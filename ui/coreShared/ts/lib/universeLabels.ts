@@ -1,4 +1,10 @@
 import * as universeCopy from '../copy/universes.js'
+import { getRuntimeNetworkProfile } from '../wallet/networkProfile.js'
+
+/** The selected Yes or No child of the Augur v2 universe, which is local universe zero. */
+export function formatRootUniverseName() {
+	return universeCopy.formatGenesisUniverse(getRuntimeNetworkProfile().genesisOutcome)
+}
 
 export function formatUniverseIdHex(universeId: bigint) {
 	return `0x${universeId.toString(16)}`
@@ -6,7 +12,7 @@ export function formatUniverseIdHex(universeId: bigint) {
 
 /** Full universe label used for accessible names, titles, and anywhere width is not constrained. */
 export function formatUniverseLabel(universeId: bigint) {
-	return universeId === 0n ? `${universeCopy.genesis} (${formatUniverseIdHex(universeId)})` : universeCopy.formatUnknownLineageUniverse(formatUniverseIdHex(universeId))
+	return universeId === 0n ? `${formatRootUniverseName()} (${formatUniverseIdHex(universeId)})` : universeCopy.formatUnknownLineageUniverse(formatUniverseIdHex(universeId))
 }
 
 /** Short, stable hex name for a universe, such as `0x3228b6…5fb5`; short IDs stay whole. */

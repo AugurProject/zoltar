@@ -90,6 +90,7 @@ const formatRep = (amount: string) => `${amount} REP`
 const formatEth = (amount: string) => `${amount} ETH`
 export const formatTargetSummary = (backing: string, commitment: string) => `${repBacking}: ${formatRep(backing)} · ${targetCommitment}: ${formatEth(commitment)}`
 export const formatTargetMaximum = (amount: string) => `${targetMaximum}: ${formatEth(amount)}`
+export const formatSelectLiquidationTarget = (address: string) => `Select vault ${address} for liquidation`
 
 export const withdrawEscrow = 'Settle escalation deposits before withdrawing REP.'
 export const withdrawCoverage = 'Reduce the withdrawal to keep enough REP backing for vault and pool commitments.'

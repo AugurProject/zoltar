@@ -45,8 +45,6 @@ function createSecurityVaultSectionProps(overrides: Partial<SecurityVaultSection
 		onLoadSecurityVault: () => undefined,
 		onSecurityVaultFormChange: () => undefined,
 		repPerEthPrice: undefined,
-		repPerEthSource: undefined,
-		repPerEthSourceUrl: undefined,
 		securityPoolVaults: undefined,
 		securityVaultDetails: createSecurityVaultDetails(),
 		securityVaultError: undefined,
@@ -135,18 +133,7 @@ describe('SecurityVaultSection', () => {
 	})
 
 	test('uses the selected UI price for backing ratios and the near-minimum warning', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<SelectedVaultSummarySection
-				repPerEthPrice={3n * 10n ** 18n}
-				repPerEthSource='v3'
-				repPerEthSourceUrl={undefined}
-				underwritingLimitAttoEth={2n * 10n ** 18n}
-				currentVaultIsHealthy
-				securityVaultDetails={createSecurityVaultDetails({ associatedRepPerCapacityBps: 20_500n })}
-				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
-				selectedVaultIsOwnedByAccount
-			/>,
-		)
+		const renderedComponent = await renderIntoDocument(<SelectedVaultSummarySection repPerEthPrice={3n * 10n ** 18n} securityVaultDetails={createSecurityVaultDetails({ associatedRepPerCapacityBps: 20_500n })} selectedPoolStatoblastSecurityMultiplierBps={20_000n} selectedVaultIsOwnedByAccount />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		expect(within(document.body).getByText('2.5×')).not.toBeNull()
 		expect(within(document.body).queryByText('2.05×')).toBeNull()
@@ -154,82 +141,42 @@ describe('SecurityVaultSection', () => {
 	})
 
 	test('colors associated REP per capacity green when the vault remains comfortably above the security multiplier', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<SelectedVaultSummarySection
-				repPerEthPrice={10n ** 18n}
-				repPerEthSource={undefined}
-				repPerEthSourceUrl={undefined}
-				underwritingLimitAttoEth={2n * 10n ** 18n}
-				currentVaultIsHealthy
-				securityVaultDetails={createSecurityVaultDetails()}
-				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
-				selectedVaultIsOwnedByAccount
-			/>,
-		)
+		const renderedComponent = await renderIntoDocument(<SelectedVaultSummarySection repPerEthPrice={10n ** 18n} securityVaultDetails={createSecurityVaultDetails()} selectedPoolStatoblastSecurityMultiplierBps={20_000n} selectedVaultIsOwnedByAccount />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const metricValue = within(document.body).getByText('7.5×').closest('.metric-field-value')
 		expect(metricValue?.className).toContain('metric-value-success')
 		expect(within(document.body).getByText('Healthy')).not.toBeNull()
+		expect(document.querySelector('.vault-health')?.classList.contains('ok')).toBe(true)
 	})
 
 	test('colors associated REP per capacity yellow when the vault is near the security multiplier', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<SelectedVaultSummarySection
-				repPerEthPrice={10n ** 18n}
-				repPerEthSource={undefined}
-				repPerEthSourceUrl={undefined}
-				underwritingLimitAttoEth={2n * 10n ** 18n}
-				currentVaultIsHealthy
-				securityVaultDetails={createSecurityVaultDetails({ disputeStakedAttoRep: 0n, vaultAttoRepBacking: 41n * 10n ** 17n })}
-				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
-				selectedVaultIsOwnedByAccount
-			/>,
-		)
+		const renderedComponent = await renderIntoDocument(<SelectedVaultSummarySection repPerEthPrice={10n ** 18n} securityVaultDetails={createSecurityVaultDetails({ disputeStakedAttoRep: 0n, vaultAttoRepBacking: 41n * 10n ** 17n })} selectedPoolStatoblastSecurityMultiplierBps={20_000n} selectedVaultIsOwnedByAccount />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const metricValue = within(document.body).getByText('2.05×').closest('.metric-field-value')
 		expect(metricValue?.className).toContain('metric-value-warning')
 		expect(within(document.body).getByText('Near minimum')).not.toBeNull()
+		expect(document.querySelector('.vault-health')?.classList.contains('warning')).toBe(true)
 	})
 
 	test('colors associated REP per capacity red when the current vault health is underwater', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<SelectedVaultSummarySection
-				repPerEthPrice={10n ** 18n}
-				repPerEthSource={undefined}
-				repPerEthSourceUrl={undefined}
-				underwritingLimitAttoEth={2n * 10n ** 18n}
-				currentVaultIsHealthy={false}
-				securityVaultDetails={createSecurityVaultDetails()}
-				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
-				selectedVaultIsOwnedByAccount
-			/>,
-		)
+		const renderedComponent = await renderIntoDocument(<SelectedVaultSummarySection repPerEthPrice={10n ** 18n} securityVaultDetails={createSecurityVaultDetails({ disputeStakedAttoRep: 0n, vaultAttoRepBacking: 3n * 10n ** 18n })} selectedPoolStatoblastSecurityMultiplierBps={20_000n} selectedVaultIsOwnedByAccount />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const metricValue = within(document.body).getByText('7.5×').closest('.metric-field-value')
+		const metricValue = within(document.body).getByText('1.5×').closest('.metric-field-value')
 		expect(metricValue?.className).toContain('metric-value-danger')
 		expect(within(document.body).getByText('Underwater')).not.toBeNull()
+		expect(document.querySelector('.vault-health')?.classList.contains('danger')).toBe(true)
 	})
 
-	test('does not infer vault health text from associated REP per capacity when current health is unavailable', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<SelectedVaultSummarySection
-				repPerEthPrice={undefined}
-				repPerEthSource={undefined}
-				repPerEthSourceUrl={undefined}
-				underwritingLimitAttoEth={2n * 10n ** 18n}
-				currentVaultIsHealthy={undefined}
-				securityVaultDetails={createSecurityVaultDetails({ associatedRepPerCapacityBps: 19_000n })}
-				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
-				selectedVaultIsOwnedByAccount
-			/>,
-		)
+	test('shows no health verdict or backing ratio without a REP price, ignoring the loaded backing ratio', async () => {
+		const renderedComponent = await renderIntoDocument(<SelectedVaultSummarySection repPerEthPrice={undefined} securityVaultDetails={createSecurityVaultDetails({ associatedRepPerCapacityBps: 19_000n })} selectedPoolStatoblastSecurityMultiplierBps={20_000n} selectedVaultIsOwnedByAccount />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(within(document.body).queryByText('1.9×')).toBeNull()
 		expect(within(document.body).getByText('Health unavailable')).not.toBeNull()
+		expect(document.querySelector('.vault-health')?.classList.contains('muted')).toBe(true)
 		expect(within(document.body).queryByText('Healthy')).toBeNull()
 		expect(within(document.body).queryByText('Near minimum')).toBeNull()
 		expect(within(document.body).queryByText('Underwater')).toBeNull()
@@ -246,12 +193,23 @@ describe('SecurityVaultSection', () => {
 					})}
 				/>,
 			)
+		const backingDetailsText = () => {
+			const details = document.body.querySelector('.vault-backing-details')
+			if (!(details instanceof HTMLElement)) throw new Error('Expected the vault backing details')
+			return details.textContent ?? ''
+		}
 		const operational = await renderVault(undefined)
 		expect(document.body.querySelector('.vault-health-status')).not.toBeNull()
+		// 12 REP behind a 2 ETH commitment at 3 REP per ETH is exactly the 2× multiplier.
+		expect(backingDetailsText()).toContain('2×')
+		expect(backingDetailsText()).toContain('Near minimum')
 		operational.cleanup()
 		cleanupRenderedComponent = (await renderVault(createEndedPoolState())).cleanup
-		// After resolution liquidation is closed, so a health verdict priced from an expired oracle is only noise.
+		// After resolution liquidation is closed, so neither the verdict, priced from an expired oracle, nor the backing ratio it judges remains.
 		expect(document.body.querySelector('.vault-health-status')).toBeNull()
+		expect(backingDetailsText()).toContain('Current proportional obligation')
+		expect(backingDetailsText()).not.toContain('×')
+		expect(backingDetailsText()).not.toContain('Near minimum')
 		expect(within(document.body).queryByText('Healthy')).toBeNull()
 	})
 })

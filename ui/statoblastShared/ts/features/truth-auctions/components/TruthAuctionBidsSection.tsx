@@ -118,7 +118,27 @@ export function TruthAuctionBidsSection({ aggregatedAuctionBidCountForLoadedTick
 			{hasLoadedData && error === undefined && !loadingAggregatedAuctionBids && loadedTickCount === 0 ? <UserMessage className='detail' detail={forkAuctionCopy.auctionPriceLevelsEmpty} /> : undefined}
 			{hasLoadedData && error === undefined && !loadingAggregatedAuctionBids && loadedTickCount > 0 && rows.length === 0 ? <UserMessage className='detail' detail={forkAuctionCopy.loadedPriceBidsEmpty} /> : undefined}
 			<BidTable
-				columns={[priceColumn(renderPriceValue), { blockCellClassName: 'truth-auction-bid-row-address', label: forkAuctionCopy.bidder, render: row => <AddressValue address={row.bidder} copyable={false} /> }, bidAmountColumn(), statusColumn()]}
+				columns={[
+					priceColumn(renderPriceValue),
+					{
+						blockCellClassName: 'truth-auction-bid-row-address',
+						label: forkAuctionCopy.bidder,
+						render: row => (
+							<>
+								{row.isViewer ? (
+									<>
+										<strong className='truth-auction-bidder-you' title={row.bidder}>
+											{forkAuctionCopy.bidderYou}
+										</strong>{' '}
+									</>
+								) : undefined}
+								<AddressValue abbreviated compactAbbreviation address={row.bidder} />
+							</>
+						),
+					},
+					bidAmountColumn(),
+					statusColumn(),
+				]}
 				regionClassName='truth-auction-bid-table-scroll'
 				regionLabel={forkAuctionCopy.scrollableAuctionBidHistory}
 				rowClassName='truth-auction-bid-row is-wide is-no-actions'

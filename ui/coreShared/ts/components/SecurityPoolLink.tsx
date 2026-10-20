@@ -1,5 +1,6 @@
 import type { ComponentChildren } from 'preact'
-import { ReadOnlyAddressValue } from './AddressValue.js'
+import * as commonCopy from '../copy/common.js'
+import { AddressValue } from './AddressValue.js'
 
 type SecurityPoolLinkProps = {
 	ariaLabel?: string | undefined
@@ -12,9 +13,9 @@ type SecurityPoolLinkProps = {
 	securityPoolAddress: string
 }
 
-/** Link from a security pool address to its detail route; the address is the visible label unless children replace it. */
+/** Pool identity links to its explorer; the separate local link opens the pool's detail route. */
 export function SecurityPoolLink({ ariaLabel, children, className, disabled = false, href, onNavigate, securityPoolAddress }: SecurityPoolLinkProps) {
-	return (
+	const navigation = (
 		<a
 			aria-disabled={disabled ? 'true' : undefined}
 			aria-label={ariaLabel}
@@ -31,7 +32,14 @@ export function SecurityPoolLink({ ariaLabel, children, className, disabled = fa
 			}}
 			title={securityPoolAddress}
 		>
-			{children ?? <ReadOnlyAddressValue address={securityPoolAddress} responsiveAbbreviation />}
+			{children ?? commonCopy.openPool}
 		</a>
+	)
+	if (children !== undefined && children !== null) return navigation
+	return (
+		<span className='security-pool-navigation'>
+			<AddressValue address={securityPoolAddress} />
+			{navigation}
+		</span>
 	)
 }

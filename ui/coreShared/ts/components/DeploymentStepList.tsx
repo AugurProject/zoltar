@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact'
-import { ReadOnlyAddressValue } from './AddressValue.js'
+import { AddressValue } from './AddressValue.js'
 import { Badge } from './Badge.js'
 import type { BadgeTone } from '../types/components.js'
 
@@ -32,7 +32,7 @@ export function DeploymentStepList({ steps }: { steps: readonly DeploymentStepRo
 							<h3>{withIdentifierBreaks(step.label)}</h3>
 						</div>
 						<p className='address'>
-							<ReadOnlyAddressValue address={step.address} />
+							<AddressValue address={step.address} />
 						</p>
 						{step.detail === undefined ? undefined : (
 							<p className='detail' id={step.detailId}>

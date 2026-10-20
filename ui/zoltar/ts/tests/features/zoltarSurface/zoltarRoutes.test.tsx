@@ -265,7 +265,7 @@ describe('ZoltarRoutes', () => {
 		for (const view of ['universes', 'fork', 'migrate'] as const) {
 			const { queries } = await renderRoute(view, undefined, 'missing')
 			expect(queries.getByText('Universe not found')).toBeTruthy()
-			expect(queries.getByRole('link', { name: 'Go to Genesis universe' }).getAttribute('href')).toContain('universe=0')
+			expect(queries.getByRole('link', { name: 'Go to root universe' }).getAttribute('href')).toContain('universe=0')
 			expect(queries.queryByText('Questions')).toBeNull()
 			await cleanupRenderedComponent?.()
 			cleanupRenderedComponent = undefined
@@ -278,7 +278,7 @@ describe('ZoltarRoutes', () => {
 		expect(queries.queryByText('Not forked')).toBeNull()
 		expect(queries.queryByText('Wallet REP')).toBeNull()
 		expect(queries.queryByText('Migration')).toBeNull()
-		expect(queries.getByRole('button', { name: 'Go to Genesis universe' })).toBeTruthy()
+		expect(queries.getByRole('button', { name: 'Go to root universe' })).toBeTruthy()
 	})
 
 	test('offers a retry instead of an endless loading state when the universe read failed', async () => {
@@ -339,7 +339,7 @@ describe('ZoltarRoutes', () => {
 		const { queries, viewChanges } = await renderRoute('overview', createUniverse())
 		expect(queries.getByRole('heading', { name: 'Overview' })).toBeTruthy()
 		expect(queries.getByText('Alpha')).toBeTruthy()
-		expect(queries.getByText('This universe forked. Migrate your REP into the child universes you back.')).toBeTruthy()
+		expect(queries.getByText('Migrate your REP into the child universes you back.')).toBeTruthy()
 		expect(queries.getByText('Open, no deadline')).toBeTruthy()
 		const nextStep = document.body.querySelector('.zoltar-next-step')
 		if (!(nextStep instanceof HTMLElement)) throw new Error('Expected the next step')

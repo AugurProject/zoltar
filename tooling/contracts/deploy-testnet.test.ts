@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { getAddress, getCreateAddress, keccak256, privateKeyToAccount, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { getBootstrapDescendantAddresses, getInfraContractAddresses } from '../../ui/statoblastShared/ts/protocol/deploymentHelpers.ts'
 import type { WriteClient } from '../../ui/coreShared/ts/wallet/chainBackend.ts'
-import { SEPOLIA_NETWORK_PROFILE } from '../../ui/coreShared/ts/wallet/networkProfile.ts'
+import { getGenesisNetworkProfile, SEPOLIA_NETWORK_PROFILE } from '../../ui/coreShared/ts/wallet/networkProfile.ts'
 import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { getDeploymentSteps as getZoltarDeploymentSteps } from '../../ui/zoltarShared/ts/protocol/deployment.ts'
 import {
@@ -28,7 +28,7 @@ import {
 	resolveCanonicalProxyDeployerForPreflight,
 	runDeploymentPlan,
 } from './deploy-testnet.mts'
-import { createCompleteDeploymentPlan } from './deployment-plan.mts'
+import { createCompleteDeploymentPlan, createDualGenesisDeploymentPlan } from './deployment-plan.mts'
 import { getUniswapDeployment } from './uniswap-deployment.mts'
 import { getTradingDeploymentPlan } from '../../ui/trading/ts/protocol/deployment.ts'
 import { PROXY_DEPLOYER_ADDRESS } from '../../ui/zoltarShared/ts/protocol/zoltarDeploymentHelpers.ts'
@@ -493,7 +493,7 @@ describe('testnet deployment plan', () => {
 		const addressSet = new Set(plan.map(step => step.address))
 		const infrastructure = getInfraContractAddresses(SEPOLIA_NETWORK_PROFILE)
 		const bootstrapDescendants = getBootstrapDescendantAddresses(SEPOLIA_NETWORK_PROFILE)
-		const trading = getTradingDeploymentPlan({ chainId: 11_155_111, chainName: 'Sepolia', defaultRpcUrl: '', id: 'sepolia', proxyDeployer: PROXY_DEPLOYER_ADDRESS, securityPoolFactory: infrastructure.securityPoolFactory, zoltar: infrastructure.zoltar }, 30)
+		const trading = getTradingDeploymentPlan({ chainId: 11_155_111, chainName: 'Sepolia', defaultRpcUrl: '', genesisOutcome: 'yes', id: 'sepolia', proxyDeployer: PROXY_DEPLOYER_ADDRESS, securityPoolFactory: infrastructure.securityPoolFactory, zoltar: infrastructure.zoltar }, 30)
 		const directInfrastructure = [
 			infrastructure.escalationGameClaimDelegate,
 			infrastructure.escalationGameFactory,
@@ -552,6 +552,29 @@ describe('testnet deployment plan', () => {
 		expect(plan.find(step => step.id === 'openOracle')?.dependencies).toContain('permit2')
 		expect(plan.find(step => step.id === 'tradingFactory')?.dependencies).toEqual(['proxyDeployer', 'securityPoolFactory'])
 		expect(plan.find(step => step.id === 'tradingRouter')?.dependencies).toEqual(['proxyDeployer', 'tradingFactory'])
+	})
+
+	test('deploys both genesis roots with shared infrastructure once and budgets both before execution', async () => {
+		const uniswap = await getUniswapDeployment(11_155_111)
+		const plan = createDualGenesisDeploymentPlan(SEPOLIA_NETWORK_PROFILE, uniswap)
+		const addressSet = new Set(plan.map(step => step.address))
+		expect(addressSet.size).toBe(plan.length)
+		expect(new Set(plan.map(step => step.id)).size).toBe(plan.length)
+		for (const outcome of ['yes', 'no'] as const) {
+			const profile = getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, outcome)
+			for (const step of createCompleteDeploymentPlan(profile, uniswap)) expect(addressSet.has(step.address)).toBe(true)
+			expect(plan.find(step => step.id === `${outcome}:zoltar`)?.address).toBe(getInfraContractAddresses(profile).zoltar)
+		}
+		const indexById = new Map(plan.map((step, index) => [step.id, index]))
+		for (const [index, step] of plan.entries()) {
+			for (const dependency of step.dependencies) expect(indexById.get(dependency)).toBeLessThan(index)
+		}
+		const preflightSteps = plan.map(({ address, dependencies, expectedRuntimeCodeHash, gasAllowanceId, id, label }) => ({ address, dependencies, ...(expectedRuntimeCodeHash === undefined ? {} : { expectedRuntimeCodeHash }), gasAllowanceId, id, label }))
+		const estimate = await preflightDeploymentPlan(preflightSteps, { getCode: async () => undefined }, CONSERVATIVE_DEPLOYMENT_GAS, 1n, 100_000_000_000_000_000n)
+		expect(estimate.missingStepIds).toEqual(plan.map(step => step.id))
+		expect(estimate.missingStepIds).toContain('yes:zoltar')
+		expect(estimate.missingStepIds).toContain('no:zoltar')
+		await expect(preflightDeploymentPlan(preflightSteps, { getCode: async () => undefined }, CONSERVATIVE_DEPLOYMENT_GAS, 1n, estimate.estimatedCostAttoEth - 1n)).rejects.toThrow('no funding or deployment transaction was attempted')
 	})
 
 	test('skips existing code and deploys missing dependent steps in order', async () => {

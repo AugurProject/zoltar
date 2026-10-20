@@ -216,17 +216,16 @@ describe('useStatoblastUrlState', () => {
 		}
 	})
 
-	test('keeps OpenOracle state in the query of the current route', async () => {
+	test('keeps the price-request selection in the query of the current route', async () => {
 		const state = await renderHarness()
 		window.location.hash = '#/open-oracle'
 		await act(() => window.dispatchEvent(new Event('hashchange')))
 
-		await act(() => state().setOpenOracleView('create'))
-		expect(window.location.hash).toBe('#/open-oracle?openOracleView=create')
-		expect(state().openOracleView).toBe('create')
-
+		const historyLength = window.history.length
 		await act(() => state().setOpenOracleReport('555', 'replace'))
-		expect(window.location.hash).toBe('#/open-oracle?openOracleView=selected-report&openOracleReportId=555')
+		expect(window.location.hash).toBe('#/open-oracle?openOracleReportId=555')
+		expect(window.history.length).toBe(historyLength)
+		expect('openOracleView' in state()).toBe(false)
 		expect(state().openOracleReportId).toBe('555')
 	})
 	test('restores browser and vault selections through history and clears vaults for another pool', async () => {

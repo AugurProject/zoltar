@@ -28,6 +28,7 @@ import type { SecurityPoolStateModel } from './security-pools/lib/securityPoolSt
 import type { ForkWorkflowSelectionStage } from './security-pools/lib/securityPoolWorkflow.js'
 import type { ReportingRouteContentProps } from './oracleTypes.js'
 import type { UiRepPriceSource } from './security-pools/lib/repPriceSource.js'
+import type { VaultHealthTier } from './security-pools/lib/vaultHealth.js'
 import type { VaultMigrationReviewAmounts } from '../protocol/forks.js'
 
 export type * from '@zoltar/ui-core-shared/types/components.js'
@@ -39,16 +40,13 @@ export type VaultMetricGridProps = {
 	className?: string
 	layout?: 'grid' | 'preview'
 	disputeStakedAttoRep?: bigint | undefined
-	isCurrentlyHealthy?: boolean | undefined
+	/** The verdict the badge, the backing ratio's tone, and the near-minimum label share. */
+	healthTier: VaultHealthTier
 	/** After resolution liquidation is closed, so the health verdict and its price source are hidden. */
 	poolEnded?: boolean | undefined
-	poolHeldRepPerCapacityBps?: bigint | undefined
-	priceValidUntilTimestamp?: bigint | undefined
 	vaultAttoRepBacking: bigint | undefined
-	selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined
 	underwritingLimitAttoEth: bigint | undefined
-	claimableFeesAttoEth: bigint | undefined
-} & RepPerEthPriceProps
+}
 
 export type RepPerEthPriceProps = {
 	repPerEthPrice: bigint | undefined
@@ -169,7 +167,7 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 	controlledVaultView?: SelectedVaultView | undefined
 	onVaultViewChange?: ((view: SelectedVaultView) => void) | undefined
 	RequestPriceModal?: ComponentType<RequestPriceModalProps>
-	inlineOracle?: import('./oracleTypes.js').OpenOracleSectionProps
+	inlineOracle?: import('./open-oracle/components/PriceRequestStatusSection.js').PriceRequestStatusProps
 	accountState: AccountState
 	activeUniverseId: bigint
 	checkedSecurityPoolAddress: string | undefined
@@ -231,7 +229,7 @@ export type SecurityVaultRouteContentProps = {
 	securityVaultMissing: boolean
 	selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined
 	securityPoolVaults?: SecurityPoolVaultSummary[] | undefined
-} & RepPerEthPriceProps
+} & Pick<RepPerEthPriceProps, 'repPerEthPrice'>
 
 export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 	extraReadinessActions?: Omit<ReadinessAction, 'title'>[]

@@ -1,5 +1,5 @@
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
-import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { RepAmount } from './RepAmount.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import * as reportingCopy from '../../../copy/reporting.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
@@ -28,7 +28,7 @@ export function ReportingWalletVaultHelp({ depositAmount, reportAmount, remainin
 			detail={
 				<>
 					{reportingCopy.continuationFundingHelp}
-					{depositAmount !== undefined && reportAmount !== undefined && remainingAmount !== undefined && depositAmount > reportAmount ? ` ${reportingCopy.continuationMinimumDeposit(formatCurrencyBalance(depositAmount), formatCurrencyBalance(remainingAmount))}` : ''}
+					{depositAmount !== undefined && reportAmount !== undefined && remainingAmount !== undefined && depositAmount > reportAmount ? <> {reportingCopy.continuationMinimumDeposit(<RepAmount rounding='up' value={depositAmount} />, <RepAmount value={remainingAmount} />)}</> : undefined}
 				</>
 			}
 		/>

@@ -9,13 +9,17 @@ function roundedProbabilityLabels(yesPercent: number) {
 /**
  * The conditional YES / NO split, captioned with what it is conditional on. With `beforePercent` it previews a trade: the
  * fill shows the price after it and the marker the price before. `last` marks a market that stopped trading, shown muted.
+ * The `headline` variant is the market page's leading figure: large labels over a thicker bar.
  */
-export function ProbabilityBar({ yesPercent, beforePercent, last = false }: { yesPercent: number; beforePercent?: number | undefined; last?: boolean }) {
+export function ProbabilityBar({ yesPercent, beforePercent, last = false, variant }: { yesPercent: number; beforePercent?: number | undefined; last?: boolean; variant?: 'headline' | undefined }) {
 	const labels = roundedProbabilityLabels(yesPercent)
 	const before = beforePercent === undefined ? undefined : roundedProbabilityLabels(beforePercent)
 	const moved = before !== undefined && before.yes !== labels.yes
 	return (
-		<figure className={`probability${moved ? ' probability--preview' : ''}${last ? ' probability--last' : ''}`} aria-label={moved ? probabilityCopy.conditionalYesMoveLabel(before.yes, labels.yes) : probabilityCopy.conditionalYesPriceLabel(labels.yes, last)}>
+		<figure
+			className={['probability', moved ? 'probability--preview' : '', last ? 'probability--last' : '', variant === 'headline' ? 'probability--headline' : ''].filter(Boolean).join(' ')}
+			aria-label={moved ? probabilityCopy.conditionalYesMoveLabel(before.yes, labels.yes) : probabilityCopy.conditionalYesPriceLabel(labels.yes, last)}
+		>
 			<figcaption className='probability__caption'>{last ? probabilityCopy.lastPriceIfNotInvalid : probabilityCopy.priceIfNotInvalid}</figcaption>
 			<div className='probability__labels'>
 				<span>{moved ? probabilityCopy.probabilityMoveLabel(shareOutcome.yes, before.yes, labels.yes) : probabilityCopy.probabilityLabel(shareOutcome.yes, labels.yes)}</span>

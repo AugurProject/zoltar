@@ -34,8 +34,9 @@ export function getSecurityPoolStatusBadgeLabel({ hasForkActivity, questionOutco
 	return getPoolStateLabel(getPoolStateFilter(lifecycleState))
 }
 
+/** Operating pools read as healthy and fork stages as needing attention; a finalized pool is a settled fact, so it stays neutral rather than amber. */
 export function getSecurityPoolStatusBadgeTone(lifecycleState: SecurityPoolLifecycleState | undefined): BadgeTone {
 	if (lifecycleState === 'operational') return 'ok'
-	if (lifecycleState === undefined) return 'muted'
+	if (lifecycleState === undefined || lifecycleState === 'ended') return 'muted'
 	return 'warning'
 }

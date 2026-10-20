@@ -1,5 +1,6 @@
 import { bigintToSafeNumber } from '@zoltar/core-shared/evm/ethereum'
 import { getReportingOutcomeKey } from '@zoltar/ui-core-shared/lib/contractEnums.js'
+import { compareBigint } from '@zoltar/core-shared/math/bigint'
 import { marketAcceptsNewRisk, type LiveMarket } from '../protocol/liveMarket.js'
 import { attoSharesToCollateralAttoEth } from './shareValue.js'
 
@@ -80,25 +81,20 @@ function marketMatchesSearch(market: Pick<LiveMarket, 'title' | 'description' | 
 	return terms.every(term => haystack.includes(term))
 }
 
-function compareBigintAscending(left: bigint, right: bigint) {
-	if (left === right) return 0
-	return left < right ? -1 : 1
-}
-
 /** Markets that still take new risk come first, soonest end first; ended ones follow, most recently ended first. */
 function compareClosingSoon(left: LiveMarket, right: LiveMarket, nowSeconds: bigint) {
 	const leftOpen = left.loadError === undefined && marketAcceptsNewRisk(left, nowSeconds)
 	const rightOpen = right.loadError === undefined && marketAcceptsNewRisk(right, nowSeconds)
 	if (leftOpen !== rightOpen) return leftOpen ? -1 : 1
 	if (left.loadError !== undefined || right.loadError !== undefined) return (left.loadError === undefined ? 0 : 1) - (right.loadError === undefined ? 0 : 1)
-	return leftOpen ? compareBigintAscending(left.endTime, right.endTime) : compareBigintAscending(right.endTime, left.endTime)
+	return leftOpen ? compareBigint(left.endTime, right.endTime) : compareBigint(right.endTime, left.endTime)
 }
 
 function compareLiquidity(left: LiveMarket, right: LiveMarket) {
 	const leftLiquidity = marketLiquidityAttoEth(left)
 	const rightLiquidity = marketLiquidityAttoEth(right)
 	if (leftLiquidity === undefined || rightLiquidity === undefined) return (leftLiquidity === undefined ? 1 : 0) - (rightLiquidity === undefined ? 1 : 0)
-	return compareBigintAscending(rightLiquidity, leftLiquidity)
+	return compareBigint(rightLiquidity, leftLiquidity)
 }
 
 /**

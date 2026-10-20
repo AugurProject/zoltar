@@ -22,8 +22,8 @@ export const NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE = 'You need matching Yes,
 export const UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE = 'Minting is unavailable because this pool has complete-set shares but no collateral.'
 export const MINTING_PAUSED_DURING_DISPUTE_MESSAGE = tradingCopy.mintingPausedDuringDispute
 
-/** True while an ordinary or fork-continuation escalation game is open; minting stays closed until the dispute ends. */
-export function isMintingPausedByEscalation(pool: { hasForkContinuationEscalationGame: boolean; ordinaryEscalationGameStarted: boolean }) {
+/** True once an ordinary or fork-continuation escalation game has started. The flags stay set after the game, so use `isMintingPausedByEscalation` to tell a paused operating pool from one that finalization or a fork closed. */
+export function hasEscalationGame(pool: { hasForkContinuationEscalationGame: boolean; ordinaryEscalationGameStarted: boolean }) {
 	return pool.ordinaryEscalationGameStarted || pool.hasForkContinuationEscalationGame
 }
 
@@ -34,13 +34,18 @@ export function hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth:
 
 /** Use contract-reported backing capacity; unknown capacity or an escalation game keeps minting closed. */
 export function getPoolMintingCapacityAttoEth(pool: { mintingCapacityAttoEth?: bigint | undefined; hasForkContinuationEscalationGame: boolean; ordinaryEscalationGameStarted: boolean }) {
-	return isMintingPausedByEscalation(pool) ? 0n : (pool.mintingCapacityAttoEth ?? 0n)
+	return hasEscalationGame(pool) ? 0n : (pool.mintingCapacityAttoEth ?? 0n)
 }
 
 export function getRemainingMintCapacity(mintingCapacityAttoEth: bigint | undefined, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares?: bigint | undefined) {
 	if (mintingCapacityAttoEth === undefined || settlementCollateralAttoEth === undefined) return undefined
 	if (hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth, shareTokenSupplyAttoShares) === true) return 0n
 	return mintingCapacityAttoEth > settlementCollateralAttoEth ? mintingCapacityAttoEth - settlementCollateralAttoEth : 0n
+}
+
+/** A listed pool's mintable remainder, the figure the pool directory and the pool header both show: zero once an escalation game starts, the backing capacity is zero or unknown, or the complete-set exchange rate is undefined. */
+export function getPoolRemainingMintCapacity(pool: { mintingCapacityAttoEth?: bigint | undefined; hasForkContinuationEscalationGame: boolean; ordinaryEscalationGameStarted: boolean; settlementCollateralAttoEth: bigint; shareTokenSupplyAttoShares: bigint }) {
+	return getRemainingMintCapacity(getPoolMintingCapacityAttoEth(pool), pool.settlementCollateralAttoEth, pool.shareTokenSupplyAttoShares)
 }
 
 /** The largest mint that fits both the remaining capacity and the wallet ETH left after the gas reserve. */
@@ -161,6 +166,11 @@ export function getShareSettlementBalances(shareBalances: TradingShareBalances |
 		no: convertAttoSharesToSettlementCollateralAttoEth(shareBalances.noAttoShares, settlementCollateralAttoEth, shareTokenSupplyAttoShares),
 		yes: convertAttoSharesToSettlementCollateralAttoEth(shareBalances.yesAttoShares, settlementCollateralAttoEth, shareTokenSupplyAttoShares),
 	}
+}
+
+/** Whether loaded balances hold any Yes, No, or Invalid shares. */
+export function hasShares(shareBalances: TradingShareBalances | undefined) {
+	return shareBalances !== undefined && (shareBalances.yesAttoShares > 0n || shareBalances.noAttoShares > 0n || shareBalances.invalidAttoShares > 0n)
 }
 
 export function getSelectedOutcomeShareBalance(shareBalances: TradingShareBalances | undefined, outcome: ReportingOutcomeKey) {

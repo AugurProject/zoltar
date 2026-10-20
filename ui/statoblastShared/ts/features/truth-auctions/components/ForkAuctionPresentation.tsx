@@ -1,7 +1,7 @@
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
-import { Fragment, type ComponentChildren } from 'preact'
+import type { ComponentChildren } from 'preact'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
@@ -11,7 +11,8 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StatoblastSecurityPoolLink } from '../../security-pools/components/StatoblastSecurityPoolLink.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
-import { AUCTION_TIME_SECONDS, getForkAuctionStageLabel, getForkAuctionStageView } from '../lib/forkAuction.js'
+import { getForkAuctionStageLabel, getForkAuctionStageView } from '../lib/forkAuction.js'
+import { getTruthAuctionEndsAt } from '../../../protocol/truthAuctionTiming.js'
 import { formatCurrencyInputBalance, formatRoundedCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
 import { type ForkWorkflowSelectionStage } from '../../security-pools/lib/securityPoolWorkflow.js'
@@ -32,7 +33,6 @@ export type DisplayMetric = {
 	label: string
 	value: ComponentChildren
 }
-export const FORK_MIGRATION_DURATION = 4_838_400n
 const FORK_WORKFLOW_NAV_STAGES: readonly ForkWorkflowSelectionStage[] = ['fork-triggered', 'migration', 'auction', 'settlement']
 function getForkWorkflowStageLabel(stage: ForkWorkflowSelectionStage) {
 	switch (stage) {
@@ -53,27 +53,9 @@ function getForkWorkflowStageOrder(stage: ForkWorkflowSelectionStage) {
 	return FORK_WORKFLOW_NAV_STAGES.indexOf(stage)
 }
 
-function getForkWorkflowStageIcon(stage: ForkWorkflowSelectionStage) {
-	switch (stage) {
-		case 'fork-triggered':
-			return <span aria-hidden='true' className='fork-workflow-stage-icon fork-workflow-stage-icon-triggered' />
-		case 'migration':
-			return <span aria-hidden='true' className='fork-workflow-stage-icon fork-workflow-stage-icon-migration' />
-		case 'auction':
-			return <span aria-hidden='true' className='fork-workflow-stage-icon fork-workflow-stage-icon-auction' />
-		case 'settlement':
-			return <span aria-hidden='true' className='fork-workflow-stage-icon fork-workflow-stage-icon-settlement' />
-		default:
-			return assertNever(stage)
-	}
-}
-
 export function getTruthAuctionWindow(startedAt: bigint | undefined) {
-	if (startedAt === undefined || startedAt === 0n) return undefined
-	return {
-		startedAt,
-		endsAt: startedAt + AUCTION_TIME_SECONDS,
-	}
+	const endsAt = getTruthAuctionEndsAt(startedAt)
+	return startedAt === undefined || endsAt === undefined ? undefined : { startedAt, endsAt }
 }
 export function renderMetricValue(value: bigint | undefined, suffix: string, fallbackText: string) {
 	if (value === undefined) return fallbackText
@@ -165,18 +147,11 @@ function getForkWorkflowStageClassName({ currentStage, selectedStage, stage }: {
 	const classNames = ['fork-workflow-stage']
 	if (currentStage === stage) classNames.push('is-current')
 	if (selectedStage === stage) classNames.push('is-selected')
-	if (getForkWorkflowStageOrder(stage) < getForkWorkflowStageOrder(currentStage)) classNames.push('is-complete')
 	if (getForkWorkflowStageOrder(stage) > getForkWorkflowStageOrder(currentStage)) classNames.push('is-upcoming')
 	return classNames.join(' ')
 }
 
-function getForkWorkflowSeparatorClassName({ currentStage, stage }: { currentStage: ForkWorkflowSelectionStage; stage: ForkWorkflowSelectionStage }) {
-	const classNames = ['fork-workflow-stage-separator']
-	if (getForkWorkflowStageOrder(stage) < getForkWorkflowStageOrder(currentStage)) classNames.push('is-complete')
-	if (getForkWorkflowStageOrder(stage) >= getForkWorkflowStageOrder(currentStage)) classNames.push('is-upcoming')
-	return classNames.join(' ')
-}
-
+/** The fork stages are sub-views of the Fork & migration tab, shown as sub-tabs: the header's stage bar carries the pool's progress, so these mark only the current stage and the one on view, and dim the stages still ahead. */
 export function ForkWorkflowStageNavigator({ currentStage, onStageChange, selectedStage }: { currentStage: ForkWorkflowSelectionStage; onStageChange: ((stage: ForkWorkflowSelectionStage) => void) | undefined; selectedStage: ForkWorkflowSelectionStage }) {
 	const handleKeyDown = (stage: ForkWorkflowSelectionStage, event: KeyboardEvent) => {
 		const currentStageIndex = FORK_WORKFLOW_NAV_STAGES.indexOf(stage)
@@ -198,37 +173,23 @@ export function ForkWorkflowStageNavigator({ currentStage, onStageChange, select
 	return (
 		<div className='fork-workflow-stage-nav-shell'>
 			<div aria-label={forkAuctionCopy.forkLifecycleStages} className='fork-workflow-stage-nav' role='tablist'>
-				{FORK_WORKFLOW_NAV_STAGES.map(stage => {
-					const stageLabel = getForkWorkflowStageLabel(stage)
-					return (
-						<Fragment key={stage}>
-							<button
-								aria-controls={`fork-workflow-stage-panel-${stage}`}
-								aria-current={currentStage === stage ? 'step' : undefined}
-								aria-label={stageLabel}
-								aria-selected={selectedStage === stage}
-								className={getForkWorkflowStageClassName({ currentStage, selectedStage, stage })}
-								id={`fork-workflow-stage-${stage}`}
-								onClick={() => onStageChange?.(stage)}
-								onKeyDown={event => handleKeyDown(stage, event)}
-								role='tab'
-								tabIndex={selectedStage === stage ? 0 : -1}
-								type='button'
-							>
-								{getForkWorkflowStageIcon(stage)}
-								<span className='fork-workflow-stage-copy'>
-									<strong>{stageLabel}</strong>
-									{selectedStage === stage ? <span className='fork-workflow-stage-indicator'>{forkAuctionCopy.viewing}</span> : undefined}
-								</span>
-							</button>
-							{stage === FORK_WORKFLOW_NAV_STAGES[FORK_WORKFLOW_NAV_STAGES.length - 1] ? undefined : (
-								<span aria-hidden='true' className={getForkWorkflowSeparatorClassName({ currentStage, stage })}>
-									→
-								</span>
-							)}
-						</Fragment>
-					)
-				})}
+				{FORK_WORKFLOW_NAV_STAGES.map(stage => (
+					<button
+						key={stage}
+						aria-controls={`fork-workflow-stage-panel-${stage}`}
+						aria-current={currentStage === stage ? 'step' : undefined}
+						aria-selected={selectedStage === stage}
+						className={getForkWorkflowStageClassName({ currentStage, selectedStage, stage })}
+						id={`fork-workflow-stage-${stage}`}
+						onClick={() => onStageChange?.(stage)}
+						onKeyDown={event => handleKeyDown(stage, event)}
+						role='tab'
+						tabIndex={selectedStage === stage ? 0 : -1}
+						type='button'
+					>
+						{getForkWorkflowStageLabel(stage)}
+					</button>
+				))}
 			</div>
 		</div>
 	)
@@ -251,7 +212,7 @@ export function ForkAuctionMigrationSummaryCard({
 	forkTypeDisplay,
 	migratedRepDisplay,
 	migratedRepLabel,
-	migrationEndsDisplay,
+	migrationEnd,
 	migrationStartedDisplay,
 	repAtForkDisplay,
 	settlementCollateralDisplay,
@@ -261,20 +222,18 @@ export function ForkAuctionMigrationSummaryCard({
 	forkTypeDisplay: ComponentChildren
 	migratedRepDisplay: ComponentChildren
 	migratedRepLabel: string
-	migrationEndsDisplay: ComponentChildren
+	/** When migration ends and whether it already has; undefined while the pool header's strip already shows the migration deadline. */
+	migrationEnd: { display: ComponentChildren; ended: boolean } | undefined
 	migrationStartedDisplay: ComponentChildren
 	repAtForkDisplay: ComponentChildren
-	settlementCollateralDisplay: ComponentChildren
+	/** Undefined while the pool header's strip already shows the settlement collateral, so the card does not repeat it. */
+	settlementCollateralDisplay: ComponentChildren | undefined
 }) {
 	return (
 		<SectionBlock badge={badge} className='fork-workflow-summary-card migration-summary-card' title={forkAuctionCopy.migrationStatus} variant='embedded'>
 			<div className='fork-workflow-summary'>
 				<div className='fork-workflow-summary-primary migration-summary-primary'>
-					{[
-						{ label: forkAuctionCopy.repAtFork, value: repAtForkDisplay },
-						{ label: migratedRepLabel, value: migratedRepDisplay },
-						{ label: forkAuctionCopy.settlementCollateral, value: settlementCollateralDisplay },
-					].map(metric => (
+					{[{ label: forkAuctionCopy.repAtFork, value: repAtForkDisplay }, { label: migratedRepLabel, value: migratedRepDisplay }, ...(settlementCollateralDisplay === undefined ? [] : [{ label: forkAuctionCopy.settlementCollateral, value: settlementCollateralDisplay }])].map(metric => (
 						<div className='fork-workflow-summary-stat-group' key={metric.label}>
 							<div className='fork-workflow-summary-stat-copy'>
 								<span>{metric.label}</span>
@@ -285,7 +244,7 @@ export function ForkAuctionMigrationSummaryCard({
 				</div>
 				<div className='fork-workflow-summary-metrics'>
 					<MetricField label={forkAuctionCopy.migrationStarted}>{migrationStartedDisplay}</MetricField>
-					<MetricField label={forkAuctionCopy.migrationEnds}>{migrationEndsDisplay}</MetricField>
+					{migrationEnd === undefined ? undefined : <MetricField label={migrationEnd.ended ? forkAuctionCopy.migrationEnded : forkAuctionCopy.migrationEnds}>{migrationEnd.display}</MetricField>}
 					<MetricField label={forkAuctionCopy.forkType}>{forkTypeDisplay}</MetricField>
 				</div>
 			</div>

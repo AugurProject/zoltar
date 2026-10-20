@@ -43,7 +43,7 @@ export function renderForkAuctionSectionDisplays(model: ForkAuctionSectionModel)
 			if (truthAuctionStatus === undefined) return model.truthAuctionFallback
 			return truthAuctionStatus.hitCap ? renderTruthAuctionPriceValue(truthAuctionStatus.clearingPrice) : forkAuctionCopy.notYetCleared
 		})(),
-		endsDisplay: model.endsDisplay.kind === 'text' ? model.endsDisplay.text : <TimestampValue {...currentTimestampProps} timestamp={model.endsDisplay.timestamp} />,
+		endsDisplay: model.endsDisplay.kind === 'text' ? model.endsDisplay.text : <TimestampValue {...currentTimestampProps} relative='first' timestamp={model.endsDisplay.timestamp} />,
 		ethRaisedCapDisplay:
 			truthAuctionStatus === undefined ? (
 				model.truthAuctionFallback
@@ -70,7 +70,7 @@ export function renderForkAuctionSectionDisplays(model: ForkAuctionSectionModel)
 		renderSelectedOutcomeChildPoolLink,
 		renderSelectedOutcomeChildPoolNotice,
 		renderStageActionButton,
-		startedDisplay: model.startedDisplay.kind === 'text' ? model.startedDisplay.text : <TimestampValue {...currentTimestampProps} timestamp={model.startedDisplay.timestamp} />,
+		startedDisplay: model.startedDisplay.kind === 'text' ? model.startedDisplay.text : <TimestampValue {...currentTimestampProps} relative='first' timestamp={model.startedDisplay.timestamp} />,
 		truthAuctionEndedNotice: truthAuctionStatus === undefined ? undefined : <ForkAuctionEndedNotice currentTimestamp={model.effectiveCurrentTimestamp} finalized={truthAuctionStatus.finalized} onOpenSettlement={model.openSettlementStage} truthAuctionEndsAt={model.truthAuctionEndsAt} />,
 		truthAuctionFinalizeSection: truthAuctionStatus === undefined ? undefined : <ForkAuctionFinalizeSection actionButton={finalizeTruthAuctionAction} />,
 	}

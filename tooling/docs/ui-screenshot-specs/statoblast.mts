@@ -77,9 +77,9 @@ export const STATOBLAST_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		app: 'statoblast',
 		scenario: 'deployed',
 		steps: openReport,
-		expectText: ['Report #1', 'Settle report'],
+		expectText: ['Report status', 'Settle report'],
 		viewport: pageViewport,
-		crop: { selector: '.open-oracle-report-stack', padding: 6 },
+		crop: { selector: '.price-request-status-stack', padding: 6 },
 		usedBy: tutorial,
 	},
 	{

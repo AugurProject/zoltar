@@ -1,10 +1,15 @@
 import { afterAll, beforeAll, describe as baseDescribe, expect, test } from 'bun:test'
 import { createPublicClient, http, mainnet } from '@zoltar/core-shared/evm/ethereum'
 import { resolveAnvilBinary } from '../../../../../solidity/ts/testSupport/simulator/anvilNode'
-import { ETH_ADDRESS, getRepAddress, quoteBestV3ExactInputWithSource, quoteExactInput } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
+import { ETH_ADDRESS, quoteBestV3ExactInputWithSource, quoteExactInput } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { MAINNET_GENESIS_UNIVERSES } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 
 const PINNED_MAINNET_BLOCK = 22_000_000n
+// This historical snapshot predates the fork; its REPv2 route remains a historical fixture, never a canonical genesis choice.
+const HISTORICAL_REPV2_TOKEN = '0x221657776846890989a759ba2973e427dff5c9bb'
 const ANVIL_START_TIMEOUT_MS = 30_000
 const forkRpcUrl = process.env['MAINNET_ARCHIVE_RPC_URL']?.trim()
 const describe = process.env['RUN_MAINNET_FORK_INTEGRATION_TESTS'] === '1' && forkRpcUrl !== undefined && forkRpcUrl !== '' ? baseDescribe : baseDescribe.skip
@@ -165,7 +170,9 @@ void describe('Uniswap quote paths — pinned mainnet fork', () => {
 		}
 		if (localRpcUrl === undefined) throw new Error('Pinned mainnet fork RPC address was not initialized')
 		client = createPublicClient({ chain: mainnet, transport: http(localRpcUrl) })
+		const restoreEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: MAINNET_NETWORK_PROFILE }))
 		stopFork = async () => {
+			restoreEnvironment()
 			anvil.kill()
 			await anvil.exited
 			await Promise.all([stderrPromise, stdoutPromise])
@@ -184,7 +191,7 @@ void describe('Uniswap quote paths — pinned mainnet fork', () => {
 	test('fork height and production token metadata are deterministic', async () => {
 		expect(await getClient().getBlockNumber()).toBe(PINNED_MAINNET_BLOCK)
 		for (const [address, expectedDecimals] of [
-			[MAINNET_NETWORK_PROFILE.genesisRepTokenAddress, 18n],
+			[HISTORICAL_REPV2_TOKEN, 18n],
 			[MAINNET_NETWORK_PROFILE.usdcAddress, 6n],
 		] as const) {
 			const decimals: unknown = await getClient().readContract({
@@ -203,9 +210,16 @@ void describe('Uniswap quote paths — pinned mainnet fork', () => {
 		expect(amountOut).toBeLessThan(100_000n * 10n ** 6n)
 	})
 
-	test('production REP/WETH V3 fallback quotes at the pinned block', async () => {
-		const { amountOut } = await quoteBestV3ExactInputWithSource(getClient(), getRepAddress(), ETH_ADDRESS, 10n ** 18n)
+	test('historical REPv2/WETH V3 fallback quotes at the pinned block', async () => {
+		const { amountOut } = await quoteBestV3ExactInputWithSource(getClient(), HISTORICAL_REPV2_TOKEN, ETH_ADDRESS, 10n ** 18n)
 		expect(amountOut).toBeGreaterThan(10n ** 12n)
 		expect(amountOut).toBeLessThan(10n ** 18n)
+	})
+
+	test('post-fork canonical REP tokens have no contract or liquidity in the historical snapshot', async () => {
+		for (const { reputationTokenAddress } of Object.values(MAINNET_GENESIS_UNIVERSES)) {
+			expect(await getClient().getCode({ address: reputationTokenAddress })).toBeUndefined()
+			await expect(quoteBestV3ExactInputWithSource(getClient(), reputationTokenAddress, ETH_ADDRESS, 10n ** 18n)).rejects.toThrow()
+		}
 	})
 })

@@ -5,13 +5,19 @@ import { findSharedBoundaryViolations } from '../repo/check-shared-boundaries.mt
 import { getAppBuildCommands } from './apps.mts'
 import { getSharedBrowserImports } from './sharedBrowserArtifacts.ts'
 import { isContractProjectSource } from '../../solidity/ts/contractProjects.ts'
+import { UI_APP_IDS } from './appIds.mts'
 
-for (const app of ['zoltar', 'statoblast', 'trading'] as const) {
+for (const app of UI_APP_IDS) {
 	test(`${app} build and browser mappings follow the runtime package closure`, () => {
 		const expected = sharedPackageClosure(appSharedPackages[app])
 		const closure = projectDependencyClosure([`ui-${app}`]).map(entry => entry.id)
 		for (const entry of expected) expect(closure).toContain(entry.id)
-		const forbidden = { zoltar: ['shared-statoblast', 'shared-open-oracle', 'shared-trading', 'ui-statoblast-shared', 'contracts-statoblast', 'contracts-trading', 'contracts'], statoblast: ['shared-trading', 'ui-trading', 'contracts-trading', 'contracts'], trading: ['contracts'] }[app]
+		const forbidden = {
+			zoltar: ['shared-statoblast', 'shared-open-oracle', 'shared-trading', 'ui-statoblast-shared', 'contracts-statoblast', 'contracts-trading', 'contracts'],
+			statoblast: ['shared-trading', 'ui-trading', 'contracts-trading', 'contracts'],
+			trading: ['contracts'],
+			openoracle: ['shared-trading', 'ui-trading', 'contracts-trading', 'contracts'],
+		}[app]
 		for (const id of forbidden) expect(closure).not.toContain(id)
 		const imports = Object.keys(getSharedBrowserImports(app))
 		for (const specifier of imports) expect(expected.some(entry => specifier.startsWith(`${entry.name}/`))).toBe(true)

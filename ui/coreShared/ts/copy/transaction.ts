@@ -116,7 +116,6 @@ export const completedAction = (title: string) => Object.values(reviewedActions)
 export const closeSymbol = '×'
 export const hide = 'Hide'
 export const transactionHash = 'Transaction hash'
-export const explorer = 'Explorer'
 export const formatViewAddressOnExplorer = (address: CopyTemplateValue) => `View address ${address} on explorer (opens in a new tab)`
 
 export const formatViewTransactionOnExplorer = (hash: CopyTemplateValue) => `View transaction ${hash} on explorer (opens in a new tab)`

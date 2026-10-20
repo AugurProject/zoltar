@@ -3,7 +3,7 @@ import { matchesLocalSearch, type LocalBrowseEntry } from '@zoltar/ui-core-share
 import { createDownloadedEntityStore } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { decodeStoredValue, readStoredMarketDetails } from '@zoltar/ui-core-shared/lib/storedValueReader.js'
 import type { ListedSecurityPool } from '../../../types/contracts.js'
-import { getPoolMintingCapacityAttoEth, getRemainingMintCapacity } from '../../markets/lib/trading.js'
+import { getPoolRemainingMintCapacity } from '../../markets/lib/trading.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from './securityPoolState.js'
 import { getPoolStateFilter } from './securityPoolLabels.js'
 
@@ -11,7 +11,6 @@ import type { PoolSortKey, PoolStateFilter } from '../../../types/app.js'
 export type { PoolSortKey, PoolStateFilter } from '../../../types/app.js'
 
 export type PoolBrowseRow = Readonly<{
-	capacity: bigint
 	fetchedAt: number
 	lifecycleState: SecurityPoolLifecycleState | undefined
 	pool: ListedSecurityPool
@@ -94,10 +93,10 @@ function getPoolLifecycleState(pool: ListedSecurityPool) {
 	}).lifecycleState
 }
 
-/** Rows show the standing ETH commitment; remaining capacity counts only what can still be minted (zero once escalation starts or reported backing capacity is zero or unknown). */
+/** Remaining capacity, which the capacity sort reads, counts only what can still be minted (zero once escalation starts or reported backing capacity is zero or unknown). */
 export function derivePoolBrowseRows(entries: readonly LocalBrowseEntry<ListedSecurityPool>[]): PoolBrowseRow[] {
 	return entries.map(({ data: pool, fetchedAt }) => {
-		return { capacity: pool.totalUnderwritingLimitAttoEth, fetchedAt, lifecycleState: getPoolLifecycleState(pool), pool, remainingCapacity: getRemainingMintCapacity(getPoolMintingCapacityAttoEth(pool), pool.settlementCollateralAttoEth, pool.shareTokenSupplyAttoShares) }
+		return { fetchedAt, lifecycleState: getPoolLifecycleState(pool), pool, remainingCapacity: getPoolRemainingMintCapacity(pool) }
 	})
 }
 

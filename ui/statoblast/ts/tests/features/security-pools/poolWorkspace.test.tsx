@@ -3,17 +3,18 @@ import { expect, test } from 'bun:test'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { withFakeClock } from '@zoltar/ui-core-shared/tests/testUtils/fakeClock.js'
 import { getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-core-shared/tests/testUtils/walletActions.js'
 import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import type { SecurityPoolWorkflowRouteContentProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { ListedSecurityPool } from '@zoltar/ui-statoblast-shared/types/contracts.js'
-import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { fireEvent, normalizeText, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { SecurityPoolWorkflowSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolWorkflowSection.js'
-import { PoolActionCard } from '@zoltar/ui-statoblast-shared/features/security-pools/components/PoolStagePanel.js'
+import { PoolActionCard, PoolLifecycleStepper } from '@zoltar/ui-statoblast-shared/features/security-pools/components/PoolStagePanel.js'
 import type { SelectedPoolView } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolWorkflow.js'
-import { createAccountState, createLoadedPoolProps, createOracleManagerDetails, createSelectedPool, createSecurityPoolWorkflowProps } from './workflow/builders.js'
+import { createAccountState, createFinalizedTruthAuction, createForkAuctionDetails, createForkAuctionProps, createLoadedPoolProps, createOracleManagerDetails, createSelectedPool, createSecurityPoolWorkflowProps, createTruthAuctionMetrics, migratingPoolState, truthAuctionPoolState } from './workflow/builders.js'
 import { useSecurityPoolWorkflowSectionTestDom } from './workflow/testDom.js'
 import { installStatoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 import { addOpenOracleBountyBuffer } from '@zoltar/ui-statoblast-shared/protocol/openOracleMath.js'
@@ -67,6 +68,7 @@ test('shows a loaded pool address read-only and keeps typed entry for an address
 	expect(page.queryByRole('textbox', { name: 'Security pool address' })).toBeNull()
 	expect(document.querySelector('.pool-address-display .address-value')?.getAttribute('title')).toBe(pool.securityPoolAddress)
 	expect(page.getByRole('button', { name: `Copy address ${pool.securityPoolAddress}` })).not.toBeNull()
+	expect(document.querySelector('.pool-address-display a.address-value')?.getAttribute('href')).toBe(`https://sepolia.etherscan.io/address/${pool.securityPoolAddress}`)
 	expect(page.getByRole('button', { name: 'Refresh pool' }).hasAttribute('disabled')).toBe(false)
 })
 
@@ -241,6 +243,25 @@ test('shows the stage, marks the open tab row, and offers controls that leave it
 	expect(views).toEqual(['trading'])
 })
 
+test('names every lifecycle stage on its segment, in order, and marks the current one', async () => {
+	setCleanup((await renderIntoDocument(<PoolLifecycleStepper step='truthAuction' />)).cleanup)
+	const segments = Array.from(document.querySelectorAll('.pool-lifecycle-steps li'))
+	const names = ['Operational', 'Escalation', 'Fork & migration', 'Truth auction', 'Settled']
+	expect(segments.map(segment => segment.querySelector('.pool-lifecycle-step-label')?.textContent)).toEqual(names)
+	expect(segments.map(segment => segment.getAttribute('title'))).toEqual(names)
+	expect(segments.map(segment => segment.className)).toEqual(['completed', 'completed', 'completed', 'current', 'upcoming'])
+	expect(segments[3]?.getAttribute('aria-current')).toBe('step')
+})
+
+test('draws the stages a settled pool passed over as skipped, named so for assistive technology', async () => {
+	setCleanup((await renderIntoDocument(<PoolLifecycleStepper skippedSteps={['escalation', 'forkMigration', 'truthAuction']} step='settled' />)).cleanup)
+	const segments = Array.from(document.querySelectorAll('.pool-lifecycle-steps li'))
+	expect(segments.map(segment => segment.className)).toEqual(['completed', 'skipped', 'skipped', 'skipped', 'current'])
+	expect(segments[1]?.getAttribute('title')).toBe('Escalation (skipped)')
+	expect(segments[1]?.querySelector('.visually-hidden')?.textContent).toBe(' (skipped)')
+	expect(segments[0]?.querySelector('.visually-hidden')).toBeNull()
+})
+
 test('keeps every next-action row, marking the open tab, so the card keeps its height between tabs', async () => {
 	const items = [
 		{ id: 'manageVault', tab: 'vaults', tone: 'action' },
@@ -278,6 +299,8 @@ for (const timestamp of [undefined, 100000n]) {
 test('keeps the pending report reachable while the pool universe differs', async () => {
 	const reports: bigint[] = []
 	await renderLoadedPool({ activeUniverseId: 2n, poolOracleManagerDetails: createOracleManagerDetails({ pendingReportId: 7n }), onViewPendingReport: id => reports.push(id) })
+	// The strip drops the stage figures it cannot load from another universe, but keeps the price status.
+	expect(document.querySelector('.pool-status-strip .pool-capacity-summary')).toBeNull()
 	await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'View report' })))
 	expect(reports).toEqual([7n])
 	expect(within(document.body).queryByRole('button', { name: 'Request new price…' })).toBeNull()
@@ -289,24 +312,47 @@ test('uses the refreshed manager price for the single capacity summary', async (
 	expect(document.querySelectorAll('.pool-capacity-summary')).toHaveLength(1)
 })
 
+// The header's remaining figure must agree with the pool directory and the Mint action, which treat these pools as closed to minting.
+const getHeaderRemainingText = () => normalizeText(document.querySelector('.pool-overview-header .pool-capacity-summary .progress-meter-detail')?.textContent ?? '')
+test('shows the mintable remainder in the header capacity summary', async () => {
+	await renderPoolPage(createSelectedPool({ mintingCapacityAttoEth: 5n * 10n ** 18n }))
+	expect(getHeaderRemainingText()).toBe('5.00 ETH remaining')
+})
+
+test('says minting is paused in the header once an escalation game has started', async () => {
+	await renderPoolPage(createSelectedPool({ mintingCapacityAttoEth: 5n * 10n ** 18n, ordinaryEscalationGameStarted: true }))
+	expect(document.querySelector('.pool-overview-header .pool-capacity-limit')?.textContent).toContain('5.00 ETH')
+	// A zero remainder beside "0% used" would contradict itself, so the caption names why nothing can be minted.
+	expect(getHeaderRemainingText()).toBe('Minting paused')
+})
+
+test('shows no remaining capacity in the header when the complete-set exchange rate is undefined', async () => {
+	await renderPoolPage(createSelectedPool({ mintingCapacityAttoEth: 5n * 10n ** 18n, settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 5n }))
+	expect(getHeaderRemainingText()).toBe('0 ETH remaining')
+})
+
 test('shows the pending report countdown in selected pool price fields', async () => {
-	await renderPoolPage(unpricedPool(), { selectedPoolView: 'price-oracle', poolOracleManagerDetails: pendingReportManager(154n) }, 100n)
-	expect(document.body.textContent).toContain('Available in 54s')
-	expect(document.body.textContent).not.toContain('Unavailable ↻')
-	const shownOraclePrices = Array.from(document.querySelectorAll('.metric-label'))
-		.filter(label => label.textContent === 'OpenOracle price')
-		.map(label => label.nextElementSibling?.textContent?.trim())
-	// Pool details omit the price while the page's price row already shows it.
-	expect(shownOraclePrices).toEqual(['Available in 54s↻'])
-	await act(async () => await new Promise(resolve => setTimeout(resolve, 1100)))
-	expect(document.body.textContent).toContain('Available in 53s')
+	await withFakeClock(async clock => {
+		await renderPoolPage(unpricedPool(), { selectedPoolView: 'price-oracle', poolOracleManagerDetails: pendingReportManager(154n) }, 100n)
+		expect(document.body.textContent).toContain('Available in 54s')
+		expect(document.body.textContent).not.toContain('Unavailable ↻')
+		const shownOraclePrices = Array.from(document.querySelectorAll('.metric-label'))
+			.filter(label => label.textContent === 'OpenOracle price')
+			.map(label => label.nextElementSibling?.textContent?.trim())
+		// Pool details omit the price while the page's price row already shows it.
+		expect(shownOraclePrices).toEqual(['Available in 54s↻'])
+		await clock.advance(1000)
+		expect(document.body.textContent).toContain('Available in 53s')
+	})
 })
 
 test('keeps the pending price countdown moving above one hour', async () => {
-	await renderPoolPage(unpricedPool(), { selectedPoolView: 'price-oracle', poolOracleManagerDetails: pendingReportManager(3702n) }, 100n)
-	expect(document.body.textContent).toContain('Available in 1h 0m 2s')
-	await act(async () => await new Promise(resolve => setTimeout(resolve, 1100)))
-	expect(document.body.textContent).toContain('Available in 1h 0m 1s')
+	await withFakeClock(async clock => {
+		await renderPoolPage(unpricedPool(), { selectedPoolView: 'price-oracle', poolOracleManagerDetails: pendingReportManager(3702n) }, 100n)
+		expect(document.body.textContent).toContain('Available in 1h 0m 2s')
+		await clock.advance(1000)
+		expect(document.body.textContent).toContain('Available in 1h 0m 1s')
+	})
 })
 
 test('keeps the prior price expiry visible while a new report is pending', async () => {
@@ -392,6 +438,67 @@ test('hides the oracle price row in an ended pool, where a new price has no use'
 	const details = document.body.querySelector('.pool-reference-details')
 	expect(details).not.toBeNull()
 	expect(details?.textContent).not.toContain('OpenOracle price')
+})
+
+// The strip's leading figures follow the pool's stage, so a figure that no longer decides anything never leads the header.
+const getStripFigures = () =>
+	Array.from(document.querySelectorAll('.pool-overview-header .pool-status-strip > *')).map(slot => {
+		const label = slot.querySelector('.metric-label, .progress-meter-label, .pool-lifecycle-summary-label')?.textContent ?? ''
+		const value = normalizeText(slot.querySelector('.pool-strip-figure-value, .progress-meter-value, .pool-lifecycle-summary-value strong, .oracle-price-value')?.textContent ?? '')
+		return `${label}: ${value}`
+	})
+
+test('leads an ended pool with its outcome and settlement collateral instead of mint capacity', async () => {
+	await renderPoolPage(createSelectedPool({ lastOraclePrice: 10n ** 18n, lastOracleSettlementTimestamp: 1n, questionOutcome: 'yes', settlementCollateralAttoEth: 3n * 10n ** 18n }))
+	expect(getStripFigures()).toEqual(['Outcome: Yes', 'Settlement collateral: 3.00 ETH', 'Pool stage: Settled'])
+	// The outcome is a word, so it uses the sans face rather than the numeric mono face.
+	expect(document.querySelector('.pool-status-strip .pool-strip-figure-value')?.classList.contains('is-text')).toBe(true)
+	expect(document.querySelector('.pool-overview-header .pool-capacity-summary')).toBeNull()
+	// A finalized pool is a settled fact, so its badge is neutral rather than amber, and the outcome is stated once, in the strip.
+	expect(document.querySelector('.pool-object-meta .badge')?.classList.contains('muted')).toBe(true)
+	expect(document.querySelector('.pool-object-meta .badge')?.textContent).toBe('Finalized')
+})
+
+test('leads a migrating pool with its settlement collateral and migration deadline, without the unused price', async () => {
+	const migratingPoolWithCollateral = { ...migratingPoolState, settlementCollateralAttoEth: 2n * 10n ** 18n }
+	await renderPoolPage(
+		createSelectedPool({ ...migratingPoolWithCollateral, lastOraclePrice: 10n ** 18n, lastOracleSettlementTimestamp: 1n }),
+		{ forkAuction: createForkAuctionProps({ forkAuctionDetails: createForkAuctionDetails({ ...migratingPoolWithCollateral, migrationEndsAt: 100n + 2n * 3600n }) }), poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, lastPrice: 10n ** 18n, lastSettlementTimestamp: 1n, pendingReportId: 0n }) },
+		100n,
+	)
+	expect(getStripFigures()).toEqual(['Settlement collateral: 2.00 ETH', 'Migration ends: in 2h', 'Pool stage: Fork & migration'])
+	expect(document.querySelector('.pool-oracle-status')).toBeNull()
+	expect(document.querySelector('.pool-reference-details')?.textContent).not.toContain('OpenOracle price')
+})
+
+test('keeps migration open at its exact deadline, since it closes only after it', async () => {
+	await renderPoolPage(createSelectedPool(migratingPoolState), { forkAuction: createForkAuctionProps({ forkAuctionDetails: createForkAuctionDetails({ ...migratingPoolState, migrationEndsAt: 100n }) }) }, 100n)
+	expect(getStripFigures()).toContain('Migration ends: now')
+})
+
+test('labels a passed migration deadline as ended', async () => {
+	await renderPoolPage(createSelectedPool(migratingPoolState), { forkAuction: createForkAuctionProps({ forkAuctionDetails: createForkAuctionDetails({ ...migratingPoolState, migrationEndsAt: 40n }) }) }, 100n)
+	expect(getStripFigures()).toContain('Migration ended: 1m ago')
+})
+
+test('leads a pool in its truth auction with the ETH it raises against the target and the auction deadline', async () => {
+	// Before finalization the auction raises what finalizing now would, by the contract's own preview; the auction card names it the same way.
+	const truthAuction = createTruthAuctionMetrics({ accumulatedBidAttoEth: 10n ** 18n, attoEthRaiseCap: 4n * 10n ** 18n, attoEthRaised: 0n, auctionEndsAt: 100n + 3n * 86_400n, finalizationPreview: { attoEthRaised: 10n ** 18n, attoRepSold: 0n } })
+	await renderPoolPage(createSelectedPool(truthAuctionPoolState), { forkAuction: createForkAuctionProps({ forkAuctionDetails: createForkAuctionDetails({ ...truthAuctionPoolState, truthAuction }) }) }, 100n)
+	expect(getStripFigures()).toEqual(['ETH raised: 1.00 ETH / 4.00 ETH', 'Auction ends: in 3d', 'Pool stage: Truth auction'])
+	expect(document.querySelector('.pool-overview-header .progress-meter-detail')?.textContent).toBe('25% of target')
+	expect(document.querySelector('.pool-oracle-status')).toBeNull()
+	// The strip owns the auction deadline, so the next-action row above it does not repeat it.
+	const header = document.querySelector('.pool-overview-header')?.textContent ?? ''
+	expect(header.split('1970-01-04 00:01:40 UTC')).toHaveLength(2)
+	expect(document.querySelector('.pool-action-card .pool-action-deadline')).toBeNull()
+})
+
+test('shows what a finalized truth auction raised', async () => {
+	const truthAuction = createFinalizedTruthAuction({ accumulatedBidAttoEth: 9n * 10n ** 18n, attoEthRaiseCap: 4n * 10n ** 18n, attoEthRaised: 4n * 10n ** 18n, auctionEndsAt: 50n })
+	await renderPoolPage(createSelectedPool(truthAuctionPoolState), { forkAuction: createForkAuctionProps({ forkAuctionDetails: createForkAuctionDetails({ ...truthAuctionPoolState, truthAuction }) }) }, 100n)
+	expect(getStripFigures().slice(0, 2)).toEqual(['ETH raised: 4.00 ETH / 4.00 ETH', 'Auction ended: 50s ago'])
+	expect(document.querySelector('.pool-overview-header .progress-meter-detail')?.textContent).toBe('Target reached')
 })
 
 test('keeps a pending report reachable from the price row in an ended pool', async () => {

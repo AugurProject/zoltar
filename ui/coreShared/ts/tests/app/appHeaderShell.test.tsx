@@ -24,6 +24,7 @@ function createSimulationController(): SimulationController {
 		bootstrapError: undefined,
 		bootstrapLabel: undefined,
 		bootstrapProgress: undefined,
+		bootstrapWarning: undefined,
 		blockCountSinceReset: 0n,
 		currentScenario: 'baseline',
 		currentTimestamp: 1n,
@@ -228,16 +229,17 @@ describe('AppHeaderShell', () => {
 
 describe('ProtocolAppFrame', () => {
 	test("replaces every app's static loading placeholder when the application frame mounts", async () => {
-		// The placeholder must share the frame's root element so the first render reuses it instead of leaving "Loading…" on the page.
+		// mountApp removes the placeholder only when it is the page's top-level frame; any other markup would leave "Loading…" on the page.
 		const repositoryRoot = join(import.meta.dir, '..', '..', '..', '..', '..')
-		for (const page of ['ui/zoltar/index.html', 'ui/statoblast/index.html', 'ui/trading/index.html', 'tooling/ui/index.production.html']) {
+		for (const page of ['ui/zoltar/index.html', 'ui/statoblast/index.html', 'ui/trading/index.html', 'ui/openoracle/index.html', 'tooling/ui/index.production.html']) {
 			const placeholder = /<body[^>]*>[\s\S]*?(<div class="app-frame">[\s\S]*?<\/div>)/.exec(readFileSync(join(repositoryRoot, page), 'utf8'))?.[1]
 			if (placeholder === undefined) throw new Error(`Missing the loading placeholder in ${page}`)
-			const domEnvironment = installDomEnvironment('http://localhost/#/zoltar')
+			const domEnvironment = installDomEnvironment('http://localhost/?genesis=yes#/zoltar')
 			try {
 				document.body.innerHTML = placeholder
 				await act(async () => {
 					await mountApp({
+						applicationTitle: 'Zoltar',
 						initialize: async () => undefined,
 						root: () => (
 							<ProtocolAppFrame accountAddress={undefined} currentBlockNumber={undefined} currentTimestamp={undefined} header={<div>Header</div>} heading={<h1>Page</h1>} notices={undefined} routeContentDisabled={false} transactionRouteKey='zoltar'>

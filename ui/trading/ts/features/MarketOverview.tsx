@@ -4,7 +4,7 @@ import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { FavoriteToggle } from '@zoltar/ui-core-shared/components/FavoriteToggle.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
-import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { StickyObjectContext } from '@zoltar/ui-core-shared/components/StickyObjectContext.js'
@@ -55,9 +55,9 @@ export function MarketContracts({ market }: { market: LiveMarket }) {
 				<MetricField label={liveCopy.securityPool}>
 					<TradingSecurityPoolLink value={market.pool} />
 				</MetricField>
-				<MetricField label={liveCopy.tradingPool}>{market.pair === undefined ? commonCopy.notDeployed : <ReadOnlyAddressValue address={market.pair} responsiveAbbreviation />}</MetricField>
+				<MetricField label={liveCopy.tradingPool}>{market.pair === undefined ? commonCopy.notDeployed : <AddressValue address={market.pair} />}</MetricField>
 				<MetricField label={marketsCopy.shareToken}>
-					<ReadOnlyAddressValue address={market.shareToken} responsiveAbbreviation />
+					<AddressValue address={market.shareToken} />
 				</MetricField>
 			</DataGrid>
 		</ReadOnlyDetailAccordion>
@@ -87,13 +87,13 @@ export function MarketPageHeader({ market, nowSeconds, headingRef, actions }: { 
 	)
 }
 
-/** The price, or the outcome that replaced it once the question resolved; a market that stopped trading shows its last price, muted. */
+/** The price, or the outcome that replaced it once the question resolved. Open odds lead the column; a market that stopped trading steps down to its last price, muted. */
 function MarketPrice({ market, nowSeconds }: { market: LiveMarket; nowSeconds: bigint }) {
 	const priceState = marketPriceState(market, nowSeconds)
 	if (priceState.kind === 'resolved') return <MarketResolution outcome={priceState.outcome} />
 	const yesTenths = marketYesTenths(market)
 	if (yesTenths === undefined) return <UserMessage className='detail' detail={marketsCopy.priceUnavailable} />
-	return <ProbabilityBar yesPercent={yesTenths / 10} last={priceState.kind === 'last'} />
+	return priceState.kind === 'last' ? <ProbabilityBar last yesPercent={yesTenths / 10} /> : <ProbabilityBar variant='headline' yesPercent={yesTenths / 10} />
 }
 
 /** The market page's reading column: conditional odds, the facts that decide a trade, the wallet's position, the question's own description, and contracts. */

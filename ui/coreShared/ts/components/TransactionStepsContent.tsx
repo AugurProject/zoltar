@@ -26,10 +26,10 @@ function TransactionStepReview({ contractAddress, contractLabel, description, ro
 							<dt>{transactionCopy.contract}</dt>
 							<dd>
 								{contractLabel === undefined ? (
-									<AddressValue address={contractAddress} copyable={false} />
+									<AddressValue address={contractAddress} />
 								) : (
 									<>
-										{contractLabel} <AddressValue address={contractAddress} copyable={false} />
+										{contractLabel} <AddressValue address={contractAddress} />
 									</>
 								)}
 							</dd>

@@ -812,6 +812,12 @@ void describe('TradingSection', () => {
 		const shareOutcomeDropdown = modalQueries.getByRole('button', { name: 'Share outcome to migrate' }) as HTMLButtonElement
 		expect(shareOutcomeDropdown.disabled).toBe(false)
 		expect(modalQueries.getByText('Target child universes')).not.toBeNull()
+		expect(modalQueries.getByRole('heading', { name: 'Fork question' })).toBeTruthy()
+		expect(modalQueries.getByText('Will this resolve?')).toBeTruthy()
+		expect(modalQueries.getByText('Question description')).toBeTruthy()
+		expect(modalQueries.getByText('Scalar')).toBeTruthy()
+		expect(modalQueries.getByText('Display range')).toBeTruthy()
+		expect(modalQueries.getByText('USD')).toBeTruthy()
 	})
 
 	void test('shows the share redemption disabled reason before finalization', async () => {
@@ -885,6 +891,17 @@ void describe('TradingSection', () => {
 		expect(getTransactionButtonState(document.body, 'Mint complete sets').reason).toBe('Minting is paused while the outcome is disputed.')
 	})
 
+	void test('does not call minting paused for a forked pool whose escalation game has ended', async () => {
+		// The escalation flag stays set after the game, but a fork has closed minting for good.
+		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ ordinaryEscalationGameStarted: true, systemState: 'forkMigration', totalPoolHeldAttoRep: 10n ** 18n }) })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const mintState = getTransactionButtonState(document.body, 'Mint complete sets')
+		expect(mintState.disabled).toBe(true)
+		// The stage, not the zero capacity the stale flag causes, explains why minting is closed.
+		expect(mintState.reason).toBe('This action is unavailable in the current pool state.')
+	})
+
 	void test('shows how many shares of the selected outcome a migration moves and each outcome balance', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
@@ -930,7 +947,7 @@ void describe('TradingSection', () => {
 		expect(getExactValueTitles(ethMetric, '1.5 ETH')).toHaveLength(1)
 	})
 
-	void test('blocks minting once the selected market has finalized', async () => {
+	void test('leaves minting out once the selected market has finalized, since it can never apply again', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
 				{...createTradingSectionProps({
@@ -941,9 +958,18 @@ void describe('TradingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const mintButton = documentQueries.getByRole('button', { name: 'Mint complete sets' }) as HTMLButtonElement
-		expect(mintButton.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Mint complete sets').reason).toBe('This question has already finalized.')
+		expect(documentQueries.queryByRole('button', { name: 'Mint complete sets' })).toBeNull()
+		// Every other share action can still apply, so each stays in place with its reason when blocked.
+		expect(Array.from(document.querySelectorAll('.vault-action-launcher-grid .action-launcher-card button')).map(button => button.textContent)).toEqual(['Redeem complete sets', 'Migrate forked shares', 'Redeem resolved shares'])
+	})
+
+	void test('replaces empty holdings with one line once balances load as zero', async () => {
+		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ tradingDetails: createTradingDetails({ maxRedeemableCompleteSetsAttoShares: 0n, shareBalances: createShareBalances({ invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n }) }) })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.querySelector('.trading-holdings-empty')?.textContent).toBe('You hold no shares in this pool.')
+		expect(document.querySelector('.trading-holdings-hero')).toBeNull()
+		expect(document.querySelector('.ranked-bar-list')).toBeNull()
 	})
 
 	void test('shows mint write failures through the shared error notice', async () => {
@@ -1121,6 +1147,9 @@ void describe('TradingSection', () => {
 		})
 
 		const modalQueries = within(documentQueries.getByRole('dialog'))
+		expect(modalQueries.getByRole('heading', { name: 'Fork question' })).toBeTruthy()
+		expect(modalQueries.getByText('Question description')).toBeTruthy()
+		expect(modalQueries.getByText('Binary')).toBeTruthy()
 		const selectAllButton = modalQueries.getByRole('button', { name: 'Select all' }) as HTMLButtonElement
 		const clearButton = modalQueries.getByRole('button', { name: 'Clear' }) as HTMLButtonElement
 		expect(clearButton.disabled).toBe(true)

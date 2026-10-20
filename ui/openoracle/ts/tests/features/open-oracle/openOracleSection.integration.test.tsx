@@ -13,12 +13,14 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { createInjectedBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import type { InjectedEthereum } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
-import { OpenOracleSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/OpenOracleSection.js'
+import { OpenOracleSection } from '../../../features/open-oracle/components/OpenOracleSection.js'
 import { useOpenOracleOperations } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleOperations.js'
 import { getOpenOracleSelectedReportActionMode } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
 import type { OpenOracleView } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
 import { getOpenOracleAddress } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { createOpenOracleReportInstance, loadOpenOracleReportDetails } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
+import { loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
+import { getRepAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { useState } from 'preact/hooks'
@@ -106,7 +108,10 @@ function OpenOracleSectionHarness({ accountAddress, initialActiveView = 'create'
 				onCancelOpenOracleWithdrawalBalanceCheck={openOracle.cancelWithdrawalBalanceCheck}
 				onCreateOpenOracleGame={() => void openOracle.createOpenOracleGame()}
 				onDisputeReport={() => void openOracle.disputeReport()}
-				onLoadOracleReport={reportIdInput => void openOracle.loadOracleReport(reportIdInput)}
+				onLoadOracleReport={reportIdInput => {
+					setActiveView('selected-report')
+					void openOracle.loadOracleReport(reportIdInput)
+				}}
 				onOpenOracleCreateFormChange={update => openOracle.setOpenOracleCreateForm(current => ({ ...current, ...update }))}
 				onOpenOracleFormChange={update => openOracle.setOpenOracleForm(current => ({ ...current, ...update }))}
 				onSettleReport={() => void openOracle.settleReport()}
@@ -237,7 +242,9 @@ describe.serial('OpenOracleSection integration', () => {
 			await mockWindow.request({ method: 'anvil_setChainId', params: [SEPOLIA_NETWORK_PROFILE.chain.id] })
 			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0, SEPOLIA_NETWORK_PROFILE.chain)
 			Reflect.set(domEnvironment.window, 'ethereum', createInjectedWalletShim(mockWindow, walletAddress))
-			resetActiveEnvironment = installActiveEnvironmentForTesting(createInjectedBackend({ profile: { ...MAINNET_NETWORK_PROFILE, chain: SEPOLIA_NETWORK_PROFILE.chain, chainIdHex: SEPOLIA_NETWORK_PROFILE.chainIdHex, id: 'sepolia', displayName: 'Sepolia' } }))
+			resetActiveEnvironment = installActiveEnvironmentForTesting(
+				createInjectedBackend({ profile: { ...MAINNET_NETWORK_PROFILE, genesisRepTokenAddress: getAddress(addressString(GENESIS_REPUTATION_TOKEN)), chain: SEPOLIA_NETWORK_PROFILE.chain, chainIdHex: SEPOLIA_NETWORK_PROFILE.chainIdHex, id: 'sepolia', displayName: 'Sepolia' } }),
+			)
 			uiReadClient = createConnectedReadClient()
 		},
 		afterTest: async () => {
@@ -249,10 +256,17 @@ describe.serial('OpenOracleSection integration', () => {
 		},
 	})
 
+	test('reads the deployed genesis REP balance using the active profile', async () => {
+		const expectedBalance = await loadErc20Balance(uiReadClient, addressString(GENESIS_REPUTATION_TOKEN), walletAddress)
+		expect(expectedBalance).toBeGreaterThan(0n)
+		expect(await loadErc20Balance(uiReadClient, getRepAddress(), walletAddress)).toBe(expectedBalance)
+	})
+
 	test('creates, funds, and opens an atomic initial report through the UI', async () => {
 		const renderedComponent = await renderIntoDocument(<OpenOracleSectionHarness accountAddress={walletAddress} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
-		expect(within(document.body).getByText('Define the token pair and initial report economics first. Default dispute and timing settings are available below for users who need to tune the report lifecycle.')).not.toBeNull()
+		expect(within(document.body).getByText('Standalone only. Start pool-managed requests from a security pool.')).not.toBeNull()
+		expect(within(document.body).getByLabelText('Base token address')).not.toBeNull()
 		expect(within(document.body).queryByText('Transaction review')).toBeNull()
 
 		await fillOpenOracleCreateForm()

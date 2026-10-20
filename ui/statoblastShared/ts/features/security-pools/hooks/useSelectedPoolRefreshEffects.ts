@@ -7,6 +7,9 @@ import type { ForkAuctionDetails, ListedSecurityPool, OpenOracleActionResult, Or
 import type { SecurityPoolWorkflowRouteContentProps } from '../../types.js'
 import { isSelectedPoolForkWorkflowView, type SelectedPoolView, shouldReloadSelectedPoolDetails } from '../lib/securityPoolWorkflow.js'
 import type { getLiquidationNoticeState } from '../lib/liquidationStatus.js'
+import type { SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
+import { isForkLifecycleState } from '../lib/poolLifecycle.js'
+import { hasEscalationGame } from '../../markets/lib/trading.js'
 
 type UseSelectedPoolRefreshEffectsParameters = {
 	currentTimestamp: bigint | undefined
@@ -32,6 +35,7 @@ type UseSelectedPoolRefreshEffectsParameters = {
 	securityVault: SecurityPoolWorkflowRouteContentProps['securityVault']
 	selectedPool: ListedSecurityPool | undefined
 	selectedPoolHasActualForkActivity: boolean
+	selectedPoolLifecycleState: SecurityPoolLifecycleState | undefined
 	selectedPoolManagerAddress: Address | undefined
 	selectedPoolQuestionOutcome: ReportingOutcomeKey | 'none' | undefined
 	selectedPoolRefreshNonce: number
@@ -69,6 +73,7 @@ export function useSelectedPoolRefreshEffects({
 	securityVault,
 	selectedPool,
 	selectedPoolHasActualForkActivity,
+	selectedPoolLifecycleState,
 	selectedPoolManagerAddress,
 	selectedPoolQuestionOutcome,
 	selectedPoolRefreshNonce,
@@ -139,9 +144,11 @@ export function useSelectedPoolRefreshEffects({
 		lastQueuedOperationRefreshHash.current = queuedOperationHash
 		void onLoadPoolOracleManager(selectedPoolManagerAddress)
 	}, [loadingPoolOracleManager, onLoadPoolOracleManager, securityPoolOverviewResult, selectedPoolManagerAddress])
+	// Once an escalation has started, the reporting stage decides whether the pool is forked, which the header reflects on every tab.
+	const selectedPoolEscalationStarted = selectedPool !== undefined && hasEscalationGame(selectedPool)
 	useEffect(() => {
 		const shouldAutoloadReportingForFork = view === 'fork-workflow'
-		const shouldAutoloadReportingForCurrentView = view === 'reporting' || shouldAutoloadReportingForFork
+		const shouldAutoloadReportingForCurrentView = view === 'reporting' || shouldAutoloadReportingForFork || selectedPoolEscalationStarted
 		if (!shouldAutoloadReportingForCurrentView || !reportingReady || !showSelectedPoolWorkflowDetails || normalizedSelectedPoolAddress === undefined) {
 			lastReportingAutoLoadKey.current = undefined
 			return
@@ -169,6 +176,7 @@ export function useSelectedPoolRefreshEffects({
 		reporting.loadingReportingDetails,
 		reporting.onLoadReporting,
 		reportingReady,
+		selectedPoolEscalationStarted,
 		selectedPoolRefreshNonce,
 		selectedPoolHasActualForkActivity,
 		selectedPoolQuestionOutcome,
@@ -176,9 +184,12 @@ export function useSelectedPoolRefreshEffects({
 		showSelectedPoolWorkflowDetails,
 		view,
 	])
+	// A forked pool's header shows its migration or auction deadline on every tab, so its fork details load whatever the view.
+	// The derived lifecycle decides, as the header does: a parent pool in a forked universe is forked while its registry state is still operational.
+	const selectedPoolInForkStage = isForkLifecycleState(selectedPoolLifecycleState)
 	useEffect(() => {
 		const normalizedSelectedPoolAddress = normalizeAddress(selectedPool?.securityPoolAddress)
-		if (!isSelectedPoolForkWorkflowView(view) || !showSelectedPoolWorkflowDetails || normalizedSelectedPoolAddress === undefined) {
+		if ((!isSelectedPoolForkWorkflowView(view) && !selectedPoolInForkStage) || !showSelectedPoolWorkflowDetails || normalizedSelectedPoolAddress === undefined) {
 			lastForkAuctionAutoLoadKey.current = undefined
 			return
 		}
@@ -196,7 +207,7 @@ export function useSelectedPoolRefreshEffects({
 		lastForkAuctionAutoLoadKey.current = forkAuctionAutoLoadKey
 		lastHandledForkAuctionRefreshNonceRef.current = selectedPoolRefreshNonce
 		void forkAuction.onLoadForkAuction(getAddress(normalizedSelectedPoolAddress))
-	}, [currentForkAuctionDetails, forkAuction.loadingForkAuctionDetails, forkAuction.onLoadForkAuction, loadedForkAuctionDetails?.securityPoolAddress, selectedPool?.securityPoolAddress, selectedPoolRefreshNonce, showSelectedPoolWorkflowDetails, view])
+	}, [currentForkAuctionDetails, forkAuction.loadingForkAuctionDetails, forkAuction.onLoadForkAuction, loadedForkAuctionDetails?.securityPoolAddress, selectedPool?.securityPoolAddress, selectedPoolInForkStage, selectedPoolRefreshNonce, showSelectedPoolWorkflowDetails, view])
 	useEffect(() => {
 		const reportingRefreshHash = reporting.reportingResult?.hash
 		if (reportingRefreshHash === undefined) {

@@ -24,7 +24,7 @@ export function ApplicationErrorNotice({ errorMessage, onRetry }: ApplicationErr
 		}
 	}
 
-	// The same frame and main landmark as the app and its static loading placeholder, so mounting the notice replaces the placeholder.
+	// The same frame and main landmark as the application, so the notice keeps the page's layout and landmarks.
 	return (
 		<div className='app-frame'>
 			<main>

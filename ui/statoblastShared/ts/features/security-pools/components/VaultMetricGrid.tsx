@@ -6,9 +6,10 @@ import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
-import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
+import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import type { VaultMetricGridProps } from '../../types.js'
-import { getVaultHealthPresentation, getVaultHealthStatus } from '../lib/vaultHealth.js'
+import type { VaultHealthTier } from '../lib/vaultHealth.js'
+import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 
 function VaultPrimaryMetric({ className, label, suffix, value }: { className?: string; label: string; suffix: string; value: bigint | undefined }) {
 	return (
@@ -37,44 +38,27 @@ function DisputeStakedMetric({ value }: { value: bigint }) {
 	)
 }
 
-function PriceValidUntilMetric({ timestamp }: { timestamp: bigint }) {
-	return (
-		<MetricField label={securityPoolCopy.priceValidUntil}>
-			<TimestampValue timestamp={timestamp} />
-		</MetricField>
-	)
+/** The badge tone, verdict, and value tone for a vault health tier; an unknown tier has no verdict. */
+export function getVaultHealthPresentation(tier: VaultHealthTier) {
+	switch (tier) {
+		case 'underwater':
+			return { badgeTone: 'danger' as const, statusLabel: securityPoolCopy.vaultHealthUnderwater, toneClass: 'metric-value-danger' }
+		case 'nearMinimum':
+			return { badgeTone: 'warning' as const, statusLabel: securityPoolCopy.vaultHealthNearMinimum, toneClass: 'metric-value-warning' }
+		case 'healthy':
+			return { badgeTone: 'ok' as const, statusLabel: securityPoolCopy.vaultHealthHealthy, toneClass: 'metric-value-success' }
+		case 'unknown':
+			return { badgeTone: 'muted' as const, statusLabel: undefined, toneClass: undefined }
+		default:
+			return assertNever(tier)
+	}
 }
 
-const VAULT_HEALTH_TONE_CLASSES = { healthy: 'metric-value-success', nearMinimum: 'metric-value-warning', underwater: 'metric-value-danger' } as const
-
-function getAssociatedRepHealth({ associatedRepPerCapacityBps, isCurrentlyHealthy, selectedPoolStatoblastSecurityMultiplierBps }: { associatedRepPerCapacityBps: bigint | undefined; isCurrentlyHealthy: boolean | undefined; selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined }) {
-	const status = getVaultHealthStatus({ associatedRepPerCapacityBps, isCurrentlyHealthy, statoblastSecurityMultiplierBps: selectedPoolStatoblastSecurityMultiplierBps })
-	if (status === 'unknown') return { statusLabel: undefined, toneClass: undefined }
-	return { statusLabel: getVaultHealthPresentation(status).label, toneClass: VAULT_HEALTH_TONE_CLASSES[status] }
-}
-
-export function VaultMetricGrid({
-	openInterestAttoEth,
-	associatedRepPerCapacityBps,
-	badDebtAttoEth,
-	className = '',
-	layout = 'grid',
-	disputeStakedAttoRep,
-	isCurrentlyHealthy,
-	poolEnded = false,
-	poolHeldRepPerCapacityBps: _poolHeldRepPerCapacityBps,
-	priceValidUntilTimestamp,
-	vaultAttoRepBacking,
-	selectedPoolStatoblastSecurityMultiplierBps,
-	underwritingLimitAttoEth,
-}: VaultMetricGridProps) {
-	const { statusLabel: associatedRepStatusLabel, toneClass: associatedRepToneClass } = getAssociatedRepHealth({
-		associatedRepPerCapacityBps,
-		isCurrentlyHealthy,
-		selectedPoolStatoblastSecurityMultiplierBps,
-	})
+export function VaultMetricGrid({ openInterestAttoEth, associatedRepPerCapacityBps, badDebtAttoEth, className = '', layout = 'grid', disputeStakedAttoRep, healthTier, poolEnded = false, vaultAttoRepBacking, underwritingLimitAttoEth }: VaultMetricGridProps) {
+	const { badgeTone: healthBadgeTone, statusLabel: associatedRepStatusLabel, toneClass: associatedRepToneClass } = getVaultHealthPresentation(healthTier)
 
 	// The directory preview is one flat metric row, so every figure shares the grid's label, value size, and baseline.
+	// The backing ratio carries the health tone (the row's badge names the verdict); a zero dispute stake is left out.
 	if (layout === 'preview')
 		return (
 			<div className={['vault-preview-strip', className].filter(Boolean).join(' ')}>
@@ -84,9 +68,13 @@ export function VaultMetricGrid({
 				<MetricField label={commonCopy.poolHeldVaultRepBackingAttoRep}>
 					<CurrencyValue exactWhenRoundedToZero value={vaultAttoRepBacking} suffix={commonCopy.rep} />
 				</MetricField>
-				{disputeStakedAttoRep === undefined ? undefined : <DisputeStakedMetric value={disputeStakedAttoRep} />}
+				{associatedRepPerCapacityBps === undefined ? undefined : (
+					<MetricField label={securityPoolCopy.associatedRepPerCapacity} valueClassName={associatedRepToneClass}>
+						{formatMultiplier(associatedRepPerCapacityBps, 4)}
+					</MetricField>
+				)}
+				{disputeStakedAttoRep === undefined || disputeStakedAttoRep === 0n ? undefined : <DisputeStakedMetric value={disputeStakedAttoRep} />}
 				{badDebtAttoEth !== undefined && badDebtAttoEth > 0n ? <BadDebtMetric value={badDebtAttoEth} valueClassName='metric-value-danger' /> : undefined}
-				{priceValidUntilTimestamp === undefined ? undefined : <PriceValidUntilMetric timestamp={priceValidUntilTimestamp} />}
 			</div>
 		)
 
@@ -94,7 +82,9 @@ export function VaultMetricGrid({
 		<div className={['vault-detail-stage', className].filter(Boolean).join(' ')}>
 			{poolEnded ? undefined : (
 				<div className='vault-health-status'>
-					<p className={`vault-health ${associatedRepToneClass ?? ''}`}>{associatedRepStatusLabel ?? workspaceCopy.healthUnknown}</p>
+					<Badge className='vault-health' tone={healthBadgeTone}>
+						{associatedRepStatusLabel ?? workspaceCopy.healthUnknown}
+					</Badge>
 					<RepPriceStatusLabel />
 				</div>
 			)}
@@ -129,7 +119,6 @@ export function VaultMetricGrid({
 					)}
 					{badDebtAttoEth === undefined || badDebtAttoEth > 0n ? undefined : <BadDebtMetric value={badDebtAttoEth} />}
 					{disputeStakedAttoRep === undefined || disputeStakedAttoRep > 0n ? undefined : <DisputeStakedMetric value={disputeStakedAttoRep} />}
-					{priceValidUntilTimestamp === undefined ? undefined : <PriceValidUntilMetric timestamp={priceValidUntilTimestamp} />}
 				</div>
 			</details>
 		</div>

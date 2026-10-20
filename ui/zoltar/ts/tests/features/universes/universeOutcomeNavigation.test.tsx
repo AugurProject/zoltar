@@ -7,6 +7,7 @@ import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
+import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 import { createForkedUniverseSummary } from '@zoltar/ui-core-shared/tests/testUtils/universeFixtures.js'
 import { UniverseOutcomeNavigation, type LoadUniverseOutcomes } from '@zoltar/ui-zoltar-shared/features/universes/components/UniverseOutcomeNavigation.js'
 import { getScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
@@ -16,7 +17,7 @@ import { appBlockWatcher } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 const address = getAddress('0x00000000000000000000000000000000000000f1')
 const universe = createForkedUniverseSummary({ universeId: 0n, zoltarAddress: address, relatedUniversesLoaded: false, childUniverses: [] })
 const page: UniverseOutcomePage = {
-	title: 'Which proposal wins?',
+	question: createMarketDetails({ title: 'Which proposal wins?', description: 'Resolve using the final published vote tally.', marketType: 'categorical', outcomeLabels: ['Alpha', 'Beta'], createdAt: 1772540087n, startTime: 1772540200n, endTime: 1775606400n }),
 	hasNextPage: false,
 	choices: [
 		{ label: 'Alpha', universeId: 10n, exists: true },
@@ -115,7 +116,11 @@ describe('outcome-based universe traversal', () => {
 	test('opens a deployed outcome directly from a migration-style card without requiring an ID', async () => {
 		const view = lifecycle.trackRendered(await renderIntoDocument(<UniverseOutcomeNavigation universe={universe} loadPage={async () => page} />))
 		const q = within(view.container)
-		await waitFor(() => expect(q.queryByText('Fork question: Which proposal wins?')).not.toBeNull())
+		await waitFor(() => expect(q.queryByText('Which proposal wins?')).not.toBeNull())
+		expect(q.getByRole('heading', { name: 'Fork question' })).toBeTruthy()
+		expect(view.container.textContent).toContain('Resolve using the final published vote tally.')
+		expect(view.container.textContent).toContain('2026-03-03 12:16:40 UTC')
+		expect(view.container.textContent).toContain('2026-04-08 00:00:00 UTC')
 		const open = q.getByRole('button', { name: 'Open Alpha universe' })
 		expect(view.container.querySelectorAll('.migration-outcome-row')).toHaveLength(2)
 		expect(open.hasAttribute('aria-pressed')).toBe(false)
@@ -144,7 +149,7 @@ describe('outcome-based universe traversal', () => {
 		})
 		await waitFor(() => expect(q.queryByText('Child universes could not be loaded. Reason: RPC unavailable.')).not.toBeNull())
 		fireEvent.click(q.getByRole('button', { name: 'Retry' }))
-		await waitFor(() => expect(q.queryByText('Fork question: Which proposal wins?')).not.toBeNull())
+		await waitFor(() => expect(q.queryByText('Which proposal wins?')).not.toBeNull())
 		expect(calls).toBe(2)
 	})
 
@@ -240,7 +245,7 @@ describe('outcome-based universe traversal', () => {
 
 	test('a late read cannot replace outcomes after moving to another universe', async () => {
 		const pending = createDeferred<UniverseOutcomePage>()
-		const loader: LoadUniverseOutcomes = async (_address, id) => (id === 0n ? await pending.promise : { ...page, title: 'Child fork', choices: [{ label: 'Delta', universeId: 40n, exists: true }] })
+		const loader: LoadUniverseOutcomes = async (_address, id) => (id === 0n ? await pending.promise : { ...page, question: createMarketDetails({ title: 'Child fork' }), choices: [{ label: 'Delta', universeId: 40n, exists: true }] })
 		const view = lifecycle.trackRendered(await renderIntoDocument(<UniverseOutcomeNavigation universe={universe} loadPage={loader} />))
 		await act(() => render(<UniverseOutcomeNavigation universe={{ ...universe, universeId: 10n }} loadPage={loader} />, view.container))
 		await waitFor(() => expect(view.container.textContent).toContain('Child fork'))
@@ -259,7 +264,7 @@ describe('outcome-based universe traversal', () => {
 			await renderIntoDocument(
 				<UniverseOutcomeNavigation
 					universe={universe}
-					loadPage={async () => ({ ...page, choices: [], hasNextPage: false, scalarQuestion: question })}
+					loadPage={async () => ({ ...page, choices: [], hasNextPage: false, question: createMarketDetails({ ...question, marketType: 'scalar', outcomeLabels: [] }) })}
 					loadOutcome={async (_address, _id, index) => {
 						indexes.push(index)
 						return { universeId: 30n, exists: true }
@@ -296,7 +301,7 @@ describe('outcome-based universe traversal', () => {
 			await renderIntoDocument(
 				<UniverseOutcomeNavigation
 					universe={universe}
-					loadPage={async () => ({ ...page, choices: [], hasNextPage: false, scalarQuestion: question })}
+					loadPage={async () => ({ ...page, choices: [], hasNextPage: false, question: createMarketDetails({ ...question, marketType: 'scalar', outcomeLabels: [] }) })}
 					loadOutcome={async (_address, _id, index) => {
 						indexes.push(index)
 						return index === getScalarOutcomeIndex(question, 0n) ? await pending.promise : { universeId: 40n, exists: deployed }
@@ -330,7 +335,7 @@ describe('outcome-based universe traversal', () => {
 			await renderIntoDocument(
 				<UniverseOutcomeNavigation
 					universe={universe}
-					loadPage={async () => ({ ...page, choices: [], hasNextPage: false, scalarQuestion: question })}
+					loadPage={async () => ({ ...page, choices: [], hasNextPage: false, question: createMarketDetails({ ...question, marketType: 'scalar', outcomeLabels: [] }) })}
 					loadOutcome={async (_address, _id, index) => {
 						indexes.push(index)
 						return { universeId: 40n, exists: true }
@@ -356,7 +361,7 @@ describe('outcome-based universe traversal', () => {
 			await renderIntoDocument(
 				<UniverseOutcomeNavigation
 					universe={universe}
-					loadPage={async () => ({ ...page, choices: [], scalarQuestion: question })}
+					loadPage={async () => ({ ...page, choices: [], question: createMarketDetails({ ...question, marketType: 'scalar', outcomeLabels: [] }) })}
 					loadOutcome={async (_address, _id, index) => {
 						indexes.push(index)
 						if (indexes.length === 1) throw new Error('Unknown error', { cause: new Error('RPC read timed out. Retry loading data.') })

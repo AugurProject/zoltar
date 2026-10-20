@@ -5,7 +5,7 @@ import { getChainDisplayLabel } from '@zoltar/ui-core-shared/wallet/network.js'
 import { WalletChipPlaceholder } from '@zoltar/ui-core-shared/components/WalletChip.js'
 import { AccountMenu, AccountMenuNetworkFact } from '@zoltar/ui-core-shared/app/components/AccountMenu.js'
 import type { ComponentChildren } from 'preact'
-import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import * as appCopy from '../copy/app.js'
 import * as availabilityCopy from '../copy/availability.js'
 import * as deploymentCopy from '../copy/deployment.js'
@@ -37,7 +37,7 @@ export type TradingWalletControlsProps = Readonly<{
 function deploymentWalletLabel(state: DeploymentWalletState) {
 	if (state.connecting) return appCopy.connectingWallet
 	if (state.account === undefined) return appCopy.connectWallet
-	return <ReadOnlyAddressValue address={state.account} responsiveAbbreviation />
+	return appCopy.disconnectWallet
 }
 
 type TradingWalletSlotState = Pick<TradingWalletControlsProps, 'deploymentSetupActive' | 'liveDeploymentStatus' | 'routeOwnsLiveWallet'>
@@ -80,6 +80,7 @@ export function TradingWalletControls({
 	if (!hasTradingWalletControls({ deploymentSetupActive, liveDeploymentStatus, routeOwnsLiveWallet })) return null
 	return (
 		<div className='trading-wallet-actions'>
+			{deploymentSetupActive && deploymentWalletState.account !== undefined ? <AddressValue address={deploymentWalletState.account} abbreviated /> : undefined}
 			{deploymentSetupActive ? (
 				<WalletConnectionControl
 					label={deploymentWalletLabel(deploymentWalletState)}

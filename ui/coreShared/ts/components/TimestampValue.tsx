@@ -9,13 +9,14 @@ type TimestampValueProps = {
 	className?: string
 	currentTimestamp?: bigint
 	loading?: boolean
-	relative?: boolean
+	/** Where the relative time goes: `'after'` (default) brackets it after the UTC time; `'first'` leads with it and sets the UTC time quietly beneath, for narrow columns where the full form would wrap over three lines; `false` leaves it out. */
+	relative?: 'after' | 'first' | false
 	timestamp: bigint | undefined
 	undefinedText?: ComponentChildren
 	zeroText?: ComponentChildren
 }
 
-export function TimestampValue({ className = '', currentTimestamp, loading = false, relative = true, timestamp, undefinedText = getMetricPlaceholderPresentation(undefined)?.placeholder, zeroText }: TimestampValueProps) {
+export function TimestampValue({ className = '', currentTimestamp, loading = false, relative = 'after', timestamp, undefinedText = getMetricPlaceholderPresentation(undefined)?.placeholder, zeroText }: TimestampValueProps) {
 	const chainCurrentTimestamp = useChainTimestamp()
 	const resolvedCurrentTimestamp = currentTimestamp ?? chainCurrentTimestamp ?? getWallClockTimestamp()
 
@@ -45,15 +46,25 @@ export function TimestampValue({ className = '', currentTimestamp, loading = fal
 	const localTimestamp = formatLocalTimestamp(timestamp)
 	const localTimeLabel = localTimestamp === undefined ? undefined : commonCopy.formatLocalTimeLabel(localTimestamp)
 
+	const parts =
+		relative === 'first' ? (
+			<>
+				<span className='timestamp-value-lead'>{relativeTimestamp}</span> <span className='timestamp-value-absolute'>{absoluteTimestamp}</span>
+			</>
+		) : (
+			<>
+				{absoluteTimestamp}
+				{relative === 'after' ? (
+					<>
+						{' '}
+						<span className='timestamp-value-relative'>({relativeTimestamp})</span>
+					</>
+				) : undefined}
+			</>
+		)
 	return (
-		<time className={`timestamp-value ${className}`} dateTime={dateTime} title={localTimeLabel ?? absoluteTimestamp}>
-			{absoluteTimestamp}
-			{relative ? (
-				<>
-					{' '}
-					<span className='timestamp-value-relative'>({relativeTimestamp})</span>
-				</>
-			) : undefined}
+		<time className={`timestamp-value${relative === 'first' ? ' is-relative-first' : ''} ${className}`} dateTime={dateTime} title={localTimeLabel ?? absoluteTimestamp}>
+			{parts}
 			{localTimeLabel === undefined ? undefined : (
 				<>
 					{' '}

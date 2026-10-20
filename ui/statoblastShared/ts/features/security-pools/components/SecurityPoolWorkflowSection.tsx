@@ -82,8 +82,6 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 		poolOracleManagerDetails,
 		poolPriceOracleResult,
 		repPerEthPrice,
-		repPerEthSource,
-		repPerEthSourceUrl,
 		reporting,
 		securityPoolAddress,
 		securityPoolOverviewError,
@@ -103,6 +101,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 	const model = derivePoolViewModel({
 		...props,
 		forkAuctionDetails: forkAuction.forkAuctionDetails,
+		loadingForkAuctionDetails: forkAuction.loadingForkAuctionDetails,
 		manualPendingOperationId,
 		now: chainCurrentTimestamp,
 		reportingDetails: reporting.reportingDetails,
@@ -170,6 +169,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 		selectedPoolManagerAddress: model.selectedPoolManagerAddress,
 		selectedPoolQuestionOutcome: model.selectedPoolQuestionOutcome,
 		selectedPoolRefreshNonce,
+		selectedPoolLifecycleState: model.selectedPoolLifecycleState,
 		selectedPoolState: model.selectedPoolState,
 		shouldRefreshSelectedPoolReporting: model.shouldRefreshSelectedPoolReporting,
 		showSelectedPoolWorkflowDetails,
@@ -207,7 +207,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 					selectedPoolView,
 				}
 	const poolOracleStatus = model.oracleStatus === undefined ? undefined : <PoolOracleStatusRow needsPrice={model.needsPrice} oracle={{ ...model.oracleStatus, requestPending: poolOracleActiveAction === 'requestPrice' }} onRequestPrice={openRequestPriceReview} onViewReport={onViewPendingReport} />
-	const poolLifecycle = showSelectedPoolWorkflowDetails ? <PoolLifecycleStepper step={model.lifecycleStep} /> : undefined
+	const poolLifecycle = showSelectedPoolWorkflowDetails ? <PoolLifecycleStepper skippedSteps={model.skippedLifecycleSteps} step={model.lifecycleStep} /> : undefined
 	const openMyVault = () => {
 		if (accountState.address !== undefined && !sameAddress(model.selectedVaultOwner, accountState.address)) {
 			securityVault.onSecurityVaultFormChange({ selectedVaultOwner: accountState.address })
@@ -217,7 +217,13 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 		onSelectedPoolViewChange('vaults')
 	}
 	const poolActions = showSelectedPoolWorkflowDetails ? (
-		<PoolActionCard currentTimestamp={currentTimestamp} currentView={view === 'vaults' && vaultView !== 'selected-vault' ? undefined : view} items={model.actionItems} onChange={nextView => (nextView === 'vaults' ? openMyVault() : onSelectedPoolViewChange(nextView))} />
+		<PoolActionCard
+			currentTimestamp={currentTimestamp}
+			currentView={view === 'vaults' && vaultView !== 'selected-vault' ? undefined : view}
+			deadlineShownInStrip={objectHeaderProps === undefined ? undefined : model.stripDeadline}
+			items={model.actionItems}
+			onChange={nextView => (nextView === 'vaults' ? openMyVault() : onSelectedPoolViewChange(nextView))}
+		/>
 	) : undefined
 	const vaultOperations =
 		loadedSelectedPool === undefined || props.vaultOperationsParameters === undefined ? undefined : (
@@ -273,9 +279,9 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 					</>
 				) : (
 					<>
-						<SecurityPoolObjectHeader {...objectHeaderProps} actions={poolActions} lifecycle={poolLifecycle} oracleStatus={poolOracleStatus} />
+						<SecurityPoolObjectHeader {...objectHeaderProps} actions={poolActions} forkTimeline={model.forkTimeline} lifecycle={poolLifecycle} oracleStatus={poolOracleStatus} showStageFigures={showSelectedPoolWorkflowDetails} />
 						<ErrorNotice message={securityPoolOverviewError} />
-						<SecurityPoolReferenceDetails {...objectHeaderProps} showOraclePrice={model.oracleStatus === undefined && model.selectedPoolLifecycleState !== 'ended'} />
+						<SecurityPoolReferenceDetails {...objectHeaderProps} showOraclePrice={model.oracleStatus === undefined && !model.oraclePriceUnused} />
 					</>
 				)}
 			</div>
@@ -305,8 +311,6 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 								vaultOperations={vaultOperations}
 								poolState={selectedPoolStateModel}
 								repPerEthPrice={repPerEthPrice}
-								repPerEthSource={repPerEthSource}
-								repPerEthSourceUrl={repPerEthSourceUrl}
 								securityVault={securityVault}
 								selectedPool={selectedPool}
 								selectedVaultDetails={model.selectedVaultDetails}

@@ -15,7 +15,7 @@ export type RoutingConfig<TRoute extends AppRoute = AppRoute> = {
 	readonly routes: readonly RouteDefinition<TRoute>[]
 }
 
-const SHARED_ROUTE_QUERY_PARAMETERS = new Set(['network', 'rpcUrl', 'simScenario', 'simState', 'simulate', 'universe'])
+const SHARED_ROUTE_QUERY_PARAMETERS = new Set(['genesis', 'network', 'rpcUrl', 'simScenario', 'simState', 'simulate', 'universe'])
 
 function getPageSearchParams(search = window.location.search) {
 	return new URLSearchParams(search)

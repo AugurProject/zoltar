@@ -92,7 +92,7 @@
 					</table>
 					<p>The defaults are authorization limits, not a spend forecast or a required balance. Before sending a transaction, the command checks the RPC chain ID, EVM features, EIP-1559 support, canonical deployer compatibility, expected bytecode, and fee limits. It then estimates only the missing deployment steps. If the conservative estimate exceeds <code>MAX_TOTAL_COST_ETH</code>, it exits; on a live network nothing has been funded or deployed at that point, while an Anvil development node may already have received the replayed Uniswap contracts. Per-transaction checks enforce the same budget while the deployment runs.</p>
 					<p>The run logs each planned contract with <code>Status: deployed</code>, <code>Status: already deployed</code>, or <code>Status: ready</code> (installed without a submitted transaction), then verifies the bootstrap support contracts. A step that fails logs <code>Status: failed</code> and stops the run.</p>
-					<p>When deployment succeeds, the command runs source verification for the target chain. Only Sepolia (<code>11155111</code>) is verified; any other chain logs that it has no known explorer support and succeeds. Verification submits the addresses in the tracked <code>docs/sepolia-deployment-addresses.json</code> manifest, not addresses discovered during the run. Blockscout and Sourcify run without a key; Etherscan runs only when <code>ETHERSCAN_API_KEY</code> is set and is otherwise skipped with a message. A verification failure makes the command exit nonzero <em>even though the contracts are deployed</em>, and prints the command to retry on its own: <code>bun run verify:contracts -- --chain-id=11155111</code>. Treat a nonzero exit as "check which stage failed" rather than "nothing was deployed".</p>
+					<p>When deployment succeeds, the command runs source verification for the target chain. Only Sepolia (<code>11155111</code>) is verified; any other chain logs that it has no known explorer support and succeeds. Verification submits the addresses in the tracked Yes and No manifests, <code>docs/sepolia-deployment-addresses.json</code> and <code>docs/sepolia-no-deployment-addresses.json</code>, not addresses discovered during the run. Blockscout and Sourcify run without a key; Etherscan runs only when <code>ETHERSCAN_API_KEY</code> is set and is otherwise skipped with a message. A verification failure makes the command exit nonzero <em>even though the contracts are deployed</em>, and prints the command to retry on its own: <code>bun run verify:contracts -- --chain-id=11155111</code>. Treat a nonzero exit as "check which stage failed" rather than "nothing was deployed".</p>
 				</section>
 				<section id="recover-an-interrupted-run">
 					<h2>Recover an interrupted run</h2>
@@ -101,15 +101,15 @@
 				<section id="what-gets-deployed">
 					<h2>What gets deployed</h2>
 					<ul>
-						<li>deterministic genesis <a href="../reference/glossary.html#rep">REP</a></li>
+						<li>separate Yes and No genesis <a href="../reference/glossary.html#rep">REP</a> tokens, each with the reviewed allocations</li>
 						<li>the canonical CREATE2 deployer, the proxy deployer, and Permit2</li>
 						<li>a deterministic Uniswap V3 SwapRouter</li>
 						<li>on chains other than Sepolia, deterministic WETH and a complete Uniswap deployment (V3 factory, QuoterV2, V4 PoolManager, and V4 Quoter)</li>
-						<li>the Zoltar and Statoblast protocol factories and their bootstrap support contracts</li>
-						<li>the Trading factory and router, at the canonical 0.30% fee</li>
+						<li>Zoltar and Statoblast deployments and their bootstrap support contracts for both genesis outcomes</li>
+						<li>a Trading factory and router for each genesis outcome, at the canonical 0.30% fee</li>
 					</ul>
 					<p>The command does not create Uniswap pools or add liquidity; protocol factories create market-specific contracts later, when those features are used. Uniswap sourcing per chain is listed in the <a href="../reference/contract-inventory.html#testnet-uniswap-dependencies">contract inventory</a>, and the <a href="../reference/deployment-status.html">deployment status reference</a> explains how clients read which steps are installed.</p>
-					<p>The bots read core addresses from the tracked mainnet and Sepolia manifests, so on testnets they work only against Sepolia and Sepolia replays such as a local Anvil node with chain ID <code>11155111</code>. A deployment to another testnet is not usable by the bots until that chain has a generated manifest.</p>
+					<p>The bots use the Yes deployment in the tracked mainnet and Sepolia manifests, so on testnets they work only against Sepolia and Sepolia replays such as a local Anvil node with chain ID <code>11155111</code>. A deployment to another testnet is not usable by the bots until that chain has a generated manifest.</p>
 				</section>
 			</article>
 		</main>

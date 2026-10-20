@@ -24,7 +24,6 @@ export const badDebt = 'Bad debt'
 export const loadingVault = 'Loading vault details…'
 export const openPool = 'Open pool'
 export const formatOpenPoolLabel = (questionTitle: string, securityPoolAddress: string) => `Open pool: ${questionTitle} (${securityPoolAddress})`
-export const priceValidUntil = 'Price valid until'
 export const selectedVaultOwner = 'Vault owner address'
 export const missingVaultDetail = 'This vault does not exist.'
 export const withdrawRep = 'Withdraw REP'
@@ -49,6 +48,7 @@ export const formatOtherUniversePoolsHidden = (count: CopyTemplateValue) => `${c
 export const formatPoolUpdated = (relativeTime: CopyTemplateValue) => `Updated ${relativeTime}`
 export const formatCapacityUsed = (percent: CopyTemplateValue) => `${percent}% used`
 export const capacityRemaining = 'remaining'
+export const mintingPaused = 'Minting paused'
 export const poolSearchPlaceholder = 'Address, question ID, or text'
 export const systemState = 'System state'
 export const allStates = 'All states'

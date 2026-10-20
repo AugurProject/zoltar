@@ -1,5 +1,5 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as openOracleCopy from '../../../copy/openOracle.js'
+import * as openOracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
 import { useState } from 'preact/hooks'
 import * as favoritesCopy from '@zoltar/ui-core-shared/copy/favorites.js'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
@@ -15,10 +15,10 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { useDownloadedEntities, useFavorites } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { buildLocalBrowseEntries, normalizeLocalSearchText } from '@zoltar/ui-core-shared/lib/localEntityBrowse.js'
 import { formatRelativeTimestamp, getWallClockTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { formatOpenOracleReportPriceUnit, getOpenOracleReportProgress, getOpenOracleReportProgressLabel, getOpenOracleReportProgressTone, OPEN_ORACLE_REPORT_PROGRESS_ORDER } from '../lib/openOracle.js'
-import { filterOpenOracleReports, getOpenOracleReportEntityId, openOracleReportDownloadStore, parseReportIdSearch, resolveBrowseStatusFilter, type BrowseStatusFilter, type OpenOracleBrowseReport } from '../lib/reportBrowse.js'
+import { formatOpenOracleReportPriceUnit, getOpenOracleReportProgress, getOpenOracleReportProgressLabel, getOpenOracleReportProgressTone, OPEN_ORACLE_REPORT_PROGRESS_ORDER, OPEN_ORACLE_PRICE_UNITS } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
+import { filterOpenOracleReports, getOpenOracleReportEntityId, openOracleReportDownloadStore, parseReportIdSearch, resolveBrowseStatusFilter, type BrowseStatusFilter, type OpenOracleBrowseReport } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/reportBrowse.js'
 import { useChainBlockNumber, useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
-import { getOpenOracleClockLabel, OPEN_ORACLE_PRICE_UNITS, OpenOracleClockValue, renderReportFields } from './OpenOracleReportContent.js'
+import { getOpenOracleClockLabel, OpenOracleClockValue, renderReportFields } from './OpenOracleReportContent.js'
 
 type ReportClock = { currentBlockNumber: bigint | undefined; currentTime: bigint | undefined }
 
@@ -30,7 +30,7 @@ function ReportSummaryRecord({ clock, fetchedAt, onSelectReport, report }: { clo
 			title={reportTitle}
 			badge={
 				<div className='open-oracle-report-badges'>
-					<FavoriteToggle app='statoblast' entityLabel={reportTitle} id={getOpenOracleReportEntityId(report.reportId)} kind='oracleReport' />
+					<FavoriteToggle app='openoracle' entityLabel={reportTitle} id={getOpenOracleReportEntityId(report.reportId)} kind='oracleReport' />
 					<Badge tone={getOpenOracleReportProgressTone(progress)}>{getOpenOracleReportProgressLabel(progress)}</Badge>
 					{/* Cached summaries can be stale; opening the report reads it from chain again. */}
 					<span className='open-oracle-report-updated'>{openOracleCopy.formatReportUpdated(formatRelativeTimestamp(BigInt(Math.floor(fetchedAt / 1000)), getWallClockTimestamp()))}</span>
@@ -66,8 +66,8 @@ export function OpenOracleReportBrowser({ onOpenReport }: { onOpenReport: (repor
 	// Without a chain timestamp yet, wall-clock time still tells whether a time-based report is ready to settle.
 	const clock: ReportClock = { currentBlockNumber: useChainBlockNumber(), currentTime: useChainTimestamp() ?? getWallClockTimestamp() }
 	const [searchText, setSearchText] = useState('')
-	const favorites = useFavorites('statoblast', 'oracleReport')
-	const downloaded = useDownloadedEntities('statoblast', 'oracleReport', openOracleReportDownloadStore)
+	const favorites = useFavorites('openoracle', 'oracleReport')
+	const downloaded = useDownloadedEntities('openoracle', 'oracleReport', openOracleReportDownloadStore)
 	const entries = buildLocalBrowseEntries(downloaded.entries, favorites.entries, 'favorites')
 	const normalizedSearchText = normalizeLocalSearchText(searchText)
 	const fetchedAtById = new Map(entries.map(entry => [entry.id, entry.fetchedAt]))

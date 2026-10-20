@@ -1,28 +1,18 @@
 import type { ComponentChildren } from 'preact'
-import { AddressValue, ReadOnlyAddressValue, type AddressWidthConstraint } from './AddressValue.js'
+import { AddressValue, type AddressWidthConstraint } from './AddressValue.js'
 
 type WalletChipTone = 'ok' | 'danger'
 
-function chipClassName(tone: WalletChipTone, extra = '') {
-	return ['wallet-chip', tone === 'danger' ? 'is-danger' : '', extra].filter(Boolean).join(' ')
+function chipClassName(tone: WalletChipTone) {
+	return ['wallet-chip', tone === 'danger' ? 'is-danger' : ''].filter(Boolean).join(' ')
 }
 
-/** Responsive account identity for the toolbar; copies the full address on click. */
-export function WalletChip({ address, tone = 'ok' }: { address: string; tone?: WalletChipTone }) {
+/** Responsive account identity for the toolbar with separate explorer and copy controls. */
+export function WalletChip({ address, tone = 'ok', widthConstraint }: { address: string; tone?: WalletChipTone; widthConstraint?: AddressWidthConstraint | undefined }) {
 	return (
 		<span className={chipClassName(tone)}>
 			<span className='wallet-chip-dot' aria-hidden='true' />
-			<AddressValue address={address} responsiveAbbreviation />
-		</span>
-	)
-}
-
-/** Non-interactive chip body for use inside a `<summary>`, where nested buttons are not allowed. */
-export function WalletChipLabel({ address, tone = 'ok', widthConstraint }: { address: string; tone?: WalletChipTone; widthConstraint?: AddressWidthConstraint | undefined }) {
-	return (
-		<span className={chipClassName(tone, 'is-static')}>
-			<span className='wallet-chip-dot' aria-hidden='true' />
-			<ReadOnlyAddressValue address={address} responsiveAbbreviation widthConstraint={widthConstraint} />
+			<AddressValue address={address} widthConstraint={widthConstraint} />
 		</span>
 	)
 }

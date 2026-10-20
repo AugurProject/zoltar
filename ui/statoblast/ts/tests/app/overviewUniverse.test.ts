@@ -34,12 +34,12 @@ describe('Statoblast top bar universe', () => {
 	test('omits the migration link on the active migration screen', () => {
 		const overview = getStatoblastOverviewUniverse({ migrationActive: true, loadingZoltarForkAccess: false, zoltarForkRepBalanceAttoRep: undefined, zoltarUniverse: { forkTime: 5n, hasForked: true } })
 		expect(overview.migrateRepHref).toBeUndefined()
-		expect(overview.universeHasForked).toBe(true)
+		expect(overview.showUniverseForkedNotice).toBe(true)
 	})
 
 	test('links a forked universe notice to REP migration in the current universe', () => {
 		const overview = getStatoblastOverviewUniverse({ loadingZoltarForkAccess: false, zoltarForkRepBalanceAttoRep: undefined, zoltarUniverse: { forkTime: 5n, hasForked: true } })
-		expect(overview.universeHasForked).toBe(true)
+		expect(overview.showUniverseForkedNotice).toBe(true)
 		expect(overview.universeForkTime).toBe(5n)
 		expect(overview.migrateRepHref).toBe('#/pools/migrate?universe=7')
 	})

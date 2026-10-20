@@ -31,8 +31,6 @@ export function buildSecurityVaultSectionProps(vault: VaultSource, shared: Secti
 			vault.setSecurityVaultForm(current => ({ ...current, ...update }))
 		},
 		repPerEthPrice: shared.repPerEthPrice,
-		repPerEthSource: shared.repPerEthSource,
-		repPerEthSourceUrl: shared.repPerEthSourceUrl,
 		securityPoolVaults: selectedPool?.vaults,
 		securityVaultDetails: vault.securityVaultDetails,
 		securityVaultError: vault.securityVaultError,

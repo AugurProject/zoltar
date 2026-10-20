@@ -24,7 +24,7 @@ describe('OverviewPanels', () => {
 	}
 
 	function getAccountMenuTrigger() {
-		const trigger = document.body.querySelector('.account-menu > .account-menu-trigger')
+		const trigger = document.body.querySelector('.account-menu .account-menu-trigger')
 		if (!(trigger instanceof HTMLElement)) throw new Error('Expected the account menu trigger')
 		expect(trigger.getAttribute('aria-label')).toBe('Account menu 0x123456…567890')
 		return trigger
@@ -69,7 +69,7 @@ describe('OverviewPanels', () => {
 			onGoToGenesisUniverse: () => undefined,
 			onSwitchNetwork: () => undefined,
 			universeForkTime: undefined,
-			universeHasForked: false,
+			showUniverseForkedNotice: false,
 			universePresentation: undefined,
 			universeRepBalanceAttoRep: undefined,
 			walletBootstrapComplete: true,
@@ -99,6 +99,16 @@ describe('OverviewPanels', () => {
 		},
 	})
 
+	test('omits universe context and REP balances for an app without a universe', async () => {
+		await renderOverviewPanels({ activeUniverseId: undefined, accountState: connectedAccount, repPrices: undefined, showWethBalance: true })
+		expect(document.body.textContent).not.toContain('Genesis')
+		openAccountMenu()
+		await waitFor(() => {
+			expect(document.body.textContent).toContain('WETH')
+			expect(document.body.textContent).not.toContain('REP')
+		})
+	})
+
 	test('shows an enabled connect wallet button when disconnected and idle', async () => {
 		const documentQueries = await renderOverviewPanels()
 		const connectButton = documentQueries.getByRole('button', { name: 'Connect wallet' })
@@ -122,9 +132,9 @@ describe('OverviewPanels', () => {
 		})
 
 		expect(documentQueries.getAllByText('This universe is not deployed.')).toHaveLength(1)
-		expect(documentQueries.getAllByRole('button', { name: 'Go to Genesis universe' })).toHaveLength(1)
-		expect(documentQueries.queryByText('Go to Genesis universe', { selector: 'p' })).toBeNull()
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Go to Genesis universe' }))
+		expect(documentQueries.getAllByRole('button', { name: 'Go to root universe' })).toHaveLength(1)
+		expect(documentQueries.queryByText('Go to root universe', { selector: 'p' })).toBeNull()
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Go to root universe' }))
 		expect(onGoToGenesisUniverse).toHaveBeenCalledTimes(1)
 	})
 
@@ -270,12 +280,15 @@ describe('OverviewPanels', () => {
 		const address = '0x1234567890123456789012345678901234567890'
 		const documentQueries = await renderOverviewPanels({ accountState: connectedAccount })
 
-		expect(document.body.querySelector('.account-menu-trigger .wallet-chip .address-value-abbreviated')?.textContent).toBe('0x123456…567890')
-		expect(document.body.querySelector('.account-menu-trigger .wallet-chip .address-value')?.getAttribute('title')).toBe(address)
-		openAccountMenu()
 		const addressButton = documentQueries.getByRole('button', { name: `Copy address ${address}` })
-		expect(addressButton.closest('.account-menu-popover')).not.toBeNull()
-		expect(addressButton.querySelector('.address-value-full')?.textContent).toBe(address)
+		expect(addressButton.closest('.wallet-chip')).not.toBeNull()
+		expect(addressButton.closest('.account-menu-trigger')).toBeNull()
+		expect(document.body.querySelector(`.wallet-chip a[href="https://sepolia.etherscan.io/address/${address}"]`)).not.toBeNull()
+		expect(document.body.querySelector('.account-menu-controls .wallet-chip .address-value-abbreviated')?.textContent).toBe('0x123456…567890')
+		expect(document.body.querySelector('.account-menu-controls .wallet-chip .address-value-full')?.textContent).toBe(address)
+		expect(document.body.querySelector('a a, a button, button a, button button')).toBeNull()
+		openAccountMenu()
+		expect(documentQueries.getAllByRole('button', { name: `Copy address ${address}` })).toHaveLength(1)
 	})
 
 	test('identifies recognized and unknown wrong networks in the environment badge', async () => {
@@ -284,7 +297,7 @@ describe('OverviewPanels', () => {
 		})
 
 		expect(documentQueries.getByText('Wrong network (Base)')).not.toBeNull()
-		expect(document.body.querySelector('.account-menu-trigger .wallet-chip.is-danger')).not.toBeNull()
+		expect(document.body.querySelector('.account-menu-controls .wallet-chip.is-danger')).not.toBeNull()
 
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
@@ -371,7 +384,7 @@ describe('OverviewPanels', () => {
 		{ name: 'a disconnected wallet', overrides: {} },
 		{ name: 'an account without REP in the forked universe', overrides: { accountState: connectedAccount, universeRepBalanceAttoRep: 0n } },
 	])('reports the fork without a migration prompt for $name', async ({ overrides }) => {
-		const documentQueries = await renderOverviewPanels({ ...overrides, migrateRepHref: '#/zoltar?zoltarView=migrate', universeForkTime: 123n, universeHasForked: true })
+		const documentQueries = await renderOverviewPanels({ ...overrides, migrateRepHref: '#/zoltar?zoltarView=migrate', universeForkTime: 123n, showUniverseForkedNotice: true })
 
 		expect(documentQueries.getByText(/This universe forked on/)).toBeDefined()
 		expect(document.body.textContent).not.toContain('Migrate your REP to a child universe.')
@@ -383,7 +396,7 @@ describe('OverviewPanels', () => {
 			migrateRepHref: '#/zoltar?zoltarView=migrate',
 			accountState: connectedAccount,
 			universeForkTime: 123n,
-			universeHasForked: true,
+			showUniverseForkedNotice: true,
 			universeRepBalanceAttoRep: 5n * 10n ** 18n,
 		})
 
@@ -402,7 +415,7 @@ describe('OverviewPanels', () => {
 		backend.getChainId = async () => '0x1'
 		const restore = installActiveEnvironmentForTesting(backend)
 		try {
-			await renderOverviewPanels({ universeHasForked: true })
+			await renderOverviewPanels({ showUniverseForkedNotice: true })
 			await waitFor(() => expect(document.body.querySelector('.mainnet-disabled-notice')).not.toBeNull())
 			const toolbar = document.body.querySelector('.header-toolbar')
 			const mainnet = document.body.querySelector('.mainnet-disabled-notice')
@@ -418,7 +431,7 @@ describe('OverviewPanels', () => {
 
 	test('does not render a redundant forked badge in the toolbar badge slot', async () => {
 		await renderOverviewPanels({
-			universeHasForked: true,
+			showUniverseForkedNotice: true,
 		})
 
 		const brand = document.body.querySelector('.header-toolbar-brand')
@@ -479,7 +492,7 @@ describe('OverviewPanels', () => {
 			})
 
 			expect(documentQueries.getByText('Wrong network (31337)')).not.toBeNull()
-			expect(document.body.querySelector('.account-menu-trigger .wallet-chip.is-danger')).not.toBeNull()
+			expect(document.body.querySelector('.account-menu-controls .wallet-chip.is-danger')).not.toBeNull()
 			const switchButton = documentQueries.getByRole('button', { name: 'Switch to Browser simulation' })
 			expect(switchButton.closest('.header-toolbar-controls')).not.toBeNull()
 			fireEvent.click(switchButton)
@@ -506,7 +519,7 @@ describe('OverviewPanels', () => {
 			})
 
 			expect(documentQueries.queryByText(/Wrong Network/)).toBeNull()
-			expect(document.body.querySelector('.account-menu-trigger .wallet-chip.is-danger')).toBeNull()
+			expect(document.body.querySelector('.account-menu-controls .wallet-chip.is-danger')).toBeNull()
 			openAccountMenu()
 			expect(documentQueries.queryByRole('button', { name: 'Switch to Browser simulation' })).toBeNull()
 			expect(documentQueries.queryByRole('button', { name: 'Disconnect' })).toBeNull()
@@ -529,8 +542,8 @@ describe('OverviewPanels', () => {
 		const readGroups = () => [...document.body.querySelectorAll('.account-menu-metrics .overview-metric-group')].map(group => group.getAttribute('aria-label'))
 
 		await renderOverviewPanels({ walletBootstrapComplete: false })
-		expect(document.body.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Genesis (0x0)')
-		expect(document.body.querySelector('.header-toolbar-controls .toolbar-field-value > span')?.getAttribute('title')).toBe('Genesis (0x0)')
+		expect(document.body.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Augur v2 › Yes (0x0)')
+		expect(document.body.querySelector('.header-toolbar-controls .toolbar-field-value > span')?.getAttribute('title')).toBe('Augur v2 › Yes (0x0)')
 		expect(document.body.querySelector('.header-toolbar-controls .wallet-button')?.textContent).toBe('Connect wallet')
 		await cleanupRenderedComponent?.()
 
@@ -545,7 +558,7 @@ describe('OverviewPanels', () => {
 			showWethBalance: true,
 			universeRepBalanceAttoRep: 5n * 10n ** 18n,
 		})
-		expect(document.body.querySelector('.header-toolbar-controls .account-menu-trigger .wallet-chip .address-value-abbreviated')?.textContent).toBe('0x123456…567890')
+		expect(document.body.querySelector('.header-toolbar-controls .account-menu-controls .wallet-chip .address-value-abbreviated')?.textContent).toBe('0x123456…567890')
 		openAccountMenu()
 		expect(readGroups()).toEqual(['Balances', 'Prices'])
 		expect(readMetricValues().slice(0, 3)).toEqual(['2.00', '1.00', '5.00'])

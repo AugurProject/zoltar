@@ -4,7 +4,7 @@ import { useCallback } from 'preact/hooks'
 import { useUrlSearchState, type UrlHistoryMode } from '@zoltar/ui-core-shared/app/hooks/useUrlSearchState.js'
 import { isHexAddressInput } from '@zoltar/ui-core-shared/lib/address.js'
 import { getCurrentRouteHash, getRouteHashSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
-import { readOpenOracleReportIdQueryParam, readOpenOracleViewQueryParam, writeOpenOracleReportIdQueryParam, writeOpenOracleViewQueryParam } from '@zoltar/ui-core-shared/navigation/openOracleUrlParams.js'
+import { readOpenOracleReportIdQueryParam, writeOpenOracleReportIdQueryParam } from '@zoltar/ui-core-shared/navigation/openOracleUrlParams.js'
 import { readSecurityPoolQuestionIdQueryParam, readUniverseQueryParam, updateSearchParams, setOrDeleteSearchParam, writeUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
 import { buildPoolsRouteHash, mapLegacyStatoblastHash, parsePoolsRouteHash, writePoolsLocationSearch, type PoolsLocation } from '@zoltar/ui-statoblast-shared/lib/statoblastLocation.js'
 
@@ -13,7 +13,6 @@ type StatoblastUrlState = {
 	vaultAddress: string | undefined
 	vaultView: SelectedVaultView | undefined
 	activeUniverseId: bigint
-	openOracleView: string
 	openOracleReportId: string
 	securityPoolsView: string
 	selectedPoolView: string
@@ -30,7 +29,6 @@ function readStatoblastUrlState(search: string, routeHash: string): StatoblastUr
 		poolBrowseState: readPoolBrowseState(search),
 		...readVaultSelection(search),
 		activeUniverseId: readUniverseQueryParam(search) ?? readUniverseQueryParam(window.location.search) ?? 0n,
-		openOracleView: readOpenOracleViewQueryParam(search) ?? '',
 		openOracleReportId: readOpenOracleReportIdQueryParam(search) ?? '',
 		securityPoolsView: poolsLocation?.view ?? 'browse',
 		selectedPoolView: poolsLocation?.view === 'operate' ? poolsLocation.tab : '',
@@ -103,7 +101,6 @@ export function useStatoblastUrlState() {
 		[navigateUrl],
 	)
 	const setOpenOracleReport = useCallback((reportId: string | undefined, historyMode: UrlHistoryMode = 'push') => updateSearch(search => writeOpenOracleReportIdQueryParam(search, reportId), historyMode), [updateSearch])
-	const setOpenOracleView = useCallback((view: string | undefined) => updateSearch(search => writeOpenOracleViewQueryParam(search, view)), [updateSearch])
 	const setSecurityPoolsView = useCallback(
 		(view: string | undefined) => {
 			if (view === 'create' || view === 'universes' || view === 'migrate' || view === 'browse') {
@@ -133,7 +130,6 @@ export function useStatoblastUrlState() {
 		setVaultAddress,
 		setVaultView,
 		setOpenOracleReport,
-		setOpenOracleView,
 		setSecurityPoolsView,
 		setSelectedPoolView,
 		setSecurityPoolAddress,

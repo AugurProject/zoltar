@@ -180,7 +180,7 @@ describe('app route effects integration', () => {
 	})
 
 	test('preserves a route-selected open oracle report while its details are loading', async () => {
-		const dom = installDomEnvironment('http://localhost/#/open-oracle?openOracleView=selected-report&openOracleReportId=2')
+		const dom = installDomEnvironment('http://localhost/#/open-oracle?openOracleReportId=2')
 		const initialProps = createDefaultProps({
 			loadOracleReport: async () => undefined,
 			route: 'open-oracle',
@@ -195,7 +195,7 @@ describe('app route effects integration', () => {
 	})
 
 	test('keeps a changed route-selected oracle report authoritative over stale loaded details', async () => {
-		const dom = installDomEnvironment('http://localhost/#/open-oracle?openOracleView=selected-report&openOracleReportId=2')
+		const dom = installDomEnvironment('http://localhost/#/open-oracle?openOracleReportId=2')
 		const calls: string[] = []
 		const initialProps = createDefaultProps({
 			loadOracleReport: async reportId => {
@@ -215,7 +215,7 @@ describe('app route effects integration', () => {
 	})
 
 	test('hydrates and clears the internal oracle report selection across history events', async () => {
-		const dom = installDomEnvironment('http://localhost/#/open-oracle?openOracleView=selected-report&openOracleReportId=2')
+		const dom = installDomEnvironment('http://localhost/#/open-oracle?openOracleReportId=2')
 		const { cleanup, container } = await renderIntoDocument(<OpenOracleReportRouteHarness />)
 		expect(container.querySelector('#selected-report-id')?.textContent).toBe('2')
 

@@ -3,7 +3,7 @@ import * as portfolioCopy from '../copy/portfolio.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { isMarketTransactionPending } from './live/marketTransactionActivity.js'
 import { parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
-import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import { marketAcceptsNewRisk, type LiveMarket } from '../protocol/live.js'
 import * as appCopy from '../copy/app.js'
@@ -214,7 +214,7 @@ export function LiveTrading({
 		)
 	}
 	// Connecting re-requests the deployment chain first, so the same action switches a wallet that is on another network.
-	let walletActionLabel = account === undefined ? appCopy.connectWallet : <ReadOnlyAddressValue address={account} />
+	let walletActionLabel = account === undefined ? appCopy.connectWallet : appCopy.changeWallet
 	if (account === undefined && networkMismatchReason !== undefined) walletActionLabel = coreAppCopy.formatSwitchToNetwork(configuration.chainName)
 	// The workflow panels' first step: connect, or switch a connected wallet back to the deployment chain.
 	const ticketWallet = {
@@ -228,9 +228,12 @@ export function LiveTrading({
 	const ticketHoldings = { balances: selectedBalances, balanceState: selectedBalanceState, balanceError, retry: retryBalances }
 	const walletAction =
 		walletConnectRequestNonce === undefined ? (
-			<button className='secondary wallet-button' type='button' disabled={workflowLocked} onClick={connect}>
-				{walletActionLabel}
-			</button>
+			<>
+				{account === undefined ? undefined : <AddressValue address={account} abbreviated />}
+				<button className='secondary wallet-button' type='button' disabled={workflowLocked} onClick={connect}>
+					{walletActionLabel}
+				</button>
+			</>
 		) : undefined
 	if (route === 'universe') {
 		// Discovery confirms the requested universe before the directory describes it, so an unknown request never renders as a universe.

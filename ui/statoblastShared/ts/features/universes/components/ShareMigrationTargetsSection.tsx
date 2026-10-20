@@ -5,6 +5,7 @@ import type { ComponentChildren } from 'preact'
 import { ForkTargetPicker, type ForkTargetOption } from '@zoltar/ui-zoltar-shared/features/universes/components/ForkTargetPicker.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
+import { ForkQuestion } from '@zoltar/ui-core-shared/components/Question.js'
 import { formatScalarOutcomeIndexLabel, getScalarOutcomeIndexDescriptor } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import type { MarketDetails, ZoltarChildUniverseSummary, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
@@ -64,6 +65,7 @@ export function ShareMigrationTargetsSection({ disabled, loading = false, forkUn
 				onToggle={onToggleOutcomeIndex}
 				question={{ kind: 'categorical', targets: childUniverses.map(childTargetOption) }}
 				selectedOutcomeIndexes={selectedOutcomeIndexes}
+				summary={<ForkQuestion question={forkUniverse.forkQuestionDetails} />}
 			/>
 		)
 	}
@@ -82,6 +84,7 @@ export function ShareMigrationTargetsSection({ disabled, loading = false, forkUn
 				resolveTarget: outcomeIndex => scalarTargetOption(childUniverseByOutcomeIndex, scalarQuestion, outcomeIndex),
 			}}
 			selectedOutcomeIndexes={selectedOutcomeIndexes}
+			summary={<ForkQuestion question={scalarQuestion} />}
 		/>
 	)
 }

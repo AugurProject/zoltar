@@ -69,6 +69,7 @@ function projectInspection(snapshot: DeploymentInspection): DeploymentInspection
 
 export function useTradingDeploymentSetup({ currentConfiguration, onComplete, onWorkflowLockChange = () => undefined, onWalletStateChange, services = defaultTradingDeploymentSetupServices, walletControlRequestNonce }: TradingDeploymentSetupOptions) {
 	const activeNetwork = getActiveNetworkProfile()
+	const deploymentScope = tradingDeploymentScope()
 	const configuredRpcUrl = resolveConfiguredRpcUrl({ fallbackRpcUrl: activeNetwork.chain.rpcUrls.default.http[0] ?? '', networkId: activeNetwork.id })
 	const [coreDeployments, setCoreDeployments] = useState<readonly CoreDeployment[]>([])
 	const [registryLoading, setRegistryLoading] = useState(true)
@@ -410,7 +411,7 @@ export function useTradingDeploymentSetup({ currentConfiguration, onComplete, on
 			if (deployStep === undefined) throw new Error(deploymentCopy.deploymentUnavailable)
 			await deployStep(publicClient, plan, step, hash => {
 				// A replacement broadcast takes over the row of the transaction it replaced.
-				recordTransactionSubmitted({ hash, previousHash: broadcastHash, scope: tradingDeploymentScope, title: deploymentCopy.formatDeployStep(step.label) })
+				recordTransactionSubmitted({ hash, previousHash: broadcastHash, scope: deploymentScope, title: deploymentCopy.formatDeployStep(step.label) })
 				broadcastHash = hash
 			})
 			if (broadcastHash !== undefined) recordTransactionSettled(broadcastHash, { status: 'confirmed' })
@@ -485,6 +486,7 @@ export function useTradingDeploymentSetup({ currentConfiguration, onComplete, on
 			canRetry: retryChecks,
 		},
 		actions: {
+			scope: deploymentScope,
 			busy,
 			pendingStepId: busyStepId,
 			feedback: actionMessage === undefined ? undefined : { message: actionMessage, failed: actionError },

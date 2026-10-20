@@ -1972,7 +1972,7 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByRole('button', { name: `Copy address ${callerVaultAddress}` })).not.toBeNull()
 		const targetVaultButton = documentQueries.getByRole('button', { name: `Copy address ${targetVaultAddress}` })
 		expect(targetVaultButton).not.toBeNull()
-		expect(targetVaultButton.textContent).toContain(targetVaultAddress)
+		expect(targetVaultButton.parentElement?.querySelector('.address-value')?.textContent).toContain(targetVaultAddress)
 	})
 
 	test('names partial receiver input as invalid in the header instead of clipping it as an address', async () => {

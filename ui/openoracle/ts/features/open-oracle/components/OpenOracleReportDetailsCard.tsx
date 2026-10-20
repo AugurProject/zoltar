@@ -1,7 +1,7 @@
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { getWalletConnectionActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
-import { useEffect, useRef, useState } from 'preact/hooks'
-import { usePageVisible } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
+import { useState } from 'preact/hooks'
+import { useOpenOracleSettlementTime } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleSettlementTime.js'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { ActionLauncherCard } from '@zoltar/ui-core-shared/components/ActionLauncherCard.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -22,27 +22,30 @@ import { TransactionActionButton, TransactionActionGroup } from '@zoltar/ui-core
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getReportPresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
-import type { OpenOracleReportDetails } from '../../../types/contracts.js'
-import * as openOracleCopy from '../../../copy/openOracle.js'
-import type { OpenOracleFormState } from '../../../types/app.js'
+import type { OpenOracleReportDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
+import * as openOracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
+import type { OpenOracleFormState } from '@zoltar/ui-statoblast-shared/types/app.js'
 import {
 	formatOpenOracleFeePercentage,
 	formatOpenOracleReportPriceUnit,
 	formatOpenOracleMultiplier,
 	formatOpenOracleTimingDuration,
+	getEffectiveOpenOracleReportDetails,
 	getOpenOracleDisputeAvailability,
 	getOpenOracleReportProgress,
 	getOpenOracleReportProgressLabel,
 	getOpenOracleReportProgressTone,
 	getOpenOracleSelectedReportActionMode,
 	getOpenOracleSettleAvailability,
+	getOpenOracleSettleRemaining,
+	OPEN_ORACLE_PRICE_UNITS,
 	type OpenOracleDisputeInputField,
-} from '../lib/openOracle.js'
-import { getOpenOracleReadinessActions } from '../lib/openOracleReadiness.js'
-import { getOpenOracleStagePresentation } from '../lib/openOracleStage.js'
-import { getOpenOracleReportEntityId } from '../lib/reportBrowse.js'
-import type { OpenOracleSectionProps } from '../../oracleTypes.js'
-import { DISPUTE_REPORT_MODAL, getOpenOracleClockLabel, OPEN_ORACLE_PRICE_UNITS, OpenOracleClockValue, renderReportField, renderReportFields, renderReportSection, renderSelectedReportActionSection, type SelectedReportModal } from './OpenOracleReportContent.js'
+} from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
+import { getOpenOracleReadinessActions } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracleReadiness.js'
+import { getOpenOracleStagePresentation } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracleStage.js'
+import { getOpenOracleReportEntityId } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/reportBrowse.js'
+import type { OpenOracleSectionProps } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
+import { DISPUTE_REPORT_MODAL, getOpenOracleClockLabel, OpenOracleClockValue, renderReportField, renderReportFields, renderReportSection, renderSelectedReportActionSection, type SelectedReportModal } from './OpenOracleReportContent.js'
 
 type OpenOracleReportDetailsCardProps = {
 	accountAddress: string | undefined
@@ -73,35 +76,6 @@ type OpenOracleReportDetailsCardProps = {
 	selectedReportModal: SelectedReportModal
 }
 
-function useLiveSettlementTime(report: OpenOracleReportDetails | undefined, loading: boolean, onLoadReport: (reportId?: string) => void) {
-	const reportKey = report === undefined ? undefined : `${report.reportId}:${report.reportTimestamp}:${report.settlementTime}:${report.currentTime}:${report.isDistributed}`
-	const [clock, setClock] = useState<{ key: string | undefined; elapsedSeconds: bigint }>({ key: undefined, elapsedSeconds: 0n })
-	const refresh = useRef({ loading, onLoadReport })
-	const lastRefresh = useRef<{ key: string; at: number } | undefined>(undefined)
-	// The clock counts from when this report was read, so pausing it in a hidden tab loses no elapsed time.
-	const startedAt = useRef<{ key: string | undefined; at: number }>({ key: undefined, at: Date.now() })
-	if (startedAt.current.key !== reportKey) startedAt.current = { key: reportKey, at: Date.now() }
-	const visible = usePageVisible()
-	refresh.current = { loading, onLoadReport }
-	useEffect(() => {
-		if (report === undefined || !report.timeType || (report.isDistributed && report.coordinatorPriceValidUntilTimestamp === undefined) || report.reportTimestamp === 0n || !visible) return
-		const readyAt = report.reportTimestamp + report.settlementTime
-		const refreshKey = `${report.reportId}:${report.reportTimestamp}:${report.settlementTime}`
-		const tick = () => {
-			const now = Date.now()
-			const elapsedSeconds = BigInt(Math.floor((now - startedAt.current.at) / 1000))
-			setClock(current => (current.key === reportKey && current.elapsedSeconds === elapsedSeconds ? current : { key: reportKey, elapsedSeconds }))
-			if (report.isDistributed || report.currentTime + elapsedSeconds < readyAt || refresh.current.loading) return
-			if (lastRefresh.current?.key === refreshKey) return
-			lastRefresh.current = { key: refreshKey, at: now }
-			refresh.current.onLoadReport(report.reportId.toString())
-		}
-		const interval = setInterval(tick, 250)
-		return () => clearInterval(interval)
-	}, [reportKey, report?.timeType, report?.coordinatorPriceValidUntilTimestamp, visible])
-	return report !== undefined && report.timeType ? report.currentTime + (clock.key === reportKey ? clock.elapsedSeconds : 0n) : report?.currentTime
-}
-
 export function OpenOracleReportDetailsCard({
 	isConnected,
 	isOnActiveAppChain,
@@ -130,7 +104,7 @@ export function OpenOracleReportDetailsCard({
 	selectedReportModal,
 }: OpenOracleReportDetailsCardProps) {
 	const loadingSelectedReport = openOracleReportLookupState === 'loading'
-	const liveCurrentTime = useLiveSettlementTime(openOracleReportDetails, loadingSelectedReport, onLoadOracleReport)
+	const liveCurrentTime = useOpenOracleSettlementTime(openOracleReportDetails, loadingSelectedReport, onLoadOracleReport)
 	// Revealed dispute errors belong to one report; switching reports starts with hidden errors again.
 	const disputeRevealKey = openOracleReportDetails?.reportId.toString() ?? ''
 	const [revealedDisputeState, setRevealedDisputeState] = useState<{ key: string; fields: ReadonlySet<OpenOracleDisputeInputField> }>({ key: disputeRevealKey, fields: new Set() })
@@ -193,7 +167,7 @@ export function OpenOracleReportDetailsCard({
 			</SectionBlock>
 		)
 	}
-	const liveReportDetails = liveCurrentTime === undefined || liveCurrentTime === openOracleReportDetails.currentTime ? openOracleReportDetails : { ...openOracleReportDetails, currentTime: liveCurrentTime }
+	const liveReportDetails = getEffectiveOpenOracleReportDetails(openOracleReportDetails, liveCurrentTime, undefined)
 	// The badge follows the same live clock as the stage banner, so a report past its settlement time never reads as pending.
 	const progress = getOpenOracleReportProgress(liveReportDetails, liveReportDetails)
 	const statusLabel = getOpenOracleReportProgressLabel(progress)
@@ -202,7 +176,7 @@ export function OpenOracleReportDetailsCard({
 	const stage = getOpenOracleStagePresentation(actionMode, liveReportDetails)
 	const disputeAvailability = getOpenOracleDisputeAvailability(liveReportDetails)
 	const settleAvailability = getOpenOracleSettleAvailability(liveReportDetails)
-	const remainingUntilSettle = liveReportDetails.reportTimestamp + liveReportDetails.settlementTime - (liveReportDetails.timeType ? liveReportDetails.currentTime : liveReportDetails.currentBlockNumber)
+	const remainingUntilSettle = getOpenOracleSettleRemaining(liveReportDetails)
 	const settleCountdown = !liveReportDetails.isDistributed && remainingUntilSettle > 0n ? openOracleCopy.formatSettleCountdown(remainingUntilSettle, liveReportDetails.timeType) : undefined
 	const readinessActions = getOpenOracleReadinessActions({
 		actionMode,
@@ -282,7 +256,7 @@ export function OpenOracleReportDetailsCard({
 			<StickyObjectContext
 				badge={
 					<div className='open-oracle-report-badges'>
-						<FavoriteToggle app='statoblast' entityLabel={openOracleCopy.formatReportNumberTitle(openOracleReportDetails.reportId.toString())} id={getOpenOracleReportEntityId(openOracleReportDetails.reportId)} kind='oracleReport' />
+						<FavoriteToggle app='openoracle' entityLabel={openOracleCopy.formatReportNumberTitle(openOracleReportDetails.reportId.toString())} id={getOpenOracleReportEntityId(openOracleReportDetails.reportId)} kind='oracleReport' />
 						<Badge tone={statusTone}>{statusLabel}</Badge>
 					</div>
 				}

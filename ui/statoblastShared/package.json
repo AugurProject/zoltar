@@ -193,6 +193,10 @@
 			"bun": "./ts/features/security-pools/lib/uiPriceOracle.ts",
 			"default": "./js/features/security-pools/lib/uiPriceOracle.js"
 		},
+		"./features/security-pools/lib/vaultHealth.js": {
+			"bun": "./ts/features/security-pools/lib/vaultHealth.ts",
+			"default": "./js/features/security-pools/lib/vaultHealth.js"
+		},
 		"./features/transactionPresentations.js": {
 			"bun": "./ts/features/transactionPresentations.tsx",
 			"default": "./js/features/transactionPresentations.js"
@@ -289,6 +293,10 @@
 			"bun": "./ts/simulation/statoblastScenarios.ts",
 			"default": "./js/simulation/statoblastScenarios.js"
 		},
+		"./simulation/registerStatoblastScenarios.js": {
+			"bun": "./ts/simulation/registerStatoblastScenarios.ts",
+			"default": "./js/simulation/registerStatoblastScenarios.js"
+		},
 		"./simulation/statoblastScenarioProtocol.js": {
 			"bun": "./ts/simulation/statoblastScenarioProtocol.ts",
 			"default": "./js/simulation/statoblastScenarioProtocol.js"
@@ -312,14 +320,6 @@
 		"./copy/trading.js": {
 			"bun": "./ts/copy/trading.ts",
 			"default": "./js/copy/trading.js"
-		},
-		"./features/open-oracle/components/OpenOracleReportContent.js": {
-			"bun": "./ts/features/open-oracle/components/OpenOracleReportContent.tsx",
-			"default": "./js/features/open-oracle/components/OpenOracleReportContent.js"
-		},
-		"./features/open-oracle/components/OpenOracleSection.js": {
-			"bun": "./ts/features/open-oracle/components/OpenOracleSection.tsx",
-			"default": "./js/features/open-oracle/components/OpenOracleSection.js"
 		},
 		"./features/open-oracle/hooks/useOpenOracleOperations.js": {
 			"bun": "./ts/features/open-oracle/hooks/useOpenOracleOperations.ts",
@@ -517,10 +517,6 @@
 			"bun": "./ts/features/open-oracle/components/OpenOraclePriceValue.tsx",
 			"default": "./js/features/open-oracle/components/OpenOraclePriceValue.js"
 		},
-		"./features/open-oracle/components/OpenOracleReportDetailsCard.js": {
-			"bun": "./ts/features/open-oracle/components/OpenOracleReportDetailsCard.tsx",
-			"default": "./js/features/open-oracle/components/OpenOracleReportDetailsCard.js"
-		},
 		"./features/reporting/components/EscalationSide.js": {
 			"bun": "./ts/features/reporting/components/EscalationSide.tsx",
 			"default": "./js/features/reporting/components/EscalationSide.js"
@@ -656,6 +652,18 @@
 		"./features/open-oracle/components/RequestPriceModal.js": {
 			"bun": "./ts/features/open-oracle/components/RequestPriceModal.tsx",
 			"default": "./js/features/open-oracle/components/RequestPriceModal.js"
+		},
+		"./features/open-oracle/components/PriceRequestStatusSection.js": {
+			"bun": "./ts/features/open-oracle/components/PriceRequestStatusSection.tsx",
+			"default": "./js/features/open-oracle/components/PriceRequestStatusSection.js"
+		},
+		"./features/open-oracle/hooks/useOpenOracleSettlementTime.js": {
+			"bun": "./ts/features/open-oracle/hooks/useOpenOracleSettlementTime.ts",
+			"default": "./js/features/open-oracle/hooks/useOpenOracleSettlementTime.js"
+		},
+		"./features/open-oracle/hooks/useOpenOracleCreateTokenMetadata.js": {
+			"bun": "./ts/features/open-oracle/hooks/useOpenOracleCreateTokenMetadata.ts",
+			"default": "./js/features/open-oracle/hooks/useOpenOracleCreateTokenMetadata.js"
 		}
 	},
 	"version": "1.0.0"

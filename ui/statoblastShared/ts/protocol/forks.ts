@@ -16,7 +16,7 @@ import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from './securityPoolAbi.js'
 import { loadMarketDetails } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 
-import { TRUTH_AUCTION_TIME_LENGTH } from './truthAuctionTiming.js'
+import { hasTruthAuctionEnded, TRUTH_AUCTION_TIME_LENGTH } from './truthAuctionTiming.js'
 
 import { getForkMigrationEndsAt, getUnresolvedEscalationMigrationSubmissionGuard } from './forkMigrationTiming.js'
 type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
@@ -251,9 +251,10 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 				args: [clearingTick],
 			})
 		}
+		const auctionEndsAt = truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH
 		truthAuction = {
 			accumulatedBidAttoEth,
-			auctionEndsAt: truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH,
+			auctionEndsAt,
 			clearingPrice,
 			clearingTick,
 			bidAtClearingTickAttoEth,
@@ -265,7 +266,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 			maxAttoRepBeingSold,
 			minBidSizeAttoEth,
 			attoRepPurchasableAtBid: clearingPrice === undefined || clearingPrice === 0n ? undefined : (attoEthRaiseCap * 10n ** 18n) / clearingPrice,
-			timeRemaining: finalized || block.timestamp >= truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH ? 0n : truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH - block.timestamp,
+			timeRemaining: finalized || hasTruthAuctionEnded(block.timestamp, auctionEndsAt) ? 0n : auctionEndsAt - block.timestamp,
 			totalAttoRepPurchased,
 			underfunded,
 			underfundedThreshold: underfunded ? underfundedThreshold : undefined,

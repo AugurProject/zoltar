@@ -19,6 +19,7 @@ import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import * as glossaryCopy from '../../../copy/glossary.js'
 import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
+import { RepAmount } from './RepAmount.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
 import { LifecycleStageBanner } from '@zoltar/ui-core-shared/components/LifecycleStageBanner.js'
@@ -452,7 +453,7 @@ export function ReportingSection({
 								value={reportingForm.reportAmount}
 							/>
 
-							{maxContributionAmount.stopsBelowFork === true && maxContributionAmount.amountAttoRep !== undefined && !reportTriggersFork ? <UserMessage className='detail' detail={reportingCopy.maxBelowForkHint(formatCurrencyBalance(maxContributionAmount.amountAttoRep))} /> : undefined}
+							{maxContributionAmount.stopsBelowFork === true && maxContributionAmount.amountAttoRep !== undefined && !reportTriggersFork ? <UserMessage className='detail' detail={reportingCopy.maxBelowForkHint(<RepAmount rounding='down' value={maxContributionAmount.amountAttoRep} />)} /> : undefined}
 							<ReportingDepositPreview
 								details={effectiveReportingDetails}
 								outcome={selectedOutcome}
@@ -473,7 +474,7 @@ export function ReportingSection({
 									aria-describedby={presetBlocker !== undefined && minimumOutcomeChangeContribution.reason === presetBlocker ? presetBlockerId : undefined}
 									title={reportControlsLocked ? reportControlsLockedReason : minimumOutcomeChangeContribution.reason}
 								>
-									{reportingCopy.minimumPreset(minimumPresetKind, minimumPresetAmount === undefined ? undefined : formatCurrencyBalance(minimumPresetAmount))}
+									{reportingCopy.minimumPreset(minimumPresetKind, minimumPresetAmount === undefined ? undefined : <RepAmount rounding='up' value={minimumPresetAmount} />)}
 								</button>
 								<button
 									className='secondary'
@@ -486,7 +487,7 @@ export function ReportingSection({
 									aria-describedby={presetBlocker !== undefined && maxProfitContribution.reason === presetBlocker ? presetBlockerId : undefined}
 									title={reportControlsLocked ? reportControlsLockedReason : maxProfitContribution.reason}
 								>
-									{reportingCopy.rewardPreset(maxProfitContribution.amountAttoRep === undefined ? undefined : formatCurrencyBalance(maxProfitContribution.amountAttoRep))}
+									{reportingCopy.rewardPreset(maxProfitContribution.amountAttoRep === undefined ? undefined : <RepAmount value={maxProfitContribution.amountAttoRep} />)}
 								</button>
 							</div>
 							{presetBlocker === undefined ? undefined : <UserMessage id={presetBlockerId} className='detail' detail={presetBlocker} />}

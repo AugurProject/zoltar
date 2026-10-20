@@ -74,9 +74,15 @@ function formatTrimmedDecimal(integerPart: bigint, fractionalPart: bigint, decim
 	return `${integerPart}.${fractionalPart.toString().padStart(decimals, '0').replace(/0+$/, '')}`
 }
 
+/** What to add before dividing by `divisor` so integer division rounds down, to nearest, or up. */
+function roundingOffset(divisor: bigint, rounding: AmountRounding) {
+	if (rounding === 'down') return 0n
+	return rounding === 'up' ? divisor - 1n : divisor / 2n
+}
+
 function formatRoundedScaledValue(value: bigint, divisor: bigint, decimals: number, rounding: 'nearest' | 'up' = 'nearest') {
 	const scale = 10n ** BigInt(decimals)
-	const rounded = (value * scale + (rounding === 'up' ? divisor - 1n : divisor / 2n)) / divisor
+	const rounded = (value * scale + roundingOffset(divisor, rounding)) / divisor
 	const integerPart = rounded / scale
 	const fractionalPart = rounded % scale
 
@@ -186,8 +192,13 @@ export function formatTrimmedUnits(value: bigint, units: number = 18, maximumFra
 	return `${negative ? '-' : ''}${formatGroupedInteger(whole)}${fraction.length > 0 ? `.${fraction}` : ''}`
 }
 
-/** `down` truncates toward zero, for figures such as limits that must never read above the exact value. It always uses standard notation, because compact SI rounding could read above the exact value. */
-export type AmountRounding = 'nearest' | 'down'
+/**
+ * `down` truncates toward zero, for figures such as limits that must never read above the exact value; `up` rounds away
+ * from zero, for minimums a user must reach, so following the shown figure is always enough. Both always use standard
+ * notation, because compact SI rounding could cross the exact value. Token approval figures round up through
+ * `formatCeilingAmountDisplay` instead, which keeps two decimals so they line up with the approval button.
+ */
+export type AmountRounding = 'nearest' | 'down' | 'up'
 
 export function formatRoundedCurrencyBalance(value: bigint | undefined, units: number = 18, decimals: number = 2, rounding: AmountRounding = 'nearest') {
 	if (value === undefined) return '—'
@@ -203,7 +214,7 @@ export function formatRoundedCurrencyBalance(value: bigint | undefined, units: n
 
 	const scale = 10n ** BigInt(effectiveDecimals)
 	const base = 10n ** BigInt(units)
-	const rounded = (absoluteValue * scale + (rounding === 'down' ? 0n : base / 2n)) / base
+	const rounded = (absoluteValue * scale + roundingOffset(base, rounding)) / base
 	const integerPart = rounded / scale
 
 	if (effectiveDecimals === 0) return `${prefix}${formatGroupedInteger(integerPart)}`
@@ -240,8 +251,10 @@ export type FormattedAmount = {
 	text: string
 }
 
+type AmountFormatOptions = { decimals?: number; notation?: AmountNotation; rounding?: AmountRounding; units?: number }
+
 /** Rounds a fixed-point amount for display and reports whether rounding lost precision. See the spec at the top of this file. */
-export function formatAmount(value: bigint, { decimals = 2, notation = 'standard', rounding = 'nearest', units = 18 }: { decimals?: number; notation?: AmountNotation; rounding?: AmountRounding; units?: number } = {}): FormattedAmount {
+export function formatAmount(value: bigint, { decimals = 2, notation = 'standard', rounding = 'nearest', units = 18 }: AmountFormatOptions = {}): FormattedAmount {
 	assertNonNegativeInteger(units, 'Units')
 	assertNonNegativeInteger(decimals, 'Decimals')
 	const exact = formatCurrencyBalance(value, units)
@@ -284,7 +297,7 @@ export function formatCeilingAmountDisplay(value: bigint, units = 18) {
 	if (value < 0n) throw new RangeError('Approval amount must be non-negative')
 	const base = 10n ** BigInt(units)
 	const scale = 100n
-	const rounded = (value * scale + base - 1n) / base
+	const rounded = (value * scale + roundingOffset(base, 'up')) / base
 	const text = `${formatGroupedInteger(rounded / scale)}.${(rounded % scale).toString().padStart(2, '0')}`
 	return (value * scale) % base === 0n ? text : `${APPROXIMATE_MARKER}${text}`
 }
@@ -298,7 +311,7 @@ export function withApproximateMarker({ approximate, text }: Pick<FormattedAmoun
 	return approximate ? `${APPROXIMATE_MARKER}${text}` : text
 }
 
-export function formatAmountDisplay(value: bigint, options?: { decimals?: number; notation?: AmountNotation; units?: number }) {
+export function formatAmountDisplay(value: bigint, options?: AmountFormatOptions) {
 	return withApproximateMarker(formatAmount(value, options))
 }
 

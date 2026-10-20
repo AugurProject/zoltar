@@ -3,7 +3,7 @@ import { bigintToSafeNumber, toEventSelector, zeroAddress, type Address, type He
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hasOpenOracleFlag, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_STORE_PRICE, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { getOpenOracleDisputeSwapTokenKey } from './openOracleMath.js'
+import { getOpenOracleDisputeSwapTokenKey, OPEN_ORACLE_PRICE_UNITS } from './openOracleMath.js'
 import { getOpenOracleCreateParameterValidation } from './openOracleValidation.js'
 import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import { statoblast_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
@@ -18,7 +18,6 @@ import * as openOracleCopy from '../copy/openOracle.js'
 import { requireBigintValue } from './decoders.js'
 import { requireOpenOracleDisputeSubmissionWindow } from './openOracleDisputeTiming.js'
 
-const OPEN_ORACLE_PRICE_UNITS = 30n
 // Flags mirrored from OpenOracle.sol that the shared package does not export.
 const OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT = 1n << 5n
 const OPEN_ORACLE_FLAG_FLEXIBLE_ESCALATION = 1n << 6n
@@ -60,7 +59,7 @@ function normalizeOpenOracleTokenMetadata(tokenAddress: Address, decimalsValue: 
 
 // Quote tokens per base token (token2 per token1), for example REP per WETH for Statoblast price reports.
 export function calculateOpenOraclePrice(amount1: bigint, amount2: bigint, decimals1: number, decimals2: number) {
-	return amount1 === 0n ? 0n : (amount2 * 10n ** (OPEN_ORACLE_PRICE_UNITS + BigInt(decimals1))) / (amount1 * 10n ** BigInt(decimals2))
+	return amount1 === 0n ? 0n : (amount2 * 10n ** (BigInt(OPEN_ORACLE_PRICE_UNITS) + BigInt(decimals1))) / (amount1 * 10n ** BigInt(decimals2))
 }
 
 // settle forwards exactly callbackGasLimit to the callback. EIP-150 lets a call forward at most 63/64 of the remaining gas,

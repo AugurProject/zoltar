@@ -277,6 +277,9 @@ describe('liquidity panel', () => {
 			const removal = document.querySelector('section[aria-label="Liquidity estimate"]')
 			expect(removal?.textContent).toContain('5 Yes')
 			expect(removal?.textContent).toContain('5 No')
+			// Each received share states its payout as a caption under the amount, like the LP it is paid from.
+			expect(removal?.querySelector('.portfolio-holding-yes .payout-caption')?.textContent?.trim()).toBe('5 ETH if the question resolves Yes')
+			expect(removal?.textContent).not.toContain('5 Yes (')
 			expect(removal?.textContent).toContain('Worth about 5 ETH at the current trading pool price')
 			expect(document.body.textContent).toContain('Removing liquidity returns Yes and No shares to your wallet, not ETH. Next, sell them on the Trade tab')
 			expect(document.body.textContent).not.toContain('raw Yes and No')

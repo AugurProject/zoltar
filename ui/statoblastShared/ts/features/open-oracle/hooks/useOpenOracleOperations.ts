@@ -18,6 +18,7 @@ import {
 import type { OpenOracleCreateContractFieldErrors, OpenOracleDisputeSubmissionDetails } from '../lib/openOracle.js'
 import { deriveOpenOracleDisputeSubmissionDetails } from '../lib/openOracleDispute.js'
 import { parseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
+import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { getDefaultOpenOracleCreateFormState } from '../lib/formDefaults.js'
 import { requireDefined } from '@zoltar/ui-core-shared/forms/required.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
@@ -165,7 +166,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 				? { tokenPair: `${openOracleCreateForm.value.token1Address} / ${openOracleCreateForm.value.token2Address}` }
 				: {
 						openOracleAddress: reportDetailsSnapshot?.openOracleAddress,
-						reportId: actionReportIdInput,
+						reportId: tryParseBigIntInput(actionReportIdInput)?.toString() ?? actionReportIdInput,
 						token1Symbol: reportDetailsSnapshot?.token1Symbol,
 						token2Symbol: reportDetailsSnapshot?.token2Symbol,
 						tokenPair: reportDetailsSnapshot === undefined ? undefined : `${reportDetailsSnapshot.token1Symbol} / ${reportDetailsSnapshot.token2Symbol}`,

@@ -8,12 +8,12 @@ import { assertStaticDeploymentArtifactRuntimeCodeHashes, CANONICAL_DEPLOYER_RAW
 import { assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes } from '../../ui/statoblastShared/ts/protocol/deployment.ts'
 import { PROXY_DEPLOYER_ADDRESS } from '../../ui/zoltarShared/ts/protocol/zoltarDeploymentHelpers.ts'
 import type { WriteClient } from '../../ui/coreShared/ts/wallet/chainBackend.ts'
-import { SEPOLIA_NETWORK_PROFILE, type NetworkProfile } from '../../ui/coreShared/ts/wallet/networkProfile.ts'
+import { getGenesisNetworkProfile, SEPOLIA_NETWORK_PROFILE, type NetworkProfile } from '../../ui/coreShared/ts/wallet/networkProfile.ts'
 import { readWithRpcStateRetries, type RpcStateRetryWait } from '../../ui/coreShared/ts/lib/rpcStateRetries.ts'
 import { ARACHNID_CREATE2_DEPLOYER_ADDRESS, ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE, getUniswapDeployment, resolveCanonicalCreate2DeployerForPreflight, SEPOLIA_CHAIN_ID, type UniswapDeployment } from './uniswap-deployment.mts'
 import { createDevelopmentNodeRpc, ensurePublishedContracts } from './published-contracts.mts'
-import { createCompleteDeploymentPlan } from './deployment-plan.mts'
-import { EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES, type BootstrapDescendantHashProfile } from './bootstrap-descendant-hashes.mts'
+import { createDualGenesisDeploymentPlan, type DeploymentPlanStep } from './deployment-plan.mts'
+import { EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES, EXPECTED_NO_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES, type BootstrapDescendantHashProfile } from './bootstrap-descendant-hashes.mts'
 
 export const DEFAULT_MAX_FEE_PER_GAS_NANO_ETH = '100'
 export const DEFAULT_MAX_TOTAL_COST_ETH = '20'
@@ -57,15 +57,7 @@ export const CONSERVATIVE_DEPLOYMENT_GAS: Readonly<Record<string, bigint>> = {
 	securityPoolFactory: 14_750_000n,
 }
 const CANONICAL_DEPLOYER_STEP_IDS = new Set(['arachnidCreate2Deployer', 'proxyDeployer'])
-type DeploymentPlanStep<TClient> = {
-	address: Address
-	dependencies: readonly string[]
-	deploy: (client: TClient) => Promise<Hash>
-	expectedRuntimeCodeHash?: Hash
-	id: string
-	label: string
-	verifyRuntimeCode?: (client: TClient, code: Hex) => Promise<void>
-}
+type DeploymentPlanInspectionStep<TClient> = Omit<DeploymentPlanStep<TClient>, 'deploy'>
 
 export type DeploymentStepResult = {
 	address: Address
@@ -425,7 +417,7 @@ function assertExpectedRuntimeCode(id: string, address: Address, code: Hex | und
 	return true
 }
 
-async function assertDeploymentPlanStepRuntimeCode<TClient>(step: DeploymentPlanStep<TClient>, client: TClient, code: Hex | undefined) {
+async function assertDeploymentPlanStepRuntimeCode<TClient>(step: DeploymentPlanInspectionStep<TClient>, client: TClient, code: Hex | undefined) {
 	if (!hasCode(code)) return false
 	if (step.verifyRuntimeCode !== undefined) {
 		await step.verifyRuntimeCode(client, code)
@@ -475,7 +467,7 @@ export async function runDeploymentPlan<TClient extends CodeReader>(steps: reado
 	return results
 }
 
-export async function preflightDeploymentPlan<TClient extends CodeReader>(steps: readonly DeploymentPlanStep<TClient>[], client: TClient, gasAllowances: Readonly<Record<string, bigint>>, maxFeePerGas: bigint, maxTotalCost: bigint, knownInstalledAddresses: ReadonlySet<Address> = new Set()) {
+export async function preflightDeploymentPlan<TClient extends CodeReader>(steps: readonly DeploymentPlanInspectionStep<TClient>[], client: TClient, gasAllowances: Readonly<Record<string, bigint>>, maxFeePerGas: bigint, maxTotalCost: bigint, knownInstalledAddresses: ReadonlySet<Address> = new Set()) {
 	const completed = new Set<string>()
 	const missingStepIds: string[] = []
 	let estimatedGas = 0n
@@ -486,7 +478,7 @@ export async function preflightDeploymentPlan<TClient extends CodeReader>(steps:
 		const installed = knownInstalledAddresses.has(step.address) || (await assertDeploymentPlanStepRuntimeCode(step, client, await client.getCode({ address: step.address })))
 		completed.add(step.id)
 		if (installed) continue
-		const gasAllowance = gasAllowances[step.id]
+		const gasAllowance = gasAllowances[step.gasAllowanceId ?? step.id]
 		if (gasAllowance === undefined) throw new Error(`Deployment step ${step.id} has no conservative gas allowance`)
 		if (gasAllowance <= 0n) throw new Error(`Deployment step ${step.id} has an invalid conservative gas allowance`)
 		missingStepIds.push(step.id)
@@ -533,7 +525,8 @@ async function assertCanonicalCreate2DeployerCode(client: CodeReader) {
 export async function assertBootstrapDescendantCode(client: CodeReader, profile: NetworkProfile, wait?: RpcStateRetryWait, expectedRuntimeCodeHashes?: Readonly<Record<string, Hash>> | BootstrapDescendantHashProfile) {
 	const bootstrapDescendants = getBootstrapDescendantAddresses(profile)
 	if (profile.id === 'simulation') throw new Error('Exact bootstrap descendant runtime-code verification is unavailable for simulation')
-	const resolvedExpectedRuntimeCodeHashes = typeof expectedRuntimeCodeHashes === 'object' ? expectedRuntimeCodeHashes : EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES[expectedRuntimeCodeHashes ?? profile.id]
+	const hashProfile = typeof expectedRuntimeCodeHashes === 'string' ? expectedRuntimeCodeHashes : profile.id
+	const resolvedExpectedRuntimeCodeHashes = typeof expectedRuntimeCodeHashes === 'object' ? expectedRuntimeCodeHashes : { ...EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES[hashProfile], ...(profile.genesisOutcome === 'no' ? EXPECTED_NO_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES[hashProfile] : {}) }
 	const entries = Object.entries(bootstrapDescendants)
 	const codes = await readWithRpcStateRetries(
 		async () => {
@@ -595,7 +588,7 @@ export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?
 		throw new Error(`MAX_FEE_PER_GAS_NANO_ETH authorizes ${authorizedMaxFeePerGas.toString()} attoETH per gas, but missing canonical deployers require fixed ${CANONICAL_DEPLOYER_RAW_GAS_PRICE.toString()} attoETH per gas raw transactions`)
 	}
 	await ensurePublishedContracts(client, createDevelopmentNodeRpc(rpcUrl), chainId, uniswap.publishedContracts, log)
-	const plan = createCompleteDeploymentPlan(profile, uniswap)
+	const plan = createDualGenesisDeploymentPlan(profile, uniswap)
 	const knownInstalledAddresses = new Set<Address>()
 	if (canonicalCreate2Installed || (await resolveCanonicalCreate2DeployerForPreflight(client))) knownInstalledAddresses.add(ARACHNID_CREATE2_DEPLOYER_ADDRESS)
 	if (proxyInstalled) knownInstalledAddresses.add(PROXY_DEPLOYER_ADDRESS)
@@ -630,9 +623,10 @@ export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?
 	)
 	const results = await runDeploymentPlan(plan, client, log, undefined, knownInstalledAddresses)
 	await assertProxyCode(client)
-	const bootstrapDescendants = await assertBootstrapDescendantCode(client, profile, undefined, uniswap.kind === 'deterministic' ? 'deterministic' : undefined)
+	const [yesBootstrapDescendants] = await Promise.all((['yes', 'no'] as const).map(outcome => assertBootstrapDescendantCode(client, getGenesisNetworkProfile(profile, outcome), undefined, uniswap.kind === 'deterministic' ? 'deterministic' : undefined)))
+	if (yesBootstrapDescendants === undefined) throw new Error('Yes genesis bootstrap descendants are missing')
 	if (parameters.writeGitHubSummary !== false) await writeGitHubSummary(chainId, client.account.address, results)
-	return { account: client.account.address, proofVerifier: bootstrapDescendants.escalationGameProofVerifier, results }
+	return { account: client.account.address, proofVerifier: yesBootstrapDescendants.escalationGameProofVerifier, results }
 }
 
 export function getDeploymentHelp() {
@@ -651,8 +645,9 @@ Pass RPC and cost limits as flags, or as uppercase assignments such as RPC_URL=.
 
 Sepolia uses Uniswap's published WETH, V3 factory, QuoterV2, and V4 contracts plus
 a deterministic SwapRouter and genesis REP; an Anvil node with the Sepolia chain ID
-receives Uniswap's contracts by replaying their creation transactions. Any other
-chain receives deterministic WETH, genesis REP, and a complete Uniswap deployment.
+receives Uniswap's contracts by replaying their creation transactions. Both Yes
+and No genesis REP tokens and their Zoltar, Statoblast, and Trading roots deploy.
+Any other chain receives deterministic WETH and a complete Uniswap deployment.
 The RPC must support Cancun, the Osaka CLZ opcode, EIP-1559, and the canonical
 legacy deployer transactions. Ethereum mainnet chain ID 1 is intentionally rejected.`
 }

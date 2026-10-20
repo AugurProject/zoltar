@@ -24,7 +24,21 @@ describe('CopyErrorMessage', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Copy unavailable')).not.toBeNull()
 		expect(documentQueries.getByRole('alert').textContent).toBe(message)
-		expect((documentQueries.getByLabelText('Exact value for manual copy') as HTMLInputElement).value).toBe('0x1234')
+		expect(documentQueries.getByLabelText('Exact value for manual copy').textContent).toBe('0x1234')
 		expect(document.body.querySelector('.copy-error-recovery')?.tagName).toBe('DETAILS')
+	})
+
+	test('keeps the complete manual copy value keyboard selectable inside a disabled fieldset', async () => {
+		const address = '0x0000000000000000000000000000000000000001'
+		const rendered = await renderIntoDocument(
+			<fieldset disabled>
+				<CopyErrorMessage id='copy-error' manualValue={address} message='Copy failed' />
+			</fieldset>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const manual = within(document.body).getByLabelText('Exact value for manual copy')
+		manual.focus()
+		expect(document.activeElement).toBe(manual)
+		expect(window.getSelection()?.toString()).toBe(address)
 	})
 })

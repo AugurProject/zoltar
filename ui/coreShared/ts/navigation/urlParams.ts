@@ -1,10 +1,12 @@
 import { tryParseBigIntInput } from '../forms/integerInput.js'
+import { parseGenesisOutcome, type GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
 
 const UNIVERSE_QUERY_PARAM = 'universe'
 const SECURITY_POOL_QUESTION_ID_QUERY_PARAM = 'questionId'
 const ZOLTAR_VIEW_QUERY_PARAM = 'zoltarView'
 /** Universe IDs are `uint248` in every contract, so a larger value can never resolve to a universe. */
 const UNIVERSE_ID_LIMIT = 1n << 248n
+const GENESIS_QUERY_PARAM = 'genesis'
 
 export function readStringQueryParam(search: string, key: string) {
 	const value = new URLSearchParams(search).get(key)
@@ -33,6 +35,15 @@ export function setOrDeleteSearchParam(params: URLSearchParams, key: string, val
 
 function writeStringQueryParam(search: string, key: string, value: string | undefined) {
 	return updateSearchParams(search, params => setOrDeleteSearchParam(params, key, value))
+}
+
+/** Only the Yes and No branches of the Augur fork are canonical genesis universes. */
+export function readGenesisQueryParam(search: string): GenesisOutcome | undefined {
+	return parseGenesisOutcome(readStringQueryParam(search, GENESIS_QUERY_PARAM))
+}
+
+export function writeGenesisQueryParam(search: string, outcome: GenesisOutcome | undefined) {
+	return writeStringQueryParam(search, GENESIS_QUERY_PARAM, outcome)
 }
 
 export function readUniverseQueryParam(search: string) {

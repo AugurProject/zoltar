@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { withFakeClock } from '@zoltar/ui-core-shared/tests/testUtils/fakeClock.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
@@ -43,25 +44,25 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 
 	test('ticks down the oracle window on an auto-exec operation card', async () => {
 		const operation = { operationId: 7n, operation: 'withdrawRep', amount: 1n, operator: zeroAddress, targetVault: zeroAddress } as const
-		await renderSelectedPool(
-			{
-				selectedPoolView: 'staged-operations',
-				poolOracleManagerDetails: createOracleManagerDetails({
-					pendingReportId: 5n,
-					pendingReportReadyAtTimestamp: 110n,
-					pendingOperation: operation,
-					pendingOperationSlotId: 7n,
-					pendingSettlementOperationIds: [7n],
-				}),
-			},
-			100n,
-		)
-		const card = document.querySelector('.staged-operation-card')
-		expect(card?.textContent).toContain('Can settle in 10s')
-		await act(async () => {
-			await new Promise(resolve => setTimeout(resolve, 1100))
+		await withFakeClock(async clock => {
+			await renderSelectedPool(
+				{
+					selectedPoolView: 'staged-operations',
+					poolOracleManagerDetails: createOracleManagerDetails({
+						pendingReportId: 5n,
+						pendingReportReadyAtTimestamp: 110n,
+						pendingOperation: operation,
+						pendingOperationSlotId: 7n,
+						pendingSettlementOperationIds: [7n],
+					}),
+				},
+				100n,
+			)
+			const card = document.querySelector('.staged-operation-card')
+			expect(card?.textContent).toContain('Can settle in 10s')
+			await clock.advance(1000)
+			expect(card?.textContent).toContain('Can settle in 9s')
 		})
-		expect(card?.textContent).toContain('Can settle in 9s')
 	})
 
 	const getLiquidationDialog = () => within(within(document.body).getByRole('dialog', { name: 'Execute vault liquidation' }))

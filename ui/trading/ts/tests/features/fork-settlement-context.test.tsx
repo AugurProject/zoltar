@@ -10,6 +10,7 @@ import { shareBalanceScope } from '../../protocol/live.js'
 const QUOTE_SETTLE_MILLISECONDS = 400
 import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { buttonByLabel } from '../support/dom.js'
 import { forkedMarketFixture } from '../support/liveMarketFixture.js'
@@ -30,7 +31,7 @@ const forkContext: ForkMigrationContext = {
 	kind: 'categorical',
 	parentUniverseId: market.universeId,
 	questionId: 99n,
-	title: 'Which branch wins?',
+	question: createMarketDetails({ title: 'Which branch wins?', description: 'Use the certified final tally.', marketType: 'categorical', outcomeLabels: ['Invalid', 'Red'], questionId: '0x63' }),
 	availableTargets: [{ outcomeIndex: 1n, universeId: 101n, label: 'Red', canonicalPool, migrated: { invalid: 0n, yes: 0n, no: 0n } }],
 }
 
@@ -180,6 +181,8 @@ describe('live fork settlement context', () => {
 		await settleEffects()
 		expect(contextLoads).toBe(2)
 		expect(document.body.textContent).toContain('Which branch wins?')
+		expect(document.body.textContent).toContain('Use the certified final tally.')
+		expect(document.body.textContent).toContain('Categorical')
 		const target = Array.from(document.querySelectorAll('button')).find(candidate => candidate.textContent?.includes('Red') === true && candidate.closest('[aria-label="Settlement operation"]') === null)
 		if (!(target instanceof HTMLButtonElement)) throw new Error('Missing categorical fork target')
 		await act(() => target.click())

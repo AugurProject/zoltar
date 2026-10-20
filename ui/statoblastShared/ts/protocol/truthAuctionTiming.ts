@@ -8,10 +8,15 @@ export function getTruthAuctionEndsAt(auctionStarted: bigint | undefined) {
 	return auctionStarted + TRUTH_AUCTION_TIME_LENGTH
 }
 
+/** UniformPriceDualCapBatchAuction.finalize requires block.timestamp >= auctionStarted + AUCTION_TIME, so the auction has ended at its end time. */
+export function hasTruthAuctionEnded(currentTimestamp: bigint, auctionEndsAt: bigint) {
+	return currentTimestamp >= auctionEndsAt
+}
+
 export function getTruthAuctionBidTimingGuardMessage(currentTimestamp: bigint | undefined, auctionEndsAt: bigint | undefined) {
 	if (currentTimestamp === undefined) return forkAuctionCopy.loadingCurrentChainTime
 	if (auctionEndsAt === undefined || auctionEndsAt <= 0n) return 'Loading truth auction deadline…'
-	if (currentTimestamp >= auctionEndsAt) return forkAuctionCopy.auctionEndedReason
+	if (hasTruthAuctionEnded(currentTimestamp, auctionEndsAt)) return forkAuctionCopy.auctionEndedReason
 	if (!hasSubmissionWindow(currentTimestamp, auctionEndsAt)) return forkAuctionCopy.auctionEndsTooSoonToBid
 	return undefined
 }

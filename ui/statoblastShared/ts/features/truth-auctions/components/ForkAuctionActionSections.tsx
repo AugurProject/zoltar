@@ -9,6 +9,7 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
+import { hasTruthAuctionEnded } from '../../../protocol/truthAuctionTiming.js'
 import { renderTruthAuctionPriceValue } from './ForkAuctionPresentation.js'
 import type { ForkAuctionSectionProps } from '../../types.js'
 import type { ActionAvailability } from '@zoltar/ui-core-shared/types/components.js'
@@ -65,7 +66,7 @@ export function ForkAuctionOutcomePoolNotice({ error, loading, onRetry, outcomeL
 }
 
 export function ForkAuctionEndedNotice({ currentTimestamp, finalized, onOpenSettlement, truthAuctionEndsAt }: { currentTimestamp: bigint | undefined; finalized: boolean; onOpenSettlement: (() => void) | undefined; truthAuctionEndsAt: bigint | undefined }) {
-	const hasEndedByTime = truthAuctionEndsAt !== undefined && currentTimestamp !== undefined && currentTimestamp >= truthAuctionEndsAt
+	const hasEndedByTime = truthAuctionEndsAt !== undefined && currentTimestamp !== undefined && hasTruthAuctionEnded(currentTimestamp, truthAuctionEndsAt)
 	if (!finalized && !hasEndedByTime) return undefined
 	const actions =
 		finalized && onOpenSettlement !== undefined ? (

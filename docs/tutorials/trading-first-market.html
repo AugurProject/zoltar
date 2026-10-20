@@ -18,7 +18,7 @@
 			<section id="before-you-start">
 				<h2>Before you start</h2>
 				<p>Trading is an exchange for <a href="../explanation/statoblast.html">Statoblast</a> outcome shares: a trading pool swaps the Yes and No shares of exactly one SecurityPool, and a SecurityPool without one has no market yet. In the UI, creating the trading pool is called creating a <em>market</em>.</p>
-				<p>To practise without a wallet, run <code>bun run app:serve:trading</code> and open <code>http://localhost:4163/?simulate=1&amp;simScenario=deployed#/create-market</code>. That simulator scenario has one SecurityPool, at <code>0x5e4EDB416494DbB62DD8C76E849aDee8e3c44d49</code>, and no trading pool; the screenshots below come from it. For a live network, follow <a href="../how-to/trading-configure-ui.html">Configure the Trading UI</a>, and if the UI opens the deployment screen, complete <a href="../how-to/trading-deploy-contracts.html">Deploy the Trading contracts</a> first. Fund the wallet with the deposit plus gas.</p>
+				<p>To practise without a wallet, run <code>bun run app:serve:trading</code> and open <code>http://localhost:4163/?simulate=1&amp;genesis=yes&amp;simScenario=deployed#/create-market</code>. That simulator scenario has one SecurityPool, at <code>0x5e4EDB416494DbB62DD8C76E849aDee8e3c44d49</code>, and no trading pool; the screenshots below come from it. For a live network, follow <a href="../how-to/trading-configure-ui.html">Configure the Trading UI</a>, and if the UI opens the deployment screen, complete <a href="../how-to/trading-deploy-contracts.html">Deploy the Trading contracts</a> first. Fund the wallet with the deposit plus gas.</p>
 			</section>
 			<section id="find-pool">
 				<h2>Open a SecurityPool without a market</h2>
@@ -45,7 +45,7 @@
 					<li>Select <strong>Create market and add liquidity</strong> and confirm the one transaction that creates and seeds the trading pool. It reverts if it would mint fewer LP tokens than the estimate allows after your slippage tolerance, which you set under <strong>Settings</strong>.</li>
 				</ol>
 				<figure class="screenshot" id="fig-trading-initialize" aria-labelledby="fig-trading-initialize-caption">
-					<a class="screenshot-link" href="../assets/screenshots/trading/initialize-pool.png"><img width="800" height="1182" src="../assets/screenshots/trading/initialize-pool.png" alt="The Liquidity panel of the Create market page, marked Market not created, with Create market selected, 0.01 ETH and a 70% conditional Yes price entered, and an estimate of 0.0042 LP, 0.01 Invalid, and 0.0057 Yes, above an enabled Create market and add liquidity button." loading="lazy" /></a>
+					<a class="screenshot-link" href="../assets/screenshots/trading/initialize-pool.png"><img width="800" height="1239" src="../assets/screenshots/trading/initialize-pool.png" alt="The Liquidity panel of the Create market page, marked Market not created, with Create market selected, 0.01 ETH and a 70% conditional Yes price entered, and an estimate of 0.0042 LP, 0.01 Invalid, and 0.0057 Yes, above an enabled Create market and add liquidity button." loading="lazy" /></a>
 					<figcaption id="fig-trading-initialize-caption"><span class="figure-label">Seeding at a 70% conditional Yes price.</span> The LP tokens represent only the Yes and No left in the trading pool; the Invalid and spare Yes return to your wallet.</figcaption>
 				</figure>
 			</section>
@@ -53,7 +53,7 @@
 				<h2>Check the result</h2>
 				<p>Open the <strong>Markets</strong> tab. The market is listed with the badge <strong>TRADING OPEN</strong> and <strong>Yes 70.0%</strong> under <strong>Price if not Invalid</strong>. Then open <strong>Portfolio</strong>: the market shows your LP tokens, your Invalid, and the spare Yes as separate holdings.</p>
 				<figure class="screenshot" id="fig-trading-portfolio" aria-labelledby="fig-trading-portfolio-caption">
-					<a class="screenshot-link" href="../assets/screenshots/trading/portfolio.png"><img width="773" height="557" src="../assets/screenshots/trading/portfolio.png" alt="The Portfolio page with one market card listing 0.0057 Yes, 0.01 Invalid, and 0.0042 LP, each outcome balance with its payout if the question resolves to that outcome." loading="lazy" /></a>
+					<a class="screenshot-link" href="../assets/screenshots/trading/portfolio.png"><img width="773" height="527" src="../assets/screenshots/trading/portfolio.png" alt="The Portfolio page with one market card listing 0.0057 Yes, 0.01 Invalid, and 0.0042 LP, each outcome balance with its payout if the question resolves to that outcome." loading="lazy" /></a>
 					<figcaption id="fig-trading-portfolio-caption"><span class="figure-label">Portfolio after seeding.</span> The 0.01 ETH deposit returned 0.01 Invalid, 0.0057 spare Yes, and the LP tokens.</figcaption>
 				</figure>
 				<p>At a 70% conditional Yes price, the trading pool holds roughly 30 Yes for every 70 No. The No reserve is the larger one because in a constant-product market the <em>opposite</em> reserve sets the price; <a href="../explanation/trading/pricing.html#formula">Conditional pricing</a> explains why.</p>

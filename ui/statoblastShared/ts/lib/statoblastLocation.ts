@@ -99,7 +99,7 @@ export function writePoolsLocationSearch(search: string, current: PoolsLocation 
 	})
 }
 
-export const STATOBLAST_CONTEXT_QUERY_PARAMS = ['openOracleReportId', 'openOracleView', 'vault', 'vaultView'] as const
+export const STATOBLAST_CONTEXT_QUERY_PARAMS = ['openOracleReportId', 'vault', 'vaultView'] as const
 /** The Pools browse controls; only the Pools route carries them in its URL. */
 export const POOL_BROWSE_QUERY_PARAMS = ['poolSearch', 'poolSort', 'poolFilter'] as const
 

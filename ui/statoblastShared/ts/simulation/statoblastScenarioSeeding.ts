@@ -155,13 +155,27 @@ export async function settleOracleReportIfNeeded({ memoryClient, readClient, wri
 	await getScenarioProtocol().settleOracleReport(writeClient, openOracleAddress, pendingReportId)
 }
 
-export async function refreshSeededOraclePrice({ accountAddress, createWriteClient, managerAddress, memoryClient, readClient }: { accountAddress: Address; createWriteClient: (accountAddress: Address) => WriteClient; managerAddress: Address; memoryClient: TevmLikeClient; readClient: ReadClient }) {
+/** Settles a fresh REP/ETH price for the pool's manager unless its current one is still valid; `price` is the reported price, the seeding default unless given. */
+export async function refreshSeededOraclePrice({
+	accountAddress,
+	createWriteClient,
+	managerAddress,
+	memoryClient,
+	price = getSeededCoordinatorInitialReportPrice(),
+	readClient,
+}: {
+	accountAddress: Address
+	createWriteClient: (accountAddress: Address) => WriteClient
+	managerAddress: Address
+	memoryClient: TevmLikeClient
+	price?: bigint
+	readClient: ReadClient
+}) {
 	const writeClient = createWriteClient(accountAddress)
 	let managerDetails = await getScenarioProtocol().loadOracleManagerDetails(readClient, managerAddress)
 	if (managerDetails.isPriceValid) return
 	if (managerDetails.pendingReportId === 0n) {
-		const initialReportPrice = getSeededCoordinatorInitialReportPrice()
-		await getScenarioProtocol().requestOraclePrice(writeClient, managerAddress, initialReportPrice)
+		await getScenarioProtocol().requestOraclePrice(writeClient, managerAddress, price)
 		managerDetails = await getScenarioProtocol().loadOracleManagerDetails(readClient, managerAddress)
 	}
 	if (managerDetails.pendingReportId === 0n) {

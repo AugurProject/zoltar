@@ -34,24 +34,10 @@ describe('security pools route section builders', () => {
 			setSecurityVaultForm: noop,
 		}
 		const props = buildSecurityVaultSectionProps(vault, { accountState, ...repPrice }, undefined, noop)
-		expect(sortedKeys(props)).toEqual([
-			'accountState',
-			'loadingSecurityVault',
-			'onLoadSecurityVault',
-			'onSecurityVaultFormChange',
-			'repPerEthPrice',
-			'repPerEthSource',
-			'repPerEthSourceUrl',
-			'securityPoolVaults',
-			'securityVaultDetails',
-			'securityVaultError',
-			'securityVaultForm',
-			'securityVaultMissing',
-			'selectedPoolStatoblastSecurityMultiplierBps',
-		])
+		expect(sortedKeys(props)).toEqual(['accountState', 'loadingSecurityVault', 'onLoadSecurityVault', 'onSecurityVaultFormChange', 'repPerEthPrice', 'securityPoolVaults', 'securityVaultDetails', 'securityVaultError', 'securityVaultForm', 'securityVaultMissing', 'selectedPoolStatoblastSecurityMultiplierBps'])
 		expectPassedThrough(props, vault)
 		expect(props.onLoadSecurityVault).toBe(vault.loadSecurityVault)
-		expect(props.repPerEthSourceUrl).toBe(repPrice.repPerEthSourceUrl)
+		expect(props.repPerEthPrice).toBe(repPrice.repPerEthPrice)
 	})
 
 	test('reporting props name exactly the declared reporting section props', () => {

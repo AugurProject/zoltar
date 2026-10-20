@@ -4,21 +4,30 @@ import * as url from 'node:url'
 import { projectDependencyClosure, projects } from '../repo/projects.ts'
 import { repositoryRoot } from '../repo/root.mts'
 import { appSharedPackages, sharedPackageClosure } from '../repo/sharedPackages.ts'
+import type { ContractProject } from '../../solidity/ts/contractProjects.ts'
 
 import { parseUiAppId, type UiAppId } from './appIds.mts'
 export { isUiAppId, parseUiAppId, UI_APP_IDS, type UiAppId } from './appIds.mts'
 // Feature stylesheets are linked after the shared sheet in the order the app pages load them; the production dist keeps the same file names under css/.
 export const featureStylesheets: Record<UiAppId, readonly string[]> = {
 	zoltar: ['zoltar-questions.css', 'zoltar-deployment.css', 'zoltar-migration.css', 'zoltar-shared.css'],
+	openoracle: ['zoltar-questions.css', 'zoltar-deployment.css', 'price-oracle.css', 'statoblast-shared.css'],
 	statoblast: ['zoltar-questions.css', 'zoltar-deployment.css', 'zoltar-migration.css', 'price-oracle.css', 'statoblast-shared.css'],
 	trading: ['zoltar-questions.css', 'price-oracle.css', 'app.css'],
 }
 
 export type UiPackageId = 'coreShared' | 'zoltarShared' | 'statoblastShared' | UiAppId
 
+const UI_CONTRACT_PROJECTS: Readonly<Record<UiAppId, ContractProject>> = { zoltar: 'zoltar', statoblast: 'statoblast', trading: 'trading', openoracle: 'statoblast' }
+
+export function getUiAppContractProject(appId: UiAppId): ContractProject {
+	return UI_CONTRACT_PROJECTS[appId]
+}
+
 const UI_PROJECT_ID_BY_PACKAGE_ID: Readonly<Record<UiPackageId, string>> = {
 	coreShared: 'ui-core',
 	statoblast: 'ui-statoblast',
+	openoracle: 'ui-openoracle',
 	statoblastShared: 'ui-statoblast-shared',
 	trading: 'ui-trading',
 	zoltar: 'ui-zoltar',
