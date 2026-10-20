@@ -14,7 +14,7 @@ describe('trading UI deployment configuration', () => {
 	})
 
 	test('loads canonical core deployment choices copied from the root manifests', async () => {
-		const deployments = await loadCoreDeploymentsFrom([{ chainId: 11_155_111, chainName: 'Sepolia', id: 'sepolia', proxyDeployer: `0x${'45'.repeat(20)}`, securityPoolFactory: core, zoltar }])
+		const deployments = await loadCoreDeploymentsFrom([{ genesisOutcome: 'yes', chainId: 11_155_111, chainName: 'Sepolia', id: 'sepolia', proxyDeployer: `0x${'45'.repeat(20)}`, securityPoolFactory: core, zoltar }])
 		expect(deployments[0]?.chainId).toBe(11_155_111)
 		expect(deployments[0]?.securityPoolFactory.toLowerCase()).toBe(core)
 		expect(deployments[0]?.zoltar.toLowerCase()).toBe(zoltar)

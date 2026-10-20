@@ -41,6 +41,7 @@ const selectors = {
 	universes: selector('universes(uint248)'),
 	deployedChildren: selector('getDeployedChildUniverses(uint248,uint256,uint256)'),
 	questions: selector('questions(uint256)'),
+	questionCreatedTimestamp: selector('questionCreatedTimestamp(uint256)'),
 	outcomeLabels: selector('getOutcomeLabels(uint256,uint256,uint256)'),
 	answerOptionName: selector('getAnswerOptionName(uint256,uint256)'),
 	canonicalPool: selector('canonicalPoolByUniverse(uint248)'),
@@ -89,6 +90,7 @@ function commonResponse(callSelector: string, question: string) {
 	if (callSelector === selectors.questionData) return encodedAddress(questionData)
 	if (callSelector === selectors.universes) return encodedUniverse(99n)
 	if (callSelector === selectors.questions) return question
+	if (callSelector === selectors.questionCreatedTimestamp) return encodeAbiParameters([{ type: 'uint256' }], [90n])
 	return undefined
 }
 
@@ -96,6 +98,31 @@ function commonResponse(callSelector: string, question: string) {
 const getChildUniverseId = (parentUniverseId: bigint, outcomeIndex: bigint) => BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [parentUniverseId, outcomeIndex]))) & ((1n << 248n) - 1n)
 
 describe('fork protocol helpers', () => {
+	test('preserves binary fork question metadata for the shared question presentation', async () => {
+		const client = publicClient(callSelector => {
+			const common = commonResponse(callSelector, encodedQuestion('Binary fork', 0n))
+			if (common !== undefined) return common
+			if (callSelector === selectors.outcomeLabels) return encodeAbiParameters([{ type: 'string[]' }], [['Yes', 'No']])
+			if (callSelector === selectors.canonicalPool) return encodedAddress(zeroAddress)
+			throw new Error(`Unexpected function selector: ${callSelector}`)
+		})
+		const context = await loadForkMigrationContext(client, market)
+		expect(context).toMatchObject({
+			questionId: 99n,
+			question: {
+				title: 'Binary fork',
+				description: 'Fork metadata',
+				questionId: '0x63',
+				createdAt: 90n,
+				startTime: 1n,
+				endTime: 2n,
+				marketType: 'binary',
+				outcomeLabels: ['Yes', 'No'],
+				outcomesComplete: true,
+			},
+		})
+	})
+
 	test('loads paginated categorical branches with Invalid and canonical-pool readiness', async () => {
 		let labelsPage = 0
 		let canonicalPoolRead = 0
@@ -117,7 +144,7 @@ describe('fork protocol helpers', () => {
 		const context = await loadForkMigrationContext(client, market)
 
 		expect(context.kind).toBe('categorical')
-		expect(context.title).toBe('Categorical fork')
+		expect(context.question).toMatchObject({ title: 'Categorical fork', marketType: 'categorical', outcomeLabels: [...firstLabels, 'Choice 31', 'Choice 32'], outcomesComplete: true })
 		expect(context.availableTargets).toHaveLength(33)
 		expect(context.availableTargets[0]).toMatchObject({ outcomeIndex: 0n, label: 'Invalid', canonicalPool: undefined })
 		expect(context.availableTargets[1]).toMatchObject({ outcomeIndex: 1n, label: 'Choice 1', canonicalPool })
@@ -153,7 +180,14 @@ describe('fork protocol helpers', () => {
 
 		const context = await loadForkMigrationContext(client, market)
 
-		expect(context).toMatchObject({ kind: 'scalar', title: 'Temperature fork', numTicks: 100n, displayValueMin: -50n * 10n ** 18n, displayValueMax: 50n * 10n ** 18n, answerUnit: '°C' })
+		expect(context).toMatchObject({
+			kind: 'scalar',
+			question: { title: 'Temperature fork', description: 'Fork metadata', startTime: 1n, endTime: 2n, createdAt: 90n, marketType: 'scalar', outcomeLabels: [], outcomesComplete: true },
+			numTicks: 100n,
+			displayValueMin: -50n * 10n ** 18n,
+			displayValueMax: 50n * 10n ** 18n,
+			answerUnit: '°C',
+		})
 		expect(context.availableTargets).toHaveLength(31)
 		expect(context.availableTargets[0]).toMatchObject({ outcomeIndex: 1n, label: 'On-chain scalar 1', canonicalPool: undefined })
 		expect(context.availableTargets[1]).toMatchObject({ outcomeIndex: 2n, label: 'On-chain scalar 2', canonicalPool })

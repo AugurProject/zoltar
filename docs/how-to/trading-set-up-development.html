@@ -21,7 +21,7 @@
 					<li>From the repository root, confirm dependencies with <code>test -d node_modules</code>. If they are missing, run <code>bun install --frozen-lockfile &amp;&amp; bun run setup</code>; <code>setup</code> installs every project from its lockfile, compiles the contracts, and builds the UI apps and UI tests.</li>
 					<li>Run <code>bun run trading:compile</code>. It compiles the contracts, builds the shared packages, and runs the Trading vendor build, which generates <code>ui/trading/ts/generated/contractArtifact.ts</code>. Never edit generated files.</li>
 					<li>Run <code>bun run trading:test</code>, which runs the SDK, contract-facing, and UI Trading tests, and <code>bun run trading:ui:build</code>.</li>
-					<li>Start <code>bun run app:serve:trading</code>, then open <code>http://localhost:4163/?simulate=1</code> for the browser-local simulator. <a href="./trading-configure-ui.html#modes">Configure the Trading UI</a> lists the Trading scenarios. The setup works when the tests pass and the simulator page loads.</li>
+					<li>Start <code>bun run app:serve:trading</code>, then open <code>http://localhost:4163/?simulate=1&amp;genesis=yes</code> for the browser-local simulator. <a href="./trading-configure-ui.html#modes">Configure the Trading UI</a> lists the Trading scenarios. The setup works when the tests pass and the simulator page loads.</li>
 				</ol>
 				<p>To run the standalone UI in Docker instead, complete the repository-root setup first, then from <code>ui/trading</code>:</p>
 				<pre class="code-scroll" tabindex="0"><code>docker network inspect zoltar &gt;/dev/null 2&gt;&amp;1 \

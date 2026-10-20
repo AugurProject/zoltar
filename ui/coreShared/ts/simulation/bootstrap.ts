@@ -8,6 +8,7 @@ import { initializeSimulationClock } from './clock.js'
 import type { SimulationScenario } from './scenarios.js'
 import { withTimeout } from '../lib/promise.js'
 import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/constants'
+import type { GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
 
 export type TevmLikeClient = ReturnType<typeof createMemoryClient>
 
@@ -245,6 +246,7 @@ async function deploySimulationTokens({
 	zoltarAddress: Address
 }) {
 	const writeClient = createWriteClient(primaryAccount)
+	if (profile.genesisOutcome === 'no') await memoryClient.tevmSetAccount({ address: primaryAccount, nonce: 1n })
 	const repDeploymentData = encodeDeployData({
 		abi: ReputationToken_ReputationToken.abi,
 		args: [zoltarAddress],
@@ -271,9 +273,9 @@ async function deploySimulationTokens({
 	})
 }
 
-export function predictSimulationTokenAddresses(accountAddress: Address): { genesisRepTokenAddress: Address; wethAddress: Address } {
+export function predictSimulationTokenAddresses(accountAddress: Address, genesisOutcome: GenesisOutcome = 'yes'): { genesisRepTokenAddress: Address; wethAddress: Address } {
 	return {
-		genesisRepTokenAddress: getCreateAddress({ from: accountAddress, nonce: 0n }),
+		genesisRepTokenAddress: getCreateAddress({ from: accountAddress, nonce: genesisOutcome === 'yes' ? 0n : 1n }),
 		wethAddress: MAINNET_WETH_ADDRESS,
 	}
 }
@@ -375,6 +377,7 @@ export async function bootstrapSimulationChain({
 	primaryAccount,
 	profile,
 	scenario,
+	zoltarAddress,
 }: {
 	accounts: readonly Address[]
 	applyScenario?: (parameters: BootstrapScenarioApplyParameters) => Promise<boolean>
@@ -386,6 +389,8 @@ export async function bootstrapSimulationChain({
 	primaryAccount: Address
 	profile: NetworkProfile
 	scenario: SimulationScenario
+	/** REP fixture mint authority; this address need not be in the application's deployment plan. */
+	zoltarAddress: Address
 }) {
 	setRuntimeNetworkProfile(profile)
 	await reportBootstrapProgress(onProgress, 'Initializing simulation engine', 0.01)
@@ -393,9 +398,6 @@ export async function bootstrapSimulationChain({
 	await reportBootstrapProgress(onProgress, 'Preparing simulation chain', 0.03)
 	await initializeSimulationClock(memoryClient)
 	await seedAccountBalances(memoryClient, accounts, onProgress)
-	const zoltarStep = getDeploymentSteps(profile).find(step => step.id === 'zoltar')
-	if (zoltarStep === undefined) throw new Error('Missing Zoltar deployment step for simulation bootstrap')
-
 	await deploySimulationTokens({
 		accounts,
 		createWriteClient,
@@ -403,7 +405,7 @@ export async function bootstrapSimulationChain({
 		onProgress,
 		primaryAccount,
 		profile,
-		zoltarAddress: zoltarStep.address,
+		zoltarAddress,
 	})
 	await seedWrappedEthBalances(createWriteClient, accounts, profile.wethAddress, onProgress)
 	const extendedApplied =

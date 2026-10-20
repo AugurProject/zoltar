@@ -123,14 +123,18 @@ export function TruthAuctionBidsSection({ aggregatedAuctionBidCountForLoadedTick
 					{
 						blockCellClassName: 'truth-auction-bid-row-address',
 						label: forkAuctionCopy.bidder,
-						render: row =>
-							row.isViewer ? (
-								<strong className='truth-auction-bidder-you' title={row.bidder}>
-									{forkAuctionCopy.bidderYou}
-								</strong>
-							) : (
-								<AddressValue abbreviated address={row.bidder} copyable={false} />
-							),
+						render: row => (
+							<>
+								{row.isViewer ? (
+									<>
+										<strong className='truth-auction-bidder-you' title={row.bidder}>
+											{forkAuctionCopy.bidderYou}
+										</strong>{' '}
+									</>
+								) : undefined}
+								<AddressValue abbreviated compactAbbreviation address={row.bidder} />
+							</>
+						),
 					},
 					bidAmountColumn(),
 					statusColumn(),

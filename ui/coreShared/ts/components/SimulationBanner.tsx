@@ -10,6 +10,7 @@ import { tryParseDecimalInput } from '../forms/decimal.js'
 import { formatCurrencyInputBalance, formatTimestampWithRelative } from '../lib/formatters.js'
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard.js'
 import { getBrowserStorage } from '../lib/browserStorage.js'
+import { getActiveNetworkProfile } from '../lib/activeEnvironment.js'
 import { getRegisteredSimulationScenarios, getSimulationScenarioDescription, getSimulationScenarioLabel } from '../simulation/scenarios.js'
 import { deleteSavedSimulationState, getSavedSimulationStateStorageSummary, persistSavedSimulationState, removeCorruptedSavedSimulationStates, type SavedSimulationStateRecord, type SavedSimulationStateStorageSummary } from '../simulation/savedStates.js'
 import { OperationModal } from './OperationModal.js'
@@ -17,6 +18,7 @@ import { TimestampValue } from './TimestampValue.js'
 import { Badge } from './Badge.js'
 import { getSimulationAccountOptionLabel, SimulationAccountControls, SimulationWalletControls } from './SimulationWalletControls.js'
 import { ErrorNotice } from './ErrorNotice.js'
+import { UserMessage } from './UserMessage.js'
 import { CopyErrorMessage } from './CopyErrorMessage.js'
 import { SIMULATION_TIME_PRESETS } from '../simulation/timePresets.js'
 import { getScenarioStatus, SimulationStripSummary } from './SimulationStripSummary.js'
@@ -57,8 +59,9 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 	const { copied, copyError, copyErrorId, copyText } = useCopyToClipboard(exportStateText.value)
 	const importStateText = useSignal('')
 	const selectedAccount = useSignal(controller.selectedAccount)
-	const simulationDetailsOpen = useSignal(controller.bootstrapError !== undefined)
+	const simulationDetailsOpen = useSignal(controller.bootstrapError !== undefined || controller.bootstrapWarning !== undefined)
 	const bootstrapError = useSignal(controller.bootstrapError)
+	const bootstrapWarning = useSignal(controller.bootstrapWarning)
 	const bootstrapLabel = useSignal(controller.bootstrapLabel)
 	const bootstrapProgress = useSignal(controller.bootstrapProgress)
 	const transactionCountSinceReset = useSignal(controller.transactionCountSinceReset)
@@ -113,6 +116,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 	const syncControllerState = () => {
 		blockCountSinceReset.value = controller.blockCountSinceReset
 		bootstrapError.value = controller.bootstrapError
+		bootstrapWarning.value = controller.bootstrapWarning
 		bootstrapLabel.value = controller.bootstrapLabel
 		bootstrapProgress.value = controller.bootstrapProgress
 		currentTimestamp.value = controller.currentTimestamp
@@ -149,9 +153,9 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 		if (controllerChanged) controlError.value = undefined
 		const handleControllerState = () => {
 			syncControllerState()
-			// The strip shows boot progress inline, so the details panel stays collapsed unless the scenario fails to boot.
+			// The strip shows boot progress inline; errors and recovery warnings open their explanation.
 			if (controller.bootstrapError !== undefined) simulationDetailsOpen.value = true
-			else if (controllerChanged) simulationDetailsOpen.value = false
+			else if (controllerChanged) simulationDetailsOpen.value = controller.bootstrapWarning !== undefined
 			controllerChanged = false
 		}
 		handleControllerState()
@@ -260,8 +264,10 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 	}
 	const scenarioStatus = getScenarioStatus({
 		bootstrapError: bootstrapError.value,
+		bootstrapWarning: bootstrapWarning.value,
 		isBootstrapped: isBootstrapped.value,
 	})
+	const genesisOutcome = getActiveNetworkProfile().genesisOutcome
 	const selectedAccountIndex = controller.accounts.findIndex(account => account === selectedAccount.value)
 	const selectedAccountLabel = walletMode.value === 'disconnected' ? appCopy.qaAccountDisconnected : getSimulationAccountOptionLabel(selectedAccountIndex < 0 ? 0 : selectedAccountIndex)
 
@@ -291,6 +297,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 								<h3>{simulationCopy.scenario}</h3>
 							</div>
 							<p className='detail'>{scenarioDetail}</p>
+							{bootstrapWarning.value === undefined ? undefined : <UserMessage tone='warning' announcement='polite' className='detail' detail={bootstrapWarning.value} />}
 							{savedStateStorageWarning.value === undefined ? undefined : <p className='detail'>{savedStateStorageWarning.value}</p>}
 							{modal.value === undefined ? <ErrorNotice message={savedStateError.value} /> : undefined}
 						</div>
@@ -318,8 +325,8 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 							{savedStateRecords.value.length === 0 ? undefined : (
 								<optgroup label={simulationCopy.savedStates}>
 									{savedStateRecords.value.map(record => (
-										<option key={record.id} value={`saved:${record.id}`}>
-											{record.name}
+										<option key={record.id} value={`saved:${record.id}`} disabled={record.genesisOutcome !== genesisOutcome}>
+											{record.genesisOutcome === genesisOutcome ? record.name : simulationCopy.formatOtherGenesisSavedStateLabel(record.name, record.genesisOutcome)}
 										</option>
 									))}
 								</optgroup>

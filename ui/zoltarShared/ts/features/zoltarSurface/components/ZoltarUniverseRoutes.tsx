@@ -6,6 +6,7 @@ import { useEffect, useRef } from 'preact/hooks'
 import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
 import { TransactionScopeProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { universeTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
+import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { UniverseBrowser } from '@zoltar/ui-core-shared/components/UniverseBrowser.js'
@@ -76,7 +77,7 @@ export function ZoltarForkRoute({ universe }: UniverseRouteProps) {
 		<>
 			<RouteHeader description={zoltarCopy.forkRouteDescription} title={zoltarCopy.forkZoltar} />
 			{/* A pending fork or migration locks only this universe's actions. */}
-			<TransactionScopeProvider scope={universeTransactionScope(universe.universeId)}>
+			<TransactionScopeProvider scope={universeTransactionScope(universe.universeId, getActiveNetworkProfile().genesisRepTokenAddress)}>
 				<SectionBlock variant='plain'>
 					<ForkZoltarSection
 						accountAddress={accountState.address}

@@ -93,6 +93,15 @@ describe('network configuration', () => {
 		}
 	})
 
+	test('indexes the Yes genesis REP instead of the parent or No universe token', () => {
+		expect(mainnetDeployment.network.genesisOutcome).toBe('yes')
+		expect(sepoliaDeployment.network.genesisOutcome).toBe('yes')
+		const tokens = parseManifestValue(mainnetManifest, 'mainnet.json').filter(([, , kind]) => kind === 'reputationToken')
+		expect(tokens).toEqual([[getAddress('0xCf6A0A7826fa124B7705d6f3c675eAD76f1e540D'), 'Genesis REP', 'reputationToken']])
+		expect(tokens.some(([address]) => address.toLowerCase() === '0x221657776846890989a759ba2973e427dff5c9bb')).toBe(false)
+		expect(tokens.some(([address]) => address.toLowerCase() === '0x2f4005456c2f098358213f01dbe34abdaa2989a4')).toBe(false)
+	})
+
 	test('indexes every current deterministic contract once and no superseded addresses', () => {
 		for (const { id, deployment, manifest } of [
 			{ id: 'mainnet', deployment: mainnetDeployment, manifest: mainnetManifest },

@@ -6,6 +6,7 @@ import { repositoryRoot } from '../repo/root.mts'
 const apps = [
 	{ id: 'zoltar', port: 8012, containerPort: 8012 },
 	{ id: 'statoblast', port: 8011, containerPort: 8011 },
+	{ id: 'openoracle', port: 4173, containerPort: 4173 },
 	{ id: 'trading', port: 4163, containerPort: 8080 },
 ] as const
 

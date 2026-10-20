@@ -367,7 +367,7 @@ type TypeScriptSourceMap = {
 	mappings: string
 }
 
-const generatedTypeScriptOutputPattern = /^(?:shared\/[^/]+|ui\/(?:coreShared|zoltarShared|statoblastShared|zoltar|statoblast|trading))\/js\/.*\.js$/
+const generatedTypeScriptOutputPattern = /^(?:shared\/[^/]+|ui\/(?:coreShared|zoltarShared|statoblastShared|zoltar|statoblast|trading|openoracle))\/js\/.*\.js$/
 const base64Digits = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 
 const decodeVlqSegment = (segment: string): number[] => {
@@ -510,7 +510,7 @@ function unloadedSourceCoverage(file: string, source: string) {
 }
 
 function isGeneratedSource(file: string) {
-	return file === 'ui/coreShared/ts/contractArtifact.ts' || file === 'ui/statoblastShared/ts/contractArtifact.ts' || file === 'solidity/ts/types/contractArtifact.ts' || /^ui\/(?:zoltar|statoblast|trading)\/(?:vendor|js)\//.test(file) || /^shared\/[^/]+\/js\//.test(file)
+	return file === 'ui/coreShared/ts/contractArtifact.ts' || file === 'ui/statoblastShared/ts/contractArtifact.ts' || file === 'solidity/ts/types/contractArtifact.ts' || /^ui\/(?:zoltar|statoblast|trading|openoracle)\/(?:vendor|js)\//.test(file) || /^shared\/[^/]+\/js\//.test(file)
 }
 
 export function classifyTypeScriptSource(filePath: string, source: string): TypeScriptSurfaceName | undefined {
@@ -523,9 +523,9 @@ export function classifyTypeScriptSource(filePath: string, source: string): Type
 	const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, false, scriptKind)
 	if (!sourceFile.statements.some(hasRuntimeStatement)) return undefined
 
-	if (/^ui\/(?:coreShared|zoltarShared|statoblastShared|zoltar|statoblast|trading)\/ts\//.test(file) && !/^ui\/(?:zoltar|statoblast|trading)\/ts\/(?:index\.dev|liveReload)\.ts$/.test(file)) return 'ui'
+	if (/^ui\/(?:coreShared|zoltarShared|statoblastShared|zoltar|statoblast|trading|openoracle)\/ts\//.test(file) && !/^ui\/(?:zoltar|statoblast|trading|openoracle)\/ts\/(?:index\.dev|liveReload)\.ts$/.test(file)) return 'ui'
 	if (/^shared\/[^/]+\/ts\//.test(file)) return 'shared'
-	if (file.startsWith('scripts/') || file.startsWith('tooling/') || /^ui\/(?:zoltar|statoblast|trading)\/ts\/(?:index\.dev|liveReload)\.ts$/.test(file) || file.startsWith('solidity/ts/')) return 'tooling'
+	if (file.startsWith('scripts/') || file.startsWith('tooling/') || /^ui\/(?:zoltar|statoblast|trading|openoracle)\/ts\/(?:index\.dev|liveReload)\.ts$/.test(file) || file.startsWith('solidity/ts/')) return 'tooling'
 	return undefined
 }
 

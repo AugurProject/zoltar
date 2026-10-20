@@ -431,10 +431,14 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		const selectedPool = createSelectedPool({ parent: parentPoolAddress, securityPoolAddress: getAddress('0x0000000000000000000000000000000000000201'), universeId: 11n })
 		await renderWorkflow(createSecurityPoolWorkflowProps({ securityPoolAddress: selectedPool.securityPoolAddress, securityPools: [parentPool, selectedPool], selectedPoolView: 'fork-workflow' }))
 
-		const parentPoolLink = within(document.body).getByRole('link', { name: parentPoolAddress })
+		const parentMetric = within(document.body).getByText('Parent pool').parentElement
+		if (parentMetric === null) throw new Error('Parent pool metric is missing')
+		const parentPoolLink = within(parentMetric).getByRole('link', { name: 'Open pool' })
 		expect(parentPoolLink).not.toBeNull()
-		expect(document.body.textContent?.includes('Parent pool')).toBe(true)
 		expect(parentPoolLink.getAttribute('title')).toBe(parentPoolAddress)
+		expect(parentPoolLink.getAttribute('href')).toContain(`/pools/${parentPoolAddress}/fork-workflow`)
+		expect(within(parentMetric).getByRole('button', { name: `Copy address ${parentPoolAddress}` })).not.toBeNull()
+		expect(parentMetric.querySelector('a.address-value')?.getAttribute('href')).toContain(`/address/${parentPoolAddress}`)
 	})
 
 	test('does not show a parent-pool metric for root pools', async () => {

@@ -20,7 +20,6 @@ export function writeOpenOracleViewQueryParam(search: string, view: string | und
 
 export function writeOpenOracleReportIdQueryParam(search: string, reportId: string | undefined) {
 	return updateSearchParams(search, params => {
-		if (setOrDeleteSearchParam(params, OPEN_ORACLE_REPORT_ID_QUERY_PARAM, reportId) === undefined) return
-		params.set(OPEN_ORACLE_VIEW_QUERY_PARAM, 'selected-report')
+		setOrDeleteSearchParam(params, OPEN_ORACLE_REPORT_ID_QUERY_PARAM, reportId)
 	})
 }

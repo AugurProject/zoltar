@@ -219,11 +219,21 @@ browserTest(
 				await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
 				await waitFor("document.querySelector('#execution-checklist li:nth-child(2)')?.dataset.ready === 'false'")
 				expect(await cdp.evaluate("document.querySelector('#execution-enabled')?.disabled")).toBe(false)
+				// Hold the final refresh so the save acknowledgement cannot stand in for the reloaded configuration.
+				if (width === 390)
+					await cdp.evaluate(
+						"{ const original = window.fetch; let saved = false; window.fetch = async (...args) => { const response = await original(...args); if (String(args[0]).endsWith('/api/execution')) saved = true; if (saved && String(args[0]).endsWith('/api/configuration')) { window.fetch = original; await new Promise(resolve => { window.releaseConfigurationRefresh = resolve }) } return response } }",
+					)
 				await cdp.evaluate("document.querySelector('#execution-enabled').click()")
 				await cdp.evaluate('document.querySelector(\'#execution-form button[type="submit"]\').click()')
 				await waitFor("document.querySelector('#execution-status')?.textContent === 'Dry-run mode saved.'")
 				expect(executionMutations.at(-1)).toEqual({ execute: false, revision: String(revision - 1) })
 				expect(settingsMutations).toHaveLength(0)
+				if (width === 390) {
+					await waitFor("typeof window.releaseConfigurationRefresh === 'function'")
+					await cdp.evaluate('window.releaseConfigurationRefresh()')
+				}
+				await waitFor("document.querySelector('#execution-mode-summary')?.textContent === 'Dry run · prerequisites missing' && document.querySelector('#settings-fields')?.disabled === false && document.querySelector('#save-settings')?.matches(':disabled') === false")
 			}
 			await cdp.evaluate("document.querySelector('#allow-high-risk').click(); document.querySelector('#save-settings').click()")
 			await waitFor("document.querySelector('.operator-confirm-dialog')?.open === true")

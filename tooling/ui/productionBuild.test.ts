@@ -12,6 +12,7 @@ import { UI_APP_IDS, featureStylesheets, getUiAppPaths, getUiCoreSharedPaths, is
 import { launchChromium } from './chromiumDevTools.mts'
 import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
 import { productionWorkflowTestName, selectProductionWorkflowScenarios, type ProductionWorkflowScenario } from './productionWorkflowScenarios.ts'
+import { AUGUR_GENESIS_FORK_QUESTION } from '../../shared/zoltar/ts/deployment/genesisUniverses.ts'
 
 const appPathsById = new Map(UI_APP_IDS.map(appId => [appId, getUiAppPaths(appId)]))
 const repositoryRootPath = getUiCoreSharedPaths().repositoryRoot
@@ -29,6 +30,15 @@ const productionWorkflowTest = (scenario: ProductionWorkflowScenario, run: () =>
 	register(productionWorkflowTestName(scenario), run, PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS)
 }
 const productionRebuildInvariantTest = process.env['ZOLTAR_USE_EXISTING_PRODUCTION_BUILD'] === '1' && process.env['ZOLTAR_RUN_PRODUCTION_REBUILD_INVARIANTS'] !== '1' ? test.skip : test
+
+function stylesheetHrefs(html: string) {
+	return [...html.matchAll(/<link\b[^>]*>/giu)].flatMap(([tag]) => {
+		if (!/\brel=["']stylesheet["']/iu.test(tag)) return []
+		const href = /\bhref=["']([^"']+)["']/iu.exec(tag)?.[1]
+		if (href === undefined) throw new Error('Stylesheet link must define href')
+		return [href]
+	})
+}
 
 beforeAll(async () => {
 	if (process.env['ZOLTAR_USE_EXISTING_PRODUCTION_BUILD'] !== '1') {
@@ -93,11 +103,23 @@ for (const appId of UI_APP_IDS) {
 	const productionCssPath = path.join(distRootPath, 'css', 'index.css')
 	const productionTokensCssPath = path.join(distRootPath, 'css', 'tokens.css')
 	const productionFaviconPaths = [path.join(distRootPath, 'favicon.svg')]
-	const expectedTitles: Record<UiAppId, string> = { statoblast: 'Augur Statoblast', trading: 'Statoblast Trading', zoltar: 'Zoltar' }
+	const expectedTitles: Record<UiAppId, string> = { openoracle: 'OpenOracle', statoblast: 'Augur Statoblast', trading: 'Statoblast Trading', zoltar: 'Zoltar' }
 	const expectedTitle = expectedTitles[appId]
 	const otherTitles = ['Zoltar', 'Augur Statoblast', 'Statoblast Trading'].filter(title => title !== expectedTitle)
-	const expectedRoutes: Record<UiAppId, string> = { statoblast: '#/pools', trading: '#/markets', zoltar: '#/zoltar' }
+	const expectedRoutes: Record<UiAppId, string> = { openoracle: '#/open-oracle', statoblast: '#/pools', trading: '#/markets', zoltar: '#/zoltar' }
 	const expectedRoute = expectedRoutes[appId]
+
+	test(`${appId} production includes the same stylesheets as development`, async () => {
+		const developmentHtml = await fs.readFile(appPaths.appIndexHtml, 'utf8')
+		const productionHtml = await fs.readFile(productionIndexPath, 'utf8')
+		const productionStyles = await Promise.all(stylesheetHrefs(productionHtml).map(href => fs.readFile(path.join(distRootPath, href), 'utf8')))
+		const missingStyles: string[] = []
+		for (const href of stylesheetHrefs(developmentHtml)) {
+			const sourcePath = href.startsWith('/') ? path.join(repositoryRootPath, href) : path.join(appPaths.appRoot, href)
+			if (!productionStyles.includes(await fs.readFile(sourcePath, 'utf8'))) missingStyles.push(href)
+		}
+		expect(missingStyles).toEqual([])
+	})
 
 	test(`${appId} production build emits the deployable artifact set`, async () => {
 		const expectedPaths = [
@@ -396,7 +418,7 @@ async function loadProductionDocumentInChromium(pageUrl: string, viewport: { hei
 const productionBrowserScenarios = [
 	{
 		appId: 'zoltar',
-		hash: '#/deploy?simulate=1&simScenario=baseline',
+		hash: '#/deploy?simulate=1&genesis=yes&simScenario=baseline',
 		expected: 'Deploy contracts',
 		workflow: false,
 		name: 'zoltar baseline deployment',
@@ -404,15 +426,39 @@ const productionBrowserScenarios = [
 	},
 	{
 		appId: 'zoltar',
-		hash: '#/zoltar?simulate=1&simScenario=deployed',
+		hash: '#/zoltar?simulate=1&genesis=yes&simScenario=deployed',
 		expected: 'Questions',
 		workflow: false,
 		name: 'zoltar deployed protocol',
 		viewport: { height: 900, width: 1440 },
 	},
 	{
-		appId: 'statoblast',
+		appId: 'zoltar',
+		hash: '#/zoltar?simulate=1&genesis=no&simScenario=deployed',
+		expected: 'Questions',
+		workflow: false,
+		name: 'zoltar No genesis deployed protocol',
+		viewport: { height: 844, width: 390 },
+	},
+	{
+		appId: 'openoracle',
 		hash: '#/deploy?simulate=1&simScenario=baseline',
+		expected: 'Deploy contracts',
+		workflow: false,
+		name: 'openoracle baseline deployment',
+		viewport: { height: 900, width: 1440 },
+	},
+	{
+		appId: 'openoracle',
+		hash: '#/open-oracle?simulate=1&simScenario=deployed',
+		expected: 'Browse reports',
+		workflow: false,
+		name: 'openoracle deployed report browser at narrow width',
+		viewport: { height: 844, width: 390 },
+	},
+	{
+		appId: 'statoblast',
+		hash: '#/deploy?simulate=1&genesis=yes&simScenario=baseline',
 		expected: 'Deploy contracts',
 		workflow: false,
 		name: 'statoblast baseline deployment',
@@ -420,7 +466,7 @@ const productionBrowserScenarios = [
 	},
 	{
 		appId: 'statoblast',
-		hash: '#/pools?simulate=1&simScenario=security-pool',
+		hash: '#/pools?simulate=1&genesis=yes&simScenario=security-pool',
 		expected: 'Browse pools',
 		workflow: false,
 		name: 'statoblast seeded pool at narrow width',
@@ -428,7 +474,23 @@ const productionBrowserScenarios = [
 	},
 	{
 		appId: 'statoblast',
-		hash: '#/pools?simulate=1&simScenario=securitypoolx2-auction',
+		hash: '#/pools?simulate=1&genesis=no&simScenario=security-pool',
+		expected: 'Browse pools',
+		workflow: false,
+		name: 'statoblast No genesis seeded pool',
+		viewport: { height: 900, width: 1440 },
+	},
+	{
+		appId: 'trading',
+		hash: '#/markets?simulate=1&genesis=no&simScenario=trading-funded',
+		expected: 'Markets',
+		workflow: false,
+		name: 'trading No genesis funded market',
+		viewport: { height: 844, width: 390 },
+	},
+	{
+		appId: 'statoblast',
+		hash: '#/pools?simulate=1&genesis=yes&simScenario=securitypoolx2-auction',
 		expected: 'Truth auction',
 		workflow: true,
 		name: 'statoblast fork and auction',
@@ -447,7 +509,8 @@ for (const scenario of productionBrowserScenarios) {
 		}
 		expect(state.html).toContain('<main')
 		expect(state.body).toContain(scenario.expected)
-		expect(state.body).toContain(scenario.appId === 'zoltar' ? 'Zoltar' : 'Augur Statoblast')
+		const appNames = { zoltar: 'Zoltar', trading: 'Statoblast Trading', statoblast: 'Augur Statoblast', openoracle: 'OpenOracle' }
+		expect(state.body).toContain(appNames[scenario.appId])
 		expect(state.body).toContain('Browser simulation')
 		expect(state.height).toBe(scenario.viewport.height)
 		expect(state.width).toBe(scenario.viewport.width)
@@ -455,6 +518,34 @@ for (const scenario of productionBrowserScenarios) {
 	}
 	if (scenario.workflow) productionWorkflowTest('auction-boot', run)
 	else productionBrowserTest(`production bundle boots the ${scenario.name} scenario in Chromium`, run)
+}
+
+for (const appId of ['zoltar', 'statoblast', 'trading'] as const) {
+	productionBrowserTest(`production bundle requires a genesis choice before starting ${appId}`, async () => {
+		if (server === undefined) throw new Error('Production test server did not start')
+		const baseUrl = server.url.toString().replace(/\/$/, '')
+		await loadProductionDocumentInChromium(`${baseUrl}/${appId}/?simulate=1&simScenario=baseline`, { height: 844, width: 390 }, async driver => {
+			const body = await driver.waitForBodyText(AUGUR_GENESIS_FORK_QUESTION.title)
+			expect(body).toContain('Choose the truthful universe')
+			expect(body).toContain('If the rocket explodes on the launch pad while attempting to launch on a launch day, then this market will resolve as No.')
+			expect(body).toContain('2026-04-08 00:00:00 UTC')
+			expect(body).toContain('Market address')
+			expect(
+				await driver.evaluate(`(() => {
+					const question = document.querySelector('.question-summary')
+					return { links: [...question.querySelectorAll('a')].map(link => ({ href: link.getAttribute('href'), target: link.getAttribute('target'), noreferrer: link.relList.contains('noreferrer'), nestedButton: link.querySelector('button, [role="button"]') !== null })), copyLabels: [...question.querySelectorAll('[role="button"]')].map(button => button.getAttribute('aria-label')) }
+				})()`),
+			).toEqual({
+				links: [AUGUR_GENESIS_FORK_QUESTION.marketAddress, AUGUR_GENESIS_FORK_QUESTION.creator, AUGUR_GENESIS_FORK_QUESTION.designatedReporter].map(address => ({ href: `https://etherscan.io/address/${address}`, target: '_blank', noreferrer: true, nestedButton: false })),
+				copyLabels: [AUGUR_GENESIS_FORK_QUESTION.marketAddress, AUGUR_GENESIS_FORK_QUESTION.creator, AUGUR_GENESIS_FORK_QUESTION.designatedReporter].map(address => `Copy address ${address}`),
+			})
+			expect(await driver.evaluate('window.__zoltarProductionWorkers.length')).toBe(0)
+			await driver.clickButton('Open No universe')
+			await driver.waitForBodyText('Browser simulation')
+			expect(await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.genesisOutcome')).toBe('no')
+			expect(await driver.evaluate('new URLSearchParams(location.search).get("genesis")')).toBe('no')
+		})
+	})
 }
 
 function createWorkflowActions(driver: ProductionBrowserDriver) {
@@ -491,7 +582,7 @@ function createWorkflowActions(driver: ProductionBrowserDriver) {
 		const genesisRepTokenAddress = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.genesisRepTokenAddress')
 		const wethAddress = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.wethAddress')
 		if (typeof genesisRepTokenAddress !== 'string' || typeof wethAddress !== 'string') throw new Error('Simulation network profile was not available')
-		const profile = createSimulationProfile({ genesisRepTokenAddress: getAddress(genesisRepTokenAddress), wethAddress: getAddress(wethAddress) })
+		const profile = createSimulationProfile({ genesisOutcome: 'yes', genesisRepTokenAddress: getAddress(genesisRepTokenAddress), wethAddress: getAddress(wethAddress) })
 		const { securityPoolFactory } = getInfraContractAddresses(profile)
 		const abi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
 		const readFixtureContract = async (data: Hex) => {
@@ -578,7 +669,7 @@ async function prepareVaultDeposit(driver: ProductionBrowserDriver, amount: stri
 	throw new Error(`Vault deposit approval did not finish: ${String(await driver.evaluate('document.body.innerText'))}`)
 }
 
-productionInteractionTest('pool-recovery', '?workflow=pool#/pools?simulate=1&simScenario=security-pool', { height: 844, width: 390 }, async driver => {
+productionInteractionTest('pool-recovery', '?workflow=pool#/pools?simulate=1&genesis=yes&simScenario=security-pool', { height: 844, width: 390 }, async driver => {
 	const { completeTransactionReview, openSeededPool } = createWorkflowActions(driver)
 	await openSeededPool()
 	await driver.waitForBodyWithoutText('Loading vault details…')
@@ -600,7 +691,7 @@ productionInteractionTest('pool-recovery', '?workflow=pool#/pools?simulate=1&sim
 	await driver.clickButton('Dismiss')
 })
 
-productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?simulate=1&simScenario=securitypoolx2', { height: 900, width: 1440 }, async driver => {
+productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?simulate=1&genesis=yes&simScenario=securitypoolx2', { height: 900, width: 1440 }, async driver => {
 	const { completeTransactionReview, isPoolToolSelected, openSeededPool, selectPoolTool } = createWorkflowActions(driver)
 	await openSeededPool()
 	await driver.waitForBodyText('Will this resolve? (securitypoolx2 #1)')
@@ -819,7 +910,7 @@ productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?sim
 	await driver.waitForTransactionStatus('Confirmed', 'Migrate vault')
 })
 
-productionInteractionTest('deployment-auction', '#/deploy?simulate=1&simScenario=baseline', { height: 900, width: 1440 }, async driver => {
+productionInteractionTest('deployment-auction', '#/deploy?simulate=1&genesis=yes&simScenario=baseline', { height: 900, width: 1440 }, async driver => {
 	await driver.evaluate('document.body.focus()')
 	await driver.pressTab()
 	expect(await driver.evaluate('document.activeElement?.textContent?.trim()')).toBe('Skip to main content')
@@ -829,7 +920,7 @@ productionInteractionTest('deployment-auction', '#/deploy?simulate=1&simScenario
 	expect(deployedBody).toContain('Proxy Deployer')
 	expect(deployedBody).not.toContain('Failed to initialize the app environment')
 	// Keep the lightweight deployment boot before the expensive auction fixture, as in the original workflow.
-	await driver.navigate('?workflow=auction#/pools?simulate=1&simScenario=securitypoolx2-auction')
+	await driver.navigate('?workflow=auction#/pools?simulate=1&genesis=yes&simScenario=securitypoolx2-auction')
 	await driver.waitForBodyText('Browse pools')
 	await driver.waitForBodyWithoutText('BOOTSTRAPPING')
 	const { completeTransactionReview, openSeededPool, selectPoolTool, loadSeededPools } = createWorkflowActions(driver)
@@ -883,7 +974,7 @@ async function readButtonDisabledReason(driver: ProductionBrowserDriver, label: 
 	)
 }
 
-productionInteractionTest('ended-pool-exit', '?workflow=ended#/pools?simulate=1&simScenario=ended-pool-commitment', { height: 900, width: 1440 }, async driver => {
+productionInteractionTest('ended-pool-exit', '?workflow=ended#/pools?simulate=1&genesis=yes&simScenario=ended-pool-commitment', { height: 900, width: 1440 }, async driver => {
 	const { completeTransactionReview, openSeededPool } = createWorkflowActions(driver)
 	const readWalletRepAttoRep = async (expected?: bigint) => {
 		const accountMenu = 'Account menu 0x000000…0000A1'
@@ -955,7 +1046,7 @@ productionInteractionTest('ended-pool-exit', '?workflow=ended#/pools?simulate=1&
 	expect(await readWalletRepAttoRep(expectedWalletRep)).toBe(expectedWalletRep)
 })
 
-productionInteractionTest('liquidation-distance', '?workflow=liquidation#/pools?simulate=1&simScenario=liquidation-distance', { height: 900, width: 1440 }, async driver => {
+productionInteractionTest('liquidation-distance', '?workflow=liquidation#/pools?simulate=1&genesis=yes&simScenario=liquidation-distance', { height: 900, width: 1440 }, async driver => {
 	const { openSeededPool } = createWorkflowActions(driver)
 	const readVaultCommitment = async (vaultAddress: string) =>
 		await driver.evaluate(

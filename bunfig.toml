@@ -1,6 +1,6 @@
 [test]
 preload = ['./bun-test-setup.ts']
-pathIgnorePatterns = ['solidity/js/tests/**', 'ui/coreShared/js/tests/**', 'ui/zoltar/js/tests/**', 'ui/statoblast/js/tests/**', 'ui/trading/js/tests/**']
+pathIgnorePatterns = ['solidity/js/tests/**', 'ui/coreShared/js/tests/**', 'ui/zoltar/js/tests/**', 'ui/statoblast/js/tests/**', 'ui/trading/js/tests/**', 'ui/openoracle/js/tests/**']
 
 [install]
 # Runtime auto-install silently resolves bare imports from temp-directory

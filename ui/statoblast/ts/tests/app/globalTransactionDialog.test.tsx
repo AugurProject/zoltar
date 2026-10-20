@@ -476,6 +476,7 @@ describe('GlobalTransactionDialog', () => {
 		expect(contractValue?.querySelector('.global-transaction-identifier-label')?.textContent).toBe('Truth Auction')
 		expect(contractValue?.querySelector('.address-value')?.getAttribute('title')).toBe(contractAddress)
 		expect(contractValue?.querySelector('.address-value-abbreviated')).not.toBeNull()
+		expect(contractValue?.querySelectorAll('a').length).toBe(1)
 		// Only a label followed by one address is treated as a labelled address.
 		expect(within(document.body).getByText('Arguments').nextElementSibling?.querySelector('.global-transaction-identifier-label')).toBeNull()
 	})
@@ -507,7 +508,8 @@ describe('GlobalTransactionDialog', () => {
 		expect(addressArguments.querySelector('.address-value-text')?.getAttribute('data-abbreviated')).toBe('false')
 		const argumentAddress = addressArguments.querySelector('.address-value')
 		expect(argumentAddress?.getAttribute('title')).toBe(poolAddress)
-		expect(argumentAddress?.getAttribute('aria-label')).toBe(`Copy address ${poolAddress}`)
+		expect(within(addressArguments).getByRole('button', { name: `Copy address ${poolAddress}` })).not.toBeNull()
+		expect(argumentAddress?.getAttribute('href')).toBe(`https://sepolia.etherscan.io/address/${poolAddress}`)
 		expect(argumentAddress?.querySelector('.address-value-full')?.textContent).toBe(poolAddress)
 		expect(addressArguments.querySelector('.global-transaction-detail-text')).not.toBeNull()
 		expect(plainArguments?.textContent).toBe('1, {title: Will this resolve?}')

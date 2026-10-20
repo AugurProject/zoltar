@@ -4,7 +4,7 @@ import * as ts from 'typescript'
 import { repositoryRoot as projectRoot } from '../repo/root.mts'
 import { walkFiles } from '../repo/walk.mts'
 
-const uiPackageIds = ['coreShared', 'zoltarShared', 'statoblastShared', 'zoltar', 'statoblast', 'trading'] as const
+const uiPackageIds = ['coreShared', 'zoltarShared', 'statoblastShared', 'zoltar', 'statoblast', 'trading', 'openoracle'] as const
 const uiSourceRoots = uiPackageIds.map(packageId => path.join(projectRoot, 'ui', packageId, 'ts'))
 
 type ImportBoundaryRule = 'features-must-not-import-app' | 'shared-layers-must-not-import-app' | 'shared-layers-must-not-import-features' | 'test-layers-must-follow-ownership' | 'cross-package-import-boundary' | 'cross-package-private-subpath'
@@ -37,7 +37,7 @@ function isWithin(candidatePath: string, directoryPath: string) {
 	return candidatePath === directoryPath || candidatePath.startsWith(`${directoryPath}/`)
 }
 
-const appPackagePattern = /^ui\/(coreShared|zoltarShared|statoblastShared|zoltar|statoblast|trading)\/ts(?:\/|$)/
+const appPackagePattern = /^ui\/(coreShared|zoltarShared|statoblastShared|zoltar|statoblast|trading|openoracle)\/ts(?:\/|$)/
 const packageAliases: Record<string, string> = {
 	'@zoltar/ui-core-shared': 'coreShared',
 	'@zoltar/ui-zoltar-shared': 'zoltarShared',
@@ -45,6 +45,7 @@ const packageAliases: Record<string, string> = {
 	'@zoltar/ui-zoltar': 'zoltar',
 	'@zoltar/ui-statoblast': 'statoblast',
 	'@zoltar/ui-trading': 'trading',
+	'@zoltar/ui-openoracle': 'openoracle',
 }
 const sharedLibraryPackageIds = new Set(['zoltarShared', 'statoblastShared'])
 const sharedLibraryPublicExports = new Map(
@@ -61,6 +62,7 @@ const allowedCrossPackageImports: Record<string, readonly string[]> = {
 	statoblastShared: ['coreShared', 'zoltarShared'],
 	zoltar: ['coreShared', 'zoltarShared'],
 	statoblast: ['coreShared', 'zoltarShared', 'statoblastShared'],
+	openoracle: ['coreShared', 'zoltarShared', 'statoblastShared'],
 	trading: ['coreShared', 'zoltarShared', 'statoblastShared'],
 }
 

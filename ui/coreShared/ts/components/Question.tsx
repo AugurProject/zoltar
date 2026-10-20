@@ -1,7 +1,8 @@
 import type { ComponentChildren } from 'preact'
 import * as commonCopy from '../copy/common.js'
-
+import * as universeCopy from '../copy/universes.js'
 import { LoadingText } from '../components/LoadingText.js'
+import { AddressValue } from './AddressValue.js'
 import { IdentifierValue } from '../components/IdentifierValue.js'
 import { MetricGrid } from '../components/MetricGrid.js'
 import { MetricField } from '../components/MetricField.js'
@@ -11,7 +12,9 @@ import { appendInvalidOutcomeLabelIfMissing, isInvalidOutcomeLabel } from '../li
 import { getMarketTypeLabel } from '../lib/marketType.js'
 import * as marketTypeCopy from '../copy/marketType.js'
 import { formatScalarDisplayValue } from '../lib/scalarOutcome.js'
-import type { MarketDetails } from '../types/contracts.js'
+import type { ForkQuestionDetails, MarketDetails } from '../types/contracts.js'
+import { WorkflowSubsection } from './WorkflowSubsection.js'
+import type { NetworkProfile } from '../wallet/networkProfile.js'
 
 type QuestionProps = {
 	abbreviateIdentifier?: boolean
@@ -41,42 +44,116 @@ type QuestionSummaryField =
 			label: string
 			value: bigint
 	  }
+	| {
+			kind: 'address'
+			label: string
+			value: string
+	  }
 
-export function getQuestionTitle(question: MarketDetails) {
+export function getQuestionTitle(question: Pick<MarketDetails, 'title'>) {
 	return question.title.trim() === '' ? commonCopy.untitledQuestion : question.title
 }
 
-function getQuestionDescription(question: MarketDetails) {
+function getQuestionDescription(question: Pick<MarketDetails, 'description'>) {
 	// Empty question descriptions are intentionally silent in the UI. These screens are read-only,
 	// and users cannot add resolution notes from here.
 	return question.description.trim()
 }
 
-function getDisplayedOutcomes(question: MarketDetails) {
+function getDisplayedOutcomes(question: ForkQuestionDetails) {
+	if (question.outcomesComplete === false) return question.outcomeLabels
 	const outcomes = question.outcomeLabels.length === 0 ? [marketTypeCopy.scalar] : question.outcomeLabels
 	return appendInvalidOutcomeLabelIfMissing(outcomes)
 }
 
-function getDisplayRange(question: MarketDetails) {
+function getDisplayRange(question: Pick<MarketDetails, 'displayValueMin' | 'displayValueMax' | 'answerUnit'>) {
 	const displayRange = `${formatScalarDisplayValue(question.displayValueMin)} to ${formatScalarDisplayValue(question.displayValueMax)}`
 	return question.answerUnit === '' ? displayRange : `${displayRange}\u00a0${question.answerUnit}`
 }
 
-function getQuestionSummaryFields(question: MarketDetails, showEndTime: boolean, showIdentifier: boolean): QuestionSummaryField[] {
+function getQuestionSummaryFields(question: ForkQuestionDetails, showEndTime: boolean, showIdentifier: boolean, fork = false): QuestionSummaryField[] {
 	const fields: QuestionSummaryField[] = [{ kind: 'text', label: commonCopy.questionType, value: getMarketTypeLabel(question.marketType) }]
-	if (showIdentifier) fields.push({ kind: 'identifier', label: commonCopy.questionId, value: question.questionId })
-	fields.push({ kind: 'timestamp', label: commonCopy.created, value: question.createdAt })
+	if (showIdentifier && question.questionId !== undefined) fields.push({ kind: 'identifier', label: commonCopy.questionId, value: question.questionId })
+	if (question.createdAt !== undefined) fields.push({ kind: 'timestamp', label: commonCopy.created, value: question.createdAt })
+	if (fork && question.startTime !== undefined) fields.push(question.startTime === 0n ? { kind: 'text', label: commonCopy.starts, value: commonCopy.none } : { kind: 'timestamp', label: commonCopy.starts, value: question.startTime })
 
-	if (showEndTime) fields.push({ kind: 'timestamp', label: commonCopy.endTime, value: question.endTime })
-	fields.push({ kind: 'text', label: commonCopy.outcomes, value: getDisplayedOutcomes(question).join(', ') })
+	if (showEndTime && question.endTime !== undefined) fields.push({ kind: 'timestamp', label: commonCopy.endTime, value: question.endTime })
+	fields.push({ kind: 'text', label: question.outcomesComplete === false ? universeCopy.outcomesOnThisPage : commonCopy.outcomes, value: getDisplayedOutcomes(question).join(', ') })
 
-	if (question.marketType === 'scalar')
-		fields.push({ kind: 'text', label: commonCopy.ticks, value: question.numTicks.toString() }, { kind: 'text', label: commonCopy.displayRange, value: getDisplayRange(question) }, { kind: 'text', label: commonCopy.answerUnit, value: question.answerUnit === '' ? commonCopy.none : question.answerUnit })
+	if ((fork || question.marketType === 'scalar') && question.numTicks !== undefined) fields.push({ kind: 'text', label: commonCopy.ticks, value: question.numTicks.toString() })
+	if (question.marketType === 'scalar') {
+		if (question.displayValueMin !== undefined && question.displayValueMax !== undefined && question.answerUnit !== undefined)
+			fields.push({ kind: 'text', label: commonCopy.displayRange, value: getDisplayRange({ displayValueMin: question.displayValueMin, displayValueMax: question.displayValueMax, answerUnit: question.answerUnit }) })
+		if (question.answerUnit !== undefined) fields.push({ kind: 'text', label: commonCopy.answerUnit, value: question.answerUnit === '' ? commonCopy.none : question.answerUnit })
+	}
+	if (fork) {
+		if (question.marketAddress !== undefined) fields.push({ kind: 'address', label: universeCopy.marketAddress, value: question.marketAddress })
+		for (const [label, value] of [
+			[universeCopy.creator, question.creator],
+			[universeCopy.designatedReporter, question.designatedReporter],
+		] as const)
+			if (value !== undefined) fields.push({ kind: 'address', label, value })
+		for (const [label, values] of [
+			[universeCopy.categories, question.categories],
+			[universeCopy.tags, question.tags],
+		] as const)
+			if (values !== undefined && values.length > 0) fields.push({ kind: 'text', label, value: values.join(', ') })
+	}
 
 	return fields
 }
 
-function renderQuestionSummaryField(field: QuestionSummaryField, abbreviateIdentifier: boolean) {
+function renderQuestionDescription(description: string, fork: boolean) {
+	if (description === '') return undefined
+	if (!fork) return <p className='detail'>{description}</p>
+	return description.split(/\n\s*\n/).map(paragraph => (
+		<p key={paragraph} className='detail'>
+			{paragraph}
+		</p>
+	))
+}
+
+function FullQuestion({
+	abbreviateIdentifier = false,
+	additionalMetrics,
+	className = '',
+	question,
+	showTitle = true,
+	showEndTime = true,
+	showIdentifier = true,
+	fork = false,
+	explorerProfile,
+}: Omit<QuestionProps, 'question' | 'variant'> & { question: ForkQuestionDetails; fork?: boolean; explorerProfile?: NetworkProfile | undefined }) {
+	const descriptionNode = renderQuestionDescription(getQuestionDescription(question), fork)
+	return (
+		<div className={`question-summary ${className}`}>
+			{showTitle ? (
+				<div className='question-summary-heading'>
+					<strong>{getQuestionTitle(question)}</strong>
+					{descriptionNode}
+				</div>
+			) : (
+				descriptionNode
+			)}
+			<MetricGrid variant='question'>
+				{getQuestionSummaryFields(question, showEndTime, showIdentifier, fork).map(field => renderQuestionSummaryField(field, abbreviateIdentifier, explorerProfile))}
+				{additionalMetrics}
+			</MetricGrid>
+		</div>
+	)
+}
+
+export function ForkQuestion({ question, loading = false, explorerProfile }: { question: ForkQuestionDetails | undefined; loading?: boolean; explorerProfile?: NetworkProfile | undefined }) {
+	return <WorkflowSubsection title={universeCopy.forkQuestion}>{loading || question === undefined ? <Question question={undefined} loading /> : <FullQuestion question={question} fork explorerProfile={explorerProfile} />}</WorkflowSubsection>
+}
+
+function renderQuestionSummaryField(field: QuestionSummaryField, abbreviateIdentifier: boolean, explorerProfile?: NetworkProfile) {
+	if (field.kind === 'address')
+		return (
+			<MetricField key={field.label} label={field.label}>
+				<AddressValue address={field.value} explorerProfile={explorerProfile} wrap />
+			</MetricField>
+		)
 	if (field.kind === 'identifier')
 		return (
 			<MetricField key={field.label} label={field.label}>
@@ -112,7 +189,6 @@ export function Question({ abbreviateIdentifier = false, additionalMetrics, clas
 	const description = getQuestionDescription(question)
 	const showHeading = showTitle || description !== ''
 	const descriptionNode = description === '' ? undefined : <p className='detail'>{description}</p>
-	const summaryFields = getQuestionSummaryFields(question, showEndTime, showIdentifier)
 	const outcomeItems = getDisplayedOutcomes(question).map(outcome => ({
 		key: outcome,
 		label: outcome,
@@ -182,20 +258,5 @@ export function Question({ abbreviateIdentifier = false, additionalMetrics, clas
 			</div>
 		)
 
-	return (
-		<div className={`question-summary ${className}`}>
-			{showTitle ? (
-				<div className='question-summary-heading'>
-					<strong>{title}</strong>
-					{descriptionNode}
-				</div>
-			) : (
-				descriptionNode
-			)}
-			<MetricGrid variant='question'>
-				{summaryFields.map(field => renderQuestionSummaryField(field, abbreviateIdentifier))}
-				{additionalMetrics}
-			</MetricGrid>
-		</div>
-	)
+	return <FullQuestion abbreviateIdentifier={abbreviateIdentifier} additionalMetrics={additionalMetrics} className={className} question={question} showTitle={showTitle} showEndTime={showEndTime} showIdentifier={showIdentifier} />
 }

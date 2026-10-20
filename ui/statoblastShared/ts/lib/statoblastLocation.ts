@@ -99,7 +99,7 @@ export function writePoolsLocationSearch(search: string, current: PoolsLocation 
 	})
 }
 
-export const STATOBLAST_CONTEXT_QUERY_PARAMS = ['poolsView', 'openOracleReportId', 'openOracleView', 'vault', 'vaultView', 'poolSearch', 'poolSort', 'poolFilter'] as const
+export const STATOBLAST_CONTEXT_QUERY_PARAMS = ['poolsView', 'openOracleReportId', 'vault', 'vaultView', 'poolSearch', 'poolSort', 'poolFilter'] as const
 
 export function readPoolBrowseState(search: string): PoolBrowseState {
 	const params = new URLSearchParams(search)

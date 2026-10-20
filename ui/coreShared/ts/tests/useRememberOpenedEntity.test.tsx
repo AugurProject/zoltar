@@ -8,6 +8,9 @@ import { createDownloadedEntityStore, readFavoriteEntries, resetLocalEntityStore
 import { decodeStoredValue } from '../lib/storedValueReader.js'
 import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
+import { getGenesisNetworkProfile, SEPOLIA_NETWORK_PROFILE } from '../wallet/networkProfile.js'
+import { createFakeBackend } from './testUtils/fakeBackend.js'
 
 type Summary = { title: string }
 const store = createDownloadedEntityStore((value: unknown) => decodeStoredValue(value, (read): Summary => ({ title: read.string('title') })))
@@ -21,10 +24,34 @@ void describe('useRememberOpenedEntity', () => {
 	const lifecycle = installDomTestLifecycle({
 		afterTest: () => {
 			resetLocalEntityStoreForTesting()
+			resetActiveEnvironmentForTesting()
 		},
 		beforeTest: () => {
 			resetLocalEntityStoreForTesting()
 		},
+	})
+
+	void test('keeps each genesis deployment favorite and download when switching roots on one chain', async () => {
+		const yes = getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, 'yes')
+		const no = getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, 'no')
+		installActiveEnvironmentForTesting(createFakeBackend({ profile: yes }))
+		const yesScope = getLocalEntityScope('statoblast', 'pool')
+		const yesSummary = { title: 'Yes root pool' }
+		const yesOpened = lifecycle.trackRendered(await renderIntoDocument(<OpenedEntity data={yesSummary} id='0xAA' />))
+
+		installActiveEnvironmentForTesting(createFakeBackend({ profile: no }))
+		const noScope = getLocalEntityScope('statoblast', 'pool')
+		expect(readFavoriteEntries(noScope)).toEqual([])
+		expect(store.read(noScope)).toEqual([])
+		const noSummary = { title: 'No root pool' }
+		await act(() => render(<OpenedEntity data={noSummary} id='0xAA' />, yesOpened.container))
+		expect(readFavoriteEntries(noScope).map(entry => entry.id)).toEqual(['0xaa'])
+
+		installActiveEnvironmentForTesting(createFakeBackend({ profile: yes }))
+		expect(getLocalEntityScope('statoblast', 'pool')).toEqual(yesScope)
+		expect(readFavoriteEntries(getLocalEntityScope('statoblast', 'pool')).map(entry => entry.id)).toEqual(['0xaa'])
+		expect(store.read(getLocalEntityScope('statoblast', 'pool')).map(entry => entry.data)).toEqual([yesSummary])
+		expect(store.read(noScope).map(entry => entry.data)).toEqual([noSummary])
 	})
 
 	void test('favorites once per visit, keeps an un-star across refreshes, and skips writes for unchanged data', async () => {
