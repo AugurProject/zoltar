@@ -5,7 +5,7 @@ import { repositoryRoot } from './root.mts'
 import { appSharedPackages, sharedPackageClosure, sharedPackages } from './sharedPackages.ts'
 import { walkFiles } from './walk.mts'
 
-const uiConsumers = ['coreShared', 'zoltarShared', 'statoblastShared', 'zoltar', 'statoblast', 'trading'] as const
+const uiConsumers = ['coreShared', 'zoltarShared', 'statoblastShared', 'zoltar', 'statoblast', 'trading', 'openoracle'] as const
 
 export function sharedImportBoundaryViolation(source: string, specifier: string): string | undefined {
 	const owner = sharedPackages.find(entry => source.startsWith(`${entry.path}/`))
@@ -19,6 +19,7 @@ export function sharedImportBoundaryViolation(source: string, specifier: string)
 	if (relativeTarget !== undefined && owner?.id !== target.id) return 'Cross-package imports must use a public package export'
 	let app: keyof typeof appSharedPackages = 'zoltar'
 	if (uiOwner === 'trading') app = 'trading'
+	else if (uiOwner === 'openoracle') app = 'openoracle'
 	else if (uiOwner === 'statoblast' || uiOwner === 'statoblastShared') app = 'statoblast'
 	const allowed = owner === undefined ? sharedPackageClosure(appSharedPackages[app]).map(entry => entry.id) : [owner.id, ...owner.dependencies]
 	if (!allowed.some(id => id === target.id)) return `${owner?.name ?? uiOwner} must not depend on ${target.name}`

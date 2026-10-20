@@ -151,7 +151,7 @@ export function App() {
 								universeForkTime={zoltarUniverse?.forkTime}
 								showUniverseForkedNotice={isUniverseForkedNoticeVisible({ route: activeRoute, universeHasForked: zoltarUniverse?.hasForked === true, zoltarView: activeZoltarView })}
 								universePresentation={universePresentation}
-								universeControl={<UniverseSwitcher includeRelatedUniverses={includeRelatedUniverses} activeUniverseId={activeUniverseId} browseHref={getZoltarViewHref('universes')} universe={zoltarUniverse} />}
+								universeControl={<UniverseSwitcher activeUniverseId={activeUniverseId} browseHref={getZoltarViewHref('universes')} universe={zoltarUniverse} />}
 								universeRepBalanceAttoRep={zoltarForkRepBalanceAttoRep}
 							/>
 						)}

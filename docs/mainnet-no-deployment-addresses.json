@@ -1,0 +1,223 @@
+{
+	"network": {
+		"chainId": 1,
+		"chainIdHex": "0x1",
+		"genesisOutcome": "no",
+		"genesisRepTokenAddress": "0x2F4005456c2F098358213f01DbE34abDAa2989A4",
+		"id": "mainnet",
+		"name": "Ethereum mainnet",
+		"wethAddress": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+	},
+	"protocolConfig": {
+		"forkBurnDivisor": "5",
+		"forkThresholdDivisor": "20",
+		"minimumSecurityBondDebtAttoEth": "1000000000000000000",
+		"minimumVaultRepDepositAttoRep": "0"
+	},
+	"deploymentSteps": [
+		{
+			"id": "proxyDeployer",
+			"label": "Proxy Deployer",
+			"address": "0x7A0D94F55792C434d74a40883C6ed8545E406D12"
+		},
+		{
+			"id": "deploymentStatusOracle",
+			"label": "DeploymentStatusOracle",
+			"address": "0xc960f45B7933E287d08433b25767879937a12bA0",
+			"constructorArguments": "0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001b0000000000000000000000007a0d94f55792c434d74a40883c6ed8545e406d12000000000000000000000000b657b12cd9d80421dbc2bc70c43d6b2ff94091080000000000000000000000008b1d22cbf7caf066ba454b04f6d6b8c08a01af6000000000000000000000000011f6cf2e2d1c35fde3713c4a919e431fb0fe376500000000000000000000000058d87eb2f326bfff5fb70a9d006e11c8477c70ce0000000000000000000000004f5760bb8f0d47d4a9ab1987f4ef9a47c955a2480000000000000000000000009cadfe7311c4f0b166930a351d9af2329cbb1db1000000000000000000000000df24af6fa066b1d9f6ff5db504f965a9c5196d3f00000000000000000000000037ab1c474fef602d1c7278c2093677002c9a3618000000000000000000000000e6d74fe839558991fc1d50b91387530386cbff5f0000000000000000000000005e42955643857eb1b6256fd08416c25afd1a6377000000000000000000000000fd1198b82113dcb0d66bba1491a9c583112e7ea5000000000000000000000000ae3c6ca7a48199cd4aa038660cc84119eaecbe91000000000000000000000000010d460dcf7336f4bdacfcaab9ef156df4bd64ab000000000000000000000000485b8bb1a53c4f0ab6d1b96eb7762fa6c3506da3000000000000000000000000cdf99b3c4d8eb8036a422505bea284786ab1e5560000000000000000000000008e07ac0bc3fa11c61bac33703ec116827e1de47600000000000000000000000065de7c2a8abd175644412ec1f0f508a7010ec52e000000000000000000000000f93435148dc09ed1595f4eaa2441465491d39a1d0000000000000000000000009bed70ef1a0cb59194a1e061adfad266b2777b1500000000000000000000000051940018c3727c371c52dac446f2863027614888000000000000000000000000f09230a6e6296f980b71ca186a1040869f85c25000000000000000000000000068e2840f7dfe51340feda8c1b0a87d9fd66217b5000000000000000000000000008797f43d6149b95251a390fe7180b2d0a018cf0000000000000000000000000817fa7b913998f815198f918b244087610f9b7d0000000000000000000000001a3d879e369f42e09b5b009d8989f04794420d1e000000000000000000000000ae093f307a0ddf2a2b6d6b9ea3f2075db74be4d4"
+		},
+		{
+			"id": "multicall3",
+			"label": "Multicall3",
+			"address": "0xB657B12CD9d80421DBC2bc70c43d6b2ff9409108",
+			"constructorArguments": ""
+		},
+		{
+			"id": "zoltarQuestionData",
+			"label": "ZoltarQuestionData",
+			"address": "0x8B1D22CBf7CAF066ba454b04f6D6B8C08A01AF60",
+			"constructorArguments": ""
+		},
+		{
+			"id": "zoltar",
+			"label": "Zoltar",
+			"address": "0x11f6CF2e2D1c35fDE3713c4a919e431fB0Fe3765",
+			"constructorArguments": "0000000000000000000000008b1d22cbf7caf066ba454b04f6d6b8c08a01af600000000000000000000000002f4005456c2f098358213f01dbe34abdaa2989a400000000000000000000000000000000000000000000000000000000000000140000000000000000000000000000000000000000000000000000000000000005"
+		},
+		{
+			"id": "uniformPriceDualCapBatchAuctionFactory",
+			"label": "UniformPriceDualCapBatchAuctionFactory",
+			"address": "0x58d87Eb2F326bFFf5fb70a9d006E11C8477c70Ce",
+			"constructorArguments": ""
+		},
+		{
+			"id": "securityPoolUtils",
+			"label": "SecurityPoolUtils",
+			"address": "0x4f5760bB8F0D47D4a9aB1987f4ef9a47c955a248",
+			"constructorArguments": ""
+		},
+		{
+			"id": "securityPoolOperationsDelegate",
+			"label": "SecurityPoolOperationsDelegate",
+			"address": "0x9CadfE7311c4f0b166930a351d9Af2329CBb1Db1",
+			"constructorArguments": ""
+		},
+		{
+			"id": "securityPoolEventEmitter",
+			"label": "SecurityPoolEventEmitter",
+			"address": "0xdf24af6fa066B1D9f6fF5dB504F965A9c5196D3f",
+			"constructorArguments": ""
+		},
+		{
+			"id": "openOracle",
+			"label": "OpenOracle",
+			"address": "0x37aB1c474fef602D1C7278C2093677002c9a3618",
+			"constructorArguments": ""
+		},
+		{
+			"id": "shareTokenFactory",
+			"label": "ShareTokenFactory",
+			"address": "0xE6d74Fe839558991fc1D50B91387530386CBff5f",
+			"constructorArguments": "00000000000000000000000011f6cf2e2d1c35fde3713c4a919e431fb0fe3765"
+		},
+		{
+			"id": "priceCoordinatorDeploymentWorker",
+			"label": "PriceCoordinatorDeploymentWorker",
+			"address": "0x5E42955643857EB1b6256FD08416C25AFd1a6377",
+			"constructorArguments": ""
+		},
+		{
+			"id": "sharedPoolPriceFeedDeploymentWorker",
+			"label": "SharedPoolPriceFeedDeploymentWorker",
+			"address": "0xfD1198b82113Dcb0d66bbA1491A9C583112E7Ea5",
+			"constructorArguments": ""
+		},
+		{
+			"id": "openOraclePriceCoordinatorFactory",
+			"label": "OpenOraclePriceCoordinatorFactory",
+			"address": "0xaE3C6ca7A48199cd4AA038660cC84119EAeCbE91",
+			"constructorArguments": "000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc200000000000000000000000000000000000000000000000000000000000186a000000000000000000000000000000000000000000000000000000000000f424000000000000000000000000000000000000000000000000000000000000493e0000000000000000000000000000000000000000000000000000000000007a12000000000000000000000000000000000000000000000000000000000000186a000000000000000000000000000000000000000000000000000000000000001e0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000186a00000000000000000000000000000000000000000000000000000000000002710000000000000000000000000000000000000000000000000000000000000007300000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000dead00000000000000000000000000000000000000000000000000000000000186a0000000000000000000000000000000000000000000000000000000000000753000000000000000000000000000000000000000000000000000000000000003e80000000000000000000000005e42955643857eb1b6256fd08416c25afd1a6377000000000000000000000000fd1198b82113dcb0d66bba1491a9c583112e7ea5"
+		},
+		{
+			"id": "securityPoolForkerPortfolioDelegate",
+			"label": "SecurityPoolForkerPortfolioDelegate",
+			"address": "0x010D460dcF7336F4bDacFcAAB9eF156DF4BD64ab",
+			"constructorArguments": "00000000000000000000000011f6cf2e2d1c35fde3713c4a919e431fb0fe3765"
+		},
+		{
+			"id": "securityPoolForker",
+			"label": "SecurityPoolForker",
+			"address": "0x485B8bB1a53C4f0AB6d1B96eb7762FA6c3506DA3",
+			"constructorArguments": "00000000000000000000000011f6cf2e2d1c35fde3713c4a919e431fb0fe3765000000000000000000000000010d460dcf7336f4bdacfcaab9ef156df4bd64ab"
+		},
+		{
+			"id": "escalationGameClaimDelegate",
+			"label": "EscalationGameClaimDelegate",
+			"address": "0xcdF99b3C4D8eB8036A422505BeA284786ab1E556",
+			"constructorArguments": ""
+		},
+		{
+			"id": "escalationGameDepositDelegate",
+			"label": "EscalationGameDepositDelegate",
+			"address": "0x8E07ac0Bc3Fa11C61bAc33703eC116827E1DE476",
+			"constructorArguments": ""
+		},
+		{
+			"id": "escalationGameFactory",
+			"label": "EscalationGameFactory",
+			"address": "0x65DE7C2A8aBD175644412Ec1f0f508a7010eC52e",
+			"constructorArguments": "000000000000000000000000cdf99b3c4d8eb8036a422505bea284786ab1e5560000000000000000000000008e07ac0bc3fa11c61bac33703ec116827e1de476"
+		},
+		{
+			"id": "securityPoolFactory",
+			"label": "SecurityPoolFactory",
+			"address": "0xf93435148Dc09ED1595f4EaA2441465491D39A1D",
+			"constructorArguments": "000000000000000000000000485b8bb1a53c4f0ab6d1b96eb7762fa6c3506da30000000000000000000000008b1d22cbf7caf066ba454b04f6d6b8c08a01af6000000000000000000000000065de7c2a8abd175644412ec1f0f508a7010ec52e00000000000000000000000037ab1c474fef602d1c7278c2093677002c9a361800000000000000000000000011f6cf2e2d1c35fde3713c4a919e431fb0fe3765000000000000000000000000e6d74fe839558991fc1d50b91387530386cbff5f00000000000000000000000058d87eb2f326bfff5fb70a9d006e11c8477c70ce000000000000000000000000ae3c6ca7a48199cd4aa038660cc84119eaecbe910000000000000000000000000000000000000000000000000de0b6b3a764000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009cadfe7311c4f0b166930a351d9af2329cbb1db1000000000000000000000000df24af6fa066b1d9f6ff5db504f965a9c5196d3f"
+		},
+		{
+			"id": "securityPoolCapitalLedgerDeployer",
+			"label": "SecurityPoolCapitalLedgerDeployer",
+			"address": "0x9beD70ef1A0cb59194A1E061AdFaD266b2777B15",
+			"constructorArguments": ""
+		},
+		{
+			"id": "securityPoolCommitmentIndexDeployer",
+			"label": "SecurityPoolCommitmentIndexDeployer",
+			"address": "0x51940018c3727C371C52Dac446f2863027614888",
+			"constructorArguments": ""
+		},
+		{
+			"id": "securityPoolCapitalFeeStreamsDeployer",
+			"label": "SecurityPoolCapitalFeeStreamsDeployer",
+			"address": "0xF09230a6E6296F980B71cA186A1040869f85c250",
+			"constructorArguments": ""
+		},
+		{
+			"id": "securityPoolSettlementBookDeployer",
+			"label": "SecurityPoolSettlementBookDeployer",
+			"address": "0x68e2840F7dfE51340FEDa8c1B0A87d9FD66217b5",
+			"constructorArguments": ""
+		},
+		{
+			"id": "securityPoolPortfolioSettlementDeployer",
+			"label": "SecurityPoolPortfolioSettlementDeployer",
+			"address": "0x008797f43D6149b95251a390fE7180b2D0a018cF",
+			"constructorArguments": ""
+		},
+		{
+			"id": "securityPoolReporterLedgerDeployer",
+			"label": "SecurityPoolReporterLedgerDeployer",
+			"address": "0x0817Fa7B913998F815198f918B244087610f9b7d",
+			"constructorArguments": ""
+		},
+		{
+			"id": "securityPoolPortfolioRecapAuctionDeployer",
+			"label": "SecurityPoolPortfolioRecapAuctionDeployer",
+			"address": "0x1a3d879e369F42e09b5B009d8989f04794420D1e",
+			"constructorArguments": ""
+		},
+		{
+			"id": "securityPoolPortfolioForkCoordinatorDeployer",
+			"label": "SecurityPoolPortfolioForkCoordinatorDeployer",
+			"address": "0xAE093f307a0ddf2A2B6d6b9ea3F2075dB74Be4D4",
+			"constructorArguments": "0000000000000000000000001a3d879e369f42e09b5b009d8989f04794420d1e"
+		}
+	],
+	"derivedContracts": [
+		{
+			"id": "securityPoolForker",
+			"label": "Security Pool Forker",
+			"address": "0x485B8bB1a53C4f0AB6d1B96eb7762FA6c3506DA3"
+		},
+		{
+			"id": "escalationGameClaimDelegate",
+			"label": "Escalation Claim Checkpoint Delegate",
+			"address": "0xcdF99b3C4D8eB8036A422505BeA284786ab1E556"
+		},
+		{
+			"id": "escalationGameFactory",
+			"label": "Escalation Game Factory",
+			"address": "0x65DE7C2A8aBD175644412Ec1f0f508a7010eC52e"
+		},
+		{
+			"id": "securityPoolFactory",
+			"label": "Security Pool Factory",
+			"address": "0xf93435148Dc09ED1595f4EaA2441465491D39A1D"
+		},
+		{
+			"id": "securityPoolOperationsDelegate",
+			"label": "Security Pool Operations Delegate",
+			"address": "0x9CadfE7311c4f0b166930a351d9Af2329CBb1Db1"
+		},
+		{
+			"id": "escalationGameProofVerifier",
+			"label": "Escalation Game Proof Verifier",
+			"address": "0x8282A626dcaCfBf084f7544e322C9Ce55f534210"
+		},
+		{
+			"id": "escalationGameDepositDelegate",
+			"label": "Escalation Game Deposit Delegate",
+			"address": "0x8E07ac0Bc3Fa11C61bAc33703eC116827E1DE476"
+		}
+	]
+}

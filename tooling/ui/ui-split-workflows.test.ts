@@ -33,8 +33,8 @@ const developerDocumentation = [
 	{ path: join(repositoryRoot, 'testnetwork', 'README.md'), command: 'bun run app:serve:zoltar', port: '4153' },
 	{ path: join(repositoryRoot, 'docs', 'how-to', 'trading-set-up-development.html'), command: 'bun run app:serve:trading', port: '4163' },
 ]
-const uiPackageIds = ['coreShared', 'zoltarShared', 'statoblastShared', 'zoltar', 'statoblast', 'trading'] as const
-const tevmPackagePaths = ['package.json', 'ui/coreShared/package.json', 'ui/zoltarShared/package.json', 'ui/statoblastShared/package.json', 'ui/zoltar/package.json', 'ui/statoblast/package.json', 'ui/trading/package.json'] as const
+const uiPackageIds = ['coreShared', 'zoltarShared', 'statoblastShared', 'zoltar', 'statoblast', 'trading', 'openoracle'] as const
+const tevmPackagePaths = ['package.json', 'ui/coreShared/package.json', 'ui/zoltarShared/package.json', 'ui/statoblastShared/package.json', 'ui/zoltar/package.json', 'ui/statoblast/package.json', 'ui/trading/package.json', 'ui/openoracle/package.json'] as const
 const pinnedTevmTransitives = ['@tevm/actions', '@tevm/node'] as const
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 const requireRecord = (value: unknown, label: string) => {
@@ -239,7 +239,7 @@ ${command}`,
 		const upload = prepareSteps.find(step => usesAction(step, 'actions/upload-artifact'))
 		const uploadOptions = requireRecord(upload?.['with'], 'production UI artifact upload options')
 		expect(uploadOptions['path']).toBe('${{ steps.projects.outputs.ui_artifact_outputs }}')
-		expect((await projectQuery()).uiArtifactOutputs).toEqual(['ui/coreShared/js', 'ui/zoltarShared/js', 'ui/statoblastShared/js', 'ui/zoltar/js', 'ui/zoltar/dist', 'ui/statoblast/js', 'ui/statoblast/dist', 'ui/trading/js', 'ui/trading/dist'])
+		expect((await projectQuery()).uiArtifactOutputs).toEqual(['ui/coreShared/js', 'ui/zoltarShared/js', 'ui/statoblastShared/js', 'ui/zoltar/js', 'ui/zoltar/dist', 'ui/statoblast/js', 'ui/statoblast/dist', 'ui/openoracle/js', 'ui/openoracle/dist', 'ui/trading/js', 'ui/trading/dist'])
 		expect(prepareSteps.findIndex(step => step['id'] === 'projects')).toBeLessThan(prepareSteps.indexOf(upload ?? {}))
 		expect(uploadOptions['name']).toBe('domain-production-ui')
 		expect(uploadOptions['if-no-files-found']).toBe('error')
@@ -733,6 +733,7 @@ ${command}`,
          *ipfs_hash_zoltar.txt*) echo bafyabc ;;
          *ipfs_hash_statoblast.txt*) echo bafydef ;;
          *ipfs_hash_trading.txt*) echo bafyghi ;;
+         *ipfs_hash_openoracle.txt*) echo bafyjkl ;;
          *) return 1 ;;
      esac
  }
@@ -745,7 +746,7 @@ ${command}`,
 			{ env: { PUBLISHER_IMAGE: 'test-image', GITHUB_ENV: '/dev/stdout' }, encoding: 'utf8' },
 		)
 		expect(result.status).toBe(0)
-		expect(result.stdout).toBe('ZOLTAR_IPFS_CID=bafyabc\nSTATOBLAST_IPFS_CID=bafydef\nTRADING_IPFS_CID=bafyghi\n')
+		expect(result.stdout).toBe('ZOLTAR_IPFS_CID=bafyabc\nSTATOBLAST_IPFS_CID=bafydef\nTRADING_IPFS_CID=bafyghi\nOPENORACLE_IPFS_CID=bafyjkl\n')
 		const invalid = spawnSync('bash', ['-e', '-c', `docker() { echo invalid; }\n${command}`], { env: { PUBLISHER_IMAGE: 'test-image', GITHUB_ENV: '/dev/stdout' }, encoding: 'utf8' })
 		expect(invalid.status).not.toBe(0)
 		expect(invalid.stdout).toBe('')
@@ -757,7 +758,7 @@ ${command}`,
 		expect(ipfsWorkflow).not.toMatch(/push:\s*\n\s*tags:/)
 		expect(versionWorkflow).toContain('push:\n    tags:')
 		expect(versionWorkflow).toContain('Create or update GitHub release')
-		for (const appId of ['zoltar', 'statoblast', 'trading']) expect(versionWorkflow).toContain(`ipfs://\${${appId.toUpperCase()}_IPFS_CID}/`)
+		for (const appId of ['zoltar', 'statoblast', 'trading', 'openoracle']) expect(versionWorkflow).toContain(`ipfs://\${${appId.toUpperCase()}_IPFS_CID}/`)
 	})
 
 	test('CI cache keys reference existing files or intentional globs', async () => {

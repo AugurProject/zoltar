@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
-import { coreDeploymentFromManifest } from '../../../build/core-deployments.mts'
+import { coreDeploymentFromManifest, writeCoreDeploymentRegistry } from '../../../build/core-deployments.mts'
 import { defaultCoreDeploymentRpcUrls } from '../../protocol/coreDeploymentDefaults.ts'
 import { loadCoreDeploymentsFrom } from '../support/coreDeployments.ts'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -12,24 +15,62 @@ import { publicErrorMessage } from '../../protocol/publicError.ts'
 import * as appCopy from '../../copy/app.ts'
 
 describe('trading core deployment registry', () => {
+	test('writes both canonical genesis roots for each public network from their real manifests', async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), 'trading-genesis-registry-'))
+		try {
+			const output = path.join(directory, 'core-deployments.json')
+			await writeCoreDeploymentRegistry(output)
+			const registry: unknown = JSON.parse(await readFile(output, 'utf8'))
+			for (const outcome of ['yes', 'no'] as const) {
+				const deployments = await loadCoreDeploymentsFrom(registry, outcome)
+				expect(deployments.map(deployment => [deployment.chainId, deployment.genesisOutcome])).toEqual([
+					[1, outcome],
+					[11_155_111, outcome],
+				])
+			}
+		} finally {
+			await rm(directory, { recursive: true, force: true })
+		}
+	})
+	test('selects one genesis deployment per network and rejects duplicate or noncanonical choices', async () => {
+		const registry = ['yes', 'no'].map(genesisOutcome => ({
+			genesisOutcome,
+			chainId: 1,
+			chainName: 'Mainnet',
+			id: `mainnet-${genesisOutcome}`,
+			proxyDeployer: getAddress(`0x${'12'.repeat(20)}`),
+			securityPoolFactory: getAddress(`0x${(genesisOutcome === 'yes' ? '34' : '45').repeat(20)}`),
+			zoltar: getAddress(`0x${(genesisOutcome === 'yes' ? '56' : '67').repeat(20)}`),
+		}))
+		for (const outcome of ['yes', 'no'] as const) {
+			const deployments = await loadCoreDeploymentsFrom(registry, outcome)
+			expect(deployments).toHaveLength(1)
+			expect(deployments[0]?.genesisOutcome).toBe(outcome)
+			expect(deployments[0]?.id).toBe(`mainnet-${outcome}`)
+		}
+		const yes = registry[0]
+		if (yes === undefined) throw new Error('Expected Yes fixture')
+		await expect(loadCoreDeploymentsFrom([yes, yes])).rejects.toThrow('repeats chain 1 genesis yes')
+		for (const genesisOutcome of [undefined, '', 'invalid', 'repv2']) await expect(loadCoreDeploymentsFrom([{ ...yes, genesisOutcome }])).rejects.toThrow('genesisOutcome must be yes or no')
+	})
 	test('copies the canonical deployment proxy and SecurityPoolFactory from a Zoltar manifest', () => {
 		const proxyDeployer = getAddress(`0x${'12'.repeat(20)}`)
 		const securityPoolFactory = getAddress(`0x${'34'.repeat(20)}`)
 		const zoltar = getAddress(`0x${'56'.repeat(20)}`)
 		expect(
 			coreDeploymentFromManifest({
-				network: { chainId: 11_155_111, id: 'sepolia', name: 'Sepolia' },
+				network: { genesisOutcome: 'yes', chainId: 11_155_111, id: 'sepolia', name: 'Sepolia' },
 				deploymentSteps: [
 					{ id: 'proxyDeployer', address: proxyDeployer },
 					{ id: 'securityPoolFactory', address: securityPoolFactory },
 					{ id: 'zoltar', address: zoltar },
 				],
 			}),
-		).toEqual({ chainId: 11_155_111, chainName: 'Sepolia', rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com', id: 'sepolia', proxyDeployer, securityPoolFactory, zoltar })
+		).toEqual({ genesisOutcome: 'yes', chainId: 11_155_111, chainName: 'Sepolia', rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com', id: 'sepolia', proxyDeployer, securityPoolFactory, zoltar })
 	})
 
 	test('rejects a manifest without the required canonical deployment steps', () => {
-		expect(() => coreDeploymentFromManifest({ network: { chainId: 1, id: 'mainnet', name: 'Mainnet' }, deploymentSteps: [] })).toThrow('proxyDeployer')
+		expect(() => coreDeploymentFromManifest({ network: { genesisOutcome: 'yes', chainId: 1, id: 'mainnet', name: 'Mainnet' }, deploymentSteps: [] })).toThrow('proxyDeployer')
 	})
 
 	test('uses one default RPC registry for build and runtime deployment choices', async () => {
@@ -40,14 +81,14 @@ describe('trading core deployment registry', () => {
 		for (const [chainIdText, rpcUrl] of Object.entries(defaultCoreDeploymentRpcUrls)) {
 			const chainId = Number(chainIdText)
 			const manifestDeployment = coreDeploymentFromManifest({
-				network: { chainId, id: `chain-${chainIdText}`, name: `Chain ${chainIdText}` },
+				network: { genesisOutcome: 'yes', chainId, id: `chain-${chainIdText}`, name: `Chain ${chainIdText}` },
 				deploymentSteps: [
 					{ id: 'proxyDeployer', address: proxyDeployer },
 					{ id: 'securityPoolFactory', address: securityPoolFactory },
 					{ id: 'zoltar', address: zoltar },
 				],
 			})
-			const [runtimeDeployment] = await loadCoreDeploymentsFrom([{ chainId, chainName: `Chain ${chainIdText}`, id: `chain-${chainIdText}`, proxyDeployer, securityPoolFactory, zoltar }])
+			const [runtimeDeployment] = await loadCoreDeploymentsFrom([{ genesisOutcome: 'yes', chainId, chainName: `Chain ${chainIdText}`, id: `chain-${chainIdText}`, proxyDeployer, securityPoolFactory, zoltar }])
 			expect(manifestDeployment.rpcUrl).toBe(rpcUrl)
 			expect(runtimeDeployment?.defaultRpcUrl).toBe(rpcUrl)
 		}

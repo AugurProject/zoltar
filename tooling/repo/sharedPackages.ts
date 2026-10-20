@@ -17,6 +17,7 @@ export function sharedPackageClosure(ids: readonly string[]) {
 export const appSharedPackages = {
 	zoltar: ['shared-zoltar'],
 	statoblast: ['shared-zoltar', 'shared-open-oracle', 'shared-statoblast'],
+	openoracle: ['shared-zoltar', 'shared-open-oracle', 'shared-statoblast'],
 	// ui/statoblastShared, which the trading app consumes, imports the Zoltar, OpenOracle and Statoblast packages at runtime.
 	trading: ['shared-zoltar', 'shared-open-oracle', 'shared-statoblast', 'shared-trading'],
 } as const

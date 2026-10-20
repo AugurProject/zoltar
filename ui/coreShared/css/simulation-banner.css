@@ -17,6 +17,11 @@
 	color: var(--simulation-text-secondary);
 }
 
+.simulation-banner .detail[data-message-tone="warning"] {
+	margin-top: var(--space-2);
+	color: var(--simulation-text-warning);
+}
+
 .simulation-banner-warning {
 	margin-top: 0.75rem;
 	border: 1px solid var(--simulation-border);
@@ -73,6 +78,10 @@
 .simulation-strip .badge {
 	padding-block: 0.05rem;
 	font-size: var(--font-xs);
+}
+
+.simulation-strip-status-compact {
+	display: none;
 }
 
 .simulation-strip-scenario {
@@ -342,6 +351,16 @@
 	color: var(--simulation-text);
 	border-color: var(--simulation-border-hover);
 	background: var(--simulation-success-bg);
+}
+
+@media (max-width: 40rem) {
+	.simulation-strip-status-full {
+		display: none;
+	}
+
+	.simulation-strip-status-compact {
+		display: inline;
+	}
 }
 
 @media (max-width: 64rem) {

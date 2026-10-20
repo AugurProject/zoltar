@@ -17,12 +17,13 @@ describe('statoblast document title', () => {
 		expect(getPoolDocumentTitleDetail({ requestedPoolAddress: POOL_ADDRESS, selectedPool: { marketDetails: { title: 'Other pool' }, securityPoolAddress: '0x0000000000000000000000000000000000000001' } })).toBe('0xa83562…60aD73')
 	})
 
-	test('titles the browse view with its visible heading', () => {
-		expect(getAppPageTitle({ activeOpenOracleView: 'browse', activeSecurityPoolsView: 'browse', route: 'pools' })).toBe('Browse pools')
+	test('titles the route with its visible heading', () => {
+		expect(getAppPageTitle({ activeSecurityPoolsView: 'browse', route: 'pools' })).toBe('Browse pools')
+		expect(getAppPageTitle({ activeSecurityPoolsView: 'browse', route: 'open-oracle' })).toBe('Price reports')
 	})
 
 	test('names the portfolio route', () => {
-		expect(getAppPageTitle({ activeOpenOracleView: 'browse', activeSecurityPoolsView: 'browse', route: 'portfolios' })).toBe('Portfolios')
+		expect(getAppPageTitle({ activeSecurityPoolsView: 'browse', route: 'portfolios' })).toBe('Portfolios')
 	})
 
 	test('keeps the plain page title without a pool', () => {

@@ -633,7 +633,7 @@ button.tx-action-button[aria-disabled="true"]:hover {
 		align-items: stretch;
 	}
 
-	.address-value.copyable,
+	.address-copy-button,
 	.identifier-value.copyable,
 	.metric-label-refresh,
 	.security-pool-link,
@@ -776,9 +776,11 @@ button.tx-action-button[aria-disabled="true"]:hover {
 }
 
 .header-toolbar {
+	position: relative;
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
-	gap: var(--space-3);
+	gap: var(--space-1);
 	min-height: 3.5rem;
 	padding: 0.3rem 0.5rem 0.3rem 0.75rem;
 	border: 1px solid var(--divider-strong);
@@ -792,12 +794,14 @@ button.tx-action-button[aria-disabled="true"]:hover {
 	align-items: center;
 	gap: var(--space-2);
 	min-width: 0;
+	max-width: max-content;
 }
 
 .header-toolbar .application-brand {
 	margin: 0;
+	min-width: 0;
 	font-family: var(--font-family-sans);
-	font-size: var(--font-title);
+	font-size: var(--font-body);
 	font-weight: 650;
 	line-height: var(--line-height-tight);
 	letter-spacing: -0.01em;
@@ -832,7 +836,7 @@ button.tx-action-button[aria-disabled="true"]:hover {
 	justify-content: center;
 	gap: 0.35rem;
 	min-height: 2.5rem;
-	padding: 0.45rem 0.75rem;
+	padding: 0.45rem 0.5rem;
 	border: 0;
 	border-radius: var(--radius-control);
 	background: transparent;
@@ -932,11 +936,11 @@ button.tx-action-button[aria-disabled="true"]:hover {
 
 .header-toolbar-controls {
 	display: flex;
-	flex: 1 1 auto;
+	flex: 1 1 0;
 	align-items: center;
 	justify-content: flex-end;
-	gap: var(--space-3);
-	min-width: 0;
+	gap: var(--space-1);
+	min-width: min-content;
 	margin-left: auto;
 }
 
@@ -946,10 +950,6 @@ button.tx-action-button[aria-disabled="true"]:hover {
 	align-items: center;
 	gap: var(--space-2);
 	margin-left: auto;
-}
-
-.header-toolbar-controls + .header-toolbar-settings {
-	margin-left: 0;
 }
 
 .app-settings-trigger {
@@ -971,13 +971,64 @@ button.tx-action-button[aria-disabled="true"]:hover {
 	font-size: var(--font-caption);
 }
 
+.header-toolbar-settings .app-settings-trigger {
+	padding-inline: var(--space-2);
+}
+
 .header-toolbar-controls .toolbar-field {
-	flex-shrink: 0;
+	flex-shrink: 1;
+	min-width: min-content;
 	min-height: 2.5rem;
 }
 
 .header-toolbar-controls .toolbar-field-value {
+	display: inline-flex;
+	min-width: min-content;
 	white-space: nowrap;
+}
+
+.header-toolbar-controls .toolbar-field.universe {
+	--header-universe-mark-width: calc(2 * var(--space-4));
+}
+
+/* Discovery reserves the ordinary switcher's frame without claiming a universe identity. */
+.header-toolbar-controls .toolbar-field.universe .toolbar-field-value:has(> .loading-value, > .unavailable-value) {
+	box-sizing: border-box;
+	align-items: center;
+	width: calc(15ch + var(--header-universe-mark-width) + var(--space-1) + 2 * var(--space-2) + 2px);
+	min-height: var(--touch-target-min);
+	padding: 0 var(--space-2) 0 calc(var(--space-2) + var(--header-universe-mark-width) + var(--space-1));
+	border: 1px solid var(--interactive-border);
+	border-radius: var(--radius-control);
+	background: var(--interactive-bg);
+}
+
+.header-toolbar .universe-switcher {
+	min-width: min-content;
+}
+
+.header-toolbar .universe-switcher-label {
+	flex-grow: 1;
+	min-width: 15ch;
+	width: 15ch;
+}
+
+.header-toolbar .universe-switcher-label:has(.universe-switcher-label-leaf) {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	line-height: var(--line-height-tight);
+}
+
+.header-toolbar .universe-switcher-label-parent,
+.header-toolbar .universe-switcher-label-leaf {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.header-toolbar .universe-switcher-label-parent {
+	color: var(--muted);
+	font-size: var(--font-label);
 }
 
 .app-settings-menu .protocol-guide-link {
@@ -1012,24 +1063,41 @@ button.tx-action-button[aria-disabled="true"]:hover {
 }
 
 /* Account popover: the full address, network facts, balances, prices, and wallet actions. */
+.header-toolbar .account-menu {
+	position: static;
+	flex: 0 0 auto;
+	min-width: 0;
+}
+
+.account-menu-controls {
+	display: inline-flex;
+	align-items: center;
+	min-width: 0;
+	max-width: 100%;
+}
+
+.account-menu-controls > .wallet-chip {
+	min-width: 0;
+	border-start-end-radius: 0;
+	border-end-end-radius: 0;
+	padding-inline-end: 0;
+}
+
 .account-menu-trigger {
 	max-width: 100%;
 	min-width: 0;
 	display: inline-flex;
 	align-items: center;
 	gap: 0.4rem;
-	min-height: 2.5rem;
-	padding: 0 0.7rem 0 0;
+	min-width: var(--touch-target-min);
+	min-height: calc(var(--touch-target-min) + 2px);
+	justify-content: center;
+	padding: 0 var(--space-1);
 	border: 1px solid var(--control-border);
-	border-radius: var(--radius-pill);
+	border-inline-start: 0;
+	border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
 	background: var(--surface-row);
 	color: var(--text-secondary);
-}
-
-.account-menu-trigger .wallet-chip {
-	min-height: 2.4rem;
-	border: 0;
-	background: transparent;
 }
 
 .account-menu-trigger:hover,
@@ -1176,20 +1244,11 @@ button.tx-action-button[aria-disabled="true"]:hover {
 	}
 }
 
-/* Below full desktop width the universe caption is dropped; the universe keeps its value. */
-@media (max-width: 80rem) {
-	.header-toolbar-controls .toolbar-field-label {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		margin: -1px;
-		overflow: hidden;
-		clip: rect(0 0 0 0);
-		white-space: nowrap;
-	}
-}
-
 @media (max-width: 64rem) {
+	.header-toolbar-controls .toolbar-field.universe {
+		--header-universe-mark-width: var(--space-5);
+	}
+
 	.header-toolbar .environment-badge-row {
 		display: none;
 	}
@@ -1206,7 +1265,8 @@ button.tx-action-button[aria-disabled="true"]:hover {
 		right: 0;
 		bottom: 0;
 		left: 0;
-		z-index: var(--z-nav);
+		/* Header dropdowns can scroll behind the fixed bar. */
+		z-index: calc(var(--z-dropdown) + 1);
 		min-height: var(--bottom-nav-height);
 		padding: 0.25rem 0.35rem calc(0.25rem + env(safe-area-inset-bottom));
 		border-top: 1px solid var(--border-default);
@@ -1308,7 +1368,7 @@ button.tx-action-button[aria-disabled="true"]:hover {
 
 	/* The settings dialog scrolls inside the space between the top bar and the bottom tab bar instead of running off screen. */
 	.app-settings-menu {
-		max-height: calc(100dvh - var(--bottom-nav-height) - 7rem);
+		max-height: calc(100dvh - var(--bottom-nav-height) - 8rem);
 		overflow-y: auto;
 		overscroll-behavior: contain;
 	}
@@ -1317,7 +1377,7 @@ button.tx-action-button[aria-disabled="true"]:hover {
 		grid-area: 2 / 1 / 3 / -1;
 		width: 100%;
 		justify-content: space-between;
-		flex-wrap: nowrap;
+		flex-wrap: wrap;
 		gap: var(--space-2);
 	}
 
@@ -1383,10 +1443,6 @@ button.tx-action-button[aria-disabled="true"]:hover {
 
 	.account-menu-trigger {
 		padding-right: var(--space-2);
-	}
-
-	.header-toolbar .account-menu {
-		position: static;
 	}
 
 	.header-toolbar .account-menu-popover {

@@ -62,6 +62,13 @@ export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonl
 	uniformPriceDualCapBatchAuctionFactory: '0xef7782aeeb22a6d00cbd223d4a11cc90c8d54391ea277f41c030405370d8825d',
 }
 
+const EXPECTED_NO_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
+	...EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES,
+	securityPoolFactory: '0x661d982ede41fe631d091202f8c2ce9aa14ff641079d2daef41c170b1af48d97',
+	securityPoolForker: '0xabf2a0090d9bb9e98056ba959ba8f93675fb0636c867628813ecc4638f7a4f19',
+	shareTokenFactory: '0x5209c3dd964b220b768c1bd909265132a44bca902ed5fbf35e62c3e635115939',
+}
+
 function getSecurityPoolUtilsRuntimeCode() {
 	const artifactRuntimeCode = `0x${statoblast_SecurityPoolUtils_SecurityPoolUtils.evm.deployedBytecode.object}` satisfies Hex
 	const immutableAddressStart = 7
@@ -122,17 +129,29 @@ const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentSt
 	openOraclePriceCoordinatorFactory: '0x0cc500222901b61b2987a296cae57832e0a76cb94b38669297b63ff3b0b3c0b0',
 	priceCoordinatorDeploymentWorker: '0xc3ce6643bd2576f5e249a7f168ffb65c8a284f5a1c0e0b2974ffd4c5a296e59e',
 	securityPoolEventEmitter: '0xdd3fe17ffbac4c9beecfc14a770cfd515a6357da28c66ee25a71c170d10ce935',
-	securityPoolFactory: '0x14d347c6f3880ae971317c69979db098d3861f171e21ac40a5190c90665989c1',
-	securityPoolForker: '0xd6fa169be21c0186b9a9334fb1fd5f5fcd76ee39a40465a4f946c7f820c3b635',
+	securityPoolFactory: '0xfc0c618699bd063e6a5e847a8207211acb586054fe0896d98b29e121a2eab08a',
+	securityPoolForker: '0x621055715b1503b289aea1b54b044a6361c9c2079c8a760c5ed9827d3e9a986d',
 	securityPoolOperationsDelegate: '0x6faf83b14b4ebb5cf3563621f168998ca892e406db144528fbfc8e721aa3d4e0',
 	securityPoolUtils: '0xe16f02b9482acbfbbe0000d61e30fcf511cf5e3b297c827c41dc628e81d9d5c4',
-	shareTokenFactory: '0x965aca660c81a2e877979cffef1e35b75d524d057ab70508df9532af25fa3499',
+	shareTokenFactory: '0xa2f0d3cde12d00ec01421e63eeab7fe9fca382374ae03efe71bdbf7f116dc25a',
 	sharedPoolPriceFeedDeploymentWorker: '0xf7d8f8e390c0e0ceb54ee7cfb8143b8e6a4397999a23083938cdf7846b5ec13a',
 	uniformPriceDualCapBatchAuctionFactory: '0xef7782aeeb22a6d00cbd223d4a11cc90c8d54391ea277f41c030405370d8825d',
 }
 
+const EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
+	...EXPECTED_MAINNET_RUNTIME_CODE_HASHES,
+	securityPoolFactory: '0xafef1df08f6c6f0b4c6d11d567c07bbbc792b313b3babe374a29cdf438d400cd',
+	securityPoolForker: '0x1254d214117089e910af310c71b30e794a254d04703d97908128365f7b62781d',
+	shareTokenFactory: '0xfce7e0ba7f58a1982dc1ee3c5a60b3d599fedcbb786ea8416bfc2b80d222ff65',
+}
+const EXPECTED_PUBLIC_RUNTIME_CODE_HASHES = {
+	mainnet: { yes: EXPECTED_MAINNET_RUNTIME_CODE_HASHES, no: EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES },
+	sepolia: { yes: EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES, no: EXPECTED_NO_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES },
+}
+
 export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkProfile(), wait?: Parameters<typeof getZoltarDeploymentSteps>[1]): DeploymentStep[] {
 	const addresses = getInfraContractAddresses(profile)
+	const expectedRuntimeCodeHashes = profile.id === 'simulation' ? undefined : EXPECTED_PUBLIC_RUNTIME_CODE_HASHES[profile.id][profile.genesisOutcome]
 	const steps: DeploymentStep[] = [
 		// Statoblast replaces the deployment status oracle step: the statoblast oracle
 		// must monitor additional Statoblast contracts, so it is deployed with
@@ -266,8 +285,7 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 	]
 	return withExpectedDeploymentRuntimeCodeHashes(steps, profile).map(step => ({
 		...step,
-		...(profile.id === 'sepolia' && EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES[step.id] !== undefined ? { expectedRuntimeCodeHash: EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES[step.id] } : {}),
-		...(profile.id === 'mainnet' && EXPECTED_MAINNET_RUNTIME_CODE_HASHES[step.id] !== undefined ? { expectedRuntimeCodeHash: EXPECTED_MAINNET_RUNTIME_CODE_HASHES[step.id] } : {}),
+		...(expectedRuntimeCodeHashes?.[step.id] === undefined ? {} : { expectedRuntimeCodeHash: expectedRuntimeCodeHashes[step.id] }),
 	}))
 }
 

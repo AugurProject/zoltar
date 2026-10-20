@@ -27,8 +27,6 @@ import {
 import { seedEndedPoolCommitmentScenario, seedEscalationInProgressScenario, seedLiquidationDistanceScenario, seedNearMinimumVaultScenario } from './statoblastWorkflowScenarios.js'
 import { STATOBLAST_SCENARIOS, type StatoblastScenario } from './statoblastScenarioDescriptions.js'
 
-export { STATOBLAST_SCENARIOS, getStatoblastScenarioLabel, getStatoblastScenarioDescription } from './statoblastScenarioDescriptions.js'
-
 const SECURITY_POOL_X2_FIRST_QUESTION_TITLE = 'Will this resolve? (securitypoolx2 #1)'
 const SECURITY_POOL_X2_PRIMARY_REP_DEPOSIT = 12_000n * 10n ** 18n
 const SECURITY_POOL_X2_PRIMARY_CAPACITY_OWNERSHIP_ATTO_REP = 40n * 10n ** 18n

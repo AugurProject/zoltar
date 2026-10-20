@@ -8,7 +8,7 @@ This page maps the repository for contributors. Protocol behavior is explained i
 | --- | --- | --- | --- |
 | Zoltar | The forkable oracle base layer: questions, universes, REP, and forks. It never judges which answer is true. | `solidity/contracts/*.sol` | `shared/zoltar`, `ui/zoltarShared`, `ui/zoltar` |
 | Statoblast | The prediction-market layer: question-specific SecurityPool ledgers, multi-question portfolios with one REP/ETH feed per universe, Escalation Games, fork migration, and Truth Auctions. | `solidity/contracts/statoblast/` | `shared/statoblast`, `ui/statoblastShared`, `ui/statoblast` |
-| OpenOracle | A contestable REP/ETH price feed used for solvency checks, never for market outcomes. The imported contract is a fixed compatibility contract. | `solidity/contracts/statoblast/openOracle/` | `shared/openOracle`, `ui/statoblastShared` |
+| OpenOracle | A contestable REP/ETH price feed used for solvency checks, never for market outcomes. The imported contract is a fixed compatibility contract. | `solidity/contracts/statoblast/openOracle/` | `shared/openOracle`, `ui/statoblastShared`, `ui/openoracle` |
 | Trading | An AMM exchange for Statoblast outcome shares; one possible venue, with no role in market creation or resolution. | `solidity/contracts/trading/` | `shared/trading`, `ui/trading` |
 | augurScan | A read-only explorer and PostgreSQL indexer for every layer. | none | `augurScan/` |
 | Bots | Permissionless operators: `liquidator`, `open-oracle-arbitrager`, and the testnet `chaos` exerciser, with common code in `bots/shared`. | `bots/open-oracle-arbitrager/contracts/`, `solidity/contracts/chaos/` | `bots/*` |
@@ -29,6 +29,7 @@ flowchart TD
 	sharedOpenOracle & sharedStatoblast --> uiStatoblastShared
 	uiZoltarShared --> appZoltar[ui/zoltar]
 	uiStatoblastShared & sharedStatoblast --> appStatoblast[ui/statoblast]
+	uiStatoblastShared --> appOpenOracle[ui/openoracle]
 	uiStatoblastShared & sharedTrading --> appTrading[ui/trading]
 	artifacts & uiCore & sharedZoltar & sharedOpenOracle & sharedStatoblast & sharedTrading --> bots[bots/*]
 	artifacts & sharedStatoblast --> augurScan[augurScan]

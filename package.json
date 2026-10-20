@@ -88,7 +88,7 @@
 		"tsc": "bun run ensure-contract-artifacts && bun run projects:typecheck",
 		"ui:build": "bun run ui:build:apps && bun run ui:build:tests",
 		"ui:build:prod": "bun run generate && bun run ui:build:apps && bun run ui:build:prod:current",
-		"ui:build:prod:current": "bun run check:mainnet-deployment:current && bun ./tooling/ui/production.mts zoltar && bun ./tooling/ui/production.mts statoblast && bun ./tooling/ui/production.mts trading",
+		"ui:build:prod:current": "bun run check:mainnet-deployment:current && bun ./tooling/ui/production.mts zoltar && bun ./tooling/ui/production.mts statoblast && bun ./tooling/ui/production.mts trading && bun ./tooling/ui/production.mts openoracle",
 		"ui:vendor": "bun ./tooling/repo/run-project-tasks.mts vendor",
 		"deploy:testnet": "bun ./tooling/contracts/ensure-contract-artifacts.mts --headless && bun ./tooling/contracts/run-deploy-testnet.mts",
 		"verify:contracts": "bun ./tooling/contracts/ensure-contract-artifacts.mts --headless && bun ./tooling/contracts/verify-contracts.mts",
@@ -110,7 +110,7 @@
 		"test:integration:mainnet-fork": "bun run ensure-contract-artifacts && RUN_MAINNET_FORK_INTEGRATION_TESTS=1 bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts ./ui/zoltar/ts/tests/protocol/uniswapQuoter.fork.test.ts",
 		"test:launch-invariants": "bun run ensure-contract-artifacts && bun run tsc:solidity && bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup.ts solidity/ts/tests/statoblastInvariant.test.ts solidity/ts/tests/statoblast/escalationMigration.test.ts solidity/ts/tests/statoblast/truthAuction/ ./solidity/ts/fuzz/auctionTickMath.fuzz.ts",
 		"update:escalation-game-bytecode-snapshot": "UPDATE_ESCALATION_GAME_BYTECODE_SNAPSHOT=1 bun ./tooling/testing/bun-test.mts solidity/ts/tests/escalationGameInterfaceRegression.test.ts",
-		"coverage:ui": "bun run ensure-shared-build && bun ./tooling/ui/vendor.mts trading && bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts --isolate --coverage --coverage-reporter=lcov --coverage-reporter=text --coverage-dir=coverage/ui ui/coreShared/ts/tests ui/zoltar/ts/tests ui/statoblast/ts/tests ui/trading/ts/tests",
+		"coverage:ui": "bun run ensure-shared-build && bun ./tooling/ui/vendor.mts trading && bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts --isolate --coverage --coverage-reporter=lcov --coverage-reporter=text --coverage-dir=coverage/ui ui/coreShared/ts/tests ui/zoltar/ts/tests ui/statoblast/ts/tests ui/trading/ts/tests ui/openoracle/ts/tests",
 		"coverage:contracts:bytecode": "bun run ensure-contract-artifacts && bun ./tooling/testing/run-solidity-bytecode-coverage.mts",
 		"coverage:typescript": "bun run ensure-contract-artifacts && bun ./tooling/ui/vendor.mts trading && bun ./tooling/testing/run-typescript-coverage.mts",
 		"coverage:check": "bun ./tooling/testing/coverage-report.mts --check",
@@ -181,7 +181,10 @@
 		"ui:browser-smoke:zoltar": "bun ./tooling/ui/browserSmoke.mts zoltar",
 		"ui:browser-smoke:statoblast": "bun ./tooling/ui/browserSmoke.mts statoblast",
 		"ui:browser-smoke:trading": "bun ./tooling/ui/browserSmoke.mts trading",
-		"check:shared-boundaries": "bun tooling/repo/check-shared-boundaries.mts"
+		"check:shared-boundaries": "bun tooling/repo/check-shared-boundaries.mts",
+		"app:serve:openoracle": "bun ./tooling/ui/apps.mts openoracle && bun ./tooling/ui/dev-server.ts openoracle",
+		"app:watch:openoracle": "bun ./tooling/ui/apps.mts openoracle && bun ./tooling/ui/watch.mts openoracle",
+		"ui:browser-smoke:openoracle": "bun ./tooling/ui/browserSmoke.mts openoracle"
 	},
 	"workspaces": [
 		"shared/*",

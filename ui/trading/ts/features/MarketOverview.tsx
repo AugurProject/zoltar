@@ -4,7 +4,7 @@ import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { FavoriteToggle } from '@zoltar/ui-core-shared/components/FavoriteToggle.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
-import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { StickyObjectContext } from '@zoltar/ui-core-shared/components/StickyObjectContext.js'
@@ -54,9 +54,9 @@ export function MarketContracts({ market }: { market: LiveMarket }) {
 				<MetricField label={liveCopy.securityPool}>
 					<TradingSecurityPoolLink value={market.pool} />
 				</MetricField>
-				<MetricField label={liveCopy.tradingPool}>{market.pair === undefined ? commonCopy.notDeployed : <ReadOnlyAddressValue address={market.pair} />}</MetricField>
+				<MetricField label={liveCopy.tradingPool}>{market.pair === undefined ? commonCopy.notDeployed : <AddressValue address={market.pair} />}</MetricField>
 				<MetricField label={marketsCopy.shareToken}>
-					<ReadOnlyAddressValue address={market.shareToken} />
+					<AddressValue address={market.shareToken} />
 				</MetricField>
 			</DataGrid>
 		</ReadOnlyDetailAccordion>

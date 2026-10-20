@@ -17,6 +17,9 @@ import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/tru
 import type { SecurityPoolsOverviewSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { act } from 'preact/test-utils'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { getGenesisNetworkProfile, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 
 function createSecurityPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
 	const securityPool: ListedSecurityPool = {
@@ -92,6 +95,34 @@ describe('SecurityPoolsOverviewSection', () => {
 		},
 	})
 
+	test('hides another genesis root zero favorite and restores it when returning to that deployment', async () => {
+		const yes = getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, 'yes')
+		const no = getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, 'no')
+		const restore = installActiveEnvironmentForTesting(createFakeBackend({ profile: yes }))
+		try {
+			seedDownloadedPools([createSecurityPool({ universeId: 0n })])
+			const props = createProps({ activeUniverseId: 0n, securityPools: [] })
+			let rendered = await renderIntoDocument(<SecurityPoolsOverviewSection {...props} />)
+			cleanupRenderedComponent = rendered.cleanup
+			expect(document.querySelectorAll('.pool-directory-row')).toHaveLength(1)
+
+			// Selecting another genesis deployment reloads the app, with browser storage retained.
+			await rendered.cleanup()
+			installActiveEnvironmentForTesting(createFakeBackend({ profile: no }))
+			rendered = await renderIntoDocument(<SecurityPoolsOverviewSection {...props} />)
+			cleanupRenderedComponent = rendered.cleanup
+			expect(document.querySelectorAll('.pool-directory-row')).toHaveLength(0)
+
+			await rendered.cleanup()
+			installActiveEnvironmentForTesting(createFakeBackend({ profile: yes }))
+			rendered = await renderIntoDocument(<SecurityPoolsOverviewSection {...props} />)
+			cleanupRenderedComponent = rendered.cleanup
+			expect(document.querySelectorAll('.pool-directory-row')).toHaveLength(1)
+		} finally {
+			restore()
+		}
+	})
+
 	test('distinguishes same-title pools and opens the selected address', async () => {
 		const first = createSecurityPool()
 		const second = createSecurityPool({ securityPoolAddress: getAddress('0x0000000000000000000000000000000000000002'), statoblastSecurityMultiplierBps: 30000n })
@@ -105,7 +136,9 @@ describe('SecurityPoolsOverviewSection', () => {
 			expect(within(row).getByRole('button', { name: 'Copy address ' + pool.securityPoolAddress })).not.toBeNull()
 			expect(row.textContent).toContain(index === 0 ? '2×' : '3×')
 			expect(row.querySelector('details')?.textContent).toContain('Initial report priority fee')
-			const link = within(row).getByRole('link', { name: new RegExp(pool.securityPoolAddress) })
+			const explorer = within(row).getByRole('link', { name: new RegExp(`^View address ${pool.securityPoolAddress}`) })
+			expect(explorer.getAttribute('href')).toContain(`/address/${pool.securityPoolAddress}`)
+			const link = within(row).getByRole('link', { name: new RegExp(`^Open pool: .*${pool.securityPoolAddress}`) })
 			expect(link.getAttribute('href')).toContain(pool.securityPoolAddress)
 			fireEvent.click(link)
 		}

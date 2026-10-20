@@ -83,3 +83,42 @@ test('partial setup loads without touching undeployed capital and resumes on ref
 	await act(() => hook.state().refresh())
 	expect(hook.state().snapshot?.capitalLedger).toBeDefined()
 })
+
+test('remembered portfolios stay scoped to their genesis REP deployment', async () => {
+	const source = capitalClient()
+	source.install()
+	const yes = await mount()
+	await waitFor(() => expect(yes.state().snapshot).toBeDefined())
+	await yes.cleanup()
+	window.history.replaceState({}, '', '#/portfolios')
+	installActiveEnvironmentForTesting({
+		...source.backend,
+		profile: { ...source.backend.profile, genesisOutcome: 'no', genesisRepTokenAddress: '0x00000000000000000000000000000000000000b2' },
+	})
+	const no = await mount()
+	expect(no.state().managerInput).toBe('')
+	expect(no.state().snapshot).toBeUndefined()
+	await no.cleanup()
+	source.install()
+	const restored = await mount()
+	await waitFor(() => expect(restored.state().snapshot).toBeDefined())
+	expect(restored.state().managerInput).toBe(portfolio)
+})
+
+test('switching genesis while mounted clears the prior selection and restores only that root’s saved portfolio', async () => {
+	const source = capitalClient()
+	source.install()
+	const hook = await mount()
+	await waitFor(() => expect(hook.state().snapshot).toBeDefined())
+	installActiveEnvironmentForTesting({
+		...source.backend,
+		profile: { ...source.backend.profile, genesisOutcome: 'no', genesisRepTokenAddress: '0x00000000000000000000000000000000000000b2' },
+	})
+	await hook.setProps({ environmentKey: 1 })
+	expect(hook.state().managerInput).toBe('')
+	expect(hook.state().snapshot).toBeUndefined()
+	source.install()
+	await hook.setProps({ environmentKey: 2 })
+	await waitFor(() => expect(hook.state().snapshot).toBeDefined())
+	expect(hook.state().managerInput).toBe(portfolio)
+})

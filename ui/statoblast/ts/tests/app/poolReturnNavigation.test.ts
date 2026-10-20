@@ -42,8 +42,9 @@ test('keeps Advanced report, browser controls, vault context and universe across
 	window.history.replaceState({}, '', `#/open-oracle?universe=7&securityPool=${pool}&selectedPoolView=vaults&vault=${vault}&vaultView=vault-by-address&openOracleReportId=42&openOracleView=selected-report&poolSearch=hello&poolFilter=ended&poolSort=endTime`)
 	const pools = getRouteHref('pools')
 	const params = new URLSearchParams(pools.split('?')[1])
+	expect(params.has('openOracleView')).toBe(false)
 	for (const [key, value] of new URLSearchParams(window.location.hash.split('?')[1])) {
-		if (key === 'securityPool' || key === 'selectedPoolView') continue
+		if (key === 'securityPool' || key === 'selectedPoolView' || key === 'openOracleView') continue
 		expect(params.get(key)).toBe(value)
 	}
 	window.history.replaceState({}, '', pools)
@@ -68,15 +69,16 @@ test('uses the Favorites browser when no pool context was selected', () => {
 	expect(getRouteHref('pools')).toBe('#/pools')
 })
 
-test('opens Portfolios from a remembered OpenOracle view and preserves the return context', () => {
+test('opens Portfolios with the price report return context and drops removed oracle views', () => {
 	for (const openOracleView of ['create', 'selected-report']) {
 		window.history.replaceState({}, '', `#/open-oracle?openOracleView=${openOracleView}&openOracleReportId=42&universe=7`)
 		const href = getRouteHref('portfolios')
 		const search = href.split('?')[1] ?? ''
 		const resolvedRoute = statoblastRouting.resolve(href)
 		expect(resolvedRoute).toBe('portfolios')
-		expect(isInvalidStatoblastRouteState(getInvalidStatoblastRouteState({ openOracleView: new URLSearchParams(search).get('openOracleView') ?? '', pageSearch: '', resolvedRoute, search, selectedPoolView: '' }))).toBe(false)
+		expect(new URLSearchParams(search).has('openOracleView')).toBe(false)
+		expect(isInvalidStatoblastRouteState(getInvalidStatoblastRouteState({ pageSearch: '', resolvedRoute, search, selectedPoolView: '' }))).toBe(false)
 		window.history.replaceState({}, '', href)
-		expect(getRouteHref('open-oracle')).toBe(`#/open-oracle?openOracleView=${openOracleView}&openOracleReportId=42&universe=7`)
+		expect(getRouteHref('open-oracle')).toBe('#/open-oracle?openOracleReportId=42&universe=7')
 	}
 })

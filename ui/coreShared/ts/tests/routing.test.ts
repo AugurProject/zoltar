@@ -106,4 +106,10 @@ describe('routing', () => {
 	test('preserves custom RPC configuration across top-level routes', () => {
 		expect(getTopLevelRouteSearch('deploy', '?rpcUrl=https%3A%2F%2Frpc.example&zoltarView=create')).toBe('?rpcUrl=https%3A%2F%2Frpc.example')
 	})
+
+	test('preserves the chosen genesis universe across app routes', () => {
+		expect(getTopLevelRouteSearch('deploy', '?genesis=no&universe=12&zoltarView=create')).toBe('?genesis=no&universe=12')
+		window.history.replaceState({}, '', '?genesis=yes#/zoltar?genesis=yes&universe=0')
+		expect(getRouteHashSearch()).toBe('?universe=0')
+	})
 })

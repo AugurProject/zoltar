@@ -38,6 +38,7 @@ export function createFakeBackend({ accountAddress, currentTimestamp, hasWallet 
 
 export function createFakeSimulationProfile() {
 	return createSimulationProfile({
+		genesisOutcome: 'yes',
 		genesisRepTokenAddress: '0x00000000000000000000000000000000000000d1',
 		wethAddress: '0x00000000000000000000000000000000000000d2',
 	})

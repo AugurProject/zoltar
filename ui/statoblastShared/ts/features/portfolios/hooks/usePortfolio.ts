@@ -8,6 +8,11 @@ import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { discoverSimulationPortfolio, loadPortfolioAccount, loadPortfolioSetup, type PortfolioSetupSnapshot, type PortfolioAccountSnapshot } from '../../../protocol/securityPoolPortfolio.js'
 import { portfolioUnsignedId } from '../lib/draft.js'
 
+function portfolioStorageKey(chainId: number) {
+	const backend = getActiveBackend()
+	return `statoblast:portfolio:last:${backend.id}:${chainId}:${backend.profile.genesisRepTokenAddress.toLowerCase()}`
+}
+
 export function usePortfolio({ accountAddress, enabled, environmentKey, activeUniverseId }: { accountAddress: Address | undefined; enabled: boolean; environmentKey: number; activeUniverseId: bigint }) {
 	const initial = new URLSearchParams(window.location.hash.split('?')[1])
 	const managerInput = useSignal(initial.get('portfolio') ?? '')
@@ -22,6 +27,7 @@ export function usePortfolio({ accountAddress, enabled, environmentKey, activeUn
 	const generation = useRef(0)
 	const active = useRef(true)
 	const inFlight = useRef<number | undefined>(undefined)
+	const selectedNetwork = useRef<string | undefined>(undefined)
 	useEffect(
 		() => () => {
 			active.current = false
@@ -51,7 +57,7 @@ export function usePortfolio({ accountAddress, enabled, environmentKey, activeUn
 			managerInput.value = portfolio
 			ownerInput.value = owner
 			try {
-				window.localStorage.setItem(`statoblast:portfolio:last:${getActiveBackend().id}:${preparation.chainId}`, portfolio)
+				window.localStorage.setItem(portfolioStorageKey(preparation.chainId), portfolio)
 			} catch (failure) {
 				if (!(failure instanceof DOMException)) throw failure
 			}
@@ -87,12 +93,15 @@ export function usePortfolio({ accountAddress, enabled, environmentKey, activeUn
 		admissionStart.value = 0n
 		if (!enabled) return
 		const backend = getActiveBackend()
+		const storageKey = portfolioStorageKey(backend.profile.chain.id)
+		if (selectedNetwork.current !== undefined && selectedNetwork.current !== storageKey) managerInput.value = ''
+		selectedNetwork.current = storageKey
 		if (ownerInput.value === '' && accountAddress !== undefined) ownerInput.value = accountAddress
 		let current = true
 		void (async () => {
 			if (managerInput.value === '') {
 				try {
-					const saved = window.localStorage.getItem(`statoblast:portfolio:last:${backend.id}:${backend.profile.chain.id}`)
+					const saved = window.localStorage.getItem(storageKey)
 					if (saved !== null && isAddress(saved)) managerInput.value = saved
 				} catch (failure) {
 					if (!(failure instanceof DOMException)) throw failure

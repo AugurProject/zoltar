@@ -14,6 +14,7 @@ export const intentionalForwardingModules: Readonly<Record<string, string>> = {
 	'shared/core/ts/evm/ethereum.ts': 'Public package EVM boundary that keeps consumers independent of codec, transport, account, and client internals.',
 	'shared/core/ts/evm/ethereum/abi.ts': 'ABI capability boundary joining parsing, call encoding, and event decoding for the EVM client modules.',
 	'shared/core/ts/evm/ethereum/clients.ts': 'Client capability boundary joining client construction and extensible public actions.',
+	'ui/openoracle/ts/index.dev.ts': 'Development bootstrap whose side-effect imports enable live reload before starting the application.',
 	'ui/statoblast/ts/index.dev.ts': 'Development bootstrap whose side-effect imports enable live reload before starting the application.',
 	'ui/statoblastShared/ts/features/security-pools/lib/securityPoolState.ts': 'Cohesive public capability facade over the security-pool state engine, axes, and types.',
 	'ui/trading/ts/index.dev.ts': 'Development bootstrap whose side-effect imports enable live reload before starting the application.',

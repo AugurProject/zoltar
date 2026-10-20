@@ -3,12 +3,12 @@ import { encodeAbiParameters, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { DeploymentStatusOracle_DeploymentStatusOracle } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { asWriteClient, createMockWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import type { WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE, createSimulationProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { getGenesisNetworkProfile, MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE, createSimulationProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes, getDeploymentSteps, getDeploymentStepConstructorArguments, loadDeploymentStatusOracleSnapshot } from '@zoltar/ui-statoblast-shared/protocol/deployment.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 
-const simulationProfile = createSimulationProfile({ genesisRepTokenAddress: '0x1000000000000000000000000000000000000001', wethAddress: '0x2000000000000000000000000000000000000002' })
+const simulationProfile = createSimulationProfile({ genesisOutcome: 'yes', genesisRepTokenAddress: '0x1000000000000000000000000000000000000001', wethAddress: '0x2000000000000000000000000000000000000002' })
 const ORACLE_CREATION_CODE = `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object}` as const
 
 // Captures the init code the oracle step submits to the proxy deployer instead of sending a transaction.
@@ -31,7 +31,8 @@ describe('statoblast deployment steps', () => {
 	})
 
 	test('deploys recapitalization before its fork coordinator and preserves verification for every capital module', async () => {
-		for (const profile of [MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE, simulationProfile]) {
+		const publicProfiles = [MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE].flatMap(profile => (['yes', 'no'] as const).map(outcome => getGenesisNetworkProfile(profile, outcome)))
+		for (const profile of [...publicProfiles, simulationProfile]) {
 			const steps = getDeploymentSteps(profile)
 			const recap = steps.find(step => step.id === 'securityPoolPortfolioRecapAuctionDeployer')
 			const forks = steps.find(step => step.id === 'securityPoolPortfolioForkCoordinatorDeployer')

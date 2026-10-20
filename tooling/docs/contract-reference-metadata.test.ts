@@ -7,8 +7,43 @@ import { entrypointSignaturesBySource, fallbackRoutedEntrypointSignatures, inter
 import { delegateEventDeclarationMirrors, documentedEventSchemas } from './contract-reference-event-schemas.mts'
 import { renderAccountingExamples } from './contract-reference-examples.mts'
 import { contractReferences } from './contract-reference-metadata.mts'
+import { computeCompiledAbiFingerprint, countEntrypoints, getCompiledContractAbi, getFallbackSelectorReferences } from './contract-reference-abi-readers.mts'
+import { assertCoordinatorDataEventAndEnumDeclarations } from './check-docs-catalog-declarations.mts'
 
 const missingSources = (sourcePaths: Iterable<string>) => [...sourcePaths].filter(sourcePath => !existsSync(path.join(repositoryRoot, sourcePath)))
+
+test('ABI fingerprints ignore declaration and property order but retain parameter order', () => {
+	const first = { type: 'function', name: 'request', inputs: [{ type: 'address' }, { type: 'uint256' }] }
+	const event = { type: 'event', name: 'Requested', inputs: [] }
+	expect(computeCompiledAbiFingerprint([first, event])).toBe(computeCompiledAbiFingerprint([event, { inputs: first.inputs, name: first.name, type: first.type }]))
+	expect(computeCompiledAbiFingerprint([first])).not.toBe(computeCompiledAbiFingerprint([{ ...first, inputs: first.inputs.toReversed() }]))
+})
+
+test('coordinator metadata retains ABI event indexing and source enum values', () => {
+	const data = { events: ['CoordinatorStateCheckpoint'], eventDeclarations: { CoordinatorStateCheckpoint: 'CoordinatorStateCheckpoint(uint256 indexed reportId)' }, checkpoint: { fields: ['reportId'], indexed: ['reportId'] }, enumValues: { Operation: { '0': 'None', '1': 'Vault' } } }
+	const artifacts = { contracts: { 'contracts/statoblast/OpenOraclePriceCoordinator.sol': { OpenOraclePriceCoordinator: { abi: [{ type: 'event', name: 'CoordinatorStateCheckpoint', inputs: [{ type: 'uint256', name: 'reportId', indexed: true }] }] } } } }
+	const source = 'enum Operation { None, Vault }'
+	expect(() => assertCoordinatorDataEventAndEnumDeclarations(JSON.stringify(data), artifacts, source)).not.toThrow()
+	expect(() => assertCoordinatorDataEventAndEnumDeclarations(JSON.stringify({ ...data, checkpoint: { ...data.checkpoint, indexed: [] } }), artifacts, source)).toThrow('indexed checkpoint fields')
+	expect(() => assertCoordinatorDataEventAndEnumDeclarations(JSON.stringify(data), artifacts, 'enum Operation { None, Withdraw }')).toThrow('enum values')
+})
+
+test('ABI readers reject incomplete artifacts and keep fallback selectors within their body', () => {
+	const abi = [{ type: 'function', name: 'request', inputs: [] }]
+	expect(getCompiledContractAbi({ contracts: { 'contracts/Oracle.sol': { Oracle: { abi } } } }, 'solidity/contracts/Oracle.sol', 'Oracle')).toEqual(abi)
+	expect(() => getCompiledContractAbi({ contracts: {} }, 'solidity/contracts/Oracle.sol', 'Oracle')).toThrow('missing contracts/Oracle.sol')
+	expect(
+		countEntrypoints(
+			new Map([
+				['request()', 1],
+				['settle(uint256)', 2],
+			]),
+		),
+	).toBe(3)
+	expect(() => countEntrypoints(undefined)).toThrow('at least one entrypoint')
+	expect(getFallbackSelectorReferences('fallback() external { if (true) { A.request.selector; } A.request.selector; B.settle.selector; }\nfunction other() external { C.other.selector; }', 'Oracle')).toEqual(['A.request', 'B.settle'])
+	expect(() => getFallbackSelectorReferences('fallback() external {', 'Oracle')).toThrow('balanced')
+})
 
 test('contract references document each contract once from an existing Solidity source', () => {
 	expect(new Set(contractReferences.map(reference => reference.name)).size).toBe(contractReferences.length)

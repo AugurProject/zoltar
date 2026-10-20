@@ -27,7 +27,7 @@ import { isHexAddressInput } from '@zoltar/ui-core-shared/lib/address.js'
 import type { useStatoblastUrlState } from './useStatoblastUrlState.js'
 import type { AccountState, ReportingFormState, WriteOperationsParameters } from '@zoltar/ui-statoblast-shared/types/app.js'
 import type { RepPerEthPriceProps, SecurityPoolsSectionProps, SecurityPoolsView } from '@zoltar/ui-statoblast-shared/features/types.js'
-import type { OpenOracleSectionProps } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
+import type { PriceRequestStatusProps } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/PriceRequestStatusSection.js'
 
 /** App-shell values every Security Pools section reads, grouped like the Zoltar workspace. */
 type SecurityPoolsRouteContext = {
@@ -53,7 +53,7 @@ type SecurityPoolsRouteParameters = {
 	context: SecurityPoolsRouteContext
 	marketCreation: ReturnType<typeof useMarketCreation>
 	openOracle: {
-		inlineOracle?: OpenOracleSectionProps
+		inlineOracle?: PriceRequestStatusProps
 		onViewPendingReport: (reportId: bigint) => void
 		priceCoordinator: ReturnType<typeof useOpenOraclePriceCoordinator>
 	}

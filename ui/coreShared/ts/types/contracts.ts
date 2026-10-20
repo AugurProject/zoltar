@@ -128,6 +128,24 @@ export type MarketDetails = QuestionData & {
 	questionId: string
 }
 
+export type ForkQuestionDetails = Pick<MarketDetails, 'title' | 'description' | 'marketType'> & {
+	outcomeLabels: readonly string[]
+	outcomesComplete?: boolean | undefined
+	questionId?: string | undefined
+	createdAt?: bigint | undefined
+	startTime?: bigint | undefined
+	endTime?: bigint | undefined
+	numTicks?: bigint | undefined
+	displayValueMin?: bigint | undefined
+	displayValueMax?: bigint | undefined
+	answerUnit?: string | undefined
+	marketAddress?: string | undefined
+	creator?: string | undefined
+	designatedReporter?: string | undefined
+	categories?: readonly string[] | undefined
+	tags?: readonly string[] | undefined
+}
+
 export type MarketDetailsPage = {
 	pageIndex: number
 	pageSize: number

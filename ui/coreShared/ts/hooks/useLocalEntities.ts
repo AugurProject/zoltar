@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { getActiveNetworkProfile } from '../lib/activeEnvironment.js'
 import { getLocalEntityStoreRevision, hasFavoriteEntry, normalizeEntityId, readFavoriteEntries, setEntityFavorite, subscribeLocalEntityStore, type DownloadedEntityStore, type DownloadedItem, type LocalEntityApp, type LocalEntityKind, type LocalEntityScope } from '../lib/localEntityStore.js'
 
-/** The active network decides the storage scope; simulation, Sepolia, and mainnet never share favorites. */
+/** The network and genesis deployment each keep their own favorites and downloaded summaries. */
 export function getLocalEntityScope(app: LocalEntityApp, kind: LocalEntityKind): LocalEntityScope {
 	const profile = getActiveNetworkProfile()
-	return { app, kind, network: `${profile.id}-${profile.chainIdHex.toLowerCase()}` }
+	return { app, kind, network: `${profile.id}-${profile.chainIdHex.toLowerCase()}-${profile.genesisRepTokenAddress.toLowerCase()}` }
 }
 
 function useLocalEntityStoreVersion() {
@@ -44,17 +44,17 @@ export function useDownloadedEntities<T>(app: LocalEntityApp, kind: LocalEntityK
  * without another chain scan. Later refreshes of the same entity only update the cache, so un-starring it sticks.
  */
 export function useRememberOpenedEntity<T>(app: LocalEntityApp, kind: LocalEntityKind, store: DownloadedEntityStore<T>, id: string | undefined, data: T | undefined) {
-	const favoritedIdRef = useRef<string | undefined>(undefined)
+	const favoritedEntityKeyRef = useRef<string | undefined>(undefined)
+	const scope = getLocalEntityScope(app, kind)
 	useEffect(() => {
 		if (id === undefined || data === undefined) {
-			favoritedIdRef.current = undefined
+			favoritedEntityKeyRef.current = undefined
 			return
 		}
-		const scope = getLocalEntityScope(app, kind)
 		store.record(scope, [{ id, data }])
-		const normalizedId = normalizeEntityId(id)
-		if (favoritedIdRef.current === normalizedId) return
-		favoritedIdRef.current = normalizedId
+		const entityKey = `${app}:${kind}:${scope.network}:${normalizeEntityId(id)}`
+		if (favoritedEntityKeyRef.current === entityKey) return
+		favoritedEntityKeyRef.current = entityKey
 		setEntityFavorite(scope, id, true)
-	}, [app, data, id, kind, store])
+	}, [app, data, id, kind, scope.network, store])
 }

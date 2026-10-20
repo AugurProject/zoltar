@@ -14,16 +14,21 @@ import type { InjectedEthereum } from '../../protocol/injected.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { createSimulationProfile, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { createSimulationProfile, getGenesisNetworkProfile, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { saveNetworkRpcUrl } from '@zoltar/ui-core-shared/wallet/rpcConfig.js'
 import { installFetchStub } from '@zoltar/ui-core-shared/tests/testUtils/fetchStub.js'
 import { createSimulationProvider } from '@zoltar/ui-core-shared/simulation/simulationProvider.js'
 import { formatChainIdHex, readInjectedChainIdNumber, requestInjectedAccount } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
+import { hasPendingTransactionActivity, setTransactionActivityOwner, transactionActivity } from '@zoltar/ui-core-shared/transactions/transactionActivityStore.js'
+import { getPendingTransactionActivityScopes } from '@zoltar/ui-core-shared/transactions/transactionActivity.js'
+import { TransactionActionButtonLockProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { tradingDeploymentScope } from '../../features/tradingDeploymentPresentation.js'
 
 beforeEach(() => installTradingRouting())
 
 const core = {
+	genesisOutcome: 'yes' as const,
 	chainId: 11_155_111,
 	chainName: 'Sepolia',
 	defaultRpcUrl: 'https://rpc.example',
@@ -135,6 +140,8 @@ describe('trading deployment setup', () => {
 		expect(rendered.container.textContent).toContain('Deploy trading factory')
 		expect(rendered.container.textContent).toContain('0 / 2')
 		expect(rendered.container.textContent).not.toContain('Ready to deploy')
+		expect(rendered.container.querySelector(`a[href="https://sepolia.etherscan.io/address/${core.securityPoolFactory}"]`)).not.toBeNull()
+		expect(rendered.container.querySelector(`[role="button"][aria-label="Copy address ${core.securityPoolFactory}"]`)).not.toBeNull()
 	})
 
 	test('waits for the simulated environment before inspecting the deployment', async () => {
@@ -484,7 +491,7 @@ describe('trading deployment setup', () => {
 	})
 
 	test('reads a simulated deployment through the active simulation client instead of the configured RPC URL', async () => {
-		const profile = createSimulationProfile({ genesisRepTokenAddress: getAddress(`0x${'aa'.repeat(20)}`), wethAddress: getAddress(`0x${'bb'.repeat(20)}`) })
+		const profile = createSimulationProfile({ genesisOutcome: 'yes', genesisRepTokenAddress: getAddress(`0x${'aa'.repeat(20)}`), wethAddress: getAddress(`0x${'bb'.repeat(20)}`) })
 		const simulationCore = { ...core, chainId: profile.chain.id, proxyDeployer: PROXY_DEPLOYER_ADDRESS, securityPoolFactory: getInfraContractAddresses(profile).securityPoolFactory }
 		const plan = getTradingDeploymentPlan(simulationCore, 30)
 		let readClients = 0
@@ -828,6 +835,84 @@ describe('trading deployment setup', () => {
 		expect(fallback.container.textContent).toContain('is not a supported network, so this deploys to Holesky instead.')
 	})
 
+	test('a pending Yes deployment preserves wallet history without locking the No deployment', async () => {
+		const yes = getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, 'yes')
+		const no = getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, 'no')
+		const restoreYes = installActiveEnvironmentForTesting(createFakeBackend({ profile: yes }))
+		const hash = `0x${'cd'.repeat(32)}`
+		const services: TradingDeploymentSetupServices = {
+			...walletServices,
+			createPublicClient: () => deploymentClient(),
+			deployStep: async (_client, _plan, _step, onSubmitted) => {
+				onSubmitted(`0x${'cd'.repeat(32)}`)
+				throw new Error('Receipt temporarily unavailable')
+			},
+			loadCoreDeployments: async () => [core],
+		}
+		const factoryAction = (container: HTMLElement) => {
+			const action = Array.from(container.querySelectorAll('button')).find(button => button.textContent?.includes('Deploy trading factory') === true)
+			if (!(action instanceof HTMLButtonElement)) throw new Error('Factory deployment action is unavailable')
+			return action
+		}
+		try {
+			setTransactionActivityOwner(testWalletAccount)
+			const renderedYes = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={services} />)
+			cleanupRendered = renderedYes.cleanup
+			await waitForText('Deploy trading factory')
+			await connectDeploymentWallet(renderedYes.container)
+			await waitForConnectedWallet(renderedYes.container)
+			await act(async () => factoryAction(renderedYes.container).click())
+			await waitForText('Receipt temporarily unavailable')
+			const yesScope = transactionActivity.value.entries.find(entry => entry.hash === hash)?.scope
+			if (yesScope === undefined) throw new Error('Submitted Yes deployment activity is unavailable')
+			expect(hasPendingTransactionActivity(yesScope)).toBeTrue()
+			const storageKey = transactionActivity.value.storageKey
+			await renderedYes.cleanup()
+			cleanupRendered = undefined
+			transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }
+			const restoreNo = installActiveEnvironmentForTesting(createFakeBackend({ profile: no }))
+			try {
+				setTransactionActivityOwner(testWalletAccount)
+				const renderedNo = await renderIntoDocument(
+					<TransactionActionButtonLockProvider lock={{ lockedScopes: getPendingTransactionActivityScopes(transactionActivity.value.entries), promptOpen: false }}>
+						<TradingDeploymentSetup onComplete={() => undefined} services={{ ...services, loadCoreDeployments: async () => [{ ...core, genesisOutcome: 'no', zoltar: getAddress(`0x${'78'.repeat(20)}`) }] }} />
+					</TransactionActionButtonLockProvider>,
+				)
+				cleanupRendered = renderedNo.cleanup
+				await waitForText('Deploy trading factory')
+				await connectDeploymentWallet(renderedNo.container)
+				await waitForConnectedWallet(renderedNo.container)
+				expect(transactionActivity.value.storageKey).toBe(storageKey)
+				expect(transactionActivity.value.entries).toMatchObject([{ hash, status: 'pending', title: 'Deploy trading factory' }])
+				expect(hasPendingTransactionActivity(yesScope)).toBeTrue()
+				expect(hasPendingTransactionActivity(tradingDeploymentScope())).toBeFalse()
+				expect(factoryAction(renderedNo.container).disabled).toBeFalse()
+				expect(factoryAction(renderedNo.container).getAttribute('aria-disabled')).not.toBe('true')
+				await renderedNo.cleanup()
+				cleanupRendered = undefined
+			} finally {
+				restoreNo()
+			}
+			setTransactionActivityOwner(testWalletAccount)
+			const returnedYes = await renderIntoDocument(
+				<TransactionActionButtonLockProvider lock={{ lockedScopes: getPendingTransactionActivityScopes(transactionActivity.value.entries), promptOpen: false }}>
+					<TradingDeploymentSetup onComplete={() => undefined} services={services} />
+				</TransactionActionButtonLockProvider>,
+			)
+			cleanupRendered = returnedYes.cleanup
+			await waitForText('Deploy trading factory')
+			await connectDeploymentWallet(returnedYes.container)
+			await waitForConnectedWallet(returnedYes.container)
+			expect(factoryAction(returnedYes.container).disabled).toBeTrue()
+			expect(hasPendingTransactionActivity(yesScope)).toBeTrue()
+			expect(hasPendingTransactionActivity(tradingDeploymentScope())).toBeTrue()
+		} finally {
+			await cleanupRendered?.()
+			cleanupRendered = undefined
+			restoreYes()
+		}
+	})
+
 	test('lets navigation leave a pending deployment and keeps the deploy action locked until it settles', async () => {
 		window.history.replaceState(undefined, '', '/#/deploy')
 		const loadedConfiguration = deploymentConfigurationForPlan(getTradingDeploymentPlan(core, 30), 'https://rpc.example/')
@@ -857,7 +942,10 @@ describe('trading deployment setup', () => {
 		await connectDeploymentWallet(rendered.container)
 		await waitForConnectedWallet(rendered.container)
 		expect(rendered.container.querySelector('.header-toolbar .badge')?.textContent).toContain(core.chainName)
-		expect(rendered.container.querySelector('.trading-wallet-actions .wallet-button')?.textContent).toContain(testWalletAccount)
+		expect(rendered.container.querySelector('.trading-wallet-actions .wallet-button')?.textContent).toBe('Disconnect')
+		expect(rendered.container.querySelector(`.trading-wallet-actions a[href="https://sepolia.etherscan.io/address/${testWalletAccount}"]`)).not.toBeNull()
+		expect(rendered.container.querySelector(`.trading-wallet-actions [role="button"][aria-label="Copy address ${testWalletAccount}"]`)).not.toBeNull()
+		expect(rendered.container.querySelector('.trading-wallet-actions button a, .trading-wallet-actions button button, .trading-wallet-actions button [role=button], .trading-wallet-actions a button, .trading-wallet-actions a [role=button], .trading-wallet-actions a a')).toBeNull()
 		for (let attempt = 0; attempt < 30; attempt++) {
 			if (rendered.container.querySelector('.trading-wallet-actions .wallet-button')?.getAttribute('aria-label') === `Disconnect ${testWalletAccount}`) break
 			await act(async () => {

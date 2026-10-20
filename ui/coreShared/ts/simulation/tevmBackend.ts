@@ -3,6 +3,7 @@ import { createPublicClient, createWalletClient, custom, publicActions, type Add
 import type { ChainBackend, WriteClient } from '../wallet/chainBackend.js'
 import { normalizeAccount } from '../wallet/chainBackend.js'
 import { createSimulationProfile } from '../wallet/networkProfile.js'
+import type { GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
 import type { SimulationController } from './controller.js'
 import { predictSimulationTokenAddresses } from './bootstrap.js'
 import type { SimulationScenario } from './scenarios.js'
@@ -58,7 +59,7 @@ function emitListeners(listeners: ReturnType<typeof createListenerMap>, eventNam
 	}
 }
 
-function resolveWorkerPath(appId: 'zoltar' | 'statoblast' | 'trading' = 'zoltar') {
+function resolveWorkerPath(appId: 'zoltar' | 'statoblast' | 'trading' | 'openoracle' = 'zoltar') {
 	const currentUrl = new URL(import.meta.url)
 	if (currentUrl.protocol === 'file:') return new URL(`../../../${appId}/ts/simulation/tevmWorker.ts`, import.meta.url)
 	if (currentUrl.pathname.includes('/assets/')) return new URL('./tevmWorker.worker.js', import.meta.url)
@@ -90,17 +91,18 @@ function createWorkerConnection(workerPath: URL): SimulationWorkerConnection {
 export async function createSimulationBackend(
 	{
 		appId = 'zoltar',
-		initialBootstrapError,
+		genesisOutcome = 'yes',
+		initialBootstrapWarning,
 		savedState,
 		savedStateId,
 		scenario,
 		walletMode = DEFAULT_SIMULATION_WALLET_MODE,
-	}: { appId?: 'zoltar' | 'statoblast' | 'trading'; initialBootstrapError?: string; savedState?: SavedSimulationStateEnvelopeV1; savedStateId?: string; scenario?: SimulationScenario; walletMode?: SimulationWalletMode },
+	}: { appId?: 'zoltar' | 'statoblast' | 'trading' | 'openoracle'; genesisOutcome?: GenesisOutcome; initialBootstrapWarning?: string; savedState?: SavedSimulationStateEnvelopeV1; savedStateId?: string; scenario?: SimulationScenario; walletMode?: SimulationWalletMode },
 	dependencies: CreateSimulationBackendDependencies = {},
 ): Promise<SimulationBackend> {
 	const primaryAccount = QA_ACCOUNTS[0]
 	if (primaryAccount === undefined) throw new Error('No simulation QA accounts configured')
-	const profile = createSimulationProfile(predictSimulationTokenAddresses(primaryAccount))
+	const profile = createSimulationProfile({ ...predictSimulationTokenAddresses(primaryAccount, genesisOutcome), genesisOutcome })
 	const initialization: SimulationInitialization =
 		savedState !== undefined && savedStateId !== undefined
 			? {
@@ -122,6 +124,7 @@ export async function createSimulationBackend(
 	let bootstrapPromise: Promise<void> | undefined = undefined
 	let disposed = false
 	let terminalError: Error | undefined = undefined
+	let bootstrapWarning = initialBootstrapWarning
 	let rejectReady: ((error: Error) => void) | undefined = undefined
 
 	const rejectPendingRequests = (error: Error) => {
@@ -279,6 +282,7 @@ export async function createSimulationBackend(
 		})
 		try {
 			worker.postMessage({
+				genesisOutcome,
 				initialization,
 				type: 'init',
 			} satisfies SimulationWorkerMessage)
@@ -291,12 +295,6 @@ export async function createSimulationBackend(
 		failWorker(error instanceof Error ? error : new Error(String(error)))
 		throw error
 	})
-
-	if (initialBootstrapError !== undefined) {
-		const state = currentState
-		if (state === undefined) throw new Error('Simulation worker state is unavailable')
-		applyState(Object.assign({}, state, { bootstrapError: initialBootstrapError }))
-	}
 
 	const requireState = () => {
 		if (currentState === undefined) throw new Error('Simulation worker state is unavailable')
@@ -354,6 +352,9 @@ export async function createSimulationBackend(
 		},
 		get bootstrapProgress() {
 			return requireState().bootstrapProgress
+		},
+		get bootstrapWarning() {
+			return bootstrapWarning
 		},
 		createReadClient: () =>
 			createPublicClient({
@@ -434,6 +435,7 @@ export async function createSimulationBackend(
 			return await callWorker('getAccounts', undefined)
 		},
 		reset: async () => {
+			bootstrapWarning = undefined
 			await callWorker('reset', undefined)
 		},
 		selectAccount: async address => {

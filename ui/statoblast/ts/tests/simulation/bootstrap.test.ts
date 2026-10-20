@@ -673,7 +673,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			},
 		}) as never
 
-	return { applyScenario, contractWriteCalls, createWriteClient, getDeploymentSteps: protocolModule.getDeploymentSteps, memoryClient, state, writeCalls }
+	return { applyScenario, contractWriteCalls, createWriteClient, getDeploymentSteps: protocolModule.getDeploymentSteps, getZoltarAddress: () => zoltarAddress, memoryClient, state, writeCalls }
 }
 
 function createBootstrapMemoryClient(
@@ -715,6 +715,7 @@ const ZOLTAR_SIMULATION_STEP: DeploymentStep = {
 	deploy: async () => ({ action: 'none', address: getAddress('0x00000000000000000000000000000000000000a1'), hash: '0x01' }) as never,
 }
 const getDeploymentSteps = () => [ZOLTAR_SIMULATION_STEP] as const satisfies ReadonlyArray<DeploymentStep>
+const getZoltarAddress = () => ZOLTAR_SIMULATION_STEP.address
 
 // The simulation clock starts at 2025-01-01T00:00:00Z.
 const SIMULATION_INITIAL_TIMESTAMP = 1_735_689_600n
@@ -821,7 +822,7 @@ describe('simulation bootstrap', () => {
 		expect(zoltarWrites).toHaveLength(2)
 	})
 
-	test('bootstraps baseline simulation chain using seeded progress and mocked clients', async () => {
+	test.each(['zoltar', 'openOracle'] satisfies DeploymentStep['id'][])('bootstraps a %s deployment plan using an explicit simulation token authority', async stepId => {
 		const profile = createBaselineProfile()
 		const progressCalls: string[] = []
 		const progress = async ({ label }: { label: string; value: number }) => {
@@ -858,7 +859,8 @@ describe('simulation bootstrap', () => {
 			createReadClient: () => ({}) as never,
 			createWriteClient,
 			memoryClient,
-			getDeploymentSteps,
+			getDeploymentSteps: () => [{ ...ZOLTAR_SIMULATION_STEP, id: stepId }],
+			zoltarAddress: ZOLTAR_SIMULATION_STEP.address,
 			onProgress: progress,
 			primaryAccount: MOCK_PRIMARY_ACCOUNT,
 			profile,
@@ -895,6 +897,7 @@ describe('simulation bootstrap', () => {
 				createWriteClient,
 				memoryClient,
 				getDeploymentSteps,
+				zoltarAddress: getZoltarAddress(),
 				primaryAccount: MOCK_PRIMARY_ACCOUNT,
 				onProgress: () => undefined,
 				profile: createBaselineProfile(),
@@ -925,6 +928,7 @@ describe('simulation bootstrap', () => {
 				createWriteClient,
 				memoryClient,
 				getDeploymentSteps,
+				zoltarAddress: getZoltarAddress(),
 				primaryAccount: MOCK_PRIMARY_ACCOUNT,
 				onProgress: () => undefined,
 				profile: createBaselineProfile(),
@@ -957,6 +961,7 @@ describe('simulation bootstrap', () => {
 			createWriteClient,
 			memoryClient,
 			getDeploymentSteps,
+			zoltarAddress: getZoltarAddress(),
 			primaryAccount: MOCK_PRIMARY_ACCOUNT,
 			onProgress: payload => {
 				progressCalls.push(payload.label)
@@ -1000,6 +1005,7 @@ describe('simulation bootstrap', () => {
 					createWriteClient: createWriteClient,
 					memoryClient,
 					getDeploymentSteps,
+					zoltarAddress: getZoltarAddress(),
 					onProgress: () => undefined,
 					primaryAccount: MOCK_PRIMARY_ACCOUNT,
 					profile: createBaselineProfile(),
@@ -1013,7 +1019,7 @@ describe('simulation bootstrap', () => {
 
 	test('boots the security-pool simulation path with seeded pool construction and oracle report settling', async () => {
 		const profile = createBaselineProfile()
-		const { applyScenario, contractWriteCalls, createWriteClient, getDeploymentSteps, memoryClient, state, writeCalls } = createMockedBootstrapDependencies({
+		const { applyScenario, contractWriteCalls, createWriteClient, getDeploymentSteps, getZoltarAddress, memoryClient, state, writeCalls } = createMockedBootstrapDependencies({
 			accounts: [MOCK_PRIMARY_ACCOUNT],
 			scenario: 'security-pool',
 			profile,
@@ -1029,6 +1035,7 @@ describe('simulation bootstrap', () => {
 			createWriteClient,
 			memoryClient,
 			getDeploymentSteps,
+			zoltarAddress: getZoltarAddress(),
 			onProgress: async (payload: { label: string; value: number }) => {
 				progressCalls.push(payload.label)
 			},
@@ -1050,7 +1057,7 @@ describe('simulation bootstrap', () => {
 
 	test('boots the securitypoolx2 simulation path with secondary vault underwriting commitments execution', async () => {
 		const profile = createBaselineProfile()
-		const { applyScenario, createWriteClient, getDeploymentSteps, memoryClient, state, writeCalls } = createMockedBootstrapDependencies({
+		const { applyScenario, createWriteClient, getDeploymentSteps, getZoltarAddress, memoryClient, state, writeCalls } = createMockedBootstrapDependencies({
 			accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
 			scenario: 'securitypoolx2',
 			profile,
@@ -1064,6 +1071,7 @@ describe('simulation bootstrap', () => {
 			createWriteClient,
 			memoryClient,
 			getDeploymentSteps,
+			zoltarAddress: getZoltarAddress(),
 			onProgress: async () => undefined,
 			primaryAccount: MOCK_PRIMARY_ACCOUNT,
 			profile,
@@ -1086,7 +1094,7 @@ describe('simulation bootstrap', () => {
 
 	test('boots the securitypoolx2-auction simulation path with forked child-auction seeding and ten bids', async () => {
 		const profile = createBaselineProfile()
-		const { applyScenario, createWriteClient, getDeploymentSteps, memoryClient, state, writeCalls } = createMockedBootstrapDependencies({
+		const { applyScenario, createWriteClient, getDeploymentSteps, getZoltarAddress, memoryClient, state, writeCalls } = createMockedBootstrapDependencies({
 			accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],
 			scenario: 'securitypoolx2-auction',
 			profile,
@@ -1100,6 +1108,7 @@ describe('simulation bootstrap', () => {
 			createWriteClient,
 			memoryClient,
 			getDeploymentSteps,
+			zoltarAddress: getZoltarAddress(),
 			onProgress: async () => undefined,
 			primaryAccount: MOCK_PRIMARY_ACCOUNT,
 			profile,

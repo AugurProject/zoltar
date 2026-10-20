@@ -65,7 +65,7 @@ jobs:
           PUBLISHER_IMAGE: ${{ steps.image.outputs.image }}
         shell: bash
         run: |
-          for APP in zoltar statoblast trading; do
+          for APP in zoltar statoblast trading openoracle; do
             IPFS_CID=$(docker run --rm --entrypoint /bin/sh "${PUBLISHER_IMAGE}" -c "cat /ipfs_hash_${APP}.txt")
             [[ "${IPFS_CID}" =~ ^bafy[a-z2-7]+$ ]]
             echo "${APP^^}_IPFS_CID=${IPFS_CID}" >> "$GITHUB_ENV"
@@ -93,6 +93,7 @@ jobs:
           - [Zoltar — ipfs://${ZOLTAR_IPFS_CID}/](ipfs://${ZOLTAR_IPFS_CID}/)
           - [Augur Statoblast — ipfs://${STATOBLAST_IPFS_CID}/](ipfs://${STATOBLAST_IPFS_CID}/)
           - [Trading — ipfs://${TRADING_IPFS_CID}/](ipfs://${TRADING_IPFS_CID}/)
+          - [OpenOracle — ipfs://${OPENORACLE_IPFS_CID}/](ipfs://${OPENORACLE_IPFS_CID}/)
 
           ${GENERATED_NOTES}
           EOF

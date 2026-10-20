@@ -40,7 +40,7 @@ describe('universe directory', () => {
 		const selectLinks = Array.from(rendered.container.querySelectorAll<HTMLAnchorElement>('.entity-card .universe-link')).filter(link => link.textContent === 'Open')
 		expect(selectLinks).toHaveLength(1)
 		expect(selectLinks[0]?.getAttribute('href')).toBe('#/universe?universe=2')
-		expect(queries.queryByRole('link', { name: 'Go to Genesis universe' })).toBeNull()
+		expect(queries.queryByRole('link', { name: 'Go to root universe' })).toBeNull()
 		expect(rendered.container.querySelector('select')).toBeNull()
 	})
 
@@ -54,14 +54,14 @@ describe('universe directory', () => {
 		const genesis = await renderIntoDocument(<UniverseDirectory configuration={configuration} loadUniverse={async () => createForkedUniverseSummary({ universeId: 0n, childUniverses: [] })} universeId={0n} />)
 		cleanupRendered = genesis.cleanup
 		await waitFor(() => expect(genesis.container.textContent).toContain('No child universes are deployed for this universe.'))
-		expect(within(genesis.container).queryByRole('link', { name: 'Go to Genesis universe' })).toBeNull()
+		expect(within(genesis.container).queryByRole('link', { name: 'Go to root universe' })).toBeNull()
 		await genesis.cleanup()
 
 		const missing = await renderIntoDocument(<UniverseDirectory configuration={configuration} loadUniverse={async () => undefined} universeId={9n} />)
 		cleanupRendered = missing.cleanup
 		await waitFor(() => expect(missing.container.textContent).toContain('Universe 0x9 is not deployed on this network.'))
 		expect(missing.container.textContent).toContain('Universe not found')
-		expect(within(missing.container).getByRole('link', { name: 'Go to Genesis universe' })).toBeTruthy()
+		expect(within(missing.container).getByRole('link', { name: 'Go to root universe' })).toBeTruthy()
 	})
 
 	test.each(['universe', 'configuration', 'loader'] as const)('does not carry a missing universe into a new %s lookup', async change => {
@@ -134,7 +134,7 @@ describe('universe directory', () => {
 		cleanupRendered = rendered.cleanup
 		await waitFor(() => expect(rendered.container.textContent).toContain('Universe discovery failed: registry RPC unavailable'))
 		expect(within(rendered.container).queryByRole('textbox', { name: 'Open universe by ID' })).toBeNull()
-		expect(within(rendered.container).getByRole('link', { name: 'Go to Genesis universe' })).toBeTruthy()
+		expect(within(rendered.container).getByRole('link', { name: 'Go to root universe' })).toBeTruthy()
 		expect(rendered.container.textContent).not.toContain('Security pool discovery failed')
 		await waitFor(() => expect(discoveryStates.at(-1)).toBe('error'))
 		expect(rendered.container.textContent).not.toContain('Loading universe details')
@@ -161,7 +161,7 @@ describe('universe directory', () => {
 		const rendered = await renderIntoDocument(<LiveTrading route='universe' configuration={configuration} configurationError={undefined} selectedUniverseId={selectedUniverseId} onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
 		await waitFor(() => expect(rendered.container.textContent).toContain('Universe discovery failed'))
-		expect(within(rendered.container).queryByRole('link', { name: 'Go to Genesis universe' }) !== null).toBe(selectedUniverseId === '1')
+		expect(within(rendered.container).queryByRole('link', { name: 'Go to root universe' }) !== null).toBe(selectedUniverseId === '1')
 	})
 
 	test('redacts an address-bearing discovery error to the universe lead without prefixing it twice', async () => {

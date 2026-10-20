@@ -9,12 +9,11 @@ import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
-import { Question } from '@zoltar/ui-core-shared/components/Question.js'
+import { ForkQuestion } from '@zoltar/ui-core-shared/components/Question.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { TransactionActionButton, TransactionActionGroup } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
-import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { normalizeQuestionId } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { formatAmountDisplay, formatRelativeTimestamp, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -224,11 +223,7 @@ export function ForkZoltarSection({
 					<FormInput aria-describedby={selectedQuestionDescriptionId} disabled={hasForked || zoltarForkPending} invalid={selectedQuestionDescriptionId !== undefined} onInput={event => onZoltarForkQuestionIdChange(event.currentTarget.value)} placeholder={commonCopy.hexValuePlaceholder} value={zoltarForkQuestionId} />
 				</label>
 
-				{selectedQuestion === undefined ? undefined : (
-					<WorkflowSubsection title={commonCopy.question}>
-						<Question question={selectedQuestion} showIdentifier={false} />
-					</WorkflowSubsection>
-				)}
+				{selectedQuestion === undefined ? undefined : <ForkQuestion question={selectedQuestion} />}
 				{selectedQuestionPresentation === undefined ? undefined : <StateHint id={selectedQuestionLookupState === 'missing' ? FORK_QUESTION_STATE_ID : undefined} presentation={selectedQuestionPresentation} />}
 				<ErrorNotice id={FORK_QUESTION_ERROR_ID} message={selectedQuestionError} />
 				{zoltarQuestionLookupError === undefined || !isSelectedQuestionLookup || onRetryZoltarQuestion === undefined ? undefined : (

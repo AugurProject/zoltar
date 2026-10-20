@@ -1,6 +1,7 @@
 /* Statoblast feature styles: truth auction, escalation and reporting visualisations, security pool workspace, vaults, liquidation, staged operations, and the open oracle. Loaded after ui/coreShared/css/index.css by the pages that render these features. */
 
-:root[data-product="statoblast"] {
+:root[data-product="statoblast"],
+:root[data-product="openoracle"] {
 	--content-max: 80rem;
 }
 
@@ -830,6 +831,7 @@
 }
 
 .truth-auction-bidder-you {
+	display: block;
 	color: var(--accent);
 }
 
@@ -2114,8 +2116,8 @@
 	flex: 1 1 auto;
 	min-width: 0;
 }
-.vault-position-strip-title .address-value.copyable,
-.security-pool-browse-vault-row-id .address-value.copyable {
+.vault-position-strip-title .address-control,
+.security-pool-browse-vault-row-id .address-control {
 	width: 100%;
 }
 
@@ -2594,7 +2596,7 @@
 		width: 100%;
 	}
 
-	.security-pool-browse-vault-row-id .address-value.copyable {
+	.security-pool-browse-vault-row-id .address-control {
 		max-width: 100%;
 	}
 }
@@ -3491,8 +3493,8 @@ span.rep-price-status.stale,
 	display: flex;
 }
 
-/* A copyable address keeps its touch-target height, but a button centres its content, so start the text on the same line as the neighbouring metric values. */
-.pool-reference-details .selected-pool-context-grid .address-value.copyable {
+/* Keep address controls aligned with the surrounding reference metrics. */
+.pool-reference-details .selected-pool-context-grid .address-control {
 	display: flex;
 	align-items: flex-start;
 }
@@ -3549,7 +3551,7 @@ span.rep-price-status.stale,
 	margin: var(--space-1) 0 0;
 }
 
-.existing-pool-identifiers .address-value.copyable {
+.existing-pool-identifiers .address-control {
 	align-items: flex-start;
 	margin: 0;
 	padding: 0;
@@ -3642,8 +3644,12 @@ span.rep-price-status.stale,
 	min-width: 0;
 }
 
-.pool-address-display-value {
+.pool-address-display-row > .address-copy-control {
 	flex: 0 1 auto;
+	min-width: 0;
+}
+
+.pool-address-display-value {
 	min-width: 0;
 	font-family: var(--font-family-mono);
 	font-size: 0.9rem;
@@ -3668,8 +3674,11 @@ span.rep-price-status.stale,
 		gap: var(--space-2);
 	}
 
-	.pool-address-display-value {
+	.pool-address-display-row > .address-copy-control {
 		flex: 1 1 auto;
+	}
+
+	.pool-address-display-value {
 		font-size: var(--font-label);
 	}
 }

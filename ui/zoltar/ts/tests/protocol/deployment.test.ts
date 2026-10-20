@@ -11,8 +11,8 @@ import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contr
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createInitialTransactionTrayState, markTransactionPrepared, markTransactionRequested } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { SEPOLIA_GENESIS_REP_INIT_CODE } from '@zoltar/ui-core-shared/lib/sepoliaDeploymentConfig.js'
+import { getGenesisNetworkProfile, MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { getSepoliaGenesisRepDeployment } from '@zoltar/ui-core-shared/lib/sepoliaDeploymentConfig.js'
 import { DeploymentStatusOracle_DeploymentStatusOracle, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { assertStaticDeploymentArtifactRuntimeCodeHashes, fundCanonicalDeployerSigner } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
@@ -97,7 +97,8 @@ contract AtomicFunding {
 describe('contract deployment internals', () => {
 	test('retains an explicitly computed module hash when the base deployment table has no entry', () => {
 		const hash = keccak256('0x1234')
-		for (const profile of [MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE]) {
+		const profiles = [MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE].flatMap(profile => (['yes', 'no'] as const).map(outcome => getGenesisNetworkProfile(profile, outcome)))
+		for (const profile of profiles) {
 			const [module] = withExpectedDeploymentRuntimeCodeHashes([{ id: 'securityPoolCommitmentIndexDeployer', label: 'Commitment index deployer', address: PROXY_DEPLOYER_ADDRESS, dependencies: [], deploy: async () => ZERO_HASH, expectedRuntimeCodeHash: hash }], profile)
 			expect(module?.expectedRuntimeCodeHash).toBe(hash)
 		}
@@ -165,7 +166,7 @@ describe('contract deployment internals', () => {
 			expect(steps.some(step => step.address === SEPOLIA_NETWORK_PROFILE.wethAddress)).toBe(false)
 			expect(repStep?.address).toBe(SEPOLIA_NETWORK_PROFILE.genesisRepTokenAddress)
 			expect(zoltarStep?.dependencies).toContain('reputationToken')
-			expect(SEPOLIA_GENESIS_REP_INIT_CODE).toStartWith('0x')
+			expect(getSepoliaGenesisRepDeployment('yes').initCode).toStartWith('0x')
 		} finally {
 			resetEnvironment()
 		}
