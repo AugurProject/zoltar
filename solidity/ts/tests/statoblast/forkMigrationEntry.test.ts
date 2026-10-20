@@ -146,7 +146,7 @@ describe('Statoblast: fork migration', () => {
 			strictEqualTypeSafe((await getUniverseData(client, genesisUniverse)).forkTime, escalationGameEndDate, 'the external fork should occur exactly at escalation resolution')
 			strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'getFeeEpochEndTime' }), escalationGameEndDate, 'a fork at the unresolved escalation deadline must use the fork-time fee cutoff')
 			await mockWindow.setTime(escalationGameEndDate + 1n)
-			strictEqualTypeSafe(await getQuestionResolution(client, securityPoolAddresses.escalationGame), QuestionOutcome.Yes, 'the escalation game should resolve after the universe fork')
+			strictEqualTypeSafe(await getQuestionResolution(client, securityPoolAddresses.escalationGame), QuestionOutcome.None, 'the escalation clock must remain frozen at the unresolved universe fork')
 			strictEqualTypeSafe(await getQuestionOutcome(client, securityPoolAddresses.securityPool), QuestionOutcome.None, 'the local outcome should remain unavailable after a fork-time-unresolved escalation game')
 			await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 			strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'delayed initialization should enter fork mode')
