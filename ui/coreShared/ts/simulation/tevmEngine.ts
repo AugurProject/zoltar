@@ -532,11 +532,7 @@ export async function createSimulationEngine({ initialization, dependencies }: {
 		)
 	}
 	await initializeSimulationAccounts()
-	const createBootstrapReadClient = () =>
-		createPublicClient({
-			chain: profile.chain,
-			transport: custom(bootstrapProvider),
-		})
+	const createBootstrapReadClient = () => createPublicClient({ chain: profile.chain, transport: custom(bootstrapProvider) })
 	const createBootstrapWriteClient = (accountAddress: Address) =>
 		createWriteClientForProvider({
 			accountAddress,
@@ -552,6 +548,7 @@ export async function createSimulationEngine({ initialization, dependencies }: {
 			createReadClient: createBootstrapReadClient,
 			createWriteClient: createBootstrapWriteClient,
 			getDeploymentSteps: dependencies.getDeploymentSteps,
+			zoltarAddress: dependencies.getZoltarAddress(profile),
 			memoryClient,
 			onProgress: progress => {
 				bootstrapLabel = progress.label

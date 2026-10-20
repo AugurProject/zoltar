@@ -20,7 +20,7 @@ import { readOpenOracleReportIdQueryParam, readOpenOracleViewQueryParam, writeOp
 import { hasInvalidViewQueryParam } from '@zoltar/ui-core-shared/navigation/viewQueryParam.js'
 import { useProtocolAppShell } from '@zoltar/ui-zoltar-shared/features/appShell/hooks/useProtocolAppShell.js'
 import { DeploymentRouteContent } from '@zoltar/ui-zoltar-shared/features/deployment/components/DeploymentRouteContent.js'
-import { getStatoblastDeploymentSections } from '@zoltar/ui-statoblast-shared/features/deployment/deploymentSections.js'
+import { getOpenOracleDeploymentSections } from '../features/deployment/deploymentSections.js'
 import { OpenOracleSection } from '../features/open-oracle/components/OpenOracleSection.js'
 import { useOpenOracleOperations } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleOperations.js'
 import { selectOpenOracleReport, useOpenOracleRouteSync } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleRouteSync.js'
@@ -42,7 +42,7 @@ export function App() {
 	const invalidView = hasInvalidViewQueryParam({ allowedRoutes: ['open-oracle'], allowedViews: views, key: 'openOracleView', resolvedRoute: route, search: getRouteHashSearch(), value: state.view })
 	const activeRoute = invalidView ? 'not-found' : route
 	const shell = useProtocolAppShell({
-		deploymentRoute: { deploymentCompleteHref: '#/open-oracle', deploymentCompleteLabel: appCopy.browseReports, getSections: getStatoblastDeploymentSections },
+		deploymentRoute: { deploymentCompleteHref: '#/open-oracle', deploymentCompleteLabel: appCopy.browseReports, getSections: getOpenOracleDeploymentSections },
 		initializeEnvironment: options => initializeOpenOracleActiveEnvironment(window.location, options),
 		isDeploymentRoute: route === 'deploy',
 		onchainStateDependencies,

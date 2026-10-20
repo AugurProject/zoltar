@@ -141,6 +141,15 @@ async function navigate(hash: string) {
 }
 
 describe('OpenOracle application navigation', () => {
+	test('keeps pool, auction and universe deployment controls out of oracle setup', async () => {
+		await renderApp('#/deploy')
+		const text = document.body.textContent
+		for (const label of ['Security pools', 'SecurityPoolFactory', 'SecurityPoolForker', 'ShareTokenFactory', 'EscalationGameFactory', 'UniformPriceDualCapBatchAuctionFactory', 'ZoltarQuestionData']) {
+			expect(text).not.toContain(label)
+		}
+		for (const label of ['Proxy Deployer', 'Multicall3', 'OpenOracle']) expect(text).toContain(label)
+	})
+
 	test('returns from deployment to the oracle browser', async () => {
 		await renderApp('#/deploy')
 		expect(document.title).toContain('Deploy contracts')

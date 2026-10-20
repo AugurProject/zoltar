@@ -1,13 +1,13 @@
 /// <reference lib="webworker" />
 
-import { getDeploymentSteps } from '@zoltar/ui-statoblast-shared/protocol/deployment.js'
+import { getOpenOracleDeploymentSteps } from '../protocol/deployment.js'
 import { getZoltarAddress } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import type { SimulationEngineDependencies } from '@zoltar/ui-core-shared/simulation/tevmEngine.js'
 import { applyStatoblastScenario } from '@zoltar/ui-statoblast-shared/simulation/statoblastScenarios.js'
 
 const dependencies: SimulationEngineDependencies = {
 	applyScenario: applyStatoblastScenario,
-	getDeploymentSteps,
+	getDeploymentSteps: getOpenOracleDeploymentSteps,
 	getZoltarAddress,
 }
 
