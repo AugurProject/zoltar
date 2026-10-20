@@ -1,4 +1,6 @@
 export const eventSourceByName: Record<string, string> = {
+	FeeStreamReplaced: 'solidity/contracts/statoblast/SecurityPoolSettlementBook.sol',
+	ForkFrozen: 'solidity/contracts/statoblast/SecurityPoolPortfolioForkCoordinator.sol',
 	PortfolioRecoveryRightsConsumed: 'solidity/contracts/statoblast/tokens/ShareToken.sol',
 	VaultPositionSplit: 'solidity/contracts/statoblast/SecurityPoolOperationsDelegate.sol',
 	ClaimCheckpointProgress: 'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol',

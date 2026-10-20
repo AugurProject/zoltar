@@ -63,6 +63,7 @@ export function buildPortfolioForkStartRequest(parameters: ForkRequest & { outco
 export function buildPortfolioForkFinalizeRequest(parameters: ForkRequest) {
 	return request(parameters, 'finalizeBranch')
 }
+/** @public Permissionless keeper transaction settling a branch's retired protocol reserve after activation. */
 export function buildPortfolioForkCollectProtectedRequest(parameters: ForkRequest) {
 	return request(parameters, 'collectProtectedPrincipal')
 }

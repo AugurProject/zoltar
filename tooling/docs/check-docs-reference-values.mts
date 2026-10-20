@@ -29,6 +29,7 @@ const escalationGameClaimDelegate = await readFile('solidity/contracts/statoblas
 const escalationGameDepositDelegate = await readFile('solidity/contracts/statoblast/EscalationGameDepositDelegate.sol', 'utf8')
 const escalationGameCarry = await readFile('solidity/contracts/statoblast/EscalationGameCarry.sol', 'utf8')
 const escalationGameState = await readFile('solidity/contracts/statoblast/EscalationGameState.sol', 'utf8')
+const escalationGameRepCustody = await readFile('solidity/contracts/statoblast/EscalationGameRepCustody.sol', 'utf8')
 const escalationGameTypes = await readFile('solidity/contracts/statoblast/EscalationGameTypes.sol', 'utf8')
 const escalationGameForker = await readFile('solidity/contracts/statoblast/EscalationGameForker.sol', 'utf8')
 const escalationGameCalculations = await readFile('solidity/contracts/statoblast/EscalationGameCalculations.sol', 'utf8')
@@ -45,6 +46,8 @@ const deploymentStatusOracle = await readFile('solidity/contracts/DeploymentStat
 const securityPool = await readFile('solidity/contracts/statoblast/SecurityPool.sol', 'utf8')
 const securityPoolOperationsDelegate = await readFile('solidity/contracts/statoblast/SecurityPoolOperationsDelegate.sol', 'utf8')
 const securityPoolSettlementDelegate = await readFile('solidity/contracts/statoblast/SecurityPoolSettlementDelegate.sol', 'utf8')
+const portfolioSettlement = await readFile('solidity/contracts/statoblast/SecurityPoolPortfolioSettlement.sol', 'utf8')
+const settlementBook = await readFile('solidity/contracts/statoblast/SecurityPoolSettlementBook.sol', 'utf8')
 const securityPoolDeployer = await readFile('solidity/contracts/statoblast/factories/SecurityPoolDeployer.sol', 'utf8')
 const securityPoolFactory = await readFile('solidity/contracts/statoblast/factories/SecurityPoolFactory.sol', 'utf8')
 const priceCoordinatorFactory = await readFile('solidity/contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol', 'utf8')
@@ -52,6 +55,7 @@ const shareTokenFactory = await readFile('solidity/contracts/statoblast/factorie
 const truthAuctionFactory = await readFile('solidity/contracts/statoblast/factories/UniformPriceDualCapBatchAuctionFactory.sol', 'utf8')
 const securityPoolInterface = await readFile('solidity/contracts/statoblast/interfaces/ISecurityPool.sol', 'utf8')
 const securityPoolForker = await readFile('solidity/contracts/statoblast/SecurityPoolForker.sol', 'utf8')
+const securityPoolForkerPortfolioDelegate = await readFile('solidity/contracts/statoblast/SecurityPoolForkerPortfolioDelegate.sol', 'utf8')
 const securityPoolForkerAuctionSettlementBase = await readFile('solidity/contracts/statoblast/SecurityPoolForkerAuctionSettlementBase.sol', 'utf8')
 const securityPoolForkerBase = await readFile('solidity/contracts/statoblast/SecurityPoolForkerBase.sol', 'utf8')
 const securityPoolForkerVaultMigrationBase = await readFile('solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol', 'utf8')
@@ -226,8 +230,17 @@ function assertRepricingBoundaryDocs(): void {
 	assert.match(invariantsHtml, /id="bal-03"/)
 	assert.match(invariantsHtml, /id="vault-02"/)
 	assert.match(securityPool, /function createCompleteSet\(\) external payable isOperational \{[\s\S]*SecurityPoolSettlementDelegate\.createCompleteSet/)
-	assert.match(securityPoolSettlementDelegate, /function createCompleteSet\([\s\S]*uint256 nextSettlementCollateralAttoEth = settlementCollateralAttoEth \+ msg\.value;[\s\S]*require\(nextSettlementCollateralAttoEth <= totalUnderwritingLimitAttoEth, 'Over capacity'\)/)
-	assert.match(securityPool, /function getCurrentMintingCapacityAttoEth\(\)[\s\S]*return address\(escalationGame\) == address\(0\) \? totalUnderwritingLimitAttoEth : 0;/)
+	const mintBody = readSolidityFunctionBody(securityPoolSettlementDelegate, 'function createCompleteSet(')
+	assert.match(mintBody, /require\(msg\.sender == ISecurityPoolPortfolioPurchaseAuthority\(portfolio\)\.quoteHelper\(\),\s*\)/)
+	assert.match(mintBody, /IPortfolioSettlement\(address\(portfolioAccounting\)\)\.mintQuestionSettlement\{value: msg\.value\}\(\);[\s\S]*return completeSetsToMintAttoShares;\s*\}\s*pool\.updateSettlementCollateral\(\);/, 'bound minting must return before the standalone commitment ceiling')
+	assert.match(mintBody, /uint256 nextSettlementCollateralAttoEth = settlementCollateralAttoEth \+ msg\.value;[\s\S]*require\(nextSettlementCollateralAttoEth <= totalUnderwritingLimitAttoEth,\s*\)/)
+	const mintingCapacityBody = readSolidityFunctionBody(securityPool, 'function getCurrentMintingCapacityAttoEth(')
+	assert.match(mintingCapacityBody, /^\s*if \(address\(escalationGame\) != address\(0\)\) return 0;/, 'an escalation game must disable both standalone and portfolio minting capacity')
+	assert.match(
+		mintingCapacityBody,
+		/if \(portfolioCustody != address\(0\)\) \{\s*return\s*settlementCollateralAttoEth \+\s*IPortfolioSettlement\(address\(portfolioAccounting\)\)\.availableMintCapacity\(universeId\);\s*\}\s*return totalUnderwritingLimitAttoEth;\s*$/,
+		'portfolio capacity must add the question cash to available shared capacity; standalone capacity remains the total underwriting limit',
+	)
 	const vaultOpenInterestBody = readSolidityFunctionBody(securityPool, 'function getVaultOpenInterestAttoEth(')
 	assert.match(vaultOpenInterestBody, /SecurityPoolUtils\.calculateVaultOpenInterestAttoEth\([\s\S]*totalUnderwritingLimitAttoEth/)
 	assert.doesNotMatch(vaultOpenInterestBody, /feeEligibleUnderwritingLimitAttoEth/)
@@ -454,12 +467,23 @@ function assertContractInteractionDistinctions(): void {
 	)
 	assert.match(securityPoolForker, /if \(data\.fixedQuestionOutcomePlusOne > 0\)\s*return BinaryOutcomes\.BinaryOutcome\(data\.fixedQuestionOutcomePlusOne - 1\)/)
 	assert.match(securityPool, /function createCompleteSet\(\) external payable isOperational \{[\s\S]*SecurityPoolSettlementDelegate\.createCompleteSet/, 'Complete-set issuance must delegate its atomic accounting transition')
-	assert.match(securityPoolSettlementDelegate, /function createCompleteSet\([\s\S]*nextSettlementCollateralAttoEth[\s\S]*require\(nextSettlementCollateralAttoEth <= totalUnderwritingLimitAttoEth, 'Over capacity'\);/, 'Complete-set issuance must compare resulting total collateral against total standing commitments')
-	assert.match(securityPool, /function attoSharesToAttoEth\(uint256 amountAttoShares\)[\s\S]*return \(amountAttoShares \* settlementCollateralAttoEth\) \/ shareTokenSupplyAttoShares/)
-	assert.match(securityPool, /function redeemCompleteSet\(uint256 amountAttoShares\)[\s\S]*SecurityPoolOperationsDelegate\.redeemCompleteSet/)
-	assert.match(securityPoolOperationsDelegate, /function redeemCompleteSet\([\s\S]*amountAttoShares \* settlementCollateralAttoEth\) \/ shareTokenSupplyAttoShares[\s\S]*shareTokenSupplyAttoShares == 0[\s\S]*badDebtGeneration\+\+/)
-	assert.match(securityPool, /function redeemShares\(\)[\s\S]*SecurityPoolOperationsDelegate\.redeemShares/)
-	assert.match(securityPoolOperationsDelegate, /function redeemShares\([\s\S]*settlementCollateralAttoEth\) \/ shareTokenSupplyAttoShares[\s\S]*shareTokenSupplyAttoShares -= winningSharesBurnedAttoShares[\s\S]*shareTokenSupplyAttoShares == 0[\s\S]*badDebtGeneration\+\+/)
+	const shareQuote = readSolidityFunctionBody(securityPool, 'function attoSharesToAttoEth(')
+	assert.match(shareQuote, /if \(portfolioCustody != address\(0\)\)\s*return\s*IPortfolioSettlement\(address\(portfolioAccounting\)\)\.quoteQuestionSettlement\(address\(this\), amountAttoShares\);/)
+	assert.match(shareQuote, /return \(amountAttoShares \* settlementCollateralAttoEth\) \/ shareTokenSupplyAttoShares;/)
+	for (const name of ['redeemCompleteSet', 'redeemShares']) {
+		const poolBody = readSolidityFunctionBody(securityPool, `function ${name}(`)
+		assert.ok(poolBody.includes(`SecurityPoolOperationsDelegate.${name}`))
+		assert.match(poolBody, /if \(portfolioCustody == address\(0\)\) _sendEth\(payable\(msg\.sender\), settlementCollateralRedeemedAttoEth\);/, 'only standalone redemption sends ETH from native custody')
+		const delegateBody = readSolidityFunctionBody(securityPoolOperationsDelegate, `function ${name}(`)
+		assert.match(delegateBody, /if \(portfolioCustody != address\(0\)\)[\s\S]*return [^;]*_redeemPortfolioSettlement\([^;]*;/, 'bound redemption must use central settlement before native accounting')
+		const standaloneBody = delegateBody.slice(delegateBody.indexOf('settlementCollateralRedeemedAttoEth ='))
+		assert.match(standaloneBody, /settlementCollateralAttoEth\) \/ shareTokenSupplyAttoShares[\s\S]*shareTokenSupplyAttoShares -= [\s\S]*shareTokenSupplyAttoShares == 0[\s\S]*badDebtGeneration\+\+/)
+	}
+	assert.match(readSolidityFunctionBody(securityPoolSettlementDelegate, 'function _redeemPortfolioSettlement('), /^\s*if \(burnedShares == 0\) return 0;[\s\S]*\.redeemQuestionSettlement\(recipient, burnedShares\);/)
+	assert.match(readSolidityFunctionBody(portfolioSettlement, 'function _sendEth('), /^\s*if \(cashAttoEth == 0\) return;[\s\S]*\.call\{value: cashAttoEth\}/)
+	assert.match(readSolidityFunctionBody(settlementBook, 'function redeem('), /outcomeShares == state\.outcomeSupplyAttoShares\s*\? state\.units\s*: Math\.mulDiv\(state\.units, outcomeShares, state\.outcomeSupplyAttoShares\);[\s\S]*_cashForUnits\(book\.cashAttoEth, book\.units, unitsBurned\)/)
+	assert.match(readSolidityFunctionBody(settlementBook, 'function _cashForUnits('), /return redeemedUnits == units \? cashAttoEth : Math\.mulDiv\(cashAttoEth, redeemedUnits, units\);/)
+	assert.match(readSolidityFunctionBody(securityPool, 'receive()'), /require\(portfolioCustody != address\(0\) \|\| msg\.sender == securityPoolForker \|\| msg\.sender == truthAuction \|\| msg\.sender == address\(parent\),\s*\);/)
 	assert.match(securityPoolForker, /securityPool\.setShareTokenSupplyAttoShares\(parent\.shareTokenSupplyAttoShares\(\)\)/)
 	assert.match(diagramModelsSource, /withdraw REP, commitment', 'change, or liquidation/)
 	assert.doesNotMatch(diagramModelsSource, /withdraw, capacity ownership/)
@@ -514,8 +538,15 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(zoltar, /function _splitRep\([\s\S]*for \(uint256 i = 0; i < outcomeIndexes\.length; i\+\+\)[\s\S]*reputationToken\.mint\(msg\.sender, amountAttoRep\)[\s\S]*emit MigrationRepSplit\(/)
 	assert.match(reputationToken, /function mint\(address account, uint256 valueAttoRep\)[\s\S]*_mint\(account, valueAttoRep\);[\s\S]*emit Mint\(account, valueAttoRep\)/)
 	assert.match(securityPoolForker, /function _claimAuctionProceeds\([\s\S]*require\(data\.truthAuction\.finalized\(\), 'Not final'\)[\s\S]*data\.truthAuction\.withdrawBids\([\s\S]*SecurityPoolForkerVaultMigrationDelegate\.creditAuctionProceeds/)
-	assert.match(escalationGameSettlement, /function drainAllRep\(address receiver\)[\s\S]*amountAttoRep = repToken\.balanceOf\(address\(this\)\);[\s\S]*if \(amountAttoRep == 0\) return 0;[\s\S]*_safeTransferRep\(receiver, amountAttoRep\)/)
-	assert.match(escalationGameSettlement, /function drainAllRep\(address receiver\)[\s\S]*require\(msg\.sender == address\(securityPool\), 'Only pool'\)/)
+	const drainRepBody = readSolidityFunctionBody(escalationGameSettlement, 'function drainAllRep(')
+	assert.match(drainRepBody, /^\s*require\(msg\.sender == address\(securityPool\),\s*\);\s*require\(!_usesCentralReporterCustody\(\),\s*\);/, 'only the pool may drain standalone reporter custody; central escrow must migrate through the portfolio')
+	assert.match(drainRepBody, /amountAttoRep = _reporterRepBalance\(\);\s*if \(amountAttoRep == 0\) return 0;\s*_safeTransferRep\(receiver, amountAttoRep\);\s*$/, 'draining must transfer the full reporter balance and skip a zero transfer')
+	assert.match(readSolidityFunctionBody(escalationGameState, 'function _reporterRepBalance('), /^\s*return EscalationGameRepCustody\.balance\(address\(securityPool\), address\(repToken\)\);\s*$/)
+	assert.match(
+		readSolidityFunctionBody(escalationGameRepCustody, 'function balance('),
+		/^\s*ISecurityPoolReporterLedger custody = ledger\(poolAddress\);\s*return\s*address\(custody\) == address\(0\)\s*\? IERC20\(tokenAddress\)\.balanceOf\(address\(this\)\)\s*: custody\.balanceOfGame\(address\(this\)\);\s*$/,
+		'standalone reporter custody must read its full token balance; central custody must read only the game ledger balance',
+	)
 	assert.match(securityPool, /function activateForkMode\(\)[\s\S]*if \(hasInheritedForkOutcome\) revert\((?:'[^']*')?\)[\s\S]*systemState = SystemState\.PoolForked;[\s\S]*escalationGame\.drainAllRep\(msg\.sender\)/)
 	assert.match(securityPoolForker, /function _getEscalationGame\(ISecurityPool securityPool\)[\s\S]*escalationGame\.securityPool\(\)[\s\S]*'Escalation game pool'/)
 	assert.match(securityPoolForkerBase, /function _validateChildEscalationGame\([\s\S]*childEscalationGame\.securityPool\(\)[\s\S]*'Child game'/)
@@ -590,13 +621,18 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(securityPool, /function activateForkMode\(\) external onlyForker/)
 	assert.match(securityPool, /function activateForkMode\(\) external onlyForker \{\s*if \(hasInheritedForkOutcome\) revert\((?:'[^']*')?\)/)
 	const externalForkBody = readSolidityFunctionBody(securityPoolForker, 'function initiateSecurityPoolFork(')
-	assertCallOrder(externalForkBody, '_prepareForkState(securityPool, escalationGame)', 'securityPool.activateForkMode()', 'external pool-fork handling must validate the existing universe fork before activating pool fork mode')
+	const portfolioExternalForkBranch =
+		/^\s*if \(securityPool\.portfolioCustody\(\) != address\(0\)\) \{\s*require\(zoltar\.getForkTime\(securityPool\.universeId\(\)\) != 0,\s*\);\s*require\(SecurityPoolForkerPortfolioDelegate\(portfolioDelegate\)\.getQuestionOutcome\(securityPool\) == BinaryOutcomes\.BinaryOutcome\.None,\s*\);\s*securityPool\.activateForkMode\(\);\s*return;\s*\}/
+	assert.match(externalForkBody, portfolioExternalForkBranch, 'portfolio fork activation must require a forked universe and an unresolved question before returning without native REP migration')
+	assertCallOrder(externalForkBody.replace(portfolioExternalForkBranch, ''), '_prepareForkState(securityPool, escalationGame)', 'securityPool.activateForkMode()', 'standalone pool-fork handling must validate the existing universe fork before activating pool fork mode')
 	const prepareForkBody = readSolidityFunctionBody(securityPoolForker, 'function _prepareForkState(')
 	assert.match(prepareForkBody, /securityPool\.shareToken\(\)\.isAuthorized\(address\(securityPool\)\)/)
 	assertCallOrder(prepareForkBody, 'uint256 forkTime = zoltar.getForkTime(universe)', 'require(forkTime > 0,', 'external pool-fork preparation must read and require an existing universe fork')
 	const ownForkBody = readSolidityFunctionBody(securityPoolForker, 'function forkZoltarWithOwnEscalationGame(')
 	assert.doesNotMatch(ownForkBody, /shareToken\(\)\.isAuthorized/)
-	assertCallOrder(ownForkBody, 'securityPool.activateForkMode()', 'migrationProxy.forkUniverse(securityPool.questionId())', 'own-fork handling must activate pool fork mode before forking Zoltar')
+	const portfolioOwnForkBranch = /^\s*if \(securityPool\.portfolioCustody\(\) != address\(0\)\) \{\s*ISecurityPoolPortfolioNative\(securityPool\.securityPoolFactory\(\)\.getSecurityPoolPortfolio\(securityPool\)\)\.forkWithReporterQuestion\(securityPool\);\s*securityPool\.activateForkMode\(\);\s*return;\s*\}/
+	assert.match(ownForkBody, portfolioOwnForkBranch, 'portfolio own-fork handling must complete the shared reporter fork before activating the question and returning without native REP migration')
+	assertCallOrder(ownForkBody.replace(portfolioOwnForkBranch, ''), 'securityPool.activateForkMode()', 'migrationProxy.forkUniverse(securityPool.questionId())', 'standalone own-fork handling must activate pool fork mode before forking Zoltar')
 	const pooledRepMigrationBody = readSolidityFunctionBody(securityPoolForker, 'function migrateRepToZoltar(')
 	assert.match(pooledRepMigrationBody, /_delegateEnsureChildPoolRepSplit\(securityPool, outcomeIndex, migrationAmountAttoRep\)/)
 	assert.doesNotMatch(pooledRepMigrationBody, /_transferForkMigratedCollateralToChild/)
@@ -621,7 +657,14 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(shareToken, /if \(sourcePool\.systemState\(\) == SystemState\.Operational\) \{\s*forker\.initiateSecurityPoolFork\(sourcePool\)/)
 	assert.match(shareToken, /require\(sourcePool\.systemState\(\) == SystemState\.PoolForked, 'ShareToken source pool cannot migrate'\)/)
 	assert.match(shareToken, /require\(targetOutcomeIndexesLength == 1, 'ShareToken bulk migration requires canonical child pools'\)/)
-	assert.match(shareToken, /address\(targetPool\) != address\(0x0\) && address\(targetPool\.parent\(\)\) == address\(sourcePool\)/)
+	const shareMigrationBody = readSolidityFunctionBody(shareToken, 'function migrate(')
+	assert.match(shareMigrationBody, /uint248 targetUniverseId = _getChildUniverseId\(universeId, outcomeIndex\);\s*ISecurityPool targetPool = canonicalPoolByUniverse\[targetUniverseId\];/, 'share migration must resolve a canonical pool in the immediate child universe')
+	assert.match(
+		shareMigrationBody,
+		/require\(address\(targetPool\) != address\(0x0\) && \(address\(targetPool\.parent\(\)\) == address\(sourcePool\) \|\| sourcePool\.portfolioCustody\(\) != address\(0\)\),\s*\);/,
+		'standalone shares require a structural child pool; bound portfolio shares may use a materialized child sourced from an earlier live reporter',
+	)
+	assert.match(readSolidityFunctionBody(shareToken, 'function _getChildUniverseId('), /^\s*return uint248\(uint256\(keccak256\(abi\.encode\(universeId, outcomeIndex\)\)\)\);\s*$/)
 	assert.match(shareToken, /address\(_securityPoolCandidate\.shareToken\(\)\) == address\(this\)/)
 	assert.match(shareToken, /'ShareToken universe already has a canonical pool'/)
 	assert.match(shareToken, /canonicalPoolByUniverse\[candidateUniverseId\] = _securityPoolCandidate/)
@@ -649,7 +692,11 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(securityPoolEventEmitter, /contract SecurityPoolEventEmitter is SecurityPoolPortfolioAccountingDelegate/)
 	assert.match(securityPoolEventEmitter, /contract SecurityPoolForkEventEmitter is SecurityPoolForkerStorage, ISecurityPoolForkerEvents/)
 	assert.match(securityPoolEventEmitter, /function emitForkSnapshotEvents\(\s*ISecurityPool parent,\s*address migrationProxy,\s*address sourceGame,\s*uint256 totalPoolHeldRepAtForkAttoRep,\s*uint256 disputeStakedRepAtForkAttoRep,\s*uint256 resultingLockedAttoRep\s*\) external payable/)
-	assert.match(securityPoolForker, /DelegateCall\.invoke\(forkEventEmitter, abi\.encodeCall\(SecurityPoolForkEventEmitter\.emitForkSnapshotEvents, \(parent, migrationProxy, sourceGame, totalPoolHeldRepAtForkAttoRep, disputeStakedRepAtForkAttoRep, resultingLockedAttoRep\)\)\)/)
+	assert.match(securityPoolForkerPortfolioDelegate, /contract SecurityPoolForkerPortfolioDelegate is SecurityPoolForkEventEmitter/)
+	assert.match(
+		readSolidityFunctionBody(securityPoolForker, 'function _emitForkSnapshotEvents('),
+		/^\s*DelegateCall\.invoke\(portfolioDelegate, abi\.encodeCall\(SecurityPoolForkEventEmitter\.emitForkSnapshotEvents, \(parent, migrationProxy, sourceGame, totalPoolHeldRepAtForkAttoRep, disputeStakedRepAtForkAttoRep, resultingLockedAttoRep\)\)\);\s*$/,
+	)
 	assert.match(truthAuctionStorage, /function allocateFromCumulativePosition\(/)
 	assert.match(truthAuction, /function finalize\(\) external[\s\S]*payable\(owner\)\.call\{\s*value:\s*raisedAttoEthToSend\s*\}/)
 	assert.match(truthAuctionStorage, /return cumulativeAllocationAfter - cumulativeAllocationBefore/)

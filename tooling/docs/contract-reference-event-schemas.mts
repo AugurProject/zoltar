@@ -1,4 +1,6 @@
 export const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePath: string }> = [
+	{ name: 'FeeStreamReplaced', parameters: 'uint64 indexed bookId,uint256 indexed questionId,uint96 rateAttoEthPerSecond,uint48 end', sourcePath: 'solidity/contracts/statoblast/SecurityPoolSettlementBook.sol' },
+	{ name: 'ForkFrozen', parameters: 'uint248 indexed universeId,uint256 backing,uint256 cash,uint256 units,uint256 freshPrice', sourcePath: 'solidity/contracts/statoblast/SecurityPoolPortfolioForkCoordinator.sol' },
 	{ name: 'PortfolioRecoveryRightsConsumed', parameters: 'uint248 indexed universeId,address indexed holder,uint256 amountAttoShares,uint256 cumulativeAttoShares', sourcePath: 'solidity/contracts/statoblast/tokens/ShareToken.sol' },
 	{ name: 'OrdinarySettlementInitialized', parameters: 'BinaryOutcomes.BinaryOutcome indexed outcome,uint256 winningPrincipalAttoRep,uint256 reservedAttoRep', sourcePath: 'solidity/contracts/statoblast/EscalationGameState.sol' },
 	{ name: 'VaultPositionSplit', parameters: 'address indexed source,address indexed recipient,uint256 numerator,uint256 denominator', sourcePath: 'solidity/contracts/statoblast/SecurityPoolOperationsDelegate.sol' },
@@ -189,4 +191,4 @@ export const assemblyEventEmissions: Array<{
 	},
 ]
 
-export const referencedEventAbiFingerprint = '4ea6d9c5fc63dc53f1c64587798a9d068bc03b036709e2f2c697a49fb5d8db03'
+export const referencedEventAbiFingerprint = 'f17ad52cc7e5d3d5dcc1ba2ba958b4255cfef84ccc56eb71e3ba41ad055acc69'

@@ -49,7 +49,7 @@ const abi = parseAbi([
 	'function takeOver(uint96 id,uint256 commitment,uint256 minimumAward,uint256 maximumOwnRep) returns (uint96)',
 ])
 
-export type PortfolioCapitalOwner = {
+type PortfolioCapitalOwner = {
 	freeAttoRep: bigint
 	feesAttoEth: bigint
 	feesAttoRep: bigint
@@ -57,7 +57,7 @@ export type PortfolioCapitalOwner = {
 	targetHealthFactorBps: bigint
 	positions: readonly [bigint, bigint, bigint]
 }
-export type PortfolioCapitalPosition = {
+type PortfolioCapitalPosition = {
 	id: bigint
 	owner: Address
 	batch: bigint
@@ -65,8 +65,8 @@ export type PortfolioCapitalPosition = {
 	commitment: bigint
 	maxHealthyPrice: bigint
 	releasedRep: bigint
-	ethFees: bigint
-	repFees: bigint
+	feesAttoEth: bigint
+	feesAttoRep: bigint
 	executionReserveAttoEth: bigint
 	liquidationStarted: bigint
 }
@@ -187,9 +187,11 @@ export function buildPortfolioCapitalClaimEarningsRequest(parameters: CapitalReq
 export function buildPortfolioCapitalTopUpRequest(parameters: CapitalRequest & { positionId: bigint; amountAttoRep: bigint }) {
 	return request(parameters, 'topUp', [positive(parameters.positionId, 'Position id', 96), positive(parameters.amountAttoRep, 'REP top-up')])
 }
+/** @public External keeper transaction: `owner` is the submitting keeper; `positionId` may belong to another owner. */
 export function buildPortfolioCapitalCureRequest(parameters: CapitalRequest & { positionId: bigint }) {
 	return request(parameters, 'cure', [positive(parameters.positionId, 'Position id', 96)])
 }
+/** @public External keeper transaction preserving explicit commitment, REP award and own-collateral limits. */
 export function buildPortfolioCapitalTakeOverRequest(parameters: CapitalRequest & { positionId: bigint; commitment: bigint; minimumAward: bigint; maximumOwnRep: bigint }) {
 	return request(parameters, 'takeOver', [positive(parameters.positionId, 'Position id', 96), positive(parameters.commitment, 'Takeover commitment'), uint(parameters.minimumAward, 'Minimum REP award'), uint(parameters.maximumOwnRep, 'Maximum own REP')])
 }
@@ -254,8 +256,8 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 					commitment: uint(commitment, 'Commitment'),
 					maxHealthyPrice: uint(maximum, 'Maximum healthy price'),
 					releasedRep: uint(released, 'Retired REP'),
-					ethFees: uint(eth, 'ETH earnings'),
-					repFees: uint(repFees, 'REP earnings'),
+					feesAttoEth: uint(eth, 'ETH earnings'),
+					feesAttoRep: uint(repFees, 'REP earnings'),
 					executionReserveAttoEth: uint(execution, 'Position execution reserve'),
 					liquidationStarted: uint(liquidation, 'Liquidation start', 48),
 				}
@@ -292,8 +294,8 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 		ownerAccount: account,
 		positions,
 		withdrawableAttoRep: account.freeAttoRep + positions.reduce((sum, position) => sum + position.releasedRep, 0n),
-		accruedFeesAttoEth: account.feesAttoEth + positions.reduce((sum, position) => sum + position.ethFees, 0n),
-		accruedFeesAttoRep: account.feesAttoRep + positions.reduce((sum, position) => sum + position.repFees, 0n),
+		accruedFeesAttoEth: account.feesAttoEth + positions.reduce((sum, position) => sum + position.feesAttoEth, 0n),
+		accruedFeesAttoRep: account.feesAttoRep + positions.reduce((sum, position) => sum + position.feesAttoRep, 0n),
 		economics: {
 			purchaseFeeBps: uint(feeBps, 'Purchase fee'),
 			annualFeeBps: uint(annualFeeBps, 'Annual fee'),

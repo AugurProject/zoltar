@@ -16,6 +16,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	uint96 private lastBatch = 1;
 	bool public importsOpen;
 	bool private importsInitialized;
+	uint64 public healthObservationEpoch;
 	struct Account {
 		address owner;
 		uint96 batch;
@@ -167,6 +168,24 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		_insert(0, position.node);
 	}
 
+	/// @notice Record which existing live positions are healthy at a fresh price.
+	/// @dev Epochs distinguish recovery and relapse even within the same block.
+	function observeHealthy(uint256 price) external onlyPortfolio operational {
+		uint64 epoch = ++healthObservationEpoch;
+		_observeHealthy(roots[0], price, epoch);
+		if (currentBatch != 0) _observeHealthy(roots[currentBatch], price, epoch);
+		_observeHealthy(roots[nextBatch], price, epoch);
+	}
+
+	function healthEpoch(uint96 id) external view returns (uint64 epoch) {
+		uint256 cursor = positions[id].node;
+		while (cursor != 0) {
+			Node storage node = nodes[cursor];
+			if (epoch < node.healthEpoch) epoch = node.healthEpoch;
+			cursor = node.parent;
+		}
+	}
+
 	function eligibleCommitment(uint256 acceptedPrice) public view returns (uint256) {
 		return
 			_eligible(roots[0], acceptedPrice) +
@@ -286,7 +305,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		require(lastPositionId != type(uint96).max, 'Commitment IDs exhausted');
 		id = ++lastPositionId;
 		uint256 node = ++lastNode;
-		nodes[node] = Node(0, 0, 0, rep, commitment, 0, 0, price, price, id, 0, false);
+		nodes[node] = Node(0, 0, 0, rep, commitment, 0, 0, price, price, id, 0, false, 0);
 		positions[id] = Position(owner, batch, node, 0, false);
 		_insert(batch, node);
 	}

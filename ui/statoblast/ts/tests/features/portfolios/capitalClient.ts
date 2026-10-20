@@ -94,7 +94,7 @@ export function capitalClient(initial = capitalSnapshot()) {
 			if (request.functionName === 'accountOf' || request.functionName === 'positionExecutionReserveAttoEth' || request.functionName === 'liquidationStarted') {
 				const position = snapshot.positions.find(position => position.id === request.args?.[0])
 				if (position === undefined) throw new Error('Unknown position')
-				if (request.functionName === 'accountOf') return position
+				if (request.functionName === 'accountOf') return [position.owner, position.batch, position.rep, position.commitment, position.maxHealthyPrice, position.releasedRep, position.feesAttoEth, position.feesAttoRep]
 				return request.functionName === 'liquidationStarted' ? position.liquidationStarted : position.executionReserveAttoEth
 			}
 			if (request.functionName === 'getQuestions') {

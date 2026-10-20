@@ -118,7 +118,8 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 	}, [recoveryKey])
 	const recoveryState = recovered.value?.key === recoveryKey ? recovered.value : undefined
 	const recovery = recoveryState?.source
-	const baseReason = actions.ownerReason ?? current?.error ?? (state === undefined ? 'Load a portfolio fork first.' : undefined)
+	const pendingReason = universeId === undefined ? 'Enter a valid source universe.' : 'Checking fork status…'
+	const baseReason = actions.ownerReason ?? current?.error ?? (state === undefined ? pendingReason : undefined)
 	const forkReason = baseReason ?? (state?.forkTime === 0n ? 'This source universe has not forked.' : undefined)
 	const branchReason = forkReason ?? (state?.branch === undefined || current?.outcome?.outcomeLabel === undefined ? 'Enter a valid fork outcome.' : undefined)
 	const chooseReason =

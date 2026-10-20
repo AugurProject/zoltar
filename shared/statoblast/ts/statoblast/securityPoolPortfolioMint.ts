@@ -31,6 +31,7 @@ export function buildPortfolioMintRequest(parameters: { trader: Address; portfol
 	return { account: address(parameters.trader, 'Trader'), to: address(parameters.portfolio, 'Portfolio'), value, data: encodeFunctionData({ abi, functionName: 'createCompleteSet', args: [universeId, questionId, cash, address(parameters.recipient, 'Recipient'), uint(parameters.minimumShares, 'Minimum shares')] }) }
 }
 
+/** @public Register a question without purchasing shares; the pool's admission policy still decides eligibility. */
 export function buildPortfolioAddQuestionRequest(parameters: { caller: Address; portfolio: Address; questionId: bigint }) {
 	return { account: address(parameters.caller, 'Caller'), to: address(parameters.portfolio, 'Portfolio'), value: 0n, data: encodeFunctionData({ abi, functionName: 'addQuestion', args: [uint(parameters.questionId, 'Question id')] }) }
 }

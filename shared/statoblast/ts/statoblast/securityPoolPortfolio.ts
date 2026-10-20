@@ -54,7 +54,7 @@ export function buildPortfolioPrepareNextRequest(parameters: { caller: Address; 
 	return { account: parameters.caller, to: parameters.portfolio, data: encodeFunctionData({ abi: parseAbi(['function prepareNext()']), functionName: 'prepareNext' }), value: 0n }
 }
 
-/** Unsigned owner transaction for a smart-account execution flow. */
+/** @public Unsigned transaction export for external smart-account execution flows. */
 export function exportPortfolioTransaction(parameters: { chainId: number; request: { account: Address; to: Address; data: Hex; value: bigint } }) {
 	if (!Number.isSafeInteger(parameters.chainId) || parameters.chainId <= 0) throw new Error('Choose a valid chain id.')
 	address(parameters.request.account, 'Owner')
@@ -77,22 +77,26 @@ export {
 	buildPortfolioCapitalServeRetirementRequest,
 	buildPortfolioCapitalClaimEarningsRequest,
 	buildPortfolioCapitalTopUpRequest,
-	buildPortfolioCapitalCureRequest,
-	buildPortfolioCapitalTakeOverRequest,
 	loadPortfolioCapitalSnapshot,
-	requiredPortfolioExecutionReserve,
-	type PortfolioCapitalOwner,
-	type PortfolioCapitalPosition,
 	type PortfolioCapitalSnapshot,
 } from './securityPoolPortfolioCapital.js'
-export { buildPortfolioMintRequest, buildPortfolioAddQuestionRequest, loadPortfolioMintQuote, type PortfolioMintQuote } from './securityPoolPortfolioMint.js'
+/** @public Permissionless capital repair for external keeper implementations. */
+export { buildPortfolioCapitalCureRequest } from './securityPoolPortfolioCapital.js'
+/** @public Explicitly bounded commitment takeovers for external keeper implementations. */
+export { buildPortfolioCapitalTakeOverRequest } from './securityPoolPortfolioCapital.js'
+/** @public Quote the execution reserve needed before an external client authorizes commitments. */
+export { requiredPortfolioExecutionReserve } from './securityPoolPortfolioCapital.js'
+export { buildPortfolioMintRequest, loadPortfolioMintQuote, type PortfolioMintQuote } from './securityPoolPortfolioMint.js'
+/** @public External clients can register an admitted question independently of purchasing shares. */
+export { buildPortfolioAddQuestionRequest } from './securityPoolPortfolioMint.js'
+/** @public External keepers can collect a branch's retired protocol reserve without an owner loop. */
+export { buildPortfolioForkCollectProtectedRequest } from './securityPoolPortfolioFork.js'
 
 export {
 	buildPortfolioVoluntaryRepairRequest,
 	buildPortfolioForkChoiceRequest,
 	buildPortfolioForkStartRequest,
 	buildPortfolioForkFinalizeRequest,
-	buildPortfolioForkCollectProtectedRequest,
 	buildPortfolioForkRecoveryRequest,
 	buildPortfolioRecapPurchaseRequest,
 	loadPortfolioForkSnapshot,

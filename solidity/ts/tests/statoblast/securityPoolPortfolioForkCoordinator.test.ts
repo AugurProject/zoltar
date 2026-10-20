@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { encodeDeployData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { buildPortfolioForkCollectProtectedRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import {
 	test_statoblast_PortfolioForkHarness_PortfolioForkHarness as rootArtifact,
 	test_statoblast_PortfolioForkHarness_PortfolioForkZoltarMock as zoltarArtifact,
@@ -126,6 +127,29 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 		}
 		expect(await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'availableForkCashAttoEth', args: [0n] })).toBe(0n)
 		expect(await owner.getBalance({ address: engine })).toBe(200n * E)
+	})
+
+	test('the permissionless collection SDK burns retired protocol REP without paying the keeper or touching chosen principal', async () => {
+		await choose(alice, 1n)
+		const child = await childId(1n)
+		const collect = () => writeContractAndWait(buyer, () => buyer.sendTransaction(buildPortfolioForkCollectProtectedRequest({ owner: buyer.account.address, controller: forks, universeId: child })))
+		await expect(collect()).rejects.toThrow('Branch is not active')
+		await moveTo(forkTime + 9n * week)
+		await finalize(child)
+		const childCapital = await owner.readContract({ ...rootTarget(), functionName: 'capitalLedger', args: [child] })
+		const token = await owner.readContract({ ...zoltarTarget(), functionName: 'getRepToken', args: [child] })
+		const index = await owner.readContract({ ...ledger(childCapital), functionName: 'commitmentIndex' })
+		const chosen = await owner.readContract({ ...ledger(childCapital), functionName: 'ownerAccount', args: [alice.account.address] })
+		const supply = await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'totalSupply' })
+		const now = (await owner.getBlock()).timestamp
+		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setPrice', args: [child, E, Number(now + 86_400n)] }))
+		await collect()
+		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'totalSupply' })).toBe(supply - 126n * E)
+		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [buyer.account.address] })).toBe(0n)
+		expect((await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [chosen.positions[0]] })).rep).toBe(126n * E)
+		expect(await owner.readContract({ ...ledger(childCapital), functionName: 'demandAttoEth' })).toBe(100n * E)
+		await collect()
+		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'totalSupply' })).toBe(supply - 126n * E)
 	})
 
 	test('a price decline between quote and execution refunds the unused purchase budget', async () => {

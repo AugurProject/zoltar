@@ -7,7 +7,7 @@ import { createDevToolsSession, type DevToolsSession } from '../ui/browserSmoke.
 import { getChromiumPath } from '../ui/chromiumPath.js'
 import type { UiAppId } from '../ui/appPaths.mts'
 import { UI_SCREENSHOTS, type UiScreenshotCrop, type UiScreenshotSpec, type UiScreenshotStep } from './ui-screenshot-specs.mts'
-import { computeScreenshotFingerprint, readPngSize, readScreenshotFingerprints, SCREENSHOT_FINGERPRINT_PATH, screenshotApp, screenshotAppIds, screenshotOutputPath, pickMatch, updateEmbeddingPages } from './ui-screenshots.mts'
+import { clickScreenshotControl, computeScreenshotFingerprint, readPngSize, readScreenshotFingerprints, SCREENSHOT_FINGERPRINT_PATH, screenshotApp, screenshotAppIds, screenshotOutputPath, pickMatch, updateEmbeddingPages } from './ui-screenshots.mts'
 
 const repositoryRoot = path.resolve(import.meta.dir, '..', '..')
 const DEFAULT_VIEWPORT = { width: 1440, height: 900 }
@@ -128,8 +128,7 @@ async function runStep(session: DevToolsSession, step: UiScreenshotStep, specId:
 	const waitOptions = { attempts: 600, intervalMilliseconds: 100, retryFailures: true }
 	let simulationSecurityPoolAddress: string | undefined
 	if ('click' in step) {
-		await session.waitFor(`window.__docsScreenshot.enabled(${quote(step.click)})`, { ...waitOptions, message: `${context}: no enabled control labelled "${step.click}" appeared` })
-		await runHelper(session, `click(${quote(step.click)}, ${(step.nth ?? 0).toString()})`, context)
+		await clickScreenshotControl(session, step.click, step.nth ?? 0, context)
 	} else if ('fill' in step) {
 		const value =
 			typeof step.value === 'string'

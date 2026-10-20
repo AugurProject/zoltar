@@ -172,7 +172,7 @@ contract SecurityPool is SecurityPoolStorage {
 	function burnEscalationWinnerHaircut(uint256) external {
 		_forwardAccountingOperation();
 	}
-	/// @notice Bind the canonical portfolio's permanent native custody.
+	/// @notice Binds the canonical portfolio's central capital ledger once.
 	function setPortfolioCustody(address) external {
 		_forwardAccountingOperation();
 	}
@@ -195,12 +195,12 @@ contract SecurityPool is SecurityPoolStorage {
 		_forwardAccountingOperation();
 	}
 
-	/// @notice Accrues fees out of settlement collateral up to the current fee epoch end; callable by anyone.
+	/// @notice Checkpoints central settlement for bound pools or accrues standalone fees through the native epoch cutoff; callable by anyone.
 	function updateSettlementCollateral() public {
 		DelegateCallForwarder.invokeWithDecodedRevert(address(eventEmitter), abi.encodeCall(SecurityPoolPortfolioAccountingDelegate.accrueSettlementCollateral, ()));
 	}
 
-	/// @notice Returns the timestamp at which fee accrual stops, accounting for forks and escalation resolution.
+	/// @notice Returns the native fee-epoch cutoff; bound portfolio fee accrual follows the central stream.
 	function getFeeEpochEndTime() public view returns (uint256) {
 		uint256 forkTime = zoltar.getForkTime(universeId);
 		if (portfolioCustody != address(0)) {
@@ -222,7 +222,7 @@ contract SecurityPool is SecurityPoolStorage {
 		return forkTime != 0 && forkTime < endTime ? forkTime : endTime;
 	}
 
-	/// @notice Accrues fees and recomputes the retention rate while the pool is operational; no-op otherwise.
+	/// @notice Refreshes the bound portfolio's linear stream or recomputes retention for an operational standalone pool.
 	function updateRetentionRate() public {
 		DelegateCallForwarder.invokeWithDecodedRevert(address(eventEmitter), abi.encodeCall(SecurityPoolPortfolioAccountingDelegate.updateRetentionRate, ()));
 	}
@@ -334,12 +334,12 @@ contract SecurityPool is SecurityPoolStorage {
 		return Math.mulDiv(repBackingUnits, getTotalPoolHeldAttoRep(), totalRepBackingUnits);
 	}
 
-	/// @notice Returns the pool's REP token balance.
+	/// @notice Returns the standalone token balance or the bound pool's accounted REP backing.
 	function getTotalPoolHeldAttoRep() public view returns (uint256) {
 		return portfolioCustody == address(0) ? repToken.balanceOf(address(this)) : accountedPortfolioBackingAttoRep;
 	}
 
-	/// @notice Returns the total underwriting limit while no escalation game exists; otherwise zero.
+	/// @notice Returns zero once a game exists; otherwise the standalone underwriting limit or question cash plus available shared capacity.
 	function getCurrentMintingCapacityAttoEth() public view returns (uint256) {
 		if (address(escalationGame) != address(0)) return 0;
 		if (portfolioCustody != address(0)) {
@@ -428,7 +428,7 @@ contract SecurityPool is SecurityPoolStorage {
 		return (amountAttoShares * settlementCollateralAttoEth) / shareTokenSupplyAttoShares;
 	}
 
-	/// @notice Converts attoEth to shares at the current rate; 1:1 while no shares or collateral exist.
+	/// @notice Quotes shares for attoEth using the standalone exchange rate or the bound pool's central settlement book.
 	function attoEthToAttoShares(uint256 amountAttoEth) public view returns (uint256) {
 		if (portfolioCustody != address(0))
 			return IPortfolioSettlement(address(portfolioAccounting)).quoteQuestionMint(address(this), amountAttoEth);
@@ -569,7 +569,7 @@ contract SecurityPool is SecurityPoolStorage {
 		DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.depositWalletRepToEscalationGame, (outcome, maximumDepositAttoRep)));
 	}
 
-	/// @notice Moves up to `maximumDepositAttoRep` of the caller's vault REP into the escalation game on `outcome`, deploying the game if needed.
+	/// @notice Standalone-only: moves up to `maximumDepositAttoRep` of the caller's vault REP into the escalation game on `outcome`, deploying it if needed.
 	/// @dev The vault and pool must stay backed, and the vault must keep at least the minimum REP or none.
 	function depositToEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external isOperational {
 		require(portfolioCustody == address(0), 'Use wallet-funded reporter REP');
@@ -648,7 +648,7 @@ contract SecurityPool is SecurityPoolStorage {
 		_registerVault(beneficiaryVault);
 	}
 
-	/// @notice Forker-only: marks the pool forked, accrues fees, and sends all pool-held and escalation-game REP to the forker.
+	/// @notice Forker-only: freezes bound portfolio accounting or drains standalone REP to the forker, then leaves the pool forked.
 	function activateForkMode() external onlyForker {
 		if (hasInheritedForkOutcome) revert('Forked');
 		if (portfolioCustody != address(0)) {

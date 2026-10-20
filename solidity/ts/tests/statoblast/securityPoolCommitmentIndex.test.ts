@@ -25,6 +25,8 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 	const replace = (id: bigint, rep: bigint, commitment: bigint, price: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'replace', args: [id, rep, commitment, price] }))
 	const request = (id: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'request', args: [id] }))
 	const cancel = (id: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'cancel', args: [id] }))
+	const observe = (price: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'observeHealthy', args: [price] }))
+	const healthEpoch = (id: bigint) => client.readContract({ abi: artifact.abi, address, functionName: 'healthEpoch', args: [id] })
 	const credit = (price: bigint, eth: bigint, rep: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'credit', args: [price, eth, rep] }))
 	const retire = (price: bigint, demand: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'retire', args: [price, demand] }))
 	const claim = (id: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'claim', args: [id] }))
@@ -219,11 +221,12 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 	})
 
 	test('mixed full-width rekeys and exact fee funding agree with a naive live ledger', async () => {
-		type Entry = { id: bigint; rep: bigint; commitment: bigint; price: bigint }
+		type Entry = { id: bigint; rep: bigint; commitment: bigint; price: bigint; healthEpoch: bigint }
 		const entries: Entry[] = []
 		let seed = 19n
 		let fundedEth = 0n
 		let fundedRep = 0n
+		let epoch = 0n
 		for (let step = 0; step < 80; step++) {
 			seed = (seed * 6364136223846793005n + 1442695040888963407n) % (1n << 64n)
 			const price = (seed % 101n) << BigInt(step % 192)
@@ -231,7 +234,7 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 			const rep = commitment * 7n
 			if (step < 20 || step % 5 === 0) {
 				const id = await create(rep, commitment, price)
-				entries.push({ id, rep, commitment, price })
+				entries.push({ id, rep, commitment, price, healthEpoch: 0n })
 			} else {
 				const entry = entries[Number(seed % BigInt(entries.length))]
 				if (entry === undefined) throw new Error('Missing commitment model entry')
@@ -242,6 +245,14 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 			expect(await eligible(cutoff)).toBe(entries.reduce((sum, entry) => sum + (entry.price >= cutoff ? entry.commitment : 0n), 0n))
 			expect(await totals()).toEqual([entries.reduce((sum, entry) => sum + entry.rep, 0n), entries.reduce((sum, entry) => sum + entry.commitment, 0n)])
 			await validate()
+			// Observe after checking inherited stamps: a new member cannot receive
+			// the old subtree observation merely by joining or rotating into it.
+			for (const entry of entries) expect(await healthEpoch(entry.id)).toBe(entry.healthEpoch)
+			if (step % 3 === 0) {
+				await observe(cutoff)
+				epoch++
+				for (const entry of entries) if (entry.price >= cutoff) entry.healthEpoch = epoch
+			}
 			if (step % 7 === 0) {
 				const eth = (seed % 101n) + 1n
 				const repFee = (seed % 83n) + 1n
@@ -254,6 +265,7 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		let actualRep = 0n
 		for (const entry of entries) {
 			const state = await account(entry.id)
+			expect(await healthEpoch(entry.id)).toBe(entry.healthEpoch)
 			expect(state).toMatchObject({ rep: entry.rep, commitment: entry.commitment, maxHealthyPrice: entry.price })
 			actualEth += state.ethFees
 			actualRep += state.repFees
@@ -284,6 +296,7 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		}
 		expect(await eligible(2n)).toBe(765n)
 		await credit(1n, 768n, 1536n)
+		await observe(1n)
 		const hash = await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'creditAndClaim', args: [2n, 765n, 1530n, [1n, 257n, 513n]] }))
 		const gas = (await client.waitForTransactionReceipt({ hash })).gasUsed
 		expect(gas).toBeLessThan(2_000_000n)
@@ -293,18 +306,29 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 	test('bulk retirement uses balanced joins and preserves all detached claims', async () => {
 		for (let i = 0; i < 128; i += 8) await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'createSparse', args: [BigInt(i), 8n, true] }))
 		await credit(0n, 129n, 131n)
+		await observe(0n)
+		const epochs = new Map(Array.from({ length: 128 }, (_, i) => [BigInt(i + 1), 1n]))
+		let epoch = 1n
 		let remaining = 128n
 		for (const amount of [1n, 2n, 31n, 17n, 48n, 28n]) {
 			remaining -= amount
 			await retire(0n, remaining)
 			await validate()
 			expect(await totals()).toEqual([remaining * 10n, remaining])
+			await observe(0n)
+			epoch++
+			for (let id = 1n; id <= remaining; id++) epochs.set(id, epoch)
 		}
 		let feesEth = 0n
 		let feesRep = 0n
 		let releasedRep = 0n
 		for (let id = 1n; id <= 128n; id++) {
 			const state = await account(id)
+			const expectedEpoch = epochs.get(id)
+			if (expectedEpoch === undefined) throw new Error('Missing retired position epoch')
+			expect(await healthEpoch(id)).toBe(expectedEpoch)
+			await claim(id)
+			expect(await healthEpoch(id)).toBe(expectedEpoch)
 			feesEth += state.ethFees
 			feesRep += state.repFees
 			releasedRep += state.releasedRep
@@ -313,10 +337,58 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		expect([feesEth, feesRep, releasedRep]).toEqual([129n, 131n, 1270n])
 	})
 
+	test('health observations survive cohort moves, splitting, merging and detached retirement claims', async () => {
+		await create(100n, 10n, 20n)
+		await create(100n, 10n, 10n)
+		await create(100n, 10n, 30n)
+		await observe(0n)
+		await observe(20n)
+		expect(await Promise.all([1n, 2n, 3n].map(healthEpoch))).toEqual([2n, 1n, 2n])
+		await request(1n)
+		await request(2n)
+		await retire(0n, 30n)
+		await request(3n)
+		await observe(25n)
+		const receiver = await split(2n, 50n, 5n, 10n, 10n)
+		expect(await healthEpoch(receiver)).toBe(0n)
+		await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'transferTo', args: [1n, receiver, 50n, 5n, 20n, 10n] }))
+		expect(await Promise.all([1n, 2n, 3n, receiver].map(healthEpoch))).toEqual([2n, 1n, 3n, 0n])
+		await credit(0n, 90n, 120n)
+		await retire(0n, 0n)
+		await create(100n, 10n, 30n)
+		await observe(0n)
+		for (const [id, expected] of [
+			[1n, 2n],
+			[2n, 1n],
+			[3n, 3n],
+			[receiver, 0n],
+		]) {
+			if (id === undefined || expected === undefined) throw new Error('Missing epoch expectation')
+			expect(await healthEpoch(id)).toBe(expected)
+			await claim(id)
+			expect(await healthEpoch(id)).toBe(expected)
+		}
+		expect(await healthEpoch(5n)).toBe(4n)
+		await validate()
+	})
+
+	test('same-block healthy observations use epochs and never replace a newer child stamp with an older parent', async () => {
+		await create(10n, 1n, 10n)
+		await create(10n, 1n, 20n)
+		await create(10n, 1n, 30n)
+		await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'observeHealthyTwice', args: [0n, 20n] }))
+		expect(await Promise.all([1n, 2n, 3n].map(healthEpoch))).toEqual([1n, 2n, 2n])
+		await replace(1n, 10n, 1n, 40n)
+		await create(10n, 1n, 25n)
+		expect(await Promise.all([1n, 2n, 3n, 4n].map(healthEpoch))).toEqual([1n, 2n, 2n, 0n])
+		await validate()
+	})
+
 	test('only the owning portfolio can mutate or collect the index', async () => {
 		await expect(writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address, functionName: 'create', args: [owner(1), 10n, 10n, 10n] }))).rejects.toThrow('Only portfolio')
 		await create(10n, 10n, 10n)
 		await expect(writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address, functionName: 'claim', args: [1n] }))).rejects.toThrow('Only portfolio')
+		await expect(writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address, functionName: 'observeHealthy', args: [0n] }))).rejects.toThrow('Only portfolio')
 	})
 
 	test('fork imports preserve cohorts and cannot refill a sealed child retirement group', async () => {
@@ -327,6 +399,7 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		await expect(create(100n, 10n, 20n)).rejects.toThrow('Commitment imports are open')
 		await expect(retire(20n, 20n)).rejects.toThrow('Commitment imports are open')
 		await expect(credit(20n, 10n, 10n)).rejects.toThrow('Commitment imports are open')
+		await expect(observe(20n)).rejects.toThrow('Commitment imports are open')
 		await expect(writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'importPosition', args: [owner(1), 100n, 10n, 20n, 3n] }))).rejects.toThrow('Unknown imported cohort')
 		await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'importAdd', args: [1n, 50n, 5n, 30n] }))
 		expect(await account(1n)).toMatchObject({ rep: 150n, commitment: 15n, maxHealthyPrice: 30n })

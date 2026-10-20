@@ -5,6 +5,7 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createMockReadClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { unscopedTransaction } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import { usePortfolioSharedFork } from '@zoltar/ui-statoblast-shared/features/portfolios/hooks/usePortfolioSharedFork.js'
 import type { PortfolioTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolio.js'
@@ -99,6 +100,18 @@ test('shared preparation waits until cutoff and activation waits until the recap
 	await act(() => hook.state().start())
 	expect(requests).toHaveLength(1)
 	expect(hook.state().buyReason).toContain('no active recap sale')
+})
+test('fork actions distinguish invalid source input from an automatic pending read', async () => {
+	const { hook, source } = await setup()
+	await act(() => hook.state().setSource('invalid'))
+	expect(hook.state().chooseReason).toBe('Enter a valid source universe.')
+	const controller = createDeferred<typeof modules.fork>()
+	source.setRead('forkController', controller.promise)
+	await act(() => hook.state().setSource('1'))
+	expect(hook.state().state).toBeUndefined()
+	expect(hook.state().chooseReason).toBe('Checking fork status…')
+	await act(() => controller.resolve(modules.fork))
+	await waitFor(() => expect(hook.state().state).toBeDefined())
 })
 test('a recorded choice cannot be changed and a ready child opens its direct universe account', async () => {
 	const { hook, setChosen, setStarted, setReady, snapshot, source, opened } = await setup()

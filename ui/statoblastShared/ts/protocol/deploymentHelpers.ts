@@ -64,7 +64,7 @@ const statoblastInitCodes = createStatoblastInitCodes(
 	{ proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS, zeroSalt: ZERO_SALT },
 )
 
-export const {
+const {
 	getEscalationGameFactoryByteCode,
 	getOpenOraclePriceCoordinatorFactoryByteCode,
 	getPriceCoordinatorDeploymentWorkerByteCode,
@@ -84,6 +84,19 @@ export const {
 	getSecurityPoolEventEmitterByteCode,
 	getShareTokenFactoryByteCode,
 } = statoblastInitCodes
+
+export {
+	getEscalationGameFactoryByteCode,
+	getOpenOraclePriceCoordinatorFactoryByteCode,
+	getPriceCoordinatorDeploymentWorkerByteCode,
+	getSharedPoolPriceFeedDeploymentWorkerByteCode,
+	getSecurityPoolFactoryByteCode,
+	getSecurityPoolForkerByteCode,
+	getSecurityPoolForkerPortfolioDelegateByteCode,
+	getSecurityPoolOperationsDelegateByteCode,
+	getSecurityPoolEventEmitterByteCode,
+	getShareTokenFactoryByteCode,
+}
 
 export const applyStatoblastLibraries = statoblastInitCodes.applyLibraries
 

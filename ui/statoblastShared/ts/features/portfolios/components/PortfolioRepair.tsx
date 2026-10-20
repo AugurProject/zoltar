@@ -11,6 +11,7 @@ import { loadPortfolioAccount, type PortfolioAccountSnapshot } from '../../../pr
 import { portfolioAmountOrUndefined } from '../lib/draft.js'
 import { PortfolioButton, PortfolioInput, type PortfolioActions } from './PortfolioControls.js'
 import * as copy from '../../../copy/portfolioCapital.js'
+import * as common from '@zoltar/ui-core-shared/copy/common.js'
 
 const abi = parseAbi([
 	'function eligibleActiveCommitment(uint256 price) view returns(uint256)',
@@ -35,14 +36,16 @@ async function repairCapacity(snapshot: PortfolioAccountSnapshot) {
 	return { shortfall: units - cash, available: active > cash ? active - cash : 0n }
 }
 
-export function PortfolioRepair({ snapshot, actions }: { snapshot: PortfolioAccountSnapshot | undefined; actions: Pick<PortfolioActions, 'scope' | 'busy' | 'ownerReason' | 'runPortfolioAction'> }) {
+export function PortfolioRepair({ snapshot, loading, actions }: { snapshot: PortfolioAccountSnapshot | undefined; loading: boolean; actions: Pick<PortfolioActions, 'scope' | 'busy' | 'ownerReason' | 'runPortfolioAction'> }) {
 	const amountInput = useSignal('')
+	const retry = useSignal(0)
 	const loaded = useSignal<{ key: string; amount?: bigint; available?: bigint; error?: string } | undefined>(undefined)
 	const key = `${snapshot?.portfolio}:${snapshot?.owner}:${snapshot?.universeId}:${snapshot?.blockHash}`
+	const inactive = snapshot !== undefined && (snapshot.forkTime !== 0n || snapshot.importing || snapshot.frozen)
 	useEffect(() => {
 		let current = true
 		loaded.value = undefined
-		if (snapshot !== undefined && snapshot.forkTime === 0n && !snapshot.importing && !snapshot.frozen)
+		if (snapshot !== undefined && !inactive)
 			void repairCapacity(snapshot)
 				.then(capacity => {
 					if (current) loaded.value = { key, amount: capacity.shortfall, available: capacity.available }
@@ -53,19 +56,24 @@ export function PortfolioRepair({ snapshot, actions }: { snapshot: PortfolioAcco
 		return () => {
 			current = false
 		}
-	}, [key])
+	}, [key, inactive, retry.value])
 	useEffect(() => {
 		amountInput.value = ''
 	}, [snapshot?.portfolio, snapshot?.owner, snapshot?.universeId])
-	const current = loaded.value?.key === key ? loaded.value : undefined
+	const current = !loading && !inactive && loaded.value?.key === key ? loaded.value : undefined
+	let fundingReason: string | undefined
+	if (loading) fundingReason = copy.repairLoading
+	else if (snapshot === undefined) fundingReason = copy.repairUnavailable
+	else if (inactive) fundingReason = copy.repairInactive
+	else if (current?.error !== undefined) fundingReason = current.error
+	else if (current?.amount === undefined) fundingReason = copy.repairLoading
+	else if (current.amount === 0n) fundingReason = copy.repairFunded
+	const fundingDetail = fundingReason ?? copy.repairShortfall(formatEther(current?.amount ?? 0n))
 	const amount = portfolioAmountOrUndefined(amountInput.value)
 	const reason =
 		actions.ownerReason ??
-		(snapshot?.forkTime !== 0n || snapshot?.importing || snapshot?.frozen ? copy.repairInactive : undefined) ??
+		fundingReason ??
 		(snapshot?.priceValid ? undefined : copy.repairPrice) ??
-		current?.error ??
-		(current?.amount === undefined ? copy.repairLoading : undefined) ??
-		(current?.amount === 0n ? copy.repairFunded : undefined) ??
 		(amount === undefined || amount === 0n ? copy.repairAmountRequired : undefined) ??
 		(amount !== undefined && current?.amount !== undefined && amount > current.amount ? copy.repairExceeds : undefined) ??
 		(amount !== undefined && current?.available !== undefined && amount > current.available ? copy.repairCapacity : undefined) ??
@@ -86,7 +94,7 @@ export function PortfolioRepair({ snapshot, actions }: { snapshot: PortfolioAcco
 		})
 	return (
 		<SectionBlock title={copy.repairTitle} description={copy.repairHint}>
-			<UserMessage detail={current?.amount === undefined ? copy.repairLoading : copy.repairShortfall(formatEther(current.amount))} />
+			{fundingReason === undefined || reason !== fundingReason || actions.busy !== undefined ? <UserMessage detail={fundingDetail} tone={current?.error === undefined ? 'neutral' : 'error'} /> : undefined}
 			<PortfolioInput
 				label={copy.repairAmount}
 				value={amountInput.value}
@@ -97,6 +105,18 @@ export function PortfolioRepair({ snapshot, actions }: { snapshot: PortfolioAcco
 				numeric
 			/>
 			<PortfolioButton model={actions} action='repairPortfolioCash' label={copy.repair} pendingLabel={copy.repairing} reason={reason} onClick={repair} />
+			{current?.error === undefined ? undefined : (
+				<button
+					type='button'
+					className='secondary'
+					onClick={() => {
+						loaded.value = undefined
+						retry.value++
+					}}
+				>
+					{common.retry}
+				</button>
+			)}
 		</SectionBlock>
 	)
 }

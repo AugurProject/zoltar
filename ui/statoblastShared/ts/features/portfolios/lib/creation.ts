@@ -22,7 +22,7 @@ export const defaultPortfolioCreationDraft = (): PortfolioCreationDraft => ({
 	rewardVestingHours: '24',
 })
 
-export function portfolioBasisPoints(value: string, label: string) {
+function portfolioBasisPoints(value: string, label: string) {
 	const amount = portfolioBasisPointsOrUndefined(value)
 	if (amount === undefined) throw new Error(`${label} must be a nonnegative percentage with at most two decimal places.`)
 	return amount

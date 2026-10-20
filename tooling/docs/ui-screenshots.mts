@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import type { UiAppId } from '../ui/appPaths.mts'
+import type { DevToolsSession } from '../ui/browserSmoke.mts'
 import { UI_SCREENSHOT_APPS, UI_SCREENSHOTS, type UiScreenshotApp, type UiScreenshotSpec } from './ui-screenshot-specs.mts'
 
 export const SCREENSHOT_DIRECTORY = 'docs/assets/screenshots'
@@ -24,6 +25,11 @@ const isIgnoredSourcePath = (filePath: string) => filePath.split('/').some(segme
 export const isScreenshotSourcePath = (appId: UiAppId, filePath: string) => !isIgnoredSourcePath(filePath) && screenshotApp(appId).sourceRoots.some(root => filePath === root || filePath.startsWith(`${root}/`))
 
 export const screenshotAppIds = (specs: readonly UiScreenshotSpec[] = UI_SCREENSHOTS): UiAppId[] => [...new Set(specs.map(spec => spec.app))].sort()
+
+export async function clickScreenshotControl(session: Pick<DevToolsSession, 'waitFor'>, label: string, nth: number, context: string) {
+	// The page helper checks readiness and clicks synchronously, so a refresh cannot disable the control between them.
+	await session.waitFor(`window.__docsScreenshot.click(${JSON.stringify(label)}, ${nth.toString()}) === ''`, { attempts: 600, intervalMilliseconds: 100, message: `${context}: no enabled control labelled "${label}" appeared` })
+}
 
 /** Tracked source files only: generated artifacts differ between checkouts and must not affect the fingerprint. */
 function listTrackedSourceFiles(rootPath: string, appId: UiAppId) {

@@ -57,6 +57,11 @@ contract CapitalLedgerHarness {
 	function setPrice(uint256 price, uint48 until) external {
 		ledger.acceptPrice(price, until);
 	}
+	function cureAndSetPrices(uint96 id, uint256 first, uint256 second, uint48 until) external {
+		ledger.cure(id);
+		ledger.acceptPrice(first, until);
+		ledger.acceptPrice(second, until);
+	}
 	function setDemand(uint256 demand) external {
 		ledger.setDemand(demand);
 	}

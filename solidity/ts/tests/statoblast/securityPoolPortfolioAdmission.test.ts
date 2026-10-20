@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { encodeDeployData, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { buildPortfolioAddQuestionRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
@@ -27,14 +28,16 @@ describe('Statoblast: pluggable question admission', () => {
 	test('fixed membership permits lazy registration and rejects other questions or universes', async () => {
 		const policy = await deployFixed([fixture.base.questionId])
 		const portfolio = await fixture.deployPortfolio(policy)
-		await fixture.register(fixture.base.questionId, portfolio)
-		await fixture.register(fixture.base.questionId, portfolio)
+		const sender = fixture.other()
+		const register = (questionId: bigint, namespace = portfolio) => writeContractAndWait(sender, () => sender.sendTransaction(buildPortfolioAddQuestionRequest({ caller: sender.account.address, portfolio: namespace, questionId })))
+		await register(fixture.base.questionId)
+		await register(fixture.base.questionId)
 		expect(await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'questionCount' })).toBe(1n)
 		expect(await fixture.owner().readContract({ abi: fixedArtifact.abi, address: policy, functionName: 'getQuestions', args: [0n, 64n] })).toEqual([fixture.base.questionId])
-		await expect(fixture.register(fixture.secondQuestionId, portfolio)).rejects.toThrow('Question rejected by admission policy')
+		await expect(register(fixture.secondQuestionId)).rejects.toThrow('Question rejected by admission policy')
 		await expect(fixture.mint(unit, fixture.secondQuestionId, { namespace: portfolio })).rejects.toThrow('Question rejected by admission policy')
 		const wrongUniverse = await deployFixed([fixture.base.questionId], fixture.base.genesisUniverse + 1n)
-		await expect(fixture.register(fixture.base.questionId, await fixture.deployPortfolio(wrongUniverse))).rejects.toThrow('Question rejected by admission policy')
+		await expect(register(fixture.base.questionId, await fixture.deployPortfolio(wrongUniverse))).rejects.toThrow('Question rejected by admission policy')
 	})
 
 	test('fixed membership cannot hide alternate entries and rejects invalid lists or pages', async () => {

@@ -88,6 +88,13 @@ contract CommitmentIndexHarness {
 	function cancel(uint96 id) external {
 		index.cancelRetirement(id);
 	}
+	function observeHealthy(uint256 price) external {
+		index.observeHealthy(price);
+	}
+	function observeHealthyTwice(uint256 first, uint256 second) external {
+		index.observeHealthy(first);
+		index.observeHealthy(second);
+	}
 	function credit(uint256 price, uint256 ethAmount, uint256 repAmount) external {
 		require(index.creditFees(price, ethAmount, repAmount), 'No eligible recipients');
 	}

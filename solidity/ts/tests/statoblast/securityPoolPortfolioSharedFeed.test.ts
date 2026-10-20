@@ -75,11 +75,14 @@ describe('Statoblast: central capital shared price feed', () => {
 		let positionSetupGas = 0n
 		for (let i = 0; i < 256; i++) {
 			const rep = 2n * (unit + BigInt(i))
-			const holder = getAddress(
-				`0x${BigInt(10_000 + i)
-					.toString(16)
-					.padStart(40, '0')}`,
-			)
+			const holder =
+				i === 0
+					? owner.account.address
+					: getAddress(
+							`0x${BigInt(10_000 + i)
+								.toString(16)
+								.padStart(40, '0')}`,
+						)
 			const positions = [0n, 1n, 2n].map(batch => ({ rep, commitment: unit, batch, executionReserveAttoEth: unit / 10_000n }))
 			const [active, current, next] = positions
 			if (active === undefined || current === undefined || next === undefined) throw new Error('Missing stress cohort')
@@ -104,6 +107,9 @@ describe('Statoblast: central capital shared price feed', () => {
 			}
 		}
 		await writeContractAndWait(root, () => root.writeContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'finishForkImport', args: [128n * unit] }))
+		const validUntil = Number((await owner.getBlock()).timestamp + 1_000n)
+		// Leave an older whole-tree observation above newer partial-range stamps.
+		for (const price of [unit, unit + 127n]) await writeContractAndWait(root, () => root.writeContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'acceptPrice', args: [price, validUntil] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: getRepTokenAddress(universe), functionName: 'transfer', args: [fixture.portfolio, unit] }))
 		await writeContractAndWait(root, () => root.writeContract({ abi: tokenArtifact.abi, address: getRepTokenAddress(universe), functionName: 'approve', args: [fixture.capitalLedger, unit] }))
 		await writeContractAndWait(root, () => root.writeContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'fundVestedFees', args: [unit], value: unit }))
@@ -111,7 +117,7 @@ describe('Statoblast: central capital shared price feed', () => {
 		expect((await owner.readContract({ abi: bookArtifact.abi, address: book, functionName: 'totals', args: [bookId] }))[0]).toBeGreaterThan(0n)
 		await mock.advanceTime(86_401n)
 		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
-		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), 2n * unit)
+		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), unit + 129n)
 		const reportId = await getPendingReportId(owner, coordinator)
 		const meta = await getOpenOracleReportMeta(owner, reportId)
 		await mock.advanceTime(BigInt(meta.settlementTime) + 1n)
@@ -119,10 +125,15 @@ describe('Statoblast: central capital shared price feed', () => {
 		const receipt = await owner.waitForTransactionReceipt({ hash })
 		const shared = await feed()
 		expect(await owner.readContract({ abi: feedArtifact.abi, address: shared, functionName: 'reportOutcome', args: [reportId] })).toBe(1n)
-		expect(await owner.readContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'acceptedPrice' })).toBe(2n * unit)
+		expect(await owner.readContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'acceptedPrice' })).toBe(unit + 129n)
 		const budget = await owner.readContract({ abi: feedArtifact.abi, address: shared, functionName: 'getSettlementCallbackGasLimit' })
 		expect(receipt.gasUsed).toBeLessThan(budget)
-		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ composedOracleSettlementGas: receipt.gasUsed, callbackGasBudget: budget, positionSetupGas })
+		const claimHash = await writeContractAndWait(owner, () => owner.writeContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'claimEarnings' }))
+		const taggedOwnerClaimGas = (await owner.waitForTransactionReceipt({ hash: claimHash })).gasUsed
+		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ composedOracleSettlementGas: receipt.gasUsed, callbackGasBudget: budget, positionSetupGas, taggedOwnerClaimGas })
+		// This full claim also checkpoints the live settlement book and fee clocks.
+		// The index-only three-cohort claim retains its separate component budget.
+		expect(taggedOwnerClaimGas).toBeLessThan(5_000_000n)
 	})
 
 	test('a different portfolio has its own price clock and cannot register into this namespace', async () => {

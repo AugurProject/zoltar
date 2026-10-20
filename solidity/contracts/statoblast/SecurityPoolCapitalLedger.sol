@@ -69,7 +69,11 @@ contract SecurityPoolCapitalLedger {
 	}
 	mapping(address => Owner) private owners;
 	mapping(address => bool) public exported;
-	mapping(uint96 => uint48) public liquidationStarted;
+	struct Liquidation {
+		uint48 started;
+		uint64 healthEpoch;
+	}
+	mapping(uint96 => Liquidation) private liquidations;
 	mapping(uint96 => uint256) public positionExecutionReserveAttoEth;
 
 	event PrincipalDeposited(address indexed payer, address indexed owner, uint256 amountAttoRep);
@@ -245,8 +249,6 @@ contract SecurityPoolCapitalLedger {
 		owner.freeAttoRep -= amount;
 		totalFreeAttoRep -= amount;
 		_replace(id, account.rep + amount, account.commitment);
-		if (isPriceValid() && maximumHealthyPrice(account.rep + amount, account.commitment) >= acceptedPrice)
-			delete liquidationStarted[id];
 		_serveRetirement();
 	}
 
@@ -313,6 +315,7 @@ contract SecurityPoolCapitalLedger {
 		_checkpoint();
 		acceptedPrice = price;
 		priceValidUntil = validUntil;
+		commitmentIndex.observeHealthy(price);
 		emit CapitalPriceAccepted(price, validUntil);
 	}
 
@@ -392,7 +395,7 @@ contract SecurityPoolCapitalLedger {
 		require(account.owner != address(0) && account.commitment > 0, 'Position is not live');
 		uint256 supported = maximumHealthyCommitment(account.rep);
 		if (supported >= account.commitment) {
-			delete liquidationStarted[id];
+			delete liquidations[id];
 			return 0;
 		}
 		(, uint256 totalCommitment) = commitmentIndex.totals();
@@ -409,8 +412,9 @@ contract SecurityPoolCapitalLedger {
 			uint256 reward = _payProgress(id, removed, account.commitment, keeper);
 			emit CommitmentCured(id, removed, reward);
 		}
-		if (remaining <= supported) delete liquidationStarted[id];
-		else if (liquidationStarted[id] == 0) liquidationStarted[id] = uint48(block.timestamp);
+		if (remaining <= supported) delete liquidations[id];
+		else if (liquidationStarted(id) == 0)
+			liquidations[id] = Liquidation(uint48(block.timestamp), commitmentIndex.healthEpoch(id));
 	}
 
 	/// @notice Competitive takeover: only the target funds the award and execution.
@@ -429,7 +433,7 @@ contract SecurityPoolCapitalLedger {
 		Owner storage receiver = owners[msg.sender];
 		uint256 proportional =
 			commitment == source.commitment ? source.rep : Math.mulDiv(source.rep, commitment, source.commitment);
-		uint256 elapsed = block.timestamp - liquidationStarted[id];
+		uint256 elapsed = block.timestamp - liquidations[id].started;
 		uint256 award = Math.mulDiv(proportional, Math.min(elapsed, 1 hours), 1 hours);
 		require(award >= minimumAward, 'Takeover award below minimum');
 		uint256 needed = requiredRep(commitment, _target(receiver));
@@ -460,6 +464,7 @@ contract SecurityPoolCapitalLedger {
 		// Balanced transfer preserved a closed cohort's K. This replacement only
 		// adjusts collateral and therefore cannot refill that cohort.
 		_replace(receiverId, receiverRep, receiverK);
+		_clearHealthyLiquidation(id, remainingK, maximumHealthyPrice(remainingRep, remainingK));
 		_fundPositionReserve(receiver, receiverId, receiverK);
 		receiver.freeAttoRep -= ownRep;
 		totalFreeAttoRep -= ownRep;
@@ -606,8 +611,20 @@ contract SecurityPoolCapitalLedger {
 			}
 		}
 	}
+	/// @notice Recovery invalidates the old interval immediately, before a keeper
+	/// touches the position. Uninterrupted distress retains its original clock.
+	function liquidationStarted(uint96 id) public view returns (uint48) {
+		Liquidation memory liquidation = liquidations[id];
+		if (liquidation.started == 0 || liquidation.healthEpoch != commitmentIndex.healthEpoch(id)) return 0;
+		return liquidation.started;
+	}
+	function _clearHealthyLiquidation(uint96 id, uint256 commitment, uint256 maxPrice) private {
+		if (commitment == 0 || (isPriceValid() && maxPrice >= acceptedPrice)) delete liquidations[id];
+	}
 	function _replace(uint96 id, uint256 rep, uint256 commitment) private {
-		commitmentIndex.replace(id, rep, commitment, maximumHealthyPrice(rep, commitment));
+		uint256 maxPrice = maximumHealthyPrice(rep, commitment);
+		commitmentIndex.replace(id, rep, commitment, maxPrice);
+		_clearHealthyLiquidation(id, commitment, maxPrice);
 	}
 	function _owned(uint96 id, address owner) private view returns (SecurityPoolCommitmentIndex.Account memory account) {
 		account = commitmentIndex.accountOf(id);

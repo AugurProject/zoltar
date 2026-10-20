@@ -3,7 +3,8 @@ import type { UiScreenshotSpec } from './ui-screenshot-specs.mts'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { extractScreenshotReferences, findScreenshotProblems, isScreenshotSourcePath, screenshotAppIds, pickMatch, readPngSize, updateEmbeddingPages, withScreenshotSize } from './ui-screenshots.mts'
+import { runInNewContext } from 'node:vm'
+import { clickScreenshotControl, extractScreenshotReferences, findScreenshotProblems, isScreenshotSourcePath, screenshotAppIds, pickMatch, readPngSize, updateEmbeddingPages, withScreenshotSize } from './ui-screenshots.mts'
 
 const spec: UiScreenshotSpec = { id: 'buy-ticket', app: 'trading', scenario: 'trading-funded', usedBy: ['tutorials/trading-first-trade.html'] }
 const outputPath = 'docs/assets/screenshots/trading/buy-ticket.png'
@@ -33,6 +34,40 @@ const pngHeader = (width: number, height: number) => {
 }
 
 describe('documentation screenshots', () => {
+	test('clicks once when a background refresh disables the control between browser commands', async () => {
+		let enabled = false
+		let clicks = 0
+		const browser = {
+			window: {
+				__docsScreenshot: {
+					enabled: () => enabled,
+					click: () => {
+						if (!enabled) return 'No enabled control labelled "Settle report"'
+						clicks++
+						return ''
+					},
+				},
+			},
+		}
+		const evaluate = async (expression: string): Promise<unknown> => runInNewContext(expression, browser)
+		const session = {
+			evaluate,
+			waitFor: async (expression: string) => {
+				for (let attempt = 0; attempt < 3; attempt++) {
+					enabled = attempt > 0
+					if (await evaluate(expression)) {
+						// The next CDP command observes a new refresh, after this one saw readiness.
+						enabled = false
+						return
+					}
+				}
+				throw new Error('The screenshot action never became available')
+			},
+		}
+		await clickScreenshotControl(session, 'Settle report', 0, 'Screenshot')
+		expect(clicks).toBe(1)
+	})
+
 	test('reads PNG dimensions and rejects other files', () => {
 		expect(readPngSize(pngHeader(480, 1213))).toEqual({ width: 480, height: 1213 })
 		expect(() => readPngSize(new Uint8Array(24))).toThrow('Not a PNG file')

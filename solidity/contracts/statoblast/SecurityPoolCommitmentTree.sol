@@ -23,6 +23,7 @@ abstract contract SecurityPoolCommitmentTree {
 		uint96 positionId;
 		uint16 height;
 		bool retired;
+		uint64 healthEpoch;
 	}
 	struct Position {
 		address owner;
@@ -204,6 +205,24 @@ abstract contract SecurityPoolCommitmentTree {
 		}
 	}
 
+	/// @dev A whole eligible subtree receives one observation. Partial ranges
+	/// follow one ordered boundary; no owner or historical observation is scanned.
+	function _observeHealthy(uint256 cursor, uint256 price, uint64 epoch) internal {
+		while (cursor != 0) {
+			Node storage node = nodes[cursor];
+			if (node.price >= price) {
+				node.healthEpoch = epoch;
+				return;
+			}
+			if (node.maximumPrice < price) return;
+			if (nodes[node.right].price < price) cursor = node.right;
+			else {
+				nodes[node.right].healthEpoch = epoch;
+				cursor = node.left;
+			}
+		}
+	}
+
 	function _credit(uint256 cursor, uint256 price, uint256 eligible, uint256 ethAmount, uint256 repAmount) internal {
 		while (cursor != 0) {
 			Node storage node = nodes[cursor];
@@ -231,6 +250,11 @@ abstract contract SecurityPoolCommitmentTree {
 		if (node.left == 0) return;
 		Node storage left = nodes[node.left];
 		Node storage right = nodes[node.right];
+		if (node.healthEpoch != 0) {
+			if (left.healthEpoch < node.healthEpoch) left.healthEpoch = node.healthEpoch;
+			if (right.healthEpoch < node.healthEpoch) right.healthEpoch = node.healthEpoch;
+			node.healthEpoch = 0;
+		}
 		if (node.retired) {
 			left.retired = true;
 			right.retired = true;

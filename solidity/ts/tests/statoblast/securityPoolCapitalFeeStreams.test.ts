@@ -42,7 +42,7 @@ describe('Statoblast: fixed-horizon dual-token capital fee streams', () => {
 		await setBaselineSnapshot()
 	})
 
-	test('independent end times preserve every funded wei and never accelerate old income', async () => {
+	test('independent end times preserve every funded attoETH and never accelerate old income', async () => {
 		const streams = [
 			{ start: 10n, duration: 100n, eth: 1003n, rep: 2005n },
 			{ start: 20n, duration: 30n, eth: 307n, rep: 601n },

@@ -219,7 +219,7 @@ async function getChildPoolAddress(client: ReadClient, parent: Address, outcome:
 
 // Integration fixtures complete permissionless setup with separate transactions.
 // Tests of partial initialization call the contract entry points directly.
-export async function finishChildInitialization(client: WriteClient, parent: Address, outcome: bigint | QuestionOutcome) {
+async function finishChildInitialization(client: WriteClient, parent: Address, outcome: bigint | QuestionOutcome) {
 	const child = await getChildPoolAddress(client, parent, outcome)
 	if (child === zeroAddress) return
 	const game = await client.readContract({ address: child, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'escalationGame' })

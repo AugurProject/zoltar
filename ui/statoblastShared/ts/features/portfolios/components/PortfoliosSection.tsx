@@ -80,7 +80,7 @@ export function PortfoliosSection({ parameters, enabled, environmentKey, activeU
 			<TransactionScopeProvider scope={actions.scope}>
 				<PortfolioAggregatePanel model={capital} actions={actions} />
 				<PortfolioPurchasePanel model={model} purchase={purchase} actions={actions} />
-				<PortfolioRepair snapshot={model.snapshot} actions={actions} />
+				<PortfolioRepair snapshot={model.snapshot} loading={model.loading} actions={actions} />
 				<PortfolioSharedFork snapshot={model.snapshot} actions={actions} openUniverse={universeId => model.setUniverseInput(universeId.toString())} />
 			</TransactionScopeProvider>
 		</div>
