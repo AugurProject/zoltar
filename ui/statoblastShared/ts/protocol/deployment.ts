@@ -36,9 +36,9 @@ export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonl
 	escalationGameFactory: '0xf9ccbaab9f6900e8b69d2eb202d4f057131073f2055f14fb2a46dacf8fd3f9c5',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
 	openOraclePriceCoordinatorFactory: '0xdab4f996e38183895fe41d8e242004f3e079e35ec7fbc5e8e581ba150e9b2a0f',
-	securityPoolFactory: '0x0cf83ee917f6d1d44d63bd50a9b44c0db59a4776427de2219c9bd7cb316cc5ad',
-	securityPoolOperationsDelegate: '0x803bfa19e2b75cdd3e34a0ca848bc292e9eb89b15d955db9bc85be6357fc4d92',
-	securityPoolForker: '0xbfeb383cdb8f9d635c6e34176ca50f010c8a396a66c3744ec21a6a8110fcd7b0',
+	securityPoolFactory: '0xcb353003eb6bf64c788dbd6e23d962553b7562651950f1b8f5427a7e622500a7',
+	securityPoolOperationsDelegate: '0x6ec71e0f525430931306090e7229a52baca1dc5e309d18a30dd43ccfeb69a3b3',
+	securityPoolForker: '0xafe7033607a778f480e6f50c6d95eab0bf7511a4f76cdf1470694a50faa2f4ab',
 	securityPoolUtils: '0xe16f02b9482acbfbbe0000d61e30fcf511cf5e3b297c827c41dc628e81d9d5c4',
 	shareTokenFactory: '0xd166e808a1860481541ec6f53d80cd284bdc172bfbe286c8b5b65da8978c8c93',
 	uniformPriceDualCapBatchAuctionFactory: '0xef7782aeeb22a6d00cbd223d4a11cc90c8d54391ea277f41c030405370d8825d',
@@ -46,8 +46,8 @@ export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonl
 
 const EXPECTED_NO_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0xdc370dd1a065fb80f2be0fd6a8774f2cf8ae7bab9a7eb113b12c2ce9a6ea72ab',
-	securityPoolForker: '0xb11b2a8da9a7eaf30bca074651083981e4183a53b399d04907294979d267b441',
+	securityPoolFactory: '0xbc214ca46b827738dde7e75bb0d2f46f3481c34d82713373d83aae054dd6a21b',
+	securityPoolForker: '0xdd892ac639b4c69fccf6a91127b880243139c582ef625b2bca7c6f670e3f4b34',
 	shareTokenFactory: '0x6e82931828c37f6cd96894609d72f84d248b8d4cd1c8caaed6120acd1b42bc4a',
 }
 
@@ -84,9 +84,9 @@ const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentSt
 	escalationGameFactory: '0xf9ccbaab9f6900e8b69d2eb202d4f057131073f2055f14fb2a46dacf8fd3f9c5',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
 	openOraclePriceCoordinatorFactory: '0x89289d1316cb82849ae9a75db1110009a753d4913542281ed0f2c2dba962ac13',
-	securityPoolFactory: '0xc665759f84eb02e6376a3b54c5322f5d9b0720d6f184e7848533e61e5724966d',
-	securityPoolOperationsDelegate: '0x803bfa19e2b75cdd3e34a0ca848bc292e9eb89b15d955db9bc85be6357fc4d92',
-	securityPoolForker: '0xb2f82cb81b54ac0850df5f4795cc717eaa5b5ee1fbd28f357d4f6d9545f09d83',
+	securityPoolFactory: '0x0526b835eab1106560f25b63b341732215437a5e51d635ca876d0ab04968e013',
+	securityPoolOperationsDelegate: '0x6ec71e0f525430931306090e7229a52baca1dc5e309d18a30dd43ccfeb69a3b3',
+	securityPoolForker: '0xb865686984d1f846759f4685b258b194d7c2d7f4232f4032a1fce48afab22c8c',
 	securityPoolUtils: '0xe16f02b9482acbfbbe0000d61e30fcf511cf5e3b297c827c41dc628e81d9d5c4',
 	shareTokenFactory: '0x54e3cd76c897e09d7c9ebce4ef6e466f842e0bf6f2af7f2705fdaa55a8aee957',
 	uniformPriceDualCapBatchAuctionFactory: '0xef7782aeeb22a6d00cbd223d4a11cc90c8d54391ea277f41c030405370d8825d',
@@ -94,8 +94,8 @@ const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentSt
 
 const EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_MAINNET_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0x962bf62946250c3b9ffa7007cad1d59de60efdd31c9bb52501d2e2115eece2b5',
-	securityPoolForker: '0x50c3b0fe26132cc3ff3b88fd47ce7165d0ec35f975dc0bd40fd990c9abffe8a8',
+	securityPoolFactory: '0x0d57c97e159095d1a0a38214a6f1cd41431e0f179432f974f2fb63b137d986b4',
+	securityPoolForker: '0xd22b1932434aa89fcec5f145dd0ec1d06907e7b9ea674425e9308bc4fd3666e2',
 	shareTokenFactory: '0x843817ae6125b999580f84716149c9ce04c18437007044ede4896c7278a19196',
 }
 const EXPECTED_PUBLIC_RUNTIME_CODE_HASHES = {
