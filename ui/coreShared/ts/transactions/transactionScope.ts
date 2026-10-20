@@ -34,6 +34,8 @@ export function securityPoolTransactionScope(securityPoolAddress: string | undef
 	return createTransactionScope('security-pool', securityPoolAddress)
 }
 
-export function universeTransactionScope(universeId: bigint | undefined) {
-	return createTransactionScope('universe', universeId)
+/** Universe ids are local to a genesis deployment, so equal ids in Yes and No never share a lock. */
+export function universeTransactionScope(universeId: bigint | undefined, genesisRepTokenAddress: string) {
+	if (universeId === undefined) return unscopedTransaction
+	return createTransactionScope('universe', `${normalizeScopeId(genesisRepTokenAddress)}:${normalizeScopeId(universeId)}`)
 }

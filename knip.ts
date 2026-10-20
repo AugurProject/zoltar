@@ -109,6 +109,17 @@ const config = (options => {
 					...sharedPackagePaths,
 				},
 			},
+			'ui/openoracle': {
+				entry: ['ts/tests/**/*.{ts,tsx}', 'ts/index.ts!', 'ts/index.dev.ts!', 'ts/simulation/tevmWorker.ts!'],
+				project: ['**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}!'],
+				paths: {
+					'@zoltar/ui-core-shared/*': ['../coreShared/ts/*'],
+					'@zoltar/ui-zoltar-shared/*': ['../zoltarShared/ts/*'],
+					'@zoltar/ui-statoblast-shared/*': ['../statoblastShared/ts/*'],
+					'@zoltar/ui-openoracle/*': ['./ts/*'],
+					...sharedPackagePaths,
+				},
+			},
 			'ui/trading': {
 				entry: ['ts/tests/**/*.{ts,tsx}', 'ts/index.ts!', 'ts/index.dev.ts!', 'ts/simulation/tevmWorker.ts!', 'build/core-deployments.mts'],
 				project: ['**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}!'],

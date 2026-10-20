@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en" data-product="openoracle">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width" />
+		<title>OpenOracle</title>
+		<!-- Apply a saved theme before the stylesheets load so the page never paints the other palette first; keep in sync with ui/coreShared/ts/lib/themePreference.ts. -->
+		<script>
+			try {
+				const theme = localStorage.getItem('zoltar.theme')
+				if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme
+			} catch {}
+		</script>
+		<link rel="stylesheet" href="/ui/coreShared/css/index.css" />
+		<link rel="stylesheet" href="/ui/zoltarShared/css/questions.css" />
+		<link rel="stylesheet" href="/ui/zoltarShared/css/deployment.css" />
+		<link rel="stylesheet" href="/ui/statoblastShared/css/priceOracle.css" />
+		<link rel="stylesheet" href="/ui/statoblastShared/css/index.css" />
+		<link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+	</head>
+	<body style>
+		<script type="importmap">
+			{
+				"imports": {
+					"preact": "./vendor/preact/preact.module.js",
+					"preact/jsx-runtime": "./vendor/preact/jsx-runtime/jsxRuntime.module.js",
+					"preact/hooks": "./vendor/preact/hooks/hooks.module.js",
+					"@preact/signals": "./vendor/@preact/signals/signals.module.js",
+					"@preact/signals-core": "./vendor/@preact/signals-core/signals-core.module.js",
+					"abitype": "./vendor/abitype/exports/index.js",
+					"micro-eth-signer": "./vendor/micro-eth-signer/index.js",
+					"micro-eth-signer/advanced/abi.js": "./vendor/micro-eth-signer/advanced/abi.js",
+					"micro-packed": "./vendor/micro-packed/index.js",
+					"@scure/base": "./vendor/@scure/base/index.js",
+					"@noble/hashes": "./vendor/@noble/hashes/index.js",
+					"@noble/hashes/blake1": "./vendor/@noble/hashes/blake1.js",
+					"@noble/hashes/blake2": "./vendor/@noble/hashes/blake2.js",
+					"@noble/hashes/blake3": "./vendor/@noble/hashes/blake3.js",
+					"@noble/hashes/webcrypto": "./vendor/@noble/hashes/webcrypto.js",
+					"@noble/hashes/webcrypto.js": "./vendor/@noble/hashes/webcrypto.js",
+					"@noble/hashes/hkdf": "./vendor/@noble/hashes/hkdf.js",
+					"@noble/hashes/hmac": "./vendor/@noble/hashes/hmac.js",
+					"@noble/hashes/hmac.js": "./vendor/@noble/hashes/hmac.js",
+					"@noble/hashes/legacy": "./vendor/@noble/hashes/legacy.js",
+					"@noble/hashes/legacy.js": "./vendor/@noble/hashes/legacy.js",
+					"@noble/hashes/pbkdf2": "./vendor/@noble/hashes/pbkdf2.js",
+					"@noble/hashes/ripemd160": "./vendor/@noble/hashes/legacy.js",
+					"@noble/hashes/ripemd160.js": "./vendor/@noble/hashes/legacy.js",
+					"@noble/hashes/scrypt": "./vendor/@noble/hashes/scrypt.js",
+					"@noble/hashes/sha2": "./vendor/@noble/hashes/sha2.js",
+					"@noble/hashes/sha2.js": "./vendor/@noble/hashes/sha2.js",
+					"@noble/hashes/sha256": "./vendor/@noble/hashes/sha2.js",
+					"@noble/hashes/sha256.js": "./vendor/@noble/hashes/sha2.js",
+					"@noble/hashes/sha3": "./vendor/@noble/hashes/sha3.js",
+					"@noble/hashes/sha3.js": "./vendor/@noble/hashes/sha3.js",
+					"@noble/hashes/sha3-addons": "./vendor/@noble/hashes/sha3-addons.js",
+					"@noble/hashes/utils": "./vendor/@noble/hashes/utils.js",
+					"@noble/hashes/utils.js": "./vendor/@noble/hashes/utils.js",
+					"@noble/hashes/_assert": "./vendor/@noble/hashes/utils.js",
+					"@noble/hashes/_assert.js": "./vendor/@noble/hashes/utils.js",
+					"@noble/hashes/sha512": "./vendor/@noble/hashes/sha2.js",
+					"@noble/hashes/sha512.js": "./vendor/@noble/hashes/sha2.js",
+					"@noble/curves": "./vendor/@noble/curves/index.js",
+					"@noble/curves/abstract/bls.js": "./vendor/@noble/curves/abstract/bls.js",
+					"@noble/curves/abstract/curve.js": "./vendor/@noble/curves/abstract/curve.js",
+					"@noble/curves/abstract/hash-to-curve.js": "./vendor/@noble/curves/abstract/hash-to-curve.js",
+					"@noble/curves/abstract/tower.js": "./vendor/@noble/curves/abstract/tower.js",
+					"@noble/curves/abstract/weierstrass.js": "./vendor/@noble/curves/abstract/weierstrass.js",
+					"@noble/curves/secp256k1": "./vendor/@noble/curves/secp256k1.js",
+					"@noble/curves/secp256k1.js": "./vendor/@noble/curves/secp256k1.js",
+					"@noble/curves/bls12-381": "./vendor/@noble/curves/bls12-381.js",
+					"@noble/curves/bls12-381.js": "./vendor/@noble/curves/bls12-381.js",
+					"@noble/curves/bn254": "./vendor/@noble/curves/bn254.js",
+					"@noble/curves/bn254.js": "./vendor/@noble/curves/bn254.js",
+					"@noble/curves/ed25519": "./vendor/@noble/curves/ed25519.js",
+					"@noble/curves/ed25519.js": "./vendor/@noble/curves/ed25519.js",
+					"@noble/curves/ed448": "./vendor/@noble/curves/ed448.js",
+					"@noble/curves/nist": "./vendor/@noble/curves/nist.js",
+					"@noble/curves/nist.js": "./vendor/@noble/curves/nist.js",
+					"@noble/curves/p256": "./vendor/@noble/curves/nist.js",
+					"@noble/curves/p256.js": "./vendor/@noble/curves/nist.js",
+					"@noble/curves/p384": "./vendor/@noble/curves/nist.js",
+					"@noble/curves/p384.js": "./vendor/@noble/curves/nist.js",
+					"@noble/curves/p521": "./vendor/@noble/curves/nist.js",
+					"@noble/curves/p521.js": "./vendor/@noble/curves/nist.js",
+					"@noble/curves/abstract/modular": "./vendor/@noble/curves/abstract/modular.js",
+					"@noble/curves/abstract/modular.js": "./vendor/@noble/curves/abstract/modular.js",
+					"@noble/curves/abstract/utils": "./vendor/@noble/curves/utils.js",
+					"@noble/curves/abstract/utils.js": "./vendor/@noble/curves/utils.js",
+					"@noble/curves/utils.js": "./vendor/@noble/curves/utils.js",
+					"isows": "./vendor/isows/native.js",
+					"ox": "./vendor/ox/index.js",
+					"ox/BlockOverrides": "./vendor/ox/core/BlockOverrides.js",
+					"ox/AbiConstructor": "./vendor/ox/core/AbiConstructor.js",
+					"ox/AbiFunction": "./vendor/ox/core/AbiFunction.js",
+					"ox/Ens": "./vendor/ox/core/Ens.js",
+					"ox/erc6492": "./vendor/ox/erc6492/index.js",
+					"ox/erc8010": "./vendor/ox/erc8010/index.js",
+					"@tevm/memory-client": "./vendor/tevm/index.js",
+					"@tevm/common": "./vendor/tevm/common/index.js",
+					"@zoltar/ui-core-shared/": "/ui/coreShared/js/",
+					"@zoltar/ui-zoltar-shared/": "/ui/zoltarShared/js/",
+					"@zoltar/ui-statoblast-shared/": "/ui/statoblastShared/js/",
+					"@zoltar/core-shared/deployment/deploymentAddresses": "../shared/core/js/deployment/deploymentAddresses.js",
+					"@zoltar/core-shared/deployment/protocolConfig": "../shared/core/js/deployment/protocolConfig.js",
+					"@zoltar/core-shared/deployment/uniswapDeployments": "../shared/core/js/deployment/uniswapDeployments.js",
+					"@zoltar/core-shared/errors/errorChain": "../shared/core/js/errors/errorChain.js",
+					"@zoltar/core-shared/errors/errorMessage": "../shared/core/js/errors/errorMessage.js",
+					"@zoltar/core-shared/evm/address": "../shared/core/js/evm/address.js",
+					"@zoltar/core-shared/math/bigint": "../shared/core/js/math/bigint.js",
+					"@zoltar/core-shared/evm/ethereum": "../shared/core/js/evm/ethereum.js",
+					"@zoltar/core-shared/evm/carryProof": "../shared/core/js/evm/carryProof.js",
+					"@zoltar/core-shared/evm/logScan": "../shared/core/js/evm/logScan.js",
+					"@zoltar/core-shared/monitoring/scanStatus": "../shared/core/js/monitoring/scanStatus.js",
+					"@zoltar/core-shared/serialization/bigInt": "../shared/core/js/serialization/bigInt.js",
+					"@zoltar/core-shared/serialization/sortStringArrayByKeccak": "../shared/core/js/serialization/sortStringArrayByKeccak.js",
+					"@zoltar/core-shared/evm/availability": "../shared/core/js/evm/availability.js",
+					"@zoltar/core-shared/evm/uniswapAbis": "../shared/core/js/evm/uniswapAbis.js",
+					"@zoltar/core-shared/validation/guards": "../shared/core/js/validation/guards.js",
+					"@zoltar/zoltar-shared/constants": "../shared/zoltar/js/constants.js",
+					"@zoltar/zoltar-shared/deployment/deploymentAddresses": "../shared/zoltar/js/deployment/deploymentAddresses.js",
+					"@zoltar/zoltar-shared/deployment/genesisUniverses": "../shared/zoltar/js/deployment/genesisUniverses.js",
+					"@zoltar/zoltar-shared/deployment/sepoliaRepAllocations": "../shared/zoltar/js/deployment/sepoliaRepAllocations.js",
+					"@zoltar/zoltar-shared/questions/scalarOutcome": "../shared/zoltar/js/questions/scalarOutcome.js",
+					"@zoltar/zoltar-shared/questions/questionId": "../shared/zoltar/js/questions/questionId.js",
+					"@zoltar/open-oracle-shared/openOracle/openOracle": "../shared/openOracle/js/openOracle/openOracle.js",
+					"@zoltar/statoblast-shared/deployment/deploymentAddresses": "../shared/statoblast/js/deployment/deploymentAddresses.js",
+					"@zoltar/statoblast-shared/escalationGame/escalationMath": "../shared/statoblast/js/escalationGame/escalationMath.js",
+					"@zoltar/statoblast-shared/escalationGame/walletVaultFunding": "../shared/statoblast/js/escalationGame/walletVaultFunding.js",
+					"@zoltar/statoblast-shared/initialReport/oracleInitialReport": "../shared/statoblast/js/initialReport/oracleInitialReport.js",
+					"@zoltar/statoblast-shared/statoblast/liquidation": "../shared/statoblast/js/statoblast/liquidation.js",
+					"@zoltar/statoblast-shared/statoblast/retentionRate": "../shared/statoblast/js/statoblast/retentionRate.js",
+					"@zoltar/statoblast-shared/statoblast/truthAuctionTickMath": "../shared/statoblast/js/statoblast/truthAuctionTickMath.js",
+					"@zoltar/statoblast-shared/statoblast/vaultOperations": "../shared/statoblast/js/statoblast/vaultOperations.js",
+					"@zoltar/statoblast-shared/deployment/initCodes": "../shared/statoblast/js/deployment/initCodes.js"
+				}
+			}
+		</script>
+
+		<noscript>OpenOracle needs JavaScript. Enable JavaScript in your browser to use this app.</noscript>
+		<main>Loading…</main>
+
+		<!-- a workaround for bug: https://bugzilla.mozilla.org/show_bug.cgi?id=1803984 -->
+		<script async type="module">
+			import './js/index.dev.js'
+		</script>
+	</body>
+</html>

@@ -3,6 +3,7 @@
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import type { DeploymentStatus } from '@zoltar/ui-core-shared/types/contracts.js'
 import { DeploymentSection } from '@zoltar/ui-zoltar-shared/features/deployment/components/DeploymentSection.js'
@@ -54,7 +55,9 @@ describe('DeploymentSection', () => {
 
 		expect(rendered.container.querySelector('span.badge')?.textContent).toBe('Deployed')
 		expect(rendered.container.textContent).not.toContain('Code found at expected address.')
-		expect(rendered.container.querySelector('button')).toBeNull()
+		expect(rendered.container.querySelector('.tx-action-button') === null).toBe(true)
+		expect(within(rendered.container).getByRole('button', { name: `Copy address ${zeroAddress}` })).not.toBeNull()
+		expect(rendered.container.querySelector('a.address-value')?.getAttribute('href')).toContain(`/address/${zeroAddress}`)
 		expect(onDeployCalls).toBe(0)
 	})
 
@@ -78,7 +81,7 @@ describe('DeploymentSection', () => {
 		expect(rendered.container.textContent).toContain('Connect wallet to continue.')
 		expect(rendered.container.textContent?.match(/Connect wallet/g) ?? []).toHaveLength(1)
 		expectTransactionButtonDisabled(document.body, 'Deploy multicall3')
-		const button = rendered.container.querySelector('button')
+		const button = within(rendered.container).getByRole('button', { name: 'Deploy multicall3' })
 		const detailId = button?.getAttribute('aria-describedby')
 		expect(detailId).toBe('deployment-multicall3-status-detail')
 		expect(rendered.container.querySelector(`#${detailId}`)?.textContent).toBe('Connect wallet to continue.')
@@ -102,7 +105,7 @@ describe('DeploymentSection', () => {
 		expect(rendered.container.textContent).toContain('Requires Proxy Deployer.')
 		expect(rendered.container.textContent?.match(/Requires Proxy Deployer\./g) ?? []).toHaveLength(1)
 		expectTransactionButtonDisabled(document.body, 'Deploy DeploymentStatusOracle', 'Requires Proxy Deployer.')
-		const button = rendered.container.querySelector('button')
+		const button = within(rendered.container).getByRole('button', { name: 'Deploy DeploymentStatusOracle' })
 		const detailId = button?.getAttribute('aria-describedby')
 		expect(detailId).toBe('deployment-deploymentStatusOracle-status-detail')
 		expect(rendered.container.querySelector(`#${detailId}`)?.textContent).toBe('Requires Proxy Deployer.')

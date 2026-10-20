@@ -14,15 +14,19 @@ installTestRouting()
 describe('StatoblastSecurityPoolLink', () => {
 	const { trackCleanup } = installLinkNavigationLifecycle()
 
-	test('renders the shared address value and follows normal left-click navigation', async () => {
+	test('separates the copyable explorer address from the pool navigation link', async () => {
 		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000f1')
 		const renderedComponent = await renderIntoDocument(<StatoblastSecurityPoolLink securityPoolAddress={securityPoolAddress} selectedPoolView='fork-workflow' universeId={11n} />)
 		trackCleanup(renderedComponent.cleanup)
 
 		const documentQueries = within(document.body)
-		const link = documentQueries.getByRole('link', { name: securityPoolAddress })
-		expect(link.querySelector('.address-value')?.getAttribute('title')).toBe(securityPoolAddress)
-		expect(link.querySelector('.address-value-full')?.textContent).toBe(securityPoolAddress)
+		const addressLink = renderedComponent.container.querySelector('a.address-value')
+		expect(addressLink?.getAttribute('title')).toBe(securityPoolAddress)
+		expect(addressLink?.getAttribute('href')).toBe(`https://sepolia.etherscan.io/address/${securityPoolAddress}`)
+		expect(addressLink?.querySelector('.address-value-full')?.textContent).toBe(securityPoolAddress)
+		expect(documentQueries.getByRole('button', { name: `Copy address ${securityPoolAddress}` })).not.toBeNull()
+		const link = documentQueries.getByRole('link', { name: 'Open pool' })
+		expect(link.querySelector('a, button') === null).toBe(true)
 		const expectedHref = getSecurityPoolLinkHref(securityPoolAddress, 'fork-workflow', 11n)
 		expect(expectedHref.split('?')[0]).toBe(`#/pools/${securityPoolAddress}/fork-workflow`)
 		expect(link.getAttribute('href')).toBe(expectedHref)
@@ -31,6 +35,10 @@ describe('StatoblastSecurityPoolLink', () => {
 			hashchangeCount += 1
 		})
 
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: `Copy address ${securityPoolAddress}` }))
+		})
+		expect(hashchangeCount).toBe(0)
 		await act(() => {
 			fireEvent.click(link)
 		})

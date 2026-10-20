@@ -9,6 +9,7 @@ import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
+import { ForkQuestion } from '@zoltar/ui-core-shared/components/Question.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
@@ -231,6 +232,7 @@ export function ZoltarMigrationSection({
 				return (
 					<>
 						{zoltarUniverseError !== undefined && !loadingZoltarUniverse ? <RetryableNotice message={zoltarUniverseError} onRetry={onRetryUniverse} retryLabel={commonCopy.retry} /> : undefined}
+						{rootUniverse?.forkQuestionDetails === undefined ? undefined : <ForkQuestion question={rootUniverse.forkQuestionDetails} />}
 						<p className='detail'>{zoltarCopy.selectOutcomesDetail}</p>
 						<MigrationOutcomeUniversesSection
 							universeBrowserHref={universeBrowserHref}

@@ -4,7 +4,21 @@ import { repositoryRoot } from '../repo/root.mts'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import process from 'node:process'
-import { buildVerificationPlan, getExplorerTargets, getSourcifyTarget, parseDeploymentManifest, verifyContractsWithExplorer, verifyContractsWithSourcify, type ArtifactLookup, type DeploymentManifest, type StandardJsonInputs, type VerificationOutcome, type VerificationPlan } from './contract-verification.mts'
+import { getDeploymentManifestFileName, getDeploymentManifestId } from './deployment-manifests.mts'
+import {
+	buildVerificationPlan,
+	getExplorerTargets,
+	getSourcifyTarget,
+	parseDeploymentManifest,
+	verifyContractsWithExplorer,
+	verifyContractsWithSourcify,
+	type ArtifactLookup,
+	type DeploymentManifest,
+	type ExplorerFetch,
+	type StandardJsonInputs,
+	type VerificationOutcome,
+	type VerificationPlan,
+} from './contract-verification.mts'
 
 const CONTRACT_ARTIFACT_PATH = path.join(repositoryRoot, 'solidity', 'artifacts', 'Contracts.json')
 const NETWORK_IDS_BY_CHAIN_ID: Readonly<Record<number, 'mainnet' | 'sepolia'>> = {
@@ -48,10 +62,10 @@ async function loadArtifactLookup(): Promise<ArtifactLookup> {
 	return createArtifactLookup(JSON.parse(rawArtifactJson))
 }
 
-async function loadManifest(networkId: 'mainnet' | 'sepolia'): Promise<DeploymentManifest> {
-	const manifestPath = path.join(repositoryRoot, 'docs', `${networkId}-deployment-addresses.json`)
+async function loadManifest(networkId: 'mainnet' | 'sepolia', genesisOutcome: 'yes' | 'no'): Promise<DeploymentManifest> {
+	const manifestPath = path.join(repositoryRoot, 'docs', getDeploymentManifestFileName(getDeploymentManifestId(networkId, genesisOutcome)))
 	const rawManifest: unknown = JSON.parse(await fs.readFile(manifestPath, 'utf8'))
-	return parseDeploymentManifest(rawManifest, networkId)
+	return parseDeploymentManifest(rawManifest, networkId, genesisOutcome)
 }
 
 function toExplorerCompilerVersion(compilerVersion: string): string {
@@ -95,7 +109,11 @@ function summarizeOutcomes(outcomes: readonly VerificationOutcome[]): { failed: 
 	return { failed: counts.failed, summary }
 }
 
-export async function main(argv: readonly string[] = process.argv.slice(2), environment: Readonly<Record<string, string | undefined>> = process.env): Promise<number> {
+export async function main(
+	argv: readonly string[] = process.argv.slice(2),
+	environment: Readonly<Record<string, string | undefined>> = process.env,
+	dependencies: { fetchFn: ExplorerFetch; sleep: (milliseconds: number) => Promise<void> } = { fetchFn: fetch, sleep: milliseconds => Bun.sleep(milliseconds) },
+): Promise<number> {
 	const chainIds = parseRequestedChainIds(argv)
 	const artifactLookup = await loadArtifactLookup()
 	let failures = 0
@@ -105,44 +123,53 @@ export async function main(argv: readonly string[] = process.argv.slice(2), envi
 			console.log(`Chain ${chainId.toString()} has no known Etherscan, Blockscout, or Sourcify support; skipping contract source verification.`)
 			continue
 		}
-		const manifest = await loadManifest(networkId)
-		if (manifest.network.chainId !== chainId) throw new Error(`The ${networkId} deployment manifest declares chain ${manifest.network.chainId.toString()}, expected ${chainId.toString()}`)
-		const plan = buildVerificationPlan(manifest, artifactLookup)
-		console.log(`Verifying ${plan.jobs.length.toString()} ${networkId} contracts (chain ${chainId.toString()})`)
-		for (const skippedStep of plan.skipped) console.log(`  Skipping ${skippedStep.id}: ${skippedStep.reason}`)
-		const inputs = await buildStandardJsonInputs(plan)
-		for (const target of getExplorerTargets(chainId, environment)) {
-			if (target.requiresApiKey && target.apiKey === undefined) {
-				console.log(`Skipping ${target.name} on ${networkId}: set ETHERSCAN_API_KEY to verify there.`)
-				continue
+		const plannedAddresses = new Set<string>()
+		for (const genesisOutcome of ['yes', 'no'] as const) {
+			const manifest = await loadManifest(networkId, genesisOutcome)
+			if (manifest.network.chainId !== chainId) throw new Error(`The ${networkId} deployment manifest declares chain ${manifest.network.chainId.toString()}, expected ${chainId.toString()}`)
+			const plan = buildVerificationPlan(manifest, artifactLookup)
+			const jobs = plan.jobs.filter(job => {
+				const address = job.address.toLowerCase()
+				if (plannedAddresses.has(address)) return false
+				plannedAddresses.add(address)
+				return true
+			})
+			console.log(`Verifying ${jobs.length.toString()} ${networkId} ${genesisOutcome} contracts (chain ${chainId.toString()})`)
+			for (const skippedStep of plan.skipped) console.log(`  Skipping ${skippedStep.id}: ${skippedStep.reason}`)
+			const inputs = await buildStandardJsonInputs(plan)
+			for (const target of getExplorerTargets(chainId, environment)) {
+				if (target.requiresApiKey && target.apiKey === undefined) {
+					console.log(`Skipping ${target.name} on ${networkId}: set ETHERSCAN_API_KEY to verify there.`)
+					continue
+				}
+				console.log(`${target.name} (${target.apiUrl})`)
+				const outcomes = await verifyContractsWithExplorer({
+					fetchFn: dependencies.fetchFn,
+					inputs,
+					jobs,
+					log: console.log,
+					sleep: dependencies.sleep,
+					target,
+				})
+				const { failed, summary } = summarizeOutcomes(outcomes)
+				console.log(`${target.name} on ${networkId}: ${summary}`)
+				failures += failed
 			}
-			console.log(`${target.name} (${target.apiUrl})`)
-			const outcomes = await verifyContractsWithExplorer({
-				fetchFn: fetch,
-				inputs,
-				jobs: plan.jobs,
-				log: console.log,
-				sleep: milliseconds => Bun.sleep(milliseconds),
-				target,
-			})
-			const { failed, summary } = summarizeOutcomes(outcomes)
-			console.log(`${target.name} on ${networkId}: ${summary}`)
-			failures += failed
-		}
-		const sourcifyTarget = getSourcifyTarget(chainId)
-		if (sourcifyTarget !== undefined) {
-			console.log(`${sourcifyTarget.name} (${sourcifyTarget.apiUrl})`)
-			const outcomes = await verifyContractsWithSourcify({
-				fetchFn: fetch,
-				inputs,
-				jobs: plan.jobs,
-				log: console.log,
-				sleep: milliseconds => Bun.sleep(milliseconds),
-				target: sourcifyTarget,
-			})
-			const { failed, summary } = summarizeOutcomes(outcomes)
-			console.log(`${sourcifyTarget.name} on ${networkId}: ${summary}`)
-			failures += failed
+			const sourcifyTarget = getSourcifyTarget(chainId)
+			if (sourcifyTarget !== undefined) {
+				console.log(`${sourcifyTarget.name} (${sourcifyTarget.apiUrl})`)
+				const outcomes = await verifyContractsWithSourcify({
+					fetchFn: dependencies.fetchFn,
+					inputs,
+					jobs,
+					log: console.log,
+					sleep: dependencies.sleep,
+					target: sourcifyTarget,
+				})
+				const { failed, summary } = summarizeOutcomes(outcomes)
+				console.log(`${sourcifyTarget.name} on ${networkId}: ${summary}`)
+				failures += failed
+			}
 		}
 	}
 	if (failures > 0) console.error(`Contract source verification failed for ${failures.toString()} contract submissions.`)

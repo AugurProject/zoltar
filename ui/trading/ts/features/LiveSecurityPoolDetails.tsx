@@ -19,7 +19,7 @@ import * as appCopy from '../copy/app.js'
 import { getTradingRouteHref } from '../lib/routing.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { SecurityPoolIdentityFields } from './LiveMarketIdentity.js'
-import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { liveCopy } from '../copy/live.js'
 import { marketsCopy } from '../copy/markets.js'
 import { questionOutcomeLabel, systemStateLabel } from '../lib/marketLabels.js'
@@ -183,7 +183,7 @@ export function SecurityPoolRouteEmptyState({
 					<>
 						{address === undefined ? undefined : (
 							<>
-								<ReadOnlyAddressValue address={address} />{' '}
+								<AddressValue address={address} />{' '}
 							</>
 						)}
 						{discoveryError}

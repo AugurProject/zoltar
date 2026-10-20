@@ -67,6 +67,7 @@ test('shows a loaded pool address read-only and keeps typed entry for an address
 	expect(page.queryByRole('textbox', { name: 'Security pool address' })).toBeNull()
 	expect(document.querySelector('.pool-address-display .address-value')?.getAttribute('title')).toBe(pool.securityPoolAddress)
 	expect(page.getByRole('button', { name: `Copy address ${pool.securityPoolAddress}` })).not.toBeNull()
+	expect(document.querySelector('.pool-address-display a.address-value')?.getAttribute('href')).toBe(`https://sepolia.etherscan.io/address/${pool.securityPoolAddress}`)
 	expect(page.getByRole('button', { name: 'Refresh pool' }).hasAttribute('disabled')).toBe(false)
 })
 

@@ -12,7 +12,7 @@ import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/a
 import { createInitialTransactionTrayState, markTransactionPrepared, markTransactionRequested } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { SEPOLIA_GENESIS_REP_INIT_CODE } from '@zoltar/ui-core-shared/lib/sepoliaDeploymentConfig.js'
+import { getSepoliaGenesisRepDeployment } from '@zoltar/ui-core-shared/lib/sepoliaDeploymentConfig.js'
 import { DeploymentStatusOracle_DeploymentStatusOracle, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { assertStaticDeploymentArtifactRuntimeCodeHashes, fundCanonicalDeployerSigner } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
@@ -157,7 +157,7 @@ describe('contract deployment internals', () => {
 			expect(steps.some(step => step.address === SEPOLIA_NETWORK_PROFILE.wethAddress)).toBe(false)
 			expect(repStep?.address).toBe(SEPOLIA_NETWORK_PROFILE.genesisRepTokenAddress)
 			expect(zoltarStep?.dependencies).toContain('reputationToken')
-			expect(SEPOLIA_GENESIS_REP_INIT_CODE).toStartWith('0x')
+			expect(getSepoliaGenesisRepDeployment('yes').initCode).toStartWith('0x')
 		} finally {
 			resetEnvironment()
 		}

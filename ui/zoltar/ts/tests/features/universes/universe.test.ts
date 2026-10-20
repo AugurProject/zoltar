@@ -25,7 +25,7 @@ void describe('universe helpers', () => {
 	})
 
 	test('renders genesis and non-genesis labels', () => {
-		expect(formatUniverseLabel(0n)).toBe('Genesis (0x0)')
+		expect(formatUniverseLabel(0n)).toBe('Augur v2 › Yes (0x0)')
 		expect(formatUniverseLabel(7n)).toBe('Universe 0x7')
 	})
 

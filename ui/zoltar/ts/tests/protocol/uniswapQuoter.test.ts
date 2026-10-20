@@ -5,7 +5,7 @@ import { createPublicClient, getAddress, http, zeroAddress, type Address } from 
 import { ETH_ADDRESS, getRepAddress, quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteExactInput, quoteRepForUsdcV4WithSource } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { getGenesisNetworkProfile, MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 
 // These read-only quote fixtures exercise mainnet addresses explicitly.
@@ -118,6 +118,18 @@ function createV3FeeAwareClient(amountsByFee: Partial<Record<number, bigint>>): 
 	return client
 }
 void describe('quoteExactInput', () => {
+	void test('quotes the No genesis token when that branch is selected', async () => {
+		const profile = getGenesisNetworkProfile(MAINNET_NETWORK_PROFILE, 'no')
+		const restore = installActiveEnvironmentForTesting(createFakeBackend({ profile }))
+		try {
+			const { client, captured } = createCapturingClient(5n)
+			expect(getRepAddress()).toBe(profile.genesisRepTokenAddress)
+			await expect(quoteExactInput(client, ETH_ADDRESS, getRepAddress(), 1n)).resolves.toBe(5n)
+			expect(captured.currency1).toBe(profile.genesisRepTokenAddress)
+		} finally {
+			restore()
+		}
+	})
 	void test('does not simulate quotes for uninitialized V4 pools', async () => {
 		const { client } = createCapturingClient(5n)
 		client.readContract = createReadContractStub(async request => {
@@ -351,8 +363,8 @@ void describe('quoteBestV3ExactInputWithSource', () => {
 		expect(factoryCalls).toEqual([
 			{
 				fee: 3000,
-				tokenA: REP_ADDRESS,
-				tokenB: WETH_ADDRESS,
+				tokenA: WETH_ADDRESS,
+				tokenB: REP_ADDRESS,
 			},
 		])
 	})

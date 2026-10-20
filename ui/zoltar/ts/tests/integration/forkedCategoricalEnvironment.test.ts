@@ -52,9 +52,11 @@ void describe('forked categorical simulation backend', () => {
 	void test('bounded outcome navigation matches the fork’s known outcomes and deployed children', async () => {
 		const client = backend.createReadClient()
 		const full = await loadZoltarUniverseSummary(client, 0n)
-		if (full?.zoltarAddress === undefined) throw new Error('Expected the seeded Zoltar address')
+		if (full?.zoltarAddress === undefined || full.forkQuestionDetails === undefined) throw new Error('Expected the seeded Zoltar address and fork question')
 		const page = await loadUniverseOutcomePage(client, full.zoltarAddress, 0n, 0n)
-		expect(page.title).toBe(full.forkQuestionDetails?.title)
+		const { exists, ...questionDetails } = full.forkQuestionDetails
+		expect(exists).toBe(true)
+		expect(page.question).toEqual({ ...questionDetails, outcomeLabels: full.childUniverses.map(child => child.outcomeLabel), outcomesComplete: true })
 		expect(page.hasNextPage).toBe(false)
 		expect(page.choices.map(choice => [choice.label, choice.universeId, choice.exists])).toEqual(full.childUniverses.map(child => [child.outcomeLabel, child.universeId, child.exists]))
 		expect(page.choices.filter(choice => choice.exists)).toHaveLength(2)

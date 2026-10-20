@@ -80,7 +80,7 @@ describe('IdentifierValue', () => {
 		expect(copyButton.textContent).toBe(value)
 		expect(error.textContent).toBe('Copy failed — select the value and copy it manually.')
 		expect(copyButton.getAttribute('aria-describedby')).toBe(error.id)
-		expect((documentQueries.getByLabelText('Exact value for manual copy') as HTMLInputElement).value).toBe(value)
+		expect(documentQueries.getByLabelText('Exact value for manual copy').textContent).toBe(value)
 	})
 
 	test('clears a clipboard error when the identifier changes', async () => {

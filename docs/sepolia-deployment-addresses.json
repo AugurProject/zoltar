@@ -2,6 +2,7 @@
 	"network": {
 		"chainId": 11155111,
 		"chainIdHex": "0xaa36a7",
+		"genesisOutcome": "yes",
 		"genesisRepTokenAddress": "0x1cac3DD2Da83AEf9B060FB55656d69784821F8C4",
 		"id": "sepolia",
 		"name": "Sepolia",

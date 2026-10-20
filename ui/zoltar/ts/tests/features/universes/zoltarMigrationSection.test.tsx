@@ -98,6 +98,35 @@ describe('ZoltarMigrationSection', () => {
 		},
 	})
 
+	test('shows full fork question facts alongside REP migration outcome selection', async () => {
+		const question = createMarketDetails({ title: 'Which proposal wins?', description: 'Use the certified final tally.', marketType: 'categorical', outcomeLabels: ['Alpha', 'Beta'], questionId: '0x1234' })
+		const rendered = await renderIntoDocument(
+			h(
+				ZoltarMigrationSection,
+				createProps({
+					zoltarUniverse: createUniverse({
+						forkQuestionDetails: question,
+						childUniverses: [
+							{ ...yesChild, outcomeLabel: 'Alpha' },
+							{ ...noChild, outcomeLabel: 'Beta' },
+						],
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const queries = within(document.body)
+		expect(queries.getByRole('heading', { name: 'Fork question' })).toBeTruthy()
+		expect(queries.getByText('Which proposal wins?')).toBeTruthy()
+		expect(queries.getByText('Use the certified final tally.')).toBeTruthy()
+		expect(document.body.textContent).toContain('Categorical')
+		expect(document.body.textContent).toContain('0x1234')
+		expect(document.body.textContent).toContain('Alpha')
+		expect(document.body.textContent).toContain('Beta')
+		expect(getCurrentStepTitle()).toBe('Select outcomes')
+		expect(queries.getByRole('button', { name: /^Alpha/ }).getAttribute('aria-pressed')).toBe('true')
+	})
+
 	test('keeps every migration control disabled before a fork and unlocks after a fork', async () => {
 		const updates: Partial<ZoltarMigrationFormState>[] = []
 		const props = createProps({ zoltarUniverse: createUniverse({ hasForked: false, childUniverses: [], forkTime: 0n }), onZoltarMigrationFormChange: update => updates.push(update) })

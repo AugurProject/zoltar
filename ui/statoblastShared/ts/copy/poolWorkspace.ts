@@ -69,5 +69,4 @@ export const actionButtonLabels = {
 	trading: 'Open shares',
 	vaults: 'Open vaults',
 } as const
-export const copyPoolAddress = 'Copy'
 export const actionShownBelow = 'Shown below'

@@ -10,7 +10,7 @@ export function UniverseNamesProvider({ children, universe, includeRelatedUniver
 	return <UniverseNamesContext.Provider value={names}>{children}</UniverseNamesContext.Provider>
 }
 
-/** The lineage name of a universe when the application knows it, otherwise `Genesis` or a short hex fallback. */
+/** The lineage name when known, otherwise the selected root name or a short hex fallback. */
 export function useUniverseName(universeId: bigint) {
 	const names = useContext(UniverseNamesContext)
 	return names?.get(universeId.toString()) ?? formatUniverseLineageLabel(undefined, universeId)

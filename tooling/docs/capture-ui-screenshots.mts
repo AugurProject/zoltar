@@ -148,7 +148,7 @@ async function cropRect(session: DevToolsSession, crop: UiScreenshotCrop, specId
 async function captureScreenshot(chromiumPath: string, baseUrl: string, spec: UiScreenshotSpec): Promise<Uint8Array> {
 	const app = screenshotApp(spec.app)
 	const viewport = spec.viewport ?? DEFAULT_VIEWPORT
-	const pageUrl = `${baseUrl}/?simulate=1&simScenario=${encodeURIComponent(spec.scenario)}${spec.route ?? ''}`
+	const pageUrl = `${baseUrl}/?simulate=1&genesis=yes&simScenario=${encodeURIComponent(spec.scenario)}${spec.route ?? ''}`
 	const session = await createDevToolsSession(chromiumPath, pageUrl, viewport)
 	try {
 		await session.send('Runtime.enable')

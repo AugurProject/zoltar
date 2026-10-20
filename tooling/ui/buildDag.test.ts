@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import * as fs from 'node:fs'
+import { tmpdir } from 'node:os'
+import * as path from 'node:path'
 import { createProjectTaskPlan } from '../repo/run-project-tasks.mts'
 import { projectsInTaskGroup } from '../repo/projects.ts'
+import { appSharedPackages, sharedPackageClosure, sharedPackages } from '../repo/sharedPackages.ts'
 import { getAppBuildCommands } from './apps.mts'
 import { getUiAppDependencyOrder, getUiAppPaths, getUiCoreSharedPaths, UI_APP_IDS, type UiAppId } from './appPaths.mts'
 import { createWatchBuilds } from './watchBuilds.mts'
@@ -38,30 +41,60 @@ function collectWatchBuilds(appId: UiAppId) {
 }
 
 describe('UI build dependency direction', () => {
+	test('the shared-build CLI compiles exactly the package closure for every application', async () => {
+		const fixtureRoot = fs.mkdtempSync(path.join(tmpdir(), 'app-shared-build-'))
+		const { repositoryRoot } = getUiCoreSharedPaths()
+		try {
+			for (const source of ['tooling/repo/build-shared.mts', 'tooling/repo/root.mts', 'tooling/repo/sharedPackages.ts', 'tooling/ui/appIds.mts']) {
+				const destination = path.join(fixtureRoot, source)
+				fs.mkdirSync(path.dirname(destination), { recursive: true })
+				fs.copyFileSync(path.join(repositoryRoot, source), destination)
+			}
+			fs.symlinkSync(path.join(repositoryRoot, 'node_modules'), path.join(fixtureRoot, 'node_modules'), 'dir')
+			for (const entry of sharedPackages) {
+				const packageRoot = path.join(fixtureRoot, entry.path)
+				fs.mkdirSync(path.join(packageRoot, 'ts'), { recursive: true })
+				fs.writeFileSync(path.join(packageRoot, 'ts/value.ts'), 'export const value = 1\n')
+				fs.writeFileSync(path.join(packageRoot, 'tsconfig.json'), JSON.stringify({ compilerOptions: { types: [], rootDir: 'ts', outDir: 'js' }, include: ['ts/**/*.ts'] }))
+			}
+			for (const appId of UI_APP_IDS) {
+				for (const entry of sharedPackages) fs.rmSync(path.join(fixtureRoot, entry.path, 'js'), { recursive: true, force: true })
+				const child = Bun.spawn([process.execPath, './tooling/repo/build-shared.mts', appId], { cwd: fixtureRoot, stdout: 'pipe', stderr: 'pipe' })
+				const [exitCode, output, errors] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()])
+				expect({ appId, exitCode, output, errors }).toEqual({ appId, exitCode: 0, output: '', errors: '' })
+				const expectedIds = sharedPackageClosure(appSharedPackages[appId]).map(entry => entry.id)
+				for (const entry of sharedPackages) expect(fs.existsSync(path.join(fixtureRoot, entry.path, 'js/value.js'))).toBe(expectedIds.includes(entry.id))
+			}
+		} finally {
+			fs.rmSync(fixtureRoot, { recursive: true, force: true })
+		}
+	})
+
 	test('ui:build:apps compiles shared libraries before the dependency-leaf applications', () => {
 		const scripts = readRootPackageJson().scripts ?? {}
 		const buildAppsScript = scripts['ui:build:apps']
 		if (buildAppsScript === undefined) throw new Error('ui:build:apps script is missing')
 		expect(buildAppsScript).toBe('bun ./tooling/repo/run-project-tasks.mts build --group ui && bun run projects:workers')
 		const uiProjects = projectsInTaskGroup('build', 'ui').map(project => project.id)
-		expect(createProjectTaskPlan('build', uiProjects).map(entry => entry.projectId)).toEqual(['ui-core', 'ui-zoltar-shared', 'ui-statoblast-shared', 'ui-zoltar', 'ui-statoblast', 'ui-trading'])
+		expect(createProjectTaskPlan('build', uiProjects).map(entry => entry.projectId)).toEqual(['ui-core', 'ui-zoltar-shared', 'ui-statoblast-shared', 'ui-zoltar', 'ui-statoblast', 'ui-trading', 'ui-openoracle'])
 	})
 
 	test('targeted application preparation compiles each dependency once and builds only requested workers', () => {
-		const commands = getAppBuildCommands(['zoltar', 'statoblast', 'trading'])
-		expect(commands.filter(command => command[0] === 'x').map(command => command[3])).toEqual(['coreShared', 'zoltarShared', 'zoltar', 'statoblastShared', 'statoblast', 'trading'].map(packageId => `ui/${packageId}/tsconfig.json`))
+		const commands = getAppBuildCommands(UI_APP_IDS)
+		expect(commands.filter(command => command[0] === 'x').map(command => command[3])).toEqual(['coreShared', 'zoltarShared', 'zoltar', 'statoblastShared', 'statoblast', 'trading', 'openoracle'].map(packageId => `ui/${packageId}/tsconfig.json`))
 		expect(commands.filter(command => command[0]?.endsWith('/vendor.mts') === true)).toEqual([
 			['./tooling/ui/vendor.mts', 'zoltar', '--scoped-artifacts'],
 			['./tooling/ui/vendor.mts', 'statoblast', '--scoped-artifacts'],
 			['./tooling/ui/vendor.mts', 'trading', '--scoped-artifacts'],
+			['./tooling/ui/vendor.mts', 'openoracle', '--scoped-artifacts'],
 		])
-		expect(commands.filter(command => command[0]?.endsWith('/workers.mts') === true).map(command => command[1])).toEqual(['zoltar', 'statoblast', 'trading'])
+		expect(commands.filter(command => command[0]?.endsWith('/workers.mts') === true).map(command => command[1])).toEqual([...UI_APP_IDS])
 		expect(commands.filter(command => command.includes('ensure-contract-artifacts'))).toHaveLength(0)
 	})
 
 	test('app serve/watch scripts prepare only the selected application before starting', () => {
 		const scripts = readRootPackageJson().scripts ?? {}
-		for (const app of ['zoltar', 'statoblast', 'trading'] as const) {
+		for (const app of UI_APP_IDS) {
 			for (const mode of ['serve', 'watch']) expect(scripts[`app:${mode}:${app}`]).toStartWith(`bun ./tooling/ui/apps.mts ${app} && `)
 			const commands = getAppBuildCommands([app])
 			expect(commands.filter(command => command[0] === 'x').map(command => command[3])).toEqual(getUiAppDependencyOrder(app).map(packageId => `ui/${packageId}/tsconfig.json`))
@@ -139,7 +172,7 @@ describe('UI build dependency direction', () => {
 		const buildTestsScript = scripts['ui:build:tests']
 		if (buildTestsScript === undefined) throw new Error('ui:build:tests script is missing')
 		expect(buildTestsScript).toBe('bun ./tooling/repo/run-project-tasks.mts test-build')
-		expect(createProjectTaskPlan('test-build').map(entry => entry.projectId)).toEqual(['ui-core', 'ui-zoltar', 'ui-statoblast', 'ui-trading'])
+		expect(createProjectTaskPlan('test-build').map(entry => entry.projectId)).toEqual(['ui-core', 'ui-zoltar', 'ui-statoblast', 'ui-trading', 'ui-openoracle'])
 	})
 })
 

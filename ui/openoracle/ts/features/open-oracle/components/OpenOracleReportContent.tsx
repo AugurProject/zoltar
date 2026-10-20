@@ -1,7 +1,7 @@
-import { getOpenOraclePriceExpiryPresentation } from '../lib/openOracleStage.js'
+import { getOpenOraclePriceExpiryPresentation } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracleStage.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as openOracleCopy from '../../../copy/openOracle.js'
+import * as openOracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
 import { Fragment, type ComponentChildren } from 'preact'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -16,17 +16,25 @@ import { TransactionActionButton } from '@zoltar/ui-core-shared/components/Trans
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
-import { formatOpenOracleReportPriceUnit, getOpenOracleDisputeAvailability, getOpenOracleSettleAvailability, type OpenOracleCreateField, type OpenOracleDisputeInputField, type OpenOracleDisputeSubmissionDetails, type OpenOracleSelectedReportActionMode } from '../lib/openOracle.js'
-import { loadOpenOracleReportSummaries } from '../../../protocol/openOracle.js'
+import {
+	formatOpenOracleReportPriceUnit,
+	getOpenOracleDisputeAvailability,
+	getOpenOracleSettleAvailability,
+	OPEN_ORACLE_PRICE_UNITS,
+	type OpenOracleCreateField,
+	type OpenOracleDisputeInputField,
+	type OpenOracleDisputeSubmissionDetails,
+	type OpenOracleSelectedReportActionMode,
+} from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
+import { loadOpenOracleReportSummaries } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getWalletConnectionActiveAppChainGuardState, withWalletGuardFirst } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { WalletActionFixReason } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { formatCeilingAmountDisplay, formatCurrencyBalance, formatCurrencyInputBalance, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
-import type { OpenOracleFormState } from '../../../types/app.js'
-import type { OpenOracleReportDetails } from '../../../types/contracts.js'
-import type { OpenOracleSectionProps } from '../../oracleTypes.js'
+import type { OpenOracleFormState } from '@zoltar/ui-statoblast-shared/types/app.js'
+import type { OpenOracleReportDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
+import type { OpenOracleSectionProps } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
 export const BROWSE_PAGE_SIZE = 10
-export const OPEN_ORACLE_PRICE_UNITS = 30
 export type SelectedReportModal = 'dispute' | undefined
 export const DISPUTE_REPORT_MODAL: SelectedReportModal = 'dispute'
 const OPEN_ORACLE_CREATE_FIELD_ERROR_IDS: Record<OpenOracleCreateField, string> = {
@@ -54,15 +62,6 @@ function getOpenOracleDisputeFieldErrorId(field: OpenOracleDisputeInputField, re
 			return `open-oracle-dispute-new-amount-2-error-${reportId}`
 		default:
 			return assertNever(field)
-	}
-}
-export function getEffectiveOpenOracleReportDetails(report: OpenOracleReportDetails | undefined, currentTimestamp: bigint | undefined, currentBlockNumber: bigint | undefined) {
-	if (report === undefined) return undefined
-	if ((currentTimestamp === undefined || report.currentTime === currentTimestamp) && (currentBlockNumber === undefined || report.currentBlockNumber === currentBlockNumber)) return report
-	return {
-		...report,
-		currentBlockNumber: currentBlockNumber ?? report.currentBlockNumber,
-		currentTime: currentTimestamp ?? report.currentTime,
 	}
 }
 export async function loadBrowseReportPage(pageIndex: number, pageSize: number) {

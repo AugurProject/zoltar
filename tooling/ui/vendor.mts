@@ -1,7 +1,7 @@
 import * as path from 'path'
 import { promises as fs } from 'fs'
 import { fileURLToPath } from 'node:url'
-import { getUiAppPaths, parseUiAppIdFromProcess } from './appPaths.mts'
+import { getUiAppContractProject, getUiAppPaths, parseUiAppIdFromProcess } from './appPaths.mts'
 import { normalizeBundlerPath, resolveBundlerSpecifierPath } from './bundlerPaths.mts'
 type FileType = 'file' | 'directory'
 type VendorBuildSteps = {
@@ -154,9 +154,10 @@ function createDefaultVendorBuildSteps(): VendorBuildSteps {
 		copyProjectArtifacts: async () => {
 			const app = parseUiAppIdFromProcess('vendor build')
 			const { repositoryRoot } = getUiAppPaths(app)
-			const scopedPath = path.join(repositoryRoot, 'solidity/artifacts', app, 'Contracts.json')
+			const project = getUiAppContractProject(app)
+			const scopedPath = path.join(repositoryRoot, 'solidity/artifacts', project, 'Contracts.json')
 			const useScoped = process.argv.includes('--scoped-artifacts')
-			await copyProjectArtifacts({ project: app, includeTrading: app === 'trading' }, useScoped ? { ...defaultProjectArtifactPaths, contractArtifactsJsonPath: scopedPath } : defaultProjectArtifactPaths)
+			await copyProjectArtifacts({ project, includeTrading: app === 'trading' }, useScoped ? { ...defaultProjectArtifactPaths, contractArtifactsJsonPath: scopedPath } : defaultProjectArtifactPaths)
 		},
 	}
 }
