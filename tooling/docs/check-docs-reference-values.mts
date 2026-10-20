@@ -274,7 +274,7 @@ function assertNonDecisionLifecycleDocs(): void {
 function assertAuditFindingRemediations(): void {
 	assert.match(securityPool, /function updateRetentionRate\(\) public \{[\s\S]*SecurityPoolUtils\.calculateRetentionRate\([\s\S]*getCurrentMintingCapacityAttoEth\(\)/, 'SecurityPool retention updates must use live minting capacity')
 	assert.match(securityPoolUtils, /if \(mintingCapacityAttoEth == 0\) return MAX_RETENTION_RATE;/, 'SecurityPoolUtils must select maximum retention for zero minting capacity')
-	assert.match(escalationGameCalculations, /if \(forkTime > getEscalationGameEndDate\(\)\) \{[\s\S]*actualForkThresholdAttoRep = nonDecisionThresholdAttoRep;/, 'Escalation payout must restore the configured threshold only for forks strictly after the scheduled game end')
+	assert.match(escalationGameCalculations, /if \(nonDecisionState == NonDecisionState\.Local \|\| forkTime > getEscalationGameEndDate\(\)\) \{[\s\S]*actualForkThresholdAttoRep = nonDecisionThresholdAttoRep;/, 'Escalation payout must preserve local non-decision payouts and the strict late-fork threshold boundary')
 	for (const boundaryName of ['one second before', 'exactly at', 'one second after']) {
 		assert.ok(escalationGameForkThresholdTest.includes(boundaryName), `Escalation fork-threshold regression must cover ${boundaryName} game end`)
 	}

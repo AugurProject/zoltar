@@ -229,7 +229,7 @@
 					<li>Winning payout: <code>5 + 2 = 7 REP</code>.</li>
 					<li>Haircut burned: <code>5 × 4 / 15 = 1.333333333333333333 REP</code> at attoREP precision.</li>
 				</ul>
-				<p>A winning deposit position above <code>15 REP</code> returns its principal without a bonus. When Zoltar's fork threshold at settlement is below the game's non-decision threshold, the whole withdrawal is scaled by their ratio. If this game's non-decision threshold were <code>20 REP</code> and the fork threshold <code>16 REP</code>, the <code>7 REP</code> payout becomes <code>7 × 16 / 20 = 5.6 REP</code>, rounded down to attoREP. Fork scaling can therefore reduce the final transfer below principal.</p>
+				<p>A winning deposit position above <code>15 REP</code> returns its principal without a bonus. Fork-threshold scaling is skipped if the game recorded local non-decision or the universe forked strictly after the game ended. Otherwise, when Zoltar's fork threshold at settlement is below the game's non-decision threshold, the whole withdrawal is scaled by their ratio. If this game's non-decision threshold were <code>20 REP</code> and the fork threshold <code>16 REP</code>, the <code>7 REP</code> payout becomes <code>7 × 16 / 20 = 5.6 REP</code>, rounded down to attoREP. Fork scaling can therefore reduce the final transfer below principal.</p>
 			</article>
 		</main>
 		<script src="../../assets/js/responsiveDocs.js"></script>
