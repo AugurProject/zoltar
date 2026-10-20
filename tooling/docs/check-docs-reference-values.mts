@@ -516,8 +516,8 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(escalationGameSettlement, /function drainAllRep\(address receiver\)[\s\S]*amountAttoRep = repToken\.balanceOf\(address\(this\)\);[\s\S]*if \(amountAttoRep == 0\) return 0;[\s\S]*_safeTransferRep\(receiver, amountAttoRep\)/)
 	assert.match(escalationGameSettlement, /function drainAllRep\(address receiver\)[\s\S]*require\(msg\.sender == address\(securityPool\), 'Only pool'\)/)
 	assert.match(securityPool, /function activateForkMode\(\)[\s\S]*if \(hasInheritedForkOutcome\) revert\((?:'[^']*')?\)[\s\S]*systemState = SystemState\.PoolForked;[\s\S]*escalationGame\.drainAllRep\(msg\.sender\)/)
-	assert.match(securityPoolForker, /function _getEscalationGame\(ISecurityPool securityPool\)[\s\S]*escalationGame\.securityPool\(\)[\s\S]*'Escalation game pool'/)
-	assert.match(securityPoolForkerBase, /function _validateChildEscalationGame\([\s\S]*childEscalationGame\.securityPool\(\)[\s\S]*'Child game'/)
+	assert.match(securityPoolForkerBase, /function _getEscalationGame\(ISecurityPool securityPool\)[\s\S]*escalationGame\.securityPool\(\)[\s\S]*'Escalation game pool'[\s\S]*function _validateChildEscalationGame\([\s\S]*childEscalationGame\.securityPool\(\)[\s\S]*'Child game'/)
+	assert.equal((`${securityPoolForker}${securityPoolForkerBase}${escalationGameForker}`.match(/_getEscalationGame\((?:securityPool|parent)\)/g) ?? []).length, 7, 'every documented pool-game path must read the game through _getEscalationGame')
 	assert.match(
 		securityPoolForkerVaultMigrationBase,
 		/childEscalationGame = child\.escalationGame\(\);[\s\S]*_validateChildEscalationGame\(child, childEscalationGame\);[\s\S]*_initializeChildForkedEscalationGameIfNeeded\([\s\S]*childEscalationGame[\s\S]*_ensureChildEscalationBacking\(parent, outcomeIndex, child, childEscalationGame\)/,

@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { ISecurityPool, ISecurityPoolFactory, PoolAccountingSnapshot, SystemState } from '../../statoblast/interfaces/ISecurityPool.sol';
+import {
+	ISecurityPool,
+	ISecurityPoolFactory,
+	PoolAccountingSnapshot,
+	SystemState
+} from '../../statoblast/interfaces/ISecurityPool.sol';
 import { IShareToken } from '../../statoblast/interfaces/IShareToken.sol';
 import { BinaryOutcomes } from '../../statoblast/BinaryOutcomes.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
@@ -153,7 +158,16 @@ contract EscalationGameForkerLineageAttackPoolMock {
 		return type(uint256).max;
 	}
 
-	function getForkCarrySnapshot() external pure returns (bytes32[64][3] memory carryPeaks, uint256[3] memory carryLeafCounts, uint256[3] memory carryTotalsAttoRep, bytes32[3] memory nullifierRoots) {
+	function getForkCarrySnapshot()
+		external
+		pure
+		returns (
+			bytes32[64][3] memory carryPeaks,
+			uint256[3] memory carryLeafCounts,
+			uint256[3] memory carryTotalsAttoRep,
+			bytes32[3] memory nullifierRoots
+		)
+	{
 		return (carryPeaks, carryLeafCounts, carryTotalsAttoRep, nullifierRoots);
 	}
 

@@ -43,8 +43,7 @@ describe('Audit PoC: fake lineage cannot reach a canonical escalation game throu
 		await createCompleteSet(createWriteClient(mockWindow, TEST_ADDRESSES[1]), securityPoolAddresses.securityPool, 10n ** 18n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, repDeposit / 2n)
 		const canonicalGame = await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'escalationGame' })
-		const readCanonicalPrincipal = async () =>
-			await client.readContract({ address: canonicalGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getLocalUnresolvedPrincipalByVaultAndOutcome', args: [client.account.address, QuestionOutcome.Yes] })
+		const readCanonicalPrincipal = async () => await client.readContract({ address: canonicalGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getLocalUnresolvedPrincipalByVaultAndOutcome', args: [client.account.address, QuestionOutcome.Yes] })
 		const canonicalPrincipalBefore = await readCanonicalPrincipal()
 		assert.ok(canonicalPrincipalBefore > 0n, 'the vault must hold unresolved canonical escrow')
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
