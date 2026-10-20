@@ -201,6 +201,7 @@ describe('SecurityPoolsOverviewSection', () => {
 			vaults: [
 				{
 					disputeStakedAttoRep: 4n * 10n ** 18n,
+					disputeBackingAttoRep: 4n * 10n ** 18n,
 					vaultAttoRepBacking: 16n * 10n ** 18n,
 					underwritingLimitAttoEth: 10n * 10n ** 18n,
 					claimableFeesAttoEth: 0n,
@@ -490,6 +491,7 @@ describe('SecurityPoolsOverviewSection', () => {
 							vaults: [
 								{
 									disputeStakedAttoRep: 0n,
+									disputeBackingAttoRep: 0n,
 									vaultAttoRepBacking: 10n,
 									underwritingLimitAttoEth: 5n,
 									claimableFeesAttoEth: 0n,
@@ -527,6 +529,7 @@ describe('SecurityPoolsOverviewSection', () => {
 							vaults: [
 								{
 									disputeStakedAttoRep: 0n,
+									disputeBackingAttoRep: 0n,
 									vaultAttoRepBacking: 10n,
 									underwritingLimitAttoEth: 1n,
 									claimableFeesAttoEth: 0n,
@@ -534,6 +537,7 @@ describe('SecurityPoolsOverviewSection', () => {
 								},
 								{
 									disputeStakedAttoRep: 0n,
+									disputeBackingAttoRep: 0n,
 									vaultAttoRepBacking: 10n,
 									underwritingLimitAttoEth: 9n,
 									claimableFeesAttoEth: 0n,
@@ -541,6 +545,7 @@ describe('SecurityPoolsOverviewSection', () => {
 								},
 								{
 									disputeStakedAttoRep: 0n,
+									disputeBackingAttoRep: 0n,
 									vaultAttoRepBacking: 10n,
 									underwritingLimitAttoEth: 5n,
 									claimableFeesAttoEth: 0n,
@@ -575,6 +580,7 @@ describe('SecurityPoolsOverviewSection', () => {
 							vaults: [
 								{
 									disputeStakedAttoRep: 0n,
+									disputeBackingAttoRep: 0n,
 									vaultAttoRepBacking: 10n,
 									underwritingLimitAttoEth: 8n,
 									claimableFeesAttoEth: 0n,
@@ -582,6 +588,7 @@ describe('SecurityPoolsOverviewSection', () => {
 								},
 								{
 									disputeStakedAttoRep: 0n,
+									disputeBackingAttoRep: 0n,
 									vaultAttoRepBacking: 10n,
 									underwritingLimitAttoEth: 7n,
 									claimableFeesAttoEth: 0n,
@@ -589,6 +596,7 @@ describe('SecurityPoolsOverviewSection', () => {
 								},
 								{
 									disputeStakedAttoRep: 0n,
+									disputeBackingAttoRep: 0n,
 									vaultAttoRepBacking: 10n,
 									underwritingLimitAttoEth: 6n,
 									claimableFeesAttoEth: 0n,
@@ -596,6 +604,7 @@ describe('SecurityPoolsOverviewSection', () => {
 								},
 								{
 									disputeStakedAttoRep: 0n,
+									disputeBackingAttoRep: 0n,
 									vaultAttoRepBacking: 10n,
 									underwritingLimitAttoEth: 1n,
 									claimableFeesAttoEth: 0n,

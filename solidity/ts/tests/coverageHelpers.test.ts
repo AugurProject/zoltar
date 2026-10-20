@@ -38,6 +38,7 @@ import {
 	statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 	statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate,
+	statoblast_SecurityPoolEventEmitter_SecurityPoolEventEmitter,
 	test_statoblast_CoverageHelpersHarness_CoverageAttributionDecoy,
 	test_statoblast_CoverageHelpersHarness_CoverageAttributionExecuted,
 	test_statoblast_CoverageHelpersHarness_CoverageHelpersHarness,
@@ -357,7 +358,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				data: encodeDeployData({
 					abi: factoryArtifact.abi,
 					bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
-					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 0n, 1n * 10n ** 18n, zeroAddress],
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 0n, 1n * 10n ** 18n, zeroAddress, zeroAddress],
 				}),
 			}),
 			/Minimum security bond debt zero/,
@@ -367,7 +368,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				data: encodeDeployData({
 					abi: factoryArtifact.abi,
 					bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
-					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 1n * 10n ** 18n, 1n * 10n ** 18n, client.account.address],
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 1n * 10n ** 18n, 1n * 10n ** 18n, client.account.address, zeroAddress],
 				}),
 			}),
 			/Operations delegate has no code/,
@@ -380,12 +381,30 @@ describe('Solidity bytecode coverage helpers', () => {
 			}),
 		)
 
+		await assert.rejects(
+			client.sendTransaction({
+				data: encodeDeployData({
+					abi: factoryArtifact.abi,
+					bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 1n * 10n ** 18n, 1n * 10n ** 18n, operationsDelegate, zeroAddress],
+				}),
+			}),
+			/Accounting delegate has no code/,
+		)
+		const eventEmitter = await deployContract(
+			client,
+			encodeDeployData({
+				abi: statoblast_SecurityPoolEventEmitter_SecurityPoolEventEmitter.abi,
+				bytecode: applyLibraries(statoblast_SecurityPoolEventEmitter_SecurityPoolEventEmitter.evm.bytecode.object),
+			}),
+		)
+
 		const factoryAddress = await deployContract(
 			client,
 			encodeDeployData({
 				abi: factoryArtifact.abi,
 				bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
-				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 1n * 10n ** 18n, 1n * 10n ** 18n, operationsDelegate],
+				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 1n * 10n ** 18n, 1n * 10n ** 18n, operationsDelegate, eventEmitter],
 			}),
 		)
 		await assert.rejects(
@@ -1718,7 +1737,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeDeployData({
 				abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer.abi,
 				bytecode: applyLibraries(statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer.evm.bytecode.object),
-				args: [zeroAddress],
+				args: [zeroAddress, zeroAddress],
 			}),
 		)
 		await assert.rejects(

@@ -20,7 +20,7 @@ describe('Nested fork migration deadline', () => {
 
 	const { genesisUniverse, repDeposit, statoblastSecurityMultiplierBps, triggerExternalForkForSecurityPool } = fixture
 
-	test('a delayed canonical pool retains a complete outgoing migration window after an early universe fork', async () => {
+	test('a delayed canonical pool retains a complete outgoing migration window after the native response interval', async () => {
 		const { mockWindow, client, securityPoolAddresses, questionId } = fixture
 		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, repDeposit / 4n)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
@@ -36,8 +36,6 @@ describe('Nested fork migration deadline', () => {
 		await addRepToMigrationBalance(client, genesisUniverse, childForkThreshold)
 		await splitMigrationRep(client, genesisUniverse, childForkThreshold, [QuestionOutcome.Yes])
 		await approveToken(client, getRepTokenAddress(childUniverse), getZoltarAddress())
-		await forkUniverse(client, childUniverse, parentFork.forkQuestionId)
-		const childFork = await getUniverseData(client, childUniverse)
 
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		const childPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, childUniverse, questionId, statoblastSecurityMultiplierBps)
@@ -47,10 +45,15 @@ describe('Nested fork migration deadline', () => {
 		assert.ok((await getETHBalance(client, childPool.securityPool)) > 0n)
 		assert.ok((await balanceOfShares(client, childPool.shareToken, childUniverse, client.account.address))[QuestionOutcome.Yes] > 0n)
 
+		await assert.rejects(forkUniverse(client, childUniverse, parentFork.forkQuestionId), /Parent fork response period is still active/)
+		await mockWindow.setTime(parentFork.forkTime + 70n * DAY)
+		await forkUniverse(client, childUniverse, parentFork.forkQuestionId)
+		const childFork = await getUniverseData(client, childUniverse)
 		const migrationTime = 8n * 7n * DAY
 		const parentMigrationDeadline = (await getForkActivationTime(client, securityPoolAddresses.securityPool)) + migrationTime
 		const expiredUniverseDeadline = childFork.forkTime + migrationTime
-		await mockWindow.setTime(parentMigrationDeadline)
+		assert.ok(expiredUniverseDeadline > parentMigrationDeadline)
+		await mockWindow.setTime(expiredUniverseDeadline + 1n)
 		await startTruthAuction(client, childPool.securityPool)
 		assert.strictEqual(await getSystemState(client, childPool.securityPool), SystemState.ForkTruthAuction)
 		const { truthAuctionStarted } = await getSecurityPoolForkerForkData(client, childPool.securityPool)

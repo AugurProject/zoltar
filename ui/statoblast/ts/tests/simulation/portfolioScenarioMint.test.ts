@@ -14,21 +14,33 @@ test('portfolio simulation mints use each current quote, including native minimu
 	const client: PortfolioReadClient = {
 		getBlock: async () => ({ number: 52n, hash, timestamp: 1_735_690_127n }),
 		getChainId: async () => 1,
-		getLogs: async () => [],
 		readContract: async parameters => {
-			expect(parameters.address).toBe(portfolio)
-			expect(parameters.functionName).toBe('quoteMint')
-			expect(parameters.args).toEqual([BigInt(quoteIndex + 1), unit])
 			expect(parameters.blockNumber).toBe(52n)
-			const fee = fees[quoteIndex++]
-			if (fee === undefined) throw new Error('Unexpected quote')
-			return [90n * unit, fee, 5000n * unit]
+			switch (parameters.functionName) {
+				case 'getPool':
+					return owner
+				case 'capitalLedger':
+					return owner
+				case 'isPriceValid':
+					return true
+				case 'availableMintCapacity':
+					return 10n * unit
+				case 'quoteQuestionMint':
+					return unit
+				case 'purchaseFee': {
+					const fee = fees[quoteIndex++]
+					if (fee === undefined) throw new Error('Unexpected quote')
+					return fee
+				}
+				default:
+					throw new Error(`Unexpected read ${parameters.functionName}`)
+			}
 		},
 	}
 	for (const [index, fee] of fees.entries()) {
 		const request = await prepareSeededPortfolioMint(client, owner, portfolio, BigInt(index + 1))
 		expect(request.value).toBe(unit + fee)
-		expect(decodeFunctionData({ abi: parseAbi(['function createCompleteSet(uint256 questionId,address recipient,uint256 minimumShares,uint256 mintAttoEth) payable']), data: request.data }).args).toEqual([BigInt(index + 1), owner, 0n, unit])
+		expect(decodeFunctionData({ abi: parseAbi(['function createCompleteSet(uint248 universeId,uint256 questionId,uint256 mintAttoEth,address recipient,uint256 minimumShares) payable']), data: request.data }).args).toEqual([0n, BigInt(index + 1), unit, owner, 0n])
 	}
 	expect(quoteIndex).toBe(2)
 })

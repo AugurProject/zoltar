@@ -201,9 +201,11 @@ export function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetai
 		badDebtAttoEth: 0n,
 		currentRetentionRate: 10n,
 		disputeStakedAttoRep: 0n,
+		disputeBackingAttoRep: overrides.disputeBackingAttoRep ?? overrides.disputeStakedAttoRep ?? 0n,
 		managerAddress: zeroAddress,
 		minimumVaultRepDepositAttoRep: 10n * 10n ** 18n,
 		totalRepBackingUnits: 1n,
+		totalPoolHeldRepBalanceAttoRep: 5n * 10n ** 18n,
 		vaultAttoRepBacking: 5n * 10n ** 18n,
 		repToken: zeroAddress,
 		underwritingLimitAttoEth: 2n * 10n ** 18n,
@@ -242,6 +244,7 @@ export function createOracleManagerDetails(overrides: Partial<OracleManagerDetai
 export function createSecurityPoolVaultSummary(overrides: Partial<SecurityPoolVaultSummary> = {}): SecurityPoolVaultSummary {
 	return {
 		disputeStakedAttoRep: 1n * 10n ** 18n,
+		disputeBackingAttoRep: overrides.disputeBackingAttoRep ?? overrides.disputeStakedAttoRep ?? 10n ** 18n,
 		vaultAttoRepBacking: 5n * 10n ** 18n,
 		underwritingLimitAttoEth: 2n * 10n ** 18n,
 		claimableFeesAttoEth: 1n * 10n ** 18n,
@@ -256,6 +259,7 @@ export function createUnencumberedVaultSummary(overrides: Partial<SecurityPoolVa
 		badDebtAttoEth: 0n,
 		claimableFeesAttoEth: 0n,
 		disputeStakedAttoRep: 0n,
+		disputeBackingAttoRep: overrides.disputeBackingAttoRep ?? overrides.disputeStakedAttoRep ?? 0n,
 		underwritingLimitAttoEth: 10n * 10n ** 18n,
 		vaultAttoRepBacking: 100n * 10n ** 18n,
 		...overrides,

@@ -111,6 +111,8 @@ export function TradingSection({
 	const mintingCapacityAttoEth = selectedPool === undefined ? 0n : getPoolMintingCapacityAttoEth(selectedPool)
 	const mintingPausedByEscalation = selectedPool !== undefined && isMintingPausedByEscalation(selectedPool, resolvedPoolState.lifecycleState)
 	const mintCheckpoint = estimateMintCheckpoint({
+		centralSettlement: selectedPool?.feeAccrualState?.centralSettlement,
+		linearFee: selectedPool?.feeAccrualState?.linearFee,
 		currentRetentionRate: selectedPool?.currentRetentionRate,
 		currentTimestamp,
 		totalUnderwritingLimitAttoEth: selectedPool?.totalUnderwritingLimitAttoEth,
@@ -122,10 +124,12 @@ export function TradingSection({
 		totalFeesOwedRemainder: selectedPool?.feeAccrualState?.totalFeesOwedRemainder,
 	})
 	const estimatedSettlementCollateralAttoEth = mintCheckpoint?.settlementCollateralAfterFeesAttoEth ?? selectedPool?.settlementCollateralAttoEth
+	const usesSharedBacking = selectedPool?.feeAccrualState?.linearFee !== undefined
 	const remainingMintCapacity = getRemainingMintCapacity(mintingCapacityAttoEth, estimatedSettlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
-	const maximumMintAmount = getMaximumMintAmount(accountState.ethBalanceAttoEth, remainingMintCapacity)
+	const maximumMintAmount = usesSharedBacking ? undefined : getMaximumMintAmount(accountState.ethBalanceAttoEth, remainingMintCapacity)
 	const mintGuardMessage = getTradingMintGuardMessage({
 		accountAddress: accountState.address,
+		usesSharedBacking,
 		escalationGameActive: mintingPausedByEscalation,
 		settlementCollateralAttoEth: estimatedSettlementCollateralAttoEth,
 		ethBalanceAttoEth: accountState.ethBalanceAttoEth,
@@ -169,6 +173,7 @@ export function TradingSection({
 		if (mintingPausedByEscalation) return MINTING_PAUSED_DURING_DISPUTE_MESSAGE
 		// A pool stage that closes minting explains it before any capacity figure, which a stale escalation flag can zero.
 		if (!mintEnabled) return tradingCopy.actionUnavailableReason
+		if (usesSharedBacking) return undefined
 		if (remainingMintCapacity === undefined) return tradingCopy.mintCapacityUnavailable
 		if (hasUndefinedCompleteSetExchangeRate(selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares) === true) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
 		if (remainingMintCapacity === 0n) {
@@ -368,9 +373,7 @@ export function TradingSection({
 					<MetricField label={tradingCopy.walletEth}>
 						<CurrencyValue exactWhenRoundedToZero value={accountState.ethBalanceAttoEth} suffix={commonCopy.eth} />
 					</MetricField>
-					<MetricField label={tradingCopy.availableToMint}>
-						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={maximumMintAmount} suffix={commonCopy.eth} />
-					</MetricField>
+					<MetricField label={tradingCopy.availableToMint}>{usesSharedBacking ? tradingCopy.sharedPoolCapacityAtReview : <CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={maximumMintAmount} suffix={commonCopy.eth} />}</MetricField>
 				</MetricGrid>
 				<AmountField
 					hint={
@@ -384,6 +387,7 @@ export function TradingSection({
 					unit={commonCopy.eth}
 					value={tradingForm.completeSetAmount}
 				/>
+				{usesSharedBacking && <UserMessage className='detail' detail={tradingCopy.sharedPoolPurchaseDetail} />}
 				<div className='actions'>
 					<TransactionActionButton
 						idleLabel={tradingCopy.mintCompleteSets}

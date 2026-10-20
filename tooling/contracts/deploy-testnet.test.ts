@@ -504,10 +504,18 @@ describe('testnet deployment plan', () => {
 			infrastructure.priceCoordinatorDeploymentWorker,
 			infrastructure.sharedPoolPriceFeedDeploymentWorker,
 			infrastructure.securityPoolFactory,
+			infrastructure.securityPoolForkerPortfolioDelegate,
 			infrastructure.securityPoolForker,
 			infrastructure.securityPoolOperationsDelegate,
-			infrastructure.securityPoolPortfolioQuoteDeployer,
-			infrastructure.securityPoolPortfolioVaultDeployer,
+			infrastructure.securityPoolEventEmitter,
+			infrastructure.securityPoolCapitalLedgerDeployer,
+			infrastructure.securityPoolCommitmentIndexDeployer,
+			infrastructure.securityPoolCapitalFeeStreamsDeployer,
+			infrastructure.securityPoolSettlementBookDeployer,
+			infrastructure.securityPoolPortfolioSettlementDeployer,
+			infrastructure.securityPoolReporterLedgerDeployer,
+			infrastructure.securityPoolPortfolioRecapAuctionDeployer,
+			infrastructure.securityPoolPortfolioForkCoordinatorDeployer,
 			infrastructure.securityPoolUtils,
 			infrastructure.shareTokenFactory,
 			infrastructure.uniformPriceDualCapBatchAuctionFactory,
@@ -528,8 +536,8 @@ describe('testnet deployment plan', () => {
 		const publishedAddresses = [SEPOLIA_NETWORK_PROFILE.wethAddress, uniswap.addresses.uniswapV3FactoryAddress, uniswap.addresses.uniswapV3QuoterAddress, uniswap.addresses.uniswapV4PoolManagerAddress, uniswap.addresses.uniswapV4QuoterAddress]
 		expect(uniswap.publishedContracts.map(contract => contract.address)).toEqual(publishedAddresses)
 		for (const address of publishedAddresses) expect(addressSet.has(address)).toBe(false)
-		expect(Object.keys(bootstrapDescendants)).toHaveLength(18)
-		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(18)
+		expect(Object.keys(bootstrapDescendants)).toHaveLength(20)
+		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(20)
 		for (const address of Object.values(bootstrapDescendants)) expect(addressSet.has(address)).toBe(false)
 		expect(bootstrapDescendants.escalationGameProofVerifier).toBe(infrastructure.escalationGameProofVerifier)
 		expect(bootstrapDescendants.liquidationApprovalRegistryDeployer).toBe(getCreateAddress({ from: infrastructure.openOraclePriceCoordinatorFactory, nonce: 1n }))
@@ -540,16 +548,20 @@ describe('testnet deployment plan', () => {
 		expect(bootstrapDescendants.sharedPoolPriceFeedCreationCodeFirstChunk).toBe(getCreateAddress({ from: infrastructure.sharedPoolPriceFeedDeploymentWorker, nonce: 1n }))
 		expect(bootstrapDescendants.sharedPoolPriceFeedCreationCodeSecondChunk).toBe(getCreateAddress({ from: infrastructure.sharedPoolPriceFeedDeploymentWorker, nonce: 2n }))
 		expect(bootstrapDescendants.securityPoolDeployer).toBe(getCreateAddress({ from: infrastructure.securityPoolFactory, nonce: 1n }))
-		expect(bootstrapDescendants.securityPoolDeploymentWorker).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeployer, nonce: 2n }))
+		expect(bootstrapDescendants.securityPoolDeploymentWorker).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeployer, nonce: 1n }))
 		expect(bootstrapDescendants.securityPoolCreationCodeFirstChunk).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeploymentWorker, nonce: 1n }))
 		expect(bootstrapDescendants.securityPoolCreationCodeSecondChunk).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeploymentWorker, nonce: 2n }))
+		expect(bootstrapDescendants['securityPoolCapitalCreationCodeFirstChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolCapitalLedgerDeployer, nonce: 1n }))
+		expect(bootstrapDescendants['securityPoolCapitalCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolCapitalLedgerDeployer, nonce: 2n }))
+		expect(bootstrapDescendants['securityPoolForkCreationCodeFirstChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioForkCoordinatorDeployer, nonce: 1n }))
+		expect(bootstrapDescendants['securityPoolForkCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioForkCoordinatorDeployer, nonce: 2n }))
 		expect(plan.some(step => step.id === 'escalationGameFactory')).toBe(true)
-		expect(plan).toHaveLength(27)
+		expect(plan).toHaveLength(35)
 		expect(new Set(plan.map(step => step.id)).size).toBe(plan.length)
 		expect(new Set(plan.map(step => step.address)).size).toBe(plan.length)
 		for (const step of plan) expect(CONSERVATIVE_DEPLOYMENT_GAS[step.id]).toBeGreaterThan(0n)
 		const deterministicPlan = createCompleteDeploymentPlan(SEPOLIA_NETWORK_PROFILE, await getUniswapDeployment(31_337))
-		expect(deterministicPlan).toHaveLength(32)
+		expect(deterministicPlan).toHaveLength(40)
 		expect(Object.keys(CONSERVATIVE_DEPLOYMENT_GAS).sort()).toEqual(deterministicPlan.map(step => step.id).sort())
 		const indexById = new Map(plan.map((step, index) => [step.id, index]))
 		for (const [index, step] of plan.entries()) {
@@ -705,7 +717,16 @@ describe('testnet deployment plan', () => {
 
 		const descendants = getBootstrapDescendantAddresses(SEPOLIA_NETWORK_PROFILE)
 		const expectedRuntimeCodeHashes = Object.fromEntries(Object.keys(descendants).map(id => [id, keccak256('0x01')]))
-		for (const id of ['priceCoordinatorCreationCodeFirstChunk', 'priceCoordinatorCreationCodeSecondChunk', 'securityPoolCreationCodeFirstChunk', 'securityPoolCreationCodeSecondChunk']) {
+		for (const id of [
+			'priceCoordinatorCreationCodeFirstChunk',
+			'priceCoordinatorCreationCodeSecondChunk',
+			'securityPoolCreationCodeFirstChunk',
+			'securityPoolCreationCodeSecondChunk',
+			'securityPoolCapitalCreationCodeFirstChunk',
+			'securityPoolCapitalCreationCodeSecondChunk',
+			'securityPoolForkCreationCodeFirstChunk',
+			'securityPoolForkCreationCodeSecondChunk',
+		]) {
 			const chunkAddress = descendants[id]
 			if (chunkAddress === undefined) throw new Error(`Missing test descendant ${id}`)
 			await expect(assertBootstrapDescendantCode({ getCode: async ({ address }) => (address === chunkAddress ? undefined : '0x01') }, SEPOLIA_NETWORK_PROFILE, async () => undefined, expectedRuntimeCodeHashes)).rejects.toThrow(`Bootstrap descendant ${id} is missing`)

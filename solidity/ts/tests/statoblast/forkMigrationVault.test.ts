@@ -562,6 +562,7 @@ describe('Statoblast: fork migration', () => {
 			const secondForkQuestionId = getQuestionId(secondForkQuestion, outcomes)
 			await createQuestion(client, secondForkQuestion, outcomes)
 			await approveToken(client, childRepToken, getZoltarAddress())
+			await mockWindow.setTime((await getUniverseData(client, genesisUniverse)).forkTime + 70n * DAY)
 			await forkUniverse(client, yesUniverse, secondForkQuestionId)
 
 			const readInactiveForkState = async () => ({
@@ -638,6 +639,7 @@ describe('Statoblast: fork migration', () => {
 			})
 			assert.ok(firstChildRepTotalSupply >= firstChildForkThreshold, 'the normally migrated child REP supply should cover the recursive fork threshold')
 			await approveToken(client, firstChildRepToken, getZoltarAddress())
+			await mockWindow.setTime((await getUniverseData(client, genesisUniverse)).forkTime + 70n * DAY)
 			await forkUniverse(client, firstChildUniverse, questionId)
 			await assert.rejects(initiateSecurityPoolFork(client, firstChildPool.securityPool))
 			strictEqualTypeSafe(await getSystemState(client, firstChildPool.securityPool), SystemState.Operational, 'the rejected recursive fork should leave the fixed child operational')
@@ -687,7 +689,7 @@ describe('Statoblast: fork migration', () => {
 				'an unrelated first fork should leave the first continuation without a fixed outcome',
 			)
 
-			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+			await mockWindow.advanceTime(10n * 7n * DAY + DAY)
 			await startTruthAuction(client, firstChildPool.securityPool)
 			strictEqualTypeSafe(await getSystemState(client, firstChildPool.securityPool), SystemState.Operational, 'first recursive child should become operational before its own fork')
 

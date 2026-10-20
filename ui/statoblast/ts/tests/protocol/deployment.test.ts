@@ -27,30 +27,34 @@ async function captureDeploymentInitCode(deploy: (client: WriteClient) => Promis
 
 describe('statoblast deployment steps', () => {
 	test('pins every directly deployed Statoblast artifact to its expected runtime code hash', () => {
-		expect(assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes()).toEqual([
-			'escalationGameClaimDelegate',
-			'escalationGameDepositDelegate',
-			'openOracle',
-			'securityPoolOperationsDelegate',
-			'securityPoolPortfolioQuoteDeployer',
-			'securityPoolPortfolioVaultDeployer',
-			'securityPoolUtils',
-			'uniformPriceDualCapBatchAuctionFactory',
-		])
+		expect(assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes()).toEqual(['escalationGameClaimDelegate', 'escalationGameDepositDelegate', 'openOracle', 'securityPoolEventEmitter', 'securityPoolOperationsDelegate', 'securityPoolUtils', 'uniformPriceDualCapBatchAuctionFactory'])
 	})
 
-	test('deploys the quote factory separately and binds the vault deployer to its canonical address', async () => {
+	test('deploys recapitalization before its fork coordinator and preserves verification for every capital module', async () => {
 		for (const profile of [MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE, simulationProfile]) {
 			const steps = getDeploymentSteps(profile)
-			const quote = steps.find(step => step.id === 'securityPoolPortfolioQuoteDeployer')
-			const vaults = steps.find(step => step.id === 'securityPoolPortfolioVaultDeployer')
-			if (quote === undefined || vaults === undefined) throw new Error('Missing portfolio infrastructure deployment step')
-			expect(vaults.dependencies).toContain(quote.id)
-			expect(steps.indexOf(quote)).toBeLessThan(steps.indexOf(vaults))
-			const constructor = encodeAbiParameters([{ type: 'address' }], [quote.address]).slice(2)
-			expect((await captureDeploymentInitCode(vaults.deploy)).endsWith(constructor)).toBe(true)
-			expect(getDeploymentStepConstructorArguments(profile).securityPoolPortfolioVaultDeployer).toBe(constructor)
-			expect(getDeploymentStepConstructorArguments(profile).securityPoolPortfolioQuoteDeployer).toBe('')
+			const recap = steps.find(step => step.id === 'securityPoolPortfolioRecapAuctionDeployer')
+			const forks = steps.find(step => step.id === 'securityPoolPortfolioForkCoordinatorDeployer')
+			if (recap === undefined || forks === undefined) throw new Error('Missing portfolio infrastructure deployment step')
+			expect(forks.dependencies).toContain(recap.id)
+			expect(steps.indexOf(recap)).toBeLessThan(steps.indexOf(forks))
+			const constructor = encodeAbiParameters([{ type: 'address' }], [recap.address]).slice(2)
+			expect((await captureDeploymentInitCode(forks.deploy)).endsWith(constructor)).toBe(true)
+			expect(getDeploymentStepConstructorArguments(profile).securityPoolPortfolioForkCoordinatorDeployer).toBe(constructor)
+			expect(getDeploymentStepConstructorArguments(profile).securityPoolPortfolioRecapAuctionDeployer).toBe('')
+			for (const id of [
+				'securityPoolCapitalLedgerDeployer',
+				'securityPoolCommitmentIndexDeployer',
+				'securityPoolCapitalFeeStreamsDeployer',
+				'securityPoolSettlementBookDeployer',
+				'securityPoolPortfolioSettlementDeployer',
+				'securityPoolReporterLedgerDeployer',
+				'securityPoolPortfolioRecapAuctionDeployer',
+				'securityPoolPortfolioForkCoordinatorDeployer',
+				'securityPoolForkerPortfolioDelegate',
+			]) {
+				expect(steps.find(step => step.id === id)?.expectedRuntimeCodeHash).toMatch(/^0x[0-9a-f]{64}$/)
+			}
 		}
 	})
 
@@ -72,7 +76,22 @@ describe('statoblast deployment steps', () => {
 			const steps = getDeploymentSteps(profile)
 			const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
 			if (oracleStep === undefined) throw new Error(`Missing deployment status oracle step for ${profile.id}`)
-			const statoblastStepIds = ['securityPoolForker', 'escalationGameClaimDelegate', 'escalationGameDepositDelegate', 'escalationGameFactory', 'securityPoolFactory', 'securityPoolPortfolioQuoteDeployer', 'securityPoolPortfolioVaultDeployer']
+			const statoblastStepIds = [
+				'securityPoolForker',
+				'securityPoolForkerPortfolioDelegate',
+				'escalationGameClaimDelegate',
+				'escalationGameDepositDelegate',
+				'escalationGameFactory',
+				'securityPoolFactory',
+				'securityPoolCapitalLedgerDeployer',
+				'securityPoolCommitmentIndexDeployer',
+				'securityPoolCapitalFeeStreamsDeployer',
+				'securityPoolSettlementBookDeployer',
+				'securityPoolPortfolioSettlementDeployer',
+				'securityPoolReporterLedgerDeployer',
+				'securityPoolPortfolioRecapAuctionDeployer',
+				'securityPoolPortfolioForkCoordinatorDeployer',
+			]
 			for (const stepId of statoblastStepIds) {
 				if (steps.every(step => step.id !== stepId)) throw new Error(`Missing statoblast deployment step ${stepId} for ${profile.id}`)
 			}

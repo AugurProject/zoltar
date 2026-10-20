@@ -51,6 +51,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 
 	/// @notice Moves ownership without changing pool-wide backing, capacity, debt or fork denominators.
 	function splitVaultPosition(address recipient, uint256 numerator, uint256 denominator) external {
+		require(portfolioCustody == address(0), 'Use shared capital ledger');
 		require(recipient != address(0) && recipient != msg.sender, 'Invalid position recipient');
 		require(numerator > 0 && numerator <= denominator, 'Invalid position fraction');
 		// Consent precedes eligibility checks and accounting reads so its callback cannot invalidate either.
@@ -95,12 +96,17 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		_delegateEvent(address(pool.eventEmitter()), abi.encodeCall(SecurityPoolEventEmitter.emitVaultAccountingCheckpoint, (msg.sender)));
 		_delegateEvent(address(pool.eventEmitter()), abi.encodeCall(SecurityPoolEventEmitter.emitVaultAccountingCheckpoint, (recipient)));
 		_delegateEvent(address(pool.eventEmitter()), abi.encodeCall(SecurityPoolEventEmitter.emitPoolAccountingCheckpoint, (AccountingReason.CapacityOwnershipChange, msg.sender)));
+		pool.updateRetentionRate();
 	}
 
 	/// @notice Pool delegatecall target: accrues pool fees and moves `vault`'s fee share into its claimable fees.
 	function updateVaultFees(address vault) external {
 		ISecurityPoolRepDepositContext pool = ISecurityPoolRepDepositContext(address(this));
 		pool.updateSettlementCollateral();
+		if (vault == portfolioCustody && portfolioCustody != address(0)) {
+			securityVaults[vault].feeIndex = feeIndex;
+			return;
+		}
 		bool hadUncheckpointedFeeEligibleCapacity = uncheckpointedFeeEligibleUnderwritingLimitAttoEth != 0;
 		uint256 previousVaultFeeIndex = securityVaults[vault].feeIndex;
 		uint256 previousVaultFeeRemainder = vaultFeeRemainders[vault];
@@ -165,6 +171,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 	}
 
 	function _setUnderwritingLimit(address vault, uint256 limitAttoEth) private {
+		require(portfolioCustody == address(0), 'Use shared capital ledger');
 		ISecurityPoolRepDepositContext context = ISecurityPoolRepDepositContext(address(this));
 		require(systemState == SystemState.Operational, 'Pool inactive');
 		require(IZoltarForkState(context.zoltar()).getForkTime(context.universeId()) == 0 || (ISecurityPool(payable(address(this))).isEscalationResolved() && limitAttoEth <= securityVaults[vault].underwritingLimitAttoEth), 'Forked');
@@ -193,7 +200,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 
 	function _requireLimitBacked(ISecurityPool pool, address vault, uint256 limitAttoEth) private view {
 		uint256 disputeStakedAttoRep =
-			address(escalationGame) == address(0) ? 0 : escalationGame.disputeStakedRepByVaultAttoRep(vault);
+			address(escalationGame) == address(0) ? 0 : escalationGame.getVaultDisputeBackingAttoRep(vault);
 		require(SecurityPoolUtils.isVaultHealthy(pool.backingUnitsToAttoRep(securityVaults[vault].repBackingUnits), disputeStakedAttoRep, limitAttoEth, pool.openOraclePriceCoordinator().lastPrice(), statoblastSecurityMultiplierBps), 'Vault backing insufficient');
 	}
 
@@ -228,7 +235,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 			escalationGame = pool.escalationGameFactory().deployEscalationGame(pool.initialEscalationGameDepositAttoRep(), zoltar.getNonDecisionThresholdAttoRep(universeId));
 			emit EscalationGameSet(escalationGame);
 		}
-		require(!escalationGame.forkContinuation(), 'Fork game');
+		require(!escalationGame.forkContinuation() || (portfolioCustody != address(0) && escalationGame.forkResumedAt() != 0), 'Fork game');
 		(uint256 depositedAttoRep, uint256 resultingCumulativeAttoRep) = escalationGame.previewDepositOnOutcome(outcome, maximumDepositAttoRep);
 		// Wallet funding enters dispute escrow directly and never acquires pool backing or capacity.
 		IERC20(pool.repToken()).safeTransferFrom(msg.sender, address(escalationGame), depositedAttoRep);
@@ -277,6 +284,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 	}
 
 	function _prepareRepDeposit(address vault, uint256 amountAttoRep, uint256 targetHealthFactorBps) private returns (uint256) {
+		require(portfolioCustody == address(0), 'Use shared capital ledger');
 		ISecurityPoolRepDepositContext pool = ISecurityPoolRepDepositContext(address(this));
 		_requireVaultAdmissionOpen(pool);
 		require(amountAttoRep > 0, 'Zero REP');
@@ -287,6 +295,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 
 	function _creditRepDeposit(address vault, uint256 amountAttoRep, uint256 repBackingUnits) private {
 		ISecurityPoolRepDepositContext pool = ISecurityPoolRepDepositContext(address(this));
+		if (portfolioCustody != address(0)) accountedPortfolioBackingAttoRep += amountAttoRep;
 		securityVaults[vault].repBackingUnits += repBackingUnits;
 		totalRepBackingUnits += repBackingUnits;
 		require(pool.backingUnitsToAttoRep(securityVaults[vault].repBackingUnits) >= minimumVaultRepDepositAttoRep, 'Vault REP below minimum');
@@ -323,6 +332,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		if (escalationGame.forkResumedAt() == 0) return;
 		awaitingForkContinuation = false;
 		emit AwaitingForkContinuationSet(false);
+		ISecurityPoolRepDepositContext(address(this)).updateRetentionRate();
 	}
 
 	/// @notice Pool delegatecall target: burns `redeemer`'s winning shares and returns the settlement collateral owed.
@@ -331,6 +341,8 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Question not final');
 		uint256 tokenId = shareToken.getTokenId(universeId, outcome);
 		(winningSharesBurnedAttoShares, ) = shareToken.burnTokenIdAndGetRemainingSupply(tokenId, redeemer);
+		if (portfolioCustody != address(0))
+			return (winningSharesBurnedAttoShares, _redeemPortfolioSettlement(redeemer, winningSharesBurnedAttoShares));
 		settlementCollateralRedeemedAttoEth =
 			shareTokenSupplyAttoShares == 0
 				? 0
@@ -347,6 +359,10 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 
 	/// @notice Pool delegatecall target: burns `redeemer`'s complete sets and returns the settlement collateral owed.
 	function redeemCompleteSet(IShareToken shareToken, uint248 universeId, address redeemer, uint256 amountAttoShares) external returns (uint256 settlementCollateralRedeemedAttoEth) {
+		if (portfolioCustody != address(0)) {
+			shareToken.burnCompleteSets(universeId, redeemer, amountAttoShares);
+			return _redeemPortfolioSettlement(redeemer, amountAttoShares);
+		}
 		settlementCollateralRedeemedAttoEth =
 			amountAttoShares == 0 || shareTokenSupplyAttoShares == 0
 				? 0
@@ -364,6 +380,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 
 	/// @notice Pool delegatecall target: moves commitment and REP backing from an unhealthy target vault to a receiver vault that must remain healthy.
 	function performBundledLiquidation(LiquidationExecutionRequest calldata request) external returns (uint256 debtToMoveAttoEth, uint256 underwritingLimitToMoveAttoEth, uint256 badDebtAttoEth) {
+		require(portfolioCustody == address(0), 'Use shared capital ledger');
 		ISecurityPool pool = ISecurityPool(payable(address(this)));
 		require(request.receiverVault != request.targetVault && request.receiverVault != address(0), 'Receiver bad');
 		require(_getVaultBadDebtAttoEth(request.targetVault) == 0, 'Target bad debt');
@@ -375,7 +392,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		uint256 targetDisputeAttoRep =
 			address(escalationGame) == address(0)
 				? 0
-				: escalationGame.disputeStakedRepByVaultAttoRep(request.targetVault);
+				: escalationGame.getVaultDisputeBackingAttoRep(request.targetVault);
 		require(SecurityPoolUtils._isLiquidationBeyondMinPriceDistance(targetBackingAttoRep, targetDisputeAttoRep, targetLimitAttoEth, statoblastSecurityMultiplierBps, request.repEthPrice, request.minLiquidationPriceDistanceBps), 'Liquidation distance too low');
 		require(!SecurityPoolUtils.isVaultHealthy(targetBackingAttoRep, targetDisputeAttoRep, targetLimitAttoEth, request.repEthPrice, statoblastSecurityMultiplierBps), 'Target safe');
 		uint256 backingUnitsToTransfer;
@@ -390,7 +407,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		uint256 receiverDisputeAttoRep =
 			address(escalationGame) == address(0)
 				? 0
-				: escalationGame.disputeStakedRepByVaultAttoRep(request.receiverVault);
+				: escalationGame.getVaultDisputeBackingAttoRep(request.receiverVault);
 		require(SecurityPoolUtils.isVaultHealthyAtFactor(pool.backingUnitsToAttoRep(securityVaults[request.receiverVault].repBackingUnits), receiverDisputeAttoRep, receiverLimitAttoEth, request.repEthPrice, statoblastSecurityMultiplierBps, request.minimumReceiverHealthFactorBps), 'Receiver bad');
 		require(receiverLimitAttoEth >= minimumSecurityBondDebtAttoEth, 'Receiver commitment below minimum');
 		require(pool.backingUnitsToAttoRep(securityVaults[request.receiverVault].repBackingUnits) >= minimumVaultRepDepositAttoRep, 'Receiver REP');

@@ -10,6 +10,10 @@ import '../interfaces/IShareToken.sol';
 import '../BinaryOutcomes.sol';
 import './ERC1155.sol';
 
+interface IShareTokenPortfolioForkAuthority {
+	function forkController() external view returns (address);
+}
+
 /**
  * @title Share Token
  * @notice ERC1155 contract to hold all share token balances
@@ -27,6 +31,8 @@ contract ShareToken is ERC1155, IShareToken {
 	mapping(uint256 => mapping(uint248 => mapping(address => uint256))) private migratedShareAmountAttoShares;
 	// Source token ID -> account -> whether its source balance is locked against transfers.
 	mapping(uint256 => mapping(address => bool)) private migratedSourceBalanceLocked;
+	mapping(uint248 => mapping(address => uint256)) public recoveredCompleteSetShares;
+	event PortfolioRecoveryRightsConsumed(uint248 indexed universeId, address indexed holder, uint256 amountAttoShares, uint256 cumulativeAttoShares);
 	event Migrate(address indexed migrator, uint256 indexed fromId, uint256 indexed toId, uint256 amountAttoShares);
 
 	constructor(address owner, Zoltar _zoltar, uint256 questionId) {
@@ -203,7 +209,7 @@ contract ShareToken is ERC1155, IShareToken {
 				forker.createChildUniverse(sourcePool, outcomeIndex);
 				targetPool = canonicalPoolByUniverse[targetUniverseId];
 			}
-			require(address(targetPool) != address(0x0) && address(targetPool.parent()) == address(sourcePool), 'ShareToken destination is missing a canonical child pool');
+			require(address(targetPool) != address(0x0) && (address(targetPool.parent()) == address(sourcePool) || sourcePool.portfolioCustody() != address(0)), 'ShareToken destination is missing a canonical child pool');
 			targetUniverseIds[i] = targetUniverseId;
 		}
 
@@ -222,6 +228,26 @@ contract ShareToken is ERC1155, IShareToken {
 			emit Migrate(msg.sender, fromId, toId, amountAttoShares);
 		}
 		require(migratedAnyShares, 'ShareToken has no new shares to migrate');
+	}
+
+	/// @notice Consume complete-set rights to source-universe recovery cash independently of every branch.
+	/// @dev Source shares remain intact for later branch minting. Locking their transfer
+	/// prevents recovery rights from being sold and consumed a second time.
+	function consumePortfolioRecoveryCompleteSets(uint248 sourceUniverse, address holder, uint256 amountAttoShares) external returns (uint256 cumulativeClaimedAttoShares) {
+		ISecurityPool source = canonicalPoolByUniverse[sourceUniverse];
+		require(address(source) != address(0) && source.portfolioCustody() != address(0), 'Recovery source is not a portfolio question');
+		address portfolio = source.securityPoolFactory().getSecurityPoolPortfolio(source);
+		require(msg.sender == portfolio || (portfolio.code.length != 0 && msg.sender == IShareTokenPortfolioForkAuthority(portfolio).forkController()), 'Only portfolio recovery authority');
+		require(zoltar.getForkTime(sourceUniverse) != 0, 'Recovery source has not forked');
+		require(amountAttoShares != 0, 'Recovery amount is zero');
+		cumulativeClaimedAttoShares = recoveredCompleteSetShares[sourceUniverse][holder] + amountAttoShares;
+		for (uint8 outcome; outcome < Constants.NUM_OUTCOMES; outcome++) {
+			uint256 id = TokenId.getTokenId(sourceUniverse, BinaryOutcomes.BinaryOutcome(outcome));
+			require(cumulativeClaimedAttoShares <= balanceOf(holder, id), 'Recovery requires unclaimed complete sets');
+			migratedSourceBalanceLocked[id][holder] = true;
+		}
+		recoveredCompleteSetShares[sourceUniverse][holder] = cumulativeClaimedAttoShares;
+		emit PortfolioRecoveryRightsConsumed(sourceUniverse, holder, amountAttoShares, cumulativeClaimedAttoShares);
 	}
 
 	function _internalTransferFrom(address from, address to, uint256 id, uint256 value, bytes memory data) internal override {

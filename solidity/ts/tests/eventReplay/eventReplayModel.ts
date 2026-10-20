@@ -322,7 +322,8 @@ export type ReplayState = {
 	escalationForkedEscrow: Map<Address, Map<string, ForkedEscrowReplay>>
 	escalationVaultExports: Map<Address, Map<Address, VaultUnresolvedExportReplay>>
 	escalationForkedExports: Map<Address, Map<Address, ForkedEscrowExportReplay>>
-	escalationResidualRepSwept: Map<Address, bigint>
+	escalationSurplusAccrued: Map<Address, bigint>
+	escalationResidualRepBurned: Map<Address, bigint>
 	escalationTotalEscrowedRep: Map<Address, bigint>
 	auctionBids: Map<Address, Map<string, AuctionBidReplay>>
 	auctions: Map<Address, AuctionLifecycleReplay>
@@ -375,7 +376,8 @@ export function createReplayState(): ReplayState {
 		escalationForkedEscrow: new Map(),
 		escalationVaultExports: new Map(),
 		escalationForkedExports: new Map(),
-		escalationResidualRepSwept: new Map(),
+		escalationSurplusAccrued: new Map(),
+		escalationResidualRepBurned: new Map(),
 		escalationTotalEscrowedRep: new Map(),
 		auctionBids: new Map(),
 		auctions: new Map(),
@@ -1349,8 +1351,11 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 		}
 		return
 	}
-	if (log.eventName === 'ResidualRepSweptToSecurityPool') {
-		state.escalationResidualRepSwept.set(log.emitter, (state.escalationResidualRepSwept.get(log.emitter) ?? 0n) + requireBigInt(log.args, 'amountAttoRep'))
+	if (log.eventName === 'EscalationSurplusAccrued') {
+		state.escalationSurplusAccrued.set(log.emitter, requireBigInt(log.args, 'cumulativeSurplusAttoRep'))
+	}
+	if (log.eventName === 'OrdinaryResidualRepBurned' || log.eventName === 'ForkContinuationResidualRepBurned') {
+		state.escalationResidualRepBurned.set(log.emitter, (state.escalationResidualRepBurned.get(log.emitter) ?? 0n) + requireBigInt(log.args, 'amountAttoRep'))
 	}
 }
 

@@ -23,6 +23,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 	}
 
 	function claimForkedEscalationDeposits(ISecurityPool parent, address vault, BinaryOutcomes.BinaryOutcome outcomeIndex, uint256[] calldata depositIndexes) public {
+		require(parent.portfolioCustody() == address(0), 'Reporter claims stay in central custody');
 		EscalationGame escalationGame = parent.escalationGame();
 		// A non-decision alone does not authorize forked escrow claims; fork-time escrow state is also required.
 		// This module is embedded in SecurityPoolForker's creation code. Data-free
@@ -77,6 +78,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 	}
 
 	function migrateVaultWithUnresolvedEscalation(ISecurityPool parent, address vault, uint256 childOutcomeIndex, ISecurityPool migratedChild, EscalationGame migratedChildEscalationGame) public {
+		require(parent.portfolioCustody() == address(0), 'Reporter claims stay in central custody');
 		if (msg.sender != vault) revert();
 		if (block.timestamp > forkDataByPool[parent].forkActivationTime + SecurityPoolUtils.MIGRATION_TIME) revert();
 		SecurityPoolForkerForkData storage parentForkData = forkDataByPool[parent];

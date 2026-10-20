@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { EscalationGameRepCustody } from '../EscalationGameRepCustody.sol';
+import { SecurityPoolReporterLedger } from '../SecurityPoolReporterLedger.sol';
+import { ISecurityPoolPortfolioNative } from '../interfaces/ISecurityPoolPortfolioNative.sol';
 import { ISecurityPool } from '../interfaces/ISecurityPool.sol';
 import { EscalationGame } from '../EscalationGame.sol';
 import { EscalationGameProofVerifier } from '../EscalationGameProofVerifier.sol';
@@ -59,7 +62,12 @@ contract EscalationGameFactory {
 		ISecurityPool parent = child.parent();
 		bool winnerHaircutPaidByFork;
 		uint256 forkCarryInitialBackingAttoRep;
-		if (address(parent) != address(0x0)) {
+		address portfolio = EscalationGameRepCustody.portfolio(address(child));
+		if (portfolio != address(0)) {
+			(SecurityPoolReporterLedger.Question memory state, ) = SecurityPoolReporterLedger(ISecurityPoolPortfolioNative(portfolio).reporterLedger(child.universeId())).question(child.universeId(), child.questionId());
+			winnerHaircutPaidByFork = state.winnerHaircutPaidByFork;
+			forkCarryInitialBackingAttoRep = state.balanceAttoRep;
+		} else if (address(parent) != address(0x0)) {
 			ISecurityPoolForker forker = ISecurityPoolForker(child.securityPoolForker());
 			winnerHaircutPaidByFork = forker.isEscalationWinnerHaircutPaidByFork(parent);
 			(, forkCarryInitialBackingAttoRep, ) = forker.getOwnForkRepBuckets(parent);

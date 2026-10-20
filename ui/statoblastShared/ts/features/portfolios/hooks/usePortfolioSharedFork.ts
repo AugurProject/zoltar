@@ -1,341 +1,317 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
-import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { encodeFunctionData, formatEther, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import {
-	buildPortfolioSharedForkChoiceRequest,
-	buildPortfolioSharedForkRevokeRequest,
-	buildPortfolioSharedForkProcessRequest,
-	buildPortfolioSharedForkRecoveryRequest,
-	buildPortfolioContextPositionClaimRequest,
-	loadPortfolioSharedForkSnapshot,
-	type PortfolioAggregateSnapshot,
-	type PortfolioSharedForkSnapshot,
+	buildPortfolioForkChoiceRequest,
+	buildPortfolioForkStartRequest,
+	buildPortfolioForkFinalizeRequest,
+	buildPortfolioForkRecoveryRequest,
+	buildPortfolioRecapPurchaseRequest,
+	loadPortfolioForkSnapshot,
+	loadPortfolioRecapQuote,
+	type PortfolioForkSnapshot,
+	type PortfolioRecapQuote,
 } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { getErrorMessage, getErrorDetail } from '@zoltar/ui-core-shared/lib/errors.js'
-import { formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { portfolioReadClient, type PortfolioTransaction } from '../../../protocol/securityPoolPortfolio.js'
-import { loadSharedForkOutcome, loadSharedForkPreparation } from '../../../protocol/securityPoolSharedFork.js'
+import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
+import { ABIS } from '@zoltar/ui-core-shared/abis.js'
+import { portfolioReadClient, type PortfolioAccountSnapshot, type PortfolioTransaction } from '../../../protocol/securityPoolPortfolio.js'
+import { loadSharedForkOutcome, loadPortfolioRecapWallet, loadPortfolioSourceRecovery, buildPortfolioRecoveryPreparation } from '../../../protocol/securityPoolSharedFork.js'
+import { portfolioAmountOrUndefined, portfolioUnsignedId } from '../lib/draft.js'
+import { portfolioBasisPointsOrUndefined } from '../lib/creation.js'
 import type { PortfolioActions } from '../components/PortfolioControls.js'
-import * as copy from '../../../copy/portfolioSharedFork.js'
-import * as forkCopy from '../../../copy/portfolioFork.js'
 
-export type PortfolioSharedForkParameters = { snapshot: PortfolioAggregateSnapshot; actions: Pick<PortfolioActions, 'scope' | 'busy' | 'ownerReason' | 'runPortfolioAction'>; onConfirmed: () => Promise<void> }
-
-function index(value: string) {
-	try {
-		if (value.trim() === '') return undefined
-		const parsed = BigInt(value)
-		return parsed >= 0n && parsed < 1n << 256n ? parsed : undefined
-	} catch (error) {
-		if (!(error instanceof SyntaxError)) throw error
-		return undefined
-	}
-}
-
-function choiceReason(snapshot: PortfolioSharedForkSnapshot) {
-	if (snapshot.opensAt === 0n) return copy.notForked
-	if (snapshot.timestamp < snapshot.opensAt) return copy.notOpen
-	if (snapshot.timestamp > snapshot.closesAt) return copy.closed
-	return undefined
-}
-
-function activeIntervals(snapshot: PortfolioSharedForkSnapshot) {
-	return snapshot.intervals.filter(interval => interval.active && interval.startPosition <= (interval.open ? snapshot.positionCount : interval.endPosition))
-}
-
-export function usePortfolioSharedFork({ snapshot: portfolio, actions, onConfirmed }: PortfolioSharedForkParameters) {
+export type PortfolioSharedForkParameters = { snapshot: PortfolioAccountSnapshot | undefined; actions: Pick<PortfolioActions, 'scope' | 'busy' | 'ownerReason' | 'runPortfolioAction'>; openUniverse: (universeId: bigint) => void }
+export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUniverse }: PortfolioSharedForkParameters) {
 	const backend = getActiveBackend()
-	const contextInput = useSignal('0')
+	const sourceInput = useSignal('')
 	const outcomeInput = useSignal('')
-	const positionInput = useSignal('')
-	const intervalCursors = useSignal<bigint[]>([0n])
-	const branchCursors = useSignal<bigint[]>([0n])
-	const refreshCount = useSignal(0)
-	const contextId = index(contextInput.value)
-	const outcomeIndex = index(outcomeInput.value)
-	const positionId = index(positionInput.value)
-	const key = `${portfolio.portfolio}:${portfolio.owner}:${portfolio.blockHash}:${contextInput.value}:${intervalCursors.value.at(-1)}:${branchCursors.value.at(-1)}:${outcomeInput.value}:${positionInput.value}:${refreshCount.value}`
-	type Loaded = {
-		key: string
-		backend: typeof backend
-		snapshot?: PortfolioSharedForkSnapshot
-		outcome?: Awaited<ReturnType<typeof loadSharedForkOutcome>> | undefined
-		position?: Awaited<ReturnType<typeof loadSharedForkPreparation>> | undefined
-		recoveryPreparation?: Awaited<ReturnType<typeof loadSharedForkPreparation>> | undefined
-		branchLabels?: { contextId: bigint; label: string }[]
-		incomingLabel?: string | undefined
-		error?: string
-	}
-	const loaded = useSignal<Loaded | undefined>(undefined)
-	const current = loaded.value?.key === key && loaded.value.backend === backend ? loaded.value : undefined
-	const state = current?.snapshot
-	const read = async (selectedContext = contextId, selectedOutcome = outcomeIndex) => {
-		if (selectedContext === undefined) throw new Error(copy.invalidContext)
-		return loadPortfolioSharedForkSnapshot({
-			client: portfolioReadClient(backend.createReadClient()),
-			portfolio: portfolio.portfolio,
-			owner: portfolio.owner,
-			contextId: selectedContext,
-			intervalCursor: intervalCursors.value.at(-1) ?? 0n,
-			branchCursor: branchCursors.value.at(-1) ?? 0n,
-			...(selectedOutcome === undefined ? {} : { outcomeIndex: selectedOutcome }),
-		})
-	}
-	const load = async () => {
-		const snapshot = await read()
-		const client = backend.createReadClient()
-		const [outcome, position, incomingOutcome, branchLabels] = await Promise.all([
-			outcomeIndex === undefined || snapshot.opensAt === 0n ? Promise.resolve(undefined) : loadSharedForkOutcome(client, snapshot, outcomeIndex),
-			positionId === undefined || positionId === 0n ? Promise.resolve(undefined) : loadSharedForkPreparation(client, snapshot, positionId, outcomeIndex),
-			snapshot.contextId === 0n ? Promise.resolve(undefined) : loadSharedForkOutcome(client, snapshot, snapshot.incomingOutcomeIndex, snapshot.parentUniverseId),
-			Promise.all(
-				snapshot.branches.map(async branch => {
-					const outcome = await loadSharedForkOutcome(client, snapshot, branch.outcomeIndex)
-					return { contextId: branch.contextId, label: outcome.outcomeLabel ?? String(branch.outcomeIndex) }
-				}),
-			),
-		])
-		let recoveryPreparation: Loaded['recoveryPreparation']
-		if (position !== undefined && snapshot.contextId > 0n && position.custody === zeroAddress && !position.recoveryComplete) {
-			const parent = await loadPortfolioSharedForkSnapshot({ client: portfolioReadClient(client), portfolio: portfolio.portfolio, owner: portfolio.owner, contextId: snapshot.parentContextId, outcomeIndex: snapshot.incomingOutcomeIndex })
-			recoveryPreparation = await loadSharedForkPreparation(client, parent, position.positionId, snapshot.incomingOutcomeIndex)
-			if (parent.timestamp <= parent.closesAt) recoveryPreparation = { ...recoveryPreparation, reason: copy.processingWait }
-			else if (parent.contextId > 0n && recoveryPreparation.custody === zeroAddress) recoveryPreparation = { ...recoveryPreparation, reason: copy.ancestorRequired }
-		}
-		return { snapshot, outcome, position, recoveryPreparation, branchLabels, incomingLabel: incomingOutcome?.outcomeLabel === undefined ? undefined : forkCopy.selectedBranch(incomingOutcome.questionTitle, incomingOutcome.outcomeLabel) }
-	}
+	const budgetInput = useSignal('')
+	const maximumRepInput = useSignal('')
+	const minimumRepInput = useSignal('')
+	const maximumCommitmentInput = useSignal('')
+	const maximumOwnRepInput = useSignal('0')
+	const healthInput = useSignal('100')
+	const questionInput = useSignal('')
+	const sharesInput = useSignal('')
+	const loaded = useSignal<{ key: string; state?: PortfolioForkSnapshot; outcome?: Awaited<ReturnType<typeof loadSharedForkOutcome>>; error?: string } | undefined>(undefined)
+	const quoted = useSignal<{ key: string; quote?: PortfolioRecapQuote; wallet?: Awaited<ReturnType<typeof loadPortfolioRecapWallet>>; error?: string } | undefined>(undefined)
+	const recovered = useSignal<{ key: string; source?: Awaited<ReturnType<typeof loadPortfolioSourceRecovery>>; error?: string } | undefined>(undefined)
 	useEffect(() => {
-		contextInput.value = '0'
+		sourceInput.value = portfolio?.universeId.toString() ?? ''
 		outcomeInput.value = ''
-		positionInput.value = ''
-		intervalCursors.value = [0n]
-		branchCursors.value = [0n]
-	}, [backend, portfolio.portfolio, portfolio.owner])
+		budgetInput.value = ''
+		maximumRepInput.value = ''
+		minimumRepInput.value = ''
+		maximumCommitmentInput.value = ''
+		maximumOwnRepInput.value = '0'
+		questionInput.value = ''
+		sharesInput.value = ''
+	}, [portfolio?.portfolio, portfolio?.owner, portfolio?.universeId])
+	const universeId = portfolioUnsignedId(sourceInput.value, 248)
+	const outcomeIndex = portfolioUnsignedId(outcomeInput.value)
+	const questionId = portfolioUnsignedId(questionInput.value)
+	const shares = portfolioAmountOrUndefined(sharesInput.value)
+	const maximumCost = portfolioAmountOrUndefined(budgetInput.value)
+	const maximumRep = portfolioAmountOrUndefined(maximumRepInput.value)
+	const minimumRep = portfolioAmountOrUndefined(minimumRepInput.value)
+	const maximumCommitment = portfolioAmountOrUndefined(maximumCommitmentInput.value)
+	const maximumOwnRep = portfolioAmountOrUndefined(maximumOwnRepInput.value)
+	const target = portfolioBasisPointsOrUndefined(healthInput.value)
+	const key = `${backend}:${portfolio?.portfolio}:${portfolio?.owner}:${portfolio?.blockHash}:${universeId}:${outcomeIndex}`
 	useEffect(() => {
-		let active = true
+		let current = true
 		loaded.value = undefined
-		if (contextId !== undefined)
-			void load()
-				.then(result => {
-					if (active) loaded.value = { key, backend, ...result }
+		if (portfolio !== undefined && universeId !== undefined) {
+			const client = createConnectedReadClient()
+			void (async () => {
+				const state = await loadPortfolioForkSnapshot({ client: portfolioReadClient(client), portfolio: portfolio.portfolio, owner: portfolio.owner, universeId, ...(outcomeIndex === undefined ? {} : { outcomeIndex }) })
+				const outcome = state.forkTime === 0n || state.branch === undefined ? undefined : await loadSharedForkOutcome(client, state, state.branch.outcomeIndex)
+				if (current && getActiveBackend() === backend) loaded.value = { key, state, ...(outcome === undefined ? {} : { outcome }) }
+			})().catch(error => {
+				if (current && getActiveBackend() === backend) loaded.value = { key, error: getErrorMessage(error, 'Unable to load this fork.') }
+			})
+		}
+		return () => {
+			current = false
+		}
+	}, [key])
+	const current = loaded.value?.key === key ? loaded.value : undefined
+	const state = current?.state
+	const quoteKey = `${key}:${state?.blockHash}:${maximumCost}:${maximumRep}:${target}`
+	useEffect(() => {
+		let current = true
+		quoted.value = undefined
+		if (state !== undefined && state.branch?.started && !state.branch.ready && state.branch.auction !== zeroAddress && maximumCost !== undefined && maximumCost > 0n && maximumRep !== undefined && maximumRep > 0n && target !== undefined && target >= 10_000n) {
+			const client = createConnectedReadClient()
+			void (async () => {
+				const [quote, wallet] = await Promise.all([loadPortfolioRecapQuote({ client: portfolioReadClient(client), snapshot: state, maximumCostAttoEth: maximumCost, maximumRep, targetHealthFactorBps: target }), loadPortfolioRecapWallet(client, state)])
+				if (current && getActiveBackend() === backend) quoted.value = { key: quoteKey, quote, ...(wallet === undefined ? {} : { wallet }) }
+			})().catch(error => {
+				if (current && getActiveBackend() === backend) quoted.value = { key: quoteKey, error: getErrorMessage(error, 'Unable to quote recap purchase.') }
+			})
+		}
+		return () => {
+			current = false
+		}
+	}, [quoteKey])
+	const quoteState = quoted.value?.key === quoteKey ? quoted.value : undefined
+	const quote = quoteState?.quote
+	const wallet = quoteState?.wallet
+	const recoveryKey = `${key}:${state?.blockHash}:${questionId}`
+	useEffect(() => {
+		let current = true
+		recovered.value = undefined
+		if (state !== undefined && state.forkTime > 0n && questionId !== undefined) {
+			void loadPortfolioSourceRecovery(createConnectedReadClient(), state, questionId)
+				.then(source => {
+					if (current && getActiveBackend() === backend) recovered.value = { key: recoveryKey, source }
 				})
 				.catch(error => {
-					if (active) {
-						if (getErrorDetail(error)?.includes('cursor retired')) {
-							intervalCursors.value = [0n]
-							branchCursors.value = [0n]
-						}
-						loaded.value = { key, backend, error: getErrorMessage(error, copy.loadFailed) }
-					}
+					if (current && getActiveBackend() === backend) recovered.value = { key: recoveryKey, error: getErrorMessage(error, 'Unable to read source recovery rights.') }
 				})
-		return () => {
-			active = false
 		}
-	}, [backend, key])
-	const loading = contextId !== undefined && current === undefined
-	const baseReason = actions.ownerReason ?? (contextId === undefined ? copy.invalidContext : undefined) ?? current?.error ?? (state === undefined ? copy.loading : undefined)
-	const intervals = state === undefined ? [] : activeIntervals(state)
-	const selected = intervals.filter(interval => interval.selected)
-	const windowReason = state === undefined ? copy.loading : choiceReason(state)
-	const branchReason = outcomeIndex === undefined || current?.outcome?.outcomeLabel === undefined ? forkCopy.chooseOutcome : undefined
-	const openChildReason = (contextId === undefined ? copy.invalidContext : undefined) ?? current?.error ?? (state === undefined ? copy.loading : undefined) ?? branchReason ?? (state?.childContextId === 0n ? copy.childUnavailable : undefined)
-	const chooseReason = baseReason ?? windowReason ?? (intervals.length === 0 ? copy.noIntervals : undefined) ?? branchReason
-	const revokeReason = baseReason ?? windowReason ?? (selected.length === 0 ? copy.noChoices : undefined)
-	const position = current?.position
-	const positionReason = (positionId === undefined || positionId === 0n ? copy.invalidPosition : undefined) ?? (position === undefined ? copy.loading : undefined)
-	const processReason =
-		baseReason ??
+		return () => {
+			current = false
+		}
+	}, [recoveryKey])
+	const recoveryState = recovered.value?.key === recoveryKey ? recovered.value : undefined
+	const recovery = recoveryState?.source
+	const baseReason = actions.ownerReason ?? current?.error ?? (state === undefined ? 'Load a portfolio fork first.' : undefined)
+	const forkReason = baseReason ?? (state?.forkTime === 0n ? 'This source universe has not forked.' : undefined)
+	const branchReason = forkReason ?? (state?.branch === undefined || current?.outcome?.outcomeLabel === undefined ? 'Enter a valid fork outcome.' : undefined)
+	const chooseReason =
 		branchReason ??
-		positionReason ??
-		(state !== undefined && (state.opensAt === 0n || state.timestamp <= state.closesAt) ? copy.processingWait : undefined) ??
-		(position?.branchProcessed ? copy.alreadyProcessed : undefined) ??
-		(position?.branchWeight === 0n ? copy.noBranchWeight : undefined) ??
-		(state !== undefined && state.contextId > 0n && position?.custody === zeroAddress ? copy.ancestorRequired : undefined) ??
-		position?.reason
-	const emptyProceedsReason = position?.recoveryComplete ? copy.allocationRecoveryComplete : copy.noProceeds
-	const collectReason =
-		baseReason ??
-		(state?.contextId === 0n ? copy.rootRecovery : undefined) ??
-		(positionInput.value.trim() !== '' ? (positionReason ?? current?.recoveryPreparation?.reason) : undefined) ??
-		((position === undefined || position.recoveryComplete) && state?.recoverableRepAttoRep === 0n && state.recoverableFeesAttoEth === 0n && !state.intervals.some(interval => interval.canRetire) ? emptyProceedsReason : undefined)
-	const interval = intervals.find(entry => positionId !== undefined && entry.startPosition <= positionId && (entry.open || entry.endPosition >= positionId))
-	const individualReason =
-		baseReason ??
-		positionReason ??
-		(interval === undefined ? copy.missingInterval : undefined) ??
-		(interval?.selected ? copy.selectedFallback : undefined) ??
-		(position?.recoveryComplete ? copy.positionRecovered : undefined) ??
-		(position?.custody === zeroAddress ? copy.ancestorRequired : undefined) ??
-		(position?.remainingShares === 0n ? copy.positionRecovered : undefined) ??
-		(position?.systemState !== undefined && position.systemState !== 0 && position.systemState !== 1 ? copy.nativeLocked : undefined)
-	const requestParameters = (snapshot: PortfolioSharedForkSnapshot) => ({ owner: snapshot.owner, controller: snapshot.controller, contextId: snapshot.contextId })
-	const run = (action: string, label: string, reason: string | undefined, build: (snapshot: PortfolioSharedForkSnapshot) => PortfolioTransaction) =>
-		actions.runPortfolioAction(
-			action,
-			label,
-			() => {
-				if (reason !== undefined || state === undefined) throw new Error(reason ?? copy.loading)
-				return build(state)
-			},
-			undefined,
-			async () => {
-				await onConfirmed()
-				refreshCount.value += 1
-			},
-		)
-	const assertIntervals = (latest: PortfolioSharedForkSnapshot, intervalIds: bigint[]) => {
-		if (intervalIds.some(id => !activeIntervals(latest).some(interval => interval.intervalId === id))) throw new Error(copy.historyChanged)
-	}
+		(state?.choice.recorded ? 'Your irreversible branch choice is already recorded.' : undefined) ??
+		(state !== undefined && state.timestamp >= state.choiceDeadline ? 'The fork choice window has closed.' : undefined) ??
+		(portfolio !== undefined && universeId === portfolio.universeId && !portfolio.positions.some(position => position.rep > 0n && position.commitment > 0n) ? 'No pledged REP to move.' : undefined)
+	const startReason = branchReason ?? (state !== undefined && state.timestamp < state.choiceDeadline ? 'Wait until the choice deadline.' : undefined) ?? (state?.branch?.started ? 'This branch is already prepared.' : undefined)
+	const finalizeReason = branchReason ?? (state !== undefined && state.timestamp < state.recapitalizationDeadline ? 'Wait until the recap deadline.' : undefined) ?? (state?.branch?.ready ? 'This branch is already active.' : undefined)
+	const recapReason =
+		branchReason ??
+		(state?.branch?.started !== true || state.branch.ready || state.branch.auction === zeroAddress ? 'This branch has no active recap sale.' : undefined) ??
+		(state !== undefined && state.timestamp >= state.recapitalizationDeadline ? 'The recap sale has closed.' : undefined) ??
+		(maximumCost === undefined || maximumCost === 0n || maximumRep === undefined || maximumRep === 0n || target === undefined || target < 10_000n ? 'Enter a positive budget, REP limit and health target of at least 100%.' : undefined) ??
+		quoteState?.error ??
+		quote?.reason ??
+		(quote === undefined || wallet === undefined ? 'Loading the recap quote.' : undefined)
+	const buyReason =
+		recapReason ??
+		(minimumRep === undefined || minimumRep === 0n || maximumRep === undefined || minimumRep > maximumRep || minimumRep > (quote?.rep ?? 0n) ? 'Set a positive minimum REP within the quote.' : undefined) ??
+		(maximumCommitment === undefined || maximumCommitment < (quote?.commitment ?? 0n) ? 'Maximum commitment is below the quote.' : undefined) ??
+		(maximumOwnRep === undefined || maximumOwnRep < (quote?.ownRep ?? 0n) ? 'Maximum extra REP is below the quote.' : undefined) ??
+		(wallet !== undefined && quote !== undefined && quote.ownRep > wallet.balance ? 'Insufficient wallet child REP.' : undefined) ??
+		(wallet !== undefined && quote !== undefined && quote.ownRep > wallet.allowance ? 'Approve child REP before purchasing.' : undefined) ??
+		(wallet !== undefined && quote !== undefined && maximumCost !== undefined && maximumCost + quote.executionReserve > wallet.eth ? 'Insufficient wallet ETH; gas is additional.' : undefined)
+	const recoveryReason = forkReason ?? (state !== undefined && state.timestamp < state.choiceDeadline ? 'Wait until the choice deadline.' : undefined) ?? (questionId === undefined ? 'Enter a question ID.' : undefined) ?? recoveryState?.error ?? (recovery === undefined ? 'Loading source complete sets.' : undefined)
+	const prepareReason = recoveryReason ?? (recovery?.pool !== zeroAddress ? 'The source question is already prepared.' : undefined)
+	const recoverReason =
+		recoveryReason ??
+		(recovery?.pool === zeroAddress ? 'Prepare the source question first.' : undefined) ??
+		(shares === undefined || shares === 0n ? 'Enter a positive complete-set amount.' : undefined) ??
+		(recovery !== undefined && shares !== undefined && shares > recovery.availableShares ? 'Insufficient unclaimed complete sets. Materialize source outcome tokens in the question market if needed.' : undefined)
+	const run = (action: string, title: string, reason: string | undefined, build: (selected: PortfolioForkSnapshot) => PortfolioTransaction, check?: (latest: PortfolioForkSnapshot) => Promise<void>) =>
+		actions.runPortfolioAction(action, title, () => {
+			if (reason !== undefined || state === undefined) throw new Error(reason ?? 'Fork state unavailable.')
+			const selected = state
+			const request = build(selected)
+			return {
+				...request,
+				validateBeforeSubmit: async () => {
+					if (getActiveBackend() !== backend) throw new Error('Wallet environment changed. Review again.')
+					const latest = await loadPortfolioForkSnapshot({ client: portfolioReadClient(createConnectedReadClient()), portfolio: selected.portfolio, owner: selected.owner, universeId: selected.universeId, ...(selected.branch === undefined ? {} : { outcomeIndex: selected.branch.outcomeIndex }) })
+					if (latest.chainId !== selected.chainId || latest.controller !== selected.controller) throw new Error('Fork context changed. Review again.')
+					await check?.(latest)
+				},
+			}
+		})
+	const base = (selected: PortfolioForkSnapshot) => ({ owner: selected.owner, controller: selected.controller, universeId: selected.universeId })
 	return {
 		state,
-		loading,
-		incomingLabel: current?.incomingLabel,
-		branches: current?.branchLabels ?? [],
-		rootContext: contextId === 0n,
-		error: current?.error,
-		contextInput: contextInput.value,
+		quote,
+		wallet,
+		recovery,
+		outcome: current?.outcome,
+		error: current?.error ?? quoteState?.error ?? recoveryState?.error,
+		loading: current === undefined,
+		sourceInput: sourceInput.value,
+		setSource: (v: string) => {
+			sourceInput.value = v
+		},
 		outcomeInput: outcomeInput.value,
-		positionInput: positionInput.value,
-		setContext: (value: string) => {
-			contextInput.value = value
-			outcomeInput.value = ''
-			positionInput.value = ''
-			intervalCursors.value = [0n]
-			branchCursors.value = [0n]
+		setOutcome: (v: string) => {
+			outcomeInput.value = v
 		},
-		setOutcome: (value: string) => {
-			outcomeInput.value = value
+		budgetInput: budgetInput.value,
+		setBudget: (v: string) => {
+			budgetInput.value = v
 		},
-		setPosition: (value: string) => {
-			positionInput.value = value
+		maximumRepInput: maximumRepInput.value,
+		setMaximumRep: (v: string) => {
+			maximumRepInput.value = v
 		},
-		intervals,
-		selectedCount: selected.length,
+		minimumRepInput: minimumRepInput.value,
+		setMinimumRep: (v: string) => {
+			minimumRepInput.value = v
+		},
+		maximumCommitmentInput: maximumCommitmentInput.value,
+		setMaximumCommitment: (v: string) => {
+			maximumCommitmentInput.value = v
+		},
+		maximumOwnRepInput: maximumOwnRepInput.value,
+		setMaximumOwnRep: (v: string) => {
+			maximumOwnRepInput.value = v
+		},
+		healthInput: healthInput.value,
+		setHealth: (v: string) => {
+			healthInput.value = v
+		},
+		questionInput: questionInput.value,
+		setQuestion: (v: string) => {
+			questionInput.value = v
+		},
+		sharesInput: sharesInput.value,
+		setShares: (v: string) => {
+			sharesInput.value = v
+		},
 		chooseReason,
-		revokeReason,
-		processReason,
-		collectReason,
-		individualReason,
-		openChildReason,
-		individualForkReason: individualReason ?? branchReason ?? position?.individualForkReason ?? position?.reason,
-		position,
-		preparation: current?.recoveryPreparation ?? position,
-		selectedBranch: current?.outcome?.outcomeLabel === undefined ? undefined : forkCopy.selectedBranch(current.outcome.questionTitle, current.outcome.outcomeLabel),
-		refresh: () => {
-			refreshCount.value += 1
-		},
-		hasPreviousPage: intervalCursors.value.length > 1,
-		hasPreviousBranchPage: branchCursors.value.length > 1,
-		previousPage: () => {
-			if (intervalCursors.value.length > 1) intervalCursors.value = intervalCursors.value.slice(0, -1)
-		},
-		nextPage: () => {
-			if (state !== undefined && state.nextIntervalCursor !== 0n) intervalCursors.value = [...intervalCursors.value, state.nextIntervalCursor]
-		},
-		previousBranchPage: () => {
-			if (branchCursors.value.length > 1) branchCursors.value = branchCursors.value.slice(0, -1)
-		},
-		nextBranchPage: () => {
-			if (state !== undefined && state.nextBranchCursor !== 0n) branchCursors.value = [...branchCursors.value, state.nextBranchCursor]
-		},
-		openContext: (id: bigint) => {
-			contextInput.value = String(id)
-			outcomeInput.value = ''
-			positionInput.value = ''
-			intervalCursors.value = [0n]
-			branchCursors.value = [0n]
-		},
-		openChild: () => {
-			if (state !== undefined && state.childContextId > 0n) {
-				contextInput.value = String(state.childContextId)
-				outcomeInput.value = ''
-				positionInput.value = ''
-				intervalCursors.value = [0n]
-				branchCursors.value = [0n]
-			}
+		startReason,
+		finalizeReason,
+		recapReason,
+		buyReason,
+		prepareReason,
+		recoverReason,
+		openReason: state?.branch?.ready ? undefined : 'Activate the branch before opening its account.',
+		open: () => {
+			if (state?.branch?.ready) openUniverse(state.branch.universeId)
 		},
 		choose: () =>
-			run('chooseSharedFork', copy.choice, chooseReason, snapshot => {
-				if (outcomeIndex === undefined || current?.outcome?.outcomeLabel === undefined) throw new Error(forkCopy.chooseOutcome)
-				const chosenOutcome = outcomeIndex
-				const intervalIds = intervals.map(interval => interval.intervalId)
+			run(
+				'choosePortfolioFork',
+				'Commit fork branch',
+				chooseReason,
+				selected => {
+					if (selected.branch === undefined) throw new Error('Select a branch.')
+					return {
+						...buildPortfolioForkChoiceRequest({ ...base(selected), outcomeIndex: selected.branch.outcomeIndex }),
+						reviewDescription: `Irreversibly choose outcome ${selected.branch.outcomeIndex} for every pledged position in universe ${selected.universeId}. Free REP and old fees remain in the source. There is no revoke action.`,
+					}
+				},
+				async latest => {
+					if (latest.choice.recorded || latest.timestamp >= latest.choiceDeadline) throw new Error('Fork choice is no longer available.')
+				},
+			),
+		start: () =>
+			run('startPortfolioFork', 'Prepare shared branch', startReason, selected => {
+				if (selected.branch === undefined) throw new Error('Select a branch.')
+				return { ...buildPortfolioForkStartRequest({ ...base(selected), outcomeIndex: selected.branch.outcomeIndex }), reviewDescription: 'Prepare this branch for all owners. This does not choose anyone’s branch or require processing each question.' }
+			}),
+		finalize: () =>
+			run('finalizePortfolioFork', 'Activate fork branch', finalizeReason, selected => {
+				if (selected.branch === undefined) throw new Error('Select a branch.')
+				return { ...buildPortfolioForkFinalizeRequest({ ...base(selected), universeId: selected.branch.universeId }), reviewDescription: 'Close this branch’s fixed recap window and activate its funded cash and personal collateral positions.' }
+			}),
+		approve: (amount: bigint) =>
+			run('approvePortfolioRecap', 'Approve child REP', recapReason, selected => {
+				if (selected.branch === undefined || quote === undefined || amount < quote.ownRep) throw new Error('Approval is below the required wallet REP.')
 				return {
-					...buildPortfolioSharedForkChoiceRequest({ ...requestParameters(snapshot), intervalIds, outcomeIndex: chosenOutcome }),
-					reviewDescription: copy.chooseReview(intervalIds.length, current.outcome.questionTitle, current.outcome.outcomeLabel, formatTimestamp(snapshot.closesAt)),
-					validateBeforeSubmit: async () => {
-						const latest = await read(snapshot.contextId, chosenOutcome)
-						assertIntervals(latest, intervalIds)
-						const unavailable = choiceReason(latest)
-						if (unavailable !== undefined) throw new Error(unavailable)
-					},
+					account: selected.owner,
+					to: selected.branch.repToken,
+					value: 0n,
+					data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [selected.controller, amount] }),
+					reviewDescription: `Allow the portfolio fork coordinator to transfer up to ${formatEther(amount)} child REP for your atomic recap purchase.`,
 				}
 			}),
-		revoke: () =>
-			run('revokeSharedFork', copy.revoke, revokeReason, snapshot => {
-				const intervalIds = selected.map(interval => interval.intervalId)
-				return {
-					...buildPortfolioSharedForkRevokeRequest({ ...requestParameters(snapshot), intervalIds }),
-					reviewDescription: copy.revokeReview(intervalIds.length),
-					validateBeforeSubmit: async () => {
-						const latest = await read(snapshot.contextId)
-						assertIntervals(latest, intervalIds)
-						const unavailable = choiceReason(latest)
-						if (unavailable !== undefined) throw new Error(unavailable)
-						if (intervalIds.some(id => !latest.intervals.some(interval => interval.intervalId === id && interval.selected))) throw new Error(copy.historyChanged)
-					},
-				}
+		buy: () =>
+			run(
+				'buyPortfolioRecap',
+				'Buy REP and accept commitment',
+				buyReason,
+				selected => {
+					if (selected.branch === undefined || maximumRep === undefined || minimumRep === undefined || maximumCommitment === undefined || maximumOwnRep === undefined || maximumCost === undefined || target === undefined || quote === undefined) throw new Error('Review recap limits first.')
+					return {
+						...buildPortfolioRecapPurchaseRequest({ ...base(selected), universeId: selected.branch.universeId, maximumRep, minimumRep, maximumCommitment, maximumOwnRep, targetHealthFactorBps: target, executionReserveAttoEth: quote.executionReserve, maximumCostAttoEth: maximumCost }),
+						reviewDescription: `Spend at most ${formatEther(maximumCost)} ETH plus ${formatEther(quote.executionReserve)} ETH execution reserve. Receive ${formatEther(minimumRep)}–${formatEther(maximumRep)} REP and accept at most ${formatEther(maximumCommitment)} ETH commitment. Extra wallet REP is capped at ${formatEther(maximumOwnRep)}. Your health target is ${healthInput.value}%. Unused sale cash is refunded.`,
+					}
+				},
+				async latest => {
+					if (maximumCost === undefined || maximumRep === undefined || target === undefined || quote === undefined) throw new Error('Recap quote unavailable.')
+					const client = createConnectedReadClient()
+					const [fresh, funds] = await Promise.all([loadPortfolioRecapQuote({ client: portfolioReadClient(client), snapshot: latest, maximumCostAttoEth: maximumCost, maximumRep, targetHealthFactorBps: target }), loadPortfolioRecapWallet(client, latest)])
+					if (
+						funds === undefined ||
+						fresh.reason !== undefined ||
+						fresh.rep < (minimumRep ?? 0n) ||
+						fresh.commitment > (maximumCommitment ?? 0n) ||
+						fresh.ownRep > (maximumOwnRep ?? 0n) ||
+						fresh.executionReserve > quote.executionReserve ||
+						fresh.ownRep > funds.allowance ||
+						fresh.ownRep > funds.balance ||
+						maximumCost + quote.executionReserve > funds.eth
+					)
+						throw new Error('Recap prerequisites changed. Refresh and review again.')
+				},
+			),
+		prepare: () =>
+			run('preparePortfolioRecovery', 'Prepare source question', prepareReason, selected => {
+				if (recovery === undefined) throw new Error('Source question unavailable.')
+				return { ...buildPortfolioRecoveryPreparation(selected, recovery), reviewDescription: 'Prepare this question’s source share namespace for all holders. This does not claim or migrate vault principal.' }
 			}),
-		process: () =>
-			run('processSharedFork', copy.process, processReason, snapshot => {
-				if (outcomeIndex === undefined || positionId === undefined || current?.outcome?.outcomeLabel === undefined) throw new Error(copy.historyChanged)
-				const chosenOutcome = outcomeIndex
-				const chosenPosition = positionId
-				return {
-					...buildPortfolioSharedForkProcessRequest({ ...requestParameters(snapshot), positionId: chosenPosition, outcomeIndex: chosenOutcome }),
-					reviewDescription: copy.processReview(chosenPosition, current.outcome.questionTitle, current.outcome.outcomeLabel),
-					validateBeforeSubmit: async () => {
-						const latest = await read(snapshot.contextId, chosenOutcome)
-						if (latest.opensAt === 0n || latest.timestamp <= latest.closesAt) throw new Error(copy.processingWait)
-						const checked = await loadSharedForkPreparation(backend.createReadClient(), latest, chosenPosition, chosenOutcome)
-						if (checked.reason !== undefined) throw new Error(checked.reason)
-						if (checked.branchProcessed || checked.branchWeight === 0n) throw new Error(copy.historyChanged)
-					},
-				}
-			}),
-		collect: () =>
-			run('collectSharedFork', copy.recover, collectReason, snapshot => {
-				const intervalIds = intervals.map(interval => interval.intervalId)
-				const chosenPosition = position?.positionId
-				return {
-					...buildPortfolioSharedForkRecoveryRequest({ ...requestParameters(snapshot), intervalIds, positionIds: chosenPosition === undefined ? [] : [chosenPosition] }),
-					reviewDescription: copy.recoverReview(current?.incomingLabel ?? snapshot.repToken, intervalIds.length, chosenPosition),
-					validateBeforeSubmit: async () => {
-						const latest = await read(snapshot.contextId)
-						assertIntervals(latest, intervalIds)
-						if (chosenPosition === undefined && latest.recoverableRepAttoRep === 0n && latest.recoverableFeesAttoEth === 0n && !latest.intervals.some(interval => intervalIds.includes(interval.intervalId) && interval.canRetire)) throw new Error(copy.noProceeds)
-					},
-				}
-			}),
-		individual: (migrate: boolean) =>
-			run(migrate ? 'claimContextPositionAndMigrate' : 'claimContextPosition', migrate ? copy.individualFork : copy.individual, migrate ? (individualReason ?? branchReason ?? position?.individualForkReason ?? position?.reason) : individualReason, snapshot => {
-				if (positionId === undefined || interval === undefined || (migrate && outcomeIndex === undefined)) throw new Error(copy.historyChanged)
-				const chosenPosition = positionId
-				const chosenInterval = interval.intervalId
-				const chosenOutcome = migrate ? outcomeIndex : undefined
-				return {
-					...buildPortfolioContextPositionClaimRequest({ ...requestParameters(snapshot), positionId: chosenPosition, intervalId: chosenInterval, ...(chosenOutcome === undefined ? {} : { outcomeIndex: chosenOutcome }) }),
-					reviewDescription: copy.individualReview(current?.incomingLabel ?? snapshot.repToken, chosenPosition) + (migrate && current?.outcome?.outcomeLabel !== undefined ? ` ${forkCopy.selectedBranch(current.outcome.questionTitle, current.outcome.outcomeLabel)}` : ''),
-					validateBeforeSubmit: async () => {
-						const latest = await read(snapshot.contextId, chosenOutcome)
-						assertIntervals(latest, [chosenInterval])
-						if (latest.intervals.some(interval => interval.intervalId === chosenInterval && interval.selected)) throw new Error(copy.selectedFallback)
-						const checked = await loadSharedForkPreparation(backend.createReadClient(), latest, chosenPosition, chosenOutcome)
-						if (checked.recoveryComplete || checked.remainingShares === 0n) throw new Error(copy.positionRecovered)
-						if (migrate && checked.individualForkReason !== undefined) throw new Error(checked.individualForkReason)
-						if (migrate && checked.reason !== undefined) throw new Error(checked.reason)
-					},
-				}
-			}),
+		recover: () =>
+			run(
+				'recoverPortfolioSource',
+				'Recover source cash',
+				recoverReason,
+				selected => {
+					if (questionId === undefined || shares === undefined) throw new Error('Enter recovery complete sets.')
+					return { ...buildPortfolioForkRecoveryRequest({ ...base(selected), questionId, shares }), reviewDescription: `Use ${formatEther(shares)} complete-set recovery rights for question 0x${questionId.toString(16)}. Source shares become nontransferable while all child branch token rights remain available.` }
+				},
+				async latest => {
+					if (questionId === undefined || shares === undefined) throw new Error('Recovery amount unavailable.')
+					const fresh = await loadPortfolioSourceRecovery(createConnectedReadClient(), latest, questionId)
+					if (fresh.availableShares < shares || fresh.pool === zeroAddress) throw new Error('Source recovery prerequisites changed.')
+				},
+			),
 	}
 }

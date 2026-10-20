@@ -21,6 +21,7 @@ import { getMaxRepBeingSoldAttoRep, getMinBidSizeAttoEth } from '../testSupport/
 import { getTotalPoolHeldAttoRep, redeemRepFromVault, withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
 import { addRepToMigrationBalance, getZoltarForkThreshold, splitMigrationRep } from '../testSupport/simulator/utils/contracts/zoltar'
 import { useStatoblastTruthAuctionFixture } from './statoblast/fixture'
+import { Zoltar_Zoltar } from '../types/contractArtifact'
 
 describe('Recursive truth-auction ownership regression', () => {
 	const fixture = useStatoblastTruthAuctionFixture()
@@ -75,6 +76,9 @@ describe('Recursive truth-auction ownership regression', () => {
 			await approveToken(attacker, currentRepToken, getZoltarAddress())
 			const forkThreshold = await getZoltarForkThreshold(client, currentUniverse)
 			assert.ok((await getERC20Balance(client, currentRepToken, attacker.account.address)) >= forkThreshold, `round ${roundIndex + 1}: the attacker should hold enough real REP to fund the unrelated universe fork`)
+			// Finishing the native auction does not end the parent's response window.
+			const earliestForkTime = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getEarliestForkTime', args: [currentUniverse] })
+			if ((await mockWindow.getTime()) < earliestForkTime) await mockWindow.setTime(earliestForkTime)
 			await forkUniverse(attacker, currentUniverse, forkQuestionId)
 
 			const remainingWalletRep = await getERC20Balance(client, currentRepToken, attacker.account.address)
@@ -155,6 +159,7 @@ describe('Recursive truth-auction ownership regression', () => {
 
 		await redeemRepFromVault(auctionWinner, currentPool.securityPool, auctionWinner.account.address)
 		strictEqualTypeSafe(await backingUnitsToAttoRep(client, currentPool.securityPool, dilutedAttackerVault.repBackingUnits), 0n, 'the sub-haircut migrated claim should remain zero after the auction winner redeems')
-		await assert.rejects(redeemRepFromVault(attacker, currentPool.securityPool, attacker.account.address), /No redeemable REP/)
+		assert.ok(dilutedAttackerVault.underwritingLimitAttoEth > 0n, 'rounding away REP must not erase the standing commitment')
+		await assert.rejects(redeemRepFromVault(attacker, currentPool.securityPool, attacker.account.address), /Exit commitment before REP redemption/)
 	})
 })

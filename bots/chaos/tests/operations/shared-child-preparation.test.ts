@@ -34,19 +34,19 @@ function forkFixture() {
 	pool.forkActivationTime = '1999999000'
 	universe.forkTime = pool.forkActivationTime
 	universe.forkQuestionId = question.id
-	pool.childPoolPreparations['0'] = { portfolio: address(90), childUniverseId: '88', childPool: zeroAddress, game: zeroAddress, historyOutcomesInitialized: 0, historyReady: false, feedRequired: true, dependenciesRequired: true }
+	pool.childPoolPreparations['0'] = { portfolio: address(90), branchReady: true, sourcePool: pool.address, sourceGame: zeroAddress, childUniverseId: '88', childPool: zeroAddress, game: zeroAddress, historyOutcomesInitialized: 0, historyReady: false, feedRequired: true, dependenciesRequired: true }
 	return { snapshot, pool }
 }
 
-test('shared child creation prepares the feed and dependencies in separate bounded transactions', () => {
+test('shared child creation prepares its native namespace only after the shared branch is ready', () => {
 	const { snapshot } = forkFixture()
 	const plan = forkDefinition('create-child')
 		.buildLifecyclePlans?.(snapshot, options)
 		.find(plan => plan.metadata?.['outcome'] === '0')
-	expect(plan?.steps.map(step => decodeFunctionData({ abi: [...securityPoolFactoryAbi, ...securityPoolForkerAbi], data: step.data }).functionName)).toEqual(['preparePortfolioChildPriceFeed', 'prepareChildPoolDependencies', 'createChildUniverse'])
+	expect(plan?.steps.map(step => decodeFunctionData({ abi: [...securityPoolFactoryAbi, ...securityPoolForkerAbi], data: step.data }).functionName)).toEqual(['preparePortfolioQuestion'])
 	if (plan === undefined) throw new Error('Missing shared child creation plan')
-	expect(assertWorkflowPrerequisiteLimit(plan)).toBe(2)
-	expect(plan.steps[0]?.evidence).toMatchObject([{ functionName: 'sharedPriceFeeds', args: [address(90), '88'], relation: 'greater-than', expected: '0' }])
+	expect(assertWorkflowPrerequisiteLimit(plan)).toBe(0)
+	expect(plan.steps[0]?.evidence).toMatchObject([{ functionName: 'getPool', args: [snapshot.pools[0]?.questionId, '88'], relation: 'greater-than', expected: '0' }])
 })
 
 test('native child creation prepares only its coordinator and auction, and completed preparation is skipped', () => {
@@ -66,6 +66,9 @@ test('native child creation prepares only its coordinator and auction, and compl
 
 test('extra preparation finality time is included in the migration deadline guard', () => {
 	const { snapshot, pool } = forkFixture()
+	const preparation = pool.childPoolPreparations['0']
+	if (preparation === undefined) throw new Error('Missing preparation')
+	preparation.portfolio = zeroAddress
 	const deadline = BigInt(pool.forkActivationTime) + 8n * 7n * 86400n
 	snapshot.anchor.timestamp = (deadline - requiredTimestampSafetySeconds(options, 2)).toString()
 	expect(
@@ -83,12 +86,16 @@ test('extra preparation finality time is included in the migration deadline guar
 
 test('vault migration waits for the canonical child creation lifecycle plan', () => {
 	const { snapshot, pool } = forkFixture()
-	for (const outcome of ['0', '1', '2']) pool.childPoolPreparations[outcome] = { portfolio: address(90), childUniverseId: '88', childPool: zeroAddress, game: zeroAddress, historyOutcomesInitialized: 0, historyReady: false, feedRequired: true, dependenciesRequired: true }
+	for (const outcome of ['0', '1', '2'])
+		pool.childPoolPreparations[outcome] = { portfolio: address(90), branchReady: true, sourcePool: pool.address, sourceGame: zeroAddress, childUniverseId: '88', childPool: zeroAddress, game: zeroAddress, historyOutcomesInitialized: 0, historyReady: false, feedRequired: true, dependenciesRequired: true }
 	expect(forkDefinition('migrate-vault').buildLifecyclePlans?.(snapshot, options)).toEqual([])
 })
 
 test('dependency receipt evidence reads the first static return word and rejects an incomplete tuple', async () => {
 	const { snapshot, pool } = forkFixture()
+	const preparation = pool.childPoolPreparations['0']
+	if (preparation === undefined) throw new Error('Missing preparation')
+	preparation.portfolio = zeroAddress
 	const step = forkDefinition('create-child')
 		.buildLifecyclePlans?.(snapshot, options)
 		.find(plan => plan.metadata?.['outcome'] === '0')
@@ -124,6 +131,7 @@ for (const expired of [false, true])
 		const { snapshot, pool } = forkFixture()
 		const preparation = pool.childPoolPreparations['0']
 		if (preparation === undefined) throw new Error('Missing child preparation')
+		preparation.portfolio = zeroAddress
 		preparation.childPool = address(93)
 		preparation.game = address(94)
 		preparation.historyOutcomesInitialized = 1
@@ -142,3 +150,37 @@ for (const expired of [false, true])
 		expect(initializeChildHistory.buildPlan(snapshot, options)).toBeUndefined()
 		expect(childLedgerNeedsPreparation(pool, '0')).toBe(false)
 	})
+
+test('shared child work waits for branch activation and remains available after the standalone migration cutoff', () => {
+	const { snapshot, pool } = forkFixture()
+	const preparation = pool.childPoolPreparations['0']
+	if (preparation === undefined) throw new Error('Missing preparation')
+	snapshot.anchor.timestamp = (BigInt(pool.forkActivationTime) + 70n * 86400n).toString()
+	preparation.branchReady = false
+	const plans = () =>
+		forkDefinition('create-child')
+			.buildLifecyclePlans?.(snapshot, options)
+			.filter(plan => plan.metadata?.['outcome'] === '0')
+	expect(plans()).toEqual([])
+	preparation.branchReady = true
+	expect(plans()).toHaveLength(1)
+	expect(plans()?.[0]?.deadlineTimestamp).toBeUndefined()
+})
+
+test('shared reporter initialization uses its last live source and one bounded materialization call', () => {
+	const { snapshot, pool } = forkFixture()
+	const preparation = pool.childPoolPreparations['0']
+	if (preparation === undefined) throw new Error('Missing preparation')
+	preparation.childPool = address(93)
+	preparation.sourcePool = address(95)
+	preparation.sourceGame = address(96)
+	preparation.game = address(94)
+	preparation.historyOutcomesInitialized = 1
+	const plan = initializeChildHistory.buildPlan(snapshot, options)
+	const step = plan?.steps[0]
+	if (step === undefined) throw new Error('Missing materialization')
+	expect(decodeFunctionData({ abi: securityPoolForkerAbi, data: step.data })).toMatchObject({ functionName: 'materializePortfolioQuestion', args: [address(95), 88n] })
+	expect(step.gasLimit).toBe('16777216')
+	preparation.branchReady = false
+	expect(initializeChildHistory.buildPlan(snapshot, options)).toBeUndefined()
+})

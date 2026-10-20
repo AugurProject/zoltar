@@ -34,6 +34,8 @@ async function loadPool(client: ReadClient, settings: OperatorSettings, deployme
 	const blockNumber = block.number
 	const address = getAddress(deployment.securityPool)
 	const manager = getAddress(deployment.openOraclePriceCoordinator)
+	const portfolio = getAddress(await client.readContract({ abi: securityPoolFactoryAbi, address: settings.deployment.securityPoolFactory, functionName: 'getSecurityPoolPortfolio', args: [address], blockNumber }))
+	if (portfolio !== zeroAddress) throw new Error(`Pool ${address} uses portfolio ${portfolio}; this operator supports standalone vaults only`)
 	const [
 		knownVaultCount,
 		currentRetentionRate,

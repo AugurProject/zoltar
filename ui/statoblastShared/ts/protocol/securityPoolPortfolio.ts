@@ -1,42 +1,37 @@
-import { decodeEventLog, encodeFunctionData, formatEther, formatUnits, getAddress, parseAbiItem, zeroAddress, type Address, type Hex, type TransactionLog } from '@zoltar/core-shared/evm/ethereum'
-import {
-	buildPortfolioDeploymentRequest,
-	buildPortfolioQuestionBatchRequest,
-	buildPortfolioAllocationPolicyRequest,
-	planPortfolioAllocations,
-	type PortfolioReadClient,
-	type PortfolioSnapshot,
-	type PortfolioAllocationPolicyConfig,
-	type PortfolioAllocationRule,
-	type PortfolioEconomicsConfig,
-} from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { encodeFunctionData, getAddress, parseAbi, parseAbiItem, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { buildPortfolioDeploymentRequest, buildPortfolioPrepareNextRequest, loadPortfolioCapitalSnapshot, type PortfolioReadClient, type PortfolioEconomicsConfig } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
+import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
-	statoblast_SecurityPoolPortfolioQuote_SecurityPoolPortfolioQuote as quoteArtifact,
-	statoblast_SecurityPoolPortfolioRecoveryDeployer_SecurityPoolPortfolioRecoveryDeployer as recoveryDeployerArtifact,
-	statoblast_SecurityPoolPortfolioVault_SecurityPoolPortfolioVault as vaultArtifact,
-	statoblast_SecurityPoolPortfolioRecovery_SecurityPoolPortfolioRecovery as recoveryArtifact,
-	statoblast_SecurityPoolPortfolioForkController_SecurityPoolPortfolioForkController as forkArtifact,
-	statoblast_SecurityPoolPortfolioVaultDeployer_SecurityPoolPortfolioVaultDeployer as deployerArtifact,
+	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
+	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
+	statoblast_SecurityPoolCapitalFeeStreams_SecurityPoolCapitalFeeStreams as feesArtifact,
+	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
+	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
+	statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact,
+	statoblast_SecurityPoolPortfolioPurchase_SecurityPoolPortfolioPurchase as purchaseArtifact,
+	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
 } from '../contractArtifact.js'
-import {
-	getInfraContractAddresses,
-	getSecurityPoolPortfolioByteCode,
-	getSecurityPoolPortfolioRuntimeCode,
-	getSecurityPoolPortfolioQuoteRuntimeCode,
-	getSecurityPoolPortfolioQuoteDeployerRuntimeCode,
-	getSecurityPoolPortfolioRecoveryRuntimeCode,
-	getSecurityPoolPortfolioVaultRuntimeCode,
-	getSecurityPoolPortfolioVaultDeployerRuntimeCode,
-	getSecurityPoolPortfolioForkControllerRuntimeCode,
-	getSecurityPoolPortfolioRecoveryDeployerRuntimeCode,
-} from './deploymentHelpers.js'
-
-export { vaultArtifact }
+import { getInfraContractAddresses, getSecurityPoolPortfolioByteCode, getSecurityPoolPortfolioRuntimeCode, getPortfolioDeployers } from './deploymentHelpers.js'
+import { requireAddressValue, requireBigintValue, requireIntegerLikeValue } from './decoders.js'
+import { loadPortfolioAdmission } from './securityPoolPortfolioAdmission.js'
 
 export type PortfolioTransaction = { account: Address; to?: Address; data: Hex; value?: bigint; reviewDescription?: string; validateBeforeSubmit?: () => Promise<void> }
+const linksAbi = parseAbi([
+	'function portfolio() view returns (address)',
+	'function zoltar() view returns (address)',
+	'function universeId() view returns (uint248)',
+	'function ledger() view returns (address)',
+	'function feeStreams() view returns (address)',
+	'function getRepToken(uint248 universeId) view returns (address)',
+	'function setupStage() view returns (uint8)',
+	'function prepareNext()',
+	'function factory() view returns (address)',
+	'function originUniverseId() view returns (uint248)',
+])
+type RuntimeArtifact = { evm: { deployedBytecode: { object: string; immutableReferences: Readonly<Record<string, readonly { start: number; length: number }[]>> } } }
 
 export function verifyRuntimeCode(actual: Hex | undefined, expected: Hex, references: Readonly<Record<string, readonly { start: number; length: number }[]>>, label: string) {
 	if (actual === undefined || actual.length !== expected.length) throw new Error(`Unrecognized ${label} runtime code.`)
@@ -61,69 +56,99 @@ export function verifyRuntimeCode(actual: Hex | undefined, expected: Hex, refere
 	if (mask(actual) !== mask(expected)) throw new Error(`Unrecognized ${label} runtime code.`)
 }
 
-export async function loadPortfolioOwnerVault(client: Pick<ReadClient, 'getCode' | 'readContract'>, portfolio: Address, owner: Address) {
-	verifyRuntimeCode(await client.getCode({ address: portfolio }), getSecurityPoolPortfolioRuntimeCode(), portfolioArtifact.evm.deployedBytecode.immutableReferences, 'portfolio')
-	const [vault, originUniverseId, factory, quoteHelper, recoveryLedger] = await Promise.all([
-		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'vaultOf', args: [owner] }),
-		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'originUniverseId' }),
-		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'factory' }),
-		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'quoteHelper' }),
-		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'recoveryLedger' }),
-	])
-	if (getAddress(factory) !== getAddress(getInfraContractAddresses().securityPoolFactory)) throw new Error('Portfolio uses an unrecognized pool factory.')
-	// Quote code and all immutable economic parameters must match this portfolio.
-	verifyRuntimeCode(await client.getCode({ address: quoteHelper }), getSecurityPoolPortfolioQuoteRuntimeCode(), quoteArtifact.evm.deployedBytecode.immutableReferences, 'portfolio quote helper')
-	if (getAddress(await client.readContract({ address: quoteHelper, abi: quoteArtifact.abi, functionName: 'portfolio' })) !== getAddress(portfolio)) throw new Error('Quote helper belongs to another portfolio.')
-	for (const functionName of ['targetHealthFactorBps', 'purchaseFeeBps', 'minimumPurchaseFeeAttoEth'] as const) {
-		const [configured, quoted] = await Promise.all([client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName }), client.readContract({ address: quoteHelper, abi: quoteArtifact.abi, functionName })])
-		if (configured !== quoted) throw new Error('Portfolio quote helper economics do not match the reserve.')
-	}
-	verifyRuntimeCode(await client.getCode({ address: recoveryLedger }), getSecurityPoolPortfolioRecoveryRuntimeCode(), recoveryArtifact.evm.deployedBytecode.immutableReferences, 'portfolio recovery ledger')
-	if (getAddress(await client.readContract({ address: recoveryLedger, abi: recoveryArtifact.abi, functionName: 'portfolio' })) !== getAddress(portfolio)) throw new Error('Recovery ledger belongs to another portfolio.')
-	const deployer = await client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'vaultDeployer' })
-	verifyRuntimeCode(await client.getCode({ address: deployer }), getSecurityPoolPortfolioVaultDeployerRuntimeCode(), deployerArtifact.evm.deployedBytecode.immutableReferences, 'portfolio vault deployer')
-	if (getAddress(deployer) !== getAddress(getInfraContractAddresses().securityPoolPortfolioVaultDeployer)) throw new Error('Portfolio uses an unrecognized vault deployer.')
-	const [helpers, forkController] = await Promise.all([client.readContract({ address: deployer, abi: deployerArtifact.abi, functionName: 'helpers' }), client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'forkController' })])
-	verifyRuntimeCode(await client.getCode({ address: helpers }), getSecurityPoolPortfolioRecoveryDeployerRuntimeCode(), recoveryDeployerArtifact.evm.deployedBytecode.immutableReferences, 'portfolio recovery deployer')
-	const quoteDeployer = await client.readContract({ address: helpers, abi: recoveryDeployerArtifact.abi, functionName: 'quoteDeployer' })
-	if (getAddress(quoteDeployer) !== getAddress(getInfraContractAddresses().securityPoolPortfolioQuoteDeployer)) throw new Error('Portfolio uses an unrecognized quote deployer.')
-	verifyRuntimeCode(await client.getCode({ address: quoteDeployer }), getSecurityPoolPortfolioQuoteDeployerRuntimeCode(), {}, 'portfolio quote deployer')
-	verifyRuntimeCode(await client.getCode({ address: forkController }), getSecurityPoolPortfolioForkControllerRuntimeCode(), forkArtifact.evm.deployedBytecode.immutableReferences, 'portfolio fork controller')
-	const [controllerPortfolio, controllerHelpers, controllerZoltar, rootContext, fixedOwnership] = await Promise.all([
-		client.readContract({ address: forkController, abi: forkArtifact.abi, functionName: 'portfolio' }),
-		client.readContract({ address: forkController, abi: forkArtifact.abi, functionName: 'helpers' }),
-		client.readContract({ address: forkController, abi: forkArtifact.abi, functionName: 'zoltar' }),
-		client.readContract({ address: forkController, abi: forkArtifact.abi, functionName: 'getContext', args: [0n] }),
-		client.readContract({ address: recoveryLedger, abi: recoveryArtifact.abi, functionName: 'fixedOwnership' }),
-	])
-	if (getAddress(controllerPortfolio) !== getAddress(portfolio) || getAddress(controllerHelpers) !== getAddress(helpers) || getAddress(controllerZoltar) !== getAddress(getInfraContractAddresses().zoltar)) throw new Error('Fork controller does not match this portfolio and its canonical helpers.')
-	if (getAddress(rootContext.ledger) !== getAddress(recoveryLedger) || rootContext.universeId !== originUniverseId || fixedOwnership) throw new Error('Fork controller root ownership does not match this portfolio.')
-
-	if (vault !== zeroAddress) {
-		const predictedVault = await client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'predictVaultAddress', args: [owner] })
-		if (getAddress(vault) !== getAddress(predictedVault)) throw new Error('Portfolio did not return its canonical owner vault address.')
-		verifyRuntimeCode(await client.getCode({ address: vault }), getSecurityPoolPortfolioVaultRuntimeCode(), vaultArtifact.evm.deployedBytecode.immutableReferences, 'portfolio vault')
-		const [vaultOwner, vaultPortfolio] = await Promise.all([client.readContract({ address: vault, abi: vaultArtifact.abi, functionName: 'owner' }), client.readContract({ address: vault, abi: vaultArtifact.abi, functionName: 'portfolio' })])
-		if (getAddress(vaultOwner) !== getAddress(owner) || getAddress(vaultPortfolio) !== getAddress(portfolio)) throw new Error('Portfolio vault ownership does not match the selected account.')
-	}
-	return { vault, originUniverseId }
+async function verifyModule(client: ReadClient, address: Address, artifact: RuntimeArtifact, authority: Address, label: string, blockNumber: bigint) {
+	verifyRuntimeCode(await client.getCode({ address, blockNumber }), `0x${artifact.evm.deployedBytecode.object}`, artifact.evm.deployedBytecode.immutableReferences, label)
+	const actualValue = await client.readContract({ address, abi: linksAbi, functionName: 'portfolio', blockNumber })
+	const actual = requireAddressValue(actualValue, 'module authority')
+	if (getAddress(actual) !== getAddress(authority)) throw new Error(`${label} belongs to another authority.`)
 }
+
+/** A bounded setup status is readable before the custody modules exist. */
+export async function loadPortfolioSetup(client: ReadClient, portfolio: Address, owner: Address) {
+	const [block, chainId] = await Promise.all([client.getBlock(), client.getChainId()])
+	if (block.number === undefined || block.hash === undefined) throw new Error('Portfolio setup requires a mined block.')
+	const blockNumber = block.number
+	verifyRuntimeCode(await client.getCode({ address: portfolio, blockNumber }), getSecurityPoolPortfolioRuntimeCode(), portfolioArtifact.evm.deployedBytecode.immutableReferences, 'portfolio')
+	const [stageValue, factoryValue, zoltarValue, originValue] = await Promise.all([
+		client.readContract({ address: portfolio, abi: linksAbi, functionName: 'setupStage', blockNumber }),
+		client.readContract({ address: portfolio, abi: linksAbi, functionName: 'factory', blockNumber }),
+		client.readContract({ address: portfolio, abi: linksAbi, functionName: 'zoltar', blockNumber }),
+		client.readContract({ address: portfolio, abi: linksAbi, functionName: 'originUniverseId', blockNumber }),
+	])
+	const infrastructure = getInfraContractAddresses()
+	if (getAddress(requireAddressValue(factoryValue, 'portfolio factory')) !== getAddress(infrastructure.securityPoolFactory) || getAddress(requireAddressValue(zoltarValue, 'portfolio protocol')) !== getAddress(infrastructure.zoltar)) throw new Error('Portfolio uses unrecognized protocol contracts.')
+	const stage = Number(requireIntegerLikeValue(stageValue, 'setup stage'))
+	if (stage < 0 || stage > 3) throw new Error('Invalid portfolio setup stage.')
+	const [finalBlock, finalChain] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
+	if (finalBlock.hash !== block.hash || finalChain !== chainId) throw new Error('Portfolio setup changed. Refresh and retry.')
+	return { portfolio, owner, stage, originUniverseId: requireBigintValue(originValue, 'origin universe'), chainId, blockNumber, blockHash: block.hash }
+}
+export type PortfolioSetupSnapshot = Awaited<ReturnType<typeof loadPortfolioSetup>>
+export function portfolioPreparationRequest(owner: Address, portfolio: Address): PortfolioTransaction {
+	return buildPortfolioPrepareNextRequest({ caller: owner, portfolio })
+}
+
+/** Authenticate the actual custody tree before offering approvals or transactions. */
+export async function loadPortfolioAccount(client: ReadClient, portfolio: Address, owner: Address, universeId: bigint, questionStart = 0n, admissionStart = 0n) {
+	const snapshot = await loadPortfolioCapitalSnapshot({ client: portfolioReadClient(client), portfolio, owner, universeId })
+	const blockNumber = snapshot.blockNumber
+	verifyRuntimeCode(await client.getCode({ address: portfolio, blockNumber }), getSecurityPoolPortfolioRuntimeCode(), portfolioArtifact.evm.deployedBytecode.immutableReferences, 'portfolio')
+	const [factory, zoltar, originUniverseId, admissionAddress, settlement, reporters, quoteHelper, forkController, feeStreamsValue, questionCount] = await Promise.all([
+		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'factory', blockNumber }),
+		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'zoltar', blockNumber }),
+		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'originUniverseId', blockNumber }),
+		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'questionAdmissionPolicy', blockNumber }),
+		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'settlement', blockNumber }),
+		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'reporters', blockNumber }),
+		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'quoteHelper', blockNumber }),
+		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'forkController', blockNumber }),
+		client.readContract({ address: snapshot.capitalLedger, abi: linksAbi, functionName: 'feeStreams', blockNumber }),
+		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'questionCount', blockNumber }),
+	])
+	const feeStreams = requireAddressValue(feeStreamsValue, 'fee streams')
+	const infrastructure = getInfraContractAddresses()
+	if (getAddress(factory) !== getAddress(infrastructure.securityPoolFactory) || getAddress(zoltar) !== getAddress(infrastructure.zoltar)) throw new Error('Portfolio uses unrecognized protocol contracts.')
+	const start = questionStart > questionCount ? 0n : questionStart
+	const [questions, admission, walletAttoRep, allowanceAttoRep, walletAttoEth, bookValue] = await Promise.all([
+		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'getQuestions', args: [start, 64n], blockNumber }),
+		loadPortfolioAdmission(client, admissionAddress, originUniverseId, blockNumber, admissionStart),
+		client.readContract({ address: snapshot.repToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [owner], blockNumber }),
+		client.readContract({ address: snapshot.repToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [owner, snapshot.capitalLedger], blockNumber }),
+		client.getBalance({ address: owner, blockNumber }),
+		client.readContract({ address: settlement, abi: linksAbi, functionName: 'ledger', blockNumber }),
+	])
+	const book = requireAddressValue(bookValue, 'settlement book')
+	await Promise.all([
+		verifyModule(client, snapshot.capitalLedger, capitalArtifact, portfolio, 'capital ledger', blockNumber),
+		verifyModule(client, snapshot.commitmentIndex, indexArtifact, snapshot.capitalLedger, 'commitment index', blockNumber),
+		verifyModule(client, feeStreams, feesArtifact, snapshot.capitalLedger, 'capital fee streams', blockNumber),
+		verifyModule(client, settlement, settlementArtifact, portfolio, 'settlement engine', blockNumber),
+		verifyModule(client, book, bookArtifact, settlement, 'settlement book', blockNumber),
+		verifyModule(client, reporters, reporterArtifact, portfolio, 'reporter ledger', blockNumber),
+		verifyModule(client, quoteHelper, purchaseArtifact, portfolio, 'portfolio purchase helper', blockNumber),
+		verifyModule(client, forkController, forkArtifact, portfolio, 'fork coordinator', blockNumber),
+	])
+	const [capitalUniverse, capitalProtocol, reporterProtocol, forkProtocol, canonicalRep] = await Promise.all([
+		client.readContract({ address: snapshot.capitalLedger, abi: linksAbi, functionName: 'universeId', blockNumber }),
+		client.readContract({ address: snapshot.capitalLedger, abi: linksAbi, functionName: 'zoltar', blockNumber }),
+		client.readContract({ address: reporters, abi: linksAbi, functionName: 'zoltar', blockNumber }),
+		client.readContract({ address: forkController, abi: linksAbi, functionName: 'zoltar', blockNumber }),
+		client.readContract({ address: zoltar, abi: linksAbi, functionName: 'getRepToken', args: [universeId], blockNumber }),
+	])
+	if (requireBigintValue(capitalUniverse, 'capital universe') !== universeId || requireAddressValue(canonicalRep, 'canonical REP') !== snapshot.repToken || [capitalProtocol, reporterProtocol, forkProtocol].some(value => requireAddressValue(value, 'module protocol') !== getAddress(zoltar)))
+		throw new Error('Portfolio modules use another universe or protocol.')
+
+	const [block, chainId] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
+	if (block.hash !== snapshot.blockHash || chainId !== snapshot.chainId) throw new Error('Chain changed while reading the portfolio. Refresh and try again.')
+	return { ...snapshot, originUniverseId, questionAdmissionPolicy: admissionAddress, admission, questions, questionCount, questionStart: start, walletAttoRep, allowanceAttoRep, walletAttoEth, forkController }
+}
+export type PortfolioAccountSnapshot = Awaited<ReturnType<typeof loadPortfolioAccount>>
 
 export function portfolioCreationRequest(owner: Address, initialOriginPool: Address, maximumQuestionHorizonSeconds: bigint, questionAdmissionPolicy: Address, economics: PortfolioEconomicsConfig) {
-	return buildPortfolioDeploymentRequest({
-		owner,
-		initialOriginPool,
-		maximumQuestionHorizonSeconds,
-		questionAdmissionPolicy,
-		economics,
-		factory: getInfraContractAddresses().securityPoolFactory,
-		vaultDeployer: getInfraContractAddresses().securityPoolPortfolioVaultDeployer,
-		artifact: { abi: portfolioArtifact.abi, bytecode: getSecurityPoolPortfolioByteCode() },
-	})
+	return buildPortfolioDeploymentRequest({ owner, initialOriginPool, maximumQuestionHorizonSeconds, questionAdmissionPolicy, economics, factory: getInfraContractAddresses().securityPoolFactory, deployers: getPortfolioDeployers(), artifact: { abi: portfolioArtifact.abi, bytecode: getSecurityPoolPortfolioByteCode() } })
 }
-
-export function portfolioContractRequest(account: Address, to: Address, functionName: string, args: readonly unknown[] = [], vault = false): PortfolioTransaction {
-	return { account, to, value: 0n, data: encodeFunctionData({ abi: vault ? vaultArtifact.abi : portfolioArtifact.abi, functionName, args }) }
+export function portfolioContractRequest(account: Address, to: Address, functionName: string, args: readonly unknown[] = []): PortfolioTransaction {
+	return { account, to, value: 0n, data: encodeFunctionData({ abi: portfolioArtifact.abi, functionName, args }) }
 }
 
 export async function sendPortfolioTransaction(client: WriteClient, request: PortfolioTransaction, title: string, validate: () => Promise<void> = async () => undefined) {
@@ -143,86 +168,9 @@ export async function sendPortfolioTransaction(client: WriteClient, request: Por
 	return { hash: result.hash, receipt: result.receipt }
 }
 
-/** Encode and describe the same captured operations; revalidation never reads mutable form inputs. */
-export function capturePortfolioBatchReview(owner: Address, vault: Address, snapshot: PortfolioSnapshot, plan: ReturnType<typeof planPortfolioAllocations>) {
-	const captured = structuredClone({ snapshot, plan })
-	const first = captured.plan.operations[0]
-	if (first === undefined) throw new Error('Choose at least one allocation.')
-	const minimumIdleAttoRep = first.minimumIdleAttoRep
-	const minimumHealthFactorBps = first.input.minimumReceiverHealthFactorBps
-	const universeId = first.universeId
-	const branch = captured.snapshot.branches.find(item => item.universeId === universeId)
-	if (branch === undefined || captured.plan.operations.some(operation => operation.universeId !== universeId || operation.minimumIdleAttoRep !== minimumIdleAttoRep || operation.input.minimumReceiverHealthFactorBps !== minimumHealthFactorBps))
-		throw new Error('Allocation review must use one universe, reserve and health limit.')
-	const allocations = captured.plan.operations.map(operation => ({ questionId: operation.questionId, depositAttoRep: operation.input.depositAttoRep, commitmentAttoEth: operation.input.commitmentAttoEth }))
-	const questionDescriptions = allocations.map(allocation => {
-		const pool = branch.positions.find(position => position.questionId === allocation.questionId)?.pool
-		if (pool === undefined) throw new Error('Allocation review is missing the question pool.')
-		return `Question 0x${allocation.questionId.toString(16)}; pool ${pool}: deposit ${formatEther(allocation.depositAttoRep)} REP; target commitment ${formatEther(allocation.commitmentAttoEth)} ETH.`
-	})
-	const encoded = buildPortfolioQuestionBatchRequest({ owner, vault, vaultAbi: vaultArtifact.abi, operations: captured.plan.operations, requireImmediate: true })
-	const request: PortfolioTransaction = {
-		...encoded,
-		reviewDescription: [
-			`Universe ${universeId}.`,
-			...questionDescriptions,
-			`Minimum health ${formatUnits(minimumHealthFactorBps, 2)}% (${minimumHealthFactorBps} bps). Keep at least ${formatEther(minimumIdleAttoRep)} REP idle. Expected idle after allocation: ${formatEther(captured.plan.idleAfterAttoRep)} REP. All question operations must execute immediately together.`,
-			'Manual vault execution revokes any active allocation policy before allocating REP.',
-		].join('\n'),
-	}
-	const validateSnapshot = (latest: PortfolioSnapshot) => {
-		if (latest.portfolio !== captured.snapshot.portfolio || latest.vault !== vault || latest.owner !== owner || latest.chainId !== captured.snapshot.chainId) throw new Error('Portfolio context changed. Refresh and review the allocation again.')
-		const next = planPortfolioAllocations({ snapshot: latest, universeId, minimumIdleAttoRep, minimumHealthFactorBps, allocations })
-		const nextRequest = buildPortfolioQuestionBatchRequest({ owner, vault, vaultAbi: vaultArtifact.abi, operations: next.operations, requireImmediate: true })
-		if (next.idleAfterAttoRep !== captured.plan.idleAfterAttoRep || nextRequest.data !== encoded.data) throw new Error('Portfolio balances or commitments changed. Refresh and review the allocation again.')
-	}
-	validateSnapshot(captured.snapshot)
-	return { request, validateSnapshot }
-}
-
-export function portfolioPolicyReviewRequest({
-	owner,
-	vault,
-	previousPolicy,
-	config,
-	rules,
-	client,
-}: {
-	owner: Address
-	vault: Address
-	previousPolicy: Awaited<ReturnType<typeof loadPortfolioPolicy>>
-	config: PortfolioAllocationPolicyConfig
-	rules: readonly PortfolioAllocationRule[]
-	client: ReadClient
-}): PortfolioTransaction {
-	const captured = structuredClone({ config, rules, previousPolicy })
-	const policy = captured.config
-	const prior = captured.previousPolicy
-	const request = buildPortfolioAllocationPolicyRequest({ owner, vault, vaultAbi: vaultArtifact.abi, expectedVersion: prior.version, expectedNonce: prior.nonce, config: captured.config, rules: captured.rules })
-	return {
-		...request,
-		reviewDescription: [
-			`Reviewed prior policy version ${prior.version}, nonce ${prior.nonce}.`,
-			prior.config.executor === zeroAddress
-				? 'No prior allocation authority is active.'
-				: `Prior executor ${prior.config.executor}; universe ${prior.config.universeId}. Prior spending: ${formatEther(prior.spentDepositAttoRep)} of ${formatEther(prior.config.depositBudgetAttoRep)} REP deposits; ${formatEther(prior.spentCommitmentIncreaseAttoEth)} of ${formatEther(prior.config.commitmentIncreaseBudgetAttoEth)} ETH commitment increases.`,
-			`Executor ${policy.executor}; universe ${policy.universeId}; expires ${new Date(Number(policy.expiresAt) * 1000).toISOString()}.`,
-			`Cumulative budgets: ${formatEther(policy.depositBudgetAttoRep)} REP deposits and ${formatEther(policy.commitmentIncreaseBudgetAttoEth)} ETH commitment increases.`,
-			...captured.rules.map(rule => `Question 0x${rule.questionId.toString(16)}: deposit budget ${formatEther(rule.depositBudgetAttoRep)} REP; commitment cap ${formatEther(rule.maximumCommitmentAttoEth)} ETH.`),
-			`Minimum health ${formatUnits(policy.minimumHealthFactorBps, 2)}% (${policy.minimumHealthFactorBps} bps). Keep at least ${formatEther(policy.minimumIdleAttoRep)} REP idle. Replacing a policy grants fresh budgets; prior spending is not deducted. The executor may spend these budgets at any permitted time.`,
-			'Manual vault execution revokes this policy. Transferring REP into the vault leaves the policy active.',
-		].join('\n'),
-		validateBeforeSubmit: async () => {
-			const latest = await loadPortfolioPolicy(client, vault)
-			if (latest.version !== prior.version || latest.nonce !== prior.nonce) throw new Error('Allocation authority changed. Refresh and review the policy again.')
-		},
-	}
-}
-
 export function portfolioReadClient(client: ReadClient): PortfolioReadClient {
 	return {
 		getChainId: () => client.getChainId(),
-		getLogs: parameters => client.getLogs(parameters),
 		readContract: parameters => client.readContract(parameters),
 		getBlock: async parameters => {
 			const block = await client.getBlock(parameters)
@@ -232,39 +180,20 @@ export function portfolioReadClient(client: ReadClient): PortfolioReadClient {
 	}
 }
 
-export async function loadPortfolioPolicy(client: ReadClient, vault: Address, snapshotBlockNumber?: bigint) {
-	const blockNumber = snapshotBlockNumber ?? (await client.getBlock()).number
-	if (blockNumber === undefined) throw new Error('Policy review requires a mined block.')
-	const [policy, version, nonce] = await Promise.all([
-		client.readContract({ address: vault, abi: vaultArtifact.abi, functionName: 'allocationPolicy', blockNumber }),
-		client.readContract({ address: vault, abi: vaultArtifact.abi, functionName: 'allocationPolicyVersion', blockNumber }),
-		client.readContract({ address: vault, abi: vaultArtifact.abi, functionName: 'allocationPolicyNonce', blockNumber }),
-	])
-	return { config: policy[0], repToken: policy[1], spentDepositAttoRep: policy[2], spentCommitmentIncreaseAttoEth: policy[3], version, nonce }
-}
-
-const vaultCreatedEvent = parseAbiItem('event VaultCreated(address indexed owner,address indexed vault)')
-type PortfolioDiscoveryClient = Pick<ReadClient, 'getCode' | 'readContract'> & {
-	getLogs(parameters: { event: typeof vaultCreatedEvent; args: { owner: Address }; fromBlock: bigint }): Promise<readonly Pick<TransactionLog, 'address' | 'data' | 'topics'>[]>
-}
-
-/** Demo discovery stays on the browser-local chain; production imports remain explicit. */
-export async function discoverSimulationPortfolio(client: PortfolioDiscoveryClient, backend: 'simulation' | 'injected', owner: Address): Promise<Address | undefined> {
+const principalDepositedEvent = parseAbiItem('event PrincipalDeposited(address indexed payer,address indexed owner,uint256 amountAttoRep)')
+/** Discovery is restricted to the browser-local simulation and authenticated again on load. */
+export async function discoverSimulationPortfolio(client: ReadClient, backend: 'simulation' | 'injected', owner: Address): Promise<Address | undefined> {
 	if (backend !== 'simulation') return undefined
-	const logs = await client.getLogs({ event: vaultCreatedEvent, args: { owner }, fromBlock: 0n })
-	const candidates = new Set<string>()
+	const logs = await client.getLogs({ event: principalDepositedEvent, args: { owner }, fromBlock: 0n })
 	for (const log of [...logs].reverse()) {
-		if (candidates.has(log.address.toLowerCase())) continue
-		candidates.add(log.address.toLowerCase())
 		try {
-			const event = decodeEventLog({ abi: [vaultCreatedEvent], data: log.data, topics: log.topics })
-			const args = event.args
-			if (!('owner' in args && 'vault' in args) || typeof args['owner'] !== 'string' || typeof args['vault'] !== 'string') continue
-			if (getAddress(args['owner']) !== getAddress(owner)) continue
-			const { vault } = await loadPortfolioOwnerVault(client, log.address, owner)
-			if (vault !== zeroAddress && getAddress(vault) === getAddress(args['vault'])) return log.address
+			const portfolioValue = await client.readContract({ address: log.address, abi: linksAbi, functionName: 'portfolio' })
+			const portfolio = requireAddressValue(portfolioValue, 'discovered portfolio')
+			if (portfolio !== zeroAddress) {
+				verifyRuntimeCode(await client.getCode({ address: portfolio }), getSecurityPoolPortfolioRuntimeCode(), portfolioArtifact.evm.deployedBytecode.immutableReferences, 'portfolio')
+				return getAddress(portfolio)
+			}
 		} catch (failure) {
-			// A log signature is only a discovery hint; unrelated or spoofed emitters are skipped.
 			console.warn('Skipped an unverified simulation portfolio candidate.', failure)
 		}
 	}

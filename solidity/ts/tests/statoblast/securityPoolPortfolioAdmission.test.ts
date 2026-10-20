@@ -1,97 +1,94 @@
 import { describe, expect, test } from 'bun:test'
-import { encodeDeployData, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
+	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
+	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
+	statoblast_SecurityPoolForker_SecurityPoolForker as nativeForkArtifact,
 	statoblast_SecurityPoolFixedAdmissionPolicy_SecurityPoolFixedAdmissionPolicy as fixedArtifact,
-	test_statoblast_QuestionAdmissionPolicyHarness_QuestionAdmissionPolicyHarness as policyHarnessArtifact,
+	test_statoblast_QuestionAdmissionPolicyHarness_QuestionAdmissionPolicyHarness as policyArtifact,
 } from '../../types/contractArtifact'
 import { deployContract } from '../../testSupport/deployContract'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
-import { getInfraContractAddresses, applyLibraries, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
-import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
-import { approveToken } from '../../testSupport/simulator/utils/utilities'
+import { applyLibraries, getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
-import { manipulatePriceOracle } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
-import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
-import { maximumQuestionHorizonSeconds, portfolioEconomics, unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/statoblast'
+import { approveToken, getChildUniverseId } from '../../testSupport/simulator/utils/utilities'
+import { forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
+import { initiateSecurityPoolFork } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
+import { QuestionOutcome } from '../../testSupport/simulator/types/types'
+import { DAY } from '../../testSupport/simulator/utils/constants'
+import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 describe('Statoblast: pluggable question admission', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
-	const deployPortfolio = async (policy: Address, economics = portfolioEconomics) =>
-		await deployContract(
-			fixture.owner(),
-			encodeDeployData({
-				abi: portfolioArtifact.abi,
-				bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object),
-				args: [getInfraContractAddresses().securityPoolFactory, fixture.base.securityPoolAddresses.securityPool, maximumQuestionHorizonSeconds, getInfraContractAddresses().securityPoolPortfolioVaultDeployer, policy, economics],
-			}),
-		)
-	const deployFixed = async (questions: bigint[], universe = fixture.base.genesisUniverse) => await deployContract(fixture.owner(), encodeDeployData({ abi: fixedArtifact.abi, bytecode: applyLibraries(fixedArtifact.evm.bytecode.object), args: [universe, questions] }))
-	const register = (portfolio: Address, questionId: bigint) => writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'addQuestion', args: [questionId] }))
+	const deployFixed = (questions: bigint[], universe = fixture.base.genesisUniverse) => deployContract(fixture.owner(), encodeDeployData({ abi: fixedArtifact.abi, bytecode: applyLibraries(fixedArtifact.evm.bytecode.object), args: [universe, questions] }))
 
-	test('fixed admission binds immutable membership to its universe and supports lazy permissionless registration', async () => {
+	test('fixed membership permits lazy registration and rejects other questions or universes', async () => {
 		const policy = await deployFixed([fixture.base.questionId])
-		const portfolio = await deployPortfolio(policy)
-		await register(portfolio, fixture.base.questionId)
-		await register(portfolio, fixture.base.questionId)
+		const portfolio = await fixture.deployPortfolio(policy)
+		await fixture.register(fixture.base.questionId, portfolio)
+		await fixture.register(fixture.base.questionId, portfolio)
 		expect(await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'questionCount' })).toBe(1n)
 		expect(await fixture.owner().readContract({ abi: fixedArtifact.abi, address: policy, functionName: 'getQuestions', args: [0n, 64n] })).toEqual([fixture.base.questionId])
-		await expect(register(portfolio, fixture.secondQuestionId)).rejects.toThrow('Question rejected by admission policy')
-		await expect(writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'createCompleteSet', args: [fixture.secondQuestionId, fixture.other().account.address, 0n, unit], value: 2n * unit }))).rejects.toThrow(
-			'Question rejected by admission policy',
-		)
-		const wrongUniversePolicy = await deployFixed([fixture.base.questionId], fixture.base.genesisUniverse + 1n)
-		await expect(register(await deployPortfolio(wrongUniversePolicy), fixture.base.questionId)).rejects.toThrow('Question rejected by admission policy')
+		await expect(fixture.register(fixture.secondQuestionId, portfolio)).rejects.toThrow('Question rejected by admission policy')
+		await expect(fixture.mint(unit, fixture.secondQuestionId, { namespace: portfolio })).rejects.toThrow('Question rejected by admission policy')
+		const wrongUniverse = await deployFixed([fixture.base.questionId], fixture.base.genesisUniverse + 1n)
+		await expect(fixture.register(fixture.base.questionId, await fixture.deployPortfolio(wrongUniverse))).rejects.toThrow('Question rejected by admission policy')
 	})
 
-	test('the enumerated fixed list is the only source of membership and rejects unsorted deployment', async () => {
-		const questions = [fixture.base.questionId, fixture.secondQuestionId].toSorted((left, right) => (left < right ? -1 : 1))
+	test('fixed membership cannot hide alternate entries and rejects invalid lists or pages', async () => {
+		const questions = [fixture.base.questionId, fixture.secondQuestionId].toSorted((a, b) => (a < b ? -1 : 1))
 		const policy = await deployFixed(questions)
-		for (const questionId of questions) expect(await fixture.owner().readContract({ abi: fixedArtifact.abi, address: policy, functionName: 'isQuestionAllowed', args: [fixture.portfolio, fixture.base.genesisUniverse, questionId] })).toBe(true)
-		expect(await fixture.owner().readContract({ abi: fixedArtifact.abi, address: policy, functionName: 'getQuestions', args: [0n, 64n] })).toEqual(questions)
+		for (const question of questions) expect(await fixture.owner().readContract({ abi: fixedArtifact.abi, address: policy, functionName: 'isQuestionAllowed', args: [fixture.portfolio, fixture.base.genesisUniverse, question] })).toBe(true)
 		expect(await fixture.owner().readContract({ abi: fixedArtifact.abi, address: policy, functionName: 'isQuestionAllowed', args: [fixture.portfolio, fixture.base.genesisUniverse, 0n] })).toBe(false)
 		await expect(deployFixed(questions.toReversed())).rejects.toThrow('Choose increasing unique questions')
-	})
-
-	test('fixed admission rejects duplicate or empty lists and invalid page boundaries', async () => {
 		await expect(deployFixed([])).rejects.toThrow('Question list empty')
 		await expect(deployFixed([fixture.base.questionId, fixture.base.questionId])).rejects.toThrow('Choose increasing unique questions')
-		const policy = await deployFixed([fixture.base.questionId])
-		await expect(fixture.owner().readContract({ abi: fixedArtifact.abi, address: policy, functionName: 'getQuestions', args: [2n, 1n] })).rejects.toThrow('Invalid page')
-		await expect(deployPortfolio(zeroAddress)).rejects.toThrow('Admission policy has no code')
+		await expect(fixture.owner().readContract({ abi: fixedArtifact.abi, address: policy, functionName: 'getQuestions', args: [3n, 1n] })).rejects.toThrow('Invalid page')
+		await expect(fixture.deployPortfolio(zeroAddress)).rejects.toThrow()
 	})
 
-	test('custom policies are checked again for registered purchases and cannot block exits or recovery', async () => {
-		const policy = await deployContract(fixture.owner(), encodeDeployData({ abi: policyHarnessArtifact.abi, bytecode: applyLibraries(policyHarnessArtifact.evm.bytecode.object) }))
-		const portfolio = await deployPortfolio(policy)
-		await register(portfolio, fixture.base.questionId)
-		const pool = getSecurityPoolAddresses(zeroAddress, fixture.base.genesisUniverse, fixture.base.questionId, fixture.base.statoblastSecurityMultiplierBps, fixture.base.genesisUniverse, DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, portfolio)
-		await approveToken(fixture.owner(), getRepTokenAddress(fixture.base.genesisUniverse), portfolio)
-		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'deposit', args: [1_000n * unit, 1n] }))
-		await manipulatePriceOracle(fixture.owner(), fixture.base.mockWindow, pool.openOraclePriceCoordinator)
-		const [, purchaseFee] = await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'quoteMint', args: [fixture.base.questionId, 10n * unit] })
-		const mint = () => writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'createCompleteSet', args: [fixture.base.questionId, fixture.other().account.address, 0n, 10n * unit], value: 10n * unit + purchaseFee }))
-		await mint()
-		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: policyHarnessArtifact.abi, address: policy, functionName: 'setState', args: [false, false] }))
-		await expect(mint()).rejects.toThrow('Question rejected by admission policy')
-		await expect(register(portfolio, fixture.base.questionId)).rejects.toThrow('Question rejected by admission policy')
-		await expect(fixture.owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'quoteMint', args: [fixture.base.questionId, unit] })).rejects.toThrow('Question rejected by admission policy')
-		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: policyHarnessArtifact.abi, address: policy, functionName: 'setState', args: [false, true] }))
-		await expect(mint()).rejects.toThrow('Admission unavailable')
-		await redeemCompleteSet(fixture.other(), pool.securityPool, 10n * unit)
-		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'recyclePosition', args: [1n] }))
-		expect(await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'totalAssets' })).toBe(1_000n * unit)
-		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'withdraw', args: [1_000n * unit, 1_000n * unit] }))
+	test('a revoked or reverting custom policy prevents purchases but cannot block redemption or principal exit', async () => {
+		const policy = await deployContract(fixture.owner(), encodeDeployData({ abi: policyArtifact.abi, bytecode: applyLibraries(policyArtifact.evm.bytecode.object) }))
+		const portfolio = await fixture.deployPortfolio(policy)
+		await fixture.register(fixture.base.questionId, portfolio)
+		await fixture.deposit(1_000n * unit, fixture.owner(), portfolio)
+		await fixture.refreshPrice(fixture.base.questionId, unit, portfolio)
+		await fixture.authorize(1_000n * unit, 100n * unit, fixture.owner(), portfolio)
+		await fixture.mint(10n * unit, fixture.base.questionId, { namespace: portfolio })
+		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: policyArtifact.abi, address: policy, functionName: 'setState', args: [false, false] }))
+		await expect(fixture.mint(unit, fixture.base.questionId, { namespace: portfolio })).rejects.toThrow('Question rejected by admission policy')
+		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: policyArtifact.abi, address: policy, functionName: 'setState', args: [false, true] }))
+		await expect(fixture.mint(unit, fixture.base.questionId, { namespace: portfolio })).rejects.toThrow('Admission unavailable')
+		const pool = fixture.poolFor(fixture.base.questionId, fixture.base.genesisUniverse, zeroAddress, portfolio)
+		const shares = await balanceOfShares(fixture.owner(), pool.shareToken, fixture.base.genesisUniverse, fixture.other().account.address)
+		await redeemCompleteSet(fixture.other(), pool.securityPool, shares[0])
+		const capital = await fixture.capitalFor(portfolio)
+		const owner = await fixture.owner().readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'ownerAccount', args: [fixture.owner().account.address] })
+		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'requestRetirement', args: [owner.positions[0]] }))
+		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'withdrawFree', args: [1_000n * unit, fixture.owner().account.address] }))
 	})
 
-	for (const [change, message] of [
-		[{ targetHealthFactorBps: 9_999n }, 'Health factor below native floor'],
-		[{ purchaseFeeBps: 10_001n }, 'Purchase fee exceeds 100 percent'],
-		[{ minimumPurchaseFeeAttoEth: 0n }, 'Purchase fee does not fund completion'],
-		[{ completionRewardAttoEth: 0n, ownershipChangeFeeAttoEth: 1n }, 'Ownership fee needs completion reward'],
-	] as const) {
-		test(`rejects invalid immutable economics: ${message}`, async () => {
-			await expect(deployPortfolio(fixture.questionAdmissionPolicy, { ...portfolioEconomics, ...change })).rejects.toThrow(message)
-		})
-	}
+	test('revoking admission also blocks new purchases of an already prepared descendant question', async () => {
+		const owner = fixture.owner()
+		const universe = fixture.base.genesisUniverse
+		const policy = await deployContract(owner, encodeDeployData({ abi: policyArtifact.abi, bytecode: applyLibraries(policyArtifact.evm.bytecode.object) }))
+		const portfolio = await fixture.deployPortfolio(policy)
+		await fixture.register(fixture.secondQuestionId, portfolio)
+		const parent = fixture.poolFor(fixture.secondQuestionId, universe, zeroAddress, portfolio).securityPool
+		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
+		await approveToken(owner, getRepTokenAddress(universe), getZoltarAddress())
+		await forkUniverse(owner, universe, fixture.base.questionId)
+		await initiateSecurityPoolFork(owner, parent)
+		const forkTime = (await getUniverseData(owner, universe)).forkTime
+		await fixture.base.mockWindow.setTime(forkTime + 63n * DAY)
+		const coordinator = await owner.readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'forkController' })
+		const child = getChildUniverseId(universe, QuestionOutcome.No)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: coordinator, functionName: 'startBranch', args: [universe, BigInt(QuestionOutcome.No)] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: coordinator, functionName: 'finalizeBranch', args: [child] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: nativeForkArtifact.abi, address: getInfraContractAddresses().securityPoolForker, functionName: 'preparePortfolioQuestion', args: [parent, child] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: policyArtifact.abi, address: policy, functionName: 'setState', args: [false, false] }))
+		await expect(owner.writeContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'createCompleteSet', args: [child, fixture.secondQuestionId, unit, owner.account.address, 0n], value: 2n * unit })).rejects.toThrow('Question rejected by admission policy')
+	})
 })

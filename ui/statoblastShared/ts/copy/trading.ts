@@ -69,3 +69,6 @@ export const shareMigrationIrreversible = 'Migration cannot be undone.'
 export const formatMigrateSharesReviewTitle = (outcomeLabel: string) => `Migrate ${outcomeLabel} shares`
 export const formatMigrateSharesReviewUnit = (outcomeLabel: string) => `${outcomeLabel} shares`
 export const formatMigrateSharesReviewDescription = (outcomeLabel: string) => `Moves your whole ${outcomeLabel} balance into the selected child universes. ${shareMigrationIrreversible}`
+
+export const sharedPoolCapacityAtReview = 'Quoted before submission'
+export const sharedPoolPurchaseDetail = 'Purchases use shared REP backing. The transaction includes the quoted purchase fee in addition to this mint amount.'

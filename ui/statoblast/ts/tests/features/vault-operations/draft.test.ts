@@ -59,7 +59,7 @@ describe('vault operation execution price refresh', () => {
 		expect(getVaultOperationsPrice('500', settled, false)).toBe(500n * 10n ** 18n)
 		const executionPrice = getVaultOperationsPrice('500', settled, true)
 		expect(executionPrice).toBe(settled)
-		const targetVaultSummary = { vaultAddress: getAddress(target), vaultAttoRepBacking: 10_000n * 10n ** 18n, underwritingLimitAttoEth: 40n * 10n ** 18n, disputeStakedAttoRep: 0n, claimableFeesAttoEth: 0n }
+		const targetVaultSummary = { vaultAddress: getAddress(target), vaultAttoRepBacking: 10_000n * 10n ** 18n, underwritingLimitAttoEth: 40n * 10n ** 18n, disputeStakedAttoRep: 0n, disputeBackingAttoRep: 0n, claimableFeesAttoEth: 0n }
 		expect(getMaxLiquidationAmount({ targetVaultSummary, statoblastSecurityMultiplierBps: 10_000n, repPerEthPrice: getVaultOperationsPrice('500', settled, false) })).toBeGreaterThan(0n)
 		expect(getMaxLiquidationAmount({ targetVaultSummary, statoblastSecurityMultiplierBps: 10_000n, repPerEthPrice: executionPrice })).toBe(0n)
 	})

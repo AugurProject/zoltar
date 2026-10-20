@@ -272,7 +272,7 @@ describe('vault liquidation launcher', () => {
 	})
 
 	test('explains why a vault is not liquidatable only at a known protocol price', () => {
-		const vault = { claimableFeesAttoEth: 0n, disputeStakedAttoRep: 0n, underwritingLimitAttoEth: 2n * 10n ** 18n, vaultAddress: zeroAddress, vaultAttoRepBacking: 17n * 10n ** 18n }
+		const vault = { claimableFeesAttoEth: 0n, disputeStakedAttoRep: 0n, disputeBackingAttoRep: 0n, underwritingLimitAttoEth: 2n * 10n ** 18n, vaultAddress: zeroAddress, vaultAttoRepBacking: 17n * 10n ** 18n }
 		const base = { repPerEthPrice: 10n ** 18n, statoblastSecurityMultiplierBps: 20_000n, targetVaultSummary: vault }
 		expect(getVaultNotLiquidatableReason({ ...base, repPerEthPrice: undefined })).toBeUndefined()
 		expect(getVaultNotLiquidatableReason(base)).toBe('The target vault is not liquidatable at the current price.')

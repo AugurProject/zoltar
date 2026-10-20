@@ -1,116 +1,120 @@
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
+import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
-import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
 import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
+import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { PortfolioButton, PortfolioInput } from './PortfolioControls.js'
 import { usePortfolioSharedFork, type PortfolioSharedForkParameters } from '../hooks/usePortfolioSharedFork.js'
-import { buildPoolsRouteHash } from '../../../lib/statoblastLocation.js'
 import * as copy from '../../../copy/portfolioSharedFork.js'
-import * as forkCopy from '../../../copy/portfolioFork.js'
-import * as portfolioCopy from '../../../copy/portfolio.js'
-import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-
-function choiceTimestamp(value: bigint | undefined) {
-	if (value === undefined) return undefined
-	return value === 0n ? copy.notForked : formatTimestamp(value)
-}
+import * as common from '@zoltar/ui-core-shared/copy/common.js'
 
 export function PortfolioSharedFork(parameters: PortfolioSharedForkParameters) {
 	const model = usePortfolioSharedFork(parameters)
 	const state = model.state
-	const busy = parameters.actions.busy !== undefined
-	const preparation = model.preparation
+	const disabled = parameters.actions.busy !== undefined
+	const branch = state?.branch
+	let branchState = copy.branchStates.choose
+	if (branch !== undefined) {
+		branchState = copy.branchStates.unprepared
+		if (branch.prepared) branchState = copy.branchStates.chosen
+		if (branch.started) branchState = copy.branchStates.recap
+		if (branch.ready) branchState = copy.branchStates.active
+	}
 	return (
 		<SectionBlock title={copy.title} description={copy.description}>
-			<h4>{model.rootContext ? copy.originalReserve : model.incomingLabel}</h4>
-			{model.rootContext ? undefined : (
-				<ActionLauncherButton
-					tone='secondary'
-					idleLabel={copy.parentBranch}
-					pendingLabel={copy.loading}
-					availability={{ disabled: busy || state === undefined, reason: busy ? portfolioCopy.busy : copy.loading }}
-					onClick={() => {
-						if (state !== undefined) model.openContext(state.parentContextId)
-					}}
-				/>
-			)}
-			<details>
-				<summary>{copy.advanced}</summary>
-				<PortfolioInput label={copy.context} hint={copy.contextHint} value={model.contextInput} onChange={model.setContext} disabled={busy} numeric />
-			</details>
-			{model.error === undefined ? undefined : <UserMessage tone='error' detail={model.error} />}
 			<MetricGrid>
-				<MetricField label={copy.universe} loading={model.loading}>
-					{state === undefined ? undefined : String(state.universeId)}
+				<PortfolioInput label={copy.universe} value={model.sourceInput} onChange={model.setSource} disabled={disabled} />
+				<PortfolioInput label={copy.outcome} hint={copy.outcomeHint} value={model.outcomeInput} onChange={model.setOutcome} disabled={disabled} />
+			</MetricGrid>
+			{model.error === undefined ? undefined : <UserMessage tone='error' detail={model.error} />}
+			{state?.forkTime === 0n ? <UserMessage detail={copy.noFork} /> : undefined}
+			{model.outcome?.outcomeLabel === undefined ? undefined : <UserMessage detail={copy.questionOutcome(model.outcome.questionTitle, model.outcome.outcomeLabel)} />}
+			<MetricGrid>
+				<MetricField label={copy.choiceDeadline} loading={model.loading}>
+					{state === undefined || state.choiceDeadline === 0n ? undefined : formatTimestamp(state.choiceDeadline)}
 				</MetricField>
-				<MetricField label={copy.token} loading={model.loading}>
-					{state === undefined ? undefined : <code>{state.repToken}</code>}
+				<MetricField label={copy.recapDeadline} loading={model.loading}>
+					{state === undefined || state.recapitalizationDeadline === 0n ? undefined : formatTimestamp(state.recapitalizationDeadline)}
 				</MetricField>
-				<MetricField label={copy.opensAt} loading={model.loading}>
-					{choiceTimestamp(state?.opensAt)}
+				<MetricField label={copy.child} loading={model.loading}>
+					{branch?.universeId.toString()}
 				</MetricField>
-				<MetricField label={copy.closesAt} loading={model.loading}>
-					{choiceTimestamp(state?.closesAt)}
+				<MetricField label={copy.state} loading={model.loading}>
+					{branchState}
 				</MetricField>
 			</MetricGrid>
-			<UserMessage detail={copy.choiceHint} />
-			<PortfolioInput label={forkCopy.outcome} hint={forkCopy.outcomeHint} value={model.outcomeInput} onChange={model.setOutcome} disabled={busy} numeric />
-			{model.selectedBranch === undefined ? undefined : <UserMessage detail={model.selectedBranch} />}
-			<UserMessage detail={model.loading ? copy.loading : copy.pageSummary(model.intervals.length, model.selectedCount)} />
-			<details>
-				<summary>{copy.periods}</summary>
-				<ul>
-					{model.intervals.map(interval => (
-						<li key={String(interval.intervalId)}>{copy.intervalSummary(interval.intervalId, interval.startPosition, interval.open ? (state?.positionCount ?? 0n) : interval.endPosition, interval.selected ? interval.outcomeIndex : undefined)}</li>
-					))}
-				</ul>
-			</details>
+			<UserMessage tone='warning' detail={copy.choiceHint} />
+			<UserMessage detail={state?.choice.recorded ? copy.chosen(state.choice.outcomeIndex) : copy.unchosen} />
 			<div className='actions'>
-				<PortfolioButton model={parameters.actions} action='chooseSharedFork' label={copy.choice} pendingLabel={copy.choosing} reason={model.chooseReason} onClick={model.choose} />
-				<PortfolioButton model={parameters.actions} action='revokeSharedFork' label={copy.revoke} pendingLabel={copy.revoking} reason={model.revokeReason} onClick={model.revoke} />
-				<ActionLauncherButton tone='secondary' idleLabel={copy.openChild} pendingLabel={copy.loading} availability={{ disabled: busy || model.openChildReason !== undefined, reason: busy ? portfolioCopy.busy : model.openChildReason }} onClick={model.openChild} />
-				<ActionLauncherButton tone='secondary' idleLabel={copy.refreshed} pendingLabel={copy.refreshing} availability={{ disabled: busy || model.loading, reason: busy ? portfolioCopy.busy : copy.loading }} onClick={model.refresh} />
+				<PortfolioButton model={parameters.actions} action='choosePortfolioFork' label={copy.choice} pendingLabel={copy.choosing} reason={model.chooseReason} onClick={model.choose} />
+				<PortfolioButton model={parameters.actions} action='startPortfolioFork' label={copy.start} pendingLabel={copy.starting} reason={model.startReason} onClick={model.start} />
+				<PortfolioButton model={parameters.actions} action='finalizePortfolioFork' label={copy.finalize} pendingLabel={copy.finalizing} reason={model.finalizeReason} onClick={model.finalize} />
+				<ActionLauncherButton tone='secondary' idleLabel={copy.open} pendingLabel={copy.loading} availability={{ disabled: disabled || model.openReason !== undefined, reason: disabled ? copy.busy : model.openReason }} onClick={model.open} />
 			</div>
-			<PaginationControls summary={copy.periods} hasPreviousPage={model.hasPreviousPage} hasNextPage={state !== undefined && state.nextIntervalCursor !== 0n} loading={model.loading} onPreviousPage={model.previousPage} onNextPage={model.nextPage} />
-			<div className='actions'>
-				{model.branches.map(branch => (
-					<ActionLauncherButton key={String(branch.contextId)} tone='secondary' idleLabel={copy.openBranch(branch.label)} pendingLabel={copy.loading} availability={{ disabled: busy, reason: portfolioCopy.busy }} onClick={() => model.openContext(branch.contextId)} />
-				))}
-			</div>
-			<PaginationControls summary={copy.savedBranches} hasPreviousPage={model.hasPreviousBranchPage} hasNextPage={state !== undefined && state.nextBranchCursor !== 0n} loading={model.loading} onPreviousPage={model.previousBranchPage} onNextPage={model.nextBranchPage} />
-			<div className='workflow-subsection'>
-				<PortfolioInput label={copy.position} hint={copy.positionHint} value={model.positionInput} onChange={model.setPosition} disabled={busy} numeric />
-				{preparation?.needsPreparation ? <UserMessage detail={forkCopy.prepareHint} /> : undefined}
-				{preparation === undefined || preparation.pool === zeroAddress ? undefined : <a href={buildPoolsRouteHash({ view: 'operate', securityPoolAddress: preparation.pool, tab: 'fork-workflow' })}>{forkCopy.prepare}</a>}
-				<PortfolioButton model={parameters.actions} action='processSharedFork' label={copy.process} pendingLabel={copy.processing} reason={model.processReason} onClick={model.process} />
-			</div>
-			{model.rootContext ? (
-				<UserMessage detail={copy.rootRecovery} />
-			) : (
-				<div className='workflow-subsection'>
-					<MetricGrid>
-						<MetricField label={copy.recoveredRep} loading={model.loading}>
-							<CurrencyValue value={state?.recoverableRepAttoRep} suffix={commonCopy.rep} />
-						</MetricField>
-						<MetricField label={copy.recoveredEth} loading={model.loading}>
-							<CurrencyValue value={state?.recoverableFeesAttoEth} suffix={commonCopy.eth} />
-						</MetricField>
-					</MetricGrid>
-					<UserMessage detail={copy.recoverHint} />
-					<PortfolioButton model={parameters.actions} action='collectSharedFork' label={copy.recover} pendingLabel={copy.recovering} reason={model.collectReason} onClick={model.collect} />
-					<details>
-						<summary>{copy.fallback}</summary>
-						<UserMessage tone='warning' detail={copy.fallbackHint} />
-						<PortfolioButton model={parameters.actions} action='claimContextPosition' label={copy.individual} pendingLabel={copy.individualPending} reason={model.individualReason} onClick={() => model.individual(false)} />
-						<PortfolioButton model={parameters.actions} action='claimContextPositionAndMigrate' label={copy.individualFork} pendingLabel={copy.individualForkPending} reason={model.individualForkReason} onClick={() => model.individual(true)} />
-					</details>
+			<WorkflowSubsection title={copy.recap}>
+				<UserMessage detail={copy.recapHint} />
+				<MetricGrid>
+					<PortfolioInput label={copy.budget} value={model.budgetInput} onChange={model.setBudget} disabled={disabled} numeric />
+					<PortfolioInput label={copy.maximumRep} value={model.maximumRepInput} onChange={model.setMaximumRep} disabled={disabled} numeric />
+					<PortfolioInput label={copy.minimumRep} value={model.minimumRepInput} onChange={model.setMinimumRep} disabled={disabled} numeric />
+					<PortfolioInput label={copy.maximumCommitment} value={model.maximumCommitmentInput} onChange={model.setMaximumCommitment} disabled={disabled} numeric />
+					<PortfolioInput label={copy.maximumOwnRep} value={model.maximumOwnRepInput} onChange={model.setMaximumOwnRep} disabled={disabled} numeric />
+					<PortfolioInput label={copy.health} value={model.healthInput} onChange={model.setHealth} disabled={disabled} numeric />
+				</MetricGrid>
+				<MetricGrid>
+					<MetricField label={copy.quoteRep}>
+						<CurrencyValue value={model.quote?.rep} suffix={common.rep} />
+					</MetricField>
+					<MetricField label={copy.quoteCommitment}>
+						<CurrencyValue value={model.quote?.commitment} suffix={common.eth} />
+					</MetricField>
+					<MetricField label={copy.quoteCost}>
+						<CurrencyValue value={model.quote?.cost} suffix={common.eth} />
+					</MetricField>
+					<MetricField label={copy.quoteOwnRep}>
+						<CurrencyValue value={model.quote?.ownRep} suffix={common.rep} />
+					</MetricField>
+					<MetricField label={copy.quoteReserve}>
+						<CurrencyValue value={model.quote?.executionReserve} suffix={common.eth} />
+					</MetricField>
+				</MetricGrid>
+				<TokenApprovalControl
+					actionLabel={copy.buy}
+					allowanceError={model.error}
+					allowanceLoading={model.loading}
+					approvedAmount={model.wallet?.allowance}
+					disabled={disabled}
+					guardMessage={model.recapReason}
+					onApprove={amount => {
+						if (amount !== undefined) void model.approve(amount)
+					}}
+					pending={parameters.actions.busy === 'approvePortfolioRecap'}
+					pendingLabel={copy.approving}
+					requiredAmount={model.quote?.ownRep}
+					resetKey={`${state?.controller}:${state?.owner}:${branch?.universeId}:${model.quote?.ownRep}`}
+					tokenSymbol={common.rep}
+					tokenUnits={18}
+				/>
+				<PortfolioButton model={parameters.actions} action='buyPortfolioRecap' label={copy.buy} pendingLabel={copy.buying} reason={model.buyReason} onClick={model.buy} />
+			</WorkflowSubsection>
+			<WorkflowSubsection title={copy.recovery}>
+				<UserMessage detail={copy.recoveryHint} />
+				<MetricGrid>
+					<PortfolioInput label={copy.question} value={model.questionInput} onChange={model.setQuestion} disabled={disabled} />
+					<PortfolioInput label={copy.shares} value={model.sharesInput} onChange={model.setShares} disabled={disabled} numeric />
+					<MetricField label={copy.available}>
+						<CurrencyValue value={model.recovery?.availableShares} />
+					</MetricField>
+				</MetricGrid>
+				<div className='actions'>
+					<PortfolioButton model={parameters.actions} action='preparePortfolioRecovery' label={copy.prepare} pendingLabel={copy.preparing} reason={model.prepareReason} onClick={model.prepare} />
+					<PortfolioButton model={parameters.actions} action='recoverPortfolioSource' label={copy.recover} pendingLabel={copy.recovering} reason={model.recoverReason} onClick={model.recover} />
 				</div>
-			)}
+			</WorkflowSubsection>
 		</SectionBlock>
 	)
 }

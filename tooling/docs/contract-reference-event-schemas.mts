@@ -1,4 +1,5 @@
 export const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePath: string }> = [
+	{ name: 'PortfolioRecoveryRightsConsumed', parameters: 'uint248 indexed universeId,address indexed holder,uint256 amountAttoShares,uint256 cumulativeAttoShares', sourcePath: 'solidity/contracts/statoblast/tokens/ShareToken.sol' },
 	{ name: 'OrdinarySettlementInitialized', parameters: 'BinaryOutcomes.BinaryOutcome indexed outcome,uint256 winningPrincipalAttoRep,uint256 reservedAttoRep', sourcePath: 'solidity/contracts/statoblast/EscalationGameState.sol' },
 	{ name: 'VaultPositionSplit', parameters: 'address indexed source,address indexed recipient,uint256 numerator,uint256 denominator', sourcePath: 'solidity/contracts/statoblast/SecurityPoolOperationsDelegate.sol' },
 	{ name: 'ClaimCheckpointProgress', parameters: 'bytes32 indexed claimId,address nextSourceGame,uint256 pendingSteps,bool complete', sourcePath: 'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol' },
@@ -163,7 +164,6 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 
 export const delegateEventDeclarationMirrors: Array<{ name: string; sourcePath: string }> = [
 	{ name: 'OrdinarySettlementInitialized', sourcePath: 'solidity/contracts/statoblast/EscalationGameDepositDelegate.sol' },
-	{ name: 'ResidualRepSweptToSecurityPool', sourcePath: 'solidity/contracts/statoblast/EscalationGameDepositDelegate.sol' },
 	{ name: 'PoolAccountingCheckpoint', sourcePath: 'solidity/contracts/statoblast/SecurityPoolEventEmitter.sol' },
 	{ name: 'VaultAccountingCheckpoint', sourcePath: 'solidity/contracts/statoblast/SecurityPoolEventEmitter.sol' },
 	{ name: 'ChildPoolLinked', sourcePath: 'solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol' },
@@ -189,4 +189,4 @@ export const assemblyEventEmissions: Array<{
 	},
 ]
 
-export const referencedEventAbiFingerprint = '88e70822558f594d167734f756ef0505649adc17fc2b17ee3ebed71e025a237f'
+export const referencedEventAbiFingerprint = '4ea6d9c5fc63dc53f1c64587798a9d068bc03b036709e2f2c697a49fb5d8db03'

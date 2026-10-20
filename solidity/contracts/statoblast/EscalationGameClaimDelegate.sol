@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { EscalationGameRepCustody } from './EscalationGameRepCustody.sol';
 import { EscalationGameStorage } from './EscalationGameStorage.sol';
 import {
 	EscalationClaimInterval,
@@ -96,6 +97,12 @@ contract EscalationGameClaimDelegate is EscalationGameStorage {
 		require(transforms.length != 0 || baseCommitment == bytes32(0), 'Invalid checkpoint base');
 		bytes32 claimId = _claimKey(outcomeIndex, amountAttoRep, cumulativeAmountAttoRep, leafIndex);
 		EscalationClaimCheckpoint storage checkpoint = claimCheckpoints[claimId];
+		if (_hasCentralReporterCustody()) {
+			checkpoint.initialized = true;
+			checkpoint.complete = true;
+			checkpoint.interval = _initialInterval(amountAttoRep, cumulativeAmountAttoRep);
+			return true;
+		}
 		if (
 			!checkpoint.complete &&
 			_adoptParentCheckpoint(checkpoint, outcomeIndex, amountAttoRep, cumulativeAmountAttoRep, leafIndex)
@@ -156,6 +163,8 @@ contract EscalationGameClaimDelegate is EscalationGameStorage {
 	/// @notice A completed cache excludes this game's immediate source transform.
 	function getReusableClaimCheckpoint(uint8 outcomeIndex, uint256 amountAttoRep, uint256 cumulativeAmountAttoRep, uint256 leafIndex) external view returns (bool complete, address anchorSourceGame, EscalationClaimInterval memory interval) {
 		_validateClaim(outcomeIndex, amountAttoRep, cumulativeAmountAttoRep, leafIndex);
+		if (_hasCentralReporterCustody())
+			return (true, forkCarrySourceGame, _initialInterval(amountAttoRep, cumulativeAmountAttoRep));
 		EscalationClaimCheckpoint storage checkpoint = claimCheckpoints[
 			_claimKey(outcomeIndex, amountAttoRep, cumulativeAmountAttoRep, leafIndex)
 		];
@@ -246,6 +255,7 @@ contract EscalationGameClaimDelegate is EscalationGameStorage {
 	/// @notice `ready` includes the bounded view fallback; `complete` means a stored checkpoint exists.
 	function getClaimCheckpointProgress(uint8 outcomeIndex, uint256 amountAttoRep, uint256 cumulativeAmountAttoRep, uint256 leafIndex) external view returns (address nextSourceGame, uint256 pendingSteps, bool complete, bool ready) {
 		_validateClaim(outcomeIndex, amountAttoRep, cumulativeAmountAttoRep, leafIndex);
+		if (_hasCentralReporterCustody()) return (address(0), 0, true, true);
 		EscalationClaimCheckpoint storage checkpoint = claimCheckpoints[
 			_claimKey(outcomeIndex, amountAttoRep, cumulativeAmountAttoRep, leafIndex)
 		];
@@ -265,7 +275,10 @@ contract EscalationGameClaimDelegate is EscalationGameStorage {
 	function _sourceClaimInterval(uint8 outcomeIndex, uint256 amountAttoRep, uint256 cumulativeAmountAttoRep, uint256 leafIndex) private view returns (EscalationClaimInterval memory interval) {
 		_validateClaim(outcomeIndex, amountAttoRep, cumulativeAmountAttoRep, leafIndex);
 		interval = _initialInterval(amountAttoRep, cumulativeAmountAttoRep);
-		if (!_hasInheritedSource(outcomeIndex, leafIndex)) return interval;
+		// Central live reporter lineages have no claim exports or recap haircuts.
+		// Finalized questions stay in their finalizing universe, so inherited
+		// principal/reward coordinates are unchanged across every live fork.
+		if (_hasCentralReporterCustody() || !_hasInheritedSource(outcomeIndex, leafIndex)) return interval;
 		EscalationClaimCheckpoint storage checkpoint = claimCheckpoints[
 			_claimKey(outcomeIndex, amountAttoRep, cumulativeAmountAttoRep, leafIndex)
 		];
@@ -313,6 +326,11 @@ contract EscalationGameClaimDelegate is EscalationGameStorage {
 	function _initialInterval(uint256 amountAttoRep, uint256 cumulativeAmountAttoRep) private pure returns (EscalationClaimInterval memory) {
 		return
 			EscalationClaimInterval(cumulativeAmountAttoRep - amountAttoRep, cumulativeAmountAttoRep, cumulativeAmountAttoRep - amountAttoRep, cumulativeAmountAttoRep);
+	}
+
+	function _hasCentralReporterCustody() private view returns (bool) {
+		return
+			EscalationGameRepCustody.portfolio(IEscalationClaimGameContext(address(this)).securityPool()) != address(0);
 	}
 
 	function _hasInheritedSource(uint8 outcomeIndex, uint256 leafIndex) private view returns (bool) {

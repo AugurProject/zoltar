@@ -11,13 +11,13 @@ import { claimCheckpointArguments, claimCheckpointWithdrawalCalls } from './chec
 import { walletVaultRegistrationCapacityBlocker } from './vaults.ts'
 
 function buildResidualSweepPlan(snapshot: EcosystemSnapshot, pool: PoolSnapshot) {
-	const signature = pool.escalationForkContinuation ? 'ForkContinuationResidualRepBurned(uint256)' : 'ResidualRepSweptToSecurityPool(uint256)'
+	const signature = pool.escalationForkContinuation ? 'ForkContinuationResidualRepBurned(uint256)' : 'OrdinaryResidualRepBurned(uint256)'
 	return planBase({
 		definitionId: sweepResidualEscalation.id,
 		ecosystem: 'statoblast',
 		label: sweepResidualEscalation.label,
 		metadata: { balanceBefore: pool.escalationRepBalanceAttoRep, escalationGame: pool.escalationGame, pool: pool.address },
-		postconditions: ['The terminal non-owner escalation REP residue is transferred to the pool and continuation residue is burned when required'],
+		postconditions: ['Terminal escalation REP beyond reserved winning claims is burned without creating a new pool-owner windfall'],
 		priority: 'random',
 		risk: 'low',
 		snapshot,

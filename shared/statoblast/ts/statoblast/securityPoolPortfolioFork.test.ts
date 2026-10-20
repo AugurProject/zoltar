@@ -1,179 +1,159 @@
-import { expect, test } from 'bun:test'
-import { decodeFunctionData, parseAbi, zeroAddress, zeroHash, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { buildPortfolioSharedForkChoiceRequest, buildPortfolioSharedForkRevokeRequest, buildPortfolioSharedForkProcessRequest, buildPortfolioSharedForkRecoveryRequest, buildPortfolioContextPositionClaimRequest, loadPortfolioSharedForkSnapshot, loadPortfolioSharedForkPosition } from './securityPoolPortfolioFork.js'
-import type { PortfolioReadClient } from './securityPoolPortfolioRead.js'
-
+import { describe, expect, test } from 'bun:test'
+import { decodeFunctionData, parseAbi, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import {
+	buildPortfolioVoluntaryRepairRequest,
+	buildPortfolioForkChoiceRequest,
+	buildPortfolioForkStartRequest,
+	buildPortfolioForkFinalizeRequest,
+	buildPortfolioForkRecoveryRequest,
+	buildPortfolioRecapPurchaseRequest,
+	loadPortfolioForkSnapshot,
+	loadPortfolioRecapQuote,
+	type PortfolioReadClient,
+} from './securityPoolPortfolio.js'
 const owner: Address = '0x0000000000000000000000000000000000000001'
 const portfolio: Address = '0x0000000000000000000000000000000000000002'
 const controller: Address = '0x0000000000000000000000000000000000000003'
-const ledger: Address = '0x0000000000000000000000000000000000000004'
-const token: Address = '0x0000000000000000000000000000000000000005'
-const factory: Address = '0x0000000000000000000000000000000000000006'
-const originId = '0x0000000000000000000000000000000000000000000000000000000000000099'
+const protocol: Address = '0x0000000000000000000000000000000000000004'
+const capital: Address = '0x0000000000000000000000000000000000000005'
+const hash: Hex = `0x${'11'.repeat(32)}`
 const abi = parseAbi([
-	'function chooseSharedFork(uint256,uint256[],uint256)',
-	'function revokeSharedFork(uint256,uint256[])',
-	'function processForkPosition(uint256,uint256,uint256)',
-	'function claimForkRecovered(uint256,uint256[],uint256[])',
-	'function claimPosition(uint256,uint256,uint256)',
-	'function claimPositionAndMigrate(uint256,uint256,uint256,uint256)',
+	'function recapitalizeUniverse(uint248 universeId) payable',
+	'function choose(uint248 source,uint256 outcome)',
+	'function startBranch(uint248 source,uint256 outcome) returns (uint248)',
+	'function finalizeBranch(uint248 child)',
+	'function recoverUnchosenCash(uint248 source,uint256 questionId,uint256 shares) returns (uint256)',
+	'function buyRecapitalization(uint248 child,uint256 maximumRep,uint256 minimumRep,uint256 maximumCommitment,uint256 maximumOwnRep,uint256 targetHealth,uint256 executionReserve) payable returns (uint256,uint256)',
 ])
-const request = { owner, controller, contextId: 7n }
-
-function reads() {
-	const state = { chainId: 1, intervalCount: 130n, processed: false, custody: zeroAddress, blockHash: zeroHash, pool: token, recoveryComplete: false, originId, factoryUnavailable: false }
-	const calls: Parameters<PortfolioReadClient['readContract']>[0][] = []
+function fixture(overrides: Record<string, unknown> = {}) {
+	const calls: { functionName: string; blockNumber: bigint }[] = []
+	const values: Record<string, unknown> = {
+		forkController: controller,
+		portfolio,
+		zoltar: protocol,
+		getForkTime: 1_000n,
+		getForkChoiceDeadline: 2_000n,
+		getForkRecapitalizationDeadline: 3_000n,
+		forks: [50n, 40n, 30n, 30n, 2n, 10n, 0n, 0n, true, false, true],
+		choices: [7n, true],
+		getChildUniverseId: 42n,
+		branches: [8n, 7n, 20n, 16n, 10n, 0n, zeroAddress, true, false, false],
+		getRepToken: owner,
+		capitalLedger: capital,
+		...overrides,
+	}
 	const client: PortfolioReadClient = {
-		getChainId: async () => state.chainId,
-		getBlock: async () => ({ number: 51n, hash: state.blockHash, timestamp: 3_000_000n }),
-		readContract: async call => {
-			calls.push(call)
-			switch (call.functionName) {
-				case 'forkController':
-					return controller
-				case 'contextCount':
-					return 10n
-				case 'getContext':
-					return { universeId: 100n, parentContextId: call.args?.[0] === 8n ? (calls.find(call => call.functionName === 'getOwnerForkBranches')?.args?.[0] ?? 0n) : 0n, outcomeIndex: 37n, incomingActivationFloor: 1_000_000n, ledger, repToken: token, pointCount: 100_000n }
-				case 'choiceWindow':
-					return [1_000_000n, 2_000_000n]
-				case 'getOwnerActiveIntervalCount':
-					return state.intervalCount
-				case 'getOwnerActiveIntervals': {
-					const cursor = call.args?.[1]
-					if (typeof cursor !== 'bigint') throw new Error('Missing cursor')
-					const start = cursor === 0n ? 0n : cursor - 1n
-					if (start >= state.intervalCount && cursor !== 0n) throw new Error('Owner interval cursor retired')
-					const end = start + 64n < state.intervalCount ? start + 64n : state.intervalCount
-					return [Array.from({ length: Number(end - start) }, (_, index) => start + BigInt(index)), end < state.intervalCount ? end + 1n : 0n]
-				}
-				case 'canRetireOwnerInterval':
-					return false
-				case 'getOwnerForkBranches':
-					return [[8n], 0n]
-				case 'getOwnerInterval':
-					return { generation: 1n, startPosition: 1n, endPosition: 100_000n, shares: 7n, repIndex: 0n, feeIndex: 0n, open: false, active: true }
-				case 'choices':
-					return [true, 37n, 3n]
-				case 'previewClaim':
-					return [13n, 17n]
-				case 'childContextIds':
-					return 8n
-				case 'readPosition':
-					return { custody: state.custody, remainingShares: 7n, unmigratedShares: 7n, recoveryComplete: state.recoveryComplete }
-				case 'processedPositions':
-					return state.processed
-				case 'positions':
-					return [901n, 10n, 7n, owner]
-				case 'getBranchWeight':
-					return 3n
-				case 'getPool':
-					if (state.pool === zeroAddress) throw new Error('Question pool unavailable')
-					return state.pool
-				case 'factory':
-					return factory
-				case 'questionOriginIds':
-					return state.originId
-				case 'getSecurityPool':
-					if (state.factoryUnavailable) throw new Error('Factory RPC unavailable')
-					return state.pool
-				default:
-					throw new Error(`Unexpected shared fork read ${call.functionName}`)
+		getChainId: async () => 1,
+		getBlock: async () => ({ number: 10n, hash, timestamp: 1_500n }),
+		readContract: async p => {
+			calls.push({ functionName: p.functionName, blockNumber: p.blockNumber })
+			if (p.functionName === 'requiredRep') {
+				const commitment = p.args?.[0]
+				if (typeof commitment !== 'bigint') throw new Error('Missing K')
+				return commitment * 3n
 			}
+			if (!(p.functionName in values)) throw new Error(`Unexpected read ${p.functionName}`)
+			return values[p.functionName]
 		},
 	}
-	return { client, state, calls }
+	return { client, calls }
 }
-
-test('shared choice binds an owner and context, normalizes only their supplied intervals, and preserves arbitrary fork outcomes', () => {
-	const built = buildPortfolioSharedForkChoiceRequest({ ...request, intervalIds: [9n, 1n, 9n, 0n], outcomeIndex: 37n })
-	expect(built).toMatchObject({ account: owner, to: controller, value: 0n })
-	expect(decodeFunctionData({ abi, data: built.data })).toEqual({ functionName: 'chooseSharedFork', args: [7n, [0n, 1n, 9n], 37n] })
-	expect(decodeFunctionData({ abi, data: buildPortfolioSharedForkRevokeRequest({ ...request, intervalIds: [8n, 1n] }).data }).args).toEqual([7n, [1n, 8n]])
-	expect(() => buildPortfolioSharedForkChoiceRequest({ ...request, intervalIds: [], outcomeIndex: 1n })).toThrow('ownership interval')
-	expect(() => buildPortfolioSharedForkChoiceRequest({ ...request, intervalIds: [0n], outcomeIndex: 1n << 256n })).toThrow('uint256')
+describe('bounded portfolio fork SDK', () => {
+	test('voluntary repair donates exactly the chosen cash without buying shares or REP', () => {
+		const request = buildPortfolioVoluntaryRepairRequest({ owner, portfolio, universeId: 42n, amountAttoEth: 50n })
+		expect(request).toMatchObject({ account: owner, to: portfolio, value: 50n })
+		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'recapitalizeUniverse', args: [42n] })
+		expect(() => buildPortfolioVoluntaryRepairRequest({ owner, portfolio, universeId: 42n, amountAttoEth: 0n })).toThrow('positive')
+	})
+	test('one owner choice, shared activation and source-only complete-set recovery encode exact identities', () => {
+		const base = { owner, controller, universeId: 8n }
+		expect(decodeFunctionData({ abi, data: buildPortfolioForkChoiceRequest({ ...base, outcomeIndex: 7n }).data })).toEqual({ functionName: 'choose', args: [8n, 7n] })
+		expect(decodeFunctionData({ abi, data: buildPortfolioForkStartRequest({ ...base, outcomeIndex: 7n }).data })).toEqual({ functionName: 'startBranch', args: [8n, 7n] })
+		expect(decodeFunctionData({ abi, data: buildPortfolioForkFinalizeRequest({ ...base, universeId: 42n }).data })).toEqual({ functionName: 'finalizeBranch', args: [42n] })
+		expect(decodeFunctionData({ abi, data: buildPortfolioForkRecoveryRequest({ ...base, questionId: 123n, shares: 99n }).data })).toEqual({ functionName: 'recoverUnchosenCash', args: [8n, 123n, 99n] })
+		expect(() => buildPortfolioForkRecoveryRequest({ ...base, questionId: 123n, shares: 0n })).toThrow('positive')
+		expect(() => buildPortfolioForkChoiceRequest({ ...base, universeId: 1n << 248n, outcomeIndex: 7n })).toThrow('uint248')
+	})
+	test('recap purchase separately caps received REP, accepted obligation, own collateral and ETH budget', () => {
+		const parameters = { owner, controller, universeId: 42n, maximumRep: 100n, minimumRep: 90n, maximumCommitment: 30n, maximumOwnRep: 7n, targetHealthFactorBps: 12_000n, executionReserveAttoEth: 4n, maximumCostAttoEth: 50n }
+		const request = buildPortfolioRecapPurchaseRequest(parameters)
+		expect(request).toMatchObject({ account: owner, to: controller, value: 54n })
+		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'buyRecapitalization', args: [42n, 100n, 90n, 30n, 7n, 12_000n, 4n] })
+		expect(() => buildPortfolioRecapPurchaseRequest({ ...parameters, minimumRep: 101n })).toThrow('ordered')
+		expect(() => buildPortfolioRecapPurchaseRequest({ ...parameters, targetHealthFactorBps: 9_999n })).toThrow('100%')
+		expect(() => buildPortfolioRecapPurchaseRequest({ ...parameters, maximumCostAttoEth: (1n << 256n) - 1n })).toThrow('uint256')
+	})
+	test('reads one chosen branch at a pinned block without owner, question or ancestor history', async () => {
+		const { client, calls } = fixture()
+		const snapshot = await loadPortfolioForkSnapshot({ client, portfolio, owner, universeId: 8n })
+		expect(snapshot.choice).toEqual({ outcomeIndex: 7n, recorded: true })
+		expect(snapshot.branch).toMatchObject({ universeId: 42n, capitalLedger: capital, prepared: true, ready: false })
+		expect(snapshot).toMatchObject({ forkTime: 1_000n, choiceDeadline: 2_000n, recapitalizationDeadline: 3_000n })
+		expect(new Set(calls.map(c => c.blockNumber))).toEqual(new Set([10n]))
+		expect(calls.length).toBeLessThan(20)
+	})
+	test('unprepared arbitrary outcomes do not require child deployment and foreign branches are rejected', async () => {
+		const unborn = fixture({ choices: [0n, false], branches: [0n, 0n, 0n, 0n, 0n, 0n, zeroAddress, false, false, false] })
+		const snapshot = await loadPortfolioForkSnapshot({ client: unborn.client, portfolio, owner, universeId: 8n, outcomeIndex: 2n ** 200n })
+		expect(snapshot.branch).toMatchObject({ prepared: false, capitalLedger: zeroAddress })
+		expect(unborn.calls.some(call => call.functionName === 'capitalLedger')).toBe(false)
+		await expect(loadPortfolioForkSnapshot({ client: fixture({ branches: [9n, 7n, 0n, 0n, 0n, 0n, zeroAddress, true, false, false] }).client, portfolio, owner, universeId: 8n })).rejects.toThrow('different fork')
+		await expect(loadPortfolioForkSnapshot({ client: fixture({ portfolio: owner }).client, portfolio, owner, universeId: 8n })).rejects.toThrow('different portfolio')
+	})
+	test('malformed deadlines, inconsistent accounting and reorgs fail closed', async () => {
+		await expect(loadPortfolioForkSnapshot({ client: fixture({ getForkChoiceDeadline: 1_000n }).client, portfolio, owner, universeId: 8n })).rejects.toThrow('deadlines')
+		await expect(loadPortfolioForkSnapshot({ client: fixture({ forks: [50n, 40n, 30n, 30n, 2n, 31n, 0n, 0n, true, false, true] }).client, portfolio, owner, universeId: 8n })).rejects.toThrow('accounting')
+		const reorg = fixture()
+		reorg.client.getBlock = async p => ({ number: 10n, hash: p?.blockNumber === undefined ? hash : `0x${'22'.repeat(32)}`, timestamp: 1_500n })
+		await expect(loadPortfolioForkSnapshot({ client: reorg.client, portfolio, owner, universeId: 8n })).rejects.toThrow('changed')
+	})
 })
 
-test('processing selects one allocation and collection can make zero-payout progress without caller-owned intervals', () => {
-	expect(decodeFunctionData({ abi, data: buildPortfolioSharedForkProcessRequest({ ...request, positionId: 99n, outcomeIndex: 37n }).data })).toEqual({ functionName: 'processForkPosition', args: [7n, 99n, 37n] })
-	expect(decodeFunctionData({ abi, data: buildPortfolioSharedForkRecoveryRequest({ ...request, intervalIds: [], positionIds: [9n, 5n, 9n] }).data })).toEqual({ functionName: 'claimForkRecovered', args: [7n, [], [5n, 9n]] })
-	expect(decodeFunctionData({ abi, data: buildPortfolioSharedForkRecoveryRequest({ ...request, intervalIds: [0n] }).data }).args).toEqual([7n, [0n], []])
-	expect(() => buildPortfolioSharedForkProcessRequest({ ...request, positionId: 0n, outcomeIndex: 1n })).toThrow('allocation position')
-	expect(() => buildPortfolioSharedForkRecoveryRequest({ ...request, intervalIds: [], positionIds: [0n] })).toThrow('allocation position')
-})
-
-test('individual fallback preserves context identity and only includes a branch when explicitly chosen', () => {
-	expect(decodeFunctionData({ abi, data: buildPortfolioContextPositionClaimRequest({ ...request, positionId: 4n, intervalId: 0n }).data })).toEqual({ functionName: 'claimPosition', args: [7n, 4n, 0n] })
-	expect(decodeFunctionData({ abi, data: buildPortfolioContextPositionClaimRequest({ ...request, positionId: 4n, intervalId: 0n, outcomeIndex: 0n }).data })).toEqual({ functionName: 'claimPositionAndMigrate', args: [7n, 4n, 0n, 0n] })
-})
-
-test('a shared snapshot reads one bounded personal page independent of global allocation and owner counts', async () => {
-	const { client, calls } = reads()
-	const snapshot = await loadPortfolioSharedForkSnapshot({ client, portfolio, owner, contextId: 7n, intervalCursor: 129n, outcomeIndex: 37n })
-	expect(snapshot).toMatchObject({ contextId: 7n, controller, universeId: 100n, repToken: token, positionCount: 100_000n, recoverableRepAttoRep: 13n, recoverableFeesAttoEth: 17n, childContextId: 8n })
-	expect(snapshot.intervals.map(interval => interval.intervalId)).toEqual([128n, 129n])
-	expect(snapshot.intervals[0]).toMatchObject({ selected: true, outcomeIndex: 37n, childIntervalId: 3n })
-	expect(calls.filter(call => call.functionName === 'getOwnerInterval')).toHaveLength(2)
-	expect(calls.find(call => call.functionName === 'previewClaim')?.args).toEqual([owner, [128n, 129n]])
-	expect(calls.every(call => call.blockNumber === 51n)).toBe(true)
-	expect(calls.some(call => call.functionName === 'positions' || call.functionName === 'getQuestions' || call.functionName === 'getVaults')).toBe(false)
-	await expect(loadPortfolioSharedForkSnapshot({ client, portfolio, owner, contextId: 10n })).rejects.toThrow('existing fork context')
-	await expect(loadPortfolioSharedForkSnapshot({ client, portfolio, owner, contextId: 7n, intervalCursor: 132n })).rejects.toThrow('cursor retired')
-})
-
-test('first history page remains bounded and only saved personal branches are linked', async () => {
-	const { client, calls } = reads()
-	const snapshot = await loadPortfolioSharedForkSnapshot({ client, portfolio, owner, contextId: 0n })
-	expect(snapshot.intervals).toHaveLength(64)
-	expect(snapshot.childContextId).toBe(0n)
-	expect(calls.filter(call => call.functionName === 'getOwnerForkBranches').map(call => call.args)).toEqual([[0n, owner, 0n, 64n]])
-	expect(snapshot.branches).toEqual([{ outcomeIndex: 37n, contextId: 8n }])
-	expect(calls.filter(call => call.functionName === 'getOwnerInterval')).toHaveLength(64)
-})
-
-test('selected allocation readiness keeps unmaterialized rights distinct from already processed branches', async () => {
-	const { client, state, calls } = reads()
-	const snapshot = await loadPortfolioSharedForkSnapshot({ client, portfolio, owner, contextId: 7n, intervalCursor: 129n, outcomeIndex: 37n })
-	calls.length = 0
-	expect(await loadPortfolioSharedForkPosition({ client, snapshot, positionId: 99n, outcomeIndex: 37n })).toMatchObject({ positionId: 99n, questionId: 901n, custody: zeroAddress, branchProcessed: false, branchWeight: 3n })
-	expect(calls.map(call => call.functionName).sort()).toEqual(['getBranchWeight', 'factory', 'questionOriginIds', 'getSecurityPool', 'positions', 'processedPositions', 'readPosition'].sort())
-	state.processed = true
-	expect((await loadPortfolioSharedForkPosition({ client, snapshot, positionId: 99n, outcomeIndex: 37n })).branchProcessed).toBe(true)
-	await expect(loadPortfolioSharedForkPosition({ client, snapshot, positionId: 100_001n })).rejects.toThrow('allocation in this fork context')
-	await expect(loadPortfolioSharedForkPosition({ client, snapshot, positionId: 99n, outcomeIndex: 38n })).rejects.toThrow('snapshot for this outcome')
-	state.chainId = 2
-	await expect(loadPortfolioSharedForkPosition({ client, snapshot, positionId: 99n })).rejects.toThrow('Chain changed')
-})
-
-test('a snapshot changing chain anchors cannot authorize choices or recovery', async () => {
-	const { client } = reads()
-	let checks = 0
-	client.getChainId = async () => ++checks
-	await expect(loadPortfolioSharedForkSnapshot({ client, portfolio, owner, contextId: 0n })).rejects.toThrow('Chain changed')
-})
-
-test('an enrolled child position can have neither pool nor custody, including a completed source hole', async () => {
-	const { client, state, calls } = reads()
-	state.pool = zeroAddress
-	const snapshot = await loadPortfolioSharedForkSnapshot({ client, portfolio, owner, contextId: 7n, intervalCursor: 129n })
-	calls.length = 0
-	expect(await loadPortfolioSharedForkPosition({ client, snapshot, positionId: 99n })).toMatchObject({ pool: zeroAddress, custody: zeroAddress, recoveryComplete: false })
-	expect(calls.find(call => call.functionName === 'getSecurityPool')).toMatchObject({ address: factory, args: [originId, 100n], blockNumber: 51n })
-	expect(calls.some(call => call.functionName === 'getPool')).toBe(false)
-	expect(calls.every(call => call.blockNumber === 51n)).toBe(true)
-	state.recoveryComplete = true
-	expect(await loadPortfolioSharedForkPosition({ client, snapshot, positionId: 99n })).toMatchObject({ pool: zeroAddress, custody: zeroAddress, recoveryComplete: true })
-	state.factoryUnavailable = true
-	await expect(loadPortfolioSharedForkPosition({ client, snapshot, positionId: 99n })).rejects.toThrow('Factory RPC unavailable')
-	state.factoryUnavailable = false
-	state.originId = zeroHash
-	await expect(loadPortfolioSharedForkPosition({ client, snapshot, positionId: 99n })).rejects.toThrow('Question not registered')
-})
-
-test('child navigation survives retirement of every source ownership interval', async () => {
-	const { client, state } = reads()
-	state.intervalCount = 0n
-	const snapshot = await loadPortfolioSharedForkSnapshot({ client, portfolio, owner, contextId: 0n })
-	expect(snapshot.intervals).toEqual([])
-	expect(snapshot.branches).toEqual([{ outcomeIndex: 37n, contextId: 8n }])
+test.each([
+	{ minimumFill: 1n, maximumSold: 100n, reason: undefined },
+	{ minimumFill: 10n, maximumSold: 100n, reason: 'Purchase is below this recap sale’s minimum fill.' },
+	{ minimumFill: 10n, maximumSold: 20n, reason: undefined },
+])('recap quote funds combined health and enforces minimum fill $minimumFill for remaining inventory $maximumSold', async ({ minimumFill, maximumSold, reason }) => {
+	const source = fixture({
+		branches: [8n, 7n, 20n, 20n, 10n, 0n, owner, true, true, false],
+		quote: [20n, 10n, 5n],
+		minimumFillAttoEth: minimumFill,
+		maximumRepSoldAttoRep: maximumSold,
+		soldAttoRep: 0n,
+		raisedAttoEth: 0n,
+		missingCashAttoEth: 100n,
+		originUniverseId: 8n,
+		settlement: portfolio,
+		ledger: portfolio,
+		minimumOutcomeExchangeRate: 1n,
+		purchaseFeeBps: 100n,
+		annualFeeBps: 1000n,
+		minimumPurchaseFeeAttoEth: 1n,
+		minimumCommitmentAttoEth: 10n,
+		minimumExecutionReserveAttoEth: 3n,
+		rewardVestingSeconds: 100n,
+		commitmentIndex: controller,
+		repToken: owner,
+		acceptedPrice: 1n,
+		securityMultiplierBps: 10000n,
+		priceValidUntil: 2000n,
+		isPriceValid: false,
+		demandAttoEth: 10n,
+		totalFreeAttoRep: 0n,
+		frozen: false,
+		importing: true,
+		exported: false,
+		totals: [40n, 20n, 0n],
+		currentBatch: 1n,
+		nextBatch: 2n,
+		ownerAccount: { freeAttoRep: 0n, feesAttoEth: 0n, feesAttoRep: 0n, executionReserveAttoEth: 2n, targetHealthFactorBps: 10000n, positions: [1n, 0n, 0n] },
+		accountOf: { owner, batch: 0n, rep: 40n, commitment: 20n, maxHealthyPrice: 1n, releasedRep: 0n, ethFees: 0n, repFees: 0n },
+		positionExecutionReserveAttoEth: 5n,
+		liquidationStarted: 0n,
+	})
+	const snapshot = await loadPortfolioForkSnapshot({ client: source.client, portfolio, owner, universeId: 8n })
+	const quote = await loadPortfolioRecapQuote({ client: source.client, snapshot, maximumCostAttoEth: 10n, maximumRep: 30n, targetHealthFactorBps: 15000n })
+	expect(quote.ownRep).toBe(30n)
+	expect(quote.executionReserve).toBe(2n)
+	expect(quote.reason).toBe(reason)
 })

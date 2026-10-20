@@ -61,6 +61,7 @@ contract SecurityPoolForkerVaultMigrationDelegate is
 	}
 
 	function migrateVault(ISecurityPool parent, uint256 outcomeIndex) public returns (ISecurityPool child, EscalationGame childEscalationGame) {
+		require(parent.portfolioCustody() == address(0), 'Use portfolio branch positions');
 		require(block.timestamp <= forkDataByPool[parent].forkActivationTime + SecurityPoolUtils.MIGRATION_TIME, 'Migration window closed');
 		(child, childEscalationGame) = _getOrDeployChildPool(parent, outcomeIndex);
 		_requireChildForkCarryReady(parent, childEscalationGame);

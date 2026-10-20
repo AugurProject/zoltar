@@ -1,3 +1,4 @@
+import type { LinearFeeState } from '@zoltar/statoblast-shared/statoblast/retentionRate'
 import type { Address, Hash, Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { ForkOutcomeKey, MarketDetails, ReportingOutcomeKey, SecurityPoolSystemState } from '@zoltar/ui-core-shared/types/contracts.js'
 
@@ -93,6 +94,7 @@ export type SecurityVaultDetails = {
 	badDebtAttoEth: bigint
 	currentRetentionRate: bigint
 	disputeStakedAttoRep: bigint
+	disputeBackingAttoRep: bigint
 	managerAddress: Address
 	minimumSecurityBondDebtAttoEth?: bigint
 	minimumVaultRepDepositAttoRep?: bigint
@@ -230,6 +232,8 @@ export type ListedSecurityPool = {
 	settlementCollateralAttoEth: bigint
 	currentRetentionRate: bigint
 	feeAccrualState?: {
+		centralSettlement?: boolean
+		linearFee?: LinearFeeState
 		feeEndTimestamp: bigint
 		feeIndexRemainder: bigint
 		lastUpdatedFeeAccumulator: bigint
@@ -272,6 +276,7 @@ export type SecurityPoolVaultSummary = {
 	badDebtAttoEth?: bigint
 	openInterestAttoEth?: bigint
 	disputeStakedAttoRep: bigint
+	disputeBackingAttoRep: bigint
 	repBackingUnits?: bigint
 	totalRepBackingUnits?: bigint
 	vaultAttoRepBacking: bigint

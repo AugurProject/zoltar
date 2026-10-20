@@ -95,17 +95,13 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		totalDisputeStakedAttoRep -= forkCarryDisputeStakedAttoRep;
 		forkCarryDisputeStakedAttoRep = 0;
 		require(totalDisputeStakedAttoRep == 0, 'Escrowed REP remains');
-		uint256 amountAttoRep = repToken.balanceOf(address(this));
+		uint256 amountAttoRep = _reporterRepBalance();
 		require(amountAttoRep > 0, 'No sweepable REP');
 		_safeTransferRep(address(securityPool), amountAttoRep);
-		if (forkContinuation) {
-			// Continuation backing predates every child-local owner class. Burning its
-			// terminal residual prevents both late capture and ownerless stranding.
-			securityPool.burnEscalationWinnerHaircut(amountAttoRep);
-			emit ForkContinuationResidualRepBurned(amountAttoRep);
-			return;
-		}
-		emit ResidualRepSweptToSecurityPool(amountAttoRep);
+		// Continuation backing predates every child-local owner class. Burning its
+		// terminal residual prevents both late capture and ownerless stranding.
+		securityPool.burnEscalationWinnerHaircut(amountAttoRep);
+		emit ForkContinuationResidualRepBurned(amountAttoRep);
 	}
 
 	function settleOrdinaryGame() external {
@@ -119,8 +115,9 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 
 	function drainAllRep(address receiver) external returns (uint256 amountAttoRep) {
 		require(msg.sender == address(securityPool), 'Only pool');
+		require(!_usesCentralReporterCustody(), 'Reporter escrow migrates through portfolio');
 		require(receiver != address(0x0), 'Recipient is zero');
-		amountAttoRep = repToken.balanceOf(address(this));
+		amountAttoRep = _reporterRepBalance();
 		if (amountAttoRep == 0) return 0;
 		_safeTransferRep(receiver, amountAttoRep);
 	}

@@ -25,6 +25,14 @@ export function openInterestFeePerYearBigint(retentionRate: bigint | undefined):
 	return (RETENTION_RATE_PRECISION - annualRetention) * 100n
 }
 
+/** Annualized linear fee as a percentage of current collateral, capped at that funded collateral. */
+export function linearOpenInterestFeePerYearBigint(rateAttoEthPerSecond: bigint, collateralAttoEth: bigint): bigint | undefined {
+	if (rateAttoEthPerSecond < 0n || collateralAttoEth < 0n) return undefined
+	if (rateAttoEthPerSecond === 0n || collateralAttoEth === 0n) return 0n
+	const annualFee = rateAttoEthPerSecond * SECONDS_PER_YEAR
+	return annualFee >= collateralAttoEth ? 100n * RETENTION_RATE_PRECISION : (annualFee * 100n * RETENTION_RATE_PRECISION) / collateralAttoEth
+}
+
 /** Annual open interest fee percentage rounded half up to `fractionDigits` decimals, as a scaled integer. */
 export function roundedOpenInterestFeePerYear(retentionRate: bigint | undefined, fractionDigits: number): bigint | undefined {
 	const feePercent = openInterestFeePerYearBigint(retentionRate)
@@ -32,3 +40,5 @@ export function roundedOpenInterestFeePerYear(retentionRate: bigint | undefined,
 	const step = 10n ** BigInt(18 - fractionDigits)
 	return (feePercent + step / 2n) / step
 }
+
+export { previewLinearFeeCheckpoint, type LinearFeeState } from './linearFees.js'

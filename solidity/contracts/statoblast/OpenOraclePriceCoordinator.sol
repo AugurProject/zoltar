@@ -273,7 +273,7 @@ contract OpenOraclePriceCoordinator is OpenOraclePriceSource {
 		snapshot.totalRepBackingUnits = securityPool.totalRepBackingUnits();
 		snapshot.targetDisputeStakedAttoRep =
 			operation == OperationType.Liquidation && address(securityPool.escalationGame()) != address(0x0)
-				? securityPool.escalationGame().disputeStakedRepByVaultAttoRep(targetVault)
+				? securityPool.escalationGame().getVaultDisputeBackingAttoRep(targetVault)
 				: 0;
 	}
 

@@ -59,8 +59,8 @@ function getSecurityPoolDeployerAddress(securityPoolFactory: Address) {
 function getSecurityPoolDeploymentWorkerAddress(securityPoolFactory: Address) {
 	return getCreateAddress({
 		from: getSecurityPoolDeployerAddress(securityPoolFactory),
-		// The deployer creates the event emitter, then its deployment worker.
-		nonce: 2n,
+		// The fixed event emitter is deployed separately; the worker is the first child.
+		nonce: 1n,
 	})
 }
 

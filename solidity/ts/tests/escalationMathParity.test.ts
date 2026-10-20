@@ -8,7 +8,7 @@ import { createWriteClient, type WriteClient, writeContractAndWait } from '../te
 import { TEST_ADDRESSES, MAX_UINT256 } from '../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { ensureInfraDeployed, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
-import { deployEscalationGame, depositOnOutcome, getActivationTime, getBalances, getEscalationGameDeposits } from '../testSupport/simulator/utils/contracts/escalationGame'
+import { getActivationTime, getBalances, getEscalationGameDeposits } from '../testSupport/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { ReputationToken_ReputationToken, statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier, statoblast_EscalationGame_EscalationGame, test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact } from '../types/contractArtifact'
@@ -389,10 +389,10 @@ describe('Escalation math parity', () => {
 	})
 
 	test('shared attrition-time inversion matches the deployed contract', async () => {
-		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThresholdAttoRep)
-		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.No, 15n * reportBond)
-		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, 7n * reportBond)
-		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Invalid, 11n * reportBond)
+		const { escalationGameAddress: escalationGame, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.No, 15n * reportBond)
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 7n * reportBond)
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, 11n * reportBond)
 
 		const bindingCapital = await readBindingCapital(escalationGame)
 
@@ -404,9 +404,9 @@ describe('Escalation math parity', () => {
 	})
 
 	test('shared deposit projection matches previewDepositOnOutcome and projected end time', async () => {
-		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThresholdAttoRep)
-		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, 9n * reportBond)
-		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.No, 6n * reportBond)
+		const { escalationGameAddress: escalationGame, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 9n * reportBond)
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.No, 6n * reportBond)
 
 		const balances = await getBalances(client, escalationGame)
 		const requestedAmount = 8n * reportBond
@@ -425,7 +425,7 @@ describe('Escalation math parity', () => {
 		assert.strictEqual(resultingCumulativeAmount, projection.projectedBalancesAttoRep[0], 'projected invalid balance should match preview cumulative amount')
 
 		const activationTime = await getActivationTime(client, escalationGame)
-		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Invalid, acceptedAmount)
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, acceptedAmount)
 		const expectedEndTime = activationTime + computeEscalationTimeSinceStartFromAttritionCostAttoRep(reportBond, nonDecisionThresholdAttoRep, await readBindingCapital(escalationGame))
 		assert.strictEqual(await readEscalationEndDate(escalationGame), expectedEndTime, 'shared projected end time should match the contract after the same deposit')
 	})

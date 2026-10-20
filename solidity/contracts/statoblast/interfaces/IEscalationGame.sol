@@ -13,6 +13,10 @@ enum CarryConsumptionReason {
 }
 
 interface IEscalationGameEvents {
+	/// @notice Ordinary minimum-outcome surplus was paid irrevocably when its source deposit arrived.
+	event EscalationSurplusAccrued(uint256 amountAttoRep, uint256 cumulativeSurplusAttoRep);
+	/// @notice Terminal rounding, threshold adjustments, and unsolicited REP cannot become a late pool windfall.
+	event OrdinaryResidualRepBurned(uint256 amountAttoRep);
 	/// @notice The game reached its non-decision threshold; timestamp uses Unix seconds.
 	event NonDecisionReached(uint256 nonDecisionTimestamp);
 	/// @notice A continuation inherited two or more threshold-full outcomes without fabricating a local timestamp.

@@ -1,3 +1,4 @@
+import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
@@ -6,7 +7,7 @@ import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.j
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { formatTrimmedUnits, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { openInterestFeePerYearBigint } from '@zoltar/statoblast-shared/statoblast/retentionRate'
+import { getPoolAnnualFeePercent } from '../lib/retentionRate.js'
 import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import { GlossaryTerm } from '../../glossary/components/GlossaryTerm.js'
 import { formatInitialReportPriorityFee } from '../lib/priorityFee.js'
@@ -27,6 +28,7 @@ function formatRepPerCapacityBps(value: bigint) {
 
 /** Static pool parameters. Settlement collateral against standing commitments is shown by `PoolCapacitySummary`. */
 export function SecurityPoolSummaryMetrics({ children, className = '', metricVariant = 'default', pool, showTotalBacking = false }: SecurityPoolSummaryMetricsProps) {
+	const currentTimestamp = useChainTimestamp()
 	const resolvedPoolHeldRepPerCapacityBps = pool.totalUnderwritingLimitAttoEth === 0n ? undefined : (pool.totalPoolHeldAttoRep * 10_000n) / pool.totalUnderwritingLimitAttoEth
 	return (
 		<MetricGrid className={className} variant={metricVariant}>
@@ -34,7 +36,7 @@ export function SecurityPoolSummaryMetrics({ children, className = '', metricVar
 			<MetricField label={<GlossaryTerm id='security-multiplier'>{statoblastAppCopy.statoblastSecurityMultiplierBps}</GlossaryTerm>}>{formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}</MetricField>
 			<MetricField label={commonCopy.initialReportPriorityFee}>{formatInitialReportPriorityFee(pool.initialReportPriorityFeeAttoEthPerGas)}</MetricField>
 			<MetricField label={<GlossaryTerm id='open-interest-fee'>{securityPoolCopy.openInterestFeeYear}</GlossaryTerm>}>
-				<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix={commonCopy.percent} />
+				<CurrencyValue value={getPoolAnnualFeePercent(pool, currentTimestamp)} suffix={commonCopy.percent} />
 			</MetricField>
 			{showTotalBacking ? (
 				<MetricField label={securityPoolCopy.totalPoolHeldAttoRep}>

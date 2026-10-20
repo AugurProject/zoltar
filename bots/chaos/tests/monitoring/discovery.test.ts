@@ -13,7 +13,7 @@ import { encodeAbiParameters, getAddress, zeroAddress, privateKeyToAccount, type
 import { discoverChildPoolPreparations } from '../../src/monitoring/discovery-child-preparation.ts'
 import { discoverEcosystemSnapshot } from '../../src/monitoring/discovery.ts'
 import { DISCOVERY_RPC_CONCURRENCY, DISCOVERY_RPC_QUEUE_LIMIT, drainConcurrent, limitDiscoveryConcurrency, mapWithConcurrency, type ChaosReadClient } from '../../src/monitoring/discovery-client.ts'
-import { discoverDirectEscalationDepositQuotes, minimumSafeVaultDeposit, relevantTokenSpenders } from '../../src/monitoring/discovery-escalation.ts'
+import { discoverDirectEscalationDepositQuotes, minimumSafeVaultDeposit, relevantTokenSpenders, projectSettlementCollateral } from '../../src/monitoring/discovery-escalation.ts'
 import { forkMigrationWindowIsOpen, forkRepMigrationTarget } from '../../src/monitoring/discovery-fork-migration.ts'
 import { assertCanonicalPairGraph, assertCanonicalPoolGraph, authenticatePoolProtocolBindings } from '../../src/monitoring/discovery-graph.ts'
 import { advanceVaultRegistryCursor, collectCountedPages } from '../../src/monitoring/discovery-registry.ts'
@@ -74,7 +74,19 @@ for (const shared of [false, true])
 		test(`discovers canonical child preparation at the pinned block (${shared}, ${ready})`, async () => {
 			const fake = fakeClient(10n, hash(10), { childPreparation: { shared, ready } })
 			const preparation = await discoverChildPoolPreparations(fake.client, address(4), address(2), address(50), 0n, ['1'], 10n)
-			expect(preparation['1']).toEqual({ portfolio: shared ? address(90) : zeroAddress, childUniverseId: '88', childPool: ready ? address(93) : zeroAddress, game: zeroAddress, historyOutcomesInitialized: 0, historyReady: ready, feedRequired: shared && !ready, dependenciesRequired: !ready })
+			expect(preparation['1']).toEqual({
+				portfolio: shared ? address(90) : zeroAddress,
+				branchReady: !shared || ready,
+				sourcePool: address(50),
+				sourceGame: zeroAddress,
+				childUniverseId: '88',
+				childPool: ready ? address(93) : zeroAddress,
+				game: zeroAddress,
+				historyOutcomesInitialized: 0,
+				historyReady: ready,
+				feedRequired: false,
+				dependenciesRequired: !shared && !ready,
+			})
 			expect(fake.contractReads.some(read => read.functionName === 'sharedPriceFeeds')).toBe(shared)
 		})
 
@@ -364,7 +376,17 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 				case 'getSecurityPoolOriginId':
 					return hash(90)
 				case 'getChildPoolDependencies':
-					return graph.childPreparation?.ready ? [address(91), address(92)] : [zeroAddress, zeroAddress]
+					return graph.childPreparation?.ready ? [address(91), graph.childPreparation.shared ? zeroAddress : address(92)] : [zeroAddress, zeroAddress]
+				case 'clocks':
+					return [0n, 0n, true, graph.childPreparation?.ready ?? false]
+				case 'getForkTime':
+					return 0n
+				case 'sourceGame':
+					return zeroAddress
+				case 'questionId':
+					return 101n
+				case 'systemState':
+					return 0n
 				case 'getSecurityPool':
 					return graph.childPreparation?.ready ? address(93) : zeroAddress
 				case 'sharedPriceFeeds':
@@ -409,6 +431,7 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 					return [...(graph.poolDeployments ?? [])].slice(Number(start), Number(start + count))
 				}
 				case 'escalationGame':
+				case 'portfolioCustody':
 					return zeroAddress
 				case 'balanceOf':
 				case 'allowance':
@@ -488,6 +511,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 				case 'questionId':
 					return 101n
 				case 'escalationGame':
+				case 'portfolioCustody':
 					return address(0)
 				case 'truthAuction':
 					return truthAuction
@@ -495,6 +519,8 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 					return 0n
 				case 'awaitingForkContinuation':
 					return false
+				case 'getFeeEpochEndTime':
+					return 2_000n
 				case 'getPoolAccountingSnapshot':
 					return {
 						badDebtGeneration: overrides.badDebtGeneration ?? 0n,
@@ -1637,6 +1663,8 @@ describe('anchored ecosystem discovery', () => {
 					case 'backingUnitsToAttoRep':
 						return 10n
 					case 'disputeStakedRepByVaultAttoRep':
+						return 7n
+					case 'getVaultDisputeBackingAttoRep':
 						return 0n
 					default:
 						throw new Error(`Unexpected read ${parameters.functionName}`)
@@ -1734,6 +1762,7 @@ describe('anchored ecosystem discovery', () => {
 				if (property === 'readContract') {
 					return async (parameters: { args?: readonly AbiValue[]; functionName: string; blockNumber?: bigint }) => {
 						expect(parameters.blockNumber).toBe(555n)
+						if (parameters.functionName === 'getVaultDisputeBackingAttoRep') return 0n
 						if (parameters.functionName === 'getActiveStagedOperationCount') return 66n
 						if (parameters.functionName === 'getPendingSettlementOperationIds') return []
 						if (parameters.functionName === 'getActiveStagedOperationsPage') {
@@ -1995,4 +2024,13 @@ for (const [name, missingContracts, expected] of [
 test('rejects a deployed trading router without its factory', async () => {
 	const fake = fakeClient(10n, hash(10), { missingContract: address(8) })
 	await expect(discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: topologyIdentity(), wallet: address(1) })).rejects.toThrow('Configured trading router exists without its factory')
+})
+
+test('portfolio collateral projection follows the funded linear stream and its two cutoffs', () => {
+	const accounting = { settlementCollateralAttoEth: 1_000n, feeEligibleUnderwritingLimitAttoEth: 100n, totalUnderwritingLimitAttoEth: 100n, feeIndexRemainder: 0n, totalFeesOwedRemainder: 0n, lastUpdatedFeeAccumulator: 10n, currentRetentionRate: 10n ** 18n }
+	expect(projectSettlementCollateral(accounting, 100n, 20n)).toBe(1_000n)
+	expect(projectSettlementCollateral(accounting, 100n, 20n, { rateAttoEthPerSecond: 7n, endTime: 50n })).toBe(930n)
+	expect(projectSettlementCollateral(accounting, 100n, 80n, { rateAttoEthPerSecond: 7n, endTime: 50n })).toBe(720n)
+	expect(projectSettlementCollateral(accounting, 30n, 80n, { rateAttoEthPerSecond: 7n, endTime: 50n })).toBe(860n)
+	expect(projectSettlementCollateral(accounting, 100n, 80n, { rateAttoEthPerSecond: 100n, endTime: 50n })).toBe(0n)
 })

@@ -603,6 +603,7 @@ describe('ForkAuctionSection', () => {
 			vaults: [
 				{
 					disputeStakedAttoRep: 0n,
+					disputeBackingAttoRep: 0n,
 					vaultAttoRepBacking: 0n,
 					underwritingLimitAttoEth: 0n,
 					claimableFeesAttoEth: 0n,
@@ -754,6 +755,7 @@ describe('ForkAuctionSection', () => {
 						vaults: [
 							{
 								disputeStakedAttoRep: 0n,
+								disputeBackingAttoRep: 0n,
 								vaultAttoRepBacking: 20n,
 								underwritingLimitAttoEth: 3n,
 								claimableFeesAttoEth: 0n,
@@ -831,6 +833,7 @@ describe('ForkAuctionSection', () => {
 					{
 						claimableFeesAttoEth: 0n,
 						disputeStakedAttoRep: 0n,
+						disputeBackingAttoRep: 0n,
 						repBackingUnits: 3n * 10n ** 18n,
 						totalPoolHeldRepBalanceAttoRep: 0n,
 						totalRepBackingUnits: 4n * 10n ** 18n,
@@ -929,6 +932,7 @@ describe('ForkAuctionSection', () => {
 						vaults: [
 							{
 								disputeStakedAttoRep: 0n,
+								disputeBackingAttoRep: 0n,
 								vaultAttoRepBacking: 20n,
 								underwritingLimitAttoEth: 3n,
 								claimableFeesAttoEth: 0n,

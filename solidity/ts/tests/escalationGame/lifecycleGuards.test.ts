@@ -7,7 +7,7 @@ import { createWriteClient, writeContractAndWait, type WriteClient } from '../..
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { contractExists } from '../../testSupport/simulator/utils/utilities'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
-import { deployEscalationGame, depositOnOutcome, getActivationTime, getBalances, getEscalationGameOutcomeState, getQuestionResolution, readEscalationGameEndDate, readCarryPeaks, readCarryLeafCount, readCarryTotal, readNullifierRoot } from '../../testSupport/simulator/utils/contracts/escalationGame'
+import { getActivationTime, getBalances, getEscalationGameOutcomeState, getQuestionResolution, readEscalationGameEndDate, readCarryPeaks, readCarryLeafCount, readCarryTotal, readNullifierRoot } from '../../testSupport/simulator/utils/contracts/escalationGame'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier, test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact } from '../../types/contractArtifact'
@@ -28,6 +28,7 @@ describe('Escalation Game: lifecycle and guards', () => {
 		resumeEscalationFromFork,
 		fundEscalationGame,
 		depositOnOutcomeViaProofTestSecurityPool,
+		depositOnOutcomeViaTestSecurityPool,
 		withdrawDepositViaProofTestSecurityPool,
 		initializeSnapshotViaTestSecurityPool,
 		initializeSnapshotWithResolutionBalancesViaTestSecurityPool,
@@ -42,7 +43,7 @@ describe('Escalation Game: lifecycle and guards', () => {
 	})
 
 	test('can start a game', async () => {
-		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThresholdAttoRep)
+		const { escalationGameAddress: escalationGame, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
 		assert.ok(await contractExists(client, escalationGame), 'game was deployed')
 		const outcomeBalances = await getBalances(client, escalationGame)
 		assert.strictEqual(outcomeBalances.yes, 0n, 'yes stake')
@@ -51,7 +52,7 @@ describe('Escalation Game: lifecycle and guards', () => {
 
 		const activationTime = await getActivationTime(client, escalationGame)
 		assert.strictEqual(activationTime !== 0n, true, 'game was started')
-		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.No, reportBond)
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.No, reportBond)
 		const outcomeBalancesAfterDeposit = await getBalances(client, escalationGame)
 		assert.strictEqual(outcomeBalancesAfterDeposit.yes, 0n, 'yes stake')
 		assert.strictEqual(outcomeBalancesAfterDeposit.no, reportBond, 'no stake')

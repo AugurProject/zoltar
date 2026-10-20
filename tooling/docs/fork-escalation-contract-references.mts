@@ -2,12 +2,12 @@ import type { ContractReference } from './contract-reference-metadata.mts'
 
 export const forkEscalationContractReferences: ContractReference[] = [
 	{
-		compiledAbiFingerprint: '743d966ba0b2f33b54a634df471ddeacf1956e12af4db22250aa001477a1837f',
+		compiledAbiFingerprint: '5dd71d808b86fc322bb1a22962bb7bd5fa3649ab7d6cf2c2d30a8b7f2aa6817a',
 		name: 'SecurityPoolForker',
-		purpose: 'Freezes parent pools, creates selected child pools, migrates vault and escalation state, and settles collateral-repair [Truth Auctions](./glossary.html#truth-auction).',
+		purpose: 'Creates canonical question children, delegates portfolio materialization to its fixed native module, and handles standalone vault migration and collateral-repair [Truth Auctions](./glossary.html#truth-auction).',
 		readAbiFingerprint: '44f89debf797ddb63c2614a513b7d04dfe528074f30a513ae53c700d9627fb51',
 		readSurface:
-			'Use `zoltar`, `forkData`, `getUnassignedPosition`, `isEscalationDepositClaimedDirectly`, `getEscalationDepositId`, `getDirectlyClaimedEscalationPrincipal`, `isEscalationWinnerHaircutPaidByFork`, `getEscalationMigrationEntitlementStatus`, `getOwnForkRepBuckets`, `getOwnForkMigrationStatus`, `getMigrationProxyAddress`, `getQuestionOutcome`, `attoRepToBackingUnits`, and `backingUnitsToAttoRep` to reconstruct fork progress and preview migration conversions. `forkData` includes cumulative migrated REP and the fork-activation timestamp. `getUnassignedPosition` returns pending REP backing units, underwriting commitment, raw auction bad debt, that debt’s generation, and the auction-finalization fee index; consumers count the debt only while its generation equals the pool snapshot’s current `badDebtGeneration`.',
+			'Use `zoltar`, `forkData`, `getUnassignedPosition`, `isEscalationDepositClaimedDirectly`, `getEscalationDepositId`, `getDirectlyClaimedEscalationPrincipal`, `isEscalationWinnerHaircutPaidByFork`, `getEscalationMigrationEntitlementStatus`, `getOwnForkRepBuckets`, `getOwnForkMigrationStatus`, `getMigrationProxyAddress`, `getQuestionOutcome`, `attoRepToBackingUnits`, and `backingUnitsToAttoRep` to reconstruct fork progress and preview migration conversions. For standalone pools, `forkData` includes cumulative migrated REP and the fork-activation timestamp. `getUnassignedPosition` returns pending REP backing units, underwriting commitment, raw auction bad debt, that debt’s generation, and the auction-finalization fee index; consumers count the debt only while its generation equals the pool snapshot’s current `badDebtGeneration`.',
 		readDeclarations: [
 			{ name: 'forkData' },
 			{ name: 'getUnassignedPosition' },
@@ -24,29 +24,48 @@ export const forkEscalationContractReferences: ContractReference[] = [
 			{ name: 'backingUnitsToAttoRep', sourcePath: 'solidity/contracts/statoblast/SecurityPoolForkerBase.sol' },
 		],
 		readStorageDeclarations: [{ name: 'zoltar', sourcePath: 'solidity/contracts/statoblast/SecurityPoolForkerBase.sol' }],
-		interactionNotes: '`claimForkedEscalationDeposits` and `migrateVaultWithUnresolvedEscalation` revert without reason data when one of the prerequisites marked "no reason data" fails; the forker omits those reason strings to stay within the contract code-size limits.',
+		interactionNotes:
+			'The per-vault migration, per-question REP proxy and Truth Auction rows describe standalone pools. Bound portfolios instead freeze and migrate central capital, reporter and settlement books through their fork coordinator. Their child question contracts are prepared and materialized lazily; no provider migrates a vault per question. `claimForkedEscalationDeposits` and `migrateVaultWithUnresolvedEscalation` revert without reason data when one of the prerequisites marked "no reason data" fails; the forker omits those reason strings to stay within the contract code-size limits.',
 		securityBoundaryHeading: 'Child-game trust boundary',
 		securityBoundary:
-			'Fork entrypoints and child setup may receive contracts through unauthenticated pool lineages. External-universe initiation requires the supplied pool to be authorized by its declared share token, but that relationship alone does not prove factory registration; own-game initiation does not perform that authorization check. Canonicality comes from the configured `SecurityPoolFactory` registry. A game relationship check is point-in-time: the reported nonzero game address must return the supplied pool or child from `securityPool()` when validated. This does not prove that an arbitrary game getter is immutable or that the address was factory-deployed. Child setup captures one reported game address, validates it before privileged use, and reuses that exact address for continuation backing and escrow work. When unresolved escalation requires a continuation and setup initially reports no game, initialization creates one; the forker then captures and validates it before continuation use. Combined vault migration passes the captured child/game pair into unresolved cleanup without reading the child getter again. Truth Auction completion performs a fresh point-in-time validation of the game reported then before checking continuation readiness. Genuine factory-deployed `EscalationGame` instances store their pool immutably, but safety on unauthenticated paths does not assume arbitrary contracts do.',
+			'Standalone fork entrypoints and child setup may receive contracts through unauthenticated pool lineages. Standalone external-universe initiation requires the supplied pool to be authorized by its declared share token, but that relationship alone does not prove factory registration; own-game initiation does not perform that authorization check. Canonicality comes from the configured `SecurityPoolFactory` registry. A game relationship check is point-in-time: the reported nonzero game address must return the supplied pool or child from `securityPool()` when validated. This does not prove that an arbitrary game getter is immutable or that the address was factory-deployed. Child setup captures one reported game address, validates it before privileged use, and reuses that exact address for continuation backing and escrow work. When unresolved escalation requires a continuation and setup initially reports no game, initialization creates one; the forker then captures and validates it before continuation use. Combined vault migration passes the captured child/game pair into unresolved cleanup without reading the child getter again. Truth Auction completion performs a fresh point-in-time validation of the game reported then before checking continuation readiness. Genuine factory-deployed `EscalationGame` instances store their pool immutably, but safety on unauthenticated paths does not assume arbitrary contracts do.',
 		sourcePath: 'solidity/contracts/statoblast/SecurityPoolForker.sol',
 		interactions: [
 			{
+				call: '`preparePortfolioQuestion(source, targetUniverse)`',
+				caller: 'Anyone',
+				effect: 'Deploys and binds the canonical target question contract and share-token namespace separately from report-history installation. A forked target can be prepared for frozen share recovery without activating a game.',
+				declarations: [{ name: 'preparePortfolioQuestion' }],
+				preconditions: 'Canonical bound source; its universe has forked; the portfolio recognizes a ready target branch and the source reporter identity. Factory and share-token bindings are verified.',
+				signals: 'Canonical pool deployment and authorization events when the target is new.',
+			},
+			{
+				call: '`materializePortfolioQuestion(source, targetUniverse)`',
+				caller: 'Anyone',
+				effect:
+					'Prepares the target if absent. With inherited reporting, installs one outcome of the fixed 64-peak snapshot per call; the third call activates the question and resumes reporting at the fixed logical-clock anchor. Without reporter history, activates immediately. Late installation does not postpone finality. Preparation may be a separate transaction to bound deployment gas.',
+				declarations: [{ name: 'materializePortfolioQuestion' }],
+				preconditions: 'The preparation guards apply. A target whose native universe has already forked can activate only a protected final reporter or trader claim owned by that universe. Already operational targets return without duplicate installation.',
+				signals: 'Canonical deployment events when needed, then game continuation and carry checkpoint events when a reporter game is installed.',
+			},
+			{
 				call: '`initiateSecurityPoolFork(securityPool)`',
 				caller: 'Anyone',
-				effect: 'Freezes the supplied pool after an external universe fork, drains its pool and game REP, and records a migration snapshot keyed by that address. The snapshot is canonical only when the supplied pool is already registered by the configured `SecurityPoolFactory`.',
+				effect:
+					'For a bound portfolio, freezes its shared books and marks the native question forked. For a standalone pool, drains pool and game REP and records a per-pool migration snapshot after the external universe fork. The snapshot is canonical only when the supplied pool is already registered by the configured `SecurityPoolFactory`.',
 				declarations: [{ name: 'initiateSecurityPoolFork' }],
 				preconditions:
-					'Pool operational with no inherited fixed outcome; the pool is authorized by its declared share token; its universe already forked; pool not already `PoolForked`; if an escalation game exists, it reports the supplied pool from `securityPool()` when validated and the universe fork occurred before that game settled. Declared-token authorization is not configured-factory registration; see the [child-game trust boundary](#child-game-trust-boundary).',
-				signals: '`SecurityPoolForkSnapshot` and `ParentRepLocked`; additionally `DisputeStakedRepDrainedAtFork` when unresolved escalation exists',
+					'A bound portfolio requires a forked universe and no final question outcome; the portfolio authenticates its native question before freezing the shared books. A partially installed reporter can be marked forked without finishing its snapshot. Standalone pools require operational state, declared-share-token authorization, and a universe fork before game finality. That token authorization alone is not configured-factory registration; see the [child-game trust boundary](#child-game-trust-boundary).',
+				signals: 'Shared-book freeze events for bound portfolios. Standalone pools emit `SecurityPoolForkSnapshot` and `ParentRepLocked`, plus `DisputeStakedRepDrainedAtFork` when unresolved escalation exists.',
 			},
 			{
 				call: '`forkZoltarWithOwnEscalationGame(securityPool)`',
 				caller: 'Anyone',
-				effect: "Uses the supplied pool game's non-decision to fork Zoltar, freezes that pool, and records own-fork REP buckets and snapshot state keyed by its address. The snapshot is canonical only when the supplied pool is already registered by the configured `SecurityPoolFactory`.",
+				effect: "For a bound portfolio, charges admission only to this question's reporter escrow and freezes the shared books. For a standalone pool, uses its game's non-decision to fork Zoltar, freezes that pool, and records own-fork REP buckets and snapshot state keyed by its address.",
 				declarations: [{ name: 'forkZoltarWithOwnEscalationGame' }],
 				preconditions:
-					'Pool operational with no inherited fixed outcome; its escalation game reports the supplied pool from `securityPool()` when validated and `canTriggerOwnFork()` is true because it recorded a local non-decision or inherited a threshold tie without a game-level fixed outcome (`Need game`); pool not already `PoolForked` (`Forked`) and `Operational` (`Inactive`); universe not already forked; the pool and game REP released to the forker reaches the Zoltar fork threshold (`Fork threshold not reached`). The game-local predicate does not bypass the pool guard. Unlike external-universe initiation, this entrypoint does not require declared-share-token authorization; neither path authenticates the supplied address against the configured pool factory. See the [child-game trust boundary](#child-game-trust-boundary).',
-				signals: '`SecurityPoolForkSnapshot`, `ParentRepLocked`, and Zoltar fork events; additionally `DisputeStakedRepDrainedAtFork` when unresolved escalation exists',
+					'All paths require `canTriggerOwnFork()`, an unforked universe and native fork eligibility. A bound portfolio authenticates the native pool and requires its reporter question to fund admission. Standalone pools additionally require operational state with no inherited fixed outcome and enough released pool/game REP. Standalone own-game initiation does not require declared-share-token authorization or configured-factory registration; see the [child-game trust boundary](#child-game-trust-boundary).',
+				signals: 'Zoltar fork events plus shared-book freeze events for bound portfolios. Standalone pools emit `SecurityPoolForkSnapshot`, `ParentRepLocked`, and `DisputeStakedRepDrainedAtFork` when unresolved escalation exists.',
 			},
 			{
 				call: '`migrateRepToZoltar(securityPool, outcomeIndices)`',
@@ -61,7 +80,7 @@ export const forkEscalationContractReferences: ContractReference[] = [
 				call: '`createChildUniverse(securityPool, outcomeIndex)`',
 				caller: 'Anyone',
 				effect:
-					"Loads an already deployed child universe and REP token or deploys them when absent, then lazily deploys the selected child pool, coordinator, and auction; authorizes and links the child; captures and validates the child's escalation game; and materializes or sweeps child backing through that validated game. An unresolved continuation stays inactive until three separate `continueChildUniverse` calls install its history.",
+					"Loads an already deployed child universe and REP token or deploys them when absent, then lazily deploys the selected child pool, coordinator, and auction; authorizes and links the child; captures and validates the child's escalation game; and materializes or sweeps child backing through that validated game. A standalone unresolved continuation stays inactive until three separate `continueChildUniverse` calls install its history. A bound source routes to direct portfolio child materialization instead and requires a ready shared branch.",
 				declarations: [{ name: 'createChildUniverse' }],
 				preconditions:
 					"Parent in migration window; selected fork outcome is well formed; child pool is not already deployed. The returned auction is nonzero, deployed, and has never been trusted by this forker; the child's fork-data slot is unused; and the child reports the expected parent, universe, source factory, forker, and auction. The selected child's reported nonzero escalation game passes the [child-game trust boundary](#child-game-trust-boundary). These relationship checks do not independently prove configured-factory registration.",
@@ -170,17 +189,19 @@ export const forkEscalationContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'af3a4f1a4ff6b3cc2b330bfc01b1bb5b175cc329a7b154b71ed746487a6b7c9f',
+		compiledAbiFingerprint: '4d5799112210859d5799bdcfde1b3c421beb42408a4bf6771317b6dfafed882e',
 		name: 'EscalationGame',
 		purpose: 'Escrows outcome REP, raises the running resolution cost, detects [non-decision](./glossary.html#non-decision-threshold), and settles local or carried deposits.',
-		readAbiFingerprint: '94ab7ebae11ebf9f50857b9adbb6e3e52535f624adc7ef7c7ddb86a9297eacd8',
+		readAbiFingerprint: 'aeb2133d6e9cddcacaacf0cc9edb6e3b7aec34ce80176d6fb5bf7cdeaa73436c',
 		readSurface:
-			'Base getters are `securityPool`, `repToken`, `activationTime`, `nonDecisionThresholdAttoRep`, `startBondAttoRep`, `nonDecisionTimestamp`, `nonDecisionState`, `forkContinuation`, `forkElapsedAtStart`, `forkResumedAt`, `fixedQuestionOutcome`, `nodes`, `disputeStakedRepByVaultAttoRep`, `totalDisputeStakedAttoRep`, `truthAuctionRepBeforeAttoRep`, `truthAuctionRepRemainingAttoRep`, `ordinarySettlementInitialized`, `ordinaryWinningReserveAttoRep`, and `ordinarySettlementForkThresholdAttoRep`. Ordinary settlement fixes the winner liability and threshold; losing local deposits and escrow read as zero afterward, while raw historical nodes remain stored. The fallback forwards every selector other than the two signed deposits to `EscalationGameClaimDelegate`, which provides the reads `rootClaimSourceGame`, `getInheritedClaimAllocation`, and `getUnresolvedClaimInterval`, plus `getClaimCheckpointProgress`, `getClaimCheckpointState`, `getClaimCheckpointWitnessSegment`, `getReusableClaimCheckpoint`, `getClaimIntervalTransform`, and `isClaimHistoryFrozen`. Allocation reads inspect at most eight ancestors; deeper histories require permissionless checkpoint preparation. `getClaimCheckpointProgress` distinguishes stored completion from readiness through the bounded read path. `getClaimCheckpointState` returns initialization, the pending commitment, the reused ancestor, and the current four-coordinate interval. `getClaimCheckpointWitnessSegment` returns the canonical source, prior commitment, first step, and length of the active segment; at most eight local transform reads reconstruct the batch from current state. `getReusableClaimCheckpoint` exports a completed interval and its excluded immediate-source anchor; descendants select caches only along their canonical lineage for the same claim tuple. The allocation read returns source principal, retained principal, reward-interval length, and the cumulative reward endpoint after per-generation auction rounding. The reward interval is the deposit’s range within its outcome’s cumulative deposits: its start is the returned endpoint minus the returned length. It determines which portion enters the reward calculation; the length is not a payable reward. Exported principal intervals compact consumed prefixes, while reward positions remain unshifted by prior claims. Allocations within a game stay fixed in every claim order. `disputeStakedRepByVaultAttoRep` is locally attributed current-game escrow used for health; inherited carry remains aggregate commitment state until proof settlement. Use `previewDepositOnOutcome`, `computeIterativeAttritionCostAttoRep`, `computeTimeSinceStartFromAttritionCostAttoRep`, `totalCostAttoRep`, `getEscalationGameEndDate`, `getQuestionResolution`, `getFinalQuestionResolution`, `hasReachedNonDecision`, `canTriggerOwnFork`, `getBindingCapitalAttoRep`, `getOutcomeBalancesAttoRep`, `getDepositsByOutcome`, `getDepositsByOutcomeLength`, `forkCarrySnapshotInitialized`, `forkCarrySnapshotOutcomesInitialized`, `getOutcomeState`, `getForkCarrySnapshot`, `getForkCarryRoots`, `isForkCarryFundingComplete`, `getCarryLeafPageByOutcome`, `getProofConsumedCarriedDepositIndexesByOutcome`, `getLocalUnresolvedPrincipalByVaultAndOutcome`, and `getForkedEscrowByVaultAndOutcome` for calculations, lifecycle authorization, pages, carry state, and escrow. `getCarryLeafPageByOutcome` limits visited nodes by `maxEntries`, including consumed nodes; empty or short pages may return a nonzero continuation cursor. Vault-funded deposits and ordinary withdrawals route through `SecurityPool`, while own-fork direct claims route through `SecurityPoolForker`; after an ordinary game starts, wallet-funded deposits use `depositRepOnOutcome`, `depositRepOnOutcomeWithPermit`, or `depositRepOnOutcomeWithAuthorization` and mint no pool backing units.',
+			'Base getters are `securityPool`, `repToken`, `activationTime`, `nonDecisionThresholdAttoRep`, `startBondAttoRep`, `nonDecisionTimestamp`, `nonDecisionState`, `forkContinuation`, `forkElapsedAtStart`, `forkResumedAt`, `fixedQuestionOutcome`, `nodes`, `disputeStakedRepByVaultAttoRep`, `totalDisputeStakedAttoRep`, `truthAuctionRepBeforeAttoRep`, `truthAuctionRepRemainingAttoRep`, `ordinarySettlementInitialized`, `ordinaryWinningReserveAttoRep`, `ordinarySettlementForkThresholdAttoRep`, `creditedSurplusAttoRep`, and `winnerHaircutPaidByFork`. Ordinary settlement fixes the winner liability and threshold; losing local deposits and escrow read as zero afterward, while raw historical nodes remain stored. The fallback forwards every selector other than the two signed deposits to `EscalationGameClaimDelegate`, which provides the reads `rootClaimSourceGame`, `getInheritedClaimAllocation`, and `getUnresolvedClaimInterval`, plus `getClaimCheckpointProgress`, `getClaimCheckpointState`, `getClaimCheckpointWitnessSegment`, `getReusableClaimCheckpoint`, `getClaimIntervalTransform`, and `isClaimHistoryFrozen`. Standalone allocation reads inspect at most eight ancestors; deeper histories require permissionless checkpoint preparation. Central portfolio reporter claims keep identity coordinates across live branches and resolve their interval without ancestor traversal; their membership proofs and per-branch nullifiers still apply. `getClaimCheckpointProgress` distinguishes stored completion from readiness through the bounded read path. `getClaimCheckpointState` returns initialization, the pending commitment, the reused ancestor, and the current four-coordinate interval. `getClaimCheckpointWitnessSegment` returns the canonical source, prior commitment, first step, and length of the active segment; at most eight local transform reads reconstruct the batch from current state. `getReusableClaimCheckpoint` exports a completed interval and its excluded immediate-source anchor; descendants select caches only along their canonical lineage for the same claim tuple. The allocation read returns source principal, retained principal, reward-interval length, and the cumulative reward endpoint after per-generation auction rounding. The reward interval is the deposit’s range within its outcome’s cumulative deposits: its start is the returned endpoint minus the returned length. It determines which portion enters the reward calculation; the length is not a payable reward. Exported principal intervals compact consumed prefixes, while reward positions remain unshifted by prior claims. Allocations within a game stay fixed in every claim order. `disputeStakedRepByVaultAttoRep` is nominal reporter principal, not collateral value. `getDisputeBackingAttoRep` returns actual game REP; `getVaultDisputeBackingAttoRep` credits ordinary reports only for their contribution retained after source surplus, and returns zero for continuation claims. Inherited carry remains aggregate commitment state until proof settlement. Use `previewDepositOnOutcome`, `computeIterativeAttritionCostAttoRep`, `computeTimeSinceStartFromAttritionCostAttoRep`, `totalCostAttoRep`, `getEscalationGameEndDate`, `getQuestionResolution`, `getFinalQuestionResolution`, `hasReachedNonDecision`, `canTriggerOwnFork`, `getBindingCapitalAttoRep`, `getOutcomeBalancesAttoRep`, `getDepositsByOutcome`, `getDepositsByOutcomeLength`, `forkCarrySnapshotInitialized`, `forkCarrySnapshotOutcomesInitialized`, `getOutcomeState`, `getForkCarrySnapshot`, `getForkCarryRoots`, `isForkCarryFundingComplete`, `getCarryLeafPageByOutcome`, `getProofConsumedCarriedDepositIndexesByOutcome`, `getLocalUnresolvedPrincipalByVaultAndOutcome`, and `getForkedEscrowByVaultAndOutcome` for calculations, lifecycle authorization, pages, carry state, and escrow. `getCarryLeafPageByOutcome` limits visited nodes by `maxEntries`, including consumed nodes; empty or short pages may return a nonzero continuation cursor. Vault-funded deposits and ordinary withdrawals route through `SecurityPool`, while own-fork direct claims route through `SecurityPoolForker`; after an ordinary game starts, wallet-funded deposits use `depositRepOnOutcome`, `depositRepOnOutcomeWithPermit`, or `depositRepOnOutcomeWithAuthorization` and mint no pool backing units.',
 		interactionNotes:
-			'Rows marked "through `fallback()`" are not in the compiled ABI: the fallback forwards the two signed deposit selectors to `EscalationGameDepositDelegate` and every other unknown selector to `EscalationGameClaimDelegate` by `delegatecall`, and returns or reverts with the delegate output. A call restricted to the owning pool or its forker reverts without reason data for any other caller.',
+			'Rows marked "through `fallback()`" are not in the compiled ABI: the fallback forwards the two signed deposit selectors to `EscalationGameDepositDelegate` and every other unknown selector to `EscalationGameClaimDelegate` by `delegatecall`, and returns or reverts with the delegate output. A call restricted to the owning pool or its forker reverts without reason data for any other caller. For central portfolio custody, report REP is held in the reporter ledger, independently of provider REP. Unrelated resumed continuations accept wallet-funded deposits. Fixed-outcome continuations end exactly three days after the child response anchor, which is the native parent fork time plus nine weeks; late materialization does not extend it. Other continuation deadlines retain their inherited elapsed time and minimum response period. A later native fork interrupts unresolved reporting before any fixed outcome can be returned. Native per-question REP exports and Truth Auction haircuts reject central custody.',
 		readDeclarations: [
 			{ name: 'previewDepositOnOutcome' },
 			{ name: 'disputeStakedRepByVaultAttoRep', sourcePath: 'solidity/contracts/statoblast/EscalationGameState.sol' },
+			{ name: 'getDisputeBackingAttoRep', sourcePath: 'solidity/contracts/statoblast/EscalationGameEscrow.sol' },
+			{ name: 'getVaultDisputeBackingAttoRep', sourcePath: 'solidity/contracts/statoblast/EscalationGameEscrow.sol' },
 			{ name: 'getClaimCheckpointProgress', sourcePath: 'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol' },
 			{ name: 'getClaimCheckpointState', sourcePath: 'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol' },
 			{ name: 'getClaimCheckpointWitnessSegment', sourcePath: 'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol' },
@@ -232,6 +253,8 @@ export const forkEscalationContractReferences: ContractReference[] = [
 			{ name: 'ordinarySettlementInitialized', sourcePath: 'solidity/contracts/statoblast/EscalationGameStorage.sol' },
 			{ name: 'ordinaryWinningReserveAttoRep', sourcePath: 'solidity/contracts/statoblast/EscalationGameStorage.sol' },
 			{ name: 'ordinarySettlementForkThresholdAttoRep', sourcePath: 'solidity/contracts/statoblast/EscalationGameStorage.sol' },
+			{ name: 'creditedSurplusAttoRep', sourcePath: 'solidity/contracts/statoblast/EscalationGameStorage.sol' },
+			{ name: 'winnerHaircutPaidByFork', sourcePath: 'solidity/contracts/statoblast/EscalationGameStorage.sol' },
 		],
 		sourcePath: 'solidity/contracts/statoblast/EscalationGame.sol',
 		interactions: [
@@ -255,10 +278,10 @@ export const forkEscalationContractReferences: ContractReference[] = [
 				call: '`resumeFromFork()`',
 				caller: 'Owning `SecurityPool` only (`Only pool`)',
 				effect:
-					'Records the resume timestamp once carry funding is complete. The new deadline is `max(rebasedCurveEnd, forkResumedAt + 3 days)`, so even an exhausted inherited clock receives a fresh response period. After that deadline, `getFinalQuestionResolution` returns the fixed outcome when the continuation has one.',
+					'Resumes once carry funding is complete. Standalone continuations use the transaction timestamp and deadline `max(rebasedCurveEnd, forkResumedAt + 3 days)`. Bound continuations use the fixed portfolio response anchor; when their outcome is fixed, the deadline is exactly anchor plus three days, otherwise inherited attrition and the minimum response interval apply. Late materialization never moves the anchor. Final resolution also checks whether the native universe forked before that deadline.',
 				declarations: [{ name: 'resumeFromFork' }],
 				preconditions:
-					'Fork-continuation mode; not previously resumed; aggregate REP funding complete (`isForkCarryFundingComplete`). All three carry outcomes must be initialized (`Fork snapshot incomplete`), even for empty history. An unrelated fork requires one-to-one backing of effective unresolved principal. For an own-fork continuation, recorded initial backing must be at least `R - ⌊R / 5⌋`, where `R` is the sum of `inheritedUnresolvedTotalAttoRep` and `localUnresolvedTotalAttoRep` across all three outcomes before direct-claim deductions, and `5` is the fixed `Constants.MINIMUM_FORK_BURN_DIVISOR` rather than the configured fork burn divisor. The live balance must cover that initial backing minus child REP already exported by valid direct pre-resume claims, scaled down by any REP `applyTruthAuctionHaircut` removed.',
+					'Fork-continuation mode; not previously resumed; aggregate REP funding complete (`isForkCarryFundingComplete`). All three carry outcomes must be initialized (`Fork snapshot incomplete`), even for empty history. When the canonical factory records nonzero initial backing, the live reporter balance must cover that actual escrow after source surplus and native fork burn, minus valid direct pre-resume exports and scaled by any `applyTruthAuctionHaircut`. Without recorded initial backing, it must cover effective inherited unresolved principal plus local unresolved principal across all three outcomes.',
 				signals: '`ForkContinuationResumed`',
 			},
 			{
@@ -273,10 +296,11 @@ export const forkEscalationContractReferences: ContractReference[] = [
 			{
 				call: '`depositRepOnOutcome(outcome, maximumDepositAttoRep)`',
 				caller: 'Any REP holder',
-				effect: 'Transfers the accepted REP directly from the caller into dispute escrow, appends a local deposit, and records its carry leaf without minting pool backing units.',
+				effect:
+					'Transfers accepted REP from the caller into dispute escrow and appends its nominal deposit and carry leaf, without minting reporter backing units. Ordinary games release increases in the minimum outcome balance to standalone backing (or burn them when no backing units exist) or to vested portfolio REP income. Continuations do not release this ordinary surplus.',
 				declarations: [{ name: 'depositRepOnOutcome' }],
-				preconditions: "Current game is the pool's ordinary unresolved game; pool operational; universe unforked; outcome non-`None`; caller allowance to this game covers the accepted REP; preview accepts a positive amount within the remaining threshold room.",
-				signals: 'REP `Transfer`, `LocalDepositAppended`, `DepositOnOutcome`, and `NonDecisionReached` when the deposit reaches non-decision',
+				preconditions: 'Current game is ordinary or a resumed portfolio continuation without a fixed outcome; game unresolved; pool operational; universe unforked; outcome non-`None`; caller allowance to this game covers the accepted REP; preview accepts a positive amount within the remaining threshold room.',
+				signals: 'REP `Transfer`, `LocalDepositAppended`, `DepositOnOutcome`, `EscalationSurplusAccrued` when the ordinary minimum increases, and `NonDecisionReached` when the deposit reaches non-decision',
 			},
 			{
 				call: '`depositRepOnOutcomeWithPermit(outcome, maximumDepositAttoRep, deadline, v, r, s)` through `fallback()`',
@@ -293,22 +317,23 @@ export const forkEscalationContractReferences: ContractReference[] = [
 				declarations: [{ kind: 'fallback-routed', name: 'depositRepOnOutcomeWithAuthorization', sourcePath: 'solidity/contracts/statoblast/EscalationGameDepositDelegate.sol' }],
 				preconditions:
 					'The `depositRepOnOutcome` game, pool, and preview prerequisites; the pool universe is not genesis (`Genesis REP does not support authorization`); the signature authorizes the token nonce `keccak256(abi.encode(nonce, operationHash, owner))`, where `operationHash` is `keccak256(abi.encode(depositRepOnOutcomeWithAuthorization.selector, owner, securityPool, universeId, questionId, outcome, maximumDepositAttoRep, previewedAmount))`.',
-				signals: 'REP `AuthorizationUsed` and `Transfer`, `LocalDepositAppended`, `DepositOnOutcome`, and `NonDecisionReached` when the deposit reaches non-decision',
+				signals: 'REP `AuthorizationUsed` and `Transfer`, `LocalDepositAppended`, `DepositOnOutcome`, `EscalationSurplusAccrued` when the ordinary minimum increases, and `NonDecisionReached` when the deposit reaches non-decision',
 			},
 			{
 				call: '`recordDepositFromSecurityPool(depositor, outcome, amountAttoRep, expectedCumulativeAttoRep)`',
 				caller: 'Owning `SecurityPool` only (`Only pool`)',
-				effect: 'Appends an accepted local deposit, updates outcome and vault escrow, and records its carry leaf.',
+				effect:
+					'Appends the nominal deposit and carry leaf. In ordinary games, it releases any increase in the minimum outcome balance through the same standalone-backing or portfolio-income path as `depositRepOnOutcome`; only the new report’s retained contribution receives collateral credit. Continuations release no ordinary surplus.',
 				declarations: [{ name: 'recordDepositFromSecurityPool' }],
 				preconditions: 'Explicit non-decision state is `None`; game unresolved; valid outcome; preview and accepted cumulative amount match; room remains below threshold.',
-				signals: '`LocalDepositAppended`, `DepositOnOutcome`, and `NonDecisionReached` when the deposit reaches non-decision',
+				signals: '`LocalDepositAppended`, `DepositOnOutcome`, `EscalationSurplusAccrued` when the ordinary minimum increases, and `NonDecisionReached` when the deposit reaches non-decision',
 			},
 			{
 				call: '`withdrawDeposit(depositIndex, outcome)`, the `uint256` overload',
 				caller: 'Owning `SecurityPool` only (`Only pool`)',
 				declarations: [{ name: 'withdrawDeposit', sourcePath: 'solidity/contracts/statoblast/EscalationGameSettlement.sol' }],
 				effect:
-					'Settles one local deposit after resolution. An ordinary first claim freezes the winning liability without releasing surplus; ordinary losers retire together and a valid losing index returns zero repeatedly. A winner consumes its reserved payout and burn and pays the immutable depositor. Continuation losers still consume their individual escrow.',
+					'Settles one local deposit after resolution. An ordinary first claim freezes the winning liability and burns terminal excess beyond the surplus already paid at source; ordinary losers retire together and a valid losing index returns zero repeatedly. A winner consumes its reserved payout and burn and pays the immutable depositor. Continuation losers still consume their individual escrow.',
 				preconditions: 'Explicit non-decision state is `None`; non-`None` supplied outcome; game final; game and pool final outcomes match; valid local deposit index, unsettled unless it is a retired ordinary loser.',
 				signals: '`OrdinarySettlementInitialized` on first ordinary settlement. Winners and continuation losers emit `CarryDepositConsumed` and `VaultEscrowUpdated`; winners also emit `ClaimDeposit` and positive payout or burn signals. Retired ordinary losers emit no per-deposit settlement event.',
 			},
@@ -373,14 +398,6 @@ export const forkEscalationContractReferences: ContractReference[] = [
 				signals: '`CarryDepositConsumed` and `ClaimDeposit` with `transferredRep = true`; REP payout `Transfer` and escalation-haircut burn signals only when positive',
 			},
 			{
-				call: '`exportVaultUnresolvedTotals(vault, repReceiver)`',
-				caller: 'Owning `SecurityPool` or its `SecurityPoolForker`',
-				declarations: [{ name: 'exportVaultUnresolvedTotals', sourcePath: 'solidity/contracts/statoblast/EscalationGameEscrow.sol' }],
-				effect: "Marks the vault's local unresolved totals exported exactly once, clears each outcome amount, consumes aggregate unresolved and escrow accounting when positive, and transfers the positive total to `repReceiver`.",
-				preconditions: '`vault` is nonzero and has not exported before; ordinary settlement has not initialized (`Final claims not exportable`). There is no explicit nonzero-receiver guard: a zero receiver succeeds when the total is zero but the token rejects it when a positive transfer is attempted.',
-				signals: 'Always `VaultUnresolvedTotalsExported`, including when every amount is zero; `VaultEscrowUpdated` and REP `Transfer` only for a positive total',
-			},
-			{
 				call: '`exportVaultUnresolvedTotalsWithoutTransfer(vault)`',
 				caller: 'Owning `SecurityPool` or its `SecurityPoolForker`',
 				declarations: [{ name: 'exportVaultUnresolvedTotalsWithoutTransfer', sourcePath: 'solidity/contracts/statoblast/EscalationGameEscrow.sol' }],
@@ -426,18 +443,18 @@ export const forkEscalationContractReferences: ContractReference[] = [
 				caller: 'Anyone',
 				declarations: [{ name: 'settleOrdinaryGame', sourcePath: 'solidity/contracts/statoblast/EscalationGameSettlement.sol' }],
 				effect:
-					'Freezes the final outcome and effective fork threshold, reserves the cumulative winning payout and burn liability, and retires all losing local escrow without visiting deposits. Each later winning claim subtracts its payout and burn from that reserve. Transfers only surplus above the reserve to the owning pool; a repeated call with no surplus succeeds. Native final backing redemption calls this before valuing units. See [ESC-11](./invariants.html#esc-11).',
+					'Freezes the final outcome and effective fork threshold, reserves the cumulative winning payout and burn liability, and retires all losing local escrow without visiting deposits. Each later winning claim subtracts its payout and burn from that reserve. Burns terminal REP above the reserve; the ordinary minimum-outcome surplus was already paid irrevocably as deposits arrived. A repeated call with no surplus succeeds. Native final backing redemption calls this before valuing units. See [ESC-11](./invariants.html#esc-11).',
 				preconditions: 'Ordinary game, not a fork continuation, with `nonDecisionState = None` and a final outcome. Game REP must cover the initial winner reserve (`Winner reserve underfunded`).',
-				signals: '`OrdinarySettlementInitialized` once; `ResidualRepSweptToSecurityPool` and REP `Transfer` only when surplus is positive',
+				signals: '`OrdinarySettlementInitialized` once; `OrdinaryResidualRepBurned` and REP `Transfer` only when surplus is positive',
 			},
 			{
 				call: '`sweepResidualRepToSecurityPool()`',
 				caller: 'Anyone',
-				effect: 'Applies ordinary winner-reserve settlement and transfers its surplus to the owning pool. Burns fork-continuation residual so pre-child capital cannot accrue to late or nonexistent child owners.',
+				effect: 'Applies ordinary winner-reserve settlement and burns its terminal excess. Also burns fork-continuation residual so pre-child capital cannot accrue to late or nonexistent child owners.',
 				declarations: [{ name: 'sweepResidualRepToSecurityPool', sourcePath: 'solidity/contracts/statoblast/EscalationGameSettlement.sol' }],
 				preconditions:
 					'Final outcome and positive releasable surplus (`No sweepable REP` for an ordinary no-op). Ordinary settlement preserves all unclaimed winning liabilities. Continuations require no effective unresolved principal and, after retiring inherited aggregate escrow, no remaining local stake or vault escrow.',
-				signals: '`OrdinarySettlementInitialized` if first ordinary settlement, then `ResidualRepSweptToSecurityPool`; `ForkContinuationResidualRepBurned` for a fork continuation',
+				signals: '`OrdinarySettlementInitialized` if first ordinary settlement, then `OrdinaryResidualRepBurned`; `ForkContinuationResidualRepBurned` for a fork continuation',
 			},
 		],
 	},

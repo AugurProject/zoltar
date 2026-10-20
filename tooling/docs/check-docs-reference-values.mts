@@ -57,6 +57,7 @@ const securityPoolForkerBase = await readFile('solidity/contracts/statoblast/Sec
 const securityPoolForkerVaultMigrationBase = await readFile('solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol', 'utf8')
 const securityPoolForkerVaultMigrationDelegate = await readFile('solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationDelegate.sol', 'utf8')
 const securityPoolEventEmitter = await readFile('solidity/contracts/statoblast/SecurityPoolEventEmitter.sol', 'utf8')
+const securityPoolPortfolioAccountingDelegate = await readFile('solidity/contracts/statoblast/SecurityPoolPortfolioAccountingDelegate.sol', 'utf8')
 const securityPoolUtils = await readFile('solidity/contracts/statoblast/SecurityPoolUtils.sol', 'utf8')
 const erc1155 = await readFile('solidity/contracts/statoblast/tokens/ERC1155.sol', 'utf8')
 const reputationToken = await readFile('solidity/contracts/ReputationToken.sol', 'utf8')
@@ -272,7 +273,7 @@ function assertNonDecisionLifecycleDocs(): void {
 }
 
 function assertAuditFindingRemediations(): void {
-	assert.match(securityPool, /function updateRetentionRate\(\) public \{[\s\S]*SecurityPoolUtils\.calculateRetentionRate\([\s\S]*getCurrentMintingCapacityAttoEth\(\)/, 'SecurityPool retention updates must use live minting capacity')
+	assert.match(securityPoolPortfolioAccountingDelegate, /function updateRetentionRate\(\) external payable \{[\s\S]*SecurityPoolUtils\.calculateRetentionRate\([\s\S]*getCurrentMintingCapacityAttoEth\(\)/, 'SecurityPool retention updates must use live minting capacity')
 	assert.match(securityPoolUtils, /if \(mintingCapacityAttoEth == 0\) return MAX_RETENTION_RATE;/, 'SecurityPoolUtils must select maximum retention for zero minting capacity')
 	assert.match(escalationGameCalculations, /if \(forkTime > getEscalationGameEndDate\(\)\) \{[\s\S]*actualForkThresholdAttoRep = nonDecisionThresholdAttoRep;/, 'Escalation payout must restore the configured threshold only for forks strictly after the scheduled game end')
 	for (const boundaryName of ['one second before', 'exactly at', 'one second after']) {
@@ -557,8 +558,8 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(priceCoordinator, /function requestPriceIfNeededAndStageOperation\([\s\S]*if \(refund > 0\) \{[\s\S]*payable\(msg\.sender\)\.call\{\s*value:\s*refund\s*\}\(''\)[\s\S]*require\(sent, 'Oracle coordinator failed to return unused ETH'\)/)
 	assert.match(priceCoordinator, /function recoverSettledPendingReport\(\)[\s\S]*storedGame\(reportId\)[\s\S]*require\(settlementTimestamp != 0, 'Report not settled'\)[\s\S]*_failPendingSettlementOperations\('Report recovered'\)/)
 	assert.match(
-		securityPool,
-		/function assignFinalizedAuctionFees\(address vault, uint256 amountAttoRep, uint256 auctionFeeIndexAtFinalization\) external onlyForker \{[\s\S]*SecurityPoolUtils\.calculateVaultFee\(amountAttoRep, feeIndex - auctionFeeIndexAtFinalization, previousVaultFeeRemainder\)[\s\S]*unallocatedAccruedFeesAttoEth -= fees;[\s\S]*_emitVaultAccountingCheckpoint\(vault\);/,
+		securityPoolEventEmitter,
+		/function assignFinalizedAuctionFees\(address vault, uint256 amountAttoRep, uint256 auctionFeeIndexAtFinalization\) external \{[\s\S]*SecurityPoolUtils\.calculateVaultFee\(amountAttoRep, feeIndex - auctionFeeIndexAtFinalization, vaultFeeRemainders\[vault\]\)[\s\S]*unallocatedAccruedFeesAttoEth -= fees;[\s\S]*_emitVaultCheckpoint\(vault\);/,
 	)
 	assert.ok(contractInteractionReference.includes('assignFinalizedAuctionFees(vault, amountAttoRep, auctionFeeIndexAtFinalization)'))
 	assert.match(securityPool, /function setAwaitingForkContinuation\(bool shouldAwait\) external onlyForker \{\s*awaitingForkContinuation = shouldAwait;\s*emit AwaitingForkContinuationSet\(awaitingForkContinuation\)/)
@@ -568,7 +569,8 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(securityPool, /function setTotalRepBackingUnits\(uint256 newTotalRepBackingUnits\) external onlyForker \{\s*totalRepBackingUnits = newTotalRepBackingUnits;\s*emit TotalRepBackingUnitsSet\(totalRepBackingUnits\)/)
 	assert.match(securityPool, /function setShareTokenSupplyAttoShares\(uint256 newShareTokenSupplyAttoShares\) external onlyForker \{\s*shareTokenSupplyAttoShares = newShareTokenSupplyAttoShares;\s*emit ShareTokenSupplySet\(shareTokenSupplyAttoShares\)/)
 	assert.match(securityPool, /function setPoolFinancials\([\s\S]*?lastUpdatedFeeAccumulator = block\.timestamp;[\s\S]*?_emitPoolAccountingCheckpoint\(AccountingReason\.ForkFinalization, address\(0x0\)\)/)
-	assert.match(securityPool, /function assignFinalizedAuctionFees\(address vault, uint256 amountAttoRep, uint256 auctionFeeIndexAtFinalization\) external onlyForker \{[\s\S]*?_emitVaultAccountingCheckpoint\(vault\);\s*_emitPoolAccountingCheckpoint\(AccountingReason\.AuctionClaim, vault\)/)
+	assert.match(securityPool, /function assignFinalizedAuctionFees\(address, uint256, uint256\) external onlyForker \{\s*_forwardAccountingOperation\(\)/)
+	assert.match(securityPoolEventEmitter, /function assignFinalizedAuctionFees\([\s\S]*?_emitVaultCheckpoint\(vault\);\s*_emitCheckpoint\(AccountingReason\.AuctionClaim, vault\)/)
 	assert.match(securityPoolForker, /Before finalization, only refundable bids can be settled/)
 	assert.match(securityPoolForker, /require\(claimTickIndices\.length == 0, 'Not final'\)/)
 	assert.match(securityPoolForker, /block\.timestamp <= data\.forkActivationTime \+ SecurityPoolUtils\.MIGRATION_TIME/)
@@ -644,7 +646,7 @@ function assertContractInteractionDistinctions(): void {
 	for (const emitterFunction of ['emitPoolAccountingCheckpoint', 'emitVaultAccountingCheckpoint']) {
 		assert.match(securityPoolEventEmitter, new RegExp(`function ${emitterFunction}\\([\\s\\S]*?\\) external payable`), `${emitterFunction} must remain externally payable for delegatecall flows`)
 	}
-	assert.match(securityPoolEventEmitter, /contract SecurityPoolEventEmitter is SecurityPoolStorage/)
+	assert.match(securityPoolEventEmitter, /contract SecurityPoolEventEmitter is SecurityPoolPortfolioAccountingDelegate/)
 	assert.match(securityPoolEventEmitter, /contract SecurityPoolForkEventEmitter is SecurityPoolForkerStorage, ISecurityPoolForkerEvents/)
 	assert.match(securityPoolEventEmitter, /function emitForkSnapshotEvents\(\s*ISecurityPool parent,\s*address migrationProxy,\s*address sourceGame,\s*uint256 totalPoolHeldRepAtForkAttoRep,\s*uint256 disputeStakedRepAtForkAttoRep,\s*uint256 resultingLockedAttoRep\s*\) external payable/)
 	assert.match(securityPoolForker, /DelegateCall\.invoke\(forkEventEmitter, abi\.encodeCall\(SecurityPoolForkEventEmitter\.emitForkSnapshotEvents, \(parent, migrationProxy, sourceGame, totalPoolHeldRepAtForkAttoRep, disputeStakedRepAtForkAttoRep, resultingLockedAttoRep\)\)\)/)

@@ -108,8 +108,8 @@
 							<td><code>syncExposure()</code></td>
 							<td>Anyone; pool accounting checkpoints also invoke it</td>
 							<td>A shared coordinator must already be registered by its canonical factory.</td>
-							<td>Reconciles this registered ledger in the shared aggregate, using max(standing commitments, settlement collateral), or zero after finality. Standalone mode has no effect.</td>
-							<td>Feed <code>ExposureCheckpoint</code> when the contribution changes</td>
+							<td>Reads the live portfolio aggregate, max(standing commitments, funded demand), and emits a checkpoint if it changed. Question finality does not independently clear this shared exposure. Standalone mode has no effect.</td>
+							<td>Feed <code>ExposureCheckpoint</code> when the portfolio aggregate changes</td>
 						</tr>
 						<tr>
 							<td><code>sharedPriceSettled(reportId, accepted, reason)</code><wbr /></td>

@@ -6,9 +6,11 @@ import * as liquidationCopy from '../../ui/statoblastShared/ts/copy/liquidation.
 import { bytesToHex, decodeFunctionResult, encodeFunctionData, getAddress, hexToBytes, zeroAddress, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { createSimulationProfile } from '../../ui/coreShared/ts/wallet/networkProfile.js'
 import { getInfraContractAddresses } from '../../ui/statoblastShared/ts/protocol/deploymentHelpers.js'
+import { getDeploymentSteps } from '../../ui/statoblastShared/ts/protocol/deployment.js'
 import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPool_SecurityPool } from '../../ui/statoblastShared/ts/contractArtifact.js'
 import * as securityPoolCopy from '../../ui/statoblastShared/ts/copy/securityPool.js'
 import * as portfolioCopy from '../../ui/statoblastShared/ts/copy/portfolio.js'
+import * as capitalCopy from '../../ui/statoblastShared/ts/copy/portfolioCapital.js'
 import { UI_APP_IDS, featureStylesheets, getUiAppPaths, getUiCoreSharedPaths, isUiAppId, type UiAppId } from './appPaths.mts'
 import { launchChromium } from './chromiumDevTools.mts'
 import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
@@ -469,73 +471,53 @@ test(
 			`${baseUrl}/statoblast/#/portfolios?simulate=1&simScenario=portfolio`,
 			{ height: 900, width: 1440 },
 			async driver => {
-				// The worker bootstrap can finish before main-thread discovery authenticates the seeded manager.
-				const body = await driver.waitForBodyText(portfolioCopy.sharedFund)
+				// Worker bootstrap can finish before main-thread discovery authenticates the ledger.
+				const body = await driver.waitForBodyText(capitalCopy.priceValid.toUpperCase())
 				expect(body).toContain('Browser simulation')
 				expect(body).not.toContain('Could not load the portfolio snapshot')
-				// Seeded reservation fees make this available only after the authenticated fund snapshot loads.
-				await driver.waitForButtonEnabled(portfolioCopy.collectRecovered)
-				expect(
-					await driver.evaluate(
-						`(() => { const summary = [...document.querySelectorAll('summary')].find(node => node.textContent === ${JSON.stringify(portfolioCopy.recovery)}); const details = summary?.parentElement; if (!(summary instanceof HTMLElement) || !(details instanceof HTMLDetailsElement)) return false; summary.click(); return details.open })()`,
-					),
-				).toBe(true)
-				expect(await driver.waitForBodyText(portfolioCopy.snapshot)).toContain(portfolioCopy.subsetCoverage)
-				expect(await driver.evaluate(`[...document.querySelectorAll('a')].filter(link => link.textContent === ${JSON.stringify(portfolioCopy.pool)}).length`)).toBe(1)
-				// Bootstrap reads only the immutable initial question; owners explicitly select further questions.
+				expect(body).toContain(capitalCopy.prepareProgress(3))
+				await driver.waitForButtonEnabled(capitalCopy.claim)
 				const seededPools = await createWorkflowActions(driver).loadSeededPools()
 				const questionIds = seededPools
 					.filter(pool => pool.universeId === 0n && pool.parent === zeroAddress)
 					.slice(0, 2)
 					.map(pool => String(pool.questionId))
 				expect(questionIds).toHaveLength(2)
-				await driver.setInputByLabel(portfolioCopy.questionFilter, questionIds.join(', '))
-				let bothQuestionsLoaded = false
-				for (let attempt = 0; attempt < 600 && !bothQuestionsLoaded; attempt++) {
-					bothQuestionsLoaded = (await driver.evaluate(`[...document.querySelectorAll('a')].filter(link => link.textContent === ${JSON.stringify(portfolioCopy.pool)}).length`)) === 2
-					if (!bothQuestionsLoaded) await Bun.sleep(50)
-				}
-				expect(bothQuestionsLoaded).toBe(true)
-				await driver.waitForButtonEnabled(portfolioCopy.collectRecovered)
 				expect(
 					await driver.evaluate(`(() => {
 			const input = text => [...document.querySelectorAll('label')].find(label => label.textContent?.trim() === text)?.control?.value;
 			const section = title => [...document.querySelectorAll('section')].find(node => node.querySelector('h3')?.textContent === title);
-			const balances = section(${JSON.stringify(portfolioCopy.snapshot)});
-			const fund = section(${JSON.stringify(portfolioCopy.sharedFund)});
-			const allocations = section(${JSON.stringify(portfolioCopy.allocationPositions)});
+			const capital = section(${JSON.stringify(capitalCopy.title)});
+			const backing = section(${JSON.stringify(capitalCopy.poolTitle)});
+			const positions = section(${JSON.stringify(capitalCopy.positions)});
 			const amounts = (scope, label) => [...scope.querySelectorAll('.metric-label')].filter(node => node.textContent === label).map(node => node.parentElement.querySelector('.currency-value')?.getAttribute('title')?.replace(/\\s/g, ''));
-			const questionsByPool = new Map(${JSON.stringify(seededPools.map(pool => [pool.securityPool.toLowerCase(), String(pool.questionId)]))});
-			const poolLinks = [...balances.querySelectorAll('a')].filter(link => link.textContent === ${JSON.stringify(portfolioCopy.pool)});
-			const questions = poolLinks.map(link => questionsByPool.get(link.hash.match(/0x[0-9a-f]{40}/i)?.[0]?.toLowerCase()));
+			const questions = [...section(${JSON.stringify(portfolioCopy.mint)}).querySelectorAll('select option')].filter(option => option.value !== '').map(option => String(BigInt(option.value)));
 			const manager = input(${JSON.stringify(portfolioCopy.manager)});
 			return {
 				managerLoaded: /^0x[0-9a-f]{40}$/i.test(manager) && manager.toLowerCase() !== ${JSON.stringify(zeroAddress)},
 				owner: input(${JSON.stringify(portfolioCopy.owner)})?.toLowerCase(),
-				fundRep: amounts(fund, ${JSON.stringify(portfolioCopy.poolAssets)}),
-				fundShares: amounts(fund, ${JSON.stringify(portfolioCopy.yourFundShares)}),
-				ownerRepClaim: amounts(fund, ${JSON.stringify(portfolioCopy.yourCurrentRep)}),
-				allocationPositions: allocations.querySelectorAll('.workflow-subsection').length,
-				claimableAllocations: [...allocations.querySelectorAll('button')].filter(button => button.textContent === ${JSON.stringify(portfolioCopy.claimQuestion)} && !button.disabled).length,
-				idle: amounts(balances, ${JSON.stringify(portfolioCopy.idle)}),
-				backing: amounts(balances, ${JSON.stringify(portfolioCopy.allocated)}),
-				commitments: amounts(balances, ${JSON.stringify(portfolioCopy.commitment)}),
-				poolLinks: poolLinks.length,
+				freeRep: amounts(capital, ${JSON.stringify(capitalCopy.freeRep)}),
+				pledgedRep: amounts(capital, ${JSON.stringify(capitalCopy.pledgedRep)}),
+				commitment: amounts(capital, ${JSON.stringify(capitalCopy.commitment)}),
+				poolPledgedRep: amounts(backing, ${JSON.stringify(capitalCopy.totalPledged)}),
+				healthyCommitment: amounts(backing, ${JSON.stringify(capitalCopy.healthyCommitment)}),
+				health: capital.textContent.includes('120%'),
+				positions: positions.querySelectorAll('.workflow-subsection').length,
+				feeMetrics: section(${JSON.stringify(capitalCopy.earnings)}).textContent.includes(${JSON.stringify(capitalCopy.ethEarnings)}) && section(${JSON.stringify(capitalCopy.earnings)}).textContent.includes(${JSON.stringify(capitalCopy.repEarnings)}),
 				questions: questions.toSorted()
 			};
 		})()`),
 				).toEqual({
 					managerLoaded: true,
 					owner: '0x00000000000000000000000000000000000000a1',
-					fundRep: ['4820REP'],
-					fundShares: ['5000'],
-					ownerRepClaim: ['4820REP'],
-					allocationPositions: 2,
-					claimableAllocations: 2,
-					idle: ['0REP'],
-					backing: ['0REP', '0REP'],
-					commitments: ['0ETH', '0ETH'],
-					poolLinks: 2,
+					freeRep: ['4856REP'],
+					pledgedRep: ['144REP'],
+					commitment: ['10ETH'],
+					poolPledgedRep: ['144REP'],
+					healthyCommitment: ['10ETH'],
+					health: true,
+					positions: 1,
+					feeMetrics: true,
 					questions: questionIds.toSorted(),
 				})
 			},
@@ -945,8 +927,14 @@ productionInteractionTest('deployment-auction', '#/deploy?simulate=1&simScenario
 	await driver.pressTab()
 	expect(await driver.evaluate('document.activeElement?.textContent?.trim()')).toBe('Skip to main content')
 	await driver.waitForButtonEnabled('Deploy next contract')
+	const genesisRepTokenAddress = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.genesisRepTokenAddress')
+	const wethAddress = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.wethAddress')
+	if (typeof genesisRepTokenAddress !== 'string' || typeof wethAddress !== 'string') throw new Error('Simulation network profile was not available')
+	const deploymentSteps = getDeploymentSteps(createSimulationProfile({ genesisRepTokenAddress: getAddress(genesisRepTokenAddress), wethAddress: getAddress(wethAddress) }))
+	expect(deploymentSteps[0]?.id).toBe('proxyDeployer')
+	await driver.waitForBodyText(`0 / ${deploymentSteps.length}`)
 	await driver.clickButton('Deploy next contract')
-	const deployedBody = await driver.waitForBodyText('1 / 18')
+	const deployedBody = await driver.waitForBodyText(`1 / ${deploymentSteps.length}`)
 	expect(deployedBody).toContain('Proxy Deployer')
 	expect(deployedBody).not.toContain('Failed to initialize the app environment')
 	// Keep the lightweight deployment boot before the expensive auction fixture, as in the original workflow.

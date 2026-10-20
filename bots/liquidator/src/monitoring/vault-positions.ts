@@ -45,7 +45,7 @@ export async function loadVaultPage(client: ReadClient, multicall3: Address, poo
 	const [rawVaults, badDebt, disputeStake] = await Promise.all([
 		client.multicall({ allowFailure: false, blockNumber, contracts: vaultAddresses.map(vault => ({ abi: securityPoolAbi, address: pool, args: [vault], functionName: 'securityVaults' as const })), multicallAddress: multicall3 }),
 		client.multicall({ allowFailure: false, blockNumber, contracts: vaultAddresses.map(vault => ({ abi: securityPoolAbi, address: pool, args: [vault], functionName: 'vaultBadDebtAttoEth' as const })), multicallAddress: multicall3 }),
-		escalationGame === zeroAddress ? vaultAddresses.map(() => 0n) : client.multicall({ allowFailure: false, blockNumber, contracts: vaultAddresses.map(vault => ({ abi: escalationGameAbi, address: escalationGame, args: [vault], functionName: 'disputeStakedRepByVaultAttoRep' as const })), multicallAddress: multicall3 }),
+		escalationGame === zeroAddress ? vaultAddresses.map(() => 0n) : client.multicall({ allowFailure: false, blockNumber, contracts: vaultAddresses.map(vault => ({ abi: escalationGameAbi, address: escalationGame, args: [vault], functionName: 'getVaultDisputeBackingAttoRep' as const })), multicallAddress: multicall3 }),
 	])
 	return vaultAddresses.map((address, index) => {
 		const raw = rawVaults[index]
@@ -61,7 +61,7 @@ export async function loadVaultPage(client: ReadClient, multicall3: Address, poo
 			backingUnits: repBackingUnits,
 			vaultAttoRepBacking: 0n,
 			claimableFeesAttoEth,
-			disputeStakedAttoRep: requireBigint(disputeStakedAttoRep, 'vault dispute stake'),
+			disputeStakedAttoRep: requireBigint(disputeStakedAttoRep, 'vault dispute backing'),
 		}
 	})
 }

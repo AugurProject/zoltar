@@ -40,7 +40,7 @@ function createPool(index: number, overrides: Partial<ListedSecurityPool> = {}):
 		universeHasForked: false,
 		universeId: 1n,
 		vaultCount: 2n,
-		vaults: [{ underwritingLimitAttoEth: 1n, claimableFeesAttoEth: 0n, disputeStakedAttoRep: 0n, vaultAddress: zeroAddress, vaultAttoRepBacking: 1n }],
+		vaults: [{ underwritingLimitAttoEth: 1n, claimableFeesAttoEth: 0n, disputeStakedAttoRep: 0n, disputeBackingAttoRep: 0n, vaultAddress: zeroAddress, vaultAttoRepBacking: 1n }],
 		...overrides,
 	}
 }
@@ -62,7 +62,7 @@ void describe('pool browse cache', () => {
 	})
 
 	void test('round-trips a cached pool through storage without its vault positions', () => {
-		const pool = createPool(1, { feeAccrualState: { feeEndTimestamp: 1n, feeIndexRemainder: 2n, lastUpdatedFeeAccumulator: 3n, totalFeesOwedRemainder: 4n }, lastOraclePrice: 3n * 10n ** 18n, minimumSecurityBondDebtAttoEth: 5n })
+		const pool = createPool(1, { feeAccrualState: { linearFee: { rateAttoEthPerSecond: 7n, endTime: 100n }, feeEndTimestamp: 1n, feeIndexRemainder: 2n, lastUpdatedFeeAccumulator: 3n, totalFeesOwedRemainder: 4n }, lastOraclePrice: 3n * 10n ** 18n, minimumSecurityBondDebtAttoEth: 5n })
 		const cached = toCachedSecurityPool(pool)
 		expect(cached.vaults).toEqual([])
 		expect(cached.hasLoadedVaults).toBe(false)

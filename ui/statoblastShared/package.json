@@ -661,17 +661,13 @@
 			"bun": "./ts/features/portfolios/components/PortfoliosSection.tsx",
 			"default": "./js/features/portfolios/components/PortfoliosSection.js"
 		},
-		"./features/portfolios/components/PortfolioAutomaticPanel.js": {
-			"bun": "./ts/features/portfolios/components/PortfolioAutomaticPanel.tsx",
-			"default": "./js/features/portfolios/components/PortfolioAutomaticPanel.js"
-		},
 		"./features/portfolios/components/PortfolioAggregatePanel.js": {
 			"bun": "./ts/features/portfolios/components/PortfolioAggregatePanel.tsx",
 			"default": "./js/features/portfolios/components/PortfolioAggregatePanel.js"
 		},
-		"./features/portfolios/components/PortfolioBalances.js": {
-			"bun": "./ts/features/portfolios/components/PortfolioBalances.tsx",
-			"default": "./js/features/portfolios/components/PortfolioBalances.js"
+		"./features/portfolios/components/PortfolioRepair.js": {
+			"bun": "./ts/features/portfolios/components/PortfolioRepair.tsx",
+			"default": "./js/features/portfolios/components/PortfolioRepair.js"
 		},
 		"./features/portfolios/hooks/usePortfolio.js": {
 			"bun": "./ts/features/portfolios/hooks/usePortfolio.ts",
@@ -681,9 +677,9 @@
 			"bun": "./ts/features/portfolios/hooks/usePortfolioActions.ts",
 			"default": "./js/features/portfolios/hooks/usePortfolioActions.js"
 		},
-		"./features/portfolios/hooks/usePortfolioAutomatic.js": {
-			"bun": "./ts/features/portfolios/hooks/usePortfolioAutomatic.ts",
-			"default": "./js/features/portfolios/hooks/usePortfolioAutomatic.js"
+		"./features/portfolios/hooks/usePortfolioPurchase.js": {
+			"bun": "./ts/features/portfolios/hooks/usePortfolioPurchase.ts",
+			"default": "./js/features/portfolios/hooks/usePortfolioPurchase.js"
 		},
 		"./features/portfolios/hooks/usePortfolioAggregate.js": {
 			"bun": "./ts/features/portfolios/hooks/usePortfolioAggregate.ts",
@@ -693,17 +689,9 @@
 			"bun": "./ts/features/portfolios/hooks/usePortfolioSharedFork.ts",
 			"default": "./js/features/portfolios/hooks/usePortfolioSharedFork.js"
 		},
-		"./features/portfolios/hooks/usePortfolioForkClaim.js": {
-			"bun": "./ts/features/portfolios/hooks/usePortfolioForkClaim.ts",
-			"default": "./js/features/portfolios/hooks/usePortfolioForkClaim.js"
-		},
-		"./features/portfolios/lib/runoff.js": {
-			"bun": "./ts/features/portfolios/lib/runoff.ts",
-			"default": "./js/features/portfolios/lib/runoff.js"
-		},
-		"./features/portfolios/lib/preferences.js": {
-			"bun": "./ts/features/portfolios/lib/preferences.ts",
-			"default": "./js/features/portfolios/lib/preferences.js"
+		"./features/portfolios/lib/capital.js": {
+			"bun": "./ts/features/portfolios/lib/capital.ts",
+			"default": "./js/features/portfolios/lib/capital.js"
 		},
 		"./features/portfolios/lib/draft.js": {
 			"bun": "./ts/features/portfolios/lib/draft.ts",
@@ -717,9 +705,17 @@
 			"bun": "./ts/protocol/securityPoolPortfolioFork.ts",
 			"default": "./js/protocol/securityPoolPortfolioFork.js"
 		},
-		"./features/portfolios/lib/history.js": {
-			"bun": "./ts/features/portfolios/lib/history.ts",
-			"default": "./js/features/portfolios/lib/history.js"
+		"./protocol/securityPoolSharedFork.js": {
+			"bun": "./ts/protocol/securityPoolSharedFork.ts",
+			"default": "./js/protocol/securityPoolSharedFork.js"
+		},
+		"./protocol/securityPoolPortfolioState.js": {
+			"bun": "./ts/protocol/securityPoolPortfolioState.ts",
+			"default": "./js/protocol/securityPoolPortfolioState.js"
+		},
+		"./copy/portfolioCapital.js": {
+			"bun": "./ts/copy/portfolioCapital.ts",
+			"default": "./js/copy/portfolioCapital.js"
 		},
 		"./features/truth-auctions/components/ForkChildPreparation.js": {
 			"bun": "./ts/features/truth-auctions/components/ForkChildPreparation.tsx",

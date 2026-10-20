@@ -1,4 +1,5 @@
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import type { ComponentChildren } from 'preact'
 import type { ForkOutcomeMigrationSeedStatus } from '../hooks/useSelectedAuctionReadState.js'
@@ -24,6 +25,25 @@ export function ForkChildPreparation({
 	onInitialize: () => void
 	renderAction: (options: ForkAuctionActionOptions) => ComponentChildren
 }) {
+	if (status?.portfolio !== undefined) {
+		const common = readGuard ?? (status.branchReady ? undefined : copy.portfolioBranchRequired)
+		const prepared = status.childPool !== zeroAddress
+		const prepareReason = common ?? (prepared ? copy.childPreparationComplete : undefined)
+		const activateReason = common ?? (!prepared ? copy.prepareChildBeforeMigration : undefined) ?? (status.historyReady ? copy.childPreparationComplete : undefined)
+		return (
+			<SectionBlock title={copy.portfolioQuestionPreparation} description={copy.portfolioQuestionPreparationHint} variant='embedded'>
+				<UserMessage detail={copy.portfolioBranchHint} />
+				<p className='detail' role='status'>
+					{copy.formatChildHistoryProgress(status.historyOutcomesInitialized)}
+				</p>
+				<a href={`#/portfolios?portfolio=${status.portfolio}`}>{copy.openPortfolioBranch}</a>
+				<div className='actions'>
+					{renderAction({ action: 'prepareChildPriceFeed', idleLabel: copy.preparePortfolioQuestion, pendingLabel: copy.creatingChildPool, availability: { disabled: prepareReason !== undefined, reason: prepareReason }, onClick: onPrepareFeed })}
+					{renderAction({ action: 'initializeChildHistory', idleLabel: copy.activatePortfolioQuestion, pendingLabel: copy.initializingChildHistory, availability: { disabled: activateReason !== undefined, reason: activateReason }, onClick: onInitialize })}
+				</div>
+			</SectionBlock>
+		)
+	}
 	const feedReady = status?.sharedFeed !== zeroAddress
 	const childReady = status?.childPool !== undefined && status.childPool !== zeroAddress
 	const commonGuard = closedGuard ?? readGuard

@@ -32,6 +32,7 @@ function createTargetVaultSummary(overrides: Partial<SecurityPoolVaultSummary> =
 	return {
 		badDebtAttoEth: 0n,
 		disputeStakedAttoRep: 0n,
+		disputeBackingAttoRep: overrides.disputeBackingAttoRep ?? overrides.disputeStakedAttoRep ?? 0n,
 		vaultAttoRepBacking: 5n * 10n ** 18n,
 		underwritingLimitAttoEth,
 		openInterestAttoEth: underwritingLimitAttoEth,

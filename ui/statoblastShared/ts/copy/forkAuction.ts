@@ -280,3 +280,11 @@ export const initializeChildHistory = 'Initialize dispute history'
 export const initializingChildHistory = 'Initializing dispute history…'
 export const initializeChildHistoryFirst = 'Initialize all dispute history outcomes first.'
 export const formatChildHistoryProgress = (completed: CopyTemplateValue) => `${completed} of 3 outcomes initialized`
+
+export const portfolioQuestionPreparation = 'Prepare portfolio question'
+export const portfolioQuestionPreparationHint = 'The portfolio migrates backing once per branch. Prepare the question, then initialize up to three reporter outcomes in separate transactions. The final step activates reporting without extending its fixed response deadline.'
+export const portfolioBranchHint = 'Choose and activate the shared branch in the portfolio before preparing this question.'
+export const portfolioBranchRequired = 'Activate the shared portfolio branch first.'
+export const openPortfolioBranch = 'Open portfolio fork controls'
+export const preparePortfolioQuestion = 'Prepare question namespace'
+export const activatePortfolioQuestion = 'Initialize next reporter outcome'

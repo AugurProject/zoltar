@@ -3,6 +3,11 @@ pragma solidity 0.8.35;
 
 import { SecurityPoolStorage } from './SecurityPoolStorage.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
+import { IPortfolioSettlement } from './interfaces/IPortfolioSettlement.sol';
+
+interface ISecurityPoolPortfolioPurchaseAuthority {
+	function quoteHelper() external view returns (address);
+}
 
 abstract contract SecurityPoolSettlementDelegate is SecurityPoolStorage {
 	event CompleteSetCreated(address indexed creator, uint256 settlementCollateralProvidedAttoEth, uint256 completeSetsMintedAttoShares, uint256 resultingShareTokenSupplyAttoShares, uint256 resultingSettlementCollateralAttoEth);
@@ -10,9 +15,22 @@ abstract contract SecurityPoolSettlementDelegate is SecurityPoolStorage {
 	function createCompleteSet() external payable returns (uint256 completeSetsToMintAttoShares) {
 		ISecurityPool pool = ISecurityPool(payable(address(this)));
 		require(!awaitingForkContinuation, 'Fork await');
+		if (portfolioCustody != address(0)) {
+			address portfolio = pool.securityPoolFactory().getSecurityPoolPortfolio(pool);
+			require(msg.sender == ISecurityPoolPortfolioPurchaseAuthority(portfolio).quoteHelper(), 'Use portfolio purchase');
+		}
 		require(address(escalationGame) == address(0), 'Escalation mint closed');
 		if (msg.value == 0 || pool.isEscalationResolved()) revert('Settlement unavailable');
 		require(block.timestamp < pool.questionData().getQuestionEndDate(pool.questionId()), 'Question ended');
+		if (portfolioCustody != address(0)) {
+			(
+				completeSetsToMintAttoShares,
+				shareTokenSupplyAttoShares,
+				settlementCollateralAttoEth
+			) = IPortfolioSettlement(address(portfolioAccounting)).mintQuestionSettlement{value: msg.value}();
+			emit CompleteSetCreated(msg.sender, msg.value, completeSetsToMintAttoShares, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
+			return completeSetsToMintAttoShares;
+		}
 		pool.updateSettlementCollateral();
 		completeSetsToMintAttoShares = pool.attoEthToAttoShares(msg.value);
 		require(completeSetsToMintAttoShares > 0, 'Exchange rate undefined');
@@ -23,6 +41,11 @@ abstract contract SecurityPoolSettlementDelegate is SecurityPoolStorage {
 		shareTokenSupplyAttoShares += completeSetsToMintAttoShares;
 		settlementCollateralAttoEth = nextSettlementCollateralAttoEth;
 		emit CompleteSetCreated(msg.sender, msg.value, completeSetsToMintAttoShares, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
+	}
+
+	function _redeemPortfolioSettlement(address recipient, uint256 burnedShares) internal returns (uint256 paidCashAttoEth) {
+		if (burnedShares == 0) return 0;
+		(paidCashAttoEth, shareTokenSupplyAttoShares, settlementCollateralAttoEth) = IPortfolioSettlement(address(portfolioAccounting)).redeemQuestionSettlement(recipient, burnedShares);
 	}
 
 	function setFundedSettlementCollateral(uint256 inheritedCollateralAttoEth) external {

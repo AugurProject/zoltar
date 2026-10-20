@@ -93,6 +93,7 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		require(address(migrationProxy) != address(0x0), 'Proxy missing');
 		pendingChildRepByPoolAndOutcome[parent][outcomeIndex] = 0;
 		migrationProxy.sweepChildRep(address(child), child.repToken(), pendingChildAttoRep);
+		child.creditForkBacking(pendingChildAttoRep);
 		emit PoolHeldRepSweptToChild(parent, child, outcomeIndex, pendingChildAttoRep, child.repToken().balanceOf(address(child)));
 	}
 
@@ -124,7 +125,7 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		if (requiredMigratedAttoRep == 0) return;
 		uint256 outcomeIndex = forkDataByPool[child].outcomeIndex;
 		_ensureChildPoolRepSplit(parent, outcomeIndex, requiredMigratedAttoRep);
-		require(child.repToken().balanceOf(address(child)) >= requiredMigratedAttoRep, 'Child REP short');
+		require(child.getTotalPoolHeldAttoRep() >= requiredMigratedAttoRep, 'Child REP short');
 	}
 
 	function _ensureChildPoolRepSplit(ISecurityPool parent, uint256 outcomeIndex, uint256 requiredSplitAttoRep) internal {

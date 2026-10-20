@@ -24,6 +24,9 @@ for (const change of [
 	'mint maturity',
 	'mint remaining capacity',
 	'mint balance',
+	'mint purchase fee',
+	'mint pooled balance',
+	'mint pooled unchanged',
 	'auction balance',
 	'report balance',
 	'report allowance',
@@ -58,6 +61,18 @@ for (const change of [
 						case 'questionId':
 						case 'universeId':
 							return 1n
+						case 'getSecurityPoolPortfolio':
+							return change.includes('pooled') || change === 'mint purchase fee' ? address : zeroAddress
+						case 'originUniverseId':
+						case 'attoEthToAttoShares':
+							return 1n
+						case 'getPool':
+							return address
+						case 'purchaseFee':
+							return changed && change === 'mint purchase fee' ? 2n : 1n
+						case 'availableMintCapacity':
+							return 1000n
+						case 'securityPoolFactory':
 						case 'questionData':
 							return address
 						case 'getQuestionEndDate':

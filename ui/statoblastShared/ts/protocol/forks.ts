@@ -42,6 +42,10 @@ export async function loadForkOutcomeMigrationSeedStatus(
 		args: [universeId, BigInt(getReportingOutcomeValue(outcome))],
 	})
 	const preparation = await loadChildPoolPreparation(client, securityPoolAddress, childUniverseId, outcome)
+	if (preparation.portfolio !== undefined) {
+		const childRepToken = await client.readContract({ abi: Zoltar_Zoltar.abi, functionName: 'getRepToken', address: getZoltarAddress(), args: [childUniverseId] })
+		return { ...preparation, childPoolRepBalanceAttoRep: 0n, childRepToken: childRepToken === zeroAddress ? undefined : childRepToken, childUniverseId, migrationProxyAddress: zeroAddress, pendingProxyRepBalanceAttoRep: 0n, seeded: preparation.branchReady === true }
+	}
 	const migrationProxyAddress = await client.readContract({
 		abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'getMigrationProxyAddress',

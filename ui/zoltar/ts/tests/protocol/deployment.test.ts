@@ -4,7 +4,7 @@ import { describe, expect, mock, test } from 'bun:test'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { type Address, type Hash, type Hex, type TransactionReceipt, encodeDeployData, getAddress, getCreate2Address, keccak256 } from '@zoltar/core-shared/evm/ethereum'
-import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
+import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance, withExpectedDeploymentRuntimeCodeHashes } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 import { getGenesisReputationTokenAddress } from '@zoltar/ui-zoltar-shared/protocol/activeProtocolAddresses.js'
 import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -95,6 +95,14 @@ contract AtomicFunding {
 }`
 
 describe('contract deployment internals', () => {
+	test('retains an explicitly computed module hash when the base deployment table has no entry', () => {
+		const hash = keccak256('0x1234')
+		for (const profile of [MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE]) {
+			const [module] = withExpectedDeploymentRuntimeCodeHashes([{ id: 'securityPoolCommitmentIndexDeployer', label: 'Commitment index deployer', address: PROXY_DEPLOYER_ADDRESS, dependencies: [], deploy: async () => ZERO_HASH, expectedRuntimeCodeHash: hash }], profile)
+			expect(module?.expectedRuntimeCodeHash).toBe(hash)
+		}
+	})
+
 	test('rejects generated deployment artifacts that do not match the pinned runtime hashes', () => {
 		expect(assertStaticDeploymentArtifactRuntimeCodeHashes()).toEqual(['deploymentStatusOracle', 'multicall3', 'zoltarQuestionData'])
 		expect(() =>

@@ -87,6 +87,7 @@ export async function discoverStagedOperations(client: ChaosReadClient, pool: Po
 	return await mapWithConcurrency(entries, DISCOVERY_RPC_CONCURRENCY, async ({ id, operation }): Promise<StagedOperationSnapshot> => {
 		const operationType = bigintToSafeNumber(operation.operation)
 		const targetVault = pool.vaults.find(vault => sameAddress(vault.address, operation.targetVault)) ?? (await discoverVault(client, pool.address, pool.escalationGame, getAddress(operation.targetVault), blockNumber))
+		const disputeBacking = pool.escalationGame === zeroAddress ? 0n : await client.readContract({ abi: escalationGameAbi, address: pool.escalationGame, args: [getAddress(operation.targetVault)], blockNumber, functionName: 'getVaultDisputeBackingAttoRep' })
 		let executionExpectedSuccess = false
 		let executionExpectedResult: Hex = '0x'
 		let liquidationMinimumReceiverHealthFactorBps = 0n
@@ -187,7 +188,7 @@ export async function discoverStagedOperations(client: ChaosReadClient, pool: Po
 			reservedLiquidationDebtAttoEth: operation.reservedLiquidationDebtAttoEth.toString(),
 			snapshotTargetBackingUnits: operation.snapshotTargetBackingUnits.toString(),
 			snapshotTargetUnderwritingLimitAttoEth: operation.snapshotTargetUnderwritingLimitAttoEth.toString(),
-			snapshotTargetDisputeStakedAttoRep: targetVault.disputeStakedAttoRep,
+			snapshotTargetDisputeStakedAttoRep: disputeBacking.toString(),
 			snapshotTargetOpenInterestAttoEth: targetVault.openInterestAttoEth,
 			snapshotTotalPoolHeldAttoRep: pool.totalPoolHeldAttoRep,
 			snapshotTotalRepBackingUnits: pool.totalRepBackingUnits,

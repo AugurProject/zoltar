@@ -133,7 +133,7 @@ export interface PoolSnapshot {
 	shareToken: Address
 	coordinator: Address
 	/** Actual OpenOracle callback and report creator, shared by portfolio questions. */
-	childPoolPreparations: Record<string, { portfolio: Address; childUniverseId: string; childPool: Address; game: Address; historyOutcomesInitialized: number; historyReady: boolean; feedRequired: boolean; dependenciesRequired: boolean }>
+	childPoolPreparations: Record<string, { portfolio: Address; branchReady: boolean; sourcePool: Address; sourceGame: Address; childUniverseId: string; childPool: Address; game: Address; historyOutcomesInitialized: number; historyReady: boolean; feedRequired: boolean; dependenciesRequired: boolean }>
 	priceFeed: Address
 	/** Conservative report exposure across this feed at the snapshot block. */
 	oracleExposureAttoEth: CanonicalUintString

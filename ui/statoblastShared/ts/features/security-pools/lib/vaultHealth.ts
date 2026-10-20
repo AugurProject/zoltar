@@ -2,11 +2,11 @@ import { LIQUIDATION_BPS_DENOMINATOR } from '@zoltar/statoblast-shared/statoblas
 import type { SecurityPoolVaultSummary } from '../../../types/contracts.js'
 import { getBaseRequiredRepAttoRep, isVaultHealthyAtFactor } from './liquidation.js'
 
-type VaultHealthInput = { multiplierBps: bigint | undefined; repPerEthPrice: bigint | undefined; vault: Pick<SecurityPoolVaultSummary, 'disputeStakedAttoRep' | 'underwritingLimitAttoEth' | 'vaultAttoRepBacking'> }
+type VaultHealthInput = { multiplierBps: bigint | undefined; repPerEthPrice: bigint | undefined; vault: Pick<SecurityPoolVaultSummary, 'disputeBackingAttoRep' | 'underwritingLimitAttoEth' | 'vaultAttoRepBacking'> }
 
 export type VaultHealthTier = 'underwater' | 'nearMinimum' | 'healthy' | 'unknown'
 
-/** Backing plus dispute stake per unit of the REP the commitment requires at the given price, in basis points; undefined without a usable price or a commitment. */
+/** Backing plus eligible dispute stake per unit of the REP the commitment requires at the given price, in basis points; undefined without a usable price or a commitment. */
 function getAssociatedRepPerCapacityBps({ disputeStakedAttoRep, repPerEthPrice, underwritingLimitAttoEth, vaultAttoRepBacking }: { disputeStakedAttoRep: bigint; repPerEthPrice: bigint | undefined; underwritingLimitAttoEth: bigint; vaultAttoRepBacking: bigint }) {
 	const requiredBaseAttoRep = repPerEthPrice === undefined || repPerEthPrice <= 0n ? undefined : getBaseRequiredRepAttoRep(underwritingLimitAttoEth, repPerEthPrice)
 	return requiredBaseAttoRep === undefined || requiredBaseAttoRep === 0n ? undefined : ((vaultAttoRepBacking + disputeStakedAttoRep) * LIQUIDATION_BPS_DENOMINATOR) / requiredBaseAttoRep
@@ -27,7 +27,7 @@ export function getVaultHealthTier({ associatedRepPerCapacityBps, isCurrentlyHea
 function isVaultCurrentlyHealthy({ multiplierBps, repPerEthPrice, vault }: VaultHealthInput) {
 	if (repPerEthPrice === undefined || repPerEthPrice <= 0n || multiplierBps === undefined) return undefined
 	return isVaultHealthyAtFactor({
-		disputeStakedAttoRep: vault.disputeStakedAttoRep,
+		disputeStakedAttoRep: vault.disputeBackingAttoRep,
 		healthFactorBps: LIQUIDATION_BPS_DENOMINATOR,
 		poolHeldVaultRepBackingAttoRep: vault.vaultAttoRepBacking,
 		poolSecurityMultiplierBps: multiplierBps,
@@ -41,7 +41,7 @@ export function getVaultSummaryHealth({ multiplierBps, poolEnded, repPerEthPrice
 	if (poolEnded) return { associatedRepPerCapacityBps: undefined, tier: 'unknown' }
 	const isCurrentlyHealthy = isVaultCurrentlyHealthy({ multiplierBps, repPerEthPrice, vault })
 	if (isCurrentlyHealthy === undefined) return { associatedRepPerCapacityBps: undefined, tier: 'unknown' }
-	const associatedRepPerCapacityBps = getAssociatedRepPerCapacityBps({ disputeStakedAttoRep: vault.disputeStakedAttoRep, repPerEthPrice, underwritingLimitAttoEth: vault.underwritingLimitAttoEth, vaultAttoRepBacking: vault.vaultAttoRepBacking })
+	const associatedRepPerCapacityBps = getAssociatedRepPerCapacityBps({ disputeStakedAttoRep: vault.disputeBackingAttoRep, repPerEthPrice, underwritingLimitAttoEth: vault.underwritingLimitAttoEth, vaultAttoRepBacking: vault.vaultAttoRepBacking })
 	return { associatedRepPerCapacityBps, tier: getVaultHealthTier({ associatedRepPerCapacityBps, isCurrentlyHealthy, multiplierBps }) }
 }
 

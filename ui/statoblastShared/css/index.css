@@ -4233,6 +4233,7 @@ span.rep-price-status.stale,
 }
 
 .portfolio-flow .field {
+	align-content: start;
 	width: 100%;
 	max-width: var(--form-max);
 	min-width: 0;

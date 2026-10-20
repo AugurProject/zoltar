@@ -16,9 +16,9 @@ import { activateContinuationWithoutAuction, createYesContinuationChild, escrowP
 describe('Fork-continuation residual settlement regression', () => {
 	const fixture = useStatoblastEscalationMigrationFixture()
 
-	test('burns external-fork continuation residual instead of assigning it to a late depositor', async () => {
+	test('keeps discharged source surplus out of unrelated-fork claims and burns terminal rounding', async () => {
 		const { mockWindow, client, securityPoolAddresses, genesisUniverse } = fixture
-		const { nonDecisionThreshold, noPrincipal, yesPrincipal, totalPrincipal } = await escrowParentVaultBelowNonDecisionThreshold(fixture)
+		const { noPrincipal } = await escrowParentVaultBelowNonDecisionThreshold(fixture)
 
 		const forkInitiator = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await forkGenesisUniverseExternally(fixture, forkInitiator, 'audit external fork for zero-owner residual capture')
@@ -63,8 +63,8 @@ describe('Fork-continuation residual settlement regression', () => {
 
 		const rewardBonus = (noPrincipal * 3n) / 5n
 		const winnerHaircut = (noPrincipal * 2n) / 5n
-		const expectedResidual = totalPrincipal - yesPrincipal - rewardBonus - winnerHaircut
-		strictEqualTypeSafe(await getERC20Balance(client, childRepToken, childGame), expectedResidual, 'the lower losing side must remain as sweepable continuation residual')
+		const expectedResidual = noPrincipal - rewardBonus - winnerHaircut
+		strictEqualTypeSafe(await getERC20Balance(client, childRepToken, childGame), expectedResidual, 'the previously discharged low side must not be recreated in the child reserve')
 		const theoreticalSupplyBeforeSweep = await getTotalTheoreticalSupply(client, childRepToken)
 		const sweepReceipt = await sweepResidualRep(client, childGame)
 		const sweepEventNames = sweepReceipt.logs
@@ -78,13 +78,13 @@ describe('Fork-continuation residual settlement regression', () => {
 					}).eventName,
 			)
 		assert.ok(sweepEventNames.includes('ForkContinuationResidualRepBurned'), 'continuation cleanup must emit its dedicated burn event')
-		assert.ok(!sweepEventNames.includes('ResidualRepSweptToSecurityPool'), 'continuation cleanup must not emit the ordinary residual sweep event')
+		assert.ok(!sweepEventNames.includes('EscalationSurplusAccrued'), 'continuation cleanup must not generate new pool-owner income')
 		strictEqualTypeSafe(await getTotalPoolHeldAttoRep(client, childPool.securityPool), seedRep, 'continuation residual must not enter the late depositor-owned pool balance')
 		strictEqualTypeSafe(theoreticalSupplyBeforeSweep - (await getTotalTheoreticalSupply(client, childRepToken)), expectedResidual, 'continuation residual must be removed from child-universe supply')
 
 		await redeemRepFromVault(forkInitiator, childPool.securityPool, forkInitiator.account.address)
 		const attackerBalanceAfterRedeem = await getERC20Balance(client, childRepToken, forkInitiator.account.address)
 		strictEqualTypeSafe(attackerBalanceAfterRedeem, attackerBalanceBeforeDeposit, 'the late depositor should recover only its own seed REP')
-		assert.ok(expectedResidual >= nonDecisionThreshold - 3n, 'the burned residual should cover the economically significant capture path')
+		assert.ok(expectedResidual <= 1n, 'only payout rounding may remain after already-discharged source surplus')
 	})
 })

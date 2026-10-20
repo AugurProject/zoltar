@@ -3,29 +3,47 @@ import { parsePortfolioAmount } from './draft.js'
 
 export type CuratedAdmissionMode = 'open' | 'fixed'
 export type PortfolioCreationDraft = {
-	targetHealthPercent: string
+	annualFeePercent: string
 	purchaseFeePercent: string
 	minimumPurchaseFee: string
-	completionReward: string
-	ownershipChangeFee: string
+	minimumCommitment: string
+	minimumExecutionReserve: string
+	minimumOutcomeRate: string
+	rewardVestingHours: string
 }
 
-export const defaultPortfolioCreationDraft = (): PortfolioCreationDraft => ({ targetHealthPercent: '120', purchaseFeePercent: '1', minimumPurchaseFee: '0.001', completionReward: '0.00025', ownershipChangeFee: '0.001' })
+export const defaultPortfolioCreationDraft = (): PortfolioCreationDraft => ({
+	annualFeePercent: '10',
+	purchaseFeePercent: '1',
+	minimumPurchaseFee: '0.001',
+	minimumCommitment: '1',
+	minimumExecutionReserve: '0.001',
+	minimumOutcomeRate: '0.01',
+	rewardVestingHours: '24',
+})
 
-function basisPoints(value: string, label: string) {
-	if (!/^\d+(\.\d{0,2})?$/.test(value.trim())) throw new Error(`${label} must be a nonnegative percentage with at most two decimal places.`)
+export function portfolioBasisPoints(value: string, label: string) {
+	const amount = portfolioBasisPointsOrUndefined(value)
+	if (amount === undefined) throw new Error(`${label} must be a nonnegative percentage with at most two decimal places.`)
+	return amount
+}
+
+export function portfolioBasisPointsOrUndefined(value: string) {
+	if (!/^\d+(\.\d{0,2})?$/.test(value.trim())) return undefined
 	const [whole, fraction = ''] = value.trim().split('.')
-	if (whole === undefined) throw new Error(`Enter ${label.toLowerCase()}.`)
+	if (whole === undefined) return undefined
 	return BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0'))
 }
 
 export function parsePortfolioCreationEconomics(draft: PortfolioCreationDraft) {
 	const config = {
-		targetHealthFactorBps: basisPoints(draft.targetHealthPercent, 'Target health'),
-		purchaseFeeBps: basisPoints(draft.purchaseFeePercent, 'Purchase fee'),
+		annualFeeBps: portfolioBasisPoints(draft.annualFeePercent, 'Annual time fee'),
+		purchaseFeeBps: portfolioBasisPoints(draft.purchaseFeePercent, 'Purchase fee'),
 		minimumPurchaseFeeAttoEth: parsePortfolioAmount(draft.minimumPurchaseFee),
-		completionRewardAttoEth: parsePortfolioAmount(draft.completionReward),
-		ownershipChangeFeeAttoEth: parsePortfolioAmount(draft.ownershipChangeFee),
+		minimumCommitmentAttoEth: parsePortfolioAmount(draft.minimumCommitment),
+		minimumExecutionReserveAttoEth: parsePortfolioAmount(draft.minimumExecutionReserve),
+		minimumOutcomeRate: parsePortfolioAmount(draft.minimumOutcomeRate),
+		rewardVestingSeconds: (parsePortfolioAmount(draft.rewardVestingHours) * 3600n) / 10n ** 18n,
 	}
 	validatePortfolioEconomics(config)
 	return config

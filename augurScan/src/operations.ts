@@ -173,6 +173,7 @@ const positiveInteger = (value: unknown, name: string): bigint => {
 
 export type VaultRiskInput = {
 	readonly poolHeldBackingAttoRep: unknown
+	/** Collateral-eligible escrow, excluding surplus already credited to the pool. */
 	readonly disputeStakedAttoRep: unknown
 	readonly openInterestAttoEth: unknown
 	readonly repPerEth1e18: string

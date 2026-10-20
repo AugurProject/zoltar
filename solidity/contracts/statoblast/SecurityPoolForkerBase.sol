@@ -25,7 +25,7 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage, ISecurity
 
 	function attoRepToBackingUnits(ISecurityPool securityPool, uint256 amountAttoRep) public view returns (uint256) {
 		uint256 totalRepBackingUnits = securityPool.totalRepBackingUnits();
-		uint256 childRepBalanceAttoRep = securityPool.repToken().balanceOf(address(securityPool));
+		uint256 childRepBalanceAttoRep = securityPool.getTotalPoolHeldAttoRep();
 		if (totalRepBackingUnits == 0 || childRepBalanceAttoRep == 0)
 			return Math.mulDiv(amountAttoRep, SecurityPoolUtils.PRICE_PRECISION, 1);
 		return Math.mulDiv(amountAttoRep, totalRepBackingUnits, childRepBalanceAttoRep);
@@ -34,8 +34,7 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage, ISecurity
 	function backingUnitsToAttoRep(ISecurityPool securityPool, uint256 repBackingUnits) public view returns (uint256) {
 		uint256 totalRepBackingUnits = securityPool.totalRepBackingUnits();
 		if (totalRepBackingUnits == 0) return 0;
-		return
-			Math.mulDiv(repBackingUnits, securityPool.repToken().balanceOf(address(securityPool)), totalRepBackingUnits);
+		return Math.mulDiv(repBackingUnits, securityPool.getTotalPoolHeldAttoRep(), totalRepBackingUnits);
 	}
 
 	function _validateChildEscalationGame(ISecurityPool child, EscalationGame childEscalationGame) internal view {

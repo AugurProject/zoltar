@@ -33,15 +33,18 @@ export const coreContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '9aec957d945308eaeaa9a2d497f6a1efefe2253de96b527a02b121a58d9dc2ec',
+		compiledAbiFingerprint: '9fce09c68c109d4ffabc5f85f0813ec2d92515318b265554fa40270759a1a006',
 		name: 'Zoltar',
 		purpose: 'Registers universe forks, charges the [fork haircut](./glossary.html#fork-haircut), and mints branch-specific [child REP](./glossary.html#child-rep).',
-		readAbiFingerprint: '888b513263619c6b31966cd009e078c19223641b9c4a6df0909bce3f797e37e2',
+		readAbiFingerprint: 'af953dbf8c9829c81943e2873905308a3a57839625fa5f1ee8e7812f3438883d',
 		readSurface:
-			'Use `universes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `genesisReputationToken`, `childReputationTokenCount`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThresholdAttoRep`, `getNonDecisionThresholdAttoRep`, `getUniverseTheoreticalSupplyAttoRep`, `getChildUniverseId`, `getDeployedChildUniverses`, `getMigrationRepBalanceAttoRep`, and `getChildMigrationRepAmountsAttoRep` to reconstruct universe and migration state. The child migration getter accepts an array of child universe IDs and returns cumulative amounts in the same order, with zero for unused IDs. The fork threshold is the live universe theoretical supply divided by `forkThresholdDivisor`, rounded up, so every nonzero-supply universe has a positive fork cost. Construction requires a deployed genesis REP token with the REPv2 `getTotalTheoreticalSupply()` selector, theoretical supply from one attoREP through 11 million REP, `forkThresholdDivisor > 1`, and `forkBurnDivisor >= 5`, which caps the uncredited fork haircut at 20% of the threshold. The constructor emits `UniverseInitialized` once, for genesis universe `0`; `deployChild` does not emit it, so child universes are discovered through `DeployChild` and `ChildReputationTokenInitialized`. Genesis REP uses ordinary ERC-20 approvals because the configured mainnet REPv2 token does not implement ERC-2612 or ERC-3009.',
+			'Use `universes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `genesisReputationToken`, `childReputationTokenCount`, `getForkTime`, `getForkChoiceDeadline`, `getForkRecapitalizationDeadline`, `getEarliestForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThresholdAttoRep`, `getNonDecisionThresholdAttoRep`, `getUniverseTheoreticalSupplyAttoRep`, `getChildUniverseId`, `getDeployedChildUniverses`, `getMigrationRepBalanceAttoRep`, and `getChildMigrationRepAmountsAttoRep` to reconstruct universe and migration state. The choice and recap deadlines are the native fork time plus eight and nine weeks. A child may next fork at its parent fork time plus ten weeks; origin universes have no parent cooldown. Late preparation never moves these timestamps. The child migration getter accepts an array of child universe IDs and returns cumulative amounts in the same order, with zero for unused IDs. The fork threshold is the live universe theoretical supply divided by `forkThresholdDivisor`, rounded up, so every nonzero-supply universe has a positive fork cost. Construction requires a deployed genesis REP token with the REPv2 `getTotalTheoreticalSupply()` selector, theoretical supply from one attoREP through 11 million REP, `forkThresholdDivisor > 1`, and `forkBurnDivisor >= 5`, which caps the uncredited fork haircut at 20% of the threshold. The constructor emits `UniverseInitialized` once, for genesis universe `0`; `deployChild` does not emit it, so child universes are discovered through `DeployChild` and `ChildReputationTokenInitialized`. Genesis REP uses ordinary ERC-20 approvals because the configured mainnet REPv2 token does not implement ERC-2612 or ERC-3009.',
 		securityBoundary: 'These calls depend on [A15 intended question selection](./security-model.html#assumption-a15) and [A25 safe immutable parameters](./security-model.html#assumption-a25).',
 		readDeclarations: [
 			{ name: 'getForkTime' },
+			{ name: 'getForkChoiceDeadline' },
+			{ name: 'getForkRecapitalizationDeadline' },
+			{ name: 'getEarliestForkTime' },
 			{ name: 'forkQuestionMatches' },
 			{ name: 'getRepToken' },
 			{ name: 'getForkThresholdAttoRep' },
@@ -60,7 +63,7 @@ export const coreContractReferences: ContractReference[] = [
 				caller: 'Any address able to fund the current fork threshold',
 				effect: 'Records the fork, removes threshold REP from the parent universe, and credits the caller with the threshold minus the uncredited fork haircut.',
 				declarations: [{ name: 'forkUniverse' }],
-				preconditions: 'Initialized and unforked universe; existing ended question; sufficient caller REP. Genesis REP requires allowance; child REP is burned directly without allowance.',
+				preconditions: 'Initialized and unforked universe; existing ended question; sufficient caller REP; a child must have reached its parent fork timestamp plus ten weeks. Genesis REP requires allowance; child REP is burned directly without allowance.',
 				signals: 'The REP burn events (genesis REP `Transfer` to the burn address, or child REP `Transfer` and `Burn`), then `UniverseForked`',
 			},
 			{
@@ -211,12 +214,12 @@ export const coreContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '5925422638a2d8df49d2a7d99005e88ae257c05559613a1be92bf583c4aa5cf3',
+		compiledAbiFingerprint: '9d3ab66506e8120a887750c3f45cbf5bede11d1e4552903ec2f441d656d7a219',
 		name: 'SecurityPoolFactory',
 		purpose: 'Creates and canonically registers origin and child security pools with their share token, oracle coordinator, and optional Truth Auction.',
 		readAbiFingerprint: '9f3ff79498031ea590e377d8c1576a903687d86081118b59adc4f4d48b33a8ca',
 		readSurface:
-			'Use `minimumSecurityBondDebtAttoEth` and `minimumVaultRepDepositAttoRep` for immutable deployment floors. Each pool derives its [start bond](./glossary.html#start-bond) at construction from Zoltar’s universe theoretical REP supply (`getUniverseTheoreticalSupplyAttoRep`) as `max(1 REP, theoretical REP supply / 10,000,000)`. A zero configured vault REP floor selects the default `theoretical REP supply / 100,000`; a nonzero constructor value is the exact override. The security-bond debt floor is the exact nonzero constructor value; the repository deployment configuration uses 1 ETH. Construction rejects a zero or code-less operations delegate. Use `securityPoolDeploymentCount` with the strict `securityPoolDeploymentsRange(startIndex, count)` pager, which reverts rather than truncating when the requested range exceeds the array. Use `getOriginId`, `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId`, and `getSecurityPoolHasInheritedForkOutcome` for canonical lookup. `getPortfolioOriginId` includes the portfolio namespace; `getSecurityPoolPortfolio` and `sharedPriceFeeds` (indexed by portfolio and universe) identify its owner namespace and shared feed. `getChildPoolDependencies` returns the coordinator and auction prepared for a parent/outcome pair; zero addresses mean preparation is still needed.',
+			'Use `minimumSecurityBondDebtAttoEth` and `minimumVaultRepDepositAttoRep` for immutable deployment floors. Each pool derives its [start bond](./glossary.html#start-bond) at construction from Zoltar’s universe theoretical REP supply (`getUniverseTheoreticalSupplyAttoRep`) as `max(1 REP, theoretical REP supply / 10,000,000)`. A zero configured vault REP floor selects the default `theoretical REP supply / 100,000`; a nonzero constructor value is the exact override. The security-bond debt floor is the exact nonzero constructor value; the repository deployment configuration uses 1 ETH. Construction requires deployed code at both fixed delegate addresses: operations, then accounting/event emitter. Use `securityPoolDeploymentCount` with the strict `securityPoolDeploymentsRange(startIndex, count)` pager, which reverts rather than truncating when the requested range exceeds the array. Use `getOriginId`, `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId`, and `getSecurityPoolHasInheritedForkOutcome` for canonical lookup. `getPortfolioOriginId` includes the portfolio namespace; `getSecurityPoolPortfolio` and `sharedPriceFeeds` (indexed by portfolio and universe) identify its owner namespace and shared feed. `getChildPoolDependencies` returns the coordinator and auction prepared for a parent/outcome pair; a zero coordinator means preparation is still needed. Portfolio children intentionally use a zero auction because their shared fork coordinator owns recapitalization.',
 		readDeclarations: [
 			{ name: 'securityPoolDeploymentCount' },
 			{ name: 'securityPoolDeploymentsRange' },
@@ -244,10 +247,26 @@ export const coreContractReferences: ContractReference[] = [
 			{
 				call: '`initializePortfolioPriceFeed(configurationSeed)`',
 				caller: 'Anyone, within their own caller-address namespace',
-				effect: 'Creates the caller namespace’s origin-universe feed from a canonical origin ledger’s oracle configuration, or returns its existing feed. Portfolio construction uses this step before the separate first-question admission transaction.',
+				effect: 'Creates the caller namespace’s origin-universe feed from a canonical origin ledger’s oracle configuration, or returns its existing feed. Portfolio setup uses this step before the separate first-question admission transaction.',
 				declarations: [{ name: 'initializePortfolioPriceFeed' }],
 				preconditions: 'The seed is a canonical origin ledger in this factory. The feed starts without an accepted price. This call neither registers a question nor allocates REP; a later coordinator must match the feed’s token and priority-fee policy.',
 				signals: 'Returns the canonical feed address; no question-deployment event.',
+			},
+			{
+				call: '`initializePortfolioPriceFeedForUniverse(configurationSeed, targetUniverse)`',
+				caller: 'A portfolio, within its own caller-address namespace',
+				effect: 'Creates or retrieves the caller namespace’s feed for an already registered child universe, using the canonical seed’s oracle configuration. No question needs to be deployed first.',
+				declarations: [{ name: 'initializePortfolioPriceFeedForUniverse' }],
+				preconditions: 'Canonical configuration seed; the caller’s logical clock recognizes the target universe; the target REP token exists. The seed may be a standalone pool.',
+				signals: 'Returns the canonical feed address; no question-deployment event.',
+			},
+			{
+				call: '`preparePortfolioPriceFeed(source, targetUniverse)`',
+				caller: 'Anyone',
+				effect: 'Creates or retrieves a target universe feed in the canonical source pool’s portfolio namespace without moving provider capital.',
+				declarations: [{ name: 'preparePortfolioPriceFeed' }],
+				preconditions: 'Canonical portfolio source; the portfolio logical clock recognizes the target; the target REP token exists.',
+				signals: 'Returns the canonical feed address.',
 			},
 			{
 				call: '`deployPortfolioSecurityPool(universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas)`',
@@ -261,7 +280,7 @@ export const coreContractReferences: ContractReference[] = [
 			{
 				call: '`preparePortfolioChildPriceFeed(parent, outcomeIndex)`',
 				caller: 'Anyone',
-				effect: 'Prepares the child universe’s REP token and shared feed in a separate transaction before creating a portfolio child ledger or migrating a vault. Repeated preparation returns the same feed without moving capital or selecting any owner’s migration.',
+				effect: 'Prepares the child universe’s REP token and shared feed in a separate transaction before creating a portfolio child ledger. Repeated preparation returns the same feed without moving capital or selecting any owner’s migration.',
 				declarations: [{ name: 'preparePortfolioChildPriceFeed' }],
 				preconditions: 'The parent is a canonical portfolio ledger in PoolForked state. Its namespace and oracle configuration determine the feed; Zoltar determines the selected child universe and its REP token.',
 				signals: 'Returns the canonical child feed address; child REP deployment may emit Zoltar events.',
@@ -269,7 +288,7 @@ export const coreContractReferences: ContractReference[] = [
 			{
 				call: '`prepareChildPoolDependencies(parent, outcomeIndex)`',
 				caller: 'Anyone',
-				effect: 'Predeploys the canonical child coordinator and Truth Auction, returning the same addresses on repeat calls. This separates their gas cost from child-ledger deployment and dispute continuation. It creates no partial ledger and moves no owner capital.',
+				effect: 'Predeploys the canonical child coordinator and, for standalone pools only, its Truth Auction, returning the same addresses on repeat calls. This separates their gas cost from child-ledger deployment and dispute continuation. It creates no partial ledger and moves no owner capital.',
 				declarations: [{ name: 'prepareChildPoolDependencies' }],
 				preconditions: 'The parent is a canonical ledger in PoolForked state. A portfolio must first prepare its child feed. Missing child REP is deployed through Zoltar. The authenticated factory chain exclusively controls subsequent coordinator binding.',
 				signals: 'Returns coordinator and auction addresses; no `DeploySecurityPool` until the child ledger is deployed.',
@@ -277,7 +296,7 @@ export const coreContractReferences: ContractReference[] = [
 			{
 				call: '`deployChildSecurityPool(parent, shareToken, universeId, questionId, statoblastSecurityMultiplierBps, currentRetentionRate, settlementCollateralAttoEth)`',
 				caller: '`SecurityPoolForker` only (`Only security pool forker`)',
-				effect: 'Creates and registers a canonical child pool with a coordinator that inherits `initialReportPriorityFeeAttoEthPerGas` from the parent coordinator and a forker-owned Truth Auction, while retaining the parent lineage share token.',
+				effect: 'Creates and registers a canonical child pool with a coordinator that inherits `initialReportPriorityFeeAttoEthPerGas` from the parent coordinator and, for standalone pools, a forker-owned Truth Auction, while retaining the parent lineage share token.',
 				declarations: [{ name: 'deployChildSecurityPool' }],
 				preconditions: 'Parent is the canonical pool for its lineage; supplied share token equals the parent share token; no pool has already been claimed for the parent origin in the target universe; a portfolio child feed has already been prepared; deployment arguments satisfy downstream constructors and wiring.',
 				signals: '`SecurityPoolRegistered`, then `DeploySecurityPool`',

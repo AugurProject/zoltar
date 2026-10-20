@@ -1,4 +1,5 @@
 export const eventSourceByName: Record<string, string> = {
+	PortfolioRecoveryRightsConsumed: 'solidity/contracts/statoblast/tokens/ShareToken.sol',
 	VaultPositionSplit: 'solidity/contracts/statoblast/SecurityPoolOperationsDelegate.sol',
 	ClaimCheckpointProgress: 'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol',
 	CoordinatorRegistered: 'solidity/contracts/statoblast/SharedPoolPriceFeed.sol',
@@ -82,7 +83,8 @@ export const eventSourceByName: Record<string, string> = {
 	ReputationTokenInitialized: 'solidity/contracts/ReputationToken.sol',
 	RepEthPriceSet: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol',
 	OrdinarySettlementInitialized: 'solidity/contracts/statoblast/EscalationGameState.sol',
-	ResidualRepSweptToSecurityPool: 'solidity/contracts/statoblast/EscalationGameState.sol',
+	EscalationSurplusAccrued: 'solidity/contracts/statoblast/interfaces/IEscalationGame.sol',
+	OrdinaryResidualRepBurned: 'solidity/contracts/statoblast/interfaces/IEscalationGame.sol',
 	ForkContinuationResidualRepBurned: 'solidity/contracts/statoblast/EscalationGameState.sol',
 	SecurityPoolSet: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol',
 	SecurityPoolForkSnapshot: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 import { ZoltarQuestionData } from '../../ZoltarQuestionData.sol';
+import { ISecurityPoolPortfolioNative } from '../interfaces/ISecurityPoolPortfolioNative.sol';
 import { SecurityPool } from '../SecurityPool.sol';
 import { ISecurityPool, ISecurityPoolFactory, SystemState } from '../interfaces/ISecurityPool.sol';
 import { OpenOracle } from '../openOracle/OpenOracle.sol';
@@ -17,6 +18,7 @@ import { ISecurityPoolForker } from '../interfaces/ISecurityPoolForker.sol';
 import { SecurityPoolDeployer } from './SecurityPoolDeployer.sol';
 import { SecurityPoolUtils } from '../SecurityPoolUtils.sol';
 import { SharedPoolPriceFeed } from '../SharedPoolPriceFeed.sol';
+import { SecurityPoolEventEmitter } from '../SecurityPoolEventEmitter.sol';
 
 contract SecurityPoolFactory is ISecurityPoolFactory {
 	ShareTokenFactory immutable shareTokenFactory;
@@ -48,7 +50,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	event DeploySecurityPool(ISecurityPool indexed securityPool, UniformPriceDualCapBatchAuction truthAuction, OpenOraclePriceCoordinator openOraclePriceCoordinator, IShareToken shareToken, ISecurityPool indexed parent, uint248 indexed universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas, uint256 currentRetentionRate, uint256 settlementCollateralAttoEth);
 	event SecurityPoolRegistered(bytes32 indexed originId, bytes32 indexed poolId, uint248 indexed universeId, ISecurityPool securityPool);
 
-	constructor(ISecurityPoolForker _securityPoolForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOracle _openOracle, Zoltar _zoltar, ShareTokenFactory _shareTokenFactory, UniformPriceDualCapBatchAuctionFactory _uniformPriceDualCapBatchAuctionFactory, OpenOraclePriceCoordinatorFactory _openOraclePriceCoordinatorFactory, uint256 _minimumSecurityBondDebtAttoEth, uint256 _minimumVaultRepDepositAttoRep, address operationsDelegate) {
+	constructor(ISecurityPoolForker _securityPoolForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOracle _openOracle, Zoltar _zoltar, ShareTokenFactory _shareTokenFactory, UniformPriceDualCapBatchAuctionFactory _uniformPriceDualCapBatchAuctionFactory, OpenOraclePriceCoordinatorFactory _openOraclePriceCoordinatorFactory, uint256 _minimumSecurityBondDebtAttoEth, uint256 _minimumVaultRepDepositAttoRep, address operationsDelegate, SecurityPoolEventEmitter eventEmitter) {
 		securityPoolForker = _securityPoolForker;
 		shareTokenFactory = _shareTokenFactory;
 		uniformPriceDualCapBatchAuctionFactory = _uniformPriceDualCapBatchAuctionFactory;
@@ -62,7 +64,8 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		minimumVaultRepDepositAttoRep = _minimumVaultRepDepositAttoRep;
 		require(operationsDelegate != address(0), 'Operations delegate zero');
 		require(operationsDelegate.code.length != 0, 'Operations delegate has no code');
-		securityPoolDeployer = new SecurityPoolDeployer(operationsDelegate);
+		require(address(eventEmitter).code.length != 0, 'Accounting delegate has no code');
+		securityPoolDeployer = new SecurityPoolDeployer(operationsDelegate, eventEmitter);
 	}
 
 	function securityPoolDeploymentCount() external view returns (uint256) {
@@ -117,6 +120,8 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 			require(sharedPriceFeeds[portfolio][universeId] != address(0), 'Prepare shared child price feed');
 		bool hasInheritedForkOutcome =
 			securityPoolHasInheritedForkOutcome[parent] || zoltar.forkQuestionMatches(parent.universeId(), questionId);
+		if (portfolio != address(0))
+			(hasInheritedForkOutcome, ) = ISecurityPoolPortfolioNative(portfolio).inheritedFixedOutcome(universeId, questionId);
 		require(address(parent.shareToken()) == address(shareToken), 'Child share token mismatch');
 		uint256 initialReportPriorityFeeAttoEthPerGas = parent.openOraclePriceCoordinator().initialReportPriorityFeeAttoEthPerGas();
 		_reserveSecurityPool(originId, universeId);
@@ -222,6 +227,16 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 			address(_getOrCreateSharedPriceFeed(configurationSeed.openOraclePriceCoordinator(), msg.sender, universeId));
 	}
 
+	/// @notice Initialize the caller's known branch feed from a canonical configuration seed.
+	function initializePortfolioPriceFeedForUniverse(ISecurityPool configurationSeed, uint248 universeId) external returns (address) {
+		bytes32 originId = securityPoolOriginIds[configurationSeed];
+		require(address(securityPoolsById[getPoolId(originId, configurationSeed.universeId())]) == address(configurationSeed), 'Seed pool is not canonical');
+		ISecurityPoolPortfolioNative(msg.sender).logicalTime(universeId);
+		require(address(zoltar.getRepToken(universeId)) != address(0), 'Branch REP is missing');
+		return
+			address(_getOrCreateSharedPriceFeed(configurationSeed.openOraclePriceCoordinator(), msg.sender, universeId));
+	}
+
 	/// @notice Prepare child REP and its shared feed independently of the more expensive ledger migration.
 	/// @dev Anyone may prepare; the canonical forked parent fixes all namespace and oracle configuration.
 	function preparePortfolioChildPriceFeed(ISecurityPool parent, uint256 outcomeIndex) external returns (address) {
@@ -233,6 +248,16 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		uint248 universeId = zoltar.getChildUniverseId(parentUniverseId, outcomeIndex);
 		if (address(zoltar.getRepToken(universeId)) == address(0)) zoltar.deployChild(parentUniverseId, outcomeIndex);
 		return address(_getOrCreateSharedPriceFeed(parent.openOraclePriceCoordinator(), portfolio, universeId));
+	}
+
+	/// @notice Prepare one known portfolio branch without materializing its ancestor questions.
+	function preparePortfolioPriceFeed(ISecurityPool source, uint248 universeId) external returns (address) {
+		address portfolio = securityPoolPortfolios[source];
+		require(portfolio != address(0), 'Source has no portfolio');
+		require(address(securityPoolsById[getPoolId(securityPoolOriginIds[source], source.universeId())]) == address(source), 'Source pool is not canonical');
+		ISecurityPoolPortfolioNative(portfolio).logicalTime(universeId);
+		require(address(zoltar.getRepToken(universeId)) != address(0), 'Branch REP is missing');
+		return address(_getOrCreateSharedPriceFeed(source.openOraclePriceCoordinator(), portfolio, universeId));
 	}
 
 	/// @notice Prepare canonical coordinator and auction dependencies without exposing a partial child ledger.
@@ -262,7 +287,8 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		uint256 priorityFee = parent.openOraclePriceCoordinator().initialReportPriorityFeeAttoEthPerGas();
 		bytes32 salt = keccak256(abi.encode(parent, universeId, parent.questionId(), parent.statoblastSecurityMultiplierBps(), priorityFee));
 		coordinator = openOraclePriceCoordinatorFactory.deployOpenOraclePriceCoordinator(openOracle, zoltar.getRepToken(universeId), priorityFee, salt);
-		auction = uniformPriceDualCapBatchAuctionFactory.deployUniformPriceDualCapBatchAuction(address(securityPoolForker), salt);
+		if (securityPoolPortfolios[parent] == address(0))
+			auction = uniformPriceDualCapBatchAuctionFactory.deployUniformPriceDualCapBatchAuction(address(securityPoolForker), salt);
 		dependencies.coordinator = coordinator;
 		dependencies.auction = auction;
 	}

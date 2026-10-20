@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test'
-import { decodeFunctionData, getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { decodeFunctionData, getAddress, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { createBlockWithTimestamp, createMockWriteClient, asWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { createCompleteSetInSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
@@ -13,6 +13,8 @@ void describe('complete-set mint submission', () => {
 			...asWriteClient(
 				createMockWriteClient(send, async request => {
 					if (request.functionName === 'escalationGame') return zeroAddress
+					if (request.functionName === 'securityPoolFactory') return pool
+					if (request.functionName === 'getSecurityPoolPortfolio') return '0x0000000000000000000000000000000000000000'
 					if (request.functionName === 'questionData') return pool
 					if (request.functionName === 'questionId' || request.functionName === 'universeId') return 1n
 					if (request.functionName === 'getQuestionEndDate') return 100n
@@ -35,6 +37,8 @@ void describe('complete-set mint submission', () => {
 				createMockWriteClient(send, async request => {
 					if (request.functionName === 'escalationGame') return zeroAddress
 					if (request.functionName === 'universeId' || request.functionName === 'questionId') return 1n
+					if (request.functionName === 'securityPoolFactory') return pool
+					if (request.functionName === 'getSecurityPoolPortfolio') return '0x0000000000000000000000000000000000000000'
 					if (request.functionName === 'questionData') return pool
 					if (request.functionName === 'getQuestionEndDate') return currentTimestamp + 1n
 					throw new Error(`Unexpected read ${request.functionName}`)
@@ -46,3 +50,61 @@ void describe('complete-set mint submission', () => {
 		expect(send).toHaveBeenCalledTimes(1)
 	})
 })
+
+const portfolio = getAddress('0x00000000000000000000000000000000000000b1')
+const portfolioMintAbi = parseAbi(['function createCompleteSet(uint248 universeId,uint256 questionId,uint256 mintEth,address recipient,uint256 minimumShares) payable'])
+
+for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) {
+	test(`shared mint route: ${mode}`, async () => {
+		const send = mock((request: { to?: unknown; data?: `0x${string}`; value?: bigint }) => {
+			expect(request.to).toBe(portfolio)
+			expect(request.value).toBe(103n)
+			if (request.data === undefined) throw new Error('Expected portfolio purchase calldata')
+			expect(decodeFunctionData({ abi: portfolioMintAbi, data: request.data })).toEqual({ functionName: 'createCompleteSet', args: [1n, 7n, 100n, pool, 90n] })
+		})
+		const reads: string[] = []
+		const client = {
+			...asWriteClient(
+				createMockWriteClient(send, async request => {
+					reads.push(request.functionName)
+					switch (request.functionName) {
+						case 'escalationGame':
+							return zeroAddress
+						case 'questionData':
+						case 'securityPoolFactory':
+						case 'getPool':
+							return pool
+						case 'getSecurityPoolPortfolio':
+							return portfolio
+						case 'questionId':
+							return 7n
+						case 'universeId':
+							return 1n
+						case 'originUniverseId':
+							return mode === 'child pool' ? 0n : 1n
+						case 'getQuestionEndDate':
+							return 100n
+						case 'purchaseFee':
+							return 3n
+						case 'availableMintCapacity':
+							return mode === 'insufficient backing' ? 99n : 100n
+						case 'attoEthToAttoShares':
+							return 90n
+						default:
+							throw new Error(`Unexpected read ${request.functionName}`)
+					}
+				}),
+			),
+			account: { address: pool, type: 'json-rpc' as const },
+			getBlock: async () => createBlockWithTimestamp(1n),
+		}
+		if (mode !== 'insufficient backing') {
+			await createCompleteSetInSecurityPool(client, pool, 100n)
+			expect(send).toHaveBeenCalledTimes(1)
+			expect(reads).not.toContain('getCurrentMintingCapacityAttoEth')
+		} else {
+			await expect(createCompleteSetInSecurityPool(client, pool, 100n)).rejects.toThrow('Insufficient shared REP')
+			expect(send).not.toHaveBeenCalled()
+		}
+	})
+}

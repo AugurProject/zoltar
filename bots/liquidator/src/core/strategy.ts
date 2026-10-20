@@ -16,6 +16,7 @@ export type VaultPosition = {
 	badDebtAttoEth: bigint
 	underwritingLimitAttoEth: bigint
 	claimableFeesAttoEth: bigint
+	/** Escrow still eligible for collateral, after source surplus accrual. */
 	disputeStakedAttoRep: bigint
 	openInterestAttoEth: bigint
 	vaultAttoRepBacking: bigint

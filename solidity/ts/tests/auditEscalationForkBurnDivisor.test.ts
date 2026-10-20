@@ -101,7 +101,44 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		)
 	})
 
-	test('rounds the own-fork minimum backing up for non-divisible source principal', async () => {
+	for (const ownFork of [false, true])
+		test(`funds three-outcome carry from the exact escrow remaining after irrevocable surplus (${ownFork ? 'own fork' : 'unrelated fork'})`, async () => {
+			const proofVerifier = await deployContract(client, encodeDeployData({ abi: statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.abi, bytecode: `0x${statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}` }))
+			const lowStake = NON_DECISION_THRESHOLD - START_BOND
+			const childBacking = FORK_THRESHOLD - (ownFork ? FORK_THRESHOLD / 5n : 0n)
+			const { escalationGame, securityPool } = await deployStartedForkContinuation(getZoltarAddress(), proofVerifier, [START_BOND, NON_DECISION_THRESHOLD, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes, ownFork, childBacking])
+			const balances = [lowStake, NON_DECISION_THRESHOLD, NON_DECISION_THRESHOLD] as const
+			const peaks = [zeroPeaks(), zeroPeaks(), zeroPeaks()] as const
+			for (const outcome of [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No] as const) {
+				peaks[outcome][0] = hashCarryLeaf(client.account.address, outcome, balances[outcome], BigInt(outcome), balances[outcome], BigInt(outcome + 1))
+			}
+			for (let outcome = 0; outcome < 3; outcome++) {
+				await writeContractAndWait(client, () => client.writeContract({ abi: initializeForkCarrySnapshotWithResolutionBalancesAbi, address: securityPool, functionName: 'initializeForkCarrySnapshotWithResolutionBalances', args: [peaks, [1n, 1n, 1n], balances, balances, [zeroHash, zeroHash, zeroHash]] }))
+			}
+			await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: securityPool, functionName: 'drainAllRep', args: [client.account.address] }))
+			await writeContractAndWait(client, () => client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: repTokenAddress, functionName: 'transfer', args: [escalationGame, childBacking] }))
+			assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'isForkCarryFundingComplete' }), true, 'mutually exclusive reporter claims must use the actual remaining escrow, not sum of all original principal')
+			await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: securityPool, functionName: 'resumeEscalationGameFromFork' }))
+			const resumedAt = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'forkResumedAt' })
+			await mockWindow.setTime(resumedAt + 3n * 24n * 60n * 60n + 1n)
+			const walletBefore = await getERC20Balance(client, repTokenAddress, client.account.address)
+			const proof = {
+				depositor: client.account.address,
+				amountAttoRep: NON_DECISION_THRESHOLD,
+				parentDepositIndex: 1n,
+				cumulativeAmountAttoRep: NON_DECISION_THRESHOLD,
+				sourceNodeId: 2n,
+				leafIndex: 0n,
+				merkleMountainRangeSiblings: [] as readonly Hex[],
+				merkleMountainRangePeakIndex: 0n,
+				nullifierSiblings: new SparseNullifierTree().getProof(1n),
+			}
+			await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: securityPool, functionName: 'withdrawDeposit', args: [QuestionOutcome.Yes, proof] }))
+			assert.strictEqual((await getERC20Balance(client, repTokenAddress, client.account.address)) - walletBefore, NON_DECISION_THRESHOLD + (NON_DECISION_THRESHOLD * 3n) / 5n, 'the full original winning payout must remain funded after the surplus is removed')
+			assert.strictEqual(await getERC20Balance(client, repTokenAddress, escalationGame), 0n)
+		})
+
+	test('requires the full authenticated backing snapshot even for a small nominal source', async () => {
 		const proofVerifier = await deployContract(
 			client,
 			encodeDeployData({
@@ -110,7 +147,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			}),
 		)
 		const sourcePrincipalAtFork = 6n
-		const exactMinimumBacking = sourcePrincipalAtFork - sourcePrincipalAtFork / 5n
+		const exactMinimumBacking = sourcePrincipalAtFork
 
 		const deployContinuation = async (initialBacking: bigint) => {
 			const { escalationGame, securityPool } = await deployStartedForkContinuation(getZoltarAddress(), proofVerifier, [1n, 10n, 0n, QuestionOutcome.Yes, true, initialBacking])
@@ -138,7 +175,9 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			return { escalationGame, securityPool }
 		}
 
-		const { escalationGame: underfundedGame, securityPool: underfundedPool } = await deployContinuation(exactMinimumBacking - 1n)
+		const { escalationGame: underfundedGame, securityPool: underfundedPool } = await deployContinuation(exactMinimumBacking)
+		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: underfundedPool, functionName: 'drainAllRep', args: [client.account.address] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: repTokenAddress, functionName: 'transfer', args: [underfundedGame, exactMinimumBacking - 1n] }))
 		assert.strictEqual(
 			await client.readContract({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
@@ -147,7 +186,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 				args: [],
 			}),
 			false,
-			'four units must not fund a six-unit own-fork source principal',
+			'a one-unit shortfall from the authenticated inventory must block resumption',
 		)
 		await assert.rejects(
 			client.writeContract({
@@ -168,7 +207,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 				args: [],
 			}),
 			true,
-			'five units must exactly fund a six-unit own-fork source principal',
+			'the exact authenticated source inventory must permit resumption',
 		)
 		await writeContractAndWait(client, () =>
 			client.writeContract({

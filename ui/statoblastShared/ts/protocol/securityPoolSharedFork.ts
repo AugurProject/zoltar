@@ -1,87 +1,70 @@
-import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { loadPortfolioSharedForkPosition, type PortfolioSharedForkSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { encodeFunctionData, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import type { PortfolioForkSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import { portfolioReadClient } from './securityPoolPortfolio.js'
-import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { getInfraContractAddresses } from './deploymentHelpers.js'
+import { requireAddressValue, requireBigintValue, requireBigintArray } from './decoders.js'
+import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { loadPortfolioForkOutcome } from './securityPoolPortfolioFork.js'
-import { requireForkDataView } from './forkData.js'
-import { getForkMigrationEndsAt, getUnresolvedEscalationMigrationSubmissionGuard } from './forkMigrationTiming.js'
-import {
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
-	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact,
-	statoblast_EscalationGame_EscalationGame as gameArtifact,
-} from '../contractArtifact.js'
-import * as forkCopy from '../copy/portfolioFork.js'
-import * as copy from '../copy/portfolioSharedFork.js'
+import { getInfraContractAddresses } from './deploymentHelpers.js'
 
-export async function loadSharedForkOutcome(client: ReadClient, snapshot: PortfolioSharedForkSnapshot, outcomeIndex: bigint, universeId = snapshot.universeId) {
-	const result = await loadPortfolioForkOutcome(client, { zoltar: getInfraContractAddresses().zoltar, universeId, outcomeIndex, blockNumber: snapshot.blockNumber })
-	if ((await client.getBlock({ blockNumber: snapshot.blockNumber })).hash !== snapshot.blockHash) throw new Error(copy.historyChanged)
+const abi = parseAbi([
+	'function factory() view returns (address)',
+	'function questionOriginIds(uint256 questionId) view returns (bytes32)',
+	'function getSecurityPool(bytes32 originId,uint248 universeId) view returns (address)',
+	'function originUniverseId() view returns (uint248)',
+	'function getPool(uint256 questionId,uint248 universeId) view returns (address)',
+	'function sourceGame(uint248 universeId,uint256 questionId) view returns (address)',
+	'function securityPool() view returns (address)',
+	'function shareToken() view returns (address)',
+	'function balanceOfShares(uint248 universeId,address owner) view returns (uint256[3])',
+	'function recoveredCompleteSetShares(uint248 universeId,address owner) view returns (uint256)',
+	'function preparePortfolioQuestion(address source,uint248 targetUniverse) returns (address)',
+])
+export async function loadSharedForkOutcome(client: ReadClient, snapshot: PortfolioForkSnapshot, outcomeIndex: bigint) {
+	const result = await loadPortfolioForkOutcome(client, { zoltar: snapshot.zoltar, universeId: snapshot.universeId, outcomeIndex, blockNumber: snapshot.blockNumber })
+	if ((await client.getBlock({ blockNumber: snapshot.blockNumber })).hash !== snapshot.blockHash) throw new Error('Fork snapshot changed. Refresh and retry.')
 	return result
 }
-
-export async function loadSharedForkPreparation(client: ReadClient, snapshot: PortfolioSharedForkSnapshot, positionId: bigint, outcomeIndex?: bigint) {
-	const position = await loadPortfolioSharedForkPosition({ client: portfolioReadClient(client), snapshot, positionId, ...(outcomeIndex === undefined ? {} : { outcomeIndex }) })
-	let reason: string | undefined
-	let needsPreparation = false
-	let migrationEndsAt: bigint | undefined
-	let systemState: number | undefined
-	let individualForkReason: string | undefined
-	if (position.pool === zeroAddress) reason = copy.noSourcePool
-	else {
-		const [state, factory, forker, resolved] = await Promise.all([
-			client.readContract({ address: position.pool, abi: poolArtifact.abi, functionName: 'systemState', blockNumber: snapshot.blockNumber }),
-			client.readContract({ address: position.pool, abi: poolArtifact.abi, functionName: 'securityPoolFactory', blockNumber: snapshot.blockNumber }),
-			client.readContract({ address: position.pool, abi: poolArtifact.abi, functionName: 'securityPoolForker', blockNumber: snapshot.blockNumber }),
-			client.readContract({ address: position.pool, abi: poolArtifact.abi, functionName: 'isEscalationResolved', blockNumber: snapshot.blockNumber }),
-		])
-		systemState = Number(state)
-		if (outcomeIndex !== undefined) {
-			if (systemState !== 1) individualForkReason = forkCopy.notForked
-			else {
-				const vault = await client.readContract({ address: snapshot.portfolio, abi: portfolioArtifact.abi, functionName: 'vaultOf', args: [snapshot.owner], blockNumber: snapshot.blockNumber })
-				if (vault !== zeroAddress) {
-					const [holdings, debt, game] = await Promise.all([
-						client.readContract({ address: position.pool, abi: poolArtifact.abi, functionName: 'securityVaults', args: [vault], blockNumber: snapshot.blockNumber }),
-						client.readContract({ address: position.pool, abi: poolArtifact.abi, functionName: 'vaultBadDebtAttoEth', args: [vault], blockNumber: snapshot.blockNumber }),
-						client.readContract({ address: position.pool, abi: poolArtifact.abi, functionName: 'escalationGame', blockNumber: snapshot.blockNumber }),
-					])
-					if (holdings[0] > 0n || holdings[1] > 0n || debt > 0n) individualForkReason = forkCopy.existingPosition
-					else if (game !== zeroAddress && (await client.readContract({ address: game, abi: gameArtifact.abi, functionName: 'disputeStakedRepByVaultAttoRep', args: [vault], blockNumber: snapshot.blockNumber })) > 0n) individualForkReason = forkCopy.existingEscrow
-				}
-			}
-		}
-		if (outcomeIndex !== undefined && !resolved) {
-			if (systemState !== 1) reason = forkCopy.notForked
-			else {
-				const fork = requireForkDataView(await client.readContract({ address: forker, abi: forkerArtifact.abi, functionName: 'forkData', args: [position.pool], blockNumber: snapshot.blockNumber }))
-				migrationEndsAt = getForkMigrationEndsAt(fork.forkActivationTime)
-				reason = getUnresolvedEscalationMigrationSubmissionGuard({ currentTimestamp: snapshot.timestamp, migrationEndsAt })
-			}
-			if (reason === undefined) {
-				const childUniverseId = await client.readContract({ address: getInfraContractAddresses().zoltar, abi: Zoltar_Zoltar.abi, functionName: 'getChildUniverseId', args: [snapshot.universeId, outcomeIndex], blockNumber: snapshot.blockNumber })
-				const [originId, feed, dependencies] = await Promise.all([
-					client.readContract({ address: factory, abi: factoryArtifact.abi, functionName: 'getSecurityPoolOriginId', args: [position.pool], blockNumber: snapshot.blockNumber }),
-					client.readContract({ address: factory, abi: factoryArtifact.abi, functionName: 'sharedPriceFeeds', args: [snapshot.portfolio, childUniverseId], blockNumber: snapshot.blockNumber }),
-					client.readContract({ address: factory, abi: factoryArtifact.abi, functionName: 'getChildPoolDependencies', args: [position.pool, outcomeIndex], blockNumber: snapshot.blockNumber }),
-				])
-				if (feed === zeroAddress) reason = forkCopy.childFeed
-				else if (dependencies[0] === zeroAddress || dependencies[1] === zeroAddress) reason = forkCopy.childContracts
-				else {
-					const child = await client.readContract({ address: factory, abi: factoryArtifact.abi, functionName: 'getSecurityPool', args: [originId, childUniverseId], blockNumber: snapshot.blockNumber })
-					if (child === zeroAddress) reason = forkCopy.childPool
-					else {
-						const game = await client.readContract({ address: child, abi: poolArtifact.abi, functionName: 'escalationGame', blockNumber: snapshot.blockNumber })
-						if (game !== zeroAddress && !(await client.readContract({ address: game, abi: gameArtifact.abi, functionName: 'isForkCarryFundingComplete', blockNumber: snapshot.blockNumber }))) reason = forkCopy.childHistory
-					}
-				}
-			}
-			needsPreparation = reason === forkCopy.notForked || reason === forkCopy.childFeed || reason === forkCopy.childContracts || reason === forkCopy.childPool || reason === forkCopy.childHistory
-		}
-	}
-	if ((await client.getBlock({ blockNumber: snapshot.blockNumber })).hash !== snapshot.blockHash) throw new Error(copy.historyChanged)
-	return { ...position, reason, needsPreparation, migrationEndsAt, systemState, individualForkReason }
+export async function loadPortfolioRecapWallet(client: ReadClient, snapshot: PortfolioForkSnapshot) {
+	const branch = snapshot.branch
+	if (branch === undefined || branch.repToken === zeroAddress) return undefined
+	const [balance, allowance, eth] = await Promise.all([
+		client.readContract({ address: branch.repToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [snapshot.owner], blockNumber: snapshot.blockNumber }),
+		client.readContract({ address: branch.repToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [snapshot.owner, snapshot.controller], blockNumber: snapshot.blockNumber }),
+		client.getBalance({ address: snapshot.owner, blockNumber: snapshot.blockNumber }),
+	])
+	if ((await client.getBlock({ blockNumber: snapshot.blockNumber })).hash !== snapshot.blockHash) throw new Error('Fork snapshot changed. Refresh and retry.')
+	return { balance, allowance, eth }
+}
+export async function loadPortfolioSourceRecovery(client: ReadClient, snapshot: Pick<PortfolioForkSnapshot, 'portfolio' | 'owner' | 'universeId' | 'blockNumber' | 'blockHash'>, questionId: bigint) {
+	const blockNumber = snapshot.blockNumber
+	const [factoryValue, originId, originValue, gameValue] = await Promise.all([
+		client.readContract({ address: snapshot.portfolio, abi, functionName: 'factory', blockNumber }),
+		client.readContract({ address: snapshot.portfolio, abi, functionName: 'questionOriginIds', args: [questionId], blockNumber }),
+		client.readContract({ address: snapshot.portfolio, abi, functionName: 'originUniverseId', blockNumber }),
+		client.readContract({ address: snapshot.portfolio, abi, functionName: 'sourceGame', args: [snapshot.universeId, questionId], blockNumber }),
+	])
+	const factory = requireAddressValue(factoryValue, 'portfolio factory')
+	if (typeof originId !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(originId) || BigInt(originId) === 0n) throw new Error('Question is not registered in this portfolio.')
+	const pool = requireAddressValue(await client.readContract({ address: factory, abi, functionName: 'getSecurityPool', args: [originId, snapshot.universeId], blockNumber }), 'source pool')
+	const origin = requireBigintValue(originValue, 'origin universe')
+	const game = requireAddressValue(gameValue, 'source game')
+	const sourceValue = game === zeroAddress ? await client.readContract({ address: snapshot.portfolio, abi, functionName: 'getPool', args: [questionId, origin], blockNumber }) : await client.readContract({ address: game, abi, functionName: 'securityPool', blockNumber })
+	const source = requireAddressValue(sourceValue, 'reporter source pool')
+	if (source === zeroAddress) throw new Error('Question is not registered in this portfolio.')
+	const shareTokenValue = await client.readContract({ address: source, abi, functionName: 'shareToken', blockNumber })
+	const shareToken = requireAddressValue(shareTokenValue, 'source shares')
+	const [balancesValue, recoveredValue] = await Promise.all([
+		client.readContract({ address: shareToken, abi, functionName: 'balanceOfShares', args: [snapshot.universeId, snapshot.owner], blockNumber }),
+		client.readContract({ address: shareToken, abi, functionName: 'recoveredCompleteSetShares', args: [snapshot.universeId, snapshot.owner], blockNumber }),
+	])
+	const balances = requireBigintArray(balancesValue, 'source balances')
+	if (balances.length !== 3) throw new Error('Invalid source balance count.')
+	const recovered = requireBigintValue(recoveredValue, 'recovered shares')
+	const completeSets = balances.reduce((minimum, value) => (value < minimum ? value : minimum), balances[0] ?? 0n)
+	if (recovered > completeSets) throw new Error('Source recovery exceeds complete-set balance.')
+	if ((await client.getBlock({ blockNumber })).hash !== snapshot.blockHash) throw new Error('Fork snapshot changed. Refresh and retry.')
+	return { pool, source, shareToken, availableShares: completeSets - recovered }
+}
+export function buildPortfolioRecoveryPreparation(snapshot: PortfolioForkSnapshot, source: Awaited<ReturnType<typeof loadPortfolioSourceRecovery>>) {
+	return { account: snapshot.owner, to: getInfraContractAddresses().securityPoolForker, value: 0n, data: encodeFunctionData({ abi, functionName: 'preparePortfolioQuestion', args: [source.source, snapshot.universeId] }) }
 }

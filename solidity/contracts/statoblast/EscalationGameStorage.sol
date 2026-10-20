@@ -39,7 +39,7 @@ abstract contract EscalationGameStorage {
 	// Vault address -> BinaryOutcome index -> forked escrow accounting.
 	mapping(address => mapping(uint8 => ForkedEscrowState)) internal forkedEscrowByVaultAndOutcome;
 	bool internal forkCarrySnapshotRequiresForkedEscrow;
-	bool internal winnerHaircutPaidByFork;
+	bool public winnerHaircutPaidByFork;
 	uint256 internal forkCarryInitialBackingAttoRep;
 	// The inherited component of totalDisputeStakedAttoRep. Inherited expenditure
 	// retires at most this component; local principal is released on settlement.
@@ -60,6 +60,12 @@ abstract contract EscalationGameStorage {
 	BinaryOutcomes.BinaryOutcome internal ordinarySettlementOutcome;
 	uint256 public ordinaryWinningReserveAttoRep;
 	uint256 public ordinarySettlementForkThresholdAttoRep;
+	// Ordinary deposits irrevocably release the minimum outcome balance. Reporter
+	// principal remains nominal because only one outcome can claim in each child.
+	uint256 public creditedSurplusAttoRep;
+	// Only the new report that generates surplus relinquishes collateral credit.
+	// Existing reporters cannot be pushed into liquidation by a third-party report.
+	mapping(address => uint256) internal collateralBackingByVault;
 
 	function _isDepositResolutionOpen(BinaryOutcomes.BinaryOutcome provisionalResolution) internal view returns (bool) {
 		// A provisional leader cannot close an unresolved unrelated continuation's

@@ -1,226 +1,214 @@
-import { encodeFunctionData, getAddress, isAddress, isHex, parseAbi, zeroAddress, zeroHash, type Address, type AbiValue } from '@zoltar/core-shared/evm/ethereum'
+import { encodeFunctionData, getAddress, isAddress, parseAbi, zeroAddress, type Address, type AbiValue } from '@zoltar/core-shared/evm/ethereum'
 import type { PortfolioReadClient } from './securityPoolPortfolioRead.js'
+import { loadPortfolioCapitalSnapshot, requiredPortfolioExecutionReserve } from './securityPoolPortfolioCapital.js'
 
 const abi = parseAbi([
+	'function recapitalizeUniverse(uint248 universeId) payable',
 	'function forkController() view returns (address)',
-	'function contextCount() view returns (uint256)',
-	'function getContext(uint256 contextId) view returns ((uint248 universeId,uint256 parentContextId,uint256 outcomeIndex,uint256 incomingActivationFloor,address ledger,address repToken,uint256 pointCount))',
-	'function choiceWindow(uint256 contextId) view returns (uint256 opensAt,uint256 closesAt)',
-	'function choices(uint256 contextId,address owner,uint256 intervalId) view returns (bool selected,uint256 outcomeIndex,uint256 childIntervalId)',
-	'function childContextIds(uint256 contextId,uint256 outcomeIndex) view returns (uint256)',
-	'function getOwnerActiveIntervalCount(address owner) view returns (uint256)',
-	'function getOwnerActiveIntervals(address owner,uint256 cursor,uint256 count) view returns (uint256[] intervalIds,uint256 nextCursor)',
-	'function canRetireOwnerInterval(address owner,uint256 intervalId) view returns (bool)',
-	'function getOwnerForkBranches(uint256 contextId,address owner,uint256 cursor,uint256 count) view returns (uint256[] childContextIds,uint256 nextCursor)',
-	'function getOwnerInterval(address owner,uint256 intervalId) view returns ((uint256 generation,uint256 startPosition,uint256 endPosition,uint256 shares,uint256 repIndex,uint256 feeIndex,bool open,bool active))',
-	'function previewClaim(address owner,uint256[] intervalIds) view returns (uint256 rep,uint256 eth)',
-	'function readPosition(uint256 contextId,uint256 positionId) view returns ((address custody,uint256 remainingShares,uint256 unmigratedShares,bool recoveryComplete))',
-	'function processedPositions(uint256 contextId,uint256 positionId) view returns (bool)',
-	'function getBranchWeight(uint256 contextId,uint256 positionId,uint256 outcomeIndex) view returns (uint256)',
-	'function positions(uint256 positionId) view returns (uint256 questionId,uint256 totalShares,uint256 remainingShares,address custody)',
-	'function factory() view returns (address)',
-	'function questionOriginIds(uint256 questionId) view returns (bytes32)',
-	'function getSecurityPool(bytes32 originId,uint248 universeId) view returns (address)',
-	'function chooseSharedFork(uint256 contextId,uint256[] intervalIds,uint256 outcomeIndex)',
-	'function revokeSharedFork(uint256 contextId,uint256[] intervalIds)',
-	'function processForkPosition(uint256 contextId,uint256 positionId,uint256 outcomeIndex) returns (bool)',
-	'function claimForkRecovered(uint256 contextId,uint256[] intervalIds,uint256[] positionIds)',
-	'function claimPosition(uint256 contextId,uint256 positionId,uint256 intervalId)',
-	'function claimPositionAndMigrate(uint256 contextId,uint256 positionId,uint256 intervalId,uint256 outcomeIndex)',
+	'function portfolio() view returns (address)',
+	'function zoltar() view returns (address)',
+	'function getForkTime(uint248 universeId) view returns (uint256)',
+	'function getForkChoiceDeadline(uint248 universeId) view returns (uint256)',
+	'function getForkRecapitalizationDeadline(uint248 universeId) view returns (uint256)',
+	'function getChildUniverseId(uint248 universeId,uint256 outcome) pure returns (uint248)',
+	'function getRepToken(uint248 universeId) view returns (address)',
+	'function capitalLedger(uint248 universeId) view returns (address)',
+	'function forks(uint248 universeId) view returns (uint256 backing,uint256 commitment,uint256 cash,uint256 units,uint256 price,uint256 assignedCash,uint256 neutralCash,uint256 recoveredUnits,bool frozen,bool recoveryFunded,bool migrationPrepared)',
+	'function branches(uint248 child) view returns (uint248 parent,uint256 outcome,uint256 chosenBacking,uint256 chosenCommitment,uint256 parentCash,uint256 protectedCommitment,address auction,bool prepared,bool started,bool ready)',
+	'function choices(uint248 source,address owner) view returns (uint256 outcome,bool recorded)',
+	'function freeze(uint248 source)',
+	'function choose(uint248 source,uint256 outcome)',
+	'function startBranch(uint248 source,uint256 outcome) returns (uint248)',
+	'function finalizeBranch(uint248 child)',
+	'function buyRecapitalization(uint248 child,uint256 maximumRep,uint256 minimumRep,uint256 maximumCommitment,uint256 maximumOwnRep,uint256 targetHealth,uint256 executionReserve) payable returns (uint256 rep,uint256 commitment)',
+	'function recoverUnchosenCash(uint248 source,uint256 questionId,uint256 shares) returns (uint256)',
+	'function collectProtectedPrincipal(uint248 child)',
+	'function quote(uint256 maximumEth,uint256 maximumRep) view returns (uint256 rep,uint256 commitment,uint256 cost)',
+	'function minimumFillAttoEth() view returns (uint256)',
+	'function maximumRepSoldAttoRep() view returns (uint256)',
+	'function soldAttoRep() view returns (uint256)',
+	'function raisedAttoEth() view returns (uint256)',
+	'function missingCashAttoEth() view returns (uint256)',
+	'function requiredRep(uint256 commitment,uint256 targetHealth) view returns (uint256)',
 ])
-
-function uint(value: unknown, label: string): bigint {
-	if (typeof value !== 'bigint' || value < 0n || value >= 1n << 256n) throw new Error(`${label} must fit uint256.`)
+function uint(value: unknown, label: string, bits = 256): bigint {
+	if (typeof value !== 'bigint' || value < 0n || value >= 1n << BigInt(bits)) throw new Error(`${label} must fit uint${bits}.`)
 	return value
 }
-
 function address(value: unknown, allowZero = false): Address {
 	if (typeof value !== 'string' || !isAddress(value) || (!allowZero && getAddress(value) === zeroAddress)) throw new Error('Choose a nonzero contract address.')
 	return getAddress(value)
 }
-
-function fields(value: unknown, names: string[]): unknown[] {
+function fields(value: unknown, names: readonly string[]): unknown[] {
 	if (Array.isArray(value) && value.length === names.length) return value
-	if (value !== null && typeof value === 'object') return names.map(name => Reflect.get(value, name))
-	throw new Error('Invalid shared fork response.')
+	if (value !== null && typeof value === 'object' && !Array.isArray(value)) return names.map(name => Reflect.get(value, name))
+	throw new Error('Invalid portfolio fork response.')
 }
-
 function bool(value: unknown): boolean {
-	if (typeof value !== 'boolean') throw new Error('Invalid shared fork state.')
+	if (typeof value !== 'boolean') throw new Error('Invalid portfolio fork state.')
 	return value
 }
-
-function ids(values: readonly bigint[], label: string) {
-	return [...new Set(values.map(value => uint(value, label)))].sort((left, right) => {
-		if (left === right) return 0
-		return left < right ? -1 : 1
-	})
+type ForkRequest = { owner: Address; controller: Address; universeId: bigint }
+function request(parameters: ForkRequest, functionName: string, args: readonly AbiValue[] = [], value = 0n) {
+	return { account: address(parameters.owner), to: address(parameters.controller), value: uint(value, 'Transaction value'), data: encodeFunctionData({ abi, functionName, args: [uint(parameters.universeId, 'Universe', 248), ...args] }) }
+}
+/** One irrevocable choice moves the owner's pledged positions; free REP and old fees stay in the source. */
+export function buildPortfolioForkChoiceRequest(parameters: ForkRequest & { outcomeIndex: bigint }) {
+	return request(parameters, 'choose', [uint(parameters.outcomeIndex, 'Fork outcome')])
+}
+/** Permissionless shared preparation touches one branch, independently of question count. */
+export function buildPortfolioForkStartRequest(parameters: ForkRequest & { outcomeIndex: bigint }) {
+	return request(parameters, 'startBranch', [uint(parameters.outcomeIndex, 'Fork outcome')])
+}
+export function buildPortfolioForkFinalizeRequest(parameters: ForkRequest) {
+	return request(parameters, 'finalizeBranch')
+}
+export function buildPortfolioForkCollectProtectedRequest(parameters: ForkRequest) {
+	return request(parameters, 'collectProtectedPrincipal')
+}
+export function buildPortfolioForkRecoveryRequest(parameters: ForkRequest & { questionId: bigint; shares: bigint }) {
+	if (uint(parameters.shares, 'Complete sets') === 0n) throw new Error('Recovery shares must be positive.')
+	return request(parameters, 'recoverUnchosenCash', [uint(parameters.questionId, 'Question'), parameters.shares])
+}
+/** Payment is a budget; unused sale cash is refunded. Extra collateral and accepted K are separately capped. */
+export function buildPortfolioRecapPurchaseRequest(parameters: ForkRequest & { maximumRep: bigint; minimumRep: bigint; maximumCommitment: bigint; maximumOwnRep: bigint; targetHealthFactorBps: bigint; executionReserveAttoEth: bigint; maximumCostAttoEth: bigint }) {
+	const maximum = uint(parameters.maximumRep, 'Maximum REP')
+	const minimum = uint(parameters.minimumRep, 'Minimum REP')
+	if (maximum === 0n || minimum === 0n || minimum > maximum) throw new Error('REP bounds must be positive and ordered.')
+	const health = uint(parameters.targetHealthFactorBps, 'Health target')
+	if (health < 10_000n) throw new Error('Health target must be at least 100%.')
+	const reserve = uint(parameters.executionReserveAttoEth, 'Execution reserve')
+	const cost = uint(parameters.maximumCostAttoEth, 'Purchase budget')
+	if (cost === 0n) throw new Error('Purchase budget must be positive.')
+	return request(parameters, 'buyRecapitalization', [maximum, minimum, uint(parameters.maximumCommitment, 'Maximum commitment'), uint(parameters.maximumOwnRep, 'Maximum own REP'), health, reserve], uint(cost + reserve, 'Total payment'))
 }
 
-type OwnerRequest = { owner: Address; controller: Address; contextId: bigint }
-
-function request(parameters: OwnerRequest, functionName: string, args: readonly AbiValue[]) {
-	return { account: address(parameters.owner), to: address(parameters.controller), value: 0n, data: encodeFunctionData({ abi, functionName, args: [uint(parameters.contextId, 'Fork context'), ...args] }) }
+/** Donate cash to existing claims without receiving shares, REP or a repayment right. */
+export function buildPortfolioVoluntaryRepairRequest(parameters: { owner: Address; portfolio: Address; universeId: bigint; amountAttoEth: bigint }) {
+	const amount = uint(parameters.amountAttoEth, 'Repair donation')
+	if (amount === 0n) throw new Error('Repair donation must be positive.')
+	return { account: address(parameters.owner), to: address(parameters.portfolio), value: amount, data: encodeFunctionData({ abi, functionName: 'recapitalizeUniverse', args: [uint(parameters.universeId, 'Universe', 248)] }) }
 }
 
-/** Selects or replaces a branch for caller-owned intervals before their shared cutoff. */
-export function buildPortfolioSharedForkChoiceRequest(parameters: OwnerRequest & { intervalIds: readonly bigint[]; outcomeIndex: bigint }) {
-	const intervalIds = ids(parameters.intervalIds, 'Owner interval')
-	if (intervalIds.length === 0) throw new Error('Choose at least one ownership interval.')
-	return request(parameters, 'chooseSharedFork', [intervalIds, uint(parameters.outcomeIndex, 'Fork outcome')])
-}
-
-export function buildPortfolioSharedForkRevokeRequest(parameters: OwnerRequest & { intervalIds: readonly bigint[] }) {
-	const intervalIds = ids(parameters.intervalIds, 'Owner interval')
-	if (intervalIds.length === 0) throw new Error('Choose at least one ownership interval.')
-	return request(parameters, 'revokeSharedFork', [intervalIds])
-}
-
-/** Permissionless work names exactly one allocation and branch, independent of its owner count. */
-export function buildPortfolioSharedForkProcessRequest(parameters: OwnerRequest & { positionId: bigint; outcomeIndex: bigint }) {
-	if (uint(parameters.positionId, 'Position id') === 0n) throw new Error('Choose an allocation position.')
-	return request(parameters, 'processForkPosition', [parameters.positionId, uint(parameters.outcomeIndex, 'Fork outcome')])
-}
-
-/** Processing may make progress without immediately releasing any child REP. */
-export function buildPortfolioSharedForkRecoveryRequest(parameters: OwnerRequest & { intervalIds: readonly bigint[]; positionIds?: readonly bigint[] }) {
-	const positionIds = ids(parameters.positionIds ?? [], 'Position id')
-	if (positionIds.includes(0n)) throw new Error('Choose an allocation position.')
-	return request(parameters, 'claimForkRecovered', [ids(parameters.intervalIds, 'Owner interval'), positionIds])
-}
-
-export function buildPortfolioContextPositionClaimRequest(parameters: OwnerRequest & { positionId: bigint; intervalId: bigint; outcomeIndex?: bigint }) {
-	if (uint(parameters.positionId, 'Position id') === 0n) throw new Error('Choose an allocation position.')
-	const args = [parameters.positionId, uint(parameters.intervalId, 'Owner interval')]
-	if (parameters.outcomeIndex === undefined) return request(parameters, 'claimPosition', args)
-	return request(parameters, 'claimPositionAndMigrate', [...args, uint(parameters.outcomeIndex, 'Fork outcome')])
-}
-
-export type PortfolioSharedForkSnapshot = Awaited<ReturnType<typeof loadPortfolioSharedForkSnapshot>>
-
-/** Reads only one context and one personal history page, all anchored to a single mined block. */
-export async function loadPortfolioSharedForkSnapshot(parameters: { client: PortfolioReadClient; portfolio: Address; owner: Address; contextId: bigint; intervalCursor?: bigint; branchCursor?: bigint; outcomeIndex?: bigint }) {
+export type PortfolioForkSnapshot = Awaited<ReturnType<typeof loadPortfolioForkSnapshot>>
+/** Bounded reads at one block; no owner, question, bid or ancestor enumeration. */
+export async function loadPortfolioForkSnapshot(parameters: { client: PortfolioReadClient; portfolio: Address; owner: Address; universeId: bigint; outcomeIndex?: bigint }) {
 	const { client } = parameters
 	const portfolio = address(parameters.portfolio)
 	const owner = address(parameters.owner)
-	const contextId = uint(parameters.contextId, 'Fork context')
-	const intervalCursor = uint(parameters.intervalCursor ?? 0n, 'Owner interval cursor')
-	const branchCursor = uint(parameters.branchCursor ?? 0n, 'Fork branch cursor')
-	const outcomeIndex = parameters.outcomeIndex === undefined ? undefined : uint(parameters.outcomeIndex, 'Fork outcome')
+	const universeId = uint(parameters.universeId, 'Universe', 248)
 	const [block, chainId] = await Promise.all([client.getBlock(), client.getChainId()])
-	if (block.number === undefined || block.hash === undefined) throw new Error('Shared fork snapshot requires a mined block.')
+	if (block.number === undefined || block.hash === undefined) throw new Error('Fork snapshot requires a mined block.')
 	const blockNumber = block.number
 	const blockHash = block.hash
 	const read = (target: Address, functionName: string, args: readonly AbiValue[] = []) => client.readContract({ address: target, abi, functionName, args, blockNumber })
-	const controller = address(await read(portfolio, 'forkController'))
-	const contextCount = uint(await read(controller, 'contextCount'), 'Fork context count')
-	if (contextId >= contextCount) throw new Error('Choose an existing fork context.')
-	const [contextValue, windowValue] = await Promise.all([read(controller, 'getContext', [contextId]), read(controller, 'choiceWindow', [contextId])])
-	const context = fields(contextValue, ['universeId', 'parentContextId', 'outcomeIndex', 'incomingActivationFloor', 'ledger', 'repToken', 'pointCount'])
-	const window = fields(windowValue, ['opensAt', 'closesAt'])
-	const ledger = address(context[4])
-	const intervalCount = uint(await read(ledger, 'getOwnerActiveIntervalCount', [owner]), 'Active owner interval count')
-	const page = fields(await read(ledger, 'getOwnerActiveIntervals', [owner, intervalCursor, 64n]), ['intervalIds', 'nextCursor'])
-	if (!Array.isArray(page[0]) || page[0].length > 64) throw new Error('Invalid active owner interval page.')
-	const intervalIds = page[0].map(value => uint(value, 'Owner interval'))
-	const nextIntervalCursor = uint(page[1], 'Next owner interval cursor')
-	if (intervalIds.some((id, index) => id + 1n < intervalCursor || (index > 0 && id <= (intervalIds[index - 1] ?? id)))) throw new Error('Invalid active owner interval order.')
-	const lastInterval = intervalIds.at(-1)
-	if (nextIntervalCursor !== 0n && (lastInterval === undefined || nextIntervalCursor <= lastInterval + 1n)) throw new Error('Invalid owner interval continuation.')
-	const intervals = await Promise.all(
-		intervalIds.map(async intervalId => {
-			const [intervalValue, choiceValue, canRetireValue] = await Promise.all([read(ledger, 'getOwnerInterval', [owner, intervalId]), read(controller, 'choices', [contextId, owner, intervalId]), read(ledger, 'canRetireOwnerInterval', [owner, intervalId])])
-			const interval = fields(intervalValue, ['generation', 'startPosition', 'endPosition', 'shares', 'repIndex', 'feeIndex', 'open', 'active'])
-			const choice = fields(choiceValue, ['selected', 'outcomeIndex', 'childIntervalId'])
-			return {
-				intervalId,
-				startPosition: uint(interval[1], 'First position'),
-				endPosition: uint(interval[2], 'Last position'),
-				shares: uint(interval[3], 'Owner shares'),
-				open: bool(interval[6]),
-				active: bool(interval[7]),
-				canRetire: bool(canRetireValue),
-				selected: bool(choice[0]),
-				outcomeIndex: uint(choice[1], 'Selected outcome'),
-				childIntervalId: uint(choice[2], 'Child interval'),
-			}
-		}),
-	)
-	const activeIds = intervals.filter(interval => interval.active).map(interval => interval.intervalId)
-	const [recoveryValue, childContextValue] = await Promise.all([read(ledger, 'previewClaim', [owner, activeIds]), outcomeIndex === undefined ? Promise.resolve(0n) : read(controller, 'childContextIds', [contextId, outcomeIndex])])
-	const recovery = fields(recoveryValue, ['rep', 'eth'])
-	const branchPage = fields(await read(controller, 'getOwnerForkBranches', [contextId, owner, branchCursor, 64n]), ['childContextIds', 'nextCursor'])
-	if (!Array.isArray(branchPage[0]) || branchPage[0].length > 64) throw new Error('Invalid fork branch page.')
-	const branchIds = branchPage[0].map(value => uint(value, 'Child context'))
-	if (new Set(branchIds).size !== branchIds.length || branchIds.includes(0n)) throw new Error('Invalid fork branch identities.')
-	const nextBranchCursor = uint(branchPage[1], 'Next fork branch cursor')
-	if (nextBranchCursor !== 0n && (nextBranchCursor === branchCursor || branchIds.includes(nextBranchCursor) || branchIds.length === 0)) throw new Error('Invalid fork branch continuation.')
-	const branches = await Promise.all(
-		branchIds.map(async childContextId => {
-			const child = fields(await read(controller, 'getContext', [childContextId]), ['universeId', 'parentContextId', 'outcomeIndex', 'incomingActivationFloor', 'ledger', 'repToken', 'pointCount'])
-			if (uint(child[1], 'Parent context') !== contextId) throw new Error('Fork branch belongs to a different parent.')
-			return { outcomeIndex: uint(child[2], 'Fork outcome'), contextId: childContextId }
-		}),
-	)
-	const parentContext = contextId === 0n ? context : fields(await read(controller, 'getContext', [uint(context[1], 'Parent context')]), ['universeId', 'parentContextId', 'outcomeIndex', 'incomingActivationFloor', 'ledger', 'repToken', 'pointCount'])
-	const [anchor, latestChainId] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
-	if (anchor.hash !== blockHash || latestChainId !== chainId) throw new Error('Chain changed while reading shared fork choices. Refresh and try again.')
-	return {
-		portfolio,
-		owner,
-		controller,
-		contextId,
-		contextCount,
-		chainId,
-		blockNumber,
-		blockHash,
-		timestamp: block.timestamp,
-		universeId: uint(context[0], 'Universe id'),
-		parentContextId: uint(context[1], 'Parent context'),
-		incomingOutcomeIndex: uint(context[2], 'Incoming outcome'),
-		incomingActivationFloor: uint(context[3], 'Incoming fork floor'),
-		ledger,
-		repToken: address(context[5]),
-		positionCount: uint(context[6], 'Allocation count'),
-		parentUniverseId: uint(parentContext[0], 'Parent universe'),
-		branches,
-		opensAt: uint(window[0], 'Choice opening'),
-		closesAt: uint(window[1], 'Choice cutoff'),
-		intervalCount,
-		intervalCursor,
-		nextIntervalCursor,
-		branchCursor,
-		nextBranchCursor,
-		intervals,
-		recoverableRepAttoRep: uint(recovery[0], 'Recovered REP'),
-		recoverableFeesAttoEth: uint(recovery[1], 'Recovered fees'),
-		childContextId: uint(childContextValue, 'Child context'),
-		selectedOutcomeIndex: outcomeIndex,
+	const [controllerValue, zoltarValue] = await Promise.all([read(portfolio, 'forkController'), read(portfolio, 'zoltar')])
+	const controller = address(controllerValue)
+	const zoltar = address(zoltarValue)
+	const [authority, protocol, forkTimeValue, choiceDeadlineValue, recapDeadlineValue, forkValue, choiceValue] = await Promise.all([
+		read(controller, 'portfolio'),
+		read(controller, 'zoltar'),
+		read(zoltar, 'getForkTime', [universeId]),
+		read(zoltar, 'getForkChoiceDeadline', [universeId]),
+		read(zoltar, 'getForkRecapitalizationDeadline', [universeId]),
+		read(controller, 'forks', [universeId]),
+		read(controller, 'choices', [universeId, owner]),
+	])
+	if (address(authority) !== portfolio || address(protocol) !== zoltar) throw new Error('Fork controller belongs to a different portfolio.')
+	const f = fields(forkValue, ['backing', 'commitment', 'cash', 'units', 'price', 'assignedCash', 'neutralCash', 'recoveredUnits', 'frozen', 'recoveryFunded', 'migrationPrepared'])
+	const c = fields(choiceValue, ['outcome', 'recorded'])
+	const fork = {
+		backing: uint(f[0], 'Fork backing'),
+		commitment: uint(f[1], 'Fork commitment'),
+		cash: uint(f[2], 'Fork cash'),
+		units: uint(f[3], 'Fork units'),
+		price: uint(f[4], 'Fork price'),
+		assignedCash: uint(f[5], 'Assigned cash'),
+		neutralCash: uint(f[6], 'Neutral cash'),
+		recoveredUnits: uint(f[7], 'Recovered units'),
+		frozen: bool(f[8]),
+		recoveryFunded: bool(f[9]),
+		migrationPrepared: bool(f[10]),
 	}
+	if (fork.assignedCash > fork.cash || fork.recoveredUnits > fork.units) throw new Error('Invalid fork accounting.')
+	const choice = { outcomeIndex: uint(c[0], 'Chosen outcome'), recorded: bool(c[1]) }
+	const chosenOutcome = choice.recorded ? choice.outcomeIndex : undefined
+	const outcomeIndex = parameters.outcomeIndex === undefined ? chosenOutcome : uint(parameters.outcomeIndex, 'Fork outcome')
+	let branch: { universeId: bigint; parent: bigint; outcomeIndex: bigint; chosenBacking: bigint; chosenCommitment: bigint; parentCash: bigint; protectedCommitment: bigint; auction: Address; prepared: boolean; started: boolean; ready: boolean; repToken: Address; capitalLedger: Address } | undefined
+	if (outcomeIndex !== undefined) {
+		const child = uint(await read(zoltar, 'getChildUniverseId', [universeId, outcomeIndex]), 'Child universe', 248)
+		const b = fields(await read(controller, 'branches', [child]), ['parent', 'outcome', 'chosenBacking', 'chosenCommitment', 'parentCash', 'protectedCommitment', 'auction', 'prepared', 'started', 'ready'])
+		const prepared = bool(b[7])
+		const parent = uint(b[0], 'Parent universe', 248)
+		const branchOutcome = uint(b[1], 'Branch outcome')
+		if (prepared && (parent !== universeId || branchOutcome !== outcomeIndex)) throw new Error('Selected branch belongs to a different fork.')
+		const [token, capital] = prepared ? await Promise.all([read(zoltar, 'getRepToken', [child]), read(portfolio, 'capitalLedger', [child])]) : [zeroAddress, zeroAddress]
+		branch = {
+			universeId: child,
+			parent,
+			outcomeIndex,
+			chosenBacking: uint(b[2], 'Chosen backing'),
+			chosenCommitment: uint(b[3], 'Chosen commitment'),
+			parentCash: uint(b[4], 'Child cash'),
+			protectedCommitment: uint(b[5], 'Protected commitment'),
+			auction: address(b[6], true),
+			prepared,
+			started: bool(b[8]),
+			ready: bool(b[9]),
+			repToken: address(token, true),
+			capitalLedger: address(capital, !prepared),
+		}
+	}
+	const forkTime = uint(forkTimeValue, 'Fork time')
+	const choiceDeadline = uint(choiceDeadlineValue, 'Choice deadline')
+	const recapitalizationDeadline = uint(recapDeadlineValue, 'Recap deadline')
+	if (forkTime !== 0n && (choiceDeadline <= forkTime || recapitalizationDeadline <= choiceDeadline)) throw new Error('Invalid native fork deadlines.')
+	const [finalBlock, finalChain] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
+	if (finalChain !== chainId || finalBlock.hash !== blockHash) throw new Error('Fork snapshot changed. Refresh and retry.')
+	return { chainId, blockNumber, blockHash, timestamp: block.timestamp, portfolio, owner, controller, zoltar, universeId, forkTime, choiceDeadline, recapitalizationDeadline, fork, choice, branch }
 }
 
-/** One selected position only; child custody may remain unmaterialized while ownership already exists. */
-export async function loadPortfolioSharedForkPosition(parameters: { client: PortfolioReadClient; snapshot: PortfolioSharedForkSnapshot; positionId: bigint; outcomeIndex?: bigint }) {
+export type PortfolioRecapQuote = Awaited<ReturnType<typeof loadPortfolioRecapQuote>>
+export async function loadPortfolioRecapQuote(parameters: { client: PortfolioReadClient; snapshot: PortfolioForkSnapshot; maximumCostAttoEth: bigint; maximumRep: bigint; targetHealthFactorBps: bigint }) {
 	const { client, snapshot } = parameters
-	const positionId = uint(parameters.positionId, 'Position id')
-	if (parameters.outcomeIndex !== undefined && parameters.outcomeIndex !== snapshot.selectedOutcomeIndex) throw new Error('Refresh the shared fork snapshot for this outcome.')
-	if (positionId === 0n || positionId > snapshot.positionCount) throw new Error('Choose an allocation in this fork context.')
-	const read = (target: Address, functionName: string, args: readonly AbiValue[]) => client.readContract({ address: target, abi, functionName, args, blockNumber: snapshot.blockNumber })
-	const [positionValue, allocationValue, weightValue, processedValue] = await Promise.all([
-		read(snapshot.controller, 'readPosition', [snapshot.contextId, positionId]),
-		read(snapshot.portfolio, 'positions', [positionId]),
-		parameters.outcomeIndex === undefined ? Promise.resolve(0n) : read(snapshot.controller, 'getBranchWeight', [snapshot.contextId, positionId, uint(parameters.outcomeIndex, 'Fork outcome')]),
-		snapshot.childContextId === 0n ? Promise.resolve(false) : read(snapshot.controller, 'processedPositions', [snapshot.childContextId, positionId]),
+	const branch = snapshot.branch
+	if (branch === undefined || !branch.started || branch.ready || branch.auction === zeroAddress) throw new Error('Recap sale unavailable.')
+	const costLimit = uint(parameters.maximumCostAttoEth, 'Purchase budget')
+	const repLimit = uint(parameters.maximumRep, 'Maximum REP')
+	const target = uint(parameters.targetHealthFactorBps, 'Health target')
+	if (target < 10_000n) throw new Error('Health target must be at least 100%.')
+	const read = (address: Address, functionName: string, args: readonly AbiValue[] = []) => client.readContract({ address, abi, functionName, args, blockNumber: snapshot.blockNumber })
+	const [quoteValue, capital, minimumFillValue, maximumSoldValue, soldValue, raisedValue, missingCashValue] = await Promise.all([
+		read(branch.auction, 'quote', [costLimit, repLimit]),
+		loadPortfolioCapitalSnapshot({ client, portfolio: snapshot.portfolio, owner: snapshot.owner, universeId: branch.universeId, blockNumber: snapshot.blockNumber }),
+		read(branch.auction, 'minimumFillAttoEth'),
+		read(branch.auction, 'maximumRepSoldAttoRep'),
+		read(branch.auction, 'soldAttoRep'),
+		read(branch.auction, 'raisedAttoEth'),
+		read(branch.auction, 'missingCashAttoEth'),
 	])
-	const position = fields(positionValue, ['custody', 'remainingShares', 'unmigratedShares', 'recoveryComplete'])
-	const allocation = fields(allocationValue, ['questionId', 'totalShares', 'remainingShares', 'custody'])
-	const questionId = uint(allocation[0], 'Question id')
-	const [factoryValue, originId] = await Promise.all([read(snapshot.portfolio, 'factory', []), read(snapshot.portfolio, 'questionOriginIds', [questionId])])
-	if (typeof originId !== 'string' || !isHex(originId) || originId.length !== 66) throw new Error('Invalid registered question origin.')
-	if (originId === zeroHash) throw new Error('Question not registered in this portfolio.')
-	// Enrollment creates ownership before its pool exists; the canonical factory preserves that absence.
-	const pool = address(await read(address(factoryValue), 'getSecurityPool', [originId, snapshot.universeId]), true)
-	const [anchor, chainId] = await Promise.all([client.getBlock({ blockNumber: snapshot.blockNumber }), client.getChainId()])
-	if (anchor.hash !== snapshot.blockHash || chainId !== snapshot.chainId) throw new Error('Chain changed while reading shared fork requirements. Refresh and try again.')
-	return { positionId, questionId, pool, custody: address(position[0], true), remainingShares: uint(position[1], 'Remaining shares'), unmigratedShares: uint(position[2], 'Unmigrated shares'), recoveryComplete: bool(position[3]), branchWeight: uint(weightValue, 'Branch shares'), branchProcessed: bool(processedValue) }
+	const q = fields(quoteValue, ['rep', 'commitment', 'cost'])
+	const rep = uint(q[0], 'Quoted REP')
+	const commitment = uint(q[1], 'Quoted commitment')
+	const cost = uint(q[2], 'Quoted cost')
+	if (rep > repLimit || cost > costLimit) throw new Error('Recap quote exceeds purchase limits.')
+	const active = capital.positions.find(position => position.batch === 0n && position.commitment > 0n)
+	let requiredRep = commitment === 0n ? 0n : uint(await read(branch.capitalLedger, 'requiredRep', [commitment, target]), 'Required collateral')
+	const totalCommitment = (active?.commitment ?? 0n) + commitment
+	if (active !== undefined && commitment > 0n) {
+		const combined = uint(await read(branch.capitalLedger, 'requiredRep', [totalCommitment, target]), 'Combined collateral')
+		const additional = combined > active.rep ? combined - active.rep : 0n
+		if (additional > requiredRep) requiredRep = additional
+	}
+	const ownRep = requiredRep > rep ? requiredRep - rep : 0n
+	const requiredReserve = commitment === 0n ? 0n : requiredPortfolioExecutionReserve({ commitment: totalCommitment, ...capital.economics })
+	const existingReserve = capital.ownerAccount.executionReserveAttoEth + (active?.executionReserveAttoEth ?? 0n)
+	const executionReserve = requiredReserve > existingReserve ? requiredReserve - existingReserve : 0n
+	let reason: string | undefined
+	if (rep === 0n) reason = 'No REP is available within this budget.'
+	else if (cost < uint(minimumFillValue, 'Minimum fill') && uint(soldValue, 'Sold REP') + rep !== uint(maximumSoldValue, 'Maximum sale REP') && uint(raisedValue, 'Raised cash') + cost !== uint(missingCashValue, 'Required cash')) reason = 'Purchase is below this recap sale’s minimum fill.'
+	else if (commitment > 0n && totalCommitment < capital.economics.minimumCommitmentAttoEth) reason = 'Accepted commitment is below this pool’s minimum.'
+	const [finalBlock, finalChain] = await Promise.all([client.getBlock({ blockNumber: snapshot.blockNumber }), client.getChainId()])
+	if (finalBlock.hash !== snapshot.blockHash || finalChain !== snapshot.chainId) throw new Error('Fork snapshot changed. Refresh and retry.')
+	return { rep, commitment, cost, ownRep, executionReserve, capital, reason }
 }

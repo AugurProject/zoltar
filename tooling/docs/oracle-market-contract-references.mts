@@ -238,10 +238,10 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			{
 				call: '`syncExposure()`',
 				caller: 'Anyone; pool accounting checkpoints also invoke it',
-				effect: 'Reconciles this registered ledger in the shared aggregate, using max(standing commitments, settlement collateral), or zero after finality. Standalone mode has no effect.',
+				effect: 'Reads the live portfolio aggregate, max(standing commitments, funded demand), and emits a checkpoint if it changed. Question finality does not independently clear this shared exposure. Standalone mode has no effect.',
 				declarations: [{ name: 'syncExposure', sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol' }],
 				preconditions: 'A shared coordinator must already be registered by its canonical factory.',
-				signals: 'Feed `ExposureCheckpoint` when the contribution changes',
+				signals: 'Feed `ExposureCheckpoint` when the portfolio aggregate changes',
 			},
 			{
 				call: '`sharedPriceSettled(reportId, accepted, reason)`',
@@ -321,12 +321,12 @@ export const oracleMarketContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'b4d43db4a275c3118a700ca255a7f63d42dfdca1fb1e7c554d681e589a76ac85',
+		compiledAbiFingerprint: 'dbf9e44024da6ec202035eb3ad3864fbd05ba55dc20d4e0ba36f23011a5c51ba',
 		name: 'ShareToken',
 		purpose: "Stores universe-aware ERC-1155 [outcome shares](./glossary.html#outcome-share) and materializes a holder's persistent source entitlement in selected fork branches.",
-		readAbiFingerprint: '6093653de73a0e5fa1e400d77bbded71a92de1197f58bd89da82a657887f349e',
+		readAbiFingerprint: '7afbb511e37a441868077ad389b077b079792c4e3d38a0ef36d15e2142fb26a7',
 		readSurface:
-			'Base and relationship getters are `name`, `symbol`, `zoltar`, `canonicalPoolByUniverse`, `_balances`, `_supplies`, and `_operatorApprovals`. Standard ERC-1155 reads are `supportsInterface`, `balanceOf`, `totalSupply`, `balanceOfBatch`, and `isApprovedForAll`; protocol-specific reads are `isAuthorized`, `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getMigratedShareAmountAttoShares`, `getTokenId`, `getTokenIds`, and `unpackTokenId`.',
+			'Base and relationship getters are `name`, `symbol`, `zoltar`, `canonicalPoolByUniverse`, `recoveredCompleteSetShares`, `_balances`, `_supplies`, and `_operatorApprovals`. Standard ERC-1155 reads are `supportsInterface`, `balanceOf`, `totalSupply`, `balanceOfBatch`, and `isApprovedForAll`; protocol-specific reads are `isAuthorized`, `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getMigratedShareAmountAttoShares`, `getTokenId`, `getTokenIds`, and `unpackTokenId`.',
 		readDeclarations: [
 			{ name: 'supportsInterface', sourcePath: 'solidity/contracts/statoblast/tokens/ERC1155.sol' },
 			{ name: 'balanceOf', sourcePath: 'solidity/contracts/statoblast/tokens/ERC1155.sol' },
@@ -348,6 +348,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			{ name: 'symbol' },
 			{ name: 'zoltar' },
 			{ name: 'canonicalPoolByUniverse' },
+			{ name: 'recoveredCompleteSetShares' },
 			{ name: '_balances', sourcePath: 'solidity/contracts/statoblast/tokens/ERC1155.sol' },
 			{ name: '_supplies', sourcePath: 'solidity/contracts/statoblast/tokens/ERC1155.sol' },
 			{ name: '_operatorApprovals', sourcePath: 'solidity/contracts/statoblast/tokens/ERC1155.sol' },
@@ -368,7 +369,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				effect: 'Transfers one outcome-token balance without changing supply.',
 				declarations: [{ name: 'safeTransferFrom', sourcePath: 'solidity/contracts/statoblast/tokens/ERC1155.sol' }],
 				preconditions:
-					'Caller holds the source balance or has operator approval; the source account has not materialized that token into any child branch; destination is nonzero; the source balance is sufficient; under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), a contract recipient accepts the ERC-1155 callback.',
+					'Caller holds the source balance or has operator approval; the source account has neither materialized that token into a child branch nor consumed portfolio recovery rights; destination is nonzero; the source balance is sufficient; under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), a contract recipient accepts the ERC-1155 callback.',
 				signals: '`TransferSingle`',
 			},
 			{
@@ -377,8 +378,16 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				effect: 'A nonempty batch transfers each listed outcome-token balance without changing supply. Equal empty ID and value arrays return as a no-op without an event.',
 				declarations: [{ name: 'safeBatchTransferFrom', sourcePath: 'solidity/contracts/statoblast/tokens/ERC1155.sol' }],
 				preconditions:
-					'ID and value array lengths match. A nonempty batch also requires holder or operator authority, no listed source token that the source account has already materialized into a child branch, a nonzero destination, sufficient source balances, and, under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), an accepting ERC-1155 callback from a contract recipient; the empty-batch no-op performs none of those checks.',
+					'ID and value array lengths match. A nonempty batch also requires holder or operator authority, no listed source token already locked by child materialization or portfolio recovery, a nonzero destination, sufficient source balances, and, under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), an accepting ERC-1155 callback from a contract recipient; the empty-batch no-op performs none of those checks.',
 				signals: '`TransferBatch` for a nonempty batch; no event for an empty batch',
+			},
+			{
+				call: '`consumePortfolioRecoveryCompleteSets(sourceUniverse, holder, amountAttoShares)`',
+				caller: 'The canonical source pool’s portfolio or its configured fork coordinator',
+				effect: 'Consumes a separate cumulative complete-set snapshot right and locks the holder’s source tokens against transfer. Source balances and every branch’s migration rights remain intact. Returns cumulative consumed shares.',
+				declarations: [{ name: 'consumePortfolioRecoveryCompleteSets' }],
+				preconditions: 'Source universe forked; positive amount; the cumulative recovery does not exceed any of the holder’s three source outcome balances. The coordinator authenticates the holder and calculates the corresponding cash payout.',
+				signals: '`PortfolioRecoveryRightsConsumed`',
 			},
 			{
 				call: '`migrate(fromId, targetOutcomeIndexes)`',
@@ -387,7 +396,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 					"If needed, first freezes the operational source pool and records its fork snapshot. A single-target call may lazily create that child while the branch-creation window is open. It keeps and locks the holder's source entitlement, then mints each selected child-universe token ID up to the current source balance. Later source additions materialize only the unminted delta. A contract holder receives the ERC-1155 single-receiver callback for each mint; rejection rolls back the mint and preceding fork or child setup.",
 				declarations: [{ name: 'migrate' }],
 				preconditions:
-					'Source universe forked; canonical source pool is `Operational` or `PoolForked`, and an `Operational` source has no inherited fixed outcome because auto-fork activation rejects one; positive source balance; nonempty, strictly increasing, well-formed outcomes; every target in a multi-target call already has a canonical child pool; after the branch-creation window, a single target must also already exist; at least one selected child has an unmaterialized balance; under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), a contract holder accepts `onERC1155Received` for every target mint.',
+					'Source universe forked; canonical source pool is `Operational` or `PoolForked`, and an `Operational` source has no inherited fixed outcome because auto-fork activation rejects one; positive source balance; nonempty, strictly increasing, well-formed outcomes; every target in a multi-target call already has a canonical child pool; after the branch-creation window, a single target must also already exist; each target is an immediate native child, including when its bound question contract skips intermediate reporter ancestors; at least one selected child has an unmaterialized balance; under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), a contract holder accepts `onERC1155Received` for every target mint.',
 				signals:
 					'`PoolForkModeActivated`, `PoolAccountingCheckpoint`, `SecurityPoolForkSnapshot`, `ParentRepLocked`, and optionally `DisputeStakedRepDrainedAtFork` when auto-forking; `SecurityPoolRegistered`, `DeploySecurityPool`, `AuthorizationUpdated`, and `ChildPoolLinked` when lazily deploying, plus `DeployChild`, `ChildRepSplit`, `PoolHeldRepSweptToChild`, `EscalationGameSet`, `GameContinuedFromFork`, `ForkCarryCheckpoint`, and `ChildDisputeStakedRepMaterialized` as applicable; then one ERC-1155 mint `TransferSingle` and `Migrate` per materialized target on successful callbacks',
 			},

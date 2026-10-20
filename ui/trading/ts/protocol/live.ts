@@ -1,3 +1,4 @@
+import { loadLinearFeeState } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { submissionDeadline, requireFreshSubmissionWindow } from './submissionWindow.js'
 import { outcomeLabel } from '../copy/outcomes.js'
 import { createRegistryIndex, readIncrementalRegistry, type RegistryIndex } from '@zoltar/ui-core-shared/lib/incrementalRegistry.js'
@@ -34,8 +35,8 @@ const router = tradingContracts['contracts/trading/TwoWayConstantProductRouter.s
 async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address) {
 	const block = await client.getBlock()
 	const blockNumber = block.number
-	if (block.hash === null || block.hash === undefined) throw new Error('Latest block identity is unavailable')
-	const [questionData, zoltar, parent, shareTokenSupplyAttoShares, mintingCapacityCeilingAttoEth, accounting, feeEndTime, systemState, awaitingForkContinuation, vaultCount, forker, escalationGame] = await Promise.all([
+	if (block.hash === null || block.hash === undefined || blockNumber === undefined) throw new Error('Latest block identity is unavailable')
+	const [questionData, zoltar, parent, shareTokenSupplyAttoShares, mintingCapacityCeilingAttoEth, accounting, feeEndTime, systemState, awaitingForkContinuation, vaultCount, forker, escalationGame, linearFee] = await Promise.all([
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'questionData' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'zoltar' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'parent' }),
@@ -48,8 +49,10 @@ async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address)
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'getVaultCount' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'securityPoolForker' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'escalationGame' }),
+		loadLinearFeeState(client, pool, blockNumber),
 	])
-	const checkpoint = (timestamp: bigint) => estimateMintCheckpoint({ ...accounting, currentTimestamp: timestamp, feeEndTimestamp: feeEndTime })
+	const feeAccounting = { ...accounting, ...(linearFee === undefined ? {} : { linearFee }) }
+	const checkpoint = (timestamp: bigint) => estimateMintCheckpoint({ ...feeAccounting, currentTimestamp: timestamp, feeEndTimestamp: feeEndTime })
 	const current = checkpoint(block.timestamp)
 	const projected = checkpoint(block.timestamp + 30n * 24n * 60n * 60n)
 	if (current === undefined || projected === undefined) throw new Error('Security pool fee accounting unavailable')
@@ -59,7 +62,7 @@ async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address)
 		parent,
 		shareTokenSupplyAttoShares,
 		settlementCollateralAttoEth: current.settlementCollateralAfterFeesAttoEth,
-		valuation: { timestamp: block.timestamp, feeEndTime, projectedCollateralAttoEth: projected.settlementCollateralAfterFeesAttoEth, feeAccounting: accounting },
+		valuation: { timestamp: block.timestamp, feeEndTime, projectedCollateralAttoEth: projected.settlementCollateralAfterFeesAttoEth, feeAccounting },
 		currentRetentionRate: accounting.currentRetentionRate,
 		totalUnderwritingLimitAttoEth: accounting.totalUnderwritingLimitAttoEth,
 		feeEligibleUnderwritingLimitAttoEth: accounting.feeEligibleUnderwritingLimitAttoEth,

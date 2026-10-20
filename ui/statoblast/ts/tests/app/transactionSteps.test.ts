@@ -1059,6 +1059,8 @@ test('minting complete sets sends the transaction directly and tracks its receip
 		getBlock: async () => createBlockWithTimestamp(1n),
 		readContract: createReadContractStub(request => {
 			if (request.functionName === 'escalationGame') return '0x0000000000000000000000000000000000000000'
+			if (request.functionName === 'securityPoolFactory') return account
+			if (request.functionName === 'getSecurityPoolPortfolio') return '0x0000000000000000000000000000000000000000'
 			if (request.functionName === 'questionData') return account
 			if (request.functionName === 'questionId') return 1n
 			if (request.functionName === 'getQuestionEndDate') return 1000n

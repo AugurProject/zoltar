@@ -9,7 +9,7 @@ import { getQuestionEndDate } from '../../testSupport/simulator/utils/contracts/
 import { approveAndDepositRepToVault } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { depositToEscalationGame, getSecurityVault, redeemRepFromVault, withdrawFromEscalationGame } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { getERC20Balance } from '../../testSupport/simulator/utils/utilities'
-import { advancePastOrdinaryEscalationDeadline, depositOrdinaryEscalationPrincipals, ordinaryEscalationPrincipals, redeemOwnVaultPayout, sweepResidualRep } from '../residualCaptureHelpers'
+import { advancePastOrdinaryEscalationDeadline, depositOrdinaryEscalationPrincipals, ordinaryEscalationPrincipals, redeemOwnVaultPayout, settleOrdinaryGame } from '../residualCaptureHelpers'
 import { useStatoblastVaultAccountingFixture } from './fixture'
 import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool as poolArtifact, test_statoblast_SecurityPoolPositionReceiver_SecurityPoolPositionReceiver as receiverArtifact } from '../../types/contractArtifact'
 
@@ -26,10 +26,10 @@ describe('Statoblast: lazy ordinary settlement recovery', () => {
 		return { reporter, game, pool: securityPoolAddresses.securityPool }
 	}
 
-	test('releases only the surplus before any reporter claims, retaining every winner liability', async () => {
+	test('preserves surplus already released at source while reserving every winner liability', async () => {
 		const { client, repDeposit } = fixture
 		const { reporter, game, pool } = await prepare()
-		await sweepResidualRep(client, game)
+		await settleOrdinaryGame(client, game)
 		expect(await getERC20Balance(client, token, game)).toBe(500n * 10n ** 18n)
 		expect(await redeemOwnVaultPayout(client, pool, token)).toBe(repDeposit + ordinaryEscalationPrincipals.lowLosingPrincipal)
 		const before = await getERC20Balance(client, token, reporter.account.address)
@@ -38,7 +38,7 @@ describe('Statoblast: lazy ordinary settlement recovery', () => {
 		expect(await getERC20Balance(client, token, game)).toBe(0n)
 	})
 
-	test('settles surplus inside passive vault redemption without any earlier sweep or reporter claim', async () => {
+	test('redeems surplus already accrued at source without any reporter claim', async () => {
 		const { client, repDeposit } = fixture
 		const { game, pool } = await prepare()
 		expect(await redeemOwnVaultPayout(client, pool, token)).toBe(repDeposit + ordinaryEscalationPrincipals.lowLosingPrincipal)
@@ -64,7 +64,7 @@ describe('Statoblast: lazy ordinary settlement recovery', () => {
 	test('retires losing rights globally and keeps repeated zero-value settlement harmless', async () => {
 		const { client } = fixture
 		const { reporter, game, pool } = await prepare()
-		await sweepResidualRep(client, game)
+		await settleOrdinaryGame(client, game)
 		const abi = statoblast_EscalationGame_EscalationGame.abi
 		for (const outcome of [QuestionOutcome.Invalid, QuestionOutcome.No]) {
 			expect(await client.readContract({ abi, address: game, functionName: 'getLocalUnresolvedPrincipalByVaultAndOutcome', args: [reporter.account.address, outcome] })).toBe(0n)
@@ -84,7 +84,9 @@ describe('Statoblast: lazy ordinary settlement recovery', () => {
 		const pool = securityPoolAddresses.securityPool
 		const reporter = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const unit = 10n ** 18n
-		await approveAndDepositRepToVault(reporter, ordinaryEscalationPrincipals.totalPrincipal, questionId)
+		// Keep backing above the native minimum as each report accrues source surplus.
+		const minimum = await client.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'minimumVaultRepDepositAttoRep' })
+		await approveAndDepositRepToVault(reporter, ordinaryEscalationPrincipals.totalPrincipal + minimum + unit, questionId)
 		await mockWindow.setTime((await getQuestionEndDate(client, questionId)) + 1n)
 		await depositToEscalationGame(reporter, pool, QuestionOutcome.Invalid, 100n * unit)
 		await depositToEscalationGame(reporter, pool, QuestionOutcome.No, 200n * unit)
@@ -92,7 +94,7 @@ describe('Statoblast: lazy ordinary settlement recovery', () => {
 			await depositToEscalationGame(reporter, pool, QuestionOutcome.Yes, amount)
 		}
 		const game = await advancePastOrdinaryEscalationDeadline(client, mockWindow, pool)
-		await sweepResidualRep(client, game)
+		await settleOrdinaryGame(client, game)
 		const before = await getERC20Balance(client, token, reporter.account.address)
 		for (const index of [3n, 2n, 1n, 0n]) await withdrawFromEscalationGame(client, pool, QuestionOutcome.Yes, [index])
 		expect((await getERC20Balance(client, token, reporter.account.address)) - before).toBe(420n * unit)

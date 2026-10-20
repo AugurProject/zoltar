@@ -2,7 +2,6 @@
 pragma solidity 0.8.35;
 
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
-import { Constants } from '../Constants.sol';
 import { EscalationGameCalculations } from './EscalationGameCalculations.sol';
 import { EscalationGameDepositDelegate } from './EscalationGameDepositDelegate.sol';
 import { MerkleMountainRange } from './MerkleMountainRange.sol';
@@ -94,27 +93,21 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		if (forkContinuation && !forkCarrySnapshotInitialized()) return false;
 		if (!forkCarrySnapshotRequiresForkedEscrow) return true;
 		uint256 requiredAttoRep;
-		uint256 requiredRepAtForkAttoRep;
 		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
 			requiredAttoRep +=
 				_getEffectiveInheritedUnresolvedTotalAttoRep(outcomeIndex) +
 				outcomeState[outcomeIndex].localUnresolvedTotalAttoRep;
-			requiredRepAtForkAttoRep +=
-				outcomeState[outcomeIndex].inheritedUnresolvedTotalAttoRep +
-				outcomeState[outcomeIndex].localUnresolvedTotalAttoRep;
 		}
-		if (winnerHaircutPaidByFork) {
-			// An own-fork continuation starts with the post-burn REP bucket. At a
-			// divisor of five, 80% of the source principal exactly covers the
-			// maximum winning payout. Direct pre-resume claims consume that same
-			// bucket, so compare the live balance with the unexported remainder.
-			uint256 minimumBackingAttoRep =
-				requiredRepAtForkAttoRep - requiredRepAtForkAttoRep / Constants.MINIMUM_FORK_BURN_DIVISOR;
-			if (forkCarryInitialBackingAttoRep < minimumBackingAttoRep) return false;
+		if (forkCarryInitialBackingAttoRep != 0) {
+			// The canonical factory binds this inventory to the parent's actual
+			// escrow after irrevocable source surplus and any native fork burn.
+			// Outcome principals are mutually exclusive, so their sum is not the
+			// funding requirement. Direct exports and auction sales spend only this
+			// authenticated bucket; neither can recreate discharged surplus.
 			if (forkCarryBackingExportedBeforeResumeAttoRep > forkCarryInitialBackingAttoRep) return false;
 			requiredAttoRep = _applyTruthAuctionRetention(forkCarryInitialBackingAttoRep - forkCarryBackingExportedBeforeResumeAttoRep);
 		}
-		return repToken.balanceOf(address(this)) >= requiredAttoRep;
+		return _reporterRepBalance() >= requiredAttoRep;
 	}
 
 	// Pages unresolved local carry leaves only, in newest-first local linked-list order.

@@ -56,6 +56,18 @@ contract EscalationGameProofTestSecurityPool {
 		zoltar.burnRep(universeId, amount);
 	}
 
+	function creditEscalationSurplus(uint256) external view {
+		require(msg.sender == address(escalationGame), 'Only game');
+	}
+
+	function creditEscalationAuctionBacking(uint256) external view {
+		require(msg.sender == address(escalationGame), 'Only game');
+	}
+
+	function refreshPortfolioFees() external view {
+		require(msg.sender == address(escalationGame), 'Only game');
+	}
+
 	function depositOnOutcome(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amount) external returns (uint256, uint256) {
 		(uint256 acceptedAmount, uint256 resultingCumulativeAmount) = escalationGame.previewDepositOnOutcome(outcome, amount);
 		ReputationToken rep = zoltar.getRepToken(universeId);
@@ -136,8 +148,8 @@ contract EscalationGameProofTestSecurityPool {
 		escalationGame.recordForkedEscrowForOutcome(depositor, outcome, sourcePrincipalAttoRep, childRepAmountAttoRep);
 	}
 
-	function exportVaultUnresolvedDeposits(address vault, address repReceiver) external returns (uint256 principalToTransferAttoRep) {
-		uint256[3] memory principalByOutcomeAttoRep = escalationGame.exportVaultUnresolvedTotals(vault, repReceiver);
+	function exportVaultUnresolvedDeposits(address vault) external returns (uint256 principalToTransferAttoRep) {
+		uint256[3] memory principalByOutcomeAttoRep = escalationGame.exportVaultUnresolvedTotalsWithoutTransfer(vault);
 		return principalByOutcomeAttoRep[0] + principalByOutcomeAttoRep[1] + principalByOutcomeAttoRep[2];
 	}
 

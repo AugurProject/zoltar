@@ -11,6 +11,7 @@ export function previewVaultOperations(pool: ListedSecurityPool, owned: Security
 		vaultAttoRepBacking: owned.vaultAttoRepBacking + input.depositAttoRep,
 		underwritingLimitAttoEth: input.changeCommitment ? input.commitmentAttoEth : owned.underwritingLimitAttoEth,
 		disputeStakedAttoRep: owned.disputeStakedAttoRep,
+		disputeBackingAttoRep: owned.disputeBackingAttoRep,
 		claimableFeesAttoEth: owned.claimableFeesAttoEth,
 		badDebtAttoEth: owned.badDebtAttoEth,
 	}

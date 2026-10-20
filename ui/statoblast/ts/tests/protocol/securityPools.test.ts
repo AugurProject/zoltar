@@ -49,7 +49,7 @@ const createPoolRead = ({
 	poolAccountingSnapshot?: ReturnType<typeof createPoolAccountingSnapshot>
 	universeForkTime?: bigint
 	escalationGame?: Address
-} = {}) => [0n, 10n, minimumSecurityBondDebtAttoEth, minimumVaultRepDepositAttoRep, forkData, 0n, 0n, 3n, 0n, 0n, totalPoolHeldAttoRep, poolAccountingSnapshot, universeForkTime, escalationGame, 200n]
+} = {}) => [0n, 10n, minimumSecurityBondDebtAttoEth, minimumVaultRepDepositAttoRep, forkData, 0n, 0n, 3n, 0n, 0n, totalPoolHeldAttoRep, poolAccountingSnapshot, universeForkTime, escalationGame, 200n, zeroAddress, 0n, 0n]
 
 const createDeployment = (securityPool: Address, { parent = zeroAddress, universeId = 1n }: { parent?: Address; universeId?: bigint } = {}) => ({
 	initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
@@ -335,12 +335,14 @@ describe('securityPools protocol client', () => {
 					})
 				},
 				disputeStakedRepByVaultAttoRep: contracts => contracts.map(contract => (getFirstArgAddress(contract) === previewVaultAddresses[0] ? 5n : 0n)),
+				getVaultDisputeBackingAttoRep: contracts => contracts.map(contract => (getFirstArgAddress(contract) === previewVaultAddresses[0] ? 2n : 0n)),
 			},
 			read: {
 				getVaultCount: () => 3n,
 				getVaults: () => previewVaultAddresses,
 				escalationGame: () => vaultEscalationGameAddress,
 				disputeStakedRepByVaultAttoRep: request => (request.args?.[0] === previewVaultAddresses[0] ? 5n : 0n),
+				getVaultDisputeBackingAttoRep: request => (request.args?.[0] === previewVaultAddresses[0] ? 2n : 0n),
 			},
 		})
 
@@ -581,7 +583,7 @@ describe('securityPools protocol client', () => {
 		const requestedFunctionNames: string[] = []
 		const requestedAddresses: Address[] = []
 		const client = createMockLoaderClient({
-			getBlock: async () => createBlockWithTimestamp(99n),
+			getBlock: async () => ({ ...createBlockWithTimestamp(99n), number: 77n }),
 			multicall: createMulticallStub(async request => {
 				for (const contract of request.contracts) {
 					requestedFunctionNames.push(getContractFunctionName(contract))
@@ -589,8 +591,9 @@ describe('securityPools protocol client', () => {
 					if (typeof address !== 'string') throw new Error('Expected security pool address')
 					requestedAddresses.push(getAddress(address))
 				}
-				if (request.contracts.length !== 7) throw new Error('Expected one mint-capacity multicall')
-				return [createPoolAccountingSnapshot(11n, 44n, 17n), 22n, 33n, 55n, 88n, feeEndTimestamp, zeroAddress]
+				expect(request.blockNumber).toBe(77n)
+				if (request.contracts.length !== 10) throw new Error('Expected one mint-capacity multicall')
+				return [createPoolAccountingSnapshot(11n, 44n, 17n), 22n, 33n, 55n, 88n, feeEndTimestamp, zeroAddress, zeroAddress, 0n, 0n]
 			}),
 			readContract: async () => {
 				throw new Error('readContract should not be called')
@@ -614,7 +617,7 @@ describe('securityPools protocol client', () => {
 			totalUnderwritingLimitAttoEth: 44n,
 			totalFeesOwedRemainder: 0n,
 		})
-		expect(requestedFunctionNames).toEqual(['getPoolAccountingSnapshot', 'shareTokenSupplyAttoShares', 'getTotalPoolHeldAttoRep', 'getCurrentMintingCapacityAttoEth', 'currentRetentionRate', 'getFeeEpochEndTime', 'escalationGame'])
-		expect(requestedAddresses).toEqual(Array.from({ length: 7 }, () => securityPoolAddress))
+		expect(requestedFunctionNames).toEqual(['getPoolAccountingSnapshot', 'shareTokenSupplyAttoShares', 'getTotalPoolHeldAttoRep', 'getCurrentMintingCapacityAttoEth', 'currentRetentionRate', 'getFeeEpochEndTime', 'escalationGame', 'portfolioCustody', 'linearFeeRateAttoEthPerSecond', 'linearFeeEndTime'])
+		expect(requestedAddresses).toEqual(Array.from({ length: 10 }, () => securityPoolAddress))
 	})
 })

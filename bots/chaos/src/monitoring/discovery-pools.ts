@@ -161,6 +161,8 @@ export async function discoverPools({
 			poolCoordinator,
 			coordinatorPool,
 			vaultOperations,
+			portfolioCustody,
+			feeEndTimestamp,
 		] = await drainConcurrent([
 			cachedDeployment ? Promise.resolve(authenticatedUniverse.repToken) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'repToken' }),
 			cachedDeployment ? Promise.resolve(deployment.shareToken) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'shareToken' }),
@@ -210,6 +212,8 @@ export async function discoverPools({
 			cachedDeployment ? Promise.resolve(coordinator) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'openOraclePriceCoordinator' }),
 			cachedDeployment ? Promise.resolve(address) : client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'securityPool' }),
 			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'vaultOperations' }),
+			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'portfolioCustody' }),
+			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'getFeeEpochEndTime' }),
 			authenticatePoolProtocolBindings({
 				blockNumber,
 				canonicalRepToken: authenticatedUniverse.repToken,
@@ -357,12 +361,16 @@ export async function discoverPools({
 		const walletVaultRegistered = vaultRegistry.cursor.retentionMode === 'resident' && vaultRegistry.complete && vaultRegistry.vaults.some(vault => wallet !== undefined && sameAddress(vault, wallet))
 		const walletVault = vaults.find(vault => wallet !== undefined && sameAddress(vault.address, wallet))
 		if (wallet !== undefined && walletVault === undefined) throw new Error(`Pool ${address} omitted the requested wallet vault`)
-		const minimumSafeWalletVaultDepositAttoRep = minimumSafeVaultDeposit(minimumDeposit, BigInt(walletVault?.repBackingUnits ?? '0'), totalRepBackingUnits, poolRepBalanceAttoRep)
-		const poolQuestion = questionById.get(questionId.toString())
+		const minimumSafeWalletVaultDepositAttoRep = minimumSafeVaultDeposit(minimumDeposit, BigInt(walletVault?.repBackingUnits ?? '0'), totalRepBackingUnits, totalPoolHeldAttoRep)
 		const forkQuestion = questionById.get(universe.forkQuestionId)
-		let feeEndTimestamp: bigint | undefined
-		if (universe !== undefined && poolQuestion !== undefined) feeEndTimestamp = BigInt(universe.forkTime) === 0n ? BigInt(poolQuestion.endTime) : BigInt(universe.forkTime)
-		const projectedSettlementCollateral = projectSettlementCollateral(accounting, feeEndTimestamp, anchorTimestamp)
+		const linearFee =
+			portfolioCustody === zeroAddress
+				? undefined
+				: await drainConcurrent([client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'linearFeeRateAttoEthPerSecond' }), client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'linearFeeEndTime' })]).then(([rateAttoEthPerSecond, endTime]) => ({
+						rateAttoEthPerSecond,
+						endTime,
+					}))
+		const projectedSettlementCollateral = projectSettlementCollateral(accounting, feeEndTimestamp, anchorTimestamp, linearFee)
 		const unresolvedEscalationMigrationReadyOutcomes: string[] = []
 		if (wallet !== undefined && inspectEveryVault && forkData.unresolvedEscalationAtFork) {
 			for (const outcome of validForkOutcomeRoutes(forkQuestion, universe.knownChildOutcomes)) {

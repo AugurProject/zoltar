@@ -16,7 +16,7 @@ export function childLedgerNeedsPreparation(pool: PoolSnapshot, outcome: string)
 
 export function childPreparationSteps(snapshot: EcosystemSnapshot, pool: PoolSnapshot, outcome: string): OperationStep[] {
 	const preparation = pool.childPoolPreparations[outcome]
-	if (preparation === undefined) return []
+	if (preparation === undefined || preparation.portfolio !== zeroAddress) return []
 	const factory = snapshot.deployments.securityPoolFactory
 	const steps: OperationStep[] = []
 	const present = (abi: string, functionName: string, args: string[]): OperationEvidence => ({ kind: 'storage-postcondition', contract: factory, abi, functionName, args, relation: 'greater-than', expected: '0' })
@@ -67,13 +67,21 @@ export const CHILD_PREPARATION_OPERATIONS: OperationDefinition[] = [
 const initializationCandidates = (snapshot: EcosystemSnapshot) =>
 	snapshot.pools.flatMap(pool =>
 		Object.entries(pool.childPoolPreparations)
-			.filter(([, preparation]) => preparation.childPool !== zeroAddress && !preparation.historyReady)
+			.filter(([, preparation]) => preparation.childPool !== zeroAddress && !preparation.historyReady && preparation.branchReady)
 			.map(([outcome, preparation]) => ({ pool, outcome, preparation })),
 	)
 
 const initializationMetadata = (candidate: ReturnType<typeof initializationCandidates>[number]) => ({ pool: candidate.pool.address, outcome: candidate.outcome, initialized: candidate.preparation.historyOutcomesInitialized })
 
+function initializationEvidence(candidate: ReturnType<typeof initializationCandidates>[number]): OperationEvidence[] {
+	const { preparation } = candidate
+	if (preparation.portfolio !== zeroAddress && preparation.sourceGame === zeroAddress) return [{ kind: 'storage-postcondition', contract: preparation.childPool, abi: 'function systemState() view returns (uint8)', functionName: 'systemState', args: [], relation: 'equals', expected: '0' }]
+	if (preparation.portfolio !== zeroAddress && preparation.game === zeroAddress) return [{ kind: 'storage-postcondition', contract: preparation.childPool, abi: 'function escalationGame() view returns (address)', functionName: 'escalationGame', args: [], relation: 'greater-than', expected: '0' }]
+	return [{ kind: 'storage-postcondition', contract: preparation.game, abi: 'function forkCarrySnapshotOutcomesInitialized() view returns (uint8)', functionName: 'forkCarrySnapshotOutcomesInitialized', args: [], relation: 'greater-than', expected: preparation.historyOutcomesInitialized.toString() }]
+}
+
 function initializationPlan(snapshot: EcosystemSnapshot, candidate: ReturnType<typeof initializationCandidates>[number]) {
+	const bound = candidate.preparation.portfolio !== zeroAddress
 	return planBase({
 		definitionId: initializeChildHistory.id,
 		ecosystem: 'statoblast',
@@ -86,14 +94,13 @@ function initializationPlan(snapshot: EcosystemSnapshot, candidate: ReturnType<t
 		steps: [
 			encodeStep({
 				abi: securityPoolForkerAbi,
-				functionName: 'continueChildUniverse',
-				args: [candidate.pool.address, BigInt(candidate.outcome)],
+				functionName: bound ? 'materializePortfolioQuestion' : 'continueChildUniverse',
+				args: bound ? [candidate.preparation.sourcePool, BigInt(candidate.preparation.childUniverseId)] : [candidate.pool.address, BigInt(candidate.outcome)],
 				to: snapshot.deployments.securityPoolForker,
 				id: 'initialize-child-history',
 				label: 'Initialize one child history outcome',
-				evidence: [
-					{ kind: 'storage-postcondition', contract: candidate.preparation.game, abi: 'function forkCarrySnapshotOutcomesInitialized() view returns (uint8)', functionName: 'forkCarrySnapshotOutcomesInitialized', args: [], relation: 'greater-than', expected: candidate.preparation.historyOutcomesInitialized.toString() },
-				],
+				gasLimit: 16_777_216n,
+				evidence: initializationEvidence(candidate),
 			}),
 		],
 	})

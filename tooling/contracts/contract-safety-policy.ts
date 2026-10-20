@@ -43,6 +43,11 @@ export const contractSafetyPolicy = {
 		},
 		{
 			host: { sourcePath: 'contracts/statoblast/SecurityPool.sol', contractName: 'SecurityPool' },
+			delegate: { sourcePath: 'contracts/statoblast/SecurityPoolEventEmitter.sol', contractName: 'SecurityPoolEventEmitter' },
+			reason: 'Native fee accounting and portfolio credits mutate SecurityPool storage through this fixed delegate.',
+		},
+		{
+			host: { sourcePath: 'contracts/statoblast/SecurityPool.sol', contractName: 'SecurityPool' },
 			delegate: { sourcePath: 'contracts/statoblast/SecurityPoolSettlementDelegate.sol', contractName: 'SecurityPoolSettlementDelegate' },
 			reason: 'Settlement operations mutate SecurityPool storage through delegatecall.',
 		},
@@ -74,7 +79,7 @@ export const contractSafetyPolicy = {
 		{
 			host: { sourcePath: 'contracts/statoblast/SecurityPool.sol', contractName: 'SecurityPool' },
 			consumer: { sourcePath: 'contracts/statoblast/SecurityPoolEventEmitter.sol', contractName: 'SecurityPoolEventEmitter' },
-			reason: 'Pool accounting events read these SecurityPool slots directly in assembly.',
+			reason: 'Pool accounting events and fee accrual read these exact SecurityPool slots through the shared storage base.',
 			anchors: [
 				{ label: 'totalUnderwritingLimitAttoEth', slot: '1', offset: 0, typeLabel: 'uint256' },
 				{ label: 'settlementCollateralAttoEth', slot: '2', offset: 0, typeLabel: 'uint256' },

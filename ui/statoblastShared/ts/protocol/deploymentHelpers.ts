@@ -7,16 +7,19 @@ import {
 	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
 	statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate,
 	statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate,
+	statoblast_SecurityPoolEventEmitter_SecurityPoolEventEmitter,
 	statoblast_SecurityPoolForker_SecurityPoolForker,
 	statoblast_SecurityPoolUtils_SecurityPoolUtils,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio,
-	statoblast_SecurityPoolPortfolioQuote_SecurityPoolPortfolioQuote,
-	statoblast_SecurityPoolPortfolioQuoteDeployer_SecurityPoolPortfolioQuoteDeployer,
-	statoblast_SecurityPoolPortfolioRecovery_SecurityPoolPortfolioRecovery,
-	statoblast_SecurityPoolPortfolioForkController_SecurityPoolPortfolioForkController,
-	statoblast_SecurityPoolPortfolioRecoveryDeployer_SecurityPoolPortfolioRecoveryDeployer,
-	statoblast_SecurityPoolPortfolioVault_SecurityPoolPortfolioVault,
-	statoblast_SecurityPoolPortfolioVaultDeployer_SecurityPoolPortfolioVaultDeployer,
+	statoblast_SecurityPoolForkerPortfolioDelegate_SecurityPoolForkerPortfolioDelegate,
+	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCapitalLedgerDeployer,
+	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCommitmentIndexDeployer,
+	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCapitalFeeStreamsDeployer,
+	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolSettlementBookDeployer,
+	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolPortfolioSettlementDeployer,
+	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolReporterLedgerDeployer,
+	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioRecapAuctionDeployer,
+	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinatorDeployer,
 	statoblast_factories_EscalationGameFactory_EscalationGameFactory,
 	statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory,
 	statoblast_factories_OpenOraclePriceCoordinatorFactory_PriceCoordinatorDeploymentWorker,
@@ -43,9 +46,17 @@ const statoblastInitCodes = createStatoblastInitCodes(
 		sharedPoolPriceFeedDeploymentWorker: statoblast_factories_OpenOraclePriceCoordinatorFactory_SharedPoolPriceFeedDeploymentWorker,
 		securityPoolFactory: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 		securityPoolForker: statoblast_SecurityPoolForker_SecurityPoolForker,
+		securityPoolForkerPortfolioDelegate: statoblast_SecurityPoolForkerPortfolioDelegate_SecurityPoolForkerPortfolioDelegate,
+		securityPoolCapitalLedgerDeployer: statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCapitalLedgerDeployer,
+		securityPoolCommitmentIndexDeployer: statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCommitmentIndexDeployer,
+		securityPoolCapitalFeeStreamsDeployer: statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCapitalFeeStreamsDeployer,
+		securityPoolSettlementBookDeployer: statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolSettlementBookDeployer,
+		securityPoolPortfolioSettlementDeployer: statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolPortfolioSettlementDeployer,
+		securityPoolReporterLedgerDeployer: statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolReporterLedgerDeployer,
+		securityPoolPortfolioRecapAuctionDeployer: statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioRecapAuctionDeployer,
+		securityPoolPortfolioForkCoordinatorDeployer: statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinatorDeployer,
 		securityPoolOperationsDelegate: statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate,
-		securityPoolPortfolioQuoteDeployer: statoblast_SecurityPoolPortfolioQuoteDeployer_SecurityPoolPortfolioQuoteDeployer,
-		securityPoolPortfolioVaultDeployer: statoblast_SecurityPoolPortfolioVaultDeployer_SecurityPoolPortfolioVaultDeployer,
+		securityPoolEventEmitter: statoblast_SecurityPoolEventEmitter_SecurityPoolEventEmitter,
 		securityPoolUtils: statoblast_SecurityPoolUtils_SecurityPoolUtils,
 		shareTokenFactory: statoblast_factories_ShareTokenFactory_ShareTokenFactory,
 		uniformPriceDualCapBatchAuctionFactory: statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
@@ -60,23 +71,27 @@ export const {
 	getSharedPoolPriceFeedDeploymentWorkerByteCode,
 	getSecurityPoolFactoryByteCode,
 	getSecurityPoolForkerByteCode,
+	getSecurityPoolForkerPortfolioDelegateByteCode,
+	getSecurityPoolCapitalLedgerDeployerByteCode,
+	getSecurityPoolCommitmentIndexDeployerByteCode,
+	getSecurityPoolCapitalFeeStreamsDeployerByteCode,
+	getSecurityPoolSettlementBookDeployerByteCode,
+	getSecurityPoolPortfolioSettlementDeployerByteCode,
+	getSecurityPoolReporterLedgerDeployerByteCode,
+	getSecurityPoolPortfolioRecapAuctionDeployerByteCode,
+	getSecurityPoolPortfolioForkCoordinatorDeployerByteCode,
 	getSecurityPoolOperationsDelegateByteCode,
-	getSecurityPoolPortfolioQuoteDeployerByteCode,
-	getSecurityPoolPortfolioVaultDeployerByteCode,
+	getSecurityPoolEventEmitterByteCode,
 	getShareTokenFactoryByteCode,
 } = statoblastInitCodes
+
+export const applyStatoblastLibraries = statoblastInitCodes.applyLibraries
 
 export const getSecurityPoolPortfolioByteCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio.evm.bytecode.object)
 
 export const getSecurityPoolPortfolioRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio.evm.deployedBytecode.object)
-export const getSecurityPoolPortfolioRecoveryRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolioRecovery_SecurityPoolPortfolioRecovery.evm.deployedBytecode.object)
-export const getSecurityPoolPortfolioForkControllerRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolioForkController_SecurityPoolPortfolioForkController.evm.deployedBytecode.object)
-export const getSecurityPoolPortfolioRecoveryDeployerRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolioRecoveryDeployer_SecurityPoolPortfolioRecoveryDeployer.evm.deployedBytecode.object)
-export const getSecurityPoolPortfolioQuoteDeployerRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolioQuoteDeployer_SecurityPoolPortfolioQuoteDeployer.evm.deployedBytecode.object)
-export const getSecurityPoolPortfolioQuoteRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolioQuote_SecurityPoolPortfolioQuote.evm.deployedBytecode.object)
-export const getSecurityPoolPortfolioVaultRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolioVault_SecurityPoolPortfolioVault.evm.deployedBytecode.object)
-export const getSecurityPoolPortfolioVaultDeployerRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolioVaultDeployer_SecurityPoolPortfolioVaultDeployer.evm.deployedBytecode.object)
 
+export const getSecurityPoolEventEmitterRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolEventEmitter_SecurityPoolEventEmitter.evm.deployedBytecode.object)
 export const getSecurityPoolOperationsDelegateRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.evm.deployedBytecode.object)
 
 export function getInfraContractAddresses(profile: NetworkProfile = getRuntimeNetworkProfile()) {
@@ -95,14 +110,22 @@ export function getInfraStepConstructorArguments(profile: NetworkProfile = getRu
 	return {
 		uniformPriceDualCapBatchAuctionFactory: '',
 		securityPoolUtils: '',
+		securityPoolEventEmitter: constructorArgumentsFromInitCode(getSecurityPoolEventEmitterByteCode(), statoblast_SecurityPoolEventEmitter_SecurityPoolEventEmitter.evm.bytecode.object),
 		securityPoolOperationsDelegate: constructorArgumentsFromInitCode(getSecurityPoolOperationsDelegateByteCode(), statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.evm.bytecode.object),
 		openOracle: '',
 		priceCoordinatorDeploymentWorker: '',
 		sharedPoolPriceFeedDeploymentWorker: '',
-		securityPoolPortfolioQuoteDeployer: '',
-		securityPoolPortfolioVaultDeployer: constructorArgumentsFromInitCode(getSecurityPoolPortfolioVaultDeployerByteCode(), statoblast_SecurityPoolPortfolioVaultDeployer_SecurityPoolPortfolioVaultDeployer.evm.bytecode.object),
 		shareTokenFactory: constructorArgumentsFromInitCode(getShareTokenFactoryByteCode(addresses.zoltar), statoblast_factories_ShareTokenFactory_ShareTokenFactory.evm.bytecode.object),
 		openOraclePriceCoordinatorFactory: constructorArgumentsFromInitCode(getOpenOraclePriceCoordinatorFactoryByteCode(profile.wethAddress), statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory.evm.bytecode.object),
+		securityPoolForkerPortfolioDelegate: constructorArgumentsFromInitCode(getSecurityPoolForkerPortfolioDelegateByteCode(addresses.zoltar), statoblast_SecurityPoolForkerPortfolioDelegate_SecurityPoolForkerPortfolioDelegate.evm.bytecode.object),
+		securityPoolCapitalLedgerDeployer: constructorArgumentsFromInitCode(getSecurityPoolCapitalLedgerDeployerByteCode(), statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCapitalLedgerDeployer.evm.bytecode.object),
+		securityPoolCommitmentIndexDeployer: constructorArgumentsFromInitCode(getSecurityPoolCommitmentIndexDeployerByteCode(), statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCommitmentIndexDeployer.evm.bytecode.object),
+		securityPoolCapitalFeeStreamsDeployer: constructorArgumentsFromInitCode(getSecurityPoolCapitalFeeStreamsDeployerByteCode(), statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCapitalFeeStreamsDeployer.evm.bytecode.object),
+		securityPoolSettlementBookDeployer: constructorArgumentsFromInitCode(getSecurityPoolSettlementBookDeployerByteCode(), statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolSettlementBookDeployer.evm.bytecode.object),
+		securityPoolPortfolioSettlementDeployer: constructorArgumentsFromInitCode(getSecurityPoolPortfolioSettlementDeployerByteCode(), statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolPortfolioSettlementDeployer.evm.bytecode.object),
+		securityPoolReporterLedgerDeployer: constructorArgumentsFromInitCode(getSecurityPoolReporterLedgerDeployerByteCode(), statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolReporterLedgerDeployer.evm.bytecode.object),
+		securityPoolPortfolioRecapAuctionDeployer: constructorArgumentsFromInitCode(getSecurityPoolPortfolioRecapAuctionDeployerByteCode(), statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioRecapAuctionDeployer.evm.bytecode.object),
+		securityPoolPortfolioForkCoordinatorDeployer: constructorArgumentsFromInitCode(getSecurityPoolPortfolioForkCoordinatorDeployerByteCode(), statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinatorDeployer.evm.bytecode.object),
 		securityPoolForker: constructorArgumentsFromInitCode(getSecurityPoolForkerByteCode(addresses.zoltar), statoblast_SecurityPoolForker_SecurityPoolForker.evm.bytecode.object),
 		escalationGameClaimDelegate: '',
 		escalationGameDepositDelegate: '',
@@ -132,7 +155,7 @@ export function getBootstrapDescendantAddresses(profile: NetworkProfile = getRun
 	const liquidationApprovalRegistryDeployer = getCreateAddress({ from: infrastructure.openOraclePriceCoordinatorFactory, nonce: 1n })
 	const priceCoordinatorDeploymentWorker = infrastructure.priceCoordinatorDeploymentWorker
 	const securityPoolDeployer = getCreateAddress({ from: infrastructure.securityPoolFactory, nonce: 1n })
-	const securityPoolDeploymentWorker = getCreateAddress({ from: securityPoolDeployer, nonce: 2n })
+	const securityPoolDeploymentWorker = getCreateAddress({ from: securityPoolDeployer, nonce: 1n })
 	return {
 		liquidationApprovalRegistryDeployer,
 		liquidationApprovalRegistryImplementation: getCreateAddress({ from: liquidationApprovalRegistryDeployer, nonce: 1n }),
@@ -148,13 +171,49 @@ export function getBootstrapDescendantAddresses(profile: NetworkProfile = getRun
 		securityPoolDeploymentWorker,
 		securityPoolCreationCodeFirstChunk: getCreateAddress({ from: securityPoolDeploymentWorker, nonce: 1n }),
 		securityPoolCreationCodeSecondChunk: getCreateAddress({ from: securityPoolDeploymentWorker, nonce: 2n }),
-		securityPoolEventEmitter: getCreateAddress({ from: securityPoolDeployer, nonce: 1n }),
 		securityPoolForkerEscalationGameForkerDelegate: getCreateAddress({ from: infrastructure.securityPoolForker, nonce: 2n }),
-		securityPoolForkerEventEmitter: getCreateAddress({ from: infrastructure.securityPoolForker, nonce: 3n }),
 		securityPoolForkerVaultMigrationDelegate: getCreateAddress({ from: infrastructure.securityPoolForker, nonce: 1n }),
+		securityPoolCapitalCreationCodeFirstChunk: getCreateAddress({ from: infrastructure.securityPoolCapitalLedgerDeployer, nonce: 1n }),
+		securityPoolCapitalCreationCodeSecondChunk: getCreateAddress({ from: infrastructure.securityPoolCapitalLedgerDeployer, nonce: 2n }),
+		securityPoolForkCreationCodeFirstChunk: getCreateAddress({ from: infrastructure.securityPoolPortfolioForkCoordinatorDeployer, nonce: 1n }),
+		securityPoolForkCreationCodeSecondChunk: getCreateAddress({ from: infrastructure.securityPoolPortfolioForkCoordinatorDeployer, nonce: 2n }),
 	}
 }
 
 export function getOpenOracleAddress() {
 	return getInfraContractAddresses().openOracle
 }
+
+export function getPortfolioDeployers(profile: NetworkProfile = getRuntimeNetworkProfile()) {
+	const addresses = getInfraContractAddresses(profile)
+	return {
+		capital: addresses.securityPoolCapitalLedgerDeployer,
+		commitments: addresses.securityPoolCommitmentIndexDeployer,
+		fees: addresses.securityPoolCapitalFeeStreamsDeployer,
+		books: addresses.securityPoolSettlementBookDeployer,
+		settlement: addresses.securityPoolPortfolioSettlementDeployer,
+		reporters: addresses.securityPoolReporterLedgerDeployer,
+		forks: addresses.securityPoolPortfolioForkCoordinatorDeployer,
+	}
+}
+
+type PortfolioModuleId =
+	| 'securityPoolCapitalLedgerDeployer'
+	| 'securityPoolCommitmentIndexDeployer'
+	| 'securityPoolCapitalFeeStreamsDeployer'
+	| 'securityPoolSettlementBookDeployer'
+	| 'securityPoolPortfolioSettlementDeployer'
+	| 'securityPoolReporterLedgerDeployer'
+	| 'securityPoolPortfolioRecapAuctionDeployer'
+	| 'securityPoolPortfolioForkCoordinatorDeployer'
+type PortfolioModuleDeployment = { id: PortfolioModuleId; label: string; bytecode: typeof getSecurityPoolCapitalLedgerDeployerByteCode; artifact: { evm: { deployedBytecode: { object: string; immutableReferences: Readonly<Record<string, readonly { start: number; length: number }[]>> } } } }
+export const portfolioModuleDeployments: readonly PortfolioModuleDeployment[] = [
+	{ id: 'securityPoolCapitalLedgerDeployer', label: 'SecurityPoolCapitalLedgerDeployer', artifact: statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCapitalLedgerDeployer, bytecode: getSecurityPoolCapitalLedgerDeployerByteCode },
+	{ id: 'securityPoolCommitmentIndexDeployer', label: 'SecurityPoolCommitmentIndexDeployer', artifact: statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCommitmentIndexDeployer, bytecode: getSecurityPoolCommitmentIndexDeployerByteCode },
+	{ id: 'securityPoolCapitalFeeStreamsDeployer', label: 'SecurityPoolCapitalFeeStreamsDeployer', artifact: statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCapitalFeeStreamsDeployer, bytecode: getSecurityPoolCapitalFeeStreamsDeployerByteCode },
+	{ id: 'securityPoolSettlementBookDeployer', label: 'SecurityPoolSettlementBookDeployer', artifact: statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolSettlementBookDeployer, bytecode: getSecurityPoolSettlementBookDeployerByteCode },
+	{ id: 'securityPoolPortfolioSettlementDeployer', label: 'SecurityPoolPortfolioSettlementDeployer', artifact: statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolPortfolioSettlementDeployer, bytecode: getSecurityPoolPortfolioSettlementDeployerByteCode },
+	{ id: 'securityPoolReporterLedgerDeployer', label: 'SecurityPoolReporterLedgerDeployer', artifact: statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolReporterLedgerDeployer, bytecode: getSecurityPoolReporterLedgerDeployerByteCode },
+	{ id: 'securityPoolPortfolioRecapAuctionDeployer', label: 'SecurityPoolPortfolioRecapAuctionDeployer', artifact: statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioRecapAuctionDeployer, bytecode: getSecurityPoolPortfolioRecapAuctionDeployerByteCode },
+	{ id: 'securityPoolPortfolioForkCoordinatorDeployer', label: 'SecurityPoolPortfolioForkCoordinatorDeployer', artifact: statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinatorDeployer, bytecode: getSecurityPoolPortfolioForkCoordinatorDeployerByteCode },
+] as const

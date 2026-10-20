@@ -1,3 +1,5 @@
+import { loadLinearFeeState } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
+import type { LinearFeeState } from '@zoltar/statoblast-shared/statoblast/retentionRate'
 import type { WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { estimateMintCheckpoint } from '@zoltar/ui-statoblast-shared/features/markets/lib/trading.js'
@@ -5,6 +7,7 @@ import type { LiveMarket } from './liveMarket.js'
 import * as copy from '../copy/availability.js'
 
 export type FeeAccounting = Readonly<{
+	linearFee?: LinearFeeState
 	settlementCollateralAttoEth: bigint
 	totalUnderwritingLimitAttoEth: bigint
 	feeEligibleUnderwritingLimitAttoEth: bigint
@@ -17,11 +20,13 @@ export type FeeAccounting = Readonly<{
 /** Pin the checkpoint and share supply to the simulation block, including after the user's other transactions. */
 export async function loadTransactionFeeMarket(client: WalletClient, market: LiveMarket, blockNumber: bigint, timestamp: bigint): Promise<LiveMarket> {
 	const abi = statoblast_SecurityPool_SecurityPool.abi
-	const [feeAccounting, shareTokenSupplyAttoShares, feeEndTime] = await Promise.all([
+	const [accounting, shareTokenSupplyAttoShares, feeEndTime, linearFee] = await Promise.all([
 		client.readContract({ abi, address: market.pool, functionName: 'getPoolAccountingSnapshot', blockNumber }),
 		client.readContract({ abi, address: market.pool, functionName: 'shareTokenSupplyAttoShares', blockNumber }),
 		client.readContract({ abi, address: market.pool, functionName: 'getFeeEpochEndTime', blockNumber }),
+		loadLinearFeeState(client, market.pool, blockNumber),
 	])
+	const feeAccounting = { ...accounting, ...(linearFee === undefined ? {} : { linearFee }) }
 	const checkpoint = estimateMintCheckpoint({ ...feeAccounting, currentTimestamp: timestamp, feeEndTimestamp: feeEndTime })
 	if (checkpoint === undefined) throw new Error(copy.holdingFeesUnavailableReason)
 	return {

@@ -31,7 +31,11 @@ function decodeCachedSecurityPool(value: unknown) {
 	return decodeStoredValue(value, (read): ListedSecurityPool => {
 		const feeAccrualState = read.optional('feeAccrualState', key => {
 			const state = read.record(key)
-			return { feeEndTimestamp: state.bigint('feeEndTimestamp'), feeIndexRemainder: state.bigint('feeIndexRemainder'), lastUpdatedFeeAccumulator: state.bigint('lastUpdatedFeeAccumulator'), totalFeesOwedRemainder: state.bigint('totalFeesOwedRemainder') }
+			const linearFee = state.optional('linearFee', key => {
+				const stream = state.record(key)
+				return { rateAttoEthPerSecond: stream.bigint('rateAttoEthPerSecond'), endTime: stream.bigint('endTime') }
+			})
+			return { ...(linearFee === undefined ? {} : { linearFee }), feeEndTimestamp: state.bigint('feeEndTimestamp'), feeIndexRemainder: state.bigint('feeIndexRemainder'), lastUpdatedFeeAccumulator: state.bigint('lastUpdatedFeeAccumulator'), totalFeesOwedRemainder: state.bigint('totalFeesOwedRemainder') }
 		})
 		const minimumSecurityBondDebtAttoEth = read.optional('minimumSecurityBondDebtAttoEth', read.bigint)
 		const minimumVaultRepDepositAttoRep = read.optional('minimumVaultRepDepositAttoRep', read.bigint)

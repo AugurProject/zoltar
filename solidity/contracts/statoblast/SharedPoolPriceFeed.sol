@@ -31,16 +31,22 @@ interface ISharedPoolPriceCoordinator {
 	function sharedPriceSettled(uint256 reportId, bool accepted, string calldata reason) external;
 }
 
+interface ISharedPoolPortfolioPriceCheckpoint {
+	function onSharedPriceAccepted(uint248 universeId, uint256 price, uint48 validUntil) external;
+	function oracleExposure(uint248 universeId) external view returns (uint256);
+	function clocks(uint248 universeId) external view returns (uint48, uint48, bool, bool);
+}
+
 /// @notice One REP/ETH report and freshness clock for all question ledgers in one pool and universe.
-/// @dev The factory admits canonical ledgers. Accounting checkpoints maintain the aggregate in O(1),
-/// and permissionless synchronization retires finalized ledgers without enumerating the question list.
+/// @dev Report sizing reads live aggregate capital, including direct authorizations
+/// that do not touch any question. No question or owner enumeration is required.
 contract SharedPoolPriceFeed {
 	bool public constant timeType = true;
 	bool public constant trackDisputes = true;
 	uint256 public constant OPEN_INTEREST_DIVIDER = 100;
 	uint256 public constant MAX_PENDING_SETTLEMENT_OPERATIONS = 4;
 	uint256 public constant SETTLEMENT_GAS_OVERHEAD = 50_000;
-	uint256 public constant FEED_SETTLEMENT_GAS_OVERHEAD = 150_000;
+	uint256 public constant FEED_SETTLEMENT_GAS_OVERHEAD = 4_000_000;
 	address public immutable configCoordinator;
 	address public immutable securityPoolFactory;
 	address public immutable portfolio;
@@ -68,9 +74,8 @@ contract SharedPoolPriceFeed {
 	uint256 public pendingReportMaxSettlementBaseFeeAttoEthPerGas;
 	uint256 public lastPrice;
 	uint256 public lastSettlementTimestamp;
-	uint256 public aggregateExposureAttoEth;
+	uint256 private checkpointedExposureAttoEth;
 	mapping(address => bool) public registeredCoordinators;
-	mapping(address => uint256) public coordinatorExposureAttoEth;
 	/// @dev 0 = unknown or pending, 1 = accepted, 2 = rejected or recovered.
 	mapping(uint256 => uint8) public reportOutcome;
 
@@ -130,31 +135,29 @@ contract SharedPoolPriceFeed {
 		emit CoordinatorRegistered(coordinatorAddress, address(pool));
 	}
 
-	/// @notice Updates one authenticated ledger's contribution, including permissionless retirement after finality.
+	/// @notice Emits a changed aggregate exposure after an authenticated question checkpoint.
 	function syncExposure(address coordinatorAddress) external {
 		require(registeredCoordinators[coordinatorAddress], 'Unregistered coordinator');
 		_syncExposure(coordinatorAddress, ISharedPoolPriceCoordinator(coordinatorAddress).securityPool());
 	}
 
 	function _syncExposure(address coordinatorAddress, ISecurityPool pool) private {
-		uint256 exposureAttoEth;
-		if (!pool.isEscalationResolved()) {
-			uint256 commitmentAttoEth = pool.totalUnderwritingLimitAttoEth();
-			uint256 collateralAttoEth = pool.settlementCollateralAttoEth();
-			exposureAttoEth = commitmentAttoEth > collateralAttoEth ? commitmentAttoEth : collateralAttoEth;
-		}
-		uint256 previousExposureAttoEth = coordinatorExposureAttoEth[coordinatorAddress];
-		if (exposureAttoEth == previousExposureAttoEth) return;
-		aggregateExposureAttoEth = aggregateExposureAttoEth - previousExposureAttoEth + exposureAttoEth;
-		coordinatorExposureAttoEth[coordinatorAddress] = exposureAttoEth;
-		emit ExposureCheckpoint(coordinatorAddress, exposureAttoEth, aggregateExposureAttoEth);
+		require(pool.universeId() == universeId, 'Wrong exposure universe');
+		uint256 exposureAttoEth = aggregateExposureAttoEth();
+		if (exposureAttoEth == checkpointedExposureAttoEth) return;
+		checkpointedExposureAttoEth = exposureAttoEth;
+		emit ExposureCheckpoint(coordinatorAddress, exposureAttoEth, exposureAttoEth);
 	}
 
-	/// @notice Report collateral covers the sum of standing capacity or collateral across all active questions.
+	function aggregateExposureAttoEth() public view returns (uint256) {
+		return ISharedPoolPortfolioPriceCheckpoint(portfolio).oracleExposure(universeId);
+	}
+
+	/// @notice Report collateral covers aggregate standing commitment or funded demand.
 	function minimumToken1ReportAttoEth() public view returns (uint256) {
 		uint256 priorityFeeReportAttoEth = _minimumToken1ReportAttoEthForGasPrice(initialReportPriorityFeeAttoEthPerGas);
 		uint256 baseFeeReportAttoEth = _minimumToken1ReportAttoEthForGasPrice(block.basefee);
-		uint256 exposureReportAttoEth = Math.ceilDiv(aggregateExposureAttoEth, OPEN_INTEREST_DIVIDER);
+		uint256 exposureReportAttoEth = Math.ceilDiv(aggregateExposureAttoEth(), OPEN_INTEREST_DIVIDER);
 		uint256 dynamicReportAttoEth =
 			baseFeeReportAttoEth > exposureReportAttoEth ? baseFeeReportAttoEth : exposureReportAttoEth;
 		uint256 minimumReportAttoEth = priorityFeeReportAttoEth + dynamicReportAttoEth;
@@ -190,6 +193,8 @@ contract SharedPoolPriceFeed {
 	/// @notice A registered coordinator authenticates the sponsor and forwards the report's exact token funding.
 	function requestPrice(address sponsor, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) external payable {
 		require(registeredCoordinators[msg.sender], 'Unregistered coordinator');
+		(, , , bool ready) = ISharedPoolPortfolioPriceCheckpoint(portfolio).clocks(universeId);
+		require(ready, 'Portfolio universe not ready');
 		require(sponsor != address(0), 'Report sponsor zero');
 		require(!isPriceValid(), 'Oracle price already fresh');
 		require(pendingReportId == 0, 'Oracle request already pending');
@@ -201,7 +206,7 @@ contract SharedPoolPriceFeed {
 			requestedInitialAttoWeth > minimumWethReportAttoEth ? requestedInitialAttoWeth : minimumWethReportAttoEth;
 		uint256 initialRepReportAttoRep = Math.mulDiv(initialWethReportAttoEth, proposedRepPerEthPrice, SecurityPoolUtils.PRICE_PRECISION, Math.Rounding.Ceil);
 		uint256 escalationHaltAttoEth = Math.mulDiv(initialWethReportAttoEth, escalationHaltMultiplierBps, SecurityPoolUtils.BPS_DENOMINATOR);
-		uint256 exposureEscalationHaltAttoEth = Math.ceilDiv(aggregateExposureAttoEth, OPEN_INTEREST_DIVIDER);
+		uint256 exposureEscalationHaltAttoEth = Math.ceilDiv(aggregateExposureAttoEth(), OPEN_INTEREST_DIVIDER);
 		if (exposureEscalationHaltAttoEth > escalationHaltAttoEth)
 			escalationHaltAttoEth = exposureEscalationHaltAttoEth;
 		require(initialWethReportAttoEth <= type(uint128).max, 'WETH report exceeds uint128');
@@ -237,9 +242,16 @@ contract SharedPoolPriceFeed {
 		bool accepted = bytes(reason).length == 0;
 		reportOutcome[reportId] = accepted ? 1 : 2;
 		if (accepted) {
+			uint256 nextPrice = Math.mulDiv(amount2, SecurityPoolUtils.PRICE_PRECISION, amount1);
+			uint256 validForSeconds =
+				block.chainid == SEPOLIA_CHAIN_ID ? SEPOLIA_PRICE_VALID_FOR_SECONDS : PRICE_VALID_FOR_SECONDS;
+			require(priceTimestamp + validForSeconds <= type(uint48).max, 'Price validity clock exhausted');
+			// This checkpoint is atomic with acceptance. A failed optional question
+			// callback cannot reassign already-earned fees to the new eligibility set.
+			ISharedPoolPortfolioPriceCheckpoint(portfolio).onSharedPriceAccepted(universeId, nextPrice, uint48(priceTimestamp + validForSeconds));
 			// Freshness begins when the final report becomes eligible, never when a delayed settler calls.
 			lastSettlementTimestamp = priceTimestamp;
-			lastPrice = Math.mulDiv(amount2, SecurityPoolUtils.PRICE_PRECISION, amount1);
+			lastPrice = nextPrice;
 			emit PriceReported(reportId, lastPrice, lastSettlementTimestamp);
 		} else emit PriceReportRejected(reportId, reason, 0, 0, lastPrice, lastSettlementTimestamp);
 		_notifyCoordinator(coordinator, reportId, accepted, reason);
@@ -295,7 +307,7 @@ contract SharedPoolPriceFeed {
 		(, , uint128 finalReportBaseFee, ) = openOracle.disputeHistory(reportId, numReports - 1);
 		uint256 minimumProfitableReportAttoEth =
 			_minimumToken1ReportAttoEthForGasPrice(initialReportPriorityFeeAttoEthPerGas) +
-				_minimumToken1ReportAttoEthForGasPrice(uint256(finalReportBaseFee));
+				Math.max(_minimumToken1ReportAttoEthForGasPrice(uint256(finalReportBaseFee)), Math.ceilDiv(aggregateExposureAttoEth(), OPEN_INTEREST_DIVIDER));
 		return finalAmount1 >= minimumProfitableReportAttoEth;
 	}
 

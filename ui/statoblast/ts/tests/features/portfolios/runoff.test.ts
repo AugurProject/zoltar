@@ -1,39 +1,29 @@
 import { expect, test } from 'bun:test'
-import { portfolioRunoffAvailability } from '@zoltar/ui-statoblast-shared/features/portfolios/lib/runoff.js'
-
-const unresolved = { backingUnits: 1n, backingAttoRep: 1n, ordinaryResidualPending: false, forkTime: 0n, systemState: 0n, resolved: false, disputeStakeAttoRep: 0n, poolCommitmentAttoEth: 100n, commitmentAttoEth: 100n, settlementCollateralAttoEth: 100n, priceValid: true, pendingReportId: 0n }
-
-test('unresolved collateral keeps REP locked, while surplus commitment can run off without a price', () => {
-	expect(portfolioRunoffAvailability(unresolved).reason).toContain('unresolved')
-	expect(portfolioRunoffAvailability({ ...unresolved, poolCommitmentAttoEth: 120n, priceValid: false })).toEqual({ reason: undefined, partial: true })
-	expect(portfolioRunoffAvailability({ ...unresolved, settlementCollateralAttoEth: 0n })).toEqual({ reason: undefined, partial: false })
-	expect(portfolioRunoffAvailability({ ...unresolved, commitmentAttoEth: 0n, priceValid: false }).reason).toContain('fresh')
+import { capitalAuthorizationReason, capitalPositionPhase, requiredPortfolioCollateral, requiredPortfolioExecutionReserve } from '@zoltar/ui-statoblast-shared/features/portfolios/lib/capital.js'
+import { capitalSnapshot, unit } from './capitalFixture.js'
+test('collateral follows the owner health target and each contract rounding step', () => {
+	const snapshot = capitalSnapshot()
+	expect(requiredPortfolioCollateral(snapshot, 10n * unit)).toBe(25_200_000_000_000_000_000n)
+	expect(requiredPortfolioCollateral({ ...snapshot, acceptedPrice: 1n }, 1n)).toBe(3n)
+	expect(requiredPortfolioCollateral({ ...snapshot, ownerAccount: { ...snapshot.ownerAccount, targetHealthFactorBps: 0n } }, 10n * unit)).toBe(21n * unit)
 })
-
-test('finality unlocks commitment and REP together without an oracle but preserves escrow and fork activation locks', () => {
-	expect(portfolioRunoffAvailability({ ...unresolved, resolved: true, priceValid: false, forkTime: 10n })).toEqual({ reason: undefined, partial: false })
-	expect(portfolioRunoffAvailability({ ...unresolved, resolved: true, disputeStakeAttoRep: 1n }).reason).toContain('dispute')
-	expect(portfolioRunoffAvailability({ ...unresolved, forkTime: 10n }).reason).toContain('migration')
-	expect(portfolioRunoffAvailability({ ...unresolved, resolved: true, systemState: 1n }).reason).toContain('migration')
+test('execution reserves grow with commitment lots and existing active reserve counts toward funding', () => {
+	const snapshot = capitalSnapshot({ ownerAccount: { ...capitalSnapshot().ownerAccount, executionReserveAttoEth: 0n } })
+	expect(requiredPortfolioExecutionReserve(snapshot, unit + 1n)).toBe(2n * 10n ** 15n)
+	expect(capitalAuthorizationReason(snapshot, 30n * unit, 10n * unit)).toBeUndefined()
+	expect(capitalAuthorizationReason(snapshot, 30n * unit, 11n * unit)).toContain('reserve')
 })
-
-test('final withdrawal reserves ordinary residuals without consent and never bypasses own escrow', () => {
-	const pending = { ...unresolved, resolved: true, ordinaryResidualPending: true }
-	expect(portfolioRunoffAvailability(pending).reason).toBeUndefined()
-	expect(portfolioRunoffAvailability(pending, true).reason).toBeUndefined()
-	expect(portfolioRunoffAvailability({ ...pending, disputeStakeAttoRep: 1n }).reason).toContain('dispute')
-	expect(portfolioRunoffAvailability({ ...pending, disputeStakeAttoRep: 1n }, true).reason).toContain('dispute')
-	expect(portfolioRunoffAvailability({ ...pending, backingUnits: 0n }).reason).toBeUndefined()
-	expect(portfolioRunoffAvailability({ ...pending, backingAttoRep: 0n }).reason).toBeUndefined()
+test('authorizations cannot cut obligations, bypass personal collateral or consume unfunded commitments', () => {
+	const snapshot = capitalSnapshot()
+	expect(capitalAuthorizationReason(snapshot, 30n * unit, 9n * unit)).toContain('retirement')
+	expect(capitalAuthorizationReason(snapshot, 1n * unit, 10n * unit)).toContain('health')
+	expect(capitalAuthorizationReason(snapshot, 131n * unit, 10n * unit)).toContain('Insufficient')
+	expect(capitalAuthorizationReason({ ...snapshot, priceValid: false }, 30n * unit, 10n * unit)).toContain('price')
+	expect(capitalAuthorizationReason({ ...snapshot, forkTime: 1n }, 30n * unit, 10n * unit)).toContain('closed')
+	expect(capitalAuthorizationReason({ ...snapshot, positions: [] }, unit, unit - 1n)).toContain('minimum')
 })
-
-test('unresolved ordinary claims also protect a full REP exit without blocking harmless commitment reductions', () => {
-	const pending = { ...unresolved, ordinaryResidualPending: true, backingAttoRep: 1n, settlementCollateralAttoEth: 0n }
-	expect(portfolioRunoffAvailability(pending).reason).toContain('residual')
-	expect(portfolioRunoffAvailability(pending, true).reason).toBeUndefined()
-	expect(portfolioRunoffAvailability({ ...pending, priceValid: false })).toEqual({ reason: undefined, partial: true })
-	expect(portfolioRunoffAvailability({ ...pending, pendingReportId: 1n })).toEqual({ reason: undefined, partial: true })
-	expect(portfolioRunoffAvailability({ ...pending, settlementCollateralAttoEth: 1n })).toEqual({ reason: undefined, partial: true })
-	expect(portfolioRunoffAvailability({ ...pending, backingAttoRep: 0n }).reason).toBeUndefined()
-	expect(portfolioRunoffAvailability({ ...pending, disputeStakeAttoRep: 1n }, true).reason).toContain('dispute')
+test('current and next retirement cohorts remain distinct without question-history scans', () => {
+	expect(capitalPositionPhase(0n, 3n)).toBe('active')
+	expect(capitalPositionPhase(3n, 3n)).toBe('current')
+	expect(capitalPositionPhase(4n, 3n)).toBe('next')
 })

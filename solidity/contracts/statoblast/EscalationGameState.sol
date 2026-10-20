@@ -2,8 +2,6 @@
 pragma solidity 0.8.35;
 
 import { ReputationToken } from '../ReputationToken.sol';
-import { IERC20 } from '../IERC20.sol';
-import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameProofVerifier } from './EscalationGameProofVerifier.sol';
@@ -13,10 +11,9 @@ import { EscalationGameDepositDelegate } from './EscalationGameDepositDelegate.s
 import { EscalationGameClaimDelegate } from './EscalationGameClaimDelegate.sol';
 import { EscalationClaimBundle } from './EscalationGameTypes.sol';
 import { DelegateCall } from './DelegateCall.sol';
+import { EscalationGameRepCustody } from './EscalationGameRepCustody.sol';
 
 abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameEvents {
-	using SafeERC20Ops for IERC20;
-
 	ISecurityPool public immutable securityPool;
 	ReputationToken public immutable repToken;
 	EscalationGameProofVerifier internal immutable proofVerifier;
@@ -32,7 +29,6 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 	event ForkedEscrowRecorded(address indexed depositor, BinaryOutcomes.BinaryOutcome indexed outcome, uint256 sourcePrincipalTotalAttoRep, uint256 childRepTotalAttoRep, uint256 disputeStakedRepByVaultAttoRep, uint256 totalDisputeStakedAttoRep, uint256 outcomeBalanceAttoRep);
 	event VaultEscrowUpdated(address indexed vault, uint256 disputeStakedRepByVaultAttoRep, uint256 totalDisputeStakedAttoRep);
 	event ForkedEscrowExported(address indexed vault, address repReceiver, uint256[3] sourcePrincipalByOutcomeAttoRep, uint256[3] childRepByOutcomeAttoRep, uint256 totalChildRepToTransferAttoRep, bool transferredRep);
-	event ResidualRepSweptToSecurityPool(uint256 amountAttoRep);
 	event OrdinarySettlementInitialized(BinaryOutcomes.BinaryOutcome indexed outcome, uint256 winningPrincipalAttoRep, uint256 reservedAttoRep);
 	event ForkContinuationResidualRepBurned(uint256 amountAttoRep);
 	event TruthAuctionHaircutApplied(uint256 repBeforeAttoRep, uint256 repRemovedAttoRep, uint256 repRemainingAttoRep, uint256 rebasedElapsed);
@@ -116,6 +112,14 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 
 	function _safeTransferRep(address receiver, uint256 amountAttoRep) internal {
 		if (amountAttoRep == 0) return;
-		IERC20(address(repToken)).safeTransfer(receiver, amountAttoRep);
+		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.transferReporterRep, (receiver, amountAttoRep)));
+	}
+
+	function _reporterRepBalance() internal view returns (uint256) {
+		return EscalationGameRepCustody.balance(address(securityPool), address(repToken));
+	}
+
+	function _usesCentralReporterCustody() internal view returns (bool) {
+		return address(EscalationGameRepCustody.ledger(address(securityPool))) != address(0);
 	}
 }

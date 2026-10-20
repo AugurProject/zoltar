@@ -109,3 +109,8 @@ describe('liquidation pool minimum vault REP', () => {
 		expect(getLiquidationFailureReason({ ...input, settlementCollateralAttoEth: 10n * ATTO, totalUnderwritingLimitAttoEth: 10n * ATTO })).toBe(liquidationCopy.selectedPoolDetailsLoading)
 	})
 })
+
+test('nominal released stake cannot prevent liquidation of an unhealthy target', () => {
+	const target = createUnencumberedVaultSummary({ vaultAttoRepBacking: 15n * ATTO, underwritingLimitAttoEth: 10n * ATTO, disputeStakedAttoRep: 100n * ATTO, disputeBackingAttoRep: 0n })
+	expect(getMaxLiquidationAmount({ repPerEthPrice: ATTO, statoblastSecurityMultiplierBps: 20_000n, targetVaultSummary: target })).toBe(10n * ATTO)
+})

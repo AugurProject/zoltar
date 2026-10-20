@@ -35,6 +35,7 @@ test('binds operation cursor pages and the complete pool scan to one canonical b
 	const multicalls: Array<{ blockNumber?: bigint; multicallAddress?: string }> = []
 	const logReads: Array<{ event?: { name?: string }; fromBlock?: bigint; toBlock?: bigint }> = []
 	let reorgSnapshot = false
+	let portfolio = getAddress('0x0000000000000000000000000000000000000000')
 	const networkClient = createPublicClient({
 		chain: mainnet,
 		transport: custom({
@@ -96,6 +97,7 @@ test('binds operation cursor pages and the complete pool scan to one canonical b
 						return Promise.resolve({ forkQuestionId: 0n, forkTime: 0n, forkingOutcomeIndex: 0n, parentUniverseId: 0n, reputationToken: repToken })
 					}
 					if (parameters.functionName === 'getDeployedChildUniverses') return Promise.resolve([[], [], []])
+					if (parameters.functionName === 'getSecurityPoolPortfolio') return Promise.resolve(portfolio)
 					if (parameters.functionName === 'getVaultCount') return Promise.resolve(1n)
 					if (parameters.functionName === 'currentRetentionRate') return Promise.resolve(1n)
 					if (parameters.functionName === 'totalRepBackingUnits') return Promise.resolve(1n)
@@ -175,6 +177,9 @@ test('binds operation cursor pages and the complete pool scan to one canonical b
 	expect(logReads.find(read => read.event?.name === 'DeploySecurityPool')).toMatchObject({ fromBlock: 0n, toBlock: 2n })
 	expect(logReads.find(read => read.event?.name === 'VaultAccountingCheckpoint')).toMatchObject({ fromBlock: 2n, toBlock: 2n })
 
+	portfolio = getAddress('0x0000000000000000000000000000000000000070')
+	await expect(scanPools(client, settings, operator, monitorIndex)).rejects.toThrow(`Pool ${pool} uses portfolio ${portfolio}; this operator supports standalone vaults only`)
+	portfolio = getAddress('0x0000000000000000000000000000000000000000')
 	settings.selectedPools = []
 	reorgSnapshot = true
 	await expect(scanPools(client, settings, undefined)).rejects.toThrow('Security pool snapshot changed during discovery')
@@ -328,7 +333,7 @@ test('retains vaults with commitments even when pool-held and dispute-staked REP
 							const vault = getAddress(contract.args[0])
 							if (contract.functionName === 'securityVaults') return [vault === backed ? 7n : 0n, vault === commitmentOnly ? 3n : 0n, vault === feesOnly ? 5n : 0n, 0n]
 							if (contract.functionName === 'vaultBadDebtAttoEth') return vault === badDebtOnly ? 3n : 0n
-							if (contract.functionName === 'disputeStakedRepByVaultAttoRep') return vault === disputeStakedOnly ? 9n : 0n
+							if (contract.functionName === 'getVaultDisputeBackingAttoRep') return vault === disputeStakedOnly ? 9n : 0n
 							throw new Error(`Unexpected multicall read: ${contract.functionName}`)
 						}),
 					)
@@ -372,7 +377,7 @@ test('ordinary settlement refreshes retained dispute stakes without per-vault ch
 						request.contracts.map(contract => {
 							if (contract.functionName === 'securityVaults') return [0n, 0n, 0n, 0n]
 							if (contract.functionName === 'vaultBadDebtAttoEth') return 0n
-							if (contract.functionName === 'disputeStakedRepByVaultAttoRep') return getAddress(contract.args[0]) === escrowVault ? 5n : 0n
+							if (contract.functionName === 'getVaultDisputeBackingAttoRep') return getAddress(contract.args[0]) === escrowVault ? 5n : 0n
 							throw new Error(`Unexpected multicall read: ${contract.functionName}`)
 						}),
 					)

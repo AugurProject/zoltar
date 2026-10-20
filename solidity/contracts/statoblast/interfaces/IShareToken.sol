@@ -5,6 +5,8 @@ import '../interfaces/ISecurityPool.sol';
 import '../BinaryOutcomes.sol';
 
 interface IShareToken {
+	function consumePortfolioRecoveryCompleteSets(uint248 sourceUniverse, address holder, uint256 amountAttoShares) external returns (uint256 cumulativeClaimedAttoShares);
+	function recoveredCompleteSetShares(uint248 sourceUniverse, address holder) external view returns (uint256);
 	/// @notice Resulting authorization for `account`.
 	/// @param actor Constructor deployer for the initial owner authorization; already-authorized caller thereafter.
 	event AuthorizationUpdated(address indexed account, address indexed actor, bool authorized);

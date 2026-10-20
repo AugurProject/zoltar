@@ -1104,14 +1104,14 @@ describe('event-only replay', () => {
 				logIndex: 13,
 				args: {
 					vault: secondVault,
-					repReceiver: receiver,
+					repReceiver: zeroAddress,
 					principalByOutcomeAttoRep: [0n, 0n, 4n],
 					principalToTransferAttoRep: 4n,
-					transferredRep: true,
+					transferredRep: false,
 				},
 			}),
 			createReplayLog({ emitter: game, eventName: 'VaultEscrowUpdated', logIndex: 14, args: { vault: secondVault, disputeStakedRepByVaultAttoRep: 0n, totalDisputeStakedAttoRep: 0n } }),
-			createReplayLog({ emitter: game, eventName: 'ResidualRepSweptToSecurityPool', logIndex: 15, args: { amountAttoRep: 2n } }),
+			createReplayLog({ emitter: game, eventName: 'EscalationSurplusAccrued', logIndex: 15, args: { amountAttoRep: 2n, cumulativeSurplusAttoRep: 2n } }),
 		]
 
 		const replayed = replayZoltarEvents(logs.toReversed())
@@ -1125,7 +1125,7 @@ describe('event-only replay', () => {
 		const forkedEscrow = replayed.escalationForkedEscrow.get(game)?.get(`${vault}:2`)
 		if (forkedEscrow?.sourcePrincipalClaimedAttoRep !== 20n || forkedEscrow.childRepClaimedAttoRep !== 15n) throw new Error('forked escrow settlement mismatch')
 		if (replayed.escalationForkedExports.get(game)?.get(vault)?.totalChildRepToTransferAttoRep !== 15n) throw new Error('forked escrow export mismatch')
-		if (replayed.escalationResidualRepSwept.get(game) !== 2n) throw new Error('residual REP sweep mismatch')
+		if (replayed.escalationSurplusAccrued.get(game) !== 2n) throw new Error('source-accrued REP surplus mismatch')
 	})
 
 	test('vault migration replay keeps the same vault isolated across parallel child pools', () => {

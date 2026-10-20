@@ -1,5 +1,6 @@
 import {
 	statoblast_EscalationGame_EscalationGame,
+	Zoltar_Zoltar,
 	statoblast_SecurityPoolForker_SecurityPoolForker,
 	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate as checkpointArtifact,
 	test_statoblast_EscalationClaimCheckpointHarness_EscalationClaimCheckpointHarness as checkpointHarness,
@@ -107,6 +108,11 @@ describe('Statoblast: escalation migration', () => {
 			)
 		}
 		strictEqualTypeSafe(await getAwaitingForkContinuation(client, securityPool), false, 'bounded continuation progress should complete')
+	}
+
+	async function advanceToEarliestFork(universeId: bigint) {
+		const earliestForkTime = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getEarliestForkTime', args: [universeId] })
+		if ((await mockWindow.getTime()) < earliestForkTime) await mockWindow.setTime(earliestForkTime)
 	}
 
 	async function refreshCurrentPrice() {
@@ -1193,15 +1199,7 @@ describe('Statoblast: escalation migration', () => {
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 
-		const parentForkDataSlot = getAddressMappingStorageSlot(securityPoolAddresses.securityPool, 0n)
-		const ownForkChildRepAtForkSlot = formatStorageSlot(parentForkDataSlot + 11n)
-		await mockWindow.addStateOverrides({
-			[getInfraContractAddresses().securityPoolForker]: {
-				stateDiff: {
-					[ownForkChildRepAtForkSlot]: 1n,
-				},
-			},
-		})
+		const parentForkBuckets = await client.readContract({ abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi, address: getInfraContractAddresses().securityPoolForker, functionName: 'getOwnForkRepBuckets', args: [securityPoolAddresses.securityPool] })
 		const parentInvalidOutcomeState = await getEscalationGameOutcomeState(client, securityPoolAddresses.escalationGame, QuestionOutcome.Invalid)
 		const parentYesOutcomeState = await getEscalationGameOutcomeState(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
 		const parentNoOutcomeState = await getEscalationGameOutcomeState(client, securityPoolAddresses.escalationGame, QuestionOutcome.No)
@@ -1210,6 +1208,16 @@ describe('Statoblast: escalation migration', () => {
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		const childEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
 		strictEqualTypeSafe(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: childEscalationGame, functionName: 'forkCarrySnapshotInitialized' }), true, 'the history must be fully installed before testing the funding guard')
+		const childRepToken = await getRepToken(client, yesSecurityPool.securityPool)
+		const childBackingBeforeFault = await getERC20Balance(client, childRepToken, childEscalationGame)
+		strictEqualTypeSafe(childBackingBeforeFault, parentForkBuckets[1], 'the child must initially hold its authenticated post-burn backing')
+		assert.ok(childBackingBeforeFault > 1n, 'the canonical backing must exceed the injected one-attoREP balance')
+		strictEqualTypeSafe(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: childEscalationGame, functionName: 'isForkCarryFundingComplete' }), true, 'the untouched canonical snapshot must be fully funded')
+		// Corrupt only physical inventory; changing the fork snapshot would also lower its authenticated requirement.
+		const childEscrowBalanceSlot = formatStorageSlot(getAddressMappingStorageSlot(childEscalationGame, 0n))
+		await mockWindow.addStateOverrides({ [childRepToken]: { stateDiff: { [childEscrowBalanceSlot]: 1n } } })
+		strictEqualTypeSafe(await getERC20Balance(client, childRepToken, childEscalationGame), 1n, 'the fault must reduce actual child inventory')
+		strictEqualTypeSafe(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: childEscalationGame, functionName: 'isForkCarryFundingComplete' }), false, 'physical inventory below the authenticated snapshot must block migration')
 		const parentVaultBeforeMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const childVaultBeforeMigration = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 		await assert.rejects(migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /Fork carry not ready/)
@@ -1699,6 +1707,8 @@ describe('Statoblast: escalation migration', () => {
 		await createQuestion(attackerClient, secondForkQuestionData, outcomes)
 
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+		// Resume only after the native cooldown so the next fork still tests unresolved carry.
+		await advanceToEarliestFork(yesUniverse)
 		await startTruthAuction(client, yesSecurityPool.securityPool)
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'the child continuation pool should become operational before the second fork')
 
@@ -1808,6 +1818,7 @@ describe('Statoblast: escalation migration', () => {
 			'an inherited threshold tie without a fixed outcome should authorize the child fork',
 		)
 
+		await advanceToEarliestFork(getChildUniverseId(genesisUniverse, QuestionOutcome.Yes))
 		await forkZoltarWithOwnEscalationGame(client, yesSecurityPool.securityPool)
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.PoolForked, 'the inherited tie should trigger the own-fork transition directly')
 	})
@@ -1860,6 +1871,7 @@ describe('Statoblast: escalation migration', () => {
 		await setVaultCapacityFixture(client, mockWindow, yesSecurityPool.openOraclePriceCoordinator, client.account.address, 0n)
 		await depositToEscalationGame(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, childForkThreshold)
 		await depositToEscalationGame(client, yesSecurityPool.securityPool, QuestionOutcome.No, childForkThreshold)
+		await advanceToEarliestFork(yesUniverse)
 		await forkZoltarWithOwnEscalationGame(client, yesSecurityPool.securityPool)
 		await migrateRepToZoltar(client, yesSecurityPool.securityPool, [QuestionOutcome.Yes])
 		await createChildUniverse(client, yesSecurityPool.securityPool, QuestionOutcome.Yes)
@@ -1932,6 +1944,8 @@ describe('Statoblast: escalation migration', () => {
 		await createQuestion(attackerClient, secondForkQuestionData, outcomes)
 
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+		// Resume only after the native cooldown so the next fork still tests unresolved carry.
+		await advanceToEarliestFork(firstChildUniverse)
 		await startTruthAuction(client, firstChildPool.securityPool)
 		if ((await getSystemState(client, firstChildPool.securityPool)) === SystemState.ForkTruthAuction) {
 			await finalizeTruthAuction(client, firstChildPool.securityPool)

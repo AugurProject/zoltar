@@ -39,6 +39,9 @@ describe('Statoblast: native proportional vault position ownership', () => {
 		const second = await receiver()
 		await fixture.mockWindow.setTime(fixture.questionData.endTime + 1n)
 		await updateVaultFees(fixture.client, pool(), owner())
+		// Splits refresh the standalone curve. Snapshot after repricing the cash
+		// remaining from fee accrual so only the ownership change is compared.
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: poolArtifact.abi, address: pool(), functionName: 'updateRetentionRate' }))
 		const before = await position(owner())
 		const beforeRemainder = await remainder(owner())
 		const beforeAccounting = await accounting()
