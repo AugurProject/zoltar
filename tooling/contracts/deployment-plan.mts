@@ -106,6 +106,15 @@ function getTradingDeploymentSteps(profile: NetworkProfile) {
 	]
 }
 
+/** Trading steps pinned to their runtime hashes, for chains whose Uniswap deployment cannot be planned locally. */
+export function getPinnedTradingDeploymentSteps(profile: NetworkProfile, hashProfile: BootstrapDescendantHashProfile) {
+	return getTradingDeploymentSteps(profile).map(step => {
+		const expectedRuntimeCodeHash = EXPECTED_TRADING_RUNTIME_CODE_HASHES[hashProfile][profile.genesisOutcome][step.id]
+		if (expectedRuntimeCodeHash === undefined) throw new Error(`Trading step ${step.id} has no expected runtime code hash for ${hashProfile}`)
+		return { ...step, expectedRuntimeCodeHash }
+	})
+}
+
 export function createCompleteDeploymentPlan(profile: NetworkProfile, uniswap: UniswapDeployment) {
 	const [create2DeployerStep, permit2Step, ...uniswapQuoteSteps] = uniswap.steps
 	if (create2DeployerStep === undefined || create2DeployerStep.id !== 'arachnidCreate2Deployer') throw new Error('Uniswap deployment plan must begin with the canonical CREATE2 deployer')
