@@ -151,7 +151,7 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 	controlledVaultView?: SelectedVaultView | undefined
 	onVaultViewChange?: ((view: SelectedVaultView) => void) | undefined
 	RequestPriceModal?: ComponentType<RequestPriceModalProps>
-	inlineOracle?: import('./oracleTypes.js').OpenOracleSectionProps
+	inlineOracle?: import('./open-oracle/components/PriceRequestStatusSection.js').PriceRequestStatusProps
 	accountState: AccountState
 	activeUniverseId: bigint
 	checkedSecurityPoolAddress: string | undefined

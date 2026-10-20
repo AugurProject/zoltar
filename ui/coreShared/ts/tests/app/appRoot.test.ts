@@ -94,7 +94,7 @@ test('links the historical Augur fork to Ethereum mainnet while the application 
 	}
 })
 
-test('requires an explicit Yes or No choice before initializing or mounting any application', async () => {
+test('requires an explicit Yes or No choice before initializing or mounting universe-dependent applications', async () => {
 	for (const search of ['', '?universe=0', '?genesis=repv2', '?genesis=invalid']) {
 		window.history.replaceState({}, '', `/${search}`)
 		const initialize = mock(async () => undefined)
@@ -110,6 +110,72 @@ test('requires an explicit Yes or No choice before initializing or mounting any 
 		).toEqual(['Open Yes universe', 'Open No universe'])
 		expect(within(document.body).getByRole('heading', { name: 'Child universes', level: 3 })).not.toBeNull()
 		await act(() => render(null, document.body))
+	}
+})
+
+test.each(['', '?genesis=invalid'])('boots an independent application without requiring a genesis choice from %s', async search => {
+	window.history.replaceState({}, '', `/${search}`)
+	const initialize = mock(async () => undefined)
+	const root = mock(() => createElement('p', {}, 'Independent application ready'))
+	await act(async () => await mountApp({ applicationTitle: 'OpenOracle', requireGenesisSelection: false, initialize, root }))
+	expect(initialize).toHaveBeenCalledTimes(1)
+	expect(root).toHaveBeenCalledTimes(1)
+	expect(document.body.textContent).toBe('Independent application ready')
+	expect(window.location.search).toBe(search)
+})
+
+test('keeps optional genesis changes from mounting an independently initialized application with a stale REP profile', async () => {
+	window.history.replaceState({}, '', '/?network=sepolia')
+	const ready = createDeferred<void>()
+	const root = mock(() => createElement('p', {}, 'Stale independent application'))
+	const reload = spyOn(window.location, 'reload').mockImplementation(() => undefined)
+	try {
+		const mounted = mountApp({ applicationTitle: 'OpenOracle', requireGenesisSelection: false, initialize: () => ready.promise, root })
+		window.history.replaceState({}, '', '/?network=sepolia&genesis=no')
+		await act(async () => {
+			ready.resolve()
+			await mounted
+		})
+		expect(root).not.toHaveBeenCalled()
+		expect(reload).toHaveBeenCalledTimes(1)
+	} finally {
+		reload.mockRestore()
+	}
+})
+
+test('reloads an independent application when its optional REP profile changes after mounting', async () => {
+	window.history.replaceState({}, '', '/?network=sepolia')
+	const reload = spyOn(window.location, 'reload').mockImplementation(() => undefined)
+	try {
+		await act(async () => await mountApp({ applicationTitle: 'OpenOracle', requireGenesisSelection: false, initialize: async () => undefined, root: () => createElement('p', {}, 'Independent application ready') }))
+		window.history.replaceState({}, '', '/?network=sepolia#/open-oracle?openOracleReportId=12')
+		await act(() => window.dispatchEvent(new Event('hashchange')))
+		expect(reload).not.toHaveBeenCalled()
+		window.history.replaceState({}, '', '/?network=sepolia&genesis=no#/open-oracle?openOracleReportId=12')
+		await act(() => window.dispatchEvent(new Event('hashchange')))
+		expect(reload).toHaveBeenCalledTimes(1)
+	} finally {
+		reload.mockRestore()
+	}
+})
+
+test('retries independent application initialization without opening the universe chooser', async () => {
+	window.history.replaceState({}, '', '/')
+	const initialize = mock(async () => {
+		if (initialize.mock.calls.length === 1) throw new Error('Read RPC unavailable')
+	})
+	const errorLog = spyOn(console, 'error').mockImplementation(() => undefined)
+	try {
+		await act(async () => await mountApp({ applicationTitle: 'OpenOracle', requireGenesisSelection: false, initialize, root: () => createElement('p', {}, 'Independent application ready') }))
+		expect(within(document.body).getByRole('alert').textContent).toContain('Read RPC unavailable')
+		await act(async () => {
+			within(document.body).getByRole('button', { name: 'Retry' }).click()
+			await Promise.resolve()
+		})
+		expect(initialize).toHaveBeenCalledTimes(2)
+		expect(document.body.textContent).toBe('Independent application ready')
+	} finally {
+		errorLog.mockRestore()
 	}
 })
 

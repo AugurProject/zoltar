@@ -377,6 +377,7 @@ export async function bootstrapSimulationChain({
 	primaryAccount,
 	profile,
 	scenario,
+	zoltarAddress,
 }: {
 	accounts: readonly Address[]
 	applyScenario?: (parameters: BootstrapScenarioApplyParameters) => Promise<boolean>
@@ -388,6 +389,8 @@ export async function bootstrapSimulationChain({
 	primaryAccount: Address
 	profile: NetworkProfile
 	scenario: SimulationScenario
+	/** REP fixture mint authority; this address need not be in the application's deployment plan. */
+	zoltarAddress: Address
 }) {
 	setRuntimeNetworkProfile(profile)
 	await reportBootstrapProgress(onProgress, 'Initializing simulation engine', 0.01)
@@ -395,9 +398,6 @@ export async function bootstrapSimulationChain({
 	await reportBootstrapProgress(onProgress, 'Preparing simulation chain', 0.03)
 	await initializeSimulationClock(memoryClient)
 	await seedAccountBalances(memoryClient, accounts, onProgress)
-	const zoltarStep = getDeploymentSteps(profile).find(step => step.id === 'zoltar')
-	if (zoltarStep === undefined) throw new Error('Missing Zoltar deployment step for simulation bootstrap')
-
 	await deploySimulationTokens({
 		accounts,
 		createWriteClient,
@@ -405,7 +405,7 @@ export async function bootstrapSimulationChain({
 		onProgress,
 		primaryAccount,
 		profile,
-		zoltarAddress: zoltarStep.address,
+		zoltarAddress,
 	})
 	await seedWrappedEthBalances(createWriteClient, accounts, profile.wethAddress, onProgress)
 	const extendedApplied =

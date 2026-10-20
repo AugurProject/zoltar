@@ -41,8 +41,9 @@ test('keeps Advanced report, browser controls, vault context and universe across
 	window.history.replaceState({}, '', `#/open-oracle?universe=7&securityPool=${pool}&selectedPoolView=vaults&vault=${vault}&vaultView=vault-by-address&openOracleReportId=42&openOracleView=selected-report&poolSearch=hello&poolFilter=ended&poolSort=endTime`)
 	const pools = getRouteHref('pools')
 	const params = new URLSearchParams(pools.split('?')[1])
+	expect(params.has('openOracleView')).toBe(false)
 	for (const [key, value] of new URLSearchParams(window.location.hash.split('?')[1])) {
-		if (key === 'securityPool' || key === 'selectedPoolView') continue
+		if (key === 'securityPool' || key === 'selectedPoolView' || key === 'openOracleView') continue
 		expect(params.get(key)).toBe(value)
 	}
 	window.history.replaceState({}, '', pools)

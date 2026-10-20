@@ -28,7 +28,7 @@ export const SIMULATION_QUERY_VALUE = '1'
 const NETWORK_QUERY_PARAM = 'network'
 
 type InitializeActiveEnvironmentDependencies = {
-	appId?: 'zoltar' | 'statoblast' | 'trading'
+	appId?: 'zoltar' | 'statoblast' | 'trading' | 'openoracle'
 	createInjectedBackend?: typeof createInjectedBackend
 	createSimulationBackend?: typeof createSimulationBackend
 }

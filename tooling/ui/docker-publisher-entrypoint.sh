@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-for app in zoltar statoblast trading; do
+for app in zoltar statoblast trading openoracle; do
     echo "$app build CID: $(cat "/ipfs_hash_${app}.txt")"
 done
 

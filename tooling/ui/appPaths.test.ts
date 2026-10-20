@@ -2,14 +2,15 @@ import { describe, expect, test } from 'bun:test'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { repositoryRoot } from '../repo/root.mts'
-import { UI_APP_IDS, getUiAppDependencyOrder, getUiAppPaths, getUiCoreSharedPaths, isUiAppId, parseUiAppId, type UiAppId } from './appPaths.mts'
+import { UI_APP_IDS, getUiAppContractProject, getUiAppDependencyOrder, getUiAppPaths, getUiCoreSharedPaths, isUiAppId, parseUiAppId, type UiAppId } from './appPaths.mts'
 
 test('UI_APP_IDS lists exactly the supported applications', () => {
-	expect(UI_APP_IDS).toEqual(['zoltar', 'statoblast', 'trading'])
+	expect(UI_APP_IDS).toEqual(['zoltar', 'statoblast', 'trading', 'openoracle'])
 })
 
 test('getUiAppDependencyOrder preserves the UI package DAG', () => {
 	expect(getUiAppDependencyOrder('zoltar')).toEqual(['coreShared', 'zoltarShared', 'zoltar'])
+	expect(getUiAppDependencyOrder('openoracle')).toEqual(['coreShared', 'zoltarShared', 'statoblastShared', 'openoracle'])
 	expect(getUiAppDependencyOrder('statoblast')).toEqual(['coreShared', 'zoltarShared', 'statoblastShared', 'statoblast'])
 	expect(getUiAppDependencyOrder('trading')).toEqual(['coreShared', 'zoltarShared', 'statoblastShared', 'trading'])
 })
@@ -24,14 +25,18 @@ test('isUiAppId accepts supported applications and rejects unknown values', () =
 })
 
 test('parseUiAppId rejects missing and unknown IDs with the supported list', () => {
-	expect(() => parseUiAppId(undefined, 'the test')).toThrow(/Missing UI app ID for the test.*zoltar, statoblast, trading/)
-	expect(() => parseUiAppId('coreShared', 'the test')).toThrow(/Unknown UI app ID 'coreShared'.*zoltar, statoblast, trading/)
+	expect(() => parseUiAppId(undefined, 'the test')).toThrow(/Missing UI app ID for the test.*zoltar, statoblast, trading, openoracle/)
+	expect(() => parseUiAppId('coreShared', 'the test')).toThrow(/Unknown UI app ID 'coreShared'.*zoltar, statoblast, trading, openoracle/)
 	expect(parseUiAppId('zoltar', 'the test')).toBe('zoltar')
 	expect(parseUiAppId('statoblast', 'the test')).toBe('statoblast')
 	expect(parseUiAppId('trading', 'the test')).toBe('trading')
 })
 
 for (const appId of UI_APP_IDS) {
+	test(`maps ${appId} to its contract project`, () => {
+		expect(getUiAppContractProject(appId)).toBe(appId === 'openoracle' ? 'statoblast' : appId)
+	})
+
 	test(`getUiAppPaths resolves existing locations for ${appId}`, () => {
 		const paths = getUiAppPaths(appId)
 		expect(paths.repositoryRoot).toBe(repositoryRoot)
@@ -104,9 +109,10 @@ describe('split development server paths', () => {
 		['zoltar', 4153],
 		['statoblast', 12347],
 		['trading', 4163],
+		['openoracle', 4173],
 	] as const) {
 		test(`serves the ${appId} application root`, async () => {
-			const titles: Record<UiAppId, string> = { statoblast: '<title>Augur Statoblast</title>', trading: '<title>Statoblast Trading</title>', zoltar: '<title>Zoltar</title>' }
+			const titles: Record<UiAppId, string> = { openoracle: '<title>OpenOracle</title>', statoblast: '<title>Augur Statoblast</title>', trading: '<title>Statoblast Trading</title>', zoltar: '<title>Zoltar</title>' }
 			const paths = getUiAppPaths(appId)
 			const processHandle = Bun.spawn([process.execPath, paths.devServerScript, appId], { stderr: 'pipe', stdout: 'pipe' })
 			try {

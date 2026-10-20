@@ -15,12 +15,14 @@ const mountedDocuments = new WeakSet<Document>()
 type MountAppOptions = {
 	applicationTitle: string
 	initialize?: () => Promise<unknown>
+	/** Independent applications can boot without choosing a Zoltar genesis deployment. */
+	requireGenesisSelection?: boolean
 	root?: () => ComponentChildren
 	target?: Element
 }
 
 type ApplicationProps = {
-	genesisOutcome: GenesisOutcome
+	genesisOutcome: GenesisOutcome | undefined
 	root: () => ComponentChildren
 }
 
@@ -61,7 +63,7 @@ export async function mountApp(options: MountAppOptions) {
 	mountedDocuments.add(target.ownerDocument)
 	const genesisOutcome = readGenesisOutcomeFromLocation()
 	applyThemePreference(readThemePreference())
-	if (genesisOutcome === undefined) {
+	if (options.requireGenesisSelection !== false && genesisOutcome === undefined) {
 		if (startupPlaceholder !== target) startupPlaceholder?.remove()
 		render(
 			createElement(GenesisUniverseEntry, {

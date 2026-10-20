@@ -2,9 +2,23 @@ import { describe, expect, test } from 'bun:test'
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { assertCompleteCoverageOwnership, createTypeScriptCoverageShards, mergeTypeScriptCoverageFiles, replaceCoverageDirectory, runCoverageShards } from './run-typescript-coverage.mts'
+import { assertCompleteCoverageOwnership, createTypeScriptCoverageShards, mergeTypeScriptCoverageFiles, prepareCoverageSourceMaps, replaceCoverageDirectory, runCoverageShards } from './run-typescript-coverage.mts'
 
 describe('TypeScript coverage sharding', () => {
+	test('emits source maps for packages whose ordinary builds disable them', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'coverage-source-maps-'))
+		try {
+			await mkdir(join(directory, 'shared/example/ts'), { recursive: true })
+			await writeFile(join(directory, 'shared/example/ts/value.ts'), 'export const value = 1\n')
+			await writeFile(join(directory, 'shared/example/tsconfig.json'), JSON.stringify({ compilerOptions: { target: 'ESNext', module: 'ESNext', types: [], rootDir: 'ts', outDir: 'js', sourceMap: false }, include: ['ts/**/*.ts'] }))
+			expect(await prepareCoverageSourceMaps(directory, [{ path: 'shared/example' }])).toBe(0)
+			const sourceMap = JSON.parse(await readFile(join(directory, 'shared/example/js/value.js.map'), 'utf8'))
+			expect(sourceMap.sources).toEqual(['../ts/value.ts'])
+		} finally {
+			await rm(directory, { recursive: true, force: true })
+		}
+	})
+
 	test('assigns every canonical test exactly once', () => {
 		const weightedTests = [
 			{ filePath: 'slow.test.ts', weight: 10 },

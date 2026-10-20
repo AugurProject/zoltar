@@ -1,78 +1,59 @@
+import type { PriceRequestStatusProps } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/PriceRequestStatusSection.js'
 import { useSettledPoolOracleManagerRefresh } from './useSettledPoolOracleManagerRefresh.js'
 import { useOpenOracleOperations } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleOperations.js'
+import { selectOpenOracleReport } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleRouteSync.js'
 import { useOpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOraclePriceCoordinator.js'
-import { resolveEnumValue, resolveFirstMatchingValue } from '@zoltar/ui-core-shared/forms/viewState.js'
 import { setFormField } from '@zoltar/ui-core-shared/hooks/useFormState.js'
 import type { WriteOperationsParameters } from '@zoltar/ui-zoltar-shared/types/app.js'
-import type { OpenOracleSectionProps, OpenOracleView } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
 import type { StatoblastRoute } from '@zoltar/ui-statoblast-shared/types/app.js'
 
 export function useOpenOracleRoute({
 	accountState,
-	activeEnvironmentNonce,
 	canReadOnchainData,
 	navigate,
-	openOracleView,
 	route,
 	setOpenOracleReport,
-	setOpenOracleView,
 	urlOpenOracleReportId,
 	walletScopedHookConfig,
 }: {
-	accountState: OpenOracleSectionProps['accountState']
-	activeEnvironmentNonce: number
+	accountState: PriceRequestStatusProps['accountState']
 	canReadOnchainData: boolean
 	navigate: (route: Exclude<StatoblastRoute, 'not-found'>) => void
-	openOracleView: string
 	route: string
 	setOpenOracleReport: (reportId: string, historyMode?: 'push' | 'replace') => void
-	setOpenOracleView: (view: OpenOracleView) => void
 	urlOpenOracleReportId: string
 	walletScopedHookConfig: WriteOperationsParameters
 }) {
 	const openOraclePriceCoordinator = useOpenOraclePriceCoordinator(walletScopedHookConfig)
 	const { loadPoolOracleManager, poolOracleManagerDetails } = openOraclePriceCoordinator
 	const onReportSettled = useSettledPoolOracleManagerRefresh(poolOracleManagerDetails?.managerAddress, loadPoolOracleManager)
-	const { approveToken1, approveToken2, cancelWithdrawalBalanceCheck, createOpenOracleGame, disputeReport, loadOracleReport, openOracleSectionState, openOracleForm, setOpenOracleCreateForm, setOpenOracleForm, settleReport, withdrawBalance } = useOpenOracleOperations({
+	const { loadOracleReport, openOracleSectionState, openOracleForm, setOpenOracleForm, settleReport } = useOpenOracleOperations({
 		...walletScopedHookConfig,
 		enabled: (route === 'open-oracle' || route === 'pools') && canReadOnchainData,
 		onReportSettled,
 	})
-	const openOracleViews: readonly OpenOracleView[] = ['browse', 'create', 'selected-report']
-	const derivedOpenOracleView = resolveFirstMatchingValue<OpenOracleView>([[urlOpenOracleReportId !== '' || openOracleForm.reportId !== '', 'selected-report']], 'browse')
-	const activeOpenOracleView = resolveEnumValue<OpenOracleView>(openOracleView, derivedOpenOracleView, openOracleViews)
 	const onViewPendingReport = (reportId: bigint) => {
-		// Open the Advanced route first, then record the report on that entry, so Back returns to the pool page that linked here.
+		// Open the request status route first, then record the report on that entry, so Back returns to the pool page that linked here.
 		navigate('open-oracle')
 		setOpenOracleReport(reportId.toString(), 'replace')
 		setOpenOracleForm(current => ({ ...current, reportId: reportId.toString() }))
-		void loadOracleReport(reportId.toString())
 	}
-	const openOracleRouteContentProps: OpenOracleSectionProps = {
+	const openOracleRouteContentProps: PriceRequestStatusProps = {
 		...openOracleSectionState,
 		accountState,
-		activeView: activeOpenOracleView,
-		environmentReady: canReadOnchainData,
-		environmentRefreshKey: activeEnvironmentNonce,
-		onActiveViewChange: view => setOpenOracleView(view),
-		onApproveToken1: amount => void approveToken1(amount),
-		onApproveToken2: amount => void approveToken2(amount),
-		onCancelOpenOracleWithdrawalBalanceCheck: () => cancelWithdrawalBalanceCheck(),
-		onCreateOpenOracleGame: () => void createOpenOracleGame(),
-		onDisputeReport: () => void disputeReport(),
 		onLoadOracleReport: reportId => {
 			const selectedReportId = (reportId ?? openOracleForm.reportId).trim()
-			if (route === 'open-oracle' && selectedReportId !== '' && selectedReportId !== urlOpenOracleReportId) setOpenOracleReport(selectedReportId)
-			void loadOracleReport(selectedReportId)
+			if (route !== 'open-oracle') {
+				void loadOracleReport(selectedReportId)
+				return
+			}
+			selectOpenOracleReport({ reportId: selectedReportId, selectedReportId: urlOpenOracleReportId, onSelectReport: setOpenOracleReport, onRefreshReport: id => void loadOracleReport(id) })
 		},
 		onOpenOracleFormChange: update => setOpenOracleForm(current => ({ ...current, ...update })),
-		onOpenOracleCreateFormChange: update => setOpenOracleCreateForm(current => ({ ...current, ...update })),
 		onSettleReport: () => void settleReport(),
-		onWithdrawOpenOracleBalance: (balance, reviewedAmount) => void withdrawBalance(balance, reviewedAmount),
 		openOracleForm,
 	}
 	return {
-		activeOpenOracleView,
 		loadOracleReport,
 		onViewPendingReport,
 		openOracleRouteContentProps,

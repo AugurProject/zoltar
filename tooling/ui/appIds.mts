@@ -1,4 +1,4 @@
-export const UI_APP_IDS = ['zoltar', 'statoblast', 'trading'] as const
+export const UI_APP_IDS = ['zoltar', 'statoblast', 'trading', 'openoracle'] as const
 export type UiAppId = (typeof UI_APP_IDS)[number]
 
 export function isUiAppId(candidate: string): candidate is UiAppId {

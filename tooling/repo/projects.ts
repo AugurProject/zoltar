@@ -84,7 +84,7 @@ export const projects: readonly Project[] = [
 		id: 'repository',
 		path: '.',
 		type: 'repository',
-		dependencies: ['shared-core', 'shared-zoltar', 'shared-open-oracle', 'shared-statoblast', 'shared-trading', 'contracts', 'ui-core', 'ui-zoltar-shared', 'ui-statoblast-shared', 'ui-zoltar', 'ui-statoblast', 'ui-trading'],
+		dependencies: ['shared-core', 'shared-zoltar', 'shared-open-oracle', 'shared-statoblast', 'shared-trading', 'contracts', 'ui-core', 'ui-zoltar-shared', 'ui-statoblast-shared', 'ui-zoltar', 'ui-statoblast', 'ui-trading', 'ui-openoracle'],
 		tasks: {
 			setup: { command: ['bun', './tooling/repo/install-frozen.mts'], cwd: '.', inputs: ['package.json', 'bun.lock'], cacheInputs: ['package.json', 'bun.lock'] },
 			test: rootTask(['bun', 'run', 'test'], ['package.json', 'bun.lock', 'knip.ts', 'bun-test-setup*.ts', 'tooling/testing/**', 'shared/*/ts/**', 'solidity/ts/**', 'ui/*/ts/**'], ['complete-validation']),
@@ -246,6 +246,23 @@ export const projects: readonly Project[] = [
 		},
 		generatedDirectories: ['ui/statoblast/js', 'ui/statoblast/dist', 'ui/statoblast/vendor'],
 		ci: { scope: 'core', artifactOutputs: ['ui/statoblast/js', 'ui/statoblast/dist'] },
+	},
+	{
+		id: 'ui-openoracle',
+		path: 'ui/openoracle',
+		type: 'ui-app',
+		dependencies: ['shared-core', 'shared-zoltar', 'shared-open-oracle', 'shared-statoblast', 'ui-core', 'ui-zoltar-shared', 'ui-statoblast-shared'],
+		tasks: {
+			setup: packageInstallTask('ui/openoracle'),
+			build: { ...packageTask('ui/openoracle', 'build', { groups: ['ui'], outputs: ['ui/openoracle/js'] }), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json'] },
+			vendor: { ...packageTask('ui/openoracle', 'vendor', { cacheInputs: [...packageInputs('ui/openoracle'), 'tooling/ui/bundlerPaths.mts', 'tooling/ui/vendor.mts'] }), outputs: ['ui/openoracle/vendor'] },
+			'test-build': { ...packageTask('ui/openoracle', 'build:tests'), outputs: ['ui/openoracle/js/tests'] },
+			workers: packageTask('ui/openoracle', 'build:workers'),
+			typecheck: { ...packageTask('ui/openoracle', 'build'), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json', '--noEmit'] },
+			audit: packageAuditTask('ui/openoracle', ['core-audit']),
+		},
+		generatedDirectories: ['ui/openoracle/js', 'ui/openoracle/dist', 'ui/openoracle/vendor'],
+		ci: { scope: 'core', artifactOutputs: ['ui/openoracle/js', 'ui/openoracle/dist'] },
 	},
 	{
 		id: 'ui-trading',

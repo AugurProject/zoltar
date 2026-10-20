@@ -1,6 +1,6 @@
 import { createElement } from 'preact'
 import { mountApp } from '@zoltar/ui-core-shared/app/appRoot.js'
-import { registerStatoblastSimulationScenarios } from './simulation/index.js'
+import { registerStatoblastSimulationScenarios } from '@zoltar/ui-statoblast-shared/simulation/registerStatoblastScenarios.js'
 import { App } from './app/App.js'
 import { initializeStatoblastActiveEnvironment } from './app/activeEnvironment.js'
 import { installStatoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'

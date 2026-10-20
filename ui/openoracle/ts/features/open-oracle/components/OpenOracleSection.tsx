@@ -3,7 +3,8 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { TransactionScopeProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { createTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import { withActiveAppChainWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
-import * as openOracleCopy from '../../../copy/openOracle.js'
+import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
+import * as openOracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -16,21 +17,31 @@ import { TransactionObjectContext } from '@zoltar/ui-core-shared/components/Tran
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { getLocalEntityScope, useRememberOpenedEntity } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { useChainBlockNumber, useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
-import { formatOpenOracleSecondsInputHint, getOpenOracleCreateEthSent, getOpenOracleCreateGuardMessage, getOpenOracleCreateValidation, getOpenOracleImpliedPrice, OPEN_ORACLE_CREATE_FIELD_ORDER, type OpenOracleCreateField } from '../lib/openOracle.js'
-import { getCreatedOpenOracleReportId } from '../../../protocol/openOracle.js'
-import { loadOpenOracleCreateTokenMetadata, useOpenOracleCreateTokenMetadata, type LoadOpenOracleCreateTokenMetadata, type OpenOracleCreateTokenMetadata } from '../hooks/useOpenOracleCreateTokenMetadata.js'
+import {
+	formatOpenOracleSecondsInputHint,
+	getEffectiveOpenOracleReportDetails,
+	getOpenOracleCreateEthSent,
+	getOpenOracleCreateGuardMessage,
+	getOpenOracleCreateValidation,
+	getOpenOracleImpliedPrice,
+	OPEN_ORACLE_CREATE_FIELD_ORDER,
+	OPEN_ORACLE_PRICE_UNITS,
+	type OpenOracleCreateField,
+} from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
+import { getCreatedOpenOracleReportId } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
+import { loadOpenOracleCreateTokenMetadata, useOpenOracleCreateTokenMetadata, type LoadOpenOracleCreateTokenMetadata, type OpenOracleCreateTokenMetadata } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleCreateTokenMetadata.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { getOpenOracleReportEntityId, openOracleReportDownloadStore, toCachedOpenOracleReportSummary } from '../lib/reportBrowse.js'
+import { getOpenOracleReportEntityId, openOracleReportDownloadStore, toCachedOpenOracleReportSummary } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/reportBrowse.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { formatCurrencyBalance, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
-import type { OpenOracleSectionProps, OpenOracleView } from '../../oracleTypes.js'
-import { BROWSE_PAGE_SIZE, getEffectiveOpenOracleReportDetails, getOpenOracleCreateFieldErrorId, loadBrowseReportPage, OPEN_ORACLE_PRICE_UNITS, type SelectedReportModal } from './OpenOracleReportContent.js'
+import type { OpenOracleSectionProps, OpenOracleView } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
+import { BROWSE_PAGE_SIZE, getOpenOracleCreateFieldErrorId, loadBrowseReportPage, type SelectedReportModal } from './OpenOracleReportContent.js'
 import { OpenOracleReportBrowser } from './OpenOracleReportBrowser.js'
 import { OpenOracleReportDetailsCard } from './OpenOracleReportDetailsCard.js'
 
 function getOpenOracleRouteHeader(view: OpenOracleView) {
 	if (view === 'browse') return { description: openOracleCopy.browseReportsDescription, title: appCopy.browseReports }
-	if (view === 'create') return { description: openOracleCopy.createReportDescription, title: appCopy.createReport }
+	if (view === 'create') return { description: undefined, title: appCopy.createReport }
 	return { description: openOracleCopy.selectedReportDescription, title: openOracleCopy.openOracleReportDetails }
 }
 
@@ -155,7 +166,7 @@ export function OpenOracleSection({
 	const createImpliedPrice = getOpenOracleImpliedPrice({ token1Amount: openOracleCreateForm.exactToken1Report, token2Amount: openOracleCreateForm.initialToken2Amount })
 	const createPriceUnit = openOracleCopy.formatReportPriceUnit(token1Symbol ?? openOracleCopy.baseToken, token2Symbol ?? openOracleCopy.quoteToken)
 	const createImpliedPriceValue = createImpliedPrice === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={createImpliedPrice} suffix={createPriceUnit} units={OPEN_ORACLE_PRICE_UNITS} />
-	const effectiveOpenOracleReportDetails = getEffectiveOpenOracleReportDetails(openOracleReportDetails, chainCurrentTimestamp, chainCurrentBlockNumber)
+	const effectiveOpenOracleReportDetails = openOracleReportDetails === undefined ? undefined : getEffectiveOpenOracleReportDetails(openOracleReportDetails, chainCurrentTimestamp, chainCurrentBlockNumber)
 	const successfulCreateKey = openOracleResult?.action === 'createReportInstance' ? openOracleResult.hash : undefined
 	const createdReportId = getCreatedOpenOracleReportId(openOracleResult)
 	const showCreateSuccess = successfulCreateKey !== undefined && successfulCreateKey !== dismissedCreateSuccessKey
@@ -171,7 +182,7 @@ export function OpenOracleSection({
 			.then(page => {
 				if (cancelled) return
 				openOracleReportDownloadStore.record(
-					getLocalEntityScope('statoblast', 'oracleReport'),
+					getLocalEntityScope('openoracle', 'oracleReport'),
 					page.reports.map(report => ({ data: toCachedOpenOracleReportSummary(report), id: getOpenOracleReportEntityId(report.reportId) })),
 				)
 			})
@@ -184,10 +195,10 @@ export function OpenOracleSection({
 	// loaded details while it is loading, so the opened report stays the same entity and an un-star is not undone.
 	const openedReportIsLoaded = openOracleReportDetails !== undefined && openOracleReportLookupState !== 'missing' && openOracleReportLookupState !== 'load-failed'
 	const openedReportSummary = useMemo(() => (view === 'selected-report' && openedReportIsLoaded && openOracleReportDetails !== undefined ? toCachedOpenOracleReportSummary(openOracleReportDetails) : undefined), [openOracleReportDetails, openedReportIsLoaded, view])
-	useRememberOpenedEntity('statoblast', 'oracleReport', openOracleReportDownloadStore, openedReportSummary === undefined ? undefined : getOpenOracleReportEntityId(openedReportSummary.reportId), openedReportSummary)
+	useRememberOpenedEntity('openoracle', 'oracleReport', openOracleReportDownloadStore, openedReportSummary === undefined ? undefined : getOpenOracleReportEntityId(openedReportSummary.reportId), openedReportSummary)
 	const openBrowseReport = async (reportId: bigint) => {
 		onOpenOracleFormChange({ reportId: reportId.toString() })
-		onActiveViewChange('selected-report')
+		// The report selection also opens its view, so the caller records one navigation.
 		await onLoadOracleReport(reportId.toString())
 	}
 	return (
@@ -210,7 +221,6 @@ export function OpenOracleSection({
 										className='primary'
 										type='button'
 										onClick={() => {
-											setDismissedCreateSuccessKey(successfulCreateKey)
 											void openBrowseReport(createdReportId)
 										}}
 									>
@@ -236,7 +246,6 @@ export function OpenOracleSection({
 					{showCreateSuccess ? undefined : (
 						<SectionBlock title={openOracleCopy.standaloneReportSettings} variant='plain'>
 							<UserMessage tone='warning' detail={openOracleCopy.standaloneOracleWarningDetail} />
-							<UserMessage className='detail' detail={openOracleCopy.standaloneOracleIntroduction} />
 							<TransactionObjectContext
 								className='mobile-workflow-context'
 								title={openOracleCopy.reportAtAGlance}
@@ -455,7 +464,7 @@ export function OpenOracleSection({
 
 			{view === 'selected-report' ? (
 				<div className='workflow-stack route-workflow-stack open-oracle-report-stack'>
-					<TransactionScopeProvider scope={createTransactionScope('open-oracle-report', openOracleForm.reportId)}>
+					<TransactionScopeProvider scope={createTransactionScope('open-oracle-report', tryParseBigIntInput(openOracleForm.reportId)?.toString() ?? openOracleForm.reportId)}>
 						<OpenOracleReportDetailsCard
 							accountAddress={accountState.address}
 							isConnected={isConnected}

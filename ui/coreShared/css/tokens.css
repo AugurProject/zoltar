@@ -263,7 +263,8 @@
 	--accent: var(--accent-zoltar);
 }
 
-:root[data-product="statoblast"] {
+:root[data-product="statoblast"],
+:root[data-product="openoracle"] {
 	--accent: var(--accent-statoblast);
 }
 

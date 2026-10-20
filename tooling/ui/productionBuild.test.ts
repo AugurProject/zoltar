@@ -31,6 +31,15 @@ const productionWorkflowTest = (scenario: ProductionWorkflowScenario, run: () =>
 }
 const productionRebuildInvariantTest = process.env['ZOLTAR_USE_EXISTING_PRODUCTION_BUILD'] === '1' && process.env['ZOLTAR_RUN_PRODUCTION_REBUILD_INVARIANTS'] !== '1' ? test.skip : test
 
+function stylesheetHrefs(html: string) {
+	return [...html.matchAll(/<link\b[^>]*>/giu)].flatMap(([tag]) => {
+		if (!/\brel=["']stylesheet["']/iu.test(tag)) return []
+		const href = /\bhref=["']([^"']+)["']/iu.exec(tag)?.[1]
+		if (href === undefined) throw new Error('Stylesheet link must define href')
+		return [href]
+	})
+}
+
 beforeAll(async () => {
 	if (process.env['ZOLTAR_USE_EXISTING_PRODUCTION_BUILD'] !== '1') {
 		const result = Bun.spawnSync([process.execPath, 'run', 'ui:build:prod'], {
@@ -94,11 +103,23 @@ for (const appId of UI_APP_IDS) {
 	const productionCssPath = path.join(distRootPath, 'css', 'index.css')
 	const productionTokensCssPath = path.join(distRootPath, 'css', 'tokens.css')
 	const productionFaviconPaths = [path.join(distRootPath, 'favicon.svg')]
-	const expectedTitles: Record<UiAppId, string> = { statoblast: 'Augur Statoblast', trading: 'Statoblast Trading', zoltar: 'Zoltar' }
+	const expectedTitles: Record<UiAppId, string> = { openoracle: 'OpenOracle', statoblast: 'Augur Statoblast', trading: 'Statoblast Trading', zoltar: 'Zoltar' }
 	const expectedTitle = expectedTitles[appId]
 	const otherTitles = ['Zoltar', 'Augur Statoblast', 'Statoblast Trading'].filter(title => title !== expectedTitle)
-	const expectedRoutes: Record<UiAppId, string> = { statoblast: '#/pools', trading: '#/markets', zoltar: '#/zoltar' }
+	const expectedRoutes: Record<UiAppId, string> = { openoracle: '#/open-oracle', statoblast: '#/pools', trading: '#/markets', zoltar: '#/zoltar' }
 	const expectedRoute = expectedRoutes[appId]
+
+	test(`${appId} production includes the same stylesheets as development`, async () => {
+		const developmentHtml = await fs.readFile(appPaths.appIndexHtml, 'utf8')
+		const productionHtml = await fs.readFile(productionIndexPath, 'utf8')
+		const productionStyles = await Promise.all(stylesheetHrefs(productionHtml).map(href => fs.readFile(path.join(distRootPath, href), 'utf8')))
+		const missingStyles: string[] = []
+		for (const href of stylesheetHrefs(developmentHtml)) {
+			const sourcePath = href.startsWith('/') ? path.join(repositoryRootPath, href) : path.join(appPaths.appRoot, href)
+			if (!productionStyles.includes(await fs.readFile(sourcePath, 'utf8'))) missingStyles.push(href)
+		}
+		expect(missingStyles).toEqual([])
+	})
 
 	test(`${appId} production build emits the deployable artifact set`, async () => {
 		const expectedPaths = [
@@ -420,6 +441,22 @@ const productionBrowserScenarios = [
 		viewport: { height: 844, width: 390 },
 	},
 	{
+		appId: 'openoracle',
+		hash: '#/deploy?simulate=1&simScenario=baseline',
+		expected: 'Deploy contracts',
+		workflow: false,
+		name: 'openoracle baseline deployment',
+		viewport: { height: 900, width: 1440 },
+	},
+	{
+		appId: 'openoracle',
+		hash: '#/open-oracle?simulate=1&simScenario=deployed',
+		expected: 'Browse reports',
+		workflow: false,
+		name: 'openoracle deployed report browser at narrow width',
+		viewport: { height: 844, width: 390 },
+	},
+	{
 		appId: 'statoblast',
 		hash: '#/deploy?simulate=1&genesis=yes&simScenario=baseline',
 		expected: 'Deploy contracts',
@@ -472,7 +509,7 @@ for (const scenario of productionBrowserScenarios) {
 		}
 		expect(state.html).toContain('<main')
 		expect(state.body).toContain(scenario.expected)
-		const appNames = { zoltar: 'Zoltar', trading: 'Statoblast Trading', statoblast: 'Augur Statoblast' }
+		const appNames = { zoltar: 'Zoltar', trading: 'Statoblast Trading', statoblast: 'Augur Statoblast', openoracle: 'OpenOracle' }
 		expect(state.body).toContain(appNames[scenario.appId])
 		expect(state.body).toContain('Browser simulation')
 		expect(state.height).toBe(scenario.viewport.height)
@@ -483,7 +520,7 @@ for (const scenario of productionBrowserScenarios) {
 	else productionBrowserTest(`production bundle boots the ${scenario.name} scenario in Chromium`, run)
 }
 
-for (const appId of UI_APP_IDS) {
+for (const appId of ['zoltar', 'statoblast', 'trading'] as const) {
 	productionBrowserTest(`production bundle requires a genesis choice before starting ${appId}`, async () => {
 		if (server === undefined) throw new Error('Production test server did not start')
 		const baseUrl = server.url.toString().replace(/\/$/, '')
