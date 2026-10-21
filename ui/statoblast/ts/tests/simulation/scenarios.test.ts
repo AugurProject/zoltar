@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test'
 import { registerStatoblastSimulationScenarios } from '@zoltar/ui-statoblast-shared/simulation/registerStatoblastScenarios.js'
 import { getRegisteredSimulationScenarios, getSimulationScenarioDescription, getSimulationScenarioLabel } from '@zoltar/ui-core-shared/simulation/scenarios.js'
 const EXPECTED_PRESENTATION = {
-	portfolio: ['Portfolio', 'A shared REP reserve funding two questions'],
+	portfolio: ['Portfolio', 'Individual REP accounts back two questions'],
 	'security-pool': ['Security pool', 'seeded question'],
 	securitypoolx2: ['Security pool x2', 'Two seeded questions with two security pools'],
 	'securitypoolx2-auction': ['Security pool x2 auction', 'child truth auction seeded with ten bids'],

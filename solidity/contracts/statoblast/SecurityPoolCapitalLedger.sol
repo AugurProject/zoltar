@@ -555,6 +555,13 @@ contract SecurityPoolCapitalLedger {
 		require(msg.value >= assignedReserve, 'Fork execution reserve unfunded');
 		account.executionReserveAttoEth += msg.value - assignedReserve;
 	}
+	/// @dev A single protocol-owned position is junior to all owner retirement.
+	/// Takeovers move its obligations into an ordinary buyer's active position.
+	function importProtocolReserve(uint256 rep, uint256 commitment) external onlyForkAuthority {
+		require(importing && forkAuthority != address(0), 'Protocol reserve import unavailable');
+		uint96 id = commitmentIndex.importProtocolReserve(forkAuthority, rep, commitment, maximumHealthyPrice(rep, commitment));
+		_addSlot(owners[forkAuthority], id);
+	}
 	/// @notice Installs a funded recap purchase in its buyer's own active position.
 	/// @dev The coordinator authenticates the buyer and supplies the actual child
 	/// REP before activation. No later winner claim can defer liquidation exposure.

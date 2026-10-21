@@ -66,7 +66,7 @@
 							<td><code>refreshPortfolioFees()</code></td>
 							<td>Anyone</td>
 							<td>The fee rate and end fit the fixed stream key widths; any increased budget is funded from question collateral.</td>
-							<td>Checkpoints earned fees and replaces a bound question’s funded prospective linear stream using central fee principal, the configured annual fee and cutoff. A forked universe only checkpoints its sealed book. No-op for standalone pools.</td>
+							<td>Checkpoints earned fees and replaces a bound question’s funded prospective linear stream using central fee principal, the configured annual fee and cutoff. Forked universes and frozen final claims only checkpoint existing settlement state. No-op for standalone pools.</td>
 							<td>Due accounting checkpoints and fee-stream replacement</td>
 						</tr>
 						<tr>
@@ -199,7 +199,7 @@
 							<td><code>updateRetentionRate()</code></td>
 							<td>Anyone</td>
 							<td>No caller restriction. The bound-pool branch runs before the native lifecycle check. Standalone pools return unless <code>Operational</code>; otherwise they first accrue fees and store a changed rate. Zero standalone minting capacity, including an existing escalation game, selects maximum retention.</td>
-							<td>Portfolio-bound pools call <code>refreshPortfolioFees()</code> to checkpoint central accounting and refresh the prospective linear fee stream; a forked universe only checkpoints its sealed book. Standalone pools recalculate the retention curve from current collateral and live minting capacity.</td>
+							<td>Portfolio-bound pools call <code>refreshPortfolioFees()</code> to checkpoint central accounting and refresh the prospective linear fee stream; forked universes and frozen final claims only checkpoint existing settlement state. Standalone pools recalculate the retention curve from current collateral and live minting capacity.</td>
 							<td>Bound pools: central fee/finality events when due and <code>FeeStreamReplaced</code> when the stream is refreshed. Standalone pools: accrual <code>PoolAccountingCheckpoint</code> when due, plus another checkpoint only if the stored retention rate changes</td>
 						</tr>
 						<tr>

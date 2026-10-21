@@ -368,11 +368,9 @@ contract SecurityPoolPortfolioForkCoordinator {
 		SecurityPoolCapitalLedger capital = portfolio.capitalLedger(child);
 		if (retainedK != 0) {
 			IERC20(address(zoltar.getRepToken(child))).safeTransfer(address(capital), retained);
-			SecurityPoolCapitalLedger.ChoicePosition[3] memory positions;
 			// One protocol-owned reserve per universe cannot create owner spam.
-			// It retires after earlier owner cohorts and never pays a private beneficiary.
-			positions[0] = SecurityPoolCapitalLedger.ChoicePosition(retained, retainedK, 2, 0);
-			capital.importChoice(address(this), positions, 10_000);
+			// Both inherited owner cohorts retain priority over its retirement.
+			capital.importProtocolReserve(retained, retainedK);
 		} else if (retained != 0) zoltar.burnRep(child, retained);
 		(uint48 logicalAnchor, , , ) = portfolio.clocks(child);
 		uint256 demand = branch.parentCash;
@@ -403,7 +401,9 @@ contract SecurityPoolPortfolioForkCoordinator {
 	function collectProtectedPrincipal(uint248 child) external nonReentrant {
 		require(branches[child].ready, 'Branch is not active');
 		SecurityPoolCapitalLedger capital = portfolio.capitalLedger(child);
-		capital.serveRetirement();
+		// A later fork freezes pledged backing, not earlier released principal
+		// or income. Those parent claims remain collectable without new retirement.
+		if (zoltar.getForkTime(child) == 0) capital.serveRetirement();
 		capital.claimEarnings();
 		SecurityPoolCapitalLedger.Owner memory account = capital.ownerAccount(address(this));
 		if (account.freeAttoRep != 0) capital.withdrawFree(account.freeAttoRep, address(this));

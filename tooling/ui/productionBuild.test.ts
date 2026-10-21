@@ -23,6 +23,7 @@ const CHROMIUM_COMMAND_TIMEOUT_MILLISECONDS = 30_000
 const PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS = 120_000
 const PORTFOLIO_BROWSER_TIMEOUT_MILLISECONDS = 600_000
 const PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS = 600_000
+const REPORTING_MIGRATION_TIMEOUT_MILLISECONDS = 900_000
 
 let server: Bun.Server | undefined
 
@@ -31,7 +32,9 @@ const productionBrowserTest = (name: string, run: () => Promise<void>) => test(n
 const selectedWorkflowScenarios = selectProductionWorkflowScenarios(process.env['ZOLTAR_BROWSER_WORKFLOW_SCENARIO'])
 const productionWorkflowTest = (scenario: ProductionWorkflowScenario, run: () => Promise<void>) => {
 	const register = process.env['RUN_PRODUCTION_BROWSER_WORKFLOWS'] === '1' && selectedWorkflowScenarios.includes(scenario) ? test : test.skip
-	register(productionWorkflowTestName(scenario), run, PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS)
+	// Oracle funding, reporting, fork creation and child migration share one complete transaction workflow.
+	const timeoutMilliseconds = scenario === 'reporting-migration' ? REPORTING_MIGRATION_TIMEOUT_MILLISECONDS : PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS
+	register(productionWorkflowTestName(scenario), run, timeoutMilliseconds)
 }
 const productionRebuildInvariantTest = process.env['ZOLTAR_USE_EXISTING_PRODUCTION_BUILD'] === '1' && process.env['ZOLTAR_RUN_PRODUCTION_REBUILD_INVARIANTS'] !== '1' ? test.skip : test
 
@@ -508,7 +511,7 @@ for (const scenario of productionBrowserScenarios) {
 		if (server === undefined) throw new Error('Production test server did not start')
 		if (chromiumPath === undefined) throw new Error('Chromium is required for the production browser smoke test')
 		const baseUrl = server.url.toString().replace(/\/$/, '')
-		const state = JSON.parse(await loadProductionDocumentInChromium(`${baseUrl}/${scenario.appId}/${scenario.hash}`, scenario.viewport))
+		const state = JSON.parse(await loadProductionDocumentInChromium(`${baseUrl}/${scenario.appId}/${scenario.hash}`, scenario.viewport, undefined, scenario.workflow ? PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS : PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS))
 		if (typeof state !== 'object' || state === null || !('body' in state) || !('html' in state) || typeof state.body !== 'string' || typeof state.html !== 'string' || !('height' in state) || !('width' in state)) {
 			throw new Error(`${scenario.name} returned an invalid document state`)
 		}
@@ -715,7 +718,7 @@ function productionInteractionTest(scenario: ProductionWorkflowScenario, route: 
 		if (server === undefined) throw new Error('Production test server did not start')
 		if (chromiumPath === undefined) throw new Error('Chromium is required for the production browser workflow test')
 		const baseUrl = server.url.toString().replace(/\/$/, '')
-		const state = JSON.parse(await loadProductionDocumentInChromium(`${baseUrl}/statoblast/${route}`, viewport, interact))
+		const state = JSON.parse(await loadProductionDocumentInChromium(`${baseUrl}/statoblast/${route}`, viewport, interact, PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS))
 		if (typeof state !== 'object' || state === null || !('body' in state) || typeof state.body !== 'string') throw new Error('Production workflow returned invalid document state')
 		expect(state.body).not.toContain('Failed to initialize the app environment')
 		expect(state.height).toBe(viewport.height)

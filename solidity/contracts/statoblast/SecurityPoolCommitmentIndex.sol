@@ -11,6 +11,7 @@ import { SecurityPoolCommitmentTree } from './SecurityPoolCommitmentTree.sol';
 contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	address public immutable portfolio;
 	uint96 public lastPositionId;
+	uint96 public protocolReserveId;
 	uint96 public currentBatch;
 	uint96 public nextBatch = 1;
 	uint96 private lastBatch = 1;
@@ -64,6 +65,14 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		require(importsOpen, 'Commitment imports are sealed');
 		require(batch == 0 || batch == currentBatch || batch == nextBatch, 'Unknown imported cohort');
 		return _create(owner, batch, rep, commitment, maxHealthyPrice);
+	}
+
+	/// @dev The one unchosen fork reserve shares active accounting, but may only
+	/// retire after both owner cohorts and never supplies capacity to new demand.
+	function importProtocolReserve(address owner, uint256 rep, uint256 commitment, uint256 maxHealthyPrice) external onlyPortfolio returns (uint96 id) {
+		require(importsOpen && protocolReserveId == 0, 'Protocol reserve import unavailable');
+		id = _create(owner, 0, rep, commitment, maxHealthyPrice);
+		protocolReserveId = id;
 	}
 
 	/// @dev Atomic recap fills may merge with a chosen active position. Imported
@@ -151,6 +160,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	}
 
 	function requestRetirement(uint96 id) external onlyPortfolio operational {
+		require(id != protocolReserveId, 'Protocol reserve follows owner retirement');
 		_touch(id);
 		Position storage position = positions[id];
 		require(position.batch == 0 && nodes[position.node].commitment != 0, 'Position is not active');
@@ -195,7 +205,9 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 
 	/// @notice Capacity available to fresh demand after honoring queued retirement.
 	function eligibleActiveCommitment(uint256 acceptedPrice) external view returns (uint256) {
-		return _eligible(roots[0], acceptedPrice);
+		Node storage reserve = nodes[positions[protocolReserveId].node];
+		uint256 reserved = reserve.price >= acceptedPrice ? reserve.commitment : 0;
+		return _eligible(roots[0], acceptedPrice) - reserved;
 	}
 
 	function totals() external view returns (uint256 rep, uint256 commitment) {
@@ -234,8 +246,9 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 
 	/// @notice Serve existing retirement groups before authorizing new demand.
 	/// @dev Current is closed before service. Only two groups can be present at
-	/// entry. Unhealthy tails cost no healthy capacity once reached. A partial
-	/// boundary keeps its conservative old price; the controller can rekey it once.
+	/// entry, followed by at most one protocol reserve. Unhealthy tails cost no
+	/// healthy capacity once reached. A partial boundary keeps its conservative
+	/// old price; the controller can rekey it once.
 	function retire(uint256 acceptedPrice, uint256 demand) external onlyPortfolio operational returns (Retirement memory result) {
 		uint256 healthy = eligibleCommitment(acceptedPrice);
 		if (healthy < demand) return result;
@@ -262,6 +275,33 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 				result.boundaryPositionId = boundary;
 				break;
 			}
+		}
+		if ((currentBatch == 0 || roots[currentBatch] == 0) && roots[nextBatch] == 0) {
+			Retirement memory reserve = _retireProtocolReserve(acceptedPrice, spare);
+			result.rep += reserve.rep;
+			result.commitment += reserve.commitment;
+			result.boundaryPositionId = reserve.boundaryPositionId;
+		}
+	}
+
+	function _retireProtocolReserve(uint256 acceptedPrice, uint256 spare) private returns (Retirement memory result) {
+		uint96 id = protocolReserveId;
+		if (id == 0) return result;
+		Position storage position = positions[id];
+		Node storage leaf = nodes[position.node];
+		if (leaf.commitment == 0) return result;
+		uint256 amount = leaf.price < acceptedPrice ? leaf.commitment : Math.min(spare, leaf.commitment);
+		if (amount == 0) return result;
+		_touch(id);
+		_detach(0, position.node);
+		result.rep = Math.mulDiv(leaf.rep, amount, leaf.commitment);
+		result.commitment = amount;
+		position.releasedRep += result.rep;
+		leaf.rep -= result.rep;
+		leaf.commitment -= amount;
+		if (leaf.commitment != 0) {
+			_insert(0, position.node);
+			result.boundaryPositionId = id;
 		}
 	}
 

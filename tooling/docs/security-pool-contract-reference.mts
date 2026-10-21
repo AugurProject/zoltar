@@ -105,7 +105,7 @@ export const securityPoolContractReference: ContractReference = {
 		{
 			call: '`refreshPortfolioFees()`',
 			caller: 'Anyone',
-			effect: 'Checkpoints earned fees and replaces a bound question’s funded prospective linear stream using central fee principal, the configured annual fee and cutoff. A forked universe only checkpoints its sealed book. No-op for standalone pools.',
+			effect: 'Checkpoints earned fees and replaces a bound question’s funded prospective linear stream using central fee principal, the configured annual fee and cutoff. Forked universes and frozen final claims only checkpoint existing settlement state. No-op for standalone pools.',
 			declarations: [{ name: 'refreshPortfolioFees' }],
 			preconditions: 'The fee rate and end fit the fixed stream key widths; any increased budget is funded from question collateral.',
 			signals: 'Due accounting checkpoints and fee-stream replacement',
@@ -273,7 +273,8 @@ export const securityPoolContractReference: ContractReference = {
 		{
 			call: '`updateRetentionRate()`',
 			caller: 'Anyone',
-			effect: 'Portfolio-bound pools call `refreshPortfolioFees()` to checkpoint central accounting and refresh the prospective linear fee stream; a forked universe only checkpoints its sealed book. Standalone pools recalculate the retention curve from current collateral and live minting capacity.',
+			effect:
+				'Portfolio-bound pools call `refreshPortfolioFees()` to checkpoint central accounting and refresh the prospective linear fee stream; forked universes and frozen final claims only checkpoint existing settlement state. Standalone pools recalculate the retention curve from current collateral and live minting capacity.',
 			declarations: [{ name: 'updateRetentionRate' }],
 			preconditions: 'No caller restriction. The bound-pool branch runs before the native lifecycle check. Standalone pools return unless `Operational`; otherwise they first accrue fees and store a changed rate. Zero standalone minting capacity, including an existing escalation game, selects maximum retention.',
 			signals: 'Bound pools: central fee/finality events when due and `FeeStreamReplaced` when the stream is refreshed. Standalone pools: accrual `PoolAccountingCheckpoint` when due, plus another checkpoint only if the stored retention rate changes',

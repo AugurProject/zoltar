@@ -190,6 +190,13 @@ contract SecurityPoolPortfolioSettlement {
 		return _snapshot(_question(pool), 0);
 	}
 
+	/// @notice Final cash remains in its original book, even when inherited by a child.
+	function isQuestionFrozen(address pool) external view returns (bool) {
+		QuestionSource memory source = _question(pool);
+		(, uint64 frozenBookId) = ledger.question(_bookId(source.universeId), source.questionId);
+		return frozenBookId != 0;
+	}
+
 	function quoteRedemption(address pool, uint256 shares) external view returns (uint256 cashAttoEth) {
 		QuestionSource memory source = _question(pool);
 		(cashAttoEth, ) = ledger.quoteRedemption(_bookId(source.universeId), source.questionId, shares);

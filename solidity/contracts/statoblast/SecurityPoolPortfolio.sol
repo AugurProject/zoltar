@@ -339,7 +339,9 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		ISecurityPool pool = _pool(msg.sender);
 		uint248 universeId = pool.universeId();
 		capitalLedger[universeId].checkpoint();
-		if (zoltar.getForkTime(universeId) != 0) {
+		// Final claims retain their immutable cash and fee state, including after
+		// partial or full redemption through a native pool's trailing refresh.
+		if (zoltar.getForkTime(universeId) != 0 || settlement.isQuestionFrozen(msg.sender)) {
 			SecurityPoolPortfolioSettlement.Snapshot memory frozenSnapshot = settlement.checkpointQuestion(msg.sender, logicalTime(universeId));
 			_creditSnapshot(universeId, frozenSnapshot);
 			return (
