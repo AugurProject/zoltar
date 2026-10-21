@@ -14,6 +14,7 @@ import * as capitalCopy from '../../ui/statoblastShared/ts/copy/portfolioCapital
 import { UI_APP_IDS, featureStylesheets, getUiAppPaths, getUiCoreSharedPaths, isUiAppId, type UiAppId } from './appPaths.mts'
 import { launchChromium } from './chromiumDevTools.mts'
 import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
+import { createProductionBrowserNavigation } from './productionBrowserNavigation.ts'
 import { productionWorkflowTestName, selectProductionWorkflowScenarios, type ProductionWorkflowScenario } from './productionWorkflowScenarios.ts'
 import { AUGUR_GENESIS_FORK_QUESTION } from '../../shared/zoltar/ts/deployment/genesisUniverses.ts'
 
@@ -290,6 +291,7 @@ type ProductionBrowserDriver = {
 	waitForButtonEnabled: (label: string, occurrence?: number) => Promise<void>
 	waitForBodyText: (text: string) => Promise<string>
 	waitForBodyWithoutText: (text: string) => Promise<string>
+	waitForReady: () => Promise<void>
 	waitForTransactionStatus: (status: string, title: string) => Promise<string>
 }
 
@@ -322,6 +324,18 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 				width: nextViewport.width,
 			})
 		}
+		const navigation = createProductionBrowserNavigation({
+			bootstrapTimeoutMilliseconds,
+			navigateDocument: async url => {
+				const result = await send('Page.navigate', { url })
+				return { startsNewDocument: typeof result === 'object' && result !== null && 'loaderId' in result && typeof result.loaderId === 'string' }
+			},
+			readDocument: async () => {
+				const document = await evaluate('({ body: document.body?.innerText ?? "", timeOrigin: performance.timeOrigin })')
+				if (typeof document !== 'object' || document === null || !('body' in document) || typeof document.body !== 'string' || !('timeOrigin' in document) || typeof document.timeOrigin !== 'number') throw new Error('Chromium did not return production document state')
+				return { body: document.body, timeOrigin: document.timeOrigin }
+			},
+		})
 
 		await send('Runtime.enable')
 		await send('Page.enable')
@@ -329,36 +343,7 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 			source: `(() => { const NativeWorker = window.Worker; window.__zoltarProductionWorkers = []; window.Worker = class TrackedProductionWorker extends NativeWorker { constructor(...args) { super(...args); window.__zoltarProductionWorkers.push(this) } } })()`,
 		})
 		await resize(viewport)
-		await send('Page.navigate', { url: pageUrl })
-		let state = ''
-		let applicationReady = false
-		const bootstrapDeadline = Date.now() + bootstrapTimeoutMilliseconds
-		while (Date.now() < bootstrapDeadline) {
-			state = readEvaluationString(
-				await send('Runtime.evaluate', {
-					expression: `JSON.stringify({ body: document.body?.innerText ?? '', height: innerHeight, html: document.documentElement?.outerHTML ?? '', width: innerWidth })`,
-					returnByValue: true,
-				}),
-			)
-			const parsedState = JSON.parse(state)
-			if (typeof parsedState === 'object' && parsedState !== null && 'body' in parsedState && typeof parsedState.body === 'string' && parsedState.body.includes('Simulation bootstrap failed')) throw new Error(`Production simulation failed to bootstrap: ${parsedState.body}`)
-			if (
-				typeof parsedState === 'object' &&
-				parsedState !== null &&
-				'body' in parsedState &&
-				typeof parsedState.body === 'string' &&
-				parsedState.body !== '' &&
-				parsedState.body !== 'Loading...' &&
-				parsedState.body !== 'Loading…' &&
-				!parsedState.body.includes('BOOTSTRAPPING') &&
-				!parsedState.body.includes('Starting simulation bootstrap')
-			) {
-				applicationReady = true
-				break
-			}
-			await Bun.sleep(50)
-		}
-		if (!applicationReady) throw new Error(`Production application did not finish loading: ${state}`)
+		await navigation.navigate(pageUrl)
 		const driver: ProductionBrowserDriver = {
 			captureScreenshot: async screenshotPath => {
 				const result = (await send('Page.captureScreenshot', { captureBeyondViewport: false, format: 'png', fromSurface: true })) as { data?: unknown }
@@ -375,7 +360,7 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 			evaluate,
 			evaluateAsync: expression => page.evaluate(expression),
 			navigate: async url => {
-				await send('Page.navigate', { url: new URL(url, pageUrl).href })
+				await navigation.navigate(new URL(url, pageUrl).href)
 			},
 			pressTab: async () => {
 				await send('Input.dispatchKeyEvent', { code: 'Tab', key: 'Tab', type: 'keyDown' })
@@ -398,6 +383,7 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 			},
 			waitForBodyText: async text => await waitForBody(body => body.includes(text), JSON.stringify(text)),
 			waitForBodyWithoutText: async text => await waitForBody(body => !body.includes(text), `body to omit ${JSON.stringify(text)}`),
+			waitForReady: navigation.waitForReady,
 			waitForTransactionStatus: async (status, title) => {
 				for (let attempt = 0; attempt < 2400; attempt += 1) {
 					const matches = await evaluate(`(() => { const notice = document.querySelector('.global-transaction-notice'); return notice?.querySelector('.badge')?.textContent?.trim() === ${JSON.stringify(status)} && notice?.querySelector('strong')?.textContent?.trim() === ${JSON.stringify(title)} })()`)
@@ -651,7 +637,7 @@ function createWorkflowActions(driver: ProductionBrowserDriver) {
 	}
 	// Read fixture addresses from the seeded chain, then use the same address-entry flow as a user.
 	const loadSeededPools = async () => {
-		await driver.waitForBodyWithoutText('BOOTSTRAPPING')
+		await driver.waitForReady()
 		const genesisRepTokenAddress = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.genesisRepTokenAddress')
 		const wethAddress = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.wethAddress')
 		if (typeof genesisRepTokenAddress !== 'string' || typeof wethAddress !== 'string') throw new Error('Simulation network profile was not available')
@@ -1034,7 +1020,6 @@ productionInteractionTest('deployment-auction', '#/deploy?simulate=1&genesis=yes
 	// Keep the lightweight deployment boot before the expensive auction fixture, as in the original workflow.
 	await driver.navigate('?workflow=auction#/pools?simulate=1&genesis=yes&simScenario=securitypoolx2-auction')
 	await driver.waitForBodyText('Browse pools')
-	await driver.waitForBodyWithoutText('BOOTSTRAPPING')
 	const { completeTransactionReview, openSeededPool, selectPoolTool, loadSeededPools } = createWorkflowActions(driver)
 	const universeDirectoryOpened = await driver.evaluate(`(() => { const link = [...document.querySelectorAll('a')].find(candidate => candidate.textContent?.trim() === 'Universes' && candidate.href.includes('#/pools/universes')); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
 	expect(universeDirectoryOpened).toBe(true)
