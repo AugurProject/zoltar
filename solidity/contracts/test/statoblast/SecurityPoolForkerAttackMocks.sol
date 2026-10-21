@@ -21,12 +21,14 @@ contract SecurityPoolForkerFakePoolMock {
 	address public constant portfolioCustody = address(0);
 	uint248 private immutable configuredUniverseId;
 	ReputationToken private immutable configuredRepToken;
+	IShareToken private immutable configuredShareToken;
 	uint256 private immutable configuredQuestionId;
 	address private immutable configuredEscalationGame;
 
-	constructor(uint248 configuredUniverse, ReputationToken configuredRep, uint256 configuredQuestion, address configuredGame) {
+	constructor(uint248 configuredUniverse, ReputationToken configuredRep, IShareToken configuredShareTokenAddress, uint256 configuredQuestion, address configuredGame) {
 		configuredUniverseId = configuredUniverse;
 		configuredRepToken = configuredRep;
+		configuredShareToken = configuredShareTokenAddress;
 		configuredQuestionId = configuredQuestion;
 		configuredEscalationGame = configuredGame;
 	}
@@ -45,6 +47,10 @@ contract SecurityPoolForkerFakePoolMock {
 
 	function repToken() external view returns (ReputationToken) {
 		return configuredRepToken;
+	}
+
+	function shareToken() external view returns (IShareToken) {
+		return configuredShareToken;
 	}
 
 	function questionId() external view returns (uint256) {
@@ -323,6 +329,10 @@ contract SecurityPoolForkerEscrowAttackParentMock {
 	}
 
 	function totalUnderwritingLimitAttoEth() external pure returns (uint256) {
+		return 0;
+	}
+
+	function getCurrentMintingCapacityAttoEth() external pure returns (uint256) {
 		return 0;
 	}
 
