@@ -3,7 +3,7 @@ import { useEffect } from 'preact/hooks'
 import { encodeFunctionData, formatEther, formatUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
 import {
 	buildPortfolioCapitalDepositRequest,
-	buildPortfolioCapitalWithdrawFreeRequest,
+	buildPortfolioCapitalWithdrawPrincipalRequest,
 	buildPortfolioCapitalSetHealthRequest,
 	buildPortfolioCapitalAuthorizeRequest,
 	buildPortfolioCapitalFundExecutionReserveRequest,
@@ -12,7 +12,6 @@ import {
 	buildPortfolioCapitalCancelRetirementRequest,
 	buildPortfolioCapitalServeRetirementRequest,
 	buildPortfolioCapitalClaimEarningsRequest,
-	buildPortfolioCapitalTopUpRequest,
 	loadPortfolioCapitalSnapshot,
 	type PortfolioCapitalSnapshot,
 } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
@@ -21,7 +20,7 @@ import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients
 import { portfolioReadClient, type PortfolioTransaction } from '../../../protocol/securityPoolPortfolio.js'
 import { portfolioAmountOrUndefined } from '../lib/draft.js'
 import { portfolioBasisPointsOrUndefined } from '../lib/creation.js'
-import { capitalAuthorizationReason, requiredPortfolioCollateral, requiredPortfolioExecutionReserve } from '../lib/capital.js'
+import { capitalAuthorizationReason, capitalWithdrawalReason, requiredPortfolioCollateral, requiredPortfolioExecutionReserve } from '../lib/capital.js'
 import type { usePortfolio } from './usePortfolio.js'
 import type { usePortfolioActions } from './usePortfolioActions.js'
 
@@ -31,9 +30,7 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 	const reserveAmount = useSignal('')
 	const reserveWithdrawal = useSignal('')
 	const healthPercent = useSignal('100')
-	const pledgeAmount = useSignal('')
 	const commitmentAmount = useSignal('')
-	const topUps = useSignal<Record<string, string>>({})
 	const snapshot = model.snapshot
 	const stateReason = (model.loading ? 'Refreshing portfolio balances.' : undefined) ?? (snapshot === undefined ? 'Load a portfolio account first.' : model.error)
 	const ownerReason = actions.ownerReason ?? stateReason
@@ -43,7 +40,6 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 	const withdrawAttoRep = portfolioAmountOrUndefined(withdrawalAmount.value)
 	const fundAttoEth = portfolioAmountOrUndefined(reserveAmount.value)
 	const reserveWithdrawAttoEth = portfolioAmountOrUndefined(reserveWithdrawal.value)
-	const pledgeAttoRep = portfolioAmountOrUndefined(pledgeAmount.value)
 	const commitmentAttoEth = portfolioAmountOrUndefined(commitmentAmount.value)
 	const healthBps = portfolioBasisPointsOrUndefined(healthPercent.value)
 	useEffect(() => {
@@ -53,25 +49,21 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 		withdrawalAmount.value = ''
 		reserveAmount.value = ''
 		reserveWithdrawal.value = ''
-		pledgeAmount.value = ''
 		commitmentAmount.value = ''
-		topUps.value = {}
 	}, [snapshot?.portfolio, snapshot?.owner, snapshot?.universeId])
 	const positive = (value: bigint | undefined) => (value === undefined || value === 0n ? 'Enter a positive amount.' : undefined)
 	const fundingReason = ownerReason ?? inactiveReason ?? admissionReason ?? positive(depositAttoRep) ?? (snapshot !== undefined && depositAttoRep !== undefined && depositAttoRep > snapshot.walletAttoRep ? 'Insufficient wallet REP.' : undefined)
 	const depositReason = fundingReason ?? (snapshot !== undefined && depositAttoRep !== undefined && depositAttoRep > snapshot.allowanceAttoRep ? 'Approve REP before depositing.' : undefined)
-	const withdrawReason = ownerReason ?? positive(withdrawAttoRep) ?? (snapshot !== undefined && withdrawAttoRep !== undefined && withdrawAttoRep > snapshot.withdrawableAttoRep ? 'Insufficient free REP. Retire pledged commitments first.' : undefined)
-	const fundReserveReason = ownerReason ?? positive(fundAttoEth) ?? (snapshot !== undefined && fundAttoEth !== undefined && fundAttoEth > snapshot.walletAttoEth ? 'Insufficient wallet ETH; gas is additional.' : undefined)
+	const withdrawReason = ownerReason ?? (snapshot === undefined ? undefined : capitalWithdrawalReason(snapshot, withdrawAttoRep))
+	const fundReserveReason = ownerReason ?? (snapshot?.exported ? 'The reserve follows your fork choice.' : undefined) ?? positive(fundAttoEth) ?? (snapshot !== undefined && fundAttoEth !== undefined && fundAttoEth > snapshot.walletAttoEth ? 'Insufficient wallet ETH; gas is additional.' : undefined)
 	const withdrawReserveReason =
 		ownerReason ??
 		positive(reserveWithdrawAttoEth) ??
 		(snapshot?.exported ? 'The reserve follows your fork choice.' : undefined) ??
 		(snapshot !== undefined && reserveWithdrawAttoEth !== undefined && reserveWithdrawAttoEth > snapshot.ownerAccount.executionReserveAttoEth ? 'Only the unassigned execution reserve can be withdrawn.' : undefined)
 	const healthReason = ownerReason ?? inactiveReason ?? (healthBps === undefined || healthBps < 10_000n ? 'Choose a health target of at least 100%.' : undefined)
-	const authorizeReason = ownerReason ?? admissionReason ?? (snapshot === undefined ? undefined : capitalAuthorizationReason(snapshot, pledgeAttoRep, commitmentAttoEth))
+	const authorizeReason = ownerReason ?? admissionReason ?? (snapshot === undefined ? undefined : capitalAuthorizationReason(snapshot, commitmentAttoEth))
 	const livePositions = snapshot?.positions.filter(position => position.commitment > 0n) ?? []
-	const activePosition = livePositions.find(position => position.batch === 0n)
-	const nextPosition = livePositions.find(position => position.batch === snapshot?.nextBatch)
 	const claimReason = ownerReason
 	const serveReason = ownerReason ?? inactiveReason ?? (snapshot?.priceValid === false ? 'Refresh the shared REP price first.' : undefined)
 	const requireSnapshot = () => {
@@ -126,10 +118,6 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 			healthPercent.value = value
 		},
 		healthReason,
-		pledgeAmount: pledgeAmount.value,
-		setPledgeAmount: (value: string) => {
-			pledgeAmount.value = value
-		},
 		commitmentAmount: commitmentAmount.value,
 		setCommitmentAmount: (value: string) => {
 			commitmentAmount.value = value
@@ -140,20 +128,12 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 		livePositions,
 		claimReason,
 		serveReason,
-		pledgedAttoRep: livePositions.reduce((total, position) => total + position.rep, 0n),
-		ownerCommitmentAttoEth: livePositions.reduce((total, position) => total + position.commitment, 0n),
-		topUps: topUps.value,
-		setTopUp: (id: bigint, value: string) => {
-			topUps.value = { ...topUps.value, [String(id)]: value }
-		},
 		positionReasons: (id: bigint) => {
 			const position = livePositions.find(item => item.id === id)
-			const amount = portfolioAmountOrUndefined(topUps.value[String(id)] ?? '')
 			const common = ownerReason ?? inactiveReason ?? (position === undefined ? 'Position is no longer live.' : undefined)
 			return {
-				topUp: common ?? positive(amount) ?? (snapshot !== undefined && amount !== undefined && amount > snapshot.withdrawableAttoRep ? 'Insufficient free REP.' : undefined),
-				retire: common ?? (position?.batch !== 0n ? 'Retirement already requested.' : undefined) ?? (nextPosition !== undefined ? 'Your next retirement position is already occupied.' : undefined),
-				cancel: common ?? (position?.batch === 0n ? 'Position is active.' : undefined) ?? (activePosition !== undefined ? 'An active position already exists.' : undefined),
+				retire: common ?? (position?.batch !== 0n ? 'Retirement already requested.' : undefined),
+				cancel: common ?? (position?.batch === 0n ? 'Position is active.' : undefined),
 			}
 		},
 		approve: (amount: bigint) =>
@@ -167,13 +147,25 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 		deposit: () =>
 			run('depositPortfolioRep', 'Deposit REP', depositReason, selected => {
 				if (depositAttoRep === undefined) throw new Error('Enter a deposit amount.')
-				return { ...buildPortfolioCapitalDepositRequest({ ...base(selected), amountAttoRep: depositAttoRep }), reviewDescription: `Deposit exactly ${formatEther(depositAttoRep)} REP into your free balance. Authorizing a commitment is a separate transaction.` }
+				return { ...buildPortfolioCapitalDepositRequest({ ...base(selected), amountAttoRep: depositAttoRep }), reviewDescription: `Deposit exactly ${formatEther(depositAttoRep)} REP into your account. It immediately backs any existing commitment without increasing it. Authorizing capacity is a separate transaction.` }
 			}),
 		withdraw: () =>
-			run('withdrawPortfolioRep', 'Withdraw free REP', withdrawReason, selected => {
-				if (withdrawAttoRep === undefined) throw new Error('Enter a withdrawal amount.')
-				return { ...buildPortfolioCapitalWithdrawFreeRequest({ ...base(selected), amountAttoRep: withdrawAttoRep }), reviewDescription: `Withdraw ${formatEther(withdrawAttoRep)} free REP to ${selected.owner}. Your live commitments remain pledged.` }
-			}),
+			run(
+				'withdrawPortfolioRep',
+				'Withdraw REP',
+				withdrawReason,
+				selected => {
+					if (withdrawAttoRep === undefined) throw new Error('Enter a withdrawal amount.')
+					return {
+						...buildPortfolioCapitalWithdrawPrincipalRequest({ ...base(selected), amountAttoRep: withdrawAttoRep }),
+						reviewDescription: `Withdraw ${formatEther(withdrawAttoRep)} REP to ${selected.owner}. Any remaining commitment must retain the protocol health floor; withdrawal may reduce your saved health buffer.`,
+					}
+				},
+				latest => {
+					const reason = capitalWithdrawalReason(latest, withdrawAttoRep)
+					if (reason !== undefined) throw new Error(reason)
+				},
+			),
 		fundReserve: () =>
 			run('fundPortfolioExecution', 'Fund execution reserve', fundReserveReason, selected => {
 				if (fundAttoEth === undefined) throw new Error('Enter reserve funding.')
@@ -190,7 +182,7 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 		setHealth: () =>
 			run('setPortfolioHealth', 'Save health target', healthReason, selected => {
 				if (healthBps === undefined) throw new Error('Enter your health target.')
-				return { ...buildPortfolioCapitalSetHealthRequest({ ...base(selected), targetHealthFactorBps: healthBps }), reviewDescription: `Set your health target to ${formatUnits(healthBps, 2)}% for new authorizations. Existing positions keep their collateral until you change or top them up.` }
+				return { ...buildPortfolioCapitalSetHealthRequest({ ...base(selected), targetHealthFactorBps: healthBps }), reviewDescription: `Set your health target to ${formatUnits(healthBps, 2)}% for new authorizations. Saving a target does not deposit additional REP.` }
 			}),
 		authorize: () =>
 			run(
@@ -198,15 +190,16 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 				'Authorize commitment',
 				authorizeReason,
 				selected => {
-					if (pledgeAttoRep === undefined || commitmentAttoEth === undefined) throw new Error('Enter collateral and commitment.')
+					if (commitmentAttoEth === undefined) throw new Error('Enter a commitment.')
 					return {
-						...buildPortfolioCapitalAuthorizeRequest({ ...base(selected), rep: pledgeAttoRep, commitment: commitmentAttoEth }),
-						reviewDescription: `Set your active position to ${formatEther(pledgeAttoRep)} pledged REP and ${formatEther(commitmentAttoEth)} ETH commitment at your saved ${formatUnits(selected.ownerAccount.targetHealthFactorBps || 10_000n, 2)}% health target. All eligible questions share this capacity. A failing position bears its own liquidation losses; retirement waits for spare capacity.`,
+						...buildPortfolioCapitalAuthorizeRequest({ ...base(selected), commitment: commitmentAttoEth }),
+						reviewDescription: `Authorize ${formatEther(commitmentAttoEth)} ETH commitment backed by all ${formatEther(selected.ownerPrincipalAttoRep)} REP in your account at your saved ${formatUnits(selected.ownerAccount.targetHealthFactorBps || 10_000n, 2)}% health target. All eligible questions share this capacity. Your account bears its own liquidation losses; retirement waits for spare capacity.`,
 					}
 				},
 				latest => {
 					if (latest.ownerAccount.targetHealthFactorBps !== snapshot?.ownerAccount.targetHealthFactorBps) throw new Error('Your health target changed. Review the commitment again.')
-					const reason = capitalAuthorizationReason(latest, pledgeAttoRep, commitmentAttoEth)
+					if (latest.ownerPrincipalAttoRep !== snapshot?.ownerPrincipalAttoRep) throw new Error('Your principal changed. Review the commitment again.')
+					const reason = capitalAuthorizationReason(latest, commitmentAttoEth)
 					if (reason !== undefined) throw new Error(reason)
 				},
 			),
@@ -216,12 +209,6 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 				...buildPortfolioCapitalServeRetirementRequest(base(selected)),
 				reviewDescription: 'Release commitments from the current retirement cohort using spare healthy capacity. Partial progress is possible; no fixed completion date is promised.',
 			})),
-		topUp: (id: bigint) =>
-			run(`topUpPortfolio-${id}`, 'Top up collateral', ownerReason ?? inactiveReason, selected => {
-				const amount = portfolioAmountOrUndefined(topUps.value[String(id)] ?? '')
-				if (amount === undefined || amount === 0n || amount > selected.withdrawableAttoRep) throw new Error('Enter a top-up within your free REP balance.')
-				return { ...buildPortfolioCapitalTopUpRequest({ ...base(selected), positionId: id, amountAttoRep: amount }), reviewDescription: `Add ${formatEther(amount)} REP to position ${id} without increasing its commitment or changing retirement priority.` }
-			}),
 		retire: (id: bigint) =>
 			run(`retirePortfolio-${id}`, 'Request retirement', ownerReason ?? inactiveReason, selected => ({
 				...buildPortfolioCapitalRequestRetirementRequest({ ...base(selected), positionId: id }),

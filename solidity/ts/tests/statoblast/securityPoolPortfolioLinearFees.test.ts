@@ -43,14 +43,14 @@ describe('Statoblast: central question fees and vested capital earnings', () => 
 		await fixture.mint(100n * unit)
 		const initial = await question()
 		await fixture.deposit(500n * unit, fixture.other())
-		await fixture.authorize(500n * unit, 200n * unit, fixture.other())
+		await fixture.authorize(200n * unit, fixture.other())
 		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: poolArtifact.abi, address: fixture.poolFor(fixture.base.questionId).securityPool, functionName: 'refreshPortfolioFees' }))
 		expect((await question()).feeRateAttoEthPerSecond).toBe(initial.feeRateAttoEthPerSecond)
 		const temporary = await fixture.other().readContract({ ...capital(), functionName: 'ownerAccount', args: [fixture.other().account.address] })
-		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...capital(), functionName: 'requestRetirement', args: [temporary.positions[0]] }))
+		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...capital(), functionName: 'requestRetirement', args: [temporary.positionId] }))
 		expect((await question()).feeRateAttoEthPerSecond).toBe(initial.feeRateAttoEthPerSecond)
 		expect(initial.feeRateAttoEthPerSecond).toBe((initial.feePrincipalAttoEth * 1_000n) / (10_000n * 365n * 86_400n))
-		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...capital(), functionName: 'withdrawFree', args: [500n * unit, fixture.other().account.address] }))
+		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...capital(), functionName: 'withdrawPrincipal', args: [500n * unit, fixture.other().account.address] }))
 	})
 
 	test('checkpointing does not rebase fee principal, and a round trip preserves the old shares fee basis', async () => {

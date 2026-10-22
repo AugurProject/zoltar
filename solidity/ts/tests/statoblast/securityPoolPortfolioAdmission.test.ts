@@ -58,7 +58,7 @@ describe('Statoblast: pluggable question admission', () => {
 		await fixture.register(fixture.base.questionId, portfolio)
 		await fixture.deposit(1_000n * unit, fixture.owner(), portfolio)
 		await fixture.refreshPrice(fixture.base.questionId, unit, portfolio)
-		await fixture.authorize(1_000n * unit, 100n * unit, fixture.owner(), portfolio)
+		await fixture.authorize(100n * unit, fixture.owner(), portfolio)
 		await fixture.mint(10n * unit, fixture.base.questionId, { namespace: portfolio })
 		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: policyArtifact.abi, address: policy, functionName: 'setState', args: [false, false] }))
 		await expect(fixture.mint(unit, fixture.base.questionId, { namespace: portfolio })).rejects.toThrow('Question rejected by admission policy')
@@ -69,8 +69,8 @@ describe('Statoblast: pluggable question admission', () => {
 		await redeemCompleteSet(fixture.other(), pool.securityPool, shares[0])
 		const capital = await fixture.capitalFor(portfolio)
 		const owner = await fixture.owner().readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'ownerAccount', args: [fixture.owner().account.address] })
-		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'requestRetirement', args: [owner.positions[0]] }))
-		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'withdrawFree', args: [1_000n * unit, fixture.owner().account.address] }))
+		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'requestRetirement', args: [owner.positionId] }))
+		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'withdrawPrincipal', args: [1_000n * unit, fixture.owner().account.address] }))
 	})
 
 	test('revoking admission also blocks new purchases of an already prepared descendant question', async () => {

@@ -81,7 +81,7 @@ describe('Statoblast: central portfolio and native question integration', () => 
 	test('returning complete sets pays traders and retires requested backing without question claims', async () => {
 		await fixture.prepare(1_000n * unit, 100n * unit)
 		await fixture.mint(100n * unit)
-		const [id] = (await ownerAccount()).positions
+		const id = (await ownerAccount()).positionId
 		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...capital(), functionName: 'requestRetirement', args: [id] }))
 		const pool = fixture.poolFor(fixture.base.questionId)
 		const shares = await balanceOfShares(fixture.owner(), pool.shareToken, fixture.base.genesisUniverse, fixture.other().account.address)
@@ -89,7 +89,7 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		expect(await demand()).toBe(0n)
 		const index = await fixture.owner().readContract({ ...capital(), functionName: 'commitmentIndex' })
 		expect(await fixture.owner().readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [id] })).toMatchObject({ rep: 0n, commitment: 0n, releasedRep: 1_000n * unit })
-		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...capital(), functionName: 'withdrawFree', args: [1_000n * unit, fixture.owner().account.address] }))
+		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...capital(), functionName: 'withdrawPrincipal', args: [1_000n * unit, fixture.owner().account.address] }))
 		expect((await ownerAccount()).freeAttoRep).toBe(0n)
 	})
 
@@ -104,14 +104,16 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		await expect(fixture.other().writeContract({ ...capital(), functionName: 'setDemand', args: [0n] })).rejects.toThrow('Only fork authority')
 	})
 
-	test('stale prices block new purchases while free principal remains withdrawable', async () => {
+	test('stale prices block new purchases and live collateral withdrawal while idle owners can exit', async () => {
 		await fixture.deposit(1_100n * unit)
 		await fixture.refreshPrice()
-		await fixture.authorize(1_000n * unit, 100n * unit)
+		await fixture.authorize(100n * unit)
+		await fixture.deposit(100n * unit, fixture.other())
 		await fixture.base.mockWindow.advanceTime(301n)
 		await expect(fixture.mint()).rejects.toThrow()
 		expect(await fixture.owner().readContract({ ...portfolio(), functionName: 'availableMintCapacity', args: [fixture.base.genesisUniverse] })).toBe(0n)
-		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...capital(), functionName: 'withdrawFree', args: [100n * unit, fixture.owner().account.address] }))
+		await expect(fixture.owner().writeContract({ ...capital(), functionName: 'withdrawPrincipal', args: [100n * unit, fixture.owner().account.address] })).rejects.toThrow('Capital price stale')
+		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...capital(), functionName: 'withdrawPrincipal', args: [100n * unit, fixture.other().account.address] }))
 		expect((await ownerAccount()).freeAttoRep).toBe(0n)
 	})
 

@@ -7,7 +7,7 @@ import {
 	buildPortfolioCapitalRequestRetirementRequest,
 	buildPortfolioCapitalSetHealthRequest,
 	buildPortfolioCapitalTakeOverRequest,
-	buildPortfolioCapitalWithdrawFreeRequest,
+	buildPortfolioCapitalWithdrawPrincipalRequest,
 	loadPortfolioCapitalSnapshot,
 	requiredPortfolioExecutionReserve,
 	type PortfolioReadClient,
@@ -22,8 +22,8 @@ const hash: Hex = `0x${'11'.repeat(32)}`
 const base = { owner, capitalLedger }
 const abi = parseAbi([
 	'function depositFor(address owner,uint256 amount)',
-	'function withdrawFree(uint256 amount,address recipient)',
-	'function authorize(uint256 rep,uint256 commitment)',
+	'function withdrawPrincipal(uint256 amount,address recipient)',
+	'function authorize(uint256 commitment)',
 	'function fundExecutionReserve(address owner) payable',
 	'function requestRetirement(uint96 id)',
 	'function takeOver(uint96 id,uint256 commitment,uint256 minimumAward,uint256 maximumOwnRep)',
@@ -59,7 +59,9 @@ function fixture(overrides: Record<string, unknown> = {}) {
 		currentBatch: 9n,
 		nextBatch: 10n,
 		getForkTime: 0n,
-		ownerAccount: { freeAttoRep: 10n, feesAttoEth: 3n, feesAttoRep: 4n, executionReserveAttoEth: 5n, targetHealthFactorBps: 12_000n, positions: [1n, 2n, 0n] },
+		ownerAccount: { freeAttoRep: 0n, feesAttoEth: 3n, feesAttoRep: 4n, executionReserveAttoEth: 5n, targetHealthFactorBps: 12_000n, positionId: 1n },
+		ownerCollateral: [260n, 20n, 17n],
+		accountOf: { owner, batch: 0n, rep: 200n, commitment: 20n, maxHealthyPrice: 20n, releasedRep: 60n, ethFees: 11n, repFees: 13n },
 		positionExecutionReserveAttoEth: 7n,
 		liquidationStarted: 0n,
 		...overrides,
@@ -69,7 +71,6 @@ function fixture(overrides: Record<string, unknown> = {}) {
 		getBlock: async () => ({ number: 42n, hash, timestamp: 1_000n }),
 		readContract: async parameters => {
 			calls.push({ functionName: parameters.functionName, blockNumber: parameters.blockNumber })
-			if (parameters.functionName === 'accountOf') return { owner, batch: parameters.args?.[0] === 1n ? 0n : 8n, rep: parameters.args?.[0] === 1n ? 200n : 0n, commitment: parameters.args?.[0] === 1n ? 20n : 0n, maxHealthyPrice: 20n, releasedRep: parameters.args?.[0] === 1n ? 0n : 50n, ethFees: 11n, repFees: 13n }
 			if (!(parameters.functionName in values)) throw new Error(`Unexpected read ${parameters.functionName}`)
 			return values[parameters.functionName]
 		},
@@ -90,12 +91,12 @@ describe('personal portfolio capital SDK', () => {
 		const deposit = buildPortfolioCapitalDepositRequest({ ...base, amountAttoRep: 123n })
 		expect(deposit).toMatchObject({ account: owner, to: capitalLedger, value: 0n })
 		expect(decodeFunctionData({ abi, data: deposit.data })).toEqual({ functionName: 'depositFor', args: [owner, 123n] })
-		const withdrawal = buildPortfolioCapitalWithdrawFreeRequest({ ...base, amountAttoRep: 77n, recipient: portfolio })
-		expect(decodeFunctionData({ abi, data: withdrawal.data })).toEqual({ functionName: 'withdrawFree', args: [77n, portfolio] })
+		const withdrawal = buildPortfolioCapitalWithdrawPrincipalRequest({ ...base, amountAttoRep: 77n, recipient: portfolio })
+		expect(decodeFunctionData({ abi, data: withdrawal.data })).toEqual({ functionName: 'withdrawPrincipal', args: [77n, portfolio] })
 	})
 
 	test('underwriting, retirement and takeovers carry explicit bounded authorization', () => {
-		expect(decodeFunctionData({ abi, data: buildPortfolioCapitalAuthorizeRequest({ ...base, rep: 126n, commitment: 100n }).data })).toEqual({ functionName: 'authorize', args: [126n, 100n] })
+		expect(decodeFunctionData({ abi, data: buildPortfolioCapitalAuthorizeRequest({ ...base, commitment: 100n }).data })).toEqual({ functionName: 'authorize', args: [100n] })
 		expect(decodeFunctionData({ abi, data: buildPortfolioCapitalRequestRetirementRequest({ ...base, positionId: 9n }).data })).toEqual({ functionName: 'requestRetirement', args: [9n] })
 		expect(decodeFunctionData({ abi, data: buildPortfolioCapitalTakeOverRequest({ ...base, positionId: 9n, commitment: 17n, minimumAward: 11n, maximumOwnRep: 30n }).data })).toEqual({ functionName: 'takeOver', args: [9n, 17n, 11n, 30n] })
 		expect(buildPortfolioCapitalFundExecutionReserveRequest({ ...base, amountAttoEth: 100n }).value).toBe(100n)
@@ -104,14 +105,29 @@ describe('personal portfolio capital SDK', () => {
 		expect(() => buildPortfolioCapitalDepositRequest({ ...base, amountAttoRep: 0n })).toThrow('positive')
 	})
 
-	test('pins reads to one block and settles at most three direct positions without question history', async () => {
+	test('pins one owner position and the canonical collateral allowance to the same block', async () => {
 		const { client, calls } = fixture()
 		const snapshot = await loadPortfolioCapitalSnapshot({ client, portfolio, owner })
-		expect(snapshot).toMatchObject({ capitalLedger, commitmentIndex: index, repToken, universeId: 7n, totalPledgedAttoRep: 600n, totalCommitmentAttoEth: 60n, healthyCommitmentAttoEth: 50n, currentBatch: 9n, nextBatch: 10n, withdrawableAttoRep: 60n, accruedFeesAttoEth: 25n, accruedFeesAttoRep: 30n })
-		expect(snapshot.positions.map(position => position.id)).toEqual([1n, 2n])
-		expect(snapshot.positions[1]).toMatchObject({ releasedRep: 50n, commitment: 0n, executionReserveAttoEth: 7n })
+		expect(snapshot).toMatchObject({
+			capitalLedger,
+			commitmentIndex: index,
+			repToken,
+			universeId: 7n,
+			totalPledgedAttoRep: 600n,
+			totalCommitmentAttoEth: 60n,
+			healthyCommitmentAttoEth: 50n,
+			currentBatch: 9n,
+			nextBatch: 10n,
+			ownerPrincipalAttoRep: 260n,
+			ownerCommitmentAttoEth: 20n,
+			withdrawableAttoRep: 17n,
+			accruedFeesAttoEth: 14n,
+			accruedFeesAttoRep: 17n,
+		})
+		expect(snapshot.positions.map(position => position.id)).toEqual([1n])
+		expect(snapshot.positions[0]).toMatchObject({ releasedRep: 60n, commitment: 20n, executionReserveAttoEth: 7n })
 		expect(new Set(calls.map(call => call.blockNumber))).toEqual(new Set([42n]))
-		expect(calls.filter(call => call.functionName === 'accountOf')).toHaveLength(2)
+		expect(calls.filter(call => call.functionName === 'accountOf')).toHaveLength(1)
 		expect(calls.length).toBeLessThan(50)
 	})
 
@@ -129,11 +145,25 @@ describe('personal portfolio capital SDK', () => {
 	})
 
 	test('rejects malformed ownership and reorgs instead of double-counting or mixing snapshots', async () => {
-		const malformed = fixture({ ownerAccount: [10n, 3n, 4n, 5n, 12_000n, [1n, 1n, 0n]] })
-		await expect(loadPortfolioCapitalSnapshot({ client: malformed.client, portfolio, owner })).rejects.toThrow('duplicate position')
+		const malformed = fixture({ ownerAccount: [10n, 3n, 4n, 5n, 12_000n, 1n << 96n] })
+		await expect(loadPortfolioCapitalSnapshot({ client: malformed.client, portfolio, owner })).rejects.toThrow('uint96')
 		const reorg = fixture()
 		let reads = 0
 		reorg.client.getBlock = async () => ({ number: 42n, hash: reads++ === 0 ? hash : '0x22', timestamp: 1_000n })
 		await expect(loadPortfolioCapitalSnapshot({ client: reorg.client, portfolio, owner })).rejects.toThrow('Chain changed')
 	})
+})
+
+test('idle owners need no position reads and retain the canonical stale-price withdrawal allowance', async () => {
+	const { client, calls } = fixture({ ownerAccount: [100n, 3n, 4n, 5n, 12_000n, 0n], ownerCollateral: [100n, 0n, 100n], isPriceValid: false })
+	const snapshot = await loadPortfolioCapitalSnapshot({ client, portfolio, owner })
+	expect(snapshot).toMatchObject({ positions: [], ownerPrincipalAttoRep: 100n, ownerCommitmentAttoEth: 0n, withdrawableAttoRep: 100n, priceValid: false })
+	expect(calls.some(call => call.functionName === 'accountOf')).toBe(false)
+})
+
+test('live collateral never becomes withdrawable merely because principal exists', async () => {
+	const { client } = fixture({ ownerCollateral: [260n, 20n, 0n], isPriceValid: false })
+	expect((await loadPortfolioCapitalSnapshot({ client, portfolio, owner })).withdrawableAttoRep).toBe(0n)
+	await expect(loadPortfolioCapitalSnapshot({ client: fixture({ ownerCollateral: [260n, 20n, 261n] }).client, portfolio, owner })).rejects.toThrow('exceeds owner principal')
+	await expect(loadPortfolioCapitalSnapshot({ client: fixture({ accountOf: { owner: portfolio, batch: 0n, rep: 200n, commitment: 20n, maxHealthyPrice: 20n, releasedRep: 60n, ethFees: 11n, repFees: 13n } }).client, portfolio, owner })).rejects.toThrow('another owner')
 })

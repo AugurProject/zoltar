@@ -89,7 +89,7 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'depositFor', args: [client.account.address, 150n * E] }))
 			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'fundExecutionReserve', args: [client.account.address], value: 100n * E }))
 			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'setHealthTarget', args: [12_000n] }))
-			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'authorize', args: [126n * E, 100n * E] }))
+			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'authorize', args: [100n * E] }))
 		}
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'mintQuestion', args: [1n], value: 200n * E }))
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: sharesArtifact.abi, address: shares, functionName: 'setHolding', args: [0n, buyer.account.address, 200n * E] }))
@@ -108,7 +108,7 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 		const childCapital = await owner.readContract({ ...rootTarget(), functionName: 'capitalLedger', args: [child] })
 		expect(await owner.readContract({ ...ledger(childCapital), functionName: 'demandAttoEth' })).toBe(200n * E)
 		expect((await alice.readContract({ ...ledger(childCapital), functionName: 'ownerAccount', args: [alice.account.address] })).targetHealthFactorBps).toBe(12_000n)
-		expect((await alice.readContract({ ...ledger(capital), functionName: 'ownerAccount', args: [alice.account.address] })).freeAttoRep).toBe(24n * E)
+		expect((await alice.readContract({ ...ledger(capital), functionName: 'ownerAccount', args: [alice.account.address] })).freeAttoRep).toBe(0n)
 	})
 
 	test('different choices split cash once while each branch receives its complete nominal liabilities', async () => {
@@ -144,12 +144,12 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 		const now = (await owner.getBlock()).timestamp
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setPrice', args: [child, E, Number(now + 86_400n)] }))
 		await collect()
-		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'totalSupply' })).toBe(supply - 126n * E)
+		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'totalSupply' })).toBe(supply - 150n * E)
 		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [buyer.account.address] })).toBe(0n)
-		expect((await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [chosen.positions[0]] })).rep).toBe(126n * E)
+		expect((await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [chosen.positionId] })).rep).toBe(150n * E)
 		expect(await owner.readContract({ ...ledger(childCapital), functionName: 'demandAttoEth' })).toBe(100n * E)
 		await collect()
-		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'totalSupply' })).toBe(supply - 126n * E)
+		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'totalSupply' })).toBe(supply - 150n * E)
 	})
 
 	test('a price decline between quote and execution refunds the unused purchase budget', async () => {
@@ -164,7 +164,7 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 		await writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'buyRecapitalization', args: [child, quote[0], quote[0], 100n * E, 0n, 10_000n, 2n * E], value: quote[2] + 2n * E }))
 		const account = await buyer.readContract({ ...ledger(childCapital), functionName: 'ownerAccount', args: [buyer.account.address] })
 		const index = await buyer.readContract({ ...ledger(childCapital), functionName: 'commitmentIndex' })
-		expect((await buyer.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [account.positions[0]] })).rep).toBe(quote[0])
+		expect((await buyer.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [account.positionId] })).rep).toBe(quote[0])
 		expect(await owner.readContract({ abi: auctionArtifact.abi, address: branch.auction, functionName: 'raisedAttoEth' })).toBeLessThan(quote[2])
 	})
 
@@ -194,7 +194,7 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 		const childCapital = await owner.readContract({ ...rootTarget(), functionName: 'capitalLedger', args: [child] })
 		const account = await alice.readContract({ ...ledger(childCapital), functionName: 'ownerAccount', args: [alice.account.address] })
 		const index = await alice.readContract({ ...ledger(childCapital), functionName: 'commitmentIndex' })
-		const position = await alice.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [account.positions[0]] })
+		const position = await alice.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [account.positionId] })
 		expect(position.rep).toBeGreaterThan(210n * E)
 		expect(position.rep).toBe(await alice.readContract({ ...ledger(childCapital), functionName: 'requiredRep', args: [position.commitment, 20_000n] }))
 	})

@@ -236,7 +236,7 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 					if (selected.branch === undefined) throw new Error('Select a branch.')
 					return {
 						...buildPortfolioForkChoiceRequest({ ...base(selected), outcomeIndex: selected.branch.outcomeIndex }),
-						reviewDescription: `Irreversibly choose outcome ${selected.branch.outcomeIndex} for every pledged position in universe ${selected.universeId}. Free REP and old fees remain in the source. There is no revoke action.`,
+						reviewDescription: `Irreversibly choose outcome ${selected.branch.outcomeIndex} for your committed principal in universe ${selected.universeId}. Idle REP and old fees remain in the source. There is no revoke action.`,
 					}
 				},
 				async latest => {

@@ -27,7 +27,8 @@ const abi = parseAbi([
 	'function frozen() view returns (bool)',
 	'function importing() view returns (bool)',
 	'function exported(address owner) view returns (bool)',
-	'function ownerAccount(address owner) view returns ((uint256 freeAttoRep,uint256 feesAttoEth,uint256 feesAttoRep,uint256 executionReserveAttoEth,uint256 targetHealthFactorBps,uint96[3] positions) account)',
+	'function ownerAccount(address owner) view returns ((uint256 freeAttoRep,uint256 feesAttoEth,uint256 feesAttoRep,uint256 executionReserveAttoEth,uint256 targetHealthFactorBps,uint96 positionId) account)',
+	'function ownerCollateral(address owner) view returns (uint256 principal,uint256 commitment,uint256 withdrawable)',
 	'function totals() view returns (uint256 rep,uint256 commitment,uint256 healthy)',
 	'function currentBatch() view returns (uint96)',
 	'function nextBatch() view returns (uint96)',
@@ -35,16 +36,15 @@ const abi = parseAbi([
 	'function positionExecutionReserveAttoEth(uint96 id) view returns (uint256)',
 	'function liquidationStarted(uint96 id) view returns (uint48)',
 	'function depositFor(address owner,uint256 amount)',
-	'function withdrawFree(uint256 amount,address recipient)',
+	'function withdrawPrincipal(uint256 amount,address recipient)',
 	'function setHealthTarget(uint256 targetHealthFactorBps)',
-	'function authorize(uint256 rep,uint256 commitment) returns (uint96)',
+	'function authorize(uint256 commitment) returns (uint96)',
 	'function fundExecutionReserve(address owner) payable',
 	'function withdrawExecutionReserve(uint256 amount)',
 	'function requestRetirement(uint96 id)',
 	'function cancelRetirement(uint96 id)',
 	'function serveRetirement()',
 	'function claimEarnings()',
-	'function topUp(uint96 id,uint256 amount)',
 	'function cure(uint96 id) returns (uint256)',
 	'function takeOver(uint96 id,uint256 commitment,uint256 minimumAward,uint256 maximumOwnRep) returns (uint96)',
 ])
@@ -55,7 +55,7 @@ type PortfolioCapitalOwner = {
 	feesAttoRep: bigint
 	executionReserveAttoEth: bigint
 	targetHealthFactorBps: bigint
-	positions: readonly [bigint, bigint, bigint]
+	positionId: bigint
 }
 type PortfolioCapitalPosition = {
 	id: bigint
@@ -98,7 +98,10 @@ export type PortfolioCapitalSnapshot = {
 	exported: boolean
 	ownerAccount: PortfolioCapitalOwner
 	positions: PortfolioCapitalPosition[]
-	/** Includes exact lazily retired principal already available to this owner. */
+	/** All deposited principal, including lazily released retirement principal. */
+	ownerPrincipalAttoRep: bigint
+	ownerCommitmentAttoEth: bigint
+	/** Canonical safe withdrawal allowance at the snapshot block. */
 	withdrawableAttoRep: bigint
 	/** Fees already credited by the index; the next checkpoint may add earnings. */
 	accruedFeesAttoEth: bigint
@@ -124,19 +127,18 @@ function bool(value: unknown, label: string): boolean {
 }
 function fields(value: unknown, names: readonly string[]): unknown[] {
 	if (Array.isArray(value) && value.length === names.length) return value
-	if (value !== null && typeof value === 'object') return names.map(name => Reflect.get(value, name))
+	if (value !== null && typeof value === 'object' && !Array.isArray(value)) return names.map(name => Reflect.get(value, name))
 	throw new Error('Invalid capital accounting response.')
 }
 function ownerAccount(value: unknown): PortfolioCapitalOwner {
-	const [free, eth, rep, execution, health, ids] = fields(value, ['freeAttoRep', 'feesAttoEth', 'feesAttoRep', 'executionReserveAttoEth', 'targetHealthFactorBps', 'positions'])
-	if (!Array.isArray(ids) || ids.length !== 3) throw new Error('Capital owner must have exactly three position slots.')
+	const [free, eth, rep, execution, health, id] = fields(value, ['freeAttoRep', 'feesAttoEth', 'feesAttoRep', 'executionReserveAttoEth', 'targetHealthFactorBps', 'positionId'])
 	return {
 		freeAttoRep: uint(free, 'Free REP'),
 		feesAttoEth: uint(eth, 'ETH earnings'),
 		feesAttoRep: uint(rep, 'REP earnings'),
 		executionReserveAttoEth: uint(execution, 'Execution reserve'),
 		targetHealthFactorBps: uint(health, 'Health target'),
-		positions: [uint(ids[0], 'Position id', 96), uint(ids[1], 'Position id', 96), uint(ids[2], 'Position id', 96)],
+		positionId: uint(id, 'Position id', 96),
 	}
 }
 
@@ -156,15 +158,15 @@ export function requiredPortfolioExecutionReserve(parameters: { commitment: bigi
 export function buildPortfolioCapitalDepositRequest(parameters: CapitalRequest & { amountAttoRep: bigint }) {
 	return request(parameters, 'depositFor', [address(parameters.owner, 'Owner'), positive(parameters.amountAttoRep, 'REP deposit')])
 }
-export function buildPortfolioCapitalWithdrawFreeRequest(parameters: CapitalRequest & { amountAttoRep: bigint; recipient?: Address }) {
-	return request(parameters, 'withdrawFree', [positive(parameters.amountAttoRep, 'REP withdrawal'), address(parameters.recipient ?? parameters.owner, 'Recipient')])
+export function buildPortfolioCapitalWithdrawPrincipalRequest(parameters: CapitalRequest & { amountAttoRep: bigint; recipient?: Address }) {
+	return request(parameters, 'withdrawPrincipal', [positive(parameters.amountAttoRep, 'REP withdrawal'), address(parameters.recipient ?? parameters.owner, 'Recipient')])
 }
 export function buildPortfolioCapitalSetHealthRequest(parameters: CapitalRequest & { targetHealthFactorBps: bigint }) {
 	if (uint(parameters.targetHealthFactorBps, 'Health target') < 10_000n) throw new Error('Health target must be at least 100%.')
 	return request(parameters, 'setHealthTarget', [parameters.targetHealthFactorBps])
 }
-export function buildPortfolioCapitalAuthorizeRequest(parameters: CapitalRequest & { rep: bigint; commitment: bigint }) {
-	return request(parameters, 'authorize', [positive(parameters.rep, 'Pledged REP'), positive(parameters.commitment, 'Commitment')])
+export function buildPortfolioCapitalAuthorizeRequest(parameters: CapitalRequest & { commitment: bigint }) {
+	return request(parameters, 'authorize', [positive(parameters.commitment, 'Commitment')])
 }
 export function buildPortfolioCapitalFundExecutionReserveRequest(parameters: CapitalRequest & { amountAttoEth: bigint }) {
 	return request(parameters, 'fundExecutionReserve', [address(parameters.owner, 'Owner')], positive(parameters.amountAttoEth, 'Execution funding'))
@@ -184,19 +186,16 @@ export function buildPortfolioCapitalServeRetirementRequest(parameters: CapitalR
 export function buildPortfolioCapitalClaimEarningsRequest(parameters: CapitalRequest) {
 	return request(parameters, 'claimEarnings')
 }
-export function buildPortfolioCapitalTopUpRequest(parameters: CapitalRequest & { positionId: bigint; amountAttoRep: bigint }) {
-	return request(parameters, 'topUp', [positive(parameters.positionId, 'Position id', 96), positive(parameters.amountAttoRep, 'REP top-up')])
-}
 /** @public External keeper transaction: `owner` is the submitting keeper; `positionId` may belong to another owner. */
 export function buildPortfolioCapitalCureRequest(parameters: CapitalRequest & { positionId: bigint }) {
 	return request(parameters, 'cure', [positive(parameters.positionId, 'Position id', 96)])
 }
-/** @public External keeper transaction preserving explicit commitment, REP award and own-collateral limits. */
+/** @public Keeper takeover: a new receiver commits all idle principal within maximumOwnRep; an existing receiver must share the target cohort. */
 export function buildPortfolioCapitalTakeOverRequest(parameters: CapitalRequest & { positionId: bigint; commitment: bigint; minimumAward: bigint; maximumOwnRep: bigint }) {
 	return request(parameters, 'takeOver', [positive(parameters.positionId, 'Position id', 96), positive(parameters.commitment, 'Takeover commitment'), uint(parameters.minimumAward, 'Minimum REP award'), uint(parameters.maximumOwnRep, 'Maximum own REP')])
 }
 
-/** All reads share one block. Work is bounded by the owner's three live slots. */
+/** All reads share one block and inspect only the owner's single position. */
 export async function loadPortfolioCapitalSnapshot(parameters: { client: PortfolioReadClient; portfolio: Address; owner: Address; universeId?: bigint; blockNumber?: bigint }): Promise<PortfolioCapitalSnapshot> {
 	const { client } = parameters
 	const portfolio = address(parameters.portfolio, 'Portfolio')
@@ -219,7 +218,7 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 	])
 	const capitalLedger = address(ledgerValue, 'Capital ledger')
 	const zoltar = address(zoltarValue, 'Zoltar')
-	const [indexValue, tokenValue, bookValue, price, multiplier, validUntil, valid, demand, free, frozen, importing, exported, ownerValue, totalsValue, forkTime] = await Promise.all([
+	const [indexValue, tokenValue, bookValue, price, multiplier, validUntil, valid, demand, free, frozen, importing, exported, ownerValue, collateralValue, totalsValue, forkTime] = await Promise.all([
 		read(capitalLedger, 'commitmentIndex'),
 		read(capitalLedger, 'repToken'),
 		read(address(settlementValue, 'Settlement engine'), 'ledger'),
@@ -233,35 +232,37 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 		read(capitalLedger, 'importing'),
 		read(capitalLedger, 'exported', [owner]),
 		read(capitalLedger, 'ownerAccount', [owner]),
+		read(capitalLedger, 'ownerCollateral', [owner]),
 		read(capitalLedger, 'totals'),
 		read(zoltar, 'getForkTime', [universeId]),
 	])
 	const commitmentIndex = address(indexValue, 'Commitment index')
 	const account = ownerAccount(ownerValue)
-	if (new Set(account.positions.filter(id => id !== 0n)).size !== account.positions.filter(id => id !== 0n).length) throw new Error('Capital owner contains duplicate position slots.')
+	const [principal, commitment, withdrawable] = fields(collateralValue, ['principal', 'commitment', 'withdrawable'])
+	const ownerPrincipalAttoRep = uint(principal, 'Owner principal')
+	const withdrawableAttoRep = uint(withdrawable, 'Withdrawable REP')
+	if (withdrawableAttoRep > ownerPrincipalAttoRep) throw new Error('Withdrawal allowance exceeds owner principal.')
 	const [totalRep, totalK, healthyK] = fields(totalsValue, ['rep', 'commitment', 'healthy'])
 	const [current, next, minimumOutcomeRate] = await Promise.all([read(commitmentIndex, 'currentBatch'), read(commitmentIndex, 'nextBatch'), read(address(bookValue, 'Settlement book'), 'minimumOutcomeExchangeRate')])
 	const positions = await Promise.all(
-		account.positions
-			.filter(id => id !== 0n)
-			.map(async id => {
-				const [value, execution, liquidation] = await Promise.all([read(commitmentIndex, 'accountOf', [id]), read(capitalLedger, 'positionExecutionReserveAttoEth', [id]), read(capitalLedger, 'liquidationStarted', [id])])
-				const [holder, batch, rep, commitment, maximum, released, eth, repFees] = fields(value, ['owner', 'batch', 'rep', 'commitment', 'maxHealthyPrice', 'releasedRep', 'ethFees', 'repFees'])
-				if (address(holder, 'Position owner').toLowerCase() !== owner.toLowerCase()) throw new Error('Capital position belongs to another owner.')
-				return {
-					id,
-					owner,
-					batch: uint(batch, 'Cohort id', 96),
-					rep: uint(rep, 'Pledged REP'),
-					commitment: uint(commitment, 'Commitment'),
-					maxHealthyPrice: uint(maximum, 'Maximum healthy price'),
-					releasedRep: uint(released, 'Retired REP'),
-					feesAttoEth: uint(eth, 'ETH earnings'),
-					feesAttoRep: uint(repFees, 'REP earnings'),
-					executionReserveAttoEth: uint(execution, 'Position execution reserve'),
-					liquidationStarted: uint(liquidation, 'Liquidation start', 48),
-				}
-			}),
+		(account.positionId === 0n ? [] : [account.positionId]).map(async id => {
+			const [value, execution, liquidation] = await Promise.all([read(commitmentIndex, 'accountOf', [id]), read(capitalLedger, 'positionExecutionReserveAttoEth', [id]), read(capitalLedger, 'liquidationStarted', [id])])
+			const [holder, batch, rep, commitment, maximum, released, eth, repFees] = fields(value, ['owner', 'batch', 'rep', 'commitment', 'maxHealthyPrice', 'releasedRep', 'ethFees', 'repFees'])
+			if (address(holder, 'Position owner').toLowerCase() !== owner.toLowerCase()) throw new Error('Capital position belongs to another owner.')
+			return {
+				id,
+				owner,
+				batch: uint(batch, 'Cohort id', 96),
+				rep: uint(rep, 'Pledged REP'),
+				commitment: uint(commitment, 'Commitment'),
+				maxHealthyPrice: uint(maximum, 'Maximum healthy price'),
+				releasedRep: uint(released, 'Retired REP'),
+				feesAttoEth: uint(eth, 'ETH earnings'),
+				feesAttoRep: uint(repFees, 'REP earnings'),
+				executionReserveAttoEth: uint(execution, 'Position execution reserve'),
+				liquidationStarted: uint(liquidation, 'Liquidation start', 48),
+			}
+		}),
 	)
 	const [finalChain, finalBlock] = await Promise.all([client.getChainId(), client.getBlock({ blockNumber })])
 	if (finalChain !== chainId || finalBlock.hash !== block.hash) throw new Error('Chain changed while reading capital. Refresh and try again.')
@@ -293,7 +294,9 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 		exported: bool(exported, 'Exported owner'),
 		ownerAccount: account,
 		positions,
-		withdrawableAttoRep: account.freeAttoRep + positions.reduce((sum, position) => sum + position.releasedRep, 0n),
+		ownerPrincipalAttoRep,
+		ownerCommitmentAttoEth: uint(commitment, 'Owner commitment'),
+		withdrawableAttoRep,
 		accruedFeesAttoEth: account.feesAttoEth + positions.reduce((sum, position) => sum + position.feesAttoEth, 0n),
 		accruedFeesAttoRep: account.feesAttoRep + positions.reduce((sum, position) => sum + position.feesAttoRep, 0n),
 		economics: {

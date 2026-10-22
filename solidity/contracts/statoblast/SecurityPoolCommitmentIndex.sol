@@ -247,8 +247,8 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	/// @notice Serve existing retirement groups before authorizing new demand.
 	/// @dev Current is closed before service. Only two groups can be present at
 	/// entry, followed by at most one protocol reserve. Unhealthy tails cost no
-	/// healthy capacity once reached. A partial boundary keeps its conservative
-	/// old price; the controller can rekey it once.
+	/// healthy capacity once reached. A partial private boundary retains all its
+	/// collateral and its conservative old price; the controller rekeys it once.
 	function retire(uint256 acceptedPrice, uint256 demand) external onlyPortfolio operational returns (Retirement memory result) {
 		uint256 healthy = eligibleCommitment(acceptedPrice);
 		if (healthy < demand) return result;

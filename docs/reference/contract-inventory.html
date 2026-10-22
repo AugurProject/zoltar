@@ -45,8 +45,13 @@
 							</tr>
 							<tr id="portfolio-underwriting">
 								<td><code>SecurityPoolCapitalLedger</code>: provider accounts</td>
-								<td><code>depositFor(owner, amount)</code> credits free REP. <code>authorize(rep, commitment)</code> pledges an exact REP amount C against exact ETH commitment K, subject to a fresh price, the owner’s health target and execution reserve. The reserve requirement is <code>⌈K / minimumCommitmentAttoEth⌉ × minimumExecutionReserveAttoEth</code>.</td>
-								<td>Accounts retain exact C/K amounts instead of buying fund NAV shares. At most three account slots cover active, earlier-retiring and current-retiring cohorts. <code>topUp</code>, <code>requestRetirement</code> and <code>cancelRetirement</code> change only the caller’s positions. <code>serveRetirement</code> releases an aggregate eligible prefix; each owner settles its own result lazily.</td>
+								<td><code>depositFor(owner, amount)</code> is callable only by that owner and adds REP to their entire live position, or to idle principal when they have no commitment. <code>authorize(commitment)</code> backs exact ETH commitment K with all deposited REP C, subject to a fresh price, the owner’s health target and execution reserve. The reserve requirement is <code>⌈K / minimumCommitmentAttoEth⌉ × minimumExecutionReserveAttoEth</code>.</td>
+								<td>Each owner has at most one live position in a portfolio universe, active or retiring, with exact C/K amounts. <code>ownerCollateral(owner)</code> returns deposited principal, commitment and currently withdrawable principal, excluding ETH and REP earnings. The chosen health target controls authorization; liquidation and surplus withdrawal use the protocol floor, whose security multiplier is at least 10,500 basis points.</td>
+							</tr>
+							<tr>
+								<td>Principal withdrawal and retirement</td>
+								<td><code>withdrawPrincipal(amount, recipient)</code> withdraws idle principal without a price requirement. A live position must be unforked and have a fresh price; its remaining REP must cover <code>requiredRep(K, 10_000)</code>. <code>requestRetirement(positionId)</code> queues the owner’s commitment. <code>cancelRetirement(positionId)</code> returns it to active status and is required before further authorization.</td>
+								<td><code>serveRetirement</code> removes an aggregate eligible prefix before new purchases. Partial private retirement reduces K while retaining all C; the controller updates that boundary position’s health key once. Full retirement releases C, settled lazily by its owner. A new request after cancellation joins the next cohort. Surplus withdrawal does not depend on another owner’s health.</td>
 							</tr>
 							<tr>
 								<td>Purchases, redemptions and earnings</td>
@@ -55,13 +60,13 @@
 							</tr>
 							<tr>
 								<td>Personal liquidation and bounded accounting</td>
-								<td><code>cure(positionId)</code> removes unused unhealthy commitment; <code>takeOver(positionId, commitment, minimumAward, maximumOwnRep)</code> transfers a selected liability to a healthy, consenting replacement. Execution reserves pay progress rewards, and the target’s REP funds the liquidation award.</td>
-								<td>Other providers’ C/K balances are unchanged by a target liquidation. Balanced trees index live commitments and health; fixed-width persistent maps track fees and finality. Work follows tree paths and the owner’s three positions, without scanning questions, providers or expired streams. Native share migration still requires one action per intervening universe.</td>
+								<td><code>cure(positionId)</code> removes unused unhealthy commitment; <code>takeOver(positionId, commitment, minimumAward, maximumOwnRep)</code> transfers a selected liability to a healthy, consenting replacement. A receiver’s existing live position must belong to the source cohort; a receiver with no commitment inherits that cohort. Execution reserves pay progress rewards, and the target’s REP funds the liquidation award. A partially taken-over private position retains every unawarded REP behind its remaining K.</td>
+								<td>Other providers’ C/K balances are unchanged by a target liquidation. Balanced trees index live commitments and health; fixed-width persistent maps track fees and finality. Work follows tree paths and the owner’s single position, without scanning questions, providers or expired streams. Native share migration still requires one action per intervening universe.</td>
 							</tr>
 							<tr id="portfolio-shared-fork-choices">
 								<td><code>SecurityPoolPortfolioForkCoordinator</code>: choices</td>
-								<td><code>choose(sourceUniverse, outcome)</code> freezes and exports the caller’s at most three pledged positions into one selected branch. Choices close eight weeks after the native fork. <code>startBranch(sourceUniverse, outcome)</code> then copies aggregate settlement and reporter roots and migrates REP once for that branch.</td>
-								<td>Choices are immutable once exported. The native clock fixes recapitalization through week nine and prevents a child fork before week ten. Late branch preparation does not extend these phases. Unselected backing becomes retained runoff and protected recap inventory; it never receives an automatic branch choice on the owner’s behalf.</td>
+								<td><code>choose(sourceUniverse, outcome)</code> freezes and exports the caller’s single position and its entire deposit, including surplus collateral, into one selected branch. Idle principal without a remaining commitment and old earnings remain in the parent. Choices close eight weeks after the native fork. <code>startBranch(sourceUniverse, outcome)</code> then copies aggregate settlement and reporter roots and migrates REP once for that branch.</td>
+								<td>Choices are immutable once exported and preserve the position’s retirement cohort. The native clock fixes recapitalization through week nine and prevents a child fork before week ten. Late branch preparation does not extend these phases. Unselected backing becomes retained runoff and protected recap inventory; it never receives an automatic branch choice on the owner’s behalf.</td>
 							</tr>
 							<tr id="portfolio-shared-fork-processing">
 								<td>Shared branch recapitalization and recovery</td>

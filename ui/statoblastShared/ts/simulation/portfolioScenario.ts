@@ -44,7 +44,7 @@ export async function seedPortfolioScenario({ accounts, createReadClient, create
 	await sendPortfolioTransaction(client, { account: owner, to: profile.genesisRepTokenAddress, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [capitalLedger, depositAttoRep] }), value: 0n }, 'Approve portfolio REP')
 	await reportStep('Approved common portfolio REP deposit')
 	await sendPortfolioTransaction(client, buildPortfolioCapitalDepositRequest({ owner, capitalLedger, amountAttoRep: depositAttoRep }), 'Deposit portfolio REP')
-	await reportStep('Funded free REP balance')
+	await reportStep('Funded owner principal')
 	// One settlement refreshes every question in the portfolio universe.
 	await advanceSimulationTime(memoryClient, 301n)
 	const questionPool = await readClient.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'getPool', args: [BigInt(initial.questionId), 0n] })
@@ -59,7 +59,7 @@ export async function seedPortfolioScenario({ accounts, createReadClient, create
 	const commitment = 10n * 10n ** 18n
 	const required = await readClient.readContract({ address: capitalLedger, abi: capitalArtifact.abi, functionName: 'requiredRep', args: [commitment, 12_000n] })
 	if (required > depositAttoRep) throw new Error('Seeded capital cannot cover the intended commitment')
-	await sendPortfolioTransaction(client, buildPortfolioCapitalAuthorizeRequest({ owner, capitalLedger, rep: required * 2n > depositAttoRep ? depositAttoRep : required * 2n, commitment }), 'Authorize shared commitment')
+	await sendPortfolioTransaction(client, buildPortfolioCapitalAuthorizeRequest({ owner, capitalLedger, commitment }), 'Authorize shared commitment')
 	await reportStep('Authorized individual healthy commitment')
 	for (const [index, pool] of pools.entries()) {
 		const request = await prepareSeededPortfolioMint(portfolioReadClient(readClient), owner, portfolio, BigInt(pool.questionId))

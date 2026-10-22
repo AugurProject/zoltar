@@ -67,7 +67,7 @@ export function exportPortfolioTransaction(parameters: { chainId: number; reques
 export type { PortfolioReadClient } from './securityPoolPortfolioRead.js'
 export {
 	buildPortfolioCapitalDepositRequest,
-	buildPortfolioCapitalWithdrawFreeRequest,
+	buildPortfolioCapitalWithdrawPrincipalRequest,
 	buildPortfolioCapitalSetHealthRequest,
 	buildPortfolioCapitalAuthorizeRequest,
 	buildPortfolioCapitalFundExecutionReserveRequest,
@@ -76,7 +76,6 @@ export {
 	buildPortfolioCapitalCancelRetirementRequest,
 	buildPortfolioCapitalServeRetirementRequest,
 	buildPortfolioCapitalClaimEarningsRequest,
-	buildPortfolioCapitalTopUpRequest,
 	loadPortfolioCapitalSnapshot,
 	type PortfolioCapitalSnapshot,
 } from './securityPoolPortfolioCapital.js'

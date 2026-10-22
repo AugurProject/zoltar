@@ -14,7 +14,7 @@ async function mount() {
 	lifecycle.trackRendered(hook)
 	return hook
 }
-test('permissionless question growth is paged independently of the three owner positions', async () => {
+test('permissionless question growth is paged independently of the owner’s single position', async () => {
 	const source = capitalClient(capitalSnapshot({ questionCount: 1_000_000n }))
 	source.install()
 	const hook = await mount()
@@ -63,7 +63,7 @@ test('disabling clears pending views and re-enabling authenticates a fresh accou
 	expect(hook.state().snapshot?.owner).toBe(owner)
 })
 test('a newly created portfolio can load before any question exists', async () => {
-	const source = capitalClient(capitalSnapshot({ questionCount: 0n, questions: [], positions: [], ownerAccount: { ...capitalSnapshot().ownerAccount, positions: [0n, 0n, 0n] } }))
+	const source = capitalClient(capitalSnapshot({ questionCount: 0n, questions: [], positions: [], ownerPrincipalAttoRep: 0n, ownerCommitmentAttoEth: 0n, withdrawableAttoRep: 0n, ownerAccount: { ...capitalSnapshot().ownerAccount, positionId: 0n } }))
 	source.install()
 	const hook = await mount()
 	await waitFor(() => expect(hook.state().snapshot).toBeDefined())

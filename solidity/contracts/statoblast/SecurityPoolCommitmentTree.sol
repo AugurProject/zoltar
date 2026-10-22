@@ -305,11 +305,9 @@ abstract contract SecurityPoolCommitmentTree {
 				break;
 			}
 			if (node.left == 0) {
-				uint256 rep = Math.mulDiv(node.rep, amount, node.commitment);
-				node.rep -= rep;
+				// A private owner's full deposit keeps backing its residual K.
+				// Only complete retirement releases custody from this leaf.
 				node.commitment -= amount;
-				positions[node.positionId].releasedRep += rep;
-				released += rep;
 				replacement = cursor;
 				boundary = node.positionId;
 				break;

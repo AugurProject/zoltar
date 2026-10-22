@@ -91,14 +91,14 @@ describe('Statoblast: fork reserve retirement priority', () => {
 			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'depositFor', args: [client.account.address, principal] }))
 			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'fundExecutionReserve', args: [client.account.address], value: 100n * E }))
 			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'setHealthTarget', args: [10_000n] }))
-			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'authorize', args: [principal, commitment] }))
+			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'authorize', args: [commitment] }))
 		}
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'mintQuestion', args: [1n], value: 200n * E }))
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: sharesArtifact.abi, address: shares, functionName: 'setHolding', args: [0n, buyer.account.address, 200n * E] }))
 
 		for (const client of [alice, bob]) {
 			const account = await client.readContract({ ...ledger(capital), functionName: 'ownerAccount', args: [client.account.address] })
-			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'requestRetirement', args: [account.positions[0]] }))
+			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'requestRetirement', args: [account.positionId] }))
 		}
 		await writeContractAndWait(owner, () => owner.writeContract({ ...zoltarTarget(), functionName: 'setFork', args: [0n, 2n] }))
 		forkTime = await owner.readContract({ ...zoltarTarget(), functionName: 'getForkTime', args: [0n] })
@@ -119,10 +119,11 @@ describe('Statoblast: fork reserve retirement priority', () => {
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setPrice', args: [child, E, Number(now + 86_400n)] }))
 		const demand = await owner.readContract({ ...ledger(childCapital), functionName: 'demandAttoEth' })
 		await writeContractAndWait(owner, () => owner.writeContract({ ...ledger(childCapital), functionName: 'serveRetirement' }))
-		const [current, next, reserve] = await Promise.all(accounts.map(account => owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [account.positions[0]] })))
+		const [current, next, reserve] = await Promise.all(accounts.map(account => owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [account.positionId] })))
 		const nextRetired = 200n * E - demand - E
 		expect(current?.releasedRep).toBe((105n * E) / 100n)
-		expect(next?.releasedRep).toBe((104n * E * nextRetired) / (99n * E))
+		expect(next?.releasedRep).toBe(0n)
+		expect(next?.rep).toBe(104n * E)
 		expect(next?.commitment).toBe(99n * E - nextRetired)
 		expect(reserve?.releasedRep).toBe(0n)
 		expect(reserve?.rep).toBe(1000n * E)
@@ -140,7 +141,7 @@ describe('Statoblast: fork reserve retirement priority', () => {
 		const now = (await owner.getBlock()).timestamp
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setPrice', args: [child, E, Number(now + 86_400n)] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...ledger(childCapital), functionName: 'serveRetirement' }))
-		const position = await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [protocol.positions[0]] })
+		const position = await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [protocol.positionId] })
 		const released = position.releasedRep
 		expect(released).toBeGreaterThan(0n)
 		expect(position.commitment).toBeGreaterThan(0n)
@@ -176,14 +177,17 @@ describe('Statoblast: fork reserve retirement priority', () => {
 		const index = await owner.readContract({ ...ledger(grandchildCapital), functionName: 'commitmentIndex' })
 		const retiring = await owner.readContract({ ...ledger(grandchildCapital), functionName: 'ownerAccount', args: [bob.account.address] })
 		const protocol = await owner.readContract({ ...ledger(grandchildCapital), functionName: 'ownerAccount', args: [forks] })
-		expect(retiring.positions.filter(id => id !== 0n)).toHaveLength(1)
-		expect(protocol.positions.filter(id => id !== 0n)).toHaveLength(1)
-		expect(await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'protocolReserveId' })).toBe(protocol.positions[0])
+		expect(retiring.positionId).toBeGreaterThan(0n)
+		expect(protocol.positionId).toBeGreaterThan(0n)
+		expect(await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'protocolReserveId' })).toBe(protocol.positionId)
 		const grandchildNow = (await owner.getBlock()).timestamp
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setPrice', args: [grandchild, E, Number(grandchildNow + 86_400n)] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...ledger(grandchildCapital), functionName: 'serveRetirement' }))
-		expect((await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [retiring.positions[0]] })).releasedRep).toBeGreaterThan(0n)
-		expect((await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [protocol.positions[0]] })).releasedRep).toBe(0n)
+		const remaining = await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [retiring.positionId] })
+		expect(remaining.releasedRep).toBe(0n)
+		expect(remaining.rep).toBe(104n * E)
+		expect(remaining.commitment).toBeLessThan(99n * E)
+		expect((await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [protocol.positionId] })).releasedRep).toBe(0n)
 	})
 
 	test('an unhealthy protocol reserve can be cured and taken over into ordinary private capital', async () => {
@@ -194,7 +198,7 @@ describe('Statoblast: fork reserve retirement priority', () => {
 		const childCapital = await owner.readContract({ ...rootTarget(), functionName: 'capitalLedger', args: [child] })
 		const index = await owner.readContract({ ...ledger(childCapital), functionName: 'commitmentIndex' })
 		const protocol = await owner.readContract({ ...ledger(childCapital), functionName: 'ownerAccount', args: [forks] })
-		const id = protocol.positions[0]
+		const id = protocol.positionId
 		const now = (await owner.getBlock()).timestamp
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setPrice', args: [child, 10n * E, Number(now + 86_400n)] }))
 		const before = await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [id] })
@@ -210,8 +214,8 @@ describe('Statoblast: fork reserve retirement priority', () => {
 		await writeContractAndWait(buyer, () => buyer.writeContract({ ...ledger(childCapital), functionName: 'fundExecutionReserve', args: [buyer.account.address], value: 100n * E }))
 		await writeContractAndWait(buyer, () => buyer.writeContract({ ...ledger(childCapital), functionName: 'takeOver', args: [id, cured.commitment, cured.rep, 4000n * E] }))
 		const receiver = await owner.readContract({ ...ledger(childCapital), functionName: 'ownerAccount', args: [buyer.account.address] })
-		expect(receiver.positions.filter(positionId => positionId !== 0n)).toHaveLength(1)
-		expect((await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [receiver.positions[0]] })).batch).toBe(0n)
+		expect(receiver.positionId).toBeGreaterThan(0n)
+		expect((await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [receiver.positionId] })).batch).toBe(0n)
 		expect((await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [id] })).commitment).toBe(0n)
 		expect(await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'eligibleActiveCommitment', args: [10n * E] })).toBe(cured.commitment + E)
 	})
@@ -224,14 +228,14 @@ describe('Statoblast: fork reserve retirement priority', () => {
 		const childCapital = await owner.readContract({ ...rootTarget(), functionName: 'capitalLedger', args: [child] })
 		const index = await owner.readContract({ ...ledger(childCapital), functionName: 'commitmentIndex' })
 		const protocol = await owner.readContract({ ...ledger(childCapital), functionName: 'ownerAccount', args: [forks] })
-		const reserve = await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [protocol.positions[0]] })
+		const reserve = await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [protocol.positionId] })
 		expect(reserve.commitment).toBe(200n * E)
 		expect(await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'eligibleActiveCommitment', args: [E] })).toBe(0n)
 		const now = (await owner.getBlock()).timestamp
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setPrice', args: [child, E, Number(now + 86_400n)] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...ledger(childCapital), functionName: 'serveRetirement' }))
 		expect([...(await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'totals' }))]).toEqual([0n, 0n])
-		expect((await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [protocol.positions[0]] })).releasedRep).toBe(reserve.rep)
+		expect((await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [protocol.positionId] })).releasedRep).toBe(reserve.rep)
 		await writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'collectProtectedPrincipal', args: [child] }))
 		const token = await owner.readContract({ ...zoltarTarget(), functionName: 'getRepToken', args: [child] })
 		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [childCapital] })).toBe(0n)

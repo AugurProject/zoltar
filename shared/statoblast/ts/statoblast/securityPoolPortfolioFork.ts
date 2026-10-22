@@ -52,7 +52,7 @@ type ForkRequest = { owner: Address; controller: Address; universeId: bigint }
 function request(parameters: ForkRequest, functionName: string, args: readonly AbiValue[] = [], value = 0n) {
 	return { account: address(parameters.owner), to: address(parameters.controller), value: uint(value, 'Transaction value'), data: encodeFunctionData({ abi, functionName, args: [uint(parameters.universeId, 'Universe', 248), ...args] }) }
 }
-/** One irrevocable choice moves the owner's pledged positions; free REP and old fees stay in the source. */
+/** One irrevocable choice moves the owner's committed principal; idle REP and old fees stay in the source. */
 export function buildPortfolioForkChoiceRequest(parameters: ForkRequest & { outcomeIndex: bigint }) {
 	return request(parameters, 'choose', [uint(parameters.outcomeIndex, 'Fork outcome')])
 }
@@ -193,21 +193,18 @@ export async function loadPortfolioRecapQuote(parameters: { client: PortfolioRea
 	const commitment = uint(q[1], 'Quoted commitment')
 	const cost = uint(q[2], 'Quoted cost')
 	if (rep > repLimit || cost > costLimit) throw new Error('Recap quote exceeds purchase limits.')
-	const active = capital.positions.find(position => position.batch === 0n && position.commitment > 0n)
-	let requiredRep = commitment === 0n ? 0n : uint(await read(branch.capitalLedger, 'requiredRep', [commitment, target]), 'Required collateral')
-	const totalCommitment = (active?.commitment ?? 0n) + commitment
-	if (active !== undefined && commitment > 0n) {
-		const combined = uint(await read(branch.capitalLedger, 'requiredRep', [totalCommitment, target]), 'Combined collateral')
-		const additional = combined > active.rep ? combined - active.rep : 0n
-		if (additional > requiredRep) requiredRep = additional
-	}
-	const ownRep = requiredRep > rep ? requiredRep - rep : 0n
+	const position = capital.positions.find(position => position.commitment > 0n)
+	const totalCommitment = capital.ownerCommitmentAttoEth + commitment
+	const requiredRep = commitment === 0n ? 0n : uint(await read(branch.capitalLedger, 'requiredRep', [totalCommitment, target]), 'Required owner collateral')
+	const availableRep = capital.ownerPrincipalAttoRep + rep
+	const ownRep = requiredRep > availableRep ? requiredRep - availableRep : 0n
 	const requiredReserve = commitment === 0n ? 0n : requiredPortfolioExecutionReserve({ commitment: totalCommitment, ...capital.economics })
-	const existingReserve = capital.ownerAccount.executionReserveAttoEth + (active?.executionReserveAttoEth ?? 0n)
+	const existingReserve = capital.ownerAccount.executionReserveAttoEth + (position?.executionReserveAttoEth ?? 0n)
 	const executionReserve = requiredReserve > existingReserve ? requiredReserve - existingReserve : 0n
 	let reason: string | undefined
 	if (rep === 0n) reason = 'No REP is available within this budget.'
 	else if (cost < uint(minimumFillValue, 'Minimum fill') && uint(soldValue, 'Sold REP') + rep !== uint(maximumSoldValue, 'Maximum sale REP') && uint(raisedValue, 'Raised cash') + cost !== uint(missingCashValue, 'Required cash')) reason = 'Purchase is below this recap sale’s minimum fill.'
+	else if (commitment > 0n && position !== undefined && position.batch !== 0n) reason = 'Retiring principal cannot accept a recap commitment.'
 	else if (commitment > 0n && totalCommitment < capital.economics.minimumCommitmentAttoEth) reason = 'Accepted commitment is below this pool’s minimum.'
 	const [finalBlock, finalChain] = await Promise.all([client.getBlock({ blockNumber: snapshot.blockNumber }), client.getChainId()])
 	if (finalBlock.hash !== snapshot.blockHash || finalChain !== snapshot.chainId) throw new Error('Fork snapshot changed. Refresh and retry.')

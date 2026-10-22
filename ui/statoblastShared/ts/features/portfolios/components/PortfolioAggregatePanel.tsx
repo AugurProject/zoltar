@@ -10,7 +10,7 @@ import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { PortfolioButton, PortfolioInput, type PortfolioActions } from './PortfolioControls.js'
 import type { usePortfolioAggregate } from '../hooks/usePortfolioAggregate.js'
-import { capitalPositionPhase } from '../lib/capital.js'
+import { capitalPositionPhase, requiredPortfolioCollateral } from '../lib/capital.js'
 import * as copy from '../../../copy/portfolioCapital.js'
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
 
@@ -44,14 +44,14 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 			</SectionBlock>
 			<SectionBlock title={copy.title} description={copy.description}>
 				<MetricGrid>
-					<MetricField label={copy.freeRep} loading={model.loading}>
+					<MetricField label={copy.withdrawableRep} loading={model.loading}>
 						<CurrencyValue value={snapshot?.withdrawableAttoRep} suffix={common.rep} />
 					</MetricField>
-					<MetricField label={copy.pledgedRep} loading={model.loading}>
-						<CurrencyValue value={snapshot === undefined ? undefined : model.pledgedAttoRep} suffix={common.rep} />
+					<MetricField label={copy.principalRep} loading={model.loading}>
+						<CurrencyValue value={snapshot?.ownerPrincipalAttoRep} suffix={common.rep} />
 					</MetricField>
 					<MetricField label={copy.commitment} loading={model.loading}>
-						<CurrencyValue value={snapshot === undefined ? undefined : model.ownerCommitmentAttoEth} suffix={common.eth} />
+						<CurrencyValue value={snapshot?.ownerCommitmentAttoEth} suffix={common.eth} />
 					</MetricField>
 					<MetricField label={copy.savedHealth} loading={model.loading}>
 						{snapshot === undefined ? undefined : `${formatUnits(snapshot.ownerAccount.targetHealthFactorBps || 10_000n, 2)}%`}
@@ -100,7 +100,6 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 				<PortfolioInput label={copy.health} hint={copy.healthHint} value={model.healthPercent} onChange={model.setHealthPercent} disabled={disabled} numeric />
 				<PortfolioButton model={actions} action='setPortfolioHealth' label={copy.saveHealth} pendingLabel={copy.savingHealth} reason={model.healthReason} onClick={model.setHealth} />
 				<MetricGrid>
-					<PortfolioInput label={copy.pledge} value={model.pledgeAmount} onChange={model.setPledgeAmount} disabled={disabled} numeric />
 					<PortfolioInput label={copy.activeCommitment} value={model.commitmentAmount} onChange={model.setCommitmentAmount} disabled={disabled} numeric />
 				</MetricGrid>
 				<MetricGrid>
@@ -124,8 +123,9 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 				{snapshot !== undefined && model.livePositions.length === 0 ? <EmptyState title={copy.noPositions} detail={copy.noPositionsHint} /> : undefined}
 				{model.livePositions.map(position => {
 					const reasons = model.positionReasons(position.id)
-					const healthy = snapshot !== undefined && snapshot.priceValid && position.maxHealthyPrice >= snapshot.acceptedPrice
-					const health = snapshot !== undefined && snapshot.acceptedPrice > 0n ? `${formatUnits((position.maxHealthyPrice * 10_000n) / snapshot.acceptedPrice, 2)}%` : copy.healthUnknown
+					const required = snapshot === undefined ? 0n : requiredPortfolioCollateral({ ...snapshot, ownerAccount: { ...snapshot.ownerAccount, targetHealthFactorBps: 10_000n } }, snapshot.ownerCommitmentAttoEth)
+					const healthy = snapshot !== undefined && snapshot.ownerPrincipalAttoRep >= required
+					const health = snapshot?.priceValid && required > 0n ? `${formatUnits((snapshot.ownerPrincipalAttoRep * 10_000n) / required, 2)}%` : copy.healthUnknown
 					return (
 						<WorkflowSubsection key={String(position.id)} title={copy.position(position.id)} badge={<Badge>{copy.phase[capitalPositionPhase(position.batch, snapshot?.currentBatch ?? 0n)]}</Badge>}>
 							<MetricGrid>
@@ -141,9 +141,7 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 								</MetricField>
 							</MetricGrid>
 							{snapshot?.priceValid && !healthy ? <UserMessage tone='warning' detail={copy.unhealthy} /> : undefined}
-							<PortfolioInput label={copy.repAmount} value={model.topUps[String(position.id)] ?? ''} onChange={value => model.setTopUp(position.id, value)} disabled={disabled} numeric />
 							<div className='actions'>
-								<PortfolioButton model={actions} action={`topUpPortfolio-${position.id}`} label={copy.topUp} pendingLabel={copy.toppingUp} reason={reasons.topUp} onClick={() => model.topUp(position.id)} />
 								<PortfolioButton model={actions} action={`retirePortfolio-${position.id}`} label={copy.retire} pendingLabel={copy.retiring} reason={reasons.retire} onClick={() => model.retire(position.id)} />
 								<PortfolioButton model={actions} action={`cancelRetirementPortfolio-${position.id}`} label={copy.cancelRetirement} pendingLabel={copy.cancelingRetirement} reason={reasons.cancel} onClick={() => model.cancelRetirement(position.id)} />
 							</div>

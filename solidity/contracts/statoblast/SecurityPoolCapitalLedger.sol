@@ -20,9 +20,9 @@ interface ICapitalLedgerAccounting {
 }
 
 /// @notice Exact REP custody and individually authorized underwriting.
-/// @dev Principal never uses a pool exchange rate. Three live slots cover active,
-/// closed-current and open-next retirement cohorts; historical slots are settled
-/// before reuse. Index paths, not the number of owners or questions, bound work.
+/// @dev One live position contains all an owner's deposited principal and
+/// commitment. Retirement never leaves a sibling position with stale health.
+/// Index paths, not the number of owners or questions, bound work.
 contract SecurityPoolCapitalLedger {
 	using SafeERC20Ops for IERC20;
 	uint256 private constant BPS = 10_000;
@@ -59,7 +59,7 @@ contract SecurityPoolCapitalLedger {
 		uint256 feesAttoRep;
 		uint256 executionReserveAttoEth;
 		uint256 targetHealthFactorBps;
-		uint96[3] positions;
+		uint96 positionId;
 	}
 	struct ChoicePosition {
 		uint256 rep;
@@ -124,6 +124,19 @@ contract SecurityPoolCapitalLedger {
 	function ownerAccount(address owner) external view returns (Owner memory) {
 		return owners[owner];
 	}
+	/// @notice Deposited principal excludes earnings, even before their claim.
+	function ownerCollateral(address owner) external view returns (uint256 principal, uint256 commitment, uint256 withdrawable) {
+		Owner storage account = owners[owner];
+		SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(account.positionId);
+		principal = account.freeAttoRep + position.rep + position.releasedRep;
+		commitment = position.commitment;
+		if (owner == forkAuthority) return (principal, commitment, account.freeAttoRep + position.releasedRep);
+		if (commitment == 0) return (principal, 0, principal);
+		if (importing || frozen || exported[owner] || zoltar.getForkTime(universeId) != 0 || !isPriceValid())
+			return (principal, commitment, 0);
+		uint256 required = requiredRep(commitment, BPS);
+		withdrawable = principal > required ? principal - required : 0;
+	}
 	function isPriceValid() public view returns (bool) {
 		return acceptedPrice > 0 && block.timestamp < priceValidUntil;
 	}
@@ -165,25 +178,41 @@ contract SecurityPoolCapitalLedger {
 		require(isPriceValid(), 'Capital price stale');
 	}
 
-	/// @dev Free deposits and top-ups remain possible during a coverage deficit.
+	/// @dev Every deposit immediately backs the owner's entire live commitment.
 	function depositFor(address owner, uint256 amount) external nonReentrant {
 		_requireOpen();
-		require(owner != address(0) && amount > 0, 'Invalid capital deposit');
+		require(owner == msg.sender && owner != forkAuthority && amount > 0, 'Invalid capital deposit');
 		_checkpoint();
-		owners[owner].freeAttoRep += amount;
-		totalFreeAttoRep += amount;
+		_settleOwner(owner);
+		Owner storage account = owners[owner];
+		if (account.positionId == 0) {
+			account.freeAttoRep += amount;
+			totalFreeAttoRep += amount;
+		} else {
+			SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(account.positionId);
+			_replace(account.positionId, position.rep + amount, position.commitment);
+		}
 		repToken.safeTransferFrom(msg.sender, address(this), amount);
+		_serveRetirement();
 		emit PrincipalDeposited(msg.sender, owner, amount);
 	}
 
-	function withdrawFree(uint256 amount, address recipient) external nonReentrant {
+	function withdrawPrincipal(uint256 amount, address recipient) external nonReentrant {
 		require(recipient != address(0) && amount > 0, 'Invalid capital withdrawal');
 		_checkpoint();
 		_settleOwner(msg.sender);
 		Owner storage owner = owners[msg.sender];
-		require(amount <= owner.freeAttoRep, 'Insufficient free principal');
-		owner.freeAttoRep -= amount;
-		totalFreeAttoRep -= amount;
+		if (amount <= owner.freeAttoRep) {
+			owner.freeAttoRep -= amount;
+			totalFreeAttoRep -= amount;
+		} else {
+			require(owner.positionId != 0 && msg.sender != forkAuthority, 'Insufficient owner principal');
+			_requireOpen();
+			_requireFresh();
+			SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(owner.positionId);
+			require(amount <= position.rep && position.rep - amount >= requiredRep(position.commitment, BPS), 'Withdrawal would undercollateralize owner');
+			_replace(owner.positionId, position.rep - amount, position.commitment);
+		}
 		repToken.safeTransfer(recipient, amount);
 		emit PrincipalWithdrawn(msg.sender, recipient, amount);
 	}
@@ -211,8 +240,8 @@ contract SecurityPoolCapitalLedger {
 		owners[msg.sender].targetHealthFactorBps = targetHealthFactorBps;
 	}
 
-	/// @notice Authorize one active standing commitment, leaving other cohorts fixed.
-	function authorize(uint256 rep, uint256 commitment) external nonReentrant returns (uint96 id) {
+	/// @notice All deposited principal backs the owner's single commitment.
+	function authorize(uint256 commitment) external nonReentrant returns (uint96 id) {
 		_requireOpen();
 		_requireFresh();
 		_checkpoint();
@@ -221,35 +250,22 @@ contract SecurityPoolCapitalLedger {
 		Owner storage owner = owners[msg.sender];
 		uint256 health = _target(owner);
 		require(commitment >= minimumCommitmentAttoEth, 'Commitment below economic minimum');
-		require(rep >= requiredRep(commitment, health), 'Collateral below chosen health target');
-		id = _positionInBatch(owner, 0);
+		id = owner.positionId;
 		SecurityPoolCommitmentIndex.Account memory old;
 		if (id != 0) old = commitmentIndex.accountOf(id);
-		require(rep <= owner.freeAttoRep + old.rep, 'Insufficient owner principal');
+		require(old.batch == 0, 'Cancel retirement before authorizing');
+		uint256 rep = owner.freeAttoRep + old.rep;
+		require(rep >= requiredRep(commitment, health), 'Collateral below chosen health target');
 		// Owners cannot bypass a closed retirement cohort with direct reductions.
 		require(commitment >= old.commitment, 'Retire commitment before reducing it');
-		owner.freeAttoRep = owner.freeAttoRep + old.rep - rep;
-		totalFreeAttoRep = totalFreeAttoRep + old.rep - rep;
+		totalFreeAttoRep -= owner.freeAttoRep;
+		owner.freeAttoRep = 0;
 		if (id == 0) {
 			id = commitmentIndex.create(msg.sender, rep, commitment, maximumHealthyPrice(rep, commitment));
-			_addSlot(owner, id);
+			owner.positionId = id;
 		} else _replace(id, rep, commitment);
 		_fundPositionReserve(owner, id, commitment);
 		emit CommitmentAuthorized(msg.sender, id, rep, commitment, health);
-	}
-
-	function topUp(uint96 id, uint256 amount) external nonReentrant {
-		_requireOpen();
-		_checkpoint();
-		_settleOwner(msg.sender);
-		SecurityPoolCommitmentIndex.Account memory account = _owned(id, msg.sender);
-		require(account.commitment > 0 && amount > 0, 'Position is not live');
-		Owner storage owner = owners[msg.sender];
-		require(amount <= owner.freeAttoRep, 'Insufficient free principal');
-		owner.freeAttoRep -= amount;
-		totalFreeAttoRep -= amount;
-		_replace(id, account.rep + amount, account.commitment);
-		_serveRetirement();
 	}
 
 	function requestRetirement(uint96 id) external nonReentrant {
@@ -257,8 +273,6 @@ contract SecurityPoolCapitalLedger {
 		_checkpoint();
 		_settleOwner(msg.sender);
 		_owned(id, msg.sender);
-		Owner storage owner = owners[msg.sender];
-		require(_positionInBatch(owner, commitmentIndex.nextBatch()) == 0, 'Next retirement position already exists');
 		commitmentIndex.requestRetirement(id);
 		_serveRetirement();
 	}
@@ -268,7 +282,6 @@ contract SecurityPoolCapitalLedger {
 		_checkpoint();
 		_settleOwner(msg.sender);
 		_owned(id, msg.sender);
-		require(_positionInBatch(owners[msg.sender], 0) == 0, 'Active commitment already exists');
 		commitmentIndex.cancelRetirement(id);
 	}
 
@@ -436,30 +449,32 @@ contract SecurityPoolCapitalLedger {
 		uint256 elapsed = block.timestamp - liquidations[id].started;
 		uint256 award = Math.mulDiv(proportional, Math.min(elapsed, 1 hours), 1 hours);
 		require(award >= minimumAward, 'Takeover award below minimum');
-		uint256 needed = requiredRep(commitment, _target(receiver));
-		receiverId = _positionInBatch(receiver, source.batch);
+		receiverId = receiver.positionId;
 		SecurityPoolCommitmentIndex.Account memory existing;
 		if (receiverId != 0) {
 			existing = commitmentIndex.accountOf(receiverId);
-			uint256 combined = requiredRep(existing.commitment + commitment, _target(receiver));
-			needed = Math.max(needed, combined > existing.rep ? combined - existing.rep : 0);
+			require(existing.batch == source.batch, 'Receiver commitment uses another retirement cohort');
 		}
-		uint256 ownRep = needed > award ? needed - award : 0;
-		require(ownRep <= maximumOwnRep && ownRep <= receiver.freeAttoRep, 'Receiver collateral insufficient');
-		uint256 remainingRep = source.rep - proportional;
+		// Any previously idle receiver principal joins its one live position.
+		uint256 ownRep = receiver.freeAttoRep;
+		require(ownRep <= maximumOwnRep, 'Receiver collateral exceeds consent');
+		uint256 needed = requiredRep(existing.commitment + commitment, _target(receiver));
+		require(existing.rep + award + ownRep >= needed, 'Receiver collateral insufficient');
 		uint256 remainingK = source.commitment - commitment;
+		uint256 debit = remainingK == 0 || id == commitmentIndex.protocolReserveId() ? proportional : award;
+		uint256 remainingRep = source.rep - debit;
 		uint256 receivedRep = award + ownRep;
 		uint256 receiverRep;
 		uint256 receiverK;
 		if (receiverId == 0) {
-			receiverId = commitmentIndex.split(id, msg.sender, proportional, commitment, maximumHealthyPrice(remainingRep, remainingK), maximumHealthyPrice(receivedRep, commitment));
-			_addSlot(receiver, receiverId);
+			receiverId = commitmentIndex.split(id, msg.sender, debit, commitment, maximumHealthyPrice(remainingRep, remainingK), maximumHealthyPrice(receivedRep, commitment));
+			receiver.positionId = receiverId;
 			receiverRep = receivedRep;
 			receiverK = commitment;
 		} else {
 			receiverRep = existing.rep + receivedRep;
 			receiverK = existing.commitment + commitment;
-			commitmentIndex.transferTo(id, receiverId, proportional, commitment, maximumHealthyPrice(remainingRep, remainingK), maximumHealthyPrice(receiverRep, receiverK));
+			commitmentIndex.transferTo(id, receiverId, debit, commitment, maximumHealthyPrice(remainingRep, remainingK), maximumHealthyPrice(receiverRep, receiverK));
 		}
 		// Balanced transfer preserved a closed cohort's K. This replacement only
 		// adjusts collateral and therefore cannot refill that cohort.
@@ -468,8 +483,8 @@ contract SecurityPoolCapitalLedger {
 		_fundPositionReserve(receiver, receiverId, receiverK);
 		receiver.freeAttoRep -= ownRep;
 		totalFreeAttoRep -= ownRep;
-		owners[source.owner].freeAttoRep += proportional - award;
-		totalFreeAttoRep += proportional - award;
+		owners[source.owner].freeAttoRep += debit - award;
+		totalFreeAttoRep += debit - award;
 		uint256 reward = _payProgress(id, commitment, source.commitment, msg.sender);
 		emit CommitmentTakenOver(id, receiverId, commitment, award, reward);
 	}
@@ -502,18 +517,17 @@ contract SecurityPoolCapitalLedger {
 
 	/// @dev Choices move exact C and K, never a shared NAV fraction. The caller
 	/// records this bounded tuple in the actual native fork's choice ledger.
-	function exportChoice(address owner) external onlyForkAuthority returns (ChoicePosition[3] memory positions, uint256 target, uint256 reserve) {
+	function exportChoice(address owner) external onlyForkAuthority returns (ChoicePosition memory choice, uint256 target, uint256 reserve) {
 		require(frozen && !exported[owner], 'Fork choice unavailable');
 		_settleOwner(owner);
 		Owner storage account = owners[owner];
-		for (uint256 i; i < 3; i++) {
-			uint96 id = account.positions[i];
-			if (id == 0) continue;
+		uint96 id = account.positionId;
+		if (id != 0) {
 			SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(id);
 			uint96 batch;
 			if (position.batch != 0) batch = position.batch == commitmentIndex.currentBatch() ? 1 : 2;
 			uint256 positionReserve = positionExecutionReserveAttoEth[id];
-			positions[i] = ChoicePosition(position.rep, position.commitment, batch, positionReserve);
+			choice = ChoicePosition(position.rep, position.commitment, batch, positionReserve);
 			reserve += positionReserve;
 			delete positionExecutionReserveAttoEth[id];
 		}
@@ -535,23 +549,16 @@ contract SecurityPoolCapitalLedger {
 		// This is an auction collateral reference, not a fresh oracle acceptance.
 		acceptedPrice = price;
 	}
-	function importChoice(address owner, ChoicePosition[3] calldata positions, uint256 target) external payable onlyForkAuthority {
+	function importChoice(address owner, ChoicePosition calldata position, uint256 target) external payable onlyForkAuthority {
 		require(importing && target >= BPS, 'Fork import unavailable');
 		Owner storage account = owners[owner];
-		require(account.positions[0] == 0 && account.positions[1] == 0 && account.positions[2] == 0, 'Owner already imported');
+		require(account.positionId == 0 && account.freeAttoRep == 0, 'Owner already imported');
 		account.targetHealthFactorBps = target;
-		uint256 assignedReserve;
-		for (uint256 i; i < 3; i++) {
-			ChoicePosition calldata position = positions[i];
-			if (position.commitment == 0) {
-				require(position.rep == 0 && position.executionReserveAttoEth == 0, 'Empty choice contains collateral');
-				continue;
-			}
-			uint96 id = commitmentIndex.importPosition(owner, position.rep, position.commitment, maximumHealthyPrice(position.rep, position.commitment), position.batch);
-			_addSlot(account, id);
-			positionExecutionReserveAttoEth[id] = position.executionReserveAttoEth;
-			assignedReserve += position.executionReserveAttoEth;
-		}
+		require(position.commitment != 0 && position.rep != 0, 'Empty fork choice');
+		uint96 id = commitmentIndex.importPosition(owner, position.rep, position.commitment, maximumHealthyPrice(position.rep, position.commitment), position.batch);
+		account.positionId = id;
+		positionExecutionReserveAttoEth[id] = position.executionReserveAttoEth;
+		uint256 assignedReserve = position.executionReserveAttoEth;
 		require(msg.value >= assignedReserve, 'Fork execution reserve unfunded');
 		account.executionReserveAttoEth += msg.value - assignedReserve;
 	}
@@ -559,24 +566,30 @@ contract SecurityPoolCapitalLedger {
 	/// Takeovers move its obligations into an ordinary buyer's active position.
 	function importProtocolReserve(uint256 rep, uint256 commitment) external onlyForkAuthority {
 		require(importing && forkAuthority != address(0), 'Protocol reserve import unavailable');
+		require(owners[forkAuthority].positionId == 0, 'Protocol reserve already exists');
 		uint96 id = commitmentIndex.importProtocolReserve(forkAuthority, rep, commitment, maximumHealthyPrice(rep, commitment));
-		_addSlot(owners[forkAuthority], id);
+		owners[forkAuthority].positionId = id;
 	}
 	/// @notice Installs a funded recap purchase in its buyer's own active position.
 	/// @dev The coordinator authenticates the buyer and supplies the actual child
 	/// REP before activation. No later winner claim can defer liquidation exposure.
 	function importAuctionPosition(address owner, uint256 rep, uint256 commitment, uint256 target) external payable onlyForkAuthority returns (uint96 id) {
 		require(importing && owner != address(0) && target >= BPS, 'Auction import unavailable');
-		require(commitment != 0 && rep >= requiredRep(commitment, target), 'Auction collateral below chosen health');
+		require(commitment != 0, 'Auction commitment is zero');
 		Owner storage account = owners[owner];
 		account.executionReserveAttoEth += msg.value;
-		id = _positionInBatch(account, 0);
+		id = account.positionId;
+		rep += account.freeAttoRep;
+		totalFreeAttoRep -= account.freeAttoRep;
+		account.freeAttoRep = 0;
 		if (id == 0) {
 			require(commitment >= minimumCommitmentAttoEth, 'Commitment below economic minimum');
+			require(rep >= requiredRep(commitment, target), 'Auction collateral below chosen health');
 			id = commitmentIndex.importPosition(owner, rep, commitment, maximumHealthyPrice(rep, commitment), 0);
-			_addSlot(account, id);
+			account.positionId = id;
 		} else {
 			SecurityPoolCommitmentIndex.Account memory old = commitmentIndex.accountOf(id);
+			require(old.batch == 0, 'Retiring owner cannot add auction commitment');
 			require(old.rep + rep >= requiredRep(old.commitment + commitment, target), 'Combined auction health below target');
 			commitmentIndex.importAdd(id, rep, commitment, maximumHealthyPrice(old.rep + rep, old.commitment + commitment));
 			commitment += old.commitment;
@@ -602,20 +615,18 @@ contract SecurityPoolCapitalLedger {
 
 	function _settleOwner(address owner) private {
 		Owner storage account = owners[owner];
-		for (uint256 i; i < 3; i++) {
-			uint96 id = account.positions[i];
-			if (id == 0) continue;
-			(uint256 rep, uint256 ethFees, uint256 repFees) = commitmentIndex.claim(id);
-			account.freeAttoRep += rep;
-			totalFreeAttoRep += rep;
-			retirementCashAttoRep -= rep;
-			account.feesAttoEth += ethFees;
-			account.feesAttoRep += repFees;
-			if (commitmentIndex.accountOf(id).commitment == 0) {
-				account.positions[i] = 0;
-				account.executionReserveAttoEth += positionExecutionReserveAttoEth[id];
-				delete positionExecutionReserveAttoEth[id];
-			}
+		uint96 id = account.positionId;
+		if (id == 0) return;
+		(uint256 rep, uint256 ethFees, uint256 repFees) = commitmentIndex.claim(id);
+		account.freeAttoRep += rep;
+		totalFreeAttoRep += rep;
+		retirementCashAttoRep -= rep;
+		account.feesAttoEth += ethFees;
+		account.feesAttoRep += repFees;
+		if (commitmentIndex.accountOf(id).commitment == 0) {
+			account.positionId = 0;
+			account.executionReserveAttoEth += positionExecutionReserveAttoEth[id];
+			delete positionExecutionReserveAttoEth[id];
 		}
 	}
 	/// @notice Recovery invalidates the old interval immediately, before a keeper
@@ -636,21 +647,6 @@ contract SecurityPoolCapitalLedger {
 	function _owned(uint96 id, address owner) private view returns (SecurityPoolCommitmentIndex.Account memory account) {
 		account = commitmentIndex.accountOf(id);
 		require(account.owner == owner, 'Position belongs to another owner');
-	}
-	function _positionInBatch(Owner storage owner, uint96 batch) private view returns (uint96) {
-		for (uint256 i; i < 3; i++) {
-			uint96 id = owner.positions[i];
-			if (id != 0 && commitmentIndex.accountOf(id).batch == batch) return id;
-		}
-		return 0;
-	}
-	function _addSlot(Owner storage owner, uint96 id) private {
-		for (uint256 i; i < 3; i++)
-			if (owner.positions[i] == 0) {
-				owner.positions[i] = id;
-				return;
-			}
-		revert('Settle existing owner positions first');
 	}
 	function _target(Owner storage owner) private view returns (uint256) {
 		return owner.targetHealthFactorBps == 0 ? BPS : owner.targetHealthFactorBps;

@@ -110,10 +110,12 @@ describe('bounded portfolio fork SDK', () => {
 })
 
 test.each([
-	{ minimumFill: 1n, maximumSold: 100n, reason: undefined },
-	{ minimumFill: 10n, maximumSold: 100n, reason: 'Purchase is below this recap sale’s minimum fill.' },
-	{ minimumFill: 10n, maximumSold: 20n, reason: undefined },
-])('recap quote funds combined health and enforces minimum fill $minimumFill for remaining inventory $maximumSold', async ({ minimumFill, maximumSold, reason }) => {
+	{ minimumFill: 1n, maximumSold: 100n, principal: 40n, batch: 0n, ownRep: 30n, reason: undefined },
+	{ minimumFill: 10n, maximumSold: 100n, principal: 40n, batch: 0n, ownRep: 30n, reason: 'Purchase is below this recap sale’s minimum fill.' },
+	{ minimumFill: 10n, maximumSold: 20n, principal: 40n, batch: 0n, ownRep: 30n, reason: undefined },
+	{ minimumFill: 1n, maximumSold: 100n, principal: 100n, batch: 0n, ownRep: 0n, reason: undefined },
+	{ minimumFill: 1n, maximumSold: 100n, principal: 40n, batch: 1n, ownRep: 30n, reason: 'Retiring principal cannot accept a recap commitment.' },
+])('recap quote funds combined health and enforces minimum fill $minimumFill for remaining inventory $maximumSold', async ({ minimumFill, maximumSold, principal, batch, ownRep, reason }) => {
 	const source = fixture({
 		branches: [8n, 7n, 20n, 20n, 10n, 0n, owner, true, true, false],
 		quote: [20n, 10n, 5n],
@@ -146,14 +148,15 @@ test.each([
 		totals: [40n, 20n, 0n],
 		currentBatch: 1n,
 		nextBatch: 2n,
-		ownerAccount: { freeAttoRep: 0n, feesAttoEth: 0n, feesAttoRep: 0n, executionReserveAttoEth: 2n, targetHealthFactorBps: 10000n, positions: [1n, 0n, 0n] },
-		accountOf: { owner, batch: 0n, rep: 40n, commitment: 20n, maxHealthyPrice: 1n, releasedRep: 0n, ethFees: 0n, repFees: 0n },
+		ownerAccount: { freeAttoRep: 0n, feesAttoEth: 0n, feesAttoRep: 0n, executionReserveAttoEth: 2n, targetHealthFactorBps: 10000n, positionId: 1n },
+		ownerCollateral: [principal, 20n, 0n],
+		accountOf: { owner, batch, rep: principal, commitment: 20n, maxHealthyPrice: 1n, releasedRep: 0n, ethFees: 0n, repFees: 0n },
 		positionExecutionReserveAttoEth: 5n,
 		liquidationStarted: 0n,
 	})
 	const snapshot = await loadPortfolioForkSnapshot({ client: source.client, portfolio, owner, universeId: 8n })
 	const quote = await loadPortfolioRecapQuote({ client: source.client, snapshot, maximumCostAttoEth: 10n, maximumRep: 30n, targetHealthFactorBps: 15000n })
-	expect(quote.ownRep).toBe(30n)
+	expect(quote.ownRep).toBe(ownRep)
 	expect(quote.executionReserve).toBe(2n)
 	expect(quote.reason).toBe(reason)
 })

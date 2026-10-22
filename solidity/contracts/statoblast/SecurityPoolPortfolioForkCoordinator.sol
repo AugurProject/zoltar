@@ -206,13 +206,9 @@ contract SecurityPoolPortfolioForkCoordinator {
 		require(!choices[source][msg.sender].recorded, 'Fork choice already recorded');
 		uint248 child = _prepare(source, outcome);
 		SecurityPoolCapitalLedger parentCapital = portfolio.capitalLedger(source);
-		(SecurityPoolCapitalLedger.ChoicePosition[3] memory positions, uint256 target, uint256 reserve) = parentCapital.exportChoice(msg.sender);
-		uint256 rep;
-		uint256 commitment;
-		for (uint256 i; i < 3; i++) {
-			rep += positions[i].rep;
-			commitment += positions[i].commitment;
-		}
+		(SecurityPoolCapitalLedger.ChoicePosition memory position, uint256 target, uint256 reserve) = parentCapital.exportChoice(msg.sender);
+		uint256 rep = position.rep;
+		uint256 commitment = position.commitment;
 		require(rep != 0, 'No pledged fork principal');
 		Fork storage fork = forks[source];
 		Branch storage branch = branches[child];
@@ -222,7 +218,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 		branch.parentCash = Math.mulDiv(fork.cash, branch.chosenBacking, fork.backing);
 		fork.assignedCash += branch.parentCash - previousCash;
 		choices[source][msg.sender] = Choice(outcome, true);
-		portfolio.capitalLedger(child).importChoice{value: reserve}(msg.sender, positions, target);
+		portfolio.capitalLedger(child).importChoice{value: reserve}(msg.sender, position, target);
 		emit BranchChosen(source, msg.sender, outcome, rep, commitment);
 	}
 
@@ -331,17 +327,12 @@ contract SecurityPoolPortfolioForkCoordinator {
 		}
 	}
 	function _requiredRecapTopUp(SecurityPoolCapitalLedger capital, address buyer, uint256 rep, uint256 commitment, uint256 health) private view returns (uint256) {
-		uint256 required = capital.requiredRep(commitment, health);
 		SecurityPoolCapitalLedger.Owner memory owner = capital.ownerAccount(buyer);
-		for (uint256 i; i < 3; i++) {
-			if (owner.positions[i] == 0) continue;
-			SecurityPoolCommitmentIndex.Account memory existing = capital.commitmentIndex().accountOf(owner.positions[i]);
-			if (existing.batch != 0) continue;
-			uint256 combined = capital.requiredRep(existing.commitment + commitment, health);
-			if (combined > existing.rep) required = Math.max(required, combined - existing.rep);
-			break;
-		}
-		return required > rep ? required - rep : 0;
+		SecurityPoolCommitmentIndex.Account memory existing = capital.commitmentIndex().accountOf(owner.positionId);
+		require(existing.batch == 0, 'Retiring owner cannot add auction commitment');
+		uint256 required = capital.requiredRep(existing.commitment + commitment, health);
+		uint256 collateral = existing.rep + owner.freeAttoRep + rep;
+		return required > collateral ? required - collateral : 0;
 	}
 
 	function finalizeBranch(uint248 child) external nonReentrant {
@@ -406,7 +397,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 		if (zoltar.getForkTime(child) == 0) capital.serveRetirement();
 		capital.claimEarnings();
 		SecurityPoolCapitalLedger.Owner memory account = capital.ownerAccount(address(this));
-		if (account.freeAttoRep != 0) capital.withdrawFree(account.freeAttoRep, address(this));
+		if (account.freeAttoRep != 0) capital.withdrawPrincipal(account.freeAttoRep, address(this));
 		uint256 rep = IERC20(address(zoltar.getRepToken(child))).balanceOf(address(this));
 		if (rep != 0) {
 			zoltar.burnRep(child, rep);

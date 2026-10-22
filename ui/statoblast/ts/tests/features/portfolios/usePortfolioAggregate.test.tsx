@@ -12,8 +12,8 @@ const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentFor
 const abi = parseAbi([
 	'function approve(address spender,uint256 amount)',
 	'function depositFor(address owner,uint256 amount)',
-	'function withdrawFree(uint256 amount,address recipient)',
-	'function authorize(uint256 rep,uint256 commitment)',
+	'function withdrawPrincipal(uint256 amount,address recipient)',
+	'function authorize(uint256 commitment)',
 	'function setHealthTarget(uint256 targetHealthFactorBps)',
 	'function claimEarnings()',
 	'function requestRetirement(uint96 id)',
@@ -51,43 +51,39 @@ test('approval and deposit remain separate transactions with exact capital-ledge
 	expect(decodeFunctionData({ abi, data: deposit.data })).toEqual({ functionName: 'depositFor', args: [owner, 5n * unit] })
 	expect(requests).toHaveLength(2)
 })
-test('stale prices disable new commitments but preserve free REP withdrawal, top-up and earned fees', async () => {
-	const { hook, requests } = await setup(capitalSnapshot({ priceValid: false }))
+test('stale prices block live-principal withdrawal and authorization while preserving earned fees', async () => {
+	const { hook, requests } = await setup(capitalSnapshot({ priceValid: false, withdrawableAttoRep: 0n }))
 	await act(() => {
-		hook.state().setPledgeAmount('30')
 		hook.state().setCommitmentAmount('10')
 		hook.state().setWithdrawalAmount('4')
-		hook.state().setTopUp(1n, '1')
 	})
 	expect(hook.state().authorizeReason).toContain('price')
-	expect(hook.state().withdrawReason).toBeUndefined()
-	expect(hook.state().positionReasons(1n).topUp).toBeUndefined()
-	await act(() => hook.state().withdraw())
+	expect(hook.state().withdrawReason).toContain('price')
 	await act(() => hook.state().claim())
-	expect(requests).toHaveLength(2)
+	expect(requests).toHaveLength(1)
 	expect(hook.state().serveReason).toContain('price')
 })
 test('personal health and exact commitment consent are rechecked after the review opens', async () => {
 	const { hook, requests, transport } = await setup()
 	await act(() => {
-		hook.state().setPledgeAmount('30')
 		hook.state().setCommitmentAmount('10')
 	})
 	expect(hook.state().authorizeReason).toBeUndefined()
 	await act(() => hook.state().authorize())
 	const request = requests[0]
 	if (request === undefined) throw new Error('Missing authorization')
-	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'authorize', args: [30n * unit, 10n * unit] })
+	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'authorize', args: [10n * unit] })
 	await request.validateBeforeSubmit?.()
 	transport.setSnapshot(capitalSnapshot({ ownerAccount: { ...capitalSnapshot().ownerAccount, targetHealthFactorBps: 15_000n } }))
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('health target changed')
+	transport.setSnapshot(capitalSnapshot({ ownerPrincipalAttoRep: 31n * unit }))
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('principal changed')
 })
 test('custom admission blocks new underwriting while keeping existing owners exits available', async () => {
 	const snapshot = capitalSnapshot()
 	const { hook } = await setup({ ...snapshot, admission: { address: snapshot.questionAdmissionPolicy, mode: 'custom' } })
 	await act(() => {
 		hook.state().setDepositAmount('1')
-		hook.state().setPledgeAmount('30')
 		hook.state().setCommitmentAmount('10')
 		hook.state().setWithdrawalAmount('1')
 	})
@@ -96,7 +92,7 @@ test('custom admission blocks new underwriting while keeping existing owners exi
 	expect(hook.state().withdrawReason).toBeUndefined()
 	expect(hook.state().claimReason).toBeUndefined()
 })
-test('position retirement uses bounded cohort slots and account changes clear drafts', async () => {
+test('single owner position retains its retirement cohort and account changes clear drafts', async () => {
 	const { hook, requests } = await setup()
 	expect(hook.state().positionReasons(1n).retire).toBeUndefined()
 	await act(() => hook.state().retire(1n))
@@ -106,4 +102,31 @@ test('position retirement uses bounded cohort slots and account changes clear dr
 	await act(() => hook.state().setDepositAmount('5'))
 	await hook.setProps({ snapshot: capitalSnapshot({ universeId: 2n }) })
 	expect(hook.state().depositAmount).toBe('')
+})
+
+test('withdrawals use the on-chain allowance and recheck it before submission', async () => {
+	const { hook, requests, transport } = await setup()
+	await act(() => hook.state().setWithdrawalAmount('4'))
+	expect(hook.state().withdrawReason).toBeUndefined()
+	await act(() => hook.state().withdraw())
+	const request = requests[0]
+	if (request === undefined) throw new Error('Withdrawal request missing')
+	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'withdrawPrincipal', args: [4n * unit, owner] })
+	await request.validateBeforeSubmit?.()
+	transport.setSnapshot(capitalSnapshot({ withdrawableAttoRep: 3n * unit }))
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('withdrawable REP')
+})
+
+test('fully retired principal can withdraw without a fresh price', async () => {
+	const { hook, requests } = await setup(capitalSnapshot({ priceValid: false, ownerCommitmentAttoEth: 0n, ownerPrincipalAttoRep: 30n * unit, positions: [], ownerAccount: { ...capitalSnapshot().ownerAccount, freeAttoRep: 30n * unit, positionId: 0n }, withdrawableAttoRep: 30n * unit }))
+	await act(() => hook.state().setWithdrawalAmount('30'))
+	expect(hook.state().withdrawReason).toBeUndefined()
+	await act(() => hook.state().withdraw())
+	expect(requests).toHaveLength(1)
+})
+
+test('an exported owner cannot fund a reserve that already followed the fork choice', async () => {
+	const { hook } = await setup(capitalSnapshot({ exported: true }))
+	await act(() => hook.state().setReserveAmount('1'))
+	expect(hook.state().fundReserveReason).toContain('fork choice')
 })

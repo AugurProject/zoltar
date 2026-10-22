@@ -27,11 +27,11 @@ describe('Statoblast: central capital shared price feed', () => {
 		const exposure = () => fixture.owner().readContract({ abi: feedArtifact.abi, address: shared, functionName: 'aggregateExposureAttoEth' })
 		const minimum = () => fixture.owner().readContract({ abi: feedArtifact.abi, address: shared, functionName: 'minimumToken1ReportAttoEth' })
 		expect(await exposure()).toBe(0n)
-		await fixture.authorize(500n * unit, 100n * unit)
+		await fixture.authorize(100n * unit)
 		expect(await exposure()).toBe(100n * unit)
 		const firstMinimum = await minimum()
 		expect(firstMinimum).toBeGreaterThan(unit)
-		await fixture.authorize(1_000n * unit, 200n * unit)
+		await fixture.authorize(200n * unit)
 		expect(await exposure()).toBe(200n * unit)
 		expect(await minimum()).toBeGreaterThan(firstMinimum)
 		for (const question of [fixture.base.questionId, fixture.secondQuestionId]) {
@@ -73,7 +73,7 @@ describe('Statoblast: central capital shared price feed', () => {
 		await writeContractAndWait(root, () => root.writeContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'beginForkImport' }))
 		let backing = 0n
 		let positionSetupGas = 0n
-		for (let i = 0; i < 256; i++) {
+		for (let i = 0; i < 768; i++) {
 			const rep = 2n * (unit + BigInt(i))
 			const holder =
 				i === 0
@@ -83,12 +83,10 @@ describe('Statoblast: central capital shared price feed', () => {
 								.toString(16)
 								.padStart(40, '0')}`,
 						)
-			const positions = [0n, 1n, 2n].map(batch => ({ rep, commitment: unit, batch, executionReserveAttoEth: unit / 10_000n }))
-			const [active, current, next] = positions
-			if (active === undefined || current === undefined || next === undefined) throw new Error('Missing stress cohort')
-			const hash = await writeContractAndWait(root, () => root.writeContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'importChoice', args: [holder, [active, current, next], 10_000n], value: (3n * unit) / 10_000n }))
+			const position = { rep, commitment: unit, batch: BigInt(i % 3), executionReserveAttoEth: unit / 10_000n }
+			const hash = await writeContractAndWait(root, () => root.writeContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'importChoice', args: [holder, position, 10_000n], value: unit / 10_000n }))
 			positionSetupGas += (await root.waitForTransactionReceipt({ hash })).gasUsed
-			backing += 3n * rep
+			backing += rep
 		}
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: getRepTokenAddress(universe), functionName: 'transfer', args: [fixture.capitalLedger, backing] }))
 		for (let i = 0; i < 128; i++) {
@@ -132,7 +130,7 @@ describe('Statoblast: central capital shared price feed', () => {
 		const taggedOwnerClaimGas = (await owner.waitForTransactionReceipt({ hash: claimHash })).gasUsed
 		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ composedOracleSettlementGas: receipt.gasUsed, callbackGasBudget: budget, positionSetupGas, taggedOwnerClaimGas })
 		// This full claim also checkpoints the live settlement book and fee clocks.
-		// The index-only three-cohort claim retains its separate component budget.
+		// Each owner has one position, irrespective of the global owner and question count.
 		expect(taggedOwnerClaimGas).toBeLessThan(5_000_000n)
 	})
 

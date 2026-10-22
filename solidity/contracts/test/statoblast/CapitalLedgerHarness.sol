@@ -68,6 +68,11 @@ contract CapitalLedgerHarness {
 	function fundFees() external payable {
 		ledger.fundVestedFees{value: msg.value}(0);
 	}
+	function fundRepFees(uint256 amount) external {
+		zoltar.mint(address(this), amount);
+		token.approve(address(ledger), amount);
+		ledger.fundVestedFees(amount);
+	}
 	function setFork(uint256 timestamp) external {
 		zoltar.setFork(timestamp);
 		ledger.freeze();
@@ -78,8 +83,8 @@ contract CapitalLedgerHarness {
 	function exportChoice(address owner) external {
 		ledger.exportChoice(owner);
 	}
-	function importChoice(address owner, SecurityPoolCapitalLedger.ChoicePosition[3] calldata positions, uint256 target) external payable {
-		ledger.importChoice{value: msg.value}(owner, positions, target);
+	function importChoice(address owner, SecurityPoolCapitalLedger.ChoicePosition calldata position, uint256 target) external payable {
+		ledger.importChoice{value: msg.value}(owner, position, target);
 	}
 	function importAuction(address owner, uint256 rep, uint256 commitment, uint256 target) external payable {
 		ledger.importAuctionPosition{value: msg.value}(owner, rep, commitment, target);

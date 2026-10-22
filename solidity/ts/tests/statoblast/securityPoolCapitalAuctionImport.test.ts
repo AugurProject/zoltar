@@ -44,27 +44,22 @@ describe('Statoblast: atomic recap capital ownership', () => {
 		await setBaselineSnapshot()
 	})
 
-	test('recap fills merge into the chosen active slot without changing closed retirement authorization', async () => {
+	test('recap fills merge into one active owner position without changing another owner retirement authorization', async () => {
 		await writeContractAndWait(owner, () =>
 			owner.writeContract({
 				abi: harnessArtifact.abi,
 				address: harness,
 				functionName: 'importChoice',
-				args: [
-					buyer.account.address,
-					[
-						{ rep: 126n * E, commitment: 100n * E, batch: 0n, executionReserveAttoEth: reserve },
-						{ rep: 126n * E, commitment: 100n * E, batch: 1n, executionReserveAttoEth: reserve },
-						{ rep: 0n, commitment: 0n, batch: 2n, executionReserveAttoEth: 0n },
-					],
-					12_000n,
-				],
-				value: 3n * reserve,
+				args: [buyer.account.address, { rep: 126n * E, commitment: 100n * E, batch: 0n, executionReserveAttoEth: reserve }, 12_000n],
+				value: 2n * reserve,
 			}),
 		)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'importChoice', args: [owner.account.address, { rep: 126n * E, commitment: 100n * E, batch: 1n, executionReserveAttoEth: reserve }, 12_000n], value: reserve }))
+		await expect(fill(owner.account.address, 63n * E, 50n * E, 12_000n, reserve)).rejects.toThrow('Retiring owner cannot add auction commitment')
 		await fill(buyer.account.address, 63n * E, 50n * E, 12_000n)
 		await fill(buyer.account.address, 63n * E, 50n * E, 12_000n)
-		expect((await account(buyer.account.address)).positions).toEqual([1n, 2n, 0n])
+		expect((await account(buyer.account.address)).positionId).toBe(1n)
+		expect((await account(owner.account.address)).positionId).toBe(2n)
 		expect(await position(1n)).toMatchObject({ rep: 252n * E, commitment: 200n * E, batch: 0n })
 		expect(await position(2n)).toMatchObject({ rep: 126n * E, commitment: 100n * E, batch: 1n })
 		expect(await owner.readContract({ abi: artifact.abi, address: ledger, functionName: 'positionExecutionReserveAttoEth', args: [1n] })).toBe(2n * reserve)
@@ -77,7 +72,7 @@ describe('Statoblast: atomic recap capital ownership', () => {
 	test('every new buyer funds their own selected health and execution reserve before becoming an owner', async () => {
 		await expect(fill(buyer.account.address, 105n * E, 100n * E, 15_000n, reserve)).rejects.toThrow('Auction collateral below chosen health')
 		await expect(fill(buyer.account.address, 158n * E, 100n * E, 15_000n)).rejects.toThrow('Fund execution reserve')
-		expect((await account(buyer.account.address)).positions).toEqual([0n, 0n, 0n])
+		expect((await account(buyer.account.address)).positionId).toBe(0n)
 		await fill(buyer.account.address, 158n * E, 100n * E, 15_000n, 3n * reserve)
 		expect(await position(1n)).toMatchObject({ owner: buyer.account.address, rep: 158n * E, commitment: 100n * E, batch: 0n })
 		expect(await account(buyer.account.address)).toMatchObject({ targetHealthFactorBps: 15_000n, executionReserveAttoEth: 2n * reserve })

@@ -13,15 +13,15 @@ export function requiredPortfolioExecutionReserve(snapshot: Pick<PortfolioCapita
 	return ceilDivide(commitment, snapshot.economics.minimumCommitmentAttoEth) * snapshot.economics.minimumExecutionReserveAttoEth
 }
 
-export function capitalAuthorizationReason(snapshot: PortfolioCapitalSnapshot, rep: bigint | undefined, commitment: bigint | undefined) {
-	if (snapshot.forkTime > 0n || snapshot.frozen || snapshot.importing) return 'This universe is closed to new commitments.'
+export function capitalAuthorizationReason(snapshot: PortfolioCapitalSnapshot, commitment: bigint | undefined) {
+	if (snapshot.forkTime > 0n || snapshot.frozen || snapshot.importing || snapshot.exported) return 'This universe is closed to new commitments.'
 	if (!snapshot.priceValid) return 'Refresh the shared REP price first.'
-	if (rep === undefined || rep === 0n || commitment === undefined || commitment === 0n) return 'Enter positive collateral and commitment amounts.'
+	if (commitment === undefined || commitment === 0n) return 'Enter a positive commitment amount.'
 	if (commitment < snapshot.economics.minimumCommitmentAttoEth) return 'Commitment is below this pool’s minimum.'
-	const active = snapshot.positions.find(position => position.batch === 0n && position.commitment > 0n)
+	const active = snapshot.positions.find(position => position.commitment > 0n)
+	if (active !== undefined && active.batch !== 0n) return 'Cancel retirement before changing your commitment.'
 	if (active !== undefined && commitment < active.commitment) return 'Request retirement before reducing an existing commitment.'
-	if (rep > snapshot.withdrawableAttoRep + (active?.rep ?? 0n)) return 'Insufficient free REP for this commitment.'
-	if (rep < requiredPortfolioCollateral(snapshot, commitment)) return 'Collateral is below your saved health target.'
+	if (snapshot.ownerPrincipalAttoRep < requiredPortfolioCollateral(snapshot, commitment)) return 'Collateral is below your saved health target.'
 	if (snapshot.ownerAccount.executionReserveAttoEth + (active?.executionReserveAttoEth ?? 0n) < requiredPortfolioExecutionReserve(snapshot, commitment)) return 'Fund the execution reserve first.'
 	return undefined
 }
@@ -29,4 +29,14 @@ export function capitalAuthorizationReason(snapshot: PortfolioCapitalSnapshot, r
 export function capitalPositionPhase(batch: bigint, currentBatch: bigint) {
 	if (batch === 0n) return 'active'
 	return batch === currentBatch ? 'current' : 'next'
+}
+
+export function capitalWithdrawalReason(snapshot: PortfolioCapitalSnapshot, amount: bigint | undefined) {
+	if (amount === undefined || amount === 0n) return 'Enter a positive amount.'
+	if (amount <= snapshot.withdrawableAttoRep) return undefined
+	if (snapshot.ownerCommitmentAttoEth > 0n) {
+		if (snapshot.forkTime > 0n || snapshot.frozen || snapshot.importing || snapshot.exported) return 'Committed principal cannot be withdrawn during fork preparation.'
+		if (!snapshot.priceValid) return 'Refresh the shared REP price before withdrawing committed principal.'
+	}
+	return 'Amount exceeds your withdrawable REP. Retire commitment to release more principal.'
 }

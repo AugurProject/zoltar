@@ -38,6 +38,6 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('The arbitrage executor contract bundles routing, settlement, and recovery paths that belong in libraries.', [['bots/open-oracle-arbitrager/contracts/OpenOracleArbitrageExecutor.sol', 754]]),
 	...allowances('SecurityPool contract owners: continue bytecode-sensitive delegate extraction for shared-capital dispatch and terminal settlement at the common entry point.', [['solidity/contracts/statoblast/SecurityPool.sol', 721]]),
 	...allowances('Shared-capital contract owners: separate fork import and export orchestration, including the dedicated junior protocol-reserve import, from custody, fee checkpoints and lazy liquidation recovery, with accounting, callback gas and deployment bytecode revalidation.', [
-		['solidity/contracts/statoblast/SecurityPoolCapitalLedger.sol', 624],
+		['solidity/contracts/statoblast/SecurityPoolCapitalLedger.sol', 618],
 	]),
 ])

@@ -39,7 +39,7 @@ describe('Statoblast: voluntary portfolio settlement repair', () => {
 		const { owner, other, base, portfolio } = fixture
 		await fixture.prepare()
 		await fixture.deposit(1_000n * unit, other())
-		await fixture.authorize(1_000n * unit, 200n * unit, other())
+		await fixture.authorize(200n * unit, other())
 		await fixture.mint()
 		await approveToken(owner(), getRepTokenAddress(base.genesisUniverse), getZoltarAddress())
 		await base.mockWindow.setTime(base.questionData.endTime + 1n)
@@ -70,15 +70,17 @@ describe('Statoblast: voluntary portfolio settlement repair', () => {
 		await splitMigrationRep(owner(), base.genesisUniverse, 100n * unit, [1n])
 		await manipulatePriceOracle(owner(), base.mockWindow, priceCoordinator)
 		const account = await owner().readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'ownerAccount', args: [owner().account.address] })
-		const position = account.positions.find(id => id !== 0n)
-		if (position === undefined) throw new Error('Chosen commitment missing')
+		const position = account.positionId
+		if (position === 0n) throw new Error('Chosen commitment missing')
 		await writeContractAndWait(owner(), () => owner().writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'requestRetirement', args: [position] }))
 		const queued = await totals()
 		await expect(repair(child, 1n)).rejects.toThrow('Insufficient healthy shared commitment')
 		expect((await totals()).slice(0, 2)).toEqual(queued.slice(0, 2))
-		// The owner voluntarily opens fresh backing after the existing queue has priority.
+		// Increasing commitment requires explicitly giving up the existing retirement priority.
+		await expect(owner().writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'authorize', args: [20n * unit] })).rejects.toThrow('Cancel retirement before authorizing')
+		await writeContractAndWait(owner(), () => owner().writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'cancelRetirement', args: [position] }))
 		await writeContractAndWait(owner(), () => owner().writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'fundExecutionReserve', args: [owner().account.address], value: unit }))
-		await writeContractAndWait(owner(), () => owner().writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'authorize', args: [100n * unit, 20n * unit] }))
+		await writeContractAndWait(owner(), () => owner().writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'authorize', args: [20n * unit] }))
 		const before = await totals()
 		const donorBefore = await other().readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'ownerAccount', args: [other().account.address] })
 		const donation = before[1] - before[0]
