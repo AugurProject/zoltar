@@ -148,7 +148,7 @@ const awaitInitializationStep = async <TValue,>(browser: ChildProcess, deadline:
 	}
 }
 
-export function createChromiumCommandSender(socket: DevToolsSocket, browser: ChildProcess, timeoutMilliseconds = DEVTOOLS_COMMAND_TIMEOUT_MILLISECONDS): DevToolsCommand {
+export function createChromiumCommandSender(socket: DevToolsSocket, browser: ChildProcess, timeoutMilliseconds = DEVTOOLS_COMMAND_TIMEOUT_MILLISECONDS, readStderr = () => ''): DevToolsCommand {
 	return createDevToolsCommandSender(
 		socket,
 		{
@@ -156,6 +156,7 @@ export function createChromiumCommandSender(socket: DevToolsSocket, browser: Chi
 			onExit: listener => {
 				browser.once('exit', (code, signal) => listener(signal === null ? `code ${String(code)}` : `signal ${signal}`))
 			},
+			readDiagnostics: () => `browser ${browser.exitCode === null && browser.signalCode === null ? 'running' : 'exited'} (pid ${String(browser.pid)}, exitCode ${String(browser.exitCode)}, signalCode ${String(browser.signalCode)}); stderr: ${readStderr().trim().slice(-2_000) || '(empty)'}`,
 		},
 		timeoutMilliseconds,
 	)
@@ -356,7 +357,7 @@ export async function launchChromium({
 			throw new Error(`Could not connect to the Chromium ${target} target`)
 		})()
 
-		const send = createChromiumCommandSender(connectedSocket, launchedBrowser, commandTimeoutMilliseconds)
+		const send = createChromiumCommandSender(connectedSocket, launchedBrowser, commandTimeoutMilliseconds, () => stderrData)
 		return { browser: launchedBrowser, close, send, socket: connectedSocket, ...createPageEvaluator(send, evaluationDefaults) }
 	} catch (error) {
 		await close()

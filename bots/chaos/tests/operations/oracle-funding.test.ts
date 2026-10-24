@@ -5,7 +5,7 @@ import { assertOperationEthFunding } from '../../src/execution/safety.ts'
 import { assertAnchoredOracleRequestFunding, assertOracleRequestFundingEnvelope, oracleRequestFundingEnvelope } from '../../src/operations/oracle-request-funding.ts'
 import { reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
 import { eligibleOperationPlans } from '../support/operation-plans.ts'
-import { planningOptionsFixture, snapshotFixture } from './fixture.ts'
+import { address, planningOptionsFixture, snapshotFixture } from './fixture.ts'
 
 const options = planningOptionsFixture()
 
@@ -41,6 +41,35 @@ function requestPricePlan(snapshot: ReturnType<typeof snapshotFixture>) {
 }
 
 describe('oracle request funding bounds', () => {
+	test('renews a fresh shared portfolio price without allowing duplicate or fresh standalone reports', () => {
+		const { pool, snapshot } = requestPriceSnapshot()
+		pool.oraclePriceValid = true
+		expect(requestPricePlan(snapshot)).toBeUndefined()
+		Object.assign(pool, { priceFeed: address(80), oracleExposureAttoEth: 100n.toString() })
+		expect(requestPricePlan(snapshot)).toBeDefined()
+		pool.pendingReportId = '1'
+		expect(requestPricePlan(snapshot)).toBeUndefined()
+	})
+
+	test('uses shared aggregate exposure and the feed event while approving the question coordinator', () => {
+		const { pool, snapshot } = requestPriceSnapshot()
+		Object.assign(pool, { priceFeed: address(80), oracleExposureAttoEth: (10n ** 40n).toString() })
+		expect(requestPricePlan(snapshot)).toBeUndefined()
+		Object.assign(pool, { oracleExposureAttoEth: 100n.toString() })
+		const plan = requestPricePlan(snapshot)
+		const request = plan?.steps.find(step => step.id === 'request-price')
+		expect(request?.to).toBe(pool.coordinator)
+		expect(request?.evidence).toContainEqual(expect.objectContaining({ emitter: address(80) }))
+		expect(plan?.steps.filter(step => step.id.startsWith('approve')).every(step => decodeFunctionData({ abi: genesisReputationTokenAbi, data: step.data }).args?.[0] === pool.coordinator)).toBe(true)
+		if (plan === undefined) throw new Error('Missing shared feed request plan')
+		const ceiling = plan.metadata['settlementCollateralCeilingAttoEth']
+		if (typeof ceiling !== 'string') throw new Error('Missing exposure ceiling')
+		pool.oracleExposureAttoEth = (BigInt(ceiling) + 1n).toString()
+		const continued = reevaluateOperationContinuation(snapshot, plan, options, { confirmedStepIds: ['approve-oracle-weth'] })
+		expect(continued.plan?.continuationDisposition).toBe('cleanup-only')
+		expect(continued.plan?.steps.map(step => step.id)).toEqual(['revoke-oracle-weth'])
+	})
+
 	test('fails closed when an anchored coordinator getter disagrees with its immutable inputs', () => {
 		const observation = {
 			baseFeePerGas: '1',

@@ -2,13 +2,11 @@
 
 import { describe, expect, test } from 'bun:test'
 import { describeRepPriceStatus, resolveRepPrice, type UiPriceOracle } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
-import { getOracleManagerPriceValidUntilTimestamp } from '@zoltar/ui-statoblast-shared/protocol/oracleTiming.js'
 
 const settlementTimestamp = 900n
-const validUntil = getOracleManagerPriceValidUntilTimestamp(settlementTimestamp)
-if (validUntil === undefined) throw new Error('Expected a valid-until timestamp')
+const validUntil = settlementTimestamp + 780n
 const freshNow = settlementTimestamp + 180n
-const poolOracle = { price: 20n, settlementTimestamp }
+const poolOracle = { price: 20n, settlementTimestamp, validUntil }
 
 function resolve(setting: UiPriceOracle, overrides: Partial<Parameters<typeof resolveRepPrice>[0]> = {}) {
 	return resolveRepPrice({ now: freshNow, poolOracle, setting, uniswapPrice: 10n, ...overrides })
@@ -49,6 +47,11 @@ describe('resolveRepPrice', () => {
 		expect(resolve('open-oracle-fallback', { now: validUntil - 1n })).toMatchObject({ price: 20n, source: 'open-oracle' })
 		expect(resolve('open-oracle-fallback', { now: validUntil })).toMatchObject({ price: 10n, reason: 'oracle-expired' })
 		expect(resolve('open-oracle-fallback', { now: validUntil + 1n })).toMatchObject({ price: 10n, reason: 'oracle-expired' })
+	})
+
+	test('uses the shared portfolio deadline beyond five minutes and never guesses an unknown expiry', () => {
+		expect(resolve('open-oracle-fallback', { now: settlementTimestamp + 480n })).toMatchObject({ price: 20n, source: 'open-oracle' })
+		expect(resolve('open-oracle-fallback', { poolOracle: { price: 20n, settlementTimestamp } })).toMatchObject({ price: 10n, reason: 'oracle-unverified' })
 	})
 })
 

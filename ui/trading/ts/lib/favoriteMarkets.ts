@@ -13,7 +13,12 @@ function decodeCachedLiveMarket(value: unknown) {
 			const stored = read.record(key)
 			const feeAccounting = stored.optional('feeAccounting', key => {
 				const accounting = stored.record(key)
+				const linearFee = accounting.optional('linearFee', key => {
+					const stream = accounting.record(key)
+					return { rateAttoEthPerSecond: stream.bigint('rateAttoEthPerSecond'), endTime: stream.bigint('endTime') }
+				})
 				return {
+					...(linearFee === undefined ? {} : { linearFee }),
 					settlementCollateralAttoEth: accounting.bigint('settlementCollateralAttoEth'),
 					totalUnderwritingLimitAttoEth: accounting.bigint('totalUnderwritingLimitAttoEth'),
 					feeEligibleUnderwritingLimitAttoEth: accounting.bigint('feeEligibleUnderwritingLimitAttoEth'),

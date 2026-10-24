@@ -349,7 +349,7 @@ function commitmentExitCandidates(snapshot: EcosystemSnapshot) {
 		if (vault === undefined || amount(vault.underwritingLimitAttoEth) === 0n || pool.systemState !== 0) return false
 		const universe = snapshot.universes.find(candidate => candidate.id === pool.universeId)
 		if (universe === undefined || (universe.forkTime !== '0' && pool.questionOutcome === BINARY_OUTCOME_NONE)) return false
-		return amount(pool.totalUnderwritingLimitAttoEth) >= amount(vault.underwritingLimitAttoEth) + amount(pool.settlementCollateralAttoEth)
+		return pool.questionOutcome !== BINARY_OUTCOME_NONE || amount(pool.totalUnderwritingLimitAttoEth) >= amount(vault.underwritingLimitAttoEth) + amount(pool.settlementCollateralAttoEth)
 	})
 }
 
@@ -362,7 +362,7 @@ export const exitCommitmentLimit: OperationDefinition = {
 			ecosystem: 'statoblast',
 			label: exitCommitmentLimit.label,
 			metadata: { pool: pool.address, limitAttoEth: 0n.toString() },
-			postconditions: ['The wallet exits its commitment while aggregate commitments still cover collateral'],
+			postconditions: ['The wallet exits its commitment after final resolution or while remaining commitments cover collateral'],
 			risk: 'low',
 			snapshot,
 			steps: [encodeStep({ abi: securityPoolAbi, args: [0n], evidence: [eventEvidence(pool.address, 'UnderwritingLimitSet(address,uint256,uint256)')], functionName: 'setUnderwritingLimit', id: 'exit-limit', label: 'Exit standing commitment', to: pool.address })],
@@ -370,7 +370,7 @@ export const exitCommitmentLimit: OperationDefinition = {
 	},
 	classification: 'selectable',
 	contract: 'SecurityPool',
-	description: 'Exits the wallet commitment only when the remaining aggregate covers outstanding collateral.',
+	description: 'Exits the wallet commitment after final resolution or when remaining commitments cover outstanding collateral.',
 	discoveryInputs: ['wallet commitment', 'aggregate commitments', 'settlement collateral'],
 	ecosystem: 'statoblast',
 	evaluate: snapshot => eligible(commitmentExitCandidates(snapshot).length > 0 ? undefined : 'Outstanding collateral prevents commitment exit'),

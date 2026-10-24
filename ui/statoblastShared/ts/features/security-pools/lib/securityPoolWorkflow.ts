@@ -337,9 +337,10 @@ export function getCurrentPoolOracleManagerDetails({ poolOracleManagerDetails, s
 	if (!sameAddress(poolOracleManagerDetails?.managerAddress, selectedPoolManagerAddress)) return undefined
 	return poolOracleManagerDetails
 }
-export function getSelectedPoolOracleMetricValues({ lastOraclePrice, lastOracleSettlementTimestamp }: Pick<ListedSecurityPool, 'lastOraclePrice' | 'lastOracleSettlementTimestamp'>) {
+export function getSelectedPoolOracleMetricValues({ lastOraclePrice, lastOracleSettlementTimestamp, oraclePriceValidUntilTimestamp }: Pick<ListedSecurityPool, 'lastOraclePrice' | 'lastOracleSettlementTimestamp' | 'oraclePriceValidUntilTimestamp'>) {
 	return {
 		lastPrice: lastOraclePrice ?? 0n,
 		lastSettlementTimestamp: lastOracleSettlementTimestamp,
+		priceValidUntilTimestamp: oraclePriceValidUntilTimestamp,
 	}
 }

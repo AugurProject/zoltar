@@ -56,8 +56,10 @@ void describe('security vault helpers', () => {
 			badDebtAttoEth: 0n,
 			currentRetentionRate: 10n,
 			disputeStakedAttoRep: 0n,
+			disputeBackingAttoRep: 0n,
 			managerAddress: zeroAddress,
 			totalRepBackingUnits: 1n,
+			totalPoolHeldRepBalanceAttoRep: 1n,
 			vaultAttoRepBacking: 1n,
 			repToken: zeroAddress,
 			underwritingLimitAttoEth: 0n,
@@ -119,8 +121,10 @@ void describe('security vault helpers', () => {
 			badDebtAttoEth: 1n,
 			currentRetentionRate: 0n,
 			disputeStakedAttoRep: 0n,
+			disputeBackingAttoRep: 0n,
 			managerAddress: zeroAddress,
 			totalRepBackingUnits: 0n,
+			totalPoolHeldRepBalanceAttoRep: 0n,
 			vaultAttoRepBacking: 0n,
 			repToken: zeroAddress,
 			underwritingLimitAttoEth: 0n,
@@ -384,7 +388,7 @@ test('withdrawal estimate preserves nested full-limit rounding and the liquidati
 void test('commitment maximum is healthy and one attoETH more is liquidatable across both collateral floors', () => {
 	for (const multiplier of [10002n, 20000n, 70000n]) {
 		for (const staked of [0n, 3n * 10n ** 18n, 100n * 10n ** 18n]) {
-			const details = { vaultAttoRepBacking: 12n * 10n ** 18n + 1n, disputeStakedAttoRep: staked }
+			const details = { vaultAttoRepBacking: 12n * 10n ** 18n + 1n, disputeBackingAttoRep: staked }
 			const price = 3n * 10n ** 18n + 7n
 			const maximum = getMaximumHealthyCommitment(details, price, multiplier)
 			if (maximum === undefined) throw new Error('Expected maximum')
@@ -394,7 +398,7 @@ void test('commitment maximum is healthy and one attoETH more is liquidatable ac
 		}
 	}
 	expect(getMaximumHealthyCommitment(undefined, 1n, 20000n)).toBeUndefined()
-	expect(getMaximumHealthyCommitment({ vaultAttoRepBacking: 1n, disputeStakedAttoRep: 0n }, 0n, 20000n)).toBeUndefined()
+	expect(getMaximumHealthyCommitment({ vaultAttoRepBacking: 1n, disputeBackingAttoRep: 0n }, 0n, 20000n)).toBeUndefined()
 })
 
 void test('an exact minimum first deposit is below the minimum when the unit round trip floors it', () => {
@@ -427,4 +431,9 @@ void test('a partial withdrawal maximum keeps the vault minimum unless coverage 
 	expect(doesVaultWithdrawalExitEntireVault(11n * 10n ** 18n, 20n * 10n ** 18n, minimum)).toBe(true)
 	expect(doesVaultWithdrawalExitEntireVault(10n * 10n ** 18n, 20n * 10n ** 18n, minimum)).toBe(false)
 	expect(doesVaultWithdrawalExitEntireVault(undefined, 20n * 10n ** 18n, minimum)).toBe(false)
+})
+
+test('maximum commitment excludes dispute stake already released from security', () => {
+	const details = { vaultAttoRepBacking: 15n * 10n ** 18n, disputeStakedAttoRep: 100n * 10n ** 18n, disputeBackingAttoRep: 0n }
+	expect(getMaximumHealthyCommitment(details, 10n ** 18n, 20_000n)).toBe(75n * 10n ** 17n)
 })

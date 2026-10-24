@@ -4,7 +4,6 @@ import { isVaultHealthyAtFactor } from './liquidation.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { OracleManagerDetails, SecurityVaultDetails } from '../../../types/contracts.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { getOracleManagerPriceValidUntilTimestamp } from '../../../protocol/oracleTiming.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 
@@ -170,14 +169,14 @@ export function hasValidSecurityVaultOraclePrice(managerAddress: Address | undef
 export function isOracleManagerPriceUsable(oracleManagerDetails: Pick<OracleManagerDetails, 'isPriceValid' | 'lastSettlementTimestamp' | 'priceValidUntilTimestamp'> | undefined, currentTimestamp?: bigint | undefined) {
 	if (oracleManagerDetails?.isPriceValid !== true) return false
 	if (currentTimestamp === undefined) return true
-	const validUntilTimestamp = oracleManagerDetails.priceValidUntilTimestamp ?? getOracleManagerPriceValidUntilTimestamp(oracleManagerDetails.lastSettlementTimestamp)
+	const validUntilTimestamp = oracleManagerDetails.priceValidUntilTimestamp
 	return validUntilTimestamp !== undefined && currentTimestamp < validUntilTimestamp
 }
 
 /** Inverts both rounded collateral requirements used by liquidation. */
-export function getMaximumHealthyCommitment(details: Pick<SecurityVaultDetails, 'vaultAttoRepBacking' | 'disputeStakedAttoRep'> | undefined, repPerEthPrice: bigint | undefined, multiplierBps: bigint | undefined) {
+export function getMaximumHealthyCommitment(details: Pick<SecurityVaultDetails, 'vaultAttoRepBacking' | 'disputeBackingAttoRep'> | undefined, repPerEthPrice: bigint | undefined, multiplierBps: bigint | undefined) {
 	if (details === undefined || repPerEthPrice === undefined || repPerEthPrice <= 0n || multiplierBps === undefined || multiplierBps < BPS_DENOMINATOR) return undefined
-	const associatedBase = ((details.vaultAttoRepBacking + details.disputeStakedAttoRep) * BPS_DENOMINATOR) / multiplierBps
+	const associatedBase = ((details.vaultAttoRepBacking + details.disputeBackingAttoRep) * BPS_DENOMINATOR) / multiplierBps
 	const freeBase = (details.vaultAttoRepBacking * BPS_DENOMINATOR) / getMigrationSecurityMultiplierBps(multiplierBps)
 	return ((associatedBase < freeBase ? associatedBase : freeBase) * PRICE_PRECISION) / repPerEthPrice
 }
@@ -189,7 +188,7 @@ export function getVaultBackingFactorAdjustmentGuard(details: SecurityVaultDetai
 	const total = details.totalUnderwritingLimitAttoEth - details.underwritingLimitAttoEth + limitAttoEth
 	if (limitAttoEth < details.underwritingLimitAttoEth && total < details.settlementCollateralAttoEth) return 'Total commitments must cover outstanding settlement collateral.'
 	if (limitAttoEth > details.underwritingLimitAttoEth && repPerEthPrice !== undefined && poolSecurityMultiplierBps !== undefined) {
-		if (!isVaultHealthyAtFactor({ healthFactorBps: 10_000n, underwritingLimitAttoEth: limitAttoEth, disputeStakedAttoRep: details.disputeStakedAttoRep, poolHeldVaultRepBackingAttoRep: details.vaultAttoRepBacking, repPerEthPrice, poolSecurityMultiplierBps }))
+		if (!isVaultHealthyAtFactor({ healthFactorBps: 10_000n, underwritingLimitAttoEth: limitAttoEth, disputeStakedAttoRep: details.disputeBackingAttoRep, poolHeldVaultRepBackingAttoRep: details.vaultAttoRepBacking, repPerEthPrice, poolSecurityMultiplierBps }))
 			return 'Deposit more REP before increasing this commitment limit.'
 	}
 	return undefined

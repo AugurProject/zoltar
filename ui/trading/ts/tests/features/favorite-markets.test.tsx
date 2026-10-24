@@ -71,7 +71,7 @@ describe('favorite markets', () => {
 				feeEndTime: 3n,
 				projectedCollateralAttoEth: 4n,
 				timestamp: 5n,
-				feeAccounting: { settlementCollateralAttoEth: 10n, totalUnderwritingLimitAttoEth: 8n, feeEligibleUnderwritingLimitAttoEth: 7n, currentRetentionRate: 10n ** 18n, lastUpdatedFeeAccumulator: 2n, feeIndexRemainder: 1n, totalFeesOwedRemainder: 0n },
+				feeAccounting: { linearFee: { rateAttoEthPerSecond: 3n, endTime: 9n }, settlementCollateralAttoEth: 10n, totalUnderwritingLimitAttoEth: 8n, feeEligibleUnderwritingLimitAttoEth: 7n, currentRetentionRate: 10n ** 18n, lastUpdatedFeeAccumulator: 2n, feeIndexRemainder: 1n, totalFeesOwedRemainder: 0n },
 			}
 			const market = createMarket(1, { originUniverseId: 7n, tradingStatus: undefined, valuation })
 			const withoutCheckpoint = createMarket(2, { valuation: { feeEndTime: 3n, projectedCollateralAttoEth: 4n, timestamp: 5n } })

@@ -48,3 +48,8 @@ describe('vault health', () => {
 		expect(sortByVaultHealthRisk(vaults, vault => vault.tier).map(vault => vault.id)).toEqual(['underwater', 'near', 'healthy-a', 'unknown', 'healthy-b'])
 	})
 })
+
+test('released nominal dispute stake cannot make an underbacked vault look healthy', () => {
+	const vault = { ...createUnencumberedVaultSummary(), vaultAttoRepBacking: 15n * ATTO, underwritingLimitAttoEth: 10n * ATTO, disputeStakedAttoRep: 100n * ATTO, disputeBackingAttoRep: 0n }
+	expect(getVaultSummaryHealth({ multiplierBps: MULTIPLIER_BPS, poolEnded: false, repPerEthPrice: ATTO, vault })).toEqual({ associatedRepPerCapacityBps: 15_000n, tier: 'underwater' })
+})

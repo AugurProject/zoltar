@@ -1,13 +1,50 @@
 import { test } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
 import { readFileSync, writeFileSync } from 'node:fs'
-import { keccak256, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeFunctionData, keccak256, parseAbi, zeroHash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { getArray, getContractOutput, getRecord, getString, loadContractsJson, normalizeStorageLayout } from './contractArtifactHelpers'
 
 const escalationGameSourcePath = 'contracts/statoblast/EscalationGame.sol'
 const escalationGameContractName = 'EscalationGame'
 const escalationGameBytecodeSnapshotPath = `${import.meta.dir}/fixtures/escalationGameBytecode.snapshot.json`
 const eip170DeployedBytecodeLimitBytes = 24_576
+
+test('claim checkpoint batches use one base commitment and forward-ordered transforms', () => {
+	const output = getContractOutput(loadContractsJson(import.meta.dir), 'contracts/statoblast/EscalationGameClaimDelegate.sol', 'EscalationGameClaimDelegate')
+	const abi = getArray(output['abi'], 'Claim delegate ABI missing')
+	const process = abi.map(entry => getRecord(entry, 'Invalid claim ABI entry')).find(entry => entry['name'] === 'processClaimCheckpoint')
+	if (process === undefined) throw new Error('Checkpoint processing ABI missing')
+	const inputs = getArray(process['inputs'], 'Checkpoint inputs missing').map(entry => getRecord(entry, 'Invalid checkpoint input'))
+	assert.deepStrictEqual(
+		inputs.map(input => input['type']),
+		['uint8', 'uint256', 'uint256', 'uint256', 'uint256', 'bytes32', 'tuple[]'],
+	)
+	assert.strictEqual(inputs[5]?.['name'], 'baseCommitment')
+	assert.strictEqual(inputs[6]?.['name'], 'transforms')
+	const transform = inputs[6]
+	if (transform === undefined) throw new Error('Checkpoint transforms missing')
+	assert.deepStrictEqual(
+		getArray(transform['components'], 'Transform fields missing').map(entry => getRecord(entry, 'Invalid transform field')['name']),
+		['repBeforeAttoRep', 'repRemainingAttoRep', 'consumedBeforeAttoRep'],
+	)
+})
+
+test('compact checkpoint calldata adds one discovery word and removes seven eight-step commitment words', () => {
+	const previousAbi = parseAbi(['function processClaimCheckpoint(uint8,uint256,uint256,uint256,uint256,((uint256,uint256,uint256),bytes32)[])'])
+	const compactAbi = parseAbi(['function processClaimCheckpoint(uint8,uint256,uint256,uint256,uint256,bytes32,(uint256,uint256,uint256)[])'])
+	const tuple = [1, 33n, 99n, 1n, 8n] as const
+	const transform = [101n, 98n, 1n] as const
+	for (const count of [0, 1, 8]) {
+		const transforms = Array.from({ length: count }, () => transform)
+		const previous = encodeFunctionData({ abi: previousAbi, functionName: 'processClaimCheckpoint', args: [...tuple, transforms.map(item => [item, zeroHash] as const)] })
+		const compact = encodeFunctionData({ abi: compactAbi, functionName: 'processClaimCheckpoint', args: [...tuple, zeroHash, transforms] })
+		const previousBytes = (previous.length - 2) / 2
+		const compactBytes = (compact.length - 2) / 2
+		assert.strictEqual(previousBytes, 228 + 128 * count)
+		assert.strictEqual(compactBytes, 260 + 96 * count)
+		assert.strictEqual(compactBytes - previousBytes, 32 * (1 - count))
+	}
+})
 
 type EscalationGameBytecodeSnapshot = {
 	creationBytes: number
@@ -139,6 +176,15 @@ test('EscalationGame storage layout matches the shared delegate accounting', () 
 			{ label: 'forkCarryBackingExportedBeforeResumeAttoRep', slot: '448', offset: 0, type: 'uint256' },
 			{ label: 'truthAuctionRepBeforeAttoRep', slot: '449', offset: 0, type: 'uint256' },
 			{ label: 'truthAuctionRepRemainingAttoRep', slot: '450', offset: 0, type: 'uint256' },
+			{ label: 'forkCarrySnapshotOutcomesInitialized', slot: '451', offset: 0, type: 'uint8' },
+			{ label: 'forkCarrySnapshotId', slot: '452', offset: 0, type: 'bytes32' },
+			{ label: 'claimCheckpoints', slot: '453', offset: 0, type: 'mapping(bytes32 => struct EscalationClaimCheckpoint)' },
+			{ label: 'ordinarySettlementInitialized', slot: '454', offset: 0, type: 'bool' },
+			{ label: 'ordinarySettlementOutcome', slot: '454', offset: 1, type: 'enum BinaryOutcomes.BinaryOutcome' },
+			{ label: 'ordinaryWinningReserveAttoRep', slot: '455', offset: 0, type: 'uint256' },
+			{ label: 'ordinarySettlementForkThresholdAttoRep', slot: '456', offset: 0, type: 'uint256' },
+			{ label: 'creditedSurplusAttoRep', slot: '457', offset: 0, type: 'uint256' },
+			{ label: 'collateralBackingByVault', slot: '458', offset: 0, type: 'mapping(address => uint256)' },
 		],
 	)
 
@@ -175,6 +221,27 @@ test('EscalationGame storage layout matches the shared delegate accounting', () 
 		{ label: 'sourcePrincipalClaimedAttoRep', slot: '1', offset: 0, type: 'uint256' },
 		{ label: 'childAttoRep', slot: '2', offset: 0, type: 'uint256' },
 		{ label: 'childRepClaimedAttoRep', slot: '3', offset: 0, type: 'uint256' },
+	])
+	assert.deepStrictEqual(storageMemberSummary(typeTable, 'struct EscalationClaimCheckpoint'), [
+		{ label: 'nextSourceGame', slot: '0', offset: 0, type: 'address' },
+		{ label: 'initialized', slot: '0', offset: 20, type: 'bool' },
+		{ label: 'complete', slot: '0', offset: 21, type: 'bool' },
+		{ label: 'stopAfterNextSource', slot: '0', offset: 22, type: 'bool' },
+		{ label: 'pendingSteps', slot: '1', offset: 0, type: 'uint256' },
+		{ label: 'interval', slot: '2', offset: 0, type: 'struct EscalationClaimInterval' },
+		{ label: 'pendingCommitment', slot: '6', offset: 0, type: 'bytes32' },
+		{ label: 'reusedCheckpointGame', slot: '7', offset: 0, type: 'address' },
+		{ label: 'segments', slot: '8', offset: 0, type: 'mapping(uint256 => struct EscalationClaimCheckpointSegment)' },
+	])
+	assert.deepStrictEqual(storageMemberSummary(typeTable, 'struct EscalationClaimInterval'), [
+		{ label: 'startAttoRep', slot: '0', offset: 0, type: 'uint256' },
+		{ label: 'endAttoRep', slot: '1', offset: 0, type: 'uint256' },
+		{ label: 'rewardStartAttoRep', slot: '2', offset: 0, type: 'uint256' },
+		{ label: 'rewardEndAttoRep', slot: '3', offset: 0, type: 'uint256' },
+	])
+	assert.deepStrictEqual(storageMemberSummary(typeTable, 'struct EscalationClaimCheckpointSegment'), [
+		{ label: 'sourceGame', slot: '0', offset: 0, type: 'address' },
+		{ label: 'previousCommitment', slot: '1', offset: 0, type: 'bytes32' },
 	])
 	assert.deepStrictEqual(storageMemberSummary(typeTable, 'struct EscalationClaimBundle'), [{ label: 'disputeStakedRepClaimUnits', slot: '0', offset: 0, type: 'uint256' }])
 })

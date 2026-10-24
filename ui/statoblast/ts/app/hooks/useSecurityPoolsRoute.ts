@@ -115,8 +115,11 @@ export function useSecurityPoolsRoute({ context, marketCreation, openOracle, rep
 	const selectedPoolOracleManagerDetails = getCurrentPoolOracleManagerDetails({ poolOracleManagerDetails: priceCoordinator.poolOracleManagerDetails, selectedPoolManagerAddress: selectedPool?.managerAddress })
 	const selectedPoolRepPrice = resolveRepPrice({
 		now: currentTimestamp,
-		oracleManager: selectedPoolOracleManagerDetails === undefined ? undefined : { isPriceValid: selectedPoolOracleManagerDetails.isPriceValid, price: selectedPoolOracleManagerDetails.lastPrice, settlementTimestamp: selectedPoolOracleManagerDetails.lastSettlementTimestamp },
-		poolOracle: selectedPool === undefined ? undefined : { price: selectedPool.lastOraclePrice, settlementTimestamp: selectedPool.lastOracleSettlementTimestamp },
+		oracleManager:
+			selectedPoolOracleManagerDetails === undefined
+				? undefined
+				: { isPriceValid: selectedPoolOracleManagerDetails.isPriceValid, price: selectedPoolOracleManagerDetails.lastPrice, settlementTimestamp: selectedPoolOracleManagerDetails.lastSettlementTimestamp, validUntil: selectedPoolOracleManagerDetails.priceValidUntilTimestamp },
+		poolOracle: selectedPool === undefined ? undefined : { price: selectedPool.lastOraclePrice, settlementTimestamp: selectedPool.lastOracleSettlementTimestamp, validUntil: selectedPool.oraclePriceValidUntilTimestamp },
 		setting: uiPriceOracle,
 		uniswapPrice: repPrices.repPerEthPrice,
 	})

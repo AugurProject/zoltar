@@ -226,6 +226,8 @@ export function useTradingOperations(
 						const latestMintCapacity = await dependencies.loadSecurityPoolMintCapacity(securityPoolAddress)
 						const walletBalanceAttoEth = await dependencies.getWalletEthBalance(walletAddress)
 						const mintCheckpoint = estimateMintCheckpoint({
+							centralSettlement: latestMintCapacity.centralSettlement,
+							linearFee: latestMintCapacity.linearFee,
 							currentRetentionRate: latestMintCapacity.currentRetentionRate,
 							currentTimestamp: latestMintCapacity.currentTimestamp,
 							totalUnderwritingLimitAttoEth: latestMintCapacity.totalUnderwritingLimitAttoEth,
@@ -238,6 +240,7 @@ export function useTradingOperations(
 						})
 						const guardMessage = getTradingMintGuardMessage({
 							accountAddress: walletAddress,
+							usesSharedBacking: latestMintCapacity.linearFee !== undefined,
 							escalationGameActive: latestMintCapacity.escalationGameActive === true,
 							settlementCollateralAttoEth: mintCheckpoint?.settlementCollateralAfterFeesAttoEth ?? latestMintCapacity.settlementCollateralAttoEth,
 							ethBalanceAttoEth: walletBalanceAttoEth,

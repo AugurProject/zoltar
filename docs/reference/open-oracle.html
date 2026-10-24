@@ -38,7 +38,10 @@
 				</figure>
 				<p>This raw-amount ratio is valid because the configured WETH and REP contracts both use 18 decimals. The coordinator does not normalize token decimals in the settlement callback.</p>
 
-				<p id="integration-terms">An accepted report becomes the coordinator's cached REP/ETH price. Its freshness window is one hour on Sepolia and five minutes on other chains. The window starts at settlement eligibility (the final report timestamp plus <code>settlementTime</code>), not when <code>settle</code> is called, and <code>lastSettlementTimestamp</code> records that start. A late settlement therefore cannot extend the life of a price that was frozen earlier. The coordinator does not meter how much operation volume uses that price during the freshness window.</p>
+				<p id="integration-terms">An accepted report becomes the coordinator's cached REP/ETH price. <code>lastSettlementTimestamp</code> records settlement eligibility: the final report timestamp plus <code>settlementTime</code>. The freshness window starts there, so settling late cannot extend it. Standalone prices remain fresh for one hour on Sepolia and five minutes on other chains. Shared feeds add one <code>settlementTime</code> to that window. With the mainnet eight-minute challenge period, a shared price is usable for 780 seconds after eligibility, or at most 21 minutes after the final report. <code>priceValidUntil()</code> returns the canonical expiry for either mode; a price is stale at that timestamp. The coordinator does not meter operation volume during the window.</p>
+				<p id="shared-feed-rules">For shared feeds, the report-size and escalation-halt formulas below use the larger of the portfolio’s current aggregate commitment and backing demand. The feed reads this live aggregate directly; expired questions do not need separate cleanup calls to update exposure. The request bounty includes the shared callback allowance. These request-time floors do not impose a ceiling on later commitments.</p>
+				<p>A shared feed permits a new report before the accepted price expires, allowing the next challenge period to overlap the current freshness window. A pending, disputed or rejected renewal does not extend the old expiry. While the accepted price remains fresh, other questions and callers can execute price-dependent operations immediately. Once it expires, only the initiating question and sponsor can attach operations to the pending report. Shared queues reject work beyond the four-action budget.</p>
+				<p>Before accepting a new price, the feed must checkpoint portfolio fees under the previous price and update capital eligibility atomically. If that mandatory checkpoint fails, the price is not accepted. It then stores acceptance or rejection before attempting the initiating coordinator’s optional local callback, so that later callback cannot erase an accepted price. Deferred operations remain individually executable or removable; each queued shared action checks the terminal outcome of its original report and cannot execute after rejection or recovery.</p>
 			</section>
 
 			<section id="optional-upstream-capabilities">
@@ -50,14 +53,14 @@
 			<section id="statoblast-integration">
 				<h2>Integration architecture</h2>
 
-				<p>Every security pool has its own <code>OpenOraclePriceCoordinator</code>. The coordinator connects users, the pool, and the shared OpenOracle instance. It keeps the pool's cached REP/ETH price, pending report state, staged-operation queue, and settlement callback state. Keeping this state per pool prevents one pool's pending report or freshness window from becoming a protocol-wide queue.</p>
+				<p>Each question ledger has an <code>OpenOraclePriceCoordinator</code> for its operations and approvals. A standalone question keeps report state there. In a multi-question portfolio, <code>priceFeed()</code> instead identifies one <code>SharedPoolPriceFeed</code> for that portfolio and universe; all its questions read the same price, freshness clock, and pending report. Other portfolios have separate feeds.</p>
 
-				<p><code>OpenOraclePriceCoordinator</code> is deployed with an immutable <code>OpenOracle</code> address. For each origin or child security pool, <code>SecurityPoolFactory</code> asks <code>OpenOraclePriceCoordinatorFactory</code> for a fresh coordinator wired to the shared OpenOracle instance, shared WETH, and that universe's REP token. <code>SecurityPoolDeployer</code> passes the coordinator to the pool, after which the factory calls <code>setSecurityPool</code> once with the nonzero pool address.</p>
+				<p><code>OpenOraclePriceCoordinator</code> is deployed with an immutable <code>OpenOracle</code> address. For each origin or child security pool, <code>SecurityPoolFactory</code> asks <code>OpenOraclePriceCoordinatorFactory</code> for a fresh coordinator wired to the shared OpenOracle instance, shared WETH, and that universe's REP token. <code>SecurityPoolDeployer</code> passes the coordinator to the pool, after which the factory authenticates a one-time <code>setSecurityPool</code> call through the coordinator factory and deployment worker. Only the coordinator’s deployer may bind its pool.</p>
 
-				<p>Only the configured pool may seed the coordinator's inherited <code>lastPrice</code>. A child pool inherits the parent's numeric price as a starting value, but its settlement timestamp remains zero, so that number is unusable until the child accepts its own report.</p>
+				<p>Only the configured ledger may seed a standalone coordinator's inherited <code>lastPrice</code>. A standalone child inherits the parent's numeric price but starts with a zero settlement timestamp. Portfolio child ledgers share a new feed for their child REP token, initially with zero price and timestamp. Adding another question never resets an existing shared feed.</p>
 				<figure class="diagram diagram-wide" id="fig-openoracle-integration-flow">
 					<div aria-label="OpenOracle integration flow" class="plot-chart" data-plot-chart="fig-openoracle-integration-flow" data-plot-height="1170" data-plot-width="980" role="img"><span class="plot-chart-fallback">After OpenOracle settles, the coordinator validates the report. An accepted report refreshes the REP/ETH price and runs pending operations through local guardrails. A rejected report leaves the price cache unchanged and terminally fails the attached pending batch.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Integration flow.</span> The coordinator is the trust boundary between Statoblast operations and OpenOracle reports.</p>
+					<p class="diagram-caption"><span class="figure-label">Integration flow.</span> Standalone integration. For a portfolio, the shared feed validates the price, checkpoints the central portfolio, stores acceptance, then attempts the initiating question coordinator's bounded callback.</p>
 				</figure>
 			</section>
 
@@ -69,10 +72,10 @@
 				<ol>
 					<li><strong>Validate and stage the operation.</strong> The coordinator checks the caller, target vault, requested amount, and validity window before any report is requested.</li>
 					<li><strong>Check the cached price.</strong> If the cached REP/ETH price is fresh, the coordinator attempts the operation immediately.</li>
-					<li><strong>Open a report when the price is stale.</strong> The refresh sponsor supplies the request bounty and initial WETH/REP position, and the coordinator creates the report as its initial reporter.</li>
+					<li><strong>Open a report when the price is stale.</strong> The refresh sponsor supplies the request bounty and initial WETH/REP position, and the price source creates the report as its initial reporter: the coordinator for a standalone ledger, or the shared feed for a portfolio.</li>
 					<li><strong>Allow corrections.</strong> Other participants may replace the report by posting the position required by OpenOracle. Every valid replacement installs a new reporter and restarts the settlement window.</li>
-					<li><strong>Settle the current report.</strong> Once the settlement deadline is reached without another dispute, any account can call OpenOracle's <code>settle</code>, which finalizes the report and calls the coordinator.</li>
-					<li><strong>Accept or reject the price.</strong> The coordinator validates the report identity, history, economics, amounts, and settlement-time base fee before updating the cache.</li>
+					<li><strong>Settle the current report.</strong> Once the settlement deadline is reached without another dispute, any account can call OpenOracle's <code>settle</code>, which finalizes the report and calls its price source.</li>
+					<li><strong>Accept or reject the price.</strong> The price source validates the report identity, history, economics, amounts, and settlement-time base fee before updating the cache.</li>
 					<li><strong>Execute queued operations.</strong> An accepted fresh price allows the coordinator to attempt the queued pool operations, each of which still performs its own current safety checks.</li>
 				</ol>
 
@@ -86,7 +89,7 @@
 
 				<p>An operation that waits for a report can also fail when it is attempted: after its expiry (<code>Staged operation expired</code>), when a liquidation target's backing units or underwriting commitment changed after staging (<code>Stale liquidation</code>), or when a withdrawal now previews to zero REP (<code>Withdraw amount has no effect</code>).</p>
 
-				<p>When a new report is needed, one settlement callback can automatically attempt up to <code>MAX_PENDING_SETTLEMENT_OPERATIONS</code> (four) price actions, counting each commitment change, liquidation, or withdrawal inside a vault bundle separately. Deposits use no callback slot. A bundle must fit the remaining capacity; additional single staged operations remain active outside the callback batch. If they have not expired and the accepted price remains fresh, they can be executed later with <code>executeStagedOperation</code>.</p>
+				<p>When a new report is needed, one settlement callback can automatically attempt up to <code>MAX_PENDING_SETTLEMENT_OPERATIONS</code> (four) price actions, counting each commitment change, liquidation, or withdrawal inside a vault bundle separately. Deposits use no callback slot. A bundle must fit the remaining capacity. For standalone coordinators, additional single staged operations remain active outside the callback batch; if unexpired and the accepted price remains fresh, they can be executed later with <code>executeStagedOperation</code>. Shared feeds instead reject overflow, as described in the <a href="#shared-feed-rules">shared-feed rules</a>.</p>
 
 				<p>For a vault bundle, a fresh-price failure reverts the entire submission. With a stale price, the deposit completes immediately and the deferred commitment changes, liquidations, and withdrawal later execute or fail together. See the <a href="./contracts/openoraclepricecoordinator.html">coordinator interaction reference</a>.</p>
 
@@ -117,7 +120,7 @@
 							<mn>101</mn>
 						</mrow>
 					</math>
-					<p class="equation-note"><code>callbackGasLimit</code> is <code>(gasConsumedSettlement + SETTLEMENT_GAS_OVERHEAD) × MAX_PENDING_SETTLEMENT_OPERATIONS</code>, returned by <code>getSettlementCallbackGasLimit()</code>. <code>101</code> is the fixed <code>REQUEST_BOUNTY_OFFSET_ATTO_ETH</code>. With the <a href="#parameters">configured values</a>, the limit is <code>4,200,000 gas</code> and the request cost is <code>block.basefee × 17,200,000 + 101</code> attoETH: <code>0.516 ETH</code> plus the offset at a <code>30 nanoETH</code> base fee.</p>
+					<p class="equation-note">For a standalone coordinator, <code>callbackGasLimit</code> is <code>(gasConsumedSettlement + SETTLEMENT_GAS_OVERHEAD) × MAX_PENDING_SETTLEMENT_OPERATIONS</code>, returned by <code>getSettlementCallbackGasLimit()</code>. <code>101</code> is the fixed <code>REQUEST_BOUNTY_OFFSET_ATTO_ETH</code>. With the <a href="#parameters">configured values</a>, the limit is <code>4,200,000 gas</code> and the request cost is <code>block.basefee × 17,200,000 + 101</code> attoETH: <code>0.516 ETH</code> plus the offset at a <code>30 nanoETH</code> base fee. Shared feeds add the <a href="#shared-feed-rules">feed bookkeeping allowance</a>.</p>
 				</figure>
 				<p id="refund-callback">Every entry point that can open a report takes an explicit <code>bountyAttoEth</code>. What happens to <code>msg.value</code> depends on the call:</p>
 				<ul>
@@ -130,7 +133,7 @@
 
 				<h3 id="rolling-dispute-exclusivity">Sponsor lane</h3>
 
-				<p>The sponsor lane is the exclusive right of <code>pendingReportSponsor</code>, the account that funded the pending report, to add operations to that report's settlement. Those follow-up operations pay no additional bounty; other callers must wait until the report finishes. <code>requestPrice</code> reverts while the cached price is fresh or a report is pending.</p>
+				<p>The sponsor lane is the exclusive right of <code>pendingReportSponsor</code>, the account that funded the pending report, to add operations to that report's settlement. Those follow-up operations pay no additional bounty. During a shared renewal, other callers can still execute against the previous accepted price until it expires. <code>requestPrice</code> always rejects a second pending report; only standalone mode also rejects requests while the cached price is fresh.</p>
 			</section>
 
 			<section id="security-guarantee">
@@ -378,18 +381,19 @@
 
 				<h3>Low-level callback failure</h3>
 
-				<p>OpenOracle invokes the coordinator through a low-level callback whose success is intentionally neither stored nor emitted. A failed callback does not automatically undo an otherwise valid OpenOracle settlement. The coordinator accepts callbacks only from the configured <code>OpenOracle</code> and only for the current pending report id. If those checks revert inside the low-level call, the report can still settle while the coordinator remains pending.</p>
+				<p>OpenOracle invokes the price source through a low-level callback whose success is intentionally neither stored nor emitted. A failed callback does not automatically undo an otherwise valid OpenOracle settlement. The price source accepts callbacks only from the configured <code>OpenOracle</code> and only for the current pending report id. If those checks revert inside the low-level call, the report can still settle while the price source remains pending.</p>
 
 				<p>If the settlement transaction cannot retain enough gas headroom after the callback attempt, OpenOracle reverts settlement with <code>InvalidGasLimit</code>. In that case, the report has not settled and coordinator recovery is not yet available.</p>
 
-				<h3 id="settlement-validation-scope">Coordinator settlement validation</h3>
+				<h3 id="settlement-validation-scope">Price-source settlement validation</h3>
 
-				<p>A callback that successfully enters the coordinator can still produce a rejected price. The coordinator clears the pending report state, emits <code>PriceReportRejected</code> with the quoted reason, and leaves the price cache unchanged when the first of the following conditions holds:</p>
+				<p>A callback that successfully enters the price source can still produce a rejected price. The price source clears the pending report state, emits <code>PriceReportRejected</code> with the quoted reason, and leaves the price cache unchanged when the first of the following conditions holds:</p>
 
 				<ul>
 					<li>the settlement block's base fee exceeds the request-time cap, which is the base fee implied by the committed bounty scaled by <code>maxSettlementBaseFeeMultiplierBps</code>: <code>Base fee too high</code>;</li>
 					<li><code>storedGame(reportId).numReports</code> is saturated at the <code>uint24</code> maximum: <code>Counter saturated</code>;</li>
 					<li><code>numReports</code> is zero, or the settled WETH amount is below <code>reportAttoEth(initialReportPriorityFeeAttoEthPerGas) + reportAttoEth(recordedBaseFee)</code> from the <a href="#security-guarantee">sizing formula</a>, where <code>recordedBaseFee</code> is the base fee OpenOracle stored for the final report in <code>disputeHistory(reportId, numReports - 1)</code>: <code>Report uneconomic</code>;</li>
+					<li>for a shared feed, settlement eligibility is no later than that of the accepted price: <code>Report timestamp not newer</code>;</li>
 					<li>the freshness window measured from settlement eligibility has already closed: <code>Report stale</code>;</li>
 					<li>either settled token amount is zero: <code>Empty oracle settlement</code>;</li>
 					<li>the integer REP/ETH calculation produces a zero price: <code>Oracle price is zero</code>.</li>
@@ -399,11 +403,11 @@
 
 				<h3>Rejected-price cleanup</h3>
 
-				<p>A rejected report does not replay its pending settlement operations. Instead, the coordinator terminally fails every operation attached to that report, removes it from the active and pending sets, and releases any liquidation-approval reservation. A caller must stage a new operation to try again with a later price.</p>
+				<p>A rejected report does not replay its pending settlement operations. A standalone coordinator terminally fails every operation attached to that report, removes it from the active and pending sets, and releases any liquidation-approval reservation. Shared feeds may defer that cleanup under the <a href="#shared-feed-rules">shared-feed rules</a>. A caller must stage a new operation to try again with a later price.</p>
 
 				<h3>Recovering a settled report after callback failure</h3>
 
-				<p>When OpenOracle has already settled but the coordinator remains pending because the low-level callback did not complete, anyone can call <code>recoverSettledPendingReport</code>. Recovery clears the pending report, sponsor, and base-fee cap; withdraws the coordinator's OpenOracle WETH and REP balances to the sponsor; and terminally fails every pending settlement operation attached to the report, releasing each liquidation-approval reservation. It does not accept the report as a new price.</p>
+				<p>When OpenOracle has already settled but the price source remains pending because the low-level callback did not complete, anyone can call <code>recoverSettledPendingReport</code>. Recovery clears the pending report, sponsor, and base-fee cap, and withdraws the price source's OpenOracle WETH and REP balances to the sponsor. A standalone coordinator also terminally fails every attached pending settlement operation and releases each liquidation-approval reservation; shared cleanup can be deferred under the <a href="#shared-feed-rules">shared-feed rules</a>. Recovery does not accept the report as a new price.</p>
 			</section>
 
 			<section id="intentional-economic-tradeoffs">
@@ -670,7 +674,7 @@
 						</tr>
 						<tr>
 							<td><code>callbackGasLimit</code></td>
-							<td><code>4,200,000 gas</code>; see <a href="#request-funding">Funding and report ownership</a>.<br />Derived from the three rows above</td>
+							<td><code>4,200,000 gas</code> for standalone coordinators, derived from the three rows above. Shared feeds add the <a href="#shared-feed-rules">feed bookkeeping allowance</a>; see <a href="#request-funding">Funding and report ownership</a>.</td>
 							<td>Gas forwarded to the settlement callback. Settlement also needs enough surrounding gas to satisfy OpenOracle's callback headroom check.</td>
 						</tr>
 						<tr>
@@ -715,13 +719,13 @@
 						</tr>
 						<tr>
 							<td><code>callbackContract</code></td>
-							<td>The pool's <code>OpenOraclePriceCoordinator</code><br />Set by the coordinator</td>
+							<td>The pool's <code>OpenOraclePriceCoordinator</code> for standalone reports, or <code>SharedPoolPriceFeed</code> for shared reports.<br />Set by the price source</td>
 							<td>Routes settled amounts back into the price cache and staged-operation executor.</td>
 						</tr>
 						<tr>
 							<td><code>PRICE_VALID_FOR_SECONDS</code> / <code>SEPOLIA_PRICE_VALID_FOR_SECONDS</code></td>
 							<td>See <a href="#integration-terms">Token pair and cached price</a>.<br />Source constant</td>
-							<td>Freshness window of an accepted price.</td>
+							<td>Standalone freshness window, also used as the keeper slack added to <code>settlementTime</code> by <code>SharedPoolPriceFeed.priceValidityWindowSeconds()</code>.</td>
 						</tr>
 						<tr>
 							<td><code>MAX_OPERATION_VALID_FOR_SECONDS</code></td>

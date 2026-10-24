@@ -12,13 +12,13 @@ import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
 import assert from '../testSupport/simulator/utils/assert'
 import { describe, test } from 'bun:test'
 import { useStatoblastVaultAccountingFixture } from './statoblast/fixture'
-import { advancePastOrdinaryEscalationDeadline, depositOrdinaryEscalationPrincipals, ordinaryEscalationPrincipals, sweepResidualRep, withdrawFirstDepositOfEachOutcome } from './residualCaptureHelpers'
+import { advancePastOrdinaryEscalationDeadline, depositOrdinaryEscalationPrincipals, sweepResidualRep, withdrawFirstDepositOfEachOutcome } from './residualCaptureHelpers'
 
 describe('Audit: forced REP redemption before escalation residual sweep', () => {
 	const fixture = useStatoblastVaultAccountingFixture()
 	const { repDeposit } = fixture
 
-	test('rejects forced redemption and preserves the honest vault share of later ordinary-game residual REP', async () => {
+	test('rejects forced redemption and preserves the honest vault share of source-accrued ordinary-game surplus REP', async () => {
 		const { mockWindow, client, securityPoolAddresses, questionId } = fixture
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const escalationDepositor = createWriteClient(mockWindow, TEST_ADDRESSES[2])
@@ -49,14 +49,14 @@ describe('Audit: forced REP redemption before escalation residual sweep', () => 
 
 		const residualBeforeSweep = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), escalationGame)
 		const poolRepBeforeSweep = await getTotalPoolHeldAttoRep(client, securityPoolAddresses.securityPool)
-		await sweepResidualRep(attacker, escalationGame)
+		await assert.rejects(sweepResidualRep(attacker, escalationGame), /No sweepable REP/)
 		const poolRepAfterSweep = await getTotalPoolHeldAttoRep(client, securityPoolAddresses.securityPool)
-		strictEqualTypeSafe(residualBeforeSweep, ordinaryEscalationPrincipals.lowLosingPrincipal, 'the lower losing side should remain as material ordinary-game residual')
-		strictEqualTypeSafe(poolRepAfterSweep - poolRepBeforeSweep, residualBeforeSweep, 'ordinary-game residual should become pool backing')
+		strictEqualTypeSafe(residualBeforeSweep, 0n, 'the lower side was already accrued before settlement')
+		strictEqualTypeSafe(poolRepAfterSweep - poolRepBeforeSweep, residualBeforeSweep, 'final settlement must not recreate source-accrued REP')
 
 		await redeemRepFromVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const honestWalletAfterRedeem = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		const honestPayoutAfterSweep = honestWalletAfterRedeem - honestWalletBeforeAttempt
-		assert.ok(honestPayoutAfterSweep > repDeposit + 30n * 10n ** 18n, 'the honest vault should retain its material pro-rata share of the later residual')
+		assert.ok(honestPayoutAfterSweep > repDeposit + 30n * 10n ** 18n, 'the honest vault should retain its material pro-rata share of the source-accrued surplus')
 	})
 })

@@ -4,7 +4,7 @@ import { browserTest, origin, qaViewports } from './browser-test.ts'
 
 for (const viewport of qaViewports) {
 	browserTest(
-		`Operations KPI subtitles and empty states identify the bounded catalog sample at ${viewport.width}px`,
+		`Operations KPI subtitles and empty states count ordinary settlements as concluded within the bounded catalog sample at ${viewport.width}px`,
 		async () => {
 			await withBrowserPage(
 				`${origin}/operations?demo=1&chainId=1&operationsKpiCapped=1`,

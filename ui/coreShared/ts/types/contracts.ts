@@ -6,7 +6,26 @@ export type { ReadClient, WriteClient } from '../wallet/clients.js'
 
 type ZoltarDeploymentStepId = 'proxyDeployer' | 'deploymentStatusOracle' | 'reputationToken' | 'multicall3' | 'uniformPriceDualCapBatchAuctionFactory' | 'securityPoolUtils' | 'openOracle' | 'zoltarQuestionData' | 'zoltar' | 'shareTokenFactory' | 'openOraclePriceCoordinatorFactory'
 
-export type DeploymentStepId = ZoltarDeploymentStepId | 'securityPoolForker' | 'securityPoolOperationsDelegate' | 'escalationGameClaimDelegate' | 'escalationGameFactory' | 'securityPoolFactory'
+export type DeploymentStepId =
+	| ZoltarDeploymentStepId
+	| 'priceCoordinatorDeploymentWorker'
+	| 'sharedPoolPriceFeedDeploymentWorker'
+	| 'securityPoolForker'
+	| 'securityPoolOperationsDelegate'
+	| 'securityPoolEventEmitter'
+	| 'escalationGameClaimDelegate'
+	| 'escalationGameDepositDelegate'
+	| 'escalationGameFactory'
+	| 'securityPoolFactory'
+	| 'securityPoolForkerPortfolioDelegate'
+	| 'securityPoolCapitalLedgerDeployer'
+	| 'securityPoolCommitmentIndexDeployer'
+	| 'securityPoolCapitalFeeStreamsDeployer'
+	| 'securityPoolSettlementBookDeployer'
+	| 'securityPoolPortfolioSettlementDeployer'
+	| 'securityPoolReporterLedgerDeployer'
+	| 'securityPoolPortfolioRecapAuctionDeployer'
+	| 'securityPoolPortfolioForkCoordinatorDeployer'
 export type MarketType = 'binary' | 'categorical' | 'scalar'
 
 export type ReportingOutcomeKey = 'invalid' | 'yes' | 'no'

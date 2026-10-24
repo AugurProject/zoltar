@@ -1,9 +1,22 @@
 import { expect, test } from 'bun:test'
 import { sampleClaimPositions } from '../../src/claim-snapshots.ts'
-import { allocatedWinningPayout } from '../../src/claim-payout.ts'
+import { allocatedWinningPayout, ordinaryWinningPayout } from '../../src/claim-payout.ts'
 
 test('separates retained principal from reward intervals and applies fork haircut after reward rounding', () => {
 	expect(allocatedWinningPayout({ principal: 81n, rewardAmount: 33n, rewardCumulative: 75n, binding: 100n, winningBalance: 160n, forkThreshold: 500n, nonDecisionThreshold: 1000n })).toEqual({ payout: 47n, burn: 8n })
+})
+
+test('ordinary payout intervals telescope across reward and haircut rounding', () => {
+	const base = { principal: 1n, rewardAmount: 1n, rewardCumulative: 0n, binding: 7n, winningBalance: 11n, forkThreshold: 13n, nonDecisionThreshold: 19n }
+	let payout = 0n
+	let burn = 0n
+	for (let end = 1n; end <= 11n; end++) {
+		const part = ordinaryWinningPayout({ ...base, rewardCumulative: end })
+		payout += part.payout
+		burn += part.burn
+	}
+	expect({ payout, burn }).toEqual(ordinaryWinningPayout({ ...base, principal: 11n, rewardAmount: 11n, rewardCumulative: 11n }))
+	expect({ payout, burn }).toEqual({ payout: 10n, burn: 2n })
 })
 
 test('failed proof reads produce explicit unavailable evidence rather than claimable principal', async () => {
@@ -51,9 +64,9 @@ peaks[0] = third
 peaks[1] = bagCarryPeaks([first, second])
 
 const fixtureRead =
-	(options: { consumed?: bigint[]; directlyClaimed?: boolean; badRoot?: boolean; badNullifier?: boolean; pending?: boolean; cycle?: boolean } = {}): StateRead =>
+	(options: { consumed?: bigint[]; directlyClaimed?: boolean; badRoot?: boolean; badNullifier?: boolean; pending?: boolean; cycle?: boolean; checkpointRequired?: boolean; ordinarySettled?: boolean } = {}): StateRead =>
 	async (target, _abi, name, args = []) => {
-		const kind = name === 'getInheritedClaimAllocation' ? 'escalationGameClaimDelegate' : fixtureKinds.get(target)
+		const kind = ['getInheritedClaimAllocation', 'getClaimCheckpointProgress'].includes(name) ? 'escalationGameClaimDelegate' : fixtureKinds.get(target)
 		if (kind === undefined) throw new Error(`Unexpected claim target ${target}`)
 		const abi = abiForKind(kind)
 		if (abi === undefined) throw new Error(`Missing compiled claim ABI ${kind}`)
@@ -80,6 +93,10 @@ const fixtureRead =
 				return 0n
 			case 'getForkThresholdAttoRep':
 				return 500n
+			case 'ordinarySettlementInitialized':
+				return options.ordinarySettled ?? false
+			case 'ordinarySettlementForkThresholdAttoRep':
+				return 7n
 			case 'getOutcomeState':
 				return {
 					balanceAttoRep: 150n,
@@ -99,6 +116,8 @@ const fixtureRead =
 				return target === child && outcome === 1 ? (options.consumed ?? []) : []
 			case 'isEscalationDepositClaimedDirectly':
 				return options.directlyClaimed === true && args[2] === 1n
+			case 'getClaimCheckpointProgress':
+				return [root, 0n, false, !options.checkpointRequired]
 			case 'getInheritedClaimAllocation':
 				return [50n, 33n, 33n, (Number(args[3]) + 1) * 33 + '']
 			default:
@@ -113,6 +132,38 @@ test('reconstructs inherited membership and independent unspent proofs with tagg
 	expect(result.positions[2]).toMatchObject({ kind: 'inherited', status: 'claimable', retained_principal_atto_rep: '33', auction_haircut_atto_rep: '17', payout_atto_rep: '23', burn_atto_rep: '8', proof: { leafIndex: '2', merkleMountainRangePeakIndex: '0', merkleMountainRangeSiblings: [peaks[1]] } })
 	expect(result.positions[2]?.['membership_root']).toBe(buildCarryMerkleMountainRangeProof(hashes, 2).root)
 	expect(result.positions.every(position => position['nullifier_root'] === createSparseNullifier([]).getRoot())).toBe(true)
+})
+
+test('ordinary claim evidence uses the frozen threshold and telescoping interval payouts', async () => {
+	const result = await sampleClaimPositions(root, fixtureRead({ ordinarySettled: true }), state)
+	expect(result.positions.map(position => position['payout_atto_rep'])).toEqual(['0', '0', '1'])
+	expect(result.positions.map(position => position['burn_atto_rep'])).toEqual(['13', '13', '14'])
+	expect(result.positions[2]?.['calculation']).toMatchObject({ fork_threshold_atto_rep: '7' })
+})
+
+test('claim snapshots continue past empty consumed-node pages', async () => {
+	const read = fixtureRead()
+	const rootHash = buildCarryMerkleMountainRangeProof([...hashes, ...Array.from({ length: 125 }, () => zero)], 0).root
+	const cursors: unknown[] = []
+	const sparseRead: StateRead = async (target, abi, name, args = []) => {
+		if (name === 'getOutcomeState' && args[0] === 1) {
+			return { balanceAttoRep: 150n, snapshotLeafCount: target === child ? 128n : 0n, snapshotPeaks: Array.from({ length: 64 }, (_, index) => (index === 7 ? rootHash : zero)), currentNullifierRoot: createSparseNullifier([]).getRoot(), localHeadNodeId: target === root ? 128n : 0n }
+		}
+		if (name === 'getCarryLeafPageByOutcome' && target === root && args[0] === 1) {
+			cursors.push(args[1])
+			expect(args[2]).toBe(100n)
+			return args[1] === 0n ? [[], 28n] : [[...leaves].reverse(), 0n]
+		}
+		if (name === 'nodes' && typeof args[0] === 'bigint' && args[0] > 3n) {
+			const nodeId = args[0]
+			return [nodeId - 1n, owner, 1n, 50n, nodeId - 1n, nodeId * 50n, nodeId - 1n]
+		}
+		return await read(target, abi, name, args)
+	}
+	const result = await sampleClaimPositions(child, sparseRead, state)
+	expect(result.positions).toHaveLength(3)
+	expect(result.positions.map(position => position['deposit_index'])).toEqual(['0', '1', '2'])
+	expect(cursors).toEqual([0n, 28n])
 })
 
 test('excludes consumed leaves, suppresses direct parent claims, and retains pending statuses', async () => {
@@ -178,4 +229,16 @@ test('ancestry reconstruction accepts 32 games including the sampled game and re
 	}
 	expect((await sampleClaimPositions(game(31), read, state)).status).toBe('available')
 	await expect(sampleClaimPositions(game(32), read, state)).rejects.toThrow('32-generation limit')
+})
+
+test('keeps authenticated proofs and withholds payout quotes until a deep claim checkpoint is ready', async () => {
+	const result = await sampleClaimPositions(child, fixtureRead({ checkpointRequired: true }), state)
+	expect(result.positions).toHaveLength(3)
+	expect(result.positions[0]).toMatchObject({ status: 'checkpoint-required', kind: 'inherited', proof: { leafIndex: '0' } })
+	for (const position of result.positions) {
+		expect(position['retained_principal_atto_rep']).toBeUndefined()
+		expect(position['source_principal_atto_rep']).toBeUndefined()
+		expect(position['reward_amount_atto_rep']).toBeUndefined()
+		expect(position['payout_atto_rep']).toBeUndefined()
+	}
 })

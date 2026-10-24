@@ -56,6 +56,7 @@ function settingsFor(current: ChaosAnvilFixture, proxy: ChaosRpcProxy, stateFile
 			rpcQuorum: 1,
 		},
 		deployment: {
+			multicall3: current.infra.multicall3,
 			openOracle: current.infra.openOracle,
 			questionData: current.infra.zoltarQuestionData,
 			securityPoolFactory: current.infra.securityPoolFactory,

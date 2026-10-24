@@ -1,5 +1,7 @@
 import { expect, test } from 'bun:test'
+import path from 'node:path'
 import { generatedArtifacts } from './generated-artifacts.ts'
+import { repositoryRoot } from './root.mts'
 import { acceptedAuditAdvisories, affectedProjects, componentProjects, dependencyAuditCommand, projectDependencyClosure, projectForPath, projects, projectsInTaskGroup, projectTaskNames, taskInputMatches, taskProjects, topologicallySortedProjects, validateProjectRegistry, type Project } from './projects.ts'
 
 const project = (id: string, dependencies: readonly string[] = []): Project => ({ id, path: id, type: 'library', dependencies, tasks: {}, generatedDirectories: [] })
@@ -50,8 +52,8 @@ test('complete validation includes root and non-database AugurScan tests', () =>
 })
 
 test('every dependency audit excludes only the documented unpatched advisories', () => {
-	expect(acceptedAuditAdvisories).toEqual(['GHSA-vfj7-8cjw-p6xm'])
-	expect(dependencyAuditCommand).toEqual(['bun', 'audit', '--ignore=GHSA-vfj7-8cjw-p6xm'])
+	expect(acceptedAuditAdvisories).toEqual(['GHSA-vfj7-8cjw-p6xm', 'GHSA-mrhx-c7xc-m3w5'])
+	expect(dependencyAuditCommand).toEqual(['bun', path.join(repositoryRoot, 'tooling/repo/audit-dependencies.mts')])
 	for (const project of projects) {
 		const audit = project.tasks.audit
 		if (audit !== undefined) expect(audit.command).toEqual(dependencyAuditCommand)

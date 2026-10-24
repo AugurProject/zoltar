@@ -1,3 +1,4 @@
+import { previewLinearFeeCheckpoint, type LinearFeeState } from '@zoltar/statoblast-shared/statoblast/retentionRate'
 import { escalationGameAbi } from '@zoltar/bot-shared/contracts/abi'
 import { type Address, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { sameAddress } from '@zoltar/core-shared/evm/address'
@@ -29,8 +30,10 @@ export function projectSettlementCollateral(
 	},
 	feeEndTimestamp: bigint | undefined,
 	anchorTimestamp: bigint,
+	linearFee?: LinearFeeState,
 ) {
 	if (feeEndTimestamp === undefined) return 0n
+	if (linearFee !== undefined) return previewLinearFeeCheckpoint({ linearFee, currentTimestamp: anchorTimestamp, feeEndTimestamp, lastUpdatedFeeAccumulator: accounting.lastUpdatedFeeAccumulator, settlementCollateralAttoEth: accounting.settlementCollateralAttoEth })?.settlementCollateralAfterFeesAttoEth ?? 0n
 	const clamped = anchorTimestamp < feeEndTimestamp ? anchorTimestamp : feeEndTimestamp
 	if (accounting.lastUpdatedFeeAccumulator >= clamped || accounting.feeEligibleUnderwritingLimitAttoEth === 0n) return accounting.settlementCollateralAttoEth
 	const timeDelta = clamped - accounting.lastUpdatedFeeAccumulator

@@ -21,8 +21,12 @@ for (const change of [
 	'report expiry',
 	'report continuation',
 	'mint capacity',
+	'mint maturity',
 	'mint remaining capacity',
 	'mint balance',
+	'mint purchase fee',
+	'mint pooled balance',
+	'mint pooled unchanged',
 	'auction balance',
 	'report balance',
 	'report allowance',
@@ -54,8 +58,25 @@ for (const change of [
 				waitForTransactionReceipt: async () => ({ blockHash: hash, blockNumber: 1n, cumulativeGasUsed: 21000n, from: address, gasUsed: 21000n, logs: [], status: 'success', transactionHash: hash, transactionIndex: 0n }),
 				readContract: createReadContractStub(request => {
 					switch (request.functionName) {
+						case 'questionId':
 						case 'universeId':
 							return 1n
+						case 'getSecurityPoolPortfolio':
+							return change.includes('pooled') || change === 'mint purchase fee' ? address : zeroAddress
+						case 'originUniverseId':
+						case 'attoEthToAttoShares':
+							return 1n
+						case 'getPool':
+							return address
+						case 'purchaseFee':
+							return changed && change === 'mint purchase fee' ? 2n : 1n
+						case 'availableMintCapacity':
+							return 1000n
+						case 'securityPoolFactory':
+						case 'questionData':
+							return address
+						case 'getQuestionEndDate':
+							return 1000n
 						case 'escalationGame':
 							return change.startsWith('report') || (changed && change === 'mint escalation') ? address : zeroAddress
 						case 'openOraclePriceCoordinator':
@@ -97,6 +118,7 @@ for (const change of [
 				getBalance: async () => (changed && change.endsWith('balance') ? 0n : 1000n),
 				getBlock: async () => {
 					if (!changed) return createBlockWithTimestamp(1n)
+					if (change === 'mint maturity') return createBlockWithTimestamp(1000n)
 					if (change === 'auction expiry') return createBlockWithTimestamp(604_741n)
 					if (change === 'report expiry') return createBlockWithTimestamp(941n)
 					return createBlockWithTimestamp(1n)

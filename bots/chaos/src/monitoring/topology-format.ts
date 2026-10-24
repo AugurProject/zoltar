@@ -1,3 +1,4 @@
+import { parseTopologyIdentity as parseIdentity, type ImmutableTopologyIdentity } from './topology-identity.ts'
 import { parseJsonDocument } from '@zoltar/bot-shared/config/durable-file'
 
 import { type Hex } from '@zoltar/bot-shared/ethereum'
@@ -8,10 +9,8 @@ import { assertExactKeys, normalizedHash32 as hash, requiredRecord, uint256Strin
 import {
 	ImmutableTopologyDiscoveryCursors,
 	CanonicalImmutableTopologyCache,
-	ImmutableTopologyIdentity,
 	IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION,
 	parseCountedRegistryCursor,
-	parseIdentity,
 	ImmutableTopologyResidentLimits,
 	IMMUTABLE_TOPOLOGY_MAXIMUM_COMMITTED_BYTES,
 	IMMUTABLE_TOPOLOGY_MAXIMUM_RESIDENT_ITEMS,
@@ -64,11 +63,6 @@ function parseManifestDiscoveryCursors(value: unknown, label: string): ManifestD
 		poolDeployments: parseCountedRegistryCursor(cursors['poolDeployments'], `${label}.poolDeployments`),
 		questions: parseCountedRegistryCursor(cursors['questions'], `${label}.questions`),
 	}
-}
-
-export function sameIdentity(left: ImmutableTopologyIdentity, right: ImmutableTopologyIdentity) {
-	const addressFields = ['openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', 'uniswapV3Factory', 'weth', 'zoltar'] as const
-	return left.chainId === right.chainId && addressFields.every(field => left[field]?.toLowerCase() === right[field]?.toLowerCase())
 }
 
 export function manifestPayload(parameters: Omit<TopologyManifestPayload, 'manifestSchemaVersion' | 'payloadSchemaVersion' | 'storeSchemaVersion'>): TopologyManifestPayload {

@@ -280,12 +280,12 @@ export const getActiveStagedOperationCount = async (client: ReadClient, openOrac
 		args: [],
 	})
 
-export const getActiveStagedOperations = async (client: ReadClient, openOraclePriceCoordinator: Address, offset: bigint, count: bigint) =>
+export const getActiveStagedOperationsPage = async (client: ReadClient, openOraclePriceCoordinator: Address, cursorOperationId: bigint, count: bigint) =>
 	await client.readContract({
 		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-		functionName: 'getActiveStagedOperations',
+		functionName: 'getActiveStagedOperationsPage',
 		address: openOraclePriceCoordinator,
-		args: [offset, count],
+		args: [cursorOperationId, count],
 	})
 
 interface ExtraReportData {

@@ -1,5 +1,6 @@
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as statoblastAppCopy from '@zoltar/ui-statoblast-shared/copy/app.js'
 import * as openOracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
 import * as glossaryCopy from '@zoltar/ui-statoblast-shared/copy/glossary.js'
 import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
@@ -14,6 +15,7 @@ export type AppPageTitleInput = {
 }
 
 export function getAppPageTitle({ activeSecurityPoolsView, route }: AppPageTitleInput) {
+	if (route === 'portfolios') return statoblastAppCopy.portfolios
 	if (route === 'deploy') return appCopy.deployContracts
 	if (route === 'pools') {
 		if (activeSecurityPoolsView === 'create') return commonCopy.createSecurityPool

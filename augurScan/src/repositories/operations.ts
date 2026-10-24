@@ -379,7 +379,7 @@ export const riskCatalogData = async (sql: SQL, chainId: number, options: { pool
 			}
 		const risk = vaultRisk({
 			poolHeldBackingAttoRep: String(state['poolHeldBackingAttoRep']),
-			disputeStakedAttoRep: String(state['disputeStakedAttoRep']),
+			disputeStakedAttoRep: String(state['disputeBackingAttoRep']),
 			openInterestAttoEth: String(state['openInterestAttoEth']),
 			repPerEth1e18: String(price['repPerEth1e18'] ?? '0'),
 			securityMultiplierBps: String(state['securityMultiplierBps']),

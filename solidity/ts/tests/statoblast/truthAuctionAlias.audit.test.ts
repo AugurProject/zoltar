@@ -90,7 +90,7 @@ describe('Audit PoC: truth-auction aliasing across unauthenticated lineages', ()
 		await client.waitForTransactionReceipt({ hash: configureUndeployedHash })
 
 		await initiateSecurityPoolFork(client, attackParent)
-		await assert.rejects(createChildUniverse(client, attackParent, QuestionOutcome.Yes))
+		await assert.rejects(createChildUniverse(client, attackParent, QuestionOutcome.Yes), /Invalid child/)
 		const undeployedAuctionForkData = await getSecurityPoolForkerForkData(client, undeployedAuctionChild)
 		assert.strictEqual(undeployedAuctionForkData.truthAuction, addressString(0n), 'rejected fake child must not reserve an undeployed auction address')
 
@@ -113,7 +113,7 @@ describe('Audit PoC: truth-auction aliasing across unauthenticated lineages', ()
 		})
 		await client.waitForTransactionReceipt({ hash: configureHash })
 
-		await assert.rejects(createChildUniverse(client, attackParent, QuestionOutcome.Yes))
+		await assert.rejects(createChildUniverse(client, attackParent, QuestionOutcome.Yes), /Invalid child/)
 
 		const attackChildForkData = await getSecurityPoolForkerForkData(client, attackChild)
 		assert.strictEqual(attackChildForkData.truthAuction, addressString(0n), 'rejected fake child must not capture the canonical auction')

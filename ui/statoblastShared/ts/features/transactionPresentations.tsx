@@ -18,6 +18,8 @@ import { formatStatoblastSecurityMultiplier } from './markets/lib/trading.js'
 import { formatInitialReportPriorityFee, formatInitialReportPriorityFeeInput } from './security-pools/lib/priorityFee.js'
 import { getLiquidationExecutionFailureDetail } from './security-pools/lib/liquidation.js'
 import * as liquidationCopy from '../copy/liquidation.js'
+import * as forkAuctionCopy from '../copy/forkAuction.js'
+import * as reportingEscalationCopy from '../copy/reportingEscalation.js'
 
 type SecurityPoolCreationTransactionContext = {
 	initialReportPriorityFeeNanoEth?: string | undefined
@@ -243,17 +245,16 @@ export function createLiquidationFailurePresentation(result: SecurityPoolOvervie
 export function createLiquidationWarningPresentation(result: SecurityPoolOverviewActionResult, message: string, context?: LiquidationTransactionContext) {
 	return withWarning(createLiquidationSuccessPresentation(result, context), message)
 }
+export function getForkAuctionActionTitle(actionName: ForkAuctionActionResult['action']) {
+	if (actionName === 'initializeChildHistory') return forkAuctionCopy.initializeChildHistory
+	if (actionName === 'prepareForkClaim') return reportingEscalationCopy.prepareInheritedClaim
+	if (actionName === 'migrateUnresolvedEscalation') return transactionCopy.clearUnresolvedParentEscalationDepositAccounting
+	if (actionName === 'claimParentEscalationDeposits') return transactionCopy.claimParentEscalationDeposits
+	return humanizeTransactionAction(actionName)
+}
+
 export function createForkAuctionTransactionIntent(actionName: ForkAuctionActionResult['action'], { context, submittedTitle }: { context?: PoolUniverseTransactionContext; submittedTitle?: TransactionIntent['submittedTitle'] } = {}) {
-	let resolvedSubmittedTitle = submittedTitle
-	if (resolvedSubmittedTitle === undefined) {
-		if (actionName === 'migrateUnresolvedEscalation') {
-			resolvedSubmittedTitle = transactionCopy.clearUnresolvedParentEscalationDepositAccounting
-		} else if (actionName === 'claimParentEscalationDeposits') {
-			resolvedSubmittedTitle = transactionCopy.claimParentEscalationDeposits
-		} else {
-			resolvedSubmittedTitle = humanizeTransactionAction(actionName)
-		}
-	}
+	const resolvedSubmittedTitle = submittedTitle ?? getForkAuctionActionTitle(actionName)
 	return buildIntent({
 		action: actionName,
 		rows: getPoolUniverseTransactionRows(context),
@@ -265,13 +266,9 @@ export function createForkAuctionTransactionIntent(actionName: ForkAuctionAction
 }
 
 export function createForkAuctionSuccessPresentation(result: ForkAuctionActionResult) {
-	let title = humanizeTransactionAction(result.action)
+	let title = getForkAuctionActionTitle(result.action)
 	if (result.action === 'claimAuctionProceeds' && result.settlementMode === 'refund') {
 		title = transactionCopy.settleFinalizedRefunds
-	} else if (result.action === 'migrateUnresolvedEscalation') {
-		title = transactionCopy.clearUnresolvedParentEscalationDepositAccounting
-	} else if (result.action === 'claimParentEscalationDeposits') {
-		title = transactionCopy.claimParentEscalationDeposits
 	}
 	const detail = (() => {
 		switch (result.action) {

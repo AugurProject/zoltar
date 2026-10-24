@@ -355,4 +355,15 @@ describe('transaction presentations', () => {
 		expect(presentation.title).toBe('Claim parent escalation deposits')
 		expect(presentation.detail).toBe('Selected winning parent deposits were paid in child universe REP. They cannot be claimed again in this universe or its descendants.')
 	})
+	for (const [action, title] of [
+		['initializeChildHistory', 'Initialize dispute history'],
+		['prepareForkClaim', 'Prepare inherited claim'],
+	] as const) {
+		test(`keeps ${action} transaction naming consistent with its review and button`, () => {
+			const intent = createForkAuctionTransactionIntent(action)
+			const presentation = createForkAuctionSuccessPresentation(createForkAuctionResult(action))
+			expect(intent.submittedTitle).toBe(title)
+			expect(presentation.title).toBe(title)
+		})
+	}
 })

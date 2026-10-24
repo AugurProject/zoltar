@@ -248,7 +248,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		const row = reportRows[index]
 		if ((lifecycle['state'] === 'Dispute window open' || lifecycle['state'] === 'Settleable') && row !== undefined) attentionReportRows.push(row)
 	}
-	const concludedEscalationEvents = new Set(['NonDecisionReached', 'GameContinuedFromFork', 'InheritedThresholdTie'])
+	const concludedEscalationEvents = new Set(['NonDecisionReached', 'GameContinuedFromFork', 'InheritedThresholdTie', 'OrdinarySettlementInitialized'])
 	const activeEscalationRows: HTMLElement[] = []
 	for (const [index, item] of escalations.entries()) {
 		const row = escalationRows[index]

@@ -142,7 +142,7 @@ describe('Statoblast: fork migration', () => {
 
 		test('child pool prices complete sets against all fork-time claims after balanced partial migration', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
-			await mockWindow.setTime(endTime - 2n * DAY)
+			await mockWindow.setTime(endTime - 90n * DAY)
 			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6])
 			const newMinter = createWriteClient(mockWindow, TEST_ADDRESSES[4])
@@ -210,6 +210,7 @@ describe('Statoblast: fork migration', () => {
 			const materializedSupplyAfterMint = migratedCompleteSetSupply + expectedMintedShares
 			assert.deepStrictEqual(await getOutcomeShareSupplies(yesSecurityPool.shareToken, yesUniverse), [materializedSupplyAfterMint, materializedSupplyAfterMint, materializedSupplyAfterMint], 'successful child minting should add balanced materialized claims without erasing the late-migration reserve')
 
+			await mockWindow.setTime(endTime + 1n)
 			await manipulatePriceOracle(newMinter, mockWindow, yesSecurityPool.openOraclePriceCoordinator)
 			await depositToEscalationGame(newMinter, yesSecurityPool.securityPool, QuestionOutcome.Yes, reportBond)
 			await mockWindow.advanceTime(10n * DAY)
@@ -223,7 +224,7 @@ describe('Statoblast: fork migration', () => {
 
 		test('an uneven child mints and redeems complete sets against fork-time economic claims', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
-			await mockWindow.setTime(endTime - 2n * DAY)
+			await mockWindow.setTime(endTime - 90n * DAY)
 			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6])
 			await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
@@ -291,7 +292,7 @@ describe('Statoblast: fork migration', () => {
 
 		test('child pool prices new complete sets from fork-time claims when no shares migrated', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
-			await mockWindow.setTime(endTime - 2n * DAY)
+			await mockWindow.setTime(endTime - 90n * DAY)
 			const parentUnderwritingLimitAttoEth = repDeposit / 4n
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, parentUnderwritingLimitAttoEth)
 

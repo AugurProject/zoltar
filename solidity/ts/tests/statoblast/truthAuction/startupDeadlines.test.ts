@@ -63,10 +63,11 @@ describe('Statoblast: truth auction', () => {
 	describe('auction startup and migration isolation', () => {
 		test('startTruthAuction waits for the parent migration window instead of the child universe fork time', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
-			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, securityPoolUnderwritingLimitAttoEth)
+			await mockWindow.setTime(endTime - 2n)
 			await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+			await mockWindow.setTime(endTime + 10000n)
 
 			await triggerExternalForkForSecurityPool(undefined, 'parent migration window fork source')
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -79,10 +80,11 @@ describe('Statoblast: truth auction', () => {
 
 		test('startTruthAuction keeps migration open at the exact parent deadline and starts one second later', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
-			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, securityPoolUnderwritingLimitAttoEth)
+			await mockWindow.setTime(endTime - 2n)
 			await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+			await mockWindow.setTime(endTime + 10000n)
 
 			await triggerExternalForkForSecurityPool(undefined, 'parent migration deadline boundary fork source')
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -171,9 +173,10 @@ describe('Statoblast: truth auction', () => {
 
 		test('startTruthAuction splits and sweeps the complete child REP inventory before pricing it', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
-			await mockWindow.setTime(endTime + 10000n)
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, repDeposit / 4n)
+			await mockWindow.setTime(endTime - 2n)
 			await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+			await mockWindow.setTime(endTime + 10000n)
 
 			await triggerExternalForkForSecurityPool(undefined, 'auction inventory funding fork source')
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -360,10 +363,11 @@ describe('Statoblast: truth auction', () => {
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[4])
 			await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
 			await setVaultCapacityFixture(passiveRepHolder, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, passiveRepHolder.account.address, repDeposit / 4n)
-			await mockWindow.setTime(endTime + 10000n)
 			const parentUnderwritingLimitAttoEth = repDeposit / 4n
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, parentUnderwritingLimitAttoEth)
+			await mockWindow.setTime(endTime - 2n)
 			await createCompleteSet(client, securityPoolAddresses.securityPool, parentUnderwritingLimitAttoEth)
+			await mockWindow.setTime(endTime + 10000n)
 
 			await triggerExternalForkForSecurityPool(undefined, 'non-divisible fully utilized fork source')
 			const parentSettlementCollateralAtForkAttoEth = await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)

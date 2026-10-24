@@ -13,7 +13,7 @@
 			<header>
 				<p class="kicker">Start here</p>
 				<h1>Contract architecture</h1>
-				<p>Users call <a href="../reference/glossary.html#security-pool">SecurityPools</a>, the Statoblast contracts that hold each market's ETH. Pools rely on Zoltar for <a href="../reference/glossary.html#universe">universes</a> and <a href="../reference/glossary.html#rep">REP</a>, on a <a href="../reference/glossary.html#price-coordinator">price coordinator</a> for REP/ETH prices, and on the <a href="../reference/glossary.html#security-pool-forker">SecurityPoolForker</a> after a fork.</p>
+				<p>Users call <a href="../reference/glossary.html#security-pool">SecurityPools</a>, the Statoblast contracts that expose each market's shares and reporting. Standalone pools hold their own ETH; a multi-question portfolio holds cash in its central settlement engine. Pools rely on Zoltar for <a href="../reference/glossary.html#universe">universes</a> and <a href="../reference/glossary.html#rep">REP</a>, on a <a href="../reference/glossary.html#price-coordinator">price coordinator</a> for REP/ETH prices, and on the <a href="../reference/glossary.html#security-pool-forker">SecurityPoolForker</a> after a fork.</p>
 				<p>This map shows contract-to-contract calls and asset movement, not every public user entrypoint. Deployment-helper factories, delegate modules (helper contracts whose code a pool, an Escalation Game, or the SecurityPoolForker runs through <code>delegatecall</code>), the coordinator's <a href="../reference/glossary.html#vault-operations-executor">VaultOperations executor</a>, event emitters, and external contracts such as WETH are omitted; the <a href="../reference/contract-inventory.html">contract inventory</a> lists them.</p>
 				<p class="security-assumption-ref"><strong>Related reading:</strong> <a href="../reference/contracts.html">the generated transaction reference</a> for exact caller and prerequisite rules, <a href="../explanation/statoblast.html">How Statoblast works</a> for lifecycle context, and <a href="../reference/invariants.html">the invariant catalog</a> for cross-contract safety properties.</p>
 			</header>
@@ -32,7 +32,7 @@
 			</section>
 			<section id="conceptual-model">
 				<h2>What each contract owns</h2>
-				<p>Statoblast separates identity, market accounting, price-sensitive execution, dispute escrow, and fork repair:</p>
+				<p>The standalone path separates identity, market accounting, price-sensitive execution, dispute escrow, and fork repair:</p>
 				<ul>
 					<li><code>ZoltarQuestionData</code> stores question state and answer encoding; <code>Zoltar</code> manages universes, forks, and each universe's REP token.</li>
 					<li>A <code>SecurityPool</code> tracks market collateral, <a href="../reference/glossary.html#vault">vault</a> accounting, <a href="../reference/glossary.html#open-interest">open interest</a>, and lifecycle state.</li>
@@ -41,12 +41,13 @@
 					<li>The <code>EscalationGame</code> holds the REP that reporters stake in the pool's <a href="../reference/glossary.html#escalation-game">local dispute</a>.</li>
 					<li>The <code>SecurityPoolForker</code> creates child pools after a fork and repairs any ETH shortfall through a <a href="../reference/glossary.html#truth-auction">Truth Auction</a>.</li>
 				</ul>
+				<p>For a <a href="./statoblast.html#question-portfolios">multi-question portfolio</a>, the settlement engine owns question cash, the capital ledger records each provider’s pledged REP and commitment, and a separate reporter ledger holds dispute escrow. The portfolio fork coordinator copies shared accounting roots and repairs a branch once. Child question contracts are created and initialized when needed; their shares still migrate through each intervening universe.</p>
 				<p>Each lineage has at most one pool per universe. The table calls that registered pool the <em>canonical</em> pool.</p>
-				<p>One complete-set path is: a trader calls <code>SecurityPool</code>, the pool accepts ETH collateral, and the pool calls <code>ShareToken</code> to mint one share for every outcome.</p>
+				<p>The standalone complete-set path is: a trader calls <code>SecurityPool</code>, the pool accepts ETH collateral, and the pool calls <code>ShareToken</code> to mint one share for every outcome.</p>
 			</section>
 
 			<section id="overview">
-				<h2>Primary interaction flow</h2>
+				<h2>Standalone interaction flow</h2>
 				<p>Arrows point from the contract initiating an interaction to the contract receiving it. The map has three panels: <em>Deploy &amp; wire</em>, <em>Operate &amp; resolve</em>, and <em>Fork &amp; repair</em>. A contract that takes part in more than one panel is drawn in each. Users and keepers enter through several of these contracts, but are omitted so the plot can focus on contract-to-contract boundaries.</p>
 				<figure class="diagram diagram-wide" id="fig-contract-interaction-map">
 					<div class="plot-chart" data-plot-chart="fig-contract-interaction-map" data-plot-width="1143" data-plot-height="1814" role="img" aria-label="Zoltar and Statoblast contract interactions grouped into deployment, runtime, and fork phases"><span class="plot-chart-fallback">Contract interactions are separated into three panels. During deployment, the pool factory validates question and universe data before deploying the pool, share token, and price coordinator. During runtime, the pool manages claims and escalation escrow while guarded actions travel through the price coordinator and OpenOracle, and the coordinator reserves liquidation approvals in the Liquidation Approval Registry. During a fork, the share token enters the pool forker, which snapshots escalation, migrates REP through a proxy, creates and migrates child pools, and repairs backing through the Truth Auction.</span></div>

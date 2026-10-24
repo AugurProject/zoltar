@@ -683,7 +683,7 @@
 							<td>
 								<a href="#esc-11"><code>ESC-11</code></a>
 							</td>
-							<td>Residual sweep preconditions</td>
+							<td>Winner reserves and residual settlement</td>
 							<td>Conservation</td>
 							<td>Contract guard</td>
 						</tr>
@@ -1580,12 +1580,12 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								<p>Each vault's <a href="./glossary.html#underwriting-commitment">underwriting commitment</a> <code>X</code> (<code>underwritingLimitAttoEth</code>) is separate from its REP backing. The pool maintains the total commitment <code>T</code> incrementally; <code>L</code> is tracked <a href="./glossary.html#settlement-collateral">settlement collateral</a>.</p>
+								<p>In a standalone pool, each vault's <a href="./glossary.html#underwriting-commitment">underwriting commitment</a> <code>X</code> (<code>underwritingLimitAttoEth</code>) is separate from its REP backing. The pool maintains the total commitment <code>T</code> incrementally; <code>L</code> is tracked <a href="./glossary.html#settlement-collateral">settlement collateral</a>. Portfolio-bound questions instead use the <a href="./contract-inventory.html#portfolio-underwriting">shared capital and minting rules</a>.</p>
 								<ul>
 									<li><strong>Obligation.</strong> With positive <code>T</code>, a vault's obligation is <code>L × X / T</code>, rounded upward to the next atomic unit with full-precision arithmetic. For <code>L ≤ T</code>, each rounded obligation is at most <code>X</code>; independently rounded obligations need not sum exactly to <code>L</code>.</li>
-									<li><strong>Authorization.</strong> REP deposits do not increase <code>X</code>. Redemptions and fees reduce <code>L</code> without reducing <code>X</code>, empty settlement epochs do not revoke it, and price or backing changes leave it unchanged.</li>
-									<li><strong>Minting.</strong> Minting requires <code>L + deposit ≤ T</code> and no escalation or fork-continuation game. It reads no oracle price and checks no REP backing: every vault already answers for its full commitment, so collateral within <code>T</code> adds no REP exposure. Minters therefore accept the current backing of the pool's commitments; minting is not blocked when that backing is insufficient. The usable collateral ceiling equals <code>T</code>.</li>
-									<li><strong>Withdrawal.</strong> A REP withdrawal must preserve aggregate backing for all of <code>T</code> and the withdrawing vault's full-commitment backing.</li>
+									<li><strong>Authorization.</strong> REP deposits do not increase <code>X</code>. Share redemptions and fees reduce <code>L</code> without reducing <code>X</code>, empty settlement epochs do not revoke it, and price or backing changes leave it unchanged.</li>
+									<li><strong>Minting.</strong> Minting requires a timestamp before the question end, <code>L + deposit ≤ T</code>, and no escalation or fork-continuation game. It reads no oracle price and checks no REP backing: every vault already answers for its full commitment, so collateral within <code>T</code> adds no REP exposure. Minters therefore accept the current backing of the pool's commitments; minting is not blocked when that backing is insufficient. The usable collateral ceiling equals <code>T</code>.</li>
+									<li><strong>Withdrawal.</strong> Before final resolution, a REP withdrawal must preserve aggregate backing for all of <code>T</code> and the withdrawing vault's full-commitment backing. After a concrete final outcome, a vault may set <code>X</code> to zero even when <code>L &gt; T</code>, then redeem its available REP once its dispute escrow is clear. The outstanding shares retain their funded ETH claims.</li>
 									<li><strong>Individual health.</strong> Each vault remains subject to full-commitment backing requirements and liquidation; aggregate health does not imply that every vault is healthy. Liquidation transfers commitment and backing to an authorized, sufficiently backed receiver without writing off collateral or changing <code>T</code>, so recovery depends on an eligible receiver.</li>
 								</ul>
 							</div>
@@ -1620,9 +1620,10 @@
 							<div class="invariant-property">
 								<p>For a commitment <code>X</code> at REP/ETH price <code>p</code>, with pool multiplier <code>m</code> in BPS and health factor <code>h</code> in BPS (<code>10,000</code> unless a delegated receiver approved more), each product rounding upward:</p>
 								<ul>
-									<li><strong>Associated-REP branch.</strong> Pool-held vault REP plus the vault's locally dispute-staked REP is at least <code>X × p × m / 10,000 × h / 10,000</code>.</li>
+									<li><strong>Associated-REP branch.</strong> Pool-held vault REP plus the vault's eligible retained dispute collateral is at least <code>X × p × m / 10,000 × h / 10,000</code>.</li>
 									<li><strong>Pool-held-REP branch.</strong> Pool-held vault REP alone is at least <code>X × p × max(10,500, 10,000 + (m − 10,000) / 2) / 10,000 × h / 10,000</code>. <code>10,500</code> BPS is the liquidation-award reserve: <code>10,000</code> plus the 500-BPS liquidation bonus.</li>
 									<li><strong>Where both apply.</strong> A REP withdrawal or vault-funded escalation deposit must leave the affected vault passing both branches, and both operations apply the same two branches to the pool aggregate against the total <a href="./glossary.html#underwriting-commitment">underwriting commitment</a>. A liquidation receiver must pass both after accepting the transferred commitment; liquidation does not require the unhealthy target to become healthy. A wallet-funded escalation deposit moves no vault backing and runs neither check.</li>
+									<li><strong>Dispute collateral.</strong> An ordinary report credits only its accepted REP minus the increase in the minimum of the three outcome balances. Earlier reporters keep their existing credit. Continuation claims receive no vault REP backing credit; nominal payout rights are separate.</li>
 									<li><strong>Repricing.</strong> A later price change can make an existing position fail a branch without reducing its commitment; that enables liquidation and reverts nothing retroactively.</li>
 								</ul>
 							</div>
@@ -2212,11 +2213,11 @@
 								<ul>
 									<li><strong>Once per child.</strong> Each selected child initializes the canonical carry snapshot and receives the complete aggregate continuation backing at most once.</li>
 									<li><strong>Optional cleanup.</strong> Vault cleanup, callable only by the vault owner within the migration window, first migrates that vault's non-escrowed position and then clears its unresolved parent escalation-deposit accounting. It creates no child escrow and cannot change carried-proof eligibility.</li>
-									<li><strong>Unrelated fork.</strong> The continuation cannot resume until its game balance covers all effective unresolved principal.</li>
-									<li><strong>Own fork.</strong> Let <code>R</code> be the snapshot's raw unresolved principal: the sum of <code>inheritedUnresolvedTotalAttoRep</code> and <code>localUnresolvedTotalAttoRep</code> across all three outcomes, before direct-claim deductions. Initial backing must be at least <code>R - ⌊R / 5⌋</code>, where <code>5</code> is the fixed <code>Constants.MINIMUM_FORK_BURN_DIVISOR</code>, not the universe's configured fork burn divisor. The live balance must cover the initial backing not yet exported by valid direct pre-resume claims, scaled down by any REP a <a href="./glossary.html#truth-auction">Truth Auction</a> removed from the game.</li>
+									<li><strong>Actual backing.</strong> The canonical source snapshot binds the child to the REP actually remaining in the source game after ordinary source surplus. Nominal outcome principals remain unchanged and are mutually exclusive liabilities; their sum is not the funding requirement.</li>
+									<li><strong>Funding check.</strong> An unrelated fork copies that actual backing; an own-question fork first deducts its native fork burn. Before resuming, the child balance must cover this authenticated initial backing minus valid direct pre-resume exports, scaled by any <a href="./glossary.html#truth-auction">Truth Auction</a> retention. A paid winner-burn marker survives later forks so the same liability is not burned twice.</li>
 								</ul>
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> Creating the Yes child installs its snapshot and aggregate backing before Alice acts. Alice may later clear her unresolved parent escalation-deposit accounting, but that cleanup neither funds the child nor enables or disables her winning proof.</p>
+							<p class="invariant-example"><strong>Example:</strong> Creating the Yes child supplies its aggregate backing; three permissionless initialization steps complete its snapshot before Alice migrates. Alice may later clear her unresolved parent escalation-deposit accounting, but that cleanup neither funds the child nor enables or disables her winning proof.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -2354,7 +2355,7 @@
 						<summary><code>ESC-01</code><span class="invariant-title">Total escrow reconciliation</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property"><code>totalDisputeStakedAttoRep</code> equals effective live vault-denominated escrow plus effective aggregate continuation backing in <code>forkCarryDisputeStakedAttoRep</code>. Continuation backing is not assigned to child-vault health or migration power, but it must enter the aggregate before the Truth Auction so physically held REP cannot escape the Truth Auction's REP removal. Auction retention, the fraction of game REP left after that removal, floors the aggregate total and the continuation bucket independently; do not reconstruct either aggregate by summing independently rounded vault views.</div>
+							<div class="invariant-property"><code>totalDisputeStakedAttoRep</code> is a reporter-accounting total, not the physical REP balance or eligible vault REP backing. It equals effective live vault-denominated escrow plus effective aggregate continuation backing in <code>forkCarryDisputeStakedAttoRep</code>. Continuation backing is not assigned to child-vault health or migration power, but it must enter the aggregate before the Truth Auction so physically held REP cannot escape the Truth Auction's REP removal. Auction retention, the fraction of game REP left after that removal, floors the aggregate total and the continuation bucket independently; do not reconstruct either aggregate by summing independently rounded vault views.</div>
 							<p class="invariant-example"><strong>Example:</strong> If vault-denominated escrow contributes 4 and 6 REP and an external-fork continuation carries 12 REP of aggregate proof backing, the total is 22 REP, represented as <code>22 × 10^18</code> attoREP in <code>totalDisputeStakedAttoRep</code>, before the auction. A 75% retention records <code>⌊22 × 10^18 × 75%⌋</code> attoREP, or 16.5 total effective REP, and <code>⌊12 × 10^18 × 75%⌋</code> attoREP, or 9 aggregate continuation REP. This makes the carried claims absorb the same repair loss without pretending that their backing belongs to a particular child vault.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -2525,7 +2526,10 @@
 						<summary><code>ESC-08</code><span class="invariant-title">Game REP settlement conservation</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Every REP unit held for a game is accounted for exactly once as winning principal, burned escalation haircut, reward funding, losing principal, unsettled residual, ordinary-game REP swept back to the pool, fork-continuation REP burned, or REP moved out by fork activation or a Truth Auction. Settlement cannot create an additional REP claim.</div>
+							<div class="invariant-property">
+								Every REP unit held for a game is accounted for exactly once as winning principal, burned escalation haircut, reward funding, losing principal, unsettled residual, irrevocable ordinary surplus routed at report time under <a href="#esc-11"><code>ESC-11</code></a
+								>, terminal residual burned, or REP moved out by fork activation or a Truth Auction. Settlement cannot create an additional REP claim.
+							</div>
 							<p class="invariant-example"><strong>Example:</strong> Paying winners and sweeping the final residual reduces the game balance to zero without total payouts exceeding the REP previously held.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -2592,11 +2596,11 @@
 						</div>
 					</details>
 					<details class="invariant-entry" id="esc-11">
-						<summary><code>ESC-11</code><span class="invariant-title">Residual sweep preconditions</span></summary>
+						<summary><code>ESC-11</code><span class="invariant-title">Winner reserves and residual settlement</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Residual REP cannot be settled until effective unresolved principal is zero for every outcome. For a continuation, the sweep first retires its inherited aggregate <code>forkCarryDisputeStakedAttoRep</code>; after that retirement, no local dispute stake or vault escrow may remain in <code>totalDisputeStakedAttoRep</code>. Inherited losing principal retires at finalization without a proof; winning inherited proofs and every local unresolved deposit still require their applicable terminal transition. Ordinary-game residual returns to the pool, while fork-continuation residual is burned and cannot accrue to child-local backing units.</div>
-							<p class="invariant-example"><strong>Example:</strong> After Yes finalizes, an unclaimed inherited No leaf does not block sweeping. An unclaimed inherited Yes proof, an unsettled local deposit, or a live vault escrow record still does.</p>
+							<div class="invariant-property">Ordinary final settlement freezes the winning outcome and effective fork threshold, reserves all remaining winning payouts and required burns, and retires losing escrow without visiting deposits. Winning payouts and burns use differences of the frozen cumulative payout curves, so their sum equals the reserved liability regardless of claim order or deposit splitting. At report time, increases in the minimum of the three ordinary outcome balances leave game escrow irrevocably: standalone pools add them to existing backing or burn them if no backing units exist; portfolio-bound pools route them to vested provider REP income, separate from pledged principal. Any terminal REP above the reserve is burned; unclaimed winners retain their full reserved entitlement and nominal vault escrow. <code>settleOrdinaryGame</code> is permissionless and idempotent, and final backing redemption invokes it before valuing backing units. A continuation keeps separate rules: its sweep requires zero effective unresolved principal, retires inherited aggregate <code>forkCarryDisputeStakedAttoRep</code>, and requires no remaining local stake or vault escrow. Inherited losers retire without proofs, but winning inherited proofs and local unresolved deposits still need their applicable terminal transition. Continuation residual is burned and cannot accrue to child-local backing units.</div>
+							<p class="invariant-example"><strong>Example:</strong> In a standalone pool with backing owners, ordinary balances of 100, 200 and 300 REP credit 100 REP to backing immediately and retain 500 REP for mutually exclusive settlement liabilities. Finalizing Yes leaves its payout and burn reserve in the game and burns any extra, even while Yes reporters remain unclaimed. In a continuation, an unclaimed inherited No leaf does not block sweeping, but an unclaimed inherited Yes proof or live local escrow does.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -2609,8 +2613,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>sweepResidualRepToSecurityPool</code></a
-										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditForkResidualCapture.test.ts">external-fork residual burn regression test</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditOwnForkResidualRepLock.test.ts">own-fork residual burn regression test</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>settleOrdinaryGame</code> and <code>sweepResidualRepToSecurityPool</code></a
+										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/ordinarySettlementRecovery.test.ts">ordinary settlement recovery regressions</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditForkResidualCapture.test.ts">external-fork residual burn regression test</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditOwnForkResidualRepLock.test.ts">own-fork residual burn regression test</a>
 									</dd>
 								</div>
 							</dl>
@@ -3407,9 +3411,9 @@
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
 								<p>No mandatory transition iterates over the whole deposit, bid, or vault history in one transaction; callers use bounded pages, fixed outcome sets, proofs, or balanced-tree traversal.</p>
-								<p>Work is not constant in fork depth. Computing a carried claim's payout calls <code>getUnresolvedClaimInterval</code> on each source game between the claiming game and the game where the deposit was made, so its gas grows linearly with the number of forks the deposit has been carried across. The contracts enforce no maximum fork depth. The lookups that stay depth-independent are listed in <a href="#ext-05"><code>EXT-05</code></a>.</p>
+								<p>Child deployment and inherited-history copying use separate transactions; each initialization step copies at most one outcome’s 64 peaks. Carried-claim reads inspect at most eight ancestors. Deeper claims use permissionless checkpoints with at most eight frozen-ancestor traversal or transformation steps per call, plus a fixed parent-cache check and initialization lookup. Completed canonical checkpoints for the same claim tuple let descendants skip an already-prepared prefix; the excluded source transform is still processed. An unfinished checkpoint can adopt a parent cache completed later, including after partial application. Pending transforms are hash-committed, with recovery anchors every eight steps so batches can be reconstructed from current state. Each batch supplies one base commitment and forward-ordered transforms; the complete hash is verified before reverse-order application. Exact rounding is retained and the immediate parent and target remain live. A first preparation with no reusable prefix still grows with fork depth; subsequent preparation processes only the uncached history. Other depth-independent lookups are listed in <a href="#ext-05"><code>EXT-05</code></a>.</p>
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> Settling one carried deposit verifies one proof and makes one interval call per ancestor game; it does not iterate over the other deposits in those games.</p>
+							<p class="invariant-example"><strong>Example:</strong> A deep carried deposit first completes its checkpoint over several bounded transactions, then settles with one proof. A different caller can continue the same checkpoint without changing its claim tuple or restarting progress.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -3574,7 +3578,7 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								Origin registration, inherited-fork detection during child construction, and direct-claim replay checks do not traverse universe or pool ancestry. Carried-claim payout reads are not covered: their cost grows with fork depth, as <a href="#life-05"><code>LIFE-05</code></a> states.
+								Origin registration, inherited-fork detection during child construction, and direct-claim replay checks do not traverse universe or pool ancestry. Carried claims use bounded preparation and reads, as <a href="#life-05"><code>LIFE-05</code></a> states.
 							</div>
 							<p class="invariant-example"><strong>Example:</strong> At lineage depths 1 and 32, a replay query for the same global deposit id performs the same lineage-registry and claimed-id lookups rather than 1 or 32 parent calls.</p>
 							<dl class="invariant-metadata">

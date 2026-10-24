@@ -3,6 +3,7 @@ pragma solidity 0.8.35;
 
 import { EscalationGame } from './EscalationGame.sol';
 import { SecurityVault, SystemState } from './interfaces/ISecurityPool.sol';
+import { ISecurityPoolPortfolioAccounting } from './interfaces/ISecurityPoolPortfolioAccounting.sol';
 
 struct VaultBadDebt {
 	uint256 badDebtAttoEth;
@@ -43,6 +44,23 @@ abstract contract SecurityPoolStorage {
 	uint256 internal badDebtGeneration;
 	/// @dev Initial pools use the question end; an activated child uses max until resolution or its next fork fixes the cutoff.
 	uint256 internal feeEpochEndTime;
+	address public portfolioCustody;
+	ISecurityPoolPortfolioAccounting internal portfolioAccounting;
+	uint256 internal accountedPortfolioBackingAttoRep;
+	uint256 public linearFeePrincipalAttoEth;
+	uint96 public linearFeeRateAttoEthPerSecond;
+	uint96 public portfolioFeeRateAttoEthPerSecond;
+	uint48 public linearFeeEndTime;
+
+	function _nativeFeeEligibleCommitment() internal view returns (uint256) {
+		if (portfolioCustody == address(0)) return feeEligibleUnderwritingLimitAttoEth;
+		uint256 designated = securityVaults[portfolioCustody].underwritingLimitAttoEth;
+		return feeEligibleUnderwritingLimitAttoEth > designated ? feeEligibleUnderwritingLimitAttoEth - designated : 0;
+	}
+
+	function _notifyPortfolioAccounting() internal {
+		if (portfolioCustody != address(0)) portfolioAccounting.onQuestionAccountingChanged();
+	}
 
 	/// @dev Shared operational guard for the pool and its operations delegate. Callers pass the
 	/// universe fork time so each keeps its own Zoltar lookup; the fork check reverts first.

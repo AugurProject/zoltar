@@ -20,22 +20,8 @@ export type VaultOperationsResult = {
 	action?: 'commitment' | 'fees' | 'redeem'
 }
 
-export async function hasPendingVaultCommitment(client: ReadClient, manager: Address, owner: Address) {
-	let executor: Address | undefined
-	for (let offset = 0n; ; offset += 25n) {
-		const [ids, operations] = await client.readContract({ address: manager, abi: coordinatorArtifact.abi, functionName: 'getActiveStagedOperations', args: [offset, 25n] })
-		for (const [index, operation] of operations.entries()) {
-			if (operation.operator.toLowerCase() !== owner.toLowerCase()) continue
-			if (operation.operation === 2n) return true
-			if (operation.operation !== 3n) continue
-			executor ??= await client.readContract({ address: manager, abi: coordinatorArtifact.abi, functionName: 'vaultOperations' })
-			const id = ids[index]
-			if (id === undefined) throw new Error(copy.unknownOutcome)
-			const bundle = await client.readContract({ address: executor, abi: bundleArtifact.abi, functionName: 'getBundle', args: [id] })
-			if (bundle.changeCommitment) return true
-		}
-		if (operations.length < 25) return false
-	}
+export async function hasPendingVaultCommitment(client: Pick<ReadClient, 'readContract'>, manager: Address, owner: Address) {
+	return (await client.readContract({ address: manager, abi: coordinatorArtifact.abi, functionName: 'getPendingCommitmentOperationId', args: [owner] })) !== 0n
 }
 
 export async function quoteVaultOperations(client: ReadClient, pool: Address, owner: Address, input: VaultOperationsInput, proposedPrice: bigint) {
@@ -51,7 +37,7 @@ export async function quoteVaultOperations(client: ReadClient, pool: Address, ow
 		client.readContract({ address: pool, abi: poolArtifact.abi, functionName: 'minimumVaultRepDepositAttoRep' }),
 		isSecurityPoolEscalationResolved(client, pool),
 	])
-	if (!resolved && countVaultPriceActions(input) > 0 && pendingReportId > 0n && sponsor.toLowerCase() !== owner.toLowerCase()) throw new Error(copy.otherReportSponsor)
+	if (!resolved && !validPrice && countVaultPriceActions(input) > 0 && pendingReportId > 0n && sponsor.toLowerCase() !== owner.toLowerCase()) throw new Error(copy.otherReportSponsor)
 	if (resolved) {
 		if (!input.changeCommitment || input.depositAttoRep > 0n || input.liquidations.length > 0 || input.withdrawAttoRep > 0n) throw new Error(copy.resolvedActions)
 		if (input.commitmentAttoEth > vault[1]) throw new Error(copy.resolvedIncrease)

@@ -258,7 +258,13 @@ export function useSelectedPoolRefreshEffects({
 		}
 		if (
 			shouldRefreshSelectedPoolReporting &&
-			(nextForkAuctionResult.action === 'claimParentEscalationDeposits' || nextForkAuctionResult.action === 'migrateUnresolvedEscalation' || nextForkAuctionResult.action === 'forkWithOwnEscalation' || nextForkAuctionResult.action === 'settleForkedEscalation' || nextForkAuctionResult.action === 'startTruthAuction')
+			(nextForkAuctionResult.action === 'prepareForkClaim' ||
+				nextForkAuctionResult.action === 'initializeChildHistory' ||
+				nextForkAuctionResult.action === 'claimParentEscalationDeposits' ||
+				nextForkAuctionResult.action === 'migrateUnresolvedEscalation' ||
+				nextForkAuctionResult.action === 'forkWithOwnEscalation' ||
+				nextForkAuctionResult.action === 'settleForkedEscalation' ||
+				nextForkAuctionResult.action === 'startTruthAuction')
 		) {
 			void reporting.onLoadReporting()
 		}

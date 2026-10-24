@@ -4,7 +4,6 @@ import { getOracleLastPriceDisplay, getOraclePriceValidityPresentation } from '.
 import { useEffect, useMemo, useState } from 'preact/hooks'
 import { usePageVisible } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { formatPendingPriceAvailability } from '../../../copy/pricing.js'
-import { getOracleManagerPriceValidUntilTimestamp } from '../../../protocol/oracleTiming.js'
 
 type OpenOraclePriceValueProps = {
 	currentTimestamp?: bigint | undefined
@@ -25,7 +24,7 @@ export function OpenOraclePriceValue({ currentTimestamp, lastPrice, lastSettleme
 		return { timestamp: resolvedCurrentTimestamp ?? BigInt(Math.floor(wallTime / 1000)), wallTime }
 	}, [resolvedCurrentTimestamp])
 	const hasSettledPrice = lastPrice !== undefined && lastSettlementTimestamp > 0n
-	const validUntilTimestamp = hasSettledPrice ? (priceValidUntilTimestamp ?? getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp)) : undefined
+	const validUntilTimestamp = hasSettledPrice ? priceValidUntilTimestamp : undefined
 	// Tick while a pending report counts down or the settled price is still valid, so both labels follow the estimated chain time.
 	const shouldTick = pendingReportReadyAtTimestamp !== undefined || (resolvedCurrentTimestamp !== undefined && validUntilTimestamp !== undefined && estimatedTimestamp <= validUntilTimestamp)
 	useEffect(() => {

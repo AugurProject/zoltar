@@ -35,3 +35,10 @@ test('requires a fee checkpoint when fees accrue and blocks zero projected payou
 	const depleted = { ...market, valuation: { ...market.valuation, timestamp: 1n, feeEndTime: 100n, projectedCollateralAttoEth: 0n, feeAccounting: { ...accounting, currentRetentionRate: 0n } } }
 	expect(sellHoldingFeeBlocker(depleted, unit, 0n, 2n)).toContain('Holding fees')
 })
+
+test('linear portfolio fee bounds stop at funded expiry for signed returns and liquidity', () => {
+	const linear = { ...market, valuation: { timestamp: 1n, feeEndTime: 100n, projectedCollateralAttoEth: (unit * 8n) / 10n, feeAccounting: { ...accounting, linearFee: { rateAttoEthPerSecond: unit / 100n, endTime: 21n } } } }
+	expect(sellHoldingFeeBlocker(linear, unit, (unit * 8n) / 10n, 1000n)).toBeUndefined()
+	expect(sellHoldingFeeBlocker(linear, unit, (unit * 8n) / 10n + 1n, 1000n)).toContain('Holding fees')
+	expect(liquidityHoldingFeeBlocker(linear, unit, (unit * 125n) / 100n, (unit * 125n) / 100n, 1000n, { completeSetShares: unit, yesUsed: unit, noUsed: unit })).toBeUndefined()
+})

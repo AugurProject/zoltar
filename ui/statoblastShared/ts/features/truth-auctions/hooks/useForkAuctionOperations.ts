@@ -1,6 +1,8 @@
+import { transactionErrorMessages } from '@zoltar/ui-core-shared/lib/errors.js'
+import { isClaimStateChanged } from '../../../protocol/claimActionState.js'
+import { prepareChildPool, initializeChildDisputeHistory } from '../../../protocol/forkPreparation.js'
 import { getUnresolvedEscalationMigrationSubmissionGuard } from '../../../protocol/forkMigrationTiming.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
-import { humanizeTransactionAction } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import { useSignal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
 import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
@@ -19,7 +21,7 @@ import {
 	migrateVaultWithUnresolvedEscalation,
 	type VaultMigrationReviewAmounts,
 } from '../../../protocol/forks.js'
-import { buildForkCarriedEscalationProofs, withdrawForkedEscalationDeposits } from '../../../protocol/reportingCarryState.js'
+import { buildForkCarriedEscalationProofs, withdrawForkedEscalationDeposits, prepareForkClaimCheckpoint, prepareAndSettleForkClaim } from '../../../protocol/reportingCarryState.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { getTruthAuctionBidGuardMessage, getTruthAuctionBidPriceValidationMessage, getTruthAuctionTickAtPrice } from '../lib/truthAuctionBook.js'
@@ -29,7 +31,7 @@ import { normalizeAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import type { ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import { requireDefined } from '@zoltar/ui-core-shared/forms/required.js'
-import { createForkAuctionSuccessPresentation, createForkAuctionTransactionIntent, createForkAuctionWarningPresentation } from '../../transactionPresentations.js'
+import { createForkAuctionSuccessPresentation, createForkAuctionTransactionIntent, createForkAuctionWarningPresentation, getForkAuctionActionTitle } from '../../transactionPresentations.js'
 import { buildWriteActionConfig, runWriteAction, type WriteActionContext } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { parseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
@@ -44,6 +46,7 @@ import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts
 import type { ForkAuctionActionResult, ForkAuctionDetails, TruthAuctionSettlementMode } from '../../../types/contracts.js'
 import type { SettlementSelectedBid } from '../../types.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import { useForkClaimActions, type ForkClaimActionsDependencies } from './useForkClaimActions.js'
 
 type UseForkAuctionOperationsParameters = WriteOperationsParameters & {
 	selectedSecurityPoolAddress?: string
@@ -55,10 +58,9 @@ type ForkAuctionReadClient = {
 
 type ForkAuctionProductionWriteClient = ReturnType<typeof createWalletWriteClient>
 
-type ForkCarriedEscalationProofs = Awaited<ReturnType<typeof buildForkCarriedEscalationProofs>>
-
-export type UseForkAuctionOperationsDependencies<TWriteClient = ForkAuctionProductionWriteClient> = {
-	buildForkCarriedEscalationProofs: (securityPoolAddress: Address, outcome: ReportingOutcomeKey, parentDepositIndexes: readonly bigint[]) => Promise<ForkCarriedEscalationProofs>
+export type UseForkAuctionOperationsDependencies<TWriteClient = ForkAuctionProductionWriteClient> = ForkClaimActionsDependencies<TWriteClient> & {
+	initializeChildDisputeHistory: (client: TWriteClient, parent: Address, universeId: bigint, outcome: ReportingOutcomeKey) => Promise<ForkAuctionActionResult>
+	prepareChildPool: (client: TWriteClient, parent: Address, universeId: bigint, outcome: ReportingOutcomeKey, kind: 'feed' | 'dependencies') => Promise<ForkAuctionActionResult>
 	createChildUniverseFromSecurityPool: (client: TWriteClient, securityPoolAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) => Promise<ForkAuctionActionResult>
 	createConnectedReadClient: () => ForkAuctionReadClient
 	createWalletWriteClient: (walletAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1]) => TWriteClient
@@ -76,10 +78,13 @@ export type UseForkAuctionOperationsDependencies<TWriteClient = ForkAuctionProdu
 	withdrawTruthAuctionRefund: (client: TWriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address) => Promise<ForkAuctionActionResult>
 	startTruthAuctionForSecurityPool: (client: TWriteClient, securityPoolAddress: Address, universeId: bigint) => Promise<ForkAuctionActionResult>
 	submitTruthAuctionBid: (client: TWriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, tick: bigint, amount: bigint) => Promise<ForkAuctionActionResult>
-	withdrawForkedEscalationDeposits: (client: TWriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, proofs: ForkCarriedEscalationProofs) => Promise<ForkAuctionActionResult>
 }
 
 const defaultUseForkAuctionOperationsDependencies: UseForkAuctionOperationsDependencies = {
+	prepareChildPool,
+	initializeChildDisputeHistory,
+	prepareForkClaimCheckpoint,
+	prepareAndSettleForkClaim,
 	buildForkCarriedEscalationProofs: async (securityPoolAddress, outcome, parentDepositIndexes) => await buildForkCarriedEscalationProofs(createConnectedReadClient(), securityPoolAddress, outcome, parentDepositIndexes),
 	createChildUniverseFromSecurityPool: async (client, securityPoolAddress, universeId, outcome) => await createChildUniverseFromSecurityPool(client, securityPoolAddress, universeId, outcome),
 	createConnectedReadClient: () => createConnectedReadClient(),
@@ -124,7 +129,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 	const getActionTitle = (actionName: ForkAuctionActionResult['action'], displayTitleOverride?: string) => {
 		if (displayTitleOverride !== undefined) return displayTitleOverride
 		if (actionName === 'claimAuctionProceeds') return 'Settle finalized bid'
-		return humanizeTransactionAction(actionName)
+		return getForkAuctionActionTitle(actionName)
 	}
 	const getPendingTitle = (actionName: ForkAuctionActionResult['action'], displayTitleOverride?: string) => formatActionTense(getActionTitle(actionName, displayTitleOverride), 'pending')
 	const getSuccessTitle = (actionName: ForkAuctionActionResult['action'], displayTitleOverride?: string) => formatActionTense(getActionTitle(actionName, displayTitleOverride), 'completed')
@@ -167,6 +172,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 		universeIdOverride?: bigint,
 		{ displayTitleOverride }: { displayTitleOverride?: string } = {},
 	) => {
+		if (forkAuctionActiveAction.value !== undefined) return
 		const actionSelectionKey = currentForkAuctionSelectionKey
 		const overrideSelectionKey = securityPoolAddressOverride === undefined ? undefined : (normalizeAddress(securityPoolAddressOverride) ?? '')
 		let transactionSecurityPoolAddress: string | undefined
@@ -218,7 +224,17 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 					if (shouldApplyCurrentSelection()) forkAuctionDetails.value = details
 					if (!isCurrentSelection()) return undefined
 					context.assertActive()
-					return await action(walletAddress, details, isCurrentSelection, context)
+					try {
+						return await action(walletAddress, details, isCurrentSelection, context)
+					} catch (error) {
+						if (isClaimStateChanged(error) && isCurrentSelection()) {
+							context.assertActive()
+							await refreshState()
+							const refreshed = await dependencies.loadForkAuctionDetails(resolvedSecurityPoolAddress)
+							if (shouldApplyCurrentSelection()) forkAuctionDetails.value = refreshed
+						}
+						throw error
+					}
 				},
 				errorFallback,
 				async result => {
@@ -257,6 +273,30 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 			},
 			'Failed to initiate security pool fork',
 		)
+
+	const prepareChild = async (kind: 'feed' | 'dependencies') => {
+		const outcome = forkAuctionForm.value.selectedOutcome
+		await runForkAuctionAction(
+			kind === 'feed' ? 'prepareChildPriceFeed' : 'prepareChildDependencies',
+			async (walletAddress, details, isCurrentSelection, context) => {
+				if (!isCurrentSelection()) return undefined
+				return await dependencies.prepareChildPool(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), details.securityPoolAddress, details.universeId, outcome, kind)
+			},
+			'Failed to prepare child pool',
+		)
+	}
+
+	const initializeChildHistory = async () => {
+		const outcome = forkAuctionForm.value.selectedOutcome
+		await runForkAuctionAction(
+			'initializeChildHistory',
+			async (walletAddress, details, isCurrentSelection, context) => {
+				if (!isCurrentSelection()) return undefined
+				return await dependencies.initializeChildDisputeHistory(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), details.securityPoolAddress, details.universeId, outcome)
+			},
+			'Failed to initialize child dispute history',
+		)
+	}
 
 	const createChildUniverse = async (outcome: ReportingOutcomeKey | bigint) =>
 		await runForkAuctionAction(
@@ -340,6 +380,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 			'startTruthAuction',
 			async (walletAddress, details, isCurrentSelection, context) => {
 				if (!isCurrentSelection()) return undefined
+				if (details.childHistoryReady === false) throw new Error('Initialize all dispute history outcomes first.')
 				return await dependencies.startTruthAuctionForSecurityPool(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), details.securityPoolAddress, details.universeId)
 			},
 			'Failed to start truth auction',
@@ -472,16 +513,26 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 		})()
 	}
 
-	const settleForkedEscalation = async (outcome: ReportingOutcomeKey, parentDepositIndexes: bigint[]) =>
-		await runForkAuctionAction(
-			'settleForkedEscalation',
-			async (walletAddress, details, isCurrentSelection, context) => {
-				const proofs = await dependencies.buildForkCarriedEscalationProofs(details.securityPoolAddress, outcome, parentDepositIndexes)
-				if (!isCurrentSelection()) return undefined
-				return await dependencies.withdrawForkedEscalationDeposits(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), details.securityPoolAddress, outcome, proofs)
-			},
-			'Failed to settle parent deposits',
-		)
+	const { forkClaimPreparation, prepareForkClaim, prepareAndSettleForkDeposit, settleForkedEscalation } = useForkClaimActions({
+		createWriteClient: (walletAddress, context, isCurrentSelection) => {
+			const assertBeforeSubmit = () => {
+				context.assertActive()
+				if (!isCurrentSelection()) throw new Error(transactionErrorMessages.reviewCanceled)
+			}
+			return dependencies.createWalletWriteClient(walletAddress, {
+				assertBeforeSubmit,
+				onTransactionPrepared: preview => {
+					assertBeforeSubmit()
+					onTransactionPrepared?.(preview)
+				},
+				onTransactionSubmitted,
+				reviewSignal: context.reviewSignal,
+			})
+		},
+		dependencies,
+		isActionActive: () => forkAuctionActiveAction.value !== undefined,
+		runAction: runForkAuctionAction,
+	})
 
 	const forkUniverse = async () =>
 		await (() => {
@@ -504,8 +555,13 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 
 	return {
 		claimAuctionProceeds,
+		prepareChild,
 		createChildUniverse,
+		initializeChildHistory,
+		prepareForkClaim,
+		prepareAndSettleForkDeposit,
 		forkAuctionActiveAction: forkAuctionActiveAction.value,
+		forkClaimPreparation,
 		forkAuctionDetails: forkAuctionDetails.value,
 		forkAuctionError: forkAuctionError.value,
 		forkAuctionFeedback: forkAuctionFeedback.value,

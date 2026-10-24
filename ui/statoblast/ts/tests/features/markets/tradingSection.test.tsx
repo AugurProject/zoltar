@@ -272,6 +272,25 @@ void describe('TradingSection', () => {
 		},
 	})
 
+	test('quotes shared backing and discloses the purchase fee when native spare capacity is exhausted', async () => {
+		const onCreateCompleteSet = mock(() => undefined)
+		const selectedPool = createSelectedPool({
+			settlementCollateralAttoEth: 10n ** 18n,
+			shareTokenSupplyAttoShares: 10n ** 18n,
+			totalUnderwritingLimitAttoEth: 10n ** 18n,
+			feeAccrualState: { linearFee: { rateAttoEthPerSecond: 0n, endTime: 100n }, lastUpdatedFeeAccumulator: 0n, feeEndTimestamp: 100n, feeIndexRemainder: 0n, totalFeesOwedRemainder: 0n },
+		})
+		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool, onCreateCompleteSet, tradingForm: createTradingForm({ completeSetAmount: '0.1' }) })} />)
+		cleanupRenderedComponent = rendered.cleanup
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
+		const dialog = within(document.body).getByRole('dialog')
+		expect(within(dialog).getByText('Quoted before submission')).not.toBeNull()
+		expect(dialog.textContent).toContain('quoted purchase fee')
+		expect(getTransactionButtonState(dialog, 'Mint complete sets').disabled).toBe(false)
+		fireEvent.click(within(dialog).getByRole('button', { name: 'Mint complete sets' }))
+		expect(onCreateCompleteSet).toHaveBeenCalledTimes(1)
+	})
+
 	test('keeps an open mint form enabled after the oracle price lapses', async () => {
 		const onCreateCompleteSet = mock(() => undefined)
 		const props = createTradingSectionProps({ onCreateCompleteSet, tradingForm: createTradingForm({ completeSetAmount: '0.1' }) })

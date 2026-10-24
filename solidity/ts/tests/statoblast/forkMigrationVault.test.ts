@@ -286,6 +286,7 @@ describe('Statoblast: fork migration', () => {
 			await forkOwnGameAfterQuestionEnd()
 			const { forkTime } = await getUniverseData(client, genesisUniverse)
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			const migrationDeadline = forkTime + 8n * 7n * DAY
 			await mockWindow.setTime(migrationDeadline - 1n)
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -317,12 +318,13 @@ describe('Statoblast: fork migration', () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			const migratingVaultClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 			await approveAndDepositRepToVault(migratingVaultClient, repDeposit, questionId)
-			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, securityPoolUnderwritingLimitAttoEth)
 			await setVaultCapacityFixture(migratingVaultClient, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, migratingVaultClient.account.address, securityPoolUnderwritingLimitAttoEth)
 			const settlementCollateralAttoEth = 1n * 10n ** 18n
+			await mockWindow.setTime(endTime - 2n)
 			await createCompleteSet(client, securityPoolAddresses.securityPool, settlementCollateralAttoEth)
+			await mockWindow.setTime(endTime + 10000n)
 
 			const forkSourceData = {
 				...questionData,
@@ -385,12 +387,13 @@ describe('Statoblast: fork migration', () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			const unmigratedVaultClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 			await approveAndDepositRepToVault(unmigratedVaultClient, repDeposit, questionId)
-			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, securityPoolUnderwritingLimitAttoEth)
 			await mockWindow.advanceTime(10n * 60n)
 			await setVaultCapacityFixture(unmigratedVaultClient, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, unmigratedVaultClient.account.address, securityPoolUnderwritingLimitAttoEth)
+			await mockWindow.setTime(endTime - 2n)
 			await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+			await mockWindow.setTime(endTime + 10000n)
 
 			const forkSourceData = {
 				...questionData,
@@ -559,6 +562,7 @@ describe('Statoblast: fork migration', () => {
 			const secondForkQuestionId = getQuestionId(secondForkQuestion, outcomes)
 			await createQuestion(client, secondForkQuestion, outcomes)
 			await approveToken(client, childRepToken, getZoltarAddress())
+			await mockWindow.setTime((await getUniverseData(client, genesisUniverse)).forkTime + 70n * DAY)
 			await forkUniverse(client, yesUniverse, secondForkQuestionId)
 
 			const readInactiveForkState = async () => ({
@@ -635,6 +639,7 @@ describe('Statoblast: fork migration', () => {
 			})
 			assert.ok(firstChildRepTotalSupply >= firstChildForkThreshold, 'the normally migrated child REP supply should cover the recursive fork threshold')
 			await approveToken(client, firstChildRepToken, getZoltarAddress())
+			await mockWindow.setTime((await getUniverseData(client, genesisUniverse)).forkTime + 70n * DAY)
 			await forkUniverse(client, firstChildUniverse, questionId)
 			await assert.rejects(initiateSecurityPoolFork(client, firstChildPool.securityPool))
 			strictEqualTypeSafe(await getSystemState(client, firstChildPool.securityPool), SystemState.Operational, 'the rejected recursive fork should leave the fixed child operational')
@@ -684,7 +689,7 @@ describe('Statoblast: fork migration', () => {
 				'an unrelated first fork should leave the first continuation without a fixed outcome',
 			)
 
-			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+			await mockWindow.advanceTime(10n * 7n * DAY + DAY)
 			await startTruthAuction(client, firstChildPool.securityPool)
 			strictEqualTypeSafe(await getSystemState(client, firstChildPool.securityPool), SystemState.Operational, 'first recursive child should become operational before its own fork')
 
@@ -814,7 +819,7 @@ describe('Statoblast: fork migration', () => {
 			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, 20n * 10n ** 18n)
-			await mockWindow.setTime(endTime - 1n)
+			await mockWindow.setTime(endTime - 2n)
 			await createCompleteSet(client, securityPoolAddresses.securityPool, 2n * 10n ** 18n)
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 
@@ -873,7 +878,7 @@ describe('Statoblast: fork migration', () => {
 			const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 4n * forkThresholdAttoRep)
 			const endTime = await getQuestionEndDate(client, questionId)
-			await mockWindow.setTime(endTime - 1n)
+			await mockWindow.setTime(endTime - 2n)
 			await createCompleteSet(client, securityPoolAddresses.securityPool, settlementCollateralAttoEth)
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThresholdAttoRep)

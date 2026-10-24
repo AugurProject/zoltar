@@ -27,6 +27,7 @@ contract TruthAuctionAliasAttackFactoryMock {
 }
 
 contract TruthAuctionAliasAttackParentMock {
+	address public constant portfolioCustody = address(0);
 	SystemState private currentSystemState = SystemState.Operational;
 	ReputationToken private immutable configuredRepToken;
 	ISecurityPoolFactory private immutable configuredFactory;
@@ -89,6 +90,10 @@ contract TruthAuctionAliasAttackParentMock {
 	}
 
 	function totalUnderwritingLimitAttoEth() external pure returns (uint256) {
+		return 0;
+	}
+
+	function getCurrentMintingCapacityAttoEth() external pure returns (uint256) {
 		return 0;
 	}
 

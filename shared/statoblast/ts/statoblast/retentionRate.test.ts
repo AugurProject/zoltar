@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { ORIGIN_POOL_INITIAL_RETENTION_RATE, openInterestFeePerYearBigint, roundedOpenInterestFeePerYear, rpow } from './retentionRate.js'
+import { ORIGIN_POOL_INITIAL_RETENTION_RATE, linearOpenInterestFeePerYearBigint, openInterestFeePerYearBigint, roundedOpenInterestFeePerYear, rpow } from './retentionRate.js'
 
 const precision = 10n ** 18n
 
@@ -31,4 +31,11 @@ test('rounded annual fee rounds half up at the requested precision', () => {
 	if (fee === undefined) throw new Error('Origin pool fee should be defined')
 	const step = 10n ** 16n
 	expect(roundedOpenInterestFeePerYear(ORIGIN_POOL_INITIAL_RETENTION_RATE, 2)).toBe((fee + step / 2n) / step)
+})
+
+test('linear annual display uses the actual funded slope over remaining collateral', () => {
+	expect(linearOpenInterestFeePerYearBigint(1_000_000_000n, precision)).toBe(3_153_600_000_000_000_000n)
+	expect(linearOpenInterestFeePerYearBigint(1_000_000_000n, precision / 2n)).toBe(6_307_200_000_000_000_000n)
+	expect(linearOpenInterestFeePerYearBigint(0n, precision)).toBe(0n)
+	expect(linearOpenInterestFeePerYearBigint(precision, precision)).toBe(100n * precision)
 })

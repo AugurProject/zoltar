@@ -1,3 +1,5 @@
+import type { ImmutableTopologyIdentity } from '../monitoring/topology-identity.ts'
+import { canonicalPoolReportRoutes } from '../monitoring/discovery-price-feed.ts'
 import { discoveryCoverageIsComplete } from '../monitoring/discovery-coverage.ts'
 import { CARRY_STORAGE_MAXIMUM_WITHDRAWALS } from '../monitoring/carry-proof-storage.ts'
 import { scanCarryStorage } from '../monitoring/carry-storage-scan.ts'
@@ -15,7 +17,7 @@ import { OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, protocolIndexDiscoveryInputs, ty
 import { updateProtocolIndexWithQuorum } from '../monitoring/protocol-index-quorum.ts'
 import { snapshotProtocolIndex } from '../state/protocol-index-store.ts'
 import { loadImmutableTopologyCacheWithinLimits, saveImmutableTopologyCache } from '../monitoring/topology-cache.ts'
-import { type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity } from '../monitoring/topology-schema.ts'
+import { type CanonicalImmutableTopologyCache } from '../monitoring/topology-schema.ts'
 import { CHAOS_OPERATION_CATALOG, canonicalLifecyclePresence, evaluateOperationCatalog } from '../operations/catalog.ts'
 import type { CanonicalLifecyclePresence, EcosystemSnapshot, EvaluatedOperation, PlanningOptions } from '../operations/types.ts'
 import { walletInventory, type WalletBalanceState } from '../state/runtime-state.ts'
@@ -224,7 +226,7 @@ async function updateIndexWithQuorum(settings: OperatorSettings, pool: RpcPool, 
 	const connectivity = requiredConnectivity(settings)
 	const auctionAddresses = uniqueAddresses(topology.auctions.map(auction => auction.address))
 	const games = escalationRoutes(topology)
-	const coordinatorReports = topology.pools.filter(candidate => candidate.pendingReportId !== '0').map(candidate => ({ coordinator: candidate.coordinator, pendingReportId: candidate.pendingReportId, repToken: candidate.repToken }))
+	const coordinatorReports = canonicalPoolReportRoutes(topology.pools)
 	const trustedRepTokens = uniqueAddresses(topology.universes.map(candidate => candidate.repToken))
 	return await updateProtocolIndexWithQuorum(
 		{
@@ -256,7 +258,16 @@ async function updateCarryWithQuorum(settings: OperatorSettings, pool: RpcPool, 
 		await Promise.allSettled(
 			chaosReadClients(settings, pool).map(async ({ client, endpoint }) => ({
 				endpoint,
-				update: await scanCarryStorage({ client, wallet, escalationGames: escalationRoutes(topology), securityPoolForker: settings.deployment.securityPoolForker, anchorBlockNumber: anchor.blockNumber, expectedAnchorHash: anchor.blockHash, maximumItems: MAXIMUM_DISCOVERY_AGGREGATE_ITEMS }),
+				update: await scanCarryStorage({
+					client,
+					multicall3: settings.deployment.multicall3,
+					wallet,
+					escalationGames: escalationRoutes(topology),
+					securityPoolForker: settings.deployment.securityPoolForker,
+					anchorBlockNumber: anchor.blockNumber,
+					expectedAnchorHash: anchor.blockHash,
+					maximumItems: MAXIMUM_DISCOVERY_AGGREGATE_ITEMS,
+				}),
 			})),
 		),
 	)
@@ -407,6 +418,7 @@ export async function performCanonicalScan(settings: OperatorSettings, pool: Rpc
 				}
 	const snapshot: EcosystemSnapshot = {
 		...indexedSnapshot,
+		forkedClaimCheckpoints: carryUpdated?.complete === true ? carryUpdated.checkpoints : [],
 		forkedCarryWithdrawalPresence: carryUpdated?.complete === true ? carryUpdated.withdrawalPresence.map(candidate => ({ ...candidate })) : [],
 		forkedCarryWithdrawals: carryUpdated?.complete === true ? carryUpdated.withdrawals.map(candidate => ({ ...candidate, proof: { ...candidate.proof, merkleMountainRangeSiblings: [...candidate.proof.merkleMountainRangeSiblings], nullifierSiblings: [...candidate.proof.nullifierSiblings] } })) : [],
 		warnings: [

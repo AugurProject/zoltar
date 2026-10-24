@@ -1,3 +1,4 @@
+import { seedPortfolioScenario } from './portfolioScenario.js'
 import { getSeededVaultDepositTargetFactorBps } from './seededVaultTarget.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getStatoblastScenarioProtocol as getScenarioProtocol } from './statoblastScenarioProtocol.js'
@@ -233,7 +234,9 @@ export async function forkSecurityPoolUniverseWithOwnEscalation({
 	await getScenarioProtocol().forkZoltarWithOwnEscalation(writeClient, parentPool.securityPoolAddress, parentPool.universeId)
 
 	await reportBootstrapProgress(onProgress, 'Creating and funding Yes child universe', 0.99)
+	await getScenarioProtocol().prepareChildPool(writeClient, parentPool.securityPoolAddress, parentPool.universeId, 'yes', 'dependencies')
 	await getScenarioProtocol().createChildUniverseFromSecurityPool(writeClient, parentPool.securityPoolAddress, parentPool.universeId, 'yes')
+	for (let outcome = 0; outcome < 3; outcome++) await getScenarioProtocol().initializeChildDisputeHistory(writeClient, parentPool.securityPoolAddress, parentPool.universeId, 'yes')
 	await getScenarioProtocol().migrateRepToZoltarFromSecurityPool(writeClient, parentPool.securityPoolAddress, parentPool.universeId, ['yes'])
 }
 
@@ -329,6 +332,13 @@ async function seedFinalizedTruthAuctionScenario(parameters: ScenarioSeedParamet
 
 // Every scenario deploys the app contracts from 0.32 to `deployEnd` on the progress bar, then seeds from there.
 const STATOBLAST_SCENARIO_SEEDING: Record<StatoblastScenario, { deployEnd: number; seed: (parameters: ScenarioSeedParameters) => Promise<unknown> }> = {
+	portfolio: {
+		deployEnd: 0.7,
+		seed: async parameters => {
+			await seedSecurityPoolX2Scenario(parameters)
+			await seedPortfolioScenario(parameters)
+		},
+	},
 	'security-pool': { deployEnd: 0.78, seed: seedSecurityPoolScenario },
 	securitypoolx2: { deployEnd: 0.7, seed: seedSecurityPoolX2Scenario },
 	'securitypoolx2-auction': { deployEnd: 0.7, seed: parameters => seedSecurityPoolX2AuctionScenario(parameters, 'Seeded securitypoolx2-auction scenario is ready') },

@@ -177,6 +177,8 @@ export type UniverseForkReplay = {
 }
 
 export type EscalationLifecycleReplay = {
+	ordinarySettlementOutcome?: bigint
+	ordinaryWinningReserveAttoRep?: bigint
 	activationTime?: bigint
 	startBondAttoRep?: bigint
 	nonDecisionThresholdAttoRep?: bigint
@@ -320,7 +322,8 @@ export type ReplayState = {
 	escalationForkedEscrow: Map<Address, Map<string, ForkedEscrowReplay>>
 	escalationVaultExports: Map<Address, Map<Address, VaultUnresolvedExportReplay>>
 	escalationForkedExports: Map<Address, Map<Address, ForkedEscrowExportReplay>>
-	escalationResidualRepSwept: Map<Address, bigint>
+	escalationSurplusAccrued: Map<Address, bigint>
+	escalationResidualRepBurned: Map<Address, bigint>
 	escalationTotalEscrowedRep: Map<Address, bigint>
 	auctionBids: Map<Address, Map<string, AuctionBidReplay>>
 	auctions: Map<Address, AuctionLifecycleReplay>
@@ -373,7 +376,8 @@ export function createReplayState(): ReplayState {
 		escalationForkedEscrow: new Map(),
 		escalationVaultExports: new Map(),
 		escalationForkedExports: new Map(),
-		escalationResidualRepSwept: new Map(),
+		escalationSurplusAccrued: new Map(),
+		escalationResidualRepBurned: new Map(),
 		escalationTotalEscrowedRep: new Map(),
 		auctionBids: new Map(),
 		auctions: new Map(),
@@ -1010,6 +1014,35 @@ export function reduceForkerEvent(state: ReplayState, log: ReplayLog) {
 }
 
 export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
+	if (log.eventName === 'OrdinarySettlementInitialized') {
+		const outcome = requireBigInt(log.args, 'outcome')
+		if (outcome < 0n || outcome > 2n) throw new Error('ordinary settlement outcome is out of range')
+		const lifecycle = state.escalationLifecycles.get(log.emitter) ?? {}
+		lifecycle.ordinarySettlementOutcome = outcome
+		lifecycle.ordinaryWinningReserveAttoRep = requireBigInt(log.args, 'reservedAttoRep')
+		state.escalationLifecycles.set(log.emitter, lifecycle)
+		state.escalationTotalEscrowedRep.set(log.emitter, requireBigInt(log.args, 'winningPrincipalAttoRep'))
+		// These maps expose effective rights; immutable deposit/consumption evidence stays intact.
+		for (const index of [0, 1, 2] as const) {
+			if (BigInt(index) === outcome) continue
+			const roots = state.escalationCarryRoots.get(log.emitter)
+			const peaks = state.escalationCarryPeaks.get(log.emitter)
+			const leaves = state.escalationCarryLeaves.get(log.emitter)
+			const counts = state.escalationLeafCounts.get(log.emitter)
+			const totals = state.escalationUnresolvedTotals.get(log.emitter)
+			const nullifiers = state.escalationNullifierRoots.get(log.emitter)
+			if (roots !== undefined) roots[index] = ZERO_HASH
+			if (peaks !== undefined) peaks[index] = []
+			if (leaves !== undefined) leaves[index] = []
+			if (counts !== undefined) counts[index] = 0n
+			if (totals !== undefined) totals[index] = 0n
+			if (nullifiers !== undefined) nullifiers[index] = getEmptyNullifierRoot()
+			for (const vaultTotals of state.escalationLocalUnresolvedByVault.get(log.emitter)?.values() ?? []) vaultTotals[index] = 0n
+		}
+		const escrow = getOrCreateNestedMap(state.escalationVaultEscrowedRep, log.emitter)
+		for (const [vault, totals] of state.escalationLocalUnresolvedByVault.get(log.emitter) ?? []) escrow.set(vault, totals[Number(outcome)] ?? 0n)
+		return
+	}
 	if (log.eventName === 'TruthAuctionHaircutApplied') {
 		const repBefore = requireBigInt(log.args, 'repBefore')
 		const repRemaining = requireBigInt(log.args, 'repRemaining')
@@ -1247,6 +1280,12 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 	}
 	if (log.eventName === 'ClaimDeposit') {
 		const outcome = requireBigInt(log.args, 'outcome')
+		const lifecycle = state.escalationLifecycles.get(log.emitter)
+		if (lifecycle?.ordinaryWinningReserveAttoRep !== undefined) {
+			const consumedReserve = requireBigInt(log.args, 'amountToWithdrawAttoRep') + requireBigInt(log.args, 'burnAmountAttoRep')
+			if (consumedReserve > lifecycle.ordinaryWinningReserveAttoRep) throw new Error('ordinary winning reserve cannot become negative')
+			lifecycle.ordinaryWinningReserveAttoRep -= consumedReserve
+		}
 		const parentDepositIndex = requireBigInt(log.args, 'parentDepositIndex')
 		getOrCreateNestedMap(state.escalationClaims, log.emitter).set(`${outcome.toString()}:${parentDepositIndex.toString()}`, {
 			depositor: requireAddress(log.args, 'depositor'),
@@ -1312,8 +1351,11 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 		}
 		return
 	}
-	if (log.eventName === 'ResidualRepSweptToSecurityPool') {
-		state.escalationResidualRepSwept.set(log.emitter, (state.escalationResidualRepSwept.get(log.emitter) ?? 0n) + requireBigInt(log.args, 'amountAttoRep'))
+	if (log.eventName === 'EscalationSurplusAccrued') {
+		state.escalationSurplusAccrued.set(log.emitter, requireBigInt(log.args, 'cumulativeSurplusAttoRep'))
+	}
+	if (log.eventName === 'OrdinaryResidualRepBurned' || log.eventName === 'ForkContinuationResidualRepBurned') {
+		state.escalationResidualRepBurned.set(log.emitter, (state.escalationResidualRepBurned.get(log.emitter) ?? 0n) + requireBigInt(log.args, 'amountAttoRep'))
 	}
 }
 

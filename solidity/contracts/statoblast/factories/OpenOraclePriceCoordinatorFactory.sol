@@ -9,6 +9,8 @@ import { ReputationToken } from '../../ReputationToken.sol';
 import { OpenOraclePriceCoordinator } from '../OpenOraclePriceCoordinator.sol';
 import { LiquidationApprovalRegistry } from '../LiquidationApprovalRegistry.sol';
 import { Create2Deployment } from './Create2Deployment.sol';
+import { SharedPoolPriceFeed } from '../SharedPoolPriceFeed.sol';
+import { OpenOracleReportDelegate } from '../OpenOracleReportDelegate.sol';
 
 contract CreationCodeChunk {
 	constructor(bytes memory data) {
@@ -72,32 +74,61 @@ contract LiquidationApprovalRegistryDeployer {
 }
 
 contract PriceCoordinatorDeploymentWorker {
-	address private immutable factory;
+	OpenOracleReportDelegate public immutable reportDelegate;
+	mapping(address => address) private deployers;
 	address private immutable creationCodeFirstChunk;
 	address private immutable creationCodeSecondChunk;
 
 	constructor() {
-		factory = msg.sender;
 		(creationCodeFirstChunk, creationCodeSecondChunk) = CreationCodeStorage.store(type(OpenOraclePriceCoordinator).creationCode);
+		reportDelegate = new OpenOracleReportDelegate();
 	}
 
 	function deploy(bytes calldata constructorArguments, bytes32 salt) external returns (OpenOraclePriceCoordinator) {
-		require(msg.sender == factory, 'Only factory');
-		bytes memory initCode = abi.encodePacked(CreationCodeStorage.load(creationCodeFirstChunk, creationCodeSecondChunk), constructorArguments);
-		address deployed = Create2Deployment.deploy(initCode, salt);
+		bytes memory initCode = abi.encodePacked(CreationCodeStorage.load(creationCodeFirstChunk, creationCodeSecondChunk), constructorArguments, abi.encode(reportDelegate));
+		address deployed = Create2Deployment.deploy(initCode, keccak256(abi.encode(msg.sender, salt)));
 		require(deployed != address(0), 'Price coordinator deployment failed');
+		deployers[deployed] = msg.sender;
 		return OpenOraclePriceCoordinator(deployed);
 	}
 
+	function configureSecurityPool(OpenOraclePriceCoordinator coordinator, ISecurityPool pool) external {
+		require(deployers[address(coordinator)] == msg.sender, 'Only coordinator factory');
+		coordinator.setSecurityPool(pool);
+	}
+
 	function configureLiquidationApprovalRegistry(OpenOraclePriceCoordinator coordinator, LiquidationApprovalRegistry registry) external {
-		require(msg.sender == factory, 'Only factory');
+		require(deployers[address(coordinator)] == msg.sender, 'Only coordinator factory');
 		coordinator.setLiquidationApprovalRegistry(registry);
+	}
+	function configureSharedPriceFeed(OpenOraclePriceCoordinator coordinator, address feed) external {
+		require(deployers[address(coordinator)] == msg.sender, 'Only coordinator factory');
+		coordinator.setSharedPriceFeed(SharedPoolPriceFeed(payable(feed)));
+	}
+}
+
+contract SharedPoolPriceFeedDeploymentWorker {
+	address private immutable creationCodeFirstChunk;
+	address private immutable creationCodeSecondChunk;
+
+	constructor() {
+		(creationCodeFirstChunk, creationCodeSecondChunk) = CreationCodeStorage.store(type(SharedPoolPriceFeed).creationCode);
+	}
+
+	function deploy(address coordinator, address securityPoolFactory, address portfolio, uint248 universeId, ReputationToken reputationToken, bytes32 salt) external returns (SharedPoolPriceFeed) {
+		bytes memory initCode = abi.encodePacked(CreationCodeStorage.load(creationCodeFirstChunk, creationCodeSecondChunk), abi.encode(coordinator, securityPoolFactory, portfolio, universeId, reputationToken));
+		address deployed = Create2Deployment.deploy(initCode, keccak256(abi.encode(msg.sender, salt)));
+		require(deployed != address(0), 'Shared price feed deployment failed');
+		return SharedPoolPriceFeed(payable(deployed));
 	}
 }
 
 contract OpenOraclePriceCoordinatorFactory {
 	LiquidationApprovalRegistryDeployer private immutable liquidationApprovalRegistryDeployer;
 	PriceCoordinatorDeploymentWorker private immutable priceCoordinatorDeploymentWorker;
+	SharedPoolPriceFeedDeploymentWorker private immutable sharedPoolPriceFeedDeploymentWorker;
+	mapping(address => address) private coordinatorDeployers;
+	mapping(address => address) private feedDeployers;
 	IWeth9 public immutable weth;
 	uint256 public immutable gasConsumedOpenOracleReportPrice;
 	uint32 public immutable gasConsumedSettlement;
@@ -116,9 +147,11 @@ contract OpenOraclePriceCoordinatorFactory {
 	uint256 public immutable maxSettlementBaseFeeMultiplierBps;
 	uint256 public immutable minLiquidationPriceDistanceBps;
 
-	constructor(IWeth9 _weth, uint256 _gasConsumedOpenOracleReportPrice, uint32 _gasConsumedSettlement, uint256 _gasUnitsForOneDispute, uint256 _targetPriceErrorForDispute, uint256 _openOracleSecurityMultiplierBps, uint48 _settlementTime, uint24 _disputeDelay, uint24 _protocolFee, uint24 _feePercentage, uint16 _multiplier, bool _timeType, bool _trackDisputes, address _protocolFeeRecipient, uint256 _escalationHaltMultiplierBps, uint256 _maxSettlementBaseFeeMultiplierBps, uint256 _minLiquidationPriceDistanceBps) {
+	constructor(IWeth9 _weth, uint256 _gasConsumedOpenOracleReportPrice, uint32 _gasConsumedSettlement, uint256 _gasUnitsForOneDispute, uint256 _targetPriceErrorForDispute, uint256 _openOracleSecurityMultiplierBps, uint48 _settlementTime, uint24 _disputeDelay, uint24 _protocolFee, uint24 _feePercentage, uint16 _multiplier, bool _timeType, bool _trackDisputes, address _protocolFeeRecipient, uint256 _escalationHaltMultiplierBps, uint256 _maxSettlementBaseFeeMultiplierBps, uint256 _minLiquidationPriceDistanceBps, PriceCoordinatorDeploymentWorker _priceCoordinatorDeploymentWorker, SharedPoolPriceFeedDeploymentWorker _sharedPoolPriceFeedDeploymentWorker) {
 		liquidationApprovalRegistryDeployer = new LiquidationApprovalRegistryDeployer();
-		priceCoordinatorDeploymentWorker = new PriceCoordinatorDeploymentWorker();
+		require(address(_priceCoordinatorDeploymentWorker).code.length != 0 && address(_sharedPoolPriceFeedDeploymentWorker).code.length != 0, 'Deployment workers missing');
+		priceCoordinatorDeploymentWorker = _priceCoordinatorDeploymentWorker;
+		sharedPoolPriceFeedDeploymentWorker = _sharedPoolPriceFeedDeploymentWorker;
 		weth = _weth;
 		gasConsumedOpenOracleReportPrice = _gasConsumedOpenOracleReportPrice;
 		gasConsumedSettlement = _gasConsumedSettlement;
@@ -143,6 +176,24 @@ contract OpenOraclePriceCoordinatorFactory {
 		OpenOraclePriceCoordinator coordinator = priceCoordinatorDeploymentWorker.deploy(abi.encode(_openOracle, _reputationToken, weth, gasConsumedOpenOracleReportPrice, gasConsumedSettlement, gasUnitsForOneDispute, _initialReportPriorityFeeAttoEthPerGas, targetPriceErrorForDispute, openOracleSecurityMultiplierBps, settlementTime, disputeDelay, protocolFee, feePercentage, multiplier, timeType, trackDisputes, protocolFeeRecipient, escalationHaltMultiplierBps, maxSettlementBaseFeeMultiplierBps, minLiquidationPriceDistanceBps), deploymentSalt);
 		LiquidationApprovalRegistry registry = liquidationApprovalRegistryDeployer.deploy(address(coordinator), deploymentSalt);
 		priceCoordinatorDeploymentWorker.configureLiquidationApprovalRegistry(coordinator, registry);
+		coordinatorDeployers[address(coordinator)] = msg.sender;
 		return coordinator;
+	}
+
+	function deploySharedPoolPriceFeed(OpenOraclePriceCoordinator coordinator, address portfolio, uint248 universeId, ReputationToken reputationToken, bytes32 salt) external returns (SharedPoolPriceFeed feed) {
+		require(coordinatorDeployers[address(coordinator)] == msg.sender, 'Only coordinator deployer');
+		feed = sharedPoolPriceFeedDeploymentWorker.deploy(address(coordinator), msg.sender, portfolio, universeId, reputationToken, keccak256(abi.encode(msg.sender, salt)));
+		feedDeployers[address(feed)] = msg.sender;
+	}
+
+	function configureSecurityPool(OpenOraclePriceCoordinator coordinator, ISecurityPool pool) external {
+		require(coordinatorDeployers[address(coordinator)] == msg.sender, 'Only coordinator deployer');
+		priceCoordinatorDeploymentWorker.configureSecurityPool(coordinator, pool);
+	}
+
+	function configureSharedPriceFeed(OpenOraclePriceCoordinator coordinator, SharedPoolPriceFeed feed) external {
+		require(coordinatorDeployers[address(coordinator)] == msg.sender, 'Only coordinator deployer');
+		require(feedDeployers[address(feed)] == msg.sender, 'Shared feed deployer mismatch');
+		priceCoordinatorDeploymentWorker.configureSharedPriceFeed(coordinator, address(feed));
 	}
 }

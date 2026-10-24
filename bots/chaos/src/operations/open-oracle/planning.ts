@@ -1,3 +1,4 @@
+import { canonicalPoolReportRoutes } from '../../monitoring/discovery-price-feed.ts'
 import { zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, trustedOpenOracleReportPredicate } from '../../monitoring/protocol-index.ts'
 import { amount, erc20WalletDebit, eventTopic, openOracleCreditDebit } from '../planning.ts'
@@ -60,7 +61,7 @@ export function exactTokenTransferEvidence(snapshot: EcosystemSnapshot, token: `
 
 export function trustedReportPredicate(snapshot: EcosystemSnapshot) {
 	return trustedOpenOracleReportPredicate({
-		coordinatorReports: snapshot.pools.flatMap(pool => (pool.pendingReportId === '0' ? [] : [{ coordinator: pool.coordinator, pendingReportId: pool.pendingReportId, repToken: pool.repToken }])),
+		coordinatorReports: canonicalPoolReportRoutes(snapshot.pools),
 		maximumSettlementStepGasLimit: OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT,
 		openOracle: snapshot.deployments.openOracle,
 		trustedRepTokens: snapshot.universes.map(universe => universe.repToken),

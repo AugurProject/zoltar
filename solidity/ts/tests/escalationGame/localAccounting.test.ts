@@ -45,6 +45,44 @@ describe('Escalation Game: local accounting and exports', () => {
 		client = fixture.client
 	})
 
+	test('charges released surplus only against the new report collateral and cannot dilute earlier reporters', async () => {
+		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
+		const yesReporter = client.account.address
+		const noReporter = addressString(TEST_ADDRESSES[1])
+		const invalidReporter = addressString(TEST_ADDRESSES[2])
+		const backing = (vault: Address) => client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'getVaultDisputeBackingAttoRep', args: [vault] })
+		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, yesReporter, QuestionOutcome.Yes, 30n * reportBond)
+		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, noReporter, QuestionOutcome.No, 20n * reportBond)
+		assert.strictEqual(await backing(yesReporter), 30n * reportBond)
+		assert.strictEqual(await backing(noReporter), 20n * reportBond)
+		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, invalidReporter, QuestionOutcome.Invalid, 10n * reportBond)
+		assert.strictEqual(await backing(yesReporter), 30n * reportBond, 'a third-party report must not remove existing YES collateral credit')
+		assert.strictEqual(await backing(noReporter), 20n * reportBond, 'a third-party report must not remove existing NO collateral credit')
+		assert.strictEqual(await backing(invalidReporter), 0n, 'REP released by this report cannot also back its own underwriting')
+		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, invalidReporter, QuestionOutcome.Invalid, 15n * reportBond)
+		assert.strictEqual(await backing(invalidReporter), 5n * reportBond, 'only the part retained in escrow creates new collateral credit')
+		assert.strictEqual(
+			(await backing(yesReporter)) + (await backing(noReporter)) + (await backing(invalidReporter)),
+			await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'getDisputeBackingAttoRep' }),
+			'collateral credit must conserve actual funded escrow',
+		)
+	})
+
+	test('ordinary finality retires losing exports while retaining winner claims', async () => {
+		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
+		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond)
+		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.No, 2n * reportBond)
+		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, reportBond)
+		await mockWindow.setTime((await getActivationTime(client, escalationGameAddress)) + ESCALATION_TIME_LENGTH + 1n)
+		await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'settleOrdinaryGame' }))
+		await assert.rejects(client.writeContract({ abi: escalationGameProofTestPoolArtifact.abi, address: testSecurityPoolAddress, functionName: 'exportLocalUnresolvedDeposit', args: [0n, QuestionOutcome.No] }), /Final claims not exportable/)
+		await assert.rejects(client.writeContract({ abi: escalationGameProofTestPoolArtifact.abi, address: testSecurityPoolAddress, functionName: 'exportVaultUnresolvedDeposits', args: [client.account.address] }), /Final claims not exportable/)
+		await assertEscrowAccounting(escalationGameAddress, 3n * reportBond)
+		await claimDepositForWinningViaTestSecurityPool(testSecurityPoolAddress, 0n, QuestionOutcome.Yes)
+		await assertEscrowAccounting(escalationGameAddress, 0n)
+		assert.strictEqual(await getERC20Balance(client, getRepTokenAddress(0n), escalationGameAddress), 0n, 'winner liabilities must remain completely payable after surplus recovery')
+	})
+
 	test('proof-backed withdrawDeposit reverts before question finalization', async () => {
 		const parent = await deployEscalationGameWithProofPool()
 		await startEscalation(parent.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep)
@@ -82,7 +120,7 @@ describe('Escalation Game: local accounting and exports', () => {
 				abi: escalationGameProofTestPoolArtifact.abi,
 				address: deployment.testSecurityPoolAddress,
 				functionName: 'exportVaultUnresolvedDeposits',
-				args: [client.account.address, receiver],
+				args: [client.account.address],
 			}),
 		)
 		const receiverBalanceAfterExport = await getERC20Balance(client, repToken, receiver)
@@ -98,11 +136,11 @@ describe('Escalation Game: local accounting and exports', () => {
 				abi: escalationGameProofTestPoolArtifact.abi,
 				address: deployment.testSecurityPoolAddress,
 				functionName: 'exportVaultUnresolvedDeposits',
-				args: [client.account.address, receiver],
+				args: [client.account.address],
 			}),
 			/Vault totals exported/,
 		)
-		assert.strictEqual(receiverBalanceAfterExport - receiverBalanceBefore, BigInt(depositCount) * reportBond, 'one export should transfer the complete aggregate vault principal')
+		assert.strictEqual(receiverBalanceAfterExport, receiverBalanceBefore, 'migration exports only nominal claim metadata; mutually exclusive principal cannot be withdrawn as cash')
 		assert.strictEqual(localPrincipalAfterExport, 0n, 'aggregate export should clear the vault outcome total')
 		assert.strictEqual(await readCarryTotal(client, deployment.escalationGameAddress, QuestionOutcome.Yes), carryTotalBeforeExport, 'aggregate export should leave the immutable parent carry commitment unchanged')
 	})
@@ -150,53 +188,64 @@ describe('Escalation Game: local accounting and exports', () => {
 		)
 	})
 
-	test('stateful local accounting model stays balanced across randomized deposits, exports, and claims', async () => {
-		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameWithProofPool()
-		await startEscalation(escalationGameAddress, reportBond, nonDecisionThresholdAttoRep)
-		const firstVault = client.account.address
-		const secondVault = addressString(TEST_ADDRESSES[1])
-		const vaults = [firstVault, secondVault, addressString(TEST_ADDRESSES[2])]
-		const deposits: LocalAccountingDeposit[] = []
-		const nextRandom = createDeterministicRng(0x5eedn)
+	for (const exportBeforeFinality of [false, true])
+		test(`stateful local accounting remains balanced across randomized deposits and ${exportBeforeFinality ? 'exports, rejecting underfunded ordinary settlement' : 'ordinary claims'}`, async () => {
+			const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameWithProofPool()
+			await startEscalation(escalationGameAddress, reportBond, nonDecisionThresholdAttoRep)
+			const firstVault = client.account.address
+			const secondVault = addressString(TEST_ADDRESSES[1])
+			const vaults = [firstVault, secondVault, addressString(TEST_ADDRESSES[2])]
+			const deposits: LocalAccountingDeposit[] = []
+			const nextRandom = createDeterministicRng(0x5eedn)
 
-		const exportVault = async (vault: Address) => {
-			await writeContractAndWait(client, async () =>
-				client.writeContract({
-					abi: escalationGameProofTestPoolArtifact.abi,
-					address: testSecurityPoolAddress,
-					functionName: 'exportVaultUnresolvedDeposits',
-					args: [vault, client.account.address],
-				}),
-			)
+			const exportVault = async (vault: Address) => {
+				await writeContractAndWait(client, async () =>
+					client.writeContract({
+						abi: escalationGameProofTestPoolArtifact.abi,
+						address: testSecurityPoolAddress,
+						functionName: 'exportVaultUnresolvedDeposits',
+						args: [vault],
+					}),
+				)
 
-			for (const deposit of deposits) {
-				if (deposit.vault === vault) deposit.escrowed = false
+				for (const deposit of deposits) {
+					if (deposit.vault === vault) deposit.escrowed = false
+				}
 			}
-		}
 
-		for (let depositIndex = 0; depositIndex < 18; depositIndex += 1) {
-			const vault = ensureDefined(vaults[nextRandom() % vaults.length], 'random vault index is out of range')
-			const amountAttoRep = BigInt((nextRandom() % 5) + 1) * reportBond
-			await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, vault, QuestionOutcome.Yes, amountAttoRep)
-			deposits.push({ vault, amountAttoRep, depositIndex: BigInt(depositIndex), carryActive: true, escrowed: true })
-			await assertLocalYesAccountingModel(escalationGameAddress, vaults, deposits)
-		}
-		await exportVault(firstVault)
-		await assertLocalYesAccountingModel(escalationGameAddress, vaults, deposits)
-		await exportVault(secondVault)
-		await assertLocalYesAccountingModel(escalationGameAddress, vaults, deposits)
+			for (let depositIndex = 0; depositIndex < 18; depositIndex += 1) {
+				const vault = ensureDefined(vaults[nextRandom() % vaults.length], 'random vault index is out of range')
+				const amountAttoRep = BigInt((nextRandom() % 5) + 1) * reportBond
+				await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, vault, QuestionOutcome.Yes, amountAttoRep)
+				deposits.push({ vault, amountAttoRep, depositIndex: BigInt(depositIndex), carryActive: true, escrowed: true })
+				await assertLocalYesAccountingModel(escalationGameAddress, vaults, deposits)
+			}
+			if (exportBeforeFinality) {
+				await exportVault(firstVault)
+				await assertLocalYesAccountingModel(escalationGameAddress, vaults, deposits)
+				await exportVault(secondVault)
+				await assertLocalYesAccountingModel(escalationGameAddress, vaults, deposits)
+			}
 
-		const activationTime = await getActivationTime(client, escalationGameAddress)
-		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
-		const activeClaimOrder = deposits.filter(deposit => deposit.escrowed).sort((left, right) => Number.parseInt(((left.depositIndex * 17n) % 31n).toString(), 10) - Number.parseInt(((right.depositIndex * 17n) % 31n).toString(), 10))
+			const activationTime = await getActivationTime(client, escalationGameAddress)
+			await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
+			// Production exports follow a fork and transfer no principal. Simulate the
+			// separate migration drain before attempting invalid ordinary settlement.
+			if (exportBeforeFinality) {
+				await writeContractAndWait(client, () => client.writeContract({ abi: escalationGameProofTestPoolArtifact.abi, address: testSecurityPoolAddress, functionName: 'drainAllRep', args: [client.account.address] }))
+				await assert.rejects(client.writeContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'settleOrdinaryGame' }), /Winner reserve underfunded/)
+				await assertLocalYesAccountingModel(escalationGameAddress, vaults, deposits)
+				return
+			}
+			const activeClaimOrder = deposits.filter(deposit => deposit.escrowed).sort((left, right) => Number.parseInt(((left.depositIndex * 17n) % 31n).toString(), 10) - Number.parseInt(((right.depositIndex * 17n) % 31n).toString(), 10))
 
-		for (const deposit of activeClaimOrder) {
-			await claimDepositForWinningViaTestSecurityPool(testSecurityPoolAddress, deposit.depositIndex, QuestionOutcome.Yes)
-			deposit.carryActive = false
-			deposit.escrowed = false
-			await assertLocalYesAccountingModel(escalationGameAddress, vaults, deposits)
-		}
-	})
+			for (const deposit of activeClaimOrder) {
+				await claimDepositForWinningViaTestSecurityPool(testSecurityPoolAddress, deposit.depositIndex, QuestionOutcome.Yes)
+				deposit.carryActive = false
+				deposit.escrowed = false
+				await assertLocalYesAccountingModel(escalationGameAddress, vaults, deposits)
+			}
+		})
 
 	test('deposit events expose updated local escrow totals', async () => {
 		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()

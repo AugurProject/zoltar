@@ -291,9 +291,9 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 
 		const childGame = await advancePastOrdinaryEscalationDeadline(client, mockWindow, childPool.securityPool)
 		await withdrawFirstDepositOfEachOutcome(attacker, childPool.securityPool)
-		strictEqualTypeSafe(await getERC20Balance(client, childRepToken, childGame), lowLosingPrincipal, 'the ordinary child game should retain the low losing side as residual')
+		strictEqualTypeSafe(await getERC20Balance(client, childRepToken, childGame), 0n, 'the ordinary child already discharged its low side before finality')
 
-		await sweepResidualRep(attacker, childGame)
+		await assert.rejects(sweepResidualRep(attacker, childGame), /No sweepable REP/)
 		const honestPayout = await redeemOwnVaultPayout(client, childPool.securityPool, childRepToken)
 		const honestResidual = honestPayout - repDeposit
 
@@ -309,7 +309,7 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 			data: encodeDeployData({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
 				bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
-				args: [securityPoolAddresses.securityPool, repToken, infra.escalationGameProofVerifier, infra.escalationGameClaimDelegate],
+				args: [securityPoolAddresses.securityPool, repToken, infra.escalationGameProofVerifier, infra.escalationGameClaimDelegate, infra.escalationGameDepositDelegate],
 			}),
 		})
 		const deploymentReceipt = await attacker.waitForTransactionReceipt({ hash: deploymentHash })

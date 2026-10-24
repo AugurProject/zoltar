@@ -34,11 +34,13 @@ function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetails> = {
 		badDebtAttoEth: 0n,
 		currentRetentionRate: 10n,
 		disputeStakedAttoRep: 3n * 10n ** 18n,
+		disputeBackingAttoRep: overrides.disputeBackingAttoRep ?? overrides.disputeStakedAttoRep ?? 3n * 10n ** 18n,
 		managerAddress: zeroAddress,
 		minimumVaultRepDepositAttoRep: 10n * 10n ** 18n,
 		openInterestAttoEth: 1n * 10n ** 18n,
 		poolHeldRepPerCapacityBps: 60_000n,
 		totalRepBackingUnits: 1n,
+		totalPoolHeldRepBalanceAttoRep: 12n * 10n ** 18n,
 		vaultAttoRepBacking: 12n * 10n ** 18n,
 		repToken: zeroAddress,
 		underwritingLimitAttoEth: 2n * 10n ** 18n,
@@ -920,7 +922,7 @@ describe('SecurityVaultSection', () => {
 		{ setting: 'open-oracle-fallback', quote: 3n * 10n ** 18n, ratio: '2.5×', status: 'via Uniswap' },
 		{ setting: 'open-oracle-fallback', quote: undefined, ratio: undefined, status: 'No REP price' },
 	] as const)('honors $setting for vault health and ratios after the oracle expires ($status)', async ({ setting, quote, ratio, status }) => {
-		const repPrice = resolveRepPrice({ now: 10n ** 6n, poolOracle: { price: 10n ** 18n, settlementTimestamp: 1n }, setting, uniswapPrice: quote })
+		const repPrice = resolveRepPrice({ now: 10n ** 6n, poolOracle: { price: 10n ** 18n, settlementTimestamp: 1n, validUntil: 781n }, setting, uniswapPrice: quote })
 		const renderedComponent = await renderIntoDocument(
 			<SelectedPoolRepPriceContext.Provider value={repPrice}>
 				<SecurityVaultSection {...createSecurityVaultSectionProps({ repPerEthPrice: repPrice.price })} />
@@ -1153,7 +1155,7 @@ describe('SecurityVaultSection', () => {
 	})
 
 	test('labels withdrawable REP with the source and staleness of the price it uses', async () => {
-		const repPrice = resolveRepPrice({ now: 10n ** 6n, poolOracle: { price: 3n * 10n ** 18n, settlementTimestamp: 1n }, setting: 'open-oracle', uniswapPrice: undefined })
+		const repPrice = resolveRepPrice({ now: 10n ** 6n, poolOracle: { price: 3n * 10n ** 18n, settlementTimestamp: 1n, validUntil: 781n }, setting: 'open-oracle', uniswapPrice: undefined })
 		const renderedComponent = await renderIntoDocument(
 			<SelectedPoolRepPriceContext.Provider value={repPrice}>
 				<SecurityVaultSection {...createSecurityVaultSectionProps({ modalFirst: true, repPerEthPrice: repPrice.price, selectedPoolStatoblastSecurityMultiplierBps: 20_000n })} />

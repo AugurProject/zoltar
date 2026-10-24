@@ -59,6 +59,7 @@ function settings(readRpcUrl: string, quorumRpcUrls: string[]): OperatorSettings
 			rpcQuorum: 2,
 		},
 		deployment: {
+			multicall3: zeroAddress,
 			openOracle: zeroAddress,
 			questionData: zeroAddress,
 			securityPoolFactory: zeroAddress,

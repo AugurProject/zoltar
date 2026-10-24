@@ -206,7 +206,9 @@ export function useSelectedAuctionReadState({
 				if (cancelled) return
 				// Splitting pool-held REP into a child universe can't be undone. A refresh right after a vault migration sweeps the staged REP into a child
 				// pool the pool list hasn't loaded yet reads neither balance, so it must not regress an already seeded outcome to "not migrated".
-				setSelectedOutcomeMigrationSeedStatusEntry(previous => (previous !== undefined && previous.key === selectedOutcomeMigrationSeedStatusKey && previous.status.seeded && !status.seeded ? previous : { key: selectedOutcomeMigrationSeedStatusKey, status }))
+				setSelectedOutcomeMigrationSeedStatusEntry(previous =>
+					previous !== undefined && previous.key === selectedOutcomeMigrationSeedStatusKey && previous.status.seeded && !status.seeded ? { key: selectedOutcomeMigrationSeedStatusKey, status: { ...status, seeded: true } } : { key: selectedOutcomeMigrationSeedStatusKey, status },
+				)
 			})
 			.catch(error => {
 				if (cancelled) return

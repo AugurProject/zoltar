@@ -23,9 +23,20 @@ describe('vault bundle preview guards', () => {
 		expect(() => previewVaultOperations(pool, owned, [{ ...target, vaultAttoRepBacking: 0n }], input, unit, 0n)).toThrow('backing')
 	})
 	test('previews liquidation followed by withdrawal for a sufficiently distant target', () => {
-		const preview = previewVaultOperations(pool, owned, [{ ...target, vaultAttoRepBacking: 100n * unit }], input, unit, 1000n)
+		const liquidatableTarget = { ...target, vaultAttoRepBacking: 100n * unit }
+		const totalPoolHeldAttoRep = owned.vaultAttoRepBacking + liquidatableTarget.vaultAttoRepBacking
+		const receiver = { ...owned, totalPoolHeldRepBalanceAttoRep: totalPoolHeldAttoRep }
+		const preview = previewVaultOperations({ ...pool, totalPoolHeldAttoRep }, receiver, [liquidatableTarget], input, unit, 1000n)
 		expect(preview.commitment).toBe(100n * unit)
-		expect(preview.backing).toBeGreaterThan(owned.vaultAttoRepBacking - 10n * unit)
+		expect(preview.backing).toBe(1090n * unit)
+		expect(preview.withdrawable).toBe(900n * unit)
+	})
+	test('rejects withdrawal after liquidation when other pool commitments need the remaining backing', () => {
+		const liquidatableTarget = { ...target, vaultAttoRepBacking: 100n * unit }
+		const totalPoolHeldAttoRep = owned.vaultAttoRepBacking + liquidatableTarget.vaultAttoRepBacking
+		const receiver = { ...owned, totalPoolHeldRepBalanceAttoRep: totalPoolHeldAttoRep }
+		const fullyCommittedPool = { ...pool, totalPoolHeldAttoRep, totalUnderwritingLimitAttoEth: 550n * unit }
+		expect(() => previewVaultOperations(fullyCommittedPool, receiver, [liquidatableTarget], input, unit, 1000n)).toThrow(vaultOperationsCopy.withdrawCoverage)
 	})
 	test('rejects an increased commitment without sufficient backing', () => {
 		const receiver = { ...owned, vaultAttoRepBacking: 100n * unit, underwritingLimitAttoEth: 50n * unit }

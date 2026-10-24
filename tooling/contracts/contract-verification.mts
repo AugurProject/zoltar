@@ -158,6 +158,52 @@ const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
 		compilerProfile: 'main',
 		contractName: 'SecurityPoolUtils',
 	},
+	securityPoolCapitalLedgerDeployer: {
+		artifactPath: 'contracts/statoblast/SecurityPoolPortfolioModuleDeployers.sol',
+		compilerProfile: 'main',
+		contractName: 'SecurityPoolCapitalLedgerDeployer',
+	},
+	securityPoolCommitmentIndexDeployer: {
+		artifactPath: 'contracts/statoblast/SecurityPoolPortfolioModuleDeployers.sol',
+		compilerProfile: 'main',
+		contractName: 'SecurityPoolCommitmentIndexDeployer',
+	},
+	securityPoolCapitalFeeStreamsDeployer: {
+		artifactPath: 'contracts/statoblast/SecurityPoolPortfolioModuleDeployers.sol',
+		compilerProfile: 'main',
+		contractName: 'SecurityPoolCapitalFeeStreamsDeployer',
+	},
+	securityPoolSettlementBookDeployer: {
+		artifactPath: 'contracts/statoblast/SecurityPoolPortfolioModuleDeployers.sol',
+		compilerProfile: 'main',
+		contractName: 'SecurityPoolSettlementBookDeployer',
+	},
+	securityPoolPortfolioSettlementDeployer: {
+		artifactPath: 'contracts/statoblast/SecurityPoolPortfolioModuleDeployers.sol',
+		compilerProfile: 'main',
+		contractName: 'SecurityPoolPortfolioSettlementDeployer',
+	},
+	securityPoolReporterLedgerDeployer: {
+		artifactPath: 'contracts/statoblast/SecurityPoolPortfolioModuleDeployers.sol',
+		compilerProfile: 'main',
+		contractName: 'SecurityPoolReporterLedgerDeployer',
+	},
+	securityPoolPortfolioRecapAuctionDeployer: {
+		artifactPath: 'contracts/statoblast/SecurityPoolPortfolioForkCoordinator.sol',
+		compilerProfile: 'main',
+		contractName: 'SecurityPoolPortfolioRecapAuctionDeployer',
+	},
+	securityPoolPortfolioForkCoordinatorDeployer: {
+		artifactPath: 'contracts/statoblast/SecurityPoolPortfolioForkCoordinator.sol',
+		compilerProfile: 'main',
+		contractName: 'SecurityPoolPortfolioForkCoordinatorDeployer',
+	},
+	securityPoolEventEmitter: {
+		artifactPath: 'contracts/statoblast/SecurityPoolEventEmitter.sol',
+		compilerProfile: 'main',
+		contractName: 'SecurityPoolEventEmitter',
+		linksLibraries: true,
+	},
 	securityPoolOperationsDelegate: {
 		artifactPath: 'contracts/statoblast/SecurityPoolOperationsDelegate.sol',
 		compilerProfile: 'main',
@@ -175,10 +221,28 @@ const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
 		compilerProfile: 'main',
 		contractName: 'ShareTokenFactory',
 	},
+	priceCoordinatorDeploymentWorker: {
+		artifactPath: 'contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol',
+		compilerProfile: 'main',
+		contractName: 'PriceCoordinatorDeploymentWorker',
+		linksLibraries: true,
+	},
+	sharedPoolPriceFeedDeploymentWorker: {
+		artifactPath: 'contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol',
+		compilerProfile: 'main',
+		contractName: 'SharedPoolPriceFeedDeploymentWorker',
+		linksLibraries: true,
+	},
 	openOraclePriceCoordinatorFactory: {
 		artifactPath: 'contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol',
 		compilerProfile: 'main',
 		contractName: 'OpenOraclePriceCoordinatorFactory',
+		linksLibraries: true,
+	},
+	securityPoolForkerPortfolioDelegate: {
+		artifactPath: 'contracts/statoblast/SecurityPoolForkerPortfolioDelegate.sol',
+		compilerProfile: 'main',
+		contractName: 'SecurityPoolForkerPortfolioDelegate',
 		linksLibraries: true,
 	},
 	securityPoolForker: {
@@ -191,6 +255,11 @@ const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
 		artifactPath: 'contracts/statoblast/EscalationGameClaimDelegate.sol',
 		compilerProfile: 'main',
 		contractName: 'EscalationGameClaimDelegate',
+	},
+	escalationGameDepositDelegate: {
+		artifactPath: 'contracts/statoblast/EscalationGameDepositDelegate.sol',
+		compilerProfile: 'main',
+		contractName: 'EscalationGameDepositDelegate',
 	},
 	escalationGameFactory: {
 		artifactPath: 'contracts/statoblast/factories/EscalationGameFactory.sol',

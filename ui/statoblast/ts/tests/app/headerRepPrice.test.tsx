@@ -12,7 +12,7 @@ const freshNow = settlementTimestamp + 60n
 const expiredNow = settlementTimestamp + 10n * 24n * 60n * 60n
 
 function resolve(setting: UiPriceOracle, { now = freshNow, pool = true }: { now?: bigint; pool?: boolean } = {}) {
-	return resolveRepPrice({ now, poolOracle: pool ? { price: 20n * 10n ** 18n, settlementTimestamp } : undefined, setting, uniswapPrice: 30n * 10n ** 18n })
+	return resolveRepPrice({ now, poolOracle: pool ? { price: 20n * 10n ** 18n, settlementTimestamp, validUntil: settlementTimestamp + 780n } : undefined, setting, uniswapPrice: 30n * 10n ** 18n })
 }
 
 async function renderText(children: ComponentChildren) {

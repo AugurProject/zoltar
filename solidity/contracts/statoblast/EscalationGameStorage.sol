@@ -8,6 +8,7 @@ import {
 	NonDecisionState,
 	OutcomeState
 } from './EscalationGameTypes.sol';
+import { EscalationClaimCheckpoint } from './EscalationClaimCheckpointTypes.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { DelegateCall } from './DelegateCall.sol';
 
@@ -38,7 +39,7 @@ abstract contract EscalationGameStorage {
 	// Vault address -> BinaryOutcome index -> forked escrow accounting.
 	mapping(address => mapping(uint8 => ForkedEscrowState)) internal forkedEscrowByVaultAndOutcome;
 	bool internal forkCarrySnapshotRequiresForkedEscrow;
-	bool internal winnerHaircutPaidByFork;
+	bool public winnerHaircutPaidByFork;
 	uint256 internal forkCarryInitialBackingAttoRep;
 	// The inherited component of totalDisputeStakedAttoRep. Inherited expenditure
 	// retires at most this component; local principal is released on settlement.
@@ -50,6 +51,21 @@ abstract contract EscalationGameStorage {
 	uint256 internal forkCarryBackingExportedBeforeResumeAttoRep;
 	uint256 public truthAuctionRepBeforeAttoRep;
 	uint256 public truthAuctionRepRemainingAttoRep;
+	uint8 public forkCarrySnapshotOutcomesInitialized;
+	bytes32 internal forkCarrySnapshotId;
+	// A checkpoint stores only frozen grandparent-and-earlier transforms. The
+	// current game and its immediate source always remain live.
+	mapping(bytes32 => EscalationClaimCheckpoint) internal claimCheckpoints;
+	bool public ordinarySettlementInitialized;
+	BinaryOutcomes.BinaryOutcome internal ordinarySettlementOutcome;
+	uint256 public ordinaryWinningReserveAttoRep;
+	uint256 public ordinarySettlementForkThresholdAttoRep;
+	// Ordinary deposits irrevocably release the minimum outcome balance. Reporter
+	// principal remains nominal because only one outcome can claim in each child.
+	uint256 public creditedSurplusAttoRep;
+	// Only the new report that generates surplus relinquishes collateral credit.
+	// Existing reporters cannot be pushed into liquidation by a third-party report.
+	mapping(address => uint256) internal collateralBackingByVault;
 
 	function _isDepositResolutionOpen(BinaryOutcomes.BinaryOutcome provisionalResolution) internal view returns (bool) {
 		// A provisional leader cannot close an unresolved unrelated continuation's
@@ -63,7 +79,13 @@ abstract contract EscalationGameStorage {
 	}
 
 	function _claimEscrowedRepByVault(address vault) internal view returns (uint256 amountAttoRep) {
+		if (ordinarySettlementInitialized)
+			return localUnresolvedPrincipalByVaultAndOutcome[vault][uint8(ordinarySettlementOutcome)];
 		return _applyTruthAuctionRetention(escalationClaimBundles[vault].disputeStakedRepClaimUnits);
+	}
+
+	function _isRetiredOrdinaryOutcome(uint8 outcomeIndex) internal view returns (bool) {
+		return ordinarySettlementInitialized && outcomeIndex != uint8(ordinarySettlementOutcome);
 	}
 
 	function _increaseEscrowedRepForBundle(address bundleId, uint256 amountAttoRep) internal {

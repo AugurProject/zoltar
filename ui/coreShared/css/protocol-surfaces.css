@@ -2056,6 +2056,11 @@ html:has(.global-transaction-dialog-nonblocking) {
 	gap: 1rem;
 }
 
+.transaction-step-content > .detail {
+	overflow-wrap: anywhere;
+	white-space: pre-line;
+}
+
 .transaction-step-actions {
 	display: grid;
 	gap: 0.75rem;

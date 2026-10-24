@@ -103,12 +103,12 @@ function getTargetLiquidatabilityReason({
 	statoblastSecurityMultiplierBps: bigint
 	targetVaultSummary: SecurityPoolVaultSummary
 }) {
-	if (!isVaultLiquidatable(repPerEthPrice, underwritingLimitAttoEth, targetVaultSummary.vaultAttoRepBacking, targetVaultSummary.disputeStakedAttoRep, statoblastSecurityMultiplierBps)) return liquidationCopy.targetNotLiquidatableError
+	if (!isVaultLiquidatable(repPerEthPrice, underwritingLimitAttoEth, targetVaultSummary.vaultAttoRepBacking, targetVaultSummary.disputeBackingAttoRep, statoblastSecurityMultiplierBps)) return liquidationCopy.targetNotLiquidatableError
 	if (
 		minLiquidationPriceDistanceBps !== undefined &&
 		!isLiquidationBeyondMinPriceDistance({
 			currentPrice: repPerEthPrice,
-			disputeStakedAttoRep: targetVaultSummary.disputeStakedAttoRep,
+			disputeStakedAttoRep: targetVaultSummary.disputeBackingAttoRep,
 			minPriceDistanceBps: minLiquidationPriceDistanceBps,
 			underwritingLimitAttoEth,
 			poolHeldVaultRepBackingAttoRep: targetVaultSummary.vaultAttoRepBacking,
@@ -251,11 +251,13 @@ export function getMaxLiquidationAmount({
 type LiquidationSimulation = {
 	callerAfter: {
 		disputeStakedAttoRep: bigint
+		disputeBackingAttoRep: bigint
 		vaultAttoRepBacking: bigint
 		underwritingLimitAttoEth: bigint
 	}
 	callerBefore: {
 		disputeStakedAttoRep: bigint
+		disputeBackingAttoRep: bigint
 		vaultAttoRepBacking: bigint
 		underwritingLimitAttoEth: bigint
 	}
@@ -267,11 +269,13 @@ type LiquidationSimulation = {
 	targetAccruedFeesRetained: bigint
 	targetAfter: {
 		disputeStakedAttoRep: bigint
+		disputeBackingAttoRep: bigint
 		vaultAttoRepBacking: bigint
 		underwritingLimitAttoEth: bigint
 	}
 	targetBefore: {
 		disputeStakedAttoRep: bigint
+		disputeBackingAttoRep: bigint
 		vaultAttoRepBacking: bigint
 		underwritingLimitAttoEth: bigint
 	}
@@ -331,11 +335,13 @@ export function simulateLiquidation({
 	return {
 		callerAfter: {
 			disputeStakedAttoRep: callerDisputeStakedAttoRep,
+			disputeBackingAttoRep: callerVaultSummary?.disputeBackingAttoRep ?? 0n,
 			vaultAttoRepBacking: callerAfterRepDeposit,
 			underwritingLimitAttoEth: resultingCallerUnderwritingLimitAttoEth,
 		},
 		callerBefore: {
 			disputeStakedAttoRep: callerDisputeStakedAttoRep,
+			disputeBackingAttoRep: callerVaultSummary?.disputeBackingAttoRep ?? 0n,
 			vaultAttoRepBacking: callerRepDeposit,
 			underwritingLimitAttoEth: callerUnderwritingLimitAttoEth,
 		},
@@ -347,11 +353,13 @@ export function simulateLiquidation({
 		targetAccruedFeesRetained: targetVaultSummary.claimableFeesAttoEth,
 		targetAfter: {
 			disputeStakedAttoRep: targetDisputeStakedAttoRep,
+			disputeBackingAttoRep: targetVaultSummary.disputeBackingAttoRep,
 			vaultAttoRepBacking: targetAfterRepDeposit,
 			underwritingLimitAttoEth: remainingTargetUnderwritingLimitAttoEth,
 		},
 		targetBefore: {
 			disputeStakedAttoRep: targetDisputeStakedAttoRep,
+			disputeBackingAttoRep: targetVaultSummary.disputeBackingAttoRep,
 			vaultAttoRepBacking: targetRepDeposit,
 			underwritingLimitAttoEth: targetUnderwritingLimitAttoEth,
 		},
@@ -396,7 +404,7 @@ export function getLiquidationEffectPreview({
 	if (simulation.underwritingLimitMovedAttoEth <= 0n) return undefined
 	return {
 		receiverHealthyAfter: isVaultHealthyAtFactor({
-			disputeStakedAttoRep: simulation.callerAfter.disputeStakedAttoRep,
+			disputeStakedAttoRep: simulation.callerAfter.disputeBackingAttoRep,
 			healthFactorBps: LIQUIDATION_BPS_DENOMINATOR,
 			poolHeldVaultRepBackingAttoRep: simulation.callerAfter.vaultAttoRepBacking,
 			poolSecurityMultiplierBps: statoblastSecurityMultiplierBps,
@@ -533,7 +541,7 @@ export function getLiquidationFailureReason({
 	const callerUnderwritingLimitBeforeAttoEth = callerVaultSummary === undefined ? 0n : requireVaultUnderwritingLimitAttoEth(callerVaultSummary)
 	const callerUnderwritingLimitAfterAttoEth = callerUnderwritingLimitBeforeAttoEth + simulation.debtMovedAttoEth
 	const receiverHealthyAtRequiredFactor = isVaultHealthyAtFactor({
-		disputeStakedAttoRep: simulation.callerAfter.disputeStakedAttoRep,
+		disputeStakedAttoRep: simulation.callerAfter.disputeBackingAttoRep,
 		healthFactorBps: minimumReceiverHealthFactorBps,
 		underwritingLimitAttoEth: callerUnderwritingLimitAfterAttoEth,
 		poolHeldVaultRepBackingAttoRep: simulation.callerAfter.vaultAttoRepBacking,
@@ -542,7 +550,7 @@ export function getLiquidationFailureReason({
 	})
 	if (!receiverHealthyAtRequiredFactor) {
 		if (minimumReceiverHealthFactorBps > LIQUIDATION_BPS_DENOMINATOR) return liquidationCopy.receiverBelowApprovedHealthFactor
-		if (isVaultLiquidatable(repPerEthPrice, callerUnderwritingLimitBeforeAttoEth, simulation.callerBefore.vaultAttoRepBacking, callerVaultSummary?.disputeStakedAttoRep, statoblastSecurityMultiplierBps)) return 'The receiver vault would remain liquidatable after this liquidation.'
+		if (isVaultLiquidatable(repPerEthPrice, callerUnderwritingLimitBeforeAttoEth, simulation.callerBefore.vaultAttoRepBacking, callerVaultSummary?.disputeBackingAttoRep, statoblastSecurityMultiplierBps)) return 'The receiver vault would remain liquidatable after this liquidation.'
 		return 'The receiver vault would become liquidatable after this liquidation.'
 	}
 	return undefined

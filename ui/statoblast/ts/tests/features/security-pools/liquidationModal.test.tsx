@@ -32,6 +32,7 @@ function createTargetVaultSummary(overrides: Partial<SecurityPoolVaultSummary> =
 	return {
 		badDebtAttoEth: 0n,
 		disputeStakedAttoRep: 0n,
+		disputeBackingAttoRep: overrides.disputeBackingAttoRep ?? overrides.disputeStakedAttoRep ?? 0n,
 		vaultAttoRepBacking: 5n * 10n ** 18n,
 		underwritingLimitAttoEth,
 		openInterestAttoEth: underwritingLimitAttoEth,
@@ -1735,7 +1736,7 @@ describe('LiquidationModal', () => {
 				<LiquidationModal
 					accountAddress={defaultCallerVaultAddress}
 					closeLiquidationModal={() => undefined}
-					currentPoolOracleManagerDetails={undefined}
+					currentPoolOracleManagerDetails={createOracleManagerDetails({ isPriceValid: false, lastPrice: 3n * ATTO_ETH_PER_ETH, lastSettlementTimestamp: 1n, priceValidUntilTimestamp: 3601n })}
 					isOnActiveAppChain
 					liquidationDebtEthAmount='1'
 					liquidationManagerAddress={zeroAddress}

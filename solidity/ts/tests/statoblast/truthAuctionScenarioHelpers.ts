@@ -125,13 +125,14 @@ export function createStatoblastTruthAuctionScenarioHelpers({
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 		const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[4])
 		await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
-		await mockWindow.setTime(endTime + 10000n)
 		const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
 		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, securityPoolUnderwritingLimitAttoEth)
 
 		const openInterestAmount = 10n * 10n ** 18n
 		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1])
+		await mockWindow.setTime(endTime - 2n)
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+		await mockWindow.setTime(endTime + 10000n)
 
 		await triggerExternalForkForSecurityPool(undefined, titlePrefix)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])

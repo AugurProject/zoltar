@@ -200,7 +200,14 @@ export function App() {
 				walletActions={overviewWalletProps}
 			>
 				<RepPriceRefreshContext.Provider value={{ onRefresh: refreshRepPrices, busy: isLoadingRepPrices || isRefreshingRepPrices }}>
-					<AppRouteContent deploy={deployRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={activeRoute} securityPools={securityPoolsRouteContentProps} />
+					<AppRouteContent
+						deploy={deployRouteContentProps}
+						openOracle={openOracleRouteContentProps}
+						portfolios={{ parameters: walletScopedHookConfig, enabled: canReadOnchainData && walletBootstrapComplete, environmentKey: activeEnvironmentNonce, activeUniverseId }}
+						readBackendMessage={readBackendMessage}
+						route={activeRoute}
+						securityPools={securityPoolsRouteContentProps}
+					/>
 				</RepPriceRefreshContext.Provider>
 				<TransactionStepsModal contextKey={`${activeEnvironmentNonce}:${walletScopedAccountAddress ?? ''}`} />
 			</ProtocolAppFrame>

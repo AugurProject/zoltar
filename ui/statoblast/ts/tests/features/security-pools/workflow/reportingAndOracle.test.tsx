@@ -1,5 +1,4 @@
 import * as reportingCopy from '@zoltar/ui-statoblast-shared/copy/reporting.js'
-import { getOraclePriceValidityWindowSeconds } from '@zoltar/ui-statoblast-shared/protocol/oracleTiming.js'
 import { describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
@@ -98,7 +97,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 
 		const reportButton = within(document.body).getByRole('button', { name: 'Report on selected side' })
 		if (!(reportButton instanceof HTMLButtonElement)) throw new Error('Expected report button')
-		expect(document.body.textContent).not.toContain(reportingCopy.priceExpired(getOraclePriceValidityWindowSeconds()))
+		expect(document.body.textContent).not.toContain(reportingCopy.priceExpired)
 		expect(reportButton.disabled).toBe(true)
 		expect(getTransactionButtonState(document.body, 'Report on selected side').reason).toBe('This pool is in truth auction. Reporting actions unlock once the pool becomes operational.')
 	})
@@ -116,7 +115,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 
 		const reportButton = within(document.body).getByRole('button', { name: /^Report No ·/ })
 		if (!(reportButton instanceof HTMLButtonElement)) throw new Error('Expected report button')
-		expect(document.body.textContent).not.toContain(reportingCopy.priceExpired(getOraclePriceValidityWindowSeconds()))
+		expect(document.body.textContent).not.toContain(reportingCopy.priceExpired)
 		expect(reportButton.disabled).toBe(false)
 	})
 
@@ -169,11 +168,11 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 
 		expect(within(document.body).queryByRole('button', { name: /^Report No ·/ })).toBeNull()
 		expect(document.body.textContent).toContain('Resolved as Yes.')
-		expect(document.body.textContent).not.toContain(reportingCopy.priceExpired(getOraclePriceValidityWindowSeconds()))
+		expect(document.body.textContent).not.toContain(reportingCopy.priceExpired)
 	})
 
 	test('uses the shared chain timestamp context for oracle expiry text', async () => {
-		await renderLoadedPool({ securityPools: [createSelectedPool({ lastOraclePrice: 3n * 10n ** 18n, lastOracleSettlementTimestamp: 1n })], selectedPoolView: 'price-oracle' }, { chainTimestamp: 1n + 60n * 60n + 60n })
+		await renderLoadedPool({ securityPools: [createSelectedPool({ lastOraclePrice: 3n * 10n ** 18n, lastOracleSettlementTimestamp: 1n, oraclePriceValidUntilTimestamp: 3601n })], selectedPoolView: 'price-oracle' }, { chainTimestamp: 1n + 60n * 60n + 60n })
 
 		expect(document.body.textContent?.includes('(expired 1m ago)')).toBe(true)
 	})
@@ -441,6 +440,11 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		await renderLoadedPool({ poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, pendingReportId: 0n }), selectedPoolView: 'price-oracle' })
 
 		expectTransactionButtonDisabled(document.body, 'Request new price…', 'The current oracle price is still valid.')
+	})
+
+	test('enables an explicit shared price renewal while the accepted price remains valid', async () => {
+		await renderLoadedPool({ accountState: fundedAccount(), poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, pendingReportId: 0n, priceFeedAddress: getAddress('0x0000000000000000000000000000000000000099'), requestPriceCostAttoEth: 1n }), selectedPoolView: 'price-oracle' })
+		expect(within(document.body).getByRole('button', { name: 'Request new price…' }).hasAttribute('disabled')).toBe(false)
 	})
 
 	test('enables Request New Price when the shared chain time reaches a loaded price expiry', async () => {

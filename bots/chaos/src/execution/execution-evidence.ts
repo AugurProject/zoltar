@@ -52,13 +52,12 @@ function storageRead(evidence: Extract<OperationEvidence, { kind: 'storage-postc
 	if (item.stateMutability !== 'view' && item.stateMutability !== 'pure') {
 		throw new Error(`${evidence.functionName} storage evidence must use a read-only function`)
 	}
-	if (item.outputs.length !== 1) {
-		throw new Error(`${evidence.functionName} storage evidence must return one scalar value`)
-	}
+	if (item.outputs.length === 0) throw new Error(`${evidence.functionName} storage evidence must return a scalar value`)
 	if (item.inputs.length !== evidence.args.length) {
 		throw new Error(`${evidence.functionName} storage evidence argument count does not match its ABI`)
 	}
 	return {
+		outputCount: item.outputs.length,
 		abi: [item],
 		args: evidence.args.map((argument, index) => {
 			const input = item.inputs[index]
@@ -68,7 +67,12 @@ function storageRead(evidence: Extract<OperationEvidence, { kind: 'storage-postc
 	}
 }
 
-function canonicalStorageValue(value: unknown, label: string) {
+function canonicalStorageValue(value: unknown, label: string, outputCount = 1): string {
+	// Multi-output factory getters install dependencies atomically; evidence refers to their first output.
+	if (outputCount > 1) {
+		if (!Array.isArray(value) || value.length !== outputCount) throw new Error(`${label} returned an invalid output tuple`)
+		return canonicalStorageValue(value[0], label)
+	}
 	if (typeof value === 'bigint' || typeof value === 'number') return String(value)
 	if (typeof value === 'boolean') return value ? 'true' : 'false'
 	if (typeof value === 'string') return /^0x[0-9a-fA-F]+$/.test(value) ? value.toLowerCase() : value
@@ -96,6 +100,7 @@ export async function captureStorageEvidence(environment: ExecutionEnvironment, 
 						functionName: expectation.functionName,
 					}),
 					`${expectation.contract}.${expectation.functionName}`,
+					read.outputCount,
 				),
 			})),
 			connectivity.rpcQuorum,

@@ -13,11 +13,13 @@ const network = networkConfiguration('mainnet')
 const factory = canonicalSecurityPoolFactory('mainnet')
 const pool = getAddress('0x0000000000000000000000000000000000000011')
 const coordinator = getAddress('0x0000000000000000000000000000000000000022')
+const secondPool = getAddress('0x0000000000000000000000000000000000000055')
+const feed = getAddress('0x0000000000000000000000000000000000000044')
 const other = getAddress('0x0000000000000000000000000000000000000033')
 const hash: Hex = `0x${'ab'.repeat(32)}`
 const entry = { securityPool: pool, truthAuction: other, openOraclePriceCoordinator: coordinator, shareToken: other, parent: other, universeId: 0n, questionId: 1n, statoblastSecurityMultiplierBps: 20_000n, initialReportPriorityFeeAttoEthPerGas: 1n, currentRetentionRate: 1n, settlementCollateralAttoEth: 0n }
 
-function reader(options: { wrongCoordinator?: boolean; missingCode?: boolean; wrongBlock?: boolean; unapproved?: boolean; shortPage?: boolean; unsafePolicy?: boolean; registryCount?: bigint; reorg?: boolean } = {}) {
+function reader(options: { sharedFeed?: boolean; wrongCoordinator?: boolean; missingCode?: boolean; wrongBlock?: boolean; unapproved?: boolean; shortPage?: boolean; unsafePolicy?: boolean; registryCount?: bigint; reorg?: boolean } = {}) {
 	let blockReads = 0
 	const targets: string[] = []
 	const provider = multicallProvider(
@@ -32,15 +34,24 @@ function reader(options: { wrongCoordinator?: boolean; missingCode?: boolean; wr
 				const fn = securityPoolFactoryAbi.find(item => item.type === 'function' && item.name === 'securityPoolDeploymentsRange')
 				if (fn === undefined || fn.type !== 'function') throw new Error('Missing registry ABI')
 				const [start, count] = call.args
-				return encodeAbiParameters(fn.outputs, [options.shortPage ? [] : Array.from({ length: Number(count) }, (_, index) => ({ ...entry, universeId: options.unapproved || (options.registryCount !== undefined && start + BigInt(index) < options.registryCount - 1n) ? 1n : 0n }))])
+				return encodeAbiParameters(fn.outputs, [
+					options.shortPage
+						? []
+						: Array.from({ length: Number(count) }, (_, index) => ({
+								...entry,
+								...(options.sharedFeed && index === 1 ? { securityPool: secondPool, openOraclePriceCoordinator: other } : {}),
+								universeId: options.unapproved || (!options.sharedFeed && options.registryCount !== undefined && start + BigInt(index) < options.registryCount - 1n) ? 1n : 0n,
+							})),
+				])
 			}
-			if (to.toLowerCase() === pool.toLowerCase()) {
+			if (to.toLowerCase() === pool.toLowerCase() || to.toLowerCase() === secondPool.toLowerCase()) {
 				const call = decodeFunctionData({ abi: securityPoolAbi, data })
 				if (call.functionName === 'universeId') return encodeAbiParameters([{ type: 'uint248' }], [0n])
-				return encodeAbiParameters([{ type: 'address' }], [options.wrongCoordinator ? other : coordinator])
+				return encodeAbiParameters([{ type: 'address' }], [options.wrongCoordinator || to.toLowerCase() === secondPool.toLowerCase() ? other : coordinator])
 			}
-			if (to.toLowerCase() !== coordinator.toLowerCase()) throw new Error('Untrusted coordinator queried')
+			if (to.toLowerCase() !== coordinator.toLowerCase() && (!options.sharedFeed || (to.toLowerCase() !== feed.toLowerCase() && to.toLowerCase() !== other.toLowerCase()))) throw new Error('Untrusted coordinator queried')
 			const call = decodeFunctionData({ abi: openOraclePriceCoordinatorAbi, data })
+			if (call.functionName === 'priceFeed') return encodeAbiParameters([{ type: 'address' }], [options.sharedFeed ? feed : coordinator])
 			if (call.functionName === 'openOracle') return encodeAbiParameters([{ type: 'address' }], [settings.deployment.openOracle])
 			if (call.functionName === 'weth') return encodeAbiParameters([{ type: 'address' }], [network.weth])
 			if (call.functionName === 'reputationToken' || call.functionName === 'protocolFeeRecipient') return encodeAbiParameters([{ type: 'address' }], [network.rep])
@@ -126,4 +137,12 @@ test('requires deployed canonical factory code', async () => {
 	const config = await configuration()
 	expect(await discoverCoordinatorPolicies([reader().client], config, 10n, hash)).toHaveLength(1)
 	await expect(discoverCoordinatorPolicies([reader({ missingCode: true }).client], config, 10n, hash)).rejects.toThrow('Canonical security pool factory is not deployed')
+})
+
+test('discovers the shared report callback once for several question ledgers', async () => {
+	const client = reader({ sharedFeed: true, registryCount: 2n })
+	const config = await configuration()
+	const policies = await discoverCoordinatorPolicies([client.client], config, 10n, hash)
+	expect(policies.map(policy => policy.coordinator)).toEqual([feed])
+	expect(client.targets.filter(target => target.toLowerCase() === feed.toLowerCase())).toHaveLength(12)
 })

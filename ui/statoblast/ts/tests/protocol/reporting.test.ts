@@ -103,6 +103,7 @@ function createActiveReportingClient(getDepositsByOutcome: (outcomeIndex: number
 			if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 			if (request.functionName === 'getForkThresholdAttoRep') return 100n
 			if (request.functionName === 'escalationGame') return escalationGameAddress
+			if (request.functionName === 'ordinarySettlementInitialized') return false
 			if (request.functionName === 'forkContinuation') return false
 			if (request.functionName === 'getDepositsByOutcome') {
 				const args = request.args
@@ -115,6 +116,20 @@ function createActiveReportingClient(getDepositsByOutcome: (outcomeIndex: number
 }
 
 describe('reporting protocol client', () => {
+	test('loads the frozen ordinary payout threshold after settlement even when the live fork threshold changed', async () => {
+		const base = createActiveReportingClient(() => [])
+		const client = {
+			...base,
+			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'ordinarySettlementInitialized') return true
+				if (request.functionName === 'ordinarySettlementForkThresholdAttoRep') return 73n
+				return base.readContract(request)
+			}),
+		}
+		const details = await loadReportingDetails(client, securityPoolAddress, undefined)
+		expect(details.forkThresholdAttoRep).toBe(73n)
+	})
+
 	test.each(['none', 'deposit', 'report', 'cancel', 'requirements', 'quote'] as const)('wallet reporting after a fork handles failures at %s', async failure => {
 		const reader = createActiveReportingClient(() => [])
 		const previews: TransactionRequestPreview[] = []
@@ -233,6 +248,7 @@ describe('reporting protocol client', () => {
 					if (request.functionName === 'universeId') return 9n
 					if (request.functionName === 'escalationGame') return gameAddress
 					if (request.functionName === 'getEscalationGameEndDate') return 1000n
+					if (request.functionName === 'ordinarySettlementInitialized') return false
 					if (request.functionName === 'forkContinuation') return false
 					if (request.functionName === 'repToken') return repTokenAddress
 					throw new Error(`Unexpected readContract function: ${request.functionName}`)
@@ -257,6 +273,7 @@ describe('reporting protocol client', () => {
 					if (request.functionName === 'universeId') return 9n
 					if (request.functionName === 'escalationGame') return gameAddress
 					if (request.functionName === 'getEscalationGameEndDate') return 1000n
+					if (request.functionName === 'ordinarySettlementInitialized') return false
 					if (request.functionName === 'forkContinuation') return false
 					throw new Error(`Unexpected read: ${request.functionName}`)
 				},
@@ -302,6 +319,7 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'universeId') return 9n
 				if (request.functionName === 'escalationGame') return escalationGameAddress
 				if (request.functionName === 'getEscalationGameEndDate') return 1000n
+				if (request.functionName === 'ordinarySettlementInitialized') return false
 				if (request.functionName === 'forkContinuation') return false
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
@@ -334,6 +352,7 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'universeId') return 9n
 				if (request.functionName === 'escalationGame') return escalationGameAddress
 				if (request.functionName === 'getEscalationGameEndDate') return 1000n
+				if (request.functionName === 'ordinarySettlementInitialized') return false
 				if (request.functionName === 'forkContinuation') return false
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
@@ -430,6 +449,7 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'getQuestionOutcome') return 3
 				if (request.functionName === 'getForkTime') return 0n
 				if (request.functionName === 'hasReachedNonDecision') return true
+				if (request.functionName === 'ordinarySettlementInitialized') return false
 				if (request.functionName === 'forkContinuation') return false
 				if (request.functionName === 'repToken') return repTokenAddress
 				if (request.functionName === 'balanceOf') return 100n
@@ -500,6 +520,7 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'getForkTime') return 123n
 				if (request.functionName === 'hasReachedNonDecision') return false
 				if (request.functionName === 'forkData') return [0n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, false, false, 0n, 0n]
+				if (request.functionName === 'ordinarySettlementInitialized') return false
 				if (request.functionName === 'forkContinuation') return false
 				if (request.functionName === 'repToken') return repTokenAddress
 				if (request.functionName === 'balanceOf') return 100n
@@ -563,6 +584,7 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'getQuestionOutcome') return 3
 				if (request.functionName === 'getForkTime') return 123n
 				if (request.functionName === 'hasReachedNonDecision') return false
+				if (request.functionName === 'ordinarySettlementInitialized') return false
 				if (request.functionName === 'forkContinuation') return false
 				if (request.functionName === 'getForkThresholdAttoRep') return 100n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
@@ -614,6 +636,7 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'getQuestionOutcome') return 3
 				if (request.functionName === 'getForkTime') return 120n
 				if (request.functionName === 'hasReachedNonDecision') return false
+				if (request.functionName === 'ordinarySettlementInitialized') return false
 				if (request.functionName === 'forkContinuation') return false
 				if (request.functionName === 'repToken') return repTokenAddress
 				if (request.functionName === 'balanceOf') return 100n
@@ -806,6 +829,8 @@ describe('reporting protocol client', () => {
 		const parentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f1')
 		const zeroHash = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hex
 		const client = {
+			getBlockNumber: async () => 1n,
+			getBlock: async () => ({ number: 1n, hash: keccak256('0x01') }),
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
@@ -823,6 +848,7 @@ describe('reporting protocol client', () => {
 						snapshotLeafCount: 0n,
 						snapshotPeaks: Array.from({ length: 64 }, () => zeroHash),
 					}
+				if (request.functionName === 'ordinarySettlementInitialized') return false
 				if (request.functionName === 'forkContinuation') return false
 				if (request.functionName === 'nodes') return [0n, vaultAddress, 1, 1n, 'bad-index', 1n, 0n]
 				if (request.functionName === 'getProofConsumedCarriedDepositIndexesByOutcome') return []
@@ -837,6 +863,8 @@ describe('reporting protocol client', () => {
 		const parentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f1')
 		const zeroHash = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hex
 		const client = {
+			getBlockNumber: async () => 1n,
+			getBlock: async () => ({ number: 1n, hash: keccak256('0x01') }),
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
@@ -888,6 +916,8 @@ describe('reporting protocol client', () => {
 		const snapshotPeaks = Array.from({ length: 64 }, () => zeroHash)
 		snapshotPeaks[1] = frozenRoot
 		const client = {
+			getBlockNumber: async () => 1n,
+			getBlock: async () => ({ number: 1n, hash: keccak256('0x01') }),
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
@@ -968,6 +998,8 @@ describe('reporting protocol client', () => {
 		const snapshotPeaks = Array.from({ length: 64 }, () => zeroHash)
 		snapshotPeaks[1] = parentCarryRoot
 		const client = {
+			getBlockNumber: async () => 1n,
+			getBlock: async () => ({ number: 1n, hash: keccak256('0x01') }),
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
@@ -1060,6 +1092,8 @@ describe('reporting protocol client', () => {
 		const snapshotPeaks = Array.from({ length: 64 }, () => zeroHash)
 		snapshotPeaks[1] = frozenRoot
 		const client = {
+			getBlockNumber: async () => 1n,
+			getBlock: async () => ({ number: 1n, hash: keccak256('0x01') }),
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
@@ -1123,6 +1157,8 @@ describe('reporting protocol client', () => {
 		snapshotPeaks[1] = frozenRoot
 		const inheritedNullifierRoot = computeSingleConsumedNullifierRootForTest(firstLeaf.parentDepositIndex)
 		const client = {
+			getBlockNumber: async () => 1n,
+			getBlock: async () => ({ number: 1n, hash: keccak256('0x01') }),
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
@@ -1188,6 +1224,8 @@ describe('reporting protocol client', () => {
 			const targetLeaf = leaves[targetGlobalIndex]
 			if (targetLeaf === undefined) throw new Error('Missing target test leaf')
 			const client = {
+				getBlockNumber: async () => 1n,
+				getBlock: async () => ({ number: 1n, hash: keccak256('0x01') }),
 				multicall: createMulticallStub(async request => {
 					const firstContract = request.contracts[0]
 					const functionName = getContractFunctionName(firstContract)
@@ -1353,6 +1391,7 @@ for (const remaining of [0n, 1n, 60n, 61n]) {
 			async request => {
 				if (request.functionName === 'universeId') return 0n
 				if (request.functionName === 'escalationGame') return escalationGameAddress
+				if (request.functionName === 'ordinarySettlementInitialized') return false
 				if (request.functionName === 'forkContinuation') return false
 				if (request.functionName === 'getEscalationGameEndDate') return 1000n
 				throw new Error(`Unexpected read: ${request.functionName}`)

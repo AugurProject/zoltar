@@ -6,14 +6,14 @@ import { BURN_ADDRESS, TEST_ADDRESSES } from '../../testSupport/simulator/utils/
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { getERC20Balance } from '../../testSupport/simulator/utils/utilities'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
-import { deployEscalationGame, depositOnOutcome, getActivationTime, getBalances, getQuestionResolution, readBindingCapital } from '../../testSupport/simulator/utils/contracts/escalationGame'
+import { getActivationTime, getBalances, getQuestionResolution, readBindingCapital } from '../../testSupport/simulator/utils/contracts/escalationGame'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { ESCALATION_TIME_LENGTH } from './carryHelpers'
 import { useEscalationGameFixture } from './fixture'
 
 describe('Escalation Game: tie-breaking and winner rewards', () => {
 	const fixture = useEscalationGameFixture()
-	const { reportBond, nonDecisionThresholdAttoRep, deployEscalationGameTestSecurityPool, depositOnOutcomeViaTestSecurityPool, claimWinningDepositAndReadClaimLog } = fixture
+	const { reportBond, deployEscalationGameTestSecurityPool, depositOnOutcomeViaTestSecurityPool, claimWinningDepositAndReadClaimLog } = fixture
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 
@@ -23,12 +23,12 @@ describe('Escalation Game: tie-breaking and winner rewards', () => {
 	})
 
 	test('depositOnOutcome prevents tie by refunding 1 attoREP', async () => {
-		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThresholdAttoRep)
+		const { escalationGameAddress: escalationGame, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
 		const depositAmount = 100n * reportBond
 		// Deposit on Yes to establish a leader
-		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, depositAmount)
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, depositAmount)
 		// Deposit same amount on Invalid; would tie, but fix reduces by 1 attoREP
-		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Invalid, depositAmount)
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, depositAmount)
 		const balances = await getBalances(client, escalationGame)
 		assert.strictEqual(balances.yes, depositAmount, 'Yes balance as leader')
 		assert.strictEqual(balances.invalid, depositAmount - 1n, 'Invalid balance reduced by 1 attoREP')
@@ -41,11 +41,11 @@ describe('Escalation Game: tie-breaking and winner rewards', () => {
 	})
 
 	test('deposit on leading outcome does not trigger tie-breaking adjustment', async () => {
-		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThresholdAttoRep)
+		const { escalationGameAddress: escalationGame, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
 		const amount1 = 100n * reportBond
 		const amount2 = 50n * reportBond
-		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, amount1)
-		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, amount2)
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, amount1)
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, amount2)
 		const balances = await getBalances(client, escalationGame)
 		assert.strictEqual(balances.yes, amount1 + amount2, 'Yes balance increased without adjustment')
 		assert.strictEqual(balances.invalid, 0n, 'Invalid balance zero')

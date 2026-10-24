@@ -113,7 +113,17 @@ export function inspectSourceSizes(files: ReadonlyMap<string, string>, allowance
 
 function trackedSources(repositoryRoot: string): Map<string, string> {
 	const tracked = listRepositoryFiles({ cwd: repositoryRoot }).filter(isProductionSource)
-	return new Map(tracked.map(file => [file, readFileSync(path.join(repositoryRoot, file), 'utf8')]))
+	const sources = new Map<string, string>()
+	for (const file of tracked) {
+		try {
+			sources.set(file, readFileSync(path.join(repositoryRoot, file), 'utf8'))
+		} catch (error) {
+			// Git still lists unstaged deletions; absent allowance targets are diagnosed by inspectSourceSizes.
+			if (error instanceof Error && 'code' in error && error.code === 'ENOENT') continue
+			throw error
+		}
+	}
+	return sources
 }
 
 if (import.meta.main) {

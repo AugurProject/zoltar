@@ -6,11 +6,15 @@ import * as liquidationCopy from '../../ui/statoblastShared/ts/copy/liquidation.
 import { bytesToHex, decodeFunctionResult, encodeFunctionData, getAddress, hexToBytes, zeroAddress, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { createSimulationProfile } from '../../ui/coreShared/ts/wallet/networkProfile.js'
 import { getInfraContractAddresses } from '../../ui/statoblastShared/ts/protocol/deploymentHelpers.js'
+import { getDeploymentSteps } from '../../ui/statoblastShared/ts/protocol/deployment.js'
 import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPool_SecurityPool } from '../../ui/statoblastShared/ts/contractArtifact.js'
 import * as securityPoolCopy from '../../ui/statoblastShared/ts/copy/securityPool.js'
+import * as portfolioCopy from '../../ui/statoblastShared/ts/copy/portfolio.js'
+import * as capitalCopy from '../../ui/statoblastShared/ts/copy/portfolioCapital.js'
 import { UI_APP_IDS, featureStylesheets, getUiAppPaths, getUiCoreSharedPaths, isUiAppId, type UiAppId } from './appPaths.mts'
 import { launchChromium } from './chromiumDevTools.mts'
 import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
+import { createProductionBrowserNavigation } from './productionBrowserNavigation.ts'
 import { productionWorkflowTestName, selectProductionWorkflowScenarios, type ProductionWorkflowScenario } from './productionWorkflowScenarios.ts'
 import { AUGUR_GENESIS_FORK_QUESTION } from '../../shared/zoltar/ts/deployment/genesisUniverses.ts'
 
@@ -18,7 +22,9 @@ const appPathsById = new Map(UI_APP_IDS.map(appId => [appId, getUiAppPaths(appId
 const repositoryRootPath = getUiCoreSharedPaths().repositoryRoot
 const CHROMIUM_COMMAND_TIMEOUT_MILLISECONDS = 30_000
 const PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS = 120_000
+const PORTFOLIO_BROWSER_TIMEOUT_MILLISECONDS = 600_000
 const PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS = 600_000
+const REPORTING_MIGRATION_TIMEOUT_MILLISECONDS = 900_000
 
 let server: Bun.Server | undefined
 
@@ -27,7 +33,9 @@ const productionBrowserTest = (name: string, run: () => Promise<void>) => test(n
 const selectedWorkflowScenarios = selectProductionWorkflowScenarios(process.env['ZOLTAR_BROWSER_WORKFLOW_SCENARIO'])
 const productionWorkflowTest = (scenario: ProductionWorkflowScenario, run: () => Promise<void>) => {
 	const register = process.env['RUN_PRODUCTION_BROWSER_WORKFLOWS'] === '1' && selectedWorkflowScenarios.includes(scenario) ? test : test.skip
-	register(productionWorkflowTestName(scenario), run, PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS)
+	// Oracle funding, reporting, fork creation and child migration share one complete transaction workflow.
+	const timeoutMilliseconds = scenario === 'reporting-migration' ? REPORTING_MIGRATION_TIMEOUT_MILLISECONDS : PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS
+	register(productionWorkflowTestName(scenario), run, timeoutMilliseconds)
 }
 const productionRebuildInvariantTest = process.env['ZOLTAR_USE_EXISTING_PRODUCTION_BUILD'] === '1' && process.env['ZOLTAR_RUN_PRODUCTION_REBUILD_INVARIANTS'] !== '1' ? test.skip : test
 
@@ -283,10 +291,11 @@ type ProductionBrowserDriver = {
 	waitForButtonEnabled: (label: string, occurrence?: number) => Promise<void>
 	waitForBodyText: (text: string) => Promise<string>
 	waitForBodyWithoutText: (text: string) => Promise<string>
+	waitForReady: () => Promise<void>
 	waitForTransactionStatus: (status: string, title: string) => Promise<string>
 }
 
-async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewport: { height: number; width: number }, interact?: (driver: ProductionBrowserDriver) => Promise<void>) {
+async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewport: { height: number; width: number }, interact?: (driver: ProductionBrowserDriver) => Promise<void>, bootstrapTimeoutMilliseconds = PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS) {
 	if (chromiumPath === undefined) throw new Error('Chromium is required for the production browser smoke test')
 	const page = await launchChromium({ commandTimeoutMilliseconds: CHROMIUM_COMMAND_TIMEOUT_MILLISECONDS, path: chromiumPath, profilePrefix: 'zoltar-production-browser-', viewport: { height: 900, width: 1440 } })
 	try {
@@ -315,6 +324,18 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 				width: nextViewport.width,
 			})
 		}
+		const navigation = createProductionBrowserNavigation({
+			bootstrapTimeoutMilliseconds,
+			navigateDocument: async url => {
+				const result = await send('Page.navigate', { url })
+				return { startsNewDocument: typeof result === 'object' && result !== null && 'loaderId' in result && typeof result.loaderId === 'string' }
+			},
+			readDocument: async () => {
+				const document = await evaluate('({ body: document.body?.innerText ?? "", timeOrigin: performance.timeOrigin })')
+				if (typeof document !== 'object' || document === null || !('body' in document) || typeof document.body !== 'string' || !('timeOrigin' in document) || typeof document.timeOrigin !== 'number') throw new Error('Chromium did not return production document state')
+				return { body: document.body, timeOrigin: document.timeOrigin }
+			},
+		})
 
 		await send('Runtime.enable')
 		await send('Page.enable')
@@ -322,35 +343,7 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 			source: `(() => { const NativeWorker = window.Worker; window.__zoltarProductionWorkers = []; window.Worker = class TrackedProductionWorker extends NativeWorker { constructor(...args) { super(...args); window.__zoltarProductionWorkers.push(this) } } })()`,
 		})
 		await resize(viewport)
-		await send('Page.navigate', { url: pageUrl })
-		let state = ''
-		let applicationReady = false
-		for (let attempt = 0; attempt < 2400; attempt += 1) {
-			state = readEvaluationString(
-				await send('Runtime.evaluate', {
-					expression: `JSON.stringify({ body: document.body?.innerText ?? '', height: innerHeight, html: document.documentElement?.outerHTML ?? '', width: innerWidth })`,
-					returnByValue: true,
-				}),
-			)
-			const parsedState = JSON.parse(state)
-			if (typeof parsedState === 'object' && parsedState !== null && 'body' in parsedState && typeof parsedState.body === 'string' && parsedState.body.includes('Simulation bootstrap failed')) throw new Error(`Production simulation failed to bootstrap: ${parsedState.body}`)
-			if (
-				typeof parsedState === 'object' &&
-				parsedState !== null &&
-				'body' in parsedState &&
-				typeof parsedState.body === 'string' &&
-				parsedState.body !== '' &&
-				parsedState.body !== 'Loading...' &&
-				parsedState.body !== 'Loading…' &&
-				!parsedState.body.includes('BOOTSTRAPPING') &&
-				!parsedState.body.includes('Starting simulation bootstrap')
-			) {
-				applicationReady = true
-				break
-			}
-			await Bun.sleep(50)
-		}
-		if (!applicationReady) throw new Error(`Production application did not finish loading: ${state}`)
+		await navigation.navigate(pageUrl)
 		const driver: ProductionBrowserDriver = {
 			captureScreenshot: async screenshotPath => {
 				const result = (await send('Page.captureScreenshot', { captureBeyondViewport: false, format: 'png', fromSurface: true })) as { data?: unknown }
@@ -367,7 +360,7 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 			evaluate,
 			evaluateAsync: expression => page.evaluate(expression),
 			navigate: async url => {
-				await send('Page.navigate', { url: new URL(url, pageUrl).href })
+				await navigation.navigate(new URL(url, pageUrl).href)
 			},
 			pressTab: async () => {
 				await send('Input.dispatchKeyEvent', { code: 'Tab', key: 'Tab', type: 'keyDown' })
@@ -390,6 +383,7 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 			},
 			waitForBodyText: async text => await waitForBody(body => body.includes(text), JSON.stringify(text)),
 			waitForBodyWithoutText: async text => await waitForBody(body => !body.includes(text), `body to omit ${JSON.stringify(text)}`),
+			waitForReady: navigation.waitForReady,
 			waitForTransactionStatus: async (status, title) => {
 				for (let attempt = 0; attempt < 2400; attempt += 1) {
 					const matches = await evaluate(`(() => { const notice = document.querySelector('.global-transaction-notice'); return notice?.querySelector('.badge')?.textContent?.trim() === ${JSON.stringify(status)} && notice?.querySelector('strong')?.textContent?.trim() === ${JSON.stringify(title)} })()`)
@@ -411,8 +405,8 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 	}
 }
 
-async function loadProductionDocumentInChromium(pageUrl: string, viewport: { height: number; width: number }, interact?: (driver: ProductionBrowserDriver) => Promise<void>) {
-	return await withChromiumTestLock(async () => await loadProductionDocumentInChromiumUnlocked(pageUrl, viewport, interact))
+async function loadProductionDocumentInChromium(pageUrl: string, viewport: { height: number; width: number }, interact?: (driver: ProductionBrowserDriver) => Promise<void>, bootstrapTimeoutMilliseconds = PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS) {
+	return await withChromiumTestLock(async () => await loadProductionDocumentInChromiumUnlocked(pageUrl, viewport, interact, bootstrapTimeoutMilliseconds))
 }
 
 const productionBrowserScenarios = [
@@ -503,7 +497,7 @@ for (const scenario of productionBrowserScenarios) {
 		if (server === undefined) throw new Error('Production test server did not start')
 		if (chromiumPath === undefined) throw new Error('Chromium is required for the production browser smoke test')
 		const baseUrl = server.url.toString().replace(/\/$/, '')
-		const state = JSON.parse(await loadProductionDocumentInChromium(`${baseUrl}/${scenario.appId}/${scenario.hash}`, scenario.viewport))
+		const state = JSON.parse(await loadProductionDocumentInChromium(`${baseUrl}/${scenario.appId}/${scenario.hash}`, scenario.viewport, undefined, scenario.workflow ? PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS : PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS))
 		if (typeof state !== 'object' || state === null || !('body' in state) || !('html' in state) || typeof state.body !== 'string' || typeof state.html !== 'string' || !('height' in state) || !('width' in state)) {
 			throw new Error(`${scenario.name} returned an invalid document state`)
 		}
@@ -519,6 +513,74 @@ for (const scenario of productionBrowserScenarios) {
 	if (scenario.workflow) productionWorkflowTest('auction-boot', run)
 	else productionBrowserTest(`production bundle boots the ${scenario.name} scenario in Chromium`, run)
 }
+
+test(
+	'production bundle boots the authenticated Statoblast portfolio and seeded question balances in Chromium',
+	async () => {
+		if (server === undefined) throw new Error('Production test server did not start')
+		const baseUrl = server.url.toString().replace(/\/$/, '')
+		await loadProductionDocumentInChromium(
+			`${baseUrl}/statoblast/#/portfolios?simulate=1&genesis=yes&simScenario=portfolio`,
+			{ height: 900, width: 1440 },
+			async driver => {
+				// Worker bootstrap can finish before main-thread discovery authenticates the ledger.
+				const body = await driver.waitForBodyText(capitalCopy.priceValid.toUpperCase())
+				expect(body).toContain('Browser simulation')
+				expect(body).not.toContain('Could not load the portfolio snapshot')
+				expect(body).toContain(capitalCopy.prepareProgress(3))
+				await driver.waitForButtonEnabled(capitalCopy.claim)
+				const seededPools = await createWorkflowActions(driver).loadSeededPools()
+				const questionIds = seededPools
+					.filter(pool => pool.universeId === 0n && pool.parent === zeroAddress)
+					.slice(0, 2)
+					.map(pool => String(pool.questionId))
+				expect(questionIds).toHaveLength(2)
+				expect(
+					await driver.evaluate(`(() => {
+			const input = text => [...document.querySelectorAll('label')].find(label => label.textContent?.trim() === text)?.control?.value;
+			const section = title => [...document.querySelectorAll('section')].find(node => node.querySelector('h3')?.textContent === title);
+			const capital = section(${JSON.stringify(capitalCopy.title)});
+			const backing = section(${JSON.stringify(capitalCopy.poolTitle)});
+			const positions = section(${JSON.stringify(capitalCopy.positions)});
+			const amounts = (scope, label) => [...scope.querySelectorAll('.metric-label')].filter(node => node.textContent === label).map(node => node.parentElement.querySelector('.currency-value')?.getAttribute('title')?.replace(/\\s/g, ''));
+			const questions = [...section(${JSON.stringify(portfolioCopy.mint)}).querySelectorAll('select option')].filter(option => option.value !== '').map(option => String(BigInt(option.value)));
+			const manager = input(${JSON.stringify(portfolioCopy.manager)});
+			return {
+				managerLoaded: /^0x[0-9a-f]{40}$/i.test(manager) && manager.toLowerCase() !== ${JSON.stringify(zeroAddress)},
+				owner: input(${JSON.stringify(portfolioCopy.owner)})?.toLowerCase(),
+				withdrawableRep: amounts(capital, ${JSON.stringify(capitalCopy.withdrawableRep)}),
+				principalRep: amounts(capital, ${JSON.stringify(capitalCopy.principalRep)}),
+				commitment: amounts(capital, ${JSON.stringify(capitalCopy.commitment)}),
+				poolPledgedRep: amounts(backing, ${JSON.stringify(capitalCopy.totalPledged)}),
+				positionPledgedRep: amounts(positions, ${JSON.stringify(capitalCopy.positionPledged)}),
+				healthyCommitment: amounts(backing, ${JSON.stringify(capitalCopy.healthyCommitment)}),
+				health: capital.textContent.includes('120%'),
+				positions: positions.querySelectorAll('.workflow-subsection').length,
+				feeMetrics: section(${JSON.stringify(capitalCopy.earnings)}).textContent.includes(${JSON.stringify(capitalCopy.ethEarnings)}) && section(${JSON.stringify(capitalCopy.earnings)}).textContent.includes(${JSON.stringify(capitalCopy.repEarnings)}),
+				questions: questions.toSorted()
+			};
+		})()`),
+				).toEqual({
+					managerLoaded: true,
+					owner: '0x00000000000000000000000000000000000000a1',
+					// The seeded 3 REP/ETH price and 2× multiplier retain 60 REP at the 100% protocol floor.
+					withdrawableRep: ['4940REP'],
+					principalRep: ['5000REP'],
+					commitment: ['10ETH'],
+					poolPledgedRep: ['5000REP'],
+					positionPledgedRep: ['5000REP'],
+					healthyCommitment: ['10ETH'],
+					health: true,
+					positions: 1,
+					feeMetrics: true,
+					questions: questionIds.toSorted(),
+				})
+			},
+			PORTFOLIO_BROWSER_TIMEOUT_MILLISECONDS - PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS,
+		)
+	},
+	PORTFOLIO_BROWSER_TIMEOUT_MILLISECONDS,
+)
 
 for (const appId of ['zoltar', 'statoblast', 'trading'] as const) {
 	productionBrowserTest(`production bundle requires a genesis choice before starting ${appId}`, async () => {
@@ -578,7 +640,7 @@ function createWorkflowActions(driver: ProductionBrowserDriver) {
 	}
 	// Read fixture addresses from the seeded chain, then use the same address-entry flow as a user.
 	const loadSeededPools = async () => {
-		await driver.waitForBodyWithoutText('BOOTSTRAPPING')
+		await driver.waitForReady()
 		const genesisRepTokenAddress = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.genesisRepTokenAddress')
 		const wethAddress = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.wethAddress')
 		if (typeof genesisRepTokenAddress !== 'string' || typeof wethAddress !== 'string') throw new Error('Simulation network profile was not available')
@@ -645,7 +707,7 @@ function productionInteractionTest(scenario: ProductionWorkflowScenario, route: 
 		if (server === undefined) throw new Error('Production test server did not start')
 		if (chromiumPath === undefined) throw new Error('Chromium is required for the production browser workflow test')
 		const baseUrl = server.url.toString().replace(/\/$/, '')
-		const state = JSON.parse(await loadProductionDocumentInChromium(`${baseUrl}/statoblast/${route}`, viewport, interact))
+		const state = JSON.parse(await loadProductionDocumentInChromium(`${baseUrl}/statoblast/${route}`, viewport, interact, PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS))
 		if (typeof state !== 'object' || state === null || !('body' in state) || typeof state.body !== 'string') throw new Error('Production workflow returned invalid document state')
 		expect(state.body).not.toContain('Failed to initialize the app environment')
 		expect(state.height).toBe(viewport.height)
@@ -904,7 +966,40 @@ productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?sim
 	await driver.clickButton('Migrate pool to Yes universe')
 	await completeTransactionReview('Migrate REP to Zoltar')
 	await driver.waitForTransactionStatus('Confirmed', 'Migrate REP to Zoltar')
+	const captureChildPreparation = async (state: string, anchor: string) => {
+		const directory = process.env['UI_CHILD_PREPARATION_SCREENSHOT_DIRECTORY']
+		if (directory === undefined || directory === '') return
+		await fs.mkdir(directory, { recursive: true })
+		for (const viewport of [
+			{ height: 900, width: 1440, name: 'desktop' },
+			{ height: 844, width: 390, name: 'narrow' },
+		]) {
+			await driver.resize(viewport)
+			await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === ${JSON.stringify(anchor)}))?.scrollIntoView({ block: 'center', behavior: 'instant' })`)
+			await driver.captureScreenshot(path.join(directory, `fork-${state}-${viewport.name}.png`))
+		}
+		await driver.resize({ height: 900, width: 1440 })
+	}
+	await driver.waitForButtonEnabled('Prepare child pool contracts')
+	await captureChildPreparation('dependencies-ready', 'Prepare child pool contracts')
+	await driver.clickButton('Prepare child pool contracts')
+	await captureChildPreparation('dependencies-review', 'Prepare child pool contracts')
+	await completeTransactionReview('Prepare child dependencies')
+	await driver.waitForButtonEnabled('Create child pool')
+	await captureChildPreparation('dependencies-confirmed', 'Create child pool')
+	await driver.clickButton('Create child pool')
+	await completeTransactionReview('Create child universe')
+	for (let outcome = 0; outcome < 3; outcome++) {
+		await driver.waitForBodyText(`${outcome} of 3 outcomes initialized`)
+		await driver.waitForButtonEnabled('Initialize dispute history')
+		await captureChildPreparation(`history-${outcome}-ready`, 'Initialize dispute history')
+		await driver.clickButton('Initialize dispute history')
+		await completeTransactionReview('Initialize dispute history')
+		await driver.waitForTransactionStatus('Confirmed', 'Initialize dispute history')
+	}
+	await driver.waitForBodyText('3 of 3 outcomes initialized')
 	await driver.waitForButtonEnabled('Migrate vault to Yes')
+	await captureChildPreparation('child-confirmed', 'Migrate vault to Yes')
 	await driver.clickButton('Migrate vault to Yes')
 	await completeTransactionReview('Migrate vault')
 	await driver.waitForTransactionStatus('Confirmed', 'Migrate vault')
@@ -915,14 +1010,19 @@ productionInteractionTest('deployment-auction', '#/deploy?simulate=1&genesis=yes
 	await driver.pressTab()
 	expect(await driver.evaluate('document.activeElement?.textContent?.trim()')).toBe('Skip to main content')
 	await driver.waitForButtonEnabled('Deploy next contract')
+	const genesisRepTokenAddress = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.genesisRepTokenAddress')
+	const wethAddress = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.wethAddress')
+	if (typeof genesisRepTokenAddress !== 'string' || typeof wethAddress !== 'string') throw new Error('Simulation network profile was not available')
+	const deploymentSteps = getDeploymentSteps(createSimulationProfile({ genesisOutcome: 'yes', genesisRepTokenAddress: getAddress(genesisRepTokenAddress), wethAddress: getAddress(wethAddress) }))
+	expect(deploymentSteps[0]?.id).toBe('proxyDeployer')
+	await driver.waitForBodyText(`0 / ${deploymentSteps.length}`)
 	await driver.clickButton('Deploy next contract')
-	const deployedBody = await driver.waitForBodyText('1 / 15')
+	const deployedBody = await driver.waitForBodyText(`1 / ${deploymentSteps.length}`)
 	expect(deployedBody).toContain('Proxy Deployer')
 	expect(deployedBody).not.toContain('Failed to initialize the app environment')
 	// Keep the lightweight deployment boot before the expensive auction fixture, as in the original workflow.
 	await driver.navigate('?workflow=auction#/pools?simulate=1&genesis=yes&simScenario=securitypoolx2-auction')
 	await driver.waitForBodyText('Browse pools')
-	await driver.waitForBodyWithoutText('BOOTSTRAPPING')
 	const { completeTransactionReview, openSeededPool, selectPoolTool, loadSeededPools } = createWorkflowActions(driver)
 	const universeDirectoryOpened = await driver.evaluate(`(() => { const link = [...document.querySelectorAll('a')].find(candidate => candidate.textContent?.trim() === 'Universes' && candidate.href.includes('#/pools/universes')); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
 	expect(universeDirectoryOpened).toBe(true)

@@ -311,7 +311,7 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 		}
 		const secondForkQuestionId = getQuestionId(secondForkQuestionData, outcomes)
 		await createQuestion(client, secondForkQuestionData, outcomes)
-		await mockWindow.setTime(secondForkQuestionData.endTime + 1n)
+		await mockWindow.setTime(firstForkQuestionData.endTime + 1n + 70n * DAY)
 		await approveToken(client, firstChildRepToken, getZoltarAddress())
 		await forkUniverse(client, firstChildUniverse, secondForkQuestionId)
 		await deployChild(client, firstChildUniverse, BigInt(QuestionOutcome.No))

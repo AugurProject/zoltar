@@ -279,6 +279,7 @@ function recoverySettings(readRpcUrl: string, quorumRpcUrls: string[], stateFile
 			rpcQuorum: 2,
 		},
 		deployment: {
+			multicall3: zeroAddress,
 			openOracle: zeroAddress,
 			questionData: zeroAddress,
 			securityPoolFactory: zeroAddress,

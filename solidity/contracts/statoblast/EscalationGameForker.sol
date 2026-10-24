@@ -3,7 +3,7 @@ pragma solidity 0.8.35;
 
 import { Zoltar } from '../Zoltar.sol';
 import { ISecurityPool, SystemState } from './interfaces/ISecurityPool.sol';
-import { ISecurityPoolForkerChildEscalationGameInitializer } from './interfaces/ISecurityPoolForkerChildEscalationGameInitializer.sol';
+import { ISecurityPoolForkerChildPoolDeployer } from './interfaces/ISecurityPoolForkerChildPoolDeployer.sol';
 import { EscalationGame } from './EscalationGame.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
@@ -17,12 +17,13 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 
 	constructor(Zoltar _zoltar) SecurityPoolForkerBase(_zoltar) {}
 
-	function _initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child, EscalationGame childEscalationGame) internal override returns (EscalationGame) {
+	function _getOrDeployChildPool(ISecurityPool parent, uint256 outcomeIndex) internal override returns (ISecurityPool child, EscalationGame game) {
 		return
-			ISecurityPoolForkerChildEscalationGameInitializer(address(this)).initializeChildForkedEscalationGameIfNeeded(parent, child, childEscalationGame);
+			ISecurityPoolForkerChildPoolDeployer(address(this)).getOrDeployChildPoolForEscalation(parent, outcomeIndex);
 	}
 
 	function claimForkedEscalationDeposits(ISecurityPool parent, address vault, BinaryOutcomes.BinaryOutcome outcomeIndex, uint256[] calldata depositIndexes) public {
+		require(parent.portfolioCustody() == address(0), 'Reporter claims stay in central custody');
 		EscalationGame escalationGame = parent.escalationGame();
 		// A non-decision alone does not authorize forked escrow claims; fork-time escrow state is also required.
 		// This module is embedded in SecurityPoolForker's creation code. Data-free
@@ -30,6 +31,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 		if (!forkDataByPool[parent].unresolvedEscalationAtFork || !escalationGame.canTriggerOwnFork()) revert();
 		if (!forkDataByPool[parent].ownFork) revert();
 		(ISecurityPool child, EscalationGame childEscalationGame) = _getOrDeployChildPool(parent, uint8(outcomeIndex));
+		_requireChildForkCarryReady(parent, childEscalationGame);
 		if (child.systemState() != SystemState.ForkMigration) revert();
 		if (block.timestamp > forkDataByPool[parent].forkActivationTime + SecurityPoolUtils.MIGRATION_TIME) revert();
 		if (address(childEscalationGame) == address(0x0)) revert();
@@ -76,6 +78,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 	}
 
 	function migrateVaultWithUnresolvedEscalation(ISecurityPool parent, address vault, uint256 childOutcomeIndex, ISecurityPool migratedChild, EscalationGame migratedChildEscalationGame) public {
+		require(parent.portfolioCustody() == address(0), 'Reporter claims stay in central custody');
 		if (msg.sender != vault) revert();
 		if (block.timestamp > forkDataByPool[parent].forkActivationTime + SecurityPoolUtils.MIGRATION_TIME) revert();
 		SecurityPoolForkerForkData storage parentForkData = forkDataByPool[parent];
@@ -89,6 +92,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 			if (address(childrenByPoolAndOutcome[parent][childOutcomeIndex]) != address(child)) revert();
 			_validateChildEscalationGame(child, childEscalationGame);
 		}
+		_requireChildForkCarryReady(parent, childEscalationGame);
 		EscalationMigrationEntitlement storage entitlement = escalationMigrationEntitlementByPoolAndVault[parent][
 			vault
 		];

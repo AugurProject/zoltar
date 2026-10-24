@@ -20,7 +20,11 @@ export const ALL_SECURITY_POOL_ACTIONS: ActionList = [
 	'forkWithOwnEscalation',
 	'initiateFork',
 	'forkUniverse',
+	'prepareChildPriceFeed',
+	'prepareChildDependencies',
 	'createChildUniverse',
+	'initializeChildHistory',
+	'prepareForkClaim',
 	'migrateRepToZoltar',
 	'migrateVault',
 	'claimParentEscalationDeposits',
@@ -42,7 +46,11 @@ export const FORK_ACTIONS: ActionList = [
 	'forkWithOwnEscalation',
 	'initiateFork',
 	'forkUniverse',
+	'prepareChildPriceFeed',
+	'prepareChildDependencies',
 	'createChildUniverse',
+	'initializeChildHistory',
+	'prepareForkClaim',
 	'migrateRepToZoltar',
 	'migrateVault',
 	'claimParentEscalationDeposits',
@@ -77,9 +85,9 @@ export const ENABLED_ACTIONS_BY_REPORTING_STAGE: Record<SecurityPoolReportingSta
 export const ENABLED_ACTIONS_BY_FORK_STAGE: Record<SecurityPoolForkStage, ActionList> = {
 	disabled: [],
 	initiate: ['forkWithOwnEscalation', 'initiateFork', 'forkUniverse'],
-	migration: ['createChildUniverse', 'migrateRepToZoltar', 'migrateVault', 'claimParentEscalationDeposits', 'migrateUnresolvedEscalation', 'startTruthAuction'],
+	migration: ['prepareChildPriceFeed', 'prepareChildDependencies', 'createChildUniverse', 'initializeChildHistory', 'migrateRepToZoltar', 'migrateVault', 'claimParentEscalationDeposits', 'migrateUnresolvedEscalation', 'startTruthAuction'],
 	auction: ['submitBid', 'finalizeTruthAuction', 'refundLosingBids', 'withdrawAuctionRefund'],
-	settlement: ['claimAuctionProceeds', 'withdrawAuctionRefund', 'settleForkedEscalation'],
+	settlement: ['prepareForkClaim', 'claimAuctionProceeds', 'withdrawAuctionRefund', 'settleForkedEscalation'],
 }
 
 export const UNIVERSE_FORKED_ENABLE: ActionList = ['migrateShares']

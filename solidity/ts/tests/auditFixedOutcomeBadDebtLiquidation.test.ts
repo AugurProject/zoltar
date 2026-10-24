@@ -21,7 +21,7 @@ describe('Audit PoC: fixed-outcome child synthetic bad debt', () => {
 	const fixture = useStatoblastForkMigrationFixture()
 	const { PRICE_PRECISION, repDeposit, statoblastSecurityMultiplierBps, genesisUniverse } = fixture
 
-	test('blocks REP recycling while commitments remain and preserves resolved-market liquidation closure', async () => {
+	test('allows finalized commitment exit and preserves resolved-market liquidation closure', async () => {
 		const { mockWindow, client, securityPoolAddresses, questionId } = fixture
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const badDebtRecorder = createWriteClient(mockWindow, TEST_ADDRESSES[2])
@@ -31,9 +31,10 @@ describe('Audit PoC: fixed-outcome child synthetic bad debt', () => {
 		await setUnderwritingLimit(client, securityPoolAddresses.securityPool, (repDeposit * 4n) / 10n)
 		await setUnderwritingLimit(attacker, securityPoolAddresses.securityPool, (repDeposit * 4n) / 10n)
 		const questionEnd = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(questionEnd + 1n)
+		await mockWindow.setTime(questionEnd - DAY)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, PRICE_PRECISION)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, (repDeposit * 7n) / 10n)
+		await mockWindow.setTime(questionEnd + 1n)
 
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		await forkUniverse(client, genesisUniverse, questionId)
@@ -69,14 +70,21 @@ describe('Audit PoC: fixed-outcome child synthetic bad debt', () => {
 		assert.ok(victimRepBefore * PRICE_PRECISION * 10_000n >= victimOpenInterestBefore * PRICE_PRECISION * statoblastSecurityMultiplierBps, 'the honest migrated vault should be healthy at the inherited price before the attack')
 		const victimRepImmediatelyBeforeAttempt = victimRepBefore
 		const attackerWalletBefore = await getERC20Balance(client, childRep, attacker.account.address)
+		const attackerVaultBefore = await getSecurityVault(client, child.securityPool, attacker.account.address)
+		const attackerRepBefore = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'backingUnitsToAttoRep', args: [attackerVaultBefore.repBackingUnits] })
+		const collateralBefore = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'settlementCollateralAttoEth' })
+		const supplyBefore = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'shareTokenSupplyAttoShares' })
 		await assert.rejects(redeemRepFromVault(attacker, child.securityPool, attacker.account.address), /Exit commitment before REP redemption/)
-		await assert.rejects(setUnderwritingLimit(attacker, child.securityPool, 0n), /Commitments below collateral/)
+		await setUnderwritingLimit(attacker, child.securityPool, 0n)
+		await redeemRepFromVault(attacker, child.securityPool, attacker.account.address)
 		const recycledRep = (await getERC20Balance(client, childRep, attacker.account.address)) - attackerWalletBefore
-		strictEqualTypeSafe(recycledRep, 0n, 'REP cannot be recycled out of an outstanding commitment')
+		strictEqualTypeSafe(recycledRep, attackerRepBefore, 'final commitment exit returns only the exiting vault REP')
 
 		const ghostVault = await getSecurityVault(client, child.securityPool, attacker.account.address)
-		assert.ok(ghostVault.repBackingUnits > 0n, 'rejected redemption preserves the backing claim')
-		assert.ok(ghostVault.underwritingLimitAttoEth > 0n, 'rejected redemption preserves the standing commitment')
+		strictEqualTypeSafe(ghostVault.repBackingUnits, 0n, 'final redemption consumes the exiting vault backing claim')
+		strictEqualTypeSafe(ghostVault.underwritingLimitAttoEth, 0n, 'final exit clears the standing commitment')
+		strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'settlementCollateralAttoEth' }), collateralBefore, 'final REP exit must preserve funded ETH collateral')
+		strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'shareTokenSupplyAttoShares' }), supplyBefore, 'final REP exit must preserve all outstanding share claims')
 
 		strictEqualTypeSafe(
 			await client.readContract({
@@ -89,13 +97,7 @@ describe('Audit PoC: fixed-outcome child synthetic bad debt', () => {
 			'the inherited fixed outcome must close collateralized operations even though the child stays operational for redemptions',
 		)
 		strictEqualTypeSafe(await getLastPrice(client, child.openOraclePriceCoordinator), PRICE_PRECISION, 'the fixed-outcome child should inherit the original REP price')
-		const ghostOpenInterest = await client.readContract({
-			abi: statoblast_SecurityPool_SecurityPool.abi,
-			address: child.securityPool,
-			functionName: 'getVaultOpenInterestAttoEth',
-			args: [attacker.account.address],
-		})
-		await assert.rejects(requestPriceIfNeededAndStageOperation(badDebtRecorder, child.openOraclePriceCoordinator, OperationType.Liquidation, attacker.account.address, ghostOpenInterest), /Escalation resolved/)
+		await assert.rejects(requestPriceIfNeededAndStageOperation(badDebtRecorder, child.openOraclePriceCoordinator, OperationType.Liquidation, attacker.account.address, attackerVaultBefore.underwritingLimitAttoEth), /Escalation resolved/)
 		await approveToken(attacker, childRep, child.securityPool)
 		await assert.rejects(depositRepToVault(attacker, child.securityPool, repDeposit, 1_000_000n))
 

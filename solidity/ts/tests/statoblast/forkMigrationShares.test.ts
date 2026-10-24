@@ -557,7 +557,6 @@ describe('Statoblast: fork migration', () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, forkThresholdAttoRep * 2n)
-			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
 			strictEqualTypeSafe(await getCurrentRetentionRate(client, securityPoolAddresses.securityPool), MAX_RETENTION_RATE, 'retention rate was not at max')
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, securityPoolUnderwritingLimitAttoEth)
@@ -567,6 +566,7 @@ describe('Statoblast: fork migration', () => {
 			const openInterestAmount = 100n * 10n ** 18n
 			const maxGasFees = openInterestAmount / 4n
 			const ethBalanceAttoEth = await getETHBalance(client, client.account.address)
+			await mockWindow.setTime(endTime - 4n)
 			await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
 			assert.ok((await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)) > 0n, 'contract did not record collateral after minting complete sets')
 			const completeSetBalances = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, client.account.address)
@@ -584,11 +584,14 @@ describe('Statoblast: fork migration', () => {
 			strictEqualTypeSafe(await getCurrentRetentionRate(client, securityPoolAddresses.securityPool), MAX_RETENTION_RATE, 'retention rate was not at max after zero complete sets')
 
 			await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
-			const settlementCollateralAtForkAttoEth = await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)
 			const repBalanceAttoRep = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool)
+
+			await mockWindow.setTime(endTime + 10000n)
+			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 
 			// forking
 			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+			const settlementCollateralAtForkAttoEth = await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
 			const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
@@ -679,7 +682,7 @@ describe('Statoblast: fork migration', () => {
 			const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			const endTime = await getQuestionEndDate(client, questionId)
-			await mockWindow.setTime(endTime - 1n)
+			await mockWindow.setTime(endTime - 3n)
 
 			const firstHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 			const secondHolder = createWriteClient(mockWindow, TEST_ADDRESSES[3])
