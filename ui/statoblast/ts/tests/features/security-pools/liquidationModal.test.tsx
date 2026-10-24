@@ -1736,7 +1736,7 @@ describe('LiquidationModal', () => {
 				<LiquidationModal
 					accountAddress={defaultCallerVaultAddress}
 					closeLiquidationModal={() => undefined}
-					currentPoolOracleManagerDetails={undefined}
+					currentPoolOracleManagerDetails={createOracleManagerDetails({ isPriceValid: false, lastPrice: 3n * ATTO_ETH_PER_ETH, lastSettlementTimestamp: 1n, priceValidUntilTimestamp: 3601n })}
 					isOnActiveAppChain
 					liquidationDebtEthAmount='1'
 					liquidationManagerAddress={zeroAddress}
