@@ -72,6 +72,7 @@ contract SharedPoolPriceFeed {
 	address public pendingReportSponsor;
 	address public pendingCoordinator;
 	uint256 public pendingReportMaxSettlementBaseFeeAttoEthPerGas;
+	uint256 public pendingExposureLimitAttoEth;
 	uint256 public lastPrice;
 	uint256 public lastSettlementTimestamp;
 	uint256 private checkpointedExposureAttoEth;
@@ -153,6 +154,13 @@ contract SharedPoolPriceFeed {
 		return ISharedPoolPortfolioPriceCheckpoint(portfolio).oracleExposure(universeId);
 	}
 
+	/// @notice New commitments may use only the exposure already secured by the
+	/// pending report. Deposits, retirement and collateral repair remain available.
+	/// Settlement still checks current exposure and the final report's gas costs.
+	function validateExposure() external view {
+		require(pendingReportId == 0 || aggregateExposureAttoEth() <= pendingExposureLimitAttoEth, 'Pending report exposure exceeded');
+	}
+
 	/// @notice Report collateral covers aggregate standing commitment or funded demand.
 	function minimumToken1ReportAttoEth() public view returns (uint256) {
 		uint256 priorityFeeReportAttoEth = _minimumToken1ReportAttoEthForGasPrice(initialReportPriorityFeeAttoEthPerGas);
@@ -212,6 +220,9 @@ contract SharedPoolPriceFeed {
 		require(initialRepReportAttoRep <= type(uint128).max, 'REP report exceeds uint128');
 		require(escalationHaltAttoEth <= type(uint128).max, 'Oracle escalation halt amount exceeds uint128 maximum');
 		require(bountyAttoEth <= type(uint96).max, 'Oracle settler reward exceeds uint96 maximum');
+		pendingExposureLimitAttoEth =
+			(initialWethReportAttoEth - _minimumToken1ReportAttoEthForGasPrice(initialReportPriorityFeeAttoEthPerGas)) *
+			OPEN_INTEREST_DIVIDER;
 		uint256 impliedRequestBaseFeeAttoEthPerGas =
 			(bountyAttoEth - REQUEST_BOUNTY_OFFSET_ATTO_ETH) / _requestGasUnits();
 		pendingReportMaxSettlementBaseFeeAttoEthPerGas =
@@ -274,6 +285,7 @@ contract SharedPoolPriceFeed {
 		pendingReportSponsor = address(0);
 		pendingCoordinator = address(0);
 		pendingReportMaxSettlementBaseFeeAttoEthPerGas = 0;
+		pendingExposureLimitAttoEth = 0;
 	}
 
 	function _notifyCoordinator(address coordinator, uint256 reportId, bool accepted, string memory reason) private {

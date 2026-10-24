@@ -98,6 +98,13 @@ contract CommitmentIndexHarness {
 		index.observeHealthy(first);
 		index.observeHealthy(second);
 	}
+	function recover(uint96 id, uint256 rep, uint256 commitment, uint256 price) external {
+		index.replace(id, rep, commitment, price);
+		index.clearLiquidation(id);
+	}
+	function cure(uint96 id, uint256 price, uint256 multiplier, uint256 minimumCommitment, uint256 demand) external {
+		index.cure(id, price, multiplier, minimumCommitment, demand);
+	}
 	function credit(uint256 price, uint256 ethAmount, uint256 repAmount) external {
 		require(index.creditFees(price, ethAmount, repAmount), 'No eligible recipients');
 	}

@@ -106,6 +106,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 	event BranchActivated(uint248 indexed universeId, uint256 fundedCash, uint256 protectedCommitment);
 	event NeutralCashRecovered(uint248 indexed universeId, uint256 indexed questionId, address indexed owner, uint256 shares, uint256 cash);
 	event ProtectedPrincipalBurned(uint248 indexed universeId, uint256 rep);
+	event ProtocolIncomeCollected(uint248 indexed universeId, address indexed keeper, uint256 reward, uint256 burned);
 
 	constructor(address authority, Zoltar protocol, SecurityPoolPortfolioRecapAuctionDeployer auctions) {
 		require(authority != address(0) && address(auctions).code.length != 0, 'Fork dependencies missing');
@@ -287,8 +288,8 @@ contract SecurityPoolPortfolioForkCoordinator {
 			branch.protectedCommitment = Math.min(shortfall, childCapital.maximumHealthyCommitment(unchosen));
 			uint256 missingCash = fork.units - branch.parentCash;
 			if (unchosen != 0 && missingCash != 0) {
-				uint256 reservePrice = Math.mulDiv(1e18, 1e18, fork.price, Math.Rounding.Ceil);
-				branch.auction = auctionDeployer.create(SecurityPoolPortfolioRecapAuction.Configuration(address(this), uint48(zoltar.getForkChoiceDeadline(branch.parent)), uint48(zoltar.getForkRecapitalizationDeadline(branch.parent)), unchosen, missingCash, reservePrice, reservePrice <= type(uint256).max / 2 ? reservePrice * 2 : reservePrice, childCapital.securityMultiplierBps(), branch.protectedCommitment));
+				uint256 referencePrice = Math.mulDiv(1e18, 1e18, fork.price, Math.Rounding.Ceil);
+				branch.auction = auctionDeployer.create(SecurityPoolPortfolioRecapAuction.Configuration(address(this), uint48(zoltar.getForkChoiceDeadline(branch.parent)), uint48(zoltar.getForkRecapitalizationDeadline(branch.parent)), unchosen, missingCash, fork.price, referencePrice <= type(uint256).max / 2 ? referencePrice * 2 : referencePrice, childCapital.securityMultiplierBps(), branch.protectedCommitment));
 			}
 		} else {
 			// A stale source price never authorizes a sale. Preserve the unsold
@@ -391,26 +392,39 @@ contract SecurityPoolPortfolioForkCoordinator {
 
 	/// @notice Burn only the unchosen protocol reserve after its liabilities retire.
 	function collectProtectedPrincipal(uint248 child) external nonReentrant {
+		uint256 initialGas = gasleft();
 		require(branches[child].ready, 'Branch is not active');
 		SecurityPoolCapitalLedger capital = portfolio.capitalLedger(child);
 		// A later fork freezes pledged backing, not earlier released principal
 		// or income. Those parent claims remain collectable without new retirement.
-		if (zoltar.getForkTime(child) == 0) capital.serveRetirement();
+		bool forked = zoltar.getForkTime(child) != 0;
+		if (!forked) capital.serveRetirement();
 		uint256 ethBefore = address(this).balance;
 		capital.claimEarnings();
-		// Source recovery and branch cash share this custody address. Dispose only
-		// of the protocol-owned ETH earnings received by this claim.
-		uint256 ethIncome = address(this).balance - ethBefore;
-		if (ethIncome != 0) {
-			(bool sent, ) = Constants.BURN_ADDRESS.call{value: ethIncome}('');
-			require(sent, 'Protocol fee burn failed');
-		}
 		SecurityPoolCapitalLedger.Owner memory account = capital.ownerAccount(address(this));
+		uint256 reserve = account.executionReserveAttoEth;
+		// An unchosen protocol position's parent budget is also released after
+		// the next fork choice deadline, even if its frozen K remains recorded.
+		if (forked && block.timestamp >= zoltar.getForkChoiceDeadline(child))
+			reserve += capital.positionExecutionReserveAttoEth(account.positionId);
+		if (reserve != 0) capital.withdrawExecutionReserve(reserve);
 		if (account.freeAttoRep != 0) capital.withdrawPrincipal(account.freeAttoRep, address(this));
 		uint256 rep = IERC20(address(zoltar.getRepToken(child))).balanceOf(address(this));
 		if (rep != 0) {
 			zoltar.burnRep(child, rep);
 			emit ProtectedPrincipalBurned(child, rep);
+		}
+		// Source recovery and branch cash share this custody address. Only newly
+		// received protocol income funds this collector; the rest is burned.
+		uint256 income = address(this).balance - ethBefore;
+		if (income != 0) {
+			uint256 gasPrice = Math.min(tx.gasprice, block.basefee + 2e9);
+			uint256 reward = Math.min(income, Math.mulDiv((initialGas - gasleft() + 60_000) * gasPrice, 5, 4));
+			(bool paid, ) = msg.sender.call{value: reward}('');
+			require(paid, 'Protocol collector payment failed');
+			(bool sent, ) = Constants.BURN_ADDRESS.call{value: income - reward}('');
+			require(sent, 'Protocol fee burn failed');
+			emit ProtocolIncomeCollected(child, msg.sender, reward, income - reward);
 		}
 	}
 

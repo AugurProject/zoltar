@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { SecurityPoolCapitalLedger, ICapitalFeeStreams } from '../../statoblast/SecurityPoolCapitalLedger.sol';
+import { SecurityPoolCapitalLedger } from '../../statoblast/SecurityPoolCapitalLedger.sol';
+import { ICapitalFeeStreams } from '../../statoblast/interfaces/ICapitalAccounting.sol';
 import { SecurityPoolCommitmentIndex } from '../../statoblast/SecurityPoolCommitmentIndex.sol';
 import { SecurityPoolCapitalFeeStreams } from '../../statoblast/SecurityPoolCapitalFeeStreams.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
@@ -39,7 +40,8 @@ contract CapitalLedgerTestComponents {
 		return new SecurityPoolCommitmentIndex(authority);
 	}
 	function createStreams(address authority) external returns (ICapitalFeeStreams) {
-		return ICapitalFeeStreams(address(new SecurityPoolCapitalFeeStreams(authority, uint48(block.timestamp))));
+		return
+			ICapitalFeeStreams(address(new SecurityPoolCapitalFeeStreams(authority, uint48(block.timestamp), 1 days)));
 	}
 }
 
@@ -57,6 +59,10 @@ contract CapitalLedgerHarness {
 		zoltar.mint(owner, amount);
 	}
 	function checkpointCapitalFees(uint248, uint48) external {}
+	function priceFeed(uint248) external view returns (address) {
+		return address(this);
+	}
+	function validateExposure() external pure {}
 	function forkController() external pure returns (address) {
 		return address(0);
 	}

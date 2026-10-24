@@ -4,7 +4,7 @@ pragma solidity 0.8.35;
 import { Constants } from '../Constants.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
-/// @notice Fixed-window descending-price recap purchases with atomic underwriting.
+/// @notice Fixed-window discounted recap purchases, selling free surplus first.
 /// @dev The coordinator installs the buyer's personal collateral and commitment in
 /// the same transaction as commitFill. There are no pending bids or winner claims.
 /// Neither fill nor finalization visits previous buyers.
@@ -12,6 +12,7 @@ contract SecurityPoolPortfolioRecapAuction {
 	uint256 private constant PRICE_PRECISION = 1e18;
 	uint256 private constant BPS = 10_000;
 	uint256 private constant MIN_FILL_SIZE_DIVISOR = 100_000;
+	uint256 public constant reservePriceAttoEthPerRep = 1;
 
 	struct Configuration {
 		address owner;
@@ -19,7 +20,7 @@ contract SecurityPoolPortfolioRecapAuction {
 		uint48 recapitalizationDeadline;
 		uint256 unchosenRepAttoRep;
 		uint256 missingCashAttoEth;
-		uint256 reservePriceAttoEthPerRep;
+		uint256 referencePriceAttoRepPerEth;
 		uint256 startingPriceAttoEthPerRep;
 		uint256 securityMultiplierBps;
 		uint256 maximumCommitmentAttoEth;
@@ -30,12 +31,14 @@ contract SecurityPoolPortfolioRecapAuction {
 	uint48 public immutable recapitalizationDeadline;
 	uint256 public immutable unchosenRepAttoRep;
 	uint256 public immutable missingCashAttoEth;
-	uint256 public immutable reservePriceAttoEthPerRep;
+	uint48 public immutable priceFloorTimestamp;
+	uint256 public immutable referencePriceAttoRepPerEth;
+	uint256 public immutable securityMultiplierBps;
 	uint256 public immutable startingPriceAttoEthPerRep;
 	uint256 public immutable maximumRepSoldAttoRep;
 	uint256 public immutable maximumCommitmentAttoEth;
-	uint256 public immutable commitmentPerRepLimit;
-	uint256 public immutable minimumFillAttoEth;
+	uint256 private immutable minimumCashFillAttoEth;
+	uint256 private immutable minimumRepFillAttoRep;
 	uint256 public raisedAttoEth;
 	uint256 public soldAttoRep;
 	uint256 public assignedCommitmentAttoEth;
@@ -51,8 +54,8 @@ contract SecurityPoolPortfolioRecapAuction {
 		require(configuration.choiceDeadline != 0 && configuration.recapitalizationDeadline > configuration.choiceDeadline, 'Invalid fixed recap deadlines');
 		require(configuration.unchosenRepAttoRep <= Constants.MAX_ATTO_REP, 'Recap REP inventory exceeds supply');
 		require(configuration.missingCashAttoEth <= type(uint128).max, 'Recap cash requirement is too large');
-		require(configuration.reservePriceAttoEthPerRep != 0, 'Recap reserve price is zero');
-		require(configuration.startingPriceAttoEthPerRep >= configuration.reservePriceAttoEthPerRep, 'Recap starting price is below reserve');
+		require(configuration.referencePriceAttoRepPerEth != 0, 'Recap reference price is zero');
+		require(configuration.startingPriceAttoEthPerRep >= reservePriceAttoEthPerRep, 'Recap starting price is below reserve');
 		require(configuration.securityMultiplierBps > BPS, 'Recap backing multiplier must exceed one');
 		require(configuration.unchosenRepAttoRep != 0 || configuration.maximumCommitmentAttoEth == 0, 'Empty inventory has commitment');
 		owner = configuration.owner;
@@ -60,15 +63,17 @@ contract SecurityPoolPortfolioRecapAuction {
 		recapitalizationDeadline = configuration.recapitalizationDeadline;
 		unchosenRepAttoRep = configuration.unchosenRepAttoRep;
 		missingCashAttoEth = configuration.missingCashAttoEth;
-		reservePriceAttoEthPerRep = configuration.reservePriceAttoEthPerRep;
+		priceFloorTimestamp =
+			configuration.choiceDeadline +
+			uint48((uint256(configuration.recapitalizationDeadline - configuration.choiceDeadline) * 3) / 4);
+		referencePriceAttoRepPerEth = configuration.referencePriceAttoRepPerEth;
+		securityMultiplierBps = configuration.securityMultiplierBps;
 		startingPriceAttoEthPerRep = configuration.startingPriceAttoEthPerRep;
-		maximumRepSoldAttoRep = Math.min(Math.mulDiv(configuration.missingCashAttoEth, PRICE_PRECISION, configuration.reservePriceAttoEthPerRep), Math.mulDiv(configuration.unchosenRepAttoRep, BPS, configuration.securityMultiplierBps));
+		maximumRepSoldAttoRep = configuration.unchosenRepAttoRep;
 		maximumCommitmentAttoEth = configuration.maximumCommitmentAttoEth;
-		commitmentPerRepLimit =
-			configuration.unchosenRepAttoRep == 0
-				? 0
-				: Math.mulDiv(configuration.maximumCommitmentAttoEth, PRICE_PRECISION, configuration.unchosenRepAttoRep, Math.Rounding.Ceil);
-		minimumFillAttoEth = Math.max(1, configuration.missingCashAttoEth / MIN_FILL_SIZE_DIVISOR);
+		require(configuration.maximumCommitmentAttoEth <= _retainedCapacity(configuration.unchosenRepAttoRep), 'Recap reserve cannot back commitment');
+		minimumCashFillAttoEth = Math.max(1, configuration.missingCashAttoEth / MIN_FILL_SIZE_DIVISOR);
+		minimumRepFillAttoRep = Math.max(1, configuration.unchosenRepAttoRep / MIN_FILL_SIZE_DIVISOR);
 	}
 
 	modifier onlyOwner() {
@@ -77,11 +82,25 @@ contract SecurityPoolPortfolioRecapAuction {
 	}
 
 	function priceAt(uint256 timestamp) public view returns (uint256) {
+		if (timestamp >= priceFloorTimestamp) return reservePriceAttoEthPerRep;
 		if (timestamp <= choiceDeadline) return startingPriceAttoEthPerRep;
-		if (timestamp >= recapitalizationDeadline) return reservePriceAttoEthPerRep;
 		return
 			reservePriceAttoEthPerRep +
-			Math.mulDiv(startingPriceAttoEthPerRep - reservePriceAttoEthPerRep, recapitalizationDeadline - timestamp, recapitalizationDeadline - choiceDeadline);
+			Math.mulDiv(startingPriceAttoEthPerRep - reservePriceAttoEthPerRep, priceFloorTimestamp - timestamp, priceFloorTimestamp - choiceDeadline);
+	}
+
+	/// @dev Match the capital ledger's nested rounding exactly. Sold REP first
+	/// consumes free surplus; further sales transfer only the commitment that the
+	/// unsold REP can no longer secure. The buyer funds that commitment atomically.
+	function _retainedCapacity(uint256 rep) private view returns (uint256) {
+		return Math.mulDiv(Math.mulDiv(rep, BPS, securityMultiplierBps), PRICE_PRECISION, referencePriceAttoRepPerEth);
+	}
+
+	/// @notice A discount also lowers the minimum cash payment. A fixed ETH
+	/// minimum would prevent partial buyers from reaching discounted inventory.
+	function minimumFillAttoEth() public view returns (uint256) {
+		return
+			Math.min(minimumCashFillAttoEth, Math.mulDiv(minimumRepFillAttoRep, priceAt(block.timestamp), PRICE_PRECISION, Math.Rounding.Ceil));
 	}
 
 	/// @notice Cost is rounded up; inventory and cumulative commitment are exact.
@@ -95,7 +114,9 @@ contract SecurityPoolPortfolioRecapAuction {
 		if (rep == 0) return (0, 0, 0);
 		cost = Math.mulDiv(rep, price, PRICE_PRECISION, Math.Rounding.Ceil);
 		commitment =
-			Math.mulDiv(soldAttoRep + rep, maximumCommitmentAttoEth, unchosenRepAttoRep) - assignedCommitmentAttoEth;
+			maximumCommitmentAttoEth -
+			Math.min(maximumCommitmentAttoEth, _retainedCapacity(unchosenRepAttoRep - soldAttoRep - rep)) -
+			assignedCommitmentAttoEth;
 	}
 
 	/// @dev Only the coordinator can fill, after authenticating the buyer's consent
@@ -106,7 +127,7 @@ contract SecurityPoolPortfolioRecapAuction {
 		(rep, commitment, cost) = quote(msg.value, maximumRep);
 		require(rep != 0 && cost == msg.value, 'Recap payment must equal quoted cost');
 		require(commitment <= maximumCommitment, 'Recap commitment exceeds buyer consent');
-		require(cost >= minimumFillAttoEth || soldAttoRep + rep == maximumRepSoldAttoRep || raisedAttoEth + cost == missingCashAttoEth, 'Recap purchase is too small');
+		require(cost >= minimumFillAttoEth() || soldAttoRep + rep == maximumRepSoldAttoRep || raisedAttoEth + cost == missingCashAttoEth, 'Recap purchase is too small');
 		soldAttoRep += rep;
 		raisedAttoEth += cost;
 		assignedCommitmentAttoEth += commitment;

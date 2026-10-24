@@ -122,6 +122,50 @@ describe('Statoblast: central internal settlement units', () => {
 		expect(await quote(2n, 2n, 200n)).toEqual([100n, 200n])
 	})
 
+	test('a real partial maturity on a full timestamp path does not charge the caller for copied ancestors', async () => {
+		for (let bit = 0; bit < 48; bit++) {
+			const questionId = BigInt(bit + 1)
+			await mint(1n, questionId, 1n)
+			await schedule(1n, questionId, Number(1n << BigInt(bit)))
+		}
+		const hash = await freeze(1n, 2)
+		const gas = (await client.waitForTransactionReceipt({ hash })).gasUsed
+		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ partialTimestampMaturityGas: gas })
+		expect(gas).toBeLessThan(600_000n)
+		expect((await book(1n)).slice(0, 2)).toEqual([47n, 47n])
+		expect(await quote(1n, 1n, 1n)).toEqual([1n, 1n])
+		expect((await question(1n, 2n))[1]).toBe(0n)
+	})
+
+	test('lifetime finality prefixes can wrap while every live and inherited claim remains exact', async () => {
+		const maximum = (1n << 256n) - 1n
+		await mint(1n, 1n, maximum)
+		await schedule(1n, 1n, 10)
+		await freeze(1n, 11)
+		await redeem(1n, 1n, maximum, 11)
+		expect((await book(1n)).slice(0, 2)).toEqual([0n, 0n])
+		await mint(1n, 2n, maximum, 0n, 12)
+		await schedule(1n, 2n, 20, 12)
+		await schedule(1n, 2n, 0, 12)
+		await freeze(1n, 21)
+		expect((await book(1n)).slice(0, 2)).toEqual([maximum, maximum])
+		await schedule(1n, 2n, 30, 21)
+		await freeze(1n, 31)
+		expect((await book(1n)).slice(0, 2)).toEqual([0n, 0n])
+		expect(await quote(1n, 2n, maximum)).toEqual([maximum, maximum])
+		await freeze(1n, 31)
+		await seal(1n, 31)
+		await child(1n, 0n)
+		await mint(2n, 3n, maximum, 0n, 31)
+		const deadline = 31 + 3 * 86_400 + 1
+		await schedule(2n, 3n, deadline, 31)
+		await freeze(2n, deadline + 1)
+		expect((await book(2n)).slice(0, 2)).toEqual([0n, 0n])
+		expect(await quote(2n, 3n, maximum)).toEqual([maximum, maximum])
+		expect(await quote(2n, 2n, maximum)).toEqual([0n, 0n])
+		expect(await quote(1n, 2n, maximum)).toEqual([maximum, maximum])
+	})
+
 	test('fork recovery eligibility matches lazy finality, exact cutoffs and nested minimum response periods', async () => {
 		const live = (bookId: bigint, questionId: bigint, timestamp: number) => client.readContract({ address, abi: parseAbi(['function hasLiveForkRecoveryRight(uint64 bookId,uint256 questionId,uint48 forkTimestamp) view returns(bool)']), functionName: 'hasLiveForkRecoveryRight', args: [bookId, questionId, timestamp] })
 		await mint(1n, 1n, 100n)
@@ -308,7 +352,7 @@ describe('Statoblast: immutable settlement Patricia roots', () => {
 	const target = () => ({ abi: mapArtifact.abi, address })
 	const set = (root: bigint, key: bigint, value: bigint, weight = value) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'set', args: [root, key, value, weight] }))
 	const get = (root: bigint, key: bigint) => client.readContract({ ...target(), functionName: 'get', args: [root, key] })
-	const ceiling = (root: bigint, key: bigint) => client.readContract({ ...target(), functionName: 'ceiling', args: [root, key] })
+	const prefix = (root: bigint, key: bigint) => client.readContract({ ...target(), functionName: 'prefixTotalModular', args: [root, key] })
 	const total = (root: bigint) => client.readContract({ ...target(), functionName: 'total', args: [root] })
 
 	beforeAll(async () => {
@@ -321,7 +365,7 @@ describe('Statoblast: immutable settlement Patricia roots', () => {
 		await setBaselineSnapshot()
 	})
 
-	test('full-width keys, replacements, deletions and prefix splits preserve old snapshots', async () => {
+	test('full-width keys, replacements, deletions and prefix reads preserve old snapshots', async () => {
 		const high = 1n << 255n
 		await set(0n, high, 7n)
 		await set(1n, 0n, 3n)
@@ -333,32 +377,106 @@ describe('Statoblast: immutable settlement Patricia roots', () => {
 		expect(await total(6n)).toBe(31n)
 		expect(await get(4n, high)).toBe(7n)
 		expect(await get(6n, high)).toBe(17n)
-		expect(await ceiling(6n, 1n)).toBe(17n)
-		expect(await ceiling(6n, high + 2n)).toBe(0n)
-		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'split', args: [6n, high] }))
-		expect(await total(7n)).toBe(20n)
-		expect(await total(8n)).toBe(11n)
-		expect(await total(6n)).toBe(31n)
-		expect(await get(7n, high + 1n)).toBe(0n)
-		expect(await get(8n, high)).toBe(0n)
+		expect(await prefix(6n, high - 1n)).toBe(3n)
+		expect(await prefix(6n, high)).toBe(20n)
+		expect(await prefix(6n, (1n << 256n) - 1n)).toBe(31n)
+		expect(await prefix(4n, high)).toBe(23n)
+		expect(await get(4n, 99n)).toBe(13n)
+		expect(await get(6n, 99n)).toBe(0n)
 	})
 
-	test('maximum uint48 timestamp depth stays within one transaction for replacement and prefix splitting', async () => {
+	test('only finality maps wrap cumulative weights and checked maps still reject overflow', async () => {
+		const maximum = (1n << 256n) - 1n
+		const modular = (root: bigint, key: bigint, value: bigint) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'setModular', args: [root, key, value, value] }))
+		await modular(0n, 1n, maximum)
+		await expect(set(1n, 2n, maximum)).rejects.toThrow()
+		await modular(1n, 2n, maximum)
+		expect(await prefix(2n, 0n)).toBe(0n)
+		expect(await prefix(2n, 1n)).toBe(maximum)
+		expect(await prefix(2n, 2n)).toBe(maximum - 1n)
+		await modular(2n, 2n, 0n)
+		expect(await prefix(3n, 2n)).toBe(maximum)
+		expect(await prefix(2n, 2n)).toBe(maximum - 1n)
+	})
+
+	test('constant-work frozen history appends match sorted ceilings across immutable fork snapshots', async () => {
+		const histories: { timestamp: number; value: bigint }[][] = [[]]
+		let seed = 31n
+		let maximumGas = 0n
+		for (let index = 1; index <= 150; index++) {
+			seed = (seed * 1664525n + 1013904223n) % (1n << 32n)
+			const parent = index > 128 && index % 3 === 0 ? Number(seed % BigInt(histories.length)) : index - 1
+			const prior = histories[parent]
+			if (prior === undefined) throw new Error('Missing frozen history model')
+			const timestamp = (prior.at(-1)?.timestamp ?? 0) + 1 + Number(seed % 13n)
+			const value = (1n << 248n) + BigInt(index)
+			const hash = await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'appendFrozen', args: [BigInt(parent), timestamp, value] }))
+			const gas = (await client.waitForTransactionReceipt({ hash })).gasUsed
+			if (gas > maximumGas) maximumGas = gas
+			const entries = [...prior, { timestamp, value }]
+			histories.push(entries)
+			for (const root of [parent, index]) {
+				const model = histories[root]
+				if (model === undefined) throw new Error('Missing frozen fork model')
+				for (const cutoff of [0, timestamp, timestamp + 1, Number(seed % BigInt(timestamp + 1))]) {
+					const expected = model.find(entry => entry.timestamp >= cutoff)?.value ?? 0n
+					expect(await client.readContract({ ...target(), functionName: 'frozenCeiling', args: [BigInt(root), cutoff] })).toBe(expected)
+				}
+			}
+		}
+		expect(maximumGas).toBeLessThan(200_000n)
+		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ frozenHistoryMaximumAppendGas: maximumGas })
+		const last = histories.at(-1)?.at(-1)
+		if (last === undefined) throw new Error('Missing latest frozen checkpoint')
+		await expect(writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'appendFrozen', args: [150n, last.timestamp, 1n] }))).rejects.toThrow('Frozen checkpoints must advance')
+		const maximumTime = Number((1n << 48n) - 1n)
+		const maximumValue = (1n << 256n) - 1n
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'appendFrozen', args: [150n, maximumTime, maximumValue] }))
+		expect(await client.readContract({ ...target(), functionName: 'frozenCeiling', args: [151n, maximumTime] })).toBe(maximumValue)
+		expect(await client.readContract({ ...target(), functionName: 'frozenCeiling', args: [150n, maximumTime] })).toBe(0n)
+	})
+
+	test('maximum uint48 timestamp depth preserves replacement and production fee-history reads', async () => {
 		await set(0n, 0n, 1n)
 		for (let bit = 0; bit < 48; bit++) await set(BigInt(bit + 1), 1n << BigInt(bit), 1n)
 		const replacement = await client.waitForTransactionReceipt({ hash: await set(49n, 0n, 2n) })
-		const splitHash = await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'split', args: [50n, 0n] }))
-		const split = await client.waitForTransactionReceipt({ hash: splitHash })
 		expect(replacement.gasUsed).toBeLessThanOrEqual(16_777_216n)
-		expect(split.gasUsed).toBeLessThanOrEqual(16_777_216n)
-		expect(await total(51n)).toBe(2n)
-		expect(await total(52n)).toBe(48n)
+		expect(await prefix(50n, 0n)).toBe(2n)
+		expect(await prefix(50n, (1n << 48n) - 1n)).toBe(50n)
+		expect(await client.readContract({ ...target(), functionName: 'prefixTotal', args: [50n, 0n] })).toBe(2n)
+		expect(await client.readContract({ ...target(), functionName: 'prefixTotal', args: [50n, (1n << 48n) - 1n] })).toBe(50n)
+		expect(await client.readContract({ ...target(), functionName: 'floor', args: [50n, 0n] })).toBe(2n)
+		expect(await client.readContract({ ...target(), functionName: 'floor', args: [50n, (1n << 48n) - 1n] })).toBe(1n)
 		expect(await total(49n)).toBe(49n)
-		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ timestampDepth: 48, replacementGas: replacement.gasUsed, splitGas: split.gasUsed })
+		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ timestampDepth: 48, replacementGas: replacement.gasUsed })
 	})
 
-	test('mixed immutable updates agree with independent sorted-map lookups and every split boundary', async () => {
+	test('empty maturity prefixes preserve their original root without copying the timestamp path', async () => {
+		for (let bit = 0; bit < 48; bit++) await set(BigInt(bit), 1n << BigInt(bit), 1n)
+		const root = await client.readContract({ ...target(), functionName: 'roots', args: [48n] })
+		const gas = await client.estimateContractGas({ ...target(), functionName: 'prefixTotalModular', args: [48n, 0n] })
+		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ emptyTimestampPrefixGas: gas })
+		expect(gas).toBeLessThan(500_000n)
+		expect(await prefix(48n, 0n)).toBe(0n)
+		expect(await client.readContract({ ...target(), functionName: 'roots', args: [48n] })).toBe(root)
+		expect(await total(48n)).toBe(48n)
+	})
+
+	test('a fully matured timestamp tree reuses its original root and keeps old snapshots immutable', async () => {
+		const maximum = (1n << 48n) - 1n
+		for (let bit = 0; bit < 48; bit++) await set(BigInt(bit), maximum - (1n << BigInt(bit)), 1n)
+		const root = await client.readContract({ ...target(), functionName: 'roots', args: [48n] })
+		const gas = await client.estimateContractGas({ ...target(), functionName: 'prefixTotalModular', args: [48n, maximum] })
+		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ completeTimestampPrefixGas: gas })
+		expect(gas).toBeLessThan(500_000n)
+		expect(await prefix(48n, maximum)).toBe(48n)
+		expect(await client.readContract({ ...target(), functionName: 'roots', args: [48n] })).toBe(root)
+		expect(await total(48n)).toBe(48n)
+	})
+
+	test('mixed immutable updates agree with independent sorted-map lookups and prefix boundaries', async () => {
 		const values = new Map<bigint, bigint>()
+		const snapshots = [new Map<bigint, bigint>()]
 		let seed = 19n
 		let root = 0n
 		for (let index = 0; index < 48; index++) {
@@ -368,25 +486,26 @@ describe('Statoblast: immutable settlement Patricia roots', () => {
 			await set(root, key, value)
 			root++
 			values.set(key, value)
+			snapshots.push(new Map(values))
 			expect(await total(root)).toBe([...values.values()].reduce((a, b) => a + b, 0n))
 		}
 		const keys = [...values.keys()].sort((a, b) => {
 			if (a === b) return 0
 			return a < b ? -1 : 1
 		})
-		let nextRoot = root
 		for (const key of keys.filter((_, index) => index % 4 === 0)) {
 			const expectedValue = values.get(key)
 			if (expectedValue === undefined) throw new Error('Missing test value')
 			expect(await get(root, key)).toBe(expectedValue)
-			const successor = keys.find(candidate => candidate >= key + 1n)
-			const expectedSuccessor = successor === undefined ? 0n : values.get(successor)
-			if (expectedSuccessor === undefined) throw new Error('Missing successor value')
-			expect(await ceiling(root, key + 1n)).toBe(expectedSuccessor)
-			await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'split', args: [root, key] }))
-			const expected = [...values.entries()].filter(([candidate]) => candidate <= key).reduce((sum, [, value]) => sum + value, 0n)
-			expect(await total(++nextRoot)).toBe(expected)
-			expect(await total(++nextRoot)).toBe((await total(root)) - expected)
+			for (const snapshot of [0, 17, 31, Number(root)]) {
+				const model = snapshots[snapshot]
+				if (model === undefined) throw new Error('Missing persistent map snapshot')
+				for (const cutoff of [key - 1n, key, key + 1n, (1n << 256n) - 1n]) {
+					if (cutoff < 0n) continue
+					const expected = [...model.entries()].filter(([candidate]) => candidate <= cutoff).reduce((sum, [, value]) => sum + value, 0n)
+					expect(await prefix(BigInt(snapshot), cutoff)).toBe(expected)
+				}
+			}
 		}
 	})
 
@@ -403,8 +522,14 @@ describe('Statoblast: immutable settlement Patricia roots', () => {
 		await set(root, 0n, 2n)
 		expect(await get(root + 1n, 0n)).toBe(2n)
 		expect(await get(root, 0n)).toBe(1n)
-		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'split', args: [root, 0n] }))
-		expect(await total(root + 2n)).toBe(1n)
-		expect(await total(root + 3n)).toBe(256n)
+		expect(await prefix(root + 1n, 0n)).toBe(2n)
+		expect(await prefix(root, 0n)).toBe(1n)
+		expect(await prefix(root + 1n, (1n << 256n) - 1n)).toBe(258n)
+		await set(root + 1n, 0n, 0n)
+		expect(await total(root + 2n)).toBe(256n)
+		expect(await get(root + 2n, 0n)).toBe(0n)
+		expect(await prefix(root + 2n, 0n)).toBe(0n)
+		expect(await get(root + 1n, 0n)).toBe(2n)
+		expect(await total(root)).toBe(257n)
 	})
 })

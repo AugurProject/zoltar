@@ -74,10 +74,10 @@ describe('Statoblast: voluntary portfolio settlement repair', () => {
 		if (position === 0n) throw new Error('Chosen commitment missing')
 		await writeContractAndWait(owner(), () => owner().writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'requestRetirement', args: [position] }))
 		const queued = await totals()
-		await expect(repair(child, 1n)).rejects.toThrow('Insufficient healthy shared commitment')
+		await expect(repair(child, 1n)).rejects.toThrow('Healthy commitment insufficient')
 		expect((await totals()).slice(0, 2)).toEqual(queued.slice(0, 2))
 		// Increasing commitment requires explicitly giving up the existing retirement priority.
-		await expect(owner().writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'authorize', args: [20n * unit] })).rejects.toThrow('Cancel retirement before authorizing')
+		await expect(owner().writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'authorize', args: [20n * unit] })).rejects.toThrow('Cancel retirement first')
 		await writeContractAndWait(owner(), () => owner().writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'cancelRetirement', args: [position] }))
 		await writeContractAndWait(owner(), () => owner().writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'fundExecutionReserve', args: [owner().account.address], value: unit }))
 		await writeContractAndWait(owner(), () => owner().writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'authorize', args: [20n * unit] }))

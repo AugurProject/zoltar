@@ -129,7 +129,7 @@ describe('Statoblast: central capital shared price feed', () => {
 		await expect(fixture.mint()).rejects.toThrow()
 	})
 
-	test('an underfunded renewal is rejected against current exposure without extending the accepted price', async () => {
+	test('mature renewals reject commitment growth beyond funded report exposure before it can invalidate settlement', async () => {
 		await fixture.prepare(1_000n * unit, 100n * unit)
 		const owner = fixture.owner()
 		const shared = await feed()
@@ -139,12 +139,35 @@ describe('Statoblast: central capital shared price feed', () => {
 		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
 		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), 2n * unit)
 		const reportId = await getPendingReportId(owner, coordinator)
+		await fixture.base.mockWindow.advanceTime(481n)
+		expect((await owner.getBlock()).timestamp).toBeLessThan(expiry)
+		await expect(fixture.authorize(200n * unit)).rejects.toThrow('Pending report exposure exceeded')
+		await openOracleSettle(owner, reportId)
+		expect(await owner.readContract({ ...target, functionName: 'reportOutcome', args: [reportId] })).toBe(1n)
+		expect(await owner.readContract({ ...target, functionName: 'lastPrice' })).toBe(2n * unit)
+		expect(await owner.readContract({ ...capital, functionName: 'priceValidUntil' })).toBeGreaterThan(expiry)
+	})
+
+	test('a prepaid renewal permits supported growth, deposits and retirement and releases its limit after settlement', async () => {
+		await fixture.prepare(1_000n * unit, 100n * unit)
+		const owner = fixture.owner()
+		const target = { abi: feedArtifact.abi, address: await feed() }
+		const capital = { abi: capitalArtifact.abi, address: fixture.capitalLedger }
+		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
+		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), unit, 10n * unit)
+		const reportId = await getPendingReportId(owner, coordinator)
 		await fixture.authorize(200n * unit)
+		await fixture.deposit(unit)
+		const account = await owner.readContract({ ...capital, functionName: 'ownerAccount', args: [owner.account.address] })
+		await writeContractAndWait(owner, () => owner.writeContract({ ...capital, functionName: 'requestRetirement', args: [account.positionId] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ ...capital, functionName: 'withdrawPrincipal', args: [1_001n * unit, owner.account.address] }))
 		await fixture.base.mockWindow.advanceTime(481n)
 		await openOracleSettle(owner, reportId)
-		expect(await owner.readContract({ ...target, functionName: 'reportOutcome', args: [reportId] })).toBe(2n)
-		expect(await owner.readContract({ ...target, functionName: 'lastPrice' })).toBe(unit)
-		expect(await owner.readContract({ ...capital, functionName: 'priceValidUntil' })).toBe(expiry)
+		expect(await owner.readContract({ ...target, functionName: 'reportOutcome', args: [reportId] })).toBe(1n)
+		expect(await owner.readContract({ ...target, functionName: 'pendingReportId' })).toBe(0n)
+		await fixture.deposit(1_000n * unit)
+		await fixture.authorize(500n * unit)
+		expect(await owner.readContract({ ...target, functionName: 'aggregateExposureAttoEth' })).toBe(500n * unit)
 	})
 
 	test('delayed settlement cannot restart the portfolio validity clock', async () => {
@@ -221,8 +244,8 @@ describe('Statoblast: central capital shared price feed', () => {
 		await writeContractAndWait(root, () => root.writeContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'fundVestedFees', args: [unit], value: unit }))
 		expect((await owner.readContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'totals' }))[1]).toBe(768n * unit)
 		expect((await owner.readContract({ abi: bookArtifact.abi, address: book, functionName: 'totals', args: [bookId] }))[0]).toBeGreaterThan(0n)
-		// A sparse new expiry maximizes cold Fenwick writes when deferred fees
-		// resume. Ordinary reward durations must not make oracle acceptance fail.
+		// A sparse new expiry previously forced expensive cold expiry-tree writes.
+		// The append-only schedule must preserve cheap shared recovery at this boundary.
 		const sparseExpiry = (1n << 24n) + 1n
 		await mock.setTime(sparseExpiry - 86_400n - 481n)
 		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
@@ -241,13 +264,13 @@ describe('Statoblast: central capital shared price feed', () => {
 		// the oracle callback. This is one global insertion, not per-owner work.
 		const resumeHash = await writeContractAndWait(owner, () => owner.writeContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'checkpoint' }))
 		const resumeGas = (await owner.waitForTransactionReceipt({ hash: resumeHash })).gasUsed
-		expect(resumeGas).toBeLessThan(8_200_000n)
+		expect(resumeGas).toBeLessThan(1_600_000n)
 		const claimHash = await writeContractAndWait(owner, () => owner.writeContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'claimEarnings' }))
 		const taggedOwnerClaimGas = (await owner.waitForTransactionReceipt({ hash: claimHash })).gasUsed
 		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ composedOracleSettlementGas: receipt.gasUsed, callbackGasBudget: budget, positionSetupGas, resumeGas, taggedOwnerClaimGas })
 		// This full claim also checkpoints the live settlement book and fee clocks.
 		// Each owner has one position, irrespective of the global owner and question count.
-		expect(taggedOwnerClaimGas).toBeLessThan(5_000_000n)
+		expect(taggedOwnerClaimGas).toBeLessThan(1_600_000n)
 	})
 
 	test('a different portfolio has its own price clock and cannot register into this namespace', async () => {

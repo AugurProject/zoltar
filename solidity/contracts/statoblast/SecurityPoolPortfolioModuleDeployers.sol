@@ -26,8 +26,8 @@ contract SecurityPoolCommitmentIndexDeployer {
 	}
 }
 contract SecurityPoolCapitalFeeStreamsDeployer {
-	function create(address authority, uint48 timestamp) external returns (SecurityPoolCapitalFeeStreams) {
-		return new SecurityPoolCapitalFeeStreams(authority, timestamp);
+	function create(address authority, uint48 timestamp, uint48 vestingDuration) external returns (SecurityPoolCapitalFeeStreams) {
+		return new SecurityPoolCapitalFeeStreams(authority, timestamp, vestingDuration);
 	}
 }
 contract SecurityPoolSettlementBookDeployer {

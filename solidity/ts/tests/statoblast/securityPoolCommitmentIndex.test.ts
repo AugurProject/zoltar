@@ -27,6 +27,7 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 	const cancel = (id: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'cancel', args: [id] }))
 	const observe = (price: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'observeHealthy', args: [price] }))
 	const healthEpoch = (id: bigint) => client.readContract({ abi: artifact.abi, address, functionName: 'healthEpoch', args: [id] })
+	const liquidationStarted = async (id: bigint) => BigInt(await client.readContract({ abi: artifact.abi, address, functionName: 'liquidationStarted', args: [id] }))
 	const credit = (price: bigint, eth: bigint, rep: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'credit', args: [price, eth, rep] }))
 	const retire = (price: bigint, demand: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'retire', args: [price, demand] }))
 	const claim = (id: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'claim', args: [id] }))
@@ -412,11 +413,122 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		await validate()
 	})
 
+	test('an adverse oracle observation starts liquidation without a keeper transaction', async () => {
+		const id = await create(100n, 10n, 10n)
+		await observe(10n)
+		await getAnvilWindowEthereum().advanceTime(100n)
+		await observe(11n)
+		const adverseTime = (await client.getBlock()).timestamp
+		expect(await liquidationStarted(id)).toBe(adverseTime)
+		await getAnvilWindowEthereum().advanceTime(100n)
+		await observe(12n)
+		expect(await liquidationStarted(id)).toBe(adverseTime)
+		await observe(10n)
+		expect(await liquidationStarted(id)).toBe(0n)
+		await getAnvilWindowEthereum().advanceTime(100n)
+		await observe(11n)
+		expect(await liquidationStarted(id)).toBe((await client.getBlock()).timestamp)
+	})
+
+	test('same-block recovery and relapse start a new interval without a starter', async () => {
+		const id = await create(100n, 10n, 10n)
+		await observe(11n)
+		const previous = await liquidationStarted(id)
+		await getAnvilWindowEthereum().advanceTime(100n)
+		await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'observeHealthyTwice', args: [10n, 11n] }))
+		expect(await liquidationStarted(id)).toBe((await client.getBlock()).timestamp)
+		expect(await liquidationStarted(id)).toBeGreaterThan(previous)
+	})
+
+	test('new positions do not inherit old distress and healthy mutations reset only their own clock', async () => {
+		const first = await create(100n, 10n, 10n)
+		await observe(11n)
+		const oldStart = await liquidationStarted(first)
+		const second = await create(120n, 10n, 12n)
+		expect(await liquidationStarted(second)).toBe(0n)
+		await getAnvilWindowEthereum().advanceTime(100n)
+		await observe(13n)
+		const later = (await client.getBlock()).timestamp
+		expect(await liquidationStarted(first)).toBe(oldStart)
+		expect(await liquidationStarted(second)).toBe(later)
+		// A still-unhealthy partial top-up or a stale deposit does not announce recovery.
+		await replace(first, 120n, 10n, 12n)
+		expect(await liquidationStarted(first)).toBe(oldStart)
+		// The controller does not certify health against an expired price.
+		await replace(first, 140n, 10n, 14n)
+		expect(await liquidationStarted(first)).toBe(0n)
+		await observe(15n)
+		expect(await liquidationStarted(first)).toBe(oldStart)
+		await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'recover', args: [first, 160n, 10n, 16n] }))
+		expect(await liquidationStarted(first)).toBe(0n)
+		await getAnvilWindowEthereum().advanceTime(100n)
+		await observe(17n)
+		expect(await liquidationStarted(first)).toBe((await client.getBlock()).timestamp)
+		expect(await liquidationStarted(second)).toBe(later)
+	})
+
+	test('partial cure preserves distress until enough unused commitment is removed', async () => {
+		const unit = 10n ** 18n
+		const id = await create(105n * unit, 100n * unit, unit)
+		await observe(unit)
+		await observe(2n * unit)
+		const started = await liquidationStarted(id)
+		const cure = (demand: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'cure', args: [id, 2n * unit, 10_500n, 10n * unit, demand] }))
+		await cure(75n * unit)
+		expect((await account(id)).commitment).toBe(75n * unit)
+		expect(await liquidationStarted(id)).toBe(started)
+		await cure(50n * unit)
+		expect((await account(id)).commitment).toBe(50n * unit)
+		expect(await liquidationStarted(id)).toBe(0n)
+		await getAnvilWindowEthereum().advanceTime(100n)
+		await observe(3n * unit)
+		expect(await liquidationStarted(id)).toBe((await client.getBlock()).timestamp)
+	})
+
+	test('cohort moves and partial takeovers retain source distress while retired positions have no clock', async () => {
+		const source = await create(100n, 10n, 10n)
+		await observe(11n)
+		const started = await liquidationStarted(source)
+		await request(source)
+		await cancel(source)
+		const receiver = await split(source, 50n, 5n, 10n, 12n)
+		expect(await liquidationStarted(source)).toBe(started)
+		expect(await liquidationStarted(receiver)).toBe(0n)
+		await request(source)
+		await retire(0n, 5n)
+		expect(await liquidationStarted(source)).toBe(0n)
+		await claim(source)
+		expect(await liquidationStarted(source)).toBe(0n)
+	})
+
+	test('imported positions start distress at their first adverse child oracle observation', async () => {
+		await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'initCohorts', args: [1n, 2n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'importPosition', args: [owner(1), 100n, 10n, 10n, 1n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'importProtocolReserve', args: [owner(2), 100n, 10n, 10n] }))
+		expect(await liquidationStarted(1n)).toBe(0n)
+		expect(await liquidationStarted(2n)).toBe(0n)
+		await getAnvilWindowEthereum().advanceTime(100n)
+		await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'sealImports' }))
+		await observe(11n)
+		const started = (await client.getBlock()).timestamp
+		expect(await liquidationStarted(1n)).toBe(started)
+		expect(await liquidationStarted(2n)).toBe(started)
+	})
+
+	test('execution rewards preserve funded residual floors and release underfunded budgets proportionally', async () => {
+		const reward = (reserve: bigint, remaining: bigint) => client.readContract({ abi: artifact.abi, address, functionName: 'executionReward', args: [reserve, 100n, remaining, 0n] })
+		expect(await reward(200n, 50n)).toBe(50n)
+		expect(await reward(25n, 50n)).toBe(13n)
+		expect(await reward(25n, 0n)).toBe(25n)
+		expect(await reward(0n, 50n)).toBe(0n)
+	})
+
 	test('only the owning portfolio can mutate or collect the index', async () => {
 		await expect(writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address, functionName: 'create', args: [owner(1), 10n, 10n, 10n] }))).rejects.toThrow('Only portfolio')
 		await create(10n, 10n, 10n)
 		await expect(writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address, functionName: 'claim', args: [1n] }))).rejects.toThrow('Only portfolio')
 		await expect(writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address, functionName: 'observeHealthy', args: [0n] }))).rejects.toThrow('Only portfolio')
+		await expect(writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address, functionName: 'clearLiquidation', args: [1n] }))).rejects.toThrow('Only portfolio')
 	})
 
 	test('fork imports preserve cohorts and cannot refill a sealed child retirement group', async () => {

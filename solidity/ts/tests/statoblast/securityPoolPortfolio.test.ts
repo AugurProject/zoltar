@@ -69,7 +69,7 @@ describe('Statoblast: central portfolio and native question integration', () => 
 	test('two questions consume one capacity budget while REP remains in one ledger', async () => {
 		await fixture.prepare(1_000n * unit, 100n * unit)
 		await fixture.mint(60n * unit)
-		await expect(fixture.mint(41n * unit, fixture.secondQuestionId)).rejects.toThrow('Insufficient healthy shared commitment')
+		await expect(fixture.mint(41n * unit, fixture.secondQuestionId)).rejects.toThrow('Healthy commitment insufficient')
 		await fixture.mint(39n * unit, fixture.secondQuestionId)
 		expect(await demand()).toBeLessThanOrEqual(99n * unit)
 		expect(await demand()).toBeGreaterThan(98n * unit)
@@ -142,7 +142,7 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		const secondPool = fixture.poolFor(fixture.base.questionId, fixture.base.genesisUniverse, zeroAddress, second)
 		expect(secondPool.securityPool).not.toBe(fixture.poolFor(fixture.base.questionId).securityPool)
 		await fixture.refreshPrice(fixture.base.questionId, unit, second)
-		await expect(fixture.mint(unit, fixture.base.questionId, { namespace: second })).rejects.toThrow('Insufficient healthy shared commitment')
+		await expect(fixture.mint(unit, fixture.base.questionId, { namespace: second })).rejects.toThrow('Healthy commitment insufficient')
 		await fixture.refreshPrice()
 		await fixture.mint(unit)
 		expect(await balanceOfShares(fixture.owner(), secondPool.shareToken, fixture.base.genesisUniverse, fixture.other().account.address)).toEqual([0n, 0n, 0n])

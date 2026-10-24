@@ -1095,6 +1095,7 @@ for (const change of ['fresh price', 'pending request', 'queue fee'] as const) {
 					if (request.functionName === 'isPriceValid') return change === 'queue fee' ? !changed : changed && change === 'fresh price'
 					if (request.functionName === 'pendingReportId') return changed && change === 'pending request' ? 1n : 0n
 					if (request.functionName === 'lastSettlementTimestamp') return 1n
+					if (request.functionName === 'priceValidUntil') return 1000n
 					if (request.functionName === 'lastPrice') return 10n ** 18n
 					if (request.functionName === 'getPendingSettlementOperationIds') return []
 					if (request.functionName === 'MAX_PENDING_SETTLEMENT_OPERATIONS') return 4n
@@ -1103,6 +1104,7 @@ for (const change of ['fresh price', 'pending request', 'queue fee'] as const) {
 				}),
 				getGasPrice: async () => 1n,
 				estimateGas: async () => 100000n,
+				call: async () => ({ data: '0x' }),
 				getBalance: async () => 1000n,
 				waitForTransactionReceipt: async () => receipt,
 			},
@@ -1115,7 +1117,12 @@ for (const change of ['fresh price', 'pending request', 'queue fee'] as const) {
 			expect(transactionSteps.value?.steps.at(-1)?.phase).toBe('review')
 			changed = true
 			confirm()
-			expect(await action).toBeInstanceOf(Error)
+			const expectedError = {
+				'fresh price': 'A fresh oracle price is already available.',
+				'pending request': 'An oracle price request is already pending.',
+				'queue fee': 'Oracle funding requirements changed. Review funding again before sending.',
+			}[change]
+			expect(await action).toEqual(new Error(expectedError))
 			expect(sendTransaction).not.toHaveBeenCalled()
 		} finally {
 			scope.abort()

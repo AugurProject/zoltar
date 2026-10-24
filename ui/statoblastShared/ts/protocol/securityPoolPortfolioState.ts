@@ -10,7 +10,7 @@ const abi = parseAbi([
 	'function feeTimestamp(uint248 universeId) view returns(uint48)',
 	'function isPriceValid() view returns(bool)',
 	'function question(uint64 bookId,uint256 questionId) view returns((uint256 units,uint256 outcomeSupplyAttoShares,uint48 finalAfter,uint96 feeRateAttoEthPerSecond,uint48 feeStart,uint48 feeEnd,uint256 feePrincipalAttoEth) state,uint64 frozenBookId)',
-	'function books(uint64 bookId) view returns(uint256 cash,uint256 units,uint256 fees,uint64 questionRoot,uint64 finalityRoot,uint64 frozenRoot,uint48 timestamp,bool isSealed,uint64 feeRateRoot,uint64 feeEndRoot,uint64 feeModeRoot,bool feesEnabled,uint48 minimumFinalAfter,uint48 feeTimeOffset)',
+	'function books(uint64 bookId) view returns(uint256 cash,uint256 units,uint256 fees,uint64 questionRoot,uint64 finalityRoot,uint64 frozenRoot,uint48 timestamp,bool isSealed,uint64 feeRateRoot,uint64 feeEndRoot,uint64 feeModeRoot,bool feesEnabled,uint48 minimumFinalAfter,uint48 feeTimeOffset,uint256 finalizedUnitsPrefix)',
 	'function portfolio() view returns (address)',
 	'function universeId() view returns (uint248)',
 	'function settlement() view returns (address)',
@@ -68,7 +68,7 @@ export async function loadCentralPortfolioQuestion(client: Pick<ReadClient, 'mul
 	)
 	const question = requireTupleValue(questionValue, 2, 'question stream')
 	const stream = requireObjectValue(question[0], 'question stream state')
-	const state = requireTupleValue(bookStateValue, 14, 'settlement book state')
+	const state = requireTupleValue(bookStateValue, 15, 'settlement book state')
 	const feeTime = BigInt(requireIntegerLikeValue(feeTimestampValue, 'native fee timestamp'))
 	const feeEnd = BigInt(requireIntegerLikeValue(Reflect.get(stream, 'feeEnd'), 'native fee end'))
 	const feesActive =

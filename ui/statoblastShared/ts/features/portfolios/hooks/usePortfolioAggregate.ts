@@ -18,6 +18,7 @@ import {
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { portfolioReadClient, type PortfolioTransaction } from '../../../protocol/securityPoolPortfolio.js'
+import { executionFundingReview } from '../../../copy/portfolioCapital.js'
 import { portfolioAmountOrUndefined } from '../lib/draft.js'
 import { portfolioBasisPointsOrUndefined } from '../lib/creation.js'
 import { capitalAuthorizationReason, capitalExecutionWithdrawalReason, capitalWithdrawalReason, requiredPortfolioCollateral, requiredPortfolioExecutionReserve } from '../lib/capital.js'
@@ -163,13 +164,22 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 				},
 			),
 		fundReserve: () =>
-			run('fundPortfolioExecution', 'Fund execution reserve', fundReserveReason, selected => {
-				if (fundAttoEth === undefined) throw new Error('Enter reserve funding.')
-				return {
-					...buildPortfolioCapitalFundExecutionReserveRequest({ ...base(selected), amountAttoEth: fundAttoEth }),
-					reviewDescription: `Add ${formatEther(fundAttoEth)} ETH to your execution reserve. Each minimum-commitment lot assigns ${formatEther(selected.economics.minimumExecutionReserveAttoEth)} ETH to keeper work; larger commitments require proportionally more.`,
-				}
-			}),
+			run(
+				'fundPortfolioExecution',
+				'Fund execution reserve',
+				fundReserveReason,
+				selected => {
+					if (fundAttoEth === undefined) throw new Error('Enter reserve funding.')
+					return {
+						...buildPortfolioCapitalFundExecutionReserveRequest({ ...base(selected), amountAttoEth: fundAttoEth }),
+						reviewDescription: executionFundingReview(formatEther(fundAttoEth), selected.ownerCommitmentAttoEth > 0n),
+					}
+				},
+				latest => {
+					if (latest.exported) throw new Error('The reserve follows your fork choice.')
+					if (latest.ownerCommitmentAttoEth > 0n !== (snapshot !== undefined && snapshot.ownerCommitmentAttoEth > 0n)) throw new Error('Commitment status changed. Review reserve funding again.')
+				},
+			),
 		withdrawReserve: () =>
 			run(
 				'withdrawPortfolioExecution',

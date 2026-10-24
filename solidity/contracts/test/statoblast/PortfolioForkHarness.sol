@@ -9,7 +9,8 @@ interface ITestForkInitializer {
 import { ReputationToken } from '../../ReputationToken.sol';
 import { Zoltar } from '../../Zoltar.sol';
 import { ISecurityPool } from '../../statoblast/interfaces/ISecurityPool.sol';
-import { SecurityPoolCapitalLedger, ICapitalFeeStreams } from '../../statoblast/SecurityPoolCapitalLedger.sol';
+import { SecurityPoolCapitalLedger } from '../../statoblast/SecurityPoolCapitalLedger.sol';
+import { ICapitalFeeStreams } from '../../statoblast/interfaces/ICapitalAccounting.sol';
 import { SecurityPoolPortfolioSettlement } from '../../statoblast/SecurityPoolPortfolioSettlement.sol';
 import { SecurityPoolSettlementBook } from '../../statoblast/SecurityPoolSettlementBook.sol';
 import { SecurityPoolReporterLedger } from '../../statoblast/SecurityPoolReporterLedger.sol';
@@ -162,7 +163,7 @@ contract PortfolioForkHarness {
 	}
 	function _createCapital(uint248 u) private returns (SecurityPoolCapitalLedger capital) {
 		capital = capitalDeployer.create(address(this), Zoltar(address(zoltar)), u, 10_500, 1e15, 1e14, 1 days);
-		capital.initialize(indexDeployer.create(address(capital)), ICapitalFeeStreams(address(streamsDeployer.create(address(capital), uint48(block.timestamp)))), forkController);
+		capital.initialize(indexDeployer.create(address(capital)), ICapitalFeeStreams(address(streamsDeployer.create(address(capital), uint48(block.timestamp), 1 days))), forkController);
 		capitalLedger[u] = capital;
 	}
 	function prepareForkChild(uint248 source, uint256 outcome) external returns (SecurityPoolCapitalLedger capital) {
@@ -185,6 +186,10 @@ contract PortfolioForkHarness {
 	function setPrice(uint248 u, uint256 price, uint48 expiry) external {
 		capitalLedger[u].acceptPrice(price, expiry);
 	}
+	function priceFeed(uint248) external view returns (address) {
+		return address(this);
+	}
+	function validateExposure() external pure {}
 	function checkpointCapitalFees(uint248 u, uint48) external {
 		require(msg.sender == address(capitalLedger[u]), 'Only capital');
 		uint64 book = settlement.bookIds(u);

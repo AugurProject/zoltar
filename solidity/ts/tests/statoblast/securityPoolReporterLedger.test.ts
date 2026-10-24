@@ -73,6 +73,39 @@ describe('Statoblast: central reporter custody', () => {
 		expect(await balance(second)).toBe(20n * unit)
 	})
 
+	test('successive frozen prefixes never reclassify paid claims when new reporter custody arrives', async () => {
+		const first = await createGame(questionId)
+		const second = await createGame(questionId + 1n)
+		const third = await createGame(questionId + 2n)
+		const schedules = [
+			{ game: first, amount: 10n, deadline: 1_000 },
+			{ game: second, amount: 20n, deadline: 1_002 },
+			{ game: third, amount: 30n, deadline: 1_004 },
+		]
+		for (const { game, amount, deadline } of schedules) {
+			await deposit(game, amount * unit)
+			await writeContractAndWait(owner, () => owner.writeContract({ abi: harness.abi, address: game, functionName: 'schedule', args: [deadline] }))
+		}
+		await ethereum.setTime(1_000n)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint', args: [0n] }))
+		expect((await book()).slice(0, 2)).toEqual([50n * unit, 10n * unit])
+		await withdraw(first, 10n * unit)
+		await ethereum.setTime(1_004n)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint', args: [0n] }))
+		expect((await book()).slice(0, 2)).toEqual([0n, 50n * unit])
+		const fourth = await createGame(questionId + 3n)
+		await deposit(fourth, 40n * unit)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: harness.abi, address: fourth, functionName: 'schedule', args: [1_100] }))
+		await withdraw(second, 20n * unit)
+		await ethereum.setTime(1_100n)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint', args: [0n] }))
+		expect((await book()).slice(0, 2)).toEqual([0n, 70n * unit])
+		await withdraw(third, 30n * unit)
+		await withdraw(fourth, 40n * unit)
+		expect((await book()).slice(0, 2)).toEqual([0n, 0n])
+		expect(await getERC20Balance(owner, getRepTokenAddress(0n), ledger)).toBe(0n)
+	})
+
 	test('protects strictly-final parent REP and migrates every live question through one branch root copy', async () => {
 		const finalGame = await createGame(questionId)
 		const liveGame = await createGame(questionId + 1n)

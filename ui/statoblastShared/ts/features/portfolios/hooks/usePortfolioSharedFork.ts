@@ -311,7 +311,7 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 		buy: () =>
 			run(
 				'buyPortfolioRecap',
-				'Buy REP and accept commitment',
+				'Buy REP',
 				buyReason,
 				selected => {
 					if (selected.branch === undefined || maximumRep === undefined || minimumRep === undefined || maximumCommitment === undefined || maximumOwnRep === undefined || maximumCost === undefined || target === undefined || quote === undefined) throw new Error('Review recap limits first.')

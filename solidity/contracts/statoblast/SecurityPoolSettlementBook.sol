@@ -3,6 +3,7 @@ pragma solidity 0.8.35;
 
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { SecurityPoolPersistentMap } from './SecurityPoolPersistentMap.sol';
+import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
 
 /// @notice Central ETH settlement accounting with distinct internal units and outcome supply.
 /// @dev This contract records liabilities; its authority holds and transfers the actual ETH.
@@ -12,6 +13,7 @@ import { SecurityPoolPersistentMap } from './SecurityPoolPersistentMap.sol';
 /// A fork copies immutable roots, including ALL inherited outcome liabilities, in constant work.
 contract SecurityPoolSettlementBook {
 	using SecurityPoolPersistentMap for SecurityPoolPersistentMap.Store;
+	using SecurityPoolFrozenHistory for SecurityPoolFrozenHistory.Store;
 
 	uint256 public constant EXCHANGE_RATE_SCALE = 1e18;
 	uint48 public constant MINIMUM_FORK_RESPONSE = 3 days;
@@ -22,6 +24,7 @@ contract SecurityPoolSettlementBook {
 	uint64 private lastQuestionStateId;
 	uint64 private lastFeeModeId;
 	SecurityPoolPersistentMap.Store private tree;
+	SecurityPoolFrozenHistory.Store private frozenHistory;
 
 	struct Book {
 		uint256 cashAttoEth;
@@ -38,6 +41,7 @@ contract SecurityPoolSettlementBook {
 		bool feesEnabled;
 		uint48 minimumFinalAfter;
 		uint48 feeTimeOffset;
+		uint256 finalizedUnitsPrefix;
 	}
 
 	struct Question {
@@ -125,6 +129,7 @@ contract SecurityPoolSettlementBook {
 		child.feesEnabled = source.feesEnabled;
 		child.minimumFinalAfter = source.timestamp + MINIMUM_FORK_RESPONSE;
 		child.feeTimeOffset = source.feeTimeOffset;
+		child.finalizedUnitsPrefix = source.finalizedUnitsPrefix;
 		_setFeeMode(child, fundedCashAttoEth == source.units && source.feesEnabled);
 		emit BookCreated(bookId, sourceBookId, fundedCashAttoEth, source.units);
 	}
@@ -134,7 +139,7 @@ contract SecurityPoolSettlementBook {
 		Book storage book = _book(bookId);
 		state = questionStates[uint64(tree.get(book.questionRoot, questionId))];
 		state = _materializeFees(book, state);
-		if (state.finalAfter != 0) frozenBookId = uint64(tree.ceiling(book.frozenRoot, state.finalAfter));
+		if (state.finalAfter != 0) frozenBookId = uint64(frozenHistory.ceiling(book.frozenRoot, state.finalAfter));
 	}
 
 	/// @notice Whether sealing at the fork clock preserves this question as a live source liability.
@@ -361,16 +366,21 @@ contract SecurityPoolSettlementBook {
 		}
 		book.timestamp = timestamp;
 		if (timestamp <= book.minimumFinalAfter) return 0;
-		(uint64 matured, uint64 pending) = tree.split(book.finalityRoot, timestamp - 1);
-		book.finalityRoot = pending;
-		uint256 units = tree.total(matured);
+		uint256 prefix = tree.prefixTotalModular(book.finalityRoot, timestamp - 1);
+		uint256 units;
+		// Only pending deadlines can change. All newly matured scheduled units
+		// fit the live book, so a modular prefix difference is their exact amount.
+		unchecked {
+			units = prefix - book.finalizedUnitsPrefix;
+		}
+		book.finalizedUnitsPrefix = prefix;
 		if (units == 0) return 0;
 		uint256 cashAttoEth = _cashForUnits(book.cashAttoEth, book.units, units);
 		book.cashAttoEth -= cashAttoEth;
 		book.units -= units;
 		frozenBookId = ++lastFrozenBookId;
 		frozenBooks[frozenBookId] = FrozenBook(cashAttoEth, units, bookId);
-		book.frozenRoot = tree.set(book.frozenRoot, timestamp - 1, frozenBookId, 0);
+		book.frozenRoot = frozenHistory.append(book.frozenRoot, timestamp - 1, frozenBookId);
 		_syncFeeMode(book);
 		emit FinalClaimsFrozen(bookId, frozenBookId, timestamp, units, cashAttoEth);
 	}
@@ -430,7 +440,7 @@ contract SecurityPoolSettlementBook {
 		if (finalAfter == 0 || units == 0) return;
 		uint256 previous = tree.get(book.finalityRoot, finalAfter);
 		uint256 next = increase ? previous + units : previous - units;
-		book.finalityRoot = tree.set(book.finalityRoot, finalAfter, next, next);
+		book.finalityRoot = tree.setModular(book.finalityRoot, finalAfter, next, next);
 	}
 
 	function _writeQuestion(Book storage book, uint256 questionId, Question memory state) private {

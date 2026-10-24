@@ -5,6 +5,7 @@ import { Zoltar } from '../Zoltar.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { SecurityPoolPersistentMap } from './SecurityPoolPersistentMap.sol';
+import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 import { ISecurityPoolReporterLedger } from './interfaces/ISecurityPoolReporterLedger.sol';
 
@@ -25,6 +26,7 @@ interface IReporterGameIdentity {
 contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 	using SafeERC20Ops for IERC20;
 	using SecurityPoolPersistentMap for SecurityPoolPersistentMap.Store;
+	using SecurityPoolFrozenHistory for SecurityPoolFrozenHistory.Store;
 
 	struct Book {
 		uint256 liveAttoRep;
@@ -36,6 +38,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		bool exists;
 		bool isSealed;
 		uint48 minimumFinalAfter;
+		uint256 finalizedRepPrefix;
 	}
 
 	struct Question {
@@ -55,6 +58,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 	address public immutable portfolio;
 	Zoltar public immutable zoltar;
 	SecurityPoolPersistentMap.Store private tree;
+	SecurityPoolFrozenHistory.Store private frozenHistory;
 	uint64 private lastQuestionStateId;
 	mapping(uint248 => Book) public books;
 	mapping(uint64 => Question) private questions;
@@ -227,7 +231,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 			zoltar.splitMigrationRep(sourceUniverseId, source.liveAttoRep, outcomes);
 		} else if (address(zoltar.getRepToken(childUniverseId)) == address(0))
 			zoltar.deployChild(sourceUniverseId, outcomeIndex);
-		books[childUniverseId] = Book(source.liveAttoRep, 0, source.questionRoot, source.finalityRoot, source.frozenRoot, source.timestamp, true, false, source.timestamp + 3 days);
+		books[childUniverseId] = Book(source.liveAttoRep, 0, source.questionRoot, source.finalityRoot, source.frozenRoot, source.timestamp, true, false, source.timestamp + 3 days, source.finalizedRepPrefix);
 		(, uint256 forkQuestionId, , , ) = zoltar.universes(sourceUniverseId);
 		(Question memory fixedQuestion, bool alreadyFinal) = _question(childUniverseId, forkQuestionId);
 		if (!alreadyFinal && fixedQuestion.balanceAttoRep != 0) {
@@ -259,7 +263,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 	function _question(uint248 universeId, uint256 questionId) private view returns (Question memory state, bool finalClaim) {
 		state = questions[uint64(tree.get(books[universeId].questionRoot, questionId))];
 		uint256 finalizingUniversePlusOne =
-			state.finalAfter == 0 ? 0 : tree.ceiling(books[universeId].frozenRoot, state.finalAfter);
+			state.finalAfter == 0 ? 0 : frozenHistory.ceiling(books[universeId].frozenRoot, state.finalAfter);
 		finalClaim = finalizingUniversePlusOne != 0;
 		if (finalClaim && finalizingUniversePlusOne - 1 != universeId) state.balanceAttoRep = 0;
 	}
@@ -272,20 +276,25 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		require(timestamp >= book.timestamp, 'Reporter clock moved backwards');
 		book.timestamp = timestamp;
 		if (timestamp == 0 || timestamp <= book.minimumFinalAfter) return;
-		(uint64 matured, uint64 pending) = tree.split(book.finalityRoot, timestamp - 1);
-		book.finalityRoot = pending;
-		uint256 amountAttoRep = tree.total(matured);
+		uint256 prefix = tree.prefixTotalModular(book.finalityRoot, timestamp - 1);
+		uint256 amountAttoRep;
+		// Unprocessed scheduled REP is bounded by live custody. Historical
+		// prefixes may wrap; their modular difference cannot exceed that custody.
+		unchecked {
+			amountAttoRep = prefix - book.finalizedRepPrefix;
+		}
+		book.finalizedRepPrefix = prefix;
 		if (amountAttoRep == 0) return;
 		book.liveAttoRep -= amountAttoRep;
 		book.finalAttoRep += amountAttoRep;
-		book.frozenRoot = tree.set(book.frozenRoot, timestamp - 1, uint256(universeId) + 1, 0);
+		book.frozenRoot = frozenHistory.append(book.frozenRoot, timestamp - 1, uint256(universeId) + 1);
 	}
 
 	function _changeFinality(Book storage book, uint48 finalAfter, uint256 amountAttoRep, bool increase) private {
 		if (finalAfter == 0 || amountAttoRep == 0) return;
 		uint256 prior = tree.get(book.finalityRoot, finalAfter);
 		uint256 next = increase ? prior + amountAttoRep : prior - amountAttoRep;
-		book.finalityRoot = tree.set(book.finalityRoot, finalAfter, next, next);
+		book.finalityRoot = tree.setModular(book.finalityRoot, finalAfter, next, next);
 	}
 
 	function _writeQuestion(Book storage book, uint256 questionId, Question memory state) private {

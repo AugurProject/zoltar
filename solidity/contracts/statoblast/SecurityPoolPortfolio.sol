@@ -7,7 +7,8 @@ import { IPortfolioSettlement } from './interfaces/IPortfolioSettlement.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { Zoltar } from '../Zoltar.sol';
-import { SecurityPoolCapitalLedger, ICapitalFeeStreams } from './SecurityPoolCapitalLedger.sol';
+import { SecurityPoolCapitalLedger } from './SecurityPoolCapitalLedger.sol';
+import { ICapitalFeeStreams } from './interfaces/ICapitalAccounting.sol';
 import { SecurityPoolPortfolioSettlement } from './SecurityPoolPortfolioSettlement.sol';
 import { SecurityPoolReporterLedger } from './SecurityPoolReporterLedger.sol';
 import { SecurityPoolPortfolioPurchase } from './SecurityPoolPortfolioPurchase.sol';
@@ -443,7 +444,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	}
 	function _createCapital(uint248 universeId) private returns (SecurityPoolCapitalLedger capital) {
 		capital = deployers.capital.create(address(this), zoltar, universeId, statoblastSecurityMultiplierBps, minimumCommitmentAttoEth, minimumExecutionReserveAttoEth, rewardVestingSeconds);
-		capital.initialize(deployers.commitments.create(address(capital)), ICapitalFeeStreams(address(deployers.fees.create(address(capital), uint48(block.timestamp)))), forkController);
+		capital.initialize(deployers.commitments.create(address(capital)), ICapitalFeeStreams(address(deployers.fees.create(address(capital), uint48(block.timestamp), rewardVestingSeconds))), forkController);
 		capitalLedger[universeId] = capital;
 		capitalAddresses[address(capital)] = true;
 		emit UniversePrepared(universeId, address(capital));

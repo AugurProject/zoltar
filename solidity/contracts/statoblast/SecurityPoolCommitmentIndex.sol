@@ -18,6 +18,9 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	bool public importsOpen;
 	bool private importsInitialized;
 	uint64 public healthObservationEpoch;
+	uint256 private observedPrice;
+	mapping(uint64 => uint48) private observationTimes;
+	mapping(uint96 => uint64) private healthyMutationEpochs;
 	struct Account {
 		address owner;
 		uint96 batch;
@@ -28,20 +31,12 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		uint256 ethFees;
 		uint256 repFees;
 	}
-	struct Liquidation {
-		uint48 started;
-		uint64 healthEpoch;
-		address initiator;
-	}
 	struct Cure {
 		uint256 removed;
 		uint256 freedRep;
 		uint256 previousCommitment;
 		address owner;
-		address initiator;
 	}
-	mapping(uint96 => Liquidation) private liquidations;
-	event LiquidationStarted(uint96 indexed positionId, address indexed initiator);
 
 	struct Retirement {
 		uint256 rep;
@@ -196,7 +191,10 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	/// @notice Record which existing live positions are healthy at a fresh price.
 	/// @dev Epochs distinguish recovery and relapse even within the same block.
 	function observeHealthy(uint256 price) external onlyPortfolio operational {
+		require(block.timestamp <= type(uint48).max, 'Commitment clock exhausted');
 		uint64 epoch = ++healthObservationEpoch;
+		observationTimes[epoch] = uint48(block.timestamp);
+		observedPrice = price;
 		_observeHealthy(roots[0], price, epoch);
 		if (currentBatch != 0) _observeHealthy(roots[currentBatch], price, epoch);
 		_observeHealthy(roots[nextBatch], price, epoch);
@@ -211,30 +209,50 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		}
 	}
 
-	/// @notice Recovery invalidates the clock even if nobody has touched the
-	/// position since a healthy oracle observation. Queries follow one tree path.
-	function liquidationState(uint96 id) public view returns (uint48 started, address initiator) {
-		Liquidation memory liquidation = liquidations[id];
-		if (liquidation.started == 0 || liquidation.healthEpoch != healthEpoch(id)) return (0, address(0));
-		return (liquidation.started, liquidation.initiator);
+	/// @notice Distress begins at the first adverse oracle observation after the
+	/// position's latest recovery. No keeper transaction starts or resets a clock.
+	/// One tree path combines lazy healthy observations and detached retirement.
+	function liquidationStarted(uint96 id) external view returns (uint48) {
+		uint256 cursor = positions[id].node;
+		Node storage leaf = nodes[cursor];
+		if (cursor == 0 || leaf.commitment == 0 || leaf.price >= observedPrice) return 0;
+		uint64 epoch = healthyMutationEpochs[id];
+		while (cursor != 0) {
+			Node storage node = nodes[cursor];
+			if (node.retired) return 0;
+			if (epoch < node.healthEpoch) epoch = node.healthEpoch;
+			cursor = node.parent;
+		}
+		if (epoch == healthObservationEpoch) return 0;
+		return observationTimes[epoch + 1];
 	}
 
+	/// @dev The controller calls only after an actual healthy mutation at a fresh
+	/// price, or full retirement. A stale-price deposit must not reset distress.
 	function clearLiquidation(uint96 id) external onlyPortfolio {
-		delete liquidations[id];
+		healthyMutationEpochs[id] = healthObservationEpoch;
+	}
+
+	/// @notice Quote real-progress execution pay from the target's funded budget.
+	/// Funded positions retain their configured residual floor. An underfunded
+	/// protocol reserve releases only the proportional share of its own budget.
+	function executionReward(uint256 reserve, uint256 previousMinimum, uint256 remainingMinimum, uint256 measuredGas) external view returns (uint256) {
+		uint256 retained = Math.min(remainingMinimum, Math.mulDiv(reserve, remainingMinimum, previousMinimum));
+		uint256 gasPrice = Math.min(tx.gasprice, block.basefee + 2e9);
+		uint256 gasReward = Math.mulDiv(measuredGas * gasPrice, 5, 4);
+		return Math.min(reserve - retained, Math.max(previousMinimum - remainingMinimum, gasReward));
 	}
 
 	/// @dev Remove unused nominal K under exactly the ordinary collateral floor.
-	/// Custody and execution payments remain with the controller. No payment is
-	/// due for a timer alone; its initiator shares later actual-progress rewards.
-	function cure(uint96 id, uint256 price, uint256 multiplier, uint256 minimumCommitment, uint256 demand, address keeper) external onlyPortfolio operational returns (Cure memory result) {
+	/// Custody and payments for actual progress remain with the controller.
+	function cure(uint96 id, uint256 price, uint256 multiplier, uint256 minimumCommitment, uint256 demand) external onlyPortfolio operational returns (Cure memory result) {
 		Account memory account = accountOf(id);
 		require(account.owner != address(0) && account.commitment > 0, 'Position is not live');
 		uint256 supported = Math.mulDiv(Math.mulDiv(account.rep, 10_000, multiplier), 1e18, price);
 		result.owner = account.owner;
 		result.previousCommitment = account.commitment;
-		(, result.initiator) = liquidationState(id);
 		if (supported >= account.commitment) {
-			delete liquidations[id];
+			healthyMutationEpochs[id] = healthObservationEpoch;
 			return result;
 		}
 		(, uint256 totalCommitment) = totals();
@@ -252,12 +270,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 				replace(id, account.rep, remaining, maxPrice);
 			}
 		}
-		(uint48 started, ) = liquidationState(id);
-		if (remaining <= supported) delete liquidations[id];
-		else if (started == 0) {
-			liquidations[id] = Liquidation(uint48(block.timestamp), healthEpoch(id), keeper);
-			emit LiquidationStarted(id, keeper);
-		}
+		if (remaining <= supported) healthyMutationEpochs[id] = healthObservationEpoch;
 	}
 
 	function eligibleCommitment(uint256 acceptedPrice) public view returns (uint256) {
@@ -411,6 +424,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		uint256 node = ++lastNode;
 		nodes[node] = Node(0, 0, 0, rep, commitment, 0, 0, price, price, id, 0, false, 0);
 		positions[id] = Position(owner, batch, node, 0, false);
+		healthyMutationEpochs[id] = healthObservationEpoch;
 		_insert(batch, node);
 	}
 
