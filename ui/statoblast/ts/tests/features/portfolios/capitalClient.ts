@@ -77,6 +77,7 @@ export function capitalClient(initial = capitalSnapshot()) {
 				currentBatch: snapshot.currentBatch,
 				nextBatch: snapshot.nextBatch,
 				getForkTime: snapshot.forkTime,
+				getForkChoiceDeadline: snapshot.forkChoiceDeadline,
 				questionAdmissionPolicy: token,
 				reporters: modules.reporters,
 				quoteHelper: modules.purchase,

@@ -16,22 +16,13 @@ import { isOracleRequestFundingError, poolOracleExposure, oracleRequestFundingEn
 
 import { maximumFeePerGas } from '@zoltar/bot-shared/execution/transaction-submission'
 
-import { SEPOLIA_CHAIN_ID } from '@zoltar/core-shared/deployment/uniswapDeployments'
-
 export const BINARY_OUTCOME_NONE = 3
 
 export const MIGRATION_TIME_SECONDS = 8n * 7n * 24n * 60n * 60n
 
 const LIFECYCLE_BATCH_LIMIT = 16
 
-const ORACLE_PRICE_VALIDITY_SECONDS = 5n * 60n
-
-const SEPOLIA_ORACLE_PRICE_VALIDITY_SECONDS = 60n * 60n
-
-/** Mirrors `OpenOraclePriceCoordinator._isFreshPriceTimestamp`: Sepolia prices stay valid for one hour, every other chain for five minutes. */
-const oraclePriceValiditySeconds = (chainId: number) => (chainId === SEPOLIA_CHAIN_ID ? SEPOLIA_ORACLE_PRICE_VALIDITY_SECONDS : ORACLE_PRICE_VALIDITY_SECONDS)
-
-export const oraclePriceValidUntil = (snapshot: Pick<EcosystemSnapshot, 'chainId'>, pool: Pick<PoolSnapshot, 'lastOracleSettlementTimestamp'>) => amount(pool.lastOracleSettlementTimestamp) + oraclePriceValiditySeconds(snapshot.chainId)
+export const oraclePriceValidUntil = (pool: Pick<PoolSnapshot, 'oraclePriceValidUntilTimestamp'>) => amount(pool.oraclePriceValidUntilTimestamp)
 
 export const STAGED_WITHDRAWAL_VALIDITY_SECONDS = 5n * 60n
 
@@ -124,7 +115,7 @@ export const canDeployOriginPool = (universe: EcosystemSnapshot['universes'][num
 
 export function safeOraclePriceDeadline(snapshot: EcosystemSnapshot, pool: PoolSnapshot, options: PlanningOptions, prerequisiteCount = 0) {
 	if (!pool.oraclePriceValid) return undefined
-	const deadline = oraclePriceValidUntil(snapshot, pool)
+	const deadline = oraclePriceValidUntil(pool)
 	return timestampDeadlineHasRequiredSafety(amount(snapshot.anchor.timestamp), deadline, options, prerequisiteCount) ? deadline : undefined
 }
 

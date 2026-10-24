@@ -247,6 +247,7 @@ export type ListedSecurityPool = {
 	forkOwnSecurityPool: boolean
 	lastOraclePrice: bigint | undefined
 	lastOracleSettlementTimestamp: bigint
+	oraclePriceValidUntilTimestamp?: bigint | undefined
 	managerAddress: Address
 	minimumSecurityBondDebtAttoEth?: bigint
 	minimumVaultRepDepositAttoRep?: bigint

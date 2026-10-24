@@ -200,7 +200,7 @@ export function SecurityPoolReferenceDetails(props: SecurityPoolObjectHeaderProp
 								lastPrice={currentPoolOraclePrice}
 								lastSettlementTimestamp={currentPoolOracleSettlementTimestamp ?? 0n}
 								pendingReportReadyAtTimestamp={currentPoolOracleManagerDetails?.pendingReportReadyAtTimestamp}
-								priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp}
+								priceValidUntilTimestamp={currentPoolOracleManagerDetails === undefined ? summaryPool.oraclePriceValidUntilTimestamp : currentPoolOracleManagerDetails.priceValidUntilTimestamp}
 							/>
 						</MetricField>
 					) : undefined}

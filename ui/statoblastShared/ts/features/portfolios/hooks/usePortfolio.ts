@@ -167,16 +167,19 @@ export function usePortfolio({ accountAddress, enabled, environmentKey, activeUn
 		ownerInput: ownerInput.value,
 		universeInput: universeInput.value,
 		setManagerInput: (value: string) => {
+			if (value === managerInput.value) return
 			invalidate()
 			questionStart.value = 0n
 			admissionStart.value = 0n
 			managerInput.value = value
 		},
 		setOwnerInput: (value: string) => {
+			if (value === ownerInput.value) return
 			invalidate()
 			ownerInput.value = value
 		},
 		setUniverseInput: (value: string) => {
+			if (value === universeInput.value) return
 			invalidate()
 			universeInput.value = value
 		},

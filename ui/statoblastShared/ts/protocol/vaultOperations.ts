@@ -37,7 +37,7 @@ export async function quoteVaultOperations(client: ReadClient, pool: Address, ow
 		client.readContract({ address: pool, abi: poolArtifact.abi, functionName: 'minimumVaultRepDepositAttoRep' }),
 		isSecurityPoolEscalationResolved(client, pool),
 	])
-	if (!resolved && countVaultPriceActions(input) > 0 && pendingReportId > 0n && sponsor.toLowerCase() !== owner.toLowerCase()) throw new Error(copy.otherReportSponsor)
+	if (!resolved && !validPrice && countVaultPriceActions(input) > 0 && pendingReportId > 0n && sponsor.toLowerCase() !== owner.toLowerCase()) throw new Error(copy.otherReportSponsor)
 	if (resolved) {
 		if (!input.changeCommitment || input.depositAttoRep > 0n || input.liquidations.length > 0 || input.withdrawAttoRep > 0n) throw new Error(copy.resolvedActions)
 		if (input.commitmentAttoEth > vault[1]) throw new Error(copy.resolvedIncrease)

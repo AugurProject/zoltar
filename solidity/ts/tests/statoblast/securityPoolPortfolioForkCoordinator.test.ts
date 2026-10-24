@@ -1,11 +1,11 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { encodeDeployData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { buildPortfolioForkCollectProtectedRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import {
 	test_statoblast_PortfolioForkHarness_PortfolioForkHarness as rootArtifact,
 	test_statoblast_PortfolioForkHarness_PortfolioForkZoltarMock as zoltarArtifact,
-	test_statoblast_PortfolioForkHarness_PortfolioForkRecoverySharesMock as sharesArtifact,
-	test_statoblast_PortfolioForkHarness_PortfolioForkQuestionMock as poolArtifact,
+	statoblast_tokens_ShareToken_ShareToken as sharesArtifact,
+	test_statoblast_ShareTokenRecoveryTestPool_ShareTokenRecoveryTestPool as poolArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioRecapAuctionDeployer as auctionDeployerArtifact,
 	statoblast_SecurityPoolPortfolioRecapAuction_SecurityPoolPortfolioRecapAuction as auctionArtifact,
@@ -77,8 +77,9 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 		forks = await deploy(encodeDeployData({ abi: forkArtifact.abi, bytecode: `0x${forkArtifact.evm.bytecode.object}`, args: [root, zoltar, auctions] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'initialize', args: [engine, book, reporter, forks] }))
 		capital = await owner.readContract({ ...rootTarget(), functionName: 'capitalLedger', args: [0n] })
-		shares = await deploy(`0x${sharesArtifact.evm.bytecode.object}`)
-		const pool = await deploy(encodeDeployData({ abi: poolArtifact.abi, bytecode: `0x${poolArtifact.evm.bytecode.object}`, args: [shares] }))
+		shares = await deploy(encodeDeployData({ abi: sharesArtifact.abi, bytecode: `0x${sharesArtifact.evm.bytecode.object}`, args: [owner.account.address, zoltar, 1n] }))
+		const pool = await deploy(encodeDeployData({ abi: poolArtifact.abi, bytecode: `0x${poolArtifact.evm.bytecode.object}`, args: [shares, 0n, zeroAddress, root] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: sharesArtifact.abi, address: shares, functionName: 'authorize', args: [pool] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'registerQuestion', args: [0n, 1n, pool] }))
 		const now = (await owner.getBlock()).timestamp
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setPrice', args: [0n, E, Number(now + 100n * 24n * 60n * 60n)] }))
@@ -92,10 +93,24 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'authorize', args: [100n * E] }))
 		}
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'mintQuestion', args: [1n], value: 200n * E }))
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: sharesArtifact.abi, address: shares, functionName: 'setHolding', args: [0n, buyer.account.address, 200n * E] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: sharesArtifact.abi, address: shares, functionName: 'mintCompleteSets', args: [0n, buyer.account.address, 200n * E] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...zoltarTarget(), functionName: 'setFork', args: [0n, 2n] }))
 		forkTime = await owner.readContract({ ...zoltarTarget(), functionName: 'getForkTime', args: [0n] })
 		await setBaselineSnapshot()
+	})
+
+	test('missing the choice cutoff releases unused parent execution funding', async () => {
+		const parent = await bob.readContract({ ...ledger(capital), functionName: 'ownerAccount', args: [bob.account.address] })
+		const assigned = await bob.readContract({ ...ledger(capital), functionName: 'positionExecutionReserveAttoEth', args: [parent.positionId] })
+		expect(assigned).toBeGreaterThan(0n)
+		await writeContractAndWait(bob, () => bob.writeContract({ ...ledger(capital), functionName: 'withdrawExecutionReserve', args: [parent.executionReserveAttoEth] }))
+		await expect(writeContractAndWait(bob, () => bob.writeContract({ ...ledger(capital), functionName: 'withdrawExecutionReserve', args: [assigned] }))).rejects.toThrow('Execution reserve insufficient')
+		await choose(alice, 1n)
+		await moveTo(forkTime + 8n * week)
+		await writeContractAndWait(bob, () => bob.writeContract({ ...ledger(capital), functionName: 'withdrawExecutionReserve', args: [assigned] }))
+		expect(await bob.readContract({ ...ledger(capital), functionName: 'positionExecutionReserveAttoEth', args: [parent.positionId] })).toBe(0n)
+		await expect(writeContractAndWait(bob, () => bob.writeContract({ ...ledger(capital), functionName: 'withdrawExecutionReserve', args: [1n] }))).rejects.toThrow('Execution reserve insufficient')
+		await expect(choose(bob, 1n)).rejects.toThrow('Fork choice window closed')
 	})
 
 	test('a fully chosen branch activates without an auction or a zero-value recap transaction', async () => {
@@ -174,9 +189,30 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 		await moveTo(forkTime + 8n * week)
 		await writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'recoverUnchosenCash', args: [0n, 1n, 200n * E] }))
 		expect(await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'availableForkCashAttoEth', args: [0n] })).toBe(100n * E)
-		await expect(writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'recoverUnchosenCash', args: [0n, 1n, 1n] }))).rejects.toThrow('Recovery exceeds holdings')
+		await expect(writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'recoverUnchosenCash', args: [0n, 1n, 1n] }))).rejects.toThrow('Recovery requires unclaimed complete sets')
 		await start(1n)
 		expect(await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'availableForkCashAttoEth', args: [0n] })).toBe(0n)
+		expect(await owner.getBalance({ address: engine })).toBe(100n * E)
+	})
+
+	test('split holders combine only their recovery rights and collect all unchosen cash in partial redemptions', async () => {
+		const target = { abi: sharesArtifact.abi, address: shares }
+		await writeContractAndWait(buyer, () => buyer.writeContract({ ...target, functionName: 'safeBatchTransferFrom', args: [buyer.account.address, bob.account.address, [0n, 2n], [200n * E, 200n * E], '0x'] }))
+		await choose(alice, 1n)
+		await moveTo(forkTime + 8n * week)
+		for (const client of [buyer, bob]) await expect(writeContractAndWait(client, () => client.writeContract({ ...forkTarget(), functionName: 'recoverUnchosenCash', args: [0n, 1n, E] }))).rejects.toThrow('unclaimed complete sets')
+		await writeContractAndWait(bob, () => bob.writeContract({ ...target, functionName: 'transferPortfolioRecoveryRights', args: [0n, buyer.account.address, [200n * E, 0n, 200n * E]] }))
+		for (const amount of [80n * E, 120n * E]) await writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'recoverUnchosenCash', args: [0n, 1n, amount] }))
+		expect((await owner.readContract({ ...forkTarget(), functionName: 'forks', args: [0n] })).neutralCash).toBe(100n * E)
+		expect(await owner.getBalance({ address: forks })).toBe(0n)
+		expect(await owner.getBalance({ address: engine })).toBe(100n * E)
+		expect(await owner.readContract({ ...target, functionName: 'balanceOfShares', args: [0n, buyer.account.address] })).toEqual([0n, 200n * E, 0n])
+		expect(await owner.readContract({ ...target, functionName: 'balanceOfShares', args: [0n, bob.account.address] })).toEqual([200n * E, 0n, 200n * E])
+		for (const client of [buyer, bob]) {
+			expect(await owner.readContract({ ...target, functionName: 'balanceOfPortfolioRecoveryRights', args: [0n, client.account.address] })).toEqual([0n, 0n, 0n])
+			await expect(writeContractAndWait(client, () => client.writeContract({ ...forkTarget(), functionName: 'recoverUnchosenCash', args: [0n, 1n, 1n] }))).rejects.toThrow('unclaimed complete sets')
+		}
+		await start(1n)
 		expect(await owner.getBalance({ address: engine })).toBe(100n * E)
 	})
 

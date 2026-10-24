@@ -4,13 +4,16 @@ pragma solidity 0.8.35;
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { Zoltar } from '../Zoltar.sol';
+import { Constants } from '../Constants.sol';
 import { SecurityPoolCommitmentIndex } from './SecurityPoolCommitmentIndex.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
 interface ICapitalFeeStreams {
 	function addStream(uint256 ethAmount, uint256 repAmount, uint48 duration) external;
-	function release(uint48 until) external returns (uint256 ethAmount, uint256 repAmount);
-	function releasedThrough() external view returns (uint48);
+	function checkpoint(uint48 eligibleThrough) external returns (uint256 ethAmount, uint256 repAmount);
+	function takeDeferred() external returns (uint256 ethAmount, uint256 repAmount);
+	function defer(uint256 ethAmount, uint256 repAmount) external;
+	function resume(uint48 duration, address index, uint256 price) external;
 }
 
 interface ICapitalLedgerAccounting {
@@ -32,9 +35,9 @@ contract SecurityPoolCapitalLedger {
 	uint248 public immutable universeId;
 	IERC20 public immutable repToken;
 	uint256 public immutable securityMultiplierBps;
-	uint256 public immutable minimumCommitmentAttoEth;
-	uint256 public immutable minimumExecutionReserveAttoEth;
-	uint48 public immutable rewardDuration;
+	uint256 private immutable minimumCommitmentAttoEth;
+	uint256 private immutable minimumExecutionReserveAttoEth;
+	uint48 private immutable rewardDuration;
 	SecurityPoolCommitmentIndex public commitmentIndex;
 	ICapitalFeeStreams public feeStreams;
 	address public forkAuthority;
@@ -43,8 +46,6 @@ contract SecurityPoolCapitalLedger {
 	uint256 public demandAttoEth;
 	uint256 public totalFreeAttoRep;
 	uint256 public retirementCashAttoRep;
-	uint256 public maintenanceAttoEth;
-	uint256 public maintenanceAttoRep;
 	uint256 public frozenBackingAttoRep;
 	uint256 public frozenCommitmentAttoEth;
 	bool public frozen;
@@ -69,11 +70,6 @@ contract SecurityPoolCapitalLedger {
 	}
 	mapping(address => Owner) private owners;
 	mapping(address => bool) public exported;
-	struct Liquidation {
-		uint48 started;
-		uint64 healthEpoch;
-	}
-	mapping(uint96 => Liquidation) private liquidations;
 	mapping(uint96 => uint256) public positionExecutionReserveAttoEth;
 
 	event PrincipalDeposited(address indexed payer, address indexed owner, uint256 amountAttoRep);
@@ -84,6 +80,7 @@ contract SecurityPoolCapitalLedger {
 	event CommitmentTakenOver(uint96 indexed sourceId, uint96 indexed receiverId, uint256 commitment, uint256 awardAttoRep, uint256 keeperReward);
 	event CapitalPriceAccepted(uint256 price, uint48 validUntil);
 	event EarningsClaimed(address indexed owner, uint256 ethAmount, uint256 repAmount);
+	event TerminalFeesBurned(uint256 ethAmount, uint256 repAmount);
 
 	constructor(address authority, Zoltar _zoltar, uint248 _universeId, uint256 multiplier, uint256 minimumCommitment, uint256 minimumReserve, uint48 vestingDuration) {
 		require(authority != address(0), 'Capital authority missing');
@@ -96,6 +93,7 @@ contract SecurityPoolCapitalLedger {
 		minimumCommitmentAttoEth = minimumCommitment;
 		minimumExecutionReserveAttoEth = minimumReserve;
 		rewardDuration = vestingDuration;
+		repToken.safeApprove(address(_zoltar), type(uint256).max);
 	}
 
 	modifier onlyPortfolio() {
@@ -228,6 +226,10 @@ contract SecurityPoolCapitalLedger {
 		_settleOwner(msg.sender);
 		Owner storage owner = owners[msg.sender];
 		require(!exported[msg.sender], 'Execution reserve follows fork choice');
+		if (zoltar.getForkTime(universeId) != 0 && block.timestamp >= zoltar.getForkChoiceDeadline(universeId)) {
+			owner.executionReserveAttoEth += positionExecutionReserveAttoEth[owner.positionId];
+			delete positionExecutionReserveAttoEth[owner.positionId];
+		}
 		require(amount <= owner.executionReserveAttoEth, 'Execution reserve insufficient');
 		owner.executionReserveAttoEth -= amount;
 		_sendEth(msg.sender, amount);
@@ -265,6 +267,7 @@ contract SecurityPoolCapitalLedger {
 			owner.positionId = id;
 		} else _replace(id, rep, commitment);
 		_fundPositionReserve(owner, id, commitment);
+		_resumeFees();
 		emit CommitmentAuthorized(msg.sender, id, rep, commitment, health);
 	}
 
@@ -325,10 +328,12 @@ contract SecurityPoolCapitalLedger {
 	function acceptPrice(uint256 price, uint48 validUntil) external onlyPortfolio {
 		require(zoltar.getForkTime(universeId) == 0, 'Fork price already frozen');
 		require(price > 0 && validUntil > block.timestamp, 'Invalid capital price');
-		_checkpoint();
+		_checkpointAccounting();
 		acceptedPrice = price;
 		priceValidUntil = validUntil;
 		commitmentIndex.observeHealthy(price);
+		// New expiry-tree writes wait for an ordinary capital transaction; they
+		// must not consume the mandatory oracle callback's fixed gas allowance.
 		emit CapitalPriceAccepted(price, validUntil);
 	}
 
@@ -336,6 +341,10 @@ contract SecurityPoolCapitalLedger {
 		_checkpoint();
 	}
 	function _checkpoint() private {
+		_checkpointAccounting();
+		if (!checkpointing) _resumeFees();
+	}
+	function _checkpointAccounting() private {
 		if (importing) return;
 		if (checkpointing) return;
 		checkpointing = true;
@@ -349,24 +358,25 @@ contract SecurityPoolCapitalLedger {
 		// separately claimable even after the owner has selected a child.
 		uint48 nowTime = uint48(block.timestamp);
 		if (forkTimestamp != 0 && forkTimestamp < priceValidUntil) through = nowTime;
-		uint48 previous = feeStreams.releasedThrough();
-		if (through > previous) {
-			(uint256 ethAmount, uint256 repAmount) = feeStreams.release(through);
-			_creditEarnings(ethAmount, repAmount);
-		}
-		if (nowTime > feeStreams.releasedThrough()) {
-			(uint256 ethAmount, uint256 repAmount) = feeStreams.release(nowTime);
-			maintenanceAttoEth += ethAmount;
-			maintenanceAttoRep += repAmount;
+		(uint256 ethAmount, uint256 repAmount) = feeStreams.checkpoint(through);
+		_creditEarnings(ethAmount, repAmount);
+		if (forkTimestamp != 0) {
+			(ethAmount, repAmount) = feeStreams.takeDeferred();
+			if (repAmount != 0) zoltar.burnRep(universeId, repAmount);
+			_sendEth(Constants.BURN_ADDRESS, ethAmount);
+			if (ethAmount != 0 || repAmount != 0) emit TerminalFeesBurned(ethAmount, repAmount);
 		}
 		checkpointing = false;
+	}
+	function _resumeFees() private {
+		if (!frozen && !importing && zoltar.getForkTime(universeId) == 0 && isPriceValid())
+			feeStreams.resume(rewardDuration, address(commitmentIndex), acceptedPrice);
 	}
 
 	function _creditEarnings(uint256 ethAmount, uint256 repAmount) private {
 		if (ethAmount == 0 && repAmount == 0) return;
 		if (acceptedPrice == 0 || !commitmentIndex.creditFees(acceptedPrice, ethAmount, repAmount)) {
-			maintenanceAttoEth += ethAmount;
-			maintenanceAttoRep += repAmount;
+			feeStreams.defer(ethAmount, repAmount);
 		}
 	}
 
@@ -404,30 +414,15 @@ contract SecurityPoolCapitalLedger {
 		removed = _cure(id, msg.sender);
 	}
 	function _cure(uint96 id, address keeper) private returns (uint256 removed) {
-		SecurityPoolCommitmentIndex.Account memory account = commitmentIndex.accountOf(id);
-		require(account.owner != address(0) && account.commitment > 0, 'Position is not live');
-		uint256 supported = maximumHealthyCommitment(account.rep);
-		if (supported >= account.commitment) {
-			delete liquidations[id];
-			return 0;
-		}
-		(, uint256 totalCommitment) = commitmentIndex.totals();
-		uint256 spare = totalCommitment > demandAttoEth ? totalCommitment - demandAttoEth : 0;
-		removed = Math.min(account.commitment, Math.min(Math.max(account.commitment - supported, minimumCommitmentAttoEth), spare));
-		if (removed < minimumCommitmentAttoEth && removed != account.commitment) removed = 0;
-		uint256 remaining = account.commitment - removed;
+		SecurityPoolCommitmentIndex.Cure memory result = commitmentIndex.cure(id, acceptedPrice, securityMultiplierBps, minimumCommitmentAttoEth, demandAttoEth, keeper);
+		removed = result.removed;
 		if (removed != 0) {
-			if (remaining == 0) {
-				commitmentIndex.replace(id, 0, 0, 0);
-				owners[account.owner].freeAttoRep += account.rep;
-				totalFreeAttoRep += account.rep;
-			} else _replace(id, account.rep, remaining);
-			uint256 reward = _payProgress(id, removed, account.commitment, keeper);
+			owners[result.owner].freeAttoRep += result.freedRep;
+			totalFreeAttoRep += result.freedRep;
+			uint256 reward = _payProgress(id, removed, result.previousCommitment, keeper, result.initiator);
+			_resumeFees();
 			emit CommitmentCured(id, removed, reward);
 		}
-		if (remaining <= supported) delete liquidations[id];
-		else if (liquidationStarted(id) == 0)
-			liquidations[id] = Liquidation(uint48(block.timestamp), commitmentIndex.healthEpoch(id));
 	}
 
 	/// @notice Competitive takeover: only the target funds the award and execution.
@@ -438,7 +433,8 @@ contract SecurityPoolCapitalLedger {
 		_serveRetirement();
 		_cure(id, msg.sender);
 		SecurityPoolCommitmentIndex.Account memory source = commitmentIndex.accountOf(id);
-		require(source.owner != msg.sender && source.commitment > maximumHealthyCommitment(source.rep), 'Position does not need takeover');
+		(uint48 started, address initiator) = commitmentIndex.liquidationState(id);
+		require(source.owner != msg.sender && source.maxHealthyPrice < acceptedPrice, 'Position does not need takeover');
 		require(commitment > 0 && commitment <= source.commitment, 'Invalid takeover commitment');
 		require(commitment == source.commitment || source.commitment - commitment >= minimumCommitmentAttoEth, 'Take entire residual commitment');
 		require(commitment >= minimumCommitmentAttoEth || commitment == source.commitment, 'Takeover below economic minimum');
@@ -446,7 +442,7 @@ contract SecurityPoolCapitalLedger {
 		Owner storage receiver = owners[msg.sender];
 		uint256 proportional =
 			commitment == source.commitment ? source.rep : Math.mulDiv(source.rep, commitment, source.commitment);
-		uint256 elapsed = block.timestamp - liquidations[id].started;
+		uint256 elapsed = block.timestamp - started;
 		uint256 award = Math.mulDiv(proportional, Math.min(elapsed, 1 hours), 1 hours);
 		require(award >= minimumAward, 'Takeover award below minimum');
 		receiverId = receiver.positionId;
@@ -485,16 +481,18 @@ contract SecurityPoolCapitalLedger {
 		totalFreeAttoRep -= ownRep;
 		owners[source.owner].freeAttoRep += debit - award;
 		totalFreeAttoRep += debit - award;
-		uint256 reward = _payProgress(id, commitment, source.commitment, msg.sender);
+		uint256 reward = _payProgress(id, commitment, source.commitment, msg.sender, initiator);
 		emit CommitmentTakenOver(id, receiverId, commitment, award, reward);
 	}
 
-	function _payProgress(uint96 id, uint256 progress, uint256 previousCommitment, address keeper) private returns (uint256 reward) {
+	function _payProgress(uint96 id, uint256 progress, uint256 previousCommitment, address keeper, address initiator) private returns (uint256 reward) {
 		uint256 reserve = positionExecutionReserveAttoEth[id];
 		reward = Math.min(reserve, requiredExecutionReserve(previousCommitment) - requiredExecutionReserve(previousCommitment - progress));
 		positionExecutionReserveAttoEth[id] -= reward;
 		// Pull credit avoids a receiver veto over an otherwise valid cure.
-		owners[keeper].feesAttoEth += reward;
+		uint256 initiationReward = initiator == address(0) ? 0 : reward / 4;
+		owners[initiator].feesAttoEth += initiationReward;
+		owners[keeper].feesAttoEth += reward - initiationReward;
 	}
 
 	function _fundPositionReserve(Owner storage owner, uint96 id, uint256 commitment) private {
@@ -631,18 +629,17 @@ contract SecurityPoolCapitalLedger {
 	}
 	/// @notice Recovery invalidates the old interval immediately, before a keeper
 	/// touches the position. Uninterrupted distress retains its original clock.
-	function liquidationStarted(uint96 id) public view returns (uint48) {
-		Liquidation memory liquidation = liquidations[id];
-		if (liquidation.started == 0 || liquidation.healthEpoch != commitmentIndex.healthEpoch(id)) return 0;
-		return liquidation.started;
+	function liquidationStarted(uint96 id) public view returns (uint48 started) {
+		(started, ) = commitmentIndex.liquidationState(id);
 	}
 	function _clearHealthyLiquidation(uint96 id, uint256 commitment, uint256 maxPrice) private {
-		if (commitment == 0 || (isPriceValid() && maxPrice >= acceptedPrice)) delete liquidations[id];
+		if (commitment == 0 || (isPriceValid() && maxPrice >= acceptedPrice)) commitmentIndex.clearLiquidation(id);
 	}
 	function _replace(uint96 id, uint256 rep, uint256 commitment) private {
 		uint256 maxPrice = maximumHealthyPrice(rep, commitment);
 		commitmentIndex.replace(id, rep, commitment, maxPrice);
 		_clearHealthyLiquidation(id, commitment, maxPrice);
+		_resumeFees();
 	}
 	function _owned(uint96 id, address owner) private view returns (SecurityPoolCommitmentIndex.Account memory account) {
 		account = commitmentIndex.accountOf(id);

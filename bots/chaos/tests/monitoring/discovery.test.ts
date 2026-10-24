@@ -542,6 +542,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 				case 'minimumVaultRepDepositAttoRep':
 				case 'initialEscalationGameDepositAttoRep':
 				case 'lastSettlementTimestamp':
+				case 'priceValidUntil':
 				case 'stagedOperationCounter':
 				case 'pendingReportId':
 				case 'getTotalPoolHeldAttoRep':

@@ -4,6 +4,7 @@ pragma solidity 0.8.35;
 import { SecurityPoolCreationCodeDeployer } from './SecurityPoolCreationCode.sol';
 
 import { Zoltar } from '../Zoltar.sol';
+import { Constants } from '../Constants.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
@@ -395,7 +396,15 @@ contract SecurityPoolPortfolioForkCoordinator {
 		// A later fork freezes pledged backing, not earlier released principal
 		// or income. Those parent claims remain collectable without new retirement.
 		if (zoltar.getForkTime(child) == 0) capital.serveRetirement();
+		uint256 ethBefore = address(this).balance;
 		capital.claimEarnings();
+		// Source recovery and branch cash share this custody address. Dispose only
+		// of the protocol-owned ETH earnings received by this claim.
+		uint256 ethIncome = address(this).balance - ethBefore;
+		if (ethIncome != 0) {
+			(bool sent, ) = Constants.BURN_ADDRESS.call{value: ethIncome}('');
+			require(sent, 'Protocol fee burn failed');
+		}
 		SecurityPoolCapitalLedger.Owner memory account = capital.ownerAccount(address(this));
 		if (account.freeAttoRep != 0) capital.withdrawPrincipal(account.freeAttoRep, address(this));
 		uint256 rep = IERC20(address(zoltar.getRepToken(child))).balanceOf(address(this));

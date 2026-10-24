@@ -1,7 +1,7 @@
 import { encodeFunctionData, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import type { PortfolioForkSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import { requireAddressValue, requireBigintValue, requireBigintArray } from './decoders.js'
+import { requireAddressValue, requireBigintValue, requireBigintArray, requireBooleanValue } from './decoders.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { loadPortfolioForkOutcome } from './securityPoolPortfolioFork.js'
 import { getInfraContractAddresses } from './deploymentHelpers.js'
@@ -15,8 +15,8 @@ const abi = parseAbi([
 	'function sourceGame(uint248 universeId,uint256 questionId) view returns (address)',
 	'function securityPool() view returns (address)',
 	'function shareToken() view returns (address)',
-	'function balanceOfShares(uint248 universeId,address owner) view returns (uint256[3])',
-	'function recoveredCompleteSetShares(uint248 universeId,address owner) view returns (uint256)',
+	'function balanceOfPortfolioRecoveryRights(uint248 universeId,address owner) view returns (uint256[3])',
+	'function isPortfolioRecoveryEligible(uint248 universeId) view returns (bool)',
 	'function preparePortfolioQuestion(address source,uint248 targetUniverse) returns (address)',
 ])
 export async function loadSharedForkOutcome(client: ReadClient, snapshot: PortfolioForkSnapshot, outcomeIndex: bigint) {
@@ -53,17 +53,16 @@ export async function loadPortfolioSourceRecovery(client: ReadClient, snapshot: 
 	if (source === zeroAddress) throw new Error('Question is not registered in this portfolio.')
 	const shareTokenValue = await client.readContract({ address: source, abi, functionName: 'shareToken', blockNumber })
 	const shareToken = requireAddressValue(shareTokenValue, 'source shares')
-	const [balancesValue, recoveredValue] = await Promise.all([
-		client.readContract({ address: shareToken, abi, functionName: 'balanceOfShares', args: [snapshot.universeId, snapshot.owner], blockNumber }),
-		client.readContract({ address: shareToken, abi, functionName: 'recoveredCompleteSetShares', args: [snapshot.universeId, snapshot.owner], blockNumber }),
+	const [rightsValue, eligibleValue] = await Promise.all([
+		client.readContract({ address: shareToken, abi, functionName: 'balanceOfPortfolioRecoveryRights', args: [snapshot.universeId, snapshot.owner], blockNumber }),
+		client.readContract({ address: shareToken, abi, functionName: 'isPortfolioRecoveryEligible', args: [snapshot.universeId], blockNumber }),
 	])
-	const balances = requireBigintArray(balancesValue, 'source balances')
-	if (balances.length !== 3) throw new Error('Invalid source balance count.')
-	const recovered = requireBigintValue(recoveredValue, 'recovered shares')
-	const completeSets = balances.reduce((minimum, value) => (value < minimum ? value : minimum), balances[0] ?? 0n)
-	if (recovered > completeSets) throw new Error('Source recovery exceeds complete-set balance.')
+	const eligible = requireBooleanValue(eligibleValue, 'source recovery eligibility')
+	const rights = requireBigintArray(rightsValue, 'source recovery rights')
+	if (rights.length !== 3 || rights.some(value => value < 0n || value >= 1n << 256n)) throw new Error('Invalid source recovery rights.')
+	const availableShares = rights.reduce((minimum, value) => (value < minimum ? value : minimum), rights[0] ?? 0n)
 	if ((await client.getBlock({ blockNumber })).hash !== snapshot.blockHash) throw new Error('Fork snapshot changed. Refresh and retry.')
-	return { pool, source, shareToken, availableShares: completeSets - recovered }
+	return { pool, source, shareToken, eligible, rights, availableShares }
 }
 export function buildPortfolioRecoveryPreparation(snapshot: PortfolioForkSnapshot, source: Awaited<ReturnType<typeof loadPortfolioSourceRecovery>>) {
 	return { account: snapshot.owner, to: getInfraContractAddresses().securityPoolForker, value: 0n, data: encodeFunctionData({ abi, functionName: 'preparePortfolioQuestion', args: [source.source, snapshot.universeId] }) }

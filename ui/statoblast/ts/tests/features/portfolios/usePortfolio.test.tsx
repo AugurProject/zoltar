@@ -26,6 +26,41 @@ test('permissionless question growth is paged independently of the owner’s sin
 	expect(source.reads.filter(read => read.name === 'getQuestions').every(read => read.args?.[1] === 64n)).toBe(true)
 	expect(source.reads.some(read => read.name === 'getLogs')).toBe(false)
 })
+const unchangedInputs = [
+	{ name: 'portfolio', repeat: (model: ReturnType<typeof usePortfolio>) => model.setManagerInput(model.managerInput) },
+	{ name: 'owner', repeat: (model: ReturnType<typeof usePortfolio>) => model.setOwnerInput(model.ownerInput) },
+	{ name: 'universe', repeat: (model: ReturnType<typeof usePortfolio>) => model.setUniverseInput(model.universeInput) },
+]
+for (const input of unchangedInputs) {
+	test(`repeating the current ${input.name} input preserves the loaded portfolio`, async () => {
+		capitalClient().install()
+		const hook = await mount()
+		await waitFor(() => expect(hook.state().snapshot).toBeDefined())
+		const snapshot = hook.state().snapshot
+		const setup = hook.state().setup
+		await act(() => input.repeat(hook.state()))
+		expect(hook.state().snapshot).toBe(snapshot)
+		expect(hook.state().setup).toBe(setup)
+		expect(hook.state().loading).toBe(false)
+	})
+	test(`repeating the current ${input.name} input preserves an in-flight portfolio load`, async () => {
+		const source = capitalClient()
+		const delayed = createDeferred<number>()
+		const client = source.client.extend(() => ({ getChainId: () => delayed.promise }))
+		installActiveEnvironmentForTesting({ ...source.backend, createReadClient: () => client })
+		const hook = await mount()
+		await waitFor(() => expect(hook.state().loading).toBe(true))
+		try {
+			await act(() => input.repeat(hook.state()))
+			expect(hook.state().loading).toBe(true)
+			await act(() => delayed.resolve(1))
+			await waitFor(() => expect(hook.state().snapshot).toBeDefined())
+			expect(hook.state().loading).toBe(false)
+		} finally {
+			delayed.resolve(1)
+		}
+	})
+}
 test('an invalidated in-flight load cannot overwrite a changed universe or strand loading', async () => {
 	const source = capitalClient()
 	const delayed = createDeferred<number>()

@@ -1,4 +1,5 @@
 import { getReportingContributionFunding } from '../../../lib/reportingFunding.js'
+import { supportsOraclePriceRenewal } from '../../../protocol/oracleTiming.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
@@ -161,7 +162,8 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 	const selectedPoolOracleMetricValues = effectiveSelectedPool === undefined ? undefined : getSelectedPoolOracleMetricValues(effectiveSelectedPool)
 	const currentPoolOraclePriceUsable = currentPoolOracleManagerDetails === undefined ? undefined : isOracleManagerPriceUsable(currentPoolOracleManagerDetails, currentTimestamp)
 	const requestPriceTransactionValueAttoEth = currentPoolOracleManagerDetails === undefined ? undefined : addOpenOracleBountyBuffer(currentPoolOracleManagerDetails.requestPriceCostAttoEth)
-	const requestPriceGuardInput = { accountAddress: accountState.address, isOnActiveAppChain, isPriceValid: currentPoolOraclePriceUsable, pendingReportId: currentPoolOracleManagerDetails?.pendingReportId, walletBalanceAttoEth: accountState.ethBalanceAttoEth }
+	const supportsRenewal = supportsOraclePriceRenewal(currentPoolOracleManagerDetails)
+	const requestPriceGuardInput = { accountAddress: accountState.address, isOnActiveAppChain, isPriceValid: supportsRenewal ? false : currentPoolOraclePriceUsable, pendingReportId: currentPoolOracleManagerDetails?.pendingReportId, walletBalanceAttoEth: accountState.ethBalanceAttoEth }
 	// The price request guards check the wallet first, so whenever the wallet blocks, their reason is the wallet reason.
 	const walletBlocker = getActiveAppChainWalletBlocker({ accountAddress: accountState.address, isOnActiveAppChain })
 	const requestPriceGuardMessage = getVaultRequestPriceGuardMessage({ ...requestPriceGuardInput, hasLoadedSelectedPool: effectiveSelectedPool !== undefined, requiredCostAttoEth: currentPoolOracleManagerDetails?.requestPriceCostAttoEth })
@@ -184,8 +186,8 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 	// The lifecycle state decides this because reporting details are not loaded on every pool view.
 	const poolEnded = selectedPoolLifecycleState === 'ended'
 	const oraclePriceUnused = poolEnded || isForkLifecycleState(selectedPoolLifecycleState)
-	// The pool page's price row offers a new request only when the price is unusable and requesting one is allowed in this stage.
-	const needsPrice = !oraclePriceUnused && !isPoolQuestionFinalized(currentReportingDetails) && showSelectedPoolWorkflowDetails && selectedPoolStateModel.actions.requestPrice.enabled && (currentPoolOraclePriceUsable === false || currentPoolOracleManagerError !== undefined)
+	// Shared prices can renew before expiry so the next challenge period overlaps the accepted price.
+	const needsPrice = !oraclePriceUnused && !isPoolQuestionFinalized(currentReportingDetails) && showSelectedPoolWorkflowDetails && selectedPoolStateModel.actions.requestPrice.enabled && (supportsRenewal || currentPoolOraclePriceUsable === false || currentPoolOracleManagerError !== undefined)
 	const accountPoolVault = selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))
 	const accountVault = selectedVaultIsOwnedByAccount && hasLoadedCurrentVault ? toAccountVault(selectedVaultDetails) : toAccountVault(accountPoolVault)
 	const truthAuctionStartedAt = currentForkAuctionDetails?.truthAuctionStartedAt ?? selectedPool?.truthAuctionStartedAt ?? 0n
@@ -219,7 +221,15 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 	const hasPendingPoolReport = (currentPoolOracleManagerDetails?.pendingReportId ?? 0n) > 0n
 	const oracleStatus =
 		selectedPool !== undefined && ((showSelectedPoolWorkflowDetails && !oraclePriceUnused) || hasPendingPoolReport)
-			? { ...currentPoolOracleManagerDetails, currentTimestamp, lastPrice: currentPoolOraclePrice, lastSettlementTimestamp: currentPoolOracleSettlementTimestamp ?? 0n, requestDisabledReason: requestPriceOpenGuardMessage, requestWalletBlocker: requestPriceOpenWalletBlocker }
+			? {
+					...currentPoolOracleManagerDetails,
+					currentTimestamp,
+					lastPrice: currentPoolOraclePrice,
+					lastSettlementTimestamp: currentPoolOracleSettlementTimestamp ?? 0n,
+					priceValidUntilTimestamp: (currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.priceValidUntilTimestamp,
+					requestDisabledReason: requestPriceOpenGuardMessage,
+					requestWalletBlocker: requestPriceOpenWalletBlocker,
+				}
 			: undefined
 
 	const getOperationGuardMessage = (resolvedPendingOperationId: bigint | undefined) =>

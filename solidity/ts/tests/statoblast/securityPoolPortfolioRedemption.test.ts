@@ -7,6 +7,7 @@ import {
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as coordinatorArtifact,
 	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
+	statoblast_tokens_ShareToken_ShareToken as shareArtifact,
 } from '../../types/contractArtifact'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { DAY } from '../../testSupport/simulator/utils/constants'
@@ -41,6 +42,24 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		return fixture.owner().readContract({ abi: gameArtifact.abi, address: game, functionName: 'getEscalationGameEndDate' })
 	}
 	const secondCash = () => fixture.owner().readContract({ ...portfolio(), functionName: 'quoteQuestionSettlement', args: [fixture.poolFor(fixture.secondQuestionId).securityPool, 20n * unit] })
+
+	test.each([false, true])('a question finalized before another question forks cannot detach recovery rights (checkpointed: %s)', async checkpointed => {
+		const deadline = await prepareReportedQuestion()
+		await fixture.base.mockWindow.setTime(deadline + 1n)
+		if (checkpointed) await refresh()
+		expect((await settlementState()).frozenBookId !== 0n).toBe(checkpointed)
+		await approveToken(fixture.owner(), getRepTokenAddress(fixture.base.genesisUniverse), getZoltarAddress())
+		await fixture.base.mockWindow.setTime(fixture.secondEndTime + 1n)
+		await forkUniverse(fixture.owner(), fixture.base.genesisUniverse, fixture.secondQuestionId)
+		const target = { abi: shareArtifact.abi, address: fixture.poolFor(fixture.base.questionId).shareToken }
+		await expect(writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...target, functionName: 'transferPortfolioRecoveryRights', args: [fixture.base.genesisUniverse, fixture.owner().account.address, [0n, 1n, 0n]] }))).rejects.toThrow('No live source recovery right')
+		expect(await fixture.other().readContract({ ...target, functionName: 'balanceOfPortfolioRecoveryRights', args: [fixture.base.genesisUniverse, fixture.other().account.address] })).toEqual([0n, 0n, 0n])
+		const before = await settlementState()
+		const cash = await fixture.owner().getBalance({ address: before.engine })
+		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...pool(), functionName: 'redeemShares' }))
+		expect((await shares())[1]).toBe(0n)
+		expect(await fixture.owner().getBalance({ address: before.engine })).toBeLessThan(cash)
+	})
 
 	test('winning shares redeem after the strict finality boundary without a prior question checkpoint', async () => {
 		const deadline = await prepareReportedQuestion()

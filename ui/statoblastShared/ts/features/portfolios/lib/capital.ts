@@ -40,3 +40,12 @@ export function capitalWithdrawalReason(snapshot: PortfolioCapitalSnapshot, amou
 	}
 	return 'Amount exceeds your withdrawable REP. Retire commitment to release more principal.'
 }
+
+export function capitalExecutionWithdrawalReason(snapshot: PortfolioCapitalSnapshot, amount: bigint | undefined) {
+	if (snapshot.exported) return 'The reserve follows your fork choice.'
+	if (amount === undefined || amount === 0n) return 'Enter a positive amount.'
+	if (snapshot.importing && snapshot.ownerAccount.positionId !== 0n) return 'Wait for child preparation to finish before withdrawing the reserve.'
+	if (amount <= snapshot.withdrawableExecutionReserveAttoEth) return undefined
+	if (snapshot.forkTime !== 0n && snapshot.timestamp < snapshot.forkChoiceDeadline) return 'Assigned reserve becomes withdrawable after the fork-choice deadline.'
+	return 'Amount exceeds your withdrawable execution reserve.'
+}

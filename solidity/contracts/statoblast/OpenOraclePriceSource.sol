@@ -191,7 +191,7 @@ abstract contract OpenOraclePriceSource {
 
 	function requestPrice(uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) public payable {
 		_requireRequestBounty(bountyAttoEth);
-		require(!isPriceValid(), 'Oracle price already fresh');
+		require(address(sharedPriceFeed) != address(0) || !isPriceValid(), 'Oracle price already fresh');
 		_requestPrice(msg.sender, bountyAttoEth, proposedRepPerEthPrice, requestedInitialAttoWeth);
 
 		uint256 excess = msg.value - bountyAttoEth;
@@ -279,6 +279,15 @@ abstract contract OpenOraclePriceSource {
 	function isPriceValid() public view returns (bool) {
 		if (address(sharedPriceFeed) != address(0)) return sharedPriceFeed.isPriceValid();
 		return lastPrice() > 0 && _isFreshPriceTimestamp(lastSettlementTimestamp());
+	}
+
+	/// @notice Canonical expiry for either a standalone price or the portfolio's shared price.
+	function priceValidUntil() public view returns (uint256) {
+		if (address(sharedPriceFeed) != address(0)) return sharedPriceFeed.priceValidUntil();
+		uint256 timestamp = lastSettlementTimestamp();
+		uint256 validForSeconds =
+			block.chainid == SEPOLIA_CHAIN_ID ? SEPOLIA_PRICE_VALID_FOR_SECONDS : PRICE_VALID_FOR_SECONDS;
+		return timestamp == 0 ? 0 : timestamp + validForSeconds;
 	}
 
 	function _isFreshPriceTimestamp(uint256 priceTimestamp) private view returns (bool) {

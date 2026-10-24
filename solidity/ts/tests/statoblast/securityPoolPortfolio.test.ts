@@ -109,7 +109,7 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		await fixture.refreshPrice()
 		await fixture.authorize(100n * unit)
 		await fixture.deposit(100n * unit, fixture.other())
-		await fixture.base.mockWindow.advanceTime(301n)
+		await fixture.base.mockWindow.setTime(await fixture.owner().readContract({ ...capital(), functionName: 'priceValidUntil' }))
 		await expect(fixture.mint()).rejects.toThrow()
 		expect(await fixture.owner().readContract({ ...portfolio(), functionName: 'availableMintCapacity', args: [fixture.base.genesisUniverse] })).toBe(0n)
 		await expect(fixture.owner().writeContract({ ...capital(), functionName: 'withdrawPrincipal', args: [100n * unit, fixture.owner().account.address] })).rejects.toThrow('Capital price stale')

@@ -49,7 +49,7 @@ const createPoolRead = ({
 	poolAccountingSnapshot?: ReturnType<typeof createPoolAccountingSnapshot>
 	universeForkTime?: bigint
 	escalationGame?: Address
-} = {}) => [0n, 10n, minimumSecurityBondDebtAttoEth, minimumVaultRepDepositAttoRep, forkData, 0n, 0n, 3n, 0n, 0n, totalPoolHeldAttoRep, poolAccountingSnapshot, universeForkTime, escalationGame, 200n, zeroAddress, 0n, 0n]
+} = {}) => [0n, 10n, minimumSecurityBondDebtAttoEth, minimumVaultRepDepositAttoRep, forkData, 0n, 0n, 3n, 0n, 0n, totalPoolHeldAttoRep, poolAccountingSnapshot, universeForkTime, escalationGame, 200n, zeroAddress, 0n, 0n, 0n]
 
 const createDeployment = (securityPool: Address, { parent = zeroAddress, universeId = 1n }: { parent?: Address; universeId?: bigint } = {}) => ({
 	initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,

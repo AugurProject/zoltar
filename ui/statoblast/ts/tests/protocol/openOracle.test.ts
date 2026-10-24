@@ -8,7 +8,8 @@ import { getOpenOracleGameTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_S
 import { createOpenOracleReportInstance, disputeOracleReport, loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, loadOpenOracleReportSummaries, settleOracleReport, withdrawOpenOracleBalance } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
 import { getOracleManagerPriceValidUntilTimestamp } from '@zoltar/ui-statoblast-shared/protocol/oracleTiming.js'
 import { loadOracleManagerDetails } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
-import { getOpenOracleAddress } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
+import { getInfraContractAddresses, getOpenOracleAddress } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
+import { loadCoordinatorPriceValidUntilTimestamp } from '@zoltar/ui-statoblast-shared/protocol/openOracleSettlement.js'
 import { loadLiquidationApproval, type LiquidationApprovalParams } from '@zoltar/ui-statoblast-shared/protocol/liquidationApprovals.js'
 import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
@@ -333,7 +334,7 @@ describe('openOracle protocol client', () => {
 				for (const contract of request.contracts) {
 					requestedFunctionNames.push(getContractFunctionName(contract))
 				}
-				return [1n, pendingOperationSlotId, [pendingOperationSlotId, 13n], 4n, 0n, 1n, true, 10n, 40n, 60n, 1_000n]
+				return [1n, pendingOperationSlotId, [pendingOperationSlotId, 13n], 4n, 0n, 1n, true, 10n, 40n, 60n, 1_000n, 790n]
 			},
 			readContract: async request => {
 				if (request.functionName === 'priceFeed') return managerAddress
@@ -396,7 +397,9 @@ describe('openOracle protocol client', () => {
 			'getActiveStagedOperationCount',
 			'settlementTime',
 			'minLiquidationPriceDistanceBps',
+			'priceValidUntil',
 		])
+		expect(details.priceValidUntilTimestamp).toBe(790n)
 		expect(details.minLiquidationPriceDistanceBps).toBe(1_000n)
 		expect(capturedActiveOperationArgs).toEqual([0n, 25n])
 		expect(details.activeStagedOperationCount).toBe(40n)
@@ -436,6 +439,45 @@ describe('openOracle protocol client', () => {
 			const report = await loadOpenOracleReportDetails(client, getOpenOracleAddress(), 1n)
 			if (association === 'verified') expect(report.coordinatorPriceValidUntilTimestamp).toBe(getOracleManagerPriceValidUntilTimestamp(11n))
 			else expect(report.coordinatorPriceValidUntilTimestamp).toBeUndefined()
+		})
+	}
+
+	for (const registered of [true, false]) {
+		test(`shared report preview uses authenticated feed validity: ${registered}`, async () => {
+			const { game } = createOpenOraclePreimage()
+			game.callbackContract = vaultAddress
+			game.settlementTime = 480n
+			const client = createMockLoaderClient({
+				getBlock: async () => ({ timestamp: 0n }),
+				readContract: async () => {
+					throw new Error('Unexpected single read')
+				},
+				multicall: async request => {
+					switch (getContractFunctionName(request.contracts[0])) {
+						case 'openOracle':
+							return [
+								{ status: 'success', result: getOpenOracleAddress() },
+								{ status: 'failure', error: new Error('Shared feed has no single question') },
+							]
+						case 'securityPoolFactory':
+							return [
+								{ status: 'success', result: getInfraContractAddresses().securityPoolFactory },
+								{ status: 'success', result: alternateSecurityPoolAddress },
+								{ status: 'success', result: 0n },
+								{ status: 'success', result: game.token1 },
+								{ status: 'success', result: game.token2 },
+							]
+						case 'sharedPriceFeeds':
+							return [
+								{ status: 'success', result: registered ? vaultAddress : zeroAddress },
+								{ status: 'success', result: 780n },
+							]
+						default:
+							throw new Error('Unexpected shared feed read')
+					}
+				},
+			})
+			expect(await loadCoordinatorPriceValidUntilTimestamp(client, getOpenOracleAddress(), game)).toBe(registered ? game.reportTimestamp + 480n + 780n : undefined)
 		})
 	}
 

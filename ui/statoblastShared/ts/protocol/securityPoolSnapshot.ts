@@ -62,6 +62,7 @@ async function readSecurityPoolSnapshot(client: ReadClient, deployment: Security
 		portfolioCustody,
 		linearRate,
 		linearEnd,
+		priceValidUntil,
 	] = await readRequiredMulticall(client, [
 		{
 			abi: statoblast_SecurityPool_SecurityPool.abi,
@@ -154,6 +155,7 @@ async function readSecurityPoolSnapshot(client: ReadClient, deployment: Security
 			args: [],
 		},
 		...linearFeeReadContracts(securityPoolAddress),
+		{ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'priceValidUntil', address: managerAddress, args: [] },
 	])
 	const block = portfolioCustody === zeroAddress ? undefined : await client.getBlock()
 	const blockNumber = block?.number
@@ -170,6 +172,7 @@ async function readSecurityPoolSnapshot(client: ReadClient, deployment: Security
 		forkData,
 		lastOraclePrice,
 		lastSettlementTimestamp,
+		priceValidUntil,
 		questionOutcome,
 		systemStateValue,
 		shareTokenSupplyAttoShares: central?.shareTokenSupplyAttoShares ?? shareTokenSupplyAttoShares,
@@ -286,6 +289,7 @@ function createListedSecurityPool({
 		initialReportPriorityFeeAttoEthPerGas,
 		lastOraclePrice: lastSettlementTimestamp > 0n ? lastOraclePrice : undefined,
 		lastOracleSettlementTimestamp: lastSettlementTimestamp,
+		oraclePriceValidUntilTimestamp: snapshot.priceValidUntil === 0n ? undefined : snapshot.priceValidUntil,
 		managerAddress,
 		minimumSecurityBondDebtAttoEth,
 		minimumVaultRepDepositAttoRep,

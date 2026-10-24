@@ -9,9 +9,12 @@ import '../interfaces/ISecurityPoolForker.sol';
 import '../interfaces/IShareToken.sol';
 import '../BinaryOutcomes.sol';
 import './ERC1155.sol';
+import '../SecurityPoolPortfolioSettlement.sol';
 
 interface IShareTokenPortfolioForkAuthority {
 	function forkController() external view returns (address);
+	function settlement() external view returns (SecurityPoolPortfolioSettlement);
+	function forkLogicalTime(uint248 universeId) external view returns (uint48);
 }
 
 /**
@@ -31,7 +34,12 @@ contract ShareToken is ERC1155, IShareToken {
 	mapping(uint256 => mapping(uint248 => mapping(address => uint256))) private migratedShareAmountAttoShares;
 	// Source token ID -> account -> whether its source balance is locked against transfers.
 	mapping(uint256 => mapping(address => bool)) private migratedSourceBalanceLocked;
+	// Recovery credits are independently transferable. Spending a source-backed
+	// right locks its source token; incoming credits alone never lock a recipient.
+	mapping(uint256 => mapping(address => uint256)) private portfolioRecoveryCredits;
+	mapping(uint256 => mapping(address => uint256)) private portfolioRecoverySourceSpent;
 	mapping(uint248 => mapping(address => uint256)) public recoveredCompleteSetShares;
+	event PortfolioRecoveryRightsTransferred(uint248 indexed universeId, address indexed from, address indexed to, uint256[3] amountsAttoShares);
 	event PortfolioRecoveryRightsConsumed(uint248 indexed universeId, address indexed holder, uint256 amountAttoShares, uint256 cumulativeAttoShares);
 	event Migrate(address indexed migrator, uint256 indexed fromId, uint256 indexed toId, uint256 amountAttoShares);
 
@@ -230,24 +238,98 @@ contract ShareToken is ERC1155, IShareToken {
 		require(migratedAnyShares, 'ShareToken has no new shares to migrate');
 	}
 
-	/// @notice Consume complete-set rights to source-universe recovery cash independently of every branch.
-	/// @dev Source shares remain intact for later branch minting. Locking their transfer
-	/// prevents recovery rights from being sold and consumed a second time.
-	function consumePortfolioRecoveryCompleteSets(uint248 sourceUniverse, address holder, uint256 amountAttoShares) external returns (uint256 cumulativeClaimedAttoShares) {
-		ISecurityPool source = canonicalPoolByUniverse[sourceUniverse];
-		require(address(source) != address(0) && source.portfolioCustody() != address(0), 'Recovery source is not a portfolio question');
-		address portfolio = source.securityPoolFactory().getSecurityPoolPortfolio(source);
-		require(msg.sender == portfolio || (portfolio.code.length != 0 && msg.sender == IShareTokenPortfolioForkAuthority(portfolio).forkController()), 'Only portfolio recovery authority');
-		require(zoltar.getForkTime(sourceUniverse) != 0, 'Recovery source has not forked');
-		require(amountAttoShares != 0, 'Recovery amount is zero');
-		cumulativeClaimedAttoShares = recoveredCompleteSetShares[sourceUniverse][holder] + amountAttoShares;
+	/// @notice Unspent recovery rights in Invalid, Yes, No order, including independently received rights.
+	function balanceOfPortfolioRecoveryRights(uint248 sourceUniverse, address holder) external view returns (uint256[3] memory amountsAttoShares) {
+		if (!isPortfolioRecoveryEligible(sourceUniverse)) return amountsAttoShares;
 		for (uint8 outcome; outcome < Constants.NUM_OUTCOMES; outcome++) {
 			uint256 id = TokenId.getTokenId(sourceUniverse, BinaryOutcomes.BinaryOutcome(outcome));
-			require(cumulativeClaimedAttoShares <= balanceOf(holder, id), 'Recovery requires unclaimed complete sets');
-			migratedSourceBalanceLocked[id][holder] = true;
+			amountsAttoShares[outcome] =
+				balanceOf(holder, id) -
+				portfolioRecoverySourceSpent[id][holder] +
+				portfolioRecoveryCredits[id][holder];
 		}
+	}
+
+	/// @notice Final claims keep ordinary redemption and cannot detach source recovery rights.
+	function isPortfolioRecoveryEligible(uint248 sourceUniverse) public view returns (bool) {
+		ISecurityPool source = canonicalPoolByUniverse[sourceUniverse];
+		if (
+			address(source) == address(0) ||
+			source.portfolioCustody() == address(0) ||
+			zoltar.getForkTime(sourceUniverse) == 0
+		) return false;
+		IShareTokenPortfolioForkAuthority portfolio = IShareTokenPortfolioForkAuthority(source.securityPoolFactory().getSecurityPoolPortfolio(source));
+		SecurityPoolPortfolioSettlement settlement = portfolio.settlement();
+		return
+			settlement.ledger().hasLiveForkRecoveryRight(settlement.bookIds(sourceUniverse), source.questionId(), portfolio.forkLogicalTime(sourceUniverse));
+	}
+
+	/// @notice Transfer only the caller's recovery rights; all source and child share balances stay intact.
+	function transferPortfolioRecoveryRights(uint248 sourceUniverse, address recipient, uint256[3] calldata amountsAttoShares) external {
+		_requirePortfolioRecoverySource(sourceUniverse);
+		require(recipient != address(0) && recipient != msg.sender, 'Recovery recipient must be another nonzero account');
+		bool transferred;
+		for (uint8 outcome; outcome < Constants.NUM_OUTCOMES; outcome++) {
+			uint256 amount = amountsAttoShares[outcome];
+			if (amount == 0) continue;
+			transferred = true;
+			uint256 id = TokenId.getTokenId(sourceUniverse, BinaryOutcomes.BinaryOutcome(outcome));
+			_spendPortfolioRecoveryRights(id, msg.sender, amount, 'Insufficient recovery rights');
+			portfolioRecoveryCredits[id][recipient] += amount;
+		}
+		require(transferred, 'Recovery transfer amount is zero');
+		emit PortfolioRecoveryRightsTransferred(sourceUniverse, msg.sender, recipient, amountsAttoShares);
+	}
+
+	function _requirePortfolioRecoverySource(uint248 sourceUniverse) private view returns (ISecurityPool source) {
+		source = canonicalPoolByUniverse[sourceUniverse];
+		require(address(source) != address(0) && source.portfolioCustody() != address(0), 'Recovery source is not a portfolio question');
+		require(zoltar.getForkTime(sourceUniverse) != 0, 'Recovery source has not forked');
+		require(isPortfolioRecoveryEligible(sourceUniverse), 'No live source recovery right');
+	}
+
+	function _spendPortfolioRecoveryRights(uint256 id, address holder, uint256 amount, string memory insufficientReason) private {
+		uint256 credits = portfolioRecoveryCredits[id][holder];
+		if (amount <= credits) {
+			portfolioRecoveryCredits[id][holder] = credits - amount;
+			return;
+		}
+		uint256 spent = portfolioRecoverySourceSpent[id][holder] + (amount - credits);
+		require(spent <= balanceOf(holder, id), insufficientReason);
+		portfolioRecoveryCredits[id][holder] = 0;
+		portfolioRecoverySourceSpent[id][holder] = spent;
+		migratedSourceBalanceLocked[id][holder] = true;
+	}
+
+	/// @notice Consume one independent recovery right per outcome, preserving every branch entitlement.
+	function consumePortfolioRecoveryCompleteSets(uint248 sourceUniverse, address holder, uint256 amountAttoShares) external returns (uint256 cumulativeClaimedAttoShares) {
+		ISecurityPool source = _requirePortfolioRecoverySource(sourceUniverse);
+		address portfolio = source.securityPoolFactory().getSecurityPoolPortfolio(source);
+		require(msg.sender == portfolio || (portfolio.code.length != 0 && msg.sender == IShareTokenPortfolioForkAuthority(portfolio).forkController()), 'Only portfolio recovery authority');
+		require(amountAttoShares != 0, 'Recovery amount is zero');
+		for (uint8 outcome; outcome < Constants.NUM_OUTCOMES; outcome++) {
+			uint256 id = TokenId.getTokenId(sourceUniverse, BinaryOutcomes.BinaryOutcome(outcome));
+			_spendPortfolioRecoveryRights(id, holder, amountAttoShares, 'Recovery requires unclaimed complete sets');
+		}
+		cumulativeClaimedAttoShares = recoveredCompleteSetShares[sourceUniverse][holder] + amountAttoShares;
 		recoveredCompleteSetShares[sourceUniverse][holder] = cumulativeClaimedAttoShares;
 		emit PortfolioRecoveryRightsConsumed(sourceUniverse, holder, amountAttoShares, cumulativeClaimedAttoShares);
+	}
+
+	function _burn(address account, uint256 id, uint256 value) internal override {
+		uint256 spent = portfolioRecoverySourceSpent[id][account];
+		if (spent != 0)
+			require(value <= balanceOf(account, id) - spent, 'ShareToken source recovery rights already separated');
+		super._burn(account, id, value);
+	}
+
+	function _burnBatch(address account, uint256[] memory ids, uint256[] memory values) internal override {
+		for (uint256 i; i < ids.length; i++) {
+			uint256 spent = portfolioRecoverySourceSpent[ids[i]][account];
+			if (spent != 0)
+				require(values[i] <= balanceOf(account, ids[i]) - spent, 'ShareToken source recovery rights already separated');
+		}
+		super._burnBatch(account, ids, values);
 	}
 
 	function _internalTransferFrom(address from, address to, uint256 id, uint256 value, bytes memory data) internal override {

@@ -4,6 +4,7 @@ import { buildPortfolioCapitalCureRequest, buildPortfolioCapitalTakeOverRequest 
 import {
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as artifact,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
+	statoblast_SecurityPoolCapitalFeeStreams_SecurityPoolCapitalFeeStreams as feeStreamsArtifact,
 	test_statoblast_CapitalLedgerHarness_CapitalLedgerHarness as harnessArtifact,
 	test_statoblast_CapitalLedgerHarness_CapitalLedgerTestComponents as componentsArtifact,
 	ReputationToken_ReputationToken as tokenArtifact,
@@ -359,6 +360,114 @@ describe('Statoblast: individual shared-custody capital', () => {
 		expect((await account(alice)).freeAttoRep).toBe(0n)
 	})
 
+	test('stale prepaid ETH and REP resume vesting without losing funded income', async () => {
+		await deposit(alice, 105n * E)
+		const id = await authorize(alice, 100n * E)
+		await price(E, 100)
+		await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'fundFees', value: 86_400n * E }))
+		await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'fundRepFees', args: [86_400n * E] }))
+		await getAnvilWindowEthereum().advanceTime(200n)
+		await price(E)
+		const feeStreams = await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'feeStreams' })
+		const deferred = () => alice.readContract({ abi: feeStreamsArtifact.abi, address: feeStreams, functionName: 'deferredEth' })
+		const waiting = await deferred()
+		expect(waiting).toBeGreaterThan(0n)
+		// Even a second report accepted while fresh must leave insertion of new
+		// expiry nodes outside the mandatory oracle callback.
+		await price(E)
+		expect(await deferred()).toBe(waiting)
+		const before = await position(id)
+		expect(before.ethFees).toBeLessThan(200n * E)
+		expect(before.repFees).toBeLessThan(200n * E)
+		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint' }))
+		expect(await deferred()).toBe(0n)
+		await getAnvilWindowEthereum().advanceTime(86_401n)
+		await writeContractAndWait(alice, () => alice.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint' }))
+		const after = await position(id)
+		expect(after.ethFees).toBe(86_400n * E)
+		expect(after.repFees).toBe(86_400n * E)
+	})
+
+	for (const mode of ['stale', 'unhealthy', 'empty'] as const) {
+		test(`terminal ${mode} fee income is disposed without consuming earned fees or principal`, async () => {
+			await deposit(alice, 105n * E)
+			const id = mode === 'empty' ? 0n : await authorize(alice, 100n * E)
+			await price(mode === 'unhealthy' ? 2n * E : E, mode === 'stale' ? 100 : 100_000)
+			const originalEth = await alice.getBalance({ address: ledger })
+			const originalRep = await alice.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [ledger] })
+			await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'fundFees', value: 86_400n * E }))
+			await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'fundRepFees', args: [86_400n * E] }))
+			await getAnvilWindowEthereum().advanceTime(200n)
+			const forkTime = (await alice.getBlock()).timestamp
+			await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'setFork', args: [forkTime] }))
+			const earned = await position(id)
+			await getAnvilWindowEthereum().advanceTime(86_401n)
+			await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint' }))
+			expect(await alice.getBalance({ address: ledger })).toBe(originalEth + earned.ethFees)
+			expect(await alice.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [ledger] })).toBe(originalRep + earned.repFees)
+			await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint' }))
+			expect(await alice.getBalance({ address: ledger })).toBe(originalEth + earned.ethFees)
+			// Canonical late income must remain accepted and reach the same terminal disposition.
+			await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'fundRepFees', args: [E] }))
+			await getAnvilWindowEthereum().advanceTime(86_401n)
+			await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint' }))
+			expect(await alice.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [ledger] })).toBe(originalRep + earned.repFees)
+			if (mode === 'stale') expect(earned.ethFees).toBeGreaterThan(0n)
+			else expect(earned.ethFees).toBe(0n)
+		})
+	}
+
+	test('the keeper starting a full-utilization liquidation earns part of later progress', async () => {
+		await deposit(alice, 105n * E)
+		await deposit(bob, 1_000n * E)
+		const id = await authorize(alice, 100n * E)
+		await demand(100n * E)
+		await price(2n * E)
+		const reserve = await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'positionExecutionReserveAttoEth', args: [id] })
+		await writeContractAndWait(keeper, () => keeper.sendTransaction(buildPortfolioCapitalCureRequest({ owner: keeper.account.address, capitalLedger: ledger, positionId: id })))
+		expect((await account(keeper)).feesAttoEth).toBe(0n)
+		await getAnvilWindowEthereum().advanceTime(3_601n)
+		await writeContractAndWait(bob, () => bob.sendTransaction(buildPortfolioCapitalTakeOverRequest({ owner: bob.account.address, capitalLedger: ledger, positionId: id, commitment: 100n * E, minimumAward: 105n * E, maximumOwnRep: 1_000n * E })))
+		expect((await account(keeper)).feesAttoEth).toBe(reserve / 4n)
+		expect((await account(bob)).feesAttoEth).toBe(reserve - reserve / 4n)
+		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'positionExecutionReserveAttoEth', args: [id] })).toBe(0n)
+	})
+
+	test('zero-progress repeats cannot take the starter reward and recovery cancels old entitlement', async () => {
+		await deposit(alice, 105n * E)
+		await deposit(bob, 1_000n * E)
+		const id = await authorize(alice, 100n * E)
+		await demand(100n * E)
+		await price(2n * E)
+		const reserve = await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'positionExecutionReserveAttoEth', args: [id] })
+		await writeContractAndWait(keeper, () => keeper.sendTransaction(buildPortfolioCapitalCureRequest({ owner: keeper.account.address, capitalLedger: ledger, positionId: id })))
+		for (let i = 0; i < 3; i++) await writeContractAndWait(bob, () => bob.sendTransaction(buildPortfolioCapitalCureRequest({ owner: bob.account.address, capitalLedger: ledger, positionId: id })))
+		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'positionExecutionReserveAttoEth', args: [id] })).toBe(reserve)
+		expect((await account(bob)).feesAttoEth).toBe(0n)
+		await price(E)
+		await price(2n * E)
+		await writeContractAndWait(bob, () => bob.sendTransaction(buildPortfolioCapitalCureRequest({ owner: bob.account.address, capitalLedger: ledger, positionId: id })))
+		await getAnvilWindowEthereum().advanceTime(3_601n)
+		await writeContractAndWait(bob, () => bob.sendTransaction(buildPortfolioCapitalTakeOverRequest({ owner: bob.account.address, capitalLedger: ledger, positionId: id, commitment: 100n * E, minimumAward: 105n * E, maximumOwnRep: 1_000n * E })))
+		expect((await account(keeper)).feesAttoEth).toBe(0n)
+		expect((await account(bob)).feesAttoEth).toBe(reserve)
+	})
+
+	test('income with no eligible commitment resumes once and ordinary checkpoints preserve its end', async () => {
+		await deposit(alice, 105n * E)
+		await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'fundFees', value: 86_400n * E }))
+		await getAnvilWindowEthereum().advanceTime(200n)
+		const id = await authorize(alice, 100n * E)
+		expect((await position(id)).ethFees).toBe(0n)
+		for (let i = 0; i < 3; i++) {
+			await getAnvilWindowEthereum().advanceTime(100n)
+			await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint' }))
+		}
+		await getAnvilWindowEthereum().advanceTime(86_101n)
+		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint' }))
+		expect((await position(id)).ethFees).toBe(86_400n * E)
+	})
+
 	test('old-price eligibility checkpoints atomically and stale vested income never backdates', async () => {
 		await deposit(alice, 105n * E)
 		await deposit(bob, 210n * E)
@@ -372,7 +481,8 @@ describe('Statoblast: individual shared-custody capital', () => {
 		const oldB = (await position(b)).ethFees
 		expect(oldA).toBeGreaterThan(0n)
 		expect(oldA).toBe(oldB)
-		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'maintenanceAttoEth' })).toBeGreaterThan(99n * E)
+		// Stale fees now resume gradually; the healthy owner cannot capture them on renewal.
+		expect(oldB).toBeLessThan(501n * E)
 		await getAnvilWindowEthereum().advanceTime(100n)
 		await writeContractAndWait(alice, () => alice.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint' }))
 		expect((await position(a)).ethFees).toBe(oldA)

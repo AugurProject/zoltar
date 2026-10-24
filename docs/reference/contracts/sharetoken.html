@@ -16,12 +16,12 @@
 					<p class="lede">Stores universe-aware ERC-1155 <a href="../glossary.html#outcome-share">outcome shares</a> and materializes a holder's persistent source entitlement in selected fork branches. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/tokens/ShareToken.sol">ShareToken source contract</a></p>
 				</header>
 				<h2 id="read-surface">Read surface</h2>
-				<p>Base and relationship getters are <code>name</code>, <code>symbol</code>, <code>zoltar</code>, <code>canonicalPoolByUniverse</code>, <code>recoveredCompleteSetShares</code>, <code>_balances</code>, <code>_supplies</code>, and <code>_operatorApprovals</code>. Standard ERC-1155 reads are <code>supportsInterface</code>, <code>balanceOf</code>, <code>totalSupply</code>, <code>balanceOfBatch</code>, and <code>isApprovedForAll</code>; protocol-specific reads are <code>isAuthorized</code>, <code>totalSupplyForOutcome</code>, <code>maximumOutcomeSupply</code>, <code>balanceOfOutcome</code>, <code>balanceOfShares</code>, <code>getMigratedShareAmountAttoShares</code>, <code>getTokenId</code>, <code>getTokenIds</code>, and <code>unpackTokenId</code>.</p>
+				<p>Base and relationship getters are <code>name</code>, <code>symbol</code>, <code>zoltar</code>, <code>canonicalPoolByUniverse</code>, <code>recoveredCompleteSetShares</code>, <code>_balances</code>, <code>_supplies</code>, and <code>_operatorApprovals</code>. Standard ERC-1155 reads are <code>supportsInterface</code>, <code>balanceOf</code>, <code>totalSupply</code>, <code>balanceOfBatch</code>, and <code>isApprovedForAll</code>; protocol-specific reads are <code>isAuthorized</code>, <code>totalSupplyForOutcome</code>, <code>maximumOutcomeSupply</code>, <code>balanceOfOutcome</code>, <code>balanceOfShares</code>, <code>getMigratedShareAmountAttoShares</code>, <code>getTokenId</code>, <code>getTokenIds</code>, <code>unpackTokenId</code>, <code>isPortfolioRecoveryEligible</code>, and <code>balanceOfPortfolioRecoveryRights</code>. The eligibility getter applies the <a href="../contract-inventory.html#portfolio-recovery-rights">source recovery rules</a>, preserving ordinary source-pool redemption for protected finalized questions. The balance getter returns unspent Invalid, Yes and No recovery rights, or all zeros when ineligible; the minimum bounds complete-set cash recovery. Received rights are included independently of the holder’s source-token balances.</p>
 
 				<h2 id="interactions">State-changing interactions</h2>
 				<p>Each call lists its parameter names in ABI order. The <a href="../contracts.html#table-columns">contract index</a> defines the columns.</p>
-				<!-- Validated read ABI fingerprint: 7afbb511e37a441868077ad389b077b079792c4e3d38a0ef36d15e2142fb26a7 -->
-				<!-- Validated complete compiled ABI fingerprint: dbf9e44024da6ec202035eb3ad3864fbd05ba55dc20d4e0ba36f23011a5c51ba -->
+				<!-- Validated read ABI fingerprint: 0194bb1e0f88ac06380299cf0929f248401c3fb6db8373010f01cba437918089 -->
+				<!-- Validated complete compiled ABI fingerprint: a5a5bd5ea48f6e815f880a8e6b86840cc0793340eafff23ab28879af48c551cd -->
 				<table>
 					<thead>
 						<tr>
@@ -43,22 +43,29 @@
 						<tr>
 							<td><code>safeTransferFrom(from, to, id, value)</code> and <code>safeTransferFrom(from, to, id, value, data)</code><wbr /></td>
 							<td>Share holder or approved ERC-1155 operator</td>
-							<td>Caller holds the source balance or has operator approval; the source account has neither materialized that token into a child branch nor consumed portfolio recovery rights; destination is nonzero; the source balance is sufficient; under <a href="../security-model.html#assumption-a22">A22 asset-recipient compatibility</a>, a contract recipient accepts the ERC-1155 callback.</td>
+							<td>Caller holds the source balance or has operator approval; the source account has neither materialized that token into a child branch nor spent source-backed recovery rights by transferring or consuming them; destination is nonzero; the source balance is sufficient; under <a href="../security-model.html#assumption-a22">A22 asset-recipient compatibility</a>, a contract recipient accepts the ERC-1155 callback.</td>
 							<td>Transfers one outcome-token balance without changing supply.</td>
 							<td><code>TransferSingle</code></td>
 						</tr>
 						<tr>
 							<td><code>safeBatchTransferFrom(from, to, ids, values)</code> and <code>safeBatchTransferFrom(from, to, ids, values, data)</code><wbr /></td>
 							<td>Share holder or approved ERC-1155 operator for a nonempty batch; any caller for an empty batch</td>
-							<td>ID and value array lengths match. A nonempty batch also requires holder or operator authority, no listed source token already locked by child materialization or portfolio recovery, a nonzero destination, sufficient source balances, and, under <a href="../security-model.html#assumption-a22">A22 asset-recipient compatibility</a>, an accepting ERC-1155 callback from a contract recipient; the empty-batch no-op performs none of those checks.</td>
+							<td>ID and value array lengths match. A nonempty batch also requires holder or operator authority, no listed source token already locked by child materialization or spending source-backed recovery rights, a nonzero destination, sufficient source balances, and, under <a href="../security-model.html#assumption-a22">A22 asset-recipient compatibility</a>, an accepting ERC-1155 callback from a contract recipient; the empty-batch no-op performs none of those checks.</td>
 							<td>A nonempty batch transfers each listed outcome-token balance without changing supply. Equal empty ID and value arrays return as a no-op without an event.</td>
 							<td><code>TransferBatch</code> for a nonempty batch; no event for an empty batch</td>
 						</tr>
 						<tr>
+							<td><code>transferPortfolioRecoveryRights(sourceUniverse, recipient, amountsAttoShares)</code><wbr /></td>
+							<td>Recovery-right holder transferring only their own rights; ERC-1155 operator approval does not authorize this call</td>
+							<td>Canonical source is a portfolio question in a forked universe with <code>isPortfolioRecoveryEligible(sourceUniverse) == true</code> (<code>No live source recovery right</code>); recipient is a different nonzero account; at least one amount is positive; every amount fits its corresponding unspent recovery-right balance.</td>
+							<td>Transfers the specified Invalid, Yes and No recovery rights independently. Source and child token balances and every branch migration entitlement remain intact. Received credits are spent first; spending source-backed rights locks that source token against transfer. No token-receiver callback is invoked.</td>
+							<td><code>PortfolioRecoveryRightsTransferred</code></td>
+						</tr>
+						<tr>
 							<td><code>consumePortfolioRecoveryCompleteSets(sourceUniverse, holder, amountAttoShares)</code><wbr /></td>
 							<td>The canonical source pool’s portfolio or its configured fork coordinator</td>
-							<td>Source universe forked; positive amount; the cumulative recovery does not exceed any of the holder’s three source outcome balances. The coordinator authenticates the holder and calculates the corresponding cash payout.</td>
-							<td>Consumes a separate cumulative complete-set snapshot right and locks the holder’s source tokens against transfer. Source balances and every branch’s migration rights remain intact. Returns cumulative consumed shares.</td>
+							<td>Canonical source is a portfolio question in a forked universe with <code>isPortfolioRecoveryEligible(sourceUniverse) == true</code> (<code>No live source recovery right</code>); positive amount no greater than any of the holder’s three unspent recovery-right balances. The coordinator authenticates the holder and calculates the corresponding cash payout.</td>
+							<td>Consumes equal amounts of Invalid, Yes and No recovery rights, using independently received credits before source-backed rights. Spending a source-backed right locks that source token against transfer; spending received credits alone does not. Source balances and every branch’s migration rights remain intact. Returns cumulative consumed shares.</td>
 							<td><code>PortfolioRecoveryRightsConsumed</code></td>
 						</tr>
 						<tr>
@@ -85,14 +92,14 @@
 						<tr>
 							<td><code>burnCompleteSets(universeId, owner, amountAttoShares)</code><wbr /></td>
 							<td>An authorized <code>SecurityPool</code></td>
-							<td>Caller is authorized; <code>owner</code> is nonzero and has at least <code>amountAttoShares</code> of every outcome.</td>
+							<td>Caller is authorized; <code>owner</code> is nonzero and has at least <code>amountAttoShares</code> of every outcome. Each remaining source balance must still cover its already-separated recovery rights.</td>
 							<td>Burns <code>amountAttoShares</code> each of Invalid, Yes, and No from <code>owner</code>; global outcome supplies may differ.</td>
 							<td><code>TransferBatch</code></td>
 						</tr>
 						<tr>
 							<td><code>burnTokenIdAndGetRemainingSupply(tokenId, owner)</code><wbr /></td>
 							<td>An authorized <code>SecurityPool</code></td>
-							<td><code>owner</code> is nonzero; caller is authorized.</td>
+							<td><code>owner</code> is nonzero; caller is authorized; no source-backed recovery rights have already been separated for this token.</td>
 							<td>Burns <code>owner</code>'s full balance of <code>tokenId</code> and returns the burned amount and that token ID's remaining supply.</td>
 							<td><code>TransferSingle</code>, including when the burned balance is zero</td>
 						</tr>

@@ -196,7 +196,6 @@ contract SharedPoolPriceFeed {
 		(, , , bool ready) = ISharedPoolPortfolioPriceCheckpoint(portfolio).clocks(universeId);
 		require(ready, 'Portfolio universe not ready');
 		require(sponsor != address(0), 'Report sponsor zero');
-		require(!isPriceValid(), 'Oracle price already fresh');
 		require(pendingReportId == 0, 'Oracle request already pending');
 		require(proposedRepPerEthPrice > 0, 'Initial oracle price zero');
 		require(bountyAttoEth >= getRequestPriceCostAttoEth(), 'Oracle bounty too small');
@@ -243,8 +242,7 @@ contract SharedPoolPriceFeed {
 		reportOutcome[reportId] = accepted ? 1 : 2;
 		if (accepted) {
 			uint256 nextPrice = Math.mulDiv(amount2, SecurityPoolUtils.PRICE_PRECISION, amount1);
-			uint256 validForSeconds =
-				block.chainid == SEPOLIA_CHAIN_ID ? SEPOLIA_PRICE_VALID_FOR_SECONDS : PRICE_VALID_FOR_SECONDS;
+			uint256 validForSeconds = priceValidityWindowSeconds();
 			require(priceTimestamp + validForSeconds <= type(uint48).max, 'Price validity clock exhausted');
 			// This checkpoint is atomic with acceptance. A failed optional question
 			// callback cannot reassign already-earned fees to the new eligibility set.
@@ -298,6 +296,7 @@ contract SharedPoolPriceFeed {
 		if (numReports == 0 || !_isFinalReportProfitable(reportId, numReports, amount1))
 			return ('Report uneconomic', 0);
 		priceTimestamp = uint256(finalReportTimestamp) + settlementTime;
+		if (priceTimestamp <= lastSettlementTimestamp) return ('Report timestamp not newer', 0);
 		if (!_isFreshPriceTimestamp(priceTimestamp)) return ('Report stale', 0);
 		if (amount1 == 0 || amount2 == 0) return ('Empty oracle settlement', 0);
 		if (Math.mulDiv(amount2, SecurityPoolUtils.PRICE_PRECISION, amount1) == 0) return ('Oracle price is zero', 0);
@@ -315,9 +314,21 @@ contract SharedPoolPriceFeed {
 		return lastPrice > 0 && _isFreshPriceTimestamp(lastSettlementTimestamp);
 	}
 
+	/// @notice One complete challenge period plus bounded keeper slack after settlement eligibility.
+	/// @dev Mainnet's 480-second challenge and 300-second slack allow continuous renewal,
+	/// but permit a final report to remain usable for at most 1,260 seconds after reporting.
+	/// A pending, disputed or rejected renewal never extends the accepted price's expiry.
+	function priceValidityWindowSeconds() public view returns (uint256) {
+		return
+			uint256(settlementTime) +
+			(block.chainid == SEPOLIA_CHAIN_ID ? SEPOLIA_PRICE_VALID_FOR_SECONDS : PRICE_VALID_FOR_SECONDS);
+	}
+
+	function priceValidUntil() public view returns (uint256) {
+		return lastSettlementTimestamp == 0 ? 0 : lastSettlementTimestamp + priceValidityWindowSeconds();
+	}
+
 	function _isFreshPriceTimestamp(uint256 priceTimestamp) private view returns (bool) {
-		uint256 validForSeconds =
-			block.chainid == SEPOLIA_CHAIN_ID ? SEPOLIA_PRICE_VALID_FOR_SECONDS : PRICE_VALID_FOR_SECONDS;
-		return priceTimestamp != 0 && priceTimestamp + validForSeconds > block.timestamp;
+		return priceTimestamp != 0 && priceTimestamp + priceValidityWindowSeconds() > block.timestamp;
 	}
 }

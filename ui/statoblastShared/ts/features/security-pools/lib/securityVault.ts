@@ -4,7 +4,6 @@ import { isVaultHealthyAtFactor } from './liquidation.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { OracleManagerDetails, SecurityVaultDetails } from '../../../types/contracts.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { getOracleManagerPriceValidUntilTimestamp } from '../../../protocol/oracleTiming.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 
@@ -170,7 +169,7 @@ export function hasValidSecurityVaultOraclePrice(managerAddress: Address | undef
 export function isOracleManagerPriceUsable(oracleManagerDetails: Pick<OracleManagerDetails, 'isPriceValid' | 'lastSettlementTimestamp' | 'priceValidUntilTimestamp'> | undefined, currentTimestamp?: bigint | undefined) {
 	if (oracleManagerDetails?.isPriceValid !== true) return false
 	if (currentTimestamp === undefined) return true
-	const validUntilTimestamp = oracleManagerDetails.priceValidUntilTimestamp ?? getOracleManagerPriceValidUntilTimestamp(oracleManagerDetails.lastSettlementTimestamp)
+	const validUntilTimestamp = oracleManagerDetails.priceValidUntilTimestamp
 	return validUntilTimestamp !== undefined && currentTimestamp < validUntilTimestamp
 }
 

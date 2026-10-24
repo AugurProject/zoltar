@@ -81,8 +81,8 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 			</SectionBlock>
 			<SectionBlock title={copy.execution} description={copy.executionHint}>
 				<MetricGrid>
-					<MetricField label={copy.unassignedExecution} loading={model.loading}>
-						<CurrencyValue value={snapshot?.ownerAccount.executionReserveAttoEth} suffix={common.eth} />
+					<MetricField label={copy.withdrawableExecution} loading={model.loading}>
+						<CurrencyValue value={snapshot?.withdrawableExecutionReserveAttoEth} suffix={common.eth} />
 					</MetricField>
 					<MetricField label={copy.minimumExecution} loading={model.loading}>
 						<CurrencyValue value={snapshot?.economics.minimumExecutionReserveAttoEth} suffix={common.eth} />

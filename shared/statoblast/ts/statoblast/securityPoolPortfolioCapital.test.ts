@@ -59,6 +59,7 @@ function fixture(overrides: Record<string, unknown> = {}) {
 		currentBatch: 9n,
 		nextBatch: 10n,
 		getForkTime: 0n,
+		getForkChoiceDeadline: 0n,
 		ownerAccount: { freeAttoRep: 0n, feesAttoEth: 3n, feesAttoRep: 4n, executionReserveAttoEth: 5n, targetHealthFactorBps: 12_000n, positionId: 1n },
 		ownerCollateral: [260n, 20n, 17n],
 		accountOf: { owner, batch: 0n, rep: 200n, commitment: 20n, maxHealthyPrice: 20n, releasedRep: 60n, ethFees: 11n, repFees: 13n },
@@ -142,6 +143,23 @@ describe('personal portfolio capital SDK', () => {
 		expect(snapshot.blockNumber).toBe(39n)
 		expect(requested).toEqual([39n, 39n])
 		expect(new Set(calls.map(call => call.blockNumber))).toEqual(new Set([39n]))
+	})
+
+	test('execution reserve withdrawal includes closed positions and missed choices at the exact canonical deadline', async () => {
+		for (const [overrides, expected] of [
+			[{}, 5n],
+			[{ getForkTime: 500n, getForkChoiceDeadline: 1_001n }, 5n],
+			[{ getForkTime: 500n, getForkChoiceDeadline: 1_000n }, 12n],
+			[{ getForkTime: 500n, getForkChoiceDeadline: 999n }, 12n],
+			[{ getForkTime: 500n, getForkChoiceDeadline: 999n, exported: true }, 0n],
+			[{ importing: true }, 0n],
+			[{ ownerCollateral: [260n, 0n, 260n], accountOf: { owner, batch: 9n, rep: 0n, commitment: 0n, maxHealthyPrice: 20n, releasedRep: 260n, ethFees: 11n, repFees: 13n } }, 12n],
+		] as const) {
+			const { client, calls } = fixture(overrides)
+			const snapshot = await loadPortfolioCapitalSnapshot({ client, portfolio, owner })
+			expect(snapshot).toMatchObject({ withdrawableExecutionReserveAttoEth: expected })
+			expect(calls.filter(call => call.functionName === 'getForkChoiceDeadline')).toEqual([{ functionName: 'getForkChoiceDeadline', blockNumber: 42n }])
+		}
 	})
 
 	test('rejects malformed ownership and reorgs instead of double-counting or mixing snapshots', async () => {

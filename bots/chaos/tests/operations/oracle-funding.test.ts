@@ -41,6 +41,16 @@ function requestPricePlan(snapshot: ReturnType<typeof snapshotFixture>) {
 }
 
 describe('oracle request funding bounds', () => {
+	test('renews a fresh shared portfolio price without allowing duplicate or fresh standalone reports', () => {
+		const { pool, snapshot } = requestPriceSnapshot()
+		pool.oraclePriceValid = true
+		expect(requestPricePlan(snapshot)).toBeUndefined()
+		Object.assign(pool, { priceFeed: address(80), oracleExposureAttoEth: 100n.toString() })
+		expect(requestPricePlan(snapshot)).toBeDefined()
+		pool.pendingReportId = '1'
+		expect(requestPricePlan(snapshot)).toBeUndefined()
+	})
+
 	test('uses shared aggregate exposure and the feed event while approving the question coordinator', () => {
 		const { pool, snapshot } = requestPriceSnapshot()
 		Object.assign(pool, { priceFeed: address(80), oracleExposureAttoEth: (10n ** 40n).toString() })

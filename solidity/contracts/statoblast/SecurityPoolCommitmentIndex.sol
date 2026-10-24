@@ -28,6 +28,21 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		uint256 ethFees;
 		uint256 repFees;
 	}
+	struct Liquidation {
+		uint48 started;
+		uint64 healthEpoch;
+		address initiator;
+	}
+	struct Cure {
+		uint256 removed;
+		uint256 freedRep;
+		uint256 previousCommitment;
+		address owner;
+		address initiator;
+	}
+	mapping(uint96 => Liquidation) private liquidations;
+	event LiquidationStarted(uint96 indexed positionId, address indexed initiator);
+
 	struct Retirement {
 		uint256 rep;
 		uint256 commitment;
@@ -102,7 +117,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	}
 
 	/// @dev A closed retirement cohort may shrink or gain collateral, never gain K.
-	function replace(uint96 id, uint256 rep, uint256 commitment, uint256 maxHealthyPrice) external onlyPortfolio operational {
+	function replace(uint96 id, uint256 rep, uint256 commitment, uint256 maxHealthyPrice) public onlyPortfolio operational {
 		_touch(id);
 		Position storage position = positions[id];
 		Node storage leaf = nodes[position.node];
@@ -187,12 +202,61 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		_observeHealthy(roots[nextBatch], price, epoch);
 	}
 
-	function healthEpoch(uint96 id) external view returns (uint64 epoch) {
+	function healthEpoch(uint96 id) public view returns (uint64 epoch) {
 		uint256 cursor = positions[id].node;
 		while (cursor != 0) {
 			Node storage node = nodes[cursor];
 			if (epoch < node.healthEpoch) epoch = node.healthEpoch;
 			cursor = node.parent;
+		}
+	}
+
+	/// @notice Recovery invalidates the clock even if nobody has touched the
+	/// position since a healthy oracle observation. Queries follow one tree path.
+	function liquidationState(uint96 id) public view returns (uint48 started, address initiator) {
+		Liquidation memory liquidation = liquidations[id];
+		if (liquidation.started == 0 || liquidation.healthEpoch != healthEpoch(id)) return (0, address(0));
+		return (liquidation.started, liquidation.initiator);
+	}
+
+	function clearLiquidation(uint96 id) external onlyPortfolio {
+		delete liquidations[id];
+	}
+
+	/// @dev Remove unused nominal K under exactly the ordinary collateral floor.
+	/// Custody and execution payments remain with the controller. No payment is
+	/// due for a timer alone; its initiator shares later actual-progress rewards.
+	function cure(uint96 id, uint256 price, uint256 multiplier, uint256 minimumCommitment, uint256 demand, address keeper) external onlyPortfolio operational returns (Cure memory result) {
+		Account memory account = accountOf(id);
+		require(account.owner != address(0) && account.commitment > 0, 'Position is not live');
+		uint256 supported = Math.mulDiv(Math.mulDiv(account.rep, 10_000, multiplier), 1e18, price);
+		result.owner = account.owner;
+		result.previousCommitment = account.commitment;
+		(, result.initiator) = liquidationState(id);
+		if (supported >= account.commitment) {
+			delete liquidations[id];
+			return result;
+		}
+		(, uint256 totalCommitment) = totals();
+		uint256 spare = totalCommitment > demand ? totalCommitment - demand : 0;
+		uint256 removed = Math.min(account.commitment, Math.min(Math.max(account.commitment - supported, minimumCommitment), spare));
+		if (removed < minimumCommitment && removed != account.commitment) removed = 0;
+		uint256 remaining = account.commitment - removed;
+		result.removed = removed;
+		if (removed != 0) {
+			if (remaining == 0) {
+				replace(id, 0, 0, 0);
+				result.freedRep = account.rep;
+			} else {
+				uint256 maxPrice = Math.mulDiv(Math.mulDiv(account.rep, 10_000, multiplier), 1e18, remaining);
+				replace(id, account.rep, remaining, maxPrice);
+			}
+		}
+		(uint48 started, ) = liquidationState(id);
+		if (remaining <= supported) delete liquidations[id];
+		else if (started == 0) {
+			liquidations[id] = Liquidation(uint48(block.timestamp), healthEpoch(id), keeper);
+			emit LiquidationStarted(id, keeper);
 		}
 	}
 
@@ -210,7 +274,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		return _eligible(roots[0], acceptedPrice) - reserved;
 	}
 
-	function totals() external view returns (uint256 rep, uint256 commitment) {
+	function totals() public view returns (uint256 rep, uint256 commitment) {
 		Node storage active = nodes[roots[0]];
 		Node storage current = nodes[currentBatch == 0 ? 0 : roots[currentBatch]];
 		Node storage next = nodes[roots[nextBatch]];
@@ -321,7 +385,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		leaf.repFees = 0;
 	}
 
-	function accountOf(uint96 id) external view returns (Account memory account) {
+	function accountOf(uint96 id) public view returns (Account memory account) {
 		Position storage position = positions[id];
 		if (position.node == 0) return account;
 		Node storage leaf = nodes[position.node];

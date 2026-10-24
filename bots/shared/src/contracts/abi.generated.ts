@@ -1819,6 +1819,7 @@ export const openOraclePriceCoordinatorAbi = [
 	{ type: 'function', name: 'pendingReportMaxSettlementBaseFeeAttoEthPerGas', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'pendingReportSponsor', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'address' }] },
 	{ type: 'function', name: 'priceFeed', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'address' }] },
+	{ type: 'function', name: 'priceValidUntil', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'protocolFee', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint24', internalType: 'uint24' }] },
 	{ type: 'function', name: 'protocolFeeRecipient', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'address' }] },
 	{ type: 'function', name: 'recoverSettledPendingReport', stateMutability: 'nonpayable', inputs: [], outputs: [] },
@@ -2064,6 +2065,8 @@ export const sharedPoolPriceFeedAbi = [
 	{ type: 'function', name: 'pendingReportMaxSettlementBaseFeeAttoEthPerGas', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'pendingReportSponsor', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'address' }] },
 	{ type: 'function', name: 'portfolio', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'address' }] },
+	{ type: 'function', name: 'priceValidUntil', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'priceValidityWindowSeconds', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'protocolFee', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint24', internalType: 'uint24' }] },
 	{ type: 'function', name: 'protocolFeeRecipient', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'address' }] },
 	{ type: 'function', name: 'recoverSettledPendingReport', stateMutability: 'nonpayable', inputs: [], outputs: [] },
@@ -4467,6 +4470,17 @@ export const shareTokenAbi = [
 	},
 	{
 		type: 'event',
+		name: 'PortfolioRecoveryRightsTransferred',
+		anonymous: false,
+		inputs: [
+			{ name: 'universeId', type: 'uint248', internalType: 'uint248', indexed: true },
+			{ name: 'from', type: 'address', internalType: 'address', indexed: true },
+			{ name: 'to', type: 'address', internalType: 'address', indexed: true },
+			{ name: 'amountsAttoShares', type: 'uint256[3]', internalType: 'uint256[3]', indexed: false },
+		],
+	},
+	{
+		type: 'event',
 		name: 'TransferBatch',
 		anonymous: false,
 		inputs: [
@@ -4550,6 +4564,16 @@ export const shareTokenAbi = [
 			{ name: '_account', type: 'address', internalType: 'address' },
 		],
 		outputs: [{ name: 'balanceAttoShares', type: 'uint256', internalType: 'uint256' }],
+	},
+	{
+		type: 'function',
+		name: 'balanceOfPortfolioRecoveryRights',
+		stateMutability: 'view',
+		inputs: [
+			{ name: 'sourceUniverse', type: 'uint248', internalType: 'uint248' },
+			{ name: 'holder', type: 'address', internalType: 'address' },
+		],
+		outputs: [{ name: 'amountsAttoShares', type: 'uint256[3]', internalType: 'uint256[3]' }],
 	},
 	{
 		type: 'function',
@@ -4639,6 +4663,7 @@ export const shareTokenAbi = [
 		outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
 	},
 	{ type: 'function', name: 'isAuthorized', stateMutability: 'view', inputs: [{ name: 'account', type: 'address', internalType: 'address' }], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
+	{ type: 'function', name: 'isPortfolioRecoveryEligible', stateMutability: 'view', inputs: [{ name: 'sourceUniverse', type: 'uint248', internalType: 'uint248' }], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
 	{ type: 'function', name: 'maximumOutcomeSupply', stateMutability: 'view', inputs: [{ name: '_universeId', type: 'uint248', internalType: 'uint248' }], outputs: [{ name: 'maximumSupplyAttoShares', type: 'uint256', internalType: 'uint256' }] },
 	{
 		type: 'function',
@@ -4744,6 +4769,17 @@ export const shareTokenAbi = [
 			{ name: '_outcome', type: 'uint8', internalType: 'enum BinaryOutcomes.BinaryOutcome' },
 		],
 		outputs: [{ name: 'totalSupplyAttoShares', type: 'uint256', internalType: 'uint256' }],
+	},
+	{
+		type: 'function',
+		name: 'transferPortfolioRecoveryRights',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{ name: 'sourceUniverse', type: 'uint248', internalType: 'uint248' },
+			{ name: 'recipient', type: 'address', internalType: 'address' },
+			{ name: 'amountsAttoShares', type: 'uint256[3]', internalType: 'uint256[3]' },
+		],
+		outputs: [],
 	},
 	{
 		type: 'function',

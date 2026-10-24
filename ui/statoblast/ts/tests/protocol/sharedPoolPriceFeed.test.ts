@@ -86,6 +86,7 @@ for (const mismatch of [undefined, 'feed', 'factory', 'weth', 'rep'] as const) {
 				if (request.functionName === 'universeId') return { status: 'success', result: 5n }
 				if (request.functionName === 'weth') return { status: 'success', result: mismatch === 'weth' ? feed : coordinator }
 				if (request.functionName === 'reputationToken') return { status: 'success', result: mismatch === 'rep' ? feed : otherCoordinator }
+				if (request.functionName === 'priceValidityWindowSeconds') return { status: 'success', result: 780n }
 				if (request.functionName === 'sharedPriceFeeds') {
 					expect(request.address).toBe(getInfraContractAddresses().securityPoolFactory)
 					expect(request.args).toEqual([coordinator, 5n])
@@ -118,7 +119,7 @@ for (const mismatch of [undefined, 'feed', 'factory', 'weth', 'rep'] as const) {
 			token2: otherCoordinator,
 		}
 		const expiry = await loadCoordinatorPriceValidUntilTimestamp({ multicall }, otherCoordinator, game, 1)
-		if (mismatch === undefined) expect(expiry).toBe(460n)
+		if (mismatch === undefined) expect(expiry).toBe(940n)
 		else expect(expiry).toBeUndefined()
 	})
 }

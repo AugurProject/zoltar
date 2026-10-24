@@ -20,8 +20,14 @@ contract CapitalLedgerZoltarMock {
 	function getForkTime(uint248) external view returns (uint256) {
 		return forkTime;
 	}
+	function getForkChoiceDeadline(uint248) external view returns (uint256) {
+		return forkTime == 0 ? 0 : forkTime + 8 weeks;
+	}
 	function mint(address owner, uint256 amount) external {
 		token.mint(owner, amount);
+	}
+	function burnRep(uint248, uint256 amount) external {
+		token.burn(msg.sender, amount);
 	}
 	function setFork(uint256 timestamp) external {
 		forkTime = timestamp;

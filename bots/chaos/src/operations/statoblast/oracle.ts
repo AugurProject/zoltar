@@ -16,6 +16,10 @@ const ORACLE_REQUEST_DEFINITION_ID = 'statoblast.oracle.request-price'
 
 const ORACLE_REQUEST_ENVELOPE_VERSION = 1
 
+function canRequestOraclePrice(pool: PoolSnapshot) {
+	return pool.pendingReportId === '0' && (!pool.oraclePriceValid || pool.priceFeed.toLowerCase() !== pool.coordinator.toLowerCase())
+}
+
 function oracleRequestMetadata(snapshot: EcosystemSnapshot, pool: PoolSnapshot, prepared: PreparedOracleRequest): OperationPlan['metadata'] {
 	return {
 		coordinator: pool.coordinator,
@@ -150,7 +154,7 @@ function oracleRequestContinuationIsSafe(snapshot: EcosystemSnapshot, pool: Pool
 		const currentBlock = amount(snapshot.anchor.blockNumber)
 		if (currentBlock < persisted.preparedAtBlock || currentBlock - persisted.preparedAtBlock > BigInt(workflowValidForBlocks)) return false
 		if (!operationalPools(snapshot).some(candidate => candidate.address.toLowerCase() === pool.address.toLowerCase())) return false
-		if (pool.oraclePriceValid || pool.pendingReportId !== '0') return false
+		if (!canRequestOraclePrice(pool)) return false
 		if (pool.coordinator.toLowerCase() !== persisted.coordinator.toLowerCase() || pool.repToken.toLowerCase() !== persisted.repToken.toLowerCase()) return false
 		if (snapshot.deployments.weth.toLowerCase() !== persisted.weth.toLowerCase()) return false
 		const currentPrice = amount(pool.lastRepPerEthPrice) > 0n ? amount(pool.lastRepPerEthPrice) : ONE_TOKEN
@@ -208,7 +212,7 @@ export const requestOraclePrice: OperationDefinition = {
 	buildPlan(snapshot, options) {
 		const candidate = choose(
 			operationalPools(snapshot).flatMap(pool => {
-				if (pool.oraclePriceValid || pool.pendingReportId !== '0') return []
+				if (!canRequestOraclePrice(pool)) return []
 				const prepared = oracleRequestPreparation(snapshot, pool, options)
 				return prepared === undefined ? [] : [{ pool, prepared }]
 			}),
@@ -230,13 +234,13 @@ export const requestOraclePrice: OperationDefinition = {
 	},
 	classification: 'selectable',
 	contract: 'OpenOraclePriceCoordinator',
-	description: 'Sponsors a bounded fresh REP/ETH report when the pool oracle is stale and no report is pending.',
+	description: 'Sponsors a bounded REP/ETH report for a stale pool or renews a shared portfolio price before expiry when no report is pending.',
 	discoveryInputs: ['oracle freshness/pending report', 'request cost', 'WETH and REP balances/allowances'],
 	ecosystem: 'statoblast',
 	evaluate(snapshot, options) {
-		const candidates = operationalPools(snapshot).filter(candidate => !candidate.oraclePriceValid && candidate.pendingReportId === '0')
+		const candidates = operationalPools(snapshot).filter(canRequestOraclePrice)
 		const prepared = candidates.some(pool => oracleRequestPreparation(snapshot, pool, options) !== undefined)
-		return eligible(candidates.length === 0 ? 'No operational pool needs a new oracle price' : undefined, candidates.length > 0 && !prepared ? 'No stale pool has a durable policy-bounded funding envelope, token inventory, ETH gas reserve, and safe private inclusion fee ceiling' : undefined)
+		return eligible(candidates.length === 0 ? 'No operational pool needs a new oracle price' : undefined, candidates.length > 0 && !prepared ? 'No eligible pool has a durable policy-bounded funding envelope, token inventory, ETH gas reserve, and safe private inclusion fee ceiling' : undefined)
 	},
 	id: ORACLE_REQUEST_DEFINITION_ID,
 	label: 'Request oracle price',

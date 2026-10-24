@@ -251,7 +251,7 @@ export function SecurityPoolPriceOracleSection({
 	managerAddress: Address
 	managerDetails: OracleManagerDetails | undefined
 	managerError: string | undefined
-	metricValues: Pick<OracleManagerDetails, 'lastPrice' | 'lastSettlementTimestamp'> | undefined
+	metricValues: Pick<OracleManagerDetails, 'lastPrice' | 'lastSettlementTimestamp' | 'priceValidUntilTimestamp'> | undefined
 	onLoadManager: (managerAddress: Address) => void
 	onOpenRequestReview: () => void
 	onViewPendingReport: (reportId: bigint) => void
@@ -266,7 +266,7 @@ export function SecurityPoolPriceOracleSection({
 		<SectionBlock density='compact' headingId={PRICE_ORACLE_HEADING_ID} title={securityPoolCopy.poolPriceOracle} variant='plain'>
 			<MetricGrid>
 				<MetricField label={statoblastAppCopy.openOraclePrice} valueTagName='span'>
-					<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={priceValues?.lastPrice} lastSettlementTimestamp={priceValues?.lastSettlementTimestamp ?? 0n} pendingReportReadyAtTimestamp={managerDetails?.pendingReportReadyAtTimestamp} priceValidUntilTimestamp={managerDetails?.priceValidUntilTimestamp} />
+					<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={priceValues?.lastPrice} lastSettlementTimestamp={priceValues?.lastSettlementTimestamp ?? 0n} pendingReportReadyAtTimestamp={managerDetails?.pendingReportReadyAtTimestamp} priceValidUntilTimestamp={priceValues?.priceValidUntilTimestamp} />
 					<button className='quiet metric-label-refresh' type='button' onClick={() => onLoadManager(managerAddress)} disabled={loadingManager} aria-label={securityPoolCopy.refreshOracle} aria-busy={loadingManager} title={securityPoolCopy.refreshOracle}>
 						{loadingManager ? <span className='spinner' aria-hidden='true' /> : <span aria-hidden='true'>↻</span>}
 					</button>

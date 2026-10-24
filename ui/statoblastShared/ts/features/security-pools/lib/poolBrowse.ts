@@ -51,6 +51,7 @@ function decodeCachedSecurityPool(value: unknown) {
 			initialReportPriorityFeeAttoEthPerGas: read.bigint('initialReportPriorityFeeAttoEthPerGas'),
 			lastOraclePrice: read.optional('lastOraclePrice', read.bigint),
 			lastOracleSettlementTimestamp: read.bigint('lastOracleSettlementTimestamp'),
+			oraclePriceValidUntilTimestamp: read.optional('oraclePriceValidUntilTimestamp', read.bigint),
 			managerAddress: read.address('managerAddress'),
 			marketDetails: readStoredMarketDetails(read.record('marketDetails')),
 			migratedAttoRep: read.bigint('migratedAttoRep'),

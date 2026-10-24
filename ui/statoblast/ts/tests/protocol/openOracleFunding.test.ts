@@ -2,10 +2,68 @@ import { asWriteClient, createMockWriteClient, createMockLoaderClient, createRea
 /// <reference types='bun-types' />
 
 import { describe, expect, test } from 'bun:test'
-import { getAddress } from '@zoltar/core-shared/evm/ethereum'
-import { queueOracleManagerOperation, loadCoordinatorInitialReportFundingRequirement, loadOracleManagerQueueOperationEthValue } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
+import { createWalletClient, custom, publicActions, getAddress } from '@zoltar/core-shared/evm/ethereum'
+import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { queueOracleManagerOperation, requestOraclePrice, loadCoordinatorInitialReportFundingRequirement, loadOracleManagerQueueOperationEthValue } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
 
 const MANAGER_ADDRESS = getAddress('0x0000000000000000000000000000000000000002')
+
+test('explicit shared renewal funds a full report even while ordinary operations are free', async () => {
+	const wallet = createWalletClient({
+		account: MANAGER_ADDRESS,
+		chain: SEPOLIA_NETWORK_PROFILE.chain,
+		transport: custom({
+			request: async () => {
+				throw new Error('Unexpected RPC')
+			},
+		}),
+	}).extend(publicActions)
+	const hash = `0x${'11'.repeat(32)}` as const
+	const values: bigint[] = []
+	const client = {
+		...wallet,
+		getBlock: async () => ({ timestamp: 480n, number: 10n, baseFeePerGas: 1n }),
+		getBalance: async () => 10n ** 18n,
+		readContract: createReadContractStub(request => {
+			switch (request.functionName) {
+				case 'isPriceValid':
+					return true
+				case 'priceFeed':
+					return getAddress('0x0000000000000000000000000000000000000003')
+				case 'reputationToken':
+					return MANAGER_ADDRESS
+				case 'balanceOf':
+				case 'allowance':
+					return 10n ** 18n
+				case 'getSettlementCallbackGasLimit':
+					return 10n
+				case 'gasConsumedOpenOracleReportPrice':
+					return 20n
+				case 'gasUnitsForOneDispute':
+				case 'initialReportPriorityFeeAttoEthPerGas':
+					return 1n
+				case 'targetPriceErrorForDispute':
+					return 10_000_000n
+				case 'openOracleSecurityMultiplierBps':
+					return 10_000n
+				case 'protocolFee':
+				case 'feePercentage':
+				case 'aggregateExposureAttoEth':
+				case 'pendingReportId':
+					return 0n
+				default:
+					throw new Error(`Unexpected read ${request.functionName}`)
+			}
+		}),
+		sendTransaction: async (request: { value?: bigint | undefined }) => {
+			values.push(request.value ?? 0n)
+			return hash
+		},
+		waitForTransactionReceipt: async () => ({ status: 'success' as const }),
+	}
+	await requestOraclePrice(asWriteClient(client), MANAGER_ADDRESS, 10n ** 18n)
+	expect(values).toEqual([266n])
+})
 
 describe('oracle manager queue funding helpers', () => {
 	test('uses zero ETH when reusing a pending-report join slot', async () => {
@@ -134,6 +192,7 @@ for (const timestamp of [3600n, 3541n]) {
 			if (request.functionName === 'gasConsumedOpenOracleReportPrice') return 20n
 			if (request.functionName === 'isPriceValid') return true
 			if (request.functionName === 'lastSettlementTimestamp') return 1n
+			if (request.functionName === 'priceValidUntil') return 3601n
 			throw new Error(`Unexpected read ${request.functionName}`)
 		})
 		const client = { readContract, getBlock: async () => ({ timestamp, transactions: [], baseFeePerGas: 0n }) }
@@ -157,6 +216,8 @@ for (const mode of ['fresh', 'stale-join', 'becomes-stale'] as const) {
 						return 10n ** 18n
 					case 'lastSettlementTimestamp':
 						return 1n
+					case 'priceValidUntil':
+						return 3601n
 					case 'getPendingSettlementOperationIds':
 						return mode === 'stale-join' ? [1n] : []
 					case 'MAX_PENDING_SETTLEMENT_OPERATIONS':

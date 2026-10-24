@@ -250,7 +250,7 @@ test('keeps every liquidation secondary but available while the protocol price i
 
 test('names the price behind the directory verdicts once, above the rows', async () => {
 	// After the OpenOracle price expires the verdicts fall back to Uniswap, so the directory says which price they use.
-	const repPrice = resolveRepPrice({ now: 10n ** 6n, poolOracle: { price: 10n ** 18n, settlementTimestamp: 1n }, setting: 'open-oracle-fallback', uniswapPrice: 3n * 10n ** 18n })
+	const repPrice = resolveRepPrice({ now: 10n ** 6n, poolOracle: { price: 10n ** 18n, settlementTimestamp: 1n, validUntil: 781n }, setting: 'open-oracle-fallback', uniswapPrice: 3n * 10n ** 18n })
 	await renderVaultDirectory([createSecurityVaultDetails({ vaultAddress: otherOwner })], { repPerEthPrice: repPrice.price }, { repPrice })
 	expect(document.querySelectorAll('.vault-directory-price')).toHaveLength(1)
 	expect(document.querySelector('.vault-directory-price .rep-price-status-title')?.textContent).toBe('via Uniswap')

@@ -590,7 +590,7 @@
 							</tr>
 							<tr>
 								<td>Fresh-price request guard</td>
-								<td><code>requestPrice</code> reverts while the cached coordinator price is still valid (<code>Oracle price already fresh</code>), so callers cannot open a redundant pending report on top of a fresh cache.</td>
+								<td>Standalone <code>requestPrice</code> reverts while the cached coordinator price is still valid (<code>Oracle price already fresh</code>). Shared feeds permit early renewal, but a pending report never extends the accepted expiry and a second pending report is rejected. See the <a href="./open-oracle.html#shared-feed-rules">shared-feed rules</a>.</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a></td>
 							</tr>
 							<tr>

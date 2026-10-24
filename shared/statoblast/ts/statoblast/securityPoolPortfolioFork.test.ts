@@ -6,6 +6,7 @@ import {
 	buildPortfolioForkStartRequest,
 	buildPortfolioForkFinalizeRequest,
 	buildPortfolioForkRecoveryRequest,
+	buildPortfolioRecoveryRightsTransferRequest,
 	buildPortfolioRecapPurchaseRequest,
 	loadPortfolioForkSnapshot,
 	loadPortfolioRecapQuote,
@@ -23,6 +24,7 @@ const abi = parseAbi([
 	'function startBranch(uint248 source,uint256 outcome) returns (uint248)',
 	'function finalizeBranch(uint248 child)',
 	'function recoverUnchosenCash(uint248 source,uint256 questionId,uint256 shares) returns (uint256)',
+	'function transferPortfolioRecoveryRights(uint248 sourceUniverse,address recipient,uint256[3] amountsAttoShares)',
 	'function buyRecapitalization(uint248 child,uint256 maximumRep,uint256 minimumRep,uint256 maximumCommitment,uint256 maximumOwnRep,uint256 targetHealth,uint256 executionReserve) payable returns (uint256,uint256)',
 ])
 function fixture(overrides: Record<string, unknown> = {}) {
@@ -74,6 +76,17 @@ describe('bounded portfolio fork SDK', () => {
 		expect(() => buildPortfolioForkRecoveryRequest({ ...base, questionId: 123n, shares: 0n })).toThrow('positive')
 		expect(() => buildPortfolioForkChoiceRequest({ ...base, universeId: 1n << 248n, outcomeIndex: 7n })).toThrow('uint248')
 	})
+	test('independent recovery transfers bind the source, share token, recipient and all three outcome amounts', () => {
+		const parameters = { owner, shareToken: capital, universeId: 8n, recipient: portfolio, amountsAttoShares: [4n, 0n, 7n] satisfies readonly [bigint, bigint, bigint] }
+		const request = buildPortfolioRecoveryRightsTransferRequest(parameters)
+		expect(request).toMatchObject({ account: owner, to: capital, value: 0n })
+		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'transferPortfolioRecoveryRights', args: [8n, portfolio, [4n, 0n, 7n]] })
+		expect(() => buildPortfolioRecoveryRightsTransferRequest({ ...parameters, amountsAttoShares: [0n, 0n, 0n] })).toThrow('positive')
+		expect(() => buildPortfolioRecoveryRightsTransferRequest({ ...parameters, amountsAttoShares: [-1n, 0n, 1n] })).toThrow('uint256')
+		expect(() => buildPortfolioRecoveryRightsTransferRequest({ ...parameters, recipient: zeroAddress })).toThrow('nonzero')
+		expect(() => buildPortfolioRecoveryRightsTransferRequest({ ...parameters, recipient: owner })).toThrow('another account')
+	})
+
 	test('recap purchase separately caps received REP, accepted obligation, own collateral and ETH budget', () => {
 		const parameters = { owner, controller, universeId: 42n, maximumRep: 100n, minimumRep: 90n, maximumCommitment: 30n, maximumOwnRep: 7n, targetHealthFactorBps: 12_000n, executionReserveAttoEth: 4n, maximumCostAttoEth: 50n }
 		const request = buildPortfolioRecapPurchaseRequest(parameters)

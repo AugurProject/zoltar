@@ -79,12 +79,12 @@ export const oracleMarketContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '05903807d4f117bfd83fa537a13ea6e5b752332ffba1a086fa5dbadf451b1fa7',
+		compiledAbiFingerprint: '2adced6ecc6af83defec65ef77493d443ee528c55174359819d9476489ee8856',
 		name: 'OpenOraclePriceCoordinator',
 		purpose: 'Obtains a fresh REP-per-ETH price and coordinates withdrawals, delegated liquidation routing, approval reservations, and terminal cleanup.',
-		readAbiFingerprint: '5ac07975973ba626a28ae2faec91705963a55daaace7de2175b09991755e16b5',
+		readAbiFingerprint: 'e734c1fded38b3717c82d59420ad9e37409a3ff324f04f8f684c935d98417bd2',
 		readSurface:
-			'`priceFeed()` returns the actual report contract; `sharedPriceFeed` is zero for a standalone question. `reportDelegate` holds the stateless standalone report creation and validation implementation. In shared mode, report state, price, freshness, and report funding come from that feed, while operations and approvals remain local. `operationReportIds` binds shared queued actions to their exact report. Configuration getters are `MAX_PENDING_SETTLEMENT_OPERATIONS`, `SETTLEMENT_GAS_OVERHEAD`, `OPEN_INTEREST_DIVIDER`, `reputationToken`, `securityPool`, `openOracle`, `weth`, `liquidationApprovalRegistry`, `vaultOperations` (the [VaultOperations](./contracts/vaultoperations.html) executor this coordinator deploys in its constructor), `gasConsumedOpenOracleReportPrice`, `gasConsumedSettlement`, `gasUnitsForOneDispute`, `initialReportPriorityFeeAttoEthPerGas`, `targetPriceErrorForDispute`, `openOracleSecurityMultiplierBps`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `timeType`, `trackDisputes`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, and `minLiquidationPriceDistanceBps`. Current report and operation getters are `pendingReportId`, `pendingReportSponsor`, `pendingOperationSlotId`, `lastSettlementTimestamp`, `lastPrice`, `pendingReportMaxSettlementBaseFeeAttoEthPerGas`, `stagedOperationCounter`, and `stagedOperations`. `lastSettlementTimestamp` records when the accepted final report reached settlement eligibility (report timestamp plus `settlementTime`), not when `settle` was called, and `isPriceValid` measures freshness from it: it is true while `lastPrice > 0`, `lastSettlementTimestamp` is nonzero, and `lastSettlementTimestamp + 5 minutes > block.timestamp`. On chain ID `11155111` (Sepolia) the window is 1 hour instead of 5 minutes. Use `isPriceValid`, `minimumToken1ReportAttoEth`, `getRequestPriceCostAttoEth`, `getQueuedOperationCostAttoEth`, `getSettlementCallbackGasLimit`, `getPendingOperationSlot`, `getActiveStagedOperationCount`, `getActiveStagedOperationsPage`, `getPendingCommitmentOperationId`, `getPendingSettlementWork`, `getPendingSettlementOperationCount`, and `getPendingSettlementOperationIds` for derived or paged state. The active-operation cursor is an inclusive live operation ID (zero starts at the newest operation), and the third return value is the first unreturned ID or zero at the end. Pin all pages to the same block; a consumed cursor explicitly reverts. Each page visits only its requested entries. The owner commitment lookup includes expired operations until they are consumed and does not scan the queue.',
+			'`priceFeed()` returns the actual report contract; `sharedPriceFeed` is zero for a standalone question. `reportDelegate` holds the stateless standalone report creation and validation implementation. In shared mode, report state, price, freshness, and report funding come from that feed, while operations and approvals remain local. `operationReportIds` binds shared queued actions to their exact report. Configuration getters are `MAX_PENDING_SETTLEMENT_OPERATIONS`, `SETTLEMENT_GAS_OVERHEAD`, `OPEN_INTEREST_DIVIDER`, `reputationToken`, `securityPool`, `openOracle`, `weth`, `liquidationApprovalRegistry`, `vaultOperations` (the [VaultOperations](./contracts/vaultoperations.html) executor this coordinator deploys in its constructor), `gasConsumedOpenOracleReportPrice`, `gasConsumedSettlement`, `gasUnitsForOneDispute`, `initialReportPriorityFeeAttoEthPerGas`, `targetPriceErrorForDispute`, `openOracleSecurityMultiplierBps`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `timeType`, `trackDisputes`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, and `minLiquidationPriceDistanceBps`. Current report and operation getters are `pendingReportId`, `pendingReportSponsor`, `pendingOperationSlotId`, `lastSettlementTimestamp`, `lastPrice`, `pendingReportMaxSettlementBaseFeeAttoEthPerGas`, `stagedOperationCounter`, and `stagedOperations`. `lastSettlementTimestamp` records when the accepted final report reached settlement eligibility (report timestamp plus `settlementTime`), not when `settle` was called, and `isPriceValid` measures freshness from it: it is true while `lastPrice > 0`, `lastSettlementTimestamp` is nonzero, and `block.timestamp < priceValidUntil()`. `priceValidUntil()` returns the shared feed’s canonical expiry in portfolio mode and the standalone expiry otherwise. Standalone freshness lasts 5 minutes, or 1 hour on chain ID `11155111` (Sepolia). A shared feed adds one `settlementTime` to that window, permitting early renewal; pending or rejected renewal never extends the accepted expiry. Exact shared timing is in the [OpenOracle reference](./open-oracle.html#integration-terms). Use `isPriceValid`, `minimumToken1ReportAttoEth`, `getRequestPriceCostAttoEth`, `getQueuedOperationCostAttoEth`, `getSettlementCallbackGasLimit`, `getPendingOperationSlot`, `getActiveStagedOperationCount`, `getActiveStagedOperationsPage`, `getPendingCommitmentOperationId`, `getPendingSettlementWork`, `getPendingSettlementOperationCount`, and `getPendingSettlementOperationIds` for derived or paged state. The active-operation cursor is an inclusive live operation ID (zero starts at the newest operation), and the third return value is the first unreturned ID or zero at the end. Pin all pages to the same block; a consumed cursor explicitly reverts. Each page visits only its requested entries. The owner commitment lookup includes expired operations until they are consumed and does not scan the queue.',
 		securityBoundary:
 			'Report and staged-operation liveness depends on [A16 timely inclusion](./security-model.html#assumption-a16), [A17 corrector capability](./security-model.html#assumption-a17), [A18 independent correction incentive](./security-model.html#assumption-a18), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). When `lastPrice` is zero, the official client currently needs an offchain market quote to propose the first report; quote availability is a client limitation rather than a protocol security assumption. Proposals copied from a nonzero cached price do not use that quote path.',
 		readDeclarations: [
@@ -96,6 +96,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			{ name: 'priceFeed', sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol' },
 
 			{ name: 'isPriceValid', sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol' },
+			{ name: 'priceValidUntil', sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol' },
 			{ name: 'minimumToken1ReportAttoEth', sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol' },
 			{ name: 'getRequestPriceCostAttoEth', sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol' },
 			{ name: 'getQueuedOperationCostAttoEth', sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol' },
@@ -155,9 +156,9 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			},
 			{
 				call: '`requestPriceIfNeededAndStageOperation(operation, targetVault, operationValue, validForSeconds, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth)` with funding when stale',
-				caller: 'Vault owner for self withdrawal or a target change; self-receiving liquidation callers are also supported. While a report is pending, only that report sponsor may stage more operations.',
+				caller: 'Vault owner for self withdrawal or a target change; self-receiving liquidation callers are also supported. With a stale price and pending report, only that report sponsor may stage more operations. A pending shared renewal does not restrict callers using a still-fresh accepted price.',
 				effect:
-					'Records the operation with `operationValue` in the unit of its `OperationType` (`0` `Liquidation`, transferred commitment in attoETH; `1` `WithdrawRep`, withdrawal in attoREP; `2` `SetVaultUnderwritingLimit`, absolute underwriting commitment in attoETH), executes immediately with a fresh price; otherwise it attaches it to the pending settlement batch while that batch has room, opening a report when none is pending and the batch was empty, or, in standalone mode, leaves it active outside the batch for a later `executeStagedOperation`. Shared mode requires a free callback slot and only the initiating question can queue on a pending report. A target change cannot supersede an active dependent bundle. Otherwise, a newly accepted target change consumes any older active target change for the same vault with `success=false` and `Backing target superseded`, freeing its settlement slot. When a report opens, the whole committed `bountyAttoEth` is retained as the settler reward regardless of the inclusion-block cost. If unused ETH is positive, the final caller refund uses a low-level callback; rejection rolls back the entire transaction, including any queueing, immediate execution, or newly opened report.',
+					'Records the operation with `operationValue` in the unit of its `OperationType` (`0` `Liquidation`, transferred commitment in attoETH; `1` `WithdrawRep`, withdrawal in attoREP; `2` `SetVaultUnderwritingLimit`, absolute underwriting commitment in attoETH), executes immediately with a fresh price; otherwise it attaches it to the pending settlement batch while that batch has room, opening a report when none is pending and the batch was empty, or, in standalone mode, leaves it active outside the batch for a later `executeStagedOperation`. Shared stale-price mode requires a free callback slot and only the initiating question can queue on a pending report. A target change cannot supersede an active dependent bundle. Otherwise, a newly accepted target change consumes any older active target change for the same vault with `success=false` and `Backing target superseded`, freeing its settlement slot. When a report opens, the whole committed `bountyAttoEth` is retained as the settler reward regardless of the inclusion-block cost. If unused ETH is positive, the final caller refund uses a low-level callback; rejection rolls back the entire transaction, including any queueing, immediate execution, or newly opened report.',
 				declarations: [{ name: 'requestPriceIfNeededAndStageOperation' }],
 				preconditions:
 					'`securityPool.isEscalationResolved()` is false; valid self-target for withdrawal or underwriting-commitment change; liquidation and withdrawal require positive amounts, and a withdrawal whose previewed REP is zero reverts with `Withdraw amount has no effect`, while an absolute underwriting commitment may be zero to request an exit; and `validForSeconds` is from 1 second through 5 minutes. A committed bounty of at least `getRequestPriceCostAttoEth()` covered by `msg.value`, buffered report funding, matching REP, and token approvals are required only when this call opens a new report. The caller must accept any positive unused-ETH refund.',
@@ -170,16 +171,16 @@ export const oracleMarketContractReferences: ContractReference[] = [
 					"Records `OperationType` `3` (`VaultOperations`) with the submitting wallet as owner and report sponsor. A fresh-price bundle executes commitment changes, other-vault liquidations, and withdrawal atomically; a failure reverts the submission and its deposit. With a stale price, deposits complete immediately and dependent actions queue together. Any change to a queued liquidation target's backing units or underwriting commitment fails the whole bundle, rolling back the owner's commitment change and withdrawal. The failed bundle is consumed while its earlier deposit remains. Each action uses one of four settlement slots; the deposit uses none.",
 				declarations: [{ name: 'stageVaultOperations' }],
 				preconditions:
-					'`validForSeconds` is from 1 second through 5 minutes; escalation is unresolved; a pending report belongs to the owner; a commitment change has no active preceding commitment operation. Stale-price bundles must fit the remaining weighted callback capacity and satisfy report funding when opening a report. Targets are distinct, nonzero other vaults with a positive commitment; liquidation bundles require a receiver health factor of at least 10,000 BPS. All liquidation snapshots and pool safety checks must still pass at execution, and a withdrawal whose resulting REP is zero fails with `Withdraw amount has no effect`.',
+					'`validForSeconds` is from 1 second through 5 minutes; escalation is unresolved; with a stale price, any pending report belongs to the owner; a commitment change has no active preceding commitment operation. Stale-price bundles must fit the remaining weighted callback capacity and satisfy report funding when opening a report. Targets are distinct, nonzero other vaults with a positive commitment; liquidation bundles require a receiver health factor of at least 10,000 BPS. All liquidation snapshots and pool safety checks must still pass at execution, and a withdrawal whose resulting REP is zero fails with `Withdraw amount has no effect`.',
 				signals: '`StagedOperationQueued`, `PriceRequested` when opening a report, `ExecutedStagedOperation`, and `CoordinatorStateCheckpoint`; the executor emits `VaultLiquidationStaged` per target and `VaultOperationsStaged` before this call',
 			},
 			{
 				call: '`requestPrice(proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth)` with report funding',
-				caller: 'Anyone when no fresh price or report is pending',
+				caller: 'Anyone when no report is pending; standalone mode additionally requires a stale price',
 				effect: 'Opens and atomically funds a fresh WETH/REP report without staging a new operation, retains the whole committed bounty as the settler reward, then refunds any ETH above the bounty through a low-level caller callback. Callback rejection rolls back the report and initial position.',
 				declarations: [{ name: 'requestPrice', sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol' }],
 				preconditions:
-					'Cached price stale; no pending report; nonzero proposed REP-per-ETH price, a committed bounty of at least `getRequestPriceCostAttoEth()` covered by `msg.value`, and funding and approvals for at least the configured priority report plus the larger of the base-fee and open-interest WETH reports, plus matching REP. Zero requested WETH uses the minimum; a larger request voluntarily increases the initial report. The caller must accept any positive excess-ETH refund.',
+					'No pending report; standalone cached price stale, while shared mode permits renewal before expiry; nonzero proposed REP-per-ETH price, a committed bounty of at least `getRequestPriceCostAttoEth()` covered by `msg.value`, and funding and approvals for at least the configured priority report plus the larger of the base-fee and open-interest WETH reports, plus matching REP. Zero requested WETH uses the minimum; a larger request voluntarily increases the initial report. The caller must accept any positive excess-ETH refund.',
 				signals: 'Standalone requests emit `PriceRequested` and `CoordinatorStateCheckpoint` from the coordinator. Shared requests emit `PriceRequested` and `ReportFundingAssigned` from the feed; they emit no coordinator checkpoint.',
 			},
 			{
@@ -321,12 +322,12 @@ export const oracleMarketContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'dbf9e44024da6ec202035eb3ad3864fbd05ba55dc20d4e0ba36f23011a5c51ba',
+		compiledAbiFingerprint: 'a5a5bd5ea48f6e815f880a8e6b86840cc0793340eafff23ab28879af48c551cd',
 		name: 'ShareToken',
 		purpose: "Stores universe-aware ERC-1155 [outcome shares](./glossary.html#outcome-share) and materializes a holder's persistent source entitlement in selected fork branches.",
-		readAbiFingerprint: '7afbb511e37a441868077ad389b077b079792c4e3d38a0ef36d15e2142fb26a7',
+		readAbiFingerprint: '0194bb1e0f88ac06380299cf0929f248401c3fb6db8373010f01cba437918089',
 		readSurface:
-			'Base and relationship getters are `name`, `symbol`, `zoltar`, `canonicalPoolByUniverse`, `recoveredCompleteSetShares`, `_balances`, `_supplies`, and `_operatorApprovals`. Standard ERC-1155 reads are `supportsInterface`, `balanceOf`, `totalSupply`, `balanceOfBatch`, and `isApprovedForAll`; protocol-specific reads are `isAuthorized`, `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getMigratedShareAmountAttoShares`, `getTokenId`, `getTokenIds`, and `unpackTokenId`.',
+			'Base and relationship getters are `name`, `symbol`, `zoltar`, `canonicalPoolByUniverse`, `recoveredCompleteSetShares`, `_balances`, `_supplies`, and `_operatorApprovals`. Standard ERC-1155 reads are `supportsInterface`, `balanceOf`, `totalSupply`, `balanceOfBatch`, and `isApprovedForAll`; protocol-specific reads are `isAuthorized`, `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getMigratedShareAmountAttoShares`, `getTokenId`, `getTokenIds`, `unpackTokenId`, `isPortfolioRecoveryEligible`, and `balanceOfPortfolioRecoveryRights`. The eligibility getter applies the [source recovery rules](./contract-inventory.html#portfolio-recovery-rights), preserving ordinary source-pool redemption for protected finalized questions. The balance getter returns unspent Invalid, Yes and No recovery rights, or all zeros when ineligible; the minimum bounds complete-set cash recovery. Received rights are included independently of the holder’s source-token balances.',
 		readDeclarations: [
 			{ name: 'supportsInterface', sourcePath: 'solidity/contracts/statoblast/tokens/ERC1155.sol' },
 			{ name: 'balanceOf', sourcePath: 'solidity/contracts/statoblast/tokens/ERC1155.sol' },
@@ -338,6 +339,8 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			{ name: 'maximumOutcomeSupply' },
 			{ name: 'balanceOfOutcome' },
 			{ name: 'balanceOfShares' },
+			{ name: 'balanceOfPortfolioRecoveryRights' },
+			{ name: 'isPortfolioRecoveryEligible' },
 			{ name: 'getMigratedShareAmountAttoShares' },
 			{ name: 'getTokenId' },
 			{ name: 'getTokenIds' },
@@ -369,7 +372,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				effect: 'Transfers one outcome-token balance without changing supply.',
 				declarations: [{ name: 'safeTransferFrom', sourcePath: 'solidity/contracts/statoblast/tokens/ERC1155.sol' }],
 				preconditions:
-					'Caller holds the source balance or has operator approval; the source account has neither materialized that token into a child branch nor consumed portfolio recovery rights; destination is nonzero; the source balance is sufficient; under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), a contract recipient accepts the ERC-1155 callback.',
+					'Caller holds the source balance or has operator approval; the source account has neither materialized that token into a child branch nor spent source-backed recovery rights by transferring or consuming them; destination is nonzero; the source balance is sufficient; under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), a contract recipient accepts the ERC-1155 callback.',
 				signals: '`TransferSingle`',
 			},
 			{
@@ -378,15 +381,27 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				effect: 'A nonempty batch transfers each listed outcome-token balance without changing supply. Equal empty ID and value arrays return as a no-op without an event.',
 				declarations: [{ name: 'safeBatchTransferFrom', sourcePath: 'solidity/contracts/statoblast/tokens/ERC1155.sol' }],
 				preconditions:
-					'ID and value array lengths match. A nonempty batch also requires holder or operator authority, no listed source token already locked by child materialization or portfolio recovery, a nonzero destination, sufficient source balances, and, under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), an accepting ERC-1155 callback from a contract recipient; the empty-batch no-op performs none of those checks.',
+					'ID and value array lengths match. A nonempty batch also requires holder or operator authority, no listed source token already locked by child materialization or spending source-backed recovery rights, a nonzero destination, sufficient source balances, and, under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), an accepting ERC-1155 callback from a contract recipient; the empty-batch no-op performs none of those checks.',
 				signals: '`TransferBatch` for a nonempty batch; no event for an empty batch',
+			},
+			{
+				call: '`transferPortfolioRecoveryRights(sourceUniverse, recipient, amountsAttoShares)`',
+				caller: 'Recovery-right holder transferring only their own rights; ERC-1155 operator approval does not authorize this call',
+				effect:
+					'Transfers the specified Invalid, Yes and No recovery rights independently. Source and child token balances and every branch migration entitlement remain intact. Received credits are spent first; spending source-backed rights locks that source token against transfer. No token-receiver callback is invoked.',
+				declarations: [{ name: 'transferPortfolioRecoveryRights' }],
+				preconditions:
+					'Canonical source is a portfolio question in a forked universe with `isPortfolioRecoveryEligible(sourceUniverse) == true` (`No live source recovery right`); recipient is a different nonzero account; at least one amount is positive; every amount fits its corresponding unspent recovery-right balance.',
+				signals: '`PortfolioRecoveryRightsTransferred`',
 			},
 			{
 				call: '`consumePortfolioRecoveryCompleteSets(sourceUniverse, holder, amountAttoShares)`',
 				caller: 'The canonical source pool’s portfolio or its configured fork coordinator',
-				effect: 'Consumes a separate cumulative complete-set snapshot right and locks the holder’s source tokens against transfer. Source balances and every branch’s migration rights remain intact. Returns cumulative consumed shares.',
+				effect:
+					'Consumes equal amounts of Invalid, Yes and No recovery rights, using independently received credits before source-backed rights. Spending a source-backed right locks that source token against transfer; spending received credits alone does not. Source balances and every branch’s migration rights remain intact. Returns cumulative consumed shares.',
 				declarations: [{ name: 'consumePortfolioRecoveryCompleteSets' }],
-				preconditions: 'Source universe forked; positive amount; the cumulative recovery does not exceed any of the holder’s three source outcome balances. The coordinator authenticates the holder and calculates the corresponding cash payout.',
+				preconditions:
+					'Canonical source is a portfolio question in a forked universe with `isPortfolioRecoveryEligible(sourceUniverse) == true` (`No live source recovery right`); positive amount no greater than any of the holder’s three unspent recovery-right balances. The coordinator authenticates the holder and calculates the corresponding cash payout.',
 				signals: '`PortfolioRecoveryRightsConsumed`',
 			},
 			{
@@ -421,7 +436,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				caller: 'An authorized `SecurityPool`',
 				effect: 'Burns `amountAttoShares` each of Invalid, Yes, and No from `owner`; global outcome supplies may differ.',
 				declarations: [{ name: 'burnCompleteSets' }],
-				preconditions: 'Caller is authorized; `owner` is nonzero and has at least `amountAttoShares` of every outcome.',
+				preconditions: 'Caller is authorized; `owner` is nonzero and has at least `amountAttoShares` of every outcome. Each remaining source balance must still cover its already-separated recovery rights.',
 				signals: '`TransferBatch`',
 			},
 			{
@@ -429,7 +444,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				caller: 'An authorized `SecurityPool`',
 				effect: "Burns `owner`'s full balance of `tokenId` and returns the burned amount and that token ID's remaining supply.",
 				declarations: [{ name: 'burnTokenIdAndGetRemainingSupply' }],
-				preconditions: '`owner` is nonzero; caller is authorized.',
+				preconditions: '`owner` is nonzero; caller is authorized; no source-backed recovery rights have already been separated for this token.',
 				signals: '`TransferSingle`, including when the burned balance is zero',
 			},
 		],

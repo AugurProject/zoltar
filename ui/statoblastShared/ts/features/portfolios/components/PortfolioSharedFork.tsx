@@ -114,6 +114,25 @@ export function PortfolioSharedFork(parameters: PortfolioSharedForkParameters) {
 					<PortfolioButton model={parameters.actions} action='preparePortfolioRecovery' label={copy.prepare} pendingLabel={copy.preparing} reason={model.prepareReason} onClick={model.prepare} />
 					<PortfolioButton model={parameters.actions} action='recoverPortfolioSource' label={copy.recover} pendingLabel={copy.recovering} reason={model.recoverReason} onClick={model.recover} />
 				</div>
+				<MetricGrid>
+					<MetricField label={copy.invalidAvailable}>
+						<CurrencyValue value={model.recovery?.rights[0]} />
+					</MetricField>
+					<MetricField label={copy.yesAvailable}>
+						<CurrencyValue value={model.recovery?.rights[1]} />
+					</MetricField>
+					<MetricField label={copy.noAvailable}>
+						<CurrencyValue value={model.recovery?.rights[2]} />
+					</MetricField>
+				</MetricGrid>
+				<UserMessage detail={copy.transferHint} />
+				<PortfolioInput label={copy.recipient} value={model.recipientInput} onChange={model.setRecipient} disabled={disabled} />
+				<MetricGrid>
+					<PortfolioInput label={copy.invalidTransfer} value={model.invalidRightsInput} onChange={model.setInvalidRights} disabled={disabled} numeric />
+					<PortfolioInput label={copy.yesTransfer} value={model.yesRightsInput} onChange={model.setYesRights} disabled={disabled} numeric />
+					<PortfolioInput label={copy.noTransfer} value={model.noRightsInput} onChange={model.setNoRights} disabled={disabled} numeric />
+				</MetricGrid>
+				<PortfolioButton model={parameters.actions} action='transferPortfolioRecoveryRights' label={copy.transfer} pendingLabel={copy.transferring} reason={model.transferReason} onClick={model.transfer} />
 			</WorkflowSubsection>
 		</SectionBlock>
 	)

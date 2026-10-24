@@ -53,6 +53,32 @@ test.each(['close', 'error'])('rejects every pending request when the socket emi
 	for (const result of await rejected) expect(result).toMatchObject({ status: 'rejected', reason: { message: expect.stringContaining('Chromium DevTools connection') } })
 })
 
+test.each([
+	['close', 'closed'],
+	['error', 'failed'],
+])('rejects future requests after the socket emits %s with no pending commands', async (eventName, description) => {
+	const { command, reply, send, socket } = fixture(5)
+	const completed = command('Page.enable')
+	reply({ id: 1, result: {} })
+	await completed
+	socket.dispatchEvent(new Event(eventName))
+	await expect(command('Runtime.evaluate')).rejects.toThrow(`Chromium DevTools connection ${description}`)
+	expect(send).toHaveBeenCalledTimes(1)
+})
+
+test('stalled evaluations retain the caller and safe command context without exposing parameters', async () => {
+	const { command, reply } = fixture(1)
+	reply({ method: 'Page.frameStartedLoading', params: { frameId: 'private-frame-content' } })
+	const evaluateLiquidationVault = () => command('Runtime.evaluate', { awaitPromise: false, expression: 'window.sign("private-wallet-value")' }, 'page-session')
+	const outcome = await Promise.allSettled([evaluateLiquidationVault()])
+	if (outcome[0]?.status !== 'rejected' || !(outcome[0].reason instanceof Error)) throw new Error('Expected a stalled evaluation error')
+	expect(outcome[0].reason.message).toContain('request 1, session page-session, awaitPromise false')
+	expect(outcome[0].reason.stack).toContain('devToolsCommands.test.ts:')
+	expect(outcome[0].reason.message).toContain('Page.frameStartedLoading')
+	expect(outcome[0].reason.message).not.toContain('private-wallet-value')
+	expect(outcome[0].reason.message).not.toContain('private-frame-content')
+})
+
 test('rejects pending and future requests after the browser exits', async () => {
 	const { command, exit, send } = fixture()
 	const pending = command('Page.enable')

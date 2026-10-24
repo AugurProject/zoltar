@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+interface ICapitalFeeEligibility {
+	function eligibleCommitment(uint256 price) external view returns (uint256);
+}
+
 /// @notice Exact vesting of independently funded ETH and REP fee budgets.
 /// @dev The authority holds the tokens. Nothing here transfers assets or visits
 /// an old stream. Income follows an integer rate plus its exact remainder at the
@@ -12,6 +16,8 @@ contract SecurityPoolCapitalFeeStreams {
 	uint48 public releasedThrough;
 	uint256 public outstandingEth;
 	uint256 public outstandingRep;
+	uint256 public deferredEth;
+	uint256 public deferredRep;
 	uint256 private aggregateEthRate;
 	uint256 private aggregateRepRate;
 	uint256 private lastEthIntegral;
@@ -26,6 +32,7 @@ contract SecurityPoolCapitalFeeStreams {
 		uint256 repRemainder;
 	}
 	mapping(uint256 => Expiry) private expiries;
+	event DeferredFeesResumed(uint256 ethAmount, uint256 repAmount);
 
 	constructor(address authority, uint48 timestamp) {
 		require(authority != address(0), 'Invalid fee authority');
@@ -42,12 +49,39 @@ contract SecurityPoolCapitalFeeStreams {
 	/// @dev The caller must allocate all older income before it funds a new stream.
 	/// One checkpoint per wall-clock second is sufficient, regardless of calls.
 	function addStream(uint256 ethAmount, uint256 repAmount, uint48 duration) external onlyPortfolio {
+		_addStream(ethAmount, repAmount, duration);
+	}
+
+	/// @notice Unallocatable income stays funded and resumes only as future income.
+	function defer(uint256 ethAmount, uint256 repAmount) external onlyPortfolio {
+		deferredEth += ethAmount;
+		deferredRep += repAmount;
+		_requireBudget();
+	}
+
+	/// @dev Called after the authority checkpoints old eligibility. Repeated calls
+	/// cannot restart an existing stream or award past income to a new commitment.
+	function resume(uint48 duration, ICapitalFeeEligibility index, uint256 price) external onlyPortfolio {
+		uint256 ethAmount = deferredEth;
+		uint256 repAmount = deferredRep;
+		if ((ethAmount == 0 && repAmount == 0) || index.eligibleCommitment(price) == 0) return;
+		deferredEth = 0;
+		deferredRep = 0;
+		_addStream(ethAmount, repAmount, duration);
+		emit DeferredFeesResumed(ethAmount, repAmount);
+	}
+
+	function _requireBudget() private view {
+		require(outstandingEth + deferredEth <= MAX_OUTSTANDING && outstandingRep + deferredRep <= MAX_OUTSTANDING, 'Fee budget exceeds token domain');
+	}
+
+	function _addStream(uint256 ethAmount, uint256 repAmount, uint48 duration) private {
 		require(releasedThrough == block.timestamp, 'Checkpoint fees before funding');
 		require(duration != 0 && uint256(releasedThrough) + duration <= MAX_TIMESTAMP, 'Invalid fee duration');
 		require(ethAmount != 0 || repAmount != 0, 'Empty fee stream');
 		outstandingEth += ethAmount;
 		outstandingRep += repAmount;
-		require(outstandingEth <= MAX_OUTSTANDING && outstandingRep <= MAX_OUTSTANDING, 'Fee budget exceeds token domain');
+		_requireBudget();
 		uint256 ethRate = ethAmount / duration;
 		uint256 repRate = repAmount / duration;
 		uint256 end = uint256(releasedThrough) + duration;
@@ -75,7 +109,7 @@ contract SecurityPoolCapitalFeeStreams {
 
 	/// @notice Return income earned since the previous checkpoint. The authority
 	/// may split one wall-clock interval at an exact oracle expiry before release.
-	function release(uint48 until) external onlyPortfolio returns (uint256 ethAmount, uint256 repAmount) {
+	function release(uint48 until) public onlyPortfolio returns (uint256 ethAmount, uint256 repAmount) {
 		require(until <= block.timestamp, 'Future fee checkpoint');
 		(ethAmount, repAmount) = preview(until);
 		lastEthIntegral += ethAmount;
@@ -83,6 +117,26 @@ contract SecurityPoolCapitalFeeStreams {
 		outstandingEth -= ethAmount;
 		outstandingRep -= repAmount;
 		releasedThrough = until;
+	}
+
+	/// @notice Checkpoint old eligibility before the authority changes it. Stale
+	/// elapsed income stays funded separately from the amount returned for credit.
+	function checkpoint(uint48 eligibleThrough) external onlyPortfolio returns (uint256 ethAmount, uint256 repAmount) {
+		if (eligibleThrough > releasedThrough) (ethAmount, repAmount) = release(eligibleThrough);
+		if (block.timestamp > releasedThrough) {
+			(uint256 staleEth, uint256 staleRep) = release(uint48(block.timestamp));
+			deferredEth += staleEth;
+			deferredRep += staleRep;
+		}
+	}
+
+	/// @dev Only the authority can withdraw deferred accounting, after a fork
+	/// fixes eligibility permanently. It must burn exactly the returned amounts.
+	function takeDeferred() external onlyPortfolio returns (uint256 ethAmount, uint256 repAmount) {
+		ethAmount = deferredEth;
+		repAmount = deferredRep;
+		deferredEth = 0;
+		deferredRep = 0;
 	}
 
 	/// @dev Future quote times are permitted. They do not release any assets.

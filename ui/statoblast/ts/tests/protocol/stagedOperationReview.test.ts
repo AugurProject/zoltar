@@ -54,8 +54,8 @@ for (const change of ['expired', 'unavailable', 'price invalid', 'snapshot chang
 							return 100n
 						case 'isPriceValid':
 							return !(changed && change === 'price invalid')
-						case 'lastSettlementTimestamp':
-							return 1n
+						case 'priceValidUntil':
+							return 781n
 						case 'securityPool':
 							return address
 						case 'securityVaults':

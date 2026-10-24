@@ -38,9 +38,10 @@
 				</figure>
 				<p>This raw-amount ratio is valid because the configured WETH and REP contracts both use 18 decimals. The coordinator does not normalize token decimals in the settlement callback.</p>
 
-				<p id="integration-terms">An accepted report becomes the coordinator's cached REP/ETH price. Its freshness window is one hour on Sepolia and five minutes on other chains. The window starts at settlement eligibility (the final report timestamp plus <code>settlementTime</code>), not when <code>settle</code> is called, and <code>lastSettlementTimestamp</code> records that start. A late settlement therefore cannot extend the life of a price that was frozen earlier. The coordinator does not meter how much operation volume uses that price during the freshness window.</p>
+				<p id="integration-terms">An accepted report becomes the coordinator's cached REP/ETH price. <code>lastSettlementTimestamp</code> records settlement eligibility: the final report timestamp plus <code>settlementTime</code>. The freshness window starts there, so settling late cannot extend it. Standalone prices remain fresh for one hour on Sepolia and five minutes on other chains. Shared feeds add one <code>settlementTime</code> to that window. With the mainnet eight-minute challenge period, a shared price is usable for 780 seconds after eligibility, or at most 21 minutes after the final report. <code>priceValidUntil()</code> returns the canonical expiry for either mode; a price is stale at that timestamp. The coordinator does not meter operation volume during the window.</p>
 				<p id="shared-feed-rules">For shared feeds, the report-size and escalation-halt formulas below use the larger of the portfolio’s current aggregate commitment and backing demand. The feed reads this live aggregate directly; expired questions do not need separate cleanup calls to update exposure. The request bounty includes the shared callback allowance. These request-time floors do not impose a ceiling on later commitments.</p>
-				<p>Only the initiating question and sponsor can attach operations to a shared pending report; other questions wait for settlement. Shared queues reject work beyond the four-action budget. Before accepting a new price, the feed must checkpoint portfolio fees under the previous price and update capital eligibility atomically. If that mandatory checkpoint fails, the price is not accepted. It then stores acceptance or rejection before attempting the initiating coordinator’s optional local callback, so that later callback cannot erase an accepted price. Deferred operations remain individually executable or removable; each queued shared action checks the terminal outcome of its original report and cannot execute after rejection or recovery.</p>
+				<p>A shared feed permits a new report before the accepted price expires, allowing the next challenge period to overlap the current freshness window. A pending, disputed or rejected renewal does not extend the old expiry. While the accepted price remains fresh, other questions and callers can execute price-dependent operations immediately. Once it expires, only the initiating question and sponsor can attach operations to the pending report. Shared queues reject work beyond the four-action budget.</p>
+				<p>Before accepting a new price, the feed must checkpoint portfolio fees under the previous price and update capital eligibility atomically. If that mandatory checkpoint fails, the price is not accepted. It then stores acceptance or rejection before attempting the initiating coordinator’s optional local callback, so that later callback cannot erase an accepted price. Deferred operations remain individually executable or removable; each queued shared action checks the terminal outcome of its original report and cannot execute after rejection or recovery.</p>
 			</section>
 
 			<section id="optional-upstream-capabilities">
@@ -132,7 +133,7 @@
 
 				<h3 id="rolling-dispute-exclusivity">Sponsor lane</h3>
 
-				<p>The sponsor lane is the exclusive right of <code>pendingReportSponsor</code>, the account that funded the pending report, to add operations to that report's settlement. Those follow-up operations pay no additional bounty; other callers must wait until the report finishes. <code>requestPrice</code> reverts while the cached price is fresh or a report is pending.</p>
+				<p>The sponsor lane is the exclusive right of <code>pendingReportSponsor</code>, the account that funded the pending report, to add operations to that report's settlement. Those follow-up operations pay no additional bounty. During a shared renewal, other callers can still execute against the previous accepted price until it expires. <code>requestPrice</code> always rejects a second pending report; only standalone mode also rejects requests while the cached price is fresh.</p>
 			</section>
 
 			<section id="security-guarantee">
@@ -392,6 +393,7 @@
 					<li>the settlement block's base fee exceeds the request-time cap, which is the base fee implied by the committed bounty scaled by <code>maxSettlementBaseFeeMultiplierBps</code>: <code>Base fee too high</code>;</li>
 					<li><code>storedGame(reportId).numReports</code> is saturated at the <code>uint24</code> maximum: <code>Counter saturated</code>;</li>
 					<li><code>numReports</code> is zero, or the settled WETH amount is below <code>reportAttoEth(initialReportPriorityFeeAttoEthPerGas) + reportAttoEth(recordedBaseFee)</code> from the <a href="#security-guarantee">sizing formula</a>, where <code>recordedBaseFee</code> is the base fee OpenOracle stored for the final report in <code>disputeHistory(reportId, numReports - 1)</code>: <code>Report uneconomic</code>;</li>
+					<li>for a shared feed, settlement eligibility is no later than that of the accepted price: <code>Report timestamp not newer</code>;</li>
 					<li>the freshness window measured from settlement eligibility has already closed: <code>Report stale</code>;</li>
 					<li>either settled token amount is zero: <code>Empty oracle settlement</code>;</li>
 					<li>the integer REP/ETH calculation produces a zero price: <code>Oracle price is zero</code>.</li>
@@ -723,7 +725,7 @@
 						<tr>
 							<td><code>PRICE_VALID_FOR_SECONDS</code> / <code>SEPOLIA_PRICE_VALID_FOR_SECONDS</code></td>
 							<td>See <a href="#integration-terms">Token pair and cached price</a>.<br />Source constant</td>
-							<td>Freshness window of an accepted price.</td>
+							<td>Standalone freshness window, also used as the keeper slack added to <code>settlementTime</code> by <code>SharedPoolPriceFeed.priceValidityWindowSeconds()</code>.</td>
 						</tr>
 						<tr>
 							<td><code>MAX_OPERATION_VALID_FOR_SECONDS</code></td>

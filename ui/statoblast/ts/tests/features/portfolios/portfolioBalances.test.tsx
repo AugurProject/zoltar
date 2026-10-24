@@ -5,10 +5,10 @@ import { unscopedTransaction } from '@zoltar/ui-core-shared/transactions/transac
 import { PortfolioAggregatePanel } from '@zoltar/ui-statoblast-shared/features/portfolios/components/PortfolioAggregatePanel.js'
 import { usePortfolioAggregate } from '@zoltar/ui-statoblast-shared/features/portfolios/hooks/usePortfolioAggregate.js'
 import * as copy from '@zoltar/ui-statoblast-shared/copy/portfolioCapital.js'
-import { capitalSnapshot, owner } from './capitalFixture.js'
+import { capitalSnapshot, owner, unit } from './capitalFixture.js'
 const lifecycle = installDomTestLifecycle()
-function Harness() {
-	const model = usePortfolioAggregate({ snapshot: capitalSnapshot(), loading: false, error: undefined, refresh: async () => undefined }, { ownerReason: undefined, runPortfolioAction: async () => undefined }, owner)
+function Harness({ snapshot = capitalSnapshot() }: { snapshot?: ReturnType<typeof capitalSnapshot> }) {
+	const model = usePortfolioAggregate({ snapshot, loading: false, error: undefined, refresh: async () => undefined }, { ownerReason: undefined, runPortfolioAction: async () => undefined }, owner)
 	return <PortfolioAggregatePanel model={model} actions={{ scope: unscopedTransaction, busy: undefined }} />
 }
 test('personal capital shows exact principal and keeps distinct approval, deposit and retirement controls', async () => {
@@ -32,4 +32,13 @@ test('personal capital shows exact principal and keeps distinct approval, deposi
 	expect(labels.some(label => label.includes('Claim earnings'))).toBe(true)
 	expect(text).not.toContain('Claim each question')
 	expect(view.container.querySelectorAll('.card .card')).toHaveLength(0)
+})
+
+test('the reserve panel shows assigned ETH available after a missed fork choice', async () => {
+	const snapshot = capitalSnapshot({ forkTime: 500n, forkChoiceDeadline: 1_000n, withdrawableExecutionReserveAttoEth: (101n * unit) / 100n })
+	const view = await renderIntoDocument(<Harness snapshot={snapshot} />)
+	lifecycle.trackRendered(view)
+	const label = [...view.container.querySelectorAll('.metric-label')].find(node => node.textContent === copy.withdrawableExecution)
+	expect(label?.parentElement?.querySelector('.currency-value')?.getAttribute('title')?.replaceAll(/\s/g, '')).toBe('1.01ETH')
+	expect([...view.container.querySelectorAll('button')].some(button => button.textContent === 'Withdraw execution reserve')).toBe(true)
 })

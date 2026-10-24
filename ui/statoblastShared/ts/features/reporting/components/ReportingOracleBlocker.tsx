@@ -13,7 +13,6 @@ import type { OracleManagerDetails } from '../../../types/contracts.js'
 import type { OpenOracleSectionProps } from '../../oracleTypes.js'
 import type { WalletActionBlocker } from '@zoltar/ui-core-shared/types/components.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
-import { getOraclePriceValidityWindowSeconds } from '../../../protocol/oracleTiming.js'
 import { getWalletActiveAppChainGuardState, withWalletGuardFirst, withWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 
 export function ReportingOracleBlocker({
@@ -78,7 +77,7 @@ export function ReportingOracleBlocker({
 	const pending = oracle?.openOracleActiveAction === 'settle'
 	let status = copy.priceRequested(remaining === undefined ? commonCopy.metricUnavailablePlaceholder : formatDuration(remaining))
 	if (ready) status = copy.priceReportReady(pendingId)
-	if (pendingId === 0n) status = copy.priceExpired(getOraclePriceValidityWindowSeconds())
+	if (pendingId === 0n) status = copy.priceExpired
 
 	return (
 		<>

@@ -18,6 +18,7 @@ const abi = parseAbi([
 	'function claimEarnings()',
 	'function requestRetirement(uint96 id)',
 	'function cancelRetirement(uint96 id)',
+	'function withdrawExecutionReserve(uint256 amount)',
 ])
 async function setup(snapshot = capitalSnapshot()) {
 	const transport = capitalClient(snapshot)
@@ -127,6 +128,34 @@ test('fully retired principal can withdraw without a fresh price', async () => {
 
 test('an exported owner cannot fund a reserve that already followed the fork choice', async () => {
 	const { hook } = await setup(capitalSnapshot({ exported: true }))
-	await act(() => hook.state().setReserveAmount('1'))
+	await act(() => {
+		hook.state().setReserveAmount('1')
+		hook.state().setReserveWithdrawal('1')
+	})
 	expect(hook.state().fundReserveReason).toContain('fork choice')
+	expect(hook.state().withdrawReserveReason).toContain('fork choice')
+})
+
+test('an open fork choice keeps assigned reserves locked while allowing unassigned withdrawals', async () => {
+	const { hook } = await setup(capitalSnapshot({ forkTime: 500n, forkChoiceDeadline: 1_001n }))
+	await act(() => hook.state().setReserveWithdrawal('1.01'))
+	expect(hook.state().withdrawReserveReason).toContain('after the fork-choice deadline')
+	await act(() => hook.state().setReserveWithdrawal('1'))
+	expect(hook.state().withdrawReserveReason).toBeUndefined()
+})
+
+test('a missed fork choice unlocks assigned execution reserve and revalidates it before submission', async () => {
+	const snapshot = { ...capitalSnapshot(), forkTime: 500n, forkChoiceDeadline: 1_000n, withdrawableExecutionReserveAttoEth: (101n * unit) / 100n }
+	const { hook, requests, transport } = await setup(snapshot)
+	await act(() => hook.state().setReserveWithdrawal('1.01'))
+	expect(hook.state().withdrawReserveReason).toBeUndefined()
+	await act(() => hook.state().withdrawReserve())
+	const request = requests[0]
+	if (request === undefined) throw new Error('Execution withdrawal request missing')
+	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'withdrawExecutionReserve', args: [(101n * unit) / 100n] })
+	await request.validateBeforeSubmit?.()
+	transport.setSnapshot({ ...snapshot, exported: true, withdrawableExecutionReserveAttoEth: 0n })
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('fork choice')
+	transport.setSnapshot({ ...snapshot, ownerAccount: { ...snapshot.ownerAccount, executionReserveAttoEth: 0n }, withdrawableExecutionReserveAttoEth: unit / 100n })
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('withdrawable execution reserve')
 })

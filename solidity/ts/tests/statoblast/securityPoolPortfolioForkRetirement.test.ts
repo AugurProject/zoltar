@@ -19,7 +19,8 @@ import {
 } from '../../types/contractArtifact'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
-import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
+import { BURN_ADDRESS, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
+import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
 
 const E = 10n ** 18n
@@ -154,6 +155,44 @@ describe('Statoblast: fork reserve retirement priority', () => {
 		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'totalSupply' })).toBe(supply - released)
 		await writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'collectProtectedPrincipal', args: [child] }))
 		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'totalSupply' })).toBe(supply - released)
+	})
+
+	test('protocol reserve fee collection burns only earned ETH and preserves source recovery cash', async () => {
+		await choose(owner, 1n)
+		const child = await childId(1n)
+		await moveTo(forkTime + 9n * week)
+		await finalize(child)
+		await writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'recoverUnchosenCash', args: [0n, 1n, 100n * E] }))
+		const reservedCash = await owner.getBalance({ address: forks })
+		expect(reservedCash).toBeGreaterThan(0n)
+		const childCapital = await owner.readContract({ ...rootTarget(), functionName: 'capitalLedger', args: [child] })
+		const index = await owner.readContract({ ...ledger(childCapital), functionName: 'commitmentIndex' })
+		const protocol = await owner.readContract({ ...ledger(childCapital), functionName: 'ownerAccount', args: [forks] })
+		const now = (await owner.getBlock()).timestamp
+		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setPrice', args: [child, E, Number(now + 86_400n)] }))
+		await getAnvilWindowEthereum().impersonateAccount(root)
+		await writeContractAndWait(owner, () => owner.sendTransaction({ to: root, value: E }))
+		const rootAuthority = createWriteClient(getAnvilWindowEthereum(), BigInt(root))
+		await writeContractAndWait(rootAuthority, () => rootAuthority.writeContract({ ...ledger(childCapital), functionName: 'creditTimedFees', value: E }))
+		await writeContractAndWait(owner, () => owner.writeContract({ ...ledger(childCapital), functionName: 'serveRetirement' }))
+		await writeContractAndWait(owner, () => owner.writeContract({ ...zoltarTarget(), functionName: 'setFork', args: [child, 3n] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ ...forkTarget(), functionName: 'freeze', args: [child] }))
+		const position = await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [protocol.positionId] })
+		expect(position.ethFees).toBeGreaterThan(0n)
+		expect(position.releasedRep).toBeGreaterThan(0n)
+		const token = await owner.readContract({ ...zoltarTarget(), functionName: 'getRepToken', args: [child] })
+		const supply = await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'totalSupply' })
+		const burnBalance = await owner.getBalance({ address: addressString(BURN_ADDRESS) })
+		await writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'collectProtectedPrincipal', args: [child] }))
+		expect(await owner.getBalance({ address: addressString(BURN_ADDRESS) })).toBe(burnBalance + position.ethFees)
+		expect(await owner.getBalance({ address: forks })).toBe(reservedCash)
+		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'totalSupply' })).toBe(supply - position.releasedRep)
+		await writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'collectProtectedPrincipal', args: [child] }))
+		expect(await owner.getBalance({ address: addressString(BURN_ADDRESS) })).toBe(burnBalance + position.ethFees)
+		expect(await owner.getBalance({ address: forks })).toBe(reservedCash)
+		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'totalSupply' })).toBe(supply - position.releasedRep)
+		await writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'recoverUnchosenCash', args: [0n, 1n, 100n * E] }))
+		expect(await owner.getBalance({ address: forks })).toBe(0n)
 	})
 
 	test('a cascading fork keeps the remaining owner queue ahead of one new protocol reserve', async () => {

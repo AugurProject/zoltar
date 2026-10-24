@@ -450,14 +450,14 @@ void describe('selected pool oracle price display', () => {
 		).toBe('42.00\u00a0REP per ETH')
 	})
 
-	void test('derives validity copy from the last settlement when manager details are not loaded', () => {
+	void test('does not guess validity when the canonical expiry is unavailable', () => {
 		expect(
 			getOraclePriceValidityPresentation({
 				currentTimestamp: 31n,
 				lastSettlementTimestamp: 1n,
 				priceValidUntilTimestamp: undefined,
 			}),
-		).toEqual({ text: '(valid for 59m)', tone: 'success' })
+		).toBeUndefined()
 	})
 
 	void test('omits validity before settlement and reports expiry after the window closes', () => {

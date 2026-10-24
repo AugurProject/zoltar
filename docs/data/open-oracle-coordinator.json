@@ -141,6 +141,7 @@
 		"pendingReportId": "view",
 		"pendingReportMaxSettlementBaseFeeAttoEthPerGas": "view",
 		"pendingReportSponsor": "view",
+		"priceValidUntil": "view",
 		"protocolFee": "view",
 		"protocolFeeRecipient": "view",
 		"recoverSettledPendingReport": "nonpayable",

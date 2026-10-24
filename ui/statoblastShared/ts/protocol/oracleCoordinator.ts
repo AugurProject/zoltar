@@ -7,7 +7,7 @@ import { parseAbi, parseAbiItem, getAddress, zeroAddress, type Address, type Hex
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import * as securityPoolCopy from '../copy/securityPool.js'
 import { getOracleOperationTimingGuard, resolveOracleOperationEthFunding } from './oracleRequestFunding.js'
-import { getOracleManagerPriceValidUntilTimestamp } from './oracleTiming.js'
+import { supportsOraclePriceRenewal } from './oracleTiming.js'
 import { addOpenOracleBountyBuffer, addOpenOracleInitialReportFundingBuffer } from './openOracleMath.js'
 import { loadOpenOracleInitialReportPrice, type OraclePriceQueryProgress } from './openOraclePricing.js'
 import { decodeOracleQueueOperation, encodeOracleQueueOperation } from './oracleQueueOperation.js'
@@ -50,7 +50,7 @@ async function readOracleRequestCost(client: Pick<ReadClient, 'getBlock' | 'read
 
 export async function loadOracleManagerDetails(client: ReadClient, managerAddress: Address, openOracleAddress?: Address): Promise<OracleManagerDetails> {
 	const queueBlock = await client.getBlock()
-	const [lastPrice, pendingOperationSlotId, pendingSettlementOperationIds, pendingSettlementQueueCapacity, pendingReportId, queuedOperationCostAttoEth, rawIsPriceValid, lastSettlementTimestamp, activeStagedOperationCount, settlementTime, minLiquidationPriceDistanceBps] = await readRequiredMulticall(
+	const [lastPrice, pendingOperationSlotId, pendingSettlementOperationIds, pendingSettlementQueueCapacity, pendingReportId, queuedOperationCostAttoEth, rawIsPriceValid, lastSettlementTimestamp, activeStagedOperationCount, settlementTime, minLiquidationPriceDistanceBps, priceValidUntil] = await readRequiredMulticall(
 		client,
 		[
 			{
@@ -116,6 +116,12 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 			{
 				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'minLiquidationPriceDistanceBps',
+				address: managerAddress,
+				args: [],
+			},
+			{
+				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				functionName: 'priceValidUntil',
 				address: managerAddress,
 				args: [],
 			},
@@ -217,7 +223,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		pendingSettlementQueueCapacity: normalizedPendingSettlementQueueCapacity,
 		pendingReportId,
 		pendingReportReadyAtTimestamp,
-		priceValidUntilTimestamp: getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp),
+		priceValidUntilTimestamp: priceValidUntil === 0n ? undefined : priceValidUntil,
 		queuedOperationCostAttoEth: normalizedQueuedOperationEthCost,
 		requestPriceCostAttoEth: normalizedRequestPriceEthCost,
 		settlementTime,
@@ -230,10 +236,6 @@ function compareStagedOperationIdsDescending(left: { operationId: bigint }, righ
 	if (left.operationId > right.operationId) return -1
 	if (left.operationId < right.operationId) return 1
 	return 0
-}
-
-async function loadBufferedOracleRequestEthCost(client: WriteClient, managerAddress: Address) {
-	return addOpenOracleBountyBuffer(await readOracleRequestCost(client, managerAddress))
 }
 
 export async function loadOracleManagerQueueOperationEthValue(client: Pick<WriteClient, 'getBlock' | 'readContract'>, managerAddress: Address) {
@@ -277,7 +279,13 @@ export async function loadOracleManagerQueueOperationEthValue(client: Pick<Write
 		}),
 	])
 	const feedState = pendingReportId === 0n ? undefined : await readPriceFeed(client, managerAddress, pendingReportId)
-	const timing = rawIsPriceValid ? await Promise.all([client.readContract({ address: managerAddress, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'lastSettlementTimestamp', args: [] }), client.getBlock()]) : undefined
+	const timing = rawIsPriceValid
+		? await Promise.all([
+				client.readContract({ address: managerAddress, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'lastSettlementTimestamp', args: [] }),
+				client.getBlock(),
+				client.readContract({ address: managerAddress, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'priceValidUntil', args: [] }),
+			])
+		: undefined
 	const normalizedQueuedOperationEthCost = requireBigintValue(queuedOperationCostAttoEth, 'queued operation ETH cost')
 	const normalizedRequestPriceEthCost = requireBigintValue(requestPriceCostAttoEth, 'request price ETH cost')
 	const managerDetails: OracleManagerDetails = {
@@ -294,7 +302,7 @@ export async function loadOracleManagerQueueOperationEthValue(client: Pick<Write
 		pendingSettlementOperationIds: [...pendingSettlementOperationIds],
 		pendingSettlementQueueCapacity,
 		pendingReportId,
-		priceValidUntilTimestamp: getOracleManagerPriceValidUntilTimestamp(timing?.[0]),
+		priceValidUntilTimestamp: timing?.[2],
 		queuedOperationCostAttoEth: normalizedQueuedOperationEthCost,
 		requestPriceCostAttoEth: normalizedRequestPriceEthCost,
 		token1: undefined,
@@ -384,8 +392,8 @@ async function assertCoordinatorRequestPriceAllowed(client: Pick<WriteClient, 'r
 			args: [],
 		}),
 	])
-	if (isPriceValid) throw new Error('A fresh oracle price is already available.')
 	if (pendingReportId > 0n) throw new Error('An oracle price request is already pending.')
+	if (isPriceValid && !supportsOraclePriceRenewal({ managerAddress, ...(await readPriceFeed(client, managerAddress, pendingReportId)) })) throw new Error('A fresh oracle price is already available.')
 }
 
 export async function fundCoordinatorInitialReport(client: WriteClient, managerAddress: Address, proposedRepPerEthPrice: bigint, requestedInitialAttoWeth: bigint, finalStep: TransactionPlanStep, extra: { actions: FundingTransaction[]; repAttoRep: bigint } = { actions: [], repAttoRep: 0n }) {
@@ -447,7 +455,7 @@ export async function fundCoordinatorInitialReport(client: WriteClient, managerA
 export async function requestOraclePrice(client: WriteClient, managerAddress: Address, proposedRepPerEthPrice?: bigint, requestedInitialAttoWeth = 0n, reviewedRequestValueAttoEth?: bigint) {
 	await assertCoordinatorRequestPriceAllowed(client, managerAddress)
 	const resolvedInitialReportPrice = proposedRepPerEthPrice ?? (await getCoordinatorInitialReportPrice(client, managerAddress, requestedInitialAttoWeth))
-	const requestValue = reviewedRequestValueAttoEth ?? (await loadBufferedOracleRequestEthCost(client, managerAddress))
+	const requestValue = reviewedRequestValueAttoEth ?? addOpenOracleBountyBuffer(await readOracleRequestCost(client, managerAddress))
 	await fundCoordinatorInitialReport(client, managerAddress, resolvedInitialReportPrice, requestedInitialAttoWeth, {
 		functionName: 'requestPrice',
 		contractAddress: managerAddress,

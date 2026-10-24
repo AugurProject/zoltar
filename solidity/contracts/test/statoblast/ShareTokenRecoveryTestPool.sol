@@ -17,7 +17,28 @@ contract ShareTokenRecoveryTestPool {
 		return address(this);
 	}
 	function getSecurityPoolPortfolio(address) external view returns (address) {
+		return portfolioCustody.code.length == 0 ? address(this) : portfolioCustody;
+	}
+	function forkController() external view returns (address) {
 		return portfolioCustody;
+	}
+	function settlement() external view returns (address) {
+		return address(this);
+	}
+	function ledger() external view returns (address) {
+		return address(this);
+	}
+	function questionId() external pure returns (uint256) {
+		return 1;
+	}
+	function bookIds(uint248) external pure returns (uint64) {
+		return 1;
+	}
+	function forkLogicalTime(uint248) external pure returns (uint48) {
+		return 0;
+	}
+	function hasLiveForkRecoveryRight(uint64, uint256, uint48) external pure returns (bool) {
+		return true;
 	}
 	function securityPoolForker() external view returns (address) {
 		return address(this);

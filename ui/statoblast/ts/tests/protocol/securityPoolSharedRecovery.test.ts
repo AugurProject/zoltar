@@ -5,7 +5,11 @@ import { createMockReadClient } from '@zoltar/ui-core-shared/tests/testUtils/pro
 import { capitalClient } from '../features/portfolios/capitalClient.js'
 import { owner, portfolio, token, capital } from '../features/portfolios/capitalFixture.js'
 
-test('a missing source namespace can be prepared without calling the reverting root pool getter', async () => {
+test.each([
+	{ rights: [100n, 50n, 120n], availableShares: 50n },
+	{ rights: [0n, 50n, 120n], availableShares: 0n },
+	{ rights: [100n, 80n, 30n], availableShares: 30n },
+])('independent recovery balances $rights remain readable before source preparation without reading source tokens or subtracting claim history', async ({ rights, availableShares }) => {
 	const source = capitalClient()
 	const reads: { name: string; block: bigint | undefined }[] = []
 	const client = source.client.extend(() =>
@@ -27,17 +31,17 @@ test('a missing source namespace can be prepared without calling the reverting r
 					return token
 				case 'shareToken':
 					return capital
-				case 'balanceOfShares':
-					return [100n, 80n, 120n]
-				case 'recoveredCompleteSetShares':
-					return 30n
+				case 'balanceOfPortfolioRecoveryRights':
+					return rights
+				case 'isPortfolioRecoveryEligible':
+					return true
 				default:
 					throw new Error(`Unexpected read ${request.functionName}`)
 			}
 		}),
 	)
 	const snapshot = { portfolio, owner, universeId: 42n, blockNumber: 10n, blockHash: zeroHash }
-	expect(await loadPortfolioSourceRecovery(client, snapshot, 7n)).toEqual({ pool: zeroAddress, source: token, shareToken: capital, availableShares: 50n })
+	expect(await loadPortfolioSourceRecovery(client, snapshot, 7n)).toEqual({ pool: zeroAddress, source: token, shareToken: capital, eligible: true, rights, availableShares })
 	expect(new Set(reads.map(read => read.block))).toEqual(new Set([10n]))
 	expect(reads.length).toBeLessThan(12)
 })

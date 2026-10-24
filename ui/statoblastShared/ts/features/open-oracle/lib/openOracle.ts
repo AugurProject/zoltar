@@ -8,7 +8,6 @@ import { getDecimalSeparatorError, parseDecimalInput, parseDecimalInputResult, t
 import { ensureSentence, formatWriteErrorMessage, getErrorDetail, transactionErrorMessages } from '@zoltar/ui-core-shared/lib/errors.js'
 import { formatAdditionalCurrencyBalance, formatAmountDisplay, formatDuration, formatMultiplier, formatScaledPercentage } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getTimeRemaining } from '@zoltar/ui-core-shared/lib/time.js'
-import { getOracleManagerPriceValidUntilTimestamp } from '../../../protocol/oracleTiming.js'
 import { getOpenOracleDisputeSubmissionReserve, getOpenOracleDisputeSubmissionTimingGuard } from '../../../protocol/openOracleDisputeTiming.js'
 import { parseAddressInput, tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { parseBigIntInput, tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
@@ -488,7 +487,7 @@ export function getOracleLastPriceDisplay({ lastPrice, lastSettlementTimestamp }
 
 export function getOraclePriceValidityPresentation({ currentTimestamp, lastSettlementTimestamp, priceValidUntilTimestamp }: { currentTimestamp: bigint; lastSettlementTimestamp: bigint; priceValidUntilTimestamp: bigint | undefined }) {
 	if (lastSettlementTimestamp === 0n) return undefined
-	const validUntilTimestamp = priceValidUntilTimestamp ?? getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp)
+	const validUntilTimestamp = priceValidUntilTimestamp
 	if (validUntilTimestamp === undefined) return undefined
 	const timeRemaining = getTimeRemaining(validUntilTimestamp, currentTimestamp)
 	if (timeRemaining === undefined) return undefined

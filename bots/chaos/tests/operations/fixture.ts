@@ -85,6 +85,7 @@ export function snapshotFixture(): EcosystemSnapshot {
 				forkUnresolvedEscalation: false,
 				lastRepPerEthPrice: '1000000000000000000',
 				lastOracleSettlementTimestamp: '1999999900',
+				oraclePriceValidUntilTimestamp: '2000000200',
 				lastUpdatedFeeAccumulator: '1999999999',
 				minimumToken1ReportAttoEth: 10_000_000_000_000_002n.toString(),
 				minimumSafeWalletVaultDepositAttoRep: 1_000n.toString(),

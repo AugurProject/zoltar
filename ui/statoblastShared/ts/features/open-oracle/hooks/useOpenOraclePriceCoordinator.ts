@@ -16,6 +16,7 @@ import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.
 import type { TransactionLifecycleParameters, WriteOperationContext } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { OpenOracleActionResult, OracleManagerDetails } from '../../../types/contracts.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import { supportsOraclePriceRenewal } from '../../../protocol/oracleTiming.js'
 
 type UseOpenOraclePriceCoordinatorParameters = TransactionLifecycleParameters & TransactionCancellationParameters & WriteOperationContext
 
@@ -115,7 +116,7 @@ function useOpenOraclePriceCoordinatorWithDependencies<TWriteClient>(
 						const refreshedManagerDetails = await dependencies.loadOracleManagerDetails(managerAddress)
 						signal?.throwIfAborted()
 						poolOracleManagerDetails.value = refreshedManagerDetails
-						if (refreshedManagerDetails?.isPriceValid) throw new Error('A fresh oracle price is already available.')
+						if (refreshedManagerDetails?.isPriceValid && !supportsOraclePriceRenewal(refreshedManagerDetails)) throw new Error('A fresh oracle price is already available.')
 						if ((refreshedManagerDetails?.pendingReportId ?? 0n) > 0n) throw new Error('An oracle price request is already pending.')
 						const writeClient = dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal })
 						const initialReportFunding = await dependencies.loadCoordinatorInitialReportFundingRequirement(writeClient, managerAddress, walletAddress, proposedRepPerEthPrice)

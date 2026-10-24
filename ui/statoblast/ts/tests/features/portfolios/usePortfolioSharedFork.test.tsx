@@ -10,7 +10,7 @@ import { unscopedTransaction } from '@zoltar/ui-core-shared/transactions/transac
 import { usePortfolioSharedFork } from '@zoltar/ui-statoblast-shared/features/portfolios/hooks/usePortfolioSharedFork.js'
 import type { PortfolioTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolio.js'
 import { renderHookWithProps } from '../../support/renderHook.js'
-import { capitalSnapshot, token, unit } from './capitalFixture.js'
+import { capitalSnapshot, token, capital, owner, unit } from './capitalFixture.js'
 import { capitalClient, modules } from './capitalClient.js'
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
 async function setup() {
@@ -126,4 +126,98 @@ test('a recorded choice cannot be changed and a ready child opens its direct uni
 	expect(hook.state().finalizeReason).toContain('already active')
 	hook.state().open()
 	expect(opened).toEqual([42n])
+})
+
+async function recoverySetup() {
+	const fixture = await setup()
+	fixture.source.setRead('questionOriginIds', `0x${'11'.repeat(32)}`)
+	fixture.source.setRead('sourceGame', zeroAddress)
+	fixture.source.setRead('getSecurityPool', token)
+	fixture.source.setRead('getPool', token)
+	fixture.source.setRead('shareToken', token)
+	fixture.source.setRead('balanceOfPortfolioRecoveryRights', [3n * unit, 5n * unit, 4n * unit])
+	fixture.source.setRead('isPortfolioRecoveryEligible', true)
+	await act(() => fixture.hook.state().setQuestion('7'))
+	await waitFor(() => expect(fixture.hook.state().recovery?.availableShares).toBe(3n * unit))
+	return fixture
+}
+test('outcome recovery transfer reviews one exact transaction before the choice deadline and rechecks each right', async () => {
+	const { hook, source, requests } = await recoverySetup()
+	expect(hook.state().recoverReason).toContain('choice deadline')
+	await act(() => {
+		hook.state().setRecipient(capital)
+		hook.state().setInvalidRights('1')
+		hook.state().setNoRights('2')
+	})
+	expect(hook.state().transferReason).toBeUndefined()
+	await act(() => hook.state().transfer())
+	expect(requests).toHaveLength(1)
+	const request = requests[0]
+	if (request === undefined) throw new Error('Recovery transfer request missing')
+	expect(request).toMatchObject({ to: token, account: owner, value: 0n })
+	expect(decodeFunctionData({ abi: parseAbi(['function transferPortfolioRecoveryRights(uint248 source,address recipient,uint256[3] amounts)']), data: request.data })).toEqual({ functionName: 'transferPortfolioRecoveryRights', args: [0n, capital, [unit, 0n, 2n * unit]] })
+	expect(request.reviewDescription).toContain('1 Invalid, 0 Yes and 2 No')
+	expect(request.reviewDescription).toContain('question 0x7 in source universe 0')
+	expect(request.reviewDescription).toContain(capital)
+	expect(request.reviewDescription).toContain('child migration rights remain yours')
+	await request.validateBeforeSubmit?.()
+	await act(() => hook.state().setNoRights('1'))
+	source.setRead('balanceOfPortfolioRecoveryRights', [3n * unit, 5n * unit, unit])
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Recovery transfer prerequisites changed')
+	expect(requests).toHaveLength(1)
+})
+test('recovery transfer blocks invalid recipients, zero amounts, per-outcome overdrafts and missing source preparation', async () => {
+	const { hook, source, requests } = await recoverySetup()
+	await act(() => hook.state().setRecipient(owner))
+	expect(hook.state().transferReason).toContain('another nonzero')
+	await act(() => hook.state().setRecipient(zeroAddress))
+	expect(hook.state().transferReason).toContain('another nonzero')
+	await act(() => hook.state().setRecipient(capital))
+	expect(hook.state().transferReason).toContain('at least one')
+	await act(() => hook.state().setInvalidRights('4'))
+	expect(hook.state().transferReason).toContain('Insufficient recovery rights')
+	await expect(hook.state().transfer()).rejects.toThrow('Insufficient recovery rights')
+	expect(requests).toHaveLength(0)
+	await act(() => hook.state().setInvalidRights('-1'))
+	expect(hook.state().transferReason).toContain('nonnegative')
+	await act(() => hook.state().setInvalidRights('1'))
+	source.setRead('getSecurityPool', zeroAddress)
+	await act(() => hook.state().setQuestion('8'))
+	await waitFor(() => expect(hook.state().recovery?.pool).toBe(zeroAddress))
+	expect(hook.state().transferReason).toBe('Prepare the source question first.')
+})
+test('received recovery sets can be redeemed independently of source balances and preserve exact review context', async () => {
+	const { hook, source, snapshot, requests } = await recoverySetup()
+	source.setSnapshot({ ...snapshot, timestamp: 2_000n })
+	await hook.setProps({ snapshot: { ...snapshot, blockHash: `0x${'33'.repeat(32)}` } })
+	await waitFor(() => expect(hook.state().state?.timestamp).toBe(2_000n))
+	await waitFor(() => expect(hook.state().recovery?.availableShares).toBe(3n * unit))
+	await act(() => hook.state().setShares('3'))
+	expect(hook.state().recoverReason).toBeUndefined()
+	await act(() => hook.state().recover())
+	const request = requests[0]
+	if (request === undefined) throw new Error('Recovery request missing')
+	expect(decodeFunctionData({ abi: parseAbi(['function recoverUnchosenCash(uint248 source,uint256 questionId,uint256 shares) returns (uint256)']), data: request.data })).toEqual({ functionName: 'recoverUnchosenCash', args: [0n, 7n, 3n * unit] })
+	expect(request.reviewDescription).toContain('Received recovery rights are consumed first')
+	await request.validateBeforeSubmit?.()
+	source.setRead('balanceOfPortfolioRecoveryRights', [2n * unit, 5n * unit, 4n * unit])
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Source recovery prerequisites changed')
+})
+
+test('finalized questions keep ordinary redemption and cannot detach source recovery rights', async () => {
+	const { hook, source, requests } = await recoverySetup()
+	await act(() => {
+		hook.state().setRecipient(capital)
+		hook.state().setInvalidRights('1')
+	})
+	await act(() => hook.state().transfer())
+	const request = requests[0]
+	if (request === undefined) throw new Error('Recovery transfer request missing')
+	source.setRead('isPortfolioRecoveryEligible', false)
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Recovery transfer prerequisites changed')
+	await act(() => hook.state().setQuestion('8'))
+	await waitFor(() => expect(hook.state().transferReason).toContain('Redeem finalized shares'))
+	expect(hook.state().recoverReason).toContain('Redeem finalized shares')
+	await expect(hook.state().transfer()).rejects.toThrow('Redeem finalized shares')
+	expect(requests).toHaveLength(1)
 })

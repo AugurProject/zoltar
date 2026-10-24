@@ -13,6 +13,7 @@ const sharedFeedLinkAbi = [
 	{ type: 'function', name: 'securityPoolFactory', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 	{ type: 'function', name: 'portfolio', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 	{ type: 'function', name: 'universeId', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint248' }] },
+	{ type: 'function', name: 'priceValidityWindowSeconds', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
 ] as const
 
 // Generic OpenOracle reports have no pool freshness rule. Verify both sides of the callback/pool association.
@@ -45,9 +46,12 @@ export async function loadCoordinatorPriceValidUntilTimestamp(client: Pick<ReadC
 			!sameAddress(rep.result, game.token2)
 		)
 			return undefined
-		const [registeredFeed] = await readOptionalMulticall(client, [{ address: factory.result, abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, functionName: 'sharedPriceFeeds', args: [portfolio.result, universe.result] }])
-		if (registeredFeed.status !== 'success' || !sameAddress(registeredFeed.result, game.callbackContract)) return undefined
-		return getOracleManagerPriceValidUntilTimestamp(game.reportTimestamp + game.settlementTime, chainId)
+		const [registeredFeed, validity] = await readOptionalMulticall(client, [
+			{ address: factory.result, abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, functionName: 'sharedPriceFeeds', args: [portfolio.result, universe.result] },
+			{ address: game.callbackContract, abi: sharedFeedLinkAbi, functionName: 'priceValidityWindowSeconds' },
+		])
+		if (registeredFeed.status !== 'success' || !sameAddress(registeredFeed.result, game.callbackContract) || validity.status !== 'success') return undefined
+		return game.reportTimestamp + game.settlementTime + validity.result
 	}
 	const [coordinator] = await readOptionalMulticall(client, [{ address: securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'openOraclePriceCoordinator' }])
 	if (coordinator.status !== 'success' || !sameAddress(coordinator.result, game.callbackContract)) return undefined

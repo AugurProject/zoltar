@@ -82,7 +82,7 @@ describe('Statoblast: central question fees and vested capital earnings', () => 
 		await fixture.deposit(100n * unit, fixture.other())
 		const newcomer = await loadPortfolioCapitalSnapshot({ client: fixture.other(), owner: fixture.other().account.address, portfolio: fixture.portfolio })
 		expect(newcomer.accruedFeesAttoEth).toBe(0n)
-		await fixture.base.mockWindow.advanceTime(301n)
+		await fixture.base.mockWindow.setTime(await fixture.owner().readContract({ ...capital(), functionName: 'priceValidUntil' }))
 		await checkpoint()
 		const demand = await fixture.owner().readContract({ ...capital(), functionName: 'demandAttoEth' })
 		await fixture.base.mockWindow.advanceTime(100n)

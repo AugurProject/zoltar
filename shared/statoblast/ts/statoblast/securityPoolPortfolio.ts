@@ -97,6 +97,7 @@ export {
 	buildPortfolioForkStartRequest,
 	buildPortfolioForkFinalizeRequest,
 	buildPortfolioForkRecoveryRequest,
+	buildPortfolioRecoveryRightsTransferRequest,
 	buildPortfolioRecapPurchaseRequest,
 	loadPortfolioForkSnapshot,
 	loadPortfolioRecapQuote,

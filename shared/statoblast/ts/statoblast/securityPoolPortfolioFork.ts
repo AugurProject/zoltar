@@ -22,6 +22,7 @@ const abi = parseAbi([
 	'function finalizeBranch(uint248 child)',
 	'function buyRecapitalization(uint248 child,uint256 maximumRep,uint256 minimumRep,uint256 maximumCommitment,uint256 maximumOwnRep,uint256 targetHealth,uint256 executionReserve) payable returns (uint256 rep,uint256 commitment)',
 	'function recoverUnchosenCash(uint248 source,uint256 questionId,uint256 shares) returns (uint256)',
+	'function transferPortfolioRecoveryRights(uint248 sourceUniverse,address recipient,uint256[3] amountsAttoShares)',
 	'function collectProtectedPrincipal(uint248 child)',
 	'function quote(uint256 maximumEth,uint256 maximumRep) view returns (uint256 rep,uint256 commitment,uint256 cost)',
 	'function minimumFillAttoEth() view returns (uint256)',
@@ -70,6 +71,15 @@ export function buildPortfolioForkCollectProtectedRequest(parameters: ForkReques
 export function buildPortfolioForkRecoveryRequest(parameters: ForkRequest & { questionId: bigint; shares: bigint }) {
 	if (uint(parameters.shares, 'Complete sets') === 0n) throw new Error('Recovery shares must be positive.')
 	return request(parameters, 'recoverUnchosenCash', [uint(parameters.questionId, 'Question'), parameters.shares])
+}
+/** Transfer only source cash-recovery rights, in Invalid/Yes/No order, without moving branch shares. */
+export function buildPortfolioRecoveryRightsTransferRequest(parameters: { owner: Address; shareToken: Address; universeId: bigint; recipient: Address; amountsAttoShares: readonly [bigint, bigint, bigint] }) {
+	const owner = address(parameters.owner)
+	const recipient = address(parameters.recipient)
+	if (owner === recipient) throw new Error('Recovery recipient must be another account.')
+	const amounts = parameters.amountsAttoShares.map(amount => uint(amount, 'Recovery rights'))
+	if (amounts.length !== 3 || amounts.every(amount => amount === 0n)) throw new Error('Choose positive recovery rights for at least one of three outcomes.')
+	return { account: owner, to: address(parameters.shareToken), value: 0n, data: encodeFunctionData({ abi, functionName: 'transferPortfolioRecoveryRights', args: [uint(parameters.universeId, 'Universe', 248), recipient, amounts] }) }
 }
 /** Payment is a budget; unused sale cash is refunded. Extra collateral and accepted K are separately capped. */
 export function buildPortfolioRecapPurchaseRequest(parameters: ForkRequest & { maximumRep: bigint; minimumRep: bigint; maximumCommitment: bigint; maximumOwnRep: bigint; targetHealthFactorBps: bigint; executionReserveAttoEth: bigint; maximumCostAttoEth: bigint }) {

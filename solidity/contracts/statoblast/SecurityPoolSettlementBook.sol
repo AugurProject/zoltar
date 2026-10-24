@@ -137,6 +137,19 @@ contract SecurityPoolSettlementBook {
 		if (state.finalAfter != 0) frozenBookId = uint64(tree.ceiling(book.frozenRoot, state.finalAfter));
 	}
 
+	/// @notice Whether sealing at the fork clock preserves this question as a live source liability.
+	function hasLiveForkRecoveryRight(uint64 bookId, uint256 questionId, uint48 forkTimestamp) external view returns (bool) {
+		Book storage book = _book(bookId);
+		(Question memory state, uint64 frozenBookId) = question(bookId, questionId);
+		return
+			frozenBookId == 0 &&
+			state.outcomeSupplyAttoShares != 0 &&
+			(book.isSealed ||
+				forkTimestamp <= book.minimumFinalAfter ||
+				state.finalAfter == 0 ||
+				state.finalAfter >= forkTimestamp);
+	}
+
 	function feeTimestamp(uint64 bookId) external view returns (uint48) {
 		return _feeTimestamp(_book(bookId));
 	}

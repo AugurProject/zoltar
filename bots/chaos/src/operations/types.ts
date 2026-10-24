@@ -174,6 +174,7 @@ export interface PoolSnapshot {
 	oracleSettlementTime: string
 	lastRepPerEthPrice: string
 	lastOracleSettlementTimestamp: string
+	oraclePriceValidUntilTimestamp: string
 	stagedOperationCounter: string
 	totalPoolHeldAttoRep: CanonicalUintString
 	minimumToken1ReportAttoEth: CanonicalUintString

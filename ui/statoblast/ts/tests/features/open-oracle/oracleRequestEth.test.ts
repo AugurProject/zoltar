@@ -1,6 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
+import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { getOracleOperationTimingGuard, getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/oracleRequestEth.js'
 import type { OracleManagerDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { createOracleManagerDetails as createBaseOracleManagerDetails } from '../security-pools/workflow/builders.js'
@@ -145,4 +146,11 @@ test('fresh-price coordinator routes require known timing and a full submission 
 	expect(getOracleOperationTimingGuard(details, 39n)).toBeUndefined()
 	expect(getOracleOperationTimingGuard({ ...details, priceValidUntilTimestamp: undefined }, 1n)).toBeDefined()
 	expect(getOracleOperationTimingGuard({ ...details, isPriceValid: false }, undefined)).toBeUndefined()
+})
+
+test('another question renewal only blocks operations after the accepted price stops being usable', () => {
+	const details = createOracleManagerDetails({ isPriceValid: true, pendingReportId: 1n, pendingReportCoordinator: getAddress('0x0000000000000000000000000000000000000099'), priceValidUntilTimestamp: 780n })
+	expect(getOracleOperationTimingGuard(details, 480n)).toBeUndefined()
+	expect(resolveOracleOperationEthFunding({ managerDetails: details })).toEqual({ costAttoEth: 0n, includeBuffer: false })
+	expect(getOracleOperationTimingGuard(details, 780n, false)).toBeDefined()
 })

@@ -105,12 +105,7 @@ export const clearLosingDepositsDetail = 'Losing deposits return no REP. Clearin
 export const clearLosingDepositsReviewDescription = 'Returns no REP. Removes these losing deposits from your vault’s dispute-staked REP so you can redeem your vault REP from this pool.'
 export const results = 'Results'
 
-function formatPriceWindow(seconds: bigint) {
-	if (seconds % 3600n === 0n) return seconds === 3600n ? '1 hour' : `${seconds / 3600n} hours`
-	const minutes = seconds / 60n
-	return minutes === 1n ? '1 minute' : `${minutes} minutes`
-}
-export const priceExpired = (windowSeconds: bigint) => `Pool price expired. Reports need a price newer than ${formatPriceWindow(windowSeconds)}.`
+export const priceExpired = 'Pool price expired. Request a new price to continue.'
 export const priceRequested = (countdown: string) => `Price requested. Ready to settle in ${countdown}.`
 export const priceReportReady = (id: bigint) => `Price report #${id} is ready.`
 export const settlingPriceReport = (id: bigint) => `Settling report #${id}…`

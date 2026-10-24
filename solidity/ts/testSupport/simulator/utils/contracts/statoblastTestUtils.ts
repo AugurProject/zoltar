@@ -17,7 +17,6 @@ import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, stato
 
 const PRICE_PRECISION = 10n ** 18n
 const DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS = 5n * 60n
-const ORACLE_PRICE_VALID_FOR_SECONDS = 5n * 60n
 
 export const approveAndDepositRepToVault = async (client: WriteClient, repDeposit: bigint, questionId: bigint, targetHealthFactorBps?: bigint) => {
 	const securityPoolAddress = getSecurityPoolAddresses(zeroAddress, GENESIS_UNIVERSE, questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS).securityPool
@@ -120,7 +119,9 @@ export const manipulatePriceOracleAndPerformOperation = async (client: WriteClie
 
 export const manipulatePriceOracle = async (client: WriteClient, mockWindow: AnvilWindowEthereum, openOraclePriceCoordinator: Address, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {
 	if (await getIsPriceValid(client, openOraclePriceCoordinator)) {
-		await mockWindow.advanceTime(ORACLE_PRICE_VALID_FOR_SECONDS + 1n)
+		const target = { abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: openOraclePriceCoordinator }
+		const feed = await client.readContract({ ...target, functionName: 'priceFeed' })
+		if (feed.toLowerCase() === openOraclePriceCoordinator.toLowerCase()) await mockWindow.setTime((await client.readContract({ ...target, functionName: 'priceValidUntil' })) + 1n)
 	}
 	const costAttoEth = await getRequestPriceCostAttoEth(client, openOraclePriceCoordinator)
 	await requestPriceWithValue(client, openOraclePriceCoordinator, costAttoEth, forceRepEthPriceTo)

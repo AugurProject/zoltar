@@ -7,6 +7,7 @@ const abi = parseAbi([
 	'function capitalLedger(uint248 universeId) view returns (address)',
 	'function zoltar() view returns (address)',
 	'function getForkTime(uint248 universeId) view returns (uint256)',
+	'function getForkChoiceDeadline(uint248 universeId) view returns (uint256)',
 	'function purchaseFeeBps() view returns (uint256)',
 	'function annualFeeBps() view returns (uint256)',
 	'function minimumPurchaseFeeAttoEth() view returns (uint256)',
@@ -93,6 +94,7 @@ export type PortfolioCapitalSnapshot = {
 	currentBatch: bigint
 	nextBatch: bigint
 	forkTime: bigint
+	forkChoiceDeadline: bigint
 	frozen: boolean
 	importing: boolean
 	exported: boolean
@@ -103,6 +105,8 @@ export type PortfolioCapitalSnapshot = {
 	ownerCommitmentAttoEth: bigint
 	/** Canonical safe withdrawal allowance at the snapshot block. */
 	withdrawableAttoRep: bigint
+	/** Available reserve includes assigned ETH released by retirement or a missed fork choice. */
+	withdrawableExecutionReserveAttoEth: bigint
 	/** Fees already credited by the index; the next checkpoint may add earnings. */
 	accruedFeesAttoEth: bigint
 	accruedFeesAttoRep: bigint
@@ -218,7 +222,7 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 	])
 	const capitalLedger = address(ledgerValue, 'Capital ledger')
 	const zoltar = address(zoltarValue, 'Zoltar')
-	const [indexValue, tokenValue, bookValue, price, multiplier, validUntil, valid, demand, free, frozen, importing, exported, ownerValue, collateralValue, totalsValue, forkTime] = await Promise.all([
+	const [indexValue, tokenValue, bookValue, price, multiplier, validUntil, valid, demand, free, frozen, importing, exported, ownerValue, collateralValue, totalsValue, forkTimeValue, choiceDeadlineValue] = await Promise.all([
 		read(capitalLedger, 'commitmentIndex'),
 		read(capitalLedger, 'repToken'),
 		read(address(settlementValue, 'Settlement engine'), 'ledger'),
@@ -235,6 +239,7 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 		read(capitalLedger, 'ownerCollateral', [owner]),
 		read(capitalLedger, 'totals'),
 		read(zoltar, 'getForkTime', [universeId]),
+		read(zoltar, 'getForkChoiceDeadline', [universeId]),
 	])
 	const commitmentIndex = address(indexValue, 'Commitment index')
 	const account = ownerAccount(ownerValue)
@@ -264,6 +269,12 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 			}
 		}),
 	)
+	const forkTime = uint(forkTimeValue, 'Fork time')
+	const forkChoiceDeadline = uint(choiceDeadlineValue, 'Fork choice deadline')
+	const isExported = bool(exported, 'Exported owner')
+	const isImporting = bool(importing, 'Import phase')
+	const missedChoice = forkTime !== 0n && block.timestamp >= forkChoiceDeadline
+	const withdrawableExecutionReserveAttoEth = isExported || (isImporting && account.positionId !== 0n) ? 0n : account.executionReserveAttoEth + positions.reduce((sum, position) => sum + (position.commitment === 0n || missedChoice ? position.executionReserveAttoEth : 0n), 0n)
 	const [finalChain, finalBlock] = await Promise.all([client.getChainId(), client.getBlock({ blockNumber })])
 	if (finalChain !== chainId || finalBlock.hash !== block.hash) throw new Error('Chain changed while reading capital. Refresh and try again.')
 	return {
@@ -288,15 +299,17 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 		totalFreeAttoRep: uint(free, 'Total free REP'),
 		currentBatch: uint(current, 'Current cohort', 96),
 		nextBatch: uint(next, 'Next cohort', 96),
-		forkTime: uint(forkTime, 'Fork time'),
+		forkTime,
+		forkChoiceDeadline,
 		frozen: bool(frozen, 'Frozen capital'),
-		importing: bool(importing, 'Import phase'),
-		exported: bool(exported, 'Exported owner'),
+		importing: isImporting,
+		exported: isExported,
 		ownerAccount: account,
 		positions,
 		ownerPrincipalAttoRep,
 		ownerCommitmentAttoEth: uint(commitment, 'Owner commitment'),
 		withdrawableAttoRep,
+		withdrawableExecutionReserveAttoEth,
 		accruedFeesAttoEth: account.feesAttoEth + positions.reduce((sum, position) => sum + position.feesAttoEth, 0n),
 		accruedFeesAttoRep: account.feesAttoRep + positions.reduce((sum, position) => sum + position.feesAttoRep, 0n),
 		economics: {

@@ -1,11 +1,12 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
-import { encodeFunctionData, formatEther, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { encodeFunctionData, formatEther, getAddress, isAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import {
 	buildPortfolioForkChoiceRequest,
 	buildPortfolioForkStartRequest,
 	buildPortfolioForkFinalizeRequest,
 	buildPortfolioForkRecoveryRequest,
+	buildPortfolioRecoveryRightsTransferRequest,
 	buildPortfolioRecapPurchaseRequest,
 	loadPortfolioForkSnapshot,
 	loadPortfolioRecapQuote,
@@ -35,6 +36,10 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 	const healthInput = useSignal('100')
 	const questionInput = useSignal('')
 	const sharesInput = useSignal('')
+	const recipientInput = useSignal('')
+	const invalidRightsInput = useSignal('0')
+	const yesRightsInput = useSignal('0')
+	const noRightsInput = useSignal('0')
 	const loaded = useSignal<{ key: string; state?: PortfolioForkSnapshot; outcome?: Awaited<ReturnType<typeof loadSharedForkOutcome>>; error?: string } | undefined>(undefined)
 	const quoted = useSignal<{ key: string; quote?: PortfolioRecapQuote; wallet?: Awaited<ReturnType<typeof loadPortfolioRecapWallet>>; error?: string } | undefined>(undefined)
 	const recovered = useSignal<{ key: string; source?: Awaited<ReturnType<typeof loadPortfolioSourceRecovery>>; error?: string } | undefined>(undefined)
@@ -48,11 +53,20 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 		maximumOwnRepInput.value = '0'
 		questionInput.value = ''
 		sharesInput.value = ''
+		recipientInput.value = ''
+		invalidRightsInput.value = '0'
+		yesRightsInput.value = '0'
+		noRightsInput.value = '0'
 	}, [portfolio?.portfolio, portfolio?.owner, portfolio?.universeId])
 	const universeId = portfolioUnsignedId(sourceInput.value, 248)
 	const outcomeIndex = portfolioUnsignedId(outcomeInput.value)
 	const questionId = portfolioUnsignedId(questionInput.value)
 	const shares = portfolioAmountOrUndefined(sharesInput.value)
+	const recipient = isAddress(recipientInput.value.trim()) ? getAddress(recipientInput.value.trim()) : undefined
+	const invalidRights = portfolioAmountOrUndefined(invalidRightsInput.value)
+	const yesRights = portfolioAmountOrUndefined(yesRightsInput.value)
+	const noRights = portfolioAmountOrUndefined(noRightsInput.value)
+	const transferAmounts = invalidRights === undefined || yesRights === undefined || noRights === undefined ? undefined : ([invalidRights, yesRights, noRights] satisfies readonly [bigint, bigint, bigint])
 	const maximumCost = portfolioAmountOrUndefined(budgetInput.value)
 	const maximumRep = portfolioAmountOrUndefined(maximumRepInput.value)
 	const minimumRep = portfolioAmountOrUndefined(minimumRepInput.value)
@@ -145,13 +159,26 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 		(wallet !== undefined && quote !== undefined && quote.ownRep > wallet.balance ? 'Insufficient wallet child REP.' : undefined) ??
 		(wallet !== undefined && quote !== undefined && quote.ownRep > wallet.allowance ? 'Approve child REP before purchasing.' : undefined) ??
 		(wallet !== undefined && quote !== undefined && maximumCost !== undefined && maximumCost + quote.executionReserve > wallet.eth ? 'Insufficient wallet ETH; gas is additional.' : undefined)
-	const recoveryReason = forkReason ?? (state !== undefined && state.timestamp < state.choiceDeadline ? 'Wait until the choice deadline.' : undefined) ?? (questionId === undefined ? 'Enter a question ID.' : undefined) ?? recoveryState?.error ?? (recovery === undefined ? 'Loading source complete sets.' : undefined)
+	const sourceReason =
+		forkReason ??
+		(questionId === undefined ? 'Enter a question ID.' : undefined) ??
+		recoveryState?.error ??
+		(recovery === undefined ? 'Loading source recovery rights.' : undefined) ??
+		(recovery !== undefined && recovery.pool !== zeroAddress && !recovery.eligible ? 'No live source recovery rights. Redeem finalized shares through the source pool.' : undefined)
+	const recoveryReason = sourceReason ?? (state !== undefined && state.timestamp < state.choiceDeadline ? 'Wait until the choice deadline.' : undefined)
 	const prepareReason = recoveryReason ?? (recovery?.pool !== zeroAddress ? 'The source question is already prepared.' : undefined)
 	const recoverReason =
 		recoveryReason ??
 		(recovery?.pool === zeroAddress ? 'Prepare the source question first.' : undefined) ??
 		(shares === undefined || shares === 0n ? 'Enter a positive complete-set amount.' : undefined) ??
-		(recovery !== undefined && shares !== undefined && shares > recovery.availableShares ? 'Insufficient unclaimed complete sets. Materialize source outcome tokens in the question market if needed.' : undefined)
+		(recovery !== undefined && shares !== undefined && shares > recovery.availableShares ? 'Insufficient complete-set recovery rights. Combine Invalid, Yes and No recovery rights from other holders if needed.' : undefined)
+	const transferReason =
+		sourceReason ??
+		(recovery?.pool === zeroAddress ? 'Prepare the source question first.' : undefined) ??
+		(recipient === undefined || recipient === zeroAddress || recipient === state?.owner ? 'Enter another nonzero recipient address.' : undefined) ??
+		(transferAmounts === undefined || transferAmounts.every(amount => amount === 0n) || transferAmounts.some(amount => amount >= 1n << 256n) ? 'Enter nonnegative outcome amounts and transfer at least one recovery right.' : undefined) ??
+		(recovery !== undefined && transferAmounts?.some((amount, index) => amount > (recovery.rights[index] ?? 0n)) ? 'Insufficient recovery rights for an outcome.' : undefined)
+
 	const run = (action: string, title: string, reason: string | undefined, build: (selected: PortfolioForkSnapshot) => PortfolioTransaction, check?: (latest: PortfolioForkSnapshot) => Promise<void>) =>
 		actions.runPortfolioAction(action, title, () => {
 			if (reason !== undefined || state === undefined) throw new Error(reason ?? 'Fork state unavailable.')
@@ -216,6 +243,23 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 		setShares: (v: string) => {
 			sharesInput.value = v
 		},
+		recipientInput: recipientInput.value,
+		setRecipient: (v: string) => {
+			recipientInput.value = v
+		},
+		invalidRightsInput: invalidRightsInput.value,
+		setInvalidRights: (v: string) => {
+			invalidRightsInput.value = v
+		},
+		yesRightsInput: yesRightsInput.value,
+		setYesRights: (v: string) => {
+			yesRightsInput.value = v
+		},
+		noRightsInput: noRightsInput.value,
+		setNoRights: (v: string) => {
+			noRightsInput.value = v
+		},
+		transferReason,
 		chooseReason,
 		startReason,
 		finalizeReason,
@@ -299,6 +343,25 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 				if (recovery === undefined) throw new Error('Source question unavailable.')
 				return { ...buildPortfolioRecoveryPreparation(selected, recovery), reviewDescription: 'Prepare this question’s source share namespace for all holders. This does not claim or migrate vault principal.' }
 			}),
+		transfer: () =>
+			run(
+				'transferPortfolioRecoveryRights',
+				'Transfer recovery rights',
+				transferReason,
+				selected => {
+					if (questionId === undefined || recovery === undefined || recipient === undefined || transferAmounts === undefined) throw new Error('Enter the recipient and recovery rights to transfer.')
+					return {
+						...buildPortfolioRecoveryRightsTransferRequest({ owner: selected.owner, shareToken: recovery.shareToken, universeId: selected.universeId, recipient, amountsAttoShares: transferAmounts }),
+						reviewDescription: `Transfer ${formatEther(transferAmounts[0])} Invalid, ${formatEther(transferAmounts[1])} Yes and ${formatEther(transferAmounts[2])} No recovery rights for question 0x${questionId.toString(16)} in source universe ${selected.universeId} to ${recipient}. The recipient receives these rights to source cash. Spending source-backed rights locks those original source shares. Your child migration rights remain yours.`,
+					}
+				},
+				async latest => {
+					if (questionId === undefined || recovery === undefined || transferAmounts === undefined) throw new Error('Recovery transfer unavailable.')
+					const fresh = await loadPortfolioSourceRecovery(createConnectedReadClient(), latest, questionId)
+					if (latest.forkTime === 0n || !fresh.eligible || fresh.pool === zeroAddress || fresh.shareToken !== recovery.shareToken || transferAmounts.some((amount, index) => amount > (fresh.rights[index] ?? 0n))) throw new Error('Recovery transfer prerequisites changed. Refresh and review again.')
+				},
+			),
+
 		recover: () =>
 			run(
 				'recoverPortfolioSource',
@@ -306,12 +369,15 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 				recoverReason,
 				selected => {
 					if (questionId === undefined || shares === undefined) throw new Error('Enter recovery complete sets.')
-					return { ...buildPortfolioForkRecoveryRequest({ ...base(selected), questionId, shares }), reviewDescription: `Use ${formatEther(shares)} complete-set recovery rights for question 0x${questionId.toString(16)}. Source shares become nontransferable while all child branch token rights remain available.` }
+					return {
+						...buildPortfolioForkRecoveryRequest({ ...base(selected), questionId, shares }),
+						reviewDescription: `Use ${formatEther(shares)} complete-set recovery rights for question 0x${questionId.toString(16)}. Spending source-backed rights locks those original source shares. Received recovery rights are consumed first; all child migration rights remain available.`,
+					}
 				},
 				async latest => {
 					if (questionId === undefined || shares === undefined) throw new Error('Recovery amount unavailable.')
 					const fresh = await loadPortfolioSourceRecovery(createConnectedReadClient(), latest, questionId)
-					if (fresh.availableShares < shares || fresh.pool === zeroAddress) throw new Error('Source recovery prerequisites changed.')
+					if (!fresh.eligible || fresh.availableShares < shares || fresh.pool === zeroAddress) throw new Error('Source recovery prerequisites changed.')
 				},
 			),
 	}

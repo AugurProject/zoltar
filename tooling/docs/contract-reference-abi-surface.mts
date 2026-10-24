@@ -174,6 +174,7 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 	},
 	'solidity/contracts/statoblast/tokens/ShareToken.sol': {
 		consumePortfolioRecoveryCompleteSets: ['external(uint248,address,uint256)'],
+		transferPortfolioRecoveryRights: ['external(uint248,address,uint256[3])'],
 		authorize: ['external(ISecurityPool)'],
 		burnCompleteSets: ['external(uint248,address,uint256)'],
 		burnTokenIdAndGetRemainingSupply: ['external(uint256,address)'],
@@ -237,12 +238,12 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/statoblast/VaultOperations.sol': '1777a52a367b0ffa5fff11581677ba0d768958dbd78255d8973b0fa8c984023a',
 	'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol': 'e062bb6265554e439dc6762ea62f3ac545237a3fd5f7de637c372c777cedabe8',
 	'solidity/contracts/statoblast/tokens/ERC1155.sol': '7bb87695bc3df8fa177c545209ed58d2e4571c19c869b5598bb0a829e764b218',
-	'solidity/contracts/statoblast/tokens/ShareToken.sol': 'b5dea8db6f4cc3f73bf499b1308cbc007406c6ee92672377f129f6fe6e5ff488',
+	'solidity/contracts/statoblast/tokens/ShareToken.sol': '68c370c22a6da29cf139846ea2fdf86f9922027ee6d46e2618de0dcdb7bc5e5f',
 	'solidity/contracts/vendor/authorization/ERC20Authorization.sol': '6bfae34f9210ed80f176774eb2b5a3624060ce4be34825ca84949ddcfb8024d2',
 }
 
 export const readDeclarationExclusionsBySource: Record<string, string[]> = {
-	'solidity/contracts/statoblast/tokens/ShareToken.sol': ['forkController'],
+	'solidity/contracts/statoblast/tokens/ShareToken.sol': ['forkController', 'forkLogicalTime', 'settlement'],
 	'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol': ['securityPool', 'securityPoolForker', 'systemState', 'forkData'],
 	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': ['storedGame', 'disputeHistory'],
 	'solidity/contracts/statoblast/LiquidationApprovalRegistry.sol': ['securityPool'],

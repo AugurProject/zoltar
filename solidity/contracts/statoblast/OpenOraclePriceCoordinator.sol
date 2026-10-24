@@ -97,7 +97,7 @@ contract OpenOraclePriceCoordinator is OpenOraclePriceSource {
 			}
 			sharedPendingReportId = 0;
 		}
-		if (pendingReportId() != 0)
+		if (pendingReportId() != 0 && !isPriceValid())
 			require(sharedPriceFeed.pendingCoordinator() == address(this), 'Another question owns pending callback');
 	}
 
@@ -142,7 +142,8 @@ contract OpenOraclePriceCoordinator is OpenOraclePriceSource {
 		_prepareSharedQueue();
 		require(validForSeconds > 0 && validForSeconds <= MAX_OPERATION_VALID_FOR_SECONDS, 'Invalid execution window');
 		require(!securityPool.isEscalationResolved(), 'Escalation resolved');
-		if (pendingReportId() != 0) require(owner == pendingReportSponsor(), 'Only pending report sponsor can submit');
+		if (pendingReportId() != 0 && !isPriceValid())
+			require(owner == pendingReportSponsor(), 'Only pending report sponsor can submit');
 		if (changeCommitment)
 			require(stagedOperations[latestBackingTargetOperationIds[owner]].operator == address(0), 'Commitment operation already pending');
 		HistoricalQueueSnapshot memory snapshot;
@@ -206,7 +207,7 @@ contract OpenOraclePriceCoordinator is OpenOraclePriceSource {
 			require(receiverVault != targetVault, 'Receiver is target');
 		}
 		require(!securityPool.isEscalationResolved(), 'Escalation resolved');
-		if (pendingReportId() != 0) {
+		if (pendingReportId() != 0 && !isPriceValid()) {
 			require(msg.sender == pendingReportSponsor(), 'Only the pending report sponsor can queue more operations until settlement');
 		}
 		if (operation == OperationType.WithdrawRep) {

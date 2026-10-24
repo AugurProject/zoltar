@@ -26,7 +26,8 @@ describe('useOpenOraclePriceCoordinator', () => {
 		{ proposedPrice: 1_250_000_000_000_000_000n, balance: 1n, cancelDuringFunding: false },
 		{ proposedPrice: undefined, balance: 0n, cancelDuringFunding: false },
 		{ proposedPrice: undefined, balance: 1n, cancelDuringFunding: true },
-	])('checks actual REP funding and forwards the selected initial price (%s)', async ({ proposedPrice, balance, cancelDuringFunding }) => {
+		{ proposedPrice: undefined, balance: 1n, cancelDuringFunding: false, sharedRenewal: true },
+	])('checks actual REP funding and forwards the selected initial price (%s)', async ({ proposedPrice, balance, cancelDuringFunding, sharedRenewal }) => {
 		const cancellation = new AbortController()
 		const onTransactionCanceled = mock(() => undefined)
 		const onTransactionFailed = mock(() => undefined)
@@ -34,8 +35,9 @@ describe('useOpenOraclePriceCoordinator', () => {
 		const loadOracleManagerDetails = mock(async () => {
 			managerLoadCount += 1
 			return createOracleManagerDetails({
-				isPriceValid: managerLoadCount === 1,
+				isPriceValid: sharedRenewal || managerLoadCount === 1,
 				managerAddress: MANAGER_ADDRESS,
+				...(sharedRenewal ? { priceFeedAddress: POOL_ADDRESS } : {}),
 				pendingReportId: 0n,
 			})
 		})

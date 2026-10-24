@@ -15,7 +15,6 @@ import { getSecurityPoolLinkHref } from '../lib/securityPoolNavigation.js'
 import type { ListedSecurityPool } from '../../../types/contracts.js'
 import { getSecurityPoolStatusBadgeLabel, getSecurityPoolStatusBadgeTone } from '../lib/securityPoolLabels.js'
 import type { SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
-import { getOracleManagerPriceValidUntilTimestamp } from '../../../protocol/oracleTiming.js'
 import { PoolCapacitySummary } from './PoolCapacitySummary.js'
 import { formatInitialReportPriorityFee } from '../lib/priorityFee.js'
 import * as copy from '../../../copy/poolWorkspace.js'
@@ -25,7 +24,7 @@ export function PoolDirectoryRow({ pool, lifecycleState, currentTimestamp, fetch
 	const title = getQuestionTitle(pool.marketDetails)
 	const status = getSecurityPoolStatusBadgeLabel({ hasForkActivity: pool.hasForkActivity, questionOutcome: pool.questionOutcome, lifecycleState })
 	const href = getSecurityPoolLinkHref(pool.securityPoolAddress, '', pool.universeId)
-	const validUntil = getOracleManagerPriceValidUntilTimestamp(pool.lastOracleSettlementTimestamp)
+	const validUntil = pool.oraclePriceValidUntilTimestamp
 	const oracleExpired = validUntil !== undefined && currentTimestamp !== undefined && currentTimestamp >= validUntil
 	const oracleMissing = pool.lastOracleSettlementTimestamp === 0n || pool.lastOraclePrice === undefined
 
