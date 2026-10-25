@@ -17,12 +17,17 @@ test('deduplicates shared question report aliases while rejecting inconsistent r
 	if (first === undefined) throw new Error('Missing pool')
 	first.priceFeed = address(80)
 	first.pendingReportId = '42'
+	first.reportEscrows = { '41': address(86), '42': address(84) }
 	const second = { ...first, address: address(81), coordinator: address(82) }
 	const routes = canonicalPoolReportRoutes([first, second])
-	expect(routes).toEqual([{ coordinator: address(80), pendingReportId: '42', repToken: first.repToken }])
+	expect(routes).toEqual([
+		{ coordinator: address(86), pendingReportId: '41', repToken: first.repToken },
+		{ coordinator: address(84), pendingReportId: '42', repToken: first.repToken },
+	])
 	const trust = { ...indexTrust, ...indexDeployments, coordinatorReports: routes, wallet: address(1) }
 	expect(() => trustedOpenOracleReportPredicate(trust)).not.toThrow()
 	second.priceFeed = address(83)
+	second.reportEscrows = { '42': address(85) }
 	expect(() => trustedOpenOracleReportPredicate({ ...trust, coordinatorReports: canonicalPoolReportRoutes([first, second]) })).toThrow('assigned to multiple coordinators')
 })
 

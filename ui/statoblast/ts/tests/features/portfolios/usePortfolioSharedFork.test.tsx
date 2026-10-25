@@ -2,12 +2,12 @@ import { expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { decodeFunctionData, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { getActiveBackend, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createMockReadClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { unscopedTransaction } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
-import { usePortfolioSharedFork } from '@zoltar/ui-statoblast-shared/features/portfolios/hooks/usePortfolioSharedFork.js'
+import { usePortfolioSharedFork, type PortfolioSharedForkParameters } from '@zoltar/ui-statoblast-shared/features/portfolios/hooks/usePortfolioSharedFork.js'
 import type { PortfolioTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolio.js'
 import { renderHookWithProps } from '../../support/renderHook.js'
 import { capitalSnapshot, token, capital, owner, unit } from './capitalFixture.js'
@@ -28,7 +28,7 @@ async function setup() {
 				choices: [1n, chosen],
 				getChildUniverseId: 42n,
 				getRepToken: token,
-				branches: [0n, 1n, 0n, 0n, 0n, 0n, zeroAddress, chosen, started, ready],
+				branches: [0n, 1n, 0n, 0n, 0n, 100n * unit, chosen, started, ready],
 				universes: [900n, 7n, 0n, false, 0n],
 				zoltarQuestionData: token,
 				questions: ['Fork question', 0n, 0n, 0n, 0n, 0n, 0n, ''],
@@ -49,13 +49,14 @@ async function setup() {
 			requests.push(await build())
 		},
 	}
-	const hook = await renderHookWithProps(usePortfolioSharedFork, {
+	const parameters: PortfolioSharedForkParameters = {
 		snapshot,
 		actions,
 		openUniverse: (universe: bigint) => {
 			opened.push(universe)
 		},
-	})
+	}
+	const hook = await renderHookWithProps(usePortfolioSharedFork, parameters)
 	lifecycle.trackRendered(hook)
 	await act(() => hook.state().setOutcome('1'))
 	await waitFor(() => expect(hook.state().state?.branch).toBeDefined())
@@ -89,17 +90,83 @@ test('one irreversible choice has an explicit review and rechecks the strict nat
 	source.setSnapshot({ ...snapshot, timestamp: 2_000n })
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('no longer available')
 })
-test('shared preparation waits until cutoff and activation waits until the recap deadline', async () => {
+test('shared preparation waits until cutoff and activation waits until the activation deadline', async () => {
 	const { hook, source, snapshot, requests } = await setup()
 	expect(hook.state().startReason).toContain('choice deadline')
-	expect(hook.state().finalizeReason).toContain('recap deadline')
+	expect(hook.state().finalizeReason).toContain('activation deadline')
 	source.setSnapshot({ ...snapshot, timestamp: 2_000n, blockNumber: 11n })
 	await hook.setProps({ snapshot: { ...snapshot, blockHash: `0x${'11'.repeat(32)}` } })
 	await waitFor(() => expect(hook.state().state?.timestamp).toBe(2_000n))
 	expect(hook.state().startReason).toBeUndefined()
 	await act(() => hook.state().start())
 	expect(requests).toHaveLength(1)
-	expect(hook.state().buyReason).toContain('no active recap sale')
+	expect(hook.state().state?.branch?.recoveryAttoRep).toBe(100n * unit)
+})
+test('fork drafts survive a transient snapshot reload so a prepared branch can be activated', async () => {
+	const { hook, source, snapshot, requests, setStarted } = await setup()
+	source.setSnapshot({ ...snapshot, timestamp: 3_001n })
+	await hook.setProps({ snapshot: { ...snapshot, blockHash: `0x${'44'.repeat(32)}` } })
+	await waitFor(() => expect(hook.state().state?.timestamp).toBe(3_001n))
+	await act(() => {
+		hook.state().setQuestion('7')
+		hook.state().setShares('2')
+		hook.state().setRecipient(capital)
+		hook.state().setInvalidRights('1')
+		hook.state().setYesRights('2')
+		hook.state().setNoRights('3')
+	})
+	const draft = { sourceInput: '0', outcomeInput: '1', questionInput: '7', sharesInput: '2', recipientInput: capital, invalidRightsInput: '1', yesRightsInput: '2', noRightsInput: '3' }
+	await act(() => hook.state().start())
+	expect(requests).toHaveLength(1)
+	setStarted(true)
+	await hook.setProps({ snapshot: undefined })
+	expect(hook.state()).toMatchObject(draft)
+	expect(hook.state().state).toBeUndefined()
+	expect(hook.state().finalizeReason).toBe('Checking fork status…')
+	await expect(hook.state().finalize()).rejects.toThrow('Checking fork status…')
+	expect(requests).toHaveLength(1)
+	await hook.setProps({ snapshot: { ...snapshot, blockHash: `0x${'55'.repeat(32)}` } })
+	await waitFor(() => expect(hook.state().state?.branch?.started).toBe(true))
+	expect(hook.state()).toMatchObject(draft)
+	expect(hook.state().startReason).toBe('This branch is already prepared.')
+	expect(hook.state().finalizeReason).toBeUndefined()
+	await act(() => hook.state().finalize())
+	expect(requests).toHaveLength(2)
+	const request = requests[1]
+	if (request === undefined) throw new Error('Activation request missing')
+	expect(decodeFunctionData({ abi: parseAbi(['function finalizeBranch(uint248 child)']), data: request.data })).toEqual({ functionName: 'finalizeBranch', args: [42n] })
+})
+test.each([
+	['portfolio', { portfolio: capital }],
+	['owner', { owner: capital }],
+	['universe', { universeId: 1n }],
+])('fork drafts reset when the %s changes after a snapshot reload', async (_identity, changed) => {
+	const { hook, snapshot } = await setup()
+	await act(() => {
+		hook.state().setSource('2')
+		hook.state().setQuestion('7')
+		hook.state().setShares('2')
+		hook.state().setRecipient(capital)
+		hook.state().setInvalidRights('1')
+		hook.state().setYesRights('2')
+		hook.state().setNoRights('3')
+	})
+	await hook.setProps({ snapshot: undefined })
+	const next = { ...snapshot, ...changed }
+	await hook.setProps({ snapshot: next })
+	expect(hook.state()).toMatchObject({ sourceInput: next.universeId.toString(), outcomeInput: '', questionInput: '', sharesInput: '', recipientInput: '', invalidRightsInput: '0', yesRightsInput: '0', noRightsInput: '0' })
+})
+test('replacing the backend clears fork drafts even when the same portfolio identity reloads', async () => {
+	const { hook, snapshot } = await setup()
+	await act(() => {
+		hook.state().setQuestion('7')
+		hook.state().setShares('2')
+	})
+	installActiveEnvironmentForTesting({ ...getActiveBackend() })
+	await hook.setProps({ snapshot: undefined })
+	expect(hook.state()).toMatchObject({ sourceInput: '', outcomeInput: '', questionInput: '', sharesInput: '' })
+	await hook.setProps({ snapshot })
+	expect(hook.state()).toMatchObject({ sourceInput: '0', outcomeInput: '', questionInput: '', sharesInput: '' })
 })
 test('fork actions distinguish invalid source input from an automatic pending read', async () => {
 	const { hook, source } = await setup()

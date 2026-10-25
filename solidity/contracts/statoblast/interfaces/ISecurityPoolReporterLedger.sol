@@ -15,4 +15,5 @@ interface ISecurityPoolReporterPortfolio {
 	function reporterLedger(uint248 universeId) external view returns (address);
 	function registerReporterGame(address game) external;
 	function onQuestionFinalityChanged(uint48 nativeFinalAfter) external;
+	function onQuestionReporterChanged(address reporter) external;
 }

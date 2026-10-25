@@ -14,12 +14,20 @@ const abi = parseAbi([
 	'function minimumCommitmentAttoEth() view returns (uint256)',
 	'function minimumExecutionReserveAttoEth() view returns (uint256)',
 	'function rewardVestingSeconds() view returns (uint48)',
+	'function reportingFeeAttoEth() view returns (uint256)',
+	'function serviceFeeBps() view returns (uint256)',
+	'function maximumOracleRewardAttoEth() view returns (uint256)',
+	'function priceFeed(uint248 universeId) view returns (address)',
+	'function acceptedExposureLimitAttoEth() view returns (uint256)',
 	'function settlement() view returns (address)',
 	'function ledger() view returns (address)',
 	'function minimumOutcomeExchangeRate() view returns (uint256)',
 	'function repToken() view returns (address)',
 	'function commitmentIndex() view returns (address)',
 	'function acceptedPrice() view returns (uint256)',
+	'function conservativePrice() view returns (uint256)',
+	'function liquidationPrice() view returns (uint256)',
+	'function ownerConservativePrice(address owner) view returns (uint256)',
 	'function securityMultiplierBps() view returns (uint256)',
 	'function priceValidUntil() view returns (uint48)',
 	'function isPriceValid() view returns (bool)',
@@ -40,6 +48,7 @@ const abi = parseAbi([
 	'function withdrawPrincipal(uint256 amount,address recipient)',
 	'function setHealthTarget(uint256 targetHealthFactorBps)',
 	'function authorize(uint256 commitment) returns (uint96)',
+	'function authorizeWithReport(uint256 reportId,uint256 commitment) returns (uint96)',
 	'function fundExecutionReserve(address owner) payable',
 	'function withdrawExecutionReserve(uint256 amount)',
 	'function requestRetirement(uint96 id)',
@@ -80,9 +89,14 @@ export type PortfolioCapitalSnapshot = {
 	owner: Address
 	universeId: bigint
 	capitalLedger: Address
+	priceFeed: Address
 	commitmentIndex: Address
 	repToken: Address
 	acceptedPrice: bigint
+	conservativePrice: bigint
+	liquidationPrice: bigint
+	ownerConservativePrice: bigint
+	oracleExposureLimitAttoEth: bigint
 	securityMultiplierBps: bigint
 	priceValidUntil: bigint
 	priceValid: boolean
@@ -169,8 +183,9 @@ export function buildPortfolioCapitalSetHealthRequest(parameters: CapitalRequest
 	if (uint(parameters.targetHealthFactorBps, 'Health target') < 10_000n) throw new Error('Health target must be at least 100%.')
 	return request(parameters, 'setHealthTarget', [parameters.targetHealthFactorBps])
 }
-export function buildPortfolioCapitalAuthorizeRequest(parameters: CapitalRequest & { commitment: bigint }) {
-	return request(parameters, 'authorize', [positive(parameters.commitment, 'Commitment')])
+export function buildPortfolioCapitalAuthorizeRequest(parameters: CapitalRequest & { commitment: bigint; reportId?: bigint }) {
+	const commitment = positive(parameters.commitment, 'Commitment')
+	return parameters.reportId === undefined ? request(parameters, 'authorize', [commitment]) : request(parameters, 'authorizeWithReport', [uint(parameters.reportId, 'Report id'), commitment])
 }
 export function buildPortfolioCapitalFundExecutionReserveRequest(parameters: CapitalRequest & { amountAttoEth: bigint }) {
 	return request(parameters, 'fundExecutionReserve', [address(parameters.owner, 'Owner')], positive(parameters.amountAttoEth, 'Execution funding'))
@@ -209,7 +224,7 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 	const blockNumber = block.number
 	const read = (target: Address, functionName: string, args: readonly AbiValue[] = []) => client.readContract({ address: target, abi, functionName, args, blockNumber })
 	const universeId = uint(parameters.universeId ?? (await read(portfolio, 'originUniverseId')), 'Universe id', 248)
-	const [ledgerValue, zoltarValue, settlementValue, feeBps, annualFeeBps, minimumFee, minimumCommitment, minimumReserve, duration] = await Promise.all([
+	const [ledgerValue, zoltarValue, settlementValue, feeBps, annualFeeBps, minimumFee, minimumCommitment, minimumReserve, duration, reportingFee, serviceFee, maximumOracleReward, feedValue] = await Promise.all([
 		read(portfolio, 'capitalLedger', [universeId]),
 		read(portfolio, 'zoltar'),
 		read(portfolio, 'settlement'),
@@ -219,10 +234,14 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 		read(portfolio, 'minimumCommitmentAttoEth'),
 		read(portfolio, 'minimumExecutionReserveAttoEth'),
 		read(portfolio, 'rewardVestingSeconds'),
+		read(portfolio, 'reportingFeeAttoEth'),
+		read(portfolio, 'serviceFeeBps'),
+		read(portfolio, 'maximumOracleRewardAttoEth'),
+		read(portfolio, 'priceFeed', [universeId]),
 	])
 	const capitalLedger = address(ledgerValue, 'Capital ledger')
 	const zoltar = address(zoltarValue, 'Zoltar')
-	const [indexValue, tokenValue, bookValue, price, multiplier, validUntil, valid, demand, free, frozen, importing, exported, ownerValue, collateralValue, totalsValue, forkTimeValue, choiceDeadlineValue] = await Promise.all([
+	const [indexValue, tokenValue, bookValue, price, multiplier, validUntil, valid, demand, free, frozen, importing, exported, ownerValue, collateralValue, totalsValue, forkTimeValue, choiceDeadlineValue, conservative, liquidation, exposureLimit, ownerPrice] = await Promise.all([
 		read(capitalLedger, 'commitmentIndex'),
 		read(capitalLedger, 'repToken'),
 		read(address(settlementValue, 'Settlement engine'), 'ledger'),
@@ -240,6 +259,10 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 		read(capitalLedger, 'totals'),
 		read(zoltar, 'getForkTime', [universeId]),
 		read(zoltar, 'getForkChoiceDeadline', [universeId]),
+		read(capitalLedger, 'conservativePrice'),
+		read(capitalLedger, 'liquidationPrice'),
+		feedValue === zeroAddress ? 0n : read(address(feedValue, 'Shared price feed'), 'acceptedExposureLimitAttoEth'),
+		read(capitalLedger, 'ownerConservativePrice', [owner]),
 	])
 	const commitmentIndex = address(indexValue, 'Commitment index')
 	const account = ownerAccount(ownerValue)
@@ -286,9 +309,14 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 		owner,
 		universeId,
 		capitalLedger,
+		priceFeed: feedValue === zeroAddress ? zeroAddress : address(feedValue, 'Shared price feed'),
 		commitmentIndex,
 		repToken: address(tokenValue, 'REP token'),
 		acceptedPrice: uint(price, 'Accepted price'),
+		conservativePrice: uint(conservative, 'Conservative price'),
+		liquidationPrice: uint(liquidation, 'Liquidation price'),
+		ownerConservativePrice: uint(ownerPrice, 'Owner collateral price'),
+		oracleExposureLimitAttoEth: uint(exposureLimit, 'Oracle exposure limit'),
 		securityMultiplierBps: uint(multiplier, 'Security multiplier'),
 		priceValidUntil: uint(validUntil, 'Price expiry', 48),
 		priceValid: bool(valid, 'Price validity'),
@@ -320,6 +348,9 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 			minimumExecutionReserveAttoEth: uint(minimumReserve, 'Minimum execution reserve'),
 			minimumOutcomeRate: uint(minimumOutcomeRate, 'Minimum outcome rate'),
 			rewardVestingSeconds: uint(duration, 'Vesting duration', 48),
+			reportingFeeAttoEth: uint(reportingFee, 'Reporting fee'),
+			serviceFeeBps: uint(serviceFee, 'Service fee'),
+			maximumOracleRewardAttoEth: uint(maximumOracleReward, 'Maximum oracle reward'),
 		},
 	}
 }

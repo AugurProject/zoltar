@@ -14,6 +14,7 @@ const abi = parseAbi([
 	'function depositFor(address owner,uint256 amount)',
 	'function withdrawPrincipal(uint256 amount,address recipient)',
 	'function authorize(uint256 commitment)',
+	'function authorizeWithReport(uint256 reportId,uint256 commitment)',
 	'function setHealthTarget(uint256 targetHealthFactorBps)',
 	'function claimEarnings()',
 	'function requestRetirement(uint96 id)',
@@ -191,4 +192,26 @@ test('a missed fork choice unlocks assigned execution reserve and revalidates it
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('fork choice')
 	transport.setSnapshot({ ...snapshot, ownerAccount: { ...snapshot.ownerAccount, executionReserveAttoEth: 0n }, withdrawableExecutionReserveAttoEth: unit / 100n })
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('withdrawable execution reserve')
+})
+
+test('a selected funded report quotes collateral, authorizes explicitly, and is rechecked before sending', async () => {
+	const snapshot = capitalSnapshot({ oracleExposureLimitAttoEth: 1n, ownerPrincipalAttoRep: 40n * unit })
+	const { hook, requests, transport } = await setup(snapshot)
+	transport.setRead('reportAuthorization', [3n * unit, 2n])
+	await act(async () => {
+		hook.state().setCommitmentAmount('10')
+		hook.state().setReportInput('7')
+	})
+	await act(async () => {
+		await new Promise(resolve => setTimeout(resolve, 20))
+	})
+	expect(hook.state().authorizeReason).toBeUndefined()
+	expect(hook.state().requiredCollateral).toBe(37_800_000_000_000_000_000n)
+	await act(() => hook.state().authorize())
+	const request = requests[0]
+	if (request === undefined) throw new Error('Missing report authorization')
+	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'authorizeWithReport', args: [7n, 10n * unit] })
+	await request.validateBeforeSubmit?.()
+	transport.setRead('reportAuthorization', [4n * unit, 2n])
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Report terms changed')
 })

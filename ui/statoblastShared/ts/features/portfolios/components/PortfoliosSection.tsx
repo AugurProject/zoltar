@@ -8,9 +8,12 @@ import type { WriteOperationsParameters } from '../../../types/app.js'
 import { usePortfolio } from '../hooks/usePortfolio.js'
 import { usePortfolioActions } from '../hooks/usePortfolioActions.js'
 import { usePortfolioAggregate } from '../hooks/usePortfolioAggregate.js'
+import { usePortfolioServiceCredit } from '../hooks/usePortfolioServiceCredit.js'
+import { PortfolioServiceCredit } from './PortfolioServiceCredit.js'
+import { usePortfolioReportingReward } from '../hooks/usePortfolioReportingReward.js'
+import { PortfolioReportingReward } from './PortfolioReportingReward.js'
 import { usePortfolioPurchase } from '../hooks/usePortfolioPurchase.js'
 import { PortfolioAggregatePanel } from './PortfolioAggregatePanel.js'
-import { PortfolioRepair } from './PortfolioRepair.js'
 import { PortfolioSharedFork } from './PortfolioSharedFork.js'
 import { PortfolioPurchasePanel } from './PortfolioPurchasePanel.js'
 import { PortfolioButton, PortfolioInput } from './PortfolioControls.js'
@@ -22,6 +25,8 @@ export function PortfoliosSection({ parameters, enabled, environmentKey, activeU
 	const actions = usePortfolioActions(model, parameters)
 	const capital = usePortfolioAggregate(model, actions, parameters.accountAddress)
 	const purchase = usePortfolioPurchase(model, actions)
+	const reporting = usePortfolioReportingReward({ model, actions, accountAddress: parameters.accountAddress, questionInput: purchase.questionInput })
+	const serviceCredit = usePortfolioServiceCredit({ model, actions, accountAddress: parameters.accountAddress })
 	const disabled = actions.busy !== undefined
 	return (
 		<div className='portfolio-flow'>
@@ -52,6 +57,9 @@ export function PortfoliosSection({ parameters, enabled, environmentKey, activeU
 						<MetricGrid>
 							<PortfolioInput label={copy.purchaseFeePercent} value={actions.economicsDraft.purchaseFeePercent} onChange={value => actions.setEconomicsField('purchaseFeePercent', value)} disabled={disabled} numeric />
 							<PortfolioInput label={copy.minimumPurchaseFee} value={actions.economicsDraft.minimumPurchaseFee} onChange={value => actions.setEconomicsField('minimumPurchaseFee', value)} disabled={disabled} numeric />
+							<PortfolioInput label={copy.reportingFee} hint={copy.reportingFeeHint} value={actions.economicsDraft.reportingFee} onChange={value => actions.setEconomicsField('reportingFee', value)} disabled={disabled} numeric />
+							<PortfolioInput label={copy.serviceFee} value={actions.economicsDraft.serviceFeePercent} onChange={value => actions.setEconomicsField('serviceFeePercent', value)} disabled={disabled} numeric />
+							<PortfolioInput label={copy.maximumOracleReward} value={actions.economicsDraft.maximumOracleReward} onChange={value => actions.setEconomicsField('maximumOracleReward', value)} disabled={disabled} numeric />
 							<PortfolioInput label={capitalCopy.minimumCommitment} value={actions.economicsDraft.minimumCommitment} onChange={value => actions.setEconomicsField('minimumCommitment', value)} disabled={disabled} numeric />
 							<PortfolioInput label={capitalCopy.minimumExecution} value={actions.economicsDraft.minimumExecutionReserve} onChange={value => actions.setEconomicsField('minimumExecutionReserve', value)} disabled={disabled} numeric />
 							<PortfolioInput label={capitalCopy.rewardVesting} value={actions.economicsDraft.rewardVestingHours} onChange={value => actions.setEconomicsField('rewardVestingHours', value)} disabled={disabled} numeric />
@@ -80,7 +88,8 @@ export function PortfoliosSection({ parameters, enabled, environmentKey, activeU
 			<TransactionScopeProvider scope={actions.scope}>
 				<PortfolioAggregatePanel model={capital} actions={actions} />
 				<PortfolioPurchasePanel model={model} purchase={purchase} actions={actions} />
-				<PortfolioRepair snapshot={model.snapshot} loading={model.loading} actions={actions} />
+				<PortfolioReportingReward model={reporting} actions={actions} questionInput={purchase.questionInput} setQuestionInput={purchase.setQuestionInput} />
+				<PortfolioServiceCredit model={serviceCredit} actions={actions} />
 				<PortfolioSharedFork snapshot={model.snapshot} actions={actions} openUniverse={universeId => model.setUniverseInput(universeId.toString())} />
 			</TransactionScopeProvider>
 		</div>

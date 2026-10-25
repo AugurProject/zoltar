@@ -100,6 +100,8 @@ export interface VaultSnapshot {
 
 /** Immutable coordinator inputs used to bound inclusion-time oracle funding. */
 export interface OracleRequestFundingSnapshot {
+	/** Shared feeds use a fixed native bounty instead of the standalone gas formula. */
+	fixedRequestPriceCostAttoEth?: CanonicalUintString
 	escalationHaltMultiplierBps: CanonicalUintString
 	feePercentage: CanonicalUintString
 	gasConsumedOpenOracleReportPrice: CanonicalUintString
@@ -132,9 +134,11 @@ export interface PoolSnapshot {
 	repToken: Address
 	shareToken: Address
 	coordinator: Address
-	/** Actual OpenOracle callback and report creator, shared by portfolio questions. */
 	childPoolPreparations: Record<string, { portfolio: Address; branchReady: boolean; sourcePool: Address; sourceGame: Address; childUniverseId: string; childPool: Address; game: Address; historyOutcomesInitialized: number; historyReady: boolean; feedRequired: boolean; dependenciesRequired: boolean }>
+	/** Canonical price authority, shared by portfolio questions and authenticating candidate escrows. */
 	priceFeed: Address
+	/** Creator and callback authenticated for each current or retained shared candidate. */
+	reportEscrows?: Readonly<Record<string, Address>>
 	/** Conservative report exposure across this feed at the snapshot block. */
 	oracleExposureAttoEth: CanonicalUintString
 	vaultOperations: Address

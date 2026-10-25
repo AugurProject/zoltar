@@ -4,7 +4,7 @@ import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/mark
 import type { ActiveReportingDetails, EscalationSide, ForkAuctionDetails, ListedSecurityPool, OracleManagerDetails, SecurityPoolVaultSummary, SecurityVaultDetails, TruthAuctionMetrics } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import type { ReportingRouteContentProps } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
 import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
-import type { ForkAuctionRouteContentProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '@zoltar/ui-zoltar-shared/features/types.js'
+import type { ForkAuctionRouteContentProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '@zoltar/ui-statoblast-shared/features/types.js'
 
 export function createTradingProps(overrides: Partial<TradingRouteContentProps> = {}): TradingRouteContentProps {
 	return {

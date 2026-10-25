@@ -15,7 +15,18 @@ const abi = parseAbi(['function createCompleteSet(uint248 universeId,uint256 que
 async function setup() {
 	const snapshot = capitalSnapshot()
 	const source = capitalClient(snapshot)
-	const values = { questionOriginIds: `0x${'11'.repeat(32)}`, getPool: capital, questionId: 999n, questionData: token, getQuestionEndDate: 10_000n, escalationGame: zeroAddress, systemState: 0n, purchaseFee: unit / 100n, quoteQuestionMint: unit, availableMintCapacity: 10n * unit }
+	const values = {
+		questionOriginIds: `0x${'11'.repeat(32)}`,
+		getPool: capital,
+		questionId: 999n,
+		questionData: token,
+		getQuestionEndDate: 10_000n,
+		escalationGame: zeroAddress,
+		systemState: 0n,
+		purchaseQuote: [unit / 100n, unit / 200n, unit / 400n, unit / 400n],
+		quoteQuestionMint: unit,
+		availableMintCapacity: 10n * unit,
+	}
 	for (const [name, value] of Object.entries(values)) source.setRead(name, value)
 	source.install()
 	const requests: PortfolioTransaction[] = []
@@ -39,6 +50,7 @@ async function setup() {
 test('purchase uses one aggregate transaction and preserves explicit limits across new blocks', async () => {
 	const { hook, requests } = await setup()
 	expect(hook.state().reason).toBeUndefined()
+	expect(hook.state().quote).toMatchObject({ purchaseFeeAttoEth: unit / 100n, reportingFundingAttoEth: unit / 400n, availableCommitmentAttoEth: 10n * unit - unit / 400n })
 	await act(() => hook.state().buy())
 	const request = requests[0]
 	if (request === undefined) throw new Error('Missing purchase')

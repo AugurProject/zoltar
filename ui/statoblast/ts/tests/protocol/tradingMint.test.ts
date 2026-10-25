@@ -58,7 +58,7 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 	test(`shared mint route: ${mode}`, async () => {
 		const send = mock((request: { to?: unknown; data?: `0x${string}`; value?: bigint }) => {
 			expect(request.to).toBe(portfolio)
-			expect(request.value).toBe(103n)
+			expect(request.value).toBe(104n)
 			if (request.data === undefined) throw new Error('Expected portfolio purchase calldata')
 			expect(decodeFunctionData({ abi: portfolioMintAbi, data: request.data })).toEqual({ functionName: 'createCompleteSet', args: [1n, 7n, 100n, pool, 90n] })
 		})
@@ -84,10 +84,11 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 							return mode === 'child pool' ? 0n : 1n
 						case 'getQuestionEndDate':
 							return 100n
-						case 'purchaseFee':
-							return 3n
+						case 'purchaseQuote':
+							expect(request.args).toEqual([1n, 7n, 100n])
+							return [3n, 1n, 2n, 0n]
 						case 'availableMintCapacity':
-							return mode === 'insufficient backing' ? 99n : 100n
+							return mode === 'insufficient backing' ? 101n : 102n
 						case 'attoEthToAttoShares':
 							return 90n
 						default:

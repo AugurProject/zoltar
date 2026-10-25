@@ -9,14 +9,14 @@ const abi = parseAbi([
 	'function bookIds(uint248 universeId) view returns(uint64)',
 	'function feeTimestamp(uint248 universeId) view returns(uint48)',
 	'function isPriceValid() view returns(bool)',
-	'function question(uint64 bookId,uint256 questionId) view returns((uint256 units,uint256 outcomeSupplyAttoShares,uint48 finalAfter,uint96 feeRateAttoEthPerSecond,uint48 feeStart,uint48 feeEnd,uint256 feePrincipalAttoEth) state,uint64 frozenBookId)',
-	'function books(uint64 bookId) view returns(uint256 cash,uint256 units,uint256 fees,uint64 questionRoot,uint64 finalityRoot,uint64 frozenRoot,uint48 timestamp,bool isSealed,uint64 feeRateRoot,uint64 feeEndRoot,uint64 feeModeRoot,bool feesEnabled,uint48 minimumFinalAfter,uint48 feeTimeOffset,uint256 finalizedUnitsPrefix)',
+	'function question(uint64 bookId,uint256 questionId) view returns((uint256 units,uint256 outcomeSupplyAttoShares,uint48 finalAfter,uint96 feeRateAttoEthPerSecond,uint48 feeStart,uint48 feeEnd,uint256 feePrincipalAttoEth,uint256 rewardShares) state,uint64 frozenBookId)',
+	'function books(uint64 bookId) view returns(uint256 cash,uint256 units,uint256 fees,uint64 questionRoot,uint64 finalityRoot,uint64 frozenRoot,uint48 timestamp,bool isSealed,uint64 feeRateRoot,uint64 feeEndRoot,uint64 feeModeRoot,bool feesEnabled,uint48 minimumFinalAfter,uint48 feeTimeOffset,uint256 finalizedUnitsPrefix,uint256 recoveryAttoRep)',
 	'function portfolio() view returns (address)',
 	'function universeId() view returns (uint248)',
 	'function settlement() view returns (address)',
 	'function availableMintCapacity(uint248 universeId) view returns (uint256)',
 	'function totals() view returns (uint256 rep,uint256 commitment,uint256 healthy)',
-	'function snapshotQuestion(address pool) view returns ((uint256 outcomeSupplyAttoShares,uint256 questionCashAttoEth,uint256 demandAttoEth,uint256 earnedFeesAttoEth,uint48 timestamp) snapshot)',
+	'function snapshotQuestion(address pool) view returns ((uint256 outcomeSupplyAttoShares,uint256 questionCashAttoEth,uint256 questionRecoveryAttoRep,uint256 demandAttoEth,uint256 earnedFeesAttoEth,uint48 timestamp) snapshot)',
 ])
 
 /** Bound native fields are caches. Read the central economic supply, including inherited outcomes. */
@@ -68,7 +68,7 @@ export async function loadCentralPortfolioQuestion(client: Pick<ReadClient, 'mul
 	)
 	const question = requireTupleValue(questionValue, 2, 'question stream')
 	const stream = requireObjectValue(question[0], 'question stream state')
-	const state = requireTupleValue(bookStateValue, 15, 'settlement book state')
+	const state = requireTupleValue(bookStateValue, 16, 'settlement book state')
 	const feeTime = BigInt(requireIntegerLikeValue(feeTimestampValue, 'native fee timestamp'))
 	const feeEnd = BigInt(requireIntegerLikeValue(Reflect.get(stream, 'feeEnd'), 'native fee end'))
 	const feesActive =
@@ -76,6 +76,7 @@ export async function loadCentralPortfolioQuestion(client: Pick<ReadClient, 'mul
 		requireBooleanValue(state[11], 'fee accrual state') &&
 		!requireBooleanValue(state[7], 'book fork state') &&
 		requireBigintValue(state[0], 'book cash') === requireBigintValue(state[1], 'book units') &&
+		requireBigintValue(state[15], 'book recovery REP') === 0n &&
 		requireBigintValue(question[1], 'frozen book ID') === 0n &&
 		feeTime < feeEnd
 	const linearFee = { rateAttoEthPerSecond: feesActive ? requireBigintValue(Reflect.get(stream, 'feeRateAttoEthPerSecond'), 'question fee rate') : 0n, endTime: feeEnd }
@@ -84,6 +85,7 @@ export async function loadCentralPortfolioQuestion(client: Pick<ReadClient, 'mul
 	return {
 		centralSettlement: true as const,
 		settlementCollateralAttoEth: cash,
+		settlementRecoveryAttoRep: requireBigintValue(Reflect.get(snapshot, 'questionRecoveryAttoRep'), 'question recovery REP'),
 		shareTokenSupplyAttoShares: requireBigintValue(Reflect.get(snapshot, 'outcomeSupplyAttoShares'), 'economic outcome supply'),
 		mintingCapacityAttoEth: cash + remainingCapacity,
 		totalPoolHeldAttoRep: requireBigintValue(totals[0], 'total REP'),

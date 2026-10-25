@@ -166,6 +166,7 @@ async function readSecurityPoolSnapshot(client: ReadClient, deployment: Security
 		centralMintingCapacity: central?.mintingCapacityAttoEth,
 		linearFee: central?.linearFee ?? decodeLinearFeeState(portfolioCustody, linearRate, linearEnd),
 		settlementCollateralAttoEth: central?.settlementCollateralAttoEth ?? settlementCollateralAttoEth,
+		settlementRecoveryAttoRep: central?.settlementRecoveryAttoRep ?? 0n,
 		currentRetentionRate,
 		minimumSecurityBondDebtAttoEth,
 		minimumVaultRepDepositAttoRep,
@@ -271,6 +272,7 @@ function createListedSecurityPool({
 	const { truthAuctionStartedAt, migratedAttoRep, forkOwnSecurityPool } = forkData
 	return {
 		mintingCapacityAttoEth,
+		settlementRecoveryAttoRep: snapshot.settlementRecoveryAttoRep,
 		settlementCollateralAttoEth,
 		currentRetentionRate,
 		feeAccrualState: {

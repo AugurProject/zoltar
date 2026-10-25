@@ -90,7 +90,7 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 				const captured = { questionId, mintAttoEth: amount, maximumPurchaseFeeAttoEth: fee, minimumShares: minimum }
 				return {
 					...buildPortfolioMintRequest({ trader: selected.owner, portfolio: selected.portfolio, universeId: selected.universeId, recipient: selected.owner, ...captured }),
-					reviewDescription: `Buy complete sets for question 0x${questionId.toString(16)} with ${formatEther(amount)} ETH. The backing-based purchase fee is ${formatEther(quote.purchaseFeeAttoEth)} ETH, capped at ${formatEther(fee)} ETH; excess budget is refunded. Receive at least ${formatEther(minimum)} of each outcome. Available backing is checked after retirement in the same transaction.`,
+					reviewDescription: `Buy complete sets for question 0x${questionId.toString(16)} with ${formatEther(amount)} ETH. The total charge for backing, the resolution premium and reporting is ${formatEther(quote.purchaseFeeAttoEth)} ETH, capped at ${formatEther(fee)} ETH; excess budget is refunded. Receive at least ${formatEther(minimum)} of each outcome. Available backing is checked after retirement in the same transaction.`,
 					validateBeforeSubmit: async () => {
 						const client = createConnectedReadClient()
 						const latest = await loadPortfolioAccount(client, selected.portfolio, selected.owner, selected.universeId)

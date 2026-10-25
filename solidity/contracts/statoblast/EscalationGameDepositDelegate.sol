@@ -243,6 +243,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		}
 		_accrueOrdinarySurplus(depositor, amountAttoRep);
 		_scheduleReporterFinality();
+		EscalationGameRepCustody.recordReporter(game.securityPool(), depositor);
 		IEscalationGameSecurityPoolContext(IEscalationGameDepositContext(address(this)).securityPool()).refreshPortfolioFees();
 	}
 

@@ -657,10 +657,6 @@
 			"bun": "./ts/features/portfolios/components/PortfolioAggregatePanel.tsx",
 			"default": "./js/features/portfolios/components/PortfolioAggregatePanel.js"
 		},
-		"./features/portfolios/components/PortfolioRepair.js": {
-			"bun": "./ts/features/portfolios/components/PortfolioRepair.tsx",
-			"default": "./js/features/portfolios/components/PortfolioRepair.js"
-		},
 		"./features/portfolios/hooks/usePortfolio.js": {
 			"bun": "./ts/features/portfolios/hooks/usePortfolio.ts",
 			"default": "./js/features/portfolios/hooks/usePortfolio.js"
@@ -748,6 +744,14 @@
 		"./features/open-oracle/hooks/useOpenOracleCreateTokenMetadata.js": {
 			"bun": "./ts/features/open-oracle/hooks/useOpenOracleCreateTokenMetadata.ts",
 			"default": "./js/features/open-oracle/hooks/useOpenOracleCreateTokenMetadata.js"
+		},
+		"./features/portfolios/hooks/usePortfolioReportingReward.js": {
+			"bun": "./ts/features/portfolios/hooks/usePortfolioReportingReward.ts",
+			"default": "./js/features/portfolios/hooks/usePortfolioReportingReward.js"
+		},
+		"./features/portfolios/hooks/usePortfolioServiceCredit.js": {
+			"bun": "./ts/features/portfolios/hooks/usePortfolioServiceCredit.ts",
+			"default": "./js/features/portfolios/hooks/usePortfolioServiceCredit.js"
 		}
 	},
 	"version": "1.0.0"

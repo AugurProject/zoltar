@@ -183,15 +183,15 @@ const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
 		compilerProfile: 'main',
 		contractName: 'SecurityPoolPortfolioSettlementDeployer',
 	},
+	securityPoolPortfolioServicesDeployer: {
+		artifactPath: 'contracts/statoblast/SecurityPoolPortfolioModuleDeployers.sol',
+		compilerProfile: 'main',
+		contractName: 'SecurityPoolPortfolioServicesDeployer',
+	},
 	securityPoolReporterLedgerDeployer: {
 		artifactPath: 'contracts/statoblast/SecurityPoolPortfolioModuleDeployers.sol',
 		compilerProfile: 'main',
 		contractName: 'SecurityPoolReporterLedgerDeployer',
-	},
-	securityPoolPortfolioRecapAuctionDeployer: {
-		artifactPath: 'contracts/statoblast/SecurityPoolPortfolioForkCoordinator.sol',
-		compilerProfile: 'main',
-		contractName: 'SecurityPoolPortfolioRecapAuctionDeployer',
 	},
 	securityPoolPortfolioForkCoordinatorDeployer: {
 		artifactPath: 'contracts/statoblast/SecurityPoolPortfolioForkCoordinator.sol',

@@ -36,8 +36,8 @@ type InfraContractAddressConfig = {
 	securityPoolCapitalFeeStreamsDeployerBytecode: Hex
 	securityPoolSettlementBookDeployerBytecode: Hex
 	securityPoolPortfolioSettlementDeployerBytecode: Hex
+	securityPoolPortfolioServicesDeployerBytecode: Hex
 	securityPoolReporterLedgerDeployerBytecode: Hex
-	securityPoolPortfolioRecapAuctionDeployerBytecode: Hex
 	securityPoolPortfolioForkCoordinatorDeployerBytecode: Hex
 	uniformPriceDualCapBatchAuctionFactoryBytecode: Hex
 	zeroSalt: Hex
@@ -66,8 +66,8 @@ type InfraContractAddresses = {
 	securityPoolCapitalFeeStreamsDeployer: Address
 	securityPoolSettlementBookDeployer: Address
 	securityPoolPortfolioSettlementDeployer: Address
+	securityPoolPortfolioServicesDeployer: Address
 	securityPoolReporterLedgerDeployer: Address
-	securityPoolPortfolioRecapAuctionDeployer: Address
 	securityPoolPortfolioForkCoordinatorDeployer: Address
 	shareTokenFactory: Address
 	uniformPriceDualCapBatchAuctionFactory: Address
@@ -85,8 +85,8 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 			securityPoolCapitalFeeStreamsDeployer: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolCapitalFeeStreamsDeployerBytecode),
 			securityPoolSettlementBookDeployer: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolSettlementBookDeployerBytecode),
 			securityPoolPortfolioSettlementDeployer: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolPortfolioSettlementDeployerBytecode),
+			securityPoolPortfolioServicesDeployer: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolPortfolioServicesDeployerBytecode),
 			securityPoolReporterLedgerDeployer: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolReporterLedgerDeployerBytecode),
-			securityPoolPortfolioRecapAuctionDeployer: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolPortfolioRecapAuctionDeployerBytecode),
 			securityPoolPortfolioForkCoordinatorDeployer: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolPortfolioForkCoordinatorDeployerBytecode),
 			openOracle: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.openOracleBytecode),
 			zoltarQuestionData: config.getZoltarQuestionDataAddress(),

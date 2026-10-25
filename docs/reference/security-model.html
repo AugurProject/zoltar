@@ -335,11 +335,11 @@
 					</li>
 					<li id="excluded-guarantee-eg03">
 						<strong>EG03.</strong>
-						OpenOracle report liquidity does not cap the notional value of operations using an accepted price, and settlement does not prove external price correctness.
+						Standalone OpenOracle operations have no report-funded notional exposure cap. Shared portfolios bound ordinary commitment growth by the accepted report’s exposure limit and require a separate funded proof for additional growth. Neither mode’s settlement proves external price correctness.
 					</li>
 					<li id="excluded-guarantee-eg04">
 						<strong>EG04.</strong>
-						A participant with unbounded capital can keep funding valid disputes and delay the sponsor lane indefinitely; no bounded coordinator-availability claim is made.
+						A participant with unbounded capital can keep funding valid disputes and delay the standalone sponsor lane indefinitely; no bounded coordinator-availability claim is made. Shared portfolios isolate concurrent report escrows, but cannot guarantee that any particular disputed report settles within a bounded time.
 					</li>
 					<li id="excluded-guarantee-eg05">
 						<strong>EG05.</strong>

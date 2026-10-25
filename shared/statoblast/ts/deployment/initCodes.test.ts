@@ -30,8 +30,8 @@ const artifacts = {
 	securityPoolCapitalFeeStreamsDeployer: artifact(19),
 	securityPoolSettlementBookDeployer: artifact(20),
 	securityPoolPortfolioSettlementDeployer: artifact(21),
+	securityPoolPortfolioServicesDeployer: artifact(23),
 	securityPoolReporterLedgerDeployer: artifact(22),
-	securityPoolPortfolioRecapAuctionDeployer: artifact(23),
 	securityPoolPortfolioForkCoordinatorDeployer: artifact(24, 'address'),
 }
 const builders = createStatoblastInitCodes(artifacts, { proxyDeployerAddress: proxy, zeroSalt })
@@ -47,19 +47,19 @@ describe('shared capital infrastructure init codes', () => {
 		expect(addresses.securityPoolForkerPortfolioDelegate).toBe(delegate)
 	})
 
-	test('the fork factory receives the same recap factory deployed by the infrastructure list', () => {
+	test('the fork factory needs no auction and all capital module addresses are distinct', () => {
 		const addresses = builders.createInfraContractAddresses(weth, { getZoltarAddress: () => zoltar, getZoltarQuestionDataAddress: () => questionData })()
-		expect(constructorArgs(builders.getSecurityPoolPortfolioForkCoordinatorDeployerByteCode())).toBe(encodeAbiParameters(parseAbiParameters('address'), [addresses.securityPoolPortfolioRecapAuctionDeployer]))
 		const modules = [
 			addresses.securityPoolCapitalLedgerDeployer,
 			addresses.securityPoolCommitmentIndexDeployer,
 			addresses.securityPoolCapitalFeeStreamsDeployer,
 			addresses.securityPoolSettlementBookDeployer,
 			addresses.securityPoolPortfolioSettlementDeployer,
+			addresses.securityPoolPortfolioServicesDeployer,
 			addresses.securityPoolReporterLedgerDeployer,
-			addresses.securityPoolPortfolioRecapAuctionDeployer,
 			addresses.securityPoolPortfolioForkCoordinatorDeployer,
 		]
+		expect(constructorArgs(builders.getSecurityPoolPortfolioForkCoordinatorDeployerByteCode())).toBe('0x')
 		expect(new Set(modules).size).toBe(8)
 	})
 })

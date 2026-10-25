@@ -39,13 +39,15 @@ contract CapitalLedgerTestComponents {
 	function createIndex(address authority) external returns (SecurityPoolCommitmentIndex) {
 		return new SecurityPoolCommitmentIndex(authority);
 	}
-	function createStreams(address authority) external returns (ICapitalFeeStreams) {
+	function createStreams(address authority, uint48 duration) external returns (ICapitalFeeStreams) {
 		return
-			ICapitalFeeStreams(address(new SecurityPoolCapitalFeeStreams(authority, uint48(block.timestamp), 1 days)));
+			ICapitalFeeStreams(address(new SecurityPoolCapitalFeeStreams(authority, uint48(block.timestamp), duration)));
 	}
 }
 
 contract CapitalLedgerHarness {
+	uint256 public targetPriceErrorForDispute;
+	uint256 public acceptedEpoch;
 	SecurityPoolCapitalLedger public immutable ledger;
 	CapitalLedgerZoltarMock public immutable zoltar;
 	ReputationToken public immutable token;
@@ -53,7 +55,7 @@ contract CapitalLedgerHarness {
 		zoltar = new CapitalLedgerZoltarMock();
 		token = zoltar.token();
 		ledger = new SecurityPoolCapitalLedger(address(this), Zoltar(address(zoltar)), 1, 10_500, 1e15, 1e14, 1 days);
-		ledger.initialize(components.createIndex(address(ledger)), components.createStreams(address(ledger)), address(0));
+		ledger.initialize(components.createIndex(address(ledger)), components.createStreams(address(ledger), 1 days), address(0), address(0));
 	}
 	function mint(address owner, uint256 amount) external {
 		zoltar.mint(owner, amount);
@@ -63,15 +65,22 @@ contract CapitalLedgerHarness {
 		return address(this);
 	}
 	function validateExposure() external pure {}
+	function setPriceError(uint256 priceError) external {
+		targetPriceErrorForDispute = priceError;
+	}
+	function creditServiceFees(uint248) external payable {}
 	function forkController() external pure returns (address) {
 		return address(0);
 	}
 	function setPrice(uint256 price, uint48 until) external {
+		++acceptedEpoch;
 		ledger.acceptPrice(price, until);
 	}
 	function cureAndSetPrices(uint96 id, uint256 first, uint256 second, uint48 until) external {
 		ledger.cure(id);
+		++acceptedEpoch;
 		ledger.acceptPrice(first, until);
+		++acceptedEpoch;
 		ledger.acceptPrice(second, until);
 	}
 	function setDemand(uint256 demand) external {
@@ -97,9 +106,6 @@ contract CapitalLedgerHarness {
 	}
 	function importChoice(address owner, SecurityPoolCapitalLedger.ChoicePosition calldata position, uint256 target) external payable {
 		ledger.importChoice{value: msg.value}(owner, position, target);
-	}
-	function importAuction(address owner, uint256 rep, uint256 commitment, uint256 target) external payable {
-		ledger.importAuctionPosition{value: msg.value}(owner, rep, commitment, target);
 	}
 	function finishImport(uint256 demand) external {
 		ledger.finishForkImport(demand);

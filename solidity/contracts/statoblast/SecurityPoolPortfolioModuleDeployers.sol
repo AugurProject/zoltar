@@ -7,6 +7,7 @@ import { SecurityPoolCapitalFeeStreams } from './SecurityPoolCapitalFeeStreams.s
 import { SecurityPoolCommitmentIndex } from './SecurityPoolCommitmentIndex.sol';
 import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
 import { SecurityPoolPortfolioSettlement } from './SecurityPoolPortfolioSettlement.sol';
+import { SecurityPoolPortfolioServices } from './SecurityPoolPortfolioServices.sol';
 import { SecurityPoolReporterLedger } from './SecurityPoolReporterLedger.sol';
 import { SecurityPoolCreationCodeDeployer } from './SecurityPoolCreationCode.sol';
 
@@ -38,6 +39,12 @@ contract SecurityPoolSettlementBookDeployer {
 contract SecurityPoolPortfolioSettlementDeployer {
 	function create(address authority) external returns (SecurityPoolPortfolioSettlement) {
 		return new SecurityPoolPortfolioSettlement(authority);
+	}
+}
+contract SecurityPoolPortfolioServicesDeployer is SecurityPoolCreationCodeDeployer {
+	constructor() SecurityPoolCreationCodeDeployer(type(SecurityPoolPortfolioServices).creationCode) {}
+	function create(address authority, uint256 maximumReward, uint256 priorityFee) external returns (SecurityPoolPortfolioServices) {
+		return SecurityPoolPortfolioServices(payable(_deploy(abi.encode(authority, maximumReward, priorityFee))));
 	}
 }
 contract SecurityPoolReporterLedgerDeployer {

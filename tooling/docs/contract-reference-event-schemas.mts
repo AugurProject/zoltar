@@ -1,6 +1,6 @@
 export const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePath: string }> = [
 	{ name: 'FeeStreamReplaced', parameters: 'uint64 indexed bookId,uint256 indexed questionId,uint96 rateAttoEthPerSecond,uint48 end', sourcePath: 'solidity/contracts/statoblast/SecurityPoolSettlementBook.sol' },
-	{ name: 'ForkFrozen', parameters: 'uint248 indexed universeId,uint256 backing,uint256 cash,uint256 units,uint256 freshPrice', sourcePath: 'solidity/contracts/statoblast/SecurityPoolPortfolioForkCoordinator.sol' },
+	{ name: 'ForkFrozen', parameters: 'uint248 indexed universeId,uint256 backing,uint256 cash,uint256 units,uint256 recoveryAttoRep', sourcePath: 'solidity/contracts/statoblast/SecurityPoolPortfolioForkCoordinator.sol' },
 	{ name: 'PortfolioRecoveryRightsConsumed', parameters: 'uint248 indexed universeId,address indexed holder,uint256 amountAttoShares,uint256 cumulativeAttoShares', sourcePath: 'solidity/contracts/statoblast/tokens/ShareToken.sol' },
 	{ name: 'PortfolioRecoveryRightsTransferred', parameters: 'uint248 indexed universeId,address indexed from,address indexed to,uint256[3] amountsAttoShares', sourcePath: 'solidity/contracts/statoblast/tokens/ShareToken.sol' },
 	{ name: 'OrdinarySettlementInitialized', parameters: 'BinaryOutcomes.BinaryOutcome indexed outcome,uint256 winningPrincipalAttoRep,uint256 reservedAttoRep', sourcePath: 'solidity/contracts/statoblast/EscalationGameState.sol' },
@@ -192,4 +192,4 @@ export const assemblyEventEmissions: Array<{
 	},
 ]
 
-export const referencedEventAbiFingerprint = '960e6535a70c9e74a13a737f73ba2ac0b92d931c9f11032eb1ec3676bbbdf775'
+export const referencedEventAbiFingerprint = 'd7fa6958b5a6c1ad3763f66cef85d82ecd55bfc8e020650bb1d84799a6a0f14e'

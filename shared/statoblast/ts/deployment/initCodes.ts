@@ -88,8 +88,8 @@ type StatoblastInfrastructureArtifacts = {
 	securityPoolCapitalFeeStreamsDeployer: BytecodeArtifact
 	securityPoolSettlementBookDeployer: BytecodeArtifact
 	securityPoolPortfolioSettlementDeployer: BytecodeArtifact
+	securityPoolPortfolioServicesDeployer: BytecodeArtifact
 	securityPoolReporterLedgerDeployer: BytecodeArtifact
-	securityPoolPortfolioRecapAuctionDeployer: BytecodeArtifact
 	securityPoolPortfolioForkCoordinatorDeployer: BytecodeArtifact
 	securityPoolUtils: BytecodeArtifact
 	shareTokenFactory: ContractArtifact
@@ -137,9 +137,9 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 	const getSecurityPoolCapitalFeeStreamsDeployerByteCode = () => applyLibraries(artifacts.securityPoolCapitalFeeStreamsDeployer.evm.bytecode.object)
 	const getSecurityPoolSettlementBookDeployerByteCode = () => applyLibraries(artifacts.securityPoolSettlementBookDeployer.evm.bytecode.object)
 	const getSecurityPoolPortfolioSettlementDeployerByteCode = () => applyLibraries(artifacts.securityPoolPortfolioSettlementDeployer.evm.bytecode.object)
+	const getSecurityPoolPortfolioServicesDeployerByteCode = () => applyLibraries(artifacts.securityPoolPortfolioServicesDeployer.evm.bytecode.object)
 	const getSecurityPoolReporterLedgerDeployerByteCode = () => applyLibraries(artifacts.securityPoolReporterLedgerDeployer.evm.bytecode.object)
-	const getSecurityPoolPortfolioRecapAuctionDeployerByteCode = () => applyLibraries(artifacts.securityPoolPortfolioRecapAuctionDeployer.evm.bytecode.object)
-	const getSecurityPoolPortfolioForkCoordinatorDeployerByteCode = () => concatHex([applyLibraries(artifacts.securityPoolPortfolioForkCoordinatorDeployer.evm.bytecode.object), encodeAbiParameters([{ type: 'address' }], [getWorkerAddress(getSecurityPoolPortfolioRecapAuctionDeployerByteCode())])])
+	const getSecurityPoolPortfolioForkCoordinatorDeployerByteCode = () => applyLibraries(artifacts.securityPoolPortfolioForkCoordinatorDeployer.evm.bytecode.object)
 	const getSecurityPoolFactoryByteCode = (inputs: SecurityPoolFactoryInputs) =>
 		encodeDeployData({
 			abi: artifacts.securityPoolFactory.abi,
@@ -186,8 +186,8 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 			securityPoolCapitalFeeStreamsDeployerBytecode: getSecurityPoolCapitalFeeStreamsDeployerByteCode(),
 			securityPoolSettlementBookDeployerBytecode: getSecurityPoolSettlementBookDeployerByteCode(),
 			securityPoolPortfolioSettlementDeployerBytecode: getSecurityPoolPortfolioSettlementDeployerByteCode(),
+			securityPoolPortfolioServicesDeployerBytecode: getSecurityPoolPortfolioServicesDeployerByteCode(),
 			securityPoolReporterLedgerDeployerBytecode: getSecurityPoolReporterLedgerDeployerByteCode(),
-			securityPoolPortfolioRecapAuctionDeployerBytecode: getSecurityPoolPortfolioRecapAuctionDeployerByteCode(),
 			securityPoolPortfolioForkCoordinatorDeployerBytecode: getSecurityPoolPortfolioForkCoordinatorDeployerByteCode(),
 			uniformPriceDualCapBatchAuctionFactoryBytecode: bytecodeOf(artifacts.uniformPriceDualCapBatchAuctionFactory),
 			zeroSalt,
@@ -210,8 +210,8 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 		getSecurityPoolCapitalFeeStreamsDeployerByteCode,
 		getSecurityPoolSettlementBookDeployerByteCode,
 		getSecurityPoolPortfolioSettlementDeployerByteCode,
+		getSecurityPoolPortfolioServicesDeployerByteCode,
 		getSecurityPoolReporterLedgerDeployerByteCode,
-		getSecurityPoolPortfolioRecapAuctionDeployerByteCode,
 		getSecurityPoolPortfolioForkCoordinatorDeployerByteCode,
 		getShareTokenFactoryByteCode,
 	}

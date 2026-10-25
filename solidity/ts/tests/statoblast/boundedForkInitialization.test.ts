@@ -171,9 +171,9 @@ describe('Statoblast: bounded fork initialization', () => {
 		const feed = await owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'priceFeed', args: [childUniverse] })
 		const coordinatorCaller = createWriteClient(base.mockWindow, BigInt(childCoordinator))
 		// Coordinator registration requires the native child, whose preparation
-		// cannot bypass the shared recap phase.
+		// cannot bypass the shared fork activation window.
 		await expect(coordinatorCaller.simulateContract({ abi: feedArtifact.abi, address: feed, functionName: 'requestPrice', args: [other().account.address, 1n, 0n, 0n] })).rejects.toThrow('Unregistered coordinator')
-		await expect(other().simulateContract({ abi: forkerArtifact.abi, address: forker, functionName: 'preparePortfolioQuestion', args: [parent, childUniverse] })).rejects.toThrow('Recap window still open')
+		await expect(other().simulateContract({ abi: forkerArtifact.abi, address: forker, functionName: 'preparePortfolioQuestion', args: [parent, childUniverse] })).rejects.toThrow('Fork activation window still open')
 		await base.mockWindow.setTime(forkTime + 63n * DAY)
 		await checkGas(await writeContractAndWait(other(), () => other().writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'finalizeBranch', args: [childUniverse] })), 'shared branch activation')
 		await checkGas(await writeContractAndWait(other(), () => other().writeContract({ abi: forkerArtifact.abi, address: forker, functionName: 'preparePortfolioQuestion', args: [parent, childUniverse] })), 'question preparation')

@@ -2,7 +2,8 @@ import { asWriteClient, createMockWriteClient, createMockLoaderClient, createRea
 /// <reference types='bun-types' />
 
 import { describe, expect, test } from 'bun:test'
-import { createWalletClient, custom, publicActions, getAddress } from '@zoltar/core-shared/evm/ethereum'
+import { createWalletClient, custom, publicActions, getAddress, encodeEventTopics, parseAbi } from '@zoltar/core-shared/evm/ethereum'
+import { getInfraContractAddresses } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { queueOracleManagerOperation, requestOraclePrice, loadCoordinatorInitialReportFundingRequirement, loadOracleManagerQueueOperationEthValue } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
 
@@ -59,10 +60,13 @@ test('explicit shared renewal funds a full report even while ordinary operations
 			values.push(request.value ?? 0n)
 			return hash
 		},
-		waitForTransactionReceipt: async () => ({ status: 'success' as const }),
+		waitForTransactionReceipt: async () => ({
+			status: 'success' as const,
+			logs: [{ address: getInfraContractAddresses().openOracle, data: '0x' as const, topics: encodeEventTopics({ abi: parseAbi(['event ReportSubmitted(uint256 indexed reportId,bytes packed)']), eventName: 'ReportSubmitted', args: { reportId: 7n } }) }],
+		}),
 	}
-	await requestOraclePrice(asWriteClient(client), MANAGER_ADDRESS, 10n ** 18n)
-	expect(values).toEqual([266n])
+	expect((await requestOraclePrice(asWriteClient(client), MANAGER_ADDRESS, 10n ** 18n)).reportId).toBe(7n)
+	expect(values).toEqual([122n])
 })
 
 describe('oracle manager queue funding helpers', () => {
@@ -183,6 +187,7 @@ for (const missing of ['base fee', 'block number']) {
 for (const timestamp of [3600n, 3541n]) {
 	test(`blocks the free coordinator operation path near oracle expiry (${timestamp})`, async () => {
 		const readContract = createReadContractStub(async request => {
+			if (request.functionName === 'priceFeed') return MANAGER_ADDRESS
 			if (request.functionName === 'lastPrice') return 10n ** 18n
 			if (request.functionName === 'getPendingSettlementOperationIds') return []
 			if (request.functionName === 'MAX_PENDING_SETTLEMENT_OPERATIONS') return 4n

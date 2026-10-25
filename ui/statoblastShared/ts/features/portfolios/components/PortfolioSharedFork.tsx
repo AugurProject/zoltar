@@ -5,7 +5,6 @@ import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
-import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { PortfolioButton, PortfolioInput } from './PortfolioControls.js'
 import { usePortfolioSharedFork, type PortfolioSharedForkParameters } from '../hooks/usePortfolioSharedFork.js'
@@ -21,7 +20,7 @@ export function PortfolioSharedFork(parameters: PortfolioSharedForkParameters) {
 	if (branch !== undefined) {
 		branchState = copy.branchStates.unprepared
 		if (branch.prepared) branchState = copy.branchStates.chosen
-		if (branch.started) branchState = copy.branchStates.recap
+		if (branch.started) branchState = copy.branchStates.waiting
 		if (branch.ready) branchState = copy.branchStates.active
 	}
 	return (
@@ -37,8 +36,8 @@ export function PortfolioSharedFork(parameters: PortfolioSharedForkParameters) {
 				<MetricField label={copy.choiceDeadline} loading={model.loading}>
 					{state === undefined || state.choiceDeadline === 0n ? undefined : formatTimestamp(state.choiceDeadline)}
 				</MetricField>
-				<MetricField label={copy.recapDeadline} loading={model.loading}>
-					{state === undefined || state.recapitalizationDeadline === 0n ? undefined : formatTimestamp(state.recapitalizationDeadline)}
+				<MetricField label={copy.activationDeadline} loading={model.loading}>
+					{state === undefined || state.activationDeadline === 0n ? undefined : formatTimestamp(state.activationDeadline)}
 				</MetricField>
 				<MetricField label={copy.child} loading={model.loading}>
 					{branch?.universeId.toString()}
@@ -55,51 +54,16 @@ export function PortfolioSharedFork(parameters: PortfolioSharedForkParameters) {
 				<PortfolioButton model={parameters.actions} action='finalizePortfolioFork' label={copy.finalize} pendingLabel={copy.finalizing} reason={model.finalizeReason} onClick={model.finalize} />
 				<ActionLauncherButton tone='secondary' idleLabel={copy.open} pendingLabel={copy.loading} availability={{ disabled: disabled || model.openReason !== undefined, reason: disabled ? copy.busy : model.openReason }} onClick={model.open} />
 			</div>
-			<WorkflowSubsection title={copy.recap}>
-				<UserMessage detail={copy.recapHint} />
+			<WorkflowSubsection title={copy.basketTitle}>
+				<UserMessage detail={copy.basketHint} />
 				<MetricGrid>
-					<PortfolioInput label={copy.budget} value={model.budgetInput} onChange={model.setBudget} disabled={disabled} numeric />
-					<PortfolioInput label={copy.maximumRep} value={model.maximumRepInput} onChange={model.setMaximumRep} disabled={disabled} numeric />
-					<PortfolioInput label={copy.minimumRep} value={model.minimumRepInput} onChange={model.setMinimumRep} disabled={disabled} numeric />
-					<PortfolioInput label={copy.maximumCommitment} value={model.maximumCommitmentInput} onChange={model.setMaximumCommitment} disabled={disabled} numeric />
-					<PortfolioInput label={copy.maximumOwnRep} value={model.maximumOwnRepInput} onChange={model.setMaximumOwnRep} disabled={disabled} numeric />
-					<PortfolioInput label={copy.health} value={model.healthInput} onChange={model.setHealth} disabled={disabled} numeric />
-				</MetricGrid>
-				<MetricGrid>
-					<MetricField label={copy.quoteRep}>
-						<CurrencyValue value={model.quote?.rep} suffix={common.rep} />
+					<MetricField label={copy.cashRecovery} loading={model.loading}>
+						<CurrencyValue value={branch?.parentCash} suffix={common.eth} />
 					</MetricField>
-					<MetricField label={copy.quoteCommitment}>
-						<CurrencyValue value={model.quote?.commitment} suffix={common.eth} />
-					</MetricField>
-					<MetricField label={copy.quoteCost}>
-						<CurrencyValue value={model.quote?.cost} suffix={common.eth} />
-					</MetricField>
-					<MetricField label={copy.quoteOwnRep}>
-						<CurrencyValue value={model.quote?.ownRep} suffix={common.rep} />
-					</MetricField>
-					<MetricField label={copy.quoteReserve}>
-						<CurrencyValue value={model.quote?.executionReserve} suffix={common.eth} />
+					<MetricField label={copy.repRecovery} loading={model.loading}>
+						<CurrencyValue value={branch?.started ? branch.recoveryAttoRep : undefined} suffix={common.rep} />
 					</MetricField>
 				</MetricGrid>
-				<TokenApprovalControl
-					actionLabel={copy.buy}
-					allowanceError={model.error}
-					allowanceLoading={model.loading}
-					approvedAmount={model.wallet?.allowance}
-					disabled={disabled}
-					guardMessage={model.recapReason}
-					onApprove={amount => {
-						if (amount !== undefined) void model.approve(amount)
-					}}
-					pending={parameters.actions.busy === 'approvePortfolioRecap'}
-					pendingLabel={copy.approving}
-					requiredAmount={model.quote?.ownRep}
-					resetKey={`${state?.controller}:${state?.owner}:${branch?.universeId}:${model.quote?.ownRep}`}
-					tokenSymbol={common.rep}
-					tokenUnits={18}
-				/>
-				<PortfolioButton model={parameters.actions} action='buyPortfolioRecap' label={copy.buy} pendingLabel={copy.buying} reason={model.buyReason} onClick={model.buy} />
 			</WorkflowSubsection>
 			<WorkflowSubsection title={copy.recovery}>
 				<UserMessage detail={copy.recoveryHint} />

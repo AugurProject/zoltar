@@ -137,12 +137,15 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		await demand(200n * E)
 		await price((3n * E) / 2n)
 		await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'fundFees', value: 86400n * E }))
+		const fundedAt = (await alice.getBlock()).timestamp
 		await getAnvilWindowEthereum().advanceTime(100n)
 		await deposit(alice, 53n * E)
+		const restoredAt = (await alice.getBlock()).timestamp
 		const priorAlice = await earnedEth(alice, a)
 		const priorBob = await earnedEth(bob, b)
 		expect(priorAlice).toBe(0n)
-		expect(priorBob).toBeGreaterThanOrEqual(100n * E)
+		// Bob earns his half of total commitment, never Alice's unhealthy share.
+		expect(priorBob).toBe(((restoredAt - fundedAt) * E) / 2n)
 		await getAnvilWindowEthereum().advanceTime(100n)
 		await writeContractAndWait(alice, () => alice.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'checkpoint' }))
 		const laterAlice = (await earnedEth(alice, a)) - priorAlice

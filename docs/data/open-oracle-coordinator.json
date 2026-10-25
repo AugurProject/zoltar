@@ -162,13 +162,11 @@
 		"timeType": "view",
 		"trackDisputes": "view",
 		"weth": "view",
-		"operationReportIds": "view",
 		"priceFeed": "view",
 		"sharedPriceFeed": "view",
 		"reportDelegate": "view",
 		"setSharedPriceFeed": "nonpayable",
-		"syncExposure": "nonpayable",
-		"sharedPriceSettled": "nonpayable"
+		"syncExposure": "nonpayable"
 	},
 	"functionSignatures": {
 		"executeStagedOperation": "executeStagedOperation(uint256)",
@@ -187,10 +185,8 @@
 		"setSecurityPool": "setSecurityPool(address)",
 		"stageVaultOperations": "stageVaultOperations(address,bool,uint256,uint256,uint256,uint256,uint256)",
 		"stagedOperations": "stagedOperations(uint256)",
-		"operationReportIds": "operationReportIds(uint256)",
-		"setSharedPriceFeed": "setSharedPriceFeed(address)",
-		"sharedPriceSettled": "sharedPriceSettled(uint256,bool,string)"
+		"setSharedPriceFeed": "setSharedPriceFeed(address)"
 	},
 	"functionSignatureNote": "The functions map is the complete ABI name-to-mutability inventory. Signatures are listed for parameterized and tuple-returning entry points; zero-input and scalar getters use their Solidity names directly.",
-	"modeNote": "The selected standalone report outcomes below apply to ordinary coordinators. A portfolio coordinator routes price/report reads and requests to priceFeed(); only the initiating question can queue on that shared report, shared queues reject overflow, and operationReportIds prevents execution after a rejected or recovered report. Shared report events come from the feed, while operation events remain on the question coordinator."
+	"modeNote": "The selected outcomes describe standalone coordinators. A portfolio coordinator routes price/report reads and requests to priceFeed(). Each shared candidate uses an independent sponsor escrow. Shared-mode operations execute individually against any later accepted canonical price, without a shared callback queue. Shared report events come from the feed, while operation events remain on the question coordinator."
 }

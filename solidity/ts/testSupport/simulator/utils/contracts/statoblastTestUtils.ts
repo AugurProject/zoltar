@@ -13,7 +13,7 @@ import { QuestionOutcome } from '../../types/types'
 import { forkZoltarWithOwnEscalationGame } from './securityPoolForker'
 import { getTotalTheoreticalSupply } from './zoltar'
 import { depositRepToVault, depositToEscalationGame, getRepToken, getSecurityVault, backingUnitsToAttoRep } from './securityPool'
-import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool } from '../../../../types/contractArtifact'
+import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed } from '../../../../types/contractArtifact'
 
 const PRICE_PRECISION = 10n ** 18n
 const DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS = 5n * 60n
@@ -61,8 +61,9 @@ export const handleOracleReporting = async (client: WriteClient, mockWindow: Anv
 	assert.strictEqual(reportStatus.currentAmount2, expectedAmount2, 'pending report should already encode the forced price before settlement')
 	assert.notStrictEqual(reportStatus.currentReporter, zeroAddress, 'pending report should already have an initial reporter')
 	const priceFeed = await client.readContract({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: openOraclePriceCoordinator, functionName: 'priceFeed' })
-	assert.strictEqual(reportStatus.currentReporter, priceFeed, 'pending report should use the configured price feed as the current reporter')
-	assert.strictEqual(reportStatus.initialReporter, priceFeed, 'pending report should preserve the configured price feed as the initial reporter')
+	const reporter = priceFeed.toLowerCase() === openOraclePriceCoordinator.toLowerCase() ? priceFeed : (await client.readContract({ abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, address: priceFeed, functionName: 'reportCandidates', args: [pendingReportId] }))[0]
+	assert.strictEqual(reportStatus.currentReporter, reporter, 'pending report should use its isolated reporter')
+	assert.strictEqual(reportStatus.initialReporter, reporter, 'pending report should preserve its isolated reporter')
 	assert.ok(reportStatus.reportTimestamp > 0n, 'pending report should already have a report timestamp')
 
 	await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
@@ -117,14 +118,14 @@ export const manipulatePriceOracleAndPerformOperation = async (client: WriteClie
 	await handleOracleReporting(client, mockWindow, openOraclePriceCoordinator, forceRepEthPriceTo)
 }
 
-export const manipulatePriceOracle = async (client: WriteClient, mockWindow: AnvilWindowEthereum, openOraclePriceCoordinator: Address, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {
+export const manipulatePriceOracle = async (client: WriteClient, mockWindow: AnvilWindowEthereum, openOraclePriceCoordinator: Address, forceRepEthPriceTo: bigint = PRICE_PRECISION, requestedInitialAttoWeth = 0n) => {
 	if (await getIsPriceValid(client, openOraclePriceCoordinator)) {
 		const target = { abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: openOraclePriceCoordinator }
 		const feed = await client.readContract({ ...target, functionName: 'priceFeed' })
 		if (feed.toLowerCase() === openOraclePriceCoordinator.toLowerCase()) await mockWindow.setTime((await client.readContract({ ...target, functionName: 'priceValidUntil' })) + 1n)
 	}
 	const costAttoEth = await getRequestPriceCostAttoEth(client, openOraclePriceCoordinator)
-	await requestPriceWithValue(client, openOraclePriceCoordinator, costAttoEth, forceRepEthPriceTo)
+	await requestPriceWithValue(client, openOraclePriceCoordinator, costAttoEth, forceRepEthPriceTo, requestedInitialAttoWeth)
 	await handleOracleReporting(client, mockWindow, openOraclePriceCoordinator, forceRepEthPriceTo)
 }
 

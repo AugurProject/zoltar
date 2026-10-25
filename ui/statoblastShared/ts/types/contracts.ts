@@ -160,7 +160,7 @@ export type OpenOracleActionResult = ActionResult & {
 	action: 'approveToken1' | 'approveToken2' | 'createReportInstance' | 'dispute' | 'executeStagedOperation' | 'queueOperation' | 'requestPrice' | 'settle' | 'withdrawBalance' | 'wrapWeth'
 	priceSettlement?: OpenOraclePriceSettlement | undefined
 	queuedOperation?: StagedOracleQueuedResult
-	/** The new report's ID, read from the receipt; only a successful create carries it. */
+	/** The new report's ID, read from its successful create or pool-price request receipt. */
 	reportId?: bigint | undefined
 	stagedExecution?: StagedOracleExecutionResult
 }
@@ -228,6 +228,7 @@ export type OpenOracleReportDetails = OpenOracleReportSummary & {
 }
 
 export type ListedSecurityPool = {
+	settlementRecoveryAttoRep?: bigint
 	mintingCapacityAttoEth?: bigint
 	settlementCollateralAttoEth: bigint
 	currentRetentionRate: bigint

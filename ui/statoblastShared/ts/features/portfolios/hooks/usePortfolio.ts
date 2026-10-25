@@ -23,6 +23,7 @@ export function usePortfolio({ accountAddress, enabled, environmentKey, activeUn
 	const snapshot = useSignal<PortfolioAccountSnapshot | undefined>(undefined)
 	const setup = useSignal<PortfolioSetupSnapshot | undefined>(undefined)
 	const loading = useSignal(false)
+	const discovering = useSignal(false)
 	const error = useSignal<string | undefined>(undefined)
 	const generation = useRef(0)
 	const active = useRef(true)
@@ -82,6 +83,7 @@ export function usePortfolio({ accountAddress, enabled, environmentKey, activeUn
 		setup.value = undefined
 		error.value = undefined
 		loading.value = false
+		discovering.value = false
 	}
 	useBlockRefresh(() => {
 		void refresh()
@@ -108,9 +110,14 @@ export function usePortfolio({ accountAddress, enabled, environmentKey, activeUn
 				}
 			}
 			if (managerInput.value === '' && isAddress(ownerInput.value)) {
-				const portfolio = await discoverSimulationPortfolio(createConnectedReadClient(), backend.id, getAddress(ownerInput.value))
-				if (!current) return
-				if (portfolio !== undefined && managerInput.value === '') managerInput.value = portfolio
+				discovering.value = true
+				try {
+					const portfolio = await discoverSimulationPortfolio(createConnectedReadClient(), backend.id, getAddress(ownerInput.value))
+					if (!current) return
+					if (portfolio !== undefined && managerInput.value === '') managerInput.value = portfolio
+				} finally {
+					if (current) discovering.value = false
+				}
 			}
 			if (current) await refresh()
 		})().catch(failure => {
@@ -162,6 +169,7 @@ export function usePortfolio({ accountAddress, enabled, environmentKey, activeUn
 		snapshot: snapshot.value,
 		setup: setup.value,
 		loading: loading.value,
+		discovering: discovering.value,
 		error: error.value,
 		managerInput: managerInput.value,
 		ownerInput: ownerInput.value,

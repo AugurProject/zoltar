@@ -132,6 +132,13 @@ contract TradingMockCoreFactory {
 	bytes32 public constant ORIGIN_ID = keccak256('trading-test-origin');
 	mapping(address => bytes32) public originByPool;
 	mapping(bytes32 => mapping(uint248 => address)) public poolByOriginAndUniverse;
+	mapping(address => address) public portfolios;
+	function setPortfolio(address pool, address portfolio) external {
+		portfolios[pool] = portfolio;
+	}
+	function getSecurityPoolPortfolio(ISecurityPool pool) external view returns (address) {
+		return portfolios[address(pool)];
+	}
 
 	function setPool(address pool, uint248 universeId) external {
 		originByPool[pool] = ORIGIN_ID;
@@ -144,6 +151,25 @@ contract TradingMockCoreFactory {
 
 	function getSecurityPool(bytes32 originId, uint248 universeId) external view returns (ISecurityPool) {
 		return ISecurityPool(payable(poolByOriginAndUniverse[originId][universeId]));
+	}
+}
+
+contract TradingMockRecoveryToken {
+	mapping(address => uint256) public balanceOf;
+	function mint(address owner, uint256 amount) external {
+		balanceOf[owner] += amount;
+	}
+	function transfer(address owner, uint256 amount) external returns (bool) {
+		balanceOf[msg.sender] -= amount;
+		balanceOf[owner] += amount;
+		return true;
+	}
+}
+
+contract TradingMockSettlementSender {
+	function pay(address recipient) external payable {
+		(bool success, ) = recipient.call{value: msg.value}('');
+		require(success, 'Settlement ETH transfer');
 	}
 }
 
@@ -160,6 +186,17 @@ contract TradingMockSecurityPool {
 	uint256 public sharesPerEth;
 	uint256 public shareTokenSupplyAttoShares;
 	uint256 public settlementCollateralAttoEth;
+	TradingMockRecoveryToken public immutable repToken = new TradingMockRecoveryToken();
+	TradingMockSettlementSender public immutable settlement = new TradingMockSettlementSender();
+	address public portfolioCustody;
+	uint256 public recoveryPerCompleteSet;
+	bool public recoveryOnly;
+
+	function configureRecovery(uint256 repPerCompleteSet, bool onlyRep, bool centralCash) external {
+		recoveryPerCompleteSet = repPerCompleteSet;
+		recoveryOnly = onlyRep;
+		portfolioCustody = centralCash ? address(this) : address(0);
+	}
 
 	constructor(TradingMockShareToken token, TradingMockCoreFactory coreFactory, TradingMockZoltar mockZoltar, TradingMockQuestionData mockQuestionData, TradingMockForker mockForker, uint248 mockUniverseId, uint256 mockQuestionId, uint256 initialSharesPerEth) {
 		shareToken = token;
@@ -190,7 +227,11 @@ contract TradingMockSecurityPool {
 	}
 
 	function attoSharesToAttoEth(uint256 amountAttoShares) public view returns (uint256) {
-		return amountAttoShares / sharesPerEth;
+		return recoveryOnly ? 0 : amountAttoShares / sharesPerEth;
+	}
+
+	function attoSharesToAttoRep(uint256 amountAttoShares) public view returns (uint256) {
+		return (amountAttoShares / sharesPerEth) * recoveryPerCompleteSet;
 	}
 
 	function createCompleteSet() external payable {
@@ -206,6 +247,11 @@ contract TradingMockSecurityPool {
 		shareToken.burnCompleteSets(universeId, msg.sender, amount);
 		shareTokenSupplyAttoShares -= amount;
 		settlementCollateralAttoEth -= ethAmount;
+		repToken.mint(msg.sender, attoSharesToAttoRep(amount));
+		if (portfolioCustody != address(0)) {
+			settlement.pay{value: ethAmount}(msg.sender);
+			return;
+		}
 		(bool success, ) = payable(msg.sender).call{value: ethAmount}('');
 		require(success, 'ETH transfer');
 	}

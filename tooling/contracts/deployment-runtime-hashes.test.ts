@@ -10,7 +10,7 @@ import { getUniswapDeployment } from './uniswap-deployment.mts'
 
 const ANVIL_PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' satisfies Hex
 const MAX_FEE_PER_GAS = 100_000_000_000n
-const MAX_TOTAL_COST = 30_000_000_000_000_000_000n
+const MAX_TOTAL_COST = 35_000_000_000_000_000_000n
 // Returns a nonzero theoretical supply for the production REP address. Zoltar's
 // constructor requires that external mainnet dependency, but its code is not
 // part of the protocol deployment plan under test.

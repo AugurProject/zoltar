@@ -4,6 +4,7 @@ pragma solidity 0.8.35;
 import { IWeth9 } from './interfaces/IWeth9.sol';
 import { ISecurityPool, ISecurityPoolFactory } from './interfaces/ISecurityPool.sol';
 import { OpenOracle } from './openOracle/OpenOracle.sol';
+import { SharedPoolReportEscrow } from './SharedPoolReportEscrow.sol';
 import { ReputationToken } from '../ReputationToken.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
@@ -28,13 +29,13 @@ interface ISharedPoolPriceCoordinator {
 	function protocolFeeRecipient() external view returns (address);
 	function escalationHaltMultiplierBps() external view returns (uint256);
 	function maxSettlementBaseFeeMultiplierBps() external view returns (uint256);
-	function sharedPriceSettled(uint256 reportId, bool accepted, string calldata reason) external;
 }
 
 interface ISharedPoolPortfolioPriceCheckpoint {
 	function onSharedPriceAccepted(uint248 universeId, uint256 price, uint48 validUntil) external;
 	function oracleExposure(uint248 universeId) external view returns (uint256);
 	function clocks(uint248 universeId) external view returns (uint48, uint48, bool, bool);
+	function rewardOracleReport(uint248 universeId, address sponsor, uint256 gasUnits, uint256 requestedAt) external;
 }
 
 /// @notice One REP/ETH report and freshness clock for all question ledgers in one pool and universe.
@@ -44,8 +45,6 @@ contract SharedPoolPriceFeed {
 	bool public constant timeType = true;
 	bool public constant trackDisputes = true;
 	uint256 public constant OPEN_INTEREST_DIVIDER = 100;
-	uint256 public constant MAX_PENDING_SETTLEMENT_OPERATIONS = 4;
-	uint256 public constant SETTLEMENT_GAS_OVERHEAD = 50_000;
 	uint256 public constant FEED_SETTLEMENT_GAS_OVERHEAD = 4_000_000;
 	address public immutable configCoordinator;
 	address public immutable securityPoolFactory;
@@ -73,6 +72,17 @@ contract SharedPoolPriceFeed {
 	address public pendingCoordinator;
 	uint256 public pendingReportMaxSettlementBaseFeeAttoEthPerGas;
 	uint256 public pendingExposureLimitAttoEth;
+	uint256 public acceptedExposureLimitAttoEth;
+	uint256 public acceptedEpoch;
+	struct ReportCandidate {
+		SharedPoolReportEscrow escrow;
+		address sponsor;
+		address coordinator;
+		uint256 maxSettlementBaseFee;
+		uint256 requestedAt;
+		uint256 requestGas;
+	}
+	mapping(uint256 => ReportCandidate) public reportCandidates;
 	uint256 public lastPrice;
 	uint256 public lastSettlementTimestamp;
 	uint256 private checkpointedExposureAttoEth;
@@ -87,7 +97,6 @@ contract SharedPoolPriceFeed {
 	event PriceReported(uint256 indexed reportId, uint256 price, uint256 lastSettlementTimestamp);
 	event PriceReportRejected(uint256 indexed reportId, string reason, uint256 pendingReportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas, uint256 lastPrice, uint256 lastSettlementTimestamp);
 	event PendingReportRecovered(uint256 indexed reportId, uint256 settlementTimestamp, uint256 pendingReportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas, uint256 lastPrice, uint256 lastSettlementTimestamp);
-	event CoordinatorSettlementDeferred(uint256 indexed reportId, address indexed coordinator);
 
 	constructor(address _configCoordinator, address _securityPoolFactory, address _portfolio, uint248 _universeId, ReputationToken _reputationToken) {
 		require(_securityPoolFactory != address(0), 'Security pool factory zero');
@@ -106,6 +115,7 @@ contract SharedPoolPriceFeed {
 		gasUnitsForOneDispute = config.gasUnitsForOneDispute();
 		initialReportPriorityFeeAttoEthPerGas = config.initialReportPriorityFeeAttoEthPerGas();
 		targetPriceErrorForDispute = config.targetPriceErrorForDispute();
+		require(targetPriceErrorForDispute < OPEN_ORACLE_PERCENTAGE_PRECISION, 'Oracle uncertainty reaches one hundred percent');
 		openOracleSecurityMultiplierBps = config.openOracleSecurityMultiplierBps();
 		settlementTime = config.settlementTime();
 		disputeDelay = config.disputeDelay();
@@ -154,11 +164,22 @@ contract SharedPoolPriceFeed {
 		return ISharedPoolPortfolioPriceCheckpoint(portfolio).oracleExposure(universeId);
 	}
 
-	/// @notice New commitments may use only the exposure already secured by the
-	/// pending report. Deposits, retirement and collateral repair remain available.
-	/// Settlement still checks current exposure and the final report's gas costs.
+	/// @notice Capital may grow only within an already challenged report's budget.
+	/// Pending candidates neither lower this budget nor grant premature capacity.
 	function validateExposure() external view {
-		require(pendingReportId == 0 || aggregateExposureAttoEth() <= pendingExposureLimitAttoEth, 'Pending report exposure exceeded');
+		require(aggregateExposureAttoEth() <= acceptedExposureLimitAttoEth, 'Accepted report exposure exceeded');
+	}
+
+	/// @notice Conservative upper REP/ETH bound for entry, withdrawals and capacity.
+	function conservativePrice() external view returns (uint256) {
+		return
+			Math.mulDiv(lastPrice, OPEN_ORACLE_PERCENTAGE_PRECISION, OPEN_ORACLE_PERCENTAGE_PRECISION - targetPriceErrorForDispute, Math.Rounding.Ceil);
+	}
+
+	/// @notice Lower REP/ETH bound for externally rewarded adverse actions.
+	function liquidationPrice() external view returns (uint256) {
+		return
+			Math.mulDiv(lastPrice, OPEN_ORACLE_PERCENTAGE_PRECISION, OPEN_ORACLE_PERCENTAGE_PRECISION + targetPriceErrorForDispute);
 	}
 
 	/// @notice Report collateral covers aggregate standing commitment or funded demand.
@@ -180,31 +201,27 @@ contract SharedPoolPriceFeed {
 			Math.mulDiv(disputeGasCost, openOracleSecurityMultiplierBps * (OPEN_ORACLE_PERCENTAGE_PRECISION + targetPriceErrorForDispute), SecurityPoolUtils.BPS_DENOMINATOR * correctionProfitNumerator, Math.Rounding.Ceil);
 	}
 
-	function getSettlementCallbackGasLimit() public view returns (uint32) {
-		uint256 limit = _coordinatorCallbackGasLimit() + FEED_SETTLEMENT_GAS_OVERHEAD;
+	function getSettlementCallbackGasLimit() public pure returns (uint32) {
+		uint256 limit = FEED_SETTLEMENT_GAS_OVERHEAD;
 		require(limit <= type(uint32).max, 'Callback gas exceeds uint32');
 		return uint32(limit);
 	}
 
-	function _coordinatorCallbackGasLimit() private view returns (uint256) {
-		return (uint256(gasConsumedSettlement) + SETTLEMENT_GAS_OVERHEAD) * MAX_PENDING_SETTLEMENT_OPERATIONS;
-	}
-
-	function _requestGasUnits() private view returns (uint256) {
-		return 4 * (getSettlementCallbackGasLimit() + gasConsumedOpenOracleReportPrice);
-	}
-
-	function getRequestPriceCostAttoEth() public view returns (uint256) {
-		return block.basefee * _requestGasUnits() + REQUEST_BOUNTY_OFFSET_ATTO_ETH;
+	/// @notice The report sponsor funds its own transactions. Due accepted work is
+	/// reimbursed by the portfolio service treasury, independently of settlement.
+	/// A large mandatory public bounty would let unrelated settlers capture the
+	/// sponsor's funding before it can earn that service reimbursement.
+	function getRequestPriceCostAttoEth() public pure returns (uint256) {
+		return REQUEST_BOUNTY_OFFSET_ATTO_ETH;
 	}
 
 	/// @notice A registered coordinator authenticates the sponsor and forwards the report's exact token funding.
-	function requestPrice(address sponsor, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) external payable {
+	function requestPrice(address sponsor, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) external payable returns (uint256 reportId) {
+		uint256 initialGas = gasleft();
 		require(registeredCoordinators[msg.sender], 'Unregistered coordinator');
 		(, , , bool ready) = ISharedPoolPortfolioPriceCheckpoint(portfolio).clocks(universeId);
 		require(ready, 'Portfolio universe not ready');
 		require(sponsor != address(0), 'Report sponsor zero');
-		require(pendingReportId == 0, 'Oracle request already pending');
 		require(proposedRepPerEthPrice > 0, 'Initial oracle price zero');
 		require(bountyAttoEth >= getRequestPriceCostAttoEth(), 'Oracle bounty too small');
 		require(msg.value == bountyAttoEth, 'Incorrect oracle bounty');
@@ -223,82 +240,101 @@ contract SharedPoolPriceFeed {
 		pendingExposureLimitAttoEth =
 			(initialWethReportAttoEth - _minimumToken1ReportAttoEthForGasPrice(initialReportPriorityFeeAttoEthPerGas)) *
 			OPEN_INTEREST_DIVIDER;
-		uint256 impliedRequestBaseFeeAttoEthPerGas =
-			(bountyAttoEth - REQUEST_BOUNTY_OFFSET_ATTO_ETH) / _requestGasUnits();
-		pendingReportMaxSettlementBaseFeeAttoEthPerGas =
-			(impliedRequestBaseFeeAttoEthPerGas * maxSettlementBaseFeeMultiplierBps) /
-			SecurityPoolUtils.BPS_DENOMINATOR;
+		pendingReportMaxSettlementBaseFeeAttoEthPerGas = Math.mulDiv(block.basefee + initialReportPriorityFeeAttoEthPerGas, maxSettlementBaseFeeMultiplierBps, SecurityPoolUtils.BPS_DENOMINATOR);
 		pendingReportSponsor = sponsor;
 		pendingCoordinator = msg.sender;
-		require(weth.transferFrom(msg.sender, address(this), initialWethReportAttoEth), 'WETH transfer for initial report failed');
-		require(reputationToken.transferFrom(msg.sender, address(this), initialRepReportAttoRep), 'REP transfer for initial report failed');
-		require(weth.approve(address(openOracle), initialWethReportAttoEth), 'WETH approval for initial report failed');
-		require(reputationToken.approve(address(openOracle), initialRepReportAttoRep), 'REP approval for initial report failed');
-		OpenOracle.OracleGame memory reportParams = OpenOracle.OracleGame({currentAmount1: uint128(initialWethReportAttoEth), currentAmount2: uint128(initialRepReportAttoRep), currentReporter: address(this), reportTimestamp: 0, settlementTimestamp: 0, token1: address(weth), lastReportOppoTime: 0, settlementTime: settlementTime, escalationHalt: uint128(escalationHaltAttoEth), protocolFeeRecipient: protocolFeeRecipient, settlerReward: uint96(bountyAttoEth), token2: address(reputationToken), numReports: 0, disputeDelay: disputeDelay, feePercentage: feePercentage, multiplier: multiplier, callbackContract: address(this), callbackGasLimit: getSettlementCallbackGasLimit(), protocolFee: protocolFee, flags: OPEN_ORACLE_FLAG_STORE_ALL | OPEN_ORACLE_FLAG_TRACK_DISPUTES | OPEN_ORACLE_FLAG_TIME_TYPE});
-		pendingReportId = openOracle.report{value: bountyAttoEth}(reportParams, false, false, OpenOracle.TimingBoundaries({blockNumber: 0, blockNumberBound: 0, blockTimestamp: 0, blockTimestampBound: 0}));
+		SharedPoolReportEscrow escrow;
+		(reportId, escrow) = this.createReportEscrow(msg.sender, sponsor, initialWethReportAttoEth, initialRepReportAttoRep, escalationHaltAttoEth, bountyAttoEth);
+		pendingReportId = reportId;
+		reportCandidates[reportId] = ReportCandidate(escrow, sponsor, msg.sender, pendingReportMaxSettlementBaseFeeAttoEthPerGas, block.timestamp, initialGas - gasleft());
 		emit PriceRequested(pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas);
 		emit ReportFundingAssigned(pendingReportId, msg.sender, sponsor);
 	}
 
-	/// @notice The accepted price is committed before a bounded attempt to execute the requesting ledger's work.
-	function openOracleCallback(uint256 reportId, uint256 amount1, uint256 amount2, uint256, address, address) external {
-		require(msg.sender == address(openOracle), 'Only OpenOracle');
-		require(reportId != 0 && reportId == pendingReportId, 'Oracle report mismatch');
-		address coordinator = pendingCoordinator;
-		uint256 maxSettlementBaseFeeAttoEthPerGas = pendingReportMaxSettlementBaseFeeAttoEthPerGas;
-		_withdrawOpenOracleReporterBalances(pendingReportSponsor);
-		_clearPendingReport();
-		(string memory reason, uint256 priceTimestamp) = _validateSettledReport(reportId, amount1, amount2, maxSettlementBaseFeeAttoEthPerGas);
+	function createReportEscrow(address payer, address sponsor, uint256 wethAmount, uint256 repAmount, uint256 haltAmount, uint256 bounty) external returns (uint256 id, SharedPoolReportEscrow escrow) {
+		require(msg.sender == address(this), 'Only report creation');
+		escrow = new SharedPoolReportEscrow(sponsor, openOracle, weth, reputationToken);
+		require(weth.transferFrom(payer, address(escrow), wethAmount), 'WETH transfer for initial report failed');
+		require(reputationToken.transferFrom(payer, address(escrow), repAmount), 'REP transfer for initial report failed');
+		OpenOracle.OracleGame memory parameters;
+		parameters.currentAmount1 = uint128(wethAmount);
+		parameters.currentAmount2 = uint128(repAmount);
+		parameters.currentReporter = address(escrow);
+		parameters.token1 = address(weth);
+		parameters.settlementTime = settlementTime;
+		parameters.escalationHalt = uint128(haltAmount);
+		parameters.protocolFeeRecipient = protocolFeeRecipient;
+		parameters.settlerReward = uint96(bounty);
+		parameters.token2 = address(reputationToken);
+		parameters.disputeDelay = disputeDelay;
+		parameters.feePercentage = feePercentage;
+		parameters.multiplier = multiplier;
+		parameters.callbackContract = address(escrow);
+		parameters.callbackGasLimit = getSettlementCallbackGasLimit();
+		parameters.protocolFee = protocolFee;
+		parameters.flags = OPEN_ORACLE_FLAG_STORE_ALL | OPEN_ORACLE_FLAG_TRACK_DISPUTES | OPEN_ORACLE_FLAG_TIME_TYPE;
+		id = escrow.start{value: bounty}(parameters);
+	}
+
+	/// @notice Accept one independently challenged candidate without executing a question's queue.
+	/// Every candidate remains individually recoverable. A disputed report cannot
+	/// prevent a different sponsor from establishing a fresh, funded observation.
+	function settleReport(uint256 reportId, uint256 amount1, uint256 amount2) external {
+		uint256 initialGas = gasleft();
+		ReportCandidate memory candidate = reportCandidates[reportId];
+		require(address(candidate.escrow) == msg.sender && msg.sender != address(0), 'Wrong report escrow');
+		require(reportOutcome[reportId] == 0, 'Report already completed');
+		(string memory reason, uint256 priceTimestamp) = _validateSettledReport(reportId, amount1, amount2, candidate.maxSettlementBaseFee);
 		bool accepted = bytes(reason).length == 0;
 		reportOutcome[reportId] = accepted ? 1 : 2;
+		_clearLatestReport(reportId);
 		if (accepted) {
 			uint256 nextPrice = Math.mulDiv(amount2, SecurityPoolUtils.PRICE_PRECISION, amount1);
 			uint256 validForSeconds = priceValidityWindowSeconds();
 			require(priceTimestamp + validForSeconds <= type(uint48).max, 'Price validity clock exhausted');
-			// This checkpoint is atomic with acceptance. A failed optional question
-			// callback cannot reassign already-earned fees to the new eligibility set.
-			ISharedPoolPortfolioPriceCheckpoint(portfolio).onSharedPriceAccepted(universeId, nextPrice, uint48(priceTimestamp + validForSeconds));
-			// Freshness begins when the final report becomes eligible, never when a delayed settler calls.
+			// Final report collateral may increase during disputes. Only its actually
+			// challenged final amount grants capacity, never a pending candidate.
+			acceptedExposureLimitAttoEth =
+				(amount1 - _minimumToken1ReportAttoEthForGasPrice(initialReportPriorityFeeAttoEthPerGas)) *
+				OPEN_INTEREST_DIVIDER;
+			acceptedEpoch++;
 			lastSettlementTimestamp = priceTimestamp;
 			lastPrice = nextPrice;
+			ISharedPoolPortfolioPriceCheckpoint(portfolio).onSharedPriceAccepted(universeId, nextPrice, uint48(priceTimestamp + validForSeconds));
 			emit PriceReported(reportId, lastPrice, lastSettlementTimestamp);
-		} else emit PriceReportRejected(reportId, reason, 0, 0, lastPrice, lastSettlementTimestamp);
-		_notifyCoordinator(coordinator, reportId, accepted, reason);
+			// Rewards are a separately capped treasury expense, never report funding.
+			// Budget exhaustion or optional accounting cannot roll back a valid price.
+			try
+				ISharedPoolPortfolioPriceCheckpoint(portfolio).rewardOracleReport{gas: 300_000}(universeId, candidate.sponsor, candidate.requestGas + initialGas - gasleft() + 250_000, candidate.requestedAt)
+			{} catch {}
+		} else
+			emit PriceReportRejected(reportId, reason, pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas, lastPrice, lastSettlementTimestamp);
 	}
 
-	/// @notice Retires a report whose OpenOracle settlement callback failed, without accepting its price later.
+	/// @notice Process the latest candidate after a failed OpenOracle callback.
 	function recoverSettledPendingReport() external {
-		uint256 reportId = pendingReportId;
-		require(reportId != 0, 'No report to recover');
+		recoverReport(pendingReportId);
+	}
+
+	/// @notice Retire one failed callback without accepting its price late.
+	function recoverReport(uint256 reportId) public {
+		ReportCandidate memory candidate = reportCandidates[reportId];
+		require(address(candidate.escrow) != address(0) && reportOutcome[reportId] == 0, 'No report to recover');
 		(, , , , uint48 settlementTimestamp) = IStoredOpenOracleGame(address(openOracle)).storedGame(reportId);
 		require(settlementTimestamp != 0, 'Report not settled');
-		address coordinator = pendingCoordinator;
-		_withdrawOpenOracleReporterBalances(pendingReportSponsor);
-		_clearPendingReport();
 		reportOutcome[reportId] = 2;
-		emit PendingReportRecovered(reportId, settlementTimestamp, 0, 0, lastPrice, lastSettlementTimestamp);
-		_notifyCoordinator(coordinator, reportId, false, 'Report recovered');
+		_clearLatestReport(reportId);
+		candidate.escrow.withdrawFunding();
+		emit PendingReportRecovered(reportId, settlementTimestamp, pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas, lastPrice, lastSettlementTimestamp);
 	}
 
-	function _clearPendingReport() private {
+	function _clearLatestReport(uint256 reportId) private {
+		if (reportId != pendingReportId) return;
 		pendingReportId = 0;
 		pendingReportSponsor = address(0);
 		pendingCoordinator = address(0);
 		pendingReportMaxSettlementBaseFeeAttoEthPerGas = 0;
 		pendingExposureLimitAttoEth = 0;
-	}
-
-	function _notifyCoordinator(address coordinator, uint256 reportId, bool accepted, string memory reason) private {
-		try
-			ISharedPoolPriceCoordinator(coordinator).sharedPriceSettled{gas: _coordinatorCallbackGasLimit()}(reportId, accepted, reason)
-		{} catch {
-			emit CoordinatorSettlementDeferred(reportId, coordinator);
-		}
-	}
-
-	function _withdrawOpenOracleReporterBalances(address sponsor) private {
-		openOracle.withdrawTo(address(weth), type(uint256).max, sponsor);
-		openOracle.withdrawTo(address(reputationToken), type(uint256).max, sponsor);
 	}
 
 	function _validateSettledReport(uint256 reportId, uint256 amount1, uint256 amount2, uint256 maxSettlementBaseFeeAttoEthPerGas) private view returns (string memory reason, uint256 priceTimestamp) {
@@ -308,17 +344,67 @@ contract SharedPoolPriceFeed {
 		if (numReports == 0 || !_isFinalReportProfitable(reportId, numReports, amount1))
 			return ('Report uneconomic', 0);
 		priceTimestamp = uint256(finalReportTimestamp) + settlementTime;
-		if (priceTimestamp <= lastSettlementTimestamp) return ('Report timestamp not newer', 0);
+		if (priceTimestamp < lastSettlementTimestamp) return ('Report timestamp not newer', 0);
+		if (
+			priceTimestamp == lastSettlementTimestamp &&
+			(amount1 - _minimumToken1ReportAttoEthForGasPrice(initialReportPriorityFeeAttoEthPerGas)) *
+				OPEN_INTEREST_DIVIDER <=
+				acceptedExposureLimitAttoEth
+		) return ('Report adds no newer observation or capacity', 0);
 		if (!_isFreshPriceTimestamp(priceTimestamp)) return ('Report stale', 0);
 		if (amount1 == 0 || amount2 == 0) return ('Empty oracle settlement', 0);
 		if (Math.mulDiv(amount2, SecurityPoolUtils.PRICE_PRECISION, amount1) == 0) return ('Oracle price is zero', 0);
 	}
 
+	/// @notice A settled candidate may authorize its owner's growth even when a
+	/// newer, smaller canonical report has already arrived. The capital ledger
+	/// retains this conservative quote as that owner's withdrawal floor until
+	/// a later canonical epoch has independently secured the enlarged exposure.
+	function reportAuthorization(uint256 reportId, uint256 newExposure) external view returns (uint256 conservativeReportPrice, uint256 epoch) {
+		ReportCandidate memory candidate = reportCandidates[reportId];
+		require(address(candidate.escrow) != address(0), 'Unknown report candidate');
+		(
+			uint128 amount1,
+			uint128 amount2,
+			,
+			uint48 reportedAt,
+			uint48 settledAt,
+			,
+			,
+			,
+			,
+			,
+			,
+			,
+			uint24 numReports,
+			,
+			,
+			,
+			,
+			,
+			,
+
+		) = openOracle.storedGame(reportId);
+		require(settledAt != 0 && amount1 != 0 && amount2 != 0, 'Report candidate not settled');
+		require(block.basefee <= candidate.maxSettlementBaseFee, 'Report base fee limit exceeded');
+		require(numReports != 0 && numReports != type(uint24).max, 'Report counter invalid');
+		require(_isFreshPriceTimestamp(uint256(reportedAt) + settlementTime), 'Report candidate stale');
+		require(_isProfitableForExposure(reportId, numReports, amount1, newExposure), 'Report exposure insufficient');
+		uint256 price = Math.mulDiv(amount2, SecurityPoolUtils.PRICE_PRECISION, amount1);
+		require(price != 0, 'Oracle price is zero');
+		conservativeReportPrice = Math.mulDiv(price, OPEN_ORACLE_PERCENTAGE_PRECISION, OPEN_ORACLE_PERCENTAGE_PRECISION - targetPriceErrorForDispute, Math.Rounding.Ceil);
+		return (conservativeReportPrice, acceptedEpoch);
+	}
+
 	function _isFinalReportProfitable(uint256 reportId, uint24 numReports, uint256 finalAmount1) private view returns (bool) {
+		return _isProfitableForExposure(reportId, numReports, finalAmount1, aggregateExposureAttoEth());
+	}
+
+	function _isProfitableForExposure(uint256 reportId, uint24 numReports, uint256 finalAmount1, uint256 exposure) private view returns (bool) {
 		(, , uint128 finalReportBaseFee, ) = openOracle.disputeHistory(reportId, numReports - 1);
 		uint256 minimumProfitableReportAttoEth =
 			_minimumToken1ReportAttoEthForGasPrice(initialReportPriorityFeeAttoEthPerGas) +
-				Math.max(_minimumToken1ReportAttoEthForGasPrice(uint256(finalReportBaseFee)), Math.ceilDiv(aggregateExposureAttoEth(), OPEN_INTEREST_DIVIDER));
+				Math.max(_minimumToken1ReportAttoEthForGasPrice(uint256(finalReportBaseFee)), Math.ceilDiv(exposure, OPEN_INTEREST_DIVIDER));
 		return finalAmount1 >= minimumProfitableReportAttoEth;
 	}
 

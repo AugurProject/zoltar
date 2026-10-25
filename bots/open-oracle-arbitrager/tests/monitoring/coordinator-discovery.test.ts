@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { discoverCoordinatorPolicies } from '#monitoring/coordinator-discovery'
 import { canonicalSecurityPoolFactory, networkConfiguration } from '#config/network'
 import { parseOperatorSettings } from '#config/settings-store'
-import { securityPoolAbi, securityPoolFactoryAbi, openOraclePriceCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
+import { securityPoolAbi, securityPoolFactoryAbi, openOraclePriceCoordinatorAbi, sharedPoolPriceFeedAbi } from '@zoltar/bot-shared/contracts/abi'
 import { createPublicClient, decodeFunctionData, encodeAbiParameters, getAddress, type Hex } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import example from '../../config/operator.example.json'
@@ -19,7 +19,7 @@ const other = getAddress('0x0000000000000000000000000000000000000033')
 const hash: Hex = `0x${'ab'.repeat(32)}`
 const entry = { securityPool: pool, truthAuction: other, openOraclePriceCoordinator: coordinator, shareToken: other, parent: other, universeId: 0n, questionId: 1n, statoblastSecurityMultiplierBps: 20_000n, initialReportPriorityFeeAttoEthPerGas: 1n, currentRetentionRate: 1n, settlementCollateralAttoEth: 0n }
 
-function reader(options: { sharedFeed?: boolean; wrongCoordinator?: boolean; missingCode?: boolean; wrongBlock?: boolean; unapproved?: boolean; shortPage?: boolean; unsafePolicy?: boolean; registryCount?: bigint; reorg?: boolean } = {}) {
+function reader(options: { sharedFeed?: boolean; missingEscrow?: boolean; wrongCoordinator?: boolean; missingCode?: boolean; wrongBlock?: boolean; unapproved?: boolean; shortPage?: boolean; unsafePolicy?: boolean; registryCount?: bigint; reorg?: boolean } = {}) {
 	let blockReads = 0
 	const targets: string[] = []
 	const provider = multicallProvider(
@@ -50,7 +50,15 @@ function reader(options: { sharedFeed?: boolean; wrongCoordinator?: boolean; mis
 				return encodeAbiParameters([{ type: 'address' }], [options.wrongCoordinator || to.toLowerCase() === secondPool.toLowerCase() ? other : coordinator])
 			}
 			if (to.toLowerCase() !== coordinator.toLowerCase() && (!options.sharedFeed || (to.toLowerCase() !== feed.toLowerCase() && to.toLowerCase() !== other.toLowerCase()))) throw new Error('Untrusted coordinator queried')
-			const call = decodeFunctionData({ abi: openOraclePriceCoordinatorAbi, data })
+			const call = decodeFunctionData({ abi: [...openOraclePriceCoordinatorAbi, ...sharedPoolPriceFeedAbi], data })
+			if (call.functionName === 'pendingReportId') return encodeAbiParameters([{ type: 'uint256' }], [7n])
+			if (call.functionName === 'reportCandidates') {
+				const fn = sharedPoolPriceFeedAbi.find(item => item.type === 'function' && item.name === 'reportCandidates')
+				if (fn === undefined || fn.type !== 'function') throw new Error('Missing candidate ABI')
+				const candidate = call.args[0] === 7n ? other : secondPool
+				const escrow = options.missingEscrow || call.args[0] === 9n ? '0x0000000000000000000000000000000000000000' : candidate
+				return encodeAbiParameters(fn.outputs, [escrow, other, coordinator, 1n, 1n, 1n])
+			}
 			if (call.functionName === 'priceFeed') return encodeAbiParameters([{ type: 'address' }], [options.sharedFeed ? feed : coordinator])
 			if (call.functionName === 'openOracle') return encodeAbiParameters([{ type: 'address' }], [settings.deployment.openOracle])
 			if (call.functionName === 'weth') return encodeAbiParameters([{ type: 'address' }], [network.weth])
@@ -139,10 +147,12 @@ test('requires deployed canonical factory code', async () => {
 	await expect(discoverCoordinatorPolicies([reader({ missingCode: true }).client], config, 10n, hash)).rejects.toThrow('Canonical security pool factory is not deployed')
 })
 
-test('discovers the shared report callback once for several question ledgers', async () => {
+test('discovers canonical shared candidate escrows once for aliases and retains older report identities', async () => {
 	const client = reader({ sharedFeed: true, registryCount: 2n })
 	const config = await configuration()
-	const policies = await discoverCoordinatorPolicies([client.client], config, 10n, hash)
+	const policies = await discoverCoordinatorPolicies([client.client], config, 10n, hash, [6n, 9n])
 	expect(policies.map(policy => policy.coordinator)).toEqual([feed])
-	expect(client.targets.filter(target => target.toLowerCase() === feed.toLowerCase())).toHaveLength(12)
+	expect(policies[0]?.reportEscrows).toEqual({ '6': secondPool, '7': other })
+	expect(client.targets.filter(target => target.toLowerCase() === feed.toLowerCase())).toHaveLength(16)
+	await expect(discoverCoordinatorPolicies([reader({ sharedFeed: true, missingEscrow: true }).client], config, 10n, hash)).rejects.toThrow('pending report has no authenticated escrow')
 })

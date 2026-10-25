@@ -21,7 +21,7 @@ import { getInfraContractAddresses } from './deploymentHelpers.js'
 import { loadOpenOracleStoredState } from './openOracleState.js'
 import { hasOpenOracleFlag, OPEN_ORACLE_FLAG_TIME_TYPE } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { requireAddressValue, requireBigintArray, requireBigintValue } from './decoders.js'
-import { wrapWeth } from './openOracle.js'
+import { getOpenOracleSubmittedReportId, wrapWeth } from './openOracle.js'
 
 type CoordinatorInitialReportClient = Parameters<typeof loadOpenOracleInitialReportPrice>[0]
 const sharedPriceFeedAbi = parseAbi(['function priceFeed() view returns (address)', 'function pendingCoordinator() view returns (address)'])
@@ -39,6 +39,8 @@ const COORDINATOR_PRICE_PRECISION = 10n ** 18n
 async function readOracleRequestCost(client: Pick<ReadClient, 'getBlock' | 'readContract'>, managerAddress: Address) {
 	const block = await client.getBlock()
 	if (block.baseFeePerGas === undefined) throw new Error('The current block base fee is unavailable. Retry the oracle quote.')
+	const priceFeed = await readPriceFeed(client, managerAddress, 0n)
+	if (supportsOraclePriceRenewal({ managerAddress, ...priceFeed })) return 101n
 	const [callbackGasLimit, reportGas] = await Promise.all([
 		client.readContract({ address: managerAddress, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'getSettlementCallbackGasLimit', args: [], blockNumber: block.number }),
 		client.readContract({ address: managerAddress, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'gasConsumedOpenOracleReportPrice', args: [], blockNumber: block.number }),
@@ -278,7 +280,7 @@ export async function loadOracleManagerQueueOperationEthValue(client: Pick<Write
 			args: [],
 		}),
 	])
-	const feedState = pendingReportId === 0n ? undefined : await readPriceFeed(client, managerAddress, pendingReportId)
+	const feedState = await readPriceFeed(client, managerAddress, pendingReportId)
 	const timing = rawIsPriceValid
 		? await Promise.all([
 				client.readContract({ address: managerAddress, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'lastSettlementTimestamp', args: [] }),
@@ -392,8 +394,9 @@ async function assertCoordinatorRequestPriceAllowed(client: Pick<WriteClient, 'r
 			args: [],
 		}),
 	])
-	if (pendingReportId > 0n) throw new Error('An oracle price request is already pending.')
-	if (isPriceValid && !supportsOraclePriceRenewal({ managerAddress, ...(await readPriceFeed(client, managerAddress, pendingReportId)) })) throw new Error('A fresh oracle price is already available.')
+	const independentReports = supportsOraclePriceRenewal({ managerAddress, ...(await readPriceFeed(client, managerAddress, pendingReportId)) })
+	if (pendingReportId > 0n && !independentReports) throw new Error('An oracle price request is already pending.')
+	if (isPriceValid && !independentReports) throw new Error('A fresh oracle price is already available.')
 }
 
 export async function fundCoordinatorInitialReport(client: WriteClient, managerAddress: Address, proposedRepPerEthPrice: bigint, requestedInitialAttoWeth: bigint, finalStep: TransactionPlanStep, extra: { actions: FundingTransaction[]; repAttoRep: bigint } = { actions: [], repAttoRep: 0n }) {
@@ -473,10 +476,12 @@ export async function requestOraclePrice(client: WriteClient, managerAddress: Ad
 		args: [resolvedInitialReportPrice, requestedInitialAttoWeth, requestValue],
 		value: requestValue,
 	}
-	const hash = await writeContractAndWait(client, () => callParams)
+	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)
+	const reportId = getOpenOracleSubmittedReportId(receipt, getInfraContractAddresses().openOracle)
 	return {
 		action: 'requestPrice',
 		hash,
+		...(reportId === undefined ? {} : { reportId }),
 	} satisfies OpenOracleActionResult
 }
 export async function executeOracleManagerStagedOperation(client: WriteContractClient & Partial<Pick<ReadClient, 'readContract' | 'getBlock'>>, managerAddress: Address, operationId: bigint) {

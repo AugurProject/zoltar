@@ -284,3 +284,5 @@ export const oracleOperationFundingChanged = 'Oracle funding requirements change
 export const oracleOperationTimingUnavailable = 'Checking oracle price validity…'
 
 export const sharedPoolPricePending = 'Another question is refreshing the shared pool price. Wait for its report to settle.'
+
+export const sharedOperationExecutesSeparately = 'Funds an independent price report. Execute this operation separately after a valid pool price is available.'

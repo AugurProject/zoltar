@@ -2,7 +2,6 @@ import { encodeFunctionData, parseAbi, zeroAddress } from '@zoltar/core-shared/e
 import type { PortfolioForkSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { requireAddressValue, requireBigintValue, requireBigintArray, requireBooleanValue } from './decoders.js'
-import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { loadPortfolioForkOutcome } from './securityPoolPortfolioFork.js'
 import { getInfraContractAddresses } from './deploymentHelpers.js'
 
@@ -23,17 +22,6 @@ export async function loadSharedForkOutcome(client: ReadClient, snapshot: Portfo
 	const result = await loadPortfolioForkOutcome(client, { zoltar: snapshot.zoltar, universeId: snapshot.universeId, outcomeIndex, blockNumber: snapshot.blockNumber })
 	if ((await client.getBlock({ blockNumber: snapshot.blockNumber })).hash !== snapshot.blockHash) throw new Error('Fork snapshot changed. Refresh and retry.')
 	return result
-}
-export async function loadPortfolioRecapWallet(client: ReadClient, snapshot: PortfolioForkSnapshot) {
-	const branch = snapshot.branch
-	if (branch === undefined || branch.repToken === zeroAddress) return undefined
-	const [balance, allowance, eth] = await Promise.all([
-		client.readContract({ address: branch.repToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [snapshot.owner], blockNumber: snapshot.blockNumber }),
-		client.readContract({ address: branch.repToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [snapshot.owner, snapshot.controller], blockNumber: snapshot.blockNumber }),
-		client.getBalance({ address: snapshot.owner, blockNumber: snapshot.blockNumber }),
-	])
-	if ((await client.getBlock({ blockNumber: snapshot.blockNumber })).hash !== snapshot.blockHash) throw new Error('Fork snapshot changed. Refresh and retry.')
-	return { balance, allowance, eth }
 }
 export async function loadPortfolioSourceRecovery(client: ReadClient, snapshot: Pick<PortfolioForkSnapshot, 'portfolio' | 'owner' | 'universeId' | 'blockNumber' | 'blockHash'>, questionId: bigint) {
 	const blockNumber = snapshot.blockNumber

@@ -14,6 +14,42 @@ async function mount() {
 	lifecycle.trackRendered(hook)
 	return hook
 }
+test.each(['empty', 'failed'])('automatic portfolio discovery exposes its pending state and a truthful %s result', async result => {
+	window.history.replaceState({}, '', '#/portfolios')
+	const source = capitalClient()
+	const logs = createDeferred<never[]>()
+	const client = source.client.extend(() => ({ getLogs: () => logs.promise }))
+	installActiveEnvironmentForTesting({ ...source.backend, id: 'simulation', createReadClient: () => client })
+	const hook = await mount()
+	try {
+		expect(hook.state().discovering).toBe(true)
+		expect(hook.state().loading).toBe(false)
+		await act(() => (result === 'empty' ? logs.resolve([]) : logs.reject(new Error('Discovery unavailable.'))))
+		await waitFor(() => expect(hook.state().discovering).toBe(false))
+		expect(hook.state().managerInput).toBe('')
+		expect(hook.state().snapshot).toBeUndefined()
+		expect(hook.state().error).toBe(result === 'failed' ? 'Unable to discover the portfolio. Reason: Discovery unavailable.' : undefined)
+	} finally {
+		logs.resolve([])
+	}
+})
+test('disabling the portfolio clears discovery status and ignores a late discovery failure', async () => {
+	window.history.replaceState({}, '', '#/portfolios')
+	const source = capitalClient()
+	const logs = createDeferred<never[]>()
+	const client = source.client.extend(() => ({ getLogs: () => logs.promise }))
+	installActiveEnvironmentForTesting({ ...source.backend, id: 'simulation', createReadClient: () => client })
+	const hook = await mount()
+	try {
+		expect(hook.state().discovering).toBe(true)
+		await hook.setProps({ enabled: false })
+		expect(hook.state().discovering).toBe(false)
+		await act(() => logs.reject(new Error('Late discovery failure.')))
+		expect(hook.state().error).toBeUndefined()
+	} finally {
+		logs.resolve([])
+	}
+})
 test('permissionless question growth is paged independently of the owner’s single position', async () => {
 	const source = capitalClient(capitalSnapshot({ questionCount: 1_000_000n }))
 	source.install()

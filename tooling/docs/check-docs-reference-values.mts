@@ -389,7 +389,7 @@ function assertCoordinatorSettlementEconomics(): void {
 	assert.match(priceCoordinator, /if \(amount1 == 0 \|\| amount2 == 0\)/, 'coordinator must reject empty settled token amounts')
 	assert.match(priceCoordinator, /standaloneLastPrice = Math\.mulDiv\(amount2, SecurityPoolUtils\.PRICE_PRECISION, amount1\)/, 'coordinator must derive the settled REP/ETH ratio from final token amounts')
 	assert.match(priceCoordinator, /uint256 costAttoEth = getRequestPriceCostAttoEth\(\);\s*require\(bountyAttoEth >= costAttoEth, 'Oracle bounty too small'\);\s*require\(msg\.value >= bountyAttoEth/, 'coordinator must require the committed bounty to cover getRequestPriceCostAttoEth and msg.value to cover the bounty')
-	assert.match(priceCoordinator, /impliedRequestBaseFeeAttoEthPerGas = \(bountyAttoEth - REQUEST_BOUNTY_OFFSET_ATTO_ETH\) \/ requestGasUnits;[\s\S]*?settlerReward: uint96\(bountyAttoEth\)/, 'coordinator must retain the committed bounty as the settler reward and derive the base-fee cap from it')
+	assert.match(priceCoordinator, /impliedRequestBaseFeeAttoEthPerGas = \(bountyAttoEth - REQUEST_BOUNTY_OFFSET_ATTO_ETH\) \/ requestGasUnits;[\s\S]*?reportParams\.settlerReward = uint96\(bountyAttoEth\);/, 'coordinator must retain the committed bounty as the settler reward and derive the base-fee cap from it')
 }
 
 function assertOpenOracleVendorAndEventDocs(): void {

@@ -11,7 +11,6 @@ import { SecurityPoolCommitmentTree } from './SecurityPoolCommitmentTree.sol';
 contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	address public immutable portfolio;
 	uint96 public lastPositionId;
-	uint96 public protocolReserveId;
 	uint96 public currentBatch;
 	uint96 public nextBatch = 1;
 	uint96 private lastBatch = 1;
@@ -75,29 +74,6 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		require(importsOpen, 'Commitment imports are sealed');
 		require(batch == 0 || batch == currentBatch || batch == nextBatch, 'Unknown imported cohort');
 		return _create(owner, batch, rep, commitment, maxHealthyPrice);
-	}
-
-	/// @dev The one unchosen fork reserve shares active accounting, but may only
-	/// retire after both owner cohorts and never supplies capacity to new demand.
-	function importProtocolReserve(address owner, uint256 rep, uint256 commitment, uint256 maxHealthyPrice) external onlyPortfolio returns (uint96 id) {
-		require(importsOpen && protocolReserveId == 0, 'Protocol reserve import unavailable');
-		id = _create(owner, 0, rep, commitment, maxHealthyPrice);
-		protocolReserveId = id;
-	}
-
-	/// @dev Atomic recap fills may merge with a chosen active position. Imported
-	/// retirement cohorts retain exactly the owner's frozen authorization.
-	function importAdd(uint96 id, uint256 rep, uint256 commitment, uint256 maxHealthyPrice) external onlyPortfolio {
-		require(importsOpen, 'Commitment imports are sealed');
-		Position storage position = positions[id];
-		Node storage leaf = nodes[position.node];
-		require(position.node != 0 && position.batch == 0 && leaf.commitment != 0, 'Import receiver is not active');
-		require(commitment != 0, 'Imported commitment is zero');
-		_detach(0, position.node);
-		leaf.rep += rep;
-		leaf.commitment += commitment;
-		leaf.price = maxHealthyPrice;
-		_insert(0, position.node);
 	}
 
 	function sealImports() external onlyPortfolio {
@@ -170,7 +146,6 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	}
 
 	function requestRetirement(uint96 id) external onlyPortfolio operational {
-		require(id != protocolReserveId, 'Protocol reserve follows owner retirement');
 		_touch(id);
 		Position storage position = positions[id];
 		require(position.batch == 0 && nodes[position.node].commitment != 0, 'Position is not active');
@@ -212,7 +187,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	/// @notice Distress begins at the first adverse oracle observation after the
 	/// position's latest recovery. No keeper transaction starts or resets a clock.
 	/// One tree path combines lazy healthy observations and detached retirement.
-	function liquidationStarted(uint96 id) external view returns (uint48) {
+	function liquidationStarted(uint96 id) public view returns (uint48) {
 		uint256 cursor = positions[id].node;
 		Node storage leaf = nodes[cursor];
 		if (cursor == 0 || leaf.commitment == 0 || leaf.price >= observedPrice) return 0;
@@ -279,12 +254,36 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 			(currentBatch == 0 ? 0 : _eligible(roots[currentBatch], acceptedPrice)) +
 			_eligible(roots[nextBatch], acceptedPrice);
 	}
+	/// @notice Validate an individual takeover against the index's current
+	/// principal, cohort and adverse observation before custody moves any assets.
+	function takeoverQuote(uint96 id, address receiver, uint256 commitment, uint256 minimumCommitment, uint256 minimumAward, uint256 price) external view onlyPortfolio returns (Account memory source, uint256 award, uint256 debit) {
+		source = accountOf(id);
+		require(source.owner != receiver && source.maxHealthyPrice < price, 'Position does not need takeover');
+		uint48 started = liquidationStarted(id);
+		require(started != 0, 'Adverse observation missing');
+		require(commitment > 0 && commitment <= source.commitment, 'Invalid takeover commitment');
+		require(commitment == source.commitment || source.commitment - commitment >= minimumCommitment, 'Take entire residual commitment');
+		require(commitment >= minimumCommitment || commitment == source.commitment, 'Takeover below economic minimum');
+		uint256 proportional =
+			commitment == source.commitment ? source.rep : Math.mulDiv(source.rep, commitment, source.commitment);
+		award = Math.mulDiv(proportional, Math.min(block.timestamp - started, 1 hours), 1 hours);
+		require(award >= minimumAward, 'Takeover award below minimum');
+		debit = commitment == source.commitment ? proportional : award;
+	}
+	function requiredRep(uint256 commitment, uint256 price, uint256 multiplier, uint256 health) external pure returns (uint256) {
+		require(health >= 10_000 && price > 0, 'Invalid health or price');
+		uint256 base = Math.mulDiv(commitment, price, 1e18, Math.Rounding.Ceil);
+		base = Math.mulDiv(base, multiplier, 10_000, Math.Rounding.Ceil);
+		return Math.mulDiv(base, health, 10_000, Math.Rounding.Ceil);
+	}
+	function maximumHealthyPrice(uint256 rep, uint256 commitment, uint256 multiplier) external pure returns (uint256) {
+		if (commitment == 0) return type(uint256).max;
+		return Math.mulDiv(Math.mulDiv(rep, 10_000, multiplier), 1e18, commitment);
+	}
 
 	/// @notice Capacity available to fresh demand after honoring queued retirement.
 	function eligibleActiveCommitment(uint256 acceptedPrice) external view returns (uint256) {
-		Node storage reserve = nodes[positions[protocolReserveId].node];
-		uint256 reserved = reserve.price >= acceptedPrice ? reserve.commitment : 0;
-		return _eligible(roots[0], acceptedPrice) - reserved;
+		return _eligible(roots[0], acceptedPrice);
 	}
 
 	function totals() public view returns (uint256 rep, uint256 commitment) {
@@ -352,33 +351,6 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 				result.boundaryPositionId = boundary;
 				break;
 			}
-		}
-		if ((currentBatch == 0 || roots[currentBatch] == 0) && roots[nextBatch] == 0) {
-			Retirement memory reserve = _retireProtocolReserve(acceptedPrice, spare);
-			result.rep += reserve.rep;
-			result.commitment += reserve.commitment;
-			result.boundaryPositionId = reserve.boundaryPositionId;
-		}
-	}
-
-	function _retireProtocolReserve(uint256 acceptedPrice, uint256 spare) private returns (Retirement memory result) {
-		uint96 id = protocolReserveId;
-		if (id == 0) return result;
-		Position storage position = positions[id];
-		Node storage leaf = nodes[position.node];
-		if (leaf.commitment == 0) return result;
-		uint256 amount = leaf.price < acceptedPrice ? leaf.commitment : Math.min(spare, leaf.commitment);
-		if (amount == 0) return result;
-		_touch(id);
-		_detach(0, position.node);
-		result.rep = Math.mulDiv(leaf.rep, amount, leaf.commitment);
-		result.commitment = amount;
-		position.releasedRep += result.rep;
-		leaf.rep -= result.rep;
-		leaf.commitment -= amount;
-		if (leaf.commitment != 0) {
-			_insert(0, position.node);
-			result.boundaryPositionId = id;
 		}
 	}
 

@@ -108,5 +108,7 @@ describe('Statoblast: fixed portfolio reporter clock', () => {
 		await approveToken(owner, getRepTokenAddress(0n), game)
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: gameArtifact.abi, address: game, functionName: 'depositRepOnOutcome', args: [1, 1n] }))
 		expect(await owner.readContract({ abi: gameArtifact.abi, address: game, functionName: 'getOutcomeBalancesAttoRep' })).toEqual([0n, 1n, 0n])
+		expect(await owner.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'lastReporter' })).toBe(owner.account.address)
+		await expect(owner.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'onQuestionReporterChanged', args: [owner.account.address] })).rejects.toThrow('Only test game')
 	})
 })

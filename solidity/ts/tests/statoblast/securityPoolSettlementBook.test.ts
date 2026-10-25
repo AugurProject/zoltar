@@ -15,7 +15,7 @@ describe('Statoblast: central internal settlement units', () => {
 	const redeem = (book: bigint, question: bigint, shares: bigint, timestamp = 0) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'redeem', args: [book, question, shares, 0n, timestamp] }))
 	const fee = (book: bigint, question: bigint, cash: bigint, timestamp = 0) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'chargeFee', args: [book, question, cash, timestamp] }))
 	const seal = (book: bigint, timestamp = 0) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'sealForFork', args: [book, timestamp] }))
-	const child = (source: bigint, cash: bigint) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createChildBook', args: [source, cash] }))
+	const child = (source: bigint, cash: bigint, recovery = 0n) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createChildBook', args: [source, cash, recovery] }))
 	const schedule = (book: bigint, question: bigint, finalAfter: number, timestamp = 0) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'scheduleFinality', args: [book, question, finalAfter, timestamp] }))
 	const freeze = (book: bigint, timestamp: number) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'freezeMatured', args: [book, timestamp] }))
 	const book = (id: bigint) => client.readContract({ ...target(), functionName: 'books', args: [id] })
@@ -62,9 +62,8 @@ describe('Statoblast: central internal settlement units', () => {
 		await expect(redeem(1n, 1n, 1n)).rejects.toThrow('Use child settlement book')
 		await redeem(2n, 1n, 40n)
 		expect((await book(2n)).slice(0, 2)).toEqual([130n, 260n])
-		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'recapitalize', args: [2n, 130n, 0] }))
-		await mint(2n, 2n, 20n)
-		expect((await book(2n)).slice(0, 2)).toEqual([280n, 280n])
+		await expect(mint(2n, 2n, 20n)).rejects.toThrow('Settlement in runoff')
+		expect((await book(2n)).slice(0, 2)).toEqual([130n, 260n])
 		expect((await question(1n, 1n))[0].outcomeSupplyAttoShares).toBe(100n)
 	})
 
@@ -84,6 +83,192 @@ describe('Statoblast: central internal settlement units', () => {
 		await redeem(3n, 1n, 7n)
 		await redeem(3n, 2n, 4n)
 		expect((await book(3n)).slice(0, 2)).toEqual([0n, 0n])
+	})
+
+	test('REP is proportional to shares before nearly exhausted ETH units are rounded', async () => {
+		const shares = 10n ** 18n
+		await mint(1n, 1n, shares)
+		await fee(1n, 1n, shares - 1n)
+		await seal(1n)
+		await child(1n, 0n, 1_000n * shares)
+		const repQuote = (amount: bigint) => client.readContract({ ...target(), functionName: 'quoteRecoveryRep', args: [2n, 1n, amount] })
+		expect(await quote(2n, 1n, shares / 2n)).toEqual([0n, 0n])
+		expect(await repQuote(shares / 2n)).toBe(500n * shares)
+		await redeem(2n, 1n, shares / 2n)
+		expect(await repQuote(shares / 4n)).toBe(250n * shares)
+		await redeem(2n, 1n, shares / 4n)
+		expect(await repQuote(shares / 4n)).toBe(250n * shares)
+		await redeem(2n, 1n, shares / 4n)
+		expect(await client.readContract({ ...target(), functionName: 'recoveryRep', args: [2n] })).toBe(0n)
+	})
+
+	test('partial REP entitlements stay separate across questions, finality and a nested fork', async () => {
+		const shares = 10n ** 18n
+		for (const q of [1n, 2n]) {
+			await mint(1n, q, shares)
+			await fee(1n, q, shares - 1n)
+		}
+		await seal(1n)
+		await child(1n, 0n, 2_000n * shares)
+		await redeem(2n, 1n, shares / 2n)
+		const deadline = 3 * 86_400 + 10
+		await schedule(2n, 1n, deadline)
+		await freeze(2n, deadline + 1)
+		expect(await client.readContract({ ...target(), functionName: 'recoveryRep', args: [2n] })).toBe(1_000n * shares)
+		expect(await client.readContract({ ...target(), functionName: 'quoteRecoveryRep', args: [2n, 1n, shares / 2n] })).toBe(500n * shares)
+		await seal(2n, deadline + 1)
+		await child(2n, 0n, 1_200n * shares)
+		expect(await client.readContract({ ...target(), functionName: 'quoteRecoveryRep', args: [3n, 1n, shares / 2n] })).toBe(0n)
+		expect(await client.readContract({ ...target(), functionName: 'quoteRecoveryRep', args: [3n, 2n, shares / 4n] })).toBe(300n * shares)
+		await redeem(3n, 2n, shares / 4n, deadline + 1)
+		await redeem(2n, 1n, shares / 2n, deadline + 1)
+		expect(await client.readContract({ ...target(), functionName: 'quoteRecoveryRep', args: [3n, 2n, (3n * shares) / 4n] })).toBe(900n * shares)
+	})
+
+	test('a nested fork preserves previously accrued REP before adding newly surrendered REP', async () => {
+		const shares = 10n ** 18n
+		for (const q of [1n, 2n]) {
+			await mint(1n, q, shares)
+			await fee(1n, q, shares - 1n)
+		}
+		await seal(1n)
+		await child(1n, 0n, 2_000n * shares)
+		await redeem(2n, 1n, shares / 2n)
+		await seal(2n)
+		await child(2n, 0n, 3_500n * shares)
+		expect(await client.readContract({ ...target(), functionName: 'quoteRecoveryRep', args: [3n, 1n, shares / 4n] })).toBe(750n * shares)
+		expect(await client.readContract({ ...target(), functionName: 'quoteRecoveryRep', args: [3n, 2n, shares] })).toBe(2_000n * shares)
+		await redeem(3n, 1n, shares / 4n)
+		await redeem(3n, 2n, shares)
+		expect(await client.readContract({ ...target(), functionName: 'quoteRecoveryRep', args: [3n, 1n, shares / 4n] })).toBe(750n * shares)
+	})
+
+	test('partial REP claims and moved deadlines preserve shared finality correction totals', async () => {
+		const shares = 10n ** 18n
+		for (const q of [1n, 2n]) {
+			await mint(1n, q, shares)
+			await fee(1n, q, shares - 1n)
+		}
+		await seal(1n)
+		await child(1n, 0n, 2_000n * shares)
+		const deadline = 3 * 86_400 + 10
+		await schedule(2n, 1n, deadline)
+		await schedule(2n, 2n, deadline)
+		await redeem(2n, 1n, shares / 2n)
+		await redeem(2n, 2n, shares / 4n)
+		await schedule(2n, 1n, deadline + 100)
+		await freeze(2n, deadline + 1)
+		expect(await client.readContract({ ...target(), functionName: 'recoveryRep', args: [2n] })).toBe(500n * shares)
+		expect(await client.readContract({ ...target(), functionName: 'quoteRecoveryRep', args: [2n, 1n, shares / 2n] })).toBe(500n * shares)
+		expect(await client.readContract({ ...target(), functionName: 'quoteRecoveryRep', args: [2n, 2n, (3n * shares) / 4n] })).toBe(750n * shares)
+		await freeze(2n, deadline + 101)
+		await redeem(2n, 1n, shares / 2n, deadline + 101)
+		await redeem(2n, 2n, (3n * shares) / 4n, deadline + 101)
+		expect(await client.readContract({ ...target(), functionName: 'recoveryRep', args: [2n] })).toBe(0n)
+	})
+
+	test('repeated nested forks wrap the REP index without changing partial-share ownership', async () => {
+		const shares = 10n ** 18n
+		const recovery = 1n << 127n
+		await mint(1n, 1n, shares)
+		await fee(1n, 1n, shares - 1n)
+		await seal(1n)
+		await child(1n, 0n, recovery)
+		let supply = shares
+		for (let bookId = 2n; bookId <= 7n; bookId++) {
+			expect(await client.readContract({ ...target(), functionName: 'quoteRecoveryRep', args: [bookId, 1n, supply / 2n] })).toBe(recovery / 2n)
+			await redeem(bookId, 1n, supply / 2n)
+			supply /= 2n
+			await seal(bookId)
+			await child(bookId, 0n, recovery)
+		}
+		expect(await client.readContract({ ...target(), functionName: 'quoteRecoveryRep', args: [8n, 1n, supply] })).toBe(recovery)
+	})
+
+	test('lazy fees before a later fork cannot allocate new REP to already exhausted units', async () => {
+		await mint(1n, 1n, 1_000n)
+		await seal(1n)
+		await child(1n, 1_000n, 1_000n)
+		await redeem(2n, 1n, 1_000n)
+		await mint(2n, 1n, 1_000n)
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [2n, 1n, 5n, 100, 0] }))
+		await seal(2n, 100)
+		await child(2n, 0n, 500n * 10n ** 18n)
+		expect(await client.readContract({ ...target(), functionName: 'quoteRecoveryRep', args: [3n, 1n, 500n] })).toBe(250n * 10n ** 18n)
+		await redeem(3n, 1n, 500n, 100)
+		expect(await client.readContract({ ...target(), functionName: 'quoteRecoveryRep', args: [3n, 1n, 500n] })).toBe(250n * 10n ** 18n)
+	})
+
+	test('REP precision bounds reject oversized books and allocations before modular accounting', async () => {
+		const scale = 1n << 128n
+		await expect(mint(1n, 1n, scale)).rejects.toThrow('Settlement units exceed precision bound')
+		await mint(1n, 1n, scale - 1n)
+		await seal(1n)
+		await expect(child(1n, 0n, scale)).rejects.toThrow('Invalid child recovery REP')
+		await child(1n, 0n, scale - 1n)
+		expect(await client.readContract({ ...target(), functionName: 'quoteRecoveryRep', args: [2n, 1n, scale / 2n] })).toBe(scale / 2n)
+	})
+
+	test('partial basket redemptions conserve every REP unit and the final holder receives the remainder', async () => {
+		await mint(1n, 1n, 7n)
+		await mint(1n, 2n, 4n)
+		await seal(1n)
+		await child(1n, 5n, 19n)
+		const repQuote = (q: bigint, shares: bigint) => client.readContract({ ...target(), functionName: 'quoteRecoveryRep', args: [2n, q, shares] })
+		expect(await repQuote(1n, 3n)).toBe(5n)
+		await redeem(2n, 1n, 3n)
+		expect(await repQuote(2n, 4n)).toBe(6n)
+		await redeem(2n, 2n, 4n)
+		expect(await repQuote(1n, 4n)).toBe(8n)
+		await redeem(2n, 1n, 4n)
+		expect(await client.readContract({ ...target(), functionName: 'recoveryRep', args: [2n] })).toBe(0n)
+		expect((await book(2n)).slice(0, 2)).toEqual([0n, 0n])
+	})
+
+	test('even a cash-funded basket cannot give new minters or fee earners its existing REP', async () => {
+		await mint(1n, 1n, 100n)
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [1n, 1n, 1n, 50, 0] }))
+		await seal(1n)
+		await child(1n, 100n, 200n)
+		await expect(mint(2n, 1n, 100n)).rejects.toThrow('Settlement in runoff')
+		await expect(fee(2n, 1n, 1n)).rejects.toThrow('Runoff fees paused')
+		await freeze(2n, 100)
+		expect((await book(2n)).slice(0, 3)).toEqual([100n, 100n, 0n])
+		expect(await client.readContract({ ...target(), functionName: 'recoveryRep', args: [2n] })).toBe(200n)
+	})
+
+	test('finalized REP stays in its source tranche across another fork', async () => {
+		await mint(1n, 1n, 100n)
+		await mint(1n, 2n, 200n)
+		await seal(1n)
+		await child(1n, 150n, 600n)
+		const deadline = 3 * 86_400 + 10
+		await schedule(2n, 1n, deadline)
+		await freeze(2n, deadline + 1)
+		expect(await client.readContract({ ...target(), functionName: 'recoveryRep', args: [2n] })).toBe(400n)
+		await seal(2n, deadline + 1)
+		await child(2n, 50n, 400n)
+		expect(await client.readContract({ ...target(), functionName: 'quoteRecoveryRep', args: [2n, 1n, 100n] })).toBe(200n)
+		expect(await client.readContract({ ...target(), functionName: 'quoteRecoveryRep', args: [3n, 1n, 100n] })).toBe(0n)
+		await expect(redeem(3n, 1n, 100n, deadline + 1)).rejects.toThrow('Use source final claim')
+		await redeem(2n, 1n, 100n, deadline + 1)
+		expect(await client.readContract({ ...target(), functionName: 'quoteRecoveryRep', args: [3n, 2n, 200n] })).toBe(400n)
+	})
+
+	test('reserved reporting shares inherit funded baskets and cannot be consumed by trader redemptions', async () => {
+		await mint(1n, 1n, 100n)
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'mintReward', args: [1n, 1n, 10n, 0n, 0] }))
+		expect((await question(1n, 1n))[0].rewardShares).toBe(10n)
+		await expect(redeem(1n, 1n, 101n)).rejects.toThrow('Invalid outcome burn')
+		await seal(1n)
+		await child(1n, 55n, 220n)
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'redeemReward', args: [2n, 1n, 0n, 0] }))
+		expect((await book(2n)).slice(0, 2)).toEqual([50n, 100n])
+		expect(await client.readContract({ ...target(), functionName: 'recoveryRep', args: [2n] })).toBe(200n)
+		await expect(writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'redeemReward', args: [2n, 1n, 0n, 0] }))).rejects.toThrow('Question reward already claimed')
+		await redeem(2n, 1n, 100n)
+		expect((await book(2n)).slice(0, 2)).toEqual([0n, 0n])
+		expect((await question(1n, 1n))[0].rewardShares).toBe(10n)
 	})
 
 	test('minimum exchange rate prevents enormous issuance after collateral fees exhaust almost all units', async () => {
@@ -110,7 +295,7 @@ describe('Statoblast: central internal settlement units', () => {
 		await expect(redeem(2n, 1n, 100n, 100)).rejects.toThrow('Use source final claim')
 		await redeem(1n, 1n, 100n, 100)
 		expect(await quote(2n, 1n, 100n)).toEqual([0n, 0n])
-		expect([...(await client.readContract({ ...target(), functionName: 'frozenBooks', args: [1n] }))]).toEqual([0n, 0n, 1n])
+		expect([...(await client.readContract({ ...target(), functionName: 'frozenBooks', args: [1n] }))]).toEqual([0n, 0n, 1n, 0n])
 		expect((await book(2n)).slice(0, 2)).toEqual([250n, 500n])
 		await freeze(2n, 101)
 		expect((await book(2n)).slice(0, 2)).toEqual([250n, 500n])
@@ -137,8 +322,8 @@ describe('Statoblast: central internal settlement units', () => {
 		expect((await question(1n, 2n))[1]).toBe(0n)
 	})
 
-	test('lifetime finality prefixes can wrap while every live and inherited claim remains exact', async () => {
-		const maximum = (1n << 256n) - 1n
+	test('lifetime finality prefixes can exceed live precision bounds while inherited claims remain exact', async () => {
+		const maximum = (1n << 128n) - 1n
 		await mint(1n, 1n, maximum)
 		await schedule(1n, 1n, 10)
 		await freeze(1n, 11)
@@ -164,6 +349,16 @@ describe('Statoblast: central internal settlement units', () => {
 		expect(await quote(2n, 3n, maximum)).toEqual([maximum, maximum])
 		expect(await quote(2n, 2n, maximum)).toEqual([0n, 0n])
 		expect(await quote(1n, 2n, maximum)).toEqual([maximum, maximum])
+	})
+
+	test('zero-unit final claims stay in the source when a fork has no funded final tranche', async () => {
+		await mint(1n, 1n, 100n)
+		await fee(1n, 1n, 100n)
+		await schedule(1n, 1n, 99)
+		expect(await client.readContract({ ...target(), functionName: 'hasLiveForkRecoveryRight', args: [1n, 1n, 100] })).toBe(false)
+		await seal(1n, 100)
+		expect((await question(1n, 1n))[1]).toBe(0n)
+		expect(await client.readContract({ ...target(), functionName: 'hasLiveForkRecoveryRight', args: [1n, 1n, 0] })).toBe(false)
 	})
 
 	test('fork recovery eligibility matches lazy finality, exact cutoffs and nested minimum response periods', async () => {
@@ -227,7 +422,7 @@ describe('Statoblast: central internal settlement units', () => {
 	test('unauthorized callers cannot create virtual funding or consume claims', async () => {
 		const outsider = createWriteClient(getAnvilWindowEthereum(), TEST_ADDRESSES[1])
 		await expect(writeContractAndWait(outsider, () => outsider.writeContract({ ...target(), functionName: 'mint', args: [1n, 1n, 100n, 0n, 0] }))).rejects.toThrow('Only portfolio')
-		await expect(writeContractAndWait(outsider, () => outsider.writeContract({ ...target(), functionName: 'createChildBook', args: [1n, 0n] }))).rejects.toThrow('Only portfolio')
+		await expect(writeContractAndWait(outsider, () => outsider.writeContract({ ...target(), functionName: 'createChildBook', args: [1n, 0n, 0n] }))).rejects.toThrow('Only portfolio')
 	})
 
 	test('aggregate time fees materialize question units once and preserve replacement boundaries', async () => {
@@ -251,26 +446,20 @@ describe('Statoblast: central internal settlement units', () => {
 		expect((await book(1n)).slice(0, 3)).toEqual([0n, 0n, 860n])
 	})
 
-	test('runoff fee pauses neither charge skipped time after recap nor extend an expired stream', async () => {
+	test('runoff never charges paused fees even after the old stream expires', async () => {
 		await mint(1n, 1n, 1_000n)
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [1n, 1n, 10n, 90, 0] }))
 		await seal(1n, 20)
-		await child(1n, 400n)
+		await child(1n, 400n, 200n)
 		await freeze(2n, 60)
 		expect((await question(2n, 1n))[0].units).toBe(800n)
-		expect((await book(2n)).slice(0, 3)).toEqual([400n, 800n, 0n])
-		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'recapitalize', args: [2n, 400n, 60] }))
-		await freeze(2n, 100)
-		expect((await question(2n, 1n))[0].units).toBe(500n)
-		expect((await book(2n)).slice(0, 3)).toEqual([500n, 500n, 300n])
 		await freeze(2n, 1_000)
-		expect((await book(2n)).slice(0, 3)).toEqual([500n, 500n, 300n])
-		await child(1n, 0n)
-		await freeze(3n, 100)
-		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'recapitalize', args: [3n, 800n, 100] }))
+		expect((await book(2n)).slice(0, 3)).toEqual([400n, 800n, 0n])
+		expect(await client.readContract({ ...target(), functionName: 'recoveryRep', args: [2n] })).toBe(200n)
+		await child(1n, 0n, 400n)
 		await freeze(3n, 1_000)
 		expect((await question(3n, 1n))[0].units).toBe(800n)
-		expect((await book(3n)).slice(0, 3)).toEqual([800n, 800n, 0n])
+		expect((await book(3n)).slice(0, 3)).toEqual([0n, 800n, 0n])
 	})
 
 	test('price validity pauses exact prospective fees and a full burn removes future stream liability', async () => {
@@ -311,12 +500,11 @@ describe('Statoblast: central internal settlement units', () => {
 		await enabled(3n, true, 150)
 		await freeze(3n, 160)
 		expect((await question(3n, 2n))[0].units).toBe(700n)
-		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'recapitalize', args: [3n, 600n, 160] }))
 		await freeze(3n, 200)
 		expect(await client.readContract({ address, abi: clockAbi, functionName: 'feeTimestamp', args: [3n] })).toBe(525n)
 		expect((await question(3n, 1n))[0].units).toBe(900n)
-		expect((await question(3n, 2n))[0].units).toBe(670n)
-		expect((await book(3n)).slice(0, 3)).toEqual([1_570n, 1_570n, 30n])
+		expect((await question(3n, 2n))[0].units).toBe(700n)
+		expect((await book(3n)).slice(0, 3)).toEqual([1_000n, 1_600n, 0n])
 		await schedule(3n, 2n, 300, 200)
 		await enabled(3n, false, 200)
 		await expect(clock(3n, 524)).rejects.toThrow('Fee clock cannot go backwards')

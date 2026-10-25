@@ -1,26 +1,13 @@
 import { useSignal } from '@preact/signals'
-import { useEffect } from 'preact/hooks'
-import { encodeFunctionData, formatEther, getAddress, isAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import {
-	buildPortfolioForkChoiceRequest,
-	buildPortfolioForkStartRequest,
-	buildPortfolioForkFinalizeRequest,
-	buildPortfolioForkRecoveryRequest,
-	buildPortfolioRecoveryRightsTransferRequest,
-	buildPortfolioRecapPurchaseRequest,
-	loadPortfolioForkSnapshot,
-	loadPortfolioRecapQuote,
-	type PortfolioForkSnapshot,
-	type PortfolioRecapQuote,
-} from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { useEffect, useRef } from 'preact/hooks'
+import { formatEther, getAddress, isAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { buildPortfolioForkChoiceRequest, buildPortfolioForkStartRequest, buildPortfolioForkFinalizeRequest, buildPortfolioForkRecoveryRequest, buildPortfolioRecoveryRightsTransferRequest, loadPortfolioForkSnapshot, type PortfolioForkSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
-import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { portfolioReadClient, type PortfolioAccountSnapshot, type PortfolioTransaction } from '../../../protocol/securityPoolPortfolio.js'
-import { loadSharedForkOutcome, loadPortfolioRecapWallet, loadPortfolioSourceRecovery, buildPortfolioRecoveryPreparation } from '../../../protocol/securityPoolSharedFork.js'
+import { loadSharedForkOutcome, loadPortfolioSourceRecovery, buildPortfolioRecoveryPreparation } from '../../../protocol/securityPoolSharedFork.js'
 import { portfolioAmountOrUndefined, portfolioUnsignedId } from '../lib/draft.js'
-import { portfolioBasisPointsOrUndefined } from '../lib/creation.js'
 import type { PortfolioActions } from '../components/PortfolioControls.js'
 
 export type PortfolioSharedForkParameters = { snapshot: PortfolioAccountSnapshot | undefined; actions: Pick<PortfolioActions, 'scope' | 'busy' | 'ownerReason' | 'runPortfolioAction'>; openUniverse: (universeId: bigint) => void }
@@ -28,12 +15,6 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 	const backend = getActiveBackend()
 	const sourceInput = useSignal('')
 	const outcomeInput = useSignal('')
-	const budgetInput = useSignal('')
-	const maximumRepInput = useSignal('')
-	const minimumRepInput = useSignal('')
-	const maximumCommitmentInput = useSignal('')
-	const maximumOwnRepInput = useSignal('0')
-	const healthInput = useSignal('100')
 	const questionInput = useSignal('')
 	const sharesInput = useSignal('')
 	const recipientInput = useSignal('')
@@ -41,23 +22,22 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 	const yesRightsInput = useSignal('0')
 	const noRightsInput = useSignal('0')
 	const loaded = useSignal<{ key: string; state?: PortfolioForkSnapshot; outcome?: Awaited<ReturnType<typeof loadSharedForkOutcome>>; error?: string } | undefined>(undefined)
-	const quoted = useSignal<{ key: string; quote?: PortfolioRecapQuote; wallet?: Awaited<ReturnType<typeof loadPortfolioRecapWallet>>; error?: string } | undefined>(undefined)
 	const recovered = useSignal<{ key: string; source?: Awaited<ReturnType<typeof loadPortfolioSourceRecovery>>; error?: string } | undefined>(undefined)
+	const draftIdentity = useRef<{ backend: typeof backend; key: string } | undefined>(undefined)
 	useEffect(() => {
+		const identity = portfolio === undefined ? undefined : `${portfolio.portfolio}:${portfolio.owner}:${portfolio.universeId}`
+		const sameBackend = draftIdentity.current?.backend === backend
+		if (sameBackend && (identity === undefined || draftIdentity.current?.key === identity)) return
+		draftIdentity.current = identity === undefined ? undefined : { backend, key: identity }
 		sourceInput.value = portfolio?.universeId.toString() ?? ''
 		outcomeInput.value = ''
-		budgetInput.value = ''
-		maximumRepInput.value = ''
-		minimumRepInput.value = ''
-		maximumCommitmentInput.value = ''
-		maximumOwnRepInput.value = '0'
 		questionInput.value = ''
 		sharesInput.value = ''
 		recipientInput.value = ''
 		invalidRightsInput.value = '0'
 		yesRightsInput.value = '0'
 		noRightsInput.value = '0'
-	}, [portfolio?.portfolio, portfolio?.owner, portfolio?.universeId])
+	}, [backend, portfolio?.portfolio, portfolio?.owner, portfolio?.universeId])
 	const universeId = portfolioUnsignedId(sourceInput.value, 248)
 	const outcomeIndex = portfolioUnsignedId(outcomeInput.value)
 	const questionId = portfolioUnsignedId(questionInput.value)
@@ -67,12 +47,6 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 	const yesRights = portfolioAmountOrUndefined(yesRightsInput.value)
 	const noRights = portfolioAmountOrUndefined(noRightsInput.value)
 	const transferAmounts = invalidRights === undefined || yesRights === undefined || noRights === undefined ? undefined : ([invalidRights, yesRights, noRights] satisfies readonly [bigint, bigint, bigint])
-	const maximumCost = portfolioAmountOrUndefined(budgetInput.value)
-	const maximumRep = portfolioAmountOrUndefined(maximumRepInput.value)
-	const minimumRep = portfolioAmountOrUndefined(minimumRepInput.value)
-	const maximumCommitment = portfolioAmountOrUndefined(maximumCommitmentInput.value)
-	const maximumOwnRep = portfolioAmountOrUndefined(maximumOwnRepInput.value)
-	const target = portfolioBasisPointsOrUndefined(healthInput.value)
 	const key = `${backend}:${portfolio?.portfolio}:${portfolio?.owner}:${portfolio?.blockHash}:${universeId}:${outcomeIndex}`
 	useEffect(() => {
 		let current = true
@@ -93,26 +67,6 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 	}, [key])
 	const current = loaded.value?.key === key ? loaded.value : undefined
 	const state = current?.state
-	const quoteKey = `${key}:${state?.blockHash}:${maximumCost}:${maximumRep}:${target}`
-	useEffect(() => {
-		let current = true
-		quoted.value = undefined
-		if (state !== undefined && state.branch?.started && !state.branch.ready && state.branch.auction !== zeroAddress && maximumCost !== undefined && maximumCost > 0n && maximumRep !== undefined && maximumRep > 0n && target !== undefined && target >= 10_000n) {
-			const client = createConnectedReadClient()
-			void (async () => {
-				const [quote, wallet] = await Promise.all([loadPortfolioRecapQuote({ client: portfolioReadClient(client), snapshot: state, maximumCostAttoEth: maximumCost, maximumRep, targetHealthFactorBps: target }), loadPortfolioRecapWallet(client, state)])
-				if (current && getActiveBackend() === backend) quoted.value = { key: quoteKey, quote, ...(wallet === undefined ? {} : { wallet }) }
-			})().catch(error => {
-				if (current && getActiveBackend() === backend) quoted.value = { key: quoteKey, error: getErrorMessage(error, 'Unable to quote recap purchase.') }
-			})
-		}
-		return () => {
-			current = false
-		}
-	}, [quoteKey])
-	const quoteState = quoted.value?.key === quoteKey ? quoted.value : undefined
-	const quote = quoteState?.quote
-	const wallet = quoteState?.wallet
 	const recoveryKey = `${key}:${state?.blockHash}:${questionId}`
 	useEffect(() => {
 		let current = true
@@ -142,23 +96,7 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 		(state !== undefined && state.timestamp >= state.choiceDeadline ? 'The fork choice window has closed.' : undefined) ??
 		(portfolio !== undefined && universeId === portfolio.universeId && !portfolio.positions.some(position => position.rep > 0n && position.commitment > 0n) ? 'No pledged REP to move.' : undefined)
 	const startReason = branchReason ?? (state !== undefined && state.timestamp < state.choiceDeadline ? 'Wait until the choice deadline.' : undefined) ?? (state?.branch?.started ? 'This branch is already prepared.' : undefined)
-	const finalizeReason = branchReason ?? (state !== undefined && state.timestamp < state.recapitalizationDeadline ? 'Wait until the recap deadline.' : undefined) ?? (state?.branch?.ready ? 'This branch is already active.' : undefined)
-	const recapReason =
-		branchReason ??
-		(state?.branch?.started !== true || state.branch.ready || state.branch.auction === zeroAddress ? 'This branch has no active recap sale.' : undefined) ??
-		(state !== undefined && state.timestamp >= state.recapitalizationDeadline ? 'The recap sale has closed.' : undefined) ??
-		(maximumCost === undefined || maximumCost === 0n || maximumRep === undefined || maximumRep === 0n || target === undefined || target < 10_000n ? 'Enter a positive budget, REP limit and health target of at least 100%.' : undefined) ??
-		quoteState?.error ??
-		quote?.reason ??
-		(quote === undefined || wallet === undefined ? 'Loading the recap quote.' : undefined)
-	const buyReason =
-		recapReason ??
-		(minimumRep === undefined || minimumRep === 0n || maximumRep === undefined || minimumRep > maximumRep || minimumRep > (quote?.rep ?? 0n) ? 'Set a positive minimum REP within the quote.' : undefined) ??
-		(maximumCommitment === undefined || maximumCommitment < (quote?.commitment ?? 0n) ? 'Maximum commitment is below the quote.' : undefined) ??
-		(maximumOwnRep === undefined || maximumOwnRep < (quote?.ownRep ?? 0n) ? 'Maximum extra REP is below the quote.' : undefined) ??
-		(wallet !== undefined && quote !== undefined && quote.ownRep > wallet.balance ? 'Insufficient wallet child REP.' : undefined) ??
-		(wallet !== undefined && quote !== undefined && quote.ownRep > wallet.allowance ? 'Approve child REP before purchasing.' : undefined) ??
-		(wallet !== undefined && quote !== undefined && maximumCost !== undefined && maximumCost + quote.executionReserve > wallet.eth ? 'Insufficient wallet ETH; gas is additional.' : undefined)
+	const finalizeReason = branchReason ?? (state !== undefined && state.timestamp < state.activationDeadline ? 'Wait until the activation deadline.' : undefined) ?? (state?.branch?.ready ? 'This branch is already active.' : undefined)
 	const sourceReason =
 		forkReason ??
 		(questionId === undefined ? 'Enter a question ID.' : undefined) ??
@@ -197,11 +135,9 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 	const base = (selected: PortfolioForkSnapshot) => ({ owner: selected.owner, controller: selected.controller, universeId: selected.universeId })
 	return {
 		state,
-		quote,
-		wallet,
 		recovery,
 		outcome: current?.outcome,
-		error: current?.error ?? quoteState?.error ?? recoveryState?.error,
+		error: current?.error ?? recoveryState?.error,
 		loading: current === undefined,
 		sourceInput: sourceInput.value,
 		setSource: (v: string) => {
@@ -210,30 +146,6 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 		outcomeInput: outcomeInput.value,
 		setOutcome: (v: string) => {
 			outcomeInput.value = v
-		},
-		budgetInput: budgetInput.value,
-		setBudget: (v: string) => {
-			budgetInput.value = v
-		},
-		maximumRepInput: maximumRepInput.value,
-		setMaximumRep: (v: string) => {
-			maximumRepInput.value = v
-		},
-		minimumRepInput: minimumRepInput.value,
-		setMinimumRep: (v: string) => {
-			minimumRepInput.value = v
-		},
-		maximumCommitmentInput: maximumCommitmentInput.value,
-		setMaximumCommitment: (v: string) => {
-			maximumCommitmentInput.value = v
-		},
-		maximumOwnRepInput: maximumOwnRepInput.value,
-		setMaximumOwnRep: (v: string) => {
-			maximumOwnRepInput.value = v
-		},
-		healthInput: healthInput.value,
-		setHealth: (v: string) => {
-			healthInput.value = v
 		},
 		questionInput: questionInput.value,
 		setQuestion: (v: string) => {
@@ -263,8 +175,6 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 		chooseReason,
 		startReason,
 		finalizeReason,
-		recapReason,
-		buyReason,
 		prepareReason,
 		recoverReason,
 		openReason: state?.branch?.ready ? undefined : 'Activate the branch before opening its account.',
@@ -280,7 +190,7 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 					if (selected.branch === undefined) throw new Error('Select a branch.')
 					return {
 						...buildPortfolioForkChoiceRequest({ ...base(selected), outcomeIndex: selected.branch.outcomeIndex }),
-						reviewDescription: `Irreversibly choose outcome ${selected.branch.outcomeIndex} for your committed principal in universe ${selected.universeId}. Idle REP and old fees remain in the source. There is no revoke action.`,
+						reviewDescription: `Irreversibly choose outcome ${selected.branch.outcomeIndex} for your committed principal in universe ${selected.universeId}. Idle REP and old fees remain in the source. REP in every unchosen branch belongs to that branch’s outcome claimants. There is no revoke action.`,
 					}
 				},
 				async latest => {
@@ -295,49 +205,8 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 		finalize: () =>
 			run('finalizePortfolioFork', 'Activate fork branch', finalizeReason, selected => {
 				if (selected.branch === undefined) throw new Error('Select a branch.')
-				return { ...buildPortfolioForkFinalizeRequest({ ...base(selected), universeId: selected.branch.universeId }), reviewDescription: 'Close this branch’s fixed recap window and activate its funded cash and personal collateral positions.' }
+				return { ...buildPortfolioForkFinalizeRequest({ ...base(selected), universeId: selected.branch.universeId }), reviewDescription: 'Activate this branch’s funded ETH and REP claim basket and chosen underwriting positions.' }
 			}),
-		approve: (amount: bigint) =>
-			run('approvePortfolioRecap', 'Approve child REP', recapReason, selected => {
-				if (selected.branch === undefined || quote === undefined || amount < quote.ownRep) throw new Error('Approval is below the required wallet REP.')
-				return {
-					account: selected.owner,
-					to: selected.branch.repToken,
-					value: 0n,
-					data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [selected.controller, amount] }),
-					reviewDescription: `Allow the portfolio fork coordinator to transfer up to ${formatEther(amount)} child REP for your atomic recap purchase.`,
-				}
-			}),
-		buy: () =>
-			run(
-				'buyPortfolioRecap',
-				'Buy REP',
-				buyReason,
-				selected => {
-					if (selected.branch === undefined || maximumRep === undefined || minimumRep === undefined || maximumCommitment === undefined || maximumOwnRep === undefined || maximumCost === undefined || target === undefined || quote === undefined) throw new Error('Review recap limits first.')
-					return {
-						...buildPortfolioRecapPurchaseRequest({ ...base(selected), universeId: selected.branch.universeId, maximumRep, minimumRep, maximumCommitment, maximumOwnRep, targetHealthFactorBps: target, executionReserveAttoEth: quote.executionReserve, maximumCostAttoEth: maximumCost }),
-						reviewDescription: `Spend at most ${formatEther(maximumCost)} ETH plus ${formatEther(quote.executionReserve)} ETH execution reserve. Receive ${formatEther(minimumRep)}–${formatEther(maximumRep)} REP and accept at most ${formatEther(maximumCommitment)} ETH commitment. Extra wallet REP is capped at ${formatEther(maximumOwnRep)}. Your health target is ${healthInput.value}%. Unused sale cash is refunded.`,
-					}
-				},
-				async latest => {
-					if (maximumCost === undefined || maximumRep === undefined || target === undefined || quote === undefined) throw new Error('Recap quote unavailable.')
-					const client = createConnectedReadClient()
-					const [fresh, funds] = await Promise.all([loadPortfolioRecapQuote({ client: portfolioReadClient(client), snapshot: latest, maximumCostAttoEth: maximumCost, maximumRep, targetHealthFactorBps: target }), loadPortfolioRecapWallet(client, latest)])
-					if (
-						funds === undefined ||
-						fresh.reason !== undefined ||
-						fresh.rep < (minimumRep ?? 0n) ||
-						fresh.commitment > (maximumCommitment ?? 0n) ||
-						fresh.ownRep > (maximumOwnRep ?? 0n) ||
-						fresh.executionReserve > quote.executionReserve ||
-						fresh.ownRep > funds.allowance ||
-						fresh.ownRep > funds.balance ||
-						maximumCost + quote.executionReserve > funds.eth
-					)
-						throw new Error('Recap prerequisites changed. Refresh and review again.')
-				},
-			),
 		prepare: () =>
 			run('preparePortfolioRecovery', 'Prepare source question', prepareReason, selected => {
 				if (recovery === undefined) throw new Error('Source question unavailable.')

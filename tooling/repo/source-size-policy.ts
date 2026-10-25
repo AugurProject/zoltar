@@ -36,8 +36,8 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['solidity/ts/testSupport/simulator/AnvilWindowEthereum.ts', 608],
 	]),
 	...allowances('The arbitrage executor contract bundles routing, settlement, and recovery paths that belong in libraries.', [['bots/open-oracle-arbitrager/contracts/OpenOracleArbitrageExecutor.sol', 754]]),
-	...allowances('SecurityPool contract owners: continue bytecode-sensitive delegate extraction for shared-capital dispatch and terminal settlement at the common entry point.', [['solidity/contracts/statoblast/SecurityPool.sol', 721]]),
-	...allowances('Shared-capital contract owners: separate fork import and export orchestration, including the dedicated junior protocol-reserve import, from custody, fee checkpoints and lazy liquidation recovery, with accounting, callback gas and deployment bytecode revalidation.', [
-		['solidity/contracts/statoblast/SecurityPoolCapitalLedger.sol', 613],
+	...allowances('SecurityPool contract owners: continue bytecode-sensitive delegate extraction for shared-capital dispatch and terminal settlement; the common entry point also dispatches independent REP-basket redemption and guards incomplete fork registration.', [
+		['solidity/contracts/statoblast/SecurityPool.sol', 727],
 	]),
+	...allowances('Shared-capital contract owners: separate chosen-branch fork import and export orchestration from custody, fee checkpoints and lazy liquidation recovery, with accounting, callback gas and deployment bytecode revalidation.', [['solidity/contracts/statoblast/SecurityPoolCapitalLedger.sol', 602]]),
 ])

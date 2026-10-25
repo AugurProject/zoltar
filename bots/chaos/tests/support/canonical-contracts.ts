@@ -27,6 +27,7 @@ export const CANONICAL_MUTATING_CONTRACT_MANIFEST: readonly CanonicalMutatingCon
 	{ artifactSource: 'contracts/statoblast/SecurityPoolEventEmitter.sol', contract: 'SecurityPoolForkEventEmitter', exposure: 'delegate-module' },
 	{ artifactSource: 'contracts/statoblast/OpenOraclePriceCoordinator.sol', contract: 'OpenOraclePriceCoordinator', exposure: 'dynamic-endpoint' },
 	{ artifactSource: 'contracts/statoblast/SharedPoolPriceFeed.sol', contract: 'SharedPoolPriceFeed', exposure: 'dynamic-endpoint' },
+	{ artifactSource: 'contracts/statoblast/SharedPoolReportEscrow.sol', contract: 'SharedPoolReportEscrow', exposure: 'dynamic-endpoint' },
 	{ artifactSource: 'contracts/statoblast/OpenOracleReportDelegate.sol', contract: 'OpenOracleReportDelegate', exposure: 'delegate-module' },
 	{ artifactSource: 'contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol', contract: 'SharedPoolPriceFeedDeploymentWorker', exposure: 'static-endpoint' },
 	{ artifactSource: 'contracts/statoblast/VaultOperations.sol', contract: 'VaultOperations', exposure: 'dynamic-endpoint' },

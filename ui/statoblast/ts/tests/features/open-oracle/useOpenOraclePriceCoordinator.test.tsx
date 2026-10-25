@@ -27,7 +27,8 @@ describe('useOpenOraclePriceCoordinator', () => {
 		{ proposedPrice: undefined, balance: 0n, cancelDuringFunding: false },
 		{ proposedPrice: undefined, balance: 1n, cancelDuringFunding: true },
 		{ proposedPrice: undefined, balance: 1n, cancelDuringFunding: false, sharedRenewal: true },
-	])('checks actual REP funding and forwards the selected initial price (%s)', async ({ proposedPrice, balance, cancelDuringFunding, sharedRenewal }) => {
+		{ proposedPrice: 2n, balance: 1n, cancelDuringFunding: false, sharedRenewal: true, pending: 7n, requestedFunding: 10n },
+	])('checks actual REP funding and forwards the selected initial price (%s)', async ({ proposedPrice, balance, cancelDuringFunding, sharedRenewal, pending, requestedFunding }) => {
 		const cancellation = new AbortController()
 		const onTransactionCanceled = mock(() => undefined)
 		const onTransactionFailed = mock(() => undefined)
@@ -38,7 +39,7 @@ describe('useOpenOraclePriceCoordinator', () => {
 				isPriceValid: sharedRenewal || managerLoadCount === 1,
 				managerAddress: MANAGER_ADDRESS,
 				...(sharedRenewal ? { priceFeedAddress: POOL_ADDRESS } : {}),
-				pendingReportId: 0n,
+				pendingReportId: pending ?? 0n,
 			})
 		})
 		const requestOraclePrice = mock(async () => {
@@ -56,7 +57,8 @@ describe('useOpenOraclePriceCoordinator', () => {
 			executeOracleManagerStagedOperation: async () => {
 				throw new Error('executeOracleManagerStagedOperation should not be called in this test')
 			},
-			loadCoordinatorInitialReportFundingRequirement: async (_client, _manager, _wallet, price) => {
+			loadCoordinatorInitialReportFundingRequirement: async (_client, _manager, _wallet, price, requested) => {
+				expect(requested).toBe(requestedFunding ?? 0n)
 				expect(price).toBe(proposedPrice)
 				if (cancelDuringFunding) {
 					cancellation.abort()
@@ -104,7 +106,7 @@ describe('useOpenOraclePriceCoordinator', () => {
 		expect(requireHookState(hookState).poolOracleManagerDetails?.isPriceValid).toBe(true)
 
 		await act(async () => {
-			await requireHookState(hookState).requestPoolPrice(MANAGER_ADDRESS, POOL_ADDRESS, 1n, 0n, proposedPrice, cancellation.signal)
+			await requireHookState(hookState).requestPoolPrice(MANAGER_ADDRESS, POOL_ADDRESS, 1n, 0n, proposedPrice, cancellation.signal, requestedFunding)
 		})
 
 		if (cancelDuringFunding) {
@@ -123,7 +125,7 @@ describe('useOpenOraclePriceCoordinator', () => {
 		expect(requireHookState(hookState).poolOracleManagerError).toBeUndefined()
 		expect(requireHookState(hookState).poolOracleFeedback?.status).toMatchObject({ tone: 'success' })
 		expect(requestOraclePrice).toHaveBeenCalledTimes(1)
-		expect(requestOraclePrice).toHaveBeenCalledWith(expect.anything(), MANAGER_ADDRESS, proposedPrice ?? 1n, 0n, 1n)
+		expect(requestOraclePrice).toHaveBeenCalledWith(expect.anything(), MANAGER_ADDRESS, proposedPrice ?? 1n, requestedFunding ?? 0n, 1n)
 		expect(loadOracleManagerDetails).toHaveBeenCalledTimes(3)
 		expect(requireHookState(hookState).poolPriceOracleResult?.action).toBe('requestPrice')
 	})

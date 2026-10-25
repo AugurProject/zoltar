@@ -168,6 +168,7 @@ interface ISecurityPool {
 	function truthAuction() external view returns (address);
 
 	function attoSharesToAttoEth(uint256 amountAttoShares) external view returns (uint256);
+	function attoSharesToAttoRep(uint256 amountAttoShares) external view returns (uint256);
 	function attoEthToAttoShares(uint256 amountAttoEth) external view returns (uint256);
 
 	function attoRepToBackingUnits(uint256 amountAttoRep) external view returns (uint256);

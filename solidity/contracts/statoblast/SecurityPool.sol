@@ -428,6 +428,13 @@ contract SecurityPool is SecurityPoolStorage {
 		return (amountAttoShares * settlementCollateralAttoEth) / shareTokenSupplyAttoShares;
 	}
 
+	/// @notice Quotes the child REP paid alongside ETH when redeeming portfolio claims.
+	function attoSharesToAttoRep(uint256 amountAttoShares) external view returns (uint256) {
+		if (portfolioCustody == address(0)) return 0;
+		return
+			IPortfolioSettlement(address(portfolioAccounting)).quoteQuestionRecoveryRep(address(this), amountAttoShares);
+	}
+
 	/// @notice Quotes shares for attoEth using the standalone exchange rate or the bound pool's central settlement book.
 	function attoEthToAttoShares(uint256 amountAttoEth) public view returns (uint256) {
 		if (portfolioCustody != address(0))

@@ -113,6 +113,7 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 						<CurrencyValue value={snapshot?.economics.minimumCommitmentAttoEth} suffix={common.eth} />
 					</MetricField>
 				</MetricGrid>
+				<PortfolioInput label={copy.reportId} hint={copy.reportHint} value={model.reportInput} onChange={model.setReportInput} disabled={disabled} />
 				<PortfolioButton model={actions} action='authorizePortfolioCommitment' label={copy.authorize} pendingLabel={copy.authorizing} reason={model.authorizeReason} onClick={model.authorize} />
 			</SectionBlock>
 			<SectionBlock title={copy.positions} description={copy.positionsHint}>

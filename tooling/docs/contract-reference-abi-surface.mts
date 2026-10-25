@@ -75,7 +75,6 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 		requestPriceIfNeededAndStageLiquidation: ['external(address,address,uint256,bytes32,uint256,uint256,uint256,uint256)'],
 		requestPriceIfNeededAndStageOperation: ['public(OperationType,address,uint256,uint256,uint256,uint256,uint256)'],
 		setLiquidationApprovalRegistry: ['external(LiquidationApprovalRegistry)'],
-		sharedPriceSettled: ['external(uint256,bool,string)'],
 	},
 	'solidity/contracts/statoblast/OpenOraclePriceSource.sol': {
 		openOracleCallback: ['external(uint256,uint256,uint256,uint256,address,address)'],
@@ -228,7 +227,7 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/statoblast/EscalationGameSettlement.sol': '74594ea760170b0f6fd698bf26826bd9a7ae20cdd7fef1e61aad4a64b6f3712f',
 	'solidity/contracts/statoblast/EscalationGameState.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/EscalationGameStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': '0ae9d6525d9148f951be44a8721bd7dacf120f2b02422c837a6d40915c5847e1',
+	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': '341f23810d1c72d8acfe89c4d0e11765ede42785eafc37a1c0ef957f50145961',
 	'solidity/contracts/statoblast/LiquidationApprovalRegistry.sol': '986a20fc0e4cfe0898be8fc91c6b911b93ef0ae1086d4cb1142a93c66f315684',
 	'solidity/contracts/statoblast/SecurityPool.sol': 'be44f15e07262d11ce2e8d0231d1de8932af310df02d41e4063d3c9a1b22fb07',
 	'solidity/contracts/statoblast/SecurityPoolForker.sol': '207f6e563f37c3fa9ec05b35dc0a1f8a4a6e816c995912df8ad26f3f1b84ad43',

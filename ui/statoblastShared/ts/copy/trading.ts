@@ -10,7 +10,9 @@ export const loadingForkTargetUniverses = 'Loading child universes…'
 export const formatMalformedOutcomeLabel = (outcomeIndex: string) => `Malformed (${outcomeIndex})`
 export const selectAll = 'Select all'
 export const childTargetsLockedReason = 'Child universe targets unlock after this universe forks.'
-export const redeemCompleteSetsAmount = 'ETH to redeem'
+export const redeemCompleteSetsAmount = 'Complete sets to redeem'
+export const availableRecoveryRep = 'REP available to redeem'
+export const expectedRepPayout = 'Expected REP payout'
 export const redeemCompleteSetsFeeDetail = 'The pool deducts accrued holding fees before redeeming, so you may receive slightly less ETH than shown. Max redeems every complete set you hold.'
 export const shareMigrationWalletRequiredReason = commonCopy.formatConnectWalletBefore('migrating shares')
 export const completeSetMintWalletRequiredReason = commonCopy.formatConnectWalletBefore('minting complete sets')

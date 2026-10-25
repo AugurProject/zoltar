@@ -19,6 +19,7 @@ function model(): Parameters<typeof usePortfolioActions>[0] {
 		snapshot: capitalSnapshot(),
 		setup: undefined,
 		loading: false,
+		discovering: false,
 		error: undefined,
 		setManagerInput: () => undefined,
 		setOwnerInput: () => undefined,

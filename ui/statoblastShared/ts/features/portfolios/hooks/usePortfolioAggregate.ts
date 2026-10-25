@@ -19,11 +19,35 @@ import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { portfolioReadClient, type PortfolioTransaction } from '../../../protocol/securityPoolPortfolio.js'
 import { executionFundingReview } from '../../../copy/portfolioCapital.js'
-import { portfolioAmountOrUndefined } from '../lib/draft.js'
+import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
+import * as capitalCopy from '../../../copy/portfolioCapital.js'
+import { portfolioAmountOrUndefined, portfolioUnsignedId } from '../lib/draft.js'
 import { portfolioBasisPointsOrUndefined } from '../lib/creation.js'
 import { capitalAuthorizationReason, capitalExecutionWithdrawalReason, capitalWithdrawalReason, requiredPortfolioCollateral, requiredPortfolioExecutionReserve } from '../lib/capital.js'
 import type { usePortfolio } from './usePortfolio.js'
 import type { usePortfolioActions } from './usePortfolioActions.js'
+
+const proofAbi = [
+	{
+		type: 'function',
+		name: 'reportAuthorization',
+		stateMutability: 'view',
+		inputs: [
+			{ name: 'reportId', type: 'uint256' },
+			{ name: 'newExposure', type: 'uint256' },
+		],
+		outputs: [
+			{ name: 'conservativeReportPrice', type: 'uint256' },
+			{ name: 'epoch', type: 'uint256' },
+		],
+	},
+] as const
+
+async function readAuthorizationProof(snapshot: PortfolioCapitalSnapshot, reportId: bigint, commitment: bigint) {
+	const client = createConnectedReadClient()
+	const [price] = await client.readContract({ address: snapshot.priceFeed, abi: proofAbi, functionName: 'reportAuthorization', args: [reportId, snapshot.totalCommitmentAttoEth - snapshot.ownerCommitmentAttoEth + commitment], blockNumber: snapshot.blockNumber })
+	return price
+}
 
 export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio>, 'snapshot' | 'loading' | 'error' | 'refresh'>, actions: Pick<ReturnType<typeof usePortfolioActions>, 'ownerReason' | 'runPortfolioAction'>, accountAddress: Address | undefined) {
 	const depositAmount = useSignal('')
@@ -32,6 +56,8 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 	const reserveWithdrawal = useSignal('')
 	const healthPercent = useSignal('100')
 	const commitmentAmount = useSignal('')
+	const reportInput = useSignal('')
+	const proof = useSignal<{ key: string; price?: bigint; error?: string }>()
 	const snapshot = model.snapshot
 	const stateReason = (model.loading ? 'Refreshing portfolio balances.' : undefined) ?? (snapshot === undefined ? 'Load a portfolio account first.' : model.error)
 	const ownerReason = actions.ownerReason ?? stateReason
@@ -43,6 +69,30 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 	const reserveWithdrawAttoEth = portfolioAmountOrUndefined(reserveWithdrawal.value)
 	const commitmentAttoEth = portfolioAmountOrUndefined(commitmentAmount.value)
 	const healthBps = portfolioBasisPointsOrUndefined(healthPercent.value)
+	const reportId = reportInput.value.trim() === '' ? undefined : portfolioUnsignedId(reportInput.value)
+	const proofKey = `${snapshot?.chainId}:${snapshot?.portfolio}:${snapshot?.universeId}:${snapshot?.owner}:${snapshot?.blockHash}:${snapshot?.totalCommitmentAttoEth}:${snapshot?.ownerCommitmentAttoEth}:${reportId}:${commitmentAttoEth}`
+	useEffect(() => {
+		let active = true
+		proof.value = undefined
+		if (snapshot !== undefined && reportId !== undefined && reportId > 0n && commitmentAttoEth !== undefined && commitmentAttoEth > 0n) {
+			void readAuthorizationProof(snapshot, reportId, commitmentAttoEth)
+				.then(price => {
+					if (active) proof.value = { key: proofKey, price }
+				})
+				.catch(error => {
+					if (active) proof.value = { key: proofKey, error: getErrorMessage(error, capitalCopy.reportUnavailable) }
+				})
+		}
+		return () => {
+			active = false
+		}
+	}, [proofKey])
+	const proofPrice = proof.value?.key === proofKey ? proof.value.price : undefined
+	let proofReason: string | undefined
+	if (reportInput.value.trim() !== '') {
+		if (reportId === undefined || reportId === 0n) proofReason = capitalCopy.reportInvalid
+		else proofReason = proof.value?.key === proofKey ? proof.value.error : capitalCopy.reportChecking
+	}
 	useEffect(() => {
 		if (snapshot === undefined) return
 		healthPercent.value = formatUnits(snapshot.ownerAccount.targetHealthFactorBps || 10_000n, 2)
@@ -51,6 +101,7 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 		reserveAmount.value = ''
 		reserveWithdrawal.value = ''
 		commitmentAmount.value = ''
+		reportInput.value = ''
 	}, [snapshot?.portfolio, snapshot?.owner, snapshot?.universeId])
 	const positive = (value: bigint | undefined) => (value === undefined || value === 0n ? 'Enter a positive amount.' : undefined)
 	const fundingReason = ownerReason ?? inactiveReason ?? admissionReason ?? positive(depositAttoRep) ?? (snapshot !== undefined && depositAttoRep !== undefined && depositAttoRep > snapshot.walletAttoRep ? 'Insufficient wallet REP.' : undefined)
@@ -59,7 +110,7 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 	const fundReserveReason = ownerReason ?? (snapshot?.exported ? 'The reserve follows your fork choice.' : undefined) ?? positive(fundAttoEth) ?? (snapshot !== undefined && fundAttoEth !== undefined && fundAttoEth > snapshot.walletAttoEth ? 'Insufficient wallet ETH; gas is additional.' : undefined)
 	const withdrawReserveReason = ownerReason ?? (snapshot === undefined ? undefined : capitalExecutionWithdrawalReason(snapshot, reserveWithdrawAttoEth))
 	const healthReason = ownerReason ?? inactiveReason ?? (healthBps === undefined || healthBps < 10_000n ? 'Choose a health target of at least 100%.' : undefined)
-	const authorizeReason = ownerReason ?? admissionReason ?? (snapshot === undefined ? undefined : capitalAuthorizationReason(snapshot, commitmentAttoEth))
+	const authorizeReason = ownerReason ?? admissionReason ?? proofReason ?? (snapshot === undefined ? undefined : capitalAuthorizationReason(snapshot, commitmentAttoEth, proofPrice))
 	const livePositions = snapshot?.positions.filter(position => position.commitment > 0n) ?? []
 	const claimReason = ownerReason
 	const serveReason = ownerReason ?? inactiveReason ?? (snapshot?.priceValid === false ? 'Refresh the shared REP price first.' : undefined)
@@ -67,7 +118,7 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 		if (snapshot === undefined || accountAddress === undefined || accountAddress.toLowerCase() !== snapshot.owner.toLowerCase()) throw new Error('Connect the selected owner account.')
 		return snapshot
 	}
-	const run = (action: string, title: string, reason: string | undefined, build: (selected: NonNullable<typeof snapshot>) => PortfolioTransaction, validate?: (latest: PortfolioCapitalSnapshot) => void) =>
+	const run = (action: string, title: string, reason: string | undefined, build: (selected: NonNullable<typeof snapshot>) => PortfolioTransaction, validate?: (latest: PortfolioCapitalSnapshot) => void | Promise<void>) =>
 		actions.runPortfolioAction(action, title, () => {
 			if (reason !== undefined) throw new Error(reason)
 			const selected = requireSnapshot()
@@ -77,7 +128,7 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 				validateBeforeSubmit: async () => {
 					const latest = await loadPortfolioCapitalSnapshot({ client: portfolioReadClient(createConnectedReadClient()), portfolio: selected.portfolio, owner: selected.owner, universeId: selected.universeId })
 					if (latest.chainId !== selected.chainId || latest.capitalLedger !== selected.capitalLedger) throw new Error('Portfolio context changed. Review the transaction again.')
-					validate?.(latest)
+					await validate?.(latest)
 					await request.validateBeforeSubmit?.()
 				},
 			}
@@ -119,8 +170,13 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 		setCommitmentAmount: (value: string) => {
 			commitmentAmount.value = value
 		},
+		reportInput: reportInput.value,
+		setReportInput: (value: string) => {
+			reportInput.value = value
+		},
+		proofPrice,
 		authorizeReason,
-		requiredCollateral: snapshot !== undefined && commitmentAttoEth !== undefined && snapshot.acceptedPrice > 0n ? requiredPortfolioCollateral(snapshot, commitmentAttoEth) : undefined,
+		requiredCollateral: snapshot !== undefined && commitmentAttoEth !== undefined && snapshot.acceptedPrice > 0n ? requiredPortfolioCollateral(snapshot, commitmentAttoEth, proofPrice) : undefined,
 		requiredExecutionReserve: snapshot !== undefined && commitmentAttoEth !== undefined ? requiredPortfolioExecutionReserve(snapshot, commitmentAttoEth) : undefined,
 		livePositions,
 		claimReason,
@@ -207,14 +263,16 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 				selected => {
 					if (commitmentAttoEth === undefined) throw new Error('Enter a commitment.')
 					return {
-						...buildPortfolioCapitalAuthorizeRequest({ ...base(selected), commitment: commitmentAttoEth }),
-						reviewDescription: `Authorize ${formatEther(commitmentAttoEth)} ETH commitment backed by all ${formatEther(selected.ownerPrincipalAttoRep)} REP in your account at your saved ${formatUnits(selected.ownerAccount.targetHealthFactorBps || 10_000n, 2)}% health target. All eligible questions share this capacity. Your account bears its own liquidation losses; retirement waits for spare capacity.`,
+						...buildPortfolioCapitalAuthorizeRequest({ ...base(selected), commitment: commitmentAttoEth, ...(reportId === undefined ? {} : { reportId }) }),
+						reviewDescription: `Authorize ${formatEther(commitmentAttoEth)} ETH commitment backed by all ${formatEther(selected.ownerPrincipalAttoRep)} REP in your account at your saved ${formatUnits(selected.ownerAccount.targetHealthFactorBps || 10_000n, 2)}% health target. All eligible questions share this capacity. Your account bears its own liquidation losses; retirement waits for spare capacity.${reportId === undefined ? '' : ` Report ${reportId} sets a collateral price floor until a later canonical report covers the full pool commitment.`}`,
 					}
 				},
-				latest => {
+				async latest => {
 					if (latest.ownerAccount.targetHealthFactorBps !== snapshot?.ownerAccount.targetHealthFactorBps) throw new Error('Your health target changed. Review the commitment again.')
 					if (latest.ownerPrincipalAttoRep !== snapshot?.ownerPrincipalAttoRep) throw new Error('Your principal changed. Review the commitment again.')
-					const reason = capitalAuthorizationReason(latest, commitmentAttoEth)
+					const freshProofPrice = reportId !== undefined && commitmentAttoEth !== undefined ? await readAuthorizationProof(latest, reportId, commitmentAttoEth) : undefined
+					if (freshProofPrice !== proofPrice) throw new Error(capitalCopy.reportChanged)
+					const reason = capitalAuthorizationReason(latest, commitmentAttoEth, freshProofPrice)
 					if (reason !== undefined) throw new Error(reason)
 				},
 			),

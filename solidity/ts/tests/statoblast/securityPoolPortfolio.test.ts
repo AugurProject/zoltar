@@ -34,6 +34,7 @@ describe('Statoblast: central portfolio and native question integration', () => 
 			settlement: infrastructure.securityPoolPortfolioSettlementDeployer,
 			reporters: infrastructure.securityPoolReporterLedgerDeployer,
 			forks: infrastructure.securityPoolPortfolioForkCoordinatorDeployer,
+			services: infrastructure.securityPoolPortfolioServicesDeployer,
 		}
 		const deploy = (configuration = portfolioEconomics, modules = deployers) =>
 			deployContract(
@@ -69,7 +70,7 @@ describe('Statoblast: central portfolio and native question integration', () => 
 	test('two questions consume one capacity budget while REP remains in one ledger', async () => {
 		await fixture.prepare(1_000n * unit, 100n * unit)
 		await fixture.mint(60n * unit)
-		await expect(fixture.mint(41n * unit, fixture.secondQuestionId)).rejects.toThrow('Healthy commitment insufficient')
+		await expect(fixture.mint(41n * unit, fixture.secondQuestionId)).rejects.toThrow('Purchase exceeds healthy capacity')
 		await fixture.mint(39n * unit, fixture.secondQuestionId)
 		expect(await demand()).toBeLessThanOrEqual(99n * unit)
 		expect(await demand()).toBeGreaterThan(98n * unit)
@@ -101,7 +102,7 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		expect(await fixture.owner().readContract({ ...capital(), functionName: 'totalFreeAttoRep' })).toBe(0n)
 		await expect(fixture.other().writeContract({ ...portfolio(), functionName: 'mintQuestionSettlement', value: unit })).rejects.toThrow('Unknown question callback')
 		await expect(fixture.other().writeContract({ ...portfolio(), functionName: 'onSharedPriceAccepted', args: [fixture.base.genesisUniverse, unit, 1] })).rejects.toThrow('Only canonical shared feed')
-		await expect(fixture.other().writeContract({ ...capital(), functionName: 'setDemand', args: [0n] })).rejects.toThrow('Only fork authority')
+		await expect(fixture.other().writeContract({ ...capital(), functionName: 'setDemand', args: [0n] })).rejects.toThrow('Only demand accounting')
 	})
 
 	test('stale prices block new purchases and live collateral withdrawal while idle owners can exit', async () => {
@@ -142,7 +143,7 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		const secondPool = fixture.poolFor(fixture.base.questionId, fixture.base.genesisUniverse, zeroAddress, second)
 		expect(secondPool.securityPool).not.toBe(fixture.poolFor(fixture.base.questionId).securityPool)
 		await fixture.refreshPrice(fixture.base.questionId, unit, second)
-		await expect(fixture.mint(unit, fixture.base.questionId, { namespace: second })).rejects.toThrow('Healthy commitment insufficient')
+		await expect(fixture.mint(unit, fixture.base.questionId, { namespace: second })).rejects.toThrow('Purchase exceeds healthy capacity')
 		await fixture.refreshPrice()
 		await fixture.mint(unit)
 		expect(await balanceOfShares(fixture.owner(), secondPool.shareToken, fixture.base.genesisUniverse, fixture.other().account.address)).toEqual([0n, 0n, 0n])

@@ -2,9 +2,10 @@ import type { PortfolioCapitalSnapshot } from '@zoltar/statoblast-shared/statobl
 
 const ceilDivide = (value: bigint, divisor: bigint) => (value + divisor - 1n) / divisor
 
-export function requiredPortfolioCollateral(snapshot: Pick<PortfolioCapitalSnapshot, 'acceptedPrice' | 'securityMultiplierBps' | 'ownerAccount'>, commitment: bigint) {
+export function requiredPortfolioCollateral(snapshot: Pick<PortfolioCapitalSnapshot, 'ownerConservativePrice' | 'securityMultiplierBps' | 'ownerAccount'>, commitment: bigint, proofPrice?: bigint) {
+	const price = proofPrice !== undefined && proofPrice > snapshot.ownerConservativePrice ? proofPrice : snapshot.ownerConservativePrice
 	const health = snapshot.ownerAccount.targetHealthFactorBps || 10_000n
-	const value = ceilDivide(commitment * snapshot.acceptedPrice, 10n ** 18n)
+	const value = ceilDivide(commitment * price, 10n ** 18n)
 	const backing = ceilDivide(value * snapshot.securityMultiplierBps, 10_000n)
 	return ceilDivide(backing * health, 10_000n)
 }
@@ -13,7 +14,7 @@ export function requiredPortfolioExecutionReserve(snapshot: Pick<PortfolioCapita
 	return ceilDivide(commitment, snapshot.economics.minimumCommitmentAttoEth) * snapshot.economics.minimumExecutionReserveAttoEth
 }
 
-export function capitalAuthorizationReason(snapshot: PortfolioCapitalSnapshot, commitment: bigint | undefined) {
+export function capitalAuthorizationReason(snapshot: PortfolioCapitalSnapshot, commitment: bigint | undefined, proofPrice?: bigint) {
 	if (snapshot.forkTime > 0n || snapshot.frozen || snapshot.importing || snapshot.exported) return 'This universe is closed to new commitments.'
 	if (!snapshot.priceValid) return 'Refresh the shared REP price first.'
 	if (commitment === undefined || commitment === 0n) return 'Enter a positive commitment amount.'
@@ -21,7 +22,8 @@ export function capitalAuthorizationReason(snapshot: PortfolioCapitalSnapshot, c
 	const active = snapshot.positions.find(position => position.commitment > 0n)
 	if (active !== undefined && active.batch !== 0n) return 'Cancel retirement before changing your commitment.'
 	if (active !== undefined && commitment < active.commitment) return 'Request retirement before reducing an existing commitment.'
-	if (snapshot.ownerPrincipalAttoRep < requiredPortfolioCollateral(snapshot, commitment)) return 'Collateral is below your saved health target.'
+	if (proofPrice === undefined && snapshot.totalCommitmentAttoEth - snapshot.ownerCommitmentAttoEth + commitment > snapshot.oracleExposureLimitAttoEth) return 'Request a price report funded for this larger commitment.'
+	if (snapshot.ownerPrincipalAttoRep < requiredPortfolioCollateral(snapshot, commitment, proofPrice)) return 'Collateral is below your saved health target.'
 	if (snapshot.ownerAccount.executionReserveAttoEth + (active?.executionReserveAttoEth ?? 0n) < requiredPortfolioExecutionReserve(snapshot, commitment)) return 'Fund the execution reserve first.'
 	return undefined
 }

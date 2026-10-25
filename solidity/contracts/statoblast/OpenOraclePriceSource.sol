@@ -208,11 +208,11 @@ abstract contract OpenOraclePriceSource {
 	}
 
 	function _requestPrice(address sponsor, uint256 bountyAttoEth, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth) internal {
-		require(pendingReportId() == 0, 'Oracle request already pending');
 		if (address(sharedPriceFeed) != address(0)) {
 			DelegateCall.invoke(address(reportDelegate), abi.encodeCall(OpenOracleReportDelegate.createSharedReport, (sponsor, bountyAttoEth, proposedRepPerEthPrice, requestedInitialAttoWeth)));
 			return;
 		}
+		require(pendingReportId() == 0, 'Oracle request already pending');
 		standalonePendingReportSponsor = sponsor;
 		bytes memory result = DelegateCall.invoke(address(reportDelegate), abi.encodeCall(OpenOracleReportDelegate.createReport, (sponsor, bountyAttoEth, proposedRepPerEthPrice, requestedInitialAttoWeth)));
 		(standalonePendingReportId, standalonePendingReportMaxSettlementBaseFeeAttoEthPerGas) = abi.decode(result, (uint256, uint256));

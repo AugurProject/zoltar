@@ -13,17 +13,7 @@ import { parseTradingAmountInput } from '@zoltar/ui-core-shared/forms/formInputs
 import { getDefaultTradingFormState } from '../lib/marketForm.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
-import {
-	estimateMintCheckpoint,
-	getCompleteSetRedeemAttoShares,
-	getDefaultShareMigrationTargetOutcomeIndexes,
-	getSelectedOutcomeShareBalance,
-	getTradingMigrateSharesGuardMessage,
-	getTradingMintGuardMessage,
-	getTradingRedeemCompleteSetGuardMessage,
-	getTradingRedeemSharesGuardMessage,
-	isTradingSystemDeployed,
-} from '../lib/trading.js'
+import { estimateMintCheckpoint, getDefaultShareMigrationTargetOutcomeIndexes, getSelectedOutcomeShareBalance, getTradingMigrateSharesGuardMessage, getTradingMintGuardMessage, getTradingRedeemCompleteSetGuardMessage, getTradingRedeemSharesGuardMessage, isTradingSystemDeployed } from '../lib/trading.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import type { ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import { createTradingSuccessPresentation, createTradingTransactionIntent, createTradingWarningPresentation } from '../../transactionPresentations.js'
@@ -321,16 +311,8 @@ export function useTradingOperations(
 		await runTradingAction(
 			'redeemCompleteSet',
 			async (walletAddress, securityPoolAddress, currentForm, isCurrentSelection, context) => {
-				const latestMintCapacity = await dependencies.loadSecurityPoolMintCapacity(securityPoolAddress)
 				if (!isCurrentSelection()) return undefined
-				const redeemAmountAttoEth = parseTradingAmountInput(currentForm.redeemAmount, 'Redeem amount')
-				const redeemAmountAttoShares = getCompleteSetRedeemAttoShares({
-					maxRedeemableAttoShares: tradingDetails.value?.maxRedeemableCompleteSetsAttoShares,
-					redeemAmountAttoEth,
-					settlementCollateralAttoEth: latestMintCapacity.settlementCollateralAttoEth,
-					shareTokenSupplyAttoShares: latestMintCapacity.shareTokenSupplyAttoShares,
-				})
-				if (redeemAmountAttoShares === undefined) throw new Error('Redeeming is unavailable because this pool has complete-set shares but no collateral.')
+				const redeemAmountAttoShares = parseTradingAmountInput(currentForm.redeemAmount, 'Complete-set shares')
 				return await dependencies.redeemCompleteSetInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, redeemAmountAttoShares)
 			},
 			'Failed to redeem complete sets.',

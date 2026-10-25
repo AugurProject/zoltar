@@ -1,9 +1,10 @@
 import { encodeFunctionData, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 import { buildPortfolioPrepareNextRequest, buildPortfolioCapitalDepositRequest, buildPortfolioCapitalSetHealthRequest, buildPortfolioCapitalFundExecutionReserveRequest, buildPortfolioCapitalAuthorizeRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { advanceSimulationTime } from '@zoltar/ui-core-shared/simulation/clock.js'
 import { createRangeProgressReporter, requireQaAccount } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
-import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact } from '../contractArtifact.js'
+import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact } from '../contractArtifact.js'
 import { loadAllSecurityPools } from '../protocol/securityPools.js'
 import { portfolioContractRequest, portfolioCreationRequest, portfolioReadClient, sendPortfolioTransaction } from '../protocol/securityPoolPortfolio.js'
 import { settleSeededOracleReport, settleOracleReportIfNeeded, type ScenarioSeedParameters } from './statoblastScenarioSeeding.js'
@@ -25,7 +26,18 @@ export async function seedPortfolioScenario({ accounts, createReadClient, create
 	if (policy === null || policy === undefined) throw new Error('Expected deployed admission policy')
 	const deployment = await sendPortfolioTransaction(
 		client,
-		portfolioCreationRequest(owner, initial.securityPoolAddress, 366n * 86400n, policy, { annualFeeBps: 1000n, purchaseFeeBps: 100n, minimumPurchaseFeeAttoEth: 10n ** 15n, minimumCommitmentAttoEth: 10n ** 18n, minimumExecutionReserveAttoEth: 10n ** 15n, minimumOutcomeRate: 10n ** 16n, rewardVestingSeconds: 86400n }),
+		portfolioCreationRequest(owner, initial.securityPoolAddress, 366n * 86400n, policy, {
+			annualFeeBps: 1000n,
+			purchaseFeeBps: 100n,
+			minimumPurchaseFeeAttoEth: 10n ** 15n,
+			minimumCommitmentAttoEth: 10n ** 18n,
+			minimumExecutionReserveAttoEth: 10n ** 15n,
+			minimumOutcomeRate: 10n ** 16n,
+			rewardVestingSeconds: 86400n,
+			reportingFeeAttoEth: 5n * 10n ** 16n,
+			serviceFeeBps: 2500n,
+			maximumOracleRewardAttoEth: 10n ** 17n,
+		}),
 		'Deploy portfolio',
 	)
 	const portfolio = deployment.receipt.contractAddress
@@ -51,12 +63,16 @@ export async function seedPortfolioScenario({ accounts, createReadClient, create
 	const managerAddress = (await loadAllSecurityPools(readClient)).find(pool => pool.securityPoolAddress.toLowerCase() === questionPool.toLowerCase())?.managerAddress
 	if (managerAddress === undefined) throw new Error('Expected namespaced portfolio question pool')
 	await reportStep('Preparing shared portfolio oracle')
-	const report = await settleSeededOracleReport({ accountAddress: owner, createWriteClient, managerAddress, onProgressStep: reportStep, poolLabel: 'portfolio', readClient })
+	const commitment = 10n * 10n ** 18n
+	const feed = await readClient.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'priceFeed', args: [0n] })
+	const [minimumReport, exposureDivider] = await Promise.all([readClient.readContract({ address: feed, abi: feedArtifact.abi, functionName: 'minimumToken1ReportAttoEth' }), readClient.readContract({ address: feed, abi: feedArtifact.abi, functionName: 'OPEN_INTEREST_DIVIDER' })])
+	// Prepay the forthcoming commitment as well as the feed's current gas-security floor.
+	const requestedInitialAttoWeth = minimumReport + ceilDiv(commitment, exposureDivider)
+	const report = await settleSeededOracleReport({ accountAddress: owner, createWriteClient, managerAddress, onProgressStep: reportStep, poolLabel: 'portfolio', readClient, requestedInitialAttoWeth })
 	await settleOracleReportIfNeeded({ memoryClient, readClient, writeClient: client, ...report })
 	await reportStep('Settled shared portfolio oracle')
 	await sendPortfolioTransaction(client, buildPortfolioCapitalSetHealthRequest({ owner, capitalLedger, targetHealthFactorBps: 12_000n }), 'Set owner health target')
 	await sendPortfolioTransaction(client, buildPortfolioCapitalFundExecutionReserveRequest({ owner, capitalLedger, amountAttoEth: 2n * 10n ** 16n }), 'Fund execution reserve')
-	const commitment = 10n * 10n ** 18n
 	const required = await readClient.readContract({ address: capitalLedger, abi: capitalArtifact.abi, functionName: 'requiredRep', args: [commitment, 12_000n] })
 	if (required > depositAttoRep) throw new Error('Seeded capital cannot cover the intended commitment')
 	await sendPortfolioTransaction(client, buildPortfolioCapitalAuthorizeRequest({ owner, capitalLedger, commitment }), 'Authorize shared commitment')

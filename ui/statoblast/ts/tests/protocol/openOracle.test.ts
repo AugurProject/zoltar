@@ -3,7 +3,7 @@ import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactio
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { createWalletClient, custom, publicActions, encodeAbiParameters, encodeEventTopics, parseAbiParameters, decodeFunctionData, getAddress, toHex, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { createWalletClient, custom, publicActions, encodeAbiParameters, encodeEventTopics, parseAbiParameters, decodeFunctionData, parseAbi, getAddress, toHex, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { getOpenOracleGameTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TRACK_DISPUTES, OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { createOpenOracleReportInstance, disputeOracleReport, loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, loadOpenOracleReportSummaries, settleOracleReport, withdrawOpenOracleBalance } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
 import { getOracleManagerPriceValidUntilTimestamp } from '@zoltar/ui-statoblast-shared/protocol/oracleTiming.js'
@@ -459,6 +459,13 @@ describe('openOracle protocol client', () => {
 								{ status: 'success', result: getOpenOracleAddress() },
 								{ status: 'failure', error: new Error('Shared feed has no single question') },
 							]
+						case 'feed':
+							return [
+								{ status: 'success', result: vaultAddress },
+								{ status: 'success', result: 1n },
+							]
+						case 'reportCandidates':
+							return [{ status: 'success', result: [vaultAddress, initialReporter, alternateSecurityPoolAddress, 0n, 0n, 0n] }]
 						case 'securityPoolFactory':
 							return [
 								{ status: 'success', result: getInfraContractAddresses().securityPoolFactory },
@@ -477,7 +484,7 @@ describe('openOracle protocol client', () => {
 					}
 				},
 			})
-			expect(await loadCoordinatorPriceValidUntilTimestamp(client, getOpenOracleAddress(), game)).toBe(registered ? game.reportTimestamp + 480n + 780n : undefined)
+			expect(await loadCoordinatorPriceValidUntilTimestamp(client, getOpenOracleAddress(), game, undefined, 1n)).toBe(registered ? game.reportTimestamp + 480n + 780n : undefined)
 		})
 	}
 
@@ -493,6 +500,24 @@ describe('openOracle protocol client', () => {
 			const client = { ...createMockWriteClient(() => {}), waitForTransactionReceipt: async () => ({ status: 'success' as const, logs }) }
 			const result = await settleOracleReport(client, getOpenOracleAddress(), 7n, preimage)
 			expect(result.priceSettlement).toEqual(status === 'accepted' ? { status } : { status, reason: 'Base fee too high' })
+		})
+	}
+
+	for (const accepted of [true, false]) {
+		test(`isolated report escrow attributes its feed settlement outcome: ${accepted}`, async () => {
+			const preimage = createOpenOraclePreimage(7n)
+			preimage.game.callbackContract = vaultAddress
+			const feedAbi = statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi
+			const escrowAbi = parseAbi(['event ReportCompleted(uint256 indexed reportId,address indexed priceFeed,bool accepted)'])
+			const completed = { address: vaultAddress, data: encodeAbiParameters(parseAbiParameters('bool'), [accepted]), topics: encodeEventTopics({ abi: escrowAbi, eventName: 'ReportCompleted', args: { reportId: 7n, priceFeed: alternateSecurityPoolAddress } }) }
+			const eventName = accepted ? ('PriceReported' as const) : ('PriceReportRejected' as const)
+			const result = {
+				address: alternateSecurityPoolAddress,
+				data: accepted ? encodeAbiParameters(parseAbiParameters('uint256,uint256'), [123n, 11n]) : encodeAbiParameters(parseAbiParameters('string,uint256,uint256,uint256,uint256'), ['Report stale', 0n, 0n, 0n, 0n]),
+				topics: encodeEventTopics({ abi: feedAbi, eventName, args: { reportId: 7n } }),
+			}
+			const client = { ...createMockWriteClient(() => {}), waitForTransactionReceipt: async () => ({ status: 'success' as const, logs: [result, completed] }) }
+			expect((await settleOracleReport(client, getOpenOracleAddress(), 7n, preimage)).priceSettlement).toEqual(accepted ? { status: 'accepted' } : { status: 'rejected', reason: 'Report stale' })
 		})
 	}
 

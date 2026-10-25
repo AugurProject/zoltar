@@ -1,4 +1,4 @@
-import { attoSharesToCollateralAttoEth, formatCollateralEth, formatCompleteSetQuantity, formatOutcomeWithValue, type ShareValueRate } from '../lib/shareValue.js'
+import { attoSharesToRecoveryAttoRep, attoSharesToCollateralAttoEth, formatCollateralEth, formatCompleteSetQuantity, formatOutcomeWithValue, type ShareValueRate } from '../lib/shareValue.js'
 import * as availabilityCopy from '../copy/availability.js'
 import type { ForkTarget } from '../protocol/forks.js'
 import { settlementUnavailability, type LiveBalances, type LiveMarket, type SettlementOperation, type SettlementUnavailableReason, type ShareOutcome } from '../protocol/live.js'
@@ -34,7 +34,7 @@ export function settlementInputBlocker(operation: SettlementOperation, unavailab
 	if (operation === 'redeem-complete-set') {
 		if (parsedAmountAttoShares === undefined || parsedAmountAttoShares <= 0n) return availabilityCopy.amountReason(parsedAmountAttoShares)
 		if (parsedAmountAttoShares > completeSetsAttoShares) return settlementCopy.formatCompleteSetLimit(formatCollateralEth(completeSetsAttoShares, rate, 'down'), formatCompleteSetQuantity(completeSetsAttoShares, 4, 'down'))
-		if (attoSharesToCollateralAttoEth(parsedAmountAttoShares, rate) === 0n) return settlementCopy.completeSetAmountTooSmall
+		if (attoSharesToCollateralAttoEth(parsedAmountAttoShares, rate) === 0n && attoSharesToRecoveryAttoRep(parsedAmountAttoShares, rate) === 0n) return settlementCopy.completeSetAmountTooSmall
 	}
 	if (operation === 'migrate-shares') {
 		if (targetOutcomeIndexes.length === 0) return settlementCopy.childUniverseRequired

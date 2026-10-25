@@ -75,6 +75,30 @@ function reportState(reportId: bigint, amount1: bigint, amount2: bigint): OpenOr
 }
 
 describe('configured coordinator report discovery', () => {
+	test('loads retained shared candidates and rejects creators outside the authenticated escrow set', async () => {
+		const policy = { ...reportState(7n, 1n, 2n).game, coordinator: activeCoordinator, openOracle, reportEscrows: { '6': idleCoordinator, '7': reporter } }
+		const clientFor = (wrongCreator = false) =>
+			createPublicClient({
+				chain: mainnet,
+				transport: custom(
+					multicallProvider(multicall3, ({ data, to, blockTag }) => {
+						expect(blockTag).toBe('0x64')
+						if (to.toLowerCase() === activeCoordinator.toLowerCase()) return encodeAbiParameters([{ type: 'uint256' }], [7n])
+						const call = decodeFunctionData({ abi: openOracleAbi, data })
+						const escrow = call.args[0] === 6n ? idleCoordinator : reporter
+						if (call.functionName === 'storedHelper') return encodeAbiParameters([{ type: 'address' }, { type: 'uint48' }, { type: 'uint48' }], [wrongCreator ? activeCoordinator : escrow, 80n, 79n])
+						if (call.functionName === 'storedGame') return encodeAbiParameters(gameOutputs, [1_000n, 2_000n, reporter, 90n, 0n, weth, 89n, 300n, 10_000n, activeCoordinator, 1n, rep, 1n, 10n, 20n, 140n, escrow, 1_000_000n, 30n, 7n])
+						throw new Error('Unexpected shared report read')
+					}),
+				),
+			})
+		const config = { coordinatorAddresses: [activeCoordinator], network, openOracle }
+		const reports = await pendingCoordinatorReports(clientFor(), config, 100n, [policy])
+		expect(reports.map(report => report.helper.reportId)).toEqual([6n, 7n])
+		expect(reports.map(report => report.helper.creator)).toEqual([idleCoordinator, reporter])
+		await expect(pendingCoordinatorReports(clientFor(true), config, 100n, [policy])).rejects.toThrow('was created by')
+		await expect(pendingCoordinatorReports(clientFor(), config, 100n, [{ ...policy, reportEscrows: { '6': idleCoordinator } }])).rejects.toThrow('outside its authenticated candidate set')
+	})
 	test('loads current report state at one block without querying event history', async () => {
 		const methods: string[] = []
 		const blockTags: unknown[] = []

@@ -1,7 +1,6 @@
 import * as tradingCopy from '../../../copy/trading.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit, formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -138,34 +137,6 @@ export function convertAttoSharesToSettlementCollateralAttoEth(amountAttoShares:
 	return (amountAttoShares * settlementCollateralAttoEth) / shareTokenSupplyAttoShares
 }
 
-function convertSettlementCollateralAttoEthToAttoShares(amountAttoEth: bigint, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares: bigint | undefined) {
-	if (settlementCollateralAttoEth === undefined || shareTokenSupplyAttoShares === undefined) return amountAttoEth
-	if (settlementCollateralAttoEth === 0n) {
-		if (shareTokenSupplyAttoShares !== 0n) return undefined
-		return amountAttoEth
-	}
-	return ceilDiv(amountAttoEth * shareTokenSupplyAttoShares, settlementCollateralAttoEth)
-}
-
-// Converting ETH back to shares rounds up, yet a maximum ETH amount rounded down from the share balance can map to fewer
-// shares and strand dust. An amount at the redeemable maximum therefore redeems the exact share balance.
-export function getCompleteSetRedeemAttoShares({
-	maxRedeemableAttoShares,
-	redeemAmountAttoEth,
-	settlementCollateralAttoEth,
-	shareTokenSupplyAttoShares,
-}: {
-	maxRedeemableAttoShares: bigint | undefined
-	redeemAmountAttoEth: bigint
-	settlementCollateralAttoEth: bigint | undefined
-	shareTokenSupplyAttoShares: bigint | undefined
-}) {
-	const convertedAttoShares = convertSettlementCollateralAttoEthToAttoShares(redeemAmountAttoEth, settlementCollateralAttoEth, shareTokenSupplyAttoShares)
-	if (convertedAttoShares === undefined || maxRedeemableAttoShares === undefined || convertedAttoShares > maxRedeemableAttoShares) return convertedAttoShares
-	const maxRedeemableAttoEth = convertAttoSharesToSettlementCollateralAttoEth(maxRedeemableAttoShares, settlementCollateralAttoEth, shareTokenSupplyAttoShares)
-	return redeemAmountAttoEth >= maxRedeemableAttoEth ? maxRedeemableAttoShares : convertedAttoShares
-}
-
 export function getShareSettlementBalances(shareBalances: TradingShareBalances | undefined, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares: bigint | undefined) {
 	if (shareBalances === undefined) return undefined
 	return {
@@ -275,13 +246,11 @@ export function getTradingMintGuardMessage({
 
 export function getTradingRedeemCompleteSetGuardMessage({
 	accountAddress,
-	settlementCollateralAttoEth,
 	hasSelectedPool,
 	isOnActiveAppChain,
 	loadingTradingDetails,
 	redeemAmountInput,
 	shareBalances,
-	shareTokenSupplyAttoShares,
 }: {
 	accountAddress: Address | undefined
 	settlementCollateralAttoEth: bigint | undefined
@@ -307,12 +276,7 @@ export function getTradingRedeemCompleteSetGuardMessage({
 	if (redeemAmount === undefined) return 'Enter a valid redeem amount.'
 
 	if (redeemAmount <= 0n) return undefined
-	const redeemAmountAttoShares = convertSettlementCollateralAttoEthToAttoShares(redeemAmount, settlementCollateralAttoEth, shareTokenSupplyAttoShares)
-	if (redeemAmountAttoShares === undefined) return 'Redeeming is unavailable because this pool has complete-set shares but no collateral.'
-	if (redeemAmountAttoShares > maxRedeemableCompleteSetsAttoShares) {
-		const maximumRedeemableAmountAttoEth = convertAttoSharesToSettlementCollateralAttoEth(maxRedeemableCompleteSetsAttoShares, settlementCollateralAttoEth, shareTokenSupplyAttoShares)
-		return `Max redeemable amount is ${formatCurrencyBalanceWithUnit(maximumRedeemableAmountAttoEth, 'ETH')}.`
-	}
+	if (redeemAmount > maxRedeemableCompleteSetsAttoShares) return `Max redeemable amount is ${formatCurrencyBalanceWithUnit(maxRedeemableCompleteSetsAttoShares, 'sets')}.`
 	return undefined
 }
 

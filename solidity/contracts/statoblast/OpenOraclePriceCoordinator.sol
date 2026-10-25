@@ -46,9 +46,6 @@ contract OpenOraclePriceCoordinator is OpenOraclePriceSource {
 	mapping(uint256 => bool) private isActiveStagedOperation;
 	uint256[] private pendingSettlementOperationIds;
 
-	uint256 private sharedPendingReportId;
-	mapping(uint256 => uint256) public operationReportIds;
-
 	constructor(OpenOracle _openOracle, ReputationToken _reputationToken, IWeth9 _weth, uint256 _gasConsumedOpenOracleReportPrice, uint32 _gasConsumedSettlement, uint256 _gasUnitsForOneDispute, uint256 _initialReportPriorityFeeAttoEthPerGas, uint256 _targetPriceErrorForDispute, uint256 _openOracleSecurityMultiplierBps, uint48 _settlementTime, uint24 _disputeDelay, uint24 _protocolFee, uint24 _feePercentage, uint16 _multiplier, bool _timeType, bool _trackDisputes, address _protocolFeeRecipient, uint256 _escalationHaltMultiplierBps, uint256 _maxSettlementBaseFeeMultiplierBps, uint256 _minLiquidationPriceDistanceBps, OpenOracleReportDelegate _reportDelegate)
 		OpenOraclePriceSource(
 			_openOracle,
@@ -84,36 +81,6 @@ contract OpenOraclePriceCoordinator is OpenOraclePriceSource {
 		emit LiquidationApprovalRegistrySet(registry);
 	}
 
-	// Only the initiating question may use a report's bounded callback budget.
-	// Terminal reports are detached before a later report can acquire new work.
-	function _prepareSharedQueue() private {
-		if (address(sharedPriceFeed) == address(0)) return;
-		if (sharedPendingReportId != 0 && sharedPriceFeed.reportOutcome(sharedPendingReportId) != 0) {
-			if (sharedPriceFeed.reportOutcome(sharedPendingReportId) == 2)
-				_failPendingSettlementOperations('Shared report rejected');
-			else {
-				delete pendingSettlementOperationIds;
-				pendingOperationSlotId = 0;
-			}
-			sharedPendingReportId = 0;
-		}
-		if (pendingReportId() != 0 && !isPriceValid())
-			require(sharedPriceFeed.pendingCoordinator() == address(this), 'Another question owns pending callback');
-	}
-
-	/// @notice Feed-only bounded callback. A failed callback leaves actions executable or fail-able by anyone.
-	function sharedPriceSettled(uint256 reportId, bool accepted, string calldata reason) external {
-		require(msg.sender == address(sharedPriceFeed), 'Only shared price feed');
-		if (sharedPendingReportId != reportId) return;
-		sharedPendingReportId = 0;
-		if (!accepted) {
-			_failPendingSettlementOperations(reason);
-			return;
-		}
-		_acceptPendingSettlementOperations();
-		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PriceReported, reportId, 0);
-	}
-
 	function _acceptPendingSettlementOperations() internal override {
 		uint256[] memory operationIds = pendingSettlementOperationIds;
 		delete pendingSettlementOperationIds;
@@ -139,10 +106,9 @@ contract OpenOraclePriceCoordinator is OpenOraclePriceSource {
 	/// @notice Executor-only registration preserves the wallet as owner and oracle sponsor.
 	function stageVaultOperations(address owner, bool changeCommitment, uint256 actionCount, uint256 validForSeconds, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) external payable returns (uint256 operationId) {
 		require(msg.sender == address(vaultOperations), 'Only vault operations executor');
-		_prepareSharedQueue();
 		require(validForSeconds > 0 && validForSeconds <= MAX_OPERATION_VALID_FOR_SECONDS, 'Invalid execution window');
 		require(!securityPool.isEscalationResolved(), 'Escalation resolved');
-		if (pendingReportId() != 0 && !isPriceValid())
+		if (address(sharedPriceFeed) == address(0) && pendingReportId() != 0 && !isPriceValid())
 			require(owner == pendingReportSponsor(), 'Only pending report sponsor can submit');
 		if (changeCommitment)
 			require(stagedOperations[latestBackingTargetOperationIds[owner]].operator == address(0), 'Commitment operation already pending');
@@ -185,7 +151,6 @@ contract OpenOraclePriceCoordinator is OpenOraclePriceSource {
 
 	function _requestPriceIfNeededAndStageOperation(OperationType operation, address targetVault, address receiverVault, bytes32 approvalId, uint256 operationValue, uint256 validForSeconds, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) private {
 		require(operation != OperationType.VaultOperations, 'Use vault operations submission');
-		_prepareSharedQueue();
 		_validateStageRequest(operation, targetVault, receiverVault, approvalId, operationValue, validForSeconds);
 		(uint256 operationId, HistoricalQueueSnapshot memory snapshot) = _recordStagedOperation(operation, msg.sender, targetVault, receiverVault, approvalId, operationValue, validForSeconds);
 		uint256 retained = _executeOrQueueStagedOperation(operationId, snapshot, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth);
@@ -207,7 +172,7 @@ contract OpenOraclePriceCoordinator is OpenOraclePriceSource {
 			require(receiverVault != targetVault, 'Receiver is target');
 		}
 		require(!securityPool.isEscalationResolved(), 'Escalation resolved');
-		if (pendingReportId() != 0 && !isPriceValid()) {
+		if (address(sharedPriceFeed) == address(0) && pendingReportId() != 0 && !isPriceValid()) {
 			require(msg.sender == pendingReportSponsor(), 'Only the pending report sponsor can queue more operations until settlement');
 		}
 		if (operation == OperationType.WithdrawRep) {
@@ -251,19 +216,21 @@ contract OpenOraclePriceCoordinator is OpenOraclePriceSource {
 			executeStagedOperation(operationId);
 			return 0;
 		}
+		if (address(sharedPriceFeed) != address(0)) {
+			// Shared feeds accept independent reports. Operations execute individually
+			// against any later valid canonical price, without a global queue slot.
+			_emitStagedOperationQueued(operationId, snapshot, false);
+			_requireRequestBounty(bountyAttoEth);
+			_requestPrice(stagedOperations[operationId].operator, bountyAttoEth, proposedRepPerEthPrice, requestedInitialAttoWeth);
+			return bountyAttoEth;
+		}
 		bool shouldRequestPrice = pendingReportId() == 0 && pendingSettlementOperationIds.length == 0;
 		bool isPendingSettlementOperationId = _trackPendingSettlementOperation(operationId);
-		if (address(sharedPriceFeed) != address(0))
-			require(isPendingSettlementOperationId, 'Oracle settlement capacity exceeded');
 		_emitStagedOperationQueued(operationId, snapshot, isPendingSettlementOperationId);
 		if (shouldRequestPrice && isPendingSettlementOperationId) {
 			_requireRequestBounty(bountyAttoEth);
 			retained = bountyAttoEth;
 			_requestPrice(stagedOperations[operationId].operator, bountyAttoEth, proposedRepPerEthPrice, requestedInitialAttoWeth);
-		}
-		if (address(sharedPriceFeed) != address(0)) {
-			sharedPendingReportId = pendingReportId();
-			operationReportIds[operationId] = sharedPendingReportId;
 		}
 	}
 
@@ -282,15 +249,6 @@ contract OpenOraclePriceCoordinator is OpenOraclePriceSource {
 	function executeStagedOperation(uint256 operationId) public {
 		StagedOperation memory stagedOperation = stagedOperations[operationId];
 		require(stagedOperation.operator != address(0), 'Staged operation unavailable');
-		uint256 reportId = operationReportIds[operationId];
-		if (reportId != 0) {
-			uint8 outcome = sharedPriceFeed.reportOutcome(reportId);
-			if (outcome == 2) {
-				_consumeAndEmitExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Shared report rejected');
-				return;
-			}
-			require(outcome == 1, 'Shared report not accepted');
-		}
 		if (block.timestamp > stagedOperation.queuedAt + settlementTime + stagedOperation.validForSeconds) {
 			_consumeAndEmitExecutedStagedOperation(operationId, stagedOperation.operation, false, STAGED_OPERATION_ERROR_EXPIRED);
 			return;

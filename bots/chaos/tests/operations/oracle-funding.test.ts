@@ -41,6 +41,22 @@ function requestPricePlan(snapshot: ReturnType<typeof snapshotFixture>) {
 }
 
 describe('oracle request funding bounds', () => {
+	test('shared report funding keeps its fixed bounty at every inclusion base fee', () => {
+		const coordinator = { ...simpleCoordinatorFunding, fixedRequestPriceCostAttoEth: 101n.toString() }
+		expect(() => assertAnchoredOracleRequestFunding({ baseFeePerGas: '1', coordinator, minimumToken1ReportAttoEth: 4n.toString(), requestPriceCostAttoEth: 101n.toString(), settlementCollateralAttoEth: 100n.toString() })).not.toThrow()
+		const envelope = oracleRequestFundingEnvelope({
+			coordinator,
+			maximumEthPrincipalAttoEth: 1000n.toString(),
+			maximumNativePrincipalAttoEth: 101n.toString(),
+			maximumRepPrincipalAttoRep: 1000n.toString(),
+			maximumWethPrincipalAttoEth: 1000n.toString(),
+			proposedRepPerEthPrice: (10n ** 18n).toString(),
+			settlementCollateralCeilingAttoEth: 100n.toString(),
+		})
+		expect(envelope.maximumRequestPriceCostAttoEth).toBe('101')
+		expect(BigInt(envelope.maximumBaseFeePerGas)).toBeGreaterThan(1n)
+		expect(() => assertOracleRequestFundingEnvelope({ coordinator, envelope, proposedRepPerEthPrice: (10n ** 18n).toString(), settlementCollateralAttoEth: 100n.toString() })).not.toThrow()
+	})
 	test('renews a fresh shared portfolio price without allowing duplicate or fresh standalone reports', () => {
 		const { pool, snapshot } = requestPriceSnapshot()
 		pool.oraclePriceValid = true
@@ -48,6 +64,7 @@ describe('oracle request funding bounds', () => {
 		Object.assign(pool, { priceFeed: address(80), oracleExposureAttoEth: 100n.toString() })
 		expect(requestPricePlan(snapshot)).toBeDefined()
 		pool.pendingReportId = '1'
+		pool.reportEscrows = { '1': address(81) }
 		expect(requestPricePlan(snapshot)).toBeUndefined()
 	})
 

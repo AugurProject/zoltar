@@ -4,7 +4,7 @@ import { capitalSnapshot, unit } from './capitalFixture.js'
 test('collateral follows the owner health target and each contract rounding step', () => {
 	const snapshot = capitalSnapshot()
 	expect(requiredPortfolioCollateral(snapshot, 10n * unit)).toBe(25_200_000_000_000_000_000n)
-	expect(requiredPortfolioCollateral({ ...snapshot, acceptedPrice: 1n }, 1n)).toBe(3n)
+	expect(requiredPortfolioCollateral({ ...snapshot, ownerConservativePrice: 1n }, 1n)).toBe(3n)
 	expect(requiredPortfolioCollateral({ ...snapshot, ownerAccount: { ...snapshot.ownerAccount, targetHealthFactorBps: 0n } }, 10n * unit)).toBe(21n * unit)
 })
 test('execution reserves grow with commitment lots and existing active reserve counts toward funding', () => {
@@ -31,4 +31,12 @@ test('all owner principal backs authorization and retirement must be canceled fi
 	const snapshot = capitalSnapshot({ withdrawableAttoRep: 0n })
 	expect(capitalAuthorizationReason(snapshot, 10n * unit)).toBeUndefined()
 	expect(capitalAuthorizationReason({ ...snapshot, positions: snapshot.positions.map(position => ({ ...position, batch: 2n })) }, 10n * unit)).toContain('Cancel retirement')
+})
+
+test('a funded report permits growth only with its conservative collateral price', () => {
+	const snapshot = capitalSnapshot({ oracleExposureLimitAttoEth: 1n, ownerPrincipalAttoRep: 40n * unit })
+	expect(capitalAuthorizationReason(snapshot, 10n * unit)).toContain('funded')
+	expect(capitalAuthorizationReason(snapshot, 10n * unit, 3n * unit)).toBeUndefined()
+	expect(capitalAuthorizationReason({ ...snapshot, ownerPrincipalAttoRep: 30n * unit }, 10n * unit, 3n * unit)).toContain('Collateral')
+	expect(requiredPortfolioCollateral(snapshot, 10n * unit, 3n * unit)).toBe(37_800_000_000_000_000_000n)
 })

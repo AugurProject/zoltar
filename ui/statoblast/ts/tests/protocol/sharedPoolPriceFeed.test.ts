@@ -41,7 +41,7 @@ test('report funding covers shared exposure across questions at the pinned block
 	expect(await readCoordinatorMinimumReport(client, coordinator)).toBe(1000n * 10n ** 18n + 807_692_307_692_307_693n)
 })
 
-test('an unrelated question cannot join a shared report operation queue', async () => {
+test('an unrelated pending report does not block an independently funded shared operation', async () => {
 	const readContract = createReadContractStub(async request => {
 		switch (request.functionName) {
 			case 'priceFeed':
@@ -69,10 +69,10 @@ test('an unrelated question cannot join a shared report operation queue', async 
 		}
 	})
 	const client = { readContract, getBlock: async () => ({ number: 7n, timestamp: 1n, baseFeePerGas: 10n, transactions: [] }) }
-	await expect(loadOracleManagerQueueOperationEthValue(client, coordinator)).rejects.toThrow('Another question is refreshing the shared pool price')
+	expect(await loadOracleManagerQueueOperationEthValue(client, coordinator)).toBeGreaterThanOrEqual(101n)
 })
 
-for (const mismatch of [undefined, 'feed', 'factory', 'weth', 'rep'] as const) {
+for (const mismatch of [undefined, 'feed', 'factory', 'weth', 'rep', 'escrow', 'report'] as const) {
 	test(`shared report freshness authenticates canonical factory registration and report tokens (${mismatch ?? 'valid'})`, async () => {
 		const { createMulticallStub } = await import('@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js')
 		const { loadCoordinatorPriceValidUntilTimestamp } = await import('@zoltar/ui-statoblast-shared/protocol/openOracleSettlement.js')
@@ -80,6 +80,9 @@ for (const mismatch of [undefined, 'feed', 'factory', 'weth', 'rep'] as const) {
 		const { getInfraContractAddresses } = await import('@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js')
 		const multicall = createMulticallStub(async requests =>
 			requests.contracts.map(request => {
+				if (request.functionName === 'feed') return { status: 'success', result: feed }
+				if (request.functionName === 'reportId') return { status: 'success', result: mismatch === 'report' ? 8n : 7n }
+				if (request.functionName === 'reportCandidates') return { status: 'success', result: [mismatch === 'escrow' ? feed : coordinator, coordinator, otherCoordinator, 0n, 0n, 0n] }
 				if (request.functionName === 'openOracle') return { status: 'success', result: otherCoordinator }
 				if (request.functionName === 'securityPoolFactory') return { status: 'success', result: mismatch === 'factory' ? coordinator : getInfraContractAddresses().securityPoolFactory }
 				if (request.functionName === 'portfolio') return { status: 'success', result: coordinator }
@@ -97,7 +100,7 @@ for (const mismatch of [undefined, 'feed', 'factory', 'weth', 'rep'] as const) {
 			}),
 		)
 		const game = {
-			callbackContract: feed,
+			callbackContract: coordinator,
 			callbackGasLimit: 1n,
 			currentAmount1: 1n,
 			currentAmount2: 1n,
@@ -118,7 +121,7 @@ for (const mismatch of [undefined, 'feed', 'factory', 'weth', 'rep'] as const) {
 			token1: coordinator,
 			token2: otherCoordinator,
 		}
-		const expiry = await loadCoordinatorPriceValidUntilTimestamp({ multicall }, otherCoordinator, game, 1)
+		const expiry = await loadCoordinatorPriceValidUntilTimestamp({ multicall }, otherCoordinator, game, 1, 7n)
 		if (mismatch === undefined) expect(expiry).toBe(940n)
 		else expect(expiry).toBeUndefined()
 	})

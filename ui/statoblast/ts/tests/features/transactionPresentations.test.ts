@@ -313,7 +313,7 @@ describe('transaction presentations', () => {
 		})
 		const submitted = markTransactionSubmitted(prepared, transactionHash)
 		const failed = markTransactionFailed(submitted, { kind: 'reverted', message: 'Transaction reverted' })
-		const success = createPoolOracleSuccessPresentation({ action: 'requestPrice', hash: transactionHash }, context)
+		const success = createPoolOracleSuccessPresentation({ action: 'requestPrice', hash: transactionHash, reportId: 77n }, context)
 
 		for (const presentation of [requested.active, prepared.active, submitted.active, failed.active, success]) {
 			expect(presentation?.universeId).toBe(7n)
@@ -323,6 +323,7 @@ describe('transaction presentations', () => {
 		expect(intent.failedTitle).toBe('Price request')
 		expect(failed.active?.title).toBe('Price request')
 		expect(success.title).toBe('Price requested')
+		expect(success.rows?.find(row => row.label === 'Report ID')?.value).toBe('77')
 	})
 
 	test('describes truth-auction claim settlement as REP plus auctioned underwriting commitments', () => {

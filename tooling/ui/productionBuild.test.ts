@@ -563,8 +563,8 @@ test(
 				).toEqual({
 					managerLoaded: true,
 					owner: '0x00000000000000000000000000000000000000a1',
-					// The seeded 3 REP/ETH price and 2× multiplier retain 60 REP at the 100% protocol floor.
-					withdrawableRep: ['4940REP'],
+					// The seeded 3 REP/ETH price, 5% oracle band and 2× multiplier retain 63.15789473684210528 REP at the 100% protocol floor.
+					withdrawableRep: ['4936.84210526315789472REP'],
 					principalRep: ['5000REP'],
 					commitment: ['10ETH'],
 					poolPledgedRep: ['5000REP'],

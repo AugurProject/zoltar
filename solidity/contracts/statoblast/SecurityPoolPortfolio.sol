@@ -12,13 +12,14 @@ import { ICapitalFeeStreams } from './interfaces/ICapitalAccounting.sol';
 import { SecurityPoolPortfolioSettlement } from './SecurityPoolPortfolioSettlement.sol';
 import { SecurityPoolReporterLedger } from './SecurityPoolReporterLedger.sol';
 import { SecurityPoolPortfolioPurchase } from './SecurityPoolPortfolioPurchase.sol';
-import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
+import { SecurityPoolPortfolioServices } from './SecurityPoolPortfolioServices.sol';
 import {
 	SecurityPoolCapitalLedgerDeployer,
 	SecurityPoolCommitmentIndexDeployer,
 	SecurityPoolCapitalFeeStreamsDeployer,
 	SecurityPoolSettlementBookDeployer,
 	SecurityPoolPortfolioSettlementDeployer,
+	SecurityPoolPortfolioServicesDeployer,
 	SecurityPoolReporterLedgerDeployer
 } from './SecurityPoolPortfolioModuleDeployers.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
@@ -34,7 +35,6 @@ interface IPortfolioForkCoordinator {
 	function logicalTimeForNative(uint248 universeId, uint48 timestamp) external view returns (uint48);
 	function ensureReady(uint248 universeId) external;
 	function freeze(uint248 universeId) external;
-	function recapitalizeUniverse(uint248 universeId) external payable;
 	function inheritedFixedOutcome(uint248 universeId, uint256 questionId) external view returns (bool, uint256);
 }
 interface IPortfolioForkCoordinatorDeployer {
@@ -42,6 +42,8 @@ interface IPortfolioForkCoordinatorDeployer {
 }
 interface IPortfolioReporterIdentity {
 	function securityPool() external view returns (ISecurityPool);
+	function forkContinuation() external view returns (bool);
+	function forkCarrySnapshotInitialized() external view returns (bool);
 }
 
 /// @notice Shared REP custody and aggregate settlement with personal vault commitments.
@@ -55,6 +57,9 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		uint256 minimumExecutionReserveAttoEth;
 		uint256 minimumOutcomeRate;
 		uint48 rewardVestingSeconds;
+		uint256 reportingFeeAttoEth;
+		uint256 serviceFeeBps;
+		uint256 maximumOracleRewardAttoEth;
 	}
 	struct Deployers {
 		SecurityPoolCapitalLedgerDeployer capital;
@@ -64,6 +69,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		SecurityPoolPortfolioSettlementDeployer settlement;
 		SecurityPoolReporterLedgerDeployer reporters;
 		IPortfolioForkCoordinatorDeployer forks;
+		SecurityPoolPortfolioServicesDeployer services;
 	}
 	ISecurityPoolFactory public immutable factory;
 	ISecurityPool public immutable seedPool;
@@ -80,7 +86,11 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	uint256 public immutable minimumExecutionReserveAttoEth;
 	uint256 public immutable minimumOutcomeRate;
 	uint48 public immutable rewardVestingSeconds;
+	uint256 public immutable reportingFeeAttoEth;
+	uint256 public immutable serviceFeeBps;
+	uint256 public immutable maximumOracleRewardAttoEth;
 	SecurityPoolPortfolioPurchase public immutable quoteHelper;
+	SecurityPoolPortfolioServices public immutable services;
 	SecurityPoolPortfolioSettlement public settlement;
 	SecurityPoolReporterLedger public reporters;
 	address public forkController;
@@ -90,8 +100,6 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	mapping(address => bool) private capitalAddresses;
 	mapping(uint256 => bytes32) public questionOriginIds;
 	mapping(address => bool) public registeredPools;
-	mapping(uint248 => bool) private syncingFees;
-	mapping(uint248 => bool) public feesEnabled;
 	uint256[] private questions;
 	bool private entered;
 	address private purchasingPool;
@@ -100,12 +108,14 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	event CompleteSetsFunded(uint248 indexed universeId, uint256 indexed questionId, address indexed recipient, uint256 cashAttoEth, uint256 shares, uint256 purchaseFeeAttoEth);
 	event UniversePrepared(uint248 indexed universeId, address capitalLedger);
 	event SetupAdvanced(uint8 stage);
+	event QuestionReportingRewardPaid(uint248 indexed universeId, uint256 indexed questionId, address indexed recipient);
 
 	constructor(ISecurityPoolFactory _factory, ISecurityPool seed, uint256 horizon, Deployers memory deployment, ISecurityPoolQuestionAdmissionPolicy admission, EconomicsConfig memory config) {
 		require(address(admission).code.length != 0, 'Admission policy has no code');
 		require(config.purchaseFeeBps <= 10_000 && config.annualFeeBps <= 10_000 && config.minimumCommitmentAttoEth > 0 && config.minimumExecutionReserveAttoEth > 0, 'Invalid portfolio economics');
+		require(config.serviceFeeBps <= 10_000, 'Invalid maintenance fee share');
 		require(config.minimumOutcomeRate > 0 && config.minimumOutcomeRate <= 1e18, 'Invalid minimum exchange rate');
-		require(address(deployment.capital).code.length != 0 && address(deployment.commitments).code.length != 0 && address(deployment.fees).code.length != 0 && address(deployment.books).code.length != 0 && address(deployment.settlement).code.length != 0 && address(deployment.reporters).code.length != 0 && address(deployment.forks).code.length != 0, 'Portfolio deployer has no code');
+		require(address(deployment.capital).code.length != 0 && address(deployment.commitments).code.length != 0 && address(deployment.fees).code.length != 0 && address(deployment.books).code.length != 0 && address(deployment.settlement).code.length != 0 && address(deployment.reporters).code.length != 0 && address(deployment.forks).code.length != 0 && address(deployment.services).code.length != 0, 'Portfolio deployer has no code');
 		require(config.rewardVestingSeconds > 0 && horizon > 0 && horizon <= type(uint48).max, 'Invalid portfolio duration');
 		require(address(seed.parent()) == address(0) && address(seed.securityPoolFactory()) == address(_factory), 'Invalid portfolio seed');
 		bytes32 origin = _factory.getSecurityPoolOriginId(seed);
@@ -125,8 +135,12 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		minimumExecutionReserveAttoEth = config.minimumExecutionReserveAttoEth;
 		minimumOutcomeRate = config.minimumOutcomeRate;
 		rewardVestingSeconds = config.rewardVestingSeconds;
+		reportingFeeAttoEth = config.reportingFeeAttoEth;
+		serviceFeeBps = config.serviceFeeBps;
+		maximumOracleRewardAttoEth = config.maximumOracleRewardAttoEth;
 		deployers = deployment;
 		quoteHelper = new SecurityPoolPortfolioPurchase(address(this));
+		services = deployment.services.create(address(this), config.maximumOracleRewardAttoEth, initialReportPriorityFeeAttoEthPerGas);
 	}
 
 	modifier nonReentrant() {
@@ -134,6 +148,10 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		entered = true;
 		_;
 		entered = false;
+	}
+	modifier onlyServices() {
+		require(msg.sender == address(services), 'Only portfolio services');
+		_;
 	}
 	modifier onlyForkController() {
 		require(msg.sender == forkController, 'Only fork coordinator');
@@ -147,8 +165,10 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		if (setupStage == 0) {
 			settlement = deployers.settlement.create(address(this));
 			settlement.initialize(deployers.books.create(address(settlement), minimumOutcomeRate));
+			settlement.authorizeServices(address(services));
 			settlement.registerUniverse(originUniverseId, uint48(block.timestamp));
 			settlement.setFeesEnabled(originUniverseId, false, uint48(block.timestamp));
+			services.registerUniverse(originUniverseId);
 		} else if (setupStage == 1) {
 			reporters = deployers.reporters.create(address(this), zoltar);
 			reporters.registerUniverse(originUniverseId);
@@ -163,7 +183,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		emit SetupAdvanced(setupStage);
 	}
 	receive() external payable {
-		require(msg.sender == address(settlement) || msg.sender == forkController || capitalAddresses[msg.sender], 'Unexpected portfolio ETH');
+		require(msg.sender == address(settlement) || msg.sender == address(services) || msg.sender == forkController || capitalAddresses[msg.sender], 'Unexpected portfolio ETH');
 	}
 	function reporterLedger(uint248) external view returns (address) {
 		return address(reporters);
@@ -198,10 +218,6 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	}
 	function logicalTime(uint248 universeId) public view returns (uint48) {
 		return IPortfolioForkCoordinator(forkController).logicalTime(universeId);
-	}
-	function _logicalAt(uint248 universeId, uint256 wallTime) private view returns (uint48) {
-		require(wallTime <= type(uint48).max, 'Native clock exhausted');
-		return IPortfolioForkCoordinator(forkController).logicalTimeForNative(universeId, uint48(wallTime));
 	}
 	function forkLogicalTime(uint248 universeId) external view returns (uint48) {
 		return IPortfolioForkCoordinator(forkController).forkLogicalTime(universeId);
@@ -271,136 +287,69 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	function purchaseFee(uint256 mintAttoEth) public view returns (uint256) {
 		return quoteHelper.purchaseFee(mintAttoEth);
 	}
+	function purchaseQuote(uint248 universeId, uint256 questionId, uint256 mintAttoEth) external view returns (uint256 fee, uint256 premium, uint256 rewardFunding, uint256 maintenance) {
+		return quoteHelper.purchaseQuote(universeId, questionId, mintAttoEth);
+	}
 	function createCompleteSet(uint248 universeId, uint256 questionId, uint256 mintAttoEth, address recipient, uint256 minimumShares) external payable nonReentrant returns (uint256 minted) {
+		uint256 fee;
+		(minted, fee) = services.purchase{value: msg.value}(msg.sender, universeId, questionId, mintAttoEth, recipient, minimumShares);
+		emit CompleteSetsFunded(universeId, questionId, recipient, mintAttoEth, minted, fee);
+	}
+	function prepareServicePurchase(uint248 universeId, uint256 questionId) external onlyServices returns (ISecurityPool pool) {
 		require(setupStage == 3, 'Portfolio setup incomplete');
-		require(mintAttoEth > 0, 'Purchase amount zero');
 		IPortfolioForkCoordinator(forkController).ensureReady(universeId);
 		require(IPortfolioForkCoordinator(forkController).isReady(universeId), 'Universe is not ready');
 		if (universeId != originUniverseId)
 			require(questionAdmissionPolicy.isQuestionAllowed(address(this), originUniverseId, questionId), 'Question rejected by admission policy');
-		ISecurityPool pool = universeId == originUniverseId ? addQuestion(questionId) : getPool(questionId, universeId);
-		uint256 fee = purchaseFee(mintAttoEth);
-		require(msg.value >= mintAttoEth + fee, 'Purchase fee exceeds budget');
-		SecurityPoolCapitalLedger capital = capitalLedger[universeId];
-		capital.checkpoint();
+		pool = universeId == originUniverseId ? addQuestion(questionId) : getPool(questionId, universeId);
+		capitalLedger[universeId].checkpoint();
+	}
+	function executeServiceMint(ISecurityPool pool, address recipient, uint256 minimumShares) external payable onlyServices returns (uint256 minted) {
 		purchasingPool = address(pool);
-		minted = quoteHelper.buyCompleteSets{value: mintAttoEth}(pool, recipient, minimumShares);
+		minted = quoteHelper.mintCompleteSets{value: msg.value}(pool, recipient, minimumShares);
 		purchasingPool = address(0);
-		if (fee != 0) capital.fundVestedFees{value: fee}(0);
-		uint256 refund = msg.value - mintAttoEth - fee;
-		if (refund != 0) {
-			(bool sent, ) = msg.sender.call{value: refund}('');
-			require(sent, 'Purchase refund failed');
-		}
-		emit CompleteSetsFunded(universeId, questionId, recipient, mintAttoEth, minted, fee);
 	}
-	/// @notice Donate cash to existing outcome claims. No shares or repayment right are created.
-	/// Queued retirement takes priority over the additional backing needed by this donation.
-	function recapitalizeUniverse(uint248 universeId) external payable nonReentrant {
-		require(setupStage == 3, 'Portfolio setup incomplete');
-		IPortfolioForkCoordinator(forkController).recapitalizeUniverse{value: msg.value}(universeId);
+	function deliverServiceMint(ISecurityPool pool, address recipient, uint256 shares) external onlyServices {
+		quoteHelper.deliverCompleteSets(pool, recipient, shares);
 	}
-	function mintQuestionSettlement()
-		external
-		payable
-		returns (uint256 mintedShares, uint256 totalEconomicShares, uint256 questionCashAttoEth)
-	{
+	function mintQuestionSettlement() external payable returns (uint256, uint256, uint256) {
 		ISecurityPool pool = _pool(msg.sender);
 		require(entered && purchasingPool == msg.sender, 'No authorized portfolio purchase');
-		SecurityPoolCapitalLedger capital = capitalLedger[pool.universeId()];
-		capital.setDemand(capital.demandAttoEth() + msg.value);
-		SecurityPoolPortfolioSettlement.Snapshot memory snapshot;
-		(mintedShares, snapshot) = settlement.mint{value: msg.value}(msg.sender, 0, logicalTime(pool.universeId()));
-		_creditSnapshot(pool.universeId(), snapshot);
-		return (mintedShares, snapshot.outcomeSupplyAttoShares, snapshot.questionCashAttoEth);
+		return services.mintQuestionSettlement{value: msg.value}(pool);
 	}
-	function redeemQuestionSettlement(address recipient, uint256 burnedShares) external returns (uint256 paidCashAttoEth, uint256 totalEconomicShares, uint256 questionCashAttoEth) {
-		ISecurityPool pool = _pool(msg.sender);
-		capitalLedger[pool.universeId()].checkpoint();
-		SecurityPoolPortfolioSettlement.Snapshot memory snapshot;
-		(paidCashAttoEth, snapshot) = settlement.redeem(msg.sender, recipient, burnedShares, 0, logicalTime(pool.universeId()));
-		_creditSnapshot(pool.universeId(), snapshot);
-		if (zoltar.getForkTime(pool.universeId()) == 0) capitalLedger[pool.universeId()].serveRetirement();
-		return (paidCashAttoEth, snapshot.outcomeSupplyAttoShares, snapshot.questionCashAttoEth);
+	function redeemQuestionSettlement(address recipient, uint256 burnedShares) external returns (uint256, uint256, uint256) {
+		return services.redeemQuestionSettlement(_pool(msg.sender), recipient, burnedShares);
 	}
-	function checkpointQuestionSettlement()
-		external
-		returns (uint256 totalEconomicShares, uint256 questionCashAttoEth, uint48 timestamp)
-	{
-		ISecurityPool pool = _pool(msg.sender);
-		capitalLedger[pool.universeId()].checkpoint();
-		SecurityPoolPortfolioSettlement.Snapshot memory snapshot = settlement.checkpointQuestion(msg.sender, logicalTime(pool.universeId()));
-		_creditSnapshot(pool.universeId(), snapshot);
-		return (snapshot.outcomeSupplyAttoShares, snapshot.questionCashAttoEth, snapshot.timestamp);
+	function checkpointQuestionSettlement() external returns (uint256, uint256, uint48) {
+		return services.checkpointQuestionSettlement(_pool(msg.sender), false);
 	}
-	function refreshQuestionSettlement()
-		external
-		returns (uint256 totalEconomicShares, uint256 questionCashAttoEth, uint48 timestamp)
-	{
-		ISecurityPool pool = _pool(msg.sender);
-		uint248 universeId = pool.universeId();
-		capitalLedger[universeId].checkpoint();
-		// Final claims retain their immutable cash and fee state, including after
-		// partial or full redemption through a native pool's trailing refresh.
-		if (zoltar.getForkTime(universeId) != 0 || settlement.isQuestionFrozen(msg.sender)) {
-			SecurityPoolPortfolioSettlement.Snapshot memory frozenSnapshot = settlement.checkpointQuestion(msg.sender, logicalTime(universeId));
-			_creditSnapshot(universeId, frozenSnapshot);
-			return (
-				frozenSnapshot.outcomeSupplyAttoShares,
-				frozenSnapshot.questionCashAttoEth,
-				frozenSnapshot.timestamp
-			);
-		}
-		uint48 nowTime = logicalTime(universeId);
-		(uint96 rate, uint48 stop) = quoteHelper.feeStream(pool, nowTime);
-		SecurityPoolPortfolioSettlement.Snapshot memory snapshot = settlement.replaceFeeStream(msg.sender, rate, stop, nowTime);
-		_creditSnapshot(universeId, snapshot);
-		return (snapshot.outcomeSupplyAttoShares, snapshot.questionCashAttoEth, snapshot.timestamp);
+	function refreshQuestionSettlement() external returns (uint256, uint256, uint48) {
+		return services.checkpointQuestionSettlement(_pool(msg.sender), true);
 	}
 	function quoteQuestionSettlement(address pool, uint256 shares) external view returns (uint256) {
 		_pool(pool);
 		return settlement.quoteRedemption(pool, shares);
 	}
+	function quoteQuestionRecoveryRep(address pool, uint256 shares) external view returns (uint256) {
+		_pool(pool);
+		return settlement.quoteRecoveryRep(pool, shares);
+	}
 	function quoteQuestionMint(address pool, uint256 cash) external view returns (uint256) {
 		_pool(pool);
 		return settlement.quoteMint(pool, cash);
 	}
-	function _creditSnapshot(uint248 universeId, SecurityPoolPortfolioSettlement.Snapshot memory snapshot) private {
-		_creditUniverse(universeId, snapshot.earnedFeesAttoEth, snapshot.demandAttoEth);
+	function feesEnabled(uint248 universeId) external view returns (bool) {
+		return services.feesEnabled(universeId);
 	}
 	function onSharedPriceAccepted(uint248 universeId, uint256 price, uint48 validUntil) external {
 		require(msg.sender == factory.sharedPriceFeeds(address(this), universeId), 'Only canonical shared feed');
 		require(IPortfolioForkCoordinator(forkController).isReady(universeId), 'Universe is not active');
 		capitalLedger[universeId].acceptPrice(price, validUntil);
-		(uint256 fees, uint256 demand) = settlement.setFeesEnabled(universeId, true, logicalTime(universeId));
-		feesEnabled[universeId] = true;
-		_creditUniverse(universeId, fees, demand);
+		services.activateFees(universeId);
 	}
 	function checkpointCapitalFees(uint248 universeId, uint48 through) external {
 		require(msg.sender == address(capitalLedger[universeId]), 'Only universe capital ledger');
-		if (syncingFees[universeId]) return;
-		syncingFees[universeId] = true;
-		uint64 bookId = settlement.bookIds(universeId);
-		(, , , uint48 previous, bool isSealed) = settlement.ledger().totals(bookId);
-		if (!isSealed) {
-			uint48 nowTime = logicalTime(universeId);
-			uint48 earnedThrough = uint48(Math.max(previous, Math.min(nowTime, _logicalAt(universeId, through))));
-			uint256 fees;
-			uint256 demand;
-			if (through < capitalLedger[universeId].effectiveTime() && feesEnabled[universeId]) {
-				(fees, demand) = settlement.setFeesEnabled(universeId, false, earnedThrough);
-				feesEnabled[universeId] = false;
-				_creditUniverse(universeId, fees, demand);
-			}
-			(fees, demand) = settlement.checkpointUniverse(universeId, nowTime);
-			_creditUniverse(universeId, fees, demand);
-		}
-		syncingFees[universeId] = false;
-	}
-	function _creditUniverse(uint248 universeId, uint256 fees, uint256 demand) private {
-		SecurityPoolCapitalLedger capital = capitalLedger[universeId];
-		if (fees != 0) capital.creditTimedFees{value: fees}();
-		capital.synchronizeDemand(demand);
+		services.checkpointCapitalFees(universeId, through);
 	}
 	function onQuestionRepIncome(uint256 amountAttoRep) external {
 		ISecurityPool pool = _pool(msg.sender);
@@ -410,25 +359,48 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		capital.fundVestedFees(amountAttoRep);
 	}
 	function registerReporterGame(address game) external {
-		ISecurityPool pool = IPortfolioReporterIdentity(game).securityPool();
+		IPortfolioReporterIdentity identity = IPortfolioReporterIdentity(game);
+		ISecurityPool pool = identity.securityPool();
 		_pool(address(pool));
 		require(address(pool.escalationGame()) == game, 'Reporter game is not canonical');
+		// Until every carried outcome is installed, the parent's game must remain
+		// the authoritative source for the next permissionless materialization step.
+		require(!identity.forkContinuation() || identity.forkCarrySnapshotInitialized(), 'Reporter fork snapshot incomplete');
+		services.registerGame(game);
 		reporters.registerGame(pool.questionId(), game);
+	}
+	function onQuestionReporterChanged(address reporter) external {
+		ISecurityPool pool = IPortfolioReporterIdentity(msg.sender).securityPool();
+		_pool(address(pool));
+		require(address(pool.escalationGame()) == msg.sender, 'Reporter caller is not canonical');
+		services.recordReporter(msg.sender, reporter);
 	}
 	function onQuestionFinalityChanged(uint48 nativeFinalAfter) external {
 		ISecurityPool pool = IPortfolioReporterIdentity(msg.sender).securityPool();
 		_pool(address(pool));
 		require(address(pool.escalationGame()) == msg.sender, 'Finality caller is not canonical');
-		uint248 universeId = pool.universeId();
-		capitalLedger[universeId].checkpoint();
-		uint48 finalAfter = nativeFinalAfter == 0 ? 0 : _logicalAt(universeId, nativeFinalAfter);
-		_creditSnapshot(universeId, settlement.scheduleFinality(address(pool), finalAfter, logicalTime(universeId)));
+		services.onQuestionFinalityChanged(pool, nativeFinalAfter);
+	}
+	/// @notice Pay the bounded final reporter ETH reward without visiting other questions.
+	function claimQuestionReportingReward(address poolAddress) external nonReentrant {
+		address recipient = services.claimReportingReward(poolAddress);
+		ISecurityPool pool = ISecurityPool(payable(poolAddress));
+		emit QuestionReportingRewardPaid(pool.universeId(), pool.questionId(), recipient);
+	}
+	function creditServiceFees(uint248 universeId) external payable {
+		require(msg.sender == address(capitalLedger[universeId]) || msg.sender == forkController, 'Only portfolio service funding');
+		services.fundMaintenance{value: msg.value}(universeId);
+	}
+	function rewardOracleReport(uint248 universeId, address sponsor, uint256 gasUnits, uint256 requestedAt) external {
+		require(msg.sender == factory.sharedPriceFeeds(address(this), universeId), 'Only canonical shared feed');
+		services.rewardOracleReport(universeId, sponsor, gasUnits, requestedAt);
 	}
 	function onQuestionAccountingChanged() external view {
 		_pool(msg.sender);
 	}
 	function onCompleteSetsReturned() external {
 		ISecurityPool pool = _pool(msg.sender);
+		services.cancelUnusedPremium(pool);
 		if (zoltar.getForkTime(pool.universeId()) == 0) capitalLedger[pool.universeId()].serveRetirement();
 	}
 	function freezeForFork() external {
@@ -444,7 +416,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	}
 	function _createCapital(uint248 universeId) private returns (SecurityPoolCapitalLedger capital) {
 		capital = deployers.capital.create(address(this), zoltar, universeId, statoblastSecurityMultiplierBps, minimumCommitmentAttoEth, minimumExecutionReserveAttoEth, rewardVestingSeconds);
-		capital.initialize(deployers.commitments.create(address(capital)), ICapitalFeeStreams(address(deployers.fees.create(address(capital), uint48(block.timestamp), rewardVestingSeconds))), forkController);
+		capital.initialize(deployers.commitments.create(address(capital)), ICapitalFeeStreams(address(deployers.fees.create(address(capital), uint48(block.timestamp), rewardVestingSeconds))), forkController, address(services));
 		capitalLedger[universeId] = capital;
 		capitalAddresses[address(capital)] = true;
 		emit UniversePrepared(universeId, address(capital));

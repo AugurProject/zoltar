@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { encodeDeployData, parseAbi, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact, statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as artifact } from '../../types/contractArtifact'
+import { encodeDeployData, parseAbi, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact, statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as artifact, ReputationToken_ReputationToken as tokenArtifact } from '../../types/contractArtifact'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
@@ -55,6 +55,27 @@ describe('Statoblast: central settlement ETH custody', () => {
 		expect(await client.getBalance({ address })).toBe(0n)
 	})
 
+	test('only the bound service can account for questions and receive the fees it settles', async () => {
+		const service = createWriteClient(getAnvilWindowEthereum(), TEST_ADDRESSES[1])
+		await expect(writeContractAndWait(service, () => service.writeContract({ ...target(), functionName: 'authorizeServices', args: [service.account.address] }))).rejects.toThrow('Only portfolio')
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'authorizeServices', args: [service.account.address] }))
+		await expect(writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'authorizeServices', args: [client.account.address] }))).rejects.toThrow('Settlement services initialized')
+		await expect(writeContractAndWait(service, () => service.writeContract({ ...target(), functionName: 'authorizeServices', args: [client.account.address] }))).rejects.toThrow('Only portfolio')
+		await writeContractAndWait(service, () => service.writeContract({ ...target(), functionName: 'mint', args: [nativePool, 0n, 0], value: 100n }))
+		await writeContractAndWait(service, () => service.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [nativePool, 2n, 10, 0] }))
+		const rootBefore = await client.getBalance({ address: client.account.address })
+		const serviceBefore = await client.getBalance({ address: service.account.address })
+		const hash = await writeContractAndWait(service, () => service.writeContract({ ...target(), functionName: 'checkpointUniverse', args: [0n, 5] }))
+		const receipt = await client.waitForTransactionReceipt({ hash })
+		if (receipt.effectiveGasPrice === undefined) throw new Error('Service checkpoint receipt is missing its gas price')
+		expect(await client.getBalance({ address: service.account.address })).toBe(serviceBefore + 10n - receipt.gasUsed * receipt.effectiveGasPrice)
+		expect(await client.getBalance({ address: client.account.address })).toBe(rootBefore)
+		const serviceAfter = await client.getBalance({ address: service.account.address })
+		await checkpoint(0n, 10)
+		expect(await client.getBalance({ address: service.account.address })).toBe(serviceAfter)
+		expect(await client.getBalance({ address })).toBe(80n)
+	})
+
 	test('fork source cash, final parent claims and child funding cannot spend each other', async () => {
 		await register(otherPool, 0n, 2n)
 		await register(finalPool, 0n, 3n)
@@ -64,19 +85,19 @@ describe('Statoblast: central settlement ETH custody', () => {
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'scheduleFinality', args: [finalPool, 99, 0] }))
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'sealUniverse', args: [0n, 100] }))
 		expect(await client.readContract({ ...target(), functionName: 'availableForkCashAttoEth', args: [0n] })).toBe(500n)
-		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createChildUniverse', args: [0n, 1n, 200n], value: 100n }))
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createChildUniverse', args: [0n, 1n, 200n, zeroAddress, 0n] }))
 		await register(childPool, 1n, 1n)
 		await register(addressString(TEST_ADDRESSES[6]), 1n, 2n)
-		expect(await client.readContract({ ...target(), functionName: 'snapshotQuestion', args: [childPool] })).toMatchObject({ demandAttoEth: 300n })
-		await expect(writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createChildUniverse', args: [0n, 2n, 301n] }))).rejects.toThrow('Fork settlement cash insufficient')
+		expect(await client.readContract({ ...target(), functionName: 'snapshotQuestion', args: [childPool] })).toMatchObject({ demandAttoEth: 200n })
+		await expect(writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createChildUniverse', args: [0n, 2n, 301n, zeroAddress, 0n] }))).rejects.toThrow('Fork settlement cash insufficient')
 		await redeem(childPool, 200n, 100)
-		expect(await client.readContract({ ...target(), functionName: 'snapshotQuestion', args: [childPool] })).toMatchObject({ demandAttoEth: 180n })
-		expect(await client.getBalance({ address })).toBe(580n)
+		expect(await client.readContract({ ...target(), functionName: 'snapshotQuestion', args: [childPool] })).toMatchObject({ demandAttoEth: 120n })
+		expect(await client.getBalance({ address })).toBe(520n)
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'withdrawForkRecoveryCash', args: [0n, 300n] }))
 		await redeem(finalPool, 100n, 100)
 		await register(addressString(0x900n), 1n, 3n)
 		expect(await client.readContract({ ...target(), functionName: 'snapshotQuestion', args: [addressString(0x900n)] })).toMatchObject({ outcomeSupplyAttoShares: 0n, questionCashAttoEth: 0n })
-		expect(await client.getBalance({ address })).toBe(180n)
+		expect(await client.getBalance({ address })).toBe(120n)
 		await redeem(addressString(TEST_ADDRESSES[6]), 300n, 100)
 		expect(await client.getBalance({ address })).toBe(0n)
 	})
@@ -84,7 +105,7 @@ describe('Statoblast: central settlement ETH custody', () => {
 	test('the inherited fork question freezes after its child response window without a native pool', async () => {
 		await mint(nativePool, 100n)
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'sealUniverse', args: [0n, 100] }))
-		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createChildUniverse', args: [0n, 1n, 100n] }))
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createChildUniverse', args: [0n, 1n, 100n, zeroAddress, 0n] }))
 		const deadline = 100 + 3 * 24 * 60 * 60
 		const inheritedAbi = parseAbi(['function fixInheritedQuestionFinality(uint248 universeId,uint256 questionId,uint48 finalAfter)'])
 		await writeContractAndWait(client, () => client.writeContract({ address, abi: inheritedAbi, functionName: 'fixInheritedQuestionFinality', args: [1n, 1n, deadline] }))
@@ -111,18 +132,27 @@ describe('Statoblast: central settlement ETH custody', () => {
 		await expect(writeContractAndWait(outsider, () => outsider.writeContract({ ...target(), functionName: 'registerQuestion', args: [childPool, 0n, 99n] }))).rejects.toThrow('Only portfolio')
 	})
 
-	test('underfunded demand follows actual cash while recap preserves every nominal outcome claim', async () => {
-		await mint(nativePool, 100n)
-		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'sealUniverse', args: [0n, 0] }))
-		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createChildUniverse', args: [0n, 1n, 0n] }))
+	test('a zero-ETH branch pays REP proportionally before rounding nearly exhausted ETH units', async () => {
+		const shares = 10n ** 18n
+		const rep = 1_000n * shares
+		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: tokenArtifact.abi, bytecode: `0x${tokenArtifact.evm.bytecode.object}`, args: [client.account.address] }) }) })
+		if (receipt.contractAddress === undefined) throw new Error('Recovery token deployment missing')
+		const token = receipt.contractAddress
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'initialize', args: [1n, rep, 1n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'mint', args: [client.account.address, rep] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'approve', args: [address, rep] }))
+		await mint(nativePool, shares)
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [nativePool, shares - 1n, 1, 0] }))
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'sealUniverse', args: [0n, 1] }))
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createChildUniverse', args: [0n, 1n, 0n, token, rep] }))
 		await register(childPool, 1n, 1n)
-		expect(await client.readContract({ ...target(), functionName: 'snapshotQuestion', args: [childPool] })).toMatchObject({ demandAttoEth: 0n, outcomeSupplyAttoShares: 100n })
-		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'recapitalize', args: [1n, 0], value: 40n }))
-		expect(await client.readContract({ ...target(), functionName: 'snapshotQuestion', args: [childPool] })).toMatchObject({ demandAttoEth: 40n, outcomeSupplyAttoShares: 100n })
-		await redeem(childPool, 50n)
-		expect(await client.readContract({ ...target(), functionName: 'snapshotQuestion', args: [childPool] })).toMatchObject({ demandAttoEth: 20n, outcomeSupplyAttoShares: 50n })
-		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'withdrawForkRecoveryCash', args: [0n, 100n] }))
-		await redeem(childPool, 50n)
+		expect(await client.readContract({ ...target(), functionName: 'snapshotQuestion', args: [childPool] })).toMatchObject({ demandAttoEth: 0n, outcomeSupplyAttoShares: shares, questionRecoveryAttoRep: rep })
+		await redeem(childPool, shares / 2n, 1)
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [addressString(TEST_ADDRESSES[1])] })).toBe(rep / 2n)
+		await redeem(childPool, shares / 2n, 1)
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [addressString(TEST_ADDRESSES[1])] })).toBe(rep)
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [address] })).toBe(0n)
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'withdrawForkRecoveryCash', args: [0n, 1n] }))
 		expect(await client.getBalance({ address })).toBe(0n)
 	})
 })

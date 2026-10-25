@@ -13,7 +13,7 @@
 			<header>
 				<p class="kicker">How-to guide</p>
 				<h1>Handle resolution</h1>
-				<p>A trading pool closes to swaps and added liquidity when its question ends; the market finalizes later, when its outcome is final. Use this guide from question end onward to turn LP tokens, complete sets, and winning shares back into ETH.</p>
+				<p>A trading pool closes to swaps and added liquidity when its question ends; the market finalizes later, when its outcome is final. Use this guide from question end onward to turn LP tokens, complete sets, and winning shares into their redeemable assets.</p>
 			</header>
 			<section id="steps">
 				<h2>Unwind after question end</h2>
@@ -22,20 +22,20 @@
 					<li>Redeem matching Invalid, Yes, and No as <a href="../reference/glossary.html#complete-set">complete sets</a> while the <a href="../reference/glossary.html#security-pool">SecurityPool</a> is <code>Operational</code> and its universe has not forked. If the universe forks while the question is unresolved, follow <a href="./trading-handle-a-fork.html">Handle a universe fork</a>.</li>
 					<li>After the market finalizes, redeem the winning share through <code>SecurityPool.redeemShares</code>, which requires the SecurityPool to be <code>Operational</code>. Keep redeeming through this pool if its universe forks later; resolved shares cannot migrate.</li>
 				</ol>
-				<p>On an Invalid result, Invalid is the only winning share. Yes and No balances, including trading fees earned as LP, are worth nothing once they lose. Each redemption burns the redeemed shares and pays ETH at the SecurityPool's current collateral rate.</p>
+				<p>On an Invalid result, Invalid is the only winning share. Yes and No balances, including trading fees earned as LP, are worth nothing once they lose. Each redemption burns the redeemed shares and pays ETH at the SecurityPool's current collateral rate. A shared portfolio child can also pay recovery REP from its <a href="../explanation/statoblast.html#portfolio-shared-forks">fork claim basket</a>. The receipt can contain REP even when its ETH payout is zero; a new price report or an auction buyer is not required for redemption.</p>
 			</section>
 			<section id="in-the-ui">
 				<h2>In the UI</h2>
 				<p>Open the market. A closed market opens on its <strong>Settlement</strong> tab.</p>
 				<ul>
-					<li>To redeem complete sets, select <strong>Redeem sets</strong>, enter an amount in <strong>ETH to redeem</strong>, check <strong>You receive ≈</strong>, and select <strong>Redeem complete sets</strong>.</li>
+					<li>To redeem complete sets, select <strong>Redeem sets</strong>, enter an amount in <strong>ETH to redeem</strong> (or <strong>Complete sets to redeem</strong> when the claim includes REP), check the ETH estimate and any <strong>Recovery REP</strong>, and select <strong>Redeem complete sets</strong>.</li>
 					<li>Once the market finalizes, a <strong>Redeem Yes</strong>, <strong>Redeem No</strong>, or <strong>Redeem Invalid</strong> option appears for the winning outcome. It redeems your entire balance of that share through this exact SecurityPool. Before finalization the option is absent.</li>
 				</ul>
 				<figure class="screenshot" id="fig-trading-settlement" aria-labelledby="fig-trading-settlement-caption">
 					<a class="screenshot-link" href="../assets/screenshots/trading/settlement.png"><img width="480" height="753" src="../assets/screenshots/trading/settlement.png" alt="The Settlement tab of an ended market with Redeem sets selected, 0.001 entered in ETH to redeem, a Max button, a note that you hold 0.005 complete sets worth 0.0045 ETH, an estimate of about 0.001 ETH received with a 0.0009 ETH minimum, and an enabled Redeem complete sets button." loading="lazy" /></a>
 					<figcaption id="fig-trading-settlement-caption"><span class="figure-label">Settlement after the question ends.</span> The market has not finalized yet, so only complete-set redemption and fork migration are offered.</figcaption>
 				</figure>
-				<p>Every settlement transaction is simulated again at the latest block before your wallet opens, and stops if it would now fail.</p>
+				<p>Check both asset balances in the selected universe after confirmation. REP recovery is shown separately from the portfolio’s ETH total. Every settlement transaction is simulated again at the latest block before your wallet opens, and stops if it would now fail.</p>
 			</section>
 		</main>
 		<script src="../assets/js/responsiveDocs.js"></script>

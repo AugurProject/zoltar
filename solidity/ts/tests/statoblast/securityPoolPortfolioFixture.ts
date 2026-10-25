@@ -24,6 +24,9 @@ export const portfolioEconomics: PortfolioEconomicsConfig = {
 	minimumExecutionReserveAttoEth: unit / 10_000n,
 	minimumOutcomeRate: 1_000n,
 	rewardVestingSeconds: DAY,
+	reportingFeeAttoEth: 0n,
+	serviceFeeBps: 2_500n,
+	maximumOracleRewardAttoEth: unit / 100n,
 }
 
 export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<PortfolioEconomicsConfig> = {}) {
@@ -54,6 +57,7 @@ export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<Port
 				settlement: infrastructure.securityPoolPortfolioSettlementDeployer,
 				reporters: infrastructure.securityPoolReporterLedgerDeployer,
 				forks: infrastructure.securityPoolPortfolioForkCoordinatorDeployer,
+				services: infrastructure.securityPoolPortfolioServicesDeployer,
 			},
 			artifact: { abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object) },
 		})
@@ -80,7 +84,7 @@ export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<Port
 	}
 	const capitalFor = (namespace = portfolio) => owner().readContract({ abi: portfolioArtifact.abi, address: namespace, functionName: 'capitalLedger', args: [base.genesisUniverse] })
 	const register = (questionId: bigint, namespace = portfolio, sender = other()) => writeContractAndWait(sender, () => sender.writeContract({ abi: portfolioArtifact.abi, address: namespace, functionName: 'addQuestion', args: [questionId] }))
-	const refreshPrice = (questionId = base.questionId, price = unit, namespace = portfolio) => manipulatePriceOracle(owner(), base.mockWindow, poolFor(questionId, base.genesisUniverse, zeroAddress, namespace).openOraclePriceCoordinator, price)
+	const refreshPrice = (questionId = base.questionId, price = unit, namespace = portfolio, requestedInitialAttoWeth = 100n * unit) => manipulatePriceOracle(owner(), base.mockWindow, poolFor(questionId, base.genesisUniverse, zeroAddress, namespace).openOraclePriceCoordinator, price, requestedInitialAttoWeth)
 	const deposit = async (amount = 1_000n * unit, sender = owner(), namespace = portfolio) => {
 		const capital = await capitalFor(namespace)
 		await approveToken(sender, getRepTokenAddress(base.genesisUniverse), capital)
@@ -100,7 +104,8 @@ export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<Port
 	const mint = async (amount = 10n * unit, question = base.questionId, options: { sender?: WriteClient; namespace?: Address; minimumShares?: bigint; budget?: bigint; recipient?: Address } = {}) => {
 		const sender = options.sender ?? other()
 		const namespace = options.namespace ?? portfolio
-		const fee = options.budget ?? (await sender.readContract({ abi: portfolioArtifact.abi, address: namespace, functionName: 'purchaseFee', args: [amount] }))
+		const quote = await sender.readContract({ abi: portfolioArtifact.abi, address: namespace, functionName: 'purchaseQuote', args: [base.genesisUniverse, question, amount] })
+		const fee = options.budget ?? (quote[0] * 10_100n + 9_999n) / 10_000n
 		return writeContractAndWait(sender, () => sender.writeContract({ abi: portfolioArtifact.abi, address: namespace, functionName: 'createCompleteSet', args: [base.genesisUniverse, question, amount, options.recipient ?? sender.account.address, options.minimumShares ?? 0n], value: amount + fee }))
 	}
 	beforeAll(async () => {

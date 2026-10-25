@@ -64,12 +64,7 @@ contract CommitmentIndexHarness {
 	function importPosition(address owner, uint256 rep, uint256 commitment, uint256 price, uint96 batch) external {
 		index.importPosition(owner, rep, commitment, price, batch);
 	}
-	function importProtocolReserve(address owner, uint256 rep, uint256 commitment, uint256 price) external {
-		index.importProtocolReserve(owner, rep, commitment, price);
-	}
-	function importAdd(uint96 id, uint256 rep, uint256 commitment, uint256 price) external {
-		index.importAdd(id, rep, commitment, price);
-	}
+
 	function sealImports() external {
 		index.sealImports();
 	}

@@ -1,4 +1,5 @@
-import { requireAddressValue } from './decoders.js'
+import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from './securityPoolAbi.js'
+import { requireAddressValue, requireBigintValue } from './decoders.js'
 import { loadCentralPortfolioQuestion } from './securityPoolPortfolioState.js'
 import { decodeLinearFeeState, linearFeeReadContracts } from './linearFeeState.js'
 import type { LinearFeeState } from '@zoltar/statoblast-shared/statoblast/retentionRate'
@@ -175,10 +176,21 @@ function getShareTokenId(universeId: bigint, outcome: ReportingOutcomeKey) {
 }
 export async function redeemSharesInSecurityPool(client: WriteClient, securityPoolAddress: Address) {
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
+	const [shareToken, forker, block] = await Promise.all([
+		client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'shareToken' }),
+		client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'securityPoolForker' }),
+		client.getBlock(),
+	])
+	const balances = await client.readContract({ address: shareToken, abi: statoblast_tokens_ShareToken_ShareToken.abi, functionName: 'balanceOfShares', args: [universeId, client.account.address], blockNumber: block.number })
+	const outcome = await client.readContract({ address: forker, abi: SECURITY_POOL_QUESTION_OUTCOME_ABI, functionName: 'getQuestionOutcome', args: [securityPoolAddress], blockNumber: block.number })
+	const amount = balances[Number(outcome)]
+	if (amount === undefined) throw new Error('Winning outcome is unavailable.')
+	const reviewDescription = await redemptionReview(client, securityPoolAddress, amount, block.number)
 	const hash = await writeContractAndWait(client, () => ({
 		address: securityPoolAddress,
 		abi: statoblast_SecurityPool_SecurityPool.abi,
 		functionName: 'redeemShares',
+		reviewDescription,
 		args: [],
 	}))
 	return {
@@ -222,7 +234,7 @@ export async function migrateSharesFromUniverse<TReceipt extends Pick<Transactio
 const purchaseAbi = parseAbi([
 	'function getSecurityPoolPortfolio(address pool) view returns (address)',
 	'function getPool(uint256 questionId,uint248 universeId) view returns (address)',
-	'function purchaseFee(uint256 amount) view returns (uint256)',
+	'function purchaseQuote(uint248 universeId,uint256 questionId,uint256 amount) view returns (uint256 fee,uint256 premium,uint256 rewardFunding,uint256 maintenance)',
 	'function availableMintCapacity(uint248 universeId) view returns (uint256)',
 	'function createCompleteSet(uint248 universeId,uint256 questionId,uint256 mintAttoEth,address recipient,uint256 minimumShares) payable',
 ])
@@ -245,12 +257,15 @@ export async function createCompleteSetInSecurityPool(client: WriteClient, secur
 	const quote = async () => {
 		const canonicalPool = await client.readContract({ abi: purchaseAbi, address: portfolio, functionName: 'getPool', args: [questionId, universeId] })
 		if (typeof canonicalPool !== 'string' || canonicalPool.toLowerCase() !== securityPoolAddress.toLowerCase()) throw new Error('Portfolio question pool is not canonical.')
-		const [fee, capacity] = await Promise.all([client.readContract({ abi: purchaseAbi, address: portfolio, functionName: 'purchaseFee', args: [amount] }), client.readContract({ abi: purchaseAbi, address: portfolio, functionName: 'availableMintCapacity', args: [universeId] })])
-		if (typeof capacity !== 'bigint' || capacity < amount) throw new Error('Insufficient shared REP backing after queued retirement.')
+		const [quoted, capacity] = await Promise.all([client.readContract({ abi: purchaseAbi, address: portfolio, functionName: 'purchaseQuote', args: [universeId, questionId, amount] }), client.readContract({ abi: purchaseAbi, address: portfolio, functionName: 'availableMintCapacity', args: [universeId] })])
+		if (!Array.isArray(quoted) || typeof quoted[0] !== 'bigint' || typeof quoted[2] !== 'bigint') throw new Error('Invalid shared REP purchase quote.')
+		const fee = quoted[0]
+		if (typeof capacity !== 'bigint' || capacity < amount + quoted[2]) throw new Error('Insufficient shared REP backing after queued retirement.')
 		if (typeof fee !== 'bigint' || fee < 0n) throw new Error('Invalid shared REP purchase quote.')
 		return fee
 	}
-	const maximumFee = pooled ? await quote() : 0n
+	const purchaseFee = pooled ? await quote() : 0n
+	const maximumFee = (purchaseFee * 10_100n + 9_999n) / 10_000n
 	const minimumShares = pooled ? await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'attoEthToAttoShares', args: [amount] }) : 0n
 	const callParams = pooled
 		? {
@@ -260,7 +275,7 @@ export async function createCompleteSetInSecurityPool(client: WriteClient, secur
 				args: [universeId, questionId, amount, client.account.address, minimumShares],
 				value: amount + maximumFee,
 				reviewTitle: 'Buy complete sets',
-				reviewDescription: `Includes a purchase fee of ${formatCurrencyBalanceWithUnit(maximumFee, 'ETH')}.`,
+				reviewDescription: `Estimated purchase fee: ${formatCurrencyBalanceWithUnit(purchaseFee, 'ETH')}. Includes 1% fee budget headroom; unused ETH is refunded.`,
 			}
 		: {
 				address: securityPoolAddress,
@@ -292,10 +307,13 @@ export async function createCompleteSetInSecurityPool(client: WriteClient, secur
 }
 export async function redeemCompleteSetInSecurityPool(client: WriteClient, securityPoolAddress: Address, amount: bigint) {
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
+	const block = await client.getBlock()
+	const reviewDescription = await redemptionReview(client, securityPoolAddress, amount, block.number)
 	const hash = await writeContractAndWait(client, () => ({
 		address: securityPoolAddress,
 		abi: statoblast_SecurityPool_SecurityPool.abi,
 		functionName: 'redeemCompleteSet',
+		reviewDescription,
 		args: [amount],
 	}))
 	return {
@@ -307,3 +325,9 @@ export async function redeemCompleteSetInSecurityPool(client: WriteClient, secur
 }
 
 export { loadLinearFeeState } from './linearFeeState.js'
+
+async function redemptionReview(client: Pick<ReadClient, 'readContract'>, pool: Address, shares: bigint, blockNumber: bigint | undefined) {
+	const recoveryAbi = parseAbi(['function attoSharesToAttoRep(uint256 amountAttoShares) view returns (uint256)'])
+	const [cash, rep] = await Promise.all([client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool, functionName: 'attoSharesToAttoEth', args: [shares], blockNumber }), client.readContract({ abi: recoveryAbi, address: pool, functionName: 'attoSharesToAttoRep', args: [shares], blockNumber })])
+	return `Redeem ${formatCurrencyBalanceWithUnit(shares, 'shares')} for approximately ${formatCurrencyBalanceWithUnit(cash, 'ETH')} and ${formatCurrencyBalanceWithUnit(requireBigintValue(rep, 'recovery REP quote'), 'REP')} in this universe.`
+}

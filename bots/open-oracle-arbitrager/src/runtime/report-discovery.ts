@@ -43,7 +43,15 @@ export async function discoverReports(runtime: OperatorRuntime, context: Operato
 	const { config, fixedState, state } = context
 	const blockNumber = block.number
 	const blockHash = block.hash
-	runtime.coordinatorPolicies = await discoverCoordinatorPolicies(config.execute ? runtime.readClients : [runtime.client], config, blockNumber, blockHash)
+	const retainedReportIds = [
+		...new Set(
+			[...runtime.reports.values()]
+				.filter(report => !report.settled)
+				.map(report => report.latest.helper.reportId)
+				.concat(runtime.positions.map(position => BigInt(position.reportId))),
+		),
+	]
+	runtime.coordinatorPolicies = await discoverCoordinatorPolicies(config.execute ? runtime.readClients : [runtime.client], config, blockNumber, blockHash, retainedReportIds)
 	config.coordinatorAddresses = runtime.coordinatorPolicies.map(policy => policy.coordinator)
 	fixedState.deployment = { ...fixedState.deployment, coordinatorAddresses: config.coordinatorAddresses }
 	const executionReady = runtime.positions.every(position => position.historyOutbox === undefined) && scan.nextError === undefined
@@ -62,7 +70,7 @@ export async function discoverReports(runtime: OperatorRuntime, context: Operato
 	const scanCursor = cursorForHeadScan(cursor, blockNumber, blockHash, REORG_OVERLAP_BLOCKS)
 	if (scanCursor === undefined) return { kind: 'head-unchanged' }
 	if (discoversReportsFromCoordinators) {
-		const pendingReports = config.execute ? await pendingCoordinatorReportsWithQuorum(runtime.readClients, config, blockNumber) : await pendingCoordinatorReports(runtime.client, config, blockNumber)
+		const pendingReports = config.execute ? await pendingCoordinatorReportsWithQuorum(runtime.readClients, config, blockNumber, runtime.coordinatorPolicies) : await pendingCoordinatorReports(runtime.client, config, blockNumber, runtime.coordinatorPolicies)
 		applyCoordinatorReports(runtime.reports, pendingReports)
 		runtime.cachedLogs = []
 	} else if (config.logLookbackBlocks > 0n) {

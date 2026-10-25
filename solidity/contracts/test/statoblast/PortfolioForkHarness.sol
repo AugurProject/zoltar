@@ -72,6 +72,10 @@ contract PortfolioForkZoltarMock {
 		universes[u].forkTime = block.timestamp;
 		universes[u].forkQuestionId = q;
 	}
+	function setForkTimestamp(uint248 u, uint256 timestamp) external {
+		require(universes[u].forkTime != 0 && timestamp <= block.timestamp, 'Invalid test fork time');
+		universes[u].forkTime = timestamp;
+	}
 	function burnRep(uint248 u, uint256 amount) external {
 		universes[u].token.burn(msg.sender, amount);
 	}
@@ -163,7 +167,7 @@ contract PortfolioForkHarness {
 	}
 	function _createCapital(uint248 u) private returns (SecurityPoolCapitalLedger capital) {
 		capital = capitalDeployer.create(address(this), Zoltar(address(zoltar)), u, 10_500, 1e15, 1e14, 1 days);
-		capital.initialize(indexDeployer.create(address(capital)), ICapitalFeeStreams(address(streamsDeployer.create(address(capital), uint48(block.timestamp), 1 days))), forkController);
+		capital.initialize(indexDeployer.create(address(capital)), ICapitalFeeStreams(address(streamsDeployer.create(address(capital), uint48(block.timestamp), 1 days))), forkController, address(this));
 		capitalLedger[u] = capital;
 	}
 	function prepareForkChild(uint248 source, uint256 outcome) external returns (SecurityPoolCapitalLedger capital) {
@@ -190,6 +194,45 @@ contract PortfolioForkHarness {
 		return address(this);
 	}
 	function validateExposure() external pure {}
+	function acceptedEpoch() external pure returns (uint256) {
+		return 1;
+	}
+	function targetPriceErrorForDispute() external pure returns (uint256) {
+		return 0;
+	}
+	function services() external view returns (address) {
+		return address(this);
+	}
+	function freezePremiumUniverse(uint248) external pure {}
+	function onPremiumChoice(uint248, uint248, uint256, uint256) external pure {}
+	function createPremiumChild(uint248, uint248) external pure {}
+	mapping(uint256 => uint256) public recoveryPremiumAttoEth;
+	mapping(uint256 => uint256) public recoveredPremiumShares;
+	mapping(address => uint256) public recoveredPremiumAttoEth;
+	function fundRecoveryPremium(uint256 questionId) external payable {
+		recoveryPremiumAttoEth[questionId] += msg.value;
+	}
+	function recoverPremiumCash(uint248 u, uint256 questionId, uint256 shares, address recipient) external returns (uint256 cash) {
+		require(msg.sender == forkController, 'Only fork coordinator');
+		(SecurityPoolSettlementBook.Question memory question, ) = settlement.ledger().question(settlement.bookIds(u), questionId);
+		uint256 beforeShares = recoveredPremiumShares[questionId];
+		uint256 afterShares = beforeShares + shares;
+		require(afterShares <= question.outcomeSupplyAttoShares, 'Premium exceeds supply');
+		recoveredPremiumShares[questionId] = afterShares;
+		cash =
+			(recoveryPremiumAttoEth[questionId] * afterShares) / question.outcomeSupplyAttoShares -
+			(recoveryPremiumAttoEth[questionId] * beforeShares) / question.outcomeSupplyAttoShares;
+		recoveredPremiumAttoEth[recipient] += cash;
+		if (cash != 0) {
+			(bool sent, ) = recipient.call{value: cash}('');
+			require(sent, 'Premium recovery failed');
+		}
+	}
+	function setQuestionFee(uint248 u, uint256 q, uint96 rate, uint48 end) external {
+		settlement.setFeesEnabled(u, true, logicalTime(u));
+		settlement.replaceFeeStream(address(pools[u][q]), rate, end, logicalTime(u));
+	}
+	function creditServiceFees(uint248) external payable {}
 	function checkpointCapitalFees(uint248 u, uint48) external {
 		require(msg.sender == address(capitalLedger[u]), 'Only capital');
 		uint64 book = settlement.bookIds(u);
@@ -210,5 +253,14 @@ contract PortfolioForkHarness {
 	function mintQuestion(uint256 q) external payable {
 		capitalLedger[0].setDemand(capitalLedger[0].demandAttoEth() + msg.value);
 		settlement.mint{value: msg.value}(address(pools[0][q]), 0, logicalTime(0));
+	}
+	function redeemQuestion(uint248 u, uint256 q, uint256 shares, address recipient) external {
+		settlement.redeem(address(pools[u][q]), recipient, shares, 0, logicalTime(u));
+		(uint256 fees, uint256 demand) = settlement.checkpointUniverse(u, logicalTime(u));
+		if (fees != 0) capitalLedger[u].creditTimedFees{value: fees}();
+		capitalLedger[u].synchronizeDemand(demand);
+	}
+	function scheduleQuestionFinality(uint248 u, uint256 q, uint48 finalAfter) external {
+		settlement.scheduleFinality(address(pools[u][q]), finalAfter, logicalTime(u));
 	}
 }

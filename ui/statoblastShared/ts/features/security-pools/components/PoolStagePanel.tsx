@@ -13,26 +13,26 @@ function getStepState(index: number, currentIndex: number, skipped: boolean) {
 }
 
 /**
- * Operational → Escalation → Fork / Migration → Truth auction → Settled as a segmented bar under the current stage's
- * name. Above full desktop width (80rem) each stage is named under its segment so the whole lifecycle reads at a glance;
+ * The pool's applicable lifecycle stages as a segmented bar under the current stage's name. Above full desktop width
+ * (80rem) each stage is named under its segment so the whole lifecycle reads at a glance;
  * narrower segments keep the name as a hover title. The current stage is marked with `aria-current`. Stages the pool
  * passed over (`skippedSteps`), such as the fork stages of a pool that settled without a fork, are drawn hollow rather
  * than filled, so the bar never claims the pool went through them.
  */
-export function PoolLifecycleStepper({ skippedSteps = [], step }: { skippedSteps?: readonly PoolLifecycleStep[]; step: PoolLifecycleStep | undefined }) {
+export function PoolLifecycleStepper({ skippedSteps = [], step, steps = POOL_LIFECYCLE_STEPS }: { skippedSteps?: readonly PoolLifecycleStep[]; step: PoolLifecycleStep | undefined; steps?: readonly PoolLifecycleStep[] }) {
 	if (step === undefined) return undefined
-	const currentIndex = POOL_LIFECYCLE_STEPS.indexOf(step)
+	const currentIndex = steps.indexOf(step)
 	const currentLabel = copy.lifecycleStepLabels[step]
 	return (
 		<nav className='pool-lifecycle' aria-label={copy.poolStage}>
 			<p className='pool-lifecycle-summary' aria-hidden='true'>
 				<span className='pool-lifecycle-summary-label'>{copy.poolStage}</span>
 				<span className='pool-lifecycle-summary-value'>
-					<strong>{currentLabel}</strong> <span className='pool-lifecycle-position'>{copy.lifecycleStepPosition(currentIndex + 1, POOL_LIFECYCLE_STEPS.length)}</span>
+					<strong>{currentLabel}</strong> <span className='pool-lifecycle-position'>{copy.lifecycleStepPosition(currentIndex + 1, steps.length)}</span>
 				</span>
 			</p>
 			<ol className='pool-lifecycle-steps'>
-				{POOL_LIFECYCLE_STEPS.map((candidate, index) => {
+				{steps.map((candidate, index) => {
 					const state = getStepState(index, currentIndex, skippedSteps.includes(candidate))
 					const label = copy.lifecycleStepLabels[candidate]
 					return (

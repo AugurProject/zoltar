@@ -19,7 +19,7 @@ import { buildSelectedPoolSummaryPool } from '../components/SecurityPoolWorkflow
 import { derivePoolActionItems, type PoolAccountVault } from './poolActions.js'
 import { getTruthAuctionEndsAt } from '../../../protocol/truthAuctionTiming.js'
 import { getPoolStripDeadline, type PoolForkTimeline } from './poolStrip.js'
-import { deriveListedPoolLifecycleStep, derivePoolLifecycleStep, getDefaultPoolTab, getSkippedLifecycleSteps, isForkLifecycleState, isForkWorkflowPrimary } from './poolLifecycle.js'
+import { deriveListedPoolLifecycleStep, derivePoolLifecycleStep, getDefaultPoolTab, getPoolLifecycleSteps, getSkippedLifecycleSteps, isForkLifecycleState, isForkWorkflowPrimary } from './poolLifecycle.js'
 import { deriveSecurityPoolLifecycleState, deriveSecurityPoolReportingStage, deriveVaultAdmissionClosed, evaluateSecurityPoolState } from './securityPoolState.js'
 import {
 	applySelectedPoolWorkflowState,
@@ -143,8 +143,9 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 		reportingOpen: reportingReady === true || selectedPool?.ordinaryEscalationGameStarted === true,
 		reportingStage: selectedPoolReportingStage,
 	})
-	// A pool that settled without a fork never passed the fork stages, and one whose question was never disputed never escalated; a fork-continuation game implies fork activity, so only the ordinary game counts here.
-	const skippedLifecycleSteps = getSkippedLifecycleSteps({ escalationStarted: selectedPool?.ordinaryEscalationGameStarted === true, hasForkActivity: selectedPoolHasActualForkActivity, step: lifecycleStep })
+	const lifecycleSteps = getPoolLifecycleSteps(selectedPool)
+	// A settled pool only marks skipped stages that apply to its custody model; a fork-continuation game implies fork activity, so only the ordinary game counts here.
+	const skippedLifecycleSteps = getSkippedLifecycleSteps({ escalationStarted: selectedPool?.ordinaryEscalationGameStarted === true, hasForkActivity: selectedPoolHasActualForkActivity, step: lifecycleStep }).filter(step => lifecycleSteps.includes(step))
 	// The default tab comes from registry data alone, so it does not jump when reporting or fork details arrive later.
 	const listedStep = selectedPool === undefined ? undefined : deriveListedPoolLifecycleStep(selectedPool, currentTimestamp).step
 	const defaultView = getDefaultPoolTab(listedStep, selectedPool?.hasForkActivity ?? false)
@@ -163,7 +164,7 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 	const currentPoolOraclePriceUsable = currentPoolOracleManagerDetails === undefined ? undefined : isOracleManagerPriceUsable(currentPoolOracleManagerDetails, currentTimestamp)
 	const requestPriceTransactionValueAttoEth = currentPoolOracleManagerDetails === undefined ? undefined : addOpenOracleBountyBuffer(currentPoolOracleManagerDetails.requestPriceCostAttoEth)
 	const supportsRenewal = supportsOraclePriceRenewal(currentPoolOracleManagerDetails)
-	const requestPriceGuardInput = { accountAddress: accountState.address, isOnActiveAppChain, isPriceValid: supportsRenewal ? false : currentPoolOraclePriceUsable, pendingReportId: currentPoolOracleManagerDetails?.pendingReportId, walletBalanceAttoEth: accountState.ethBalanceAttoEth }
+	const requestPriceGuardInput = { accountAddress: accountState.address, isOnActiveAppChain, isPriceValid: supportsRenewal ? false : currentPoolOraclePriceUsable, pendingReportId: supportsRenewal ? 0n : currentPoolOracleManagerDetails?.pendingReportId, walletBalanceAttoEth: accountState.ethBalanceAttoEth }
 	// The price request guards check the wallet first, so whenever the wallet blocks, their reason is the wallet reason.
 	const walletBlocker = getActiveAppChainWalletBlocker({ accountAddress: accountState.address, isOnActiveAppChain })
 	const requestPriceGuardMessage = getVaultRequestPriceGuardMessage({ ...requestPriceGuardInput, hasLoadedSelectedPool: effectiveSelectedPool !== undefined, requiredCostAttoEth: currentPoolOracleManagerDetails?.requestPriceCostAttoEth })
@@ -269,6 +270,7 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 		isOnActiveAppChain,
 		legacyForkWorkflowSelectionStage: resolveForkWorkflowSelectionStage(selectedPoolView),
 		lifecycleStep,
+		lifecycleSteps,
 		liquidationPoolOracleManagerError,
 		loadedForkAuctionDetails,
 		loadedReportingDetails,

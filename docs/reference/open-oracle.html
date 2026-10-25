@@ -39,9 +39,12 @@
 				<p>This raw-amount ratio is valid because the configured WETH and REP contracts both use 18 decimals. The coordinator does not normalize token decimals in the settlement callback.</p>
 
 				<p id="integration-terms">An accepted report becomes the coordinator's cached REP/ETH price. <code>lastSettlementTimestamp</code> records settlement eligibility: the final report timestamp plus <code>settlementTime</code>. The freshness window starts there, so settling late cannot extend it. Standalone prices remain fresh for one hour on Sepolia and five minutes on other chains. Shared feeds add one <code>settlementTime</code> to that window. With the mainnet eight-minute challenge period, a shared price is usable for 780 seconds after eligibility, or at most 21 minutes after the final report. <code>priceValidUntil()</code> returns the canonical expiry for either mode; a price is stale at that timestamp. The coordinator does not meter operation volume during the window.</p>
-				<p id="shared-feed-rules">For shared feeds, the report-size and escalation-halt formulas below use the larger of the portfolio’s current aggregate commitment and backing demand. The feed reads this live aggregate directly; expired questions do not need separate cleanup calls to update exposure. The request bounty includes the shared callback allowance. These request-time floors do not impose a ceiling on later commitments.</p>
-				<p>A shared feed permits a new report before the accepted price expires, allowing the next challenge period to overlap the current freshness window. A pending, disputed or rejected renewal does not extend the old expiry. While the accepted price remains fresh, other questions and callers can execute price-dependent operations immediately. Once it expires, only the initiating question and sponsor can attach operations to the pending report. Shared queues reject work beyond the four-action budget.</p>
-				<p>Before accepting a new price, the feed must checkpoint portfolio fees under the previous price and update capital eligibility atomically. If that mandatory checkpoint fails, the price is not accepted. It then stores acceptance or rejection before attempting the initiating coordinator’s optional local callback, so that later callback cannot erase an accepted price. Deferred operations remain individually executable or removable; each queued shared action checks the terminal outcome of its original report and cannot execute after rejection or recovery.</p>
+				<p id="shared-feed-rules">Shared feeds size reports and escalation halts against the larger of current portfolio commitment and backing demand. The feed reads this live aggregate without scanning questions. Unused capacity from an oversized earlier report does not increase the minimum size of the next report.</p>
+				<p>A shared feed permits concurrent candidates, including renewal before the accepted price expires. Each candidate has its own <code>SharedPoolReportEscrow</code>, which holds its reporter identity and funding credits. <code>pendingReportId</code> and the associated pending getters identify only the latest candidate; they do not enumerate or exclude other pending candidates. A pending, disputed or rejected report never extends accepted-price freshness.</p>
+				<p>Shared acceptance atomically checkpoints portfolio fees under the previous price and updates capital eligibility. A failed mandatory checkpoint rolls back acceptance. Question operations are separate: with a stale price, each staged operation funds an independent report and remains individually executable against any later valid canonical price, subject to its original expiry and safety checks. Shared operations do not occupy the automatic settlement queue or depend on their own report being accepted.</p>
+				<h3 id="shared-report-coverage">Shared report coverage and capital prices</h3>
+				<p>A canonical acceptance sets <code>acceptedExposureLimitAttoEth</code> to <code>(final WETH − priority-fee report component) × 100</code> and increments <code>acceptedEpoch</code>. Ordinary authorization cannot raise aggregate exposure above that accepted limit. Pending funding grants no capacity. An owner can instead call <code>authorizeWithReport(reportId, commitment)</code> with an independently settled, fresh candidate whose final funding covers the projected total exposure. <code>reportAuthorization(reportId, newExposure)</code> validates that proof even if a newer, smaller canonical report superseded it.</p>
+				<p>For accepted price <code>q</code>, target error <code>e</code>, and percentage precision <code>P = 10,000,000</code>, the upper bound is <code>q × P / (P − e)</code>, rounded up, and the liquidation bound is <code>q × P / (P + e)</code>, rounded down. Capital entry, withdrawals, capacity and fee eligibility use the conservative upper bound; rewarded adverse actions use the lower bound. Proof authorization also retains the higher of the owner’s current conservative price and the proof’s upper bound for that owner’s collateral checks until a later canonical epoch covers the enlarged live exposure. Selecting a smaller report cannot remove this owner-specific floor.</p>
 			</section>
 
 			<section id="optional-upstream-capabilities">
@@ -53,14 +56,14 @@
 			<section id="statoblast-integration">
 				<h2>Integration architecture</h2>
 
-				<p>Each question ledger has an <code>OpenOraclePriceCoordinator</code> for its operations and approvals. A standalone question keeps report state there. In a multi-question portfolio, <code>priceFeed()</code> instead identifies one <code>SharedPoolPriceFeed</code> for that portfolio and universe; all its questions read the same price, freshness clock, and pending report. Other portfolios have separate feeds.</p>
+				<p>Each question ledger has an <code>OpenOraclePriceCoordinator</code> for its operations and approvals. A standalone question keeps report state there. In a multi-question portfolio, <code>priceFeed()</code> instead identifies one <code>SharedPoolPriceFeed</code> for that portfolio and universe; all its questions read the same accepted price and freshness clock. Independent report candidates belong to that feed. Other portfolios have separate feeds.</p>
 
 				<p><code>OpenOraclePriceCoordinator</code> is deployed with an immutable <code>OpenOracle</code> address. For each origin or child security pool, <code>SecurityPoolFactory</code> asks <code>OpenOraclePriceCoordinatorFactory</code> for a fresh coordinator wired to the shared OpenOracle instance, shared WETH, and that universe's REP token. <code>SecurityPoolDeployer</code> passes the coordinator to the pool, after which the factory authenticates a one-time <code>setSecurityPool</code> call through the coordinator factory and deployment worker. Only the coordinator’s deployer may bind its pool.</p>
 
 				<p>Only the configured ledger may seed a standalone coordinator's inherited <code>lastPrice</code>. A standalone child inherits the parent's numeric price but starts with a zero settlement timestamp. Portfolio child ledgers share a new feed for their child REP token, initially with zero price and timestamp. Adding another question never resets an existing shared feed.</p>
 				<figure class="diagram diagram-wide" id="fig-openoracle-integration-flow">
 					<div aria-label="OpenOracle integration flow" class="plot-chart" data-plot-chart="fig-openoracle-integration-flow" data-plot-height="1170" data-plot-width="980" role="img"><span class="plot-chart-fallback">After OpenOracle settles, the coordinator validates the report. An accepted report refreshes the REP/ETH price and runs pending operations through local guardrails. A rejected report leaves the price cache unchanged and terminally fails the attached pending batch.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Integration flow.</span> Standalone integration. For a portfolio, the shared feed validates the price, checkpoints the central portfolio, stores acceptance, then attempts the initiating question coordinator's bounded callback.</p>
+					<p class="diagram-caption"><span class="figure-label">Integration flow.</span> Standalone integration. Portfolio settlement instead validates one candidate through its escrow and checkpoints the shared capital ledger; staged operations execute separately.</p>
 				</figure>
 			</section>
 
@@ -72,16 +75,16 @@
 				<ol>
 					<li><strong>Validate and stage the operation.</strong> The coordinator checks the caller, target vault, requested amount, and validity window before any report is requested.</li>
 					<li><strong>Check the cached price.</strong> If the cached REP/ETH price is fresh, the coordinator attempts the operation immediately.</li>
-					<li><strong>Open a report when the price is stale.</strong> The refresh sponsor supplies the request bounty and initial WETH/REP position, and the price source creates the report as its initial reporter: the coordinator for a standalone ledger, or the shared feed for a portfolio.</li>
+					<li><strong>Open a report when the price is stale.</strong> The refresh sponsor supplies the request bounty and initial WETH/REP position, and the price source creates the report as its initial reporter: the coordinator for a standalone ledger, or a separate report escrow for a portfolio.</li>
 					<li><strong>Allow corrections.</strong> Other participants may replace the report by posting the position required by OpenOracle. Every valid replacement installs a new reporter and restarts the settlement window.</li>
-					<li><strong>Settle the current report.</strong> Once the settlement deadline is reached without another dispute, any account can call OpenOracle's <code>settle</code>, which finalizes the report and calls its price source.</li>
+					<li><strong>Settle the current report.</strong> Once the settlement deadline is reached without another dispute, any account can call OpenOracle's <code>settle</code>, which finalizes the report and calls the coordinator or report escrow.</li>
 					<li><strong>Accept or reject the price.</strong> The price source validates the report identity, history, economics, amounts, and settlement-time base fee before updating the cache.</li>
-					<li><strong>Execute queued operations.</strong> An accepted fresh price allows the coordinator to attempt the queued pool operations, each of which still performs its own current safety checks.</li>
+					<li><strong>Execute queued operations.</strong> Standalone acceptance attempts the bounded callback batch. Shared operations require separate <code>executeStagedOperation</code> calls. Both modes retain each operation’s current safety checks.</li>
 				</ol>
 
 				<h3>Staging preconditions</h3>
 
-				<p>A request that violates a staging precondition reverts before any report is requested. The preconditions of each entry point, including amounts, the validity window, vault targets, liquidation approvals, and the pending-report sponsor rule, are listed in the <a href="./contracts/openoraclepricecoordinator.html#interactions">coordinator contract reference</a>.</p>
+				<p>A request that violates a staging precondition reverts before any report is requested. The preconditions of each entry point, including amounts, the validity window, vault targets, liquidation approvals, and the standalone pending-report sponsor rule, are listed in the <a href="./contracts/openoraclepricecoordinator.html#interactions">coordinator contract reference</a>.</p>
 
 				<h3>Execution batches</h3>
 
@@ -89,7 +92,7 @@
 
 				<p>An operation that waits for a report can also fail when it is attempted: after its expiry (<code>Staged operation expired</code>), when a liquidation target's backing units or underwriting commitment changed after staging (<code>Stale liquidation</code>), or when a withdrawal now previews to zero REP (<code>Withdraw amount has no effect</code>).</p>
 
-				<p>When a new report is needed, one settlement callback can automatically attempt up to <code>MAX_PENDING_SETTLEMENT_OPERATIONS</code> (four) price actions, counting each commitment change, liquidation, or withdrawal inside a vault bundle separately. Deposits use no callback slot. A bundle must fit the remaining capacity. For standalone coordinators, additional single staged operations remain active outside the callback batch; if unexpired and the accepted price remains fresh, they can be executed later with <code>executeStagedOperation</code>. Shared feeds instead reject overflow, as described in the <a href="#shared-feed-rules">shared-feed rules</a>.</p>
+				<p>A standalone settlement callback can automatically attempt up to <code>MAX_PENDING_SETTLEMENT_OPERATIONS</code> (four) price actions, counting each commitment change, liquidation, or withdrawal inside a vault bundle separately. Deposits use no callback slot. Standalone bundles must fit the remaining capacity; additional single operations stay active for later <code>executeStagedOperation</code> calls. Shared operations have no automatic callback batch. The separate <code>VaultOperations.MAX_ACTIONS</code> limit of four price actions per submitted bundle still applies in both modes.</p>
 
 				<p>For a vault bundle, a fresh-price failure reverts the entire submission. With a stale price, the deposit completes immediately and the deferred commitment changes, liquidations, and withdrawal later execute or fail together. See the <a href="./contracts/openoraclepricecoordinator.html">coordinator interaction reference</a>.</p>
 
@@ -101,7 +104,7 @@
 			<section id="request-funding">
 				<h2>Funding and report ownership</h2>
 
-				<p>Report funding is caller supplied. The coordinator's <code>getRequestPriceCostAttoEth()</code> getter calculates the minimum request bounty from the current base fee, callback gas limit, and the coordinator's own report processing budget:</p>
+				<p>Report funding is caller supplied. For a standalone coordinator, <code>getRequestPriceCostAttoEth()</code> calculates the minimum bounty from the current base fee and processing budgets:</p>
 				<figure class="equation" id="eq-openoracle-request-price-cost">
 					<math aria-label="request price cost in attoETH equals block base fee times 4 times callback gas limit plus gas consumed open oracle report price, plus 101 attoETH" data-source="requestPriceCostAttoEth = block.basefee \cdot 4 \cdot (callbackGasLimit + gasConsumedOpenOracleReportPrice) + 101" display="block">
 						<mrow>
@@ -120,20 +123,21 @@
 							<mn>101</mn>
 						</mrow>
 					</math>
-					<p class="equation-note">For a standalone coordinator, <code>callbackGasLimit</code> is <code>(gasConsumedSettlement + SETTLEMENT_GAS_OVERHEAD) × MAX_PENDING_SETTLEMENT_OPERATIONS</code>, returned by <code>getSettlementCallbackGasLimit()</code>. <code>101</code> is the fixed <code>REQUEST_BOUNTY_OFFSET_ATTO_ETH</code>. With the <a href="#parameters">configured values</a>, the limit is <code>4,200,000 gas</code> and the request cost is <code>block.basefee × 17,200,000 + 101</code> attoETH: <code>0.516 ETH</code> plus the offset at a <code>30 nanoETH</code> base fee. Shared feeds add the <a href="#shared-feed-rules">feed bookkeeping allowance</a>.</p>
+					<p class="equation-note">For a standalone coordinator, <code>callbackGasLimit</code> is <code>(gasConsumedSettlement + SETTLEMENT_GAS_OVERHEAD) × MAX_PENDING_SETTLEMENT_OPERATIONS</code>, returned by <code>getSettlementCallbackGasLimit()</code>. <code>101</code> is the fixed <code>REQUEST_BOUNTY_OFFSET_ATTO_ETH</code>. With the <a href="#parameters">configured values</a>, the limit is <code>4,200,000 gas</code> and the request cost is <code>block.basefee × 17,200,000 + 101</code> attoETH: <code>0.516 ETH</code> plus the offset at a <code>30 nanoETH</code> base fee. This formula applies only to standalone coordinators.</p>
 				</figure>
+				<p>For shared feeds the minimum public settlement bounty is <code>101 attoETH</code>, independent of callback gas. Request and settlement callers pay their transaction gas. After a canonical acceptance, the feed attempts an optional, gas-bounded service reimbursement to the sponsor. The portfolio caps that credit by its funded universe budget, configured reward and gas-price limits, and renewal interval. Rejected candidates receive none; an empty budget does not prevent price acceptance. This reimbursement is separate from refundable report inventory and is not guaranteed to cover costs.</p>
 				<p id="refund-callback">Every entry point that can open a report takes an explicit <code>bountyAttoEth</code>. What happens to <code>msg.value</code> depends on the call:</p>
 				<ul>
 					<li><strong>The call opens a report.</strong> <code>bountyAttoEth</code> must be at least <code>getRequestPriceCostAttoEth()</code> in the inclusion block, and <code>msg.value</code> must be at least <code>bountyAttoEth</code>. The coordinator forwards exactly <code>bountyAttoEth</code> to OpenOracle as the report's <code>settlerReward</code> and refunds the rest. The same transaction transfers the sponsor's initial WETH and REP position, so the sponsor funds the bounty and the position up front.</li>
 					<li><strong>A staging call finds a fresh cached price.</strong> No bounty is taken, and all of <code>msg.value</code> is refunded.</li>
-					<li><strong>A staging call adds an operation while a report is pending.</strong> No bounty is taken, and all of <code>msg.value</code> is refunded.</li>
+					<li><strong>A standalone staging call adds an operation while a report is pending.</strong> No bounty is taken, and all of <code>msg.value</code> is refunded.</li>
 				</ul>
 
 				<p><code>requestPrice</code>, <code>requestPriceIfNeededAndStageOperation</code>, and <code>requestPriceIfNeededAndStageLiquidation</code> refund <code>msg.sender</code>. <code>stageVaultOperations</code>, which only the coordinator's <code>vaultOperations</code> executor can call, refunds the bundle owner. Each refund is a low-level native-ETH call made only for a positive amount. If the recipient rejects it, the whole transaction reverts, including operation staging, immediate execution, and any report opened in the same transaction.</p>
 
 				<h3 id="rolling-dispute-exclusivity">Sponsor lane</h3>
 
-				<p>The sponsor lane is the exclusive right of <code>pendingReportSponsor</code>, the account that funded the pending report, to add operations to that report's settlement. Those follow-up operations pay no additional bounty. During a shared renewal, other callers can still execute against the previous accepted price until it expires. <code>requestPrice</code> always rejects a second pending report; only standalone mode also rejects requests while the cached price is fresh.</p>
+				<p>For standalone coordinators, <code>pendingReportSponsor</code> alone may attach further operations while the price is stale. Those operations pay no additional bounty, and <code>requestPrice</code> rejects a second pending report or an already-fresh cached price. Shared feeds have no exclusive sponsor lane: anyone can fund another candidate while earlier candidates remain pending or the cached price remains fresh.</p>
 			</section>
 
 			<section id="security-guarantee">
@@ -265,7 +269,7 @@
 					<li>positive dispute gas units</li>
 					<li>positive request gas: <code>gasConsumedSettlement</code> or <code>gasConsumedOpenOracleReportPrice</code> is nonzero</li>
 					<li>a nonzero <code>initialReportPriorityFeeAttoEthPerGas</code></li>
-					<li>a target error no greater than 100%</li>
+					<li>a target error no greater than 100%; shared feeds additionally require it to be strictly below 100%</li>
 					<li>an OpenOracle security multiplier of at least <code>1x</code> and at most <code>type(uint256).max / (percentagePrecision + targetPriceErrorForDispute)</code></li>
 					<li>combined OpenOracle fees below the target error</li>
 					<li>a nonzero <code>escalationHaltMultiplierBps</code></li>
@@ -381,19 +385,19 @@
 
 				<h3>Low-level callback failure</h3>
 
-				<p>OpenOracle invokes the price source through a low-level callback whose success is intentionally neither stored nor emitted. A failed callback does not automatically undo an otherwise valid OpenOracle settlement. The price source accepts callbacks only from the configured <code>OpenOracle</code> and only for the current pending report id. If those checks revert inside the low-level call, the report can still settle while the price source remains pending.</p>
+				<p>OpenOracle invokes the price source through a low-level callback whose success is intentionally neither stored nor emitted. A failed callback does not automatically undo an otherwise valid OpenOracle settlement. A standalone coordinator authenticates the configured <code>OpenOracle</code> and its single pending report. A shared escrow authenticates OpenOracle and its own report ID; the feed accepts settlement only from that candidate’s registered escrow. Failure can leave an individually settled candidate unprocessed without blocking other candidates.</p>
 
 				<p>If the settlement transaction cannot retain enough gas headroom after the callback attempt, OpenOracle reverts settlement with <code>InvalidGasLimit</code>. In that case, the report has not settled and coordinator recovery is not yet available.</p>
 
 				<h3 id="settlement-validation-scope">Price-source settlement validation</h3>
 
-				<p>A callback that successfully enters the price source can still produce a rejected price. The price source clears the pending report state, emits <code>PriceReportRejected</code> with the quoted reason, and leaves the price cache unchanged when the first of the following conditions holds:</p>
+				<p>A callback that successfully enters the price source can still produce a rejected price. The price source emits <code>PriceReportRejected</code> and leaves the price cache unchanged when the first applicable condition below holds. A shared rejection records <code>reportOutcome(reportId) = 2</code> and clears the latest-candidate getters only if they still name that report:</p>
 
 				<ul>
-					<li>the settlement block's base fee exceeds the request-time cap, which is the base fee implied by the committed bounty scaled by <code>maxSettlementBaseFeeMultiplierBps</code>: <code>Base fee too high</code>;</li>
+					<li>the settlement block’s base fee exceeds the request-time cap: standalone mode uses the base fee implied by the committed bounty; shared mode uses <code>request block.basefee + initialReportPriorityFeeAttoEthPerGas</code>. Each is scaled by <code>maxSettlementBaseFeeMultiplierBps / 10000</code>: <code>Base fee too high</code>;</li>
 					<li><code>storedGame(reportId).numReports</code> is saturated at the <code>uint24</code> maximum: <code>Counter saturated</code>;</li>
-					<li><code>numReports</code> is zero, or the settled WETH amount is below <code>reportAttoEth(initialReportPriorityFeeAttoEthPerGas) + reportAttoEth(recordedBaseFee)</code> from the <a href="#security-guarantee">sizing formula</a>, where <code>recordedBaseFee</code> is the base fee OpenOracle stored for the final report in <code>disputeHistory(reportId, numReports - 1)</code>: <code>Report uneconomic</code>;</li>
-					<li>for a shared feed, settlement eligibility is no later than that of the accepted price: <code>Report timestamp not newer</code>;</li>
+					<li><code>numReports</code> is zero, or the settled WETH amount is below <code>reportAttoEth(initialReportPriorityFeeAttoEthPerGas) + reportAttoEth(recordedBaseFee)</code> from the <a href="#security-guarantee">sizing formula</a>, where <code>recordedBaseFee</code> comes from the final <code>disputeHistory(reportId, numReports - 1)</code>. Shared mode also requires the amount above the priority-fee component to cover <code>live aggregate exposure / 100</code>, rounded up: <code>Report uneconomic</code>;</li>
+					<li>for a shared feed, settlement eligibility is earlier than the accepted observation (<code>Report timestamp not newer</code>), or equal without larger funded coverage (<code>Report adds no newer observation or capacity</code>);</li>
 					<li>the freshness window measured from settlement eligibility has already closed: <code>Report stale</code>;</li>
 					<li>either settled token amount is zero: <code>Empty oracle settlement</code>;</li>
 					<li>the integer REP/ETH calculation produces a zero price: <code>Oracle price is zero</code>.</li>
@@ -403,17 +407,17 @@
 
 				<h3>Rejected-price cleanup</h3>
 
-				<p>A rejected report does not replay its pending settlement operations. A standalone coordinator terminally fails every operation attached to that report, removes it from the active and pending sets, and releases any liquidation-approval reservation. Shared feeds may defer that cleanup under the <a href="#shared-feed-rules">shared-feed rules</a>. A caller must stage a new operation to try again with a later price.</p>
+				<p>A standalone rejection terminally fails the attached batch and releases liquidation-approval reservations; retrying those operations requires new staging. Shared operations are not bound to a candidate’s outcome. They remain executable against another valid canonical price until expiry, or can be consumed with <code>expireStagedOperation</code> after expiry.</p>
 
 				<h3>Recovering a settled report after callback failure</h3>
 
-				<p>When OpenOracle has already settled but the price source remains pending because the low-level callback did not complete, anyone can call <code>recoverSettledPendingReport</code>. Recovery clears the pending report, sponsor, and base-fee cap, and withdraws the price source's OpenOracle WETH and REP balances to the sponsor. A standalone coordinator also terminally fails every attached pending settlement operation and releases each liquidation-approval reservation; shared cleanup can be deferred under the <a href="#shared-feed-rules">shared-feed rules</a>. Recovery does not accept the report as a new price.</p>
+				<p>For a standalone coordinator, anyone can call <code>recoverSettledPendingReport()</code> after native OpenOracle settlement. It clears the pending state, sends released WETH/REP credits to the sponsor, and terminally fails the attached operation batch. Shared feeds expose <code>recoverReport(reportId)</code> for any unprocessed settled candidate; <code>recoverSettledPendingReport()</code> is only a convenience for the latest ID. Shared recovery marks that candidate rejected and releases its escrow credits without accepting a price or changing staged operations. Independently, anyone may call an escrow’s <code>withdrawFunding()</code> to deliver already-released credits to its original sponsor, including credits released by a dispute before settlement. Each escrow isolates those credits from other reports.</p>
 			</section>
 
 			<section id="intentional-economic-tradeoffs">
 				<h2>Liveness and exposure limits</h2>
 
-				<p>The coordinator has no notional exposure budget and no absolute settlement deadline; see excluded guarantees <a href="./security-model.html#excluded-guarantee-eg03">EG03</a> and <a href="./security-model.html#excluded-guarantee-eg04">EG04</a> and the <a href="../explanation/open-oracle.html#limitations">OpenOracle explanation</a>.</p>
+				<p>Standalone coordinators have no notional exposure budget. Shared capital growth requires the <a href="#shared-report-coverage">accepted coverage or an independently funded proof</a>. Neither mode imposes an absolute deadline on an individual dispute game; shared candidates can proceed independently when another game remains disputed. See excluded guarantees <a href="./security-model.html#excluded-guarantee-eg03">EG03</a> and <a href="./security-model.html#excluded-guarantee-eg04">EG04</a>.</p>
 
 				<h3 id="dispute-escalation">Dispute escalation amounts</h3>
 
@@ -670,22 +674,22 @@
 						<tr>
 							<td><code>MAX_PENDING_SETTLEMENT_OPERATIONS</code></td>
 							<td><code>4</code><br />Source constant</td>
-							<td>Price actions one settlement callback can attempt, counting each action inside a vault bundle.</td>
+							<td>Price actions one standalone settlement callback can attempt, counting each action inside a vault bundle.</td>
 						</tr>
 						<tr>
 							<td><code>callbackGasLimit</code></td>
-							<td><code>4,200,000 gas</code> for standalone coordinators, derived from the three rows above. Shared feeds add the <a href="#shared-feed-rules">feed bookkeeping allowance</a>; see <a href="#request-funding">Funding and report ownership</a>.</td>
+							<td><code>4,200,000 gas</code> for standalone coordinators, derived from the three rows above. Shared candidate escrows use <code>4,000,000 gas</code> for feed acceptance and funding recovery; shared operations execute separately.</td>
 							<td>Gas forwarded to the settlement callback. Settlement also needs enough surrounding gas to satisfy OpenOracle's callback headroom check.</td>
 						</tr>
 						<tr>
 							<td><code>gasConsumedOpenOracleReportPrice</code></td>
 							<td><code>100,000 gas</code><br />Deployment configuration <code>ORACLE_REPORT_GAS</code></td>
-							<td>Added to the callback gas limit in the <a href="#request-funding">request cost</a>.</td>
+							<td>Added to the callback gas limit in the standalone <a href="#request-funding">request cost</a>.</td>
 						</tr>
 						<tr>
 							<td><code>maxSettlementBaseFeeMultiplierBps</code></td>
 							<td><code>30,000 bps</code> (<code>3x</code>)<br />Deployment configuration <code>ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS</code></td>
-							<td>Scales the base fee implied by the bounty into the <a href="#settlement-validation-scope">settlement base-fee cap</a>.</td>
+							<td>Scales the standalone bounty-implied base fee, or shared request-block base fee plus configured priority fee, into the <a href="#settlement-validation-scope">settlement base-fee cap</a>.</td>
 						</tr>
 						<tr>
 							<td><code>minLiquidationPriceDistanceBps</code></td>
@@ -719,8 +723,8 @@
 						</tr>
 						<tr>
 							<td><code>callbackContract</code></td>
-							<td>The pool's <code>OpenOraclePriceCoordinator</code> for standalone reports, or <code>SharedPoolPriceFeed</code> for shared reports.<br />Set by the price source</td>
-							<td>Routes settled amounts back into the price cache and staged-operation executor.</td>
+							<td>The pool's <code>OpenOraclePriceCoordinator</code> for standalone reports, or the candidate's <code>SharedPoolReportEscrow</code> for shared reports.<br />Set when the report is created</td>
+							<td>Standalone callbacks update the coordinator price and attempt queued operations. Shared callbacks reconcile the candidate’s funding and submit its settled price to the feed; staged operations execute separately.</td>
 						</tr>
 						<tr>
 							<td><code>PRICE_VALID_FOR_SECONDS</code> / <code>SEPOLIA_PRICE_VALID_FOR_SECONDS</code></td>

@@ -7,7 +7,6 @@ import {
 	estimateMintCheckpoint,
 	convertAttoSharesToSettlementCollateralAttoEth,
 	formatStatoblastSecurityMultiplier,
-	getCompleteSetRedeemAttoShares,
 	getDefaultShareMigrationTargetOutcomeIndexes,
 	getMaximumMintAmount,
 	getPoolRemainingMintCapacity,
@@ -461,7 +460,7 @@ void describe('trading helpers', () => {
 				shareBalances,
 				shareTokenSupplyAttoShares: 10n * TOKEN_PRECISION,
 			}),
-		).toBe('Max redeemable amount is 2\u00a0ETH.')
+		).toBe('Max redeemable amount is 2\u00a0sets.')
 
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
@@ -480,7 +479,6 @@ void describe('trading helpers', () => {
 	void test('converts first-mint share token amounts through the pool exchange rate', () => {
 		const firstMintShareAmount = TOKEN_PRECISION
 		expect(convertAttoSharesToSettlementCollateralAttoEth(firstMintShareAmount, TOKEN_PRECISION, firstMintShareAmount)).toBe(TOKEN_PRECISION)
-		expect(getCompleteSetRedeemAttoShares({ maxRedeemableAttoShares: undefined, redeemAmountAttoEth: TOKEN_PRECISION, settlementCollateralAttoEth: TOKEN_PRECISION, shareTokenSupplyAttoShares: firstMintShareAmount })).toBe(firstMintShareAmount)
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
@@ -496,14 +494,7 @@ void describe('trading helpers', () => {
 				},
 				shareTokenSupplyAttoShares: firstMintShareAmount,
 			}),
-		).toBe('Max redeemable amount is 1\u00a0ETH.')
-	})
-
-	void test('redeems every complete-set share when the ETH amount reaches the redeemable maximum', () => {
-		// 99 shares at 7 / 100 ETH per share are worth 6 ETH, but 6 ETH converts back to only 86 shares.
-		expect(getCompleteSetRedeemAttoShares({ maxRedeemableAttoShares: 99n, redeemAmountAttoEth: 6n, settlementCollateralAttoEth: 7n, shareTokenSupplyAttoShares: 100n })).toBe(99n)
-		expect(getCompleteSetRedeemAttoShares({ maxRedeemableAttoShares: 99n, redeemAmountAttoEth: 5n, settlementCollateralAttoEth: 7n, shareTokenSupplyAttoShares: 100n })).toBe(72n)
-		expect(getCompleteSetRedeemAttoShares({ maxRedeemableAttoShares: undefined, redeemAmountAttoEth: 6n, settlementCollateralAttoEth: 7n, shareTokenSupplyAttoShares: 100n })).toBe(86n)
+		).toBe('Max redeemable amount is 1\u00a0sets.')
 	})
 
 	void test('explains that share migration waits for the pool to fork', () => {
@@ -740,4 +731,19 @@ test('central annual fee display does not extrapolate a logical checkpoint on th
 	const pool = { settlementCollateralAttoEth: 63_072_000n, feeAccrualState: { centralSettlement: true, linearFee: { rateAttoEthPerSecond: 1n, endTime: 100_000_000n }, feeEndTimestamp: 100_000_000n, lastUpdatedFeeAccumulator: 0n, feeIndexRemainder: 0n, totalFeesOwedRemainder: 0n } }
 	expect(getPoolAnnualFeePercent(pool, 31_536_000n)).toBe(50n * TOKEN_PRECISION)
 	expect(getPoolAnnualFeePercent(pool, 100_000_000n)).toBe(0n)
+})
+
+test('complete-set redemption accepts share amounts when the claim pays only REP', () => {
+	expect(
+		getTradingRedeemCompleteSetGuardMessage({
+			accountAddress: zeroAddress,
+			hasSelectedPool: true,
+			isOnActiveAppChain: true,
+			loadingTradingDetails: false,
+			redeemAmountInput: '1',
+			settlementCollateralAttoEth: 0n,
+			shareTokenSupplyAttoShares: 2n * TOKEN_PRECISION,
+			shareBalances: { invalidAttoShares: TOKEN_PRECISION, yesAttoShares: TOKEN_PRECISION, noAttoShares: TOKEN_PRECISION },
+		}),
+	).toBeUndefined()
 })

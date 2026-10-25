@@ -54,7 +54,7 @@ contract SecurityPoolForkerPortfolioDelegate is SecurityPoolForkEventEmitter {
 		uint64 bookId = engine.bookIds(universe);
 		(SecurityPoolSettlementBook.Question memory question, uint64 frozenBookId) = ledger.question(bookId, questionId);
 		if (frozenBookId == 0 || question.outcomeSupplyAttoShares == 0) return false;
-		(, , uint64 sourceBookId) = ledger.frozenBooks(frozenBookId);
+		(, , uint64 sourceBookId, ) = ledger.frozenBooks(frozenBookId);
 		return sourceBookId == bookId;
 	}
 

@@ -30,7 +30,17 @@ describe('Statoblast: central capital SDK against production contracts', () => {
 		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioCapitalFundExecutionReserveRequest({ ...base, amountAttoEth: reserve })))
 		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioCapitalAuthorizeRequest({ ...base, commitment: 100n * unit })))
 		const snapshot = await loadPortfolioCapitalSnapshot({ client, owner, portfolio: fixture.portfolio })
-		expect(snapshot).toMatchObject({ universeId: fixture.base.genesisUniverse, totalPledgedAttoRep: 1_000n * unit, totalCommitmentAttoEth: 100n * unit, ownerPrincipalAttoRep: 1_000n * unit, ownerCommitmentAttoEth: 100n * unit, withdrawableAttoRep: 800n * unit, priceValid: true })
+		expect(snapshot).toMatchObject({
+			universeId: fixture.base.genesisUniverse,
+			totalPledgedAttoRep: 1_000n * unit,
+			totalCommitmentAttoEth: 100n * unit,
+			ownerPrincipalAttoRep: 1_000n * unit,
+			ownerCommitmentAttoEth: 100n * unit,
+			withdrawableAttoRep: 789_473_684_210_526_315_600n,
+			ownerConservativePrice: 1_052_631_578_947_368_422n,
+			priceValid: true,
+		})
+		await expect(writeContractAndWait(client, () => client.sendTransaction(buildPortfolioCapitalWithdrawPrincipalRequest({ ...base, amountAttoRep: snapshot.withdrawableAttoRep + 1n })))).rejects.toThrow('Owner collateral too low')
 		expect(snapshot.positions).toHaveLength(1)
 		const position = snapshot.positions[0]
 		if (position === undefined) throw new Error('SDK position missing')
@@ -38,7 +48,7 @@ describe('Statoblast: central capital SDK against production contracts', () => {
 		const quote = await loadPortfolioMintQuote({ client, portfolio: fixture.portfolio, universeId: fixture.base.genesisUniverse, questionId: fixture.base.questionId, mintAttoEth: 10n * unit })
 		expect(quote.availableCommitmentAttoEth).toBe(100n * unit)
 		await writeContractAndWait(client, () =>
-			client.sendTransaction(buildPortfolioMintRequest({ trader: owner, portfolio: fixture.portfolio, universeId: fixture.base.genesisUniverse, questionId: fixture.base.questionId, mintAttoEth: 10n * unit, recipient: owner, minimumShares: quote.shares, maximumPurchaseFeeAttoEth: quote.purchaseFeeAttoEth })),
+			client.sendTransaction(buildPortfolioMintRequest({ trader: owner, portfolio: fixture.portfolio, universeId: fixture.base.genesisUniverse, questionId: fixture.base.questionId, mintAttoEth: 10n * unit, recipient: owner, minimumShares: quote.shares, maximumPurchaseFeeAttoEth: quote.maximumPurchaseFeeAttoEth })),
 		)
 		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioCapitalRequestRetirementRequest({ ...base, positionId: position.id })))
 		const pool = fixture.poolFor(fixture.base.questionId)

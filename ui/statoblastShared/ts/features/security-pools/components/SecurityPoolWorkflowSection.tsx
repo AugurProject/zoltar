@@ -206,7 +206,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 					selectedPoolView,
 				}
 	const poolOracleStatus = model.oracleStatus === undefined ? undefined : <PoolOracleStatusRow needsPrice={model.needsPrice} oracle={{ ...model.oracleStatus, requestPending: poolOracleActiveAction === 'requestPrice' }} onRequestPrice={openRequestPriceReview} onViewReport={onViewPendingReport} />
-	const poolLifecycle = showSelectedPoolWorkflowDetails ? <PoolLifecycleStepper skippedSteps={model.skippedLifecycleSteps} step={model.lifecycleStep} /> : undefined
+	const poolLifecycle = showSelectedPoolWorkflowDetails ? <PoolLifecycleStepper skippedSteps={model.skippedLifecycleSteps} step={model.lifecycleStep} steps={model.lifecycleSteps} /> : undefined
 	const openMyVault = () => {
 		if (accountState.address !== undefined && !sameAddress(model.selectedVaultOwner, accountState.address)) {
 			securityVault.onSecurityVaultFormChange({ selectedVaultOwner: accountState.address })
@@ -430,7 +430,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 					return panel?.querySelector<HTMLElement>('.oracle-actions .tx-action-button:not(:disabled)') ?? panel?.querySelector<HTMLElement>('.workflow-metric-grid button.link') ?? document.getElementById(PRICE_ORACLE_HEADING_ID) ?? document.querySelector<HTMLElement>('.pool-oracle-status button:not(:disabled)')
 				}}
 				onClose={() => setRequestPriceReview(undefined)}
-				onConfirm={(review, signal) => onRequestPoolPrice(review.managerAddress, review.securityPoolAddress, review.requestValueAttoEth, review.universeId, review.proposedRepPerEthPrice, signal)}
+				onConfirm={(review, signal) => onRequestPoolPrice(review.managerAddress, review.securityPoolAddress, review.requestValueAttoEth, review.universeId, review.proposedRepPerEthPrice, signal, review.requestedInitialAttoWeth)}
 				pending={poolOracleActiveAction === 'requestPrice'}
 				review={requestPriceReview}
 			/>

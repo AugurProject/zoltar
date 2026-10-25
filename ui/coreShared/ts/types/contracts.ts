@@ -23,8 +23,8 @@ export type DeploymentStepId =
 	| 'securityPoolCapitalFeeStreamsDeployer'
 	| 'securityPoolSettlementBookDeployer'
 	| 'securityPoolPortfolioSettlementDeployer'
+	| 'securityPoolPortfolioServicesDeployer'
 	| 'securityPoolReporterLedgerDeployer'
-	| 'securityPoolPortfolioRecapAuctionDeployer'
 	| 'securityPoolPortfolioForkCoordinatorDeployer'
 export type MarketType = 'binary' | 'categorical' | 'scalar'
 

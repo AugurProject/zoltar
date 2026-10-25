@@ -35,8 +35,8 @@ import {
 	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCapitalFeeStreamsDeployer,
 	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolSettlementBookDeployer,
 	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolPortfolioSettlementDeployer,
+	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolPortfolioServicesDeployer,
 	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolReporterLedgerDeployer,
-	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioRecapAuctionDeployer,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinatorDeployer,
 	statoblast_tokens_ShareToken_ShareToken,
 	Zoltar_Zoltar,
@@ -70,8 +70,8 @@ const statoblastInitCodes = createStatoblastInitCodes(
 		securityPoolCapitalFeeStreamsDeployer: statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCapitalFeeStreamsDeployer,
 		securityPoolSettlementBookDeployer: statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolSettlementBookDeployer,
 		securityPoolPortfolioSettlementDeployer: statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolPortfolioSettlementDeployer,
+		securityPoolPortfolioServicesDeployer: statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolPortfolioServicesDeployer,
 		securityPoolReporterLedgerDeployer: statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolReporterLedgerDeployer,
-		securityPoolPortfolioRecapAuctionDeployer: statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioRecapAuctionDeployer,
 		securityPoolPortfolioForkCoordinatorDeployer: statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinatorDeployer,
 		securityPoolUtils: statoblast_SecurityPoolUtils_SecurityPoolUtils,
 		shareTokenFactory: statoblast_factories_ShareTokenFactory_ShareTokenFactory,
@@ -96,8 +96,8 @@ const {
 	getSecurityPoolCapitalFeeStreamsDeployerByteCode,
 	getSecurityPoolSettlementBookDeployerByteCode,
 	getSecurityPoolPortfolioSettlementDeployerByteCode,
+	getSecurityPoolPortfolioServicesDeployerByteCode,
 	getSecurityPoolReporterLedgerDeployerByteCode,
-	getSecurityPoolPortfolioRecapAuctionDeployerByteCode,
 	getSecurityPoolPortfolioForkCoordinatorDeployerByteCode,
 	getShareTokenFactoryByteCode,
 } = statoblastInitCodes
@@ -225,8 +225,8 @@ function getDeploymentStatusOracleSteps() {
 		{ id: 'securityPoolCapitalFeeStreamsDeployer', address: infraContracts.securityPoolCapitalFeeStreamsDeployer },
 		{ id: 'securityPoolSettlementBookDeployer', address: infraContracts.securityPoolSettlementBookDeployer },
 		{ id: 'securityPoolPortfolioSettlementDeployer', address: infraContracts.securityPoolPortfolioSettlementDeployer },
+		{ id: 'securityPoolPortfolioServicesDeployer', address: infraContracts.securityPoolPortfolioServicesDeployer },
 		{ id: 'securityPoolReporterLedgerDeployer', address: infraContracts.securityPoolReporterLedgerDeployer },
-		{ id: 'securityPoolPortfolioRecapAuctionDeployer', address: infraContracts.securityPoolPortfolioRecapAuctionDeployer },
 		{ id: 'securityPoolPortfolioForkCoordinatorDeployer', address: infraContracts.securityPoolPortfolioForkCoordinatorDeployer },
 	] as const
 }
@@ -266,8 +266,8 @@ async function getInfraDeployedInformation(client: WriteClient): Promise<{ [key 
 		securityPoolCapitalFeeStreamsDeployer: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolCapitalFeeStreamsDeployer'),
 		securityPoolSettlementBookDeployer: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolSettlementBookDeployer'),
 		securityPoolPortfolioSettlementDeployer: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolPortfolioSettlementDeployer'),
+		securityPoolPortfolioServicesDeployer: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolPortfolioServicesDeployer'),
 		securityPoolReporterLedgerDeployer: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolReporterLedgerDeployer'),
-		securityPoolPortfolioRecapAuctionDeployer: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolPortfolioRecapAuctionDeployer'),
 		securityPoolPortfolioForkCoordinatorDeployer: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolPortfolioForkCoordinatorDeployer'),
 	}
 }
@@ -313,8 +313,8 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	if (!existence['securityPoolCapitalFeeStreamsDeployer']) await deployBytecode('securityPoolCapitalFeeStreamsDeployer', getSecurityPoolCapitalFeeStreamsDeployerByteCode())
 	if (!existence['securityPoolSettlementBookDeployer']) await deployBytecode('securityPoolSettlementBookDeployer', getSecurityPoolSettlementBookDeployerByteCode())
 	if (!existence['securityPoolPortfolioSettlementDeployer']) await deployBytecode('securityPoolPortfolioSettlementDeployer', getSecurityPoolPortfolioSettlementDeployerByteCode())
+	if (!existence['securityPoolPortfolioServicesDeployer']) await deployBytecode('securityPoolPortfolioServicesDeployer', getSecurityPoolPortfolioServicesDeployerByteCode())
 	if (!existence['securityPoolReporterLedgerDeployer']) await deployBytecode('securityPoolReporterLedgerDeployer', getSecurityPoolReporterLedgerDeployerByteCode())
-	if (!existence['securityPoolPortfolioRecapAuctionDeployer']) await deployBytecode('securityPoolPortfolioRecapAuctionDeployer', getSecurityPoolPortfolioRecapAuctionDeployerByteCode())
 	if (!existence['securityPoolPortfolioForkCoordinatorDeployer']) await deployBytecode('securityPoolPortfolioForkCoordinatorDeployer', getSecurityPoolPortfolioForkCoordinatorDeployerByteCode())
 
 	for (const [name, contractAddress] of objectEntries(contractAddresses)) {

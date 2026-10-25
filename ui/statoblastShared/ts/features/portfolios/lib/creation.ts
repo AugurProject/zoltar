@@ -10,6 +10,9 @@ export type PortfolioCreationDraft = {
 	minimumExecutionReserve: string
 	minimumOutcomeRate: string
 	rewardVestingHours: string
+	reportingFee: string
+	serviceFeePercent: string
+	maximumOracleReward: string
 }
 
 export const defaultPortfolioCreationDraft = (): PortfolioCreationDraft => ({
@@ -20,6 +23,9 @@ export const defaultPortfolioCreationDraft = (): PortfolioCreationDraft => ({
 	minimumExecutionReserve: '0.001',
 	minimumOutcomeRate: '0.01',
 	rewardVestingHours: '24',
+	reportingFee: '0.05',
+	serviceFeePercent: '25',
+	maximumOracleReward: '0.1',
 })
 
 function portfolioBasisPoints(value: string, label: string) {
@@ -44,6 +50,9 @@ export function parsePortfolioCreationEconomics(draft: PortfolioCreationDraft) {
 		minimumExecutionReserveAttoEth: parsePortfolioAmount(draft.minimumExecutionReserve),
 		minimumOutcomeRate: parsePortfolioAmount(draft.minimumOutcomeRate),
 		rewardVestingSeconds: (parsePortfolioAmount(draft.rewardVestingHours) * 3600n) / 10n ** 18n,
+		reportingFeeAttoEth: parsePortfolioAmount(draft.reportingFee),
+		serviceFeeBps: portfolioBasisPoints(draft.serviceFeePercent, 'Oracle maintenance share'),
+		maximumOracleRewardAttoEth: parsePortfolioAmount(draft.maximumOracleReward),
 	}
 	validatePortfolioEconomics(config)
 	return config

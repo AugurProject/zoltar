@@ -166,7 +166,7 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 	onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint, securityPoolAddress: Address, universeId: bigint) => void
 	onRefreshSelectedPoolData: (securityPoolAddress?: string, totalCommitment?: bigint) => void
 	securityPoolsFreshness?: DataFreshness | undefined
-	onRequestPoolPrice: (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint, universeId: bigint, proposedRepPerEthPrice?: bigint, signal?: AbortSignal) => void | Promise<void>
+	onRequestPoolPrice: (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint, universeId: bigint, proposedRepPerEthPrice?: bigint, signal?: AbortSignal, requestedInitialAttoWeth?: bigint) => void | Promise<void>
 	onSelectedPoolViewChange: (view: string | undefined) => void
 	onViewPendingReport: (reportId: bigint) => void
 	selectedPoolRefreshNonce: number

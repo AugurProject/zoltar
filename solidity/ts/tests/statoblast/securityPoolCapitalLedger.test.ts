@@ -64,6 +64,49 @@ describe('Statoblast: individual shared-custody capital', () => {
 		await setBaselineSnapshot()
 	})
 
+	test('oracle uncertainty cannot create a paid cure without a real price decline', async () => {
+		await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'setPriceError', args: [500_000n] }))
+		await price(E)
+		const required = await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'requiredRep', args: [100n * E, 10_000n] })
+		await deposit(alice, required)
+		const id = await authorize(alice, 100n * E)
+		await price((E * 1_005n) / 1_000n)
+		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'cure', args: [id] }))
+		expect((await position(id)).commitment).toBe(100n * E)
+		expect((await account(keeper)).feesAttoEth).toBe(0n)
+	})
+
+	test('opposite ends of the correction band cannot create liquidation or a takeover clock', async () => {
+		await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'setPriceError', args: [500_000n] }))
+		await price((E * 95n) / 100n)
+		const required = await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'requiredRep', args: [100n * E, 10_000n] })
+		expect(required).toBe(105n * E)
+		await deposit(alice, required)
+		const id = await authorize(alice, 100n * E)
+		await demand(100n * E)
+		await price((E * 105n) / 100n)
+		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'cure', args: [id] }))
+		expect((await position(id)).commitment).toBe(100n * E)
+		expect((await account(keeper)).feesAttoEth).toBe(0n)
+		expect(await alice.readContract({ abi: indexArtifact.abi, address: index, functionName: 'liquidationStarted', args: [id] })).toBe(0n)
+		await deposit(keeper, 1_000n * E)
+		await expect(writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'takeOver', args: [id, 100n * E, 1n, 1_000n * E] }))).rejects.toThrow('Position does not need takeover')
+	})
+
+	test('one healthy commitment cannot collect the fees of a hundred unhealthy commitments', async () => {
+		await deposit(alice, 105n * E)
+		await authorize(alice, 100n * E)
+		await demand(100n * E)
+		await price(2n * E)
+		await deposit(bob, 3n * E)
+		const id = await authorize(bob, E)
+		await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'fundFees', value: 101n * E }))
+		await getAnvilWindowEthereum().request({ method: 'evm_increaseTime', params: [86_401] })
+		await getAnvilWindowEthereum().request({ method: 'evm_mine' })
+		await writeContractAndWait(bob, () => bob.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint' }))
+		expect((await account(bob)).feesAttoEth + (await position(id)).ethFees).toBeLessThanOrEqual(E)
+	})
+
 	test('execution funding after a fork choice cannot enter an account whose reserve already moved', async () => {
 		await deposit(alice, 105n * E)
 		await authorize(alice, 100n * E)
@@ -384,32 +427,31 @@ describe('Statoblast: individual shared-custody capital', () => {
 		expect((await account(alice)).freeAttoRep).toBe(0n)
 	})
 
-	test('stale prepaid ETH and REP resume vesting without losing funded income', async () => {
+	test('stale prepaid income cannot become a jackpot for future healthy commitments', async () => {
 		await deposit(alice, 105n * E)
 		const id = await authorize(alice, 100n * E)
 		await price(E, 100)
+		const initialEth = await alice.getBalance({ address: ledger })
+		const initialRep = await alice.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [ledger] })
+		const serviceBefore = await alice.getBalance({ address: harness })
 		await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'fundFees', value: 86_400n * E }))
 		await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'fundRepFees', args: [86_400n * E] }))
 		await getAnvilWindowEthereum().advanceTime(200n)
 		await price(E)
 		const feeStreams = await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'feeStreams' })
-		const deferred = () => alice.readContract({ abi: feeStreamsArtifact.abi, address: feeStreams, functionName: 'deferredEth' })
-		const waiting = await deferred()
-		expect(waiting).toBeGreaterThan(0n)
-		// Even a second report accepted while fresh must leave insertion of new
-		// expiry nodes outside the mandatory oracle callback.
-		await price(E)
-		expect(await deferred()).toBe(waiting)
+		expect(await alice.readContract({ abi: feeStreamsArtifact.abi, address: feeStreams, functionName: 'deferredEth' })).toBe(0n)
+		expect(await alice.getBalance({ address: harness })).toBeGreaterThan(serviceBefore)
 		const before = await position(id)
 		expect(before.ethFees).toBeLessThan(200n * E)
 		expect(before.repFees).toBeLessThan(200n * E)
-		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint' }))
-		expect(await deferred()).toBe(0n)
 		await getAnvilWindowEthereum().advanceTime(86_401n)
 		await writeContractAndWait(alice, () => alice.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint' }))
 		const after = await position(id)
-		expect(after.ethFees).toBe(86_400n * E)
-		expect(after.repFees).toBe(86_400n * E)
+		expect(after.ethFees).toBeLessThan(86_400n * E)
+		expect(after.repFees).toBeLessThan(86_400n * E)
+		expect(after.ethFees + (await alice.getBalance({ address: harness })) - serviceBefore).toBe(86_400n * E)
+		expect(await alice.getBalance({ address: ledger })).toBe(initialEth + after.ethFees)
+		expect(await alice.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [ledger] })).toBe(initialRep + after.repFees)
 	})
 
 	for (const mode of ['stale', 'unhealthy', 'empty'] as const) {
@@ -507,8 +549,9 @@ describe('Statoblast: individual shared-custody capital', () => {
 		expect((await account(bob)).feesAttoEth).toBe(reserve)
 	})
 
-	test('income with no eligible commitment resumes once and ordinary checkpoints preserve its end', async () => {
+	test('income with no eligible commitment cannot be captured by a later authorization', async () => {
 		await deposit(alice, 105n * E)
+		const serviceBefore = await alice.getBalance({ address: harness })
 		await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'fundFees', value: 86_400n * E }))
 		await getAnvilWindowEthereum().advanceTime(200n)
 		const id = await authorize(alice, 100n * E)
@@ -519,7 +562,9 @@ describe('Statoblast: individual shared-custody capital', () => {
 		}
 		await getAnvilWindowEthereum().advanceTime(86_101n)
 		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint' }))
-		expect((await position(id)).ethFees).toBe(86_400n * E)
+		const earned = (await position(id)).ethFees
+		expect(earned).toBeLessThan(86_400n * E)
+		expect(earned + (await alice.getBalance({ address: harness })) - serviceBefore).toBe(86_400n * E)
 	})
 
 	test('old-price eligibility checkpoints atomically and stale vested income never backdates', async () => {
@@ -535,11 +580,12 @@ describe('Statoblast: individual shared-custody capital', () => {
 		const oldB = (await position(b)).ethFees
 		expect(oldA).toBeGreaterThan(0n)
 		expect(oldA).toBe(oldB)
-		// Stale fees now resume gradually; the healthy owner cannot capture them on renewal.
+		// Stale fees leave provider income; only new healthy coverage earns later fees.
 		expect(oldB).toBeLessThan(501n * E)
 		await getAnvilWindowEthereum().advanceTime(100n)
 		await writeContractAndWait(alice, () => alice.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint' }))
 		expect((await position(a)).ethFees).toBe(oldA)
-		expect((await position(b)).ethFees).toBeGreaterThan(oldB + 99n * E)
+		expect((await position(b)).ethFees).toBeGreaterThanOrEqual(oldB + 50n * E)
+		expect((await position(b)).ethFees).toBeLessThan(oldB + 52n * E)
 	})
 })

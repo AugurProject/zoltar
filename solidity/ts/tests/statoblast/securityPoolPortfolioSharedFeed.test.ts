@@ -3,6 +3,7 @@ import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import {
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
+	statoblast_SharedPoolReportEscrow_SharedPoolReportEscrow as escrowArtifact,
 	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator as coordinatorArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
@@ -23,6 +24,114 @@ describe('Statoblast: central capital shared price feed', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
 	const feed = () => fixture.owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })
 
+	test('an accurate small report cannot veto an independently funded growth report', async () => {
+		await fixture.deposit(1_000n * unit)
+		await fixture.refreshPrice(fixture.base.questionId, unit, fixture.portfolio, 2n * unit)
+		await fixture.authorize(100n * unit)
+		const owner = fixture.owner()
+		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
+		const otherCoordinator = fixture.poolFor(fixture.secondQuestionId).openOraclePriceCoordinator
+		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), unit)
+		const smallReport = await getPendingReportId(owner, coordinator)
+		await requestPriceWithValue(owner, otherCoordinator, await getRequestPriceCostAttoEth(owner, otherCoordinator), unit, 10n * unit)
+		const growthReport = await getPendingReportId(owner, otherCoordinator)
+		expect(growthReport).not.toBe(smallReport)
+		await fixture.base.mockWindow.advanceTime(481n)
+		await openOracleSettle(owner, growthReport)
+		await fixture.authorize(300n * unit)
+		await openOracleSettle(owner, smallReport)
+		expect(await owner.readContract({ abi: feedArtifact.abi, address: await feed(), functionName: 'reportOutcome', args: [growthReport] })).toBe(1n)
+		expect(await owner.readContract({ abi: feedArtifact.abi, address: await feed(), functionName: 'reportOutcome', args: [smallReport] })).toBe(2n)
+	})
+
+	test('concurrent sponsors cannot collect another candidate refund, including disputed funding', async () => {
+		await fixture.prepare()
+		const owner = fixture.owner()
+		const other = fixture.other()
+		const firstCoordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
+		const secondCoordinator = fixture.poolFor(fixture.secondQuestionId).openOraclePriceCoordinator
+		const target = { abi: feedArtifact.abi, address: await feed() }
+		await requestPriceWithValue(owner, firstCoordinator, await getRequestPriceCostAttoEth(owner, firstCoordinator), 2n * unit)
+		const firstId = await getPendingReportId(owner, firstCoordinator)
+		const first = (await loadOpenOracleEventState(owner, firstId)).latest
+		const [firstEscrow] = await owner.readContract({ ...target, functionName: 'reportCandidates', args: [firstId] })
+		await requestPriceWithValue(other, secondCoordinator, await getRequestPriceCostAttoEth(other, secondCoordinator), unit)
+		const secondId = await getPendingReportId(other, secondCoordinator)
+		const second = (await loadOpenOracleEventState(other, secondId)).latest
+		const [secondEscrow] = await owner.readContract({ ...target, functionName: 'reportCandidates', args: [secondId] })
+		expect(firstEscrow).not.toBe(secondEscrow)
+		const oracle = getInfraContractAddresses().openOracle
+		await wrapWeth(other, first.game.currentAmount1 * 3n)
+		await approveToken(other, first.game.token1, oracle)
+		await approveToken(other, first.game.token2, oracle)
+		const nextAmount1 = (first.game.currentAmount1 * first.game.multiplier) / 100n
+		await fixture.base.mockWindow.advanceTime(100n)
+		await writeContractAndWait(other, () => other.writeContract({ abi: oracleArtifact.abi, address: oracle, functionName: 'dispute', args: [firstId, nextAmount1, nextAmount1, other.account.address, false, false, getOpenOracleGameTuple(first.game), getOpenOracleHelperTuple(first.helper), [0n, 0n, 0n, 0n]] }))
+		const firstCredit = await owner.readContract({ abi: oracleArtifact.abi, address: oracle, functionName: 'tokenHolder', args: [firstEscrow, first.game.token1] })
+		expect(firstCredit).toBeGreaterThan(1n)
+		const otherWeth = await other.readContract({ abi: tokenArtifact.abi, address: second.game.token1, functionName: 'balanceOf', args: [other.account.address] })
+		await fixture.base.mockWindow.advanceTime(381n)
+		await openOracleSettle(other, secondId)
+		expect(await owner.readContract({ abi: oracleArtifact.abi, address: oracle, functionName: 'tokenHolder', args: [firstEscrow, first.game.token1] })).toBe(firstCredit)
+		expect(await other.readContract({ abi: tokenArtifact.abi, address: second.game.token1, functionName: 'balanceOf', args: [other.account.address] })).toBe(otherWeth + second.game.currentAmount1)
+		const ownerWeth = await owner.readContract({ abi: tokenArtifact.abi, address: first.game.token1, functionName: 'balanceOf', args: [owner.account.address] })
+		await writeContractAndWait(other, () => other.writeContract({ abi: escrowArtifact.abi, address: firstEscrow, functionName: 'withdrawFunding' }))
+		expect(await owner.readContract({ abi: tokenArtifact.abi, address: first.game.token1, functionName: 'balanceOf', args: [owner.account.address] })).toBe(ownerWeth + firstCredit - 1n)
+		expect(await owner.readContract({ ...target, functionName: 'reportOutcome', args: [firstId] })).toBe(0n)
+	})
+
+	test('a smaller renewal preserves affordable reporting and a growth proof keeps its owner collateral floor', async () => {
+		await fixture.deposit(1_000n * unit)
+		const owner = fixture.owner()
+		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
+		const target = { abi: feedArtifact.abi, address: await feed() }
+		const capital = { abi: capitalArtifact.abi, address: fixture.capitalLedger }
+		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), 2n * unit, 100n * unit)
+		const largeReport = await getPendingReportId(owner, coordinator)
+		await fixture.base.mockWindow.advanceTime(481n)
+		await openOracleSettle(owner, largeReport)
+		await fixture.authorize(100n * unit)
+		expect(await owner.readContract({ ...target, functionName: 'minimumToken1ReportAttoEth' })).toBeLessThan(2n * unit)
+		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), unit)
+		const smallReport = await getPendingReportId(owner, coordinator)
+		await fixture.base.mockWindow.advanceTime(481n)
+		await openOracleSettle(owner, smallReport)
+		expect(await owner.readContract({ ...target, functionName: 'reportOutcome', args: [smallReport] })).toBe(1n)
+		await expect(fixture.authorize(200n * unit)).rejects.toThrow('Accepted report exposure exceeded')
+		const [protectedPrice] = await owner.readContract({ ...target, functionName: 'reportAuthorization', args: [largeReport, 200n * unit] })
+		await writeContractAndWait(owner, () => owner.writeContract({ ...capital, functionName: 'authorizeWithReport', args: [largeReport, 200n * unit] }))
+		expect(await owner.readContract({ ...capital, functionName: 'ownerConservativePrice', args: [owner.account.address] })).toBe(protectedPrice)
+		await expect(owner.writeContract({ ...capital, functionName: 'withdrawPrincipal', args: [200n * unit, owner.account.address] })).rejects.toThrow('Owner collateral too low')
+		await writeContractAndWait(owner, () => owner.writeContract({ ...capital, functionName: 'withdrawPrincipal', args: [100n * unit, owner.account.address] }))
+		await fixture.refreshPrice()
+		expect(await owner.readContract({ ...capital, functionName: 'ownerConservativePrice', args: [owner.account.address] })).toBeLessThan(protectedPrice)
+		await writeContractAndWait(owner, () => owner.writeContract({ ...capital, functionName: 'withdrawPrincipal', args: [200n * unit, owner.account.address] }))
+	})
+
+	test('shared staged operations do not join an unrelated report or require automatic queue capacity', async () => {
+		await fixture.prepare()
+		const owner = fixture.owner()
+		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
+		const otherCoordinator = fixture.poolFor(fixture.secondQuestionId).openOraclePriceCoordinator
+		await fixture.base.mockWindow.advanceTime(781n)
+		await requestPriceWithValue(owner, otherCoordinator, await getRequestPriceCostAttoEth(owner, otherCoordinator), unit)
+		const unrelatedReport = await getPendingReportId(owner, otherCoordinator)
+		await wrapWeth(owner, 100n * unit)
+		await approveToken(owner, (await loadOpenOracleEventState(owner, unrelatedReport)).latest.game.token1, coordinator)
+		await approveToken(owner, getRepTokenAddress(fixture.base.genesisUniverse), coordinator)
+		const bounty = await getRequestPriceCostAttoEth(owner, coordinator)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'requestPriceIfNeededAndStageOperation', args: [2, owner.account.address, 0n, 300n, unit, 0n, bounty], value: bounty }))
+		const ownReport = await getPendingReportId(owner, coordinator)
+		expect(ownReport).not.toBe(unrelatedReport)
+		expect(await owner.readContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'getPendingSettlementOperationIds' })).toEqual([])
+		const operationId = await owner.readContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'stagedOperationCounter' })
+		await fixture.base.mockWindow.advanceTime(481n)
+		await openOracleSettle(owner, unrelatedReport)
+		expect(await owner.readContract({ abi: feedArtifact.abi, address: await feed(), functionName: 'reportOutcome', args: [ownReport] })).toBe(0n)
+		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'executeStagedOperation', args: [operationId] }))
+		expect(await owner.readContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'getActiveStagedOperationCount' })).toBe(0n)
+	})
+
 	test('report exposure follows direct capital authorizations without a question synchronization transaction', async () => {
 		await fixture.deposit(1_000n * unit)
 		await fixture.refreshPrice()
@@ -36,7 +145,8 @@ describe('Statoblast: central capital shared price feed', () => {
 		expect(firstMinimum).toBeGreaterThan(unit)
 		await fixture.authorize(200n * unit)
 		expect(await exposure()).toBe(200n * unit)
-		expect(await minimum()).toBeGreaterThan(firstMinimum)
+		expect(await minimum()).toBeGreaterThanOrEqual(firstMinimum)
+		// The accepted headroom remains secured even before providers consume it.
 		for (const question of [fixture.base.questionId, fixture.secondQuestionId]) {
 			const coordinator = fixture.poolFor(question).openOraclePriceCoordinator
 			expect(await fixture.owner().readContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'minimumToken1ReportAttoEth' })).toBe(await minimum())
@@ -100,7 +210,7 @@ describe('Statoblast: central capital shared price feed', () => {
 		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), unit + 1n)
 		const reportId = await getPendingReportId(owner, coordinator)
 		await expect(openOracleSettle(owner, reportId)).rejects.toThrow()
-		await expect(requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), unit)).rejects.toThrow('Oracle request already pending')
+		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), unit)
 		const challenger = fixture.other()
 		const oracle = getInfraContractAddresses().openOracle
 		const state = (await loadOpenOracleEventState(owner, reportId)).latest
@@ -129,32 +239,30 @@ describe('Statoblast: central capital shared price feed', () => {
 		await expect(fixture.mint()).rejects.toThrow()
 	})
 
-	test('mature renewals reject commitment growth beyond funded report exposure before it can invalidate settlement', async () => {
-		await fixture.prepare(1_000n * unit, 100n * unit)
+	test('accepted exposure remains a persistent cap even when no candidate is pending', async () => {
+		await fixture.deposit(1_000n * unit)
+		await fixture.refreshPrice(fixture.base.questionId, unit, fixture.portfolio, 2n * unit)
+		await fixture.authorize(100n * unit)
+		await expect(fixture.authorize(200n * unit)).rejects.toThrow('Accepted report exposure exceeded')
 		const owner = fixture.owner()
-		const shared = await feed()
-		const target = { abi: feedArtifact.abi, address: shared }
-		const capital = { abi: capitalArtifact.abi, address: fixture.capitalLedger }
-		const expiry = await owner.readContract({ ...capital, functionName: 'priceValidUntil' })
 		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
-		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), 2n * unit)
+		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), unit, 10n * unit)
 		const reportId = await getPendingReportId(owner, coordinator)
+		await expect(fixture.authorize(200n * unit)).rejects.toThrow('Accepted report exposure exceeded')
 		await fixture.base.mockWindow.advanceTime(481n)
-		expect((await owner.getBlock()).timestamp).toBeLessThan(expiry)
-		await expect(fixture.authorize(200n * unit)).rejects.toThrow('Pending report exposure exceeded')
 		await openOracleSettle(owner, reportId)
-		expect(await owner.readContract({ ...target, functionName: 'reportOutcome', args: [reportId] })).toBe(1n)
-		expect(await owner.readContract({ ...target, functionName: 'lastPrice' })).toBe(2n * unit)
-		expect(await owner.readContract({ ...capital, functionName: 'priceValidUntil' })).toBeGreaterThan(expiry)
+		await fixture.authorize(200n * unit)
+		expect(await owner.readContract({ abi: feedArtifact.abi, address: await feed(), functionName: 'pendingReportId' })).toBe(0n)
 	})
 
-	test('a prepaid renewal permits supported growth, deposits and retirement and releases its limit after settlement', async () => {
+	test('a pending smaller candidate cannot prevent currently secured growth or retirement', async () => {
 		await fixture.prepare(1_000n * unit, 100n * unit)
 		const owner = fixture.owner()
 		const target = { abi: feedArtifact.abi, address: await feed() }
 		const capital = { abi: capitalArtifact.abi, address: fixture.capitalLedger }
 		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
-		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), unit, 10n * unit)
+		const coverage = await owner.readContract({ ...target, functionName: 'acceptedExposureLimitAttoEth' })
+		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), unit)
 		const reportId = await getPendingReportId(owner, coordinator)
 		await fixture.authorize(200n * unit)
 		await fixture.deposit(unit)
@@ -164,10 +272,7 @@ describe('Statoblast: central capital shared price feed', () => {
 		await fixture.base.mockWindow.advanceTime(481n)
 		await openOracleSettle(owner, reportId)
 		expect(await owner.readContract({ ...target, functionName: 'reportOutcome', args: [reportId] })).toBe(1n)
-		expect(await owner.readContract({ ...target, functionName: 'pendingReportId' })).toBe(0n)
-		await fixture.deposit(1_000n * unit)
-		await fixture.authorize(500n * unit)
-		expect(await owner.readContract({ ...target, functionName: 'aggregateExposureAttoEth' })).toBe(500n * unit)
+		expect(await owner.readContract({ ...target, functionName: 'acceptedExposureLimitAttoEth' })).toBeLessThan(coverage)
 	})
 
 	test('delayed settlement cannot restart the portfolio validity clock', async () => {

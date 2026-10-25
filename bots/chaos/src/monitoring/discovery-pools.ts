@@ -237,7 +237,8 @@ export async function discoverPools({
 			settlementCallbackGasLimit: settlementCallbackGasLimit.toString(),
 			targetPriceErrorForDispute: targetPriceErrorForDispute.toString(),
 		}
-		const priceFeedSnapshot = await discoverPoolPriceFeed(client, coordinator, blockNumber, accounting.settlementCollateralAttoEth, oracleRequestFunding, minimumReport, requestCost, anchorBaseFeePerGas)
+		const retainedReportIds = (context.indexedReports ?? []).filter(report => report.token2.toLowerCase() === repToken.toLowerCase() && report.settlementTimestamp === '0').map(report => BigInt(report.reportId))
+		const priceFeedSnapshot = await discoverPoolPriceFeed(client, coordinator, blockNumber, accounting.settlementCollateralAttoEth, oracleRequestFunding, minimumReport, requestCost, anchorBaseFeePerGas, pendingReportId, retainedReportIds)
 		const [auctionableAttoRepAtFork, , , migratedAttoRep, , , , , ownFork, unresolvedEscalationAtFork, outcomeIndex, forkActivationTime] = forkDataResult
 		const parentForkActivationTime = parentForkDataResult?.[11] ?? 0n
 		const [statusOwnFork, statusAuctionableAttoRepAtFork, vaultRepAtForkAttoRep] = ownForkMigrationStatusResult
@@ -426,7 +427,6 @@ export async function discoverPools({
 			minimumSafeWalletVaultDepositAttoRep: minimumSafeWalletVaultDepositAttoRep.toString(),
 			minimumVaultRepDepositAttoRep: minimumDeposit.toString(),
 			oraclePriceValid: priceValid,
-			oracleRequestFunding,
 			oracleSettlementTime: settlementTime.toString(),
 			parent: getAddress(deployment.parent),
 			parentForkActivationTime: parentForkActivationTime.toString(),

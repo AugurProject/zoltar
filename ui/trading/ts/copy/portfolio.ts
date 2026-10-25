@@ -64,3 +64,9 @@ export const favoriteGuidance = 'Portfolio only covers markets opened in this br
 export const browseMarkets = 'Browse markets'
 
 export const refreshPortfolio = 'Refresh portfolio'
+
+export const recoveryRepExcluded = 'REP recovery is shown per position and excluded from the ETH total.'
+
+export function formatRecoveryRepTail(amount: string) {
+	return ` + ${amount} REP`
+}

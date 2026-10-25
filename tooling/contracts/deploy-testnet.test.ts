@@ -514,7 +514,7 @@ describe('testnet deployment plan', () => {
 			infrastructure.securityPoolSettlementBookDeployer,
 			infrastructure.securityPoolPortfolioSettlementDeployer,
 			infrastructure.securityPoolReporterLedgerDeployer,
-			infrastructure.securityPoolPortfolioRecapAuctionDeployer,
+			infrastructure.securityPoolPortfolioServicesDeployer,
 			infrastructure.securityPoolPortfolioForkCoordinatorDeployer,
 			infrastructure.securityPoolUtils,
 			infrastructure.shareTokenFactory,
@@ -536,8 +536,8 @@ describe('testnet deployment plan', () => {
 		const publishedAddresses = [SEPOLIA_NETWORK_PROFILE.wethAddress, uniswap.addresses.uniswapV3FactoryAddress, uniswap.addresses.uniswapV3QuoterAddress, uniswap.addresses.uniswapV4PoolManagerAddress, uniswap.addresses.uniswapV4QuoterAddress]
 		expect(uniswap.publishedContracts.map(contract => contract.address)).toEqual(publishedAddresses)
 		for (const address of publishedAddresses) expect(addressSet.has(address)).toBe(false)
-		expect(Object.keys(bootstrapDescendants)).toHaveLength(20)
-		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(20)
+		expect(Object.keys(bootstrapDescendants)).toHaveLength(22)
+		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(22)
 		for (const address of Object.values(bootstrapDescendants)) expect(addressSet.has(address)).toBe(false)
 		expect(bootstrapDescendants.escalationGameProofVerifier).toBe(infrastructure.escalationGameProofVerifier)
 		expect(bootstrapDescendants.liquidationApprovalRegistryDeployer).toBe(getCreateAddress({ from: infrastructure.openOraclePriceCoordinatorFactory, nonce: 1n }))
@@ -553,6 +553,8 @@ describe('testnet deployment plan', () => {
 		expect(bootstrapDescendants.securityPoolCreationCodeSecondChunk).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeploymentWorker, nonce: 2n }))
 		expect(bootstrapDescendants['securityPoolCapitalCreationCodeFirstChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolCapitalLedgerDeployer, nonce: 1n }))
 		expect(bootstrapDescendants['securityPoolCapitalCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolCapitalLedgerDeployer, nonce: 2n }))
+		expect(bootstrapDescendants['securityPoolServicesCreationCodeFirstChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioServicesDeployer, nonce: 1n }))
+		expect(bootstrapDescendants['securityPoolServicesCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioServicesDeployer, nonce: 2n }))
 		expect(bootstrapDescendants['securityPoolForkCreationCodeFirstChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioForkCoordinatorDeployer, nonce: 1n }))
 		expect(bootstrapDescendants['securityPoolForkCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioForkCoordinatorDeployer, nonce: 2n }))
 		expect(plan.some(step => step.id === 'escalationGameFactory')).toBe(true)
@@ -747,6 +749,8 @@ describe('testnet deployment plan', () => {
 			'securityPoolCreationCodeSecondChunk',
 			'securityPoolCapitalCreationCodeFirstChunk',
 			'securityPoolCapitalCreationCodeSecondChunk',
+			'securityPoolServicesCreationCodeFirstChunk',
+			'securityPoolServicesCreationCodeSecondChunk',
 			'securityPoolForkCreationCodeFirstChunk',
 			'securityPoolForkCreationCodeSecondChunk',
 		]) {

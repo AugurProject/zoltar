@@ -99,6 +99,10 @@ export function TradingSection({
 	const shareBalances = tradingDetails?.shareBalances
 	const maxRedeemableCompleteSetsAttoShares = tradingDetails?.maxRedeemableCompleteSetsAttoShares
 	const displayMaxRedeemableCompleteSets = convertAttoSharesToSettlementCollateralAttoEth(maxRedeemableCompleteSetsAttoShares, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
+	const recoveryRep = (shares: bigint | undefined) => {
+		if (shares === undefined || selectedPool === undefined) return undefined
+		return selectedPool.shareTokenSupplyAttoShares === 0n ? 0n : (shares * (selectedPool.settlementRecoveryAttoRep ?? 0n)) / selectedPool.shareTokenSupplyAttoShares
+	}
 	const displayShareBalances = getShareSettlementBalances(shareBalances, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	// Once balances load and every one is zero, a single line replaces the empty sets figure and three empty bars.
 	const holdsNoShares = shareBalances !== undefined && !hasShares(shareBalances)
@@ -407,8 +411,11 @@ export function TradingSection({
 					<MetricField label={tradingCopy.availableToRedeem}>
 						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} decimals={4} value={displayMaxRedeemableCompleteSets} suffix={commonCopy.eth} />
 					</MetricField>
+					<MetricField label={tradingCopy.availableRecoveryRep}>
+						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={recoveryRep(maxRedeemableCompleteSetsAttoShares)} suffix={commonCopy.rep} />
+					</MetricField>
 				</MetricGrid>
-				<AmountField fillMax={{ amount: displayMaxRedeemableCompleteSets }} label={tradingCopy.redeemCompleteSetsAmount} onChange={redeemAmount => onTradingFormChange({ redeemAmount })} unit={commonCopy.eth} value={tradingForm.redeemAmount} />
+				<AmountField fillMax={{ amount: maxRedeemableCompleteSetsAttoShares }} label={tradingCopy.redeemCompleteSetsAmount} onChange={redeemAmount => onTradingFormChange({ redeemAmount })} unit={tradingCopy.setsUnit} value={tradingForm.redeemAmount} />
 				<UserMessage className='detail' detail={tradingCopy.redeemCompleteSetsFeeDetail} />
 				<div className='actions'>
 					<TransactionActionButton
@@ -454,6 +461,9 @@ export function TradingSection({
 					</MetricField>
 					<MetricField label={tradingCopy.expectedEthPayout}>
 						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} decimals={4} value={expectedRedemptionPayoutAttoEth} suffix={commonCopy.eth} />
+					</MetricField>
+					<MetricField label={tradingCopy.expectedRepPayout}>
+						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={recoveryRep(winningAttoShares)} suffix={commonCopy.rep} />
 					</MetricField>
 				</MetricGrid>
 				<UserMessage className='detail' detail={tradingCopy.resolvedShareRedemptionFeeDetail} />

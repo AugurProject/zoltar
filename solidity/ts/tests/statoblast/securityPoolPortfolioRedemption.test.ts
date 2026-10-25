@@ -18,7 +18,7 @@ import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/sta
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 describe('Statoblast: native finalized portfolio redemptions', () => {
-	const fixture = useSecurityPoolPortfolioFixture()
+	const fixture = useSecurityPoolPortfolioFixture({ reportingFeeAttoEth: unit / 100n })
 	const pool = () => ({ abi: poolArtifact.abi, address: fixture.poolFor(fixture.base.questionId).securityPool })
 	const portfolio = () => ({ abi: portfolioArtifact.abi, address: fixture.portfolio })
 	const shares = () => balanceOfShares(fixture.other(), fixture.poolFor(fixture.base.questionId).shareToken, fixture.base.genesisUniverse, fixture.other().account.address)
@@ -42,6 +42,11 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		return fixture.owner().readContract({ abi: gameArtifact.abi, address: game, functionName: 'getEscalationGameEndDate' })
 	}
 	const secondCash = () => fixture.owner().readContract({ ...portfolio(), functionName: 'quoteQuestionSettlement', args: [fixture.poolFor(fixture.secondQuestionId).securityPool, 20n * unit] })
+	const questionCash = async (questionId: bigint) => {
+		const state = await settlementState()
+		const [question] = await fixture.owner().readContract({ abi: bookArtifact.abi, address: state.book, functionName: 'question', args: [state.bookId, questionId] })
+		return fixture.owner().readContract({ ...portfolio(), functionName: 'quoteQuestionSettlement', args: [fixture.poolFor(questionId).securityPool, question.outcomeSupplyAttoShares] })
+	}
 
 	test.each([false, true])('a question finalized before another question forks cannot detach recovery rights (checkpointed: %s)', async checkpointed => {
 		const deadline = await prepareReportedQuestion()
@@ -77,13 +82,17 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		expect(await shares()).toEqual([beforeShares[0], 0n, beforeShares[2]])
 		const state = await settlementState()
 		expect(state.frozenBookId).not.toBe(0n)
-		expect(state.question.outcomeSupplyAttoShares).toBe(0n)
+		expect(state.question.outcomeSupplyAttoShares).toBe(state.question.rewardShares)
+		expect(state.question.rewardShares).toBeGreaterThan(0n)
 		expect(state.question.feeRateAttoEthPerSecond).toBe(0n)
 		expect(await secondCash()).toBe(otherCash)
-		expect(await fixture.owner().getBalance({ address: state.engine })).toBe(otherCash)
+		expect(await fixture.owner().getBalance({ address: state.engine })).toBe((await questionCash(fixture.base.questionId)) + (await questionCash(fixture.secondQuestionId)))
 		await refresh()
 		await refresh()
 		expect(await secondCash()).toBe(otherCash)
+		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...portfolio(), functionName: 'claimQuestionReportingReward', args: [pool().address] }))
+		expect((await settlementState()).question.outcomeSupplyAttoShares).toBe(0n)
+		expect(await fixture.owner().getBalance({ address: state.engine })).toBe(await questionCash(fixture.secondQuestionId))
 	})
 
 	test('partial complete-set return and the remaining winner preserve the frozen cash rate and other questions', async () => {
@@ -108,7 +117,7 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		expect((await settlementState()).question).toEqual(after.question)
 		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...pool(), functionName: 'redeemShares' }))
 		expect(await secondCash()).toBe(otherCash)
-		expect(await fixture.owner().getBalance({ address: before.engine })).toBe(otherCash)
+		expect(await fixture.owner().getBalance({ address: before.engine })).toBe((await questionCash(fixture.base.questionId)) + (await questionCash(fixture.secondQuestionId)))
 	})
 
 	test('a later fork leaves final cash at its source and child refresh cannot duplicate the claim', async () => {
@@ -138,6 +147,7 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		expect(await owner.getBalance({ address: state.engine })).toBe(balance - expectedCash)
 		expect((await shares())[1]).toBe(0n)
 		await refresh()
-		expect((await settlementState()).question.outcomeSupplyAttoShares).toBe(0n)
+		const final = await settlementState()
+		expect(final.question.outcomeSupplyAttoShares).toBe(final.question.rewardShares)
 	})
 })

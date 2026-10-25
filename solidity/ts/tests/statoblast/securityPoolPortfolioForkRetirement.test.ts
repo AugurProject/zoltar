@@ -6,7 +6,6 @@ import {
 	test_statoblast_PortfolioForkHarness_PortfolioForkRecoverySharesMock as sharesArtifact,
 	test_statoblast_PortfolioForkHarness_PortfolioForkQuestionMock as poolArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
-	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioRecapAuctionDeployer as auctionDeployerArtifact,
 	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCapitalLedgerDeployer as capitalDeployerArtifact,
 	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCommitmentIndexDeployer as indexDeployerArtifact,
 	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCapitalFeeStreamsDeployer as streamsDeployerArtifact,
@@ -19,14 +18,13 @@ import {
 } from '../../types/contractArtifact'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
-import { BURN_ADDRESS, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
-import { addressString } from '../../testSupport/simulator/utils/bigint'
+import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
 
 const E = 10n ** 18n
 const week = 7n * 24n * 60n * 60n
 
-describe('Statoblast: fork reserve retirement priority', () => {
+describe('Statoblast: chosen underwriting and claimant recovery remain separate', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
 	let owner: WriteClient
 	let alice: WriteClient
@@ -55,22 +53,6 @@ describe('Statoblast: fork reserve retirement priority', () => {
 	const childId = (outcome: bigint) => owner.readContract({ ...zoltarTarget(), functionName: 'getChildUniverseId', args: [0n, outcome] })
 	const choose = (client: WriteClient, outcome: bigint) => writeContractAndWait(client, () => client.writeContract({ ...forkTarget(), functionName: 'choose', args: [0n, outcome] }))
 	const finalize = (child: bigint) => writeContractAndWait(owner, () => owner.writeContract({ ...forkTarget(), functionName: 'finalizeBranch', args: [child] }))
-	const fundFees = async (childCapital: Address, amount: bigint) => {
-		await getAnvilWindowEthereum().impersonateAccount(root)
-		await writeContractAndWait(owner, () => owner.sendTransaction({ to: root, value: amount }))
-		const rootAuthority = createWriteClient(getAnvilWindowEthereum(), BigInt(root))
-		await writeContractAndWait(rootAuthority, () => rootAuthority.writeContract({ ...ledger(childCapital), functionName: 'creditTimedFees', value: amount }))
-	}
-	const collectReward = async (child: bigint) => {
-		const before = await buyer.getBalance({ address: buyer.account.address })
-		const hash = await writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'collectProtectedPrincipal', args: [child], gasPrice: 2_000_000_000n }))
-		const receipt = await buyer.waitForTransactionReceipt({ hash })
-		if (receipt.effectiveGasPrice === undefined) throw new Error('Collection receipt must include its effective gas price')
-		const gasCost = receipt.gasUsed * receipt.effectiveGasPrice
-		const reward = (await buyer.getBalance({ address: buyer.account.address })) + gasCost - before
-		if (reward > 0n) expect(reward).toBeGreaterThanOrEqual(gasCost)
-		return reward
-	}
 
 	beforeAll(async () => {
 		const ethereum = getAnvilWindowEthereum()
@@ -87,8 +69,7 @@ describe('Statoblast: fork reserve retirement priority', () => {
 		engine = await deploy(encodeDeployData({ abi: settlementArtifact.abi, bytecode: `0x${settlementArtifact.evm.bytecode.object}`, args: [root] }))
 		const book = await deploy(encodeDeployData({ abi: bookArtifact.abi, bytecode: `0x${bookArtifact.evm.bytecode.object}`, args: [engine, 10n ** 12n] }))
 		const reporter = await deploy(encodeDeployData({ abi: reporterArtifact.abi, bytecode: `0x${reporterArtifact.evm.bytecode.object}`, args: [root, zoltar] }))
-		const auctions = await deploy(`0x${auctionDeployerArtifact.evm.bytecode.object}`)
-		forks = await deploy(encodeDeployData({ abi: forkArtifact.abi, bytecode: `0x${forkArtifact.evm.bytecode.object}`, args: [root, zoltar, auctions] }))
+		forks = await deploy(encodeDeployData({ abi: forkArtifact.abi, bytecode: `0x${forkArtifact.evm.bytecode.object}`, args: [root, zoltar] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'initialize', args: [engine, book, reporter, forks] }))
 		capital = await owner.readContract({ ...rootTarget(), functionName: 'capitalLedger', args: [0n] })
 		shares = await deploy(`0x${sharesArtifact.evm.bytecode.object}`)
@@ -122,7 +103,22 @@ describe('Statoblast: fork reserve retirement priority', () => {
 		await setBaselineSnapshot()
 	})
 
-	test('zero-sale reserve stays behind both inherited owner retirement cohorts', async () => {
+	test('excess collateral cannot move cash beyond accepted commitment', async () => {
+		await choose(owner, 1n)
+		const child = await childId(1n)
+		await moveTo(forkTime + 9n * week)
+		await finalize(child)
+		const childCapital = await owner.readContract({ ...rootTarget(), functionName: 'capitalLedger', args: [child] })
+		const branch = await owner.readContract({ ...forkTarget(), functionName: 'branches', args: [child] })
+		expect(branch.parentCash).toBe(E)
+		expect(branch.chosenCommitment).toBe(E)
+		expect(await owner.readContract({ ...ledger(childCapital), functionName: 'demandAttoEth' })).toBe(E)
+		expect((await owner.readContract({ ...ledger(childCapital), functionName: 'ownerAccount', args: [forks] })).positionId).toBe(0n)
+		const token = await owner.readContract({ ...zoltarTarget(), functionName: 'getRepToken', args: [child] })
+		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [engine] })).toBe((110_505n * E) / 100n)
+	})
+
+	test('claim basket redemptions free actual cash demand without adding protocol retirement work', async () => {
 		await choose(owner, 1n)
 		await choose(alice, 1n)
 		await choose(bob, 1n)
@@ -131,223 +127,33 @@ describe('Statoblast: fork reserve retirement priority', () => {
 		await finalize(child)
 		const childCapital = await owner.readContract({ ...rootTarget(), functionName: 'capitalLedger', args: [child] })
 		const index = await owner.readContract({ ...ledger(childCapital), functionName: 'commitmentIndex' })
-		const accounts = await Promise.all([alice.account.address, bob.account.address, forks].map(address => owner.readContract({ ...ledger(childCapital), functionName: 'ownerAccount', args: [address] })))
+		const first = await owner.readContract({ ...ledger(childCapital), functionName: 'ownerAccount', args: [alice.account.address] })
+		const second = await owner.readContract({ ...ledger(childCapital), functionName: 'ownerAccount', args: [bob.account.address] })
 		const now = (await owner.getBlock()).timestamp
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setPrice', args: [child, E, Number(now + 86_400n)] }))
-		const demand = await owner.readContract({ ...ledger(childCapital), functionName: 'demandAttoEth' })
-		await writeContractAndWait(owner, () => owner.writeContract({ ...ledger(childCapital), functionName: 'serveRetirement' }))
-		const [current, next, reserve] = await Promise.all(accounts.map(account => owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [account.positionId] })))
-		const nextRetired = 200n * E - demand - E
-		expect(current?.releasedRep).toBe((105n * E) / 100n)
-		expect(next?.releasedRep).toBe(0n)
-		expect(next?.rep).toBe(104n * E)
-		expect(next?.commitment).toBe(99n * E - nextRetired)
-		expect(reserve?.releasedRep).toBe(0n)
-		expect(reserve?.rep).toBe(1000n * E)
-		expect(await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'eligibleActiveCommitment', args: [E] })).toBe(E)
-	})
-
-	test('already released protocol principal can be collected after a subsequent fork', async () => {
-		await choose(owner, 1n)
-		const child = await childId(1n)
-		await moveTo(forkTime + 9n * week)
-		await finalize(child)
-		const childCapital = await owner.readContract({ ...rootTarget(), functionName: 'capitalLedger', args: [child] })
-		const index = await owner.readContract({ ...ledger(childCapital), functionName: 'commitmentIndex' })
-		const protocol = await owner.readContract({ ...ledger(childCapital), functionName: 'ownerAccount', args: [forks] })
-		const now = (await owner.getBlock()).timestamp
-		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setPrice', args: [child, E, Number(now + 86_400n)] }))
-		await writeContractAndWait(owner, () => owner.writeContract({ ...ledger(childCapital), functionName: 'serveRetirement' }))
-		const position = await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [protocol.positionId] })
-		const released = position.releasedRep
-		expect(released).toBeGreaterThan(0n)
-		expect(position.commitment).toBeGreaterThan(0n)
-		expect(position.maxHealthyPrice).toBe(await owner.readContract({ ...ledger(childCapital), functionName: 'maximumHealthyPrice', args: [position.rep, position.commitment] }))
-		await writeContractAndWait(owner, () => owner.writeContract({ ...zoltarTarget(), functionName: 'setFork', args: [child, 3n] }))
-		await writeContractAndWait(owner, () => owner.writeContract({ ...forkTarget(), functionName: 'freeze', args: [child] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'registerQuestion', args: [child, 1n, buyer.account.address] }))
 		const token = await owner.readContract({ ...zoltarTarget(), functionName: 'getRepToken', args: [child] })
-		const supply = await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'totalSupply' })
-		await writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'collectProtectedPrincipal', args: [child] }))
-		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'totalSupply' })).toBe(supply - released)
-		await writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'collectProtectedPrincipal', args: [child] }))
-		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'totalSupply' })).toBe(supply - released)
-	})
-
-	test('protocol fees stay assigned until a later fork releases the budget, preserving recovery cash', async () => {
-		await choose(owner, 1n)
-		const child = await childId(1n)
-		await moveTo(forkTime + 9n * week)
-		await finalize(child)
-		await writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'recoverUnchosenCash', args: [0n, 1n, 100n * E] }))
-		const reservedCash = await owner.getBalance({ address: forks })
-		expect(reservedCash).toBeGreaterThan(0n)
-		const childCapital = await owner.readContract({ ...rootTarget(), functionName: 'capitalLedger', args: [child] })
-		const index = await owner.readContract({ ...ledger(childCapital), functionName: 'commitmentIndex' })
-		const protocol = await owner.readContract({ ...ledger(childCapital), functionName: 'ownerAccount', args: [forks] })
-		const now = (await owner.getBlock()).timestamp
-		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setPrice', args: [child, E, Number(now + 86_400n)] }))
-		await fundFees(childCapital, E)
+		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'redeemQuestion', args: [child, 1n, 20n * E, buyer.account.address] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...ledger(childCapital), functionName: 'serveRetirement' }))
-		await writeContractAndWait(owner, () => owner.writeContract({ ...zoltarTarget(), functionName: 'setFork', args: [child, 3n] }))
-		await writeContractAndWait(owner, () => owner.writeContract({ ...forkTarget(), functionName: 'freeze', args: [child] }))
-		const position = await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [protocol.positionId] })
-		expect(position.ethFees).toBeGreaterThan(0n)
-		expect(position.releasedRep).toBeGreaterThan(0n)
-		const token = await owner.readContract({ ...zoltarTarget(), functionName: 'getRepToken', args: [child] })
-		const supply = await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'totalSupply' })
-		const burnBalance = await owner.getBalance({ address: addressString(BURN_ADDRESS) })
-		await writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'collectProtectedPrincipal', args: [child] }))
-		expect(await owner.getBalance({ address: addressString(BURN_ADDRESS) })).toBe(burnBalance)
-		expect(await owner.readContract({ ...ledger(childCapital), functionName: 'positionExecutionReserveAttoEth', args: [protocol.positionId] })).toBe(position.ethFees)
-		expect(await owner.getBalance({ address: forks })).toBe(reservedCash)
-		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'totalSupply' })).toBe(supply - position.releasedRep)
-		await writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'collectProtectedPrincipal', args: [child] }))
-		expect(await owner.getBalance({ address: addressString(BURN_ADDRESS) })).toBe(burnBalance)
-		expect(await owner.getBalance({ address: forks })).toBe(reservedCash)
-		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'totalSupply' })).toBe(supply - position.releasedRep)
-		await moveTo(await owner.readContract({ ...zoltarTarget(), functionName: 'getForkChoiceDeadline', args: [child] }))
-		const reward = await collectReward(child)
-		expect(reward).toBeGreaterThan(0n)
-		expect(reward).toBeLessThanOrEqual(position.ethFees)
-		expect(await owner.getBalance({ address: addressString(BURN_ADDRESS) })).toBe(burnBalance + position.ethFees - reward)
-		expect(await owner.readContract({ ...ledger(childCapital), functionName: 'positionExecutionReserveAttoEth', args: [protocol.positionId] })).toBe(0n)
-		expect((await owner.readContract({ ...ledger(childCapital), functionName: 'ownerAccount', args: [forks] })).executionReserveAttoEth).toBe(0n)
-		expect(await owner.getBalance({ address: forks })).toBe(reservedCash)
-		await writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'recoverUnchosenCash', args: [0n, 1n, 100n * E] }))
-		expect(await owner.getBalance({ address: forks })).toBe(0n)
+		const firstPosition = await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [first.positionId] })
+		const secondPosition = await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [second.positionId] })
+		expect(firstPosition.commitment).toBe(0n)
+		expect(firstPosition.releasedRep).toBe((105n * E) / 100n)
+		expect(secondPosition.commitment).toBe((899n * E) / 10n)
+		expect(await owner.readContract({ ...ledger(childCapital), functionName: 'demandAttoEth' })).toBe((909n * E) / 10n)
+		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [buyer.account.address] })).toBe(100n * E)
+		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [engine] })).toBe(900n * E)
 	})
 
-	test.each([{ funding: 'earned fees' }, { funding: 'external funding' }])('full protocol retirement collects $funding without touching recovery cash', async ({ funding }) => {
-		await choose(owner, 1n)
-		const child = await childId(1n)
-		await moveTo(forkTime + 9n * week)
-		await finalize(child)
-		await writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'recoverUnchosenCash', args: [0n, 1n, 100n * E] }))
-		const recoveryCash = await owner.getBalance({ address: forks })
-		const childCapital = await owner.readContract({ ...rootTarget(), functionName: 'capitalLedger', args: [child] })
-		const protocol = await owner.readContract({ ...ledger(childCapital), functionName: 'ownerAccount', args: [forks] })
-		const now = (await owner.getBlock()).timestamp
-		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setPrice', args: [child, E, Number(now + 86_400n)] }))
-		if (funding === 'earned fees') {
-			await fundFees(childCapital, E)
-			await writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'collectProtectedPrincipal', args: [child] }))
-		} else await writeContractAndWait(buyer, () => buyer.writeContract({ ...ledger(childCapital), functionName: 'fundExecutionReserve', args: [forks], value: E }))
-		const unassigned = (await owner.readContract({ ...ledger(childCapital), functionName: 'ownerAccount', args: [forks] })).executionReserveAttoEth
-		const budget = unassigned + (await owner.readContract({ ...ledger(childCapital), functionName: 'positionExecutionReserveAttoEth', args: [protocol.positionId] }))
-		expect(budget).toBeGreaterThan(0n)
-		await writeContractAndWait(owner, () => owner.writeContract({ ...ledger(childCapital), functionName: 'authorize', args: [200n * E] }))
-		const burnBalance = await owner.getBalance({ address: addressString(BURN_ADDRESS) })
-		const reward = await collectReward(child)
-		expect(reward).toBeGreaterThan(0n)
-		expect(reward).toBeLessThanOrEqual(budget)
-		expect(await owner.getBalance({ address: addressString(BURN_ADDRESS) })).toBe(burnBalance + budget - reward)
-		const after = await owner.readContract({ ...ledger(childCapital), functionName: 'ownerAccount', args: [forks] })
-		expect(after.positionId).toBe(0n)
-		expect(after.executionReserveAttoEth).toBe(0n)
-		expect(await owner.getBalance({ address: forks })).toBe(recoveryCash)
-		expect(await collectReward(child)).toBe(0n)
-		expect(await owner.getBalance({ address: addressString(BURN_ADDRESS) })).toBe(burnBalance + budget - reward)
-		expect(await owner.getBalance({ address: forks })).toBe(recoveryCash)
-	})
-
-	test('a cascading fork keeps the remaining owner queue ahead of one new protocol reserve', async () => {
-		await choose(owner, 1n)
-		await choose(alice, 1n)
-		await choose(bob, 1n)
-		const child = await childId(1n)
-		await moveTo(forkTime + 9n * week)
-		await finalize(child)
-		const childCapital = await owner.readContract({ ...rootTarget(), functionName: 'capitalLedger', args: [child] })
-		const now = (await owner.getBlock()).timestamp
-		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setPrice', args: [child, E, Number(now + 86_400n)] }))
-		await writeContractAndWait(owner, () => owner.writeContract({ ...ledger(childCapital), functionName: 'serveRetirement' }))
-		await writeContractAndWait(owner, () => owner.writeContract({ ...zoltarTarget(), functionName: 'setFork', args: [child, 3n] }))
-		for (const client of [owner, bob]) await writeContractAndWait(client, () => client.writeContract({ ...forkTarget(), functionName: 'choose', args: [child, 1n] }))
-		const grandchild = await owner.readContract({ ...zoltarTarget(), functionName: 'getChildUniverseId', args: [child, 1n] })
-		const childForkTime = await owner.readContract({ ...zoltarTarget(), functionName: 'getForkTime', args: [child] })
-		await moveTo(childForkTime + 9n * week)
-		await finalize(grandchild)
-		const grandchildCapital = await owner.readContract({ ...rootTarget(), functionName: 'capitalLedger', args: [grandchild] })
-		const index = await owner.readContract({ ...ledger(grandchildCapital), functionName: 'commitmentIndex' })
-		const retiring = await owner.readContract({ ...ledger(grandchildCapital), functionName: 'ownerAccount', args: [bob.account.address] })
-		const protocol = await owner.readContract({ ...ledger(grandchildCapital), functionName: 'ownerAccount', args: [forks] })
-		expect(retiring.positionId).toBeGreaterThan(0n)
-		expect(protocol.positionId).toBeGreaterThan(0n)
-		expect(await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'protocolReserveId' })).toBe(protocol.positionId)
-		const grandchildNow = (await owner.getBlock()).timestamp
-		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setPrice', args: [grandchild, E, Number(grandchildNow + 86_400n)] }))
-		await writeContractAndWait(owner, () => owner.writeContract({ ...ledger(grandchildCapital), functionName: 'serveRetirement' }))
-		const remaining = await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [retiring.positionId] })
-		expect(remaining.releasedRep).toBe(0n)
-		expect(remaining.rep).toBe(104n * E)
-		expect(remaining.commitment).toBeLessThan(99n * E)
-		expect((await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [protocol.positionId] })).releasedRep).toBe(0n)
-	})
-
-	test('an unhealthy protocol reserve can be cured and taken over into ordinary private capital', async () => {
-		await choose(owner, 1n)
-		const child = await childId(1n)
-		await moveTo(forkTime + 9n * week)
-		await finalize(child)
-		const childCapital = await owner.readContract({ ...rootTarget(), functionName: 'capitalLedger', args: [child] })
-		const index = await owner.readContract({ ...ledger(childCapital), functionName: 'commitmentIndex' })
-		const protocol = await owner.readContract({ ...ledger(childCapital), functionName: 'ownerAccount', args: [forks] })
-		const id = protocol.positionId
-		const now = (await owner.getBlock()).timestamp
-		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setPrice', args: [child, E, Number(now + 86_400n)] }))
-		await fundFees(childCapital, E)
-		const funded = await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [id] })
-		const chosenOwner = await owner.readContract({ ...ledger(childCapital), functionName: 'ownerAccount', args: [owner.account.address] })
-		const chosenBefore = await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [chosenOwner.positionId] })
-		expect(funded.ethFees).toBeGreaterThan(0n)
-		expect(await owner.readContract({ ...ledger(childCapital), functionName: 'positionExecutionReserveAttoEth', args: [id] })).toBe(0n)
-		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setPrice', args: [child, 10n * E, Number(now + 86_400n)] }))
-		const before = await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [id] })
-		await writeContractAndWait(buyer, () => buyer.writeContract({ ...ledger(childCapital), functionName: 'cure', args: [id] }))
-		const cured = await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [id] })
-		expect(cured.commitment).toBeLessThan(before.commitment)
-		expect(cured.rep).toBe(before.rep)
-		const paid = (await buyer.readContract({ ...ledger(childCapital), functionName: 'ownerAccount', args: [buyer.account.address] })).feesAttoEth
-		const retainedBudget = await owner.readContract({ ...ledger(childCapital), functionName: 'positionExecutionReserveAttoEth', args: [id] })
-		expect(paid).toBeGreaterThan(0n)
-		expect(paid + retainedBudget).toBe(funded.ethFees)
-		expect(cured.ethFees).toBe(0n)
-		const chosenAfter = await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [chosenOwner.positionId] })
-		expect([chosenAfter.rep, chosenAfter.ethFees]).toEqual([chosenBefore.rep, chosenBefore.ethFees])
-		await getAnvilWindowEthereum().advanceTime(3600n)
-		const token = await owner.readContract({ ...zoltarTarget(), functionName: 'getRepToken', args: [child] })
-		await writeContractAndWait(owner, () => owner.writeContract({ ...zoltarTarget(), functionName: 'mint', args: [child, buyer.account.address, 4000n * E] }))
-		await writeContractAndWait(buyer, () => buyer.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'approve', args: [childCapital, 4000n * E] }))
-		await writeContractAndWait(buyer, () => buyer.writeContract({ ...ledger(childCapital), functionName: 'depositFor', args: [buyer.account.address, 4000n * E] }))
-		await writeContractAndWait(buyer, () => buyer.writeContract({ ...ledger(childCapital), functionName: 'fundExecutionReserve', args: [buyer.account.address], value: 100n * E }))
-		await writeContractAndWait(buyer, () => buyer.writeContract({ ...ledger(childCapital), functionName: 'takeOver', args: [id, cured.commitment, cured.rep, 4000n * E] }))
-		const receiver = await owner.readContract({ ...ledger(childCapital), functionName: 'ownerAccount', args: [buyer.account.address] })
-		expect(receiver.positionId).toBeGreaterThan(0n)
-		expect(receiver.feesAttoEth).toBe(funded.ethFees)
-		expect(await owner.readContract({ ...ledger(childCapital), functionName: 'positionExecutionReserveAttoEth', args: [id] })).toBe(0n)
-		expect((await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [receiver.positionId] })).batch).toBe(0n)
-		expect((await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [id] })).commitment).toBe(0n)
-		expect(await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'eligibleActiveCommitment', args: [10n * E] })).toBe(cured.commitment + E)
-	})
-
-	test('a zero-choice branch releases its only reserve without adding mint capacity', async () => {
+	test('a zero-choice branch has no capital position but preserves the full REP recovery basket', async () => {
 		await moveTo(forkTime + 9n * week)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...forkTarget(), functionName: 'startBranch', args: [0n, 1n] }))
 		const child = await childId(1n)
 		await finalize(child)
 		const childCapital = await owner.readContract({ ...rootTarget(), functionName: 'capitalLedger', args: [child] })
-		const index = await owner.readContract({ ...ledger(childCapital), functionName: 'commitmentIndex' })
-		const protocol = await owner.readContract({ ...ledger(childCapital), functionName: 'ownerAccount', args: [forks] })
-		const reserve = await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [protocol.positionId] })
-		expect(reserve.commitment).toBe(200n * E)
-		expect(await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'eligibleActiveCommitment', args: [E] })).toBe(0n)
-		const now = (await owner.getBlock()).timestamp
-		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setPrice', args: [child, E, Number(now + 86_400n)] }))
-		await writeContractAndWait(owner, () => owner.writeContract({ ...ledger(childCapital), functionName: 'serveRetirement' }))
-		expect([...(await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'totals' }))]).toEqual([0n, 0n])
-		expect((await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [protocol.positionId] })).releasedRep).toBe(reserve.rep)
-		await writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'collectProtectedPrincipal', args: [child] }))
+		expect(await owner.readContract({ ...ledger(childCapital), functionName: 'demandAttoEth' })).toBe(0n)
+		expect((await owner.readContract({ ...ledger(childCapital), functionName: 'ownerAccount', args: [forks] })).positionId).toBe(0n)
 		const token = await owner.readContract({ ...zoltarTarget(), functionName: 'getRepToken', args: [child] })
-		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [childCapital] })).toBe(0n)
+		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [engine] })).toBe((1_110_505n * E) / 100n)
 	})
 })

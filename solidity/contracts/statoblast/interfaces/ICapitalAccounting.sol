@@ -11,10 +11,14 @@ interface ICapitalFeeStreams {
 
 interface ICapitalPriceExposure {
 	function validateExposure() external view;
+	function targetPriceErrorForDispute() external view returns (uint256);
+	function acceptedEpoch() external view returns (uint256);
+	function reportAuthorization(uint256 reportId, uint256 newExposure) external view returns (uint256 conservativeReportPrice, uint256 epoch);
 }
 
 interface ICapitalLedgerAccounting {
 	function priceFeed(uint248 universeId) external view returns (address);
+	function creditServiceFees(uint248 universeId) external payable;
 	/// @dev Deliver collateral-funded fees earned before this deadline, before any
 	/// change to eligibility. The accounting contract must not advance past it.
 	function checkpointCapitalFees(uint248 universeId, uint48 through) external;

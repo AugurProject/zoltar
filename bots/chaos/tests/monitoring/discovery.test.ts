@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { encodeAbiParameters, getAddress, zeroAddress, privateKeyToAccount, type Abi, type AbiValue, type Address } from '@zoltar/bot-shared/ethereum'
 import { discoverChildPoolPreparations } from '../../src/monitoring/discovery-child-preparation.ts'
+import { discoverPoolPriceFeed } from '../../src/monitoring/discovery-price-feed.ts'
 import { discoverEcosystemSnapshot } from '../../src/monitoring/discovery.ts'
 import { DISCOVERY_RPC_CONCURRENCY, DISCOVERY_RPC_QUEUE_LIMIT, drainConcurrent, limitDiscoveryConcurrency, mapWithConcurrency, type ChaosReadClient } from '../../src/monitoring/discovery-client.ts'
 import { discoverDirectEscalationDepositQuotes, minimumSafeVaultDeposit, relevantTokenSpenders, projectSettlementCollateral } from '../../src/monitoring/discovery-escalation.ts'
@@ -66,7 +67,25 @@ test('monitors inventory for a known execution address without requiring a signe
 test('discovers a shared feed with aggregate exposure instead of empty question collateral', async () => {
 	const fake = refundBackfillClient(0n, false, { sharedExposure: 10n ** 18n })
 	const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet: undefined })
-	expect(snapshot.pools[0]).toMatchObject({ priceFeed: address(80), oracleExposureAttoEth: (10n ** 18n).toString(), settlementCollateralAttoEth: 0n.toString() })
+	expect(snapshot.pools[0]).toMatchObject({ priceFeed: address(80), oracleExposureAttoEth: (10n ** 18n).toString(), settlementCollateralAttoEth: 0n.toString(), oracleRequestFunding: { fixedRequestPriceCostAttoEth: 101n.toString() } })
+})
+
+test('authenticates latest and retained candidate escrows at the same discovery block', async () => {
+	const fake = refundBackfillClient(0n, false, { sharedExposure: 0n })
+	const funding = {
+		escalationHaltMultiplierBps: '10000',
+		feePercentage: '0',
+		gasConsumedOpenOracleReportPrice: '1',
+		gasUnitsForOneDispute: '1',
+		initialReportPriorityFeeAttoEthPerGas: 1n.toString(),
+		openOracleSecurityMultiplierBps: '10000',
+		protocolFee: '0',
+		settlementCallbackGasLimit: '1',
+		targetPriceErrorForDispute: '1000',
+	}
+	const snapshot = await discoverPoolPriceFeed(fake.client, address(21), 10n, 0n, funding, 20_002n, 101n, 1n, 7n, [6n, 9n])
+	expect(snapshot.reportEscrows).toEqual({ '6': address(86), '7': address(87) })
+	await expect(discoverPoolPriceFeed(fake.client, address(21), 10n, 0n, funding, 20_002n, 101n, 1n, 9n)).rejects.toThrow('pending report has no authenticated escrow')
 })
 
 for (const shared of [false, true])
@@ -556,7 +575,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 				case 'isPriceValid':
 					return true
 				case 'getRequestPriceCostAttoEth':
-					return 8n * callBaseFee + 101n
+					return overrides.sharedExposure === undefined ? 8n * callBaseFee + 101n : 101n
 				case 'vaultOperations':
 					return address(70)
 				case 'settlementTime':
@@ -569,6 +588,11 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 					expect(parameters.blockNumber).toBe(10n)
 					expect(parameters.address).toBe(address(80))
 					return overrides.sharedExposure ?? 0n
+				case 'reportCandidates':
+					expect(parameters.blockNumber).toBe(10n)
+					expect(parameters.address).toBe(address(80))
+					if (parameters.args?.[0] === 7n) return [address(87), address(1), coordinator, 1n, 1n, 1n]
+					return [parameters.args?.[0] === 6n ? address(86) : zeroAddress, address(1), coordinator, 1n, 1n, 1n]
 				case 'minimumToken1ReportAttoEth':
 					return 10_001n + ((overrides.sharedExposure ?? 0n) / 100n > 10_001n * callBaseFee ? (overrides.sharedExposure ?? 0n) / 100n : 10_001n * callBaseFee)
 				case 'gasConsumedOpenOracleReportPrice':

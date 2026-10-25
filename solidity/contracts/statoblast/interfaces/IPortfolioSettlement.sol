@@ -18,6 +18,7 @@ interface IPortfolioSettlement {
 		external
 		returns (uint256 totalEconomicShares, uint256 questionCashAttoEth, uint48 logicalClock);
 	function quoteQuestionSettlement(address pool, uint256 outcomeShares) external view returns (uint256 cashAttoEth);
+	function quoteQuestionRecoveryRep(address pool, uint256 outcomeShares) external view returns (uint256 recoveryAttoRep);
 	function quoteQuestionMint(address pool, uint256 cashAttoEth) external view returns (uint256 outcomeShares);
 	function onQuestionRepIncome(uint256 amountAttoRep) external;
 }

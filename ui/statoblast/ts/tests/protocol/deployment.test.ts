@@ -30,27 +30,23 @@ describe('statoblast deployment steps', () => {
 		expect(assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes()).toEqual(['escalationGameClaimDelegate', 'escalationGameDepositDelegate', 'openOracle', 'securityPoolEventEmitter', 'securityPoolOperationsDelegate', 'securityPoolUtils', 'uniformPriceDualCapBatchAuctionFactory'])
 	})
 
-	test('deploys recapitalization before its fork coordinator and preserves verification for every capital module', async () => {
+	test('deploys the fork coordinator without an auction and preserves verification for every capital module', async () => {
 		const publicProfiles = [MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE].flatMap(profile => (['yes', 'no'] as const).map(outcome => getGenesisNetworkProfile(profile, outcome)))
 		for (const profile of [...publicProfiles, simulationProfile]) {
 			const steps = getDeploymentSteps(profile)
-			const recap = steps.find(step => step.id === 'securityPoolPortfolioRecapAuctionDeployer')
 			const forks = steps.find(step => step.id === 'securityPoolPortfolioForkCoordinatorDeployer')
-			if (recap === undefined || forks === undefined) throw new Error('Missing portfolio infrastructure deployment step')
-			expect(forks.dependencies).toContain(recap.id)
-			expect(steps.indexOf(recap)).toBeLessThan(steps.indexOf(forks))
-			const constructor = encodeAbiParameters([{ type: 'address' }], [recap.address]).slice(2)
-			expect((await captureDeploymentInitCode(forks.deploy)).endsWith(constructor)).toBe(true)
-			expect(getDeploymentStepConstructorArguments(profile).securityPoolPortfolioForkCoordinatorDeployer).toBe(constructor)
-			expect(getDeploymentStepConstructorArguments(profile).securityPoolPortfolioRecapAuctionDeployer).toBe('')
+			if (forks === undefined) throw new Error('Missing portfolio infrastructure deployment step')
+			expect(forks.dependencies).toEqual(['proxyDeployer'])
+			expect(await captureDeploymentInitCode(forks.deploy)).toMatch(/^0x[0-9a-f]+$/)
+			expect(getDeploymentStepConstructorArguments(profile).securityPoolPortfolioForkCoordinatorDeployer).toBe('')
 			for (const id of [
 				'securityPoolCapitalLedgerDeployer',
 				'securityPoolCommitmentIndexDeployer',
 				'securityPoolCapitalFeeStreamsDeployer',
 				'securityPoolSettlementBookDeployer',
 				'securityPoolPortfolioSettlementDeployer',
+				'securityPoolPortfolioServicesDeployer',
 				'securityPoolReporterLedgerDeployer',
-				'securityPoolPortfolioRecapAuctionDeployer',
 				'securityPoolPortfolioForkCoordinatorDeployer',
 				'securityPoolForkerPortfolioDelegate',
 			]) {
@@ -89,8 +85,8 @@ describe('statoblast deployment steps', () => {
 				'securityPoolCapitalFeeStreamsDeployer',
 				'securityPoolSettlementBookDeployer',
 				'securityPoolPortfolioSettlementDeployer',
+				'securityPoolPortfolioServicesDeployer',
 				'securityPoolReporterLedgerDeployer',
-				'securityPoolPortfolioRecapAuctionDeployer',
 				'securityPoolPortfolioForkCoordinatorDeployer',
 			]
 			for (const stepId of statoblastStepIds) {

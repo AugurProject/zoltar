@@ -8,6 +8,9 @@ export type PortfolioEconomicsConfig = {
 	minimumExecutionReserveAttoEth: bigint
 	minimumOutcomeRate: bigint
 	rewardVestingSeconds: bigint
+	reportingFeeAttoEth: bigint
+	serviceFeeBps: bigint
+	maximumOracleRewardAttoEth: bigint
 }
 export type PortfolioDeployers = {
 	capital: Address
@@ -17,6 +20,7 @@ export type PortfolioDeployers = {
 	settlement: Address
 	reporters: Address
 	forks: Address
+	services: Address
 }
 
 function uint(value: bigint, bits: number, label: string) {
@@ -30,6 +34,7 @@ export function validatePortfolioEconomics(config: PortfolioEconomicsConfig) {
 	for (const [name, value] of Object.entries(config)) uint(value, name === 'rewardVestingSeconds' ? 48 : 256, name)
 	if (config.purchaseFeeBps > 10_000n) throw new Error('Purchase fee cannot exceed 100%.')
 	if (config.annualFeeBps > 10_000n) throw new Error('Annual fee cannot exceed 100%.')
+	if (config.serviceFeeBps > 10_000n) throw new Error('Maintenance fee share cannot exceed 100%.')
 	if (config.minimumCommitmentAttoEth === 0n || config.minimumExecutionReserveAttoEth === 0n || config.rewardVestingSeconds === 0n) throw new Error('Minimum commitment, execution reserve and fee vesting duration must be positive.')
 	if (config.minimumOutcomeRate === 0n || config.minimumOutcomeRate > 10n ** 18n) throw new Error('Minimum outcome exchange rate must be positive and at most one.')
 }
@@ -88,19 +93,14 @@ export { requiredPortfolioExecutionReserve } from './securityPoolPortfolioCapita
 export { buildPortfolioMintRequest, loadPortfolioMintQuote, type PortfolioMintQuote } from './securityPoolPortfolioMint.js'
 /** @public External clients can register an admitted question independently of purchasing shares. */
 export { buildPortfolioAddQuestionRequest } from './securityPoolPortfolioMint.js'
-/** @public External keepers can collect a branch's retired protocol reserve without an owner loop. */
-export { buildPortfolioForkCollectProtectedRequest } from './securityPoolPortfolioFork.js'
-
+/** @public A permissionless call pays a question's authenticated final reporting beneficiary. */
+export { buildPortfolioReportingRewardRequest, buildPortfolioServiceCreditRequest } from './securityPoolPortfolioMint.js'
 export {
-	buildPortfolioVoluntaryRepairRequest,
 	buildPortfolioForkChoiceRequest,
 	buildPortfolioForkStartRequest,
 	buildPortfolioForkFinalizeRequest,
 	buildPortfolioForkRecoveryRequest,
 	buildPortfolioRecoveryRightsTransferRequest,
-	buildPortfolioRecapPurchaseRequest,
 	loadPortfolioForkSnapshot,
-	loadPortfolioRecapQuote,
 	type PortfolioForkSnapshot,
-	type PortfolioRecapQuote,
 } from './securityPoolPortfolioFork.js'

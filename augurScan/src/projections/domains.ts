@@ -37,7 +37,7 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 		'StagedOperationQueued',
 		'InternalApproval',
 	]),
-	...definitions('oracle', 'price-feed', ['CoordinatorRegistered', 'ExposureCheckpoint', 'ReportFundingAssigned', 'CoordinatorSettlementDeferred']),
+	...definitions('oracle', 'price-feed', ['CoordinatorRegistered', 'ExposureCheckpoint', 'ReportFundingAssigned']),
 	...definitions('escalation', 'escalation', [
 		'CarryDepositConsumed',
 		'ClaimDeposit',

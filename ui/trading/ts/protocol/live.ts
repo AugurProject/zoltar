@@ -1,3 +1,4 @@
+import { loadCentralPortfolioQuestion } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolioState.js'
 import { loadLinearFeeState } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { submissionDeadline, requireFreshSubmissionWindow } from './submissionWindow.js'
 import { outcomeLabel } from '../copy/outcomes.js'
@@ -51,7 +52,9 @@ async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address)
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'escalationGame' }),
 		loadLinearFeeState(client, pool, blockNumber),
 	])
-	const feeAccounting = { ...accounting, ...(linearFee === undefined ? {} : { linearFee }) }
+	const capital = linearFee === undefined ? undefined : await client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'portfolioCustody' })
+	const central = capital === undefined ? undefined : await loadCentralPortfolioQuestion(client, pool, capital, blockNumber)
+	const feeAccounting = { ...accounting, ...(linearFee === undefined ? {} : { linearFee }), ...central }
 	const checkpoint = (timestamp: bigint) => estimateMintCheckpoint({ ...feeAccounting, currentTimestamp: timestamp, feeEndTimestamp: feeEndTime })
 	const current = checkpoint(block.timestamp)
 	const projected = checkpoint(block.timestamp + 30n * 24n * 60n * 60n)
@@ -60,8 +63,9 @@ async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address)
 		questionData,
 		zoltar,
 		parent,
-		shareTokenSupplyAttoShares,
+		shareTokenSupplyAttoShares: central?.shareTokenSupplyAttoShares ?? shareTokenSupplyAttoShares,
 		settlementCollateralAttoEth: current.settlementCollateralAfterFeesAttoEth,
+		settlementRecoveryAttoRep: central?.settlementRecoveryAttoRep ?? 0n,
 		valuation: { timestamp: block.timestamp, feeEndTime, projectedCollateralAttoEth: projected.settlementCollateralAfterFeesAttoEth, feeAccounting },
 		currentRetentionRate: accounting.currentRetentionRate,
 		totalUnderwritingLimitAttoEth: accounting.totalUnderwritingLimitAttoEth,
@@ -189,8 +193,23 @@ export async function loadLiveMarket(client: PublicClient, configuration: Deploy
 	const shareToken = getAddress(shareTokenAddress)
 	const factoryArtifact = tradingContracts['contracts/trading/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
 	const [poolSettings, pairAddress] = await Promise.all([loadLiveSecurityPoolSettings(client, pool), client.readContract({ abi: factoryArtifact.abi, address: configuration.factory, functionName: 'getPair', args: [pool] })])
-	const { questionData, zoltar, parent, shareTokenSupplyAttoShares, settlementCollateralAttoEth, currentRetentionRate, totalUnderwritingLimitAttoEth, feeEligibleUnderwritingLimitAttoEth, mintingCapacityCeilingAttoEth, availableMintingCapacityAttoEth, systemState, awaitingForkContinuation, vaultCount, forker } =
-		poolSettings
+	const {
+		questionData,
+		zoltar,
+		parent,
+		shareTokenSupplyAttoShares,
+		settlementCollateralAttoEth,
+		settlementRecoveryAttoRep,
+		currentRetentionRate,
+		totalUnderwritingLimitAttoEth,
+		feeEligibleUnderwritingLimitAttoEth,
+		mintingCapacityCeilingAttoEth,
+		availableMintingCapacityAttoEth,
+		systemState,
+		awaitingForkContinuation,
+		vaultCount,
+		forker,
+	} = poolSettings
 	const [question, questionOutcome, universeForkTime, originUniverseId] = await Promise.all([
 		client.readContract({ abi: questionDataAbi, address: getAddress(questionData), functionName: 'questions', args: [questionId] }),
 		client.readContract({ abi: SECURITY_POOL_QUESTION_OUTCOME_ABI, address: getAddress(forker), functionName: 'getQuestionOutcome', args: [pool] }),
@@ -235,6 +254,7 @@ export async function loadLiveMarket(client: PublicClient, configuration: Deploy
 		vaultCount,
 		shareTokenSupplyAttoShares,
 		settlementCollateralAttoEth,
+		settlementRecoveryAttoRep,
 		valuation: poolSettings.valuation,
 		currentRetentionRate,
 		totalUnderwritingLimitAttoEth,

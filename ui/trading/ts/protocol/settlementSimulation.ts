@@ -1,3 +1,4 @@
+import { attoSharesToRecoveryAttoRep } from '../lib/shareValue.js'
 import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import type { DeploymentConfiguration } from './config.js'
@@ -64,10 +65,10 @@ export async function simulateSettlement(
 				blockNumber: block.blockNumber,
 			})
 			void simulation
-			return { result: estimatedEthOut, feeMarket }
+			return { result: estimatedEthOut, expectedAttoRep: attoSharesToRecoveryAttoRep(amount, feeMarket), feeMarket }
 		})
-		if (simulation.result <= 0n) throw new Error('Complete-set redemption would return zero ETH')
-		return { blockNumber, blockHash, operation, market: simulation.feeMarket, amount, deadline, slippageBps, expectedAttoEth: simulation.result, minimumAttoEth: minimumAfterSlippage(simulation.result, slippageBps) }
+		if (simulation.result <= 0n && simulation.expectedAttoRep === 0n) throw new Error('Complete-set redemption would return no ETH or REP')
+		return { blockNumber, blockHash, operation, market: simulation.feeMarket, amount, deadline, slippageBps, expectedAttoEth: simulation.result, expectedAttoRep: simulation.expectedAttoRep, minimumAttoEth: minimumAfterSlippage(simulation.result, slippageBps) }
 	}
 	if (operation === 'redeem-winning-shares') {
 		const { blockNumber, blockHash } = await stableSimulation(client, async block => await client.simulateContract({ abi: securityPoolAbi, address: market.pool, functionName: 'redeemShares', account, args: [], blockNumber: block.blockNumber }))
