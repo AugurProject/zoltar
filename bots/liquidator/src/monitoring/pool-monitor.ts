@@ -35,7 +35,7 @@ async function loadPool(client: ReadClient, settings: OperatorSettings, deployme
 	const address = getAddress(deployment.securityPool)
 	const manager = getAddress(deployment.openOraclePriceCoordinator)
 	const portfolio = getAddress(await client.readContract({ abi: securityPoolFactoryAbi, address: settings.deployment.securityPoolFactory, functionName: 'getSecurityPoolPortfolio', args: [address], blockNumber }))
-	if (portfolio !== zeroAddress) throw new Error(`Pool ${address} uses portfolio ${portfolio}; this operator supports standalone vaults only`)
+	if (portfolio !== zeroAddress) throw new Error(`Pool ${address} uses portfolio ${portfolio}; select its portfolio and universe in selectedPortfolios instead of selectedPools`)
 	const [
 		knownVaultCount,
 		currentRetentionRate,
@@ -278,8 +278,8 @@ async function loadRelevantPoolDeployments(client: ReadClient, settings: Operato
 	})
 }
 
-export async function scanPools(client: ReadClient, settings: OperatorSettings, wallet: Address | undefined, monitorIndex: PoolMonitorIndex = createPoolMonitorIndex(), isStopping: () => boolean = () => false) {
-	const block = await client.getBlock()
+export async function scanPools(client: ReadClient, settings: OperatorSettings, wallet: Address | undefined, monitorIndex: PoolMonitorIndex = createPoolMonitorIndex(), isStopping: () => boolean = () => false, blockNumber?: bigint) {
+	const block = await client.getBlock(blockNumber === undefined ? undefined : { blockNumber })
 	if (isStopping()) throw new Error('Operator stopping during pool scan')
 	if (block.hash === undefined || block.number === undefined) throw new Error('Security pool scan block is missing canonical identity')
 	const snapshotBlock = { hash: block.hash, number: block.number, timestamp: block.timestamp }

@@ -4,12 +4,14 @@ import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSu
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
+import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
 import { PortfolioButton, PortfolioInput, type PortfolioActions } from './PortfolioControls.js'
+import { PortfolioRetirementPreview } from './PortfolioRetirementPreview.js'
 import type { usePortfolioAggregate } from '../hooks/usePortfolioAggregate.js'
 import { capitalPositionPhase, requiredPortfolioCollateral } from '../lib/capital.js'
 import * as copy from '../../../copy/portfolioCapital.js'
@@ -45,6 +47,12 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 					</MetricField>
 					<MetricField label={copy.availableCapacity} loading={model.loading}>
 						<CurrencyValue value={available} suffix={common.eth} />
+					</MetricField>
+					<MetricField label={copy.priceExpiry} loading={model.loading}>
+						<TimestampValue timestamp={snapshot?.priceValidUntil} relative={false} zeroText={copy.noPrice} />
+					</MetricField>
+					<MetricField label={copy.snapshotTime} loading={model.loading}>
+						<TimestampValue timestamp={snapshot?.timestamp} relative={false} />
 					</MetricField>
 				</MetricGrid>
 			</SectionBlock>
@@ -183,6 +191,9 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 								</MetricField>
 								<MetricField label={copy.currentHealth}>{health}</MetricField>
 								<MetricField label={copy.liquidationHealth}>{liquidationStatus}</MetricField>
+								<MetricField label={copy.liquidationSince}>
+									<TimestampValue timestamp={position.liquidationStarted} relative={false} zeroText={copy.noLiquidationInterval} />
+								</MetricField>
 								{position.batch === 0n ? undefined : (
 									<MetricField label={copy.queuedRemainingCommitment}>
 										<CurrencyValue value={position.remainingCommitment} suffix={common.eth} />
@@ -195,6 +206,8 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 							{snapshot?.priceValid && !healthy ? <UserMessage tone='warning' detail={copy.unhealthy} /> : undefined}
 							{snapshot?.priceValid && healthy && !targetMet ? <UserMessage tone='warning' detail={copy.belowTarget} /> : undefined}
 							<UserMessage detail={copy.liquidationHint} />
+							{position.liquidationStarted === 0n ? undefined : <UserMessage detail={copy.liquidationTimingHint} />}
+							{snapshot === undefined || position.batch === 0n ? undefined : <PortfolioRetirementPreview snapshot={snapshot} position={position} />}
 							<PortfolioInput label={copy.remainingCommitment} hint={copy.remainingCommitmentHint} value={position.batch === 0n ? model.remainingCommitmentAmount : formatUnits(position.remainingCommitment, 18)} onChange={model.setRemainingCommitmentAmount} disabled={disabled || position.batch !== 0n} numeric />
 							<ActionLauncherButton tone='secondary' idleLabel={copy.retireToTarget} pendingLabel={copy.retireToTarget} availability={{ disabled: retirementSizingReason !== undefined, reason: retirementSizingReason }} onClick={model.retireToTarget} />
 							<UserMessage detail={copy.retirementTargetHint} />

@@ -399,7 +399,7 @@ export function usePortfolioAggregate(
 					reviewDescription:
 						pendingRetirement === undefined
 							? 'Release commitments from the current retirement cohort using spare healthy capacity. Partial progress is possible; no fixed completion date is promised.'
-							: `Attempt to finish your request at ${formatEther(pendingRetirement.remainingCommitment)} ETH commitment. It completes only when spare healthy capacity covers earlier reserved reductions and your entire remaining reduction. Otherwise your commitment remains unchanged. Ordinary pool activity can still make partial progress.`,
+							: `Attempt to finish your request at ${formatEther(pendingRetirement.remainingCommitment)} ETH commitment. ${pendingRetirement.retirementPreview === undefined ? capitalCopy.retirementPreviewUnavailable : capitalCopy.retirementPreviewStatus[pendingRetirement.retirementPreview.status]}. It completes only when spare healthy capacity covers earlier reserved reductions and your entire remaining reduction. Otherwise your commitment remains unchanged. ${capitalCopy.retirementPreviewHint} Ordinary pool activity can still make partial progress.`,
 				}),
 				latest => {
 					if (!latest.priceValid) throw new Error('Refresh the shared REP price first.')
@@ -407,6 +407,7 @@ export function usePortfolioAggregate(
 					if (pendingRetirement === undefined) return
 					const current = latest.positions.find(position => position.id === pendingRetirement.id && position.commitment > 0n && position.batch !== 0n)
 					if (current === undefined || current.remainingCommitment !== pendingRetirement.remainingCommitment) throw new Error('Retirement request changed. Review the transaction again.')
+					if (pendingRetirement.retirementPreview?.status === 'ready' && current.retirementPreview?.status !== 'ready') throw new Error('Retirement capacity changed. Refresh the preview and review the transaction again.')
 				},
 			),
 		retire: (id: bigint) =>

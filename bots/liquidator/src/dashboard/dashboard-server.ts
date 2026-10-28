@@ -194,6 +194,12 @@ function publicOperatorSnapshot(value: unknown) {
 	const snapshot = publicFields(value, ['configurationRevision', 'deploymentMissingName', 'deploymentCheckedBlock', 'deploymentCheckedTimestamp', 'execute', 'lastScanAt', 'lastScannedBlock', 'lastScannedTimestamp', 'network', 'operatorCapable', 'paused', 'scanning', 'status', 'wallet'])
 	const error = source['error']
 	if (typeof error === 'string') snapshot['error'] = publicOperatorFailure(error)
+	if (Array.isArray(source['portfolios']))
+		snapshot['portfolios'] = publicList(source['portfolios'], value => {
+			const view = publicFields(value, ['address', 'universeId', 'selected', 'approvedUniverse', 'blockNumber', 'priceValid', 'principalRep', 'commitmentEth', 'managedPrincipalRep', 'maximumTotalPrincipalRep', 'automation', 'knownPositionCount', 'nextPositionId'])
+			view['positions'] = publicList(record(value)?.['positions'], position => publicFields(position, ['id', 'commitmentEth', 'distressed', 'reserveEth', 'requiredReserveEth', 'reserveAdequate', 'retirementStatus', 'stalledRetirement', 'takeoverStatus']))
+			return view
+		})
 	if (Array.isArray(source['activities'])) snapshot['activities'] = publicList(source['activities'], publicActivity)
 	if (Array.isArray(source['alerts'])) snapshot['alerts'] = publicList(source['alerts'], publicAlert)
 	if (record(source['centralizedMarket']) !== undefined) snapshot['centralizedMarket'] = publicCentralizedMarket(source['centralizedMarket'])

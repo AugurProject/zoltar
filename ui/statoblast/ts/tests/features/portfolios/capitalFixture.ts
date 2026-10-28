@@ -41,7 +41,7 @@ export function capitalSnapshot(overrides: Partial<PortfolioAccountSnapshot> = {
 		importing: false,
 		exported: false,
 		ownerAccount: { freeAttoRep: 0n, feesAttoEth: unit, feesAttoRep: 2n * unit, executionReserveAttoEth: unit, targetHealthFactorBps: 12_000n, positionId: 1n },
-		positions: [{ id: 1n, owner, batch: 0n, rep: 30n * unit, commitment: 10n * unit, maxHealthyPrice: (28n * unit) / 10n, releasedRep: 0n, feesAttoEth: 0n, feesAttoRep: 0n, executionReserveAttoEth: 10n ** 16n, liquidationStarted: 0n, remainingCommitment: 0n }],
+		positions: [{ id: 1n, owner, batch: 0n, rep: 30n * unit, commitment: 10n * unit, maxHealthyPrice: (28n * unit) / 10n, releasedRep: 0n, feesAttoEth: 0n, feesAttoRep: 0n, executionReserveAttoEth: 10n ** 16n, liquidationStarted: 0n, remainingCommitment: 0n, retirementPreview: undefined }],
 		ownerPrincipalAttoRep: 30n * unit,
 		ownerCommitmentAttoEth: 10n * unit,
 		withdrawableAttoRep: (48n * unit) / 10n,

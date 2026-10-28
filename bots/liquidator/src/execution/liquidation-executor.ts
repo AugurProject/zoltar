@@ -1,7 +1,9 @@
+import { estimateExecutionGas } from './gas-estimate.ts'
+import { simulateWithRevalidation } from './simulation.ts'
 import { createPublicClient, createWalletClient, encodeFunctionData, type Account, type Address, type Chain, type Hex, type Transport, type WalletClient } from '@zoltar/bot-shared/ethereum'
-import { prepareSignedTransaction, submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
+import { maximumFeePerGas, paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
-import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
+import { settledQuorumValue, sharedQuorumReadTargets } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 import type { DesiredPoolSettings, OperatorSettings } from '#config/settings'
 import { openOraclePriceCoordinatorAbi, erc20Abi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, weth9Abi } from '@zoltar/bot-shared/contracts/abi'
@@ -18,10 +20,12 @@ type RpcPool = ReturnType<typeof createRpcEndpointPool>
 
 type Call = {
 	data: Hex
-	gas: bigint
+	gas: bigint | 'estimate'
+	gasBudgetExceeded?: (() => never) | undefined
 	label: string
 	lastValidBlockNumber?: bigint | undefined
 	preSubmit?: (() => Promise<unknown> | unknown) | undefined
+	revalidateSimulationRevert?: (() => Promise<unknown>) | undefined
 	receiptExpectation?: PendingTransactionIntent['receiptExpectation'] | undefined
 	to: Address
 	value?: bigint | undefined
@@ -47,32 +51,48 @@ async function agreedErc20Allowance(wallet: WriteClient, settings: OperatorSetti
 	)
 }
 
-async function submitCall(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, pool: RpcPool, call: Call, kind: PendingTransactionIntent['kind']) {
+export async function submitCall(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, pool: RpcPool, call: Call, kind: PendingTransactionIntent['kind']) {
 	assertExecutionActive(state)
 	const account = wallet.account
 	if (account.signTransaction === undefined || account.signMessage === undefined) {
 		throw new Error('Execution signer cannot sign transactions')
 	}
+	const pinned = await sharedQuorumReadTargets(executionReadClients(wallet, settings, pool), settings.connectivity.rpcQuorum)
 	const block = await settledQuorumValue(
 		`${call.label} signing block`,
-		executionReadClients(wallet, settings, pool).map(async ({ client, endpoint }) => {
-			const candidate = await client.getBlock()
+		pinned.readers.map(async ({ client, endpoint }) => {
+			const candidate = await client.getBlock({ blockNumber: pinned.blockNumber })
 			return { endpoint, value: { baseFeePerGas: candidate.baseFeePerGas, hash: candidate.hash, number: candidate.number } }
 		}),
 		settings.connectivity.rpcQuorum,
 	)
-	if (block.number === undefined || block.baseFeePerGas === undefined) {
-		throw new Error('Latest block is missing number or base fee')
+	if (block.number === undefined || block.baseFeePerGas === undefined || block.hash === undefined) {
+		throw new Error('Latest block is missing number, hash or base fee')
 	}
+	const validateCanonicalBlock = async () => {
+		const canonicalHash = await settledQuorumValue(
+			`${call.label} simulation block`,
+			pinned.readers.map(async ({ client, endpoint }) => ({ endpoint, value: (await client.getBlock({ blockNumber: pinned.blockNumber })).hash })),
+			settings.connectivity.rpcQuorum,
+		)
+		if (canonicalHash !== block.hash) throw new Error('Simulation block changed before portfolio revalidation')
+	}
+	const revalidateRevert =
+		call.revalidateSimulationRevert === undefined
+			? undefined
+			: async () => {
+					await validateCanonicalBlock()
+					await call.revalidateSimulationRevert?.()
+				}
 	assertExecutionActive(state)
-	assertGasCostLimitForBaseFee(call.gas, block.baseFeePerGas, settings.strategy.maximumGasCostAttoEth, call.label)
-	await settledQuorumValue(
+	const gas = call.gas === 'estimate' ? await estimateExecutionGas(pinned.readers, { account, data: call.data, to: call.to, value: call.value, blockNumber: pinned.blockNumber }, settings.connectivity.rpcQuorum, validateCanonicalBlock, revalidateRevert) : call.gas
+	if (maximumFeePerGas(block.baseFeePerGas) * paddedTransactionGas(gas) > settings.strategy.maximumGasCostAttoEth) call.gasBudgetExceeded?.()
+	assertGasCostLimitForBaseFee(gas, block.baseFeePerGas, settings.strategy.maximumGasCostAttoEth, call.label)
+	await simulateWithRevalidation(
 		`${call.label} simulation`,
-		executionReadClients(wallet, settings, pool).map(async ({ client, endpoint }) => ({
-			endpoint,
-			value: await client.call({ account, data: call.data, gas: call.gas, to: call.to, value: call.value }),
-		})),
+		pinned.readers.map(async ({ client, endpoint }) => ({ endpoint, value: await client.call({ account, data: call.data, gas: call.gas === 'estimate' ? paddedTransactionGas(gas) : gas, to: call.to, value: call.value, blockNumber: pinned.blockNumber }) })),
 		settings.connectivity.rpcQuorum,
+		revalidateRevert,
 	)
 	assertExecutionActive(state)
 	recordActivity(state, {
@@ -90,7 +110,7 @@ async function submitCall(wallet: WriteClient, settings: OperatorSettings, state
 		chainId: settings.network.chainId,
 		data: call.data,
 		from: account.address,
-		gasEstimate: call.gas,
+		gasEstimate: gas,
 		lastValidBlockNumber: call.lastValidBlockNumber,
 		nonce,
 		signTransaction: account.signTransaction,

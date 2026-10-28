@@ -2,6 +2,8 @@
 pragma solidity 0.8.35;
 
 import { SecurityPoolCapitalLedger } from '../../statoblast/SecurityPoolCapitalLedger.sol';
+import { SecurityPoolCapitalState } from '../../statoblast/SecurityPoolCapitalState.sol';
+import { SecurityPoolCreationCodeDeployer } from '../../statoblast/SecurityPoolCreationCode.sol';
 import { ICapitalFeeStreams } from '../../statoblast/interfaces/ICapitalAccounting.sol';
 import { SecurityPoolCommitmentIndex } from '../../statoblast/SecurityPoolCommitmentIndex.sol';
 import { SecurityPoolCapitalFeeStreams } from '../../statoblast/SecurityPoolCapitalFeeStreams.sol';
@@ -35,9 +37,10 @@ contract CapitalLedgerZoltarMock {
 	}
 }
 
-contract CapitalLedgerTestComponents {
+contract CapitalLedgerTestComponents is SecurityPoolCreationCodeDeployer {
+	constructor() SecurityPoolCreationCodeDeployer(type(SecurityPoolCommitmentIndex).creationCode) {}
 	function createIndex(address authority) external returns (SecurityPoolCommitmentIndex) {
-		return new SecurityPoolCommitmentIndex(authority);
+		return SecurityPoolCommitmentIndex(_deploy(abi.encode(authority)));
 	}
 	function createStreams(address authority, uint48 duration) external returns (ICapitalFeeStreams) {
 		return
@@ -104,11 +107,29 @@ contract CapitalLedgerHarness {
 	function exportChoice(address owner) external {
 		ledger.exportChoice(owner);
 	}
+	function releaseForkBacking() external {
+		ledger.releaseForkBacking();
+	}
 	function importChoice(address owner, SecurityPoolCapitalLedger.ChoicePosition calldata position, uint256 target) external payable {
 		ledger.importChoice{value: msg.value}(owner, position, target);
 	}
 	function finishImport(uint256 demand) external {
 		ledger.finishForkImport(demand);
+	}
+	/// @dev Populate the production import path, including custody and reserves.
+	/// Profiles exercise clustered keys and alternating healthy/unhealthy owners.
+	function importChoices(uint256 start, uint256 count, bool alternating) external payable {
+		require(msg.value == count * 2 ether, 'Fund every imported reserve');
+		uint256 principal;
+		for (uint256 i = start; i < start + count; i++) {
+			uint256 baseRep = 42 ether;
+			if (alternating) baseRep = i % 2 == 0 ? 21 ether : 84 ether;
+			uint256 rep = baseRep + i * 1e12;
+			uint96 batch = uint96(i % 3);
+			ledger.importChoice{value: 2 ether}(address(uint160(0x1000 + i)), SecurityPoolCapitalState.ChoicePosition(rep, 20 ether, batch, 2 ether, batch == 0 ? 0 : 10 ether), 10_000);
+			principal += rep;
+		}
+		zoltar.mint(address(ledger), principal);
 	}
 	receive() external payable {}
 }

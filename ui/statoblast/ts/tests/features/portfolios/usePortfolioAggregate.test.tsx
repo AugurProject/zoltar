@@ -241,6 +241,19 @@ test('retirement service without an owner request keeps the bounded global actio
 	expect(request.reviewDescription).toContain('Partial progress')
 })
 
+test('a retirement reviewed as ready is stopped if its capacity disappears before submission', async () => {
+	const base = capitalSnapshot()
+	const preview = { status: 'ready' as const, effectiveCurrentBatch: 1n, healthyCommitment: 20n * unit, spareCommitment: 10n * unit, queuedAheadCommitment: 0n, commitmentReduction: 5n * unit, releasedRep: 0n }
+	const snapshot = { ...base, positions: base.positions.map(position => ({ ...position, batch: 1n, remainingCommitment: 5n * unit, retirementPreview: preview })) }
+	const { hook, requests, transport } = await setup(snapshot)
+	await act(() => hook.state().serve())
+	const request = requests[0]
+	if (request === undefined) throw new Error('Missing retirement request')
+	await request.validateBeforeSubmit?.()
+	transport.setSnapshot({ ...snapshot, demandAttoEth: 20n * unit, positions: snapshot.positions.map(position => ({ ...position, retirementPreview: { ...preview, status: 'insufficient-spare', spareCommitment: 0n } })) })
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Retirement capacity changed')
+})
+
 test('withdrawals use the on-chain allowance and recheck it before submission', async () => {
 	const { hook, requests, transport } = await setup()
 	await act(() => hook.state().setWithdrawalAmount('4'))

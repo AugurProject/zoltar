@@ -224,11 +224,13 @@ type ContractWriteParameters<TAbi extends Abi, TFunctionName extends string> = C
 }
 
 export type EstimateContractGasParameters<TAbi extends Abi, TFunctionName extends string> = ContractFunctionParameters<TAbi, TFunctionName> & {
+	blockNumber?: bigint | undefined
 	account?: Account | Address | undefined
 	value?: bigint | undefined
 }
 
 type EstimateGasParameters = {
+	blockNumber?: bigint | undefined
 	account?: Account | Address | undefined
 	data?: Hex | undefined
 	gasPrice?: bigint | undefined
@@ -493,7 +495,17 @@ export type PublicClientActions = Omit<PublicClientShape<Transport, Chain | unde
 
 type WalletClientShape<TTransport extends Transport, TChain extends Chain | undefined, TAccount extends Account | undefined> = PublicClientShape<TTransport, TChain> & {
 	account: TAccount
-	call: (parameters: { account?: Account | Address | undefined; data?: Hex | undefined; gas?: bigint | undefined; gasPrice?: bigint | undefined; maxFeePerGas?: bigint | undefined; maxPriorityFeePerGas?: bigint | undefined; to?: Address | undefined; value?: bigint | undefined }) => Promise<{ data: Hex | undefined }>
+	call: (parameters: {
+		blockNumber?: bigint | undefined
+		account?: Account | Address | undefined
+		data?: Hex | undefined
+		gas?: bigint | undefined
+		gasPrice?: bigint | undefined
+		maxFeePerGas?: bigint | undefined
+		maxPriorityFeePerGas?: bigint | undefined
+		to?: Address | undefined
+		value?: bigint | undefined
+	}) => Promise<{ data: Hex | undefined }>
 	sendRawTransaction: (parameters: { serializedTransaction: Hex }) => Promise<Hash>
 	sendTransaction: (parameters: {
 		account?: Account | Address | undefined

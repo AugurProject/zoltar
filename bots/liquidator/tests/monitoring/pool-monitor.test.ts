@@ -178,7 +178,7 @@ test('binds operation cursor pages and the complete pool scan to one canonical b
 	expect(logReads.find(read => read.event?.name === 'VaultAccountingCheckpoint')).toMatchObject({ fromBlock: 2n, toBlock: 2n })
 
 	portfolio = getAddress('0x0000000000000000000000000000000000000070')
-	await expect(scanPools(client, settings, operator, monitorIndex)).rejects.toThrow(`Pool ${pool} uses portfolio ${portfolio}; this operator supports standalone vaults only`)
+	await expect(scanPools(client, settings, operator, monitorIndex)).rejects.toThrow(`Pool ${pool} uses portfolio ${portfolio}; select its portfolio and universe in selectedPortfolios instead of selectedPools`)
 	portfolio = getAddress('0x0000000000000000000000000000000000000000')
 	settings.selectedPools = []
 	reorgSnapshot = true

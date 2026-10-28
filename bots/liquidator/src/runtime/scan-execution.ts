@@ -1,3 +1,6 @@
+import { portfolioTakeoverPlan } from '#core/portfolio-strategy'
+import { executePortfolioTakeover } from '#execution/portfolio-executor'
+import { recordActivity } from '#state/operator-state'
 import { canonicalMarketPriceAllowsExecution, marketPriceAllowsExecution, selectedCandidate } from '#core/candidate-selection'
 import { recoveryWorkBlocksExecution, shouldStopAfterSuccessfulCycle } from '#core/cycle-control'
 import { selectVaultMigration } from '#core/fork-migration'
@@ -56,6 +59,19 @@ export async function runLiveExecutionStep(runtime: LiquidatorRuntime, deps: Liq
 	}
 	const canonicalHash = (blockNumber: bigint) => canonicalBlockHash(runtime.settings, blockNumber, runtime.readPool)
 	const requireDexEvidence: Parameters<typeof canonicalMarketPriceAllowsExecution>[4] = (configuration, estimate) => requireCurrentDexEvidence(runtime, configuration, estimate)
+	if (runtime.settings.portfolioPolicy.allowFundedTakeovers) {
+		const totalPrincipal = state.portfolios.reduce((sum, portfolio) => sum + portfolio.snapshot.ownerPrincipalAttoRep, 0n)
+		for (const portfolio of state.portfolios) {
+			const price = { repToken: portfolio.snapshot.repToken, lastPrice: portfolio.snapshot.acceptedPrice }
+			for (const position of portfolio.positions) {
+				const result = portfolioTakeoverPlan(portfolio, position, runtime.settings, totalPrincipal, marketPriceAllowsExecution(price, runtime.settings, state))
+				if (result.plan === undefined) continue
+				await executePortfolioTakeover(activeWallet, runtime.settings, state, runtime.readPool, portfolio, position.id, current => canonicalMarketPriceAllowsExecution({ repToken: current.snapshot.repToken, lastPrice: current.snapshot.acceptedPrice }, runtime.settings, state, canonicalHash, requireDexEvidence))
+				await saveDurableState(runtime.settings.runtime.stateFile, state)
+				return shouldStopAfterSuccessfulCycle(runtime.settings.runtime.once)
+			}
+		}
+	}
 	for (const pool of state.pools) {
 		if (await maintainVault(runtime.wallet, runtime.settings, state, runtime.readPool, pool, () => canonicalMarketPriceAllowsExecution(pool, runtime.settings, state, canonicalHash, requireDexEvidence))) {
 			await saveDurableState(runtime.settings.runtime.stateFile, state)
@@ -74,6 +90,23 @@ export async function runLiveExecutionStep(runtime: LiquidatorRuntime, deps: Liq
 /** Records the best dry-run candidate once per distinct pool, target, debt, and price. */
 export function runDryRunStep(runtime: LiquidatorRuntime, deps: LiquidatorDeps) {
 	const { state } = deps
+	const totalPrincipal = state.portfolios.reduce((sum, portfolio) => sum + portfolio.snapshot.ownerPrincipalAttoRep, 0n)
+	for (const portfolio of state.portfolios) {
+		for (const position of portfolio.positions) {
+			const result = portfolioTakeoverPlan(portfolio, position, runtime.settings, totalPrincipal, marketPriceAllowsExecution({ repToken: portfolio.snapshot.repToken, lastPrice: portfolio.snapshot.acceptedPrice }, runtime.settings, state))
+			if (result.plan === undefined) continue
+			const key = `portfolio:${portfolio.snapshot.capitalLedger}:${position.id}:${position.commitment}:${portfolio.acceptedPriceEpoch}`
+			if (runtime.lastDryRunKey !== key)
+				recordActivity(state, {
+					kind: 'liquidation',
+					status: 'dry-run',
+					message: 'Portfolio funded takeover candidate',
+					details: `${portfolio.selection.address} universe=${portfolio.selection.universeId} position=${position.id} ownREP=${result.plan.ownFunding} reserveETH=${result.plan.reserveFunding}; ${result.reason}`,
+				})
+			runtime.lastDryRunKey = key
+			return
+		}
+	}
 	const selected = selectedCandidate(state.pools, runtime.settings, pool => marketPriceAllowsExecution(pool, runtime.settings, state))
 	if (selected === undefined) return
 	const dryRunKey = `${selected.pool.address}:${selected.candidate.target.address}:${selected.candidate.requestedDebtAttoEth.toString()}:${selected.pool.lastPrice.toString()}`

@@ -42,6 +42,7 @@ const abi = parseAbi([
 	'function currentBatch() view returns (uint96)',
 	'function nextBatch() view returns (uint96)',
 	'function accountOf(uint96 id) view returns ((address owner,uint96 batch,uint256 rep,uint256 commitment,uint256 maxHealthyPrice,uint256 releasedRep,uint256 ethFees,uint256 repFees,uint256 remainingCommitment) account)',
+	'function previewRetirement(uint96 id,uint256 acceptedPrice,uint256 demand) view returns ((uint8 status,uint96 effectiveCurrentBatch,uint256 healthyCommitment,uint256 spareCommitment,uint256 queuedAheadCommitment,uint256 commitmentReduction,uint256 releasedRep) preview)',
 	'function positionExecutionReserveAttoEth(uint96 id) view returns (uint256)',
 	'function liquidationStarted(uint96 id) view returns (uint48)',
 	'function depositFor(address owner,uint256 amount)',
@@ -58,6 +59,7 @@ const abi = parseAbi([
 	'function claimEarnings()',
 	'function cure(uint96 id) returns (uint256)',
 	'function takeOver(uint96 id,uint256 commitment,uint256 minimumAward,uint256 maximumOwnRep) returns (uint96)',
+	'function takeOverWithBounds(uint96 id,uint256 commitment,uint256 minimumAward,uint256 maximumOwnRep,(uint256 maximumOwnerPrincipal,uint256 maximumOwnerCommitment,uint256 expectedTargetHealthFactorBps,uint256 expectedAcceptedPriceEpoch,uint96 expectedSourceBatch) bounds) returns (uint96)',
 ])
 
 type PortfolioCapitalOwner = {
@@ -67,6 +69,22 @@ type PortfolioCapitalOwner = {
 	executionReserveAttoEth: bigint
 	targetHealthFactorBps: bigint
 	positionId: bigint
+}
+type PortfolioRetirementPreview = {
+	status: 'not-retiring' | 'imports-open' | 'demand-exceeds-healthy' | 'earlier-requests' | 'insufficient-spare' | 'ready'
+	effectiveCurrentBatch: bigint
+	healthyCommitment: bigint
+	spareCommitment: bigint
+	queuedAheadCommitment: bigint
+	commitmentReduction: bigint
+	releasedRep: bigint
+}
+type PortfolioTakeoverBounds = {
+	maximumOwnerPrincipal: bigint
+	maximumOwnerCommitment: bigint
+	expectedTargetHealthFactorBps: bigint
+	expectedAcceptedPriceEpoch: bigint
+	expectedSourceBatch: bigint
 }
 type PortfolioCapitalPosition = {
 	id: bigint
@@ -81,6 +99,8 @@ type PortfolioCapitalPosition = {
 	executionReserveAttoEth: bigint
 	liquidationStarted: bigint
 	remainingCommitment: bigint
+	/** Advisory at this snapshot block, before the next ledger checkpoint. */
+	retirementPreview: PortfolioRetirementPreview | undefined
 }
 export type PortfolioCapitalSnapshot = {
 	chainId: number
@@ -149,6 +169,36 @@ function fields(value: unknown, names: readonly string[]): unknown[] {
 	if (Array.isArray(value) && value.length === names.length) return value
 	if (value !== null && typeof value === 'object' && !Array.isArray(value)) return names.map(name => Reflect.get(value, name))
 	throw new Error('Invalid capital accounting response.')
+}
+function retirementStatus(value: unknown): PortfolioRetirementPreview['status'] {
+	switch (value) {
+		case 0n:
+			return 'not-retiring'
+		case 1n:
+			return 'imports-open'
+		case 2n:
+			return 'demand-exceeds-healthy'
+		case 3n:
+			return 'earlier-requests'
+		case 4n:
+			return 'insufficient-spare'
+		case 5n:
+			return 'ready'
+		default:
+			throw new Error('Invalid retirement preview status.')
+	}
+}
+function retirementPreview(value: unknown): PortfolioRetirementPreview {
+	const [status, batch, healthy, spare, ahead, reduction, rep] = fields(value, ['status', 'effectiveCurrentBatch', 'healthyCommitment', 'spareCommitment', 'queuedAheadCommitment', 'commitmentReduction', 'releasedRep'])
+	return {
+		status: retirementStatus(status),
+		effectiveCurrentBatch: uint(batch, 'Effective current cohort', 96),
+		healthyCommitment: uint(healthy, 'Preview healthy commitment'),
+		spareCommitment: uint(spare, 'Preview spare commitment'),
+		queuedAheadCommitment: uint(ahead, 'Earlier reserved reductions'),
+		commitmentReduction: uint(reduction, 'Requested commitment reduction'),
+		releasedRep: uint(rep, 'Requested REP release'),
+	}
 }
 function ownerAccount(value: unknown): PortfolioCapitalOwner {
 	const [free, eth, rep, execution, health, id] = fields(value, ['freeAttoRep', 'feesAttoEth', 'feesAttoRep', 'executionReserveAttoEth', 'targetHealthFactorBps', 'positionId'])
@@ -220,6 +270,19 @@ export function buildPortfolioCapitalTakeOverRequest(parameters: CapitalRequest 
 	return request(parameters, 'takeOver', [positive(parameters.positionId, 'Position id', 96), positive(parameters.commitment, 'Takeover commitment'), uint(parameters.minimumAward, 'Minimum REP award'), uint(parameters.maximumOwnRep, 'Maximum own REP')])
 }
 
+/** Bind an automated acquisition to its quoted price epoch, owner policy and final exposure. */
+export function buildPortfolioCapitalTakeOverWithBoundsRequest(parameters: CapitalRequest & { positionId: bigint; commitment: bigint; minimumAward: bigint; maximumOwnRep: bigint; bounds: PortfolioTakeoverBounds }) {
+	const bounds = parameters.bounds
+	if (uint(bounds.expectedTargetHealthFactorBps, 'Expected health target') < 10_000n) throw new Error('Health target must be at least 100%.')
+	return request(parameters, 'takeOverWithBounds', [
+		positive(parameters.positionId, 'Position id', 96),
+		positive(parameters.commitment, 'Takeover commitment'),
+		uint(parameters.minimumAward, 'Minimum REP award'),
+		uint(parameters.maximumOwnRep, 'Maximum own REP'),
+		[uint(bounds.maximumOwnerPrincipal, 'Maximum owner principal'), uint(bounds.maximumOwnerCommitment, 'Maximum owner commitment'), bounds.expectedTargetHealthFactorBps, uint(bounds.expectedAcceptedPriceEpoch, 'Expected price epoch'), uint(bounds.expectedSourceBatch, 'Expected source cohort', 96)],
+	])
+}
+
 /** All reads share one block and inspect only the owner's single position. */
 export async function loadPortfolioCapitalSnapshot(parameters: { client: PortfolioReadClient; portfolio: Address; owner: Address; universeId?: bigint; blockNumber?: bigint }): Promise<PortfolioCapitalSnapshot> {
 	const { client } = parameters
@@ -283,12 +346,15 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 			const [value, execution, liquidation] = await Promise.all([read(commitmentIndex, 'accountOf', [id]), read(capitalLedger, 'positionExecutionReserveAttoEth', [id]), read(capitalLedger, 'liquidationStarted', [id])])
 			const [holder, batch, rep, commitment, maximum, released, eth, repFees, remaining] = fields(value, ['owner', 'batch', 'rep', 'commitment', 'maxHealthyPrice', 'releasedRep', 'ethFees', 'repFees', 'remainingCommitment'])
 			if (address(holder, 'Position owner').toLowerCase() !== owner.toLowerCase()) throw new Error('Capital position belongs to another owner.')
+			const cohort = uint(batch, 'Cohort id', 96)
+			const liveCommitment = uint(commitment, 'Commitment')
+			const preview = cohort !== 0n && liveCommitment !== 0n ? retirementPreview(await read(commitmentIndex, 'previewRetirement', [id, uint(conservative, 'Conservative price'), uint(demand, 'Demand')])) : undefined
 			return {
 				id,
 				owner,
-				batch: uint(batch, 'Cohort id', 96),
+				batch: cohort,
 				rep: uint(rep, 'Pledged REP'),
-				commitment: uint(commitment, 'Commitment'),
+				commitment: liveCommitment,
 				maxHealthyPrice: uint(maximum, 'Maximum healthy price'),
 				releasedRep: uint(released, 'Retired REP'),
 				feesAttoEth: uint(eth, 'ETH earnings'),
@@ -296,6 +362,7 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 				executionReserveAttoEth: uint(execution, 'Position execution reserve'),
 				liquidationStarted: uint(liquidation, 'Liquidation start', 48),
 				remainingCommitment: uint(remaining, 'Remaining commitment'),
+				retirementPreview: preview,
 			}
 		}),
 	)

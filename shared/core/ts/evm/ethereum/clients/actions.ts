@@ -273,6 +273,7 @@ export function buildPublicClientActions<TTransport extends Transport, TChain ex
 							to: parameters.address,
 							value: parameters.value,
 						}),
+						...(parameters.blockNumber === undefined ? [] : [normalizeBlockTag(parameters.blockNumber)]),
 					],
 				}),
 				'gas estimate',
@@ -281,7 +282,7 @@ export function buildPublicClientActions<TTransport extends Transport, TChain ex
 			normalizeRequiredRpcBigInt(
 				await requestTransportWithRateLimitRetries<string>(transport, {
 					method: 'eth_estimateGas',
-					params: [buildRpcTransactionRequest(parameters)],
+					params: [buildRpcTransactionRequest(parameters), ...(parameters.blockNumber === undefined ? [] : [normalizeBlockTag(parameters.blockNumber)])],
 				}),
 				'gas estimate',
 			),

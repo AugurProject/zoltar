@@ -609,3 +609,10 @@ test('bounds factory browsing, gates network setup, sanitizes failures, and prot
 	expect((await fetch(mutation, { method: 'PUT', body: JSON.stringify(request), headers: { origin: server.url.origin, 'content-type': 'application/json' } })).status).toBe(200)
 	expect(selections).toEqual([request])
 })
+
+test('portfolio monitoring responses exclude protected nested metadata', async () => {
+	const server = startServer({ getState: () => ({ portfolios: [{ address: '0x123', privateKey: 'protected', positions: [{ id: '3', takeoverStatus: 'Funded takeover ready', serializedTransaction: 'protected' }] }] }) })
+	const body: unknown = await (await fetch(new URL('/api/state', server.url))).json()
+	expect(body).toMatchObject({ portfolios: [{ address: '0x123', positions: [{ id: '3', takeoverStatus: 'Funded takeover ready' }] }] })
+	expect(JSON.stringify(body)).not.toContain('protected')
+})

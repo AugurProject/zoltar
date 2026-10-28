@@ -44,6 +44,24 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		uint96 boundaryPositionId;
 	}
 
+	enum RetirementStatus {
+		NotRetiring,
+		ImportsOpen,
+		DemandExceedsHealthy,
+		EarlierRequests,
+		InsufficientSpare,
+		Ready
+	}
+	struct RetirementPreview {
+		RetirementStatus status;
+		uint96 effectiveCurrentBatch;
+		uint256 healthyCommitment;
+		uint256 spareCommitment;
+		uint256 queuedAheadCommitment;
+		uint256 commitmentReduction;
+		uint256 releasedRep;
+	}
+
 	constructor(address authority) {
 		require(authority != address(0), 'Invalid commitment authority');
 		portfolio = authority;
@@ -395,19 +413,15 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	/// service is all-or-nothing: partial rekeying could otherwise jump the same
 	/// earlier requests on a subsequent call without adding any collateral.
 	function _retirePosition(uint96 id, uint256 acceptedPrice, uint256 demand) private returns (Retirement memory result) {
+		RetirementPreview memory preview = previewRetirement(id, acceptedPrice, demand);
+		require(preview.status != RetirementStatus.NotRetiring, 'Position is not retiring');
 		_touch(id);
+		_promote();
+		if (preview.status != RetirementStatus.Ready) return result;
 		Position storage position = positions[id];
 		Node storage leaf = nodes[position.node];
-		require(position.batch != 0 && !leaf.retired && leaf.commitment != 0, 'Position is not retiring');
-		_promote();
-		uint256 healthy = eligibleCommitment(acceptedPrice);
-		if (healthy < demand) return result;
-		uint256 spare = healthy - demand;
-		uint256 ahead = _queuedAhead(position, acceptedPrice);
-		uint256 reduction = leaf.commitment - position.remainingCommitment;
-		if (spare < ahead || (leaf.price >= acceptedPrice && spare - ahead < reduction)) return result;
 		_detach(position.batch, position.node);
-		result.commitment = reduction;
+		result.commitment = preview.commitmentReduction;
 		if (position.remainingCommitment == 0) {
 			result.rep = leaf.rep;
 			_close(position.node);
@@ -418,7 +432,34 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		}
 	}
 
-	function _queuedAhead(Position storage position, uint256 acceptedPrice) private view returns (uint256 ahead) {
+	/// @notice Exact current-state readiness for all-or-nothing targeted service.
+	/// @dev The ledger may checkpoint matured demand before execution. Price
+	/// freshness and ledger freeze/import authorization remain its responsibility.
+	/// Requested amounts are populated even when readiness is blocked. Bulk
+	/// retirement is recognized through lazy ancestors without mutating claims.
+	function previewRetirement(uint96 id, uint256 acceptedPrice, uint256 demand) public view returns (RetirementPreview memory result) {
+		result.effectiveCurrentBatch = currentBatch;
+		if (currentBatch == 0 || roots[currentBatch] == 0)
+			result.effectiveCurrentBatch = roots[nextBatch] == 0 ? 0 : nextBatch;
+		Account memory account = accountOf(id);
+		if (account.batch == 0 || account.commitment == 0) return result;
+		result.commitmentReduction = account.commitment - account.remainingCommitment;
+		if (account.remainingCommitment == 0) result.releasedRep = account.rep;
+		result.healthyCommitment = eligibleCommitment(acceptedPrice);
+		result.spareCommitment = result.healthyCommitment > demand ? result.healthyCommitment - demand : 0;
+		result.queuedAheadCommitment = _queuedAhead(positions[id], acceptedPrice, result.effectiveCurrentBatch);
+		if (importsOpen) result.status = RetirementStatus.ImportsOpen;
+		else if (result.healthyCommitment < demand) result.status = RetirementStatus.DemandExceedsHealthy;
+		else if (result.spareCommitment < result.queuedAheadCommitment)
+			result.status = RetirementStatus.EarlierRequests;
+		else if (
+			account.maxHealthyPrice >= acceptedPrice &&
+			result.spareCommitment - result.queuedAheadCommitment < result.commitmentReduction
+		) result.status = RetirementStatus.InsufficientSpare;
+		else result.status = RetirementStatus.Ready;
+	}
+
+	function _queuedAhead(Position storage position, uint256 acceptedPrice, uint96 effectiveCurrentBatch) private view returns (uint256 ahead) {
 		uint256 cursor = position.node;
 		if (nodes[cursor].price < acceptedPrice) {
 			uint256 root = roots[position.batch];
@@ -433,8 +474,8 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 				cursor = parent;
 			}
 		}
-		if (position.batch != currentBatch) {
-			uint256 root = roots[currentBatch];
+		if (effectiveCurrentBatch != 0 && position.batch != effectiveCurrentBatch) {
+			uint256 root = roots[effectiveCurrentBatch];
 			ahead += _eligible(root, acceptedPrice) - _eligibleRetained(root, acceptedPrice);
 		}
 	}

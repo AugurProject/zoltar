@@ -6,6 +6,7 @@ import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/trans
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
+	statoblast_SecurityPoolCapitalLifecycleDelegate_SecurityPoolCapitalLifecycleDelegate as lifecycleArtifact,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
 	statoblast_SecurityPoolCapitalFeeStreams_SecurityPoolCapitalFeeStreams as feesArtifact,
 	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
@@ -13,6 +14,9 @@ import {
 	statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact,
 	statoblast_SecurityPoolPortfolioPurchase_SecurityPoolPortfolioPurchase as purchaseArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
+	statoblast_SecurityPoolPortfolioServices_SecurityPoolPortfolioServices as servicesArtifact,
+	statoblast_SecurityPoolReportingRewards_SecurityPoolReportingRewards as rewardsArtifact,
+	statoblast_SecurityPoolResolutionPremiumBook_SecurityPoolResolutionPremiumBook as premiumArtifact,
 } from '../contractArtifact.js'
 import { getInfraContractAddresses, getSecurityPoolPortfolioByteCode, getSecurityPoolPortfolioRuntimeCode, getPortfolioDeployers } from './deploymentHelpers.js'
 import { requireAddressValue, requireBigintValue, requireIntegerLikeValue } from './decoders.js'
@@ -25,6 +29,11 @@ const linksAbi = parseAbi([
 	'function universeId() view returns (uint248)',
 	'function ledger() view returns (address)',
 	'function feeStreams() view returns (address)',
+	'function lifecycleDelegate() view returns (address)',
+	'function services() view returns (address)',
+	'function forkAuthority() view returns (address)',
+	'function reportingRewards() view returns (address)',
+	'function premiumLedger() view returns (address)',
 	'function getRepToken(uint248 universeId) view returns (address)',
 	'function setupStage() view returns (uint8)',
 	'function prepareNext()',
@@ -56,9 +65,9 @@ export function verifyRuntimeCode(actual: Hex | undefined, expected: Hex, refere
 	if (mask(actual) !== mask(expected)) throw new Error(`Unrecognized ${label} runtime code.`)
 }
 
-async function verifyModule(client: ReadClient, address: Address, artifact: RuntimeArtifact, authority: Address, label: string, blockNumber: bigint) {
+async function verifyModule(client: ReadClient, address: Address, artifact: RuntimeArtifact, authority: Address, label: string, blockNumber: bigint, authorityGetter: 'portfolio' | 'ledger' | 'services' = 'portfolio') {
 	verifyRuntimeCode(await client.getCode({ address, blockNumber }), `0x${artifact.evm.deployedBytecode.object}`, artifact.evm.deployedBytecode.immutableReferences, label)
-	const actualValue = await client.readContract({ address, abi: linksAbi, functionName: 'portfolio', blockNumber })
+	const actualValue = await client.readContract({ address, abi: linksAbi, functionName: authorityGetter, blockNumber })
 	const actual = requireAddressValue(actualValue, 'module authority')
 	if (getAddress(actual) !== getAddress(authority)) throw new Error(`${label} belongs to another authority.`)
 }
@@ -93,7 +102,7 @@ export async function loadPortfolioAccount(client: ReadClient, portfolio: Addres
 	const snapshot = await loadPortfolioCapitalSnapshot({ client: portfolioReadClient(client), portfolio, owner, universeId })
 	const blockNumber = snapshot.blockNumber
 	verifyRuntimeCode(await client.getCode({ address: portfolio, blockNumber }), getSecurityPoolPortfolioRuntimeCode(), portfolioArtifact.evm.deployedBytecode.immutableReferences, 'portfolio')
-	const [factory, zoltar, originUniverseId, admissionAddress, settlement, reporters, quoteHelper, forkController, feeStreamsValue, questionCount] = await Promise.all([
+	const [factory, zoltar, originUniverseId, admissionAddress, settlement, reporters, quoteHelper, forkController, feeStreamsValue, lifecycleValue, services, capitalServicesValue, capitalForkValue, questionCount] = await Promise.all([
 		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'factory', blockNumber }),
 		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'zoltar', blockNumber }),
 		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'originUniverseId', blockNumber }),
@@ -103,23 +112,37 @@ export async function loadPortfolioAccount(client: ReadClient, portfolio: Addres
 		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'quoteHelper', blockNumber }),
 		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'forkController', blockNumber }),
 		client.readContract({ address: snapshot.capitalLedger, abi: linksAbi, functionName: 'feeStreams', blockNumber }),
+		client.readContract({ address: snapshot.capitalLedger, abi: linksAbi, functionName: 'lifecycleDelegate', blockNumber }),
+		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'services', blockNumber }),
+		client.readContract({ address: snapshot.capitalLedger, abi: linksAbi, functionName: 'services', blockNumber }),
+		client.readContract({ address: snapshot.capitalLedger, abi: linksAbi, functionName: 'forkAuthority', blockNumber }),
 		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'questionCount', blockNumber }),
 	])
 	const feeStreams = requireAddressValue(feeStreamsValue, 'fee streams')
+	const lifecycle = requireAddressValue(lifecycleValue, 'capital lifecycle delegate')
 	const infrastructure = getInfraContractAddresses()
 	if (getAddress(factory) !== getAddress(infrastructure.securityPoolFactory) || getAddress(zoltar) !== getAddress(infrastructure.zoltar)) throw new Error('Portfolio uses unrecognized protocol contracts.')
+	if (requireAddressValue(capitalServicesValue, 'capital services') !== getAddress(services)) throw new Error('Capital ledger uses another services authority.')
+	if (requireAddressValue(capitalForkValue, 'capital fork authority') !== getAddress(forkController)) throw new Error('Capital ledger uses another fork authority.')
 	const start = questionStart > questionCount ? 0n : questionStart
-	const [questions, admission, walletAttoRep, allowanceAttoRep, walletAttoEth, bookValue] = await Promise.all([
+	const [questions, admission, walletAttoRep, allowanceAttoRep, walletAttoEth, bookValue, rewardsValue, premiumValue] = await Promise.all([
 		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'getQuestions', args: [start, 64n], blockNumber }),
 		loadPortfolioAdmission(client, admissionAddress, originUniverseId, blockNumber, admissionStart),
 		client.readContract({ address: snapshot.repToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [owner], blockNumber }),
 		client.readContract({ address: snapshot.repToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [owner, snapshot.capitalLedger], blockNumber }),
 		client.getBalance({ address: owner, blockNumber }),
 		client.readContract({ address: settlement, abi: linksAbi, functionName: 'ledger', blockNumber }),
+		client.readContract({ address: services, abi: linksAbi, functionName: 'reportingRewards', blockNumber }),
+		client.readContract({ address: services, abi: linksAbi, functionName: 'premiumLedger', blockNumber }),
 	])
 	const book = requireAddressValue(bookValue, 'settlement book')
+	const rewards = requireAddressValue(rewardsValue, 'reporting rewards')
+	const premium = requireAddressValue(premiumValue, 'resolution premium book')
+	const rewardsServicesValue = await client.readContract({ address: rewards, abi: linksAbi, functionName: 'services', blockNumber })
+	if (requireAddressValue(rewardsServicesValue, 'reporting services') !== getAddress(services)) throw new Error('Reporting rewards use another services authority.')
 	await Promise.all([
 		verifyModule(client, snapshot.capitalLedger, capitalArtifact, portfolio, 'capital ledger', blockNumber),
+		verifyModule(client, lifecycle, lifecycleArtifact, snapshot.capitalLedger, 'capital lifecycle delegate', blockNumber, 'ledger'),
 		verifyModule(client, snapshot.commitmentIndex, indexArtifact, snapshot.capitalLedger, 'commitment index', blockNumber),
 		verifyModule(client, feeStreams, feesArtifact, snapshot.capitalLedger, 'capital fee streams', blockNumber),
 		verifyModule(client, settlement, settlementArtifact, portfolio, 'settlement engine', blockNumber),
@@ -127,6 +150,9 @@ export async function loadPortfolioAccount(client: ReadClient, portfolio: Addres
 		verifyModule(client, reporters, reporterArtifact, portfolio, 'reporter ledger', blockNumber),
 		verifyModule(client, quoteHelper, purchaseArtifact, portfolio, 'portfolio purchase helper', blockNumber),
 		verifyModule(client, forkController, forkArtifact, portfolio, 'fork coordinator', blockNumber),
+		verifyModule(client, services, servicesArtifact, portfolio, 'portfolio services', blockNumber),
+		verifyModule(client, rewards, rewardsArtifact, portfolio, 'reporting rewards', blockNumber),
+		verifyModule(client, premium, premiumArtifact, services, 'resolution premium book', blockNumber, 'services'),
 	])
 	const [capitalUniverse, capitalProtocol, reporterProtocol, forkProtocol, canonicalRep] = await Promise.all([
 		client.readContract({ address: snapshot.capitalLedger, abi: linksAbi, functionName: 'universeId', blockNumber }),

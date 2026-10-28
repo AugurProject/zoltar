@@ -5,6 +5,7 @@ import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/a
 import { getInfraContractAddresses, getSecurityPoolPortfolioRuntimeCode } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import {
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
+	statoblast_SecurityPoolCapitalLifecycleDelegate_SecurityPoolCapitalLifecycleDelegate as lifecycleArtifact,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
 	statoblast_SecurityPoolCapitalFeeStreams_SecurityPoolCapitalFeeStreams as feesArtifact,
 	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as engineArtifact,
@@ -12,6 +13,9 @@ import {
 	statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact,
 	statoblast_SecurityPoolPortfolioPurchase_SecurityPoolPortfolioPurchase as purchaseArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
+	statoblast_SecurityPoolPortfolioServices_SecurityPoolPortfolioServices as servicesArtifact,
+	statoblast_SecurityPoolReportingRewards_SecurityPoolReportingRewards as rewardsArtifact,
+	statoblast_SecurityPoolResolutionPremiumBook_SecurityPoolResolutionPremiumBook as premiumArtifact,
 	statoblast_SecurityPoolOpenAdmissionPolicy_SecurityPoolOpenAdmissionPolicy as openArtifact,
 } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { capitalSnapshot, owner, portfolio, capital, token, index } from './capitalFixture.js'
@@ -22,15 +26,21 @@ export const modules = {
 	reporters: getAddress('0x0000000000000000000000000000000000000064'),
 	purchase: getAddress('0x0000000000000000000000000000000000000065'),
 	fork: getAddress('0x0000000000000000000000000000000000000066'),
+	lifecycle: getAddress('0x0000000000000000000000000000000000000067'),
+	services: getAddress('0x0000000000000000000000000000000000000068'),
+	rewards: getAddress('0x0000000000000000000000000000000000000069'),
+	premium: getAddress('0x0000000000000000000000000000000000000070'),
 }
 export function capitalClient(initial = capitalSnapshot()) {
 	let snapshot = initial
 	let setupStage = 3n
 	const overrides: Record<string, unknown> = {}
+	const scopedOverrides = new Map<string, unknown>()
 	const reads: { name: string; args: readonly unknown[] | undefined; blockNumber: bigint | undefined }[] = []
 	const codes = new Map<Address, Hex>([
 		[portfolio, getSecurityPoolPortfolioRuntimeCode()],
 		[capital, `0x${capitalArtifact.evm.deployedBytecode.object}`],
+		[modules.lifecycle, `0x${lifecycleArtifact.evm.deployedBytecode.object}`],
 		[index, `0x${indexArtifact.evm.deployedBytecode.object}`],
 		[modules.fees, `0x${feesArtifact.evm.deployedBytecode.object}`],
 		[modules.engine, `0x${engineArtifact.evm.deployedBytecode.object}`],
@@ -38,6 +48,9 @@ export function capitalClient(initial = capitalSnapshot()) {
 		[modules.reporters, `0x${reporterArtifact.evm.deployedBytecode.object}`],
 		[modules.purchase, `0x${purchaseArtifact.evm.deployedBytecode.object}`],
 		[modules.fork, `0x${forkArtifact.evm.deployedBytecode.object}`],
+		[modules.services, `0x${servicesArtifact.evm.deployedBytecode.object}`],
+		[modules.rewards, `0x${rewardsArtifact.evm.deployedBytecode.object}`],
+		[modules.premium, `0x${premiumArtifact.evm.deployedBytecode.object}`],
 		[token, `0x${openArtifact.evm.deployedBytecode.object}`],
 	])
 	const client = createPublicClient({ transport: http('https://example.test') }).extend(() => ({
@@ -47,6 +60,8 @@ export function capitalClient(initial = capitalSnapshot()) {
 		getBlock: async () => ({ ...createBlockWithTimestamp(snapshot.timestamp), number: snapshot.blockNumber, hash: snapshot.blockHash }),
 		...createMockReadClient(async request => {
 			reads.push({ name: request.functionName, args: request.args, blockNumber: request.blockNumber })
+			const scopedKey = `${request.address}:${request.functionName}`
+			if (scopedOverrides.has(scopedKey)) return scopedOverrides.get(scopedKey)
 			const infrastructure = getInfraContractAddresses()
 			const values: Record<string, unknown> = {
 				setupStage,
@@ -59,7 +74,12 @@ export function capitalClient(initial = capitalSnapshot()) {
 				commitmentIndex: index,
 				repToken: token,
 				getRepToken: token,
-				ledger: modules.book,
+				ledger: request.address === modules.lifecycle ? capital : modules.book,
+				lifecycleDelegate: modules.lifecycle,
+				services: modules.services,
+				forkAuthority: modules.fork,
+				reportingRewards: modules.rewards,
+				premiumLedger: modules.premium,
 				minimumOutcomeExchangeRate: snapshot.economics.minimumOutcomeRate,
 				...snapshot.economics,
 				acceptedPrice: snapshot.acceptedPrice,
@@ -104,6 +124,11 @@ export function capitalClient(initial = capitalSnapshot()) {
 				if (request.functionName === 'accountOf') return [position.owner, position.batch, position.rep, position.commitment, position.maxHealthyPrice, position.releasedRep, position.feesAttoEth, position.feesAttoRep, position.remainingCommitment]
 				return request.functionName === 'liquidationStarted' ? position.liquidationStarted : position.executionReserveAttoEth
 			}
+			if (request.functionName === 'previewRetirement') {
+				const preview = snapshot.positions.find(position => position.id === request.args?.[0])?.retirementPreview
+				const statuses = ['not-retiring', 'imports-open', 'demand-exceeds-healthy', 'earlier-requests', 'insufficient-spare', 'ready']
+				return preview === undefined ? [0n, snapshot.currentBatch, 0n, 0n, 0n, 0n, 0n] : [BigInt(statuses.indexOf(preview.status)), preview.effectiveCurrentBatch, preview.healthyCommitment, preview.spareCommitment, preview.queuedAheadCommitment, preview.commitmentReduction, preview.releasedRep]
+			}
 			if (request.functionName === 'getQuestions') {
 				const start = request.args?.[0]
 				const count = request.args?.[1]
@@ -121,8 +146,9 @@ export function capitalClient(initial = capitalSnapshot()) {
 		backend,
 		reads,
 		codes,
-		setRead: (name: string, value: unknown) => {
-			overrides[name] = value
+		setRead: (name: string, value: unknown, address?: Address) => {
+			if (address === undefined) overrides[name] = value
+			else scopedOverrides.set(`${address}:${name}`, value)
 		},
 		setSetupStage: (stage: bigint) => {
 			setupStage = stage

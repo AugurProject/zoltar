@@ -5,28 +5,13 @@ import { SecurityPoolResolutionPremiumBook } from './SecurityPoolResolutionPremi
 import { SecurityPoolPortfolioSettlement } from './SecurityPoolPortfolioSettlement.sol';
 import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
 import { SecurityPoolCapitalLedger } from './SecurityPoolCapitalLedger.sol';
-import { EscalationGame } from './EscalationGame.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { Constants } from '../Constants.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
-import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 import { IERC20 } from '../IERC20.sol';
-import { SecurityPoolPortfolioPurchase } from './SecurityPoolPortfolioPurchase.sol';
-
-interface IPortfolioServiceRoot {
-	function forkController() external view returns (address);
-	function settlement() external view returns (SecurityPoolPortfolioSettlement);
-	function capitalLedger(uint248 universeId) external view returns (SecurityPoolCapitalLedger);
-	function quoteHelper() external view returns (SecurityPoolPortfolioPurchase);
-	function prepareServicePurchase(uint248 universeId, uint256 questionId) external returns (ISecurityPool);
-	function executeServiceMint(ISecurityPool pool, address recipient, uint256 minimumShares) external payable returns (uint256);
-	function deliverServiceMint(ISecurityPool pool, address recipient, uint256 shares) external;
-	function registeredPools(address pool) external view returns (bool);
-	function inheritedFixedOutcome(uint248 universeId, uint256 questionId) external view returns (bool, uint256);
-	function logicalTime(uint248 universeId) external view returns (uint48);
-	function logicalTimeForNative(uint248 universeId, uint48 timestamp) external view returns (uint48);
-}
+import { IPortfolioServiceRoot } from './interfaces/IPortfolioServiceRoot.sol';
+import { SecurityPoolReportingRewards } from './SecurityPoolReportingRewards.sol';
 
 /// @notice Funded maintenance and question-specific prepaid reporting risk.
 /// @dev Premium roots copy across forks; no call walks questions or ancestors.
@@ -52,17 +37,12 @@ contract SecurityPoolPortfolioServices {
 		uint256 maintenance;
 		bool created;
 	}
-	struct Reporter {
-		address beneficiary;
-		BinaryOutcomes.BinaryOutcome leader;
-		bool registered;
-		uint256 rewardCapAttoEth;
-	}
+
 	mapping(uint248 => MaintenanceFork) public maintenanceForks;
 	mapping(uint248 => PremiumBranch) public premiumBranches;
 	mapping(uint248 => uint256) public lastOracleRewardAt;
 	mapping(address => uint256) public pullCreditsAttoEth;
-	mapping(address => Reporter) public reportingBeneficiaries;
+	SecurityPoolReportingRewards public immutable reportingRewards;
 	mapping(uint248 => bool) private syncingFees;
 	mapping(uint248 => bool) public feesEnabled;
 
@@ -78,6 +58,7 @@ contract SecurityPoolPortfolioServices {
 		maximumOracleRewardAttoEth = maximumReward;
 		priorityFeeAttoEthPerGas = priorityFee;
 		premiumLedger = new SecurityPoolResolutionPremiumBook(address(this));
+		reportingRewards = new SecurityPoolReportingRewards(authority, address(this));
 	}
 	modifier onlyPortfolio() {
 		require(msg.sender == portfolio, 'Only service portfolio');
@@ -141,24 +122,7 @@ contract SecurityPoolPortfolioServices {
 	/// @notice Actual final reporter ETH, or the unused cash routed to maintenance.
 	/// @dev Neither ordinary claims nor this funded reward require a new price report.
 	function quoteReportingReward(address poolAddress) public view returns (address recipient, uint256 cashAttoEth) {
-		IPortfolioServiceRoot root = IPortfolioServiceRoot(portfolio);
-		require(root.registeredPools(poolAddress), 'Unknown reward question');
-		ISecurityPool pool = ISecurityPool(payable(poolAddress));
-		BinaryOutcomes.BinaryOutcome outcome = ISecurityPoolForker(pool.securityPoolForker()).getQuestionOutcome(pool);
-		if (outcome == BinaryOutcomes.BinaryOutcome.None) return (address(0), 0);
-		(bool fixedOutcome, ) = root.inheritedFixedOutcome(pool.universeId(), pool.questionId());
-		Reporter storage reporter = reportingBeneficiaries[address(pool.escalationGame())];
-		recipient =
-			!fixedOutcome &&
-			reporter.leader == outcome &&
-			reporter.beneficiary != address(0) &&
-			reporter.rewardCapAttoEth != 0
-				? reporter.beneficiary
-				: address(this);
-		SecurityPoolPortfolioSettlement settlement = root.settlement();
-		(SecurityPoolSettlementBook.Question memory question, ) = settlement.ledger().question(settlement.bookIds(pool.universeId()), pool.questionId());
-		cashAttoEth = settlement.quoteRedemption(poolAddress, question.rewardShares);
-		if (recipient != address(this)) cashAttoEth = Math.min(cashAttoEth, reporter.rewardCapAttoEth);
+		return reportingRewards.quoteReportingReward(poolAddress);
 	}
 	function mintQuestionSettlement(ISecurityPool pool) external payable onlyPortfolio returns (uint256, uint256, uint256) {
 		IPortfolioServiceRoot root = IPortfolioServiceRoot(portfolio);
@@ -358,50 +322,19 @@ contract SecurityPoolPortfolioServices {
 		emit PremiumRecovered(source, questionId, recipient, cash);
 	}
 	function registerGame(address game) external onlyPortfolio {
-		if (reportingBeneficiaries[game].registered) return;
-		// An interrupted parent's reporting work cannot earn one bounty per child.
-		// Child rewards need a new local report; unclaimed inherited budgets remain funded.
-		(reportingBeneficiaries[game].leader, ) = _leader(game);
-		reportingBeneficiaries[game].registered = true;
-		reportingBeneficiaries[game].rewardCapAttoEth = type(uint256).max;
+		reportingRewards.registerGame(game);
 	}
 	function recordReporter(address game, address reporter) external onlyPortfolio {
-		Reporter storage record = reportingBeneficiaries[game];
-		require(record.registered && reporter != address(0), 'Invalid reporter service');
-		(BinaryOutcomes.BinaryOutcome leader, uint256 margin) = _leader(game);
-		if (leader != record.leader) {
-			SecurityPoolCapitalLedger capital = IPortfolioServiceRoot(portfolio).capitalLedger(EscalationGame(payable(game)).securityPool().universeId());
-			// Even a coalition owning all winner rewards and backing income cannot
-			// recover the native 2/5 median-stake burn. A round trip raises that median
-			// by at least its temporary leader's margin; min-stake surplus alone is
-			// recoverable, so the start bond by itself is not a safe economic bound.
-			// Sub-bond deposits only fill the threshold: a return then forces a fork.
-			uint256 risk = Math.min(EscalationGame(payable(game)).startBondAttoRep(), margin) / 5;
-			uint256 cap = capital.isPriceValid() ? Math.mulDiv(risk, 1 ether, capital.conservativePrice()) : 0;
-			record.rewardCapAttoEth = Math.min(record.rewardCapAttoEth, cap);
-			record.leader = leader;
-			record.beneficiary = leader == BinaryOutcomes.BinaryOutcome.None ? address(0) : reporter;
-		}
+		reportingRewards.recordReporter(game, reporter);
 	}
-	function _leader(address game) private view returns (BinaryOutcomes.BinaryOutcome leader, uint256 margin) {
-		uint256[3] memory balances = EscalationGame(payable(game)).getOutcomeBalancesAttoRep();
-		uint256 highest;
-		uint256 second;
-		leader = BinaryOutcomes.BinaryOutcome.None;
-		for (uint8 i; i < 3; i++) {
-			if (balances[i] > highest) {
-				second = highest;
-				highest = balances[i];
-				leader = BinaryOutcomes.BinaryOutcome(i);
-			} else {
-				second = Math.max(second, balances[i]);
-				if (balances[i] == highest) leader = BinaryOutcomes.BinaryOutcome.None;
-			}
-		}
-		unchecked {
-			margin = highest - second;
-		}
+	function reportingBeneficiaries(address game)
+		external
+		view
+		returns (address beneficiary, BinaryOutcomes.BinaryOutcome leader, bool registered, uint256 rewardCapAttoEth)
+	{
+		return reportingRewards.reportingBeneficiaries(game);
 	}
+
 	function _credit(address recipient, uint256 amount) private {
 		pullCreditsAttoEth[recipient] += amount;
 		totalPullCreditsAttoEth += amount;

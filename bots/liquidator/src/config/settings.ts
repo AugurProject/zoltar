@@ -1,3 +1,4 @@
+import { parsePortfolioPolicy, parsePortfolioSelections, serializePortfolioPolicy, type PortfolioPolicy, type PortfolioSelection } from './portfolio-policy.ts'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { bigintToSafeNumber, getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
@@ -77,6 +78,8 @@ export type OperatorSettings = {
 		uiHost: '0.0.0.0' | '127.0.0.1'
 		uiPort: number
 	}
+	selectedPortfolios: PortfolioSelection[]
+	portfolioPolicy: PortfolioPolicy
 	selectedPools: Address[]
 	strategy: StrategySettings
 	submission: SubmissionSettings
@@ -236,6 +239,8 @@ export function parseSettings(value: unknown): OperatorSettings {
 			uiPort: integer(runtime['uiPort'], 'runtime.uiPort', 1, 65_535),
 		},
 		selectedPools: parsedSelectedPools,
+		selectedPortfolios: parsePortfolioSelections(root['selectedPortfolios']),
+		portfolioPolicy: parsePortfolioPolicy(root['portfolioPolicy']),
 		strategy: parseStrategy(root['strategy']),
 		submission: validateSubmissionSettings(root['submission']),
 		version: SETTINGS_VERSION,
@@ -270,6 +275,8 @@ export function serializedSettings(settings: OperatorSettings, redactPrivateKey 
 		privateKey: redactPrivateKey || settings.privateKey === undefined ? null : settings.privateKey,
 		runtime: settings.runtime,
 		selectedPools: settings.selectedPools,
+		selectedPortfolios: settings.selectedPortfolios.map(selection => ({ address: selection.address, universeId: selection.universeId.toString() })),
+		portfolioPolicy: serializePortfolioPolicy(settings.portfolioPolicy),
 		strategy: {
 			allowAutomaticDeposits: settings.strategy.allowAutomaticDeposits,
 			allowAutomaticPoolCreation: settings.strategy.allowAutomaticPoolCreation,

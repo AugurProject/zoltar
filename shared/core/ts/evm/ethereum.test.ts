@@ -3734,3 +3734,38 @@ for (const anonymous of [true, false]) {
 		expect(alternatives.at(-1)).toEqual([toHex(5n, { size: 32 }), toHex(6n, { size: 32 })])
 	})
 }
+
+test('wallet call pins simulation to the requested block while preserving the default latest selector', async () => {
+	const blocks: unknown[] = []
+	const wallet = createWalletClient({
+		transport: custom({
+			request: async ({ method, params }) => {
+				if (method !== 'eth_call' || !Array.isArray(params)) throw new Error('Unexpected simulation request')
+				blocks.push(params[1])
+				return '0x'
+			},
+		}),
+	})
+	await wallet.call({ to: TOKEN_ADDRESS, blockNumber: 42n })
+	await wallet.call({ to: TOKEN_ADDRESS })
+	expect(blocks).toEqual(['0x2a', 'latest'])
+})
+
+test('gas estimation forwards an optional pinned block without changing default request semantics', async () => {
+	const requests: unknown[] = []
+	const client = createPublicClient({
+		transport: custom({
+			request: async ({ method, params }) => {
+				if (method !== 'eth_estimateGas') throw new Error('Unexpected RPC method')
+				requests.push(params)
+				return '0x5208'
+			},
+		}),
+	})
+	const abi = [parseAbiItem('function value() view returns (uint256)')]
+	await client.estimateGas({ to: TOKEN_ADDRESS, blockNumber: 42n })
+	await client.estimateContractGas({ address: TOKEN_ADDRESS, abi, functionName: 'value', blockNumber: 43n })
+	await client.estimateGas({ to: TOKEN_ADDRESS })
+	await client.estimateContractGas({ address: TOKEN_ADDRESS, abi, functionName: 'value' })
+	expect(requests.map(parameters => (Array.isArray(parameters) ? parameters.slice(1) : parameters))).toEqual([['0x2a'], ['0x2b'], [], []])
+})

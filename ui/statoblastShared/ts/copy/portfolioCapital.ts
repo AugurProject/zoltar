@@ -12,6 +12,9 @@ export const totalPledged = 'Pool pledged REP'
 export const availableCapacity = 'Unused healthy capacity'
 export const priceValid = 'Price current'
 export const priceStale = 'Price refresh required'
+export const priceExpiry = 'Price valid until'
+export const snapshotTime = 'Balances observed at'
+export const noPrice = 'No accepted price'
 export const forked = 'Universe forked'
 export const importing = 'Child preparation in progress'
 export const earnings = 'Your earnings'
@@ -77,6 +80,9 @@ export const liquidationHealth = 'Liquidation boundary'
 export const liquidationHealthy = 'Above boundary'
 export const liquidationUnhealthy = 'Below boundary'
 export const liquidationHint = 'Liquidation uses the protocol requirement and its own oracle price bound, not your chosen target.'
+export const liquidationSince = 'Below liquidation boundary since'
+export const noLiquidationInterval = 'No observed adverse interval'
+export const liquidationTimingHint = 'This marks the accepted adverse price observation, not a guaranteed grace period.'
 export const healthUnknown = 'Price unavailable'
 export const retire = 'Request retirement'
 export const retiring = 'Requesting retirement…'
@@ -91,6 +97,22 @@ export const serve = 'Release available retirement'
 export const serving = 'Releasing retirement…'
 export const nextCohort = 'Next retirement cohort'
 export const currentCohort = 'Current retirement cohort'
+export const retirementPreviewTitle = 'Targeted retirement preview'
+export const retirementPreviewUnavailable = 'Preview unavailable'
+export const retirementPreviewStale = 'Refresh the shared price to assess readiness'
+export const retirementPreviewClosed = 'Universe closed to retirement'
+export const retirementPreviewHint = 'Snapshot estimate before fee checkpoints. Capacity can change before inclusion; an attempt may spend gas without reducing commitment.'
+export const retirementPreviewStatus = {
+	'not-retiring': 'No pending reduction',
+	'imports-open': 'Child preparation in progress',
+	'demand-exceeds-healthy': 'Demand exceeds healthy capacity',
+	'earlier-requests': 'Capacity reserved for earlier requests',
+	'insufficient-spare': 'Waiting for enough spare capacity',
+	ready: 'Enough capacity at this snapshot',
+}
+export const retirementSpare = 'Spare healthy commitment'
+export const retirementAhead = 'Reserved for earlier requests'
+export const retirementReduction = 'Your requested reduction'
 export const rewardVesting = 'Reward vesting (hours)'
 export const outcomeRate = 'Minimum settlement units per outcome'
 export const outcomeRateHint = 'Bounds outcome issuance after fees. The value is fixed when the pool is created.'

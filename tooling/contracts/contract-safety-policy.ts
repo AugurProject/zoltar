@@ -32,6 +32,11 @@ export const contractSafetyPolicy = {
 	excludedSourcePrefixes: ['contracts/test/', 'contracts/trading/test/'],
 	exactLayoutPairs: [
 		{
+			host: { sourcePath: 'contracts/statoblast/SecurityPoolCapitalLedger.sol', contractName: 'SecurityPoolCapitalLedger' },
+			delegate: { sourcePath: 'contracts/statoblast/SecurityPoolCapitalLifecycleDelegate.sol', contractName: 'SecurityPoolCapitalLifecycleDelegate' },
+			reason: 'Owner registration and fork choices mutate the original capital custody ledger through a fixed delegate.',
+		},
+		{
 			host: { sourcePath: 'contracts/statoblast/EscalationGame.sol', contractName: 'EscalationGame' },
 			delegate: { sourcePath: 'contracts/statoblast/EscalationGameDepositDelegate.sol', contractName: 'EscalationGameDepositDelegate' },
 			reason: 'Deposits mutate EscalationGame storage through delegatecall.',

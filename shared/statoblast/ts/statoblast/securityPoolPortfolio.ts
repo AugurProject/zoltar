@@ -89,6 +89,7 @@ export {
 export { buildPortfolioCapitalCureRequest } from './securityPoolPortfolioCapital.js'
 /** @public Explicitly bounded commitment takeovers for external keeper implementations. */
 export { buildPortfolioCapitalTakeOverRequest } from './securityPoolPortfolioCapital.js'
+export { buildPortfolioCapitalTakeOverWithBoundsRequest } from './securityPoolPortfolioCapital.js'
 /** @public Quote the execution reserve needed before an external client authorizes commitments. */
 export { requiredPortfolioExecutionReserve } from './securityPoolPortfolioCapital.js'
 export { buildPortfolioMintRequest, loadPortfolioMintQuote, type PortfolioMintQuote } from './securityPoolPortfolioMint.js'

@@ -62,7 +62,8 @@
 		"./monitoring/read-quorum": "./src/monitoring/read-quorum.ts",
 		"./monitoring/rpc-quorum-policy": "./src/monitoring/rpc-quorum-policy.ts",
 		"./monitoring/resilience": "./src/monitoring/resilience.ts",
-		"./monitoring/centralized-exchange-factory": "./src/monitoring/centralized-exchange-factory.ts"
+		"./monitoring/centralized-exchange-factory": "./src/monitoring/centralized-exchange-factory.ts",
+		"./monitoring/runtime-identity": "./src/monitoring/runtime-identity.ts"
 	},
 	"scripts": {
 		"check": "bun run typecheck && bun run lint && bun run check:generated && bun run test && bun run format:check",

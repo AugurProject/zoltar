@@ -112,7 +112,34 @@ describe('generated bot contract ABIs', () => {
 			'vaultEscrowUpdatedEvent',
 			'ordinarySettlementInitializedEvent',
 			'truthAuctionHaircutAppliedEvent',
+			'portfolioRuntimeIdentities',
 		])
 		expect(Object.keys(abis).sort()).toEqual([...asserted].sort())
 	})
+})
+
+import { readFile } from 'node:fs/promises'
+import { verifyRuntimeIdentity } from '../src/monitoring/runtime-identity.ts'
+import { isHex } from '../src/ethereum.ts'
+
+test('portfolio runtime identities authenticate the complete compiled custody tree', async () => {
+	const raw: unknown = JSON.parse(await readFile(new URL('../../../solidity/artifacts/Contracts.json', import.meta.url), 'utf8'))
+	if (typeof raw !== 'object' || raw === null) throw new Error('Artifact document missing')
+	const contracts: unknown = Reflect.get(raw, 'contracts')
+	if (typeof contracts !== 'object' || contracts === null) throw new Error('Artifact contracts missing')
+	for (const [name, identity] of Object.entries(abis.portfolioRuntimeIdentities)) {
+		const source: unknown = Reflect.get(contracts, `contracts/statoblast/${name}.sol`)
+		if (typeof source !== 'object' || source === null) throw new Error(`Missing source ${name}`)
+		const artifact: unknown = Reflect.get(source, name)
+		if (typeof artifact !== 'object' || artifact === null) throw new Error(`Missing artifact ${name}`)
+		const evm: unknown = Reflect.get(artifact, 'evm')
+		if (typeof evm !== 'object' || evm === null) throw new Error('Missing EVM artifact')
+		const deployed: unknown = Reflect.get(evm, 'deployedBytecode')
+		if (typeof deployed !== 'object' || deployed === null) throw new Error('Missing deployed artifact')
+		const bytecode: unknown = Reflect.get(deployed, 'object')
+		const code: `0x${string}` = `0x${String(bytecode)}`
+		if (!isHex(code)) throw new Error('Malformed artifact runtime')
+		expect(() => verifyRuntimeIdentity(code, identity, name)).not.toThrow()
+		expect(identity.immutableReferences).toEqual(Reflect.get(deployed, 'immutableReferences'))
+	}
 })

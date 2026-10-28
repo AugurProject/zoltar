@@ -6,6 +6,9 @@ import {
 	ICapitalPriceExposure,
 	ICapitalLedgerAccounting
 } from './interfaces/ICapitalAccounting.sol';
+import { SecurityPoolCapitalState } from './SecurityPoolCapitalState.sol';
+import { SecurityPoolCapitalLifecycleDelegate } from './SecurityPoolCapitalLifecycleDelegate.sol';
+import { DelegateCall } from './DelegateCall.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { Zoltar } from '../Zoltar.sol';
@@ -17,56 +20,24 @@ import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 /// @dev One live position contains all an owner's deposited principal and
 /// commitment. Retirement never leaves a sibling position with stale health.
 /// Index paths, not the number of owners or questions, bound work.
-contract SecurityPoolCapitalLedger {
+contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	using SafeERC20Ops for IERC20;
-	uint256 private constant BPS = 10_000;
 	address public immutable portfolio;
+	SecurityPoolCapitalLifecycleDelegate public immutable lifecycleDelegate;
 	Zoltar public immutable zoltar;
 	uint248 public immutable universeId;
 	IERC20 public immutable repToken;
 	uint256 public immutable securityMultiplierBps;
 	uint256 private immutable minimumCommitmentAttoEth;
 	uint256 private immutable minimumExecutionReserveAttoEth;
-	SecurityPoolCommitmentIndex public commitmentIndex;
-	ICapitalFeeStreams public feeStreams;
-	address public services;
-	address public forkAuthority;
-	uint256 public acceptedPrice;
-	uint256 public conservativePrice;
-	uint256 public liquidationPrice;
-	uint256 public acceptedPriceEpoch;
-	mapping(address => uint256) public fundingPriceFloor;
-	mapping(address => uint256) public fundingPriceEpoch;
-	uint48 public priceValidUntil;
-	uint256 public demandAttoEth;
-	uint256 public totalFreeAttoRep;
-	uint256 public retirementCashAttoRep;
-	uint256 public frozenBackingAttoRep;
-	uint256 public frozenCommitmentAttoEth;
-	bool public frozen;
-	bool public importing;
-	bool public migrationPrepared;
-	bool private entered;
-	bool private checkpointing;
 
-	struct Owner {
-		uint256 freeAttoRep;
-		uint256 feesAttoEth;
-		uint256 feesAttoRep;
-		uint256 executionReserveAttoEth;
-		uint256 targetHealthFactorBps;
-		uint96 positionId;
+	struct TakeoverBounds {
+		uint256 maximumOwnerPrincipal;
+		uint256 maximumOwnerCommitment;
+		uint256 expectedTargetHealthFactorBps;
+		uint256 expectedAcceptedPriceEpoch;
+		uint96 expectedSourceBatch;
 	}
-	struct ChoicePosition {
-		uint256 rep;
-		uint256 commitment;
-		uint96 batch;
-		uint256 executionReserveAttoEth;
-		uint256 remainingCommitment;
-	}
-	mapping(address => Owner) private owners;
-	mapping(address => bool) public exported;
-	mapping(uint96 => uint256) public positionExecutionReserveAttoEth;
 
 	event PrincipalDeposited(address indexed payer, address indexed owner, uint256 amountAttoRep);
 	event PrincipalWithdrawn(address indexed owner, address indexed recipient, uint256 amountAttoRep);
@@ -82,6 +53,7 @@ contract SecurityPoolCapitalLedger {
 		require(authority != address(0), 'Capital authority missing');
 		require(minimumCommitment > 0 && minimumReserve > 0 && vestingDuration > 0, 'Capital economic minimum missing');
 		portfolio = authority;
+		lifecycleDelegate = new SecurityPoolCapitalLifecycleDelegate(address(this));
 		zoltar = _zoltar;
 		universeId = _universeId;
 		repToken = IERC20(address(_zoltar.getRepToken(_universeId)));
@@ -286,35 +258,8 @@ contract SecurityPoolCapitalLedger {
 		_requireFresh();
 		_checkpoint();
 		_serveRetirement(0);
-		_settleOwner(msg.sender);
-		Owner storage owner = owners[msg.sender];
-		uint256 health = _target(owner);
-		require(commitment >= minimumCommitmentAttoEth, 'Commitment below minimum');
-		id = owner.positionId;
-		SecurityPoolCommitmentIndex.Account memory old;
-		if (id != 0) old = commitmentIndex.accountOf(id);
-		require(old.batch == 0, 'Cancel retirement first');
-		ICapitalPriceExposure feed = ICapitalPriceExposure(ICapitalLedgerAccounting(portfolio).priceFeed(universeId));
-		if (useReport) {
-			(, uint256 totalCommitment) = commitmentIndex.totals();
-			(uint256 reportPrice, uint256 epoch) = feed.reportAuthorization(reportId, Math.max(demandAttoEth, totalCommitment - old.commitment + commitment));
-			require(epoch == acceptedPriceEpoch, 'Capital price epoch changed');
-			fundingPriceFloor[msg.sender] = Math.max(ownerConservativePrice(msg.sender), reportPrice);
-			fundingPriceEpoch[msg.sender] = epoch;
-		}
-		uint256 rep = owner.freeAttoRep + old.rep;
-		_requireTarget(rep, commitment, health);
-		// Owners cannot bypass a closed retirement cohort with direct reductions.
-		require(commitment >= old.commitment, 'Retire before reducing');
-		totalFreeAttoRep -= owner.freeAttoRep;
-		owner.freeAttoRep = 0;
-		if (id == 0) {
-			id = commitmentIndex.create(msg.sender, rep, commitment, maximumHealthyPrice(rep, commitment));
-			owner.positionId = id;
-		} else _replace(id, rep, commitment);
-		_fundPositionReserve(owner, id, commitment);
-		if (!useReport) feed.validateExposure();
-		emit CommitmentAuthorized(msg.sender, id, rep, commitment, health);
+		return
+			abi.decode(DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.authorize, (commitment, reportId, useReport, minimumCommitmentAttoEth))), (uint96));
 	}
 
 	function requestRetirement(uint96 id, uint256 remainingCommitment) external nonReentrant {
@@ -484,6 +429,14 @@ contract SecurityPoolCapitalLedger {
 
 	/// @notice Competitive takeover: only the target funds the award and execution.
 	function takeOver(uint96 id, uint256 commitment, uint256 minimumAward, uint256 maximumOwnRep) external nonReentrant returns (uint96 receiverId) {
+		TakeoverBounds memory bounds;
+		return _takeOver(id, commitment, minimumAward, maximumOwnRep, bounds, false);
+	}
+	/// @notice Keeper-owned acquisition with signed owner exposure and quote bounds.
+	function takeOverWithBounds(uint96 id, uint256 commitment, uint256 minimumAward, uint256 maximumOwnRep, TakeoverBounds calldata bounds) external nonReentrant returns (uint96 receiverId) {
+		return _takeOver(id, commitment, minimumAward, maximumOwnRep, bounds, true);
+	}
+	function _takeOver(uint96 id, uint256 commitment, uint256 minimumAward, uint256 maximumOwnRep, TakeoverBounds memory bounds, bool enforceBounds) private returns (uint96 receiverId) {
 		uint256 initialGas = gasleft();
 		_requireOpen();
 		_requireFresh();
@@ -493,6 +446,11 @@ contract SecurityPoolCapitalLedger {
 		(SecurityPoolCommitmentIndex.Account memory source, uint256 award, uint256 debit) = commitmentIndex.takeoverQuote(id, msg.sender, commitment, minimumCommitmentAttoEth, minimumAward, liquidationPrice);
 		_settleOwner(msg.sender);
 		Owner storage receiver = owners[msg.sender];
+		if (enforceBounds) {
+			require(acceptedPriceEpoch == bounds.expectedAcceptedPriceEpoch, 'Takeover price epoch changed');
+			require(_target(receiver) == bounds.expectedTargetHealthFactorBps, 'Takeover owner target changed');
+			require(source.batch == bounds.expectedSourceBatch, 'Takeover source cohort changed');
+		}
 		receiverId = receiver.positionId;
 		SecurityPoolCommitmentIndex.Account memory existing;
 		if (receiverId != 0) {
@@ -507,6 +465,10 @@ contract SecurityPoolCapitalLedger {
 		uint256 remainingK = source.commitment - commitment;
 		uint256 remainingRep = source.rep - debit;
 		uint256 receivedRep = award + ownRep;
+		if (enforceBounds) {
+			require(existing.rep + receivedRep <= bounds.maximumOwnerPrincipal, 'Takeover owner principal exceeds limit');
+			require(existing.commitment + commitment <= bounds.maximumOwnerCommitment, 'Takeover owner commitment exceeds limit');
+		}
 		uint256 receiverRep;
 		uint256 receiverK;
 		if (receiverId == 0) {
@@ -562,81 +524,24 @@ contract SecurityPoolCapitalLedger {
 		frozen = true;
 	}
 
-	/// @dev Choices move exact C and K, never a shared NAV fraction. The caller
-	/// records this bounded tuple in the actual native fork's choice ledger.
+	/// @notice Fork choices preserve exact owner principal, reserve and retirement intent.
 	function exportChoice(address owner) external onlyForkAuthority returns (ChoicePosition memory choice, uint256 target, uint256 reserve) {
-		require(frozen && !exported[owner], 'Fork choice unavailable');
-		_settleOwner(owner);
-		Owner storage account = owners[owner];
-		uint96 id = account.positionId;
-		if (id != 0) {
-			SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(id);
-			uint96 batch;
-			if (position.batch != 0) batch = position.batch == commitmentIndex.currentBatch() ? 1 : 2;
-			uint256 positionReserve = positionExecutionReserveAttoEth[id];
-			choice = ChoicePosition(position.rep, position.commitment, batch, positionReserve, position.remainingCommitment);
-			reserve += positionReserve;
-			delete positionExecutionReserveAttoEth[id];
-		}
-		exported[owner] = true;
-		target = _target(account);
-		reserve += account.executionReserveAttoEth;
-		account.executionReserveAttoEth = 0;
-		_sendEth(msg.sender, reserve);
+		return
+			abi.decode(DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.exportChoice, (owner))), (ChoicePosition, uint256, uint256));
 	}
-
 	function beginForkImport() external onlyForkAuthority {
-		(uint256 rep, uint256 commitment) = commitmentIndex.totals();
-		require(rep == 0 && commitment == 0 && !importing, 'Capital already used');
-		importing = true;
-		commitmentIndex.initCohorts(1, 2);
+		DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.beginForkImport, ()));
 	}
 	function importChoice(address owner, ChoicePosition calldata position, uint256 target) external payable onlyForkAuthority {
-		require(importing && target >= BPS, 'Fork import unavailable');
-		Owner storage account = owners[owner];
-		require(account.positionId == 0 && account.freeAttoRep == 0, 'Owner already imported');
-		account.targetHealthFactorBps = target;
-		require(position.commitment != 0 && position.rep != 0, 'Empty fork choice');
-		uint96 id = commitmentIndex.importPosition(owner, position.rep, position.commitment, maximumHealthyPrice(position.rep, position.commitment), position.batch, position.remainingCommitment);
-		account.positionId = id;
-		positionExecutionReserveAttoEth[id] = position.executionReserveAttoEth;
-		uint256 assignedReserve = position.executionReserveAttoEth;
-		require(msg.value >= assignedReserve, 'Fork execution reserve unfunded');
-		account.executionReserveAttoEth += msg.value - assignedReserve;
+		DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.importChoice, (owner, position, target)));
 	}
 	function finishForkImport(uint256 fundedDemand) external onlyForkAuthority {
-		require(importing, 'Fork import unavailable');
-		(uint256 pledged, ) = commitmentIndex.totals();
-		require(repToken.balanceOf(address(this)) >= pledged + totalFreeAttoRep + retirementCashAttoRep, 'Fork principal unfunded');
-		commitmentIndex.sealImports();
-		importing = false;
-		demandAttoEth = fundedDemand;
+		DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.finishForkImport, (fundedDemand)));
 	}
-	/// @dev Move only frozen pledged principal into the shared native migration.
-	/// Free principal, retired cash and every old fee claim remain in this ledger.
 	function releaseForkBacking() external onlyForkAuthority {
-		require(frozen && !migrationPrepared, 'Fork backing release unavailable');
-		migrationPrepared = true;
-		if (frozenBackingAttoRep != 0) repToken.safeTransfer(msg.sender, frozenBackingAttoRep);
+		DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.releaseForkBacking, ()));
 	}
 
-	function _settleOwner(address owner) private {
-		Owner storage account = owners[owner];
-		uint96 id = account.positionId;
-		if (id == 0) return;
-		(uint256 rep, uint256 ethFees, uint256 repFees) = commitmentIndex.claim(id);
-		account.freeAttoRep += rep;
-		totalFreeAttoRep += rep;
-		retirementCashAttoRep -= rep;
-		account.feesAttoRep += repFees;
-		bool live = commitmentIndex.accountOf(id).commitment != 0;
-		account.feesAttoEth += ethFees;
-		if (!live) {
-			account.positionId = 0;
-			account.executionReserveAttoEth += positionExecutionReserveAttoEth[id];
-			delete positionExecutionReserveAttoEth[id];
-		}
-	}
 	/// @notice Recovery invalidates the old interval immediately, before a keeper
 	/// touches the position. Uninterrupted distress retains its original clock.
 	function liquidationStarted(uint96 id) public view returns (uint48 started) {
@@ -653,13 +558,5 @@ contract SecurityPoolCapitalLedger {
 	function _owned(uint96 id, address owner) private view returns (SecurityPoolCommitmentIndex.Account memory account) {
 		account = commitmentIndex.accountOf(id);
 		require(account.owner == owner, 'Position owner differs');
-	}
-	function _target(Owner storage owner) private view returns (uint256) {
-		return owner.targetHealthFactorBps == 0 ? BPS : owner.targetHealthFactorBps;
-	}
-	function _sendEth(address recipient, uint256 amount) private {
-		if (amount == 0) return;
-		(bool success, ) = recipient.call{value: amount}('');
-		require(success, 'Capital ETH transfer failed');
 	}
 }

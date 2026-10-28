@@ -9,6 +9,7 @@ import {
 	buildPortfolioCapitalServeRetirementRequest,
 	buildPortfolioCapitalSetHealthRequest,
 	buildPortfolioCapitalTakeOverRequest,
+	buildPortfolioCapitalTakeOverWithBoundsRequest,
 	buildPortfolioCapitalWithdrawPrincipalRequest,
 	loadPortfolioCapitalSnapshot,
 	requiredPortfolioExecutionReserve,
@@ -31,10 +32,11 @@ const abi = parseAbi([
 	'function serveRetirement(uint96 id)',
 	'function depositAndSetHealthTarget(uint256 amount,uint256 targetHealthFactorBps)',
 	'function takeOver(uint96 id,uint256 commitment,uint256 minimumAward,uint256 maximumOwnRep)',
+	'function takeOverWithBounds(uint96 id,uint256 commitment,uint256 minimumAward,uint256 maximumOwnRep,(uint256 maximumOwnerPrincipal,uint256 maximumOwnerCommitment,uint256 expectedTargetHealthFactorBps,uint256 expectedAcceptedPriceEpoch,uint96 expectedSourceBatch) bounds)',
 ])
 
 function fixture(overrides: Record<string, unknown> = {}) {
-	const calls: { functionName: string; blockNumber: bigint }[] = []
+	const calls: { functionName: string; blockNumber: bigint; args: readonly unknown[] | undefined }[] = []
 	const values: Record<string, unknown> = {
 		originUniverseId: 7n,
 		capitalLedger,
@@ -77,13 +79,14 @@ function fixture(overrides: Record<string, unknown> = {}) {
 		accountOf: { owner, batch: 0n, rep: 200n, commitment: 20n, maxHealthyPrice: 20n, releasedRep: 60n, ethFees: 11n, repFees: 13n, remainingCommitment: 0n },
 		positionExecutionReserveAttoEth: 7n,
 		liquidationStarted: 0n,
+		previewRetirement: [5n, 9n, 50n, 10n, 0n, 13n, 0n],
 		...overrides,
 	}
 	const client: PortfolioReadClient = {
 		getChainId: async () => 1,
 		getBlock: async () => ({ number: 42n, hash, timestamp: 1_000n }),
 		readContract: async parameters => {
-			calls.push({ functionName: parameters.functionName, blockNumber: parameters.blockNumber })
+			calls.push({ functionName: parameters.functionName, blockNumber: parameters.blockNumber, args: parameters.args })
 			if (!(parameters.functionName in values)) throw new Error(`Unexpected read ${parameters.functionName}`)
 			return values[parameters.functionName]
 		},
@@ -125,6 +128,16 @@ describe('personal portfolio capital SDK', () => {
 		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'depositAndSetHealthTarget', args: [17n, 12_000n] })
 		expect(() => buildPortfolioCapitalDepositAndSetHealthRequest({ ...base, amountAttoRep: 0n, targetHealthFactorBps: 12_000n })).toThrow('positive')
 		expect(() => buildPortfolioCapitalDepositAndSetHealthRequest({ ...base, amountAttoRep: 17n, targetHealthFactorBps: 9_999n })).toThrow('100%')
+	})
+	test('keeper takeover binds final exposure, saved target, report epoch and source cohort', () => {
+		const bounds = { maximumOwnerPrincipal: 100n, maximumOwnerCommitment: 40n, expectedTargetHealthFactorBps: 12_000n, expectedAcceptedPriceEpoch: 7n, expectedSourceBatch: 9n }
+		const parameters = { ...base, positionId: 3n, commitment: 20n, minimumAward: 5n, maximumOwnRep: 30n, bounds }
+		const request = buildPortfolioCapitalTakeOverWithBoundsRequest(parameters)
+		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'takeOverWithBounds', args: [3n, 20n, 5n, 30n, bounds] })
+		expect(request).toMatchObject({ account: owner, to: capitalLedger, value: 0n })
+		expect(() => buildPortfolioCapitalTakeOverWithBoundsRequest({ ...parameters, bounds: { ...bounds, expectedTargetHealthFactorBps: 9_999n } })).toThrow('100%')
+		expect(() => buildPortfolioCapitalTakeOverWithBoundsRequest({ ...parameters, bounds: { ...bounds, expectedSourceBatch: 1n << 96n } })).toThrow('uint96')
+		expect(() => buildPortfolioCapitalTakeOverWithBoundsRequest({ ...parameters, bounds: { ...bounds, maximumOwnerPrincipal: -1n } })).toThrow('uint256')
 	})
 	test('retirement service selects one pending position or explicitly requests bounded global progress', () => {
 		expect(decodeFunctionData({ abi, data: buildPortfolioCapitalServeRetirementRequest(base).data })).toEqual({ functionName: 'serveRetirement', args: [0n] })
@@ -173,8 +186,19 @@ describe('personal portfolio capital SDK', () => {
 	test('a partial retirement exposes its fixed stopping point without additional history reads', async () => {
 		const { client, calls } = fixture({ accountOf: { owner, batch: 9n, rep: 200n, commitment: 20n, maxHealthyPrice: 20n, releasedRep: 0n, ethFees: 11n, repFees: 13n, remainingCommitment: 7n } })
 		const snapshot = await loadPortfolioCapitalSnapshot({ client, portfolio, owner })
-		expect(snapshot.positions[0]).toMatchObject({ batch: 9n, commitment: 20n, remainingCommitment: 7n })
+		expect(snapshot.positions[0]).toMatchObject({ batch: 9n, commitment: 20n, remainingCommitment: 7n, retirementPreview: { status: 'ready', effectiveCurrentBatch: 9n, healthyCommitment: 50n, spareCommitment: 10n, queuedAheadCommitment: 0n, commitmentReduction: 13n, releasedRep: 0n } })
 		expect(calls.filter(call => call.functionName === 'accountOf')).toHaveLength(1)
+		expect(calls.filter(call => call.functionName === 'previewRetirement')).toEqual([{ functionName: 'previewRetirement', blockNumber: 42n, args: [1n, 3n, 40n] }])
+	})
+	test('retirement preview rejects an unknown status and does not inspect active or lazily closed history', async () => {
+		const retiring = { owner, batch: 9n, rep: 200n, commitment: 20n, maxHealthyPrice: 20n, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 7n }
+		await expect(loadPortfolioCapitalSnapshot({ client: fixture({ accountOf: retiring, previewRetirement: [6n, 9n, 50n, 10n, 0n, 13n, 0n] }).client, portfolio, owner })).rejects.toThrow('Invalid retirement preview status')
+		for (const overrides of [{}, { accountOf: { ...retiring, commitment: 0n, rep: 0n, releasedRep: 200n } }]) {
+			const { client, calls } = fixture(overrides)
+			const snapshot = await loadPortfolioCapitalSnapshot({ client, portfolio, owner })
+			expect(snapshot.positions[0]?.retirementPreview).toBeUndefined()
+			expect(calls.filter(call => call.functionName === 'previewRetirement')).toHaveLength(0)
+		}
 	})
 
 	test('execution reserve withdrawal includes closed positions and missed choices at the exact canonical deadline', async () => {
@@ -190,7 +214,7 @@ describe('personal portfolio capital SDK', () => {
 			const { client, calls } = fixture(overrides)
 			const snapshot = await loadPortfolioCapitalSnapshot({ client, portfolio, owner })
 			expect(snapshot).toMatchObject({ withdrawableExecutionReserveAttoEth: expected })
-			expect(calls.filter(call => call.functionName === 'getForkChoiceDeadline')).toEqual([{ functionName: 'getForkChoiceDeadline', blockNumber: 42n }])
+			expect(calls.filter(call => call.functionName === 'getForkChoiceDeadline')).toEqual([{ functionName: 'getForkChoiceDeadline', blockNumber: 42n, args: [7n] }])
 		}
 	})
 

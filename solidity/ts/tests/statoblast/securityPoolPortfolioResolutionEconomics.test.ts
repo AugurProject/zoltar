@@ -6,6 +6,7 @@ import {
 	statoblast_SecurityPool_SecurityPool as poolArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
 	statoblast_SecurityPoolPortfolioServices_SecurityPoolPortfolioServices as servicesArtifact,
+	statoblast_SecurityPoolReportingRewards_SecurityPoolReportingRewards as reportingArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	test_statoblast_PortfolioPurchaseReceiver_PortfolioPurchaseReceiver as receiverArtifact,
 } from '../../types/contractArtifact'
@@ -53,6 +54,20 @@ describe('Statoblast: funded reporting and unresolved capital compensation', () 
 		// The inverse attrition curve rounds independently of its forward value.
 		await fixture.base.mockWindow.setTime(deadline + 60n)
 	}
+	test('isolates reporter attribution updates behind services while reward custody stays in services', async () => {
+		await fixture.prepare()
+		await fixture.mint(10n * unit)
+		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
+		const game = await report(fixture.owner(), 1)
+		const services = await service()
+		const book = await fixture.owner().readContract({ ...services, functionName: 'reportingRewards' })
+		const record = await fixture.owner().readContract({ ...services, functionName: 'reportingBeneficiaries', args: [game] })
+		expect(await fixture.owner().readContract({ abi: reportingArtifact.abi, address: book, functionName: 'reportingBeneficiaries', args: [game] })).toEqual(record)
+		await expect(writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: reportingArtifact.abi, address: book, functionName: 'registerGame', args: [game] }))).rejects.toThrow('Only reporting services')
+		await expect(writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: reportingArtifact.abi, address: book, functionName: 'recordReporter', args: [game, fixture.owner().account.address] }))).rejects.toThrow('Only reporting services')
+		expect(await fixture.owner().getBalance({ address: book })).toBe(0n)
+		expect(await fixture.owner().readContract({ ...services, functionName: 'reportingBeneficiaries', args: [game] })).toEqual(record)
+	})
 	test('an unreported question keeps paying for occupied underwriting after its calendar end', async () => {
 		await fixture.prepare()
 		await fixture.mint(10n * unit)
