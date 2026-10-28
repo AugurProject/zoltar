@@ -22,7 +22,7 @@ export const CONSERVATIVE_DEPLOYMENT_GAS: Readonly<Record<string, bigint>> = {
 	securityPoolOperationsDelegate: 7_000_000n,
 	securityPoolEventEmitter: 5_000_000n,
 	securityPoolCapitalLedgerDeployer: 9_000_000n,
-	securityPoolCommitmentIndexDeployer: 6_000_000n,
+	securityPoolCommitmentIndexDeployer: 6_750_000n,
 	securityPoolCapitalFeeStreamsDeployer: 1_750_000n,
 	securityPoolSettlementBookDeployer: 8_000_000n,
 	securityPoolPortfolioSettlementDeployer: 5_000_000n,

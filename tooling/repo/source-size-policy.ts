@@ -39,5 +39,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('SecurityPool contract owners: continue bytecode-sensitive delegate extraction for shared-capital dispatch and terminal settlement; the common entry point also dispatches independent REP-basket redemption and guards incomplete fork registration.', [
 		['solidity/contracts/statoblast/SecurityPool.sol', 727],
 	]),
-	...allowances('Shared-capital contract owners: separate chosen-branch fork import and export orchestration from custody, fee checkpoints and lazy liquidation recovery, with accounting, callback gas and deployment bytecode revalidation.', [['solidity/contracts/statoblast/SecurityPoolCapitalLedger.sol', 602]]),
+	...allowances('Shared-capital contract owners: saved-target guards and atomic deposits remain at the custody boundary; separate chosen-branch fork import and export orchestration from custody, fee checkpoints and lazy liquidation recovery next, with accounting, callback gas and deployment bytecode revalidation.', [
+		['solidity/contracts/statoblast/SecurityPoolCapitalLedger.sol', 623],
+	]),
 ])

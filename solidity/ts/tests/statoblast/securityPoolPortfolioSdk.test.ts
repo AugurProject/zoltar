@@ -50,7 +50,7 @@ describe('Statoblast: central capital SDK against production contracts', () => {
 		await writeContractAndWait(client, () =>
 			client.sendTransaction(buildPortfolioMintRequest({ trader: owner, portfolio: fixture.portfolio, universeId: fixture.base.genesisUniverse, questionId: fixture.base.questionId, mintAttoEth: 10n * unit, recipient: owner, minimumShares: quote.shares, maximumPurchaseFeeAttoEth: quote.maximumPurchaseFeeAttoEth })),
 		)
-		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioCapitalRequestRetirementRequest({ ...base, positionId: position.id })))
+		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioCapitalRequestRetirementRequest({ ...base, positionId: position.id, remainingCommitment: 0n })))
 		const pool = fixture.poolFor(fixture.base.questionId)
 		const balances = await balanceOfShares(client, pool.shareToken, fixture.base.genesisUniverse, owner)
 		await redeemCompleteSet(client, pool.securityPool, balances[0])

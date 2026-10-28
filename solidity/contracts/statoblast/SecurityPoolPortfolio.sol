@@ -401,7 +401,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	function onCompleteSetsReturned() external {
 		ISecurityPool pool = _pool(msg.sender);
 		services.cancelUnusedPremium(pool);
-		if (zoltar.getForkTime(pool.universeId()) == 0) capitalLedger[pool.universeId()].serveRetirement();
+		if (zoltar.getForkTime(pool.universeId()) == 0) capitalLedger[pool.universeId()].serveRetirement(0);
 	}
 	function freezeForFork() external {
 		ISecurityPool pool = _pool(msg.sender);

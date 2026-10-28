@@ -74,6 +74,7 @@ export {
 	buildPortfolioCapitalDepositRequest,
 	buildPortfolioCapitalWithdrawPrincipalRequest,
 	buildPortfolioCapitalSetHealthRequest,
+	buildPortfolioCapitalDepositAndSetHealthRequest,
 	buildPortfolioCapitalAuthorizeRequest,
 	buildPortfolioCapitalFundExecutionReserveRequest,
 	buildPortfolioCapitalWithdrawExecutionReserveRequest,

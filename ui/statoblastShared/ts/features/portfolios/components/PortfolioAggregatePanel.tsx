@@ -8,6 +8,7 @@ import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApp
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
+import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
 import { PortfolioButton, PortfolioInput, type PortfolioActions } from './PortfolioControls.js'
 import type { usePortfolioAggregate } from '../hooks/usePortfolioAggregate.js'
 import { capitalPositionPhase, requiredPortfolioCollateral } from '../lib/capital.js'
@@ -17,7 +18,11 @@ import * as common from '@zoltar/ui-core-shared/copy/common.js'
 type Model = ReturnType<typeof usePortfolioAggregate>
 export function PortfolioAggregatePanel({ model, actions }: { model: Model; actions: Pick<PortfolioActions, 'scope' | 'busy'> }) {
 	const snapshot = model.snapshot
-	const disabled = actions.busy !== undefined
+	const disabled = actions.busy !== undefined || model.loading || model.showingPreviousSnapshot
+	const disabledReason = actions.busy !== undefined ? copy.actionPending : copy.readUnavailable
+	let targetCapacityReason: string | undefined
+	if (disabled) targetCapacityReason = disabledReason
+	else if (model.targetCapacity === undefined) targetCapacityReason = copy.targetUnavailable
 	let available: bigint | undefined
 	if (snapshot !== undefined) available = snapshot.healthyCommitmentAttoEth > snapshot.demandAttoEth ? snapshot.healthyCommitmentAttoEth - snapshot.demandAttoEth : 0n
 	let status = snapshot?.priceValid ? copy.priceValid : copy.priceStale
@@ -26,6 +31,7 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 	return (
 		<>
 			<SectionBlock title={copy.poolTitle} description={copy.poolDescription}>
+				{model.showingPreviousSnapshot ? <UserMessage detail={copy.lastConfirmed} /> : undefined}
 				{snapshot === undefined ? undefined : <Badge tone={snapshot.priceValid ? 'ok' : 'warning'}>{status}</Badge>}
 				<MetricGrid>
 					<MetricField label={copy.totalPledged} loading={model.loading}>
@@ -98,10 +104,41 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 			</SectionBlock>
 			<SectionBlock title={copy.authorize} description={copy.authorizationHint}>
 				<PortfolioInput label={copy.health} hint={copy.healthHint} value={model.healthPercent} onChange={model.setHealthPercent} disabled={disabled} numeric />
+				<MetricGrid>
+					<MetricField label={copy.targetCapacity}>
+						<CurrencyValue value={model.targetCapacity} suffix={common.eth} />
+					</MetricField>
+					<MetricField label={copy.targetShortfall}>
+						<CurrencyValue value={model.targetShortfall} suffix={common.rep} />
+					</MetricField>
+				</MetricGrid>
 				<PortfolioButton model={actions} action='setPortfolioHealth' label={copy.saveHealth} pendingLabel={copy.savingHealth} reason={model.healthReason} onClick={model.setHealth} />
+				<details>
+					<summary>{copy.healthDepositDetails}</summary>
+					<PortfolioInput label={copy.healthDepositAmount} hint={copy.healthDepositHint} value={model.healthDepositAmount} onChange={model.setHealthDepositAmount} disabled={disabled} numeric />
+					<TokenApprovalControl
+						actionLabel={copy.depositHealth}
+						allowanceError={model.readError}
+						allowanceLoading={model.loading}
+						approvedAmount={snapshot?.allowanceAttoRep}
+						disabled={disabled}
+						guardMessage={model.healthFundingReason}
+						onApprove={value => {
+							if (value !== undefined) void model.approveHealthDeposit(value)
+						}}
+						pending={actions.busy === 'approvePortfolioHealthRep'}
+						pendingLabel={copy.approving}
+						requiredAmount={model.healthDepositAttoRep}
+						resetKey={`${snapshot?.capitalLedger}:${snapshot?.owner}:${model.healthDepositAmount}`}
+						tokenSymbol={common.rep}
+						tokenUnits={18}
+					/>
+					<PortfolioButton model={actions} action='depositPortfolioHealthRep' label={copy.depositHealth} pendingLabel={copy.depositingHealth} reason={model.healthDepositReason} onClick={model.depositAndSetHealth} />
+				</details>
 				<MetricGrid>
 					<PortfolioInput label={copy.activeCommitment} value={model.commitmentAmount} onChange={model.setCommitmentAmount} disabled={disabled} numeric />
 				</MetricGrid>
+				<ActionLauncherButton tone='secondary' idleLabel={copy.useTargetCapacity} pendingLabel={copy.useTargetCapacity} availability={{ disabled: targetCapacityReason !== undefined, reason: targetCapacityReason }} onClick={model.useTargetCapacity} />
 				<MetricGrid>
 					<MetricField label={copy.requiredCollateral}>
 						<CurrencyValue value={model.requiredCollateral} suffix={common.rep} />
@@ -125,8 +162,16 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 				{model.livePositions.map(position => {
 					const reasons = model.positionReasons(position.id)
 					const required = snapshot === undefined ? 0n : requiredPortfolioCollateral({ ...snapshot, ownerAccount: { ...snapshot.ownerAccount, targetHealthFactorBps: 10_000n } }, snapshot.ownerCommitmentAttoEth)
-					const healthy = snapshot !== undefined && snapshot.ownerPrincipalAttoRep >= required
-					const health = snapshot?.priceValid && required > 0n ? `${formatUnits((snapshot.ownerPrincipalAttoRep * 10_000n) / required, 2)}%` : copy.healthUnknown
+					const healthy = snapshot !== undefined && position.rep >= required
+					const targetMet = snapshot !== undefined && position.rep >= requiredPortfolioCollateral(snapshot, position.commitment)
+					const health = snapshot?.priceValid && required > 0n ? `${formatUnits((position.rep * 10_000n) / required, 2)}%` : copy.healthUnknown
+					let liquidationStatus: string = copy.healthUnknown
+					if (snapshot?.priceValid) liquidationStatus = position.maxHealthyPrice >= snapshot.liquidationPrice ? copy.liquidationHealthy : copy.liquidationUnhealthy
+					let retirementSizingReason: string | undefined
+					if (disabled) retirementSizingReason = disabledReason
+					else if (position.batch !== 0n) retirementSizingReason = copy.retirementRequested
+					else if (model.retirementTargetCapacity === undefined) retirementSizingReason = copy.targetUnavailable
+					else if (model.retirementTargetCapacity >= position.commitment) retirementSizingReason = copy.currentTargetSatisfied
 					return (
 						<WorkflowSubsection key={String(position.id)} title={copy.position(position.id)} badge={<Badge>{copy.phase[capitalPositionPhase(position.batch, snapshot?.currentBatch ?? 0n)]}</Badge>}>
 							<MetricGrid>
@@ -137,11 +182,22 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 									<CurrencyValue value={position.commitment} suffix={common.eth} />
 								</MetricField>
 								<MetricField label={copy.currentHealth}>{health}</MetricField>
+								<MetricField label={copy.liquidationHealth}>{liquidationStatus}</MetricField>
+								{position.batch === 0n ? undefined : (
+									<MetricField label={copy.queuedRemainingCommitment}>
+										<CurrencyValue value={position.remainingCommitment} suffix={common.eth} />
+									</MetricField>
+								)}
 								<MetricField label={copy.assignedExecution}>
 									<CurrencyValue value={position.executionReserveAttoEth} suffix={common.eth} />
 								</MetricField>
 							</MetricGrid>
 							{snapshot?.priceValid && !healthy ? <UserMessage tone='warning' detail={copy.unhealthy} /> : undefined}
+							{snapshot?.priceValid && healthy && !targetMet ? <UserMessage tone='warning' detail={copy.belowTarget} /> : undefined}
+							<UserMessage detail={copy.liquidationHint} />
+							<PortfolioInput label={copy.remainingCommitment} hint={copy.remainingCommitmentHint} value={position.batch === 0n ? model.remainingCommitmentAmount : formatUnits(position.remainingCommitment, 18)} onChange={model.setRemainingCommitmentAmount} disabled={disabled || position.batch !== 0n} numeric />
+							<ActionLauncherButton tone='secondary' idleLabel={copy.retireToTarget} pendingLabel={copy.retireToTarget} availability={{ disabled: retirementSizingReason !== undefined, reason: retirementSizingReason }} onClick={model.retireToTarget} />
+							<UserMessage detail={copy.retirementTargetHint} />
 							<div className='actions'>
 								<PortfolioButton model={actions} action={`retirePortfolio-${position.id}`} label={copy.retire} pendingLabel={copy.retiring} reason={reasons.retire} onClick={() => model.retire(position.id)} />
 								<PortfolioButton model={actions} action={`cancelRetirementPortfolio-${position.id}`} label={copy.cancelRetirement} pendingLabel={copy.cancelingRetirement} reason={reasons.cancel} onClick={() => model.cancelRetirement(position.id)} />

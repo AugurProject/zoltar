@@ -15,6 +15,7 @@ import { UI_APP_IDS, featureStylesheets, getUiAppPaths, getUiCoreSharedPaths, is
 import { launchChromium } from './chromiumDevTools.mts'
 import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
 import { createProductionBrowserNavigation } from './productionBrowserNavigation.ts'
+import { browserButtonNameExpression, createProductionBrowserActions } from './productionBrowserActions.ts'
 import { productionWorkflowTestName, selectProductionWorkflowScenarios, type ProductionWorkflowScenario } from './productionWorkflowScenarios.ts'
 import { AUGUR_GENESIS_FORK_QUESTION } from '../../shared/zoltar/ts/deployment/genesisUniverses.ts'
 
@@ -276,9 +277,6 @@ function readEvaluationString(response: unknown) {
 	return result.value
 }
 
-// In-page expression naming a `button` the way its accessible name does: an explicit aria-label, otherwise its text without aria-hidden decoration such as arrow icons.
-const browserButtonNameExpression = `(button.getAttribute('aria-label') ?? (() => { const copy = button.cloneNode(true); copy.querySelectorAll('[aria-hidden="true"]').forEach(hidden => hidden.remove()); return copy.textContent?.trim() })())`
-
 type ProductionBrowserDriver = {
 	captureScreenshot: (screenshotPath: string) => Promise<void>
 	clickButton: (label: string, occurrence?: number) => Promise<void>
@@ -345,17 +343,12 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 		await resize(viewport)
 		await navigation.navigate(pageUrl)
 		const driver: ProductionBrowserDriver = {
+			...createProductionBrowserActions({ evaluate, readBody }),
 			captureScreenshot: async screenshotPath => {
 				const result = (await send('Page.captureScreenshot', { captureBeyondViewport: false, format: 'png', fromSurface: true })) as { data?: unknown }
 				if (typeof result.data !== 'string') throw new Error('Chromium did not return PNG screenshot data.')
 				await fs.mkdir(path.dirname(screenshotPath), { recursive: true })
 				await fs.writeFile(screenshotPath, Buffer.from(result.data, 'base64'))
-			},
-			clickButton: async (label, occurrence = 0) => {
-				const clicked = await evaluate(
-					`(() => { const buttons = [...document.querySelectorAll('button')].filter(button => ${browserButtonNameExpression} === ${JSON.stringify(label)} && !button.disabled); const button = buttons[${occurrence.toString()}]; if (!(button instanceof HTMLButtonElement)) return false; button.focus(); button.click(); return true })()`,
-				)
-				if (clicked !== true) throw new Error(`Unable to click enabled browser button ${label} at occurrence ${occurrence.toString()}`)
 			},
 			evaluate,
 			evaluateAsync: expression => page.evaluate(expression),
@@ -563,8 +556,8 @@ test(
 				).toEqual({
 					managerLoaded: true,
 					owner: '0x00000000000000000000000000000000000000a1',
-					// The seeded 3 REP/ETH price, 5% oracle band and 2× multiplier retain 63.15789473684210528 REP at the 100% protocol floor.
-					withdrawableRep: ['4936.84210526315789472REP'],
+					// The seeded 3 REP/ETH price, 5% oracle band and 2× multiplier retain 75.789473684210526336 REP at the saved 120% target.
+					withdrawableRep: ['4924.210526315789473664REP'],
 					principalRep: ['5000REP'],
 					commitment: ['10ETH'],
 					poolPledgedRep: ['5000REP'],

@@ -31,7 +31,12 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 	const universeId = snapshot?.universeId ?? portfolioUnsignedId(model.universeInput, 248) ?? 0n
 	const scope = mergeTransactionScopes(createTransactionScope('portfolio', snapshot?.portfolio ?? model.setup?.portfolio), createTransactionScope('portfolio-capital', snapshot?.capitalLedger))
 	const walletReason = parameters.accountAddress === undefined ? copy.connect : undefined
-	const ownerReason = walletReason ?? (model.loading ? copy.loading : undefined) ?? (snapshot === undefined ? copy.enterPortfolio : undefined) ?? (parameters.accountAddress?.toLowerCase() !== snapshot?.owner.toLowerCase() ? copy.ownerRequired : undefined)
+	const ownerReason =
+		walletReason ??
+		(model.loading || (busy.value !== undefined && snapshot === undefined) ? copy.loading : undefined) ??
+		(snapshot === undefined && model.presentationSnapshot !== undefined ? copy.readUnavailable : undefined) ??
+		(snapshot === undefined ? copy.enterPortfolio : undefined) ??
+		(parameters.accountAddress?.toLowerCase() !== snapshot?.owner.toLowerCase() ? copy.ownerRequired : undefined)
 	useEffect(() => {
 		error.value = undefined
 		feedback.value = undefined

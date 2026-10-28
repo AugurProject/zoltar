@@ -36,3 +36,28 @@ test('completed setup preserves the three transaction controls in their original
 	expect(view.container.textContent?.split(copy.prepareProgress(3))).toHaveLength(2)
 	expect(view.container.textContent?.split(copy.description)).toHaveLength(2)
 })
+
+test('authenticated refresh preserves position controls while disabling transactions until fresh data resolves', async () => {
+	const source = capitalClient()
+	source.install()
+	const view = await renderIntoDocument(<PortfoliosSection parameters={parameters} enabled environmentKey={0} activeUniverseId={0n} />)
+	lifecycle.trackRendered(view)
+	await waitFor(() => expect(view.container.textContent).toContain(copy.position(1n)))
+	const position = [...view.container.querySelectorAll('.workflow-subsection')].find(section => section.querySelector('h4')?.textContent === copy.position(1n))
+	if (position === undefined) throw new Error('Position section missing')
+	const inputs = [...position.querySelectorAll('input')]
+	const buttons = [...position.querySelectorAll('button')]
+	expect(inputs).toHaveLength(1)
+	expect(buttons).toHaveLength(3)
+	await act(() => render(<PortfoliosSection parameters={parameters} enabled={false} environmentKey={0} activeUniverseId={0n} />, view.container))
+	expect(position.isConnected).toBe(true)
+	expect([...position.querySelectorAll('input')]).toEqual(inputs)
+	expect([...position.querySelectorAll('button')]).toEqual(buttons)
+	expect(buttons.every(button => button.disabled)).toBe(true)
+	expect(position.textContent).toContain(copy.readUnavailable)
+	expect(view.container.textContent).toContain(copy.lastConfirmed)
+	expect(inputs.every(input => input.disabled)).toBe(true)
+	await act(() => render(<PortfoliosSection parameters={parameters} enabled environmentKey={0} activeUniverseId={0n} />, view.container))
+	await waitFor(() => expect(buttons.some(button => !button.disabled)).toBe(true))
+	expect(position.isConnected).toBe(true)
+})

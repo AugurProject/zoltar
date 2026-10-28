@@ -94,7 +94,7 @@ describe('Statoblast: purpose-bound oracle maintenance rewards', () => {
 		await redeemCompleteSet(fixture.other(), pool.securityPool, shares[0])
 		const capital = { abi: capitalArtifact.abi, address: fixture.capitalLedger }
 		const owner = await fixture.owner().readContract({ ...capital, functionName: 'ownerAccount', args: [fixture.owner().account.address] })
-		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...capital, functionName: 'requestRetirement', args: [owner.positionId] }))
+		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...capital, functionName: 'requestRetirement', args: [owner.positionId, 0n] }))
 		expect((await fixture.owner().readContract({ ...capital, functionName: 'totals' }))[1]).toBe(0n)
 		const before = await reserve()
 		const reportId = await request(fixture.other())

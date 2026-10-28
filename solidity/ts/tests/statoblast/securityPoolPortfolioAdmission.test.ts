@@ -69,7 +69,7 @@ describe('Statoblast: pluggable question admission', () => {
 		await redeemCompleteSet(fixture.other(), pool.securityPool, shares[0])
 		const capital = await fixture.capitalFor(portfolio)
 		const owner = await fixture.owner().readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'ownerAccount', args: [fixture.owner().account.address] })
-		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'requestRetirement', args: [owner.positionId] }))
+		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'requestRetirement', args: [owner.positionId, 0n] }))
 		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'withdrawPrincipal', args: [1_000n * unit, fixture.owner().account.address] }))
 	})
 

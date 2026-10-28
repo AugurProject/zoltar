@@ -24,6 +24,7 @@ abstract contract SecurityPoolCommitmentTree {
 		uint16 height;
 		bool retired;
 		uint64 healthEpoch;
+		uint256 retainedCommitment;
 	}
 	struct Position {
 		address owner;
@@ -31,6 +32,7 @@ abstract contract SecurityPoolCommitmentTree {
 		uint256 node;
 		uint256 releasedRep;
 		bool retiredRepClaimed;
+		uint256 remainingCommitment;
 	}
 	mapping(uint256 => Node) internal nodes;
 	mapping(uint96 => Position) internal positions;
@@ -50,6 +52,7 @@ abstract contract SecurityPoolCommitmentTree {
 		node.maximumPrice = right.maximumPrice;
 		node.positionId = left.positionId;
 		node.height = uint16(Math.max(left.height, right.height) + 1);
+		node.retainedCommitment = left.retainedCommitment + right.retainedCommitment;
 	}
 
 	function _branch(uint256 id, uint256 left, uint256 right, uint256 parent) private {
@@ -192,14 +195,23 @@ abstract contract SecurityPoolCommitmentTree {
 		nodes[replacement].parent = 0;
 	}
 
-	function _eligible(uint256 cursor, uint256 price) internal view returns (uint256 amount) {
+	function _eligible(uint256 cursor, uint256 price) internal view returns (uint256) {
+		return _eligibleAmount(cursor, price, false);
+	}
+
+	function _eligibleRetained(uint256 cursor, uint256 price) internal view returns (uint256) {
+		return _eligibleAmount(cursor, price, true);
+	}
+
+	function _eligibleAmount(uint256 cursor, uint256 price, bool retained) private view returns (uint256 amount) {
 		while (cursor != 0) {
 			Node storage node = nodes[cursor];
-			if (node.price >= price) return amount + node.commitment;
+			if (retained && node.retainedCommitment == 0) return amount;
+			if (node.price >= price) return amount + (retained ? node.retainedCommitment : node.commitment);
 			if (node.maximumPrice < price) return amount;
 			if (nodes[node.right].price < price) cursor = node.right;
 			else {
-				amount += nodes[node.right].commitment;
+				amount += retained ? nodes[node.right].retainedCommitment : nodes[node.right].commitment;
 				cursor = node.left;
 			}
 		}
@@ -292,6 +304,22 @@ abstract contract SecurityPoolCommitmentTree {
 	function _close(uint256 root) internal {
 		nodes[root].retired = true;
 		nodes[root].parent = 0;
+	}
+
+	/// @dev All leaves to the right of the first partial request are full exits.
+	/// Capping a prefix here lets one service call complete bulk full exits and
+	/// change at most one retained owner's health key and active membership.
+	function _retirementLimit(uint256 cursor) internal view returns (uint256 amount) {
+		if (nodes[cursor].retainedCommitment == 0) return nodes[cursor].commitment;
+		while (nodes[cursor].left != 0) {
+			uint256 right = nodes[cursor].right;
+			if (nodes[right].retainedCommitment != 0) cursor = right;
+			else {
+				amount += nodes[right].commitment;
+				cursor = nodes[cursor].left;
+			}
+		}
+		return amount + nodes[cursor].commitment - positions[nodes[cursor].positionId].remainingCommitment;
 	}
 
 	function _retirePrefix(uint256 cursor, uint256 amount) internal returns (uint256 replacement, uint256 released, uint96 boundary) {

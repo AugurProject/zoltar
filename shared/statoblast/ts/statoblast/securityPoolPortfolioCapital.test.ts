@@ -3,8 +3,10 @@ import { decodeFunctionData, parseAbi, type Address, type Hex } from '@zoltar/co
 import {
 	buildPortfolioCapitalAuthorizeRequest,
 	buildPortfolioCapitalDepositRequest,
+	buildPortfolioCapitalDepositAndSetHealthRequest,
 	buildPortfolioCapitalFundExecutionReserveRequest,
 	buildPortfolioCapitalRequestRetirementRequest,
+	buildPortfolioCapitalServeRetirementRequest,
 	buildPortfolioCapitalSetHealthRequest,
 	buildPortfolioCapitalTakeOverRequest,
 	buildPortfolioCapitalWithdrawPrincipalRequest,
@@ -25,7 +27,9 @@ const abi = parseAbi([
 	'function withdrawPrincipal(uint256 amount,address recipient)',
 	'function authorize(uint256 commitment)',
 	'function fundExecutionReserve(address owner) payable',
-	'function requestRetirement(uint96 id)',
+	'function requestRetirement(uint96 id,uint256 remainingCommitment)',
+	'function serveRetirement(uint96 id)',
+	'function depositAndSetHealthTarget(uint256 amount,uint256 targetHealthFactorBps)',
 	'function takeOver(uint96 id,uint256 commitment,uint256 minimumAward,uint256 maximumOwnRep)',
 ])
 
@@ -70,7 +74,7 @@ function fixture(overrides: Record<string, unknown> = {}) {
 		getForkChoiceDeadline: 0n,
 		ownerAccount: { freeAttoRep: 0n, feesAttoEth: 3n, feesAttoRep: 4n, executionReserveAttoEth: 5n, targetHealthFactorBps: 12_000n, positionId: 1n },
 		ownerCollateral: [260n, 20n, 17n],
-		accountOf: { owner, batch: 0n, rep: 200n, commitment: 20n, maxHealthyPrice: 20n, releasedRep: 60n, ethFees: 11n, repFees: 13n },
+		accountOf: { owner, batch: 0n, rep: 200n, commitment: 20n, maxHealthyPrice: 20n, releasedRep: 60n, ethFees: 11n, repFees: 13n, remainingCommitment: 0n },
 		positionExecutionReserveAttoEth: 7n,
 		liquidationStarted: 0n,
 		...overrides,
@@ -106,12 +110,26 @@ describe('personal portfolio capital SDK', () => {
 
 	test('underwriting, retirement and takeovers carry explicit bounded authorization', () => {
 		expect(decodeFunctionData({ abi, data: buildPortfolioCapitalAuthorizeRequest({ ...base, commitment: 100n }).data })).toEqual({ functionName: 'authorize', args: [100n] })
-		expect(decodeFunctionData({ abi, data: buildPortfolioCapitalRequestRetirementRequest({ ...base, positionId: 9n }).data })).toEqual({ functionName: 'requestRetirement', args: [9n] })
+		expect(decodeFunctionData({ abi, data: buildPortfolioCapitalRequestRetirementRequest({ ...base, positionId: 9n, remainingCommitment: 7n }).data })).toEqual({ functionName: 'requestRetirement', args: [9n, 7n] })
+		expect(decodeFunctionData({ abi, data: buildPortfolioCapitalRequestRetirementRequest({ ...base, positionId: 9n, remainingCommitment: 0n }).data })).toEqual({ functionName: 'requestRetirement', args: [9n, 0n] })
 		expect(decodeFunctionData({ abi, data: buildPortfolioCapitalTakeOverRequest({ ...base, positionId: 9n, commitment: 17n, minimumAward: 11n, maximumOwnRep: 30n }).data })).toEqual({ functionName: 'takeOver', args: [9n, 17n, 11n, 30n] })
 		expect(buildPortfolioCapitalFundExecutionReserveRequest({ ...base, amountAttoEth: 100n }).value).toBe(100n)
 		expect(() => buildPortfolioCapitalSetHealthRequest({ ...base, targetHealthFactorBps: 9_999n })).toThrow('100%')
-		expect(() => buildPortfolioCapitalRequestRetirementRequest({ ...base, positionId: 2n ** 96n })).toThrow('uint96')
+		expect(() => buildPortfolioCapitalRequestRetirementRequest({ ...base, positionId: 2n ** 96n, remainingCommitment: 0n })).toThrow('uint96')
+		expect(() => buildPortfolioCapitalRequestRetirementRequest({ ...base, positionId: 9n, remainingCommitment: -1n })).toThrow('uint256')
 		expect(() => buildPortfolioCapitalDepositRequest({ ...base, amountAttoRep: 0n })).toThrow('positive')
+	})
+	test('atomic health funding specifies the exact deposit and target without a second transaction', () => {
+		const request = buildPortfolioCapitalDepositAndSetHealthRequest({ ...base, amountAttoRep: 17n, targetHealthFactorBps: 12_000n })
+		expect(request).toMatchObject({ account: owner, to: capitalLedger, value: 0n })
+		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'depositAndSetHealthTarget', args: [17n, 12_000n] })
+		expect(() => buildPortfolioCapitalDepositAndSetHealthRequest({ ...base, amountAttoRep: 0n, targetHealthFactorBps: 12_000n })).toThrow('positive')
+		expect(() => buildPortfolioCapitalDepositAndSetHealthRequest({ ...base, amountAttoRep: 17n, targetHealthFactorBps: 9_999n })).toThrow('100%')
+	})
+	test('retirement service selects one pending position or explicitly requests bounded global progress', () => {
+		expect(decodeFunctionData({ abi, data: buildPortfolioCapitalServeRetirementRequest(base).data })).toEqual({ functionName: 'serveRetirement', args: [0n] })
+		expect(decodeFunctionData({ abi, data: buildPortfolioCapitalServeRetirementRequest({ ...base, positionId: 9n }).data })).toEqual({ functionName: 'serveRetirement', args: [9n] })
+		expect(() => buildPortfolioCapitalServeRetirementRequest({ ...base, positionId: 1n << 96n })).toThrow('uint96')
 	})
 
 	test('pins one owner position and the canonical collateral allowance to the same block', async () => {
@@ -152,6 +170,12 @@ describe('personal portfolio capital SDK', () => {
 		expect(requested).toEqual([39n, 39n])
 		expect(new Set(calls.map(call => call.blockNumber))).toEqual(new Set([39n]))
 	})
+	test('a partial retirement exposes its fixed stopping point without additional history reads', async () => {
+		const { client, calls } = fixture({ accountOf: { owner, batch: 9n, rep: 200n, commitment: 20n, maxHealthyPrice: 20n, releasedRep: 0n, ethFees: 11n, repFees: 13n, remainingCommitment: 7n } })
+		const snapshot = await loadPortfolioCapitalSnapshot({ client, portfolio, owner })
+		expect(snapshot.positions[0]).toMatchObject({ batch: 9n, commitment: 20n, remainingCommitment: 7n })
+		expect(calls.filter(call => call.functionName === 'accountOf')).toHaveLength(1)
+	})
 
 	test('execution reserve withdrawal includes closed positions and missed choices at the exact canonical deadline', async () => {
 		for (const [overrides, expected] of [
@@ -161,7 +185,7 @@ describe('personal portfolio capital SDK', () => {
 			[{ getForkTime: 500n, getForkChoiceDeadline: 999n }, 12n],
 			[{ getForkTime: 500n, getForkChoiceDeadline: 999n, exported: true }, 0n],
 			[{ importing: true }, 0n],
-			[{ ownerCollateral: [260n, 0n, 260n], accountOf: { owner, batch: 9n, rep: 0n, commitment: 0n, maxHealthyPrice: 20n, releasedRep: 260n, ethFees: 11n, repFees: 13n } }, 12n],
+			[{ ownerCollateral: [260n, 0n, 260n], accountOf: { owner, batch: 9n, rep: 0n, commitment: 0n, maxHealthyPrice: 20n, releasedRep: 260n, ethFees: 11n, repFees: 13n, remainingCommitment: 0n } }, 12n],
 		] as const) {
 			const { client, calls } = fixture(overrides)
 			const snapshot = await loadPortfolioCapitalSnapshot({ client, portfolio, owner })

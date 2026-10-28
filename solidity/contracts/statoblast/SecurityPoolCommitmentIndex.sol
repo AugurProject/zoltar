@@ -29,6 +29,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		uint256 releasedRep;
 		uint256 ethFees;
 		uint256 repFees;
+		uint256 remainingCommitment;
 	}
 	struct Cure {
 		uint256 removed;
@@ -70,10 +71,11 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		importsOpen = true;
 	}
 
-	function importPosition(address owner, uint256 rep, uint256 commitment, uint256 maxHealthyPrice, uint96 batch) external onlyPortfolio returns (uint96) {
+	function importPosition(address owner, uint256 rep, uint256 commitment, uint256 maxHealthyPrice, uint96 batch, uint256 remainingCommitment) external onlyPortfolio returns (uint96) {
 		require(importsOpen, 'Commitment imports are sealed');
 		require(batch == 0 || batch == currentBatch || batch == nextBatch, 'Unknown imported cohort');
-		return _create(owner, batch, rep, commitment, maxHealthyPrice);
+		require(remainingCommitment < commitment && (batch != 0 || remainingCommitment == 0), 'Invalid imported retirement target');
+		return _create(owner, batch, rep, commitment, maxHealthyPrice, remainingCommitment);
 	}
 
 	function sealImports() external onlyPortfolio {
@@ -84,7 +86,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	/// @dev New commitments always start active. The controller limits the live
 	/// slots per owner and checks collateral, desired health and keeper funding.
 	function create(address owner, uint256 rep, uint256 commitment, uint256 maxHealthyPrice) external onlyPortfolio operational returns (uint96) {
-		return _create(owner, 0, rep, commitment, maxHealthyPrice);
+		return _create(owner, 0, rep, commitment, maxHealthyPrice, 0);
 	}
 
 	/// @dev A closed retirement cohort may shrink or gain collateral, never gain K.
@@ -99,8 +101,8 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		leaf.rep = rep;
 		leaf.commitment = commitment;
 		leaf.price = maxHealthyPrice;
-		if (commitment != 0) _insert(position.batch, position.node);
-		else require(rep == 0, 'Uncommitted REP must leave index');
+		if (commitment == 0) require(rep == 0, 'Uncommitted REP must leave index');
+		_reinsert(position);
 	}
 
 	/// @dev Fees remain attached to the old owner. The receiver gets a fresh ID
@@ -111,12 +113,14 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		Node storage leaf = nodes[source.node];
 		require(!leaf.retired && commitment != 0 && commitment <= leaf.commitment && rep <= leaf.rep, 'Invalid commitment transfer');
 		require(commitment != leaf.commitment || rep == leaf.rep, 'Residual REP has no commitment');
+		uint96 batch = source.batch;
 		_detach(source.batch, source.node);
 		leaf.rep -= rep;
 		leaf.commitment -= commitment;
 		leaf.price = remainingMaxPrice;
-		if (leaf.commitment != 0) _insert(source.batch, source.node);
-		receiverId = _create(receiver, source.batch, rep, commitment, receiverMaxPrice);
+		uint256 remaining = _transferRemaining(source, leaf.commitment);
+		_reinsert(source);
+		receiverId = _create(receiver, batch, rep, commitment, receiverMaxPrice, remaining);
 	}
 
 	/// @dev Supports an existing receiver slot without refreshing retirement
@@ -141,16 +145,22 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		to.rep += rep;
 		to.commitment += commitment;
 		to.price = receiverMaxPrice;
-		if (from.commitment != 0) _insert(source.batch, source.node);
-		_insert(receiver.batch, receiver.node);
+		receiver.remainingCommitment += _transferRemaining(source, from.commitment);
+		_reinsert(source);
+		_reinsert(receiver);
 	}
 
-	function requestRetirement(uint96 id) external onlyPortfolio operational {
+	function requestRetirement(uint96 id, uint256 remainingCommitment, uint256 minimumCommitment) external onlyPortfolio operational {
 		_touch(id);
 		Position storage position = positions[id];
-		require(position.batch == 0 && nodes[position.node].commitment != 0, 'Position is not active');
+		Node storage leaf = nodes[position.node];
+		require(position.batch == 0 && leaf.commitment != 0, 'Position is not active');
+		require(remainingCommitment < leaf.commitment, 'Retirement must reduce commitment');
+		require(remainingCommitment == 0 || (remainingCommitment >= minimumCommitment && leaf.commitment - remainingCommitment >= minimumCommitment), 'Retirement below economic minimum');
 		_detach(0, position.node);
 		position.batch = nextBatch;
+		position.remainingCommitment = remainingCommitment;
+		leaf.retainedCommitment = remainingCommitment;
 		_insert(nextBatch, position.node);
 	}
 
@@ -160,6 +170,8 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		require(position.batch != 0 && !nodes[position.node].retired && nodes[position.node].commitment != 0, 'Position is not retiring');
 		_detach(position.batch, position.node);
 		position.batch = 0;
+		position.remainingCommitment = 0;
+		nodes[position.node].retainedCommitment = 0;
 		_insert(0, position.node);
 	}
 
@@ -281,9 +293,13 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		return Math.mulDiv(Math.mulDiv(rep, 10_000, multiplier), 1e18, commitment);
 	}
 
-	/// @notice Capacity available to fresh demand after honoring queued retirement.
+	/// @notice Fresh demand can use active K and the residual K a retiring owner
+	/// explicitly retained. Only the requested reduction is reserved for exit.
 	function eligibleActiveCommitment(uint256 acceptedPrice) external view returns (uint256) {
-		return _eligible(roots[0], acceptedPrice);
+		return
+			_eligible(roots[0], acceptedPrice) +
+			(currentBatch == 0 ? 0 : _eligibleRetained(roots[currentBatch], acceptedPrice)) +
+			_eligibleRetained(roots[nextBatch], acceptedPrice);
 	}
 
 	function totals() public view returns (uint256 rep, uint256 commitment) {
@@ -301,7 +317,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	/// @notice Assign exact, already funded budgets to currently healthy K.
 	/// @return assigned False when there are no healthy commitments; the controller
 	/// retains the undistributed funds and applies its explicit no-recipient policy.
-	function creditFees(uint256 acceptedPrice, uint256 ethAmount, uint256 repAmount) external onlyPortfolio operational returns (bool assigned) {
+	function creditFees(uint256 acceptedPrice, uint256 ethAmount, uint256 repAmount) public onlyPortfolio operational returns (bool assigned) {
 		uint256 total = eligibleCommitment(acceptedPrice);
 		if (total == 0) return false;
 		uint96[3] memory batches = [uint96(0), currentBatch, nextBatch];
@@ -320,12 +336,23 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		return true;
 	}
 
+	/// @notice Unhealthy commitment remains in the earnings denominator. The
+	/// controller handles the unassigned funds without scanning their owners.
+	function creditProportionalFees(uint256 acceptedPrice, uint256 ethAmount, uint256 repAmount) external onlyPortfolio returns (uint256 unassignedEth, uint256 unassignedRep) {
+		(, uint256 total) = totals();
+		uint256 eligible = acceptedPrice == 0 ? 0 : eligibleCommitment(acceptedPrice);
+		uint256 assignedEth = total == 0 ? 0 : Math.mulDiv(ethAmount, eligible, total);
+		uint256 assignedRep = total == 0 ? 0 : Math.mulDiv(repAmount, eligible, total);
+		if (eligible != 0) creditFees(acceptedPrice, assignedEth, assignedRep);
+		return (ethAmount - assignedEth, repAmount - assignedRep);
+	}
+
 	/// @notice Serve existing retirement groups before authorizing new demand.
-	/// @dev Current is closed before service. Only two groups can be present at
-	/// entry, followed by at most one protocol reserve. Unhealthy tails cost no
-	/// healthy capacity once reached. A partial private boundary retains all its
-	/// collateral and its conservative old price; the controller rekeys it once.
-	function retire(uint256 acceptedPrice, uint256 demand) external onlyPortfolio operational returns (Retirement memory result) {
+	/// @dev At most two cohorts and one partial boundary are processed. A capped
+	/// request rejoins active capacity at its residual K; full exits can close in
+	/// bulk. The controller rekeys the sole boundary while retaining all its REP.
+	function retire(uint256 acceptedPrice, uint256 demand, uint96 id) external onlyPortfolio operational returns (Retirement memory result) {
+		if (id != 0) return _retirePosition(id, acceptedPrice, demand);
 		uint256 healthy = eligibleCommitment(acceptedPrice);
 		if (healthy < demand) return result;
 		uint256 spare = healthy - demand;
@@ -334,7 +361,8 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 			if (currentBatch == 0) break;
 			uint256 root = roots[currentBatch];
 			uint256 eligible = _eligible(root, acceptedPrice);
-			if (spare >= eligible) {
+			uint256 amount = Math.min(spare >= eligible ? nodes[root].commitment : spare, _retirementLimit(root));
+			if (amount == nodes[root].commitment) {
 				result.rep += nodes[root].rep;
 				result.commitment += nodes[root].commitment;
 				spare -= eligible;
@@ -342,15 +370,72 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 				roots[currentBatch] = 0;
 				currentBatch = 0;
 			} else {
-				if (spare == 0) break;
-				(uint256 replacement, uint256 rep, uint96 boundary) = _retirePrefix(root, spare);
+				if (amount == 0) break;
+				(uint256 replacement, uint256 rep, uint96 boundary) = _retirePrefix(root, amount);
 				roots[currentBatch] = replacement;
 				nodes[replacement].parent = 0;
 				result.rep += rep;
-				result.commitment += spare;
+				result.commitment += amount;
 				result.boundaryPositionId = boundary;
+				Position storage position = positions[boundary];
+				if (
+					position.remainingCommitment != 0 && nodes[position.node].commitment == position.remainingCommitment
+				) {
+					_touch(boundary);
+					_detach(position.batch, position.node);
+					_reinsert(position);
+				}
 				break;
 			}
+		}
+	}
+
+	/// @dev A requested position may finish without processing earlier owners,
+	/// provided their healthy queued reductions remain fully reserved. Targeted
+	/// service is all-or-nothing: partial rekeying could otherwise jump the same
+	/// earlier requests on a subsequent call without adding any collateral.
+	function _retirePosition(uint96 id, uint256 acceptedPrice, uint256 demand) private returns (Retirement memory result) {
+		_touch(id);
+		Position storage position = positions[id];
+		Node storage leaf = nodes[position.node];
+		require(position.batch != 0 && !leaf.retired && leaf.commitment != 0, 'Position is not retiring');
+		_promote();
+		uint256 healthy = eligibleCommitment(acceptedPrice);
+		if (healthy < demand) return result;
+		uint256 spare = healthy - demand;
+		uint256 ahead = _queuedAhead(position, acceptedPrice);
+		uint256 reduction = leaf.commitment - position.remainingCommitment;
+		if (spare < ahead || (leaf.price >= acceptedPrice && spare - ahead < reduction)) return result;
+		_detach(position.batch, position.node);
+		result.commitment = reduction;
+		if (position.remainingCommitment == 0) {
+			result.rep = leaf.rep;
+			_close(position.node);
+		} else {
+			leaf.commitment = position.remainingCommitment;
+			_reinsert(position);
+			result.boundaryPositionId = id;
+		}
+	}
+
+	function _queuedAhead(Position storage position, uint256 acceptedPrice) private view returns (uint256 ahead) {
+		uint256 cursor = position.node;
+		if (nodes[cursor].price < acceptedPrice) {
+			uint256 root = roots[position.batch];
+			ahead = _eligible(root, acceptedPrice) - _eligibleRetained(root, acceptedPrice);
+		} else {
+			while (nodes[cursor].parent != 0) {
+				uint256 parent = nodes[cursor].parent;
+				if (nodes[parent].left == cursor) {
+					Node storage right = nodes[nodes[parent].right];
+					ahead += right.commitment - right.retainedCommitment;
+				}
+				cursor = parent;
+			}
+		}
+		if (position.batch != currentBatch) {
+			uint256 root = roots[currentBatch];
+			ahead += _eligible(root, acceptedPrice) - _eligibleRetained(root, acceptedPrice);
 		}
 	}
 
@@ -378,6 +463,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		account.batch = position.batch;
 		account.maxHealthyPrice = leaf.price;
 		account.releasedRep = position.releasedRep;
+		account.remainingCommitment = position.remainingCommitment;
 		(bool retired, uint256 ethFees, uint256 repFees) = _preview(position.node);
 		account.ethFees = ethFees;
 		account.repFees = repFees;
@@ -389,15 +475,37 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		}
 	}
 
-	function _create(address owner, uint96 batch, uint256 rep, uint256 commitment, uint256 price) private returns (uint96 id) {
+	function _create(address owner, uint96 batch, uint256 rep, uint256 commitment, uint256 price, uint256 remainingCommitment) private returns (uint96 id) {
 		require(owner != address(0) && commitment != 0, 'Invalid commitment position');
 		require(lastPositionId != type(uint96).max, 'Commitment IDs exhausted');
 		id = ++lastPositionId;
 		uint256 node = ++lastNode;
-		nodes[node] = Node(0, 0, 0, rep, commitment, 0, 0, price, price, id, 0, false, 0);
-		positions[id] = Position(owner, batch, node, 0, false);
+		nodes[node] = Node(0, 0, 0, rep, commitment, 0, 0, price, price, id, 0, false, 0, remainingCommitment);
+		positions[id] = Position(owner, batch, node, 0, false, remainingCommitment);
 		healthyMutationEpochs[id] = healthObservationEpoch;
 		_insert(batch, node);
+	}
+
+	/// @dev Takeovers transfer requested exits first. Only commitment beyond the
+	/// source's queued reduction carries residual intent to the receiver, keeping
+	/// the closed cohort's aggregate requested reduction unchanged.
+	function _transferRemaining(Position storage source, uint256 commitment) private returns (uint256 transferred) {
+		if (source.remainingCommitment > commitment) {
+			transferred = source.remainingCommitment - commitment;
+			source.remainingCommitment = commitment;
+		}
+	}
+
+	/// @dev The leaf must be detached before changing its active membership.
+	/// Forced reductions can also fulfill a pending voluntary residual goal.
+	function _reinsert(Position storage position) private {
+		Node storage leaf = nodes[position.node];
+		if (position.remainingCommitment != 0 && leaf.commitment <= position.remainingCommitment) {
+			position.remainingCommitment = 0;
+			position.batch = 0;
+		}
+		leaf.retainedCommitment = position.remainingCommitment;
+		if (leaf.commitment != 0) _insert(position.batch, position.node);
 	}
 
 	function _promote() private {

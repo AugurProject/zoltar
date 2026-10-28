@@ -193,3 +193,118 @@ test('switching genesis while mounted clears the prior selection and restores on
 	await waitFor(() => expect(hook.state().snapshot).toBeDefined())
 	expect(hook.state().managerInput).toBe(portfolio)
 })
+
+test('same-context authentication preserves presentation only and replaces it with resolved removal', async () => {
+	const source = capitalClient()
+	const gate = createDeferred<number>()
+	let pause = false
+	const client = source.client.extend(() => ({ getChainId: () => (pause ? gate.promise : Promise.resolve(1)) }))
+	installActiveEnvironmentForTesting({ ...source.backend, createReadClient: () => client })
+	const hook = await mount()
+	await waitFor(() => expect(hook.state().snapshot).toBeDefined())
+	const previous = hook.state().snapshot
+	await hook.setProps({ enabled: false })
+	expect(hook.state().snapshot).toBeUndefined()
+	expect(hook.state().presentationSnapshot).toBe(previous)
+	pause = true
+	await hook.setProps({ enabled: true })
+	expect(hook.state().snapshot).toBeUndefined()
+	expect(hook.state().presentationSnapshot).toBe(previous)
+	expect(hook.state().loading).toBe(true)
+	source.setSnapshot(capitalSnapshot({ positions: [], ownerCommitmentAttoEth: 0n, ownerAccount: { ...capitalSnapshot().ownerAccount, positionId: 0n } }))
+	await act(() => gate.resolve(1))
+	await waitFor(() => expect(hook.state().snapshot).toBeDefined())
+	expect(hook.state().presentationSnapshot).toBe(hook.state().snapshot)
+	expect(hook.state().presentationSnapshot?.positions).toEqual([])
+})
+
+test.each(['failure', 'incomplete setup'])('a resolved %s clears retained presentation', async result => {
+	const source = capitalClient()
+	let fail = false
+	const client = source.client.extend(() => ({
+		getChainId: async () => {
+			if (fail) throw new Error('Account read failed.')
+			return 1
+		},
+	}))
+	installActiveEnvironmentForTesting({ ...source.backend, createReadClient: () => client })
+	const hook = await mount()
+	await waitFor(() => expect(hook.state().snapshot).toBeDefined())
+	await hook.setProps({ enabled: false })
+	expect(hook.state().presentationSnapshot).toBeDefined()
+	if (result === 'failure') fail = true
+	else source.setSetupStage(1n)
+	await hook.setProps({ enabled: true })
+	await waitFor(() => expect(hook.state().loading).toBe(false))
+	expect(hook.state().snapshot).toBeUndefined()
+	expect(hook.state().presentationSnapshot).toBeUndefined()
+	if (result === 'failure') expect(hook.state().error).toContain('Account read failed.')
+	else expect(hook.state().setup?.stage).toBe(1)
+})
+
+test.each(['portfolio', 'owner', 'universe', 'environment', 'backend replacement', 'backend reinstall', 'bootstrap reset'])('changing %s clears retained presentation immediately', async change => {
+	const source = capitalClient()
+	const backend = { ...source.backend, isBootstrapped: true, isBootstrapping: false }
+	installActiveEnvironmentForTesting(backend)
+	const hook = await mount()
+	await waitFor(() => expect(hook.state().snapshot).toBeDefined())
+	await hook.setProps({ enabled: false })
+	expect(hook.state().presentationSnapshot).toBeDefined()
+	if (change === 'portfolio') await act(() => hook.state().setManagerInput(owner))
+	else if (change === 'owner') await act(() => hook.state().setOwnerInput(portfolio))
+	else if (change === 'universe') await hook.setProps({ activeUniverseId: 1n })
+	else if (change === 'environment') await hook.setProps({ environmentKey: 1 })
+	else {
+		if (change === 'backend replacement') installActiveEnvironmentForTesting({ ...backend })
+		else if (change === 'backend reinstall') installActiveEnvironmentForTesting(backend)
+		else backend.isBootstrapping = true
+		await hook.setProps({ enabled: false, accountAddress: portfolio })
+	}
+	expect(hook.state().snapshot).toBeUndefined()
+	expect(hook.state().presentationSnapshot).toBeUndefined()
+})
+
+test('an in-place backend reset clears presentation and suspends account reads until bootstrap completes', async () => {
+	const source = capitalClient()
+	let loads = 0
+	const client = source.client.extend(() => ({
+		getChainId: async () => {
+			loads++
+			return 1
+		},
+	}))
+	const backend = { ...source.backend, createReadClient: () => client, isBootstrapped: true, isBootstrapping: false }
+	installActiveEnvironmentForTesting(backend)
+	const hook = await mount()
+	await waitFor(() => expect(hook.state().snapshot).toBeDefined())
+	const previousLoads = loads
+	backend.isBootstrapping = true
+	await hook.setProps({ accountAddress: portfolio })
+	await act(() => hook.state().load())
+	expect(loads).toBe(previousLoads)
+	expect(hook.state().snapshot).toBeUndefined()
+	expect(hook.state().presentationSnapshot).toBeUndefined()
+	backend.isBootstrapping = false
+	await hook.setProps({ accountAddress: owner })
+	await waitFor(() => expect(hook.state().snapshot).toBeDefined())
+	expect(loads).toBeGreaterThan(previousLoads)
+})
+
+test('authentication refresh preserves a manually selected universe independently of the global universe', async () => {
+	const source = capitalClient()
+	source.install()
+	const hook = await mount()
+	await waitFor(() => expect(hook.state().snapshot).toBeDefined())
+	source.setSnapshot(capitalSnapshot({ universeId: 2n }))
+	await act(() => hook.state().setUniverseInput('2'))
+	await act(() => hook.state().load())
+	expect(hook.state().snapshot?.universeId).toBe(2n)
+	await hook.setProps({ enabled: false })
+	expect(hook.state().universeInput).toBe('2')
+	expect(hook.state().snapshot).toBeUndefined()
+	expect(hook.state().presentationSnapshot?.universeId).toBe(2n)
+	await hook.setProps({ enabled: true })
+	await waitFor(() => expect(hook.state().snapshot).toBeDefined())
+	expect(hook.state().universeInput).toBe('2')
+	expect(hook.state().snapshot?.universeId).toBe(2n)
+})

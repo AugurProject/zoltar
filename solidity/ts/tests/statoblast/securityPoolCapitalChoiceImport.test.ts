@@ -44,8 +44,8 @@ describe('Statoblast: funded fork choice imports', () => {
 	})
 
 	test('imported choices preserve personal collateral, retirement cohorts and execution budgets', async () => {
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'importChoice', args: [buyer.account.address, { rep: 126n * E, commitment: 100n * E, batch: 0n, executionReserveAttoEth: reserve }, 12_000n], value: 2n * reserve }))
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'importChoice', args: [owner.account.address, { rep: 158n * E, commitment: 100n * E, batch: 1n, executionReserveAttoEth: reserve }, 15_000n], value: reserve }))
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'importChoice', args: [buyer.account.address, { rep: 126n * E, commitment: 100n * E, batch: 0n, executionReserveAttoEth: reserve, remainingCommitment: 0n }, 12_000n], value: 2n * reserve }))
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'importChoice', args: [owner.account.address, { rep: 158n * E, commitment: 100n * E, batch: 1n, executionReserveAttoEth: reserve, remainingCommitment: 0n }, 15_000n], value: reserve }))
 		expect(await position(1n)).toMatchObject({ rep: 126n * E, commitment: 100n * E, batch: 0n })
 		expect(await position(2n)).toMatchObject({ rep: 158n * E, commitment: 100n * E, batch: 1n })
 		expect((await account(buyer.account.address)).executionReserveAttoEth).toBe(reserve)
@@ -57,9 +57,21 @@ describe('Statoblast: funded fork choice imports', () => {
 	})
 
 	test('choice import requires actual execution funding and authenticated authority', async () => {
-		const imported = { rep: 126n * E, commitment: 100n * E, batch: 0n, executionReserveAttoEth: reserve }
+		const imported = { rep: 126n * E, commitment: 100n * E, batch: 0n, executionReserveAttoEth: reserve, remainingCommitment: 0n }
 		await expect(writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'importChoice', args: [buyer.account.address, imported, 12_000n], value: reserve - 1n }))).rejects.toThrow('Fork execution reserve unfunded')
 		expect((await account(buyer.account.address)).positionId).toBe(0n)
 		await expect(buyer.writeContract({ abi: artifact.abi, address: ledger, functionName: 'importChoice', args: [buyer.account.address, imported, 12_000n], value: reserve })).rejects.toThrow('Only fork authority')
+	})
+	test('a fork import preserves a partial retirement stop and keeps all collateral behind the residual', async () => {
+		const imported = { rep: 126n * E, commitment: 100n * E, batch: 1n, executionReserveAttoEth: reserve, remainingCommitment: 60n * E }
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'importChoice', args: [buyer.account.address, imported, 12_000n], value: reserve }))
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'mint', args: [ledger, imported.rep] }))
+		await finish()
+		expect(await position(1n)).toMatchObject({ commitment: 100n * E, remainingCommitment: 60n * E, batch: 1n })
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'setDemand', args: [60n * E] }))
+		expect(await position(1n)).toMatchObject({ rep: 126n * E, commitment: 60n * E, remainingCommitment: 0n, batch: 0n, releasedRep: 0n })
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'setDemand', args: [0n] }))
+		expect(await position(1n)).toMatchObject({ rep: 126n * E, commitment: 60n * E, batch: 0n })
+		expect((await account(buyer.account.address)).targetHealthFactorBps).toBe(12_000n)
 	})
 })

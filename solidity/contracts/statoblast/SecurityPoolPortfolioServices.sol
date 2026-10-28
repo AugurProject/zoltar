@@ -177,7 +177,7 @@ contract SecurityPoolPortfolioServices {
 		(uint256 paid, SecurityPoolPortfolioSettlement.Snapshot memory snapshot) = root.settlement().redeem(address(pool), recipient, shares, 0, root.logicalTime(universeId));
 		_creditSnapshot(universeId, snapshot);
 		_cancelUnusedPremium(pool);
-		if (capital.zoltar().getForkTime(universeId) == 0) capital.serveRetirement();
+		if (capital.zoltar().getForkTime(universeId) == 0) capital.serveRetirement(0);
 		return (paid, snapshot.outcomeSupplyAttoShares, snapshot.questionCashAttoEth);
 	}
 	function checkpointQuestionSettlement(ISecurityPool pool, bool refresh) external onlyPortfolio returns (uint256, uint256, uint48) {

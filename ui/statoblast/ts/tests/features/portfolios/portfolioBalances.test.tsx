@@ -16,8 +16,8 @@ test('personal capital shows exact principal and keeps distinct approval, deposi
 	lifecycle.trackRendered(view)
 	const text = view.container.textContent ?? ''
 	const amounts = (label: string) => [...view.container.querySelectorAll('.metric-label')].filter(node => node.textContent === label).map(node => node.parentElement?.querySelector('.currency-value')?.getAttribute('title')?.replaceAll(/\s/g, ''))
-	// The 100% protocol floor keeps 10 ETH × 2 REP/ETH × 1.05 = 21 REP backing the commitment.
-	expect(amounts(copy.withdrawableRep)).toEqual(['9REP'])
+	// The saved 120% target keeps 10 ETH × 2 REP/ETH × 1.05 × 1.2 = 25.2 REP.
+	expect(amounts(copy.withdrawableRep)).toEqual(['4.8REP'])
 	expect(amounts(copy.principalRep)).toEqual(['30REP'])
 	expect(amounts(copy.commitment)).toEqual(['10ETH'])
 	expect(amounts(copy.positionPledged)).toEqual(['30REP'])

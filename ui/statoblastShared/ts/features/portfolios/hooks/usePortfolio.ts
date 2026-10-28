@@ -13,14 +13,24 @@ function portfolioStorageKey(chainId: number) {
 	return `statoblast:portfolio:last:${backend.id}:${chainId}:${backend.profile.genesisRepTokenAddress.toLowerCase()}`
 }
 
+function portfolioBackendReady(backend: ReturnType<typeof getActiveBackend>) {
+	return backend.isBootstrapped !== false && backend.isBootstrapping !== true && backend.bootstrapError === undefined
+}
+
 export function usePortfolio({ accountAddress, enabled, environmentKey, activeUniverseId }: { accountAddress: Address | undefined; enabled: boolean; environmentKey: number; activeUniverseId: bigint }) {
 	const initial = new URLSearchParams(window.location.hash.split('?')[1])
 	const managerInput = useSignal(initial.get('portfolio') ?? '')
 	const ownerInput = useSignal(initial.get('owner') ?? accountAddress ?? '')
 	const universeInput = useSignal(String(activeUniverseId))
+	const previousActiveUniverse = useRef(activeUniverseId)
 	const questionStart = useSignal(0n)
 	const admissionStart = useSignal(0n)
 	const snapshot = useSignal<PortfolioAccountSnapshot | undefined>(undefined)
+	const presentationSnapshot = useSignal<PortfolioAccountSnapshot | undefined>(undefined)
+	const presentationContext = useRef<{ environmentKey: number; backend: ReturnType<typeof getActiveBackend>; guard: ReturnType<typeof createActiveEnvironmentGuard> }>()
+	const renderedBackend = getActiveBackend()
+	const backendReady = portfolioBackendReady(renderedBackend)
+	const presentationEnvironmentCurrent = presentationContext.current?.guard.isCurrent() ?? true
 	const setup = useSignal<PortfolioSetupSnapshot | undefined>(undefined)
 	const loading = useSignal(false)
 	const discovering = useSignal(false)
@@ -37,10 +47,11 @@ export function usePortfolio({ accountAddress, enabled, environmentKey, activeUn
 		[],
 	)
 	const load = async (managerOverride = managerInput.value, ownerOverride = ownerInput.value, universeOverride = universeInput.value) => {
+		if (!portfolioBackendReady(getActiveBackend())) return
 		const id = ++generation.current
 		inFlight.current = id
 		const environment = createActiveEnvironmentGuard()
-		const current = () => active.current && id === generation.current && environment.isCurrent()
+		const current = () => active.current && id === generation.current && environment.isCurrent() && portfolioBackendReady(getActiveBackend())
 		loading.value = true
 		error.value = undefined
 		try {
@@ -54,6 +65,8 @@ export function usePortfolio({ accountAddress, enabled, environmentKey, activeUn
 			if (!current()) return
 			setup.value = preparation
 			snapshot.value = next
+			presentationSnapshot.value = next
+			presentationContext.current = { environmentKey, backend: renderedBackend, guard: environment }
 			universeInput.value = String(universeId)
 			managerInput.value = portfolio
 			ownerInput.value = owner
@@ -65,6 +78,7 @@ export function usePortfolio({ accountAddress, enabled, environmentKey, activeUn
 		} catch (failure) {
 			if (current()) {
 				snapshot.value = undefined
+				presentationSnapshot.value = undefined
 				setup.value = undefined
 				error.value = getErrorMessage(failure, 'Unable to load the portfolio account.')
 			}
@@ -74,12 +88,13 @@ export function usePortfolio({ accountAddress, enabled, environmentKey, activeUn
 		}
 	}
 	const refresh = async () => {
-		if (!enabled || inFlight.current === generation.current || !isAddress(managerInput.value) || !isAddress(ownerInput.value)) return
+		if (!enabled || !portfolioBackendReady(getActiveBackend()) || inFlight.current === generation.current || !isAddress(managerInput.value) || !isAddress(ownerInput.value)) return
 		await load()
 	}
-	const invalidate = () => {
+	const invalidate = (preservePresentation = false) => {
 		generation.current++
 		snapshot.value = undefined
+		if (!preservePresentation) presentationSnapshot.value = undefined
 		setup.value = undefined
 		error.value = undefined
 		loading.value = false
@@ -89,11 +104,22 @@ export function usePortfolio({ accountAddress, enabled, environmentKey, activeUn
 		void refresh()
 	}, enabled)
 	useEffect(() => {
-		invalidate()
-		universeInput.value = String(activeUniverseId)
+		if (previousActiveUniverse.current !== activeUniverseId) universeInput.value = String(activeUniverseId)
+		previousActiveUniverse.current = activeUniverseId
+		const previous = presentationSnapshot.value
+		const context = presentationContext.current
+		const preservePresentation =
+			backendReady &&
+			context?.environmentKey === environmentKey &&
+			context.backend === renderedBackend &&
+			context.guard.isCurrent() &&
+			previous?.portfolio.toLowerCase() === managerInput.value.toLowerCase() &&
+			previous?.owner.toLowerCase() === ownerInput.value.toLowerCase() &&
+			previous?.universeId === portfolioUnsignedId(universeInput.value, 248)
+		invalidate(preservePresentation)
 		questionStart.value = 0n
 		admissionStart.value = 0n
-		if (!enabled) return
+		if (!enabled || !backendReady) return
 		const backend = getActiveBackend()
 		const storageKey = portfolioStorageKey(backend.profile.chain.id)
 		if (selectedNetwork.current !== undefined && selectedNetwork.current !== storageKey) managerInput.value = ''
@@ -127,7 +153,7 @@ export function usePortfolio({ accountAddress, enabled, environmentKey, activeUn
 			current = false
 			generation.current++
 		}
-	}, [enabled, environmentKey, activeUniverseId])
+	}, [enabled, environmentKey, activeUniverseId, renderedBackend, backendReady, presentationEnvironmentCurrent])
 	useEffect(() => {
 		if (ownerInput.value === '' && accountAddress !== undefined) ownerInput.value = accountAddress
 	}, [accountAddress])
@@ -167,6 +193,7 @@ export function usePortfolio({ accountAddress, enabled, environmentKey, activeUn
 	}
 	return {
 		snapshot: snapshot.value,
+		presentationSnapshot: presentationSnapshot.value,
 		setup: setup.value,
 		loading: loading.value,
 		discovering: discovering.value,

@@ -1,11 +1,34 @@
 import { expect, test } from 'bun:test'
-import { capitalAuthorizationReason, capitalPositionPhase, requiredPortfolioCollateral, requiredPortfolioExecutionReserve } from '@zoltar/ui-statoblast-shared/features/portfolios/lib/capital.js'
+import { capitalAuthorizationReason, capitalPositionPhase, requiredPortfolioCollateral, requiredPortfolioExecutionReserve, maximumPortfolioCommitment, capitalRetirementReason } from '@zoltar/ui-statoblast-shared/features/portfolios/lib/capital.js'
 import { capitalSnapshot, unit } from './capitalFixture.js'
 test('collateral follows the owner health target and each contract rounding step', () => {
 	const snapshot = capitalSnapshot()
 	expect(requiredPortfolioCollateral(snapshot, 10n * unit)).toBe(25_200_000_000_000_000_000n)
 	expect(requiredPortfolioCollateral({ ...snapshot, ownerConservativePrice: 1n }, 1n)).toBe(3n)
 	expect(requiredPortfolioCollateral({ ...snapshot, ownerAccount: { ...snapshot.ownerAccount, targetHealthFactorBps: 0n } }, 10n * unit)).toBe(21n * unit)
+})
+test('target capacity reverses every rounding step and never quotes one extra unit of commitment', () => {
+	for (const principal of [0n, 1n, 2n, 3n, 17n, 30n * unit]) {
+		for (const price of [1n, 7n, unit, 2n * unit + 1n]) {
+			const snapshot = capitalSnapshot({ ownerPrincipalAttoRep: principal, ownerConservativePrice: price })
+			const capacity = maximumPortfolioCommitment(snapshot, 12_000n)
+			expect(capacity).toBeDefined()
+			if (capacity === undefined) throw new Error('Missing capacity')
+			expect(requiredPortfolioCollateral(snapshot, capacity)).toBeLessThanOrEqual(principal)
+			expect(requiredPortfolioCollateral(snapshot, capacity + 1n)).toBeGreaterThan(principal)
+		}
+	}
+	expect(maximumPortfolioCommitment(capitalSnapshot({ ownerConservativePrice: 0n }), 12_000n)).toBeUndefined()
+	expect(maximumPortfolioCommitment(capitalSnapshot(), 9_999n)).toBeUndefined()
+	expect(maximumPortfolioCommitment(capitalSnapshot(), 1n << 256n)).toBeUndefined()
+})
+test('partial retirement keeps a meaningful residual and requires one complete reduction unit', () => {
+	const snapshot = capitalSnapshot()
+	expect(capitalRetirementReason(snapshot, 1n, 8n * unit)).toBeUndefined()
+	expect(capitalRetirementReason(snapshot, 1n, 0n)).toBeUndefined()
+	expect(capitalRetirementReason(snapshot, 1n, unit - 1n)).toContain('minimum')
+	expect(capitalRetirementReason(snapshot, 1n, 10n * unit - 1n)).toContain('minimum')
+	expect(capitalRetirementReason(snapshot, 1n, 10n * unit)).toContain('smaller')
 })
 test('execution reserves grow with commitment lots and existing active reserve counts toward funding', () => {
 	const snapshot = capitalSnapshot({ ownerAccount: { ...capitalSnapshot().ownerAccount, executionReserveAttoEth: 0n } })
@@ -39,4 +62,8 @@ test('a funded report permits growth only with its conservative collateral price
 	expect(capitalAuthorizationReason(snapshot, 10n * unit, 3n * unit)).toBeUndefined()
 	expect(capitalAuthorizationReason({ ...snapshot, ownerPrincipalAttoRep: 30n * unit }, 10n * unit, 3n * unit)).toContain('Collateral')
 	expect(requiredPortfolioCollateral(snapshot, 10n * unit, 3n * unit)).toBe(37_800_000_000_000_000_000n)
+})
+test('unfunded authorization cannot ignore demand above nominal commitment', () => {
+	const snapshot = capitalSnapshot({ demandAttoEth: 101n * unit })
+	expect(capitalAuthorizationReason(snapshot, 10n * unit)).toContain('funded')
 })

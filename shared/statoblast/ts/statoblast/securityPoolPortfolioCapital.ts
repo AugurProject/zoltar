@@ -41,19 +41,20 @@ const abi = parseAbi([
 	'function totals() view returns (uint256 rep,uint256 commitment,uint256 healthy)',
 	'function currentBatch() view returns (uint96)',
 	'function nextBatch() view returns (uint96)',
-	'function accountOf(uint96 id) view returns ((address owner,uint96 batch,uint256 rep,uint256 commitment,uint256 maxHealthyPrice,uint256 releasedRep,uint256 ethFees,uint256 repFees) account)',
+	'function accountOf(uint96 id) view returns ((address owner,uint96 batch,uint256 rep,uint256 commitment,uint256 maxHealthyPrice,uint256 releasedRep,uint256 ethFees,uint256 repFees,uint256 remainingCommitment) account)',
 	'function positionExecutionReserveAttoEth(uint96 id) view returns (uint256)',
 	'function liquidationStarted(uint96 id) view returns (uint48)',
 	'function depositFor(address owner,uint256 amount)',
+	'function depositAndSetHealthTarget(uint256 amount,uint256 targetHealthFactorBps)',
 	'function withdrawPrincipal(uint256 amount,address recipient)',
 	'function setHealthTarget(uint256 targetHealthFactorBps)',
 	'function authorize(uint256 commitment) returns (uint96)',
 	'function authorizeWithReport(uint256 reportId,uint256 commitment) returns (uint96)',
 	'function fundExecutionReserve(address owner) payable',
 	'function withdrawExecutionReserve(uint256 amount)',
-	'function requestRetirement(uint96 id)',
+	'function requestRetirement(uint96 id,uint256 remainingCommitment)',
 	'function cancelRetirement(uint96 id)',
-	'function serveRetirement()',
+	'function serveRetirement(uint96 id)',
 	'function claimEarnings()',
 	'function cure(uint96 id) returns (uint256)',
 	'function takeOver(uint96 id,uint256 commitment,uint256 minimumAward,uint256 maximumOwnRep) returns (uint96)',
@@ -79,6 +80,7 @@ type PortfolioCapitalPosition = {
 	feesAttoRep: bigint
 	executionReserveAttoEth: bigint
 	liquidationStarted: bigint
+	remainingCommitment: bigint
 }
 export type PortfolioCapitalSnapshot = {
 	chainId: number
@@ -183,6 +185,10 @@ export function buildPortfolioCapitalSetHealthRequest(parameters: CapitalRequest
 	if (uint(parameters.targetHealthFactorBps, 'Health target') < 10_000n) throw new Error('Health target must be at least 100%.')
 	return request(parameters, 'setHealthTarget', [parameters.targetHealthFactorBps])
 }
+export function buildPortfolioCapitalDepositAndSetHealthRequest(parameters: CapitalRequest & { amountAttoRep: bigint; targetHealthFactorBps: bigint }) {
+	if (uint(parameters.targetHealthFactorBps, 'Health target') < 10_000n) throw new Error('Health target must be at least 100%.')
+	return request(parameters, 'depositAndSetHealthTarget', [positive(parameters.amountAttoRep, 'REP deposit'), parameters.targetHealthFactorBps])
+}
 export function buildPortfolioCapitalAuthorizeRequest(parameters: CapitalRequest & { commitment: bigint; reportId?: bigint }) {
 	const commitment = positive(parameters.commitment, 'Commitment')
 	return parameters.reportId === undefined ? request(parameters, 'authorize', [commitment]) : request(parameters, 'authorizeWithReport', [uint(parameters.reportId, 'Report id'), commitment])
@@ -193,14 +199,14 @@ export function buildPortfolioCapitalFundExecutionReserveRequest(parameters: Cap
 export function buildPortfolioCapitalWithdrawExecutionReserveRequest(parameters: CapitalRequest & { amountAttoEth: bigint }) {
 	return request(parameters, 'withdrawExecutionReserve', [positive(parameters.amountAttoEth, 'Execution withdrawal')])
 }
-export function buildPortfolioCapitalRequestRetirementRequest(parameters: CapitalRequest & { positionId: bigint }) {
-	return request(parameters, 'requestRetirement', [positive(parameters.positionId, 'Position id', 96)])
+export function buildPortfolioCapitalRequestRetirementRequest(parameters: CapitalRequest & { positionId: bigint; remainingCommitment: bigint }) {
+	return request(parameters, 'requestRetirement', [positive(parameters.positionId, 'Position id', 96), uint(parameters.remainingCommitment, 'Remaining commitment')])
 }
 export function buildPortfolioCapitalCancelRetirementRequest(parameters: CapitalRequest & { positionId: bigint }) {
 	return request(parameters, 'cancelRetirement', [positive(parameters.positionId, 'Position id', 96)])
 }
-export function buildPortfolioCapitalServeRetirementRequest(parameters: CapitalRequest) {
-	return request(parameters, 'serveRetirement')
+export function buildPortfolioCapitalServeRetirementRequest(parameters: CapitalRequest & { positionId?: bigint }) {
+	return request(parameters, 'serveRetirement', [uint(parameters.positionId ?? 0n, 'Position id', 96)])
 }
 export function buildPortfolioCapitalClaimEarningsRequest(parameters: CapitalRequest) {
 	return request(parameters, 'claimEarnings')
@@ -275,7 +281,7 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 	const positions = await Promise.all(
 		(account.positionId === 0n ? [] : [account.positionId]).map(async id => {
 			const [value, execution, liquidation] = await Promise.all([read(commitmentIndex, 'accountOf', [id]), read(capitalLedger, 'positionExecutionReserveAttoEth', [id]), read(capitalLedger, 'liquidationStarted', [id])])
-			const [holder, batch, rep, commitment, maximum, released, eth, repFees] = fields(value, ['owner', 'batch', 'rep', 'commitment', 'maxHealthyPrice', 'releasedRep', 'ethFees', 'repFees'])
+			const [holder, batch, rep, commitment, maximum, released, eth, repFees, remaining] = fields(value, ['owner', 'batch', 'rep', 'commitment', 'maxHealthyPrice', 'releasedRep', 'ethFees', 'repFees', 'remainingCommitment'])
 			if (address(holder, 'Position owner').toLowerCase() !== owner.toLowerCase()) throw new Error('Capital position belongs to another owner.')
 			return {
 				id,
@@ -289,6 +295,7 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 				feesAttoRep: uint(repFees, 'REP earnings'),
 				executionReserveAttoEth: uint(execution, 'Position execution reserve'),
 				liquidationStarted: uint(liquidation, 'Liquidation start', 48),
+				remainingCommitment: uint(remaining, 'Remaining commitment'),
 			}
 		}),
 	)

@@ -38,7 +38,7 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		if (owner.positionId === 0n) throw new Error('Authorized owner position missing')
 		return owner.positionId
 	}
-	const retire = (client: WriteClient, id: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'requestRetirement', args: [id] }))
+	const retire = (client: WriteClient, id: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'requestRetirement', args: [id, 0n] }))
 	const cure = (id: bigint) => writeContractAndWait(keeper, () => keeper.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'cure', args: [id] }))
 	const healthy = async () => (await alice.readContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'totals' }))[2]
 	const earnedEth = async (client: WriteClient, id: bigint) => (await account(client)).feesAttoEth + (await position(id)).ethFees
@@ -274,15 +274,16 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		expect((await account(alice)).positionId).toBe(0n)
 	})
 
-	test('a chosen health buffer constrains authorization but does not raise the withdrawal liquidation floor', async () => {
-		await deposit(alice, 126n * E)
+	test('a chosen health buffer constrains withdrawals without moving the liquidation floor', async () => {
+		await deposit(alice, 147n * E)
 		await writeContractAndWait(alice, () => alice.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'setHealthTarget', args: [12_000n] }))
 		const id = await authorize(alice, 100n * E)
 		await demand(100n * E)
 		await withdraw(alice, 21n * E)
-		expect(await position(id)).toMatchObject({ rep: 105n * E, commitment: 100n * E })
+		expect(await position(id)).toMatchObject({ rep: 126n * E, commitment: 100n * E })
 		expect((await account(alice)).targetHealthFactorBps).toBe(12_000n)
 		await expect(withdraw(alice, 1n)).rejects.toThrow('Owner collateral too low')
+		await price((11n * E) / 10n)
 		await cure(id)
 		expect(await alice.readContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })).toBe(0n)
 	})

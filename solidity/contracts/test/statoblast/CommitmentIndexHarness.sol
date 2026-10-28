@@ -13,6 +13,7 @@ contract InspectableCommitmentIndex is SecurityPoolCommitmentIndex {
 		uint96 lastId;
 		uint16 height;
 		uint256 leaves;
+		uint256 retainedCommitment;
 	}
 	constructor(address authority) SecurityPoolCommitmentIndex(authority) {}
 	function validate(uint96 batch) external view returns (uint256 leaves, uint16 height) {
@@ -26,7 +27,12 @@ contract InspectableCommitmentIndex is SecurityPoolCommitmentIndex {
 		if (node.left == 0) {
 			require(node.right == 0 && node.height == 0 && node.price == node.maximumPrice, 'Invalid leaf');
 			require(positions[node.positionId].node == id && node.commitment != 0, 'Invalid leaf identity');
-			return Checked(node.rep, node.commitment, node.price, node.price, node.positionId, node.positionId, 0, 1);
+			Position storage position = positions[node.positionId];
+			bool leafPartial = position.remainingCommitment != 0;
+			require(node.retainedCommitment == position.remainingCommitment, 'Invalid partial retirement leaf');
+			require(!leafPartial || (position.batch != 0 && position.remainingCommitment < node.commitment), 'Invalid partial retirement goal');
+			return
+				Checked(node.rep, node.commitment, node.price, node.price, node.positionId, node.positionId, 0, 1, position.remainingCommitment);
 		}
 		Checked memory left = _check(node.left, id);
 		Checked memory right = _check(node.right, id);
@@ -35,8 +41,10 @@ contract InspectableCommitmentIndex is SecurityPoolCommitmentIndex {
 		uint16 height = (left.height > right.height ? left.height : right.height) + 1;
 		require(node.rep == left.rep + right.rep && node.commitment == left.commitment + right.commitment, 'Wrong commitment aggregates');
 		require(node.height == height && node.price == left.minimumPrice && node.maximumPrice == right.maximumPrice && node.positionId == left.firstId, 'Wrong commitment bounds');
+		uint256 retained = left.retainedCommitment + right.retainedCommitment;
+		require(node.retainedCommitment == retained, 'Wrong partial retirement aggregate');
 		return
-			Checked(node.rep, node.commitment, node.price, node.maximumPrice, left.firstId, right.lastId, height, left.leaves + right.leaves);
+			Checked(node.rep, node.commitment, node.price, node.maximumPrice, left.firstId, right.lastId, height, left.leaves + right.leaves, retained);
 	}
 }
 
@@ -45,6 +53,8 @@ contract CommitmentIndexHarness {
 	uint256 public releasedRep;
 	uint256 public retiredCommitment;
 	uint96 public boundaryPositionId;
+	uint256 public unassignedEth;
+	uint256 public unassignedRep;
 	mapping(uint96 => uint256) public paidRep;
 	mapping(uint96 => uint256) public paidEthFees;
 	mapping(uint96 => uint256) public paidRepFees;
@@ -62,7 +72,10 @@ contract CommitmentIndexHarness {
 		index.initCohorts(currentId, nextId);
 	}
 	function importPosition(address owner, uint256 rep, uint256 commitment, uint256 price, uint96 batch) external {
-		index.importPosition(owner, rep, commitment, price, batch);
+		index.importPosition(owner, rep, commitment, price, batch, 0);
+	}
+	function importPartial(address owner, uint256 rep, uint256 commitment, uint256 price, uint96 batch, uint256 remainingCommitment) external {
+		index.importPosition(owner, rep, commitment, price, batch, remainingCommitment);
 	}
 
 	function sealImports() external {
@@ -81,7 +94,13 @@ contract CommitmentIndexHarness {
 		index.transferTo(source, receiver, rep, commitment, oldPrice, newPrice);
 	}
 	function request(uint96 id) external {
-		index.requestRetirement(id);
+		index.requestRetirement(id, 0, 1);
+	}
+	function requestPartial(uint96 id, uint256 remainingCommitment) external {
+		index.requestRetirement(id, remainingCommitment, 1);
+	}
+	function requestWithMinimum(uint96 id, uint256 remainingCommitment, uint256 minimumCommitment) external {
+		index.requestRetirement(id, remainingCommitment, minimumCommitment);
 	}
 	function cancel(uint96 id) external {
 		index.cancelRetirement(id);
@@ -103,8 +122,18 @@ contract CommitmentIndexHarness {
 	function credit(uint256 price, uint256 ethAmount, uint256 repAmount) external {
 		require(index.creditFees(price, ethAmount, repAmount), 'No eligible recipients');
 	}
+	function creditProportional(uint256 price, uint256 ethAmount, uint256 repAmount) external {
+		(uint256 ethAmountLeft, uint256 repAmountLeft) = index.creditProportionalFees(price, ethAmount, repAmount);
+		unassignedEth += ethAmountLeft;
+		unassignedRep += repAmountLeft;
+	}
 	function retire(uint256 price, uint256 demand) external {
-		SecurityPoolCommitmentIndex.Retirement memory result = index.retire(price, demand);
+		_recordRetirement(index.retire(price, demand, 0));
+	}
+	function retirePosition(uint96 id, uint256 price, uint256 demand) external {
+		_recordRetirement(index.retire(price, demand, id));
+	}
+	function _recordRetirement(SecurityPoolCommitmentIndex.Retirement memory result) private {
 		releasedRep += result.rep;
 		retiredCommitment += result.commitment;
 		boundaryPositionId = result.boundaryPositionId;
@@ -127,13 +156,19 @@ contract CommitmentIndexHarness {
 	function createIdentical(uint256 count, uint256 rep, uint256 commitment, uint256 price, bool retiring) external {
 		for (uint256 i; i < count; i++) {
 			uint96 id = index.create(address(uint160(i + 1)), rep, commitment, price);
-			if (retiring) index.requestRetirement(id);
+			if (retiring) index.requestRetirement(id, 0, 1);
+		}
+	}
+	function createPartial(uint256 count, uint256 rep, uint256 commitment, uint256 price, uint256 remainingCommitment) external {
+		for (uint256 i; i < count; i++) {
+			uint96 id = index.create(address(uint160(i + 1)), rep, commitment, price);
+			index.requestRetirement(id, remainingCommitment, 1);
 		}
 	}
 	function createSparse(uint256 start, uint256 count, bool retiring) external {
 		for (uint256 i; i < count; i++) {
 			uint96 id = index.create(address(uint160(start + i + 1)), 10, 1, uint256(1) << (start + i));
-			if (retiring) index.requestRetirement(id);
+			if (retiring) index.requestRetirement(id, 0, 1);
 		}
 	}
 }

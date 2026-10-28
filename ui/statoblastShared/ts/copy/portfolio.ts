@@ -61,3 +61,5 @@ export const admissionCustom = 'Custom policy — underwriting unavailable'
 export const admissionChecking = 'Checking question admission…'
 export const admissionCheckFailed = 'Could not verify the question admission policy.'
 export const approvedQuestionCount = (count: bigint) => `${count} permanently approved question${count === 1n ? '' : 's'}. Only the current page is listed below.`
+
+export const readUnavailable = 'Account refresh pending.'

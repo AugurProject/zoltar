@@ -47,7 +47,7 @@ describe('Statoblast: central question fees and vested capital earnings', () => 
 		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: poolArtifact.abi, address: fixture.poolFor(fixture.base.questionId).securityPool, functionName: 'refreshPortfolioFees' }))
 		expect((await question()).feeRateAttoEthPerSecond).toBe(initial.feeRateAttoEthPerSecond)
 		const temporary = await fixture.other().readContract({ ...capital(), functionName: 'ownerAccount', args: [fixture.other().account.address] })
-		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...capital(), functionName: 'requestRetirement', args: [temporary.positionId] }))
+		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...capital(), functionName: 'requestRetirement', args: [temporary.positionId, 0n] }))
 		expect((await question()).feeRateAttoEthPerSecond).toBe(initial.feeRateAttoEthPerSecond)
 		expect(initial.feeRateAttoEthPerSecond).toBe((initial.feePrincipalAttoEth * 1_000n) / (10_000n * 365n * 86_400n))
 		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...capital(), functionName: 'withdrawPrincipal', args: [500n * unit, fixture.other().account.address] }))

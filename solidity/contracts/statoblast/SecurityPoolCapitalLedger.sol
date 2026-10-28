@@ -62,6 +62,7 @@ contract SecurityPoolCapitalLedger {
 		uint256 commitment;
 		uint96 batch;
 		uint256 executionReserveAttoEth;
+		uint256 remainingCommitment;
 	}
 	mapping(address => Owner) private owners;
 	mapping(address => bool) public exported;
@@ -129,13 +130,14 @@ contract SecurityPoolCapitalLedger {
 	function ownerCollateral(address owner) external view returns (uint256 principal, uint256 commitment, uint256 withdrawable) {
 		Owner storage account = owners[owner];
 		SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(account.positionId);
-		principal = account.freeAttoRep + position.rep + position.releasedRep;
+		withdrawable = account.freeAttoRep + position.releasedRep;
+		principal = withdrawable + position.rep;
 		commitment = position.commitment;
 		if (commitment == 0) return (principal, 0, principal);
 		if (importing || frozen || exported[owner] || zoltar.getForkTime(universeId) != 0 || !isPriceValid())
-			return (principal, commitment, 0);
-		uint256 required = _requiredRep(commitment, BPS, ownerConservativePrice(owner));
-		withdrawable = principal > required ? principal - required : 0;
+			return (principal, commitment, withdrawable);
+		uint256 required = _requiredRep(commitment, _target(account), ownerConservativePrice(owner));
+		if (position.rep > required) withdrawable += position.rep - required;
 	}
 	function isPriceValid() public view returns (bool) {
 		return acceptedPrice > 0 && block.timestamp < priceValidUntil;
@@ -183,6 +185,13 @@ contract SecurityPoolCapitalLedger {
 
 	/// @dev Every deposit immediately backs the owner's entire live commitment.
 	function depositFor(address owner, uint256 amount) external nonReentrant {
+		_depositFor(owner, amount);
+	}
+	function depositAndSetHealthTarget(uint256 amount, uint256 targetHealthFactorBps) external nonReentrant {
+		_depositFor(msg.sender, amount);
+		_setHealthTarget(targetHealthFactorBps);
+	}
+	function _depositFor(address owner, uint256 amount) private {
 		_requireOpen();
 		require(owner == msg.sender && owner != forkAuthority && amount > 0, 'Invalid capital deposit');
 		_checkpoint();
@@ -196,7 +205,7 @@ contract SecurityPoolCapitalLedger {
 			_replace(account.positionId, position.rep + amount, position.commitment);
 		}
 		repToken.safeTransferFrom(msg.sender, address(this), amount);
-		_serveRetirement();
+		_serveRetirement(0);
 		emit PrincipalDeposited(msg.sender, owner, amount);
 	}
 
@@ -205,16 +214,17 @@ contract SecurityPoolCapitalLedger {
 		_checkpoint();
 		_settleOwner(msg.sender);
 		Owner storage owner = owners[msg.sender];
-		if (amount <= owner.freeAttoRep) {
-			owner.freeAttoRep -= amount;
-			totalFreeAttoRep -= amount;
-		} else {
+		uint256 free = Math.min(amount, owner.freeAttoRep);
+		owner.freeAttoRep -= free;
+		totalFreeAttoRep -= free;
+		uint256 pledged = amount - free;
+		if (pledged != 0) {
 			require(owner.positionId != 0 && msg.sender != forkAuthority, 'Insufficient owner principal');
 			_requireOpen();
 			_requireFresh();
 			SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(owner.positionId);
-			require(amount <= position.rep && position.rep - amount >= _requiredRep(position.commitment, BPS, ownerConservativePrice(msg.sender)), 'Owner collateral too low');
-			_replace(owner.positionId, position.rep - amount, position.commitment);
+			require(pledged <= position.rep && position.rep - pledged >= _requiredRep(position.commitment, _target(owner), ownerConservativePrice(msg.sender)), 'Owner collateral too low');
+			_replace(owner.positionId, position.rep - pledged, position.commitment);
 		}
 		repToken.safeTransfer(recipient, amount);
 		emit PrincipalWithdrawn(msg.sender, recipient, amount);
@@ -245,10 +255,23 @@ contract SecurityPoolCapitalLedger {
 	}
 
 	function setHealthTarget(uint256 targetHealthFactorBps) external nonReentrant {
+		_setHealthTarget(targetHealthFactorBps);
+	}
+	function _setHealthTarget(uint256 targetHealthFactorBps) private {
 		_requireOpen();
 		require(targetHealthFactorBps >= BPS, 'Health below protocol floor');
 		_checkpoint();
-		owners[msg.sender].targetHealthFactorBps = targetHealthFactorBps;
+		_settleOwner(msg.sender);
+		Owner storage owner = owners[msg.sender];
+		if (owner.positionId != 0 && targetHealthFactorBps > _target(owner)) {
+			_requireFresh();
+			SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(owner.positionId);
+			_requireTarget(position.rep, position.commitment, targetHealthFactorBps);
+		}
+		owner.targetHealthFactorBps = targetHealthFactorBps;
+	}
+	function _requireTarget(uint256 rep, uint256 commitment, uint256 health) private view {
+		require(rep >= _requiredRep(commitment, health, ownerConservativePrice(msg.sender)), 'Chosen health target unmet');
 	}
 
 	/// @notice All deposited principal backs the owner's single commitment.
@@ -262,7 +285,7 @@ contract SecurityPoolCapitalLedger {
 		_requireOpen();
 		_requireFresh();
 		_checkpoint();
-		_serveRetirement();
+		_serveRetirement(0);
 		_settleOwner(msg.sender);
 		Owner storage owner = owners[msg.sender];
 		uint256 health = _target(owner);
@@ -280,7 +303,7 @@ contract SecurityPoolCapitalLedger {
 			fundingPriceEpoch[msg.sender] = epoch;
 		}
 		uint256 rep = owner.freeAttoRep + old.rep;
-		require(rep >= _requiredRep(commitment, health, ownerConservativePrice(msg.sender)), 'Chosen health target unmet');
+		_requireTarget(rep, commitment, health);
 		// Owners cannot bypass a closed retirement cohort with direct reductions.
 		require(commitment >= old.commitment, 'Retire before reducing');
 		totalFreeAttoRep -= owner.freeAttoRep;
@@ -294,31 +317,33 @@ contract SecurityPoolCapitalLedger {
 		emit CommitmentAuthorized(msg.sender, id, rep, commitment, health);
 	}
 
-	function requestRetirement(uint96 id) external nonReentrant {
+	function requestRetirement(uint96 id, uint256 remainingCommitment) external nonReentrant {
 		_requireOpen();
 		_checkpoint();
 		_settleOwner(msg.sender);
 		_owned(id, msg.sender);
-		commitmentIndex.requestRetirement(id);
-		_serveRetirement();
+		commitmentIndex.requestRetirement(id, remainingCommitment, minimumCommitmentAttoEth);
+		_serveRetirement(0);
 	}
 
 	function cancelRetirement(uint96 id) external nonReentrant {
 		_requireOpen();
 		_checkpoint();
 		_settleOwner(msg.sender);
-		_owned(id, msg.sender);
+		_requireFresh();
+		SecurityPoolCommitmentIndex.Account memory position = _owned(id, msg.sender);
+		_requireTarget(position.rep, position.commitment, _target(owners[msg.sender]));
 		commitmentIndex.cancelRetirement(id);
 	}
 
-	function serveRetirement() external nonReentrant {
+	function serveRetirement(uint96 id) external nonReentrant {
 		_requireOpen();
 		_checkpoint();
-		_serveRetirement();
+		_serveRetirement(id);
 	}
-	function _serveRetirement() private {
+	function _serveRetirement(uint96 id) private {
 		if (!isPriceValid() || frozen || zoltar.getForkTime(universeId) != 0) return;
-		SecurityPoolCommitmentIndex.Retirement memory result = commitmentIndex.retire(conservativePrice, demandAttoEth);
+		SecurityPoolCommitmentIndex.Retirement memory result = commitmentIndex.retire(conservativePrice, demandAttoEth, id);
 		retirementCashAttoRep += result.rep;
 		if (result.boundaryPositionId != 0) {
 			SecurityPoolCommitmentIndex.Account memory boundary = commitmentIndex.accountOf(result.boundaryPositionId);
@@ -333,11 +358,11 @@ contract SecurityPoolCapitalLedger {
 		_checkpoint();
 		if (demand > demandAttoEth) {
 			_requireFresh();
-			_serveRetirement();
+			_serveRetirement(0);
 			require(demand <= commitmentIndex.eligibleCommitment(conservativePrice), 'Healthy commitment insufficient');
 		}
 		demandAttoEth = demand;
-		_serveRetirement();
+		_serveRetirement(0);
 	}
 
 	/// @dev The book may remove matured liabilities during the pre-mutation fee
@@ -398,12 +423,8 @@ contract SecurityPoolCapitalLedger {
 
 	function _creditEarnings(uint256 ethAmount, uint256 repAmount) private {
 		if (ethAmount == 0 && repAmount == 0) return;
-		(, uint256 total) = commitmentIndex.totals();
-		uint256 eligible = acceptedPrice == 0 ? 0 : commitmentIndex.eligibleCommitment(conservativePrice);
-		uint256 assignedEth = total == 0 ? 0 : Math.mulDiv(ethAmount, eligible, total);
-		uint256 assignedRep = total == 0 ? 0 : Math.mulDiv(repAmount, eligible, total);
-		if (eligible != 0) commitmentIndex.creditFees(conservativePrice, assignedEth, assignedRep);
-		_serviceIncome(ethAmount - assignedEth, repAmount - assignedRep);
+		(uint256 unassignedEth, uint256 unassignedRep) = commitmentIndex.creditProportionalFees(acceptedPrice == 0 ? 0 : conservativePrice, ethAmount, repAmount);
+		_serviceIncome(unassignedEth, unassignedRep);
 	}
 	/// @dev Income belonging to unhealthy or stale intervals can never become a
 	/// new provider's jackpot. ETH funds maintenance; forfeited REP is burned.
@@ -447,7 +468,7 @@ contract SecurityPoolCapitalLedger {
 		_requireOpen();
 		_requireFresh();
 		_checkpoint();
-		_serveRetirement();
+		_serveRetirement(0);
 		removed = _cure(id, msg.sender, initialGas);
 	}
 	function _cure(uint96 id, address keeper, uint256 initialGas) private returns (uint256 removed) {
@@ -467,7 +488,7 @@ contract SecurityPoolCapitalLedger {
 		_requireOpen();
 		_requireFresh();
 		_checkpoint();
-		_serveRetirement();
+		_serveRetirement(0);
 		if (_cure(id, msg.sender, initialGas) != 0) initialGas = gasleft();
 		(SecurityPoolCommitmentIndex.Account memory source, uint256 award, uint256 debit) = commitmentIndex.takeoverQuote(id, msg.sender, commitment, minimumCommitmentAttoEth, minimumAward, liquidationPrice);
 		_settleOwner(msg.sender);
@@ -553,7 +574,7 @@ contract SecurityPoolCapitalLedger {
 			uint96 batch;
 			if (position.batch != 0) batch = position.batch == commitmentIndex.currentBatch() ? 1 : 2;
 			uint256 positionReserve = positionExecutionReserveAttoEth[id];
-			choice = ChoicePosition(position.rep, position.commitment, batch, positionReserve);
+			choice = ChoicePosition(position.rep, position.commitment, batch, positionReserve, position.remainingCommitment);
 			reserve += positionReserve;
 			delete positionExecutionReserveAttoEth[id];
 		}
@@ -576,7 +597,7 @@ contract SecurityPoolCapitalLedger {
 		require(account.positionId == 0 && account.freeAttoRep == 0, 'Owner already imported');
 		account.targetHealthFactorBps = target;
 		require(position.commitment != 0 && position.rep != 0, 'Empty fork choice');
-		uint96 id = commitmentIndex.importPosition(owner, position.rep, position.commitment, maximumHealthyPrice(position.rep, position.commitment), position.batch);
+		uint96 id = commitmentIndex.importPosition(owner, position.rep, position.commitment, maximumHealthyPrice(position.rep, position.commitment), position.batch, position.remainingCommitment);
 		account.positionId = id;
 		positionExecutionReserveAttoEth[id] = position.executionReserveAttoEth;
 		uint256 assignedReserve = position.executionReserveAttoEth;

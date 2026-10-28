@@ -96,7 +96,7 @@ describe('Statoblast: chosen underwriting and claimant recovery remain separate'
 
 		for (const client of [alice, bob]) {
 			const account = await client.readContract({ ...ledger(capital), functionName: 'ownerAccount', args: [client.account.address] })
-			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'requestRetirement', args: [account.positionId] }))
+			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'requestRetirement', args: [account.positionId, client === bob ? 80n * E : 0n] }))
 		}
 		await writeContractAndWait(owner, () => owner.writeContract({ ...zoltarTarget(), functionName: 'setFork', args: [0n, 2n] }))
 		forkTime = await owner.readContract({ ...zoltarTarget(), functionName: 'getForkTime', args: [0n] })
@@ -134,7 +134,7 @@ describe('Statoblast: chosen underwriting and claimant recovery remain separate'
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'registerQuestion', args: [child, 1n, buyer.account.address] }))
 		const token = await owner.readContract({ ...zoltarTarget(), functionName: 'getRepToken', args: [child] })
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'redeemQuestion', args: [child, 1n, 20n * E, buyer.account.address] }))
-		await writeContractAndWait(owner, () => owner.writeContract({ ...ledger(childCapital), functionName: 'serveRetirement' }))
+		await writeContractAndWait(owner, () => owner.writeContract({ ...ledger(childCapital), functionName: 'serveRetirement', args: [0n] }))
 		const firstPosition = await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [first.positionId] })
 		const secondPosition = await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [second.positionId] })
 		expect(firstPosition.commitment).toBe(0n)
@@ -155,5 +155,22 @@ describe('Statoblast: chosen underwriting and claimant recovery remain separate'
 		expect((await owner.readContract({ ...ledger(childCapital), functionName: 'ownerAccount', args: [forks] })).positionId).toBe(0n)
 		const token = await owner.readContract({ ...zoltarTarget(), functionName: 'getRepToken', args: [child] })
 		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [engine] })).toBe((1_110_505n * E) / 100n)
+	})
+	test('a chosen partial retirement carries its stop into the child and keeps its owners REP', async () => {
+		await choose(bob, 1n)
+		const child = await childId(1n)
+		const childCapital = await owner.readContract({ ...rootTarget(), functionName: 'capitalLedger', args: [child] })
+		const index = await owner.readContract({ ...ledger(childCapital), functionName: 'commitmentIndex' })
+		const holder = await owner.readContract({ ...ledger(childCapital), functionName: 'ownerAccount', args: [bob.account.address] })
+		const childPosition = () => owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [holder.positionId] })
+		expect(await childPosition()).toMatchObject({ commitment: 99n * E, remainingCommitment: 80n * E })
+		await moveTo(forkTime + 9n * week)
+		await finalize(child)
+		const now = (await owner.getBlock()).timestamp
+		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setPrice', args: [child, E, Number(now + 86_400n)] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'registerQuestion', args: [child, 1n, buyer.account.address] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'redeemQuestion', args: [child, 1n, 100n * E, buyer.account.address] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ ...ledger(childCapital), functionName: 'serveRetirement', args: [0n] }))
+		expect(await childPosition()).toMatchObject({ rep: 104n * E, commitment: 80n * E, remainingCommitment: 0n, batch: 0n, releasedRep: 0n })
 	})
 })

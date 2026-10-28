@@ -267,7 +267,7 @@ describe('Statoblast: central capital shared price feed', () => {
 		await fixture.authorize(200n * unit)
 		await fixture.deposit(unit)
 		const account = await owner.readContract({ ...capital, functionName: 'ownerAccount', args: [owner.account.address] })
-		await writeContractAndWait(owner, () => owner.writeContract({ ...capital, functionName: 'requestRetirement', args: [account.positionId] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ ...capital, functionName: 'requestRetirement', args: [account.positionId, 0n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...capital, functionName: 'withdrawPrincipal', args: [1_001n * unit, owner.account.address] }))
 		await fixture.base.mockWindow.advanceTime(481n)
 		await openOracleSettle(owner, reportId)
@@ -319,7 +319,7 @@ describe('Statoblast: central capital shared price feed', () => {
 								.toString(16)
 								.padStart(40, '0')}`,
 						)
-			const position = { rep, commitment: unit, batch: BigInt(i % 3), executionReserveAttoEth: unit / 10_000n }
+			const position = { rep, commitment: unit, batch: BigInt(i % 3), executionReserveAttoEth: unit / 10_000n, remainingCommitment: 0n }
 			const hash = await writeContractAndWait(root, () => root.writeContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'importChoice', args: [holder, position, 10_000n], value: unit / 10_000n }))
 			positionSetupGas += (await root.waitForTransactionReceipt({ hash })).gasUsed
 			backing += rep

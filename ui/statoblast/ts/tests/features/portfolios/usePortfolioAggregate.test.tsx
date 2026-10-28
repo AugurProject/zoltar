@@ -16,8 +16,10 @@ const abi = parseAbi([
 	'function authorize(uint256 commitment)',
 	'function authorizeWithReport(uint256 reportId,uint256 commitment)',
 	'function setHealthTarget(uint256 targetHealthFactorBps)',
+	'function depositAndSetHealthTarget(uint256 amount,uint256 targetHealthFactorBps)',
 	'function claimEarnings()',
-	'function requestRetirement(uint96 id)',
+	'function requestRetirement(uint96 id,uint256 remainingCommitment)',
+	'function serveRetirement(uint96 id)',
 	'function cancelRetirement(uint96 id)',
 	'function withdrawExecutionReserve(uint256 amount)',
 	'function fundExecutionReserve(address owner) payable',
@@ -32,7 +34,10 @@ async function setup(snapshot = capitalSnapshot()) {
 			requests.push(await build())
 		},
 	}
-	const hook = await renderHookWithProps((props: { snapshot: typeof snapshot; account: typeof owner | undefined }) => usePortfolioAggregate({ snapshot: props.snapshot, loading: false, error: undefined, refresh: async () => undefined }, actions, props.account), { snapshot, account: owner })
+	const hook = await renderHookWithProps((props: { snapshot: typeof snapshot | undefined; account: typeof owner | undefined }) => usePortfolioAggregate({ snapshot: props.snapshot, loading: props.snapshot === undefined, error: undefined, refresh: async () => undefined }, actions, props.account), {
+		snapshot,
+		account: owner,
+	})
 	lifecycle.trackRendered(hook)
 	return { hook, requests, transport }
 }
@@ -65,6 +70,87 @@ test('stale prices block live-principal withdrawal and authorization while prese
 	await act(() => hook.state().claim())
 	expect(requests).toHaveLength(1)
 	expect(hook.state().serveReason).toContain('price')
+})
+test('raising a saved health target requires present collateral and a fresh price', async () => {
+	const { hook } = await setup()
+	await act(() => hook.state().setHealthPercent('150'))
+	expect(hook.state().healthReason).toContain('REP')
+	await hook.setProps({ snapshot: capitalSnapshot({ priceValid: false }) })
+	expect(hook.state().healthReason).toContain('price')
+	await act(() => hook.state().setHealthPercent('100'))
+	expect(hook.state().healthReason).toBeUndefined()
+})
+test('cancelling retirement cannot reopen capacity below the saved target or at a stale price', async () => {
+	const snapshot = capitalSnapshot()
+	const retiring = { ...snapshot, positions: snapshot.positions.map(position => ({ ...position, batch: 1n, rep: 24n * unit })), ownerPrincipalAttoRep: 24n * unit }
+	const { hook } = await setup(retiring)
+	expect(hook.state().positionReasons(1n).cancel).toContain('target')
+	await hook.setProps({ snapshot: { ...retiring, priceValid: false } })
+	expect(hook.state().positionReasons(1n).cancel).toContain('price')
+})
+test('commitment starts from funded target capacity and lowering a target never sends authorization', async () => {
+	const { hook, requests } = await setup()
+	expect(hook.state().commitmentAmount).toBe('11.904761904761904761')
+	await act(() => hook.state().setHealthPercent('100'))
+	expect(hook.state().commitmentAmount).toBe('14.285714285714285714')
+	expect(hook.state().authorizeReason).toContain('Save your health target')
+	await act(() => hook.state().setHealth())
+	expect(requests).toHaveLength(1)
+	const request = requests[0]
+	if (request === undefined) throw new Error('Missing target request')
+	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'setHealthTarget', args: [10_000n] })
+})
+test('an atomic target raise previews the collateral shortfall and keeps approval separate', async () => {
+	const { hook, requests, transport } = await setup()
+	await act(() => hook.state().setHealthPercent('150'))
+	expect(hook.state().healthDepositAmount).toBe('1.5')
+	expect(hook.state().healthDepositReason).toContain('Approve')
+	await act(() => hook.state().approveHealthDeposit(2n * unit))
+	expect(requests).toHaveLength(1)
+	const funded = capitalSnapshot({ allowanceAttoRep: 2n * unit })
+	await hook.setProps({ snapshot: funded })
+	transport.setSnapshot(funded)
+	await act(() => hook.state().depositAndSetHealth())
+	expect(requests).toHaveLength(2)
+	const request = requests[1]
+	if (request === undefined) throw new Error('Missing atomic target request')
+	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'depositAndSetHealthTarget', args: [(3n * unit) / 2n, 15_000n] })
+	await request.validateBeforeSubmit?.()
+	transport.setSnapshot({ ...funded, allowanceAttoRep: unit })
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Approve REP')
+	transport.setSnapshot({ ...funded, priceValid: false })
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('price')
+})
+test('target-sized retirement sends a fixed residual without silently saving an unfunded target', async () => {
+	const { hook, requests } = await setup()
+	await act(() => hook.state().setHealthPercent('200'))
+	expect(hook.state().healthReason).toContain('REP')
+	await act(() => hook.state().retireToTarget())
+	expect(hook.state().remainingCommitmentAmount).toBe('7.142857142857142857')
+	await act(() => hook.state().retire(1n))
+	expect(requests).toHaveLength(1)
+	const request = requests[0]
+	if (request === undefined) throw new Error('Missing partial retirement request')
+	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'requestRetirement', args: [1n, 7_142_857_142_857_142_857n] })
+	expect(request.reviewDescription).toContain('saved health target stays unchanged')
+})
+test('target sizing rounds a small reduction up to a meaningful retirement unit', async () => {
+	const { hook } = await setup()
+	await act(() => hook.state().setHealthPercent('150'))
+	await act(() => hook.state().retireToTarget())
+	expect(hook.state().remainingCommitmentAmount).toBe('9')
+	expect(hook.state().positionReasons(1n).retire).toBeUndefined()
+})
+test('idle principal sizes new authorization but cannot satisfy a live health raise or reduction', async () => {
+	const base = capitalSnapshot()
+	const snapshot = { ...base, ownerPrincipalAttoRep: 50n * unit, ownerAccount: { ...base.ownerAccount, freeAttoRep: 20n * unit } }
+	const { hook } = await setup(snapshot)
+	await act(() => hook.state().setHealthPercent('200'))
+	expect(hook.state().targetCapacity).toBe(11_904_761_904_761_904_761n)
+	expect(hook.state().healthReason).toContain('REP')
+	expect(hook.state().healthDepositAmount).toBe('12')
+	await act(() => hook.state().retireToTarget())
+	expect(hook.state().remainingCommitmentAmount).toBe('7.142857142857142857')
 })
 test('personal health and exact commitment consent are rechecked after the review opens', async () => {
 	const { hook, requests, transport } = await setup()
@@ -101,10 +187,58 @@ test('single owner position retains its retirement cohort and account changes cl
 	await act(() => hook.state().retire(1n))
 	const request = requests[0]
 	if (request === undefined) throw new Error('Missing retirement')
-	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'requestRetirement', args: [1n] })
+	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'requestRetirement', args: [1n, 0n] })
 	await act(() => hook.state().setDepositAmount('5'))
 	await hook.setProps({ snapshot: capitalSnapshot({ universeId: 2n }) })
 	expect(hook.state().depositAmount).toBe('')
+})
+
+test('approval refresh preserves health and commitment drafts until the concrete account or saved target changes', async () => {
+	const { hook } = await setup()
+	await act(() => {
+		hook.state().setHealthPercent('150')
+		hook.state().setHealthDepositAmount('7')
+		hook.state().setCommitmentAmount('6')
+		hook.state().setRemainingCommitmentAmount('5')
+	})
+	await hook.setProps({ snapshot: undefined })
+	await hook.setProps({ snapshot: capitalSnapshot({ allowanceAttoRep: 7n * unit }) })
+	expect(hook.state().healthPercent).toBe('150')
+	expect(hook.state().healthDepositAmount).toBe('7')
+	expect(hook.state().commitmentAmount).toBe('6')
+	expect(hook.state().remainingCommitmentAmount).toBe('5')
+	await act(() => hook.state().setHealthPercent('200'))
+	await hook.setProps({ snapshot: capitalSnapshot({ ownerAccount: { ...capitalSnapshot().ownerAccount, targetHealthFactorBps: 15_000n } }) })
+	expect(hook.state().healthPercent).toBe('150')
+	await hook.setProps({ snapshot: undefined })
+	await hook.setProps({ snapshot: capitalSnapshot({ chainId: 2 }) })
+	expect(hook.state().healthPercent).toBe('120')
+	expect(hook.state().healthDepositAmount).toBe('0')
+	expect(hook.state().remainingCommitmentAmount).toBe('0')
+})
+
+test('retirement service targets the owner request without pretending insufficient capacity completed it', async () => {
+	const base = capitalSnapshot()
+	const snapshot = { ...base, demandAttoEth: base.healthyCommitmentAttoEth, positions: base.positions.map(position => ({ ...position, batch: 1n, remainingCommitment: 5n * unit })) }
+	const { hook, requests, transport } = await setup(snapshot)
+	await act(() => hook.state().serve())
+	const request = requests[0]
+	if (request === undefined) throw new Error('Missing retirement service request')
+	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'serveRetirement', args: [1n] })
+	expect(request.reviewDescription).toContain('your commitment remains unchanged')
+	expect(hook.state().livePositions[0]).toMatchObject({ batch: 1n, commitment: 10n * unit, remainingCommitment: 5n * unit })
+	await request.validateBeforeSubmit?.()
+	transport.setSnapshot(base)
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Retirement request changed')
+})
+
+test('retirement service without an owner request keeps the bounded global action', async () => {
+	const { hook, requests } = await setup()
+	await act(() => hook.state().serve())
+	const request = requests[0]
+	if (request === undefined) throw new Error('Missing global retirement service request')
+	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'serveRetirement', args: [0n] })
+	expect(request.reviewDescription).toContain('Partial progress')
 })
 
 test('withdrawals use the on-chain allowance and recheck it before submission', async () => {
@@ -214,4 +348,64 @@ test('a selected funded report quotes collateral, authorizes explicitly, and is 
 	await request.validateBeforeSubmit?.()
 	transport.setRead('reportAuthorization', [4n * unit, 2n])
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Report terms changed')
+})
+
+test('a higher funded report price resizes target capacity and settles after rechecking that exposure', async () => {
+	const snapshot = capitalSnapshot({ oracleExposureLimitAttoEth: 1n, ownerPrincipalAttoRep: 40n * unit })
+	const { hook, transport } = await setup(snapshot)
+	transport.setRead('reportAuthorization', [3n * unit, 2n])
+	await act(async () => {
+		hook.state().setReportInput('7')
+	})
+	await act(async () => {
+		await new Promise(resolve => setTimeout(resolve, 20))
+	})
+	await act(async () => {
+		await new Promise(resolve => setTimeout(resolve, 20))
+	})
+	expect(hook.state().commitmentAmount).toBe('10.58201058201058201')
+	expect(hook.state().authorizeReason).toBeUndefined()
+	expect(transport.reads.filter(read => read.name === 'reportAuthorization')).toHaveLength(2)
+})
+test('funded authorization proofs cover existing demand when it exceeds proposed nominal capacity', async () => {
+	const snapshot = capitalSnapshot({ demandAttoEth: 100n * unit })
+	const { hook, transport } = await setup(snapshot)
+	transport.setRead('reportAuthorization', [2n * unit, 2n])
+	await act(async () => {
+		hook.state().setCommitmentAmount('10')
+		hook.state().setReportInput('7')
+	})
+	await act(async () => {
+		await new Promise(resolve => setTimeout(resolve, 20))
+	})
+	expect(transport.reads.filter(read => read.name === 'reportAuthorization').at(-1)?.args).toEqual([7n, 100n * unit])
+})
+
+test('presentation-only balances retain position context without authorizing a write', async () => {
+	const snapshot = capitalSnapshot()
+	const transport = capitalClient(snapshot)
+	transport.install()
+	const requests: PortfolioTransaction[] = []
+	const hook = await renderHookWithProps(
+		() =>
+			usePortfolioAggregate(
+				{ snapshot: undefined, presentationSnapshot: snapshot, loading: false, error: undefined, refresh: async () => undefined },
+				{
+					ownerReason: undefined,
+					runPortfolioAction: async (_action, _title, build) => {
+						requests.push(await build())
+					},
+				},
+				owner,
+			),
+		{},
+	)
+	lifecycle.trackRendered(hook)
+	await act(() => hook.state().setReportInput('7'))
+	expect(transport.reads.some(read => read.name === 'reportAuthorization')).toBe(false)
+	expect(hook.state().showingPreviousSnapshot).toBe(true)
+	expect(hook.state().livePositions).toEqual(snapshot.positions)
+	expect(hook.state().claimReason).toBe('Account refresh pending.')
+	await expect(hook.state().claim()).rejects.toThrow('Account refresh pending.')
+	expect(requests).toHaveLength(0)
 })
