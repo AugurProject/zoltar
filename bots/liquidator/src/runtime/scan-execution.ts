@@ -1,5 +1,8 @@
 import { portfolioTakeoverPlan } from '#core/portfolio-strategy'
-import { executePortfolioTakeover } from '#execution/portfolio-executor'
+import { executePortfolioTakeover, PortfolioOpportunityExpired } from '#execution/portfolio-executor'
+import { executePortfolioCure, executePortfolioEarnings } from '#execution/portfolio-cure'
+import { portfolioCurePlan } from '#core/portfolio-cure'
+import { portfolioTarget } from '#monitoring/portfolio-auction'
 import { recordActivity } from '#state/operator-state'
 import { canonicalMarketPriceAllowsExecution, marketPriceAllowsExecution, selectedCandidate } from '#core/candidate-selection'
 import { recoveryWorkBlocksExecution, shouldStopAfterSuccessfulCycle } from '#core/cycle-control'
@@ -63,10 +66,27 @@ export async function runLiveExecutionStep(runtime: LiquidatorRuntime, deps: Liq
 		const totalPrincipal = state.portfolios.reduce((sum, portfolio) => sum + portfolio.snapshot.ownerPrincipalAttoRep, 0n)
 		for (const portfolio of state.portfolios) {
 			const price = { repToken: portfolio.snapshot.repToken, lastPrice: portfolio.snapshot.acceptedPrice }
+			if (portfolio.selected && portfolio.approvedUniverse && portfolio.snapshot.ownerAccount.feesAttoEth >= runtime.settings.strategy.maximumGasCostAttoEth + runtime.settings.portfolioPolicy.minimumNetRewardAttoEth) {
+				await executePortfolioEarnings(activeWallet, runtime.settings, state, runtime.readPool, portfolio)
+				await saveDurableState(runtime.settings.runtime.stateFile, state)
+				return shouldStopAfterSuccessfulCycle(runtime.settings.runtime.once)
+			}
 			for (const position of portfolio.positions) {
+				const priceAllowed = (current: typeof portfolio) => canonicalMarketPriceAllowsExecution({ repToken: current.snapshot.repToken, lastPrice: current.snapshot.acceptedPrice }, runtime.settings, state, canonicalHash, requireDexEvidence)
+				if (portfolioCurePlan(portfolio, position, runtime.settings, marketPriceAllowsExecution(price, runtime.settings, state)) !== undefined) {
+					try {
+						await executePortfolioCure(activeWallet, runtime.settings, state, runtime.readPool, portfolio, portfolioTarget(position), priceAllowed)
+						await saveDurableState(runtime.settings.runtime.stateFile, state)
+						return shouldStopAfterSuccessfulCycle(runtime.settings.runtime.once)
+					} catch (error) {
+						if (!(error instanceof PortfolioOpportunityExpired)) throw error
+					}
+				}
 				const result = portfolioTakeoverPlan(portfolio, position, runtime.settings, totalPrincipal, marketPriceAllowsExecution(price, runtime.settings, state))
 				if (result.plan === undefined) continue
-				await executePortfolioTakeover(activeWallet, runtime.settings, state, runtime.readPool, portfolio, position.id, current => canonicalMarketPriceAllowsExecution({ repToken: current.snapshot.repToken, lastPrice: current.snapshot.acceptedPrice }, runtime.settings, state, canonicalHash, requireDexEvidence))
+				await executePortfolioTakeover(activeWallet, runtime.settings, state, runtime.readPool, portfolio, portfolioTarget(position), current =>
+					canonicalMarketPriceAllowsExecution({ repToken: current.snapshot.repToken, lastPrice: current.snapshot.acceptedPrice }, runtime.settings, state, canonicalHash, requireDexEvidence),
+				)
 				await saveDurableState(runtime.settings.runtime.stateFile, state)
 				return shouldStopAfterSuccessfulCycle(runtime.settings.runtime.once)
 			}
@@ -95,13 +115,14 @@ export function runDryRunStep(runtime: LiquidatorRuntime, deps: LiquidatorDeps) 
 		for (const position of portfolio.positions) {
 			const result = portfolioTakeoverPlan(portfolio, position, runtime.settings, totalPrincipal, marketPriceAllowsExecution({ repToken: portfolio.snapshot.repToken, lastPrice: portfolio.snapshot.acceptedPrice }, runtime.settings, state))
 			if (result.plan === undefined) continue
-			const key = `portfolio:${portfolio.snapshot.capitalLedger}:${position.id}:${position.commitment}:${portfolio.acceptedPriceEpoch}`
+			const label = position.auctionTarget === undefined ? `position=${position.id}` : `auction=${position.auctionTarget.auction} bid=${position.auctionTarget.bidId}`
+			const key = `portfolio:${portfolio.snapshot.capitalLedger}:${label}:${position.commitment}:${portfolio.acceptedPriceEpoch}`
 			if (runtime.lastDryRunKey !== key)
 				recordActivity(state, {
 					kind: 'liquidation',
 					status: 'dry-run',
 					message: 'Portfolio funded takeover candidate',
-					details: `${portfolio.selection.address} universe=${portfolio.selection.universeId} position=${position.id} ownREP=${result.plan.ownFunding} reserveETH=${result.plan.reserveFunding}; ${result.reason}`,
+					details: `${portfolio.selection.address} universe=${portfolio.selection.universeId} ${label} ownREP=${result.plan.ownFunding} reserveETH=${result.plan.reserveFunding}; ${result.reason}`,
 				})
 			runtime.lastDryRunKey = key
 			return

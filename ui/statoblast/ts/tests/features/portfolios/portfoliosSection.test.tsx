@@ -13,7 +13,7 @@ import { capitalClient } from './capitalClient.js'
 const lifecycle = installDomTestLifecycle({ url: `https://example.test/#/portfolios?portfolio=${portfolio}&owner=${owner}`, afterTest: resetActiveEnvironmentForTesting })
 const parameters = { accountAddress: owner, onTransactionRequested: () => undefined, onTransactionSubmitted: () => undefined, onTransactionFinished: () => undefined, onTransactionPresented: () => undefined, refreshState: async () => undefined }
 
-test('completed setup preserves the three transaction controls in their original order with completion reasons', async () => {
+test('completed setup preserves the four transaction controls in their original order with completion reasons', async () => {
 	const source = capitalClient()
 	source.setSetupStage(2n)
 	source.install()
@@ -24,17 +24,24 @@ test('completed setup preserves the three transaction controls in their original
 	if (setup === undefined) throw new Error('Setup section missing')
 	const buttons = [...setup.querySelectorAll('button')]
 	expect(buttons.map(button => button.textContent)).toEqual(copy.prepareStages)
-	expect(buttons.map(button => button.disabled)).toEqual([true, true, false])
+	expect(buttons.map(button => button.disabled)).toEqual([true, true, false, true])
 
-	source.setSetupStage(3n)
+	source.setSetupStage(4n)
 	await act(() => render(<PortfoliosSection parameters={parameters} enabled environmentKey={1} activeUniverseId={0n} />, view.container))
-	await waitFor(() => expect(view.container.textContent).toContain(copy.prepareProgress(3)))
+	await waitFor(() => expect(view.container.textContent).toContain(copy.prepareProgress(4)))
 	expect(setup.isConnected).toBe(true)
 	expect([...setup.querySelectorAll('button')]).toEqual(buttons)
-	expect(buttons.map(button => button.disabled)).toEqual([true, true, true])
-	expect(setup.textContent?.match(/This setup stage is complete\./g)).toHaveLength(3)
-	expect(view.container.textContent?.split(copy.prepareProgress(3))).toHaveLength(2)
+	expect(buttons.map(button => button.disabled)).toEqual([true, true, true, true])
+	expect(setup.textContent?.match(/This setup stage is complete\./g)).toHaveLength(4)
+	expect(view.container.textContent?.split(copy.prepareProgress(4))).toHaveLength(2)
 	expect(view.container.textContent?.split(copy.description)).toHaveLength(2)
+	const reserveLabel = [...view.container.querySelectorAll('label')].find(label => label.textContent?.includes(copy.auctionReserve))
+	if (reserveLabel === undefined) throw new Error('Auction reserve input missing')
+	const reserveInput = [...view.container.querySelectorAll('input')].find(input => input.id === reserveLabel.htmlFor)
+	if (reserveInput === undefined) throw new Error('Auction reserve control missing')
+	expect(reserveInput.value).toBe('50')
+	expect(view.container.textContent).toContain(copy.auctionReserveHint)
+	expect(view.container.textContent).toContain(copy.minimumCommitmentHint)
 })
 
 test('authenticated refresh preserves position controls while disabling transactions until fresh data resolves', async () => {

@@ -163,7 +163,8 @@ describe('Statoblast: bounded fork initialization', () => {
 		await checkGas(await initiateSecurityPoolFork(owner(), parent), 'aggregate freeze')
 		await base.mockWindow.setTime(forkTime + 56n * DAY + 1n)
 		const childUniverse = getChildUniverseId(base.genesisUniverse, QuestionOutcome.No)
-		await checkGas(await writeContractAndWait(other(), () => other().writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'startBranch', args: [base.genesisUniverse, BigInt(QuestionOutcome.No)] })), 'shared branch migration')
+		await checkGas(await writeContractAndWait(other(), () => other().writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'prepareBranch', args: [base.genesisUniverse, BigInt(QuestionOutcome.No)], gas: transactionGasLimit })), 'shared branch custody preparation')
+		await checkGas(await writeContractAndWait(other(), () => other().writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'startBranch', args: [base.genesisUniverse, BigInt(QuestionOutcome.No)], gas: transactionGasLimit })), 'shared branch migration')
 		const factory = getInfraContractAddresses().securityPoolFactory
 		await writeContractAndWait(other(), () => other().writeContract({ abi: factoryArtifact.abi, address: factory, functionName: 'preparePortfolioPriceFeed', args: [parent, childUniverse] }))
 		await writeContractAndWait(other(), () => other().writeContract({ abi: factoryArtifact.abi, address: factory, functionName: 'prepareChildPoolDependencies', args: [parent, BigInt(QuestionOutcome.No)] }))

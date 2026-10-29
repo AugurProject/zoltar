@@ -752,6 +752,34 @@
 		"./features/portfolios/hooks/usePortfolioServiceCredit.js": {
 			"bun": "./ts/features/portfolios/hooks/usePortfolioServiceCredit.ts",
 			"default": "./js/features/portfolios/hooks/usePortfolioServiceCredit.js"
+		},
+		"./features/portfolios/components/PortfolioPriceReport.js": {
+			"bun": "./ts/features/portfolios/components/PortfolioPriceReport.tsx",
+			"default": "./js/features/portfolios/components/PortfolioPriceReport.js"
+		},
+		"./features/portfolios/hooks/usePortfolioPrice.js": {
+			"bun": "./ts/features/portfolios/hooks/usePortfolioPrice.ts",
+			"default": "./js/features/portfolios/hooks/usePortfolioPrice.js"
+		},
+		"./features/portfolios/components/PortfolioAuction.js": {
+			"bun": "./ts/features/portfolios/components/PortfolioAuction.tsx",
+			"default": "./js/features/portfolios/components/PortfolioAuction.js"
+		},
+		"./features/portfolios/hooks/usePortfolioAuction.js": {
+			"bun": "./ts/features/portfolios/hooks/usePortfolioAuction.ts",
+			"default": "./js/features/portfolios/hooks/usePortfolioAuction.js"
+		},
+		"./copy/portfolioAuction.js": {
+			"bun": "./ts/copy/portfolioAuction.ts",
+			"default": "./js/copy/portfolioAuction.js"
+		},
+		"./protocol/securityPoolPortfolioAuction.js": {
+			"bun": "./ts/protocol/securityPoolPortfolioAuction.ts",
+			"default": "./js/protocol/securityPoolPortfolioAuction.js"
+		},
+		"./protocol/securityPoolPortfolioPrice.js": {
+			"bun": "./ts/protocol/securityPoolPortfolioPrice.ts",
+			"default": "./js/protocol/securityPoolPortfolioPrice.js"
 		}
 	},
 	"version": "1.0.0"

@@ -1,6 +1,6 @@
 import { type Account, type Address, type Chain, type ExtendableClient, type PublicClient, type Transport, type WalletClient } from '../types.js'
 
-import { buildPublicClientActions, buildRpcTransactionRequest, isAlreadyKnownTransactionError, withDefaultAccount } from './actions.js'
+import { buildPublicClientActions, buildRpcTransactionRequest, isAlreadyKnownTransactionError, rpcBalanceOverride, withDefaultAccount } from './actions.js'
 
 import { getAddress, keccak256, normalizeHash, normalizeRpcHex, normalizeBlockTag } from '../encoding.js'
 
@@ -72,6 +72,7 @@ export function createWalletClient<TTransport extends Transport = Transport, TCh
 							value: parameters.value,
 						}),
 						normalizeBlockTag(parameters.blockNumber),
+						...rpcBalanceOverride({ account, balanceOverride: parameters.balanceOverride }),
 					],
 				}),
 			)

@@ -126,6 +126,11 @@ contract PortfolioForkHarness {
 	SecurityPoolPortfolioSettlement public settlement;
 	SecurityPoolReporterLedger public reporters;
 	address public forkController;
+	address public immutable auctionDeployer;
+	uint256 public constant minimumCommitmentAttoEth = 1e15;
+	uint256 public constant minimumExecutionReserveAttoEth = 1e14;
+	uint256 public constant auctionReserveFactorBps = 5_000;
+	uint256 public constant initialReportPriorityFeeAttoEthPerGas = 2e9;
 	struct Clock {
 		uint48 logicalAnchor;
 		uint48 wallAnchor;
@@ -136,11 +141,12 @@ contract PortfolioForkHarness {
 	mapping(uint248 => SecurityPoolCapitalLedger) public capitalLedger;
 	mapping(uint248 => mapping(uint256 => ISecurityPool)) private pools;
 
-	constructor(PortfolioForkZoltarMock protocol, SecurityPoolCapitalLedgerDeployer capitals, SecurityPoolCommitmentIndexDeployer indices, SecurityPoolCapitalFeeStreamsDeployer streams) {
+	constructor(PortfolioForkZoltarMock protocol, SecurityPoolCapitalLedgerDeployer capitals, SecurityPoolCommitmentIndexDeployer indices, SecurityPoolCapitalFeeStreamsDeployer streams, address auctions) {
 		zoltar = protocol;
 		capitalDeployer = capitals;
 		indexDeployer = indices;
 		streamsDeployer = streams;
+		auctionDeployer = auctions;
 		clocks[0] = Clock(0, 0, true, true);
 	}
 	receive() external payable {}
@@ -206,6 +212,7 @@ contract PortfolioForkHarness {
 	function freezePremiumUniverse(uint248) external pure {}
 	function onPremiumChoice(uint248, uint248, uint256, uint256) external pure {}
 	function createPremiumChild(uint248, uint248) external pure {}
+	function checkpointPreparationPremium(uint248) external pure {}
 	mapping(uint256 => uint256) public recoveryPremiumAttoEth;
 	mapping(uint256 => uint256) public recoveredPremiumShares;
 	mapping(address => uint256) public recoveredPremiumAttoEth;

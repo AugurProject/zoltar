@@ -8,7 +8,7 @@ import { executePortfolioTakeover, refreshPortfolioExecution } from '../../src/e
 import { initialRuntimeState } from '../../src/state/operator-state.ts'
 import { createWalletClient, createRpcEndpointPool, decodeFunctionData, parseAbiItem, privateKeyToAccount, type Hex } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
-import { erc20Abi } from '@zoltar/bot-shared/contracts/abi'
+import { erc20Abi, securityPoolCapitalLedgerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { mainnet } from '@zoltar/core-shared/evm/ethereum'
 import type { submitCall } from '../../src/execution/liquidation-executor.ts'
 import { portfolioObservation, portfolioSettings, unit } from '../support/portfolio-observation.ts'
@@ -189,4 +189,32 @@ test('portfolio final refresh reads one agreed height across staggered RPC heads
 	const result = await refreshPortfolioExecution(f.wallet, f.settings, f.state.portfolioScopes, f.pool, f.observation, 1n, readers)
 	expect(result.observation.snapshot.blockNumber).toBe(123n)
 	for (const fixtureValue of fixtures) expect(fixtureValue.reads.every(read => read.blockNumber === 123n)).toBe(true)
+})
+
+test('virtual winner takeover uses the bid API and rejects materialization or identity drift before funding', async () => {
+	const f = fixture()
+	const position = f.observation.positions[0]
+	if (position === undefined) throw new Error('Fixture target missing')
+	const target = { auction: f.observation.snapshot.portfolio, bidId: 44n, vault: position.owner }
+	position.auctionTarget = target
+	position.id = 44n
+	f.observation.snapshot.ownerPrincipalAttoRep = 100n * unit
+	f.observation.snapshot.ownerAccount.freeAttoRep = 100n * unit
+	f.observation.snapshot.ownerAccount.executionReserveAttoEth = unit
+	const refresh: typeof refreshPortfolioExecution = async () => ({ observation: f.observation, totalPrincipal: 100n * unit, allowance: 0n })
+	const submit: typeof submitCall = async (_wallet, _settings, _state, _pool, call) => {
+		await call.preSubmit?.()
+		f.calls.push(call)
+		return confirmed
+	}
+	await executePortfolioTakeover(f.wallet, f.settings, f.state, f.pool, f.observation, target, async () => true, { refresh, submit })
+	const call = f.calls[0]
+	if (call === undefined) throw new Error('Missing auction takeover')
+	expect(decodeFunctionData({ abi: securityPoolCapitalLedgerAbi, data: call.data })).toMatchObject({
+		functionName: 'takeOverAuctionBid',
+		args: [44n, 100n * unit, 99n * unit, 100n * unit, { maximumOwnerPrincipal: 1000n * unit, maximumOwnerCommitment: 1000n * unit, expectedTargetHealthFactorBps: 15_000n, expectedAcceptedPriceEpoch: 3n, expectedSourceBatch: 0n }],
+	})
+	expect(call.label).toContain('auction bid 44')
+	delete position.auctionTarget
+	await expect(call.preSubmit?.()).rejects.toThrow('target position is missing')
 })

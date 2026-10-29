@@ -516,6 +516,7 @@ describe('testnet deployment plan', () => {
 			infrastructure.securityPoolReporterLedgerDeployer,
 			infrastructure.securityPoolPortfolioServicesDeployer,
 			infrastructure.securityPoolPortfolioForkCoordinatorDeployer,
+			infrastructure.securityPoolPortfolioAuctionDeployer,
 			infrastructure.securityPoolUtils,
 			infrastructure.shareTokenFactory,
 			infrastructure.uniformPriceDualCapBatchAuctionFactory,
@@ -536,8 +537,8 @@ describe('testnet deployment plan', () => {
 		const publishedAddresses = [SEPOLIA_NETWORK_PROFILE.wethAddress, uniswap.addresses.uniswapV3FactoryAddress, uniswap.addresses.uniswapV3QuoterAddress, uniswap.addresses.uniswapV4PoolManagerAddress, uniswap.addresses.uniswapV4QuoterAddress]
 		expect(uniswap.publishedContracts.map(contract => contract.address)).toEqual(publishedAddresses)
 		for (const address of publishedAddresses) expect(addressSet.has(address)).toBe(false)
-		expect(Object.keys(bootstrapDescendants)).toHaveLength(22)
-		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(22)
+		expect(Object.keys(bootstrapDescendants)).toHaveLength(24)
+		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(24)
 		for (const address of Object.values(bootstrapDescendants)) expect(addressSet.has(address)).toBe(false)
 		expect(bootstrapDescendants.escalationGameProofVerifier).toBe(infrastructure.escalationGameProofVerifier)
 		expect(bootstrapDescendants.liquidationApprovalRegistryDeployer).toBe(getCreateAddress({ from: infrastructure.openOraclePriceCoordinatorFactory, nonce: 1n }))
@@ -556,14 +557,16 @@ describe('testnet deployment plan', () => {
 		expect(bootstrapDescendants['securityPoolServicesCreationCodeFirstChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioServicesDeployer, nonce: 1n }))
 		expect(bootstrapDescendants['securityPoolServicesCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioServicesDeployer, nonce: 2n }))
 		expect(bootstrapDescendants['securityPoolForkCreationCodeFirstChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioForkCoordinatorDeployer, nonce: 1n }))
+		expect(bootstrapDescendants['securityPoolAuctionCreationCodeFirstChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioAuctionDeployer, nonce: 1n }))
 		expect(bootstrapDescendants['securityPoolForkCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioForkCoordinatorDeployer, nonce: 2n }))
+		expect(bootstrapDescendants['securityPoolAuctionCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioAuctionDeployer, nonce: 2n }))
 		expect(plan.some(step => step.id === 'escalationGameFactory')).toBe(true)
-		expect(plan).toHaveLength(35)
+		expect(plan).toHaveLength(36)
 		expect(new Set(plan.map(step => step.id)).size).toBe(plan.length)
 		expect(new Set(plan.map(step => step.address)).size).toBe(plan.length)
 		for (const step of plan) expect(CONSERVATIVE_DEPLOYMENT_GAS[step.id]).toBeGreaterThan(0n)
 		const deterministicPlan = createCompleteDeploymentPlan(SEPOLIA_NETWORK_PROFILE, await getUniswapDeployment(31_337))
-		expect(deterministicPlan).toHaveLength(40)
+		expect(deterministicPlan).toHaveLength(41)
 		expect(Object.keys(CONSERVATIVE_DEPLOYMENT_GAS).sort()).toEqual(deterministicPlan.map(step => step.id).sort())
 		const indexById = new Map(plan.map((step, index) => [step.id, index]))
 		for (const [index, step] of plan.entries()) {
@@ -752,7 +755,9 @@ describe('testnet deployment plan', () => {
 			'securityPoolServicesCreationCodeFirstChunk',
 			'securityPoolServicesCreationCodeSecondChunk',
 			'securityPoolForkCreationCodeFirstChunk',
+			'securityPoolAuctionCreationCodeFirstChunk',
 			'securityPoolForkCreationCodeSecondChunk',
+			'securityPoolAuctionCreationCodeSecondChunk',
 		]) {
 			const chunkAddress = descendants[id]
 			if (chunkAddress === undefined) throw new Error(`Missing test descendant ${id}`)

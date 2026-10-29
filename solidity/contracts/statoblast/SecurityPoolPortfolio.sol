@@ -29,6 +29,8 @@ interface IPortfolioForkCoordinator {
 	function activateOrigin(uint248 origin) external;
 	function clocks(uint248 universeId) external view returns (uint48, uint48, bool, bool);
 	function isReady(uint248 universeId) external view returns (bool);
+	function isPriceReportingOpen(uint248 universeId) external view returns (bool);
+	function auctionExposure(uint248 universeId) external view returns (uint256 commitment, uint256 rep);
 	function logicalTime(uint248 universeId) external view returns (uint48);
 	function forkLogicalTime(uint248 universeId) external view returns (uint48);
 	function nativeTimeForLogical(uint248 universeId, uint48 timestamp) external view returns (uint48);
@@ -36,6 +38,9 @@ interface IPortfolioForkCoordinator {
 	function ensureReady(uint248 universeId) external;
 	function freeze(uint248 universeId) external;
 	function inheritedFixedOutcome(uint248 universeId, uint256 questionId) external view returns (bool, uint256);
+}
+interface IPortfolioAuctionDeployer {
+	function create(address authority, address portfolio, uint248 child, uint256 close, uint256 inventory, uint256 shortfall) external returns (address);
 }
 interface IPortfolioForkCoordinatorDeployer {
 	function create(address authority, Zoltar zoltar) external returns (address);
@@ -60,6 +65,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		uint256 reportingFeeAttoEth;
 		uint256 serviceFeeBps;
 		uint256 maximumOracleRewardAttoEth;
+		uint256 auctionReserveFactorBps;
 	}
 	struct Deployers {
 		SecurityPoolCapitalLedgerDeployer capital;
@@ -70,6 +76,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		SecurityPoolReporterLedgerDeployer reporters;
 		IPortfolioForkCoordinatorDeployer forks;
 		SecurityPoolPortfolioServicesDeployer services;
+		IPortfolioAuctionDeployer auctions;
 	}
 	ISecurityPoolFactory public immutable factory;
 	ISecurityPool public immutable seedPool;
@@ -89,6 +96,8 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	uint256 public immutable reportingFeeAttoEth;
 	uint256 public immutable serviceFeeBps;
 	uint256 public immutable maximumOracleRewardAttoEth;
+	uint256 public immutable auctionReserveFactorBps;
+	IPortfolioAuctionDeployer public immutable auctionDeployer;
 	SecurityPoolPortfolioPurchase public immutable quoteHelper;
 	SecurityPoolPortfolioServices public immutable services;
 	SecurityPoolPortfolioSettlement public settlement;
@@ -114,6 +123,8 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		require(address(admission).code.length != 0, 'Admission policy has no code');
 		require(config.purchaseFeeBps <= 10_000 && config.annualFeeBps <= 10_000 && config.minimumCommitmentAttoEth > 0 && config.minimumExecutionReserveAttoEth > 0, 'Invalid portfolio economics');
 		require(config.serviceFeeBps <= 10_000, 'Invalid maintenance fee share');
+		require(config.auctionReserveFactorBps > 0 && config.auctionReserveFactorBps <= 10_000, 'Invalid auction reserve factor');
+		require(address(deployment.auctions).code.length != 0, 'Auction deployer has no code');
 		require(config.minimumOutcomeRate > 0 && config.minimumOutcomeRate <= 1e18, 'Invalid minimum exchange rate');
 		require(address(deployment.capital).code.length != 0 && address(deployment.commitments).code.length != 0 && address(deployment.fees).code.length != 0 && address(deployment.books).code.length != 0 && address(deployment.settlement).code.length != 0 && address(deployment.reporters).code.length != 0 && address(deployment.forks).code.length != 0 && address(deployment.services).code.length != 0, 'Portfolio deployer has no code');
 		require(config.rewardVestingSeconds > 0 && horizon > 0 && horizon <= type(uint48).max, 'Invalid portfolio duration');
@@ -138,6 +149,8 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		reportingFeeAttoEth = config.reportingFeeAttoEth;
 		serviceFeeBps = config.serviceFeeBps;
 		maximumOracleRewardAttoEth = config.maximumOracleRewardAttoEth;
+		auctionReserveFactorBps = config.auctionReserveFactorBps;
+		auctionDeployer = deployment.auctions;
 		deployers = deployment;
 		quoteHelper = new SecurityPoolPortfolioPurchase(address(this));
 		services = deployment.services.create(address(this), config.maximumOracleRewardAttoEth, initialReportPriorityFeeAttoEthPerGas);
@@ -160,7 +173,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	/// @notice Advance one fixed setup stage without exceeding the transaction gas limit.
 	/// No caller can change the constructor configuration or replace an existing module.
 	function prepareNext() external nonReentrant {
-		if (setupStage == 3) return;
+		if (setupStage == 4) return;
 		require(zoltar.getForkTime(originUniverseId) == 0, 'Origin universe forked');
 		if (setupStage == 0) {
 			settlement = deployers.settlement.create(address(this));
@@ -174,8 +187,9 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 			reporters.registerUniverse(originUniverseId);
 			forkController = deployers.forks.create(address(this), zoltar);
 			IPortfolioForkCoordinator(forkController).initialize(originUniverseId);
-		} else {
+		} else if (setupStage == 2) {
 			_createCapital(originUniverseId);
+		} else {
 			factory.initializePortfolioPriceFeed(seedPool);
 			IPortfolioForkCoordinator(forkController).activateOrigin(originUniverseId);
 		}
@@ -208,13 +222,20 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	}
 	function oracleExposure(uint248 universeId) external view returns (uint256) {
 		(, uint256 commitment, ) = capitalLedger[universeId].totals();
-		return Math.max(commitment, capitalLedger[universeId].demandAttoEth());
+		(uint256 auctionCommitment, ) = IPortfolioForkCoordinator(forkController).auctionExposure(universeId);
+		return Math.max(Math.max(commitment, auctionCommitment), capitalLedger[universeId].demandAttoEth());
+	}
+	function oracleRepExposure(uint248 universeId) external view returns (uint256 rep) {
+		(, rep) = IPortfolioForkCoordinator(forkController).auctionExposure(universeId);
 	}
 	function availableMintCapacity(uint248 universeId) external view returns (uint256) {
 		return quoteHelper.availableMintCapacity(universeId);
 	}
 	function clocks(uint248 universeId) external view returns (uint48, uint48, bool, bool) {
 		return IPortfolioForkCoordinator(forkController).clocks(universeId);
+	}
+	function isPriceReportingOpen(uint248 universeId) external view returns (bool) {
+		return IPortfolioForkCoordinator(forkController).isPriceReportingOpen(universeId);
 	}
 	function logicalTime(uint248 universeId) public view returns (uint48) {
 		return IPortfolioForkCoordinator(forkController).logicalTime(universeId);
@@ -244,12 +265,13 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	}
 	function activateForkChild(uint248 child) external onlyForkController {
 		factory.initializePortfolioPriceFeedForUniverse(seedPool, child);
+		if (zoltar.getForkTime(child) == 0 && capitalLedger[child].isPriceValid()) services.activateFees(child);
 	}
 	function creditForkFees(uint248 universeId, uint256 amount) external onlyForkController {
 		if (amount != 0) capitalLedger[universeId].creditTimedFees{value: amount}();
 	}
 	function addQuestion(uint256 questionId) public returns (ISecurityPool pool) {
-		require(setupStage == 3, 'Portfolio setup incomplete');
+		require(setupStage == 4, 'Portfolio setup incomplete');
 		require(questionAdmissionPolicy.isQuestionAllowed(address(this), originUniverseId, questionId), 'Question rejected by admission policy');
 		bytes32 origin = questionOriginIds[questionId];
 		if (origin != bytes32(0)) return factory.getSecurityPool(origin, originUniverseId);
@@ -296,7 +318,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		emit CompleteSetsFunded(universeId, questionId, recipient, mintAttoEth, minted, fee);
 	}
 	function prepareServicePurchase(uint248 universeId, uint256 questionId) external onlyServices returns (ISecurityPool pool) {
-		require(setupStage == 3, 'Portfolio setup incomplete');
+		require(setupStage == 4, 'Portfolio setup incomplete');
 		IPortfolioForkCoordinator(forkController).ensureReady(universeId);
 		require(IPortfolioForkCoordinator(forkController).isReady(universeId), 'Universe is not ready');
 		if (universeId != originUniverseId)
@@ -343,9 +365,9 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	}
 	function onSharedPriceAccepted(uint248 universeId, uint256 price, uint48 validUntil) external {
 		require(msg.sender == factory.sharedPriceFeeds(address(this), universeId), 'Only canonical shared feed');
-		require(IPortfolioForkCoordinator(forkController).isReady(universeId), 'Universe is not active');
+		require(IPortfolioForkCoordinator(forkController).isPriceReportingOpen(universeId), 'Portfolio reporting window closed');
 		capitalLedger[universeId].acceptPrice(price, validUntil);
-		services.activateFees(universeId);
+		if (IPortfolioForkCoordinator(forkController).isReady(universeId)) services.activateFees(universeId);
 	}
 	function checkpointCapitalFees(uint248 universeId, uint48 through) external {
 		require(msg.sender == address(capitalLedger[universeId]), 'Only universe capital ledger');

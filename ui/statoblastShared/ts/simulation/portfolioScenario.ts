@@ -37,15 +37,16 @@ export async function seedPortfolioScenario({ accounts, createReadClient, create
 			reportingFeeAttoEth: 5n * 10n ** 16n,
 			serviceFeeBps: 2500n,
 			maximumOracleRewardAttoEth: 10n ** 17n,
+			auctionReserveFactorBps: 5_000n,
 		}),
 		'Deploy portfolio',
 	)
 	const portfolio = deployment.receipt.contractAddress
 	if (portfolio === null || portfolio === undefined) throw new Error('Expected deployed portfolio address')
 	await reportStep('Deployed shared portfolio')
-	for (let stage = 1; stage <= 3; stage++) {
+	for (let stage = 1; stage <= 4; stage++) {
 		await sendPortfolioTransaction(client, buildPortfolioPrepareNextRequest({ caller: owner, portfolio }), 'Prepare portfolio modules')
-		await reportStep(`Prepared portfolio stage ${stage} of 3`)
+		await reportStep(`Prepared portfolio stage ${stage} of 4`)
 	}
 	for (const [index, pool] of pools.entries()) {
 		await sendPortfolioTransaction(client, portfolioContractRequest(owner, portfolio, 'addQuestion', [BigInt(pool.questionId)]), 'Register question')

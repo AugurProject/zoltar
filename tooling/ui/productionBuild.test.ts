@@ -520,7 +520,7 @@ test(
 				const body = await driver.waitForBodyText(capitalCopy.priceValid.toUpperCase())
 				expect(body).toContain('Browser simulation')
 				expect(body).not.toContain('Could not load the portfolio snapshot')
-				expect(body).toContain(capitalCopy.prepareProgress(3))
+				expect(body).toContain(capitalCopy.prepareProgress(4))
 				await driver.waitForButtonEnabled(capitalCopy.claim)
 				const seededPools = await createWorkflowActions(driver).loadSeededPools()
 				const questionIds = seededPools

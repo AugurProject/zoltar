@@ -87,9 +87,10 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 			actions.runPortfolioAction('mintPortfolioCompleteSets', 'Buy complete sets', () => {
 				if (reason !== undefined || snapshot === undefined || questionId === undefined || amount === undefined || fee === undefined || minimum === undefined || quote === undefined) throw new Error(reason ?? 'Purchase quote unavailable.')
 				const selected = snapshot
+				const buyer = selected.auctionVault?.bidder ?? selected.owner
 				const captured = { questionId, mintAttoEth: amount, maximumPurchaseFeeAttoEth: fee, minimumShares: minimum }
 				return {
-					...buildPortfolioMintRequest({ trader: selected.owner, portfolio: selected.portfolio, universeId: selected.universeId, recipient: selected.owner, ...captured }),
+					...buildPortfolioMintRequest({ trader: buyer, portfolio: selected.portfolio, universeId: selected.universeId, recipient: buyer, ...captured }),
 					reviewDescription: `Buy complete sets for question 0x${questionId.toString(16)} with ${formatEther(amount)} ETH. The total charge for backing, the resolution premium and reporting is ${formatEther(quote.purchaseFeeAttoEth)} ETH, capped at ${formatEther(fee)} ETH; excess budget is refunded. Receive at least ${formatEther(minimum)} of each outcome. Available backing is checked after retirement in the same transaction.`,
 					validateBeforeSubmit: async () => {
 						const client = createConnectedReadClient()

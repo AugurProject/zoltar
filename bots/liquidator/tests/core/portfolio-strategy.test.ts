@@ -15,6 +15,14 @@ test('funded takeover bounds the entire transferred obligation, owner collateral
 	expect(plan?.netRewardAttoEth).toBeGreaterThan(0n)
 })
 
+test('an independently accounted auction vault controlled by the keeper is not an external profit opportunity', () => {
+	const observation = portfolioObservation()
+	const position = observation.positions[0]
+	if (position === undefined) throw new Error('Fixture target missing')
+	Object.assign(position, { controllingOwner: observation.snapshot.owner })
+	expect(evaluate(observation).plan).toBeUndefined()
+})
+
 test('unapproved, deselected, stale, forked and independent-price failures cannot produce actions', () => {
 	for (const mutation of [
 		(value: ReturnType<typeof portfolioObservation>) => {

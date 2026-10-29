@@ -17,6 +17,7 @@ const links = [
 	parseAbiItem('function feeStreams() view returns (address)'),
 	parseAbiItem('function services() view returns (address)'),
 	parseAbiItem('function lifecycleDelegate() view returns (address)'),
+	parseAbiItem('function auctionDelegate() view returns (address)'),
 	parseAbiItem('function reportingRewards() view returns (address)'),
 	parseAbiItem('function premiumLedger() view returns (address)'),
 ] as const
@@ -37,7 +38,7 @@ export async function verifyPortfolioCustody(client: ReadClient, snapshot: Portf
 		if ((await readAddress(address, authorityFunction)) !== authority) throw new Error(`${name} belongs to another authority`)
 	}
 	await verifyCode(snapshot.portfolio, 'SecurityPoolPortfolio')
-	const [settlement, reporters, quote, fork, fees, services, lifecycle] = await Promise.all([
+	const [settlement, reporters, quote, fork, fees, services, lifecycle, auctionDelegate] = await Promise.all([
 		readAddress(snapshot.portfolio, 'settlement'),
 		readAddress(snapshot.portfolio, 'reporters'),
 		readAddress(snapshot.portfolio, 'quoteHelper'),
@@ -45,6 +46,7 @@ export async function verifyPortfolioCustody(client: ReadClient, snapshot: Portf
 		readAddress(snapshot.capitalLedger, 'feeStreams'),
 		readAddress(snapshot.portfolio, 'services'),
 		readAddress(snapshot.capitalLedger, 'lifecycleDelegate'),
+		readAddress(snapshot.capitalLedger, 'auctionDelegate'),
 	])
 	const [book, rewards, premium, capitalServices, forkAuthority] = await Promise.all([readAddress(settlement, 'ledger'), readAddress(services, 'reportingRewards'), readAddress(services, 'premiumLedger'), readAddress(snapshot.capitalLedger, 'services'), readAddress(snapshot.capitalLedger, 'forkAuthority')])
 	if (capitalServices !== services) throw new Error('Capital ledger uses another services authority')
@@ -71,6 +73,7 @@ export async function verifyPortfolioCustody(client: ReadClient, snapshot: Portf
 		verifyModule(fork, 'SecurityPoolPortfolioForkCoordinator', snapshot.portfolio),
 		verifyModule(services, 'SecurityPoolPortfolioServices', snapshot.portfolio),
 		verifyModule(lifecycle, 'SecurityPoolCapitalLifecycleDelegate', snapshot.capitalLedger, 'ledger'),
+		verifyModule(auctionDelegate, 'SecurityPoolCapitalAuctionDelegate', snapshot.capitalLedger, 'ledger'),
 		verifyModule(rewards, 'SecurityPoolReportingRewards', snapshot.portfolio),
 		verifyModule(premium, 'SecurityPoolResolutionPremiumBook', services, 'services'),
 	])

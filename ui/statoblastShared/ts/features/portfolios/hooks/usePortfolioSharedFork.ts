@@ -1,7 +1,16 @@
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
-import { formatEther, getAddress, isAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { buildPortfolioForkChoiceRequest, buildPortfolioForkStartRequest, buildPortfolioForkFinalizeRequest, buildPortfolioForkRecoveryRequest, buildPortfolioRecoveryRightsTransferRequest, loadPortfolioForkSnapshot, type PortfolioForkSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { formatEther, getAddress, isAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import {
+	buildPortfolioForkChoiceRequest,
+	buildPortfolioForkPreparationRequest,
+	buildPortfolioForkStartRequest,
+	buildPortfolioForkFinalizeRequest,
+	buildPortfolioForkRecoveryRequest,
+	buildPortfolioRecoveryRightsTransferRequest,
+	loadPortfolioForkSnapshot,
+	type PortfolioForkSnapshot,
+} from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
@@ -10,7 +19,13 @@ import { loadSharedForkOutcome, loadPortfolioSourceRecovery, buildPortfolioRecov
 import { portfolioAmountOrUndefined, portfolioUnsignedId } from '../lib/draft.js'
 import type { PortfolioActions } from '../components/PortfolioControls.js'
 
-export type PortfolioSharedForkParameters = { snapshot: PortfolioAccountSnapshot | undefined; actions: Pick<PortfolioActions, 'scope' | 'busy' | 'ownerReason' | 'runPortfolioAction'>; openUniverse: (universeId: bigint) => void }
+export type PortfolioSharedForkParameters = {
+	snapshot: PortfolioAccountSnapshot | undefined
+	actions: Pick<PortfolioActions, 'scope' | 'busy' | 'ownerReason' | 'runPortfolioAction'>
+	openUniverse: (universeId: bigint) => void
+	bidder?: Address | undefined
+	openVault?: ((vault: Address, universeId: bigint) => void) | undefined
+}
 export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUniverse }: PortfolioSharedForkParameters) {
 	const backend = getActiveBackend()
 	const sourceInput = useSignal('')
@@ -95,8 +110,9 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 		(state?.choice.recorded ? 'Your irreversible branch choice is already recorded.' : undefined) ??
 		(state !== undefined && state.timestamp >= state.choiceDeadline ? 'The fork choice window has closed.' : undefined) ??
 		(portfolio !== undefined && universeId === portfolio.universeId && !portfolio.positions.some(position => position.rep > 0n && position.commitment > 0n) ? 'No pledged REP to move.' : undefined)
-	const startReason = branchReason ?? (state !== undefined && state.timestamp < state.choiceDeadline ? 'Wait until the choice deadline.' : undefined) ?? (state?.branch?.started ? 'This branch is already prepared.' : undefined)
-	const finalizeReason = branchReason ?? (state !== undefined && state.timestamp < state.activationDeadline ? 'Wait until the activation deadline.' : undefined) ?? (state?.branch?.ready ? 'This branch is already active.' : undefined)
+	const prepareBranchReason = branchReason ?? (state?.branch?.prepared ? 'This branch capital is already prepared.' : undefined)
+	const startReason = branchReason ?? (!state?.branch?.prepared ? 'Prepare the branch capital first.' : undefined) ?? (state !== undefined && state.timestamp < state.choiceDeadline ? 'Wait until the choice deadline.' : undefined) ?? (state?.branch?.started ? 'This branch migration is already started.' : undefined)
+	const finalizeReason = branchReason ?? (!state?.branch?.started ? 'Start branch migration first.' : undefined) ?? (state !== undefined && state.timestamp < state.activationDeadline ? 'Wait until the activation deadline.' : undefined) ?? (state?.branch?.ready ? 'This branch is already active.' : undefined)
 	const sourceReason =
 		forkReason ??
 		(questionId === undefined ? 'Enter a question ID.' : undefined) ??
@@ -173,6 +189,7 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 		},
 		transferReason,
 		chooseReason,
+		prepareBranchReason,
 		startReason,
 		finalizeReason,
 		prepareReason,
@@ -197,10 +214,15 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 					if (latest.choice.recorded || latest.timestamp >= latest.choiceDeadline) throw new Error('Fork choice is no longer available.')
 				},
 			),
-		start: () =>
-			run('startPortfolioFork', 'Prepare shared branch', startReason, selected => {
+		prepareBranch: () =>
+			run('preparePortfolioFork', 'Prepare branch capital', prepareBranchReason, selected => {
 				if (selected.branch === undefined) throw new Error('Select a branch.')
-				return { ...buildPortfolioForkStartRequest({ ...base(selected), outcomeIndex: selected.branch.outcomeIndex }), reviewDescription: 'Prepare this branch for all owners. This does not choose anyone’s branch or require processing each question.' }
+				return { ...buildPortfolioForkPreparationRequest({ ...base(selected), outcomeIndex: selected.branch.outcomeIndex }), reviewDescription: 'Prepare this branch’s capital contracts for all participants. This does not choose a branch for anyone or migrate REP.' }
+			}),
+		start: () =>
+			run('startPortfolioFork', 'Start branch migration', startReason, selected => {
+				if (selected.branch === undefined) throw new Error('Select a branch.')
+				return { ...buildPortfolioForkStartRequest({ ...base(selected), outcomeIndex: selected.branch.outcomeIndex }), reviewDescription: 'Migrate this branch’s shared REP and prepare its truth auction. This does not choose anyone’s branch or process each question.' }
 			}),
 		finalize: () =>
 			run('finalizePortfolioFork', 'Activate fork branch', finalizeReason, selected => {

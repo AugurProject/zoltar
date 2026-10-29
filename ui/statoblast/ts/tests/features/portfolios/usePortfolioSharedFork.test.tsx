@@ -17,6 +17,7 @@ async function setup() {
 	const snapshot = capitalSnapshot({ forkTime: 900n })
 	const source = capitalClient(snapshot)
 	let chosen = false
+	let prepared = true
 	let started = false
 	let ready = false
 	const client = source.client.extend(() =>
@@ -28,7 +29,7 @@ async function setup() {
 				choices: [1n, chosen],
 				getChildUniverseId: 42n,
 				getRepToken: token,
-				branches: [0n, 1n, 0n, 0n, 0n, 100n * unit, chosen, started, ready],
+				branches: [0n, 1n, 0n, 0n, 0n, 100n * unit, prepared || chosen, started, ready],
 				universes: [900n, 7n, 0n, false, 0n],
 				zoltarQuestionData: token,
 				questions: ['Fork question', 0n, 0n, 0n, 0n, 0n, 0n, ''],
@@ -69,6 +70,9 @@ async function setup() {
 		setChosen: (v: boolean) => {
 			chosen = v
 		},
+		setPrepared: (value: boolean) => {
+			prepared = value
+		},
 		setStarted: (v: boolean) => {
 			started = v
 		},
@@ -93,7 +97,7 @@ test('one irreversible choice has an explicit review and rechecks the strict nat
 test('shared preparation waits until cutoff and activation waits until the activation deadline', async () => {
 	const { hook, source, snapshot, requests } = await setup()
 	expect(hook.state().startReason).toContain('choice deadline')
-	expect(hook.state().finalizeReason).toContain('activation deadline')
+	expect(hook.state().finalizeReason).toContain('Start branch migration')
 	source.setSnapshot({ ...snapshot, timestamp: 2_000n, blockNumber: 11n })
 	await hook.setProps({ snapshot: { ...snapshot, blockHash: `0x${'11'.repeat(32)}` } })
 	await waitFor(() => expect(hook.state().state?.timestamp).toBe(2_000n))
@@ -128,13 +132,35 @@ test('fork drafts survive a transient snapshot reload so a prepared branch can b
 	await hook.setProps({ snapshot: { ...snapshot, blockHash: `0x${'55'.repeat(32)}` } })
 	await waitFor(() => expect(hook.state().state?.branch?.started).toBe(true))
 	expect(hook.state()).toMatchObject(draft)
-	expect(hook.state().startReason).toBe('This branch is already prepared.')
+	expect(hook.state().startReason).toBe('This branch migration is already started.')
 	expect(hook.state().finalizeReason).toBeUndefined()
 	await act(() => hook.state().finalize())
 	expect(requests).toHaveLength(2)
 	const request = requests[1]
 	if (request === undefined) throw new Error('Activation request missing')
 	expect(decodeFunctionData({ abi: parseAbi(['function finalizeBranch(uint248 child)']), data: request.data })).toEqual({ functionName: 'finalizeBranch', args: [42n] })
+})
+test('a branch without chosen owners prepares capital in a separate transaction before migration', async () => {
+	const { hook, source, snapshot, requests, setPrepared, setStarted } = await setup()
+	setPrepared(false)
+	source.setSnapshot({ ...snapshot, timestamp: 2_500n })
+	await hook.setProps({ snapshot: { ...snapshot, blockHash: `0x${'66'.repeat(32)}` } })
+	await waitFor(() => expect(hook.state().state?.branch?.prepared).toBe(false))
+	expect(hook.state().startReason).toContain('Prepare the branch capital')
+	expect(hook.state().prepareBranchReason).toBeUndefined()
+	await act(() => hook.state().prepareBranch())
+	expect(requests).toHaveLength(1)
+	const prepare = requests[0]
+	if (prepare === undefined) throw new Error('Missing branch preparation request')
+	expect(decodeFunctionData({ abi: parseAbi(['function prepareBranch(uint248 source,uint256 outcome) returns (uint248)']), data: prepare.data })).toEqual({ functionName: 'prepareBranch', args: [0n, 1n] })
+	setPrepared(true)
+	await hook.setProps({ snapshot: { ...snapshot, blockHash: `0x${'77'.repeat(32)}` } })
+	await waitFor(() => expect(hook.state().startReason).toBeUndefined())
+	await act(() => hook.state().start())
+	expect(requests).toHaveLength(2)
+	setStarted(true)
+	await hook.setProps({ snapshot: { ...snapshot, blockHash: `0x${'88'.repeat(32)}` } })
+	await waitFor(() => expect(hook.state().finalizeReason).toContain('activation deadline'))
 })
 test.each([
 	['portfolio', { portfolio: capital }],
@@ -174,7 +200,7 @@ test('fork actions distinguish invalid source input from an automatic pending re
 	expect(hook.state().chooseReason).toBe('Enter a valid source universe.')
 	const controller = createDeferred<typeof modules.fork>()
 	source.setRead('forkController', controller.promise)
-	await act(() => hook.state().setSource('1'))
+	await act(() => hook.state().setSource('0'))
 	expect(hook.state().state).toBeUndefined()
 	expect(hook.state().chooseReason).toBe('Checking fork status…')
 	await act(() => controller.resolve(modules.fork))
@@ -189,7 +215,7 @@ test('a recorded choice cannot be changed and a ready child opens its direct uni
 	await hook.setProps({ snapshot: { ...snapshot, blockHash: `0x${'22'.repeat(32)}` } })
 	await waitFor(() => expect(hook.state().state?.branch?.ready).toBe(true))
 	expect(hook.state().chooseReason).toContain('already recorded')
-	expect(hook.state().startReason).toContain('already prepared')
+	expect(hook.state().startReason).toContain('already started')
 	expect(hook.state().finalizeReason).toContain('already active')
 	hook.state().open()
 	expect(opened).toEqual([42n])

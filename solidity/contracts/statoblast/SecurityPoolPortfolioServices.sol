@@ -300,6 +300,15 @@ contract SecurityPoolPortfolioServices {
 		(, uint256 questionId, , , ) = IPortfolioServiceRoot(portfolio).capitalLedger(source).zoltar().universes(source);
 		premiumLedger.schedule(child, questionId, premiumLedger.minimumFinalAfter(child));
 	}
+	/// @notice Preparation time cannot become retroactive underwriting income.
+	/// @dev The child clock follows its fixed native deadline even if activation
+	/// is delayed. Discard that elapsed premium before capital becomes operational.
+	function checkpointPreparationPremium(uint248 child) external onlyForkController {
+		IPortfolioServiceRoot root = IPortfolioServiceRoot(portfolio);
+		require(premiumBranches[child].created && root.capitalLedger(child).importing(), 'Premium preparation unavailable');
+		(uint256 earned, uint256 unused) = premiumLedger.checkpoint(child, root.logicalTime(child));
+		if (earned + unused != 0) _fundMaintenance(child, earned + unused);
+	}
 	/// @notice Ownerless maintenance cannot subsidize an unrelated fork branch.
 	function burnUnusedMaintenance(uint248 source) external nonReentrant {
 		MaintenanceFork storage book = maintenanceForks[source];

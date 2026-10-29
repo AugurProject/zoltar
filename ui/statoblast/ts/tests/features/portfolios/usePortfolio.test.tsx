@@ -152,6 +152,11 @@ test('partial setup loads without touching undeployed capital and resumes on ref
 	expect(source.reads.some(read => read.name === 'capitalLedger')).toBe(false)
 	source.setSetupStage(3n)
 	await act(() => hook.state().refresh())
+	expect(hook.state().setup?.stage).toBe(3)
+	expect(hook.state().snapshot).toBeUndefined()
+	expect(source.reads.some(read => read.name === 'capitalLedger')).toBe(false)
+	source.setSetupStage(4n)
+	await act(() => hook.state().refresh())
 	expect(hook.state().snapshot?.capitalLedger).toBeDefined()
 })
 

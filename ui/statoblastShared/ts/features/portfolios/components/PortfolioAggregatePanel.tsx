@@ -57,6 +57,7 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 				</MetricGrid>
 			</SectionBlock>
 			<SectionBlock title={copy.title} description={copy.description}>
+				{snapshot?.auctionVault === undefined ? undefined : <UserMessage detail={copy.auctionVaultOwnership} />}
 				<MetricGrid>
 					<MetricField label={copy.withdrawableRep} loading={model.loading}>
 						<CurrencyValue value={snapshot?.withdrawableAttoRep} suffix={common.rep} />

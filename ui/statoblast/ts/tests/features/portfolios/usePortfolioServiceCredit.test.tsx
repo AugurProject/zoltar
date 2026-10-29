@@ -65,9 +65,9 @@ test.each([
 	await expect(hook.state().claim()).rejects.toThrow(reason)
 	expect(requests).toHaveLength(0)
 })
-test('service reimbursement directs a partially prepared portfolio to setup without claiming it is loading', async () => {
+test.each([1, 3])('service reimbursement directs incomplete setup stage %s to preparation without claiming it is loading', async stage => {
 	const { hook, model, snapshot } = await setup()
-	await hook.setProps({ model: { ...model, snapshot: undefined, setup: { ...snapshot, stage: 1 } } })
+	await hook.setProps({ model: { ...model, snapshot: undefined, setup: { ...snapshot, stage } } })
 	expect(hook.state().loading).toBe(false)
 	expect(hook.state().reason).toBe('Complete the portfolio setup above.')
 })

@@ -30,15 +30,17 @@ describe('statoblast deployment steps', () => {
 		expect(assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes()).toEqual(['escalationGameClaimDelegate', 'escalationGameDepositDelegate', 'openOracle', 'securityPoolEventEmitter', 'securityPoolOperationsDelegate', 'securityPoolUtils', 'uniformPriceDualCapBatchAuctionFactory'])
 	})
 
-	test('deploys the fork coordinator without an auction and preserves verification for every capital module', async () => {
+	test('deploys independent fork and auction modules with verified runtime code', async () => {
 		const publicProfiles = [MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE].flatMap(profile => (['yes', 'no'] as const).map(outcome => getGenesisNetworkProfile(profile, outcome)))
 		for (const profile of [...publicProfiles, simulationProfile]) {
 			const steps = getDeploymentSteps(profile)
-			const forks = steps.find(step => step.id === 'securityPoolPortfolioForkCoordinatorDeployer')
-			if (forks === undefined) throw new Error('Missing portfolio infrastructure deployment step')
-			expect(forks.dependencies).toEqual(['proxyDeployer'])
-			expect(await captureDeploymentInitCode(forks.deploy)).toMatch(/^0x[0-9a-f]+$/)
-			expect(getDeploymentStepConstructorArguments(profile).securityPoolPortfolioForkCoordinatorDeployer).toBe('')
+			for (const id of ['securityPoolPortfolioForkCoordinatorDeployer', 'securityPoolPortfolioAuctionDeployer'] as const) {
+				const module = steps.find(step => step.id === id)
+				if (module === undefined) throw new Error('Missing portfolio infrastructure deployment step')
+				expect(module.dependencies).toEqual(['proxyDeployer'])
+				expect(await captureDeploymentInitCode(module.deploy)).toMatch(/^0x[0-9a-f]+$/)
+				expect(getDeploymentStepConstructorArguments(profile)[id]).toBe('')
+			}
 			for (const id of [
 				'securityPoolCapitalLedgerDeployer',
 				'securityPoolCommitmentIndexDeployer',
@@ -48,6 +50,7 @@ describe('statoblast deployment steps', () => {
 				'securityPoolPortfolioServicesDeployer',
 				'securityPoolReporterLedgerDeployer',
 				'securityPoolPortfolioForkCoordinatorDeployer',
+				'securityPoolPortfolioAuctionDeployer',
 				'securityPoolForkerPortfolioDelegate',
 			]) {
 				expect(steps.find(step => step.id === id)?.expectedRuntimeCodeHash).toMatch(/^0x[0-9a-f]{64}$/)
@@ -88,6 +91,7 @@ describe('statoblast deployment steps', () => {
 				'securityPoolPortfolioServicesDeployer',
 				'securityPoolReporterLedgerDeployer',
 				'securityPoolPortfolioForkCoordinatorDeployer',
+				'securityPoolPortfolioAuctionDeployer',
 			]
 			for (const stepId of statoblastStepIds) {
 				if (steps.every(step => step.id !== stepId)) throw new Error(`Missing statoblast deployment step ${stepId} for ${profile.id}`)

@@ -590,7 +590,7 @@
 							</tr>
 							<tr>
 								<td>Fresh-price request guard</td>
-								<td>Standalone <code>requestPrice</code> reverts while the cached coordinator price is still valid (<code>Oracle price already fresh</code>). Shared feeds permit early renewal, but a pending report never extends the accepted expiry and a second pending report is rejected. See the <a href="./open-oracle.html#shared-feed-rules">shared-feed rules</a>.</td>
+								<td>Standalone <code>requestPrice</code> reverts while the cached coordinator price is still valid (<code>Oracle price already fresh</code>). Shared feeds permit early renewal and concurrent report candidates; pending reports never extend the accepted expiry. See the <a href="./open-oracle.html#shared-feed-rules">shared-feed rules</a>.</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a></td>
 							</tr>
 							<tr>
@@ -611,23 +611,23 @@
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/LiquidationApprovalRegistry.sol">LiquidationApprovalRegistry.sol</a></td>
 							</tr>
 							<tr>
-								<td>Pending report bound</td>
+								<td>Standalone callback bound</td>
 								<td>At most four price actions are attached to one settlement callback, counting each commitment change, liquidation, or withdrawal within a vault bundle separately. Deposits use no slot. Bundles must fit the remaining callback capacity; single operations can still be tracked as active outside the callback batch.</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a></td>
 							</tr>
 							<tr>
-								<td>Sponsor exclusivity</td>
-								<td>Once the cached price is stale and a caller funds a fresh coordinator report, only that <code>pendingReportSponsor</code> can append more staged operations until settlement. Valid disputes reset the settlement clock, so this paid exclusive lane can be extended indefinitely; the coordinator makes no bounded-availability guarantee. The <a href="./open-oracle.html#intentional-economic-tradeoffs">economic tradeoffs</a>, <a href="./open-oracle.html#attack-model">attack model</a>, and <a href="./open-oracle.html#parameters">parameter table</a> own dispute funding, escalation, and rounding details.</td>
+								<td>Standalone sponsor exclusivity</td>
+								<td>For a standalone coordinator, once the cached price is stale and a caller funds a fresh report, only that <code>pendingReportSponsor</code> can append more staged operations until settlement. Valid disputes reset the settlement clock, so this paid exclusive lane can be extended indefinitely; the coordinator makes no bounded-availability guarantee. The <a href="./open-oracle.html#intentional-economic-tradeoffs">economic tradeoffs</a>, <a href="./open-oracle.html#attack-model">attack model</a>, and <a href="./open-oracle.html#parameters">parameter table</a> own dispute funding, escalation, and rounding details. Shared feeds allow <a href="./open-oracle.html#shared-feed-rules">independent concurrent candidates</a>.</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/OpenOracle.sol">OpenOracle.sol</a></td>
 							</tr>
 							<tr>
-								<td>Rejected settlement</td>
+								<td>Standalone rejected settlement</td>
 								<td>When the callback fails any condition in <a href="./open-oracle.html#settlement-validation-scope">coordinator settlement validation</a>, it emits <code>PriceReportRejected</code>, leaves <code>lastPrice</code> unchanged, clears the pending report so a new price can be requested, and terminally fails every operation attached to that report, releasing each delegated-liquidation reservation.</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/OpenOracle.sol">OpenOracle.sol</a></td>
 							</tr>
 							<tr>
-								<td>Recovery path</td>
-								<td>Coordinator reports opt into OpenOracle's <code>STORE_ALL</code> and <code>TRACK_DISPUTES</code> flags. Recovery requires a pending report whose stored OpenOracle settlement timestamp is nonzero. It returns withdrawable reporter balances to the sponsor, clears the report, consumes all associated pending operations, and releases their liquidation reservations. An expired operation can also be cleaned permissionlessly before any valid-price requirement.</td>
+								<td>Standalone report recovery</td>
+								<td>Standalone coordinator reports opt into OpenOracle's <code>STORE_ALL</code> and <code>TRACK_DISPUTES</code> flags. Recovery requires a pending report whose stored OpenOracle settlement timestamp is nonzero. It returns withdrawable reporter balances to the sponsor, clears the report, consumes all associated pending operations, and releases their liquidation reservations. An expired operation can also be cleaned permissionlessly before any valid-price requirement.</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a></td>
 							</tr>
 							<tr>

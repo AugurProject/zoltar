@@ -30,7 +30,7 @@
 						<tbody>
 							<tr id="portfolio-boundary">
 								<td><code>SecurityPoolPortfolio</code></td>
-								<td>An immutable admission policy, question horizon, economic configuration and canonical configuration seed define the portfolio. After construction, three permissionless <code>prepareNext()</code> transactions initialize settlement, reporter/fork modules, then capital and the shared feed. <code>setupStage == 3</code> is required before accepting user funds or risk. Anyone may register an allowed, open question in the unforked origin universe. <code>getPool(questionId, universeId)</code> resolves the registered lineage through the configured factory. Each universe has one capital ledger and one shared REP/ETH feed.</td>
+								<td>An immutable admission policy, question horizon, economic configuration and canonical configuration seed define the portfolio. After construction, four permissionless <code>prepareNext()</code> transactions initialize settlement, reporter/fork modules, capital, then the shared feed and activation. <code>setupStage == 4</code> is required before accepting user funds or risk. Anyone may register an allowed, open question in the unforked origin universe. <code>getPool(questionId, universeId)</code> resolves the registered lineage through the configured factory. Each universe has one capital ledger and one shared REP/ETH feed.</td>
 								<td>The central settlement book owns question cash and supply accounting; the capital ledger owns each provider’s REP and commitments; the reporter ledger separately owns report escrow. Native question contracts expose shares and reporting. Verify the factory and module bindings independently. See <a href="../explanation/statoblast.html#question-portfolios">the portfolio model</a>.</td>
 							</tr>
 							<tr>
@@ -50,8 +50,8 @@
 							</tr>
 							<tr>
 								<td><code>SecurityPoolCapitalLifecycleDelegate</code></td>
-								<td>Each capital ledger creates its own immutable delegate for authorization and fork-choice export, import and backing release. It shares the ledger’s storage layout through <code>SecurityPoolCapitalState</code>. Mutations execute in the bound ledger’s context; direct mutation calls and delegate calls from another host revert.</td>
-								<td>The ledger’s entrypoints retain caller permissions, reentrancy guards and price/checkpoint requirements. Principal and earnings stay in the ledger. The delegate’s <code>ledger()</code> getter identifies its sole host.</td>
+								<td>Each capital ledger creates its own immutable delegate for authorization, owner withdrawals, reserve funding, earnings claims and fork-choice export, import and backing release. It shares the ledger’s storage layout through <code>SecurityPoolCapitalState</code>. Mutations execute in the bound ledger’s context; direct mutation calls and delegate calls from another host revert.</td>
+								<td>The ledger’s entrypoints retain caller permissions, reentrancy guards and price/checkpoint requirements. Principal and earnings stay in the ledger. Preparation reports cache prices without starting imported positions’ health history. <code>finishForkImport</code> seals the funded imports and records a health observation only if the cached price is still valid. The delegate’s <code>ledger()</code> getter identifies its sole host.</td>
 							</tr>
 							<tr>
 								<td>Principal withdrawal and retirement</td>
@@ -70,7 +70,7 @@
 							</tr>
 							<tr id="portfolio-services">
 								<td><code>SecurityPoolPortfolioServices</code> and <code>SecurityPoolResolutionPremiumBook</code></td>
-								<td>The service module owns prepaid resolution premiums, universe-specific maintenance reserves and pull credits. Each question earns its premium only during its funded unresolved interval. A persistent expiry index removes earned units and routes the unused terminal remainder to maintenance without scanning questions. Changes checkpoint earned income under the capital ledger’s old weights. Reporting updates replace only the affected question’s schedule. Forks copy the schedule roots and divide funded cash by chosen commitment; they do not replenish it.</td>
+								<td>The service module owns prepaid resolution premiums, universe-specific maintenance reserves and pull credits. Each question earns its premium only during its funded unresolved interval. A persistent expiry index removes earned units and routes the unused terminal remainder to maintenance without scanning questions. Changes checkpoint earned income under the capital ledger’s old weights. Reporting updates replace only the affected question’s schedule. Forks copy the schedule roots and divide funded cash by chosen commitment; they do not replenish it. Before imports become operational, the fork coordinator calls <code>checkpointPreparationPremium(child)</code> to route elapsed inactive premium and any unused terminal remainder to that branch’s maintenance reserve.</td>
 								<td>The portfolio authenticates native pools, reporters and accepted price reports. The service module may credit already-earned capital fees, fund vesting streams and synchronize demand; it cannot change the accepted price or withdraw provider principal. Maintenance pays useful accepted reports at most once per service interval, within the configured reward cap and available reserve. Sponsors withdraw credited ETH through <code>claimServiceCredit(recipient)</code>. A finite reserve cannot guarantee report sponsorship during every market or gas-price condition.</td>
 							</tr>
 							<tr>
@@ -85,7 +85,7 @@
 							</tr>
 							<tr>
 								<td><code>SecurityPoolCommitmentIndex</code>: liquidation accounting</td>
-								<td>Only the bound capital ledger calls <code>cure(id, price, multiplier, minimumCommitment, demand)</code> or <code>clearLiquidation(id)</code>. The index updates commitments and records healthy observation epochs; the ledger retains custody and pays rewards. Each accepted price stores one observation timestamp, without visiting individual owners.</td>
+								<td>Only the bound capital ledger calls <code>cure(id, price, multiplier, minimumCommitment, demand)</code> or <code>clearLiquidation(id)</code>. The index updates commitments and records healthy observation epochs; the ledger retains custody and pays rewards. Each accepted operating price stores one observation timestamp, without visiting individual owners; preparation prices do not start that history.</td>
 								<td><code>liquidationStarted(id)</code> derives the first adverse observation after the latest healthy epoch or fresh-price recovery mutation. It returns zero for healthy or retired positions. The capital ledger exposes the same getter. No starter transaction is required; uninterrupted distress retains its original timestamp, including across stale-price deposits.</td>
 							</tr>
 							<tr id="portfolio-shared-fork-choices">
@@ -95,7 +95,7 @@
 							</tr>
 							<tr id="portfolio-shared-fork-processing">
 								<td>Shared branch claim recovery</td>
-								<td><code>startBranch</code> migrates the source’s pledged REP and live recovery REP once, splits the requested child once, and assigns chosen collateral to its providers. Remaining child REP moves into central settlement custody. <code>finalizeBranch</code> activates the assigned cash and chosen commitments after the fixed activation deadline. Neither operation needs an oracle price, sale or donation.</td>
+								<td><code>prepareBranch</code> deploys child capital separately from migration. <code>startBranch</code> migrates pledged REP and live recovery REP once, splits the requested child once, and assigns chosen collateral to its providers. Fresh unchosen backing may enter the branch auction; old recovery REP remains reserved for inherited claims. <code>finalizeBranch</code> creates the settlement book with assigned parent cash plus accepted auction ETH, installs funded winning commitments, and activates after the fixed deadline. Unsold REP joins claim recovery. An absent or stale price does not prevent activation; eligible holding-fee streams start only with a fresh price in an unforked child. Preparation reporting follows the <a href="./open-oracle.html#portfolio-preparation-reports">fixed reporting window</a>.</td>
 								<td>The child settlement book preserves the inherited question units. ETH redemption uses the question’s settlement units. REP has a separate Q128 entitlement accumulator and per-question corrections, so a partial claim receives its share of REP even when its ETH-unit burn rounds to zero. Finality freezes both entitlements. Live units and funded child REP are each bounded by <code>uint128</code>; cumulative REP indices use modular arithmetic across repeated forks. <code>attoSharesToAttoEth</code> and <code>attoSharesToAttoRep</code> quote the two assets through the native question pool. Recovery REP or cash below outstanding units disables new minting and ordinary holding fees. If no live claim units exist, surplus child REP is burned. Finalized source claims retain their source assets.</td>
 							</tr>
 							<tr id="portfolio-recovery-rights">
@@ -107,6 +107,21 @@
 								<td>Reporter custody and native question materialization</td>
 								<td><code>SecurityPoolReporterLedger</code> holds funded per-question report balances in persistent books. Only canonical games can debit their own balances. A fork charges admission to the triggering question only; unrelated report balances cannot fund it. Strictly finalized escrow remains in its source universe; live books migrate once per branch.</td>
 								<td><code>SecurityPoolForker.preparePortfolioQuestion(source, targetUniverse)</code> creates the canonical question namespace separately from <code>materializePortfolioQuestion</code>, which installs at most one of three fixed outcome snapshots per call when needed; the question activates after the third. Bound questions do not deploy individual Truth Auctions or migrate provider vaults. Trader tokens retain their immediate-parent migration checks, so skipped native universes still need explicit token migration.</td>
+							</tr>
+							<tr>
+								<td><code>SecurityPoolUniformPriceAuction</code></td>
+								<td>Only its immutable controller starts bidding, submits funded bids, finalizes and settles refunds. Each lot contributes the same fixed ETH amount. Bids specify minimum REP per lot; lower values rank first. All winners pay one clearing price. Marginal equal-price bids receive cumulative proportional fills rounded to whole lots. Insufficient demand clears at the reserve. Bids cannot be cancelled. Finalization searches a balanced tree without visiting bidders; individual refund settlement and fee allocation follow one tree path.</td>
+								<td>The engine holds bid ETH. Its controller holds sale REP, collateral top-ups and execution reserves. Refunds are pull credits for the recorded bidder. Historical fee budgets are pushed down a frozen bid tree before one winner’s weight is removed, preserving integer ownership without a bidder migration job. Work grows logarithmically with bids; numeric escrow and fee budgets are bounded by <code>uint128</code>.</td>
+							</tr>
+							<tr id="portfolio-truth-auction">
+								<td><code>SecurityPoolPortfolioAuction</code></td>
+								<td>The fork coordinator deploys one controller per eligible branch. Its ETH lot is <code>minimumCommitmentAttoEth</code>; target lots are the ETH shortfall divided by that lot, rounded down. Opening requires a fresh <a href="./open-oracle.html#shared-report-coverage">funded branch price</a>. Each bid escrows ETH, a common REP top-up covering the protocol collateral floor at the opening upper price bound, and an explicitly signed execution reserve. The bid’s minimum purchased REP plus top-up must meet its chosen health target.</td>
+								<td>Maximum REP per lot is the lesser of inventory per target lot and lot ETH times the oracle’s lower REP/ETH bound divided by the configured reserve fraction, rounded down to the REP grid. <code>auctionReserveFactorBps</code> is immutable, between 1 and 10,000. At the fixed close, a missing funded quote or a higher conservative REP/ETH price cancels the sale. Finalization delivers all winning REP and top-ups into capital immediately. Losing portions return bid ETH, top-ups and execution reserves. Sub-lot shortfalls remain unrepaired.</td>
+							</tr>
+							<tr>
+								<td><code>SecurityPoolAuctionVault</code> and <code>SecurityPoolCapitalAuctionDelegate</code></td>
+								<td>Each bid creates a separate vault controlled by its bidder. Winning principal and commitment first share one protected capital position. <code>materializeAuctionBid</code> splits one exact funded entitlement, preserving health history and historical fees; it pays no keeper reward. The bidder’s vault materializes before voluntary operations. <code>depositPrincipal</code> pulls approved REP from the controlling wallet. <code>executeAndSweep</code> executes an owner-authorized call and returns the chosen token and ETH balance to the selected recipient.</td>
+								<td>Unmaterialized winners count toward capital, fees and fork snapshots. They cannot avoid liabilities by delaying an individual claim. <code>cureAuctionBid</code> and <code>takeOverAuctionBid</code> include materialization gas in the ordinary progress reward, paid from that bid’s reserve. Bidding requires at least the configured reserve or <code>3,000,000 × (base fee + configured priority fee) × 1.25</code> per lot, whichever is larger. This budget does not guarantee future gas affordability. Each vault retains an independent health target, liquidation liability and future branch choice.</td>
 							</tr>
 							<tr>
 								<td>Portfolio module deployers</td>
@@ -284,6 +299,7 @@
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolCapitalLedger.sol"><code>SecurityPoolCapitalLedger.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolCapitalState.sol"><code>SecurityPoolCapitalState.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolCapitalLifecycleDelegate.sol"><code>SecurityPoolCapitalLifecycleDelegate.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolCapitalAuctionDelegate.sol"><code>SecurityPoolCapitalAuctionDelegate.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolCommitmentIndex.sol"><code>SecurityPoolCommitmentIndex.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolCommitmentTree.sol"><code>SecurityPoolCommitmentTree.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolCapitalFeeStreams.sol"><code>SecurityPoolCapitalFeeStreams.sol</code></a
@@ -297,6 +313,9 @@
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolFrozenHistory.sol"><code>SecurityPoolFrozenHistory.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolReporterLedger.sol"><code>SecurityPoolReporterLedger.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolPortfolioForkCoordinator.sol"><code>SecurityPoolPortfolioForkCoordinator.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolUniformPriceAuction.sol"><code>SecurityPoolUniformPriceAuction.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolPortfolioAuction.sol"><code>SecurityPoolPortfolioAuction.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolAuctionVault.sol"><code>SecurityPoolAuctionVault.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolPortfolioModuleDeployers.sol"><code>SecurityPoolPortfolioModuleDeployers.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolCreationCode.sol"><code>SecurityPoolCreationCode.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolOpenAdmissionPolicy.sol"><code>SecurityPoolOpenAdmissionPolicy.sol</code></a
@@ -423,6 +442,7 @@
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/ISecurityPoolQuestionAdmissionPolicy.sol"><code>ISecurityPoolQuestionAdmissionPolicy.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/ISecurityPoolPortfolioAccounting.sol"><code>ISecurityPoolPortfolioAccounting.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/ICapitalAccounting.sol"><code>ICapitalAccounting.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/ISecurityPoolAuctionCapital.sol"><code>ISecurityPoolAuctionCapital.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/IPortfolioSettlement.sol"><code>IPortfolioSettlement.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/IPortfolioServiceRoot.sol"><code>IPortfolioServiceRoot.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/ISecurityPoolReporterLedger.sol"><code>ISecurityPoolReporterLedger.sol</code></a

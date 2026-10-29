@@ -12,15 +12,17 @@ import { capitalUnit as E, useCapitalTestFixture } from './securityPoolCapitalTe
 
 describe('Statoblast: composed capital economics and fork intent', () => {
 	const fixture = useCapitalTestFixture()
-	test('lifecycle delegate rejects direct authorization/import and an authenticated foreign host', async () => {
+	test('lifecycle delegate rejects direct price updates, authorization/import and an authenticated foreign host', async () => {
 		const sender = fixture.client()
 		const delegate = await sender.readContract({ ...fixture.capital, functionName: 'lifecycleDelegate' })
 		const delegateAbi = parseAbi([
+			'function acceptPrice(address feed,uint256 price,uint48 validUntil)',
 			'function beginForkImport()',
 			'function authorize(uint256 commitment,uint256 reportId,bool useReport,uint256 minimumCommitment)',
 			'function importChoice(address owner,(uint256 rep,uint256 commitment,uint96 batch,uint256 executionReserveAttoEth,uint256 remainingCommitment) position,uint256 target) payable',
 		])
 		for (const data of [
+			encodeFunctionData({ abi: delegateAbi, functionName: 'acceptPrice', args: [fixture.harness.address, E, 1_000_000] }),
 			encodeFunctionData({ abi: delegateAbi, functionName: 'beginForkImport' }),
 			encodeFunctionData({ abi: delegateAbi, functionName: 'authorize', args: [E, 0n, false, E / 1_000n] }),
 			encodeFunctionData({ abi: delegateAbi, functionName: 'importChoice', args: [sender.account.address, { rep: 2n * E, commitment: E, batch: 0n, executionReserveAttoEth: E / 10n, remainingCommitment: 0n }, 10_000n] }),

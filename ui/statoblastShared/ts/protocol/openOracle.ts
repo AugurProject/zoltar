@@ -64,7 +64,7 @@ export function calculateOpenOraclePrice(amount1: bigint, amount2: bigint, decim
 
 // settle forwards exactly callbackGasLimit to the callback. EIP-150 lets a call forward at most 63/64 of the remaining gas,
 // and settle reverts with InvalidGasLimit unless callbackGasLimit / 63 remains afterwards, so budget both plus settle overhead.
-function getOpenOracleSettleGasLimit(game: Pick<OpenOracleStatePreimage['game'], 'callbackContract' | 'callbackGasLimit'>) {
+export function getOpenOracleSettleGasLimit(game: Pick<OpenOracleStatePreimage['game'], 'callbackContract' | 'callbackGasLimit'>) {
 	if (game.callbackContract === zeroAddress) return OPEN_ORACLE_DEFAULT_SETTLE_GAS_LIMIT
 	const callbackGasLimit = game.callbackGasLimit
 	const required = (callbackGasLimit * 64n + 62n) / 63n + callbackGasLimit / 63n + OPEN_ORACLE_SETTLE_OVERHEAD_GAS

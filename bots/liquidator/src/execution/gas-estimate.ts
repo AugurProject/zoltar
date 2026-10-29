@@ -5,6 +5,9 @@ import { simulateWithRevalidation } from './simulation.ts'
 
 type Reader = { endpoint: string; client: Pick<ReturnType<typeof createPublicClient>, 'estimateGas'> }
 
+/** Quote and estimate only; real-funds simulation and signing never use this balance. */
+export const PREFLIGHT_BALANCE = 1n << 128n // Leave ample uint256 headroom for incoming reward credits.
+
 /** Clients may use different estimation heuristics: require a successful quorum, then use its largest estimate. */
 export async function estimateExecutionGas(readers: readonly Reader[], request: Parameters<Reader['client']['estimateGas']>[0], requirement: RpcQuorumRequirement, validateCanonicalBlock: () => Promise<void>, revalidateRevert?: () => Promise<unknown>) {
 	const observations = readers.map(async ({ endpoint, client }) => {

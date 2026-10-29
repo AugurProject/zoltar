@@ -3,6 +3,7 @@ pragma solidity 0.8.35;
 
 import { ICapitalFeeStreams } from './interfaces/ICapitalAccounting.sol';
 import { SecurityPoolCommitmentIndex } from './SecurityPoolCommitmentIndex.sol';
+import { ISecurityPoolAuctionCapital } from './interfaces/ISecurityPoolAuctionCapital.sol';
 
 /// @dev Exact shared storage for the custody ledger and its lifecycle delegate.
 /// The delegate uses host getters for immutable configuration; only the ledger
@@ -50,7 +51,32 @@ abstract contract SecurityPoolCapitalState {
 	mapping(address => bool) public exported;
 	mapping(uint96 => uint256) public positionExecutionReserveAttoEth;
 
+	struct AuctionCohort {
+		ISecurityPoolAuctionCapital adapter;
+		uint96 positionId;
+		uint256 remainingLots;
+		uint256 repPerLot;
+		uint256 commitmentPerLot;
+	}
+	struct AuctionPosition {
+		address vault;
+		uint96 positionId;
+		uint256 principal;
+		uint256 commitment;
+		uint256 targetHealthFactorBps;
+		uint48 liquidationStarted;
+		bool materialized;
+		uint256 earnedAttoEth;
+		uint256 earnedAttoRep;
+	}
+	AuctionCohort public auctionCohort;
+	mapping(uint256 => uint96) public auctionBidPositionIds;
+	uint256 internal receivingAuctionBid;
+	uint256 internal expectedAuctionReserve;
+	bool internal auctionReserveReceived;
+
 	function _settleOwner(address owner) internal {
+		require(owner != address(auctionCohort.adapter), 'Materialize an individual auction vault');
 		Owner storage account = owners[owner];
 		uint96 id = account.positionId;
 		if (id == 0) return;

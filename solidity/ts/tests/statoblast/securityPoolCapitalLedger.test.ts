@@ -6,13 +6,13 @@ import {
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
 	statoblast_SecurityPoolCapitalFeeStreams_SecurityPoolCapitalFeeStreams as feeStreamsArtifact,
 	test_statoblast_CapitalLedgerHarness_CapitalLedgerHarness as harnessArtifact,
-	test_statoblast_CapitalLedgerHarness_CapitalLedgerTestComponents as componentsArtifact,
 	ReputationToken_ReputationToken as tokenArtifact,
 } from '../../types/contractArtifact'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
+import { deployCapitalTestComponents } from './securityPoolCapitalTestComponents'
 
 const E = 10n ** 18n
 
@@ -47,7 +47,7 @@ describe('Statoblast: individual shared-custody capital', () => {
 		alice = createWriteClient(ethereum, TEST_ADDRESSES[0])
 		bob = createWriteClient(ethereum, TEST_ADDRESSES[1])
 		keeper = createWriteClient(ethereum, TEST_ADDRESSES[2])
-		const componentsReceipt = await alice.waitForTransactionReceipt({ hash: await alice.sendTransaction({ data: `0x${componentsArtifact.evm.bytecode.object}` }) })
+		const componentsReceipt = await deployCapitalTestComponents(alice)
 		if (componentsReceipt.contractAddress === undefined) throw new Error('Capital test components address missing')
 		const receipt = await alice.waitForTransactionReceipt({ hash: await alice.sendTransaction({ data: encodeDeployData({ abi: harnessArtifact.abi, bytecode: `0x${harnessArtifact.evm.bytecode.object}`, args: [componentsReceipt.contractAddress] }) }) })
 		if (receipt.contractAddress === undefined) throw new Error('Capital harness address missing')

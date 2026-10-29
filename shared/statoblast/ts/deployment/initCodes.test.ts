@@ -32,7 +32,8 @@ const artifacts = {
 	securityPoolPortfolioSettlementDeployer: artifact(21),
 	securityPoolPortfolioServicesDeployer: artifact(23),
 	securityPoolReporterLedgerDeployer: artifact(22),
-	securityPoolPortfolioForkCoordinatorDeployer: artifact(24, 'address'),
+	securityPoolPortfolioForkCoordinatorDeployer: artifact(24),
+	securityPoolPortfolioAuctionDeployer: artifact(25),
 }
 const builders = createStatoblastInitCodes(artifacts, { proxyDeployerAddress: proxy, zeroSalt })
 const constructorArgs = (code: Hex) => `0x${code.slice(10)}` as const
@@ -47,7 +48,7 @@ describe('shared capital infrastructure init codes', () => {
 		expect(addresses.securityPoolForkerPortfolioDelegate).toBe(delegate)
 	})
 
-	test('the fork factory needs no auction and all capital module addresses are distinct', () => {
+	test('fork and auction deployers need no constructor parameters and all module addresses are distinct', () => {
 		const addresses = builders.createInfraContractAddresses(weth, { getZoltarAddress: () => zoltar, getZoltarQuestionDataAddress: () => questionData })()
 		const modules = [
 			addresses.securityPoolCapitalLedgerDeployer,
@@ -58,8 +59,11 @@ describe('shared capital infrastructure init codes', () => {
 			addresses.securityPoolPortfolioServicesDeployer,
 			addresses.securityPoolReporterLedgerDeployer,
 			addresses.securityPoolPortfolioForkCoordinatorDeployer,
+			addresses.securityPoolPortfolioAuctionDeployer,
 		]
 		expect(constructorArgs(builders.getSecurityPoolPortfolioForkCoordinatorDeployerByteCode())).toBe('0x')
-		expect(new Set(modules).size).toBe(8)
+		expect(constructorArgs(builders.getSecurityPoolPortfolioAuctionDeployerByteCode())).toBe('0x')
+		expect(new Set(modules).size).toBe(9)
+		expect(addresses.securityPoolPortfolioAuctionDeployer).toBe(getCreate2Address({ bytecode: builders.getSecurityPoolPortfolioAuctionDeployerByteCode(), from: proxy, salt: zeroSalt }))
 	})
 })

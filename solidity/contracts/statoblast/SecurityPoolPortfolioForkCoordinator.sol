@@ -12,6 +12,8 @@ import { SecurityPoolPortfolioSettlement } from './SecurityPoolPortfolioSettleme
 import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
 import { SecurityPoolReporterLedger } from './SecurityPoolReporterLedger.sol';
 import { SecurityPoolPersistentMap } from './SecurityPoolPersistentMap.sol';
+import { SecurityPoolPortfolioAuction } from './SecurityPoolPortfolioAuction.sol';
+import { SecurityPoolUniformPriceAuction } from './SecurityPoolUniformPriceAuction.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
 interface IPortfolioForkRoot {
@@ -28,12 +30,19 @@ interface IPortfolioForkRoot {
 	function creditForkFees(uint248 universeId, uint256 amount) external;
 	function creditServiceFees(uint248 universeId) external payable;
 	function getPool(uint256 questionId, uint248 universeId) external view returns (ISecurityPool);
+	function minimumCommitmentAttoEth() external view returns (uint256);
+	function auctionDeployer() external view returns (IPortfolioTruthAuctionDeployer);
+}
+
+interface IPortfolioTruthAuctionDeployer {
+	function create(address authority, address portfolio, uint248 child, uint256 close, uint256 inventory, uint256 shortfall) external returns (address);
 }
 
 interface IPortfolioForkServices {
 	function freezePremiumUniverse(uint248 source) external;
 	function onPremiumChoice(uint248 source, uint248 child, uint256 branchChosenK, uint256 totalSourceK) external;
 	function createPremiumChild(uint248 source, uint248 child) external;
+	function checkpointPreparationPremium(uint248 child) external;
 	function recoverPremiumCash(uint248 source, uint256 questionId, uint256 shares, address recipient) external returns (uint256);
 }
 
@@ -92,6 +101,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 	}
 	mapping(uint248 => Fork) public forks;
 	mapping(uint248 => Branch) public branches;
+	mapping(uint248 => SecurityPoolPortfolioAuction) public auctions;
 	mapping(uint248 => mapping(address => Choice)) public choices;
 	mapping(uint248 => mapping(uint256 => uint256)) public recoveredQuestionShares;
 	mapping(uint248 => mapping(uint256 => bool)) public recoveredQuestionReward;
@@ -130,6 +140,24 @@ contract SecurityPoolPortfolioForkCoordinator {
 	}
 	function isReady(uint248 universeId) external view returns (bool) {
 		return clocks[universeId].ready;
+	}
+	/// @notice Preparation reports stop at the fixed closing time. The last
+	/// accepted observation stays unchanged until branch activation, so delaying
+	/// finalization cannot choose a different auction price or freshness cutoff.
+	function isPriceReportingOpen(uint248 universeId) external view returns (bool) {
+		if (zoltar.getForkTime(universeId) != 0) return false;
+		if (clocks[universeId].ready) return true;
+		Branch storage branch = branches[universeId];
+		return branch.started && block.timestamp < zoltar.getForkRecapitalizationDeadline(branch.parent);
+	}
+	/// @notice Reports reserve the maximum winning liability before bids begin.
+	/// These budgets remain fixed until activation, including a delayed closing.
+	function auctionExposure(uint248 universeId) external view returns (uint256 commitment, uint256 rep) {
+		Branch storage branch = branches[universeId];
+		if (!branch.started || branch.ready) return (0, 0);
+		SecurityPoolPortfolioAuction auction = auctions[universeId];
+		if (address(auction) == address(0)) return (branch.chosenCommitment, 0);
+		return (branch.chosenCommitment + auction.targetLots() * auction.lotAttoEth(), auction.inventoryAttoRep());
 	}
 	function logicalTime(uint248 universeId) public view returns (uint48) {
 		uint256 wall = zoltar.getForkTime(universeId);
@@ -231,6 +259,13 @@ contract SecurityPoolPortfolioForkCoordinator {
 		fixedRoots[child] = root;
 	}
 
+	/// @notice Prepare custody separately from migration and auction deployment.
+	/// This fixed setup step keeps a branch with no choosing owners deployable
+	/// within the transaction gas limit, without processing any owner or bid list.
+	function prepareBranch(uint248 parent, uint256 outcome) external nonReentrant returns (uint248 child) {
+		_freeze(parent);
+		return _prepare(parent, outcome);
+	}
 	function startBranch(uint248 parent, uint256 outcome) external nonReentrant returns (uint248 child) {
 		_freeze(parent);
 		child = _prepare(parent, outcome);
@@ -266,19 +301,18 @@ contract SecurityPoolPortfolioForkCoordinator {
 		if (branch.chosenBacking != 0) token.safeTransfer(address(childCapital), branch.chosenBacking);
 		portfolio.reporters().createChild(branch.parent, branch.outcome);
 		branch.recoveryAttoRep = migratingRep - branch.chosenBacking;
-		// No claimant may acquire another owner's child REP through a forced
-		// discounted sale. It belongs directly to the inherited outcome claims.
 		if (fork.units == 0 && branch.recoveryAttoRep != 0) {
 			zoltar.burnRep(child, branch.recoveryAttoRep);
 			branch.recoveryAttoRep = 0;
 		}
-		SecurityPoolPortfolioSettlement settlement = portfolio.settlement();
-		if (branch.recoveryAttoRep != 0) token.safeApprove(address(settlement), branch.recoveryAttoRep);
-		settlement.createChildUniverse(branch.parent, child, branch.parentCash, token, branch.recoveryAttoRep);
+		uint256 freshInventory = fork.backing - branch.chosenBacking;
+		uint256 shortfall = fork.cash - branch.parentCash;
+		if (fork.units != 0 && freshInventory != 0 && shortfall >= portfolio.minimumCommitmentAttoEth()) {
+			SecurityPoolPortfolioAuction auction = SecurityPoolPortfolioAuction(portfolio.auctionDeployer().create(address(this), address(portfolio), child, zoltar.getForkRecapitalizationDeadline(branch.parent), freshInventory, shortfall));
+			auctions[child] = auction;
+			token.safeTransfer(address(auction), freshInventory);
+		}
 		IPortfolioForkServices(portfolio.services()).createPremiumChild(branch.parent, child);
-		settlement.setFeeClock(child, uint48(zoltar.getForkRecapitalizationDeadline(branch.parent)));
-		(, uint256 forkQuestion, , , ) = zoltar.universes(branch.parent);
-		settlement.fixInheritedQuestionFinality(child, forkQuestion, clocks[child].logicalAnchor + 3 days);
 		emit BranchStarted(child, branch.parentCash, branch.recoveryAttoRep);
 	}
 
@@ -290,14 +324,30 @@ contract SecurityPoolPortfolioForkCoordinator {
 		require(branch.prepared, 'Fork branch unknown');
 		if (branch.ready) return;
 		_start(child);
-		// Keep the native response schedule shared by standalone pools. No
-		// auction or external keeper work is required before this activation.
+		// The fixed native response schedule survives missing bids or quotes.
 		require(block.timestamp >= zoltar.getForkRecapitalizationDeadline(branch.parent), 'Fork activation window still open');
-		portfolio.capitalLedger(child).finishForkImport(branch.parentCash);
+		uint256 raised;
+		SecurityPoolPortfolioAuction auction = auctions[child];
+		if (address(auction) != address(0)) {
+			SecurityPoolUniformPriceAuction.Clearing memory result = auction.finalize();
+			raised = result.raisedAttoEth;
+			branch.recoveryAttoRep -= result.soldAttoRep;
+			if (result.filledLots != 0)
+				portfolio.capitalLedger(child).installAuctionCohort(address(auction), result.filledLots, result.attoRepPerLot + auction.topUpPerLotAttoRep(), auction.lotAttoEth());
+		}
+		SecurityPoolPortfolioSettlement settlement = portfolio.settlement();
+		IERC20 token = IERC20(address(zoltar.getRepToken(child)));
+		if (branch.recoveryAttoRep != 0) token.safeApprove(address(settlement), branch.recoveryAttoRep);
+		settlement.createChildUniverse{value: raised}(branch.parent, child, branch.parentCash, token, branch.recoveryAttoRep);
+		settlement.setFeeClock(child, uint48(zoltar.getForkRecapitalizationDeadline(branch.parent)));
+		(, uint256 forkQuestion, , , ) = zoltar.universes(branch.parent);
+		settlement.fixInheritedQuestionFinality(child, forkQuestion, clocks[child].logicalAnchor + 3 days);
+		IPortfolioForkServices(portfolio.services()).checkpointPreparationPremium(child);
+		portfolio.capitalLedger(child).finishForkImport(branch.parentCash + raised);
 		branch.ready = true;
 		clocks[child].ready = true;
 		portfolio.activateForkChild(child);
-		emit BranchActivated(child, branch.parentCash, branch.recoveryAttoRep);
+		emit BranchActivated(child, branch.parentCash + raised, branch.recoveryAttoRep);
 	}
 
 	/// @notice Resolve only this actual fork, never recursively walk ancestors.

@@ -10,6 +10,13 @@ export function parsePortfolioScopes(value: unknown): PortfolioScope[] {
 		const cursor = Reflect.get(entry, 'nextPositionId')
 		const end = Reflect.get(entry, 'sweepEnd')
 		if (typeof cursor !== 'string' || !/^[1-9]\d*$/.test(cursor) || typeof end !== 'string' || !/^(0|[1-9]\d*)$/.test(end) || BigInt(cursor) >= 2n ** 96n || BigInt(end) >= 2n ** 96n) throw new Error('Invalid managed portfolio cursor')
+		const auctionCursor = Reflect.get(entry, 'nextAuctionBidId')
+		const auctionEnd = Reflect.get(entry, 'auctionSweepEnd')
+		let auctionPage = {}
+		if (auctionCursor !== undefined || auctionEnd !== undefined) {
+			if (typeof auctionCursor !== 'string' || !/^[1-9]\d*$/.test(auctionCursor) || typeof auctionEnd !== 'string' || !/^(0|[1-9]\d*)$/.test(auctionEnd) || BigInt(auctionCursor) >= 2n ** 96n || BigInt(auctionEnd) >= 2n ** 96n) throw new Error('Invalid managed auction cursor')
+			auctionPage = { nextAuctionBidId: BigInt(auctionCursor), auctionSweepEnd: BigInt(auctionEnd) }
+		}
 		const observations = Reflect.get(entry, 'retirementObservations') ?? []
 		if (!Array.isArray(observations) || observations.length > 256) throw new Error('Invalid retirement observation history')
 		const retirementObservations = observations.map(value => {
@@ -21,6 +28,6 @@ export function parsePortfolioScopes(value: unknown): PortfolioScope[] {
 			}
 			return { id: field('id'), commitment: field('commitment'), batch: field('batch'), since: field('since') }
 		})
-		return { ...selection, nextPositionId: BigInt(cursor), sweepEnd: BigInt(end), retirementObservations }
+		return { ...selection, ...auctionPage, nextPositionId: BigInt(cursor), sweepEnd: BigInt(end), retirementObservations }
 	})
 }

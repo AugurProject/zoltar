@@ -9,8 +9,10 @@ export const choice = 'Commit branch choice'
 export const choosing = 'Committing choice…'
 export const choiceHint =
 	'The native choice window lasts eight weeks. This choice is irreversible. All committed principal, commitment and assigned execution reserve follow this branch. Idle REP and previously earned fees stay in the source. Missing the deadline forfeits your committed REP to outcome claimants in every branch; it does not choose a default branch.'
-export const start = 'Prepare shared branch'
-export const starting = 'Preparing branch…'
+export const prepareBranch = 'Prepare branch capital'
+export const preparingBranch = 'Preparing branch capital…'
+export const start = 'Start branch migration'
+export const starting = 'Starting branch migration…'
 export const finalize = 'Activate branch'
 export const finalizing = 'Activating branch…'
 export const child = 'Child universe'
@@ -46,4 +48,4 @@ export const recovering = 'Recovering source cash…'
 
 export const questionOutcome = (question: string, outcome: string) => `${question} — ${outcome}`
 export const busy = 'Another portfolio action is pending.'
-export const branchStates = { choose: 'Choose an outcome', unprepared: 'Not prepared', chosen: 'Choice recorded', waiting: 'Awaiting activation', active: 'Active' }
+export const branchStates = { choose: 'Choose an outcome', unprepared: 'Not prepared', chosen: 'Capital prepared', waiting: 'Awaiting activation', active: 'Active' }

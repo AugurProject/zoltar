@@ -17,6 +17,7 @@ const abi = parseAbi([
 	'function reportingFeeAttoEth() view returns (uint256)',
 	'function serviceFeeBps() view returns (uint256)',
 	'function maximumOracleRewardAttoEth() view returns (uint256)',
+	'function auctionReserveFactorBps() view returns (uint256)',
 	'function priceFeed(uint248 universeId) view returns (address)',
 	'function acceptedExposureLimitAttoEth() view returns (uint256)',
 	'function settlement() view returns (address)',
@@ -293,7 +294,7 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 	const blockNumber = block.number
 	const read = (target: Address, functionName: string, args: readonly AbiValue[] = []) => client.readContract({ address: target, abi, functionName, args, blockNumber })
 	const universeId = uint(parameters.universeId ?? (await read(portfolio, 'originUniverseId')), 'Universe id', 248)
-	const [ledgerValue, zoltarValue, settlementValue, feeBps, annualFeeBps, minimumFee, minimumCommitment, minimumReserve, duration, reportingFee, serviceFee, maximumOracleReward, feedValue] = await Promise.all([
+	const [ledgerValue, zoltarValue, settlementValue, feeBps, annualFeeBps, minimumFee, minimumCommitment, minimumReserve, duration, reportingFee, serviceFee, maximumOracleReward, auctionReserveFactor, feedValue] = await Promise.all([
 		read(portfolio, 'capitalLedger', [universeId]),
 		read(portfolio, 'zoltar'),
 		read(portfolio, 'settlement'),
@@ -306,6 +307,7 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 		read(portfolio, 'reportingFeeAttoEth'),
 		read(portfolio, 'serviceFeeBps'),
 		read(portfolio, 'maximumOracleRewardAttoEth'),
+		read(portfolio, 'auctionReserveFactorBps'),
 		read(portfolio, 'priceFeed', [universeId]),
 	])
 	const capitalLedger = address(ledgerValue, 'Capital ledger')
@@ -425,6 +427,7 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 			reportingFeeAttoEth: uint(reportingFee, 'Reporting fee'),
 			serviceFeeBps: uint(serviceFee, 'Service fee'),
 			maximumOracleRewardAttoEth: uint(maximumOracleReward, 'Maximum oracle reward'),
+			auctionReserveFactorBps: uint(auctionReserveFactor, 'Auction reserve factor'),
 		},
 	}
 }

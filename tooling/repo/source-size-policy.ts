@@ -28,7 +28,6 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['tooling/docs/check-docs-reference-values.mts', 839],
 		['tooling/contracts/deploy-testnet.mts', 636],
 	]),
-	...allowances('Contract deployment tooling: extract the static contract verification registry from explorer submission and verification execution.', [['tooling/contracts/contract-verification.mts', 631]]),
 	...allowances('Documentation runtime bundles and Solidity-side TypeScript utilities still need responsibility extraction.', [
 		['docs/charts/chartRuntime.ts', 1049],
 		['solidity/ts/testSupport/coverage/traceToSource.ts', 965],

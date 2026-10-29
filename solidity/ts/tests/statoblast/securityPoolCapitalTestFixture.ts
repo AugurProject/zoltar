@@ -4,13 +4,13 @@ import {
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capital,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as commitments,
 	test_statoblast_CapitalLedgerHarness_CapitalLedgerHarness as harnessArtifact,
-	test_statoblast_CapitalLedgerHarness_CapitalLedgerTestComponents as components,
 	ReputationToken_ReputationToken as rep,
 } from '../../types/contractArtifact'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
+import { deployCapitalTestComponents } from './securityPoolCapitalTestComponents'
 
 export const capitalUnit = 10n ** 18n
 
@@ -45,7 +45,7 @@ export function useCapitalTestFixture() {
 	beforeAll(async () => {
 		await setupTestAccounts(node.getAnvilWindowEthereum())
 		clients = TEST_ADDRESSES.slice(0, 4).map(address => createWriteClient(node.getAnvilWindowEthereum(), address))
-		const receipt = await client().waitForTransactionReceipt({ hash: await client().sendTransaction({ data: `0x${components.evm.bytecode.object}` }) })
+		const receipt = await deployCapitalTestComponents(client())
 		if (receipt.contractAddress === undefined) throw new Error('Capital test components deployment failed')
 		componentsAddress = receipt.contractAddress
 		const deployed = await deploy()

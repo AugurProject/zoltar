@@ -27,6 +27,7 @@ export const portfolioEconomics: PortfolioEconomicsConfig = {
 	reportingFeeAttoEth: 0n,
 	serviceFeeBps: 2_500n,
 	maximumOracleRewardAttoEth: unit / 100n,
+	auctionReserveFactorBps: 5_000n,
 }
 
 export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<PortfolioEconomicsConfig> = {}) {
@@ -57,6 +58,7 @@ export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<Port
 				settlement: infrastructure.securityPoolPortfolioSettlementDeployer,
 				reporters: infrastructure.securityPoolReporterLedgerDeployer,
 				forks: infrastructure.securityPoolPortfolioForkCoordinatorDeployer,
+				auctions: infrastructure.securityPoolPortfolioAuctionDeployer,
 				services: infrastructure.securityPoolPortfolioServicesDeployer,
 			},
 			artifact: { abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object) },
@@ -66,7 +68,7 @@ export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<Port
 		const created = receipt.contractAddress
 		const setupAbi = parseAbi(['function setupStage() view returns(uint8)'])
 		const setupGas = [receipt.gasUsed]
-		for (let stage = 1; stage <= 3; stage++) {
+		for (let stage = 1; stage <= 4; stage++) {
 			const sender = other()
 			await expect(sender.writeContract({ abi: portfolioArtifact.abi, address: created, functionName: 'addQuestion', args: [base.questionId] })).rejects.toThrow('Portfolio setup incomplete')
 			await expect(sender.writeContract({ abi: portfolioArtifact.abi, address: created, functionName: 'createCompleteSet', args: [base.genesisUniverse, base.questionId, unit, sender.account.address, 0n], value: 2n * unit })).rejects.toThrow('Portfolio setup incomplete')
@@ -78,7 +80,7 @@ export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<Port
 			setupGas.push(setupReceipt.gasUsed)
 		}
 		await writeContractAndWait(other(), () => other().sendTransaction(buildPortfolioPrepareNextRequest({ caller: other().account.address, portfolio: created })))
-		expect(Number(await owner().readContract({ abi: setupAbi, address: created, functionName: 'setupStage' }))).toBe(3)
+		expect(Number(await owner().readContract({ abi: setupAbi, address: created, functionName: 'setupStage' }))).toBe(4)
 		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ portfolioSetupGas: setupGas })
 		return created
 	}

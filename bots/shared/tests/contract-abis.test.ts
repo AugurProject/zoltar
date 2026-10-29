@@ -17,6 +17,10 @@ import {
 	statoblast_SecurityPool_SecurityPool,
 	statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate,
 	statoblast_SecurityPoolForker_SecurityPoolForker,
+	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger,
+	statoblast_SecurityPoolPortfolioAuction_SecurityPoolPortfolioAuction,
+	statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction,
+	statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault,
 	statoblast_tokens_ERC1155_ERC1155,
 	statoblast_tokens_ShareToken_ShareToken,
 	statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction,
@@ -46,6 +50,10 @@ describe('generated bot contract ABIs', () => {
 			[abis.openOraclePriceCoordinatorAbi, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi],
 			[abis.sharedPoolPriceFeedAbi, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi],
 			[abis.securityPoolForkerAbi, statoblast_SecurityPoolForker_SecurityPoolForker.abi],
+			[abis.securityPoolCapitalLedgerAbi, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger.abi],
+			[abis.securityPoolPortfolioAuctionAbi, statoblast_SecurityPoolPortfolioAuction_SecurityPoolPortfolioAuction.abi],
+			[abis.securityPoolUniformPriceAuctionAbi, statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction.abi],
+			[abis.securityPoolAuctionVaultAbi, statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault.abi],
 			[abis.uniformPriceDualCapBatchAuctionAbi, statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi],
 			[abis.openOracleAbi, statoblast_openOracle_OpenOracle_OpenOracle.abi],
 			[abis.weth9Abi, statoblast_WETH9_WETH9.abi],
@@ -113,6 +121,10 @@ describe('generated bot contract ABIs', () => {
 			'ordinarySettlementInitializedEvent',
 			'truthAuctionHaircutAppliedEvent',
 			'portfolioRuntimeIdentities',
+			'securityPoolCapitalLedgerAbi',
+			'securityPoolPortfolioAuctionAbi',
+			'securityPoolUniformPriceAuctionAbi',
+			'securityPoolAuctionVaultAbi',
 		])
 		expect(Object.keys(abis).sort()).toEqual([...asserted].sort())
 	})

@@ -6,6 +6,7 @@ import { getInfraContractAddresses, getSecurityPoolPortfolioRuntimeCode } from '
 import {
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolCapitalLifecycleDelegate_SecurityPoolCapitalLifecycleDelegate as lifecycleArtifact,
+	statoblast_SecurityPoolCapitalAuctionDelegate_SecurityPoolCapitalAuctionDelegate as auctionDelegateArtifact,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
 	statoblast_SecurityPoolCapitalFeeStreams_SecurityPoolCapitalFeeStreams as feesArtifact,
 	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as engineArtifact,
@@ -30,10 +31,11 @@ export const modules = {
 	services: getAddress('0x0000000000000000000000000000000000000068'),
 	rewards: getAddress('0x0000000000000000000000000000000000000069'),
 	premium: getAddress('0x0000000000000000000000000000000000000070'),
+	auctionDelegate: getAddress('0x0000000000000000000000000000000000000071'),
 }
 export function capitalClient(initial = capitalSnapshot()) {
 	let snapshot = initial
-	let setupStage = 3n
+	let setupStage = 4n
 	const overrides: Record<string, unknown> = {}
 	const scopedOverrides = new Map<string, unknown>()
 	const reads: { name: string; args: readonly unknown[] | undefined; blockNumber: bigint | undefined }[] = []
@@ -41,6 +43,7 @@ export function capitalClient(initial = capitalSnapshot()) {
 		[portfolio, getSecurityPoolPortfolioRuntimeCode()],
 		[capital, `0x${capitalArtifact.evm.deployedBytecode.object}`],
 		[modules.lifecycle, `0x${lifecycleArtifact.evm.deployedBytecode.object}`],
+		[modules.auctionDelegate, `0x${auctionDelegateArtifact.evm.deployedBytecode.object}`],
 		[index, `0x${indexArtifact.evm.deployedBytecode.object}`],
 		[modules.fees, `0x${feesArtifact.evm.deployedBytecode.object}`],
 		[modules.engine, `0x${engineArtifact.evm.deployedBytecode.object}`],
@@ -74,8 +77,10 @@ export function capitalClient(initial = capitalSnapshot()) {
 				commitmentIndex: index,
 				repToken: token,
 				getRepToken: token,
-				ledger: request.address === modules.lifecycle ? capital : modules.book,
+				ledger: request.address === modules.lifecycle || request.address === modules.auctionDelegate ? capital : modules.book,
 				lifecycleDelegate: modules.lifecycle,
+				auctionDelegate: modules.auctionDelegate,
+				auctionDeployer: infrastructure.securityPoolPortfolioAuctionDeployer,
 				services: modules.services,
 				forkAuthority: modules.fork,
 				reportingRewards: modules.rewards,

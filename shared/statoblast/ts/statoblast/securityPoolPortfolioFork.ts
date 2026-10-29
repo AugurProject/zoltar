@@ -16,6 +16,7 @@ const abi = parseAbi([
 	'function choices(uint248 source,address owner) view returns (uint256 outcome,bool recorded)',
 	'function freeze(uint248 source)',
 	'function choose(uint248 source,uint256 outcome)',
+	'function prepareBranch(uint248 source,uint256 outcome) returns (uint248)',
 	'function startBranch(uint248 source,uint256 outcome) returns (uint248)',
 	'function finalizeBranch(uint248 child)',
 	'function recoverUnchosenCash(uint248 source,uint256 questionId,uint256 shares) returns (uint256)',
@@ -45,6 +46,10 @@ function request(parameters: ForkRequest, functionName: string, args: readonly A
 /** One irrevocable choice moves the owner's committed principal; idle REP and old fees stay in the source. */
 export function buildPortfolioForkChoiceRequest(parameters: ForkRequest & { outcomeIndex: bigint }) {
 	return request(parameters, 'choose', [uint(parameters.outcomeIndex, 'Fork outcome')])
+}
+/** Prepare one branch's capital modules in a separate, bounded deployment transaction. */
+export function buildPortfolioForkPreparationRequest(parameters: ForkRequest & { outcomeIndex: bigint }) {
+	return request(parameters, 'prepareBranch', [uint(parameters.outcomeIndex, 'Fork outcome')])
 }
 /** Permissionless shared preparation touches one branch, independently of question count. */
 export function buildPortfolioForkStartRequest(parameters: ForkRequest & { outcomeIndex: bigint }) {

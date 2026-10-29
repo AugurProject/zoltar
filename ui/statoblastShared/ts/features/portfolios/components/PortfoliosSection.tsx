@@ -60,7 +60,8 @@ export function PortfoliosSection({ parameters, enabled, environmentKey, activeU
 							<PortfolioInput label={copy.reportingFee} hint={copy.reportingFeeHint} value={actions.economicsDraft.reportingFee} onChange={value => actions.setEconomicsField('reportingFee', value)} disabled={disabled} numeric />
 							<PortfolioInput label={copy.serviceFee} value={actions.economicsDraft.serviceFeePercent} onChange={value => actions.setEconomicsField('serviceFeePercent', value)} disabled={disabled} numeric />
 							<PortfolioInput label={copy.maximumOracleReward} value={actions.economicsDraft.maximumOracleReward} onChange={value => actions.setEconomicsField('maximumOracleReward', value)} disabled={disabled} numeric />
-							<PortfolioInput label={capitalCopy.minimumCommitment} value={actions.economicsDraft.minimumCommitment} onChange={value => actions.setEconomicsField('minimumCommitment', value)} disabled={disabled} numeric />
+							<PortfolioInput label={capitalCopy.minimumCommitment} hint={capitalCopy.minimumCommitmentHint} value={actions.economicsDraft.minimumCommitment} onChange={value => actions.setEconomicsField('minimumCommitment', value)} disabled={disabled} numeric />
+							<PortfolioInput label={capitalCopy.auctionReserve} hint={capitalCopy.auctionReserveHint} value={actions.economicsDraft.auctionReservePercent} onChange={value => actions.setEconomicsField('auctionReservePercent', value)} disabled={disabled} numeric />
 							<PortfolioInput label={capitalCopy.minimumExecution} value={actions.economicsDraft.minimumExecutionReserve} onChange={value => actions.setEconomicsField('minimumExecutionReserve', value)} disabled={disabled} numeric />
 							<PortfolioInput label={capitalCopy.rewardVesting} value={actions.economicsDraft.rewardVestingHours} onChange={value => actions.setEconomicsField('rewardVestingHours', value)} disabled={disabled} numeric />
 							<PortfolioInput label={capitalCopy.annualFee} hint={capitalCopy.annualFeeHint} value={actions.economicsDraft.annualFeePercent} onChange={value => actions.setEconomicsField('annualFeePercent', value)} disabled={disabled} numeric />
@@ -75,7 +76,7 @@ export function PortfoliosSection({ parameters, enabled, environmentKey, activeU
 				</details>
 			</SectionBlock>
 			<SectionBlock title={capitalCopy.prepareTitle} description={capitalCopy.prepareHint}>
-				<UserMessage tone={actions.setupStage === 3 ? 'success' : 'neutral'} detail={capitalCopy.prepareProgress(actions.setupStage ?? 0)} />
+				<UserMessage tone={actions.setupStage === 4 ? 'success' : 'neutral'} detail={capitalCopy.prepareProgress(actions.setupStage ?? 0)} />
 				<div className='actions'>
 					{capitalCopy.prepareStages.map((label, index) => (
 						<PortfolioButton key={label} model={actions} action={`preparePortfolio${index + 1}`} label={label} pendingLabel={capitalCopy.preparing} reason={actions.preparationReason(index + 1)} onClick={() => actions.prepare(index + 1)} />
@@ -90,7 +91,16 @@ export function PortfoliosSection({ parameters, enabled, environmentKey, activeU
 				<PortfolioPurchasePanel model={model} purchase={purchase} actions={actions} />
 				<PortfolioReportingReward model={reporting} actions={actions} questionInput={purchase.questionInput} setQuestionInput={purchase.setQuestionInput} />
 				<PortfolioServiceCredit model={serviceCredit} actions={actions} />
-				<PortfolioSharedFork snapshot={model.snapshot} actions={actions} openUniverse={universeId => model.setUniverseInput(universeId.toString())} />
+				<PortfolioSharedFork
+					snapshot={model.snapshot}
+					actions={actions}
+					bidder={parameters.accountAddress}
+					openUniverse={universeId => model.setUniverseInput(universeId.toString())}
+					openVault={(vault, universeId) => {
+						model.setOwnerInput(vault)
+						model.setUniverseInput(universeId.toString())
+					}}
+				/>
 			</TransactionScopeProvider>
 		</div>
 	)

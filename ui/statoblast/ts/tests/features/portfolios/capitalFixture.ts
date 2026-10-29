@@ -6,6 +6,17 @@ export const capital = getAddress('0x0000000000000000000000000000000000000033')
 export const token = getAddress('0x0000000000000000000000000000000000000044')
 export const index = getAddress('0x0000000000000000000000000000000000000055')
 export const unit = 10n ** 18n
+export function auctionCapitalSnapshot(overrides: Partial<PortfolioAccountSnapshot> = {}): PortfolioAccountSnapshot {
+	const vault = getAddress('0x0000000000000000000000000000000000000093')
+	const snapshot = capitalSnapshot()
+	return {
+		...snapshot,
+		owner: vault,
+		positions: snapshot.positions.map(position => ({ ...position, owner: vault })),
+		auctionVault: { vault, bidder: owner, auction: getAddress('0x0000000000000000000000000000000000000091'), initialCapital: capital, initialUniverse: 0n, bidId: 1n, filledLots: 10n, materialized: true },
+		...overrides,
+	}
+}
 export function capitalSnapshot(overrides: Partial<PortfolioAccountSnapshot> = {}): PortfolioAccountSnapshot {
 	return {
 		chainId: 1,
@@ -59,6 +70,7 @@ export function capitalSnapshot(overrides: Partial<PortfolioAccountSnapshot> = {
 			reportingFeeAttoEth: 5n * 10n ** 16n,
 			serviceFeeBps: 2500n,
 			maximumOracleRewardAttoEth: 10n ** 17n,
+			auctionReserveFactorBps: 5_000n,
 		},
 		questionAdmissionPolicy: token,
 		admission: { address: token, mode: 'open' },

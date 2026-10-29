@@ -61,7 +61,7 @@ export function usePortfolio({ accountAddress, enabled, environmentKey, activeUn
 			if (universeId === undefined) throw new Error('Enter a valid universe ID.')
 			const client = createConnectedReadClient()
 			const preparation = await loadPortfolioSetup(client, portfolio, owner)
-			const next = preparation.stage === 3 ? await loadPortfolioAccount(client, portfolio, owner, universeId, questionStart.value, admissionStart.value) : undefined
+			const next = preparation.stage === 4 ? await loadPortfolioAccount(client, portfolio, owner, universeId, questionStart.value, admissionStart.value) : undefined
 			if (!current()) return
 			setup.value = preparation
 			snapshot.value = next

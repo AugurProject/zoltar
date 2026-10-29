@@ -9,11 +9,11 @@ export function renderPortfolios(portfolios: readonly PortfolioView[] | undefine
 		<>
 			<p class='muted'>
 				Select portfolio addresses and universes in <code>selectedPortfolios</code> in the operator file, then restart while paused. Approve each universe separately in Settings. Funded takeovers require the separate <code>portfolioPolicy</code> opt-in. Previously managed portfolios remain visible for exposure
-				accounting.
+				accounting. Principal limits cover the signer's direct ledger positions. Separate auction vault accounts are excluded from those limits.
 			</p>
 			<details class='portfolio-guidance'>
 				<summary>Monitoring limits</summary>
-				<p class='muted'>Each page is a fresh observation. Unchanged retirement warnings require repeated observations; the monitor retains the latest 256 retiring positions per scope.</p>
+				<p class='muted'>Each scan reads one bounded page of positions and one bounded page of auction bids. Winning bids already back claims before their individual positions are recorded. Unchanged retirement warnings require repeated observations; the monitor retains the latest 256 retiring positions per scope.</p>
 			</details>
 			{stale && <p class='notice warning'>Connection lost. These portfolio observations are stale.</p>}
 			{portfolios === undefined || portfolios.length === 0 ? (
@@ -30,7 +30,7 @@ export function renderPortfolios(portfolios: readonly PortfolioView[] | undefine
 							Owner principal {formatAmount(portfolio.principalRep, 'REP')} · commitment {formatAmount(portfolio.commitmentEth, 'ETH')}. Managed principal {formatAmount(portfolio.managedPrincipalRep, 'REP')} / {formatAmount(portfolio.maximumTotalPrincipalRep, 'REP')} limit.
 						</p>
 						<p class='muted'>
-							Current page from {portfolio.knownPositionCount} registered positions; next cursor {portfolio.nextPositionId}.
+							Current page from {portfolio.knownPositionCount} registered positions; next cursor {portfolio.nextPositionId}. Auction bids {portfolio.knownAuctionBidCount}; next bid cursor {portfolio.nextAuctionBidId}.
 						</p>
 						{portfolio.positions.length === 0 ? (
 							<p class='empty'>No live commitments in this page.</p>
@@ -39,7 +39,7 @@ export function renderPortfolios(portfolios: readonly PortfolioView[] | undefine
 								{portfolio.positions.map(position => (
 									<li key={position.id}>
 										<strong>
-											Position {position.id} · {position.distressed ? 'Distressed' : 'Healthy'} · {formatAmount(position.commitmentEth, 'ETH')}
+											{position.label} · {position.distressed ? 'Distressed' : 'Healthy'} · {formatAmount(position.commitmentEth, 'ETH')}
 										</strong>
 										<p>
 											Execution reserve {formatAmount(position.reserveEth, 'ETH')} / {formatAmount(position.requiredReserveEth, 'ETH')} required · {position.reserveAdequate ? 'Adequate' : 'Underfunded'}

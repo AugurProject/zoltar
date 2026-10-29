@@ -34,6 +34,7 @@ describe('Statoblast: central portfolio and native question integration', () => 
 			settlement: infrastructure.securityPoolPortfolioSettlementDeployer,
 			reporters: infrastructure.securityPoolReporterLedgerDeployer,
 			forks: infrastructure.securityPoolPortfolioForkCoordinatorDeployer,
+			auctions: infrastructure.securityPoolPortfolioAuctionDeployer,
 			services: infrastructure.securityPoolPortfolioServicesDeployer,
 		}
 		const deploy = (configuration = portfolioEconomics, modules = deployers) =>
@@ -47,7 +48,8 @@ describe('Statoblast: central portfolio and native question integration', () => 
 			)
 		for (const minimumOutcomeRate of [0n, unit + 1n]) await expect(deploy({ ...portfolioEconomics, minimumOutcomeRate })).rejects.toThrow('Invalid minimum exchange rate')
 		await expect(deploy({ ...portfolioEconomics, annualFeeBps: 10_001n })).rejects.toThrow('Invalid portfolio economics')
-		for (const key of Object.keys(deployers)) await expect(deploy(portfolioEconomics, { ...deployers, [key]: fixture.owner().account.address })).rejects.toThrow('Portfolio deployer has no code')
+		for (const auctionReserveFactorBps of [0n, 10_001n]) await expect(deploy({ ...portfolioEconomics, auctionReserveFactorBps })).rejects.toThrow('Invalid auction reserve factor')
+		for (const key of Object.keys(deployers)) await expect(deploy(portfolioEconomics, { ...deployers, [key]: fixture.owner().account.address })).rejects.toThrow(key === 'auctions' ? 'Auction deployer has no code' : 'Portfolio deployer has no code')
 	})
 
 	test('permissionless registration binds distinct canonical shares without authorizing or moving owner capital', async () => {

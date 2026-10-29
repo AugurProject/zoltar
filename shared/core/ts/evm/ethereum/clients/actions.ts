@@ -127,6 +127,13 @@ export function buildRpcTransactionRequest(parameters: {
 	}
 }
 
+export function rpcBalanceOverride(parameters: { account?: Account | Address | undefined; balanceOverride?: bigint | undefined }) {
+	if (parameters.balanceOverride === undefined) return []
+	const account = normalizeAccountAddress(parameters.account)
+	if (account === undefined) throw new Error('Balance override requires a simulation account')
+	return [{ [account]: { balance: hexQuantity(parameters.balanceOverride) } }]
+}
+
 function normalizeAccountAddress(account: Account | Address | undefined) {
 	if (account === undefined) return undefined
 	return typeof account === 'string' ? getAddress(account) : account.address
@@ -282,7 +289,7 @@ export function buildPublicClientActions<TTransport extends Transport, TChain ex
 			normalizeRequiredRpcBigInt(
 				await requestTransportWithRateLimitRetries<string>(transport, {
 					method: 'eth_estimateGas',
-					params: [buildRpcTransactionRequest(parameters), ...(parameters.blockNumber === undefined ? [] : [normalizeBlockTag(parameters.blockNumber)])],
+					params: [buildRpcTransactionRequest(parameters), ...(parameters.blockNumber === undefined && parameters.balanceOverride === undefined ? [] : [normalizeBlockTag(parameters.blockNumber)]), ...rpcBalanceOverride(parameters)],
 				}),
 				'gas estimate',
 			),

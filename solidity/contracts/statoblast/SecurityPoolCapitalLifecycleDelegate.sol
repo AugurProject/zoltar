@@ -7,6 +7,7 @@ import { ICapitalPriceExposure, ICapitalLedgerAccounting } from './interfaces/IC
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
+import { Zoltar } from '../Zoltar.sol';
 
 interface ICapitalLifecycleHost {
 	function portfolio() external view returns (address);
@@ -15,7 +16,9 @@ interface ICapitalLifecycleHost {
 	function ownerConservativePrice(address owner) external view returns (uint256);
 	function requiredExecutionReserve(uint256 commitment) external view returns (uint256);
 	function repToken() external view returns (IERC20);
+	function zoltar() external view returns (Zoltar);
 	function maximumHealthyPrice(uint256 rep, uint256 commitment) external view returns (uint256);
+	function isPriceValid() external view returns (bool);
 }
 
 /// @notice Owner registration and bounded fork choices in the custody ledger's context.
@@ -24,13 +27,33 @@ interface ICapitalLifecycleHost {
 contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 	using SafeERC20Ops for IERC20;
 	address public immutable ledger;
+	event PrincipalWithdrawn(address indexed owner, address indexed recipient, uint256 amount);
+	event EarningsClaimed(address indexed owner, uint256 attoEth, uint256 attoRep);
 	event CommitmentAuthorized(address indexed owner, uint96 indexed positionId, uint256 rep, uint256 commitment, uint256 targetHealthFactorBps);
+	event CapitalPriceAccepted(uint256 price, uint48 validUntil);
 	constructor(address host) {
 		ledger = host;
 	}
 	modifier onlyLedger() {
 		require(address(this) == ledger, 'Only capital ledger context');
 		_;
+	}
+
+	/// @dev The ledger authenticates the portfolio, validates the input, and
+	/// checkpoints all old-price income before forwarding its canonical feed.
+	function acceptPrice(ICapitalPriceExposure feed, uint256 price, uint48 validUntil) external onlyLedger {
+		uint256 uncertainty = feed.targetPriceErrorForDispute();
+		acceptedPriceEpoch = feed.acceptedEpoch();
+		require(uncertainty < 10_000_000, 'Invalid oracle uncertainty');
+		acceptedPrice = price;
+		conservativePrice = Math.mulDiv(price, 10_000_000, 10_000_000 - uncertainty, Math.Rounding.Ceil);
+		liquidationPrice = Math.mulDiv(price, 10_000_000, 10_000_000 + uncertainty);
+		require(liquidationPrice != 0, 'Liquidation price rounds to zero');
+		priceValidUntil = validUntil;
+		// Child reports can fund the fork auction before capital activation.
+		// Imported positions have no operating health history until imports seal.
+		if (!importing) commitmentIndex.observeHealthy(liquidationPrice);
+		emit CapitalPriceAccepted(price, validUntil);
 	}
 
 	/// @dev The ledger has already checkpointed fees, served prior retirements,
@@ -79,6 +102,65 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		emit CommitmentAuthorized(msg.sender, id, rep, commitment, health);
 	}
 
+	/// @dev These owner operations run after the ledger checkpoints old income.
+	function withdrawPrincipal(uint256 amount, address recipient) external onlyLedger {
+		require(recipient != address(0) && amount > 0, 'Invalid capital withdrawal');
+		_settleOwner(msg.sender);
+		Owner storage owner = owners[msg.sender];
+		uint256 free = Math.min(amount, owner.freeAttoRep);
+		owner.freeAttoRep -= free;
+		totalFreeAttoRep -= free;
+		uint256 pledged = amount - free;
+		ICapitalLifecycleHost host = ICapitalLifecycleHost(address(this));
+		if (pledged != 0) {
+			require(owner.positionId != 0 && msg.sender != forkAuthority, 'Insufficient owner principal');
+			require(!importing && host.zoltar().getForkTime(host.universeId()) == 0 && !frozen, 'Capital universe inactive');
+			require(host.isPriceValid(), 'Capital price stale');
+			SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(owner.positionId);
+			require(pledged <= position.rep && position.rep - pledged >= commitmentIndex.requiredRep(position.commitment, host.ownerConservativePrice(msg.sender), host.securityMultiplierBps(), _target(owner)), 'Owner collateral too low');
+			uint256 maxPrice = host.maximumHealthyPrice(position.rep - pledged, position.commitment);
+			commitmentIndex.replace(owner.positionId, position.rep - pledged, position.commitment, maxPrice);
+			if (position.commitment == 0 || maxPrice >= liquidationPrice)
+				commitmentIndex.clearLiquidation(owner.positionId);
+		}
+		host.repToken().safeTransfer(recipient, amount);
+		emit PrincipalWithdrawn(msg.sender, recipient, amount);
+	}
+	function fundExecutionReserve(address owner) external payable onlyLedger {
+		require(owner != address(0) && msg.value > 0, 'Invalid execution funding');
+		require(owner != address(auctionCohort.adapter), 'Materialize an individual auction vault');
+		require(!exported[owner], 'Reserve follows fork choice');
+		uint96 id = owners[owner].positionId;
+		if (id != 0 && commitmentIndex.accountOf(id).commitment != 0) positionExecutionReserveAttoEth[id] += msg.value;
+		else owners[owner].executionReserveAttoEth += msg.value;
+	}
+	function withdrawExecutionReserve(uint256 amount) external onlyLedger {
+		_settleOwner(msg.sender);
+		Owner storage owner = owners[msg.sender];
+		require(!exported[msg.sender], 'Reserve follows fork choice');
+		ICapitalLifecycleHost host = ICapitalLifecycleHost(address(this));
+		Zoltar zoltar = host.zoltar();
+		uint248 universe = host.universeId();
+		if (zoltar.getForkTime(universe) != 0 && block.timestamp >= zoltar.getForkChoiceDeadline(universe)) {
+			owner.executionReserveAttoEth += positionExecutionReserveAttoEth[owner.positionId];
+			delete positionExecutionReserveAttoEth[owner.positionId];
+		}
+		require(amount <= owner.executionReserveAttoEth, 'Execution reserve insufficient');
+		owner.executionReserveAttoEth -= amount;
+		_sendEth(msg.sender, amount);
+	}
+	function claimEarnings() external onlyLedger {
+		_settleOwner(msg.sender);
+		Owner storage owner = owners[msg.sender];
+		uint256 ethAmount = owner.feesAttoEth;
+		uint256 repAmount = owner.feesAttoRep;
+		owner.feesAttoEth = 0;
+		owner.feesAttoRep = 0;
+		if (repAmount != 0) ICapitalLifecycleHost(address(this)).repToken().safeTransfer(msg.sender, repAmount);
+		_sendEth(msg.sender, ethAmount);
+		emit EarningsClaimed(msg.sender, ethAmount, repAmount);
+	}
+
 	function exportChoice(address owner) external onlyLedger returns (ChoicePosition memory choice, uint256 target, uint256 reserve) {
 		require(frozen && !exported[owner], 'Fork choice unavailable');
 		_settleOwner(owner);
@@ -125,6 +207,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		commitmentIndex.sealImports();
 		importing = false;
 		demandAttoEth = fundedDemand;
+		if (ICapitalLifecycleHost(address(this)).isPriceValid()) commitmentIndex.observeHealthy(liquidationPrice);
 	}
 	function releaseForkBacking() external onlyLedger {
 		require(frozen && !migrationPrepared, 'Fork backing release unavailable');

@@ -10,7 +10,7 @@ export function getPortfolioClaimReadiness(model: PortfolioClaimModel) {
 	else if (model.error !== undefined) reason = model.error
 	else if (model.snapshot === undefined) {
 		if (model.managerInput.trim() === '') reason = copy.selectPortfolio
-		else if (model.setup !== undefined && model.setup.stage < 3) reason = copy.portfolioSetup
+		else if (model.setup !== undefined && model.setup.stage < 4) reason = copy.portfolioSetup
 		else reason = copy.portfolioUnavailable
 	}
 	return { loading, reason }

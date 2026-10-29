@@ -6,6 +6,7 @@ import {
 	statoblast_tokens_ShareToken_ShareToken as sharesArtifact,
 	test_statoblast_ShareTokenRecoveryTestPool_ShareTokenRecoveryTestPool as poolArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
+	statoblast_SecurityPoolPortfolioAuction_SecurityPoolPortfolioAuctionDeployer as auctionDeployerArtifact,
 	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCapitalLedgerDeployer as capitalDeployerArtifact,
 	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCommitmentIndexDeployer as indexDeployerArtifact,
 	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCapitalFeeStreamsDeployer as streamsDeployerArtifact,
@@ -66,7 +67,8 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 		const capitals = await deploy(`0x${capitalDeployerArtifact.evm.bytecode.object}`)
 		const indices = await deploy(`0x${indexDeployerArtifact.evm.bytecode.object}`)
 		const streams = await deploy(`0x${streamsDeployerArtifact.evm.bytecode.object}`)
-		root = await deploy(encodeDeployData({ abi: rootArtifact.abi, bytecode: `0x${rootArtifact.evm.bytecode.object}`, args: [zoltar, capitals, indices, streams] }))
+		const auctions = await deploy(`0x${auctionDeployerArtifact.evm.bytecode.object}`)
+		root = await deploy(encodeDeployData({ abi: rootArtifact.abi, bytecode: `0x${rootArtifact.evm.bytecode.object}`, args: [zoltar, capitals, indices, streams, auctions] }))
 		engine = await deploy(encodeDeployData({ abi: settlementArtifact.abi, bytecode: `0x${settlementArtifact.evm.bytecode.object}`, args: [root] }))
 		const book = await deploy(encodeDeployData({ abi: bookArtifact.abi, bytecode: `0x${bookArtifact.evm.bytecode.object}`, args: [engine, 10n ** 12n] }))
 		const reporter = await deploy(encodeDeployData({ abi: reporterArtifact.abi, bytecode: `0x${reporterArtifact.evm.bytecode.object}`, args: [root, zoltar] }))
@@ -131,6 +133,11 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 		await start(2n)
 		const first = await childId(1n)
 		const second = await childId(2n)
+		for (const child of [first, second]) expect(await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'bookIds', args: [child] })).toBe(0n)
+		expect(await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'availableForkCashAttoEth', args: [0n] })).toBe(200n * E)
+		await moveTo(forkTime + 9n * week)
+		await finalize(first)
+		await finalize(second)
 		const bookAddress = await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'ledger' })
 		for (const child of [first, second]) {
 			const bookId = await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'bookIds', args: [child] })
@@ -246,6 +253,9 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 		expect(await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'availableForkCashAttoEth', args: [0n] })).toBe(100n * E)
 		await expect(writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'recoverUnchosenCash', args: [0n, 1n, 1n] }))).rejects.toThrow('Recovery requires unclaimed complete sets')
 		await start(1n)
+		expect(await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'availableForkCashAttoEth', args: [0n] })).toBe(100n * E)
+		await moveTo(forkTime + 9n * week)
+		await finalize(await childId(1n))
 		expect(await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'availableForkCashAttoEth', args: [0n] })).toBe(0n)
 		expect(await owner.getBalance({ address: engine })).toBe(100n * E)
 	})

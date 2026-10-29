@@ -188,14 +188,14 @@ contract SecurityPoolPortfolioSettlement {
 	}
 
 	/// @notice Fund one child's claim basket with assigned ETH and forfeited child REP.
-	/// @dev Earlier final claims stay in the parent. REP is pulled atomically and
-	/// has no external price, auction, underwriting or keeper dependency.
-	function createChildUniverse(uint248 sourceUniverseId, uint248 childUniverseId, uint256 parentContributionAttoEth, IERC20 recoveryToken, uint256 recoveryAttoRep) external onlyForkAuthority nonReentrant returns (uint64 bookId) {
+	/// @dev Additional auction ETH is supplied as msg.value. Only assigned source
+	/// cash consumes the parent's balance; unsold and old recovery REP stay claims.
+	function createChildUniverse(uint248 sourceUniverseId, uint248 childUniverseId, uint256 parentContributionAttoEth, IERC20 recoveryToken, uint256 recoveryAttoRep) external payable onlyForkAuthority nonReentrant returns (uint64 bookId) {
 		require(bookIds[childUniverseId] == 0, 'Settlement universe registered');
 		uint256 available = availableForkCashAttoEth[sourceUniverseId];
 		require(parentContributionAttoEth <= available, 'Fork settlement cash insufficient');
 		availableForkCashAttoEth[sourceUniverseId] = available - parentContributionAttoEth;
-		bookId = ledger.createChildBook(_bookId(sourceUniverseId), parentContributionAttoEth, recoveryAttoRep);
+		bookId = ledger.createChildBook(_bookId(sourceUniverseId), parentContributionAttoEth + msg.value, recoveryAttoRep);
 		(, , , uint48 timestamp, ) = ledger.totals(bookId);
 		ledger.setFeeAccrualEnabled(bookId, false, timestamp);
 		bookIds[childUniverseId] = bookId;

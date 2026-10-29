@@ -7,10 +7,11 @@ import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { usePortfolioActions } from '@zoltar/ui-statoblast-shared/features/portfolios/hooks/usePortfolioActions.js'
-import { decodeFunctionData, parseAbi, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { decodeFunctionData, encodeFunctionData, parseAbi, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { renderHookWithProps } from '../../support/renderHook.js'
-import { capitalSnapshot, owner, portfolio, token } from './capitalFixture.js'
+import { auctionCapitalSnapshot, capitalSnapshot, owner, portfolio, token, capital } from './capitalFixture.js'
 import { capitalClient } from './capitalClient.js'
+import { auctionFixture } from './auctionFixture.js'
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
 const parameters = { accountAddress: owner, onTransactionRequested: () => undefined, onTransactionSubmitted: () => undefined, onTransactionFinished: () => undefined, onTransactionPresented: () => undefined, refreshState: async () => undefined }
 function model(): Parameters<typeof usePortfolioActions>[0] {
@@ -62,6 +63,41 @@ test('creation uses an explicit admission transaction before deployment and inva
 function usePortfolioActionsWrapper(props: { model: ReturnType<typeof model>; parameters?: Parameters<typeof usePortfolioActions>[1] }) {
 	return usePortfolioActions(props.model, props.parameters ?? parameters)
 }
+test('a winning vault is controlled by its bidder and individual controls wait for materialization', async () => {
+	capitalClient().install()
+	const snapshot = auctionCapitalSnapshot()
+	const hook = await renderHookWithProps(usePortfolioActionsWrapper, { model: { ...model(), snapshot } })
+	lifecycle.trackRendered(hook)
+	expect(hook.state().ownerReason).toBeUndefined()
+	await hook.setProps({ parameters: { ...parameters, accountAddress: token } })
+	expect(hook.state().ownerReason).toContain('owner')
+	const auctionVault = snapshot.auctionVault
+	if (auctionVault === undefined) throw new Error('Missing auction authority')
+	await hook.setProps({ parameters, model: { ...model(), snapshot: { ...snapshot, auctionVault: { ...auctionVault, materialized: false } } } })
+	expect(hook.state().ownerReason).toContain('Activate this individual vault')
+})
+test('individual capital actions execute through the authenticated auction vault and sweep returned assets to its bidder', async () => {
+	const fixture = await auctionFixture()
+	const snapshot = auctionCapitalSnapshot()
+	const requests: { data?: Hex | undefined; to?: string | undefined }[] = []
+	const writer = asWriteClient(createMockWriteClient(request => requests.push(request)))
+	installActiveEnvironmentForTesting({ ...fixture.backend, createWriteClient: () => ({ ...writer, account: { address: owner, type: 'json-rpc' }, chain: MAINNET_NETWORK_PROFILE.chain, call: async () => ({ data: undefined }) }) })
+	const hook = await renderHookWithProps(usePortfolioActionsWrapper, { model: { ...model(), snapshot } })
+	lifecycle.trackRendered(hook)
+	const abi = parseAbi(['function claimEarnings()', 'function executeAndSweep(address target,uint256 value,bytes data,address token,address recipient) payable returns(bytes)'])
+	const data = encodeFunctionData({ abi, functionName: 'claimEarnings' })
+	await act(() => hook.state().runPortfolioAction('claimPortfolioEarnings', 'Claim earnings', () => ({ account: snapshot.owner, to: capital, value: 0n, data })))
+	expect(hook.state().error).toBeUndefined()
+	expect(requests).toHaveLength(1)
+	const request = requests[0]
+	if (request?.data === undefined) throw new Error('Missing vault execution')
+	expect(request.to).toBe(snapshot.owner)
+	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'executeAndSweep', args: [capital, 0n, data, token, owner] })
+	fixture.values['owner'] = token
+	await act(() => hook.state().runPortfolioAction('claimPortfolioEarnings', 'Claim earnings', () => ({ account: snapshot.owner, to: capital, value: 0n, data })))
+	expect(hook.state().error).toBeDefined()
+	expect(requests).toHaveLength(1)
+})
 test('an authenticated portfolio refresh keeps actions disabled with a loading reason', async () => {
 	capitalClient().install()
 	const base = model()
@@ -138,7 +174,12 @@ test('creation rejects invalid economics without changing the owner health targe
 	})
 	expect(hook.state().creationError).toContain('positive')
 	expect(hook.state().economicsDraft).not.toHaveProperty('targetHealthPercent')
+	expect(hook.state().economicsDraft.auctionReservePercent).toBe('50')
 	await act(() => hook.state().setEconomicsField('minimumCommitment', '1'))
+	expect(hook.state().creationError).toBeUndefined()
+	await act(() => hook.state().setEconomicsField('auctionReservePercent', '0'))
+	expect(hook.state().creationError).toContain('Auction reserve')
+	await act(() => hook.state().setEconomicsField('auctionReservePercent', '50'))
 	expect(hook.state().creationError).toBeUndefined()
 })
 

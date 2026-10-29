@@ -39,6 +39,7 @@ describe('Statoblast: central capital SDK against production contracts', () => {
 			withdrawableAttoRep: 789_473_684_210_526_315_600n,
 			ownerConservativePrice: 1_052_631_578_947_368_422n,
 			priceValid: true,
+			economics: { auctionReserveFactorBps: portfolioEconomics.auctionReserveFactorBps },
 		})
 		await expect(writeContractAndWait(client, () => client.sendTransaction(buildPortfolioCapitalWithdrawPrincipalRequest({ ...base, amountAttoRep: snapshot.withdrawableAttoRep + 1n })))).rejects.toThrow('Owner collateral too low')
 		expect(snapshot.positions).toHaveLength(1)

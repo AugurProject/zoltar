@@ -6,7 +6,7 @@ const owner: Address = '0x0000000000000000000000000000000000000001'
 const factory: Address = '0x0000000000000000000000000000000000000002'
 const initialOriginPool: Address = '0x0000000000000000000000000000000000000003'
 const questionAdmissionPolicy: Address = '0x0000000000000000000000000000000000000004'
-const deployers = { capital: factory, commitments: factory, fees: factory, books: factory, settlement: factory, reporters: factory, forks: factory, services: factory }
+const deployers = { capital: factory, commitments: factory, fees: factory, books: factory, settlement: factory, reporters: factory, forks: factory, services: factory, auctions: factory }
 const economics: PortfolioEconomicsConfig = {
 	purchaseFeeBps: 100n,
 	annualFeeBps: 1_000n,
@@ -18,9 +18,10 @@ const economics: PortfolioEconomicsConfig = {
 	reportingFeeAttoEth: 10n ** 15n,
 	serviceFeeBps: 2_500n,
 	maximumOracleRewardAttoEth: 10n ** 16n,
+	auctionReserveFactorBps: 5_000n,
 }
 const inputs = parseAbiParameters(
-	'address factory,address seed,uint256 horizon,(address capital,address commitments,address fees,address books,address settlement,address reporters,address forks,address services) deployment,address admission,(uint256 purchaseFeeBps,uint256 annualFeeBps,uint256 minimumPurchaseFeeAttoEth,uint256 minimumCommitmentAttoEth,uint256 minimumExecutionReserveAttoEth,uint256 minimumOutcomeRate,uint48 rewardVestingSeconds,uint256 reportingFeeAttoEth,uint256 serviceFeeBps,uint256 maximumOracleRewardAttoEth) config',
+	'address factory,address seed,uint256 horizon,(address capital,address commitments,address fees,address books,address settlement,address reporters,address forks,address services,address auctions) deployment,address admission,(uint256 purchaseFeeBps,uint256 annualFeeBps,uint256 minimumPurchaseFeeAttoEth,uint256 minimumCommitmentAttoEth,uint256 minimumExecutionReserveAttoEth,uint256 minimumOutcomeRate,uint48 rewardVestingSeconds,uint256 reportingFeeAttoEth,uint256 serviceFeeBps,uint256 maximumOracleRewardAttoEth,uint256 auctionReserveFactorBps) config',
 )
 const abi = [{ type: 'constructor', stateMutability: 'nonpayable', inputs }] as const
 const base = { owner, factory, initialOriginPool, questionAdmissionPolicy, maximumQuestionHorizonSeconds: 31_536_000n, deployers, economics, artifact: { abi, bytecode: '0x1234' as const } }
@@ -41,6 +42,9 @@ describe('shared capital portfolio deployment', () => {
 		expect(() => validatePortfolioEconomics({ ...economics, annualFeeBps: 10_001n })).toThrow('100%')
 		expect(() => validatePortfolioEconomics({ ...economics, annualFeeBps: 0n })).not.toThrow()
 		expect(() => validatePortfolioEconomics({ ...economics, serviceFeeBps: 10_001n })).toThrow('100%')
+		for (const auctionReserveFactorBps of [0n, 10_001n]) expect(() => validatePortfolioEconomics({ ...economics, auctionReserveFactorBps })).toThrow('Auction reserve')
+		for (const auctionReserveFactorBps of [1n, 10_000n]) expect(() => validatePortfolioEconomics({ ...economics, auctionReserveFactorBps })).not.toThrow()
+		expect(() => buildPortfolioDeploymentRequest({ ...base, deployers: { ...deployers, auctions: zeroAddress } })).toThrow('auctions deployer')
 		expect(() => validatePortfolioEconomics({ ...economics, minimumOutcomeRate: 10n ** 18n + 1n })).toThrow('exchange rate')
 		expect(() => validatePortfolioEconomics({ ...economics, rewardVestingSeconds: 2n ** 48n })).toThrow('uint48')
 		expect(() => buildPortfolioDeploymentRequest({ ...base, deployers: { ...deployers, commitments: zeroAddress } })).toThrow('commitments deployer')

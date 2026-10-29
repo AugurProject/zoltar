@@ -3769,3 +3769,25 @@ test('gas estimation forwards an optional pinned block without changing default 
 	await client.estimateContractGas({ address: TOKEN_ADDRESS, abi, functionName: 'value' })
 	expect(requests.map(parameters => (Array.isArray(parameters) ? parameters.slice(1) : parameters))).toEqual([['0x2a'], ['0x2b'], [], []])
 })
+
+test('fee preflight balance overrides change only the sender ETH balance and remain opt-in', async () => {
+	const requests: unknown[] = []
+	const transport = custom({
+		request: async ({ method, params }) => {
+			requests.push({ method, params })
+			return method === 'eth_estimateGas' ? '0x5208' : '0x'
+		},
+	})
+	const wallet = createWalletClient({ account: OWNER_ADDRESS, transport })
+	const sender = wallet.account.address
+	await wallet.call({ to: TOKEN_ADDRESS, blockNumber: 42n, maxFeePerGas: 10n, maxPriorityFeePerGas: 2n, balanceOverride: 1000n })
+	await wallet.estimateGas({ to: TOKEN_ADDRESS, blockNumber: 42n, maxFeePerGas: 10n, maxPriorityFeePerGas: 2n, balanceOverride: 1000n })
+	await wallet.call({ to: TOKEN_ADDRESS })
+	expect(requests).toEqual([
+		{ method: 'eth_call', params: [{ from: sender, to: TOKEN_ADDRESS, maxFeePerGas: '0xa', maxPriorityFeePerGas: '0x2' }, '0x2a', { [sender]: { balance: '0x3e8' } }] },
+		{ method: 'eth_estimateGas', params: [{ from: sender, to: TOKEN_ADDRESS, maxFeePerGas: '0xa', maxPriorityFeePerGas: '0x2' }, '0x2a', { [sender]: { balance: '0x3e8' } }] },
+		{ method: 'eth_call', params: [{ from: sender, to: TOKEN_ADDRESS }, 'latest'] },
+	])
+	await expect(createPublicClient({ transport }).estimateGas({ to: TOKEN_ADDRESS, balanceOverride: 1000n })).rejects.toThrow('Balance override requires a simulation account')
+	expect(requests).toHaveLength(3)
+})

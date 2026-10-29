@@ -68,7 +68,19 @@ export function portfolioObservation(): PortfolioObservation {
 			withdrawableExecutionReserveAttoEth: 0n,
 			accruedFeesAttoEth: 0n,
 			accruedFeesAttoRep: 0n,
-			economics: { purchaseFeeBps: 100n, annualFeeBps: 100n, minimumPurchaseFeeAttoEth: 1n, minimumCommitmentAttoEth: unit, minimumExecutionReserveAttoEth: unit / 1000n, minimumOutcomeRate: 1n, rewardVestingSeconds: 3600n, reportingFeeAttoEth: 1n, serviceFeeBps: 1n, maximumOracleRewardAttoEth: 1n },
+			economics: {
+				auctionReserveFactorBps: 5000n,
+				purchaseFeeBps: 100n,
+				annualFeeBps: 100n,
+				minimumPurchaseFeeAttoEth: 1n,
+				minimumCommitmentAttoEth: unit,
+				minimumExecutionReserveAttoEth: unit / 1000n,
+				minimumOutcomeRate: 1n,
+				rewardVestingSeconds: 3600n,
+				reportingFeeAttoEth: 1n,
+				serviceFeeBps: 1n,
+				maximumOracleRewardAttoEth: 1n,
+			},
 		},
 	}
 }

@@ -447,7 +447,7 @@ export function decodeFunctionData(parameters: { abi: Abi; data: Hex }) {
 	}
 }
 
-/** @internal Test fixtures decode call results with this; production reads through readContract. */
+/** Decode raw call results, including authenticated multicall simulation evidence. */
 export function decodeFunctionResult<TAbi extends Abi, TFunctionName extends string>(parameters: { abi: TAbi; data: Hex; functionName: TFunctionName }): ContractFunctionResult<TAbi, TFunctionName> {
 	return decodeFunctionOutput(getNamedFunctionAbi(parameters.abi, parameters.functionName), parameters.data) as ContractFunctionResult<TAbi, TFunctionName>
 }

@@ -38,6 +38,7 @@ import {
 	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolPortfolioServicesDeployer,
 	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolReporterLedgerDeployer,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinatorDeployer,
+	statoblast_SecurityPoolPortfolioAuction_SecurityPoolPortfolioAuctionDeployer,
 	statoblast_tokens_ShareToken_ShareToken,
 	Zoltar_Zoltar,
 	ZoltarQuestionData_ZoltarQuestionData,
@@ -73,6 +74,7 @@ const statoblastInitCodes = createStatoblastInitCodes(
 		securityPoolPortfolioServicesDeployer: statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolPortfolioServicesDeployer,
 		securityPoolReporterLedgerDeployer: statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolReporterLedgerDeployer,
 		securityPoolPortfolioForkCoordinatorDeployer: statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinatorDeployer,
+		securityPoolPortfolioAuctionDeployer: statoblast_SecurityPoolPortfolioAuction_SecurityPoolPortfolioAuctionDeployer,
 		securityPoolUtils: statoblast_SecurityPoolUtils_SecurityPoolUtils,
 		shareTokenFactory: statoblast_factories_ShareTokenFactory_ShareTokenFactory,
 		uniformPriceDualCapBatchAuctionFactory: statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
@@ -99,6 +101,7 @@ const {
 	getSecurityPoolPortfolioServicesDeployerByteCode,
 	getSecurityPoolReporterLedgerDeployerByteCode,
 	getSecurityPoolPortfolioForkCoordinatorDeployerByteCode,
+	getSecurityPoolPortfolioAuctionDeployerByteCode,
 	getShareTokenFactoryByteCode,
 } = statoblastInitCodes
 
@@ -228,6 +231,7 @@ function getDeploymentStatusOracleSteps() {
 		{ id: 'securityPoolPortfolioServicesDeployer', address: infraContracts.securityPoolPortfolioServicesDeployer },
 		{ id: 'securityPoolReporterLedgerDeployer', address: infraContracts.securityPoolReporterLedgerDeployer },
 		{ id: 'securityPoolPortfolioForkCoordinatorDeployer', address: infraContracts.securityPoolPortfolioForkCoordinatorDeployer },
+		{ id: 'securityPoolPortfolioAuctionDeployer', address: infraContracts.securityPoolPortfolioAuctionDeployer },
 	] as const
 }
 
@@ -269,6 +273,7 @@ async function getInfraDeployedInformation(client: WriteClient): Promise<{ [key 
 		securityPoolPortfolioServicesDeployer: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolPortfolioServicesDeployer'),
 		securityPoolReporterLedgerDeployer: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolReporterLedgerDeployer'),
 		securityPoolPortfolioForkCoordinatorDeployer: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolPortfolioForkCoordinatorDeployer'),
+		securityPoolPortfolioAuctionDeployer: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolPortfolioAuctionDeployer'),
 	}
 }
 export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
@@ -316,6 +321,7 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	if (!existence['securityPoolPortfolioServicesDeployer']) await deployBytecode('securityPoolPortfolioServicesDeployer', getSecurityPoolPortfolioServicesDeployerByteCode())
 	if (!existence['securityPoolReporterLedgerDeployer']) await deployBytecode('securityPoolReporterLedgerDeployer', getSecurityPoolReporterLedgerDeployerByteCode())
 	if (!existence['securityPoolPortfolioForkCoordinatorDeployer']) await deployBytecode('securityPoolPortfolioForkCoordinatorDeployer', getSecurityPoolPortfolioForkCoordinatorDeployerByteCode())
+	if (!existence['securityPoolPortfolioAuctionDeployer']) await deployBytecode('securityPoolPortfolioAuctionDeployer', getSecurityPoolPortfolioAuctionDeployerByteCode())
 
 	for (const [name, contractAddress] of objectEntries(contractAddresses)) {
 		if (!(await contractExists(client, contractAddress))) throw new Error(`${name} does not exist even though we deployed it`)

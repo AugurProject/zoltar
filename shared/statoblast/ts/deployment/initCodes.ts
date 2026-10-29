@@ -91,6 +91,7 @@ type StatoblastInfrastructureArtifacts = {
 	securityPoolPortfolioServicesDeployer: BytecodeArtifact
 	securityPoolReporterLedgerDeployer: BytecodeArtifact
 	securityPoolPortfolioForkCoordinatorDeployer: BytecodeArtifact
+	securityPoolPortfolioAuctionDeployer: BytecodeArtifact
 	securityPoolUtils: BytecodeArtifact
 	shareTokenFactory: ContractArtifact
 	uniformPriceDualCapBatchAuctionFactory: BytecodeArtifact
@@ -140,6 +141,7 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 	const getSecurityPoolPortfolioServicesDeployerByteCode = () => applyLibraries(artifacts.securityPoolPortfolioServicesDeployer.evm.bytecode.object)
 	const getSecurityPoolReporterLedgerDeployerByteCode = () => applyLibraries(artifacts.securityPoolReporterLedgerDeployer.evm.bytecode.object)
 	const getSecurityPoolPortfolioForkCoordinatorDeployerByteCode = () => applyLibraries(artifacts.securityPoolPortfolioForkCoordinatorDeployer.evm.bytecode.object)
+	const getSecurityPoolPortfolioAuctionDeployerByteCode = () => applyLibraries(artifacts.securityPoolPortfolioAuctionDeployer.evm.bytecode.object)
 	const getSecurityPoolFactoryByteCode = (inputs: SecurityPoolFactoryInputs) =>
 		encodeDeployData({
 			abi: artifacts.securityPoolFactory.abi,
@@ -189,6 +191,7 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 			securityPoolPortfolioServicesDeployerBytecode: getSecurityPoolPortfolioServicesDeployerByteCode(),
 			securityPoolReporterLedgerDeployerBytecode: getSecurityPoolReporterLedgerDeployerByteCode(),
 			securityPoolPortfolioForkCoordinatorDeployerBytecode: getSecurityPoolPortfolioForkCoordinatorDeployerByteCode(),
+			securityPoolPortfolioAuctionDeployerBytecode: getSecurityPoolPortfolioAuctionDeployerByteCode(),
 			uniformPriceDualCapBatchAuctionFactoryBytecode: bytecodeOf(artifacts.uniformPriceDualCapBatchAuctionFactory),
 			zeroSalt,
 		}).getInfraContractAddresses
@@ -213,6 +216,7 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 		getSecurityPoolPortfolioServicesDeployerByteCode,
 		getSecurityPoolReporterLedgerDeployerByteCode,
 		getSecurityPoolPortfolioForkCoordinatorDeployerByteCode,
+		getSecurityPoolPortfolioAuctionDeployerByteCode,
 		getShareTokenFactoryByteCode,
 	}
 }

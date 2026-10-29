@@ -2,7 +2,8 @@ import type { OperatorSettings } from '#config/settings'
 import { portfolioTakeoverPlan, type PortfolioTakeover } from '#core/portfolio-strategy'
 import { loadPortfolioObservation, requireCompletePortfolioExposure, type PortfolioObservation, type PortfolioScope } from '#monitoring/portfolio-monitor'
 import type { RuntimeState } from '#state/operator-state'
-import { erc20Abi } from '@zoltar/bot-shared/contracts/abi'
+import { erc20Abi, securityPoolCapitalLedgerAbi } from '@zoltar/bot-shared/contracts/abi'
+import { portfolioTarget, samePortfolioTarget, type PortfolioTarget } from '#monitoring/portfolio-auction'
 import { createPublicClient, encodeFunctionData, type Account, type Chain, type Transport, type WalletClient, type createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { settledQuorumValue, sharedQuorumReadTargets } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { buildPortfolioCapitalTakeOverWithBoundsRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
@@ -16,14 +17,14 @@ export class PortfolioOpportunityExpired extends Error {
 type Wallet = WalletClient<Transport, Chain, Account>
 type RpcPool = ReturnType<typeof createRpcEndpointPool>
 
-/** @internal Tests verify authenticated refreshes and inject independent execution snapshots. */
+/** Authenticate exposure and the exact target again at an agreed RPC height before execution. */
 export async function refreshPortfolioExecution(
 	wallet: Wallet,
 	settings: OperatorSettings,
 	scopes: readonly PortfolioScope[],
 	pool: RpcPool,
 	target: PortfolioObservation,
-	positionId: bigint,
+	positionId: PortfolioTarget | undefined,
 	readers = [settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls].map(endpoint => ({ endpoint, client: createPublicClient({ chain: wallet.chain, transport: pool.transportFor(endpoint) }) })),
 ) {
 	const pinned = await sharedQuorumReadTargets(readers, settings.connectivity.rpcQuorum)
@@ -33,7 +34,7 @@ export async function refreshPortfolioExecution(
 			const block = await client.getBlock({ blockNumber: pinned.blockNumber })
 			if (block.number === undefined || block.hash === undefined) throw new Error('Portfolio execution requires a confirmed block')
 			const observations = []
-			for (const scope of scopes) observations.push(await loadPortfolioObservation(client, settings, wallet.account.address, scope, block.number, scope.address === target.selection.address && scope.universeId === target.selection.universeId ? [positionId] : []))
+			for (const scope of scopes) observations.push(await loadPortfolioObservation(client, settings, wallet.account.address, scope, block.number, positionId !== undefined && scope.address === target.selection.address && scope.universeId === target.selection.universeId ? [positionId] : []))
 			requireCompletePortfolioExposure(observations)
 			const observation = observations.find(observation => observation.selection.address === target.selection.address && observation.selection.universeId === target.selection.universeId)
 			if (observation === undefined) throw new Error('Portfolio disappeared from managed exposure history')
@@ -51,7 +52,7 @@ export async function executePortfolioTakeover(
 	state: RuntimeState,
 	pool: RpcPool,
 	target: PortfolioObservation,
-	positionId: bigint,
+	positionId: PortfolioTarget,
 	priceAllowed: (observation: PortfolioObservation) => Promise<boolean>,
 	execution = { refresh: refreshPortfolioExecution, submit: submitCall },
 ) {
@@ -59,7 +60,7 @@ export async function executePortfolioTakeover(
 	if (state.pendingTransactions.length !== 0 || state.pendingStagedOperations.length !== 0) throw new Error('Pending recovery blocks portfolio exposure changes')
 	const refresh = async () => {
 		const current = await execution.refresh(wallet, settings, state.portfolioScopes, pool, target, positionId)
-		const position = current.observation.positions.find(position => position.id === positionId)
+		const position = current.observation.positions.find(position => samePortfolioTarget(portfolioTarget(position), positionId))
 		if (position === undefined) throw new PortfolioOpportunityExpired('Portfolio target position is missing')
 		const result = portfolioTakeoverPlan(current.observation, position, settings, current.totalPrincipal, await priceAllowed(current.observation))
 		if (result.plan === undefined) throw new PortfolioOpportunityExpired(result.reason)
@@ -87,15 +88,19 @@ export async function executePortfolioTakeover(
 		label = 'Fund portfolio execution reserve; rescreen next cycle'
 	} else {
 		action = 'takeover'
-		request = buildPortfolioCapitalTakeOverWithBoundsRequest({
-			...base,
-			positionId: plan.positionId,
-			commitment: plan.commitment,
-			minimumAward: plan.minimumAward,
-			maximumOwnRep: plan.maximumOwnRep,
-			bounds: { maximumOwnerPrincipal: plan.maximumOwnerPrincipal, maximumOwnerCommitment: settings.portfolioPolicy.maximumCommitmentAttoEth, expectedTargetHealthFactorBps: settings.portfolioPolicy.targetHealthFactorBps, expectedAcceptedPriceEpoch, expectedSourceBatch: plan.expectedSourceBatch },
-		})
-		label = `Take over portfolio position ${positionId}`
+		const bounds = { maximumOwnerPrincipal: plan.maximumOwnerPrincipal, maximumOwnerCommitment: settings.portfolioPolicy.maximumCommitmentAttoEth, expectedTargetHealthFactorBps: settings.portfolioPolicy.targetHealthFactorBps, expectedAcceptedPriceEpoch, expectedSourceBatch: plan.expectedSourceBatch }
+		request =
+			typeof positionId === 'bigint'
+				? buildPortfolioCapitalTakeOverWithBoundsRequest({
+						...base,
+						positionId: plan.positionId,
+						commitment: plan.commitment,
+						minimumAward: plan.minimumAward,
+						maximumOwnRep: plan.maximumOwnRep,
+						bounds,
+					})
+				: { to: base.capitalLedger, value: 0n, data: encodeFunctionData({ abi: securityPoolCapitalLedgerAbi, functionName: 'takeOverAuctionBid', args: [positionId.bidId, plan.commitment, plan.minimumAward, plan.maximumOwnRep, bounds] }) }
+		label = typeof positionId === 'bigint' ? `Take over portfolio position ${positionId}` : `Take over auction bid ${positionId.bidId} vault ${positionId.vault}`
 	}
 	const preSubmit = async () => {
 		const latest = await refresh()

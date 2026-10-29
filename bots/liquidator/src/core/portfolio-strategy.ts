@@ -25,7 +25,7 @@ export function portfolioTakeoverPlan(observation: PortfolioObservation, positio
 	if (!observation.selected || !observation.approvedUniverse) return reject('Portfolio and universe must both be selected')
 	if (!marketAllowed) return reject('Independent REP price evidence is unavailable or disagrees')
 	if (!snapshot.priceValid || snapshot.timestamp >= snapshot.priceValidUntil || snapshot.forkTime !== 0n || snapshot.frozen || snapshot.importing || snapshot.exported) return reject('Portfolio capital is inactive or its price has expired')
-	if (position.owner === snapshot.owner || position.commitment === 0n || position.maxHealthyPrice >= snapshot.liquidationPrice || position.liquidationStarted === 0n) return reject('Position is not a takeover target')
+	if (position.owner === snapshot.owner || position.controllingOwner === snapshot.owner || position.commitment === 0n || position.maxHealthyPrice >= snapshot.liquidationPrice || position.liquidationStarted === 0n) return reject('Position is not an external takeover target')
 	if (snapshot.ownerAccount.targetHealthFactorBps !== policy.targetHealthFactorBps) return reject('Receiver health target does not match the configured target')
 	const receiver = snapshot.positions.find(position => position.commitment > 0n)
 	if (receiver !== undefined && receiver.batch !== position.batch) return reject('Receiver and target retirement cohorts differ')

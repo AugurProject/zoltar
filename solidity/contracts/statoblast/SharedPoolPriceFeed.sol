@@ -34,7 +34,8 @@ interface ISharedPoolPriceCoordinator {
 interface ISharedPoolPortfolioPriceCheckpoint {
 	function onSharedPriceAccepted(uint248 universeId, uint256 price, uint48 validUntil) external;
 	function oracleExposure(uint248 universeId) external view returns (uint256);
-	function clocks(uint248 universeId) external view returns (uint48, uint48, bool, bool);
+	function oracleRepExposure(uint248 universeId) external view returns (uint256);
+	function isPriceReportingOpen(uint248 universeId) external view returns (bool);
 	function rewardOracleReport(uint248 universeId, address sponsor, uint256 gasUnits, uint256 requestedAt) external;
 }
 
@@ -73,6 +74,7 @@ contract SharedPoolPriceFeed {
 	uint256 public pendingReportMaxSettlementBaseFeeAttoEthPerGas;
 	uint256 public pendingExposureLimitAttoEth;
 	uint256 public acceptedExposureLimitAttoEth;
+	uint256 public acceptedRepExposureLimitAttoRep;
 	uint256 public acceptedEpoch;
 	struct ReportCandidate {
 		SharedPoolReportEscrow escrow;
@@ -193,6 +195,19 @@ contract SharedPoolPriceFeed {
 		return minimumReportAttoEth > 0 ? minimumReportAttoEth : 1;
 	}
 
+	/// @notice Auction inventory needs a challenged REP-side budget as well as
+	/// the ETH liability budget. Neither budget may be inferred from the other
+	/// using an unchallenged proposed price.
+	function minimumToken2ReportAttoRep() public view returns (uint256) {
+		return
+			Math.ceilDiv(ISharedPoolPortfolioPriceCheckpoint(portfolio).oracleRepExposure(universeId), OPEN_INTEREST_DIVIDER);
+	}
+	function minimumToken1ReportAttoEthForPrice(uint256 proposedRepPerEthPrice) public view returns (uint256) {
+		require(proposedRepPerEthPrice != 0, 'Initial oracle price zero');
+		return
+			Math.max(minimumToken1ReportAttoEth(), Math.mulDiv(minimumToken2ReportAttoRep(), SecurityPoolUtils.PRICE_PRECISION, proposedRepPerEthPrice, Math.Rounding.Ceil));
+	}
+
 	function _minimumToken1ReportAttoEthForGasPrice(uint256 gasPriceAttoEthPerGas) private view returns (uint256) {
 		if (gasPriceAttoEthPerGas == 0) return 0;
 		uint256 disputeGasCost = Math.mulDiv(gasPriceAttoEthPerGas, gasUnitsForOneDispute, 1);
@@ -217,15 +232,30 @@ contract SharedPoolPriceFeed {
 
 	/// @notice A registered coordinator authenticates the sponsor and forwards the report's exact token funding.
 	function requestPrice(address sponsor, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) external payable returns (uint256 reportId) {
-		uint256 initialGas = gasleft();
 		require(registeredCoordinators[msg.sender], 'Unregistered coordinator');
-		(, , , bool ready) = ISharedPoolPortfolioPriceCheckpoint(portfolio).clocks(universeId);
-		require(ready, 'Portfolio universe not ready');
+		return _requestPrice(msg.sender, sponsor, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth);
+	}
+
+	/// @notice Fund a shared observation without first deploying a child question.
+	/// The caller approves this feed for WETH and the branch's REP; only that caller
+	/// receives the candidate's returned funding. No pool collateral funds reports.
+	function requestPortfolioPrice(uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) external payable returns (uint256 reportId) {
+		return
+			_requestPrice(address(this), msg.sender, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth);
+	}
+
+	function _requestPrice(address coordinator, address sponsor, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) private returns (uint256 reportId) {
+		uint256 initialGas = gasleft();
+		require(ISharedPoolPortfolioPriceCheckpoint(portfolio).isPriceReportingOpen(universeId), 'Portfolio reporting window closed');
 		require(sponsor != address(0), 'Report sponsor zero');
 		require(proposedRepPerEthPrice > 0, 'Initial oracle price zero');
 		require(bountyAttoEth >= getRequestPriceCostAttoEth(), 'Oracle bounty too small');
 		require(msg.value == bountyAttoEth, 'Incorrect oracle bounty');
-		uint256 minimumWethReportAttoEth = minimumToken1ReportAttoEth();
+		uint256 minimumWethReportAttoEth = minimumToken1ReportAttoEthForPrice(proposedRepPerEthPrice);
+		// Direct sponsors sign an exact budget, even when a standing token approval
+		// is larger. A changed capital exposure or base fee must require a new quote.
+		if (coordinator == address(this))
+			require(requestedInitialAttoWeth >= minimumWethReportAttoEth, 'Report funding exceeds approved budget');
 		uint256 initialWethReportAttoEth =
 			requestedInitialAttoWeth > minimumWethReportAttoEth ? requestedInitialAttoWeth : minimumWethReportAttoEth;
 		uint256 initialRepReportAttoRep = Math.mulDiv(initialWethReportAttoEth, proposedRepPerEthPrice, SecurityPoolUtils.PRICE_PRECISION, Math.Rounding.Ceil);
@@ -242,13 +272,13 @@ contract SharedPoolPriceFeed {
 			OPEN_INTEREST_DIVIDER;
 		pendingReportMaxSettlementBaseFeeAttoEthPerGas = Math.mulDiv(block.basefee + initialReportPriorityFeeAttoEthPerGas, maxSettlementBaseFeeMultiplierBps, SecurityPoolUtils.BPS_DENOMINATOR);
 		pendingReportSponsor = sponsor;
-		pendingCoordinator = msg.sender;
+		pendingCoordinator = coordinator;
 		SharedPoolReportEscrow escrow;
 		(reportId, escrow) = this.createReportEscrow(msg.sender, sponsor, initialWethReportAttoEth, initialRepReportAttoRep, escalationHaltAttoEth, bountyAttoEth);
 		pendingReportId = reportId;
-		reportCandidates[reportId] = ReportCandidate(escrow, sponsor, msg.sender, pendingReportMaxSettlementBaseFeeAttoEthPerGas, block.timestamp, initialGas - gasleft());
+		reportCandidates[reportId] = ReportCandidate(escrow, sponsor, coordinator, pendingReportMaxSettlementBaseFeeAttoEthPerGas, block.timestamp, initialGas - gasleft());
 		emit PriceRequested(pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas);
-		emit ReportFundingAssigned(pendingReportId, msg.sender, sponsor);
+		emit ReportFundingAssigned(pendingReportId, coordinator, sponsor);
 	}
 
 	function createReportEscrow(address payer, address sponsor, uint256 wethAmount, uint256 repAmount, uint256 haltAmount, uint256 bounty) external returns (uint256 id, SharedPoolReportEscrow escrow) {
@@ -297,6 +327,7 @@ contract SharedPoolPriceFeed {
 			acceptedExposureLimitAttoEth =
 				(amount1 - _minimumToken1ReportAttoEthForGasPrice(initialReportPriorityFeeAttoEthPerGas)) *
 				OPEN_INTEREST_DIVIDER;
+			acceptedRepExposureLimitAttoRep = amount2 * OPEN_INTEREST_DIVIDER;
 			acceptedEpoch++;
 			lastSettlementTimestamp = priceTimestamp;
 			lastPrice = nextPrice;
@@ -338,18 +369,24 @@ contract SharedPoolPriceFeed {
 	}
 
 	function _validateSettledReport(uint256 reportId, uint256 amount1, uint256 amount2, uint256 maxSettlementBaseFeeAttoEthPerGas) private view returns (string memory reason, uint256 priceTimestamp) {
+		// Before activation, closing is anchored to the native recap deadline.
+		// A later callback must refund normally without replacing its frozen quote.
+		if (!ISharedPoolPortfolioPriceCheckpoint(portfolio).isPriceReportingOpen(universeId))
+			return ('Portfolio reporting window closed', 0);
 		if (block.basefee > maxSettlementBaseFeeAttoEthPerGas) return ('Base fee too high', 0);
 		(, , , uint48 finalReportTimestamp, , , , , , , , , uint24 numReports, , , , , , , ) = openOracle.storedGame(reportId);
 		if (numReports == type(uint24).max) return ('Counter saturated', 0);
 		if (numReports == 0 || !_isFinalReportProfitable(reportId, numReports, amount1))
 			return ('Report uneconomic', 0);
+		if (amount2 < minimumToken2ReportAttoRep()) return ('Report REP inventory budget insufficient', 0);
 		priceTimestamp = uint256(finalReportTimestamp) + settlementTime;
 		if (priceTimestamp < lastSettlementTimestamp) return ('Report timestamp not newer', 0);
 		if (
 			priceTimestamp == lastSettlementTimestamp &&
 			(amount1 - _minimumToken1ReportAttoEthForGasPrice(initialReportPriorityFeeAttoEthPerGas)) *
 				OPEN_INTEREST_DIVIDER <=
-				acceptedExposureLimitAttoEth
+				acceptedExposureLimitAttoEth &&
+			amount2 * OPEN_INTEREST_DIVIDER <= acceptedRepExposureLimitAttoRep
 		) return ('Report adds no newer observation or capacity', 0);
 		if (!_isFreshPriceTimestamp(priceTimestamp)) return ('Report stale', 0);
 		if (amount1 == 0 || amount2 == 0) return ('Empty oracle settlement', 0);

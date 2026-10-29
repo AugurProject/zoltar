@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, parseAbi, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { buildPortfolioForkChoiceRequest, buildPortfolioForkStartRequest, buildPortfolioForkFinalizeRequest, buildPortfolioForkRecoveryRequest, buildPortfolioRecoveryRightsTransferRequest, loadPortfolioForkSnapshot, type PortfolioReadClient } from './securityPoolPortfolio.js'
+import { buildPortfolioForkChoiceRequest, buildPortfolioForkPreparationRequest, buildPortfolioForkStartRequest, buildPortfolioForkFinalizeRequest, buildPortfolioForkRecoveryRequest, buildPortfolioRecoveryRightsTransferRequest, loadPortfolioForkSnapshot, type PortfolioReadClient } from './securityPoolPortfolio.js'
 const owner: Address = '0x0000000000000000000000000000000000000001'
 const portfolio: Address = '0x0000000000000000000000000000000000000002'
 const controller: Address = '0x0000000000000000000000000000000000000003'
@@ -9,6 +9,7 @@ const capital: Address = '0x0000000000000000000000000000000000000005'
 const hash: Hex = `0x${'11'.repeat(32)}`
 const abi = parseAbi([
 	'function choose(uint248 source,uint256 outcome)',
+	'function prepareBranch(uint248 source,uint256 outcome) returns (uint248)',
 	'function startBranch(uint248 source,uint256 outcome) returns (uint248)',
 	'function finalizeBranch(uint248 child)',
 	'function recoverUnchosenCash(uint248 source,uint256 questionId,uint256 shares) returns (uint256)',
@@ -46,6 +47,7 @@ describe('bounded portfolio fork SDK', () => {
 	test('one owner choice, shared activation and source-only complete-set recovery encode exact identities', () => {
 		const base = { owner, controller, universeId: 8n }
 		expect(decodeFunctionData({ abi, data: buildPortfolioForkChoiceRequest({ ...base, outcomeIndex: 7n }).data })).toEqual({ functionName: 'choose', args: [8n, 7n] })
+		expect(decodeFunctionData({ abi, data: buildPortfolioForkPreparationRequest({ ...base, outcomeIndex: 7n }).data })).toEqual({ functionName: 'prepareBranch', args: [8n, 7n] })
 		expect(decodeFunctionData({ abi, data: buildPortfolioForkStartRequest({ ...base, outcomeIndex: 7n }).data })).toEqual({ functionName: 'startBranch', args: [8n, 7n] })
 		expect(decodeFunctionData({ abi, data: buildPortfolioForkFinalizeRequest({ ...base, universeId: 42n }).data })).toEqual({ functionName: 'finalizeBranch', args: [42n] })
 		expect(decodeFunctionData({ abi, data: buildPortfolioForkRecoveryRequest({ ...base, questionId: 123n, shares: 99n }).data })).toEqual({ functionName: 'recoverUnchosenCash', args: [8n, 123n, 99n] })

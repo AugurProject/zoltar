@@ -1,7 +1,7 @@
-import { estimateExecutionGas } from './gas-estimate.ts'
+import { estimateExecutionGas, PREFLIGHT_BALANCE } from './gas-estimate.ts'
 import { simulateWithRevalidation } from './simulation.ts'
 import { createPublicClient, createWalletClient, encodeFunctionData, type Account, type Address, type Chain, type Hex, type Transport, type WalletClient } from '@zoltar/bot-shared/ethereum'
-import { maximumFeePerGas, paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
+import { MAX_PRIORITY_FEE_PER_GAS, maximumFeePerGas, paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction, transactionMaxBlockNumber } from '@zoltar/bot-shared/execution/transaction-submission'
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
 import { settledQuorumValue, sharedQuorumReadTargets } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ceilDiv } from '@zoltar/core-shared/math/bigint'
@@ -85,12 +85,17 @@ export async function submitCall(wallet: WriteClient, settings: OperatorSettings
 					await call.revalidateSimulationRevert?.()
 				}
 	assertExecutionActive(state)
-	const gas = call.gas === 'estimate' ? await estimateExecutionGas(pinned.readers, { account, data: call.data, to: call.to, value: call.value, blockNumber: pinned.blockNumber }, settings.connectivity.rpcQuorum, validateCanonicalBlock, revalidateRevert) : call.gas
+	// Match the EIP-1559 envelope used by prepareSignedTransaction so contracts
+	// that reimburse tx.gasprice see the same effective fee during preflight.
+	const fees = { maxFeePerGas: maximumFeePerGas(block.baseFeePerGas, transactionMaxBlockNumber(block.number, call.lastValidBlockNumber) - block.number), maxPriorityFeePerGas: MAX_PRIORITY_FEE_PER_GAS }
+	// Estimate before enforcing the configured spend ceiling. RPC affordability
+	// must not turn an over-budget opportunity into an ambiguous contract revert.
+	const gas = call.gas === 'estimate' ? await estimateExecutionGas(pinned.readers, { account, data: call.data, to: call.to, value: call.value, blockNumber: pinned.blockNumber, balanceOverride: PREFLIGHT_BALANCE, ...fees }, settings.connectivity.rpcQuorum, validateCanonicalBlock, revalidateRevert) : call.gas
 	if (maximumFeePerGas(block.baseFeePerGas) * paddedTransactionGas(gas) > settings.strategy.maximumGasCostAttoEth) call.gasBudgetExceeded?.()
 	assertGasCostLimitForBaseFee(gas, block.baseFeePerGas, settings.strategy.maximumGasCostAttoEth, call.label)
 	await simulateWithRevalidation(
 		`${call.label} simulation`,
-		pinned.readers.map(async ({ client, endpoint }) => ({ endpoint, value: await client.call({ account, data: call.data, gas: call.gas === 'estimate' ? paddedTransactionGas(gas) : gas, to: call.to, value: call.value, blockNumber: pinned.blockNumber }) })),
+		pinned.readers.map(async ({ client, endpoint }) => ({ endpoint, value: await client.call({ account, data: call.data, gas: call.gas === 'estimate' ? paddedTransactionGas(gas) : gas, to: call.to, value: call.value, blockNumber: pinned.blockNumber, ...fees }) })),
 		settings.connectivity.rpcQuorum,
 		revalidateRevert,
 	)

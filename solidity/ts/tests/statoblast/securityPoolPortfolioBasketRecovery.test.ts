@@ -36,7 +36,8 @@ describe('Statoblast: native fork claim basket recovery', () => {
 		const forkTime = (await getUniverseData(owner(), base.genesisUniverse)).forkTime
 		await base.mockWindow.setTime(forkTime + 63n * DAY)
 		const child = getChildUniverseId(base.genesisUniverse, 1)
-		await writeContractAndWait(owner(), () => owner().writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'startBranch', args: [base.genesisUniverse, 1n] }))
+		await writeContractAndWait(owner(), () => owner().writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'prepareBranch', args: [base.genesisUniverse, 1n], gas: 16_777_216n }))
+		await writeContractAndWait(owner(), () => owner().writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'startBranch', args: [base.genesisUniverse, 1n], gas: 16_777_216n }))
 		await writeContractAndWait(owner(), () => owner().writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'finalizeBranch', args: [child] }))
 		await writeContractAndWait(other(), () => other().writeContract({ abi: sharesArtifact.abi, address: shares, functionName: 'migrate', args: [base.genesisUniverse * 256n + 1n, [1n]] }))
 		const childPool = await owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'getPool', args: [base.questionId, child] })

@@ -14,6 +14,8 @@ import type { usePortfolio } from './usePortfolio.js'
 import * as copy from '../../../copy/portfolio.js'
 import { defaultPortfolioCreationDraft, parseFixedPortfolioQuestions, parsePortfolioCreationEconomics, type CuratedAdmissionMode, type PortfolioCreationDraft } from '../lib/creation.js'
 import { loadPortfolioAdmission, portfolioAdmissionCreationRequest, requirePortfolioQuestionAdmission } from '../../../protocol/securityPoolPortfolioAdmission.js'
+import { buildPortfolioAuctionVaultExecuteRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { authenticatePortfolioAuctionVault } from '../../../protocol/securityPoolPortfolioAuction.js'
 
 export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, parameters: WriteOperationsParameters) {
 	const originInput = useSignal('')
@@ -36,7 +38,8 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 		(model.loading || (busy.value !== undefined && snapshot === undefined) ? copy.loading : undefined) ??
 		(snapshot === undefined && model.presentationSnapshot !== undefined ? copy.readUnavailable : undefined) ??
 		(snapshot === undefined ? copy.enterPortfolio : undefined) ??
-		(parameters.accountAddress?.toLowerCase() !== snapshot?.owner.toLowerCase() ? copy.ownerRequired : undefined)
+		(parameters.accountAddress?.toLowerCase() !== (snapshot?.auctionVault?.bidder ?? snapshot?.owner)?.toLowerCase() ? copy.ownerRequired : undefined) ??
+		(snapshot?.auctionVault !== undefined && snapshot.auctionVault.filledLots > 0n && !snapshot.auctionVault.materialized ? 'Activate this individual vault in its auction panel before using capital controls.' : undefined)
 	useEffect(() => {
 		error.value = undefined
 		feedback.value = undefined
@@ -57,7 +60,25 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 					scope,
 				}),
 				async (account, context) => {
-					const request = await build()
+					let request = await build()
+					const selectedVault = snapshot?.auctionVault
+					if (selectedVault !== undefined && getAddress(request.account) === selectedVault.vault) {
+						if (snapshot === undefined || request.to === undefined || getAddress(account) !== selectedVault.bidder) throw new Error(copy.ownerRequired)
+						const original = request
+						request = {
+							...original,
+							...buildPortfolioAuctionVaultExecuteRequest({ bidder: selectedVault.bidder, vault: selectedVault.vault, request: { account: original.account, to: request.to, value: original.value ?? 0n, data: original.data }, sweep: { repToken: snapshot.repToken, recipient: selectedVault.bidder } }),
+							reviewDescription: `${original.reviewDescription ?? label} This operation uses your independent auction vault ${selectedVault.vault}. Returned ETH and REP are sent to your wallet ${selectedVault.bidder}.`,
+							validateBeforeSubmit: async () => {
+								const client = createConnectedReadClient()
+								const block = await client.getBlock()
+								if (block.number === undefined) throw new Error('A confirmed block is required to authenticate this vault.')
+								const fresh = await authenticatePortfolioAuctionVault(client, snapshot.portfolio, selectedVault.vault, block.number)
+								if (fresh.bidder !== selectedVault.bidder || fresh.auction !== selectedVault.auction || fresh.bidId !== selectedVault.bidId) throw new Error('Auction vault authority changed. Review again.')
+								await original.validateBeforeSubmit?.()
+							},
+						}
+					}
 					context.assertActive()
 					const client = createWalletWriteClient(account, { reviewSignal: context.reviewSignal, onTransactionPrepared: parameters.onTransactionPrepared, onTransactionSubmitted: parameters.onTransactionSubmitted })
 					return await sendPortfolioTransaction(client, request, label, validate)
@@ -190,7 +211,7 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 					return {
 						...portfolioCreationRequest(parameters.accountAddress, initialPool, horizon, chosen.address, config),
 						validateBeforeSubmit: validateAdmission,
-						reviewDescription: `Deploy a portfolio with immutable ${mode} question admission. Fixed annual time fee ${formatUnits(config.annualFeeBps, 2)}%. Purchase fee ${formatUnits(config.purchaseFeeBps, 2)}% of required backing value, minimum ${formatEther(config.minimumPurchaseFeeAttoEth)} ETH. Each purchase also prepays up to 52 days of resolution fees and a fixed ${formatEther(config.reportingFeeAttoEth)} ETH reporting charge. ${formatUnits(config.serviceFeeBps, 2)}% of the backing fee funds oracle maintenance, with each maintenance reward capped at ${formatEther(config.maximumOracleRewardAttoEth)} ETH. Minimum commitment ${formatEther(config.minimumCommitmentAttoEth)} ETH; execution reserve ${formatEther(config.minimumExecutionReserveAttoEth)} ETH per minimum-commitment lot; prepaid rewards vest over ${config.rewardVestingSeconds} seconds. Each owner chooses their own health target. Register eligible questions in a separate transaction.`,
+						reviewDescription: `Deploy a portfolio with immutable ${mode} question admission. Fixed annual time fee ${formatUnits(config.annualFeeBps, 2)}%. Purchase fee ${formatUnits(config.purchaseFeeBps, 2)}% of required backing value, minimum ${formatEther(config.minimumPurchaseFeeAttoEth)} ETH. Each purchase also prepays up to 52 days of resolution fees and a fixed ${formatEther(config.reportingFeeAttoEth)} ETH reporting charge. ${formatUnits(config.serviceFeeBps, 2)}% of the backing fee funds oracle maintenance, with each maintenance reward capped at ${formatEther(config.maximumOracleRewardAttoEth)} ETH. Auction reserve ${formatUnits(config.auctionReserveFactorBps, 2)}% of reported REP value. Winners can retire if spare backing permits; there is no minimum holding period. Minimum commitment and auction ETH lot ${formatEther(config.minimumCommitmentAttoEth)} ETH; execution reserve ${formatEther(config.minimumExecutionReserveAttoEth)} ETH per minimum-commitment lot; prepaid rewards vest over ${config.rewardVestingSeconds} seconds. Each owner chooses their own health target. Register eligible questions in a separate transaction.`,
 					}
 				},
 				undefined,
@@ -213,7 +234,7 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 				if (selected === undefined || selected.stage !== stage - 1 || parameters.accountAddress === undefined) throw new Error('Refresh and select the next setup stage.')
 				return {
 					...portfolioPreparationRequest(parameters.accountAddress, selected.portfolio),
-					reviewDescription: `Complete setup stage ${stage} of 3. This deploys the next bounded group of custody modules. No REP or trader ETH is deposited.`,
+					reviewDescription: `Complete setup stage ${stage} of 4. This deploys the next bounded group of custody modules. No REP or trader ETH is deposited.`,
 					validateBeforeSubmit: async () => {
 						const latest = await loadPortfolioSetup(createConnectedReadClient(), selected.portfolio, selected.owner)
 						if (latest.chainId !== selected.chainId || latest.stage !== selected.stage) throw new Error('Setup advanced. Refresh before sending another preparation transaction.')

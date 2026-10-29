@@ -65,6 +65,9 @@ export const currentTargetSatisfied = 'The current commitment already fits this 
 export const activeCommitment = 'Active position commitment (ETH)'
 export const requiredCollateral = 'Required REP at saved target'
 export const minimumCommitment = 'Minimum commitment (ETH)'
+export const minimumCommitmentHint = 'Also the ETH lot size for fork auction bids.'
+export const auctionReserve = 'Auction reserve (% of reported REP value)'
+export const auctionReserveHint = 'Immutable minimum sale price, from 0.01% to 100% of reported REP value. Winners may retire immediately if enough spare backing exists.'
 export const positions = 'Your commitment position'
 export const positionsHint = 'Retirement uses spare healthy capacity and reserves capacity for earlier requests. A partial request reserves only its reduction; the commitment you keep can still back purchases.'
 export const noPositions = 'No pledged commitments'
@@ -120,8 +123,8 @@ export const requiredExecution = 'Required execution reserve'
 
 export const prepareTitle = 'Complete portfolio setup'
 export const prepareHint = 'Each stage is one transaction with bounded deployment work. Anyone can resume setup before deposits and purchases open.'
-export const prepareStages = ['1. Prepare settlement', '2. Prepare reporting and forks', '3. Activate capital ledger']
-export const prepareProgress = (stage: number) => `${stage} of 3 setup stages complete`
+export const prepareStages = ['1. Prepare settlement', '2. Prepare reporting and forks', '3. Prepare capital ledger', '4. Activate portfolio']
+export const prepareProgress = (stage: number) => `${stage} of 4 setup stages complete`
 export const preparing = 'Preparing modules…'
 
 export const annualFee = 'Annual time fee (%)'
@@ -136,3 +139,4 @@ export const reportChanged = 'Report terms changed. Review the commitment again.
 
 export { readUnavailable } from './portfolio.js'
 export const lastConfirmed = 'Last confirmed balances. Account refresh pending.'
+export const auctionVaultOwnership = 'This auction vault has separate collateral and obligations. Your connected wallet controls it, funds deposits and receives withdrawals.'

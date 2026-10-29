@@ -158,6 +158,7 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('OpenOraclePriceCoordinator', 'syncExposure', 'excluded-dangerous', undefined, 'Accounting hooks synchronize shared exposure; a standalone bookkeeping write has no reviewed wallet workflow.'),
 	entry('SharedPoolPriceFeed', 'registerCoordinator', 'role-restricted', undefined, 'Only the security pool factory registers atomically linked question coordinators.'),
 	entry('SharedPoolPriceFeed', 'requestPrice', 'role-restricted', undefined, 'Only a registered coordinator can fund and request a shared report for its sponsor.'),
+	entry('SharedPoolPriceFeed', 'requestPortfolioPrice', 'excluded-dangerous', undefined, 'Direct portfolio sponsorship requires authenticated branch selection and explicit report funding outside the question-level random workflow.'),
 	entry('SharedPoolPriceFeed', 'createReportEscrow', 'role-restricted', undefined, 'Only the shared feed itself can create its independently funded report escrow.'),
 	entry('SharedPoolPriceFeed', 'settleReport', 'role-restricted', undefined, 'Only the authenticated candidate escrow can deliver its report outcome.'),
 	entry('SharedPoolPriceFeed', 'syncExposure', 'excluded-dangerous', undefined, 'Accounting hooks synchronize authenticated exposure; standalone retirement bookkeeping has no reviewed wallet workflow.'),

@@ -141,6 +141,30 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		receiverId = _create(receiver, batch, rep, commitment, receiverMaxPrice, remaining);
 	}
 
+	/// @notice Materialize an exact share of an active auction cohort without
+	/// granting a new liquidation clock. Custody and past cohort fees are handled
+	/// by the controller; this operation moves only principal and commitment.
+	function splitAuctionPosition(uint96 id, address receiver, uint256 rep, uint256 commitment) external onlyPortfolio operational returns (uint96 receiverId) {
+		_touch(id);
+		Position storage source = positions[id];
+		Node storage leaf = nodes[source.node];
+		require(source.batch == 0 && !leaf.retired && leaf.commitment != 0, 'Auction position is not active');
+		require(rep != 0 && rep <= leaf.rep && commitment != 0 && commitment <= leaf.commitment, 'Invalid auction commitment split');
+		require(Math.mulDiv(leaf.rep, commitment, leaf.commitment) == rep && mulmod(leaf.rep, commitment, leaf.commitment) == 0, 'Auction split must be proportional');
+		// Touch first: the latest healthy observation may exist only on an
+		// ancestor. Mutation epochs are independent and must also survive.
+		uint64 observedEpoch = leaf.healthEpoch;
+		uint64 mutationEpoch = healthyMutationEpochs[id];
+		uint256 price = leaf.price;
+		_detach(0, source.node);
+		leaf.rep -= rep;
+		leaf.commitment -= commitment;
+		_reinsert(source);
+		receiverId = _create(receiver, 0, rep, commitment, price, 0);
+		nodes[positions[receiverId].node].healthEpoch = observedEpoch;
+		healthyMutationEpochs[receiverId] = mutationEpoch;
+	}
+
 	/// @dev Supports an existing receiver slot without refreshing retirement
 	/// priority. Both old fee entitlements stay with their respective owners.
 	function transferTo(uint96 sourceId, uint96 receiverId, uint256 rep, uint256 commitment, uint256 sourceMaxPrice, uint256 receiverMaxPrice) external onlyPortfolio operational {

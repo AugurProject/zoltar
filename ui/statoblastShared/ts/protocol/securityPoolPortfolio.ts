@@ -7,6 +7,8 @@ import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolCapitalLifecycleDelegate_SecurityPoolCapitalLifecycleDelegate as lifecycleArtifact,
+	statoblast_SecurityPoolCapitalAuctionDelegate_SecurityPoolCapitalAuctionDelegate as auctionDelegateArtifact,
+	statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault as auctionVaultArtifact,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
 	statoblast_SecurityPoolCapitalFeeStreams_SecurityPoolCapitalFeeStreams as feesArtifact,
 	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
@@ -21,8 +23,9 @@ import {
 import { getInfraContractAddresses, getSecurityPoolPortfolioByteCode, getSecurityPoolPortfolioRuntimeCode, getPortfolioDeployers } from './deploymentHelpers.js'
 import { requireAddressValue, requireBigintValue, requireIntegerLikeValue } from './decoders.js'
 import { loadPortfolioAdmission } from './securityPoolPortfolioAdmission.js'
+import { authenticatePortfolioAuctionVault } from './securityPoolPortfolioAuction.js'
 
-export type PortfolioTransaction = { account: Address; to?: Address; data: Hex; value?: bigint; reviewDescription?: string; validateBeforeSubmit?: () => Promise<void> }
+export type PortfolioTransaction = { account: Address; to?: Address; data: Hex; value?: bigint; gas?: bigint; reviewDescription?: string; validateBeforeSubmit?: () => Promise<void> }
 const linksAbi = parseAbi([
 	'function portfolio() view returns (address)',
 	'function zoltar() view returns (address)',
@@ -30,6 +33,8 @@ const linksAbi = parseAbi([
 	'function ledger() view returns (address)',
 	'function feeStreams() view returns (address)',
 	'function lifecycleDelegate() view returns (address)',
+	'function auctionDelegate() view returns (address)',
+	'function auctionDeployer() view returns (address)',
 	'function services() view returns (address)',
 	'function forkAuthority() view returns (address)',
 	'function reportingRewards() view returns (address)',
@@ -78,16 +83,18 @@ export async function loadPortfolioSetup(client: ReadClient, portfolio: Address,
 	if (block.number === undefined || block.hash === undefined) throw new Error('Portfolio setup requires a mined block.')
 	const blockNumber = block.number
 	verifyRuntimeCode(await client.getCode({ address: portfolio, blockNumber }), getSecurityPoolPortfolioRuntimeCode(), portfolioArtifact.evm.deployedBytecode.immutableReferences, 'portfolio')
-	const [stageValue, factoryValue, zoltarValue, originValue] = await Promise.all([
+	const [stageValue, factoryValue, zoltarValue, originValue, auctionDeployerValue] = await Promise.all([
 		client.readContract({ address: portfolio, abi: linksAbi, functionName: 'setupStage', blockNumber }),
 		client.readContract({ address: portfolio, abi: linksAbi, functionName: 'factory', blockNumber }),
 		client.readContract({ address: portfolio, abi: linksAbi, functionName: 'zoltar', blockNumber }),
 		client.readContract({ address: portfolio, abi: linksAbi, functionName: 'originUniverseId', blockNumber }),
+		client.readContract({ address: portfolio, abi: linksAbi, functionName: 'auctionDeployer', blockNumber }),
 	])
 	const infrastructure = getInfraContractAddresses()
 	if (getAddress(requireAddressValue(factoryValue, 'portfolio factory')) !== getAddress(infrastructure.securityPoolFactory) || getAddress(requireAddressValue(zoltarValue, 'portfolio protocol')) !== getAddress(infrastructure.zoltar)) throw new Error('Portfolio uses unrecognized protocol contracts.')
+	if (getAddress(requireAddressValue(auctionDeployerValue, 'auction deployer')) !== getAddress(infrastructure.securityPoolPortfolioAuctionDeployer)) throw new Error('Portfolio uses an unrecognized auction deployer.')
 	const stage = Number(requireIntegerLikeValue(stageValue, 'setup stage'))
-	if (stage < 0 || stage > 3) throw new Error('Invalid portfolio setup stage.')
+	if (stage < 0 || stage > 4) throw new Error('Invalid portfolio setup stage.')
 	const [finalBlock, finalChain] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
 	if (finalBlock.hash !== block.hash || finalChain !== chainId) throw new Error('Portfolio setup changed. Refresh and retry.')
 	return { portfolio, owner, stage, originUniverseId: requireBigintValue(originValue, 'origin universe'), chainId, blockNumber, blockHash: block.hash }
@@ -102,7 +109,7 @@ export async function loadPortfolioAccount(client: ReadClient, portfolio: Addres
 	const snapshot = await loadPortfolioCapitalSnapshot({ client: portfolioReadClient(client), portfolio, owner, universeId })
 	const blockNumber = snapshot.blockNumber
 	verifyRuntimeCode(await client.getCode({ address: portfolio, blockNumber }), getSecurityPoolPortfolioRuntimeCode(), portfolioArtifact.evm.deployedBytecode.immutableReferences, 'portfolio')
-	const [factory, zoltar, originUniverseId, admissionAddress, settlement, reporters, quoteHelper, forkController, feeStreamsValue, lifecycleValue, services, capitalServicesValue, capitalForkValue, questionCount] = await Promise.all([
+	const [factory, zoltar, originUniverseId, admissionAddress, settlement, reporters, quoteHelper, forkController, feeStreamsValue, lifecycleValue, services, capitalServicesValue, capitalForkValue, questionCount, auctionDelegateValue, auctionDeployerValue] = await Promise.all([
 		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'factory', blockNumber }),
 		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'zoltar', blockNumber }),
 		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'originUniverseId', blockNumber }),
@@ -117,20 +124,38 @@ export async function loadPortfolioAccount(client: ReadClient, portfolio: Addres
 		client.readContract({ address: snapshot.capitalLedger, abi: linksAbi, functionName: 'services', blockNumber }),
 		client.readContract({ address: snapshot.capitalLedger, abi: linksAbi, functionName: 'forkAuthority', blockNumber }),
 		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'questionCount', blockNumber }),
+		client.readContract({ address: snapshot.capitalLedger, abi: linksAbi, functionName: 'auctionDelegate', blockNumber }),
+		client.readContract({ address: portfolio, abi: linksAbi, functionName: 'auctionDeployer', blockNumber }),
 	])
 	const feeStreams = requireAddressValue(feeStreamsValue, 'fee streams')
 	const lifecycle = requireAddressValue(lifecycleValue, 'capital lifecycle delegate')
+	const auctionDelegate = requireAddressValue(auctionDelegateValue, 'capital auction delegate')
 	const infrastructure = getInfraContractAddresses()
 	if (getAddress(factory) !== getAddress(infrastructure.securityPoolFactory) || getAddress(zoltar) !== getAddress(infrastructure.zoltar)) throw new Error('Portfolio uses unrecognized protocol contracts.')
+	if (getAddress(requireAddressValue(auctionDeployerValue, 'auction deployer')) !== getAddress(infrastructure.securityPoolPortfolioAuctionDeployer)) throw new Error('Portfolio uses an unrecognized auction deployer.')
 	if (requireAddressValue(capitalServicesValue, 'capital services') !== getAddress(services)) throw new Error('Capital ledger uses another services authority.')
 	if (requireAddressValue(capitalForkValue, 'capital fork authority') !== getAddress(forkController)) throw new Error('Capital ledger uses another fork authority.')
 	const start = questionStart > questionCount ? 0n : questionStart
+	const ownerCode = await client.getCode({ address: owner, blockNumber })
+	let isAuctionVault = false
+	if (ownerCode !== undefined && ownerCode !== '0x') {
+		try {
+			verifyRuntimeCode(ownerCode, `0x${auctionVaultArtifact.evm.deployedBytecode.object}`, auctionVaultArtifact.evm.deployedBytecode.immutableReferences, 'auction vault')
+			isAuctionVault = true
+		} catch (error) {
+			if (!(error instanceof Error) || !['Unrecognized auction vault runtime code.', 'Inconsistent auction vault immutable values.'].includes(error.message)) throw error
+			// Other contract accounts remain readable, but gain no auction-owner authority.
+		}
+	}
+	const auctionVault = isAuctionVault ? await authenticatePortfolioAuctionVault(client, portfolio, owner, blockNumber) : undefined
+	const fundingOwner = auctionVault?.bidder ?? owner
+	const depositSpender = auctionVault?.vault ?? snapshot.capitalLedger
 	const [questions, admission, walletAttoRep, allowanceAttoRep, walletAttoEth, bookValue, rewardsValue, premiumValue] = await Promise.all([
 		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'getQuestions', args: [start, 64n], blockNumber }),
 		loadPortfolioAdmission(client, admissionAddress, originUniverseId, blockNumber, admissionStart),
-		client.readContract({ address: snapshot.repToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [owner], blockNumber }),
-		client.readContract({ address: snapshot.repToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [owner, snapshot.capitalLedger], blockNumber }),
-		client.getBalance({ address: owner, blockNumber }),
+		client.readContract({ address: snapshot.repToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [fundingOwner], blockNumber }),
+		client.readContract({ address: snapshot.repToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [fundingOwner, depositSpender], blockNumber }),
+		client.getBalance({ address: fundingOwner, blockNumber }),
 		client.readContract({ address: settlement, abi: linksAbi, functionName: 'ledger', blockNumber }),
 		client.readContract({ address: services, abi: linksAbi, functionName: 'reportingRewards', blockNumber }),
 		client.readContract({ address: services, abi: linksAbi, functionName: 'premiumLedger', blockNumber }),
@@ -143,6 +168,7 @@ export async function loadPortfolioAccount(client: ReadClient, portfolio: Addres
 	await Promise.all([
 		verifyModule(client, snapshot.capitalLedger, capitalArtifact, portfolio, 'capital ledger', blockNumber),
 		verifyModule(client, lifecycle, lifecycleArtifact, snapshot.capitalLedger, 'capital lifecycle delegate', blockNumber, 'ledger'),
+		verifyModule(client, auctionDelegate, auctionDelegateArtifact, snapshot.capitalLedger, 'capital auction delegate', blockNumber, 'ledger'),
 		verifyModule(client, snapshot.commitmentIndex, indexArtifact, snapshot.capitalLedger, 'commitment index', blockNumber),
 		verifyModule(client, feeStreams, feesArtifact, snapshot.capitalLedger, 'capital fee streams', blockNumber),
 		verifyModule(client, settlement, settlementArtifact, portfolio, 'settlement engine', blockNumber),
@@ -166,7 +192,7 @@ export async function loadPortfolioAccount(client: ReadClient, portfolio: Addres
 
 	const [block, chainId] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
 	if (block.hash !== snapshot.blockHash || chainId !== snapshot.chainId) throw new Error('Chain changed while reading the portfolio. Refresh and try again.')
-	return { ...snapshot, originUniverseId, questionAdmissionPolicy: admissionAddress, admission, questions, questionCount, questionStart: start, walletAttoRep, allowanceAttoRep, walletAttoEth, forkController }
+	return { ...snapshot, originUniverseId, questionAdmissionPolicy: admissionAddress, admission, questions, questionCount, questionStart: start, walletAttoRep, allowanceAttoRep, walletAttoEth, forkController, ...(auctionVault === undefined ? {} : { auctionVault }) }
 }
 export type PortfolioAccountSnapshot = Awaited<ReturnType<typeof loadPortfolioAccount>>
 
@@ -185,11 +211,12 @@ export async function sendPortfolioTransaction(client: WriteClient, request: Por
 		await captured.validateBeforeSubmit?.()
 	}
 	await validateCaptured()
-	await client.call({ account: client.account, to: captured.to, data: captured.data, value: captured.value })
-	const review = { functionName: title, contractAddress: captured.to, data: captured.data, value: captured.value, reviewTitle: title, reviewDescription: captured.reviewDescription }
+	const gas = captured.gas === undefined ? {} : { gas: captured.gas }
+	await client.call({ account: client.account, to: captured.to, data: captured.data, value: captured.value, ...gas })
+	const review = { functionName: title, contractAddress: captured.to, data: captured.data, value: captured.value, reviewTitle: title, reviewDescription: captured.reviewDescription, ...gas }
 	client.onTransactionPlan?.([{ ...review, requireReview: true, validateBeforeSubmit: validateCaptured }])
 	client.onTransactionPrepared?.({ ...review, args: undefined, chainName: client.chain.name, account: client.account })
-	const hash = await client.sendTransaction({ to: captured.to, data: captured.data, value: captured.value })
+	const hash = await client.sendTransaction({ to: captured.to, data: captured.data, value: captured.value, ...gas })
 	const result = await waitForSubmittedTransactionReceipt(client, hash)
 	return { hash: result.hash, receipt: result.receipt }
 }

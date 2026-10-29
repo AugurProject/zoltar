@@ -1,7 +1,9 @@
 import { verifyPortfolioCustody } from './portfolio-identity.ts'
+import { authenticatePortfolioAuction, loadPortfolioAuctionPosition, portfolioAuctionPage, type PortfolioAuctionTarget, type PortfolioTarget } from './portfolio-auction.ts'
 import type { OperatorSettings } from '#config/settings'
 import type { PortfolioSelection } from '#config/portfolio-policy'
-import { erc20Abi, securityPoolAbi, securityPoolFactoryAbi } from '@zoltar/bot-shared/contracts/abi'
+import { erc20Abi, securityPoolAbi, securityPoolFactoryAbi, securityPoolCapitalLedgerAbi, securityPoolAuctionVaultAbi, portfolioRuntimeIdentities } from '@zoltar/bot-shared/contracts/abi'
+import { verifyRuntimeIdentity } from '@zoltar/bot-shared/monitoring/runtime-identity'
 import { getAddress, parseAbiItem, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { loadPortfolioCapitalSnapshot, requiredPortfolioExecutionReserve, type PortfolioCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import type { ReadClient } from './vault-positions.ts'
@@ -35,10 +37,12 @@ const portfolioMonitorAbi = [
 	parseAbiItem('function previewRetirement(uint96 id,uint256 acceptedPrice,uint256 demand) view returns ((uint8 status,uint96 effectiveCurrentBatch,uint256 healthyCommitment,uint256 spareCommitment,uint256 queuedAheadCommitment,uint256 commitmentReduction,uint256 releasedRep) preview)'),
 ] as const
 
-export type PortfolioScope = PortfolioSelection & { nextPositionId: bigint; sweepEnd: bigint; retirementObservations?: { id: bigint; commitment: bigint; batch: bigint; since: bigint }[] }
+export type PortfolioScope = PortfolioSelection & { nextPositionId: bigint; sweepEnd: bigint; nextAuctionBidId?: bigint; auctionSweepEnd?: bigint; retirementObservations?: { id: bigint; commitment: bigint; batch: bigint; since: bigint }[] }
 export type PortfolioPosition = {
 	id: bigint
+	auctionTarget?: PortfolioAuctionTarget
 	owner: Address
+	controllingOwner?: Address
 	batch: bigint
 	rep: bigint
 	commitment: bigint
@@ -58,6 +62,7 @@ export type PortfolioObservation = {
 	snapshot: PortfolioCapitalSnapshot
 	acceptedPriceEpoch: bigint
 	knownPositionCount: bigint
+	knownAuctionBidCount?: bigint
 	positions: PortfolioPosition[]
 	nextScope: PortfolioScope
 	walletRep: bigint
@@ -93,6 +98,17 @@ async function loadPortfolioPosition(client: ReadClient, snapshot: PortfolioCapi
 		client.readContract({ address: snapshot.capitalLedger, abi: portfolioMonitorAbi, functionName: 'liquidationStarted', args: [id], blockNumber }),
 	])
 	const account = record(rawAccount, 'Portfolio position')
+	const owner = address(account['owner'])
+	const code = await client.getCode({ address: owner, blockNumber })
+	let auctionVault = false
+	try {
+		verifyRuntimeIdentity(code, portfolioRuntimeIdentities.SecurityPoolAuctionVault, 'position auction vault')
+		auctionVault = true
+	} catch (error) {
+		if (!(error instanceof Error) || !['Unrecognized position auction vault runtime code', 'Inconsistent position auction vault runtime immutable values'].includes(error.message)) throw error
+		// Ordinary EOAs and other account contracts have no known auction signer.
+	}
+	const controllingOwner = auctionVault ? getAddress(await client.readContract({ address: owner, abi: securityPoolAuctionVaultAbi, functionName: 'owner', blockNumber })) : owner
 	let retirementStatus = 'Not retiring'
 	if (uint(account['batch']) !== 0n && uint(account['commitment']) !== 0n) {
 		const raw = await client.readContract({ address: snapshot.commitmentIndex, abi: portfolioMonitorAbi, functionName: 'previewRetirement', args: [id, snapshot.conservativePrice, snapshot.demandAttoEth], blockNumber })
@@ -107,7 +123,8 @@ async function loadPortfolioPosition(client: ReadClient, snapshot: PortfolioCapi
 		retirementStatus,
 		stalledRetirement: false,
 		id,
-		owner: address(account['owner']),
+		owner,
+		controllingOwner,
 		batch: uint(account['batch']),
 		rep: uint(account['rep']),
 		commitment: uint(account['commitment']),
@@ -119,7 +136,7 @@ async function loadPortfolioPosition(client: ReadClient, snapshot: PortfolioCapi
 	}
 }
 
-export async function loadPortfolioObservation(client: ReadClient, settings: OperatorSettings, wallet: Address | undefined, scope: PortfolioScope, blockNumber: bigint, positionIds?: readonly bigint[]): Promise<PortfolioObservation> {
+export async function loadPortfolioObservation(client: ReadClient, settings: OperatorSettings, wallet: Address | undefined, scope: PortfolioScope, blockNumber: bigint, targets?: readonly PortfolioTarget[]): Promise<PortfolioObservation> {
 	const [factory, protocol, seed] = await Promise.all([
 		client.readContract({ address: scope.address, abi: portfolioMonitorAbi, functionName: 'factory', blockNumber }),
 		client.readContract({ address: scope.address, abi: portfolioMonitorAbi, functionName: 'zoltar', blockNumber }),
@@ -161,15 +178,37 @@ export async function loadPortfolioObservation(client: ReadClient, settings: Ope
 	])
 	if (address(authority) !== scope.address || address(indexAuthority) !== snapshot.capitalLedger || universeId !== scope.universeId || address(token) !== snapshot.repToken || snapshot.chainId !== settings.network.chainId) throw new Error('Portfolio capital identity does not match the approved universe')
 	const page = portfolioPositionPage(scope, uint(lastPositionId), settings.portfolioPolicy.maximumPositionsPerScan)
+	const cohort = await client.readContract({ address: snapshot.capitalLedger, abi: securityPoolCapitalLedgerAbi, functionName: 'auctionCohort', blockNumber })
 	const positions: PortfolioPosition[] = []
-	for (const id of positionIds ?? page.ids) {
+	for (const id of targets ?? page.ids) {
+		if (typeof id !== 'bigint') continue
 		if (id === 0n || id > uint(lastPositionId)) throw new Error('Portfolio position is outside the authenticated registry')
+		if (id === cohort[1]) continue
 		const position = await loadPortfolioPosition(client, snapshot, id)
 		if (position.owner === zeroAddress) throw new Error('Portfolio registry position has no owner')
 		positions.push(position)
 	}
+	let knownAuctionBidCount = 0n
+	if (cohort[2] !== 0n) {
+		const auction = await authenticatePortfolioAuction(client, snapshot, getAddress(cohort[0]))
+		knownAuctionBidCount = auction.bidCount
+		const bids = portfolioAuctionPage(scope, auction.bidCount, settings.portfolioPolicy.maximumPositionsPerScan)
+		page.nextScope.nextAuctionBidId = bids.nextAuctionBidId
+		page.nextScope.auctionSweepEnd = bids.auctionSweepEnd
+		const threshold = await client.readContract({ address: snapshot.capitalLedger, abi: securityPoolCapitalLedgerAbi, functionName: 'maximumHealthyPrice', args: [cohort[3], cohort[4]], blockNumber })
+		for (const candidate of targets ?? bids.ids.map(bidId => ({ auction: auction.address, bidId }))) {
+			if (typeof candidate === 'bigint') continue
+			if (candidate.auction !== auction.address) throw new Error('Auction target controller changed')
+			const position = await loadPortfolioAuctionPosition(client, snapshot, auction, candidate.bidId, threshold)
+			if (position !== undefined) {
+				if ('vault' in candidate && candidate.vault !== position.owner) throw new Error('Auction target vault changed')
+				positions.push(position)
+			}
+		}
+	}
 	const retirementObservations = new Map((scope.retirementObservations ?? []).map(entry => [entry.id, entry]))
 	for (const position of positions) {
+		if (position.auctionTarget !== undefined) continue
 		if (position.batch === 0n || position.commitment === 0n) {
 			retirementObservations.delete(position.id)
 			continue
@@ -190,6 +229,7 @@ export async function loadPortfolioObservation(client: ReadClient, settings: Ope
 		snapshot,
 		acceptedPriceEpoch: uint(epoch),
 		knownPositionCount: uint(lastPositionId),
+		knownAuctionBidCount,
 		positions,
 		nextScope: page.nextScope,
 		walletRep,

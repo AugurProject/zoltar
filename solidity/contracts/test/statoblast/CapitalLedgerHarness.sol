@@ -4,6 +4,7 @@ pragma solidity 0.8.35;
 import { SecurityPoolCapitalLedger } from '../../statoblast/SecurityPoolCapitalLedger.sol';
 import { SecurityPoolCapitalState } from '../../statoblast/SecurityPoolCapitalState.sol';
 import { SecurityPoolCreationCodeDeployer } from '../../statoblast/SecurityPoolCreationCode.sol';
+import { SecurityPoolCapitalLedgerDeployer } from '../../statoblast/SecurityPoolPortfolioModuleDeployers.sol';
 import { ICapitalFeeStreams } from '../../statoblast/interfaces/ICapitalAccounting.sol';
 import { SecurityPoolCommitmentIndex } from '../../statoblast/SecurityPoolCommitmentIndex.sol';
 import { SecurityPoolCapitalFeeStreams } from '../../statoblast/SecurityPoolCapitalFeeStreams.sol';
@@ -38,7 +39,13 @@ contract CapitalLedgerZoltarMock {
 }
 
 contract CapitalLedgerTestComponents is SecurityPoolCreationCodeDeployer {
-	constructor() SecurityPoolCreationCodeDeployer(type(SecurityPoolCommitmentIndex).creationCode) {}
+	SecurityPoolCapitalLedgerDeployer public immutable capitalDeployer;
+	constructor(SecurityPoolCapitalLedgerDeployer deployer) SecurityPoolCreationCodeDeployer(type(SecurityPoolCommitmentIndex).creationCode) {
+		capitalDeployer = deployer;
+	}
+	function createLedger(address authority, Zoltar zoltar) external returns (SecurityPoolCapitalLedger) {
+		return capitalDeployer.create(authority, zoltar, 1, 10_500, 1e15, 1e14, 1 days);
+	}
 	function createIndex(address authority) external returns (SecurityPoolCommitmentIndex) {
 		return SecurityPoolCommitmentIndex(_deploy(abi.encode(authority)));
 	}
@@ -57,7 +64,7 @@ contract CapitalLedgerHarness {
 	constructor(CapitalLedgerTestComponents components) {
 		zoltar = new CapitalLedgerZoltarMock();
 		token = zoltar.token();
-		ledger = new SecurityPoolCapitalLedger(address(this), Zoltar(address(zoltar)), 1, 10_500, 1e15, 1e14, 1 days);
+		ledger = components.createLedger(address(this), Zoltar(address(zoltar)));
 		ledger.initialize(components.createIndex(address(ledger)), components.createStreams(address(ledger), 1 days), address(0), address(0));
 	}
 	function mint(address owner, uint256 amount) external {

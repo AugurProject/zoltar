@@ -20,6 +20,10 @@ export function portfolioClient(overrides: Record<string, unknown> = {}) {
 		'SecurityPoolPortfolioForkCoordinator',
 		'SecurityPoolPortfolioServices',
 		'SecurityPoolCapitalLifecycleDelegate',
+		'SecurityPoolCapitalAuctionDelegate',
+		'SecurityPoolPortfolioAuction',
+		'SecurityPoolUniformPriceAuction',
+		'SecurityPoolAuctionVault',
 		'SecurityPoolReportingRewards',
 		'SecurityPoolResolutionPremiumBook',
 	]
@@ -69,6 +73,8 @@ export function portfolioClient(overrides: Record<string, unknown> = {}) {
 		feeStreams: module('SecurityPoolCapitalFeeStreams'),
 		services: module('SecurityPoolPortfolioServices'),
 		lifecycleDelegate: module('SecurityPoolCapitalLifecycleDelegate'),
+		auctionDelegate: module('SecurityPoolCapitalAuctionDelegate'),
+		auctionCohort: ['0x0000000000000000000000000000000000000000', 0n, 0n, 0n, 0n],
 		reportingRewards: module('SecurityPoolReportingRewards'),
 		premiumLedger: module('SecurityPoolResolutionPremiumBook'),
 		priceFeed: snapshot.priceFeed,
@@ -133,7 +139,7 @@ export function portfolioClient(overrides: Record<string, unknown> = {}) {
 						if ([snapshot.commitmentIndex, module('SecurityPoolCapitalFeeStreams')].includes(getAddress(parameters.address))) return snapshot.capitalLedger
 						if (getAddress(parameters.address) === module('SecurityPoolSettlementBook')) return module('SecurityPoolPortfolioSettlement')
 					}
-					if (parameters.functionName === 'ledger' && getAddress(parameters.address) === module('SecurityPoolCapitalLifecycleDelegate')) return snapshot.capitalLedger
+					if (parameters.functionName === 'ledger' && [module('SecurityPoolCapitalLifecycleDelegate'), module('SecurityPoolCapitalAuctionDelegate')].includes(getAddress(parameters.address))) return snapshot.capitalLedger
 					if (!(parameters.functionName in values)) throw new Error(`Unexpected read ${parameters.functionName}`)
 					return values[parameters.functionName]
 				}

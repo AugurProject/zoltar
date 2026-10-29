@@ -196,8 +196,8 @@ function publicOperatorSnapshot(value: unknown) {
 	if (typeof error === 'string') snapshot['error'] = publicOperatorFailure(error)
 	if (Array.isArray(source['portfolios']))
 		snapshot['portfolios'] = publicList(source['portfolios'], value => {
-			const view = publicFields(value, ['address', 'universeId', 'selected', 'approvedUniverse', 'blockNumber', 'priceValid', 'principalRep', 'commitmentEth', 'managedPrincipalRep', 'maximumTotalPrincipalRep', 'automation', 'knownPositionCount', 'nextPositionId'])
-			view['positions'] = publicList(record(value)?.['positions'], position => publicFields(position, ['id', 'commitmentEth', 'distressed', 'reserveEth', 'requiredReserveEth', 'reserveAdequate', 'retirementStatus', 'stalledRetirement', 'takeoverStatus']))
+			const view = publicFields(value, ['address', 'universeId', 'selected', 'approvedUniverse', 'blockNumber', 'priceValid', 'principalRep', 'commitmentEth', 'managedPrincipalRep', 'maximumTotalPrincipalRep', 'automation', 'knownPositionCount', 'nextPositionId', 'knownAuctionBidCount', 'nextAuctionBidId'])
+			view['positions'] = publicList(record(value)?.['positions'], position => publicFields(position, ['id', 'label', 'commitmentEth', 'distressed', 'reserveEth', 'requiredReserveEth', 'reserveAdequate', 'retirementStatus', 'stalledRetirement', 'takeoverStatus']))
 			return view
 		})
 	if (Array.isArray(source['activities'])) snapshot['activities'] = publicList(source['activities'], publicActivity)

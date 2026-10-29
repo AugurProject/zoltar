@@ -232,6 +232,8 @@ export type EstimateContractGasParameters<TAbi extends Abi, TFunctionName extend
 type EstimateGasParameters = {
 	blockNumber?: bigint | undefined
 	account?: Account | Address | undefined
+	/** Simulation only: override the sender's ETH balance, preserving all code and storage. */
+	balanceOverride?: bigint | undefined
 	data?: Hex | undefined
 	gasPrice?: bigint | undefined
 	maxFeePerGas?: bigint | undefined
@@ -498,6 +500,8 @@ type WalletClientShape<TTransport extends Transport, TChain extends Chain | unde
 	call: (parameters: {
 		blockNumber?: bigint | undefined
 		account?: Account | Address | undefined
+		/** Simulation only: override the sender's ETH balance, preserving all code and storage. */
+		balanceOverride?: bigint | undefined
 		data?: Hex | undefined
 		gas?: bigint | undefined
 		gasPrice?: bigint | undefined
