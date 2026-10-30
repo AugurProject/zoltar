@@ -27,7 +27,6 @@ export const portfolioEconomics: PortfolioEconomicsConfig = {
 	reportingFeeAttoEth: 0n,
 	serviceFeeBps: 2_500n,
 	maximumOracleRewardAttoEth: unit / 100n,
-	auctionReserveFactorBps: 5_000n,
 }
 
 export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<PortfolioEconomicsConfig> = {}) {

@@ -134,7 +134,7 @@ function auctionFixture() {
 		bidCount: 2n,
 		maximumHealthyPrice: 7n,
 		auctionPosition: { vault, positionId: 0n, materialized: false, principal: 18n, commitment: 20n, targetHealthFactorBps: 12_000n, liquidationStarted: 100n, earnedAttoEth: 0n, earnedAttoRep: 0n },
-		previewBid: { bidder: targetAddress, vault, targetHealthBps: 12_000n, filledLots: 2n, usedAttoEth: 20n, filledAttoRep: 8n, refundAttoEth: 0n },
+		previewBid: { bidder: targetAddress, vault, targetHealthBps: 12_000n, filledLots: 2n, usedAttoEth: 20n, principalAttoRep: 8n, refundAttoEth: 0n },
 		owner: targetAddress,
 		initialCapital: fixture.observation.snapshot.capitalLedger,
 		auction,

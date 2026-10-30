@@ -2,7 +2,6 @@ import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
 import { parseUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
 import {
-	buildPortfolioAuctionApprovalRequest,
 	buildPortfolioAuctionBidRequest,
 	buildPortfolioAuctionOpenRequest,
 	buildPortfolioAuctionRefundCreditRequest,
@@ -98,7 +97,7 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 			bidReason = getErrorMessage(error, copy.quoteError)
 		}
 	}
-	const withdrawalReason = auctionReason ?? (auction?.refundAttoEth === 0n && auction.refundAttoRep === 0n ? copy.noRefund : undefined)
+	const withdrawalReason = auctionReason ?? (auction?.refundAttoEth === 0n ? copy.noRefund : undefined)
 	const refundReason = (bid: PortfolioAuctionBid) => auctionReason ?? (!auction?.finalized ? copy.waitClose : undefined) ?? (bid.refundSettled ? copy.credited : undefined)
 	const activateReason = (bid: PortfolioAuctionBid) => auctionReason ?? (bid.fill === undefined || bid.fill.filledLots === 0n ? copy.managePending : undefined) ?? (bid.materialized ? copy.activated : undefined)
 	const run = (action: string, title: string, reason: string | undefined, build: (selected: PortfolioAuctionSnapshot) => PortfolioTransaction, verify: (latest: PortfolioAuctionSnapshot) => void = () => undefined, onConfirmed?: () => void) =>
@@ -138,7 +137,7 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 	const verifyQuote = (latest: PortfolioAuctionSnapshot) => {
 		if (quote === undefined) throw new Error(copy.quoteError)
 		const fresh = quotePortfolioAuctionBid(latest, quote)
-		if (fresh.topUpAttoRep !== quote.topUpAttoRep || fresh.totalAttoEth !== quote.totalAttoEth || fresh.minimumPrincipalAttoRep !== quote.minimumPrincipalAttoRep) throw new Error(copy.fundingChanged)
+		if (fresh.totalAttoEth !== quote.totalAttoEth || fresh.minimumPrincipalAttoRep !== quote.minimumPrincipalAttoRep) throw new Error(copy.fundingChanged)
 		return fresh
 	}
 	return {
@@ -146,7 +145,6 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 		quote,
 		loading,
 		error: current?.error ?? quoteError,
-		fundingReadError: current?.error,
 		lotsInput: lotsInput.value,
 		repInput: repInput.value,
 		healthInput: healthInput.value,
@@ -182,16 +180,6 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 			run('openPortfolioAuction', copy.open, openReason, buildPortfolioAuctionOpenRequest, latest => {
 				buildPortfolioAuctionOpenRequest(latest)
 			}),
-		approve: (amount: bigint) =>
-			run(
-				'approvePortfolioAuction',
-				copy.approve,
-				fundingReason,
-				selected => ({ ...buildPortfolioAuctionApprovalRequest(selected, amount), reviewDescription: copy.approvalReview(amount, selected.auction?.address ?? selected.controller) }),
-				latest => {
-					verifyQuote(latest)
-				},
-			),
 		bid: () =>
 			run(
 				'bidPortfolioAuction',
@@ -199,7 +187,7 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 				bidReason,
 				selected => {
 					if (quote === undefined) throw new Error(copy.quoteError)
-					return { ...buildPortfolioAuctionBidRequest(selected, quote), reviewDescription: copy.bidReview(quote.lots, quote.bidAttoEth, quote.topUpAttoRep, quote.executionReserveAttoEth, quote.minimumAttoRepPerLot) }
+					return { ...buildPortfolioAuctionBidRequest(selected, quote), reviewDescription: copy.bidReview(quote.lots, quote.bidAttoEth, quote.executionReserveAttoEth, quote.minimumAttoRepPerLot) }
 				},
 				latest => {
 					buildPortfolioAuctionBidRequest(latest, verifyQuote(latest))

@@ -129,7 +129,6 @@ contract PortfolioForkHarness {
 	address public immutable auctionDeployer;
 	uint256 public constant minimumCommitmentAttoEth = 1e15;
 	uint256 public constant minimumExecutionReserveAttoEth = 1e14;
-	uint256 public constant auctionReserveFactorBps = 5_000;
 	uint256 public constant initialReportPriorityFeeAttoEthPerGas = 2e9;
 	struct Clock {
 		uint48 logicalAnchor;

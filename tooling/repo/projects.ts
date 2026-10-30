@@ -135,24 +135,9 @@ export const projects: readonly Project[] = [
 			type: 'contracts',
 			dependencies: app === 'zoltar' ? [] : [app === 'statoblast' ? 'contracts-zoltar' : 'contracts-statoblast'],
 			tasks: {
-				build: rootTask(
-					['bun', './tooling/contracts/build-app-contracts.mts', app],
-					[
-						'solidity/ts/compile.ts',
-						'solidity/ts/abi/**',
-						'solidity/contracts/*.sol',
-						'solidity/contracts/vendor/**',
-						'solidity/contracts/statoblast/WETH9.sol',
-						'solidity/contracts/statoblast/Multicall3.sol',
-						...(app === 'zoltar' ? [] : ['solidity/contracts/statoblast/**']),
-						...(app === 'trading' ? ['solidity/contracts/trading/**'] : []),
-						'solidity/ts/contractProjects.ts',
-						'tooling/contracts/build-app-contracts.mts',
-						'tooling/ui/projectArtifacts.mts',
-					],
-				),
+				build: rootTask(['bun', './tooling/contracts/build-app-contracts.mts', app], ['solidity/ts/compile.ts', 'solidity/ts/abi/**', 'solidity/contracts/**', 'solidity/ts/contractProjects.ts', 'tooling/contracts/build-app-contracts.mts', 'tooling/ui/projectArtifacts.mts']),
 			},
-			generatedDirectories: [`solidity/artifacts/${app}`],
+			generatedDirectories: [],
 			ci: { scope: 'core' },
 		}),
 	),
@@ -546,6 +531,9 @@ function ownerProject(filePath: string, registry: readonly Project[] = projects)
 export function affectedProjects(filePaths: readonly string[], registry: readonly Project[] = projects): Project[] {
 	validateProjectRegistry(registry)
 	const affected = new Set(filePaths.flatMap(filePath => ownerProject(filePath, registry)?.id ?? []))
+	// App exports share canonical compilation even when their runtime dependencies differ.
+	const contractSources = filePaths.filter(filePath => filePath.startsWith('solidity/contracts/'))
+	for (const project of registry) if (project.type === 'contracts' && contractSources.some(filePath => taskInputMatches('build', filePath, project))) affected.add(project.id)
 	let changed = true
 	while (changed) {
 		changed = false

@@ -42,16 +42,15 @@ function fixture() {
 		minimumExecutionReservePerLot: 10n,
 		repGrid: 1n,
 		openingConservativePrice: unit,
-		topUpPerLotAttoRep: 2n * unit,
-		initialMaximumAttoRepPerLot: unit,
+		minimumCollateralAttoRepPerLot: 2n * unit,
+		maximumBidAttoRepPerLot: 10n * unit,
 		depositedAttoEth: unit,
 		bidderBidCount: 0n,
-		refundCreditAttoRep: 0n,
 		refundCreditAttoEth: 0n,
-		bids: [owner, vault, 12_000n, 1n, unit, false, false],
-		previewBid: { bidder: owner, vault, targetHealthBps: 12_000n, filledLots: 1n, usedAttoEth: unit, filledAttoRep: unit, refundAttoEth: 0n },
-		auctionPosition: { vault, positionId: 0n, principal: 3n * unit, commitment: unit, targetHealthFactorBps: 12_000n, liquidationStarted: 0n, materialized: false, earnedAttoEth: 7n, earnedAttoRep: 9n },
-		clearing: [unit, 1n, unit, unit, 0n, 0n, 0n, 1n, false],
+		bids: [owner, vault, 12_000n, 1n, 3n * unit, false, false],
+		previewBid: { bidder: owner, vault, targetHealthBps: 12_000n, filledLots: 1n, usedAttoEth: unit, principalAttoRep: 10n * unit, refundAttoEth: 0n },
+		auctionPosition: { vault, positionId: 0n, principal: 10n * unit, commitment: unit, targetHealthFactorBps: 12_000n, liquidationStarted: 0n, materialized: false, earnedAttoEth: 7n, earnedAttoRep: 9n },
+		clearing: [10n * unit, 1n, unit, 10n * unit, 0n, 0n, 0n, 0n, 1n, false],
 	}
 	const scoped = new Map<string, unknown>()
 	const reads: { functionName: string; address: Address; blockNumber?: bigint | undefined }[] = []
@@ -73,7 +72,7 @@ test('selected vault authentication uses its initial branch without scanning bid
 	expect(result).toEqual({ vault, bidder: owner, auction, initialCapital: capital, initialUniverse: 42n, bidId: 3n, filledLots: 1n, materialized: false })
 	expect(new Set(source.reads.map(read => read.blockNumber))).toEqual(new Set([10n]))
 	expect(source.reads.some(read => read.functionName === 'bidderBidCount' || read.functionName === 'bidderBidId')).toBe(false)
-	source.values.auctionPosition = { vault, positionId: 1n, principal: 3n * unit, commitment: unit, targetHealthFactorBps: 12_000n, liquidationStarted: 0n, materialized: true, earnedAttoEth: 7n, earnedAttoRep: 9n }
+	source.values.auctionPosition = { vault, positionId: 1n, principal: 10n * unit, commitment: unit, targetHealthFactorBps: 12_000n, liquidationStarted: 0n, materialized: true, earnedAttoEth: 7n, earnedAttoRep: 9n }
 	expect((await authenticatePortfolioAuctionVault(source.client, portfolio, vault, 10n)).materialized).toBe(true)
 })
 

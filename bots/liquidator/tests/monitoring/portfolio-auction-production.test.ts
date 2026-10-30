@@ -26,8 +26,10 @@ describe('portfolio operator funded auction capital integration', () => {
 		const context = await preparePortfolioTruthAuction(fixture)
 		await context.report()
 		await context.open()
-		const first = await context.bid(context.owner, 2n)
-		const second = await context.bid(context.other, 3n)
+		// Set purchased collateral explicitly so the later price makes these
+		// positions distressed, independently of the shared bidding helper default.
+		const first = await context.bid(context.owner, 2n, (35n * unit) / 10n)
+		const second = await context.bid(context.other, 3n, (35n * unit) / 10n)
 		await context.closingQuote()
 		await context.finalize()
 		const account = privateKeyToAccount(`0x${'01'.repeat(32)}`)
@@ -198,8 +200,8 @@ describe('portfolio auction cure with a small operator gas budget', () => {
 			const context = await preparePortfolioTruthAuction(fixture)
 			await context.report()
 			await context.open()
-			const first = await context.bid(context.owner, 2n)
-			await context.bid(context.other, 3n)
+			const first = await context.bid(context.owner, 2n, (35n * unit) / 10n)
+			await context.bid(context.other, 3n, (35n * unit) / 10n)
 			await context.closingQuote()
 			await context.finalize()
 			await context.report(3n * unit)

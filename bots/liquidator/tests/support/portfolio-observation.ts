@@ -69,7 +69,6 @@ export function portfolioObservation(): PortfolioObservation {
 			accruedFeesAttoEth: 0n,
 			accruedFeesAttoRep: 0n,
 			economics: {
-				auctionReserveFactorBps: 5000n,
 				purchaseFeeBps: 100n,
 				annualFeeBps: 100n,
 				minimumPurchaseFeeAttoEth: 1n,

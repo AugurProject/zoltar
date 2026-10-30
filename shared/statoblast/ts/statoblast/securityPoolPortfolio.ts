@@ -11,7 +11,6 @@ export type PortfolioEconomicsConfig = {
 	reportingFeeAttoEth: bigint
 	serviceFeeBps: bigint
 	maximumOracleRewardAttoEth: bigint
-	auctionReserveFactorBps: bigint
 }
 export type PortfolioDeployers = {
 	capital: Address
@@ -37,7 +36,6 @@ export function validatePortfolioEconomics(config: PortfolioEconomicsConfig) {
 	if (config.purchaseFeeBps > 10_000n) throw new Error('Purchase fee cannot exceed 100%.')
 	if (config.annualFeeBps > 10_000n) throw new Error('Annual fee cannot exceed 100%.')
 	if (config.serviceFeeBps > 10_000n) throw new Error('Maintenance fee share cannot exceed 100%.')
-	if (config.auctionReserveFactorBps === 0n || config.auctionReserveFactorBps > 10_000n) throw new Error('Auction reserve must be positive and cannot exceed 100%.')
 	if (config.minimumCommitmentAttoEth === 0n || config.minimumExecutionReserveAttoEth === 0n || config.rewardVestingSeconds === 0n) throw new Error('Minimum commitment, execution reserve and fee vesting duration must be positive.')
 	if (config.minimumOutcomeRate === 0n || config.minimumOutcomeRate > 10n ** 18n) throw new Error('Minimum outcome exchange rate must be positive and at most one.')
 }
@@ -116,7 +114,6 @@ export {
 	portfolioAuctionOpeningReason,
 	quotePortfolioAuctionBid,
 	buildPortfolioAuctionOpenRequest,
-	buildPortfolioAuctionApprovalRequest,
 	buildPortfolioAuctionBidRequest,
 	buildPortfolioAuctionMaterializeRequest,
 	buildPortfolioAuctionRefundCreditRequest,

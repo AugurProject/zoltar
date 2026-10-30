@@ -333,7 +333,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 			raised = result.raisedAttoEth;
 			branch.recoveryAttoRep -= result.soldAttoRep;
 			if (result.filledLots != 0)
-				portfolio.capitalLedger(child).installAuctionCohort(address(auction), result.filledLots, result.attoRepPerLot + auction.topUpPerLotAttoRep(), auction.lotAttoEth());
+				portfolio.capitalLedger(child).installAuctionCohort(address(auction), result.filledLots, result.attoRepPerLot, auction.lotAttoEth());
 		}
 		SecurityPoolPortfolioSettlement settlement = portfolio.settlement();
 		IERC20 token = IERC20(address(zoltar.getRepToken(child)));

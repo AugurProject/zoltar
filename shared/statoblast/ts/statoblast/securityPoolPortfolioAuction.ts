@@ -1,10 +1,9 @@
-import { encodeFunctionData, getAddress, isAddress, isHex, parseAbi, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeFunctionData, formatEther, getAddress, isAddress, isHex, parseAbi, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { PortfolioAuctionSnapshot } from './securityPoolPortfolioAuctionRead.js'
 export { loadPortfolioAuctionSnapshot, type PortfolioAuctionSnapshot, type PortfolioAuctionBid } from './securityPoolPortfolioAuctionRead.js'
 
 const abi = parseAbi([
 	'function open()',
-	'function approve(address spender,uint256 amount) returns (bool)',
 	'function submitBid(uint256 lots,uint256 minimumAttoRepPerLot,uint256 targetHealthFactorBps,uint256 executionReservePerLotAttoEth) payable returns (uint256 bidId,address vault)',
 	'function settleRefund(uint256 bidId)',
 	'function materializeAuctionBid(uint256 bidId) returns (address vault,uint96 positionId)',
@@ -31,7 +30,7 @@ function requireAuction(snapshot: PortfolioAuctionSnapshot) {
 	return snapshot.auction
 }
 
-/** The reserve protects a funded price observation; it cannot guarantee later profitability. */
+/** Opening requires a funded observation; it cannot guarantee later profitability. */
 export function portfolioAuctionOpeningReason(snapshot: PortfolioAuctionSnapshot): string | undefined {
 	const auction = snapshot.auction
 	if (auction === undefined) return 'Start a branch with saleable REP and an ETH shortfall first.'
@@ -41,11 +40,11 @@ export function portfolioAuctionOpeningReason(snapshot: PortfolioAuctionSnapshot
 	if (snapshot.forkTime !== 0n) return 'This auction universe has forked.'
 	if (auction.targetLots === 0n || auction.inventoryAttoRep === 0n) return 'This branch has no saleable auction lots.'
 	const price = auction.price
-	if (price === undefined || price.lastSettlementTimestamp === 0n || price.lastSettlementTimestamp > snapshot.timestamp || price.validUntil <= snapshot.timestamp || price.conservativePrice === 0n || price.liquidationPrice === 0n) return 'Accept a fresh branch REP price report first.'
+	if (price === undefined || price.lastSettlementTimestamp === 0n || price.lastSettlementTimestamp > snapshot.timestamp || price.validUntil <= snapshot.timestamp || price.conservativePrice === 0n) return 'Accept a fresh branch REP price report first.'
 	if (price.exposureLimitAttoEth < price.requiredExposureAttoEth || price.exposureLimitAttoRep < auction.inventoryAttoRep) return 'The price report must cover the branch ETH exposure and auction REP inventory.'
-	const oracleReserve = (auction.lotAttoEth * price.liquidationPrice) / (10n ** 14n * snapshot.auctionReserveFactorBps)
-	const inventoryReserve = auction.inventoryAttoRep / auction.targetLots
-	if ((oracleReserve < inventoryReserve ? oracleReserve : inventoryReserve) < auction.repGrid) return 'The auction reserve cannot fund one REP price unit per lot.'
+	const requiredBase = ceilDiv(auction.lotAttoEth * price.conservativePrice, ATTO_UNITS)
+	const requiredCollateral = ceilDiv(ceilDiv(requiredBase * auction.securityMultiplierBps, BPS), auction.repGrid) * auction.repGrid
+	if (requiredCollateral > auction.inventoryAttoRep) return 'The auction inventory cannot back one ETH lot at the minimum health target.'
 	return undefined
 }
 export function buildPortfolioAuctionOpenRequest(snapshot: PortfolioAuctionSnapshot) {
@@ -53,12 +52,8 @@ export function buildPortfolioAuctionOpenRequest(snapshot: PortfolioAuctionSnaps
 	if (reason !== undefined) throw new Error(reason)
 	return { account: snapshot.bidder, to: requireAuction(snapshot).address, value: 0n, data: encodeFunctionData({ abi, functionName: 'open' }) }
 }
-export function buildPortfolioAuctionApprovalRequest(snapshot: PortfolioAuctionSnapshot, allowanceAttoRep: bigint) {
-	const auction = requireAuction(snapshot)
-	return { account: snapshot.bidder, to: snapshot.repToken, value: 0n, data: encodeFunctionData({ abi, functionName: 'approve', args: [auction.address, uint(allowanceAttoRep, 'REP allowance')] }) }
-}
 type PortfolioAuctionBidTerms = { lots: bigint; minimumAttoRepPerLot: bigint; targetHealthFactorBps: bigint; executionReservePerLotAttoEth: bigint }
-/** Every bid is an exact ETH lot, plus full REP top-up and its explicitly signed reserve. */
+/** Every bid funds exact ETH lots and an explicitly signed execution reserve. */
 export function quotePortfolioAuctionBid(snapshot: PortfolioAuctionSnapshot, terms: PortfolioAuctionBidTerms) {
 	const auction = requireAuction(snapshot)
 	if (!auction.opened || auction.finalized || snapshot.timestamp >= auction.closesAt || snapshot.forkTime !== 0n) throw new Error('This auction is not accepting bids.')
@@ -67,35 +62,30 @@ export function quotePortfolioAuctionBid(snapshot: PortfolioAuctionSnapshot, ter
 	const targetHealthFactorBps = uint(terms.targetHealthFactorBps, 'Health target')
 	const executionReservePerLotAttoEth = uint(terms.executionReservePerLotAttoEth, 'Execution reserve per lot')
 	if (lots === 0n || minimumAttoRepPerLot === 0n || minimumAttoRepPerLot % auction.repGrid !== 0n) throw new Error('Use positive whole lots and an exact REP price-grid multiple.')
-	if (minimumAttoRepPerLot > auction.maximumAttoRepPerLot) throw new Error('The bid price is below the auction reserve.')
+	if (minimumAttoRepPerLot > auction.maximumBidAttoRepPerLot) throw new Error('The minimum REP per lot exceeds the auction inventory.')
 	if (targetHealthFactorBps < BPS) throw new Error('The chosen health target must be at least 100%.')
 	if (executionReservePerLotAttoEth < auction.minimumExecutionReservePerLotAttoEth) throw new Error('The execution reserve budget is below the current minimum. Review the updated funding amount.')
 	const requiredBase = ceilDiv(auction.lotAttoEth * auction.openingConservativePrice, ATTO_UNITS)
 	const requiredSecurity = ceilDiv(requiredBase * auction.securityMultiplierBps, BPS)
-	const requiredPrincipalPerLotAttoRep = uint(ceilDiv(requiredSecurity * targetHealthFactorBps, BPS), 'Required REP per lot')
-	if (minimumAttoRepPerLot + auction.topUpPerLotAttoRep < requiredPrincipalPerLotAttoRep) throw new Error('The bid does not provide enough REP for the chosen health target.')
+	const requiredPrincipalPerLotAttoRep = uint(ceilDiv(ceilDiv(requiredSecurity * targetHealthFactorBps, BPS), auction.repGrid) * auction.repGrid, 'Required REP per lot')
+	if (minimumAttoRepPerLot < requiredPrincipalPerLotAttoRep) throw new Error(`Increase the minimum REP per lot to at least ${formatEther(requiredPrincipalPerLotAttoRep)} REP for the chosen health target.`)
 	const bidAttoEth = uint(lots * auction.lotAttoEth, 'Bid ETH', 128)
 	uint(auction.depositedAttoEth + bidAttoEth, 'Total auction bid escrow', 128)
-	const topUpAttoRep = uint(lots * auction.topUpPerLotAttoRep, 'REP top-up')
 	const executionReserveAttoEth = uint(lots * executionReservePerLotAttoEth, 'Execution reserve')
 	const totalAttoEth = uint(bidAttoEth + executionReserveAttoEth, 'Total ETH funding')
 	return {
 		...terms,
 		bidAttoEth,
-		topUpAttoRep,
 		executionReserveAttoEth,
 		totalAttoEth,
 		requiredPrincipalPerLotAttoRep,
-		minimumPurchasedAttoRep: uint(lots * minimumAttoRepPerLot, 'Minimum purchased REP'),
-		minimumPrincipalAttoRep: uint(lots * (minimumAttoRepPerLot + auction.topUpPerLotAttoRep), 'Minimum winning REP'),
+		minimumPrincipalAttoRep: uint(lots * minimumAttoRepPerLot, 'Minimum winning REP'),
 		maximumPrice: { attoEth: auction.lotAttoEth, attoRep: minimumAttoRepPerLot },
 	}
 }
 export function buildPortfolioAuctionBidRequest(snapshot: PortfolioAuctionSnapshot, terms: PortfolioAuctionBidTerms) {
 	const auction = requireAuction(snapshot)
 	const quote = quotePortfolioAuctionBid(snapshot, terms)
-	if (auction.walletAttoRep < quote.topUpAttoRep) throw new Error('Insufficient REP for the bid top-up.')
-	if (auction.allowanceAttoRep < quote.topUpAttoRep) throw new Error('Approve the auction to spend the bid REP top-up first.')
 	if (snapshot.walletAttoEth < quote.totalAttoEth) throw new Error('Insufficient ETH for the bid and execution reserve.')
 	return { account: snapshot.bidder, to: auction.address, value: quote.totalAttoEth, data: encodeFunctionData({ abi, functionName: 'submitBid', args: [quote.lots, quote.minimumAttoRepPerLot, quote.targetHealthFactorBps, quote.executionReservePerLotAttoEth] }) }
 }
@@ -113,7 +103,7 @@ export function buildPortfolioAuctionRefundCreditRequest(snapshot: PortfolioAuct
 }
 export function buildPortfolioAuctionRefundWithdrawRequest(snapshot: PortfolioAuctionSnapshot, recipient: Address) {
 	const auction = requireAuction(snapshot)
-	if (auction.refundAttoEth === 0n && auction.refundAttoRep === 0n) throw new Error('This bidder has no credited auction refunds.')
+	if (auction.refundAttoEth === 0n) throw new Error('This bidder has no credited auction refunds.')
 	return { account: snapshot.bidder, to: auction.address, value: 0n, data: encodeFunctionData({ abi, functionName: 'withdrawRefunds', args: [address(recipient, 'Refund recipient')] }) }
 }
 /** Call only after authenticating the vault owner and its original auction binding. */

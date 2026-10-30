@@ -27,35 +27,30 @@ const abi = parseAbi([
 	'function bidReservePerLotAttoEth(uint256 bidId) view returns (uint256)',
 	'function repGrid() view returns (uint256)',
 	'function openingConservativePrice() view returns (uint256)',
-	'function topUpPerLotAttoRep() view returns (uint256)',
+	'function minimumCollateralAttoRepPerLot() view returns (uint256)',
 	'function opened() view returns (bool)',
 	'function finalized() view returns (bool)',
 	'function initialized() view returns (bool)',
-	'function initialMaximumAttoRepPerLot() view returns (uint256)',
+	'function maximumBidAttoRepPerLot() view returns (uint256)',
 	'function depositedAttoEth() view returns (uint256)',
 	'function securityMultiplierBps() view returns (uint256)',
-	'function auctionReserveFactorBps() view returns (uint256)',
 	'function conservativePrice() view returns (uint256)',
-	'function liquidationPrice() view returns (uint256)',
 	'function priceValidUntil() view returns (uint256)',
 	'function lastSettlementTimestamp() view returns (uint256)',
 	'function acceptedExposureLimitAttoEth() view returns (uint256)',
 	'function acceptedRepExposureLimitAttoRep() view returns (uint256)',
-	'function refundCreditAttoRep(address bidder) view returns (uint256)',
 	'function refundCreditAttoEth(address bidder) view returns (uint256)',
 	'function bidderBidCount(address bidder) view returns (uint256)',
 	'function bidderBidId(address bidder,uint256 index) view returns (uint256)',
 	'function bids(uint256 id) view returns (address bidder,address vault,uint256 targetHealthBps,uint256 lots,uint256 minimumAttoRepPerLot,bool settled,bool feesRemoved)',
-	'function previewBid(uint256 id) view returns ((address bidder,address vault,uint256 targetHealthBps,uint256 filledLots,uint256 usedAttoEth,uint256 filledAttoRep,uint256 refundAttoEth) fill)',
+	'function previewBid(uint256 id) view returns ((address bidder,address vault,uint256 targetHealthBps,uint256 filledLots,uint256 usedAttoEth,uint256 principalAttoRep,uint256 refundAttoEth) fill)',
 	'function auctionPosition(uint256 bidId) view returns ((address vault,uint96 positionId,uint256 principal,uint256 commitment,uint256 targetHealthFactorBps,uint48 liquidationStarted,bool materialized,uint256 earnedAttoEth,uint256 earnedAttoRep) result)',
-	'function clearing() view returns (uint256 attoRepPerLot,uint256 filledLots,uint256 raisedAttoEth,uint256 soldAttoRep,uint256 marginalMinimumAttoRepPerLot,uint256 marginalFillLots,uint256 marginalDemandLots,uint256 fullBeforeLots,bool raiseLimitReached)',
+	'function clearing() view returns (uint256 attoRepPerLot,uint256 filledLots,uint256 raisedAttoEth,uint256 soldAttoRep,uint256 roundingAttoRep,uint256 marginalMinimumAttoRepPerLot,uint256 marginalFillLots,uint256 marginalDemandLots,uint256 fullBeforeLots,bool raiseLimitReached)',
 	'function bidIdForVault(address vault) view returns (uint256)',
 	'function owner() view returns (address)',
 	'function initialCapital() view returns (address)',
 	'function auction() view returns (address)',
 	'function bidId() view returns (uint256)',
-	'function balanceOf(address owner) view returns (uint256)',
-	'function allowance(address owner,address spender) view returns (uint256)',
 ])
 type AuctionReadClient = PortfolioReadClient & { getBalance(parameters: { address: Address; blockNumber: bigint }): Promise<bigint> }
 function address(value: unknown, label: string, allowZero = false): Address {
@@ -87,7 +82,7 @@ export type PortfolioAuctionBid = {
 	refundSettled: boolean
 	materialized: boolean
 	position: { positionId: bigint; principalAttoRep: bigint; commitmentAttoEth: bigint; targetHealthFactorBps: bigint; liquidationStarted: bigint; materialized: boolean; earnedAttoEth: bigint; earnedAttoRep: bigint } | undefined
-	fill: { filledLots: bigint; usedAttoEth: bigint; purchasedAttoRep: bigint; refundAttoEth: bigint; principalAttoRep: bigint; reserveAttoEth: bigint } | undefined
+	fill: { filledLots: bigint; usedAttoEth: bigint; refundAttoEth: bigint; principalAttoRep: bigint; reserveAttoEth: bigint } | undefined
 }
 
 /** One confirmed block, one explicit bidder page. No historical log or bidder scan. */
@@ -103,13 +98,12 @@ export async function loadPortfolioAuctionSnapshot(parameters: { client: Auction
 	if (block.number === undefined || block.hash === undefined || !Number.isSafeInteger(chainId) || chainId <= 0) throw new Error('Auction snapshot requires a confirmed block and chain.')
 	const blockNumber = block.number
 	const read = (target: Address, functionName: string, args: readonly AbiValue[] = []) => client.readContract({ address: target, abi, functionName, args, blockNumber })
-	const [controllerValue, protocolValue, factoryValue, capitalValue, feedValue, factorValue, walletEth] = await Promise.all([
+	const [controllerValue, protocolValue, factoryValue, capitalValue, feedValue, walletEth] = await Promise.all([
 		read(portfolio, 'forkController'),
 		read(portfolio, 'zoltar'),
 		read(portfolio, 'factory'),
 		read(portfolio, 'capitalLedger', [universeId]),
 		read(portfolio, 'priceFeed', [universeId]),
-		read(portfolio, 'auctionReserveFactorBps'),
 		client.getBalance({ address: bidder, blockNumber }),
 	])
 	const controller = address(controllerValue, 'Fork controller')
@@ -121,9 +115,7 @@ export async function loadPortfolioAuctionSnapshot(parameters: { client: Auction
 	if (address(authorityValue, 'Fork authority') !== portfolio || address(controllerProtocol, 'Fork protocol') !== zoltar) throw new Error('Auction fork controller belongs to another portfolio.')
 	const auctionAddress = address(auctionValue, 'Auction', true)
 	const repToken = address(tokenValue, 'Branch REP', true)
-	const auctionReserveFactorBps = uint(factorValue, 'Auction reserve factor')
-	if (auctionReserveFactorBps === 0n || auctionReserveFactorBps > 10_000n) throw new Error('Invalid auction reserve factor.')
-	const base = { chainId, blockNumber, blockHash: block.hash, timestamp: block.timestamp, portfolio, bidder, universeId, controller, zoltar, factory, capitalLedger, priceFeed, repToken, auctionReserveFactorBps, walletAttoEth: uint(walletEth, 'Wallet ETH'), forkTime: uint(forkTimeValue, 'Fork time') }
+	const base = { chainId, blockNumber, blockHash: block.hash, timestamp: block.timestamp, portfolio, bidder, universeId, controller, zoltar, factory, capitalLedger, priceFeed, repToken, walletAttoEth: uint(walletEth, 'Wallet ETH'), forkTime: uint(forkTimeValue, 'Fork time') }
 	let auction: Awaited<ReturnType<typeof readAuction>> | undefined
 	if (auctionAddress !== zeroAddress) {
 		if (capitalLedger === zeroAddress || repToken === zeroAddress) throw new Error('Auction capital or REP is unavailable.')
@@ -134,7 +126,7 @@ export async function loadPortfolioAuctionSnapshot(parameters: { client: Auction
 	return { ...base, auction }
 
 	async function readAuction(auctionAddress: Address) {
-		const [fork, root, capital, engineValue, token, child, closes, inventory, shortfall, lot, target, reserve, grid, openingPrice, topUp, openedValue, finalizedValue, multiplier, capitalRoot, capitalProtocol, capitalChild, capitalToken, capitalFork] = await Promise.all([
+		const [fork, root, capital, engineValue, token, child, closes, inventory, shortfall, lot, target, reserve, grid, openingPrice, minimumCollateral, openedValue, finalizedValue, multiplier, capitalRoot, capitalProtocol, capitalChild, capitalToken, capitalFork] = await Promise.all([
 			read(auctionAddress, 'forkAuthority'),
 			read(auctionAddress, 'portfolio'),
 			read(auctionAddress, 'capital'),
@@ -149,7 +141,7 @@ export async function loadPortfolioAuctionSnapshot(parameters: { client: Auction
 			read(auctionAddress, 'minimumExecutionReservePerLot'),
 			read(auctionAddress, 'repGrid'),
 			read(auctionAddress, 'openingConservativePrice'),
-			read(auctionAddress, 'topUpPerLotAttoRep'),
+			read(auctionAddress, 'minimumCollateralAttoRepPerLot'),
 			read(auctionAddress, 'opened'),
 			read(auctionAddress, 'finalized'),
 			read(capitalLedger, 'securityMultiplierBps'),
@@ -175,18 +167,15 @@ export async function loadPortfolioAuctionSnapshot(parameters: { client: Auction
 		const engine = address(engineValue, 'Auction engine')
 		const opened = bool(openedValue)
 		const finalized = bool(finalizedValue)
-		const [engineController, initialized, engineFinalized, maximum, deposited, count, repCredit, reserveCredit, bidCredit, walletRep, allowance] = await Promise.all([
+		const [engineController, initialized, engineFinalized, maximum, deposited, count, reserveCredit, bidCredit] = await Promise.all([
 			read(engine, 'controller'),
 			read(engine, 'initialized'),
 			read(engine, 'finalized'),
-			read(engine, 'initialMaximumAttoRepPerLot'),
+			read(engine, 'maximumBidAttoRepPerLot'),
 			read(engine, 'depositedAttoEth'),
 			read(engine, 'bidderBidCount', [bidder]),
-			read(auctionAddress, 'refundCreditAttoRep', [bidder]),
 			read(auctionAddress, 'refundCreditAttoEth', [bidder]),
 			read(engine, 'refundCreditAttoEth', [bidder]),
-			read(repToken, 'balanceOf', [bidder]),
-			read(repToken, 'allowance', [bidder, auctionAddress]),
 		])
 		if (address(engineController, 'Engine controller') !== auctionAddress || bool(initialized) !== opened || bool(engineFinalized) !== (opened && finalized)) throw new Error('Auction engine identity or state is inconsistent.')
 		const terms = {
@@ -202,26 +191,22 @@ export async function loadPortfolioAuctionSnapshot(parameters: { client: Auction
 			minimumExecutionReservePerLotAttoEth: uint(reserve, 'Minimum execution reserve per lot'),
 			repGrid: uint(grid, 'REP grid'),
 			openingConservativePrice: uint(openingPrice, 'Opening price'),
-			topUpPerLotAttoRep: uint(topUp, 'REP top-up per lot'),
+			minimumCollateralAttoRepPerLot: uint(minimumCollateral, 'Minimum collateral per lot'),
 			securityMultiplierBps: uint(multiplier, 'Security multiplier'),
-			maximumAttoRepPerLot: uint(maximum, 'REP price limit'),
+			maximumBidAttoRepPerLot: uint(maximum, 'Maximum bid REP per lot'),
 			depositedAttoEth: uint(deposited, 'Bid escrow'),
-			walletAttoRep: uint(walletRep, 'Wallet REP'),
-			allowanceAttoRep: uint(allowance, 'REP allowance'),
-			refundAttoRep: uint(repCredit, 'REP refund'),
 			refundAttoEth: uint(reserveCredit, 'Reserve refund') + uint(bidCredit, 'Bid refund'),
 		}
 		if (terms.lotAttoEth === 0n || terms.repGrid === 0n || terms.minimumExecutionReservePerLotAttoEth === 0n || terms.targetLots !== terms.shortfallAttoEth / terms.lotAttoEth) throw new Error('Invalid auction lot configuration.')
-		let price: { conservativePrice: bigint; liquidationPrice: bigint; validUntil: bigint; lastSettlementTimestamp: bigint; exposureLimitAttoEth: bigint; exposureLimitAttoRep: bigint; requiredExposureAttoEth: bigint } | undefined
+		let price: { conservativePrice: bigint; validUntil: bigint; lastSettlementTimestamp: bigint; exposureLimitAttoEth: bigint; exposureLimitAttoRep: bigint; requiredExposureAttoEth: bigint } | undefined
 		if (priceFeed !== zeroAddress) {
-			const [values, exposureValue] = await Promise.all([Promise.all(['conservativePrice', 'liquidationPrice', 'priceValidUntil', 'lastSettlementTimestamp', 'acceptedExposureLimitAttoEth', 'acceptedRepExposureLimitAttoRep'].map(name => read(priceFeed, name))), read(portfolio, 'oracleExposure', [universeId])])
+			const [values, exposureValue] = await Promise.all([Promise.all(['conservativePrice', 'priceValidUntil', 'lastSettlementTimestamp', 'acceptedExposureLimitAttoEth', 'acceptedRepExposureLimitAttoRep'].map(name => read(priceFeed, name))), read(portfolio, 'oracleExposure', [universeId])])
 			price = {
 				conservativePrice: uint(values[0], 'Conservative price'),
-				liquidationPrice: uint(values[1], 'Liquidation price'),
-				validUntil: uint(values[2], 'Price validity'),
-				lastSettlementTimestamp: uint(values[3], 'Price settlement'),
-				exposureLimitAttoEth: uint(values[4], 'Funded ETH exposure'),
-				exposureLimitAttoRep: uint(values[5], 'Funded REP exposure'),
+				validUntil: uint(values[1], 'Price validity'),
+				lastSettlementTimestamp: uint(values[2], 'Price settlement'),
+				exposureLimitAttoEth: uint(values[3], 'Funded ETH exposure'),
+				exposureLimitAttoRep: uint(values[4], 'Funded REP exposure'),
 				requiredExposureAttoEth: uint(exposureValue, 'Required report exposure'),
 			}
 		}
@@ -230,10 +215,10 @@ export async function loadPortfolioAuctionSnapshot(parameters: { client: Auction
 		const remaining = totalBidCount - start
 		const size = Number(remaining < BigInt(pageSize) ? remaining : BigInt(pageSize))
 		const bids = await Promise.all(Array.from({ length: size }, (_, offset) => readBid(uint(start + BigInt(offset), 'Bid index'))))
-		let clearing: { attoRepPerLot: bigint; filledLots: bigint; raisedAttoEth: bigint; soldAttoRep: bigint; raiseLimitReached: boolean } | undefined
+		let clearing: { attoRepPerLot: bigint; filledLots: bigint; raisedAttoEth: bigint; soldAttoRep: bigint; roundingAttoRep: bigint; raiseLimitReached: boolean } | undefined
 		if (opened && finalized) {
-			const result = fields(await read(engine, 'clearing'), ['attoRepPerLot', 'filledLots', 'raisedAttoEth', 'soldAttoRep', 'marginalMinimumAttoRepPerLot', 'marginalFillLots', 'marginalDemandLots', 'fullBeforeLots', 'raiseLimitReached'])
-			clearing = { attoRepPerLot: uint(result[0], 'Clearing REP per lot'), filledLots: uint(result[1], 'Filled lots'), raisedAttoEth: uint(result[2], 'Raised ETH'), soldAttoRep: uint(result[3], 'Sold REP'), raiseLimitReached: bool(result[8]) }
+			const result = fields(await read(engine, 'clearing'), ['attoRepPerLot', 'filledLots', 'raisedAttoEth', 'soldAttoRep', 'roundingAttoRep', 'marginalMinimumAttoRepPerLot', 'marginalFillLots', 'marginalDemandLots', 'fullBeforeLots', 'raiseLimitReached'])
+			clearing = { attoRepPerLot: uint(result[0], 'Clearing REP per lot'), filledLots: uint(result[1], 'Filled lots'), raisedAttoEth: uint(result[2], 'Raised ETH'), soldAttoRep: uint(result[3], 'Sold REP'), roundingAttoRep: uint(result[4], 'REP rounding fees'), raiseLimitReached: bool(result[9]) }
 		}
 		return { ...terms, price, clearing, totalBidCount, bidStart: start, bids }
 
@@ -266,11 +251,10 @@ export async function loadPortfolioAuctionSnapshot(parameters: { client: Auction
 			let fill: PortfolioAuctionBid['fill']
 			let position: PortfolioAuctionBid['position']
 			if (finalized) {
-				const result = fields(await read(engine, 'previewBid', [id]), ['bidder', 'vault', 'targetHealthBps', 'filledLots', 'usedAttoEth', 'filledAttoRep', 'refundAttoEth'])
+				const result = fields(await read(engine, 'previewBid', [id]), ['bidder', 'vault', 'targetHealthBps', 'filledLots', 'usedAttoEth', 'principalAttoRep', 'refundAttoEth'])
 				if (address(result[0], 'Fill bidder') !== bidder || address(result[1], 'Fill vault') !== vault || uint(result[2], 'Fill health') !== bid.targetHealthFactorBps) throw new Error('Auction fill identity mismatch.')
 				const filledLots = uint(result[3], 'Filled bid lots')
-				const purchasedAttoRep = uint(result[5], 'Purchased REP')
-				fill = { filledLots, usedAttoEth: uint(result[4], 'Used ETH'), purchasedAttoRep, refundAttoEth: uint(result[6], 'Unused bid ETH'), principalAttoRep: purchasedAttoRep + filledLots * terms.topUpPerLotAttoRep, reserveAttoEth: filledLots * bid.executionReservePerLotAttoEth }
+				fill = { filledLots, usedAttoEth: uint(result[4], 'Used ETH'), refundAttoEth: uint(result[6], 'Unused bid ETH'), principalAttoRep: uint(result[5], 'Purchased collateral REP'), reserveAttoEth: filledLots * bid.executionReservePerLotAttoEth }
 				if (filledLots > bid.lots || fill.usedAttoEth !== filledLots * terms.lotAttoEth || fill.refundAttoEth !== (bid.lots - filledLots) * terms.lotAttoEth) throw new Error('Invalid auction fill accounting.')
 				if (filledLots !== 0n) {
 					const current = fields(await read(capitalLedger, 'auctionPosition', [id]), ['vault', 'positionId', 'principal', 'commitment', 'targetHealthFactorBps', 'liquidationStarted', 'materialized', 'earnedAttoEth', 'earnedAttoRep'])

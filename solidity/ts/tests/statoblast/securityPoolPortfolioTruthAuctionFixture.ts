@@ -46,12 +46,10 @@ export async function preparePortfolioTruthAuction(fixture: ReturnType<typeof us
 	await addRepToMigrationBalance(owner, source, 200n * unit)
 	await splitMigrationRep(owner, source, 200n * unit, [1])
 	const token = getRepTokenAddress(child)
-	await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'transfer', args: [other.account.address, 100n * unit] }))
 	const weth = await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'weth' })
 	await wrapWeth(owner, 100n * unit)
 	await approveToken(owner, weth, feed)
 	await approveToken(owner, token, feed)
-	for (const bidder of [owner, other]) await approveToken(bidder, token, auction)
 	const deadline = forkTime + 63n * DAY
 	const report = async (price = unit, budget = 10n * unit) => {
 		const bounty = await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'getRequestPriceCostAttoEth' })
@@ -62,7 +60,7 @@ export async function preparePortfolioTruthAuction(fixture: ReturnType<typeof us
 		if ((await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'reportOutcome', args: [id] })) !== 1n) throw new Error('Truth auction price report was not accepted')
 	}
 	const open = () => writeContractAndWait(owner, () => owner.writeContract({ abi: auctionArtifact.abi, address: auction, functionName: 'open' }))
-	const bid = async (bidder: WriteClient, lots: bigint, price = (15n * unit) / 10n, health = 12_000n) => {
+	const bid = async (bidder: WriteClient, lots: bigint, price = 6n * unit, health = 12_000n) => {
 		const reserve = await bidder.readContract({ abi: auctionArtifact.abi, address: auction, functionName: 'minimumExecutionReservePerLot' })
 		const id = (await bidder.readContract({ abi: engineArtifact.abi, address: engine, functionName: 'bidCount' })) + 1n
 		await writeContractAndWait(bidder, () => bidder.writeContract({ abi: auctionArtifact.abi, address: auction, functionName: 'submitBid', args: [lots, price, health, reserve], value: lots * (unit + reserve) }))

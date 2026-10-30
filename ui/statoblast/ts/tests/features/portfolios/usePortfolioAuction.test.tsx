@@ -14,7 +14,6 @@ import { auctionFixture, auctionAddress, auctionVault } from './auctionFixture.j
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
 const abi = parseAbi([
 	'function open()',
-	'function approve(address spender,uint256 amount) returns (bool)',
 	'function submitBid(uint256 lots,uint256 minimumAttoRepPerLot,uint256 targetHealthFactorBps,uint256 executionReservePerLotAttoEth) payable returns (uint256,address)',
 	'function materializeAuctionBid(uint256 bidId) returns (address,uint96)',
 	'function settleRefund(uint256 bidId)',
@@ -48,31 +47,27 @@ function last(requests: PortfolioTransaction[]) {
 async function terms(state: Awaited<ReturnType<typeof setup>>) {
 	await act(() => {
 		state.hook.state().setLots('2')
-		state.hook.state().setRep('1')
+		state.hook.state().setRep('5')
 	})
 }
 
-test('auction REP approval and funding are independent with exact reviewed budgets', async () => {
+test('auction bidding funds only ETH without REP approval and preserves the reviewed execution budget', async () => {
 	const state = await setup()
+	state.setAllowances(0n, 0n)
 	await terms(state)
-	expect(state.hook.state().quote).toMatchObject({ bidAttoEth: 2n * unit, topUpAttoRep: 8n * unit, executionReserveAttoEth: unit / 50n, totalAttoEth: (202n * unit) / 100n })
-	expect(state.hook.state().bidReason).toContain('Approve')
-	await act(() => state.hook.state().approve(9n * unit))
-	expect(state.requests).toHaveLength(1)
-	expect(decodeFunctionData({ abi, data: last(state.requests).data })).toEqual({ functionName: 'approve', args: [auctionAddress, 9n * unit] })
-	expect(last(state.requests).reviewDescription).toContain('9 branch REP')
-	await last(state.requests).validateBeforeSubmit?.()
-	state.setAllowances(0n, 9n * unit)
-	await act(() => state.hook.state().refresh())
-	await waitFor(() => expect(state.hook.state().bidReason).toBeUndefined())
+	expect(state.hook.state().quote).toMatchObject({ bidAttoEth: 2n * unit, minimumPrincipalAttoRep: 10n * unit, executionReserveAttoEth: unit / 50n, totalAttoEth: (202n * unit) / 100n })
+	expect(state.hook.state().quote).not.toHaveProperty('topUpAttoRep')
+	expect(state.hook.state()).not.toHaveProperty('approve')
+	expect(state.hook.state().bidReason).toBeUndefined()
 	await act(() => state.hook.state().bid())
-	expect(state.requests).toHaveLength(2)
+	expect(state.requests).toHaveLength(1)
 	expect(last(state.requests)).toMatchObject({ account: owner, to: auctionAddress, value: (202n * unit) / 100n })
-	expect(decodeFunctionData({ abi, data: last(state.requests).data })).toEqual({ functionName: 'submitBid', args: [2n, unit, 12_000n, unit / 100n] })
+	expect(decodeFunctionData({ abi, data: last(state.requests).data })).toEqual({ functionName: 'submitBid', args: [2n, 5n * unit, 12_000n, unit / 100n] })
+	expect(last(state.requests).reviewDescription).toContain('Purchased REP backs')
 	await last(state.requests).validateBeforeSubmit?.()
 	state.values['minimumExecutionReservePerLot'] = unit / 50n
 	await expect(last(state.requests).validateBeforeSubmit?.()).rejects.toThrow('Review the updated')
-	expect(state.requests).toHaveLength(2)
+	expect(state.requests).toHaveLength(1)
 })
 
 test('chosen health, integer lots, price grid and explicit execution reserve are checked before sending', async () => {
@@ -93,7 +88,7 @@ test('chosen health, integer lots, price grid and explicit execution reserve are
 	})
 	expect(state.hook.state().bidReason).toContain('price-grid')
 	await act(() => {
-		state.hook.state().setRep('1')
+		state.hook.state().setRep('5')
 		state.hook.state().setReserve('0')
 	})
 	expect(state.hook.state().bidReason).toContain('below the current minimum')
@@ -104,10 +99,10 @@ test('auction drafts survive transient fork reloads but reset when the bidder ch
 	const state = await setup()
 	await terms(state)
 	await state.hook.setProps({ fork: undefined })
-	expect(state.hook.state()).toMatchObject({ lotsInput: '2', repInput: '1' })
+	expect(state.hook.state()).toMatchObject({ lotsInput: '2', repInput: '5' })
 	await state.hook.setProps({ fork: state.fork })
 	await waitFor(() => expect(state.hook.state().loading).toBe(false))
-	expect(state.hook.state()).toMatchObject({ lotsInput: '2', repInput: '1' })
+	expect(state.hook.state()).toMatchObject({ lotsInput: '2', repInput: '5' })
 	await state.hook.setProps({ bidder: token })
 	expect(state.hook.state()).toMatchObject({ lotsInput: '', repInput: '' })
 })
@@ -118,22 +113,22 @@ test('automatic winners expose live principal and fees before activating individ
 	})
 	const bid = state.hook.state().snapshot?.auction?.bids[0]
 	if (bid === undefined) throw new Error('Missing auction bid')
-	expect(bid.position).toMatchObject({ principalAttoRep: 6n * unit, commitmentAttoEth: unit, earnedAttoEth: 7n * unit, earnedAttoRep: 9n * unit, materialized: false })
+	expect(bid.position).toMatchObject({ principalAttoRep: 100n * unit, commitmentAttoEth: unit, earnedAttoEth: 7n * unit, earnedAttoRep: 9n * unit, materialized: false })
 	expect(state.hook.state().activateReason(bid)).toBeUndefined()
 	await act(() => state.hook.state().activate(bid))
 	expect(state.requests).toHaveLength(1)
 	expect(last(state.requests)).toMatchObject({ account: owner, to: capital, value: 0n })
 	expect(decodeFunctionData({ abi, data: last(state.requests).data })).toEqual({ functionName: 'materializeAuctionBid', args: [1n] })
 	await last(state.requests).validateBeforeSubmit?.()
-	state.values['bids'] = [owner, auctionVault, 12_000n, 2n, unit, false, true]
-	state.values['auctionPosition'] = [auctionVault, 8n, 6n * unit, unit, 12_000n, 0n, true, 7n * unit, 9n * unit]
+	state.values['bids'] = [owner, auctionVault, 12_000n, 2n, 60n * unit, false, true]
+	state.values['auctionPosition'] = [auctionVault, 8n, 100n * unit, unit, 12_000n, 0n, true, 7n * unit, 9n * unit]
 	await expect(last(state.requests).validateBeforeSubmit?.()).rejects.toThrow()
 })
 
 test('reviewed auction actions reject a context change during their fresh read', async () => {
 	const state = await setup()
 	await terms(state)
-	await act(() => state.hook.state().approve(9n * unit))
+	await act(() => state.hook.state().bid())
 	const pending = createDeferred<bigint>()
 	state.values['minimumExecutionReservePerLot'] = pending.promise
 	const validation = last(state.requests).validateBeforeSubmit?.()

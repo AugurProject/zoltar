@@ -39,15 +39,17 @@ test('auction funding controls and bid rows stay in place through reload and fai
 	await act(() => {
 		for (const [name, value] of [
 			['Number of lots', '2'],
-			['Minimum REP purchased per lot', '1'],
+			['Minimum REP purchased per lot', '5'],
 		] as const) {
 			const input = field(view.container, name)
 			input.value = value
 			input.dispatchEvent(new Event('input', { bubbles: true }))
 		}
 	})
-	await waitFor(() => expect(view.container.textContent).toContain('Approve the auction'))
-	expect(button(view.container, 'Submit funded bid').disabled).toBe(true)
+	await waitFor(() => expect(button(view.container, 'Submit funded bid').disabled).toBe(false))
+	expect(view.container.textContent).not.toContain('Approve REP')
+	expect(view.container.textContent).not.toContain('REP top-up')
+	expect(view.container.textContent).not.toContain('Credited REP refund')
 	const pending = createDeferred<bigint>()
 	fixture.values['minimumExecutionReservePerLot'] = pending.promise
 	await act(() => button(view.container, 'Refresh auction').click())
@@ -70,15 +72,15 @@ test('funded unclaimed winners show live fees and separate activation from manag
 	const view = await renderIntoDocument(<PortfolioAuction fork={fixture.fork} bidder={owner} actions={actions} openVault={vault => opened.push(vault)} />)
 	lifecycle.trackRendered(view)
 	await waitFor(() => expect(view.container.textContent).toContain('Funded vault'))
-	expect(metric(view.container, 'Current vault REP principal')).toContain('6.00')
-	expect(metric(view.container, 'Clearing REP per winning lot')).toContain('2.00')
-	expect(metric(view.container, 'REP purchased at closing')).toContain('2.00')
+	expect(metric(view.container, 'Current vault REP principal')).toContain('100.00')
+	expect(metric(view.container, 'Clearing REP per winning lot')).toContain('100.00')
+	expect(metric(view.container, 'REP pledged at closing')).toContain('100.00')
 	expect(metric(view.container, 'Unclaimed ETH fees')).toContain('7.00')
 	expect(metric(view.container, 'Unclaimed REP fees')).toContain('9.00')
 	expect(button(view.container, 'Activate vault controls').disabled).toBe(false)
 	expect(button(view.container, 'Manage vault').disabled).toBe(true)
-	fixture.values['bids'] = [owner, auctionVault, 12_000n, 2n, unit, false, true]
-	fixture.values['auctionPosition'] = [auctionVault, 8n, 6n * unit, unit, 12_000n, 0n, true, 7n * unit, 9n * unit]
+	fixture.values['bids'] = [owner, auctionVault, 12_000n, 2n, 60n * unit, false, true]
+	fixture.values['auctionPosition'] = [auctionVault, 8n, 100n * unit, unit, 12_000n, 0n, true, 7n * unit, 9n * unit]
 	await act(() => button(view.container, 'Refresh auction').click())
 	await waitFor(() => expect(button(view.container, 'Manage vault').disabled).toBe(false))
 	expect(button(view.container, 'Activate vault controls').disabled).toBe(true)

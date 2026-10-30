@@ -174,12 +174,8 @@ test('creation rejects invalid economics without changing the owner health targe
 	})
 	expect(hook.state().creationError).toContain('positive')
 	expect(hook.state().economicsDraft).not.toHaveProperty('targetHealthPercent')
-	expect(hook.state().economicsDraft.auctionReservePercent).toBe('50')
+	expect(hook.state().economicsDraft).not.toHaveProperty('auctionReservePercent')
 	await act(() => hook.state().setEconomicsField('minimumCommitment', '1'))
-	expect(hook.state().creationError).toBeUndefined()
-	await act(() => hook.state().setEconomicsField('auctionReservePercent', '0'))
-	expect(hook.state().creationError).toContain('Auction reserve')
-	await act(() => hook.state().setEconomicsField('auctionReservePercent', '50'))
 	expect(hook.state().creationError).toBeUndefined()
 })
 

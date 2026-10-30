@@ -55,7 +55,6 @@ function fixture(overrides: Record<string, unknown> = {}) {
 		reportingFeeAttoEth: 1n,
 		serviceFeeBps: 2_500n,
 		maximumOracleRewardAttoEth: 10n,
-		auctionReserveFactorBps: 5_000n,
 		priceFeed: portfolio,
 		acceptedExposureLimitAttoEth: 100n,
 		acceptedPrice: 2n,
@@ -164,7 +163,6 @@ describe('personal portfolio capital SDK', () => {
 			withdrawableAttoRep: 17n,
 			accruedFeesAttoEth: 14n,
 			accruedFeesAttoRep: 17n,
-			economics: { auctionReserveFactorBps: 5_000n },
 		})
 		expect(snapshot.positions.map(position => position.id)).toEqual([1n])
 		expect(snapshot.positions[0]).toMatchObject({ releasedRep: 60n, commitment: 20n, executionReserveAttoEth: 7n })

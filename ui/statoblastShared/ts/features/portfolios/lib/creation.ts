@@ -13,7 +13,6 @@ export type PortfolioCreationDraft = {
 	reportingFee: string
 	serviceFeePercent: string
 	maximumOracleReward: string
-	auctionReservePercent: string
 }
 
 export const defaultPortfolioCreationDraft = (): PortfolioCreationDraft => ({
@@ -27,7 +26,6 @@ export const defaultPortfolioCreationDraft = (): PortfolioCreationDraft => ({
 	reportingFee: '0.05',
 	serviceFeePercent: '25',
 	maximumOracleReward: '0.1',
-	auctionReservePercent: '50',
 })
 
 function portfolioBasisPoints(value: string, label: string) {
@@ -55,7 +53,6 @@ export function parsePortfolioCreationEconomics(draft: PortfolioCreationDraft) {
 		reportingFeeAttoEth: parsePortfolioAmount(draft.reportingFee),
 		serviceFeeBps: portfolioBasisPoints(draft.serviceFeePercent, 'Oracle maintenance share'),
 		maximumOracleRewardAttoEth: parsePortfolioAmount(draft.maximumOracleReward),
-		auctionReserveFactorBps: portfolioBasisPoints(draft.auctionReservePercent, 'Auction reserve'),
 	}
 	validatePortfolioEconomics(config)
 	return config

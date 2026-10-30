@@ -35,12 +35,7 @@ test('completed setup preserves the four transaction controls in their original 
 	expect(setup.textContent?.match(/This setup stage is complete\./g)).toHaveLength(4)
 	expect(view.container.textContent?.split(copy.prepareProgress(4))).toHaveLength(2)
 	expect(view.container.textContent?.split(copy.description)).toHaveLength(2)
-	const reserveLabel = [...view.container.querySelectorAll('label')].find(label => label.textContent?.includes(copy.auctionReserve))
-	if (reserveLabel === undefined) throw new Error('Auction reserve input missing')
-	const reserveInput = [...view.container.querySelectorAll('input')].find(input => input.id === reserveLabel.htmlFor)
-	if (reserveInput === undefined) throw new Error('Auction reserve control missing')
-	expect(reserveInput.value).toBe('50')
-	expect(view.container.textContent).toContain(copy.auctionReserveHint)
+	expect(view.container.textContent).not.toContain('Auction reserve')
 	expect(view.container.textContent).toContain(copy.minimumCommitmentHint)
 })
 

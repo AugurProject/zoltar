@@ -7,7 +7,6 @@ import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
-import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
 import { PortfolioButton, PortfolioInput } from './PortfolioControls.js'
 import { usePortfolioAuction, type PortfolioAuctionParameters } from '../hooks/usePortfolioAuction.js'
@@ -47,8 +46,8 @@ export function PortfolioAuction(parameters: PortfolioAuctionParameters) {
 				<MetricField label={copy.lotPrice} loading={model.loading}>
 					<CurrencyValue value={auction?.lotAttoEth} suffix={common.eth} />
 				</MetricField>
-				<MetricField label={copy.maximumRep} loading={model.loading}>
-					<CurrencyValue value={auction?.opened ? auction.maximumAttoRepPerLot : undefined} suffix={common.rep} />
+				<MetricField label={copy.minimumCollateral} loading={model.loading}>
+					<CurrencyValue value={auction?.opened ? auction.minimumCollateralAttoRepPerLot : undefined} suffix={common.rep} />
 				</MetricField>
 				<MetricField label={copy.clearingRep} loading={model.loading}>
 					<CurrencyValue value={auction?.clearing?.attoRepPerLot} suffix={common.rep} />
@@ -67,9 +66,6 @@ export function PortfolioAuction(parameters: PortfolioAuctionParameters) {
 				<MetricField label={copy.bidEth}>
 					<CurrencyValue value={model.quote?.bidAttoEth} suffix={common.eth} />
 				</MetricField>
-				<MetricField label={copy.topUp}>
-					<CurrencyValue value={model.quote?.topUpAttoRep} suffix={common.rep} />
-				</MetricField>
 				<MetricField label={copy.keeperEth}>
 					<CurrencyValue value={model.quote?.executionReserveAttoEth} suffix={common.eth} />
 				</MetricField>
@@ -80,23 +76,6 @@ export function PortfolioAuction(parameters: PortfolioAuctionParameters) {
 					<CurrencyValue value={model.quote?.minimumPrincipalAttoRep} suffix={common.rep} />
 				</MetricField>
 			</MetricGrid>
-			<TokenApprovalControl
-				actionLabel={copy.bid}
-				allowanceError={model.fundingReadError}
-				allowanceLoading={model.loading}
-				approvedAmount={auction?.allowanceAttoRep}
-				disabled={disabled}
-				guardMessage={model.fundingReason}
-				onApprove={amount => {
-					if (amount !== undefined) void model.approve(amount)
-				}}
-				pending={parameters.actions.busy === 'approvePortfolioAuction'}
-				pendingLabel={copy.approving}
-				requiredAmount={model.quote?.topUpAttoRep}
-				resetKey={`${auction?.address}:${snapshot?.bidder}:${model.lotsInput}:${model.repInput}:${model.healthInput}`}
-				tokenSymbol={common.rep}
-				tokenUnits={18}
-			/>
 			<UserMessage tone='warning' detail={copy.ownership} />
 			<UserMessage detail={copy.fairness} />
 			<PortfolioButton model={parameters.actions} action='bidPortfolioAuction' label={copy.bid} pendingLabel={copy.bidding} reason={model.bidReason} onClick={model.bid} />
@@ -129,8 +108,8 @@ export function PortfolioAuction(parameters: PortfolioAuctionParameters) {
 							<MetricField label={copy.earnedRep}>
 								<CurrencyValue value={bid.position?.earnedAttoRep} suffix={common.rep} />
 							</MetricField>
-							<MetricField label={copy.purchasedRep}>
-								<CurrencyValue value={bid.fill?.purchasedAttoRep} suffix={common.rep} />
+							<MetricField label={copy.purchasedPrincipal}>
+								<CurrencyValue value={bid.fill?.principalAttoRep} suffix={common.rep} />
 							</MetricField>
 							<MetricField label={copy.charged}>
 								<CurrencyValue value={bid.fill?.usedAttoEth} suffix={common.eth} />
@@ -167,9 +146,6 @@ export function PortfolioAuction(parameters: PortfolioAuctionParameters) {
 			<MetricGrid>
 				<MetricField label={copy.refundEth}>
 					<CurrencyValue value={auction?.refundAttoEth} suffix={common.eth} />
-				</MetricField>
-				<MetricField label={copy.refundRep}>
-					<CurrencyValue value={auction?.refundAttoRep} suffix={common.rep} />
 				</MetricField>
 			</MetricGrid>
 			<div className='actions'>

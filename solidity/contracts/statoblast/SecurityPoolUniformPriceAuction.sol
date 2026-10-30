@@ -5,7 +5,8 @@ import { Constants } from '../Constants.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
 /// @notice A branch auction of exact ETH lots. Lower REP-per-lot limits bid a
-/// higher price; every winning lot receives exactly the same clearing REP.
+/// higher price; every winning lot pledges exactly the same clearing REP.
+/// Weak demand buys all inventory; grid residue belongs to winners as REP fees.
 /// Its AVL tree freezes at closing and also owns unmaterialized winners' fees.
 /// Bidding, clearing and detaching one winner use logarithmic paths, never scans.
 contract SecurityPoolUniformPriceAuction {
@@ -24,6 +25,7 @@ contract SecurityPoolUniformPriceAuction {
 		uint256 filledLots;
 		uint256 raisedAttoEth;
 		uint256 soldAttoRep;
+		uint256 roundingAttoRep;
 		uint256 marginalMinimumAttoRepPerLot;
 		uint256 marginalFillLots;
 		uint256 marginalDemandLots;
@@ -37,7 +39,7 @@ contract SecurityPoolUniformPriceAuction {
 		uint256 targetHealthBps;
 		uint256 filledLots;
 		uint256 usedAttoEth;
-		uint256 filledAttoRep;
+		uint256 principalAttoRep;
 		uint256 refundAttoEth;
 	}
 
@@ -60,7 +62,7 @@ contract SecurityPoolUniformPriceAuction {
 	uint256 public lotAttoEth;
 	uint256 public targetLots;
 	uint256 public inventoryAttoRep;
-	uint256 public initialMaximumAttoRepPerLot;
+	uint256 public maximumBidAttoRepPerLot;
 	uint256 public repGrid;
 	uint256 public depositedAttoEth;
 	uint256 public bidCount;
@@ -93,25 +95,24 @@ contract SecurityPoolUniformPriceAuction {
 		_;
 	}
 
-	function startAuction(uint256 opensAt_, uint256 closesAt_, uint256 lotAttoEth_, uint256 targetLots_, uint256 inventoryAttoRep_, uint256 maximumAttoRepPerLot_, uint256 repGrid_, address feeAllocator_) external onlyController {
+	function startAuction(uint256 opensAt_, uint256 closesAt_, uint256 lotAttoEth_, uint256 targetLots_, uint256 inventoryAttoRep_, uint256 repGrid_, address feeAllocator_) external onlyController {
 		require(!initialized, 'Auction has already started');
 		require(closesAt_ > opensAt_, 'Auction closing time must follow opening time');
 		require(lotAttoEth_ > 0 && targetLots_ > 0 && targetLots_ <= type(uint128).max / lotAttoEth_, 'Auction ETH target is outside the supported range');
 		require(inventoryAttoRep_ > 0 && inventoryAttoRep_ <= Constants.MAX_ATTO_REP, 'Auction REP inventory is outside the supported range');
 		require(repGrid_ > 0 && feeAllocator_ != address(0), 'Auction grid and fee allocator are required');
-		uint256 reserve = Math.min(maximumAttoRepPerLot_, inventoryAttoRep_ / targetLots_);
-		reserve -= reserve % repGrid_;
-		require(reserve > 0, 'Auction reserve cannot fund one REP grid unit per lot');
+		uint256 maximum = inventoryAttoRep_ - (inventoryAttoRep_ % repGrid_);
+		require(maximum > 0, 'Auction inventory cannot fund one REP grid unit');
 		initialized = true;
 		opensAt = opensAt_;
 		closesAt = closesAt_;
 		lotAttoEth = lotAttoEth_;
 		targetLots = targetLots_;
 		inventoryAttoRep = inventoryAttoRep_;
-		initialMaximumAttoRepPerLot = reserve;
+		maximumBidAttoRepPerLot = maximum;
 		repGrid = repGrid_;
 		feeAllocator = feeAllocator_;
-		emit AuctionStarted(opensAt_, closesAt_, lotAttoEth_, targetLots_, inventoryAttoRep_, reserve);
+		emit AuctionStarted(opensAt_, closesAt_, lotAttoEth_, targetLots_, inventoryAttoRep_, maximum);
 	}
 
 	function submitBid(address bidder, address vault, uint256 targetHealthBps, uint256 lots, uint256 minimumAttoRepPerLot) external payable onlyController returns (uint256 bidId) {
@@ -121,7 +122,7 @@ contract SecurityPoolUniformPriceAuction {
 		require(lots > 0 && lots <= type(uint128).max / lotAttoEth && msg.value == lots * lotAttoEth, 'Auction bid must fund exact whole ETH lots');
 		require(msg.value <= type(uint128).max - depositedAttoEth, 'Auction deposits exceed the supported range');
 		require(minimumAttoRepPerLot > 0 && minimumAttoRepPerLot % repGrid == 0, 'Auction bid must use the REP price grid');
-		require(minimumAttoRepPerLot <= initialMaximumAttoRepPerLot, 'Bid maximum price is below the auction minimum');
+		require(minimumAttoRepPerLot <= maximumBidAttoRepPerLot, 'Auction bid exceeds the REP inventory per lot');
 		require(bidCount < type(uint96).max, 'Auction bid identifiers exhausted');
 		depositedAttoEth += msg.value;
 		bidId = ++bidCount;
@@ -133,39 +134,38 @@ contract SecurityPoolUniformPriceAuction {
 		emit BidSubmitted(bidId, bidder, vault, lots, minimumAttoRepPerLot, targetHealthBps);
 	}
 
-	/// @notice A stronger reserve has fewer REP per lot. Zero capacity or a zero
-	/// reserve cancels safely. An earlier reserve is never weakened at closing.
-	function finalize(uint256 maximumAttoRepPerLot, uint256 maximumFilledLots) external onlyController returns (Clearing memory result) {
+	/// @notice Zero capacity cancels safely. Otherwise the winning prefix must
+	/// fit the inventory at every winner's minimum collateral amount per lot.
+	function finalize(uint256 maximumFilledLots) external onlyController returns (Clearing memory result) {
 		require(initialized && !finalized, 'Auction cannot be finalized');
 		require(block.timestamp >= closesAt, 'Auction bidding window has not closed');
-		result = previewFinalization(maximumAttoRepPerLot, maximumFilledLots);
+		result = previewFinalization(maximumFilledLots);
 		clearing = result;
 		remainingFeeLots = result.filledLots;
+		if (result.roundingAttoRep != 0) nodes[root].pendingAttoRep = _amount128(result.roundingAttoRep);
 		finalized = true;
 		emit AuctionFinalized(result.attoRepPerLot, result.filledLots, result.raisedAttoEth, result.soldAttoRep);
 	}
 
-	function previewFinalization(uint256 maximumAttoRepPerLot, uint256 maximumFilledLots) public view returns (Clearing memory result) {
+	function previewFinalization(uint256 maximumFilledLots) public view returns (Clearing memory result) {
 		require(initialized, 'Auction has not started');
 		if (finalized) return clearing;
 		require(maximumFilledLots <= targetLots, 'Auction raise limit exceeds its target');
-		result.attoRepPerLot = Math.min(initialMaximumAttoRepPerLot, maximumAttoRepPerLot);
+		if (maximumFilledLots == 0) return result;
+		result.filledLots = _fundedLots(maximumFilledLots);
+		if (result.filledLots == 0) return result;
+		uint256 marginal = bids[_lotAt(result.filledLots)].minimumAttoRepPerLot;
+		result.marginalMinimumAttoRepPerLot = marginal;
+		result.fullBeforeLots = _pricePrefix(marginal, false);
+		result.marginalDemandLots = _pricePrefix(marginal, true) - result.fullBeforeLots;
+		result.marginalFillLots = result.filledLots - result.fullBeforeLots;
+		result.raiseLimitReached = result.filledLots == maximumFilledLots;
+		result.attoRepPerLot = result.raiseLimitReached ? marginal : inventoryAttoRep / result.filledLots;
 		result.attoRepPerLot -= result.attoRepPerLot % repGrid;
-		if (maximumFilledLots == 0 || result.attoRepPerLot == 0) return result;
-		uint256 eligible = _pricePrefix(result.attoRepPerLot, true);
-		result.filledLots = Math.min(eligible, maximumFilledLots);
-		result.fullBeforeLots = result.filledLots;
-		if (eligible >= maximumFilledLots) {
-			uint256 marginal = _lotAt(maximumFilledLots);
-			result.attoRepPerLot = bids[marginal].minimumAttoRepPerLot;
-			result.marginalMinimumAttoRepPerLot = result.attoRepPerLot;
-			result.fullBeforeLots = _pricePrefix(result.attoRepPerLot, false);
-			result.marginalDemandLots = _pricePrefix(result.attoRepPerLot, true) - result.fullBeforeLots;
-			result.marginalFillLots = maximumFilledLots - result.fullBeforeLots;
-			result.raiseLimitReached = true;
-		}
 		result.raisedAttoEth = result.filledLots * lotAttoEth;
-		result.soldAttoRep = result.filledLots * result.attoRepPerLot;
+		uint256 principal = result.filledLots * result.attoRepPerLot;
+		result.soldAttoRep = result.raiseLimitReached ? principal : inventoryAttoRep;
+		result.roundingAttoRep = result.soldAttoRep - principal;
 	}
 
 	function previewBid(uint256 bidId) public view returns (Fill memory fill) {
@@ -178,7 +178,7 @@ contract SecurityPoolUniformPriceAuction {
 		fill.targetHealthBps = bid.targetHealthBps;
 		fill.filledLots = _acceptedPrefix(before + bid.lots) - _acceptedPrefix(before);
 		fill.usedAttoEth = fill.filledLots * lotAttoEth;
-		fill.filledAttoRep = fill.filledLots * clearing.attoRepPerLot;
+		fill.principalAttoRep = fill.filledLots * clearing.attoRepPerLot;
 		fill.refundAttoEth = (bid.lots - fill.filledLots) * lotAttoEth;
 	}
 
@@ -352,6 +352,23 @@ contract SecurityPoolUniformPriceAuction {
 				lots += nodes[node.left].subtreeLots + bids[id].lots;
 				id = node.right;
 			} else id = node.left;
+		}
+	}
+
+	/// @dev A later bid has a weakly larger minimum and can only lower affordable
+	/// capacity. Subtree lot sums locate the largest feasible prefix in one path.
+	function _fundedLots(uint256 maximumFilledLots) private view returns (uint256 lots) {
+		uint256 id = root;
+		while (id != 0) {
+			Node storage node = nodes[id];
+			uint256 before = lots + nodes[node.left].subtreeLots;
+			uint256 capacity = Math.min(maximumFilledLots, inventoryAttoRep / bids[id].minimumAttoRepPerLot);
+			if (capacity < before) id = node.left;
+			else if (capacity <= before + bids[id].lots) return capacity;
+			else {
+				lots = before + bids[id].lots;
+				id = node.right;
+			}
 		}
 	}
 

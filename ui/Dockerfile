@@ -45,9 +45,8 @@ RUN bun ./tooling/repo/build-shared.mts zoltar
 # Solidity contracts and TypeScript source
 COPY ./solidity/tsconfig.json /source/solidity/tsconfig.json
 COPY ./solidity/tsconfig-compile.json /source/solidity/tsconfig-compile.json
-COPY ./solidity/contracts/*.sol /source/solidity/contracts/
-COPY ./solidity/contracts/vendor/ /source/solidity/contracts/vendor/
-COPY ./solidity/contracts/statoblast/WETH9.sol ./solidity/contracts/statoblast/Multicall3.sol /source/solidity/contracts/statoblast/
+# Keep the compiler source set identical to canonical deployment builds.
+COPY ./solidity/contracts/ /source/solidity/contracts/
 COPY ./solidity/ts/compile.ts ./solidity/ts/contractProjects.ts /source/solidity/ts/
 COPY ./solidity/ts/abi/ /source/solidity/ts/abi/
 RUN mkdir -p /source/ui/coreShared/ts && bun ./tooling/contracts/build-app-contracts.mts zoltar
@@ -98,7 +97,6 @@ COPY ./shared/openOracle/tsconfig.json /source/shared/openOracle/
 COPY ./shared/statoblast/tsconfig.json /source/shared/statoblast/
 COPY ./shared/openOracle/ts/ /source/shared/openOracle/ts/
 COPY ./shared/statoblast/ts/ /source/shared/statoblast/ts/
-COPY ./solidity/contracts/statoblast/ /source/solidity/contracts/statoblast/
 RUN bun ./tooling/repo/build-shared.mts statoblast && bun ./tooling/contracts/build-app-contracts.mts statoblast
 COPY ./ui/statoblastShared/tsconfig.json /source/ui/statoblastShared/tsconfig.json
 COPY ./ui/statoblastShared/css/ /source/ui/statoblastShared/css/
@@ -154,7 +152,6 @@ CMD [ "bun", "/app/tooling/ui/dockerServe.mts" ]
 FROM statoblast-dependencies AS trading-builder
 COPY ./shared/trading/tsconfig.json /source/shared/trading/
 COPY ./shared/trading/ts/ /source/shared/trading/ts/
-COPY ./solidity/contracts/trading/ /source/solidity/contracts/trading/
 RUN bun ./tooling/repo/build-shared.mts trading && bun ./tooling/contracts/build-app-contracts.mts trading
 
 COPY ./ui/trading/tsconfig.json /source/ui/trading/tsconfig.json

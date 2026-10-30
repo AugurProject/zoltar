@@ -192,9 +192,9 @@
 					</li>
 					<li id="assumption-a12" value="12">
 						<h3><span class="assumption-id">A12</span> Truth Auctions can convert supported child REP efficiently</h3>
-						<p>When repair is needed, enough <a href="./glossary.html#truth-auction">Truth Auction</a> demand can buy some supported <a href="./glossary.html#child-rep">child REP</a> for ETH at an acceptably small discount and operating cost. This does not assume that the full repair target is raised.</p>
-						<p class="assumption-failure"><strong>Failure boundary:</strong> Weak or strategically withheld demand leaves the child operational with impaired collateral.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/truth-auctions.html#lifecycle">auction lifecycle</a>, <a href="../explanation/truth-auctions.html#clearing">clearing</a>, and <a href="../explanation/statoblast.html#forks-migration">repair accounting</a>.</p>
+						<p>When repair is needed, competitive <a href="./glossary.html#truth-auction">Truth Auction</a> entry can convert supported <a href="./glossary.html#child-rep">child REP</a> into ETH at an acceptably small discount and operating cost. This is a participation assumption, not a contract guarantee of revenue or full repair.</p>
+						<p class="assumption-failure"><strong>Failure boundary:</strong> Weak or strategically withheld demand leaves the child operational with impaired collateral. A shared portfolio auction can sell all fresh inventory for one funded lot. Ordinary surplus withdrawal and retirement remain available to winners, so selling the inventory does not guarantee permanent backing.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/truth-auctions.html#portfolio-auctions">shared portfolio auctions</a>, <a href="../explanation/truth-auctions.html#clearing">standalone clearing</a>, and <a href="../explanation/statoblast.html#forks-migration">repair accounting</a>.</p>
 					</li>
 					<li id="assumption-a13" value="13">
 						<h3><span class="assumption-id">A13</span> REP is sufficiently liquid</h3>

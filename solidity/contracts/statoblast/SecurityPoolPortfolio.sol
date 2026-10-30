@@ -65,7 +65,6 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		uint256 reportingFeeAttoEth;
 		uint256 serviceFeeBps;
 		uint256 maximumOracleRewardAttoEth;
-		uint256 auctionReserveFactorBps;
 	}
 	struct Deployers {
 		SecurityPoolCapitalLedgerDeployer capital;
@@ -96,7 +95,6 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	uint256 public immutable reportingFeeAttoEth;
 	uint256 public immutable serviceFeeBps;
 	uint256 public immutable maximumOracleRewardAttoEth;
-	uint256 public immutable auctionReserveFactorBps;
 	IPortfolioAuctionDeployer public immutable auctionDeployer;
 	SecurityPoolPortfolioPurchase public immutable quoteHelper;
 	SecurityPoolPortfolioServices public immutable services;
@@ -123,7 +121,6 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		require(address(admission).code.length != 0, 'Admission policy has no code');
 		require(config.purchaseFeeBps <= 10_000 && config.annualFeeBps <= 10_000 && config.minimumCommitmentAttoEth > 0 && config.minimumExecutionReserveAttoEth > 0, 'Invalid portfolio economics');
 		require(config.serviceFeeBps <= 10_000, 'Invalid maintenance fee share');
-		require(config.auctionReserveFactorBps > 0 && config.auctionReserveFactorBps <= 10_000, 'Invalid auction reserve factor');
 		require(address(deployment.auctions).code.length != 0, 'Auction deployer has no code');
 		require(config.minimumOutcomeRate > 0 && config.minimumOutcomeRate <= 1e18, 'Invalid minimum exchange rate');
 		require(address(deployment.capital).code.length != 0 && address(deployment.commitments).code.length != 0 && address(deployment.fees).code.length != 0 && address(deployment.books).code.length != 0 && address(deployment.settlement).code.length != 0 && address(deployment.reporters).code.length != 0 && address(deployment.forks).code.length != 0 && address(deployment.services).code.length != 0, 'Portfolio deployer has no code');
@@ -149,7 +146,6 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		reportingFeeAttoEth = config.reportingFeeAttoEth;
 		serviceFeeBps = config.serviceFeeBps;
 		maximumOracleRewardAttoEth = config.maximumOracleRewardAttoEth;
-		auctionReserveFactorBps = config.auctionReserveFactorBps;
 		auctionDeployer = deployment.auctions;
 		deployers = deployment;
 		quoteHelper = new SecurityPoolPortfolioPurchase(address(this));
