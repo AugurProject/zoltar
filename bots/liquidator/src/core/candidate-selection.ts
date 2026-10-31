@@ -22,11 +22,11 @@ export function marketConfigurations(settings: OperatorSettings) {
 	return [settings.centralizedMarkets, ...settings.childMarketConfigurations]
 }
 
-function marketConfigurationForPool(pool: PoolObservation, settings: OperatorSettings) {
+function marketConfigurationForPool(pool: Pick<PoolObservation, 'repToken' | 'lastPrice'>, settings: OperatorSettings) {
 	return marketConfigurations(settings).find(configuration => configuration.assetAddress.toLowerCase() === pool.repToken.toLowerCase())
 }
 
-export function marketPriceAllowsExecution(pool: PoolObservation, settings: OperatorSettings, state: ReturnType<typeof initialRuntimeState>) {
+export function marketPriceAllowsExecution(pool: Pick<PoolObservation, 'repToken' | 'lastPrice'>, settings: OperatorSettings, state: ReturnType<typeof initialRuntimeState>) {
 	const configuration = marketConfigurationForPool(pool, settings)
 	if (configuration === undefined || !centralizedMarketConfigurationAllowsExecution(configuration)) return false
 	const centralizedMarket = state.centralizedMarketsByAsset.get(pool.repToken.toLowerCase())
@@ -46,7 +46,7 @@ export function marketPriceAllowsExecution(pool: PoolObservation, settings: Oper
 }
 
 export async function canonicalMarketPriceAllowsExecution(
-	pool: PoolObservation,
+	pool: Pick<PoolObservation, 'repToken' | 'lastPrice'>,
 	settings: OperatorSettings,
 	state: ReturnType<typeof initialRuntimeState>,
 	readCanonicalHash: (blockNumber: bigint) => Promise<`0x${string}` | undefined>,

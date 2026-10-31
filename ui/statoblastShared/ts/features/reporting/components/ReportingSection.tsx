@@ -509,6 +509,7 @@ export function ReportingSection({
 								}
 							/>
 							{activeReportingDetails?.forkContinuation && usesWalletFunding ? <ReportingWalletVaultHelp remainingAmount={walletFundingQuote?.remainingVaultRepAttoRep} depositAmount={walletDepositAmount} reportAmount={actualReportDepositAmount} /> : undefined}
+							<UserMessage className='detail' detail={reportingCopy.portfolioReportingRewardHint} />
 							<div className='reporting-shared-action-region'>
 								<WalletActionFixReason actionButtonRef={reportActionButtonRef} availability={reportActionAvailability} id={settlementDisabledReasonId} visible={shouldRenderSharedReportSettlementDisabledReason}>
 									<UserMessage className='detail' id={settlementDisabledReasonId} loading={loadingReportingDetails} detail={sharedReportSettlementDisabledReason} />

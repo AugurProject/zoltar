@@ -267,3 +267,11 @@ describe('live settlement contract encoding', () => {
 		expect(counts.sends).toBe(0)
 	})
 })
+
+test('REP-only complete-set redemption accepts zero ETH and retains the received-asset quote', async () => {
+	const unit = 10n ** 18n
+	const basket = { ...market, shareTokenSupplyAttoShares: 10n * unit, settlementCollateralAttoEth: 0n, settlementRecoveryAttoRep: 30n * unit, currentRetentionRate: unit, feeEligibleUnderwritingLimitAttoEth: 0n }
+	const fixture = recordingSettlementClient(basket)
+	const quote = await simulateSettlement(fixture.client, configuration, basket, account, 'redeem-complete-set', { amount: 2n * unit })
+	expect(quote).toMatchObject({ expectedAttoEth: 0n, expectedAttoRep: 6n * unit, minimumAttoEth: 0n })
+})

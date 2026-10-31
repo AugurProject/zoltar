@@ -68,11 +68,11 @@ describe('Audit: pre-escalation residual capture', () => {
 		strictEqualTypeSafe(await getQuestionOutcome(client, securityPoolAddresses.securityPool), QuestionOutcome.Yes, 'the dispute should resolve YES normally')
 
 		await withdrawFirstDepositOfEachOutcome(attacker, securityPoolAddresses.securityPool)
-		strictEqualTypeSafe(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), escalationGame), lowLosingPrincipal, 'the low losing side should remain as terminal residual')
+		strictEqualTypeSafe(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), escalationGame), 0n, 'the low side was already paid to backing owners when the deposit arrived')
 
 		const poolRepBeforeSweep = await getTotalPoolHeldAttoRep(client, securityPoolAddresses.securityPool)
-		await sweepResidualRep(attacker, escalationGame)
-		strictEqualTypeSafe((await getTotalPoolHeldAttoRep(client, securityPoolAddresses.securityPool)) - poolRepBeforeSweep, lowLosingPrincipal, 'the entire residual should enter the passive backing pool')
+		await assert.rejects(sweepResidualRep(attacker, escalationGame), /No sweepable REP/)
+		strictEqualTypeSafe((await getTotalPoolHeldAttoRep(client, securityPoolAddresses.securityPool)) - poolRepBeforeSweep, 0n, 'finalization must not recreate an already-accrued pool gain')
 
 		const honestPayout = await redeemOwnVaultPayout(client, securityPoolAddresses.securityPool, addressString(GENESIS_REPUTATION_TOKEN))
 		const attackerNetProfit = (await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), attacker.account.address)) - attackerWalletBefore

@@ -34,6 +34,8 @@ async function loadPool(client: ReadClient, settings: OperatorSettings, deployme
 	const blockNumber = block.number
 	const address = getAddress(deployment.securityPool)
 	const manager = getAddress(deployment.openOraclePriceCoordinator)
+	const portfolio = getAddress(await client.readContract({ abi: securityPoolFactoryAbi, address: settings.deployment.securityPoolFactory, functionName: 'getSecurityPoolPortfolio', args: [address], blockNumber }))
+	if (portfolio !== zeroAddress) throw new Error(`Pool ${address} uses portfolio ${portfolio}; select its portfolio and universe in selectedPortfolios instead of selectedPools`)
 	const [
 		knownVaultCount,
 		currentRetentionRate,
@@ -94,9 +96,15 @@ async function loadPool(client: ReadClient, settings: OperatorSettings, deployme
 	])
 	const stagedOperations: StagedOperationObservation[] = []
 	const stagedTargetVaults = new Map(vaults.map(vault => [vault.address.toLowerCase(), vault]))
+	let operationCursor = 0n
 	for (let start = 0n; start < stagedOperationCount; start += 100n) {
 		const pageCount = stagedOperationCount - start < 100n ? stagedOperationCount - start : 100n
-		const [ids, operations] = await client.readContract({ abi: openOraclePriceCoordinatorAbi, address: manager, args: [start, pageCount], blockNumber, functionName: 'getActiveStagedOperations' })
+		const [ids, operations, nextCursor] = await client.readContract({ abi: openOraclePriceCoordinatorAbi, address: manager, args: [operationCursor, pageCount], blockNumber, functionName: 'getActiveStagedOperationsPage' })
+		if (ids.length !== Number(pageCount) || operations.length !== ids.length) throw new Error('Coordinator returned an incomplete staged operation page')
+		if (operationCursor !== 0n && ids[0] !== operationCursor) throw new Error('Coordinator omitted the requested operation cursor')
+		for (const [index, id] of ids.entries()) if (id === 0n || (index > 0 && id >= (ids[index - 1] ?? 0n))) throw new Error('Coordinator returned an unordered operation page')
+		if ((nextCursor === 0n) !== (start + pageCount === stagedOperationCount) || nextCursor >= (ids.at(-1) ?? 0n)) throw new Error('Coordinator returned an inconsistent staged operation cursor')
+		operationCursor = nextCursor
 		for (const [index, operation] of operations.entries()) {
 			const id = ids[index]
 			if (id === undefined) throw new Error('Coordinator returned mismatched staged operation arrays')
@@ -270,8 +278,8 @@ async function loadRelevantPoolDeployments(client: ReadClient, settings: Operato
 	})
 }
 
-export async function scanPools(client: ReadClient, settings: OperatorSettings, wallet: Address | undefined, monitorIndex: PoolMonitorIndex = createPoolMonitorIndex(), isStopping: () => boolean = () => false) {
-	const block = await client.getBlock()
+export async function scanPools(client: ReadClient, settings: OperatorSettings, wallet: Address | undefined, monitorIndex: PoolMonitorIndex = createPoolMonitorIndex(), isStopping: () => boolean = () => false, blockNumber?: bigint) {
+	const block = await client.getBlock(blockNumber === undefined ? undefined : { blockNumber })
 	if (isStopping()) throw new Error('Operator stopping during pool scan')
 	if (block.hash === undefined || block.number === undefined) throw new Error('Security pool scan block is missing canonical identity')
 	const snapshotBlock = { hash: block.hash, number: block.number, timestamp: block.timestamp }

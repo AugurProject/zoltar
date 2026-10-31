@@ -12,6 +12,9 @@ test('derives canonical addresses without configuration placeholders', () => {
 		const root = manifest.deploymentSteps.find(step => step.id === 'zoltar')
 		if (root === undefined) throw new Error('Missing canonical Zoltar deployment')
 		expect(settings.deployment.zoltar).toBe(getAddress(root.address))
+		const multicall = manifest.deploymentSteps.find(step => step.id === 'multicall3')
+		if (multicall === undefined) throw new Error('Missing canonical Multicall3 deployment')
+		expect(settings.deployment.multicall3).toBe(getAddress(multicall.address))
 		expect(settings.deployment.weth).toBe(getAddress(manifest.network.wethAddress))
 		for (const address of Object.values(settings.deployment)) expect(address).not.toBe(zeroAddress)
 	}
@@ -28,6 +31,7 @@ test('ignores obsolete address overrides and omits them from saved configuration
 
 test('rejects a changed address or chain in a pinned deployment', () => {
 	const stored = serializedSettings(parseSettings(example))
+	expect(() => parseSettings({ ...stored, deploymentPin: { ...stored.deploymentPin, multicall3: getAddress('0x0000000000000000000000000000000000000001') } })).toThrow('deploymentPin does not match')
 	expect(() => parseSettings({ ...stored, deploymentPin: { ...stored.deploymentPin, zoltar: getAddress('0x0000000000000000000000000000000000000001') } })).toThrow('deploymentPin does not match')
 	expect(() => parseSettings({ ...stored, deploymentPin: { ...stored.deploymentPin, uniswapV3Factory: getAddress('0x0000000000000000000000000000000000000001') } })).toThrow('deploymentPin factory does not match')
 	expect(() => parseSettings({ ...stored, network: { ...stored.network, chainId: 1, name: 'mainnet' } })).toThrow('deploymentPin does not match')

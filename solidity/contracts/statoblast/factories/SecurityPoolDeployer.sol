@@ -18,9 +18,9 @@ contract SecurityPoolDeployer {
 	SecurityPoolDeploymentWorker immutable worker;
 	SecurityPoolEventEmitter immutable eventEmitter;
 
-	constructor(address operationsDelegate) {
+	constructor(address operationsDelegate, SecurityPoolEventEmitter accountingDelegate) {
 		factory = ISecurityPoolFactory(msg.sender);
-		eventEmitter = new SecurityPoolEventEmitter();
+		eventEmitter = accountingDelegate;
 		worker = new SecurityPoolDeploymentWorker(factory, eventEmitter, operationsDelegate);
 	}
 

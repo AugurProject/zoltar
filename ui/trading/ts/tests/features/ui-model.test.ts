@@ -421,7 +421,7 @@ describe('standalone trading UI model', () => {
 			expect(settlementUnavailableReason('redeem-complete-set', market, balances)).toBe('The question resolved. Redeem your winning shares instead.')
 			expect(marketSettlementPath({ ...market, systemState: 1 })).toBe('unavailable')
 			expect(settlementAvailability({ ...market, systemState: 1 }, balances).canMigrateShares).toBe(false)
-			expect(settlementUnavailableReason('redeem-winning-shares', { ...market, systemState: 1 }, balances)).toBe('The security pool is not operational, so it cannot pay out ETH.')
+			expect(settlementUnavailableReason('redeem-winning-shares', { ...market, systemState: 1 }, balances)).toBe('The security pool is not operational, so it cannot redeem shares.')
 		})
 
 	test('allows many ready fork children while requiring missing children to be created singly', () => {
@@ -476,7 +476,7 @@ describe('standalone trading UI model', () => {
 		expect(settlementUnavailableReason('redeem-complete-set', open, empty)).toBe('You hold no complete sets. Redeeming needs equal Yes, No, and Invalid shares.')
 		expect(settlementUnavailableReason('redeem-complete-set', open, undefined)).toBe('You hold no complete sets. Redeeming needs equal Yes, No, and Invalid shares.')
 		expect(settlementUnavailableReason('redeem-complete-set', { ...open, universeForkTime: 1n }, holdings)).toBe('The universe forked; migrate your shares instead.')
-		expect(settlementUnavailableReason('redeem-complete-set', { ...open, systemState: 1 }, holdings)).toBe('The security pool is not operational, so it cannot pay out ETH.')
+		expect(settlementUnavailableReason('redeem-complete-set', { ...open, systemState: 1 }, holdings)).toBe('The security pool is not operational, so it cannot redeem shares.')
 		expect(settlementUnavailableReason('redeem-winning-shares', open, holdings)).toBe('The question has not resolved yet.')
 		expect(settlementUnavailableReason('redeem-winning-shares', { ...open, questionOutcome: 2 }, { ...holdings, no: 0n })).toBe('You hold no No shares to redeem.')
 		expect(settlementUnavailableReason('redeem-winning-shares', { ...open, questionOutcome: 2 }, { ...holdings, no: 1n })).toBeUndefined()

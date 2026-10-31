@@ -1,3 +1,4 @@
+import { childPreparationCount, childPreparationSteps, childLedgerNeedsPreparation } from './child-preparation.ts'
 import { EcosystemSnapshot, OperationDefinition, OperationEvidence, PlanningOptions, PoolSnapshot } from '../types.ts'
 
 import { amount, choose, eligible, encodeStep, eventEvidence, mixSeed, planBase } from '../planning.ts'
@@ -75,7 +76,9 @@ function claimForkedEscalationCandidates(snapshot: EcosystemSnapshot, options?: 
 		const deposits = snapshot.escalationDeposits.filter(deposit => !deposit.claimed && deposit.pool.toLowerCase() === pool.address.toLowerCase() && deposit.vault.toLowerCase() === snapshot.wallet.address.toLowerCase()).sort((left, right) => compareDecimalStrings(left.depositIndex, right.depositIndex))
 		return [...new Set(deposits.map(deposit => deposit.outcome))].flatMap(outcome => lifecycleBatches(deposits.filter(deposit => deposit.outcome === outcome)).map(batch => ({ deadline, deposits: batch, outcome, pool })))
 	})
-	return enforceTopologyCapacity && options !== undefined ? candidates.filter(candidate => childRouteTopologyCapacityBlocker(snapshot, candidate.pool, candidate.outcome.toString(), options, 'Forked escalation claim child route') === undefined) : candidates
+	return enforceTopologyCapacity && options !== undefined
+		? candidates.filter(candidate => !childLedgerNeedsPreparation(candidate.pool, candidate.outcome.toString()) && childRouteTopologyCapacityBlocker(snapshot, candidate.pool, candidate.outcome.toString(), options, 'Forked escalation claim child route') === undefined)
+		: candidates
 }
 
 function claimForkedDepositIndexes(candidate: ReturnType<typeof claimForkedEscalationCandidates>[number]) {
@@ -160,7 +163,7 @@ function unresolvedMigrationCandidates(snapshot: EcosystemSnapshot, options: Pla
 }
 
 function actionableUnresolvedMigrationCandidates(snapshot: EcosystemSnapshot, options: PlanningOptions) {
-	return unresolvedMigrationCandidates(snapshot, options).filter(candidate => walletVaultMigrationRouteCapacityBlocker(snapshot, candidate.pool, candidate.outcome, options, 'Unresolved vault migration child route') === undefined)
+	return unresolvedMigrationCandidates(snapshot, options).filter(candidate => !childLedgerNeedsPreparation(candidate.pool, candidate.outcome) && walletVaultMigrationRouteCapacityBlocker(snapshot, candidate.pool, candidate.outcome, options, 'Unresolved vault migration child route') === undefined)
 }
 
 function unresolvedMigrationPresenceCandidates(snapshot: EcosystemSnapshot) {
@@ -283,7 +286,9 @@ export function forkDefinition(kind: 'initiate' | 'migrate-rep' | 'create-child'
 		const now = amount(snapshot.anchor.timestamp)
 		return vaultMigrationPresenceCandidates(snapshot).flatMap(candidate => {
 			if (!timestampDeadlineHasRequiredSafety(now, candidate.deadline, options)) return []
-			const routes = forkOutcomesForPool(snapshot, candidate.pool).filter(outcome => isOpenChildRoute(snapshot, candidate.pool, outcome) && (!enforceCapacity || walletVaultMigrationRouteCapacityBlocker(snapshot, candidate.pool, outcome, options, 'Vault migration child route') === undefined))
+			const routes = forkOutcomesForPool(snapshot, candidate.pool).filter(
+				outcome => !childLedgerNeedsPreparation(candidate.pool, outcome) && isOpenChildRoute(snapshot, candidate.pool, outcome) && (!enforceCapacity || walletVaultMigrationRouteCapacityBlocker(snapshot, candidate.pool, outcome, options, 'Vault migration child route') === undefined),
+			)
 			return routes.length === 0 ? [] : [{ ...candidate, routes }]
 		})
 	}
@@ -324,8 +329,19 @@ export function forkDefinition(kind: 'initiate' | 'migrate-rep' | 'create-child'
 					: []
 			}
 			if (kind === 'create-child' && forkOutcomes.length === 0) return []
+			if (kind === 'create-child' && Object.values(pool.childPoolPreparations).some(preparation => preparation.portfolio !== zeroAddress)) {
+				if (pool.systemState !== 1 || universe?.forkTime === '0') return []
+				return forkOutcomes
+					.filter(outcome => {
+						const preparation = pool.childPoolPreparations[outcome]
+						return preparation?.branchReady && preparation.childPool === zeroAddress
+					})
+					.flatMap(outcome => (!enforceCapacity || childRouteTopologyCapacityBlocker(snapshot, pool, outcome, options, 'Child pool creation route') === undefined ? [{ deadline: undefined, outcome, pool }] : []))
+			}
 			if (pool.systemState !== 1 || amount(pool.forkActivationTime) === 0n || !timestampDeadlineHasRequiredSafety(now, deadline, options)) return []
-			return missingChildOutcomes.flatMap(outcome => (!enforceCapacity || childRouteTopologyCapacityBlocker(snapshot, pool, outcome, options, 'Child pool creation route') === undefined ? [{ deadline, outcome, pool }] : []))
+			return missingChildOutcomes
+				.filter(outcome => timestampDeadlineHasRequiredSafety(now, deadline, options, childPreparationCount(pool, outcome)))
+				.flatMap(outcome => (!enforceCapacity || childRouteTopologyCapacityBlocker(snapshot, pool, outcome, options, 'Child pool creation route') === undefined ? [{ deadline, outcome, pool }] : []))
 		})
 	}
 	const candidateMetadata = (candidate: ForkCandidate): Record<string, string | number | boolean> => {
@@ -335,12 +351,18 @@ export function forkDefinition(kind: 'initiate' | 'migrate-rep' | 'create-child'
 	}
 	const build = (snapshot: EcosystemSnapshot, candidate: ForkCandidate) => {
 		const outcome = candidate.outcome
+		const preparation = candidate.pool.childPoolPreparations[outcome]
+		const boundPreparation = kind === 'create-child' && preparation !== undefined && preparation.portfolio !== zeroAddress
 		let args: readonly AbiValue[] = [candidate.pool.address]
 		if (kind === 'migrate-rep') args = [candidate.pool.address, [BigInt(outcome)]]
 		else if (kind === 'create-child' || kind === 'migrate-vault') args = [candidate.pool.address, BigInt(outcome)]
+		if (boundPreparation) args = [preparation.sourcePool, BigInt(preparation.childUniverseId)]
 		let evidence: OperationEvidence[]
 		if (kind === 'initiate') evidence = [eventEvidence(candidate.pool.address, 'PoolForkModeActivated(uint256,uint256,uint8)')]
-		else if (kind === 'create-child') evidence = [eventEvidence(snapshot.deployments.securityPoolForker, 'ChildPoolLinked(address,uint256,address,address)')]
+		else if (kind === 'create-child')
+			evidence = boundPreparation
+				? [{ kind: 'storage-postcondition', contract: preparation.portfolio, abi: 'function getPool(uint256,uint248) view returns (address)', functionName: 'getPool', args: [candidate.pool.questionId, preparation.childUniverseId], relation: 'greater-than', expected: '0' }]
+				: [eventEvidence(snapshot.deployments.securityPoolForker, 'ChildPoolLinked(address,uint256,address,address)')]
 		else if (kind === 'migrate-vault') {
 			const child = childPoolForOutcome(snapshot, candidate.pool, outcome)
 			evidence = [decodedVaultMigrationEvidence(snapshot, candidate.pool, 'outcomeIndex', outcome, child), decodedVaultMigrationEvidence(snapshot, candidate.pool, 'resultingParentRepBackingUnits', '0', child)]
@@ -359,11 +381,13 @@ export function forkDefinition(kind: 'initiate' | 'migrate-rep' | 'create-child'
 			risk: 'irreversible',
 			snapshot,
 			steps: [
+				...(kind === 'create-child' ? childPreparationSteps(snapshot, candidate.pool, outcome) : []),
 				encodeStep({
 					abi: securityPoolForkerAbi,
 					args,
 					evidence,
-					functionName: method,
+					functionName: boundPreparation ? 'preparePortfolioQuestion' : method,
+					...(kind === 'create-child' ? { gasLimit: 16_777_216n } : {}),
 					id: kind === 'migrate-rep' || kind === 'migrate-vault' ? `${method}-${candidate.pool.address.toLowerCase()}-${outcome}` : method,
 					label: kind === 'migrate-vault' ? `migrate-vault through outcome ${outcome}` : kind,
 					to: snapshot.deployments.securityPoolForker,

@@ -10,6 +10,8 @@ const MAX_SAFE_MULTIPLIER = 200n
 export type CoordinatorGamePolicy = {
 	callbackGasLimit: bigint
 	coordinator: Address
+	/** Shared feeds authenticate independently created escrows for exact report IDs. */
+	reportEscrows?: Readonly<Record<string, Address>>
 	disputeDelay: bigint
 	feePercentage: bigint
 	flags: bigint
@@ -36,11 +38,15 @@ export function coordinatorPolicySafetyMismatch(policy: CoordinatorGamePolicy) {
 }
 
 export function gamePolicyMismatch(report: OpenOracleStatePreimage, policies: readonly CoordinatorGamePolicy[], expectedOpenOracle: Address) {
-	const policy = policies.find(candidate => sameAddress(candidate.coordinator, report.helper.creator))
+	const creator = (candidate: CoordinatorGamePolicy) => (candidate.reportEscrows === undefined ? candidate.coordinator : candidate.reportEscrows[report.helper.reportId.toString()])
+	const policy = policies.find(candidate => {
+		const expected = creator(candidate)
+		return expected !== undefined && sameAddress(expected, report.helper.creator)
+	})
 	if (policy === undefined) return 'Report creator is not an approved coordinator'
 	if (!sameAddress(policy.openOracle, expectedOpenOracle)) return 'Coordinator is bound to a different OpenOracle'
 	const game = report.game
-	if (!sameAddress(game.callbackContract, policy.coordinator)) return 'Settlement callback is not the report coordinator'
+	if (!sameAddress(game.callbackContract, report.helper.creator)) return 'Settlement callback is not the report coordinator'
 	if (!sameAddress(game.token1, policy.token1) || !sameAddress(game.token2, policy.token2)) return 'Token pair differs from the approved coordinator template'
 	if (!sameAddress(game.protocolFeeRecipient, policy.protocolFeeRecipient)) return 'Protocol fee recipient differs from the approved coordinator template'
 	const mismatch =

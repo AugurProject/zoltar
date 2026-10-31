@@ -67,6 +67,7 @@ describe('shared bot primitives', () => {
 				'createWalletClient',
 				'decodeEventLog',
 				'decodeFunctionData',
+				'decodeFunctionResult',
 				'defineChain',
 				'encodeAbiParameters',
 				'encodeDeployData',

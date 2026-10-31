@@ -11,6 +11,7 @@ export const reportingWorkflow = 'Reporting workflow'
 export const reportOutcome = 'Report outcome'
 export const reportOutcomeSelectionRequired = 'Select an outcome side before reporting on a question.'
 export const reportingActivationHint = 'Select an outcome side above to enable reporting.'
+export const portfolioReportingRewardHint = 'For portfolio pools, check the shared REP price before taking the lead: a stale price can leave the ETH reporting reward at zero. The funded budget is an upper limit, not a promised payout.'
 export const settlementSelectionRequired = 'Select at least one deposit or use the claim or clear action for this side.'
 export const triggerZoltarFork = 'Trigger universe fork'
 export const selectedSideBelowMinimumReason = 'Remaining selected-side capacity is below the minimum report.'
@@ -105,12 +106,7 @@ export const clearLosingDepositsDetail = 'Losing deposits return no REP. Clearin
 export const clearLosingDepositsReviewDescription = 'Returns no REP. Removes these losing deposits from your vault’s dispute-staked REP so you can redeem your vault REP from this pool.'
 export const results = 'Results'
 
-function formatPriceWindow(seconds: bigint) {
-	if (seconds % 3600n === 0n) return seconds === 3600n ? '1 hour' : `${seconds / 3600n} hours`
-	const minutes = seconds / 60n
-	return minutes === 1n ? '1 minute' : `${minutes} minutes`
-}
-export const priceExpired = (windowSeconds: bigint) => `Pool price expired. Reports need a price newer than ${formatPriceWindow(windowSeconds)}.`
+export const priceExpired = 'Pool price expired. Request a new price to continue.'
 export const priceRequested = (countdown: string) => `Price requested. Ready to settle in ${countdown}.`
 export const priceReportReady = (id: bigint) => `Price report #${id} is ready.`
 export const settlingPriceReport = (id: bigint) => `Settling report #${id}…`

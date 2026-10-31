@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import type { UiAppId } from '../ui/appPaths.mts'
+import type { DevToolsSession } from '../ui/browserSmoke.mts'
 import { UI_SCREENSHOT_APPS, UI_SCREENSHOTS, type UiScreenshotApp, type UiScreenshotSpec } from './ui-screenshot-specs.mts'
 
 export const SCREENSHOT_DIRECTORY = 'docs/assets/screenshots'
@@ -24,6 +25,11 @@ const isIgnoredSourcePath = (filePath: string) => filePath.split('/').some(segme
 export const isScreenshotSourcePath = (appId: UiAppId, filePath: string) => !isIgnoredSourcePath(filePath) && screenshotApp(appId).sourceRoots.some(root => filePath === root || filePath.startsWith(`${root}/`))
 
 export const screenshotAppIds = (specs: readonly UiScreenshotSpec[] = UI_SCREENSHOTS): UiAppId[] => [...new Set(specs.map(spec => spec.app))].sort()
+
+export async function clickScreenshotControl(session: Pick<DevToolsSession, 'waitFor'>, label: string, nth: number, context: string) {
+	// The page helper checks readiness and clicks synchronously, so a refresh cannot disable the control between them.
+	await session.waitFor(`window.__docsScreenshot.click(${JSON.stringify(label)}, ${nth.toString()}) === ''`, { attempts: 600, intervalMilliseconds: 100, message: `${context}: no enabled control labelled "${label}" appeared` })
+}
 
 /** Tracked source files only: generated artifacts differ between checkouts and must not affect the fingerprint. */
 function listTrackedSourceFiles(rootPath: string, appId: UiAppId) {
@@ -133,11 +139,28 @@ export function pickMatch<T>(matches: readonly T[], nth: number): T | undefined 
 	return matches.at(nth)
 }
 
+/** Changes only explicitly marked simulator examples, retaining their surrounding HTML and URL parts. */
+function withSimulationSecurityPoolAddress(page: string, html: string, address: string): string {
+	return html.replace(/(<code\b[^>]*>)([\s\S]*?)(<\/code>)/g, (tag, opening: string, content: string, closing: string) => {
+		const marker = attributeValue(opening, 'data-simulation-security-pool')
+		if (marker === undefined) return tag
+		let pattern: RegExp | undefined
+		if (marker === 'address') pattern = /^(\s*)0x[0-9a-fA-F]{40}(\s*)$/
+		if (marker === 'market-url') pattern = /^(\s*https?:\/\/[^#\s<>]+#\/market\/)0x[0-9a-fA-F]{40}((?:[/?&][^\s<>]*)?\s*)$/
+		const match = pattern?.exec(content)
+		const prefix = match?.[1]
+		const suffix = match?.[2]
+		if (prefix === undefined || suffix === undefined || (marker === 'market-url' && !URL.canParse(content.trim()))) throw new Error(`docs/${page} has malformed <code data-simulation-security-pool="${marker}"> content`)
+		return `${opening}${prefix}${address}${suffix}${closing}`
+	})
+}
+
 /**
- * Copies a screenshot's size into every page that embeds it. A screenshot may be captured before its page is written,
- * so a missing page is reported through `warn` and skipped; docs:check-screenshots reports the gap.
+ * Copies a screenshot's size and, when supplied by the running simulator, its SecurityPool address into embedding pages.
+ * A missing page is reported through `warn` and skipped; docs:check-screenshots reports the gap.
  */
-export async function updateEmbeddingPages(docsRoot: string, spec: Pick<UiScreenshotSpec, 'usedBy'>, outputPath: string, size: ImageSize, warn: (message: string) => void): Promise<void> {
+export async function updateEmbeddingPages(docsRoot: string, spec: Pick<UiScreenshotSpec, 'usedBy'>, outputPath: string, size: ImageSize, warn: (message: string) => void, simulationSecurityPoolAddress?: string): Promise<void> {
+	if (simulationSecurityPoolAddress !== undefined && !/^0x[0-9a-fA-F]{40}$/.test(simulationSecurityPoolAddress)) throw new Error('Invalid simulation SecurityPool address: expected 0x followed by 40 hexadecimal digits')
 	for (const page of spec.usedBy) {
 		const pagePath = path.join(docsRoot, page)
 		const html = await fs.readFile(pagePath, 'utf8').catch((error: unknown) => {
@@ -148,7 +171,8 @@ export async function updateEmbeddingPages(docsRoot: string, spec: Pick<UiScreen
 			warn(`docs/${page} does not exist yet; embed ${outputPath} there, then run 'bun run docs:screenshots -- --sync-sizes'.`)
 			continue
 		}
-		const updated = withScreenshotSize(page, html, outputPath, size)
+		const withAddress = simulationSecurityPoolAddress === undefined ? html : withSimulationSecurityPoolAddress(page, html, simulationSecurityPoolAddress)
+		const updated = withScreenshotSize(page, withAddress, outputPath, size)
 		if (updated !== html) await fs.writeFile(pagePath, updated)
 	}
 }

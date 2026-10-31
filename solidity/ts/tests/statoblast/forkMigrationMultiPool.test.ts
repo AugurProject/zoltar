@@ -26,7 +26,7 @@ import {
 } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { claimAuctionProceeds, claimForkedEscalationDeposits, createChildUniverse, finalizeTruthAuction, getMigratedAttoRep, getOwnForkRepBuckets, getQuestionOutcome, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault, startTruthAuction } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
 import { balanceOfShares, balanceOfSharesInAttoEth, getLastPrice, getQuestionEndDate, migrateShares, OperationType, participateAuction } from '../../testSupport/simulator/utils/contracts/statoblast'
-import { approveAndDepositRepToVault, manipulatePriceOracleAndPerformOperation, setVaultCapacityFixture, triggerOwnGameFork } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { approveAndDepositRepToVault, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, setVaultCapacityFixture, triggerOwnGameFork } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
@@ -58,7 +58,8 @@ describe('Statoblast: fork migration', () => {
 	describe('multi-pool and scalar share migration', () => {
 		test('two security pools with disagreement', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
-			const openInterestAmount = 10n * 10n ** 18n + 1n
+			// Preserve an indivisible fork allocation after the final second of origin-pool fees.
+			const openInterestAmount = 10n * 10n ** 18n + 2n
 			const openInterestArray = [openInterestAmount, openInterestAmount, openInterestAmount]
 			const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
 			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
@@ -68,7 +69,6 @@ describe('Statoblast: fork migration', () => {
 			const zoltarForkThreshold = await getZoltarForkThreshold(client, genesisUniverse)
 			const burnAmount = zoltarForkThreshold / 5n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
-			await mockWindow.setTime(endTime + 10000n)
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, securityPoolUnderwritingLimitAttoEth)
 			await setVaultCapacityFixture(attackerClient, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, attackerClient.account.address, securityPoolUnderwritingLimitAttoEth)
 
@@ -78,8 +78,11 @@ describe('Statoblast: fork migration', () => {
 			strictEqual18Decimal(await getTotalRepBackingUnits(client, securityPoolAddresses.securityPool), repBalanceInGenesisPool * PRICE_PRECISION, 'REP backing units denominator should equal `pool balance * PRICE_PRECISION` prior fork')
 
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2])
+			await mockWindow.setTime(endTime - 2n)
 			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 			assert.deepStrictEqual(await balanceOfSharesInAttoEth(client, securityPoolAddresses.securityPool, securityPoolAddresses.shareToken, genesisUniverse, addressString(TEST_ADDRESSES[2])), openInterestArray, 'Did not create enough complete sets')
+			await mockWindow.setTime(endTime + 10000n)
+			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 			const ownForkParentCollateralAtFork = await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)
 			const ownForkRepBuckets = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)

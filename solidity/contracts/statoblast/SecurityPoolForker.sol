@@ -16,6 +16,8 @@ import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { SecurityPoolMigrationProxy } from './SecurityPoolMigrationProxy.sol';
 import { SecurityPoolForkerVaultMigrationDelegate } from './SecurityPoolForkerVaultMigrationDelegate.sol';
 import { EscalationGameForker } from './EscalationGameForker.sol';
+import { SecurityPoolForkerPortfolioDelegate } from './SecurityPoolForkerPortfolioDelegate.sol';
+import { ISecurityPoolPortfolioNative } from './interfaces/ISecurityPoolPortfolioNative.sol';
 import { SecurityPoolForkerBase } from './SecurityPoolForkerBase.sol';
 import { SecurityPoolForkEventEmitter } from './SecurityPoolEventEmitter.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
@@ -30,10 +32,10 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	using SafeERC20Ops for IERC20;
 	// These delegates keep fork/migration behavior under the EVM bytecode-size limit while
 	// sharing the same storage layout defined by `SecurityPoolForkerBase` and `SecurityPoolForkerStorage`.
+	address private immutable portfolioDelegate;
 	address private immutable vaultMigrationDelegate;
 	address private immutable escalationGameForkerDelegate;
 	// Never delegate through a module address supplied by an external pool.
-	address private immutable forkEventEmitter;
 
 	event ChildPoolLinked(ISecurityPool indexed parent, uint256 indexed outcomeIndex, ISecurityPool indexed child, UniformPriceDualCapBatchAuction truthAuction);
 	event ChildRepSplit(ISecurityPool indexed parent, uint256 indexed outcomeIndex, uint256 childPoolRepSplitAttoRep, uint256 pendingChildAttoRep);
@@ -108,9 +110,11 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		return directlyClaimedEscalationPrincipalByPoolAndOutcome[securityPool][uint8(outcomeIndex)];
 	}
 
-	/// @notice Returns whether `securityPool` forked on its own escalation game, in which case the fork paid the winner haircut.
+	/// @notice Returns whether this question's winner haircut was paid by this or an earlier own-question fork.
 	function isEscalationWinnerHaircutPaidByFork(ISecurityPool securityPool) external view returns (bool) {
-		return forkDataByPool[securityPool].ownFork;
+		if (forkDataByPool[securityPool].ownFork) return true;
+		EscalationGame game = securityPool.escalationGame();
+		return address(game) != address(0) && game.winnerHaircutPaidByFork();
 	}
 
 	/// @notice Returns `vault`'s escalation migration entitlement and which child outcomes have materialized it.
@@ -166,14 +170,15 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		);
 	}
 
-	constructor(Zoltar _zoltar) SecurityPoolForkerBase(_zoltar) {
+	constructor(Zoltar _zoltar, address _portfolioDelegate) SecurityPoolForkerBase(_zoltar) {
+		require(_portfolioDelegate.code.length != 0 && address(SecurityPoolForkerPortfolioDelegate(_portfolioDelegate).zoltar()) == address(_zoltar), 'Invalid native portfolio module');
+		portfolioDelegate = _portfolioDelegate;
 		vaultMigrationDelegate = address(new SecurityPoolForkerVaultMigrationDelegate(_zoltar));
 		escalationGameForkerDelegate = address(new EscalationGameForker(_zoltar));
-		forkEventEmitter = address(new SecurityPoolForkEventEmitter());
 	}
 
 	function _emitForkSnapshotEvents(ISecurityPool parent, address migrationProxy, address sourceGame, uint256 totalPoolHeldRepAtForkAttoRep, uint256 disputeStakedRepAtForkAttoRep, uint256 resultingLockedAttoRep) private {
-		DelegateCall.invoke(forkEventEmitter, abi.encodeCall(SecurityPoolForkEventEmitter.emitForkSnapshotEvents, (parent, migrationProxy, sourceGame, totalPoolHeldRepAtForkAttoRep, disputeStakedRepAtForkAttoRep, resultingLockedAttoRep)));
+		DelegateCall.invoke(portfolioDelegate, abi.encodeCall(SecurityPoolForkEventEmitter.emitForkSnapshotEvents, (parent, migrationProxy, sourceGame, totalPoolHeldRepAtForkAttoRep, disputeStakedRepAtForkAttoRep, resultingLockedAttoRep)));
 	}
 
 	function _forkOccurredBeforeEscalationSettled(EscalationGame escalationGame, uint256 forkTime) private view returns (bool) {
@@ -186,53 +191,8 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			escalationGame.getEscalationGameEndDate() >= forkTime;
 	}
 
-	function _getEscalationElapsedAtFork(EscalationGame escalationGame, uint256 forkTime) private view returns (uint256 elapsedAtFork) {
-		if (escalationGame.forkContinuation()) {
-			elapsedAtFork = escalationGame.forkElapsedAtStart();
-			uint256 resumedAt = escalationGame.forkResumedAt();
-			if (resumedAt != 0) {
-				if (forkTime > resumedAt) {
-					elapsedAtFork += forkTime - resumedAt;
-				}
-			}
-		} else {
-			uint256 activationTime = escalationGame.activationTime();
-			if (forkTime <= activationTime) return 0;
-			elapsedAtFork = forkTime - activationTime;
-		}
-		if (elapsedAtFork > ESCALATION_TIME_LENGTH) {
-			elapsedAtFork = ESCALATION_TIME_LENGTH;
-		}
-	}
-
-	function _snapshotEscalationAtFork(ISecurityPool securityPool, SecurityPoolForkerForkData storage data, EscalationGame escalationGame, uint256 forkTime) private {
-		if (!_forkOccurredBeforeEscalationSettled(escalationGame, forkTime)) return;
-		EscalationForkSnapshot storage snapshot = escalationForkSnapshotByPool[securityPool];
-		// Keep this unreachable initialization guard data-free for the EIP-170 size limit.
-		if (snapshot.initialized) revert();
-		(
-			bytes32[64][3] memory carryPeaks,
-			uint256[3] memory carryLeafCounts,
-			uint256[3] memory carryTotalsAttoRep,
-			bytes32[3] memory nullifierRoots
-		) = escalationGame.getForkCarrySnapshot();
-		uint256[3] memory resolutionBalancesAttoRep = escalationGame.getOutcomeBalancesAttoRep();
-		bytes32[3] memory carryRoots = escalationGame.getForkCarryRoots();
-		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
-			for (uint8 peakIndex = 0; peakIndex < 64; peakIndex++) {
-				snapshot.carryPeaks[outcomeIndex][peakIndex] = carryPeaks[outcomeIndex][peakIndex];
-			}
-			snapshot.carryLeafCounts[outcomeIndex] = carryLeafCounts[outcomeIndex];
-			snapshot.carryTotalsAttoRep[outcomeIndex] = carryTotalsAttoRep[outcomeIndex];
-			snapshot.resolutionBalancesAttoRep[outcomeIndex] = resolutionBalancesAttoRep[outcomeIndex];
-			snapshot.nullifierRoots[outcomeIndex] = nullifierRoots[outcomeIndex];
-		}
-		snapshot.initialized = true;
-		data.escalationSnapshotId = keccak256(abi.encode(address(escalationGame), carryRoots, nullifierRoots, carryLeafCounts, carryTotalsAttoRep, resolutionBalancesAttoRep));
-		data.unresolvedEscalationAtFork = true;
-		data.escalationStartBondAtForkAttoRep = escalationGame.startBondAttoRep();
-		data.escalationNonDecisionThresholdAtForkAttoRep = escalationGame.nonDecisionThresholdAttoRep();
-		data.escalationElapsedAtFork = _getEscalationElapsedAtFork(escalationGame, forkTime);
+	function _snapshotEscalationAtFork(ISecurityPool pool, SecurityPoolForkerForkData storage, EscalationGame game, uint256 forkTime) private {
+		DelegateCall.invoke(portfolioDelegate, abi.encodeCall(SecurityPoolForkerPortfolioDelegate.snapshotNativeEscalationAtFork, (pool, game, forkTime)));
 	}
 
 	function _getForkData(ISecurityPool securityPool) private view returns (SecurityPoolForkerForkData storage data) {
@@ -275,27 +235,14 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		migrationProxyByPool[securityPool] = migrationProxy;
 	}
 
-	function _initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child, EscalationGame childEscalationGame) internal override returns (EscalationGame) {
-		_validateChildEscalationGame(child, childEscalationGame);
-		SecurityPoolForkerForkData storage parentForkData = forkDataByPool[parent];
-		if (!parentForkData.unresolvedEscalationAtFork) return childEscalationGame;
-		if (address(childEscalationGame) == address(0x0)) {
-			SecurityPoolForkerForkData storage childForkData = forkDataByPool[child];
-			child.initializeForkedEscalationGame(parentForkData.escalationStartBondAtForkAttoRep, parentForkData.escalationNonDecisionThresholdAtForkAttoRep, parentForkData.escalationElapsedAtFork, childForkData.fixedQuestionOutcomePlusOne == 0 ? BinaryOutcomes.BinaryOutcome.None : BinaryOutcomes.BinaryOutcome(childForkData.fixedQuestionOutcomePlusOne - 1));
-			childEscalationGame = child.escalationGame();
-			_validateChildEscalationGame(child, childEscalationGame);
-		}
-		return super._initializeChildForkedEscalationGameIfNeeded(parent, child, childEscalationGame);
-	}
-
-	/// @notice Self-call only: initializes the child's fork-continuation escalation game when the parent forked with an unresolved escalation.
-	function initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child, EscalationGame childEscalationGame) external returns (EscalationGame) {
-		if (msg.sender != address(this)) revert('Only self');
-		return _initializeChildForkedEscalationGameIfNeeded(parent, child, childEscalationGame);
-	}
-
 	/// @notice Activates fork mode on a pool in a forked universe and locks its REP and unresolved escrow REP into Zoltar migration; callable by anyone.
 	function initiateSecurityPoolFork(ISecurityPool securityPool) external {
+		if (securityPool.portfolioCustody() != address(0)) {
+			require(zoltar.getForkTime(securityPool.universeId()) != 0, 'Universe has not forked');
+			require(SecurityPoolForkerPortfolioDelegate(portfolioDelegate).getQuestionOutcome(securityPool) == BinaryOutcomes.BinaryOutcome.None, 'Question finalized before fork');
+			securityPool.activateForkMode();
+			return;
+		}
 		EscalationGame escalationGame = _getEscalationGame(securityPool);
 		SecurityPoolForkerForkData storage data = _prepareForkState(securityPool, escalationGame);
 		ReputationToken rep = securityPool.repToken();
@@ -359,8 +306,34 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	}
 
 	/// @notice Deploys the child universe (if needed) and child pool for `outcomeIndex` during the migration window; reverts if the pool exists.
+	function preparePortfolioQuestion(ISecurityPool source, uint248 targetUniverse) external returns (ISecurityPool) {
+		return
+			abi.decode(DelegateCall.invoke(portfolioDelegate, abi.encodeCall(SecurityPoolForkerPortfolioDelegate.preparePortfolioQuestion, (source, targetUniverse))), (ISecurityPool));
+	}
+
+	function materializePortfolioQuestion(ISecurityPool source, uint248 targetUniverse) external returns (ISecurityPool) {
+		return
+			abi.decode(DelegateCall.invoke(portfolioDelegate, abi.encodeCall(SecurityPoolForkerPortfolioDelegate.materializePortfolioQuestion, (source, targetUniverse))), (ISecurityPool));
+	}
+
 	function createChildUniverse(ISecurityPool securityPool, uint256 outcomeIndex) external {
+		if (securityPool.portfolioCustody() != address(0)) {
+			DelegateCall.invoke(portfolioDelegate, abi.encodeCall(SecurityPoolForkerPortfolioDelegate.materializeImmediatePortfolioChild, (securityPool, outcomeIndex)));
+			return;
+		}
 		_delegateMigrationCall(vaultMigrationDelegate, abi.encodeCall(SecurityPoolForkerVaultMigrationDelegate.createChildUniverse, (securityPool, outcomeIndex)));
+	}
+
+	/// @notice Installs one bounded outcome of an already registered child's carry snapshot, including after migration closes.
+	function continueChildUniverse(ISecurityPool parent, uint256 outcomeIndex) external {
+		_delegateMigrationCall(vaultMigrationDelegate, abi.encodeCall(SecurityPoolForkerVaultMigrationDelegate.continueChildUniverse, (parent, outcomeIndex)));
+	}
+
+	/// @notice Self-call only: shares the canonical child deployment path with the escalation migration delegate.
+	function getOrDeployChildPoolForEscalation(ISecurityPool parent, uint256 outcomeIndex) external returns (ISecurityPool child, EscalationGame game) {
+		require(msg.sender == address(this), 'Only self');
+		bytes memory result = _delegateMigrationCall(vaultMigrationDelegate, abi.encodeCall(SecurityPoolForkerVaultMigrationDelegate.getOrDeployChildPoolForEscalation, (parent, outcomeIndex)));
+		return abi.decode(result, (ISecurityPool, EscalationGame));
 	}
 
 	/// @notice Vault-only: after an own-game fork, carries the vault's deposits on `outcomeIndex` into the child game and exports the child REP to the vault.
@@ -413,6 +386,9 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	{
 		require(securityPool.systemState() == SystemState.ForkMigration, 'Not mig');
 		parent = securityPool.parent();
+		EscalationGame game = securityPool.escalationGame();
+		_validateChildEscalationGame(securityPool, game);
+		_requireChildForkCarryReady(parent, game);
 		// The truth auction ends the parent's pool-specific migration phase for this child branch.
 		uint256 parentForkActivationTime = forkDataByPool[parent].forkActivationTime;
 		require(parentForkActivationTime > 0 && block.timestamp > parentForkActivationTime + SecurityPoolUtils.MIGRATION_TIME, 'Active');
@@ -487,7 +463,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	function _getEscalationAuctionableRep(ISecurityPool securityPool, SecurityPoolForkerForkData storage parentData) private view returns (uint256) {
 		if (!parentData.unresolvedEscalationAtFork) return 0;
 		EscalationGame game = securityPool.escalationGame();
-		return address(game) == address(0x0) ? 0 : game.totalDisputeStakedAttoRep();
+		return address(game) == address(0x0) ? 0 : game.getDisputeBackingAttoRep();
 	}
 
 	function _getPoolAuctionableRepAtFork(SecurityPoolForkerForkData storage parentData) private view returns (uint256) {
@@ -566,12 +542,17 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 
 	/// @notice Forks the universe on the pool's own question once its escalation game allows it, using pool-held and escrowed REP; callable by anyone.
 	function forkZoltarWithOwnEscalationGame(ISecurityPool securityPool) external {
+		if (securityPool.portfolioCustody() != address(0)) {
+			ISecurityPoolPortfolioNative(securityPool.securityPoolFactory().getSecurityPoolPortfolio(securityPool)).forkWithReporterQuestion(securityPool);
+			securityPool.activateForkMode();
+			return;
+		}
 		EscalationGame escalationGame = _getEscalationGame(securityPool);
 		require(address(escalationGame) != address(0x0) && escalationGame.canTriggerOwnFork(), 'Need game');
 		require(securityPool.systemState() != SystemState.PoolForked, 'Forked');
 		require(securityPool.systemState() == SystemState.Operational, 'Inactive');
 		ReputationToken rep = securityPool.repToken();
-		uint256 poolRepToForkAttoRep = rep.balanceOf(address(securityPool));
+		uint256 poolRepToForkAttoRep = securityPool.getTotalPoolHeldAttoRep();
 		uint256 disputeStakedRepToForkAttoRep = rep.balanceOf(address(escalationGame));
 		uint256 repBalanceBeforeAttoRep = rep.balanceOf(address(this));
 		securityPool.activateForkMode();
@@ -663,6 +644,8 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	/// @notice Returns the pool's final question outcome, or None while unresolved or while the pool is forked.
 	function getQuestionOutcome(ISecurityPool securityPool) external view returns (BinaryOutcomes.BinaryOutcome outcome) {
 		SystemState systemState = securityPool.systemState();
+		if (securityPool.portfolioCustody() != address(0))
+			return SecurityPoolForkerPortfolioDelegate(portfolioDelegate).getQuestionOutcome(securityPool);
 		if (systemState == SystemState.PoolForked) return BinaryOutcomes.BinaryOutcome.None;
 		SecurityPoolForkerForkData storage data = _getForkData(securityPool);
 		if (data.fixedQuestionOutcomePlusOne > 0)

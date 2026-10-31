@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 import { buildPoolPageRouteHash, mapLegacyStatoblastHash, parsePoolsRouteHash } from '@zoltar/ui-statoblast-shared/lib/statoblastLocation.js'
-import { deriveListedPoolLifecycleStep, derivePoolLifecycleStep, getDefaultPoolTab, getSkippedLifecycleSteps, isForkLifecycleState, isForkWorkflowPrimary } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/poolLifecycle.js'
+import { deriveListedPoolLifecycleStep, derivePoolLifecycleStep, getDefaultPoolTab, getSkippedLifecycleSteps, isForkLifecycleState, isForkWorkflowPrimary, type PoolLifecycleStep } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/poolLifecycle.js'
 import { derivePoolActionItems, type PoolActionInput } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/poolActions.js'
 import { derivePoolViewModel } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/poolViewModel.js'
 import { evaluateSecurityPoolState } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolState.js'
@@ -220,6 +220,32 @@ describe('derivePoolViewModel', () => {
 		expect(settled.skippedLifecycleSteps).toEqual(['forkMigration', 'truthAuction'])
 		const operational = derive({ securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 100n }), securityPoolAddress: POOL })] })
 		expect(operational.skippedLifecycleSteps).toEqual([])
+	})
+	test.each([true, false, undefined])('uses the canonical central settlement binding to choose child lifecycle stages: %s', centralSettlement => {
+		const pool = createSelectedPool({
+			securityPoolAddress: POOL,
+			parent: ACCOUNT,
+			forkOutcome: 'yes',
+			questionOutcome: 'yes',
+			settlementCollateralAttoEth: 0n,
+			settlementRecoveryAttoRep: 5_000n * 10n ** 18n,
+			feeAccrualState: { ...(centralSettlement === undefined ? {} : { centralSettlement }), feeEndTimestamp: 0n, feeIndexRemainder: 0n, lastUpdatedFeeAccumulator: 0n, totalFeesOwedRemainder: 0n },
+		})
+		const expected: readonly PoolLifecycleStep[] = centralSettlement === true ? ['operational', 'escalation', 'forkMigration', 'settled'] : ['operational', 'escalation', 'forkMigration', 'truthAuction', 'settled']
+		const activated = derive({ securityPools: [pool] })
+		expect(activated.lifecycleStep).toBe('settled')
+		expect(activated.lifecycleSteps).toEqual(expected)
+		expect(activated.skippedLifecycleSteps).toEqual([])
+		const preparing = derive({ securityPools: [{ ...pool, systemState: 'forkMigration', questionOutcome: 'none' }] })
+		expect(preparing.lifecycleStep).toBe('forkMigration')
+		expect(preparing.lifecycleSteps).toEqual(expected)
+	})
+	test('a bound question settled without a fork skips only its applicable fork stage', () => {
+		const model = derive({
+			securityPools: [createSelectedPool({ securityPoolAddress: POOL, ordinaryEscalationGameStarted: true, questionOutcome: 'yes', feeAccrualState: { centralSettlement: true, feeEndTimestamp: 0n, feeIndexRemainder: 0n, lastUpdatedFeeAccumulator: 0n, totalFeesOwedRemainder: 0n } })],
+		})
+		expect(model.lifecycleStep).toBe('settled')
+		expect(model.skippedLifecycleSteps).toEqual(['forkMigration'])
 	})
 
 	test('keeps an explicit tab and does not act on an unloaded pool', () => {

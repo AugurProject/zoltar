@@ -12,3 +12,7 @@ export { requestNewPrice as requestPrice } from './securityPool.js'
 export const retryRequired = 'Retry required'
 export const waitingForPriceRequest = 'Waiting for the current request to finish.'
 export const attemptedRepPerEthPrice = 'Attempted REP per ETH price'
+
+export const reportFunding = 'Report deposit (WETH)'
+export const reportFundingHint = 'Leave blank to fund the minimum for current commitments. A larger deposit can support additional underwriting; use its settled report ID when authorizing. WETH and REP remain exposed to the report dispute game until released.'
+export const reportFundingInvalid = 'Enter a nonnegative WETH amount below the report limit.'

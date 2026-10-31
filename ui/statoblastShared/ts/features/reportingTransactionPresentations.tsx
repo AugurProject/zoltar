@@ -98,7 +98,7 @@ export function createPoolOracleSuccessPresentation(result: OpenOracleActionResu
 	}
 	return buildPresentation({
 		hash: result.hash,
-		rows: getPoolOracleTransactionRows(context),
+		rows: [...(getPoolOracleTransactionRows(context) ?? []), ...(result.reportId === undefined ? [] : [{ label: openOracleCopy.reportId, value: result.reportId.toString() }])],
 		title,
 		tone: 'success',
 		universeId: context?.universeId,

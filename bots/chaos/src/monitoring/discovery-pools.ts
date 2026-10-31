@@ -9,7 +9,8 @@ import { sameAddress } from '@zoltar/core-shared/evm/address'
 
 import { canonicalUintString, compareUnsignedStrings, type CanonicalUintString } from '../core/units.ts'
 import { validForkOutcomeRoutes } from '../operations/fork-outcomes.ts'
-import { assertAnchoredOracleRequestFunding } from '../operations/oracle-request-funding.ts'
+import { discoverChildPoolPreparations } from './discovery-child-preparation.ts'
+import { discoverPoolPriceFeed } from './discovery-price-feed.ts'
 import type { ChildRepSplitProgressSnapshot, PoolSnapshot, QuestionSnapshot, StagedOperationSnapshot, UniverseSnapshot } from '../operations/types.ts'
 import { contractSimulationReverted, DISCOVERY_RPC_CONCURRENCY, drainConcurrent, mapWithConcurrency } from './discovery-client.ts'
 
@@ -131,6 +132,7 @@ export async function discoverPools({
 			settlementTime,
 			lastPrice,
 			lastSettlementTimestamp,
+			priceValidUntil,
 			stagedOperationCounter,
 			minimumReport,
 			gasConsumedOpenOracleReportPrice,
@@ -160,6 +162,8 @@ export async function discoverPools({
 			poolCoordinator,
 			coordinatorPool,
 			vaultOperations,
+			portfolioCustody,
+			feeEndTimestamp,
 		] = await drainConcurrent([
 			cachedDeployment ? Promise.resolve(authenticatedUniverse.repToken) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'repToken' }),
 			cachedDeployment ? Promise.resolve(deployment.shareToken) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'shareToken' }),
@@ -180,6 +184,7 @@ export async function discoverPools({
 			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'settlementTime' }),
 			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'lastPrice' }),
 			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'lastSettlementTimestamp' }),
+			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'priceValidUntil' }),
 			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'stagedOperationCounter' }),
 			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'minimumToken1ReportAttoEth', gasPrice: anchorBaseFeePerGas }),
 			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'gasConsumedOpenOracleReportPrice' }),
@@ -209,6 +214,8 @@ export async function discoverPools({
 			cachedDeployment ? Promise.resolve(coordinator) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'openOraclePriceCoordinator' }),
 			cachedDeployment ? Promise.resolve(address) : client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'securityPool' }),
 			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'vaultOperations' }),
+			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'portfolioCustody' }),
+			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'getFeeEpochEndTime' }),
 			authenticatePoolProtocolBindings({
 				blockNumber,
 				canonicalRepToken: authenticatedUniverse.repToken,
@@ -230,14 +237,8 @@ export async function discoverPools({
 			settlementCallbackGasLimit: settlementCallbackGasLimit.toString(),
 			targetPriceErrorForDispute: targetPriceErrorForDispute.toString(),
 		}
-		assertAnchoredOracleRequestFunding({
-			baseFeePerGas: anchorBaseFeePerGas.toString(),
-			coordinator: oracleRequestFunding,
-			minimumToken1ReportAttoEth: minimumReport.toString(),
-			requestPriceCostAttoEth: requestCost.toString(),
-			settlementCollateralAttoEth: accounting.settlementCollateralAttoEth.toString(),
-			subject: `Coordinator ${coordinator}`,
-		})
+		const retainedReportIds = (context.indexedReports ?? []).filter(report => report.token2.toLowerCase() === repToken.toLowerCase() && report.settlementTimestamp === '0').map(report => BigInt(report.reportId))
+		const priceFeedSnapshot = await discoverPoolPriceFeed(client, coordinator, blockNumber, accounting.settlementCollateralAttoEth, oracleRequestFunding, minimumReport, requestCost, anchorBaseFeePerGas, pendingReportId, retainedReportIds)
 		const [auctionableAttoRepAtFork, , , migratedAttoRep, , , , , ownFork, unresolvedEscalationAtFork, outcomeIndex, forkActivationTime] = forkDataResult
 		const parentForkActivationTime = parentForkDataResult?.[11] ?? 0n
 		const [statusOwnFork, statusAuctionableAttoRepAtFork, vaultRepAtForkAttoRep] = ownForkMigrationStatusResult
@@ -363,12 +364,16 @@ export async function discoverPools({
 		const walletVaultRegistered = vaultRegistry.cursor.retentionMode === 'resident' && vaultRegistry.complete && vaultRegistry.vaults.some(vault => wallet !== undefined && sameAddress(vault, wallet))
 		const walletVault = vaults.find(vault => wallet !== undefined && sameAddress(vault.address, wallet))
 		if (wallet !== undefined && walletVault === undefined) throw new Error(`Pool ${address} omitted the requested wallet vault`)
-		const minimumSafeWalletVaultDepositAttoRep = minimumSafeVaultDeposit(minimumDeposit, BigInt(walletVault?.repBackingUnits ?? '0'), totalRepBackingUnits, poolRepBalanceAttoRep)
-		const poolQuestion = questionById.get(questionId.toString())
+		const minimumSafeWalletVaultDepositAttoRep = minimumSafeVaultDeposit(minimumDeposit, BigInt(walletVault?.repBackingUnits ?? '0'), totalRepBackingUnits, totalPoolHeldAttoRep)
 		const forkQuestion = questionById.get(universe.forkQuestionId)
-		let feeEndTimestamp: bigint | undefined
-		if (universe !== undefined && poolQuestion !== undefined) feeEndTimestamp = BigInt(universe.forkTime) === 0n ? BigInt(poolQuestion.endTime) : BigInt(universe.forkTime)
-		const projectedSettlementCollateral = projectSettlementCollateral(accounting, feeEndTimestamp, anchorTimestamp)
+		const linearFee =
+			portfolioCustody === zeroAddress
+				? undefined
+				: await drainConcurrent([client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'linearFeeRateAttoEthPerSecond' }), client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'linearFeeEndTime' })]).then(([rateAttoEthPerSecond, endTime]) => ({
+						rateAttoEthPerSecond,
+						endTime,
+					}))
+		const projectedSettlementCollateral = projectSettlementCollateral(accounting, feeEndTimestamp, anchorTimestamp, linearFee)
 		const unresolvedEscalationMigrationReadyOutcomes: string[] = []
 		if (wallet !== undefined && inspectEveryVault && forkData.unresolvedEscalationAtFork) {
 			for (const outcome of validForkOutcomeRoutes(forkQuestion, universe.knownChildOutcomes)) {
@@ -386,6 +391,8 @@ export async function discoverPools({
 			awaitingForkContinuation,
 			canonicalVaultCount: vaultCount.toString(),
 			coordinator,
+			...priceFeedSnapshot,
+			childPoolPreparations: await discoverChildPoolPreparations(client, deployments.securityPoolFactory, deployments.zoltar, address, universeId, systemState === 1n ? validForkOutcomeRoutes(forkQuestion, universe.knownChildOutcomes) : [], blockNumber),
 			vaultOperations: getAddress(vaultOperations),
 			currentMintingCapacityAttoEth: currentMintingCapacity.toString(),
 			escalationCanTriggerOwnFork,
@@ -414,12 +421,12 @@ export async function discoverPools({
 			forkUnresolvedEscalation: forkData.unresolvedEscalationAtFork,
 			lastRepPerEthPrice: lastPrice.toString(),
 			lastOracleSettlementTimestamp: lastSettlementTimestamp.toString(),
+			oraclePriceValidUntilTimestamp: priceValidUntil.toString(),
 			lastUpdatedFeeAccumulator: accounting.lastUpdatedFeeAccumulator.toString(),
 			minimumToken1ReportAttoEth: minimumReport.toString(),
 			minimumSafeWalletVaultDepositAttoRep: minimumSafeWalletVaultDepositAttoRep.toString(),
 			minimumVaultRepDepositAttoRep: minimumDeposit.toString(),
 			oraclePriceValid: priceValid,
-			oracleRequestFunding,
 			oracleSettlementTime: settlementTime.toString(),
 			parent: getAddress(deployment.parent),
 			parentForkActivationTime: parentForkActivationTime.toString(),

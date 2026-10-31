@@ -4,7 +4,7 @@ import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { openInterestFeePerYearBigint } from '@zoltar/statoblast-shared/statoblast/retentionRate'
+import { getPoolAnnualFeePercent } from '../lib/retentionRate.js'
 import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { getQuestionTitle, Question } from '@zoltar/ui-core-shared/components/Question.js'
@@ -15,7 +15,6 @@ import { getSecurityPoolLinkHref } from '../lib/securityPoolNavigation.js'
 import type { ListedSecurityPool } from '../../../types/contracts.js'
 import { getSecurityPoolStatusBadgeLabel, getSecurityPoolStatusBadgeTone } from '../lib/securityPoolLabels.js'
 import type { SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
-import { getOracleManagerPriceValidUntilTimestamp } from '../../../protocol/oracleTiming.js'
 import { PoolCapacitySummary } from './PoolCapacitySummary.js'
 import { formatInitialReportPriorityFee } from '../lib/priorityFee.js'
 import * as copy from '../../../copy/poolWorkspace.js'
@@ -25,7 +24,7 @@ export function PoolDirectoryRow({ pool, lifecycleState, currentTimestamp, fetch
 	const title = getQuestionTitle(pool.marketDetails)
 	const status = getSecurityPoolStatusBadgeLabel({ hasForkActivity: pool.hasForkActivity, questionOutcome: pool.questionOutcome, lifecycleState })
 	const href = getSecurityPoolLinkHref(pool.securityPoolAddress, '', pool.universeId)
-	const validUntil = getOracleManagerPriceValidUntilTimestamp(pool.lastOracleSettlementTimestamp)
+	const validUntil = pool.oraclePriceValidUntilTimestamp
 	const oracleExpired = validUntil !== undefined && currentTimestamp !== undefined && currentTimestamp >= validUntil
 	const oracleMissing = pool.lastOracleSettlementTimestamp === 0n || pool.lastOraclePrice === undefined
 
@@ -71,7 +70,7 @@ export function PoolDirectoryRow({ pool, lifecycleState, currentTimestamp, fetch
 				<ReadOnlyDetailAccordion title={copy.poolDetails}>
 					<MetricField label={commonCopy.initialReportPriorityFee}>{formatInitialReportPriorityFee(pool.initialReportPriorityFeeAttoEthPerGas)}</MetricField>
 					<MetricField label={securityPoolCopy.openInterestFeeYear}>
-						<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix={commonCopy.percent} />
+						<CurrencyValue value={getPoolAnnualFeePercent(pool, currentTimestamp)} suffix={commonCopy.percent} />
 					</MetricField>
 					<Question question={pool.marketDetails} variant='preview' showTitle={false} />
 				</ReadOnlyDetailAccordion>

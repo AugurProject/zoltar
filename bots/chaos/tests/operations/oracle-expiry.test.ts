@@ -33,10 +33,6 @@ function expectMintingPlansIgnoreOracleHorizon(snapshot: ReturnType<typeof snaps
 		const candidate = plan(snapshot, definitionId)
 		expect(candidate, definitionId).toBeDefined()
 		const deadline = candidate?.deadlineTimestamp
-		if (definitionId === 'statoblast.complete-set.create') {
-			expect(deadline, definitionId).toBeUndefined()
-			continue
-		}
 		if (deadline === undefined) throw new Error(`${definitionId} must keep its question-end deadline`)
 		expect(BigInt(deadline) > oracleExpiry, definitionId).toBe(true)
 		expect(BigInt(deadline) <= questionLastSecond, definitionId).toBe(true)
@@ -44,6 +40,18 @@ function expectMintingPlansIgnoreOracleHorizon(snapshot: ReturnType<typeof snaps
 }
 
 describe('oracle-price expiry planning', () => {
+	test('shared portfolio plans use the canonical deadline beyond a five-minute interval', () => {
+		const snapshot = snapshotFixture()
+		const pool = snapshot.pools[0]
+		if (pool === undefined) throw new Error('Pool fixture missing')
+		configureOpenQuestion(snapshot)
+		pool.priceFeed = '0x0000000000000000000000000000000000000099'
+		pool.oracleSettlementTime = '480'
+		pool.lastOracleSettlementTimestamp = (BigInt(snapshot.anchor.timestamp) - 480n).toString()
+		pool.oraclePriceValidUntilTimestamp = (BigInt(pool.lastOracleSettlementTimestamp) + 780n).toString()
+		expect(plan(snapshot, 'statoblast.escalation.deposit')?.deadlineTimestamp).toBe((BigInt(pool.lastOracleSettlementTimestamp) + 780n).toString())
+	})
+
 	test('binds every price-dependent plan to the exact five-minute oracle horizon', () => {
 		const snapshot = snapshotFixture()
 		const pool = snapshot.pools[0]
@@ -67,6 +75,7 @@ describe('oracle-price expiry planning', () => {
 		if (pool === undefined) throw new Error('Pool fixture missing')
 		configureOpenQuestion(snapshot)
 		pool.lastOracleSettlementTimestamp = (BigInt(snapshot.anchor.timestamp) - 240n).toString()
+		pool.oraclePriceValidUntilTimestamp = (BigInt(pool.lastOracleSettlementTimestamp) + 300n).toString()
 
 		expect(plan(snapshot, 'statoblast.escalation.deposit')).toBeUndefined()
 

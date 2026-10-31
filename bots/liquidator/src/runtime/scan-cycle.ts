@@ -1,3 +1,6 @@
+import { PortfolioOpportunityExpired } from '#execution/portfolio-executor'
+import { sharedQuorumReadTargets } from '@zoltar/bot-shared/monitoring/read-quorum'
+import { loadPortfolioObservation, managedPortfolioScopes, requireCompletePortfolioExposure } from '#monitoring/portfolio-monitor'
 import { shouldStopAfterSuccessfulCycle } from '#core/cycle-control'
 import { inheritedChildPoolSelections, validateApprovedUniverseSelection } from '#core/fork-migration'
 import { OperatorStopping, TransactionAwaitingCanonicalFinality } from '#execution/execution-safety'
@@ -21,13 +24,23 @@ import { runDryRunStep, runLiveExecutionStep, type DesiredPoolStatus } from './s
  */
 async function scanExecutionSnapshot(runtime: LiquidatorRuntime, deps: LiquidatorDeps, currentChain: LiquidatorRuntime['chain']) {
 	const { shutdown, state } = deps
-	if (!runtime.settings.runtime.execute) return await scanPools(runtime.client, runtime.settings, state.wallet, poolMonitorIndexFor(runtime, runtime.settings.connectivity.readRpcUrl), shutdown.isRequested)
-	const settled = await Promise.allSettled(
-		readEndpoints(runtime.settings).map(async endpoint => {
-			const endpointClient = createPublicClient({ chain: currentChain, transport: runtime.readPool.transportFor(endpoint) })
-			return { client: endpointClient, endpoint, scan: await scanPools(endpointClient, runtime.settings, state.wallet, poolMonitorIndexFor(runtime, endpoint), shutdown.isRequested) }
-		}),
+	state.portfolioScopes = managedPortfolioScopes(state.portfolioScopes, runtime.settings.selectedPortfolios)
+	const scanClient = async (client: typeof runtime.client, endpoint: string, blockNumber?: bigint) => {
+		const scan = await scanPools(client, runtime.settings, state.wallet, poolMonitorIndexFor(runtime, endpoint), shutdown.isRequested, blockNumber)
+		const portfolios = []
+		for (const scope of state.portfolioScopes) {
+			if (shutdown.isRequested()) throw new OperatorStopping()
+			portfolios.push(await loadPortfolioObservation(client, runtime.settings, state.wallet, scope, scan.block.number))
+		}
+		requireCompletePortfolioExposure(portfolios)
+		return { ...scan, portfolios }
+	}
+	if (!runtime.settings.runtime.execute) return await scanClient(runtime.client, runtime.settings.connectivity.readRpcUrl)
+	const pinned = await sharedQuorumReadTargets(
+		readEndpoints(runtime.settings).map(endpoint => ({ endpoint, client: createPublicClient({ chain: currentChain, transport: runtime.readPool.transportFor(endpoint) }) })),
+		runtime.settings.connectivity.rpcQuorum,
 	)
+	const settled = await Promise.allSettled(pinned.readers.map(async ({ client, endpoint }) => ({ client, endpoint, scan: await scanClient(client, endpoint, pinned.blockNumber) })))
 	const available = availableExecutionObservations('liquidation execution snapshot', settled, liquidationExecutionSnapshotObservation, runtime.settings.connectivity.rpcQuorum)
 	const selected = available[0]
 	if (selected === undefined) throw new Error('Liquidation execution snapshot is unavailable')
@@ -83,6 +96,7 @@ async function scanAndAct(runtime: LiquidatorRuntime, deps: LiquidatorDeps, scan
 	state.lastScannedBlockHash = scannedBlock.hash
 	state.lastScannedTimestamp = scannedBlock.timestamp
 	if (replacedMarketHead) {
+		state.portfolioScopes = state.portfolioScopes.map(scope => ({ ...scope, nextPositionId: 1n, sweepEnd: 0n, retirementObservations: [] }))
 		recordActivity(state, {
 			details: `block=${scannedBlock.number.toString()}`,
 			kind: 'scan',
@@ -93,6 +107,8 @@ async function scanAndAct(runtime: LiquidatorRuntime, deps: LiquidatorDeps, scan
 		await saveDurableState(runtime.settings.runtime.stateFile, state)
 		return shouldStopAfterSuccessfulCycle(runtime.settings.runtime.once)
 	}
+	state.portfolios = primary.portfolios
+	state.portfolioScopes = primary.portfolios.map(portfolio => portfolio.nextScope)
 	state.pools = primary.pools
 	state.universes = primary.universes
 	state.walletRepByToken = primary.walletRepByToken
@@ -122,8 +138,8 @@ async function scanAndAct(runtime: LiquidatorRuntime, deps: LiquidatorDeps, scan
 	return shouldStopAfterSuccessfulCycle(runtime.settings.runtime.once)
 }
 
-/** Settles a cycle interrupted by shutdown or an unfinalized transaction; `undefined` means the error is a failure. */
-async function settleInterruptedCycle(runtime: LiquidatorRuntime, deps: LiquidatorDeps, error: unknown) {
+/** @internal Tests verify interrupted-cycle recovery; `undefined` means the error is a failure. */
+export async function settleInterruptedCycle(runtime: Pick<LiquidatorRuntime, 'settings'>, deps: Pick<LiquidatorDeps, 'state'> & { shutdown: Pick<LiquidatorDeps['shutdown'], 'isRequested'> }, error: unknown) {
 	const { state } = deps
 	if (deps.shutdown.isRequested()) {
 		await saveDurableState(runtime.settings.runtime.stateFile, state)
@@ -132,6 +148,12 @@ async function settleInterruptedCycle(runtime: LiquidatorRuntime, deps: Liquidat
 	if (error instanceof OperatorStopping) {
 		await saveDurableState(runtime.settings.runtime.stateFile, state)
 		return true
+	}
+	if (error instanceof PortfolioOpportunityExpired) {
+		state.status = runningStatus(state.paused, runtime.settings.runtime.execute)
+		recordActivity(state, { kind: 'liquidation', status: 'info', message: 'Portfolio opportunity expired; rescreen next cycle', details: error.message })
+		await saveDurableState(runtime.settings.runtime.stateFile, state)
+		return shouldStopAfterSuccessfulCycle(runtime.settings.runtime.once)
 	}
 	if (error instanceof TransactionAwaitingCanonicalFinality) {
 		state.status = 'running'

@@ -90,12 +90,14 @@ const poolSnapshot = async (target: StateSnapshotTarget, read: StateRead): Promi
 	}
 	if (target.coordinatorAddress !== undefined) {
 		const coordinator = target.coordinatorAddress
-		const price = await Promise.all([read(coordinator, coordinatorAbi, 'lastPrice'), read(coordinator, coordinatorAbi, 'lastSettlementTimestamp'), read(coordinator, coordinatorAbi, 'isPriceValid')])
+		const price = await Promise.all([read(coordinator, coordinatorAbi, 'lastPrice'), read(coordinator, coordinatorAbi, 'lastSettlementTimestamp'), read(coordinator, coordinatorAbi, 'isPriceValid'), read(coordinator, coordinatorAbi, 'priceFeed')])
+		const feedAddress = price[3]
+		if (typeof feedAddress !== 'string') throw new Error('priceFeed returned an invalid address')
 		result['price'] = {
 			repPerEth1e18: exact(price[0], 'lastPrice'),
 			settlementTimestamp: exact(price[1], 'lastSettlementTimestamp'),
 			protocolValid: flag(price[2], 'isPriceValid'),
-			sourceContract: coordinator.toLowerCase(),
+			sourceContract: getAddress(feedAddress).toLowerCase(),
 		}
 	}
 	return result
@@ -110,7 +112,12 @@ const vaultSnapshot = async (target: StateSnapshotTarget, read: StateRead): Prom
 	const repBackingUnits = exact(state[0], 'securityVaults.repBackingUnits')
 	const backingAttoRep = await read(pool, poolAbi, 'backingUnitsToAttoRep', [BigInt(repBackingUnits)])
 	let disputeStakedAttoRep = '0'
-	if (target.escalationAddress !== undefined) disputeStakedAttoRep = exact(await read(target.escalationAddress, escalationAbi, 'disputeStakedRepByVaultAttoRep', [vault]), 'disputeStakedRepByVaultAttoRep')
+	let disputeBackingAttoRep = '0'
+	if (target.escalationAddress !== undefined) {
+		const [nominal, backing] = await Promise.all([read(target.escalationAddress, escalationAbi, 'disputeStakedRepByVaultAttoRep', [vault]), read(target.escalationAddress, escalationAbi, 'getVaultDisputeBackingAttoRep', [vault])])
+		disputeStakedAttoRep = exact(nominal, 'disputeStakedRepByVaultAttoRep')
+		disputeBackingAttoRep = exact(backing, 'getVaultDisputeBackingAttoRep')
+	}
 	return {
 		poolAddress: pool.toLowerCase(),
 		vaultAddress: vault.toLowerCase(),
@@ -123,6 +130,7 @@ const vaultSnapshot = async (target: StateSnapshotTarget, read: StateRead): Prom
 		badDebtAttoEth: exact(values[2], 'vaultBadDebtAttoEth'),
 		securityMultiplierBps: exact(values[3], 'statoblastSecurityMultiplierBps'),
 		disputeStakedAttoRep,
+		disputeBackingAttoRep,
 	}
 }
 

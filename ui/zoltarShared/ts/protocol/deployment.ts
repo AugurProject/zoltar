@@ -23,13 +23,13 @@ export const EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<R
 	multicall3: '0x1ff11a2c64e95bb3d4e330d0235adbe3c3f78eeecb5c5104ac38c89673dfaade',
 	proxyDeployer: '0x5acaad953250bec20933f7c72a25bb03bfa54767ebd3a750396276512c46a79c',
 	reputationToken: '0x1939fc9070edce2ad78392d5145b884e58d307171bc2e24a95927db370002b86',
-	zoltar: '0xc3a6a5ef53f2dab10b6e50a1d139ee59c74a01480b53aeda78fd488c600c60be',
+	zoltar: '0xc427f7f4d9bc93bff0e9dca809c8f77bdf734f1762e19526ef9f23f352f5a4eb',
 	zoltarQuestionData: '0xf0ecbeb457c59c6393a5b382c99a2bbbc8229b88c165b5f953ed126e22aedcc7',
 }
 
 const EXPECTED_NO_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES,
-	zoltar: '0x11045d6afa2355b1d944974d8f848cba581bfe039c6c84cb1e4dfb52e8c11c49',
+	zoltar: '0x98fe87d4d9f71d6282e9d4eca9e22b8c5beda23744fc43a1e69362340f1d44d5',
 }
 
 const STATIC_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID = {
@@ -61,13 +61,13 @@ const EXPECTED_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<D
 	deploymentStatusOracle: '0xa8385e5704060e4e97fdaba0f7bf6ef692162bacc83533ebd616b455d2b190e1',
 	multicall3: '0x1ff11a2c64e95bb3d4e330d0235adbe3c3f78eeecb5c5104ac38c89673dfaade',
 	proxyDeployer: '0x5acaad953250bec20933f7c72a25bb03bfa54767ebd3a750396276512c46a79c',
-	zoltar: '0x1aef97f283fe70336e045edd950d6fd7365010f03a4ffdf10e747424b13cb539',
+	zoltar: '0x2ceb90afed1d2b9a15752fc5642528af66b84d559c86cb23e07c4f966075ebda',
 	zoltarQuestionData: '0xf0ecbeb457c59c6393a5b382c99a2bbbc8229b88c165b5f953ed126e22aedcc7',
 }
 
 const EXPECTED_NO_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES,
-	zoltar: '0x796d74a448e70d580410ccc52031c5118fba02694a77b51a4725d3c99e26ac66',
+	zoltar: '0xd331e6ed4938f06eda6162cb73d78010c60837553e3d0242048326afa4cd6041',
 }
 const EXPECTED_PUBLIC_DEPLOYMENT_RUNTIME_CODE_HASHES = {
 	mainnet: { yes: EXPECTED_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES, no: EXPECTED_NO_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES },
@@ -476,12 +476,15 @@ export function getZoltarDeploymentStepConstructorArguments(profile: NetworkProf
 }
 
 export function withExpectedDeploymentRuntimeCodeHashes(steps: readonly DeploymentStep[], profile: NetworkProfile): DeploymentStep[] {
-	return steps.map(step => ({
-		...step,
-		...(profile.id === 'sepolia' || profile.id === 'mainnet' ? { expectedRuntimeCodeHash: EXPECTED_PUBLIC_DEPLOYMENT_RUNTIME_CODE_HASHES[profile.id][profile.genesisOutcome][step.id] } : {}),
-		...(profile.id === 'simulation' && step.id === 'proxyDeployer' ? { expectedRuntimeCodeHash: EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES.proxyDeployer } : {}),
-		...(profile.id === 'simulation' ? { trustedSimulationCodePresence: TRUSTED_SIMULATION_CODE_PRESENCE } : {}),
-	}))
+	return steps.map(step => {
+		const expectedRuntimeCodeHash = profile.id === 'simulation' ? undefined : EXPECTED_PUBLIC_DEPLOYMENT_RUNTIME_CODE_HASHES[profile.id][profile.genesisOutcome][step.id]
+		return {
+			...step,
+			...(expectedRuntimeCodeHash === undefined ? {} : { expectedRuntimeCodeHash }),
+			...(profile.id === 'simulation' && step.id === 'proxyDeployer' ? { expectedRuntimeCodeHash: EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES.proxyDeployer } : {}),
+			...(profile.id === 'simulation' ? { trustedSimulationCodePresence: TRUSTED_SIMULATION_CODE_PRESENCE } : {}),
+		}
+	})
 }
 
 export function assertDeploymentStepRuntimeCode(step: Pick<DeploymentStep, 'address' | 'expectedRuntimeCodeHash' | 'id' | 'trustedSimulationCodePresence'>, code: Hex | undefined) {

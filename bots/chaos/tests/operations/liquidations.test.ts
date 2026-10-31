@@ -87,6 +87,7 @@ describe('safe liquidation operations', () => {
 		if (pool === undefined) throw new Error('Withdrawal pool missing')
 		expect(withdrawalCall.caller).toBe(pool.vaultOperations)
 		pool.lastOracleSettlementTimestamp = (BigInt(withdrawal.snapshot.anchor.timestamp) - 240n).toString()
+		pool.oraclePriceValidUntilTimestamp = (BigInt(pool.lastOracleSettlementTimestamp) + 300n).toString()
 		pool.oraclePriceValid = true
 		expect(urgentOperationPlans(withdrawal.snapshot, options).find(candidate => candidate.definitionId === 'statoblast.staged.execute')).toBeUndefined()
 	})
@@ -146,12 +147,14 @@ describe('safe liquidation operations', () => {
 		const sepolia = stagedFixture(1)
 		sepolia.snapshot.chainId = 11155111
 		sepolia.pool.lastOracleSettlementTimestamp = (BigInt(sepolia.snapshot.anchor.timestamp) - 600n).toString()
+		sepolia.pool.oraclePriceValidUntilTimestamp = (BigInt(sepolia.pool.lastOracleSettlementTimestamp) + 3600n).toString()
 		sepolia.pool.oraclePriceValid = true
 		expect(safeOraclePriceDeadline(sepolia.snapshot, sepolia.pool, options)).toBe(BigInt(sepolia.snapshot.anchor.timestamp) + 3000n)
 		expect(urgentOperationPlans(sepolia.snapshot, options).find(candidate => candidate.definitionId === 'statoblast.staged.execute')?.deadlineTimestamp).toBe('2000003000')
 
 		const local = stagedFixture(1)
 		local.pool.lastOracleSettlementTimestamp = (BigInt(local.snapshot.anchor.timestamp) - 600n).toString()
+		local.pool.oraclePriceValidUntilTimestamp = (BigInt(local.pool.lastOracleSettlementTimestamp) + 300n).toString()
 		local.pool.oraclePriceValid = true
 		expect(safeOraclePriceDeadline(local.snapshot, local.pool, options)).toBeUndefined()
 		expect(urgentOperationPlans(local.snapshot, options).find(candidate => candidate.definitionId === 'statoblast.staged.execute')).toBeUndefined()

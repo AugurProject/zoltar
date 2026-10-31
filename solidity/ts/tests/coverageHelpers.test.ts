@@ -29,12 +29,16 @@ import {
 	DeploymentStatusOracle_DeploymentStatusOracle,
 	ReputationToken_ReputationToken,
 	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
+	statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate,
 	statoblast_factories_EscalationGameFactory_EscalationGameFactory,
 	statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory,
+	statoblast_factories_OpenOraclePriceCoordinatorFactory_PriceCoordinatorDeploymentWorker,
+	statoblast_factories_OpenOraclePriceCoordinatorFactory_SharedPoolPriceFeedDeploymentWorker,
 	statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer,
 	statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 	statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate,
+	statoblast_SecurityPoolEventEmitter_SecurityPoolEventEmitter,
 	test_statoblast_CoverageHelpersHarness_CoverageAttributionDecoy,
 	test_statoblast_CoverageHelpersHarness_CoverageAttributionExecuted,
 	test_statoblast_CoverageHelpersHarness_CoverageHelpersHarness,
@@ -354,7 +358,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				data: encodeDeployData({
 					abi: factoryArtifact.abi,
 					bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
-					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 0n, 1n * 10n ** 18n, zeroAddress],
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 0n, 1n * 10n ** 18n, zeroAddress, zeroAddress],
 				}),
 			}),
 			/Minimum security bond debt zero/,
@@ -364,7 +368,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				data: encodeDeployData({
 					abi: factoryArtifact.abi,
 					bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
-					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 1n * 10n ** 18n, 1n * 10n ** 18n, client.account.address],
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 1n * 10n ** 18n, 1n * 10n ** 18n, client.account.address, zeroAddress],
 				}),
 			}),
 			/Operations delegate has no code/,
@@ -377,12 +381,30 @@ describe('Solidity bytecode coverage helpers', () => {
 			}),
 		)
 
+		await assert.rejects(
+			client.sendTransaction({
+				data: encodeDeployData({
+					abi: factoryArtifact.abi,
+					bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 1n * 10n ** 18n, 1n * 10n ** 18n, operationsDelegate, zeroAddress],
+				}),
+			}),
+			/Accounting delegate has no code/,
+		)
+		const eventEmitter = await deployContract(
+			client,
+			encodeDeployData({
+				abi: statoblast_SecurityPoolEventEmitter_SecurityPoolEventEmitter.abi,
+				bytecode: applyLibraries(statoblast_SecurityPoolEventEmitter_SecurityPoolEventEmitter.evm.bytecode.object),
+			}),
+		)
+
 		const factoryAddress = await deployContract(
 			client,
 			encodeDeployData({
 				abi: factoryArtifact.abi,
 				bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
-				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 1n * 10n ** 18n, 1n * 10n ** 18n, operationsDelegate],
+				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 1n * 10n ** 18n, 1n * 10n ** 18n, operationsDelegate, eventEmitter],
 			}),
 		)
 		await assert.rejects(
@@ -1592,14 +1614,23 @@ describe('Solidity bytecode coverage helpers', () => {
 				bytecode: `0x${statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`,
 			}),
 		)
+		const depositDelegateAddress = await deployContract(
+			client,
+			encodeDeployData({
+				abi: statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.abi,
+				bytecode: `0x${statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.evm.bytecode.object}`,
+			}),
+		)
 		const escalationGameFactoryAddress = await deployContract(
 			client,
 			encodeDeployData({
 				abi: statoblast_factories_EscalationGameFactory_EscalationGameFactory.abi,
 				bytecode: `0x${statoblast_factories_EscalationGameFactory_EscalationGameFactory.evm.bytecode.object}`,
-				args: [claimDelegateAddress],
+				args: [claimDelegateAddress, depositDelegateAddress],
 			}),
 		)
+		assert.strictEqual(await client.readContract({ abi: statoblast_factories_EscalationGameFactory_EscalationGameFactory.abi, address: escalationGameFactoryAddress, functionName: 'depositDelegate' }), depositDelegateAddress)
+		assert.strictEqual(await client.readContract({ abi: statoblast_factories_EscalationGameFactory_EscalationGameFactory.abi, address: escalationGameFactoryAddress, functionName: 'claimDelegate' }), claimDelegateAddress)
 		await assert.rejects(
 			writeContractAndWait(client, () =>
 				client.sendTransaction({
@@ -1644,12 +1675,14 @@ describe('Solidity bytecode coverage helpers', () => {
 			/Escalation game deployment failed/,
 		)
 
+		const coordinatorWorker = await deployContract(client, encodeDeployData({ abi: statoblast_factories_OpenOraclePriceCoordinatorFactory_PriceCoordinatorDeploymentWorker.abi, bytecode: applyLibraries(statoblast_factories_OpenOraclePriceCoordinatorFactory_PriceCoordinatorDeploymentWorker.evm.bytecode.object) }))
+		const feedWorker = await deployContract(client, encodeDeployData({ abi: statoblast_factories_OpenOraclePriceCoordinatorFactory_SharedPoolPriceFeedDeploymentWorker.abi, bytecode: applyLibraries(statoblast_factories_OpenOraclePriceCoordinatorFactory_SharedPoolPriceFeedDeploymentWorker.evm.bytecode.object) }))
 		const priceOracleFactoryAddress = await deployContract(
 			client,
 			encodeDeployData({
 				abi: statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory.abi,
 				bytecode: applyLibraries(statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory.evm.bytecode.object),
-				args: [zeroAddress, 100000n, 1000000, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, 480, 0, 100000, 10000, 115, true, true, client.account.address, 100000n, 30000n, 1000n],
+				args: [zeroAddress, 100000n, 1000000, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, 480, 0, 100000, 10000, 115, true, true, client.account.address, 100000n, 30000n, 1000n, coordinatorWorker, feedWorker],
 			}),
 		)
 		const deployPriceCoordinatorData = encodeFunctionData({
@@ -1704,7 +1737,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeDeployData({
 				abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer.abi,
 				bytecode: applyLibraries(statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer.evm.bytecode.object),
-				args: [zeroAddress],
+				args: [zeroAddress, zeroAddress],
 			}),
 		)
 		await assert.rejects(

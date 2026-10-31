@@ -2,6 +2,5 @@ export { MULTICALL3_ABI, normalizeCodecArguments, getNamedFunctionAbi, getContra
 export { toEventSelector, decodeEventLog } from './abi/events.js'
 export { parseAbiParameters, parseAbi, parseAbiItem } from './abi/parser.js'
 
-/** @internal Test-only raw codec entry points. */
 export { decodeFunctionResult } from './abi/codec.js'
 export { encodeEventTopics } from './abi/events.js'

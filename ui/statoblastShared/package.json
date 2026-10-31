@@ -649,6 +649,90 @@
 			"bun": "./ts/features/security-pools/components/VaultBackingFactorForm.tsx",
 			"default": "./js/features/security-pools/components/VaultBackingFactorForm.js"
 		},
+		"./features/portfolios/components/PortfoliosSection.js": {
+			"bun": "./ts/features/portfolios/components/PortfoliosSection.tsx",
+			"default": "./js/features/portfolios/components/PortfoliosSection.js"
+		},
+		"./features/portfolios/components/PortfolioAggregatePanel.js": {
+			"bun": "./ts/features/portfolios/components/PortfolioAggregatePanel.tsx",
+			"default": "./js/features/portfolios/components/PortfolioAggregatePanel.js"
+		},
+		"./features/portfolios/hooks/usePortfolio.js": {
+			"bun": "./ts/features/portfolios/hooks/usePortfolio.ts",
+			"default": "./js/features/portfolios/hooks/usePortfolio.js"
+		},
+		"./features/portfolios/hooks/usePortfolioActions.js": {
+			"bun": "./ts/features/portfolios/hooks/usePortfolioActions.ts",
+			"default": "./js/features/portfolios/hooks/usePortfolioActions.js"
+		},
+		"./features/portfolios/hooks/usePortfolioPurchase.js": {
+			"bun": "./ts/features/portfolios/hooks/usePortfolioPurchase.ts",
+			"default": "./js/features/portfolios/hooks/usePortfolioPurchase.js"
+		},
+		"./features/portfolios/hooks/usePortfolioAggregate.js": {
+			"bun": "./ts/features/portfolios/hooks/usePortfolioAggregate.ts",
+			"default": "./js/features/portfolios/hooks/usePortfolioAggregate.js"
+		},
+		"./features/portfolios/hooks/usePortfolioSharedFork.js": {
+			"bun": "./ts/features/portfolios/hooks/usePortfolioSharedFork.ts",
+			"default": "./js/features/portfolios/hooks/usePortfolioSharedFork.js"
+		},
+		"./features/portfolios/lib/capital.js": {
+			"bun": "./ts/features/portfolios/lib/capital.ts",
+			"default": "./js/features/portfolios/lib/capital.js"
+		},
+		"./features/portfolios/lib/draft.js": {
+			"bun": "./ts/features/portfolios/lib/draft.ts",
+			"default": "./js/features/portfolios/lib/draft.js"
+		},
+		"./protocol/securityPoolPortfolio.js": {
+			"bun": "./ts/protocol/securityPoolPortfolio.ts",
+			"default": "./js/protocol/securityPoolPortfolio.js"
+		},
+		"./protocol/securityPoolPortfolioFork.js": {
+			"bun": "./ts/protocol/securityPoolPortfolioFork.ts",
+			"default": "./js/protocol/securityPoolPortfolioFork.js"
+		},
+		"./protocol/securityPoolSharedFork.js": {
+			"bun": "./ts/protocol/securityPoolSharedFork.ts",
+			"default": "./js/protocol/securityPoolSharedFork.js"
+		},
+		"./protocol/securityPoolPortfolioState.js": {
+			"bun": "./ts/protocol/securityPoolPortfolioState.ts",
+			"default": "./js/protocol/securityPoolPortfolioState.js"
+		},
+		"./copy/portfolioCapital.js": {
+			"bun": "./ts/copy/portfolioCapital.ts",
+			"default": "./js/copy/portfolioCapital.js"
+		},
+		"./features/truth-auctions/components/ForkChildPreparation.js": {
+			"bun": "./ts/features/truth-auctions/components/ForkChildPreparation.tsx",
+			"default": "./js/features/truth-auctions/components/ForkChildPreparation.js"
+		},
+		"./protocol/forkPreparation.js": {
+			"bun": "./ts/protocol/forkPreparation.ts",
+			"default": "./js/protocol/forkPreparation.js"
+		},
+		"./protocol/oracleInitialReportFunding.js": {
+			"bun": "./ts/protocol/oracleInitialReportFunding.ts",
+			"default": "./js/protocol/oracleInitialReportFunding.js"
+		},
+		"./protocol/openOracleSettlement.js": {
+			"bun": "./ts/protocol/openOracleSettlement.ts",
+			"default": "./js/protocol/openOracleSettlement.js"
+		},
+		"./simulation/portfolioScenarioMint.js": {
+			"bun": "./ts/simulation/portfolioScenarioMint.ts",
+			"default": "./js/simulation/portfolioScenarioMint.js"
+		},
+		"./features/portfolios/lib/creation.js": {
+			"bun": "./ts/features/portfolios/lib/creation.ts",
+			"default": "./js/features/portfolios/lib/creation.js"
+		},
+		"./protocol/securityPoolPortfolioAdmission.js": {
+			"bun": "./ts/protocol/securityPoolPortfolioAdmission.ts",
+			"default": "./js/protocol/securityPoolPortfolioAdmission.js"
+		},
 		"./features/open-oracle/components/PriceRequestStatusSection.js": {
 			"bun": "./ts/features/open-oracle/components/PriceRequestStatusSection.tsx",
 			"default": "./js/features/open-oracle/components/PriceRequestStatusSection.js"
@@ -660,6 +744,42 @@
 		"./features/open-oracle/hooks/useOpenOracleCreateTokenMetadata.js": {
 			"bun": "./ts/features/open-oracle/hooks/useOpenOracleCreateTokenMetadata.ts",
 			"default": "./js/features/open-oracle/hooks/useOpenOracleCreateTokenMetadata.js"
+		},
+		"./features/portfolios/hooks/usePortfolioReportingReward.js": {
+			"bun": "./ts/features/portfolios/hooks/usePortfolioReportingReward.ts",
+			"default": "./js/features/portfolios/hooks/usePortfolioReportingReward.js"
+		},
+		"./features/portfolios/hooks/usePortfolioServiceCredit.js": {
+			"bun": "./ts/features/portfolios/hooks/usePortfolioServiceCredit.ts",
+			"default": "./js/features/portfolios/hooks/usePortfolioServiceCredit.js"
+		},
+		"./features/portfolios/components/PortfolioPriceReport.js": {
+			"bun": "./ts/features/portfolios/components/PortfolioPriceReport.tsx",
+			"default": "./js/features/portfolios/components/PortfolioPriceReport.js"
+		},
+		"./features/portfolios/hooks/usePortfolioPrice.js": {
+			"bun": "./ts/features/portfolios/hooks/usePortfolioPrice.ts",
+			"default": "./js/features/portfolios/hooks/usePortfolioPrice.js"
+		},
+		"./features/portfolios/components/PortfolioAuction.js": {
+			"bun": "./ts/features/portfolios/components/PortfolioAuction.tsx",
+			"default": "./js/features/portfolios/components/PortfolioAuction.js"
+		},
+		"./features/portfolios/hooks/usePortfolioAuction.js": {
+			"bun": "./ts/features/portfolios/hooks/usePortfolioAuction.ts",
+			"default": "./js/features/portfolios/hooks/usePortfolioAuction.js"
+		},
+		"./copy/portfolioAuction.js": {
+			"bun": "./ts/copy/portfolioAuction.ts",
+			"default": "./js/copy/portfolioAuction.js"
+		},
+		"./protocol/securityPoolPortfolioAuction.js": {
+			"bun": "./ts/protocol/securityPoolPortfolioAuction.ts",
+			"default": "./js/protocol/securityPoolPortfolioAuction.js"
+		},
+		"./protocol/securityPoolPortfolioPrice.js": {
+			"bun": "./ts/protocol/securityPoolPortfolioPrice.ts",
+			"default": "./js/protocol/securityPoolPortfolioPrice.js"
 		}
 	},
 	"version": "1.0.0"

@@ -24,7 +24,7 @@ const lowLosingPrincipal = 100n * ATTO_REP
 const bindingLosingPrincipal = 200n * ATTO_REP
 const winningPrincipal = 300n * ATTO_REP
 
-// Ordinary-game stakes whose strict YES resolution leaves the low losing Invalid side as residual REP.
+// Ordinary-game stakes whose low Invalid side is paid to backing providers at source.
 export const ordinaryEscalationPrincipals = {
 	lowLosingPrincipal,
 	bindingLosingPrincipal,
@@ -64,6 +64,11 @@ export async function sweepResidualRep(sweeper: WriteClient, escalationGame: Add
 		args: [],
 	})
 	return await sweeper.waitForTransactionReceipt({ hash })
+}
+
+export async function settleOrdinaryGame(caller: WriteClient, escalationGame: Address) {
+	const hash = await caller.writeContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'settleOrdinaryGame' })
+	return await caller.waitForTransactionReceipt({ hash })
 }
 
 export async function redeemOwnVaultPayout(client: WriteClient, securityPool: Address, repToken: Address) {

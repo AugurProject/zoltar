@@ -3,12 +3,13 @@ import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactio
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { createWalletClient, custom, publicActions, encodeAbiParameters, encodeEventTopics, parseAbiParameters, decodeFunctionData, getAddress, toHex, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { createWalletClient, custom, publicActions, encodeAbiParameters, encodeEventTopics, parseAbiParameters, decodeFunctionData, parseAbi, getAddress, toHex, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { getOpenOracleGameTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TRACK_DISPUTES, OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { createOpenOracleReportInstance, disputeOracleReport, loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, loadOpenOracleReportSummaries, settleOracleReport, withdrawOpenOracleBalance } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
 import { getOracleManagerPriceValidUntilTimestamp } from '@zoltar/ui-statoblast-shared/protocol/oracleTiming.js'
 import { loadOracleManagerDetails } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
-import { getOpenOracleAddress } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
+import { getInfraContractAddresses, getOpenOracleAddress } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
+import { loadCoordinatorPriceValidUntilTimestamp } from '@zoltar/ui-statoblast-shared/protocol/openOracleSettlement.js'
 import { loadLiquidationApproval, type LiquidationApprovalParams } from '@zoltar/ui-statoblast-shared/protocol/liquidationApprovals.js'
 import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
@@ -327,19 +328,22 @@ describe('openOracle protocol client', () => {
 		let capturedActiveOperationArgs: readonly [bigint, bigint] | undefined
 		const requestedFunctionNames: string[] = []
 		const client = createMockLoaderClient({
-			getBlock: async () => ({ timestamp: 0n, baseFeePerGas: 0n }),
+			getBlock: async () => ({ timestamp: 0n, baseFeePerGas: 0n, number: 51n, hash: '0x11' }),
 			multicall: async request => {
+				expect(request.blockNumber).toBe(51n)
 				for (const contract of request.contracts) {
 					requestedFunctionNames.push(getContractFunctionName(contract))
 				}
-				return [1n, pendingOperationSlotId, [pendingOperationSlotId, 13n], 4n, 0n, 1n, true, 10n, 40n, 60n, 1_000n]
+				return [1n, pendingOperationSlotId, [pendingOperationSlotId, 13n], 4n, 0n, 1n, true, 10n, 40n, 60n, 1_000n, 790n]
 			},
 			readContract: async request => {
+				if (request.functionName === 'priceFeed') return managerAddress
 				if (request.functionName === 'getSettlementCallbackGasLimit') return 10
 				if (request.functionName === 'gasConsumedOpenOracleReportPrice') return 20n
-				if (request.functionName === 'getActiveStagedOperations') {
+				if (request.functionName === 'getActiveStagedOperationsPage') {
+					expect(request.blockNumber).toBe(51n)
 					const args = request.args
-					if (args === undefined) throw new Error('Expected getActiveStagedOperations args')
+					if (args === undefined) throw new Error('Expected getActiveStagedOperationsPage args')
 					const startIndex = args[0]
 					const count = args[1]
 					if (typeof startIndex !== 'bigint' || typeof count !== 'bigint') throw new Error('Expected bigint staged operation args')
@@ -358,6 +362,7 @@ describe('openOracle protocol client', () => {
 							targetVault: vaultAddress,
 							validForSeconds: 60n,
 						})),
+						15n,
 					]
 				}
 				if (request.functionName === 'getPendingOperationSlot') {
@@ -392,7 +397,9 @@ describe('openOracle protocol client', () => {
 			'getActiveStagedOperationCount',
 			'settlementTime',
 			'minLiquidationPriceDistanceBps',
+			'priceValidUntil',
 		])
+		expect(details.priceValidUntilTimestamp).toBe(790n)
 		expect(details.minLiquidationPriceDistanceBps).toBe(1_000n)
 		expect(capturedActiveOperationArgs).toEqual([0n, 25n])
 		expect(details.activeStagedOperationCount).toBe(40n)
@@ -401,6 +408,8 @@ describe('openOracle protocol client', () => {
 		expect(details.stagedOperations?.[0]?.operationId).toBe(40n)
 		expect(details.stagedOperations?.at(-1)?.operationId).toBe(pendingOperationSlotId)
 		expect(details.stagedOperations).toHaveLength(26)
+		let headerReads = 0
+		await expect(loadOracleManagerDetails({ ...client, getBlock: async () => ({ ...(await client.getBlock()), hash: headerReads++ === 0 ? '0x11' : '0x22' }) }, managerAddress)).rejects.toThrow('Chain changed while reading the operation queue')
 	})
 
 	for (const association of ['verified', 'different oracle', 'different coordinator', 'generic callback'] as const) {
@@ -433,6 +442,52 @@ describe('openOracle protocol client', () => {
 		})
 	}
 
+	for (const registered of [true, false]) {
+		test(`shared report preview uses authenticated feed validity: ${registered}`, async () => {
+			const { game } = createOpenOraclePreimage()
+			game.callbackContract = vaultAddress
+			game.settlementTime = 480n
+			const client = createMockLoaderClient({
+				getBlock: async () => ({ timestamp: 0n }),
+				readContract: async () => {
+					throw new Error('Unexpected single read')
+				},
+				multicall: async request => {
+					switch (getContractFunctionName(request.contracts[0])) {
+						case 'openOracle':
+							return [
+								{ status: 'success', result: getOpenOracleAddress() },
+								{ status: 'failure', error: new Error('Shared feed has no single question') },
+							]
+						case 'feed':
+							return [
+								{ status: 'success', result: vaultAddress },
+								{ status: 'success', result: 1n },
+							]
+						case 'reportCandidates':
+							return [{ status: 'success', result: [vaultAddress, initialReporter, alternateSecurityPoolAddress, 0n, 0n, 0n] }]
+						case 'securityPoolFactory':
+							return [
+								{ status: 'success', result: getInfraContractAddresses().securityPoolFactory },
+								{ status: 'success', result: alternateSecurityPoolAddress },
+								{ status: 'success', result: 0n },
+								{ status: 'success', result: game.token1 },
+								{ status: 'success', result: game.token2 },
+							]
+						case 'sharedPriceFeeds':
+							return [
+								{ status: 'success', result: registered ? vaultAddress : zeroAddress },
+								{ status: 'success', result: 780n },
+							]
+						default:
+							throw new Error('Unexpected shared feed read')
+					}
+				},
+			})
+			expect(await loadCoordinatorPriceValidUntilTimestamp(client, getOpenOracleAddress(), game, undefined, 1n)).toBe(registered ? game.reportTimestamp + 480n + 780n : undefined)
+		})
+	}
+
 	for (const status of ['accepted', 'rejected'] as const) {
 		test(`settlement filters unrelated logs before the ${status} coordinator outcome`, async () => {
 			const preimage = createOpenOraclePreimage(7n)
@@ -445,6 +500,24 @@ describe('openOracle protocol client', () => {
 			const client = { ...createMockWriteClient(() => {}), waitForTransactionReceipt: async () => ({ status: 'success' as const, logs }) }
 			const result = await settleOracleReport(client, getOpenOracleAddress(), 7n, preimage)
 			expect(result.priceSettlement).toEqual(status === 'accepted' ? { status } : { status, reason: 'Base fee too high' })
+		})
+	}
+
+	for (const accepted of [true, false]) {
+		test(`isolated report escrow attributes its feed settlement outcome: ${accepted}`, async () => {
+			const preimage = createOpenOraclePreimage(7n)
+			preimage.game.callbackContract = vaultAddress
+			const feedAbi = statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi
+			const escrowAbi = parseAbi(['event ReportCompleted(uint256 indexed reportId,address indexed priceFeed,bool accepted)'])
+			const completed = { address: vaultAddress, data: encodeAbiParameters(parseAbiParameters('bool'), [accepted]), topics: encodeEventTopics({ abi: escrowAbi, eventName: 'ReportCompleted', args: { reportId: 7n, priceFeed: alternateSecurityPoolAddress } }) }
+			const eventName = accepted ? ('PriceReported' as const) : ('PriceReportRejected' as const)
+			const result = {
+				address: alternateSecurityPoolAddress,
+				data: accepted ? encodeAbiParameters(parseAbiParameters('uint256,uint256'), [123n, 11n]) : encodeAbiParameters(parseAbiParameters('string,uint256,uint256,uint256,uint256'), ['Report stale', 0n, 0n, 0n, 0n]),
+				topics: encodeEventTopics({ abi: feedAbi, eventName, args: { reportId: 7n } }),
+			}
+			const client = { ...createMockWriteClient(() => {}), waitForTransactionReceipt: async () => ({ status: 'success' as const, logs: [result, completed] }) }
+			expect((await settleOracleReport(client, getOpenOracleAddress(), 7n, preimage)).priceSettlement).toEqual(accepted ? { status: 'accepted' } : { status: 'rejected', reason: 'Report stale' })
 		})
 	}
 

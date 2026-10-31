@@ -104,7 +104,7 @@ function truthAuctionStartCandidates(snapshot: EcosystemSnapshot) {
 	const now = amount(snapshot.anchor.timestamp)
 	return snapshot.pools.filter(pool => {
 		const auction = snapshot.auctions.find(value => value.pool.toLowerCase() === pool.address.toLowerCase())
-		return pool.systemState === 2 && pool.parent !== zeroAddress && auction?.startTime === '0' && amount(pool.parentForkActivationTime) > 0n && now > amount(pool.parentForkActivationTime) + MIGRATION_TIME_SECONDS
+		return pool.systemState === 2 && (!pool.escalationForkContinuation || pool.forkCarrySnapshotInitialized) && pool.parent !== zeroAddress && auction?.startTime === '0' && amount(pool.parentForkActivationTime) > 0n && now > amount(pool.parentForkActivationTime) + MIGRATION_TIME_SECONDS
 	})
 }
 
@@ -155,7 +155,7 @@ export const startTruthAuction: OperationDefinition = {
 		const now = amount(snapshot.anchor.timestamp)
 		const found = snapshot.pools.some(pool => {
 			const auction = snapshot.auctions.find(value => value.pool.toLowerCase() === pool.address.toLowerCase())
-			return pool.systemState === 2 && pool.parent !== zeroAddress && auction?.startTime === '0' && amount(pool.parentForkActivationTime) > 0n && now > amount(pool.parentForkActivationTime) + MIGRATION_TIME_SECONDS
+			return pool.systemState === 2 && (!pool.escalationForkContinuation || pool.forkCarrySnapshotInitialized) && pool.parent !== zeroAddress && auction?.startTime === '0' && amount(pool.parentForkActivationTime) > 0n && now > amount(pool.parentForkActivationTime) + MIGRATION_TIME_SECONDS
 		})
 		return eligible(options.allowIrreversibleOperations === true ? undefined : 'Irreversible operations are disabled', found ? undefined : 'No child pool has completed migration and awaits auction start')
 	},

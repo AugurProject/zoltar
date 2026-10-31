@@ -106,6 +106,32 @@ describe('Escalation Game: fork carry and MMR proofs', () => {
 		await traceCarryLeafPage(escalationGameAddress, QuestionOutcome.Yes, firstNextNodeId, 2n)
 	})
 
+	test('fork carry leaf paging bounds visited nodes across consumed history without losing live leaves', async () => {
+		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameWithProofPool()
+		await startEscalation(escalationGameAddress, reportBond, nonDecisionThresholdAttoRep)
+		for (let index = 0; index < 9; index++) {
+			await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		}
+		const activationTime = await getActivationTime(client, escalationGameAddress)
+		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
+		for (let index = 1n; index < 9n; index++) {
+			await claimDepositForWinningViaTestSecurityPool(testSecurityPoolAddress, index, QuestionOutcome.Yes)
+		}
+
+		let cursor = 0n
+		for (const expectedNextNodeId of [7n, 5n, 3n, 1n]) {
+			const [page, nextNodeId] = await readCarryLeafPage(client, escalationGameAddress, QuestionOutcome.Yes, cursor, 2n)
+			assert.deepStrictEqual(page, [], 'consumed nodes must count against the page scan budget')
+			assert.strictEqual(nextNodeId, expectedNextNodeId, 'an empty page must resume at the first unvisited node')
+			cursor = nextNodeId
+		}
+		const [lastPage, lastNextNodeId] = await readCarryLeafPage(client, escalationGameAddress, QuestionOutcome.Yes, cursor, 2n)
+		assert.strictEqual(lastPage.length, 1, 'following empty page cursors must retain the oldest live leaf')
+		assert.strictEqual(lastPage[0]?.parentDepositIndex, 0n)
+		assert.strictEqual(lastPage[0]?.amountAttoRep, reportBond)
+		assert.strictEqual(lastNextNodeId, 0n)
+	})
+
 	test('fork carry leaf paging rejects cursors from another outcome chain', async () => {
 		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameWithProofPool()
 		await startEscalation(escalationGameAddress, reportBond, nonDecisionThresholdAttoRep)
@@ -274,24 +300,24 @@ describe('Escalation Game: fork carry and MMR proofs', () => {
 		await assert.rejects(withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, proof), /Bad nullifier proof|Deposit settled/)
 	})
 
-	test('fork carry proof settlement rejects when no carry snapshot is available', async () => {
+	test('fork carry proof settlement blocks incomplete initialization and rejects empty snapshots', async () => {
 		const child = await deployEscalationGameWithProofPool()
 		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+		const proof = {
+			depositor: client.account.address,
+			amountAttoRep: reportBond,
+			parentDepositIndex: 0n,
+			cumulativeAmountAttoRep: reportBond,
+			sourceNodeId: 1n,
+			leafIndex: 0n,
+			merkleMountainRangeSiblings: [],
+			merkleMountainRangePeakIndex: 0n,
+			nullifierSiblings: new SparseNullifierTree().getProof(0n),
+		}
+		await assert.rejects(advanceForkContinuationPastStart(child.escalationGameAddress), /Fork snapshot incomplete/)
+		await assert.rejects(withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, proof), /Question not final/)
+		await initializeSnapshotViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
 		await advanceForkContinuationPastStart(child.escalationGameAddress)
-
-		await assert.rejects(
-			withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, {
-				depositor: client.account.address,
-				amountAttoRep: reportBond,
-				parentDepositIndex: 0n,
-				cumulativeAmountAttoRep: reportBond,
-				sourceNodeId: 1n,
-				leafIndex: 0n,
-				merkleMountainRangeSiblings: [],
-				merkleMountainRangePeakIndex: 0n,
-				nullifierSiblings: new SparseNullifierTree().getProof(0n),
-			}),
-			/Not winning outcome|Carry peak absent/,
-		)
+		await assert.rejects(withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, proof), /Not winning outcome|Carry peak absent/)
 	})
 })

@@ -102,7 +102,19 @@ enum QuestionOutcome {
 	No
 }
 
+interface ISecurityPoolVaultPositionReceiver {
+	/// @notice Explicit consent to receive the source vault's backing and obligations from the calling pool.
+	function onSecurityPoolVaultPositionReceived(address source) external returns (bytes4);
+}
+
 interface ISecurityPool {
+	function portfolioCustody() external view returns (address);
+	function setPortfolioCustody(address custody) external;
+	function creditForkBacking(uint256 amountAttoRep) external;
+	function creditEscalationAuctionBacking(uint256 amountAttoRep) external;
+	function refreshPortfolioFees() external;
+	function linearFeeRateAttoEthPerSecond() external view returns (uint96);
+	function linearFeeEndTime() external view returns (uint48);
 	/// @notice Authoritative resulting accounting state after a mutation. `vault` is zero for pool-wide causes.
 	event PoolAccountingCheckpoint(AccountingReason reason, address indexed vault, uint256 settlementCollateralAttoEth, uint256 totalUnderwritingLimitAttoEth, uint256 feeEligibleUnderwritingLimitAttoEth, uint256 totalClaimableVaultFeesAttoEth, uint256 unallocatedAccruedFeesAttoEth, uint256 feeIndex, uint256 feeIndexRemainder, uint256 totalFeesOwedRemainder, uint256 uncheckpointedFeeEligibleUnderwritingLimitAttoEth, uint256 lastUpdatedFeeAccumulator, uint256 currentRetentionRate);
 	/// @notice Authoritative resulting vault state and the affected global denominators. REP attribution uses
@@ -156,6 +168,7 @@ interface ISecurityPool {
 	function truthAuction() external view returns (address);
 
 	function attoSharesToAttoEth(uint256 amountAttoShares) external view returns (uint256);
+	function attoSharesToAttoRep(uint256 amountAttoShares) external view returns (uint256);
 	function attoEthToAttoShares(uint256 amountAttoEth) external view returns (uint256);
 
 	function attoRepToBackingUnits(uint256 amountAttoRep) external view returns (uint256);
@@ -177,6 +190,8 @@ interface ISecurityPool {
 	function updateRetentionRate() external;
 	function updateVaultFees(address vault) external;
 	function redeemFees(address vault) external;
+	/// @notice Transfers a proportional slice of the caller's non-escrowed position to a consenting vault.
+	function splitVaultPosition(address recipient, uint256 numerator, uint256 denominator) external;
 
 	function withdrawRepFromVault(address vault, uint256 amountAttoRep) external;
 	function setVaultUnderwritingLimit(address vault, uint256 limitAttoEth) external;
@@ -195,7 +210,7 @@ interface ISecurityPool {
 
 	function escalationGame() external view returns (EscalationGame);
 	function initializeForkedEscalationGame(uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep, uint256 elapsedAtFork, BinaryOutcomes.BinaryOutcome fixedQuestionOutcome) external;
-	function initializeForkCarrySnapshotWithResolutionBalances(address sourceGame, bytes32 snapshotId, bytes32[64][3] memory inheritedCarryPeaks, uint256[3] memory inheritedCarryLeafCounts, uint256[3] memory inheritedCarryTotals, uint256[3] memory inheritedResolutionBalances, bytes32[3] memory inheritedNullifierRoots) external;
+	function initializeForkCarryOutcome(address sourceGame, bytes32 snapshotId, bytes32[64] memory peaks, uint256 leafCount, uint256 carryTotalAttoRep, uint256 resolutionBalanceAttoRep, bytes32 nullifierRoot) external;
 	function resumeForkedEscalationGame() external;
 	function setAwaitingForkContinuation(bool shouldAwait) external;
 	function activateForkMode() external;
@@ -218,6 +233,7 @@ interface ISecurityPool {
 }
 
 interface ISecurityPoolFactory {
+	function preparePortfolioPriceFeed(ISecurityPool source, uint248 universeId) external returns (address);
 	function minimumSecurityBondDebtAttoEth() external view returns (uint256);
 	function minimumVaultRepDepositAttoRep() external view returns (uint256);
 
@@ -237,6 +253,15 @@ interface ISecurityPoolFactory {
 
 	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 currentRetentionRate, uint256 settlementCollateralAttoEth) external returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction);
 	function deployOriginSecurityPool(uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) external returns (ISecurityPool securityPool);
+	function deployPortfolioSecurityPool(uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) external returns (ISecurityPool securityPool);
+	function getPortfolioOriginId(address portfolio, uint248 originUniverseId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) external pure returns (bytes32 originId);
+	function getSecurityPoolPortfolio(ISecurityPool securityPool) external view returns (address portfolio);
+	function prepareChildPoolDependencies(ISecurityPool parent, uint256 outcomeIndex) external returns (OpenOraclePriceCoordinator coordinator, UniformPriceDualCapBatchAuction auction);
+	function getChildPoolDependencies(ISecurityPool parent, uint256 outcomeIndex) external view returns (OpenOraclePriceCoordinator coordinator, UniformPriceDualCapBatchAuction auction);
+	function preparePortfolioChildPriceFeed(ISecurityPool parent, uint256 outcomeIndex) external returns (address);
+	function initializePortfolioPriceFeed(ISecurityPool configurationSeed) external returns (address);
+	function initializePortfolioPriceFeedForUniverse(ISecurityPool configurationSeed, uint248 universeId) external returns (address);
+	function sharedPriceFeeds(address portfolio, uint248 universeId) external view returns (address);
 	function getOriginId(uint248 originUniverseId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) external pure returns (bytes32 originId);
 	function getPoolId(bytes32 originId, uint248 universeId) external pure returns (bytes32 poolId);
 	function getSecurityPool(bytes32 originId, uint248 universeId) external view returns (ISecurityPool securityPool);

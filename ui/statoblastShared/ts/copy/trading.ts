@@ -10,7 +10,9 @@ export const loadingForkTargetUniverses = 'Loading child universes…'
 export const formatMalformedOutcomeLabel = (outcomeIndex: string) => `Malformed (${outcomeIndex})`
 export const selectAll = 'Select all'
 export const childTargetsLockedReason = 'Child universe targets unlock after this universe forks.'
-export const redeemCompleteSetsAmount = 'ETH to redeem'
+export const redeemCompleteSetsAmount = 'Complete sets to redeem'
+export const availableRecoveryRep = 'REP available to redeem'
+export const expectedRepPayout = 'Expected REP payout'
 export const redeemCompleteSetsFeeDetail = 'The pool deducts accrued holding fees before redeeming, so you may receive slightly less ETH than shown. Max redeems every complete set you hold.'
 export const shareMigrationWalletRequiredReason = commonCopy.formatConnectWalletBefore('migrating shares')
 export const completeSetMintWalletRequiredReason = commonCopy.formatConnectWalletBefore('minting complete sets')
@@ -69,3 +71,6 @@ export const shareMigrationIrreversible = 'Migration cannot be undone.'
 export const formatMigrateSharesReviewTitle = (outcomeLabel: string) => `Migrate ${outcomeLabel} shares`
 export const formatMigrateSharesReviewUnit = (outcomeLabel: string) => `${outcomeLabel} shares`
 export const formatMigrateSharesReviewDescription = (outcomeLabel: string) => `Moves your whole ${outcomeLabel} balance into the selected child universes. ${shareMigrationIrreversible}`
+
+export const sharedPoolCapacityAtReview = 'Quoted before submission'
+export const sharedPoolPurchaseDetail = 'Purchases use shared REP backing. The transaction includes the quoted purchase fee in addition to this mint amount.'

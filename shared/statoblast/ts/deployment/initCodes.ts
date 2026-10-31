@@ -42,8 +42,11 @@ const ORACLE_SETTLEMENT_PARAMETERS = [
 ] as const
 
 /** ABI-encoded OpenOraclePriceCoordinatorFactory constructor arguments. */
-function encodeOpenOraclePriceCoordinatorFactoryArguments(weth: Address): Hex {
-	return encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }, { type: 'uint32' }, { type: 'uint256' }, ...ORACLE_SETTLEMENT_PARAMETER_TYPES], [weth, ORACLE_REPORT_GAS, ORACLE_SETTLEMENT_GAS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ...ORACLE_SETTLEMENT_PARAMETERS])
+function encodeOpenOraclePriceCoordinatorFactoryArguments(weth: Address, coordinatorWorker: Address, feedWorker: Address): Hex {
+	return encodeAbiParameters(
+		[{ type: 'address' }, { type: 'uint256' }, { type: 'uint32' }, { type: 'uint256' }, ...ORACLE_SETTLEMENT_PARAMETER_TYPES, { type: 'address' }, { type: 'address' }],
+		[weth, ORACLE_REPORT_GAS, ORACLE_SETTLEMENT_GAS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ...ORACLE_SETTLEMENT_PARAMETERS, coordinatorWorker, feedWorker],
+	)
 }
 
 type PriceCoordinatorArguments = {
@@ -51,13 +54,14 @@ type PriceCoordinatorArguments = {
 	openOracle: Address
 	repToken: Address
 	weth: Address
+	reportDelegate: Address
 }
 
 /** @internal ABI-encoded OpenOraclePriceCoordinator constructor arguments; the contract simulator derives price coordinator addresses from them. */
-export function encodeOpenOraclePriceCoordinatorArguments({ initialReportPriorityFeeAttoEthPerGas, openOracle, repToken, weth }: PriceCoordinatorArguments): Hex {
+export function encodeOpenOraclePriceCoordinatorArguments({ initialReportPriorityFeeAttoEthPerGas, openOracle, repToken, weth, reportDelegate }: PriceCoordinatorArguments): Hex {
 	return encodeAbiParameters(
-		[{ type: 'address' }, { type: 'address' }, { type: 'address' }, { type: 'uint256' }, { type: 'uint32' }, { type: 'uint256' }, { type: 'uint256' }, ...ORACLE_SETTLEMENT_PARAMETER_TYPES],
-		[openOracle, repToken, weth, ORACLE_REPORT_GAS, ORACLE_SETTLEMENT_GAS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, initialReportPriorityFeeAttoEthPerGas, ...ORACLE_SETTLEMENT_PARAMETERS],
+		[{ type: 'address' }, { type: 'address' }, { type: 'address' }, { type: 'uint256' }, { type: 'uint32' }, { type: 'uint256' }, { type: 'uint256' }, ...ORACLE_SETTLEMENT_PARAMETER_TYPES, { type: 'address' }],
+		[openOracle, repToken, weth, ORACLE_REPORT_GAS, ORACLE_SETTLEMENT_GAS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, initialReportPriorityFeeAttoEthPerGas, ...ORACLE_SETTLEMENT_PARAMETERS, reportDelegate],
 	)
 }
 
@@ -67,13 +71,27 @@ type ContractArtifact = BytecodeArtifact & Readonly<{ abi: Abi }>
 /** Compiled artifacts for the proxy-deployed statoblast infrastructure; callers supply them from their own artifact module. */
 type StatoblastInfrastructureArtifacts = {
 	escalationGameClaimDelegate: BytecodeArtifact
+	escalationGameDepositDelegate: BytecodeArtifact
 	escalationGameFactory: ContractArtifact
 	multicall3: BytecodeArtifact
 	openOracle: BytecodeArtifact
 	openOraclePriceCoordinatorFactory: BytecodeArtifact
+	priceCoordinatorDeploymentWorker: BytecodeArtifact
+	sharedPoolPriceFeedDeploymentWorker: BytecodeArtifact
 	securityPoolFactory: ContractArtifact
 	securityPoolForker: ContractArtifact
+	securityPoolForkerPortfolioDelegate: ContractArtifact
 	securityPoolOperationsDelegate: BytecodeArtifact
+	securityPoolEventEmitter: BytecodeArtifact
+	securityPoolCapitalLedgerDeployer: BytecodeArtifact
+	securityPoolCommitmentIndexDeployer: BytecodeArtifact
+	securityPoolCapitalFeeStreamsDeployer: BytecodeArtifact
+	securityPoolSettlementBookDeployer: BytecodeArtifact
+	securityPoolPortfolioSettlementDeployer: BytecodeArtifact
+	securityPoolPortfolioServicesDeployer: BytecodeArtifact
+	securityPoolReporterLedgerDeployer: BytecodeArtifact
+	securityPoolPortfolioForkCoordinatorDeployer: BytecodeArtifact
+	securityPoolPortfolioAuctionDeployer: BytecodeArtifact
 	securityPoolUtils: BytecodeArtifact
 	shareTokenFactory: ContractArtifact
 	uniformPriceDualCapBatchAuctionFactory: BytecodeArtifact
@@ -85,6 +103,7 @@ type SecurityPoolFactoryInputs = {
 	openOraclePriceCoordinatorFactory: Address
 	securityPoolForker: Address
 	securityPoolOperationsDelegate: Address
+	securityPoolEventEmitter: Address
 	shareTokenFactory: Address
 	uniformPriceDualCapBatchAuctionFactory: Address
 	zoltar: Address
@@ -104,10 +123,25 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 	const { applyLibraries } = createApplyLinkedLibrariesHelper(() => [{ hash: keccak256(toHex(SECURITY_POOL_UTILS_LIBRARY)).slice(2, 36), address: getSecurityPoolUtilsAddress() }])
 
 	const getShareTokenFactoryByteCode = (zoltar: Address) => encodeDeployData({ abi: artifacts.shareTokenFactory.abi, bytecode: bytecodeOf(artifacts.shareTokenFactory), args: [zoltar] })
-	const getEscalationGameFactoryByteCode = (claimDelegate: Address) => encodeDeployData({ abi: artifacts.escalationGameFactory.abi, bytecode: bytecodeOf(artifacts.escalationGameFactory), args: [claimDelegate] })
-	const getOpenOraclePriceCoordinatorFactoryByteCode = (weth: Address) => concatHex([applyLibraries(artifacts.openOraclePriceCoordinatorFactory.evm.bytecode.object), encodeOpenOraclePriceCoordinatorFactoryArguments(weth)])
-	const getSecurityPoolForkerByteCode = (zoltar: Address) => encodeDeployData({ abi: artifacts.securityPoolForker.abi, bytecode: applyLibraries(artifacts.securityPoolForker.evm.bytecode.object), args: [zoltar] })
+	const getEscalationGameFactoryByteCode = (claimDelegate: Address, depositDelegate: Address) => encodeDeployData({ abi: artifacts.escalationGameFactory.abi, bytecode: bytecodeOf(artifacts.escalationGameFactory), args: [claimDelegate, depositDelegate] })
+	const getPriceCoordinatorDeploymentWorkerByteCode = () => applyLibraries(artifacts.priceCoordinatorDeploymentWorker.evm.bytecode.object)
+	const getSharedPoolPriceFeedDeploymentWorkerByteCode = () => applyLibraries(artifacts.sharedPoolPriceFeedDeploymentWorker.evm.bytecode.object)
+	const getWorkerAddress = (bytecode: Hex) => getCreate2Address({ bytecode, from: proxyDeployerAddress, salt: zeroSalt })
+	const getOpenOraclePriceCoordinatorFactoryByteCode = (weth: Address) =>
+		concatHex([applyLibraries(artifacts.openOraclePriceCoordinatorFactory.evm.bytecode.object), encodeOpenOraclePriceCoordinatorFactoryArguments(weth, getWorkerAddress(getPriceCoordinatorDeploymentWorkerByteCode()), getWorkerAddress(getSharedPoolPriceFeedDeploymentWorkerByteCode()))])
+	const getSecurityPoolForkerPortfolioDelegateByteCode = (zoltar: Address) => encodeDeployData({ abi: artifacts.securityPoolForkerPortfolioDelegate.abi, bytecode: applyLibraries(artifacts.securityPoolForkerPortfolioDelegate.evm.bytecode.object), args: [zoltar] })
+	const getSecurityPoolForkerByteCode = (zoltar: Address) => encodeDeployData({ abi: artifacts.securityPoolForker.abi, bytecode: applyLibraries(artifacts.securityPoolForker.evm.bytecode.object), args: [zoltar, getWorkerAddress(getSecurityPoolForkerPortfolioDelegateByteCode(zoltar))] })
+	const getSecurityPoolEventEmitterByteCode = () => applyLibraries(artifacts.securityPoolEventEmitter.evm.bytecode.object)
 	const getSecurityPoolOperationsDelegateByteCode = () => applyLibraries(artifacts.securityPoolOperationsDelegate.evm.bytecode.object)
+	const getSecurityPoolCapitalLedgerDeployerByteCode = () => applyLibraries(artifacts.securityPoolCapitalLedgerDeployer.evm.bytecode.object)
+	const getSecurityPoolCommitmentIndexDeployerByteCode = () => applyLibraries(artifacts.securityPoolCommitmentIndexDeployer.evm.bytecode.object)
+	const getSecurityPoolCapitalFeeStreamsDeployerByteCode = () => applyLibraries(artifacts.securityPoolCapitalFeeStreamsDeployer.evm.bytecode.object)
+	const getSecurityPoolSettlementBookDeployerByteCode = () => applyLibraries(artifacts.securityPoolSettlementBookDeployer.evm.bytecode.object)
+	const getSecurityPoolPortfolioSettlementDeployerByteCode = () => applyLibraries(artifacts.securityPoolPortfolioSettlementDeployer.evm.bytecode.object)
+	const getSecurityPoolPortfolioServicesDeployerByteCode = () => applyLibraries(artifacts.securityPoolPortfolioServicesDeployer.evm.bytecode.object)
+	const getSecurityPoolReporterLedgerDeployerByteCode = () => applyLibraries(artifacts.securityPoolReporterLedgerDeployer.evm.bytecode.object)
+	const getSecurityPoolPortfolioForkCoordinatorDeployerByteCode = () => applyLibraries(artifacts.securityPoolPortfolioForkCoordinatorDeployer.evm.bytecode.object)
+	const getSecurityPoolPortfolioAuctionDeployerByteCode = () => applyLibraries(artifacts.securityPoolPortfolioAuctionDeployer.evm.bytecode.object)
 	const getSecurityPoolFactoryByteCode = (inputs: SecurityPoolFactoryInputs) =>
 		encodeDeployData({
 			abi: artifacts.securityPoolFactory.abi,
@@ -124,6 +158,7 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 				DEFAULT_PROTOCOL_CONFIG.minimumSecurityBondDebtAttoEth,
 				DEFAULT_PROTOCOL_CONFIG.minimumVaultRepDepositAttoRep,
 				inputs.securityPoolOperationsDelegate,
+				inputs.securityPoolEventEmitter,
 			],
 		})
 
@@ -131,18 +166,32 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 	const createInfraContractAddresses = (weth: Address, zoltar: ZoltarAddressSources) =>
 		createInfraContractAddressHelper({
 			escalationGameClaimDelegateBytecode: bytecodeOf(artifacts.escalationGameClaimDelegate),
+			escalationGameDepositDelegateBytecode: bytecodeOf(artifacts.escalationGameDepositDelegate),
 			getEscalationGameFactoryByteCode,
 			getSecurityPoolFactoryByteCode,
 			getSecurityPoolForkerByteCode,
+			getSecurityPoolForkerPortfolioDelegateByteCode,
 			getShareTokenFactoryByteCode,
 			getZoltarAddress: zoltar.getZoltarAddress,
 			getZoltarQuestionDataAddress: zoltar.getZoltarQuestionDataAddress,
 			multicall3Bytecode: bytecodeOf(artifacts.multicall3),
 			openOracleBytecode: bytecodeOf(artifacts.openOracle),
 			openOraclePriceCoordinatorFactoryBytecode: () => getOpenOraclePriceCoordinatorFactoryByteCode(weth),
+			priceCoordinatorDeploymentWorkerBytecode: getPriceCoordinatorDeploymentWorkerByteCode(),
+			sharedPoolPriceFeedDeploymentWorkerBytecode: getSharedPoolPriceFeedDeploymentWorkerByteCode(),
 			proxyDeployerAddress,
 			securityPoolUtilsBytecode: bytecodeOf(artifacts.securityPoolUtils),
 			securityPoolOperationsDelegateBytecode: getSecurityPoolOperationsDelegateByteCode(),
+			securityPoolEventEmitterBytecode: getSecurityPoolEventEmitterByteCode(),
+			securityPoolCapitalLedgerDeployerBytecode: getSecurityPoolCapitalLedgerDeployerByteCode(),
+			securityPoolCommitmentIndexDeployerBytecode: getSecurityPoolCommitmentIndexDeployerByteCode(),
+			securityPoolCapitalFeeStreamsDeployerBytecode: getSecurityPoolCapitalFeeStreamsDeployerByteCode(),
+			securityPoolSettlementBookDeployerBytecode: getSecurityPoolSettlementBookDeployerByteCode(),
+			securityPoolPortfolioSettlementDeployerBytecode: getSecurityPoolPortfolioSettlementDeployerByteCode(),
+			securityPoolPortfolioServicesDeployerBytecode: getSecurityPoolPortfolioServicesDeployerByteCode(),
+			securityPoolReporterLedgerDeployerBytecode: getSecurityPoolReporterLedgerDeployerByteCode(),
+			securityPoolPortfolioForkCoordinatorDeployerBytecode: getSecurityPoolPortfolioForkCoordinatorDeployerByteCode(),
+			securityPoolPortfolioAuctionDeployerBytecode: getSecurityPoolPortfolioAuctionDeployerByteCode(),
 			uniformPriceDualCapBatchAuctionFactoryBytecode: bytecodeOf(artifacts.uniformPriceDualCapBatchAuctionFactory),
 			zeroSalt,
 		}).getInfraContractAddresses
@@ -152,9 +201,22 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 		createInfraContractAddresses,
 		getEscalationGameFactoryByteCode,
 		getOpenOraclePriceCoordinatorFactoryByteCode,
+		getPriceCoordinatorDeploymentWorkerByteCode,
+		getSharedPoolPriceFeedDeploymentWorkerByteCode,
 		getSecurityPoolFactoryByteCode,
 		getSecurityPoolForkerByteCode,
+		getSecurityPoolForkerPortfolioDelegateByteCode,
 		getSecurityPoolOperationsDelegateByteCode,
+		getSecurityPoolEventEmitterByteCode,
+		getSecurityPoolCapitalLedgerDeployerByteCode,
+		getSecurityPoolCommitmentIndexDeployerByteCode,
+		getSecurityPoolCapitalFeeStreamsDeployerByteCode,
+		getSecurityPoolSettlementBookDeployerByteCode,
+		getSecurityPoolPortfolioSettlementDeployerByteCode,
+		getSecurityPoolPortfolioServicesDeployerByteCode,
+		getSecurityPoolReporterLedgerDeployerByteCode,
+		getSecurityPoolPortfolioForkCoordinatorDeployerByteCode,
+		getSecurityPoolPortfolioAuctionDeployerByteCode,
 		getShareTokenFactoryByteCode,
 	}
 }

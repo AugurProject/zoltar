@@ -29,6 +29,22 @@ test('every manifest deployment step is either verifiable or explicitly skipped,
 	}
 })
 
+test('verification authenticates the directly deployed shared escalation deposit delegate', async () => {
+	const artifactLookup = await loadRealArtifactLookup()
+	const manifest = await loadRealManifest('sepolia')
+	const delegateStep = manifest.deploymentSteps.find(step => step.id === 'escalationGameDepositDelegate')
+	if (delegateStep === undefined) throw new Error('Missing escalation game deposit delegate deployment')
+	const delegate = buildVerificationPlan(manifest, artifactLookup).jobs.find(job => job.id === 'escalationGameDepositDelegate')
+	expect(delegate).toEqual({
+		address: delegateStep.address,
+		compilerProfile: 'main',
+		constructorArguments: '',
+		contractIdentifier: 'contracts/statoblast/EscalationGameDepositDelegate.sol:EscalationGameDepositDelegate',
+		id: 'escalationGameDepositDelegate',
+		label: delegateStep.label,
+	})
+})
+
 test('manifest parsing rejects a different genesis outcome', async () => {
 	const manifest = await loadRealManifest('sepolia', 'no')
 	expect(() => parseDeploymentManifest(manifest, 'sepolia', 'yes')).toThrow('Expected yes genesis outcome, received no')

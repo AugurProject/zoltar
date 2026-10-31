@@ -1,4 +1,4 @@
-import { OperationDefinition, OperationWalletAssetDebit } from '../types.ts'
+import { EcosystemSnapshot, OperationDefinition, OperationWalletAssetDebit, PlanningOptions, PoolSnapshot } from '../types.ts'
 
 import { inputInteger, inputMatches } from '../input-values.ts'
 
@@ -11,6 +11,14 @@ import { ethSpend } from '../input-funding.ts'
 import { amount, choose, eligible, encodeStep, erc1155WalletDebit, eventEvidence, mixSeed, planBase } from '../planning.ts'
 
 import { securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
+import { timestampDeadlineHasRequiredSafety } from '../timing.ts'
+
+function mintDeadline(snapshot: EcosystemSnapshot, pool: PoolSnapshot, options: PlanningOptions) {
+	const question = snapshot.questions.find(candidate => candidate.id === pool.questionId)
+	if (question === undefined || amount(question.endTime) === 0n) return undefined
+	const deadline = amount(question.endTime) - 1n
+	return timestampDeadlineHasRequiredSafety(amount(snapshot.anchor.timestamp), deadline, options) ? deadline.toString() : undefined
+}
 
 export function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): OperationDefinition {
 	let id = 'statoblast.complete-set.create'
@@ -32,7 +40,7 @@ export function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Op
 		buildPlan(snapshot, options) {
 			const candidates = snapshot.pools.filter(pool => {
 				if (!inputMatches(options, 'pool', pool.address)) return false
-				if (kind === 'create') return operationalPools(snapshot).includes(pool) && canCreateCompleteSet(pool, ethSpend(snapshot, options, id))
+				if (kind === 'create') return operationalPools(snapshot).includes(pool) && mintDeadline(snapshot, pool, options) !== undefined && canCreateCompleteSet(pool, ethSpend(snapshot, options, id))
 				const shares = snapshot.wallet.shares.find(candidate => candidate.shareToken.toLowerCase() === pool.shareToken.toLowerCase() && candidate.universeId === pool.universeId)
 				if (shares === undefined) return false
 				if (kind === 'redeem') {
@@ -68,6 +76,7 @@ export function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Op
 				ecosystem: 'statoblast',
 				label: actionLabel,
 				metadata: { amount: spend.toString(), pool: pool.address },
+				deadlineTimestamp: kind === 'create' ? mintDeadline(snapshot, pool, options) : undefined,
 				postconditions: [kind === 'create' ? 'All three outcome share balances increase equally' : 'Pool collateral and wallet share balances decrease consistently'],
 				risk: kind === 'create' ? 'medium' : 'low',
 				snapshot,
@@ -82,7 +91,7 @@ export function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Op
 		evaluate(snapshot, options) {
 			if (kind === 'create') {
 				const spend = ethSpend(snapshot, options, id)
-				return eligible(operationalPools(snapshot).some(pool => canCreateCompleteSet(pool, spend)) ? undefined : 'No operational pool has minting capacity for the spend', spend === 0n ? 'No spendable ETH above reserve' : undefined)
+				return eligible(operationalPools(snapshot).some(pool => mintDeadline(snapshot, pool, options) !== undefined && canCreateCompleteSet(pool, spend)) ? undefined : 'No operational pool has minting capacity for the spend', spend === 0n ? 'No spendable ETH above reserve' : undefined)
 			}
 			const possible = snapshot.pools.some(pool => {
 				const shares = snapshot.wallet.shares.find(candidate => candidate.shareToken.toLowerCase() === pool.shareToken.toLowerCase() && candidate.universeId === pool.universeId)

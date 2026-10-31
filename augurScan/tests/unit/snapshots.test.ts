@@ -23,6 +23,7 @@ for (const [entityType, contractKind] of [
 			awaitingForkContinuation: [false],
 			isEscalationResolved: [false],
 			isPriceValid: [false],
+			priceFeed: [coordinator],
 			finalized: [false],
 		}
 		const read: StateRead = async (address, abi, functionName, args = []) => {
@@ -54,7 +55,8 @@ test('samples vault accounting without a stored target health factor and feeds r
 		getVaultOpenInterestAttoEth: 10n ** 18n,
 		vaultBadDebtAttoEth: 0n,
 		statoblastSecurityMultiplierBps: 15000n,
-		disputeStakedRepByVaultAttoRep: 0n,
+		disputeStakedRepByVaultAttoRep: 100n,
+		getVaultDisputeBackingAttoRep: 0n,
 	}
 	const read: StateRead = async (_address, _abi, name) => {
 		const value = values[name]
@@ -74,12 +76,13 @@ test('samples vault accounting without a stored target health factor and feeds r
 		openInterestAttoEth: String(10n ** 18n),
 		badDebtAttoEth: '0',
 		securityMultiplierBps: '15000',
-		disputeStakedAttoRep: '0',
+		disputeStakedAttoRep: '100',
+		disputeBackingAttoRep: '0',
 	})
 	const state = snapshot.readResult
 	if (state === undefined) throw new Error('Missing vault snapshot')
 	expect(
-		vaultRisk({ poolHeldBackingAttoRep: state['poolHeldBackingAttoRep'], disputeStakedAttoRep: state['disputeStakedAttoRep'], openInterestAttoEth: state['openInterestAttoEth'], repPerEth1e18: '100', securityMultiplierBps: String(state['securityMultiplierBps']), badDebtAttoEth: state['badDebtAttoEth'] }),
+		vaultRisk({ poolHeldBackingAttoRep: state['poolHeldBackingAttoRep'], disputeStakedAttoRep: state['disputeBackingAttoRep'], openInterestAttoEth: state['openInterestAttoEth'], repPerEth1e18: '100', securityMultiplierBps: String(state['securityMultiplierBps']), badDebtAttoEth: state['badDebtAttoEth'] }),
 	).toMatchObject({ protocolState: 'healthy', healthFactorBps: '13333' })
 })
 
@@ -184,4 +187,17 @@ test('unavailable claim reconstruction preserves the tagged basic escalation sta
 	const snapshot = await sampleEntityStateWithRead({ entityType: 'escalation', entityIdentity: pool, address: pool }, read)
 	expect(snapshot.readStatus).toBe('success')
 	expect(snapshot.readResult).toMatchObject({ outcomeBalancesAttoRep: ['1', '2', '3'], claimEvidence: { status: 'unavailable', reason: 'Claim ancestry unavailable' } })
+})
+
+test('attributes a member ledger snapshot to its shared pool price feed', async () => {
+	const feed = getAddress('0x4444444444444444444444444444444444444444')
+	const read: StateRead = async (_address, _abi, name) => {
+		if (name === 'priceFeed') return feed
+		if (name === 'isPriceValid') return true
+		if (name === 'awaitingForkContinuation' || name === 'isEscalationResolved') return false
+		return 1n
+	}
+	const snapshot = await sampleEntityStateWithRead({ entityType: 'pool', entityIdentity: pool, address: pool, coordinatorAddress: coordinator }, read)
+	expect(snapshot.readStatus).toBe('success')
+	expect(snapshot.readResult?.['price']).toEqual({ repPerEth1e18: '1', settlementTimestamp: '1', protocolValid: true, sourceContract: feed.toLowerCase() })
 })

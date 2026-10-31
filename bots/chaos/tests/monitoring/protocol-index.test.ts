@@ -1,3 +1,4 @@
+import { canonicalPoolReportRoutes } from '../../src/monitoring/discovery-price-feed.ts'
 import { indexWithCurrentRefunds, snapshotWithProtocolIndex } from '../../src/runtime/protocol-index-snapshot.ts'
 import { snapshotProtocolIndex } from '../../src/state/protocol-index-store.ts'
 import { ChaosProtocolIndexReorgError } from '../../src/monitoring/protocol-index-context.ts'
@@ -5,10 +6,30 @@ import { describe, expect, test } from 'bun:test'
 import { bytesToHex } from '@zoltar/core-shared/evm/ethereum'
 import { encodeAbiParameters, keccak256, toHex, type Address } from '@zoltar/bot-shared/ethereum'
 import { deriveChildUniverseId } from '../support/universe.ts'
-import { OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, updateProtocolIndex, type ChaosProtocolIndex } from '../../src/monitoring/protocol-index.ts'
+import { OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, trustedOpenOracleReportPredicate, updateProtocolIndex, type ChaosProtocolIndex } from '../../src/monitoring/protocol-index.ts'
 import { updateProtocolIndexWithQuorum } from '../../src/monitoring/protocol-index-quorum.ts'
 import type { ChaosReadClient } from '../../src/monitoring/discovery-client.ts'
 import { address, hash, snapshotFixture } from '../operations/fixture.ts'
+
+test('deduplicates shared question report aliases while rejecting inconsistent report identities', () => {
+	const snapshot = snapshotFixture()
+	const first = snapshot.pools[0]
+	if (first === undefined) throw new Error('Missing pool')
+	first.priceFeed = address(80)
+	first.pendingReportId = '42'
+	first.reportEscrows = { '41': address(86), '42': address(84) }
+	const second = { ...first, address: address(81), coordinator: address(82) }
+	const routes = canonicalPoolReportRoutes([first, second])
+	expect(routes).toEqual([
+		{ coordinator: address(86), pendingReportId: '41', repToken: first.repToken },
+		{ coordinator: address(84), pendingReportId: '42', repToken: first.repToken },
+	])
+	const trust = { ...indexTrust, ...indexDeployments, coordinatorReports: routes, wallet: address(1) }
+	expect(() => trustedOpenOracleReportPredicate(trust)).not.toThrow()
+	second.priceFeed = address(83)
+	second.reportEscrows = { '42': address(85) }
+	expect(() => trustedOpenOracleReportPredicate({ ...trust, coordinatorReports: canonicalPoolReportRoutes([first, second]) })).toThrow('assigned to multiple coordinators')
+})
 
 const indexDeployments = { openOracle: address(6), securityPoolForker: address(5), zoltar: address(2) } as const
 const indexTrust = {
@@ -642,6 +663,57 @@ describe('durable protocol index', () => {
 		const update = await updateProtocolIndex(indexContext(client, { auctionAddresses: [address(20)], escalationGames: [{ escalationGame: address(21), pool: address(22) }], previous: terminalIndex, startBlock: 1n }))
 		expect(update.index.auctionBids).toEqual({})
 		expect(update.index.escalationDeposits).toEqual([])
+	})
+
+	test('ordinary finality retires every indexed losing deposit while preserving winners and other games', async () => {
+		const game = address(21)
+		const pool = address(22)
+		const otherGame = address(23)
+		const previous: ChaosProtocolIndex = {
+			auctionBids: {},
+			auctionRefunds: {},
+			chainId: 31337,
+			childRepSplits: [],
+			cursor: { blockHash: hash(9), blockNumber: '9' },
+			escalationDeposits: [
+				{ amountAttoRep: 9n.toString(), claimed: false, depositIndex: '0', escalationGame: game, outcome: 1, parentDepositIndex: '0', pool, vault: address(1) },
+				{ amountAttoRep: 8n.toString(), claimed: false, depositIndex: '0', escalationGame: game, outcome: 2, parentDepositIndex: '0', pool, vault: address(1) },
+				{ amountAttoRep: 3n.toString(), claimed: false, depositIndex: '0', escalationGame: game, outcome: 0, parentDepositIndex: '0', pool, vault: address(2) },
+				{ amountAttoRep: 4n.toString(), claimed: false, depositIndex: '0', escalationGame: otherGame, outcome: 2, parentDepositIndex: '0', pool: address(24), vault: address(1) },
+			],
+			migrationRepSplits: [],
+			...indexDeployments,
+			reports: [],
+			schemaVersion: 3,
+			startBlock: '1',
+			wallet: address(1),
+		}
+		const topic = keccak256(toHex('OrdinarySettlementInitialized(uint8,uint256,uint256)'))
+		const settlement = canonicalLog({ address: game, blockNumber: 10n, logIndex: 0, topics: [topic, toHex(1n, { size: 32 })], data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [9n, 17n]) })
+		const client = strictReadClient({
+			async getBlock(parameters: { blockNumber: bigint }) {
+				return { hash: hash(Number(parameters.blockNumber)), number: parameters.blockNumber, timestamp: 1_000n }
+			},
+			async getLogs(parameters: { address?: Address | Address[]; topics?: readonly (string | readonly string[] | null)[] }) {
+				const selected = parameters.topics?.[0]
+				return Array.isArray(parameters.address) && parameters.address.includes(game) && Array.isArray(selected) && selected.includes(topic) ? [settlement] : []
+			},
+		})
+		const context = indexContext(client, {
+			escalationGames: [
+				{ escalationGame: game, pool },
+				{ escalationGame: otherGame, pool: address(24) },
+			],
+			previous,
+			startBlock: 1n,
+		})
+		const update = await updateProtocolIndex(context)
+		expect(update.index.escalationDeposits.map(deposit => [deposit.escalationGame, deposit.outcome])).toEqual([
+			[game, 1],
+			[otherGame, 2],
+		])
+		const repeated = await updateProtocolIndex({ ...context, previous: update.index })
+		expect(repeated.index.escalationDeposits).toEqual(update.index.escalationDeposits)
 	})
 
 	test('marks both winning claims and losing carry consumptions terminal', async () => {

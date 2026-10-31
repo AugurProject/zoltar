@@ -1,3 +1,4 @@
+import { attoSharesToRecoveryAttoRep } from '../../lib/shareValue.js'
 import * as workflowCopy from '../../copy/workflows.js'
 import type { SettlementOperation, ShareOutcome } from '../../protocol/live.js'
 import * as settlementCopy from '../../copy/settlement.js'
@@ -46,7 +47,8 @@ export function useSettlementWorkflowController({
 	if (inputBlocker === undefined) {
 		if (operation === 'redeem-complete-set' && parsedAmount !== undefined && market.shareTokenSupplyAttoShares > 0n) {
 			const expectedAttoEth = (parsedAmount * market.settlementCollateralAttoEth) / market.shareTokenSupplyAttoShares
-			if (expectedAttoEth > 0n) previewApproval = { operation, market, amount: parsedAmount, expectedAttoEth, minimumAttoEth: minimumAfterSlippage(expectedAttoEth, settings.slippageBps), slippageBps: settings.slippageBps, deadline: { validityMinutes: settings.validityMinutes } }
+			const expectedAttoRep = attoSharesToRecoveryAttoRep(parsedAmount, market)
+			if (expectedAttoEth > 0n || expectedAttoRep > 0n) previewApproval = { operation, market, amount: parsedAmount, expectedAttoEth, expectedAttoRep, minimumAttoEth: minimumAfterSlippage(expectedAttoEth, settings.slippageBps), slippageBps: settings.slippageBps, deadline: { validityMinutes: settings.validityMinutes } }
 		} else if (operation === 'migrate-shares') previewApproval = { operation, market, sourceOutcome, targetOutcomeIndexes }
 		else if (operation === 'redeem-winning-shares') previewApproval = { operation, market }
 	}

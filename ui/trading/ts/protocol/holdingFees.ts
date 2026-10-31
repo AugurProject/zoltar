@@ -1,10 +1,16 @@
-import type { WalletClient } from '@zoltar/core-shared/evm/ethereum'
+import { loadCentralPortfolioQuestion } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolioState.js'
+import { loadLinearFeeState } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
+import { attoSharesToRecoveryAttoRep } from '../lib/shareValue.js'
+import type { LinearFeeState } from '@zoltar/statoblast-shared/statoblast/retentionRate'
+import { parseAbi, type WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { estimateMintCheckpoint } from '@zoltar/ui-statoblast-shared/features/markets/lib/trading.js'
 import type { LiveMarket } from './liveMarket.js'
 import * as copy from '../copy/availability.js'
 
 export type FeeAccounting = Readonly<{
+	linearFee?: LinearFeeState
+	centralSettlement?: boolean
 	settlementCollateralAttoEth: bigint
 	totalUnderwritingLimitAttoEth: bigint
 	feeEligibleUnderwritingLimitAttoEth: bigint
@@ -17,16 +23,24 @@ export type FeeAccounting = Readonly<{
 /** Pin the checkpoint and share supply to the simulation block, including after the user's other transactions. */
 export async function loadTransactionFeeMarket(client: WalletClient, market: LiveMarket, blockNumber: bigint, timestamp: bigint): Promise<LiveMarket> {
 	const abi = statoblast_SecurityPool_SecurityPool.abi
-	const [feeAccounting, shareTokenSupplyAttoShares, feeEndTime] = await Promise.all([
+	const recoveryAbi = parseAbi(['function attoSharesToAttoRep(uint256 amountAttoShares) view returns (uint256)'])
+	const [accounting, shareTokenSupplyAttoShares, feeEndTime, linearFee] = await Promise.all([
 		client.readContract({ abi, address: market.pool, functionName: 'getPoolAccountingSnapshot', blockNumber }),
 		client.readContract({ abi, address: market.pool, functionName: 'shareTokenSupplyAttoShares', blockNumber }),
 		client.readContract({ abi, address: market.pool, functionName: 'getFeeEpochEndTime', blockNumber }),
+		loadLinearFeeState(client, market.pool, blockNumber),
 	])
+	const capital = linearFee === undefined ? undefined : await client.readContract({ abi, address: market.pool, blockNumber, functionName: 'portfolioCustody' })
+	const central = capital === undefined ? undefined : await loadCentralPortfolioQuestion(client, market.pool, capital, blockNumber)
+	const recovery = central?.settlementRecoveryAttoRep ?? (await client.readContract({ abi: recoveryAbi, address: market.pool, blockNumber, functionName: 'attoSharesToAttoRep', args: [shareTokenSupplyAttoShares] }))
+	if (typeof recovery !== 'bigint') throw new Error('Invalid claim recovery REP.')
+	const feeAccounting = { ...accounting, ...(linearFee === undefined ? {} : { linearFee }), ...central }
 	const checkpoint = estimateMintCheckpoint({ ...feeAccounting, currentTimestamp: timestamp, feeEndTimestamp: feeEndTime })
 	if (checkpoint === undefined) throw new Error(copy.holdingFeesUnavailableReason)
 	return {
 		...market,
-		shareTokenSupplyAttoShares,
+		shareTokenSupplyAttoShares: central?.shareTokenSupplyAttoShares ?? shareTokenSupplyAttoShares,
+		settlementRecoveryAttoRep: recovery,
 		settlementCollateralAttoEth: checkpoint.settlementCollateralAfterFeesAttoEth,
 		currentRetentionRate: feeAccounting.currentRetentionRate,
 		feeEligibleUnderwritingLimitAttoEth: feeAccounting.feeEligibleUnderwritingLimitAttoEth,
@@ -47,7 +61,7 @@ export function sellHoldingFeeBlocker(market: LiveMarket, completeSets: bigint, 
 	const collateral = projectedCollateral(market, deadline)
 	if (collateral === undefined) return copy.holdingFeesUnavailableReason
 	const payout = market.shareTokenSupplyAttoShares === 0n ? completeSets : (completeSets * collateral) / market.shareTokenSupplyAttoShares
-	return payout === 0n || payout < minimumAttoEth ? copy.holdingFeesBoundsReason : undefined
+	return (payout === 0n && attoSharesToRecoveryAttoRep(completeSets, market) === 0n) || payout < minimumAttoEth ? copy.holdingFeesBoundsReason : undefined
 }
 
 /** Fee accrual increases complete sets minted per ETH, so both directional deposit ceilings need time coverage. */

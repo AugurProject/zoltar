@@ -18,14 +18,17 @@ contract SecurityPoolForkerChildGameValidationHarness is SecurityPoolForkerBase 
 }
 
 contract SecurityPoolForkerFakePoolMock {
+	address public constant portfolioCustody = address(0);
 	uint248 private immutable configuredUniverseId;
 	ReputationToken private immutable configuredRepToken;
+	IShareToken private immutable configuredShareToken;
 	uint256 private immutable configuredQuestionId;
 	address private immutable configuredEscalationGame;
 
-	constructor(uint248 configuredUniverse, ReputationToken configuredRep, uint256 configuredQuestion, address configuredGame) {
+	constructor(uint248 configuredUniverse, ReputationToken configuredRep, IShareToken configuredShareTokenAddress, uint256 configuredQuestion, address configuredGame) {
 		configuredUniverseId = configuredUniverse;
 		configuredRepToken = configuredRep;
+		configuredShareToken = configuredShareTokenAddress;
 		configuredQuestionId = configuredQuestion;
 		configuredEscalationGame = configuredGame;
 	}
@@ -46,6 +49,10 @@ contract SecurityPoolForkerFakePoolMock {
 		return configuredRepToken;
 	}
 
+	function shareToken() external view returns (IShareToken) {
+		return configuredShareToken;
+	}
+
 	function questionId() external view returns (uint256) {
 		return configuredQuestionId;
 	}
@@ -54,6 +61,10 @@ contract SecurityPoolForkerFakePoolMock {
 
 	function settlementCollateralAttoEth() external pure returns (uint256) {
 		return 0;
+	}
+
+	function getTotalPoolHeldAttoRep() external view returns (uint256) {
+		return configuredRepToken.balanceOf(address(this));
 	}
 }
 
@@ -72,6 +83,7 @@ contract SecurityPoolForkerAttackFactoryMock {
 }
 
 contract SecurityPoolForkerAttackParentMock {
+	address public constant portfolioCustody = address(0);
 	SystemState private immutable configuredSystemState;
 	uint248 private immutable configuredUniverseId;
 	ISecurityPoolFactory private immutable configuredSecurityPoolFactory;
@@ -238,6 +250,7 @@ contract SecurityPoolForkerEscrowAttackGameMock {
 }
 
 contract SecurityPoolForkerEscrowAttackParentMock {
+	address public constant portfolioCustody = address(0);
 	SystemState private configuredSystemState = SystemState.Operational;
 	ReputationToken private immutable configuredRepToken;
 	ISecurityPoolFactory private immutable configuredFactory;
@@ -294,6 +307,10 @@ contract SecurityPoolForkerEscrowAttackParentMock {
 		return configuredRepToken;
 	}
 
+	function getTotalPoolHeldAttoRep() external view returns (uint256) {
+		return configuredRepToken.balanceOf(address(this));
+	}
+
 	function escalationGame() external view returns (SecurityPoolForkerEscrowAttackGameMock) {
 		return configuredEscalationGame;
 	}
@@ -312,6 +329,10 @@ contract SecurityPoolForkerEscrowAttackParentMock {
 	}
 
 	function totalUnderwritingLimitAttoEth() external pure returns (uint256) {
+		return 0;
+	}
+
+	function getCurrentMintingCapacityAttoEth() external pure returns (uint256) {
 		return 0;
 	}
 
@@ -364,6 +385,7 @@ contract SecurityPoolForkerAlternatingChildGameMock {
 }
 
 contract SecurityPoolForkerEscrowAttackChildMock {
+	address public constant portfolioCustody = address(0);
 	ISecurityPool private immutable configuredParent;
 	ISecurityPoolFactory private immutable configuredFactory;
 	ReputationToken private immutable configuredRepToken;
@@ -445,7 +467,7 @@ contract SecurityPoolForkerEscrowAttackChildMock {
 		forkResumeCount++;
 	}
 
-	function initializeForkCarrySnapshotWithResolutionBalances(address, bytes32, bytes32[64][3] memory, uint256[3] memory, uint256[3] memory, uint256[3] memory, bytes32[3] memory) external pure {}
+	function initializeForkCarryOutcome(address, bytes32, bytes32[64] memory, uint256, uint256, uint256, bytes32) external pure {}
 
 	function updateVaultFees(address) external pure {}
 

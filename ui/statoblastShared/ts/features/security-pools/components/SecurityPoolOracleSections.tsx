@@ -1,3 +1,5 @@
+import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
+import * as priceRequestCopy from '../../../copy/priceRequest.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { formatSettleCountdown, readyToSettle } from '../../../copy/openOracle.js'
 import { useLayoutEffect, useId, useState, useEffect } from 'preact/hooks'
@@ -28,6 +30,7 @@ import * as liquidationCopy from '../../../copy/liquidation.js'
 
 export type RequestPriceReview = {
 	proposedRepPerEthPrice?: bigint | undefined
+	requestedInitialAttoWeth?: bigint | undefined
 	requestValueAttoEth: bigint
 	managerAddress: Address
 	securityPoolAddress: Address
@@ -63,12 +66,22 @@ export type RequestPriceModalProps = {
 export function SecurityPoolRequestPriceModal({ canRequest, closeOnSuccessKey, confirmationGuardMessage, confirmationWalletBlocker, getReturnFocusTarget, onClose, onConfirm, pending, review }: RequestPriceModalProps) {
 	const manualPriceErrorId = useId()
 	const [initialPrice, setInitialPrice] = useState<OracleInitialPriceInput>({ price: '' })
-	useLayoutEffect(() => setInitialPrice({ price: '' }), [review])
+	const [reportFunding, setReportFunding] = useState('')
+	useLayoutEffect(() => {
+		setInitialPrice({ price: '' })
+		setReportFunding('')
+	}, [review])
+	const requestedInitialAttoWeth = reportFunding.trim() === '' ? 0n : tryParseDecimalInput(reportFunding)
+	const fundingError = requestedInitialAttoWeth === undefined || requestedInitialAttoWeth < 0n || requestedInitialAttoWeth >= 2n ** 128n ? priceRequestCopy.reportFundingInvalid : undefined
 	const { proposedRepPerEthPrice, error: manualPriceError } = parseOracleInitialPrice(initialPrice)
 	const manualPriceErrorShown = initialPrice.price !== '' && manualPriceError !== undefined
 	return (
 		<OperationModal closeOnSuccessKey={closeOnSuccessKey} getReturnFocusTarget={getReturnFocusTarget} isOpen={review !== undefined} onClose={onClose} title={securityPoolCopy.requestNewPrice}>
 			<OracleInitialPriceFields managerAddress={review?.managerAddress} value={initialPrice} onChange={setInitialPrice} disabled={pending} fieldId={manualPriceErrorId} />
+			<label className='field'>
+				<span>{priceRequestCopy.reportFunding}</span>
+				<FormInput value={reportFunding} onInput={event => setReportFunding(event.currentTarget.value)} disabled={pending} inputMode='decimal' placeholder={securityPoolCopy.zeroPlaceholder} error={fundingError} hint={priceRequestCopy.reportFundingHint} />
+			</label>
 			<div className='actions oracle-actions'>
 				<TransactionActionButton
 					disabledReasonElementId={confirmationGuardMessage === undefined && manualPriceErrorShown ? `${manualPriceErrorId}-error` : undefined}
@@ -76,10 +89,13 @@ export function SecurityPoolRequestPriceModal({ canRequest, closeOnSuccessKey, c
 					idleLabel={securityPoolCopy.requestNewPrice}
 					pendingLabel={securityPoolCopy.requestingNewPrice}
 					onClick={() => {
-						if (review !== undefined && manualPriceError === undefined && !pending && canRequest && confirmationGuardMessage === undefined) void onConfirm({ ...review, proposedRepPerEthPrice })
+						if (review !== undefined && manualPriceError === undefined && fundingError === undefined && !pending && canRequest && confirmationGuardMessage === undefined) void onConfirm({ ...review, proposedRepPerEthPrice, requestedInitialAttoWeth })
 					}}
 					pending={pending}
-					availability={withWalletBlocker({ disabled: review === undefined || !canRequest || confirmationGuardMessage !== undefined || manualPriceError !== undefined, reason: canRequest ? (confirmationGuardMessage ?? manualPriceError) : undefined }, canRequest ? confirmationWalletBlocker : undefined)}
+					availability={withWalletBlocker(
+						{ disabled: review === undefined || !canRequest || confirmationGuardMessage !== undefined || manualPriceError !== undefined || fundingError !== undefined, reason: canRequest ? (confirmationGuardMessage ?? manualPriceError ?? fundingError) : undefined },
+						canRequest ? confirmationWalletBlocker : undefined,
+					)}
 				/>
 				<button className='secondary' type='button' onClick={onClose} disabled={pending}>
 					{commonCopy.cancel}
@@ -251,7 +267,7 @@ export function SecurityPoolPriceOracleSection({
 	managerAddress: Address
 	managerDetails: OracleManagerDetails | undefined
 	managerError: string | undefined
-	metricValues: Pick<OracleManagerDetails, 'lastPrice' | 'lastSettlementTimestamp'> | undefined
+	metricValues: Pick<OracleManagerDetails, 'lastPrice' | 'lastSettlementTimestamp' | 'priceValidUntilTimestamp'> | undefined
 	onLoadManager: (managerAddress: Address) => void
 	onOpenRequestReview: () => void
 	onViewPendingReport: (reportId: bigint) => void
@@ -266,7 +282,7 @@ export function SecurityPoolPriceOracleSection({
 		<SectionBlock density='compact' headingId={PRICE_ORACLE_HEADING_ID} title={securityPoolCopy.poolPriceOracle} variant='plain'>
 			<MetricGrid>
 				<MetricField label={statoblastAppCopy.openOraclePrice} valueTagName='span'>
-					<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={priceValues?.lastPrice} lastSettlementTimestamp={priceValues?.lastSettlementTimestamp ?? 0n} pendingReportReadyAtTimestamp={managerDetails?.pendingReportReadyAtTimestamp} priceValidUntilTimestamp={managerDetails?.priceValidUntilTimestamp} />
+					<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={priceValues?.lastPrice} lastSettlementTimestamp={priceValues?.lastSettlementTimestamp ?? 0n} pendingReportReadyAtTimestamp={managerDetails?.pendingReportReadyAtTimestamp} priceValidUntilTimestamp={priceValues?.priceValidUntilTimestamp} />
 					<button className='quiet metric-label-refresh' type='button' onClick={() => onLoadManager(managerAddress)} disabled={loadingManager} aria-label={securityPoolCopy.refreshOracle} aria-busy={loadingManager} title={securityPoolCopy.refreshOracle}>
 						{loadingManager ? <span className='spinner' aria-hidden='true' /> : <span aria-hidden='true'>↻</span>}
 					</button>

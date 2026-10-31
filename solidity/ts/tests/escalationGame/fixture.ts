@@ -67,7 +67,7 @@ export function useEscalationGameFixture() {
 			data: encodeDeployData({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
 				bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
-				args: [testSecurityPoolAddress, repTokenAddress, proofVerifierAddress, getInfraContractAddresses().escalationGameClaimDelegate],
+				args: [testSecurityPoolAddress, repTokenAddress, proofVerifierAddress, getInfraContractAddresses().escalationGameClaimDelegate, getInfraContractAddresses().escalationGameDepositDelegate],
 			}),
 		})
 		const escalationGameDeploymentReceipt = await client.waitForTransactionReceipt({ hash: escalationGameDeploymentHash })
@@ -269,7 +269,7 @@ export function useEscalationGameFixture() {
 			assert.strictEqual(await getEscrowedRepByVault(client, escalationGameAddress, vault), expectedVaultTotal, 'vault escrow should match active local deposits')
 		}
 
-		const [carryPage] = await readCarryLeafPage(client, escalationGameAddress, QuestionOutcome.Yes, 0n, BigInt(activeCarryDeposits.length + 1))
+		const [carryPage] = await readCarryLeafPage(client, escalationGameAddress, QuestionOutcome.Yes, 0n, BigInt(deposits.length + 1))
 		const expectedNewestFirst = activeCarryDeposits.slice().reverse()
 		assert.deepStrictEqual(
 			carryPage.map(leaf => ({

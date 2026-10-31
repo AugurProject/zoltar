@@ -180,6 +180,9 @@ function useStatoblastTestFixture() {
 			return questionId
 		},
 		getAnvilWindowEthereum,
+		setSecurityPoolAddresses(addresses: typeof securityPoolAddresses) {
+			securityPoolAddresses = addresses
+		},
 		setBaselineSnapshot,
 		initializeStatoblastBaseline,
 		reportBond,
@@ -302,6 +305,7 @@ export function useStatoblastVaultAccountingFixture() {
 	const fixture = useStatoblastTestFixture()
 	return pickFixtureProperties(fixture, [
 		'getAnvilWindowEthereum',
+		'setSecurityPoolAddresses',
 		'setBaselineSnapshot',
 		'initializeStatoblastBaseline',
 		'reportBond',

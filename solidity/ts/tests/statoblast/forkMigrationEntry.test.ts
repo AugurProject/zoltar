@@ -307,7 +307,7 @@ describe('Statoblast: fork migration', () => {
 				data: encodeDeployData({
 					abi: test_statoblast_SecurityPoolForkerAttackMocks_SecurityPoolForkerFakePoolMock.abi,
 					bytecode: `0x${test_statoblast_SecurityPoolForkerAttackMocks_SecurityPoolForkerFakePoolMock.evm.bytecode.object}`,
-					args: [genesisUniverse, addressString(GENESIS_REPUTATION_TOKEN), questionId, zeroAddress],
+					args: [genesisUniverse, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.shareToken, questionId, zeroAddress],
 				}),
 			})
 			const fakePoolReceipt = await client.waitForTransactionReceipt({ hash: fakePoolDeploymentHash })
@@ -317,7 +317,7 @@ describe('Statoblast: fork migration', () => {
 			const targetCollateralBeforeAttack = await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)
 			assert.ok(targetCollateralBeforeAttack > 0n, 'attack target should hold tracked complete-set collateral')
 
-			await assert.rejects(initiateSecurityPoolFork(client, fakePool))
+			await assert.rejects(initiateSecurityPoolFork(client, fakePool), /Pool is not authorized/)
 
 			strictEqualTypeSafe(await getETHBalance(client, securityPoolAddresses.securityPool), targetBalanceBeforeAttack, 'untrusted delegate target must not drain canonical pool ETH')
 			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool), targetCollateralBeforeAttack, 'untrusted delegate target must not change canonical collateral accounting')
@@ -368,7 +368,7 @@ describe('Statoblast: fork migration', () => {
 				data: encodeDeployData({
 					abi: test_statoblast_SecurityPoolForkerAttackMocks_SecurityPoolForkerFakePoolMock.abi,
 					bytecode: `0x${test_statoblast_SecurityPoolForkerAttackMocks_SecurityPoolForkerFakePoolMock.evm.bytecode.object}`,
-					args: [genesisUniverse, addressString(GENESIS_REPUTATION_TOKEN), questionId, escalationGame],
+					args: [genesisUniverse, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.shareToken, questionId, escalationGame],
 				}),
 			})
 			const fakePoolReceipt = await attackerClient.waitForTransactionReceipt({ hash: fakePoolDeploymentHash })
@@ -567,7 +567,7 @@ describe('Statoblast: fork migration', () => {
 			)
 
 			const attackerChildRepBefore = await getERC20Balance(client, childRep, client.account.address)
-			await assert.rejects(claimForkedEscalationDeposits(client, fakeParent, client.account.address, QuestionOutcome.Yes, [0n]))
+			await assert.rejects(claimForkedEscalationDeposits(client, fakeParent, client.account.address, QuestionOutcome.Yes, [0n]), /Child game/)
 
 			strictEqualTypeSafe(await getERC20Balance(client, childRep, client.account.address), attackerChildRepBefore, 'rejected forged claim must not transfer child REP to the attacker')
 			strictEqualTypeSafe(await getERC20Balance(client, childRep, targetGame), victimDeposit, 'rejected forged claim must leave the canonical target game funded')

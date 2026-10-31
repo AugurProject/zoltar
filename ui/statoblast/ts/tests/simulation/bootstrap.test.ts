@@ -203,6 +203,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			loadReportingDetails: 0,
 			loadSecurityVaultDetails: 0,
 			loadZoltarUniverseSummary: 0,
+			initializeChildDisputeHistory: 0,
 			migrateRepToZoltarFromSecurityPool: 0,
 			queueOracleManagerOperation: 0,
 			requestOraclePrice: 0,
@@ -284,6 +285,11 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				universeId: 0n,
 			} as never
 		}),
+		initializeChildDisputeHistory: mock(async () => {
+			state.callLog.initializeChildDisputeHistory += 1
+			return { action: 'initializeChildHistory', hash: '0x01', securityPoolAddress: primaryPoolAddress, universeId: 0n }
+		}),
+		prepareChildPool: mock(async () => ({ action: 'prepareChildDependencies', hash: '0x01', securityPoolAddress: primaryPoolAddress, universeId: 0n })),
 		createChildUniverseFromSecurityPool: mock(
 			async () =>
 				({
@@ -1113,6 +1119,7 @@ describe('simulation bootstrap', () => {
 		expect(state.callLog.createSecurityPool).toBe(2)
 		expect(state.callLog.reportOutcomeInSecurityPool).toBe(2)
 		expect(state.callLog.migrateRepToZoltarFromSecurityPool).toBe(1)
+		expect(state.callLog.initializeChildDisputeHistory).toBe(3)
 		expect(state.callLog.startTruthAuctionForSecurityPool).toBe(1)
 		expect(state.callLog.submitTruthAuctionBid).toBe(10)
 		expect(state.callLog.loadForkAuctionDetails).toBeGreaterThanOrEqual(2)

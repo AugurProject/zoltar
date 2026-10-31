@@ -22,7 +22,7 @@ import {
 import { isIgnorableLogDecodeError } from '../../logDecodeErrors'
 import { getTotalRepPurchasedAttoRep, getEthRaiseCapAttoEth, getMaxRepBeingSoldAttoRep } from '../../../testSupport/simulator/utils/contracts/auction'
 import { getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress } from '../../../testSupport/simulator/utils/contracts/zoltar'
-import { claimAuctionProceeds, finalizeTruthAuction, getMigratedAttoRep, getOwnForkRepBuckets, getSecurityPoolForkerForkData, migrateRepToZoltar, migrateVault, startTruthAuction } from '../../../testSupport/simulator/utils/contracts/securityPoolForker'
+import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, getMigratedAttoRep, getOwnForkRepBuckets, getSecurityPoolForkerForkData, migrateRepToZoltar, migrateVault, startTruthAuction } from '../../../testSupport/simulator/utils/contracts/securityPoolForker'
 import { SystemState } from '../../../testSupport/simulator/types/statoblastTypes'
 import { QuestionOutcome } from '../../../testSupport/simulator/types/types'
 import { getQuestionEndDate, participateAuction, migrateShares } from '../../../testSupport/simulator/utils/contracts/statoblast'
@@ -158,10 +158,12 @@ describe('Statoblast: truth auction', () => {
 				await setVaultCapacityFixture(passiveRepHolder, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, passiveRepHolder.account.address, repDeposit / 4n)
 				const losingReporter = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 				await approveAndDepositRepToVault(losingReporter, inheritedTie ? 2n * forkThresholdAttoRep : repDeposit, questionId)
-				await mockWindow.setTime(endTime + 10000n)
 				const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
 				await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, securityPoolUnderwritingLimitAttoEth)
+				await mockWindow.setTime(endTime - 2n)
 				await createCompleteSet(createWriteClient(mockWindow, TEST_ADDRESSES[1]), securityPoolAddresses.securityPool, 10n * 10n ** 18n)
+				await mockWindow.setTime(endTime + 10000n)
+				await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 				await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, inheritedTie ? forkThresholdAttoRep : 2n * reportBond)
 				await depositToEscalationGame(losingReporter, securityPoolAddresses.securityPool, QuestionOutcome.No, inheritedTie ? forkThresholdAttoRep : reportBond)
 
@@ -170,6 +172,7 @@ describe('Statoblast: truth auction', () => {
 				const parentRepBuckets = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
 				assert.ok(parentRepBuckets.escalationChildRepPerSelectedOutcomeAttoRep > 0n, 'the external fork should preserve unresolved escalation backing')
 				await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+				await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 				const unresolvedMigrationHash = await client.writeContract({
 					address: getInfraContractAddresses().securityPoolForker,
 					abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,

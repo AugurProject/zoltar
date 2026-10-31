@@ -25,6 +25,7 @@ export type {
 	Transport,
 } from '@zoltar/core-shared/evm/ethereum'
 export {
+	decodeFunctionResult,
 	bigintToSafeNumber,
 	concatHex,
 	decodeEventLog,

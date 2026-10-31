@@ -10,6 +10,7 @@ export function canonicalDeployment(chainId: number): DeploymentSettings {
 	const core = canonicalCoreDeployment(chainId === MAINNET_CHAIN_ID ? mainnet : sepolia)
 	const trading = tradingRootDeploymentPlans(core.securityPoolFactory)
 	return {
+		multicall3: core.multicall3,
 		openOracle: core.openOracle,
 		questionData: core.questionData,
 		securityPoolFactory: core.securityPoolFactory,

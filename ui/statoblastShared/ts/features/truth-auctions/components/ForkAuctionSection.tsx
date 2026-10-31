@@ -15,6 +15,8 @@ import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue
 import { TruthAuctionBidsSection, ViewerTruthAuctionBidsSection } from './TruthAuctionBidsSection.js'
 import { TruthAuctionMarketViewSection } from './TruthAuctionMarketViewSection.js'
 import { TruthAuctionSummaryCard } from './TruthAuctionSummaryCard.js'
+import * as reportingEscalationCopy from '../../../copy/reportingEscalation.js'
+import { ForkChildPreparation } from './ForkChildPreparation.js'
 import { ForkAuctionMigrationStage } from './ForkAuctionMigrationStage.js'
 import { ForkAuctionWorkflowShell, ForkTriggeredStage } from './ForkAuctionWorkflowShell.js'
 import { ForkAuctionBidsStatusSection, ForkAuctionSettlementActionSection, ForkAuctionStartSection, ForkAuctionSubmitBidSection } from './ForkAuctionActionSections.js'
@@ -321,12 +323,50 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 		return (
 			<ImportedForkSettlementSection
 				activeReportingDetails={model.activeReportingDetails}
-				disabled={model.forkAuctionActiveAction === 'settleForkedEscalation'}
+				disabled={model.forkAuctionActiveAction === 'settleForkedEscalation' || model.forkAuctionActiveAction === 'prepareForkClaim'}
 				onDepositSelectionChange={(outcome, depositIndex, checked) => {
 					model.setSelectedImportedForkDepositIndexesByOutcome(currentSelections => ({
 						...currentSelections,
 						[outcome]: checked ? [...currentSelections[outcome], depositIndex] : currentSelections[outcome].filter(index => index !== depositIndex),
 					}))
+				}}
+				renderPreparationAction={({ outcome, parentDepositIndex, identity, settlementGuardMessage, ready, progress }) => {
+					const pending = model.forkAuctionActiveAction === 'prepareForkClaim' && model.forkClaimPreparation?.outcome === outcome && model.forkClaimPreparation.parentDepositIndex === parentDepositIndex
+					const otherPreparationPending = model.forkAuctionActiveAction !== undefined && !pending
+					const completeGuard = (() => {
+						if (ready) return reportingEscalationCopy.inheritedClaimPreparationComplete
+						if (identity === undefined) return reportingEscalationCopy.inheritedClaimIdentityUnavailable
+						return undefined
+					})()
+					const settling = model.forkAuctionActiveAction === 'settleForkedEscalation' && model.forkClaimPreparation?.outcome === outcome && model.forkClaimPreparation.parentDepositIndex === parentDepositIndex
+					return (
+						<Fragment>
+							{displays.renderStageActionButton({
+								action: 'prepareForkClaim',
+								idleLabel: reportingEscalationCopy.prepareInheritedClaim,
+								pendingLabel: reportingEscalationCopy.preparingInheritedClaim,
+								pending,
+								inlineHint: progress,
+								availability: createActionAvailability(completeGuard ?? (otherPreparationPending ? reportingEscalationCopy.inheritedClaimTransactionPending : undefined)),
+								forceEnabled: true,
+								onClick: () => {
+									if (identity !== undefined) model.onPrepareForkClaim(identity)
+								},
+							})}
+							{displays.renderStageActionButton({
+								action: 'settleForkedEscalation',
+								idleLabel: reportingEscalationCopy.prepareAndSettleInheritedClaim,
+								pendingLabel: reportingEscalationCopy.preparingAndSettlingInheritedClaim,
+								pending: settling,
+								availability: createActionAvailability(settlementGuardMessage ?? (model.forkAuctionActiveAction !== undefined && !settling ? reportingEscalationCopy.inheritedClaimTransactionPending : undefined)),
+								forceEnabled: true,
+								tone: 'secondary',
+								onClick: () => {
+									if (identity !== undefined) model.onPrepareAndSettleForkClaim(identity)
+								},
+							})}
+						</Fragment>
+					)
 				}}
 				renderSettlementAction={({ guardMessage, outcome, sideLabel }) =>
 					displays.renderStageActionButton({
@@ -335,6 +375,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 						idleLabel: forkAuctionCopy.formatSettleSelectedValueForkCarriedDeposits(sideLabel),
 						onClick: () => model.onWithdrawForkedEscalationSubmit(outcome),
 						pendingLabel: forkAuctionCopy.settlingForkCarriedDepositsTruncated,
+						pending: model.forkAuctionActiveAction === 'settleForkedEscalation' && model.forkClaimPreparation === undefined,
 						tone: 'secondary',
 					})
 				}
@@ -361,6 +402,18 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 		if (model.selectedStage === 'migration')
 			return (
 				<ForkAuctionMigrationStage
+					childPreparationContent={
+						<ForkChildPreparation
+							status={model.childPreparation}
+							readGuard={model.childPreparationReadGuard}
+							closedGuard={model.isMigrationExpired ? forkAuctionCopy.unresolvedMigrationExpiredReason : undefined}
+							onPrepareFeed={model.onPrepareChildPriceFeed}
+							onPrepareContracts={model.onPrepareChildDependencies}
+							onCreate={model.onCreateChildUniverse}
+							onInitialize={model.onInitializeChildHistory}
+							renderAction={displays.renderStageActionButton}
+						/>
+					}
 					accountConnected={model.accountState.address !== undefined}
 					activeReportingDetails={model.activeReportingDetails}
 					claimParentDepositsGuardMessage={model.claimSelectedParentEscalationDepositsGuardMessage}

@@ -89,7 +89,7 @@ async function loadEscalationVaultData(client: Pick<ReadClient, 'multicall' | 'r
 		blockNumber,
 	})
 	if (sameAddress(escalationGameAddress, zeroAddress)) {
-		return vaultAddresses.map(() => ({ disputeStakedAttoRep: 0n }))
+		return vaultAddresses.map(() => ({ disputeStakedAttoRep: 0n, disputeBackingAttoRep: 0n }))
 	}
 	const disputeStakeContracts: ContractFunctionParameters[] = vaultAddresses.map(vaultAddress => ({
 		abi: statoblast_EscalationGame_EscalationGame.abi,
@@ -97,10 +97,12 @@ async function loadEscalationVaultData(client: Pick<ReadClient, 'multicall' | 'r
 		address: escalationGameAddress,
 		args: [vaultAddress],
 	}))
-	const disputeStakedAttoRep = await readRequiredMulticall(client, disputeStakeContracts, blockNumber)
-	return disputeStakedAttoRep.map(value => {
-		if (typeof value !== 'bigint') throw new Error('Unexpected escalation vault response')
-		return { disputeStakedAttoRep: value }
+	const disputeBackingContracts = disputeStakeContracts.map(contract => ({ ...contract, functionName: 'getVaultDisputeBackingAttoRep' }))
+	const [disputeStakedAttoRep, disputeBackingAttoRep] = await Promise.all([readRequiredMulticall(client, disputeStakeContracts, blockNumber), readRequiredMulticall(client, disputeBackingContracts, blockNumber)])
+	return disputeStakedAttoRep.map((value, index) => {
+		const backing = disputeBackingAttoRep[index]
+		if (typeof value !== 'bigint' || typeof backing !== 'bigint' || value < 0n || backing < 0n || backing > value) throw new Error('Unexpected escalation vault response')
+		return { disputeStakedAttoRep: value, disputeBackingAttoRep: backing }
 	})
 }
 
@@ -187,6 +189,7 @@ export async function loadSecurityPoolVaultSummaries(
 					badDebtAttoEth,
 					openInterestAttoEth,
 					disputeStakedAttoRep: currentEscalationData.disputeStakedAttoRep,
+					disputeBackingAttoRep: currentEscalationData.disputeBackingAttoRep,
 					repBackingUnits,
 					totalRepBackingUnits,
 					vaultAttoRepBacking: getVaultRepBackingAttoRepFromRepBackingUnits({
@@ -253,6 +256,7 @@ export async function loadSecurityPoolVaultSummary(client: ReadClient, securityP
 			badDebtAttoEth: 0n,
 			openInterestAttoEth: 0n,
 			disputeStakedAttoRep: 0n,
+			disputeBackingAttoRep: 0n,
 			vaultAttoRepBacking: 0n,
 			underwritingLimitAttoEth: 0n,
 			claimableFeesAttoEth: 0n,
@@ -277,7 +281,7 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 		totalUnderwritingLimitAttoEth,
 		universeId,
 		vaultData,
-		disputeStakedRepByVaultAttoRep,
+		escalationVaultData,
 		openInterestAttoEth,
 		capacityBackingFactorsBps,
 		statoblastSecurityMultiplierBps,
@@ -294,7 +298,7 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'totalUnderwritingLimitAttoEth', address: securityPoolAddress, args: [], blockNumber }),
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'universeId', address: securityPoolAddress, args: [], blockNumber }),
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'securityVaults', address: securityPoolAddress, args: [vaultAddress], blockNumber }),
-		loadEscalationVaultData(client, securityPoolAddress, [vaultAddress], blockNumber).then(values => values[0]?.disputeStakedAttoRep ?? 0n),
+		loadEscalationVaultData(client, securityPoolAddress, [vaultAddress], blockNumber),
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getVaultOpenInterestAttoEth', address: securityPoolAddress, args: [vaultAddress], blockNumber }),
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getVaultCapacityBackingFactorsBps', address: securityPoolAddress, args: [vaultAddress], blockNumber }),
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'statoblastSecurityMultiplierBps', address: securityPoolAddress, args: [], blockNumber }),
@@ -302,6 +306,8 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 	])
 	const repTokenSymbol = await client.readContract({ abi: ReputationToken_ReputationToken.abi, functionName: 'symbol', address: repToken, args: [], blockNumber })
 
+	const disputeData = escalationVaultData[0]
+	if (disputeData === undefined) throw new Error('Missing escalation vault data')
 	const [repBackingUnits, underwritingLimitAttoEth, claimableFeesAttoEth] = vaultData
 	const vaultAttoRepBacking = getVaultRepBackingAttoRepFromRepBackingUnits({ repBackingUnits, totalRepBackingUnits, totalPoolHeldRepBalanceAttoRep })
 
@@ -311,7 +317,8 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 		associatedRepPerCapacityBps: capacityBackingFactorsBps[0],
 		badDebtAttoEth,
 		currentRetentionRate,
-		disputeStakedAttoRep: disputeStakedRepByVaultAttoRep,
+		disputeStakedAttoRep: disputeData.disputeStakedAttoRep,
+		disputeBackingAttoRep: disputeData.disputeBackingAttoRep,
 		managerAddress,
 		minimumSecurityBondDebtAttoEth,
 		minimumVaultRepDepositAttoRep,

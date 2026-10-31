@@ -711,6 +711,12 @@ describe('Contract Test Suite', () => {
 		await splitMigrationRep(client, GENESIS_UNIVERSE, childRepRequired, [1n])
 		const childForkQuestionId = await createEndedBinaryQuestion('nested fork for global REP numbering')
 		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: childRep, functionName: 'allowance', args: [client.account.address, zoltar] }), 0n)
+		await assert.rejects(forkUniverse(client, childUniverseId, childForkQuestionId), /Parent fork response period is still active/)
+		const parentFork = await getUniverseData(client, GENESIS_UNIVERSE)
+		const childForkEarliest = parentFork.forkTime + 70n * 24n * 60n * 60n
+		await mockWindow.setTime(childForkEarliest - 2n)
+		await assert.rejects(forkUniverse(client, childUniverseId, childForkQuestionId), /Parent fork response period is still active/)
+		await mockWindow.setTime(childForkEarliest - 1n)
 		await forkUniverse(client, childUniverseId, childForkQuestionId)
 		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: childRep, functionName: 'allowance', args: [client.account.address, zoltar] }), 0n, 'all rejected child permit calls must preserve zero allowance')
 		await addRepToMigrationBalance(client, childUniverseId, 1n)

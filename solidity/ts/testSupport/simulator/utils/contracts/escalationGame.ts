@@ -1,9 +1,9 @@
-import { encodeDeployData } from '@zoltar/core-shared/evm/ethereum'
-import { ReputationToken_ReputationToken, statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier } from '../../../../types/contractArtifact'
+import { encodeDeployData, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { ReputationToken_ReputationToken, statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier, test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as poolArtifact } from '../../../../types/contractArtifact'
 import { AccountAddress, QuestionOutcome } from '../../types/types'
 import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
 import { CONTRACT_PAGE_SIZE } from './pagination'
-import { getRepTokenAddress } from './zoltar'
+import { getRepTokenAddress, getZoltarAddress } from './zoltar'
 import { getInfraContractAddresses } from './deployStatoblast'
 import { requireAddress, requireArray, requireBigInt } from '../utilities'
 
@@ -130,6 +130,11 @@ export const getEscalationGameOutcomeState = async (client: ReadClient, escalati
 	})
 
 export const deployEscalationGame = async (writeClient: WriteClient, startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint) => {
+	const poolHash = await writeClient.sendTransaction({
+		data: encodeDeployData({ abi: poolArtifact.abi, bytecode: `0x${poolArtifact.evm.bytecode.object}`, args: [getZoltarAddress(), 0n, zeroAddress] }),
+	})
+	const poolReceipt = await writeClient.waitForTransactionReceipt({ hash: poolHash })
+	const pool = requireContractAddress(poolReceipt.contractAddress, 'Escalation test pool deployment address')
 	const verifierDeploymentHash = await writeClient.sendTransaction({
 		data: encodeDeployData({
 			abi: statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.abi,
@@ -142,11 +147,12 @@ export const deployEscalationGame = async (writeClient: WriteClient, startBondAt
 		data: encodeDeployData({
 			abi: statoblast_EscalationGame_EscalationGame.abi,
 			bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
-			args: [writeClient.account.address, getRepTokenAddress(0n), proofVerifierAddress, getInfraContractAddresses().escalationGameClaimDelegate],
+			args: [pool, getRepTokenAddress(0n), proofVerifierAddress, getInfraContractAddresses().escalationGameClaimDelegate, getInfraContractAddresses().escalationGameDepositDelegate],
 		}),
 	})
 	const deploymentReceipt = await writeClient.waitForTransactionReceipt({ hash: deploymentHash })
 	const escalationGameAddress = requireContractAddress(deploymentReceipt.contractAddress, 'Escalation game deployment address')
+	await writeContractAndWait(writeClient, () => writeClient.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'setEscalationGame', args: [escalationGameAddress] }))
 	await writeContractAndWait(writeClient, () =>
 		writeClient.writeContract({
 			abi: statoblast_EscalationGame_EscalationGame.abi,
@@ -215,21 +221,21 @@ export const depositOnOutcome = async (writeClient: WriteClient, escalationGame:
 		'Escalation deposit preview',
 	)
 	const acceptedAmount = requireBigInt(preview[0], 'Accepted escalation deposit amount')
-	const resultingCumulativeAmount = requireBigInt(preview[1], 'Resulting escalation cumulative amount')
+	const pool = await writeClient.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'securityPool' })
 	await writeContractAndWait(writeClient, () =>
 		writeClient.writeContract({
 			abi: ReputationToken_ReputationToken.abi,
-			functionName: 'transfer',
+			functionName: 'approve',
 			address: getRepTokenAddress(0n),
-			args: [escalationGame, acceptedAmount],
+			args: [pool, acceptedAmount],
 		}),
 	)
 	await writeContractAndWait(writeClient, () =>
 		writeClient.writeContract({
-			abi: statoblast_EscalationGame_EscalationGame.abi,
-			functionName: 'recordDepositFromSecurityPool',
-			address: escalationGame,
-			args: [depositor, outcome, acceptedAmount, resultingCumulativeAmount],
+			abi: poolArtifact.abi,
+			functionName: 'depositOnOutcome',
+			address: pool,
+			args: [depositor, outcome, amount],
 		}),
 	)
 }

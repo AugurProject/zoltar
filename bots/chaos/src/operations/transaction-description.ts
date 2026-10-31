@@ -25,6 +25,7 @@ const previewAbis: readonly Abi[] = [
 	contractAbis.openOraclePriceCoordinatorAbi,
 	contractAbis.securityPoolForkerAbi,
 	contractAbis.escalationGameAbi,
+	contractAbis.multicall3Abi,
 	contractAbis.uniformPriceDualCapBatchAuctionAbi,
 	contractAbis.openOracleAbi,
 	contractAbis.weth9Abi,

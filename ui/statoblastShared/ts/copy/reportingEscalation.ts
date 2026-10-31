@@ -24,3 +24,18 @@ export const worthNowPendingFinalSettlement = 'Worth now: Pending final settleme
 
 export const winner = 'Winner'
 export const you = 'You:'
+
+export const prepareInheritedClaim = 'Prepare inherited claim'
+export const preparingInheritedClaim = 'Preparing inherited claim…'
+export const prepareInheritedClaimFirst = 'Prepare the selected inherited claims first.'
+export const inheritedClaimPreparationComplete = 'Claim preparation complete'
+export const inheritedClaimTransactionPending = 'Wait for the current claim transaction to finish.'
+export const formatClaimPreparationProgress = (pending: string) => {
+	if (pending === '0') return undefined
+	return `${pending} ancestry ${pending === '1' ? 'step' : 'steps'} queued`
+}
+
+export const prepareAndSettleInheritedClaim = 'Prepare and settle'
+export const preparingAndSettlingInheritedClaim = 'Preparing and settling…'
+export const inheritedClaimIdentityUnavailable = 'Refresh the pool to verify this deposit.'
+export const inheritedClaimFinalBatchRequired = 'Prepare earlier ancestry steps first.'

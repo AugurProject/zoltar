@@ -10,6 +10,11 @@ import type { SelectedPoolView } from './securityPoolWorkflow.js'
 export const POOL_LIFECYCLE_STEPS = ['operational', 'escalation', 'forkMigration', 'truthAuction', 'settled'] as const
 export type PoolLifecycleStep = (typeof POOL_LIFECYCLE_STEPS)[number]
 
+/** Bound portfolio questions activate through their shared branch and never run a per-question truth auction. */
+export function getPoolLifecycleSteps(pool: Pick<ListedSecurityPool, 'feeAccrualState'> | undefined): readonly PoolLifecycleStep[] {
+	return pool?.feeAccrualState?.centralSettlement === true ? POOL_LIFECYCLE_STEPS.filter(step => step !== 'truthAuction') : POOL_LIFECYCLE_STEPS
+}
+
 export type PoolLifecycleStepInput = {
 	/** The pool has recorded fork activity (a triggered fork, migration, or auction). */
 	hasForkActivity: boolean

@@ -32,6 +32,16 @@ export const contractSafetyPolicy = {
 	excludedSourcePrefixes: ['contracts/test/', 'contracts/trading/test/'],
 	exactLayoutPairs: [
 		{
+			host: { sourcePath: 'contracts/statoblast/SecurityPoolCapitalLedger.sol', contractName: 'SecurityPoolCapitalLedger' },
+			delegate: { sourcePath: 'contracts/statoblast/SecurityPoolCapitalAuctionDelegate.sol', contractName: 'SecurityPoolCapitalAuctionDelegate' },
+			reason: 'Auction winners detach exact funded positions in the original capital ledger without changing custody or health history.',
+		},
+		{
+			host: { sourcePath: 'contracts/statoblast/SecurityPoolCapitalLedger.sol', contractName: 'SecurityPoolCapitalLedger' },
+			delegate: { sourcePath: 'contracts/statoblast/SecurityPoolCapitalLifecycleDelegate.sol', contractName: 'SecurityPoolCapitalLifecycleDelegate' },
+			reason: 'Owner registration and fork choices mutate the original capital custody ledger through a fixed delegate.',
+		},
+		{
 			host: { sourcePath: 'contracts/statoblast/EscalationGame.sol', contractName: 'EscalationGame' },
 			delegate: { sourcePath: 'contracts/statoblast/EscalationGameDepositDelegate.sol', contractName: 'EscalationGameDepositDelegate' },
 			reason: 'Deposits mutate EscalationGame storage through delegatecall.',
@@ -40,6 +50,11 @@ export const contractSafetyPolicy = {
 			host: { sourcePath: 'contracts/statoblast/EscalationGame.sol', contractName: 'EscalationGame' },
 			delegate: { sourcePath: 'contracts/statoblast/EscalationGameClaimDelegate.sol', contractName: 'EscalationGameClaimDelegate' },
 			reason: 'Claim accounting reads and mutates EscalationGame storage through delegatecall.',
+		},
+		{
+			host: { sourcePath: 'contracts/statoblast/SecurityPool.sol', contractName: 'SecurityPool' },
+			delegate: { sourcePath: 'contracts/statoblast/SecurityPoolEventEmitter.sol', contractName: 'SecurityPoolEventEmitter' },
+			reason: 'Native fee accounting and portfolio credits mutate SecurityPool storage through this fixed delegate.',
 		},
 		{
 			host: { sourcePath: 'contracts/statoblast/SecurityPool.sol', contractName: 'SecurityPool' },
@@ -74,7 +89,7 @@ export const contractSafetyPolicy = {
 		{
 			host: { sourcePath: 'contracts/statoblast/SecurityPool.sol', contractName: 'SecurityPool' },
 			consumer: { sourcePath: 'contracts/statoblast/SecurityPoolEventEmitter.sol', contractName: 'SecurityPoolEventEmitter' },
-			reason: 'Pool accounting events read these SecurityPool slots directly in assembly.',
+			reason: 'Pool accounting events and fee accrual read these exact SecurityPool slots through the shared storage base.',
 			anchors: [
 				{ label: 'totalUnderwritingLimitAttoEth', slot: '1', offset: 0, typeLabel: 'uint256' },
 				{ label: 'settlementCollateralAttoEth', slot: '2', offset: 0, typeLabel: 'uint256' },

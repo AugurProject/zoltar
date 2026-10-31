@@ -3,7 +3,7 @@ import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { type WriteContractClient, writeContractAndWaitForReceipt } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
 import * as securityPoolCopy from '../copy/securityPool.js'
-import { getOracleManagerPriceValidUntilTimestamp, hasOraclePriceSubmissionWindow } from './oracleTiming.js'
+import { hasOraclePriceSubmissionWindow } from './oracleTiming.js'
 
 export async function writeStagedOperationAndWaitForReceipt(client: WriteContractClient & Partial<Pick<ReadClient, 'readContract' | 'getBlock'>>, managerAddress: Address, operationId: bigint) {
 	const callParams = {
@@ -22,10 +22,10 @@ export async function writeStagedOperationAndWaitForReceipt(client: WriteContrac
 				if (readContract === undefined || getBlock === undefined) throw new Error('Staged operation execution requires a readable wallet client.')
 				const operation = await readContract({ address: managerAddress, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'stagedOperations', args: [operationId] })
 				if (operation.operator === zeroAddress) throw new Error('This staged operation is no longer available. Refresh its state.')
-				const [settlementTime, priceValid, lastSettlementTimestamp, pool] = await Promise.all([
+				const [settlementTime, priceValid, priceValidUntil, pool] = await Promise.all([
 					readContract({ address: managerAddress, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'settlementTime' }),
 					readContract({ address: managerAddress, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'isPriceValid' }),
-					readContract({ address: managerAddress, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'lastSettlementTimestamp' }),
+					readContract({ address: managerAddress, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'priceValidUntil' }),
 					readContract({ address: managerAddress, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'securityPool' }),
 				])
 				if (!priceValid) throw new Error('A valid oracle price is required to execute this operation.')
@@ -43,7 +43,7 @@ export async function writeStagedOperationAndWaitForReceipt(client: WriteContrac
 				}
 				const block = await getBlock()
 				if (block.timestamp > operation.queuedAt + settlementTime + operation.validForSeconds) throw new Error('This staged operation has expired. Review a new operation.')
-				if (hasOraclePriceSubmissionWindow(block.timestamp, getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp)) !== true) throw new Error(securityPoolCopy.oracleOperationPriceExpiresTooSoon)
+				if (hasOraclePriceSubmissionWindow(block.timestamp, priceValidUntil) !== true) throw new Error(securityPoolCopy.oracleOperationPriceExpiresTooSoon)
 			},
 		},
 	])

@@ -63,10 +63,16 @@ const packageInstallTask = (projectPath: string, groups?: readonly string[]): Pr
  * only path is @tevm/compiler > solc-typed-ast > findup-sync > micromatch, and the only caller is solc-typed-ast's import
  * resolver, which passes the constant pattern `node_modules/`. No pattern from this repository, a user, or a remote party
  * reaches braces.
+ *
+ * GHSA-mrhx-c7xc-m3w5: the remaining Zod 3.25.76 copy has no patched v3 release; Web3 validator requires its v3 API.
+ * It is used only by @tevm/compiler > solc-typed-ast > web3-eth-abi / web3-utils > web3-validator. The repository does
+ * not import that compiler chain, and the four production simulation workers contain only patched Zod v4. The audit
+ * runner enforces the inspected legacy versions and dependency paths and rejects vulnerable runtime Zod copies before
+ * ignoring this advisory. Recheck reachability if compiler imports change; do not replace v3 with an incompatible v4.
  */
-export const acceptedAuditAdvisories = ['GHSA-vfj7-8cjw-p6xm'] as const
+export const acceptedAuditAdvisories = ['GHSA-vfj7-8cjw-p6xm', 'GHSA-mrhx-c7xc-m3w5'] as const
 
-export const dependencyAuditCommand: readonly string[] = ['bun', 'audit', ...acceptedAuditAdvisories.map(advisory => `--ignore=${advisory}`)]
+export const dependencyAuditCommand: readonly string[] = ['bun', path.join(defaultRepositoryRoot, 'tooling/repo/audit-dependencies.mts')]
 
 const packageAuditTask = (projectPath: string, groups?: readonly string[]): ProjectTask => ({ ...packageTask(projectPath, 'audit'), command: dependencyAuditCommand, ...(groups === undefined ? {} : { groups }) })
 
@@ -101,7 +107,7 @@ export const projects: readonly Project[] = [
 			),
 			typecheck: rootTask(['bun', 'run', 'tsc:root'], ['package.json', 'knip.ts', 'shared/tsconfig*.json', 'tsconfig.scripts.json', 'docs/tsconfig.json', 'tooling/**']),
 			knip: rootTask(['bun', 'run', 'knip'], ['package.json', 'knip.ts', 'tooling/**', 'shared/*/ts/**', 'solidity/ts/**', 'ui/**', 'bots/**', 'augurScan/**']),
-			audit: rootTask(dependencyAuditCommand, ['package.json', 'bun.lock'], ['core-audit']),
+			audit: rootTask(dependencyAuditCommand, ['package.json', 'bun.lock', 'tooling/repo/audit-dependencies.mts', 'tooling/repo/projects.ts'], ['core-audit']),
 		},
 		generatedDirectories: [],
 		ci: { scope: 'core' },
@@ -129,24 +135,9 @@ export const projects: readonly Project[] = [
 			type: 'contracts',
 			dependencies: app === 'zoltar' ? [] : [app === 'statoblast' ? 'contracts-zoltar' : 'contracts-statoblast'],
 			tasks: {
-				build: rootTask(
-					['bun', './tooling/contracts/build-app-contracts.mts', app],
-					[
-						'solidity/ts/compile.ts',
-						'solidity/ts/abi/**',
-						'solidity/contracts/*.sol',
-						'solidity/contracts/vendor/**',
-						'solidity/contracts/statoblast/WETH9.sol',
-						'solidity/contracts/statoblast/Multicall3.sol',
-						...(app === 'zoltar' ? [] : ['solidity/contracts/statoblast/**']),
-						...(app === 'trading' ? ['solidity/contracts/trading/**'] : []),
-						'solidity/ts/contractProjects.ts',
-						'tooling/contracts/build-app-contracts.mts',
-						'tooling/ui/projectArtifacts.mts',
-					],
-				),
+				build: rootTask(['bun', './tooling/contracts/build-app-contracts.mts', app], ['solidity/ts/compile.ts', 'solidity/ts/abi/**', 'solidity/contracts/**', 'solidity/ts/contractProjects.ts', 'tooling/contracts/build-app-contracts.mts', 'tooling/ui/projectArtifacts.mts']),
 			},
-			generatedDirectories: [`solidity/artifacts/${app}`],
+			generatedDirectories: [],
 			ci: { scope: 'core' },
 		}),
 	),
@@ -304,7 +295,7 @@ export const projects: readonly Project[] = [
 		id: 'chaos',
 		path: 'bots/chaos',
 		type: 'bot',
-		dependencies: ['shared-core', 'shared-zoltar', 'shared-trading', 'bot-shared', 'contracts'],
+		dependencies: ['shared-core', 'shared-zoltar', 'shared-statoblast', 'shared-trading', 'bot-shared', 'contracts'],
 		tasks: {
 			setup: packageInstallTask('bots/chaos'),
 			test: packageTask('bots/chaos', 'test'),
@@ -540,6 +531,9 @@ function ownerProject(filePath: string, registry: readonly Project[] = projects)
 export function affectedProjects(filePaths: readonly string[], registry: readonly Project[] = projects): Project[] {
 	validateProjectRegistry(registry)
 	const affected = new Set(filePaths.flatMap(filePath => ownerProject(filePath, registry)?.id ?? []))
+	// App exports share canonical compilation even when their runtime dependencies differ.
+	const contractSources = filePaths.filter(filePath => filePath.startsWith('solidity/contracts/'))
+	for (const project of registry) if (project.type === 'contracts' && contractSources.some(filePath => taskInputMatches('build', filePath, project))) affected.add(project.id)
 	let changed = true
 	while (changed) {
 		changed = false

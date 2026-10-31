@@ -16,6 +16,7 @@ const bindings: Record<string, Abi> = {
 	SecurityPoolForker: abis.securityPoolForkerAbi,
 	UniformPriceDualCapBatchAuction: abis.uniformPriceDualCapBatchAuctionAbi,
 	EscalationGame: abis.escalationGameAbi,
+	EscalationGameClaimDelegate: abis.escalationGameAbi,
 	OpenOracle: abis.openOracleAbi,
 	WETH9: abis.weth9Abi,
 	ShareToken: abis.shareTokenAbi,

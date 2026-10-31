@@ -79,7 +79,9 @@ export const demoOperations = (env: DemoEnvironment, chainId: string, atBlock?: 
 	const escalationTemplate = requiredArrayItem(escalations, 0, 'Demo escalation')
 	const auctionTemplate = requiredArrayItem(auctions, 0, 'Demo auction')
 	const allReports = cappedKpiCatalog ? [...Array.from({ length: 250 }, (_, index) => ({ ...reportTemplate, report_id: String(10_000 + index), lifecycle: { ...reportTemplate.lifecycle, state: 'Finalized' } })), { ...settleableReport, report_id: '10250' }] : reports
-	const allEscalations = cappedKpiCatalog ? [...Array.from({ length: 250 }, (_, index) => ({ ...escalationTemplate, game_address: `0x${(index + 1).toString(16).padStart(40, '0')}`, event_name: 'NonDecisionReached' })), { ...escalationTemplate, game_address: `0x${(251).toString(16).padStart(40, '0')}` }] : escalations
+	const allEscalations = cappedKpiCatalog
+		? [...Array.from({ length: 250 }, (_, index) => ({ ...escalationTemplate, game_address: `0x${(index + 1).toString(16).padStart(40, '0')}`, event_name: index % 2 === 0 ? 'OrdinarySettlementInitialized' : 'NonDecisionReached' })), { ...escalationTemplate, game_address: `0x${(251).toString(16).padStart(40, '0')}` }]
+		: escalations
 	const allAuctions = cappedKpiCatalog ? [...Array.from({ length: 250 }, (_, index) => ({ ...auctionTemplate, auction_address: `0x${(index + 1).toString(16).padStart(40, '0')}`, status: 'Closed' })), { ...auctionTemplate, auction_address: `0x${(251).toString(16).padStart(40, '0')}` }] : auctions
 	const poolMetricsUnavailable = context.pageUrl.searchParams.get('poolMetrics') === 'unavailable'
 	const risk = {

@@ -2,8 +2,8 @@ import { createApplyLinkedLibrariesHelper } from '@zoltar/core-shared/deployment
 import { getAddress, getCreate2Address, keccak256, toHex, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import type { GenesisOutcome } from '../../shared/zoltar/ts/deployment/genesisUniverses.ts'
+import { SECURITY_POOL_UTILS_SOURCE_PATH, STEP_DEFINITIONS, UNVERIFIABLE_STEPS, type CompilerProfile } from './contract-verification-steps.mts'
 
-const SECURITY_POOL_UTILS_SOURCE_PATH = 'contracts/statoblast/SecurityPoolUtils.sol'
 const ZERO_SALT = toHex(0, { size: 32 })
 
 export type DeploymentManifest = {
@@ -15,8 +15,6 @@ export type DeploymentManifest = {
 	network: { chainId: number; genesisOutcome: GenesisOutcome; genesisRepTokenAddress: Address; id: 'mainnet' | 'sepolia'; wethAddress: Address }
 	protocolConfig: { forkBurnDivisor: bigint; forkThresholdDivisor: bigint; minimumSecurityBondDebtAttoEth: bigint; minimumVaultRepDepositAttoRep: bigint }
 }
-
-type CompilerProfile = 'main' | 'openOracle'
 
 type ContractCreationArtifact = {
 	// Unlinked creation bytecode without a 0x prefix, exactly as compiled.
@@ -100,109 +98,6 @@ export function parseDeploymentManifest(rawManifest: unknown, expectedNetworkId:
 			minimumVaultRepDepositAttoRep: readDecimalBigInt(protocolConfig, 'minimumVaultRepDepositAttoRep', 'protocolConfig.minimumVaultRepDepositAttoRep'),
 		},
 	}
-}
-
-type StepDefinition = {
-	artifactPath: string
-	compilerProfile: CompilerProfile
-	contractName: string
-	// Source path inside the profile's standard JSON input when it differs
-	// from the merged artifact path (the OpenOracle pass compiles under its
-	// upstream layout).
-	inputPath?: string
-	linksLibraries?: boolean
-}
-
-const UNVERIFIABLE_STEPS: Readonly<Record<string, string>> = {
-	proxyDeployer: 'raw EVM deterministic proxy with no Solidity source',
-}
-
-const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
-	deploymentStatusOracle: {
-		artifactPath: 'contracts/DeploymentStatusOracle.sol',
-		compilerProfile: 'main',
-		contractName: 'DeploymentStatusOracle',
-	},
-	weth: {
-		artifactPath: 'contracts/statoblast/WETH9.sol',
-		compilerProfile: 'main',
-		contractName: 'WETH9',
-	},
-	reputationToken: {
-		artifactPath: 'contracts/GenesisReputationToken.sol',
-		compilerProfile: 'main',
-		contractName: 'GenesisReputationToken',
-	},
-	multicall3: {
-		artifactPath: 'contracts/statoblast/Multicall3.sol',
-		compilerProfile: 'main',
-		contractName: 'Multicall3',
-	},
-	zoltarQuestionData: {
-		artifactPath: 'contracts/ZoltarQuestionData.sol',
-		compilerProfile: 'main',
-		contractName: 'ZoltarQuestionData',
-	},
-	zoltar: {
-		artifactPath: 'contracts/Zoltar.sol',
-		compilerProfile: 'main',
-		contractName: 'Zoltar',
-	},
-	uniformPriceDualCapBatchAuctionFactory: {
-		artifactPath: 'contracts/statoblast/factories/UniformPriceDualCapBatchAuctionFactory.sol',
-		compilerProfile: 'main',
-		contractName: 'UniformPriceDualCapBatchAuctionFactory',
-	},
-	securityPoolUtils: {
-		artifactPath: SECURITY_POOL_UTILS_SOURCE_PATH,
-		compilerProfile: 'main',
-		contractName: 'SecurityPoolUtils',
-	},
-	securityPoolOperationsDelegate: {
-		artifactPath: 'contracts/statoblast/SecurityPoolOperationsDelegate.sol',
-		compilerProfile: 'main',
-		contractName: 'SecurityPoolOperationsDelegate',
-		linksLibraries: true,
-	},
-	openOracle: {
-		artifactPath: 'contracts/statoblast/openOracle/OpenOracle.sol',
-		compilerProfile: 'openOracle',
-		contractName: 'OpenOracle',
-		inputPath: 'src/OpenOracleSlim.sol',
-	},
-	shareTokenFactory: {
-		artifactPath: 'contracts/statoblast/factories/ShareTokenFactory.sol',
-		compilerProfile: 'main',
-		contractName: 'ShareTokenFactory',
-	},
-	openOraclePriceCoordinatorFactory: {
-		artifactPath: 'contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol',
-		compilerProfile: 'main',
-		contractName: 'OpenOraclePriceCoordinatorFactory',
-		linksLibraries: true,
-	},
-	securityPoolForker: {
-		artifactPath: 'contracts/statoblast/SecurityPoolForker.sol',
-		compilerProfile: 'main',
-		contractName: 'SecurityPoolForker',
-		linksLibraries: true,
-	},
-	escalationGameClaimDelegate: {
-		artifactPath: 'contracts/statoblast/EscalationGameClaimDelegate.sol',
-		compilerProfile: 'main',
-		contractName: 'EscalationGameClaimDelegate',
-	},
-	escalationGameFactory: {
-		artifactPath: 'contracts/statoblast/factories/EscalationGameFactory.sol',
-		compilerProfile: 'main',
-		contractName: 'EscalationGameFactory',
-	},
-	securityPoolFactory: {
-		artifactPath: 'contracts/statoblast/factories/SecurityPoolFactory.sol',
-		compilerProfile: 'main',
-		contractName: 'SecurityPoolFactory',
-		linksLibraries: true,
-	},
 }
 
 export function buildVerificationPlan(manifest: DeploymentManifest, getArtifact: ArtifactLookup): VerificationPlan {

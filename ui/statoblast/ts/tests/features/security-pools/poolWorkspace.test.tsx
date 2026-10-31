@@ -8,12 +8,11 @@ import { getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtil
 import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-core-shared/tests/testUtils/walletActions.js'
 import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import type { SecurityPoolWorkflowRouteContentProps } from '@zoltar/ui-zoltar-shared/features/types.js'
+import type { SecurityPoolWorkflowRouteContentProps } from '@zoltar/ui-statoblast-shared/features/types.js'
 import type { ListedSecurityPool } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { fireEvent, normalizeText, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { SecurityPoolWorkflowSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolWorkflowSection.js'
 import { PoolActionCard, PoolLifecycleStepper } from '@zoltar/ui-statoblast-shared/features/security-pools/components/PoolStagePanel.js'
-import type { SelectedPoolView } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolWorkflow.js'
 import { createAccountState, createFinalizedTruthAuction, createForkAuctionDetails, createForkAuctionProps, createLoadedPoolProps, createOracleManagerDetails, createSelectedPool, createSecurityPoolWorkflowProps, createTruthAuctionMetrics, migratingPoolState, truthAuctionPoolState } from './workflow/builders.js'
 import { useSecurityPoolWorkflowSectionTestDom } from './workflow/testDom.js'
 import { installStatoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
@@ -72,9 +71,9 @@ test('shows a loaded pool address read-only and keeps typed entry for an address
 })
 
 function NavigationHarness() {
-	const [view, setView] = useState<SelectedPoolView>('staged-operations')
+	const [view, setView] = useState('staged-operations')
 	const pool = createSelectedPool()
-	return <SecurityPoolWorkflowSection {...createSecurityPoolWorkflowProps({ securityPoolAddress: pool.securityPoolAddress, securityPools: [pool], selectedPoolView: view, onSelectedPoolViewChange: setView })} />
+	return <SecurityPoolWorkflowSection {...createSecurityPoolWorkflowProps({ securityPoolAddress: pool.securityPoolAddress, securityPools: [pool], selectedPoolView: view, onSelectedPoolViewChange: nextView => setView(nextView ?? '') })} />
 }
 test('shows the refresh busy label only while a shown pool reloads', async () => {
 	const pool = createSelectedPool()
@@ -113,7 +112,7 @@ test('keeps a directly opened advanced view visible and returns to the primary t
 })
 
 test('surfaces actionable pool exceptions independently of the selected tab', async () => {
-	const views: SelectedPoolView[] = []
+	const views: (string | undefined)[] = []
 	const reports: bigint[] = []
 	await renderLoadedPool({
 		securityPools: [createSelectedPool({ hasForkActivity: true, systemState: 'poolForked' })],
@@ -209,7 +208,7 @@ test('requests a new price straight from the pool oracle row', async () => {
 })
 
 test('shows the stage, marks the open tab row, and offers controls that leave it', async () => {
-	const views: SelectedPoolView[] = []
+	const views: (string | undefined)[] = []
 	await renderLoadedPool({ onSelectedPoolViewChange: view => views.push(view) })
 	const card = document.querySelector('.pool-action-card')
 	if (!(card instanceof HTMLElement)) throw new Error('Expected the action card')
@@ -232,6 +231,26 @@ test('names every lifecycle stage on its segment, in order, and marks the curren
 	expect(segments.map(segment => segment.getAttribute('title'))).toEqual(names)
 	expect(segments.map(segment => segment.className)).toEqual(['completed', 'completed', 'completed', 'current', 'upcoming'])
 	expect(segments[3]?.getAttribute('aria-current')).toBe('step')
+})
+
+test('an activated portfolio child shows four applicable stages without a truth auction', async () => {
+	await renderPoolPage(
+		createSelectedPool({
+			parent: '0x00000000000000000000000000000000000000b2',
+			forkOutcome: 'yes',
+			questionOutcome: 'yes',
+			settlementCollateralAttoEth: 0n,
+			settlementRecoveryAttoRep: 5_000n * 10n ** 18n,
+			feeAccrualState: { centralSettlement: true, feeEndTimestamp: 0n, feeIndexRemainder: 0n, lastUpdatedFeeAccumulator: 0n, totalFeesOwedRemainder: 0n },
+		}),
+		{ selectedPoolView: 'trading' },
+	)
+	const segments = Array.from(document.querySelectorAll('.pool-lifecycle-steps li'))
+	expect(segments.map(segment => segment.querySelector('.pool-lifecycle-step-label')?.textContent)).toEqual(['Operational', 'Escalation', 'Fork & migration', 'Settled'])
+	expect(segments.map(segment => segment.className)).toEqual(['completed', 'completed', 'completed', 'current'])
+	expect(segments[3]?.getAttribute('aria-current')).toBe('step')
+	expect(document.querySelector('.pool-lifecycle-position')?.textContent).toBe('4 of 4')
+	expect(document.querySelector('.pool-lifecycle')?.textContent).not.toContain('Truth auction')
 })
 
 test('draws the stages a settled pool passed over as skipped, named so for assistive technology', async () => {

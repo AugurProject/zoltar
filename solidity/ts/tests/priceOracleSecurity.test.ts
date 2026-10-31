@@ -1,4 +1,4 @@
-import { decodeEventLog, encodeDeployData, encodeFunctionData, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { getCreateAddress, decodeEventLog, encodeDeployData, encodeFunctionData, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { formatStorageSlot, getUintMappingStorageSlot } from '../testSupport/storage'
 import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import {
@@ -171,7 +171,7 @@ function encodeOracleCoordinatorDeployData(args: OracleCoordinatorConstructorArg
 	return encodeDeployData({
 		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		bytecode: applyLibraries(statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.evm.bytecode.object),
-		args,
+		args: [...args, getCreateAddress({ from: getInfraContractAddresses().priceCoordinatorDeploymentWorker, nonce: 3n })],
 	})
 }
 

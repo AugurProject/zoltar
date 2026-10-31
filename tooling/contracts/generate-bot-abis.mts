@@ -1,3 +1,4 @@
+import { keccak256 } from '../../shared/core/ts/evm/ethereum.js'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { repositoryRoot } from '../repo/root.mts'
@@ -17,7 +18,7 @@ const statoblast = (contract: string, functions?: readonly string[]): ContractSe
 const trading = (contract: string): ContractSelection => ({ artifactSource: `contracts/trading/${contract}.sol`, contract })
 const root = (contract: string, functions?: readonly string[]): ContractSelection => ({ artifactSource: `contracts/${contract}.sol`, contract, ...(functions === undefined ? {} : { functions }) })
 const uniswapSeeder = (contract: string): ContractSelection => ({ artifactSource: 'contracts/chaos/GenesisUniswapV3Seeder.sol', contract })
-const escalationGame = [statoblast('EscalationGame'), statoblast('EscalationGameClaimDelegate', ['getInheritedClaimAllocation'])]
+const escalationGame = [statoblast('EscalationGame'), statoblast('EscalationGameClaimDelegate', ['getInheritedClaimAllocation', 'getClaimCheckpointProgress', 'getClaimCheckpointState', 'getClaimCheckpointWitnessSegment', 'getClaimIntervalTransform', 'isClaimHistoryFrozen', 'processClaimCheckpoint'])]
 
 /** One generated module in bots/shared serves every bot; names follow the contract names so bots alias locally if they prefer shorter ones. */
 const SHARED_ABI_EXPORTS: readonly AbiExport[] = [
@@ -29,9 +30,15 @@ const SHARED_ABI_EXPORTS: readonly AbiExport[] = [
 	{ name: 'securityPoolAbi', sources: [statoblast('SecurityPool'), statoblast('SecurityPoolOperationsDelegate', ['setVaultUnderwritingLimit'])] },
 	{ name: 'liquidationApprovalRegistryAbi', sources: [statoblast('LiquidationApprovalRegistry')] },
 	{ name: 'openOraclePriceCoordinatorAbi', sources: [statoblast('OpenOraclePriceCoordinator')] },
+	{ name: 'sharedPoolPriceFeedAbi', sources: [statoblast('SharedPoolPriceFeed')] },
 	{ name: 'securityPoolForkerAbi', sources: [statoblast('SecurityPoolForker')] },
 	{ name: 'escalationGameAbi', sources: escalationGame },
+	{ name: 'multicall3Abi', sources: [statoblast('Multicall3')] },
 	{ name: 'uniformPriceDualCapBatchAuctionAbi', sources: [statoblast('UniformPriceDualCapBatchAuction')] },
+	{ name: 'securityPoolPortfolioAuctionAbi', sources: [statoblast('SecurityPoolPortfolioAuction')] },
+	{ name: 'securityPoolUniformPriceAuctionAbi', sources: [statoblast('SecurityPoolUniformPriceAuction')] },
+	{ name: 'securityPoolAuctionVaultAbi', sources: [statoblast('SecurityPoolAuctionVault')] },
+	{ name: 'securityPoolCapitalLedgerAbi', sources: [statoblast('SecurityPoolCapitalLedger')] },
 	{ name: 'openOracleAbi', sources: [statoblast('openOracle/OpenOracle')] },
 	{ name: 'weth9Abi', sources: [statoblast('WETH9')] },
 	{ name: 'erc1155Abi', sources: [statoblast('tokens/ERC1155')] },
@@ -45,8 +52,56 @@ const SHARED_ABI_EXPORTS: readonly AbiExport[] = [
 	{ name: 'deploySecurityPoolEvent', source: statoblast('factories/SecurityPoolFactory'), event: 'DeploySecurityPool' },
 	{ name: 'vaultAccountingCheckpointEvent', source: statoblast('SecurityPool'), event: 'VaultAccountingCheckpoint' },
 	{ name: 'vaultEscrowUpdatedEvent', source: statoblast('EscalationGame'), event: 'VaultEscrowUpdated' },
+	{ name: 'ordinarySettlementInitializedEvent', source: statoblast('EscalationGame'), event: 'OrdinarySettlementInitialized' },
 	{ name: 'truthAuctionHaircutAppliedEvent', source: statoblast('EscalationGame'), event: 'TruthAuctionHaircutApplied' },
 ]
+const PORTFOLIO_RUNTIME_CONTRACTS = [
+	'SecurityPoolPortfolio',
+	'SecurityPoolCapitalLedger',
+	'SecurityPoolCommitmentIndex',
+	'SecurityPoolCapitalFeeStreams',
+	'SecurityPoolPortfolioSettlement',
+	'SecurityPoolSettlementBook',
+	'SecurityPoolReporterLedger',
+	'SecurityPoolPortfolioPurchase',
+	'SecurityPoolPortfolioForkCoordinator',
+	'SecurityPoolPortfolioServices',
+	'SecurityPoolCapitalLifecycleDelegate',
+	'SecurityPoolCapitalAuctionDelegate',
+	'SecurityPoolPortfolioAuction',
+	'SecurityPoolUniformPriceAuction',
+	'SecurityPoolAuctionVault',
+	'Multicall3',
+	'SecurityPoolReportingRewards',
+	'SecurityPoolResolutionPremiumBook',
+] as const
+
+function renderRuntimeIdentities(contracts: Record<string, unknown>) {
+	const identities = Object.fromEntries(
+		PORTFOLIO_RUNTIME_CONTRACTS.map(name => {
+			const selection = statoblast(name)
+			const artifact = record(record(contracts[selection.artifactSource], selection.artifactSource)[name], name)
+			const bytecode = record(record(artifact['evm'], `${name}.evm`)['deployedBytecode'], `${name}.runtime`)
+			const object = bytecode['object']
+			if (typeof object !== 'string' || !/^(?:[0-9a-fA-F]{2})+$/.test(object)) throw new Error(`${name} runtime contains missing bytecode or unlinked libraries`)
+			const references = record(bytecode['immutableReferences'], `${name}.immutables`)
+			let masked = object.toLowerCase()
+			for (const entries of Object.values(references)) {
+				if (!Array.isArray(entries)) throw new Error(`${name} immutable references are invalid`)
+				for (const raw of entries) {
+					const entry = record(raw, `${name}.immutable`)
+					const start = entry['start']
+					const length = entry['length']
+					if (typeof start !== 'number' || typeof length !== 'number' || !Number.isSafeInteger(start) || !Number.isSafeInteger(length) || start < 0 || length <= 0 || (start + length) * 2 > object.length) throw new Error(`${name} immutable range is invalid`)
+					masked = masked.slice(0, start * 2) + '0'.repeat(length * 2) + masked.slice((start + length) * 2)
+				}
+			}
+			return [name, { runtimeCodeHash: keccak256(`0x${masked}`), runtimeCodeLength: object.length / 2, immutableReferences: references }]
+		}),
+	)
+	return `export const portfolioRuntimeIdentities = ${JSON.stringify(identities)} as const\n`
+}
+
 const outputPath = path.join(repositoryRoot, 'bots', 'shared', 'src', 'contracts', 'abi.generated.ts')
 
 type AbiItem = { readonly type: string; readonly name: string | undefined; readonly entry: Record<string, unknown> }
@@ -83,7 +138,7 @@ function renderExport(contracts: Record<string, unknown>, abiExport: AbiExport):
 }
 
 async function renderSharedAbis(contracts: Record<string, unknown>): Promise<string> {
-	const unformatted = `// Generated by tooling/contracts/generate-bot-abis.mts from solidity/artifacts/Contracts.json. Do not edit.\n${SHARED_ABI_EXPORTS.map(abiExport => renderExport(contracts, abiExport)).join('\n')}`
+	const unformatted = `// Generated by tooling/contracts/generate-bot-abis.mts from solidity/artifacts/Contracts.json. Do not edit.\n${SHARED_ABI_EXPORTS.map(abiExport => renderExport(contracts, abiExport)).join('\n')}\n${renderRuntimeIdentities(contracts)}`
 	const formatter = Bun.spawnSync(['bunx', '@biomejs/biome', 'format', '--stdin-file-path', outputPath], { cwd: repositoryRoot, stderr: 'pipe', stdin: Buffer.from(unformatted), stdout: 'pipe' })
 	if (!formatter.success) throw new Error(`Could not format the generated bot ABIs: ${formatter.stderr.toString()}`)
 	return formatter.stdout.toString()

@@ -52,14 +52,19 @@ export async function discoverStagedOperations(client: ChaosReadClient, pool: Po
 		return []
 	}
 	const pendingIds = await client.readContract({ abi: openOraclePriceCoordinatorAbi, address: pool.coordinator, blockNumber, functionName: 'getPendingSettlementOperationIds' })
+	let cursor = 0n
 	const collected = await collectCountedPages({
 		count,
 		label: `Staged-operation discovery for ${pool.coordinator}`,
 		maximumItems: limit,
-		pageSize: limit,
+		pageSize: Math.min(limit, 64),
 		readPage: async (start, pageCount) => {
-			const [ids, operations] = await client.readContract({ abi: openOraclePriceCoordinatorAbi, address: pool.coordinator, args: [start, pageCount], blockNumber, functionName: 'getActiveStagedOperations' })
+			const [ids, operations, nextCursor] = await client.readContract({ abi: openOraclePriceCoordinatorAbi, address: pool.coordinator, args: [cursor, pageCount], blockNumber, functionName: 'getActiveStagedOperationsPage' })
 			if (ids.length !== operations.length) throw new Error(`Coordinator ${pool.coordinator} returned mismatched staged-operation arrays`)
+			if (cursor !== 0n && ids[0] !== cursor) throw new Error(`Coordinator ${pool.coordinator} omitted the requested operation cursor`)
+			for (const [index, id] of ids.entries()) if (id === 0n || (index > 0 && id >= (ids[index - 1] ?? 0n))) throw new Error(`Coordinator ${pool.coordinator} returned an unordered operation page`)
+			if ((nextCursor === 0n) !== (start + pageCount === count) || nextCursor >= (ids.at(-1) ?? 0n)) throw new Error(`Coordinator ${pool.coordinator} returned an inconsistent staged-operation cursor`)
+			cursor = nextCursor
 			return ids.map((id, index) => {
 				const operation = operations[index]
 				if (operation === undefined) throw new Error(`Coordinator ${pool.coordinator} omitted staged operation ${id.toString()}`)
@@ -82,6 +87,7 @@ export async function discoverStagedOperations(client: ChaosReadClient, pool: Po
 	return await mapWithConcurrency(entries, DISCOVERY_RPC_CONCURRENCY, async ({ id, operation }): Promise<StagedOperationSnapshot> => {
 		const operationType = bigintToSafeNumber(operation.operation)
 		const targetVault = pool.vaults.find(vault => sameAddress(vault.address, operation.targetVault)) ?? (await discoverVault(client, pool.address, pool.escalationGame, getAddress(operation.targetVault), blockNumber))
+		const disputeBacking = pool.escalationGame === zeroAddress ? 0n : await client.readContract({ abi: escalationGameAbi, address: pool.escalationGame, args: [getAddress(operation.targetVault)], blockNumber, functionName: 'getVaultDisputeBackingAttoRep' })
 		let executionExpectedSuccess = false
 		let executionExpectedResult: Hex = '0x'
 		let liquidationMinimumReceiverHealthFactorBps = 0n
@@ -182,7 +188,7 @@ export async function discoverStagedOperations(client: ChaosReadClient, pool: Po
 			reservedLiquidationDebtAttoEth: operation.reservedLiquidationDebtAttoEth.toString(),
 			snapshotTargetBackingUnits: operation.snapshotTargetBackingUnits.toString(),
 			snapshotTargetUnderwritingLimitAttoEth: operation.snapshotTargetUnderwritingLimitAttoEth.toString(),
-			snapshotTargetDisputeStakedAttoRep: targetVault.disputeStakedAttoRep,
+			snapshotTargetDisputeStakedAttoRep: disputeBacking.toString(),
 			snapshotTargetOpenInterestAttoEth: targetVault.openInterestAttoEth,
 			snapshotTotalPoolHeldAttoRep: pool.totalPoolHeldAttoRep,
 			snapshotTotalRepBackingUnits: pool.totalRepBackingUnits,

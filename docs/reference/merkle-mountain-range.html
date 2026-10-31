@@ -277,7 +277,7 @@ bagPeaks(peaks, peakCount):
 						</tr>
 					</tbody>
 				</table>
-				<p><code>getForkCarrySnapshot()</code> reports the current carry peaks, leaf counts, totals, and nullifier roots after local appends and proof consumption. <code>getCarryLeafPageByOutcome()</code> pages only local unresolved leaves.</p>
+				<p><code>getForkCarrySnapshot()</code> reports the current carry peaks, leaf counts, totals, and nullifier roots after local appends and proof consumption. <code>getCarryLeafPageByOutcome()</code> pages only local unresolved leaves in newest-first order. Its <code>maxEntries</code> parameter bounds visited nodes, including consumed leaves. An empty or short page can return a nonzero <code>nextPageNodeId</code>; pass that cursor as <code>startNodeId</code> to continue until the cursor is zero.</p>
 			</section>
 
 			<section id="sources">

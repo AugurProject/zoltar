@@ -25,6 +25,8 @@ const RECOVERY_OPERATIONS = [
 	'statoblast.escalation.sweep-residual',
 	'statoblast.escalation.withdraw',
 	'statoblast.escalation.withdraw-forked',
+	'statoblast.escalation.prepare-claim',
+	'statoblast.child.initialize-history',
 	'statoblast.oracle.recover-report',
 	'statoblast.pool.checkpoint-collateral',
 	'statoblast.pool.checkpoint-retention',
@@ -39,7 +41,7 @@ const RECOVERY_OPERATIONS = [
 	'trading.liquidity.remove',
 ] as const
 
-const CLAIM_LINKED_MIGRATIONS = new Set(['statoblast.fork.create-child', 'statoblast.fork.migrate-rep', 'statoblast.fork.migrate-vault', 'statoblast.fork.migrate-vault-unresolved', 'trading.shares.migrate'])
+const CLAIM_LINKED_MIGRATIONS = new Set(['statoblast.child.prepare-feed', 'statoblast.child.prepare-contracts', 'statoblast.fork.create-child', 'statoblast.fork.migrate-rep', 'statoblast.fork.migrate-vault', 'statoblast.fork.migrate-vault-unresolved', 'trading.shares.migrate'])
 
 const PROHIBITED_OPERATIONS = [
 	'trading.uniswap.mint-range',
@@ -128,6 +130,8 @@ const RETIREMENT_OPERATION_ORDER = [
 	'statoblast.escalation.resume',
 	'statoblast.escalation.withdraw',
 	'statoblast.escalation.withdraw-forked',
+	'statoblast.escalation.prepare-claim',
+	'statoblast.child.initialize-history',
 	'statoblast.escalation.claim-forked',
 	'statoblast.auction.withdraw-refund',
 	'statoblast.auction.refund',

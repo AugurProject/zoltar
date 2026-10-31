@@ -115,6 +115,7 @@ export async function settleSeededOracleReport({
 	onProgressStep,
 	poolLabel,
 	readClient,
+	requestedInitialAttoWeth = 0n,
 }: {
 	accountAddress: Address
 	createWriteClient: (accountAddress: Address) => WriteClient
@@ -122,10 +123,11 @@ export async function settleSeededOracleReport({
 	onProgressStep: (label: string) => Promise<void>
 	poolLabel: string
 	readClient: ReadClient
+	requestedInitialAttoWeth?: bigint
 }) {
 	const writeClient = createWriteClient(accountAddress)
 	const initialReportPrice = getSeededCoordinatorInitialReportPrice()
-	await getScenarioProtocol().requestOraclePrice(writeClient, managerAddress, initialReportPrice)
+	await getScenarioProtocol().requestOraclePrice(writeClient, managerAddress, initialReportPrice, requestedInitialAttoWeth)
 	await onProgressStep(`Configuring oracle manager for ${poolLabel}`)
 
 	const oracleManagerDetails = await getScenarioProtocol().loadOracleManagerDetails(readClient, managerAddress)

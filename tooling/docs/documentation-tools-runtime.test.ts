@@ -1,5 +1,7 @@
 import { expect, test } from 'bun:test'
 import { installDomEnvironment } from '../../ui/coreShared/ts/tests/testUtils/domEnvironment.ts'
+import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '../../ui/coreShared/ts/wallet/networkProfile.js'
+import { getDeploymentSteps } from '../../ui/statoblastShared/ts/protocol/deployment.js'
 
 const additionalGlobalKeys = ['HTMLDetailsElement', 'HTMLSelectElement', 'HTMLTableCellElement', 'HTMLTableSectionElement', 'HTMLOutputElement', 'SVGSVGElement'] as const
 
@@ -497,6 +499,11 @@ test('deployment bit controls clear the active preset and stale status', async (
 })
 
 test('deployment decoder decodes a mask against the selected network mapping', async () => {
+	const mainnetSteps = getDeploymentSteps(MAINNET_NETWORK_PROFILE).filter(step => step.id !== 'deploymentStatusOracle')
+	const sepoliaSteps = getDeploymentSteps(SEPOLIA_NETWORK_PROFILE).filter(step => step.id !== 'deploymentStatusOracle')
+	expect(mainnetSteps[1]?.id).toBe('multicall3')
+	expect(sepoliaSteps[1]?.id).toBe('reputationToken')
+	expect(sepoliaSteps).toHaveLength(mainnetSteps.length + 1)
 	const cleanup = await loadDocument('docs/reference/deployment-status.html', 'http://localhost/docs/reference/deployment-status.html')
 	const fetchDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch')
 	Object.defineProperty(globalThis, 'fetch', {
@@ -517,15 +524,16 @@ test('deployment decoder decodes a mask against the selected network mapping', a
 		if (network === null || input === null || summary === null || mainnetStatus === null || sepoliaStatus === null) throw new Error('Deployment decoder network controls are missing')
 		input.value = '0x2'
 		input.dispatchEvent(new Event('input'))
-		expect(summary.value).toBe('Ethereum mainnet: 1 of 14 tracked steps have set bits: Multicall3.')
+		expect(summary.value).toBe(`Ethereum mainnet: 1 of ${mainnetSteps.length} tracked steps have set bits: Multicall3.`)
+		expect(document.querySelectorAll('#deployment-status-bit-mapping [data-deployment-bit-status]')).toHaveLength(mainnetSteps.length)
 		expect(mainnetStatus.dataset['maskState']).toBe('set')
 		expect(sepoliaStatus.dataset['maskState']).toBeUndefined()
 		network.value = 'sepolia'
 		network.dispatchEvent(new Event('change'))
-		expect(summary.value).toBe('Sepolia: 1 of 15 tracked steps have set bits: GenesisReputationToken.')
+		expect(summary.value).toBe(`Sepolia: 1 of ${sepoliaSteps.length} tracked steps have set bits: GenesisReputationToken.`)
 		expect(sepoliaStatus.dataset['maskState']).toBe('set')
 		expect(mainnetStatus.dataset['maskState']).toBeUndefined()
-		expect(document.querySelectorAll('[data-deployment-bit-toggle]')).toHaveLength(15)
+		expect(document.querySelectorAll('[data-deployment-bit-toggle]')).toHaveLength(sepoliaSteps.length)
 
 		const bitToggles = () => Array.from(document.querySelectorAll<HTMLButtonElement>('[data-deployment-bit-toggle]'))
 		expect(bitToggles().some(button => button.getAttribute('aria-pressed') === 'true')).toBeTrue()

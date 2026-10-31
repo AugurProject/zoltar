@@ -3,7 +3,7 @@ import { sameAddress } from '@zoltar/core-shared/evm/address'
 
 import { type VaultPosition, repForBackingUnits } from '#core/strategy'
 import { type VaultChangeSource, loadChangedVaultAddresses } from '#monitoring/vault-change-logs'
-import { escalationGameAbi, securityPoolAbi, truthAuctionHaircutAppliedEvent, vaultAccountingCheckpointEvent, vaultEscrowUpdatedEvent } from '@zoltar/bot-shared/contracts/abi'
+import { escalationGameAbi, securityPoolAbi, ordinarySettlementInitializedEvent, truthAuctionHaircutAppliedEvent, vaultAccountingCheckpointEvent, vaultEscrowUpdatedEvent } from '@zoltar/bot-shared/contracts/abi'
 import { type Address, getAddress, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { type VaultStateIndex, refreshVaultStateIndex } from './vault-state-index.ts'
 
@@ -45,7 +45,7 @@ export async function loadVaultPage(client: ReadClient, multicall3: Address, poo
 	const [rawVaults, badDebt, disputeStake] = await Promise.all([
 		client.multicall({ allowFailure: false, blockNumber, contracts: vaultAddresses.map(vault => ({ abi: securityPoolAbi, address: pool, args: [vault], functionName: 'securityVaults' as const })), multicallAddress: multicall3 }),
 		client.multicall({ allowFailure: false, blockNumber, contracts: vaultAddresses.map(vault => ({ abi: securityPoolAbi, address: pool, args: [vault], functionName: 'vaultBadDebtAttoEth' as const })), multicallAddress: multicall3 }),
-		escalationGame === zeroAddress ? vaultAddresses.map(() => 0n) : client.multicall({ allowFailure: false, blockNumber, contracts: vaultAddresses.map(vault => ({ abi: escalationGameAbi, address: escalationGame, args: [vault], functionName: 'disputeStakedRepByVaultAttoRep' as const })), multicallAddress: multicall3 }),
+		escalationGame === zeroAddress ? vaultAddresses.map(() => 0n) : client.multicall({ allowFailure: false, blockNumber, contracts: vaultAddresses.map(vault => ({ abi: escalationGameAbi, address: escalationGame, args: [vault], functionName: 'getVaultDisputeBackingAttoRep' as const })), multicallAddress: multicall3 }),
 	])
 	return vaultAddresses.map((address, index) => {
 		const raw = rawVaults[index]
@@ -61,7 +61,7 @@ export async function loadVaultPage(client: ReadClient, multicall3: Address, poo
 			backingUnits: repBackingUnits,
 			vaultAttoRepBacking: 0n,
 			claimableFeesAttoEth,
-			disputeStakedAttoRep: requireBigint(disputeStakedAttoRep, 'vault dispute stake'),
+			disputeStakedAttoRep: requireBigint(disputeStakedAttoRep, 'vault dispute backing'),
 		}
 	})
 }
@@ -100,9 +100,12 @@ export async function loadCurrentVaults(
 			const sources: VaultChangeSource[] = [async range => await client.getLogs({ address: pool, event: vaultAccountingCheckpointEvent, fromBlock: range.fromBlock, toBlock: range.toBlock })]
 			if (escalationGame === zeroAddress) return await loadChangedVaultAddresses(fromBlock, toBlock, sources)
 			sources.push(async range => await client.getLogs({ address: escalationGame, event: vaultEscrowUpdatedEvent, fromBlock: range.fromBlock, toBlock: range.toBlock }))
-			const haircutSources: VaultChangeSource[] = [async range => await client.getLogs({ address: escalationGame, event: truthAuctionHaircutAppliedEvent, fromBlock: range.fromBlock, toBlock: range.toBlock })]
+			const globalDisputeStakeSources: VaultChangeSource[] = [
+				async range => await client.getLogs({ address: escalationGame, event: truthAuctionHaircutAppliedEvent, fromBlock: range.fromBlock, toBlock: range.toBlock }),
+				async range => await client.getLogs({ address: escalationGame, event: ordinarySettlementInitializedEvent, fromBlock: range.fromBlock, toBlock: range.toBlock }),
+			]
 			const disputeStakedVaults = [...index.activeVaults.values()].filter(vault => vault.disputeStakedAttoRep > 0n).map(vault => vault.address)
-			return await loadChangedVaultAddresses(fromBlock, toBlock, sources, haircutSources, disputeStakedVaults)
+			return await loadChangedVaultAddresses(fromBlock, toBlock, sources, globalDisputeStakeSources, disputeStakedVaults)
 		},
 		loadPositions: async vaults => await loadVaultPage(client, multicall3, pool, escalationGame, vaults, block.number),
 		loadRegistryRange: async (start, count) => {

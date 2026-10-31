@@ -17,3 +17,5 @@ export const openOracleUiPriceDetail = 'Uses the latest pool OpenOracle price, e
 export const openOracleFallbackUiPriceDetail = 'Uses a valid pool OpenOracle price, or falls back to Uniswap when it is unavailable or expired.'
 export const priceOracleSaveFailed = 'Unable to save the UI price oracle.'
 export const openPoolForOraclePrice = 'Open a pool to see its oracle price'
+
+export const portfolios = 'Portfolios'

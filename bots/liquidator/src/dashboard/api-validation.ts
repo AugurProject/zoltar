@@ -1,3 +1,4 @@
+import { portfolioView, type PortfolioView } from './portfolio-response.ts'
 import type { MonitoredPool } from './pool-presentation.ts'
 import { array, booleanValue, decode, dictionary, numberValue, object, oneOf, optional, stringValue, unknownValue } from '@zoltar/bot-shared/dashboard/response-validation'
 
@@ -88,6 +89,7 @@ export type Snapshot = {
 	pendingStagedOperations: { candidateBlock?: string; coordinator: string; historicalRecoveryComplete: boolean; latestRecoveryBlock?: string; nextHistoricalBlock?: string; operationId: string; queuedBlock: string; target: string }[]
 	pendingTransactions: { hash: string; label: string; mode: 'private' | 'public'; nonce: string; submissionBlock: string }[]
 	operatorCapable: boolean
+	portfolios?: PortfolioView[]
 	pools: MonitoredPool[]
 	scanning: boolean
 	status: 'connectivity-degraded' | 'dry-run' | 'error' | 'paused' | 'running' | 'starting'
@@ -169,6 +171,7 @@ const snapshot = object<Snapshot>({
 	),
 	pendingTransactions: array(object<Snapshot['pendingTransactions'][number]>({ hash: stringValue, label: stringValue, mode: oneOf('private', 'public'), nonce: stringValue, submissionBlock: stringValue })),
 	operatorCapable: booleanValue,
+	portfolios: optional(array(portfolioView)),
 	pools: array(pool),
 	scanning: booleanValue,
 	status: oneOf('connectivity-degraded', 'dry-run', 'error', 'paused', 'running', 'starting'),

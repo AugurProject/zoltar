@@ -1,3 +1,4 @@
+import { renderPortfolios } from './portfolio-panel.tsx'
 import { renderBlockStatus as renderSharedBlockStatus } from '@zoltar/bot-shared/dashboard/block-status'
 import { endpointHealthDetail, endpointRow } from '@zoltar/bot-shared/dashboard/components'
 import { renderRepMarketConsensus, renderRepMarketConsensusError } from '@zoltar/bot-shared/dashboard/rep-market-consensus'
@@ -53,6 +54,7 @@ export function createSnapshotView({ state, elements, controls, header, refresh,
 		elements.recoveryGuidance.hidden = snapshot.paused
 		elements.lastScan.textContent = scanStatusText(snapshot)
 		header.renderGlobalNotice(snapshot)
+		renderPortfolios(snapshot.portfolios)
 		renderOverviewMetrics(snapshot, state.configuration)
 		renderOverviewAlerts(snapshot)
 		renderRepMarketConsensus(document, snapshot.centralizedMarket, snapshot.marketConsensus)
@@ -71,6 +73,7 @@ export function createSnapshotView({ state, elements, controls, header, refresh,
 	function renderConnectionFailure(reason: 'incompatible' | 'unreachable' = 'unreachable') {
 		const snapshot = state.snapshot
 		if (snapshot !== undefined) renderOverviewHealth(snapshot, state.configuration, true)
+		renderPortfolios(snapshot?.portfolios, true)
 		state.stateConnected = false
 		header.renderNetworkBadge()
 		renderRepMarketConsensusError(document)

@@ -1,4 +1,4 @@
-import { encodeAbiParameters, keccak256, stringToHex, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { zeroAddress, encodeAbiParameters, keccak256, stringToHex, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { LiveMarket } from '../../protocol/liveMarket.js'
 
 /** Contract-shaped checkpoint responses; advancing-chain tests can replace the market between quote and submit. */
@@ -8,7 +8,14 @@ export function feeAccountingRpcResult(data: Hex, market: LiveMarket, timestamp:
 	if (data === selector('questionData()')) return encodeAbiParameters([{ type: 'address' }], [market.pool])
 	if (data.slice(0, 10) === selector('getQuestionEndDate(uint256)')) return encodeAbiParameters([uint256], [market.endTime])
 	if (data === selector('shareTokenSupplyAttoShares()')) return encodeAbiParameters([uint256], [market.shareTokenSupplyAttoShares])
+	if (data.slice(0, 10) === selector('attoSharesToAttoRep(uint256)')) {
+		const shares = BigInt(`0x${data.slice(10)}`)
+		return encodeAbiParameters([uint256], [market.shareTokenSupplyAttoShares === 0n ? 0n : (shares * (market.settlementRecoveryAttoRep ?? 0n)) / market.shareTokenSupplyAttoShares])
+	}
 	if (data === selector('getFeeEpochEndTime()')) return encodeAbiParameters([uint256], [market.valuation?.feeEndTime ?? market.endTime])
+	if (data === selector('portfolioCustody()')) return encodeAbiParameters([{ type: 'address' }], [market.valuation?.feeAccounting?.linearFee === undefined ? zeroAddress : market.pool])
+	if (data === selector('linearFeeRateAttoEthPerSecond()')) return encodeAbiParameters([uint256], [market.valuation?.feeAccounting?.linearFee?.rateAttoEthPerSecond ?? 0n])
+	if (data === selector('linearFeeEndTime()')) return encodeAbiParameters([uint256], [market.valuation?.feeAccounting?.linearFee?.endTime ?? 0n])
 	if (data !== selector('getPoolAccountingSnapshot()')) return undefined
 	const accounting = market.valuation?.feeAccounting
 	return encodeAbiParameters(

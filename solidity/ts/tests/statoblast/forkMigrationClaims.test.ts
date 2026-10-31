@@ -264,12 +264,16 @@ describe('Statoblast: fork migration', () => {
 
 		test('claimForkedEscalationDeposits allows the exact own-fork migration deadline', async () => {
 			const forkTime = await forkContestedGameAndMigrateYesRep()
+			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			const claimDeadline = forkTime + 8n * 7n * DAY
 			await mockWindow.setTime(claimDeadline - 1n)
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 			const walletRepBeforeClaim = await getERC20Balance(client, getRepTokenAddress(yesUniverse), client.account.address)
 
-			await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
+			const claimHash = await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
+			const claimReceipt = await client.getTransactionReceipt({ hash: claimHash })
+			const claimBlock = await client.getBlock({ blockNumber: claimReceipt.blockNumber })
+			assert.strictEqual(claimBlock.timestamp, claimDeadline, 'the successful claim must execute at the inclusive deadline')
 
 			const walletRepAfterClaim = await getERC20Balance(client, getRepTokenAddress(yesUniverse), client.account.address)
 			assert.ok(walletRepAfterClaim > walletRepBeforeClaim, 'claiming at the inclusive deadline should still pay child REP')

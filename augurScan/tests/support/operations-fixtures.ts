@@ -217,7 +217,7 @@ export const seedRiskAndPortfolioEvidence = async ({ database, operationsChainId
 				${operationsChainId}, 'vault', ${`${oracle.toLowerCase()}:${address.toLowerCase()}`}, 2,
 				${`0x${(2).toString(16).padStart(64, '0')}`}, timestamptz '2026-01-01 00:00:22+00',
 				'augurscan.vault-risk.v1', 'success',
-				jsonb_build_object('poolHeldBackingAttoRep', '200', 'disputeStakedAttoRep', '0',
+				jsonb_build_object('poolHeldBackingAttoRep', '200', 'disputeStakedAttoRep', '100', 'disputeBackingAttoRep', '0',
 					'openInterestAttoEth', '1000000000000000000', 'securityMultiplierBps', '15000',
 					'targetHealthFactorBps', '12000', 'badDebtAttoEth', '0'), true
 			)

@@ -3,7 +3,7 @@ import { estimateLiquidity, type LiquidityPreview } from '../../../../ui/trading
 import { encodeReceiveRequest } from '@zoltar/trading-shared/trading/receiveRequest'
 import { deployContract } from '../../testSupport/deployContract'
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { encodeDeployData, encodeFunctionData, privateKeyToAccount, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData, encodeFunctionData, parseAbi, zeroAddress, privateKeyToAccount, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { signTyped } from 'micro-eth-signer'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
@@ -94,6 +94,33 @@ describe('factory, pair, and router integration', () => {
 		expect(await client.readContract({ abi: factoryArtifact.abi, address: factory, functionName: 'isPair', args: [pair] })).toBe(true)
 		expect(await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'invalidTokenId' })).toBe(universe << 8n)
 	})
+
+	for (const onlyRep of [false, true]) {
+		test(`forwards a portfolio ${onlyRep ? 'REP-only' : 'ETH and REP'} recovery basket without sweeping prior REP`, async () => {
+			await initialize()
+			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'createCompleteSet', value: 10n }))
+			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'configureRecovery', args: [7n, onlyRep, true] }))
+			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockCoreFactory.abi, address: coreFactory, functionName: 'setPortfolio', args: [pool, pool] }))
+			const rep = await client.readContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'repToken' })
+			const repAbi = parseAbi(['function mint(address owner,uint256 amount)', 'function balanceOf(address owner) view returns (uint256)'])
+			await writeContractAndWait(client, () => client.writeContract({ abi: repAbi, address: rep, functionName: 'mint', args: [router, 11n] }))
+			const recipient = `0x${TEST_ADDRESSES[1].toString(16).padStart(40, '0')}` as const
+			const beforeEth = await client.getBalance({ address: recipient })
+			const ids = [universe << 8n, (universe << 8n) | 1n, (universe << 8n) | 2n]
+			const redeem = (minEth: bigint) =>
+				client.writeContract({
+					abi: mocks.TradingMockShareToken.abi,
+					address: token,
+					functionName: 'safeBatchTransferFrom',
+					args: [account, router, ids, [rate, rate, rate], encodeReceiveBasedRedeemRequest({ shareToken: token, pool, pair: onlyRep ? zeroAddress : pair, universeId: universe, questionId: question }, rate, minEth, recipient, 10n ** 12n)],
+				})
+			if (onlyRep) await expect(redeem(1n)).rejects.toThrow('Minimum ETH output')
+			await writeContractAndWait(client, () => redeem(onlyRep ? 0n : 1n))
+			expect(await client.getBalance({ address: recipient })).toBe(beforeEth + (onlyRep ? 0n : 1n))
+			expect(await client.readContract({ abi: repAbi, address: rep, functionName: 'balanceOf', args: [recipient] })).toBe(7n)
+			expect(await client.readContract({ abi: repAbi, address: rep, functionName: 'balanceOf', args: [router] })).toBe(11n)
+		})
+	}
 
 	test('direct canonical deployment initializes ERC-20 identity from the inherited constructor', async () => {
 		const directPair = await deploy(pairArtifact, [account, pool, 30n, account])

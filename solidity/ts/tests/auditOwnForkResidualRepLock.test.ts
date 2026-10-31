@@ -22,11 +22,10 @@ describe('Own-fork continuation residual settlement regression', () => {
 
 	const { genesisUniverse, statoblastSecurityMultiplierBps } = fixture
 
-	test('burns significant continuation residual when the resolved child has no live owner', async () => {
+	test('burns threshold-change residual after ownerless source surplus was already discharged', async () => {
 		const { mockWindow, client, securityPoolAddresses, questionId } = fixture
 		const parentRepToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThreshold = (((await getTotalTheoreticalSupply(client, parentRepToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
-		const universeForkThreshold = await getZoltarForkThreshold(client, genesisUniverse)
 		const extraLosingPrincipal = forkThreshold / 2n
 		const totalEscrowTarget = 2n * forkThreshold + extraLosingPrincipal
 		let parentVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -48,6 +47,8 @@ describe('Own-fork continuation residual settlement regression', () => {
 		strictEqualTypeSafe(parentVault.repBackingUnits, 0n, 'all parent ownership should be escrowed before the own fork')
 		strictEqualTypeSafe(await getTotalRepBackingUnits(client, securityPoolAddresses.securityPool), 0n, 'no live REP backing units should remain at the fork')
 
+		const universeForkThreshold = await getZoltarForkThreshold(client, genesisUniverse)
+		strictEqualTypeSafe(await getERC20Balance(client, parentRepToken, securityPoolAddresses.escalationGame), 2n * forkThreshold, 'the low-side source surplus must already be discharged before the fork')
 		await forkZoltarWithOwnEscalationGame(client, securityPoolAddresses.securityPool)
 		const repBuckets = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
 		strictEqualTypeSafe(repBuckets.vaultRepAtForkAttoRep, 0n, 'the fork should have no vault-held REP bucket')
@@ -58,9 +59,9 @@ describe('Own-fork continuation residual settlement regression', () => {
 		const yesGame = await getSecurityPoolsEscalationGame(client, yesPool.securityPool)
 		const yesRepToken = getRepTokenAddress(yesUniverse)
 		const gameResidualBeforeResolution = await getERC20Balance(client, yesRepToken, yesGame)
-		const expectedResidual = totalEscrowTarget - universeForkThreshold / 5n - (forkThreshold + (forkThreshold * 3n) / 5n)
+		const expectedResidual = 2n * forkThreshold - universeForkThreshold / 5n - (forkThreshold + (forkThreshold * 3n) / 5n)
 		strictEqualTypeSafe(gameResidualBeforeResolution, expectedResidual, 'the direct winning claim should leave the post-fork payout residual')
-		strictEqualTypeSafe(gameResidualBeforeResolution, extraLosingPrincipal, 'the third-outcome losing principal should survive as economically significant residual')
+		assert.ok(gameResidualBeforeResolution < extraLosingPrincipal, 'the previously discharged third-outcome principal must not reappear in the child')
 
 		await mockWindow.advanceTime(8n * 7n * DAY + 1n)
 		await startTruthAuction(client, yesPool.securityPool)
@@ -92,7 +93,7 @@ describe('Own-fork continuation residual settlement regression', () => {
 					}).eventName,
 			)
 		assert.ok(sweepEventNames.includes('ForkContinuationResidualRepBurned'), 'own-fork continuation cleanup must emit its dedicated burn event')
-		assert.ok(!sweepEventNames.includes('ResidualRepSweptToSecurityPool'), 'own-fork continuation cleanup must not emit the ordinary residual sweep event')
+		assert.ok(!sweepEventNames.includes('EscalationSurplusAccrued'), 'own-fork continuation cleanup must not create new owner income')
 
 		strictEqualTypeSafe(await getERC20Balance(client, yesRepToken, yesGame), 0n, 'the sweep should empty the continuation game')
 		strictEqualTypeSafe(await getERC20Balance(client, yesRepToken, yesPool.securityPool), 0n, 'the resolved ownerless child pool should not receive continuation residual')

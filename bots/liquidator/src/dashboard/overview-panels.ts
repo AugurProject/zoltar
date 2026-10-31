@@ -11,10 +11,11 @@ const stateReceiptTimes = new WeakMap<Snapshot, number>()
 export function renderOverviewHealth(snapshot: Snapshot, configuration: Configuration | undefined, stale = false) {
 	if (!stateReceiptTimes.has(snapshot)) stateReceiptTimes.set(snapshot, Date.now())
 	const limit = configuration?.strategy['maximumTotalDeployedRep']
+	const portfolio = snapshot.portfolios?.[0]
 	renderOperatorHealth(element('operator-health', HTMLDivElement), {
 		mode: snapshot.execute ? 'Live armed' : 'Dry run',
 		lastScanAt: snapshot.lastScanAt,
-		capitalAtRisk: `${formatAmount(snapshot.metrics.deployedRep, 'REP')} / ${formatAmount(limit === undefined ? undefined : String(limit), 'REP')}`,
+		capitalAtRisk: `${formatAmount(snapshot.metrics.deployedRep, 'REP')} / ${formatAmount(limit === undefined ? undefined : String(limit), 'REP')} pools${portfolio === undefined ? '' : ` · ${formatAmount(portfolio.managedPrincipalRep, 'REP')} / ${formatAmount(portfolio.maximumTotalPrincipalRep, 'REP')} portfolios`}`,
 		recoveryItems: snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length,
 		lastAction: snapshot.activities[0]?.message ?? 'No action yet',
 		paused: snapshot.paused,

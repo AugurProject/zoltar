@@ -21,7 +21,7 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		require(address(child) != address(0x0) && address(truthAuction) != address(0x0) && address(truthAuction).code.length != 0 && !trustedAuctionAddresses[address(truthAuction)] && address(forkDataByPool[child].truthAuction) == address(0x0) && address(child.parent()) == address(parent) && child.universeId() == childUniverseId && address(child.securityPoolFactory()) == parentFactory && child.securityPoolForker() == address(this) && child.truthAuction() == address(truthAuction), 'Invalid child');
 	}
 
-	function _getOrDeployChildPool(ISecurityPool parent, uint256 outcomeIndex) internal returns (ISecurityPool child, EscalationGame childEscalationGame) {
+	function _getOrDeployChildPool(ISecurityPool parent, uint256 outcomeIndex) internal virtual returns (ISecurityPool child, EscalationGame childEscalationGame) {
 		child = childrenByPoolAndOutcome[parent][outcomeIndex];
 		if (address(child) == address(0x0)) {
 			require(parent.systemState() == SystemState.PoolForked, 'Parent not forked');
@@ -93,6 +93,7 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		require(address(migrationProxy) != address(0x0), 'Proxy missing');
 		pendingChildRepByPoolAndOutcome[parent][outcomeIndex] = 0;
 		migrationProxy.sweepChildRep(address(child), child.repToken(), pendingChildAttoRep);
+		child.creditForkBacking(pendingChildAttoRep);
 		emit PoolHeldRepSweptToChild(parent, child, outcomeIndex, pendingChildAttoRep, child.repToken().balanceOf(address(child)));
 	}
 
@@ -124,7 +125,7 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		if (requiredMigratedAttoRep == 0) return;
 		uint256 outcomeIndex = forkDataByPool[child].outcomeIndex;
 		_ensureChildPoolRepSplit(parent, outcomeIndex, requiredMigratedAttoRep);
-		require(child.repToken().balanceOf(address(child)) >= requiredMigratedAttoRep, 'Child REP short');
+		require(child.getTotalPoolHeldAttoRep() >= requiredMigratedAttoRep, 'Child REP short');
 	}
 
 	function _ensureChildPoolRepSplit(ISecurityPool parent, uint256 outcomeIndex, uint256 requiredSplitAttoRep) internal {

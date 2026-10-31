@@ -1,3 +1,4 @@
+import { parseTopologyIdentity as parseIdentity, sameTopologyIdentity as sameIdentity, type ImmutableTopologyIdentity } from './topology-identity.ts'
 import { randomUUID } from 'node:crypto'
 import { mkdir, opendir, rename, rm } from 'node:fs/promises'
 import { resolve } from 'node:path'
@@ -8,14 +9,12 @@ import { type Hex } from '@zoltar/bot-shared/ethereum'
 import { collectionDigest, manifestWithDigest, sha256 } from '../state/content-digest.ts'
 import { requiredRecord } from '../state/validators.ts'
 import {
-	ImmutableTopologyIdentity,
 	ImmutableTopologyResidentLimits,
 	IMMUTABLE_TOPOLOGY_MANIFEST_BYTES,
 	IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION,
 	IMMUTABLE_TOPOLOGY_SEGMENT_BYTES,
 	parseTopologyCache,
 	assertTopologyResidentBounds,
-	parseIdentity,
 	CanonicalImmutableTopologyCache,
 	IMMUTABLE_TOPOLOGY_MAXIMUM_COMMITTED_BYTES,
 	validateImmutableTopologyCache,
@@ -23,7 +22,6 @@ import {
 } from './topology-schema.ts'
 import {
 	parseManifest,
-	sameIdentity,
 	assertManifestResidentBounds,
 	emptyCollectionFiles,
 	safeCount,

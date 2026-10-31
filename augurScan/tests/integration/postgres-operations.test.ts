@@ -241,6 +241,7 @@ const expectRiskHistoryAndSeverity = async ({ database, operationsChainId, oracl
 	if (healthyResponse === undefined) throw new Error('healthy vault risk endpoint did not return a response')
 	expect(healthyResponse.status).toBe(200)
 	const healthy = await healthyResponse.json()
+	// The nominal 100 REP escrow was already credited as surplus and cannot increase vault health.
 	expect(healthy).toMatchObject({ data: { protocol_state: 'healthy', scanner_severity: 'healthy', risk: { healthFactorBps: '13333' } } })
 
 	await database.sql`

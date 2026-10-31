@@ -12,6 +12,7 @@ import { CHAOS_OPERATION_CATALOG } from '../../src/operations/catalog.ts'
 const chaosContractAbis = {
 	uniformPriceDualCapBatchAuctionAbi: contractAbis.uniformPriceDualCapBatchAuctionAbi,
 	openOraclePriceCoordinatorAbi: contractAbis.openOraclePriceCoordinatorAbi,
+	sharedPoolPriceFeedAbi: contractAbis.sharedPoolPriceFeedAbi,
 	erc1155Abi: contractAbis.erc1155Abi,
 	genesisReputationTokenAbi: contractAbis.genesisReputationTokenAbi,
 	escalationGameAbi: contractAbis.escalationGameAbi,
@@ -34,6 +35,7 @@ const chaosContractAbis = {
 const {
 	uniformPriceDualCapBatchAuctionAbi,
 	openOraclePriceCoordinatorAbi,
+	sharedPoolPriceFeedAbi,
 	erc1155Abi,
 	genesisReputationTokenAbi,
 	escalationGameAbi,
@@ -63,6 +65,7 @@ const curatedAbiBindings = [
 	{ abi: securityPoolFactoryAbi, artifactSource: 'contracts/statoblast/factories/SecurityPoolFactory.sol', contract: 'SecurityPoolFactory' },
 	{ abi: securityPoolAbi, artifactSource: 'contracts/statoblast/SecurityPool.sol', contract: 'SecurityPool', delegatedFunctions: [{ artifactSource: 'contracts/statoblast/SecurityPoolOperationsDelegate.sol', contract: 'SecurityPoolOperationsDelegate', functions: ['setVaultUnderwritingLimit'] }] },
 	{ abi: openOraclePriceCoordinatorAbi, artifactSource: 'contracts/statoblast/OpenOraclePriceCoordinator.sol', contract: 'OpenOraclePriceCoordinator' },
+	{ abi: sharedPoolPriceFeedAbi, artifactSource: 'contracts/statoblast/SharedPoolPriceFeed.sol', contract: 'SharedPoolPriceFeed' },
 	{ abi: liquidationApprovalRegistryAbi, artifactSource: 'contracts/statoblast/LiquidationApprovalRegistry.sol', contract: 'LiquidationApprovalRegistry' },
 	{ abi: securityPoolForkerAbi, artifactSource: 'contracts/statoblast/SecurityPoolForker.sol', contract: 'SecurityPoolForker' },
 	{ abi: uniformPriceDualCapBatchAuctionAbi, artifactSource: 'contracts/statoblast/UniformPriceDualCapBatchAuction.sol', contract: 'UniformPriceDualCapBatchAuction' },
@@ -74,7 +77,8 @@ const curatedAbiBindings = [
 			{
 				artifactSource: 'contracts/statoblast/EscalationGameClaimDelegate.sol',
 				contract: 'EscalationGameClaimDelegate',
-				functions: ['getInheritedClaimAllocation'],
+				functions: ['getInheritedClaimAllocation', 'getClaimCheckpointProgress', 'getClaimCheckpointState', 'getClaimCheckpointWitnessSegment', 'getClaimIntervalTransform', 'isClaimHistoryFrozen', 'processClaimCheckpoint'],
+				events: ['ClaimCheckpointProgress'],
 			},
 		],
 	},
@@ -103,11 +107,15 @@ const expectedCanonicalManifest = [
 	'SecurityPoolEventEmitter:contracts/statoblast/SecurityPoolEventEmitter.sol:delegate-module',
 	'SecurityPoolForkEventEmitter:contracts/statoblast/SecurityPoolEventEmitter.sol:delegate-module',
 	'OpenOraclePriceCoordinator:contracts/statoblast/OpenOraclePriceCoordinator.sol:dynamic-endpoint',
+	'SharedPoolPriceFeed:contracts/statoblast/SharedPoolPriceFeed.sol:dynamic-endpoint',
+	'SharedPoolReportEscrow:contracts/statoblast/SharedPoolReportEscrow.sol:dynamic-endpoint',
+	'OpenOracleReportDelegate:contracts/statoblast/OpenOracleReportDelegate.sol:delegate-module',
+	'SharedPoolPriceFeedDeploymentWorker:contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol:static-endpoint',
 	'VaultOperations:contracts/statoblast/VaultOperations.sol:dynamic-endpoint',
 	'LiquidationApprovalRegistry:contracts/statoblast/LiquidationApprovalRegistry.sol:dynamic-endpoint',
 	'OpenOraclePriceCoordinatorFactory:contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol:static-endpoint',
 	'LiquidationApprovalRegistryDeployer:contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol:deployment-helper',
-	'PriceCoordinatorDeploymentWorker:contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol:deployment-helper',
+	'PriceCoordinatorDeploymentWorker:contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol:static-endpoint',
 	'SecurityPoolForker:contracts/statoblast/SecurityPoolForker.sol:static-endpoint',
 	'SecurityPoolForkerVaultMigrationDelegate:contracts/statoblast/SecurityPoolForkerVaultMigrationDelegate.sol:delegate-module',
 	'EscalationGameForker:contracts/statoblast/EscalationGameForker.sol:delegate-module',
@@ -385,8 +393,15 @@ describe('contract operation classification', () => {
 		const directDelegateContracts = new Set(CANONICAL_MUTATING_CONTRACT_MANIFEST.filter(entry => entry.exposure === 'delegate-module').map(entry => entry.contract))
 		const orphanFactoryContracts = new Set(['EscalationGameFactory', 'OpenOraclePriceCoordinatorFactory', 'ShareTokenFactory', 'UniformPriceDualCapBatchAuctionFactory'])
 		for (const entry of MUTATING_CONTRACT_SURFACE) {
-			if (helperContracts.has(entry.contract)) expect(entry.classification, `${entry.contract}.${entry.method}`).toBe('role-restricted')
-			if (directDelegateContracts.has(entry.contract) || orphanFactoryContracts.has(entry.contract)) expect(entry.classification, `${entry.contract}.${entry.method}`).toBe('excluded-dangerous')
+			if (helperContracts.has(entry.contract)) {
+				const permissionlessCheckpoint = entry.contract === 'EscalationGameClaimDelegate' && entry.method === 'processClaimCheckpoint'
+				expect(entry.classification, `${entry.contract}.${entry.method}`).toBe(permissionlessCheckpoint ? 'lifecycle-obligation' : 'role-restricted')
+			}
+			if (directDelegateContracts.has(entry.contract)) expect(entry.classification, `${entry.contract}.${entry.method}`).toBe('excluded-dangerous')
+			if (orphanFactoryContracts.has(entry.contract)) {
+				const authenticatedFeedWiring = entry.contract === 'OpenOraclePriceCoordinatorFactory' && ['deploySharedPoolPriceFeed', 'configureSharedPriceFeed', 'configureSecurityPool'].includes(entry.method)
+				expect(entry.classification, `${entry.contract}.${entry.method}`).toBe(authenticatedFeedWiring ? 'role-restricted' : 'excluded-dangerous')
+			}
 		}
 	})
 
@@ -397,8 +412,9 @@ describe('contract operation classification', () => {
 		expect(constructor).toMatchObject({ inputs: expect.arrayContaining([{ internalType: 'contract EscalationGameClaimDelegate', name: '_claimDelegate', type: 'address' }]) })
 		expect(gameAbi).toContainEqual(expect.objectContaining({ stateMutability: 'nonpayable', type: 'fallback' }))
 		const delegateMutations = mutatingFunctions(contractAbi(contracts, 'contracts/statoblast/EscalationGameClaimDelegate.sol', 'EscalationGameClaimDelegate'))
-		expect(delegateMutations.map((item, index) => artifactFunctionSignature(item, `EscalationGameClaimDelegate[${index.toString()}]`))).toEqual(['initializeForkClaimCheckpoint(address)'])
+		expect(delegateMutations.map((item, index) => artifactFunctionSignature(item, `EscalationGameClaimDelegate[${index.toString()}]`))).toEqual(['initializeForkClaimCheckpoint(address)', 'processClaimCheckpoint(uint8,uint256,uint256,uint256,uint256,bytes32,(uint256,uint256,uint256)[])'])
 		expect(classifiedMethod('EscalationGameClaimDelegate', 'initializeForkClaimCheckpoint')).toMatchObject({ classification: 'role-restricted' })
+		expect(classifiedMethod('EscalationGameClaimDelegate', 'processClaimCheckpoint')).toMatchObject({ classification: 'lifecycle-obligation', operationId: 'statoblast.escalation.prepare-claim' })
 	})
 
 	test('classifies canonical receive and fallback entry points by ABI kind', () => {
@@ -440,8 +456,10 @@ describe('contract operation classification', () => {
 			if ('delegatedFunctions' in binding) {
 				for (const delegatedFunction of binding.delegatedFunctions) {
 					const functionNames = new Set<string>(delegatedFunction.functions)
+					const eventNames = new Set<string>('events' in delegatedFunction ? delegatedFunction.events : [])
 					for (const [index, item] of contractAbi(contracts, delegatedFunction.artifactSource, delegatedFunction.contract).entries()) {
-						if (typeof item !== 'object' || item === null || !('type' in item) || !('name' in item) || item.type !== 'function' || typeof item.name !== 'string' || !functionNames.has(item.name)) continue
+						if (typeof item !== 'object' || item === null || !('type' in item) || !('name' in item) || typeof item.name !== 'string') continue
+						if (item.type === 'function' ? !functionNames.has(item.name) : item.type !== 'event' || !eventNames.has(item.name)) continue
 						generatedEntries.set(abiEntryIdentity(item, `${delegatedFunction.contract}.generated[${index.toString()}]`), item)
 					}
 				}
@@ -469,7 +487,7 @@ describe('contract operation classification', () => {
 		const stepSelectors = new Set<string>()
 		const tradingFiles = readdirSync(path.resolve(import.meta.dir, '../../src/operations/trading')).map(file => `trading/${file}`)
 		const openOracleFiles = readdirSync(path.resolve(import.meta.dir, '../../src/operations/open-oracle')).map(file => `open-oracle/${file}`)
-		for (const file of [...openOracleFiles, 'statoblast.ts', 'statoblast/complete-sets.ts', ...tradingFiles, 'zoltar.ts']) {
+		for (const file of [...openOracleFiles, 'statoblast.ts', 'statoblast/complete-sets.ts', 'statoblast/child-preparation.ts', ...tradingFiles, 'zoltar.ts']) {
 			for (const selector of operationStepSelectors(path.resolve(import.meta.dir, '../../src/operations', file))) stepSelectors.add(selector)
 		}
 		for (const entry of MUTATING_CONTRACT_SURFACE.filter(candidate => candidate.classification === 'prerequisite')) {

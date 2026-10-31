@@ -64,7 +64,7 @@ export function calculateOpenOraclePrice(amount1: bigint, amount2: bigint, decim
 
 // settle forwards exactly callbackGasLimit to the callback. EIP-150 lets a call forward at most 63/64 of the remaining gas,
 // and settle reverts with InvalidGasLimit unless callbackGasLimit / 63 remains afterwards, so budget both plus settle overhead.
-function getOpenOracleSettleGasLimit(game: Pick<OpenOracleStatePreimage['game'], 'callbackContract' | 'callbackGasLimit'>) {
+export function getOpenOracleSettleGasLimit(game: Pick<OpenOracleStatePreimage['game'], 'callbackContract' | 'callbackGasLimit'>) {
 	if (game.callbackContract === zeroAddress) return OPEN_ORACLE_DEFAULT_SETTLE_GAS_LIMIT
 	const callbackGasLimit = game.callbackGasLimit
 	const required = (callbackGasLimit * 64n + 62n) / 63n + callbackGasLimit / 63n + OPEN_ORACLE_SETTLE_OVERHEAD_GAS
@@ -120,7 +120,7 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 	return {
 		reportId,
 		openOracleAddress,
-		coordinatorPriceValidUntilTimestamp: await loadCoordinatorPriceValidUntilTimestamp(client, openOracleAddress, game),
+		coordinatorPriceValidUntilTimestamp: await loadCoordinatorPriceValidUntilTimestamp(client, openOracleAddress, game, undefined, reportId),
 		currentTime: block.timestamp,
 		currentBlockNumber: block.number,
 		exactToken1Report: storedState.initialAmount1,
@@ -431,7 +431,7 @@ function getOpenOracleReportSubmittedTopic() {
 	return toEventSelector(event).toLowerCase()
 }
 
-function getOpenOracleSubmittedReportId(receipt: { logs?: readonly Pick<TransactionReceipt['logs'][number], 'address' | 'topics'>[] }, openOracleAddress: Address) {
+export function getOpenOracleSubmittedReportId(receipt: { logs?: readonly Pick<TransactionReceipt['logs'][number], 'address' | 'topics'>[] }, openOracleAddress: Address) {
 	const reportSubmittedTopic = getOpenOracleReportSubmittedTopic()
 	for (const log of receipt.logs ?? []) {
 		if (!sameAddress(log.address, openOracleAddress)) continue
@@ -530,7 +530,7 @@ export async function settleOracleReport<TReceipt extends Pick<TransactionReceip
 		if (readContract === undefined) throw new Error('OpenOracle settlement requires a client that can read stored report state')
 		resolvedPreimage = (await loadOpenOracleStoredState({ readContract }, openOracleAddress, reportId)).latest
 	}
-	const coordinatorPriceValidUntilTimestamp = client.multicall === undefined ? undefined : await loadCoordinatorPriceValidUntilTimestamp({ multicall: client.multicall }, openOracleAddress, resolvedPreimage.game, client.chain?.id)
+	const coordinatorPriceValidUntilTimestamp = client.multicall === undefined ? undefined : await loadCoordinatorPriceValidUntilTimestamp({ multicall: client.multicall }, openOracleAddress, resolvedPreimage.game, client.chain?.id, reportId)
 	const reviewedBlock = coordinatorPriceValidUntilTimestamp === undefined ? undefined : await client.getBlock?.()
 	const reviewedPriceExpired = coordinatorPriceValidUntilTimestamp !== undefined && reviewedBlock !== undefined && reviewedBlock.timestamp >= coordinatorPriceValidUntilTimestamp
 	const reviewedStateHash = hashOpenOracleStatePreimage(resolvedPreimage)

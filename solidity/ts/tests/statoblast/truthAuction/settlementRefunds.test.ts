@@ -78,13 +78,14 @@ describe('Statoblast: truth auction', () => {
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6])
 			await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
 			await setVaultCapacityFixture(passiveRepHolder, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, passiveRepHolder.account.address, repDeposit / 4n)
-			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, securityPoolUnderwritingLimitAttoEth)
 
 			const openInterestAmount = 10n * 10n ** 18n
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1])
+			await mockWindow.setTime(endTime - 2n)
 			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+			await mockWindow.setTime(endTime + 10000n)
 
 			await triggerExternalForkForSecurityPool(undefined, 'zero rep refund fork source')
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -177,10 +178,11 @@ describe('Statoblast: truth auction', () => {
 
 		test('zero-migration full-cap settlement keeps backingUnits conversion while rejecting post-end deposits', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
-			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, securityPoolUnderwritingLimitAttoEth)
+			await mockWindow.setTime(endTime - 2n)
 			await createCompleteSet(createWriteClient(mockWindow, TEST_ADDRESSES[1]), securityPoolAddresses.securityPool, 10n * 10n ** 18n)
+			await mockWindow.setTime(endTime + 10000n)
 
 			await triggerExternalForkForSecurityPool(undefined, 'zero-migration backingUnits normalization source')
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -231,12 +233,13 @@ describe('Statoblast: truth auction', () => {
 
 			const unmigratedVault = createWriteClient(mockWindow, TEST_ADDRESSES[4])
 			await approveAndDepositRepToVault(unmigratedVault, 2n * forkThresholdAttoRep, questionId)
-			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, securityPoolUnderwritingLimitAttoEth)
 			await mockWindow.advanceTime(10n * 60n)
 			await setVaultCapacityFixture(unmigratedVault, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, unmigratedVault.account.address, securityPoolUnderwritingLimitAttoEth)
+			await mockWindow.setTime(endTime - 2n)
 			await createCompleteSet(createWriteClient(mockWindow, TEST_ADDRESSES[2]), securityPoolAddresses.securityPool, 10n * 10n ** 18n)
+			await mockWindow.setTime(endTime + 10000n)
 
 			await triggerExternalForkForSecurityPool(undefined, 'rejecting auction winner capacity source')
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -341,8 +344,10 @@ describe('Statoblast: truth auction', () => {
 				retentionRateBeforeClaim,
 				'assigning already-counted aggregate capacity should not change pool utilization',
 			)
-			await createCompleteSet(openInterestHolder, yesSecurityPool.securityPool, capacityProbe)
-			assert.ok((await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool)) <= mintingCapacityBeforeClaim, 'minted collateral must stay within aggregate backing even when an individual winner is underbacked')
+			const collateralBeforeMintAttempt = await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool)
+			await assert.rejects(createCompleteSet(openInterestHolder, yesSecurityPool.securityPool, capacityProbe), /Question ended/)
+			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), collateralBeforeMintAttempt, 'an ended child cannot consume its remaining minting headroom')
+			assert.ok(collateralBeforeMintAttempt <= mintingCapacityBeforeClaim, 'collateral must stay within aggregate backing even when an individual winner is underbacked')
 
 			await client.writeContract({
 				abi: rejectingEthReceiverArtifact.abi,

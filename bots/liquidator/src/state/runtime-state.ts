@@ -1,3 +1,4 @@
+import type { PortfolioObservation, PortfolioScope } from '#monitoring/portfolio-monitor'
 import type { Address, Hex, RpcEndpointHealth } from '@zoltar/bot-shared/ethereum'
 import type { CentralizedMarketEstimate } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import type { MarketConsensusEstimate, MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
@@ -23,6 +24,8 @@ export type RuntimeState = {
 	rpcEndpointHealth: readonly RpcEndpointHealth[]
 	pendingStagedOperations: PendingStagedOperation[]
 	pendingTransactions: PendingTransactionIntent[]
+	portfolios: PortfolioObservation[]
+	portfolioScopes: PortfolioScope[]
 	pools: PoolObservation[]
 	scanning: boolean
 	startedAt: string

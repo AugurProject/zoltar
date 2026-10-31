@@ -1,3 +1,6 @@
+import { requireAddressValue } from './decoders.js'
+import { loadCentralPortfolioQuestion } from './securityPoolPortfolioState.js'
+import { decodeLinearFeeState, linearFeeReadContracts } from './linearFeeState.js'
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_EscalationGame_EscalationGame, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker } from '../contractArtifact.js'
 import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
@@ -56,6 +59,10 @@ async function readSecurityPoolSnapshot(client: ReadClient, deployment: Security
 		universeForkTime,
 		escalationGameAddress,
 		feeEndTimestamp,
+		portfolioCustody,
+		linearRate,
+		linearEnd,
+		priceValidUntil,
 	] = await readRequiredMulticall(client, [
 		{
 			abi: statoblast_SecurityPool_SecurityPool.abi,
@@ -147,23 +154,37 @@ async function readSecurityPoolSnapshot(client: ReadClient, deployment: Security
 			address: securityPoolAddress,
 			args: [],
 		},
+		...linearFeeReadContracts(securityPoolAddress),
+		{ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'priceValidUntil', address: managerAddress, args: [] },
 	])
+	const block = portfolioCustody === zeroAddress ? undefined : await client.getBlock()
+	const blockNumber = block?.number
+	if (block !== undefined && blockNumber === undefined) throw new Error('Portfolio snapshot requires a mined block.')
+	const central = blockNumber === undefined ? undefined : await loadCentralPortfolioQuestion(client, securityPoolAddress, requireAddressValue(portfolioCustody, 'portfolio custody'), blockNumber)
 	return {
-		settlementCollateralAttoEth,
+		centralSettlement: central !== undefined,
+		centralMintingCapacity: central?.mintingCapacityAttoEth,
+		linearFee: central?.linearFee ?? decodeLinearFeeState(portfolioCustody, linearRate, linearEnd),
+		settlementCollateralAttoEth: central?.settlementCollateralAttoEth ?? settlementCollateralAttoEth,
+		settlementRecoveryAttoRep: central?.settlementRecoveryAttoRep ?? 0n,
 		currentRetentionRate,
 		minimumSecurityBondDebtAttoEth,
 		minimumVaultRepDepositAttoRep,
 		forkData,
 		lastOraclePrice,
 		lastSettlementTimestamp,
+		priceValidUntil,
 		questionOutcome,
 		systemStateValue,
-		shareTokenSupplyAttoShares,
-		totalPoolHeldAttoRep,
-		poolAccountingSnapshot,
+		shareTokenSupplyAttoShares: central?.shareTokenSupplyAttoShares ?? shareTokenSupplyAttoShares,
+		totalPoolHeldAttoRep: central?.totalPoolHeldAttoRep ?? totalPoolHeldAttoRep,
+		poolAccountingSnapshot:
+			central === undefined
+				? poolAccountingSnapshot
+				: { ...poolAccountingSnapshot, settlementCollateralAttoEth: central.settlementCollateralAttoEth, totalUnderwritingLimitAttoEth: central.totalUnderwritingLimitAttoEth, feeEligibleUnderwritingLimitAttoEth: central.feeEligibleUnderwritingLimitAttoEth, lastUpdatedFeeAccumulator: central.lastUpdatedFeeAccumulator },
 		universeForkTime,
 		escalationGameAddress,
-		feeEndTimestamp,
+		feeEndTimestamp: central?.feeEndTimestamp ?? feeEndTimestamp,
 	}
 }
 
@@ -198,7 +219,7 @@ export async function loadSecurityPoolDetails(
 				args: [],
 			})
 	const interpretedSnapshot = interpretSecurityPoolSnapshot(snapshot, deployment.parent)
-	const mintingCapacityAttoEth = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'getCurrentMintingCapacityAttoEth' })
+	const mintingCapacityAttoEth = snapshot.centralMintingCapacity ?? (await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'getCurrentMintingCapacityAttoEth' }))
 	return createListedSecurityPool({ deployment, snapshot: interpretedSnapshot, marketDetails, vaultSummaries, hasForkContinuationEscalationGame, mintingCapacityAttoEth })
 }
 
@@ -251,9 +272,12 @@ function createListedSecurityPool({
 	const { truthAuctionStartedAt, migratedAttoRep, forkOwnSecurityPool } = forkData
 	return {
 		mintingCapacityAttoEth,
+		settlementRecoveryAttoRep: snapshot.settlementRecoveryAttoRep,
 		settlementCollateralAttoEth,
 		currentRetentionRate,
 		feeAccrualState: {
+			centralSettlement: snapshot.centralSettlement,
+			...(snapshot.linearFee === undefined ? {} : { linearFee: snapshot.linearFee }),
 			feeEndTimestamp,
 			feeIndexRemainder: poolAccountingSnapshot.feeIndexRemainder,
 			lastUpdatedFeeAccumulator: poolAccountingSnapshot.lastUpdatedFeeAccumulator,
@@ -267,6 +291,7 @@ function createListedSecurityPool({
 		initialReportPriorityFeeAttoEthPerGas,
 		lastOraclePrice: lastSettlementTimestamp > 0n ? lastOraclePrice : undefined,
 		lastOracleSettlementTimestamp: lastSettlementTimestamp,
+		oraclePriceValidUntilTimestamp: snapshot.priceValidUntil === 0n ? undefined : snapshot.priceValidUntil,
 		managerAddress,
 		minimumSecurityBondDebtAttoEth,
 		minimumVaultRepDepositAttoRep,

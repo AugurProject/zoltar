@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { EscalationGameRepCustody } from '../EscalationGameRepCustody.sol';
+import { SecurityPoolReporterLedger } from '../SecurityPoolReporterLedger.sol';
+import { ISecurityPoolPortfolioNative } from '../interfaces/ISecurityPoolPortfolioNative.sol';
 import { ISecurityPool } from '../interfaces/ISecurityPool.sol';
 import { EscalationGame } from '../EscalationGame.sol';
 import { EscalationGameProofVerifier } from '../EscalationGameProofVerifier.sol';
 import { BinaryOutcomes } from '../BinaryOutcomes.sol';
 import { EscalationGameClaimDelegate } from '../EscalationGameClaimDelegate.sol';
+import { EscalationGameDepositDelegate } from '../EscalationGameDepositDelegate.sol';
 import { ISecurityPoolForker } from '../interfaces/ISecurityPoolForker.sol';
 import { Create2Deployment } from './Create2Deployment.sol';
 
@@ -14,11 +18,13 @@ contract EscalationGameFactory {
 
 	EscalationGameProofVerifier public immutable proofVerifier;
 	EscalationGameClaimDelegate public immutable claimDelegate;
+	EscalationGameDepositDelegate public immutable depositDelegate;
 	address private immutable escalationGameCreationCodePartOne;
 	address private immutable escalationGameCreationCodePartTwo;
 
-	constructor(EscalationGameClaimDelegate _claimDelegate) {
+	constructor(EscalationGameClaimDelegate _claimDelegate, EscalationGameDepositDelegate _depositDelegate) {
 		require(address(_claimDelegate).code.length > 0, 'Claim delegate');
+		require(address(_depositDelegate).code.length > 0, 'Deposit delegate');
 		claimDelegate = _claimDelegate;
 		proofVerifier = new EscalationGameProofVerifier();
 		bytes memory creationCode = type(EscalationGame).creationCode;
@@ -26,6 +32,8 @@ contract EscalationGameFactory {
 			creationCode.length < CREATION_CODE_CHUNK_SIZE ? creationCode.length : CREATION_CODE_CHUNK_SIZE;
 		escalationGameCreationCodePartOne = _deployCodePart(creationCode, 0, firstPartLength);
 		escalationGameCreationCodePartTwo = _deployCodePart(creationCode, firstPartLength, creationCode.length - firstPartLength);
+		// Stateless delegate code is shared by every game; game storage stays isolated through delegatecall.
+		depositDelegate = _depositDelegate;
 	}
 
 	function _deployCodePart(bytes memory completeCode, uint256 offset, uint256 length) private returns (address codePart) {
@@ -54,7 +62,12 @@ contract EscalationGameFactory {
 		ISecurityPool parent = child.parent();
 		bool winnerHaircutPaidByFork;
 		uint256 forkCarryInitialBackingAttoRep;
-		if (address(parent) != address(0x0)) {
+		address portfolio = EscalationGameRepCustody.portfolio(address(child));
+		if (portfolio != address(0)) {
+			(SecurityPoolReporterLedger.Question memory state, ) = SecurityPoolReporterLedger(ISecurityPoolPortfolioNative(portfolio).reporterLedger(child.universeId())).question(child.universeId(), child.questionId());
+			winnerHaircutPaidByFork = state.winnerHaircutPaidByFork;
+			forkCarryInitialBackingAttoRep = state.balanceAttoRep;
+		} else if (address(parent) != address(0x0)) {
 			ISecurityPoolForker forker = ISecurityPoolForker(child.securityPoolForker());
 			winnerHaircutPaidByFork = forker.isEscalationWinnerHaircutPaidByFork(parent);
 			(, forkCarryInitialBackingAttoRep, ) = forker.getOwnForkRepBuckets(parent);
@@ -81,7 +94,7 @@ contract EscalationGameFactory {
 		}
 		// Code storage is cheaper to deploy and read than one storage slot per 32-byte
 		// word, while two fixed parts keep each carrier below EIP-170.
-		bytes memory initCode = abi.encodePacked(creationCode, abi.encode(securityPool, securityPool.repToken(), proofVerifier, claimDelegate));
+		bytes memory initCode = abi.encodePacked(creationCode, abi.encode(securityPool, securityPool.repToken(), proofVerifier, claimDelegate, depositDelegate));
 		address deployed = Create2Deployment.deploy(initCode, 0);
 		require(deployed != address(0x0), 'Escalation game deployment failed');
 		gameImplementation = EscalationGame(deployed);

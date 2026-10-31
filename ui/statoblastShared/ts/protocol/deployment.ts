@@ -1,6 +1,6 @@
 import type { NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { getRuntimeNetworkProfile, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { bytesToHex, encodeDeployData, hexToBytes, toHex, type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { bytesToHex, encodeDeployData, getCreateAddress, hexToBytes, keccak256, toHex, type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { DeploymentStatusSnapshot, DeploymentStep, DeploymentStepId, ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import {
 	assertDeploymentStepRuntimeCode,
@@ -15,40 +15,58 @@ import {
 } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 import {
 	getInfraContractAddresses,
+	applyStatoblastLibraries,
 	getEscalationGameFactoryByteCode,
 	getInfraStepConstructorArguments,
 	getOpenOraclePriceCoordinatorFactoryByteCode,
+	getPriceCoordinatorDeploymentWorkerByteCode,
+	getSharedPoolPriceFeedDeploymentWorkerByteCode,
 	getSecurityPoolFactoryByteCode,
 	getSecurityPoolForkerByteCode,
+	getSecurityPoolForkerPortfolioDelegateByteCode,
+	portfolioModuleDeployments,
 	getSecurityPoolOperationsDelegateByteCode,
 	getSecurityPoolOperationsDelegateRuntimeCode,
+	getSecurityPoolEventEmitterByteCode,
+	getSecurityPoolEventEmitterRuntimeCode,
 	getShareTokenFactoryByteCode,
 } from './deploymentHelpers.js'
 import { DeploymentStatusOracle_DeploymentStatusOracle } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate, statoblast_SecurityPoolUtils_SecurityPoolUtils, statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, statoblast_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
+import {
+	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
+	statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate,
+	statoblast_SecurityPoolUtils_SecurityPoolUtils,
+	statoblast_SecurityPoolForkerPortfolioDelegate_SecurityPoolForkerPortfolioDelegate as nativePortfolioForkArtifact,
+	statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
+	statoblast_openOracle_OpenOracle_OpenOracle,
+} from '../contractArtifact.js'
 import { constructorArgumentsFromInitCode, createDeploymentStatusOracleAddressHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from './deploymentHelpers.js'
 
 export { loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 
 export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
-	escalationGameClaimDelegate: '0xed5d44482ceeac7091409ffd63a592fabad32aca961274fc2e077f369864f229',
-	escalationGameFactory: '0xf9ccbaab9f6900e8b69d2eb202d4f057131073f2055f14fb2a46dacf8fd3f9c5',
+	escalationGameClaimDelegate: '0x173356fedb7f28b10ef64501c8272c3eb533ed2919b6a0296438bc170f7aab1d',
+	escalationGameDepositDelegate: '0x8d706d8e3f620b659d5b48a28d61ec55da621c92457d6cd5e6f8b937062d226c',
+	escalationGameFactory: '0x25a0aa410753945faf2e313b9d1bad8d988f86bc569aa4f942d74288b9415031',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
-	openOraclePriceCoordinatorFactory: '0xdab4f996e38183895fe41d8e242004f3e079e35ec7fbc5e8e581ba150e9b2a0f',
-	securityPoolFactory: '0x0cf83ee917f6d1d44d63bd50a9b44c0db59a4776427de2219c9bd7cb316cc5ad',
-	securityPoolOperationsDelegate: '0x803bfa19e2b75cdd3e34a0ca848bc292e9eb89b15d955db9bc85be6357fc4d92',
-	securityPoolForker: '0xbfeb383cdb8f9d635c6e34176ca50f010c8a396a66c3744ec21a6a8110fcd7b0',
+	openOraclePriceCoordinatorFactory: '0xfa2fc2c97c884e1c8069bee3033f15926669d26d452968f99b3a01277794328e',
+	priceCoordinatorDeploymentWorker: '0x4009edde535da7fa06278f120cee536179daba7ae88457a5372998ae19fe144b',
+	securityPoolEventEmitter: '0xdd3fe17ffbac4c9beecfc14a770cfd515a6357da28c66ee25a71c170d10ce935',
+	securityPoolFactory: '0x5c7e4ffe4914dba8b532c7840a3445ebfe6e412e63fd9b37c97be5daf3eb0488',
+	securityPoolForker: '0x77c3e9c8dbb289df55c2561602b3c14dab2d15ab28c0ebc2920eb42c9cfa7b21',
+	securityPoolOperationsDelegate: '0x6faf83b14b4ebb5cf3563621f168998ca892e406db144528fbfc8e721aa3d4e0',
 	securityPoolUtils: '0xe16f02b9482acbfbbe0000d61e30fcf511cf5e3b297c827c41dc628e81d9d5c4',
-	shareTokenFactory: '0xd166e808a1860481541ec6f53d80cd284bdc172bfbe286c8b5b65da8978c8c93',
+	shareTokenFactory: '0x1e96726ca016ae1b8ee475efb6bf20a0ee5606173240df6028f616ae65e26088',
+	sharedPoolPriceFeedDeploymentWorker: '0x0e42c67b06de2d623314da856b94877b62dec2ea8c40fd6a8f0fee7c95f333ac',
 	uniformPriceDualCapBatchAuctionFactory: '0xef7782aeeb22a6d00cbd223d4a11cc90c8d54391ea277f41c030405370d8825d',
 }
 
 const EXPECTED_NO_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0xdc370dd1a065fb80f2be0fd6a8774f2cf8ae7bab9a7eb113b12c2ce9a6ea72ab',
-	securityPoolForker: '0xb11b2a8da9a7eaf30bca074651083981e4183a53b399d04907294979d267b441',
-	shareTokenFactory: '0x6e82931828c37f6cd96894609d72f84d248b8d4cd1c8caaed6120acd1b42bc4a',
+	securityPoolFactory: '0x5ab092612f3bc886516cec7448f1ceb6a52f92118506e547294a6afcc4774eaa',
+	securityPoolForker: '0xbe902cbde889e5289e7224fd749eb9182c83ed6d5bb52bd035c6856b09e5b538',
+	shareTokenFactory: '0x4342a315b441f9428ceba95ac6acf6145f3f7803fca7e4fc8ac4d1a062afbac6',
 }
 
 function getSecurityPoolUtilsRuntimeCode() {
@@ -62,10 +80,34 @@ function getSecurityPoolUtilsRuntimeCode() {
 	return bytesToHex(runtimeBytes)
 }
 
+function runtimeWithAddresses(artifact: { evm: { deployedBytecode: { object: string; immutableReferences: Readonly<Record<string, readonly { start: number; length: number }[]>> } } }, addresses: readonly Address[]) {
+	const groups = Object.values(artifact.evm.deployedBytecode.immutableReferences)
+	if (groups.length !== addresses.length) throw new Error('Unexpected deployment immutable layout')
+	const code = hexToBytes(applyStatoblastLibraries(artifact.evm.deployedBytecode.object))
+	for (const [index, group] of groups.entries()) {
+		const address = addresses[index]
+		if (address === undefined) throw new Error('Missing deployment immutable')
+		const padded = hexToBytes(toHex(hexToBytes(address), { size: 32 }))
+		for (const reference of group) {
+			if (reference.length !== 32 || code.slice(reference.start, reference.start + reference.length).some(byte => byte !== 0)) throw new Error('Unexpected deployment immutable bytes')
+			code.set(padded, reference.start)
+		}
+	}
+	return bytesToHex(code)
+}
+function moduleRuntimeCode(module: (typeof portfolioModuleDeployments)[number], profile: NetworkProfile) {
+	const addresses = getInfraContractAddresses(profile)
+	if (module.id === 'securityPoolCapitalLedgerDeployer' || module.id === 'securityPoolPortfolioServicesDeployer') return runtimeWithAddresses(module.artifact, [getCreateAddress({ from: addresses[module.id], nonce: 1n }), getCreateAddress({ from: addresses[module.id], nonce: 2n })])
+	if (module.id === 'securityPoolPortfolioForkCoordinatorDeployer' || module.id === 'securityPoolPortfolioAuctionDeployer') return runtimeWithAddresses(module.artifact, [getCreateAddress({ from: addresses[module.id], nonce: 1n }), getCreateAddress({ from: addresses[module.id], nonce: 2n })])
+	return runtimeWithAddresses(module.artifact, [])
+}
+
 const STATIC_STATOBLAST_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID = {
 	escalationGameClaimDelegate: `0x${statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.deployedBytecode.object}`,
+	escalationGameDepositDelegate: `0x${statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.evm.deployedBytecode.object}`,
 	openOracle: `0x${statoblast_openOracle_OpenOracle_OpenOracle.evm.deployedBytecode.object}`,
 	securityPoolOperationsDelegate: getSecurityPoolOperationsDelegateRuntimeCode(),
+	securityPoolEventEmitter: getSecurityPoolEventEmitterRuntimeCode(),
 	securityPoolUtils: getSecurityPoolUtilsRuntimeCode(),
 	uniformPriceDualCapBatchAuctionFactory: `0x${statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.deployedBytecode.object}`,
 } satisfies Readonly<Partial<Record<DeploymentStepId, Hex>>>
@@ -80,23 +122,27 @@ export function assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes(
 }
 
 const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
-	escalationGameClaimDelegate: '0xed5d44482ceeac7091409ffd63a592fabad32aca961274fc2e077f369864f229',
-	escalationGameFactory: '0xf9ccbaab9f6900e8b69d2eb202d4f057131073f2055f14fb2a46dacf8fd3f9c5',
+	escalationGameClaimDelegate: '0x173356fedb7f28b10ef64501c8272c3eb533ed2919b6a0296438bc170f7aab1d',
+	escalationGameDepositDelegate: '0x8d706d8e3f620b659d5b48a28d61ec55da621c92457d6cd5e6f8b937062d226c',
+	escalationGameFactory: '0x25a0aa410753945faf2e313b9d1bad8d988f86bc569aa4f942d74288b9415031',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
-	openOraclePriceCoordinatorFactory: '0x89289d1316cb82849ae9a75db1110009a753d4913542281ed0f2c2dba962ac13',
-	securityPoolFactory: '0xc665759f84eb02e6376a3b54c5322f5d9b0720d6f184e7848533e61e5724966d',
-	securityPoolOperationsDelegate: '0x803bfa19e2b75cdd3e34a0ca848bc292e9eb89b15d955db9bc85be6357fc4d92',
-	securityPoolForker: '0xb2f82cb81b54ac0850df5f4795cc717eaa5b5ee1fbd28f357d4f6d9545f09d83',
+	openOraclePriceCoordinatorFactory: '0xf80c63097b699391b5af5114b4dbca1a87270db82baef8397a3c5fb08ce6d936',
+	priceCoordinatorDeploymentWorker: '0x4009edde535da7fa06278f120cee536179daba7ae88457a5372998ae19fe144b',
+	securityPoolEventEmitter: '0xdd3fe17ffbac4c9beecfc14a770cfd515a6357da28c66ee25a71c170d10ce935',
+	securityPoolFactory: '0x31abd70cfcdba8d953e4136ffc47e8668001924e4868686c52f5288abde354d9',
+	securityPoolForker: '0xf9f87d6414d2f0bcb4758372c524668843cde2d6ffbf0e861643f8ec48162c7b',
+	securityPoolOperationsDelegate: '0x6faf83b14b4ebb5cf3563621f168998ca892e406db144528fbfc8e721aa3d4e0',
 	securityPoolUtils: '0xe16f02b9482acbfbbe0000d61e30fcf511cf5e3b297c827c41dc628e81d9d5c4',
-	shareTokenFactory: '0x54e3cd76c897e09d7c9ebce4ef6e466f842e0bf6f2af7f2705fdaa55a8aee957',
+	shareTokenFactory: '0xf1abf801c6aa9d65fe38c6934720803416214c7a6cb582596dca9650b7e2465b',
+	sharedPoolPriceFeedDeploymentWorker: '0x0e42c67b06de2d623314da856b94877b62dec2ea8c40fd6a8f0fee7c95f333ac',
 	uniformPriceDualCapBatchAuctionFactory: '0xef7782aeeb22a6d00cbd223d4a11cc90c8d54391ea277f41c030405370d8825d',
 }
 
 const EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_MAINNET_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0x962bf62946250c3b9ffa7007cad1d59de60efdd31c9bb52501d2e2115eece2b5',
-	securityPoolForker: '0x50c3b0fe26132cc3ff3b88fd47ce7165d0ec35f975dc0bd40fd990c9abffe8a8',
-	shareTokenFactory: '0x843817ae6125b999580f84716149c9ce04c18437007044ede4896c7278a19196',
+	securityPoolFactory: '0x6f8d464ad07c521afd6a0276fa40b043ded28fccd16ba39b199b392c2eb450c9',
+	securityPoolForker: '0x90a51174b37e5cdf3cf220669f979b98c0e42056af91519fc87220b0b1066d2b',
+	shareTokenFactory: '0x24e9f5b5a86fb9f010685979a051de2eec1740d054ddaf7358ab067614ac34b4',
 }
 const EXPECTED_PUBLIC_RUNTIME_CODE_HASHES = {
 	mainnet: { yes: EXPECTED_MAINNET_RUNTIME_CODE_HASHES, no: EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES },
@@ -141,6 +187,13 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 			deploy: async client => await deployViaProxy(client, getSecurityPoolOperationsDelegateByteCode()),
 		},
 		{
+			id: 'securityPoolEventEmitter',
+			label: 'SecurityPoolEventEmitter',
+			address: addresses.securityPoolEventEmitter,
+			dependencies: ['proxyDeployer', 'securityPoolUtils'],
+			deploy: async client => await deployViaProxy(client, getSecurityPoolEventEmitterByteCode()),
+		},
+		{
 			id: 'openOracle',
 			label: 'OpenOracle',
 			address: addresses.openOracle,
@@ -155,17 +208,39 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 			deploy: async client => await deployViaProxy(client, getShareTokenFactoryByteCode(addresses.zoltar)),
 		},
 		{
+			id: 'priceCoordinatorDeploymentWorker',
+			label: 'PriceCoordinatorDeploymentWorker',
+			address: addresses.priceCoordinatorDeploymentWorker,
+			dependencies: ['proxyDeployer', 'securityPoolUtils'],
+			deploy: async client => await deployViaProxy(client, getPriceCoordinatorDeploymentWorkerByteCode()),
+		},
+		{
+			id: 'sharedPoolPriceFeedDeploymentWorker',
+			label: 'SharedPoolPriceFeedDeploymentWorker',
+			address: addresses.sharedPoolPriceFeedDeploymentWorker,
+			dependencies: ['proxyDeployer', 'securityPoolUtils'],
+			deploy: async client => await deployViaProxy(client, getSharedPoolPriceFeedDeploymentWorkerByteCode()),
+		},
+		{
 			id: 'openOraclePriceCoordinatorFactory',
 			label: 'OpenOraclePriceCoordinatorFactory',
 			address: addresses.openOraclePriceCoordinatorFactory,
-			dependencies: ['proxyDeployer'],
+			dependencies: ['proxyDeployer', 'priceCoordinatorDeploymentWorker', 'sharedPoolPriceFeedDeploymentWorker'],
 			deploy: async client => await deployViaProxy(client, getOpenOraclePriceCoordinatorFactoryByteCode(profile.wethAddress)),
+		},
+		{
+			id: 'securityPoolForkerPortfolioDelegate',
+			label: 'SecurityPoolForkerPortfolioDelegate',
+			address: addresses.securityPoolForkerPortfolioDelegate,
+			dependencies: ['proxyDeployer', 'securityPoolUtils', 'zoltar'],
+			deploy: async client => await deployViaProxy(client, getSecurityPoolForkerPortfolioDelegateByteCode(addresses.zoltar)),
+			expectedRuntimeCodeHash: keccak256(runtimeWithAddresses(nativePortfolioForkArtifact, [addresses.zoltar])),
 		},
 		{
 			id: 'securityPoolForker',
 			label: 'SecurityPoolForker',
 			address: addresses.securityPoolForker,
-			dependencies: ['proxyDeployer', 'securityPoolUtils', 'zoltar'],
+			dependencies: ['proxyDeployer', 'securityPoolUtils', 'zoltar', 'securityPoolForkerPortfolioDelegate'],
 			deploy: async client => await deployViaProxy(client, getSecurityPoolForkerByteCode(addresses.zoltar)),
 		},
 		{
@@ -176,19 +251,37 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 			deploy: async client => await deployViaProxy(client, `0x${statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`),
 		},
 		{
+			id: 'escalationGameDepositDelegate',
+			label: 'EscalationGameDepositDelegate',
+			address: addresses.escalationGameDepositDelegate,
+			dependencies: ['proxyDeployer'],
+			deploy: async client => await deployViaProxy(client, `0x${statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.evm.bytecode.object}`),
+		},
+		{
 			id: 'escalationGameFactory',
 			label: 'EscalationGameFactory',
 			address: addresses.escalationGameFactory,
-			dependencies: ['proxyDeployer', 'escalationGameClaimDelegate'],
-			deploy: async client => await deployViaProxy(client, getEscalationGameFactoryByteCode(addresses.escalationGameClaimDelegate)),
+			dependencies: ['proxyDeployer', 'escalationGameClaimDelegate', 'escalationGameDepositDelegate'],
+			deploy: async client => await deployViaProxy(client, getEscalationGameFactoryByteCode(addresses.escalationGameClaimDelegate, addresses.escalationGameDepositDelegate)),
 		},
 		{
 			id: 'securityPoolFactory',
 			label: 'SecurityPoolFactory',
 			address: addresses.securityPoolFactory,
-			dependencies: ['proxyDeployer', 'securityPoolForker', 'securityPoolOperationsDelegate', 'zoltarQuestionData', 'escalationGameFactory', 'openOracle', 'zoltar', 'shareTokenFactory', 'uniformPriceDualCapBatchAuctionFactory', 'openOraclePriceCoordinatorFactory', 'securityPoolUtils'],
+			dependencies: ['proxyDeployer', 'securityPoolForker', 'securityPoolOperationsDelegate', 'securityPoolEventEmitter', 'zoltarQuestionData', 'escalationGameFactory', 'openOracle', 'zoltar', 'shareTokenFactory', 'uniformPriceDualCapBatchAuctionFactory', 'openOraclePriceCoordinatorFactory', 'securityPoolUtils'],
 			deploy: async client => await deployViaProxy(client, getSecurityPoolFactoryByteCode(addresses)),
 		},
+		...portfolioModuleDeployments.map(
+			module =>
+				({
+					id: module.id,
+					label: module.label,
+					address: addresses[module.id],
+					dependencies: ['proxyDeployer'],
+					deploy: async (client: WriteClient) => await deployViaProxy(client, module.bytecode()),
+					expectedRuntimeCodeHash: keccak256(moduleRuntimeCode(module, profile)),
+				}) satisfies DeploymentStep,
+		),
 	]
 	return withExpectedDeploymentRuntimeCodeHashes(steps, profile).map(step => ({
 		...step,
@@ -219,13 +312,19 @@ function getStatoblastDeploymentStatusOracleStepAddresses(profile = getRuntimeNe
 		addresses.uniformPriceDualCapBatchAuctionFactory,
 		addresses.securityPoolUtils,
 		addresses.securityPoolOperationsDelegate,
+		addresses.securityPoolEventEmitter,
 		addresses.openOracle,
 		addresses.shareTokenFactory,
+		addresses.priceCoordinatorDeploymentWorker,
+		addresses.sharedPoolPriceFeedDeploymentWorker,
 		addresses.openOraclePriceCoordinatorFactory,
+		addresses.securityPoolForkerPortfolioDelegate,
 		addresses.securityPoolForker,
 		addresses.escalationGameClaimDelegate,
+		addresses.escalationGameDepositDelegate,
 		addresses.escalationGameFactory,
 		addresses.securityPoolFactory,
+		...portfolioModuleDeployments.map(module => addresses[module.id]),
 	] satisfies Address[]
 }
 

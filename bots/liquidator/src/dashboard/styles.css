@@ -743,3 +743,27 @@ body[data-page="pools"] #network-badge::before {
 	font-size: 0.82rem;
 	text-decoration: underline;
 }
+
+.portfolio-card {
+	margin-top: 1rem;
+	min-width: 0;
+}
+.portfolio-card p,
+.portfolio-card h3 {
+	overflow-wrap: anywhere;
+}
+.portfolio-address {
+	font-family: var(--font-mono, monospace);
+}
+.portfolio-positions {
+	padding-left: 1.25rem;
+}
+.portfolio-positions li {
+	margin-top: 1rem;
+}
+
+.portfolio-guidance summary {
+	cursor: pointer;
+	padding: 0.6rem 0;
+	font-weight: 600;
+}

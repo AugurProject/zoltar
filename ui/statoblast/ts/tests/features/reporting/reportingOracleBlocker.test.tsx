@@ -8,7 +8,6 @@ import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-
 import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { SecurityPoolRequestPriceModal } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolOracleSections.js'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
-import { MAINNET_NETWORK_PROFILE, resetRuntimeNetworkProfile, SEPOLIA_NETWORK_PROFILE, setRuntimeNetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 
 let cleanup: (() => Promise<void>) | undefined
 installDomTestLifecycle({
@@ -42,7 +41,7 @@ for (const state of ['expired', 'pending', 'ready', 'valid']) {
 		const queries = within(rendered.container)
 		if (state === 'expired') {
 			// The default test network is Sepolia, whose price window is 1 hour.
-			expect(rendered.container.textContent).toContain('Pool price expired. Reports need a price newer than 1 hour.')
+			expect(rendered.container.textContent).toContain('Pool price expired. Request a new price to continue.')
 			fireEvent.click(queries.getByRole('button', { name: 'Request new price…' }))
 			expect(requested).toBe(1)
 		} else if (state === 'pending') {
@@ -95,18 +94,3 @@ test('offers the switch fix on the price request confirmation the wallet blocks'
 })
 
 // The pool price stays valid for 1 hour on Sepolia and 5 minutes elsewhere (protocol/oracleTiming.ts).
-for (const [profile, window] of [
-	[SEPOLIA_NETWORK_PROFILE, '1 hour'],
-	[MAINNET_NETWORK_PROFILE, '5 minutes'],
-] as const) {
-	test(`the expired price copy states the ${profile.displayName} price window`, async () => {
-		setRuntimeNetworkProfile(profile)
-		try {
-			const rendered = await renderIntoDocument(<ReportingOracleBlocker blocked manager={createOracleManagerDetails({ pendingReportId: 0n })} now={100n} onRequest={() => undefined} requestReason={undefined} onRefresh={() => undefined} oracle={undefined} onViewReport={() => undefined} />)
-			cleanup = rendered.cleanup
-			expect(rendered.container.textContent).toContain(`Pool price expired. Reports need a price newer than ${window}.`)
-		} finally {
-			resetRuntimeNetworkProfile()
-		}
-	})
-}

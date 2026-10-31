@@ -22,13 +22,14 @@ export function completeSettingsCandidate(current: OperatorSettings, value: unkn
 	const pin = settings['deploymentPin']
 	if (pin === undefined) return { revision: body['revision'], settings: base }
 	const addresses = record(pin, 'deploymentPin')
-	exactKeys(addresses, ['openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', 'uniswapV3Factory', 'weth', 'zoltar'], 'deploymentPin')
+	exactKeys(addresses, ['multicall3', 'openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', 'uniswapV3Factory', 'weth', 'zoltar'], 'deploymentPin')
 	const address = (key: string) => {
 		const value = addresses[key]
 		if (typeof value !== 'string') throw new Error(`deploymentPin.${key} must be an address`)
 		return getAddress(value)
 	}
 	const deployment = {
+		multicall3: address('multicall3'),
 		openOracle: address('openOracle'),
 		questionData: address('questionData'),
 		securityPoolFactory: address('securityPoolFactory'),

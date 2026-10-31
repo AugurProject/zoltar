@@ -5,22 +5,9 @@ import type { AnvilWindowEthereum } from '../../testSupport/simulator/AnvilWindo
 import { writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { DAY, MAX_UINT256 } from '../../testSupport/simulator/utils/constants'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
-import {
-	deployEscalationGame,
-	depositOnOutcome,
-	getActivationTime,
-	getBalances,
-	getEscalationGameDeposits,
-	getQuestionResolution,
-	readHasReachedNonDecision,
-	readNonDecisionState,
-	readCanTriggerOwnFork,
-	readEscalationGameEndDate,
-	readFinalQuestionResolution,
-	readNonDecisionTimestamp,
-} from '../../testSupport/simulator/utils/contracts/escalationGame'
+import { getActivationTime, getBalances, getEscalationGameDeposits, getQuestionResolution, readHasReachedNonDecision, readNonDecisionState, readCanTriggerOwnFork, readEscalationGameEndDate, readFinalQuestionResolution, readNonDecisionTimestamp } from '../../testSupport/simulator/utils/contracts/escalationGame'
 import { statoblast_EscalationGame_EscalationGame, test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact } from '../../types/contractArtifact'
-import { ESCALATION_TIME_LENGTH, FRESH_FORK_RESPONSE_PERIOD, NON_DECISION_STATE_LOCAL } from './carryHelpers'
+import { ESCALATION_TIME_LENGTH, FRESH_FORK_RESPONSE_PERIOD, NON_DECISION_STATE_LOCAL, zeroHash, zeroPeakArray } from './carryHelpers'
 import { useEscalationGameFixture } from './fixture'
 
 describe('Escalation Game: deposits and entry-point guards', () => {
@@ -34,6 +21,7 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 		startEscalation,
 		startEscalationFromFork,
 		resumeEscalationFromFork,
+		initializeSnapshotViaTestSecurityPool,
 		depositOnOutcomeViaProofTestSecurityPool,
 		recordForkedEscrowForOutcomeViaTestSecurityPool,
 		claimDepositForWinningViaTestSecurityPool,
@@ -83,7 +71,7 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 				abi: escalationGameProofTestPoolArtifact.abi,
 				address: deployment.testSecurityPoolAddress,
 				functionName: 'exportVaultUnresolvedDeposits',
-				args: [zeroAddress, client.account.address],
+				args: [zeroAddress],
 			}),
 			/Vault is zero/,
 		)
@@ -92,7 +80,7 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 				abi: escalationGameProofTestPoolArtifact.abi,
 				address: deployment.testSecurityPoolAddress,
 				functionName: 'exportVaultUnresolvedDeposits',
-				args: [client.account.address, client.account.address],
+				args: [client.account.address],
 			}),
 		)
 		await assert.rejects(
@@ -100,7 +88,7 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 				abi: escalationGameProofTestPoolArtifact.abi,
 				address: deployment.testSecurityPoolAddress,
 				functionName: 'exportVaultUnresolvedDeposits',
-				args: [client.account.address, client.account.address],
+				args: [client.account.address],
 			}),
 			/Vault totals exported/,
 		)
@@ -134,6 +122,8 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 
 		const emptyFinal = await deployEscalationGameWithProofPool()
 		await startEscalationFromFork(emptyFinal.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes)
+		await assert.rejects(resumeEscalationFromFork(emptyFinal.escalationGameAddress), /Fork snapshot incomplete/)
+		await initializeSnapshotViaTestSecurityPool(emptyFinal.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
 		await resumeEscalationFromFork(emptyFinal.escalationGameAddress)
 		await mockWindow.advanceTime(FRESH_FORK_RESPONSE_PERIOD + 1n)
 		await assert.rejects(
@@ -157,11 +147,13 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 				functionName: 'sweepResidualRepToSecurityPool',
 				args: [],
 			}),
-			/Principal remains/,
+			/No sweepable REP/,
 		)
 
 		const escrowed = await deployEscalationGameWithProofPool()
 		await startEscalationFromFork(escrowed.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes)
+		await assert.rejects(recordForkedEscrowForOutcomeViaTestSecurityPool(escrowed.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 1n, 1n), /Fork snapshot incomplete/)
+		await initializeSnapshotViaTestSecurityPool(escrowed.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
 		await recordForkedEscrowForOutcomeViaTestSecurityPool(escrowed.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 1n, 1n)
 		await resumeEscalationFromFork(escrowed.escalationGameAddress)
 		await mockWindow.advanceTime(FRESH_FORK_RESPONSE_PERIOD + 1n)
@@ -193,9 +185,9 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 	})
 
 	test('non-decision keeps question resolution at None even after the nominal timeout window', async () => {
-		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThresholdAttoRep)
-		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, nonDecisionThresholdAttoRep)
-		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.No, nonDecisionThresholdAttoRep)
+		const { escalationGameAddress: escalationGame, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, nonDecisionThresholdAttoRep)
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.No, nonDecisionThresholdAttoRep)
 		assert.strictEqual(await readHasReachedNonDecision(client, escalationGame), true, 'two threshold-reaching outcomes should trigger non-decision')
 		assert.strictEqual(await readNonDecisionState(client, escalationGame), NON_DECISION_STATE_LOCAL, 'a local threshold-crossing deposit should record local non-decision')
 		assert.strictEqual(await readCanTriggerOwnFork(client, escalationGame), true, 'a local non-decision should authorize the own-fork path')
@@ -209,15 +201,15 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 	})
 
 	test('depositOnOutcome reverts when outcome is None', async () => {
-		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThresholdAttoRep)
-		await assert.rejects(depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.None, reportBond))
+		const { testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
+		await assert.rejects(depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.None, reportBond))
 	})
 
 	test('depositOnOutcome reverts when outcome is out of enum range', async () => {
-		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThresholdAttoRep)
+		const { testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
 		// Values > 3 are outside enum (0=Invalid,1=Yes,2=No,3=None)
-		await assert.rejects(depositOnOutcome(client, escalationGame, client.account.address, 4 as QuestionOutcome, reportBond))
-		await assert.rejects(depositOnOutcome(client, escalationGame, client.account.address, 255 as QuestionOutcome, reportBond))
+		await assert.rejects(depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, 4 as QuestionOutcome, reportBond))
+		await assert.rejects(depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, 255 as QuestionOutcome, reportBond))
 	})
 
 	test('depositOnOutcome rejects tie adjustments that would drop the accepted deposit below the minimum bond', async () => {
@@ -230,9 +222,9 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 	})
 
 	test('getEscalationGameDeposits paginates deposits without adding synthetic entries', async () => {
-		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThresholdAttoRep)
-		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, reportBond)
-		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, reportBond * 2n)
+		const { escalationGameAddress: escalationGame, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond * 2n)
 
 		const deposits = await getEscalationGameDeposits(client, escalationGame, QuestionOutcome.Yes)
 		const depositPage = deposits.slice(1, 6)
@@ -263,8 +255,8 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 		{ name: 'None', outcome: QuestionOutcome.None, depositFirst: true },
 		{ name: 'out of enum range', outcome: 4, depositFirst: false },
 	])('claimDepositForWinning reverts when outcome is $name', async ({ outcome, depositFirst }) => {
-		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThresholdAttoRep)
-		if (depositFirst) await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, reportBond)
+		const { escalationGameAddress: escalationGame, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
+		if (depositFirst) await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		await assert.rejects(
 			writeContractAndWait(
 				client,
@@ -282,7 +274,9 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 	test('claimDepositForWinning rejects false-returning REP transfers', async () => {
 		const falseReturningRepToken = await deployFalseReturningToken()
 		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameWithProofPool(falseReturningRepToken)
-		await startEscalation(escalationGameAddress, reportBond, nonDecisionThresholdAttoRep)
+		await startEscalationFromFork(escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+		await initializeSnapshotViaTestSecurityPool(testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
+		await resumeEscalationFromFork(escalationGameAddress)
 		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		await mockWindow.advanceTime(4n * DAY)
 

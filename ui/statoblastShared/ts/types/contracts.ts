@@ -1,3 +1,4 @@
+import type { LinearFeeState } from '@zoltar/statoblast-shared/statoblast/retentionRate'
 import type { Address, Hash, Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { ForkOutcomeKey, MarketDetails, ReportingOutcomeKey, SecurityPoolSystemState } from '@zoltar/ui-core-shared/types/contracts.js'
 
@@ -27,7 +28,11 @@ export type LiquidationApprovalDetails = {
 export type ForkAuctionAction =
 	| 'forkWithOwnEscalation'
 	| 'initiateFork'
+	| 'prepareChildPriceFeed'
+	| 'prepareChildDependencies'
 	| 'createChildUniverse'
+	| 'initializeChildHistory'
+	| 'prepareForkClaim'
 	| 'migrateRepToZoltar'
 	| 'migrateVault'
 	| 'claimParentEscalationDeposits'
@@ -89,6 +94,7 @@ export type SecurityVaultDetails = {
 	badDebtAttoEth: bigint
 	currentRetentionRate: bigint
 	disputeStakedAttoRep: bigint
+	disputeBackingAttoRep: bigint
 	managerAddress: Address
 	minimumSecurityBondDebtAttoEth?: bigint
 	minimumVaultRepDepositAttoRep?: bigint
@@ -121,6 +127,8 @@ export type SecurityVaultActionResult = ActionResult & {
 }
 
 export type OracleManagerDetails = {
+	priceFeedAddress?: Address
+	pendingReportCoordinator?: Address
 	activeStagedOperationCount?: bigint
 	callbackStateHash: Hex | undefined
 	exactToken1Report: bigint | undefined
@@ -152,7 +160,7 @@ export type OpenOracleActionResult = ActionResult & {
 	action: 'approveToken1' | 'approveToken2' | 'createReportInstance' | 'dispute' | 'executeStagedOperation' | 'queueOperation' | 'requestPrice' | 'settle' | 'withdrawBalance' | 'wrapWeth'
 	priceSettlement?: OpenOraclePriceSettlement | undefined
 	queuedOperation?: StagedOracleQueuedResult
-	/** The new report's ID, read from the receipt; only a successful create carries it. */
+	/** The new report's ID, read from its successful create or pool-price request receipt. */
 	reportId?: bigint | undefined
 	stagedExecution?: StagedOracleExecutionResult
 }
@@ -220,10 +228,13 @@ export type OpenOracleReportDetails = OpenOracleReportSummary & {
 }
 
 export type ListedSecurityPool = {
+	settlementRecoveryAttoRep?: bigint
 	mintingCapacityAttoEth?: bigint
 	settlementCollateralAttoEth: bigint
 	currentRetentionRate: bigint
 	feeAccrualState?: {
+		centralSettlement?: boolean
+		linearFee?: LinearFeeState
 		feeEndTimestamp: bigint
 		feeIndexRemainder: bigint
 		lastUpdatedFeeAccumulator: bigint
@@ -237,6 +248,7 @@ export type ListedSecurityPool = {
 	forkOwnSecurityPool: boolean
 	lastOraclePrice: bigint | undefined
 	lastOracleSettlementTimestamp: bigint
+	oraclePriceValidUntilTimestamp?: bigint | undefined
 	managerAddress: Address
 	minimumSecurityBondDebtAttoEth?: bigint
 	minimumVaultRepDepositAttoRep?: bigint
@@ -266,6 +278,7 @@ export type SecurityPoolVaultSummary = {
 	badDebtAttoEth?: bigint
 	openInterestAttoEth?: bigint
 	disputeStakedAttoRep: bigint
+	disputeBackingAttoRep: bigint
 	repBackingUnits?: bigint
 	totalRepBackingUnits?: bigint
 	vaultAttoRepBacking: bigint
@@ -315,7 +328,22 @@ export type EscalationDeposit = {
 	depositor: Address
 }
 
+export type AuthenticatedForkClaim = {
+	escalationGame: Address
+	outcome: ReportingOutcomeKey
+	snapshotRoot: Hex
+	snapshotLeafCount: bigint
+	amountAttoRep: bigint
+	cumulativeAmountAttoRep: bigint
+	depositor: Address
+	parentDepositIndex: bigint
+	leafIndex: bigint
+}
+
 export type ImportedEscalationDeposit = {
+	claimIdentity?: AuthenticatedForkClaim
+	claimCheckpoint?: { nextSourceGame: Address; pendingSteps: bigint; complete: boolean; ready: boolean }
+	claimAllocation?: { retainedAmountAttoRep: bigint; rewardAmountAttoRep: bigint; retainedCumulativeAttoRep: bigint } | undefined
 	amountAttoRep: bigint
 	cumulativeAmountAttoRep: bigint
 	depositor: Address
@@ -470,6 +498,7 @@ export type TruthAuctionBidderBidPage = {
 }
 
 export type ForkAuctionDetails = {
+	childHistoryReady?: boolean
 	auctionedUnderwritingLimitAttoEth: bigint
 	claimingAvailable: boolean
 	settlementCollateralAttoEth: bigint

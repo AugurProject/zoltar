@@ -9,8 +9,15 @@ import { ITwoWayConstantProductFactory } from './interfaces/ITwoWayConstantProdu
 import { ITwoWayConstantProductPair } from './interfaces/ITwoWayConstantProductPair.sol';
 import { ITradingShareToken } from './interfaces/ITradingShareToken.sol';
 import { TwoWayConstantProductMath } from './TwoWayConstantProductMath.sol';
+import { IERC20 } from '../IERC20.sol';
+import { SafeERC20Ops } from '../SafeERC20Ops.sol';
+
+interface ITradingPortfolioSettlement {
+	function settlement() external view returns (address);
+}
 
 contract TwoWayConstantProductRouter is IERC1155Receiver {
+	using SafeERC20Ops for IERC20;
 	struct EnterResult {
 		uint256 ethSpent;
 		uint256 completeSetShares;
@@ -68,6 +75,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 	bool private ethCallbackActive;
 	ISecurityPool private callbackPool;
 	ITradingShareToken private callbackShareToken;
+	address private callbackSettlement;
 
 	modifier nonReentrant() {
 		require(!entered, 'Reentrant call');
@@ -193,7 +201,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 	}
 
 	receive() external payable {
-		require(ethCallbackActive && msg.sender == address(callbackPool), 'Unexpected ETH');
+		require(ethCallbackActive && (msg.sender == address(callbackPool) || msg.sender == callbackSettlement), 'Unexpected ETH');
 	}
 
 	function _exitReceivedPosition(ReceiveRequest memory request, address owner, uint256[] calldata ids, uint256[] calldata values) private {
@@ -229,13 +237,24 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 
 	function _redeemReceivedShares(ReceiveRequest memory request) private {
 		uint256 ethBefore = address(this).balance;
+		IERC20 rep = IERC20(address(request.securityPool.repToken()));
+		uint256 repBefore = rep.balanceOf(address(this));
+		if (request.securityPool.portfolioCustody() != address(0)) {
+			address portfolio = request.securityPool.securityPoolFactory().getSecurityPoolPortfolio(request.securityPool);
+			callbackSettlement = ITradingPortfolioSettlement(portfolio).settlement();
+		}
 		ethCallbackActive = true;
 		request.securityPool.redeemCompleteSet(request.completeSetShares);
 		ethCallbackActive = false;
+		callbackSettlement = address(0);
 		uint256 ethOut = address(this).balance - ethBefore;
-		require(ethOut > 0 && ethOut >= request.minEthOut, 'Minimum ETH output');
-		(bool success, ) = request.payoutRecipient.call{value: ethOut}('');
-		require(success, 'ETH transfer failed');
+		uint256 repOut = rep.balanceOf(address(this)) - repBefore;
+		require(ethOut >= request.minEthOut && (ethOut > 0 || repOut > 0), 'Minimum ETH output');
+		if (repOut != 0) rep.safeTransfer(request.payoutRecipient, repOut);
+		if (ethOut != 0) {
+			(bool success, ) = request.payoutRecipient.call{value: ethOut}('');
+			require(success, 'ETH transfer failed');
+		}
 	}
 
 	function _validateReceiveRequest(ReceiveRequest memory request) private view {
@@ -243,12 +262,18 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		require(request.completeSetShares > 0, 'Complete set is zero');
 		require(request.payoutRecipient != address(0) && request.payoutRecipient != address(this), 'Invalid payout recipient');
 		require(request.refundRecipient != address(0) && request.refundRecipient != address(this), 'Invalid refund recipient');
-		_validatePair(request.pair);
-		require(address(request.securityPool) == address(request.pair.securityPool()), 'Wrong security pool');
-		require(request.shareToken == address(request.pair.shareToken()), 'Wrong request share token');
-		require(request.universeId == request.securityPool.universeId() && request.universeId == request.pair.universeId(), 'Wrong universe');
-		require(request.questionId == request.securityPool.questionId() && request.questionId == request.pair.questionId(), 'Wrong question');
-		require(request.invalidTokenId == request.pair.invalidTokenId() && request.yesTokenId == request.pair.yesTokenId() && request.noTokenId == request.pair.noTokenId(), 'Wrong outcome IDs');
+		if (address(request.pair) != address(0) || request.operation != ReceiveOperation.RedeemCompleteSet) {
+			_validatePair(request.pair);
+			require(address(request.securityPool) == address(request.pair.securityPool()), 'Wrong security pool');
+		}
+		require(address(request.securityPool.securityPoolFactory()) == address(factory.securityPoolFactory()), 'Wrong security pool factory');
+		bytes32 origin = factory.securityPoolFactory().getSecurityPoolOriginId(request.securityPool);
+		require(address(factory.securityPoolFactory().getSecurityPool(origin, request.universeId)) == address(request.securityPool), 'Noncanonical security pool');
+		require(request.shareToken == address(request.securityPool.shareToken()), 'Wrong request share token');
+		require(request.universeId == request.securityPool.universeId(), 'Wrong universe');
+		require(request.questionId == request.securityPool.questionId(), 'Wrong question');
+		ITradingShareToken shares = ITradingShareToken(request.shareToken);
+		require(request.invalidTokenId == shares.getTokenId(request.universeId, BinaryOutcomes.BinaryOutcome.Invalid) && request.yesTokenId == shares.getTokenId(request.universeId, BinaryOutcomes.BinaryOutcome.Yes) && request.noTokenId == shares.getTokenId(request.universeId, BinaryOutcomes.BinaryOutcome.No), 'Wrong outcome IDs');
 		require(address(request.securityPool.shareToken().canonicalPoolByUniverse(request.universeId)) == address(request.securityPool), 'Noncanonical share pool');
 	}
 

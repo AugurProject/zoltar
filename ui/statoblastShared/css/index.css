@@ -1144,6 +1144,7 @@
 	display: grid;
 	gap: var(--space-1);
 	min-width: 0;
+	overflow-wrap: anywhere;
 }
 
 .action-readiness-grid,
@@ -3722,7 +3723,8 @@ span.rep-price-status.stale,
 
 .pool-lifecycle-steps {
 	display: grid;
-	grid-template-columns: repeat(5, minmax(0, 1fr));
+	grid-auto-flow: column;
+	grid-auto-columns: minmax(0, 1fr);
 	gap: var(--space-2);
 	margin: 0;
 	padding: 0;
@@ -4232,4 +4234,37 @@ span.rep-price-status.stale,
 
 .vault-position-strip-actions .vault-liquidation-reason {
 	margin-top: var(--space-2);
+}
+
+.portfolio-flow {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: var(--space-5);
+}
+
+.portfolio-flow .field {
+	align-content: start;
+	width: 100%;
+	max-width: var(--form-max);
+	min-width: 0;
+}
+
+.portfolio-creation-form {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.portfolio-creation-form .field-row {
+	align-items: start;
+}
+
+.portfolio-transaction-export {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font-family: var(--font-family-mono);
+	font-size: var(--font-caption);
+}
+
+.portfolio-flow code {
+	white-space: normal;
+	overflow-wrap: anywhere;
 }

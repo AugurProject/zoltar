@@ -1,4 +1,5 @@
 import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
+import { prepareChildPool, initializeChildDisputeHistory } from '../protocol/forkPreparation.js'
 import { createChildUniverseFromSecurityPool, forkZoltarWithOwnEscalation, loadForkAuctionDetails, migrateRepToZoltarFromSecurityPool } from '../protocol/forks.js'
 import { loadOpenOracleReportDetails, settleOracleReport } from '../protocol/openOracle.js'
 import { loadOracleManagerDetails, requestOraclePrice } from '../protocol/oracleCoordinator.js'
@@ -12,6 +13,8 @@ import { finalizeSecurityPoolTruthAuction, startTruthAuctionForSecurityPool, sub
 
 const defaultScenarioProtocol = {
 	approveErc20,
+	prepareChildPool,
+	initializeChildDisputeHistory,
 	createChildUniverseFromSecurityPool,
 	createCompleteSetInSecurityPool,
 	createMarket,

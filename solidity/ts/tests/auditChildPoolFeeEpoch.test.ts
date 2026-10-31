@@ -28,7 +28,7 @@ import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { DAY, GENESIS_REPUTATION_TOKEN } from '../testSupport/simulator/utils/constants'
 import assert from '../testSupport/simulator/utils/assert'
 import { describe, test } from 'bun:test'
-import { ReputationToken_ReputationToken, statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool, Zoltar_Zoltar } from '../types/contractArtifact'
+import { ReputationToken_ReputationToken, statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker, Zoltar_Zoltar } from '../types/contractArtifact'
 import { addRepToMigrationBalance, getMigrationRepBalanceAttoRep, splitMigrationRep } from '../testSupport/simulator/utils/contracts/zoltar'
 import { sortStringArrayByKeccak } from '../testSupport/simulator/utils/utilities'
 import { useStatoblastForkMigrationFixture } from './statoblast/fixture'
@@ -72,6 +72,17 @@ describe('Child-pool fee epoch regression', () => {
 		return { childUniverse, child }
 	}
 
+	test('preserves the already-paid winner burn when an own-fork child becomes a source for another fork', async () => {
+		const { client } = fixture
+		const { child } = await setupResumedOwnForkYesChild()
+		const forker = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'securityPoolForker' })
+		assert.strictEqual(
+			await client.readContract({ abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi, address: forker, functionName: 'isEscalationWinnerHaircutPaidByFork', args: [child.securityPool] }),
+			true,
+			'the child factory must inherit the existing burn payment instead of charging it again after an unrelated fork',
+		)
+	})
+
 	test('resolved child without a continuation game preserves collateral after activation', async () => {
 		const { client, mockWindow, questionId, securityPoolAddresses } = fixture
 		await createCompleteSet(client, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
@@ -107,11 +118,12 @@ describe('Child-pool fee epoch regression', () => {
 		strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'initialEscalationGameDepositAttoRep' }), childLiveSupply / 10_000_000n, 'child escalation economics should remain based on its unchanged live supply')
 		strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'minimumVaultRepDepositAttoRep' }), childLiveSupply / 100_000n, 'child vault economics should remain based on its unchanged live supply')
 
+		const mintedShares = 2n * 10n ** 18n
+		await createCompleteSet(client, child.securityPool, mintedShares)
 		await mockWindow.setTime((await getQuestionEndDate(client, questionId)) + 1n)
 		await updateSettlementCollateral(client, child.securityPool)
 		strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'getFeeEpochEndTime' }), 2n ** 256n - 1n, 'unresolved child horizon must remain open beyond question end')
-		const mintedShares = 2n * 10n ** 18n
-		await createCompleteSet(client, child.securityPool, mintedShares)
+		await assert.rejects(createCompleteSet(client, child.securityPool, mintedShares), /Question ended/)
 		const collateralBefore = await getSettlementCollateralAttoEth(client, child.securityPool)
 		await mockWindow.advanceTime(DAY)
 		await updateSettlementCollateral(client, child.securityPool)
@@ -170,7 +182,8 @@ describe('Child-pool fee epoch regression', () => {
 		await splitMigrationRep(client, 0n, childForkThreshold, [QuestionOutcome.Yes])
 		const childRepToken = await getRepToken(client, child.securityPool)
 		await approveToken(client, childRepToken, getZoltarAddress())
-		await mockWindow.setTime(gameEnd + DAY)
+		const earliestForkTime = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getEarliestForkTime', args: [childUniverse] })
+		await mockWindow.setTime(gameEnd + DAY > earliestForkTime ? gameEnd + DAY : earliestForkTime)
 		await forkUniverse(client, childUniverse, recursiveForkQuestionId)
 		await updateSettlementCollateral(client, child.securityPool)
 		strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'lastUpdatedFeeAccumulator' }), gameEnd, 'a later fork must not extend fees past an already-resolved child game')

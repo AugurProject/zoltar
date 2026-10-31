@@ -99,6 +99,10 @@ export function TradingSection({
 	const shareBalances = tradingDetails?.shareBalances
 	const maxRedeemableCompleteSetsAttoShares = tradingDetails?.maxRedeemableCompleteSetsAttoShares
 	const displayMaxRedeemableCompleteSets = convertAttoSharesToSettlementCollateralAttoEth(maxRedeemableCompleteSetsAttoShares, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
+	const recoveryRep = (shares: bigint | undefined) => {
+		if (shares === undefined || selectedPool === undefined) return undefined
+		return selectedPool.shareTokenSupplyAttoShares === 0n ? 0n : (shares * (selectedPool.settlementRecoveryAttoRep ?? 0n)) / selectedPool.shareTokenSupplyAttoShares
+	}
 	const displayShareBalances = getShareSettlementBalances(shareBalances, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	// Once balances load and every one is zero, a single line replaces the empty sets figure and three empty bars.
 	const holdsNoShares = shareBalances !== undefined && !hasShares(shareBalances)
@@ -111,6 +115,8 @@ export function TradingSection({
 	const mintingCapacityAttoEth = selectedPool === undefined ? 0n : getPoolMintingCapacityAttoEth(selectedPool)
 	const mintingPausedByEscalation = selectedPool !== undefined && isMintingPausedByEscalation(selectedPool, resolvedPoolState.lifecycleState)
 	const mintCheckpoint = estimateMintCheckpoint({
+		centralSettlement: selectedPool?.feeAccrualState?.centralSettlement,
+		linearFee: selectedPool?.feeAccrualState?.linearFee,
 		currentRetentionRate: selectedPool?.currentRetentionRate,
 		currentTimestamp,
 		totalUnderwritingLimitAttoEth: selectedPool?.totalUnderwritingLimitAttoEth,
@@ -122,10 +128,12 @@ export function TradingSection({
 		totalFeesOwedRemainder: selectedPool?.feeAccrualState?.totalFeesOwedRemainder,
 	})
 	const estimatedSettlementCollateralAttoEth = mintCheckpoint?.settlementCollateralAfterFeesAttoEth ?? selectedPool?.settlementCollateralAttoEth
+	const usesSharedBacking = selectedPool?.feeAccrualState?.linearFee !== undefined
 	const remainingMintCapacity = getRemainingMintCapacity(mintingCapacityAttoEth, estimatedSettlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
-	const maximumMintAmount = getMaximumMintAmount(accountState.ethBalanceAttoEth, remainingMintCapacity)
+	const maximumMintAmount = usesSharedBacking ? undefined : getMaximumMintAmount(accountState.ethBalanceAttoEth, remainingMintCapacity)
 	const mintGuardMessage = getTradingMintGuardMessage({
 		accountAddress: accountState.address,
+		usesSharedBacking,
 		escalationGameActive: mintingPausedByEscalation,
 		settlementCollateralAttoEth: estimatedSettlementCollateralAttoEth,
 		ethBalanceAttoEth: accountState.ethBalanceAttoEth,
@@ -169,6 +177,7 @@ export function TradingSection({
 		if (mintingPausedByEscalation) return MINTING_PAUSED_DURING_DISPUTE_MESSAGE
 		// A pool stage that closes minting explains it before any capacity figure, which a stale escalation flag can zero.
 		if (!mintEnabled) return tradingCopy.actionUnavailableReason
+		if (usesSharedBacking) return undefined
 		if (remainingMintCapacity === undefined) return tradingCopy.mintCapacityUnavailable
 		if (hasUndefinedCompleteSetExchangeRate(selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares) === true) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
 		if (remainingMintCapacity === 0n) {
@@ -368,9 +377,7 @@ export function TradingSection({
 					<MetricField label={tradingCopy.walletEth}>
 						<CurrencyValue exactWhenRoundedToZero value={accountState.ethBalanceAttoEth} suffix={commonCopy.eth} />
 					</MetricField>
-					<MetricField label={tradingCopy.availableToMint}>
-						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={maximumMintAmount} suffix={commonCopy.eth} />
-					</MetricField>
+					<MetricField label={tradingCopy.availableToMint}>{usesSharedBacking ? tradingCopy.sharedPoolCapacityAtReview : <CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={maximumMintAmount} suffix={commonCopy.eth} />}</MetricField>
 				</MetricGrid>
 				<AmountField
 					hint={
@@ -384,6 +391,7 @@ export function TradingSection({
 					unit={commonCopy.eth}
 					value={tradingForm.completeSetAmount}
 				/>
+				{usesSharedBacking && <UserMessage className='detail' detail={tradingCopy.sharedPoolPurchaseDetail} />}
 				<div className='actions'>
 					<TransactionActionButton
 						idleLabel={tradingCopy.mintCompleteSets}
@@ -403,8 +411,11 @@ export function TradingSection({
 					<MetricField label={tradingCopy.availableToRedeem}>
 						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} decimals={4} value={displayMaxRedeemableCompleteSets} suffix={commonCopy.eth} />
 					</MetricField>
+					<MetricField label={tradingCopy.availableRecoveryRep}>
+						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={recoveryRep(maxRedeemableCompleteSetsAttoShares)} suffix={commonCopy.rep} />
+					</MetricField>
 				</MetricGrid>
-				<AmountField fillMax={{ amount: displayMaxRedeemableCompleteSets }} label={tradingCopy.redeemCompleteSetsAmount} onChange={redeemAmount => onTradingFormChange({ redeemAmount })} unit={commonCopy.eth} value={tradingForm.redeemAmount} />
+				<AmountField fillMax={{ amount: maxRedeemableCompleteSetsAttoShares }} label={tradingCopy.redeemCompleteSetsAmount} onChange={redeemAmount => onTradingFormChange({ redeemAmount })} unit={tradingCopy.setsUnit} value={tradingForm.redeemAmount} />
 				<UserMessage className='detail' detail={tradingCopy.redeemCompleteSetsFeeDetail} />
 				<div className='actions'>
 					<TransactionActionButton
@@ -450,6 +461,9 @@ export function TradingSection({
 					</MetricField>
 					<MetricField label={tradingCopy.expectedEthPayout}>
 						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} decimals={4} value={expectedRedemptionPayoutAttoEth} suffix={commonCopy.eth} />
+					</MetricField>
+					<MetricField label={tradingCopy.expectedRepPayout}>
+						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={recoveryRep(winningAttoShares)} suffix={commonCopy.rep} />
 					</MetricField>
 				</MetricGrid>
 				<UserMessage className='detail' detail={tradingCopy.resolvedShareRedemptionFeeDetail} />

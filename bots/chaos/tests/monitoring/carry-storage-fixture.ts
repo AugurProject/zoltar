@@ -1,8 +1,9 @@
-import { createPublicClient, decodeFunctionData, defineChain, encodeAbiParameters, getAddress, hexToBytes, isHex, toHex, zeroAddress, zeroHash, type AbiValue, type Address } from '@zoltar/bot-shared/ethereum'
+import { createPublicClient, decodeFunctionData, defineChain, encodeAbiParameters, getAddress, hexToBytes, isHex, keccak256, RpcError, toHex, zeroAddress, zeroHash, type AbiValue, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { carryStorageAbi } from '../../src/contracts/carry-storage-abi.ts'
-import { escalationGameAbi, securityPoolAbi, securityPoolForkerAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
+import { escalationGameAbi, multicall3Abi, securityPoolAbi, securityPoolForkerAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
 import { carryCommitment, hashCarryLeaf, sparseNullifierRoot, type CarryLeafSlot } from '../../src/monitoring/carry-proof-index.ts'
+import type { ClaimCheckpointProgress } from '@zoltar/statoblast-shared/escalationGame/claimCheckpoint'
 import { consumeSparseNullifier, emptySparseNullifierState } from '../support/carry-proof-verification.ts'
 
 export const address = (value: number) => getAddress(`0x${value.toString(16).padStart(40, '0')}`)
@@ -13,7 +14,7 @@ export const grandchild = address(300)
 export const forker = address(900)
 export const anchor = 11000000n
 export const blockHash = toHex(anchor, { size: 32 })
-const abi = [...carryStorageAbi, ...escalationGameAbi, ...securityPoolAbi, ...securityPoolForkerAbi, ...zoltarAbi]
+const abi = [...carryStorageAbi, ...multicall3Abi, ...escalationGameAbi, ...securityPoolAbi, ...securityPoolForkerAbi, ...zoltarAbi]
 
 export function slot(game: Address, index: number, depositor = wallet): CarryLeafSlot {
 	const leaf = { depositor, outcome: 0 as const, amountAttoRep: 10n.toString(), parentDepositIndex: ((BigInt(game) << 96n) + BigInt(index)).toString(), cumulativeAmountAttoRep: ((index + 1) * 10).toString(), sourceNodeId: (index + 1).toString() }
@@ -33,7 +34,14 @@ export function storageFixture() {
 	let cycle = false
 	let badAnchor = false
 	let badEconomics = false
+	let claimReady = true
+	let checkpointApplying = false
+	let badCheckpointCommitment = false
 	let principalAttoRep = 10n
+	let atomicFailure: Error | undefined
+	let atomicResponse: Hex | undefined
+	const progressByGame = new Map<string, ClaimCheckpointProgress>()
+	const forkedGames = new Set<string>()
 	const pool = (game: Address) => getAddress(toHex(BigInt(game) + 1n, { size: 20 }))
 	function resolve(target: Address) {
 		return games.find(game => game.game.toLowerCase() === target.toLowerCase() || pool(game.game).toLowerCase() === target.toLowerCase())
@@ -90,12 +98,13 @@ export function storageFixture() {
 			case 'getProofConsumedCarriedDepositIndexesByOutcome':
 				return [outcome === 0n ? (game?.consumed ?? []).slice(Number(args[1]), Number(args[1]) + Number(args[2])).map(BigInt) : []]
 			case 'getCarryLeafPageByOutcome': {
-				const available = outcome === 0n ? (game?.local ?? []).filter(slot => slot.hash !== zeroHash && !game?.direct.has(slot.leaf.parentDepositIndex) && (args[1] === 0n || BigInt(slot.leaf.sourceNodeId) <= BigInt(String(args[1])))).reverse() : []
-				const page = available.slice(0, Number(args[2]))
-				const last = page.at(-1)
+				const available = outcome === 0n ? (game?.local ?? []).filter(slot => args[1] === 0n || BigInt(slot.leaf.sourceNodeId) <= BigInt(String(args[1]))).reverse() : []
+				const visited = available.slice(0, Number(args[2]))
+				const page = visited.filter(slot => slot.hash !== zeroHash && !game?.direct.has(slot.leaf.parentDepositIndex))
+				const last = visited.at(-1)
 				return [
 					page.map(slot => ({ depositor: slot.leaf.depositor, amountAttoRep: BigInt(slot.leaf.amountAttoRep), parentDepositIndex: BigInt(slot.leaf.parentDepositIndex), cumulativeAmountAttoRep: BigInt(slot.leaf.cumulativeAmountAttoRep), sourceNodeId: BigInt(slot.leaf.sourceNodeId) })),
-					available.length > page.length && last !== undefined ? BigInt(last.leaf.sourceNodeId) - 1n : 0n,
+					available.length > visited.length && last !== undefined ? BigInt(last.leaf.sourceNodeId) - 1n : 0n,
 				]
 			}
 			case 'nodes': {
@@ -108,13 +117,30 @@ export function storageFixture() {
 				return [sourceGame?.direct.has(String(args[2])) ?? false]
 			}
 			case 'systemState':
-				return [0n]
+				return [game !== undefined && forkedGames.has(game.game.toLowerCase()) ? 2n : 0n]
 			case 'isEscalationResolved':
 			case 'forkCarrySnapshotInitialized':
 				return [true]
 			case 'getFinalQuestionResolution':
 			case 'getQuestionOutcome':
 				return [0n]
+			case 'getClaimCheckpointProgress': {
+				const progress = progressByGame.get(target.toLowerCase())
+				if (progress !== undefined) return [progress.nextSourceGame, progress.pendingSteps, progress.complete, progress.ready]
+				const pending = checkpointApplying ? 1n : 10n
+				return [claimReady || checkpointApplying ? zeroAddress : source, claimReady ? 0n : pending, false, claimReady]
+			}
+			case 'getClaimCheckpointState': {
+				const claimId = keccak256(encodeAbiParameters([{ type: 'uint8' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], args))
+				const commitment = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'bytes32' }, { type: 'bytes32' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [target, claimId, zeroHash, 20n, 15n, 1n]))
+				return [true, checkpointApplying && !badCheckpointCommitment ? commitment : zeroHash, zeroAddress, { startAttoRep: 0n, endAttoRep: 10n, rewardStartAttoRep: 0n, rewardEndAttoRep: 10n }]
+			}
+			case 'getClaimCheckpointWitnessSegment':
+				return [source, zeroHash, checkpointApplying ? 0n : 8n, checkpointApplying ? 1n : 2n]
+			case 'isClaimHistoryFrozen':
+				return [game?.game !== child || forkedGames.has(game.game.toLowerCase())]
+			case 'getClaimIntervalTransform':
+				return [game !== undefined && BigInt(String(args[1])) < BigInt(game.inherited.length) ? game.parent : zeroAddress, { repBeforeAttoRep: 20n, repRemainingAttoRep: 15n, consumedBeforeAttoRep: 1n }]
 			case 'getInheritedClaimAllocation':
 				return [args[1] ?? 0n, principalAttoRep, args[1] ?? 0n, args[2] ?? 0n]
 			case 'getBindingCapitalAttoRep':
@@ -129,10 +155,24 @@ export function storageFixture() {
 				return [1n]
 			case 'zoltar':
 				return [address(901)]
+			case 'aggregate3':
+				if (atomicFailure !== undefined) throw atomicFailure
+				return [
+					[
+						{ success: true, returnData: encodeAbiParameters([{ type: 'bool' }], [true]) },
+						{ success: true, returnData: '0x' },
+					],
+				]
 			case 'withdrawForkedEscalationDeposits':
 				return []
-			case 'withdrawDeposit':
-				return [wallet, badEconomics ? 999n : principalAttoRep + 6n, 10n]
+			case 'withdrawDeposit': {
+				const argument = args[0]
+				if (typeof argument !== 'object' || argument === null || !('cumulativeAmountAttoRep' in argument)) throw new Error('Missing fixture withdrawal proof')
+				const cumulative = BigInt(String(argument['cumulativeAmountAttoRep']))
+				const eligibleEnd = cumulative < 15n ? cumulative : 15n
+				const eligibleAmount = eligibleEnd > cumulative - 10n ? eligibleEnd - (cumulative - 10n) : 0n
+				return [wallet, badEconomics ? 999n : principalAttoRep + (eligibleAmount * 6n) / 10n, 10n]
+			}
 			default:
 				break
 		}
@@ -152,6 +192,7 @@ export function storageFixture() {
 				if (typeof call !== 'object' || call === null || !('data' in call) || !('to' in call) || typeof call.to !== 'string' || typeof call.data !== 'string' || !isHex(call.data)) throw new Error('Invalid call')
 				const decoded = decodeFunctionData({ abi, data: toHex(hexToBytes(call.data)) })
 				calls.push({ method, functionName: decoded.functionName, block: params[1] })
+				if (decoded.functionName === 'aggregate3' && atomicResponse !== undefined) return atomicResponse
 				const entry = abi.find(entry => entry.type === 'function' && entry.name === decoded.functionName && entry.inputs.length === decoded.args.length)
 				if (entry === undefined || entry.type !== 'function') throw new Error('Missing ABI function')
 				const values = result(getAddress(call.to), decoded.functionName, decoded.args)
@@ -166,6 +207,25 @@ export function storageFixture() {
 		games,
 		leaf,
 		pool,
+		setProgress: (game: Address, progress: ClaimCheckpointProgress) => {
+			progressByGame.set(game.toLowerCase(), progress)
+		},
+		setForked: (game: Address) => {
+			forkedGames.add(game.toLowerCase())
+		},
+		setAtomicFailure: (error = new RpcError('execution reverted: stale atomic withdrawal proof', { code: 3 })) => {
+			atomicFailure = error
+		},
+		setAtomicResponse: (response: Hex) => {
+			atomicResponse = response
+		},
+		setCheckpointApplying: () => {
+			claimReady = false
+			checkpointApplying = true
+		},
+		setBadCheckpointCommitment: () => {
+			badCheckpointCommitment = true
+		},
 		setBadSnapshot: () => {
 			badSnapshot = true
 		},
@@ -180,6 +240,9 @@ export function storageFixture() {
 		},
 		setRetainedPrincipal: (value: bigint) => {
 			principalAttoRep = value
+		},
+		setClaimNotReady: () => {
+			claimReady = false
 		},
 		setBadEconomics: () => {
 			badEconomics = true

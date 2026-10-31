@@ -6,7 +6,7 @@ import { createWriteClient, WriteClient } from '../testSupport/simulator/utils/c
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import { setupTestAccounts, ensureProxyDeployerDeployed } from '../testSupport/simulator/utils/utilities'
-import { ensureDeploymentStatusOracleDeployed, ensureInfraDeployed, getDeploymentStepAddresses, loadDeploymentStatusOracleMask } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { ensureDeploymentStatusOracleDeployed, ensureInfraDeployed, getDeploymentStepAddresses, getInfraContractAddresses, loadDeploymentStatusOracleMask } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { statoblast_Multicall3_Multicall3, statoblast_SecurityPoolUtils_SecurityPoolUtils, statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, statoblast_openOracle_OpenOracle_OpenOracle } from '../types/contractArtifact'
 import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
 import { PROXY_DEPLOYER_ADDRESS } from '../testSupport/simulator/utils/constants'
@@ -48,8 +48,15 @@ describe('Deployment Status Oracle Test Suite', () => {
 		await deployViaProxy(`0x${statoblast_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`)
 
 		const deploymentMask = await loadDeploymentStatusOracleMask(client)
+		const infraContracts = getInfraContractAddresses()
+		const stepAddresses = getDeploymentStepAddresses()
+		const expectedMask = [addressString(PROXY_DEPLOYER_ADDRESS), infraContracts.multicall3, infraContracts.openOracle].reduce((mask, address) => {
+			const bitIndex = stepAddresses.findIndex(stepAddress => stepAddress.toLowerCase() === address.toLowerCase())
+			if (bitIndex < 0) throw new Error(`Deployed contract ${address} is missing from the deployment status registry`)
+			return mask | (1n << BigInt(bitIndex))
+		}, 0n)
 
-		strictEqualTypeSafe(deploymentMask, 1n | (1n << 1n) | (1n << 5n), 'oracle should report the deployed subset of infra contracts')
+		strictEqualTypeSafe(deploymentMask, expectedMask, 'oracle should report the deployed subset of infra contracts')
 	})
 
 	test('ensureInfraDeployed repairs an out-of-order partial deployment', async () => {

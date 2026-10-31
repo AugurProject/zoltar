@@ -1,4 +1,5 @@
 import { encodeFunctionData, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { loadChildPoolPreparation, loadChildHistoryPreparation } from './forkPreparation.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { deriveHasForkActivity } from './forkActivity.js'
 import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
@@ -40,6 +41,11 @@ export async function loadForkOutcomeMigrationSeedStatus(
 		address: getZoltarAddress(),
 		args: [universeId, BigInt(getReportingOutcomeValue(outcome))],
 	})
+	const preparation = await loadChildPoolPreparation(client, securityPoolAddress, childUniverseId, outcome)
+	if (preparation.portfolio !== undefined) {
+		const childRepToken = await client.readContract({ abi: Zoltar_Zoltar.abi, functionName: 'getRepToken', address: getZoltarAddress(), args: [childUniverseId] })
+		return { ...preparation, childPoolRepBalanceAttoRep: 0n, childRepToken: childRepToken === zeroAddress ? undefined : childRepToken, childUniverseId, migrationProxyAddress: zeroAddress, pendingProxyRepBalanceAttoRep: 0n, seeded: preparation.branchReady === true }
+	}
 	const migrationProxyAddress = await client.readContract({
 		abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'getMigrationProxyAddress',
@@ -54,6 +60,7 @@ export async function loadForkOutcomeMigrationSeedStatus(
 	})
 	if (childRepToken === zeroAddress) {
 		return {
+			...preparation,
 			childPoolRepBalanceAttoRep: 0n,
 			childRepToken: undefined,
 			childUniverseId,
@@ -79,6 +86,7 @@ export async function loadForkOutcomeMigrationSeedStatus(
 				})
 
 	return {
+		...preparation,
 		childPoolRepBalanceAttoRep,
 		childRepToken,
 		childUniverseId,
@@ -274,6 +282,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 		forkOutcome,
 		forkOwnSecurityPool,
 		hasForkActivity,
+		childHistoryReady: parentSecurityPoolAddress === zeroAddress || (await loadChildHistoryPreparation(client, securityPoolAddress)).historyReady,
 		marketDetails,
 		migratedAttoRep,
 		migrationEndsAt,

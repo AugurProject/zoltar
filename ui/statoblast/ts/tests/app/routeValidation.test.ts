@@ -25,7 +25,7 @@ describe('statoblast route validation', () => {
 	})
 
 	test('rejects every removed oracle view on all Statoblast routes', () => {
-		for (const resolvedRoute of ['open-oracle', 'pools', 'deploy'] as const) {
+		for (const resolvedRoute of ['open-oracle', 'pools', 'portfolios', 'deploy'] as const) {
 			for (const view of ['', 'browse', 'create', 'selected-report', 'invalid']) {
 				expect(validateRoute({ resolvedRoute, search: `?openOracleView=${view}&openOracleReportId=9` }).hasInvalidOpenOracleView).toBe(true)
 			}

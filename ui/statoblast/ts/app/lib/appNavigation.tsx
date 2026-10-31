@@ -16,7 +16,7 @@ export function getPoolsViewHref(view: PoolsListView) {
 	return buildRouteHref(buildPoolsRouteHash({ view }), search)
 }
 
-/** Pools and price requests share one primary row; Deploy joins while deployment is incomplete, and the other sections are disabled while required contracts are missing. */
+/** Pools, portfolios and price reports share one primary row; Deploy joins while deployment is incomplete, and the other sections are disabled while required contracts are missing. */
 export function getStatoblastRouteTabs({ applicationDeploymentMissing, route, showDeployTab }: { applicationDeploymentMissing: boolean; route: string; showDeployTab: boolean }): RouteTabDefinition[] {
 	return withDeploymentTab({
 		deploymentMissing: applicationDeploymentMissing,
@@ -25,6 +25,7 @@ export function getStatoblastRouteTabs({ applicationDeploymentMissing, route, sh
 		route,
 		tabs: [
 			{ hash: statoblastRouting.getHash('pools'), label: statoblastAppCopy.pools, route: 'pools' },
+			{ hash: statoblastRouting.getHash('portfolios'), label: statoblastAppCopy.portfolios, route: 'portfolios' },
 			{ hash: statoblastRouting.getHash('open-oracle'), label: openOracleCopy.priceReports, route: 'open-oracle' },
 		],
 	})

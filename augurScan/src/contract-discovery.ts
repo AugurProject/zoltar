@@ -10,6 +10,7 @@ export const discoveries: Readonly<Record<string, readonly Discovery[]>> = {
 		{ argument: 'shareToken', kind: 'shareToken', label: 'Share Token' },
 	],
 	DeployChild: [{ argument: 'childReputationToken', kind: 'reputationToken', label: 'Child REP' }],
+	SharedPriceFeedSet: [{ argument: 'priceFeed', kind: 'sharedPoolPriceFeed', label: 'Shared Pool Price Feed' }],
 	EscalationGameSet: [{ argument: 'escalationGame', kind: 'escalationGame', label: 'Escalation Game' }],
 }
 

@@ -60,7 +60,10 @@ interface ISecurityPoolForker is ISecurityPoolForkerEvents {
 		);
 	function initiateSecurityPoolFork(ISecurityPool securityPool) external;
 	function migrateRepToZoltar(ISecurityPool securityPool, uint256[] calldata outcomeIndices) external;
+	function preparePortfolioQuestion(ISecurityPool source, uint248 targetUniverse) external returns (ISecurityPool);
+	function materializePortfolioQuestion(ISecurityPool source, uint248 targetUniverse) external returns (ISecurityPool);
 	function createChildUniverse(ISecurityPool securityPool, uint256 outcomeIndex) external;
+	function continueChildUniverse(ISecurityPool parent, uint256 outcomeIndex) external;
 	function migrateVault(ISecurityPool securityPool, uint256 outcomeIndex) external;
 	function migrateVaultWithUnresolvedEscalation(ISecurityPool securityPool, address vault, uint256 childOutcomeIndex) external;
 	function getEscalationMigrationEntitlementStatus(ISecurityPool securityPool, address vault) external view returns (bool initialized, uint256 totalCurrentAttoRep, bool[3] memory materializedByOutcome);

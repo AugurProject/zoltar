@@ -4,7 +4,7 @@ import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/mark
 import type { ActiveReportingDetails, EscalationSide, ForkAuctionDetails, ListedSecurityPool, OracleManagerDetails, SecurityPoolVaultSummary, SecurityVaultDetails, TruthAuctionMetrics } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import type { ReportingRouteContentProps } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
 import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
-import type { ForkAuctionRouteContentProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '@zoltar/ui-zoltar-shared/features/types.js'
+import type { ForkAuctionRouteContentProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '@zoltar/ui-statoblast-shared/features/types.js'
 
 export function createTradingProps(overrides: Partial<TradingRouteContentProps> = {}): TradingRouteContentProps {
 	return {
@@ -201,9 +201,11 @@ export function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetai
 		badDebtAttoEth: 0n,
 		currentRetentionRate: 10n,
 		disputeStakedAttoRep: 0n,
+		disputeBackingAttoRep: overrides.disputeBackingAttoRep ?? overrides.disputeStakedAttoRep ?? 0n,
 		managerAddress: zeroAddress,
 		minimumVaultRepDepositAttoRep: 10n * 10n ** 18n,
 		totalRepBackingUnits: 1n,
+		totalPoolHeldRepBalanceAttoRep: 5n * 10n ** 18n,
 		vaultAttoRepBacking: 5n * 10n ** 18n,
 		repToken: zeroAddress,
 		underwritingLimitAttoEth: 2n * 10n ** 18n,
@@ -242,6 +244,7 @@ export function createOracleManagerDetails(overrides: Partial<OracleManagerDetai
 export function createSecurityPoolVaultSummary(overrides: Partial<SecurityPoolVaultSummary> = {}): SecurityPoolVaultSummary {
 	return {
 		disputeStakedAttoRep: 1n * 10n ** 18n,
+		disputeBackingAttoRep: overrides.disputeBackingAttoRep ?? overrides.disputeStakedAttoRep ?? 10n ** 18n,
 		vaultAttoRepBacking: 5n * 10n ** 18n,
 		underwritingLimitAttoEth: 2n * 10n ** 18n,
 		claimableFeesAttoEth: 1n * 10n ** 18n,
@@ -256,6 +259,7 @@ export function createUnencumberedVaultSummary(overrides: Partial<SecurityPoolVa
 		badDebtAttoEth: 0n,
 		claimableFeesAttoEth: 0n,
 		disputeStakedAttoRep: 0n,
+		disputeBackingAttoRep: overrides.disputeBackingAttoRep ?? overrides.disputeStakedAttoRep ?? 0n,
 		underwritingLimitAttoEth: 10n * 10n ** 18n,
 		vaultAttoRepBacking: 100n * 10n ** 18n,
 		...overrides,
@@ -287,6 +291,11 @@ export function createForkAuctionProps(overrides: Partial<ForkAuctionRouteConten
 		forkAuctionResult: undefined,
 		loadingForkAuctionDetails: false,
 		onClaimAuctionProceeds: () => undefined,
+		onPrepareChildPriceFeed: () => undefined,
+		onPrepareChildDependencies: () => undefined,
+		onInitializeChildHistory: () => undefined,
+		onPrepareForkClaim: () => undefined,
+		onPrepareAndSettleForkClaim: () => undefined,
 		onCreateChildUniverse: () => undefined,
 		onFinalizeTruthAuction: () => undefined,
 		onForkAuctionFormChange: () => undefined,

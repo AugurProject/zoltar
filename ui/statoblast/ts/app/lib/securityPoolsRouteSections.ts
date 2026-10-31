@@ -105,7 +105,11 @@ type ForkAuctionSource = SectionSource<
 	ForkAuctionRouteContentProps,
 	| 'claimAuctionProceeds'
 	| 'claimParentEscalation'
+	| 'prepareChild'
 	| 'createChildUniverse'
+	| 'initializeChildHistory'
+	| 'prepareForkClaim'
+	| 'prepareAndSettleForkDeposit'
 	| 'finalizeTruthAuction'
 	| 'forkUniverse'
 	| 'forkWithOwnEscalation'
@@ -126,12 +130,18 @@ export function buildForkAuctionSectionProps(forkAuction: ForkAuctionSource, sha
 	return {
 		accountState: shared.accountState,
 		forkAuctionActiveAction: forkAuction.forkAuctionActiveAction,
+		forkClaimPreparation: forkAuction.forkClaimPreparation,
 		forkAuctionDetails: forkAuction.forkAuctionDetails,
 		forkAuctionError: forkAuction.forkAuctionError,
 		forkAuctionForm: forkAuction.forkAuctionForm,
 		forkAuctionResult: forkAuction.forkAuctionResult,
 		loadingForkAuctionDetails: forkAuction.loadingForkAuctionDetails,
 		onClaimAuctionProceeds: forkAuction.claimAuctionProceeds,
+		onPrepareChildPriceFeed: () => void forkAuction.prepareChild('feed'),
+		onPrepareChildDependencies: () => void forkAuction.prepareChild('dependencies'),
+		onPrepareForkClaim: identity => void forkAuction.prepareForkClaim(identity),
+		onPrepareAndSettleForkClaim: identity => void forkAuction.prepareAndSettleForkDeposit(identity),
+		onInitializeChildHistory: () => void forkAuction.initializeChildHistory(),
 		onCreateChildUniverse: () => void forkAuction.createChildUniverse(forkAuction.forkAuctionForm.selectedOutcome),
 		onFinalizeTruthAuction: forkAuction.finalizeTruthAuction,
 		onForkAuctionFormChange: update => forkAuction.setForkAuctionForm(current => ({ ...current, ...update })),

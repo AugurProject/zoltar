@@ -44,6 +44,7 @@ function createForkDetailsClient({ poolRead, computeClearing, ownForkMigrationSt
 			throw new Error(`Unexpected multicall contract: ${functionName}`)
 		},
 		readContract: async request => {
+			if (request.functionName === 'escalationGame') return zeroAddress
 			if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 			if (request.functionName === 'getOwnForkMigrationStatus') return ownForkMigrationStatus
 			throw new Error(`Unexpected readContract function: ${request.functionName}`)

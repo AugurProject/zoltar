@@ -15,12 +15,13 @@ export function availableExecutionObservations<T, V>(label: string, settled: rea
 	return available
 }
 
-export function liquidationExecutionSnapshotObservation<TBlock, TPool, TUniverse>(observation: { endpoint: string; scan: { block: TBlock; pools: readonly TPool[]; universes: readonly TUniverse[]; walletRepByToken: ReadonlyMap<string, bigint> } }) {
+export function liquidationExecutionSnapshotObservation<TBlock, TPool, TUniverse>(observation: { endpoint: string; scan: { block: TBlock; pools: readonly TPool[]; universes: readonly TUniverse[]; portfolios?: readonly unknown[]; walletRepByToken: ReadonlyMap<string, bigint> } }) {
 	return {
 		endpoint: observation.endpoint,
 		value: {
 			block: observation.scan.block,
 			pools: observation.scan.pools,
+			portfolios: observation.scan.portfolios ?? [],
 			universes: observation.scan.universes,
 			walletRepByToken: [...observation.scan.walletRepByToken.entries()].sort(([left], [right]) => left.localeCompare(right)),
 		},

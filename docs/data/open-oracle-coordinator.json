@@ -60,10 +60,24 @@
 			"outcomes": ["ExecutedStagedOperation failure", "operation is consumed without requiring a valid price", "delegated-liquidation reservation is released"]
 		}
 	],
-	"events": ["SecurityPoolSet", "LiquidationApprovalRegistrySet", "RepEthPriceSet", "PriceRequested", "PriceReported", "PriceReportRejected", "PendingReportRecovered", "LiquidationRouteStaged", "StagedOperationQueued", "ExecutedStagedOperation", "CoordinatorStateCheckpoint"],
+	"events": ["SecurityPoolSet", "LiquidationApprovalRegistrySet", "RepEthPriceSet", "PriceRequested", "PriceReported", "PriceReportRejected", "PendingReportRecovered", "LiquidationRouteStaged", "StagedOperationQueued", "ExecutedStagedOperation", "CoordinatorStateCheckpoint", "SharedPriceFeedSet"],
 	"enumValues": {
-		"OperationType": { "0": "Liquidation", "1": "WithdrawRep", "2": "SetVaultUnderwritingLimit", "3": "VaultOperations" },
-		"CoordinatorCheckpointReason": { "0": "SecurityPoolSetup", "1": "PriceSeeded", "2": "PriceRequested", "3": "PriceReported", "4": "PriceRejected", "5": "PendingReportRecovered", "6": "OperationQueued", "7": "OperationExecuted" }
+		"OperationType": {
+			"0": "Liquidation",
+			"1": "WithdrawRep",
+			"2": "SetVaultUnderwritingLimit",
+			"3": "VaultOperations"
+		},
+		"CoordinatorCheckpointReason": {
+			"0": "SecurityPoolSetup",
+			"1": "PriceSeeded",
+			"2": "PriceRequested",
+			"3": "PriceReported",
+			"4": "PriceRejected",
+			"5": "PendingReportRecovered",
+			"6": "OperationQueued",
+			"7": "OperationExecuted"
+		}
 	},
 	"eventDeclarations": {
 		"LiquidationApprovalRegistrySet": "LiquidationApprovalRegistrySet(address indexed registry)",
@@ -76,13 +90,18 @@
 		"LiquidationRouteStaged": "LiquidationRouteStaged(uint256 indexed operationId, address indexed operator, address indexed receiverVault, address targetVault, bytes32 approvalId, uint256 requestedDebtAttoEth, uint256 reservedDebtAttoEth)",
 		"StagedOperationQueued": "StagedOperationQueued(uint256 indexed operationId, uint8 operation, address indexed operator, address indexed targetVault, uint256 operationValue, uint256 queuedAt, uint256 validForSeconds, uint256 snapshotTargetBackingUnits, uint256 snapshotTargetUnderwritingLimitAttoEth, uint256 snapshotTargetOpenInterestAttoEth, uint256 snapshotTargetDisputeStakedAttoRep, uint256 snapshotTotalPoolHeldAttoRep, uint256 snapshotTotalRepBackingUnits, bool isPendingSlot)",
 		"ExecutedStagedOperation": "ExecutedStagedOperation(uint256 indexed operationId, uint8 operation, bool success, string errorMessage)",
-		"CoordinatorStateCheckpoint": "CoordinatorStateCheckpoint(uint8 reason, uint256 indexed reportId, uint256 indexed operationId, uint256 pendingReportId, address pendingReportSponsor, uint256 pendingOperationSlotId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas, uint256 lastPrice, uint256 lastSettlementTimestamp, uint256 stagedOperationCounter, uint256 activeStagedOperationCount, uint256 pendingSettlementOperationCount)"
+		"CoordinatorStateCheckpoint": "CoordinatorStateCheckpoint(uint8 reason, uint256 indexed reportId, uint256 indexed operationId, uint256 pendingReportId, address pendingReportSponsor, uint256 pendingOperationSlotId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas, uint256 lastPrice, uint256 lastSettlementTimestamp, uint256 stagedOperationCounter, uint256 activeStagedOperationCount, uint256 pendingSettlementOperationCount)",
+		"SharedPriceFeedSet": "SharedPriceFeedSet(address indexed priceFeed)"
 	},
 	"checkpoint": {
 		"event": "CoordinatorStateCheckpoint",
 		"indexed": ["reportId", "operationId"],
 		"fields": ["reason", "reportId", "operationId", "pendingReportId", "pendingReportSponsor", "pendingOperationSlotId", "pendingReportMaxSettlementBaseFeeAttoEthPerGas", "lastPrice", "lastSettlementTimestamp", "stagedOperationCounter", "activeStagedOperationCount", "pendingSettlementOperationCount"],
-		"units": { "pendingReportMaxSettlementBaseFeeAttoEthPerGas": "attoETH per gas", "lastPrice": "REP per ETH scaled by 1e18", "lastSettlementTimestamp": "unix seconds" }
+		"units": {
+			"pendingReportMaxSettlementBaseFeeAttoEthPerGas": "attoETH per gas",
+			"lastPrice": "REP per ETH scaled by 1e18",
+			"lastSettlementTimestamp": "unix seconds"
+		}
 	},
 	"functions": {
 		"MAX_PENDING_SETTLEMENT_OPERATIONS": "view",
@@ -97,7 +116,8 @@
 		"gasConsumedSettlement": "view",
 		"gasUnitsForOneDispute": "view",
 		"getActiveStagedOperationCount": "view",
-		"getActiveStagedOperations": "view",
+		"getActiveStagedOperationsPage": "view",
+		"getPendingCommitmentOperationId": "view",
 		"getPendingOperationSlot": "view",
 		"getPendingSettlementWork": "view",
 		"getPendingSettlementOperationCount": "view",
@@ -121,6 +141,7 @@
 		"pendingReportId": "view",
 		"pendingReportMaxSettlementBaseFeeAttoEthPerGas": "view",
 		"pendingReportSponsor": "view",
+		"priceValidUntil": "view",
 		"protocolFee": "view",
 		"protocolFeeRecipient": "view",
 		"recoverSettledPendingReport": "nonpayable",
@@ -140,12 +161,18 @@
 		"targetPriceErrorForDispute": "view",
 		"timeType": "view",
 		"trackDisputes": "view",
-		"weth": "view"
+		"weth": "view",
+		"priceFeed": "view",
+		"sharedPriceFeed": "view",
+		"reportDelegate": "view",
+		"setSharedPriceFeed": "nonpayable",
+		"syncExposure": "nonpayable"
 	},
 	"functionSignatures": {
 		"executeStagedOperation": "executeStagedOperation(uint256)",
 		"expireStagedOperation": "expireStagedOperation(uint256)",
-		"getActiveStagedOperations": "getActiveStagedOperations(uint256,uint256)",
+		"getActiveStagedOperationsPage": "getActiveStagedOperationsPage(uint256,uint256)",
+		"getPendingCommitmentOperationId": "getPendingCommitmentOperationId(address)",
 		"getPendingOperationSlot": "getPendingOperationSlot()",
 		"getQueuedOperationCostAttoEth": "getQueuedOperationCostAttoEth()",
 		"openOracleCallback": "openOracleCallback(uint256,uint256,uint256,uint256,address,address)",
@@ -157,7 +184,9 @@
 		"setRepEthPrice": "setRepEthPrice(uint256)",
 		"setSecurityPool": "setSecurityPool(address)",
 		"stageVaultOperations": "stageVaultOperations(address,bool,uint256,uint256,uint256,uint256,uint256)",
-		"stagedOperations": "stagedOperations(uint256)"
+		"stagedOperations": "stagedOperations(uint256)",
+		"setSharedPriceFeed": "setSharedPriceFeed(address)"
 	},
-	"functionSignatureNote": "The functions map is the complete ABI name-to-mutability inventory. Signatures are listed for parameterized and tuple-returning entry points; zero-input and scalar getters use their Solidity names directly."
+	"functionSignatureNote": "The functions map is the complete ABI name-to-mutability inventory. Signatures are listed for parameterized and tuple-returning entry points; zero-input and scalar getters use their Solidity names directly.",
+	"modeNote": "The selected outcomes describe standalone coordinators. A portfolio coordinator routes price/report reads and requests to priceFeed(). Each shared candidate uses an independent sponsor escrow. Shared-mode operations execute individually against any later accepted canonical price, without a shared callback queue. Shared report events come from the feed, while operation events remain on the question coordinator."
 }

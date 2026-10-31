@@ -313,7 +313,7 @@ describe('transaction presentations', () => {
 		})
 		const submitted = markTransactionSubmitted(prepared, transactionHash)
 		const failed = markTransactionFailed(submitted, { kind: 'reverted', message: 'Transaction reverted' })
-		const success = createPoolOracleSuccessPresentation({ action: 'requestPrice', hash: transactionHash }, context)
+		const success = createPoolOracleSuccessPresentation({ action: 'requestPrice', hash: transactionHash, reportId: 77n }, context)
 
 		for (const presentation of [requested.active, prepared.active, submitted.active, failed.active, success]) {
 			expect(presentation?.universeId).toBe(7n)
@@ -323,6 +323,7 @@ describe('transaction presentations', () => {
 		expect(intent.failedTitle).toBe('Price request')
 		expect(failed.active?.title).toBe('Price request')
 		expect(success.title).toBe('Price requested')
+		expect(success.rows?.find(row => row.label === 'Report ID')?.value).toBe('77')
 	})
 
 	test('describes truth-auction claim settlement as REP plus auctioned underwriting commitments', () => {
@@ -355,4 +356,15 @@ describe('transaction presentations', () => {
 		expect(presentation.title).toBe('Claim parent escalation deposits')
 		expect(presentation.detail).toBe('Selected winning parent deposits were paid in child universe REP. They cannot be claimed again in this universe or its descendants.')
 	})
+	for (const [action, title] of [
+		['initializeChildHistory', 'Initialize dispute history'],
+		['prepareForkClaim', 'Prepare inherited claim'],
+	] as const) {
+		test(`keeps ${action} transaction naming consistent with its review and button`, () => {
+			const intent = createForkAuctionTransactionIntent(action)
+			const presentation = createForkAuctionSuccessPresentation(createForkAuctionResult(action))
+			expect(intent.submittedTitle).toBe(title)
+			expect(presentation.title).toBe(title)
+		})
+	}
 })

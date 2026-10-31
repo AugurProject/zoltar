@@ -1,6 +1,6 @@
 import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 import type { CanonicalUintString } from '../core/units.ts'
-import type { OracleRequestFundingSnapshot } from './types.ts'
+import type { OracleRequestFundingSnapshot, PoolSnapshot } from './types.ts'
 
 export const BPS_DENOMINATOR = 10_000n
 const OPEN_INTEREST_DIVIDER = 100n
@@ -22,6 +22,7 @@ export function isOracleRequestFundingError(error: unknown) {
 }
 
 type CoordinatorFundingValues = {
+	fixedRequestPriceCostAttoEth: bigint | undefined
 	escalationHaltMultiplierBps: bigint
 	gasConsumedOpenOracleReportPrice: bigint
 	gasUnitsForOneDispute: bigint
@@ -76,6 +77,8 @@ function mulDivCeil(left: bigint, right: bigint, denominator: bigint, label: str
 }
 
 function coordinatorFundingValues(snapshot: OracleRequestFundingSnapshot): CoordinatorFundingValues {
+	const fixedRequestPriceCostAttoEth = snapshot.fixedRequestPriceCostAttoEth === undefined ? undefined : uint256(snapshot.fixedRequestPriceCostAttoEth, 'fixedRequestPriceCostAttoEth')
+	if (fixedRequestPriceCostAttoEth !== undefined && fixedRequestPriceCostAttoEth !== 101n) throw oracleRequestFundingError('Shared report bounty must be 101 attoETH')
 	const gasConsumedOpenOracleReportPrice = uint256(snapshot.gasConsumedOpenOracleReportPrice, 'gasConsumedOpenOracleReportPrice')
 	const settlementCallbackGasLimit = uint256(snapshot.settlementCallbackGasLimit, 'settlementCallbackGasLimit')
 	const gasUnitsForOneDispute = uint256(snapshot.gasUnitsForOneDispute, 'gasUnitsForOneDispute')
@@ -107,6 +110,7 @@ function coordinatorFundingValues(snapshot: OracleRequestFundingSnapshot): Coord
 		throw oracleRequestFundingError('initialReportPriorityFeeAttoEthPerGas exceeds OpenOracle limits')
 	}
 	return {
+		fixedRequestPriceCostAttoEth,
 		escalationHaltMultiplierBps,
 		gasConsumedOpenOracleReportPrice,
 		gasUnitsForOneDispute,
@@ -132,6 +136,7 @@ function minimumToken1ReportAttoEth(baseFeePerGas: bigint, settlementCollateralA
 }
 
 function requestPriceCostAttoEth(baseFeePerGas: bigint, funding: CoordinatorFundingValues) {
+	if (funding.fixedRequestPriceCostAttoEth !== undefined) return funding.fixedRequestPriceCostAttoEth
 	const callbackAndReportGas = checkedAdd(funding.settlementCallbackGasLimit, funding.gasConsumedOpenOracleReportPrice, 'oracle request gas units')
 	const fourBaseFees = checkedMultiply(baseFeePerGas, 4n, 'oracle request base-fee bounty')
 	return checkedAdd(checkedMultiply(fourBaseFees, callbackAndReportGas, 'oracle request bounty'), 101n, 'oracle request bounty')
@@ -263,4 +268,9 @@ export function assertOracleRequestFundingEnvelope(parameters: { coordinator: Or
 	if (currentEscalationHalt > persistedEscalationHalt) {
 		throw oracleRequestFundingError(`${subject} no longer covers the current escalation halt`)
 	}
+}
+
+/** Ordinary pools use question collateral; shared feeds protect all live question exposure. */
+export function poolOracleExposure(pool: PoolSnapshot) {
+	return pool.priceFeed.toLowerCase() === pool.coordinator.toLowerCase() ? pool.settlementCollateralAttoEth : pool.oracleExposureAttoEth
 }

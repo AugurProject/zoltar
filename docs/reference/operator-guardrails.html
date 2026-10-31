@@ -98,7 +98,7 @@
 							</tr>
 							<tr>
 								<td>Complete-set capacity</td>
-								<td>Like other operational flows, <a href="./glossary.html#complete-set">complete-set</a> minting first requires an unforked universe (<code>Forked</code>) and an <code>Operational</code> pool (<code>Pool inactive</code>). It then reverts with <code>Fork await</code> while a fork continuation is pending, <code>Escalation mint closed</code> once an Escalation Game exists, <code>Settlement unavailable</code> for zero ETH or an inherited fork outcome, <code>Exchange rate undefined</code> when the deposit converts to no shares or outstanding shares have no collateral, and <code>Over capacity</code> when <a href="./glossary.html#settlement-collateral">settlement collateral</a> plus the deposit would exceed the pool's total <a href="./glossary.html#underwriting-commitment">underwriting commitments</a>. Minting reads no oracle price or REP backing; <a href="./invariants.html#bal-03">BAL-03</a> states the rule.</td>
+								<td>Standalone <a href="./glossary.html#complete-set">complete-set</a> minting first requires an unforked universe (<code>Forked</code>) and an <code>Operational</code> pool (<code>Pool inactive</code>). It then reverts with <code>Fork await</code> while a fork continuation is pending, <code>Escalation mint closed</code> once an Escalation Game exists, <code>Settlement unavailable</code> for zero ETH or an inherited fork outcome, <code>Question ended</code> at or after the question end time, <code>Exchange rate undefined</code> when the deposit converts to no shares or outstanding shares have no collateral, and <code>Over capacity</code> when <a href="./glossary.html#settlement-collateral">settlement collateral</a> plus the deposit would exceed the pool's total <a href="./glossary.html#underwriting-commitment">underwriting commitments</a>. Standalone minting reads no oracle price or REP backing; <a href="./invariants.html#bal-03">BAL-03</a> states the rule. Portfolio purchases use the <a href="./contract-inventory.html#portfolio-underwriting">canonical purchase route and fresh healthy shared capacity</a>.</td>
 								<td>
 									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>SecurityPool.createCompleteSet</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolSettlementDelegate.sol"><code>SecurityPoolSettlementDelegate.createCompleteSet</code></a>
@@ -139,7 +139,7 @@
 							</tr>
 							<tr>
 								<td>External fork withdrawal lock</td>
-								<td>If the universe forked before the local escalation game ended and non-decision was not reached, parent-pool escalation withdrawal reverts. The child continuation already has the canonical snapshot and aggregate backing: winning inherited deposits settle there by proof, inherited losers require no transaction, and clearing the vault's unresolved parent escalation-deposit accounting is optional.</td>
+								<td>If the universe forked before the local escalation game ended and non-decision was not reached, parent-pool escalation withdrawal reverts. After permissionless initialization completes, the child continuation has the canonical snapshot and aggregate backing: winning inherited deposits settle there by proof, inherited losers require no transaction, and clearing the vault's unresolved parent escalation-deposit accounting is optional.</td>
 								<td>
 									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol">SecurityPool.sol</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>EscalationGameSettlement.withdrawDeposit</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameCarry.sol"><code>EscalationGameCarry._getEffectiveInheritedUnresolvedTotalAttoRep</code></a>
@@ -392,7 +392,7 @@
 							<tr>
 								<td>Carried-claim gas</td>
 								<td>
-									Allocation reads call each source game in the deposit's <a href="./glossary.html#lineage">lineage</a>, so gas grows with fork depth. No maximum depth is enforced; see <a href="./invariants.html#life-05"><code>LIFE-05</code></a
+									Allocation reads inspect at most eight ancestors in the deposit's <a href="./glossary.html#lineage">lineage</a>. Deeper histories require resumable <code>processClaimCheckpoint</code> calls, each limited to eight steps. Completed canonical ancestor checkpoints skip previously prepared history for the same claim. Discover with an empty transform array and zero base commitment, then submit one base commitment and transforms in forward hash order matching the pending commitment. The contract applies the verified transforms in reverse order; the current segment needs at most eight local transform reads, without historical logs. Preparation preserves per-generation rounding; the immediate parent and target remain live. See <a href="./invariants.html#life-05"><code>LIFE-05</code></a
 									>.
 								</td>
 								<td>
@@ -411,7 +411,7 @@
 							<tr>
 								<td>Residual sweep</td>
 								<td>
-									<code>sweepResidualRepToSecurityPool</code> returns an ordinary game's residual to the security pool and burns a carried game's entire residual. <a href="./invariants.html#esc-11"><code>ESC-11</code></a> owns the preconditions.
+									<code>settleOrdinaryGame</code> reserves final winning liabilities and burns remaining surplus without waiting for individual claims; repeated calls with no surplus succeed. Ordinary source surplus has already left game escrow when reports increased the minimum outcome balance; <a href="./invariants.html#esc-11"><code>ESC-11</code></a> specifies its destination. Native final backing redemption invokes settlement automatically. <code>sweepResidualRepToSecurityPool</code> uses the same ordinary settlement but requires a positive burn; continuation sweeps retain their claim-completion requirements and burn the residual. <a href="./invariants.html#esc-11"><code>ESC-11</code></a> owns the conservation rules.
 								</td>
 								<td>
 									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>EscalationGameSettlement.sweepResidualRepToSecurityPool</code></a>
@@ -471,7 +471,7 @@
 							<tr>
 								<td>Aggregate escalation backing</td>
 								<td>
-									An external unrelated fork reproduces the drained game's dispute-staked REP one-for-one in each selected child. The escalation's own fork transfers aggregate backing net of the <a href="./glossary.html#fork-haircut">fork haircut</a> instead; ordinary pool-held REP remains one-to-one. Each selected child receives its applicable aggregate backing once, and <code>resumeFromFork</code> remains paused until that backing is present after accounting for child REP already exported by valid direct pre-resume claims. See <a href="./invariants.html#fork-08"><code>FORK-08</code></a> for the raw and effective principal definitions and exact funding bound. Neither path scales or releases per-vault child escrow.
+									An external unrelated fork reproduces the drained game's actual remaining REP one-for-one in each selected child, excluding ordinary surplus already routed out of game escrow. The escalation's own fork transfers aggregate backing net of the <a href="./glossary.html#fork-haircut">fork haircut</a> instead; ordinary pool-held REP remains one-to-one. Each selected child receives its applicable aggregate backing once, and <code>resumeFromFork</code> remains paused until that backing is present after accounting for child REP already exported by valid direct pre-resume claims. See <a href="./invariants.html#fork-08"><code>FORK-08</code></a> for the authenticated backing snapshot and exact funding bound. Neither path scales or releases per-vault child escrow.
 								</td>
 								<td>
 									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForker.sol"><code>SecurityPoolForker.initiateSecurityPoolFork</code></a
@@ -491,7 +491,7 @@
 							</tr>
 							<tr>
 								<td>Continuation setup</td>
-								<td>Child creation installs the canonical carry commitment, source-game link, and aggregate backing without waiting for vault transactions or copying claims and owners. The fixed 64-peak MMR frontier is logarithmic commitment storage for up to <code>2^64 - 1</code> leaves, not a participant cap; see <a href="../reference/merkle-mountain-range.html#peaks">Merkle Mountain Range carry-proof peaks</a>.</td>
+								<td>Child creation deploys and funds the continuation. Anyone then calls <code>continueChildUniverse</code> three times, installing one outcome per transaction from the fixed parent snapshot. Vault migration, direct claims, auctions, and continuation resume wait for all three outcomes. Initialization of a registered child can finish after the migration cutoff without extending that cutoff. The fixed 64-peak MMR frontier is logarithmic commitment storage for up to <code>2^64 - 1</code> leaves, not a participant cap; see <a href="../reference/merkle-mountain-range.html#peaks">Merkle Mountain Range carry-proof peaks</a>.</td>
 								<td>
 									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForkerBase.sol"><code>SecurityPoolForkerBase._finalizeAwaitingForkContinuationIfReady</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>EscalationGameSettlement.withdrawDeposit</code></a
@@ -538,7 +538,8 @@
 				</section>
 				<section id="truth-auction-operations">
 					<h2>Truth Auction operations</h2>
-					<p>Collateral-repair auctions have three operator-critical boundaries: forker ownership, a one-week bidding window, and paged settlement into vault accounting. Bids close at <code>auctionStarted + AUCTION_TIME</code>; both direct auction finalization and the public forker wrapper allow finalization at <code>&gt;=</code> that boundary. The canonical clearing rules and examples are in <a href="../explanation/truth-auctions.html#clearing">Truth Auction</a>.</p>
+					<p>Standalone collateral-repair auctions have three operator-critical boundaries: forker ownership, a one-week bidding window, and paged settlement into vault accounting. Bids close at <code>auctionStarted + AUCTION_TIME</code>; both direct auction finalization and the public forker wrapper allow finalization at <code>&gt;=</code> that boundary. The canonical clearing rules and examples are in <a href="../explanation/truth-auctions.html#clearing">Truth Auction</a>.</p>
+					<p>Shared portfolio auctions use the fixed native week-nine close, ETH-only bids with no separate keeper funding, and immediate aggregate winning commitments. Their funded-price, minimum-backing, inventory and refund rules are specified in the <a href="./contract-inventory.html#portfolio-truth-auction">shared auction reference</a>. The table below applies to standalone pools.</p>
 					<table>
 						<thead>
 							<tr>
@@ -590,7 +591,7 @@
 							</tr>
 							<tr>
 								<td>Fresh-price request guard</td>
-								<td><code>requestPrice</code> reverts while the cached coordinator price is still valid (<code>Oracle price already fresh</code>), so callers cannot open a redundant pending report on top of a fresh cache.</td>
+								<td>Standalone <code>requestPrice</code> reverts while the cached coordinator price is still valid (<code>Oracle price already fresh</code>). Shared feeds permit early renewal and concurrent report candidates; pending reports never extend the accepted expiry. See the <a href="./open-oracle.html#shared-feed-rules">shared-feed rules</a>.</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a></td>
 							</tr>
 							<tr>
@@ -611,24 +612,29 @@
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/LiquidationApprovalRegistry.sol">LiquidationApprovalRegistry.sol</a></td>
 							</tr>
 							<tr>
-								<td>Pending report bound</td>
+								<td>Standalone callback bound</td>
 								<td>At most four price actions are attached to one settlement callback, counting each commitment change, liquidation, or withdrawal within a vault bundle separately. Deposits use no slot. Bundles must fit the remaining callback capacity; single operations can still be tracked as active outside the callback batch.</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a></td>
 							</tr>
 							<tr>
-								<td>Sponsor exclusivity</td>
-								<td>Once the cached price is stale and a caller funds a fresh coordinator report, only that <code>pendingReportSponsor</code> can append more staged operations until settlement. Valid disputes reset the settlement clock, so this paid exclusive lane can be extended indefinitely; the coordinator makes no bounded-availability guarantee. The <a href="./open-oracle.html#intentional-economic-tradeoffs">economic tradeoffs</a>, <a href="./open-oracle.html#attack-model">attack model</a>, and <a href="./open-oracle.html#parameters">parameter table</a> own dispute funding, escalation, and rounding details.</td>
+								<td>Standalone sponsor exclusivity</td>
+								<td>For a standalone coordinator, once the cached price is stale and a caller funds a fresh report, only that <code>pendingReportSponsor</code> can append more staged operations until settlement. Valid disputes reset the settlement clock, so this paid exclusive lane can be extended indefinitely; the coordinator makes no bounded-availability guarantee. The <a href="./open-oracle.html#intentional-economic-tradeoffs">economic tradeoffs</a>, <a href="./open-oracle.html#attack-model">attack model</a>, and <a href="./open-oracle.html#parameters">parameter table</a> own dispute funding, escalation, and rounding details. Shared feeds allow <a href="./open-oracle.html#shared-feed-rules">independent concurrent candidates</a>.</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/OpenOracle.sol">OpenOracle.sol</a></td>
 							</tr>
 							<tr>
-								<td>Rejected settlement</td>
+								<td>Standalone rejected settlement</td>
 								<td>When the callback fails any condition in <a href="./open-oracle.html#settlement-validation-scope">coordinator settlement validation</a>, it emits <code>PriceReportRejected</code>, leaves <code>lastPrice</code> unchanged, clears the pending report so a new price can be requested, and terminally fails every operation attached to that report, releasing each delegated-liquidation reservation.</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/OpenOracle.sol">OpenOracle.sol</a></td>
 							</tr>
 							<tr>
-								<td>Recovery path</td>
-								<td>Coordinator reports opt into OpenOracle's <code>STORE_ALL</code> and <code>TRACK_DISPUTES</code> flags. Recovery requires a pending report whose stored OpenOracle settlement timestamp is nonzero. It returns withdrawable reporter balances to the sponsor, clears the report, consumes all associated pending operations, and releases their liquidation reservations. An expired operation can also be cleaned permissionlessly before any valid-price requirement.</td>
+								<td>Standalone report recovery</td>
+								<td>Standalone coordinator reports opt into OpenOracle's <code>STORE_ALL</code> and <code>TRACK_DISPUTES</code> flags. Recovery requires a pending report whose stored OpenOracle settlement timestamp is nonzero. It returns withdrawable reporter balances to the sponsor, clears the report, consumes all associated pending operations, and releases their liquidation reservations. An expired operation can also be cleaned permissionlessly before any valid-price requirement.</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a></td>
+							</tr>
+							<tr>
+								<td>Queue reads</td>
+								<td><code>getActiveStagedOperationsPage(cursorOperationId, count)</code> walks only the requested page from an active operation ID; zero starts at the newest entry. Pin all pages to one block and continue with the returned cursor. A consumed cursor reverts. <code>getPendingCommitmentOperationId(owner)</code> returns that owner's unconsumed commitment operation directly, including an expired operation awaiting consumption. No queue-wide scan is needed to check this pending state.</td>
+								<td><a href="./contracts/openoraclepricecoordinator.html">OpenOraclePriceCoordinator read surface</a></td>
 							</tr>
 							<tr>
 								<td>Consumed failures</td>

@@ -31,6 +31,7 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 		if (nonDecisionState == NonDecisionState.Local) return nonDecisionTimestamp;
 		if (forkContinuation) {
 			if (forkResumedAt == 0) return type(uint256).max;
+			if (fixedQuestionOutcome != BinaryOutcomes.BinaryOutcome.None) return forkResumedAt + ACTIVATION_DELAY;
 			uint256 requiredElapsed = computeTimeSinceStartFromAttritionCostAttoRep(getBindingCapitalAttoRep());
 			uint256 curveEnd =
 				requiredElapsed <= forkElapsedAtStart
@@ -69,11 +70,11 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 	function getFinalQuestionResolution() public view returns (BinaryOutcomes.BinaryOutcome) {
 		uint256 endDate = getEscalationGameEndDate();
 		if (block.timestamp <= endDate) return BinaryOutcomes.BinaryOutcome.None;
-		// An inherited branch outcome is already fixed, but still observes the fresh response period.
-		if (fixedQuestionOutcome != BinaryOutcomes.BinaryOutcome.None) return fixedQuestionOutcome;
 		// A fork at the deadline interrupts finality, even when migration is initialized later.
 		uint256 forkTime = _getUniverseForkTime();
 		if (forkTime != 0 && forkTime <= endDate) return BinaryOutcomes.BinaryOutcome.None;
+		// An inherited branch outcome is already fixed, but still observes the fresh response period.
+		if (fixedQuestionOutcome != BinaryOutcomes.BinaryOutcome.None) return fixedQuestionOutcome;
 		return getQuestionResolution();
 	}
 
@@ -115,6 +116,9 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 	}
 
 	function _computeWinningWithdrawal(uint8 outcomeIndex, uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep) internal view returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
+		if (ordinarySettlementInitialized)
+			return
+				proofVerifier.computeOrdinaryWinningWithdrawal(depositAmountAttoRep, cumulativeAmountAttoRep, getBindingCapitalAttoRep(), outcomeState[outcomeIndex].balanceAttoRep, ordinarySettlementForkThresholdAttoRep, nonDecisionThresholdAttoRep);
 		return
 			_computeAllocatedWinningWithdrawal(outcomeIndex, depositAmountAttoRep, depositAmountAttoRep, cumulativeAmountAttoRep);
 	}

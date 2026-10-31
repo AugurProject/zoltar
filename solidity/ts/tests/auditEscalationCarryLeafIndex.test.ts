@@ -48,7 +48,7 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 			encodeDeployData({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
 				bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
-				args: [securityPool, repToken, proofVerifier, getInfraContractAddresses().escalationGameClaimDelegate],
+				args: [securityPool, repToken, proofVerifier, getInfraContractAddresses().escalationGameClaimDelegate, getInfraContractAddresses().escalationGameDepositDelegate],
 			}),
 		)
 		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: securityPool, functionName: 'setEscalationGame', args: [escalationGame] }))
@@ -62,14 +62,16 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 		await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: continuation.escalationGame, functionName: 'startFromFork', args: [REPORT_BOND, NON_DECISION_THRESHOLD, 0n, QuestionOutcome.None, false, 0n] }))
 		const sourceYes = await readYesState(source)
 		const yesPeaks = [...sourceYes.currentPeaks]
-		await writeContractAndWait(client, () =>
-			client.writeContract({
-				abi: initializeForkCarrySnapshotFromSourceAbi,
-				address: continuation.securityPool,
-				functionName: 'initializeForkCarrySnapshotFromSource',
-				args: [source, zeroHash, [zeroPeaks(), yesPeaks, zeroPeaks()], [0n, sourceYes.currentLeafCount, 0n], [0n, sourceYes.currentCarryTotalAttoRep, 0n], [zeroHash, sourceYes.currentNullifierRoot, zeroHash]],
-			}),
-		)
+		for (let outcome = 0; outcome < 3; outcome++) {
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					abi: initializeForkCarrySnapshotFromSourceAbi,
+					address: continuation.securityPool,
+					functionName: 'initializeForkCarrySnapshotFromSource',
+					args: [source, zeroHash, [zeroPeaks(), yesPeaks, zeroPeaks()], [0n, sourceYes.currentLeafCount, 0n], [0n, sourceYes.currentCarryTotalAttoRep, 0n], [zeroHash, sourceYes.currentNullifierRoot, zeroHash]],
+				}),
+			)
+		}
 		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: continuation.securityPool, functionName: 'recordForkedEscrowForOutcome', args: [client.account.address, QuestionOutcome.Yes, sourceYes.currentCarryTotalAttoRep, sourceYes.currentCarryTotalAttoRep] }))
 		return continuation
 	}

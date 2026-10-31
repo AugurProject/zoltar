@@ -3734,3 +3734,60 @@ for (const anonymous of [true, false]) {
 		expect(alternatives.at(-1)).toEqual([toHex(5n, { size: 32 }), toHex(6n, { size: 32 })])
 	})
 }
+
+test('wallet call pins simulation to the requested block while preserving the default latest selector', async () => {
+	const blocks: unknown[] = []
+	const wallet = createWalletClient({
+		transport: custom({
+			request: async ({ method, params }) => {
+				if (method !== 'eth_call' || !Array.isArray(params)) throw new Error('Unexpected simulation request')
+				blocks.push(params[1])
+				return '0x'
+			},
+		}),
+	})
+	await wallet.call({ to: TOKEN_ADDRESS, blockNumber: 42n })
+	await wallet.call({ to: TOKEN_ADDRESS })
+	expect(blocks).toEqual(['0x2a', 'latest'])
+})
+
+test('gas estimation forwards an optional pinned block without changing default request semantics', async () => {
+	const requests: unknown[] = []
+	const client = createPublicClient({
+		transport: custom({
+			request: async ({ method, params }) => {
+				if (method !== 'eth_estimateGas') throw new Error('Unexpected RPC method')
+				requests.push(params)
+				return '0x5208'
+			},
+		}),
+	})
+	const abi = [parseAbiItem('function value() view returns (uint256)')]
+	await client.estimateGas({ to: TOKEN_ADDRESS, blockNumber: 42n })
+	await client.estimateContractGas({ address: TOKEN_ADDRESS, abi, functionName: 'value', blockNumber: 43n })
+	await client.estimateGas({ to: TOKEN_ADDRESS })
+	await client.estimateContractGas({ address: TOKEN_ADDRESS, abi, functionName: 'value' })
+	expect(requests.map(parameters => (Array.isArray(parameters) ? parameters.slice(1) : parameters))).toEqual([['0x2a'], ['0x2b'], [], []])
+})
+
+test('fee preflight balance overrides change only the sender ETH balance and remain opt-in', async () => {
+	const requests: unknown[] = []
+	const transport = custom({
+		request: async ({ method, params }) => {
+			requests.push({ method, params })
+			return method === 'eth_estimateGas' ? '0x5208' : '0x'
+		},
+	})
+	const wallet = createWalletClient({ account: OWNER_ADDRESS, transport })
+	const sender = wallet.account.address
+	await wallet.call({ to: TOKEN_ADDRESS, blockNumber: 42n, maxFeePerGas: 10n, maxPriorityFeePerGas: 2n, balanceOverride: 1000n })
+	await wallet.estimateGas({ to: TOKEN_ADDRESS, blockNumber: 42n, maxFeePerGas: 10n, maxPriorityFeePerGas: 2n, balanceOverride: 1000n })
+	await wallet.call({ to: TOKEN_ADDRESS })
+	expect(requests).toEqual([
+		{ method: 'eth_call', params: [{ from: sender, to: TOKEN_ADDRESS, maxFeePerGas: '0xa', maxPriorityFeePerGas: '0x2' }, '0x2a', { [sender]: { balance: '0x3e8' } }] },
+		{ method: 'eth_estimateGas', params: [{ from: sender, to: TOKEN_ADDRESS, maxFeePerGas: '0xa', maxPriorityFeePerGas: '0x2' }, '0x2a', { [sender]: { balance: '0x3e8' } }] },
+		{ method: 'eth_call', params: [{ from: sender, to: TOKEN_ADDRESS }, 'latest'] },
+	])
+	await expect(createPublicClient({ transport }).estimateGas({ to: TOKEN_ADDRESS, balanceOverride: 1000n })).rejects.toThrow('Balance override requires a simulation account')
+	expect(requests).toHaveLength(3)
+})

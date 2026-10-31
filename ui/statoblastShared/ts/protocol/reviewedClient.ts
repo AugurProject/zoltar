@@ -75,10 +75,16 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 	return details
 }
 
-export function createReviewedClient(client: WriteClient, validate: () => Promise<void> = async () => undefined, signal = getTransactionReviewSignal()): WriteClient {
+export function createReviewedClient(client: WriteClient, validate: () => Promise<void> = async () => undefined, signal = getTransactionReviewSignal(), registerBeforeSubmit?: (assertActive: () => void) => void): WriteClient {
 	let controller = createTransactionStepController(signal, false)
 	const prepareInForm = isTransactionPreparationScope(signal)
 	const environment = createActiveEnvironmentGuard()
+	// The injected backend can await wallet validation after our final review checks.
+	// Close over the current controller because initialization replaces it.
+	registerBeforeSubmit?.(() => {
+		if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
+		controller.assertActive()
+	})
 	const requiresReview = () => prepareInForm || (plan?.length ?? 0) > 1 || (plan?.some(step => step.requireReview) ?? false)
 	let preview: TransactionRequestPreview | undefined
 	let plan: readonly TransactionPlanStep[] | undefined

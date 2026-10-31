@@ -197,4 +197,62 @@ describe('ImportedForkSettlementSection', () => {
 		expect(within(document.body).queryByRole('button', { name: 'Settle No' })).toBeNull()
 		expect(renderedActions).toEqual(['yes'])
 	})
+	test('shows a separate bounded preparation action and blocks an unprepared inherited claim', async () => {
+		let preparations = 0
+		const rendered = await renderIntoDocument(
+			<ImportedForkSettlementSection
+				activeReportingDetails={undefined}
+				disabled={false}
+				onDepositSelectionChange={() => undefined}
+				renderPreparationAction={({ parentDepositIndex }) => (
+					<button
+						onClick={() => {
+							preparations += 1
+						}}
+					>
+						Prepare claim #{parentDepositIndex.toString()}
+					</button>
+				)}
+				renderSettlementAction={({ guardMessage }) => <button disabled={guardMessage !== undefined}>Settle</button>}
+				resolved={true}
+				selectedDepositIndexesByOutcome={{ invalid: [], no: [], yes: [7n] }}
+				winningOutcome='yes'
+				sides={[
+					{
+						key: 'yes',
+						label: 'Yes',
+						importedUserDeposits: [{ amountAttoRep: 10n, cumulativeAmountAttoRep: 12n, depositor: '0x0000000000000000000000000000000000000001', parentDepositIndex: 7n, claimCheckpoint: { nextSourceGame: '0x0000000000000000000000000000000000000002', pendingSteps: 10n, complete: false, ready: false } }],
+					},
+				]}
+			/>,
+		)
+		cleanupRendered = rendered.cleanup
+		expect(within(document.body).getByRole('button', { name: 'Settle' }).hasAttribute('disabled')).toBe(true)
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Prepare claim #7' }))
+		expect(preparations).toBe(1)
+	})
+	test('keeps a completed preparation control in place while enabling settlement', async () => {
+		const rendered = await renderIntoDocument(
+			<ImportedForkSettlementSection
+				activeReportingDetails={undefined}
+				disabled={false}
+				onDepositSelectionChange={() => undefined}
+				renderPreparationAction={({ ready }) => <button disabled={ready}>Prepare inherited claim</button>}
+				renderSettlementAction={({ guardMessage }) => <button disabled={guardMessage !== undefined}>Settle</button>}
+				resolved={true}
+				selectedDepositIndexesByOutcome={{ invalid: [], no: [], yes: [7n] }}
+				winningOutcome='yes'
+				sides={[
+					{
+						key: 'yes',
+						label: 'Yes',
+						importedUserDeposits: [{ amountAttoRep: 10n, cumulativeAmountAttoRep: 12n, depositor: '0x0000000000000000000000000000000000000001', parentDepositIndex: 7n, claimCheckpoint: { nextSourceGame: '0x0000000000000000000000000000000000000000', pendingSteps: 0n, complete: true, ready: true } }],
+					},
+				]}
+			/>,
+		)
+		cleanupRendered = rendered.cleanup
+		expect(within(document.body).getByRole('button', { name: 'Prepare inherited claim' }).hasAttribute('disabled')).toBe(true)
+		expect(within(document.body).getByRole('button', { name: 'Settle' }).hasAttribute('disabled')).toBe(false)
+	})
 })

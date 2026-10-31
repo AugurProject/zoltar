@@ -7,6 +7,8 @@ import { SystemState } from './ISecurityPool.sol';
 /// @dev Escalation game reads available to the deposit delegate while it runs in the game's context.
 interface IEscalationGameDepositContext {
 	function getQuestionResolution() external view returns (BinaryOutcomes.BinaryOutcome);
+	function getFinalQuestionResolution() external view returns (BinaryOutcomes.BinaryOutcome);
+	function getEscalationGameEndDate() external view returns (uint256);
 	function hasReachedNonDecision() external view returns (bool);
 	function previewDepositOnOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep) external view returns (uint256 acceptedAmountAttoRep, uint256 resultingCumulativeAmountAttoRep);
 	function repToken() external view returns (address);
@@ -24,4 +26,8 @@ interface IEscalationGameSecurityPoolContext {
 	function systemState() external view returns (SystemState);
 	function universeId() external view returns (uint248);
 	function zoltar() external view returns (address);
+	function creditEscalationSurplus(uint256 amountAttoRep) external;
+	function creditEscalationAuctionBacking(uint256 amountAttoRep) external;
+	function refreshPortfolioFees() external;
+	function burnEscalationWinnerHaircut(uint256 amountAttoRep) external;
 }

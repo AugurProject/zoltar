@@ -43,14 +43,16 @@ test('shared boundaries reject reverse edges, relative bypasses and type-only de
 	expect(findSharedBoundaryViolations('ui/trading/ts/example.ts', "import { x } from '@zoltar/zoltar-shared/example'\n")).toHaveLength(0)
 })
 
-test('downstream contract changes do not invalidate upstream app builds', () => {
-	for (const source of ['solidity/contracts/statoblast/SecurityPool.sol', 'solidity/contracts/statoblast/openOracle/OpenOracle.sol', 'solidity/contracts/trading/TradingPair.sol']) {
+test('every canonical Solidity source invalidates application contract builds', () => {
+	for (const source of ['solidity/contracts/Zoltar.sol', 'solidity/contracts/statoblast/SecurityPool.sol', 'solidity/contracts/statoblast/openOracle/OpenOracle.sol', 'solidity/contracts/trading/TradingPair.sol', 'solidity/contracts/test/Mock.sol', 'solidity/contracts/chaos/ChaosHarness.sol']) {
 		const affected = affectedProjects([source]).map(entry => entry.id)
-		expect(affected).not.toContain('ui-zoltar')
 		expect(affected).toContain('contracts')
-		const zoltar = projects.find(entry => entry.id === 'contracts-zoltar')
-		if (zoltar === undefined) throw new Error('Missing Zoltar contract project')
-		expect(taskInputMatches('build', source, zoltar)).toBe(false)
+		for (const app of UI_APP_IDS) expect(affected).toContain(`ui-${app}`)
+		for (const app of ['zoltar', 'statoblast', 'trading']) {
+			const contractProject = projects.find(entry => entry.id === `contracts-${app}`)
+			if (contractProject === undefined) throw new Error(`Missing ${app} contract project`)
+			expect(taskInputMatches('build', source, contractProject)).toBe(true)
+		}
 	}
 	for (const name of ['WETH9', 'Multicall3']) expect(affectedProjects([`solidity/contracts/statoblast/${name}.sol`]).map(entry => entry.id)).toContain('ui-zoltar')
 })
