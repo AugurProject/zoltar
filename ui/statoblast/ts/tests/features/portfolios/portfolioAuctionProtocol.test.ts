@@ -39,7 +39,6 @@ function fixture() {
 		shortfallAttoEth: 2n * unit,
 		lotAttoEth: unit,
 		targetLots: 2n,
-		minimumExecutionReservePerLot: 10n,
 		repGrid: 1n,
 		openingConservativePrice: unit,
 		minimumCollateralAttoRepPerLot: 2n * unit,

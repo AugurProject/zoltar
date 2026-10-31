@@ -25,8 +25,6 @@ export async function auctionFixture() {
 		shortfallAttoEth: 10n * unit,
 		lotAttoEth: unit,
 		targetLots: 10n,
-		minimumExecutionReservePerLot: unit / 100n,
-		bidReservePerLotAttoEth: unit / 50n,
 		repGrid: 2n,
 		openingConservativePrice: 2n * unit,
 		minimumCollateralAttoRepPerLot: 4n * unit,

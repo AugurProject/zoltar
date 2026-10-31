@@ -52,25 +52,15 @@ export function PortfolioAuction(parameters: PortfolioAuctionParameters) {
 				<MetricField label={copy.clearingRep} loading={model.loading}>
 					<CurrencyValue value={auction?.clearing?.attoRepPerLot} suffix={common.rep} />
 				</MetricField>
-				<MetricField label={copy.minimumReserve} loading={model.loading}>
-					<CurrencyValue value={auction?.minimumExecutionReservePerLotAttoEth} suffix={common.eth} />
-				</MetricField>
 			</MetricGrid>
 			<MetricGrid>
 				<PortfolioInput label={copy.lotCount} hint={copy.lotHint} value={model.lotsInput} onChange={model.setLots} disabled={disabled} />
 				<PortfolioInput label={copy.minimumRep} hint={copy.priceHint(auction?.repGrid)} value={model.repInput} onChange={model.setRep} disabled={disabled} numeric />
 				<PortfolioInput label={copy.health} value={model.healthInput} onChange={model.setHealth} disabled={disabled} numeric />
-				<PortfolioInput label={copy.reserve} hint={copy.reserveHint} value={model.reserveInput} onChange={model.setReserve} disabled={disabled} numeric />
 			</MetricGrid>
 			<MetricGrid>
 				<MetricField label={copy.bidEth}>
 					<CurrencyValue value={model.quote?.bidAttoEth} suffix={common.eth} />
-				</MetricField>
-				<MetricField label={copy.keeperEth}>
-					<CurrencyValue value={model.quote?.executionReserveAttoEth} suffix={common.eth} />
-				</MetricField>
-				<MetricField label={copy.totalEth}>
-					<CurrencyValue value={model.quote?.totalAttoEth} suffix={common.eth} />
 				</MetricField>
 				<MetricField label={copy.minimumPrincipal}>
 					<CurrencyValue value={model.quote?.minimumPrincipalAttoRep} suffix={common.rep} />

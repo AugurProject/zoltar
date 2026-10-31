@@ -56,7 +56,6 @@ describe('Statoblast: owner health policy', () => {
 		for (const client of [alice, bob, keeper]) {
 			await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'mint', args: [client.account.address, 10_000n * E] }))
 			await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'approve', args: [ledger, 10_000n * E] }))
-			await writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address: ledger, functionName: 'fundExecutionReserve', args: [client.account.address], value: 100n * E }))
 		}
 		await price(E)
 		await setBaselineSnapshot()
@@ -160,6 +159,7 @@ describe('Statoblast: owner health policy', () => {
 		expect((await position(id)).commitment).toBe(100n * E)
 		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })).toBe(0n)
 		expect((await account(keeper)).feesAttoEth).toBe(0n)
+		expect((await account(keeper)).feesAttoRep).toBe(0n)
 		await expect(authorize(alice, 101n * E)).rejects.toThrow('Chosen health target unmet')
 	})
 

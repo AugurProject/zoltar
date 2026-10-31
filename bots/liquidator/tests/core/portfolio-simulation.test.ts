@@ -25,7 +25,6 @@ async function simulationFixture(mode: Mode) {
 	observation.snapshot.owner = account.address
 	observation.snapshot.ownerPrincipalAttoRep = 100n * unit
 	observation.snapshot.ownerAccount.freeAttoRep = 100n * unit
-	observation.snapshot.ownerAccount.executionReserveAttoEth = unit
 	const state = initialRuntimeState(false, account.address, 1)
 	state.portfolioScopes = [observation.nextScope]
 	const wallet = createWalletClient({

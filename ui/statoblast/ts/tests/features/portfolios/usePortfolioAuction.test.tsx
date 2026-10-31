@@ -14,7 +14,7 @@ import { auctionFixture, auctionAddress, auctionVault } from './auctionFixture.j
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
 const abi = parseAbi([
 	'function open()',
-	'function submitBid(uint256 lots,uint256 minimumAttoRepPerLot,uint256 targetHealthFactorBps,uint256 executionReservePerLotAttoEth) payable returns (uint256,address)',
+	'function submitBid(uint256 lots,uint256 minimumAttoRepPerLot,uint256 targetHealthFactorBps) payable returns (uint256,address)',
 	'function materializeAuctionBid(uint256 bidId) returns (address,uint96)',
 	'function settleRefund(uint256 bidId)',
 	'function withdrawRefunds(address recipient)',
@@ -51,26 +51,28 @@ async function terms(state: Awaited<ReturnType<typeof setup>>) {
 	})
 }
 
-test('auction bidding funds only ETH without REP approval and preserves the reviewed execution budget', async () => {
+test('auction bidding sends only the reviewed ETH bid without REP approval or a separate reserve', async () => {
 	const state = await setup()
 	state.setAllowances(0n, 0n)
 	await terms(state)
-	expect(state.hook.state().quote).toMatchObject({ bidAttoEth: 2n * unit, minimumPrincipalAttoRep: 10n * unit, executionReserveAttoEth: unit / 50n, totalAttoEth: (202n * unit) / 100n })
+	expect(state.hook.state().quote).toMatchObject({ bidAttoEth: 2n * unit, minimumPrincipalAttoRep: 10n * unit })
 	expect(state.hook.state().quote).not.toHaveProperty('topUpAttoRep')
 	expect(state.hook.state()).not.toHaveProperty('approve')
+	expect(state.hook.state()).not.toHaveProperty('setReserve')
 	expect(state.hook.state().bidReason).toBeUndefined()
 	await act(() => state.hook.state().bid())
 	expect(state.requests).toHaveLength(1)
-	expect(last(state.requests)).toMatchObject({ account: owner, to: auctionAddress, value: (202n * unit) / 100n })
-	expect(decodeFunctionData({ abi, data: last(state.requests).data })).toEqual({ functionName: 'submitBid', args: [2n, 5n * unit, 12_000n, unit / 100n] })
+	expect(last(state.requests)).toMatchObject({ account: owner, to: auctionAddress, value: 2n * unit })
+	expect(decodeFunctionData({ abi, data: last(state.requests).data })).toEqual({ functionName: 'submitBid', args: [2n, 5n * unit, 12_000n] })
 	expect(last(state.requests).reviewDescription).toContain('Purchased REP backs')
 	await last(state.requests).validateBeforeSubmit?.()
-	state.values['minimumExecutionReservePerLot'] = unit / 50n
-	await expect(last(state.requests).validateBeforeSubmit?.()).rejects.toThrow('Review the updated')
+	state.values['lotAttoEth'] = 2n * unit
+	state.values['targetLots'] = 5n
+	await expect(last(state.requests).validateBeforeSubmit?.()).rejects.toThrow()
 	expect(state.requests).toHaveLength(1)
 })
 
-test('chosen health, integer lots, price grid and explicit execution reserve are checked before sending', async () => {
+test('chosen health, integer lots and price grid are checked before sending', async () => {
 	const state = await setup()
 	await terms(state)
 	await act(() => state.hook.state().setHealth('130'))
@@ -89,9 +91,8 @@ test('chosen health, integer lots, price grid and explicit execution reserve are
 	expect(state.hook.state().bidReason).toContain('price-grid')
 	await act(() => {
 		state.hook.state().setRep('5')
-		state.hook.state().setReserve('0')
 	})
-	expect(state.hook.state().bidReason).toContain('below the current minimum')
+	expect(state.hook.state().bidReason).toBeUndefined()
 	expect(state.requests).toHaveLength(0)
 })
 
@@ -130,10 +131,10 @@ test('reviewed auction actions reject a context change during their fresh read',
 	await terms(state)
 	await act(() => state.hook.state().bid())
 	const pending = createDeferred<bigint>()
-	state.values['minimumExecutionReservePerLot'] = pending.promise
+	state.values['repGrid'] = pending.promise
 	const validation = last(state.requests).validateBeforeSubmit?.()
 	if (validation === undefined) throw new Error('Missing pre-submit validation')
 	await state.hook.setProps({ bidder: token })
-	pending.resolve(unit / 100n)
+	pending.resolve(2n)
 	await expect(validation).rejects.toThrow('wallet or network changed')
 })

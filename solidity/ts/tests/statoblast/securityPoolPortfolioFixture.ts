@@ -21,7 +21,6 @@ export const portfolioEconomics: PortfolioEconomicsConfig = {
 	annualFeeBps: 1_000n,
 	minimumPurchaseFeeAttoEth: unit / 1_000n,
 	minimumCommitmentAttoEth: unit,
-	minimumExecutionReserveAttoEth: unit / 10_000n,
 	minimumOutcomeRate: 1_000n,
 	rewardVestingSeconds: DAY,
 	reportingFeeAttoEth: 0n,
@@ -93,8 +92,6 @@ export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<Port
 	}
 	const authorize = async (commitment = 100n * unit, sender = owner(), namespace = portfolio) => {
 		const capital = await capitalFor(namespace)
-		const reserve = await sender.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'requiredExecutionReserve', args: [commitment] })
-		await writeContractAndWait(sender, () => sender.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'fundExecutionReserve', args: [sender.account.address], value: reserve }))
 		return writeContractAndWait(sender, () => sender.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'authorize', args: [commitment] }))
 	}
 	const prepare = async (rep = 1_000n * unit, commitment = 200n * unit) => {

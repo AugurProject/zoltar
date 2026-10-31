@@ -8,7 +8,7 @@ export const activationDeadline = 'Activation deadline'
 export const choice = 'Commit branch choice'
 export const choosing = 'Committing choice…'
 export const choiceHint =
-	'The native choice window lasts eight weeks. This choice is irreversible. All committed principal, commitment and assigned execution reserve follow this branch. Idle REP and previously earned fees stay in the source. Missing the deadline forfeits your committed REP to outcome claimants in every branch; it does not choose a default branch.'
+	'The native choice window lasts eight weeks. This choice is irreversible. All committed principal and commitment follow this branch. Idle REP and previously earned fees stay in the source. Missing the deadline forfeits your committed REP to outcome claimants in every branch; it does not choose a default branch.'
 export const prepareBranch = 'Prepare branch capital'
 export const preparingBranch = 'Preparing branch capital…'
 export const start = 'Start branch migration'

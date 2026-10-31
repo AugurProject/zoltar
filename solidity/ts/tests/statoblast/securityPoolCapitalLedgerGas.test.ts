@@ -5,7 +5,7 @@ import { capitalUnit as E, useCapitalTestFixture } from './securityPoolCapitalTe
 async function importOwners(fixture: ReturnType<typeof useCapitalTestFixture>, count: number, alternating: boolean, demand: bigint) {
 	const sender = fixture.client()
 	await writeContractAndWait(sender, () => sender.writeContract({ ...fixture.harness, functionName: 'beginImport' }))
-	for (let start = 0; start < count; start += 8) await writeContractAndWait(sender, () => sender.writeContract({ ...fixture.harness, functionName: 'importChoices', args: [BigInt(start), 8n, alternating], value: 16n * E }))
+	for (let start = 0; start < count; start += 8) await writeContractAndWait(sender, () => sender.writeContract({ ...fixture.harness, functionName: 'importChoices', args: [BigInt(start), 8n, alternating] }))
 	await writeContractAndWait(sender, () => sender.writeContract({ ...fixture.harness, functionName: 'finishImport', args: [demand] }))
 }
 
@@ -111,8 +111,6 @@ describe('Statoblast: production bounded takeover gas', () => {
 				expect(source.maxHealthyPrice).toBeLessThan(price)
 				expect(started).toBeGreaterThan(0n)
 				expect((await buyer.getBlock()).timestamp - started).toBeGreaterThanOrEqual(3600n)
-				const requiredReserve = await buyer.readContract({ ...fixture.capital, functionName: 'requiredExecutionReserve', args: [source.commitment] })
-				expect(owner.executionReserveAttoEth).toBeGreaterThanOrEqual(requiredReserve)
 				const request = {
 					...fixture.capital,
 					functionName: 'takeOverWithBounds',

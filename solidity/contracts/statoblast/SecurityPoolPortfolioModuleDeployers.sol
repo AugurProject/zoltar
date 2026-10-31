@@ -16,9 +16,9 @@ import { SecurityPoolCreationCodeDeployer } from './SecurityPoolCreationCode.sol
 contract SecurityPoolCapitalLedgerDeployer is SecurityPoolCreationCodeDeployer {
 	constructor() SecurityPoolCreationCodeDeployer(type(SecurityPoolCapitalLedger).creationCode) {}
 
-	function create(address authority, Zoltar zoltar, uint248 universeId, uint256 multiplier, uint256 minimumCommitment, uint256 minimumReserve, uint48 vestingDuration) external returns (SecurityPoolCapitalLedger) {
+	function create(address authority, Zoltar zoltar, uint248 universeId, uint256 multiplier, uint256 minimumCommitment, uint48 vestingDuration) external returns (SecurityPoolCapitalLedger) {
 		return
-			SecurityPoolCapitalLedger(_deploy(abi.encode(authority, zoltar, universeId, multiplier, minimumCommitment, minimumReserve, vestingDuration)));
+			SecurityPoolCapitalLedger(_deploy(abi.encode(authority, zoltar, universeId, multiplier, minimumCommitment, vestingDuration)));
 	}
 }
 contract SecurityPoolCommitmentIndexDeployer {

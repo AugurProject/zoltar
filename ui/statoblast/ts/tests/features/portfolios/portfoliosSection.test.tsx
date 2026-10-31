@@ -36,6 +36,7 @@ test('completed setup preserves the four transaction controls in their original 
 	expect(view.container.textContent?.split(copy.prepareProgress(4))).toHaveLength(2)
 	expect(view.container.textContent?.split(copy.description)).toHaveLength(2)
 	expect(view.container.textContent).not.toContain('Auction reserve')
+	expect(view.container.textContent).not.toContain('Execution reserve')
 	expect(view.container.textContent).toContain(copy.minimumCommitmentHint)
 })
 

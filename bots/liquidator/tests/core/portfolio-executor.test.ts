@@ -15,7 +15,6 @@ import { portfolioObservation, portfolioSettings, unit } from '../support/portfo
 
 const abi = [
 	parseAbiItem('function depositFor(address owner,uint256 amount)'),
-	parseAbiItem('function fundExecutionReserve(address owner) payable'),
 	parseAbiItem('function takeOverWithBounds(uint96 id,uint256 commitment,uint256 minimumAward,uint256 maximumOwnRep,(uint256 maximumOwnerPrincipal,uint256 maximumOwnerCommitment,uint256 expectedTargetHealthFactorBps,uint256 expectedAcceptedPriceEpoch,uint96 expectedSourceBatch) bounds) returns (uint96)'),
 ] as const
 const confirmed: Hex = `0x${'1'.repeat(64)}`
@@ -73,7 +72,7 @@ function fixture() {
 	}
 }
 
-test('portfolio lifecycle sends only one exact approval, deposit, reserve funding or bounded acquisition per cycle', async () => {
+test('portfolio lifecycle needs only REP approval, deposit and bounded acquisition without ETH funding', async () => {
 	const fixtureValue = fixture()
 	await fixtureValue.run()
 	const first = fixtureValue.calls[0]
@@ -89,21 +88,15 @@ test('portfolio lifecycle sends only one exact approval, deposit, reserve fundin
 	fixtureValue.observation.snapshot.ownerAccount.freeAttoRep = (585n * unit) / 10n
 	await fixtureValue.run()
 	const third = fixtureValue.calls[2]
-	if (third === undefined) throw new Error('Missing reserve funding')
-	expect(decodeFunctionData({ abi, data: third.data }).functionName).toBe('fundExecutionReserve')
-	expect(third.value).toBe(unit / 10n)
-	fixtureValue.observation.snapshot.ownerAccount.executionReserveAttoEth = unit / 10n
-	await fixtureValue.run()
-	const fourth = fixtureValue.calls[3]
-	if (fourth === undefined) throw new Error('Missing acquisition')
-	expect(decodeFunctionData({ abi, data: fourth.data })).toMatchObject({
+	if (third === undefined) throw new Error('Missing acquisition')
+	expect(decodeFunctionData({ abi, data: third.data })).toMatchObject({
 		functionName: 'takeOverWithBounds',
 		args: [1n, 100n * unit, 99n * unit, (585n * unit) / 10n, { maximumOwnerPrincipal: 1000n * unit, maximumOwnerCommitment: 1000n * unit, expectedTargetHealthFactorBps: 15_000n, expectedAcceptedPriceEpoch: 3n, expectedSourceBatch: 0n }],
 	})
-	expect(fixtureValue.calls).toHaveLength(4)
+	expect(fixtureValue.calls).toHaveLength(3)
 })
 
-test('post-approval revalidation rejects deteriorated reserve, stale price epoch, or policy changes before signing', async () => {
+test('post-approval revalidation rejects deteriorated collateral, stale price epoch, or policy changes before signing', async () => {
 	const changed = fixture()
 	changed.setMutation(() => {
 		changed.observation.snapshot.ownerAccount.targetHealthFactorBps = 10_000n
@@ -200,7 +193,6 @@ test('virtual winner takeover uses the bid API and rejects materialization or id
 	position.id = 44n
 	f.observation.snapshot.ownerPrincipalAttoRep = 100n * unit
 	f.observation.snapshot.ownerAccount.freeAttoRep = 100n * unit
-	f.observation.snapshot.ownerAccount.executionReserveAttoEth = unit
 	const refresh: typeof refreshPortfolioExecution = async () => ({ observation: f.observation, totalPrincipal: 100n * unit, allowance: 0n })
 	const submit: typeof submitCall = async (_wallet, _settings, _state, _pool, call) => {
 		await call.preSubmit?.()

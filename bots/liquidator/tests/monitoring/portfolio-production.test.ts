@@ -29,6 +29,5 @@ describe('portfolio operator production integration', () => {
 		expect(funded.snapshot.priceValid).toBe(true)
 		expect(funded.snapshot.ownerPrincipalAttoRep).toBe(1000n * 10n ** 18n)
 		expect(funded.positions).toHaveLength(1)
-		expect(funded.positions[0]?.executionReserveAttoEth).toBe(funded.positions[0]?.requiredExecutionReserveAttoEth)
 	})
 })

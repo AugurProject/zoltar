@@ -47,12 +47,11 @@ test('never exposes the protected aggregate auction cohort as an ordinary keeper
 	expect(result.positions).toHaveLength(0)
 })
 
-test('monitors underfunded reserve and marks unchanged blocked retirement only after repeated observations', async () => {
+test('marks unchanged blocked retirement only after repeated observations', async () => {
 	const fixture = portfolioClient({ accountOf: { owner: portfolioAddress, batch: 1n, rep: 1n, commitment: 10n ** 18n, maxHealthyPrice: 1n, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 0n }, previewRetirement: { status: 3n } })
 	const scope = { ...fixture.observation.nextScope, retirementObservations: [{ id: 1n, batch: 1n, commitment: 10n ** 18n, since: 1n }] }
 	const result = await loadPortfolioObservation(fixture.client, fixture.settings, fixture.observation.snapshot.owner, scope, 123n)
 	expect(result.positions[0]).toMatchObject({ retirementStatus: 'Earlier requests reserve available capacity', stalledRetirement: true })
-	expect(result.positions[0]?.executionReserveAttoEth).toBeLessThan(result.positions[0]?.requiredExecutionReserveAttoEth ?? 0n)
 	const reset = await loadPortfolioObservation(fixture.client, fixture.settings, fixture.observation.snapshot.owner, { ...scope, retirementObservations: [] }, 123n)
 	expect(reset.positions[0]?.stalledRetirement).toBe(false)
 })
@@ -140,17 +139,16 @@ function auctionFixture() {
 		auction,
 		bidId: 1n,
 		bidIdForVault: 1n,
-		bidExecutionReserve: 555n,
 	})
 	fixture.settings.portfolioPolicy.maximumPositionsPerScan = 1
 	return { ...fixture, auction, engine, vault }
 }
 
-test('discovers a funded unmaterialized bid with its own reserve and never invents a live index position', async () => {
+test('discovers a funded unmaterialized bid and never invents a live index position', async () => {
 	const fixture = auctionFixture()
 	const result = await loadPortfolioObservation(fixture.client, fixture.settings, fixture.observation.snapshot.owner, fixture.observation.nextScope, 123n)
 	expect(result.positions).toHaveLength(1)
-	expect(result.positions[0]).toMatchObject({ id: 1n, auctionTarget: { auction: fixture.auction, bidId: 1n, vault: fixture.vault }, owner: fixture.vault, rep: 18n, commitment: 20n, executionReserveAttoEth: 555n, maxHealthyPrice: 7n, liquidationStarted: 100n })
+	expect(result.positions[0]).toMatchObject({ id: 1n, auctionTarget: { auction: fixture.auction, bidId: 1n, vault: fixture.vault }, owner: fixture.vault, rep: 18n, commitment: 20n, maxHealthyPrice: 7n, liquidationStarted: 100n })
 	expect(result.nextScope.nextAuctionBidId).toBe(2n)
 	expect(fixture.reads.every(read => read.blockNumber === 123n)).toBe(true)
 	fixture.values['auctionPosition'] = { materialized: true }

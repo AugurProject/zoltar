@@ -12,7 +12,6 @@ const economics: PortfolioEconomicsConfig = {
 	annualFeeBps: 1_000n,
 	minimumPurchaseFeeAttoEth: 10n ** 15n,
 	minimumCommitmentAttoEth: 10n ** 15n,
-	minimumExecutionReserveAttoEth: 10n ** 14n,
 	minimumOutcomeRate: 10n ** 9n,
 	rewardVestingSeconds: 86_400n,
 	reportingFeeAttoEth: 10n ** 15n,
@@ -20,7 +19,7 @@ const economics: PortfolioEconomicsConfig = {
 	maximumOracleRewardAttoEth: 10n ** 16n,
 }
 const inputs = parseAbiParameters(
-	'address factory,address seed,uint256 horizon,(address capital,address commitments,address fees,address books,address settlement,address reporters,address forks,address services,address auctions) deployment,address admission,(uint256 purchaseFeeBps,uint256 annualFeeBps,uint256 minimumPurchaseFeeAttoEth,uint256 minimumCommitmentAttoEth,uint256 minimumExecutionReserveAttoEth,uint256 minimumOutcomeRate,uint48 rewardVestingSeconds,uint256 reportingFeeAttoEth,uint256 serviceFeeBps,uint256 maximumOracleRewardAttoEth) config',
+	'address factory,address seed,uint256 horizon,(address capital,address commitments,address fees,address books,address settlement,address reporters,address forks,address services,address auctions) deployment,address admission,(uint256 purchaseFeeBps,uint256 annualFeeBps,uint256 minimumPurchaseFeeAttoEth,uint256 minimumCommitmentAttoEth,uint256 minimumOutcomeRate,uint48 rewardVestingSeconds,uint256 reportingFeeAttoEth,uint256 serviceFeeBps,uint256 maximumOracleRewardAttoEth) config',
 )
 const abi = [{ type: 'constructor', stateMutability: 'nonpayable', inputs }] as const
 const base = { owner, factory, initialOriginPool, questionAdmissionPolicy, maximumQuestionHorizonSeconds: 31_536_000n, deployers, economics, artifact: { abi, bytecode: '0x1234' as const } }
@@ -36,7 +35,7 @@ describe('shared capital portfolio deployment', () => {
 
 	test('validates configurable fees, economic position minimums, vesting horizon and module addresses', () => {
 		expect(() => validatePortfolioEconomics({ ...economics, purchaseFeeBps: 0n, minimumPurchaseFeeAttoEth: 0n })).not.toThrow()
-		for (const key of ['minimumCommitmentAttoEth', 'minimumExecutionReserveAttoEth', 'rewardVestingSeconds']) expect(() => validatePortfolioEconomics({ ...economics, [key]: 0n })).toThrow('must be positive')
+		for (const key of ['minimumCommitmentAttoEth', 'rewardVestingSeconds']) expect(() => validatePortfolioEconomics({ ...economics, [key]: 0n })).toThrow('must be positive')
 		expect(() => validatePortfolioEconomics({ ...economics, purchaseFeeBps: 10_001n })).toThrow('100%')
 		expect(() => validatePortfolioEconomics({ ...economics, annualFeeBps: 10_001n })).toThrow('100%')
 		expect(() => validatePortfolioEconomics({ ...economics, annualFeeBps: 0n })).not.toThrow()

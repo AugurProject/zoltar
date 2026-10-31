@@ -12,7 +12,6 @@ const abi = parseAbi([
 	'function annualFeeBps() view returns (uint256)',
 	'function minimumPurchaseFeeAttoEth() view returns (uint256)',
 	'function minimumCommitmentAttoEth() view returns (uint256)',
-	'function minimumExecutionReserveAttoEth() view returns (uint256)',
 	'function rewardVestingSeconds() view returns (uint48)',
 	'function reportingFeeAttoEth() view returns (uint256)',
 	'function serviceFeeBps() view returns (uint256)',
@@ -36,14 +35,13 @@ const abi = parseAbi([
 	'function frozen() view returns (bool)',
 	'function importing() view returns (bool)',
 	'function exported(address owner) view returns (bool)',
-	'function ownerAccount(address owner) view returns ((uint256 freeAttoRep,uint256 feesAttoEth,uint256 feesAttoRep,uint256 executionReserveAttoEth,uint256 targetHealthFactorBps,uint96 positionId) account)',
+	'function ownerAccount(address owner) view returns ((uint256 freeAttoRep,uint256 feesAttoEth,uint256 feesAttoRep,uint256 targetHealthFactorBps,uint96 positionId) account)',
 	'function ownerCollateral(address owner) view returns (uint256 principal,uint256 commitment,uint256 withdrawable)',
 	'function totals() view returns (uint256 rep,uint256 commitment,uint256 healthy)',
 	'function currentBatch() view returns (uint96)',
 	'function nextBatch() view returns (uint96)',
 	'function accountOf(uint96 id) view returns ((address owner,uint96 batch,uint256 rep,uint256 commitment,uint256 maxHealthyPrice,uint256 releasedRep,uint256 ethFees,uint256 repFees,uint256 remainingCommitment) account)',
 	'function previewRetirement(uint96 id,uint256 acceptedPrice,uint256 demand) view returns ((uint8 status,uint96 effectiveCurrentBatch,uint256 healthyCommitment,uint256 spareCommitment,uint256 queuedAheadCommitment,uint256 commitmentReduction,uint256 releasedRep) preview)',
-	'function positionExecutionReserveAttoEth(uint96 id) view returns (uint256)',
 	'function liquidationStarted(uint96 id) view returns (uint48)',
 	'function depositFor(address owner,uint256 amount)',
 	'function depositAndSetHealthTarget(uint256 amount,uint256 targetHealthFactorBps)',
@@ -51,8 +49,6 @@ const abi = parseAbi([
 	'function setHealthTarget(uint256 targetHealthFactorBps)',
 	'function authorize(uint256 commitment) returns (uint96)',
 	'function authorizeWithReport(uint256 reportId,uint256 commitment) returns (uint96)',
-	'function fundExecutionReserve(address owner) payable',
-	'function withdrawExecutionReserve(uint256 amount)',
 	'function requestRetirement(uint96 id,uint256 remainingCommitment)',
 	'function cancelRetirement(uint96 id)',
 	'function serveRetirement(uint96 id)',
@@ -66,7 +62,6 @@ type PortfolioCapitalOwner = {
 	freeAttoRep: bigint
 	feesAttoEth: bigint
 	feesAttoRep: bigint
-	executionReserveAttoEth: bigint
 	targetHealthFactorBps: bigint
 	positionId: bigint
 }
@@ -96,7 +91,6 @@ type PortfolioCapitalPosition = {
 	releasedRep: bigint
 	feesAttoEth: bigint
 	feesAttoRep: bigint
-	executionReserveAttoEth: bigint
 	liquidationStarted: bigint
 	remainingCommitment: bigint
 	/** Advisory at this snapshot block, before the next ledger checkpoint. */
@@ -141,8 +135,6 @@ export type PortfolioCapitalSnapshot = {
 	ownerCommitmentAttoEth: bigint
 	/** Canonical safe withdrawal allowance at the snapshot block. */
 	withdrawableAttoRep: bigint
-	/** Available reserve includes assigned ETH released by retirement or a missed fork choice. */
-	withdrawableExecutionReserveAttoEth: bigint
 	/** Fees already credited by the index; the next checkpoint may add earnings. */
 	accruedFeesAttoEth: bigint
 	accruedFeesAttoRep: bigint
@@ -201,12 +193,11 @@ function retirementPreview(value: unknown): PortfolioRetirementPreview {
 	}
 }
 function ownerAccount(value: unknown): PortfolioCapitalOwner {
-	const [free, eth, rep, execution, health, id] = fields(value, ['freeAttoRep', 'feesAttoEth', 'feesAttoRep', 'executionReserveAttoEth', 'targetHealthFactorBps', 'positionId'])
+	const [free, eth, rep, health, id] = fields(value, ['freeAttoRep', 'feesAttoEth', 'feesAttoRep', 'targetHealthFactorBps', 'positionId'])
 	return {
 		freeAttoRep: uint(free, 'Free REP'),
 		feesAttoEth: uint(eth, 'ETH earnings'),
 		feesAttoRep: uint(rep, 'REP earnings'),
-		executionReserveAttoEth: uint(execution, 'Execution reserve'),
 		targetHealthFactorBps: uint(health, 'Health target'),
 		positionId: uint(id, 'Position id', 96),
 	}
@@ -215,14 +206,6 @@ function ownerAccount(value: unknown): PortfolioCapitalOwner {
 type CapitalRequest = { owner: Address; capitalLedger: Address }
 function request(parameters: CapitalRequest, functionName: string, args: readonly AbiValue[] = [], value = 0n) {
 	return { account: address(parameters.owner, 'Owner'), to: address(parameters.capitalLedger, 'Capital ledger'), value: uint(value, 'Transaction value'), data: encodeFunctionData({ abi, functionName, args }) }
-}
-
-/** Covers every minimum-sized keeper action without draining the remaining position's budget. */
-export function requiredPortfolioExecutionReserve(parameters: { commitment: bigint; minimumCommitmentAttoEth: bigint; minimumExecutionReserveAttoEth: bigint }): bigint {
-	const commitment = uint(parameters.commitment, 'Commitment')
-	const minimum = positive(parameters.minimumCommitmentAttoEth, 'Minimum commitment')
-	const reward = positive(parameters.minimumExecutionReserveAttoEth, 'Minimum execution reserve')
-	return uint(((commitment + minimum - 1n) / minimum) * reward, 'Required execution reserve')
 }
 
 export function buildPortfolioCapitalDepositRequest(parameters: CapitalRequest & { amountAttoRep: bigint }) {
@@ -242,12 +225,6 @@ export function buildPortfolioCapitalDepositAndSetHealthRequest(parameters: Capi
 export function buildPortfolioCapitalAuthorizeRequest(parameters: CapitalRequest & { commitment: bigint; reportId?: bigint }) {
 	const commitment = positive(parameters.commitment, 'Commitment')
 	return parameters.reportId === undefined ? request(parameters, 'authorize', [commitment]) : request(parameters, 'authorizeWithReport', [uint(parameters.reportId, 'Report id'), commitment])
-}
-export function buildPortfolioCapitalFundExecutionReserveRequest(parameters: CapitalRequest & { amountAttoEth: bigint }) {
-	return request(parameters, 'fundExecutionReserve', [address(parameters.owner, 'Owner')], positive(parameters.amountAttoEth, 'Execution funding'))
-}
-export function buildPortfolioCapitalWithdrawExecutionReserveRequest(parameters: CapitalRequest & { amountAttoEth: bigint }) {
-	return request(parameters, 'withdrawExecutionReserve', [positive(parameters.amountAttoEth, 'Execution withdrawal')])
 }
 export function buildPortfolioCapitalRequestRetirementRequest(parameters: CapitalRequest & { positionId: bigint; remainingCommitment: bigint }) {
 	return request(parameters, 'requestRetirement', [positive(parameters.positionId, 'Position id', 96), uint(parameters.remainingCommitment, 'Remaining commitment')])
@@ -293,7 +270,7 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 	const blockNumber = block.number
 	const read = (target: Address, functionName: string, args: readonly AbiValue[] = []) => client.readContract({ address: target, abi, functionName, args, blockNumber })
 	const universeId = uint(parameters.universeId ?? (await read(portfolio, 'originUniverseId')), 'Universe id', 248)
-	const [ledgerValue, zoltarValue, settlementValue, feeBps, annualFeeBps, minimumFee, minimumCommitment, minimumReserve, duration, reportingFee, serviceFee, maximumOracleReward, feedValue] = await Promise.all([
+	const [ledgerValue, zoltarValue, settlementValue, feeBps, annualFeeBps, minimumFee, minimumCommitment, duration, reportingFee, serviceFee, maximumOracleReward, feedValue] = await Promise.all([
 		read(portfolio, 'capitalLedger', [universeId]),
 		read(portfolio, 'zoltar'),
 		read(portfolio, 'settlement'),
@@ -301,7 +278,6 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 		read(portfolio, 'annualFeeBps'),
 		read(portfolio, 'minimumPurchaseFeeAttoEth'),
 		read(portfolio, 'minimumCommitmentAttoEth'),
-		read(portfolio, 'minimumExecutionReserveAttoEth'),
 		read(portfolio, 'rewardVestingSeconds'),
 		read(portfolio, 'reportingFeeAttoEth'),
 		read(portfolio, 'serviceFeeBps'),
@@ -343,7 +319,7 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 	const [current, next, minimumOutcomeRate] = await Promise.all([read(commitmentIndex, 'currentBatch'), read(commitmentIndex, 'nextBatch'), read(address(bookValue, 'Settlement book'), 'minimumOutcomeExchangeRate')])
 	const positions = await Promise.all(
 		(account.positionId === 0n ? [] : [account.positionId]).map(async id => {
-			const [value, execution, liquidation] = await Promise.all([read(commitmentIndex, 'accountOf', [id]), read(capitalLedger, 'positionExecutionReserveAttoEth', [id]), read(capitalLedger, 'liquidationStarted', [id])])
+			const [value, liquidation] = await Promise.all([read(commitmentIndex, 'accountOf', [id]), read(capitalLedger, 'liquidationStarted', [id])])
 			const [holder, batch, rep, commitment, maximum, released, eth, repFees, remaining] = fields(value, ['owner', 'batch', 'rep', 'commitment', 'maxHealthyPrice', 'releasedRep', 'ethFees', 'repFees', 'remainingCommitment'])
 			if (address(holder, 'Position owner').toLowerCase() !== owner.toLowerCase()) throw new Error('Capital position belongs to another owner.')
 			const cohort = uint(batch, 'Cohort id', 96)
@@ -359,7 +335,6 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 				releasedRep: uint(released, 'Retired REP'),
 				feesAttoEth: uint(eth, 'ETH earnings'),
 				feesAttoRep: uint(repFees, 'REP earnings'),
-				executionReserveAttoEth: uint(execution, 'Position execution reserve'),
 				liquidationStarted: uint(liquidation, 'Liquidation start', 48),
 				remainingCommitment: uint(remaining, 'Remaining commitment'),
 				retirementPreview: preview,
@@ -370,8 +345,6 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 	const forkChoiceDeadline = uint(choiceDeadlineValue, 'Fork choice deadline')
 	const isExported = bool(exported, 'Exported owner')
 	const isImporting = bool(importing, 'Import phase')
-	const missedChoice = forkTime !== 0n && block.timestamp >= forkChoiceDeadline
-	const withdrawableExecutionReserveAttoEth = isExported || (isImporting && account.positionId !== 0n) ? 0n : account.executionReserveAttoEth + positions.reduce((sum, position) => sum + (position.commitment === 0n || missedChoice ? position.executionReserveAttoEth : 0n), 0n)
 	const [finalChain, finalBlock] = await Promise.all([client.getChainId(), client.getBlock({ blockNumber })])
 	if (finalChain !== chainId || finalBlock.hash !== block.hash) throw new Error('Chain changed while reading capital. Refresh and try again.')
 	return {
@@ -411,7 +384,6 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 		ownerPrincipalAttoRep,
 		ownerCommitmentAttoEth: uint(commitment, 'Owner commitment'),
 		withdrawableAttoRep,
-		withdrawableExecutionReserveAttoEth,
 		accruedFeesAttoEth: account.feesAttoEth + positions.reduce((sum, position) => sum + position.feesAttoEth, 0n),
 		accruedFeesAttoRep: account.feesAttoRep + positions.reduce((sum, position) => sum + position.feesAttoRep, 0n),
 		economics: {
@@ -419,7 +391,6 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 			annualFeeBps: uint(annualFeeBps, 'Annual fee'),
 			minimumPurchaseFeeAttoEth: uint(minimumFee, 'Minimum purchase fee'),
 			minimumCommitmentAttoEth: uint(minimumCommitment, 'Minimum commitment'),
-			minimumExecutionReserveAttoEth: uint(minimumReserve, 'Minimum execution reserve'),
 			minimumOutcomeRate: uint(minimumOutcomeRate, 'Minimum outcome rate'),
 			rewardVestingSeconds: uint(duration, 'Vesting duration', 48),
 			reportingFeeAttoEth: uint(reportingFee, 'Reporting fee'),

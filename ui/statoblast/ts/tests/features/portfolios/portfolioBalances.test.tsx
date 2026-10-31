@@ -32,16 +32,9 @@ test('personal capital shows exact principal and keeps distinct approval, deposi
 	expect(labels.some(label => label.includes('Request retirement'))).toBe(true)
 	expect(labels.some(label => label.includes('Claim earnings'))).toBe(true)
 	expect(text).not.toContain('Claim each question')
+	expect(text).not.toContain('Execution reserve')
+	expect(labels.some(label => label.includes('Fund execution'))).toBe(false)
 	expect(view.container.querySelectorAll('.card .card')).toHaveLength(0)
-})
-
-test('the reserve panel shows assigned ETH available after a missed fork choice', async () => {
-	const snapshot = capitalSnapshot({ forkTime: 500n, forkChoiceDeadline: 1_000n, withdrawableExecutionReserveAttoEth: (101n * unit) / 100n })
-	const view = await renderIntoDocument(<Harness snapshot={snapshot} />)
-	lifecycle.trackRendered(view)
-	const label = [...view.container.querySelectorAll('.metric-label')].find(node => node.textContent === copy.withdrawableExecution)
-	expect(label?.parentElement?.querySelector('.currency-value')?.getAttribute('title')?.replaceAll(/\s/g, '')).toBe('1.01ETH')
-	expect([...view.container.querySelectorAll('button')].some(button => button.textContent === 'Withdraw execution reserve')).toBe(true)
 })
 
 test('retirement readiness exposes the reserved capacity and observed times without promising completion', async () => {

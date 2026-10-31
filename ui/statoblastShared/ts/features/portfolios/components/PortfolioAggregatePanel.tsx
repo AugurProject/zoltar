@@ -94,23 +94,6 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 				/>
 				<PortfolioButton model={actions} action='depositPortfolioRep' label={copy.deposit} pendingLabel={copy.depositing} reason={model.depositReason} onClick={model.deposit} />
 			</SectionBlock>
-			<SectionBlock title={copy.execution} description={copy.executionHint}>
-				<MetricGrid>
-					<MetricField label={copy.withdrawableExecution} loading={model.loading}>
-						<CurrencyValue value={snapshot?.withdrawableExecutionReserveAttoEth} suffix={common.eth} />
-					</MetricField>
-					<MetricField label={copy.minimumExecution} loading={model.loading}>
-						<CurrencyValue value={snapshot?.economics.minimumExecutionReserveAttoEth} suffix={common.eth} />
-					</MetricField>
-				</MetricGrid>
-				<PortfolioInput label={copy.ethAmount} value={model.reserveAmount} onChange={model.setReserveAmount} disabled={disabled} numeric />
-				<PortfolioButton model={actions} action='fundPortfolioExecution' label={copy.fundExecution} pendingLabel={copy.fundingExecution} reason={model.fundReserveReason} onClick={model.fundReserve} />
-				<details>
-					<summary>{copy.withdrawExecution}</summary>
-					<PortfolioInput label={copy.ethAmount} value={model.reserveWithdrawal} onChange={model.setReserveWithdrawal} disabled={disabled} numeric />
-					<PortfolioButton model={actions} action='withdrawPortfolioExecution' label={copy.withdrawExecution} pendingLabel={copy.withdrawingExecution} reason={model.withdrawReserveReason} onClick={model.withdrawReserve} />
-				</details>
-			</SectionBlock>
 			<SectionBlock title={copy.authorize} description={copy.authorizationHint}>
 				<PortfolioInput label={copy.health} hint={copy.healthHint} value={model.healthPercent} onChange={model.setHealthPercent} disabled={disabled} numeric />
 				<MetricGrid>
@@ -151,9 +134,6 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 				<MetricGrid>
 					<MetricField label={copy.requiredCollateral}>
 						<CurrencyValue value={model.requiredCollateral} suffix={common.rep} />
-					</MetricField>
-					<MetricField label={copy.requiredExecution}>
-						<CurrencyValue value={model.requiredExecutionReserve} suffix={common.eth} />
 					</MetricField>
 					<MetricField label={copy.minimumCommitment}>
 						<CurrencyValue value={snapshot?.economics.minimumCommitmentAttoEth} suffix={common.eth} />
@@ -200,9 +180,6 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 										<CurrencyValue value={position.remainingCommitment} suffix={common.eth} />
 									</MetricField>
 								)}
-								<MetricField label={copy.assignedExecution}>
-									<CurrencyValue value={position.executionReserveAttoEth} suffix={common.eth} />
-								</MetricField>
 							</MetricGrid>
 							{snapshot?.priceValid && !healthy ? <UserMessage tone='warning' detail={copy.unhealthy} /> : undefined}
 							{snapshot?.priceValid && healthy && !targetMet ? <UserMessage tone='warning' detail={copy.belowTarget} /> : undefined}

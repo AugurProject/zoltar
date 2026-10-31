@@ -14,7 +14,6 @@ interface ICapitalLifecycleHost {
 	function universeId() external view returns (uint248);
 	function securityMultiplierBps() external view returns (uint256);
 	function ownerConservativePrice(address owner) external view returns (uint256);
-	function requiredExecutionReserve(uint256 commitment) external view returns (uint256);
 	function repToken() external view returns (IERC20);
 	function zoltar() external view returns (Zoltar);
 	function maximumHealthyPrice(uint256 rep, uint256 commitment) external view returns (uint256);
@@ -90,14 +89,6 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 			commitmentIndex.replace(id, rep, commitment, maxPrice);
 			if (maxPrice >= liquidationPrice) commitmentIndex.clearLiquidation(id);
 		}
-		uint256 required = host.requiredExecutionReserve(commitment);
-		uint256 previous = positionExecutionReserveAttoEth[id];
-		if (previous < required) {
-			uint256 additional = required - previous;
-			require(owner.executionReserveAttoEth >= additional, 'Fund execution reserve');
-			owner.executionReserveAttoEth -= additional;
-			positionExecutionReserveAttoEth[id] = required;
-		}
 		if (!useReport) feed.validateExposure();
 		emit CommitmentAuthorized(msg.sender, id, rep, commitment, health);
 	}
@@ -126,29 +117,6 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		host.repToken().safeTransfer(recipient, amount);
 		emit PrincipalWithdrawn(msg.sender, recipient, amount);
 	}
-	function fundExecutionReserve(address owner) external payable onlyLedger {
-		require(owner != address(0) && msg.value > 0, 'Invalid execution funding');
-		require(owner != address(auctionCohort.adapter), 'Materialize an individual auction vault');
-		require(!exported[owner], 'Reserve follows fork choice');
-		uint96 id = owners[owner].positionId;
-		if (id != 0 && commitmentIndex.accountOf(id).commitment != 0) positionExecutionReserveAttoEth[id] += msg.value;
-		else owners[owner].executionReserveAttoEth += msg.value;
-	}
-	function withdrawExecutionReserve(uint256 amount) external onlyLedger {
-		_settleOwner(msg.sender);
-		Owner storage owner = owners[msg.sender];
-		require(!exported[msg.sender], 'Reserve follows fork choice');
-		ICapitalLifecycleHost host = ICapitalLifecycleHost(address(this));
-		Zoltar zoltar = host.zoltar();
-		uint248 universe = host.universeId();
-		if (zoltar.getForkTime(universe) != 0 && block.timestamp >= zoltar.getForkChoiceDeadline(universe)) {
-			owner.executionReserveAttoEth += positionExecutionReserveAttoEth[owner.positionId];
-			delete positionExecutionReserveAttoEth[owner.positionId];
-		}
-		require(amount <= owner.executionReserveAttoEth, 'Execution reserve insufficient');
-		owner.executionReserveAttoEth -= amount;
-		_sendEth(msg.sender, amount);
-	}
 	function claimEarnings() external onlyLedger {
 		_settleOwner(msg.sender);
 		Owner storage owner = owners[msg.sender];
@@ -161,7 +129,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		emit EarningsClaimed(msg.sender, ethAmount, repAmount);
 	}
 
-	function exportChoice(address owner) external onlyLedger returns (ChoicePosition memory choice, uint256 target, uint256 reserve) {
+	function exportChoice(address owner) external onlyLedger returns (ChoicePosition memory choice, uint256 target) {
 		require(frozen && !exported[owner], 'Fork choice unavailable');
 		_settleOwner(owner);
 		Owner storage account = owners[owner];
@@ -170,16 +138,10 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 			SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(id);
 			uint96 batch;
 			if (position.batch != 0) batch = position.batch == commitmentIndex.currentBatch() ? 1 : 2;
-			uint256 positionReserve = positionExecutionReserveAttoEth[id];
-			choice = ChoicePosition(position.rep, position.commitment, batch, positionReserve, position.remainingCommitment);
-			reserve += positionReserve;
-			delete positionExecutionReserveAttoEth[id];
+			choice = ChoicePosition(position.rep, position.commitment, batch, position.remainingCommitment);
 		}
 		exported[owner] = true;
 		target = _target(account);
-		reserve += account.executionReserveAttoEth;
-		account.executionReserveAttoEth = 0;
-		_sendEth(msg.sender, reserve);
 	}
 	function beginForkImport() external onlyLedger {
 		(uint256 rep, uint256 commitment) = commitmentIndex.totals();
@@ -187,7 +149,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		importing = true;
 		commitmentIndex.initCohorts(1, 2);
 	}
-	function importChoice(address owner, ChoicePosition calldata position, uint256 target) external payable onlyLedger {
+	function importChoice(address owner, ChoicePosition calldata position, uint256 target) external onlyLedger {
 		require(importing && target >= BPS, 'Fork import unavailable');
 		Owner storage account = owners[owner];
 		require(account.positionId == 0 && account.freeAttoRep == 0, 'Owner already imported');
@@ -195,10 +157,6 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		require(position.commitment != 0 && position.rep != 0, 'Empty fork choice');
 		uint96 id = commitmentIndex.importPosition(owner, position.rep, position.commitment, ICapitalLifecycleHost(address(this)).maximumHealthyPrice(position.rep, position.commitment), position.batch, position.remainingCommitment);
 		account.positionId = id;
-		positionExecutionReserveAttoEth[id] = position.executionReserveAttoEth;
-		uint256 assignedReserve = position.executionReserveAttoEth;
-		require(msg.value >= assignedReserve, 'Fork execution reserve unfunded');
-		account.executionReserveAttoEth += msg.value - assignedReserve;
 	}
 	function finishForkImport(uint256 fundedDemand) external onlyLedger {
 		require(importing, 'Fork import unavailable');

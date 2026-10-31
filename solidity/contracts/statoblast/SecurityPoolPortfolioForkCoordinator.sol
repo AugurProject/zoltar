@@ -218,7 +218,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 		require(!choices[source][msg.sender].recorded, 'Fork choice already recorded');
 		uint248 child = _prepare(source, outcome);
 		SecurityPoolCapitalLedger parentCapital = portfolio.capitalLedger(source);
-		(SecurityPoolCapitalLedger.ChoicePosition memory position, uint256 target, uint256 reserve) = parentCapital.exportChoice(msg.sender);
+		(SecurityPoolCapitalLedger.ChoicePosition memory position, uint256 target) = parentCapital.exportChoice(msg.sender);
 		uint256 rep = position.rep;
 		uint256 commitment = position.commitment;
 		require(rep != 0, 'No pledged fork principal');
@@ -234,7 +234,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 		IPortfolioForkServices(portfolio.services()).onPremiumChoice(source, child, branch.chosenCommitment, fork.commitment);
 		fork.assignedCash += branch.parentCash - previousCash;
 		choices[source][msg.sender] = Choice(outcome, true);
-		portfolio.capitalLedger(child).importChoice{value: reserve}(msg.sender, position, target);
+		portfolio.capitalLedger(child).importChoice(msg.sender, position, target);
 		emit BranchChosen(source, msg.sender, outcome, rep, commitment);
 	}
 

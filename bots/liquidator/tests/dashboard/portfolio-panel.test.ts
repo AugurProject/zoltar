@@ -11,7 +11,6 @@ function snapshot() {
 	const observation = portfolioObservation()
 	const position = observation.positions[0]
 	if (position === undefined) throw new Error('Fixture position missing')
-	position.executionReserveAttoEth = 0n
 	position.stalledRetirement = true
 	position.retirementStatus = 'Earlier requests reserve available capacity'
 	observation.positions.push({ ...position, id: 9n, auctionTarget: { auction: observation.selection.address, bidId: 9n, vault: position.owner }, retirementStatus: 'Not retiring', stalledRetirement: false })
@@ -24,10 +23,10 @@ function snapshot() {
 test('portfolio dashboard response validates nested observations and owner exposure', () => {
 	const value = snapshot()
 	expect(decodeSnapshot(value).portfolios?.[0]?.knownPositionCount).toBe('1')
-	expect(() => decodeSnapshot({ ...value, portfolios: [{ ...value.portfolios[0], positions: [{ id: '1', reserveAdequate: 'yes' }] }] })).toThrow('invalid state snapshot')
+	expect(() => decodeSnapshot({ ...value, portfolios: [{ ...value.portfolios[0], positions: [{ id: '1', distressed: 'yes' }] }] })).toThrow('invalid state snapshot')
 })
 
-test('portfolio panel shows explicit automation, reserve and retirement blockers, empty and stale states', async () => {
+test('portfolio panel shows explicit automation and retirement blockers, empty and stale states', async () => {
 	const window = new Window()
 	const previous = Reflect.get(globalThis, 'document')
 	try {
@@ -49,7 +48,7 @@ test('portfolio panel shows explicit automation, reserve and retirement blockers
 		disclosure.open = true
 		renderPortfolios(twoPortfolios)
 		expect(disclosure.open).toBe(true)
-		expect(window.document.body.textContent).toContain('Underfunded')
+		expect(window.document.body.textContent).not.toContain('Execution reserve')
 		expect(window.document.body.textContent).toContain('Retirement stalled: Earlier requests')
 		expect(window.document.body.textContent).toContain('Automation enabled')
 		expect(window.document.body.textContent).toContain('Independent REP price')

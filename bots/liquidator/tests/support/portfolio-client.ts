@@ -108,7 +108,6 @@ export function portfolioClient(overrides: Record<string, unknown> = {}) {
 		acceptedPriceEpoch: observation.acceptedPriceEpoch,
 		lastPositionId: 1n,
 		balanceOf: observation.walletRep,
-		positionExecutionReserveAttoEth: 1n,
 		liquidationStarted: 100n,
 		accountOf: { owner: targetAddress, batch: 0n, rep: 99n * 10n ** 18n, commitment: snapshot.totalCommitmentAttoEth, maxHealthyPrice: 1n, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 0n },
 		...overrides,
@@ -130,11 +129,6 @@ export function portfolioClient(overrides: Record<string, unknown> = {}) {
 			if (property === 'readContract')
 				return async (parameters: { address: string; functionName: string; blockNumber?: bigint; args?: readonly unknown[] }) => {
 					reads.push(parameters)
-					if (parameters.functionName === 'requiredExecutionReserve') {
-						const commitment = parameters.args?.[0]
-						if (typeof commitment !== 'bigint') throw new Error('Fixture commitment missing')
-						return ((commitment + snapshot.economics.minimumCommitmentAttoEth - 1n) / snapshot.economics.minimumCommitmentAttoEth) * snapshot.economics.minimumExecutionReserveAttoEth
-					}
 					if (parameters.functionName === 'portfolio') {
 						if ([snapshot.commitmentIndex, module('SecurityPoolCapitalFeeStreams')].includes(getAddress(parameters.address))) return snapshot.capitalLedger
 						if (getAddress(parameters.address) === module('SecurityPoolSettlementBook')) return module('SecurityPoolPortfolioSettlement')

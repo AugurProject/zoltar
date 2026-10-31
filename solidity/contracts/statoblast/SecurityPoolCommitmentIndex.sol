@@ -9,6 +9,7 @@ import { SecurityPoolCommitmentTree } from './SecurityPoolCommitmentTree.sol';
 /// custody. Keys are exact uint256 health thresholds followed by unique uint96
 /// position IDs. Balanced paths depend on live positions, never price-key entropy.
 contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
+	uint256 public constant CURE_REWARD_BPS = 100;
 	address public immutable portfolio;
 	uint96 public lastPositionId;
 	uint96 public currentBatch;
@@ -34,7 +35,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	struct Cure {
 		uint256 removed;
 		uint256 freedRep;
-		uint256 previousCommitment;
+		uint256 rewardAttoRep;
 		address owner;
 	}
 
@@ -102,7 +103,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	}
 
 	/// @dev New commitments always start active. The controller limits the live
-	/// slots per owner and checks collateral, desired health and keeper funding.
+	/// slots per owner and checks collateral and desired health.
 	function create(address owner, uint256 rep, uint256 commitment, uint256 maxHealthyPrice) external onlyPortfolio operational returns (uint96) {
 		return _create(owner, 0, rep, commitment, maxHealthyPrice, 0);
 	}
@@ -262,16 +263,6 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		healthyMutationEpochs[id] = healthObservationEpoch;
 	}
 
-	/// @notice Quote real-progress execution pay from the target's funded budget.
-	/// Funded positions retain their configured residual floor. An underfunded
-	/// protocol reserve releases only the proportional share of its own budget.
-	function executionReward(uint256 reserve, uint256 previousMinimum, uint256 remainingMinimum, uint256 measuredGas) external view returns (uint256) {
-		uint256 retained = Math.min(remainingMinimum, Math.mulDiv(reserve, remainingMinimum, previousMinimum));
-		uint256 gasPrice = Math.min(tx.gasprice, block.basefee + 2e9);
-		uint256 gasReward = Math.mulDiv(measuredGas * gasPrice, 5, 4);
-		return Math.min(reserve - retained, Math.max(previousMinimum - remainingMinimum, gasReward));
-	}
-
 	/// @dev Remove unused nominal K under exactly the ordinary collateral floor.
 	/// Custody and payments for actual progress remain with the controller.
 	function cure(uint96 id, uint256 price, uint256 multiplier, uint256 minimumCommitment, uint256 demand) external onlyPortfolio operational returns (Cure memory result) {
@@ -279,18 +270,33 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		require(account.owner != address(0) && account.commitment > 0, 'Position is not live');
 		uint256 supported = Math.mulDiv(Math.mulDiv(account.rep, 10_000, multiplier), 1e18, price);
 		result.owner = account.owner;
-		result.previousCommitment = account.commitment;
 		if (supported >= account.commitment) {
 			healthyMutationEpochs[id] = healthObservationEpoch;
 			return result;
 		}
 		(, uint256 totalCommitment) = totals();
 		uint256 spare = totalCommitment > demand ? totalCommitment - demand : 0;
-		uint256 removed = Math.min(account.commitment, Math.min(Math.max(account.commitment - supported, minimumCommitment), spare));
+		// Reserve enough reduction for a 1% REP reward without an iteration. The
+		// exact collateral check below remains authoritative under all rounding.
+		uint256 deficit = account.commitment - supported;
+		uint256 reduction =
+			deficit >= Math.mulDiv(account.commitment, 10_000 - CURE_REWARD_BPS, 10_000)
+				? account.commitment
+				: Math.mulDiv(deficit, 10_000, 10_000 - CURE_REWARD_BPS, Math.Rounding.Ceil);
+		uint256 removed = Math.min(account.commitment, Math.min(Math.max(reduction, minimumCommitment), spare));
 		if (removed < minimumCommitment && removed != account.commitment) removed = 0;
 		uint256 remaining = account.commitment - removed;
 		result.removed = removed;
 		if (removed != 0) {
+			// A fixed fraction of eliminated backing, rounded down, cannot be
+			// amplified by splitting progress at this price. Only this target pays.
+			// Insolvent residuals have no payable surplus. Avoid evaluating their
+			// potentially unrepresentable forward backing value after a price shock.
+			if (remaining <= supported) {
+				uint256 required = requiredRep(remaining, price, multiplier, 10_000);
+				result.rewardAttoRep = _cureReward(removed, price, multiplier, account.rep - required);
+				account.rep -= result.rewardAttoRep;
+			}
 			if (remaining == 0) {
 				replace(id, 0, 0, 0);
 				result.freedRep = account.rep;
@@ -300,6 +306,21 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 			}
 		}
 		if (remaining <= supported) healthyMutationEpochs[id] = healthObservationEpoch;
+	}
+
+	/// @dev Exactly floor(floor(removed * price / 1e18) * multiplier / D),
+	/// capped before an overflowing intermediate can make a full cure unavailable.
+	function _cureReward(uint256 removed, uint256 price, uint256 multiplier, uint256 cap) private pure returns (uint256) {
+		if (cap == 0) return 0;
+		uint256 divisor = 10_000 * (10_000 / CURE_REWARD_BPS);
+		uint256 denominator = 1e18 * divisor;
+		(uint256 high, ) = Math.mul512(removed, price);
+		if (high >= denominator) return cap;
+		uint256 quotient = Math.mulDiv(removed, price, denominator);
+		if (quotient > cap / multiplier) return cap;
+		uint256 base = quotient * multiplier;
+		uint256 remainder = Math.mulDiv(mulmod(removed, price, denominator) / 1e18, multiplier, divisor);
+		return base + Math.min(cap - base, remainder);
 	}
 
 	function eligibleCommitment(uint256 acceptedPrice) public view returns (uint256) {
@@ -324,7 +345,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		require(award >= minimumAward, 'Takeover award below minimum');
 		debit = commitment == source.commitment ? proportional : award;
 	}
-	function requiredRep(uint256 commitment, uint256 price, uint256 multiplier, uint256 health) external pure returns (uint256) {
+	function requiredRep(uint256 commitment, uint256 price, uint256 multiplier, uint256 health) public pure returns (uint256) {
 		require(health >= 10_000 && price > 0, 'Invalid health or price');
 		uint256 base = Math.mulDiv(commitment, price, 1e18, Math.Rounding.Ceil);
 		base = Math.mulDiv(base, multiplier, 10_000, Math.Rounding.Ceil);

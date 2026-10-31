@@ -54,7 +54,7 @@ contract SecurityPoolAuctionVault {
 		return _execute(target, value, data);
 	}
 
-	/// @notice Ledger earnings and execution-reserve withdrawals pay this
+	/// @notice Ledger earnings and principal withdrawals pay this
 	/// account. Forward those assets to the owner-selected recipient atomically.
 	function executeAndSweep(address target, uint256 value, bytes calldata data, IERC20 token, address payable recipient) external payable onlyOwner returns (bytes memory result) {
 		require(recipient != address(0) && recipient != address(this), 'Auction vault recipient invalid');

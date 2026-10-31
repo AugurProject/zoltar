@@ -60,7 +60,6 @@ export function useCapitalTestFixture() {
 		for (const sender of clients) {
 			await writeContractAndWait(client(), () => client().writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'mint', args: [sender.account.address, 10_000n * capitalUnit] }))
 			await writeContractAndWait(sender, () => sender.writeContract({ abi: rep.abi, address: token, functionName: 'approve', args: [ledger, 10_000n * capitalUnit] }))
-			await writeContractAndWait(sender, () => sender.writeContract({ abi: capital.abi, address: ledger, functionName: 'fundExecutionReserve', args: [sender.account.address], value: 100n * capitalUnit }))
 		}
 	}
 	return {

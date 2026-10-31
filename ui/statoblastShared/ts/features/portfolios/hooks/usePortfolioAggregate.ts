@@ -7,8 +7,6 @@ import {
 	buildPortfolioCapitalSetHealthRequest,
 	buildPortfolioCapitalDepositAndSetHealthRequest,
 	buildPortfolioCapitalAuthorizeRequest,
-	buildPortfolioCapitalFundExecutionReserveRequest,
-	buildPortfolioCapitalWithdrawExecutionReserveRequest,
 	buildPortfolioCapitalRequestRetirementRequest,
 	buildPortfolioCapitalCancelRetirementRequest,
 	buildPortfolioCapitalServeRetirementRequest,
@@ -20,12 +18,11 @@ import {
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { portfolioReadClient, type PortfolioTransaction } from '../../../protocol/securityPoolPortfolio.js'
-import { executionFundingReview } from '../../../copy/portfolioCapital.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import * as capitalCopy from '../../../copy/portfolioCapital.js'
 import { portfolioAmountOrUndefined, portfolioUnsignedId } from '../lib/draft.js'
 import { portfolioBasisPointsOrUndefined } from '../lib/creation.js'
-import { capitalAuthorizationReason, capitalExecutionWithdrawalReason, capitalWithdrawalReason, requiredPortfolioCollateral, requiredPortfolioExecutionReserve, maximumPortfolioCommitment, capitalHealthReason, capitalCancelRetirementReason, capitalRetirementReason } from '../lib/capital.js'
+import { capitalAuthorizationReason, capitalWithdrawalReason, requiredPortfolioCollateral, maximumPortfolioCommitment, capitalHealthReason, capitalCancelRetirementReason, capitalRetirementReason } from '../lib/capital.js'
 import type { usePortfolio } from './usePortfolio.js'
 import type { usePortfolioActions } from './usePortfolioActions.js'
 
@@ -60,8 +57,6 @@ export function usePortfolioAggregate(
 ) {
 	const depositAmount = useSignal('')
 	const withdrawalAmount = useSignal('')
-	const reserveAmount = useSignal('')
-	const reserveWithdrawal = useSignal('')
 	const healthPercent = useSignal('100')
 	const commitmentAmount = useSignal('')
 	const healthDepositAmount = useSignal('')
@@ -77,8 +72,6 @@ export function usePortfolioAggregate(
 	const admissionReason = snapshot?.admission.mode === 'custom' ? 'This interface supports open or fixed question policies.' : undefined
 	const depositAttoRep = portfolioAmountOrUndefined(depositAmount.value)
 	const withdrawAttoRep = portfolioAmountOrUndefined(withdrawalAmount.value)
-	const fundAttoEth = portfolioAmountOrUndefined(reserveAmount.value)
-	const reserveWithdrawAttoEth = portfolioAmountOrUndefined(reserveWithdrawal.value)
 	const healthBps = portfolioBasisPointsOrUndefined(healthPercent.value)
 	const reportId = reportInput.value.trim() === '' ? undefined : portfolioUnsignedId(reportInput.value)
 	const proofContext = `${snapshot?.chainId}:${snapshot?.portfolio}:${snapshot?.universeId}:${snapshot?.owner}:${snapshot?.blockHash}:${snapshot?.totalCommitmentAttoEth}:${snapshot?.ownerCommitmentAttoEth}:${snapshot?.demandAttoEth}:${reportId}`
@@ -129,8 +122,6 @@ export function usePortfolioAggregate(
 		healthPercent.value = formatUnits(savedHealth, 2)
 		depositAmount.value = ''
 		withdrawalAmount.value = ''
-		reserveAmount.value = ''
-		reserveWithdrawal.value = ''
 		commitmentAmount.value = ''
 		healthDepositAmount.value = ''
 		remainingCommitmentAmount.value = '0'
@@ -140,8 +131,6 @@ export function usePortfolioAggregate(
 	const fundingReason = ownerReason ?? inactiveReason ?? admissionReason ?? positive(depositAttoRep) ?? (snapshot !== undefined && depositAttoRep !== undefined && depositAttoRep > snapshot.walletAttoRep ? 'Insufficient wallet REP.' : undefined)
 	const depositReason = fundingReason ?? (snapshot !== undefined && depositAttoRep !== undefined && depositAttoRep > snapshot.allowanceAttoRep ? 'Approve REP before depositing.' : undefined)
 	const withdrawReason = ownerReason ?? (snapshot === undefined ? undefined : capitalWithdrawalReason(snapshot, withdrawAttoRep))
-	const fundReserveReason = ownerReason ?? (snapshot?.exported ? 'The reserve follows your fork choice.' : undefined) ?? positive(fundAttoEth) ?? (snapshot !== undefined && fundAttoEth !== undefined && fundAttoEth > snapshot.walletAttoEth ? 'Insufficient wallet ETH; gas is additional.' : undefined)
-	const withdrawReserveReason = ownerReason ?? (snapshot === undefined ? undefined : capitalExecutionWithdrawalReason(snapshot, reserveWithdrawAttoEth))
 	const healthReason = ownerReason ?? (snapshot === undefined ? undefined : capitalHealthReason(snapshot, healthBps))
 	const healthFundingReason =
 		ownerReason ??
@@ -196,16 +185,6 @@ export function usePortfolioAggregate(
 			withdrawalAmount.value = value
 		},
 		withdrawReason,
-		reserveAmount: reserveAmount.value,
-		setReserveAmount: (value: string) => {
-			reserveAmount.value = value
-		},
-		fundReserveReason,
-		reserveWithdrawal: reserveWithdrawal.value,
-		setReserveWithdrawal: (value: string) => {
-			reserveWithdrawal.value = value
-		},
-		withdrawReserveReason,
 		healthPercent: healthPercent.value,
 		setHealthPercent: (value: string) => {
 			healthPercent.value = value
@@ -245,7 +224,6 @@ export function usePortfolioAggregate(
 		proofPrice,
 		authorizeReason,
 		requiredCollateral: snapshot !== undefined && commitmentAttoEth !== undefined && snapshot.acceptedPrice > 0n ? requiredPortfolioCollateral(snapshot, commitmentAttoEth, proofPrice) : undefined,
-		requiredExecutionReserve: snapshot !== undefined && commitmentAttoEth !== undefined ? requiredPortfolioExecutionReserve(snapshot, commitmentAttoEth) : undefined,
 		livePositions,
 		claimReason,
 		serveReason,
@@ -296,37 +274,6 @@ export function usePortfolioAggregate(
 				},
 				latest => {
 					const reason = capitalWithdrawalReason(latest, withdrawAttoRep)
-					if (reason !== undefined) throw new Error(reason)
-				},
-			),
-		fundReserve: () =>
-			run(
-				'fundPortfolioExecution',
-				'Fund execution reserve',
-				fundReserveReason,
-				selected => {
-					if (fundAttoEth === undefined) throw new Error('Enter reserve funding.')
-					return {
-						...buildPortfolioCapitalFundExecutionReserveRequest({ ...base(selected), amountAttoEth: fundAttoEth }),
-						reviewDescription: executionFundingReview(formatEther(fundAttoEth), selected.ownerCommitmentAttoEth > 0n),
-					}
-				},
-				latest => {
-					if (latest.exported) throw new Error('The reserve follows your fork choice.')
-					if (latest.ownerCommitmentAttoEth > 0n !== (snapshot !== undefined && snapshot.ownerCommitmentAttoEth > 0n)) throw new Error('Commitment status changed. Review reserve funding again.')
-				},
-			),
-		withdrawReserve: () =>
-			run(
-				'withdrawPortfolioExecution',
-				'Withdraw execution reserve',
-				withdrawReserveReason,
-				selected => {
-					if (reserveWithdrawAttoEth === undefined) throw new Error('Enter reserve withdrawal.')
-					return { ...buildPortfolioCapitalWithdrawExecutionReserveRequest({ ...base(selected), amountAttoEth: reserveWithdrawAttoEth }), reviewDescription: `Withdraw ${formatEther(reserveWithdrawAttoEth)} ETH of available execution reserve to ${selected.owner}.` }
-				},
-				latest => {
-					const reason = capitalExecutionWithdrawalReason(latest, reserveWithdrawAttoEth)
 					if (reason !== undefined) throw new Error(reason)
 				},
 			),

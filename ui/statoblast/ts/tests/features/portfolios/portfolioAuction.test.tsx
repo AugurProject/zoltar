@@ -49,14 +49,16 @@ test('auction funding controls and bid rows stay in place through reload and fai
 	await waitFor(() => expect(button(view.container, 'Submit funded bid').disabled).toBe(false))
 	expect(view.container.textContent).not.toContain('Approve REP')
 	expect(view.container.textContent).not.toContain('REP top-up')
+	expect(view.container.textContent).not.toContain('Execution reserve')
+	expect(metric(view.container, 'ETH bid')).toContain('2.00')
 	expect(view.container.textContent).not.toContain('Credited REP refund')
 	const pending = createDeferred<bigint>()
-	fixture.values['minimumExecutionReservePerLot'] = pending.promise
+	fixture.values['repGrid'] = pending.promise
 	await act(() => button(view.container, 'Refresh auction').click())
 	await waitFor(() => expect(button(view.container, 'Refresh auction').disabled).toBe(true))
 	for (const node of original) expect(node.isConnected && button(view.container, node.textContent ?? '') === node).toBe(true)
-	fixture.values['minimumExecutionReservePerLot'] = unit / 100n
-	await act(() => pending.resolve(unit / 100n))
+	fixture.values['repGrid'] = 2n
+	await act(() => pending.resolve(2n))
 	await waitFor(() => expect(button(view.container, 'Refresh auction').disabled).toBe(false))
 	fixture.values['controller'] = owner
 	await act(() => button(view.container, 'Refresh auction').click())

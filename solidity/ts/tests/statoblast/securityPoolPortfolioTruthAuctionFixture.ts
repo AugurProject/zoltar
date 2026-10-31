@@ -61,11 +61,10 @@ export async function preparePortfolioTruthAuction(fixture: ReturnType<typeof us
 	}
 	const open = () => writeContractAndWait(owner, () => owner.writeContract({ abi: auctionArtifact.abi, address: auction, functionName: 'open' }))
 	const bid = async (bidder: WriteClient, lots: bigint, price = 6n * unit, health = 12_000n) => {
-		const reserve = await bidder.readContract({ abi: auctionArtifact.abi, address: auction, functionName: 'minimumExecutionReservePerLot' })
 		const id = (await bidder.readContract({ abi: engineArtifact.abi, address: engine, functionName: 'bidCount' })) + 1n
-		await writeContractAndWait(bidder, () => bidder.writeContract({ abi: auctionArtifact.abi, address: auction, functionName: 'submitBid', args: [lots, price, health, reserve], value: lots * (unit + reserve) }))
+		await writeContractAndWait(bidder, () => bidder.writeContract({ abi: auctionArtifact.abi, address: auction, functionName: 'submitBid', args: [lots, price, health], value: lots * unit }))
 		const [, vault] = await bidder.readContract({ abi: engineArtifact.abi, address: engine, functionName: 'bids', args: [id] })
-		return { id, vault, reserve }
+		return { id, vault }
 	}
 	const closingQuote = async (price = unit) => {
 		await mock.setTime(deadline - 1_000n)

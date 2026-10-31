@@ -2,20 +2,18 @@ import { describe, expect, test } from 'bun:test'
 import {
 	buildPortfolioCapitalDepositRequest,
 	buildPortfolioCapitalAuthorizeRequest,
-	buildPortfolioCapitalFundExecutionReserveRequest,
 	buildPortfolioCapitalRequestRetirementRequest,
 	buildPortfolioCapitalWithdrawPrincipalRequest,
 	buildPortfolioMintRequest,
 	loadPortfolioCapitalSnapshot,
 	loadPortfolioMintQuote,
-	requiredPortfolioExecutionReserve,
 } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
-import { portfolioEconomics, unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 describe('Statoblast: central capital SDK against production contracts', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
@@ -26,8 +24,6 @@ describe('Statoblast: central capital SDK against production contracts', () => {
 		await approveToken(client, getRepTokenAddress(fixture.base.genesisUniverse), fixture.capitalLedger)
 		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioCapitalDepositRequest({ ...base, amountAttoRep: 1_000n * unit })))
 		await fixture.refreshPrice()
-		const reserve = requiredPortfolioExecutionReserve({ ...portfolioEconomics, commitment: 100n * unit })
-		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioCapitalFundExecutionReserveRequest({ ...base, amountAttoEth: reserve })))
 		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioCapitalAuthorizeRequest({ ...base, commitment: 100n * unit })))
 		const snapshot = await loadPortfolioCapitalSnapshot({ client, owner, portfolio: fixture.portfolio })
 		expect(snapshot).toMatchObject({
@@ -44,7 +40,7 @@ describe('Statoblast: central capital SDK against production contracts', () => {
 		expect(snapshot.positions).toHaveLength(1)
 		const position = snapshot.positions[0]
 		if (position === undefined) throw new Error('SDK position missing')
-		expect(position).toMatchObject({ owner, rep: 1_000n * unit, commitment: 100n * unit, executionReserveAttoEth: reserve })
+		expect(position).toMatchObject({ owner, rep: 1_000n * unit, commitment: 100n * unit })
 		const quote = await loadPortfolioMintQuote({ client, portfolio: fixture.portfolio, universeId: fixture.base.genesisUniverse, questionId: fixture.base.questionId, mintAttoEth: 10n * unit })
 		expect(quote.availableCommitmentAttoEth).toBe(100n * unit)
 		await writeContractAndWait(client, () =>

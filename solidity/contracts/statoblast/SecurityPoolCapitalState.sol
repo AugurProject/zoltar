@@ -36,7 +36,6 @@ abstract contract SecurityPoolCapitalState {
 		uint256 freeAttoRep;
 		uint256 feesAttoEth;
 		uint256 feesAttoRep;
-		uint256 executionReserveAttoEth;
 		uint256 targetHealthFactorBps;
 		uint96 positionId;
 	}
@@ -44,12 +43,10 @@ abstract contract SecurityPoolCapitalState {
 		uint256 rep;
 		uint256 commitment;
 		uint96 batch;
-		uint256 executionReserveAttoEth;
 		uint256 remainingCommitment;
 	}
 	mapping(address => Owner) internal owners;
 	mapping(address => bool) public exported;
-	mapping(uint96 => uint256) public positionExecutionReserveAttoEth;
 
 	struct AuctionCohort {
 		ISecurityPoolAuctionCapital adapter;
@@ -71,9 +68,6 @@ abstract contract SecurityPoolCapitalState {
 	}
 	AuctionCohort public auctionCohort;
 	mapping(uint256 => uint96) public auctionBidPositionIds;
-	uint256 internal receivingAuctionBid;
-	uint256 internal expectedAuctionReserve;
-	bool internal auctionReserveReceived;
 
 	function _settleOwner(address owner) internal {
 		require(owner != address(auctionCohort.adapter), 'Materialize an individual auction vault');
@@ -89,8 +83,6 @@ abstract contract SecurityPoolCapitalState {
 		account.feesAttoEth += ethFees;
 		if (!live) {
 			account.positionId = 0;
-			account.executionReserveAttoEth += positionExecutionReserveAttoEth[id];
-			delete positionExecutionReserveAttoEth[id];
 		}
 	}
 	function _target(Owner storage owner) internal view returns (uint256) {

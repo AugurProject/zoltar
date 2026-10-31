@@ -59,7 +59,6 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		uint256 annualFeeBps;
 		uint256 minimumPurchaseFeeAttoEth;
 		uint256 minimumCommitmentAttoEth;
-		uint256 minimumExecutionReserveAttoEth;
 		uint256 minimumOutcomeRate;
 		uint48 rewardVestingSeconds;
 		uint256 reportingFeeAttoEth;
@@ -89,7 +88,6 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	uint256 public immutable annualFeeBps;
 	uint256 public immutable minimumPurchaseFeeAttoEth;
 	uint256 public immutable minimumCommitmentAttoEth;
-	uint256 public immutable minimumExecutionReserveAttoEth;
 	uint256 public immutable minimumOutcomeRate;
 	uint48 public immutable rewardVestingSeconds;
 	uint256 public immutable reportingFeeAttoEth;
@@ -119,7 +117,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 
 	constructor(ISecurityPoolFactory _factory, ISecurityPool seed, uint256 horizon, Deployers memory deployment, ISecurityPoolQuestionAdmissionPolicy admission, EconomicsConfig memory config) {
 		require(address(admission).code.length != 0, 'Admission policy has no code');
-		require(config.purchaseFeeBps <= 10_000 && config.annualFeeBps <= 10_000 && config.minimumCommitmentAttoEth > 0 && config.minimumExecutionReserveAttoEth > 0, 'Invalid portfolio economics');
+		require(config.purchaseFeeBps <= 10_000 && config.annualFeeBps <= 10_000 && config.minimumCommitmentAttoEth > 0, 'Invalid portfolio economics');
 		require(config.serviceFeeBps <= 10_000, 'Invalid maintenance fee share');
 		require(address(deployment.auctions).code.length != 0, 'Auction deployer has no code');
 		require(config.minimumOutcomeRate > 0 && config.minimumOutcomeRate <= 1e18, 'Invalid minimum exchange rate');
@@ -140,7 +138,6 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		annualFeeBps = config.annualFeeBps;
 		minimumPurchaseFeeAttoEth = config.minimumPurchaseFeeAttoEth;
 		minimumCommitmentAttoEth = config.minimumCommitmentAttoEth;
-		minimumExecutionReserveAttoEth = config.minimumExecutionReserveAttoEth;
 		minimumOutcomeRate = config.minimumOutcomeRate;
 		rewardVestingSeconds = config.rewardVestingSeconds;
 		reportingFeeAttoEth = config.reportingFeeAttoEth;
@@ -433,7 +430,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		IPortfolioForkCoordinator(forkController).freeze(pool.universeId());
 	}
 	function _createCapital(uint248 universeId) private returns (SecurityPoolCapitalLedger capital) {
-		capital = deployers.capital.create(address(this), zoltar, universeId, statoblastSecurityMultiplierBps, minimumCommitmentAttoEth, minimumExecutionReserveAttoEth, rewardVestingSeconds);
+		capital = deployers.capital.create(address(this), zoltar, universeId, statoblastSecurityMultiplierBps, minimumCommitmentAttoEth, rewardVestingSeconds);
 		capital.initialize(deployers.commitments.create(address(capital)), ICapitalFeeStreams(address(deployers.fees.create(address(capital), uint48(block.timestamp), rewardVestingSeconds))), forkController, address(services));
 		capitalLedger[universeId] = capital;
 		capitalAddresses[address(capital)] = true;

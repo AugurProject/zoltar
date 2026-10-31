@@ -16,7 +16,7 @@ export type PortfolioView = {
 	nextPositionId: string
 	knownAuctionBidCount: string
 	nextAuctionBidId: string
-	positions: { id: string; label: string; commitmentEth: string; distressed: boolean; reserveEth: string; requiredReserveEth: string; reserveAdequate: boolean; retirementStatus: string; stalledRetirement: boolean; takeoverStatus: string }[]
+	positions: { id: string; label: string; commitmentEth: string; distressed: boolean; retirementStatus: string; stalledRetirement: boolean; takeoverStatus: string }[]
 }
 export const portfolioView = object<PortfolioView>({
 	address: stringValue,
@@ -40,9 +40,6 @@ export const portfolioView = object<PortfolioView>({
 			label: stringValue,
 			commitmentEth: stringValue,
 			distressed: booleanValue,
-			reserveEth: stringValue,
-			requiredReserveEth: stringValue,
-			reserveAdequate: booleanValue,
 			retirementStatus: stringValue,
 			stalledRetirement: booleanValue,
 			takeoverStatus: stringValue,

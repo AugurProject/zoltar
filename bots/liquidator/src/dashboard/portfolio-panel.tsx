@@ -41,9 +41,7 @@ export function renderPortfolios(portfolios: readonly PortfolioView[] | undefine
 										<strong>
 											{position.label} · {position.distressed ? 'Distressed' : 'Healthy'} · {formatAmount(position.commitmentEth, 'ETH')}
 										</strong>
-										<p>
-											Execution reserve {formatAmount(position.reserveEth, 'ETH')} / {formatAmount(position.requiredReserveEth, 'ETH')} required · {position.reserveAdequate ? 'Adequate' : 'Underfunded'}
-										</p>
+
 										<p>
 											{position.stalledRetirement ? 'Retirement stalled: ' : 'Retirement: '}
 											{position.retirementStatus}

@@ -9,7 +9,6 @@ export type PortfolioPolicy = {
 	maximumTotalPrincipalAttoRep: bigint
 	maximumCommitmentAttoEth: bigint
 	maximumOwnFundingAttoRep: bigint
-	maximumReserveFundingAttoEth: bigint
 	minimumNetRewardAttoEth: bigint
 	walletReserveAttoEth: bigint
 	targetHealthFactorBps: bigint
@@ -41,7 +40,6 @@ export function parsePortfolioPolicy(value: unknown): PortfolioPolicy {
 		maximumTotalPrincipalAttoRep: amount('maximumTotalPrincipalRep', '0'),
 		maximumCommitmentAttoEth: amount('maximumCommitmentEth', '0'),
 		maximumOwnFundingAttoRep: amount('maximumOwnFundingRep', '0'),
-		maximumReserveFundingAttoEth: amount('maximumReserveFundingEth', '0'),
 		minimumNetRewardAttoEth: amount('minimumNetRewardEth', '0.001'),
 		walletReserveAttoEth: amount('walletReserveEth', '0.01'),
 		targetHealthFactorBps: BigInt(integer(policy['targetHealthFactorBps'] ?? 15_000, 'portfolioPolicy.targetHealthFactorBps', 10_001, 1_000_000)),
@@ -60,7 +58,6 @@ export function serializePortfolioPolicy(policy: PortfolioPolicy) {
 		maximumTotalPrincipalRep: formatDecimalAmount(policy.maximumTotalPrincipalAttoRep),
 		maximumCommitmentEth: formatDecimalAmount(policy.maximumCommitmentAttoEth),
 		maximumOwnFundingRep: formatDecimalAmount(policy.maximumOwnFundingAttoRep),
-		maximumReserveFundingEth: formatDecimalAmount(policy.maximumReserveFundingAttoEth),
 		minimumNetRewardEth: formatDecimalAmount(policy.minimumNetRewardAttoEth),
 		walletReserveEth: formatDecimalAmount(policy.walletReserveAttoEth),
 		targetHealthFactorBps: Number(policy.targetHealthFactorBps),

@@ -35,7 +35,7 @@ function fixture() {
 	const state = initialRuntimeState(false, account.address, 1)
 	state.portfolioScopes = [observation.nextScope]
 	const refresh: typeof refreshPortfolioExecution = async () => ({ observation, totalPrincipal: 0n, allowance: 0n })
-	let reward = unit / 10n
+	let reward = unit / 20n
 	let removed = unit
 	const simulate: typeof simulatePortfolioCureReward = async () => ({ reward, removed })
 	const calls: Parameters<typeof submitCall>[4][] = []
@@ -79,12 +79,12 @@ test('paid cure sends a single combined bid materialization and progress call wi
 	expect(call.value).toBe(0n)
 	f.quote(0n)
 	await expect(call.preSubmit?.()).rejects.toThrow('cover cure, claim')
-	f.quote(unit / 10n)
+	f.quote(unit / 20n)
 	f.observation.acceptedPriceEpoch++
 	await expect(call.preSubmit?.()).rejects.toThrow('Cure state or minimum reward changed')
 })
 
-test('unpaid, zero-progress, over-reserve and already materialized cures never submit', async () => {
+test('unpaid, zero-progress, over-collateral and already materialized cures never submit', async () => {
 	for (const [reward, removed] of [
 		[0n, unit],
 		[unit / 10n, 0n],
@@ -116,11 +116,38 @@ test('cure progress and wallet budget respect ordinary floor, market evidence an
 
 test('keeper pull credits are claimed in a later single transaction only when claim cost is covered', async () => {
 	const f = fixture()
-	await expect(executePortfolioEarnings(f.wallet, f.settings, f.state, f.pool, f.observation, f)).rejects.toThrow('cover claim gas')
+	await expect(executePortfolioEarnings(f.wallet, f.settings, f.state, f.pool, f.observation, async () => true, f)).rejects.toThrow('cover claim gas')
 	f.observation.snapshot.ownerAccount.feesAttoEth = unit
-	await executePortfolioEarnings(f.wallet, f.settings, f.state, f.pool, f.observation, f)
+	await executePortfolioEarnings(f.wallet, f.settings, f.state, f.pool, f.observation, async () => true, f)
 	expect(f.calls).toHaveLength(1)
 	const call = f.calls[0]
 	if (call === undefined) throw new Error('Claim missing')
 	expect(decodeFunctionData({ abi: securityPoolCapitalLedgerAbi, data: call.data }).functionName).toBe('claimEarnings')
+})
+
+test('REP cure rewards use a conservative exchange rate and keep wallet gas separate', async () => {
+	const f = fixture()
+	f.observation.snapshot.conservativePrice = 10n * unit
+	const plan = portfolioCurePlan(f.observation, f.position, f.settings, true)
+	expect(plan?.minimumReward).toBe((3n * unit) / 100n)
+	f.quote(unit / 100n)
+	await expect(f.run()).rejects.toThrow('cover cure, claim')
+	f.quote(unit / 20n)
+	await f.run()
+	const call = f.calls[0]
+	if (call === undefined) throw new Error('Cure missing')
+	expect(decodeFunctionData({ abi: securityPoolCapitalLedgerAbi, data: call.data })).toMatchObject({ args: [99n, { minimumReward: (3n * unit) / 100n }] })
+	f.observation.walletAttoEth = 0n
+	expect(portfolioCurePlan(f.observation, f.position, f.settings, true)).toBeUndefined()
+})
+
+test('REP keeper credits count for collection only with current independent market evidence', async () => {
+	const f = fixture()
+	f.observation.snapshot.ownerAccount.feesAttoRep = unit
+	await expect(executePortfolioEarnings(f.wallet, f.settings, f.state, f.pool, f.observation, async () => false, f)).rejects.toThrow('cover claim gas')
+	f.observation.snapshot.priceValid = false
+	await expect(executePortfolioEarnings(f.wallet, f.settings, f.state, f.pool, f.observation, async () => true, f)).rejects.toThrow('cover claim gas')
+	f.observation.snapshot.priceValid = true
+	await executePortfolioEarnings(f.wallet, f.settings, f.state, f.pool, f.observation, async () => true, f)
+	expect(f.calls).toHaveLength(1)
 })

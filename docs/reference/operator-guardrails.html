@@ -539,7 +539,7 @@
 				<section id="truth-auction-operations">
 					<h2>Truth Auction operations</h2>
 					<p>Standalone collateral-repair auctions have three operator-critical boundaries: forker ownership, a one-week bidding window, and paged settlement into vault accounting. Bids close at <code>auctionStarted + AUCTION_TIME</code>; both direct auction finalization and the public forker wrapper allow finalization at <code>&gt;=</code> that boundary. The canonical clearing rules and examples are in <a href="../explanation/truth-auctions.html#clearing">Truth Auction</a>.</p>
-					<p>Shared portfolio auctions use the fixed native week-nine close, ETH-only bids plus separate ETH execution reserves, and immediate aggregate winning commitments. Their funded-price, minimum-backing, inventory and refund rules are specified in the <a href="./contract-inventory.html#portfolio-truth-auction">shared auction reference</a>. The table below applies to standalone pools.</p>
+					<p>Shared portfolio auctions use the fixed native week-nine close, ETH-only bids with no separate keeper funding, and immediate aggregate winning commitments. Their funded-price, minimum-backing, inventory and refund rules are specified in the <a href="./contract-inventory.html#portfolio-truth-auction">shared auction reference</a>. The table below applies to standalone pools.</p>
 					<table>
 						<thead>
 							<tr>

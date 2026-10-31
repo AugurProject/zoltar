@@ -16,7 +16,7 @@ import { deployCapitalTestComponents } from './securityPoolCapitalTestComponents
 
 const ATTO_ETH_PER_ETH = 10n ** 18n
 const LOT = 10n ** 15n
-const RESERVE = 10n ** 14n
+const CURE_REWARD = (LOT * 3n * 10_500n) / 1_000_000n
 // The multiplier is 10500; 21 divides REP per lot, making its initial floor exact.
 const REP = 2_100_000_000_000_000n
 
@@ -77,11 +77,11 @@ describe('Statoblast: individually owned lazy auction capital', () => {
 		capital = await caller.readContract({ abi: harnessArtifact.abi, address: harness, functionName: 'ledger' })
 		index = await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'commitmentIndex' })
 		token = await caller.readContract({ abi: harnessArtifact.abi, address: harness, functionName: 'token' })
-		const auction = await caller.waitForTransactionReceipt({ hash: await caller.sendTransaction({ data: encodeDeployData({ abi: adapterArtifact.abi, bytecode: `0x${adapterArtifact.evm.bytecode.object}`, args: [capital, RESERVE] }) }) })
+		const auction = await caller.waitForTransactionReceipt({ hash: await caller.sendTransaction({ data: encodeDeployData({ abi: adapterArtifact.abi, bytecode: `0x${adapterArtifact.evm.bytecode.object}`, args: [capital] }) }) })
 		if (auction.contractAddress === undefined) throw new Error('Auction adapter missing')
 		adapter = auction.contractAddress
-		await writeContractAndWait(caller, () => caller.writeContract({ abi: adapterArtifact.abi, address: adapter, functionName: 'setBid', args: [1n, first.account.address, 12_000n, 2n], value: 2n * RESERVE }))
-		await writeContractAndWait(caller, () => caller.writeContract({ abi: adapterArtifact.abi, address: adapter, functionName: 'setBid', args: [2n, second.account.address, 15_000n, 1n], value: RESERVE }))
+		await writeContractAndWait(caller, () => caller.writeContract({ abi: adapterArtifact.abi, address: adapter, functionName: 'setBid', args: [1n, first.account.address, 12_000n, 2n] }))
+		await writeContractAndWait(caller, () => caller.writeContract({ abi: adapterArtifact.abi, address: adapter, functionName: 'setBid', args: [2n, second.account.address, 15_000n, 1n] }))
 		await setPrice(ATTO_ETH_PER_ETH)
 		await writeContractAndWait(caller, () => caller.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'beginImport' }))
 		await setBaselineSnapshot()
@@ -99,20 +99,18 @@ describe('Statoblast: individually owned lazy auction capital', () => {
 		await expect(call('installAuction')).rejects.toThrow('Auction cohort installation unavailable')
 	})
 
-	test('unclaimed winners count fully and detach only their own principal, fees and reserve', async () => {
+	test('unclaimed winners count fully and detach only their own principal and fees', async () => {
 		await activate()
 		expect(await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'totals' })).toMatchObject({ rep: 3n * REP, commitment: 3n * LOT, healthy: 3n * LOT })
 		expect(await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'ownerCollateral', args: [first.account.address] })).toMatchObject({ principal: 2n * REP, commitment: 2n * LOT, withdrawable: 2n * REP - (2n * LOT * 105n * 12n) / 1000n })
 		expect((await owner(first.account.address)).targetHealthFactorBps).toBe(12_000n)
 		await writeContractAndWait(caller, () => caller.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'creditFees', value: 30n }))
 		expect(await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'auctionPosition', args: [1n] })).toMatchObject({ principal: 2n * REP, commitment: 2n * LOT, earnedAttoEth: 20n, earnedAttoRep: 0n, materialized: false })
-		await writeContractAndWait(caller, () => caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'fundExecutionReserve', args: [first.account.address], value: 7n }))
 		await materialize(1n)
 		const firstOwner = await owner(first.account.address)
-		expect(firstOwner).toMatchObject({ targetHealthFactorBps: 12_000n, feesAttoEth: 20n, executionReserveAttoEth: 7n })
+		expect(firstOwner).toMatchObject({ targetHealthFactorBps: 12_000n, feesAttoEth: 20n })
 		expect(await position(firstOwner.positionId)).toMatchObject({ rep: 2n * REP, commitment: 2n * LOT })
 		expect(await position(1n)).toMatchObject({ rep: REP, commitment: LOT })
-		expect(await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'positionExecutionReserveAttoEth', args: [firstOwner.positionId] })).toBe(2n * RESERVE)
 		await materialize(2n)
 		expect((await owner(second.account.address)).feesAttoEth).toBe(10n)
 		expect(await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'totals' })).toMatchObject({ rep: 3n * REP, commitment: 3n * LOT, healthy: 3n * LOT })
@@ -120,30 +118,14 @@ describe('Statoblast: individually owned lazy auction capital', () => {
 		expect(await owner(first.account.address)).toEqual(firstOwner)
 	})
 
-	test('the funded auction reserve is preserved exactly and must cover the ordinary minimum', async () => {
+	test('materialization requires no ETH and preserves every winning commitment', async () => {
 		await activate()
-		await writeContractAndWait(caller, () => caller.writeContract({ abi: adapterArtifact.abi, address: adapter, functionName: 'setReservePerLot', args: [RESERVE - 1n] }))
-		await expect(materialize(1n)).rejects.toThrow('Auction execution reserve below minimum')
-		expect((await owner(first.account.address)).positionId).toBe(0n)
-		expect(await caller.readContract({ abi: adapterArtifact.abi, address: adapter, functionName: 'removed', args: [1n] })).toBe(false)
-		await writeContractAndWait(caller, () => caller.writeContract({ abi: adapterArtifact.abi, address: adapter, functionName: 'setReservePerLot', args: [2n * RESERVE], value: 3n * (RESERVE + 1n) }))
 		await materialize(1n)
 		const id = (await owner(first.account.address)).positionId
-		expect(await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'positionExecutionReserveAttoEth', args: [id] })).toBe(4n * RESERVE)
-		expect(await caller.getBalance({ address: capital })).toBe(4n * RESERVE)
+		expect(await position(id)).toMatchObject({ rep: 2n * REP, commitment: 2n * LOT })
+		expect(await caller.getBalance({ address: capital })).toBe(0n)
+		expect(await caller.getBalance({ address: adapter })).toBe(0n)
 		expect((await owner(second.account.address)).positionId).toBe(0n)
-	})
-
-	test('reserve underfunding reverts the complete materialization and rejects unrelated callbacks', async () => {
-		await activate()
-		await expect(caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'receiveAuctionExecutionReserve', args: [1n], value: 2n * RESERVE })).rejects.toThrow('Unexpected auction reserve')
-		await writeContractAndWait(caller, () => caller.writeContract({ abi: adapterArtifact.abi, address: adapter, functionName: 'setShortReserve', args: [true] }))
-		await expect(materialize(1n)).rejects.toThrow('Incorrect auction execution reserve')
-		expect((await owner(first.account.address)).positionId).toBe(0n)
-		expect(await position(1n)).toMatchObject({ rep: 3n * REP, commitment: 3n * LOT })
-		expect(await caller.readContract({ abi: adapterArtifact.abi, address: adapter, functionName: 'removed', args: [1n] })).toBe(false)
-		await writeContractAndWait(caller, () => caller.writeContract({ abi: adapterArtifact.abi, address: adapter, functionName: 'setShortReserve', args: [false] }))
-		await materialize(1n)
 	})
 
 	test('a materialized distressed winner keeps the original liquidation start and other winners remain unchanged', async () => {
@@ -160,15 +142,15 @@ describe('Statoblast: individually owned lazy auction capital', () => {
 		await expect(writeContractAndWait(caller, () => caller.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'exportChoice', args: [adapter] }))).rejects.toThrow()
 	})
 
-	test('a keeper can cure one virtual winner atomically using only its own funded reserve', async () => {
+	test('a keeper can cure one virtual winner atomically using only its own REP', async () => {
 		await activate(0n)
 		await setPrice(3n * ATTO_ETH_PER_ETH)
 		const bounds = await cureBounds()
 		await writeContractAndWait(caller, () => caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'cureAuctionBid', args: [2n, bounds] }))
 		const secondOwner = await owner(second.account.address)
 		expect((await position(secondOwner.positionId)).commitment).toBe(0n)
-		expect(secondOwner.freeAttoRep).toBe(REP)
-		expect((await owner(caller.account.address)).feesAttoEth).toBe(RESERVE)
+		expect(secondOwner.freeAttoRep).toBe(REP - CURE_REWARD)
+		expect((await owner(caller.account.address)).feesAttoRep).toBe(CURE_REWARD)
 		expect(await position(1n)).toMatchObject({ rep: 2n * REP, commitment: 2n * LOT })
 		expect(await caller.readContract({ abi: adapterArtifact.abi, address: adapter, functionName: 'remainingLots' })).toBe(2n)
 	})
@@ -202,44 +184,36 @@ describe('Statoblast: individually owned lazy auction capital', () => {
 		expect(await caller.readContract({ abi: adapterArtifact.abi, address: adapter, functionName: 'removed', args: [2n] })).toBe(false)
 	})
 
-	test('bounded cure progress and reward minima roll back custody and reserve changes', async () => {
+	test('bounded cure progress and reward minima roll back custody and REP reward changes', async () => {
 		await activate(0n)
 		await setPrice(3n * ATTO_ETH_PER_ETH)
 		const bounds = await cureBounds()
 		await expect(caller.simulateContract({ abi: capitalArtifact.abi, address: capital, functionName: 'cureAuctionBid', args: [2n, { ...bounds, minimumRemoved: 0n }] })).rejects.toThrow('Cure progress minimum missing')
 		await expect(caller.simulateContract({ abi: capitalArtifact.abi, address: capital, functionName: 'cureAuctionBid', args: [2n, { ...bounds, minimumRemoved: 2n * LOT }] })).rejects.toThrow('Cure progress below minimum')
-		await expect(caller.simulateContract({ abi: capitalArtifact.abi, address: capital, functionName: 'cureAuctionBid', args: [2n, { ...bounds, minimumReward: RESERVE + 1n }] })).rejects.toThrow('Cure reward below minimum')
-		const data = encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'cureAuctionBid', args: [2n, { ...bounds, minimumReward: RESERVE + 1n }] })
+		await expect(caller.simulateContract({ abi: capitalArtifact.abi, address: capital, functionName: 'cureAuctionBid', args: [2n, { ...bounds, minimumReward: CURE_REWARD + 1n }] })).rejects.toThrow('Cure reward below minimum')
+		const data = encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'cureAuctionBid', args: [2n, { ...bounds, minimumReward: CURE_REWARD + 1n }] })
 		await sendReverted(data, 2_000_000n)
 		expect((await owner(second.account.address)).positionId).toBe(0n)
 		expect((await owner(caller.account.address)).feesAttoEth).toBe(0n)
-		expect(await caller.getBalance({ address: adapter })).toBe(3n * RESERVE)
+		expect(await caller.getBalance({ address: adapter })).toBe(0n)
 		await materialize(2n)
 		const id = (await owner(second.account.address)).positionId
 		await expect(caller.simulateContract({ abi: capitalArtifact.abi, address: capital, functionName: 'cureAuctionBid', args: [2n, bounds] })).rejects.toThrow('Auction bid already materialized')
-		await expect(caller.simulateContract({ abi: capitalArtifact.abi, address: capital, functionName: 'cureWithBounds', args: [id, { ...bounds, minimumReward: RESERVE + 1n }] })).rejects.toThrow('Cure reward below minimum')
+		await expect(caller.simulateContract({ abi: capitalArtifact.abi, address: capital, functionName: 'cureWithBounds', args: [id, { ...bounds, minimumReward: CURE_REWARD + 1n }] })).rejects.toThrow('Cure reward below minimum')
 		expect((await position(id)).commitment).toBe(LOT)
-		expect(await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'positionExecutionReserveAttoEth', args: [id] })).toBe(RESERVE)
-		await writeContractAndWait(caller, () => caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'cureWithBounds', args: [id, { ...bounds, minimumReward: RESERVE }] }))
+		await writeContractAndWait(caller, () => caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'cureWithBounds', args: [id, { ...bounds, minimumReward: CURE_REWARD }] }))
 		expect((await position(id)).commitment).toBe(0n)
-		expect((await owner(caller.account.address)).feesAttoEth).toBe(RESERVE)
+		expect((await owner(caller.account.address)).feesAttoRep).toBe(CURE_REWARD)
 	})
 
-	test('a funded cure compensates the complete materialization transaction and preserves all unpaid reserve', async () => {
+	test('the virtual cure REP reward is independent of materialization gas', async () => {
 		await activate(0n)
-		const fundedReserve = 10n ** 16n
-		await writeContractAndWait(caller, () => caller.writeContract({ abi: adapterArtifact.abi, address: adapter, functionName: 'setReservePerLot', args: [fundedReserve], value: 3n * (fundedReserve - RESERVE) }))
 		await setPrice(3n * ATTO_ETH_PER_ETH)
-		const gasPrice = 10n ** 9n
-		const bounds = await cureBounds(LOT, RESERVE)
-		const hash = await writeContractAndWait(caller, () => caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'cureAuctionBid', args: [2n, bounds], gasPrice }))
-		const receipt = await caller.waitForTransactionReceipt({ hash })
-		const reward = (await owner(caller.account.address)).feesAttoEth
-		expect(reward).toBeGreaterThanOrEqual(receipt.gasUsed * gasPrice)
-		expect(reward).toBeLessThan(fundedReserve)
-		const id = (await owner(second.account.address)).positionId
-		expect(await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'positionExecutionReserveAttoEth', args: [id] })).toBe(fundedReserve - reward)
-		expect(await caller.getBalance({ address: adapter })).toBe(2n * fundedReserve)
+		const bounds = await cureBounds(LOT, CURE_REWARD)
+		await writeContractAndWait(caller, () => caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'cureAuctionBid', args: [2n, bounds], gasPrice: 10n ** 9n }))
+		expect((await owner(caller.account.address)).feesAttoRep).toBe(CURE_REWARD)
+		expect((await owner(caller.account.address)).feesAttoEth).toBe(0n)
+		expect(await caller.getBalance({ address: adapter })).toBe(0n)
 		expect(await position(1n)).toMatchObject({ rep: 2n * REP, commitment: 2n * LOT })
 	})
 
@@ -253,7 +227,6 @@ describe('Statoblast: individually owned lazy auction capital', () => {
 		await writeContractAndWait(caller, () => caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'cure', args: [id] }))
 		expect(await position(id)).toMatchObject({ rep: REP, commitment: LOT })
 		expect((await owner(caller.account.address)).feesAttoEth).toBe(0n)
-		expect(await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'positionExecutionReserveAttoEth', args: [id] })).toBe(RESERVE)
 	})
 
 	test('a bounded takeover materializes one distressed winner and isolates its principal loss and earned fees', async () => {
@@ -263,7 +236,6 @@ describe('Statoblast: individually owned lazy auction capital', () => {
 		await writeContractAndWait(caller, () => caller.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'mint', args: [caller.account.address, REP] }))
 		await writeContractAndWait(caller, () => caller.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'approve', args: [capital, REP] }))
 		await writeContractAndWait(caller, () => caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'depositFor', args: [caller.account.address, REP] }))
-		await writeContractAndWait(caller, () => caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'fundExecutionReserve', args: [caller.account.address], value: RESERVE }))
 		await getAnvilWindowEthereum().advanceTime(3601n)
 		const bounds = { maximumOwnerPrincipal: 2n * REP, maximumOwnerCommitment: LOT, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'acceptedPriceEpoch' }), expectedSourceBatch: 0n }
 		await expect(caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'takeOverAuctionBid', args: [2n, LOT, REP, REP, { ...bounds, maximumOwnerPrincipal: 2n * REP - 1n }] })).rejects.toThrow('Takeover owner principal exceeds limit')
@@ -285,9 +257,9 @@ describe('Statoblast: individually owned lazy auction capital', () => {
 		await writeContractAndWait(first, () => first.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'claimEarnings' }))
 		expect((await owner(second.account.address)).feesAttoEth).toBe(20n)
 		expect((await owner(first.account.address)).feesAttoEth).toBe(0n)
-		// The first owner has claimed 40 attoETH, the second owns 20; every reserve
-		// remains in capital custody and cannot become provider fee income.
-		expect(await caller.getBalance({ address: capital })).toBe(3n * RESERVE + 20n)
+		// The first owner has claimed 40 attoETH; only the second owner
+		// still owns the remaining 20 attoETH in capital custody.
+		expect(await caller.getBalance({ address: capital })).toBe(20n)
 	})
 
 	test('frozen ownership detaches after backing migration without moving principal or changing the snapshot', async () => {
@@ -305,7 +277,7 @@ describe('Statoblast: individually owned lazy auction capital', () => {
 		expect(await position(1n)).toMatchObject({ rep: REP, commitment: LOT })
 	})
 
-	test('a late unchosen winner can recover its work reserve but cannot revive migrated principal', async () => {
+	test('a late unchosen winner cannot revive migrated principal', async () => {
 		await activate()
 		const timestamp = (await caller.getBlock()).timestamp
 		await writeContractAndWait(caller, () => caller.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'setFork', args: [timestamp] }))
@@ -313,8 +285,6 @@ describe('Statoblast: individually owned lazy auction capital', () => {
 		await getAnvilWindowEthereum().advanceTime(8n * 7n * 86_400n + 1n)
 		await materialize(2n)
 		await expect(second.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'withdrawPrincipal', args: [REP, second.account.address] })).rejects.toThrow('Capital universe inactive')
-		await writeContractAndWait(second, () => second.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'withdrawExecutionReserve', args: [RESERVE] }))
-		expect(await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'positionExecutionReserveAttoEth', args: [(await owner(second.account.address)).positionId] })).toBe(0n)
 		expect(await caller.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [capital] })).toBe(0n)
 	})
 })

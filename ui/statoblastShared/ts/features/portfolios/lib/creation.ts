@@ -7,7 +7,6 @@ export type PortfolioCreationDraft = {
 	purchaseFeePercent: string
 	minimumPurchaseFee: string
 	minimumCommitment: string
-	minimumExecutionReserve: string
 	minimumOutcomeRate: string
 	rewardVestingHours: string
 	reportingFee: string
@@ -20,7 +19,6 @@ export const defaultPortfolioCreationDraft = (): PortfolioCreationDraft => ({
 	purchaseFeePercent: '1',
 	minimumPurchaseFee: '0.001',
 	minimumCommitment: '1',
-	minimumExecutionReserve: '0.001',
 	minimumOutcomeRate: '0.01',
 	rewardVestingHours: '24',
 	reportingFee: '0.05',
@@ -47,7 +45,6 @@ export function parsePortfolioCreationEconomics(draft: PortfolioCreationDraft) {
 		purchaseFeeBps: portfolioBasisPoints(draft.purchaseFeePercent, 'Purchase fee'),
 		minimumPurchaseFeeAttoEth: parsePortfolioAmount(draft.minimumPurchaseFee),
 		minimumCommitmentAttoEth: parsePortfolioAmount(draft.minimumCommitment),
-		minimumExecutionReserveAttoEth: parsePortfolioAmount(draft.minimumExecutionReserve),
 		minimumOutcomeRate: parsePortfolioAmount(draft.minimumOutcomeRate),
 		rewardVestingSeconds: (parsePortfolioAmount(draft.rewardVestingHours) * 3600n) / 10n ** 18n,
 		reportingFeeAttoEth: parsePortfolioAmount(draft.reportingFee),

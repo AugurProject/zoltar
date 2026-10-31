@@ -79,7 +79,6 @@
 		"maximumTotalPrincipalRep": "0",
 		"maximumCommitmentEth": "0",
 		"maximumOwnFundingRep": "0",
-		"maximumReserveFundingEth": "0",
 		"minimumNetRewardEth": "0.001",
 		"walletReserveEth": "0.01",
 		"targetHealthFactorBps": 15000,

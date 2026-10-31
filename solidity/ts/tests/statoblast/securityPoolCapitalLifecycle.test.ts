@@ -19,13 +19,13 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 			'function acceptPrice(address feed,uint256 price,uint48 validUntil)',
 			'function beginForkImport()',
 			'function authorize(uint256 commitment,uint256 reportId,bool useReport,uint256 minimumCommitment)',
-			'function importChoice(address owner,(uint256 rep,uint256 commitment,uint96 batch,uint256 executionReserveAttoEth,uint256 remainingCommitment) position,uint256 target) payable',
+			'function importChoice(address owner,(uint256 rep,uint256 commitment,uint96 batch,uint256 remainingCommitment) position,uint256 target)',
 		])
 		for (const data of [
 			encodeFunctionData({ abi: delegateAbi, functionName: 'acceptPrice', args: [fixture.harness.address, E, 1_000_000] }),
 			encodeFunctionData({ abi: delegateAbi, functionName: 'beginForkImport' }),
 			encodeFunctionData({ abi: delegateAbi, functionName: 'authorize', args: [E, 0n, false, E / 1_000n] }),
-			encodeFunctionData({ abi: delegateAbi, functionName: 'importChoice', args: [sender.account.address, { rep: 2n * E, commitment: E, batch: 0n, executionReserveAttoEth: E / 10n, remainingCommitment: 0n }, 10_000n] }),
+			encodeFunctionData({ abi: delegateAbi, functionName: 'importChoice', args: [sender.account.address, { rep: 2n * E, commitment: E, batch: 0n, remainingCommitment: 0n }, 10_000n] }),
 		])
 			await expect(sender.call({ to: delegate, data })).rejects.toThrow('Only capital ledger context')
 		const runtime = await sender.getCode({ address: fixture.capital.address })
@@ -63,7 +63,6 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 			const before = await sender.readContract({ ...fixture.token, functionName: 'balanceOf', args: [holder.account.address] })
 			await writeContractAndWait(holder, () => holder.writeContract({ ...fixture.capital, functionName: 'withdrawPrincipal', args: [amount, holder.account.address] }))
 			expect(await sender.readContract({ ...fixture.token, functionName: 'balanceOf', args: [holder.account.address] })).toBe(before + amount)
-			await expect(writeContractAndWait(holder, () => holder.writeContract({ ...fixture.capital, functionName: 'withdrawExecutionReserve', args: [1n] }))).rejects.toThrow('Reserve follows fork choice')
 		}
 		expect(await sender.readContract({ ...fixture.token, functionName: 'balanceOf', args: [fixture.capital.address] })).toBe(0n)
 		expect(await sender.readContract({ ...fixture.capital, functionName: 'totalFreeAttoRep' })).toBe(0n)
@@ -132,22 +131,14 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 				const outstandingEth = await sender.readContract({ ...streams, functionName: 'outstandingEth' })
 				const outstandingRep = await sender.readContract({ ...streams, functionName: 'outstandingRep' })
 				const custodyRep = (await sender.readContract({ ...fixture.token, functionName: 'balanceOf', args: [fixture.capital.address] })) + (await sender.readContract({ ...fixture.token, functionName: 'balanceOf', args: [fixture.harness.address] }))
-				const reserve = (
-					await Promise.all(
-						[0, 1, 2, 3].map(async i => {
-							const owner = await fixture.owner(i)
-							return owner.executionReserveAttoEth + (await sender.readContract({ ...fixture.capital, functionName: 'positionExecutionReserveAttoEth', args: [owner.positionId] }))
-						}),
-					)
-				).reduce((a, b) => a + b, 0n)
 				expect((await sender.readContract({ ...fixture.capital, functionName: 'totals' }))[1]).toBe(totalK)
 				expect(await sender.readContract({ ...fixture.commitments, functionName: 'eligibleCommitment', args: [price] })).toBe(healthy)
 				expect(await sender.readContract({ ...fixture.commitments, functionName: 'eligibleActiveCommitment', args: [price] })).toBe(active)
 				expect(custodyRep).toBe(principal + feesRep + outstandingRep)
 				const burnedRep = initialSupply + fundedRep - (await sender.readContract({ ...fixture.token, functionName: 'totalSupply' }))
 				expect(fundedRep).toBe(feesRep + outstandingRep + paidRep + burnedRep)
-				expect(await sender.getBalance({ address: fixture.capital.address })).toBe(reserve + feesEth + outstandingEth)
-				expect((await sender.getBalance({ address: fixture.capital.address })) + (await sender.getBalance({ address: fixture.harness.address })) + paidEth).toBe(400n * E + fundedEth)
+				expect(await sender.getBalance({ address: fixture.capital.address })).toBe(feesEth + outstandingEth)
+				expect((await sender.getBalance({ address: fixture.capital.address })) + (await sender.getBalance({ address: fixture.harness.address })) + paidEth).toBe(fundedEth)
 			}
 			const action = async (label: string, execute: () => Promise<unknown>, update: () => void = () => {}) => {
 				trace.push(label)
@@ -161,6 +152,7 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 			}
 			const demand = (value: bigint) => writeContractAndWait(sender, () => sender.writeContract({ ...fixture.harness, functionName: 'setDemand', args: [value] }))
 			await check()
+			await action('limit cure capacity to the reward-free hard floor', () => demand(260n * U))
 			await action('target alice 12000', () => writeContractAndWait(sender, () => sender.writeContract({ ...fixture.capital, functionName: 'setHealthTarget', args: [12_000n] })))
 			await action(
 				'adverse price with unused nominal capacity',
@@ -170,7 +162,7 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 				},
 			)
 			await action(
-				'minimal cure pays progress without moving owner principal',
+				'capacity-limited cure reaches the exact floor without charging REP',
 				() => writeContractAndWait(fixture.client(2), () => fixture.client(2).writeContract({ ...fixture.capital, functionName: 'cure', args: [aliceId] })),
 				() => {
 					alice.commitment = 60n * U
@@ -184,7 +176,7 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 				},
 			)
 			await action(
-				'authorize restored capacity funds its execution reserve again',
+				'authorize restored capacity with existing REP',
 				() => fixture.authorize(0, 100n * U),
 				() => {
 					alice.commitment = 100n * U
@@ -305,7 +297,6 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 			for (let i = 0; i < expected.length; i++) {
 				const owner = await fixture.owner(i)
 				const position = await fixture.position(owner.positionId)
-				const reserve = await sender.readContract({ ...fixture.capital, functionName: 'positionExecutionReserveAttoEth', args: [owner.positionId] })
 				let importedBatch = 0n
 				if (position.batch !== 0n) importedBatch = position.batch === current ? 1n : 2n
 				await action(`export choice owner ${i}`, () => writeContractAndWait(sender, () => sender.writeContract({ ...fixture.harness, functionName: 'exportChoice', args: [fixture.client(i).account.address] })))
@@ -314,8 +305,7 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 					sender.writeContract({
 						...childHarness,
 						functionName: 'importChoice',
-						args: [fixture.client(i).account.address, { rep: position.rep, commitment: position.commitment, batch: importedBatch, executionReserveAttoEth: reserve, remainingCommitment: position.remainingCommitment }, owner.targetHealthFactorBps || 10_000n],
-						value: reserve + owner.executionReserveAttoEth,
+						args: [fixture.client(i).account.address, { rep: position.rep, commitment: position.commitment, batch: importedBatch, remainingCommitment: position.remainingCommitment }, owner.targetHealthFactorBps || 10_000n],
 					}),
 				)
 			}
@@ -338,7 +328,7 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 			await writeContractAndWait(fixture.client(1), () => fixture.client(1).writeContract({ abi: capitalArtifact.abi, address: child.ledger, functionName: 'withdrawPrincipal', args: [420n * U, fixture.client(1).account.address] }))
 			expect(await sender.readContract({ abi: tokenArtifact.abi, address: child.token, functionName: 'balanceOf', args: [fixture.client(1).account.address] })).toBe(420n * U)
 			expect(await sender.readContract({ abi: tokenArtifact.abi, address: child.token, functionName: 'balanceOf', args: [child.ledger] })).toBe(principal - 420n * U)
-			expect(await sender.readContract({ abi: capitalArtifact.abi, address: child.ledger, functionName: 'ownerAccount', args: [fixture.client(1).account.address] })).toMatchObject({ positionId: 0n, freeAttoRep: 0n, executionReserveAttoEth: 100n * E })
+			expect(await sender.readContract({ abi: capitalArtifact.abi, address: child.ledger, functionName: 'ownerAccount', args: [fixture.client(1).account.address] })).toMatchObject({ positionId: 0n, freeAttoRep: 0n })
 			for (let i = 0; i < expected.length; i++) {
 				const owner = await fixture.owner(i)
 				const position = await fixture.position(owner.positionId)

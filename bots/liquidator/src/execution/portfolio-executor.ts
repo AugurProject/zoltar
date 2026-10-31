@@ -7,7 +7,7 @@ import { portfolioTarget, samePortfolioTarget, type PortfolioTarget } from '#mon
 import { createPublicClient, encodeFunctionData, type Account, type Chain, type Transport, type WalletClient, type createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { settledQuorumValue, sharedQuorumReadTargets } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { buildPortfolioCapitalTakeOverWithBoundsRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
-import { buildPortfolioCapitalDepositRequest, buildPortfolioCapitalFundExecutionReserveRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { buildPortfolioCapitalDepositRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { submitCall } from './liquidation-executor.ts'
 
 export class PortfolioOpportunityExpired extends Error {
@@ -70,10 +70,10 @@ export async function executePortfolioTakeover(
 	const { observation, plan } = current
 	const expectedAcceptedPriceEpoch = observation.acceptedPriceEpoch
 	const base = { owner: wallet.account.address, capitalLedger: observation.snapshot.capitalLedger }
-	const kind = plan.ownFunding > 0n || plan.reserveFunding > 0n ? 'deposit' : 'liquidation'
+	const kind = plan.ownFunding > 0n ? 'deposit' : 'liquidation'
 	let request: { to: typeof base.capitalLedger; data: `0x${string}`; value: bigint }
 	let label: string
-	let action: 'approval' | 'principal' | 'reserve' | 'takeover'
+	let action: 'approval' | 'principal' | 'takeover'
 	if (plan.ownFunding > 0n && current.allowance < plan.ownFunding) {
 		action = 'approval'
 		request = { to: observation.snapshot.repToken, data: encodeFunctionData({ abi: erc20Abi, functionName: 'approve', args: [base.capitalLedger, plan.ownFunding] }), value: 0n }
@@ -82,10 +82,6 @@ export async function executePortfolioTakeover(
 		action = 'principal'
 		request = buildPortfolioCapitalDepositRequest({ ...base, amountAttoRep: plan.ownFunding })
 		label = 'Fund portfolio owner principal; rescreen next cycle'
-	} else if (plan.reserveFunding > 0n) {
-		action = 'reserve'
-		request = buildPortfolioCapitalFundExecutionReserveRequest({ ...base, amountAttoEth: plan.reserveFunding })
-		label = 'Fund portfolio execution reserve; rescreen next cycle'
 	} else {
 		action = 'takeover'
 		const bounds = { maximumOwnerPrincipal: plan.maximumOwnerPrincipal, maximumOwnerCommitment: settings.portfolioPolicy.maximumCommitmentAttoEth, expectedTargetHealthFactorBps: settings.portfolioPolicy.targetHealthFactorBps, expectedAcceptedPriceEpoch, expectedSourceBatch: plan.expectedSourceBatch }
@@ -127,9 +123,9 @@ export async function executePortfolioTakeover(
 }
 
 /** @internal Tests exercise each prerequisite's final funding, exposure, and cohort revalidation. */
-export function assertPortfolioPlanStillAllowed(original: PortfolioTakeover, current: PortfolioTakeover, action: 'approval' | 'principal' | 'reserve' | 'takeover') {
+export function assertPortfolioPlanStillAllowed(original: PortfolioTakeover, current: PortfolioTakeover, action: 'approval' | 'principal' | 'takeover') {
+	if (original.expectedTotalCommitment !== current.expectedTotalCommitment || original.expectedDemand !== current.expectedDemand) throw new PortfolioOpportunityExpired('Portfolio cure capacity changed before submission')
 	if (original.commitment !== current.commitment || original.expectedSourceBatch !== current.expectedSourceBatch || original.maximumOwnerPrincipal > current.maximumOwnerPrincipal) throw new PortfolioOpportunityExpired('Portfolio exposure or cohort changed before submission')
 	if ((action === 'approval' || action === 'principal') && original.ownFunding !== current.ownFunding) throw new PortfolioOpportunityExpired('Portfolio funding requirement changed before submission')
-	if (action === 'reserve' && original.reserveFunding !== current.reserveFunding) throw new PortfolioOpportunityExpired('Portfolio reserve requirement changed before submission')
-	if (action === 'takeover' && (current.ownFunding !== 0n || current.reserveFunding !== 0n || current.minimumAward < original.minimumAward || current.maximumOwnRep > original.maximumOwnRep)) throw new PortfolioOpportunityExpired('Portfolio takeover terms changed before submission')
+	if (action === 'takeover' && (current.ownFunding !== 0n || current.minimumAward < original.minimumAward || current.maximumOwnRep > original.maximumOwnRep)) throw new PortfolioOpportunityExpired('Portfolio takeover terms changed before submission')
 }

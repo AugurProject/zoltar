@@ -1,5 +1,5 @@
 import type { OperatorSettings } from '#config/settings'
-import { portfolioCurePlan } from '#core/portfolio-cure'
+import { portfolioCurePlan, portfolioEarningsCoverGas } from '#core/portfolio-cure'
 import { portfolioTarget, samePortfolioTarget, type PortfolioTarget } from '#monitoring/portfolio-auction'
 import type { PortfolioObservation } from '#monitoring/portfolio-monitor'
 import type { RuntimeState } from '#state/operator-state'
@@ -45,8 +45,7 @@ export async function simulatePortfolioCureReward(wallet: Wallet, settings: Oper
 				// Isolate reward accounting from RPC gas-ceiling affordability. Only
 				// the caller's ETH balance changes; final simulation uses real funds.
 				balanceOverride: PREFLIGHT_BALANCE,
-				// Use the same signed fee policy as estimation and final simulation;
-				// eth_call's default zero fee suppresses gas-dependent cure rewards.
+				// Use the same signed fee policy as estimation and final simulation.
 				maxFeePerGas,
 				maxPriorityFeePerGas: MAX_PRIORITY_FEE_PER_GAS,
 				data: encodeFunctionData({
@@ -68,8 +67,8 @@ export async function simulatePortfolioCureReward(wallet: Wallet, settings: Oper
 			const removed = decodeFunctionResult({ abi: capitalAbi, functionName: typeof target === 'bigint' ? 'cureWithBounds' : 'cureAuctionBid', data: cure.returnData })
 			if (typeof removed !== 'bigint') throw new Error('Cure returned invalid progress')
 			const after = decodeFunctionResult({ abi: capitalAbi, functionName: 'storedOwnerAccount', data: account.returnData })
-			if (after.feesAttoEth < before.feesAttoEth || (await client.getBlock({ blockNumber })).hash !== snapshot.blockHash) throw new Error('Cure reward snapshot changed')
-			return { endpoint, value: { removed, reward: after.feesAttoEth - before.feesAttoEth } }
+			if (after.feesAttoRep < before.feesAttoRep || (await client.getBlock({ blockNumber })).hash !== snapshot.blockHash) throw new Error('Cure reward snapshot changed')
+			return { endpoint, value: { removed, reward: after.feesAttoRep - before.feesAttoRep } }
 		}),
 		settings.connectivity.rpcQuorum,
 	)
@@ -92,10 +91,10 @@ export async function executePortfolioCure(
 		const position = current.observation.positions.find(position => samePortfolioTarget(portfolioTarget(position), targetId))
 		if (position === undefined) throw new PortfolioOpportunityExpired('Cure target was materialized or removed; rescreen its ordinary position')
 		const plan = portfolioCurePlan(current.observation, position, settings, await priceAllowed(current.observation))
-		if (plan === undefined) throw new PortfolioOpportunityExpired('No funded profitable cure progress is available')
+		if (plan === undefined) throw new PortfolioOpportunityExpired('No profitable REP-funded cure progress is available')
 		const quote = await execution.simulate(wallet, settings, pool, current.observation, targetId)
-		if (quote.removed <= 0n || quote.reward > plan.rewardCeiling || quote.reward < plan.gasBudget + settings.portfolioPolicy.minimumNetRewardAttoEth) throw new PortfolioOpportunityExpired('Simulated cure reward does not cover cure, claim and minimum profit')
-		return { observation: current.observation, quote, minimumReward: plan.gasBudget + settings.portfolioPolicy.minimumNetRewardAttoEth }
+		if (quote.removed <= 0n || quote.reward > plan.rewardCeiling || quote.reward < plan.minimumReward) throw new PortfolioOpportunityExpired('Simulated cure reward does not cover cure, claim and minimum profit')
+		return { observation: current.observation, quote, minimumReward: plan.minimumReward }
 	}
 	const current = await refresh()
 	const bounds = cureBounds(current.observation, current.quote.removed, current.minimumReward)
@@ -134,19 +133,13 @@ export async function executePortfolioCure(
 }
 
 /** Reward credits are collected separately, with no principal or commitment mutation. */
-export async function executePortfolioEarnings(wallet: Wallet, settings: OperatorSettings, state: RuntimeState, pool: RpcPool, target: PortfolioObservation, execution = { refresh: refreshPortfolioExecution, submit: submitCall }) {
+export async function executePortfolioEarnings(wallet: Wallet, settings: OperatorSettings, state: RuntimeState, pool: RpcPool, target: PortfolioObservation, priceAllowed: (observation: PortfolioObservation) => Promise<boolean>, execution = { refresh: refreshPortfolioExecution, submit: submitCall }) {
 	if (!settings.portfolioPolicy.allowFundedTakeovers || !settings.runtime.execute) throw new Error('Portfolio automation is disabled')
 	if (state.pendingTransactions.length !== 0 || state.pendingStagedOperations.length !== 0) throw new Error('Pending recovery blocks portfolio earnings withdrawal')
 	const refresh = async () => {
 		const current = await execution.refresh(wallet, settings, state.portfolioScopes, pool, target, undefined)
 		const observation = current.observation
-		if (
-			!observation.selected ||
-			!observation.approvedUniverse ||
-			observation.snapshot.ownerAccount.feesAttoEth < settings.strategy.maximumGasCostAttoEth + settings.portfolioPolicy.minimumNetRewardAttoEth ||
-			observation.walletAttoEth < settings.strategy.maximumGasCostAttoEth + settings.portfolioPolicy.walletReserveAttoEth
-		)
-			throw new PortfolioOpportunityExpired('Portfolio earnings do not cover claim gas and minimum profit')
+		if (!portfolioEarningsCoverGas(observation, settings, await priceAllowed(observation))) throw new PortfolioOpportunityExpired('Portfolio earnings do not cover claim gas and minimum profit')
 		return observation
 	}
 	const current = await refresh()

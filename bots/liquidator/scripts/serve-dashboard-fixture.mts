@@ -282,15 +282,12 @@ const server = startDashboardServer(Number(process.env['DASHBOARD_FIXTURE_PORT']
 				nextAuctionBidId: '33',
 				nextPositionId: '33',
 				positions: [
-					{ id: '12', label: 'Position 12', commitmentEth: '100', distressed: true, reserveEth: '0.01', requiredReserveEth: '0.1', reserveAdequate: false, retirementStatus: 'Earlier requests reserve available capacity', stalledRetirement: true, takeoverStatus: 'Receiver and target retirement cohorts differ' },
+					{ id: '12', label: 'Position 12', commitmentEth: '100', distressed: true, retirementStatus: 'Earlier requests reserve available capacity', stalledRetirement: true, takeoverStatus: 'Receiver and target retirement cohorts differ' },
 					{
 						id: 'auction:19',
 						label: 'Auction bid 19 · awaiting individual position',
 						commitmentEth: '25',
 						distressed: true,
-						reserveEth: '0.025',
-						requiredReserveEth: '0.025',
-						reserveAdequate: true,
 						retirementStatus: 'Not retiring',
 						stalledRetirement: false,
 						takeoverStatus: 'Funded takeover ready; automation is disabled',

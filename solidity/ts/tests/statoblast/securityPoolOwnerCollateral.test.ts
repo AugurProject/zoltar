@@ -60,7 +60,6 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		for (const client of [alice, bob, keeper]) {
 			await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'mint', args: [client.account.address, 10_000n * E] }))
 			await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'approve', args: [ledger, 10_000n * E] }))
-			await writeContractAndWait(client, () => client.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'fundExecutionReserve', args: [client.account.address], value: 100n * E }))
 		}
 		await price(E)
 		await setBaselineSnapshot()

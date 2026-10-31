@@ -5,7 +5,6 @@ export type PortfolioEconomicsConfig = {
 	annualFeeBps: bigint
 	minimumPurchaseFeeAttoEth: bigint
 	minimumCommitmentAttoEth: bigint
-	minimumExecutionReserveAttoEth: bigint
 	minimumOutcomeRate: bigint
 	rewardVestingSeconds: bigint
 	reportingFeeAttoEth: bigint
@@ -36,7 +35,7 @@ export function validatePortfolioEconomics(config: PortfolioEconomicsConfig) {
 	if (config.purchaseFeeBps > 10_000n) throw new Error('Purchase fee cannot exceed 100%.')
 	if (config.annualFeeBps > 10_000n) throw new Error('Annual fee cannot exceed 100%.')
 	if (config.serviceFeeBps > 10_000n) throw new Error('Maintenance fee share cannot exceed 100%.')
-	if (config.minimumCommitmentAttoEth === 0n || config.minimumExecutionReserveAttoEth === 0n || config.rewardVestingSeconds === 0n) throw new Error('Minimum commitment, execution reserve and fee vesting duration must be positive.')
+	if (config.minimumCommitmentAttoEth === 0n || config.rewardVestingSeconds === 0n) throw new Error('Minimum commitment and fee vesting duration must be positive.')
 	if (config.minimumOutcomeRate === 0n || config.minimumOutcomeRate > 10n ** 18n) throw new Error('Minimum outcome exchange rate must be positive and at most one.')
 }
 
@@ -77,8 +76,6 @@ export {
 	buildPortfolioCapitalSetHealthRequest,
 	buildPortfolioCapitalDepositAndSetHealthRequest,
 	buildPortfolioCapitalAuthorizeRequest,
-	buildPortfolioCapitalFundExecutionReserveRequest,
-	buildPortfolioCapitalWithdrawExecutionReserveRequest,
 	buildPortfolioCapitalRequestRetirementRequest,
 	buildPortfolioCapitalCancelRetirementRequest,
 	buildPortfolioCapitalServeRetirementRequest,
@@ -91,8 +88,6 @@ export { buildPortfolioCapitalCureRequest } from './securityPoolPortfolioCapital
 /** @public Explicitly bounded commitment takeovers for external keeper implementations. */
 export { buildPortfolioCapitalTakeOverRequest } from './securityPoolPortfolioCapital.js'
 export { buildPortfolioCapitalTakeOverWithBoundsRequest } from './securityPoolPortfolioCapital.js'
-/** @public Quote the execution reserve needed before an external client authorizes commitments. */
-export { requiredPortfolioExecutionReserve } from './securityPoolPortfolioCapital.js'
 export { buildPortfolioMintRequest, loadPortfolioMintQuote, type PortfolioMintQuote } from './securityPoolPortfolioMint.js'
 /** @public External clients can register an admitted question independently of purchasing shares. */
 export { buildPortfolioAddQuestionRequest } from './securityPoolPortfolioMint.js'

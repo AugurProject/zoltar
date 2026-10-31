@@ -48,7 +48,7 @@ describe('Statoblast: takeover owner consent bounds', () => {
 	})
 
 	for (const mutation of ['principal', 'commitment', 'target', 'price', 'cohort'] as const) {
-		test(`a changed ${mutation} bound reverts atomically without consuming principal or reserve`, async () => {
+		test(`a changed ${mutation} bound reverts atomically without consuming principal or changing obligations`, async () => {
 			const { source, bounds } = await prepare()
 			const buyer = fixture.client(1)
 			if (mutation === 'principal') bounds.maximumOwnerPrincipal--
@@ -59,14 +59,12 @@ describe('Statoblast: takeover owner consent bounds', () => {
 			const previous = {
 				source: await fixture.position(source),
 				buyer: await fixture.owner(1),
-				reserve: await buyer.readContract({ ...fixture.capital, functionName: 'positionExecutionReserveAttoEth', args: [source] }),
 				balance: await buyer.readContract({ ...fixture.token, functionName: 'balanceOf', args: [fixture.capital.address] }),
 			}
 			const reason = { principal: 'Takeover owner principal exceeds limit', commitment: 'Takeover owner commitment exceeds limit', target: 'Takeover owner target changed', price: 'Takeover price epoch changed', cohort: 'Takeover source cohort changed' }[mutation]
 			await expect(writeContractAndWait(buyer, () => buyer.writeContract({ abi: boundedAbi, address: fixture.capital.address, functionName: 'takeOverWithBounds', args: [source, 50n * E, 1n, 500n * E, bounds] }))).rejects.toThrow(reason)
 			expect(await fixture.position(source)).toEqual(previous.source)
 			expect(await fixture.owner(1)).toEqual(previous.buyer)
-			expect(await buyer.readContract({ ...fixture.capital, functionName: 'positionExecutionReserveAttoEth', args: [source] })).toBe(previous.reserve)
 			expect(await buyer.readContract({ ...fixture.token, functionName: 'balanceOf', args: [fixture.capital.address] })).toBe(previous.balance)
 		})
 	}

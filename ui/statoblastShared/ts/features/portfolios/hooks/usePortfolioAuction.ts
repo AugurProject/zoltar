@@ -28,7 +28,6 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 	const lotsInput = useSignal('')
 	const repInput = useSignal('')
 	const healthInput = useSignal('120')
-	const reserveInput = useSignal('')
 	const pageStart = useSignal(0n)
 	const version = useSignal(0)
 	const loaded = useSignal<{ identity: string; key: string; snapshot?: PortfolioAuctionSnapshot | undefined; error?: string } | undefined>(undefined)
@@ -42,7 +41,6 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 		lotsInput.value = ''
 		repInput.value = ''
 		healthInput.value = '120'
-		reserveInput.value = ''
 		pageStart.value = 0n
 	}, [backend, bidder, identity])
 	const key = `${identity}:${fork?.blockHash}:${pageStart.value}:${version.value}`
@@ -73,17 +71,12 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 	const lots = portfolioUnsignedId(lotsInput.value)
 	const minimumAttoRepPerLot = portfolioAmountOrUndefined(repInput.value)
 	const targetHealthFactorBps = /^\d+(\.\d{0,2})?$/.test(healthInput.value.trim()) ? parseUnits(healthInput.value.trim(), 2) : undefined
-	const executionReservePerLotAttoEth = reserveInput.value.trim() === '' ? auction?.minimumExecutionReservePerLotAttoEth : portfolioAmountOrUndefined(reserveInput.value)
-	const inputReason =
-		(lots === undefined || lots === 0n ? copy.lotsInvalid : undefined) ??
-		(minimumAttoRepPerLot === undefined || minimumAttoRepPerLot === 0n ? copy.repInvalid : undefined) ??
-		(targetHealthFactorBps === undefined || targetHealthFactorBps < 10_000n ? copy.healthInvalid : undefined) ??
-		(executionReservePerLotAttoEth === undefined ? copy.reserveInvalid : undefined)
+	const inputReason = (lots === undefined || lots === 0n ? copy.lotsInvalid : undefined) ?? (minimumAttoRepPerLot === undefined || minimumAttoRepPerLot === 0n ? copy.repInvalid : undefined) ?? (targetHealthFactorBps === undefined || targetHealthFactorBps < 10_000n ? copy.healthInvalid : undefined)
 	let quote: ReturnType<typeof quotePortfolioAuctionBid> | undefined
 	let quoteError: string | undefined
-	if (biddingReason === undefined && inputReason === undefined && snapshot !== undefined && lots !== undefined && minimumAttoRepPerLot !== undefined && targetHealthFactorBps !== undefined && executionReservePerLotAttoEth !== undefined) {
+	if (biddingReason === undefined && inputReason === undefined && snapshot !== undefined && lots !== undefined && minimumAttoRepPerLot !== undefined && targetHealthFactorBps !== undefined) {
 		try {
-			quote = quotePortfolioAuctionBid(snapshot, { lots, minimumAttoRepPerLot, targetHealthFactorBps, executionReservePerLotAttoEth })
+			quote = quotePortfolioAuctionBid(snapshot, { lots, minimumAttoRepPerLot, targetHealthFactorBps })
 		} catch (error) {
 			quoteError = getErrorMessage(error, copy.quoteError)
 		}
@@ -137,7 +130,7 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 	const verifyQuote = (latest: PortfolioAuctionSnapshot) => {
 		if (quote === undefined) throw new Error(copy.quoteError)
 		const fresh = quotePortfolioAuctionBid(latest, quote)
-		if (fresh.totalAttoEth !== quote.totalAttoEth || fresh.minimumPrincipalAttoRep !== quote.minimumPrincipalAttoRep) throw new Error(copy.fundingChanged)
+		if (fresh.bidAttoEth !== quote.bidAttoEth || fresh.minimumPrincipalAttoRep !== quote.minimumPrincipalAttoRep) throw new Error(copy.fundingChanged)
 		return fresh
 	}
 	return {
@@ -148,7 +141,6 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 		lotsInput: lotsInput.value,
 		repInput: repInput.value,
 		healthInput: healthInput.value,
-		reserveInput: reserveInput.value,
 		setLots: (value: string) => {
 			lotsInput.value = value
 		},
@@ -157,9 +149,6 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 		},
 		setHealth: (value: string) => {
 			healthInput.value = value
-		},
-		setReserve: (value: string) => {
-			reserveInput.value = value
 		},
 		openReason,
 		fundingReason,
@@ -187,7 +176,7 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 				bidReason,
 				selected => {
 					if (quote === undefined) throw new Error(copy.quoteError)
-					return { ...buildPortfolioAuctionBidRequest(selected, quote), reviewDescription: copy.bidReview(quote.lots, quote.bidAttoEth, quote.executionReserveAttoEth, quote.minimumAttoRepPerLot) }
+					return { ...buildPortfolioAuctionBidRequest(selected, quote), reviewDescription: copy.bidReview(quote.lots, quote.bidAttoEth, quote.minimumAttoRepPerLot) }
 				},
 				latest => {
 					buildPortfolioAuctionBidRequest(latest, verifyQuote(latest))

@@ -8,10 +8,7 @@ import { SecurityPoolCapitalLedger } from './SecurityPoolCapitalLedger.sol';
 import { SecurityPoolUniformPriceAuction } from './SecurityPoolUniformPriceAuction.sol';
 import { SecurityPoolAuctionVault } from './SecurityPoolAuctionVault.sol';
 import { SecurityPoolCreationCodeDeployer } from './SecurityPoolCreationCode.sol';
-import {
-	ISecurityPoolAuctionCapital,
-	ISecurityPoolAuctionReserveReceiver
-} from './interfaces/ISecurityPoolAuctionCapital.sol';
+import { ISecurityPoolAuctionCapital } from './interfaces/ISecurityPoolAuctionCapital.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
 interface ITruthAuctionPortfolio {
@@ -19,8 +16,6 @@ interface ITruthAuctionPortfolio {
 	function capitalLedger(uint248 universeId) external view returns (SecurityPoolCapitalLedger);
 	function priceFeed(uint248 universeId) external view returns (address);
 	function minimumCommitmentAttoEth() external view returns (uint256);
-	function minimumExecutionReserveAttoEth() external view returns (uint256);
-	function initialReportPriorityFeeAttoEthPerGas() external view returns (uint256);
 	function oracleExposure(uint248 universeId) external view returns (uint256);
 }
 
@@ -49,7 +44,6 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 	uint256 public immutable shortfallAttoEth;
 	uint256 public immutable lotAttoEth;
 	uint256 public immutable targetLots;
-	uint256 public constant MATERIALIZATION_GAS_BUDGET = 3_000_000;
 	uint256 public immutable repGrid;
 	uint256 public openingConservativePrice;
 	uint256 public minimumCollateralAttoRepPerLot;
@@ -57,15 +51,10 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 	bool public finalized;
 	bool private entered;
 	mapping(address => uint256) public bidIdForVault;
-	mapping(uint256 => bool) public reserveReleased;
-	mapping(uint256 => uint256) public bidReservePerLotAttoEth;
-	mapping(address => uint256) public refundCreditAttoEth;
 
 	event AuctionOpened(uint256 conservativePrice, uint256 minimumCollateralAttoRepPerLot, uint256 maximumBidAttoRepPerLot);
 	event WinningVaultCreated(uint256 indexed bidId, address indexed bidder, address indexed vault);
 	event AuctionClosed(uint256 filledLots, uint256 raisedAttoEth, uint256 soldAttoRep);
-	event BidRefundCredited(uint256 indexed bidId, address indexed bidder, uint256 executionReserveAttoEth);
-	event RefundWithdrawn(address indexed bidder, address indexed recipient, uint256 executionReserveAttoEth);
 
 	constructor(address authority, address root, uint248 child, uint256 deadline, uint256 inventory, uint256 shortfall) {
 		require(authority != address(0) && root.code.length != 0, 'Truth auction dependencies missing');
@@ -113,33 +102,20 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 		emit AuctionOpened(openingConservativePrice, minimumCollateralAttoRepPerLot, engine.maximumBidAttoRepPerLot());
 	}
 
-	/// @notice Only bid ETH and each lot's execution reserve are paid upfront.
+	/// @notice Only the ETH purchase amount is paid upfront.
 	/// Purchased REP must back the commitment at the bidder's chosen health target.
-	function submitBid(uint256 lots, uint256 minimumAttoRepPerLot, uint256 targetHealthFactorBps, uint256 executionReservePerLotAttoEth) external payable nonReentrant returns (uint256 bidId, address vault) {
+	function submitBid(uint256 lots, uint256 minimumAttoRepPerLot, uint256 targetHealthFactorBps) external payable nonReentrant returns (uint256 bidId, address vault) {
 		require(opened && !finalized, 'Truth auction is not accepting bids');
 		require(portfolio.zoltar().getForkTime(universeId) == 0, 'Truth auction universe forked');
 		require(lots != 0 && targetHealthFactorBps >= 10_000, 'Invalid truth auction lots or health target');
-		require(executionReservePerLotAttoEth >= minimumExecutionReservePerLot(), 'Truth auction execution reserve insufficient');
-		require(msg.value == lots * (lotAttoEth + executionReservePerLotAttoEth), 'Truth auction ETH funding mismatch');
+		require(msg.value == lots * lotAttoEth, 'Truth auction ETH funding mismatch');
 		uint256 required = capital.commitmentIndex().requiredRep(lotAttoEth, openingConservativePrice, capital.securityMultiplierBps(), targetHealthFactorBps);
 		require(minimumAttoRepPerLot >= required, 'Auction bid does not meet chosen health target');
 		bidId = engine.bidCount() + 1;
 		vault = address(new SecurityPoolAuctionVault{salt: bytes32(bidId)}(msg.sender, address(capital), address(this), bidId));
 		bidIdForVault[vault] = bidId;
-		bidReservePerLotAttoEth[bidId] = executionReservePerLotAttoEth;
 		require(engine.submitBid{value: lots * lotAttoEth}(msg.sender, vault, targetHealthFactorBps, lots, minimumAttoRepPerLot) == bidId, 'Auction bid identity mismatch');
 		emit WinningVaultCreated(bidId, msg.sender, vault);
-	}
-
-	/// @notice Signed, refundable keeper funding uses the bidding block's gas
-	/// conditions; opening cannot lock all bidders into one expensive gas quote.
-	function minimumExecutionReservePerLot() public view returns (uint256) {
-		uint256 gasPrice = block.basefee + portfolio.initialReportPriorityFeeAttoEthPerGas();
-		return
-			Math.max(portfolio.minimumExecutionReserveAttoEth(), Math.mulDiv(MATERIALIZATION_GAS_BUDGET * gasPrice, 5, 4));
-	}
-	function bidExecutionReserve(uint256 bidId) public view returns (uint256) {
-		return engine.previewBid(bidId).filledLots * bidReservePerLotAttoEth[bidId];
 	}
 
 	/// @notice Closing never requires a bidder transaction. The quote is tested
@@ -176,34 +152,15 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 	function previewBidFees(uint256 bidId, uint256 addedAttoEth, uint256 addedAttoRep) external view returns (uint256 ownedAttoEth, uint256 ownedAttoRep) {
 		return engine.previewBidFees(bidId, addedAttoEth, addedAttoRep);
 	}
-	function releaseBidExecutionReserve(uint256 bidId) external onlyCapital {
-		require(!reserveReleased[bidId], 'Auction execution reserve already released');
-		reserveReleased[bidId] = true;
-		uint256 amount = bidExecutionReserve(bidId);
-		ISecurityPoolAuctionReserveReceiver(address(capital)).receiveAuctionExecutionReserve{value: amount}(bidId);
-	}
-
 	/// @notice Anyone may credit one bid's refunds; only its bidder may withdraw.
 	/// Refunds and position materialization are independent and never scan bids.
 	function settleRefund(uint256 bidId) external nonReentrant {
 		require(finalized, 'Truth auction has not closed');
-		SecurityPoolUniformPriceAuction.Fill memory fill = engine.settleBid(bidId);
-		(, , , uint256 requestedLots, , , ) = engine.bids(bidId);
-		uint256 unusedLots = requestedLots - fill.filledLots;
-		uint256 reserve = unusedLots * bidReservePerLotAttoEth[bidId];
-		refundCreditAttoEth[fill.bidder] += reserve;
-		emit BidRefundCredited(bidId, fill.bidder, reserve);
+		engine.settleBid(bidId);
 	}
 	function withdrawRefunds(address payable recipient) external nonReentrant {
 		require(recipient != address(0), 'Truth auction refund recipient missing');
-		uint256 reserve = refundCreditAttoEth[msg.sender];
-		refundCreditAttoEth[msg.sender] = 0;
 		engine.withdrawRefundFor(msg.sender, recipient);
-		if (reserve != 0) {
-			(bool sent, ) = recipient.call{value: reserve}('');
-			require(sent, 'Truth auction reserve refund failed');
-		}
-		emit RefundWithdrawn(msg.sender, recipient, reserve);
 	}
 
 	function _fundedQuote(ITruthAuctionPriceFeed feed, uint256 atTime) private view returns (bool) {

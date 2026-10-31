@@ -8,7 +8,6 @@ import { setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
 import { deployCapitalTestComponents } from './securityPoolCapitalTestComponents'
 
 const E = 10n ** 18n
-const reserve = 10n * E
 
 describe('Statoblast: funded fork choice imports', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
@@ -39,12 +38,11 @@ describe('Statoblast: funded fork choice imports', () => {
 		await setBaselineSnapshot()
 	})
 
-	test('imported choices preserve personal collateral, retirement cohorts and execution budgets', async () => {
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'importChoice', args: [buyer.account.address, { rep: 126n * E, commitment: 100n * E, batch: 0n, executionReserveAttoEth: reserve, remainingCommitment: 0n }, 12_000n], value: 2n * reserve }))
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'importChoice', args: [owner.account.address, { rep: 158n * E, commitment: 100n * E, batch: 1n, executionReserveAttoEth: reserve, remainingCommitment: 0n }, 15_000n], value: reserve }))
+	test('imported choices preserve personal collateral, retirement cohorts without ETH funding', async () => {
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'importChoice', args: [buyer.account.address, { rep: 126n * E, commitment: 100n * E, batch: 0n, remainingCommitment: 0n }, 12_000n] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'importChoice', args: [owner.account.address, { rep: 158n * E, commitment: 100n * E, batch: 1n, remainingCommitment: 0n }, 15_000n] }))
 		expect(await position(1n)).toMatchObject({ rep: 126n * E, commitment: 100n * E, batch: 0n })
 		expect(await position(2n)).toMatchObject({ rep: 158n * E, commitment: 100n * E, batch: 1n })
-		expect((await account(buyer.account.address)).executionReserveAttoEth).toBe(reserve)
 		expect((await account(owner.account.address)).targetHealthFactorBps).toBe(15_000n)
 		await expect(finish()).rejects.toThrow('Fork principal unfunded')
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'mint', args: [ledger, 284n * E] }))
@@ -52,15 +50,15 @@ describe('Statoblast: funded fork choice imports', () => {
 		await expect(finish()).rejects.toThrow('Fork import unavailable')
 	})
 
-	test('choice import requires actual execution funding and authenticated authority', async () => {
-		const imported = { rep: 126n * E, commitment: 100n * E, batch: 0n, executionReserveAttoEth: reserve, remainingCommitment: 0n }
-		await expect(writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'importChoice', args: [buyer.account.address, imported, 12_000n], value: reserve - 1n }))).rejects.toThrow('Fork execution reserve unfunded')
+	test('choice import requires authenticated authority without an ETH payment', async () => {
+		const imported = { rep: 126n * E, commitment: 100n * E, batch: 0n, remainingCommitment: 0n }
+		await expect(buyer.writeContract({ abi: artifact.abi, address: ledger, functionName: 'importChoice', args: [buyer.account.address, imported, 12_000n] })).rejects.toThrow('Only fork authority')
 		expect((await account(buyer.account.address)).positionId).toBe(0n)
-		await expect(buyer.writeContract({ abi: artifact.abi, address: ledger, functionName: 'importChoice', args: [buyer.account.address, imported, 12_000n], value: reserve })).rejects.toThrow('Only fork authority')
 	})
+
 	test('a fresh child price is cached during import without starting liquidation observations', async () => {
-		const imported = { rep: 126n * E, commitment: 100n * E, batch: 0n, executionReserveAttoEth: reserve, remainingCommitment: 0n }
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'importChoice', args: [buyer.account.address, imported, 12_000n], value: reserve }))
+		const imported = { rep: 126n * E, commitment: 100n * E, batch: 0n, remainingCommitment: 0n }
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'importChoice', args: [buyer.account.address, imported, 12_000n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'mint', args: [ledger, imported.rep] }))
 		const now = (await owner.getBlock()).timestamp
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'setPrice', args: [2n * E, Number(now + 100_000n)] }))
@@ -80,8 +78,8 @@ describe('Statoblast: funded fork choice imports', () => {
 		expect(await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'healthObservationEpoch' })).toBe(1n)
 	})
 	test('a fork import preserves a partial retirement stop and keeps all collateral behind the residual', async () => {
-		const imported = { rep: 126n * E, commitment: 100n * E, batch: 1n, executionReserveAttoEth: reserve, remainingCommitment: 60n * E }
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'importChoice', args: [buyer.account.address, imported, 12_000n], value: reserve }))
+		const imported = { rep: 126n * E, commitment: 100n * E, batch: 1n, remainingCommitment: 60n * E }
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'importChoice', args: [buyer.account.address, imported, 12_000n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'mint', args: [ledger, imported.rep] }))
 		await finish()
 		expect(await position(1n)).toMatchObject({ commitment: 100n * E, remainingCommitment: 60n * E, batch: 1n })

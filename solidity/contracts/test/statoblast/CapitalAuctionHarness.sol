@@ -15,32 +15,18 @@ contract CapitalAuctionAdapterMock is ISecurityPoolAuctionCapital {
 	uint256 public remainingLots;
 	uint256 public ethFees;
 	uint256 public repFees;
-	uint256 public reservePerLot;
-	bool public shortReserve;
 
-	constructor(SecurityPoolCapitalLedger ledger, uint256 reserve) {
+	constructor(SecurityPoolCapitalLedger ledger) {
 		capital = ledger;
-		reservePerLot = reserve;
 	}
-	function setBid(uint256 id, address vault, uint256 health, uint256 lots) external payable {
+	function setBid(uint256 id, address vault, uint256 health, uint256 lots) external {
 		require(bids[id].vault == address(0) && bidIdForVault[vault] == 0, 'Duplicate test bid');
-		require(msg.value == reservePerLot * lots, 'Fund test bid');
 		bids[id] = BidPosition(vault, health, lots);
 		bidIdForVault[vault] = id;
 		remainingLots += lots;
 	}
-	function setShortReserve(bool enabled) external {
-		shortReserve = enabled;
-	}
-	function setReservePerLot(uint256 reserve) external payable {
-		require(reserve <= reservePerLot || msg.value == (reserve - reservePerLot) * remainingLots, 'Fund test reserve increase');
-		reservePerLot = reserve;
-	}
 	function bidPosition(uint256 id) external view returns (BidPosition memory) {
 		return bids[id];
-	}
-	function bidExecutionReserve(uint256 id) external view returns (uint256) {
-		return bids[id].filledLots * reservePerLot;
 	}
 	function previewBidFees(uint256 id, uint256 ethAmount, uint256 repAmount) external view returns (uint256 ownedEth, uint256 ownedRep) {
 		if (removed[id] || bids[id].filledLots == 0) return (0, 0);
@@ -60,11 +46,6 @@ contract CapitalAuctionAdapterMock is ISecurityPoolAuctionCapital {
 		repFees -= ownedRep;
 		remainingLots -= lots;
 		removed[id] = true;
-	}
-	function releaseBidExecutionReserve(uint256 id) external {
-		require(msg.sender == address(capital) && removed[id], 'Test reserve unavailable');
-		uint256 amount = bids[id].filledLots * reservePerLot;
-		capital.receiveAuctionExecutionReserve{value: shortReserve ? amount - 1 : amount}(id);
 	}
 }
 

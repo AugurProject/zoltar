@@ -821,14 +821,6 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		expect(await liquidationStarted(2n)).toBe(started)
 	})
 
-	test('execution rewards preserve funded residual floors and release underfunded budgets proportionally', async () => {
-		const reward = (reserve: bigint, remaining: bigint) => client.readContract({ abi: artifact.abi, address, functionName: 'executionReward', args: [reserve, 100n, remaining, 0n] })
-		expect(await reward(200n, 50n)).toBe(50n)
-		expect(await reward(25n, 50n)).toBe(13n)
-		expect(await reward(25n, 0n)).toBe(25n)
-		expect(await reward(0n, 50n)).toBe(0n)
-	})
-
 	test('only the owning portfolio can mutate or collect the index', async () => {
 		await expect(writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address, functionName: 'create', args: [owner(1), 10n, 10n, 10n] }))).rejects.toThrow('Only portfolio')
 		await create(10n, 10n, 10n)

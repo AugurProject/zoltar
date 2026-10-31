@@ -28,7 +28,7 @@ const hash: Hex = `0x${'11'.repeat(32)}`
 const vaultFor = (id: bigint) => getAddress(`0x${(100n + id).toString(16).padStart(40, '0')}`)
 const abi = parseAbi([
 	'function open()',
-	'function submitBid(uint256 lots,uint256 minimumAttoRepPerLot,uint256 targetHealthFactorBps,uint256 executionReservePerLotAttoEth) payable returns (uint256 bidId,address vault)',
+	'function submitBid(uint256 lots,uint256 minimumAttoRepPerLot,uint256 targetHealthFactorBps) payable returns (uint256 bidId,address vault)',
 	'function settleRefund(uint256 bidId)',
 	'function materializeAuctionBid(uint256 bidId) returns (address vault,uint96 positionId)',
 	'function withdrawRefunds(address recipient)',
@@ -61,8 +61,6 @@ function fixture(overrides: Record<string, unknown> = {}, options: { timestamp?:
 		shortfallAttoEth: 10n * unit,
 		lotAttoEth: unit,
 		targetLots: 10n,
-		minimumExecutionReservePerLot: unit / 100n,
-		bidReservePerLotAttoEth: unit / 50n,
 		repGrid: 2n,
 		openingConservativePrice: 2n * unit,
 		minimumCollateralAttoRepPerLot: 4n * unit,
@@ -111,17 +109,18 @@ function fixture(overrides: Record<string, unknown> = {}, options: { timestamp?:
 	return { client, calls }
 }
 const load = (source: ReturnType<typeof fixture>, bidStart = 0n, bidCount = 16) => loadPortfolioAuctionSnapshot({ client: source.client, portfolio, bidder, universeId: 42n, bidStart, bidCount })
-const bidTerms = { lots: 2n, minimumAttoRepPerLot: 5n * unit, targetHealthFactorBps: 12_000n, executionReservePerLotAttoEth: unit / 100n }
+const bidTerms = { lots: 2n, minimumAttoRepPerLot: 5n * unit, targetHealthFactorBps: 12_000n }
 
 describe('portfolio truth auction SDK', () => {
 	test('ETH-only bids need no existing REP or approval and pledge only purchased collateral', async () => {
 		const source = fixture({ balanceOf: 0n, allowance: 0n })
 		const snapshot = await load(source)
 		const quote = quotePortfolioAuctionBid(snapshot, { ...bidTerms, minimumAttoRepPerLot: 5n * unit })
-		expect(buildPortfolioAuctionBidRequest(snapshot, quote).value).toBe((202n * unit) / 100n)
+		expect(buildPortfolioAuctionBidRequest(snapshot, quote).value).toBe(2n * unit)
 		expect(quote.minimumPrincipalAttoRep).toBe(10n * unit)
 		expect(quote).not.toHaveProperty('topUpAttoRep')
-		expect(source.calls.some(call => ['balanceOf', 'allowance', 'refundCreditAttoRep'].includes(call.functionName))).toBe(false)
+		expect(quote).not.toHaveProperty('executionReserveAttoEth')
+		expect(source.calls.some(call => ['balanceOf', 'allowance', 'refundCreditAttoRep', 'minimumExecutionReservePerLot', 'bidReservePerLotAttoEth'].includes(call.functionName))).toBe(false)
 	})
 	test('authenticates canonical modules and each bidder vault at one block without enumerating other bidders', async () => {
 		const source = fixture({ bidderBidCount: 1_000_000n })
@@ -183,33 +182,27 @@ describe('portfolio truth auction SDK', () => {
 		const quote = quotePortfolioAuctionBid(snapshot, bidTerms)
 		expect(quote).toMatchObject({
 			bidAttoEth: 2n * unit,
-			executionReserveAttoEth: unit / 50n,
-			totalAttoEth: (202n * unit) / 100n,
 			requiredPrincipalPerLotAttoRep: (48n * unit) / 10n,
 			minimumPrincipalAttoRep: 10n * unit,
 			maximumPrice: { attoEth: unit, attoRep: 5n * unit },
 		})
 		const request = buildPortfolioAuctionBidRequest(snapshot, quote)
-		expect(request).toMatchObject({ account: bidder, to: auction, value: quote.totalAttoEth })
-		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'submitBid', args: [2n, 5n * unit, 12_000n, unit / 100n] })
-		for (const patch of [{ lots: 0n }, { minimumAttoRepPerLot: 1n }, { minimumAttoRepPerLot: 101n * unit }, { minimumAttoRepPerLot: 4n * unit }, { targetHealthFactorBps: 9_999n }, { targetHealthFactorBps: 20_000n }, { executionReservePerLotAttoEth: 0n }, { lots: 1n << 128n }])
+		expect(request).toMatchObject({ account: bidder, to: auction, value: quote.bidAttoEth })
+		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'submitBid', args: [2n, 5n * unit, 12_000n] })
+		for (const patch of [{ lots: 0n }, { minimumAttoRepPerLot: 1n }, { minimumAttoRepPerLot: 101n * unit }, { minimumAttoRepPerLot: 4n * unit }, { targetHealthFactorBps: 9_999n }, { targetHealthFactorBps: 20_000n }, { lots: 1n << 128n }])
 			expect(() => quotePortfolioAuctionBid(snapshot, { ...bidTerms, ...patch })).toThrow()
 	})
-	test('ETH balance and a rising execution minimum block submission without increasing signed funding', async () => {
-		for (const [patch, options, reason] of [
-			[{}, { walletAttoEth: 0n }, 'Insufficient ETH'],
-			[{ minimumExecutionReservePerLot: unit }, {}, 'Review the updated'],
-		] as const) {
-			const snapshot = await load(fixture(patch, options))
-			expect(() => buildPortfolioAuctionBidRequest(snapshot, bidTerms)).toThrow(reason)
-		}
+	test('ETH balance and closing deadline block submission without increasing signed funding', async () => {
+		const snapshot = await load(fixture({}, { walletAttoEth: 2n * unit - 1n }))
+		expect(() => buildPortfolioAuctionBidRequest(snapshot, bidTerms)).toThrow('Insufficient ETH')
 		const closed = await load(fixture({}, { timestamp: 1_000n }))
 		expect(() => buildPortfolioAuctionBidRequest(closed, bidTerms)).toThrow('not accepting')
+		expect(buildPortfolioAuctionBidRequest(await load(fixture({}, { walletAttoEth: 2n * unit })), bidTerms).value).toBe(2n * unit)
 	})
-	test('partial fills expose original principal and the bid-specific reserve while refunds remain separate transactions', async () => {
-		const snapshot = await load(fixture({ [`${auction}:refundCreditAttoEth`]: unit / 50n, [`${engine}:refundCreditAttoEth`]: unit }, { finalized: true }))
-		expect(snapshot.auction?.bids[0]?.fill).toEqual({ filledLots: 1n, usedAttoEth: unit, refundAttoEth: unit, principalAttoRep: 6n * unit, reserveAttoEth: unit / 50n })
-		expect(snapshot.auction).toMatchObject({ refundAttoEth: (102n * unit) / 100n, clearing: { soldAttoRep: 18n * unit + 1n, roundingAttoRep: 1n } })
+	test('partial fills expose original principal while unused bid refunds remain separate transactions', async () => {
+		const snapshot = await load(fixture({ [`${engine}:refundCreditAttoEth`]: unit }, { finalized: true }))
+		expect(snapshot.auction?.bids[0]?.fill).toEqual({ filledLots: 1n, usedAttoEth: unit, refundAttoEth: unit, principalAttoRep: 6n * unit })
+		expect(snapshot.auction).toMatchObject({ refundAttoEth: unit, clearing: { soldAttoRep: 18n * unit + 1n, roundingAttoRep: 1n } })
 		expect(snapshot.auction?.bids[0]?.position).toMatchObject({ positionId: 0n, materialized: false, principalAttoRep: 6n * unit, commitmentAttoEth: unit, liquidationStarted: 30n, earnedAttoEth: 7n, earnedAttoRep: 9n })
 		expect(decodeFunctionData({ abi, data: buildPortfolioAuctionRefundCreditRequest(snapshot, 1n).data })).toEqual({ functionName: 'settleRefund', args: [1n] })
 		expect(buildPortfolioAuctionMaterializeRequest(snapshot, 1n)).toMatchObject({ account: bidder, to: capital, value: 0n })

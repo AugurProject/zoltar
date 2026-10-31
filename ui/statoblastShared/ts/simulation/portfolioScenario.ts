@@ -1,6 +1,6 @@
 import { encodeFunctionData, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { ceilDiv } from '@zoltar/core-shared/math/bigint'
-import { buildPortfolioPrepareNextRequest, buildPortfolioCapitalDepositRequest, buildPortfolioCapitalSetHealthRequest, buildPortfolioCapitalFundExecutionReserveRequest, buildPortfolioCapitalAuthorizeRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { buildPortfolioPrepareNextRequest, buildPortfolioCapitalDepositRequest, buildPortfolioCapitalSetHealthRequest, buildPortfolioCapitalAuthorizeRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { advanceSimulationTime } from '@zoltar/ui-core-shared/simulation/clock.js'
 import { createRangeProgressReporter, requireQaAccount } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
@@ -31,7 +31,6 @@ export async function seedPortfolioScenario({ accounts, createReadClient, create
 			purchaseFeeBps: 100n,
 			minimumPurchaseFeeAttoEth: 10n ** 15n,
 			minimumCommitmentAttoEth: 10n ** 18n,
-			minimumExecutionReserveAttoEth: 10n ** 15n,
 			minimumOutcomeRate: 10n ** 16n,
 			rewardVestingSeconds: 86400n,
 			reportingFeeAttoEth: 5n * 10n ** 16n,
@@ -72,7 +71,6 @@ export async function seedPortfolioScenario({ accounts, createReadClient, create
 	await settleOracleReportIfNeeded({ memoryClient, readClient, writeClient: client, ...report })
 	await reportStep('Settled shared portfolio oracle')
 	await sendPortfolioTransaction(client, buildPortfolioCapitalSetHealthRequest({ owner, capitalLedger, targetHealthFactorBps: 12_000n }), 'Set owner health target')
-	await sendPortfolioTransaction(client, buildPortfolioCapitalFundExecutionReserveRequest({ owner, capitalLedger, amountAttoEth: 2n * 10n ** 16n }), 'Fund execution reserve')
 	const required = await readClient.readContract({ address: capitalLedger, abi: capitalArtifact.abi, functionName: 'requiredRep', args: [commitment, 12_000n] })
 	if (required > depositAttoRep) throw new Error('Seeded capital cannot cover the intended commitment')
 	await sendPortfolioTransaction(client, buildPortfolioCapitalAuthorizeRequest({ owner, capitalLedger, commitment }), 'Authorize shared commitment')

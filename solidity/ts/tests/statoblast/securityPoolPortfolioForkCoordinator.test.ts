@@ -86,7 +86,6 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 			await writeContractAndWait(owner, () => owner.writeContract({ ...zoltarTarget(), functionName: 'mint', args: [0n, client.account.address, 150n * E] }))
 			await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'approve', args: [capital, 150n * E] }))
 			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'depositFor', args: [client.account.address, 150n * E] }))
-			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'fundExecutionReserve', args: [client.account.address], value: 100n * E }))
 			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'setHealthTarget', args: [12_000n] }))
 			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'authorize', args: [100n * E] }))
 		}
@@ -97,18 +96,11 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 		await setBaselineSnapshot()
 	})
 
-	test('missing the choice cutoff releases unused parent execution funding', async () => {
-		const parent = await bob.readContract({ ...ledger(capital), functionName: 'ownerAccount', args: [bob.account.address] })
-		const assigned = await bob.readContract({ ...ledger(capital), functionName: 'positionExecutionReserveAttoEth', args: [parent.positionId] })
-		expect(assigned).toBeGreaterThan(0n)
-		await writeContractAndWait(bob, () => bob.writeContract({ ...ledger(capital), functionName: 'withdrawExecutionReserve', args: [parent.executionReserveAttoEth] }))
-		await expect(writeContractAndWait(bob, () => bob.writeContract({ ...ledger(capital), functionName: 'withdrawExecutionReserve', args: [assigned] }))).rejects.toThrow('Execution reserve insufficient')
+	test('missing the choice cutoff cannot move the unchosen principal', async () => {
 		await choose(alice, 1n)
 		await moveTo(forkTime + 8n * week)
-		await writeContractAndWait(bob, () => bob.writeContract({ ...ledger(capital), functionName: 'withdrawExecutionReserve', args: [assigned] }))
-		expect(await bob.readContract({ ...ledger(capital), functionName: 'positionExecutionReserveAttoEth', args: [parent.positionId] })).toBe(0n)
-		await expect(writeContractAndWait(bob, () => bob.writeContract({ ...ledger(capital), functionName: 'withdrawExecutionReserve', args: [1n] }))).rejects.toThrow('Execution reserve insufficient')
 		await expect(choose(bob, 1n)).rejects.toThrow('Fork choice window closed')
+		expect(await bob.getBalance({ address: capital })).toBe(0n)
 	})
 
 	test('a fully chosen branch activates without an auction or a zero-value recap transaction', async () => {

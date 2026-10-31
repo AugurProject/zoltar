@@ -22,8 +22,6 @@ const abi = parseAbi([
 	'function requestRetirement(uint96 id,uint256 remainingCommitment)',
 	'function serveRetirement(uint96 id)',
 	'function cancelRetirement(uint96 id)',
-	'function withdrawExecutionReserve(uint256 amount)',
-	'function fundExecutionReserve(address owner) payable',
 ])
 async function setup(snapshot = capitalSnapshot()) {
 	const transport = capitalClient(snapshot)
@@ -88,6 +86,19 @@ test('stale prices block live-principal withdrawal and authorization while prese
 	await act(() => hook.state().claim())
 	expect(requests).toHaveLength(1)
 	expect(hook.state().serveReason).toContain('price')
+})
+test('authorizing backed capacity sends zero ETH without a separate funding action', async () => {
+	const { hook, requests } = await setup(capitalSnapshot({ walletAttoEth: 0n }))
+	await act(() => hook.state().setCommitmentAmount('11'))
+	expect(hook.state().authorizeReason).toBeUndefined()
+	expect(hook.state()).not.toHaveProperty('fundReserve')
+	await act(() => hook.state().authorize())
+	const request = requests[0]
+	if (request === undefined) throw new Error('Missing authorization request')
+	expect(request.value).toBe(0n)
+	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'authorize', args: [11n * unit] })
+	await request.validateBeforeSubmit?.()
+	expect(requests).toHaveLength(1)
 })
 test('raising a saved health target requires present collateral and a fresh price', async () => {
 	const { hook } = await setup()
@@ -291,72 +302,6 @@ test('fully retired principal can withdraw without a fresh price', async () => {
 	expect(hook.state().withdrawReason).toBeUndefined()
 	await act(() => hook.state().withdraw())
 	expect(requests).toHaveLength(1)
-})
-
-test('an exported owner cannot fund a reserve that already followed the fork choice', async () => {
-	const { hook } = await setup(capitalSnapshot({ exported: true }))
-	await act(() => {
-		hook.state().setReserveAmount('1')
-		hook.state().setReserveWithdrawal('1')
-	})
-	expect(hook.state().fundReserveReason).toContain('fork choice')
-	expect(hook.state().withdrawReserveReason).toContain('fork choice')
-})
-
-test('execution funding reviews live commitment and stops when its withdrawal terms change', async () => {
-	const { hook, requests, transport } = await setup()
-	await act(() => hook.state().setReserveAmount('1'))
-	await act(() => hook.state().fundReserve())
-	const request = requests[0]
-	if (request === undefined) throw new Error('Execution funding request missing')
-	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'fundExecutionReserve', args: [owner] })
-	expect(request.value).toBe(unit)
-	expect(request.reviewDescription).toContain('committed to keeper work')
-	expect(request.reviewDescription).toContain('full retirement')
-	await request.validateBeforeSubmit?.()
-	transport.setSnapshot(capitalSnapshot({ ownerCommitmentAttoEth: 0n }))
-	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Commitment status changed')
-	expect(requests).toHaveLength(1)
-})
-
-test('funding before authorization remains withdrawable and cannot silently become committed', async () => {
-	const snapshot = capitalSnapshot({ ownerCommitmentAttoEth: 0n, positions: [], ownerAccount: { ...capitalSnapshot().ownerAccount, positionId: 0n } })
-	const { hook, requests, transport } = await setup(snapshot)
-	await act(() => hook.state().setReserveAmount('1'))
-	await act(() => hook.state().fundReserve())
-	const request = requests[0]
-	if (request === undefined) throw new Error('Execution funding request missing')
-	expect(request.reviewDescription).toContain('remains withdrawable until you authorize')
-	await request.validateBeforeSubmit?.()
-	transport.setSnapshot(capitalSnapshot())
-	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Commitment status changed')
-	transport.setSnapshot({ ...snapshot, exported: true })
-	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('fork choice')
-	expect(requests).toHaveLength(1)
-})
-
-test('an open fork choice keeps assigned reserves locked while allowing unassigned withdrawals', async () => {
-	const { hook } = await setup(capitalSnapshot({ forkTime: 500n, forkChoiceDeadline: 1_001n }))
-	await act(() => hook.state().setReserveWithdrawal('1.01'))
-	expect(hook.state().withdrawReserveReason).toContain('after the fork-choice deadline')
-	await act(() => hook.state().setReserveWithdrawal('1'))
-	expect(hook.state().withdrawReserveReason).toBeUndefined()
-})
-
-test('a missed fork choice unlocks assigned execution reserve and revalidates it before submission', async () => {
-	const snapshot = { ...capitalSnapshot(), forkTime: 500n, forkChoiceDeadline: 1_000n, withdrawableExecutionReserveAttoEth: (101n * unit) / 100n }
-	const { hook, requests, transport } = await setup(snapshot)
-	await act(() => hook.state().setReserveWithdrawal('1.01'))
-	expect(hook.state().withdrawReserveReason).toBeUndefined()
-	await act(() => hook.state().withdrawReserve())
-	const request = requests[0]
-	if (request === undefined) throw new Error('Execution withdrawal request missing')
-	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'withdrawExecutionReserve', args: [(101n * unit) / 100n] })
-	await request.validateBeforeSubmit?.()
-	transport.setSnapshot({ ...snapshot, exported: true, withdrawableExecutionReserveAttoEth: 0n })
-	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('fork choice')
-	transport.setSnapshot({ ...snapshot, ownerAccount: { ...snapshot.ownerAccount, executionReserveAttoEth: 0n }, withdrawableExecutionReserveAttoEth: unit / 100n })
-	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('withdrawable execution reserve')
 })
 
 test('a selected funded report quotes collateral, authorizes explicitly, and is rechecked before sending', async () => {

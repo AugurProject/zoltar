@@ -128,7 +128,6 @@ contract PortfolioForkHarness {
 	address public forkController;
 	address public immutable auctionDeployer;
 	uint256 public constant minimumCommitmentAttoEth = 1e15;
-	uint256 public constant minimumExecutionReserveAttoEth = 1e14;
 	uint256 public constant initialReportPriorityFeeAttoEthPerGas = 2e9;
 	struct Clock {
 		uint48 logicalAnchor;
@@ -171,7 +170,7 @@ contract PortfolioForkHarness {
 		return logicalTime(u);
 	}
 	function _createCapital(uint248 u) private returns (SecurityPoolCapitalLedger capital) {
-		capital = capitalDeployer.create(address(this), Zoltar(address(zoltar)), u, 10_500, 1e15, 1e14, 1 days);
+		capital = capitalDeployer.create(address(this), Zoltar(address(zoltar)), u, 10_500, 1e15, 1 days);
 		capital.initialize(indexDeployer.create(address(capital)), ICapitalFeeStreams(address(streamsDeployer.create(address(capital), uint48(block.timestamp), 1 days))), forkController, address(this));
 		capitalLedger[u] = capital;
 	}

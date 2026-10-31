@@ -5,7 +5,7 @@ import type { PortfolioSelection } from '#config/portfolio-policy'
 import { erc20Abi, securityPoolAbi, securityPoolFactoryAbi, securityPoolCapitalLedgerAbi, securityPoolAuctionVaultAbi, portfolioRuntimeIdentities } from '@zoltar/bot-shared/contracts/abi'
 import { verifyRuntimeIdentity } from '@zoltar/bot-shared/monitoring/runtime-identity'
 import { getAddress, parseAbiItem, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
-import { loadPortfolioCapitalSnapshot, requiredPortfolioExecutionReserve, type PortfolioCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { loadPortfolioCapitalSnapshot, type PortfolioCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import type { ReadClient } from './vault-positions.ts'
 import { record } from '@zoltar/bot-shared/infrastructure/json-validation'
 
@@ -32,7 +32,6 @@ const portfolioMonitorAbi = [
 	parseAbiItem('function getRepToken(uint248 universeId) view returns (address)'),
 	parseAbiItem('function lastPositionId() view returns (uint96)'),
 	parseAbiItem('function accountOf(uint96 id) view returns ((address owner,uint96 batch,uint256 rep,uint256 commitment,uint256 maxHealthyPrice,uint256 releasedRep,uint256 ethFees,uint256 repFees,uint256 remainingCommitment) account)'),
-	parseAbiItem('function positionExecutionReserveAttoEth(uint96 id) view returns (uint256)'),
 	parseAbiItem('function liquidationStarted(uint96 id) view returns (uint48)'),
 	parseAbiItem('function previewRetirement(uint96 id,uint256 acceptedPrice,uint256 demand) view returns ((uint8 status,uint96 effectiveCurrentBatch,uint256 healthyCommitment,uint256 spareCommitment,uint256 queuedAheadCommitment,uint256 commitmentReduction,uint256 releasedRep) preview)'),
 ] as const
@@ -48,8 +47,6 @@ export type PortfolioPosition = {
 	commitment: bigint
 	maxHealthyPrice: bigint
 	remainingCommitment: bigint
-	executionReserveAttoEth: bigint
-	requiredExecutionReserveAttoEth: bigint
 	liquidationStarted: bigint
 	retirementStatus: string
 	stalledRetirement: boolean
@@ -92,9 +89,8 @@ export function portfolioPositionPage(scope: PortfolioScope, lastPositionId: big
 
 async function loadPortfolioPosition(client: ReadClient, snapshot: PortfolioCapitalSnapshot, id: bigint): Promise<PortfolioPosition> {
 	const blockNumber = snapshot.blockNumber
-	const [rawAccount, reserve, started] = await Promise.all([
+	const [rawAccount, started] = await Promise.all([
 		client.readContract({ address: snapshot.commitmentIndex, abi: portfolioMonitorAbi, functionName: 'accountOf', args: [id], blockNumber }),
-		client.readContract({ address: snapshot.capitalLedger, abi: portfolioMonitorAbi, functionName: 'positionExecutionReserveAttoEth', args: [id], blockNumber }),
 		client.readContract({ address: snapshot.capitalLedger, abi: portfolioMonitorAbi, functionName: 'liquidationStarted', args: [id], blockNumber }),
 	])
 	const account = record(rawAccount, 'Portfolio position')
@@ -130,8 +126,6 @@ async function loadPortfolioPosition(client: ReadClient, snapshot: PortfolioCapi
 		commitment: uint(account['commitment']),
 		maxHealthyPrice: uint(account['maxHealthyPrice']),
 		remainingCommitment: uint(account['remainingCommitment']),
-		executionReserveAttoEth: uint(reserve),
-		requiredExecutionReserveAttoEth: requiredPortfolioExecutionReserve({ commitment: uint(account['commitment']), ...snapshot.economics }),
 		liquidationStarted: uint(started),
 	}
 }

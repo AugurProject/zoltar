@@ -6,7 +6,6 @@ test('creation configures pool fees and minimums while health remains a personal
 		purchaseFeeBps: 100n,
 		minimumPurchaseFeeAttoEth: 10n ** 15n,
 		minimumCommitmentAttoEth: 10n ** 18n,
-		minimumExecutionReserveAttoEth: 10n ** 15n,
 		minimumOutcomeRate: 10n ** 16n,
 		rewardVestingSeconds: 86_400n,
 		reportingFeeAttoEth: 5n * 10n ** 16n,
@@ -15,7 +14,7 @@ test('creation configures pool fees and minimums while health remains a personal
 	})
 	expect(parsePortfolioCreationEconomics({ ...defaultPortfolioCreationDraft(), purchaseFeePercent: '0.07', minimumPurchaseFee: '0', rewardVestingHours: '1.5' })).toMatchObject({ purchaseFeeBps: 7n, minimumPurchaseFeeAttoEth: 0n, rewardVestingSeconds: 5_400n })
 	expect(parsePortfolioCreationEconomics({ ...defaultPortfolioCreationDraft(), annualFeePercent: '51.23' })).toMatchObject({ annualFeeBps: 5_123n })
-	for (const patch of [{ annualFeePercent: '100.01' }, { annualFeePercent: '0.001' }, { purchaseFeePercent: '100.01' }, { purchaseFeePercent: '0.001' }, { minimumCommitment: '0' }, { minimumExecutionReserve: '0' }, { minimumOutcomeRate: '1.01' }, { rewardVestingHours: '0' }])
+	for (const patch of [{ annualFeePercent: '100.01' }, { annualFeePercent: '0.001' }, { purchaseFeePercent: '100.01' }, { purchaseFeePercent: '0.001' }, { minimumCommitment: '0' }, { minimumOutcomeRate: '1.01' }, { rewardVestingHours: '0' }])
 		expect(() => parsePortfolioCreationEconomics({ ...defaultPortfolioCreationDraft(), ...patch })).toThrow()
 })
 test('fixed policy questions normalize duplicate IDs and preserve full uint256 precision', () => {

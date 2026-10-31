@@ -7,7 +7,6 @@ import type { ReadClient } from './vault-positions.ts'
 const links = [
 	parseAbiItem('function forkAuthority() view returns (address)'),
 	parseAbiItem('function zoltar() view returns (address)'),
-	parseAbiItem('function requiredExecutionReserve(uint256 commitment) view returns (uint256)'),
 	parseAbiItem('function portfolio() view returns (address)'),
 	parseAbiItem('function ledger() view returns (address)'),
 	parseAbiItem('function settlement() view returns (address)'),
@@ -52,16 +51,6 @@ export async function verifyPortfolioCustody(client: ReadClient, snapshot: Portf
 	if (capitalServices !== services) throw new Error('Capital ledger uses another services authority')
 	if (forkAuthority !== fork) throw new Error('Capital ledger uses another fork authority')
 	for (const module of [snapshot.capitalLedger, reporters, fork]) if ((await readAddress(module, 'zoltar')) !== protocol) throw new Error('Portfolio custody module uses another protocol')
-	const minimum = snapshot.economics.minimumCommitmentAttoEth
-	const reserve = snapshot.economics.minimumExecutionReserveAttoEth
-	for (const { commitment, expected } of [
-		{ commitment: 1n, expected: reserve },
-		{ commitment: minimum, expected: reserve },
-		{ commitment: minimum + 1n, expected: reserve * 2n },
-	]) {
-		const actual = await client.readContract({ address: snapshot.capitalLedger, abi: links, functionName: 'requiredExecutionReserve', args: [commitment], blockNumber })
-		if (actual !== expected) throw new Error('Capital execution reserve policy differs from the portfolio economics')
-	}
 	await Promise.all([
 		verifyModule(snapshot.capitalLedger, 'SecurityPoolCapitalLedger', snapshot.portfolio),
 		verifyModule(snapshot.commitmentIndex, 'SecurityPoolCommitmentIndex', snapshot.capitalLedger),

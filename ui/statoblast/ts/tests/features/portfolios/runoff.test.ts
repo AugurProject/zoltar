@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { capitalAuthorizationReason, capitalPositionPhase, requiredPortfolioCollateral, requiredPortfolioExecutionReserve, maximumPortfolioCommitment, capitalRetirementReason } from '@zoltar/ui-statoblast-shared/features/portfolios/lib/capital.js'
+import { capitalAuthorizationReason, capitalPositionPhase, requiredPortfolioCollateral, maximumPortfolioCommitment, capitalRetirementReason } from '@zoltar/ui-statoblast-shared/features/portfolios/lib/capital.js'
 import { capitalSnapshot, unit } from './capitalFixture.js'
 test('collateral follows the owner health target and each contract rounding step', () => {
 	const snapshot = capitalSnapshot()
@@ -29,12 +29,6 @@ test('partial retirement keeps a meaningful residual and requires one complete r
 	expect(capitalRetirementReason(snapshot, 1n, unit - 1n)).toContain('minimum')
 	expect(capitalRetirementReason(snapshot, 1n, 10n * unit - 1n)).toContain('minimum')
 	expect(capitalRetirementReason(snapshot, 1n, 10n * unit)).toContain('smaller')
-})
-test('execution reserves grow with commitment lots and existing active reserve counts toward funding', () => {
-	const snapshot = capitalSnapshot({ ownerAccount: { ...capitalSnapshot().ownerAccount, executionReserveAttoEth: 0n } })
-	expect(requiredPortfolioExecutionReserve(snapshot, unit + 1n)).toBe(2n * 10n ** 15n)
-	expect(capitalAuthorizationReason(snapshot, 10n * unit)).toBeUndefined()
-	expect(capitalAuthorizationReason(snapshot, 11n * unit)).toContain('reserve')
 })
 test('authorizations cannot cut obligations, bypass personal collateral or consume unfunded commitments', () => {
 	const snapshot = capitalSnapshot()
@@ -66,4 +60,10 @@ test('a funded report permits growth only with its conservative collateral price
 test('unfunded authorization cannot ignore demand above nominal commitment', () => {
 	const snapshot = capitalSnapshot({ demandAttoEth: 101n * unit })
 	expect(capitalAuthorizationReason(snapshot, 10n * unit)).toContain('funded')
+})
+
+test('collateral-backed authorization needs no separate ETH execution budget', () => {
+	const snapshot = capitalSnapshot({ walletAttoEth: 0n })
+	expect(capitalAuthorizationReason(snapshot, 10n * unit)).toBeUndefined()
+	expect(capitalAuthorizationReason(snapshot, 11n * unit)).toBeUndefined()
 })

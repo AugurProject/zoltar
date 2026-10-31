@@ -34,13 +34,13 @@ describe('Statoblast: automatic truth-auction vaults', () => {
 		const grid = await context.owner.readContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'repGrid' })
 		const opened = await readAuction()
 		if (opened.auction === undefined) throw new Error('Auction snapshot missing')
-		const terms = { lots: 2n, minimumAttoRepPerLot: 5n * unit - ((5n * unit) % grid), targetHealthFactorBps: 12_000n, executionReservePerLotAttoEth: opened.auction.minimumExecutionReservePerLotAttoEth }
+		const terms = { lots: 2n, minimumAttoRepPerLot: 5n * unit - ((5n * unit) % grid), targetHealthFactorBps: 12_000n }
 		const bidQuote = quotePortfolioAuctionBid(opened, terms)
 		expect(bidQuote.bidAttoEth).toBe(2n * unit)
 		await writeContractAndWait(context.owner, () => context.owner.sendTransaction(buildPortfolioAuctionBidRequest(opened, terms)))
 		const firstSnapshot = (await readAuction()).auction?.bids[0]
 		if (firstSnapshot === undefined) throw new Error('Submitted bid missing')
-		const first = { id: firstSnapshot.id, vault: firstSnapshot.vault, reserve: terms.executionReservePerLotAttoEth }
+		const first = { id: firstSnapshot.id, vault: firstSnapshot.vault }
 		const second = await context.bid(context.other, 4n)
 		await context.closingQuote()
 		await context.finalize()
@@ -62,15 +62,14 @@ describe('Statoblast: automatic truth-auction vaults', () => {
 		const account = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'ownerAccount', args: [first.vault] })
 		expect(account.positionId).not.toBe(0n)
 		expect(account.targetHealthFactorBps).toBe(12_000n)
-		expect(await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'positionExecutionReserveAttoEth', args: [account.positionId] })).toBe(2n * first.reserve)
 		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleRefund', args: [second.id] }))
-		expect(await context.owner.readContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'refundCreditAttoEth', args: [context.other.account.address] })).toBe(second.reserve)
+		expect(await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'refundCreditAttoEth', args: [context.other.account.address] })).toBe(unit)
 		const before = await context.balance(context.other.account.address)
 		const refundRecipient = context.owner.account.address
 		const ethBefore = await context.owner.getBalance({ address: refundRecipient })
 		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'withdrawRefunds', args: [refundRecipient] }))
 		expect(await context.balance(context.other.account.address)).toBe(before)
-		expect(await context.owner.getBalance({ address: refundRecipient })).toBe(ethBefore + unit + second.reserve)
+		expect(await context.owner.getBalance({ address: refundRecipient })).toBe(ethBefore + unit)
 		const settlement = await context.owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'settlement' })
 		const book = await context.owner.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'ledger' })
 		const bookId = await context.owner.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'bookIds', args: [context.child] })
@@ -94,7 +93,7 @@ describe('Statoblast: automatic truth-auction vaults', () => {
 		await expect(context.other.sendTransaction({ ...withdrawal, account: context.other.account.address })).rejects.toThrow('Only the auction vault owner')
 	})
 
-	test('missing a closing quote refunds bid ETH and the individual execution reserve', async () => {
+	test('missing a closing quote refunds bid ETH', async () => {
 		const context = await prepare()
 		await context.report()
 		await context.open()

@@ -28,7 +28,12 @@ describe('Statoblast: ETH-only truth-auction funding', () => {
 		expect(await context.balance(context.other.account.address)).toBe(0n)
 		const grid = await context.owner.readContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'repGrid' })
 		const minimum = ((100n * unit + grid - 1n) / grid) * grid
+		for (const funding of [2n * unit - 1n, 2n * unit + 1n]) {
+			await expect(context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'submitBid', args: [2n, minimum, 12_000n], value: funding })).rejects.toThrow('Truth auction ETH funding mismatch')
+		}
 		const bid = await context.bid(context.other, 2n, minimum)
+		expect(await context.other.getBalance({ address: context.auction })).toBe(0n)
+		expect(await context.other.getBalance({ address: context.engine })).toBe(2n * unit)
 		await context.closingQuote()
 		await context.finalize()
 		const position = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'auctionPosition', args: [bid.id] })
@@ -95,7 +100,7 @@ describe('Statoblast: ETH-only truth-auction funding', () => {
 		const recipient = context.owner.account.address
 		const before = await context.owner.getBalance({ address: recipient })
 		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'withdrawRefunds', args: [recipient] }))
-		expect(await context.owner.getBalance({ address: recipient })).toBe(before + 2n * (unit + bid.reserve))
+		expect(await context.owner.getBalance({ address: recipient })).toBe(before + 2n * unit)
 		expect(await context.balance(context.other.account.address)).toBe(0n)
 	})
 })

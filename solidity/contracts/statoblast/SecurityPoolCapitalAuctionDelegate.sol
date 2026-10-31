@@ -10,7 +10,6 @@ import { SecurityPoolCommitmentIndex } from './SecurityPoolCommitmentIndex.sol';
 interface ICapitalAuctionHost {
 	function repToken() external view returns (IERC20);
 	function securityMultiplierBps() external view returns (uint256);
-	function requiredExecutionReserve(uint256 commitment) external view returns (uint256);
 	function maximumHealthyPrice(uint256 rep, uint256 commitment) external view returns (uint256);
 	function storedOwnerAccount(address owner) external view returns (SecurityPoolCapitalState.Owner memory);
 	function commitmentIndex() external view returns (SecurityPoolCommitmentIndex);
@@ -89,16 +88,6 @@ contract SecurityPoolCapitalAuctionDelegate is SecurityPoolCapitalState {
 		owner.targetHealthFactorBps = bid.targetHealthFactorBps;
 		owner.feesAttoEth += ethFees;
 		owner.feesAttoRep += repFees;
-		uint256 reserve = cohort.adapter.bidExecutionReserve(bidId);
-		require(reserve >= ICapitalAuctionHost(address(this)).requiredExecutionReserve(commitment), 'Auction execution reserve below minimum');
-		receivingAuctionBid = bidId;
-		expectedAuctionReserve = reserve;
-		cohort.adapter.releaseBidExecutionReserve(bidId);
-		require(auctionReserveReceived, 'Auction execution reserve unfunded');
-		receivingAuctionBid = 0;
-		expectedAuctionReserve = 0;
-		auctionReserveReceived = false;
-		positionExecutionReserveAttoEth[id] = reserve;
 		emit AuctionBidMaterialized(bidId, vault, id, principal, commitment);
 	}
 

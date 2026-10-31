@@ -53,10 +53,6 @@ export function capitalRetirementReason(snapshot: PortfolioCapitalSnapshot, id: 
 	return undefined
 }
 
-export function requiredPortfolioExecutionReserve(snapshot: Pick<PortfolioCapitalSnapshot, 'economics'>, commitment: bigint) {
-	return ceilDivide(commitment, snapshot.economics.minimumCommitmentAttoEth) * snapshot.economics.minimumExecutionReserveAttoEth
-}
-
 export function capitalAuthorizationReason(snapshot: PortfolioCapitalSnapshot, commitment: bigint | undefined, proofPrice?: bigint) {
 	if (snapshot.forkTime > 0n || snapshot.frozen || snapshot.importing || snapshot.exported) return 'This universe is closed to new commitments.'
 	if (!snapshot.priceValid) return 'Refresh the shared REP price first.'
@@ -68,7 +64,6 @@ export function capitalAuthorizationReason(snapshot: PortfolioCapitalSnapshot, c
 	const totalCommitment = snapshot.totalCommitmentAttoEth - snapshot.ownerCommitmentAttoEth + commitment
 	if (proofPrice === undefined && (totalCommitment > snapshot.oracleExposureLimitAttoEth || snapshot.demandAttoEth > snapshot.oracleExposureLimitAttoEth)) return 'Request a price report funded for this larger commitment.'
 	if (snapshot.ownerPrincipalAttoRep < requiredPortfolioCollateral(snapshot, commitment, proofPrice)) return 'Collateral is below your saved health target.'
-	if (snapshot.ownerAccount.executionReserveAttoEth + (active?.executionReserveAttoEth ?? 0n) < requiredPortfolioExecutionReserve(snapshot, commitment)) return 'Fund the execution reserve first.'
 	return undefined
 }
 
@@ -85,13 +80,4 @@ export function capitalWithdrawalReason(snapshot: PortfolioCapitalSnapshot, amou
 		if (!snapshot.priceValid) return 'Refresh the shared REP price before withdrawing committed principal.'
 	}
 	return 'Amount exceeds your withdrawable REP. Retire commitment to release more principal.'
-}
-
-export function capitalExecutionWithdrawalReason(snapshot: PortfolioCapitalSnapshot, amount: bigint | undefined) {
-	if (snapshot.exported) return 'The reserve follows your fork choice.'
-	if (amount === undefined || amount === 0n) return 'Enter a positive amount.'
-	if (snapshot.importing && snapshot.ownerAccount.positionId !== 0n) return 'Wait for child preparation to finish before withdrawing the reserve.'
-	if (amount <= snapshot.withdrawableExecutionReserveAttoEth) return undefined
-	if (snapshot.forkTime !== 0n && snapshot.timestamp < snapshot.forkChoiceDeadline) return 'Assigned reserve becomes withdrawable after the fork-choice deadline.'
-	return 'Amount exceeds your withdrawable execution reserve.'
 }

@@ -44,7 +44,7 @@ contract CapitalLedgerTestComponents is SecurityPoolCreationCodeDeployer {
 		capitalDeployer = deployer;
 	}
 	function createLedger(address authority, Zoltar zoltar) external returns (SecurityPoolCapitalLedger) {
-		return capitalDeployer.create(authority, zoltar, 1, 10_500, 1e15, 1e14, 1 days);
+		return capitalDeployer.create(authority, zoltar, 1, 10_500, 1e15, 1 days);
 	}
 	function createIndex(address authority) external returns (SecurityPoolCommitmentIndex) {
 		return SecurityPoolCommitmentIndex(_deploy(abi.encode(authority)));
@@ -117,23 +117,22 @@ contract CapitalLedgerHarness {
 	function releaseForkBacking() external {
 		ledger.releaseForkBacking();
 	}
-	function importChoice(address owner, SecurityPoolCapitalLedger.ChoicePosition calldata position, uint256 target) external payable {
-		ledger.importChoice{value: msg.value}(owner, position, target);
+	function importChoice(address owner, SecurityPoolCapitalLedger.ChoicePosition calldata position, uint256 target) external {
+		ledger.importChoice(owner, position, target);
 	}
 	function finishImport(uint256 demand) external {
 		ledger.finishForkImport(demand);
 	}
-	/// @dev Populate the production import path, including custody and reserves.
+	/// @dev Populate the production import path, including custody.
 	/// Profiles exercise clustered keys and alternating healthy/unhealthy owners.
-	function importChoices(uint256 start, uint256 count, bool alternating) external payable {
-		require(msg.value == count * 2 ether, 'Fund every imported reserve');
+	function importChoices(uint256 start, uint256 count, bool alternating) external {
 		uint256 principal;
 		for (uint256 i = start; i < start + count; i++) {
 			uint256 baseRep = 42 ether;
 			if (alternating) baseRep = i % 2 == 0 ? 21 ether : 84 ether;
 			uint256 rep = baseRep + i * 1e12;
 			uint96 batch = uint96(i % 3);
-			ledger.importChoice{value: 2 ether}(address(uint160(0x1000 + i)), SecurityPoolCapitalState.ChoicePosition(rep, 20 ether, batch, 2 ether, batch == 0 ? 0 : 10 ether), 10_000);
+			ledger.importChoice(address(uint160(0x1000 + i)), SecurityPoolCapitalState.ChoicePosition(rep, 20 ether, batch, batch == 0 ? 0 : 10 ether), 10_000);
 			principal += rep;
 		}
 		zoltar.mint(address(ledger), principal);

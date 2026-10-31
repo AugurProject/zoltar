@@ -31,14 +31,13 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	IERC20 public immutable repToken;
 	uint256 public immutable securityMultiplierBps;
 	uint256 private immutable minimumCommitmentAttoEth;
-	uint256 private immutable minimumExecutionReserveAttoEth;
 
 	struct CureBounds {
 		uint256 expectedTotalCommitment;
 		uint256 expectedDemand;
 		uint256 expectedAcceptedPriceEpoch;
 		uint256 minimumRemoved;
-		uint256 minimumReward;
+		uint256 minimumReward; // REP credited to the keeper, in attoREP.
 	}
 
 	struct TakeoverBounds {
@@ -53,15 +52,15 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	event PrincipalWithdrawn(address indexed owner, address indexed recipient, uint256 amountAttoRep);
 	event CommitmentAuthorized(address indexed owner, uint96 indexed positionId, uint256 rep, uint256 commitment, uint256 targetHealthFactorBps);
 	event RetirementServed(uint256 rep, uint256 commitment);
-	event CommitmentCured(uint96 indexed positionId, uint256 removedCommitment, uint256 keeperReward);
-	event CommitmentTakenOver(uint96 indexed sourceId, uint96 indexed receiverId, uint256 commitment, uint256 awardAttoRep, uint256 keeperReward);
+	event CommitmentCured(uint96 indexed positionId, uint256 removedCommitment, uint256 keeperRewardAttoRep);
+	event CommitmentTakenOver(uint96 indexed sourceId, uint96 indexed receiverId, uint256 commitment, uint256 awardAttoRep);
 	event CapitalPriceAccepted(uint256 price, uint48 validUntil);
 	event EarningsClaimed(address indexed owner, uint256 ethAmount, uint256 repAmount);
 	event TerminalFeesBurned(uint256 ethAmount, uint256 repAmount);
 
-	constructor(address authority, Zoltar _zoltar, uint248 _universeId, uint256 multiplier, uint256 minimumCommitment, uint256 minimumReserve, uint48 vestingDuration) {
+	constructor(address authority, Zoltar _zoltar, uint248 _universeId, uint256 multiplier, uint256 minimumCommitment, uint48 vestingDuration) {
 		require(authority != address(0), 'Capital authority missing');
-		require(minimumCommitment > 0 && minimumReserve > 0 && vestingDuration > 0, 'Capital economic minimum missing');
+		require(minimumCommitment > 0 && vestingDuration > 0, 'Capital economic minimum missing');
 		portfolio = authority;
 		lifecycleDelegate = new SecurityPoolCapitalLifecycleDelegate(address(this));
 		auctionDelegate = new SecurityPoolCapitalAuctionDelegate(address(this));
@@ -70,7 +69,6 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		repToken = IERC20(address(_zoltar.getRepToken(_universeId)));
 		securityMultiplierBps = Math.max(multiplier, 10_500);
 		minimumCommitmentAttoEth = minimumCommitment;
-		minimumExecutionReserveAttoEth = minimumReserve;
 		repToken.safeApprove(address(_zoltar), type(uint256).max);
 	}
 
@@ -131,13 +129,6 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		return
 			abi.decode(DelegateCall.invoke(address(auctionDelegate), abi.encodeCall(auctionDelegate.materialize, (bidId))), (address, uint96));
 	}
-	/// @dev Only the expected reserve delivery may reenter materialization. This
-	/// hook receives funds but cannot change principal, index weights or earnings.
-	function receiveAuctionExecutionReserve(uint256 bidId) external payable {
-		require(msg.sender == address(auctionCohort.adapter) && receivingAuctionBid != 0 && bidId == receivingAuctionBid, 'Unexpected auction reserve');
-		require(!auctionReserveReceived && msg.value == expectedAuctionReserve, 'Incorrect auction execution reserve');
-		auctionReserveReceived = true;
-	}
 	function isPriceValid() public view returns (bool) {
 		return acceptedPrice > 0 && block.timestamp < priceValidUntil;
 	}
@@ -165,12 +156,6 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	}
 	function _requiredRep(uint256 commitment, uint256 health, uint256 price) private view returns (uint256) {
 		return commitmentIndex.requiredRep(commitment, price, securityMultiplierBps, health);
-	}
-	/// @notice Fund one execution unit for every minimum-sized commitment unit.
-	/// A paid partial action removes at least one unit; the residual keeps its
-	/// complete execution budget without charging another owner's principal.
-	function requiredExecutionReserve(uint256 commitment) public view returns (uint256) {
-		return Math.ceilDiv(commitment, minimumCommitmentAttoEth) * minimumExecutionReserveAttoEth;
 	}
 	function maximumHealthyPrice(uint256 rep, uint256 commitment) public view returns (uint256) {
 		return commitmentIndex.maximumHealthyPrice(rep, commitment, securityMultiplierBps);
@@ -211,17 +196,6 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	function withdrawPrincipal(uint256 amount, address recipient) external nonReentrant {
 		_checkpoint();
 		DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.withdrawPrincipal, (amount, recipient)));
-	}
-
-	/// @notice Funding a live position commits the additional ETH to its work.
-	/// Before authorization, or after retirement, funding stays withdrawable.
-	function fundExecutionReserve(address owner) external payable {
-		DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.fundExecutionReserve, (owner)));
-	}
-
-	function withdrawExecutionReserve(uint256 amount) external nonReentrant {
-		_checkpoint();
-		DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.withdrawExecutionReserve, (amount)));
 	}
 
 	function setHealthTarget(uint256 targetHealthFactorBps) external nonReentrant {
@@ -391,24 +365,21 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 
 	/// @notice Remove only enough unused nominal K to cure this particular vault.
 	function cure(uint96 id) external nonReentrant returns (uint256 removed) {
-		uint256 initialGas = gasleft();
 		_requireOpen();
 		_requireFresh();
 		_checkpoint();
 		_serveRetirement(0);
-		(removed, ) = _cure(id, msg.sender, initialGas);
+		(removed, ) = _cure(id, msg.sender);
 	}
 	function cureWithBounds(uint96 id, CureBounds calldata bounds) external nonReentrant returns (uint256 removed) {
-		uint256 initialGas = gasleft();
 		_prepareBoundedCure(bounds);
-		return _finishBoundedCure(id, bounds, initialGas);
+		return _finishBoundedCure(id, bounds);
 	}
 	function cureAuctionBid(uint256 bidId, CureBounds calldata bounds) external nonReentrant returns (uint256 removed) {
-		uint256 initialGas = gasleft();
 		require(auctionBidPositionIds[bidId] == 0, 'Auction bid already materialized');
 		_prepareBoundedCure(bounds);
 		(, uint96 id) = _materializeAuctionBid(bidId);
-		return _finishBoundedCure(id, bounds, initialGas);
+		return _finishBoundedCure(id, bounds);
 	}
 	/// @dev Reject changed signed capacity before any checkpoint or auction-tree
 	/// work. Retirement during this call must also leave the promised progress.
@@ -425,48 +396,47 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		(, commitment) = commitmentIndex.totals();
 		require(commitment > demandAttoEth && commitment - demandAttoEth >= bounds.minimumRemoved, 'Cure capacity below minimum');
 	}
-	function _finishBoundedCure(uint96 id, CureBounds calldata bounds, uint256 initialGas) private returns (uint256 removed) {
+	function _finishBoundedCure(uint96 id, CureBounds calldata bounds) private returns (uint256 removed) {
 		uint256 reward;
-		(removed, reward) = _cure(id, msg.sender, initialGas);
+		(removed, reward) = _cure(id, msg.sender);
 		require(removed >= bounds.minimumRemoved, 'Cure progress below minimum');
 		require(reward >= bounds.minimumReward, 'Cure reward below minimum');
 	}
-	function _cure(uint96 id, address keeper, uint256 initialGas) private returns (uint256 removed, uint256 reward) {
+	function _cure(uint96 id, address keeper) private returns (uint256 removed, uint256 reward) {
 		require(id != 0 && id != auctionCohort.positionId, 'Materialize an individual auction vault');
 		SecurityPoolCommitmentIndex.Cure memory result = commitmentIndex.cure(id, liquidationPrice, securityMultiplierBps, minimumCommitmentAttoEth, demandAttoEth);
 		removed = result.removed;
 		if (removed != 0) {
 			owners[result.owner].freeAttoRep += result.freedRep;
 			totalFreeAttoRep += result.freedRep;
-			reward = _payProgress(id, removed, result.previousCommitment, keeper, initialGas);
+			reward = result.rewardAttoRep;
+			owners[keeper].feesAttoRep += reward;
 			emit CommitmentCured(id, removed, reward);
 		}
 	}
 
-	/// @notice Competitive takeover: only the target funds the award and execution.
+	/// @notice Competitive takeover: only the target funds the REP award.
 	function takeOver(uint96 id, uint256 commitment, uint256 minimumAward, uint256 maximumOwnRep) external nonReentrant returns (uint96 receiverId) {
 		TakeoverBounds memory bounds;
-		return _takeOver(id, commitment, minimumAward, maximumOwnRep, bounds, false, gasleft());
+		return _takeOver(id, commitment, minimumAward, maximumOwnRep, bounds, false);
 	}
 	/// @notice Keeper-owned acquisition with signed owner exposure and quote bounds.
 	function takeOverWithBounds(uint96 id, uint256 commitment, uint256 minimumAward, uint256 maximumOwnRep, TakeoverBounds calldata bounds) external nonReentrant returns (uint96 receiverId) {
-		return _takeOver(id, commitment, minimumAward, maximumOwnRep, bounds, true, gasleft());
+		return _takeOver(id, commitment, minimumAward, maximumOwnRep, bounds, true);
 	}
 	function takeOverAuctionBid(uint256 bidId, uint256 commitment, uint256 minimumAward, uint256 maximumOwnRep, TakeoverBounds calldata bounds) external nonReentrant returns (uint96 receiverId) {
-		uint256 initialGas = gasleft();
 		_requireOpen();
 		_requireFresh();
 		_checkpoint();
 		(, uint96 id) = _materializeAuctionBid(bidId);
-		return _takeOver(id, commitment, minimumAward, maximumOwnRep, bounds, true, initialGas);
+		return _takeOver(id, commitment, minimumAward, maximumOwnRep, bounds, true);
 	}
-	function _takeOver(uint96 id, uint256 commitment, uint256 minimumAward, uint256 maximumOwnRep, TakeoverBounds memory bounds, bool enforceBounds, uint256 initialGas) private returns (uint96 receiverId) {
+	function _takeOver(uint96 id, uint256 commitment, uint256 minimumAward, uint256 maximumOwnRep, TakeoverBounds memory bounds, bool enforceBounds) private returns (uint96 receiverId) {
 		_requireOpen();
 		_requireFresh();
 		_checkpoint();
 		_serveRetirement(0);
-		(uint256 cured, ) = _cure(id, msg.sender, initialGas);
-		if (cured != 0) initialGas = gasleft();
+		_cure(id, msg.sender);
 		(SecurityPoolCommitmentIndex.Account memory source, uint256 award, uint256 debit) = commitmentIndex.takeoverQuote(id, msg.sender, commitment, minimumCommitmentAttoEth, minimumAward, liquidationPrice);
 		_settleOwner(msg.sender);
 		Owner storage receiver = owners[msg.sender];
@@ -509,35 +479,11 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		// adjusts collateral and therefore cannot refill that cohort.
 		_replace(receiverId, receiverRep, receiverK);
 		_clearHealthyLiquidation(id, remainingK, maximumHealthyPrice(remainingRep, remainingK));
-		_fundPositionReserve(receiver, receiverId, receiverK);
 		receiver.freeAttoRep -= ownRep;
 		totalFreeAttoRep -= ownRep;
 		owners[source.owner].freeAttoRep += debit - award;
 		totalFreeAttoRep += debit - award;
-		uint256 reward = _payProgress(id, commitment, source.commitment, msg.sender, initialGas);
-		emit CommitmentTakenOver(id, receiverId, commitment, award, reward);
-	}
-
-	function _payProgress(uint96 id, uint256 progress, uint256 previousCommitment, address keeper, uint256 initialGas) private returns (uint256 reward) {
-		uint256 reserve = positionExecutionReserveAttoEth[id];
-		uint256 previousMinimum = requiredExecutionReserve(previousCommitment);
-		uint256 remainingMinimum = requiredExecutionReserve(previousCommitment - progress);
-		// Funded positions preserve the complete configured residual floor. An
-		// underfunded position releases its own budget in proportion to progress.
-		reward = commitmentIndex.executionReward(reserve, previousMinimum, remainingMinimum, initialGas - gasleft() + 60_000);
-		positionExecutionReserveAttoEth[id] -= reward;
-		// Pull credit avoids a receiver veto over an otherwise valid cure.
-		owners[keeper].feesAttoEth += reward;
-	}
-
-	function _fundPositionReserve(Owner storage owner, uint96 id, uint256 commitment) private {
-		uint256 required = requiredExecutionReserve(commitment);
-		uint256 previous = positionExecutionReserveAttoEth[id];
-		if (previous >= required) return;
-		uint256 additional = required - previous;
-		require(owner.executionReserveAttoEth >= additional, 'Fund execution reserve');
-		owner.executionReserveAttoEth -= additional;
-		positionExecutionReserveAttoEth[id] = required;
+		emit CommitmentTakenOver(id, receiverId, commitment, award);
 	}
 
 	function freeze() external onlyForkAuthority {
@@ -548,15 +494,15 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		frozen = true;
 	}
 
-	/// @notice Fork choices preserve exact owner principal, reserve and retirement intent.
-	function exportChoice(address owner) external onlyForkAuthority returns (ChoicePosition memory choice, uint256 target, uint256 reserve) {
+	/// @notice Fork choices preserve exact owner principal and retirement intent.
+	function exportChoice(address owner) external onlyForkAuthority returns (ChoicePosition memory choice, uint256 target) {
 		return
-			abi.decode(DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.exportChoice, (owner))), (ChoicePosition, uint256, uint256));
+			abi.decode(DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.exportChoice, (owner))), (ChoicePosition, uint256));
 	}
 	function beginForkImport() external onlyForkAuthority {
 		DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.beginForkImport, ()));
 	}
-	function importChoice(address owner, ChoicePosition calldata position, uint256 target) external payable onlyForkAuthority {
+	function importChoice(address owner, ChoicePosition calldata position, uint256 target) external onlyForkAuthority {
 		DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.importChoice, (owner, position, target)));
 	}
 	function finishForkImport(uint256 fundedDemand) external onlyForkAuthority {

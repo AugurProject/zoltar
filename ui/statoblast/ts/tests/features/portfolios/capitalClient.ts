@@ -123,11 +123,11 @@ export function capitalClient(initial = capitalSnapshot()) {
 				if (request.address === modules.book) return modules.engine
 				return portfolio
 			}
-			if (request.functionName === 'accountOf' || request.functionName === 'positionExecutionReserveAttoEth' || request.functionName === 'liquidationStarted') {
+			if (request.functionName === 'accountOf' || request.functionName === 'liquidationStarted') {
 				const position = snapshot.positions.find(position => position.id === request.args?.[0])
 				if (position === undefined) throw new Error('Unknown position')
 				if (request.functionName === 'accountOf') return [position.owner, position.batch, position.rep, position.commitment, position.maxHealthyPrice, position.releasedRep, position.feesAttoEth, position.feesAttoRep, position.remainingCommitment]
-				return request.functionName === 'liquidationStarted' ? position.liquidationStarted : position.executionReserveAttoEth
+				return position.liquidationStarted
 			}
 			if (request.functionName === 'previewRetirement') {
 				const preview = snapshot.positions.find(position => position.id === request.args?.[0])?.retirementPreview

@@ -21,7 +21,7 @@ import { initialRuntimeState } from '../../src/state/operator-state.ts'
 import { portfolioSettings } from '../support/portfolio-observation.ts'
 
 describe('portfolio operator funded auction capital integration', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n, minimumExecutionReserveAttoEth: unit / 100n })
+	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
 	test('a minimally funded keeper authenticates lazy winners, cures and collects rewards with bounded gas', async () => {
 		const context = await preparePortfolioTruthAuction(fixture)
 		await context.report()
@@ -48,7 +48,7 @@ describe('portfolio operator funded auction capital integration', () => {
 		expect(virtual.map(position => position.auctionTarget?.bidId)).toEqual([first.id, second.id])
 		const cohort = await context.owner.readContract({ address: context.capital, abi: capitalAbi, functionName: 'auctionCohort' })
 		expect(initial.positions.filter(position => position.auctionTarget === undefined).some(position => position.id === cohort[1])).toBe(false)
-		expect(virtual[0]).toMatchObject({ rep: (await context.owner.readContract({ address: context.capital, abi: capitalAbi, functionName: 'auctionPosition', args: [first.id] })).principal, executionReserveAttoEth: 2n * first.reserve })
+		expect(virtual[0]).toMatchObject({ rep: (await context.owner.readContract({ address: context.capital, abi: capitalAbi, functionName: 'auctionPosition', args: [first.id] })).principal })
 		await context.report(3n * unit)
 		const observation = await loadPortfolioObservation(reader, settings, account.address, scope, await reader.getBlockNumber())
 		const target = observation.positions.find(position => position.auctionTarget?.bidId === first.id)
@@ -114,7 +114,7 @@ describe('portfolio operator funded auction capital integration', () => {
 			settings.deployment.multicall3 = canonicalMulticall
 			const quote = await simulatePortfolioCureReward(wallet, settings, pool, observation, portfolioTarget(target))
 			expect(quote.removed).toBe(unit)
-			expect(quote.reward).toBeGreaterThanOrEqual(2n * settings.strategy.maximumGasCostAttoEth)
+			expect((quote.reward * unit) / observation.snapshot.liquidationPrice).toBeGreaterThanOrEqual(2n * settings.strategy.maximumGasCostAttoEth)
 			// No simulation may materialize or debit the real winning vault.
 			expect((await reader.readContract({ address: context.capital, abi: capitalAbi, functionName: 'auctionPosition', args: [first.id] })).materialized).toBe(false)
 			await executePortfolioCure(wallet, settings, state, pool, observation, portfolioTarget(target), async () => true)
@@ -141,13 +141,14 @@ describe('portfolio operator funded auction capital integration', () => {
 			expect(realized.commitment).toBe(unit)
 			expect((await reader.readContract({ address: context.capital, abi: capitalAbi, functionName: 'auctionPosition', args: [second.id] })).materialized).toBe(false)
 			const earned = await reader.readContract({ address: context.capital, abi: capitalAbi, functionName: 'storedOwnerAccount', args: [account.address] })
-			expect(earned.feesAttoEth).toBeGreaterThanOrEqual(quote.reward)
-			await executePortfolioEarnings(wallet, settings, state, pool, observation)
-			expect((await reader.readContract({ address: context.capital, abi: capitalAbi, functionName: 'storedOwnerAccount', args: [account.address] })).feesAttoEth).toBe(0n)
-			expect(await reader.getBalance({ address: account.address })).toBeGreaterThan(observation.walletAttoEth)
+			expect(earned.feesAttoRep).toBeGreaterThanOrEqual(quote.reward)
+			await executePortfolioEarnings(wallet, settings, state, pool, observation, async () => true)
+			expect((await reader.readContract({ address: context.capital, abi: capitalAbi, functionName: 'storedOwnerAccount', args: [account.address] })).feesAttoRep).toBe(0n)
+			expect(await reader.readContract({ address: context.token, abi: erc20Abi, functionName: 'balanceOf', args: [account.address] })).toBe(earned.feesAttoRep)
+			expect(await reader.getBalance({ address: account.address })).toBeLessThan(observation.walletAttoEth)
 			expect(state.pendingTransactions).toHaveLength(0)
 			expect(state.paused).toBe(false)
-			if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ auctionKeeperCureGas: { estimate, signed: transaction.gas, used: receipt.gasUsed, reward: earned.feesAttoEth } })
+			if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ auctionKeeperCureGas: { estimate, signed: transaction.gas, used: receipt.gasUsed, reward: earned.feesAttoRep } })
 			// The second winner remains virtual until a real funded acquisition.
 			await context.mock.setBalance(account.address, 100n * unit)
 			// Retire chosen capital down to claim demand so cure cannot change K.
@@ -166,12 +167,12 @@ describe('portfolio operator funded auction capital integration', () => {
 			const winner = next.positions.find(position => position.auctionTarget?.bidId === second.id)
 			if (winner === undefined) throw new Error('Second auction target disappeared')
 			expect(next.snapshot.totalCommitmentAttoEth).toBe(next.snapshot.demandAttoEth)
-			for (let step = 0; step < 4; step++) {
+			for (let step = 0; step < 3; step++) {
 				const before = state.activities.filter(activity => activity.status === 'confirmed').length
 				await executePortfolioTakeover(wallet, settings, state, pool, next, portfolioTarget(winner), async () => true)
 				expect(state.activities.filter(activity => activity.status === 'confirmed')).toHaveLength(before + 1)
 				const after = await reader.readContract({ address: context.capital, abi: capitalAbi, functionName: 'auctionPosition', args: [second.id] })
-				expect(after.materialized).toBe(step === 3)
+				expect(after.materialized).toBe(step === 2)
 			}
 			const taken = await reader.readContract({ address: context.capital, abi: capitalAbi, functionName: 'ownerCollateral', args: [account.address] })
 			expect(taken[1]).toBe(3n * unit)
@@ -193,7 +194,7 @@ describe('portfolio operator funded auction capital integration', () => {
 })
 
 describe('portfolio auction cure with a small operator gas budget', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n, minimumExecutionReserveAttoEth: 1n })
+	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
 
 	for (const enoughQuoteGas of [true, false])
 		test(enoughQuoteGas ? 'skips an over-budget funded cure before signing without pausing the operator' : 'skips a cure whose reward quote exceeds wallet gas capacity without pausing', async () => {
@@ -251,10 +252,7 @@ describe('portfolio auction cure with a small operator gas budget', () => {
 			const state = initialRuntimeState(false, account.address, 1)
 			state.portfolioScopes = [scope]
 			try {
-				// The pool's one-attoETH reserve floor is distinct from the funded auction
-				// reserve. A correctly priced simulation earns a real gas reimbursement.
-				expect(observation.snapshot.economics.minimumExecutionReserveAttoEth).toBe(1n)
-				expect(first.reserve).toBeGreaterThan(4n)
+				// The target funds its cure from REP; the keeper still must afford gas.
 				const quote = await simulatePortfolioCureReward(wallet, settings, pool, observation, portfolioTarget(target))
 				expect(quote.removed).toBe(unit)
 				expect(quote.reward).toBeGreaterThan(4n)

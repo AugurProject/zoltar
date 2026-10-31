@@ -29,13 +29,7 @@ export const priceHint = (grid: bigint | undefined) => `This sets your maximum p
 export const repInvalid = 'Enter a positive REP amount with up to 18 decimal places.'
 export const health = 'Target health (%)'
 export const healthInvalid = 'Enter a health target of at least 100%, with up to two decimal places.'
-export const reserve = 'Execution reserve per lot (ETH)'
-export const reserveHint = 'Leave blank to use the current minimum. This funds later keeper work for your vault.'
-export const reserveInvalid = 'Enter a nonnegative execution reserve with up to 18 decimal places.'
-export const minimumReserve = 'Current minimum reserve per lot'
 export const bidEth = 'ETH bid'
-export const keeperEth = 'Execution reserve paid now'
-export const totalEth = 'Total ETH paid now'
 export const minimumPrincipal = 'Minimum pledged REP if fully filled'
 export const minimumCollateral = 'Minimum REP per lot at 100% health'
 export const clearingRep = 'Clearing REP per winning lot'
@@ -77,5 +71,5 @@ export const refresh = 'Refresh auction'
 export const refreshing = 'Refreshing auction…'
 export const busy = 'Wait for the current transaction.'
 export const pages = (start: bigint, count: number, total: bigint) => `${start + (count === 0 ? 0n : 1n)}–${start + BigInt(count)} of ${total} bids`
-export const bidReview = (lots: bigint, bidAttoEth: bigint, reserveAttoEth: bigint, minimumAttoRepPerLot: bigint) =>
-	`Bid ${formatEther(bidAttoEth)} ETH for ${lots} lots with at least ${formatEther(minimumAttoRepPerLot)} REP collateral per winning lot, plus ${formatEther(reserveAttoEth)} ETH execution reserve. Purchased REP backs the vault’s accepted ETH commitment immediately at closing. Unused ETH can be refunded after closing.`
+export const bidReview = (lots: bigint, bidAttoEth: bigint, minimumAttoRepPerLot: bigint) =>
+	`Bid ${formatEther(bidAttoEth)} ETH for ${lots} lots with at least ${formatEther(minimumAttoRepPerLot)} REP collateral per winning lot. Purchased REP backs the vault’s accepted ETH commitment immediately at closing. Unused ETH can be refunded after closing.`

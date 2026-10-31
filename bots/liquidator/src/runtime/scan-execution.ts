@@ -1,7 +1,7 @@
 import { portfolioTakeoverPlan } from '#core/portfolio-strategy'
 import { executePortfolioTakeover, PortfolioOpportunityExpired } from '#execution/portfolio-executor'
 import { executePortfolioCure, executePortfolioEarnings } from '#execution/portfolio-cure'
-import { portfolioCurePlan } from '#core/portfolio-cure'
+import { portfolioCurePlan, portfolioEarningsCoverGas } from '#core/portfolio-cure'
 import { portfolioTarget } from '#monitoring/portfolio-auction'
 import { recordActivity } from '#state/operator-state'
 import { canonicalMarketPriceAllowsExecution, marketPriceAllowsExecution, selectedCandidate } from '#core/candidate-selection'
@@ -66,13 +66,13 @@ export async function runLiveExecutionStep(runtime: LiquidatorRuntime, deps: Liq
 		const totalPrincipal = state.portfolios.reduce((sum, portfolio) => sum + portfolio.snapshot.ownerPrincipalAttoRep, 0n)
 		for (const portfolio of state.portfolios) {
 			const price = { repToken: portfolio.snapshot.repToken, lastPrice: portfolio.snapshot.acceptedPrice }
-			if (portfolio.selected && portfolio.approvedUniverse && portfolio.snapshot.ownerAccount.feesAttoEth >= runtime.settings.strategy.maximumGasCostAttoEth + runtime.settings.portfolioPolicy.minimumNetRewardAttoEth) {
-				await executePortfolioEarnings(activeWallet, runtime.settings, state, runtime.readPool, portfolio)
+			const priceAllowed = (current: typeof portfolio) => canonicalMarketPriceAllowsExecution({ repToken: current.snapshot.repToken, lastPrice: current.snapshot.acceptedPrice }, runtime.settings, state, canonicalHash, requireDexEvidence)
+			if (portfolioEarningsCoverGas(portfolio, runtime.settings, marketPriceAllowsExecution(price, runtime.settings, state))) {
+				await executePortfolioEarnings(activeWallet, runtime.settings, state, runtime.readPool, portfolio, priceAllowed)
 				await saveDurableState(runtime.settings.runtime.stateFile, state)
 				return shouldStopAfterSuccessfulCycle(runtime.settings.runtime.once)
 			}
 			for (const position of portfolio.positions) {
-				const priceAllowed = (current: typeof portfolio) => canonicalMarketPriceAllowsExecution({ repToken: current.snapshot.repToken, lastPrice: current.snapshot.acceptedPrice }, runtime.settings, state, canonicalHash, requireDexEvidence)
 				if (portfolioCurePlan(portfolio, position, runtime.settings, marketPriceAllowsExecution(price, runtime.settings, state)) !== undefined) {
 					try {
 						await executePortfolioCure(activeWallet, runtime.settings, state, runtime.readPool, portfolio, portfolioTarget(position), priceAllowed)
@@ -122,7 +122,7 @@ export function runDryRunStep(runtime: LiquidatorRuntime, deps: LiquidatorDeps) 
 					kind: 'liquidation',
 					status: 'dry-run',
 					message: 'Portfolio funded takeover candidate',
-					details: `${portfolio.selection.address} universe=${portfolio.selection.universeId} ${label} ownREP=${result.plan.ownFunding} reserveETH=${result.plan.reserveFunding}; ${result.reason}`,
+					details: `${portfolio.selection.address} universe=${portfolio.selection.universeId} ${label} ownREP=${result.plan.ownFunding}; ${result.reason}`,
 				})
 			runtime.lastDryRunKey = key
 			return

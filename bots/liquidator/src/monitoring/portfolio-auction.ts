@@ -69,14 +69,12 @@ export async function loadPortfolioAuctionPosition(client: ReadClient, snapshot:
 	if (position.materialized || fill.filledLots === 0n) return undefined
 	const vault = getAddress(position.vault)
 	verifyRuntimeIdentity(await client.getCode({ address: vault, blockNumber }), portfolioRuntimeIdentities.SecurityPoolAuctionVault, 'auction vault')
-	const [owner, initialCapital, controller, id, mappedId, reserve, required] = await Promise.all([
+	const [owner, initialCapital, controller, id, mappedId] = await Promise.all([
 		client.readContract({ address: vault, abi: vaultAbi, functionName: 'owner', blockNumber }),
 		client.readContract({ address: vault, abi: vaultAbi, functionName: 'initialCapital', blockNumber }),
 		client.readContract({ address: vault, abi: vaultAbi, functionName: 'auction', blockNumber }),
 		client.readContract({ address: vault, abi: vaultAbi, functionName: 'bidId', blockNumber }),
 		client.readContract({ address: auction.address, abi: auctionAbi, functionName: 'bidIdForVault', args: [vault], blockNumber }),
-		client.readContract({ address: auction.address, abi: auctionAbi, functionName: 'bidExecutionReserve', args: [bidId], blockNumber }),
-		client.readContract({ address: snapshot.capitalLedger, abi: capitalAbi, functionName: 'requiredExecutionReserve', args: [position.commitment], blockNumber }),
 	])
 	if (getAddress(fill.vault) !== vault || getAddress(owner) !== getAddress(fill.bidder) || getAddress(initialCapital) !== snapshot.capitalLedger || getAddress(controller) !== auction.address || id !== bidId || mappedId !== bidId || position.positionId !== 0n) throw new Error('Auction bid vault identity changed')
 	return {
@@ -89,8 +87,6 @@ export async function loadPortfolioAuctionPosition(client: ReadClient, snapshot:
 		commitment: position.commitment,
 		maxHealthyPrice: threshold,
 		remainingCommitment: 0n,
-		executionReserveAttoEth: reserve,
-		requiredExecutionReserveAttoEth: required,
 		liquidationStarted: BigInt(position.liquidationStarted),
 		retirementStatus: 'Not retiring',
 		stalledRetirement: false,
