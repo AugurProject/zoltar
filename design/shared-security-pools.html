@@ -1,0 +1,1727 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="A single-page explainer for pull request #1164: shared security pools (portfolios) that let many questions share REP custody and underwriting capacity, and the redesigned uniform-price Truth Auction." />
+		<title>Shared security pools and uniform-price Truth Auctions · PR #1164 explainer</title>
+		<style>
+			:root {
+				--bg: #fbfbf9;
+				--fg: #1d1f21;
+				--muted: #5c6166;
+				--line: #d7d9d4;
+				--panel: #ffffff;
+				--accent: #0b6e4f;
+				--accent2: #b25b00;
+				--accent3: #355c9a;
+				--warn: #9a2b2b;
+				--soft: #eef3ef;
+				--soft2: #fbf1e6;
+				--soft3: #eaf0fa;
+				--code: #f1f2ef;
+				--accent-alt: #2a7f62;
+				--on-fill: #ffffff;
+			}
+			@media (prefers-color-scheme: dark) {
+				:root {
+					--bg: #13161a;
+					--fg: #e6e8e3;
+					--muted: #a0a6a1;
+					--line: #2e343a;
+					--panel: #1a1f24;
+					--accent: #4fbf95;
+					--accent2: #f0a24a;
+					--accent3: #8fb0e8;
+					--warn: #e07070;
+					--soft: #1f2a25;
+					--soft2: #2b241b;
+					--soft3: #1c2430;
+					--code: #20262c;
+					--accent-alt: #7fd3b3;
+					--on-fill: #13161a;
+				}
+			}
+			* {
+				box-sizing: border-box;
+			}
+			html {
+				background: var(--bg);
+				color: var(--fg);
+				font-family:
+					'Inter',
+					'Segoe UI',
+					system-ui,
+					-apple-system,
+					sans-serif;
+				font-size: 17px;
+				line-height: 1.55;
+			}
+			body {
+				margin: 0;
+				padding: 0 1.25rem 4rem;
+			}
+			main {
+				max-width: 58rem;
+				margin: 0 auto;
+			}
+			header.page {
+				padding: 3rem 0 1.5rem;
+				border-bottom: 1px solid var(--line);
+			}
+			.kicker {
+				text-transform: uppercase;
+				letter-spacing: 0.08em;
+				font-size: 0.8rem;
+				color: var(--accent);
+				margin: 0 0 0.5rem;
+			}
+			h1 {
+				font-size: 2.2rem;
+				line-height: 1.15;
+				margin: 0 0 1rem;
+			}
+			h2 {
+				font-size: 1.6rem;
+				margin: 3rem 0 0.75rem;
+				padding-top: 1rem;
+				border-top: 1px solid var(--line);
+			}
+			section:first-of-type h2 {
+				border-top: none;
+				padding-top: 0;
+			}
+			h3 {
+				font-size: 1.2rem;
+				margin: 2rem 0 0.5rem;
+			}
+			h4 {
+				font-size: 1rem;
+				margin: 1.5rem 0 0.4rem;
+				text-transform: uppercase;
+				letter-spacing: 0.04em;
+				color: var(--muted);
+			}
+			p,
+			li {
+				max-width: 46rem;
+			}
+			.lede {
+				font-size: 1.15rem;
+				color: var(--fg);
+			}
+			.meta {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 0.5rem;
+				margin: 1rem 0 0;
+				padding: 0;
+				list-style: none;
+			}
+			.meta li {
+				background: var(--soft);
+				border: 1px solid var(--line);
+				border-radius: 999px;
+				padding: 0.15rem 0.7rem;
+				font-size: 0.85rem;
+				color: var(--muted);
+			}
+			nav.toc {
+				background: var(--panel);
+				border: 1px solid var(--line);
+				border-radius: 8px;
+				padding: 1rem 1.25rem;
+				margin: 1.5rem 0 0;
+			}
+			nav.toc ol {
+				margin: 0.25rem 0 0;
+				padding-left: 1.25rem;
+				columns: 2;
+				column-gap: 2rem;
+			}
+			nav.toc li {
+				break-inside: avoid;
+				margin: 0.15rem 0;
+			}
+			@media (max-width: 40rem) {
+				nav.toc ol {
+					columns: 1;
+				}
+				.equation math {
+					font-size: 0.9rem;
+				}
+				figcaption::before {
+					content: 'Scroll sideways to see the whole figure. ';
+					font-style: italic;
+				}
+				html {
+					font-size: 16px;
+				}
+				h1 {
+					font-size: 1.7rem;
+				}
+			}
+			a {
+				color: var(--accent3);
+			}
+			code {
+				font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, monospace;
+				font-size: 0.88em;
+				background: var(--code);
+				padding: 0.05rem 0.3rem;
+				border-radius: 4px;
+			}
+			figure {
+				margin: 1.5rem 0;
+				padding: 1rem;
+				background: var(--panel);
+				border: 1px solid var(--line);
+				border-radius: 8px;
+				overflow-x: auto;
+			}
+			figure svg {
+				display: block;
+				width: 100%;
+				min-width: 900px;
+				height: auto;
+				max-width: 900px;
+				margin: 0 auto;
+			}
+			figcaption {
+				font-size: 0.9rem;
+				color: var(--muted);
+				margin-top: 0.75rem;
+			}
+			figcaption strong {
+				color: var(--fg);
+			}
+			.equation {
+				margin: 1rem 0;
+				padding: 0.75rem 1rem;
+				background: var(--soft3);
+				border-left: 3px solid var(--accent3);
+				border-radius: 4px;
+				overflow-x: auto;
+			}
+			.equation math {
+				font-size: 1.05rem;
+			}
+			.equation mtable {
+				math-style: normal;
+			}
+			.equation .equation-caption {
+				font-size: 0.85rem;
+				color: var(--muted);
+				margin: 0.4rem 0 0;
+			}
+			.var {
+				font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, monospace;
+				font-size: 0.9em;
+				color: var(--accent3);
+			}
+			table {
+				border-collapse: collapse;
+				width: 100%;
+				margin: 1rem 0 1.5rem;
+				font-size: 0.93rem;
+			}
+			th,
+			td {
+				border: 1px solid var(--line);
+				padding: 0.45rem 0.6rem;
+				text-align: left;
+				vertical-align: top;
+			}
+			th {
+				background: var(--soft);
+			}
+			td.num,
+			th.num {
+				text-align: right;
+				font-variant-numeric: tabular-nums;
+			}
+			.table-wrap {
+				overflow-x: auto;
+			}
+			.table-wrap table {
+				min-width: 40rem;
+			}
+			td code {
+				white-space: nowrap;
+			}
+			td ul {
+				margin: 0;
+				padding-left: 1.1rem;
+			}
+			td li {
+				margin: 0.2rem 0;
+			}
+			.callout {
+				margin: 1.25rem 0;
+				padding: 0.9rem 1.1rem;
+				border-radius: 6px;
+				border: 1px solid var(--line);
+				background: var(--soft);
+			}
+			.callout.warn {
+				background: var(--soft2);
+				border-color: var(--accent2);
+			}
+			.callout p:last-child {
+				margin-bottom: 0;
+			}
+			dl.glossary dt {
+				font-weight: 600;
+				margin-top: 0.75rem;
+			}
+			dl.glossary dd {
+				margin: 0.1rem 0 0 0;
+				max-width: 46rem;
+			}
+			.colophon {
+				color: var(--muted);
+				font-size: 0.85rem;
+				margin-top: 3rem;
+			}
+			/* SVG palette, so diagrams follow light and dark mode */
+			.box {
+				fill: var(--panel);
+				stroke: var(--line);
+				stroke-width: 1.2;
+			}
+			.box-accent {
+				fill: var(--soft);
+				stroke: var(--accent);
+				stroke-width: 1.4;
+			}
+			.box-warm {
+				fill: var(--soft2);
+				stroke: var(--accent2);
+				stroke-width: 1.4;
+			}
+			.box-cool {
+				fill: var(--soft3);
+				stroke: var(--accent3);
+				stroke-width: 1.4;
+			}
+			.lbl {
+				fill: var(--fg);
+				font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+				font-size: 13px;
+			}
+			.lbl-small {
+				fill: var(--muted);
+				font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+				font-size: 11px;
+			}
+			.lbl-title {
+				fill: var(--fg);
+				font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+				font-size: 14px;
+				font-weight: 600;
+			}
+			.axis {
+				stroke: var(--muted);
+				stroke-width: 1;
+			}
+			.grid {
+				stroke: var(--line);
+				stroke-width: 1;
+				stroke-dasharray: 3 3;
+			}
+			.arrow {
+				stroke: var(--muted);
+				stroke-width: 1.3;
+				fill: none;
+				marker-end: url(#arrowhead);
+			}
+			.arrow-accent {
+				stroke: var(--accent);
+				stroke-width: 1.6;
+				fill: none;
+				marker-end: url(#arrowhead-accent);
+			}
+			.fill-accent {
+				fill: var(--accent);
+			}
+			.fill-accent-alt {
+				fill: var(--accent-alt);
+			}
+			.lbl-on-fill {
+				fill: var(--on-fill);
+			}
+			.fill-warm {
+				fill: var(--accent2);
+			}
+			.fill-cool {
+				fill: var(--accent3);
+			}
+			.fill-warn {
+				fill: var(--warn);
+			}
+			.fill-muted {
+				fill: var(--line);
+				stroke: var(--muted);
+				stroke-width: 1;
+			}
+			.stroke-accent {
+				stroke: var(--accent);
+				stroke-width: 2;
+				fill: none;
+			}
+			.stroke-warm {
+				stroke: var(--accent2);
+				stroke-width: 2;
+				fill: none;
+			}
+			.stroke-cool {
+				stroke: var(--accent3);
+				stroke-width: 2;
+				fill: none;
+			}
+			.stroke-warn {
+				stroke: var(--warn);
+				stroke-width: 1.5;
+				stroke-dasharray: 5 3;
+				fill: none;
+			}
+			.band-ok {
+				fill: var(--accent);
+				opacity: 0.18;
+			}
+			.band-warn {
+				fill: var(--warn);
+				opacity: 0.18;
+			}
+			.band-neutral {
+				fill: var(--accent2);
+				opacity: 0.16;
+			}
+		</style>
+	</head>
+	<body>
+		<main>
+			<header class="page">
+				<p class="kicker">Design explainer · pull request #1164</p>
+				<h1>Shared security pools and uniform-price Truth Auctions</h1>
+				<p class="lede">Pull request <a href="https://github.com/AugurProject/zoltar/pull/1164">#1164</a> lets many Statoblast questions share one pool of REP security and one set of underwriting commitments, instead of each question running its own isolated SecurityPool. It also rebuilds the post-fork Truth Auction as a uniform-price auction of whole ETH lots whose winners automatically become funded capital providers. This page explains what the change does, how the new system works, the math and incentives behind it, and where its weak points are.</p>
+				<ul class="meta">
+					<li>Branch <code>t3code/multi-question-security-pool</code> → <code>main</code></li>
+					<li>742 files changed, about 49,900 lines added and 3,700 removed</li>
+					<li>34 new Solidity contracts and libraries plus nine new interfaces; roughly 7,600 lines of new contract code excluding interfaces</li>
+					<li>Contracts, SDK, Statoblast and Trading UIs, bots, scanner, deployment tooling and documentation change together</li>
+				</ul>
+				<nav class="toc" aria-label="Contents">
+					<strong>Contents</strong>
+					<ol>
+						<li><a href="#summary">The change in one minute</a></li>
+						<li><a href="#problem">The problem: fragmented security</a></li>
+						<li><a href="#overview">The new system at a glance</a></li>
+						<li><a href="#lifecycle">How a portfolio works, step by step</a></li>
+						<li><a href="#forks">Forks and the Truth Auction</a></li>
+						<li><a href="#game-theory">Game theory and incentives</a></li>
+						<li><a href="#scaling">Why it scales: trees instead of scans</a></li>
+						<li><a href="#changes">What the pull request changes, layer by layer</a></li>
+						<li><a href="#benefits">Benefits</a></li>
+						<li><a href="#issues">Issues, risks and accepted limits</a></li>
+						<li><a href="#glossary">Glossary</a></li>
+					</ol>
+				</nav>
+			</header>
+
+			<section id="summary">
+				<h2>1. The change in one minute</h2>
+				<p>Statoblast is Augur's market layer on top of the Zoltar oracle. Before this pull request, every question had its own SecurityPool: its own vaults holding REP, its own ETH collateral, its own fee curve, its own REP/ETH price coordinator and, after a fork, its own Truth Auction. A REP holder who wanted to secure twenty questions had to run twenty vaults and pay for twenty price reports.</p>
+				<p>After this pull request, a <strong>portfolio</strong> holds REP once per universe in a <strong>capital ledger</strong>, and every question registered in the portfolio draws on that same backing. A provider deposits REP, picks a personal <strong>health target</strong>, and authorizes one ETH <strong>commitment</strong>. A buyer picks a question and an amount; the portfolio checks that total <strong>demand</strong> (ETH liabilities) stays within the <strong>healthy commitment</strong> of all providers, mints the complete set (one Invalid, one Yes and one No share per unit of ETH), and charges a fee that is split between providers, a prepaid resolution premium, a reporting budget and a maintenance reserve. Each question keeps its own outcome tokens, its own Escalation Game (the REP-staked dispute process that resolves a question locally) and separate settlement accounting, but ETH custody and fee bookkeeping are centralized in a <strong>settlement book</strong>.</p>
+				<p>The pull request also replaces per-vault liquidation with two keeper actions, <strong>cure</strong> (remove unused commitment, 1% REP reward) and <strong>takeover</strong> (take over a distressed commitment for a time-ramped REP award), and redesigns the <strong>Truth Auction</strong> that repairs a branch's ETH shortfall after a fork: bids are whole ETH lots with a minimum REP-per-lot limit, every winning lot receives the same clearing REP amount, provably losing bids can be refunded before closing, and all sold REP enters capital custody immediately so winners never need to claim.</p>
+				<p>Everything is built so that no operation iterates over all questions, owners or bidders: commitments live in balanced trees keyed by health, fees vest through cumulative integrals, and forks copy immutable roots instead of migrating each vault.</p>
+			</section>
+
+			<section id="problem">
+				<h2>2. The problem: fragmented security</h2>
+				<p>In the standalone design each SecurityPool is an island. A vault owner deposits REP into a specific pool and sets an underwriting commitment there. The pool can mint complete sets only up to the sum of its vault commitments, charges an open-interest fee that depends on that pool's utilization, and requires its own fresh REP/ETH price for any solvency-sensitive step. When the universe forks, each pool migrates its vaults one by one and each child pool runs its own Truth Auction, in which winners must come back later to claim a vault.</p>
+				<p>Three costs follow from that isolation:</p>
+				<ul>
+					<li><strong>Idle capital.</strong> REP locked in a quiet question cannot back a busy one. Underwriting capacity is wherever it happened to be deposited, not where demand is.</li>
+					<li><strong>Repeated overhead.</strong> Every pool needs its own price reports, its own keeper attention and, in a fork, its own migration and auction. The costs scale with the number of questions, not with the amount of capital.</li>
+					<li><strong>Thin markets.</strong> Small questions rarely attract a dedicated underwriter, so the long tail of questions is either unbacked or backed badly.</li>
+				</ul>
+				<figure id="fig-before-after">
+					<svg viewBox="0 0 900 330" role="img" aria-labelledby="fig-before-after-title">
+						<title id="fig-before-after-title">Standalone pools each hold their own vaults, oracle and auction; a portfolio shares one capital ledger, settlement book and price feed across thin question contracts.</title>
+						<defs>
+							<marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted)"></path></marker>
+							<marker id="arrowhead-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)"></path></marker>
+						</defs>
+						<text x="20" y="24" class="lbl-title">Before: one SecurityPool per question</text>
+						<rect x="20" y="40" width="120" height="30" rx="6" class="box-cool"></rect>
+						<text x="80" y="60" text-anchor="middle" class="lbl">Provider A</text>
+						<rect x="160" y="40" width="120" height="30" rx="6" class="box-cool"></rect>
+						<text x="220" y="60" text-anchor="middle" class="lbl">Provider B</text>
+						<rect x="300" y="40" width="120" height="30" rx="6" class="box-cool"></rect>
+						<text x="360" y="60" text-anchor="middle" class="lbl">Provider C</text>
+						<rect x="20" y="120" width="120" height="180" rx="8" class="box"></rect>
+						<rect x="160" y="120" width="120" height="180" rx="8" class="box"></rect>
+						<rect x="300" y="120" width="120" height="180" rx="8" class="box"></rect>
+						<text x="80" y="140" text-anchor="middle" class="lbl-title">Question 1</text>
+						<text x="220" y="140" text-anchor="middle" class="lbl-title">Question 2</text>
+						<text x="360" y="140" text-anchor="middle" class="lbl-title">Question 3</text>
+						<text x="80" y="165" text-anchor="middle" class="lbl-small">vaults + REP</text>
+						<text x="80" y="185" text-anchor="middle" class="lbl-small">ETH collateral</text>
+						<text x="80" y="205" text-anchor="middle" class="lbl-small">fee curve</text>
+						<text x="80" y="225" text-anchor="middle" class="lbl-small">price coordinator</text>
+						<text x="80" y="245" text-anchor="middle" class="lbl-small">escalation game</text>
+						<text x="80" y="265" text-anchor="middle" class="lbl-small">own Truth Auction</text>
+						<text x="220" y="165" text-anchor="middle" class="lbl-small">vaults + REP</text>
+						<text x="220" y="185" text-anchor="middle" class="lbl-small">ETH collateral</text>
+						<text x="220" y="205" text-anchor="middle" class="lbl-small">fee curve</text>
+						<text x="220" y="225" text-anchor="middle" class="lbl-small">price coordinator</text>
+						<text x="220" y="245" text-anchor="middle" class="lbl-small">escalation game</text>
+						<text x="220" y="265" text-anchor="middle" class="lbl-small">own Truth Auction</text>
+						<text x="360" y="165" text-anchor="middle" class="lbl-small">vaults + REP</text>
+						<text x="360" y="185" text-anchor="middle" class="lbl-small">ETH collateral</text>
+						<text x="360" y="205" text-anchor="middle" class="lbl-small">fee curve</text>
+						<text x="360" y="225" text-anchor="middle" class="lbl-small">price coordinator</text>
+						<text x="360" y="245" text-anchor="middle" class="lbl-small">escalation game</text>
+						<text x="360" y="265" text-anchor="middle" class="lbl-small">own Truth Auction</text>
+						<path d="M 80 70 L 80 118" class="arrow"></path>
+						<path d="M 220 70 L 220 118" class="arrow"></path>
+						<path d="M 360 70 L 360 118" class="arrow"></path>
+						<path d="M 100 70 L 200 118" class="arrow"></path>
+						<text x="220" y="318" text-anchor="middle" class="lbl-small">A provider backing several questions repeats everything per question.</text>
+						<line x1="450" y1="20" x2="450" y2="310" class="grid"></line>
+						<text x="480" y="24" class="lbl-title">After: one portfolio, many questions</text>
+						<rect x="480" y="40" width="120" height="30" rx="6" class="box-cool"></rect>
+						<text x="540" y="60" text-anchor="middle" class="lbl">Provider A</text>
+						<rect x="620" y="40" width="120" height="30" rx="6" class="box-cool"></rect>
+						<text x="680" y="60" text-anchor="middle" class="lbl">Provider B</text>
+						<rect x="760" y="40" width="120" height="30" rx="6" class="box-cool"></rect>
+						<text x="820" y="60" text-anchor="middle" class="lbl">Provider C</text>
+						<rect x="480" y="105" width="400" height="60" rx="8" class="box-accent"></rect>
+						<text x="680" y="128" text-anchor="middle" class="lbl-title">Capital ledger (one per universe)</text>
+						<text x="680" y="148" text-anchor="middle" class="lbl-small">REP principal · commitments · health targets · fee streams</text>
+						<rect x="480" y="180" width="195" height="44" rx="8" class="box-warm"></rect>
+						<text x="577" y="198" text-anchor="middle" class="lbl-title">Settlement book</text>
+						<text x="577" y="214" text-anchor="middle" class="lbl-small">all question ETH, fees, finality</text>
+						<rect x="685" y="180" width="195" height="44" rx="8" class="box-warm"></rect>
+						<text x="782" y="198" text-anchor="middle" class="lbl-title">Shared price feed</text>
+						<text x="782" y="214" text-anchor="middle" class="lbl-small">one REP/ETH report per universe</text>
+						<rect x="480" y="245" width="120" height="55" rx="8" class="box"></rect>
+						<rect x="620" y="245" width="120" height="55" rx="8" class="box"></rect>
+						<rect x="760" y="245" width="120" height="55" rx="8" class="box"></rect>
+						<text x="540" y="266" text-anchor="middle" class="lbl-title">Question 1</text>
+						<text x="680" y="266" text-anchor="middle" class="lbl-title">Question 2</text>
+						<text x="820" y="266" text-anchor="middle" class="lbl-title">Question 3</text>
+						<text x="540" y="286" text-anchor="middle" class="lbl-small">shares + reporting</text>
+						<text x="680" y="286" text-anchor="middle" class="lbl-small">shares + reporting</text>
+						<text x="820" y="286" text-anchor="middle" class="lbl-small">shares + reporting</text>
+						<path d="M 540 70 L 540 103" class="arrow"></path>
+						<path d="M 680 70 L 680 103" class="arrow"></path>
+						<path d="M 820 70 L 820 103" class="arrow"></path>
+						<path d="M 540 224 L 540 243" class="arrow"></path>
+						<path d="M 600 224 L 680 243" class="arrow"></path>
+						<path d="M 660 224 L 820 243" class="arrow"></path>
+						<text x="680" y="318" text-anchor="middle" class="lbl-small">Providers deposit once; every question draws on the same capacity.</text>
+					</svg>
+					<figcaption><strong>Figure 1. Before and after.</strong> Standalone pools duplicate vaults, collateral accounting, pricing and repair per question. A portfolio centralizes REP custody, ETH settlement and pricing per universe and leaves each question with only its shares and reporting.</figcaption>
+				</figure>
+				<p>Standalone pools are not removed. A question can still be deployed as an ordinary SecurityPool with the existing vault, fee and auction rules. The portfolio is a second way to deploy and back questions, and the per-question SecurityPool contract now has a <em>bound</em> mode in which it mirrors the central books instead of holding assets itself.</p>
+			</section>
+
+			<section id="overview">
+				<h2>3. The new system at a glance</h2>
+				<h3>3.1 Roles and assets</h3>
+				<div class="table-wrap">
+					<table>
+						<thead>
+							<tr>
+								<th>Who</th>
+								<th>What they put in</th>
+								<th>What they get</th>
+								<th>What they risk</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td><strong>Capital provider</strong> (vault owner)</td>
+								<td>REP <em>principal</em> deposited in a universe's capital ledger; one ETH <em>commitment</em> backed by all of that principal; a personal health target</td>
+								<td>A share of every fee earned while the commitment is healthy, paid in ETH and REP; lump sums vest over a configured period</td>
+								<td>REP rewards paid to keepers when the position becomes unhealthy; forced commitment reduction; REP sold or devalued in a fork</td>
+							</tr>
+							<tr>
+								<td><strong>Buyer</strong> (trader, liquidity provider)</td>
+								<td>ETH for complete sets of one registered question, plus a purchase fee</td>
+								<td>Invalid, Yes and No shares backed by the shared capital</td>
+								<td>Impaired redemption if a fork leaves a branch short of ETH</td>
+							</tr>
+							<tr>
+								<td><strong>Reporter</strong></td>
+								<td>REP staked in a question's Escalation Game, held in a central reporter ledger</td>
+								<td>Escalation Game payouts plus a bounded ETH reward for the final unique leader</td>
+								<td>Losing stake; the escalation haircut (two fifths of the game's binding capital, burned at settlement instead of being paid to winners)</td>
+							</tr>
+							<tr>
+								<td><strong>Keeper</strong> (the liquidator bot or anyone)</td>
+								<td>Gas and, for takeovers, REP collateral of their own</td>
+								<td>REP from cures and takeovers; ETH reimbursement for accepted oracle reports from the maintenance reserve</td>
+								<td>Unprofitable gas; REP that may be illiquid</td>
+							</tr>
+							<tr>
+								<td><strong>Auction bidder</strong></td>
+								<td>ETH in whole lots during a branch's Truth Auction</td>
+								<td>Child REP at a uniform clearing amount per lot and an automatically funded vault</td>
+								<td>Ordinary provider risk in the chosen branch; nothing if the bid loses, since losing ETH is refunded</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<h3>3.2 The contracts</h3>
+				<p>The portfolio is a hub with a small number of modules, each deployed once per portfolio or once per universe. The hub holds configuration and routes authenticated callbacks; the modules hold assets or accounting, never both for the same thing.</p>
+				<figure id="fig-contract-map">
+					<svg viewBox="0 0 900 470" role="img" aria-labelledby="fig-contract-map-title">
+						<title id="fig-contract-map-title">Contract map: the portfolio hub deploys a capital ledger per universe, the central settlement, services, the reporter ledger, the fork coordinator and the shared price feed; the fork coordinator deploys one branch Truth Auction, which deploys one vault per bid.</title>
+						<rect x="290" y="20" width="320" height="56" rx="8" class="box-accent"></rect>
+						<text x="450" y="43" text-anchor="middle" class="lbl-title">SecurityPoolPortfolio (hub)</text>
+						<text x="450" y="62" text-anchor="middle" class="lbl-small">admission policy · economics · question registry</text>
+						<rect x="20" y="130" width="250" height="110" rx="8" class="box-cool"></rect>
+						<text x="145" y="152" text-anchor="middle" class="lbl-title">SecurityPoolCapitalLedger</text>
+						<text x="145" y="170" text-anchor="middle" class="lbl-small">one per universe · holds REP principal</text>
+						<rect x="30" y="182" width="112" height="44" rx="6" class="box"></rect>
+						<text x="86" y="200" text-anchor="middle" class="lbl-small">CommitmentIndex</text>
+						<text x="86" y="216" text-anchor="middle" class="lbl-small">AVL tree by health</text>
+						<rect x="150" y="182" width="112" height="44" rx="6" class="box"></rect>
+						<text x="206" y="200" text-anchor="middle" class="lbl-small">CapitalFeeStreams</text>
+						<text x="206" y="216" text-anchor="middle" class="lbl-small">vesting integrals</text>
+						<rect x="300" y="130" width="280" height="110" rx="8" class="box-warm"></rect>
+						<text x="440" y="152" text-anchor="middle" class="lbl-title">SecurityPoolPortfolioSettlement</text>
+						<text x="440" y="170" text-anchor="middle" class="lbl-small">holds all question ETH</text>
+						<rect x="315" y="182" width="250" height="44" rx="6" class="box"></rect>
+						<text x="440" y="200" text-anchor="middle" class="lbl-small">SettlementBook</text>
+						<text x="440" y="216" text-anchor="middle" class="lbl-small">units · finality · fees · recovery REP</text>
+						<rect x="610" y="130" width="270" height="110" rx="8" class="box-warm"></rect>
+						<text x="745" y="152" text-anchor="middle" class="lbl-title">SecurityPoolPortfolioServices</text>
+						<text x="745" y="170" text-anchor="middle" class="lbl-small">maintenance reserve · purchase routing</text>
+						<rect x="620" y="182" width="125" height="44" rx="6" class="box"></rect>
+						<text x="682" y="200" text-anchor="middle" class="lbl-small">PremiumBook</text>
+						<text x="682" y="216" text-anchor="middle" class="lbl-small">resolution premiums</text>
+						<rect x="752" y="182" width="122" height="44" rx="6" class="box"></rect>
+						<text x="813" y="200" text-anchor="middle" class="lbl-small">ReportingRewards</text>
+						<text x="813" y="216" text-anchor="middle" class="lbl-small">reporter caps</text>
+						<rect x="20" y="290" width="200" height="56" rx="8" class="box"></rect>
+						<text x="120" y="312" text-anchor="middle" class="lbl-title">SharedPoolPriceFeed</text>
+						<text x="120" y="331" text-anchor="middle" class="lbl-small">one REP/ETH report per universe</text>
+						<rect x="250" y="290" width="200" height="56" rx="8" class="box"></rect>
+						<text x="350" y="312" text-anchor="middle" class="lbl-title">ReporterLedger</text>
+						<text x="350" y="331" text-anchor="middle" class="lbl-small">central escalation REP custody</text>
+						<rect x="480" y="290" width="400" height="56" rx="8" class="box-cool"></rect>
+						<text x="680" y="312" text-anchor="middle" class="lbl-title">PortfolioForkCoordinator</text>
+						<text x="680" y="331" text-anchor="middle" class="lbl-small">freeze · branch choice · migration · branch activation</text>
+						<rect x="480" y="380" width="190" height="70" rx="8" class="box-warm"></rect>
+						<text x="575" y="402" text-anchor="middle" class="lbl-title">PortfolioAuction</text>
+						<text x="575" y="420" text-anchor="middle" class="lbl-small">+ UniformPriceAuction engine</text>
+						<text x="575" y="437" text-anchor="middle" class="lbl-small">one per branch, ETH-only bids</text>
+						<rect x="690" y="380" width="190" height="70" rx="8" class="box"></rect>
+						<text x="785" y="402" text-anchor="middle" class="lbl-title">AuctionVault</text>
+						<text x="785" y="420" text-anchor="middle" class="lbl-small">one per bid, bidder-controlled</text>
+						<text x="785" y="437" text-anchor="middle" class="lbl-small">becomes a capital owner</text>
+						<rect x="20" y="380" width="430" height="70" rx="8" class="box"></rect>
+						<text x="235" y="402" text-anchor="middle" class="lbl-title">SecurityPool (bound mode) · ShareToken · EscalationGame</text>
+						<text x="235" y="420" text-anchor="middle" class="lbl-small">one set per question and universe, deployed by the factory on the hub's request</text>
+						<text x="235" y="437" text-anchor="middle" class="lbl-small">holds no provider capital or question cash; mirrors the central books</text>
+						<path d="M 380 76 L 160 128" class="arrow"></path>
+						<path d="M 440 76 L 440 128" class="arrow"></path>
+						<path d="M 520 76 L 740 128" class="arrow"></path>
+						<path d="M 292 76 L 285 84 L 285 262 L 120 262 L 120 288" class="arrow"></path>
+						<path d="M 596 76 L 596 262 L 350 262 L 350 288" class="arrow"></path>
+						<path d="M 603 76 L 603 288" class="arrow"></path>
+						<path d="M 575 346 L 575 378" class="arrow"></path>
+						<path d="M 670 415 L 688 415" class="arrow"></path>
+					</svg>
+					<figcaption><strong>Figure 2. Contract map.</strong> Arrows run from the contract that deploys or binds a module to that module; callbacks in the other direction, and the factory that deploys the per-question contracts on the hub's behalf, are omitted. Shaded boxes hold assets: REP in the capital ledger, ETH in settlement and services, and, during a fork, the branch's fresh REP inventory and bid ETH in the auction until it closes. The hub and the fork coordinator are tinted to mark their control role; the coordinator holds recovery REP and raised ETH only between branch start and activation. White boxes are pure accounting or thin per-question contracts.</figcaption>
+				</figure>
+				<p>Three design rules recur in every module. First, <em>custody and accounting are separate</em>: the settlement book records liabilities, but the settlement contract holds the ETH; the commitment index records positions, but the capital ledger holds the REP. Second, <em>every mutation is preceded by a checkpoint</em> that pays out income earned at the old weights before any weight, price or commitment changes, so nobody can capture earnings that accrued before they joined. Third, <em>work follows tree paths</em>: no call loops over the set of owners, questions or bids.</p>
+			</section>
+
+			<section id="lifecycle">
+				<h2>4. How a portfolio works, step by step</h2>
+				<p>This section follows a portfolio from creation to redemption. Numbers in the examples use illustrative parameters: a security multiplier of 150% (15,000 basis points), a 5% oracle tolerance, a 1% purchase fee, a 10% annual holding fee, a 0.05 ETH reporting budget per question, a 25% maintenance share and a 1 ETH minimum commitment. All of these are configured per portfolio or per deployment, not fixed by the protocol, except where the text says otherwise.</p>
+
+				<h3 id="create">4.1 Creating a portfolio and registering questions</h3>
+				<p>A portfolio is created from a <em>seed</em>: an ordinary origin SecurityPool whose security multiplier and oracle priority fee the portfolio inherits. The creator supplies an immutable <strong>admission policy</strong> contract and an <strong>economics configuration</strong>. The repository ships two policies: <em>Open</em>, which admits any question, and <em>Fixed</em>, which admits a sorted list of question identifiers that can never change. Anyone can write another policy; it is consulted with a static call on registration, quotes and purchases, never on withdrawals or recovery, so a broken policy cannot trap funds.</p>
+				<div class="table-wrap">
+					<table>
+						<thead>
+							<tr>
+								<th>Parameter</th>
+								<th>Meaning</th>
+								<th>Where it bites</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td><code>purchaseFeeBps</code>, <code>minimumPurchaseFeeAttoEth</code></td>
+								<td>One-time fee on each purchase, as a share of the <em>backing value</em> the purchase consumes</td>
+								<td>Every purchase, including reused capacity</td>
+							</tr>
+							<tr>
+								<td><code>annualFeeBps</code></td>
+								<td>Linear holding fee charged from a question's cash while it is open and unreported</td>
+								<td>Continuous fee stream; also sizes the prepaid resolution premium</td>
+							</tr>
+							<tr>
+								<td><code>reportingFeeAttoEth</code></td>
+								<td>Fixed per-question reporting budget, prefunded as reward shares</td>
+								<td>Charged on every purchase; the question's reward is funded once, the rest goes to maintenance</td>
+							</tr>
+							<tr>
+								<td><code>serviceFeeBps</code>, <code>maximumOracleRewardAttoEth</code></td>
+								<td>Share of the backing fee that funds the maintenance reserve, and the cap on one oracle reimbursement</td>
+								<td>Pays sponsors of accepted price reports</td>
+							</tr>
+							<tr>
+								<td><code>minimumCommitmentAttoEth</code></td>
+								<td>Smallest commitment, smallest retirement step, and the ETH lot size of the Truth Auction</td>
+								<td>Authorization, retirement, cures, auction bids</td>
+							</tr>
+							<tr>
+								<td><code>rewardVestingSeconds</code></td>
+								<td>How long each lump-sum fee budget (backing-fee share, reporting REP surplus) takes to vest to providers</td>
+								<td>Backing-fee and REP-surplus credits</td>
+							</tr>
+							<tr>
+								<td><code>maximumQuestionHorizonSeconds</code></td>
+								<td>Longest time to question end accepted at registration</td>
+								<td>Registration</td>
+							</tr>
+							<tr>
+								<td><code>minimumOutcomeRate</code></td>
+								<td>Lowest ETH-per-share exchange rate at which a question still accepts new mints</td>
+								<td>Purchases after heavy fee accrual</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<p>Setup runs in <strong>four permissionless stages</strong>, each one transaction, so that deploying the settlement book, reporter ledger, fork coordinator, capital ledger and shared price feed stays under the block gas limit. Registering a question afterwards deploys a thin bound SecurityPool and its ShareToken in the portfolio's own namespace, checks the question's end date against the horizon, and records it in the settlement book. Registration moves no capital and creates no per-provider state: a portfolio with ten thousand questions has exactly as many positions as it has providers.</p>
+
+				<h3 id="capital">4.2 Providing capital: principal, commitment, health</h3>
+				<p>A provider interacts with one <strong>capital ledger</strong> per universe. Three quantities describe a provider there:</p>
+				<ul>
+					<li><strong>Principal</strong> is REP the provider has deposited. It is either <em>free</em> (idle, withdrawable at any time) or <em>pledged</em> to the provider's single live position.</li>
+					<li><strong>Commitment</strong> is the ETH amount the provider agrees to underwrite. All pledged principal backs this one commitment; there is at most one live position per owner, portfolio and universe.</li>
+					<li><strong>Health target</strong> is a personal multiplier, at least 100%, that the provider applies on top of the protocol floor. It governs admission, commitment increases, surplus withdrawals and cancelling a retirement. The protocol applies only the floor, both for counting capacity and for liquidation; the target binds only the owner's own actions.</li>
+				</ul>
+				<p>Health is measured against a REP/ETH price quoted as REP per ETH, so a <em>higher</em> price means REP is cheaper and more REP is needed. The REP a position must hold is:</p>
+				<div class="equation" id="eq-required-rep">
+					<math display="block">
+						<mrow>
+							<mi>requiredRep</mi>
+							<mo>=</mo>
+							<mi>commitment</mi>
+							<mo>×</mo>
+							<mi>price</mi>
+							<mo>×</mo>
+							<mfrac><mi>securityMultiplier</mi><mn>10 000</mn></mfrac>
+							<mo>×</mo>
+							<mfrac><mi>healthTarget</mi><mn>10 000</mn></mfrac>
+						</mrow>
+					</math>
+					<p class="equation-caption">Each multiplication rounds up in the contract. The security multiplier is the seed pool's value, floored at 10,500 basis points (105%). The health target is at least 10,000 basis points.</p>
+				</div>
+				<p>Rather than re-evaluating every position at each new price, the index stores for every position the highest price at which it is still healthy at the protocol floor:</p>
+				<div class="equation" id="eq-max-healthy-price">
+					<math display="block">
+						<mrow>
+							<mi>maxHealthyPrice</mi>
+							<mo>=</mo>
+							<mfrac>
+								<mrow><mi>pledgedRep</mi><mo>×</mo><mn>10 000</mn></mrow>
+								<mrow><mi>securityMultiplier</mi><mo>×</mo><mi>commitment</mi></mrow>
+							</mfrac>
+						</mrow>
+					</math>
+					<p class="equation-caption">Positions are keyed by this value in a balanced tree, so “sum of commitments healthy at price p” is one tree walk, whatever the number of providers.</p>
+				</div>
+				<p>Two prices are derived from each accepted oracle report, using the oracle's configured dispute tolerance (5% in the repository configuration):</p>
+				<div class="equation" id="eq-prices">
+					<math display="block">
+						<mrow>
+							<mi>conservativePrice</mi>
+							<mo>=</mo>
+							<mfrac
+								><mi>acceptedPrice</mi><mrow><mn>1</mn><mo>−</mo><mi>tolerance</mi></mrow></mfrac
+							>
+							<mspace width="2em"></mspace>
+							<mi>liquidationPrice</mi>
+							<mo>=</mo>
+							<mfrac
+								><mi>acceptedPrice</mi><mrow><mn>1</mn><mo>+</mo><mi>tolerance</mi></mrow></mfrac
+							>
+						</mrow>
+					</math>
+					<p class="equation-caption">Admission, commitment growth, surplus withdrawal and capacity use the conservative price (REP assumed cheaper than reported). Cures and takeovers use the liquidation price (REP assumed dearer than reported).</p>
+				</div>
+				<p>The gap between the two prices is the point of the design. A report that is wrong by up to the tolerance in either direction cannot both admit a position and then make it liquidatable: a position admitted at the edge needs the accepted price to move by a factor of (1 + tolerance) ÷ (1 − tolerance), about 10.5% at a 5% tolerance, before any keeper can touch it.</p>
+				<figure id="fig-price-band">
+					<svg viewBox="0 0 900 300" role="img" aria-labelledby="fig-price-band-title">
+						<title id="fig-price-band-title">Number lines of REP-per-ETH prices showing the liquidation price below the accepted price and the conservative price above it, and the 10.5% move needed before an admitted position becomes liquidatable.</title>
+						<text x="60" y="26" class="lbl-title">Today: accepted price 200 REP per ETH, tolerance 5%</text>
+						<rect x="60" y="50" width="136" height="26" class="band-warn"></rect>
+						<rect x="196" y="50" width="261" height="26" class="band-neutral"></rect>
+						<rect x="457" y="50" width="383" height="26" class="band-ok"></rect>
+						<line x1="60" y1="76" x2="840" y2="76" class="axis"></line>
+						<line x1="196" y1="44" x2="196" y2="82" class="stroke-warn"></line>
+						<line x1="320" y1="44" x2="320" y2="82" class="axis"></line>
+						<line x1="457" y1="44" x2="457" y2="82" class="stroke-accent"></line>
+						<text x="196" y="100" text-anchor="middle" class="lbl-small">liquidation price 190.5</text>
+						<text x="320" y="100" text-anchor="middle" class="lbl-small">accepted 200</text>
+						<text x="457" y="100" text-anchor="middle" class="lbl-small">conservative price 210.5</text>
+						<text x="128" y="42" text-anchor="middle" class="lbl-small">cure / takeover zone</text>
+						<text x="326" y="42" text-anchor="middle" class="lbl-small">no admission, no liquidation</text>
+						<text x="648" y="42" text-anchor="middle" class="lbl-small">admission, growth, surplus withdrawal</text>
+						<circle cx="457" cy="76" r="6" class="fill-cool"></circle>
+						<text x="470" y="124" class="lbl-small">position admitted exactly at the edge: maxHealthyPrice = 210.5</text>
+						<text x="60" y="176" class="lbl-title">After REP loses 10.5% of its ETH value: accepted price 221.1</text>
+						<rect x="60" y="200" width="397" height="26" class="band-warn"></rect>
+						<rect x="457" y="200" width="289" height="26" class="band-neutral"></rect>
+						<rect x="746" y="200" width="94" height="26" class="band-ok"></rect>
+						<line x1="60" y1="226" x2="840" y2="226" class="axis"></line>
+						<line x1="457" y1="194" x2="457" y2="232" class="stroke-warn"></line>
+						<line x1="594" y1="194" x2="594" y2="232" class="axis"></line>
+						<line x1="746" y1="194" x2="746" y2="232" class="stroke-accent"></line>
+						<text x="457" y="250" text-anchor="middle" class="lbl-small">liquidation price 210.5</text>
+						<text x="594" y="250" text-anchor="middle" class="lbl-small">accepted 221.1</text>
+						<text x="746" y="250" text-anchor="middle" class="lbl-small">conservative 232.7</text>
+						<circle cx="457" cy="226" r="6" class="fill-cool"></circle>
+						<text x="300" y="274" class="lbl-small">the same position now sits on the liquidation line; the next adverse report makes it curable</text>
+						<text x="840" y="290" text-anchor="end" class="lbl-small">axis: REP per ETH, 180 to 240</text>
+					</svg>
+					<figcaption><strong>Figure 3. The two-price band.</strong> The conservative price gates everything that increases exposure; the liquidation price gates everything that punishes. Their ratio, (1 + tolerance) ÷ (1 − tolerance), is the minimum adverse move between admission and liquidation.</figcaption>
+				</figure>
+				<p>Authorizing a commitment requires a fresh price and enough pledged REP at the provider's own target and the conservative price. It also requires that the portfolio's aggregate exposure stays within what the accepted oracle report has <em>funded</em> (see <a href="#prices">4.7</a>); a provider who wants to grow beyond that can attach their own settled report and is then held to that report's conservative price as a withdrawal floor until a newer canonical report covers the larger total. Raising a live target is likewise price-checked; an atomic deposit-and-set-target call exists so a provider can add collateral and tighten their target in one step.</p>
+
+				<h3 id="purchase">4.3 Buying complete sets: capacity and fees</h3>
+				<p>A buyer calls the portfolio with a universe, a question, an ETH amount, a recipient and a minimum number of shares, sending the ETH plus a fee budget. Allocation is automatic: there is no choice of provider. The gating constraint is that new ETH liabilities are admitted only while the healthy commitment of all providers covers the total:</p>
+				<div class="equation" id="eq-capacity">
+					<math display="block">
+						<mrow>
+							<mi>availableCapacity</mi>
+							<mo>=</mo>
+							<mi>healthyActiveCommitment</mi>
+							<mo>(</mo>
+							<mi>conservativePrice</mi>
+							<mo>)</mo>
+							<mo>−</mo>
+							<mi>demand</mi>
+						</mrow>
+					</math>
+					<p class="equation-caption"><span class="var">demand</span> is the ETH of all live question liabilities in the universe plus prefunded reporting rewards. <span class="var">healthyActiveCommitment</span> counts active positions whose <span class="var">maxHealthyPrice</span> is at least the conservative price, plus the part of a retiring position its owner has chosen to keep. The rule is enforced when demand increases and when retirements are served, not continuously: an adverse price move can leave outstanding demand above the healthy commitment, and it is the cures and takeovers of <a href="#distress">4.6</a>, not a reduction of demand, that restore coverage. Capacity is zero while the price is stale, after the universe has forked, before a branch has been activated, and while the universe's settlement book is in runoff, the post-fork state in which claims settle but no new purchases are accepted (see <a href="#after-auction">5.4</a>).</p>
+				</div>
+				<p>Minting itself is proportional. A question's shares are a claim on its <em>units</em> of cash; a new buyer receives <span class="var">cash × outcomeSupply ÷ units</span> complete sets, so holders who arrived before fees were charged are not diluted and later buyers pay the current exchange rate. Every mint increases <span class="var">demand</span> by exactly the cash deposited.</p>
+				<p>The fee has four parts. The first is proportional to the <em>backing value</em> the purchase consumes, which is the cash times the security multiplier, because that is the amount of REP exposure providers take on:</p>
+				<div class="equation" id="eq-backing-fee">
+					<math display="block">
+						<mrow>
+							<mi>backingFee</mi>
+							<mo>=</mo>
+							<mi>max</mi>
+							<mo>(</mo>
+							<mi>minimumPurchaseFee</mi>
+							<mo>,</mo>
+							<mi>cash</mi>
+							<mo>×</mo>
+							<mfrac><mi>securityMultiplier</mi><mn>10 000</mn></mfrac>
+							<mo>×</mo>
+							<mfrac><mi>purchaseFeeBps</mi><mn>10 000</mn></mfrac>
+							<mo>)</mo>
+						</mrow>
+					</math>
+				</div>
+				<p>The second prepays the holding fee for the reporting tail. Once a question's Escalation Game opens, the linear holding fee stops, but providers remain exposed until finality. The buyer therefore prepays a <strong>resolution premium</strong> covering the longest possible local reporting window, three days of activation plus seven weeks of required-support ramp (52 days):</p>
+				<div class="equation" id="eq-premium">
+					<math display="block">
+						<mrow>
+							<mi>premium</mi>
+							<mo>=</mo>
+							<mi>addedPrincipal</mi>
+							<mo>×</mo>
+							<mfrac><mi>annualFeeBps</mi><mn>10 000</mn></mfrac>
+							<mo>×</mo>
+							<mfrac
+								><mrow><mn>52</mn><mtext>&#160;days</mtext></mrow
+								><mrow><mn>365</mn><mtext>&#160;days</mtext></mrow></mfrac
+							>
+						</mrow>
+					</math>
+					<p class="equation-caption">The premium is earned by providers only until the question's finality deadline; the unused remainder goes to the maintenance reserve, not back to the buyer.</p>
+				</div>
+				<p>The third is the fixed <strong>reporting budget</strong>. The first purchase of a question (or any purchase after the budget has been partly consumed) tops the question's <em>reward shares</em> up to <span class="var">reportingFeeAttoEth</span>; these are complete-set-equivalent claims that the final unique leader of the Escalation Game can later redeem, within a cap. Every purchase pays the full budget amount; whatever is not needed to top up the reward is routed to maintenance. The fourth is the <strong>maintenance share</strong> of the backing fee:</p>
+				<div class="equation" id="eq-fee-total">
+					<math display="block">
+						<mtable displaystyle="true">
+							<mtr>
+								<mtd><mi>totalFee</mi><mo>=</mo><mi>backingFee</mi><mo>+</mo><mi>premium</mi><mo>+</mo><mi>reportingBudget</mi></mtd>
+							</mtr>
+							<mtr>
+								<mtd
+									><mi>maintenance</mi><mo>=</mo><mi>backingFee</mi><mo>×</mo><mfrac><mi>serviceFeeBps</mi><mn>10 000</mn></mfrac
+									><mo>+</mo><mi>reportingBudget</mi><mo>−</mo><mi>rewardTopUp</mi></mtd
+								>
+							</mtr>
+							<mtr>
+								<mtd><mi>providerIncome</mi><mo>=</mo><mi>totalFee</mi><mo>−</mo><mi>premium</mi><mo>−</mo><mi>rewardTopUp</mi><mo>−</mo><mi>maintenance</mi></mtd>
+							</mtr>
+						</mtable>
+					</math>
+					<p class="equation-caption">Quotes are exact at the current checkpoint; the transaction re-checkpoints, enforces the caller's total budget and minimum shares, and refunds any excess ETH.</p>
+				</div>
+				<p>Worked example: the first 1 ETH purchase of a fresh question.</p>
+				<div class="table-wrap">
+					<table>
+						<thead>
+							<tr>
+								<th>Item</th>
+								<th class="num">ETH</th>
+								<th>Destination</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>Cash for complete sets</td>
+								<td class="num">1.0000</td>
+								<td>Question units in the settlement book; raises demand by 1 ETH</td>
+							</tr>
+							<tr>
+								<td>Backing fee: 1 ETH × 150% × 1%</td>
+								<td class="num">0.0150</td>
+								<td>0.01125 vests to providers; 0.00375 (25%) to maintenance</td>
+							</tr>
+							<tr>
+								<td>Resolution premium: 1.05 ETH principal × 10% × 52 ÷ 365</td>
+								<td class="num">0.0150</td>
+								<td>Premium book; credited to healthy providers over the reporting window</td>
+							</tr>
+							<tr>
+								<td>Reporting budget (first purchase funds the reward in full)</td>
+								<td class="num">0.0500</td>
+								<td>Reward shares of the question; also raises demand by 0.05 ETH</td>
+							</tr>
+							<tr>
+								<td><strong>Total paid</strong></td>
+								<td class="num"><strong>1.0800</strong></td>
+								<td>Fee of 0.080 ETH, about 8% of cash on a fresh question; later purchases of the same question pay a slightly smaller premium and send the reporting budget to maintenance</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<figure id="fig-fee-split">
+					<svg viewBox="0 0 900 230" role="img" aria-labelledby="fig-fee-split-title">
+						<title id="fig-fee-split-title">Stacked bars: a 1.08 ETH payment is 1 ETH of cash and 0.08 ETH of fee; the fee splits into a backing fee shared by providers and maintenance, a resolution premium and a reporting budget.</title>
+						<text x="60" y="24" class="lbl-title">Payment: 1.080 ETH</text>
+						<rect x="60" y="36" width="722" height="30" class="fill-cool"></rect>
+						<rect x="782" y="36" width="58" height="30" class="fill-warm"></rect>
+						<text x="421" y="56" text-anchor="middle" class="lbl lbl-on-fill">cash 1.000 ETH → question units (settlement book)</text>
+						<text x="811" y="84" text-anchor="middle" class="lbl-small">fee 0.080</text>
+						<text x="60" y="124" class="lbl-title">Fee breakdown: 0.080 ETH</text>
+						<rect x="60" y="136" width="110" height="30" class="fill-accent"></rect>
+						<rect x="170" y="136" width="36" height="30" class="fill-muted"></rect>
+						<rect x="206" y="136" width="146" height="30" class="fill-accent-alt"></rect>
+						<rect x="352" y="136" width="488" height="30" class="fill-warm"></rect>
+						<text x="115" y="156" text-anchor="middle" class="lbl-small lbl-on-fill">providers</text>
+						<text x="279" y="156" text-anchor="middle" class="lbl-small lbl-on-fill">premium</text>
+						<text x="596" y="156" text-anchor="middle" class="lbl-small lbl-on-fill">reporting budget 0.050 → reward shares (first purchase) or maintenance</text>
+						<text x="115" y="186" text-anchor="middle" class="lbl-small">0.01125 vests from now</text>
+						<text x="188" y="206" text-anchor="middle" class="lbl-small">0.00375 maintenance</text>
+						<text x="279" y="186" text-anchor="middle" class="lbl-small">0.0150 earned until finality</text>
+						<text x="596" y="186" text-anchor="middle" class="lbl-small">final reporter claims up to a cap; remainder to maintenance</text>
+					</svg>
+					<figcaption><strong>Figure 4. Where a purchase goes.</strong> The cash stays with the question. The fee is small relative to cash but is the only income providers earn up front; the holding fee below is their income over time.</figcaption>
+				</figure>
+
+				<h3 id="earn">4.4 Earning: holding fees and vesting streams</h3>
+				<p>Providers earn from four sources: their share of the up-front backing fee, the resolution premium, a <strong>linear holding fee</strong> charged continuously from each open question's cash, and the REP surplus that Escalation Games shed (<a href="#reporting">4.8</a>). The holding fee replaces the standalone pools' utilization-dependent retention curve with something a buyer can compute in advance:</p>
+				<div class="equation" id="eq-holding-fee">
+					<math display="block">
+						<mrow>
+							<mi>feeRatePerSecond</mi>
+							<mo>=</mo>
+							<mfrac>
+								<mrow><mi>feePrincipal</mi><mo>×</mo><mi>annualFeeBps</mi></mrow>
+								<mrow><mn>10 000</mn><mo>×</mo><mn>365</mn><mtext>&#160;days</mtext></mrow>
+							</mfrac>
+						</mrow>
+					</math>
+					<p class="equation-caption"><span class="var">feePrincipal</span> is the cash originally deposited for the question's live shares, so the fee is a flat annual percentage of what buyers paid. It stops when an Escalation Game opens, when the question is final, when the question's cash would run out, or while the universe's price is stale or its book is in runoff. Each second charged converts one unit of question cash into fee cash and lowers demand by the same amount.</p>
+				</div>
+				<p>Income reaches providers in two different ways. Time-earned income, the holding fee and the resolution premium, is credited at every checkpoint to the commitments that are healthy at that moment, in proportion to size. Lump-sum income, the provider share of each backing fee and the REP surplus from reporting, is handed to a <strong>fee stream</strong> contract that vests it linearly over <span class="var">rewardVestingSeconds</span>. Vesting serves two purposes: it rewards capital that stays, and it prevents a provider who joins just before a large lump sum is credited from capturing income that belongs to earlier providers. The stream contract keeps one cumulative integral per expiry time, so adding a budget or releasing income costs a constant amount of work plus a binary search over outstanding expiries, no matter how many budgets were ever funded:</p>
+				<div class="equation" id="eq-stream">
+					<math display="block">
+						<mrow>
+							<mi>incomeReleased</mi>
+							<mo>(</mo><mi>from</mi><mo>,</mo><mi>to</mi><mo>)</mo>
+							<mo>=</mo>
+							<munderover><mo>∑</mo><mi>stream</mi><mrow></mrow></munderover>
+							<msub><mi>rate</mi><mi>stream</mi></msub>
+							<mo>×</mo>
+							<mo>(</mo>
+							<mi>min</mi><mo>(</mo><mi>to</mi><mo>,</mo><msub><mi>end</mi><mi>stream</mi></msub
+							><mo>)</mo>
+							<mo>−</mo>
+							<mi>min</mi><mo>(</mo><mi>from</mi><mo>,</mo><msub><mi>end</mi><mi>stream</mi></msub
+							><mo>)</mo>
+							<mo>)</mo>
+						</mrow>
+					</math>
+					<p class="equation-caption">Each stream's rate is its integer budget divided by the vesting duration; the integer remainder is paid at the stream's end. Later funding never accelerates an existing stream.</p>
+				</div>
+				<figure id="fig-vesting">
+					<svg viewBox="0 0 900 250" role="img" aria-labelledby="fig-vesting-title">
+						<title id="fig-vesting-title">Step chart of total vesting rate over time: a 60-unit budget funded on day 0 vests at one unit per day for 60 days; a 30-unit budget funded on day 20 adds half a unit per day until day 80.</title>
+						<line x1="60" y1="200" x2="840" y2="200" class="axis"></line>
+						<line x1="60" y1="200" x2="60" y2="40" class="axis"></line>
+						<line x1="60" y1="120" x2="840" y2="120" class="grid"></line>
+						<line x1="60" y1="80" x2="840" y2="80" class="grid"></line>
+						<line x1="60" y1="160" x2="840" y2="160" class="grid"></line>
+						<text x="52" y="204" text-anchor="end" class="lbl-small">0</text>
+						<text x="52" y="164" text-anchor="end" class="lbl-small">0.5</text>
+						<text x="52" y="124" text-anchor="end" class="lbl-small">1.0</text>
+						<text x="52" y="84" text-anchor="end" class="lbl-small">1.5</text>
+						<text x="20" y="30" class="lbl-small">units per day</text>
+						<text x="60" y="222" text-anchor="middle" class="lbl-small">day 0</text>
+						<text x="233" y="222" text-anchor="middle" class="lbl-small">day 20</text>
+						<text x="580" y="222" text-anchor="middle" class="lbl-small">day 60</text>
+						<text x="753" y="222" text-anchor="middle" class="lbl-small">day 80</text>
+						<path d="M 60 120 L 580 120 L 580 200" class="stroke-cool"></path>
+						<path d="M 233 200 L 233 160 L 753 160 L 753 200" class="stroke-warm"></path>
+						<path d="M 60 120 L 233 120 L 233 80 L 580 80 L 580 160 L 753 160 L 753 200 L 840 200" class="stroke-accent"></path>
+						<text x="250" y="112" class="lbl-small">stream 1: 60 units over 60 days</text>
+						<text x="400" y="72" class="lbl-small">total rate 1.5 per day</text>
+						<text x="600" y="152" class="lbl-small">stream 2 continues alone</text>
+						<text x="250" y="192" class="lbl-small">stream 2: 30 units from day 20 to day 80</text>
+					</svg>
+					<figcaption><strong>Figure 5. Streams stack, never accelerate.</strong> The green line is the total rate the ledger releases; the blue and orange lines are the two budgets. The contract stores only cumulative rate changes at expiry times.</figcaption>
+				</figure>
+				<p>Whether it arrives from a stream or from a checkpoint, income is split across commitments in proportion to size, but only <em>healthy</em> commitments receive their share. Unhealthy commitments stay in the denominator, so their part is not redistributed to others; ETH that cannot be assigned funds maintenance and REP that cannot be assigned is burned. Income that accrues while the price is stale is unassignable in the same way; after a fork, unassignable ETH is burned instead of funding maintenance. Positions carry their earned ETH and REP separately from principal, and a provider claims earnings in one call.</p>
+
+				<h3 id="exit">4.5 Exiting: surplus, retirement and the queue</h3>
+				<p>Free principal can be withdrawn at any time, including after a fork. Pledged principal above the requirement at the owner's target and the conservative price is <strong>surplus</strong> and can be withdrawn whenever the price is fresh and the universe is open:</p>
+				<div class="equation" id="eq-surplus">
+					<math display="block">
+						<mrow>
+							<mi>withdrawable</mi>
+							<mo>=</mo>
+							<mi>freeRep</mi>
+							<mo>+</mo>
+							<mi>max</mi>
+							<mo>(</mo>
+							<mn>0</mn>
+							<mo>,</mo>
+							<mi>pledgedRep</mi>
+							<mo>−</mo>
+							<mi>requiredRep</mi>
+							<mo>(</mo><mi>commitment</mi><mo>,</mo><mi>healthTarget</mi><mo>,</mo><mi>ownerConservativePrice</mi><mo>)</mo>
+							<mo>)</mo>
+						</mrow>
+					</math>
+				</div>
+				<p>Reducing the commitment itself is a <strong>retirement</strong>. A provider requests retirement to a chosen remaining commitment (zero for a full exit; otherwise both the remainder and the reduction must meet the minimum). The position moves out of the active tree into a <strong>cohort</strong>, the queue of everyone who asked in the same period. Retirement is served only from <em>spare capacity</em>:</p>
+				<div class="equation" id="eq-spare">
+					<math display="block">
+						<mrow>
+							<mi>spare</mi>
+							<mo>=</mo>
+							<mi>healthyCommitment</mi>
+							<mo>(</mo><mi>conservativePrice</mi><mo>)</mo>
+							<mo>−</mo>
+							<mi>demand</mi>
+						</mrow>
+					</math>
+					<p class="equation-caption">Service happens lazily, whenever something else runs a checkpoint: deposits, authorizations, purchases, complete-set returns, cures and takeovers all try to serve the queue first. Returning complete sets reduces demand immediately, so redemptions free capacity for exits in the same transaction.</p>
+				</div>
+				<figure id="fig-capacity">
+					<svg viewBox="0 0 900 190" role="img" aria-labelledby="fig-capacity-title">
+						<title id="fig-capacity-title">Two stacked bars: total commitment of 110 ETH is 100 ETH healthy and 10 ETH unhealthy; the 100 ETH healthy commitment is 70 ETH demand, 12 ETH queued retirement and 18 ETH available to buyers.</title>
+						<text x="60" y="24" class="lbl-title">Total commitment 110 ETH</text>
+						<rect x="60" y="34" width="709" height="30" class="fill-accent"></rect>
+						<rect x="769" y="34" width="71" height="30" class="fill-warn"></rect>
+						<text x="414" y="54" text-anchor="middle" class="lbl-small lbl-on-fill">healthy at the conservative price: 100 ETH</text>
+						<text x="804" y="54" text-anchor="middle" class="lbl-small lbl-on-fill">10</text>
+						<text x="804" y="80" text-anchor="middle" class="lbl-small">unhealthy</text>
+						<text x="60" y="114" class="lbl-title">Healthy commitment 100 ETH</text>
+						<rect x="60" y="124" width="496" height="30" class="fill-cool"></rect>
+						<rect x="556" y="124" width="85" height="30" class="fill-warm"></rect>
+						<rect x="641" y="124" width="128" height="30" class="fill-accent"></rect>
+						<text x="308" y="144" text-anchor="middle" class="lbl-small lbl-on-fill">demand 70 ETH: live question cash + reward funding</text>
+						<text x="598" y="144" text-anchor="middle" class="lbl-small lbl-on-fill">queue 12</text>
+						<text x="705" y="144" text-anchor="middle" class="lbl-small lbl-on-fill">buyers 18</text>
+						<text x="598" y="174" text-anchor="middle" class="lbl-small">retirement queue, served first</text>
+						<text x="705" y="188" text-anchor="middle" class="lbl-small">available to buyers</text>
+					</svg>
+					<figcaption><strong>Figure 6. Capacity accounting.</strong> Unhealthy commitment is excluded from capacity but stays in the fee denominator. Spare capacity serves queued retirements before new purchases can use it.</figcaption>
+				</figure>
+				<p>The queue follows a few fixed rules:</p>
+				<ul>
+					<li>Earlier cohorts are served before later ones.</li>
+					<li>Within a cohort, partial service starts from the healthiest positions; a cohort's unhealthy members leave together with it once spare capacity covers the cohort's healthy commitment.</li>
+					<li>A single position can be served on request only if spare capacity also covers every healthy reduction queued ahead of it, and that targeted service is all-or-nothing.</li>
+					<li>Cancelling a retirement requires a fresh price and the owner's target to be met, because the position re-enters capacity.</li>
+					<li>A retiring position cannot increase its commitment, and a provider cannot bypass the queue by authorizing a smaller commitment directly.</li>
+				</ul>
+				<p>The second rule follows from the capacity accounting rather than from a preference: only healthy commitment occupies the capacity an exit releases, so unhealthy commitment can leave without waiting for spare capacity of its own.</p>
+
+				<h3 id="distress">4.6 Distress: cures and takeovers instead of liquidation</h3>
+				<p>Standalone pools liquidate by moving commitment and REP to an approved receiver vault with a 5% REP bonus and a staged price request. Portfolios replace this with two permissionless actions that need no approval registry, no staging and no ETH reserve.</p>
+				<p>Distress is observed, not declared. Every accepted price records which positions are healthy at the liquidation price. A position's <strong>distress clock</strong> starts at the first adverse observation after its most recent recovery, and no keeper transaction can start, reset or extend it. A deposit at a stale price does not clear distress; only a healthy mutation at a fresh price does.</p>
+				<h4>Cure</h4>
+				<p>A cure removes only as much of a distressed position's commitment as is <em>unused</em> by the portfolio, that is, total commitment minus demand, and only as much as needed to make the position healthy again at the liquidation price with a margin for the reward:</p>
+				<div class="equation" id="eq-cure">
+					<math display="block">
+						<mtable displaystyle="true">
+							<mtr>
+								<mtd
+									><mi>supportedCommitment</mi><mo>=</mo
+									><mfrac
+										><mrow><mi>pledgedRep</mi><mo>×</mo><mn>10 000</mn></mrow
+										><mrow><mi>securityMultiplier</mi><mo>×</mo><mi>liquidationPrice</mi></mrow></mfrac
+									></mtd
+								>
+							</mtr>
+							<mtr>
+								<mtd
+									><mi>removed</mi><mo>=</mo><mi>min</mi><mo>(</mo><mi>commitment</mi><mo>,</mo><mi>unusedCommitment</mi><mo>,</mo><mi>max</mi><mo>(</mo><mi>minimumCommitment</mi><mo>,</mo
+									><mfrac
+										><mrow><mi>commitment</mi><mo>−</mo><mi>supportedCommitment</mi></mrow
+										><mrow><mn>1</mn><mo>−</mo><mn>1%</mn></mrow></mfrac
+									><mo>)</mo><mo>)</mo></mtd
+								>
+							</mtr>
+							<mtr>
+								<mtd
+									><mi>keeperReward</mi><mo>=</mo><mn>1%</mn><mo>×</mo><mi>removed</mi><mo>×</mo><mi>liquidationPrice</mi><mo>×</mo><mfrac><mi>securityMultiplier</mi><mn>10 000</mn></mfrac></mtd
+								>
+							</mtr>
+						</mtable>
+					</math>
+					<p class="equation-caption"><span class="var">unusedCommitment</span> is total commitment minus demand, counting every position whether healthy or not, so it is at least the spare capacity of <a href="#exit">4.5</a>. A cure that could remove less than one minimum commitment without removing the whole position removes nothing. The reward, paid in REP from the cured position only, is capped so the remaining position still meets the protocol floor. If the remaining position would still be insolvent, the keeper earns nothing; if nothing can be removed, nothing happens. Splitting a cure into several steps at one price cannot increase the total reward, because the reward is a fixed fraction of what is removed.</p>
+				</div>
+				<p>Worked example: a provider pledged 3,000 REP against a 10 ETH commitment at 150%. The accepted price rises to 230 REP per ETH, so the liquidation price is 219.05. Supported commitment is 3,000 ÷ 1.5 ÷ 219.05 = 9.13 ETH, a deficit of 0.87 ETH. The reduction needed with a 1% margin is 0.88 ETH, which the minimum commitment rounds up to 1 ETH (if the portfolio has at least 1 ETH of unused commitment). The keeper receives 1% of 1 ETH × 219.05 × 1.5, about 3.29 REP, and the provider keeps a 9 ETH commitment backed by about 2,996.7 REP, which is healthy again.</p>
+				<h4>Takeover</h4>
+				<p>If a position cannot be cured, because there is no spare capacity or the position is insolvent, a keeper can <strong>take over</strong> part or all of its commitment. The keeper first performs any possible cure, then receives the position's REP proportional to the commitment taken, scaled by how long the position has been in distress:</p>
+				<div class="equation" id="eq-takeover">
+					<math display="block">
+						<mrow>
+							<mi>award</mi>
+							<mo>=</mo>
+							<mi>pledgedRep</mi>
+							<mo>×</mo>
+							<mfrac><mi>commitmentTaken</mi><mi>commitment</mi></mfrac>
+							<mo>×</mo>
+							<mi>min</mi>
+							<mo>(</mo>
+							<mn>1</mn>
+							<mo>,</mo>
+							<mfrac
+								><mrow><mi>now</mi><mo>−</mo><mi>distressStart</mi></mrow
+								><mrow><mn>1</mn><mtext>&#160;hour</mtext></mrow></mfrac
+							>
+							<mo>)</mo>
+						</mrow>
+					</math>
+					<p class="equation-caption">The receiver's existing position, the award and all of the receiver's idle REP together must back the combined commitment at the receiver's own health target and the conservative price; the receiver states the most idle REP they consent to sweeping in, and the call reverts if their idle balance exceeds it. REP not awarded stays with the source owner: in a partial takeover it remains pledged behind the reduced commitment, and in a full takeover everything above the award is returned to the source owner as free principal.</p>
+				</div>
+				<figure id="fig-takeover-ramp">
+					<svg viewBox="0 0 900 230" role="img" aria-labelledby="fig-takeover-ramp-title">
+						<title id="fig-takeover-ramp-title">Line chart: the takeover award rises linearly from zero to the full proportional REP over sixty minutes of distress and stays flat afterwards.</title>
+						<line x1="60" y1="190" x2="840" y2="190" class="axis"></line>
+						<line x1="60" y1="190" x2="60" y2="40" class="axis"></line>
+						<line x1="60" y1="115" x2="840" y2="115" class="grid"></line>
+						<line x1="580" y1="40" x2="580" y2="190" class="grid"></line>
+						<text x="52" y="194" text-anchor="end" class="lbl-small">0%</text>
+						<text x="52" y="119" text-anchor="end" class="lbl-small">50%</text>
+						<text x="52" y="44" text-anchor="end" class="lbl-small">100%</text>
+						<text x="20" y="28" class="lbl-small">share of proportional REP awarded</text>
+						<text x="60" y="212" text-anchor="middle" class="lbl-small">distress starts</text>
+						<text x="320" y="212" text-anchor="middle" class="lbl-small">30 min</text>
+						<text x="580" y="212" text-anchor="middle" class="lbl-small">60 min</text>
+						<text x="840" y="212" text-anchor="end" class="lbl-small">90 min</text>
+						<path d="M 60 190 L 580 40 L 840 40" class="stroke-accent"></path>
+						<text x="200" y="172" class="lbl-small">a keeper acting early takes less of the owner's REP</text>
+						<text x="600" y="60" class="lbl-small">after one hour the full proportional REP is at stake</text>
+					</svg>
+					<figcaption><strong>Figure 7. The takeover ramp.</strong> An owner who recapitalizes within the hour loses only a fraction of the REP behind the taken commitment. The ramp is measured from the oracle's first adverse observation, not from any keeper action.</figcaption>
+				</figure>
+				<p>Both actions have <em>bounded</em> variants for bots. A bounded cure pins the expected total commitment, demand and price epoch and demands a minimum removal and a minimum reward; a bounded takeover pins the price epoch, the receiver's own health target and the source cohort, caps the receiver's resulting principal and commitment, and demands a minimum award. The transaction reverts if any pinned value changed. Auction winners' positions can be cured or taken over too; the aggregate auction position is first split so that one winner's loss is never charged to other bidders.</p>
+
+				<h3 id="prices">4.7 One price per universe: the shared feed</h3>
+				<p>Every portfolio universe has one <strong>shared price feed</strong> that replaces the per-pool price coordinators for solvency purposes. Anyone can sponsor a report: they fund the OpenOracle game (the contestable price-report mechanism Statoblast uses for REP/ETH prices) with WETH and REP from their own wallet, and the feed accepts the settled result if it is fresh, newer than the last one, economically defensible at the current base fee, and sized for the portfolio's exposure. Sponsors are reimbursed from the maintenance reserve for accepted work, at most once per 480 seconds per universe, up to a gas-based amount and a configured cap.</p>
+				<p>Report sizing is where price security meets capital size. A report's WETH side must cover one hundredth of the aggregate exposure, and its REP side one hundredth of any auction inventory, so a report cannot authorize more risk than it would cost to correct it:</p>
+				<div class="equation" id="eq-exposure">
+					<math display="block">
+						<mtable displaystyle="true">
+							<mtr>
+								<mtd><mi>exposure</mi><mo>=</mo><mi>max</mi><mo>(</mo><mi>totalCommitment</mi><mo>,</mo><mi>auctionExposure</mi><mo>,</mo><mi>demand</mi><mo>)</mo></mtd>
+							</mtr>
+							<mtr>
+								<mtd><mi>acceptedExposureLimit</mi><mo>=</mo><mo>(</mo><mi>reportWeth</mi><mo>−</mo><mi>gasFloor</mi><mo>)</mo><mo>×</mo><mn>100</mn></mtd>
+							</mtr>
+						</mtable>
+					</math>
+					<p class="equation-caption">Commitment growth is allowed only while <span class="var">exposure</span> stays within the accepted report's limit. An owner who wants to grow past it attaches their own settled, larger report; the ledger then keeps that report's conservative price as that owner's withdrawal floor until a later canonical report covers the enlarged total. An older, smaller report can never authorize larger risk.</p>
+				</div>
+				<p>Reports are independent candidates with separate escrows, so a disputed report cannot block a different sponsor from establishing a fresh observation, and a pending report never extends the accepted price's expiry. Accepted prices are valid for the oracle's settlement time plus five minutes on mainnet (one hour on Sepolia), which is why almost every solvency-sensitive action checks <em>price fresh</em> and why the ledger pauses cash-funded fees across stale intervals.</p>
+
+				<h3 id="reporting">4.8 Reporting, finality and redemption</h3>
+				<p>Each question still resolves through its own Escalation Game: REP-backed balances accumulate behind Invalid, Yes and No after the question ends, the median balance sets the deadline, and a strict leader at the deadline wins locally. What changes is custody and reward. Reporter REP for all questions in a universe sits in one <strong>reporter ledger</strong> whose per-question roots are copied to fork children without traversal. The irrevocable surplus that the game sheds whenever the smallest outcome balance rises is routed to providers as vested REP income rather than to a per-pool backing pot.</p>
+				<p>The final reporter earns the question's prefunded reward, but only if they created a <em>new unique leader</em> and only up to a cap tied to the economic risk they took:</p>
+				<div class="equation" id="eq-reporter-cap">
+					<math display="block">
+						<mrow>
+							<mi>rewardCap</mi>
+							<mo>=</mo>
+							<mfrac
+								><mrow><mi>min</mi><mo>(</mo><mi>startBond</mi><mo>,</mo><mi>leadMargin</mi><mo>)</mo></mrow
+								><mn>5</mn></mfrac
+							>
+							<mo>×</mo>
+							<mfrac><mn>1</mn><mi>conservativePrice</mi></mfrac>
+						</mrow>
+					</math>
+					<p class="equation-caption">The cap is in ETH, converted from REP at the conservative price when the leader changed, and can only fall over the life of a game. If the shared price is stale at the moment the leader changes, the cap is set to zero and, being non-increasing, stays zero for the rest of that game. A same-leader top-up cannot steal attribution; a cheap, reversible dispute cannot extract a large accumulated reward. Unused reward cash, including for questions whose outcome a fork fixed, goes to maintenance.</p>
+				</div>
+				<p>When a question's deadline passes, the settlement book <strong>freezes</strong> its units and their pro-rata share of cash (and any recovery REP, the child REP owed to claims after a fork, see <a href="#after-auction">5.4</a>) into a frozen book, so later fee accrual and later fork shortfalls cannot touch finalized claims. Winning shares and complete sets redeem against the central cash; a redemption burns the shares through the question's ShareToken, lowers demand, cancels any unused premium when a question has no live shares left, and lets the ledger serve the retirement queue in the same transaction.</p>
+			</section>
+
+			<section id="forks">
+				<h2>5. Forks and the Truth Auction</h2>
+				<p>A fork is Zoltar's last resort: when an Escalation Game cannot decide, the universe splits into one child per outcome and every REP holder picks the child they believe is true. Statoblast must then move each question's security into the children. In a standalone pool each vault owner migrates per pool and each child pool auctions REP to repair its missing ETH. The portfolio does this once per universe.</p>
+
+				<h3 id="fork-schedule">5.1 A fixed schedule</h3>
+				<p>The pull request adds three constants to Zoltar so that every participant can compute every deadline from the fork time alone, and so that nobody can extend a window by being slow:</p>
+				<figure id="fig-fork-timeline">
+					<svg viewBox="0 0 900 200" role="img" aria-labelledby="fig-fork-timeline-title">
+						<title id="fig-fork-timeline-title">Timeline: eight weeks of branch choice after the fork, one week of recapitalization in which the branch Truth Auction runs and closes, then a one-week response period before a child may itself fork.</title>
+						<line x1="60" y1="110" x2="840" y2="110" class="axis"></line>
+						<rect x="60" y="80" width="560" height="30" class="band-ok"></rect>
+						<rect x="620" y="80" width="70" height="30" class="band-neutral"></rect>
+						<rect x="690" y="80" width="70" height="30" class="band-warn"></rect>
+						<text x="340" y="70" text-anchor="middle" class="lbl">choice window: 8 weeks</text>
+						<text x="655" y="58" text-anchor="middle" class="lbl-small">recapitalization</text>
+						<text x="725" y="70" text-anchor="middle" class="lbl-small">response</text>
+						<line x1="60" y1="76" x2="60" y2="120" class="axis"></line>
+						<line x1="620" y1="76" x2="620" y2="120" class="axis"></line>
+						<line x1="690" y1="76" x2="690" y2="120" class="axis"></line>
+						<line x1="760" y1="76" x2="760" y2="120" class="axis"></line>
+						<text x="60" y="138" text-anchor="middle" class="lbl-small">fork</text>
+						<text x="620" y="138" text-anchor="middle" class="lbl-small">week 8</text>
+						<text x="690" y="138" text-anchor="middle" class="lbl-small">week 9</text>
+						<text x="760" y="138" text-anchor="middle" class="lbl-small">week 10</text>
+						<text x="60" y="160" class="lbl-small">freeze books · owners choose one branch each · idle principal and earnings stay claimable</text>
+						<text x="620" y="160" text-anchor="start" class="lbl-small">branch starts · auction opens</text>
+						<text x="690" y="178" text-anchor="start" class="lbl-small">auction closes · branch activates</text>
+						<text x="760" y="196" text-anchor="start" class="lbl-small">child may fork</text>
+						<text x="60" y="40" class="lbl-title">Fork schedule fixed by Zoltar constants</text>
+					</svg>
+					<figcaption><strong>Figure 8. The fork clock.</strong> Choice ends eight weeks after the fork, the branch Truth Auction closes one week later, and a child universe cannot itself fork until one further week has passed. Late preparation never moves these dates.</figcaption>
+				</figure>
+
+				<h3 id="fork-choice">5.2 Freeze, choose, migrate</h3>
+				<p>When the universe forks, the fork coordinator <strong>freezes</strong> the universe's capital ledger, settlement book, premium book and reporter ledger. The freeze checkpoints every fee earned before the fork and records five totals: pledged REP backing, total commitment, question cash, question units and the live recovery REP owed to claims. During the eight-week choice window each owner with pledged principal calls <em>choose</em> once, naming one outcome. The owner's exact position, including its health target, retirement request and remaining-commitment goal, is exported from the parent ledger and imported into the chosen child's ledger, which is still in <em>import</em> mode and accepts only fork imports until the branch starts, then only price reports until it activates.</p>
+				<p>Cash follows commitment, not REP. A branch receives the share of the parent's question cash that its choosers had committed to underwrite:</p>
+				<div class="equation" id="eq-branch-cash">
+					<math display="block">
+						<mrow>
+							<mi>branchCash</mi>
+							<mo>=</mo>
+							<mi>parentCash</mi>
+							<mo>×</mo>
+							<mfrac><mi>chosenCommitment</mi><mi>parentCommitment</mi></mfrac>
+							<mspace width="2em"></mspace>
+							<mi>shortfall</mi>
+							<mo>=</mo>
+							<mi>parentCash</mi>
+							<mo>−</mo>
+							<mi>branchCash</mi>
+						</mrow>
+					</math>
+					<p class="equation-caption">Excess personal collateral cannot pull more ETH into a branch than its owners committed to underwrite. The maintenance reserve and the premium book split by the same ratio. Each branch inherits <em>all</em> of the parent's question liabilities, so the shortfall is exactly the cash the non-choosing owners were underwriting.</p>
+				</div>
+				<p>After the choice deadline anyone can <em>start</em> a branch. Zoltar migrates the frozen backing REP plus live recovery REP into the child as child REP; the branch's chosen backing goes to its capital ledger, and the frozen backing of owners who chose another branch or did not choose at all becomes the branch's <strong>fresh inventory</strong>. If the branch has outstanding question units, fresh inventory and a shortfall of at least one minimum commitment, the coordinator deploys a <strong>branch Truth Auction</strong> and hands it the inventory. Older recovery REP from previous forks never enters the auction; it stays with the claims that already own it.</p>
+				<div class="callout warn">
+					<p><strong>Missing the cutoff is costly.</strong> An owner who does not choose within eight weeks loses their pledged principal's branch fallback: that REP is sold in <em>every</em> branch's auction to repair the cash their commitment was backing. Their idle principal and already-earned fees remain separately claimable from the parent ledger.</p>
+				</div>
+
+				<h3 id="auction">5.3 The Truth Auction: uniform-price lots</h3>
+				<p>The auction sells fresh inventory REP for ETH to repair the shortfall, and nothing else. It does not select truth: it sells REP of a child universe that already exists. Its design differs from the standalone tick auction in almost every detail, so it is worth stating the whole mechanism.</p>
+				<h4>Units</h4>
+				<p>The ETH side is denominated in whole <strong>lots</strong>, each equal to the portfolio's minimum commitment. The REP side is denominated in a <strong>grid</strong> that makes the per-lot collateral divide exactly for any number of lots:</p>
+				<div class="equation" id="eq-lots">
+					<math display="block">
+						<mtable displaystyle="true">
+							<mtr>
+								<mtd><mi>lotEth</mi><mo>=</mo><mi>minimumCommitment</mi></mtd>
+							</mtr>
+							<mtr>
+								<mtd><mi>targetLots</mi><mo>=</mo><mo>⌊</mo><mi>shortfall</mi><mo>÷</mo><mi>lotEth</mi><mo>⌋</mo></mtd>
+							</mtr>
+							<mtr>
+								<mtd><mi>repGrid</mi><mo>=</mo><mi>securityMultiplier</mi><mo>÷</mo><mi>gcd</mi><mo>(</mo><mi>securityMultiplier</mi><mo>,</mo><mn>10 000</mn><mo>)</mo></mtd>
+							</mtr>
+						</mtable>
+					</math>
+					<p class="equation-caption">At a 150% multiplier the grid is 3 attoREP, so grid rounding is invisible in practice. A shortfall below one lot cannot be repaired by the auction.</p>
+				</div>
+				<h4>Opening</h4>
+				<p>The auction opens only against a <em>funded, fresh</em> shared price whose WETH side covers the branch's maximum possible exposure (chosen commitment plus every target lot) and whose REP side covers the inventory. The opening conservative price fixes the minimum collateral per lot for the whole auction, rounded up to the grid, and the inventory must be able to back at least one lot:</p>
+				<div class="equation" id="eq-min-collateral">
+					<math display="block">
+						<mrow>
+							<mi>minimumRepPerLot</mi>
+							<mo>(</mo><mi>healthTarget</mi><mo>)</mo>
+							<mo>=</mo>
+							<mi>requiredRep</mi>
+							<mo>(</mo><mi>lotEth</mi><mo>,</mo><mi>openingConservativePrice</mi><mo>,</mo><mi>securityMultiplier</mi><mo>,</mo><mi>healthTarget</mi><mo>)</mo>
+						</mrow>
+					</math>
+				</div>
+				<h4>Bidding</h4>
+				<p>A bid is a triple: a number of lots, a <strong>minimum REP per lot</strong> the bidder insists on receiving (a grid multiple), and a <strong>health target</strong> for the vault the bid will become. The bidder pays exactly <span class="var">lots × lotEth</span> in ETH and nothing else: no REP deposit, no token approval, no execution reserve. The minimum REP per lot must at least cover the lot at the bidder's own health target at the opening price, so a winning bid is always a healthy vault on arrival. Bids cannot be cancelled or repriced. Each bid deploys a small <strong>auction vault</strong> contract controlled by the bidder that will own the resulting position.</p>
+				<p>A lower minimum REP per lot is a <em>higher</em> price: the bidder accepts fewer REP for the same ETH. Bids rank by that minimum, lowest first, ties by arrival.</p>
+				<h4>Clearing</h4>
+				<p>At closing the engine finds the largest prefix of ranked lots that the inventory can fund at the marginal bidder's own minimum, capped by the target. Equal-price bids at the margin share the last lots by cumulative proportional whole-lot rounding. Then one of two cases applies:</p>
+				<div class="equation" id="eq-clearing">
+					<math display="block">
+						<mtable displaystyle="true">
+							<mtr>
+								<mtd><mi>filledLots</mi><mo>=</mo><mi>max</mi><mo>{</mo><mi>lotCount</mi><mo>:</mo><mi>lotCount</mi><mo>≤</mo><mi>min</mi><mo>(</mo><mi>targetLots</mi><mo>,</mo><mo>⌊</mo><mi>inventory</mi><mo>÷</mo><mi>minimumRepPerLot</mi><mo>(</mo><mtext>bid holding lot&#160;</mtext><mi>lotCount</mi><mo>)</mo><mo>⌋</mo><mo>)</mo><mo>}</mo></mtd>
+							</mtr>
+							<mtr>
+								<mtd><mtext>target reached:&#160;</mtext><mi>repPerLot</mi><mo>=</mo><mi>minimumRepPerLot</mi><mo>(</mo><mtext>marginal bid</mtext><mo>)</mo><mo>,</mo><mspace width="1em"></mspace><mi>soldRep</mi><mo>=</mo><mi>filledLots</mi><mo>×</mo><mi>repPerLot</mi></mtd>
+							</mtr>
+							<mtr>
+								<mtd><mtext>target missed:&#160;</mtext><mi>repPerLot</mi><mo>=</mo><mo>⌊</mo><mi>inventory</mi><mo>÷</mo><mi>filledLots</mi><mo>⌋</mo><mtext>&#160;on the grid</mtext><mo>,</mo><mspace width="1em"></mspace><mi>soldRep</mi><mo>=</mo><mi>inventory</mi></mtd>
+							</mtr>
+						</mtable>
+					</math>
+					<p class="equation-caption">Every winning lot receives the same REP amount. When the target is reached, unsold inventory returns to the branch as recovery REP for existing claims. When it is missed, all inventory is sold, so winners receive at least their minimum and usually more; the indivisible grid remainder is credited to winners as REP earnings in proportion to their lots.</p>
+				</div>
+				<p>Closing is permissionless at the week-nine deadline and is never extended. The quote is tested <em>at the deadline</em>, not at the time of the call, so a late closer cannot pick a better price. Fills are cancelled and all ETH refunded if the branch universe forked again before closing, if no funded fresh quote covers the deadline, or if the closing conservative price is <em>worse</em> for the branch than the opening one, meaning REP got cheaper and the pledged collateral would no longer back the commitments. Cancellation does not block branch activation; the branch simply activates with the migrated cash alone.</p>
+				<h4>Two worked examples</h4>
+				<p>Four bidders face a 10 ETH shortfall with 1 ETH lots at a 150% multiplier and an opening conservative price of 200 REP per ETH, so one lot needs at least 300 REP at a 100% health target.</p>
+				<div class="table-wrap">
+					<table>
+						<thead>
+							<tr>
+								<th>Bidder (rank)</th>
+								<th class="num">Lots</th>
+								<th class="num">Minimum REP per lot</th>
+								<th class="num">Health target</th>
+								<th>Example A: 3,000 REP inventory</th>
+								<th>Example B: 6,000 REP inventory</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>Alice (1)</td>
+								<td class="num">4</td>
+								<td class="num">320</td>
+								<td class="num">100%</td>
+								<td>4 lots, 1,714.3 REP</td>
+								<td>4 lots, 1,600 REP</td>
+							</tr>
+							<tr>
+								<td>Bob (2)</td>
+								<td class="num">3</td>
+								<td class="num">350</td>
+								<td class="num">110%</td>
+								<td>3 lots, 1,285.7 REP</td>
+								<td>3 lots, 1,200 REP</td>
+							</tr>
+							<tr>
+								<td>Carol (3)</td>
+								<td class="num">5</td>
+								<td class="num">400</td>
+								<td class="num">120%</td>
+								<td>0 lots, 5 ETH refundable early</td>
+								<td>3 lots, 1,200 REP, 2 ETH refunded</td>
+							</tr>
+							<tr>
+								<td>Dave (4)</td>
+								<td class="num">2</td>
+								<td class="num">500</td>
+								<td class="num">150%</td>
+								<td>0 lots, 2 ETH refundable early</td>
+								<td>0 lots, 2 ETH refundable early</td>
+							</tr>
+							<tr>
+								<td><strong>Result</strong></td>
+								<td class="num"></td>
+								<td class="num"></td>
+								<td class="num"></td>
+								<td>7 of 10 lots; all 3,000 REP sold at 428.57 per lot (an 18 attoREP grid remainder goes to winners as REP earnings); 7 ETH raised, branch in runoff</td>
+								<td>10 of 10 lots; 4,000 REP sold at 400 per lot; ETH shortfall fully repaired, but the 2,000 unsold REP becomes recovery REP for existing claims, so the branch still settles in runoff</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<p>In example A the inventory cannot fund an eighth lot at Carol's minimum (3,000 ÷ 400 = 7 lots, and seven better-ranked lots already exist), so the auction stops at seven lots and sells everything it has: each winner receives about 428.57 REP per lot, more than they asked for. In example B the target binds, so the marginal bidder Carol sets the uniform price and Alice, who would have accepted 320 REP, receives 400 REP per lot like everyone else.</p>
+				<figure id="fig-auction-ladder">
+					<svg viewBox="0 0 900 360" role="img" aria-labelledby="fig-auction-ladder-title">
+						<title id="fig-auction-ladder-title">Two bar charts of bids ranked by minimum REP per lot against cumulative lots, with the inventory capacity line and the clearing level, for the inventory-limited and target-reached examples.</title>
+						<text x="40" y="22" class="lbl-title">Example A: inventory 3,000 REP (target missed)</text>
+						<line x1="40" y1="300" x2="425" y2="300" class="axis"></line>
+						<line x1="40" y1="300" x2="40" y2="50" class="axis"></line>
+						<text x="34" y="304" text-anchor="end" class="lbl-small">0</text>
+						<text x="34" y="222" text-anchor="end" class="lbl-small">200</text>
+						<text x="34" y="139" text-anchor="end" class="lbl-small">400</text>
+						<text x="34" y="56" text-anchor="end" class="lbl-small">600</text>
+						<text x="40" y="320" text-anchor="middle" class="lbl-small">0</text>
+						<text x="150" y="320" text-anchor="middle" class="lbl-small">4</text>
+						<text x="232" y="320" text-anchor="middle" class="lbl-small">7</text>
+						<text x="315" y="320" text-anchor="middle" class="lbl-small">10</text>
+						<text x="425" y="320" text-anchor="middle" class="lbl-small">14</text>
+						<text x="230" y="340" text-anchor="middle" class="lbl-small">cumulative lots (ranked by minimum REP per lot)</text>
+						<rect x="40" y="168" width="110" height="132" class="fill-accent"></rect>
+						<rect x="150" y="155" width="82" height="145" class="fill-accent"></rect>
+						<rect x="232" y="135" width="138" height="165" class="fill-muted"></rect>
+						<rect x="370" y="93" width="55" height="207" class="fill-muted"></rect>
+						<text x="95" y="290" text-anchor="middle" class="lbl-small lbl-on-fill">Alice 320</text>
+						<text x="191" y="290" text-anchor="middle" class="lbl-small lbl-on-fill">Bob 350</text>
+						<text x="301" y="290" text-anchor="middle" class="lbl-small">Carol 400</text>
+						<text x="397" y="290" text-anchor="middle" class="lbl-small">Dave 500</text>
+						<path d="M 40 300 L 40 300" class="stroke-warn"></path>
+						<line x1="40" y1="123" x2="425" y2="123" class="stroke-cool"></line>
+						<text x="88" y="117" class="lbl-small">clearing 428.6 REP per lot</text>
+						<line x1="232" y1="50" x2="232" y2="300" class="stroke-warn"></line>
+						<text x="236" y="62" class="lbl-small">7 lots funded: 3,000 ÷ 400 = 7</text>
+						<text x="236" y="76" class="lbl-small">Carol and Dave are excluded</text>
+						<text x="480" y="22" class="lbl-title">Example B: inventory 6,000 REP (target reached)</text>
+						<line x1="480" y1="300" x2="865" y2="300" class="axis"></line>
+						<line x1="480" y1="300" x2="480" y2="50" class="axis"></line>
+						<text x="474" y="304" text-anchor="end" class="lbl-small">0</text>
+						<text x="474" y="222" text-anchor="end" class="lbl-small">200</text>
+						<text x="474" y="139" text-anchor="end" class="lbl-small">400</text>
+						<text x="474" y="56" text-anchor="end" class="lbl-small">600</text>
+						<text x="480" y="320" text-anchor="middle" class="lbl-small">0</text>
+						<text x="590" y="320" text-anchor="middle" class="lbl-small">4</text>
+						<text x="672" y="320" text-anchor="middle" class="lbl-small">7</text>
+						<text x="755" y="320" text-anchor="middle" class="lbl-small">10</text>
+						<text x="865" y="320" text-anchor="middle" class="lbl-small">14</text>
+						<text x="670" y="340" text-anchor="middle" class="lbl-small">cumulative lots (ranked by minimum REP per lot)</text>
+						<rect x="480" y="168" width="110" height="132" class="fill-accent"></rect>
+						<rect x="590" y="155" width="82" height="145" class="fill-accent"></rect>
+						<rect x="672" y="135" width="83" height="165" class="fill-accent"></rect>
+						<rect x="755" y="135" width="55" height="165" class="fill-muted"></rect>
+						<rect x="810" y="93" width="55" height="207" class="fill-muted"></rect>
+						<text x="535" y="290" text-anchor="middle" class="lbl-small lbl-on-fill">Alice 320</text>
+						<text x="631" y="290" text-anchor="middle" class="lbl-small lbl-on-fill">Bob 350</text>
+						<text x="713" y="290" text-anchor="middle" class="lbl-small lbl-on-fill">Carol</text>
+						<text x="782" y="290" text-anchor="middle" class="lbl-small">Carol</text>
+						<text x="837" y="290" text-anchor="middle" class="lbl-small">Dave</text>
+						<line x1="480" y1="135" x2="865" y2="135" class="stroke-cool"></line>
+						<text x="488" y="129" class="lbl-small">uniform clearing 400 REP per lot</text>
+						<line x1="755" y1="50" x2="755" y2="300" class="stroke-warn"></line>
+						<text x="759" y="62" class="lbl-small">target 10 lots</text>
+						<text x="759" y="76" class="lbl-small">Carol fills 3 of 5</text>
+					</svg>
+					<figcaption><strong>Figure 9. Demand ladders.</strong> Bars are bids in rank order, width equals lots, height equals the minimum REP per lot the bidder insists on. Green bars win. The blue line is the uniform REP each winning lot actually receives; it is at or above every winner's minimum.</figcaption>
+				</figure>
+				<h4>Early refunds for provably losing bids</h4>
+				<p>Because bids cannot be cancelled or repriced, demand that ranks ahead of a bid can only grow. A bid is therefore <em>permanently</em> excluded as soon as strictly better funded demand alone would fill the auction at that bid's price:</p>
+				<div class="equation" id="eq-early-refund">
+					<math display="block">
+						<mrow>
+							<mi>betterLots</mi>
+							<mo>≥</mo>
+							<mi>min</mi>
+							<mo>(</mo>
+							<mi>targetLots</mi>
+							<mo>,</mo>
+							<mo>⌊</mo><mi>inventory</mi><mo>÷</mo><mi>minimumRepPerLot</mi><mo>⌋</mo>
+							<mo>)</mo>
+						</mrow>
+					</math>
+					<p class="equation-caption"><span class="var">betterLots</span> counts lots with a strictly lower minimum. Anyone may credit the refund of a qualifying bid before closing; only the bidder may withdraw it, to a recipient of their choice, and may use the ETH anywhere, including a new bid at a better price. A new bid that already satisfies this condition is rejected outright. A bid with a provisional zero fill from equal-price rounding is <em>not</em> refundable early, because later equal bids can still change the rounding.</p>
+				</div>
+				<p>Refunded bids are not deleted. They remain in the auction's balanced tree as permanently zero-fill history, so clearing and fee ownership never need a scan or a deletion, at the cost of storage that grows with every bid ever placed.</p>
+
+				<h3 id="after-auction">5.4 After closing: winners are owners</h3>
+				<p>At finalization the raised ETH goes to the branch's settlement book and <em>all</em> sold REP goes to the child's capital ledger as one protected <strong>aggregate position</strong> owned by the auction contract. That position accounts for every winner's commitment, fees and later fork exposure. The branch activates immediately; no winner has to claim anything to be counted as backing.</p>
+				<p>Any owner or keeper can later <strong>split out</strong> one bid from the aggregate into its own position, carrying its exact REP, commitment, health target, earned fees and distress history. The split is proportional and exact (the grid guarantees it), and it does not grant a new distress clock. Nobody can cure or take over the aggregate as a whole, so one winner's loss is never charged to other bidders. The bidder's auction vault contract controls the position: it can deposit more REP, set a target, retire, claim earnings and make fork choices like any other owner, and sweep returned assets to a wallet in the same call.</p>
+				<p>The branch then lives in one of two states. If accepted ETH plus migrated cash covers all inherited units and no recovery REP remains, which requires the auction to have sold its entire inventory, it is fully <em>operational</em>: purchases reopen and holding fees resume. Otherwise it is in <strong>runoff</strong>: existing claims settle pro rata in ETH and in <strong>recovery REP</strong> (unsold inventory plus older recovery baskets, tracked with 128-bit precision so partial redemptions and nested forks keep exact ownership), but no new purchases are accepted and no holding fees are charged. New buyers can never capture an old recovery basket.</p>
+			</section>
+
+			<section id="game-theory">
+				<h2>6. Game theory and incentives</h2>
+				<p>This section asks, for each participant, why they would behave as the design wants, and where the design admits it cannot make them.</p>
+
+				<h3>6.1 Why REP backing matters at all</h3>
+				<p>Complete sets are fully collateralized by the buyer's own ETH, so in normal operation providers' REP is never used to pay anyone. Its job is the fork. When the universe splits, the ETH a branch receives is proportional to the commitment of the owners who chose it, and the REP of everyone who chose <em>against</em> it is sold in that branch to make its share holders whole. Because every healthy position holds at least <span class="var">securityMultiplier</span> times its commitment in REP value, the inventory a branch can sell is worth, at the pre-fork price, at least the multiplier times the cash it is missing, as long as those positions were healthy at the freeze. If the branch's REP keeps its value, full repair is affordable; if the branch is the one the market considers false, its REP is worth little and the shortfall persists, which is the intended outcome. Providers are thus paid fees to stand behind their belief about which branch is true, and the admission rule that new demand must fit within healthy commitment keeps that promise collateralized at the moment each liability is taken on; between price reports, keepers' cures and takeovers are what pull a drifting position back under cover.</p>
+
+				<h3>6.2 Providers: fees for risk, with a dial</h3>
+				<p>A provider's income is proportional to commitment while healthy, so the dominant strategy is to commit as much as their REP supports. The counterweight is the health target. A target of exactly 100% maximizes commitment per REP but leaves the position one adverse report away from the cure zone, where a keeper removes commitment and takes 1% of its backing value in REP. A higher target costs capital efficiency and buys distance from that zone. Because the target also gates surplus withdrawal, a provider who sets it high cannot quietly drain collateral later without first lowering it, and the withdrawal itself is then price-checked against the new target. The design leaves this trade-off to each owner rather than imposing a pool-wide ratio, so a mix of conservative and aggressive providers can coexist in one ledger without one subsidizing the other's liquidation.</p>
+				<p>Vesting is the anti-sniping device for lump sums. Without it, a provider could join seconds before a backing fee is credited, take a proportional share and leave. With vesting, joining late only earns the slice of each stream that vests after joining. Time-earned income needs no vesting: each checkpoint pays only the interval since the last one, to the commitments healthy during it, and the checkpoint-before-mutation rule guarantees that income already earned at the old weights is distributed at those weights.</p>
+
+				<h3>6.3 The two-price band as a griefing defence</h3>
+				<p>The oracle is contestable, not infallible: a report within the dispute tolerance is accepted. If one price were used for both admission and liquidation, a reporter could post a price at the top of the tolerance, watch providers be admitted at the edge, then post one at the bottom and liquidate them, all within “acceptable” reports. Using the conservative price for admission and the liquidation price for punishment means an accepted report can never do both: the minimum move between the two is (1 + tolerance) ÷ (1 − tolerance). Distress itself is declared by the oracle's observations, not by keepers. A cure is available as soon as a fresh price leaves a position unhealthy, but the takeover award ramps over an hour from that observation, so before the full REP behind a commitment is at stake the owner has a window that no keeper can shorten.</p>
+
+				<h3>6.4 Keepers: paid in REP, bounded in both directions</h3>
+				<p>A keeper's cure reward is a fixed 1% of the backing value removed, paid only when the cure actually restores solvency and only from the cured position. This is deliberately small: a cure removes <em>unused</em> commitment, so it costs the provider nothing but the reward, and the design does not want keepers hunting marginally unhealthy positions for large bounties. The takeover award can be large, up to all the REP behind the taken commitment, but it starts at zero and takes an hour to ramp, and the keeper must usually bring REP of their own, because the award alone was by definition not enough to back the commitment, so taking over is a capital decision rather than a free option. There is no ETH liquidation bonus and no ETH execution reserve: keepers are paid in REP they must value and, if they want ETH, sell themselves. The liquidator bot shipped with the pull request values REP rewards conservatively, rejects every cure or takeover candidate unless independent REP price evidence agrees, and ships with portfolio exposure limits that default to zero.</p>
+
+				<h3>6.5 Reporters: a reward that cannot be farmed</h3>
+				<p>A naïve “final reporter wins the budget” rule invites two attacks. A reporter who already leads could top up their own stake to claim authorship of the final state, and two colluding reporters could flip the lead back and forth cheaply to accumulate a large reward. The attribution rule requires a <em>new unique leader</em>, and the cap of <span class="var">min(startBond, leadMargin) ÷ 5</span>, non-increasing over the game, ties the reward to the smallest REP amount the reporter actually put at risk and to the escalation haircut, the Escalation Game's own two-fifths burn of binding capital, so a round trip cannot net more than it burns.</p>
+
+				<h3>6.6 Bidders: uniform price, no promise of truthfulness</h3>
+				<p>In a uniform-price auction every winner pays the marginal price, which weakens the incentive to shade bids compared with pay-as-bid, but it does not remove it: a bidder with a large share of demand still gains from demanding more REP per lot (bidding a lower price) if that lowers the clearing level for all their lots. The pull request states this plainly: uniform pricing does not guarantee competitive or truthful bidding. The lot-and-grid design is chosen for a different reason, which is that winning bids become healthy vaults with no further action, so the auction cannot leave REP in limbo waiting for claims.</p>
+				<p>The weak-demand rule is the most consequential choice. When the target is missed, all inventory is sold to whoever showed up, at <span class="var">inventory ÷ filledLots</span> per lot. That maximizes repair and avoids a seller reserve that would leave REP unsold, but it means a lone bidder for one lot can buy the entire inventory for one minimum commitment of ETH. Winners then have ordinary vault obligations and <strong>no minimum holding period</strong>: with spare capacity they can retire and withdraw surplus REP immediately. Selling every REP therefore does not guarantee that every REP stays pledged; the enforceable backing is the accepted commitment at the chosen health target, no more.</p>
+				<p>Early refunds make bidding cheaper for losers and let ETH recycle into better bids, but they rely on the fact that excluded bids can never become winning demand again; that is why refunded bids stay in the tree as zero-fill history rather than being removed.</p>
+
+				<h3>6.7 Choosers: one branch, one position, no hedging with pledged REP</h3>
+				<p>A fork is a vote with capital. Each owner's live principal and commitment go to exactly one child. Idle principal is left in the parent and can be withdrawn and used anywhere, so an owner who wants to hedge must do it with free REP, not with the REP that is earning fees. Cash following <em>commitment</em> rather than REP removes a subtler game: an owner who over-collateralized could otherwise drag more than their share of ETH into a branch by holding excess REP. Not choosing is strictly dominated, because the pledged REP is auctioned in every branch for the benefit of share holders, while choosing any branch at least preserves it there.</p>
+
+				<h3>6.8 The retirement queue</h3>
+				<p>Exits compete with new purchases for the same spare capacity. Serving the queue before purchases, in cohort order, and refusing targeted service that would skip a healthy earlier request, means a provider cannot be trapped behind a stream of new buyers and cannot buy their way to the front.</p>
+			</section>
+
+			<section id="scaling">
+				<h2>7. Why it scales: trees instead of scans</h2>
+				<p>A single ledger serving thousands of questions and providers is only viable if no transaction's cost depends on how many of them exist. The pull request replaces every scan with a tree path or a cumulative index.</p>
+				<div class="table-wrap">
+					<table>
+						<thead>
+							<tr>
+								<th>Question the contracts must answer</th>
+								<th>Standalone approach</th>
+								<th>Portfolio structure</th>
+								<th>Cost</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>How much commitment is healthy at a given price?</td>
+								<td>Per-vault check at each operation</td>
+								<td>AVL tree of positions keyed by <span class="var">maxHealthyPrice</span>, with subtree sums of REP and commitment</td>
+								<td>One root-to-leaf walk, under 192 levels for any number of positions</td>
+							</tr>
+							<tr>
+								<td>Who earns the fee just released?</td>
+								<td>Global fee index plus per-vault checkpoint</td>
+								<td>Lazy fee credits pushed down the same tree; unhealthy subtrees skipped by price range</td>
+								<td>Logarithmic per credit; claims pull only along one path</td>
+							</tr>
+							<tr>
+								<td>Who is next in the retirement queue?</td>
+								<td>Not supported</td>
+								<td>One tree per cohort; at most two cohorts and one partial boundary processed per service</td>
+								<td>Constant number of tree operations</td>
+							</tr>
+							<tr>
+								<td>How much income vested between two times?</td>
+								<td>Per-second retention compounding</td>
+								<td>Cumulative rate and integral checkpoints per expiry; binary search over unreleased expiries</td>
+								<td>At most 48 probes</td>
+							</tr>
+							<tr>
+								<td>Which lots win, and what does one bid own?</td>
+								<td>Tick ladder with bounded indexing</td>
+								<td>AVL tree of bids by minimum REP per lot with subtree lot sums; fee ownership pushed down lazily</td>
+								<td>Logarithmic; measured under 250,000 gas for early settlement and under 100,000 gas growth from 64 to 512 bids</td>
+							</tr>
+							<tr>
+								<td>How does a fork child inherit every question?</td>
+								<td>Per-pool, per-vault migration</td>
+								<td>Persistent maps: the child book copies immutable roots for questions, finality deadlines, fee rates and premium schedules</td>
+								<td>Constant work per branch, independent of question count</td>
+							</tr>
+							<tr>
+								<td>Which shares were final before a fork?</td>
+								<td>Per-pool snapshot</td>
+								<td>Frozen books appended by deadline; a frozen-history ceiling lookup per question</td>
+								<td>Logarithmic</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<p>The price of this approach is that <em>history never shrinks</em>: refunded bids, retired positions, old premium schedules and frozen books all stay in storage, and each path still costs logarithmic gas rather than constant. Deployment is likewise split into four origin setup stages and separate child preparation steps so that no single transaction has to construct more than a block allows.</p>
+			</section>
+
+			<section id="changes">
+				<h2>8. What the pull request changes, layer by layer</h2>
+				<div class="table-wrap">
+					<table>
+						<thead>
+							<tr>
+								<th>Layer</th>
+								<th>Main changes</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td><strong>Contracts</strong> (<code>solidity/contracts/statoblast</code>)</td>
+								<td>
+									<ul>
+										<li>New capital modules: the portfolio hub, the capital ledger with its lifecycle and auction delegates, the commitment index and tree, fee streams.</li>
+										<li>New settlement and service modules: the settlement book and portfolio settlement, services with the premium book and reporting rewards, the reporter ledger.</li>
+										<li>New fork modules: the fork coordinator and forker portfolio delegate, the portfolio auction with its uniform-price engine and per-bid vaults, the shared price feed and report escrow, the open and fixed admission policies, persistent-map and frozen-history libraries.</li>
+										<li>Changed: SecurityPool, ShareToken and the Escalation Game delegates gain a bound mode; the factory gains portfolio namespaces and shared-feed preparation; the OpenOracle coordinator is split into a price source and a report delegate; Zoltar gains the fixed fork schedule.</li>
+									</ul>
+								</td>
+							</tr>
+							<tr>
+								<td><strong>SDK</strong> (<code>shared/statoblast</code>)</td>
+								<td>A new <code>securityPoolPortfolio</code> export family: deployment and setup builders, capital actions and snapshots, mint quotes, price funding quotes, auction opening and bid quotes, fork choice and recovery builders, and claim-checkpoint planning. Core RPC helpers gain block pinning and sender-balance overrides.</td>
+							</tr>
+							<tr>
+								<td><strong>Statoblast UI</strong></td>
+								<td>
+									<ul>
+										<li>A new Portfolios tab with portfolio deployment (Open or Fixed admission, every economics field) and the four setup stages.</li>
+										<li>Capital: shared backing and personal capital views, deposit, health target, authorization, retirement request and cancellation, surplus withdrawal, earnings claims.</li>
+										<li>Questions: registration and complete-set purchase with a bounded quote; reporting-reward and service-credit claims.</li>
+										<li>Forks: branch choice, cash recovery, branch price-report funding, and the branch Truth Auction with bidding, early refund credit, separate withdrawal and vault split-out.</li>
+										<li>A walletless <code>simScenario=portfolio</code> seeds all of it.</li>
+									</ul>
+								</td>
+							</tr>
+							<tr>
+								<td><strong>Trading UI</strong></td>
+								<td>Reads bound pools through the central settlement book, mints portfolio complete sets through the portfolio purchase route with a fee quote, asks for a complete-set count instead of an ETH value when a position holds recovery REP, and shows recovery REP separately from ETH value.</td>
+							</tr>
+							<tr>
+								<td><strong>Liquidator bot</strong> (<code>bots/liquidator</code>)</td>
+								<td>
+									<ul>
+										<li>Portfolio selection with bounded, paged discovery of positions and auction winners; runtime-bytecode authentication of every module.</li>
+										<li>Earnings collection, paid cures and funded takeovers with signed bounds.</li>
+										<li>One EIP-1559 fee policy shared by quotes, estimates, simulations and signing; sender-balance isolation for quotes; a dashboard panel.</li>
+										<li>Defaults remain paused and dry-run with zero exposure caps.</li>
+									</ul>
+								</td>
+							</tr>
+							<tr>
+								<td><strong>Other bots and scanner</strong></td>
+								<td>The chaos bot exercises child preparation, claim checkpoints and shared-feed reports; the arbitrager understands shared-feed escrows; augurScan indexes the shared-feed and new settlement events and reads prices through the bound feed.</td>
+							</tr>
+							<tr>
+								<td><strong>Deployment and CI</strong></td>
+								<td>Fourteen new infrastructure steps (event emitter, deployment workers, delegates and nine module deployers), a deployment-status bitmask that grows from 14 to 28 entries, refreshed runtime pins and manifests for every network and genesis variant, a dependency-audit runner wired into CI, and a lockfile bump.</td>
+							</tr>
+							<tr>
+								<td><strong>Documentation</strong></td>
+								<td>The explanation pages distinguish standalone and portfolio paths, the SecurityPool, forker, factory and share-token references document bound mode and the shared auction, the invariant and security-model pages add the portfolio claims, and the deployment-address files list the new contracts.</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<p>The pull request reports full type-checking, formatting, lint, dead-code and generated-artifact checks passing, 265 affected tests with 2,242 assertions in the final revision, an independent TypeScript model of the auction compared against the on-chain tree including adversarial refund cases, gas comparisons at 64 and 512 bids, six observed network and genesis deployments within gas ceilings, and browser QA of the auction states at desktop and mobile widths.</p>
+			</section>
+
+			<section id="benefits">
+				<h2>9. Benefits</h2>
+				<ul>
+					<li><strong>Capital goes where demand is.</strong> One deposit backs every registered question; a quiet question no longer strands REP, and a busy one no longer waits for a dedicated underwriter.</li>
+					<li><strong>Costs scale with capital, not with questions.</strong> One price report, one keeper watch and one fork migration per universe serve any number of questions. Registering a question moves no capital and creates no per-provider state.</li>
+					<li><strong>Predictable prices for buyers.</strong> A flat annual holding fee and a purchase fee proportional to consumed backing replace a utilization-dependent retention curve; quotes bound both the total payment and the shares delivered.</li>
+					<li><strong>Individual, not pooled, risk.</strong> Providers keep exact ownership of their principal, choose their own health target, and bear only their own cure and takeover losses. Unassigned income is never redistributed to whoever happens to be healthy.</li>
+					<li><strong>Keeper actions without trusted setup.</strong> Cures and takeovers need no approval registry, staging, ETH reserve or bonus pool, and bots can sign exact bounds so a changed state cannot be exploited.</li>
+					<li><strong>Griefing-resistant pricing.</strong> The conservative and liquidation prices prevent a report within tolerance from both admitting and liquidating a position; independent report candidates prevent one disputed report from stalling the feed.</li>
+					<li><strong>Auction winners are backing on arrival.</strong> All sold REP enters custody at finalization as an aggregate position; nobody needs to claim for the branch to be repaired, and winners' ETH is never tied up beyond the lot price.</li>
+					<li><strong>Fairer exits and refunds.</strong> A cohort queue serves earlier requests first and cannot be jumped; provably losing bids get their ETH back before closing.</li>
+					<li><strong>Bounded work everywhere.</strong> Trees, cumulative indexes and immutable fork snapshots keep every transaction's gas logarithmic in participants and constant in questions.</li>
+				</ul>
+			</section>
+
+			<section id="issues">
+				<h2>10. Issues, risks and accepted limits</h2>
+				<p>Some of these are stated in the pull request as accepted limits; others are observations about the design. None of them is hidden by the implementation, but all of them matter for anyone deciding whether to use a portfolio.</p>
+				<h3>10.1 Economic</h3>
+				<ul>
+					<li><strong>Weak-demand capture.</strong> When the auction target is missed, all inventory is sold to the bidders present. A lone bidder can acquire the entire fresh inventory for one lot of ETH, then retire and withdraw surplus REP if spare capacity exists. Selling every REP does not pledge every REP.</li>
+					<li><strong>Branches rarely reopen.</strong> A branch accepts new purchases only when its cash covers every inherited unit and it holds no recovery REP. Any unsold auction inventory, even after a full ETH repair, keeps it in runoff until the claims owning that REP have been redeemed.</li>
+					<li><strong>No minimum holding period for winners.</strong> The branch is repaired by the ETH, but the REP sold can leave the ledger as soon as ordinary vault rules allow. The enforceable backing is the accepted commitment at the chosen health target.</li>
+					<li><strong>Uniform pricing is not truthful.</strong> Large bidders still have a demand-reduction incentive. The auction also has no seller reserve, so there is no floor on the price at which REP is sold.</li>
+					<li><strong>Whole-lot rounding.</strong> A marginal bid's allocation can differ from its fractional share by less than one lot, and a shortfall below one lot stays unrepaired.</li>
+					<li><strong>Keeper profitability is not guaranteed.</strong> Rewards are in REP, with no ETH bonus; whether a cure or takeover pays depends on gas prices and REP liquidity. The bot requires independent price evidence and will not sell REP for gas on its own. The 1% cure reward may be too small to attract keepers for small positions.</li>
+					<li><strong>The reporting budget is charged on every purchase.</strong> Once a question's reward is funded, later purchases still pay the full budget, which goes to maintenance. The resolution premium's unused portion also goes to maintenance rather than back to the buyer. Buyers of fresh, short-lived questions pay a visibly higher effective fee than the headline purchase fee suggests (about 8% of cash in the worked example).</li>
+					<li><strong>Fork cutoff forfeiture.</strong> An owner who does not choose a branch within eight weeks loses their pledged principal to the branch Truth Auctions. Absent, sleeping or unaware providers are penalized hard.</li>
+					<li><strong>Shared fate within a universe.</strong> Providers back every admitted question, including ones they would not have chosen. The admission policy is the only filter, and a custom policy can be arbitrary; the UI labels a custom policy “Custom policy — underwriting unavailable”.</li>
+				</ul>
+				<h3>10.2 Oracle and operational</h3>
+				<ul>
+					<li><strong>Everything depends on fresh, roughly correct prices.</strong> A stale feed freezes capacity, withdrawals of pledged REP, cures and takeovers at once, and a lead change during a stale interval forfeits that question's reporting reward for good. A feed that is wrong by more than the tolerance can still admit or liquidate wrongly; the band only protects against errors within tolerance.</li>
+					<li><strong>Report funding grows with exposure.</strong> A sponsor must post one hundredth of aggregate exposure in WETH; for a large portfolio this is a meaningful capital requirement for whoever keeps the feed alive, reimbursed only within a capped maintenance budget.</li>
+					<li><strong>Missing or adverse closing quotes cancel repair.</strong> If nobody funds a quote covering the week-nine deadline, or REP got cheaper during the auction, every fill is cancelled and the branch activates impaired.</li>
+					<li><strong>Liveness still needs volunteers.</strong> Starting branches, closing auctions, splitting out winners, serving retirements and settling refunds are all permissionless but not automatic.</li>
+				</ul>
+				<h3>10.3 Engineering</h3>
+				<ul>
+					<li><strong>Size and novelty.</strong> Roughly 7,600 lines of new Solidity across 34 contracts and libraries (plus nine new interfaces), with custom AVL trees, persistent maps, modular prefix arithmetic and 128-bit recovery scaling, delivered in one pull request. The author's own validation note ends with “tests and reviews do not prove absence of bugs”.</li>
+					<li><strong>Storage only grows.</strong> Refunded bids, retired positions, frozen books and premium schedules are never deleted, and work follows tree paths rather than being constant.</li>
+					<li><strong>Delegate and module sprawl.</strong> The capital ledger runs through two delegatecall helpers, the forker through a portfolio delegate, and the hub through nine module deployers. Each boundary is authenticated, but the call graph is harder to audit than the standalone pool's.</li>
+					<li><strong>Native share migration still needs intervening forks.</strong> Shares move universe by universe as before; only capital and books skip the per-pool work.</li>
+					<li><strong>Known dependency advisories.</strong> The CI audit runner currently reports pre-existing advisories in <code>follow-redirects</code>, <code>glob</code> and <code>minimatch</code> that are outside this change but must be cleared before the pipeline is fully green.</li>
+					<li><strong>Two systems to maintain.</strong> Standalone pools keep their vaults, retention curve, approval registry and tick auction; portfolios use the new rules. Documentation, bots and the scanner must describe both for as long as both exist.</li>
+				</ul>
+			</section>
+
+			<section id="glossary">
+				<h2>11. Glossary</h2>
+				<dl class="glossary">
+					<dt>Complete set</dt>
+					<dd>One Invalid, one Yes and one No share of a question, minted against ETH and redeemable together while the question is open.</dd>
+					<dt>Escalation Game</dt>
+					<dd>The REP-staked dispute process that resolves one question locally; two outcomes reaching the non-decision threshold force a fork instead.</dd>
+					<dt>Escalation haircut</dt>
+					<dd>Two fifths of an Escalation Game's binding capital, burned at settlement instead of being paid to the winning side.</dd>
+					<dt>OpenOracle</dt>
+					<dd>The contestable price-report mechanism from which Statoblast takes REP/ETH prices for solvency checks, never for market outcomes.</dd>
+					<dt>Portfolio</dt>
+					<dd>A deployment that shares REP custody, commitments, ETH settlement and pricing across many questions in one namespace. Created from a seed pool with an admission policy and an economics configuration.</dd>
+					<dt>Capital ledger</dt>
+					<dd>The per-universe contract holding provider REP principal and recording each provider's single commitment, health target and earnings.</dd>
+					<dt>Principal, free and pledged</dt>
+					<dd>REP a provider deposited. Free principal is idle and withdrawable at any time; pledged principal backs the provider's live commitment.</dd>
+					<dt>Commitment</dt>
+					<dd>The ETH amount one provider agrees to underwrite. Each provider has at most one live commitment per portfolio and universe.</dd>
+					<dt>Health target</dt>
+					<dd>A personal multiplier of at least 100% applied to the protocol's REP requirement, governing admission, growth, surplus withdrawal and retirement cancellation.</dd>
+					<dt>Conservative price and liquidation price</dt>
+					<dd>The accepted REP-per-ETH price adjusted up or down by the oracle tolerance. Exposure-increasing actions use the former; cures and takeovers the latter.</dd>
+					<dt>Demand</dt>
+					<dd>The ETH of all live question liabilities in a universe plus prefunded reporting rewards. New demand is admitted only up to the healthy commitment; a later price move can push the two apart until cures or takeovers restore coverage.</dd>
+					<dt>Spare capacity</dt>
+					<dd>Healthy commitment minus demand. It serves the retirement queue first and new purchases second.</dd>
+					<dt>Retirement, cohort</dt>
+					<dd>A request to reduce a commitment to a chosen remainder. Requests are grouped into cohorts served in order from spare capacity.</dd>
+					<dt>Cure</dt>
+					<dd>Removal of unused commitment from a distressed position, rewarded with 1% of the eliminated backing value in REP from that position.</dd>
+					<dt>Takeover</dt>
+					<dd>Transfer of a distressed commitment to a consenting, collateralized receiver for a REP award that ramps from zero to the proportional REP over one hour of distress.</dd>
+					<dt>Settlement book</dt>
+					<dd>The central accounting of every question's units, share supply, finality deadline, fee stream and recovery REP; the portfolio settlement contract holds the ETH.</dd>
+					<dt>Units</dt>
+					<dd>A question's ETH-denominated claim on the settlement book's cash. Fees convert units into fee cash; shares redeem for cash in proportion to units.</dd>
+					<dt>Fee stream</dt>
+					<dd>A funded ETH or REP budget that vests linearly to healthy commitments over the configured vesting duration.</dd>
+					<dt>Resolution premium</dt>
+					<dd>A buyer's prepayment of up to 52 days of holding fee covering the reporting window, earned by healthy providers until the question's finality deadline.</dd>
+					<dt>Maintenance reserve</dt>
+					<dd>ETH from the service share of fees, unused premiums and unclaimed reporting budgets, used to reimburse sponsors of accepted oracle reports.</dd>
+					<dt>Shared price feed</dt>
+					<dd>The per-universe contract that accepts one REP/ETH report at a time for the whole portfolio and sizes report funding by aggregate exposure.</dd>
+					<dt>Branch, fresh inventory, shortfall</dt>
+					<dd>A child universe's portfolio state after a fork; the REP of owners who did not choose that branch; and the question cash the branch did not receive through choices.</dd>
+					<dt>Truth Auction (branch Truth Auction)</dt>
+					<dd>The per-branch uniform-price auction that sells a branch's fresh inventory REP for ETH to repair its shortfall after a fork. It never selects truth.</dd>
+					<dt>Lot, grid</dt>
+					<dd>The auction's ETH unit, equal to the minimum commitment, and its REP rounding unit, derived from the security multiplier.</dd>
+					<dt>Aggregate position</dt>
+					<dd>The single capital position holding all auction winners' REP and commitment until a winner is split out into their own auction vault.</dd>
+					<dt>Runoff</dt>
+					<dd>A branch whose cash does not cover its inherited units or which still holds recovery REP: claims settle pro rata, but no purchases or holding fees occur.</dd>
+					<dt>Recovery REP</dt>
+					<dd>Child REP owed to existing claims: unsold auction inventory plus baskets inherited from earlier forks, tracked at 128-bit precision.</dd>
+				</dl>
+				<p class="colophon">This explainer describes the pull request as of its winner-discovery and bid-admission revision, head commit <code>debbaf297</code>, reviewed on 1 November 2026; the counts and validation figures above refer to that revision. The authoritative behaviour is the Solidity under <code>solidity/contracts/statoblast</code> on the branch and the published protocol documentation; where this page and the code disagree, the code is right.</p>
+			</section>
+		</main>
+	</body>
+</html>
