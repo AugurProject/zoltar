@@ -265,7 +265,7 @@ jobs:
           build-inputs: ci-contract-inputs
       - run: bun run check:solidity-format
       - run: bun run tsc:solidity:current
-      - run: cd solidity && bun audit
+      - run: bun ./tooling/repo/run-project-tasks.mts audit contracts
 
   packages:
     name: Package (${{ matrix.package }})
