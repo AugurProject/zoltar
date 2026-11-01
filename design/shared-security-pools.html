@@ -404,7 +404,7 @@
 			<header class="page">
 				<p class="kicker">Design explainer · pull request #1164</p>
 				<h1>Shared security pools and uniform-price Truth Auctions</h1>
-				<p class="lede">Pull request <a href="https://github.com/AugurProject/zoltar/pull/1164">#1164</a> lets many Statoblast questions share one pool of REP security and one set of underwriting commitments, instead of each question running its own isolated SecurityPool. It also rebuilds the post-fork Truth Auction as a uniform-price auction of whole ETH lots whose winners automatically become funded capital providers. This page explains what the change does, how the new system works, the math and incentives behind it, and where its weak points are.</p>
+				<p class="lede">Pull request <a href="https://github.com/AugurProject/zoltar/pull/1164">#1164</a> lets many Statoblast questions share one pool of REP security and one set of underwriting commitments, instead of each question running its own isolated SecurityPool. It also rebuilds the post-fork Truth Auction as a uniform-price auction of whole ETH lots whose winners automatically become funded capital providers. This page explains what the change does, how the new system works, the math and incentives behind it, and where its weak points are. It closes with the page author's assessment of the pull request and concrete suggestions for improving it.</p>
 				<ul class="meta">
 					<li>Branch <code>t3code/multi-question-security-pool</code> → <code>main</code></li>
 					<li>742 files changed, about 49,900 lines added and 3,700 removed</li>
@@ -424,6 +424,7 @@
 						<li><a href="#changes">What the pull request changes, layer by layer</a></li>
 						<li><a href="#benefits">Benefits</a></li>
 						<li><a href="#issues">Issues, risks and accepted limits</a></li>
+						<li><a href="#review">Assessment and suggested improvements</a></li>
 						<li><a href="#glossary">Glossary</a></li>
 					</ol>
 				</nav>
@@ -1662,8 +1663,74 @@
 				</ul>
 			</section>
 
+			<section id="review">
+				<h2>11. Assessment and suggested improvements</h2>
+				<p>Everything above describes the branch as it is. This section is the page author's own view after reading it: what the pull request gets right, what still worries me, and what I would change, from design-level choices down to small fixes. The suggestions are starting points for discussion, not specifications, and each one trades something away.</p>
+
+				<h3>11.1 What the pull request gets right</h3>
+				<ul>
+					<li><strong>Custody and accounting are kept apart, and every mutation checkpoints first.</strong> The ledger, the settlement book, the fee streams and the premium book each answer one question, and income earned at old weights is always credited before weights change. That discipline is what makes the fee logic auditable at all, and it is applied consistently.</li>
+					<li><strong>Nothing scans.</strong> Capacity, fees, retirement service, auction clearing, fee ownership and fork inheritance are all tree paths or cumulative indexes. The gas tests at 64 and 512 bids and the deployment-size checks back this up rather than assert it.</li>
+					<li><strong>Risk stays individual.</strong> Personal health targets, per-position cures and takeovers, and unassigned income going to maintenance or being burned mean that one provider's trouble is never socialized onto the others, and that nobody can snipe income earned before they arrived.</li>
+					<li><strong>The two-price band and oracle-declared distress remove the liquidation race.</strong> A report inside the tolerance cannot both admit and punish, and keepers cannot start or reset a distress clock; portfolios need none of the standalone pools' approval registry, staged operations or ETH bonus, with no loss of safety.</li>
+					<li><strong>The auction leaves nothing in limbo.</strong> Winners are backing the moment the branch activates, provably losing bids get their ETH back early, and the frozen bid tree keeps clearing and fee ownership consistent without deletions.</li>
+					<li><strong>Finalized questions release capacity on their own.</strong> Freezing a question's units moves them out of the live book, so demand falls and the retirement queue advances at the next checkpoint, without a dedicated service transaction.</li>
+					<li><strong>Validation is unusually thorough for a change this size.</strong> An independent TypeScript model of the auction compared against the contract, a seeded reference model of the commitment index, module size limits and observed deployments are more than most protocol pull requests carry.</li>
+				</ul>
+
+				<h3>11.2 What still worries me</h3>
+				<ul>
+					<li><strong>The economic edge cases are not corner cases.</strong> Weak-demand capture and the long runoff of almost every branch, lasting until its recovery claims are redeemed (<a href="#issues">section 10</a>), will both happen in the first real fork, not in a contrived one.</li>
+					<li><strong>Liveness is bought with REP and goodwill.</strong> Price sponsors, keepers paid in REP, and volunteers to start branches, close auctions, serve retirements and split out winners are all assumed. Keepers spend ETH on gas and are paid in REP, volunteers are not paid at all, and sponsors are reimbursed in ETH only within a capped maintenance budget.</li>
+					<li><strong>Size and novelty.</strong> Custom AVL trees, persistent maps, modular prefix arithmetic and 128-bit recovery scaling in roughly 7,600 new lines, delivered in one pull request, is a large audit surface with two delegatecall boundaries inside the capital ledger alone.</li>
+					<li><strong>Open admission is open to everyone.</strong> Under the Open policy anyone can register any question within the horizon, and every provider backs it from that moment.</li>
+				</ul>
+
+				<h3>11.3 Larger changes worth considering</h3>
+				<ol>
+					<li><strong>Cap the REP a lot can buy.</strong> Today the only ceiling on a bid's minimum REP per lot is the whole inventory, so a single one-lot bid under weak demand buys everything for one minimum commitment. A configurable cap expressed as a multiple of the minimum collateral per lot at opening (two or three times, say) would make the branch keep REP it cannot sell at a tolerable price as recovery REP instead of giving it away. The cost is less ETH repaired when bidders insist on a steep discount, which is exactly the trade the design should refuse.</li>
+					<li>
+						<strong>Let repaired branches reopen.</strong> A branch is in runoff whenever it holds any recovery REP, and after a target-reached auction it almost always does, so new purchases on inherited questions are effectively closed after every fork. Three options, from smallest to largest:
+						<ul>
+							<li>burn or re-auction unsold inventory in a second window;</li>
+							<li>let a branch whose cash fully covers its units reopen, paying recovery REP only to shares that existed at activation;</li>
+							<li>mark recovery baskets by claim generation so new mints never own old REP. The settlement book already keeps per-question recovery indices with corrections, so a generation marker is a smaller step than it sounds.</li>
+						</ul>
+					</li>
+					<li><strong>Pause vesting while the price is stale instead of forfeiting it.</strong> Stream ETH that vests during a stale-price interval goes to the maintenance reserve, which pays report sponsors, and stream REP is burned; the provider loses both, and for the ETH whoever withholds reports moves provider income towards the sponsors who decide whether a report is posted. Extending every stream's end by the stale duration keeps providers whole and removes the incentive. The same applies to the reporter reward cap: convert the REP-denominated risk to ETH at claim time rather than zeroing it when the price happens to be stale at a lead change.</li>
+					<li><strong>Give owners a standing fork choice.</strong> Missing the eight-week window forfeits all pledged REP. An owner-registered default policy, such as a specific outcome index or the branch with the most chosen commitment at the deadline, would protect inattentive providers; a late-choice grace period with a penalty would protect them less but keep the vote-with-capital property intact. Either is better than silent forfeiture.</li>
+					<li><strong>Decouple the three roles of the minimum commitment.</strong> One parameter is at once the smallest commitment, the smallest retirement step and the auction's ETH lot. Lot size should be chosen for clearing granularity and bidder access, the other two for dust prevention; a portfolio cannot tune one without the others.</li>
+					<li><strong>Make distress economics portfolio parameters.</strong> The one-hour takeover ramp and the 1% cure reward are constants. An hour is short for a human owner and long enough for a bot to wait out, so most takeovers will be captured by bots at the full award; a longer or two-stage ramp and a configurable reward would let portfolios with different capital bases choose.</li>
+					<li><strong>Put a bond or a cap on open admission.</strong> Registration is free and permissionless under the Open policy, so providers underwrite whatever anyone registers. A registration bond returned at finality, a per-portfolio question cap, or simply making the Fixed policy the recommended default would limit the exposure without a governance process.</li>
+					<li><strong>Reduce the standing cost of the shared price.</strong> A fresh report must post about one hundredth of aggregate exposure as collateral and a price stays usable for thirteen minutes after it settles on mainnet (about twenty after the report is made), so a large portfolio needs a sponsor willing to lock a meaningful amount of WETH several times an hour. A longer validity window for shared feeds, a divider that grows with exposure, or a cheaper renewal path when the price has not moved would all lower that cost; each weakens the oracle's correction incentive and needs its own analysis.</li>
+					<li><strong>Split future work and document the modules.</strong> The next changes of this kind should arrive as stacked pull requests by module. Independently of that, most of the new contracts have no page in the contract reference, and portfolios have only one section in the Statoblast explanation page; a dedicated explanation page seeded from this explainer should replace that section and be linked from it.</li>
+				</ol>
+
+				<h3>11.4 Smaller changes</h3>
+				<ul>
+					<li><strong>Make the fee parts mean what they say.</strong> Stop charging the reporting budget once it is funded, or split out an explicit maintenance charge, so buyers see what each part of the fee pays for. The unused resolution premium could likewise return to the remaining share holders of the question instead of maintenance.</li>
+					<li><strong>Let a takeover receiver name the idle REP to contribute.</strong> Today all of the receiver's idle REP is swept in under a cap, so a keeper with a large idle balance has to consent to all of it or revert.</li>
+					<li><strong>Add a recipient parameter to earnings claims.</strong> Principal withdrawals already take one; vault contracts and bots could then route income without a second transfer.</li>
+					<li><strong>Emit a reason when the oracle-reward callback fails or is skipped.</strong> The shared feed's settlement swallows a failed callback, and the services contract returns silently when fewer than 480 seconds have passed since the last sponsor reward, when nothing is committed, or when the quoted reward is zero, so sponsors cannot tell why they were not reimbursed.</li>
+					<li><strong>Seed a forked portfolio in the walletless simulation.</strong> The portfolio scenario describes fork recovery but seeds no fork, so branch choice, the auction and early refunds cannot be exercised end to end without a wallet.</li>
+					<li><strong>Give the keeper a housekeeping mode or pay for housekeeping.</strong> The bot flags stalled retirements and discovers auction winners, but nothing pays anyone to serve retirements, close auctions or split out winners; small rewards or an explicit low-priority mode would make those steps less dependent on volunteers.</li>
+					<li>
+						<strong>Add conservation invariants and a cure-reward fuzz.</strong> The stateful tests could check:
+						<ul>
+							<li>the ledger's REP balance equals pledged principal plus free principal plus REP released by served retirements but not yet withdrawn plus unclaimed earnings, across purchases, fees, cures, takeovers and forks;</li>
+							<li>released plus outstanding plus deferred stream income equals funded income;</li>
+							<li>the cure reward behaves correctly around its cap under fuzzed prices and positions.</li>
+						</ul>
+					</li>
+					<li><strong>Show the coverage ratio.</strong> The Portfolios tab already shows healthy commitment, settlement demand and each position's adverse-interval start, but not the ratio of healthy commitment to demand, and the scanner shows none of these; a single ratio reading in both would make the state in which demand exceeds healthy commitment obvious at a glance.</li>
+					<li><strong>Clear the pre-existing dependency advisories first.</strong> A separate pull request before this one merges would leave the audit job green on its own terms.</li>
+					<li><strong>Add a review guide to the pull request.</strong> The description is thorough but dense; a short reading order of the modules, which test proves which claim, and a link to this explainer would shorten every future review.</li>
+					<li><strong>Unify the vocabulary.</strong> The branch uses demand, settlement demand, funded demand and aggregate exposure for closely related quantities; one glossary entry each in the published documentation would prevent drift.</li>
+				</ul>
+			</section>
+
 			<section id="glossary">
-				<h2>11. Glossary</h2>
+				<h2>12. Glossary</h2>
 				<dl class="glossary">
 					<dt>Complete set</dt>
 					<dd>One Invalid, one Yes and one No share of a question, minted against ETH and redeemable together while the question is open.</dd>
