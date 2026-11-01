@@ -176,6 +176,16 @@
 				white-space: normal;
 				overflow-wrap: anywhere;
 			}
+			/* Below 22rem a long token no longer fits on a line of its own, so let it wrap rather than widen the page. */
+			@media (max-width: 22rem) {
+				code {
+					white-space: normal;
+					overflow-wrap: anywhere;
+				}
+				td code {
+					white-space: nowrap;
+				}
+			}
 			figure {
 				margin: 1.5rem 0;
 				padding: 1rem;
