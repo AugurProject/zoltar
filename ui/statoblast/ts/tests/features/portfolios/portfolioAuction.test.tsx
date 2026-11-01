@@ -89,3 +89,29 @@ test('funded unclaimed winners show live fees and separate activation from manag
 	await act(() => button(view.container, 'Manage vault').click())
 	expect(opened).toEqual([auctionVault])
 })
+
+test('early refund status enables only crediting then a separate unrestricted withdrawal', async () => {
+	const fixture = await auctionFixture()
+	const view = await renderIntoDocument(<PortfolioAuction fork={fixture.fork} bidder={owner} actions={actions} />)
+	lifecycle.trackRendered(view)
+	await waitFor(() => expect(view.container.textContent).toContain('Bid 1'))
+	const credit = button(view.container, 'Credit this bid’s refunds')
+	const withdraw = button(view.container, 'Withdraw credited refunds')
+	expect(credit.disabled).toBe(true)
+	expect(view.container.textContent).toContain('This bid may still win')
+	fixture.values['earlyRefundAttoEth'] = 2n * unit
+	await act(() => button(view.container, 'Refresh auction').click())
+	await waitFor(() => expect(credit.disabled).toBe(false))
+	expect(view.container.textContent).toContain('Better funded bids rule out this bid')
+	expect(metric(view.container, 'Unused bid ETH')).toContain('2.00')
+	expect(withdraw.disabled).toBe(true)
+	fixture.values['earlyRefundAttoEth'] = 0n
+	fixture.values['bids'] = [owner, auctionVault, 12_000n, 2n, 60n * unit, true, false]
+	fixture.values['refundCreditAttoEth'] = 2n * unit
+	await act(() => button(view.container, 'Refresh auction').click())
+	await waitFor(() => expect(withdraw.disabled).toBe(false))
+	expect(credit.disabled).toBe(true)
+	expect(view.container.textContent).toContain('Its ETH refund has been credited for withdrawal')
+	expect(button(view.container, 'Credit this bid’s refunds')).toBe(credit)
+	expect(button(view.container, 'Withdraw credited refunds')).toBe(withdraw)
+})

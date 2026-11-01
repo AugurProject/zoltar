@@ -41,6 +41,31 @@ describe('Statoblast: ETH-only truth-auction funding', () => {
 		expect(position.principal + position.earnedAttoRep).toBe(1_000n * unit)
 	})
 
+	test('a losing bidder withdraws and freely reuses ETH before branch finalization', async () => {
+		const context = await preparePortfolioTruthAuction(fixture)
+		await context.report()
+		await context.open()
+		const loser = await context.bid(context.other, 2n, 100n * unit)
+		await expect(context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleRefund', args: [loser.id] })).rejects.toThrow('Bid may still win')
+		await context.bid(context.owner, 5n, 10n * unit)
+		const clearing = await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewFinalization', args: [5n] })
+		// Anyone can credit, but the credit belongs only to the original bidder.
+		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleRefund', args: [loser.id] }))
+		expect(await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'refundCreditAttoEth', args: [context.other.account.address] })).toBe(2n * unit)
+		const recipient = context.owner.account.address
+		const before = await context.owner.getBalance({ address: recipient })
+		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'withdrawRefunds', args: [recipient] }))
+		expect((await context.owner.getBalance({ address: recipient })) - before).toBe(2n * unit)
+		expect(await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewFinalization', args: [5n] })).toEqual(clearing)
+		// A new bid is an independent decision; the refund is not locked into rebidding.
+		const replacement = await context.bid(context.other, 2n, 6n * unit)
+		await context.closingQuote()
+		await context.finalize()
+		expect((await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [loser.id] })).filledLots).toBe(0n)
+		expect((await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [replacement.id] })).filledLots).toBe(2n)
+		await expect(context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleRefund', args: [loser.id] })).rejects.toThrow('already been settled')
+	})
+
 	test('purchased collateral meets the chosen health target and all rounding belongs to winners', async () => {
 		const context = await preparePortfolioTruthAuction(fixture)
 		await context.report()

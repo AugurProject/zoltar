@@ -41,6 +41,7 @@ export async function auctionFixture() {
 		acceptedExposureLimitAttoEth: 20n * unit,
 		acceptedRepExposureLimitAttoRep: 100n * unit,
 		refundCreditAttoEth: 0n,
+		earlyRefundAttoEth: 0n,
 		bidderBidCount: 1n,
 		bidderBidId: 1n,
 		owner,

@@ -138,3 +138,30 @@ test('reviewed auction actions reject a context change during their fresh read',
 	pending.resolve(2n)
 	await expect(validation).rejects.toThrow('wallet or network changed')
 })
+
+test('early refund actions revalidate eligibility and leave withdrawal under bidder control', async () => {
+	const state = await setup(fixture => {
+		fixture.values['earlyRefundAttoEth'] = 2n * unit
+	})
+	const bid = state.hook.state().snapshot?.auction?.bids[0]
+	if (bid === undefined) throw new Error('Missing auction bid')
+	expect(state.hook.state().refundReason(bid)).toBeUndefined()
+	await act(() => state.hook.state().credit(bid))
+	expect(state.requests).toHaveLength(1)
+	expect(decodeFunctionData({ abi, data: last(state.requests).data })).toEqual({ functionName: 'settleRefund', args: [1n] })
+	await last(state.requests).validateBeforeSubmit?.()
+	state.values['earlyRefundAttoEth'] = 0n
+	await expect(last(state.requests).validateBeforeSubmit?.()).rejects.toThrow('may still win')
+	state.values['bids'] = [owner, auctionVault, 12_000n, 2n, 60n * unit, true, false]
+	state.values['refundCreditAttoEth'] = 2n * unit
+	await act(() => state.hook.state().refresh())
+	await waitFor(() => expect(state.hook.state().snapshot?.auction?.refundAttoEth).toBe(2n * unit))
+	expect(state.hook.state().withdrawalReason).toBeUndefined()
+	expect(state.requests).toHaveLength(1)
+	await act(() => state.hook.state().withdraw())
+	expect(state.requests).toHaveLength(2)
+	expect(decodeFunctionData({ abi, data: last(state.requests).data })).toEqual({ functionName: 'withdrawRefunds', args: [owner] })
+	await last(state.requests).validateBeforeSubmit?.()
+	state.values['refundCreditAttoEth'] = 0n
+	await expect(last(state.requests).validateBeforeSubmit?.()).rejects.toThrow('no credited')
+})

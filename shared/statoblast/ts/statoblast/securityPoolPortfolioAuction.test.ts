@@ -77,6 +77,7 @@ function fixture(overrides: Record<string, unknown> = {}, options: { timestamp?:
 		acceptedExposureLimitAttoEth: 20n * unit,
 		acceptedRepExposureLimitAttoRep: 100n * unit,
 		refundCreditAttoEth: 0n,
+		earlyRefundAttoEth: 0n,
 		bidderBidCount: 3n,
 		owner: bidder,
 		initialCapital: capital,
@@ -198,6 +199,22 @@ describe('portfolio truth auction SDK', () => {
 		const closed = await load(fixture({}, { timestamp: 1_000n }))
 		expect(() => buildPortfolioAuctionBidRequest(closed, bidTerms)).toThrow('not accepting')
 		expect(buildPortfolioAuctionBidRequest(await load(fixture({}, { walletAttoEth: 2n * unit })), bidTerms).value).toBe(2n * unit)
+	})
+	test('provably losing bids can credit and withdraw ETH before closing', async () => {
+		const snapshot = await load(fixture({ earlyRefundAttoEth: 2n * unit }))
+		expect(decodeFunctionData({ abi, data: buildPortfolioAuctionRefundCreditRequest(snapshot, 1n).data })).toEqual({ functionName: 'settleRefund', args: [1n] })
+		const credited = await load(fixture({ refundCreditAttoEth: 2n * unit }))
+		expect(buildPortfolioAuctionRefundWithdrawRequest(credited, bidder)).toMatchObject({ to: auction, value: 0n })
+	})
+	test('early refund reads reject partial amounts and keep potential winners committed', async () => {
+		const pending = await load(fixture())
+		expect(pending.auction?.bids[0]?.earlyRefundAttoEth).toBe(0n)
+		expect(() => buildPortfolioAuctionRefundCreditRequest(pending, 1n)).toThrow('may still win')
+		await expect(load(fixture({ earlyRefundAttoEth: unit }))).rejects.toThrow('early auction refund accounting')
+		const source = fixture({ bids: [bidder, vaultFor(1n), 12_000n, 2n, 5n * unit, true, false], bidderBidCount: 1n })
+		const credited = await load(source)
+		expect(() => buildPortfolioAuctionRefundCreditRequest(credited, 1n)).toThrow('unsettled bid')
+		expect(source.calls.some(call => call.functionName === 'earlyRefundAttoEth')).toBe(false)
 	})
 	test('partial fills expose original principal while unused bid refunds remain separate transactions', async () => {
 		const snapshot = await load(fixture({ [`${engine}:refundCreditAttoEth`]: unit }, { finalized: true }))

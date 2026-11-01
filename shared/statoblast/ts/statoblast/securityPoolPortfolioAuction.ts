@@ -92,7 +92,8 @@ export function buildPortfolioAuctionMaterializeRequest(snapshot: PortfolioAucti
 export function buildPortfolioAuctionRefundCreditRequest(snapshot: PortfolioAuctionSnapshot, bidId: bigint) {
 	const auction = requireAuction(snapshot)
 	const bid = auction.bids.find(candidate => candidate.id === uint(bidId, 'Bid ID'))
-	if (!auction.finalized || bid === undefined || bid.refundSettled) throw new Error('Choose an unsettled bid from this finalized auction page.')
+	if (bid === undefined || bid.refundSettled) throw new Error('Choose an unsettled bid from this auction page.')
+	if (!auction.finalized && bid.earlyRefundAttoEth === 0n) throw new Error('This bid may still win. Its ETH remains committed until closing.')
 	return { account: snapshot.bidder, to: auction.address, value: 0n, data: encodeFunctionData({ abi, functionName: 'settleRefund', args: [bidId] }) }
 }
 export function buildPortfolioAuctionRefundWithdrawRequest(snapshot: PortfolioAuctionSnapshot, recipient: Address) {

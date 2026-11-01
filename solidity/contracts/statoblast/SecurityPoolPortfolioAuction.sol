@@ -152,10 +152,11 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 	function previewBidFees(uint256 bidId, uint256 addedAttoEth, uint256 addedAttoRep) external view returns (uint256 ownedAttoEth, uint256 ownedAttoRep) {
 		return engine.previewBidFees(bidId, addedAttoEth, addedAttoRep);
 	}
-	/// @notice Anyone may credit one bid's refunds; only its bidder may withdraw.
+	/// @notice Anyone may credit refunds, including a provably losing bid before
+	/// closing. Only its bidder may withdraw the freely usable ETH.
 	/// Refunds and position materialization are independent and never scan bids.
 	function settleRefund(uint256 bidId) external nonReentrant {
-		require(finalized, 'Truth auction has not closed');
+		require(opened, 'Truth auction has not opened');
 		engine.settleBid(bidId);
 	}
 	function withdrawRefunds(address payable recipient) external nonReentrant {

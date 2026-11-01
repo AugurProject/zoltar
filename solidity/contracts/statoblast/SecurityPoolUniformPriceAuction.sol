@@ -182,9 +182,28 @@ contract SecurityPoolUniformPriceAuction {
 		fill.refundAttoEth = (bid.lots - fill.filledLots) * lotAttoEth;
 	}
 
+	/// @notice Refund only a bid excluded by strictly better, binding demand.
+	/// Better demand never decreases: bids cannot be cancelled or repriced. A
+	/// refunded bid stays in the tree, permanently outside every winning prefix,
+	/// so neither clearing nor lazy fee ownership needs a deletion or a scan.
+	function earlyRefundAttoEth(uint256 bidId) public view returns (uint256) {
+		Bid storage bid = bids[bidId];
+		if (!initialized || finalized || bid.bidder == address(0) || bid.settled) return 0;
+		uint256 capacity = Math.min(targetLots, inventoryAttoRep / bid.minimumAttoRepPerLot);
+		if (_pricePrefix(bid.minimumAttoRepPerLot, false) < capacity) return 0;
+		return bid.lots * lotAttoEth;
+	}
+
 	function settleBid(uint256 bidId) external onlyController returns (Fill memory fill) {
-		fill = previewBid(bidId);
-		require(!bids[bidId].settled, 'Auction bid has already been settled');
+		Bid storage bid = bids[bidId];
+		require(bid.bidder != address(0), 'Auction bid does not exist');
+		require(!bid.settled, 'Auction bid has already been settled');
+		if (finalized) fill = previewBid(bidId);
+		else {
+			uint256 refund = earlyRefundAttoEth(bidId);
+			require(refund != 0, 'Bid may still win');
+			fill = Fill(bid.bidder, bid.vault, bid.targetHealthBps, 0, 0, 0, refund);
+		}
 		bids[bidId].settled = true;
 		refundCreditAttoEth[fill.bidder] += fill.refundAttoEth;
 		emit BidSettled(bidId, fill.bidder, fill.filledLots, fill.refundAttoEth);

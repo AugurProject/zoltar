@@ -38,6 +38,7 @@ const abi = parseAbi([
 	'function acceptedExposureLimitAttoEth() view returns (uint256)',
 	'function acceptedRepExposureLimitAttoRep() view returns (uint256)',
 	'function refundCreditAttoEth(address bidder) view returns (uint256)',
+	'function earlyRefundAttoEth(uint256 bidId) view returns (uint256)',
 	'function bidderBidCount(address bidder) view returns (uint256)',
 	'function bidderBidId(address bidder,uint256 index) view returns (uint256)',
 	'function bids(uint256 id) view returns (address bidder,address vault,uint256 targetHealthBps,uint256 lots,uint256 minimumAttoRepPerLot,bool settled,bool feesRemoved)',
@@ -77,6 +78,7 @@ export type PortfolioAuctionBid = {
 	lots: bigint
 	minimumAttoRepPerLot: bigint
 	refundSettled: boolean
+	earlyRefundAttoEth: bigint
 	materialized: boolean
 	position: { positionId: bigint; principalAttoRep: bigint; commitmentAttoEth: bigint; targetHealthFactorBps: bigint; liquidationStarted: bigint; materialized: boolean; earnedAttoEth: bigint; earnedAttoRep: bigint } | undefined
 	fill: { filledLots: bigint; usedAttoEth: bigint; refundAttoEth: bigint; principalAttoRep: bigint } | undefined
@@ -264,7 +266,9 @@ export async function loadPortfolioAuctionSnapshot(parameters: { client: Auction
 					}
 				}
 			}
-			return { ...bid, fill, position }
+			const earlyRefundAttoEth = !finalized && !bid.refundSettled ? uint(await read(engine, 'earlyRefundAttoEth', [id]), 'Early refund ETH') : 0n
+			if (earlyRefundAttoEth !== 0n && earlyRefundAttoEth !== bid.lots * terms.lotAttoEth) throw new Error('Invalid early auction refund accounting.')
+			return { ...bid, earlyRefundAttoEth, fill, position }
 		}
 	}
 }

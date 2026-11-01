@@ -184,6 +184,83 @@ describe('Portfolio uniform-price auction', () => {
 		await expect(owner.writeContract({ abi, address, functionName: 'withdrawRaised', args: [recipient] })).rejects.toThrow('Auction proceeds are not withdrawable')
 	})
 
+	test('provably losing bids recover ETH before finalization without changing settlement', async () => {
+		const address = await deploy()
+		await getAnvilWindowEthereum().setTime(opensAt)
+		await bid(address, unit, 10n, client(2).account.address)
+		const loser = await bid(address, 2n * unit, 2n)
+		const expected = await client().readContract({ abi, address, functionName: 'previewFinalization', args: [10n] })
+		await settle(address, loser)
+		expect(await client().readContract({ abi, address, functionName: 'refundCreditAttoEth', args: [client(1).account.address] })).toBe(2n * unit)
+		const recipient = client(2).account.address
+		const before = await client().getBalance({ address: recipient })
+		await writeContractAndWait(client(1), () => client(1).writeContract({ abi, address, functionName: 'withdrawRefund', args: [recipient] }))
+		expect((await client().getBalance({ address: recipient })) - before).toBe(2n * unit)
+		expect(await close(address)).toEqual(expected)
+		expect(await fill(address, loser)).toMatchObject({ filledLots: 0n, refundAttoEth: 2n * unit })
+		await expect(settle(address, loser)).rejects.toThrow('Auction bid has already been settled')
+		await writeContractAndWait(client(), () => client().writeContract({ abi, address, functionName: 'withdrawRaised', args: [client().account.address] }))
+		expect(await client().getBalance({ address })).toBe(0n)
+	})
+
+	test('a zero-fill marginal bid cannot exit because later equal bids can make it win', async () => {
+		const address = await deploy(2n)
+		await getAnvilWindowEthereum().setTime(opensAt)
+		for (let count = 0; count < 4; count++) await bid(address, unit, 1n)
+		// Cumulative pro-rata rounding assigns the third bid zero of two lots.
+		expect((3n * 2n) / 4n - (2n * 2n) / 4n).toBe(0n)
+		expect(await client().readContract({ abi, address, functionName: 'earlyRefundAttoEth', args: [3n] })).toBe(0n)
+		await expect(settle(address, 3n)).rejects.toThrow('Bid may still win')
+		await bid(address, unit, 1n)
+		await close(address, 2n)
+		expect(await fill(address, 3n)).toMatchObject({ filledLots: 1n })
+	})
+
+	test('inventory-excluded bids can exit, but marginal and potential winners remain binding', async () => {
+		const address = await deploy(10n, 100n, 1n)
+		await getAnvilWindowEthereum().setTime(opensAt)
+		await bid(address, 10n, 2n, client(1).account.address, 1n)
+		await bid(address, 30n, 4n, client(2).account.address, 1n)
+		await bid(address, 40n, 5n, client(1).account.address, 1n)
+		for (const id of [1n, 2n]) await expect(settle(address, id)).rejects.toThrow('Bid may still win')
+		expect(await client().readContract({ abi, address, functionName: 'earlyRefundAttoEth', args: [3n] })).toBe(5n)
+		await settle(address, 3n)
+		await expect(settle(address, 3n)).rejects.toThrow('Auction bid has already been settled')
+		expect(await client().readContract({ abi, address, functionName: 'earlyRefundAttoEth', args: [3n] })).toBe(0n)
+		await bid(address, 5n, 3n, client(1).account.address, 1n)
+		// Stronger demand now excludes the former marginal bid too.
+		await settle(address, 2n)
+		await bid(address, 50n, 7n, client(2).account.address, 1n)
+		await getAnvilWindowEthereum().setTime(closesAt)
+		await settle(address, 5n)
+		expect(await close(address)).toMatchObject({ filledLots: 5n, raisedAttoEth: 5n, soldAttoRep: 100n })
+		for (const id of [2n, 3n, 5n]) {
+			expect((await fill(address, id)).filledLots).toBe(0n)
+			await expect(detach(address, id, 1n, 1n)).rejects.toThrow('Auction bid has no remaining fee ownership')
+		}
+		expect(await detach(address, 1n, 5n, 10n)).toEqual([2n, 4n])
+		expect(await detach(address, 4n)).toEqual([3n, 6n])
+	})
+
+	test('early refunds cannot be duplicated by cancellation or credited to another bidder', async () => {
+		const address = await deploy(1n)
+		expect(await client().readContract({ abi, address, functionName: 'earlyRefundAttoEth', args: [0n] })).toBe(0n)
+		await getAnvilWindowEthereum().setTime(opensAt)
+		await bid(address, unit, 1n, client(2).account.address)
+		await bid(address, 2n * unit, 1n)
+		await expect(client(1).writeContract({ abi, address, functionName: 'settleBid', args: [2n] })).rejects.toThrow('Only the auction controller')
+		await expect(settle(address, 999n)).rejects.toThrow('Auction bid does not exist')
+		await settle(address, 2n)
+		await writeContractAndWait(client(1), () => client(1).writeContract({ abi, address, functionName: 'withdrawRefund', args: [client(1).account.address] }))
+		await close(address, 0n)
+		await settle(address, 1n)
+		await expect(settle(address, 2n)).rejects.toThrow('Auction bid has already been settled')
+		expect(await client().readContract({ abi, address, functionName: 'refundCreditAttoEth', args: [client(1).account.address] })).toBe(0n)
+		expect(await client().readContract({ abi, address, functionName: 'refundCreditAttoEth', args: [client(2).account.address] })).toBe(unit)
+		await writeContractAndWait(client(2), () => client(2).writeContract({ abi, address, functionName: 'withdrawRefund', args: [client(2).account.address] }))
+		expect(await client().getBalance({ address })).toBe(0n)
+	})
+
 	test('controller can combine a beneficiary refund and tolerate an empty ETH credit', async () => {
 		const address = await deploy()
 		await getAnvilWindowEthereum().setTime(opensAt)
@@ -228,7 +305,7 @@ describe('Portfolio uniform-price auction', () => {
 		expect(refund + used).toBe(total * lot)
 	})
 
-	test('mixed books agree with an independent per-lot model across demand and inventory limits', async () => {
+	test('mixed books with early refunds agree with an independent model deleting refunded bids', async () => {
 		const cases = [
 			{ seed: 42n, inventory: 100_000n, limit: 333n, grid: 1n },
 			{ seed: 123n, inventory: 100_001n, limit: 1_000n, grid: 1n },
@@ -236,8 +313,8 @@ describe('Portfolio uniform-price auction', () => {
 			{ seed: 444n, inventory: 31n, limit: 1_000n, grid: 1n },
 			{ seed: 555n, inventory: 1_009n, limit: 1_000n, grid: 3n },
 		]
-		const auctions: { address: Address; entries: { price: bigint; lots: bigint; id: bigint }[]; inventory: bigint; limit: bigint; grid: bigint }[] = []
-		for (const entry of cases) auctions.push({ address: await deploy(1_000n, entry.inventory, 1n, entry.grid), entries: [], inventory: entry.inventory, limit: entry.limit, grid: entry.grid })
+		const auctions: { address: Address; entries: { price: bigint; lots: bigint; id: bigint }[]; inventory: bigint; limit: bigint; grid: bigint; refunded: Set<bigint> }[] = []
+		for (const entry of cases) auctions.push({ address: await deploy(1_000n, entry.inventory, 1n, entry.grid), entries: [], inventory: entry.inventory, limit: entry.limit, grid: entry.grid, refunded: new Set() })
 		await getAnvilWindowEthereum().setTime(opensAt)
 		for (const [index, auction] of auctions.entries()) {
 			let seed = cases[index]?.seed ?? 1n
@@ -246,10 +323,18 @@ describe('Portfolio uniform-price auction', () => {
 				const price = ([3n, 7n, 11n, 13n, 19n][Number(seed % 5n)] ?? 3n) * auction.grid
 				const lots = 1n + (seed % 31n)
 				auction.entries.push({ price, lots, id: await bid(auction.address, price, lots, client(1).account.address, 1n) })
+				for (const candidate of auction.entries) {
+					const refund = await client().readContract({ abi, address: auction.address, functionName: 'earlyRefundAttoEth', args: [candidate.id] })
+					if (refund === 0n) continue
+					expect(refund).toBe(candidate.lots)
+					await settle(auction.address, candidate.id)
+					auction.refunded.add(candidate.id)
+				}
 			}
 		}
+		expect(auctions.reduce((count, auction) => count + auction.refunded.size, 0)).toBeGreaterThan(0)
 		for (const auction of auctions) {
-			const ordered = [...auction.entries].sort((a, b) => Number(a.price - b.price || a.id - b.id))
+			const ordered = auction.entries.filter(entry => !auction.refunded.has(entry.id)).sort((a, b) => Number(a.price - b.price || a.id - b.id))
 			const limits = ordered.flatMap(entry => Array.from({ length: Number(entry.lots) }, () => entry.price))
 			let filled = 0n
 			let marginal = 0n
@@ -273,11 +358,12 @@ describe('Portfolio uniform-price auction', () => {
 			let fees = 0n
 			let refund = 0n
 			for (const entry of auction.entries) {
-				let winning = entry.price < marginal ? entry.lots : 0n
-				if (entry.price === marginal) {
+				let winning = !auction.refunded.has(entry.id) && entry.price < marginal ? entry.lots : 0n
+				if (!auction.refunded.has(entry.id) && entry.price === marginal) {
 					winning = ((before + entry.lots) * (filled - fullBefore)) / marginalDemand - (before * (filled - fullBefore)) / marginalDemand
 					before += entry.lots
 				}
+				if (!auction.refunded.has(entry.id)) await settle(auction.address, entry.id)
 				const actual = await fill(auction.address, entry.id)
 				expect(actual.filledLots).toBe(winning)
 				expect(actual.principalAttoRep).toBeGreaterThanOrEqual(winning * entry.price)
@@ -291,6 +377,7 @@ describe('Portfolio uniform-price auction', () => {
 			expect(fees).toBe(rounding)
 			expect(result.soldAttoRep).toBeLessThanOrEqual(auction.inventory)
 			expect(used + refund).toBe(auction.entries.reduce((sum, entry) => sum + entry.lots, 0n))
+			expect(await client().readContract({ abi, address: auction.address, functionName: 'refundCreditAttoEth', args: [client(1).account.address] })).toBe(refund)
 		}
 	})
 
@@ -421,6 +508,15 @@ describe('Portfolio uniform-price auction', () => {
 			await bid(large, 1n + BigInt(index), 1n, client(1).account.address, 1n)
 			if (index < 64) await bid(small, 1n + BigInt(index), 1n, client(1).account.address, 1n)
 		}
+		const smallLoser = await bid(small, 1_000_000n, 1n, client(1).account.address, 1n)
+		const largeLoser = await bid(large, 1_000_000n, 1n, client(1).account.address, 1n)
+		const earlyGas = (address: Address, id: bigint) => client().estimateContractGas({ abi, address, functionName: 'settleBid', args: [id] })
+		const smallEarly = await earlyGas(small, smallLoser)
+		const largeEarly = await earlyGas(large, largeLoser)
+		expect(largeEarly).toBeLessThan(smallEarly + 100_000n)
+		expect(largeEarly).toBeLessThan(250_000n)
+		await settle(small, smallLoser)
+		await settle(large, largeLoser)
 		await getAnvilWindowEthereum().setTime(closesAt)
 		const closeGas = (address: Address) => client().estimateContractGas({ abi, address, functionName: 'finalize', args: [1_000n] })
 		const smallClose = await closeGas(small)

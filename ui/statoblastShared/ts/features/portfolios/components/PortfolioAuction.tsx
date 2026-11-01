@@ -73,7 +73,12 @@ export function PortfolioAuction(parameters: PortfolioAuctionParameters) {
 			{auction?.bids.length === 0 && !model.loading ? <EmptyState title={copy.noBids} /> : undefined}
 			{auction?.bids.map(bid => {
 				let bidStatus = copy.awaitingClose
+				if (bid.earlyRefundAttoEth > 0n) bidStatus = copy.earlyRefundAvailable
+				if (!auction.finalized && bid.refundSettled) bidStatus = copy.earlyRefundCredited
 				if (bid.fill !== undefined) bidStatus = bid.fill.filledLots > 0n ? copy.funded : copy.noFill
+				let refundAttoEth = bid.earlyRefundAttoEth > 0n ? bid.earlyRefundAttoEth : undefined
+				if (bid.refundSettled) refundAttoEth = bid.lots * auction.lotAttoEth
+				if (bid.fill !== undefined) refundAttoEth = bid.fill.refundAttoEth
 				const manageReason =
 					(disabled ? copy.busy : undefined) ?? (model.loading ? copy.loading : undefined) ?? (bid.fill === undefined || bid.fill.filledLots === 0n ? copy.managePending : undefined) ?? (!bid.materialized ? copy.activateFirst : undefined) ?? (parameters.openVault === undefined ? copy.manageUnavailable : undefined)
 				return (
@@ -105,7 +110,7 @@ export function PortfolioAuction(parameters: PortfolioAuctionParameters) {
 								<CurrencyValue value={bid.fill?.usedAttoEth} suffix={common.eth} />
 							</MetricField>
 							<MetricField label={copy.refund}>
-								<CurrencyValue value={bid.fill?.refundAttoEth} suffix={common.eth} />
+								<CurrencyValue value={refundAttoEth} suffix={common.eth} />
 							</MetricField>
 						</MetricGrid>
 						<div className='actions'>

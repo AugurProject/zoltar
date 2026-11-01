@@ -91,7 +91,7 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 		}
 	}
 	const withdrawalReason = auctionReason ?? (auction?.refundAttoEth === 0n ? copy.noRefund : undefined)
-	const refundReason = (bid: PortfolioAuctionBid) => auctionReason ?? (!auction?.finalized ? copy.waitClose : undefined) ?? (bid.refundSettled ? copy.credited : undefined)
+	const refundReason = (bid: PortfolioAuctionBid) => auctionReason ?? (bid.refundSettled ? copy.credited : undefined) ?? (!auction?.finalized && bid.earlyRefundAttoEth === 0n ? copy.bidMayStillWin : undefined)
 	const activateReason = (bid: PortfolioAuctionBid) => auctionReason ?? (bid.fill === undefined || bid.fill.filledLots === 0n ? copy.managePending : undefined) ?? (bid.materialized ? copy.activated : undefined)
 	const run = (action: string, title: string, reason: string | undefined, build: (selected: PortfolioAuctionSnapshot) => PortfolioTransaction, verify: (latest: PortfolioAuctionSnapshot) => void = () => undefined, onConfirmed?: () => void) =>
 		actions.runPortfolioAction(
