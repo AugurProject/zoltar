@@ -170,6 +170,11 @@
 				background: var(--code);
 				padding: 0.05rem 0.3rem;
 				border-radius: 4px;
+				white-space: nowrap;
+			}
+			.meta li code {
+				white-space: normal;
+				overflow-wrap: anywhere;
 			}
 			figure {
 				margin: 1.5rem 0;
@@ -245,9 +250,6 @@
 			}
 			.table-wrap table {
 				min-width: 40rem;
-			}
-			td code {
-				white-space: nowrap;
 			}
 			td ul {
 				margin: 0;
@@ -434,7 +436,7 @@
 				<h2>1. The change in one minute</h2>
 				<p>Statoblast is Augur's market layer on top of the Zoltar oracle. Before this pull request, every question had its own SecurityPool: its own vaults holding REP, its own ETH collateral, its own fee curve, its own REP/ETH price coordinator and, after a fork, its own Truth Auction. A REP holder who wanted to secure twenty questions had to run twenty vaults and pay for twenty price reports.</p>
 				<p>After this pull request, a <strong>portfolio</strong> holds REP once per universe in a <strong>capital ledger</strong>, and every question registered in the portfolio draws on that same backing. A provider deposits REP, picks a personal <strong>health target</strong>, and authorizes one ETH <strong>commitment</strong>. A buyer picks a question and an amount; the portfolio checks that total <strong>demand</strong> (ETH liabilities) stays within the <strong>healthy commitment</strong> of all providers, mints the complete set (one Invalid, one Yes and one No share per unit of ETH), and charges a fee that is split between providers, a prepaid resolution premium, a reporting budget and a maintenance reserve. Each question keeps its own outcome tokens, its own Escalation Game (the REP-staked dispute process that resolves a question locally) and separate settlement accounting, but ETH custody and fee bookkeeping are centralized in a <strong>settlement book</strong>.</p>
-				<p>The pull request also replaces per-vault liquidation with two keeper actions, <strong>cure</strong> (remove unused commitment, 1% REP reward) and <strong>takeover</strong> (take over a distressed commitment for a time-ramped REP award), and redesigns the <strong>Truth Auction</strong> that repairs a branch's ETH shortfall after a fork: bids are whole ETH lots with a minimum REP-per-lot limit, every winning lot receives the same clearing REP amount, provably losing bids can be refunded before closing, and all sold REP enters capital custody immediately so winners never need to claim.</p>
+				<p>The pull request also replaces per-vault liquidation with two keeper actions, <strong>cure</strong> (remove unused commitment, 1% REP reward) and <strong>takeover</strong> (take over a distressed commitment for a time-ramped REP award), and redesigns the <strong>Truth Auction</strong> that repairs a branch's ETH shortfall after a fork: bids are whole ETH lots with a minimum REP-per-lot limit, every winning lot receives the same clearing REP amount, provably losing bids can be refunded before closing, in one transaction if the bidder wants, and all sold REP enters capital custody immediately so winners never need to claim. Each bid's vault is a cheap clone of one shared implementation, with the bidder, ledger, auction and bid number fixed in its own code.</p>
 				<p>Everything is built so that no operation iterates over all questions, owners or bidders: commitments live in balanced trees keyed by health, fees vest through cumulative integrals, and forks copy immutable roots instead of migrating each vault.</p>
 			</section>
 
@@ -622,7 +624,7 @@
 						<text x="575" y="420" text-anchor="middle" class="lbl-small">+ UniformPriceAuction engine</text>
 						<text x="575" y="437" text-anchor="middle" class="lbl-small">one per branch, ETH-only bids</text>
 						<rect x="690" y="380" width="190" height="70" rx="8" class="box"></rect>
-						<text x="785" y="402" text-anchor="middle" class="lbl-title">AuctionVault</text>
+						<text x="785" y="402" text-anchor="middle" class="lbl-title">AuctionVault (clone)</text>
 						<text x="785" y="420" text-anchor="middle" class="lbl-small">one per bid, bidder-controlled</text>
 						<text x="785" y="437" text-anchor="middle" class="lbl-small">becomes a capital owner</text>
 						<rect x="20" y="380" width="430" height="70" rx="8" class="box"></rect>
@@ -1284,7 +1286,7 @@
 					</math>
 				</div>
 				<h4>Bidding</h4>
-				<p>A bid is a triple: a number of lots, a <strong>minimum REP per lot</strong> the bidder insists on receiving (a grid multiple), and a <strong>health target</strong> for the vault the bid will become. The bidder pays exactly <span class="var">lots × lotEth</span> in ETH and nothing else: no REP deposit, no token approval, no execution reserve. The minimum REP per lot must at least cover the lot at the bidder's own health target at the opening price, so a winning bid is always a healthy vault on arrival. Bids cannot be cancelled or repriced. Each bid deploys a small <strong>auction vault</strong> contract controlled by the bidder that will own the resulting position.</p>
+				<p>A bid is a triple: a number of lots, a <strong>minimum REP per lot</strong> the bidder insists on receiving (a grid multiple), and a <strong>health target</strong> for the vault the bid will become. The bidder pays exactly <span class="var">lots × lotEth</span> in ETH and nothing else: no REP deposit, no token approval, no execution reserve. The minimum REP per lot must at least cover the lot at the bidder's own health target at the opening price, so a winning bid is always a healthy vault on arrival. Bids cannot be cancelled or repriced. Each bid also creates a small <strong>auction vault</strong> controlled by the bidder that will own the resulting position. The vault is a minimal-proxy clone (EIP-1167) of one shared implementation, published once by the auction deployer rather than by the fork coordinator; the bidder's address, the capital ledger, the auction and the bid number are appended to the clone's own code and read back on every call. Creating it costs less than a fifth of a full vault deployment, the bindings can never change, and the address follows from those bindings and the shared implementation. The implementation itself refuses to be used directly.</p>
 				<p>A lower minimum REP per lot is a <em>higher</em> price: the bidder accepts fewer REP for the same ETH. Bids rank by that minimum, lowest first, ties by arrival.</p>
 				<h4>Clearing</h4>
 				<p>At closing the engine finds the largest prefix of ranked lots that the inventory can fund at the marginal bidder's own minimum, capped by the target. Equal-price bids at the margin share the last lots by cumulative proportional whole-lot rounding. Then one of two cases applies:</p>
@@ -1440,13 +1442,13 @@
 							<mo>)</mo>
 						</mrow>
 					</math>
-					<p class="equation-caption"><span class="var">betterLots</span> counts lots with a strictly lower minimum. Anyone may credit the refund of a qualifying bid before closing; only the bidder may withdraw it, to a recipient of their choice, and may use the ETH anywhere, including a new bid at a better price. A new bid that already satisfies this condition is rejected outright. A bid with a provisional zero fill from equal-price rounding is <em>not</em> refundable early, because later equal bids can still change the rounding.</p>
+					<p class="equation-caption"><span class="var">betterLots</span> counts lots with a strictly lower minimum. Anyone may credit the refund of a qualifying bid before closing; only the bidder may withdraw it, to a recipient of their choice, and may use the ETH anywhere, including a new bid at a better price. The bidder can also credit their own bid and withdraw in one transaction; that call skips a credit someone else already made and pays out the bidder's entire refund credit in the auction, including refunds already credited for their other bids. A new bid that already satisfies this condition is rejected outright. A bid with a provisional zero fill from equal-price rounding is <em>not</em> refundable early, because later equal bids can still change the rounding.</p>
 				</div>
 				<p>Refunded bids are not deleted. They remain in the auction's balanced tree as permanently zero-fill history, so clearing and fee ownership never need a scan or a deletion, at the cost of storage that grows with every bid ever placed.</p>
 
 				<h3 id="after-auction">5.4 After closing: winners are owners</h3>
 				<p>At finalization the raised ETH goes to the branch's settlement book and <em>all</em> sold REP goes to the child's capital ledger as one protected <strong>aggregate position</strong> owned by the auction contract. That position accounts for every winner's commitment, fees and later fork exposure. The branch activates immediately; no winner has to claim anything to be counted as backing.</p>
-				<p>Any owner or keeper can later <strong>split out</strong> one bid from the aggregate into its own position, carrying its exact REP, commitment, health target, earned fees and distress history. The split is proportional and exact (the grid guarantees it), and it does not grant a new distress clock. Nobody can cure or take over the aggregate as a whole, so one winner's loss is never charged to other bidders. The bidder's auction vault contract controls the position: it can deposit more REP, set a target, retire, claim earnings and make fork choices like any other owner, and sweep returned assets to a wallet in the same call.</p>
+				<p>Any owner or keeper can later <strong>split out</strong> one bid from the aggregate into its own position, carrying its exact REP, commitment, health target, earned fees and distress history. The split is proportional and exact (the grid guarantees it), and it does not grant a new distress clock. Nobody can cure or take over the aggregate as a whole, so one winner's loss is never charged to other bidders. The bidder's auction vault contract controls the position: it can deposit more REP, set a target, retire, claim earnings and make fork choices like any other owner, and sweep returned assets to a wallet in the same call. Before its first owner operation the vault splits out its own position if the bid won any lot, then records a permanent <strong>split-out flag</strong> so later owner operations skip the auction lookup and the ledger call; if that first operation reverts, the split and the flag roll back together. A losing bid's vault never records the flag and stays usable for recovering assets.</p>
 				<p>The branch then lives in one of two states. If accepted ETH plus migrated cash covers all inherited units and no recovery REP remains, which requires the auction to have sold its entire inventory, it is fully <em>operational</em>: purchases reopen and holding fees resume. Otherwise it is in <strong>runoff</strong>: existing claims settle pro rata in ETH and in <strong>recovery REP</strong> (unsold inventory plus older recovery baskets, tracked with 128-bit precision so partial redemptions and nested forks keep exact ownership), but no new purchases are accepted and no holding fees are charged. New buyers can never capture an old recovery basket.</p>
 			</section>
 
@@ -1527,6 +1529,12 @@
 								<td>Logarithmic; measured under 250,000 gas for early settlement and under 100,000 gas growth from 64 to 512 bids</td>
 							</tr>
 							<tr>
+								<td>What does one bid's vault cost?</td>
+								<td>A vault record inside the pool contract</td>
+								<td>A minimal-proxy clone (<a href="#auction">section 5.3</a>) plus a split-out flag set by the first owner operation</td>
+								<td>Deployment under a fifth of a full vault; each later call pays under 10,000 gas of forwarding overhead</td>
+							</tr>
+							<tr>
 								<td>How does a fork child inherit every question?</td>
 								<td>Per-pool, per-vault migration</td>
 								<td>Persistent maps: the child book copies immutable roots for questions, finality deadlines, fee rates and premium schedules</td>
@@ -1561,14 +1569,14 @@
 									<ul>
 										<li>New capital modules: the portfolio hub, the capital ledger with its lifecycle and auction delegates, the commitment index and tree, fee streams.</li>
 										<li>New settlement and service modules: the settlement book and portfolio settlement, services with the premium book and reporting rewards, the reporter ledger.</li>
-										<li>New fork modules: the fork coordinator and forker portfolio delegate, the portfolio auction with its uniform-price engine and per-bid vaults, the shared price feed and report escrow, the open and fixed admission policies, persistent-map and frozen-history libraries.</li>
+										<li>New fork modules: the fork coordinator and forker portfolio delegate, the portfolio auction with its uniform-price engine and per-bid vault clones, the shared price feed and report escrow, the open and fixed admission policies, persistent-map and frozen-history libraries.</li>
 										<li>Changed: SecurityPool, ShareToken and the Escalation Game delegates gain a bound mode; the factory gains portfolio namespaces and shared-feed preparation; the OpenOracle coordinator is split into a price source and a report delegate; Zoltar gains the fixed fork schedule.</li>
 									</ul>
 								</td>
 							</tr>
 							<tr>
 								<td><strong>SDK</strong> (<code>shared/statoblast</code>)</td>
-								<td>A new <code>securityPoolPortfolio</code> export family: deployment and setup builders, capital actions and snapshots, mint quotes, price funding quotes, auction opening and bid quotes, fork choice and recovery builders, and claim-checkpoint planning. Core RPC helpers gain block pinning and sender-balance overrides.</td>
+								<td>A new <code>securityPoolPortfolio</code> export family: deployment and setup builders, capital actions and snapshots, mint quotes, price funding quotes, auction opening, bid and combined-refund quotes, vault clone code and address prediction, fork choice and recovery builders, and claim-checkpoint planning. Core RPC helpers gain block pinning and sender-balance overrides.</td>
 							</tr>
 							<tr>
 								<td><strong>Statoblast UI</strong></td>
@@ -1577,8 +1585,8 @@
 										<li>A new Portfolios tab with portfolio deployment (Open or Fixed admission, every economics field) and the four setup stages.</li>
 										<li>Capital: shared backing and personal capital views, deposit, health target, authorization, retirement request and cancellation, surplus withdrawal, earnings claims.</li>
 										<li>Questions: registration and complete-set purchase with a bounded quote; reporting-reward and service-credit claims.</li>
-										<li>Forks: branch choice, cash recovery, branch price-report funding, and the branch Truth Auction with bidding, early refund credit, separate withdrawal and vault split-out.</li>
-										<li>A walletless <code>simScenario=portfolio</code> seeds all of it.</li>
+										<li>Forks: branch choice, cash recovery, branch price-report funding, and the branch Truth Auction with bidding, early refund credit, separate or combined credit-and-withdrawal, and vault split-out.</li>
+										<li>Walletless scenarios seed the origin universe (<code>simScenario=portfolio</code>) and an open branch auction (<code>simScenario=portfolio-auction</code>: the portfolio forked on its first question, the Yes branch started, one winning, one excluded and one rival bid); split-out and runoff still need the auction to be closed.</li>
 									</ul>
 								</td>
 							</tr>
@@ -1590,7 +1598,7 @@
 								<td><strong>Liquidator bot</strong> (<code>bots/liquidator</code>)</td>
 								<td>
 									<ul>
-										<li>Portfolio selection with bounded, paged discovery of positions and auction winners; runtime-bytecode authentication of every module.</li>
+										<li>Portfolio selection with bounded, paged discovery of positions and auction winners; runtime-bytecode authentication of every module, including each auction vault's exact clone code and bindings.</li>
 										<li>Earnings collection, paid cures and funded takeovers with signed bounds.</li>
 										<li>One EIP-1559 fee policy shared by quotes, estimates, simulations and signing; sender-balance isolation for quotes; a dashboard panel.</li>
 										<li>Defaults remain paused and dry-run with zero exposure caps.</li>
@@ -1603,7 +1611,7 @@
 							</tr>
 							<tr>
 								<td><strong>Deployment and CI</strong></td>
-								<td>Fourteen new infrastructure steps (event emitter, deployment workers, delegates and nine module deployers), a deployment-status bitmask that grows from 14 to 28 entries, refreshed runtime pins and manifests for every network and genesis variant, a dependency-audit runner wired into CI, and a lockfile bump.</td>
+								<td>Fourteen new infrastructure steps (event emitter, deployment workers, delegates and nine module deployers, with the auction deployer also publishing the shared vault implementation), a deployment-status bitmask that grows from 14 to 28 entries, refreshed runtime pins and manifests for every network and genesis variant, a dependency-audit runner wired into CI, and a lockfile bump.</td>
 							</tr>
 							<tr>
 								<td><strong>Documentation</strong></td>
@@ -1612,7 +1620,17 @@
 						</tbody>
 					</table>
 				</div>
-				<p>The pull request reports full type-checking, formatting, lint, dead-code and generated-artifact checks passing, 265 affected tests with 2,242 assertions in the final revision, an independent TypeScript model of the auction compared against the on-chain tree including adversarial refund cases, gas comparisons at 64 and 512 bids, six observed network and genesis deployments within gas ceilings, and browser QA of the auction states at desktop and mobile widths.</p>
+				<p>The pull request reports full type-checking, formatting, lint, dead-code and generated-artifact checks passing, 265 affected tests with 2,242 assertions at head commit <code>debbaf297</code>, an independent TypeScript model of the auction compared against the on-chain tree including adversarial refund cases, gas comparisons at 64 and 512 bids, six observed network and genesis deployments within gas ceilings, and browser QA of the auction states at desktop and mobile widths.</p>
+				<p><strong>The latest revision.</strong> After head commit <code>debbaf297</code>, the branch's working tree of 1 November 2026 reworks the auction's vault and refund surface, trims ledger reads, and adds a gas baseline and a forked simulation scenario, without changing the clearing rules:</p>
+				<ul>
+					<li><strong>Vault clones.</strong> Every bid's vault is now a minimal-proxy clone (<a href="#auction">section 5.3</a>) rather than a full contract; the bid number is its CREATE2 salt, and verifiers compare only the shared implementation with the compiled artifact.</li>
+					<li><strong>One-step refunds.</strong> A bidder can credit any bid of theirs with unused ETH, provably losing before closing or with unfilled lots afterwards, and withdraw their whole refund credit in a single transaction, even when a keeper credited the bid first. The UI gains a “Credit and withdraw refunds” action that discloses the total before signing.</li>
+					<li><strong>A split-out flag.</strong> The vault records its split-out once (<a href="#after-auction">section 5.4</a>), so later owner operations skip the auction lookup and the ledger call.</li>
+					<li><strong>Fewer reads.</strong> Claiming from the commitment index returns the live commitment, so the ledger no longer re-reads a position to tell a retired one apart; service income skips zero amounts; a universe's capital ledger is read once per services checkpoint.</li>
+					<li><strong>A gas baseline.</strong> A lifecycle test at 8 and 256 tied bids keeps every path other than the three transactions that deploy child modules (auction finalization, the first branch choice and starting the branch) under 3,000,000 gas, and lets no path grow by 350,000 gas or more between the two book sizes.</li>
+					<li><strong>A forked simulation scenario.</strong> <code>simScenario=portfolio-auction</code>, described in the Statoblast UI row above.</li>
+					<li><strong>Tests.</strong> Clone code and address prediction, the split-out flag and its rollback, the combined refund in both the engine and the branch auction, counterfeit-clone rejection in the bot, the gas baseline, and the forked simulation scenario.</li>
+				</ul>
 			</section>
 
 			<section id="benefits">
@@ -1624,8 +1642,8 @@
 					<li><strong>Individual, not pooled, risk.</strong> Providers keep exact ownership of their principal, choose their own health target, and bear only their own cure and takeover losses. Unassigned income is never redistributed to whoever happens to be healthy.</li>
 					<li><strong>Keeper actions without trusted setup.</strong> Cures and takeovers need no approval registry, staging, ETH reserve or bonus pool, and bots can sign exact bounds so a changed state cannot be exploited.</li>
 					<li><strong>Griefing-resistant pricing.</strong> The conservative and liquidation prices prevent a report within tolerance from both admitting and liquidating a position; independent report candidates prevent one disputed report from stalling the feed.</li>
-					<li><strong>Auction winners are backing on arrival.</strong> All sold REP enters custody at finalization as an aggregate position; nobody needs to claim for the branch to be repaired, and winners' ETH is never tied up beyond the lot price.</li>
-					<li><strong>Fairer exits and refunds.</strong> A cohort queue serves earlier requests first and cannot be jumped; provably losing bids get their ETH back before closing.</li>
+					<li><strong>Auction winners are backing on arrival.</strong> All sold REP enters custody at finalization as an aggregate position; nobody needs to claim for the branch to be repaired, winners' ETH is never tied up beyond the lot price, and each bid's vault is a clone rather than a full contract deployment.</li>
+					<li><strong>Fairer exits and refunds.</strong> A cohort queue serves earlier requests first and cannot be jumped; provably losing bids get their ETH back before closing, in one transaction if the bidder wants.</li>
 					<li><strong>Bounded work everywhere.</strong> Trees, cumulative indexes and immutable fork snapshots keep every transaction's gas logarithmic in participants and constant in questions.</li>
 				</ul>
 			</section>
@@ -1650,13 +1668,14 @@
 					<li><strong>Everything depends on fresh, roughly correct prices.</strong> A stale feed freezes capacity, withdrawals of pledged REP, cures and takeovers at once, and a lead change during a stale interval forfeits that question's reporting reward for good. A feed that is wrong by more than the tolerance can still admit or liquidate wrongly; the band only protects against errors within tolerance.</li>
 					<li><strong>Report funding grows with exposure.</strong> A sponsor must post one hundredth of aggregate exposure in WETH; for a large portfolio this is a meaningful capital requirement for whoever keeps the feed alive, reimbursed only within a capped maintenance budget.</li>
 					<li><strong>Missing or adverse closing quotes cancel repair.</strong> If nobody funds a quote covering the week-nine deadline, or REP got cheaper during the auction, every fill is cancelled and the branch activates impaired.</li>
-					<li><strong>Liveness still needs volunteers.</strong> Starting branches, closing auctions, splitting out winners, serving retirements and settling refunds are all permissionless but not automatic.</li>
+					<li><strong>Liveness still needs volunteers.</strong> Starting branches, closing auctions, splitting out winners, serving retirements and crediting other bidders' refunds are all permissionless but not automatic; a bidder can at least credit and withdraw their own refund in one step.</li>
 				</ul>
 				<h3>10.3 Engineering</h3>
 				<ul>
 					<li><strong>Size and novelty.</strong> Roughly 7,600 lines of new Solidity across 34 contracts and libraries (plus nine new interfaces), with custom AVL trees, persistent maps, modular prefix arithmetic and 128-bit recovery scaling, delivered in one pull request. The author's own validation note ends with “tests and reviews do not prove absence of bugs”.</li>
 					<li><strong>Storage only grows.</strong> Refunded bids, retired positions, frozen books and premium schedules are never deleted, and work follows tree paths rather than being constant.</li>
 					<li><strong>Delegate and module sprawl.</strong> The capital ledger runs through two delegatecall helpers, the forker through a portfolio delegate, and the hub through nine module deployers. Each boundary is authenticated, but the call graph is harder to audit than the standalone pool's.</li>
+					<li><strong>Hand-assembled bytecode.</strong> Vault clones are built from raw minimal-proxy forwarder bytes with 92 bytes of bindings appended and read back with <code>extcodecopy</code>, and the SDK, the UI and the bot reproduce those exact bytes to authenticate a vault. The compiler checks none of it, so the byte layout is now part of the protocol's verified surface and every verifier must change together with it.</li>
 					<li><strong>Native share migration still needs intervening forks.</strong> Shares move universe by universe as before; only capital and books skip the per-pool work.</li>
 					<li><strong>Known dependency advisories.</strong> The CI audit runner currently reports pre-existing advisories in <code>follow-redirects</code>, <code>glob</code> and <code>minimatch</code> that are outside this change but must be cleared before the pipeline is fully green.</li>
 					<li><strong>Two systems to maintain.</strong> Standalone pools keep their vaults, retention curve, approval registry and tick auction; portfolios use the new rules. Documentation, bots and the scanner must describe both for as long as both exist.</li>
@@ -1673,7 +1692,7 @@
 					<li><strong>Nothing scans.</strong> Capacity, fees, retirement service, auction clearing, fee ownership and fork inheritance are all tree paths or cumulative indexes. The gas tests at 64 and 512 bids and the deployment-size checks back this up rather than assert it.</li>
 					<li><strong>Risk stays individual.</strong> Personal health targets, per-position cures and takeovers, and unassigned income going to maintenance or being burned mean that one provider's trouble is never socialized onto the others, and that nobody can snipe income earned before they arrived.</li>
 					<li><strong>The two-price band and oracle-declared distress remove the liquidation race.</strong> A report inside the tolerance cannot both admit and punish, and keepers cannot start or reset a distress clock; portfolios need none of the standalone pools' approval registry, staged operations or ETH bonus, with no loss of safety.</li>
-					<li><strong>The auction leaves nothing in limbo.</strong> Winners are backing the moment the branch activates, provably losing bids get their ETH back early, and the frozen bid tree keeps clearing and fee ownership consistent without deletions.</li>
+					<li><strong>The auction leaves nothing in limbo.</strong> Winners are backing the moment the branch activates, provably losing bids get their ETH back early, in one transaction if they choose, and the frozen bid tree keeps clearing and fee ownership consistent without deletions. Each bid's vault is verifiable from its own code once the shared implementation it forwards to is checked against the published artifact.</li>
 					<li><strong>Finalized questions release capacity on their own.</strong> Freezing a question's units moves them out of the live book, so demand falls and the retirement queue advances at the next checkpoint, without a dedicated service transaction.</li>
 					<li><strong>Validation is unusually thorough for a change this size.</strong> An independent TypeScript model of the auction compared against the contract, a seeded reference model of the commitment index, module size limits and observed deployments are more than most protocol pull requests carry.</li>
 				</ul>
@@ -1711,8 +1730,9 @@
 					<li><strong>Make the fee parts mean what they say.</strong> Stop charging the reporting budget once it is funded, or split out an explicit maintenance charge, so buyers see what each part of the fee pays for. The unused resolution premium could likewise return to the remaining share holders of the question instead of maintenance.</li>
 					<li><strong>Let a takeover receiver name the idle REP to contribute.</strong> Today all of the receiver's idle REP is swept in under a cap, so a keeper with a large idle balance has to consent to all of it or revert.</li>
 					<li><strong>Add a recipient parameter to earnings claims.</strong> Principal withdrawals already take one; vault contracts and bots could then route income without a second transfer.</li>
+					<li><strong>Let a bidder pin the bid number.</strong> A vault's address follows from the bidder, ledger, auction, bid number and shared implementation, and <code>vaultFor</code> predicts it, but the number is assigned at submission, so a bid that lands behind another bidder's receives a different vault from the one predicted. An optional expected bid number on <code>submitBid</code>, or a note that predicted addresses are only safe once the bid is mined, would stop assets being sent to a vault that is never created.</li>
 					<li><strong>Emit a reason when the oracle-reward callback fails or is skipped.</strong> The shared feed's settlement swallows a failed callback, and the services contract returns silently when fewer than 480 seconds have passed since the last sponsor reward, when nothing is committed, or when the quoted reward is zero, so sponsors cannot tell why they were not reimbursed.</li>
-					<li><strong>Seed a forked portfolio in the walletless simulation.</strong> The portfolio scenario describes fork recovery but seeds no fork, so branch choice, the auction and early refunds cannot be exercised end to end without a wallet.</li>
+					<li><strong>Seed a closed auction in the walletless simulation.</strong> The latest revision's <code>simScenario=portfolio-auction</code> covers the open auction; a second seeded state after closing would also cover winner split-out and runoff.</li>
 					<li><strong>Give the keeper a housekeeping mode or pay for housekeeping.</strong> The bot flags stalled retirements and discovers auction winners, but nothing pays anyone to serve retirements, close auctions or split out winners; small rewards or an explicit low-priority mode would make those steps less dependent on volunteers.</li>
 					<li>
 						<strong>Add conservation invariants and a cure-reward fuzz.</strong> The stateful tests could check:
@@ -1780,6 +1800,8 @@
 					<dd>The per-branch uniform-price auction that sells a branch's fresh inventory REP for ETH to repair its shortfall after a fork. It never selects truth.</dd>
 					<dt>Lot, grid</dt>
 					<dd>The auction's ETH unit, equal to the minimum commitment, and its REP rounding unit, derived from the security multiplier.</dd>
+					<dt>Auction vault</dt>
+					<dd>The bidder-controlled account created for each bid as a minimal-proxy clone, with the bidder, capital ledger, auction and bid number fixed in its code. It owns the bid's position after split-out and stays usable for later fork choices and asset recovery.</dd>
 					<dt>Aggregate position</dt>
 					<dd>The single capital position holding all auction winners' REP and commitment until a winner is split out into their own auction vault.</dd>
 					<dt>Runoff</dt>
@@ -1787,7 +1809,7 @@
 					<dt>Recovery REP</dt>
 					<dd>Child REP owed to existing claims: unsold auction inventory plus baskets inherited from earlier forks, tracked at 128-bit precision.</dd>
 				</dl>
-				<p class="colophon">This explainer describes the pull request as of its winner-discovery and bid-admission revision, head commit <code>debbaf297</code>, reviewed on 1 November 2026; the counts and validation figures above refer to that revision. The authoritative behaviour is the Solidity under <code>solidity/contracts/statoblast</code> on the branch and the published protocol documentation; where this page and the code disagree, the code is right.</p>
+				<p class="colophon">This explainer describes the pull request as of its latest revision: head commit <code>debbaf297</code> plus the working-tree changes of 1 November 2026 (auction-vault clones and combined refunds) that had not yet been pushed when this page was updated. The counts and validation figures above refer to head commit <code>debbaf297</code> unless stated otherwise. The authoritative behaviour is the Solidity under <code>solidity/contracts/statoblast</code> on the branch and the published protocol documentation; where this page and the code disagree, the code is right.</p>
 			</section>
 		</main>
 	</body>
