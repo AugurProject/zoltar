@@ -15,7 +15,7 @@ function snapshot() {
 	position.retirementStatus = 'Earlier requests reserve available capacity'
 	observation.positions.push({ ...position, id: 9n, auctionTarget: { auction: observation.selection.address, bidId: 9n, vault: position.owner }, retirementStatus: 'Not retiring', stalledRetirement: false })
 	observation.knownAuctionBidCount = 512n
-	observation.nextScope.nextAuctionBidId = 33n
+	observation.nextScope.auctionAfterBidId = 33n
 	state.portfolios = [observation]
 	return { ...operatorSnapshot(state, false), portfolios: portfolioViews(state, portfolioSettings()) }
 }
@@ -53,7 +53,7 @@ test('portfolio panel shows explicit automation and retirement blockers, empty a
 		expect(window.document.body.textContent).toContain('Automation enabled')
 		expect(window.document.body.textContent).toContain('Independent REP price')
 		expect(window.document.body.textContent).toContain('Auction bid 9 · awaiting individual position')
-		expect(window.document.body.textContent).toContain('Auction bids 512; next bid cursor 33')
+		expect(window.document.body.textContent).toContain('Auction bids 512; winner scan after bid 33')
 		expect(window.document.body.textContent).not.toContain('Position 0')
 		expect(window.document.querySelector('button')).toBeNull()
 		renderPortfolios([], true)

@@ -25,7 +25,7 @@ export function portfolioViews(state: RuntimeState, settings: OperatorSettings) 
 			knownPositionCount: portfolio.knownPositionCount.toString(),
 			nextPositionId: portfolio.nextScope.nextPositionId.toString(),
 			knownAuctionBidCount: (portfolio.knownAuctionBidCount ?? 0n).toString(),
-			nextAuctionBidId: (portfolio.nextScope.nextAuctionBidId ?? 1n).toString(),
+			auctionAfterBidId: (portfolio.nextScope.auctionAfterBidId ?? 0n).toString(),
 			positions: portfolio.positions
 				.filter(position => position.commitment > 0n)
 				.map(position => {

@@ -123,6 +123,7 @@ contract SecurityPoolUniformPriceAuction {
 		require(msg.value <= type(uint128).max - depositedAttoEth, 'Auction deposits exceed the supported range');
 		require(minimumAttoRepPerLot > 0 && minimumAttoRepPerLot % repGrid == 0, 'Auction bid must use the REP price grid');
 		require(minimumAttoRepPerLot <= maximumBidAttoRepPerLot, 'Auction bid exceeds the REP inventory per lot');
+		require(_pricePrefix(minimumAttoRepPerLot, false) < Math.min(targetLots, inventoryAttoRep / minimumAttoRepPerLot), 'Better bids already exclude this bid');
 		require(bidCount < type(uint96).max, 'Auction bid identifiers exhausted');
 		depositedAttoEth += msg.value;
 		bidId = ++bidCount;
@@ -192,6 +193,27 @@ contract SecurityPoolUniformPriceAuction {
 		uint256 capacity = Math.min(targetLots, inventoryAttoRep / bid.minimumAttoRepPerLot);
 		if (_pricePrefix(bid.minimumAttoRepPerLot, false) < capacity) return 0;
 		return bid.lots * lotAttoEth;
+	}
+
+	/// @notice Next still-shared winner in price order, excluding afterBidId.
+	/// Zero starts or ends a sweep. The frozen tree preserves cursors even after
+	/// materialization. Zero-weight subtrees skip losers and detached winners.
+	function nextUnmaterializedBid(uint256 afterBidId) external view returns (uint256) {
+		require(finalized, 'Auction has not been finalized');
+		require(afterBidId <= bidCount, 'Auction cursor does not exist');
+		uint256 cutoff = afterBidId == 0 ? 0 : _bidPrefix(afterBidId) + bids[afterBidId].lots;
+		return _nextUnmaterialized(root, 0, cutoff);
+	}
+
+	function _nextUnmaterialized(uint256 id, uint256 start, uint256 cutoff) private view returns (uint256) {
+		if (id == 0 || start + nodes[id].subtreeLots <= cutoff || _remainingWeight(id, start) == 0) return 0;
+		Node storage node = nodes[id];
+		uint256 found = _nextUnmaterialized(node.left, start, cutoff);
+		if (found != 0) return found;
+		uint256 before = start + nodes[node.left].subtreeLots;
+		uint256 end = before + bids[id].lots;
+		if (end > cutoff && !bids[id].feesRemoved && _acceptedPrefix(end) > _acceptedPrefix(before)) return id;
+		return _nextUnmaterialized(node.right, end, cutoff);
 	}
 
 	function settleBid(uint256 bidId) external onlyController returns (Fill memory fill) {

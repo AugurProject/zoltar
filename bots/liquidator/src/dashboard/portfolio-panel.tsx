@@ -13,7 +13,9 @@ export function renderPortfolios(portfolios: readonly PortfolioView[] | undefine
 			</p>
 			<details class='portfolio-guidance'>
 				<summary>Monitoring limits</summary>
-				<p class='muted'>Each scan reads one bounded page of positions and one bounded page of auction bids. Winning bids already back claims before their individual positions are recorded. Unchanged retirement warnings require repeated observations; the monitor retains the latest 256 retiring positions per scope.</p>
+				<p class='muted'>
+					Each scan reads one bounded page of positions and one bounded page of unmaterialized auction winners. Winning bids already back claims before their individual positions are recorded. Unchanged retirement warnings require repeated observations; the monitor retains the latest 256 retiring positions per scope.
+				</p>
 			</details>
 			{stale && <p class='notice warning'>Connection lost. These portfolio observations are stale.</p>}
 			{portfolios === undefined || portfolios.length === 0 ? (
@@ -30,7 +32,7 @@ export function renderPortfolios(portfolios: readonly PortfolioView[] | undefine
 							Owner principal {formatAmount(portfolio.principalRep, 'REP')} · commitment {formatAmount(portfolio.commitmentEth, 'ETH')}. Managed principal {formatAmount(portfolio.managedPrincipalRep, 'REP')} / {formatAmount(portfolio.maximumTotalPrincipalRep, 'REP')} limit.
 						</p>
 						<p class='muted'>
-							Current page from {portfolio.knownPositionCount} registered positions; next cursor {portfolio.nextPositionId}. Auction bids {portfolio.knownAuctionBidCount}; next bid cursor {portfolio.nextAuctionBidId}.
+							Current page from {portfolio.knownPositionCount} registered positions; next cursor {portfolio.nextPositionId}. Auction bids {portfolio.knownAuctionBidCount}; winner scan after bid {portfolio.auctionAfterBidId}.
 						</p>
 						{portfolio.positions.length === 0 ? (
 							<p class='empty'>No live commitments in this page.</p>

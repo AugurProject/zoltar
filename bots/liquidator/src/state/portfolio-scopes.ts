@@ -10,12 +10,11 @@ export function parsePortfolioScopes(value: unknown): PortfolioScope[] {
 		const cursor = Reflect.get(entry, 'nextPositionId')
 		const end = Reflect.get(entry, 'sweepEnd')
 		if (typeof cursor !== 'string' || !/^[1-9]\d*$/.test(cursor) || typeof end !== 'string' || !/^(0|[1-9]\d*)$/.test(end) || BigInt(cursor) >= 2n ** 96n || BigInt(end) >= 2n ** 96n) throw new Error('Invalid managed portfolio cursor')
-		const auctionCursor = Reflect.get(entry, 'nextAuctionBidId')
-		const auctionEnd = Reflect.get(entry, 'auctionSweepEnd')
+		const auctionCursor = Reflect.get(entry, 'auctionAfterBidId')
 		let auctionPage = {}
-		if (auctionCursor !== undefined || auctionEnd !== undefined) {
-			if (typeof auctionCursor !== 'string' || !/^[1-9]\d*$/.test(auctionCursor) || typeof auctionEnd !== 'string' || !/^(0|[1-9]\d*)$/.test(auctionEnd) || BigInt(auctionCursor) >= 2n ** 96n || BigInt(auctionEnd) >= 2n ** 96n) throw new Error('Invalid managed auction cursor')
-			auctionPage = { nextAuctionBidId: BigInt(auctionCursor), auctionSweepEnd: BigInt(auctionEnd) }
+		if (auctionCursor !== undefined) {
+			if (typeof auctionCursor !== 'string' || !/^(0|[1-9]\d*)$/.test(auctionCursor) || BigInt(auctionCursor) >= 2n ** 96n) throw new Error('Invalid managed auction cursor')
+			auctionPage = { auctionAfterBidId: BigInt(auctionCursor) }
 		}
 		const observations = Reflect.get(entry, 'retirementObservations') ?? []
 		if (!Array.isArray(observations) || observations.length > 256) throw new Error('Invalid retirement observation history')

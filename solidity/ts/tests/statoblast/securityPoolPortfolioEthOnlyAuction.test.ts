@@ -48,6 +48,10 @@ describe('Statoblast: ETH-only truth-auction funding', () => {
 		const loser = await context.bid(context.other, 2n, 100n * unit)
 		await expect(context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleRefund', args: [loser.id] })).rejects.toThrow('Bid may still win')
 		await context.bid(context.owner, 5n, 10n * unit)
+		// Rejecting an already-excluded bid rolls back its controller-created vault too.
+		await expect(context.bid(context.other, 2n, 100n * unit)).rejects.toThrow('Better bids already exclude this bid')
+		expect(await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'bidCount' })).toBe(2n)
+		expect(await context.owner.getBalance({ address: context.engine })).toBe(7n * unit)
 		const clearing = await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewFinalization', args: [5n] })
 		// Anyone can credit, but the credit belongs only to the original bidder.
 		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleRefund', args: [loser.id] }))

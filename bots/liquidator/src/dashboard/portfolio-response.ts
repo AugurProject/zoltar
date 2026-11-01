@@ -15,7 +15,7 @@ export type PortfolioView = {
 	knownPositionCount: string
 	nextPositionId: string
 	knownAuctionBidCount: string
-	nextAuctionBidId: string
+	auctionAfterBidId: string
 	positions: { id: string; label: string; commitmentEth: string; distressed: boolean; retirementStatus: string; stalledRetirement: boolean; takeoverStatus: string }[]
 }
 export const portfolioView = object<PortfolioView>({
@@ -33,7 +33,7 @@ export const portfolioView = object<PortfolioView>({
 	knownPositionCount: stringValue,
 	nextPositionId: stringValue,
 	knownAuctionBidCount: stringValue,
-	nextAuctionBidId: stringValue,
+	auctionAfterBidId: stringValue,
 	positions: array(
 		object<PortfolioView['positions'][number]>({
 			id: stringValue,

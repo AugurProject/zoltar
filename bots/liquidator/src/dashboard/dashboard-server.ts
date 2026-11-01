@@ -196,7 +196,7 @@ function publicOperatorSnapshot(value: unknown) {
 	if (typeof error === 'string') snapshot['error'] = publicOperatorFailure(error)
 	if (Array.isArray(source['portfolios']))
 		snapshot['portfolios'] = publicList(source['portfolios'], value => {
-			const view = publicFields(value, ['address', 'universeId', 'selected', 'approvedUniverse', 'blockNumber', 'priceValid', 'principalRep', 'commitmentEth', 'managedPrincipalRep', 'maximumTotalPrincipalRep', 'automation', 'knownPositionCount', 'nextPositionId', 'knownAuctionBidCount', 'nextAuctionBidId'])
+			const view = publicFields(value, ['address', 'universeId', 'selected', 'approvedUniverse', 'blockNumber', 'priceValid', 'principalRep', 'commitmentEth', 'managedPrincipalRep', 'maximumTotalPrincipalRep', 'automation', 'knownPositionCount', 'nextPositionId', 'knownAuctionBidCount', 'auctionAfterBidId'])
 			view['positions'] = publicList(record(value)?.['positions'], position => publicFields(position, ['id', 'label', 'commitmentEth', 'distressed', 'retirementStatus', 'stalledRetirement', 'takeoverStatus']))
 			return view
 		})

@@ -3,7 +3,7 @@ import { getAddress, parseAbiItem, type Address } from '@zoltar/bot-shared/ether
 import { verifyRuntimeIdentity } from '@zoltar/bot-shared/monitoring/runtime-identity'
 import type { PortfolioCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import type { ReadClient } from './vault-positions.ts'
-import type { PortfolioPosition, PortfolioScope } from './portfolio-monitor.ts'
+import type { PortfolioPosition } from './portfolio-monitor.ts'
 
 export type PortfolioAuctionTarget = { auction: Address; bidId: bigint; vault: Address }
 export type PortfolioTarget = bigint | PortfolioAuctionTarget
@@ -13,15 +13,19 @@ export function samePortfolioTarget(first: PortfolioTarget, second: PortfolioTar
 }
 const links = [parseAbiItem('function forkController() view returns (address)'), parseAbiItem('function auctions(uint248 universeId) view returns (address)')] as const
 
-/** The frozen bid registry is paged separately from materialized index positions. */
-export function portfolioAuctionPage(scope: PortfolioScope, count: bigint, maximum: number) {
-	const end = scope.auctionSweepEnd === undefined || scope.auctionSweepEnd === 0n || scope.auctionSweepEnd > count ? count : scope.auctionSweepEnd
-	const cursor = scope.nextAuctionBidId ?? 1n
-	const start = cursor > end ? 1n : cursor
+/** Follow only remaining winners at the same confirmed block; no losing-history scan. */
+export async function portfolioAuctionPage(client: ReadClient, engine: Address, blockNumber: bigint, afterBidId: bigint, count: bigint, maximum: number) {
+	if (!Number.isSafeInteger(maximum) || maximum < 1 || maximum > 256) throw new Error('Invalid auction page size')
+	let cursor = afterBidId > count ? 0n : afterBidId
 	const ids: bigint[] = []
-	for (let id = start; id <= end && ids.length < maximum; id++) ids.push(id)
-	const next = (ids.at(-1) ?? 0n) + 1n
-	return { ids, nextAuctionBidId: next > end ? 1n : next, auctionSweepEnd: next > end ? 0n : end }
+	for (let index = 0; index < maximum; index++) {
+		const next = await client.readContract({ address: engine, abi: engineAbi, functionName: 'nextUnmaterializedBid', args: [cursor], blockNumber })
+		if (next === 0n) return { ids, auctionAfterBidId: 0n }
+		if (next > count || next === cursor || ids.includes(next)) throw new Error('Invalid auction winner cursor')
+		ids.push(next)
+		cursor = next
+	}
+	return { ids, auctionAfterBidId: cursor }
 }
 
 export async function authenticatePortfolioAuction(client: ReadClient, snapshot: PortfolioCapitalSnapshot, auction: Address) {

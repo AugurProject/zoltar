@@ -104,18 +104,34 @@ test('exported managed principal cannot disappear without its authenticated chos
 import { portfolioAuctionPage } from '../../src/monitoring/portfolio-auction.ts'
 import { targetAddress } from '../support/portfolio-observation.ts'
 
-test('auction cursors persist bounded sweeps and reset safely when a reorg reduces the registry', () => {
-	const scope = { ...selection, nextPositionId: 1n, sweepEnd: 0n, nextAuctionBidId: 1n, auctionSweepEnd: 0n }
-	const page = portfolioAuctionPage(scope, 200n, 2)
-	expect(page.ids).toEqual([1n, 2n])
-	const second = portfolioAuctionPage({ ...scope, ...page }, 900n, 2)
-	expect(second.ids).toEqual([3n, 4n])
-	expect(second.auctionSweepEnd).toBe(200n)
-	expect(portfolioAuctionPage({ ...scope, ...second }, 1n, 2).ids).toEqual([1n])
-	const saved = { ...scope, nextAuctionBidId: 8n, auctionSweepEnd: 200n, retirementObservations: [] }
+test('winner cursors skip history, survive removal, wrap and reset after a shorter reorg', async () => {
+	const fixture = auctionFixture()
+	const next = (after: bigint, maximum = 2, count = 5000n) => portfolioAuctionPage(fixture.client, fixture.engine, 123n, after, count, maximum)
+	fixture.values['nextUnmaterializedBid'] = (args: readonly unknown[]) => {
+		if (args[0] === 0n) return 4000n
+		return args[0] === 4000n ? 2n : 0n
+	}
+	expect(await next(0n)).toEqual({ ids: [4000n, 2n], auctionAfterBidId: 2n })
+	expect(await next(2n)).toEqual({ ids: [], auctionAfterBidId: 0n })
+	// A detached cursor still locates its original position in the frozen tree.
+	fixture.values['nextUnmaterializedBid'] = (args: readonly unknown[]) => (args[0] === 0n || args[0] === 4000n ? 2n : 0n)
+	expect(await next(4000n)).toEqual({ ids: [2n], auctionAfterBidId: 0n })
+	expect(await next(4000n, 2, 2n)).toEqual({ ids: [2n], auctionAfterBidId: 0n })
+	// A same-sized reorg can reorder IDs; wrapping revisits winners before the cursor.
+	fixture.values['nextUnmaterializedBid'] = (args: readonly unknown[]) => {
+		if (args[0] === 0n) return 2n
+		return args[0] === 2n ? 4000n : 0n
+	}
+	expect(await next(4000n)).toEqual({ ids: [], auctionAfterBidId: 0n })
+	expect(await next(0n)).toEqual({ ids: [2n, 4000n], auctionAfterBidId: 4000n })
+	const saved = { ...selection, nextPositionId: 1n, sweepEnd: 0n, auctionAfterBidId: 4000n, retirementObservations: [] }
 	const serialized: unknown = JSON.parse(JSON.stringify([saved], (_key, value) => (typeof value === 'bigint' ? value.toString() : value)))
 	expect(parsePortfolioScopes(serialized)).toEqual([saved])
-	expect(() => parsePortfolioScopes([{ ...selection, universeId: '0', nextPositionId: '1', sweepEnd: '0', nextAuctionBidId: '0', auctionSweepEnd: '1' }])).toThrow('auction cursor')
+	expect(() => parsePortfolioScopes([{ ...selection, universeId: '0', nextPositionId: '1', sweepEnd: '0', auctionAfterBidId: '-1' }])).toThrow('auction cursor')
+	fixture.values['nextUnmaterializedBid'] = 4000n
+	await expect(next(0n)).rejects.toThrow('Invalid auction winner cursor')
+	await expect(next(0n, 257)).rejects.toThrow('Invalid auction page size')
+	expect(fixture.reads.every(read => read.blockNumber === 123n)).toBe(true)
 })
 
 function auctionFixture() {
@@ -131,6 +147,7 @@ function auctionFixture() {
 		auctions: auction,
 		controller: auction,
 		bidCount: 2n,
+		nextUnmaterializedBid: 1n,
 		maximumHealthyPrice: 7n,
 		auctionPosition: { vault, positionId: 0n, materialized: false, principal: 18n, commitment: 20n, targetHealthFactorBps: 12_000n, liquidationStarted: 100n, earnedAttoEth: 0n, earnedAttoRep: 0n },
 		previewBid: { bidder: targetAddress, vault, targetHealthBps: 12_000n, filledLots: 2n, usedAttoEth: 20n, principalAttoRep: 8n, refundAttoEth: 0n },
@@ -149,7 +166,7 @@ test('discovers a funded unmaterialized bid and never invents a live index posit
 	const result = await loadPortfolioObservation(fixture.client, fixture.settings, fixture.observation.snapshot.owner, fixture.observation.nextScope, 123n)
 	expect(result.positions).toHaveLength(1)
 	expect(result.positions[0]).toMatchObject({ id: 1n, auctionTarget: { auction: fixture.auction, bidId: 1n, vault: fixture.vault }, owner: fixture.vault, rep: 18n, commitment: 20n, maxHealthyPrice: 7n, liquidationStarted: 100n })
-	expect(result.nextScope.nextAuctionBidId).toBe(2n)
+	expect(result.nextScope.auctionAfterBidId).toBe(1n)
 	expect(fixture.reads.every(read => read.blockNumber === 123n)).toBe(true)
 	fixture.values['auctionPosition'] = { materialized: true }
 	const materialized = await loadPortfolioObservation(fixture.client, fixture.settings, fixture.observation.snapshot.owner, fixture.observation.nextScope, 123n)
@@ -187,4 +204,20 @@ test('preserves a materialized auction vault controlling owner for keeper self-d
 	fixture.values['accountOf'] = { owner: fixture.vault, batch: 0n, rep: 99n, commitment: 100n, maxHealthyPrice: 1n, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 0n }
 	const result = await loadPortfolioObservation(fixture.client, fixture.settings, fixture.observation.snapshot.owner, fixture.observation.nextScope, 123n)
 	expect(result.positions[0]).toMatchObject({ owner: fixture.vault, controllingOwner: fixture.observation.snapshot.owner })
+})
+
+test('auction discovery jumps directly to a winner beyond losing history', async () => {
+	const fixture = auctionFixture()
+	Object.assign(fixture.values, { bidCount: 5000n, nextUnmaterializedBid: 4000n, bidId: 4000n, bidIdForVault: 4000n })
+	const result = await loadPortfolioObservation(fixture.client, fixture.settings, fixture.observation.snapshot.owner, fixture.observation.nextScope, 123n)
+	expect(result.positions[0]?.id).toBe(4000n)
+	expect(fixture.reads.filter(read => read.functionName === 'auctionPosition')).toHaveLength(1)
+})
+
+test('targeted revalidation preserves discovery cursor without fetching another page', async () => {
+	const fixture = auctionFixture()
+	const scope = { ...fixture.observation.nextScope, auctionAfterBidId: 2n }
+	const result = await loadPortfolioObservation(fixture.client, fixture.settings, fixture.observation.snapshot.owner, scope, 123n, [{ auction: fixture.auction, bidId: 1n, vault: fixture.vault }])
+	expect(result.nextScope.auctionAfterBidId).toBe(2n)
+	expect(fixture.reads.filter(read => read.functionName === 'nextUnmaterializedBid')).toHaveLength(0)
 })

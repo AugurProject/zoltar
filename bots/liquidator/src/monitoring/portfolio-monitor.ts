@@ -36,7 +36,7 @@ const portfolioMonitorAbi = [
 	parseAbiItem('function previewRetirement(uint96 id,uint256 acceptedPrice,uint256 demand) view returns ((uint8 status,uint96 effectiveCurrentBatch,uint256 healthyCommitment,uint256 spareCommitment,uint256 queuedAheadCommitment,uint256 commitmentReduction,uint256 releasedRep) preview)'),
 ] as const
 
-export type PortfolioScope = PortfolioSelection & { nextPositionId: bigint; sweepEnd: bigint; nextAuctionBidId?: bigint; auctionSweepEnd?: bigint; retirementObservations?: { id: bigint; commitment: bigint; batch: bigint; since: bigint }[] }
+export type PortfolioScope = PortfolioSelection & { nextPositionId: bigint; sweepEnd: bigint; auctionAfterBidId?: bigint; retirementObservations?: { id: bigint; commitment: bigint; batch: bigint; since: bigint }[] }
 export type PortfolioPosition = {
 	id: bigint
 	auctionTarget?: PortfolioAuctionTarget
@@ -186,9 +186,8 @@ export async function loadPortfolioObservation(client: ReadClient, settings: Ope
 	if (cohort[2] !== 0n) {
 		const auction = await authenticatePortfolioAuction(client, snapshot, getAddress(cohort[0]))
 		knownAuctionBidCount = auction.bidCount
-		const bids = portfolioAuctionPage(scope, auction.bidCount, settings.portfolioPolicy.maximumPositionsPerScan)
-		page.nextScope.nextAuctionBidId = bids.nextAuctionBidId
-		page.nextScope.auctionSweepEnd = bids.auctionSweepEnd
+		const bids = targets === undefined ? await portfolioAuctionPage(client, auction.engine, blockNumber, scope.auctionAfterBidId ?? 0n, auction.bidCount, settings.portfolioPolicy.maximumPositionsPerScan) : { ids: [], auctionAfterBidId: scope.auctionAfterBidId ?? 0n }
+		page.nextScope.auctionAfterBidId = bids.auctionAfterBidId
 		const threshold = await client.readContract({ address: snapshot.capitalLedger, abi: securityPoolCapitalLedgerAbi, functionName: 'maximumHealthyPrice', args: [cohort[3], cohort[4]], blockNumber })
 		for (const candidate of targets ?? bids.ids.map(bidId => ({ auction: auction.address, bidId }))) {
 			if (typeof candidate === 'bigint') continue
