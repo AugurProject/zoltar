@@ -11,7 +11,7 @@ export function createWatchBuilds({ appPaths, bunExecutablePath, isStopped, onId
 		contracts: { command: [bunExecutablePath, './tooling/contracts/build-app-contracts.mts', appId], cwd: repositoryRoot, label: 'Solidity and UI contract artifacts' },
 		shared: { command: [bunExecutablePath, './tooling/repo/build-shared.mts', appId], cwd: repositoryRoot, label: 'Shared TypeScript build' },
 		vendor: { command: [bunExecutablePath, vendorBuildScript, appId, '--scoped-artifacts'], cwd: coreSharedRoot, label: 'Vendor rebuild' },
-		worker: { command: [bunExecutablePath, workersBuildScript, appId, '--artifacts-current'], cwd: coreSharedRoot, label: 'Simulation worker rebuild' },
+		worker: { command: [bunExecutablePath, workersBuildScript, appId, '--artifacts-current', '--prune-stale-snapshots'], cwd: coreSharedRoot, label: 'Simulation worker rebuild' },
 	}
 	const queue = createBuildQueue<BuildJob>({
 		// Upstream inputs always rebuild before the jobs that consume their outputs.

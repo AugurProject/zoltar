@@ -50,6 +50,26 @@ function createWorkerHarness() {
 	}
 }
 
+async function waitForPostedCall(worker: ReturnType<typeof createWorkerHarness>, method: string) {
+	for (let attempt = 0; attempt < 50; attempt += 1) {
+		if (worker.postMessage.mock.calls.some(([message]) => message.type === 'call' && message.method === method)) return
+		await new Promise(resolve => setTimeout(resolve, 0))
+	}
+	throw new Error(`The worker never received a ${method} call`)
+}
+
+function createSavedStateEnvelope() {
+	const selectedAccount = normalizeAccount('0x00000000000000000000000000000000000000a1')
+	if (selectedAccount === undefined) throw new Error('Expected a valid simulation account')
+	return {
+		baseScenario: 'baseline',
+		name: 'Saved',
+		savedAt: '2026-11-02T00:00:00.000Z',
+		state: { blockCountSinceReset: 1n, currentTimestamp: 2n, queryDelayMilliseconds: 0, repPerEthPrice: 1n, repPerUsdcPrice: 1n, selectedAccount, snapshot: {}, transactionCountSinceReset: 0n, transactionDelayMilliseconds: 0 },
+		version: 1 as const,
+	}
+}
+
 function createReadyState(): SimulationWorkerState {
 	const selectedAccount = normalizeAccount('0x00000000000000000000000000000000000000a1')
 	if (selectedAccount === undefined) throw new Error('Expected a valid simulation account')
@@ -86,6 +106,8 @@ describe('simulation worker lifecycle', () => {
 			const bootstrap = backend.bootstrap()
 			expect(backend.isBootstrapping).toBe(true)
 			expect(backend.bootstrapError).toBeUndefined()
+			// The backend looks for a prepared scenario state before it asks the worker to bootstrap.
+			await waitForPostedCall(worker, 'bootstrap')
 			worker.emitMessage({ state: createReadyState(), type: 'state' })
 			worker.emitMessage({ id: 1, type: 'result', value: undefined })
 			await bootstrap
@@ -103,6 +125,81 @@ describe('simulation worker lifecycle', () => {
 			expect(backend.bootstrapWarning).toBeUndefined()
 		} finally {
 			await backend.dispose()
+		}
+	})
+
+	test('hands the prepared scenario state found next to the worker to the bootstrap call', async () => {
+		const worker = createWorkerHarness()
+		const lookups: Array<[string, string]> = []
+		const backendPromise = createSimulationBackend(
+			{ appId: 'statoblast', scenario: 'portfolio' },
+			{
+				createWorkerConnection: () => worker.connection,
+				fetchScenarioSnapshot: async (workerPath, scenario) => {
+					lookups.push([workerPath.pathname, scenario])
+					return { manifestKey: 'key-1', snapshot: '{"prepared":true}' }
+				},
+			},
+		)
+		worker.emitMessage({ state: { ...createReadyState(), isBootstrapped: false }, type: 'ready' })
+		const backend = await backendPromise
+		try {
+			const bootstrap = backend.bootstrap()
+			await waitForPostedCall(worker, 'bootstrap')
+			expect(worker.postMessage.mock.calls.at(-1)?.[0]).toMatchObject({ method: 'bootstrap', params: { scenarioSnapshot: '{"prepared":true}', scenarioSnapshotKey: 'key-1' }, type: 'call' })
+			expect(lookups).toEqual([[expect.stringContaining('/statoblast/ts/simulation/tevmWorker.ts'), 'portfolio']])
+			worker.emitMessage({ id: 1, type: 'result', value: undefined })
+			await bootstrap
+		} finally {
+			await backend.dispose()
+		}
+	})
+
+	test('seeds live when no prepared state can be loaded and never looks one up for a saved state', async () => {
+		const failing = createWorkerHarness()
+		const failingBackendPromise = createSimulationBackend(
+			{ scenario: 'deployed' },
+			{
+				createWorkerConnection: () => failing.connection,
+				fetchScenarioSnapshot: async () => {
+					throw new Error('offline')
+				},
+			},
+		)
+		failing.emitMessage({ state: { ...createReadyState(), isBootstrapped: false }, type: 'ready' })
+		const failingBackend = await failingBackendPromise
+		try {
+			const bootstrap = failingBackend.bootstrap()
+			await waitForPostedCall(failing, 'bootstrap')
+			expect(failing.postMessage.mock.calls.at(-1)?.[0]).toMatchObject({ method: 'bootstrap', params: {}, type: 'call' })
+			failing.emitMessage({ id: 1, type: 'result', value: undefined })
+			await bootstrap
+		} finally {
+			await failingBackend.dispose()
+		}
+
+		const saved = createWorkerHarness()
+		const lookups: string[] = []
+		const savedBackendPromise = createSimulationBackend(
+			{ savedState: createSavedStateEnvelope(), savedStateId: 'saved-1' },
+			{
+				createWorkerConnection: () => saved.connection,
+				fetchScenarioSnapshot: async (_workerPath, scenario) => {
+					lookups.push(scenario)
+					return undefined
+				},
+			},
+		)
+		saved.emitMessage({ state: { ...createReadyState(), isBootstrapped: false }, type: 'ready' })
+		const savedBackend = await savedBackendPromise
+		try {
+			const bootstrap = savedBackend.bootstrap()
+			await waitForPostedCall(saved, 'bootstrap')
+			saved.emitMessage({ id: 1, type: 'result', value: undefined })
+			await bootstrap
+			expect(lookups).toEqual([])
+		} finally {
+			await savedBackend.dispose()
 		}
 	})
 

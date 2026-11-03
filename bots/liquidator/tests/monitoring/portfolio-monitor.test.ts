@@ -2,6 +2,8 @@ import { expect, test } from 'bun:test'
 import { managedPortfolioScopes, portfolioPositionPage, requireCompletePortfolioExposure } from '../../src/monitoring/portfolio-monitor.ts'
 import { parsePortfolioScopes } from '../../src/state/portfolio-scopes.ts'
 import { portfolioAddress } from '../support/portfolio-observation.ts'
+import { auctionVaultRuntimeCode } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { getAddress } from '@zoltar/bot-shared/ethereum'
 
 const selection = { address: portfolioAddress, universeId: 0n }
 test('bounded historical sweeps cannot be postponed by new registrations and revisit rekeyed old positions', () => {
@@ -138,8 +140,12 @@ function auctionFixture() {
 	const fixture = portfolioClient()
 	const auction = fixture.module('SecurityPoolPortfolioAuction')
 	const engine = fixture.module('SecurityPoolUniformPriceAuction')
-	const vault = fixture.module('SecurityPoolAuctionVault')
+	const implementation = fixture.module('SecurityPoolAuctionVault')
+	const vault = getAddress('0x0000000000000000000000000000000000000199')
+	const cloneCode = (bindings: Partial<Parameters<typeof auctionVaultRuntimeCode>[0]> = {}) => auctionVaultRuntimeCode({ implementation, owner: targetAddress, capital: fixture.observation.snapshot.capitalLedger, auction, bidId: 1n, ...bindings })
+	fixture.codes.set(vault, cloneCode())
 	Object.assign(fixture.values, {
+		vaultImplementation: implementation,
 		auctionCohort: [auction, 1n, 2n, 9n, 10n],
 		capital: fixture.observation.snapshot.capitalLedger,
 		engine,
@@ -158,7 +164,7 @@ function auctionFixture() {
 		bidIdForVault: 1n,
 	})
 	fixture.settings.portfolioPolicy.maximumPositionsPerScan = 1
-	return { ...fixture, auction, engine, vault }
+	return { ...fixture, auction, engine, implementation, vault, cloneCode }
 }
 
 test('discovers a funded unmaterialized bid and never invents a live index position', async () => {
@@ -188,6 +194,15 @@ test('rejects counterfeit auction links, runtime and bid vault before exposing a
 			fixture.codes.set(fixture.vault, '0x6000')
 		},
 		(fixture: ReturnType<typeof auctionFixture>) => {
+			fixture.codes.set(fixture.vault, fixture.cloneCode({ implementation: fixture.engine }))
+		},
+		(fixture: ReturnType<typeof auctionFixture>) => {
+			fixture.codes.set(fixture.vault, fixture.cloneCode({ bidId: 2n }))
+		},
+		(fixture: ReturnType<typeof auctionFixture>) => {
+			fixture.codes.set(fixture.implementation, '0x6000')
+		},
+		(fixture: ReturnType<typeof auctionFixture>) => {
 			fixture.codes.set(fixture.engine, '0x6000')
 		},
 	]) {
@@ -201,14 +216,26 @@ test('preserves a materialized auction vault controlling owner for keeper self-d
 	const fixture = auctionFixture()
 	fixture.values['auctionCohort'] = ['0x0000000000000000000000000000000000000000', 0n, 0n, 0n, 0n]
 	fixture.values['owner'] = fixture.observation.snapshot.owner
+	fixture.codes.set(fixture.vault, fixture.cloneCode({ owner: fixture.observation.snapshot.owner }))
 	fixture.values['accountOf'] = { owner: fixture.vault, batch: 0n, rep: 99n, commitment: 100n, maxHealthyPrice: 1n, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 0n }
 	const result = await loadPortfolioObservation(fixture.client, fixture.settings, fixture.observation.snapshot.owner, fixture.observation.nextScope, 123n)
 	expect(result.positions[0]).toMatchObject({ owner: fixture.vault, controllingOwner: fixture.observation.snapshot.owner })
+	// A canonical clone whose getter disagrees with its code can only come from an inconsistent node.
+	fixture.values['owner'] = targetAddress
+	await expect(loadPortfolioObservation(fixture.client, fixture.settings, fixture.observation.snapshot.owner, fixture.observation.nextScope, 123n)).rejects.toThrow('does not match its code')
+	fixture.values['owner'] = fixture.observation.snapshot.owner
+	// Anyone can open a position from a clone-shaped contract with another implementation: it is an ordinary owner and never stalls the scan.
+	fixture.codes.set(fixture.implementation, '0x6000')
+	const ownerReads = fixture.reads.filter(read => read.functionName === 'owner').length
+	const foreign = await loadPortfolioObservation(fixture.client, fixture.settings, fixture.observation.snapshot.owner, fixture.observation.nextScope, 123n)
+	expect(foreign.positions[0]).toMatchObject({ owner: fixture.vault, controllingOwner: fixture.vault })
+	expect(fixture.reads.filter(read => read.functionName === 'owner')).toHaveLength(ownerReads)
 })
 
 test('auction discovery jumps directly to a winner beyond losing history', async () => {
 	const fixture = auctionFixture()
 	Object.assign(fixture.values, { bidCount: 5000n, nextUnmaterializedBid: 4000n, bidId: 4000n, bidIdForVault: 4000n })
+	fixture.codes.set(fixture.vault, fixture.cloneCode({ bidId: 4000n }))
 	const result = await loadPortfolioObservation(fixture.client, fixture.settings, fixture.observation.snapshot.owner, fixture.observation.nextScope, 123n)
 	expect(result.positions[0]?.id).toBe(4000n)
 	expect(fixture.reads.filter(read => read.functionName === 'auctionPosition')).toHaveLength(1)

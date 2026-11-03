@@ -1,4 +1,5 @@
 import { seedPortfolioScenario } from './portfolioScenario.js'
+import { seedPortfolioAuctionScenario } from './portfolioAuctionScenario.js'
 import { getSeededVaultDepositTargetFactorBps } from './seededVaultTarget.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getStatoblastScenarioProtocol as getScenarioProtocol } from './statoblastScenarioProtocol.js'
@@ -337,6 +338,13 @@ const STATOBLAST_SCENARIO_SEEDING: Record<StatoblastScenario, { deployEnd: numbe
 		seed: async parameters => {
 			await seedSecurityPoolX2Scenario(parameters)
 			await seedPortfolioScenario(parameters)
+		},
+	},
+	'portfolio-auction': {
+		deployEnd: 0.7,
+		seed: async parameters => {
+			await seedSecurityPoolX2Scenario(parameters)
+			await seedPortfolioAuctionScenario(parameters)
 		},
 	},
 	'security-pool': { deployEnd: 0.78, seed: seedSecurityPoolScenario },

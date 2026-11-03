@@ -81,4 +81,5 @@ export async function seedPortfolioScenario({ accounts, createReadClient, create
 		await reportStep(`Minted shared portfolio question ${index + 1} of ${pools.length}`)
 	}
 	await reportStep('Shared portfolio scenario is ready')
+	return { portfolio, capitalLedger, managerAddress, questionIds: pools.map(pool => BigInt(pool.questionId)) }
 }

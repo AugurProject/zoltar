@@ -139,7 +139,7 @@ contract CommitmentIndexHarness {
 		boundaryPositionId = result.boundaryPositionId;
 	}
 	function claim(uint96 id) external {
-		(uint256 rep, uint256 ethFees, uint256 repFees) = index.claim(id);
+		(uint256 rep, uint256 ethFees, uint256 repFees, ) = index.claim(id);
 		paidRep[id] += rep;
 		paidEthFees[id] += ethFees;
 		paidRepFees[id] += repFees;
@@ -147,7 +147,7 @@ contract CommitmentIndexHarness {
 	function creditAndClaim(uint256 price, uint256 ethAmount, uint256 repAmount, uint96[3] calldata ids) external {
 		require(index.creditFees(price, ethAmount, repAmount), 'No eligible recipients');
 		for (uint256 i; i < 3; i++) {
-			(uint256 rep, uint256 ethFees, uint256 repFees) = index.claim(ids[i]);
+			(uint256 rep, uint256 ethFees, uint256 repFees, ) = index.claim(ids[i]);
 			paidRep[ids[i]] += rep;
 			paidEthFees[ids[i]] += ethFees;
 			paidRepFees[ids[i]] += repFees;

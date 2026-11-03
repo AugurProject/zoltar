@@ -16,7 +16,35 @@ export function PortfolioInput({ label, value, onChange, disabled = false, hint,
 	)
 }
 
-export function PortfolioButton({ model, action, label, pendingLabel, reason, onClick }: { model: Pick<PortfolioActions, 'scope' | 'busy'>; action: string; label: string; pendingLabel: string; reason?: string | undefined; onClick: () => Promise<void> }) {
+export function PortfolioButton({
+	model,
+	action,
+	label,
+	pendingLabel,
+	reason,
+	sharedReasonId,
+	onClick,
+}: {
+	model: Pick<PortfolioActions, 'scope' | 'busy'>
+	action: string
+	label: string
+	pendingLabel: string
+	reason?: string | undefined
+	/** Element that already states this button's disabled reason, so the button references it instead of repeating it. */
+	sharedReasonId?: string | undefined
+	onClick: () => Promise<void>
+}) {
 	const disabledReason = model.busy !== undefined && model.busy !== action ? copy.busy : reason
-	return <TransactionActionButton scope={model.scope} idleLabel={label} pendingLabel={pendingLabel} pending={model.busy === action} availability={{ disabled: disabledReason !== undefined, reason: disabledReason }} onClick={() => void onClick()} />
+	return (
+		<TransactionActionButton
+			scope={model.scope}
+			idleLabel={label}
+			pendingLabel={pendingLabel}
+			pending={model.busy === action}
+			availability={{ disabled: disabledReason !== undefined, reason: disabledReason }}
+			disabledReasonElementId={sharedReasonId}
+			showDisabledReason={sharedReasonId === undefined}
+			onClick={() => void onClick()}
+		/>
+	)
 }

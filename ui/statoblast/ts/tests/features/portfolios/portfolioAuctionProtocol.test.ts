@@ -8,20 +8,25 @@ import {
 	statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact,
 	statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault as vaultArtifact,
 } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { auctionVaultRuntimeCode, predictAuctionVaultAddress } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { capitalClient, modules } from './capitalClient.js'
 import { capital, capitalSnapshot, index, owner, portfolio, token, unit } from './capitalFixture.js'
 
 const auction = getAddress('0x0000000000000000000000000000000000000091')
 const engine = getAddress('0x0000000000000000000000000000000000000092')
-const vault = getAddress('0x0000000000000000000000000000000000000093')
+const implementation = getAddress('0x0000000000000000000000000000000000000094')
+const bindings = { implementation, owner, capital, auction, bidId: 3n }
+const vault = predictAuctionVaultAddress(bindings)
 function fixture() {
 	const source = capitalClient()
 	source.codes.set(auction, `0x${auctionArtifact.evm.deployedBytecode.object}`)
 	source.codes.set(engine, `0x${engineArtifact.evm.deployedBytecode.object}`)
-	source.codes.set(vault, `0x${vaultArtifact.evm.deployedBytecode.object}`)
+	source.codes.set(implementation, `0x${vaultArtifact.evm.deployedBytecode.object}`)
+	source.codes.set(vault, auctionVaultRuntimeCode(bindings))
 	const values: Record<string, unknown> = {
 		auctions: auction,
 		engine,
+		vaultImplementation: implementation,
 		capital,
 		owner,
 		initialCapital: capital,
@@ -102,16 +107,43 @@ test('vault binding rejects another owner, fork route, initial ledger, bid or co
 		source.set(address, getter, value)
 		await expect(authenticatePortfolioAuctionVault(source.client, portfolio, vault, 10n)).rejects.toThrow()
 	}
-	for (const address of [vault, auction, engine, capital, modules.fork, modules.lifecycle, modules.auctionDelegate, index, modules.fees, modules.services]) {
+	for (const address of [vault, auction, engine, capital, implementation, modules.fork, modules.lifecycle, modules.auctionDelegate, index, modules.fees, modules.services]) {
 		const source = fixture()
 		source.source.codes.set(address, '0x6000')
 		await expect(authenticatePortfolioAuctionVault(source.client, portfolio, vault, 10n)).rejects.toThrow('runtime')
 	}
+	// Counterfeit clones: another implementation, foreign bindings, or a clone at the wrong address.
+	for (const [code, reason] of [
+		[auctionVaultRuntimeCode({ ...bindings, implementation: token }), 'address does not match'],
+		[auctionVaultRuntimeCode({ ...bindings, bidId: 4n }), 'runtime'],
+		[auctionVaultRuntimeCode({ ...bindings, owner: token }), 'runtime'],
+	] as const) {
+		const source = fixture()
+		source.source.codes.set(vault, code)
+		await expect(authenticatePortfolioAuctionVault(source.client, portfolio, vault, 10n)).rejects.toThrow(reason)
+	}
+	const misplaced = fixture()
+	const elsewhere = getAddress('0x0000000000000000000000000000000000000093')
+	misplaced.source.codes.set(elsewhere, auctionVaultRuntimeCode(bindings))
+	misplaced.set(auction, 'bidIdForVault', 3n)
+	await expect(authenticatePortfolioAuctionVault(misplaced.client, portfolio, elsewhere, 10n)).rejects.toThrow('address does not match')
+	const foreignImplementation = fixture()
+	foreignImplementation.set(auction, 'vaultImplementation', token)
+	await expect(authenticatePortfolioAuctionVault(foreignImplementation.client, portfolio, vault, 10n)).rejects.toThrow('another implementation')
 })
 
-test('branch auction loading authenticates the adapter and engine runtime before offering bids', async () => {
+test('branch auction loading authenticates the adapter, engine, implementation and each vault clone before offering bids', async () => {
 	const source = fixture()
-	expect((await loadPortfolioBranchAuction(source.client, portfolio, owner, 42n)).auction).toMatchObject({ address: auction, engine, finalized: true, bids: [] })
+	expect((await loadPortfolioBranchAuction(source.client, portfolio, owner, 42n)).auction).toMatchObject({ address: auction, engine, vaultImplementation: implementation, finalized: true, bids: [] })
+	source.values['bidderBidCount'] = 1n
+	source.values['bidderBidId'] = 3n
+	expect((await loadPortfolioBranchAuction(source.client, portfolio, owner, 42n)).auction?.bids.map(bid => bid.vault)).toEqual([vault])
+	source.source.codes.set(vault, auctionVaultRuntimeCode({ ...bindings, implementation: token }))
+	await expect(loadPortfolioBranchAuction(source.client, portfolio, owner, 42n)).rejects.toThrow('auction vault runtime')
+	source.source.codes.set(vault, auctionVaultRuntimeCode(bindings))
+	source.source.codes.set(implementation, '0x6000')
+	await expect(loadPortfolioBranchAuction(source.client, portfolio, owner, 42n)).rejects.toThrow('implementation runtime')
+	source.source.codes.set(implementation, `0x${vaultArtifact.evm.deployedBytecode.object}`)
 	source.source.codes.set(engine, '0x6000')
 	await expect(loadPortfolioBranchAuction(source.client, portfolio, owner, 42n)).rejects.toThrow('auction engine runtime')
 })
@@ -129,4 +161,10 @@ test('selected auction vault accounts retain vault liabilities while funding com
 	expect(source.source.reads.filter(read => read.name === 'allowance').at(-1)?.args).toEqual([owner, vault])
 	source.set(vault, 'owner', token)
 	await expect(loadPortfolioAccount(source.client, portfolio, vault, 42n)).rejects.toThrow()
+	// A clone-shaped account of another implementation is an ordinary owner: readable, funded by itself, with no vault authority.
+	source.set(vault, 'owner', owner)
+	source.source.codes.set(vault, auctionVaultRuntimeCode({ ...bindings, implementation: token }))
+	const ordinary = await loadPortfolioAccount(source.client, portfolio, vault, 42n)
+	expect(ordinary.auctionVault).toBeUndefined()
+	expect(source.source.reads.filter(read => read.name === 'balanceOf').at(-1)?.args).toEqual([vault])
 })

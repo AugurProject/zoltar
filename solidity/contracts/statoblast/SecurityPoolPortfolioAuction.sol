@@ -6,7 +6,7 @@ import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { Zoltar } from '../Zoltar.sol';
 import { SecurityPoolCapitalLedger } from './SecurityPoolCapitalLedger.sol';
 import { SecurityPoolUniformPriceAuction } from './SecurityPoolUniformPriceAuction.sol';
-import { SecurityPoolAuctionVault } from './SecurityPoolAuctionVault.sol';
+import { SecurityPoolAuctionVault, SecurityPoolAuctionVaultClones } from './SecurityPoolAuctionVault.sol';
 import { SecurityPoolCreationCodeDeployer } from './SecurityPoolCreationCode.sol';
 import { ISecurityPoolAuctionCapital } from './interfaces/ISecurityPoolAuctionCapital.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
@@ -45,6 +45,8 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 	uint256 public immutable lotAttoEth;
 	uint256 public immutable targetLots;
 	uint256 public immutable repGrid;
+	/// @notice Shared code behind every bid's vault clone; each clone binds its own owner, ledger, auction and bid.
+	address public immutable vaultImplementation;
 	uint256 public openingConservativePrice;
 	uint256 public minimumCollateralAttoRepPerLot;
 	bool public opened;
@@ -56,9 +58,10 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 	event WinningVaultCreated(uint256 indexed bidId, address indexed bidder, address indexed vault);
 	event AuctionClosed(uint256 filledLots, uint256 raisedAttoEth, uint256 soldAttoRep);
 
-	constructor(address authority, address root, uint248 child, uint256 deadline, uint256 inventory, uint256 shortfall) {
-		require(authority != address(0) && root.code.length != 0, 'Truth auction dependencies missing');
+	constructor(address authority, address root, uint248 child, uint256 deadline, uint256 inventory, uint256 shortfall, address implementation) {
+		require(authority != address(0) && root.code.length != 0 && implementation.code.length != 0, 'Truth auction dependencies missing');
 		forkAuthority = authority;
+		vaultImplementation = implementation;
 		portfolio = ITruthAuctionPortfolio(root);
 		capital = portfolio.capitalLedger(child);
 		require(address(capital) != address(0), 'Truth auction capital missing');
@@ -112,7 +115,7 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 		uint256 required = capital.commitmentIndex().requiredRep(lotAttoEth, openingConservativePrice, capital.securityMultiplierBps(), targetHealthFactorBps);
 		require(minimumAttoRepPerLot >= required, 'Auction bid does not meet chosen health target');
 		bidId = engine.bidCount() + 1;
-		vault = address(new SecurityPoolAuctionVault{salt: bytes32(bidId)}(msg.sender, address(capital), address(this), bidId));
+		vault = SecurityPoolAuctionVaultClones.create(vaultImplementation, msg.sender, address(capital), address(this), bidId);
 		bidIdForVault[vault] = bidId;
 		require(engine.submitBid{value: lots * lotAttoEth}(msg.sender, vault, targetHealthFactorBps, lots, minimumAttoRepPerLot) == bidId, 'Auction bid identity mismatch');
 		emit WinningVaultCreated(bidId, msg.sender, vault);
@@ -142,6 +145,11 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 		emit AuctionClosed(result.filledLots, result.raisedAttoEth, result.soldAttoRep);
 	}
 
+	/// @notice The clone address a bidder's bid receives, computable before bidding.
+	function vaultFor(address bidder, uint256 bidId) external view returns (address) {
+		return
+			SecurityPoolAuctionVaultClones.predict(address(this), vaultImplementation, bidder, address(capital), address(this), bidId);
+	}
 	function bidPosition(uint256 bidId) external view returns (BidPosition memory position) {
 		SecurityPoolUniformPriceAuction.Fill memory fill = engine.previewBid(bidId);
 		return BidPosition(fill.vault, fill.targetHealthBps, fill.filledLots);
@@ -163,6 +171,14 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 		require(recipient != address(0), 'Truth auction refund recipient missing');
 		engine.withdrawRefundFor(msg.sender, recipient);
 	}
+	/// @notice One transaction for the bidder: credit its own eligible bid, or skip
+	/// a credit someone already made, then withdraw its whole refund credit. The
+	/// withdrawal includes credits from the bidder's other bids in this auction.
+	function settleAndWithdrawRefund(uint256 bidId, address payable recipient) external nonReentrant returns (uint256 amountAttoEth) {
+		require(opened, 'Truth auction has not opened');
+		require(recipient != address(0), 'Truth auction refund recipient missing');
+		return engine.settleAndWithdrawRefund(bidId, msg.sender, recipient);
+	}
 
 	function _fundedQuote(ITruthAuctionPriceFeed feed, uint256 atTime) private view returns (bool) {
 		return
@@ -179,8 +195,12 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 }
 
 contract SecurityPoolPortfolioAuctionDeployer is SecurityPoolCreationCodeDeployer {
-	constructor() SecurityPoolCreationCodeDeployer(type(SecurityPoolPortfolioAuction).creationCode) {}
+	/// @notice One vault implementation serves every auction this deployer creates.
+	address public immutable vaultImplementation;
+	constructor() SecurityPoolCreationCodeDeployer(type(SecurityPoolPortfolioAuction).creationCode) {
+		vaultImplementation = address(new SecurityPoolAuctionVault());
+	}
 	function create(address authority, address portfolio, uint248 child, uint256 close, uint256 inventory, uint256 shortfall) external returns (address) {
-		return _deploy(abi.encode(authority, portfolio, child, close, inventory, shortfall));
+		return _deploy(abi.encode(authority, portfolio, child, close, inventory, shortfall, vaultImplementation));
 	}
 }

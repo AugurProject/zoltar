@@ -8,6 +8,7 @@ const abi = parseAbi([
 	'function settleRefund(uint256 bidId)',
 	'function materializeAuctionBid(uint256 bidId) returns (address vault,uint96 positionId)',
 	'function withdrawRefunds(address recipient)',
+	'function settleAndWithdrawRefund(uint256 bidId,address recipient) returns (uint256 amountAttoEth)',
 	'function execute(address target,uint256 value,bytes data) payable returns (bytes)',
 	'function executeAndSweep(address target,uint256 value,bytes data,address token,address recipient) payable returns (bytes)',
 	'function depositPrincipal(address ledger,uint256 amount,uint256 targetHealthFactorBps)',
@@ -100,6 +101,31 @@ export function buildPortfolioAuctionRefundWithdrawRequest(snapshot: PortfolioAu
 	const auction = requireAuction(snapshot)
 	if (auction.refundAttoEth === 0n) throw new Error('This bidder has no credited auction refunds.')
 	return { account: snapshot.bidder, to: auction.address, value: 0n, data: encodeFunctionData({ abi, functionName: 'withdrawRefunds', args: [address(recipient, 'Refund recipient')] }) }
+}
+/**
+ * One bidder transaction: credit the chosen bid unless someone already did, then withdraw the bidder's whole credit.
+ * The withdrawal always includes refunds already credited for the bidder's other bids in this auction.
+ */
+export function quotePortfolioAuctionRefundClaim(snapshot: PortfolioAuctionSnapshot, bidId: bigint) {
+	const auction = requireAuction(snapshot)
+	const bid = auction.bids.find(candidate => candidate.id === uint(bidId, 'Bid ID'))
+	if (bid === undefined) throw new Error('Choose a bid from this auction page.')
+	let bidRefundAttoEth = 0n
+	if (!bid.refundSettled) {
+		if (auction.finalized) bidRefundAttoEth = bid.fill?.refundAttoEth ?? 0n
+		else if (bid.earlyRefundAttoEth === 0n) throw new Error('This bid may still win. Its ETH remains committed until closing.')
+		else bidRefundAttoEth = bid.earlyRefundAttoEth
+		if (bidRefundAttoEth === 0n) throw new Error('This bid has no unused ETH to refund.')
+	}
+	const creditedAttoEth = auction.refundAttoEth
+	const totalAttoEth = creditedAttoEth + bidRefundAttoEth
+	if (totalAttoEth === 0n) throw new Error('No refund credit remains to withdraw.')
+	return { bidId: bid.id, settles: !bid.refundSettled, bidRefundAttoEth, creditedAttoEth, totalAttoEth }
+}
+export function buildPortfolioAuctionRefundClaimRequest(snapshot: PortfolioAuctionSnapshot, bidId: bigint, recipient: Address) {
+	const auction = requireAuction(snapshot)
+	const quote = quotePortfolioAuctionRefundClaim(snapshot, bidId)
+	return { account: snapshot.bidder, to: auction.address, value: 0n, data: encodeFunctionData({ abi, functionName: 'settleAndWithdrawRefund', args: [quote.bidId, address(recipient, 'Refund recipient')] }) }
 }
 /** Call only after authenticating the vault owner and its original auction binding. */
 export function buildPortfolioAuctionVaultExecuteRequest(parameters: { bidder: Address; vault: Address; request: { account: Address; to: Address; value: bigint; data: Hex }; fundingAttoEth?: bigint; sweep?: { repToken: Address; recipient: Address } }) {

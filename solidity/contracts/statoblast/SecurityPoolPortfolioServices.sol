@@ -175,8 +175,10 @@ contract SecurityPoolPortfolioServices {
 		(, , , uint48 previous, bool isSealed) = settlement.ledger().totals(settlement.bookIds(universeId));
 		uint48 nowTime = root.logicalTime(universeId);
 		uint48 earnedThrough = uint48(Math.min(nowTime, root.logicalTimeForNative(universeId, through)));
+		// A universe's ledger is bound once at preparation; one read serves the checkpoint.
+		SecurityPoolCapitalLedger capital = root.capitalLedger(universeId);
 		if (!isSealed) {
-			if (through < root.capitalLedger(universeId).effectiveTime() && feesEnabled[universeId]) {
+			if (through < capital.effectiveTime() && feesEnabled[universeId]) {
 				(uint256 stoppedFees, uint256 stoppedDemand) = settlement.setFeesEnabled(universeId, false, uint48(Math.max(previous, earnedThrough)));
 				feesEnabled[universeId] = false;
 				_creditUniverse(universeId, stoppedFees, stoppedDemand);
@@ -187,7 +189,7 @@ contract SecurityPoolPortfolioServices {
 		(, , uint48 premiumTime, bool premiumSealed) = premiumLedger.totals(universeId);
 		if (!premiumSealed) {
 			(uint256 earned, uint256 unused) = premiumLedger.checkpoint(universeId, uint48(Math.max(premiumTime, earnedThrough)));
-			if (earned != 0) root.capitalLedger(universeId).creditTimedFees{value: earned}();
+			if (earned != 0) capital.creditTimedFees{value: earned}();
 			if (unused != 0) _fundMaintenance(universeId, unused);
 			(uint256 stale, uint256 remainingUnused) = premiumLedger.checkpoint(universeId, nowTime);
 			if (stale + remainingUnused != 0) _fundMaintenance(universeId, stale + remainingUnused);

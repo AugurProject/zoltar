@@ -1,7 +1,16 @@
 import { describe, expect, test } from 'bun:test'
 import { preparePortfolioTruthAuction } from './securityPoolPortfolioTruthAuctionFixture'
-import { encodeFunctionData } from '@zoltar/core-shared/evm/ethereum'
-import { buildPortfolioAuctionBidRequest, buildPortfolioAuctionOpenRequest, buildPortfolioAuctionVaultDepositRequest, buildPortfolioAuctionVaultExecuteRequest, loadPortfolioAuctionSnapshot, quotePortfolioAuctionBid } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { encodeFunctionData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import {
+	auctionVaultRuntimeCode,
+	buildPortfolioAuctionBidRequest,
+	buildPortfolioAuctionOpenRequest,
+	buildPortfolioAuctionVaultDepositRequest,
+	buildPortfolioAuctionVaultExecuteRequest,
+	loadPortfolioAuctionSnapshot,
+	predictAuctionVaultAddress,
+	quotePortfolioAuctionBid,
+} from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import {
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
@@ -13,7 +22,7 @@ import {
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
 	ReputationToken_ReputationToken as tokenArtifact,
 } from '../../types/contractArtifact'
-import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
+import { writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { DAY } from '../../testSupport/simulator/utils/constants'
 import { addRepToMigrationBalance, forkUniverse, getZoltarForkThreshold, splitMigrationRep } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
@@ -41,6 +50,14 @@ describe('Statoblast: automatic truth-auction vaults', () => {
 		const firstSnapshot = (await readAuction()).auction?.bids[0]
 		if (firstSnapshot === undefined) throw new Error('Submitted bid missing')
 		const first = { id: firstSnapshot.id, vault: firstSnapshot.vault }
+		// Each vault is a clone at the address the auction and the SDK both predict from its bindings.
+		const implementation = await context.owner.readContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'vaultImplementation' })
+		const bindings = { implementation, owner: context.owner.account.address, capital: context.capital, auction: context.auction, bidId: first.id }
+		expect(opened.auction.vaultImplementation).toBe(implementation)
+		expect(predictAuctionVaultAddress(bindings)).toBe(first.vault)
+		expect(await context.owner.readContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'vaultFor', args: [context.owner.account.address, first.id] })).toBe(first.vault)
+		expect(await context.owner.getCode({ address: first.vault })).toBe(auctionVaultRuntimeCode(bindings))
+		expect(await context.owner.getCode({ address: implementation })).toBe(`0x${vaultArtifact.evm.deployedBytecode.object}`)
 		const second = await context.bid(context.other, 4n)
 		await context.closingQuote()
 		await context.finalize()
@@ -91,6 +108,61 @@ describe('Statoblast: automatic truth-auction vaults', () => {
 		expect(await context.balance(context.owner.account.address)).toBe(walletBefore + unit)
 		expect(await context.balance(first.vault)).toBe(0n)
 		await expect(context.other.sendTransaction({ ...withdrawal, account: context.other.account.address })).rejects.toThrow('Only the auction vault owner')
+	})
+
+	test('the first owner operation records initial materialization once and later operations skip the auction lookup', async () => {
+		const context = await prepare()
+		await context.report()
+		await context.open()
+		const vaultFlag = (vault: Address) => context.owner.readContract({ abi: vaultArtifact.abi, address: vault, functionName: 'initialPositionMaterialized' })
+		const ledgerFlag = async (bidId: bigint) => (await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'auctionPosition', args: [bidId] })).materialized
+		const positionId = async (vault: Address) => (await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'ownerAccount', args: [vault] })).positionId
+		const operate = async (client: WriteClient, vault: Address, data: Hex = encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'setHealthTarget', args: [12_000n] }), target = context.capital) => {
+			const hash = await writeContractAndWait(client, () => client.writeContract({ abi: vaultArtifact.abi, address: vault, functionName: 'execute', args: [target, 0n, data] }))
+			return (await client.waitForTransactionReceipt({ hash })).gasUsed
+		}
+		const winner = await context.bid(context.other, 2n)
+		const loser = await context.bid(context.owner, 1n, 100n * unit)
+		const partial = await context.bid(context.other, 5n)
+		await expect(operate(context.other, winner.vault)).rejects.toThrow('Auction has not been finalized')
+		expect(await vaultFlag(winner.vault)).toBe(false)
+		await context.closingQuote()
+		await context.finalize()
+		expect([winner, loser, partial].map(bid => bid.vault)).toHaveLength(3)
+		expect(await vaultFlag(winner.vault)).toBe(false)
+		expect(await ledgerFlag(winner.id)).toBe(false)
+		// A keeper's materialization is recognized by the owner's next operation.
+		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'materializeAuctionBid', args: [winner.id] }))
+		expect(await ledgerFlag(winner.id)).toBe(true)
+		expect(await vaultFlag(winner.vault)).toBe(false)
+		const first = await operate(context.other, winner.vault)
+		expect(await vaultFlag(winner.vault)).toBe(true)
+		const second = await operate(context.other, winner.vault)
+		expect(await vaultFlag(winner.vault)).toBe(true)
+		expect(second).toBeLessThan(first - 40_000n)
+		expect(await positionId(winner.vault)).not.toBe(0n)
+		// A reverting owner action rolls back its materialization and the flag together.
+		const failing = encodeFunctionData({ abi: vaultArtifact.abi, functionName: 'execute', args: [context.capital, 0n, encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'withdrawPrincipal', args: [1_000n * unit, partial.vault] })] })
+		const hash = await context.mock.requestRaw({ method: 'eth_sendTransaction', params: [{ from: context.other.account.address, to: partial.vault, data: failing, gas: '0x2dc6c0', gasPrice: '0x0' }] })
+		await context.mock.requestRaw({ method: 'evm_mine', params: [] })
+		const receipt = await context.mock.requestRaw({ method: 'eth_getTransactionReceipt', params: [hash] })
+		if (typeof receipt !== 'object' || receipt === null || !('status' in receipt)) throw new Error('Missing reverted transaction receipt')
+		expect(receipt.status).toBe('0x0')
+		expect(await vaultFlag(partial.vault)).toBe(false)
+		expect(await ledgerFlag(partial.id)).toBe(false)
+		expect(await positionId(partial.vault)).toBe(0n)
+		const activated = await operate(context.other, partial.vault)
+		expect(await vaultFlag(partial.vault)).toBe(true)
+		expect(await ledgerFlag(partial.id)).toBe(true)
+		expect(activated).toBeGreaterThan(first)
+		// A losing bid never records a permanent zero fill and keeps asset recovery.
+		const recovery = encodeFunctionData({ abi: tokenArtifact.abi, functionName: 'transfer', args: [context.owner.account.address, 0n] })
+		for (let attempt = 0; attempt < 2; attempt++) {
+			await operate(context.owner, loser.vault, recovery, context.token)
+			expect(await vaultFlag(loser.vault)).toBe(false)
+			expect(await positionId(loser.vault)).toBe(0n)
+		}
+		await expect(context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'auctionPosition', args: [loser.id] })).resolves.toMatchObject({ materialized: false, principal: 0n })
 	})
 
 	test('missing a closing quote refunds bid ETH', async () => {

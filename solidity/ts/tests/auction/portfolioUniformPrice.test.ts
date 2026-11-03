@@ -285,6 +285,60 @@ describe('Portfolio uniform-price auction', () => {
 		expect((await client().getBalance({ address: recipient })) - before).toBe(2n * unit)
 	})
 
+	test('the controller settles and withdraws for a bidder in one call, skipping credits others already made', async () => {
+		const address = await deploy()
+		await getAnvilWindowEthereum().setTime(opensAt)
+		const bidder = client(1).account.address
+		const recipient = client(2).account.address
+		const first = await bid(address, 2n * unit, 2n)
+		const second = await bid(address, 2n * unit, 1n)
+		await expect(client().simulateContract({ abi, address, functionName: 'settleAndWithdrawRefund', args: [first, bidder, recipient] })).rejects.toThrow('Bid may still win')
+		await bid(address, unit, 10n, recipient)
+		await expect(client(1).writeContract({ abi, address, functionName: 'settleAndWithdrawRefund', args: [first, bidder, recipient] })).rejects.toThrow('Only the auction controller')
+		await expect(client().simulateContract({ abi, address, functionName: 'settleAndWithdrawRefund', args: [first, recipient, recipient] })).rejects.toThrow('Auction bid belongs to another bidder')
+		await expect(client().simulateContract({ abi, address, functionName: 'settleAndWithdrawRefund', args: [999n, bidder, recipient] })).rejects.toThrow('Auction bid belongs to another bidder')
+		// A keeper credited the second bid already; the combined call skips that
+		// settlement and pays both credits in one transfer.
+		await settle(address, second)
+		const combined = await client().simulateContract({ abi, address, functionName: 'settleAndWithdrawRefund', args: [first, bidder, recipient] })
+		expect(combined.result).toBe(3n * unit)
+		const before = await client().getBalance({ address: recipient })
+		await writeContractAndWait(client(), () => client().writeContract({ abi, address, functionName: 'settleAndWithdrawRefund', args: [first, bidder, recipient] }))
+		expect((await client().getBalance({ address: recipient })) - before).toBe(3n * unit)
+		expect(await client().readContract({ abi, address, functionName: 'refundCreditAttoEth', args: [bidder] })).toBe(0n)
+		expect((await client().readContract({ abi, address, functionName: 'bids', args: [first] }))[5]).toBe(true)
+		await expect(client().simulateContract({ abi, address, functionName: 'settleAndWithdrawRefund', args: [first, bidder, recipient] })).rejects.toThrow('Auction has no refund credit for this bidder')
+		await expect(client().simulateContract({ abi, address, functionName: 'settleAndWithdrawRefund', args: [second, bidder, recipient] })).rejects.toThrow('Auction has no refund credit for this bidder')
+		expect(await close(address)).toMatchObject({ filledLots: 10n })
+		await expect(settle(address, first)).rejects.toThrow('Auction bid has already been settled')
+	})
+
+	test('a rejecting recipient rolls back the new credit while older credit stays recoverable', async () => {
+		const address = await deploy()
+		const owner = client()
+		const receiver = await deployContract(owner, encodeDeployData({ abi: rejectingArtifact.abi, bytecode: `0x${rejectingArtifact.evm.bytecode.object}` }))
+		await getAnvilWindowEthereum().setTime(opensAt)
+		const bidder = client(1).account.address
+		const first = await bid(address, 2n * unit, 2n)
+		const second = await bid(address, 2n * unit, 1n)
+		await bid(address, unit, 10n, client(2).account.address)
+		await settle(address, second)
+		await expect(owner.writeContract({ abi, address, functionName: 'settleAndWithdrawRefund', args: [first, bidder, receiver] })).rejects.toThrow('Auction refund transfer failed')
+		expect((await owner.readContract({ abi, address, functionName: 'bids', args: [first] }))[5]).toBe(false)
+		expect(await owner.readContract({ abi, address, functionName: 'refundCreditAttoEth', args: [bidder] })).toBe(unit)
+		expect(await owner.readContract({ abi, address, functionName: 'earlyRefundAttoEth', args: [first] })).toBe(2n * unit)
+		const recipient = client(2).account.address
+		const before = await owner.getBalance({ address: recipient })
+		await writeContractAndWait(client(1), () => client(1).writeContract({ abi, address, functionName: 'withdrawRefund', args: [recipient] }))
+		expect((await owner.getBalance({ address: recipient })) - before).toBe(unit)
+		// After closing, the unfilled bid settles its final refund through the same path.
+		await close(address)
+		const settled = await owner.simulateContract({ abi, address, functionName: 'settleAndWithdrawRefund', args: [first, bidder, recipient] })
+		expect(settled.result).toBe(2n * unit)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi, address, functionName: 'settleAndWithdrawRefund', args: [first, bidder, recipient] }))
+		expect((await owner.getBalance({ address: recipient })) - before).toBe(3n * unit)
+	})
+
 	test('all marginal sizes preserve the same principal-to-commitment ratio exactly', async () => {
 		const target = 101n
 		const price = 21n

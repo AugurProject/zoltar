@@ -217,6 +217,22 @@ contract SecurityPoolUniformPriceAuction {
 	}
 
 	function settleBid(uint256 bidId) external onlyController returns (Fill memory fill) {
+		return _settleBid(bidId);
+	}
+
+	/// @notice Credit `bidId` for its bidder unless someone already did, then pay
+	/// that bidder's whole credit, which may include refunds of its other bids.
+	/// Settlement and the credit reset complete before the single ETH transfer,
+	/// so a rejecting recipient reverts the new credit and keeps older credit intact.
+	function settleAndWithdrawRefund(uint256 bidId, address bidder, address payable recipient) external onlyController returns (uint256 amountAttoEth) {
+		Bid storage bid = bids[bidId];
+		require(bid.bidder != address(0) && bid.bidder == bidder, 'Auction bid belongs to another bidder');
+		if (!bid.settled) _settleBid(bidId);
+		amountAttoEth = _withdrawRefund(bidder, recipient);
+		require(amountAttoEth != 0, 'Auction has no refund credit for this bidder');
+	}
+
+	function _settleBid(uint256 bidId) private returns (Fill memory fill) {
 		Bid storage bid = bids[bidId];
 		require(bid.bidder != address(0), 'Auction bid does not exist');
 		require(!bid.settled, 'Auction bid has already been settled');
@@ -226,7 +242,7 @@ contract SecurityPoolUniformPriceAuction {
 			require(refund != 0, 'Bid may still win');
 			fill = Fill(bid.bidder, bid.vault, bid.targetHealthBps, 0, 0, 0, refund);
 		}
-		bids[bidId].settled = true;
+		bid.settled = true;
 		refundCreditAttoEth[fill.bidder] += fill.refundAttoEth;
 		emit BidSettled(bidId, fill.bidder, fill.filledLots, fill.refundAttoEth);
 	}
@@ -303,10 +319,10 @@ contract SecurityPoolUniformPriceAuction {
 		_withdrawRefund(bidder, recipient);
 	}
 
-	function _withdrawRefund(address bidder, address payable recipient) private {
+	function _withdrawRefund(address bidder, address payable recipient) private returns (uint256 amount) {
 		require(recipient != address(0), 'Auction refund recipient is required');
-		uint256 amount = refundCreditAttoEth[bidder];
-		if (amount == 0) return;
+		amount = refundCreditAttoEth[bidder];
+		if (amount == 0) return 0;
 		refundCreditAttoEth[bidder] = 0;
 		emit RefundWithdrawn(bidder, recipient, amount);
 		(bool sent, ) = recipient.call{value: amount}('');

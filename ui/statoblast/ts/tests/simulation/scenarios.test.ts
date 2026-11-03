@@ -5,6 +5,7 @@ import { registerStatoblastSimulationScenarios } from '@zoltar/ui-statoblast-sha
 import { getRegisteredSimulationScenarios, getSimulationScenarioDescription, getSimulationScenarioLabel } from '@zoltar/ui-core-shared/simulation/scenarios.js'
 const EXPECTED_PRESENTATION = {
 	portfolio: ['Portfolio', 'Individual REP accounts back two questions'],
+	'portfolio-auction': ['Portfolio branch auction', 'truth auction is open with one winning, one excluded and one rival bid'],
 	'security-pool': ['Security pool', 'seeded question'],
 	securitypoolx2: ['Security pool x2', 'Two seeded questions with two security pools'],
 	'securitypoolx2-auction': ['Security pool x2 auction', 'child truth auction seeded with ten bids'],

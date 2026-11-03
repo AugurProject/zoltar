@@ -1,19 +1,26 @@
 import { getAddress, zeroHash } from '@zoltar/core-shared/evm/ethereum'
+import { predictAuctionVaultAddress } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import type { PortfolioAccountSnapshot } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolio.js'
 export const owner = getAddress('0x0000000000000000000000000000000000000011')
 export const portfolio = getAddress('0x0000000000000000000000000000000000000022')
 export const capital = getAddress('0x0000000000000000000000000000000000000033')
 export const token = getAddress('0x0000000000000000000000000000000000000044')
 export const index = getAddress('0x0000000000000000000000000000000000000055')
+export const auctionAddress = getAddress('0x0000000000000000000000000000000000000091')
+export const auctionEngine = getAddress('0x0000000000000000000000000000000000000092')
+export const auctionVaultImplementation = getAddress('0x0000000000000000000000000000000000000094')
+// The fixture vault is the clone the auction would create for this bidder, ledger and bid.
+export const auctionVaultBindings = { implementation: auctionVaultImplementation, owner, capital, auction: auctionAddress, bidId: 1n }
+export const auctionVault = predictAuctionVaultAddress(auctionVaultBindings)
 export const unit = 10n ** 18n
 export function auctionCapitalSnapshot(overrides: Partial<PortfolioAccountSnapshot> = {}): PortfolioAccountSnapshot {
-	const vault = getAddress('0x0000000000000000000000000000000000000093')
+	const vault = auctionVault
 	const snapshot = capitalSnapshot()
 	return {
 		...snapshot,
 		owner: vault,
 		positions: snapshot.positions.map(position => ({ ...position, owner: vault })),
-		auctionVault: { vault, bidder: owner, auction: getAddress('0x0000000000000000000000000000000000000091'), initialCapital: capital, initialUniverse: 0n, bidId: 1n, filledLots: 10n, materialized: true },
+		auctionVault: { vault, bidder: owner, auction: auctionAddress, initialCapital: capital, initialUniverse: 0n, bidId: 1n, filledLots: 10n, materialized: true },
 		...overrides,
 	}
 }

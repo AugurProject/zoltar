@@ -11,6 +11,7 @@
 	},
 	"dependencies": {
 		"@tevm/actions": "1.0.0-rc.151",
+		"@tevm/block": "1.0.0-rc.151",
 		"@preact/signals": "2.0.1",
 		"@noble/curves": "2.2.0",
 		"@noble/hashes": "2.2.0",
@@ -19,6 +20,7 @@
 		"preact": "10.26.4",
 		"@tevm/memory-client": "1.0.0-rc.151",
 		"@tevm/common": "1.0.0-rc.151",
+		"@tevm/utils": "1.0.0-rc.151",
 		"@zoltar/core-shared": "workspace:1.0.0",
 		"@zoltar/zoltar-shared": "workspace:1.0.0"
 	},

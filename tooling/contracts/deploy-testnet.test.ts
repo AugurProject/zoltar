@@ -537,8 +537,8 @@ describe('testnet deployment plan', () => {
 		const publishedAddresses = [SEPOLIA_NETWORK_PROFILE.wethAddress, uniswap.addresses.uniswapV3FactoryAddress, uniswap.addresses.uniswapV3QuoterAddress, uniswap.addresses.uniswapV4PoolManagerAddress, uniswap.addresses.uniswapV4QuoterAddress]
 		expect(uniswap.publishedContracts.map(contract => contract.address)).toEqual(publishedAddresses)
 		for (const address of publishedAddresses) expect(addressSet.has(address)).toBe(false)
-		expect(Object.keys(bootstrapDescendants)).toHaveLength(24)
-		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(24)
+		expect(Object.keys(bootstrapDescendants)).toHaveLength(25)
+		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(25)
 		for (const address of Object.values(bootstrapDescendants)) expect(addressSet.has(address)).toBe(false)
 		expect(bootstrapDescendants.escalationGameProofVerifier).toBe(infrastructure.escalationGameProofVerifier)
 		expect(bootstrapDescendants.liquidationApprovalRegistryDeployer).toBe(getCreateAddress({ from: infrastructure.openOraclePriceCoordinatorFactory, nonce: 1n }))
@@ -556,6 +556,7 @@ describe('testnet deployment plan', () => {
 		expect(bootstrapDescendants['securityPoolCapitalCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolCapitalLedgerDeployer, nonce: 2n }))
 		expect(bootstrapDescendants['securityPoolServicesCreationCodeFirstChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioServicesDeployer, nonce: 1n }))
 		expect(bootstrapDescendants['securityPoolServicesCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioServicesDeployer, nonce: 2n }))
+		expect(bootstrapDescendants['securityPoolAuctionVaultImplementation']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioAuctionDeployer, nonce: 3n }))
 		expect(bootstrapDescendants['securityPoolForkCreationCodeFirstChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioForkCoordinatorDeployer, nonce: 1n }))
 		expect(bootstrapDescendants['securityPoolAuctionCreationCodeFirstChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioAuctionDeployer, nonce: 1n }))
 		expect(bootstrapDescendants['securityPoolForkCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioForkCoordinatorDeployer, nonce: 2n }))

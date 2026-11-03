@@ -32,14 +32,6 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	uint256 public immutable securityMultiplierBps;
 	uint256 private immutable minimumCommitmentAttoEth;
 
-	struct CureBounds {
-		uint256 expectedTotalCommitment;
-		uint256 expectedDemand;
-		uint256 expectedAcceptedPriceEpoch;
-		uint256 minimumRemoved;
-		uint256 minimumReward; // REP credited to the keeper, in attoREP.
-	}
-
 	struct TakeoverBounds {
 		uint256 maximumOwnerPrincipal;
 		uint256 maximumOwnerCommitment;
@@ -52,11 +44,11 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	event PrincipalWithdrawn(address indexed owner, address indexed recipient, uint256 amountAttoRep);
 	event CommitmentAuthorized(address indexed owner, uint96 indexed positionId, uint256 rep, uint256 commitment, uint256 targetHealthFactorBps);
 	event RetirementServed(uint256 rep, uint256 commitment);
-	event CommitmentCured(uint96 indexed positionId, uint256 removedCommitment, uint256 keeperRewardAttoRep);
+	event CommitmentCured(uint96 indexed positionId, uint256 removedCommitment);
 	event CommitmentTakenOver(uint96 indexed sourceId, uint96 indexed receiverId, uint256 commitment, uint256 awardAttoRep);
 	event CapitalPriceAccepted(uint256 price, uint48 validUntil);
 	event EarningsClaimed(address indexed owner, uint256 ethAmount, uint256 repAmount);
-	event TerminalFeesBurned(uint256 ethAmount, uint256 repAmount);
+	event UnassignedFeesBurned(uint256 ethAmount, uint256 repAmount);
 
 	constructor(address authority, Zoltar _zoltar, uint248 _universeId, uint256 multiplier, uint256 minimumCommitment, uint48 vestingDuration) {
 		require(authority != address(0), 'Capital authority missing');
@@ -336,14 +328,12 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		_serviceIncome(unassignedEth, unassignedRep);
 	}
 	/// @dev Income belonging to unhealthy or stale intervals can never become a
-	/// new provider's jackpot. ETH funds maintenance; forfeited REP is burned.
+	/// new provider's jackpot, and no shared pot exists to receive it. Burn it.
 	function _serviceIncome(uint256 ethAmount, uint256 repAmount) private {
+		if (ethAmount == 0 && repAmount == 0) return;
 		if (repAmount != 0) zoltar.burnRep(universeId, repAmount);
-		if (zoltar.getForkTime(universeId) != 0) {
-			_sendEth(Constants.BURN_ADDRESS, ethAmount);
-			if (ethAmount != 0 || repAmount != 0) emit TerminalFeesBurned(ethAmount, repAmount);
-		} else if (ethAmount != 0)
-			ICapitalLedgerAccounting(portfolio).creditServiceFees{value: ethAmount}(universeId);
+		_sendEth(Constants.BURN_ADDRESS, ethAmount);
+		emit UnassignedFeesBurned(ethAmount, repAmount);
 	}
 
 	/// @dev An already time-earned amount; only the canonical checkpoint may call.
@@ -364,54 +354,32 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	}
 
 	/// @notice Remove only enough unused nominal K to cure this particular vault.
+	/// @dev Open to anyone and unpaid: the caller acts for its own fee share or
+	/// as part of a takeover.
 	function cure(uint96 id) external nonReentrant returns (uint256 removed) {
-		_requireOpen();
-		_requireFresh();
-		_checkpoint();
-		_serveRetirement(0);
-		(removed, ) = _cure(id, msg.sender);
+		_prepareCure();
+		return _cure(id);
 	}
-	function cureWithBounds(uint96 id, CureBounds calldata bounds) external nonReentrant returns (uint256 removed) {
-		_prepareBoundedCure(bounds);
-		return _finishBoundedCure(id, bounds);
-	}
-	function cureAuctionBid(uint256 bidId, CureBounds calldata bounds) external nonReentrant returns (uint256 removed) {
+	function cureAuctionBid(uint256 bidId) external nonReentrant returns (uint256 removed) {
 		require(auctionBidPositionIds[bidId] == 0, 'Auction bid already materialized');
-		_prepareBoundedCure(bounds);
+		_prepareCure();
 		(, uint96 id) = _materializeAuctionBid(bidId);
-		return _finishBoundedCure(id, bounds);
+		return _cure(id);
 	}
-	/// @dev Reject changed signed capacity before any checkpoint or auction-tree
-	/// work. Retirement during this call must also leave the promised progress.
-	function _prepareBoundedCure(CureBounds calldata bounds) private {
+	function _prepareCure() private {
 		_requireOpen();
 		_requireFresh();
-		require(bounds.minimumRemoved != 0, 'Cure progress minimum missing');
-		require(acceptedPriceEpoch == bounds.expectedAcceptedPriceEpoch, 'Cure price epoch changed');
-		(, uint256 commitment) = commitmentIndex.totals();
-		require(commitment == bounds.expectedTotalCommitment, 'Cure commitment changed');
-		require(demandAttoEth == bounds.expectedDemand, 'Cure demand changed');
 		_checkpoint();
 		_serveRetirement(0);
-		(, commitment) = commitmentIndex.totals();
-		require(commitment > demandAttoEth && commitment - demandAttoEth >= bounds.minimumRemoved, 'Cure capacity below minimum');
 	}
-	function _finishBoundedCure(uint96 id, CureBounds calldata bounds) private returns (uint256 removed) {
-		uint256 reward;
-		(removed, reward) = _cure(id, msg.sender);
-		require(removed >= bounds.minimumRemoved, 'Cure progress below minimum');
-		require(reward >= bounds.minimumReward, 'Cure reward below minimum');
-	}
-	function _cure(uint96 id, address keeper) private returns (uint256 removed, uint256 reward) {
+	function _cure(uint96 id) private returns (uint256 removed) {
 		require(id != 0 && id != auctionCohort.positionId, 'Materialize an individual auction vault');
 		SecurityPoolCommitmentIndex.Cure memory result = commitmentIndex.cure(id, liquidationPrice, securityMultiplierBps, minimumCommitmentAttoEth, demandAttoEth);
 		removed = result.removed;
 		if (removed != 0) {
 			owners[result.owner].freeAttoRep += result.freedRep;
 			totalFreeAttoRep += result.freedRep;
-			reward = result.rewardAttoRep;
-			owners[keeper].feesAttoRep += reward;
-			emit CommitmentCured(id, removed, reward);
+			emit CommitmentCured(id, removed);
 		}
 	}
 
@@ -436,7 +404,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		_requireFresh();
 		_checkpoint();
 		_serveRetirement(0);
-		_cure(id, msg.sender);
+		_cure(id);
 		(SecurityPoolCommitmentIndex.Account memory source, uint256 award, uint256 debit) = commitmentIndex.takeoverQuote(id, msg.sender, commitment, minimumCommitmentAttoEth, minimumAward, liquidationPrice);
 		_settleOwner(msg.sender);
 		Owner storage receiver = owners[msg.sender];

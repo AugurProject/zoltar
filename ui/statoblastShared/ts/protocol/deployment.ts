@@ -82,7 +82,7 @@ function getSecurityPoolUtilsRuntimeCode() {
 
 function runtimeWithAddresses(artifact: { evm: { deployedBytecode: { object: string; immutableReferences: Readonly<Record<string, readonly { start: number; length: number }[]>> } } }, addresses: readonly Address[]) {
 	const groups = Object.values(artifact.evm.deployedBytecode.immutableReferences)
-	if (groups.length !== addresses.length) throw new Error('Unexpected deployment immutable layout')
+	if (groups.length !== addresses.length) throw new Error(`Unexpected deployment immutable layout: ${groups.length.toString()} immutables, ${addresses.length.toString()} addresses, runtime ${artifact.evm.deployedBytecode.object.length.toString()} characters`)
 	const code = hexToBytes(applyStatoblastLibraries(artifact.evm.deployedBytecode.object))
 	for (const [index, group] of groups.entries()) {
 		const address = addresses[index]
@@ -98,7 +98,9 @@ function runtimeWithAddresses(artifact: { evm: { deployedBytecode: { object: str
 function moduleRuntimeCode(module: (typeof portfolioModuleDeployments)[number], profile: NetworkProfile) {
 	const addresses = getInfraContractAddresses(profile)
 	if (module.id === 'securityPoolCapitalLedgerDeployer' || module.id === 'securityPoolPortfolioServicesDeployer') return runtimeWithAddresses(module.artifact, [getCreateAddress({ from: addresses[module.id], nonce: 1n }), getCreateAddress({ from: addresses[module.id], nonce: 2n })])
-	if (module.id === 'securityPoolPortfolioForkCoordinatorDeployer' || module.id === 'securityPoolPortfolioAuctionDeployer') return runtimeWithAddresses(module.artifact, [getCreateAddress({ from: addresses[module.id], nonce: 1n }), getCreateAddress({ from: addresses[module.id], nonce: 2n })])
+	if (module.id === 'securityPoolPortfolioForkCoordinatorDeployer') return runtimeWithAddresses(module.artifact, [getCreateAddress({ from: addresses[module.id], nonce: 1n }), getCreateAddress({ from: addresses[module.id], nonce: 2n })])
+	// The auction deployer also publishes the shared vault implementation after its two creation-code chunks.
+	if (module.id === 'securityPoolPortfolioAuctionDeployer') return runtimeWithAddresses(module.artifact, [getCreateAddress({ from: addresses[module.id], nonce: 1n }), getCreateAddress({ from: addresses[module.id], nonce: 2n }), getCreateAddress({ from: addresses[module.id], nonce: 3n })])
 	return runtimeWithAddresses(module.artifact, [])
 }
 

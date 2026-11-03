@@ -5,7 +5,7 @@ import type { PortfolioSelection } from '#config/portfolio-policy'
 import { erc20Abi, securityPoolAbi, securityPoolFactoryAbi, securityPoolCapitalLedgerAbi, securityPoolAuctionVaultAbi, portfolioRuntimeIdentities } from '@zoltar/bot-shared/contracts/abi'
 import { verifyRuntimeIdentity } from '@zoltar/bot-shared/monitoring/runtime-identity'
 import { getAddress, parseAbiItem, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
-import { loadPortfolioCapitalSnapshot, type PortfolioCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { decodeAuctionVaultBindings, loadPortfolioCapitalSnapshot, type PortfolioCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import type { ReadClient } from './vault-positions.ts'
 import { record } from '@zoltar/bot-shared/infrastructure/json-validation'
 
@@ -87,6 +87,16 @@ export function portfolioPositionPage(scope: PortfolioScope, lastPositionId: big
 	return { ids, nextScope: { ...scope, nextPositionId: next > end ? 1n : next, sweepEnd: next > end ? 0n : end } }
 }
 
+async function isCanonicalAuctionVaultImplementation(client: ReadClient, implementation: Address, blockNumber: bigint) {
+	try {
+		verifyRuntimeIdentity(await client.getCode({ address: implementation, blockNumber }), portfolioRuntimeIdentities.SecurityPoolAuctionVault, 'position auction vault implementation')
+		return true
+	} catch (error) {
+		if (error instanceof Error && ['Unrecognized position auction vault implementation runtime code', 'Inconsistent position auction vault implementation runtime immutable values'].includes(error.message)) return false
+		throw error
+	}
+}
+
 async function loadPortfolioPosition(client: ReadClient, snapshot: PortfolioCapitalSnapshot, id: bigint): Promise<PortfolioPosition> {
 	const blockNumber = snapshot.blockNumber
 	const [rawAccount, started] = await Promise.all([
@@ -95,16 +105,17 @@ async function loadPortfolioPosition(client: ReadClient, snapshot: PortfolioCapi
 	])
 	const account = record(rawAccount, 'Portfolio position')
 	const owner = address(account['owner'])
-	const code = await client.getCode({ address: owner, blockNumber })
-	let auctionVault = false
-	try {
-		verifyRuntimeIdentity(code, portfolioRuntimeIdentities.SecurityPoolAuctionVault, 'position auction vault')
-		auctionVault = true
-	} catch (error) {
-		if (!(error instanceof Error) || !['Unrecognized position auction vault runtime code', 'Inconsistent position auction vault runtime immutable values'].includes(error.message)) throw error
-		// Ordinary EOAs and other account contracts have no known auction signer.
+	// Ordinary EOAs and other account contracts have no known auction signer, and
+	// any contract may open a position, so a clone-shaped owner whose
+	// implementation is not the canonical vault stays an ordinary owner instead of
+	// stalling the scan. A clone of the canonical implementation names its
+	// controlling wallet.
+	const bindings = decodeAuctionVaultBindings(await client.getCode({ address: owner, blockNumber }))
+	let controllingOwner = owner
+	if (bindings !== undefined && (await isCanonicalAuctionVaultImplementation(client, bindings.implementation, blockNumber))) {
+		controllingOwner = getAddress(await client.readContract({ address: owner, abi: securityPoolAuctionVaultAbi, functionName: 'owner', blockNumber }))
+		if (controllingOwner !== bindings.owner) throw new Error('Position auction vault owner does not match its code')
 	}
-	const controllingOwner = auctionVault ? getAddress(await client.readContract({ address: owner, abi: securityPoolAuctionVaultAbi, functionName: 'owner', blockNumber })) : owner
 	let retirementStatus = 'Not retiring'
 	if (uint(account['batch']) !== 0n && uint(account['commitment']) !== 0n) {
 		const raw = await client.readContract({ address: snapshot.commitmentIndex, abi: portfolioMonitorAbi, functionName: 'previewRetirement', args: [id, snapshot.conservativePrice, snapshot.demandAttoEth], blockNumber })

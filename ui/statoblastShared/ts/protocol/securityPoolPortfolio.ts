@@ -1,5 +1,5 @@
 import { encodeFunctionData, getAddress, parseAbi, parseAbiItem, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { buildPortfolioDeploymentRequest, buildPortfolioPrepareNextRequest, loadPortfolioCapitalSnapshot, type PortfolioReadClient, type PortfolioEconomicsConfig } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { buildPortfolioDeploymentRequest, buildPortfolioPrepareNextRequest, decodeAuctionVaultBindings, loadPortfolioCapitalSnapshot, type PortfolioReadClient, type PortfolioEconomicsConfig } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
@@ -8,7 +8,6 @@ import {
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolCapitalLifecycleDelegate_SecurityPoolCapitalLifecycleDelegate as lifecycleArtifact,
 	statoblast_SecurityPoolCapitalAuctionDelegate_SecurityPoolCapitalAuctionDelegate as auctionDelegateArtifact,
-	statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault as auctionVaultArtifact,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
 	statoblast_SecurityPoolCapitalFeeStreams_SecurityPoolCapitalFeeStreams as feesArtifact,
 	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
@@ -23,7 +22,7 @@ import {
 import { getInfraContractAddresses, getSecurityPoolPortfolioByteCode, getSecurityPoolPortfolioRuntimeCode, getPortfolioDeployers } from './deploymentHelpers.js'
 import { requireAddressValue, requireBigintValue, requireIntegerLikeValue } from './decoders.js'
 import { loadPortfolioAdmission } from './securityPoolPortfolioAdmission.js'
-import { authenticatePortfolioAuctionVault } from './securityPoolPortfolioAuction.js'
+import { authenticatePortfolioAuctionVault, isCanonicalAuctionVaultImplementation } from './securityPoolPortfolioAuction.js'
 
 export type PortfolioTransaction = { account: Address; to?: Address; data: Hex; value?: bigint; gas?: bigint; reviewDescription?: string; validateBeforeSubmit?: () => Promise<void> }
 const linksAbi = parseAbi([
@@ -136,18 +135,11 @@ export async function loadPortfolioAccount(client: ReadClient, portfolio: Addres
 	if (requireAddressValue(capitalServicesValue, 'capital services') !== getAddress(services)) throw new Error('Capital ledger uses another services authority.')
 	if (requireAddressValue(capitalForkValue, 'capital fork authority') !== getAddress(forkController)) throw new Error('Capital ledger uses another fork authority.')
 	const start = questionStart > questionCount ? 0n : questionStart
-	const ownerCode = await client.getCode({ address: owner, blockNumber })
-	let isAuctionVault = false
-	if (ownerCode !== undefined && ownerCode !== '0x') {
-		try {
-			verifyRuntimeCode(ownerCode, `0x${auctionVaultArtifact.evm.deployedBytecode.object}`, auctionVaultArtifact.evm.deployedBytecode.immutableReferences, 'auction vault')
-			isAuctionVault = true
-		} catch (error) {
-			if (!(error instanceof Error) || !['Unrecognized auction vault runtime code.', 'Inconsistent auction vault immutable values.'].includes(error.message)) throw error
-			// Other contract accounts remain readable, but gain no auction-owner authority.
-		}
-	}
-	const auctionVault = isAuctionVault ? await authenticatePortfolioAuctionVault(client, portfolio, owner, blockNumber) : undefined
+	// Other contract accounts remain readable, but gain no auction-owner authority:
+	// a clone of another implementation stays an ordinary owner, and a clone of the
+	// canonical implementation is authenticated fully before it gains any.
+	const bindings = decodeAuctionVaultBindings(await client.getCode({ address: owner, blockNumber }))
+	const auctionVault = bindings !== undefined && (await isCanonicalAuctionVaultImplementation(client, bindings.implementation, blockNumber)) ? await authenticatePortfolioAuctionVault(client, portfolio, owner, blockNumber) : undefined
 	const fundingOwner = auctionVault?.bidder ?? owner
 	const depositSpender = auctionVault?.vault ?? snapshot.capitalLedger
 	const [questions, admission, walletAttoRep, allowanceAttoRep, walletAttoEth, bookValue, rewardsValue, premiumValue] = await Promise.all([

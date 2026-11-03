@@ -1,7 +1,7 @@
 import { portfolioRuntimeIdentities, securityPoolCapitalLedgerAbi as capitalAbi, securityPoolPortfolioAuctionAbi as auctionAbi, securityPoolUniformPriceAuctionAbi as engineAbi, securityPoolAuctionVaultAbi as vaultAbi } from '@zoltar/bot-shared/contracts/abi'
 import { getAddress, parseAbiItem, type Address } from '@zoltar/bot-shared/ethereum'
 import { verifyRuntimeIdentity } from '@zoltar/bot-shared/monitoring/runtime-identity'
-import type { PortfolioCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { verifyAuctionVaultCode, type PortfolioCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import type { ReadClient } from './vault-positions.ts'
 import type { PortfolioPosition } from './portfolio-monitor.ts'
 
@@ -30,7 +30,7 @@ export async function portfolioAuctionPage(client: ReadClient, engine: Address, 
 
 export async function authenticatePortfolioAuction(client: ReadClient, snapshot: PortfolioCapitalSnapshot, auction: Address) {
 	const blockNumber = snapshot.blockNumber
-	const [fork, portfolio, capital, universe, token, authority, engine, finalized] = await Promise.all([
+	const [fork, portfolio, capital, universe, token, authority, engine, finalized, implementation] = await Promise.all([
 		client.readContract({ address: snapshot.portfolio, abi: links, functionName: 'forkController', blockNumber }),
 		client.readContract({ address: auction, abi: auctionAbi, functionName: 'portfolio', blockNumber }),
 		client.readContract({ address: auction, abi: auctionAbi, functionName: 'capital', blockNumber }),
@@ -39,10 +39,12 @@ export async function authenticatePortfolioAuction(client: ReadClient, snapshot:
 		client.readContract({ address: auction, abi: auctionAbi, functionName: 'forkAuthority', blockNumber }),
 		client.readContract({ address: auction, abi: auctionAbi, functionName: 'engine', blockNumber }),
 		client.readContract({ address: auction, abi: auctionAbi, functionName: 'finalized', blockNumber }),
+		client.readContract({ address: auction, abi: auctionAbi, functionName: 'vaultImplementation', blockNumber }),
 	])
 	if (typeof fork !== 'string') throw new Error('Portfolio fork authority is invalid')
 	verifyRuntimeIdentity(await client.getCode({ address: auction, blockNumber }), portfolioRuntimeIdentities.SecurityPoolPortfolioAuction, 'portfolio auction')
 	verifyRuntimeIdentity(await client.getCode({ address: engine, blockNumber }), portfolioRuntimeIdentities.SecurityPoolUniformPriceAuction, 'auction engine')
+	verifyRuntimeIdentity(await client.getCode({ address: implementation, blockNumber }), portfolioRuntimeIdentities.SecurityPoolAuctionVault, 'auction vault implementation')
 	const [registered, controller, count, closed] = await Promise.all([
 		client.readContract({ address: getAddress(fork), abi: links, functionName: 'auctions', args: [snapshot.universeId], blockNumber }),
 		client.readContract({ address: engine, abi: engineAbi, functionName: 'controller', blockNumber }),
@@ -62,7 +64,7 @@ export async function authenticatePortfolioAuction(client: ReadClient, snapshot:
 		!finalized
 	)
 		throw new Error('Auction custody identity does not match finalized portfolio capital')
-	return { address: auction, engine: getAddress(engine), bidCount: count }
+	return { address: auction, engine: getAddress(engine), vaultImplementation: getAddress(implementation), bidCount: count }
 }
 
 export async function loadPortfolioAuctionPosition(client: ReadClient, snapshot: PortfolioCapitalSnapshot, auction: Awaited<ReturnType<typeof authenticatePortfolioAuction>>, bidId: bigint, threshold: bigint): Promise<PortfolioPosition | undefined> {
@@ -72,7 +74,8 @@ export async function loadPortfolioAuctionPosition(client: ReadClient, snapshot:
 	// A materialized bid belongs exclusively to the ordinary position registry.
 	if (position.materialized || fill.filledLots === 0n) return undefined
 	const vault = getAddress(position.vault)
-	verifyRuntimeIdentity(await client.getCode({ address: vault, blockNumber }), portfolioRuntimeIdentities.SecurityPoolAuctionVault, 'auction vault')
+	// The vault must be the exact clone the auction created for this bidder, ledger and bid.
+	verifyAuctionVaultCode(await client.getCode({ address: vault, blockNumber }), { implementation: auction.vaultImplementation, owner: getAddress(fill.bidder), capital: snapshot.capitalLedger, auction: auction.address, bidId })
 	const [owner, initialCapital, controller, id, mappedId] = await Promise.all([
 		client.readContract({ address: vault, abi: vaultAbi, functionName: 'owner', blockNumber }),
 		client.readContract({ address: vault, abi: vaultAbi, functionName: 'initialCapital', blockNumber }),

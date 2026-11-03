@@ -4,8 +4,10 @@ import { parseUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
 import {
 	buildPortfolioAuctionBidRequest,
 	buildPortfolioAuctionOpenRequest,
+	buildPortfolioAuctionRefundClaimRequest,
 	buildPortfolioAuctionRefundCreditRequest,
 	buildPortfolioAuctionRefundWithdrawRequest,
+	quotePortfolioAuctionRefundClaim,
 	buildPortfolioAuctionMaterializeRequest,
 	portfolioAuctionOpeningReason,
 	quotePortfolioAuctionBid,
@@ -92,6 +94,22 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 	}
 	const withdrawalReason = auctionReason ?? (auction?.refundAttoEth === 0n ? copy.noRefund : undefined)
 	const refundReason = (bid: PortfolioAuctionBid) => auctionReason ?? (bid.refundSettled ? copy.credited : undefined) ?? (!auction?.finalized && bid.earlyRefundAttoEth === 0n ? copy.bidMayStillWin : undefined)
+	const claimQuote = (selected: PortfolioAuctionSnapshot, bid: PortfolioAuctionBid) => quotePortfolioAuctionRefundClaim(selected, bid.id)
+	const claimReason = (bid: PortfolioAuctionBid) => {
+		if (auctionReason !== undefined || snapshot === undefined) return auctionReason ?? copy.loading
+		try {
+			claimQuote(snapshot, bid)
+			return undefined
+		} catch (error) {
+			// The quote's own sentence is the complete reason; no generic prefix.
+			return error instanceof Error ? error.message : copy.quoteError
+		}
+	}
+	// An already credited bid only withdraws, so its review is titled as the withdrawal it performs.
+	const claimTitle = (bid: PortfolioAuctionBid) => {
+		if (snapshot === undefined || claimReason(bid) !== undefined) return copy.claim
+		return claimQuote(snapshot, bid).settles ? copy.claim : copy.withdraw
+	}
 	const activateReason = (bid: PortfolioAuctionBid) => auctionReason ?? (bid.fill === undefined || bid.fill.filledLots === 0n ? copy.managePending : undefined) ?? (bid.materialized ? copy.activated : undefined)
 	const run = (action: string, title: string, reason: string | undefined, build: (selected: PortfolioAuctionSnapshot) => PortfolioTransaction, verify: (latest: PortfolioAuctionSnapshot) => void = () => undefined, onConfirmed?: () => void) =>
 		actions.runPortfolioAction(
@@ -155,6 +173,7 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 		bidReason,
 		withdrawalReason,
 		refundReason,
+		claimReason,
 		activateReason,
 		refresh: () => {
 			version.value += 1
@@ -190,6 +209,20 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 				selected => buildPortfolioAuctionRefundCreditRequest(selected, bid.id),
 				latest => {
 					buildPortfolioAuctionRefundCreditRequest(latest, bid.id)
+				},
+			),
+		claim: (bid: PortfolioAuctionBid) =>
+			run(
+				`claimPortfolioAuction${bid.id}`,
+				claimTitle(bid),
+				claimReason(bid),
+				selected => ({ ...buildPortfolioAuctionRefundClaimRequest(selected, bid.id, selected.bidder), reviewDescription: copy.claimReview(claimQuote(selected, bid)) }),
+				latest => {
+					if (snapshot === undefined) throw new Error(copy.loading)
+					// A credit someone else made in the meantime is skipped on chain; the
+					// disclosed total must still match what the bidder reviewed.
+					if (claimQuote(latest, bid).totalAttoEth !== claimQuote(snapshot, bid).totalAttoEth) throw new Error(copy.refundChanged)
+					buildPortfolioAuctionRefundClaimRequest(latest, bid.id, latest.bidder)
 				},
 			),
 		activate: (bid: PortfolioAuctionBid) =>

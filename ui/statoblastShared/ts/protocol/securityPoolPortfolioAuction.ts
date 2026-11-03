@@ -1,5 +1,5 @@
 import { getAddress, parseAbi, type AbiValue, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { loadPortfolioAuctionSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { decodeAuctionVaultBindings, loadPortfolioAuctionSnapshot, predictAuctionVaultAddress, verifyAuctionVaultCode } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
@@ -23,6 +23,7 @@ const vaultIdentityAbi = parseAbi([
 	'function initialCapital() view returns (address)',
 	'function auction() view returns (address)',
 	'function bidId() view returns (uint256)',
+	'function vaultImplementation() view returns (address)',
 	'function forkController() view returns (address)',
 	'function factory() view returns (address)',
 	'function portfolio() view returns (address)',
@@ -59,29 +60,54 @@ export async function loadPortfolioBranchAuction(client: ReadClient, portfolio: 
 	const auction = snapshot.auction
 	if (auction !== undefined) {
 		await verifyAuctionCapitalCustody(client, portfolio, snapshot.capitalLedger, blockNumber)
-		modules.push({ address: snapshot.capitalLedger, artifact: capitalArtifact, label: 'capital ledger' }, { address: auction.address, artifact: auctionArtifact, label: 'portfolio auction' }, { address: auction.engine, artifact: engineArtifact, label: 'auction engine' })
-		for (const bid of auction.bids) modules.push({ address: bid.vault, artifact: vaultArtifact, label: 'auction vault' })
+		modules.push(
+			{ address: snapshot.capitalLedger, artifact: capitalArtifact, label: 'capital ledger' },
+			{ address: auction.address, artifact: auctionArtifact, label: 'portfolio auction' },
+			{ address: auction.engine, artifact: engineArtifact, label: 'auction engine' },
+			{ address: auction.vaultImplementation, artifact: vaultArtifact, label: 'auction vault implementation' },
+		)
 	}
 	await Promise.all(modules.map(async module => verifyRuntimeCode(await client.getCode({ address: module.address, blockNumber }), `0x${module.artifact.evm.deployedBytecode.object}`, module.artifact.evm.deployedBytecode.immutableReferences, module.label)))
+	// Every vault is the exact clone the auction creates for the bidder, ledger, auction and bid.
+	if (auction !== undefined) await Promise.all(auction.bids.map(async bid => verifyAuctionVaultCode(await client.getCode({ address: bid.vault, blockNumber }), { implementation: auction.vaultImplementation, owner: bidder, capital: snapshot.capitalLedger, auction: auction.address, bidId: bid.id })))
 	const [block, chainId] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
 	if (block.hash !== snapshot.blockHash || chainId !== snapshot.chainId) throw new Error('Auction authentication changed. Refresh and retry.')
 	return snapshot
 }
 
 /** Authenticate one selected vault directly, including its original branch after later forks. */
+/**
+ * Whether an account's clone-shaped code points at the canonical vault implementation. Any contract can own a position, so
+ * a look-alike with another implementation is an ordinary owner rather than a failure; identity errors are the only tolerated ones.
+ */
+export async function isCanonicalAuctionVaultImplementation(client: ReadClient, implementation: Address, blockNumber: bigint) {
+	try {
+		verifyRuntimeCode(await client.getCode({ address: implementation, blockNumber }), `0x${vaultArtifact.evm.deployedBytecode.object}`, vaultArtifact.evm.deployedBytecode.immutableReferences, 'auction vault implementation')
+		return true
+	} catch (error) {
+		if (error instanceof Error && ['Unrecognized auction vault implementation runtime code.', 'Inconsistent auction vault implementation immutable values.'].includes(error.message)) return false
+		throw error
+	}
+}
+
 export async function authenticatePortfolioAuctionVault(client: ReadClient, portfolio: Address, vault: Address, blockNumber: bigint) {
 	const read = (address: Address, functionName: string, args: readonly AbiValue[] = []) => client.readContract({ abi: vaultIdentityAbi, address, functionName, args, blockNumber })
-	verifyRuntimeCode(await client.getCode({ address: vault, blockNumber }), `0x${vaultArtifact.evm.deployedBytecode.object}`, vaultArtifact.evm.deployedBytecode.immutableReferences, 'auction vault')
+	const vaultCode = await client.getCode({ address: vault, blockNumber })
+	const bindings = decodeAuctionVaultBindings(vaultCode)
+	if (bindings === undefined) throw new Error('Unrecognized auction vault runtime code.')
 	const [ownerValue, capitalValue, auctionValue, idValue, controllerValue, protocolValue, factoryValue] = await Promise.all([read(vault, 'owner'), read(vault, 'initialCapital'), read(vault, 'auction'), read(vault, 'bidId'), read(portfolio, 'forkController'), read(portfolio, 'zoltar'), read(portfolio, 'factory')])
 	const bidder = requireAddressValue(ownerValue, 'auction vault owner')
 	const initialCapital = requireAddressValue(capitalValue, 'initial auction capital')
 	const auction = requireAddressValue(auctionValue, 'vault auction')
 	const bidId = requireBigintValue(idValue, 'vault bid ID')
+	// The clone's code is the only authority for its bindings; the getters must agree with it.
+	verifyAuctionVaultCode(vaultCode, { implementation: bindings.implementation, owner: bidder, capital: initialCapital, auction, bidId })
+	if (predictAuctionVaultAddress({ implementation: bindings.implementation, owner: bidder, capital: initialCapital, auction, bidId }) !== getAddress(vault)) throw new Error('Auction vault address does not match its bindings.')
 	const controller = requireAddressValue(controllerValue, 'fork coordinator')
 	const zoltar = requireAddressValue(protocolValue, 'portfolio protocol')
 	const infrastructure = getInfraContractAddresses()
 	if (getAddress(requireAddressValue(factoryValue, 'portfolio factory')) !== getAddress(infrastructure.securityPoolFactory) || getAddress(zoltar) !== getAddress(infrastructure.zoltar) || bidId <= 0n) throw new Error('Auction vault uses unrecognized portfolio infrastructure.')
-	const [universeValue, capitalRoot, capitalProtocol, auctionRoot, auctionCapital, auctionFork, auctionUniverse, engineValue, controllerRoot] = await Promise.all([
+	const [universeValue, capitalRoot, capitalProtocol, auctionRoot, auctionCapital, auctionFork, auctionUniverse, engineValue, controllerRoot, implementationValue] = await Promise.all([
 		read(initialCapital, 'universeId'),
 		read(initialCapital, 'portfolio'),
 		read(initialCapital, 'zoltar'),
@@ -91,9 +117,11 @@ export async function authenticatePortfolioAuctionVault(client: ReadClient, port
 		read(auction, 'universeId'),
 		read(auction, 'engine'),
 		read(controller, 'portfolio'),
+		read(auction, 'vaultImplementation'),
 	])
 	const initialUniverse = requireBigintValue(universeValue, 'initial auction universe')
 	const engine = requireAddressValue(engineValue, 'auction engine')
+	if (getAddress(requireAddressValue(implementationValue, 'vault implementation')) !== bindings.implementation) throw new Error('Auction vault uses another implementation.')
 	const [canonicalCapital, canonicalAuction, engineController, bidValue, registeredId] = await Promise.all([read(portfolio, 'capitalLedger', [initialUniverse]), read(controller, 'auctions', [initialUniverse]), read(engine, 'controller'), read(engine, 'bids', [bidId]), read(auction, 'bidIdForVault', [vault])])
 	const bid = requireTupleValue(bidValue, 7, 'auction bid')
 	if (
@@ -117,6 +145,7 @@ export async function authenticatePortfolioAuctionVault(client: ReadClient, port
 			{ address: initialCapital, artifact: capitalArtifact, label: 'initial capital ledger' },
 			{ address: auction, artifact: auctionArtifact, label: 'portfolio auction' },
 			{ address: engine, artifact: engineArtifact, label: 'auction engine' },
+			{ address: bindings.implementation, artifact: vaultArtifact, label: 'auction vault implementation' },
 		].map(async module => verifyRuntimeCode(await client.getCode({ address: module.address, blockNumber }), `0x${module.artifact.evm.deployedBytecode.object}`, module.artifact.evm.deployedBytecode.immutableReferences, module.label)),
 	])
 	await verifyAuctionCapitalCustody(client, portfolio, initialCapital, blockNumber)

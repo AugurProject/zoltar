@@ -1,7 +1,7 @@
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 
 // The single scenario list: adding an id here makes the label, description, and seeding lookups fail to compile until it has an entry in each.
-export const STATOBLAST_SCENARIOS = ['portfolio', 'security-pool', 'securitypoolx2', 'securitypoolx2-auction', 'finalized-truth-auction', 'ended-pool-commitment', 'escalation-in-progress', 'liquidation-distance', 'near-minimum-vault'] as const
+export const STATOBLAST_SCENARIOS = ['portfolio', 'portfolio-auction', 'security-pool', 'securitypoolx2', 'securitypoolx2-auction', 'finalized-truth-auction', 'ended-pool-commitment', 'escalation-in-progress', 'liquidation-distance', 'near-minimum-vault'] as const
 
 export type StatoblastScenario = (typeof STATOBLAST_SCENARIOS)[number]
 
@@ -9,6 +9,8 @@ export function getStatoblastScenarioLabel(scenario: StatoblastScenario) {
 	switch (scenario) {
 		case 'portfolio':
 			return 'Portfolio'
+		case 'portfolio-auction':
+			return 'Portfolio branch auction'
 		case 'security-pool':
 			return 'Security pool'
 		case 'securitypoolx2':
@@ -34,6 +36,8 @@ export function getStatoblastScenarioDescription(scenario: StatoblastScenario) {
 	switch (scenario) {
 		case 'portfolio':
 			return 'Individual REP accounts back two questions. Test owner health settings, shared purchases, retirement, fees, and fork recovery.'
+		case 'portfolio-auction':
+			return 'The portfolio forked on its first question, the owner chose outcome Yes and started that branch, and its truth auction is open with one winning, one excluded and one rival bid. Use it to test branch auction bids, refunds, and vault activation.'
 		case 'security-pool':
 			return 'One seeded question, one security pool, and one funded vault with a standing ETH commitment. Use it to test pool actions and liquidation paths.'
 		case 'securitypoolx2':

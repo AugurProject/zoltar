@@ -74,16 +74,13 @@ abstract contract SecurityPoolCapitalState {
 		Owner storage account = owners[owner];
 		uint96 id = account.positionId;
 		if (id == 0) return;
-		(uint256 rep, uint256 ethFees, uint256 repFees) = commitmentIndex.claim(id);
+		(uint256 rep, uint256 ethFees, uint256 repFees, uint256 commitment) = commitmentIndex.claim(id);
 		account.freeAttoRep += rep;
 		totalFreeAttoRep += rep;
 		retirementCashAttoRep -= rep;
 		account.feesAttoRep += repFees;
-		bool live = commitmentIndex.accountOf(id).commitment != 0;
 		account.feesAttoEth += ethFees;
-		if (!live) {
-			account.positionId = 0;
-		}
+		if (commitment == 0) account.positionId = 0;
 	}
 	function _target(Owner storage owner) internal view returns (uint256) {
 		return owner.targetHealthFactorBps == 0 ? BPS : owner.targetHealthFactorBps;

@@ -57,6 +57,15 @@ export const credited = 'This bid’s refunds are already credited.'
 export const bidMayStillWin = 'This bid may still win. Its ETH remains committed until closing.'
 export const earlyRefundAvailable = 'Better funded bids rule out this bid. Its full ETH amount can be refunded now.'
 export const earlyRefundCredited = 'This bid cannot win. Its ETH refund has been credited for withdrawal.'
+export const claim = 'Credit and withdraw refunds'
+export const claiming = 'Withdrawing bid refunds…'
+export const refundChanged = 'Your refund credit changed. Refresh and review the new amount.'
+export const earlyRefundWithdrawn = 'This bid cannot win. Its ETH refund has been credited and withdrawn.'
+export const claimReview = (quote: { settles: boolean; bidRefundAttoEth: bigint; creditedAttoEth: bigint; totalAttoEth: bigint }) => {
+	if (quote.creditedAttoEth === 0n) return `Credit this bid’s ${formatEther(quote.bidRefundAttoEth)} ETH refund and withdraw it to your wallet.`
+	if (!quote.settles) return `This bid’s refund is already credited. Withdraw your entire ${formatEther(quote.totalAttoEth)} ETH auction refund credit, possibly including your other bids, to your wallet.`
+	return `Credit this bid’s ${formatEther(quote.bidRefundAttoEth)} ETH refund and withdraw your entire ${formatEther(quote.totalAttoEth)} ETH auction refund credit to your wallet, including ${formatEther(quote.creditedAttoEth)} ETH already credited, possibly from your other bids.`
+}
 export const refundEth = 'Credited ETH refund'
 export const withdraw = 'Withdraw credited refunds'
 export const withdrawing = 'Withdrawing auction refunds…'

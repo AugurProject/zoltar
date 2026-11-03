@@ -10,6 +10,9 @@ import { PaginationControls } from '@zoltar/ui-core-shared/components/Pagination
 import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
 import { PortfolioButton, PortfolioInput } from './PortfolioControls.js'
 import { usePortfolioAuction, type PortfolioAuctionParameters } from '../hooks/usePortfolioAuction.js'
+import { useId } from 'preact/hooks'
+import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
+import type { PortfolioAuctionBid } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import * as copy from '../../../copy/portfolioAuction.js'
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
 
@@ -74,7 +77,7 @@ export function PortfolioAuction(parameters: PortfolioAuctionParameters) {
 			{auction?.bids.map(bid => {
 				let bidStatus = copy.awaitingClose
 				if (bid.earlyRefundAttoEth > 0n) bidStatus = copy.earlyRefundAvailable
-				if (!auction.finalized && bid.refundSettled) bidStatus = copy.earlyRefundCredited
+				if (!auction.finalized && bid.refundSettled) bidStatus = auction.refundAttoEth === 0n ? copy.earlyRefundWithdrawn : copy.earlyRefundCredited
 				if (bid.fill !== undefined) bidStatus = bid.fill.filledLots > 0n ? copy.funded : copy.noFill
 				let refundAttoEth = bid.earlyRefundAttoEth > 0n ? bid.earlyRefundAttoEth : undefined
 				if (bid.refundSettled) refundAttoEth = bid.lots * auction.lotAttoEth
@@ -113,8 +116,8 @@ export function PortfolioAuction(parameters: PortfolioAuctionParameters) {
 								<CurrencyValue value={refundAttoEth} suffix={common.eth} />
 							</MetricField>
 						</MetricGrid>
+						<RefundActions model={model} actions={parameters.actions} bid={bid} />
 						<div className='actions'>
-							<PortfolioButton model={parameters.actions} action={`creditPortfolioAuction${bid.id}`} label={copy.credit} pendingLabel={copy.crediting} reason={model.refundReason(bid)} onClick={() => model.credit(bid)} />
 							<PortfolioButton model={parameters.actions} action={`activatePortfolioAuction${bid.id}`} label={copy.activate} pendingLabel={copy.activating} reason={model.activateReason(bid)} onClick={() => model.activate(bid)} />
 							<ActionLauncherButton
 								tone='secondary'
@@ -148,5 +151,27 @@ export function PortfolioAuction(parameters: PortfolioAuctionParameters) {
 				<ActionLauncherButton tone='secondary' idleLabel={copy.refresh} pendingLabel={copy.refreshing} availability={{ disabled: refreshReason !== undefined, reason: refreshReason }} onClick={model.refresh} />
 			</div>
 		</WorkflowSubsection>
+	)
+}
+
+/** The two refund actions often rest disabled for one shared cause, such as a bid that may still win; that reason renders once for the pair. */
+function RefundActions({ model, actions, bid }: { model: ReturnType<typeof usePortfolioAuction>; actions: PortfolioAuctionParameters['actions']; bid: PortfolioAuctionBid }) {
+	const sharedReasonId = useId()
+	const creditReason = model.refundReason(bid)
+	const claimReason = model.claimReason(bid)
+	const sharedReason = actions.busy === undefined && creditReason !== undefined && creditReason === claimReason ? creditReason : undefined
+	const reasonId = sharedReason === undefined ? undefined : sharedReasonId
+	return (
+		<>
+			<div className='actions'>
+				<PortfolioButton model={actions} action={`creditPortfolioAuction${bid.id}`} label={copy.credit} pendingLabel={copy.crediting} reason={creditReason} sharedReasonId={reasonId} onClick={() => model.credit(bid)} />
+				<PortfolioButton model={actions} action={`claimPortfolioAuction${bid.id}`} label={copy.claim} pendingLabel={copy.claiming} reason={claimReason} sharedReasonId={reasonId} onClick={() => model.claim(bid)} />
+			</div>
+			{sharedReason === undefined ? undefined : (
+				<div className='tx-action-feedback shared-action-reason'>
+					<InlineHint id={sharedReasonId} message={sharedReason} />
+				</div>
+			)}
+		</>
 	)
 }

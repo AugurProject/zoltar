@@ -9,7 +9,6 @@ import { SecurityPoolCommitmentTree } from './SecurityPoolCommitmentTree.sol';
 /// custody. Keys are exact uint256 health thresholds followed by unique uint96
 /// position IDs. Balanced paths depend on live positions, never price-key entropy.
 contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
-	uint256 public constant CURE_REWARD_BPS = 100;
 	address public immutable portfolio;
 	uint96 public lastPositionId;
 	uint96 public currentBatch;
@@ -35,7 +34,6 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	struct Cure {
 		uint256 removed;
 		uint256 freedRep;
-		uint256 rewardAttoRep;
 		address owner;
 	}
 
@@ -264,7 +262,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	}
 
 	/// @dev Remove unused nominal K under exactly the ordinary collateral floor.
-	/// Custody and payments for actual progress remain with the controller.
+	/// Custody remains with the controller. No one is paid for this progress.
 	function cure(uint96 id, uint256 price, uint256 multiplier, uint256 minimumCommitment, uint256 demand) external onlyPortfolio operational returns (Cure memory result) {
 		Account memory account = accountOf(id);
 		require(account.owner != address(0) && account.commitment > 0, 'Position is not live');
@@ -276,27 +274,14 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		}
 		(, uint256 totalCommitment) = totals();
 		uint256 spare = totalCommitment > demand ? totalCommitment - demand : 0;
-		// Reserve enough reduction for a 1% REP reward without an iteration. The
-		// exact collateral check below remains authoritative under all rounding.
-		uint256 deficit = account.commitment - supported;
-		uint256 reduction =
-			deficit >= Math.mulDiv(account.commitment, 10_000 - CURE_REWARD_BPS, 10_000)
-				? account.commitment
-				: Math.mulDiv(deficit, 10_000, 10_000 - CURE_REWARD_BPS, Math.Rounding.Ceil);
+		// `supported` rounds down, so the deficit rounds up and removing it leaves
+		// a residual that the remaining REP fully backs.
+		uint256 reduction = account.commitment - supported;
 		uint256 removed = Math.min(account.commitment, Math.min(Math.max(reduction, minimumCommitment), spare));
 		if (removed < minimumCommitment && removed != account.commitment) removed = 0;
 		uint256 remaining = account.commitment - removed;
 		result.removed = removed;
 		if (removed != 0) {
-			// A fixed fraction of eliminated backing, rounded down, cannot be
-			// amplified by splitting progress at this price. Only this target pays.
-			// Insolvent residuals have no payable surplus. Avoid evaluating their
-			// potentially unrepresentable forward backing value after a price shock.
-			if (remaining <= supported) {
-				uint256 required = requiredRep(remaining, price, multiplier, 10_000);
-				result.rewardAttoRep = _cureReward(removed, price, multiplier, account.rep - required);
-				account.rep -= result.rewardAttoRep;
-			}
 			if (remaining == 0) {
 				replace(id, 0, 0, 0);
 				result.freedRep = account.rep;
@@ -306,21 +291,6 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 			}
 		}
 		if (remaining <= supported) healthyMutationEpochs[id] = healthObservationEpoch;
-	}
-
-	/// @dev Exactly floor(floor(removed * price / 1e18) * multiplier / D),
-	/// capped before an overflowing intermediate can make a full cure unavailable.
-	function _cureReward(uint256 removed, uint256 price, uint256 multiplier, uint256 cap) private pure returns (uint256) {
-		if (cap == 0) return 0;
-		uint256 divisor = 10_000 * (10_000 / CURE_REWARD_BPS);
-		uint256 denominator = 1e18 * divisor;
-		(uint256 high, ) = Math.mul512(removed, price);
-		if (high >= denominator) return cap;
-		uint256 quotient = Math.mulDiv(removed, price, denominator);
-		if (quotient > cap / multiplier) return cap;
-		uint256 base = quotient * multiplier;
-		uint256 remainder = Math.mulDiv(mulmod(removed, price, denominator) / 1e18, multiplier, divisor);
-		return base + Math.min(cap - base, remainder);
 	}
 
 	function eligibleCommitment(uint256 acceptedPrice) public view returns (uint256) {
@@ -525,7 +495,14 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		}
 	}
 
-	function claim(uint96 id) external onlyPortfolio operational returns (uint256 releasedRep, uint256 ethFees, uint256 repFees) {
+	/// @dev Also returns the live commitment after settling lazy retirement, so the
+	/// caller can tell a retired position apart without a second fee preview.
+	function claim(uint96 id)
+		external
+		onlyPortfolio
+		operational
+		returns (uint256 releasedRep, uint256 ethFees, uint256 repFees, uint256 commitment)
+	{
 		_touch(id);
 		Position storage position = positions[id];
 		Node storage leaf = nodes[position.node];
@@ -539,6 +516,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		repFees = leaf.repFees;
 		leaf.ethFees = 0;
 		leaf.repFees = 0;
+		if (!leaf.retired) commitment = leaf.commitment;
 	}
 
 	function accountOf(uint96 id) public view returns (Account memory account) {

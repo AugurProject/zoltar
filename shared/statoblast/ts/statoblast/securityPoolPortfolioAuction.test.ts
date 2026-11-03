@@ -4,12 +4,15 @@ import {
 	buildPortfolioAuctionBidRequest,
 	buildPortfolioAuctionOpenRequest,
 	buildPortfolioAuctionMaterializeRequest,
+	buildPortfolioAuctionRefundClaimRequest,
 	buildPortfolioAuctionRefundCreditRequest,
 	buildPortfolioAuctionRefundWithdrawRequest,
+	quotePortfolioAuctionRefundClaim,
 	buildPortfolioAuctionVaultDepositRequest,
 	buildPortfolioAuctionVaultExecuteRequest,
 	loadPortfolioAuctionSnapshot,
 	portfolioAuctionOpeningReason,
+	predictAuctionVaultAddress,
 	quotePortfolioAuctionBid,
 } from './securityPoolPortfolio.js'
 
@@ -23,15 +26,28 @@ const feed: Address = '0x0000000000000000000000000000000000000007'
 const rep: Address = '0x0000000000000000000000000000000000000008'
 const auction: Address = '0x0000000000000000000000000000000000000009'
 const engine: Address = '0x0000000000000000000000000000000000000010'
+const vaultImplementation: Address = '0x0000000000000000000000000000000000000011'
 const unit = 10n ** 18n
 const hash: Hex = `0x${'11'.repeat(32)}`
-const vaultFor = (id: bigint) => getAddress(`0x${(100n + id).toString(16).padStart(40, '0')}`)
+// Each vault is the clone the auction would create; reads of a vault's bid recover its identifier.
+const vaultIds = new Map<Address, bigint>()
+const vaultFor = (id: bigint) => {
+	const vault = predictAuctionVaultAddress({ implementation: vaultImplementation, owner: bidder, capital, auction, bidId: id })
+	vaultIds.set(vault, id)
+	return vault
+}
+const vaultId = (vault: unknown) => {
+	const id = typeof vault === 'string' ? vaultIds.get(getAddress(vault)) : undefined
+	if (id === undefined) throw new Error('Unknown fixture vault')
+	return id
+}
 const abi = parseAbi([
 	'function open()',
 	'function submitBid(uint256 lots,uint256 minimumAttoRepPerLot,uint256 targetHealthFactorBps) payable returns (uint256 bidId,address vault)',
 	'function settleRefund(uint256 bidId)',
 	'function materializeAuctionBid(uint256 bidId) returns (address vault,uint96 positionId)',
 	'function withdrawRefunds(address recipient)',
+	'function settleAndWithdrawRefund(uint256 bidId,address recipient) returns (uint256)',
 	'function execute(address target,uint256 value,bytes data) payable returns (bytes)',
 	'function executeAndSweep(address target,uint256 value,bytes data,address token,address recipient) payable returns (bytes)',
 	'function depositPrincipal(address ledger,uint256 amount,uint256 targetHealthFactorBps)',
@@ -54,6 +70,7 @@ function fixture(overrides: Record<string, unknown> = {}, options: { timestamp?:
 		forkAuthority: controller,
 		capital,
 		engine,
+		vaultImplementation,
 		repToken: rep,
 		universeId: 42n,
 		closesAt: 1_000n,
@@ -101,8 +118,8 @@ function fixture(overrides: Record<string, unknown> = {}, options: { timestamp?:
 			if (parameters.functionName === 'bids' && typeof id === 'bigint') return [bidder, vaultFor(id), 12_000n, 2n, 5n * unit, false, false]
 			if (parameters.functionName === 'previewBid' && typeof id === 'bigint') return [bidder, vaultFor(id), 12_000n, 1n, unit, 6n * unit, unit]
 			if (parameters.functionName === 'auctionPosition' && typeof id === 'bigint') return [vaultFor(id), 0n, 6n * unit, unit, 12_000n, 30n, false, 7n, 9n]
-			if (parameters.functionName === 'bidId') return BigInt(parameters.address) - 100n
-			if (parameters.functionName === 'bidIdForVault' && typeof id === 'string') return BigInt(id) - 100n
+			if (parameters.functionName === 'bidId') return vaultId(parameters.address)
+			if (parameters.functionName === 'bidIdForVault') return vaultId(id)
 			if (!(parameters.functionName in values)) throw new Error(`Unexpected auction read ${parameters.functionName}`)
 			return values[parameters.functionName]
 		},
@@ -205,6 +222,26 @@ describe('portfolio truth auction SDK', () => {
 		expect(decodeFunctionData({ abi, data: buildPortfolioAuctionRefundCreditRequest(snapshot, 1n).data })).toEqual({ functionName: 'settleRefund', args: [1n] })
 		const credited = await load(fixture({ refundCreditAttoEth: 2n * unit }))
 		expect(buildPortfolioAuctionRefundWithdrawRequest(credited, bidder)).toMatchObject({ to: auction, value: 0n })
+	})
+	test('a combined refund claim settles only uncredited bids and discloses the whole accumulated credit', async () => {
+		const early = await load(fixture({ earlyRefundAttoEth: 2n * unit, refundCreditAttoEth: unit }))
+		expect(quotePortfolioAuctionRefundClaim(early, 1n)).toEqual({ bidId: 1n, settles: true, bidRefundAttoEth: 2n * unit, creditedAttoEth: unit, totalAttoEth: 3n * unit })
+		const request = buildPortfolioAuctionRefundClaimRequest(early, 1n, bidder)
+		expect(request).toMatchObject({ account: bidder, to: auction, value: 0n })
+		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'settleAndWithdrawRefund', args: [1n, bidder] })
+		// A keeper's earlier credit is skipped, not double counted.
+		const credited = await load(fixture({ bids: [bidder, vaultFor(1n), 12_000n, 2n, 5n * unit, true, false], refundCreditAttoEth: 3n * unit, bidderBidCount: 1n }))
+		expect(quotePortfolioAuctionRefundClaim(credited, 1n)).toEqual({ bidId: 1n, settles: false, bidRefundAttoEth: 0n, creditedAttoEth: 3n * unit, totalAttoEth: 3n * unit })
+		const withdrawn = await load(fixture({ bids: [bidder, vaultFor(1n), 12_000n, 2n, 5n * unit, true, false], bidderBidCount: 1n }))
+		expect(() => quotePortfolioAuctionRefundClaim(withdrawn, 1n)).toThrow('No refund credit remains')
+		const pending = await load(fixture())
+		expect(() => quotePortfolioAuctionRefundClaim(pending, 1n)).toThrow('may still win')
+		expect(() => quotePortfolioAuctionRefundClaim(early, 100n)).toThrow('page')
+		expect(() => buildPortfolioAuctionRefundClaimRequest(early, 1n, zeroAddress)).toThrow('recipient')
+		const closed = await load(fixture({}, { finalized: true }))
+		expect(quotePortfolioAuctionRefundClaim(closed, 1n)).toMatchObject({ settles: true, bidRefundAttoEth: unit, totalAttoEth: unit })
+		const fullWinner = await load(fixture({ previewBid: [bidder, vaultFor(1n), 12_000n, 2n, 2n * unit, 12n * unit, 0n], refundCreditAttoEth: unit, bidderBidCount: 1n }, { finalized: true }))
+		expect(() => quotePortfolioAuctionRefundClaim(fullWinner, 1n)).toThrow('no unused ETH')
 	})
 	test('early refund reads reject partial amounts and keep potential winners committed', async () => {
 		const pending = await load(fixture())

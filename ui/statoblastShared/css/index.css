@@ -4242,6 +4242,11 @@ span.rep-price-status.stale,
 	gap: var(--space-5);
 }
 
+/* A disabled reason shared by a row of actions keeps the rhythm of a per-button feedback slot: the button gap above, then the reserved slot. */
+.actions + .shared-action-reason {
+	margin-top: var(--space-2);
+}
+
 .portfolio-flow .field {
 	align-content: start;
 	width: 100%;

@@ -1,5 +1,6 @@
 import { getAddress, isAddress, parseAbi, zeroAddress, type AbiValue, type Address } from '@zoltar/core-shared/evm/ethereum'
 import type { PortfolioReadClient } from './securityPoolPortfolioRead.js'
+import { predictAuctionVaultAddress } from './securityPoolAuctionVaultClones.js'
 
 const abi = parseAbi([
 	'function factory() view returns (address)',
@@ -24,6 +25,7 @@ const abi = parseAbi([
 	'function lotAttoEth() view returns (uint256)',
 	'function targetLots() view returns (uint256)',
 	'function repGrid() view returns (uint256)',
+	'function vaultImplementation() view returns (address)',
 	'function openingConservativePrice() view returns (uint256)',
 	'function minimumCollateralAttoRepPerLot() view returns (uint256)',
 	'function opened() view returns (bool)',
@@ -125,7 +127,7 @@ export async function loadPortfolioAuctionSnapshot(parameters: { client: Auction
 	return { ...base, auction }
 
 	async function readAuction(auctionAddress: Address) {
-		const [fork, root, capital, engineValue, token, child, closes, inventory, shortfall, lot, target, grid, openingPrice, minimumCollateral, openedValue, finalizedValue, multiplier, capitalRoot, capitalProtocol, capitalChild, capitalToken, capitalFork] = await Promise.all([
+		const [fork, root, capital, engineValue, token, child, closes, inventory, shortfall, lot, target, grid, openingPrice, minimumCollateral, openedValue, finalizedValue, multiplier, capitalRoot, capitalProtocol, capitalChild, capitalToken, capitalFork, implementationValue] = await Promise.all([
 			read(auctionAddress, 'forkAuthority'),
 			read(auctionAddress, 'portfolio'),
 			read(auctionAddress, 'capital'),
@@ -148,6 +150,7 @@ export async function loadPortfolioAuctionSnapshot(parameters: { client: Auction
 			read(capitalLedger, 'universeId'),
 			read(capitalLedger, 'repToken'),
 			read(capitalLedger, 'forkAuthority'),
+			read(auctionAddress, 'vaultImplementation'),
 		])
 		if (
 			address(fork, 'Auction fork authority') !== controller ||
@@ -163,6 +166,7 @@ export async function loadPortfolioAuctionSnapshot(parameters: { client: Auction
 		)
 			throw new Error('Auction identities do not match the selected branch.')
 		const engine = address(engineValue, 'Auction engine')
+		const vaultImplementation = address(implementationValue, 'Vault implementation')
 		const opened = bool(openedValue)
 		const finalized = bool(finalizedValue)
 		const [engineController, initialized, engineFinalized, maximum, deposited, count, bidCredit] = await Promise.all([
@@ -178,6 +182,7 @@ export async function loadPortfolioAuctionSnapshot(parameters: { client: Auction
 		const terms = {
 			address: auctionAddress,
 			engine,
+			vaultImplementation,
 			opened,
 			finalized,
 			closesAt: uint(closes, 'Auction close'),
@@ -230,7 +235,8 @@ export async function loadPortfolioAuctionSnapshot(parameters: { client: Auction
 				address(vaultCapital, 'Vault initial capital') !== capitalLedger ||
 				address(vaultAuction, 'Vault auction') !== auctionAddress ||
 				uint(vaultId, 'Vault bid ID') !== id ||
-				uint(registeredId, 'Registered vault bid') !== id
+				uint(registeredId, 'Registered vault bid') !== id ||
+				predictAuctionVaultAddress({ implementation: vaultImplementation, owner: bidder, capital: capitalLedger, auction: auctionAddress, bidId: id }) !== vault
 			)
 				throw new Error('Auction bid or vault belongs to another account.')
 			const bid = {

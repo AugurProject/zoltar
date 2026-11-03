@@ -35,7 +35,7 @@ test('auction funding controls and bid rows stay in place through reload and fai
 	await waitFor(() => expect(view.container.textContent).toContain('Bid 1'))
 	expect(view.container.querySelectorAll('.card .card')).toHaveLength(0)
 	const original = Array.from(view.container.querySelectorAll('button'))
-	for (const name of ['Open truth auction', 'Submit funded bid', 'Credit this bid’s refunds', 'Activate vault controls', 'Manage vault', 'Withdraw credited refunds', 'Refresh auction']) expect(original.some(node => node.textContent === name)).toBe(true)
+	for (const name of ['Open truth auction', 'Submit funded bid', 'Credit this bid’s refunds', 'Credit and withdraw refunds', 'Activate vault controls', 'Manage vault', 'Withdraw credited refunds', 'Refresh auction']) expect(original.some(node => node.textContent === name)).toBe(true)
 	await act(() => {
 		for (const [name, value] of [
 			['Number of lots', '2'],
@@ -96,12 +96,18 @@ test('early refund status enables only crediting then a separate unrestricted wi
 	lifecycle.trackRendered(view)
 	await waitFor(() => expect(view.container.textContent).toContain('Bid 1'))
 	const credit = button(view.container, 'Credit this bid’s refunds')
+	const claim = button(view.container, 'Credit and withdraw refunds')
 	const withdraw = button(view.container, 'Withdraw credited refunds')
 	expect(credit.disabled).toBe(true)
-	expect(view.container.textContent).toContain('This bid may still win')
+	expect(claim.disabled).toBe(true)
+	// Both refund buttons rest on the same cause, stated once for the pair and referenced by each button.
+	expect(view.container.textContent?.split('This bid may still win')).toHaveLength(2)
+	expect(credit.getAttribute('aria-describedby')).toBeTruthy()
+	expect(credit.getAttribute('aria-describedby')).toBe(claim.getAttribute('aria-describedby'))
 	fixture.values['earlyRefundAttoEth'] = 2n * unit
 	await act(() => button(view.container, 'Refresh auction').click())
 	await waitFor(() => expect(credit.disabled).toBe(false))
+	expect(claim.disabled).toBe(false)
 	expect(view.container.textContent).toContain('Better funded bids rule out this bid')
 	expect(metric(view.container, 'Unused bid ETH')).toContain('2.00')
 	expect(withdraw.disabled).toBe(true)
@@ -111,7 +117,17 @@ test('early refund status enables only crediting then a separate unrestricted wi
 	await act(() => button(view.container, 'Refresh auction').click())
 	await waitFor(() => expect(withdraw.disabled).toBe(false))
 	expect(credit.disabled).toBe(true)
+	// The credited bid can still use the combined path, which only withdraws.
+	expect(claim.disabled).toBe(false)
 	expect(view.container.textContent).toContain('Its ETH refund has been credited for withdrawal')
+	expect(view.container.textContent).not.toContain('credited and withdrawn')
 	expect(button(view.container, 'Credit this bid’s refunds')).toBe(credit)
+	expect(button(view.container, 'Credit and withdraw refunds')).toBe(claim)
 	expect(button(view.container, 'Withdraw credited refunds')).toBe(withdraw)
+	fixture.values['refundCreditAttoEth'] = 0n
+	await act(() => button(view.container, 'Refresh auction').click())
+	await waitFor(() => expect(view.container.textContent).toContain('credited and withdrawn'))
+	expect(withdraw.disabled).toBe(true)
+	expect(claim.disabled).toBe(true)
+	expect(view.container.textContent).toContain('No refund credit remains to withdraw.')
 })

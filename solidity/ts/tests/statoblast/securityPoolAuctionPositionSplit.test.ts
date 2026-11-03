@@ -137,7 +137,7 @@ describe('Statoblast: auction position materialization preserves cohort history'
 		expect(await account(first)).toMatchObject({ ethFees: 50n, repFees: 40n })
 		expect(await account(last)).toMatchObject({ ethFees: 75n, repFees: 60n })
 		const claimable = await client.simulateContract({ abi: artifact.abi, address, functionName: 'claim', args: [source], account: client.account.address })
-		expect([...claimable.result]).toEqual([0n, 175n, 140n])
+		expect([...claimable.result]).toEqual([0n, 175n, 140n, (await account(source)).commitment])
 		await claim(source)
 		expect(await account(source)).toMatchObject({ ethFees: 0n, repFees: 0n })
 		expect(await totals()).toEqual([1_000n, 100n])

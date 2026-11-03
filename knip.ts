@@ -25,7 +25,7 @@ const config = (options => {
 					'tooling/contracts/build-app-contracts.mts!',
 					'tooling/contracts/{deploy-testnet,deployment-plan,run-deploy-testnet,uniswap-deployment}.mts!',
 					'tooling/docs/{build-doc-charts,documentationChartBuild,check-doc-charts,check-docs-examples}.mts!',
-					...productionOnly(['tooling/ui/projectArtifacts.mts!']),
+					...productionOnly(['tooling/ui/projectArtifacts.mts!', 'tooling/ui/simulationSnapshots.mts!']),
 					'tooling/contracts/lint-no-nested-solidity-ternaries.mts!',
 					'tooling/repo/lint-no-{bare-catch,signal-wrapper-comparisons}.mts!',
 				],
