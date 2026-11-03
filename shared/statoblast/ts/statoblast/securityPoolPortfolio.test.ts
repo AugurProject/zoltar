@@ -15,11 +15,9 @@ const economics: PortfolioEconomicsConfig = {
 	minimumOutcomeRate: 10n ** 9n,
 	rewardVestingSeconds: 86_400n,
 	reportingFeeAttoEth: 10n ** 15n,
-	serviceFeeBps: 2_500n,
-	maximumOracleRewardAttoEth: 10n ** 16n,
 }
 const inputs = parseAbiParameters(
-	'address factory,address seed,uint256 horizon,(address capital,address commitments,address fees,address books,address settlement,address reporters,address forks,address services,address auctions) deployment,address admission,(uint256 purchaseFeeBps,uint256 annualFeeBps,uint256 minimumPurchaseFeeAttoEth,uint256 minimumCommitmentAttoEth,uint256 minimumOutcomeRate,uint48 rewardVestingSeconds,uint256 reportingFeeAttoEth,uint256 serviceFeeBps,uint256 maximumOracleRewardAttoEth) config',
+	'address factory,address seed,uint256 horizon,(address capital,address commitments,address fees,address books,address settlement,address reporters,address forks,address services,address auctions) deployment,address admission,(uint256 purchaseFeeBps,uint256 annualFeeBps,uint256 minimumPurchaseFeeAttoEth,uint256 minimumCommitmentAttoEth,uint256 minimumOutcomeRate,uint48 rewardVestingSeconds,uint256 reportingFeeAttoEth) config',
 )
 const abi = [{ type: 'constructor', stateMutability: 'nonpayable', inputs }] as const
 const base = { owner, factory, initialOriginPool, questionAdmissionPolicy, maximumQuestionHorizonSeconds: 31_536_000n, deployers, economics, artifact: { abi, bytecode: '0x1234' as const } }
@@ -39,7 +37,6 @@ describe('shared capital portfolio deployment', () => {
 		expect(() => validatePortfolioEconomics({ ...economics, purchaseFeeBps: 10_001n })).toThrow('100%')
 		expect(() => validatePortfolioEconomics({ ...economics, annualFeeBps: 10_001n })).toThrow('100%')
 		expect(() => validatePortfolioEconomics({ ...economics, annualFeeBps: 0n })).not.toThrow()
-		expect(() => validatePortfolioEconomics({ ...economics, serviceFeeBps: 10_001n })).toThrow('100%')
 		expect(() => buildPortfolioDeploymentRequest({ ...base, deployers: { ...deployers, auctions: zeroAddress } })).toThrow('auctions deployer')
 		expect(() => validatePortfolioEconomics({ ...economics, minimumOutcomeRate: 10n ** 18n + 1n })).toThrow('exchange rate')
 		expect(() => validatePortfolioEconomics({ ...economics, rewardVestingSeconds: 2n ** 48n })).toThrow('uint48')

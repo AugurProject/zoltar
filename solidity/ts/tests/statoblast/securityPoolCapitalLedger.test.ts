@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { encodeDeployData, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, encodeDeployData, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { buildPortfolioCapitalCureRequest, buildPortfolioCapitalTakeOverRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import {
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as artifact,
@@ -13,6 +13,7 @@ import { createWriteClient, writeContractAndWait, type WriteClient } from '../..
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
 import { deployCapitalTestComponents } from './securityPoolCapitalTestComponents'
+import { burnedEthBalance, receiptBurns } from './burnEvidence'
 
 const E = 10n ** 18n
 
@@ -39,6 +40,7 @@ describe('Statoblast: individual shared-custody capital', () => {
 		if (owner.positionId === 0n) throw new Error('Authorized position missing')
 		return owner.positionId
 	}
+	const repSupply = () => alice.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'totalSupply' })
 	const withdraw = (client: WriteClient, amount: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address: ledger, functionName: 'withdrawPrincipal', args: [amount, client.account.address] }))
 
 	beforeAll(async () => {
@@ -170,30 +172,57 @@ describe('Statoblast: individual shared-custody capital', () => {
 		expect((await position(b)).commitment).toBe(100n * E)
 	})
 
-	test('a paid cure charges only target REP and leaves exact remaining backing solvent', async () => {
+	test('an unpaid cure removes exactly the rounded-up deficit and leaves the residual fully backed', async () => {
 		await deposit(alice, 105n * E)
 		const id = await authorize(alice, 100n * E)
-		await price(2n * E)
-		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'cure', args: [id] }))
+		await price(3n * E)
+		const walletBefore = await keeper.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [keeper.account.address] })
+		const ledgerRepBefore = await alice.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [ledger] })
+		const keeperBefore = await account(keeper)
+		// The ledger multiplier is 10_500 bps, so 105 REP supports floor(100 / 3) ETH of K.
+		const supported = (100n * E * E) / (3n * E)
+		expect(supported * 3n).toBeLessThan(100n * E)
+		const hash = await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'cure', args: [id] }))
 		const remaining = await position(id)
 		const removed = 100n * E - remaining.commitment
-		const reward = (((removed * 2n * E) / E) * 10_500n) / 1_000_000n
-		expect(removed).toBe((50n * E * 10_000n + 9_899n) / 9_900n)
-		expect((await account(keeper)).feesAttoRep).toBe(reward)
-		expect((await account(keeper)).feesAttoEth).toBe(0n)
-		expect(remaining.rep).toBe(105n * E - reward)
+		expect(removed).toBe(100n * E - supported)
+		expect(remaining.commitment).toBe(supported)
+		expect(remaining.rep).toBe(105n * E)
 		const required = await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'requiredRep', args: [remaining.commitment, 10_000n] })
 		expect(remaining.rep).toBeGreaterThanOrEqual(required)
+		expect(remaining.maxHealthyPrice).toBeGreaterThanOrEqual(3n * E)
+		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })).toBe(0n)
+		const cured = (await alice.getTransactionReceipt({ hash })).logs
+			.filter(log => log.address.toLowerCase() === ledger.toLowerCase())
+			.map(log => decodeEventLog({ abi: artifact.abi, data: log.data, topics: log.topics }))
+			.filter(log => log.eventName === 'CommitmentCured')
+		expect(cured.map(log => log.args)).toEqual([{ positionId: id, removedCommitment: removed }])
+		// The caller is unpaid: no REP or ETH fee credit, no wallet transfer, no principal leaves the vault.
+		expect(await account(keeper)).toEqual(keeperBefore)
+		expect((await account(keeper)).feesAttoRep).toBe(0n)
+		expect((await account(keeper)).feesAttoEth).toBe(0n)
+		expect(await keeper.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [keeper.account.address] })).toBe(walletBefore)
+		expect(await alice.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [ledger] })).toBe(ledgerRepBefore)
 		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'cure', args: [id] }))
-		expect((await account(keeper)).feesAttoRep).toBe(reward)
-		const wallet = await keeper.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [keeper.account.address] })
-		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'claimEarnings' }))
-		expect(await keeper.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [keeper.account.address] })).toBe(wallet + reward)
+		expect(await position(id)).toMatchObject({ rep: 105n * E, commitment: supported })
+		expect(await account(keeper)).toEqual(keeperBefore)
 	})
 
-	test('subminimum cure headroom cannot drain REP through repeated tiny progress', async () => {
+	test('cure is capped by spare capacity and keeps an unpaid partial cure fully disclosed as still unhealthy', async () => {
+		await deposit(alice, 105n * E)
+		const id = await authorize(alice, 100n * E)
+		await demand(80n * E)
+		await price(3n * E)
+		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'cure', args: [id] }))
+		expect(await position(id)).toMatchObject({ rep: 105n * E, commitment: 80n * E })
+		const totals = await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'totals' })
+		expect(totals[1]).toBe(80n * E)
+		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })).toBeGreaterThan(0n)
+		expect((await account(keeper)).feesAttoRep).toBe(0n)
+	})
+
+	test('subminimum cure headroom cannot make repeated tiny progress or pay the caller', async () => {
 		const minimumK = E / 1_000n
-		const minimumReward = (minimumK * 10_500n) / 1_000_000n
 		await deposit(alice, 105n * E)
 		const id = await authorize(alice, 100n * E)
 		await demand(100n * E - minimumK + 1n)
@@ -204,10 +233,13 @@ describe('Statoblast: individual shared-custody capital', () => {
 		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })).toBeGreaterThan(0n)
 		await demand(100n * E - minimumK)
 		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'cure', args: [id] }))
+		// The deficit is far below the minimum, so the floor removes exactly one minimum commitment.
 		expect((await position(id)).commitment).toBe(100n * E - minimumK)
-		expect((await account(keeper)).feesAttoRep).toBe(minimumReward)
+		expect((await position(id)).rep).toBe(105n * E)
+		expect((await account(keeper)).feesAttoRep).toBe(0n)
 		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'cure', args: [id] }))
-		expect((await account(keeper)).feesAttoRep).toBe(minimumReward)
+		expect((await position(id)).commitment).toBe(100n * E - minimumK)
+		expect((await account(keeper)).feesAttoRep).toBe(0n)
 	})
 
 	test('increasing authorized capacity needs only sufficient REP collateral', async () => {
@@ -443,14 +475,20 @@ describe('Statoblast: individual shared-custody capital', () => {
 		await price(E, 100)
 		const initialEth = await alice.getBalance({ address: ledger })
 		const initialRep = await alice.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [ledger] })
-		const serviceBefore = await alice.getBalance({ address: harness })
+		const burnedBefore = await burnedEthBalance(alice)
+		const supplyBefore = await repSupply()
+		const harnessBefore = await alice.getBalance({ address: harness })
 		await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'fundFees', value: 86_400n * E }))
 		await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'fundRepFees', args: [86_400n * E] }))
 		await getAnvilWindowEthereum().advanceTime(200n)
-		await price(E)
+		const refresh = await price(E)
+		const refreshBurns = await receiptBurns(alice, refresh)
+		expect(refreshBurns.unassignedEth).toBeGreaterThan(0n)
+		expect(refreshBurns.unassignedRep).toBeGreaterThan(0n)
 		const feeStreams = await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'feeStreams' })
 		expect(await alice.readContract({ abi: feeStreamsArtifact.abi, address: feeStreams, functionName: 'deferredEth' })).toBe(0n)
-		expect(await alice.getBalance({ address: harness })).toBeGreaterThan(serviceBefore)
+		expect(await burnedEthBalance(alice)).toBe(burnedBefore + refreshBurns.unassignedEth)
+		expect(await alice.getBalance({ address: harness })).toBe(harnessBefore)
 		const before = await position(id)
 		expect(before.ethFees).toBeLessThan(200n * E)
 		expect(before.repFees).toBeLessThan(200n * E)
@@ -459,7 +497,10 @@ describe('Statoblast: individual shared-custody capital', () => {
 		const after = await position(id)
 		expect(after.ethFees).toBeLessThan(86_400n * E)
 		expect(after.repFees).toBeLessThan(86_400n * E)
-		expect(after.ethFees + (await alice.getBalance({ address: harness })) - serviceBefore).toBe(86_400n * E)
+		// Unhealthy or stale-interval income is burned, never retained for a later provider.
+		expect(after.ethFees + (await burnedEthBalance(alice)) - burnedBefore).toBe(86_400n * E)
+		expect(await repSupply()).toBe(supplyBefore + after.repFees)
+		expect(await alice.getBalance({ address: harness })).toBe(harnessBefore)
 		expect(await alice.getBalance({ address: ledger })).toBe(initialEth + after.ethFees)
 		expect(await alice.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [ledger] })).toBe(initialRep + after.repFees)
 	})
@@ -471,6 +512,8 @@ describe('Statoblast: individual shared-custody capital', () => {
 			await price(mode === 'unhealthy' ? 2n * E : E, mode === 'stale' ? 100 : 100_000)
 			const originalEth = await alice.getBalance({ address: ledger })
 			const originalRep = await alice.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [ledger] })
+			const burnedBefore = await burnedEthBalance(alice)
+			const supplyBefore = await repSupply()
 			await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'fundFees', value: 86_400n * E }))
 			await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'fundRepFees', args: [86_400n * E] }))
 			await getAnvilWindowEthereum().advanceTime(200n)
@@ -488,6 +531,9 @@ describe('Statoblast: individual shared-custody capital', () => {
 			await getAnvilWindowEthereum().advanceTime(86_401n)
 			await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint' }))
 			expect(await alice.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [ledger] })).toBe(originalRep + earned.repFees)
+			// Everything not earned before the fork is burned rather than retained.
+			expect(await burnedEthBalance(alice)).toBe(burnedBefore + 86_400n * E - earned.ethFees)
+			expect(await repSupply()).toBe(supplyBefore + earned.repFees)
 			if (mode === 'stale') expect(earned.ethFees).toBeGreaterThan(0n)
 			else expect(earned.ethFees).toBe(0n)
 		})
@@ -529,18 +575,20 @@ describe('Statoblast: individual shared-custody capital', () => {
 		expect((await account(keeper)).feesAttoRep).toBe(0n)
 	})
 
-	test('a full cure caps an overflowing nominal reward at the target principal', async () => {
+	test('an extreme adverse price fully cures by returning all REP to the owner and nothing to the caller', async () => {
 		await deposit(alice, 105n * E)
 		const id = await authorize(alice, 100n * E)
 		await price(((1n << 256n) - 1n) / 4n)
 		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'cure', args: [id] }))
 		expect(await position(id)).toMatchObject({ rep: 0n, commitment: 0n })
-		expect((await account(keeper)).feesAttoRep).toBe(105n * E)
-		expect((await account(alice)).freeAttoRep).toBe(0n)
+		expect((await account(keeper)).feesAttoRep).toBe(0n)
+		expect((await account(keeper)).freeAttoRep).toBe(0n)
+		expect((await account(alice)).freeAttoRep).toBe(105n * E)
 		expect((await account(bob)).feesAttoRep).toBe(0n)
+		expect(await alice.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [ledger] })).toBe(105n * E)
 	})
 
-	test('splitting spare capacity across cures cannot amplify the REP reward', async () => {
+	test('splitting spare capacity across cures reaches the same unpaid residual as one cure', async () => {
 		await deposit(alice, 105n * E)
 		const id = await authorize(alice, 100n * E)
 		await demand(90n * E)
@@ -548,29 +596,29 @@ describe('Statoblast: individual shared-custody capital', () => {
 		const baseline = await getAnvilWindowEthereum().anvilSnapshot()
 		await demand(0n)
 		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'cure', args: [id] }))
-		const combined = (await account(keeper)).feesAttoRep
+		const combined = await position(id)
+		expect(combined).toMatchObject({ rep: 105n * E, commitment: 50n * E })
 		await getAnvilWindowEthereum().anvilRevert(baseline)
 		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'cure', args: [id] }))
-		expect((await account(keeper)).feesAttoRep).toBe(0n)
+		expect(await position(id)).toMatchObject({ rep: 105n * E, commitment: 90n * E })
 		await demand(0n)
 		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'cure', args: [id] }))
-		const split = (await account(keeper)).feesAttoRep
-		expect(split).toBeGreaterThan(0n)
-		expect(split).toBeLessThanOrEqual(combined)
+		expect(await position(id)).toMatchObject({ rep: combined.rep, commitment: combined.commitment })
 		for (let i = 0; i < 3; i++) await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'cure', args: [id] }))
-		expect((await account(keeper)).feesAttoRep).toBe(split)
+		expect(await position(id)).toMatchObject({ rep: combined.rep, commitment: combined.commitment })
+		expect((await account(keeper)).feesAttoRep).toBe(0n)
+		expect((await account(keeper)).feesAttoEth).toBe(0n)
 	})
 
-	test('the REP cure reward cannot be inflated with a higher transaction gas price', async () => {
+	test('a higher transaction gas price changes neither the cure removal nor the unpaid caller', async () => {
 		const minimumK = E / 1_000n
 		await deposit(alice, 105n * E)
 		const id = await authorize(alice, 100n * E)
 		await demand(100n * E - minimumK)
 		await price(E + 1n)
 		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'cure', args: [id], gasPrice: 2_000_000_000n }))
-		const paid = (await account(keeper)).feesAttoRep
-		expect(paid).toBe((minimumK * 10_500n) / 1_000_000n)
-		expect((await position(id)).commitment).toBe(100n * E - minimumK)
+		expect(await position(id)).toMatchObject({ rep: 105n * E, commitment: 100n * E - minimumK })
+		expect((await account(keeper)).feesAttoRep).toBe(0n)
 		expect((await account(bob)).feesAttoRep).toBe(0n)
 		expect((await account(keeper)).feesAttoEth).toBe(0n)
 	})
@@ -595,10 +643,11 @@ describe('Statoblast: individual shared-custody capital', () => {
 
 	test('income with no eligible commitment cannot be captured by a later authorization', async () => {
 		await deposit(alice, 105n * E)
-		const serviceBefore = await alice.getBalance({ address: harness })
+		const burnedBefore = await burnedEthBalance(alice)
 		await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'fundFees', value: 86_400n * E }))
 		await getAnvilWindowEthereum().advanceTime(200n)
 		const id = await authorize(alice, 100n * E)
+		expect(await burnedEthBalance(alice)).toBeGreaterThan(burnedBefore)
 		expect((await position(id)).ethFees).toBe(0n)
 		for (let i = 0; i < 3; i++) {
 			await getAnvilWindowEthereum().advanceTime(100n)
@@ -608,7 +657,8 @@ describe('Statoblast: individual shared-custody capital', () => {
 		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint' }))
 		const earned = (await position(id)).ethFees
 		expect(earned).toBeLessThan(86_400n * E)
-		expect(earned + (await alice.getBalance({ address: harness })) - serviceBefore).toBe(86_400n * E)
+		expect(earned + (await burnedEthBalance(alice)) - burnedBefore).toBe(86_400n * E)
+		expect(await alice.getBalance({ address: ledger })).toBe(earned)
 	})
 
 	test('old-price eligibility checkpoints atomically and stale vested income never backdates', async () => {

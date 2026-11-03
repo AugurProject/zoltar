@@ -34,8 +34,6 @@ export async function seedPortfolioScenario({ accounts, createReadClient, create
 			minimumOutcomeRate: 10n ** 16n,
 			rewardVestingSeconds: 86400n,
 			reportingFeeAttoEth: 5n * 10n ** 16n,
-			serviceFeeBps: 2500n,
-			maximumOracleRewardAttoEth: 10n ** 17n,
 		}),
 		'Deploy portfolio',
 	)

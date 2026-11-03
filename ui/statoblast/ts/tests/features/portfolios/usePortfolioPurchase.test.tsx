@@ -22,7 +22,7 @@ async function setup(snapshot = capitalSnapshot()) {
 		getQuestionEndDate: 10_000n,
 		escalationGame: zeroAddress,
 		systemState: 0n,
-		purchaseQuote: [unit / 100n, unit / 200n, unit / 400n, unit / 400n],
+		purchaseQuote: [unit / 100n, unit / 200n, unit / 400n],
 		quoteQuestionMint: unit,
 		availableMintCapacity: 10n * unit,
 	}

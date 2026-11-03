@@ -49,8 +49,6 @@ function fixture(overrides: Record<string, unknown> = {}) {
 		minimumCommitmentAttoEth: 1n,
 		rewardVestingSeconds: 86_400n,
 		reportingFeeAttoEth: 1n,
-		serviceFeeBps: 2_500n,
-		maximumOracleRewardAttoEth: 10n,
 		priceFeed: portfolio,
 		acceptedExposureLimitAttoEth: 100n,
 		acceptedPrice: 2n,

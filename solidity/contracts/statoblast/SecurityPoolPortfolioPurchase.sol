@@ -21,7 +21,6 @@ interface IPortfolioPurchaseRoot {
 	function annualFeeBps() external view returns (uint256);
 	function minimumPurchaseFeeAttoEth() external view returns (uint256);
 	function reportingFeeAttoEth() external view returns (uint256);
-	function serviceFeeBps() external view returns (uint256);
 }
 interface IPurchaseForkReadiness {
 	function isReady(uint248 universeId) external view returns (bool);
@@ -40,10 +39,11 @@ contract SecurityPoolPortfolioPurchase is IERC1155Receiver {
 		return
 			Math.max(root.minimumPurchaseFeeAttoEth(), Math.mulDiv(backingValue, root.purchaseFeeBps(), 10_000, Math.Rounding.Ceil));
 	}
-	/// @notice Every purchase prepays its reporting tail and a fixed question service charge.
+	/// @notice Every purchase prepays its reporting tail and tops up the question's
+	/// reporter reward to its target. Nothing funds a shared service budget.
 	/// @dev Quotes use the current central checkpoint. The transaction checkpoints
 	/// again before enforcing the caller's total ETH budget.
-	function purchaseQuote(uint248 universeId, uint256 questionId, uint256 cash) external view returns (uint256 fee, uint256 premium, uint256 rewardFunding, uint256 maintenance) {
+	function purchaseQuote(uint248 universeId, uint256 questionId, uint256 cash) external view returns (uint256 fee, uint256 premium, uint256 rewardFunding) {
 		IPortfolioPurchaseRoot root = IPortfolioPurchaseRoot(portfolio);
 		SecurityPoolPortfolioSettlement engine = root.settlement();
 		uint64 bookId = engine.bookIds(universeId);
@@ -58,8 +58,7 @@ contract SecurityPoolPortfolioPurchase is IERC1155Receiver {
 		premium = Math.mulDiv(principal, root.annualFeeBps() * RESOLUTION_WINDOW, 10_000 * 365 days, Math.Rounding.Ceil);
 		uint256 backing = Math.mulDiv(cash, Math.max(root.statoblastSecurityMultiplierBps(), 10_500), 10_000, Math.Rounding.Ceil);
 		uint256 base = Math.max(root.minimumPurchaseFeeAttoEth(), Math.mulDiv(backing, root.purchaseFeeBps(), 10_000, Math.Rounding.Ceil));
-		maintenance = Math.mulDiv(base, root.serviceFeeBps(), 10_000) + target - rewardFunding;
-		fee = base + premium + target;
+		fee = base + premium + rewardFunding;
 	}
 	function _addedPrincipal(SecurityPoolSettlementBook.Question memory question, uint256 cash) private pure returns (uint256 principal) {
 		require(question.outcomeSupplyAttoShares == 0 || question.units != 0, 'Question backing exhausted');

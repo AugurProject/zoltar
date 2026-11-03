@@ -43,8 +43,8 @@ contract SecurityPoolPortfolioSettlementDeployer {
 }
 contract SecurityPoolPortfolioServicesDeployer is SecurityPoolCreationCodeDeployer {
 	constructor() SecurityPoolCreationCodeDeployer(type(SecurityPoolPortfolioServices).creationCode) {}
-	function create(address authority, uint256 maximumReward, uint256 priorityFee) external returns (SecurityPoolPortfolioServices) {
-		return SecurityPoolPortfolioServices(payable(_deploy(abi.encode(authority, maximumReward, priorityFee))));
+	function create(address authority) external returns (SecurityPoolPortfolioServices) {
+		return SecurityPoolPortfolioServices(payable(_deploy(abi.encode(authority))));
 	}
 }
 contract SecurityPoolReporterLedgerDeployer {

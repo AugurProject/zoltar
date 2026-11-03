@@ -4,6 +4,7 @@ pragma solidity 0.8.35;
 import { SecurityPoolCreationCodeDeployer } from './SecurityPoolCreationCode.sol';
 
 import { Zoltar } from '../Zoltar.sol';
+import { Constants } from '../Constants.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
@@ -28,7 +29,6 @@ interface IPortfolioForkRoot {
 	function prepareForkChild(uint248 parent, uint256 outcome) external returns (SecurityPoolCapitalLedger);
 	function activateForkChild(uint248 child) external;
 	function creditForkFees(uint248 universeId, uint256 amount) external;
-	function creditServiceFees(uint248 universeId) external payable;
 	function getPool(uint256 questionId, uint248 universeId) external view returns (ISecurityPool);
 	function minimumCommitmentAttoEth() external view returns (uint256);
 	function auctionDeployer() external view returns (IPortfolioTruthAuctionDeployer);
@@ -379,8 +379,8 @@ contract SecurityPoolPortfolioForkCoordinator {
 		emit NeutralCashRecovered(source, questionId, msg.sender, shares, cash);
 	}
 
-	/// @notice Reserved reporter shares have no ERC1155 holder. Their unassigned
-	/// source cash remains service funding instead of becoming an orphan balance.
+	/// @notice Reserved reporter shares have no ERC1155 holder and their many
+	/// funders are not recorded. Their unassigned source cash is burned.
 	function recoverQuestionRewardCash(uint248 source, uint256 questionId) external nonReentrant returns (uint256 cash) {
 		_freeze(source);
 		require(block.timestamp >= zoltar.getForkChoiceDeadline(source), 'Fork choices still open');
@@ -391,7 +391,10 @@ contract SecurityPoolPortfolioForkCoordinator {
 		cash = _recordRecovery(source, questionId, question, question.rewardShares);
 		IPortfolioForkServices services = IPortfolioForkServices(portfolio.services());
 		services.recoverPremiumCash(source, questionId, question.rewardShares, address(services));
-		if (cash != 0) portfolio.creditServiceFees{value: cash}(source);
+		if (cash != 0) {
+			(bool sent, ) = Constants.BURN_ADDRESS.call{value: cash}('');
+			require(sent, 'Recovery burn failed');
+		}
 		emit NeutralServiceCashRecovered(source, questionId, cash);
 	}
 

@@ -14,17 +14,17 @@ export function PortfolioReportingReward({ model, actions, questionInput, setQue
 		<SectionBlock title={copy.title} description={copy.description}>
 			<PortfolioInput label={copy.question} value={questionInput} onChange={setQuestionInput} disabled={actions.busy !== undefined} />
 			<MetricField label={copy.beneficiary} loading={model.loading}>
-				<AddressValue address={model.reward?.beneficiary} wrap />
+				<AddressValue address={model.recipient} wrap />
 			</MetricField>
 			<MetricGrid>
-				<MetricField label={copy.cash} loading={model.loading}>
+				<MetricField label={model.cashLabel} loading={model.loading}>
 					<CurrencyValue value={model.reward?.cashAttoEth} suffix={common.eth} />
 				</MetricField>
 				<MetricField label={copy.rep} loading={model.loading}>
 					<CurrencyValue value={model.reward?.recoveryAttoRep} suffix={common.rep} />
 				</MetricField>
 			</MetricGrid>
-			{model.reward?.maintenance ? <UserMessage detail={copy.maintenance} /> : undefined}
+			{model.reward?.unclaimable ? <UserMessage detail={copy.unclaimable} /> : undefined}
 			<PortfolioButton model={actions} action='claimPortfolioReportingReward' label={copy.claim} pendingLabel={copy.claiming} reason={model.reason} onClick={model.claim} />
 		</SectionBlock>
 	)

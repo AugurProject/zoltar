@@ -36,7 +36,6 @@ interface ISharedPoolPortfolioPriceCheckpoint {
 	function oracleExposure(uint248 universeId) external view returns (uint256);
 	function oracleRepExposure(uint248 universeId) external view returns (uint256);
 	function isPriceReportingOpen(uint248 universeId) external view returns (bool);
-	function rewardOracleReport(uint248 universeId, address sponsor, uint256 gasUnits, uint256 requestedAt) external;
 }
 
 /// @notice One REP/ETH report and freshness clock for all question ledgers in one pool and universe.
@@ -81,8 +80,6 @@ contract SharedPoolPriceFeed {
 		address sponsor;
 		address coordinator;
 		uint256 maxSettlementBaseFee;
-		uint256 requestedAt;
-		uint256 requestGas;
 	}
 	mapping(uint256 => ReportCandidate) public reportCandidates;
 	uint256 public lastPrice;
@@ -222,10 +219,9 @@ contract SharedPoolPriceFeed {
 		return uint32(limit);
 	}
 
-	/// @notice The report sponsor funds its own transactions. Due accepted work is
-	/// reimbursed by the portfolio service treasury, independently of settlement.
-	/// A large mandatory public bounty would let unrelated settlers capture the
-	/// sponsor's funding before it can earn that service reimbursement.
+	/// @notice The report sponsor funds its own transactions; nothing reimburses
+	/// them. A large mandatory public bounty would let unrelated settlers capture
+	/// the sponsor's funding.
 	function getRequestPriceCostAttoEth() public pure returns (uint256) {
 		return REQUEST_BOUNTY_OFFSET_ATTO_ETH;
 	}
@@ -245,7 +241,6 @@ contract SharedPoolPriceFeed {
 	}
 
 	function _requestPrice(address coordinator, address sponsor, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) private returns (uint256 reportId) {
-		uint256 initialGas = gasleft();
 		require(ISharedPoolPortfolioPriceCheckpoint(portfolio).isPriceReportingOpen(universeId), 'Portfolio reporting window closed');
 		require(sponsor != address(0), 'Report sponsor zero');
 		require(proposedRepPerEthPrice > 0, 'Initial oracle price zero');
@@ -276,7 +271,7 @@ contract SharedPoolPriceFeed {
 		SharedPoolReportEscrow escrow;
 		(reportId, escrow) = this.createReportEscrow(msg.sender, sponsor, initialWethReportAttoEth, initialRepReportAttoRep, escalationHaltAttoEth, bountyAttoEth);
 		pendingReportId = reportId;
-		reportCandidates[reportId] = ReportCandidate(escrow, sponsor, coordinator, pendingReportMaxSettlementBaseFeeAttoEthPerGas, block.timestamp, initialGas - gasleft());
+		reportCandidates[reportId] = ReportCandidate(escrow, sponsor, coordinator, pendingReportMaxSettlementBaseFeeAttoEthPerGas);
 		emit PriceRequested(pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas);
 		emit ReportFundingAssigned(pendingReportId, coordinator, sponsor);
 	}
@@ -310,7 +305,6 @@ contract SharedPoolPriceFeed {
 	/// Every candidate remains individually recoverable. A disputed report cannot
 	/// prevent a different sponsor from establishing a fresh, funded observation.
 	function settleReport(uint256 reportId, uint256 amount1, uint256 amount2) external {
-		uint256 initialGas = gasleft();
 		ReportCandidate memory candidate = reportCandidates[reportId];
 		require(address(candidate.escrow) == msg.sender && msg.sender != address(0), 'Wrong report escrow');
 		require(reportOutcome[reportId] == 0, 'Report already completed');
@@ -333,11 +327,6 @@ contract SharedPoolPriceFeed {
 			lastPrice = nextPrice;
 			ISharedPoolPortfolioPriceCheckpoint(portfolio).onSharedPriceAccepted(universeId, nextPrice, uint48(priceTimestamp + validForSeconds));
 			emit PriceReported(reportId, lastPrice, lastSettlementTimestamp);
-			// Rewards are a separately capped treasury expense, never report funding.
-			// Budget exhaustion or optional accounting cannot roll back a valid price.
-			try
-				ISharedPoolPortfolioPriceCheckpoint(portfolio).rewardOracleReport{gas: 300_000}(universeId, candidate.sponsor, candidate.requestGas + initialGas - gasleft() + 250_000, candidate.requestedAt)
-			{} catch {}
 		} else
 			emit PriceReportRejected(reportId, reason, pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas, lastPrice, lastSettlementTimestamp);
 	}

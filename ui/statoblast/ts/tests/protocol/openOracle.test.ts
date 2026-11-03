@@ -465,7 +465,7 @@ describe('openOracle protocol client', () => {
 								{ status: 'success', result: 1n },
 							]
 						case 'reportCandidates':
-							return [{ status: 'success', result: [vaultAddress, initialReporter, alternateSecurityPoolAddress, 0n, 0n, 0n] }]
+							return [{ status: 'success', result: [vaultAddress, initialReporter, alternateSecurityPoolAddress, 0n] }]
 						case 'securityPoolFactory':
 							return [
 								{ status: 'success', result: getInfraContractAddresses().securityPoolFactory },

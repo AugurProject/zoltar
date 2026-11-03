@@ -211,19 +211,14 @@ describe('Statoblast: truth-auction lifecycle gas baselines', () => {
 			await mock.advanceTime(3_601n)
 			await context.report(5n * unit, 10n * unit)
 			expect(await owner.readContract({ ...capital, functionName: 'liquidationStarted', args: [cohort[1]] })).toBe(distressStart)
-			const cureBounds = {
-				expectedTotalCommitment: (await owner.readContract({ ...capital, functionName: 'totals' }))[1],
-				expectedDemand: await owner.readContract({ ...capital, functionName: 'demandAttoEth' }),
-				expectedAcceptedPriceEpoch: await owner.readContract({ ...capital, functionName: 'acceptedPriceEpoch' }),
-				minimumRemoved: 1n,
-				minimumReward: 0n,
-			}
+			const totalCommitment = (await owner.readContract({ ...capital, functionName: 'totals' }))[1]
+			const demand = await owner.readContract({ ...capital, functionName: 'demandAttoEth' })
+			const acceptedPriceEpoch = await owner.readContract({ ...capital, functionName: 'acceptedPriceEpoch' })
 			const liquidation = await snapshot()
-			const cureData = encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'cureAuctionBid', args: [winner.id, cureBounds] })
-			if (cureBounds.expectedTotalCommitment > cureBounds.expectedDemand) await gasOf('liquidation: keeper cures an unmaterialized winner', keeper, () => keeper.writeContract({ ...capital, functionName: 'cureAuctionBid', args: [winner.id, cureBounds] }))
-			else await revertedGasOf('liquidation failure: cure without spare capacity', keeper, context.capital, cureData)
+			// Without spare capacity a cure has nothing to remove and only materializes the vault.
+			await gasOf(totalCommitment > demand ? 'liquidation: keeper cures an unmaterialized winner' : 'liquidation: cure without spare capacity only materializes', keeper, () => keeper.writeContract({ ...capital, functionName: 'cureAuctionBid', args: [winner.id] }))
 			await restore(liquidation)
-			const takeoverBounds = { maximumOwnerPrincipal: 100n * unit, maximumOwnerCommitment: 10n * unit, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: cureBounds.expectedAcceptedPriceEpoch, expectedSourceBatch: 0n }
+			const takeoverBounds = { maximumOwnerPrincipal: 100n * unit, maximumOwnerCommitment: 10n * unit, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: acceptedPriceEpoch, expectedSourceBatch: 0n }
 			const winnerCommitment = (await owner.readContract({ ...capital, functionName: 'auctionPosition', args: [winner.id] })).commitment
 			await revertedGasOf('liquidation failure: takeover rejected by bounds', keeper, context.capital, encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'takeOverAuctionBid', args: [winner.id, winnerCommitment, 0n, 60n * unit, { ...takeoverBounds, maximumOwnerPrincipal: 1n }] }))
 			await gasOf('liquidation: keeper takes over an unmaterialized winner', keeper, () => keeper.writeContract({ ...capital, functionName: 'takeOverAuctionBid', args: [winner.id, winnerCommitment, 0n, 60n * unit, takeoverBounds] }))

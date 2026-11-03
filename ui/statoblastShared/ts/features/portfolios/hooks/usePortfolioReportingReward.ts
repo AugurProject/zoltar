@@ -52,17 +52,23 @@ export function usePortfolioReportingReward({ model, actions, accountAddress, qu
 	else if (current?.error !== undefined) reason = current.error
 	else if (reward === undefined) reason = copy.loading
 	else reason = rewardReason(reward)
+	const unclaimable = reward?.unclaimable === true
 	return {
 		reward,
 		loading,
 		reason,
+		/** An unclaimable budget pays nobody, so no recipient is shown and its ETH is labelled as burned. */
+		recipient: unclaimable ? undefined : reward?.beneficiary,
+		cashLabel: unclaimable ? copy.burnedCash : copy.cash,
 		claim: () =>
 			actions.runPortfolioAction('claimPortfolioReportingReward', copy.claim, () => {
 				if (reason !== undefined || snapshot === undefined || questionId === undefined || accountAddress === undefined || reward?.beneficiary === undefined) throw new Error(reason ?? copy.failed)
 				const selected = snapshot
 				return {
 					...buildPortfolioReportingRewardRequest({ caller: accountAddress, portfolio: selected.portfolio, pool: reward.pool }),
-					reviewDescription: `Release ${formatEther(reward.cashAttoEth)} ETH for question 0x${questionId.toString(16)} to the fixed recipient ${reward.beneficiary}. ${formatEther(reward.recoveryAttoRep)} REP will be burned. ${reward.maintenance ? copy.maintenance : copy.rewardSurplus} Your wallet pays only gas.`,
+					reviewDescription: reward.unclaimable
+						? `Burn ${formatEther(reward.cashAttoEth)} ETH and ${formatEther(reward.recoveryAttoRep)} REP for question 0x${questionId.toString(16)}. ${copy.unclaimable} Your wallet pays only gas.`
+						: `Release ${formatEther(reward.cashAttoEth)} ETH for question 0x${questionId.toString(16)} to the fixed recipient ${reward.beneficiary}. ${formatEther(reward.recoveryAttoRep)} REP will be burned. ${copy.rewardSurplus} Your wallet pays only gas.`,
 					validateBeforeSubmit: async () => {
 						const client = createConnectedReadClient()
 						const [block, chainId] = await Promise.all([client.getBlock(), client.getChainId()])

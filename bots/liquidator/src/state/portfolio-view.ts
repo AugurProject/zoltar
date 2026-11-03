@@ -1,6 +1,5 @@
 import type { OperatorSettings } from '#config/settings'
 import { marketPriceAllowsExecution } from '#core/candidate-selection'
-import { portfolioCurePlan } from '#core/portfolio-cure'
 import { portfolioTakeoverPlan } from '#core/portfolio-strategy'
 import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import type { RuntimeState } from './runtime-state.ts'
@@ -30,7 +29,7 @@ export function portfolioViews(state: RuntimeState, settings: OperatorSettings) 
 				.filter(position => position.commitment > 0n)
 				.map(position => {
 					let takeoverStatus = 'Configure an execution signer to evaluate owner funding'
-					if (state.wallet !== undefined) takeoverStatus = portfolioCurePlan(portfolio, position, settings, marketAllowed) === undefined ? portfolioTakeoverPlan(portfolio, position, settings, totalPrincipal, marketAllowed).reason : 'Paid cure candidate; exact progress and reward must pass simulation'
+					if (state.wallet !== undefined) takeoverStatus = portfolioTakeoverPlan(portfolio, position, settings, totalPrincipal, marketAllowed).reason
 					return {
 						id: position.auctionTarget === undefined ? position.id.toString() : `auction:${position.auctionTarget.bidId}`,
 						label: position.auctionTarget === undefined ? `Position ${position.id}` : `Auction bid ${position.auctionTarget.bidId} · awaiting individual position`,

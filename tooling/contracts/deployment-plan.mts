@@ -31,22 +31,22 @@ const EXPECTED_RUNTIME_CODE_HASHES: Readonly<Record<string, Hash>> = {
 const EXPECTED_TRADING_RUNTIME_CODE_HASHES: Readonly<Record<BootstrapDescendantHashProfile, Readonly<Record<GenesisOutcome, Readonly<Record<string, Hash>>>>>> = {
 	sepolia: {
 		yes: {
-			tradingFactory: '0xabc1241312d440994c920b37f39fd7cfc5256ee4c9cc8a4dd7ddbff6b8b8edf1',
-			tradingRouter: '0xbdeb67da6426cfa70c0488f9e5e7c9aa9d908d630c35cb1110b396c96b44d507',
+			tradingFactory: '0xf9842ec516bc054cfa0bcbf8d6722989e23c5d3caa01aa42fb92531a84586181',
+			tradingRouter: '0x1688816656ab6fc5b9ee9b99a2d596d9dd1496c0374a8fc1bcd15eefabe90efc',
 		},
 		no: {
-			tradingFactory: '0xd2ce591e42c3bae3ae3576b48fa425318a950396237e34f1c831a93d89e33129',
-			tradingRouter: '0xbafd5eb9f6bea04d4935a60b8f9ce7f054b0ba8510e72c092b301e815a4f9c69',
+			tradingFactory: '0x1ff49f3c86bb347ff615a774b58bb9e02fc881ed4ba41170cefd3e90bf7844bb',
+			tradingRouter: '0x0c3027b9912dc60a10a601277ff177c99bd404047e44428d0f349d827bf3262f',
 		},
 	},
 	deterministic: {
 		yes: {
-			tradingFactory: '0x1b708c91a4e9c54170c6f65d73f331b6adb08c96bc31143e6670b0a5cb06c5ed',
-			tradingRouter: '0x61619f4426292b44311fea51cc18cd6b0bf9eeaa7b36031b8eca5a73dc044bc2',
+			tradingFactory: '0x8c37e8abedb4a8411cc0606b703d5bc1f246a82f5927e3c1df97f3cb3e1ed4c4',
+			tradingRouter: '0x4fc81f5e2ee2b6a9ff2d23c7e6dcb1f3b53b7996f8f8167b099b871de45d5898',
 		},
 		no: {
-			tradingFactory: '0x517f110dd97755220a6f416a9440c02d553f7191be13ae089bdb2e455ca77a7b',
-			tradingRouter: '0x11dd7ee82519fb500c0ac2a60f2b63d239c5a2e724fdb6b97025b3c9992bac2f',
+			tradingFactory: '0x4f9f369c7ed3a0b2ad72aa0cdc2267d021780785494a1f7d5c4f83164812d073',
+			tradingRouter: '0xe31e8983561e445586ad215a9aed96e9fb8c57611bd084f2e92dc586899334b3',
 		},
 	},
 	mainnet: {
@@ -64,12 +64,12 @@ const EXPECTED_TRADING_RUNTIME_CODE_HASHES: Readonly<Record<BootstrapDescendantH
 // WETH-dependent immutables differ on chains with deterministic WETH9.
 const DETERMINISTIC_WETH_DEPENDENT_RUNTIME_CODE_HASHES: Readonly<Record<GenesisOutcome, Readonly<Record<string, Hash>>>> = {
 	yes: {
-		openOraclePriceCoordinatorFactory: '0xb44cc37efdad79b73c3a0f3faff098ef2deb254c854d2239125b671c6a3f4e77',
-		securityPoolFactory: '0xa906d4f15e71c66eda5ac35acbfd89536ba6b00b42390122b4723b00232921ce',
+		openOraclePriceCoordinatorFactory: '0xd77ef50e6f043b0116f814c4a0d2726000c1ce0327a85ed5a15677e9fb754366',
+		securityPoolFactory: '0xfb2c48c757e2dfc168a3ac1b791a4cfcc89d2b11f806eed3d287e52edf2732ea',
 	},
 	no: {
-		openOraclePriceCoordinatorFactory: '0xb44cc37efdad79b73c3a0f3faff098ef2deb254c854d2239125b671c6a3f4e77',
-		securityPoolFactory: '0x4ed193b806d98d3bd2025f429c88a7277e35b087a574be7cd8aeea405717ebdd',
+		openOraclePriceCoordinatorFactory: '0xd77ef50e6f043b0116f814c4a0d2726000c1ce0327a85ed5a15677e9fb754366',
+		securityPoolFactory: '0x1316a0da65efa1d1a0b747b7330ca436de06647da9e1ff01fa18e28eee3a62ea',
 	},
 }
 

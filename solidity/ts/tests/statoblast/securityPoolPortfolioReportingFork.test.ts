@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { parseAbi, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, parseAbi, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
@@ -21,6 +21,7 @@ import { addRepToMigrationBalance, forkUniverse, getRepTokenAddress, getUniverse
 import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { manipulatePriceOracle } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { burnedEthBalance, receiptBurns } from './burnEvidence'
 
 describe('Statoblast: native fork reporting reward ownership', () => {
 	const fixture = useSecurityPoolPortfolioFixture({ reportingFeeAttoEth: unit / 100n })
@@ -138,7 +139,7 @@ describe('Statoblast: native fork reporting reward ownership', () => {
 		else expect(cash).toBe(0n)
 		expect(await reward(childPool)).toEqual({ recipient: service.address, cash })
 		const before = {
-			maintenance: await owner.readContract({ ...service, functionName: 'maintenanceReserveAttoEth', args: [child] }),
+			burned: await burnedEthBalance(owner),
 			serviceCash: await owner.getBalance({ address: service.address }),
 			settlementCash: await owner.getBalance({ address: state.engine }),
 			settlementRep: await owner.readContract({ ...token, functionName: 'balanceOf', args: [state.engine] }),
@@ -156,8 +157,11 @@ describe('Statoblast: native fork reporting reward ownership', () => {
 		expect(await owner.readContract({ ...token, functionName: 'balanceOf', args: [owner.account.address] })).toBe(before.callerRep)
 		expect(await owner.readContract({ ...token, functionName: 'balanceOf', args: [other.account.address] })).toBe(before.reporterRep)
 		expect(await owner.getBalance({ address: state.engine })).toBe(before.settlementCash - cash)
-		expect(await owner.getBalance({ address: service.address })).toBe(before.serviceCash + cash)
-		expect(await owner.readContract({ ...service, functionName: 'maintenanceReserveAttoEth', args: [child] })).toBe(before.maintenance + cash)
+		// No reporter can receive this cash, so the services contract burns it instead of retaining it.
+		const burns = await receiptBurns(owner, hash)
+		expect(burns.service).toEqual(cash === 0n ? [] : [{ universeId: child, amount: cash }])
+		expect(await owner.getBalance({ address: service.address })).toBe(before.serviceCash)
+		expect(await burnedEthBalance(owner)).toBe(before.burned + burns.totalEth)
 		expect(await owner.readContract({ ...token, functionName: 'balanceOf', args: [state.engine] })).toBe(before.settlementRep - rep)
 		expect(await owner.readContract({ ...token, functionName: 'balanceOf', args: [service.address] })).toBe(0n)
 		expect(await owner.readContract({ ...token, functionName: 'totalSupply' })).toBe(before.totalRep - rep)
@@ -191,7 +195,7 @@ describe('Statoblast: native fork reporting reward ownership', () => {
 		const reporterRep = await owner.readContract({ ...token, functionName: 'balanceOf', args: [owner.account.address] })
 		const callerCash = await owner.getBalance({ address: other.account.address })
 		const serviceCash = await owner.getBalance({ address: service.address })
-		const maintenance = await owner.readContract({ ...service, functionName: 'maintenanceReserveAttoEth', args: [child] })
+		const burned = await burnedEthBalance(owner)
 		const settlementCash = await owner.getBalance({ address: state.engine })
 		const settlementRep = await owner.readContract({ ...token, functionName: 'balanceOf', args: [state.engine] })
 		const totalRep = await owner.readContract({ ...token, functionName: 'totalSupply' })
@@ -201,13 +205,16 @@ describe('Statoblast: native fork reporting reward ownership', () => {
 		expect(await owner.getBalance({ address: owner.account.address })).toBe(reporterCash + payout.cash)
 		expect(await owner.getBalance({ address: other.account.address })).toBe(callerCash - receipt.gasUsed * requireBigInt(receipt.effectiveGasPrice, 'Claim effective gas price'))
 		expect(await owner.getBalance({ address: state.engine })).toBe(settlementCash - cash)
-		expect(await owner.getBalance({ address: service.address })).toBe(serviceCash + cash - payout.cash)
+		expect(await owner.getBalance({ address: service.address })).toBe(serviceCash)
 		expect(await owner.readContract({ ...token, functionName: 'balanceOf', args: [owner.account.address] })).toBe(reporterRep)
 		expect(await owner.readContract({ ...token, functionName: 'balanceOf', args: [state.engine] })).toBe(settlementRep - rep)
 		expect(await owner.readContract({ ...token, functionName: 'balanceOf', args: [service.address] })).toBe(0n)
 		expect(await owner.readContract({ ...token, functionName: 'totalSupply' })).toBe(totalRep - rep)
 		expect(await owner.readContract({ ...token, functionName: 'getTotalTheoreticalSupply' })).toBe(theoreticalRep - rep)
-		expect(await owner.readContract({ ...service, functionName: 'maintenanceReserveAttoEth', args: [child] })).toBe(maintenance + cash - payout.cash)
+		// Cash above the capped reporter payout is burned rather than retained by services.
+		const burns = await receiptBurns(owner, hash)
+		expect(burns.service).toEqual([{ universeId: child, amount: cash - payout.cash }])
+		expect(await burnedEthBalance(owner)).toBe(burned + burns.totalEth)
 		expect((await settlement(child)).question.rewardShares).toBe(0n)
 	})
 
@@ -237,5 +244,42 @@ describe('Statoblast: native fork reporting reward ownership', () => {
 		expect(await owner.getBalance({ address: source.engine })).toBe(settlementCash - sourceReward.cash)
 		expect((await settlement(fixture.base.genesisUniverse)).question.rewardShares).toBe(0n)
 		await expect(other.simulateContract({ ...portfolio(), functionName: 'claimQuestionReportingReward', args: [sourcePool()] })).rejects.toThrow('Question reward already claimed')
+	})
+
+	test('neutral source cash behind reserved reward shares is burned rather than paid to the recovering caller', async () => {
+		await prepareReport()
+		const { base } = fixture
+		const owner = fixture.owner()
+		const other = fixture.other()
+		const source = base.genesisUniverse
+		expect((await settlement(source)).question.rewardShares).toBeGreaterThan(0n)
+		const question = { ...base.questionData, title: 'Unrelated fork leaving neutral reward cash' }
+		await createQuestion(owner, question, base.outcomes)
+		await approveToken(owner, getRepTokenAddress(source), getZoltarAddress())
+		await forkUniverse(owner, source, getQuestionId(question, base.outcomes))
+		const coordinator = { abi: coordinatorArtifact.abi, address: await owner.readContract({ ...portfolio(), functionName: 'forkController' }) }
+		// Only one underwriter chooses, leaving the other's share of source cash neutral.
+		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'choose', args: [source, 1n] }))
+		await expect(other.simulateContract({ ...coordinator, functionName: 'recoverQuestionRewardCash', args: [source, base.questionId] })).rejects.toThrow('Fork choices still open')
+		await base.mockWindow.setTime((await getUniverseData(owner, source)).forkTime + 63n * DAY)
+		const service = await services()
+		const burnedBefore = await burnedEthBalance(owner)
+		const callerBefore = await owner.getBalance({ address: other.account.address })
+		const serviceBefore = await owner.getBalance({ address: service.address })
+		const hash = await writeContractAndWait(other, () => other.writeContract({ ...coordinator, functionName: 'recoverQuestionRewardCash', args: [source, base.questionId] }))
+		const receipt = await owner.getTransactionReceipt({ hash })
+		const recovered = receipt.logs
+			.filter(log => log.address.toLowerCase() === coordinator.address.toLowerCase())
+			.map(log => decodeEventLog({ abi: coordinatorArtifact.abi, data: log.data, topics: log.topics }))
+			.flatMap(log => (log.eventName === 'NeutralServiceCashRecovered' ? [log.args.cash] : []))
+		expect(recovered).toHaveLength(1)
+		const cash = recovered[0] ?? 0n
+		expect(cash).toBeGreaterThan(0n)
+		const burns = await receiptBurns(owner, hash)
+		// The recovered cash and any recovered reward-share premium both go to the burn address.
+		expect(await burnedEthBalance(owner)).toBe(burnedBefore + cash + burns.totalEth)
+		expect(await owner.getBalance({ address: other.account.address })).toBe(callerBefore - receipt.gasUsed * requireBigInt(receipt.effectiveGasPrice, 'Recovery effective gas price'))
+		expect(await owner.getBalance({ address: service.address })).toBe(serviceBefore - burns.serviceEth)
+		await expect(other.simulateContract({ ...coordinator, functionName: 'recoverQuestionRewardCash', args: [source, base.questionId] })).rejects.toThrow('Question service cash already recovered')
 	})
 })

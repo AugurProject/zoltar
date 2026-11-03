@@ -10,7 +10,6 @@ import { capitalUnit as E, useCapitalTestFixture } from '../../../../solidity/ts
 import { createWriteClient, writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients'
 import { executePortfolioTakeover, type refreshPortfolioExecution } from '../../src/execution/portfolio-executor.ts'
 import { portfolioTakeoverPlan } from '../../src/core/portfolio-strategy.ts'
-import { portfolioCurePlan } from '../../src/core/portfolio-cure.ts'
 import { submitCall } from '../../src/execution/liquidation-executor.ts'
 import { initialRuntimeState } from '../../src/state/operator-state.ts'
 import { portfolioObservation, portfolioSettings } from '../support/portfolio-observation.ts'
@@ -219,7 +218,6 @@ describe('atomic unpaid cure and portfolio takeover', () => {
 			const target = current.observation.positions[0]
 			if (target === undefined) throw new Error('Missing test target')
 			expect(target).toMatchObject({ rep: 105n * E, commitment: 100n * E, batch: retainedCommitment === 0n ? 0n : 1n, remainingCommitment: retainedCommitment })
-			expect(portfolioCurePlan(current.observation, target, settings, true)).toBeUndefined()
 			expect(portfolioTakeoverPlan(current.observation, target, settings, current.totalPrincipal, true).plan).toMatchObject({ commitment: 90n * E, minimumAward: 105n * E, ownFunding: 0n, expectedSourceBatch: 0n })
 			let submitted = 0
 			const submit: typeof submitCall = async (_wallet, _settings, _state, _pool, call) => {

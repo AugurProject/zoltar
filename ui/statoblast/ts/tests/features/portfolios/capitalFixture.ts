@@ -73,8 +73,6 @@ export function capitalSnapshot(overrides: Partial<PortfolioAccountSnapshot> = {
 			minimumOutcomeRate: 10n ** 16n,
 			rewardVestingSeconds: 86_400n,
 			reportingFeeAttoEth: 5n * 10n ** 16n,
-			serviceFeeBps: 2500n,
-			maximumOracleRewardAttoEth: 10n ** 17n,
 		},
 		questionAdmissionPolicy: token,
 		admission: { address: token, mode: 'open' },

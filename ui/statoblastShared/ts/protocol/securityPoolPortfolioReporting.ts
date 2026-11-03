@@ -1,4 +1,4 @@
-import { parseAbi, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import type { ReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { requireAddressValue, requireBigintValue, requireBooleanValue, requireIntegerLikeValue, requireObjectValue, requireTupleValue } from './decoders.js'
 import type { PortfolioAccountSnapshot } from './securityPoolPortfolio.js'
@@ -8,7 +8,6 @@ const abi = parseAbi([
 	'function registeredPools(address pool) view returns(bool)',
 	'function settlement() view returns(address)',
 	'function services() view returns(address)',
-	'function pullCreditsAttoEth(address owner) view returns(uint256)',
 	'function securityPoolForker() view returns(address)',
 	'function getQuestionOutcome(address pool) view returns(uint8)',
 	'function ledger() view returns(address)',
@@ -55,13 +54,6 @@ export async function loadPortfolioReportingReward(client: ReadClient, snapshot:
 	const payout = requireTupleValue(payoutValue, 2, 'reporting payout')
 	const recipient = requireAddressValue(payout[0], 'reporting recipient')
 	const beneficiary = recipient === zeroAddress ? undefined : recipient
-	const maintenance = beneficiary === services
-	return { pool, outcome, final: outcome !== 3n, beneficiary, maintenance, rewardShares, cashAttoEth: requireBigintValue(payout[1], 'reward ETH'), recoveryAttoRep: requireBigintValue(recoveryValue, 'recovered service REP'), sourceOnly }
-}
-
-export async function loadPortfolioServiceCredit(client: ReadClient, snapshot: Pick<PortfolioAccountSnapshot, 'portfolio' | 'blockNumber' | 'blockHash' | 'chainId'>, owner: Address) {
-	const services = requireAddressValue(await client.readContract({ address: snapshot.portfolio, abi, functionName: 'services', blockNumber: snapshot.blockNumber }), 'portfolio services')
-	const [credit, block, chainId] = await Promise.all([client.readContract({ address: services, abi, functionName: 'pullCreditsAttoEth', args: [owner], blockNumber: snapshot.blockNumber }), client.getBlock({ blockNumber: snapshot.blockNumber }), client.getChainId()])
-	if (block.hash !== snapshot.blockHash || chainId !== snapshot.chainId) throw new Error('Chain changed while reading service credits. Refresh and try again.')
-	return { services, amount: requireBigintValue(credit, 'service credit') }
+	const unclaimable = beneficiary === services
+	return { pool, outcome, final: outcome !== 3n, beneficiary, unclaimable, rewardShares, cashAttoEth: requireBigintValue(payout[1], 'reward ETH'), recoveryAttoRep: requireBigintValue(recoveryValue, 'recovered service REP'), sourceOnly }
 }

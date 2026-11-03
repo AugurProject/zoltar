@@ -1,7 +1,7 @@
 import { portfolioTakeoverPlan } from '#core/portfolio-strategy'
-import { executePortfolioTakeover, PortfolioOpportunityExpired } from '#execution/portfolio-executor'
-import { executePortfolioCure, executePortfolioEarnings } from '#execution/portfolio-cure'
-import { portfolioCurePlan, portfolioEarningsCoverGas } from '#core/portfolio-cure'
+import { executePortfolioTakeover } from '#execution/portfolio-executor'
+import { executePortfolioEarnings } from '#execution/portfolio-earnings'
+import { portfolioEarningsCoverGas } from '#core/portfolio-earnings'
 import { portfolioTarget } from '#monitoring/portfolio-auction'
 import { recordActivity } from '#state/operator-state'
 import { canonicalMarketPriceAllowsExecution, marketPriceAllowsExecution, selectedCandidate } from '#core/candidate-selection'
@@ -73,20 +73,9 @@ export async function runLiveExecutionStep(runtime: LiquidatorRuntime, deps: Liq
 				return shouldStopAfterSuccessfulCycle(runtime.settings.runtime.once)
 			}
 			for (const position of portfolio.positions) {
-				if (portfolioCurePlan(portfolio, position, runtime.settings, marketPriceAllowsExecution(price, runtime.settings, state)) !== undefined) {
-					try {
-						await executePortfolioCure(activeWallet, runtime.settings, state, runtime.readPool, portfolio, portfolioTarget(position), priceAllowed)
-						await saveDurableState(runtime.settings.runtime.stateFile, state)
-						return shouldStopAfterSuccessfulCycle(runtime.settings.runtime.once)
-					} catch (error) {
-						if (!(error instanceof PortfolioOpportunityExpired)) throw error
-					}
-				}
 				const result = portfolioTakeoverPlan(portfolio, position, runtime.settings, totalPrincipal, marketPriceAllowsExecution(price, runtime.settings, state))
 				if (result.plan === undefined) continue
-				await executePortfolioTakeover(activeWallet, runtime.settings, state, runtime.readPool, portfolio, portfolioTarget(position), current =>
-					canonicalMarketPriceAllowsExecution({ repToken: current.snapshot.repToken, lastPrice: current.snapshot.acceptedPrice }, runtime.settings, state, canonicalHash, requireDexEvidence),
-				)
+				await executePortfolioTakeover(activeWallet, runtime.settings, state, runtime.readPool, portfolio, portfolioTarget(position), priceAllowed)
 				await saveDurableState(runtime.settings.runtime.stateFile, state)
 				return shouldStopAfterSuccessfulCycle(runtime.settings.runtime.once)
 			}

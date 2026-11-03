@@ -237,7 +237,6 @@ contract PortfolioForkHarness {
 		settlement.setFeesEnabled(u, true, logicalTime(u));
 		settlement.replaceFeeStream(address(pools[u][q]), rate, end, logicalTime(u));
 	}
-	function creditServiceFees(uint248) external payable {}
 	function checkpointCapitalFees(uint248 u, uint48) external {
 		require(msg.sender == address(capitalLedger[u]), 'Only capital');
 		uint64 book = settlement.bookIds(u);

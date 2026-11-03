@@ -9,6 +9,7 @@ import {
 } from '../../types/contractArtifact'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { capitalUnit as E, useCapitalTestFixture } from './securityPoolCapitalTestFixture'
+import { burnedEthBalance } from './burnEvidence'
 
 describe('Statoblast: composed capital economics and fork intent', () => {
 	const fixture = useCapitalTestFixture()
@@ -102,6 +103,7 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 			let paidRep = 0n
 			const principal = 1346n * U
 			const initialSupply = await sender.readContract({ ...fixture.token, functionName: 'totalSupply' })
+			const initialBurnedEth = await burnedEthBalance(sender)
 			const streams = { abi: streamsArtifact.abi, address: await sender.readContract({ ...fixture.capital, functionName: 'feeStreams' }) }
 			const trace: string[] = []
 			const check = async () => {
@@ -138,7 +140,10 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 				const burnedRep = initialSupply + fundedRep - (await sender.readContract({ ...fixture.token, functionName: 'totalSupply' }))
 				expect(fundedRep).toBe(feesRep + outstandingRep + paidRep + burnedRep)
 				expect(await sender.getBalance({ address: fixture.capital.address })).toBe(feesEth + outstandingEth)
-				expect((await sender.getBalance({ address: fixture.capital.address })) + (await sender.getBalance({ address: fixture.harness.address })) + paidEth).toBe(fundedEth)
+				// Unassigned income is burned; nothing is retained by the harness authority.
+				expect(await sender.getBalance({ address: fixture.harness.address })).toBe(0n)
+				const burnedEth = (await burnedEthBalance(sender)) - initialBurnedEth
+				expect((await sender.getBalance({ address: fixture.capital.address })) + burnedEth + paidEth).toBe(fundedEth)
 			}
 			const action = async (label: string, execute: () => Promise<unknown>, update: () => void = () => {}) => {
 				trace.push(label)

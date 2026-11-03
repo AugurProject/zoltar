@@ -18,7 +18,7 @@ describe('shared capital complete-set purchases', () => {
 
 	test('quotes canonical question units and uniform purchase fees without a vault or allocation scan', async () => {
 		const calls: string[] = []
-		const responses: Record<string, unknown> = { getPool: pool, capitalLedger, purchaseQuote: [20n, 8n, 3n, 2n], quoteQuestionMint: 99n, availableMintCapacity: 200n, isPriceValid: true }
+		const responses: Record<string, unknown> = { getPool: pool, capitalLedger, purchaseQuote: [20n, 8n, 3n], quoteQuestionMint: 99n, availableMintCapacity: 200n, isPriceValid: true }
 		const client: PortfolioReadClient = {
 			getChainId: async () => 1,
 			getBlock: async () => ({ number: 45n, timestamp: 100n }),
@@ -36,7 +36,6 @@ describe('shared capital complete-set purchases', () => {
 			maximumPurchaseFeeAttoEth: 21n,
 			resolutionPremiumAttoEth: 8n,
 			reportingFundingAttoEth: 3n,
-			maintenanceAttoEth: 2n,
 			availableCommitmentAttoEth: 197n,
 			priceValid: true,
 			blockNumber: 45n,

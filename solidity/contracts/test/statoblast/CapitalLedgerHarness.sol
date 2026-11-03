@@ -78,7 +78,6 @@ contract CapitalLedgerHarness {
 	function setPriceError(uint256 priceError) external {
 		targetPriceErrorForDispute = priceError;
 	}
-	function creditServiceFees(uint248) external payable {}
 	function forkController() external pure returns (address) {
 		return address(0);
 	}

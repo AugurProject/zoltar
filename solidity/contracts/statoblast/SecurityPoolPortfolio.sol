@@ -62,8 +62,6 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		uint256 minimumOutcomeRate;
 		uint48 rewardVestingSeconds;
 		uint256 reportingFeeAttoEth;
-		uint256 serviceFeeBps;
-		uint256 maximumOracleRewardAttoEth;
 	}
 	struct Deployers {
 		SecurityPoolCapitalLedgerDeployer capital;
@@ -91,8 +89,6 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	uint256 public immutable minimumOutcomeRate;
 	uint48 public immutable rewardVestingSeconds;
 	uint256 public immutable reportingFeeAttoEth;
-	uint256 public immutable serviceFeeBps;
-	uint256 public immutable maximumOracleRewardAttoEth;
 	IPortfolioAuctionDeployer public immutable auctionDeployer;
 	SecurityPoolPortfolioPurchase public immutable quoteHelper;
 	SecurityPoolPortfolioServices public immutable services;
@@ -118,7 +114,6 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	constructor(ISecurityPoolFactory _factory, ISecurityPool seed, uint256 horizon, Deployers memory deployment, ISecurityPoolQuestionAdmissionPolicy admission, EconomicsConfig memory config) {
 		require(address(admission).code.length != 0, 'Admission policy has no code');
 		require(config.purchaseFeeBps <= 10_000 && config.annualFeeBps <= 10_000 && config.minimumCommitmentAttoEth > 0, 'Invalid portfolio economics');
-		require(config.serviceFeeBps <= 10_000, 'Invalid maintenance fee share');
 		require(address(deployment.auctions).code.length != 0, 'Auction deployer has no code');
 		require(config.minimumOutcomeRate > 0 && config.minimumOutcomeRate <= 1e18, 'Invalid minimum exchange rate');
 		require(address(deployment.capital).code.length != 0 && address(deployment.commitments).code.length != 0 && address(deployment.fees).code.length != 0 && address(deployment.books).code.length != 0 && address(deployment.settlement).code.length != 0 && address(deployment.reporters).code.length != 0 && address(deployment.forks).code.length != 0 && address(deployment.services).code.length != 0, 'Portfolio deployer has no code');
@@ -141,12 +136,10 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		minimumOutcomeRate = config.minimumOutcomeRate;
 		rewardVestingSeconds = config.rewardVestingSeconds;
 		reportingFeeAttoEth = config.reportingFeeAttoEth;
-		serviceFeeBps = config.serviceFeeBps;
-		maximumOracleRewardAttoEth = config.maximumOracleRewardAttoEth;
 		auctionDeployer = deployment.auctions;
 		deployers = deployment;
 		quoteHelper = new SecurityPoolPortfolioPurchase(address(this));
-		services = deployment.services.create(address(this), config.maximumOracleRewardAttoEth, initialReportPriorityFeeAttoEthPerGas);
+		services = deployment.services.create(address(this));
 	}
 
 	modifier nonReentrant() {
@@ -302,7 +295,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	function purchaseFee(uint256 mintAttoEth) public view returns (uint256) {
 		return quoteHelper.purchaseFee(mintAttoEth);
 	}
-	function purchaseQuote(uint248 universeId, uint256 questionId, uint256 mintAttoEth) external view returns (uint256 fee, uint256 premium, uint256 rewardFunding, uint256 maintenance) {
+	function purchaseQuote(uint248 universeId, uint256 questionId, uint256 mintAttoEth) external view returns (uint256 fee, uint256 premium, uint256 rewardFunding) {
 		return quoteHelper.purchaseQuote(universeId, questionId, mintAttoEth);
 	}
 	function createCompleteSet(uint248 universeId, uint256 questionId, uint256 mintAttoEth, address recipient, uint256 minimumShares) external payable nonReentrant returns (uint256 minted) {
@@ -401,14 +394,6 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		address recipient = services.claimReportingReward(poolAddress);
 		ISecurityPool pool = ISecurityPool(payable(poolAddress));
 		emit QuestionReportingRewardPaid(pool.universeId(), pool.questionId(), recipient);
-	}
-	function creditServiceFees(uint248 universeId) external payable {
-		require(msg.sender == address(capitalLedger[universeId]) || msg.sender == forkController, 'Only portfolio service funding');
-		services.fundMaintenance{value: msg.value}(universeId);
-	}
-	function rewardOracleReport(uint248 universeId, address sponsor, uint256 gasUnits, uint256 requestedAt) external {
-		require(msg.sender == factory.sharedPriceFeeds(address(this), universeId), 'Only canonical shared feed');
-		services.rewardOracleReport(universeId, sponsor, gasUnits, requestedAt);
 	}
 	function onQuestionAccountingChanged() external view {
 		_pool(msg.sender);

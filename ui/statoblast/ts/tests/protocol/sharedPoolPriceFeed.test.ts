@@ -82,7 +82,7 @@ for (const mismatch of [undefined, 'feed', 'factory', 'weth', 'rep', 'escrow', '
 			requests.contracts.map(request => {
 				if (request.functionName === 'feed') return { status: 'success', result: feed }
 				if (request.functionName === 'reportId') return { status: 'success', result: mismatch === 'report' ? 8n : 7n }
-				if (request.functionName === 'reportCandidates') return { status: 'success', result: [mismatch === 'escrow' ? feed : coordinator, coordinator, otherCoordinator, 0n, 0n, 0n] }
+				if (request.functionName === 'reportCandidates') return { status: 'success', result: [mismatch === 'escrow' ? feed : coordinator, coordinator, otherCoordinator, 0n] }
 				if (request.functionName === 'openOracle') return { status: 'success', result: otherCoordinator }
 				if (request.functionName === 'securityPoolFactory') return { status: 'success', result: mismatch === 'factory' ? coordinator : getInfraContractAddresses().securityPoolFactory }
 				if (request.functionName === 'portfolio') return { status: 'success', result: coordinator }

@@ -234,7 +234,7 @@ export async function migrateSharesFromUniverse<TReceipt extends Pick<Transactio
 const purchaseAbi = parseAbi([
 	'function getSecurityPoolPortfolio(address pool) view returns (address)',
 	'function getPool(uint256 questionId,uint248 universeId) view returns (address)',
-	'function purchaseQuote(uint248 universeId,uint256 questionId,uint256 amount) view returns (uint256 fee,uint256 premium,uint256 rewardFunding,uint256 maintenance)',
+	'function purchaseQuote(uint248 universeId,uint256 questionId,uint256 amount) view returns (uint256 fee,uint256 premium,uint256 rewardFunding)',
 	'function availableMintCapacity(uint248 universeId) view returns (uint256)',
 	'function createCompleteSet(uint248 universeId,uint256 questionId,uint256 mintAttoEth,address recipient,uint256 minimumShares) payable',
 ])

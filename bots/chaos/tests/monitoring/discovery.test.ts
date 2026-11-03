@@ -591,8 +591,8 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 				case 'reportCandidates':
 					expect(parameters.blockNumber).toBe(10n)
 					expect(parameters.address).toBe(address(80))
-					if (parameters.args?.[0] === 7n) return [address(87), address(1), coordinator, 1n, 1n, 1n]
-					return [parameters.args?.[0] === 6n ? address(86) : zeroAddress, address(1), coordinator, 1n, 1n, 1n]
+					if (parameters.args?.[0] === 7n) return [address(87), address(1), coordinator, 1n]
+					return [parameters.args?.[0] === 6n ? address(86) : zeroAddress, address(1), coordinator, 1n]
 				case 'minimumToken1ReportAttoEth':
 					return 10_001n + ((overrides.sharedExposure ?? 0n) / 100n > 10_001n * callBaseFee ? (overrides.sharedExposure ?? 0n) / 100n : 10_001n * callBaseFee)
 				case 'gasConsumedOpenOracleReportPrice':

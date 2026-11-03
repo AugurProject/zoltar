@@ -91,10 +91,12 @@ test('any connected caller can claim once for the fixed winning reporter with a 
 test('the preview uses the capped canonical payout rather than the entire funded question reserve', async () => {
 	const { hook, requests } = await setup({ quoteReportingReward: [owner, unit / 10n] })
 	expect(hook.state().reward?.cashAttoEth).toBe(unit / 10n)
+	expect(hook.state().recipient).toBe(owner)
+	expect(hook.state().cashLabel).toBe('Reward ETH')
 	await act(() => hook.state().claim())
 	expect(requests[0]?.reviewDescription).toContain('Release 0.1 ETH')
 	expect(requests[0]?.reviewDescription).toContain('2 REP will be burned')
-	expect(requests[0]?.reviewDescription).toContain('remaining budget funds pool maintenance')
+	expect(requests[0]?.reviewDescription).toContain('remaining budget is burned')
 })
 test.each([
 	[{ getQuestionOutcome: 3n }, 'must be final'],
@@ -107,12 +109,17 @@ test.each([
 	await expect(hook.state().claim()).rejects.toThrow(expected)
 	expect(requests).toHaveLength(0)
 })
-test('unassigned reporting budgets route to maintenance with explicit REP burn disclosure', async () => {
+test('unassigned reporting budgets disclose that their ETH and recovered REP are burned', async () => {
 	const { hook, requests } = await setup({ quoteReportingReward: [capital, unit] })
 	expect(hook.state().reward?.beneficiary).toBe(capital)
 	expect(hook.state().reason).toBeUndefined()
+	expect(hook.state().recipient).toBeUndefined()
+	expect(hook.state().cashLabel).toBe('ETH to burn')
 	await act(() => hook.state().claim())
-	expect(requests[0]?.reviewDescription).toContain('funds pool maintenance; recovered REP is burned')
+	expect(requests[0]?.reviewDescription).toContain('Burn 1 ETH and 2 REP for question 0x1.')
+	expect(requests[0]?.reviewDescription).toContain('its ETH and recovered REP are burned')
+	expect(requests[0]?.reviewDescription).not.toContain('Release')
+	expect(requests[0]?.reviewDescription).not.toContain(capital)
 })
 test('beneficiary changes and inherited source-only rewards cannot pass submission revalidation', async () => {
 	const { hook, requests, values, snapshot, model } = await setup()

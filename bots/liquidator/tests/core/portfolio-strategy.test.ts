@@ -118,6 +118,19 @@ test('a cure that restores health is screened out of takeovers', () => {
 	expect(evaluate(observation).reason).toBe('Cure restores target health without a takeover')
 })
 
+test('the preliminary cure is unpaid and removes exactly the rounded-up deficit, floored and capped like the index', () => {
+	const observation = portfolioObservation()
+	const position = observation.positions[0]
+	if (position === undefined) throw new Error('Fixture position missing')
+	observation.snapshot.demandAttoEth = 0n
+	const supported = (((position.rep * 10_000n) / observation.snapshot.securityMultiplierBps) * unit) / observation.snapshot.liquidationPrice
+	expect(portfolioCureOutcome(observation, position)).toMatchObject({ removed: position.commitment - supported, commitment: supported, rep: position.rep, healthy: true })
+	observation.snapshot.economics.minimumCommitmentAttoEth = 10n * unit
+	expect(portfolioCureOutcome(observation, position)).toMatchObject({ removed: 10n * unit, commitment: 90n * unit, rep: position.rep, healthy: true })
+	observation.snapshot.demandAttoEth = 95n * unit
+	expect(portfolioCureOutcome(observation, position)).toMatchObject({ removed: 0n, commitment: 100n * unit, rep: position.rep, healthy: false })
+})
+
 test('takeover prerequisites reject demand or total-capacity changes even below the cure floor', () => {
 	const plan = evaluate().plan
 	if (plan === undefined) throw new Error('Fixture plan missing')

@@ -75,8 +75,6 @@ export function portfolioObservation(): PortfolioObservation {
 				minimumOutcomeRate: 1n,
 				rewardVestingSeconds: 3600n,
 				reportingFeeAttoEth: 1n,
-				serviceFeeBps: 1n,
-				maximumOracleRewardAttoEth: 1n,
 			},
 		},
 	}

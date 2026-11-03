@@ -71,7 +71,7 @@ describe('simulation chain', () => {
 		const result = await chain.request({ method: 'eth_call', params: [{ data, from: SENDER, to: multicall, value: '0x3' }, 'latest'] })
 
 		const [, returnData] = decodeFunctionResult({ abi: multicallAbi, data: result as Hex, functionName: 'aggregate' })
-		// The call saw its own 3 wei arrive at the contract; the chain did not keep them.
+		// The call saw its own 3 attoETH arrive at the contract; the chain did not keep them.
 		expect(returnData.map(value => BigInt(value))).toEqual([await chain.memoryClient.getBalance({ address: RECIPIENT }), 3n])
 		expect(await chain.memoryClient.getTransactionCount({ address: SENDER })).toBe(nonceBefore)
 		expect(await chain.memoryClient.getBalance({ address: multicall })).toBe(0n)

@@ -29,8 +29,6 @@ const reportEscrowAbi = [
 			{ name: 'sponsor', type: 'address' },
 			{ name: 'coordinator', type: 'address' },
 			{ name: 'maxSettlementBaseFee', type: 'uint256' },
-			{ name: 'requestedAt', type: 'uint256' },
-			{ name: 'requestGas', type: 'uint256' },
 		],
 	},
 	{

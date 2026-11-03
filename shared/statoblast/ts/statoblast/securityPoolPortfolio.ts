@@ -8,8 +8,6 @@ export type PortfolioEconomicsConfig = {
 	minimumOutcomeRate: bigint
 	rewardVestingSeconds: bigint
 	reportingFeeAttoEth: bigint
-	serviceFeeBps: bigint
-	maximumOracleRewardAttoEth: bigint
 }
 export type PortfolioDeployers = {
 	capital: Address
@@ -34,7 +32,6 @@ export function validatePortfolioEconomics(config: PortfolioEconomicsConfig) {
 	for (const [name, value] of Object.entries(config)) uint(value, name === 'rewardVestingSeconds' ? 48 : 256, name)
 	if (config.purchaseFeeBps > 10_000n) throw new Error('Purchase fee cannot exceed 100%.')
 	if (config.annualFeeBps > 10_000n) throw new Error('Annual fee cannot exceed 100%.')
-	if (config.serviceFeeBps > 10_000n) throw new Error('Maintenance fee share cannot exceed 100%.')
 	if (config.minimumCommitmentAttoEth === 0n || config.rewardVestingSeconds === 0n) throw new Error('Minimum commitment and fee vesting duration must be positive.')
 	if (config.minimumOutcomeRate === 0n || config.minimumOutcomeRate > 10n ** 18n) throw new Error('Minimum outcome exchange rate must be positive and at most one.')
 }
@@ -92,7 +89,7 @@ export { buildPortfolioMintRequest, loadPortfolioMintQuote, type PortfolioMintQu
 /** @public External clients can register an admitted question independently of purchasing shares. */
 export { buildPortfolioAddQuestionRequest } from './securityPoolPortfolioMint.js'
 /** @public A permissionless call pays a question's authenticated final reporting beneficiary. */
-export { buildPortfolioReportingRewardRequest, buildPortfolioServiceCreditRequest } from './securityPoolPortfolioMint.js'
+export { buildPortfolioReportingRewardRequest } from './securityPoolPortfolioMint.js'
 export {
 	buildPortfolioForkChoiceRequest,
 	buildPortfolioForkPreparationRequest,

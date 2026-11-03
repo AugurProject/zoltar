@@ -16,6 +16,7 @@ import { getInfraContractAddresses } from '../../testSupport/simulator/utils/con
 import { addRepToMigrationBalance, forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress, splitMigrationRep } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { approveToken, getChildUniverseId } from '../../testSupport/simulator/utils/utilities'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { burnedEthBalance, receiptBurns } from './burnEvidence'
 
 const preparationAbi = parseAbi(['function checkpointPreparationPremium(uint248 universeId)'])
 
@@ -50,22 +51,31 @@ describe('Statoblast: preparation premium ownership', () => {
 		await mock.setTime(deadline - 1n)
 		const root = createWriteClient(mock, BigInt(fixture.portfolio))
 		await writeContractAndWait(root, () => root.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'acceptPrice', args: [unit, Number(deadline + 780n)] }))
-		const maintenanceBefore = await owner.readContract({ abi: servicesArtifact.abi, address: services, functionName: 'maintenanceReserveAttoEth', args: [child] })
+		const servicesCashBefore = await owner.getBalance({ address: services })
 		const premiumBefore = (await owner.readContract({ abi: premiumArtifact.abi, address: premium, functionName: 'totals', args: [child] }))[0]
 		expect(premiumBefore).toBeGreaterThan(0n)
 		await mock.setTime(activation)
-		const finalize = () => writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'finalizeBranch', args: [child] }))
+		const finalize = async () => {
+			const burnedBefore = await burnedEthBalance(owner)
+			const hash = await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'finalizeBranch', args: [child] }))
+			const burns = await receiptBurns(owner, hash)
+			// Every ownerless amount the activation reports is actually sent to the burn address.
+			expect(await burnedEthBalance(owner)).toBe(burnedBefore + burns.totalEth)
+			const preparation = burns.service.filter(entry => entry.universeId === child).reduce((total, entry) => total + entry.amount, 0n)
+			return { burns, preparation }
+		}
 		const checkpoint = () => writeContractAndWait(owner, () => owner.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'checkpoint' }))
 		const fees = async () => {
 			const position = (await owner.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'ownerAccount', args: [owner.account.address] })).positionId
 			return (await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [position] })).ethFees
 		}
-		return { owner, mock, child, forks, capital, services, premium, maintenanceBefore, premiumBefore, finalize, checkpoint, fees }
+		const servicesCash = () => owner.getBalance({ address: services })
+		return { owner, mock, child, forks, capital, services, premium, servicesCashBefore, servicesCash, premiumBefore, finalize, checkpoint, fees }
 	}
 
 	test('late activation cannot backdate reporting premiums into the preparation interval', async () => {
 		const context = await prepare(300n)
-		await context.finalize()
+		const { preparation } = await context.finalize()
 		const [activationCash, , activationTime] = await context.owner.readContract({ abi: premiumArtifact.abi, address: context.premium, functionName: 'totals', args: [context.child] })
 		expect(activationTime).toBe(await context.owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'logicalTime', args: [context.child] }))
 		expect(await context.fees()).toBe(0n)
@@ -73,19 +83,22 @@ describe('Statoblast: preparation premium ownership', () => {
 		const remaining = (await context.owner.readContract({ abi: premiumArtifact.abi, address: context.premium, functionName: 'totals', args: [context.child] }))[0]
 		expect(activationCash).toBeLessThan(context.premiumBefore)
 		expect(await context.fees()).toBe(activationCash - remaining)
-		expect(await context.owner.readContract({ abi: servicesArtifact.abi, address: context.services, functionName: 'maintenanceReserveAttoEth', args: [context.child] })).toBe(context.maintenanceBefore + context.premiumBefore - activationCash)
+		// Elapsed preparation premium is burned, never retained or paid to later underwriters.
+		expect(preparation).toBe(context.premiumBefore - activationCash)
+		expect(preparation).toBeGreaterThan(0n)
 		await context.mock.advanceTime(300n)
 		await context.checkpoint()
 		expect(await context.fees()).toBeGreaterThan(0n)
 	})
 
-	test('expired preparation premiums entirely fund maintenance without delaying activation', async () => {
+	test('expired preparation premiums are entirely burned without delaying activation', async () => {
 		const context = await prepare(4n * DAY)
-		await context.finalize()
+		const { preparation } = await context.finalize()
+		expect(preparation).toBe(context.premiumBefore)
+		expect(await context.servicesCash()).toBe(context.servicesCashBefore - context.premiumBefore)
 		await context.checkpoint()
 		expect(await context.fees()).toBe(0n)
 		expect((await context.owner.readContract({ abi: premiumArtifact.abi, address: context.premium, functionName: 'totals', args: [context.child] }))[0]).toBe(0n)
-		expect(await context.owner.readContract({ abi: servicesArtifact.abi, address: context.services, functionName: 'maintenanceReserveAttoEth', args: [context.child] })).toBe(context.maintenanceBefore + context.premiumBefore)
 	})
 
 	test('preparation checkpoints require the fork controller and cannot divert active earnings', async () => {
@@ -106,11 +119,11 @@ describe('Statoblast: preparation premium ownership', () => {
 		await forkUniverse(context.owner, context.child, fixture.base.questionId)
 		const frozenTime = await context.owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'logicalTime', args: [context.child] })
 		await context.mock.advanceTime(3600n)
-		await context.finalize()
+		const { preparation } = await context.finalize()
 		const [remaining, , timestamp] = await context.owner.readContract({ abi: premiumArtifact.abi, address: context.premium, functionName: 'totals', args: [context.child] })
 		expect(timestamp).toBe(frozenTime)
 		expect(remaining).toBe(0n)
 		expect(await context.fees()).toBe(0n)
-		expect(await context.owner.readContract({ abi: servicesArtifact.abi, address: context.services, functionName: 'maintenanceReserveAttoEth', args: [context.child] })).toBe(context.maintenanceBefore + context.premiumBefore)
+		expect(preparation).toBe(context.premiumBefore)
 	})
 })

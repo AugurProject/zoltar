@@ -749,10 +749,6 @@
 			"bun": "./ts/features/portfolios/hooks/usePortfolioReportingReward.ts",
 			"default": "./js/features/portfolios/hooks/usePortfolioReportingReward.js"
 		},
-		"./features/portfolios/hooks/usePortfolioServiceCredit.js": {
-			"bun": "./ts/features/portfolios/hooks/usePortfolioServiceCredit.ts",
-			"default": "./js/features/portfolios/hooks/usePortfolioServiceCredit.js"
-		},
 		"./features/portfolios/components/PortfolioPriceReport.js": {
 			"bun": "./ts/features/portfolios/components/PortfolioPriceReport.tsx",
 			"default": "./js/features/portfolios/components/PortfolioPriceReport.js"
