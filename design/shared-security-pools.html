@@ -445,8 +445,9 @@
 			<section id="summary">
 				<h2>1. The change in one minute</h2>
 				<p>Statoblast is Augur's market layer on top of the Zoltar oracle. Before this pull request, every question had its own SecurityPool: its own vaults holding REP, its own ETH collateral, its own fee curve, its own REP/ETH price coordinator and, after a fork, its own Truth Auction. A REP holder who wanted to secure twenty questions had to run twenty vaults and pay for twenty price reports.</p>
-				<p>After this pull request, a <strong>portfolio</strong> holds REP once per universe in a <strong>capital ledger</strong>, and every question registered in the portfolio draws on that same backing. A provider deposits REP, picks a personal <strong>health target</strong>, and authorizes one ETH <strong>commitment</strong>. A buyer picks a question and an amount; the portfolio checks that total <strong>demand</strong> (ETH liabilities) stays within the <strong>healthy commitment</strong> of all providers, mints the complete set (one Invalid, one Yes and one No share per unit of ETH), and charges a fee that is split between providers, a prepaid resolution premium, a reporting budget and a maintenance reserve. Each question keeps its own outcome tokens, its own Escalation Game (the REP-staked dispute process that resolves a question locally) and separate settlement accounting, but ETH custody and fee bookkeeping are centralized in a <strong>settlement book</strong>.</p>
-				<p>The pull request also replaces per-vault liquidation with two keeper actions, <strong>cure</strong> (remove unused commitment, 1% REP reward) and <strong>takeover</strong> (take over a distressed commitment for a time-ramped REP award), and redesigns the <strong>Truth Auction</strong> that repairs a branch's ETH shortfall after a fork: bids are whole ETH lots with a minimum REP-per-lot limit, every winning lot receives the same clearing REP amount, provably losing bids can be refunded before closing, in one transaction if the bidder wants, and all sold REP enters capital custody immediately so winners never need to claim. Each bid's vault is a cheap clone of one shared implementation, with the bidder, ledger, auction and bid number fixed in its own code.</p>
+				<p>After this pull request, a <strong>portfolio</strong> holds REP once per universe in a <strong>capital ledger</strong>, and every question registered in the portfolio draws on that same backing. A provider deposits REP, picks a personal <strong>health target</strong>, and authorizes one ETH <strong>commitment</strong>. A buyer picks a question and an amount; the portfolio checks that total <strong>demand</strong> (ETH liabilities) stays within the <strong>healthy commitment</strong> of all providers, mints the complete set (one Invalid, one Yes and one No share per unit of ETH), and charges a fee made of a backing fee for providers, a prepaid resolution premium and whatever top-up the question's reporting reward still needs. Each question keeps its own outcome tokens, its own Escalation Game (the REP-staked dispute process that resolves a question locally) and separate settlement accounting, but ETH custody and fee bookkeeping are centralized in a <strong>settlement book</strong>.</p>
+				<p>The pull request also replaces per-vault liquidation with two permissionless actions, <strong>cure</strong> (remove a distressed position's unbacked commitment from unused capacity, for no reward) and <strong>takeover</strong> (take over a distressed commitment for a time-ramped REP award), and redesigns the <strong>Truth Auction</strong> that repairs a branch's ETH shortfall after a fork: bids are whole ETH lots with a minimum REP-per-lot limit, every winning lot receives the same clearing REP amount, provably losing bids can be refunded before closing, in one transaction if the bidder wants, and all sold REP enters capital custody immediately so winners never need to claim. Each bid's vault is a cheap clone of one shared implementation, with the bidder, ledger, auction and bid number fixed in its own code.</p>
+				<p>No shared pot pays for upkeep. Whoever needs a fresh price or a cure pays for it, and ETH that no current underwriter has earned and whose payer is not recorded, such as income from unhealthy or stale intervals and unused premiums and reporting budgets, is burned rather than refunded.</p>
 				<p>Everything is built so that no operation iterates over all questions, owners or bidders: commitments live in balanced trees keyed by health, fees vest through cumulative integrals, and forks copy immutable roots instead of migrating each vault.</p>
 			</section>
 
@@ -559,7 +560,7 @@
 								<td><strong>Capital provider</strong> (vault owner)</td>
 								<td>REP <em>principal</em> deposited in a universe's capital ledger; one ETH <em>commitment</em> backed by all of that principal; a personal health target</td>
 								<td>A share of every fee earned while the commitment is healthy, paid in ETH and REP; lump sums vest over a configured period</td>
-								<td>REP rewards paid to keepers when the position becomes unhealthy; forced commitment reduction; REP sold or devalued in a fork</td>
+								<td>Forced commitment reduction when the position becomes unhealthy; REP awarded to a takeover receiver; REP sold or devalued in a fork</td>
 							</tr>
 							<tr>
 								<td><strong>Buyer</strong> (trader, liquidity provider)</td>
@@ -576,7 +577,7 @@
 							<tr>
 								<td><strong>Keeper</strong> (the liquidator bot or anyone)</td>
 								<td>Gas and, for takeovers, REP collateral of their own</td>
-								<td>REP from cures and takeovers; ETH reimbursement for accepted oracle reports from the maintenance reserve</td>
+								<td>REP from takeovers; nothing for cures or price reports, which they pay for themselves when they need them</td>
 								<td>Unprofitable gas; REP that may be illiquid</td>
 							</tr>
 							<tr>
@@ -613,7 +614,7 @@
 						<text x="440" y="216" text-anchor="middle" class="lbl-small">units · finality · fees · recovery REP</text>
 						<rect x="610" y="130" width="270" height="110" rx="8" class="box-warm"></rect>
 						<text x="745" y="152" text-anchor="middle" class="lbl-title">SecurityPoolPortfolioServices</text>
-						<text x="745" y="170" text-anchor="middle" class="lbl-small">maintenance reserve · purchase routing</text>
+						<text x="745" y="170" text-anchor="middle" class="lbl-small">purchase routing · premium and reward cash</text>
 						<rect x="620" y="182" width="125" height="44" rx="6" class="box"></rect>
 						<text x="682" y="200" text-anchor="middle" class="lbl-small">PremiumBook</text>
 						<text x="682" y="216" text-anchor="middle" class="lbl-small">resolution premiums</text>
@@ -657,7 +658,7 @@
 
 			<section id="lifecycle">
 				<h2>4. How a portfolio works, step by step</h2>
-				<p>This section follows a portfolio from creation to redemption. Numbers in the examples use illustrative parameters: a security multiplier of 150% (15,000 basis points), a 5% oracle tolerance, a 1% purchase fee, a 10% annual holding fee, a 0.05 ETH reporting budget per question, a 25% maintenance share and a 1 ETH minimum commitment. All of these are configured per portfolio or per deployment, not fixed by the protocol, except where the text says otherwise.</p>
+				<p>This section follows a portfolio from creation to redemption. Numbers in the examples use illustrative parameters: a security multiplier of 150% (15,000 basis points), a 5% oracle tolerance, a 1% purchase fee, a 10% annual holding fee, a 0.05 ETH reporting budget per question and a 1 ETH minimum commitment. All of these are configured per portfolio or per deployment, not fixed by the protocol, except where the text says otherwise.</p>
 
 				<h3 id="create">4.1 Creating a portfolio and registering questions</h3>
 				<p>A portfolio is created from a <em>seed</em>: an ordinary origin SecurityPool whose security multiplier and oracle priority fee the portfolio inherits. The creator supplies an immutable <strong>admission policy</strong> contract and an <strong>economics configuration</strong>. The repository ships two policies: <em>Open</em>, which admits any question, and <em>Fixed</em>, which admits a sorted list of question identifiers that can never change. Anyone can write another policy; it is consulted with a static call on registration, quotes and purchases, never on withdrawals or recovery, so a broken policy cannot trap funds.</p>
@@ -684,12 +685,7 @@
 							<tr>
 								<td><code>reportingFeeAttoEth</code></td>
 								<td>Fixed per-question reporting budget, prefunded as reward shares</td>
-								<td>Charged on every purchase; the question's reward is funded once, the rest goes to maintenance</td>
-							</tr>
-							<tr>
-								<td><code>serviceFeeBps</code>, <code>maximumOracleRewardAttoEth</code></td>
-								<td>Share of the backing fee that funds the maintenance reserve, and the cap on one oracle reimbursement</td>
-								<td>Pays sponsors of accepted price reports</td>
+								<td>A purchase pays only the shortfall between this target and the current value of the question's reward shares</td>
 							</tr>
 							<tr>
 								<td><code>minimumCommitmentAttoEth</code></td>
@@ -698,7 +694,7 @@
 							</tr>
 							<tr>
 								<td><code>rewardVestingSeconds</code></td>
-								<td>How long each lump-sum fee budget (backing-fee share, reporting REP surplus) takes to vest to providers</td>
+								<td>How long each lump-sum fee budget (backing fee, reporting REP surplus) takes to vest to providers</td>
 								<td>Backing-fee and REP-surplus credits</td>
 							</tr>
 							<tr>
@@ -830,7 +826,7 @@
 					<p class="equation-caption"><span class="var">demand</span> is the ETH of all live question liabilities in the universe plus prefunded reporting rewards. <span class="var">healthyActiveCommitment</span> counts active positions whose <span class="var">maxHealthyPrice</span> is at least the conservative price, plus the part of a retiring position its owner has chosen to keep. The rule is enforced when demand increases and when retirements are served, not continuously: an adverse price move can leave outstanding demand above the healthy commitment, and it is the cures and takeovers of <a href="#distress">4.6</a>, not a reduction of demand, that restore coverage. Capacity is zero while the price is stale, after the universe has forked, before a branch has been activated, and while the universe's settlement book is in runoff, the post-fork state in which claims settle but no new purchases are accepted (see <a href="#after-auction">5.4</a>).</p>
 				</div>
 				<p>Minting itself is proportional. A question's shares are a claim on its <em>units</em> of cash; a new buyer receives <span class="var">cash × outcomeSupply ÷ units</span> complete sets, so holders who arrived before fees were charged are not diluted and later buyers pay the current exchange rate. Every mint increases <span class="var">demand</span> by exactly the cash deposited.</p>
-				<p>The fee has four parts. The first is proportional to the <em>backing value</em> the purchase consumes, which is the cash times the security multiplier, because that is the amount of REP exposure providers take on:</p>
+				<p>The fee has three parts. The first is proportional to the <em>backing value</em> the purchase consumes, which is the cash times the security multiplier, because that is the amount of REP exposure providers take on:</p>
 				<div class="equation" id="eq-backing-fee">
 					<math display="block">
 						<mrow>
@@ -865,27 +861,24 @@
 							>
 						</mrow>
 					</math>
-					<p class="equation-caption">The premium is earned by providers only until the question's finality deadline; the unused remainder goes to the maintenance reserve, not back to the buyer.</p>
+					<p class="equation-caption">The premium is earned by providers only until the question's finality deadline; the unused remainder is burned, because the premium book does not record which buyer paid it.</p>
 				</div>
-				<p>The third is the fixed <strong>reporting budget</strong>. The first purchase of a question (or any purchase after the budget has been partly consumed) tops the question's <em>reward shares</em> up to <span class="var">reportingFeeAttoEth</span>; these are complete-set-equivalent claims that the final unique leader of the Escalation Game can later redeem, within a cap. Every purchase pays the full budget amount; whatever is not needed to top up the reward is routed to maintenance. The fourth is the <strong>maintenance share</strong> of the backing fee:</p>
+				<p>The third is the fixed <strong>reporting budget</strong>. The first purchase of a question (or any purchase after the budget has been partly consumed) tops the question's <em>reward shares</em> up to <span class="var">reportingFeeAttoEth</span>; these are complete-set-equivalent claims that the final unique leader of the Escalation Game can later redeem, within a cap. A purchase pays only that top-up, the shortfall between the target and the current redemption value of the reward shares; once the reward is funded, later purchases pay only the small amount by which holding fees have reduced that value since. The whole backing fee vests to providers:</p>
 				<div class="equation" id="eq-fee-total">
 					<math display="block">
 						<mtable displaystyle="true">
 							<mtr>
-								<mtd><mi>totalFee</mi><mo>=</mo><mi>backingFee</mi><mo>+</mo><mi>premium</mi><mo>+</mo><mi>reportingBudget</mi></mtd>
+								<mtd><mi>rewardTopUp</mi><mo>=</mo><mi>max</mi><mo>(</mo><mn>0</mn><mo>,</mo><mi>reportingBudget</mi><mo>−</mo><mi>rewardSharesValue</mi><mo>)</mo></mtd>
 							</mtr>
 							<mtr>
-								<mtd
-									><mi>maintenance</mi><mo>=</mo><mi>backingFee</mi><mo>×</mo><mfrac><mi>serviceFeeBps</mi><mn>10 000</mn></mfrac
-									><mo>+</mo><mi>reportingBudget</mi><mo>−</mo><mi>rewardTopUp</mi></mtd
-								>
+								<mtd><mi>totalFee</mi><mo>=</mo><mi>backingFee</mi><mo>+</mo><mi>premium</mi><mo>+</mo><mi>rewardTopUp</mi></mtd>
 							</mtr>
 							<mtr>
-								<mtd><mi>providerIncome</mi><mo>=</mo><mi>totalFee</mi><mo>−</mo><mi>premium</mi><mo>−</mo><mi>rewardTopUp</mi><mo>−</mo><mi>maintenance</mi></mtd>
+								<mtd><mi>providerIncome</mi><mo>=</mo><mi>totalFee</mi><mo>−</mo><mi>premium</mi><mo>−</mo><mi>rewardTopUp</mi><mo>=</mo><mi>backingFee</mi></mtd>
 							</mtr>
 						</mtable>
 					</math>
-					<p class="equation-caption">Quotes are exact at the current checkpoint; the transaction re-checkpoints, enforces the caller's total budget and minimum shares, and refunds any excess ETH.</p>
+					<p class="equation-caption">Quotes are exact at the current checkpoint, but the top-up, and with it the fee, can grow slightly from block to block as holding fees lower the reward shares' value. The transaction re-checkpoints, enforces the caller's total budget and minimum shares, and refunds any excess ETH; the SDK allows a fee up to 1% above the quote.</p>
 				</div>
 				<p>Worked example: the first 1 ETH purchase of a fresh question.</p>
 				<div class="table-wrap">
@@ -906,7 +899,7 @@
 							<tr>
 								<td>Backing fee: 1 ETH × 150% × 1%</td>
 								<td class="num">0.0150</td>
-								<td>0.01125 vests to providers; 0.00375 (25%) to maintenance</td>
+								<td>Vests to providers in full</td>
 							</tr>
 							<tr>
 								<td>Resolution premium: 1.05 ETH principal × 10% × 52 ÷ 365</td>
@@ -914,44 +907,42 @@
 								<td>Premium book; credited to healthy providers over the reporting window</td>
 							</tr>
 							<tr>
-								<td>Reporting budget (first purchase funds the reward in full)</td>
+								<td>Reporting top-up (the first purchase funds the whole budget)</td>
 								<td class="num">0.0500</td>
 								<td>Reward shares of the question; also raises demand by 0.05 ETH</td>
 							</tr>
 							<tr>
 								<td><strong>Total paid</strong></td>
 								<td class="num"><strong>1.0800</strong></td>
-								<td>Fee of 0.080 ETH, about 8% of cash on a fresh question; later purchases of the same question pay a slightly smaller premium and send the reporting budget to maintenance</td>
+								<td>Fee of 0.080 ETH, about 8% of cash on a fresh question; a later 1 ETH purchase of the same question pays a slightly smaller premium and only a small top-up, about 0.029 ETH in total</td>
 							</tr>
 						</tbody>
 					</table>
 				</div>
 				<figure id="fig-fee-split">
 					<svg viewBox="0 0 900 230" role="img" aria-labelledby="fig-fee-split-title">
-						<title id="fig-fee-split-title">Stacked bars: a 1.08 ETH payment is 1 ETH of cash and 0.08 ETH of fee; the fee splits into a backing fee shared by providers and maintenance, a resolution premium and a reporting budget.</title>
+						<title id="fig-fee-split-title">Stacked bars: a 1.08 ETH payment is 1 ETH of cash and 0.08 ETH of fee; the fee splits into a backing fee for providers, a resolution premium and a reporting top-up.</title>
 						<text x="60" y="24" class="lbl-title">Payment: 1.080 ETH</text>
 						<rect x="60" y="36" width="722" height="30" class="fill-cool"></rect>
 						<rect x="782" y="36" width="58" height="30" class="fill-warm"></rect>
 						<text x="421" y="56" text-anchor="middle" class="lbl lbl-on-fill">cash 1.000 ETH → question units (settlement book)</text>
 						<text x="811" y="84" text-anchor="middle" class="lbl-small">fee 0.080</text>
 						<text x="60" y="124" class="lbl-title">Fee breakdown: 0.080 ETH</text>
-						<rect x="60" y="136" width="110" height="30" class="fill-accent"></rect>
-						<rect x="170" y="136" width="36" height="30" class="fill-muted"></rect>
+						<rect x="60" y="136" width="146" height="30" class="fill-accent"></rect>
 						<rect x="206" y="136" width="146" height="30" class="fill-accent-alt"></rect>
 						<rect x="352" y="136" width="488" height="30" class="fill-warm"></rect>
-						<text x="115" y="156" text-anchor="middle" class="lbl-small lbl-on-fill">providers</text>
+						<text x="133" y="156" text-anchor="middle" class="lbl-small lbl-on-fill">providers</text>
 						<text x="279" y="156" text-anchor="middle" class="lbl-small lbl-on-fill">premium</text>
-						<text x="596" y="156" text-anchor="middle" class="lbl-small lbl-on-fill">reporting budget 0.050 → reward shares (first purchase) or maintenance</text>
-						<text x="115" y="186" text-anchor="middle" class="lbl-small">0.01125 vests from now</text>
-						<text x="188" y="206" text-anchor="middle" class="lbl-small">0.00375 maintenance</text>
+						<text x="596" y="156" text-anchor="middle" class="lbl-small lbl-on-fill">reporting top-up 0.050 → reward shares (first purchase only)</text>
+						<text x="133" y="186" text-anchor="middle" class="lbl-small">0.0150 vests from now</text>
 						<text x="279" y="186" text-anchor="middle" class="lbl-small">0.0150 earned until finality</text>
-						<text x="596" y="186" text-anchor="middle" class="lbl-small">final reporter claims up to a cap; remainder to maintenance</text>
+						<text x="596" y="186" text-anchor="middle" class="lbl-small">final reporter claims up to a cap; the remainder is burned</text>
 					</svg>
 					<figcaption><strong>Figure 4. Where a purchase goes.</strong> The cash stays with the question. The fee is small relative to cash but is the only income providers earn up front; the holding fee below is their income over time.</figcaption>
 				</figure>
 
 				<h3 id="earn">4.4 Earning: holding fees and vesting streams</h3>
-				<p>Providers earn from four sources: their share of the up-front backing fee, the resolution premium, a <strong>linear holding fee</strong> charged continuously from each open question's cash, and the REP surplus that Escalation Games shed (<a href="#reporting">4.8</a>). The holding fee replaces the standalone pools' utilization-dependent retention curve with something a buyer can compute in advance:</p>
+				<p>Providers earn from four sources: the up-front backing fee, the resolution premium, a <strong>linear holding fee</strong> charged continuously from each open question's cash, and the REP surplus that Escalation Games shed (<a href="#reporting">4.8</a>). The holding fee replaces the standalone pools' utilization-dependent retention curve with something a buyer can compute in advance:</p>
 				<div class="equation" id="eq-holding-fee">
 					<math display="block">
 						<mrow>
@@ -965,7 +956,7 @@
 					</math>
 					<p class="equation-caption"><span class="var">feePrincipal</span> is the cash originally deposited for the question's live shares, so the fee is a flat annual percentage of what buyers paid. It stops when an Escalation Game opens, when the question is final, when the question's cash would run out, or while the universe's price is stale or its book is in runoff. Each second charged converts one unit of question cash into fee cash and lowers demand by the same amount.</p>
 				</div>
-				<p>Income reaches providers in two different ways. Time-earned income, the holding fee and the resolution premium, is credited at every checkpoint to the commitments that are healthy at that moment, in proportion to size. Lump-sum income, the provider share of each backing fee and the REP surplus from reporting, is handed to a <strong>fee stream</strong> contract that vests it linearly over <span class="var">rewardVestingSeconds</span>. Vesting serves two purposes: it rewards capital that stays, and it prevents a provider who joins just before a large lump sum is credited from capturing income that belongs to earlier providers. The stream contract keeps one cumulative integral per expiry time, so adding a budget or releasing income costs a constant amount of work plus a binary search over outstanding expiries, no matter how many budgets were ever funded:</p>
+				<p>Income reaches providers in two different ways. Time-earned income, the holding fee and the resolution premium, is credited at every checkpoint to the commitments that are healthy at that moment, in proportion to size. Lump-sum income, each backing fee and the REP surplus from reporting, is handed to a <strong>fee stream</strong> contract that vests it linearly over <span class="var">rewardVestingSeconds</span>. Vesting serves two purposes: it rewards capital that stays, and it prevents a provider who joins just before a large lump sum is credited from capturing income that belongs to earlier providers. The stream contract keeps one cumulative integral per expiry time, so adding a budget or releasing income costs a constant amount of work plus a binary search over outstanding expiries, no matter how many budgets were ever funded:</p>
 				<div class="equation" id="eq-stream">
 					<math display="block">
 						<mrow>
@@ -1013,7 +1004,7 @@
 					</svg>
 					<figcaption><strong>Figure 5. Streams stack, never accelerate.</strong> The green line is the total rate the ledger releases; the blue and orange lines are the two budgets. The contract stores only cumulative rate changes at expiry times.</figcaption>
 				</figure>
-				<p>Whether it arrives from a stream or from a checkpoint, income is split across commitments in proportion to size, but only <em>healthy</em> commitments receive their share. Unhealthy commitments stay in the denominator, so their part is not redistributed to others; ETH that cannot be assigned funds maintenance and REP that cannot be assigned is burned. Income that accrues while the price is stale is unassignable in the same way; after a fork, unassignable ETH is burned instead of funding maintenance. Positions carry their earned ETH and REP separately from principal, and a provider claims earnings in one call.</p>
+				<p>Whether it arrives from a stream or from a checkpoint, income is split across commitments in proportion to size, but only <em>healthy</em> commitments receive their share. Unhealthy commitments stay in the denominator, so their part is not redistributed to others; ETH and REP that cannot be assigned are burned, in every state of the universe. Income that accrues while the price is stale is unassignable in the same way. Positions carry their earned ETH and REP separately from principal, and a provider claims earnings in one call.</p>
 
 				<h3 id="exit">4.5 Exiting: surplus, retirement and the queue</h3>
 				<p>Free principal can be withdrawn at any time, including after a fork. Pledged principal above the requirement at the owner's target and the conservative price is <strong>surplus</strong> and can be withdrawn whenever the price is fresh and the universe is open:</p>
@@ -1085,7 +1076,7 @@
 				<p>Standalone pools liquidate by moving commitment and REP to an approved receiver vault with a 5% REP bonus and a staged price request. Portfolios replace this with two permissionless actions that need no approval registry, no staging and no ETH reserve.</p>
 				<p>Distress is observed, not declared. Every accepted price records which positions are healthy at the liquidation price. A position's <strong>distress clock</strong> starts at the first adverse observation after its most recent recovery, and no keeper transaction can start, reset or extend it. A deposit at a stale price does not clear distress; only a healthy mutation at a fresh price does.</p>
 				<h4>Cure</h4>
-				<p>A cure removes only as much of a distressed position's commitment as is <em>unused</em> by the portfolio, that is, total commitment minus demand, and only as much as needed to make the position healthy again at the liquidation price with a margin for the reward:</p>
+				<p>A cure removes only as much of a distressed position's commitment as is <em>unused</em> by the portfolio, that is, total commitment minus demand, and only as much as needed to make the position healthy again at the liquidation price. Anyone may call it, and it pays the caller nothing:</p>
 				<div class="equation" id="eq-cure">
 					<math display="block">
 						<mtable displaystyle="true">
@@ -1101,24 +1092,17 @@
 							<mtr>
 								<mtd
 									><mi>removed</mi><mo>=</mo><mi>min</mi><mo>(</mo><mi>commitment</mi><mo>,</mo><mi>unusedCommitment</mi><mo>,</mo><mi>max</mi><mo>(</mo><mi>minimumCommitment</mi><mo>,</mo
-									><mfrac
-										><mrow><mi>commitment</mi><mo>−</mo><mi>supportedCommitment</mi></mrow
-										><mrow><mn>1</mn><mo>−</mo><mn>1%</mn></mrow></mfrac
+									><mi>commitment</mi><mo>−</mo><mi>supportedCommitment</mi
 									><mo>)</mo><mo>)</mo></mtd
-								>
-							</mtr>
-							<mtr>
-								<mtd
-									><mi>keeperReward</mi><mo>=</mo><mn>1%</mn><mo>×</mo><mi>removed</mi><mo>×</mo><mi>liquidationPrice</mi><mo>×</mo><mfrac><mi>securityMultiplier</mi><mn>10 000</mn></mfrac></mtd
 								>
 							</mtr>
 						</mtable>
 					</math>
-					<p class="equation-caption"><span class="var">unusedCommitment</span> is total commitment minus demand, counting every position whether healthy or not, so it is at least the spare capacity of <a href="#exit">4.5</a>. A cure that could remove less than one minimum commitment without removing the whole position removes nothing. The reward, paid in REP from the cured position only, is capped so the remaining position still meets the protocol floor. If the remaining position would still be insolvent, the keeper earns nothing; if nothing can be removed, nothing happens. Splitting a cure into several steps at one price cannot increase the total reward, because the reward is a fixed fraction of what is removed.</p>
+					<p class="equation-caption"><span class="var">unusedCommitment</span> is total commitment minus demand, counting every position whether healthy or not, so it is at least the spare capacity of <a href="#exit">4.5</a>. <span class="var">supportedCommitment</span> rounds down, so the deficit rounds up and removing it leaves a remainder that the position's REP fully backs. A cure that could remove less than one minimum commitment without removing the whole position removes nothing. The position keeps all of its REP; if unused commitment does not cover the deficit, the cure removes what it can and the remaining position stays distressed. If the position is already healthy or nothing can be removed, the call succeeds and removes nothing. Before this revision a cure also paid its caller 1% of the removed backing value in REP from the cured position, sized the removal with a matching margin, and had a bounded variant that demanded a minimum reward; all three are gone.</p>
 				</div>
-				<p>Worked example: a provider pledged 3,000 REP against a 10 ETH commitment at 150%. The accepted price rises to 230 REP per ETH, so the liquidation price is 219.05. Supported commitment is 3,000 ÷ 1.5 ÷ 219.05 = 9.13 ETH, a deficit of 0.87 ETH. The reduction needed with a 1% margin is 0.88 ETH, which the minimum commitment rounds up to 1 ETH (if the portfolio has at least 1 ETH of unused commitment). The keeper receives 1% of 1 ETH × 219.05 × 1.5, about 3.29 REP, and the provider keeps a 9 ETH commitment backed by about 2,996.7 REP, which is healthy again.</p>
+				<p>Worked example: a provider pledged 3,000 REP against a 10 ETH commitment at 150%. The accepted price rises to 230 REP per ETH, so the liquidation price is 219.05. Supported commitment is 3,000 ÷ 1.5 ÷ 219.05 = 9.13 ETH, a deficit of 0.87 ETH, which the minimum commitment rounds up to a 1 ETH removal (if the portfolio has at least 1 ETH of unused commitment). The provider keeps a 9 ETH commitment backed by all 3,000 REP, against the 2,957 REP that 9 ETH requires at the liquidation price, so the position is healthy again. Whoever sent the cure paid its gas and received nothing.</p>
 				<h4>Takeover</h4>
-				<p>If a position cannot be cured, because there is no spare capacity or the position is insolvent, a keeper can <strong>take over</strong> part or all of its commitment. The keeper first performs any possible cure, then receives the position's REP proportional to the commitment taken, scaled by how long the position has been in distress:</p>
+				<p>If a position cannot be cured, because there is no spare capacity or the position is insolvent, a keeper can <strong>take over</strong> part or all of its commitment. The takeover first performs any possible cure, unpaid as always, then the keeper receives the position's REP proportional to the commitment taken, scaled by how long the position has been in distress:</p>
 				<div class="equation" id="eq-takeover">
 					<math display="block">
 						<mrow>
@@ -1162,10 +1146,10 @@
 					</svg>
 					<figcaption><strong>Figure 7. The takeover ramp.</strong> An owner who recapitalizes within the hour loses only a fraction of the REP behind the taken commitment. The ramp is measured from the oracle's first adverse observation, not from any keeper action.</figcaption>
 				</figure>
-				<p>Both actions have <em>bounded</em> variants for bots. A bounded cure pins the expected total commitment, demand and price epoch and demands a minimum removal and a minimum reward; a bounded takeover pins the price epoch, the receiver's own health target and the source cohort, caps the receiver's resulting principal and commitment, and demands a minimum award. The transaction reverts if any pinned value changed. Auction winners' positions can be cured or taken over too; the aggregate auction position is first split so that one winner's loss is never charged to other bidders.</p>
+				<p>Takeovers have a <em>bounded</em> variant for bots; cures no longer do, since an unpaid cure has no reward to protect. A bounded takeover pins the price epoch, the receiver's own health target and the source cohort, caps the receiver's resulting principal and commitment, and demands a minimum award. The transaction reverts if any pinned value changed. Auction winners' positions can be cured or taken over too; the aggregate auction position is first split so that one winner's loss is never charged to other bidders.</p>
 
 				<h3 id="prices">4.7 One price per universe: the shared feed</h3>
-				<p>Every portfolio universe has one <strong>shared price feed</strong> that replaces the per-pool price coordinators for solvency purposes. Anyone can sponsor a report: they fund the OpenOracle game (the contestable price-report mechanism Statoblast uses for REP/ETH prices) with WETH and REP from their own wallet, and the feed accepts the settled result if it is fresh, newer than the last one, economically defensible at the current base fee, and sized for the portfolio's exposure. Sponsors are reimbursed from the maintenance reserve for accepted work, at most once per 480 seconds per universe, up to a gas-based amount and a configured cap.</p>
+				<p>Every portfolio universe has one <strong>shared price feed</strong> that replaces the per-pool price coordinators for solvency purposes. Anyone can sponsor a report: they fund the OpenOracle game (the contestable price-report mechanism Statoblast uses for REP/ETH prices) with WETH and REP from their own wallet, and the feed accepts the settled result if it is fresh, newer than the last one, economically defensible at the current base fee, and sized for the portfolio's exposure. Nothing reimburses a sponsor: whoever needs a fresh price, typically a provider who wants to withdraw or grow, a buyer who needs capacity or a keeper who wants to take over, pays for the report. Before this revision the feed called back into the portfolio on settlement to pay accepted sponsors from a maintenance reserve, at most once per 480 seconds per universe and up to a gas-based cap; the callback and the reserve are gone.</p>
 				<p>Report sizing is where price security meets capital size. A report's WETH side must cover one hundredth of the aggregate exposure, and its REP side one hundredth of any auction inventory, so a report cannot authorize more risk than it would cost to correct it:</p>
 				<div class="equation" id="eq-exposure">
 					<math display="block">
@@ -1198,7 +1182,7 @@
 							<mfrac><mn>1</mn><mi>conservativePrice</mi></mfrac>
 						</mrow>
 					</math>
-					<p class="equation-caption">The cap is in ETH, converted from REP at the conservative price when the leader changed, and can only fall over the life of a game. If the shared price is stale at the moment the leader changes, the cap is set to zero and, being non-increasing, stays zero for the rest of that game. A same-leader top-up cannot steal attribution; a cheap, reversible dispute cannot extract a large accumulated reward. Unused reward cash, including for questions whose outcome a fork fixed, goes to maintenance.</p>
+					<p class="equation-caption">The cap is in ETH, converted from REP at the conservative price when the leader changed, and can only fall over the life of a game. If the shared price is stale at the moment the leader changes, the cap is set to zero and, being non-increasing, stays zero for the rest of that game. A same-leader top-up cannot steal attribution; a cheap, reversible dispute cannot extract a large accumulated reward. Unused reward cash, including for questions whose outcome a fork fixed, is burned, because many purchases funded it and none of their shares is recorded.</p>
 				</div>
 				<p>When a question's deadline passes, the settlement book <strong>freezes</strong> its units and their pro-rata share of cash (and any recovery REP, the child REP owed to claims after a fork, see <a href="#after-auction">5.4</a>) into a frozen book, so later fee accrual and later fork shortfalls cannot touch finalized claims. Winning shares and complete sets redeem against the central cash; a redemption burns the shares through the question's ShareToken, lowers demand, cancels any unused premium when a question has no live shares left, and lets the ledger serve the retirement queue in the same transaction.</p>
 			</section>
@@ -1255,7 +1239,7 @@
 							<mi>branchCash</mi>
 						</mrow>
 					</math>
-					<p class="equation-caption">Excess personal collateral cannot pull more ETH into a branch than its owners committed to underwrite. The maintenance reserve and the premium book split by the same ratio. Each branch inherits <em>all</em> of the parent's question liabilities, so the shortfall is exactly the cash the non-choosing owners were underwriting.</p>
+					<p class="equation-caption">Excess personal collateral cannot pull more ETH into a branch than its owners committed to underwrite. The premium book splits by the same ratio; premium that elapses while a child is being prepared, and the cash recovered for a question's reserved reporter shares, are burned. Each branch inherits <em>all</em> of the parent's question liabilities, so the shortfall is exactly the cash the non-choosing owners were underwriting.</p>
 				</div>
 				<p>After the choice deadline anyone can <em>start</em> a branch. Zoltar migrates the frozen backing REP plus live recovery REP into the child as child REP; the branch's chosen backing goes to its capital ledger, and the frozen backing of owners who chose another branch or did not choose at all becomes the branch's <strong>fresh inventory</strong>. If the branch has outstanding question units, fresh inventory and a shortfall of at least one minimum commitment, the coordinator deploys a <strong>branch Truth Auction</strong> and hands it the inventory. Older recovery REP from previous forks never enters the auction; it stays with the claims that already own it.</p>
 				<div class="callout warn">
@@ -1470,14 +1454,14 @@
 				<p>Complete sets are fully collateralized by the buyer's own ETH, so in normal operation providers' REP is never used to pay anyone. Its job is the fork. When the universe splits, the ETH a branch receives is proportional to the commitment of the owners who chose it, and the REP of everyone who chose <em>against</em> it is sold in that branch to make its share holders whole. Because every healthy position holds at least <span class="var">securityMultiplier</span> times its commitment in REP value, the inventory a branch can sell is worth, at the pre-fork price, at least the multiplier times the cash it is missing, as long as those positions were healthy at the freeze. If the branch's REP keeps its value, full repair is affordable; if the branch is the one the market considers false, its REP is worth little and the shortfall persists, which is the intended outcome. Providers are thus paid fees to stand behind their belief about which branch is true, and the admission rule that new demand must fit within healthy commitment keeps that promise collateralized at the moment each liability is taken on; between price reports, keepers' cures and takeovers are what pull a drifting position back under cover.</p>
 
 				<h3>6.2 Providers: fees for risk, with a dial</h3>
-				<p>A provider's income is proportional to commitment while healthy, so the dominant strategy is to commit as much as their REP supports. The counterweight is the health target. A target of exactly 100% maximizes commitment per REP but leaves the position one adverse report away from the cure zone, where a keeper removes commitment and takes 1% of its backing value in REP. A higher target costs capital efficiency and buys distance from that zone. Because the target also gates surplus withdrawal, a provider who sets it high cannot quietly drain collateral later without first lowering it, and the withdrawal itself is then price-checked against the new target. The design leaves this trade-off to each owner rather than imposing a pool-wide ratio, so a mix of conservative and aggressive providers can coexist in one ledger without one subsidizing the other's liquidation.</p>
+				<p>A provider's income is proportional to commitment while healthy, so the dominant strategy is to commit as much as their REP supports. The counterweight is the health target. A target of exactly 100% maximizes commitment per REP but leaves the position one adverse report away from distress, where the position stops earning, anyone may cure away its unbacked commitment and a takeover award starts to ramp. A higher target costs capital efficiency and buys distance from that zone. Because the target also gates surplus withdrawal, a provider who sets it high cannot quietly drain collateral later without first lowering it, and the withdrawal itself is then price-checked against the new target. The design leaves this trade-off to each owner rather than imposing a pool-wide ratio, so a mix of conservative and aggressive providers can coexist in one ledger without one subsidizing the other's liquidation.</p>
 				<p>Vesting is the anti-sniping device for lump sums. Without it, a provider could join seconds before a backing fee is credited, take a proportional share and leave. With vesting, joining late only earns the slice of each stream that vests after joining. Time-earned income needs no vesting: each checkpoint pays only the interval since the last one, to the commitments healthy during it, and the checkpoint-before-mutation rule guarantees that income already earned at the old weights is distributed at those weights.</p>
 
 				<h3>6.3 The two-price band as a griefing defence</h3>
 				<p>The oracle is contestable, not infallible: a report within the dispute tolerance is accepted. If one price were used for both admission and liquidation, a reporter could post a price at the top of the tolerance, watch providers be admitted at the edge, then post one at the bottom and liquidate them, all within “acceptable” reports. Using the conservative price for admission and the liquidation price for punishment means an accepted report can never do both: the minimum move between the two is (1 + tolerance) ÷ (1 − tolerance). Distress itself is declared by the oracle's observations, not by keepers. A cure is available as soon as a fresh price leaves a position unhealthy, but the takeover award ramps over an hour from that observation, so before the full REP behind a commitment is at stake the owner has a window that no keeper can shorten.</p>
 
-				<h3>6.4 Keepers: paid in REP, bounded in both directions</h3>
-				<p>A keeper's cure reward is a fixed 1% of the backing value removed, paid only when the cure actually restores solvency and only from the cured position. This is deliberately small: a cure removes <em>unused</em> commitment, so it costs the provider nothing but the reward, and the design does not want keepers hunting marginally unhealthy positions for large bounties. The takeover award can be large, up to all the REP behind the taken commitment, but it starts at zero and takes an hour to ramp, and the keeper must usually bring REP of their own, because the award alone was by definition not enough to back the commitment, so taking over is a capital decision rather than a free option. There is no ETH liquidation bonus and no ETH execution reserve: keepers are paid in REP they must value and, if they want ETH, sell themselves. The liquidator bot shipped with the pull request values REP rewards conservatively, rejects every cure or takeover candidate unless independent REP price evidence agrees, and ships with portfolio exposure limits that default to zero.</p>
+				<h3>6.4 Keepers: paid in REP for takeovers, unpaid for cures</h3>
+				<p>A cure pays nobody. It removes <em>unused</em> commitment, so it costs the provider nothing, and the rule of this revision is that whoever needs a cure pays for it: another provider whose fee share grows once unhealthy commitment leaves the denominator, a buyer or retiring owner who needs the healthy capacity a cure can restore, or a keeper about to take over. Before this revision a keeper earned 1% of the backing value removed, in REP from the cured position. Removing that reward ends any hunting of marginal positions for bounties, but it also removes the only reason a third party had to cure on its own. The liquidator bot accordingly never sends a standalone cure; it cures only inside a takeover, which runs the cure first. The takeover award can be large, up to all the REP behind the taken commitment, but it starts at zero and takes an hour to ramp, and the keeper must usually bring REP of their own, because the award alone was by definition not enough to back the commitment, so taking over is a capital decision rather than a free option. There is no ETH liquidation bonus and no ETH execution reserve: keepers are paid in REP they must value and, if they want ETH, sell themselves. The liquidator bot shipped with the pull request values REP awards conservatively, predicts the unpaid cure a takeover performs first, rejects every takeover candidate unless independent REP price evidence agrees, and ships with portfolio exposure limits that default to zero.</p>
 
 				<h3>6.5 Reporters: a reward that cannot be farmed</h3>
 				<p>A naïve “final reporter wins the budget” rule invites two attacks. A reporter who already leads could top up their own stake to claim authorship of the final state, and two colluding reporters could flip the lead back and forth cheaply to accumulate a large reward. The attribution rule requires a <em>new unique leader</em>, and the cap of <span class="var">min(startBond, leadMargin) ÷ 5</span>, non-increasing over the game, ties the reward to the smallest REP amount the reporter actually put at risk and to the escalation haircut, the Escalation Game's own two-fifths burn of binding capital, so a round trip cannot net more than it burns.</p>
@@ -1594,7 +1578,7 @@
 									<ul>
 										<li>A new Portfolios tab with portfolio deployment (Open or Fixed admission, every economics field) and the four setup stages.</li>
 										<li>Capital: shared backing and personal capital views, deposit, health target, authorization, retirement request and cancellation, surplus withdrawal, earnings claims.</li>
-										<li>Questions: registration and complete-set purchase with a bounded quote; reporting-reward and service-credit claims.</li>
+										<li>Questions: registration and complete-set purchase with a bounded quote; reporting-reward claims, with a reporting budget nobody can claim shown as ETH and REP to burn.</li>
 										<li>Forks: branch choice, cash recovery, branch price-report funding, and the branch Truth Auction with bidding, early refund credit, separate or combined credit-and-withdrawal, and vault split-out.</li>
 										<li>Walletless scenarios seed the origin universe (<code>simScenario=portfolio</code>) and an open branch auction (<code>simScenario=portfolio-auction</code>: the portfolio forked on its first question, the Yes branch started, one winning, one excluded and one rival bid); split-out and runoff still need the auction to be closed. Both scenarios open from prepared snapshots when the build has current ones (see the simulation tooling row).</li>
 									</ul>
@@ -1613,7 +1597,7 @@
 								<td>
 									<ul>
 										<li>Portfolio selection with bounded, paged discovery of positions and auction winners; runtime-bytecode authentication of every module, including each auction vault's exact clone code and bindings.</li>
-										<li>Earnings collection, paid cures and funded takeovers with signed bounds.</li>
+										<li>Earnings collection and funded takeovers with signed bounds; cures only as the unpaid first step of a takeover, never on their own.</li>
 										<li>One EIP-1559 fee policy shared by quotes, estimates, simulations and signing; sender-balance isolation for quotes; a dashboard panel.</li>
 										<li>Defaults remain paused and dry-run with zero exposure caps.</li>
 									</ul>
@@ -1634,13 +1618,22 @@
 						</tbody>
 					</table>
 				</div>
-				<p>The pull request reports full type-checking, formatting, lint, dead-code and generated-artifact checks passing, 265 affected tests with 2,242 assertions at head commit <code>debbaf297</code>, an independent TypeScript model of the auction compared against the on-chain tree including adversarial refund cases, gas comparisons at 64 and 512 bids, six observed network and genesis deployments within gas ceilings, and browser QA of the auction states at desktop and mobile widths.</p>
-				<p><strong>The latest revision.</strong> After head commit <code>debbaf297</code>, the branch's working tree of 1 and 2 November 2026 reworks the auction's vault and refund surface, trims ledger reads, adds a gas baseline and a forked simulation scenario, and lets the walletless simulation open scenarios from prepared snapshots, without changing the clearing rules:</p>
+				<p>The pull request description reports full type-checking, formatting, lint, dead-code and generated-artifact checks passing, 265 affected tests with 2,242 assertions at commit <code>debbaf297</code>, an independent TypeScript model of the auction compared against the on-chain tree including adversarial refund cases, gas comparisons at 64 and 512 bids, six observed network and genesis deployments within gas ceilings, and browser QA of the auction states at desktop and mobile widths.</p>
+				<p><strong>The latest revision.</strong> Head commit <code>aa5f8efce</code>, pushed on 3 November 2026, removes the two incentive mechanisms that paid for upkeep out of a shared pot. Its rule is that whoever needs a fresh price, or a cure, pays for it. The pull request description, last written before this commit, still describes both mechanisms; this page follows the code.</p>
+				<ul>
+					<li><strong>No cure reward.</strong> A cure removes exactly the position's deficit, rounded up, at least one minimum commitment unless it closes the position and at most the commitment above demand, and pays its caller nothing (<a href="#distress">section 4.6</a>). The 1% REP reward, its margin in the removal, the bounded cure and its minimum-reward check are gone; <code>cure</code> and <code>cureAuctionBid</code> take no bounds, and <code>CommitmentCured</code> has no reward field. Takeovers still cure first and still pay their ramped award from the target.</li>
+					<li><strong>No maintenance budget.</strong> The services contract keeps no maintenance reserve, pays no oracle report reward, holds no pull credits and no longer splits or burns a maintenance balance across forks; the shared feed no longer calls back on settlement, and its report candidates no longer record request time and gas (<a href="#prices">section 4.7</a>). The premium book still splits across forks as before.</li>
+					<li><strong>Burned instead of pooled.</strong> Every former maintenance inflow is burned, because none has a recorded single payer: unassigned ETH from unhealthy or stale intervals, now in every state rather than only after a fork, with the capital ledger's burn event renamed <code>UnassignedFeesBurned</code>; unused reporter-reward cash; unused, stale and cancelled premiums; premium that elapses during fork preparation; and the cash recovered for reserved reporter shares.</li>
+					<li><strong>Cheaper repeat purchases.</strong> A purchase pays the backing fee, the premium and only the shortfall of the question's reward, instead of the full reporting budget every time, and the whole backing fee vests to providers (<a href="#purchase">section 4.3</a>). The quote has three parts instead of four, and the configuration loses its maintenance share and oracle-reward cap.</li>
+					<li><strong>Consumers.</strong> The liquidator bot drops standalone cures and moves earnings collection to its own module; the creation form loses the oracle-share and maximum-oracle-payment inputs; the service-reimbursement panel is gone; the published explanation and reference pages describe the new rule.</li>
+					<li><strong>Tests.</strong> Maintenance, oracle-reimbursement and paid-cure tests are replaced by tests that a cure removes exactly the rounded-up deficit, never exceeds spare capacity, leaves every residual fully backed and pays nothing at any gas price; that sponsors of accepted or rejected reports move no service cash; and that each former inflow is burned.</li>
+				</ul>
+				<p><strong>The previous revision.</strong> Commit <code>e0d5fb6bf</code>, also pushed on 3 November 2026, committed the work this page first described as uncommitted, together with the first part of the cure-reward removal, which this page counts as part of <code>aa5f8efce</code>'s change. After commit <code>debbaf297</code> it reworks the auction's vault and refund surface, trims ledger reads, adds a gas baseline and a forked simulation scenario, and lets the walletless simulation open scenarios from prepared snapshots, without changing the clearing rules:</p>
 				<ul>
 					<li><strong>Vault clones.</strong> Every bid's vault is now a minimal-proxy clone (<a href="#auction">section 5.3</a>) rather than a full contract; the bid number is its CREATE2 salt, and verifiers compare only the shared implementation with the compiled artifact. A clone-shaped owner whose implementation is not that vault is read as an ordinary owner with no auction authority rather than as an error, so a look-alike contract cannot stall the bot's position scan.</li>
 					<li><strong>One-step refunds.</strong> A bidder can credit any bid of theirs with unused ETH, provably losing before closing or with unfilled lots afterwards, and withdraw their whole refund credit in a single transaction, even when a keeper credited the bid first. The UI gains a “Credit and withdraw refunds” action that discloses the total before signing, presents a plain withdrawal when the bid is already credited, and marks a bid whose refund has been credited and withdrawn.</li>
 					<li><strong>A split-out flag.</strong> The vault records its split-out once (<a href="#after-auction">section 5.4</a>), so later owner operations on the ledger the bid was sold into skip the auction lookup and the ledger call.</li>
-					<li><strong>Fewer reads.</strong> Claiming from the commitment index returns the live commitment, so the ledger no longer re-reads a position to tell a retired one apart; service income skips zero amounts; a universe's capital ledger is read once per services checkpoint.</li>
+					<li><strong>Fewer reads.</strong> Claiming from the commitment index returns the live commitment, so the ledger no longer re-reads a position to tell a retired one apart; unassigned income skips zero amounts; a universe's capital ledger is read once per services checkpoint.</li>
 					<li><strong>A gas baseline.</strong> A lifecycle test at 8 and 256 tied bids keeps every path other than the three transactions that deploy child modules (auction finalization, the first branch choice and starting the branch) under 3,000,000 gas, and lets no path grow by 350,000 gas or more between the two book sizes.</li>
 					<li><strong>A forked simulation scenario.</strong> <code>simScenario=portfolio-auction</code>, described in the Statoblast UI row above.</li>
 					<li><strong>Prepared simulation snapshots.</strong> Every walletless scenario can open from a prepared snapshot instead of replaying its seeding when the build carries a current one, described in the simulation tooling row above.</li>
@@ -1655,7 +1648,8 @@
 					<li><strong>Costs scale with capital, not with questions.</strong> One price report, one keeper watch and one fork migration per universe serve any number of questions. Registering a question moves no capital and creates no per-provider state.</li>
 					<li><strong>Predictable prices for buyers.</strong> A flat annual holding fee and a purchase fee proportional to consumed backing replace a utilization-dependent retention curve; quotes bound both the total payment and the shares delivered.</li>
 					<li><strong>Individual, not pooled, risk.</strong> Providers keep exact ownership of their principal, choose their own health target, and bear only their own cure and takeover losses. Unassigned income is never redistributed to whoever happens to be healthy.</li>
-					<li><strong>Keeper actions without trusted setup.</strong> Cures and takeovers need no approval registry, staging, ETH reserve or bonus pool, and bots can sign exact bounds so a changed state cannot be exploited.</li>
+					<li><strong>Keeper actions without trusted setup.</strong> Cures and takeovers need no approval registry, staging, ETH reserve or bonus pool, and bots can sign exact takeover bounds so a changed state cannot be exploited.</li>
+					<li><strong>No upkeep budget to drain or misallocate.</strong> With the maintenance reserve and the cure reward gone, no shared pot can be farmed, run dry or steered by whoever posts reports; fee ETH that no underwriter, reporter or share holder can claim is burned.</li>
 					<li><strong>Griefing-resistant pricing.</strong> The conservative and liquidation prices prevent a report within tolerance from both admitting and liquidating a position; independent report candidates prevent one disputed report from stalling the feed.</li>
 					<li><strong>Auction winners are backing on arrival.</strong> All sold REP enters custody at finalization as an aggregate position; nobody needs to claim for the branch to be repaired, winners' ETH is never tied up beyond the lot price, and each bid's vault is a clone rather than a full contract deployment.</li>
 					<li><strong>Fairer exits and refunds.</strong> A cohort queue serves earlier requests first and cannot be jumped; provably losing bids get their ETH back before closing, in one transaction if the bidder wants.</li>
@@ -1673,15 +1667,18 @@
 					<li><strong>No minimum holding period for winners.</strong> The branch is repaired by the ETH, but the REP sold can leave the ledger as soon as ordinary vault rules allow. The enforceable backing is the accepted commitment at the chosen health target.</li>
 					<li><strong>Uniform pricing is not truthful.</strong> Large bidders still have a demand-reduction incentive. The auction also has no seller reserve, so there is no floor on the price at which REP is sold.</li>
 					<li><strong>Whole-lot rounding.</strong> A marginal bid's allocation can differ from its fractional share by less than one lot, and a shortfall below one lot stays unrepaired.</li>
-					<li><strong>Keeper profitability is not guaranteed.</strong> Rewards are in REP, with no ETH bonus; whether a cure or takeover pays depends on gas prices and REP liquidity. The bot requires independent price evidence and will not sell REP for gas on its own. The 1% cure reward may be too small to attract keepers for small positions.</li>
-					<li><strong>The reporting budget is charged on every purchase.</strong> Once a question's reward is funded, later purchases still pay the full budget, which goes to maintenance. The resolution premium's unused portion also goes to maintenance rather than back to the buyer. Buyers of fresh, short-lived questions pay a visibly higher effective fee than the headline purchase fee suggests (about 8% of cash in the worked example).</li>
+					<li><strong>Keeper profitability is not guaranteed.</strong> Takeover awards are in REP, with no ETH bonus; whether a takeover pays depends on gas prices and REP liquidity. The bot requires independent price evidence and will not sell REP for gas on its own.</li>
+					<li><strong>Nobody is paid to cure.</strong> Since <code>aa5f8efce</code> a cure pays nothing, so a distressed position whose deficit spare capacity could cover may stay distressed, earning nothing and holding back the healthy capacity its cured remainder would add, until another provider, a buyer, a retiring owner or a takeover keeper decides the cure is worth its gas. The liquidator bot cures only inside a profitable takeover.</li>
+					<li><strong>The first buyer pays the reporting budget.</strong> Since <code>aa5f8efce</code> later purchases pay only the reward's shortfall rather than the full budget, but the first purchase of a question still funds all of it, so buyers of fresh, short-lived questions pay a visibly higher effective fee than the headline purchase fee suggests (about 8% of cash in the worked example, about 3% for a later purchase). The resolution premium's unused portion is burned rather than returned to the buyer.</li>
+					<li><strong>Quotes drift.</strong> The reward top-up grows as holding fees lower the reward shares' value, so a fee quoted in one block can be slightly too low a few blocks later; the SDK allows 1% above the quote, and a caller with a tighter budget sees the purchase revert.</li>
+					<li><strong>Unassigned income is destroyed, not reused.</strong> ETH from unhealthy or stale intervals, unused premiums and unused reporting budgets is burned in every state. Nothing leaks to new providers and nothing rewards whoever let a price go stale, but the ETH no longer pays for anyone's upkeep either, and providers still lose the income of every stale interval.</li>
 					<li><strong>Fork cutoff forfeiture.</strong> An owner who does not choose a branch within eight weeks loses their pledged principal to the branch Truth Auctions. Absent, sleeping or unaware providers are penalized hard.</li>
 					<li><strong>Shared fate within a universe.</strong> Providers back every admitted question, including ones they would not have chosen. The admission policy is the only filter, and a custom policy can be arbitrary; the UI labels a custom policy “Custom policy — underwriting unavailable”.</li>
 				</ul>
 				<h3>10.2 Oracle and operational</h3>
 				<ul>
 					<li><strong>Everything depends on fresh, roughly correct prices.</strong> A stale feed freezes capacity, withdrawals of pledged REP, cures and takeovers at once, and a lead change during a stale interval forfeits that question's reporting reward for good. A feed that is wrong by more than the tolerance can still admit or liquidate wrongly; the band only protects against errors within tolerance.</li>
-					<li><strong>Report funding grows with exposure.</strong> A sponsor must post one hundredth of aggregate exposure in WETH; for a large portfolio this is a meaningful capital requirement for whoever keeps the feed alive, reimbursed only within a capped maintenance budget.</li>
+					<li><strong>Report funding grows with exposure.</strong> A sponsor must post one hundredth of aggregate exposure in WETH; for a large portfolio this is a meaningful capital requirement for whoever keeps the feed alive, and since <code>aa5f8efce</code> nothing reimburses it. Price freshness depends on parties who need a fresh price at that moment paying for it; when nobody does, capacity, withdrawals of pledged REP and takeovers wait.</li>
 					<li><strong>Missing or adverse closing quotes cancel repair.</strong> If nobody funds a quote covering the week-nine deadline, or REP got cheaper during the auction, every fill is cancelled and the branch activates impaired.</li>
 					<li><strong>Liveness still needs volunteers.</strong> Starting branches, closing auctions, splitting out winners, serving retirements and crediting other bidders' refunds are all permissionless but not automatic; a bidder can at least credit and withdraw their own refund in one step.</li>
 				</ul>
@@ -1705,7 +1702,7 @@
 				<ul>
 					<li><strong>Custody and accounting are kept apart, and every mutation checkpoints first.</strong> The ledger, the settlement book, the fee streams and the premium book each answer one question, and income earned at old weights is always credited before weights change. That discipline is what makes the fee logic auditable at all, and it is applied consistently.</li>
 					<li><strong>Nothing scans.</strong> Capacity, fees, retirement service, auction clearing, fee ownership and fork inheritance are all tree paths or cumulative indexes. The gas tests at 64 and 512 bids and the deployment-size checks back this up rather than assert it.</li>
-					<li><strong>Risk stays individual.</strong> Personal health targets, per-position cures and takeovers, and unassigned income going to maintenance or being burned mean that one provider's trouble is never socialized onto the others, and that nobody can snipe income earned before they arrived.</li>
+					<li><strong>Risk stays individual.</strong> Personal health targets, per-position cures and takeovers, and unassigned income being burned mean that one provider's trouble is never socialized onto the others, and that nobody can snipe income earned before they arrived.</li>
 					<li><strong>The two-price band and oracle-declared distress remove the liquidation race.</strong> A report inside the tolerance cannot both admit and punish, and keepers cannot start or reset a distress clock; portfolios need none of the standalone pools' approval registry, staged operations or ETH bonus, with no loss of safety.</li>
 					<li><strong>The auction leaves nothing in limbo.</strong> Winners are backing the moment the branch activates, provably losing bids get their ETH back early, in one transaction if they choose, and the frozen bid tree keeps clearing and fee ownership consistent without deletions. Each bid's vault is verifiable from its own code once the shared implementation it forwards to is checked against the published artifact.</li>
 					<li><strong>Finalized questions release capacity on their own.</strong> Freezing a question's units moves them out of the live book, so demand falls and the retirement queue advances at the next checkpoint, without a dedicated service transaction.</li>
@@ -1715,7 +1712,7 @@
 				<h3>11.2 What still worries me</h3>
 				<ul>
 					<li><strong>The economic edge cases are not corner cases.</strong> Weak-demand capture and the long runoff of almost every branch, lasting until its recovery claims are redeemed (<a href="#issues">section 10</a>), will both happen in the first real fork, not in a contrived one.</li>
-					<li><strong>Liveness is bought with REP and goodwill.</strong> Price sponsors, keepers paid in REP, and volunteers to start branches, close auctions, serve retirements and split out winners are all assumed. Keepers spend ETH on gas and are paid in REP, volunteers are not paid at all, and sponsors are reimbursed in ETH only within a capped maintenance budget.</li>
+					<li><strong>Liveness is bought with REP, self-interest and goodwill.</strong> Price sponsors, takeover keepers paid in REP, and volunteers to cure, start branches, close auctions, serve retirements and split out winners are all assumed. Takeover keepers spend ETH on gas and are paid in REP; since <code>aa5f8efce</code> curers and price sponsors are not paid at all and act only when they need the result themselves, and volunteers are not paid either. Removing the maintenance budget closes the farming and steering questions a shared pot raised, but it makes this assumption stronger, not weaker.</li>
 					<li><strong>Size and novelty.</strong> Custom AVL trees, persistent maps, modular prefix arithmetic and 128-bit recovery scaling in roughly 7,600 new lines, delivered in one pull request, is a large audit surface with two delegatecall boundaries inside the capital ledger alone.</li>
 					<li><strong>Open admission is open to everyone.</strong> Under the Open policy anyone can register any question within the horizon, and every provider backs it from that moment.</li>
 				</ul>
@@ -1731,10 +1728,10 @@
 							<li>mark recovery baskets by claim generation so new mints never own old REP. The settlement book already keeps per-question recovery indices with corrections, so a generation marker is a smaller step than it sounds.</li>
 						</ul>
 					</li>
-					<li><strong>Pause vesting while the price is stale instead of forfeiting it.</strong> Stream ETH that vests during a stale-price interval goes to the maintenance reserve, which pays report sponsors, and stream REP is burned; the provider loses both, and for the ETH whoever withholds reports moves provider income towards the sponsors who decide whether a report is posted. Extending every stream's end by the stale duration keeps providers whole and removes the incentive. The same applies to the reporter reward cap: convert the REP-denominated risk to ETH at claim time rather than zeroing it when the price happens to be stale at a lead change.</li>
+					<li><strong>Pause vesting while the price is stale instead of forfeiting it.</strong> Stream ETH and REP that vest during a stale-price interval are burned, so the provider loses both. <em>Partly addressed by <code>aa5f8efce</code>:</em> the ETH used to fund the maintenance reserve that paid report sponsors, which let whoever withheld reports move provider income towards the sponsors deciding whether a report was posted; it is now burned, so that incentive is gone, but providers still lose the income. Extending every stream's end by the stale duration would keep providers whole. The same applies to the reporter reward cap: convert the REP-denominated risk to ETH at claim time rather than zeroing it when the price happens to be stale at a lead change.</li>
 					<li><strong>Give owners a standing fork choice.</strong> Missing the eight-week window forfeits all pledged REP. An owner-registered default policy, such as a specific outcome index or the branch with the most chosen commitment at the deadline, would protect inattentive providers; a late-choice grace period with a penalty would protect them less but keep the vote-with-capital property intact. Either is better than silent forfeiture.</li>
 					<li><strong>Decouple the three roles of the minimum commitment.</strong> One parameter is at once the smallest commitment, the smallest retirement step and the auction's ETH lot. Lot size should be chosen for clearing granularity and bidder access, the other two for dust prevention; a portfolio cannot tune one without the others.</li>
-					<li><strong>Make distress economics portfolio parameters.</strong> The one-hour takeover ramp and the 1% cure reward are constants. An hour is short for a human owner and long enough for a bot to wait out, so most takeovers will be captured by bots at the full award; a longer or two-stage ramp and a configurable reward would let portfolios with different capital bases choose.</li>
+					<li><strong>Make distress economics portfolio parameters.</strong> The one-hour takeover ramp is a constant, and so was the 1% cure reward. An hour is short for a human owner and long enough for a bot to wait out, so most takeovers will be captured by bots at the full award; a longer or two-stage ramp would let portfolios with different capital bases choose. <em>Partly addressed by <code>aa5f8efce</code>:</em> the cure reward is gone rather than configurable; if unpaid cures prove too rare, an optional, portfolio-funded cure reward is the parameter to revisit.</li>
 					<li><strong>Put a bond or a cap on open admission.</strong> Registration is free and permissionless under the Open policy, so providers underwrite whatever anyone registers. A registration bond returned at finality, a per-portfolio question cap, or simply making the Fixed policy the recommended default would limit the exposure without a governance process.</li>
 					<li><strong>Reduce the standing cost of the shared price.</strong> A fresh report must post about one hundredth of aggregate exposure as collateral and a price stays usable for thirteen minutes after it settles on mainnet (about twenty after the report is made), so a large portfolio needs a sponsor willing to lock a meaningful amount of WETH several times an hour. A longer validity window for shared feeds, a divider that grows with exposure, or a cheaper renewal path when the price has not moved would all lower that cost; each weakens the oracle's correction incentive and needs its own analysis.</li>
 					<li><strong>Split future work and document the modules.</strong> The next changes of this kind should arrive as stacked pull requests by module. Independently of that, most of the new contracts have no page in the contract reference, and portfolios have only one section in the Statoblast explanation page; a dedicated explanation page seeded from this explainer should replace that section and be linked from it. The simulation-snapshot work in the latest revision is a ready candidate for its own pull request: it touches no protocol code and speeds up every app's walletless mode.</li>
@@ -1742,19 +1739,20 @@
 
 				<h3>11.4 Smaller changes</h3>
 				<ul>
-					<li><strong>Make the fee parts mean what they say.</strong> Stop charging the reporting budget once it is funded, or split out an explicit maintenance charge, so buyers see what each part of the fee pays for. The unused resolution premium could likewise return to the remaining share holders of the question instead of maintenance.</li>
+					<li><strong>Make the fee parts mean what they say.</strong> Stop charging the reporting budget once it is funded, or split out an explicit maintenance charge, so buyers see what each part of the fee pays for. The unused resolution premium could likewise return to the remaining share holders of the question instead of maintenance. <em>Mostly addressed by <code>aa5f8efce</code>:</em> purchases now pay only the reward's shortfall and no maintenance charge exists; the unused premium is burned rather than returned to share holders, which remains open.</li>
 					<li><strong>Let a takeover receiver name the idle REP to contribute.</strong> Today all of the receiver's idle REP is swept in under a cap, so a keeper with a large idle balance has to consent to all of it or revert.</li>
 					<li><strong>Add a recipient parameter to earnings claims.</strong> Principal withdrawals already take one; vault contracts and bots could then route income without a second transfer.</li>
 					<li><strong>Let a bidder pin the bid number.</strong> A vault's address follows from the bidder, ledger, auction, bid number and shared implementation, and <code>vaultFor</code> predicts it, but the number is assigned at submission, so a bid that lands behind another bidder's receives a different vault from the one predicted. An optional expected bid number on <code>submitBid</code>, or a note that predicted addresses are only safe once the bid is mined, would stop assets being sent to a vault that is never created.</li>
-					<li><strong>Emit a reason when the oracle-reward callback fails or is skipped.</strong> The shared feed's settlement swallows a failed callback, and the services contract returns silently when fewer than 480 seconds have passed since the last sponsor reward, when nothing is committed, or when the quoted reward is zero, so sponsors cannot tell why they were not reimbursed.</li>
+					<li><strong>Emit a reason when the oracle-reward callback fails or is skipped.</strong> The shared feed's settlement swallowed a failed callback, and the services contract returned silently when fewer than 480 seconds had passed since the last sponsor reward, when nothing was committed, or when the quoted reward was zero, so sponsors could not tell why they were not reimbursed. <em>Addressed by <code>aa5f8efce</code>:</em> the callback and the reward no longer exist.</li>
 					<li><strong>Seed a closed auction in the walletless simulation.</strong> The latest revision's <code>simScenario=portfolio-auction</code> covers the open auction; a second seeded state after closing would also cover winner split-out and runoff, and prepared snapshots now make another scenario cheap to open.</li>
-					<li><strong>Give the keeper a housekeeping mode or pay for housekeeping.</strong> The bot flags stalled retirements and discovers auction winners, but nothing pays anyone to serve retirements, close auctions or split out winners; small rewards or an explicit low-priority mode would make those steps less dependent on volunteers.</li>
+					<li><strong>Give the keeper a housekeeping mode or pay for housekeeping.</strong> The bot flags stalled retirements and discovers auction winners, but nothing pays anyone to serve retirements, close auctions or split out winners, and since <code>aa5f8efce</code> nothing pays for standalone cures either; small rewards or an explicit low-priority mode would make those steps less dependent on volunteers. Paying rewards would now cut against the revision's rule, so a low-priority mode in which an operator chooses to spend gas on cures and housekeeping is the more consistent option.</li>
 					<li>
-						<strong>Add conservation invariants and a cure-reward fuzz.</strong> The stateful tests could check:
+						<strong>Add conservation invariants and a cure fuzz.</strong> The stateful tests could check:
 						<ul>
 							<li>the ledger's REP balance equals pledged principal plus free principal plus REP released by served retirements but not yet withdrawn plus unclaimed earnings, across purchases, fees, cures, takeovers and forks;</li>
 							<li>released plus outstanding plus deferred stream income equals funded income;</li>
-							<li>the cure reward behaves correctly around its cap under fuzzed prices and positions.</li>
+							<li>the cure reward behaves correctly around its cap under fuzzed prices and positions; <em>superseded by <code>aa5f8efce</code>,</em> which removes the reward and adds fixed-case tests that a cure never exceeds spare capacity and always leaves a fully backed residual, so the fuzz would now target those two properties;</li>
+							<li>ETH burned equals every unassigned or unclaimable inflow, so no burn path strands ETH in the services contract or the fork coordinator.</li>
 						</ul>
 					</li>
 					<li><strong>Show the coverage ratio.</strong> The Portfolios tab already shows healthy commitment, settlement demand and each position's adverse-interval start, but not the ratio of healthy commitment to demand, and the scanner shows none of these; a single ratio reading in both would make the state in which demand exceeds healthy commitment obvious at a glance.</li>
@@ -1794,7 +1792,7 @@
 					<dt>Retirement, cohort</dt>
 					<dd>A request to reduce a commitment to a chosen remainder. Requests are grouped into cohorts served in order from spare capacity.</dd>
 					<dt>Cure</dt>
-					<dd>Removal of unused commitment from a distressed position, rewarded with 1% of the eliminated backing value in REP from that position.</dd>
+					<dd>Removal of a distressed position's unbacked commitment, rounded up and taken from unused commitment, so the remainder is fully backed when unused commitment covers the deficit. Anyone may call it; it pays nobody.</dd>
 					<dt>Takeover</dt>
 					<dd>Transfer of a distressed commitment to a consenting, collateralized receiver for a REP award that ramps from zero to the proportional REP over one hour of distress.</dd>
 					<dt>Settlement book</dt>
@@ -1806,7 +1804,7 @@
 					<dt>Resolution premium</dt>
 					<dd>A buyer's prepayment of up to 52 days of holding fee covering the reporting window, earned by healthy providers until the question's finality deadline.</dd>
 					<dt>Maintenance reserve</dt>
-					<dd>ETH from the service share of fees, unused premiums and unclaimed reporting budgets, used to reimburse sponsors of accepted oracle reports.</dd>
+					<dd>Removed in <code>aa5f8efce</code>. It held ETH from a service share of fees, unused premiums and unclaimed reporting budgets and reimbursed sponsors of accepted oracle reports; those inflows are now burned and sponsors pay for their own reports.</dd>
 					<dt>Shared price feed</dt>
 					<dd>The per-universe contract that accepts one REP/ETH report at a time for the whole portfolio and sizes report funding by aggregate exposure.</dd>
 					<dt>Branch, fresh inventory, shortfall</dt>
@@ -1824,7 +1822,7 @@
 					<dt>Recovery REP</dt>
 					<dd>Child REP owed to existing claims: unsold auction inventory plus baskets inherited from earlier forks, tracked at 128-bit precision.</dd>
 				</dl>
-				<p class="colophon">This explainer describes the pull request as of its latest revision: head commit <code>debbaf297</code> plus the working-tree changes of 1 and 2 November 2026 (auction-vault clones, combined refunds and prepared simulation snapshots) that had not yet been pushed when this page was updated. The counts and validation figures above refer to head commit <code>debbaf297</code> unless stated otherwise. The authoritative behaviour is the Solidity under <code>solidity/contracts/statoblast</code> on the branch and the published protocol documentation; where this page and the code disagree, the code is right.</p>
+				<p class="colophon">This explainer describes the pull request as of its latest revision: head commit <code>aa5f8efce</code>, pushed on 3 November 2026, which removes the cure reward and the maintenance budget on top of commit <code>e0d5fb6bf</code> (auction-vault clones, combined refunds and prepared simulation snapshots). The test and assertion counts, the line and contract counts and the pull request's validation figures above were taken at commit <code>debbaf297</code> and have not been recounted; the behaviour described is that of <code>aa5f8efce</code>. The authoritative behaviour is the Solidity under <code>solidity/contracts/statoblast</code> on the branch and the published protocol documentation; where this page and the code disagree, the code is right.</p>
 			</section>
 		</main>
 	</body>
