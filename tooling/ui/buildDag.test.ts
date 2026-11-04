@@ -183,7 +183,7 @@ describe('UI watcher build dependencies', () => {
 		expect(builds.calls).toEqual(['vendor', 'worker', 'reload'])
 		expect(builds.commands).toEqual([
 			[process.execPath, builds.appPaths.vendorBuildScript, 'trading', '--scoped-artifacts'],
-			[process.execPath, builds.appPaths.workersBuildScript, 'trading', '--artifacts-current'],
+			[process.execPath, builds.appPaths.workersBuildScript, 'trading', '--artifacts-current', '--prune-stale-snapshots'],
 		])
 		expect(builds.workingDirectories).toEqual([builds.appPaths.coreSharedRoot, builds.appPaths.coreSharedRoot])
 	})
@@ -213,7 +213,7 @@ describe('UI watcher build dependencies', () => {
 			expect(builds.calls).toEqual(['shared', 'worker', 'reload'])
 			expect(builds.commands).toEqual([
 				[process.execPath, './tooling/repo/build-shared.mts', appId],
-				[process.execPath, builds.appPaths.workersBuildScript, appId, '--artifacts-current'],
+				[process.execPath, builds.appPaths.workersBuildScript, appId, '--artifacts-current', '--prune-stale-snapshots'],
 			])
 			expect(builds.workingDirectories).toEqual([builds.appPaths.repositoryRoot, builds.appPaths.coreSharedRoot])
 		}

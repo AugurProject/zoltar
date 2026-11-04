@@ -1171,13 +1171,12 @@ productionInteractionTest('liquidation-distance', '?workflow=liquidation#/pools?
 	expect(await readVaultCommitment(farTargetVault)).toBe('160 ETH')
 
 	// Undercollateralized, but its 3.906 REP/ETH threshold is only 2.3% below the 4 REP/ETH price.
-	await openLiquidationReview(nearTargetVault)
-	await driver.setInputByLabel('Commitment to transfer', '10')
 	await driver.waitForBodyText(liquidationCopy.formatLiquidationDistanceTooLowReason('10%'))
-	expect(JSON.parse(String(await readButtonDisabledReason(driver, 'Execute vault liquidation')))).toEqual({ disabled: true, reason: liquidationCopy.formatLiquidationDistanceTooLowReason('10%') })
-	expect(await driver.evaluate(`[...document.querySelectorAll('[role="dialog"] button')].find(button => button.textContent?.trim() === 'Max')?.disabled`)).toBe(true)
-	await driver.clickButton('Cancel')
-	await driver.waitForBodyWithoutText('Commitment to transfer')
+	const nearAction = await driver.evaluate(
+		`(() => { const row = [...document.querySelectorAll('.vault-position-strip')].find(candidate => candidate.querySelector('.vault-position-strip-title')?.textContent?.toLowerCase().includes(${JSON.stringify(nearTargetVault)})); const button = [...(row?.querySelectorAll('button') ?? [])].find(candidate => candidate.textContent?.trim() === 'Liquidate vault'); return button instanceof HTMLButtonElement ? { disabled: button.disabled, reason: document.getElementById(button.getAttribute('aria-describedby') ?? '')?.textContent } : undefined })()`,
+	)
+	expect(nearAction).toEqual({ disabled: true, reason: liquidationCopy.formatLiquidationDistanceTooLowReason('10%') })
+	expect(await driver.evaluate(`document.querySelector('[role="dialog"]') !== null`)).toBe(false)
 
 	// Its 3.125 REP/ETH threshold is 21.9% below the price, past the minimum distance.
 	await openLiquidationReview(farTargetVault)

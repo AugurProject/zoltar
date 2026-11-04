@@ -95,8 +95,7 @@ function runtimeWithAddresses(artifact: { evm: { deployedBytecode: { object: str
 	}
 	return bytesToHex(code)
 }
-function moduleRuntimeCode(module: (typeof portfolioModuleDeployments)[number], profile: NetworkProfile) {
-	const addresses = getInfraContractAddresses(profile)
+function moduleRuntimeCode(module: (typeof portfolioModuleDeployments)[number], addresses: ReturnType<typeof getInfraContractAddresses>) {
 	if (module.id === 'securityPoolCapitalLedgerDeployer' || module.id === 'securityPoolPortfolioServicesDeployer') return runtimeWithAddresses(module.artifact, [getCreateAddress({ from: addresses[module.id], nonce: 1n }), getCreateAddress({ from: addresses[module.id], nonce: 2n })])
 	if (module.id === 'securityPoolPortfolioForkCoordinatorDeployer') return runtimeWithAddresses(module.artifact, [getCreateAddress({ from: addresses[module.id], nonce: 1n }), getCreateAddress({ from: addresses[module.id], nonce: 2n })])
 	// The auction deployer also publishes the shared vault implementation after its two creation-code chunks.
@@ -281,7 +280,7 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 					address: addresses[module.id],
 					dependencies: ['proxyDeployer'],
 					deploy: async (client: WriteClient) => await deployViaProxy(client, module.bytecode()),
-					expectedRuntimeCodeHash: keccak256(moduleRuntimeCode(module, profile)),
+					expectedRuntimeCodeHash: keccak256(moduleRuntimeCode(module, addresses)),
 				}) satisfies DeploymentStep,
 		),
 	]
