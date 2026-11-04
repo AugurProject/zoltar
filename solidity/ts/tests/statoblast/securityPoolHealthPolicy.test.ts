@@ -64,11 +64,6 @@ describe('Statoblast: owner health policy', () => {
 	const target = (client: WriteClient, health: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address: ledger, functionName: 'setHealthTarget', args: [health] }))
 	const collateral = (client: WriteClient) => alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'ownerCollateral', args: [client.account.address] })
 	const retire = (client: WriteClient) => writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address: ledger, functionName: 'setCommitment', args: [0n] }))
-	// Setting the commitment back to its current value cancels a pending retirement.
-	const cancel = async (client: WriteClient, id: bigint) => {
-		const { commitment } = await position(id)
-		return writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address: ledger, functionName: 'setCommitment', args: [commitment] }))
-	}
 
 	test('withdrawal quote preserves the saved target and excludes earned REP', async () => {
 		await target(alice, 12_000n)
@@ -130,27 +125,14 @@ describe('Statoblast: owner health policy', () => {
 		expect(await position(id)).toMatchObject({ rep: 126n * E, commitment: 100n * E })
 	})
 
-	test('cancelling retirement cannot reopen capacity below the chosen target', async () => {
-		await target(alice, 12_000n)
-		await deposit(alice, 126n * E)
-		const id = await authorize(alice, 100n * E)
-		await demand(100n * E)
-		await retire(alice)
-		await price((E * 11n) / 10n)
-		await expect(cancel(alice, id)).rejects.toThrow('Chosen health target unmet')
-		await deposit(alice, (E * 126n) / 10n)
-		await cancel(alice, id)
-		expect(await position(id)).toMatchObject({ batch: 0n, commitment: 100n * E })
-	})
-
-	test('cancelling retirement needs a fresh price even with abundant collateral', async () => {
+	test('a pending retirement cannot be cancelled or reopened, even with abundant collateral', async () => {
 		await deposit(alice, 200n * E)
 		const id = await authorize(alice, 100n * E)
 		await demand(100n * E)
 		await retire(alice)
-		await price(E, 5)
-		await getAnvilWindowEthereum().advanceTime(6n)
-		await expect(cancel(alice, id)).rejects.toThrow('Capital price stale')
+		await expect(authorize(alice, 100n * E)).rejects.toThrow('Retirement pending')
+		expect(await position(id)).toMatchObject({ commitment: 100n * E, remainingCommitment: 0n })
+		expect((await position(id)).batch).not.toBe(0n)
 	})
 
 	test('breaching the chosen buffer alone does not permit liquidation or keeper rewards', async () => {

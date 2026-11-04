@@ -274,22 +274,7 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 					carol.remaining = 50n * U
 				},
 			)
-			await action(
-				'carol cancels',
-				() => writeContractAndWait(fixture.client(3), () => fixture.client(3).writeContract({ ...fixture.capital, functionName: 'setCommitment', args: [carol.commitment] })),
-				() => {
-					carol.queued = false
-					carol.remaining = 0n
-				},
-			)
-			await action(
-				'carol requeues behind existing closed cohort',
-				() => writeContractAndWait(fixture.client(3), () => fixture.client(3).writeContract({ ...fixture.capital, functionName: 'setCommitment', args: [50n * U] })),
-				() => {
-					carol.queued = true
-					carol.remaining = 50n * U
-				},
-			)
+			await expect(writeContractAndWait(fixture.client(3), () => fixture.client(3).writeContract({ ...fixture.capital, functionName: 'setCommitment', args: [carol.commitment] }))).rejects.toThrow('Retirement pending')
 			await ethereum.advanceTime(86_401n)
 			await action('checkpoint all mature income', () => writeContractAndWait(sender, () => sender.writeContract({ ...fixture.capital, functionName: 'checkpoint' })))
 			const forkTime = (await sender.getBlock()).timestamp

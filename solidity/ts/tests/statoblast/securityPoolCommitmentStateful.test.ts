@@ -157,12 +157,12 @@ describe('Statoblast: replayable mixed retirement reference model', () => {
 							await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'requestPartial', args: [entry.id, entry.remaining] }))
 						}
 					} else if (operation === 4) {
-						const entry = pick(queued())
+						const entry = pick(live().filter(entry => entry.batch === 0n && entry.commitment >= 3n))
 						if (entry !== undefined) {
-							trace.push(`${step}:cancel(${entry.id})`)
-							await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'cancel', args: [entry.id] }))
-							entry.batch = 0n
-							entry.remaining = 0n
+							entry.remaining = entry.commitment / 3n
+							entry.batch = next
+							trace.push(`${step}:request(${entry.id},${entry.remaining})`)
+							await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'requestPartial', args: [entry.id, entry.remaining] }))
 						}
 					} else if (operation === 5 || operation === 6) {
 						const demand = random(sum(healthy(), entry => entry.commitment) + 2n)

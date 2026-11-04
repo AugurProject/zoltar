@@ -87,9 +87,10 @@ describe('Statoblast: targeted retirement preview', () => {
 		const newer = await create(80n, 8n, 40n)
 		await request(newer, 3n)
 		expect(await preview(newer, 10n, 12n)).toMatchObject({ status: 4n, effectiveCurrentBatch: 1n, queuedAheadCommitment: 4n })
-		await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'cancel', args: [older] }))
-		expect(await preview(newer, 10n, 12n)).toMatchObject({ status: 5n, effectiveCurrentBatch: 2n, queuedAheadCommitment: 0n })
-		await retire(newer, 10n, 12n)
+		await retire(older, 10n, 0n)
+		expect((await account(older)).commitment).toBe(5n)
+		expect(await preview(newer, 10n, 8n)).toMatchObject({ status: 5n, effectiveCurrentBatch: 2n, queuedAheadCommitment: 0n })
+		await retire(newer, 10n, 8n)
 		expect((await account(newer)).commitment).toBe(3n)
 	})
 

@@ -7,7 +7,7 @@ import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/act
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { PortfoliosSection } from '@zoltar/ui-statoblast-shared/features/portfolios/components/PortfoliosSection.js'
 import * as copy from '@zoltar/ui-statoblast-shared/copy/portfolioCapital.js'
-import { owner, portfolio } from './capitalFixture.js'
+import { capitalSnapshot, owner, portfolio } from './capitalFixture.js'
 import { capitalClient } from './capitalClient.js'
 
 const lifecycle = installDomTestLifecycle({ url: `https://example.test/#/portfolios?portfolio=${portfolio}&owner=${owner}`, afterTest: resetActiveEnvironmentForTesting })
@@ -51,7 +51,7 @@ test('authenticated refresh preserves position controls while disabling transact
 	const inputs = [...position.querySelectorAll('input')]
 	const buttons = [...position.querySelectorAll('button')]
 	expect(inputs).toHaveLength(1)
-	expect(buttons).toHaveLength(3)
+	expect(buttons).toHaveLength(2)
 	await act(() => render(<PortfoliosSection parameters={parameters} enabled={false} environmentKey={0} activeUniverseId={0n} />, view.container))
 	expect(position.isConnected).toBe(true)
 	expect([...position.querySelectorAll('input')]).toEqual(inputs)
@@ -63,4 +63,18 @@ test('authenticated refresh preserves position controls while disabling transact
 	await act(() => render(<PortfoliosSection parameters={parameters} enabled environmentKey={0} activeUniverseId={0n} />, view.container))
 	await waitFor(() => expect(buttons.some(button => !button.disabled)).toBe(true))
 	expect(position.isConnected).toBe(true)
+})
+
+test('a pending retirement shows its locked request without an editable form', async () => {
+	const snapshot = capitalSnapshot()
+	const source = capitalClient({ ...snapshot, positions: snapshot.positions.map(position => ({ ...position, batch: 1n, remainingCommitment: 0n })) })
+	source.install()
+	const view = await renderIntoDocument(<PortfoliosSection parameters={parameters} enabled environmentKey={0} activeUniverseId={0n} />)
+	lifecycle.trackRendered(view)
+	await waitFor(() => expect(view.container.textContent).toContain(copy.queuedRemainingCommitment))
+	const position = [...view.container.querySelectorAll('.workflow-subsection')].find(section => section.querySelector('h4')?.textContent === copy.position(1n))
+	if (position === undefined) throw new Error('Position section missing')
+	expect(position.querySelectorAll('input')).toHaveLength(0)
+	expect([...position.querySelectorAll('button')].map(button => button.textContent?.trim())).not.toContain(copy.retire)
+	expect(position.textContent).not.toContain(copy.remainingCommitment)
 })

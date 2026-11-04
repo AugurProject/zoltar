@@ -44,10 +44,10 @@ test('current and next retirement cohorts remain distinct without question-histo
 	expect(capitalPositionPhase(4n, 3n)).toBe('next')
 })
 
-test('all owner principal backs authorization and retirement must be canceled first', () => {
+test('all owner principal backs authorization and a pending retirement locks the commitment', () => {
 	const snapshot = capitalSnapshot({ withdrawableAttoRep: 0n })
 	expect(capitalAuthorizationReason(snapshot, 10n * unit)).toBeUndefined()
-	expect(capitalAuthorizationReason({ ...snapshot, positions: snapshot.positions.map(position => ({ ...position, batch: 2n })) }, 10n * unit)).toContain('Cancel retirement')
+	expect(capitalAuthorizationReason({ ...snapshot, positions: snapshot.positions.map(position => ({ ...position, batch: 2n })) }, 10n * unit)).toContain('locked until its retirement is released')
 })
 
 test('a funded report permits growth only with its conservative collateral price', () => {

@@ -186,13 +186,17 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 							<UserMessage detail={copy.liquidationHint} />
 							{position.liquidationStarted === 0n ? undefined : <UserMessage detail={copy.liquidationTimingHint} />}
 							{snapshot === undefined || position.batch === 0n ? undefined : <PortfolioRetirementPreview snapshot={snapshot} position={position} />}
-							<PortfolioInput label={copy.remainingCommitment} hint={copy.remainingCommitmentHint} value={position.batch === 0n ? model.remainingCommitmentAmount : formatUnits(position.remainingCommitment, 18)} onChange={model.setRemainingCommitmentAmount} disabled={disabled || position.batch !== 0n} numeric />
-							<ActionLauncherButton tone='secondary' idleLabel={copy.retireToTarget} pendingLabel={copy.retireToTarget} availability={{ disabled: retirementSizingReason !== undefined, reason: retirementSizingReason }} onClick={model.retireToTarget} />
-							<UserMessage detail={copy.retirementTargetHint} />
-							<div className='actions'>
-								<PortfolioButton model={actions} action={`retirePortfolio-${position.id}`} label={copy.retire} pendingLabel={copy.retiring} reason={reasons.retire} onClick={() => model.retire(position.id)} />
-								<PortfolioButton model={actions} action={`cancelRetirementPortfolio-${position.id}`} label={copy.cancelRetirement} pendingLabel={copy.cancelingRetirement} reason={reasons.cancel} onClick={() => model.cancelRetirement(position.id)} />
-							</div>
+							{/* A pending request is locked until released, so its form is not shown. */}
+							{position.batch === 0n ? (
+								<>
+									<PortfolioInput label={copy.remainingCommitment} hint={copy.remainingCommitmentHint} value={model.remainingCommitmentAmount} onChange={model.setRemainingCommitmentAmount} disabled={disabled} numeric />
+									<ActionLauncherButton tone='secondary' idleLabel={copy.retireToTarget} pendingLabel={copy.retireToTarget} availability={{ disabled: retirementSizingReason !== undefined, reason: retirementSizingReason }} onClick={model.retireToTarget} />
+									<UserMessage detail={copy.retirementTargetHint} />
+									<div className='actions'>
+										<PortfolioButton model={actions} action={`retirePortfolio-${position.id}`} label={copy.retire} pendingLabel={copy.retiring} reason={reasons.retire} onClick={() => model.retire(position.id)} />
+									</div>
+								</>
+							) : undefined}
 						</WorkflowSubsection>
 					)
 				})}

@@ -21,7 +21,7 @@ import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import * as capitalCopy from '../../../copy/portfolioCapital.js'
 import { portfolioAmountOrUndefined, portfolioUnsignedId } from '../lib/draft.js'
 import { portfolioBasisPointsOrUndefined } from '../lib/creation.js'
-import { capitalAuthorizationReason, capitalWithdrawalReason, requiredPortfolioCollateral, maximumPortfolioCommitment, capitalHealthReason, capitalCancelRetirementReason, capitalRetirementReason, coveredUnderwaterCommitment } from '../lib/capital.js'
+import { capitalAuthorizationReason, capitalWithdrawalReason, requiredPortfolioCollateral, maximumPortfolioCommitment, capitalHealthReason, capitalRetirementReason, coveredUnderwaterCommitment } from '../lib/capital.js'
 import type { usePortfolio } from './usePortfolio.js'
 import type { usePortfolioActions } from './usePortfolioActions.js'
 
@@ -240,7 +240,6 @@ export function usePortfolioAggregate(
 			const common = ownerReason ?? inactiveReason ?? (position === undefined ? 'Position is no longer live.' : undefined)
 			return {
 				retire: common ?? (snapshot === undefined ? undefined : capitalRetirementReason(snapshot, id, remainingCommitment)),
-				cancel: common ?? (snapshot === undefined ? undefined : capitalCancelRetirementReason(snapshot, id)),
 			}
 		},
 		approve: (amount: bigint) =>
@@ -294,7 +293,7 @@ export function usePortfolioAggregate(
 					if (healthBps === undefined) throw new Error('Enter your health target.')
 					return {
 						...buildPortfolioCapitalSetHealthRequest({ ...base(selected), targetHealthFactorBps: healthBps }),
-						reviewDescription: `Save a ${formatUnits(healthBps, 2)}% target for withdrawals, authorizations and cancelling retirement. Raising the target requires enough REP now. This does not change your commitment or the protocol liquidation threshold.`,
+						reviewDescription: `Save a ${formatUnits(healthBps, 2)}% target for withdrawals and authorizations. Raising the target requires enough REP now. This does not change your commitment or the protocol liquidation threshold.`,
 					}
 				},
 				latest => {
@@ -385,32 +384,12 @@ export function usePortfolioAggregate(
 					const queue = retirementQueueDescription(covered, remainingCommitment)
 					return {
 						...buildPortfolioCapitalSetCommitmentRequest({ ...base(selected), commitment: remainingCommitment }),
-						reviewDescription: `Reduce position ${id} to ${formatEther(remainingCommitment)} ETH commitment. ${remainingCommitment === 0n ? 'Full retirement releases its REP.' : 'The reduction stops at this amount and keeps its REP backing the remaining commitment.'}${queue} The saved health target stays unchanged.`,
+						reviewDescription: `Reduce position ${id} to ${formatEther(remainingCommitment)} ETH commitment. ${remainingCommitment === 0n ? 'Full retirement releases its REP.' : 'The reduction stops at this amount and keeps its REP backing the remaining commitment.'}${queue} Once submitted, the request cannot be changed or cancelled. The saved health target stays unchanged.`,
 					}
 				},
 				latest => {
 					const reason = capitalRetirementReason(latest, id, remainingCommitment)
 					if (reason !== undefined) throw new Error(reason)
-				},
-			),
-		cancelRetirement: (id: bigint) =>
-			run(
-				`cancelRetirementPortfolio-${id}`,
-				'Cancel retirement',
-				ownerReason ?? inactiveReason,
-				selected => {
-					const reason = capitalCancelRetirementReason(selected, id)
-					if (reason !== undefined) throw new Error(reason)
-					const position = selected.positions.find(item => item.id === id && item.commitment > 0n)
-					if (position === undefined) throw new Error('Position is no longer live.')
-					return { ...buildPortfolioCapitalSetCommitmentRequest({ ...base(selected), commitment: position.commitment }), reviewDescription: `Return position ${id} to active underwriting at its remaining commitment and give up its retirement priority. Your saved health target must be met at a fresh price.` }
-				},
-				latest => {
-					const reason = capitalCancelRetirementReason(latest, id)
-					if (reason !== undefined) throw new Error(reason)
-					// Cancelling keeps the current commitment, so a changed commitment would otherwise be restored or raised.
-					const commitmentOf = (positions: PortfolioCapitalSnapshot['positions']) => positions.find(item => item.id === id)?.commitment
-					if (commitmentOf(latest.positions) !== commitmentOf(snapshot?.positions ?? [])) throw new Error('Your commitment changed. Review the transaction again.')
 				},
 			),
 	}

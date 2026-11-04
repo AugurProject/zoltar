@@ -214,8 +214,8 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	/// @dev Raising or keeping it applies at once and must meet the owner's health
 	/// target at a fresh price. Lowering it first cures an underwater position at
 	/// once, which uses no healthy spare; the rest of the reduction joins the
-	/// retirement queue. A new value replaces any pending request, which then
-	/// loses its place in the queue unless the value is unchanged.
+	/// retirement queue. A pending request is locked until it is served: only
+	/// its own value is accepted, which cures an underwater position in place.
 	function setCommitment(uint256 commitment) external nonReentrant returns (uint96 id) {
 		return _setCommitment(commitment, 0, false);
 	}
@@ -230,8 +230,8 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		_settleOwner(msg.sender);
 		id = owners[msg.sender].positionId;
 		SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(id);
-		bool keepsRequest = position.batch != 0 && commitment == position.remainingCommitment;
-		if (position.batch != 0 && !keepsRequest) commitmentIndex.cancelRetirement(id);
+		bool pending = position.batch != 0;
+		require(!pending || commitment == position.remainingCommitment, 'Retirement pending');
 		if (commitment >= position.commitment) {
 			_requireFresh();
 			return
@@ -241,7 +241,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		require(commitment == 0 || commitment >= minimumCommitmentAttoEth, 'Commitment below minimum');
 		uint256 current = position.commitment;
 		if (isPriceValid()) current -= _cure(id, commitment);
-		if (current > commitment && !keepsRequest)
+		if (current > commitment && !pending)
 			commitmentIndex.requestRetirement(id, commitment, minimumCommitmentAttoEth);
 		_serveRetirement(0);
 	}

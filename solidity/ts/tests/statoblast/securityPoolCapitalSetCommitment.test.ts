@@ -152,7 +152,7 @@ describe('Statoblast: owner-set capital commitment', () => {
 		expect(account.batch).not.toBe(0n)
 	})
 
-	test('a pending request keeps its place only when repeated; a new value requeues and the current value cancels', async () => {
+	test('a pending request is locked: repeating it keeps its place and any other value reverts', async () => {
 		const id = await commit(alice, 210n * E, 100n * E)
 		await demand(100n * E)
 		await setCommitment(alice, 50n * E)
@@ -162,16 +162,9 @@ describe('Statoblast: owner-set capital commitment', () => {
 		expect((await position(id)).batch).toBe(promoted)
 		await setCommitment(alice, 50n * E)
 		expect((await position(id)).batch).toBe(promoted)
-		await setCommitment(alice, 60n * E)
-		const requeued = await position(id)
-		expect(requeued.batch).not.toBe(0n)
-		expect(requeued.batch).not.toBe(promoted)
-		expect(requeued.remainingCommitment).toBe(60n * E)
-		await setCommitment(alice, 100n * E)
-		const cancelled = await position(id)
-		expect(cancelled.batch).toBe(0n)
-		expect(cancelled.remainingCommitment).toBe(0n)
-		expect(cancelled.commitment).toBe(100n * E)
+		for (const other of [0n, 40n * E, 60n * E, 100n * E, 120n * E]) await expect(setCommitment(alice, other)).rejects.toThrow('Retirement pending')
+		await expect(writeContractAndWait(alice, () => alice.writeContract({ abi: artifact.abi, address: ledger, functionName: 'setCommitmentWithReport', args: [1n, 120n * E] }))).rejects.toThrow('Retirement pending')
+		expect(await position(id)).toMatchObject({ batch: promoted, commitment: 100n * E, remainingCommitment: 50n * E })
 	})
 
 	// Healthy capacity (carol's 100 ETH) stays below demand, so the queue serves nothing and only the owner's cure can act.
@@ -208,7 +201,7 @@ describe('Statoblast: owner-set capital commitment', () => {
 		expect(account.remainingCommitment).toBe(45n * E)
 	})
 
-	test('cancelling still requires the saved health target, while lowering never does', async () => {
+	test('lowering never requires the saved health target', async () => {
 		const id = await commit(alice, 105n * E, 100n * E)
 		await demand(100n * E)
 		await price(2n * E)
@@ -216,7 +209,6 @@ describe('Statoblast: owner-set capital commitment', () => {
 		await setCommitment(alice, 0n)
 		expect((await position(id)).batch).not.toBe(0n)
 		expect((await position(id)).commitment).toBe(100n * E)
-		await expect(setCommitment(alice, (await position(id)).commitment)).rejects.toThrow('Chosen health target unmet')
 	})
 
 	test('a funded report prices growth only', async () => {

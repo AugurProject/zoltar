@@ -65,7 +65,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		id = owner.positionId;
 		SecurityPoolCommitmentIndex.Account memory old;
 		if (id != 0) old = commitmentIndex.accountOf(id);
-		require(old.batch == 0, 'Cancel retirement first');
+		require(old.batch == 0, 'Retirement pending');
 		ICapitalLifecycleHost host = ICapitalLifecycleHost(address(this));
 		ICapitalPriceExposure feed = ICapitalPriceExposure(ICapitalLedgerAccounting(host.portfolio()).priceFeed(host.universeId()));
 		if (useReport) {
@@ -89,7 +89,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 			commitmentIndex.replace(id, rep, commitment, maxPrice);
 			if (maxPrice >= liquidationPrice) commitmentIndex.clearLiquidation(id);
 		}
-		// Keeping the commitment, as when cancelling a retirement, adds no exposure.
+		// Keeping the commitment adds no exposure.
 		if (!useReport && commitment > old.commitment) feed.validateExposure();
 		emit CommitmentAuthorized(msg.sender, id, rep, commitment, health);
 	}

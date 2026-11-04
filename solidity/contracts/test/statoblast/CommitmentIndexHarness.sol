@@ -102,9 +102,6 @@ contract CommitmentIndexHarness {
 	function requestWithMinimum(uint96 id, uint256 remainingCommitment, uint256 minimumCommitment) external {
 		index.requestRetirement(id, remainingCommitment, minimumCommitment);
 	}
-	function cancel(uint96 id) external {
-		index.cancelRetirement(id);
-	}
 	function observeHealthy(uint256 price) external {
 		index.observeHealthy(price);
 	}

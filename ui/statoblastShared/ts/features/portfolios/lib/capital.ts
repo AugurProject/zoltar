@@ -40,16 +40,6 @@ export function coveredUnderwaterCommitment(snapshot: Pick<PortfolioCapitalSnaps
 	return covered < position.commitment ? covered : undefined
 }
 
-export function capitalCancelRetirementReason(snapshot: PortfolioCapitalSnapshot, id: bigint) {
-	if (snapshot.forkTime > 0n || snapshot.frozen || snapshot.importing || snapshot.exported) return 'This universe is closed to new commitments.'
-	const position = snapshot.positions.find(item => item.id === id && item.commitment > 0n)
-	if (position === undefined) return 'Position is no longer live.'
-	if (position.batch === 0n) return 'Position is active.'
-	if (!snapshot.priceValid) return 'Refresh the shared REP price before cancelling retirement.'
-	if (position.rep < requiredPortfolioCollateral(snapshot, position.commitment)) return 'Restore your saved health target before cancelling retirement.'
-	return undefined
-}
-
 export function capitalRetirementReason(snapshot: PortfolioCapitalSnapshot, id: bigint, remaining: bigint | undefined) {
 	if (snapshot.forkTime > 0n || snapshot.frozen || snapshot.importing || snapshot.exported) return 'This universe is closed to retirement requests.'
 	const position = snapshot.positions.find(item => item.id === id && item.commitment > 0n)
@@ -67,7 +57,7 @@ export function capitalAuthorizationReason(snapshot: PortfolioCapitalSnapshot, c
 	if (commitment === undefined || commitment === 0n) return 'Enter a positive commitment amount.'
 	if (commitment < snapshot.economics.minimumCommitmentAttoEth) return 'Commitment is below this pool’s minimum.'
 	const active = snapshot.positions.find(position => position.commitment > 0n)
-	if (active !== undefined && active.batch !== 0n) return 'Cancel retirement before changing your commitment.'
+	if (active !== undefined && active.batch !== 0n) return 'Your commitment is locked until its retirement is released.'
 	if (active !== undefined && commitment < active.commitment) return 'Request retirement before reducing an existing commitment.'
 	const totalCommitment = snapshot.totalCommitmentAttoEth - snapshot.ownerCommitmentAttoEth + commitment
 	if (proofPrice === undefined && (totalCommitment > snapshot.oracleExposureLimitAttoEth || snapshot.demandAttoEth > snapshot.oracleExposureLimitAttoEth)) return 'Request a price report funded for this larger commitment.'

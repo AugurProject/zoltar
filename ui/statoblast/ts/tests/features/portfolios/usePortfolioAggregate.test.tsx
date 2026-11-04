@@ -107,28 +107,15 @@ test('raising a saved health target requires present collateral and a fresh pric
 	await act(() => hook.state().setHealthPercent('100'))
 	expect(hook.state().healthReason).toBeUndefined()
 })
-test('cancelling retirement cannot reopen capacity below the saved target or at a stale price', async () => {
+test('a pending retirement locks the commitment: no cancel, no new request and no raise', async () => {
 	const snapshot = capitalSnapshot()
-	const retiring = { ...snapshot, positions: snapshot.positions.map(position => ({ ...position, batch: 1n, rep: 24n * unit })), ownerPrincipalAttoRep: 24n * unit }
+	const retiring = { ...snapshot, positions: snapshot.positions.map(position => ({ ...position, batch: 1n, remainingCommitment: 5n * unit })) }
 	const { hook } = await setup(retiring)
-	expect(hook.state().positionReasons(1n).cancel).toContain('target')
-	await hook.setProps({ snapshot: { ...retiring, priceValid: false } })
-	expect(hook.state().positionReasons(1n).cancel).toContain('price')
-})
-test('cancelling retirement keeps the reviewed commitment and refuses a commitment that changed since review', async () => {
-	const snapshot = capitalSnapshot()
-	const retiring = { ...snapshot, positions: snapshot.positions.map(position => ({ ...position, batch: 1n })) }
-	const { hook, requests, transport } = await setup(retiring)
-	expect(hook.state().positionReasons(1n).cancel).toBeUndefined()
-	await act(() => hook.state().cancelRetirement(1n))
-	const request = requests[0]
-	if (request === undefined) throw new Error('Missing cancellation request')
-	const reviewed = retiring.positions[0]?.commitment
-	if (reviewed === undefined) throw new Error('Missing reviewed position')
-	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'setCommitment', args: [reviewed] })
-	await request.validateBeforeSubmit?.()
-	transport.setSnapshot({ ...retiring, positions: retiring.positions.map(position => ({ ...position, commitment: position.commitment - unit })) })
-	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('commitment changed')
+	expect(Object.keys(hook.state().positionReasons(1n))).toEqual(['retire'])
+	expect('cancelRetirement' in hook.state()).toBe(false)
+	expect(hook.state().positionReasons(1n).retire).toBe('Retirement already requested.')
+	await act(() => hook.state().setCommitmentAmount('11'))
+	expect(hook.state().authorizeReason).toBe('Your commitment is locked until its retirement is released.')
 })
 test('commitment starts from funded target capacity and lowering a target never sends authorization', async () => {
 	const { hook, requests } = await setup()
@@ -175,6 +162,7 @@ test('target-sized retirement sends a fixed residual without silently saving an 
 	if (request === undefined) throw new Error('Missing partial retirement request')
 	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'setCommitment', args: [7_142_857_142_857_142_857n] })
 	expect(request.reviewDescription).toContain('saved health target stays unchanged')
+	expect(request.reviewDescription).toContain('cannot be changed or cancelled')
 })
 function underwaterSnapshot() {
 	const snapshot = capitalSnapshot()

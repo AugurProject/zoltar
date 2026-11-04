@@ -205,17 +205,6 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		_insert(nextBatch, position.node);
 	}
 
-	function cancelRetirement(uint96 id) external onlyPortfolio operational {
-		_touch(id);
-		Position storage position = positions[id];
-		require(position.batch != 0 && !nodes[position.node].retired && nodes[position.node].commitment != 0, 'Position is not retiring');
-		_detach(position.batch, position.node);
-		position.batch = 0;
-		position.remainingCommitment = 0;
-		nodes[position.node].retainedCommitment = 0;
-		_insert(0, position.node);
-	}
-
 	/// @notice Record which existing live positions are healthy at a fresh price.
 	/// @dev Epochs distinguish recovery and relapse even within the same block.
 	function observeHealthy(uint256 price) external onlyPortfolio operational {

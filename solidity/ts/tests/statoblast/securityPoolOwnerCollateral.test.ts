@@ -112,15 +112,15 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		await expect(withdraw(alice, 1n)).rejects.toThrow('Owner collateral too low')
 	})
 
-	test('an owner cannot add commitment while retaining retirement priority', async () => {
+	test('an owner cannot add commitment while a retirement is pending', async () => {
 		await deposit(alice, 210n * E)
 		const id = await authorize(alice, 100n * E)
 		await demand(100n * E)
 		await retire(alice)
 		expect((await position(id)).batch).not.toBe(0n)
-		// Raising the commitment replaces the pending exit in the same single position.
-		expect(await authorize(alice, 150n * E)).toBe(id)
-		expect(await position(id)).toMatchObject({ rep: 210n * E, commitment: 150n * E, batch: 0n, remainingCommitment: 0n })
+		// A pending exit is locked until served, so a raise cannot replace it.
+		await expect(authorize(alice, 150n * E)).rejects.toThrow('Retirement pending')
+		expect(await position(id)).toMatchObject({ rep: 210n * E, commitment: 100n * E, remainingCommitment: 0n })
 	})
 
 	test('a restoring deposit checkpoints old fee eligibility and earns only later healthy income', async () => {
@@ -196,7 +196,7 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		expect(await healthy()).toBe(100n * E)
 	})
 
-	test('an existing retiring receiver must relinquish its cohort before assuming active obligations', async () => {
+	test('an existing retiring receiver cannot assume active obligations or leave its cohort', async () => {
 		await deposit(alice, 105n * E)
 		await deposit(keeper, 210n * E)
 		const source = await authorize(alice, 100n * E)
@@ -208,11 +208,10 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		const takeover = () => writeContractAndWait(keeper, () => keeper.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'takeOver', args: [source, 50n * E, 1n, 0n] }))
 		await expect(takeover()).rejects.toThrow('Receiver retirement differs')
 		expect((await position(receiver)).commitment).toBe(100n * E)
-		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'setCommitment', args: [100n * E] }))
+		await expect(writeContractAndWait(keeper, () => keeper.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'setCommitment', args: [100n * E] }))).rejects.toThrow('Retirement pending')
 		await deposit(keeper, 105n * E)
-		await takeover()
-		expect((await account(keeper)).positionId).toBe(receiver)
-		expect(await position(receiver)).toMatchObject({ commitment: 150n * E, batch: 0n })
+		await expect(takeover()).rejects.toThrow('Receiver retirement differs')
+		expect((await position(receiver)).batch).not.toBe(0n)
 	})
 
 	test('REP earnings remain claimable income and cannot conceal an undercollateralized commitment', async () => {
