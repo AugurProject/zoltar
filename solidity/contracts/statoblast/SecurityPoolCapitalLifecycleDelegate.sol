@@ -89,7 +89,8 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 			commitmentIndex.replace(id, rep, commitment, maxPrice);
 			if (maxPrice >= liquidationPrice) commitmentIndex.clearLiquidation(id);
 		}
-		if (!useReport) feed.validateExposure();
+		// Keeping the commitment, as when cancelling a retirement, adds no exposure.
+		if (!useReport && commitment > old.commitment) feed.validateExposure();
 		emit CommitmentAuthorized(msg.sender, id, rep, commitment, health);
 	}
 

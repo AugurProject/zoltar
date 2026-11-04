@@ -2,7 +2,7 @@ import { encodeFunctionData, type Address } from '@zoltar/core-shared/evm/ethere
 import {
 	buildPortfolioAuctionBidRequest,
 	buildPortfolioAuctionOpenRequest,
-	buildPortfolioCapitalAuthorizeRequest,
+	buildPortfolioCapitalSetCommitmentRequest,
 	buildPortfolioCapitalDepositRequest,
 	buildPortfolioCapitalSetHealthRequest,
 	buildPortfolioForkChoiceRequest,
@@ -95,7 +95,7 @@ export async function seedPortfolioAuctionScenario(parameters: ScenarioSeedParam
 	await sendPortfolioTransaction(rivalClient, buildPortfolioCapitalDepositRequest({ owner: rival, capitalLedger, amountAttoRep: rivalRep }), 'Deposit rival REP')
 	await reportStep("Deposited the second underwriter's REP")
 	await sendPortfolioTransaction(rivalClient, buildPortfolioCapitalSetHealthRequest({ owner: rival, capitalLedger, targetHealthFactorBps: 12_000n }), 'Set rival health target')
-	await sendPortfolioTransaction(rivalClient, buildPortfolioCapitalAuthorizeRequest({ owner: rival, capitalLedger, commitment: 10n * unit }), 'Authorize rival commitment')
+	await sendPortfolioTransaction(rivalClient, buildPortfolioCapitalSetCommitmentRequest({ owner: rival, capitalLedger, commitment: 10n * unit }), 'Authorize rival commitment')
 	await reportStep('Funded a second underwriter whose backing stays unchosen')
 
 	// Forcing a fork burns the threshold from the caller; the fixture mints it to the owner first.

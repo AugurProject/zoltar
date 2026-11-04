@@ -90,7 +90,7 @@ export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<Port
 	}
 	const authorize = async (commitment = 100n * unit, sender = owner(), namespace = portfolio) => {
 		const capital = await capitalFor(namespace)
-		return writeContractAndWait(sender, () => sender.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'authorize', args: [commitment] }))
+		return writeContractAndWait(sender, () => sender.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'setCommitment', args: [commitment] }))
 	}
 	const prepare = async (rep = 1_000n * unit, commitment = 200n * unit) => {
 		await deposit(rep)

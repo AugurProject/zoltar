@@ -1,13 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import {
-	buildPortfolioCapitalDepositRequest,
-	buildPortfolioCapitalAuthorizeRequest,
-	buildPortfolioCapitalRequestRetirementRequest,
-	buildPortfolioCapitalWithdrawPrincipalRequest,
-	buildPortfolioMintRequest,
-	loadPortfolioCapitalSnapshot,
-	loadPortfolioMintQuote,
-} from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { buildPortfolioCapitalDepositRequest, buildPortfolioCapitalSetCommitmentRequest, buildPortfolioCapitalWithdrawPrincipalRequest, buildPortfolioMintRequest, loadPortfolioCapitalSnapshot, loadPortfolioMintQuote } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
@@ -24,7 +16,7 @@ describe('Statoblast: central capital SDK against production contracts', () => {
 		await approveToken(client, getRepTokenAddress(fixture.base.genesisUniverse), fixture.capitalLedger)
 		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioCapitalDepositRequest({ ...base, amountAttoRep: 1_000n * unit })))
 		await fixture.refreshPrice()
-		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioCapitalAuthorizeRequest({ ...base, commitment: 100n * unit })))
+		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioCapitalSetCommitmentRequest({ ...base, commitment: 100n * unit })))
 		const snapshot = await loadPortfolioCapitalSnapshot({ client, owner, portfolio: fixture.portfolio })
 		expect(snapshot).toMatchObject({
 			universeId: fixture.base.genesisUniverse,
@@ -46,7 +38,7 @@ describe('Statoblast: central capital SDK against production contracts', () => {
 		await writeContractAndWait(client, () =>
 			client.sendTransaction(buildPortfolioMintRequest({ trader: owner, portfolio: fixture.portfolio, universeId: fixture.base.genesisUniverse, questionId: fixture.base.questionId, mintAttoEth: 10n * unit, recipient: owner, minimumShares: quote.shares, maximumPurchaseFeeAttoEth: quote.maximumPurchaseFeeAttoEth })),
 		)
-		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioCapitalRequestRetirementRequest({ ...base, positionId: position.id, remainingCommitment: 0n })))
+		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioCapitalSetCommitmentRequest({ ...base, commitment: 0n })))
 		const pool = fixture.poolFor(fixture.base.questionId)
 		const balances = await balanceOfShares(client, pool.shareToken, fixture.base.genesisUniverse, owner)
 		await redeemCompleteSet(client, pool.securityPool, balances[0])

@@ -84,7 +84,7 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		await fixture.prepare(1_000n * unit, 100n * unit)
 		await fixture.mint(100n * unit)
 		const id = (await ownerAccount()).positionId
-		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...capital(), functionName: 'requestRetirement', args: [id, 0n] }))
+		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...capital(), functionName: 'setCommitment', args: [0n] }))
 		const pool = fixture.poolFor(fixture.base.questionId)
 		const shares = await balanceOfShares(fixture.owner(), pool.shareToken, fixture.base.genesisUniverse, fixture.other().account.address)
 		await redeemCompleteSet(fixture.other(), pool.securityPool, shares[0])
@@ -155,7 +155,7 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		const id = (await ownerAccount()).positionId
 		const index = await fixture.owner().readContract({ ...capital(), functionName: 'commitmentIndex' })
 		await fixture.base.mockWindow.setTime(await fixture.owner().readContract({ ...capital(), functionName: 'priceValidUntil' }))
-		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...capital(), functionName: 'requestRetirement', args: [id, 90n * unit] }))
+		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...capital(), functionName: 'setCommitment', args: [90n * unit] }))
 		await fixture.refreshPrice()
 		const before = await fixture.owner().readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [id] })
 		expect(before).toMatchObject({ commitment: 100n * unit, remainingCommitment: 90n * unit })

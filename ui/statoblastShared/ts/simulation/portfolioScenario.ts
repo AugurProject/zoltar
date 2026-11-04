@@ -1,6 +1,6 @@
 import { encodeFunctionData, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { ceilDiv } from '@zoltar/core-shared/math/bigint'
-import { buildPortfolioPrepareNextRequest, buildPortfolioCapitalDepositRequest, buildPortfolioCapitalSetHealthRequest, buildPortfolioCapitalAuthorizeRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { buildPortfolioPrepareNextRequest, buildPortfolioCapitalDepositRequest, buildPortfolioCapitalSetHealthRequest, buildPortfolioCapitalSetCommitmentRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { advanceSimulationTime } from '@zoltar/ui-core-shared/simulation/clock.js'
 import { createRangeProgressReporter, requireQaAccount } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
@@ -71,7 +71,7 @@ export async function seedPortfolioScenario({ accounts, createReadClient, create
 	await sendPortfolioTransaction(client, buildPortfolioCapitalSetHealthRequest({ owner, capitalLedger, targetHealthFactorBps: 12_000n }), 'Set owner health target')
 	const required = await readClient.readContract({ address: capitalLedger, abi: capitalArtifact.abi, functionName: 'requiredRep', args: [commitment, 12_000n] })
 	if (required > depositAttoRep) throw new Error('Seeded capital cannot cover the intended commitment')
-	await sendPortfolioTransaction(client, buildPortfolioCapitalAuthorizeRequest({ owner, capitalLedger, commitment }), 'Authorize shared commitment')
+	await sendPortfolioTransaction(client, buildPortfolioCapitalSetCommitmentRequest({ owner, capitalLedger, commitment }), 'Authorize shared commitment')
 	await reportStep('Authorized individual healthy commitment')
 	for (const [index, pool] of pools.entries()) {
 		const request = await prepareSeededPortfolioMint(portfolioReadClient(readClient), owner, portfolio, BigInt(pool.questionId))

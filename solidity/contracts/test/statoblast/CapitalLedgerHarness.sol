@@ -85,8 +85,8 @@ contract CapitalLedgerHarness {
 		++acceptedEpoch;
 		ledger.acceptPrice(price, until);
 	}
-	function cureAndSetPrices(uint96 id, uint256 first, uint256 second, uint48 until) external {
-		ledger.cure(id);
+	function checkpointAndSetPrices(uint256 first, uint256 second, uint48 until) external {
+		ledger.checkpoint();
 		++acceptedEpoch;
 		ledger.acceptPrice(first, until);
 		++acceptedEpoch;

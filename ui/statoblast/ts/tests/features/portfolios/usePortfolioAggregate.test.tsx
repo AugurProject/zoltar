@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
-import { decodeFunctionData, parseAbi } from '@zoltar/core-shared/evm/ethereum'
+import { decodeFunctionData, formatEther, parseAbi } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { usePortfolioAggregate } from '@zoltar/ui-statoblast-shared/features/portfolios/hooks/usePortfolioAggregate.js'
@@ -14,14 +14,12 @@ const abi = parseAbi([
 	'function depositFor(address owner,uint256 amount)',
 	'function depositPrincipal(address ledger,uint256 amount,uint256 targetHealthFactorBps)',
 	'function withdrawPrincipal(uint256 amount,address recipient)',
-	'function authorize(uint256 commitment)',
-	'function authorizeWithReport(uint256 reportId,uint256 commitment)',
+	'function setCommitment(uint256 commitment)',
+	'function setCommitmentWithReport(uint256 reportId,uint256 commitment)',
 	'function setHealthTarget(uint256 targetHealthFactorBps)',
 	'function depositAndSetHealthTarget(uint256 amount,uint256 targetHealthFactorBps)',
 	'function claimEarnings()',
-	'function requestRetirement(uint96 id,uint256 remainingCommitment)',
 	'function serveRetirement(uint96 id)',
-	'function cancelRetirement(uint96 id)',
 ])
 async function setup(snapshot = capitalSnapshot()) {
 	const transport = capitalClient(snapshot)
@@ -96,7 +94,7 @@ test('authorizing backed capacity sends zero ETH without a separate funding acti
 	const request = requests[0]
 	if (request === undefined) throw new Error('Missing authorization request')
 	expect(request.value).toBe(0n)
-	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'authorize', args: [11n * unit] })
+	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'setCommitment', args: [11n * unit] })
 	await request.validateBeforeSubmit?.()
 	expect(requests).toHaveLength(1)
 })
@@ -116,6 +114,21 @@ test('cancelling retirement cannot reopen capacity below the saved target or at 
 	expect(hook.state().positionReasons(1n).cancel).toContain('target')
 	await hook.setProps({ snapshot: { ...retiring, priceValid: false } })
 	expect(hook.state().positionReasons(1n).cancel).toContain('price')
+})
+test('cancelling retirement keeps the reviewed commitment and refuses a commitment that changed since review', async () => {
+	const snapshot = capitalSnapshot()
+	const retiring = { ...snapshot, positions: snapshot.positions.map(position => ({ ...position, batch: 1n })) }
+	const { hook, requests, transport } = await setup(retiring)
+	expect(hook.state().positionReasons(1n).cancel).toBeUndefined()
+	await act(() => hook.state().cancelRetirement(1n))
+	const request = requests[0]
+	if (request === undefined) throw new Error('Missing cancellation request')
+	const reviewed = retiring.positions[0]?.commitment
+	if (reviewed === undefined) throw new Error('Missing reviewed position')
+	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'setCommitment', args: [reviewed] })
+	await request.validateBeforeSubmit?.()
+	transport.setSnapshot({ ...retiring, positions: retiring.positions.map(position => ({ ...position, commitment: position.commitment - unit })) })
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('commitment changed')
 })
 test('commitment starts from funded target capacity and lowering a target never sends authorization', async () => {
 	const { hook, requests } = await setup()
@@ -160,8 +173,39 @@ test('target-sized retirement sends a fixed residual without silently saving an 
 	expect(requests).toHaveLength(1)
 	const request = requests[0]
 	if (request === undefined) throw new Error('Missing partial retirement request')
-	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'requestRetirement', args: [1n, 7_142_857_142_857_142_857n] })
+	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'setCommitment', args: [7_142_857_142_857_142_857n] })
 	expect(request.reviewDescription).toContain('saved health target stays unchanged')
+})
+function underwaterSnapshot() {
+	const snapshot = capitalSnapshot()
+	return { ...snapshot, liquidationPrice: 4n * unit, positions: snapshot.positions.map(position => ({ ...position, maxHealthyPrice: 2n * unit })) }
+}
+test('the retirement review omits the immediate cure for a covered position', async () => {
+	const { hook, requests } = await setup()
+	await act(() => hook.state().retire(1n))
+	expect(requests[0]?.reviewDescription).not.toContain('removed at once')
+	expect(requests[0]?.reviewDescription).toContain('The reduction waits for spare capacity')
+})
+test('the retirement review states the immediate cure for a position underwater at a fresh price', async () => {
+	const { hook, requests } = await setup(underwaterSnapshot())
+	await act(() => hook.state().retire(1n))
+	// 30 REP at a 10,500 bps multiplier and a liquidation price of 4 backs 7.142857… ETH, shown rounded down.
+	expect(requests[0]?.reviewDescription).toContain('Your REP covers only 7.1428 ETH at the current price, so the uncovered part is removed at once where spare capacity allows. The rest waits for spare capacity behind earlier retirement requests.')
+	expect(requests[0]?.reviewDescription).toContain('The rest waits for spare capacity')
+})
+test('the retirement review claims no queued rest when the kept commitment is at least the covered amount', async () => {
+	const { hook, requests } = await setup(underwaterSnapshot())
+	const position = underwaterSnapshot().positions[0]
+	if (position === undefined) throw new Error('Missing underwater position')
+	await act(() => hook.state().setRemainingCommitmentAmount(formatEther(position.commitment - unit)))
+	await act(() => hook.state().retire(1n))
+	expect(requests[0]?.reviewDescription).toContain('this reduction is removed at once')
+	expect(requests[0]?.reviewDescription).not.toContain('The rest waits')
+})
+test('the retirement review omits the immediate cure at a stale price', async () => {
+	const { hook, requests } = await setup({ ...underwaterSnapshot(), priceValid: false })
+	await act(() => hook.state().retire(1n))
+	expect(requests[0]?.reviewDescription).not.toContain('removed at once')
 })
 test('target sizing rounds a small reduction up to a meaningful retirement unit', async () => {
 	const { hook } = await setup()
@@ -190,7 +234,7 @@ test('personal health and exact commitment consent are rechecked after the revie
 	await act(() => hook.state().authorize())
 	const request = requests[0]
 	if (request === undefined) throw new Error('Missing authorization')
-	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'authorize', args: [10n * unit] })
+	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'setCommitment', args: [10n * unit] })
 	await request.validateBeforeSubmit?.()
 	transport.setSnapshot(capitalSnapshot({ ownerAccount: { ...capitalSnapshot().ownerAccount, targetHealthFactorBps: 15_000n } }))
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('health target changed')
@@ -216,7 +260,7 @@ test('single owner position retains its retirement cohort and account changes cl
 	await act(() => hook.state().retire(1n))
 	const request = requests[0]
 	if (request === undefined) throw new Error('Missing retirement')
-	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'requestRetirement', args: [1n, 0n] })
+	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'setCommitment', args: [0n] })
 	await act(() => hook.state().setDepositAmount('5'))
 	await hook.setProps({ snapshot: capitalSnapshot({ universeId: 2n }) })
 	expect(hook.state().depositAmount).toBe('')
@@ -320,7 +364,7 @@ test('a selected funded report quotes collateral, authorizes explicitly, and is 
 	await act(() => hook.state().authorize())
 	const request = requests[0]
 	if (request === undefined) throw new Error('Missing report authorization')
-	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'authorizeWithReport', args: [7n, 10n * unit] })
+	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'setCommitmentWithReport', args: [7n, 10n * unit] })
 	await request.validateBeforeSubmit?.()
 	transport.setRead('reportAuthorization', [4n * unit, 2n])
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Report terms changed')

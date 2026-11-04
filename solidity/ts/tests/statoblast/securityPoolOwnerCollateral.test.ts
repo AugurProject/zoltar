@@ -33,13 +33,12 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 	}
 	const demand = (amount: bigint) => writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'setDemand', args: [amount] }))
 	const authorize = async (client: WriteClient, commitment: bigint) => {
-		await writeContractAndWait(client, () => client.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'authorize', args: [commitment] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'setCommitment', args: [commitment] }))
 		const owner = await account(client)
 		if (owner.positionId === 0n) throw new Error('Authorized owner position missing')
 		return owner.positionId
 	}
-	const retire = (client: WriteClient, id: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'requestRetirement', args: [id, 0n] }))
-	const cure = (id: bigint) => writeContractAndWait(keeper, () => keeper.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'cure', args: [id] }))
+	const retire = (client: WriteClient) => writeContractAndWait(client, () => client.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'setCommitment', args: [0n] }))
 	const healthy = async () => (await alice.readContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'totals' }))[2]
 	const earnedEth = async (client: WriteClient, id: bigint) => (await account(client)).feesAttoEth + (await position(id)).ethFees
 
@@ -71,7 +70,6 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		await demand(100n * E)
 		await price((3n * E) / 2n)
 		expect(await healthy()).toBe(100n * E)
-		await cure(id)
 		expect(await position(id)).toMatchObject({ rep: 158n * E, commitment: 100n * E })
 		expect(await alice.readContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })).toBe(0n)
 	})
@@ -81,12 +79,10 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		const id = await authorize(alice, 100n * E)
 		await demand(100n * E)
 		await price((3n * E) / 2n)
-		await cure(id)
 		expect(await alice.readContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })).toBeGreaterThan(0n)
 		await deposit(alice, 53n * E)
 		expect(await healthy()).toBe(100n * E)
 		expect(await alice.readContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })).toBe(0n)
-		await cure(id)
 		expect((await position(id)).commitment).toBe(100n * E)
 	})
 
@@ -107,7 +103,7 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		await deposit(alice, 210n * E)
 		const id = await authorize(alice, 100n * E)
 		await demand(75n * E)
-		await retire(alice, id)
+		await retire(alice)
 		expect(await position(id)).toMatchObject({ rep: 210n * E, commitment: 75n * E, releasedRep: 0n })
 		await price(2n * E)
 		expect(await healthy()).toBe(75n * E)
@@ -116,16 +112,15 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		await expect(withdraw(alice, 1n)).rejects.toThrow('Owner collateral too low')
 	})
 
-	test('an owner cannot add a parallel commitment while retaining retirement priority', async () => {
+	test('an owner cannot add commitment while retaining retirement priority', async () => {
 		await deposit(alice, 210n * E)
 		const id = await authorize(alice, 100n * E)
 		await demand(100n * E)
-		await retire(alice, id)
-		await expect(authorize(alice, 100n * E)).rejects.toThrow('Cancel retirement first')
-		expect((await position(id)).commitment).toBe(100n * E)
-		await writeContractAndWait(alice, () => alice.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'cancelRetirement', args: [id] }))
+		await retire(alice)
+		expect((await position(id)).batch).not.toBe(0n)
+		// Raising the commitment replaces the pending exit in the same single position.
 		expect(await authorize(alice, 150n * E)).toBe(id)
-		expect(await position(id)).toMatchObject({ rep: 210n * E, commitment: 150n * E, batch: 0n })
+		expect(await position(id)).toMatchObject({ rep: 210n * E, commitment: 150n * E, batch: 0n, remainingCommitment: 0n })
 	})
 
 	test('a restoring deposit checkpoints old fee eligibility and earns only later healthy income', async () => {
@@ -159,7 +154,6 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		const id = await authorize(alice, 100n * E)
 		await demand(100n * E)
 		await price(2n * E)
-		await cure(id)
 		await getAnvilWindowEthereum().advanceTime(1800n)
 		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'takeOver', args: [id, 50n * E, 1n, 200n * E] }))
 		const source = await position(id)
@@ -178,7 +172,6 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		const id = await authorize(alice, 100n * E)
 		await demand(100n * E)
 		await price(2n * E)
-		await cure(id)
 		await getAnvilWindowEthereum().advanceTime(3601n)
 		await expect(writeContractAndWait(bob, () => bob.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'depositFor', args: [keeper.account.address, 1n] }))).rejects.toThrow('Invalid capital deposit')
 		expect((await account(keeper)).freeAttoRep).toBe(200n * E)
@@ -209,14 +202,13 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		const source = await authorize(alice, 100n * E)
 		const receiver = await authorize(keeper, 100n * E)
 		await demand(200n * E)
-		await retire(keeper, receiver)
+		await retire(keeper)
 		await price(2n * E)
-		await cure(source)
 		await getAnvilWindowEthereum().advanceTime(3601n)
 		const takeover = () => writeContractAndWait(keeper, () => keeper.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'takeOver', args: [source, 50n * E, 1n, 0n] }))
 		await expect(takeover()).rejects.toThrow('Receiver retirement differs')
 		expect((await position(receiver)).commitment).toBe(100n * E)
-		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'cancelRetirement', args: [receiver] }))
+		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'setCommitment', args: [100n * E] }))
 		await deposit(keeper, 105n * E)
 		await takeover()
 		expect((await account(keeper)).positionId).toBe(receiver)
@@ -240,7 +232,6 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		expect(after - before).toBeGreaterThanOrEqual(200n * E)
 		expect((await position(id)).rep).toBe(105n * E)
 		expect(await healthy()).toBe(0n)
-		await cure(id)
 		expect(await alice.readContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })).toBeGreaterThan(0n)
 	})
 
@@ -263,7 +254,7 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		await deposit(alice, 105n * E)
 		const id = await authorize(alice, 100n * E)
 		await demand(100n * E)
-		await retire(alice, id)
+		await retire(alice)
 		await demand(0n)
 		expect(await position(id)).toMatchObject({ commitment: 0n, releasedRep: 105n * E })
 		await price(E, 5)
@@ -283,7 +274,6 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		expect((await account(alice)).targetHealthFactorBps).toBe(12_000n)
 		await expect(withdraw(alice, 1n)).rejects.toThrow('Owner collateral too low')
 		await price((11n * E) / 10n)
-		await cure(id)
 		expect(await alice.readContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })).toBe(0n)
 	})
 

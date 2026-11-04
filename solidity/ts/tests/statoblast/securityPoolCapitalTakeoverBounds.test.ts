@@ -55,7 +55,7 @@ describe('Statoblast: takeover owner consent bounds', () => {
 			if (mutation === 'commitment') bounds.maximumOwnerCommitment--
 			if (mutation === 'target') await writeContractAndWait(buyer, () => buyer.writeContract({ ...fixture.capital, functionName: 'setHealthTarget', args: [12_000n] }))
 			if (mutation === 'price') await fixture.price(2n * E)
-			if (mutation === 'cohort') await writeContractAndWait(fixture.client(), () => fixture.client().writeContract({ ...fixture.capital, functionName: 'requestRetirement', args: [source, 60n * E] }))
+			if (mutation === 'cohort') await writeContractAndWait(fixture.client(), () => fixture.client().writeContract({ ...fixture.capital, functionName: 'setCommitment', args: [60n * E] }))
 			const previous = {
 				source: await fixture.position(source),
 				buyer: await fixture.owner(1),

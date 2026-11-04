@@ -1,3 +1,4 @@
+import { formatRoundedCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
 import { encodeFunctionData, formatEther, formatUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
@@ -6,9 +7,7 @@ import {
 	buildPortfolioCapitalWithdrawPrincipalRequest,
 	buildPortfolioCapitalSetHealthRequest,
 	buildPortfolioCapitalDepositAndSetHealthRequest,
-	buildPortfolioCapitalAuthorizeRequest,
-	buildPortfolioCapitalRequestRetirementRequest,
-	buildPortfolioCapitalCancelRetirementRequest,
+	buildPortfolioCapitalSetCommitmentRequest,
 	buildPortfolioCapitalServeRetirementRequest,
 	buildPortfolioCapitalClaimEarningsRequest,
 	loadPortfolioCapitalSnapshot,
@@ -22,7 +21,7 @@ import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import * as capitalCopy from '../../../copy/portfolioCapital.js'
 import { portfolioAmountOrUndefined, portfolioUnsignedId } from '../lib/draft.js'
 import { portfolioBasisPointsOrUndefined } from '../lib/creation.js'
-import { capitalAuthorizationReason, capitalWithdrawalReason, requiredPortfolioCollateral, maximumPortfolioCommitment, capitalHealthReason, capitalCancelRetirementReason, capitalRetirementReason } from '../lib/capital.js'
+import { capitalAuthorizationReason, capitalWithdrawalReason, requiredPortfolioCollateral, maximumPortfolioCommitment, capitalHealthReason, capitalCancelRetirementReason, capitalRetirementReason, coveredUnderwaterCommitment } from '../lib/capital.js'
 import type { usePortfolio } from './usePortfolio.js'
 import type { usePortfolioActions } from './usePortfolioActions.js'
 
@@ -41,6 +40,15 @@ const proofAbi = [
 		],
 	},
 ] as const
+
+/** An underwater position's uncovered part is cut at once; only a reduction below the covered amount leaves a queued rest. */
+function retirementQueueDescription(covered: bigint | undefined, remainingCommitment: bigint) {
+	if (covered === undefined) return ' The reduction waits for spare capacity behind earlier retirement requests.'
+	// Rounding down keeps "covers only" conservative.
+	const coverage = ` Your REP covers only ${formatRoundedCurrencyBalance(covered, 18, 4, 'down')} ETH at the current price, so`
+	if (remainingCommitment >= covered) return `${coverage} this reduction is removed at once where spare capacity allows; any shortfall waits behind earlier retirement requests.`
+	return `${coverage} the uncovered part is removed at once where spare capacity allows. The rest waits for spare capacity behind earlier retirement requests.`
+}
 
 async function readAuthorizationProof(snapshot: PortfolioCapitalSnapshot, reportId: bigint, commitment: bigint) {
 	const client = createConnectedReadClient()
@@ -329,7 +337,7 @@ export function usePortfolioAggregate(
 				selected => {
 					if (commitmentAttoEth === undefined) throw new Error('Enter a commitment.')
 					return {
-						...buildPortfolioCapitalAuthorizeRequest({ ...base(selected), commitment: commitmentAttoEth, ...(reportId === undefined ? {} : { reportId }) }),
+						...buildPortfolioCapitalSetCommitmentRequest({ ...base(selected), commitment: commitmentAttoEth, ...(reportId === undefined ? {} : { reportId }) }),
 						reviewDescription: `Authorize ${formatEther(commitmentAttoEth)} ETH commitment backed by all ${formatEther(selected.ownerPrincipalAttoRep)} REP in your account at your saved ${formatUnits(selected.ownerAccount.targetHealthFactorBps || 10_000n, 2)}% health target. All eligible questions share this capacity. Your account bears its own liquidation losses; retirement waits for spare capacity.${reportId === undefined ? '' : ` Report ${reportId} sets a collateral price floor until a later canonical report covers the full pool commitment.`}`,
 					}
 				},
@@ -372,9 +380,12 @@ export function usePortfolioAggregate(
 				selected => {
 					const reason = capitalRetirementReason(selected, id, remainingCommitment)
 					if (reason !== undefined || remainingCommitment === undefined) throw new Error(reason ?? 'Enter a remaining commitment.')
+					const position = selected.positions.find(item => item.id === id && item.commitment > 0n)
+					const covered = position === undefined ? undefined : coveredUnderwaterCommitment(selected, position)
+					const queue = retirementQueueDescription(covered, remainingCommitment)
 					return {
-						...buildPortfolioCapitalRequestRetirementRequest({ ...base(selected), positionId: id, remainingCommitment }),
-						reviewDescription: `Queue position ${id} to reduce its commitment to ${formatEther(remainingCommitment)} ETH. ${remainingCommitment === 0n ? 'Full retirement releases its REP.' : 'The reduction stops at this amount and keeps its REP backing the remaining commitment.'} Existing demand and earlier retirement requests may delay completion. The saved health target stays unchanged.`,
+						...buildPortfolioCapitalSetCommitmentRequest({ ...base(selected), commitment: remainingCommitment }),
+						reviewDescription: `Reduce position ${id} to ${formatEther(remainingCommitment)} ETH commitment. ${remainingCommitment === 0n ? 'Full retirement releases its REP.' : 'The reduction stops at this amount and keeps its REP backing the remaining commitment.'}${queue} The saved health target stays unchanged.`,
 					}
 				},
 				latest => {
@@ -390,11 +401,16 @@ export function usePortfolioAggregate(
 				selected => {
 					const reason = capitalCancelRetirementReason(selected, id)
 					if (reason !== undefined) throw new Error(reason)
-					return { ...buildPortfolioCapitalCancelRetirementRequest({ ...base(selected), positionId: id }), reviewDescription: `Return position ${id} to active underwriting at its remaining commitment and give up its retirement priority. Your saved health target must be met at a fresh price.` }
+					const position = selected.positions.find(item => item.id === id && item.commitment > 0n)
+					if (position === undefined) throw new Error('Position is no longer live.')
+					return { ...buildPortfolioCapitalSetCommitmentRequest({ ...base(selected), commitment: position.commitment }), reviewDescription: `Return position ${id} to active underwriting at its remaining commitment and give up its retirement priority. Your saved health target must be met at a fresh price.` }
 				},
 				latest => {
 					const reason = capitalCancelRetirementReason(latest, id)
 					if (reason !== undefined) throw new Error(reason)
+					// Cancelling keeps the current commitment, so a changed commitment would otherwise be restored or raised.
+					const commitmentOf = (positions: PortfolioCapitalSnapshot['positions']) => positions.find(item => item.id === id)?.commitment
+					if (commitmentOf(latest.positions) !== commitmentOf(snapshot?.positions ?? [])) throw new Error('Your commitment changed. Review the transaction again.')
 				},
 			),
 	}

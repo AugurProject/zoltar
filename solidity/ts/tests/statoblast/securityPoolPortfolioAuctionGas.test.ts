@@ -26,7 +26,7 @@ const bookSizes = [8, 256] as const
 const branchTransactions = new Set(['close: finalize branch and install the auction cohort', 'fork: unmaterialized winner chooses a branch', 'fork: start the chosen branch'])
 const setHealthTargetData = (target: bigint) => encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'setHealthTarget', args: [target] })
 const claimEarningsData = encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings' })
-const requestRetirementData = (positionId: bigint, remaining: bigint) => encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'requestRetirement', args: [positionId, remaining] })
+const setCommitmentData = (commitment: bigint) => encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'setCommitment', args: [commitment] })
 const withdrawPrincipalData = (amount: bigint, recipient: Address) => encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'withdrawPrincipal', args: [amount, recipient] })
 
 // Production composition: the portfolio fork coordinator, the real uniform-price
@@ -174,13 +174,15 @@ describe('Statoblast: truth-auction lifecycle gas baselines', () => {
 			await claim('fees: claim after one more vested day', other, winner.vault)
 			const retirementHistory = await snapshot()
 			// Retirement with prior retirement history from another winner and the incumbent.
-			await vaultCall('retirement: another winner requests retirement', filler, partial.vault, context.capital, requestRetirementData(await materializedPositionId(partial), 0n))
-			const incumbent = await owner.readContract({ ...capital, functionName: 'ownerAccount', args: [owner.account.address] })
-			await gasOf('retirement: incumbent requests partial retirement', owner, () => owner.writeContract({ ...capital, functionName: 'requestRetirement', args: [incumbent.positionId, 100n * unit] }))
-			await vaultCall('retirement: winner requests retirement after history', other, winner.vault, context.capital, requestRetirementData(await materializedPositionId(winner), 0n))
+			await materializedPositionId(partial)
+			await vaultCall('retirement: another winner requests retirement', filler, partial.vault, context.capital, setCommitmentData(0n))
+			await gasOf('retirement: incumbent requests partial retirement', owner, () => owner.writeContract({ ...capital, functionName: 'setCommitment', args: [100n * unit] }))
+			await materializedPositionId(winner)
+			await vaultCall('retirement: winner requests retirement after history', other, winner.vault, context.capital, setCommitmentData(0n))
 			await gasOf('retirement: permissionless service after history', stranger, () => stranger.writeContract({ ...capital, functionName: 'serveRetirement', args: [0n] }))
 			await restore(retirementHistory)
-			await vaultCall('retirement: winner requests retirement without history', other, winner.vault, context.capital, requestRetirementData(await materializedPositionId(winner), 0n))
+			await materializedPositionId(winner)
+			await vaultCall('retirement: winner requests retirement without history', other, winner.vault, context.capital, setCommitmentData(0n))
 			await gasOf('retirement: permissionless service without history', stranger, () => stranger.writeContract({ ...capital, functionName: 'serveRetirement', args: [0n] }))
 			await restore(finalized)
 
@@ -198,8 +200,7 @@ describe('Statoblast: truth-auction lifecycle gas baselines', () => {
 			// materialized winner, after the REP price leaves the winner undercollateralized.
 			// The incumbent first retires its spare capacity so distressed commitment
 			// is needed by claims and must be taken over instead of simply cured.
-			const incumbentId = (await owner.readContract({ ...capital, functionName: 'ownerAccount', args: [owner.account.address] })).positionId
-			await gasOf('retirement: incumbent retires all spare capacity', owner, () => owner.writeContract({ ...capital, functionName: 'requestRetirement', args: [incumbentId, 0n] }))
+			await gasOf('retirement: incumbent retires all spare capacity', owner, () => owner.writeContract({ ...capital, functionName: 'setCommitment', args: [0n] }))
 			await writeContractAndWait(owner, () => owner.writeContract({ ...token, functionName: 'transfer', args: [keeper.account.address, 60n * unit] }))
 			await approveToken(keeper, context.token, context.capital)
 			await gasOf('liquidation: keeper deposits principal', keeper, () => keeper.writeContract({ ...capital, functionName: 'depositFor', args: [keeper.account.address, 60n * unit] }))
@@ -215,8 +216,9 @@ describe('Statoblast: truth-auction lifecycle gas baselines', () => {
 			const demand = await owner.readContract({ ...capital, functionName: 'demandAttoEth' })
 			const acceptedPriceEpoch = await owner.readContract({ ...capital, functionName: 'acceptedPriceEpoch' })
 			const liquidation = await snapshot()
-			// Without spare capacity a cure has nothing to remove and only materializes the vault.
-			await gasOf(totalCommitment > demand ? 'liquidation: keeper cures an unmaterialized winner' : 'liquidation: cure without spare capacity only materializes', keeper, () => keeper.writeContract({ ...capital, functionName: 'cureAuctionBid', args: [winner.id] }))
+			// Only the winner cures, through its vault; its first operation materializes the position. Without spare
+			// capacity the cure has nothing to remove and the whole exit waits in the retirement queue.
+			await vaultCall(totalCommitment > demand ? 'liquidation: winner cures its unmaterialized vault' : 'liquidation: winner exit without spare capacity only materializes and queues', other, winner.vault, context.capital, setCommitmentData(0n))
 			await restore(liquidation)
 			const takeoverBounds = { maximumOwnerPrincipal: 100n * unit, maximumOwnerCommitment: 10n * unit, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: acceptedPriceEpoch, expectedSourceBatch: 0n }
 			const winnerCommitment = (await owner.readContract({ ...capital, functionName: 'auctionPosition', args: [winner.id] })).commitment

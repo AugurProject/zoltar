@@ -117,16 +117,18 @@ describe('Statoblast: individually owned lazy auction capital', () => {
 		const id = (await owner(first.account.address)).positionId
 		expect(await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'liquidationStarted', args: [id] })).toBe(started)
 		expect(await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'auctionPosition', args: [2n] })).toMatchObject({ principal: REP, commitment: LOT, liquidationStarted: started, materialized: false })
-		await expect(writeContractAndWait(caller, () => caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'cure', args: [1n] }))).rejects.toThrow('Materialize an individual auction vault')
 		await expect(writeContractAndWait(caller, () => caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'takeOver', args: [1n, LOT, 0n, 0n] }))).rejects.toThrow('Materialize an individual auction vault')
 		await expect(writeContractAndWait(caller, () => caller.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'exportChoice', args: [adapter] }))).rejects.toThrow()
 	})
 
-	test('a keeper cures one virtual winner atomically, returning all its REP to the owner and nothing to the caller', async () => {
+	const setCommitment = (client: WriteClient, commitment: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'setCommitment', args: [commitment] }))
+
+	test('a winner materializes and cures its own lot, keeping all its REP, while the caller gains nothing', async () => {
 		await activate(0n)
 		await setPrice(3n * ATTO_ETH_PER_ETH)
 		const callerBefore = await owner(caller.account.address)
-		await writeContractAndWait(caller, () => caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'cureAuctionBid', args: [2n] }))
+		await materialize(2n)
+		await setCommitment(second, 0n)
 		const secondOwner = await owner(second.account.address)
 		expect((await position(secondOwner.positionId)).commitment).toBe(0n)
 		// The deficit is below the minimum commitment, so the floor removes the whole lot.
@@ -141,58 +143,44 @@ describe('Statoblast: individually owned lazy auction capital', () => {
 	test('a cure never removes more than spare capacity and leaves each residual fully backed', async () => {
 		await activate(2n * LOT)
 		await setPrice(3n * ATTO_ETH_PER_ETH)
-		await writeContractAndWait(caller, () => caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'cureAuctionBid', args: [1n] }))
+		await materialize(1n)
 		const firstId = (await owner(first.account.address)).positionId
+		await setCommitment(first, LOT)
 		const cured = await position(firstId)
-		expect(cured).toMatchObject({ rep: 2n * REP, commitment: LOT })
+		expect(cured).toMatchObject({ rep: 2n * REP, commitment: LOT, batch: 0n })
 		const required = await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'requiredRep', args: [cured.commitment, 10_000n] })
 		expect(cured.rep).toBeGreaterThanOrEqual(required)
 		expect((await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'totals' })).commitment).toBe(2n * LOT)
-		// Demand now consumes every remaining commitment, so the next cure can only materialize.
-		await writeContractAndWait(caller, () => caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'cureAuctionBid', args: [2n] }))
+		// Demand now consumes every remaining commitment, so the second winner's exit can only wait in the queue.
+		await materialize(2n)
 		const secondId = (await owner(second.account.address)).positionId
+		await setCommitment(second, 0n)
 		expect(await position(secondId)).toMatchObject({ rep: REP, commitment: LOT })
+		expect((await position(secondId)).batch).not.toBe(0n)
 		expect((await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'totals' })).commitment).toBe(2n * LOT)
 		expect((await owner(caller.account.address)).feesAttoRep).toBe(0n)
 		expect((await owner(caller.account.address)).feesAttoEth).toBe(0n)
-		await expect(caller.simulateContract({ abi: capitalArtifact.abi, address: capital, functionName: 'cureAuctionBid', args: [2n] })).rejects.toThrow('Auction bid already materialized')
-		// Returned demand frees spare capacity for the same residual on a later cure.
+		// Once healthy commitment covers the returned demand, the queued unbacked exit completes with all its REP.
 		await writeContractAndWait(caller, () => caller.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'setDemand', args: [LOT] }))
-		await writeContractAndWait(caller, () => caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'cure', args: [secondId] }))
-		expect(await position(secondId)).toMatchObject({ rep: 0n, commitment: 0n })
-		expect((await owner(second.account.address)).freeAttoRep).toBe(REP)
+		expect(await position(secondId)).toMatchObject({ commitment: 0n, releasedRep: REP })
 	})
 
-	test('an already materialized bid must be cured by position and the caller still receives nothing', async () => {
+	test('materialization pays nothing regardless of gas price', async () => {
 		await activate(0n)
 		await setPrice(3n * ATTO_ETH_PER_ETH)
-		await materialize(2n)
-		const id = (await owner(second.account.address)).positionId
-		await expect(caller.simulateContract({ abi: capitalArtifact.abi, address: capital, functionName: 'cureAuctionBid', args: [2n] })).rejects.toThrow('Auction bid already materialized')
-		expect((await position(id)).commitment).toBe(LOT)
-		await writeContractAndWait(caller, () => caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'cure', args: [id] }))
-		expect((await position(id)).commitment).toBe(0n)
-		expect((await owner(second.account.address)).freeAttoRep).toBe(REP)
-		expect((await owner(caller.account.address)).feesAttoRep).toBe(0n)
-		expect((await owner(caller.account.address)).feesAttoEth).toBe(0n)
-	})
-
-	test('a virtual cure pays nothing regardless of materialization gas price', async () => {
-		await activate(0n)
-		await setPrice(3n * ATTO_ETH_PER_ETH)
-		await writeContractAndWait(caller, () => caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'cureAuctionBid', args: [2n], gasPrice: 10n ** 9n }))
+		await writeContractAndWait(caller, () => caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'materializeAuctionBid', args: [2n], gasPrice: 10n ** 9n }))
 		expect((await owner(caller.account.address)).feesAttoRep).toBe(0n)
 		expect((await owner(caller.account.address)).feesAttoEth).toBe(0n)
 		expect(await caller.getBalance({ address: adapter })).toBe(0n)
 		expect(await position(1n)).toMatchObject({ rep: 2n * REP, commitment: 2n * LOT })
+		expect((await position((await owner(second.account.address)).positionId)).commitment).toBe(LOT)
 	})
 
-	test('a healthy bid cure removes nothing and pays nothing', async () => {
+	test('a healthy winner keeping its commitment removes nothing and pays nothing', async () => {
 		await activate(0n)
-		await writeContractAndWait(caller, () => caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'cureAuctionBid', args: [2n] }))
+		await materialize(2n)
 		const id = (await owner(second.account.address)).positionId
-		expect(await position(id)).toMatchObject({ rep: REP, commitment: LOT })
-		await writeContractAndWait(caller, () => caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'cure', args: [id] }))
+		await setCommitment(second, LOT)
 		expect(await position(id)).toMatchObject({ rep: REP, commitment: LOT })
 		expect((await owner(caller.account.address)).feesAttoRep).toBe(0n)
 		expect((await owner(caller.account.address)).feesAttoEth).toBe(0n)

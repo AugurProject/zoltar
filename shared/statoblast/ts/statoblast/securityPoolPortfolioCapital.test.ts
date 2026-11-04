@@ -1,11 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, parseAbi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import {
-	buildPortfolioCapitalAuthorizeRequest,
 	buildPortfolioCapitalDepositRequest,
 	buildPortfolioCapitalDepositAndSetHealthRequest,
-	buildPortfolioCapitalRequestRetirementRequest,
 	buildPortfolioCapitalServeRetirementRequest,
+	buildPortfolioCapitalSetCommitmentRequest,
 	buildPortfolioCapitalSetHealthRequest,
 	buildPortfolioCapitalTakeOverRequest,
 	buildPortfolioCapitalTakeOverWithBoundsRequest,
@@ -24,8 +23,8 @@ const base = { owner, capitalLedger }
 const abi = parseAbi([
 	'function depositFor(address owner,uint256 amount)',
 	'function withdrawPrincipal(uint256 amount,address recipient)',
-	'function authorize(uint256 commitment)',
-	'function requestRetirement(uint96 id,uint256 remainingCommitment)',
+	'function setCommitment(uint256 commitment)',
+	'function setCommitmentWithReport(uint256 reportId,uint256 commitment)',
 	'function serveRetirement(uint96 id)',
 	'function depositAndSetHealthTarget(uint256 amount,uint256 targetHealthFactorBps)',
 	'function takeOver(uint96 id,uint256 commitment,uint256 minimumAward,uint256 maximumOwnRep)',
@@ -97,14 +96,14 @@ describe('personal portfolio capital SDK', () => {
 	})
 
 	test('underwriting, retirement and takeovers carry explicit bounded authorization without ETH funding', () => {
-		expect(buildPortfolioCapitalAuthorizeRequest({ ...base, commitment: 100n }).value).toBe(0n)
-		expect(decodeFunctionData({ abi, data: buildPortfolioCapitalAuthorizeRequest({ ...base, commitment: 100n }).data })).toEqual({ functionName: 'authorize', args: [100n] })
-		expect(decodeFunctionData({ abi, data: buildPortfolioCapitalRequestRetirementRequest({ ...base, positionId: 9n, remainingCommitment: 7n }).data })).toEqual({ functionName: 'requestRetirement', args: [9n, 7n] })
-		expect(decodeFunctionData({ abi, data: buildPortfolioCapitalRequestRetirementRequest({ ...base, positionId: 9n, remainingCommitment: 0n }).data })).toEqual({ functionName: 'requestRetirement', args: [9n, 0n] })
+		expect(buildPortfolioCapitalSetCommitmentRequest({ ...base, commitment: 100n }).value).toBe(0n)
+		expect(decodeFunctionData({ abi, data: buildPortfolioCapitalSetCommitmentRequest({ ...base, commitment: 100n }).data })).toEqual({ functionName: 'setCommitment', args: [100n] })
+		expect(decodeFunctionData({ abi, data: buildPortfolioCapitalSetCommitmentRequest({ ...base, commitment: 0n }).data })).toEqual({ functionName: 'setCommitment', args: [0n] })
+		expect(decodeFunctionData({ abi, data: buildPortfolioCapitalSetCommitmentRequest({ ...base, commitment: 100n, reportId: 4n }).data })).toEqual({ functionName: 'setCommitmentWithReport', args: [4n, 100n] })
 		expect(decodeFunctionData({ abi, data: buildPortfolioCapitalTakeOverRequest({ ...base, positionId: 9n, commitment: 17n, minimumAward: 11n, maximumOwnRep: 30n }).data })).toEqual({ functionName: 'takeOver', args: [9n, 17n, 11n, 30n] })
 		expect(() => buildPortfolioCapitalSetHealthRequest({ ...base, targetHealthFactorBps: 9_999n })).toThrow('100%')
-		expect(() => buildPortfolioCapitalRequestRetirementRequest({ ...base, positionId: 2n ** 96n, remainingCommitment: 0n })).toThrow('uint96')
-		expect(() => buildPortfolioCapitalRequestRetirementRequest({ ...base, positionId: 9n, remainingCommitment: -1n })).toThrow('uint256')
+		expect(() => buildPortfolioCapitalSetCommitmentRequest({ ...base, commitment: -1n })).toThrow('uint256')
+		expect(() => buildPortfolioCapitalSetCommitmentRequest({ ...base, commitment: 0n, reportId: 4n })).toThrow('positive')
 		expect(() => buildPortfolioCapitalDepositRequest({ ...base, amountAttoRep: 0n })).toThrow('positive')
 	})
 	test('atomic health funding specifies the exact deposit and target without a second transaction', () => {

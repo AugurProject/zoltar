@@ -90,14 +90,13 @@ describe('Statoblast: chosen underwriting and claimant recovery remain separate'
 			await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'approve', args: [capital, principal] }))
 			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'depositFor', args: [client.account.address, principal] }))
 			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'setHealthTarget', args: [10_000n] }))
-			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'authorize', args: [commitment] }))
+			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'setCommitment', args: [commitment] }))
 		}
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'mintQuestion', args: [1n], value: 200n * E }))
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: sharesArtifact.abi, address: shares, functionName: 'setHolding', args: [0n, buyer.account.address, 200n * E] }))
 
 		for (const client of [alice, bob]) {
-			const account = await client.readContract({ ...ledger(capital), functionName: 'ownerAccount', args: [client.account.address] })
-			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'requestRetirement', args: [account.positionId, client === bob ? 80n * E : 0n] }))
+			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'setCommitment', args: [client === bob ? 80n * E : 0n] }))
 		}
 		await writeContractAndWait(owner, () => owner.writeContract({ ...zoltarTarget(), functionName: 'setFork', args: [0n, 2n] }))
 		forkTime = await owner.readContract({ ...zoltarTarget(), functionName: 'getForkTime', args: [0n] })

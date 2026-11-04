@@ -210,39 +210,40 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		require(rep >= _requiredRep(commitment, health, ownerConservativePrice(msg.sender)), 'Chosen health target unmet');
 	}
 
-	/// @notice All deposited principal backs the owner's single commitment.
-	function authorize(uint256 commitment) external nonReentrant returns (uint96 id) {
-		return _authorize(commitment, 0, false);
+	/// @notice Set the owner's single commitment, which all deposited principal backs.
+	/// @dev Raising or keeping it applies at once and must meet the owner's health
+	/// target at a fresh price. Lowering it first cures an underwater position at
+	/// once, which uses no healthy spare; the rest of the reduction joins the
+	/// retirement queue. A new value replaces any pending request, which then
+	/// loses its place in the queue unless the value is unchanged.
+	function setCommitment(uint256 commitment) external nonReentrant returns (uint96 id) {
+		return _setCommitment(commitment, 0, false);
 	}
-	function authorizeWithReport(uint256 reportId, uint256 commitment) external nonReentrant returns (uint96 id) {
-		return _authorize(commitment, reportId, true);
+	/// @notice Raise the commitment under a funded growth report's price floor.
+	function setCommitmentWithReport(uint256 reportId, uint256 commitment) external nonReentrant returns (uint96 id) {
+		return _setCommitment(commitment, reportId, true);
 	}
-	function _authorize(uint256 commitment, uint256 reportId, bool useReport) private returns (uint96 id) {
+	function _setCommitment(uint256 commitment, uint256 reportId, bool useReport) private returns (uint96 id) {
 		_requireOpen();
-		_requireFresh();
 		_checkpoint();
 		_serveRetirement(0);
-		return
-			abi.decode(DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.authorize, (commitment, reportId, useReport, minimumCommitmentAttoEth))), (uint96));
-	}
-
-	function requestRetirement(uint96 id, uint256 remainingCommitment) external nonReentrant {
-		_requireOpen();
-		_checkpoint();
 		_settleOwner(msg.sender);
-		_owned(id, msg.sender);
-		commitmentIndex.requestRetirement(id, remainingCommitment, minimumCommitmentAttoEth);
+		id = owners[msg.sender].positionId;
+		SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(id);
+		bool keepsRequest = position.batch != 0 && commitment == position.remainingCommitment;
+		if (position.batch != 0 && !keepsRequest) commitmentIndex.cancelRetirement(id);
+		if (commitment >= position.commitment) {
+			_requireFresh();
+			return
+				abi.decode(DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.authorize, (commitment, reportId, useReport, minimumCommitmentAttoEth))), (uint96));
+		}
+		require(!useReport, 'Reports price growth only');
+		require(commitment == 0 || commitment >= minimumCommitmentAttoEth, 'Commitment below minimum');
+		uint256 current = position.commitment;
+		if (isPriceValid()) current -= _cure(id, commitment);
+		if (current > commitment && !keepsRequest)
+			commitmentIndex.requestRetirement(id, commitment, minimumCommitmentAttoEth);
 		_serveRetirement(0);
-	}
-
-	function cancelRetirement(uint96 id) external nonReentrant {
-		_requireOpen();
-		_checkpoint();
-		_settleOwner(msg.sender);
-		_requireFresh();
-		SecurityPoolCommitmentIndex.Account memory position = _owned(id, msg.sender);
-		_requireTarget(position.rep, position.commitment, _target(owners[msg.sender]));
-		commitmentIndex.cancelRetirement(id);
 	}
 
 	function serveRetirement(uint96 id) external nonReentrant {
@@ -353,28 +354,11 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.claimEarnings, ()));
 	}
 
-	/// @notice Remove only enough unused nominal K to cure this particular vault.
-	/// @dev Open to anyone and unpaid: the caller acts for its own fee share or
-	/// as part of a takeover.
-	function cure(uint96 id) external nonReentrant returns (uint256 removed) {
-		_prepareCure();
-		return _cure(id);
-	}
-	function cureAuctionBid(uint256 bidId) external nonReentrant returns (uint256 removed) {
-		require(auctionBidPositionIds[bidId] == 0, 'Auction bid already materialized');
-		_prepareCure();
-		(, uint96 id) = _materializeAuctionBid(bidId);
-		return _cure(id);
-	}
-	function _prepareCure() private {
-		_requireOpen();
-		_requireFresh();
-		_checkpoint();
-		_serveRetirement(0);
-	}
-	function _cure(uint96 id) private returns (uint256 removed) {
+	/// @dev Cut unbacked commitment down to `target`. Only the owner's own
+	/// `setCommitment` and a takeover, which needs an adverse observation, cure.
+	function _cure(uint96 id, uint256 target) private returns (uint256 removed) {
 		require(id != 0 && id != auctionCohort.positionId, 'Materialize an individual auction vault');
-		SecurityPoolCommitmentIndex.Cure memory result = commitmentIndex.cure(id, liquidationPrice, securityMultiplierBps, minimumCommitmentAttoEth, demandAttoEth);
+		SecurityPoolCommitmentIndex.Cure memory result = commitmentIndex.cure(id, liquidationPrice, securityMultiplierBps, minimumCommitmentAttoEth, demandAttoEth, target);
 		removed = result.removed;
 		if (removed != 0) {
 			owners[result.owner].freeAttoRep += result.freedRep;
@@ -404,7 +388,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		_requireFresh();
 		_checkpoint();
 		_serveRetirement(0);
-		_cure(id);
+		_cure(id, 0);
 		(SecurityPoolCommitmentIndex.Account memory source, uint256 award, uint256 debit) = commitmentIndex.takeoverQuote(id, msg.sender, commitment, minimumCommitmentAttoEth, minimumAward, liquidationPrice);
 		_settleOwner(msg.sender);
 		Owner storage receiver = owners[msg.sender];
@@ -492,10 +476,5 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		uint256 maxPrice = maximumHealthyPrice(rep, commitment);
 		commitmentIndex.replace(id, rep, commitment, maxPrice);
 		_clearHealthyLiquidation(id, commitment, maxPrice);
-	}
-	function _owned(uint96 id, address owner) private view returns (SecurityPoolCommitmentIndex.Account memory account) {
-		require(id != auctionCohort.positionId, 'Materialize an individual auction vault');
-		account = commitmentIndex.accountOf(id);
-		require(account.owner == owner, 'Position owner differs');
 	}
 }

@@ -60,8 +60,7 @@ describe('portfolio operator funded auction capital integration', () => {
 			await context.mock.setBalance(account.address, 100n * unit)
 			// Retire chosen capital down to claim demand so cure cannot change K.
 			await context.report(unit)
-			const chosen = await context.owner.readContract({ address: context.capital, abi: capitalAbi, functionName: 'ownerAccount', args: [context.owner.account.address] })
-			await writeContractAndWait(context.owner, () => context.owner.writeContract({ address: context.capital, abi: capitalAbi, functionName: 'requestRetirement', args: [chosen.positionId, 5n * unit] }))
+			await writeContractAndWait(context.owner, () => context.owner.writeContract({ address: context.capital, abi: capitalAbi, functionName: 'setCommitment', args: [5n * unit] }))
 			await context.report(2n * unit)
 			await context.mock.advanceTime(3601n)
 			await context.report(2n * unit)

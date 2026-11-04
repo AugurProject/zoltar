@@ -45,13 +45,10 @@ const abi = parseAbi([
 	'function depositAndSetHealthTarget(uint256 amount,uint256 targetHealthFactorBps)',
 	'function withdrawPrincipal(uint256 amount,address recipient)',
 	'function setHealthTarget(uint256 targetHealthFactorBps)',
-	'function authorize(uint256 commitment) returns (uint96)',
-	'function authorizeWithReport(uint256 reportId,uint256 commitment) returns (uint96)',
-	'function requestRetirement(uint96 id,uint256 remainingCommitment)',
-	'function cancelRetirement(uint96 id)',
+	'function setCommitment(uint256 commitment) returns (uint96)',
+	'function setCommitmentWithReport(uint256 reportId,uint256 commitment) returns (uint96)',
 	'function serveRetirement(uint96 id)',
 	'function claimEarnings()',
-	'function cure(uint96 id) returns (uint256)',
 	'function takeOver(uint96 id,uint256 commitment,uint256 minimumAward,uint256 maximumOwnRep) returns (uint96)',
 	'function takeOverWithBounds(uint96 id,uint256 commitment,uint256 minimumAward,uint256 maximumOwnRep,(uint256 maximumOwnerPrincipal,uint256 maximumOwnerCommitment,uint256 expectedTargetHealthFactorBps,uint256 expectedAcceptedPriceEpoch,uint96 expectedSourceBatch) bounds) returns (uint96)',
 ])
@@ -220,25 +217,19 @@ export function buildPortfolioCapitalDepositAndSetHealthRequest(parameters: Capi
 	if (uint(parameters.targetHealthFactorBps, 'Health target') < 10_000n) throw new Error('Health target must be at least 100%.')
 	return request(parameters, 'depositAndSetHealthTarget', [positive(parameters.amountAttoRep, 'REP deposit'), parameters.targetHealthFactorBps])
 }
-export function buildPortfolioCapitalAuthorizeRequest(parameters: CapitalRequest & { commitment: bigint; reportId?: bigint }) {
-	const commitment = positive(parameters.commitment, 'Commitment')
-	return parameters.reportId === undefined ? request(parameters, 'authorize', [commitment]) : request(parameters, 'authorizeWithReport', [uint(parameters.reportId, 'Report id'), commitment])
-}
-export function buildPortfolioCapitalRequestRetirementRequest(parameters: CapitalRequest & { positionId: bigint; remainingCommitment: bigint }) {
-	return request(parameters, 'requestRetirement', [positive(parameters.positionId, 'Position id', 96), uint(parameters.remainingCommitment, 'Remaining commitment')])
-}
-export function buildPortfolioCapitalCancelRetirementRequest(parameters: CapitalRequest & { positionId: bigint }) {
-	return request(parameters, 'cancelRetirement', [positive(parameters.positionId, 'Position id', 96)])
+/**
+ * Sets the owner's whole commitment. Raising or keeping it applies at once; lowering it cures any unbacked part at once and
+ * queues the rest for retirement. A report id prices growth only.
+ */
+export function buildPortfolioCapitalSetCommitmentRequest(parameters: CapitalRequest & { commitment: bigint; reportId?: bigint }) {
+	const commitment = uint(parameters.commitment, 'Commitment')
+	return parameters.reportId === undefined ? request(parameters, 'setCommitment', [commitment]) : request(parameters, 'setCommitmentWithReport', [uint(parameters.reportId, 'Report id'), positive(commitment, 'Commitment')])
 }
 export function buildPortfolioCapitalServeRetirementRequest(parameters: CapitalRequest & { positionId?: bigint }) {
 	return request(parameters, 'serveRetirement', [uint(parameters.positionId ?? 0n, 'Position id', 96)])
 }
 export function buildPortfolioCapitalClaimEarningsRequest(parameters: CapitalRequest) {
 	return request(parameters, 'claimEarnings')
-}
-/** @public External keeper transaction: `owner` is the submitting keeper; `positionId` may belong to another owner. */
-export function buildPortfolioCapitalCureRequest(parameters: CapitalRequest & { positionId: bigint }) {
-	return request(parameters, 'cure', [positive(parameters.positionId, 'Position id', 96)])
 }
 /** @public Keeper takeover: a new receiver commits all idle principal within maximumOwnRep; an existing receiver must share the target cohort. */
 export function buildPortfolioCapitalTakeOverRequest(parameters: CapitalRequest & { positionId: bigint; commitment: bigint; minimumAward: bigint; maximumOwnRep: bigint }) {

@@ -32,7 +32,7 @@ describe('Statoblast: owner health policy', () => {
 	const demand = (amount: bigint) => writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'setDemand', args: [amount] }))
 	const deposit = (client: WriteClient, amount: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address: ledger, functionName: 'depositFor', args: [client.account.address, amount] }))
 	const authorize = async (client: WriteClient, commitment: bigint) => {
-		await writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address: ledger, functionName: 'authorize', args: [commitment] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address: ledger, functionName: 'setCommitment', args: [commitment] }))
 		const owner = await account(client)
 		if (owner.positionId === 0n) throw new Error('Authorized position missing')
 		return owner.positionId
@@ -63,8 +63,12 @@ describe('Statoblast: owner health policy', () => {
 
 	const target = (client: WriteClient, health: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address: ledger, functionName: 'setHealthTarget', args: [health] }))
 	const collateral = (client: WriteClient) => alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'ownerCollateral', args: [client.account.address] })
-	const retire = (client: WriteClient, id: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address: ledger, functionName: 'requestRetirement', args: [id, 0n] }))
-	const cancel = (client: WriteClient, id: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address: ledger, functionName: 'cancelRetirement', args: [id] }))
+	const retire = (client: WriteClient) => writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address: ledger, functionName: 'setCommitment', args: [0n] }))
+	// Setting the commitment back to its current value cancels a pending retirement.
+	const cancel = async (client: WriteClient, id: bigint) => {
+		const { commitment } = await position(id)
+		return writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address: ledger, functionName: 'setCommitment', args: [commitment] }))
+	}
 
 	test('withdrawal quote preserves the saved target and excludes earned REP', async () => {
 		await target(alice, 12_000n)
@@ -131,7 +135,7 @@ describe('Statoblast: owner health policy', () => {
 		await deposit(alice, 126n * E)
 		const id = await authorize(alice, 100n * E)
 		await demand(100n * E)
-		await retire(alice, id)
+		await retire(alice)
 		await price((E * 11n) / 10n)
 		await expect(cancel(alice, id)).rejects.toThrow('Chosen health target unmet')
 		await deposit(alice, (E * 126n) / 10n)
@@ -143,7 +147,7 @@ describe('Statoblast: owner health policy', () => {
 		await deposit(alice, 200n * E)
 		const id = await authorize(alice, 100n * E)
 		await demand(100n * E)
-		await retire(alice, id)
+		await retire(alice)
 		await price(E, 5)
 		await getAnvilWindowEthereum().advanceTime(6n)
 		await expect(cancel(alice, id)).rejects.toThrow('Capital price stale')
@@ -155,7 +159,7 @@ describe('Statoblast: owner health policy', () => {
 		const id = await authorize(alice, 100n * E)
 		await demand(100n * E)
 		await price((E * 11n) / 10n)
-		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'cure', args: [id] }))
+		await expect(writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'takeOver', args: [id, 100n * E, 1n, 0n] }))).rejects.toThrow('Position does not need takeover')
 		expect((await position(id)).commitment).toBe(100n * E)
 		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })).toBe(0n)
 		expect((await account(keeper)).feesAttoEth).toBe(0n)
@@ -191,9 +195,9 @@ describe('Statoblast: owner health policy', () => {
 
 	test('settling a completed retirement permits idle target changes without an oracle', async () => {
 		await deposit(alice, 105n * E)
-		const id = await authorize(alice, 100n * E)
+		await authorize(alice, 100n * E)
 		await demand(100n * E)
-		await retire(alice, id)
+		await retire(alice)
 		await demand(0n)
 		await price(E, 5)
 		await getAnvilWindowEthereum().advanceTime(6n)
@@ -220,7 +224,7 @@ describe('Statoblast: owner health policy', () => {
 		await deposit(alice, 126n * E)
 		const id = await authorize(alice, 100n * E)
 		await demand(100n * E)
-		await writeContractAndWait(alice, () => alice.writeContract({ abi: artifact.abi, address: ledger, functionName: 'requestRetirement', args: [id, 80n * E] }))
+		await writeContractAndWait(alice, () => alice.writeContract({ abi: artifact.abi, address: ledger, functionName: 'setCommitment', args: [80n * E] }))
 		expect(await position(id)).toMatchObject({ commitment: 100n * E, remainingCommitment: 80n * E })
 		await expect(target(alice, 15_000n)).rejects.toThrow('Chosen health target unmet')
 		await demand(80n * E)
@@ -236,9 +240,11 @@ describe('Statoblast: owner health policy', () => {
 		await deposit(alice, 126n * E)
 		const id = await authorize(alice, 100n * E)
 		await demand(100n * E)
-		const request = (remaining: bigint) => writeContractAndWait(alice, () => alice.writeContract({ abi: artifact.abi, address: ledger, functionName: 'requestRetirement', args: [id, remaining] }))
-		await expect(request(100n * E)).rejects.toThrow('Retirement must reduce commitment')
-		await expect(request(10n ** 15n - 1n)).rejects.toThrow('Retirement below economic minimum')
+		const request = (remaining: bigint) => writeContractAndWait(alice, () => alice.writeContract({ abi: artifact.abi, address: ledger, functionName: 'setCommitment', args: [remaining] }))
+		// Keeping the current commitment is not a reduction and queues nothing.
+		await request(100n * E)
+		expect(await position(id)).toMatchObject({ commitment: 100n * E, batch: 0n })
+		await expect(request(10n ** 15n - 1n)).rejects.toThrow('Commitment below minimum')
 		await expect(request(100n * E - 10n ** 15n + 1n)).rejects.toThrow('Retirement below economic minimum')
 		await request(100n * E - 10n ** 15n)
 		expect((await position(id)).remainingCommitment).toBe(100n * E - 10n ** 15n)
@@ -250,12 +256,7 @@ describe('Statoblast: owner health policy', () => {
 		const first = await authorize(alice, 100n * E)
 		const second = await authorize(bob, 100n * E)
 		await demand(200n * E)
-		for (const [client, id] of [
-			[alice, first],
-			[bob, second],
-		] as const) {
-			await writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address: ledger, functionName: 'requestRetirement', args: [id, 80n * E] }))
-		}
+		for (const client of [alice, bob]) await writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address: ledger, functionName: 'setCommitment', args: [80n * E] }))
 		await deposit(keeper, 42n * E)
 		await authorize(keeper, 40n * E)
 		await writeContractAndWait(bob, () => bob.writeContract({ abi: artifact.abi, address: ledger, functionName: 'serveRetirement', args: [second] }))
@@ -272,12 +273,7 @@ describe('Statoblast: owner health policy', () => {
 		const first = await authorize(alice, 100n * E)
 		const second = await authorize(bob, 100n * E)
 		await demand(200n * E)
-		for (const [client, id] of [
-			[alice, first],
-			[bob, second],
-		] as const) {
-			await writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address: ledger, functionName: 'requestRetirement', args: [id, 80n * E] }))
-		}
+		for (const client of [alice, bob]) await writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address: ledger, functionName: 'setCommitment', args: [80n * E] }))
 		await deposit(keeper, 21n * E)
 		await authorize(keeper, 20n * E)
 		await writeContractAndWait(bob, () => bob.writeContract({ abi: artifact.abi, address: ledger, functionName: 'serveRetirement', args: [second] }))

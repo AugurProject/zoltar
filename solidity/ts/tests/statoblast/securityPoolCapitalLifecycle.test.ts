@@ -44,7 +44,7 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 		await fixture.authorize(0, 100n * E)
 		const retired = await fixture.authorize(2, 100n * E)
 		await writeContractAndWait(sender, () => sender.writeContract({ ...fixture.harness, functionName: 'setDemand', args: [200n * E] }))
-		await writeContractAndWait(fixture.client(2), () => fixture.client(2).writeContract({ ...fixture.capital, functionName: 'requestRetirement', args: [retired, 0n] }))
+		await writeContractAndWait(fixture.client(2), () => fixture.client(2).writeContract({ ...fixture.capital, functionName: 'setCommitment', args: [0n] }))
 		await writeContractAndWait(sender, () => sender.writeContract({ ...fixture.harness, functionName: 'setDemand', args: [100n * E] }))
 		expect(await fixture.position(retired)).toMatchObject({ commitment: 0n, releasedRep: 315n * E })
 		expect(await sender.readContract({ ...fixture.capital, functionName: 'retirementCashAttoRep' })).toBe(315n * E)
@@ -167,8 +167,8 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 				},
 			)
 			await action(
-				'capacity-limited cure reaches the exact floor without charging REP',
-				() => writeContractAndWait(fixture.client(2), () => fixture.client(2).writeContract({ ...fixture.capital, functionName: 'cure', args: [aliceId] })),
+				'alice lowers to her backed amount; the capacity-limited cure reaches the exact floor without charging REP',
+				() => writeContractAndWait(sender, () => sender.writeContract({ ...fixture.capital, functionName: 'setCommitment', args: [60n * U] })),
 				() => {
 					alice.commitment = 60n * U
 				},
@@ -204,7 +204,7 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 			)
 			await action(
 				'alice partial exit',
-				() => writeContractAndWait(sender, () => sender.writeContract({ ...fixture.capital, functionName: 'requestRetirement', args: [aliceId, 60n * U] })),
+				() => writeContractAndWait(sender, () => sender.writeContract({ ...fixture.capital, functionName: 'setCommitment', args: [60n * U] })),
 				() => {
 					alice.remaining = 60n * U
 					alice.queued = true
@@ -212,7 +212,7 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 			)
 			await action(
 				'bob full exit newer cohort',
-				() => writeContractAndWait(fixture.client(1), () => fixture.client(1).writeContract({ ...fixture.capital, functionName: 'requestRetirement', args: [bobId, 0n] })),
+				() => writeContractAndWait(fixture.client(1), () => fixture.client(1).writeContract({ ...fixture.capital, functionName: 'setCommitment', args: [0n] })),
 				() => {
 					bob.queued = true
 				},
@@ -225,7 +225,7 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 					price = 2n * E
 				},
 			)
-			await action('cure without nominal headroom', () => writeContractAndWait(fixture.client(2), () => fixture.client(2).writeContract({ ...fixture.capital, functionName: 'cure', args: [aliceId] })))
+			await action('repeating her request cannot cure without nominal headroom', () => writeContractAndWait(sender, () => sender.writeContract({ ...fixture.capital, functionName: 'setCommitment', args: [60n * U] })))
 			await action('raise healthy owner target', () => writeContractAndWait(fixture.client(3), () => fixture.client(3).writeContract({ ...fixture.capital, functionName: 'setHealthTarget', args: [12_000n] })))
 			await ethereum.advanceTime(3601n)
 			await action(
@@ -268,7 +268,7 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 			await action('targeted service cannot consume retained demand', () => writeContractAndWait(sender, () => sender.writeContract({ ...fixture.capital, functionName: 'serveRetirement', args: [bobId] })))
 			await action(
 				'carol requests partial retirement',
-				() => writeContractAndWait(fixture.client(3), () => fixture.client(3).writeContract({ ...fixture.capital, functionName: 'requestRetirement', args: [carolId, 50n * U] })),
+				() => writeContractAndWait(fixture.client(3), () => fixture.client(3).writeContract({ ...fixture.capital, functionName: 'setCommitment', args: [50n * U] })),
 				() => {
 					carol.queued = true
 					carol.remaining = 50n * U
@@ -276,7 +276,7 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 			)
 			await action(
 				'carol cancels',
-				() => writeContractAndWait(fixture.client(3), () => fixture.client(3).writeContract({ ...fixture.capital, functionName: 'cancelRetirement', args: [carolId] })),
+				() => writeContractAndWait(fixture.client(3), () => fixture.client(3).writeContract({ ...fixture.capital, functionName: 'setCommitment', args: [carol.commitment] })),
 				() => {
 					carol.queued = false
 					carol.remaining = 0n
@@ -284,7 +284,7 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 			)
 			await action(
 				'carol requeues behind existing closed cohort',
-				() => writeContractAndWait(fixture.client(3), () => fixture.client(3).writeContract({ ...fixture.capital, functionName: 'requestRetirement', args: [carolId, 50n * U] })),
+				() => writeContractAndWait(fixture.client(3), () => fixture.client(3).writeContract({ ...fixture.capital, functionName: 'setCommitment', args: [50n * U] })),
 				() => {
 					carol.queued = true
 					carol.remaining = 50n * U

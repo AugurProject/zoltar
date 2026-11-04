@@ -39,7 +39,7 @@ export function useCapitalTestFixture() {
 	const position = (id: bigint) => client().readContract({ abi: commitments.abi, address: index, functionName: 'accountOf', args: [id] })
 	const deposit = (offset: number, amount: bigint) => writeContractAndWait(client(offset), () => client(offset).writeContract({ abi: capital.abi, address: ledger, functionName: 'depositFor', args: [client(offset).account.address, amount] }))
 	const authorize = async (offset: number, amount: bigint) => {
-		await writeContractAndWait(client(offset), () => client(offset).writeContract({ abi: capital.abi, address: ledger, functionName: 'authorize', args: [amount] }))
+		await writeContractAndWait(client(offset), () => client(offset).writeContract({ abi: capital.abi, address: ledger, functionName: 'setCommitment', args: [amount] }))
 		return (await owner(offset)).positionId
 	}
 	beforeAll(async () => {

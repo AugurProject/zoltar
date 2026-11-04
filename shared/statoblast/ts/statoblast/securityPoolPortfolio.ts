@@ -72,16 +72,12 @@ export {
 	buildPortfolioCapitalWithdrawPrincipalRequest,
 	buildPortfolioCapitalSetHealthRequest,
 	buildPortfolioCapitalDepositAndSetHealthRequest,
-	buildPortfolioCapitalAuthorizeRequest,
-	buildPortfolioCapitalRequestRetirementRequest,
-	buildPortfolioCapitalCancelRetirementRequest,
+	buildPortfolioCapitalSetCommitmentRequest,
 	buildPortfolioCapitalServeRetirementRequest,
 	buildPortfolioCapitalClaimEarningsRequest,
 	loadPortfolioCapitalSnapshot,
 	type PortfolioCapitalSnapshot,
 } from './securityPoolPortfolioCapital.js'
-/** @public Permissionless capital repair for external keeper implementations. */
-export { buildPortfolioCapitalCureRequest } from './securityPoolPortfolioCapital.js'
 /** @public Explicitly bounded commitment takeovers for external keeper implementations. */
 export { buildPortfolioCapitalTakeOverRequest } from './securityPoolPortfolioCapital.js'
 export { buildPortfolioCapitalTakeOverWithBoundsRequest } from './securityPoolPortfolioCapital.js'

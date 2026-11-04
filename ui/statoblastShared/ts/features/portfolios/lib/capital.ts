@@ -32,6 +32,14 @@ export function capitalHealthReason(snapshot: PortfolioCapitalSnapshot, health: 
 	return undefined
 }
 
+/** ETH a position's REP backs at the liquidation price when a fresh price shows it underwater; lowering its commitment then cuts the rest at once. */
+export function coveredUnderwaterCommitment(snapshot: Pick<PortfolioCapitalSnapshot, 'priceValid' | 'liquidationPrice' | 'securityMultiplierBps'>, position: Pick<PortfolioCapitalSnapshot['positions'][number], 'rep' | 'commitment' | 'maxHealthyPrice'>) {
+	if (!snapshot.priceValid || snapshot.liquidationPrice === 0n || position.maxHealthyPrice >= snapshot.liquidationPrice) return undefined
+	// Matches the commitment index's rounding: the REP-backed amount rounds down.
+	const covered = (((position.rep * 10_000n) / snapshot.securityMultiplierBps) * 10n ** 18n) / snapshot.liquidationPrice
+	return covered < position.commitment ? covered : undefined
+}
+
 export function capitalCancelRetirementReason(snapshot: PortfolioCapitalSnapshot, id: bigint) {
 	if (snapshot.forkTime > 0n || snapshot.frozen || snapshot.importing || snapshot.exported) return 'This universe is closed to new commitments.'
 	const position = snapshot.positions.find(item => item.id === id && item.commitment > 0n)
