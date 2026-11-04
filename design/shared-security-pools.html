@@ -1616,7 +1616,7 @@
 					</table>
 				</div>
 				<p>The pull request description reports full type-checking, formatting, lint, dead-code and generated-artifact checks passing, 265 affected tests with 2,242 assertions at commit <code>debbaf297</code>, an independent TypeScript model of the auction compared against the on-chain tree including adversarial refund cases, gas comparisons at 64 and 512 bids, six observed network and genesis deployments within gas ceilings, and browser QA of the auction states at desktop and mobile widths.</p>
-				<p><strong>The latest revision.</strong> Head commit <code>4e7f7ba04</code>, pushed on 4 November 2026, locks a pending retirement request until it is served. The pull request description describes this revision, <code>setCommitment</code> and owner-only cures; two of its paragraphs still mention maintenance rewards, which <code>aa5f8efce</code> removed, and this page follows the code.</p>
+				<p><strong>The latest revision.</strong> Head commit <code>4e7f7ba04</code>, pushed on 4 November 2026, locks a pending retirement request until it is served. The pull request description describes this revision, <code>setCommitment</code> and owner-only cures.</p>
 				<ul>
 					<li><strong>Locked requests.</strong> <code>setCommitment</code> reverts with “Retirement pending” for any value except the pending one. Repeating that value leaves the request in place and, at a fresh price, only cures an underwater position (<a href="#exit">section 4.5</a>). Raising a position with a pending request reverts the same way.</li>
 					<li><strong>No cancellation.</strong> The commitment index's <code>cancelRetirement</code> is gone, so nothing can take a request out of its cohort before it is served.</li>
