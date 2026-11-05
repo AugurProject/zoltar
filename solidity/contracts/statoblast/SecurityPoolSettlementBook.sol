@@ -296,7 +296,7 @@ contract SecurityPoolSettlementBook {
 	}
 
 	/// @notice Replace one prospective collateral fee stream after checkpointing every old stream.
-	/// @dev The full maximum budget must fit the question's units. Runoff pauses accrual globally;
+	/// @dev Clamp the end to the fee budget above the backing floor. Runoff pauses accrual globally;
 	/// pausing never extends the absolute end, so skipped intervals cannot be charged after recap.
 	function replaceFeeStream(uint64 bookId, uint256 questionId, uint96 rateAttoEthPerSecond, uint48 end, uint48 timestamp) external onlyPortfolio {
 		Book storage book = _activeBook(bookId);
@@ -305,7 +305,11 @@ contract SecurityPoolSettlementBook {
 		require(frozenBookId == 0, 'Final claim fees closed');
 		uint48 nativeTimestamp = _feeTimestamp(book);
 		require(rateAttoEthPerSecond == 0 || (state.finalAfter == 0 && end > nativeTimestamp), 'Invalid question fee interval');
-		require(rateAttoEthPerSecond == 0 || uint256(rateAttoEthPerSecond) * (end - nativeTimestamp) <= state.units, 'Question fees unfunded');
+		if (rateAttoEthPerSecond != 0) {
+			uint256 duration = Math.min(end - nativeTimestamp, _feeBudget(state) / rateAttoEthPerSecond);
+			if (duration == 0) rateAttoEthPerSecond = 0;
+			else end = nativeTimestamp + uint48(duration);
+		}
 		_changeFeeRate(book, state.feeEnd, state.feeRateAttoEthPerSecond, false);
 		state.feeRateAttoEthPerSecond = rateAttoEthPerSecond;
 		state.feeStart = nativeTimestamp;
@@ -322,10 +326,10 @@ contract SecurityPoolSettlementBook {
 		require(book.cashAttoEth == book.units && book.recoveryAttoRep == 0, 'Runoff fees paused');
 		(Question memory state, uint64 frozenBookId) = question(bookId, questionId);
 		require(frozenBookId == 0, 'Final claim fees closed');
-		require(cashAttoEth <= state.units, 'Fee exceeds question units');
+		require(cashAttoEth <= _feeBudget(state), 'Fee exceeds backing floor');
 		state.units -= cashAttoEth;
 		uint48 nativeTimestamp = _feeTimestamp(book);
-		require(state.feeEnd <= nativeTimestamp || uint256(state.feeRateAttoEthPerSecond) * (state.feeEnd - nativeTimestamp) <= state.units, 'Question fees unfunded');
+		require(state.feeEnd <= nativeTimestamp || uint256(state.feeRateAttoEthPerSecond) * (state.feeEnd - nativeTimestamp) <= _feeBudget(state), 'Question fees unfunded');
 		book.units -= cashAttoEth;
 		book.cashAttoEth -= cashAttoEth;
 		book.feeCashAttoEth += cashAttoEth;
@@ -459,6 +463,17 @@ contract SecurityPoolSettlementBook {
 		book.frozenRoot = frozenHistory.append(book.frozenRoot, timestamp - 1, frozenBookId);
 		_syncFeeMode(book);
 		emit FinalClaimsFrozen(bookId, frozenBookId, timestamp, units, cashAttoEth);
+	}
+
+	/// @notice Remaining collateral that may fund fees, excluding the rounded-up backing floor.
+	function availableFeeBudget(uint64 bookId, uint256 questionId) external view returns (uint256) {
+		(Question memory state, ) = question(bookId, questionId);
+		return _feeBudget(state);
+	}
+
+	function _feeBudget(Question memory state) private view returns (uint256) {
+		uint256 reserved = Math.mulDiv(state.outcomeSupplyAttoShares, minimumOutcomeExchangeRate, EXCHANGE_RATE_SCALE, Math.Rounding.Ceil);
+		return state.units > reserved ? state.units - reserved : 0;
 	}
 
 	function _materializeFees(Book storage book, Question memory state) private view returns (Question memory) {

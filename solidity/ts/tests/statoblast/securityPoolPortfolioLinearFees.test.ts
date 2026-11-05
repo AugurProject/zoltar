@@ -102,3 +102,28 @@ describe('Statoblast: central question fees and vested capital earnings', () => 
 		expect((await fixture.owner().readContract({ abi: streamArtifact.abi, address: streams, functionName: 'fundedOutstanding' }))[0]).toBeGreaterThan(0n)
 	})
 })
+
+describe('Statoblast: portfolio holding fee backing floor', () => {
+	const minimumOutcomeRate = (unit * 9_999_999n) / 10_000_000n
+	const fixture = useSecurityPoolPortfolioFixture({ minimumOutcomeRate })
+	test('capital checkpoints stop fees at the floor and purchases and redemptions remain available', async () => {
+		await fixture.prepare()
+		await fixture.mint(100n * unit)
+		const capital = { abi: capitalArtifact.abi, address: fixture.capitalLedger }
+		const checkpoint = () => writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...capital, functionName: 'checkpoint' }))
+		const demand = () => fixture.owner().readContract({ ...capital, functionName: 'demandAttoEth' })
+		await fixture.base.mockWindow.advanceTime(100n)
+		await checkpoint()
+		const remaining = await demand()
+		expect(remaining).toBeGreaterThanOrEqual(100n * minimumOutcomeRate)
+		expect(remaining).toBeLessThan(100n * unit)
+		await fixture.base.mockWindow.advanceTime(100n)
+		await checkpoint()
+		expect(await demand()).toBe(remaining)
+		await fixture.mint(unit, fixture.base.questionId, { sender: fixture.owner() })
+		const pool = fixture.poolFor(fixture.base.questionId)
+		const ownShares = await balanceOfShares(fixture.owner(), pool.shareToken, fixture.base.genesisUniverse, fixture.owner().account.address)
+		await redeemCompleteSet(fixture.owner(), pool.securityPool, ownShares[0])
+		expect(await demand()).toBeGreaterThanOrEqual(100n * minimumOutcomeRate)
+	})
+})

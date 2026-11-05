@@ -102,7 +102,7 @@ export const retirementAhead = 'Reserved for earlier requests'
 export const retirementReduction = 'Your requested reduction'
 export const rewardVesting = 'Reward vesting (hours)'
 export const outcomeRate = 'Minimum settlement units per outcome'
-export const outcomeRateHint = 'Bounds outcome issuance after fees. The value is fixed when the pool is created.'
+export const outcomeRateHint = 'Holding fees stop before reducing backing below this rate. Fixed at creation; fork recovery can pay less.'
 
 export const prepareTitle = 'Complete portfolio setup'
 export const prepareHint = 'Each stage is one transaction with bounded deployment work. Anyone can resume setup before deposits and purchases open.'

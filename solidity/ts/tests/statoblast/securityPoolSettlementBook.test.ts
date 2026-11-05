@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, test } from 'bun:test'
+import { beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { encodeDeployData, parseAbi, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as artifact, test_statoblast_SettlementPersistentMapHarness_SettlementPersistentMapHarness as mapArtifact } from '../../types/contractArtifact'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
@@ -10,6 +10,7 @@ describe('Statoblast: central internal settlement units', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
 	let client: WriteClient
 	let address: Address
+	let baselineAddress: Address
 	const target = () => ({ abi: artifact.abi, address })
 	const mint = (book: bigint, question: bigint, cash: bigint, minimum = 0n, timestamp = 0) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'mint', args: [book, question, cash, minimum, timestamp] }))
 	const redeem = (book: bigint, question: bigint, shares: bigint, timestamp = 0) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'redeem', args: [book, question, shares, 0n, timestamp] }))
@@ -22,16 +23,26 @@ describe('Statoblast: central internal settlement units', () => {
 	const question = (bookId: bigint, id: bigint) => client.readContract({ ...target(), functionName: 'question', args: [bookId, id] })
 	const quote = async (bookId: bigint, id: bigint, shares: bigint) => [...(await client.readContract({ ...target(), functionName: 'quoteRedemption', args: [bookId, id, shares] }))]
 
+	const deployBook = async (minimumRate: bigint) => {
+		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}`, args: [client.account.address, minimumRate] }) }) })
+		if (receipt.contractAddress === undefined) throw new Error('Settlement ledger deployment address missing')
+		address = receipt.contractAddress
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createBook', args: [0] }))
+	}
+
 	beforeAll(async () => {
 		const ethereum = getAnvilWindowEthereum()
 		await setupTestAccounts(ethereum)
 		await ethereum.advanceTime(1_000_000n)
 		client = createWriteClient(ethereum, TEST_ADDRESSES[0])
-		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}`, args: [client.account.address, 10n ** 12n] }) }) })
-		if (receipt.contractAddress === undefined) throw new Error('Settlement ledger deployment address missing')
-		address = receipt.contractAddress
-		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createBook', args: [0] }))
+		// The smallest supported floor keeps fractional recovery regressions meaningful.
+		await deployBook(1n)
+		baselineAddress = address
 		await setBaselineSnapshot()
+	})
+
+	beforeEach(() => {
+		address = baselineAddress
 	})
 
 	test('fees burn internal units without burning outcomes, and entry preserves existing entitlements', async () => {
@@ -265,14 +276,56 @@ describe('Statoblast: central internal settlement units', () => {
 		expect((await book(2n)).slice(0, 2)).toEqual([0n, 0n])
 		expect(await client.readContract({ ...target(), functionName: 'recoveryRep', args: [2n] })).toBe(0n)
 	})
-	test('minimum exchange rate prevents enormous issuance after collateral fees exhaust almost all units', async () => {
-		await mint(1n, 1n, 10n ** 18n)
-		await fee(1n, 1n, 10n ** 18n - 1n)
-		await expect(mint(1n, 1n, 1n)).rejects.toThrow('Outcome exchange below minimum')
-		expect(await quote(1n, 1n, 10n ** 18n)).toEqual([1n, 1n])
-		await redeem(1n, 1n, 10n ** 18n)
+	test('minimum backing floor prevents fee exhaustion and keeps proportional entry available', async () => {
+		await deployBook(10n ** 12n)
+		const supply = 10n ** 18n
+		const reserve = 10n ** 12n
+		await mint(1n, 1n, supply)
+		await expect(fee(1n, 1n, supply - reserve + 1n)).rejects.toThrow('Fee exceeds backing floor')
+		await fee(1n, 1n, supply - reserve)
+		expect(await quote(1n, 1n, supply)).toEqual([reserve, reserve])
+		await mint(1n, 1n, reserve, supply)
+		expect((await question(1n, 1n))[0]).toMatchObject({ units: 2n * reserve, outcomeSupplyAttoShares: 2n * supply })
+		await redeem(1n, 1n, supply)
+		await expect(fee(1n, 1n, 1n)).rejects.toThrow('Fee exceeds backing floor')
+		await redeem(1n, 1n, supply)
 		await mint(1n, 1n, 10n)
 		expect((await question(1n, 1n))[0].outcomeSupplyAttoShares).toBe(10n)
+	})
+
+	test('lazy fee streams stop above the backing floor without a question checkpoint', async () => {
+		await deployBook(10n ** 12n)
+		const supply = 10n ** 18n
+		const rate = 10n ** 12n
+		await mint(1n, 1n, supply)
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [1n, 1n, rate, 1_000_000, 0] }))
+		await freeze(1n, 1_000_000)
+		expect((await book(1n)).slice(0, 3)).toEqual([rate, rate, supply - rate])
+		expect((await question(1n, 1n))[0].units).toBe(rate)
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [1n, 1n, rate, 1_000_001, 1_000_000] }))
+		expect((await question(1n, 1n))[0].feeRateAttoEthPerSecond).toBe(0n)
+	})
+
+	test('rounded backing floors survive partial burns, replacement and later finality', async () => {
+		const minimum = 37n * 10n ** 16n
+		await deployBook(minimum)
+		await mint(1n, 1n, 101n)
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [1n, 1n, 9n, 100, 0] }))
+		await expect(fee(1n, 1n, 1n)).rejects.toThrow('Question fees unfunded')
+		await redeem(1n, 1n, 13n, 3)
+		await freeze(1n, 100)
+		const state = (await question(1n, 1n))[0]
+		const reserve = (state.outcomeSupplyAttoShares * minimum + 10n ** 18n - 1n) / 10n ** 18n
+		expect(state.units).toBeGreaterThanOrEqual(reserve)
+		expect((await book(1n))[0]).toBe(state.units)
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [1n, 1n, 1n, 200, 100] }))
+		await freeze(1n, 200)
+		expect((await question(1n, 1n))[0].units).toBe(reserve)
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [1n, 1n, 0n, 0, 200] }))
+		await schedule(1n, 1n, 201, 200)
+		await freeze(1n, 202)
+		expect(await quote(1n, 1n, state.outcomeSupplyAttoShares)).toEqual([reserve, reserve])
+		await redeem(1n, 1n, state.outcomeSupplyAttoShares, 202)
 	})
 
 	test('strict finality cutoff preserves finalized parent money and interrupts equal-deadline claims', async () => {
@@ -347,7 +400,7 @@ describe('Statoblast: central internal settlement units', () => {
 
 	test('zero-unit final claims stay in the source when a fork has no funded final tranche', async () => {
 		await mint(1n, 1n, 100n)
-		await fee(1n, 1n, 100n)
+		await redeem(1n, 1n, 100n)
 		await schedule(1n, 1n, 99)
 		expect(await client.readContract({ ...target(), functionName: 'hasLiveForkRecoveryRight', args: [1n, 1n, 100] })).toBe(false)
 		await seal(1n, 100)

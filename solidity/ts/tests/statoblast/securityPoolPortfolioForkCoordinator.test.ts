@@ -207,24 +207,24 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 		expect(await owner.readContract({ ...zoltarTarget(), functionName: 'getMigrationRepBalanceAttoRep', args: [forks, child] })).toBe(300n * E)
 	})
 
-	test('exhausted settlement units preserve neutral premium recovery and consume the right once', async () => {
+	test('floor-backed settlement units preserve neutral premium recovery and consume the right once', async () => {
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'fundRecoveryPremium', args: [1n], value: 20n * E }))
-		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setQuestionFee', args: [0n, 1n, 200n * E, Number(forkTime + 1n)] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setQuestionFee', args: [0n, 1n, 200n * E - 200n * 10n ** 12n, Number(forkTime + 1n)] }))
 		await moveTo(forkTime + 1n)
-		const exhaustedForkTime = (await owner.getBlock()).timestamp
-		await writeContractAndWait(owner, () => owner.writeContract({ ...zoltarTarget(), functionName: 'setForkTimestamp', args: [0n, exhaustedForkTime] }))
-		await moveTo(exhaustedForkTime + 8n * week)
+		const floorForkTime = (await owner.getBlock()).timestamp
+		await writeContractAndWait(owner, () => owner.writeContract({ ...zoltarTarget(), functionName: 'setForkTimestamp', args: [0n, floorForkTime] }))
+		await moveTo(floorForkTime + 8n * week)
 		for (const amount of [80n * E, 120n * E]) await writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'recoverUnchosenCash', args: [0n, 1n, amount] }))
-		expect((await owner.readContract({ ...forkTarget(), functionName: 'forks', args: [0n] })).units).toBe(0n)
+		expect((await owner.readContract({ ...forkTarget(), functionName: 'forks', args: [0n] })).units).toBe(200n * 10n ** 12n)
 		expect(await owner.readContract({ ...rootTarget(), functionName: 'recoveredPremiumAttoEth', args: [buyer.account.address] })).toBe(20n * E)
 		expect(await owner.readContract({ ...forkTarget(), functionName: 'recoveredQuestionShares', args: [0n, 1n] })).toBe(200n * E)
 		await expect(writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'recoverUnchosenCash', args: [0n, 1n, 1n] }))).rejects.toThrow('Recovery requires unclaimed complete sets')
 		expect(await owner.readContract({ ...rootTarget(), functionName: 'recoveredPremiumAttoEth', args: [buyer.account.address] })).toBe(20n * E)
 	})
 
-	test('already final zero-unit questions cannot redirect source premium through fork recovery', async () => {
+	test('already final floor-backed questions cannot redirect source premium through fork recovery', async () => {
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'fundRecoveryPremium', args: [1n], value: 20n * E }))
-		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setQuestionFee', args: [0n, 1n, 200n * E, Number(forkTime + 1n)] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setQuestionFee', args: [0n, 1n, 200n * E - 200n * 10n ** 12n, Number(forkTime + 1n)] }))
 		await moveTo(forkTime + 1n)
 		const finalAfter = (await owner.getBlock()).timestamp
 		await writeContractAndWait(owner, () => owner.writeContract({ ...zoltarTarget(), functionName: 'setForkTimestamp', args: [0n, finalAfter] }))

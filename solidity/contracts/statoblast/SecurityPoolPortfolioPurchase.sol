@@ -88,7 +88,7 @@ contract SecurityPoolPortfolioPurchase is IERC1155Receiver {
 		uint256 calculated = Math.mulDiv(question.feePrincipalAttoEth, root.annualFeeBps(), 10_000 * 365 days);
 		require(calculated <= type(uint96).max, 'Question fee domain exceeded');
 		if (calculated == 0) return (0, 0);
-		uint256 duration = Math.min(type(uint48).max - nativeTime, question.units / calculated);
+		uint256 duration = Math.min(type(uint48).max - nativeTime, engine.ledger().availableFeeBudget(engine.bookIds(pool.universeId()), pool.questionId()) / calculated);
 		if (duration == 0) return (0, 0);
 		return (uint96(calculated), uint48(nativeTime + duration));
 	}
