@@ -69,7 +69,7 @@ for (const change of [
 						case 'getPool':
 							return address
 						case 'purchaseQuote':
-							return [changed && change === 'mint purchase fee' ? 3n : 1n, 0n, 0n]
+							return [changed && change === 'mint purchase fee' ? 3n : 1n, 0n]
 						case 'availableMintCapacity':
 							return 1000n
 						case 'securityPoolFactory':

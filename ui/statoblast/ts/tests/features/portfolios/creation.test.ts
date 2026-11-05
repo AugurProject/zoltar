@@ -8,7 +8,6 @@ test('creation configures pool fees and minimums while health remains a personal
 		minimumCommitmentAttoEth: 10n ** 18n,
 		minimumOutcomeRate: 10n ** 16n,
 		rewardVestingSeconds: 86_400n,
-		reportingFeeAttoEth: 5n * 10n ** 16n,
 	})
 	expect(parsePortfolioCreationEconomics({ ...defaultPortfolioCreationDraft(), purchaseFeePercent: '0.07', minimumPurchaseFee: '0', rewardVestingHours: '1.5' })).toMatchObject({ purchaseFeeBps: 7n, minimumPurchaseFeeAttoEth: 0n, rewardVestingSeconds: 5_400n })
 	expect(parsePortfolioCreationEconomics({ ...defaultPortfolioCreationDraft(), annualFeePercent: '51.23' })).toMatchObject({ annualFeeBps: 5_123n })

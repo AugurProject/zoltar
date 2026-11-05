@@ -9,7 +9,7 @@ const abi = parseAbi([
 	'function bookIds(uint248 universeId) view returns(uint64)',
 	'function feeTimestamp(uint248 universeId) view returns(uint48)',
 	'function isPriceValid() view returns(bool)',
-	'function question(uint64 bookId,uint256 questionId) view returns((uint256 units,uint256 outcomeSupplyAttoShares,uint48 finalAfter,uint96 feeRateAttoEthPerSecond,uint48 feeStart,uint48 feeEnd,uint256 feePrincipalAttoEth,uint256 rewardShares) state,uint64 frozenBookId)',
+	'function question(uint64 bookId,uint256 questionId) view returns((uint256 units,uint256 outcomeSupplyAttoShares,uint48 finalAfter,uint96 feeRateAttoEthPerSecond,uint48 feeStart,uint48 feeEnd,uint256 feePrincipalAttoEth) state,uint64 frozenBookId)',
 	'function books(uint64 bookId) view returns(uint256 cash,uint256 units,uint256 fees,uint64 questionRoot,uint64 finalityRoot,uint64 frozenRoot,uint48 timestamp,bool isSealed,uint64 feeRateRoot,uint64 feeEndRoot,uint64 feeModeRoot,bool feesEnabled,uint48 minimumFinalAfter,uint48 feeTimeOffset,uint256 finalizedUnitsPrefix,uint256 recoveryAttoRep)',
 	'function portfolio() view returns (address)',
 	'function universeId() view returns (uint248)',

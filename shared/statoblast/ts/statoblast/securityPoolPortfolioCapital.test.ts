@@ -47,7 +47,6 @@ function fixture(overrides: Record<string, unknown> = {}) {
 		minimumPurchaseFeeAttoEth: 1n,
 		minimumCommitmentAttoEth: 1n,
 		rewardVestingSeconds: 86_400n,
-		reportingFeeAttoEth: 1n,
 		priceFeed: portfolio,
 		acceptedExposureLimitAttoEth: 100n,
 		acceptedPrice: 2n,

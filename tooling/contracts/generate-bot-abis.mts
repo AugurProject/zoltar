@@ -72,7 +72,6 @@ const PORTFOLIO_RUNTIME_CONTRACTS = [
 	'SecurityPoolUniformPriceAuction',
 	'SecurityPoolAuctionVault',
 	'Multicall3',
-	'SecurityPoolReportingRewards',
 	'SecurityPoolResolutionPremiumBook',
 ] as const
 

@@ -6,11 +6,10 @@ const abi = parseAbi([
 	'function addQuestion(uint256 questionId) returns (address)',
 	'function getPool(uint256 questionId,uint248 universeId) view returns (address)',
 	'function quoteQuestionMint(address pool,uint256 cash) view returns (uint256)',
-	'function purchaseQuote(uint248 universeId,uint256 questionId,uint256 mintAttoEth) view returns (uint256 fee,uint256 premium,uint256 rewardFunding)',
+	'function purchaseQuote(uint248 universeId,uint256 questionId,uint256 mintAttoEth) view returns (uint256 fee,uint256 premium)',
 	'function capitalLedger(uint248 universeId) view returns (address)',
 	'function isPriceValid() view returns (bool)',
 	'function availableMintCapacity(uint248 universeId) view returns (uint256)',
-	'function claimQuestionReportingReward(address pool)',
 ])
 function uint(value: unknown, label: string, bits = 256): bigint {
 	if (typeof value !== 'bigint' || value < 0n || value >= 1n << BigInt(bits)) throw new Error(`${label} must fit uint${bits}.`)
@@ -37,11 +36,6 @@ export function buildPortfolioAddQuestionRequest(parameters: { caller: Address; 
 	return { account: address(parameters.caller, 'Caller'), to: address(parameters.portfolio, 'Portfolio'), value: 0n, data: encodeFunctionData({ abi, functionName: 'addQuestion', args: [uint(parameters.questionId, 'Question id')] }) }
 }
 
-/** @public Finalization pays the recorded reporter; the caller cannot redirect the funded basket. */
-export function buildPortfolioReportingRewardRequest(parameters: { caller: Address; portfolio: Address; pool: Address }) {
-	return { account: address(parameters.caller, 'Caller'), to: address(parameters.portfolio, 'Portfolio'), value: 0n, data: encodeFunctionData({ abi, functionName: 'claimQuestionReportingReward', args: [address(parameters.pool, 'Question pool')] }) }
-}
-
 export type PortfolioMintQuote = {
 	pool: Address
 	capitalLedger: Address
@@ -49,7 +43,6 @@ export type PortfolioMintQuote = {
 	purchaseFeeAttoEth: bigint
 	maximumPurchaseFeeAttoEth: bigint
 	resolutionPremiumAttoEth: bigint
-	reportingFundingAttoEth: bigint
 	availableCommitmentAttoEth: bigint
 	priceValid: boolean
 	blockNumber: bigint
@@ -66,9 +59,8 @@ export async function loadPortfolioMintQuote(parameters: { client: PortfolioRead
 	if (blockNumber === undefined) throw new Error('A confirmed block is required for a purchase quote.')
 	const read = (target: Address, functionName: string, args: readonly (Address | bigint)[] = []) => parameters.client.readContract({ address: target, abi, functionName, args, blockNumber })
 	const [poolValue, capitalValue, feeQuote] = await Promise.all([read(portfolio, 'getPool', [questionId, universeId]), read(portfolio, 'capitalLedger', [universeId]), read(portfolio, 'purchaseQuote', [universeId, questionId, cash])])
-	if (!Array.isArray(feeQuote) || feeQuote.length !== 3) throw new Error('Invalid funded purchase fee quote.')
+	if (!Array.isArray(feeQuote) || feeQuote.length !== 2) throw new Error('Invalid funded purchase fee quote.')
 	const fee = uint(feeQuote[0], 'Purchase fee')
-	const rewardFunding = uint(feeQuote[2], 'Reporting funding')
 	const pool = address(poolValue, 'Question pool')
 	const capitalLedger = address(capitalValue, 'Capital ledger')
 	const [shares, valid, capacity] = await Promise.all([read(portfolio, 'quoteQuestionMint', [pool, cash]), read(capitalLedger, 'isPriceValid'), read(portfolio, 'availableMintCapacity', [universeId])])
@@ -81,8 +73,7 @@ export async function loadPortfolioMintQuote(parameters: { client: PortfolioRead
 		purchaseFeeAttoEth: fee,
 		maximumPurchaseFeeAttoEth: uint((fee * 10_100n + 9_999n) / 10_000n, 'Maximum purchase fee'),
 		resolutionPremiumAttoEth: uint(feeQuote[1], 'Resolution premium'),
-		reportingFundingAttoEth: rewardFunding,
-		availableCommitmentAttoEth: available > rewardFunding ? available - rewardFunding : 0n,
+		availableCommitmentAttoEth: available,
 		priceValid: valid,
 		blockNumber,
 	}

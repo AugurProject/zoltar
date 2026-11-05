@@ -13,7 +13,6 @@ const abi = parseAbi([
 	'function minimumPurchaseFeeAttoEth() view returns (uint256)',
 	'function minimumCommitmentAttoEth() view returns (uint256)',
 	'function rewardVestingSeconds() view returns (uint48)',
-	'function reportingFeeAttoEth() view returns (uint256)',
 	'function priceFeed(uint248 universeId) view returns (address)',
 	'function acceptedExposureLimitAttoEth() view returns (uint256)',
 	'function settlement() view returns (address)',
@@ -259,7 +258,7 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 	const blockNumber = block.number
 	const read = (target: Address, functionName: string, args: readonly AbiValue[] = []) => client.readContract({ address: target, abi, functionName, args, blockNumber })
 	const universeId = uint(parameters.universeId ?? (await read(portfolio, 'originUniverseId')), 'Universe id', 248)
-	const [ledgerValue, zoltarValue, settlementValue, feeBps, annualFeeBps, minimumFee, minimumCommitment, duration, reportingFee, feedValue] = await Promise.all([
+	const [ledgerValue, zoltarValue, settlementValue, feeBps, annualFeeBps, minimumFee, minimumCommitment, duration, feedValue] = await Promise.all([
 		read(portfolio, 'capitalLedger', [universeId]),
 		read(portfolio, 'zoltar'),
 		read(portfolio, 'settlement'),
@@ -268,7 +267,6 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 		read(portfolio, 'minimumPurchaseFeeAttoEth'),
 		read(portfolio, 'minimumCommitmentAttoEth'),
 		read(portfolio, 'rewardVestingSeconds'),
-		read(portfolio, 'reportingFeeAttoEth'),
 		read(portfolio, 'priceFeed', [universeId]),
 	])
 	const capitalLedger = address(ledgerValue, 'Capital ledger')
@@ -380,7 +378,6 @@ export async function loadPortfolioCapitalSnapshot(parameters: { client: Portfol
 			minimumCommitmentAttoEth: uint(minimumCommitment, 'Minimum commitment'),
 			minimumOutcomeRate: uint(minimumOutcomeRate, 'Minimum outcome rate'),
 			rewardVestingSeconds: uint(duration, 'Vesting duration', 48),
-			reportingFeeAttoEth: uint(reportingFee, 'Reporting fee'),
 		},
 	}
 }

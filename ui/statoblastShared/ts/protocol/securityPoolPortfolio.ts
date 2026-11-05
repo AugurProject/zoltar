@@ -16,7 +16,6 @@ import {
 	statoblast_SecurityPoolPortfolioPurchase_SecurityPoolPortfolioPurchase as purchaseArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
 	statoblast_SecurityPoolPortfolioServices_SecurityPoolPortfolioServices as servicesArtifact,
-	statoblast_SecurityPoolReportingRewards_SecurityPoolReportingRewards as rewardsArtifact,
 	statoblast_SecurityPoolResolutionPremiumBook_SecurityPoolResolutionPremiumBook as premiumArtifact,
 } from '../contractArtifact.js'
 import { getInfraContractAddresses, getSecurityPoolPortfolioByteCode, getSecurityPoolPortfolioRuntimeCode, getPortfolioDeployers } from './deploymentHelpers.js'
@@ -36,7 +35,6 @@ const linksAbi = parseAbi([
 	'function auctionDeployer() view returns (address)',
 	'function services() view returns (address)',
 	'function forkAuthority() view returns (address)',
-	'function reportingRewards() view returns (address)',
 	'function premiumLedger() view returns (address)',
 	'function getRepToken(uint248 universeId) view returns (address)',
 	'function setupStage() view returns (uint8)',
@@ -142,21 +140,17 @@ export async function loadPortfolioAccount(client: ReadClient, portfolio: Addres
 	const auctionVault = bindings !== undefined && (await isCanonicalAuctionVaultImplementation(client, bindings.implementation, blockNumber)) ? await authenticatePortfolioAuctionVault(client, portfolio, owner, blockNumber) : undefined
 	const fundingOwner = auctionVault?.bidder ?? owner
 	const depositSpender = auctionVault?.vault ?? snapshot.capitalLedger
-	const [questions, admission, walletAttoRep, allowanceAttoRep, walletAttoEth, bookValue, rewardsValue, premiumValue] = await Promise.all([
+	const [questions, admission, walletAttoRep, allowanceAttoRep, walletAttoEth, bookValue, premiumValue] = await Promise.all([
 		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'getQuestions', args: [start, 64n], blockNumber }),
 		loadPortfolioAdmission(client, admissionAddress, originUniverseId, blockNumber, admissionStart),
 		client.readContract({ address: snapshot.repToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [fundingOwner], blockNumber }),
 		client.readContract({ address: snapshot.repToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [fundingOwner, depositSpender], blockNumber }),
 		client.getBalance({ address: fundingOwner, blockNumber }),
 		client.readContract({ address: settlement, abi: linksAbi, functionName: 'ledger', blockNumber }),
-		client.readContract({ address: services, abi: linksAbi, functionName: 'reportingRewards', blockNumber }),
 		client.readContract({ address: services, abi: linksAbi, functionName: 'premiumLedger', blockNumber }),
 	])
 	const book = requireAddressValue(bookValue, 'settlement book')
-	const rewards = requireAddressValue(rewardsValue, 'reporting rewards')
 	const premium = requireAddressValue(premiumValue, 'resolution premium book')
-	const rewardsServicesValue = await client.readContract({ address: rewards, abi: linksAbi, functionName: 'services', blockNumber })
-	if (requireAddressValue(rewardsServicesValue, 'reporting services') !== getAddress(services)) throw new Error('Reporting rewards use another services authority.')
 	await Promise.all([
 		verifyModule(client, snapshot.capitalLedger, capitalArtifact, portfolio, 'capital ledger', blockNumber),
 		verifyModule(client, lifecycle, lifecycleArtifact, snapshot.capitalLedger, 'capital lifecycle delegate', blockNumber, 'ledger'),
@@ -169,7 +163,6 @@ export async function loadPortfolioAccount(client: ReadClient, portfolio: Addres
 		verifyModule(client, quoteHelper, purchaseArtifact, portfolio, 'portfolio purchase helper', blockNumber),
 		verifyModule(client, forkController, forkArtifact, portfolio, 'fork coordinator', blockNumber),
 		verifyModule(client, services, servicesArtifact, portfolio, 'portfolio services', blockNumber),
-		verifyModule(client, rewards, rewardsArtifact, portfolio, 'reporting rewards', blockNumber),
 		verifyModule(client, premium, premiumArtifact, services, 'resolution premium book', blockNumber, 'services'),
 	])
 	const [capitalUniverse, capitalProtocol, reporterProtocol, forkProtocol, canonicalRep] = await Promise.all([

@@ -4,7 +4,7 @@ import { deployContract } from '../../testSupport/deployContract'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
-import { approveToken, setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
+import { approveToken, getERC20Balance, setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
 import { ensureZoltarDeployed, getRepTokenAddress, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { zeroHash, zeroPeakArray } from '../escalationGame/carryHelpers'
 import { initializeForkCarrySnapshotAbi, initializeForkCarrySnapshotWithResolutionBalancesAbi } from '../carrySnapshotAbis'
@@ -108,7 +108,8 @@ describe('Statoblast: fixed portfolio reporter clock', () => {
 		await approveToken(owner, getRepTokenAddress(0n), game)
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: gameArtifact.abi, address: game, functionName: 'depositRepOnOutcome', args: [1, 1n] }))
 		expect(await owner.readContract({ abi: gameArtifact.abi, address: game, functionName: 'getOutcomeBalancesAttoRep' })).toEqual([0n, 1n, 0n])
-		expect(await owner.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'lastReporter' })).toBe(owner.account.address)
-		await expect(owner.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'onQuestionReporterChanged', args: [owner.account.address] })).rejects.toThrow('Only test game')
+		const custody = await owner.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'reporters' })
+		expect(await getERC20Balance(owner, getRepTokenAddress(0n), custody)).toBe(1n)
+		await expect(owner.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'onQuestionFinalityChanged', args: [0] })).rejects.toThrow('Only test game')
 	})
 })

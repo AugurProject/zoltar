@@ -5,15 +5,12 @@ import { SecurityPoolResolutionPremiumBook } from './SecurityPoolResolutionPremi
 import { SecurityPoolPortfolioSettlement } from './SecurityPoolPortfolioSettlement.sol';
 import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
 import { SecurityPoolCapitalLedger } from './SecurityPoolCapitalLedger.sol';
-import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { Constants } from '../Constants.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
-import { IERC20 } from '../IERC20.sol';
 import { IPortfolioServiceRoot } from './interfaces/IPortfolioServiceRoot.sol';
-import { SecurityPoolReportingRewards } from './SecurityPoolReportingRewards.sol';
 
-/// @notice Question-specific prepaid reporting risk and reporter rewards.
+/// @notice Question-specific prepaid resolution risk compensation.
 /// @dev Premium roots copy across forks; no call walks questions or ancestors.
 /// No shared pot pays keepers or price sponsors. ETH whose payer is not
 /// recorded, or that would otherwise accrue to no one, is burned.
@@ -22,7 +19,6 @@ contract SecurityPoolPortfolioServices {
 	SecurityPoolResolutionPremiumBook public immutable premiumLedger;
 	bool private entered;
 	mapping(uint248 => bool) public premiumChildCreated;
-	SecurityPoolReportingRewards public immutable reportingRewards;
 	mapping(uint248 => bool) private syncingFees;
 	mapping(uint248 => bool) public feesEnabled;
 
@@ -33,7 +29,6 @@ contract SecurityPoolPortfolioServices {
 	constructor(address authority) {
 		portfolio = authority;
 		premiumLedger = new SecurityPoolResolutionPremiumBook(address(this));
-		reportingRewards = new SecurityPoolReportingRewards(authority, address(this));
 	}
 	modifier onlyPortfolio() {
 		require(msg.sender == portfolio, 'Only service portfolio');
@@ -57,45 +52,15 @@ contract SecurityPoolPortfolioServices {
 		IPortfolioServiceRoot root = IPortfolioServiceRoot(portfolio);
 		ISecurityPool pool = root.prepareServicePurchase(universeId, questionId);
 		uint256 premium;
-		uint256 rewardFunding;
-		(fee, premium, rewardFunding) = root.quoteHelper().purchaseQuote(universeId, questionId, cash);
+		(fee, premium) = root.quoteHelper().purchaseQuote(universeId, questionId, cash);
 		require(msg.value >= cash + fee, 'Purchase fee exceeds budget');
-		require(cash + rewardFunding <= root.quoteHelper().availableMintCapacity(universeId), 'Purchase exceeds healthy capacity');
+		require(cash <= root.quoteHelper().availableMintCapacity(universeId), 'Purchase exceeds healthy capacity');
 		minted = root.executeServiceMint{value: cash}(pool, recipient, minimumShares);
-		if (rewardFunding != 0) {
-			SecurityPoolCapitalLedger capital = root.capitalLedger(universeId);
-			capital.setDemand(capital.demandAttoEth() + rewardFunding);
-			(, SecurityPoolPortfolioSettlement.Snapshot memory snapshot) = root.settlement().fundQuestionReward{value: rewardFunding}(address(pool), 0, root.logicalTime(universeId));
-			_creditSnapshot(universeId, snapshot);
-			pool.refreshPortfolioFees();
-		}
 		if (premium != 0) _fundPremium(universeId, questionId, premium);
-		uint256 earnings = fee - premium - rewardFunding;
+		uint256 earnings = fee - premium;
 		if (earnings != 0) root.capitalLedger(universeId).fundVestedFees{value: earnings}(0);
 		root.deliverServiceMint(pool, recipient, minted);
 		_send(trader, msg.value - cash - fee);
-	}
-	function claimReportingReward(address poolAddress) external onlyPortfolio nonReentrant returns (address recipient) {
-		IPortfolioServiceRoot root = IPortfolioServiceRoot(portfolio);
-		uint256 reward;
-		(recipient, reward) = quoteReportingReward(poolAddress);
-		require(recipient != address(0), 'Question not final');
-		ISecurityPool pool = ISecurityPool(payable(poolAddress));
-		uint256 beforeRep = IERC20(address(pool.repToken())).balanceOf(address(this));
-		root.capitalLedger(pool.universeId()).checkpoint();
-		(uint256 cash, SecurityPoolPortfolioSettlement.Snapshot memory snapshot) = root.settlement().claimQuestionReward(poolAddress, address(this), root.logicalTime(pool.universeId()));
-		_creditSnapshot(pool.universeId(), snapshot);
-		pool.refreshPortfolioFees();
-		uint256 paid = recipient == address(this) ? 0 : Math.min(cash, reward);
-		_burn(pool.universeId(), cash - paid);
-		uint256 repIncome = IERC20(address(pool.repToken())).balanceOf(address(this)) - beforeRep;
-		if (repIncome != 0) pool.zoltar().burnRep(pool.universeId(), repIncome);
-		_send(recipient, paid);
-	}
-	/// @notice Actual final reporter ETH. Cash beyond it has no recorded payer and is burned.
-	/// @dev Neither ordinary claims nor this funded reward require a new price report.
-	function quoteReportingReward(address poolAddress) public view returns (address recipient, uint256 cashAttoEth) {
-		return reportingRewards.quoteReportingReward(poolAddress);
 	}
 	function mintQuestionSettlement(ISecurityPool pool) external payable onlyPortfolio returns (uint256, uint256, uint256) {
 		IPortfolioServiceRoot root = IPortfolioServiceRoot(portfolio);
@@ -184,7 +149,7 @@ contract SecurityPoolPortfolioServices {
 	function _cancelUnusedPremium(ISecurityPool pool) private {
 		IPortfolioServiceRoot root = IPortfolioServiceRoot(portfolio);
 		(SecurityPoolSettlementBook.Question memory question, ) = root.settlement().ledger().question(root.settlement().bookIds(pool.universeId()), pool.questionId());
-		if (question.outcomeSupplyAttoShares == question.rewardShares) {
+		if (question.outcomeSupplyAttoShares == 0) {
 			uint256 unused = premiumLedger.cancel(pool.universeId(), pool.questionId());
 			_burn(pool.universeId(), unused);
 		}
@@ -232,22 +197,8 @@ contract SecurityPoolPortfolioServices {
 		SecurityPoolPortfolioSettlement settlement = IPortfolioServiceRoot(portfolio).settlement();
 		(SecurityPoolSettlementBook.Question memory question, ) = settlement.ledger().question(settlement.bookIds(source), questionId);
 		cash = premiumLedger.recover(source, questionId, shares, question.outcomeSupplyAttoShares);
-		if (recipient == address(this)) _burn(source, cash);
-		else _send(recipient, cash);
+		_send(recipient, cash);
 		emit PremiumRecovered(source, questionId, recipient, cash);
-	}
-	function registerGame(address game) external onlyPortfolio {
-		reportingRewards.registerGame(game);
-	}
-	function recordReporter(address game, address reporter) external onlyPortfolio {
-		reportingRewards.recordReporter(game, reporter);
-	}
-	function reportingBeneficiaries(address game)
-		external
-		view
-		returns (address beneficiary, BinaryOutcomes.BinaryOutcome leader, bool registered, uint256 rewardCapAttoEth)
-	{
-		return reportingRewards.reportingBeneficiaries(game);
 	}
 
 	function _burn(uint248 universeId, uint256 amount) private {

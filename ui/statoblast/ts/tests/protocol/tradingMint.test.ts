@@ -86,9 +86,9 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 							return 100n
 						case 'purchaseQuote':
 							expect(request.args).toEqual([1n, 7n, 100n])
-							return [3n, 1n, 2n]
+							return [3n, 1n]
 						case 'availableMintCapacity':
-							return mode === 'insufficient backing' ? 101n : 102n
+							return mode === 'insufficient backing' ? 99n : 100n
 						case 'attoEthToAttoShares':
 							return 90n
 						default:

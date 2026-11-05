@@ -18,7 +18,7 @@ import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/sta
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 describe('Statoblast: native finalized portfolio redemptions', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ reportingFeeAttoEth: unit / 100n })
+	const fixture = useSecurityPoolPortfolioFixture({})
 	const pool = () => ({ abi: poolArtifact.abi, address: fixture.poolFor(fixture.base.questionId).securityPool })
 	const portfolio = () => ({ abi: portfolioArtifact.abi, address: fixture.portfolio })
 	const shares = () => balanceOfShares(fixture.other(), fixture.poolFor(fixture.base.questionId).shareToken, fixture.base.genesisUniverse, fixture.other().account.address)
@@ -82,15 +82,13 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		expect(await shares()).toEqual([beforeShares[0], 0n, beforeShares[2]])
 		const state = await settlementState()
 		expect(state.frozenBookId).not.toBe(0n)
-		expect(state.question.outcomeSupplyAttoShares).toBe(state.question.rewardShares)
-		expect(state.question.rewardShares).toBeGreaterThan(0n)
+		expect(state.question.outcomeSupplyAttoShares).toBe(0n)
 		expect(state.question.feeRateAttoEthPerSecond).toBe(0n)
 		expect(await secondCash()).toBe(otherCash)
 		expect(await fixture.owner().getBalance({ address: state.engine })).toBe((await questionCash(fixture.base.questionId)) + (await questionCash(fixture.secondQuestionId)))
 		await refresh()
 		await refresh()
 		expect(await secondCash()).toBe(otherCash)
-		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...portfolio(), functionName: 'claimQuestionReportingReward', args: [pool().address] }))
 		expect((await settlementState()).question.outcomeSupplyAttoShares).toBe(0n)
 		expect(await fixture.owner().getBalance({ address: state.engine })).toBe(await questionCash(fixture.secondQuestionId))
 	})
@@ -148,6 +146,6 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		expect((await shares())[1]).toBe(0n)
 		await refresh()
 		const final = await settlementState()
-		expect(final.question.outcomeSupplyAttoShares).toBe(final.question.rewardShares)
+		expect(final.question.outcomeSupplyAttoShares).toBe(0n)
 	})
 })

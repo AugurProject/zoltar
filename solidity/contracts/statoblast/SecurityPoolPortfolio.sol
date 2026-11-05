@@ -61,7 +61,6 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		uint256 minimumCommitmentAttoEth;
 		uint256 minimumOutcomeRate;
 		uint48 rewardVestingSeconds;
-		uint256 reportingFeeAttoEth;
 	}
 	struct Deployers {
 		SecurityPoolCapitalLedgerDeployer capital;
@@ -88,7 +87,6 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	uint256 public immutable minimumCommitmentAttoEth;
 	uint256 public immutable minimumOutcomeRate;
 	uint48 public immutable rewardVestingSeconds;
-	uint256 public immutable reportingFeeAttoEth;
 	IPortfolioAuctionDeployer public immutable auctionDeployer;
 	SecurityPoolPortfolioPurchase public immutable quoteHelper;
 	SecurityPoolPortfolioServices public immutable services;
@@ -109,7 +107,6 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	event CompleteSetsFunded(uint248 indexed universeId, uint256 indexed questionId, address indexed recipient, uint256 cashAttoEth, uint256 shares, uint256 purchaseFeeAttoEth);
 	event UniversePrepared(uint248 indexed universeId, address capitalLedger);
 	event SetupAdvanced(uint8 stage);
-	event QuestionReportingRewardPaid(uint248 indexed universeId, uint256 indexed questionId, address indexed recipient);
 
 	constructor(ISecurityPoolFactory _factory, ISecurityPool seed, uint256 horizon, Deployers memory deployment, ISecurityPoolQuestionAdmissionPolicy admission, EconomicsConfig memory config) {
 		require(address(admission).code.length != 0, 'Admission policy has no code');
@@ -135,7 +132,6 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		minimumCommitmentAttoEth = config.minimumCommitmentAttoEth;
 		minimumOutcomeRate = config.minimumOutcomeRate;
 		rewardVestingSeconds = config.rewardVestingSeconds;
-		reportingFeeAttoEth = config.reportingFeeAttoEth;
 		auctionDeployer = deployment.auctions;
 		deployers = deployment;
 		quoteHelper = new SecurityPoolPortfolioPurchase(address(this));
@@ -295,7 +291,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	function purchaseFee(uint256 mintAttoEth) public view returns (uint256) {
 		return quoteHelper.purchaseFee(mintAttoEth);
 	}
-	function purchaseQuote(uint248 universeId, uint256 questionId, uint256 mintAttoEth) external view returns (uint256 fee, uint256 premium, uint256 rewardFunding) {
+	function purchaseQuote(uint248 universeId, uint256 questionId, uint256 mintAttoEth) external view returns (uint256 fee, uint256 premium) {
 		return quoteHelper.purchaseQuote(universeId, questionId, mintAttoEth);
 	}
 	function createCompleteSet(uint248 universeId, uint256 questionId, uint256 mintAttoEth, address recipient, uint256 minimumShares) external payable nonReentrant returns (uint256 minted) {
@@ -374,26 +370,13 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		// Until every carried outcome is installed, the parent's game must remain
 		// the authoritative source for the next permissionless materialization step.
 		require(!identity.forkContinuation() || identity.forkCarrySnapshotInitialized(), 'Reporter fork snapshot incomplete');
-		services.registerGame(game);
 		reporters.registerGame(pool.questionId(), game);
-	}
-	function onQuestionReporterChanged(address reporter) external {
-		ISecurityPool pool = IPortfolioReporterIdentity(msg.sender).securityPool();
-		_pool(address(pool));
-		require(address(pool.escalationGame()) == msg.sender, 'Reporter caller is not canonical');
-		services.recordReporter(msg.sender, reporter);
 	}
 	function onQuestionFinalityChanged(uint48 nativeFinalAfter) external {
 		ISecurityPool pool = IPortfolioReporterIdentity(msg.sender).securityPool();
 		_pool(address(pool));
 		require(address(pool.escalationGame()) == msg.sender, 'Finality caller is not canonical');
 		services.onQuestionFinalityChanged(pool, nativeFinalAfter);
-	}
-	/// @notice Pay the bounded final reporter ETH reward without visiting other questions.
-	function claimQuestionReportingReward(address poolAddress) external nonReentrant {
-		address recipient = services.claimReportingReward(poolAddress);
-		ISecurityPool pool = ISecurityPool(payable(poolAddress));
-		emit QuestionReportingRewardPaid(pool.universeId(), pool.questionId(), recipient);
 	}
 	function onQuestionAccountingChanged() external view {
 		_pool(msg.sender);

@@ -31,7 +31,7 @@ test('portfolio simulation mints use each funded purchase quote, including fees 
 					expect(parameters.args).toEqual([0n, BigInt(quoteIndex + 1), unit])
 					const fee = fees[quoteIndex++]
 					if (fee === undefined) throw new Error('Unexpected quote')
-					return [fee, fee / 2n, fee / 4n]
+					return [fee, fee / 2n]
 				}
 				default:
 					throw new Error(`Unexpected read ${parameters.functionName}`)

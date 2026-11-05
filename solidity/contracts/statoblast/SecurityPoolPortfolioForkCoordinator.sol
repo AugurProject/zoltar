@@ -4,7 +4,6 @@ pragma solidity 0.8.35;
 import { SecurityPoolCreationCodeDeployer } from './SecurityPoolCreationCode.sol';
 
 import { Zoltar } from '../Zoltar.sol';
-import { Constants } from '../Constants.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
@@ -104,7 +103,6 @@ contract SecurityPoolPortfolioForkCoordinator {
 	mapping(uint248 => SecurityPoolPortfolioAuction) public auctions;
 	mapping(uint248 => mapping(address => Choice)) public choices;
 	mapping(uint248 => mapping(uint256 => uint256)) public recoveredQuestionShares;
-	mapping(uint248 => mapping(uint256 => bool)) public recoveredQuestionReward;
 	mapping(uint248 => uint64) private fixedRoots;
 	SecurityPoolPersistentMap.Store private fixedTree;
 	FixedOutcome[] private fixedOutcomes;
@@ -114,7 +112,6 @@ contract SecurityPoolPortfolioForkCoordinator {
 	event BranchStarted(uint248 indexed universeId, uint256 parentCash, uint256 recoveryAttoRep);
 	event BranchActivated(uint248 indexed universeId, uint256 fundedCash, uint256 recoveryAttoRep);
 	event NeutralCashRecovered(uint248 indexed universeId, uint256 indexed questionId, address indexed owner, uint256 shares, uint256 cash);
-	event NeutralServiceCashRecovered(uint248 indexed universeId, uint256 indexed questionId, uint256 cash);
 
 	constructor(address authority, Zoltar protocol) {
 		require(authority != address(0) && address(protocol).code.length != 0, 'Fork dependencies missing');
@@ -377,25 +374,6 @@ contract SecurityPoolPortfolioForkCoordinator {
 			require(sent, 'Recovery transfer failed');
 		}
 		emit NeutralCashRecovered(source, questionId, msg.sender, shares, cash);
-	}
-
-	/// @notice Reserved reporter shares have no ERC1155 holder and their many
-	/// funders are not recorded. Their unassigned source cash is burned.
-	function recoverQuestionRewardCash(uint248 source, uint256 questionId) external nonReentrant returns (uint256 cash) {
-		_freeze(source);
-		require(block.timestamp >= zoltar.getForkChoiceDeadline(source), 'Fork choices still open');
-		require(!recoveredQuestionReward[source][questionId], 'Question service cash already recovered');
-		SecurityPoolSettlementBook.Question memory question = _recoveryQuestion(source, questionId);
-		require(question.rewardShares != 0, 'Question has no service shares');
-		recoveredQuestionReward[source][questionId] = true;
-		cash = _recordRecovery(source, questionId, question, question.rewardShares);
-		IPortfolioForkServices services = IPortfolioForkServices(portfolio.services());
-		services.recoverPremiumCash(source, questionId, question.rewardShares, address(services));
-		if (cash != 0) {
-			(bool sent, ) = Constants.BURN_ADDRESS.call{value: cash}('');
-			require(sent, 'Recovery burn failed');
-		}
-		emit NeutralServiceCashRecovered(source, questionId, cash);
 	}
 
 	function _recoveryQuestion(uint248 source, uint256 questionId) private returns (SecurityPoolSettlementBook.Question memory question) {

@@ -11,7 +11,6 @@ contract EscalationGamePortfolioClockHarness is EscalationGameProofTestSecurityP
 	uint48 public immutable logicalAnchor;
 	uint256 public constant questionId = 17;
 	SecurityPoolReporterLedger public immutable reporters;
-	address public lastReporter;
 
 	constructor(Zoltar protocol, uint48 wallStart, uint48 logicalStart) EscalationGameProofTestSecurityPool(protocol, 0, address(0)) {
 		wallAnchor = wallStart;
@@ -53,10 +52,6 @@ contract EscalationGamePortfolioClockHarness is EscalationGameProofTestSecurityP
 	}
 	function onQuestionFinalityChanged(uint48) external view {
 		require(msg.sender == address(escalationGame), 'Only test game');
-	}
-	function onQuestionReporterChanged(address reporter) external {
-		require(msg.sender == address(escalationGame), 'Only test game');
-		lastReporter = reporter;
 	}
 }
 

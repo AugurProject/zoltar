@@ -21,7 +21,7 @@ import { burnedEthBalance, receiptBurns } from './burnEvidence'
 const preparationAbi = parseAbi(['function checkpointPreparationPremium(uint248 universeId)'])
 
 describe('Statoblast: preparation premium ownership', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ reportingFeeAttoEth: unit / 100n })
+	const fixture = useSecurityPoolPortfolioFixture({})
 	const prepare = async (delay: bigint) => {
 		const owner = fixture.owner()
 		const mock = fixture.base.mockWindow

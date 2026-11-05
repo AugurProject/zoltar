@@ -17,7 +17,6 @@ const links = [
 	parseAbiItem('function services() view returns (address)'),
 	parseAbiItem('function lifecycleDelegate() view returns (address)'),
 	parseAbiItem('function auctionDelegate() view returns (address)'),
-	parseAbiItem('function reportingRewards() view returns (address)'),
 	parseAbiItem('function premiumLedger() view returns (address)'),
 ] as const
 
@@ -47,7 +46,7 @@ export async function verifyPortfolioCustody(client: ReadClient, snapshot: Portf
 		readAddress(snapshot.capitalLedger, 'lifecycleDelegate'),
 		readAddress(snapshot.capitalLedger, 'auctionDelegate'),
 	])
-	const [book, rewards, premium, capitalServices, forkAuthority] = await Promise.all([readAddress(settlement, 'ledger'), readAddress(services, 'reportingRewards'), readAddress(services, 'premiumLedger'), readAddress(snapshot.capitalLedger, 'services'), readAddress(snapshot.capitalLedger, 'forkAuthority')])
+	const [book, premium, capitalServices, forkAuthority] = await Promise.all([readAddress(settlement, 'ledger'), readAddress(services, 'premiumLedger'), readAddress(snapshot.capitalLedger, 'services'), readAddress(snapshot.capitalLedger, 'forkAuthority')])
 	if (capitalServices !== services) throw new Error('Capital ledger uses another services authority')
 	if (forkAuthority !== fork) throw new Error('Capital ledger uses another fork authority')
 	for (const module of [snapshot.capitalLedger, reporters, fork]) if ((await readAddress(module, 'zoltar')) !== protocol) throw new Error('Portfolio custody module uses another protocol')
@@ -63,8 +62,6 @@ export async function verifyPortfolioCustody(client: ReadClient, snapshot: Portf
 		verifyModule(services, 'SecurityPoolPortfolioServices', snapshot.portfolio),
 		verifyModule(lifecycle, 'SecurityPoolCapitalLifecycleDelegate', snapshot.capitalLedger, 'ledger'),
 		verifyModule(auctionDelegate, 'SecurityPoolCapitalAuctionDelegate', snapshot.capitalLedger, 'ledger'),
-		verifyModule(rewards, 'SecurityPoolReportingRewards', snapshot.portfolio),
 		verifyModule(premium, 'SecurityPoolResolutionPremiumBook', services, 'services'),
 	])
-	if ((await readAddress(rewards, 'services')) !== services) throw new Error('Reporting rewards use another services authority')
 }

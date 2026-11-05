@@ -5,8 +5,6 @@ import {
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolCapitalLifecycleDelegate_SecurityPoolCapitalLifecycleDelegate as lifecycleArtifact,
 	statoblast_SecurityPoolCapitalAuctionDelegate_SecurityPoolCapitalAuctionDelegate as auctionArtifact,
-	statoblast_SecurityPoolPortfolioServices_SecurityPoolPortfolioServices as servicesArtifact,
-	statoblast_SecurityPoolReportingRewards_SecurityPoolReportingRewards as rewardsArtifact,
 } from '../../types/contractArtifact'
 import { useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
@@ -20,19 +18,15 @@ describe('Statoblast: production portfolio module deployment', () => {
 		const services = await client.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'services' })
 		const lifecycle = await client.readContract({ ...capital, functionName: 'lifecycleDelegate' })
 		const auction = await client.readContract({ ...capital, functionName: 'auctionDelegate' })
-		const rewards = await client.readContract({ abi: servicesArtifact.abi, address: services, functionName: 'reportingRewards' })
 		expect(await client.readContract({ ...capital, functionName: 'portfolio' })).toBe(fixture.portfolio)
 		expect(await client.readContract({ abi: lifecycleArtifact.abi, address: lifecycle, functionName: 'ledger' })).toBe(fixture.capitalLedger)
 		expect(await client.readContract({ abi: auctionArtifact.abi, address: auction, functionName: 'ledger' })).toBe(fixture.capitalLedger)
-		expect(await client.readContract({ abi: rewardsArtifact.abi, address: rewards, functionName: 'portfolio' })).toBe(fixture.portfolio)
-		expect(await client.readContract({ abi: rewardsArtifact.abi, address: rewards, functionName: 'services' })).toBe(services)
 		const observations = []
 		for (const [name, address] of [
 			['capital', fixture.capitalLedger],
 			['services', services],
 			['lifecycle', lifecycle],
 			['auction', auction],
-			['reportingRewards', rewards],
 		] as const) {
 			const code = await client.getCode({ address })
 			if (code === undefined || code === '0x') throw new Error(`Production ${name} runtime missing`)

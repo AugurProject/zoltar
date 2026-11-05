@@ -9,7 +9,6 @@ export type PortfolioCreationDraft = {
 	minimumCommitment: string
 	minimumOutcomeRate: string
 	rewardVestingHours: string
-	reportingFee: string
 }
 
 export const defaultPortfolioCreationDraft = (): PortfolioCreationDraft => ({
@@ -19,7 +18,6 @@ export const defaultPortfolioCreationDraft = (): PortfolioCreationDraft => ({
 	minimumCommitment: '1',
 	minimumOutcomeRate: '0.01',
 	rewardVestingHours: '24',
-	reportingFee: '0.05',
 })
 
 function portfolioBasisPoints(value: string, label: string) {
@@ -43,7 +41,6 @@ export function parsePortfolioCreationEconomics(draft: PortfolioCreationDraft) {
 		minimumCommitmentAttoEth: parsePortfolioAmount(draft.minimumCommitment),
 		minimumOutcomeRate: parsePortfolioAmount(draft.minimumOutcomeRate),
 		rewardVestingSeconds: (parsePortfolioAmount(draft.rewardVestingHours) * 3600n) / 10n ** 18n,
-		reportingFeeAttoEth: parsePortfolioAmount(draft.reportingFee),
 	}
 	validatePortfolioEconomics(config)
 	return config

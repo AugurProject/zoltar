@@ -51,14 +51,9 @@ test('capital accounting must use the portfolio services authority', async () =>
 	fixture.setRead('services', modules.engine, capital)
 	await expect(loadPortfolioAccount(fixture.client, portfolio, owner, 0n)).rejects.toThrow('Capital ledger uses another services authority')
 })
-test('reporter reward accounting must use the same services authority', async () => {
-	const fixture = capitalClient()
-	fixture.setRead('services', modules.engine, modules.rewards)
-	await expect(loadPortfolioAccount(fixture.client, portfolio, owner, 0n)).rejects.toThrow('Reporting rewards use another services authority')
-})
+
 for (const [module, label] of [
 	[modules.services, 'portfolio services'],
-	[modules.rewards, 'reporting rewards'],
 	[modules.premium, 'resolution premium book'],
 ] as const) {
 	test(`unrecognized ${label} code blocks portfolio approval`, async () => {

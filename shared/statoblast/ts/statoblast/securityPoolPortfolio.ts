@@ -7,7 +7,6 @@ export type PortfolioEconomicsConfig = {
 	minimumCommitmentAttoEth: bigint
 	minimumOutcomeRate: bigint
 	rewardVestingSeconds: bigint
-	reportingFeeAttoEth: bigint
 }
 export type PortfolioDeployers = {
 	capital: Address
@@ -84,8 +83,6 @@ export { buildPortfolioCapitalTakeOverWithBoundsRequest } from './securityPoolPo
 export { buildPortfolioMintRequest, loadPortfolioMintQuote, type PortfolioMintQuote } from './securityPoolPortfolioMint.js'
 /** @public External clients can register an admitted question independently of purchasing shares. */
 export { buildPortfolioAddQuestionRequest } from './securityPoolPortfolioMint.js'
-/** @public A permissionless call pays a question's authenticated final reporting beneficiary. */
-export { buildPortfolioReportingRewardRequest } from './securityPoolPortfolioMint.js'
 export {
 	buildPortfolioForkChoiceRequest,
 	buildPortfolioForkPreparationRequest,

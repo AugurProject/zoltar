@@ -15,7 +15,6 @@ import {
 	statoblast_SecurityPoolPortfolioPurchase_SecurityPoolPortfolioPurchase as purchaseArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
 	statoblast_SecurityPoolPortfolioServices_SecurityPoolPortfolioServices as servicesArtifact,
-	statoblast_SecurityPoolReportingRewards_SecurityPoolReportingRewards as rewardsArtifact,
 	statoblast_SecurityPoolResolutionPremiumBook_SecurityPoolResolutionPremiumBook as premiumArtifact,
 	statoblast_SecurityPoolOpenAdmissionPolicy_SecurityPoolOpenAdmissionPolicy as openArtifact,
 } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
@@ -29,7 +28,6 @@ export const modules = {
 	fork: getAddress('0x0000000000000000000000000000000000000066'),
 	lifecycle: getAddress('0x0000000000000000000000000000000000000067'),
 	services: getAddress('0x0000000000000000000000000000000000000068'),
-	rewards: getAddress('0x0000000000000000000000000000000000000069'),
 	premium: getAddress('0x0000000000000000000000000000000000000070'),
 	auctionDelegate: getAddress('0x0000000000000000000000000000000000000071'),
 }
@@ -52,7 +50,6 @@ export function capitalClient(initial = capitalSnapshot()) {
 		[modules.purchase, `0x${purchaseArtifact.evm.deployedBytecode.object}`],
 		[modules.fork, `0x${forkArtifact.evm.deployedBytecode.object}`],
 		[modules.services, `0x${servicesArtifact.evm.deployedBytecode.object}`],
-		[modules.rewards, `0x${rewardsArtifact.evm.deployedBytecode.object}`],
 		[modules.premium, `0x${premiumArtifact.evm.deployedBytecode.object}`],
 		[token, `0x${openArtifact.evm.deployedBytecode.object}`],
 	])
@@ -83,7 +80,6 @@ export function capitalClient(initial = capitalSnapshot()) {
 				auctionDeployer: infrastructure.securityPoolPortfolioAuctionDeployer,
 				services: modules.services,
 				forkAuthority: modules.fork,
-				reportingRewards: modules.rewards,
 				premiumLedger: modules.premium,
 				minimumOutcomeExchangeRate: snapshot.economics.minimumOutcomeRate,
 				...snapshot.economics,

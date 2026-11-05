@@ -54,7 +54,6 @@ contract SecurityPoolSettlementBook {
 		uint48 feeStart;
 		uint48 feeEnd;
 		uint256 feePrincipalAttoEth;
-		uint256 rewardShares;
 	}
 
 	struct FrozenBook {
@@ -246,30 +245,12 @@ contract SecurityPoolSettlementBook {
 		emit SettlementMinted(bookId, questionId, cashAttoEth, outcomeShares);
 	}
 
-	/// @notice Reserve fully funded economic shares for the final reporter. They
-	/// inherit the same basket as trader shares without requiring token migration.
-	function mintReward(uint64 bookId, uint256 questionId, uint256 cashAttoEth, uint256 minimumShares, uint48 timestamp) external onlyPortfolio returns (uint256 rewardShares) {
-		rewardShares = mint(bookId, questionId, cashAttoEth, minimumShares, timestamp);
-		(Question memory state, ) = question(bookId, questionId);
-		state.rewardShares += rewardShares;
-		_writeQuestion(bookId, _book(bookId), questionId, state);
-	}
-
-	function redeemReward(uint64 bookId, uint256 questionId, uint256 minimumCashAttoEth, uint48 timestamp) external onlyPortfolio returns (uint256 cashAttoEth, uint256 unitsBurned, uint256 recoveryAttoRep) {
-		(Question memory state, ) = question(bookId, questionId);
-		uint256 rewardShares = state.rewardShares;
-		require(rewardShares != 0, 'Question reward already claimed');
-		state.rewardShares = 0;
-		_writeQuestion(bookId, _book(bookId), questionId, state);
-		return redeem(bookId, questionId, rewardShares, minimumCashAttoEth, timestamp);
-	}
-
 	/// @notice Burn authenticated complete sets or winning outcomes and return their funded cash.
 	function redeem(uint64 bookId, uint256 questionId, uint256 outcomeShares, uint256 minimumCashAttoEth, uint48 timestamp) public onlyPortfolio returns (uint256 cashAttoEth, uint256 unitsBurned, uint256 recoveryAttoRep) {
 		Book storage book = _book(bookId);
 		if (!book.isSealed) _freezeMatured(bookId, book, timestamp);
 		(Question memory state, uint64 frozenBookId) = question(bookId, questionId);
-		require(outcomeShares > 0 && outcomeShares <= state.outcomeSupplyAttoShares - state.rewardShares, 'Invalid outcome burn');
+		require(outcomeShares > 0 && outcomeShares <= state.outcomeSupplyAttoShares, 'Invalid outcome burn');
 		uint256 scaledRecovery = _scaledRecovery(bookId, book, questionId, state);
 		recoveryAttoRep = _quoteRecovery(book, state, frozenBookId, outcomeShares, scaledRecovery);
 		unitsBurned =

@@ -33,7 +33,6 @@ export async function seedPortfolioScenario({ accounts, createReadClient, create
 			minimumCommitmentAttoEth: 10n ** 18n,
 			minimumOutcomeRate: 10n ** 16n,
 			rewardVestingSeconds: 86400n,
-			reportingFeeAttoEth: 5n * 10n ** 16n,
 		}),
 		'Deploy portfolio',
 	)

@@ -70,8 +70,4 @@ library EscalationGameRepCustody {
 		ledger(poolAddress).scheduleFinality(address(this), logicalFinalAfter);
 		ISecurityPoolReporterPortfolio(authority).onQuestionFinalityChanged(finalAfter);
 	}
-	function recordReporter(address poolAddress, address reporter) internal {
-		address authority = portfolio(poolAddress);
-		if (authority != address(0)) ISecurityPoolReporterPortfolio(authority).onQuestionReporterChanged(reporter);
-	}
 }

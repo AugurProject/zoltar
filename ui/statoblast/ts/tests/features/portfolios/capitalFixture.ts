@@ -72,7 +72,6 @@ export function capitalSnapshot(overrides: Partial<PortfolioAccountSnapshot> = {
 			minimumCommitmentAttoEth: unit,
 			minimumOutcomeRate: 10n ** 16n,
 			rewardVestingSeconds: 86_400n,
-			reportingFeeAttoEth: 5n * 10n ** 16n,
 		},
 		questionAdmissionPolicy: token,
 		admission: { address: token, mode: 'open' },

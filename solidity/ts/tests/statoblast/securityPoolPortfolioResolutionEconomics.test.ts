@@ -6,7 +6,6 @@ import {
 	statoblast_SecurityPool_SecurityPool as poolArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
 	statoblast_SecurityPoolPortfolioServices_SecurityPoolPortfolioServices as servicesArtifact,
-	statoblast_SecurityPoolReportingRewards_SecurityPoolReportingRewards as reportingArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolCapitalFeeStreams_SecurityPoolCapitalFeeStreams as streamsArtifact,
 	test_statoblast_PortfolioPurchaseReceiver_PortfolioPurchaseReceiver as receiverArtifact,
@@ -14,31 +13,20 @@ import {
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 import { burnedEthBalance, receiptBurns } from './burnEvidence'
 import { writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
-import { approveToken, requireAddress, requireArray, requireBigInt } from '../../testSupport/simulator/utils/utilities'
+import { approveToken, getERC20Balance, requireBigInt } from '../../testSupport/simulator/utils/utilities'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/statoblast'
-import { encodeDeployData, parseAbi } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData } from '@zoltar/core-shared/evm/ethereum'
 import { deployContract } from '../../testSupport/deployContract'
 import { applyLibraries } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { loadPortfolioCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 
-describe('Statoblast: funded reporting and unresolved capital compensation', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ reportingFeeAttoEth: unit / 100n })
+describe('Statoblast: reporting and unresolved capital compensation', () => {
+	const fixture = useSecurityPoolPortfolioFixture({})
 	const portfolio = () => ({ abi: portfolioArtifact.abi, address: fixture.portfolio })
 	const pool = () => ({ abi: poolArtifact.abi, address: fixture.poolFor(fixture.base.questionId).securityPool })
 	const service = async () => ({ abi: servicesArtifact.abi, address: await fixture.owner().readContract({ ...portfolio(), functionName: 'services' }) })
-	const reward = async () => {
-		const result = requireArray(await fixture.owner().readContract({ address: (await service()).address, abi: parseAbi(['function quoteReportingReward(address pool) view returns(address recipient,uint256 cashAttoEth)']), functionName: 'quoteReportingReward', args: [pool().address] }), 'Reporting reward quote')
-		return { recipient: requireAddress(result[0], 'Reporting reward recipient'), cash: requireBigInt(result[1], 'Reporting reward cash') }
-	}
-	const rewardCap = async (game: `0x${string}`) => {
-		const result = requireArray(
-			await fixture.owner().readContract({ address: (await service()).address, abi: parseAbi(['function reportingBeneficiaries(address game) view returns(address beneficiary,uint8 leader,bool registered,uint256 rewardCapAttoEth)']), functionName: 'reportingBeneficiaries', args: [game] }),
-			'Reporting reward cap',
-		)
-		return requireBigInt(result[3], 'Reporting reward cap')
-	}
 	const questionState = async () => {
 		const client = fixture.owner()
 		const engine = await client.readContract({ ...portfolio(), functionName: 'settlement' })
@@ -56,19 +44,15 @@ describe('Statoblast: funded reporting and unresolved capital compensation', () 
 		// The inverse attrition curve rounds independently of its forward value.
 		await fixture.base.mockWindow.setTime(deadline + 60n)
 	}
-	test('isolates reporter attribution updates behind services while reward custody stays in services', async () => {
+	test('purchases pay only backing fees and resolution premium, with no reporting subsidy', async () => {
 		await fixture.prepare()
-		await fixture.mint(10n * unit)
-		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
-		const game = await report(fixture.owner(), 1)
-		const services = await service()
-		const book = await fixture.owner().readContract({ ...services, functionName: 'reportingRewards' })
-		const record = await fixture.owner().readContract({ ...services, functionName: 'reportingBeneficiaries', args: [game] })
-		expect(await fixture.owner().readContract({ abi: reportingArtifact.abi, address: book, functionName: 'reportingBeneficiaries', args: [game] })).toEqual(record)
-		await expect(writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: reportingArtifact.abi, address: book, functionName: 'registerGame', args: [game] }))).rejects.toThrow('Only reporting services')
-		await expect(writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: reportingArtifact.abi, address: book, functionName: 'recordReporter', args: [game, fixture.owner().account.address] }))).rejects.toThrow('Only reporting services')
-		expect(await fixture.owner().getBalance({ address: book })).toBe(0n)
-		expect(await fixture.owner().readContract({ ...services, functionName: 'reportingBeneficiaries', args: [game] })).toEqual(record)
+		const cash = 10n * unit
+		const quote = await fixture.owner().readContract({ ...portfolio(), functionName: 'purchaseQuote', args: [fixture.base.genesisUniverse, fixture.base.questionId, cash] })
+		const base = await fixture.owner().readContract({ ...portfolio(), functionName: 'purchaseFee', args: [cash] })
+		expect(quote[0]).toBe(base + quote[1])
+		await fixture.mint(cash)
+		const shares = await balanceOfShares(fixture.other(), fixture.poolFor(fixture.base.questionId).shareToken, fixture.base.genesisUniverse, fixture.other().account.address)
+		expect((await questionState()).outcomeSupplyAttoShares).toBe(shares[0])
 	})
 	test('an unreported question keeps paying for occupied underwriting after its calendar end', async () => {
 		await fixture.prepare()
@@ -76,25 +60,23 @@ describe('Statoblast: funded reporting and unresolved capital compensation', () 
 		const question = await questionState()
 		expect(BigInt(question.feeEnd)).toBeGreaterThan(fixture.base.questionData.endTime)
 	})
-	test('capacity includes the reporter bounty and rejects an unfunded total purchase atomically', async () => {
+	test('purchases above healthy capacity fail atomically', async () => {
 		await fixture.prepare()
 		const capacity = await fixture.owner().readContract({ ...portfolio(), functionName: 'availableMintCapacity', args: [fixture.base.genesisUniverse] })
-		await expect(fixture.mint(capacity)).rejects.toThrow('Purchase exceeds healthy capacity')
+		await expect(fixture.mint(capacity + 1n)).rejects.toThrow('Purchase exceeds healthy capacity')
 		expect((await questionState()).outcomeSupplyAttoShares).toBe(0n)
 		expect((await fixture.owner().readContract({ ...(await service()), functionName: 'questionPremium', args: [fixture.base.genesisUniverse, fixture.base.questionId] }))[1]).toBe(0n)
 	})
-	test('a purchase tops up only the unfunded question reward and pays the whole base fee to underwriters', async () => {
+	test('every purchase pays only its premium and the whole base fee to underwriters', async () => {
 		await fixture.prepare()
 		const amount = 10n * unit
-		const reportingFee = unit / 100n
 		const quote = async () => {
-			const [fee, premium, rewardFunding] = await fixture.owner().readContract({ ...portfolio(), functionName: 'purchaseQuote', args: [fixture.base.genesisUniverse, fixture.base.questionId, amount] })
-			return { fee, premium, rewardFunding }
+			const [fee, premium] = await fixture.owner().readContract({ ...portfolio(), functionName: 'purchaseQuote', args: [fixture.base.genesisUniverse, fixture.base.questionId, amount] })
+			return { fee, premium }
 		}
 		const base = await fixture.owner().readContract({ ...portfolio(), functionName: 'purchaseFee', args: [amount] })
 		const streams = await fixture.owner().readContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'feeStreams' })
 		const outstanding = async () => (await fixture.owner().readContract({ abi: streamsArtifact.abi, address: streams, functionName: 'fundedOutstanding' }))[0]
-		// The transaction re-quotes one block later, when reward shares may have accrued a little more fee drift.
 		const paidFor = async (expected: bigint, drift = 0n) => {
 			const buyer = fixture.other()
 			const before = await buyer.getBalance({ address: buyer.account.address })
@@ -114,17 +96,13 @@ describe('Statoblast: funded reporting and unresolved capital compensation', () 
 			expect(await burnedEthBalance(buyer)).toBe(burnedBefore)
 		}
 		const first = await quote()
-		expect(first.rewardFunding).toBe(reportingFee)
 		expect(first.premium).toBeGreaterThan(0n)
-		expect(first.fee).toBe(base + first.premium + first.rewardFunding)
+		expect(first.fee).toBe(base + first.premium)
 		await paidFor(first.fee)
-		expect((await questionState()).rewardShares).toBeGreaterThan(0n)
-		// Once the question reward is funded, later buyers are not charged the full reporting fee again.
 		const second = await quote()
-		expect(second.rewardFunding).toBeLessThan(reportingFee / 1_000_000n)
-		expect(second.fee).toBe(base + second.premium + second.rewardFunding)
-		expect(second.fee).toBeLessThan(base + second.premium + reportingFee)
-		await paidFor(second.fee, reportingFee / 1_000_000n)
+		expect(second.fee).toBe(base + second.premium)
+		// Holding fees change the principal basis between the quote and mined purchase.
+		await paidFor(second.fee, unit / 100_000_000n)
 	})
 	test('recipient callbacks observe the completed purchase premium accounting', async () => {
 		await fixture.prepare()
@@ -152,7 +130,7 @@ describe('Statoblast: funded reporting and unresolved capital compensation', () 
 		expect(cancelled).toBeLessThanOrEqual(premiumCash)
 		expect((await burnedEthBalance(fixture.owner())) - burnedBefore).toBeGreaterThanOrEqual(cancelled)
 		const question = await questionState()
-		expect(question.outcomeSupplyAttoShares).toBe(question.rewardShares)
+		expect(question.outcomeSupplyAttoShares).toBe(0n)
 	})
 
 	test('reporting earns its premium only until actual finality and the unearned remainder is burned', async () => {
@@ -195,132 +173,21 @@ describe('Statoblast: funded reporting and unresolved capital compensation', () 
 		expect(newcomer.accruedFeesAttoEth).toBe(0n)
 	})
 
-	test('an uncontested useful reporter is paid from its question once, without a caller-selected recipient', async () => {
+	test('stale-price reporting preserves REP claims without an ETH subsidy', async () => {
 		await fixture.prepare()
 		await fixture.mint(10n * unit)
 		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
-		await fixture.refreshPrice()
+		expect(await fixture.owner().readContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'isPriceValid' })).toBe(false)
 		const game = await report(fixture.other(), 1)
 		await mature(game)
-		const question = await questionState()
-		const reward = await fixture.owner().readContract({ ...portfolio(), functionName: 'quoteQuestionSettlement', args: [pool().address, question.rewardShares] })
-		expect(reward).toBeGreaterThan(0n)
-		const balance = await fixture.other().getBalance({ address: fixture.other().account.address })
-		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...portfolio(), functionName: 'claimQuestionReportingReward', args: [pool().address] }))
-		expect(await fixture.other().getBalance({ address: fixture.other().account.address })).toBe(balance + reward)
-		expect((await questionState()).rewardShares).toBe(0n)
-		await expect(fixture.owner().simulateContract({ ...portfolio(), functionName: 'claimQuestionReportingReward', args: [pool().address] })).rejects.toThrow('Question reward already claimed')
-	})
-
-	test('pre-positioning on every outcome cannot capture the correction reward', async () => {
-		await fixture.prepare()
-		await fixture.mint(10n * unit)
-		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
-		await fixture.refreshPrice()
-		const bond = await fixture.owner().readContract({ ...pool(), functionName: 'initialEscalationGameDepositAttoRep' })
-		await report(fixture.owner(), 0, bond)
-		await report(fixture.owner(), 1, bond + 1n)
-		await report(fixture.owner(), 2, bond + 2n)
-		const game = await report(fixture.other(), 1)
-		const beneficiary = await fixture.owner().readContract({ ...(await service()), functionName: 'reportingBeneficiaries', args: [game] })
-		expect(beneficiary[0].toLowerCase()).toBe(fixture.other().account.address.toLowerCase())
-		expect(beneficiary[1]).toBe(1n)
-		await mature(game)
-		expect((await reward()).recipient.toLowerCase()).toBe((await service()).address.toLowerCase())
-		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...portfolio(), functionName: 'claimQuestionReportingReward', args: [pool().address] }))
-		expect((await questionState()).rewardShares).toBe(0n)
-	})
-
-	test('a later top-up to the existing leader cannot steal its reporting reward', async () => {
-		await fixture.prepare()
-		await fixture.mint(10n * unit)
-		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
-		const bond = await fixture.owner().readContract({ ...pool(), functionName: 'initialEscalationGameDepositAttoRep' })
-		const game = await report(fixture.other(), 1, bond)
-		await report(fixture.owner(), 1)
-		const beneficiary = await fixture.owner().readContract({ ...(await service()), functionName: 'reportingBeneficiaries', args: [game] })
-		expect(beneficiary[0].toLowerCase()).toBe(fixture.other().account.address.toLowerCase())
-	})
-
-	test('a reversible leader cycle cannot claim more ETH than its irreversible reporting risk', async () => {
-		await fixture.prepare()
-		await fixture.mint(10n * unit)
-		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
-		await fixture.refreshPrice(fixture.base.questionId, 100n * unit)
-		const bond = await fixture.owner().readContract({ ...pool(), functionName: 'initialEscalationGameDepositAttoRep' })
-		const game = await report(fixture.other(), 1, bond)
-		await report(fixture.owner(), 2, bond + 1n)
-		await report(fixture.owner(), 1, bond)
-		await mature(game)
-		const before = await fixture.owner().getBalance({ address: fixture.owner().account.address })
-		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...portfolio(), functionName: 'claimQuestionReportingReward', args: [pool().address] }))
-		const received = (await fixture.owner().getBalance({ address: fixture.owner().account.address })) - before
-		// Even crediting the attacker the native 60% winner bonus, the losing
-		// report costs at least 40% of one bond. A 1-attoREP lead cannot fund a bounty.
-		expect(received).toBeLessThan((bond * 2n) / 5n / 100n)
-		expect(received).toBe(0n)
-	})
-
-	test('a backing owner cannot recycle third-outcome surplus into a near-tie bounty', async () => {
-		await fixture.prepare()
-		await fixture.mint(10n * unit)
-		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
-		await fixture.refreshPrice()
-		const bond = await fixture.owner().readContract({ ...pool(), functionName: 'initialEscalationGameDepositAttoRep' })
-		const game = await report(fixture.other(), 1, bond)
-		await report(fixture.owner(), 1, bond * 99n)
-		await report(fixture.owner(), 0, bond * 100n - 1n)
-		await report(fixture.owner(), 2, bond * 100n + 1n)
-		await report(fixture.owner(), 1, bond)
-		// This owner receives all released minimum-stake surplus and most winning
-		// REP. Only the median increase is necessarily burned, so a bond-only cap fails.
-		expect(await rewardCap(game)).toBe(0n)
-		await mature(game)
-		expect((await reward()).recipient.toLowerCase()).toBe((await service()).address.toLowerCase())
-	})
-
-	test('the reporting cap cannot grow after a later accepted REP appreciation', async () => {
-		await fixture.prepare()
-		await fixture.mint(10n * unit)
-		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
-		await fixture.refreshPrice(fixture.base.questionId, 100n * unit)
-		const bond = await fixture.owner().readContract({ ...pool(), functionName: 'initialEscalationGameDepositAttoRep' })
-		const game = await report(fixture.other(), 1, bond)
-		await report(fixture.owner(), 2, bond + bond / 2n)
-		const cap = await rewardCap(game)
-		expect(cap).toBeGreaterThan(0n)
-		await fixture.refreshPrice()
-		await report(fixture.owner(), 1, bond)
-		expect(await rewardCap(game)).toBe(cap)
-		await mature(game)
-		expect((await reward()).cash).toBe(cap)
-		const balance = await fixture.owner().getBalance({ address: fixture.owner().account.address })
-		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...portfolio(), functionName: 'claimQuestionReportingReward', args: [pool().address] }))
-		expect(await fixture.owner().getBalance({ address: fixture.owner().account.address })).toBe(balance + cap)
-	})
-
-	test('a stale report remains possible and burns its unused reporter-reward cash', async () => {
-		await fixture.prepare()
-		await fixture.mint(10n * unit)
-		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
-		const game = await report(fixture.other(), 1)
-		expect(await rewardCap(game)).toBe(0n)
-		await mature(game)
-		const services = await service()
-		expect((await reward()).recipient.toLowerCase()).toBe(services.address.toLowerCase())
-		const rewardCash = await fixture.owner().readContract({ ...portfolio(), functionName: 'quoteQuestionSettlement', args: [pool().address, (await questionState()).rewardShares] })
-		expect(rewardCash).toBeGreaterThan(0n)
-		const burnedBefore = await burnedEthBalance(fixture.owner())
-		const servicesCashBefore = await fixture.owner().getBalance({ address: services.address })
-		const claimerCashBefore = await fixture.other().getBalance({ address: fixture.other().account.address })
-		const hash = await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...portfolio(), functionName: 'claimQuestionReportingReward', args: [pool().address] }))
-		expect((await questionState()).rewardShares).toBe(0n)
-		const burns = await receiptBurns(fixture.owner(), hash)
-		expect(burns.service.filter(entry => entry.universeId === fixture.base.genesisUniverse).map(entry => entry.amount)).toContain(rewardCash)
-		expect(await burnedEthBalance(fixture.owner())).toBe(burnedBefore + burns.totalEth)
-		expect(await fixture.owner().getBalance({ address: services.address })).toBeLessThanOrEqual(servicesCashBefore)
-		// The stale reporter is not paid either.
-		expect(await fixture.other().getBalance({ address: fixture.other().account.address })).toBe(claimerCashBefore)
+		const reporter = fixture.other()
+		const rep = getRepTokenAddress(fixture.base.genesisUniverse)
+		const before = await getERC20Balance(reporter, rep, reporter.account.address)
+		const ethBefore = await reporter.getBalance({ address: reporter.account.address })
+		const hash = await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...pool(), functionName: 'withdrawFromEscalationGame', args: [1, [0n]] }))
+		expect(await getERC20Balance(reporter, rep, reporter.account.address)).toBeGreaterThan(before)
+		expect(await reporter.getBalance({ address: reporter.account.address })).toBe(ethBefore)
+		expect((await fixture.owner().getTransactionReceipt({ hash })).status).toBe('success')
 	})
 
 	test('a sub-bond threshold fill cannot restore an ordinary winner after a leader change', async () => {
@@ -336,6 +203,5 @@ describe('Statoblast: funded reporting and unresolved capital compensation', () 
 		await report(fixture.owner(), 2, bond)
 		await report(fixture.other(), 1, bond)
 		expect(await fixture.owner().readContract({ abi: gameArtifact.abi, address: game, functionName: 'hasReachedNonDecision' })).toBe(true)
-		await expect(fixture.owner().simulateContract({ ...portfolio(), functionName: 'claimQuestionReportingReward', args: [pool().address] })).rejects.toThrow('Question not final')
 	})
 })

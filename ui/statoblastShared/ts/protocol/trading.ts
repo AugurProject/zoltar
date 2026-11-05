@@ -234,7 +234,7 @@ export async function migrateSharesFromUniverse<TReceipt extends Pick<Transactio
 const purchaseAbi = parseAbi([
 	'function getSecurityPoolPortfolio(address pool) view returns (address)',
 	'function getPool(uint256 questionId,uint248 universeId) view returns (address)',
-	'function purchaseQuote(uint248 universeId,uint256 questionId,uint256 amount) view returns (uint256 fee,uint256 premium,uint256 rewardFunding)',
+	'function purchaseQuote(uint248 universeId,uint256 questionId,uint256 amount) view returns (uint256 fee,uint256 premium)',
 	'function availableMintCapacity(uint248 universeId) view returns (uint256)',
 	'function createCompleteSet(uint248 universeId,uint256 questionId,uint256 mintAttoEth,address recipient,uint256 minimumShares) payable',
 ])
@@ -258,9 +258,9 @@ export async function createCompleteSetInSecurityPool(client: WriteClient, secur
 		const canonicalPool = await client.readContract({ abi: purchaseAbi, address: portfolio, functionName: 'getPool', args: [questionId, universeId] })
 		if (typeof canonicalPool !== 'string' || canonicalPool.toLowerCase() !== securityPoolAddress.toLowerCase()) throw new Error('Portfolio question pool is not canonical.')
 		const [quoted, capacity] = await Promise.all([client.readContract({ abi: purchaseAbi, address: portfolio, functionName: 'purchaseQuote', args: [universeId, questionId, amount] }), client.readContract({ abi: purchaseAbi, address: portfolio, functionName: 'availableMintCapacity', args: [universeId] })])
-		if (!Array.isArray(quoted) || typeof quoted[0] !== 'bigint' || typeof quoted[2] !== 'bigint') throw new Error('Invalid shared REP purchase quote.')
+		if (!Array.isArray(quoted) || typeof quoted[0] !== 'bigint' || quoted.length !== 2 || typeof quoted[1] !== 'bigint') throw new Error('Invalid shared REP purchase quote.')
 		const fee = quoted[0]
-		if (typeof capacity !== 'bigint' || capacity < amount + quoted[2]) throw new Error('Insufficient shared REP backing after queued retirement.')
+		if (typeof capacity !== 'bigint' || capacity < amount) throw new Error('Insufficient shared REP backing after queued retirement.')
 		if (typeof fee !== 'bigint' || fee < 0n) throw new Error('Invalid shared REP purchase quote.')
 		return fee
 	}

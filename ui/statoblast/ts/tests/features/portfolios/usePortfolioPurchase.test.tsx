@@ -22,7 +22,7 @@ async function setup(snapshot = capitalSnapshot()) {
 		getQuestionEndDate: 10_000n,
 		escalationGame: zeroAddress,
 		systemState: 0n,
-		purchaseQuote: [unit / 100n, unit / 200n, unit / 400n],
+		purchaseQuote: [unit / 100n, unit / 200n],
 		quoteQuestionMint: unit,
 		availableMintCapacity: 10n * unit,
 	}
@@ -57,7 +57,7 @@ test('purchases made while managing an auction vault receive shares in the contr
 test('purchase uses one aggregate transaction and preserves explicit limits across new blocks', async () => {
 	const { hook, requests } = await setup()
 	expect(hook.state().reason).toBeUndefined()
-	expect(hook.state().quote).toMatchObject({ purchaseFeeAttoEth: unit / 100n, reportingFundingAttoEth: unit / 400n, availableCommitmentAttoEth: 10n * unit - unit / 400n })
+	expect(hook.state().quote).toMatchObject({ purchaseFeeAttoEth: unit / 100n, availableCommitmentAttoEth: 10n * unit })
 	await act(() => hook.state().buy())
 	const request = requests[0]
 	if (request === undefined) throw new Error('Missing purchase')

@@ -24,7 +24,6 @@ export function portfolioClient(overrides: Record<string, unknown> = {}) {
 		'SecurityPoolPortfolioAuction',
 		'SecurityPoolUniformPriceAuction',
 		'SecurityPoolAuctionVault',
-		'SecurityPoolReportingRewards',
 		'SecurityPoolResolutionPremiumBook',
 	]
 	const modules = new Map(names.map((name, index) => [name, index === 0 ? snapshot.portfolio : getAddress(`0x${(256 + index).toString(16).padStart(40, '0')}`)]))
@@ -75,7 +74,6 @@ export function portfolioClient(overrides: Record<string, unknown> = {}) {
 		lifecycleDelegate: module('SecurityPoolCapitalLifecycleDelegate'),
 		auctionDelegate: module('SecurityPoolCapitalAuctionDelegate'),
 		auctionCohort: ['0x0000000000000000000000000000000000000000', 0n, 0n, 0n, 0n],
-		reportingRewards: module('SecurityPoolReportingRewards'),
 		premiumLedger: module('SecurityPoolResolutionPremiumBook'),
 		priceFeed: snapshot.priceFeed,
 		...snapshot.economics,

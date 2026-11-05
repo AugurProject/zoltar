@@ -20,7 +20,6 @@ interface IPortfolioPurchaseRoot {
 	function purchaseFeeBps() external view returns (uint256);
 	function annualFeeBps() external view returns (uint256);
 	function minimumPurchaseFeeAttoEth() external view returns (uint256);
-	function reportingFeeAttoEth() external view returns (uint256);
 }
 interface IPurchaseForkReadiness {
 	function isReady(uint248 universeId) external view returns (bool);
@@ -39,26 +38,19 @@ contract SecurityPoolPortfolioPurchase is IERC1155Receiver {
 		return
 			Math.max(root.minimumPurchaseFeeAttoEth(), Math.mulDiv(backingValue, root.purchaseFeeBps(), 10_000, Math.Rounding.Ceil));
 	}
-	/// @notice Every purchase prepays its reporting tail and tops up the question's
-	/// reporter reward to its target. Nothing funds a shared service budget.
+	/// @notice Every purchase prepays its resolution tail.
 	/// @dev Quotes use the current central checkpoint. The transaction checkpoints
 	/// again before enforcing the caller's total ETH budget.
-	function purchaseQuote(uint248 universeId, uint256 questionId, uint256 cash) external view returns (uint256 fee, uint256 premium, uint256 rewardFunding) {
+	function purchaseQuote(uint248 universeId, uint256 questionId, uint256 cash) external view returns (uint256 fee, uint256 premium) {
 		IPortfolioPurchaseRoot root = IPortfolioPurchaseRoot(portfolio);
 		SecurityPoolPortfolioSettlement engine = root.settlement();
 		uint64 bookId = engine.bookIds(universeId);
 		(SecurityPoolSettlementBook.Question memory question, ) = engine.ledger().question(bookId, questionId);
-		uint256 target = root.reportingFeeAttoEth();
-		uint256 funded;
-		if (question.rewardShares != 0)
-			(funded, ) = engine.ledger().quoteRedemption(bookId, questionId, question.rewardShares);
-		rewardFunding = target > funded ? target - funded : 0;
 		uint256 principal = _addedPrincipal(question, cash);
-		if (rewardFunding != 0) principal += _addedPrincipal(question, rewardFunding);
 		premium = Math.mulDiv(principal, root.annualFeeBps() * RESOLUTION_WINDOW, 10_000 * 365 days, Math.Rounding.Ceil);
 		uint256 backing = Math.mulDiv(cash, Math.max(root.statoblastSecurityMultiplierBps(), 10_500), 10_000, Math.Rounding.Ceil);
 		uint256 base = Math.max(root.minimumPurchaseFeeAttoEth(), Math.mulDiv(backing, root.purchaseFeeBps(), 10_000, Math.Rounding.Ceil));
-		fee = base + premium + rewardFunding;
+		fee = base + premium;
 	}
 	function _addedPrincipal(SecurityPoolSettlementBook.Question memory question, uint256 cash) private pure returns (uint256 principal) {
 		require(question.outcomeSupplyAttoShares == 0 || question.units != 0, 'Question backing exhausted');
@@ -70,9 +62,6 @@ contract SecurityPoolPortfolioPurchase is IERC1155Receiver {
 			question.outcomeSupplyAttoShares == 0
 				? cash
 				: Math.mulDiv(question.feePrincipalAttoEth, shares, question.outcomeSupplyAttoShares, Math.Rounding.Ceil);
-		question.units += cash;
-		question.outcomeSupplyAttoShares += shares;
-		question.feePrincipalAttoEth += principal;
 	}
 	function availableMintCapacity(uint248 universeId) external view returns (uint256) {
 		IPortfolioPurchaseRoot root = IPortfolioPurchaseRoot(portfolio);
@@ -113,7 +102,7 @@ contract SecurityPoolPortfolioPurchase is IERC1155Receiver {
 		minted = token.balanceOfOutcome(universeId, BinaryOutcomes.BinaryOutcome.Invalid, address(this)) - beforeShares;
 		require(minted > 0 && minted >= minimumShares, 'Minimum shares not met');
 	}
-	/// @dev Recipient callbacks run only after the funded premium and bounty are recorded.
+	/// @dev Recipient callbacks run only after the funded premium is recorded.
 	function deliverCompleteSets(ISecurityPool pool, address recipient, uint256 minted) external {
 		require(msg.sender == portfolio, 'Only portfolio');
 		IShareToken token = pool.shareToken();

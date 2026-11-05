@@ -23,7 +23,6 @@ export const portfolioEconomics: PortfolioEconomicsConfig = {
 	minimumCommitmentAttoEth: unit,
 	minimumOutcomeRate: 1_000n,
 	rewardVestingSeconds: DAY,
-	reportingFeeAttoEth: 0n,
 }
 
 export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<PortfolioEconomicsConfig> = {}) {

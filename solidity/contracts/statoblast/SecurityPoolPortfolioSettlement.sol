@@ -100,26 +100,6 @@ contract SecurityPoolPortfolioSettlement {
 		snapshot = _snapshot(source, _collectFees(bookId));
 	}
 
-	function fundQuestionReward(address pool, uint256 minimumShares, uint48 timestamp) external payable onlyPortfolio nonReentrant returns (uint256 shares, Snapshot memory snapshot) {
-		QuestionSource memory source = _question(pool);
-		uint64 bookId = _bookId(source.universeId);
-		shares = ledger.mintReward(bookId, source.questionId, msg.value, minimumShares, timestamp);
-		snapshot = _snapshot(source, _collectFees(bookId));
-	}
-
-	/// @dev The portfolio authenticates the final reporter before requesting this
-	/// one-time burn. Inherited rewards pay the child's actual ETH and REP basket.
-	function claimQuestionReward(address pool, address recipient, uint48 timestamp) external onlyPortfolio nonReentrant returns (uint256 cashAttoEth, Snapshot memory snapshot) {
-		require(recipient != address(0), 'Invalid settlement recipient');
-		QuestionSource memory source = _question(pool);
-		uint64 bookId = _bookId(source.universeId);
-		uint256 recoveryAttoRep;
-		(cashAttoEth, , recoveryAttoRep) = ledger.redeemReward(bookId, source.questionId, 0, timestamp);
-		snapshot = _snapshot(source, _collectFees(bookId));
-		_payRecoveryRep(source, recipient, recoveryAttoRep);
-		_sendEth(recipient, cashAttoEth);
-	}
-
 	function redeem(address pool, address recipient, uint256 shares, uint256 minimumCashAttoEth, uint48 timestamp) external onlyPortfolio nonReentrant returns (uint256 cashAttoEth, Snapshot memory snapshot) {
 		require(recipient != address(0), 'Invalid settlement recipient');
 		QuestionSource memory source = _question(pool);

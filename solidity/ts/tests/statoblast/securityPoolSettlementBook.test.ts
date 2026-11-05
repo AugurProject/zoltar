@@ -255,22 +255,16 @@ describe('Statoblast: central internal settlement units', () => {
 		expect(await client.readContract({ ...target(), functionName: 'quoteRecoveryRep', args: [3n, 2n, 200n] })).toBe(400n)
 	})
 
-	test('reserved reporting shares inherit funded baskets and cannot be consumed by trader redemptions', async () => {
+	test('trader shares exhaust their inherited cash and REP baskets', async () => {
 		await mint(1n, 1n, 100n)
-		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'mintReward', args: [1n, 1n, 10n, 0n, 0] }))
-		expect((await question(1n, 1n))[0].rewardShares).toBe(10n)
 		await expect(redeem(1n, 1n, 101n)).rejects.toThrow('Invalid outcome burn')
 		await seal(1n)
-		await child(1n, 55n, 220n)
-		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'redeemReward', args: [2n, 1n, 0n, 0] }))
-		expect((await book(2n)).slice(0, 2)).toEqual([50n, 100n])
-		expect(await client.readContract({ ...target(), functionName: 'recoveryRep', args: [2n] })).toBe(200n)
-		await expect(writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'redeemReward', args: [2n, 1n, 0n, 0] }))).rejects.toThrow('Question reward already claimed')
+		await child(1n, 50n, 200n)
+		expect(await client.readContract({ ...target(), functionName: 'quoteRecoveryRep', args: [2n, 1n, 100n] })).toBe(200n)
 		await redeem(2n, 1n, 100n)
 		expect((await book(2n)).slice(0, 2)).toEqual([0n, 0n])
-		expect((await question(1n, 1n))[0].rewardShares).toBe(10n)
+		expect(await client.readContract({ ...target(), functionName: 'recoveryRep', args: [2n] })).toBe(0n)
 	})
-
 	test('minimum exchange rate prevents enormous issuance after collateral fees exhaust almost all units', async () => {
 		await mint(1n, 1n, 10n ** 18n)
 		await fee(1n, 1n, 10n ** 18n - 1n)

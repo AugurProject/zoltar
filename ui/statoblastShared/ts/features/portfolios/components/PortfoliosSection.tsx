@@ -8,8 +8,6 @@ import type { WriteOperationsParameters } from '../../../types/app.js'
 import { usePortfolio } from '../hooks/usePortfolio.js'
 import { usePortfolioActions } from '../hooks/usePortfolioActions.js'
 import { usePortfolioAggregate } from '../hooks/usePortfolioAggregate.js'
-import { usePortfolioReportingReward } from '../hooks/usePortfolioReportingReward.js'
-import { PortfolioReportingReward } from './PortfolioReportingReward.js'
 import { usePortfolioPurchase } from '../hooks/usePortfolioPurchase.js'
 import { PortfolioAggregatePanel } from './PortfolioAggregatePanel.js'
 import { PortfolioSharedFork } from './PortfolioSharedFork.js'
@@ -23,7 +21,6 @@ export function PortfoliosSection({ parameters, enabled, environmentKey, activeU
 	const actions = usePortfolioActions(model, parameters)
 	const capital = usePortfolioAggregate(model, actions, parameters.accountAddress)
 	const purchase = usePortfolioPurchase(model, actions)
-	const reporting = usePortfolioReportingReward({ model, actions, accountAddress: parameters.accountAddress, questionInput: purchase.questionInput })
 	const disabled = actions.busy !== undefined
 	return (
 		<div className='portfolio-flow'>
@@ -54,7 +51,6 @@ export function PortfoliosSection({ parameters, enabled, environmentKey, activeU
 						<MetricGrid>
 							<PortfolioInput label={copy.purchaseFeePercent} value={actions.economicsDraft.purchaseFeePercent} onChange={value => actions.setEconomicsField('purchaseFeePercent', value)} disabled={disabled} numeric />
 							<PortfolioInput label={copy.minimumPurchaseFee} value={actions.economicsDraft.minimumPurchaseFee} onChange={value => actions.setEconomicsField('minimumPurchaseFee', value)} disabled={disabled} numeric />
-							<PortfolioInput label={copy.reportingFee} hint={copy.reportingFeeHint} value={actions.economicsDraft.reportingFee} onChange={value => actions.setEconomicsField('reportingFee', value)} disabled={disabled} numeric />
 							<PortfolioInput label={capitalCopy.minimumCommitment} hint={capitalCopy.minimumCommitmentHint} value={actions.economicsDraft.minimumCommitment} onChange={value => actions.setEconomicsField('minimumCommitment', value)} disabled={disabled} numeric />
 							<PortfolioInput label={capitalCopy.rewardVesting} value={actions.economicsDraft.rewardVestingHours} onChange={value => actions.setEconomicsField('rewardVestingHours', value)} disabled={disabled} numeric />
 							<PortfolioInput label={capitalCopy.annualFee} hint={capitalCopy.annualFeeHint} value={actions.economicsDraft.annualFeePercent} onChange={value => actions.setEconomicsField('annualFeePercent', value)} disabled={disabled} numeric />
@@ -82,7 +78,6 @@ export function PortfoliosSection({ parameters, enabled, environmentKey, activeU
 			<TransactionScopeProvider scope={actions.scope}>
 				<PortfolioAggregatePanel model={capital} actions={actions} />
 				<PortfolioPurchasePanel model={model} purchase={purchase} actions={actions} />
-				<PortfolioReportingReward model={reporting} actions={actions} questionInput={purchase.questionInput} setQuestionInput={purchase.setQuestionInput} />
 				<PortfolioSharedFork
 					snapshot={model.snapshot}
 					actions={actions}
