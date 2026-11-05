@@ -419,7 +419,7 @@
 				<p class="lede">Pull request <a href="https://github.com/AugurProject/zoltar/pull/1164">#1164</a> lets many Statoblast questions share one pool of REP security and one set of underwriting commitments, instead of each question running its own isolated SecurityPool. It also rebuilds the post-fork Truth Auction as a uniform-price auction of whole ETH lots whose winners automatically become funded capital providers. This page explains what the change does, how the new system works, the math and incentives behind it, and where its weak points are. It closes with the page author's assessment of the pull request and concrete suggestions for improving it.</p>
 				<ul class="meta">
 					<li>Branch <code>t3code/multi-question-security-pool</code> → <code>main</code></li>
-					<li>Describes the pull request at commit <code>340d802f1</code></li>
+					<li>Describes the pull request at commit <code>cfa690c48</code></li>
 					<li>771 files changed, about 52,000 lines added and 4,100 removed</li>
 					<li>33 new Solidity contracts and libraries plus nine new interfaces; roughly 7,300 lines of new contract code excluding interfaces</li>
 					<li>Contracts, SDK, Statoblast and Trading UIs, bots, scanner, deployment tooling and documentation change together</li>
@@ -697,8 +697,8 @@
 							</tr>
 							<tr>
 								<td><code>minimumOutcomeRate</code></td>
-								<td>Lowest ETH-per-share exchange rate at which a question still accepts new mints</td>
-								<td>Purchases after heavy fee accrual</td>
+								<td>Minimum settlement units retained per outcome share after holding fees; also bounds new issuance</td>
+								<td>Holding-fee budget and purchases</td>
 							</tr>
 						</tbody>
 					</table>
@@ -936,8 +936,10 @@
 							</mfrac>
 						</mrow>
 					</math>
-					<p class="equation-caption"><span class="var">feePrincipal</span> is the cash originally deposited for the question's live shares, so the fee is a flat annual percentage of what buyers paid. It stops when an Escalation Game opens, when the question is final, when the question's cash would run out, or while the universe's price is stale or its book is in runoff. Each second charged converts one unit of question cash into fee cash and lowers demand by the same amount.</p>
+					<p class="equation-caption"><span class="var">feePrincipal</span> is the cash originally deposited for the question's live shares, so the fee is a flat annual percentage of what buyers paid. It stops when an Escalation Game opens, when the question is final, before another whole second of fees would cross the question's minimum backing floor, or while the universe's price is stale or its book is in runoff. Each unit charged moves question cash into fee cash and lowers demand by the same amount.</p>
 				</div>
+				<p>The backing floor is the outstanding outcome-share supply multiplied by <code>minimumOutcomeRate</code>, divided by 10<sup>18</sup> and rounded up to a whole settlement unit. Only units above it may fund holding fees. With the UI default of 0.01, 1,000 complete sets retain at least 10 ETH in a fully funded book. Each stream's expiry is capped by that fee budget, so aggregate checkpoints enforce the floor without visiting questions or requiring keeper transactions. Purchases and redemptions remain proportional at the floor; direct fee deductions cannot spend the reserve either.</p>
+				<p>The cap ends ordinary holding-fee income without releasing the remaining underwriting obligation. Providers must price that possible period into their decision to back a portfolio; purchase fees and prepaid resolution premiums remain separate. The floor is not a guaranteed ETH recovery value after an underfunded fork, and it cannot eliminate rounding below a token's smallest unit.</p>
 				<p>Income reaches providers in two different ways. Time-earned income, the holding fee and the resolution premium, is credited at every checkpoint to the commitments that are healthy at that moment, in proportion to size. Lump-sum income, each backing fee and the REP surplus from reporting, is handed to a <strong>fee stream</strong> contract that vests it linearly over <span class="var">rewardVestingSeconds</span>. Vesting serves two purposes: it rewards capital that stays, and it prevents a provider who joins just before a large lump sum is credited from capturing income that belongs to earlier providers. The stream contract keeps one cumulative integral per expiry time, so adding a budget or releasing income costs a constant amount of work plus a binary search over outstanding expiries, no matter how many budgets were ever funded:</p>
 				<div class="equation" id="eq-stream">
 					<math display="block">
