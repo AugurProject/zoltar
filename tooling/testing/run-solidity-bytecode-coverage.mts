@@ -177,7 +177,8 @@ if (import.meta.main) {
 		console.log(`Running Solidity bytecode coverage shard ${shardIndex}/${testShards.length}`)
 		await rm(coverageDirectory, { recursive: true, force: true })
 		const exitCode = await runBunTestProcess({
-			cmd: [process.execPath, 'test', ...testShard.map(toBunTestPath)],
+			// Trace collection makes large gas-regression fixtures exceed the ordinary five-minute test budget.
+			cmd: [process.execPath, 'test', '--timeout', '1200000', ...testShard.map(toBunTestPath)],
 			env: {
 				...Bun.env,
 				SOLIDITY_BYTECODE_COVERAGE: '1',
