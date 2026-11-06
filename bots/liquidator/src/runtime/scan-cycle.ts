@@ -1,6 +1,6 @@
 import { PortfolioOpportunityExpired } from '#execution/portfolio-executor'
 import { sharedQuorumReadTargets } from '@zoltar/bot-shared/monitoring/read-quorum'
-import { loadPortfolioObservation, managedPortfolioScopes, requireCompletePortfolioExposure } from '#monitoring/portfolio-monitor'
+import { loadManagedPortfolioObservations, managedPortfolioScopes } from '#monitoring/portfolio-monitor'
 import { shouldStopAfterSuccessfulCycle } from '#core/cycle-control'
 import { validateApprovedUniverseSelection } from '@zoltar/bot-shared/monitoring/universe-policy'
 import { OperatorStopping, TransactionAwaitingCanonicalFinality } from '#execution/execution-safety'
@@ -27,12 +27,14 @@ async function scanExecutionSnapshot(runtime: LiquidatorRuntime, deps: Liquidato
 	state.portfolioScopes = managedPortfolioScopes(state.portfolioScopes, runtime.settings.selectedPortfolios)
 	const scanClient = async (client: typeof runtime.client, blockNumber?: bigint) => {
 		const scan = await scanPortfolioContext(client, runtime.settings, state.wallet, shutdown.isRequested, blockNumber)
-		const portfolios = []
-		for (const scope of state.portfolioScopes) {
-			if (shutdown.isRequested()) throw new OperatorStopping()
-			portfolios.push(await loadPortfolioObservation(client, runtime.settings, state.wallet, scope, scan.block.number))
-		}
-		requireCompletePortfolioExposure(portfolios)
+		if (shutdown.isRequested()) throw new OperatorStopping()
+		const portfolios = await loadManagedPortfolioObservations(
+			client,
+			runtime.settings,
+			state.wallet,
+			state.portfolioScopes.map(scope => ({ scope })),
+			scan.block.number,
+		)
 		return { ...scan, portfolios }
 	}
 	if (!runtime.settings.runtime.execute) return await scanClient(runtime.client)

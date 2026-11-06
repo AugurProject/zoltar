@@ -69,6 +69,8 @@ export function portfolioClient(overrides: Record<string, unknown> = {}) {
 		services: module('SecurityPoolPortfolioServices'),
 		lifecycleDelegate: module('SecurityPoolCapitalLifecycleDelegate'),
 		auctionDelegate: module('SecurityPoolCapitalAuctionDelegate'),
+		auctions: '0x0000000000000000000000000000000000000000',
+		bidderBidCount: 0n,
 		auctionCohort: ['0x0000000000000000000000000000000000000000', 0n, 0n, 0n, 0n],
 		premiumLedger: module('SecurityPoolResolutionPremiumBook'),
 		priceFeed: snapshot.priceFeed,

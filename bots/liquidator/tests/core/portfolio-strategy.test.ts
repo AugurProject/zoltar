@@ -173,3 +173,11 @@ test('inherited dust does not reset retirement intent when the cure cannot remov
 	observation.snapshot.demandAttoEth = 0n
 	expect(portfolioCureOutcome(observation, position)).toMatchObject({ removed: 9n, commitment: 0n, batch: 0n, remainingCommitment: 0n, healthy: true })
 })
+
+test('auction vault commitments consume the same managed commitment budget as direct takeovers', () => {
+	const observation = portfolioObservation()
+	observation.managedCommitmentAttoEth = 950n * unit
+	expect(evaluate(observation).plan).toBeUndefined()
+	observation.managedCommitmentAttoEth = 800n * unit
+	expect(evaluate(observation).plan).toMatchObject({ maximumOwnerCommitment: 200n * unit + observation.snapshot.ownerCommitmentAttoEth })
+})

@@ -18,7 +18,7 @@
 			<section id="before-you-start">
 				<h2>Before you start</h2>
 				<p>Trading is an exchange for <a href="../explanation/statoblast.html">Statoblast</a> outcome shares: a trading pool swaps the Yes and No shares of exactly one SecurityPool, and a SecurityPool without one has no market yet. In the UI, creating the trading pool is called creating a <em>market</em>.</p>
-				<p>To practise without a wallet, run <code>bun run app:serve:trading</code> and open <code>http://localhost:4163/?simulate=1&amp;genesis=yes&amp;simScenario=deployed#/create-market</code>. That simulator scenario has one SecurityPool, at <code data-simulation-security-pool="address">0x3a16BAdbc16C914D09541A7fdd7e3922b63287A7</code>, and no trading pool; the screenshots below come from it. For a live network, follow <a href="../how-to/trading-configure-ui.html">Configure the Trading UI</a>, and if the UI opens the deployment screen, complete <a href="../how-to/trading-deploy-contracts.html">Deploy the Trading contracts</a> first. Fund the wallet with the deposit plus gas.</p>
+				<p>To practise without a wallet, run <code>bun run app:serve:trading</code> and open <code>http://localhost:4163/?simulate=1&amp;genesis=yes&amp;simScenario=deployed#/create-market</code>. That simulator scenario has one SecurityPool, at <code data-simulation-security-pool="address">0x8FB71A7599c80bA78493231739Bf6294437Ff73E</code>, and no trading pool; the screenshots below come from it. For a live network, follow <a href="../how-to/trading-configure-ui.html">Configure the Trading UI</a>, and if the UI opens the deployment screen, complete <a href="../how-to/trading-deploy-contracts.html">Deploy the Trading contracts</a> first. Fund the wallet with the deposit plus gas.</p>
 			</section>
 			<section id="find-pool">
 				<h2>Open a SecurityPool without a market</h2>
@@ -33,7 +33,7 @@
 				</figure>
 				<p>The details page tells you whether the SecurityPool can take a market. An enabled <strong>Create market</strong> button means it can, and selecting it returns you to the form. When it cannot, the button is disabled and names the reason, such as <em>Question ended. This market can no longer be created.</em> <strong>Minting capacity</strong> shows the collateral already minted against the SecurityPool's ceiling (used / ceiling); your deposit must fit in the difference.</p>
 				<figure class="screenshot" id="fig-trading-pool-details" aria-labelledby="fig-trading-pool-details-caption">
-					<a class="screenshot-link" href="../assets/screenshots/trading/security-pool-details.png"><img width="785" height="535" src="../assets/screenshots/trading/security-pool-details.png" alt="The security pool details page showing question end, security pool state Operational, universe not forked, minting capacity 0 of 80 ETH, and a Create market button." loading="lazy" /></a>
+					<a class="screenshot-link" href="../assets/screenshots/trading/security-pool-details.png"><img width="785" height="611" src="../assets/screenshots/trading/security-pool-details.png" alt="The security pool details page showing question end, security pool state Operational, universe not forked, minting capacity 1 of 10 ETH, and a Create market button." loading="lazy" /></a>
 					<figcaption id="fig-trading-pool-details-caption"><span class="figure-label">An eligible SecurityPool.</span> The SecurityPool is operational, its universe has not forked, and it has capacity for new collateral.</figcaption>
 				</figure>
 			</section>
@@ -41,11 +41,11 @@
 				<h2>Create and seed the trading pool</h2>
 				<ol>
 					<li>Enter <code>0.01</code> in <strong>Amount</strong> and <code>70</code> in <strong>Conditional Yes price</strong>.</li>
-					<li>Read the estimate: <strong>You provide</strong> 0.01 ETH, <strong>You receive ≈</strong> LP tokens, 0.01 Invalid, and the Yes shares the trading pool did not need.</li>
+					<li>Read the estimate: <strong>You provide</strong> 0.01 ETH, <strong>You receive ≈</strong> LP tokens, about 0.0089 Invalid after the minting fee, and the Yes shares the trading pool did not need.</li>
 					<li>Select <strong>Create market and add liquidity</strong> and confirm the one transaction that creates and seeds the trading pool. It reverts if it would mint fewer LP tokens than the estimate allows after your slippage tolerance, which you set under <strong>Settings</strong>.</li>
 				</ol>
 				<figure class="screenshot" id="fig-trading-initialize" aria-labelledby="fig-trading-initialize-caption">
-					<a class="screenshot-link" href="../assets/screenshots/trading/initialize-pool.png"><img width="800" height="1168" src="../assets/screenshots/trading/initialize-pool.png" alt="The Liquidity panel of the Create market page, marked Market not created, with Create market selected, 0.01 ETH and a 70% conditional Yes price entered, and an estimate of 0.0042 LP, 0.01 Invalid, and 0.0057 Yes, above an enabled Create market and add liquidity button." loading="lazy" /></a>
+					<a class="screenshot-link" href="../assets/screenshots/trading/initialize-pool.png"><img width="800" height="1168" src="../assets/screenshots/trading/initialize-pool.png" alt="The Liquidity panel of the Create market page, marked Market not created, with Create market selected, 0.01 ETH and a 70% conditional Yes price entered, and an estimate of 0.0037 LP, 0.0089 Invalid, and 0.0051 Yes, above an enabled Create market and add liquidity button." loading="lazy" /></a>
 					<figcaption id="fig-trading-initialize-caption"><span class="figure-label">Seeding at a 70% conditional Yes price.</span> The LP tokens represent only the Yes and No left in the trading pool; the Invalid and spare Yes return to your wallet.</figcaption>
 				</figure>
 			</section>
@@ -53,8 +53,8 @@
 				<h2>Check the result</h2>
 				<p>Open the <strong>Markets</strong> tab. The market is listed with the badge <strong>TRADING OPEN</strong> and a conditional price of 70% Yes. Then open <strong>Portfolio</strong>: the market shows your LP tokens, your Invalid, and the spare Yes as separate holdings.</p>
 				<figure class="screenshot" id="fig-trading-portfolio" aria-labelledby="fig-trading-portfolio-caption">
-					<a class="screenshot-link" href="../assets/screenshots/trading/portfolio.png"><img width="773" height="527" src="../assets/screenshots/trading/portfolio.png" alt="The Portfolio page with one market card listing 0.0057 Yes, 0.01 Invalid, and 0.0042 LP, each outcome balance with its payout if the question resolves to that outcome." loading="lazy" /></a>
-					<figcaption id="fig-trading-portfolio-caption"><span class="figure-label">Portfolio after seeding.</span> The 0.01 ETH deposit returned 0.01 Invalid, 0.0057 spare Yes, and the LP tokens.</figcaption>
+					<a class="screenshot-link" href="../assets/screenshots/trading/portfolio.png"><img width="773" height="607" src="../assets/screenshots/trading/portfolio.png" alt="The Portfolio page with one market card listing 1.005 Yes, 1 No, 1.0088 Invalid, and 0.0037 LP, each outcome balance with its payout if the question resolves to that outcome." loading="lazy" /></a>
+					<figcaption id="fig-trading-portfolio-caption"><span class="figure-label">Portfolio after seeding.</span> The new LP tokens and spare outcomes appear alongside the simulation wallet’s existing complete set. Fees reduce the amount minted from the 0.01 ETH deposit.</figcaption>
 				</figure>
 				<p>At a 70% conditional Yes price, the trading pool holds roughly 30 Yes for every 70 No. The No reserve is the larger one because in a constant-product market the <em>opposite</em> reserve sets the price; <a href="../explanation/trading/pricing.html#formula">Conditional pricing</a> explains why.</p>
 				<p>Next: <a href="./trading-first-trade.html">make your first trade</a> against the trading pool you just created.</p>

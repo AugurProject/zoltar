@@ -22,7 +22,7 @@ test('deselected scopes remain in exposure accounting and persisted cursors surv
 	expect(managedPortfolioScopes(scopes, [])).toEqual(scopes)
 	const scope = { ...selection, nextPositionId: 33n, sweepEnd: 150n, retirementObservations: [{ id: 3n, batch: 1n, commitment: 100n, since: 1000n }] }
 	const serialized: unknown = JSON.parse(JSON.stringify([scope], (_key, value) => (typeof value === 'bigint' ? value.toString() : value)))
-	expect(parsePortfolioScopes(serialized)).toEqual([scope])
+	expect(parsePortfolioScopes(serialized)).toEqual([{ ...scope, managedVaults: [] }])
 	expect(() => parsePortfolioScopes([{ ...selection, universeId: '0', nextPositionId: '0', sweepEnd: '0' }])).toThrow('cursor')
 })
 
@@ -129,7 +129,7 @@ test('winner cursors skip history, survive removal, wrap and reset after a short
 	expect(await next(0n)).toEqual({ ids: [2n, 4000n], auctionAfterBidId: 4000n })
 	const saved = { ...selection, nextPositionId: 1n, sweepEnd: 0n, auctionAfterBidId: 4000n, retirementObservations: [] }
 	const serialized: unknown = JSON.parse(JSON.stringify([saved], (_key, value) => (typeof value === 'bigint' ? value.toString() : value)))
-	expect(parsePortfolioScopes(serialized)).toEqual([saved])
+	expect(parsePortfolioScopes(serialized)).toEqual([{ ...saved, managedVaults: [] }])
 	expect(() => parsePortfolioScopes([{ ...selection, universeId: '0', nextPositionId: '1', sweepEnd: '0', auctionAfterBidId: '-1' }])).toThrow('auction cursor')
 	fixture.values['nextUnmaterializedBid'] = 4000n
 	await expect(next(0n)).rejects.toThrow('Invalid auction winner cursor')

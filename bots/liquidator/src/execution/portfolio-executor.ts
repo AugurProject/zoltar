@@ -1,6 +1,6 @@
 import type { OperatorSettings } from '#config/settings'
 import { portfolioTakeoverPlan, type PortfolioTakeover } from '#core/portfolio-strategy'
-import { loadPortfolioObservation, requireCompletePortfolioExposure, type PortfolioObservation, type PortfolioScope } from '#monitoring/portfolio-monitor'
+import { loadManagedPortfolioObservations, type PortfolioObservation, type PortfolioScope } from '#monitoring/portfolio-monitor'
 import type { RuntimeState } from '#state/operator-state'
 import { erc20Abi, securityPoolCapitalLedgerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { portfolioTarget, samePortfolioTarget, type PortfolioTarget } from '#monitoring/portfolio-auction'
@@ -33,13 +33,17 @@ export async function refreshPortfolioExecution(
 		pinned.readers.map(async ({ endpoint, client }) => {
 			const block = await client.getBlock({ blockNumber: pinned.blockNumber })
 			if (block.number === undefined || block.hash === undefined) throw new Error('Portfolio execution requires a confirmed block')
-			const observations = []
-			for (const scope of scopes) observations.push(await loadPortfolioObservation(client, settings, wallet.account.address, scope, block.number, positionId !== undefined && scope.address === target.selection.address && scope.universeId === target.selection.universeId ? [positionId] : []))
-			requireCompletePortfolioExposure(observations)
+			const observations = await loadManagedPortfolioObservations(
+				client,
+				settings,
+				wallet.account.address,
+				scopes.map(scope => ({ scope, targets: positionId !== undefined && scope.address === target.selection.address && scope.universeId === target.selection.universeId ? [positionId] : [] })),
+				block.number,
+			)
 			const observation = observations.find(observation => observation.selection.address === target.selection.address && observation.selection.universeId === target.selection.universeId)
 			if (observation === undefined) throw new Error('Portfolio disappeared from managed exposure history')
 			const allowance = await client.readContract({ address: observation.snapshot.repToken, abi: erc20Abi, functionName: 'allowance', args: [wallet.account.address, observation.snapshot.capitalLedger], blockNumber: block.number })
-			return { endpoint, value: { observation, totalPrincipal: observations.reduce((sum, observation) => sum + observation.snapshot.ownerPrincipalAttoRep, 0n), allowance } }
+			return { endpoint, value: { observation, totalPrincipal: observations.reduce((sum, observation) => sum + (observation.managedPrincipalAttoRep ?? observation.snapshot.ownerPrincipalAttoRep), 0n), allowance } }
 		}),
 		settings.connectivity.rpcQuorum,
 	)
@@ -84,7 +88,7 @@ export async function executePortfolioTakeover(
 		label = 'Fund portfolio owner principal; rescreen next cycle'
 	} else {
 		action = 'takeover'
-		const bounds = { maximumOwnerPrincipal: plan.maximumOwnerPrincipal, maximumOwnerCommitment: settings.portfolioPolicy.maximumCommitmentAttoEth, expectedTargetHealthFactorBps: settings.portfolioPolicy.targetHealthFactorBps, expectedAcceptedPriceEpoch, expectedSourceBatch: plan.expectedSourceBatch }
+		const bounds = { maximumOwnerPrincipal: plan.maximumOwnerPrincipal, maximumOwnerCommitment: plan.maximumOwnerCommitment, expectedTargetHealthFactorBps: settings.portfolioPolicy.targetHealthFactorBps, expectedAcceptedPriceEpoch, expectedSourceBatch: plan.expectedSourceBatch }
 		request =
 			typeof positionId === 'bigint'
 				? buildPortfolioCapitalTakeOverWithBoundsRequest({
@@ -110,6 +114,7 @@ export async function executePortfolioTakeover(
 		pool,
 		{
 			...request,
+			portfolioFunding: action === 'approval' ? undefined : { key: `${base.capitalLedger.toLowerCase()}:${base.owner.toLowerCase()}`, operation: action === 'principal' ? 'fund' : 'consume', target: positionId, amount: action === 'principal' ? plan.ownFunding : 0n },
 			gas: 'estimate',
 			gasBudgetExceeded: () => {
 				throw new PortfolioOpportunityExpired('Estimated portfolio gas exceeds strategy.maximumGasCostEth')
@@ -125,7 +130,8 @@ export async function executePortfolioTakeover(
 /** @internal Tests exercise each prerequisite's final funding, exposure, and cohort revalidation. */
 export function assertPortfolioPlanStillAllowed(original: PortfolioTakeover, current: PortfolioTakeover, action: 'approval' | 'principal' | 'takeover') {
 	if (original.expectedTotalCommitment !== current.expectedTotalCommitment || original.expectedDemand !== current.expectedDemand) throw new PortfolioOpportunityExpired('Portfolio cure capacity changed before submission')
-	if (original.commitment !== current.commitment || original.expectedSourceBatch !== current.expectedSourceBatch || original.maximumOwnerPrincipal > current.maximumOwnerPrincipal) throw new PortfolioOpportunityExpired('Portfolio exposure or cohort changed before submission')
+	if (original.commitment !== current.commitment || original.expectedSourceBatch !== current.expectedSourceBatch || original.maximumOwnerPrincipal > current.maximumOwnerPrincipal || original.maximumOwnerCommitment > current.maximumOwnerCommitment)
+		throw new PortfolioOpportunityExpired('Portfolio exposure or cohort changed before submission')
 	if ((action === 'approval' || action === 'principal') && original.ownFunding !== current.ownFunding) throw new PortfolioOpportunityExpired('Portfolio funding requirement changed before submission')
 	if (action === 'takeover' && (current.ownFunding !== 0n || current.minimumAward < original.minimumAward || current.maximumOwnRep > original.maximumOwnRep)) throw new PortfolioOpportunityExpired('Portfolio takeover terms changed before submission')
 }

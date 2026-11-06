@@ -28,7 +28,7 @@ export const TRADING_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		id: 'buy-ticket',
 		app: 'trading',
 		scenario: 'trading-funded',
-		steps: [...openFirstMarket, { fill: 'You pay', value: '0.001' }, { waitForEnabled: 'Buy Yes' }],
+		steps: [...openFirstMarket, { fill: 'You pay', value: '0.002' }, { waitForEnabled: 'Buy Yes' }],
 		expectText: ['Trade', 'Buy', 'Sell', 'You pay', 'You receive ≈', 'Invalid insurance', 'Average price', 'Profit if the question resolves Yes', 'Minimum received', 'Price impact', 'Trade details', 'Buy Yes'],
 		viewport: tallViewport,
 		crop: tradePanel,

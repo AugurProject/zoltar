@@ -412,6 +412,11 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 			if (account === undefined) throw new Error('Simulation wallet is missing')
 			const balances = await loadLiveBalances(backend.createReadClient(), market, account)
 			for (const balance of [balances.yes, balances.no, balances.invalid, balances.lp]) expect(balance).toBeGreaterThan(0n)
+			const walletWide = await discoverSavedMarkets(backend.createReadClient(), configuration, 0n, [], undefined, () => true, account)
+			expect(walletWide.markets.map(market => market.pool)).toContain(market.pool)
+			const emptyWallet = await discoverSavedMarkets(backend.createReadClient(), configuration, 0n, [], undefined, () => true, getAddress('0x1111111111111111111111111111111111111111'))
+			expect(emptyWallet.markets).toEqual([])
+
 			await backend.advanceTime(60n)
 			const refreshed = await discoverLiveUniverseMarketPage(backend.createReadClient(), configuration, 0n)
 			const valued = refreshed.markets[0]

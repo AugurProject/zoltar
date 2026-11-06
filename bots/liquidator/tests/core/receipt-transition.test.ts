@@ -14,6 +14,9 @@ for (const status of ['success', 'reverted'] as const) {
 			const path = join(directory, 'state.json')
 			const { intent, receipt } = await portfolioReceiptIntent()
 			receipt.status = status
+			intent.portfolioInstruction = { id: 'one-shot-bid', fingerprint: 'immutable-bid-terms' }
+			const fundingKey = `${intent.sender.toLowerCase()}:${intent.sender.toLowerCase()}`
+			intent.portfolioFunding = { key: fundingKey, operation: 'fund', amount: 12n, target: 3n }
 			const state = initialRuntimeState(false, intent.sender, 1)
 			state.pendingTransactions.push(intent)
 			await saveDurableState(path, state)
@@ -24,6 +27,8 @@ for (const status of ['success', 'reverted'] as const) {
 			await resolveFinalizedReceipt(path, state, intent, receipt)
 			const loaded = await loadDurableState(path, 1)
 			expect(loaded.pendingTransactions).toHaveLength(0)
+			expect(loaded.completedPortfolioInstructions).toEqual({ 'one-shot-bid': 'immutable-bid-terms' })
+			expect(loaded.portfolioFunding).toEqual(status === 'success' ? { [fundingKey]: { amount: 12n, target: 3n } } : {})
 			expect(loaded.activities).toHaveLength(1)
 			expect(loaded.activities[0]?.status).toBe(status === 'success' ? 'confirmed' : 'failed')
 		} finally {

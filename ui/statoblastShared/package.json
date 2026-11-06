@@ -424,6 +424,10 @@
 		"./copy/portfolio.js": {
 			"bun": "./ts/copy/portfolio.ts",
 			"default": "./js/copy/portfolio.js"
+		},
+		"./features/portfolios/components/PortfolioTakeover.js": {
+			"bun": "./ts/features/portfolios/components/PortfolioTakeover.tsx",
+			"default": "./js/features/portfolios/components/PortfolioTakeover.js"
 		}
 	},
 	"version": "1.0.0"

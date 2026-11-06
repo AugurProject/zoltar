@@ -38,6 +38,10 @@ describe('portfolio operator funded auction capital integration', () => {
 		settings.deployment.multicall3 = getInfraContractAddresses().multicall3
 		settings.selectedPortfolios = [scope]
 		settings.approvedUniverses = [context.child]
+		const ownerExposure = await loadPortfolioObservation(reader, settings, context.owner.account.address, scope, await reader.getBlockNumber())
+		expect(ownerExposure.ownedVaults?.map(vault => vault.owner)).toContain(first.vault)
+		expect(ownerExposure.managedPrincipalAttoRep).toBeGreaterThan(ownerExposure.snapshot.ownerPrincipalAttoRep)
+		expect(ownerExposure.nextScope.managedVaults).toContain(first.vault)
 		const initial = await loadPortfolioObservation(reader, settings, account.address, scope, await reader.getBlockNumber())
 		const virtual = initial.positions.filter(position => position.auctionTarget !== undefined)
 		expect(virtual.map(position => position.auctionTarget?.bidId)).toEqual([first.id, second.id])

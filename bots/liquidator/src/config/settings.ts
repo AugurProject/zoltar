@@ -1,3 +1,4 @@
+import { parsePortfolioInstructions, serializePortfolioInstructions, type PortfolioInstruction } from './portfolio-instructions.ts'
 import { parsePortfolioPolicy, parsePortfolioSelections, serializePortfolioPolicy, type PortfolioPolicy, type PortfolioSelection } from './portfolio-policy.ts'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { type Address, type Hex } from '@zoltar/bot-shared/ethereum'
@@ -50,6 +51,7 @@ export type OperatorSettings = {
 		uiPort: number
 	}
 	selectedPortfolios: PortfolioSelection[]
+	portfolioInstructions?: PortfolioInstruction[]
 	portfolioPolicy: PortfolioPolicy
 	strategy: StrategySettings
 	submission: SubmissionSettings
@@ -116,6 +118,7 @@ export function parseSettings(value: unknown): OperatorSettings {
 			uiPort: integer(runtime['uiPort'], 'runtime.uiPort', 1, 65_535),
 		},
 		selectedPortfolios: parsePortfolioSelections(root['selectedPortfolios']),
+		portfolioInstructions: parsePortfolioInstructions(root['portfolioInstructions']),
 		portfolioPolicy: parsePortfolioPolicy(root['portfolioPolicy']),
 		strategy: parseStrategy(root['strategy']),
 		submission: validateSubmissionSettings(root['submission']),
@@ -145,6 +148,7 @@ export function serializedSettings(settings: OperatorSettings, redactPrivateKey 
 		privateKey: redactPrivateKey || settings.privateKey === undefined ? null : settings.privateKey,
 		runtime: settings.runtime,
 		selectedPortfolios: settings.selectedPortfolios.map(selection => ({ address: selection.address, universeId: selection.universeId.toString() })),
+		portfolioInstructions: serializePortfolioInstructions(settings.portfolioInstructions ?? []),
 		portfolioPolicy: serializePortfolioPolicy(settings.portfolioPolicy),
 		strategy: {
 			maximumGasCostEth: formatDecimalAmount(settings.strategy.maximumGasCostAttoEth),

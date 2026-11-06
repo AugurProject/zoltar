@@ -1,3 +1,4 @@
+import { loadOwnedPortfolioVaults } from './portfolio-owned-vaults.ts'
 import { verifyPortfolioCustody } from './portfolio-identity.ts'
 import { authenticatePortfolioAuction, loadPortfolioAuctionPosition, portfolioAuctionPage, type PortfolioAuctionTarget, type PortfolioTarget } from './portfolio-auction.ts'
 import type { OperatorSettings } from '#config/settings'
@@ -35,7 +36,7 @@ const portfolioMonitorAbi = [
 	parseAbiItem('function previewRetirement(uint96 id,uint256 acceptedPrice,uint256 demand) view returns ((uint8 status,uint96 effectiveCurrentBatch,uint256 healthyCommitment,uint256 spareCommitment,uint256 queuedAheadCommitment,uint256 commitmentReduction,uint256 releasedRep) preview)'),
 ] as const
 
-export type PortfolioScope = PortfolioSelection & { nextPositionId: bigint; sweepEnd: bigint; auctionAfterBidId?: bigint; retirementObservations?: { id: bigint; commitment: bigint; batch: bigint; since: bigint }[] }
+export type PortfolioScope = PortfolioSelection & { managedVaults?: Address[]; nextPositionId: bigint; sweepEnd: bigint; auctionAfterBidId?: bigint; retirementObservations?: { id: bigint; commitment: bigint; batch: bigint; since: bigint }[] }
 export type PortfolioPosition = {
 	id: bigint
 	auctionTarget?: PortfolioAuctionTarget
@@ -53,6 +54,10 @@ export type PortfolioPosition = {
 export type PortfolioObservation = {
 	selection: PortfolioSelection
 	selected: boolean
+	managedPrincipalAttoRep?: bigint
+	managedCommitmentAttoEth?: bigint
+	ownedVaults?: PortfolioCapitalSnapshot[]
+	chosenVaultChildUniverseIds?: bigint[]
 	chosenChildUniverseId?: bigint
 	approvedUniverse: boolean
 	snapshot: PortfolioCapitalSnapshot
@@ -66,14 +71,21 @@ export type PortfolioObservation = {
 }
 
 /** Retain every previously managed scope: deselection cannot hide deployed principal from total limits. */
-export function managedPortfolioScopes(previous: readonly PortfolioScope[], selected: readonly PortfolioSelection[]) {
+export function managedPortfolioScopes(previous: readonly PortfolioScope[], selected: readonly PortfolioSelection[]): PortfolioScope[] {
 	const scopes = new Map(previous.map(scope => [`${scope.address.toLowerCase()}:${scope.universeId}`, scope]))
 	for (const selection of selected) {
 		const key = `${selection.address.toLowerCase()}:${selection.universeId}`
 		if (!scopes.has(key)) scopes.set(key, { ...selection, nextPositionId: 1n, sweepEnd: 0n })
 	}
 	if (scopes.size > 64) throw new Error('Managed portfolio scope history exceeds 64; reconcile exposure before adding more portfolios')
-	return [...scopes.values()]
+	const vaultsByPortfolio = new Map<string, Set<Address>>()
+	for (const scope of scopes.values()) {
+		const key = scope.address.toLowerCase()
+		const vaults = vaultsByPortfolio.get(key) ?? new Set<Address>()
+		for (const vault of scope.managedVaults ?? []) vaults.add(vault)
+		vaultsByPortfolio.set(key, vaults)
+	}
+	return [...scopes.values()].map(scope => ({ ...scope, managedVaults: [...(vaultsByPortfolio.get(scope.address.toLowerCase()) ?? [])] }))
 }
 
 /** @internal Tests verify the fixed sweep end prevents new positions from indefinitely postponing older ones. */
@@ -140,6 +152,7 @@ async function loadPortfolioPosition(client: ReadClient, snapshot: PortfolioCapi
 	}
 }
 
+/** @internal Single-scope reader exposed for authenticated monitoring regression tests. */
 export async function loadPortfolioObservation(client: ReadClient, settings: OperatorSettings, wallet: Address | undefined, scope: PortfolioScope, blockNumber: bigint, targets?: readonly PortfolioTarget[]): Promise<PortfolioObservation> {
 	const [factory, protocol] = await Promise.all([client.readContract({ address: scope.address, abi: portfolioMonitorAbi, functionName: 'factory', blockNumber }), client.readContract({ address: scope.address, abi: portfolioMonitorAbi, functionName: 'zoltar', blockNumber })])
 	if (address(factory) !== settings.deployment.securityPoolFactory || address(protocol) !== settings.deployment.zoltar) throw new Error('Selected portfolio belongs to another factory or Zoltar')
@@ -167,6 +180,9 @@ export async function loadPortfolioObservation(client: ReadClient, settings: Ope
 	if (address(authority) !== scope.address || address(indexAuthority) !== snapshot.capitalLedger || universeId !== scope.universeId || address(token) !== snapshot.repToken || snapshot.chainId !== settings.network.chainId) throw new Error('Portfolio capital identity does not match the approved universe')
 	const page = portfolioPositionPage(scope, uint(lastPositionId), settings.portfolioPolicy.maximumPositionsPerScan)
 	const cohort = await client.readContract({ address: snapshot.capitalLedger, abi: securityPoolCapitalLedgerAbi, functionName: 'auctionCohort', blockNumber })
+	const owned = await loadOwnedPortfolioVaults(client, snapshot, scope.managedVaults ?? [])
+	page.nextScope.managedVaults = owned.vaults
+	const chosenVaultChildUniverseIds = await Promise.all(owned.chosenOutcomes.map(async outcome => uint(await client.readContract({ address: settings.deployment.zoltar, abi: portfolioMonitorAbi, functionName: 'getChildUniverseId', args: [scope.universeId, outcome], blockNumber }))))
 	const positions: PortfolioPosition[] = []
 	for (const id of targets ?? page.ids) {
 		if (typeof id !== 'bigint') continue
@@ -210,6 +226,10 @@ export async function loadPortfolioObservation(client: ReadClient, settings: Ope
 	if ((await client.getBlock({ blockNumber })).hash !== snapshot.blockHash) throw new Error('Portfolio snapshot changed during discovery')
 	return {
 		...(chosenChildUniverseId === undefined ? {} : { chosenChildUniverseId }),
+		managedPrincipalAttoRep: snapshot.ownerPrincipalAttoRep + owned.pendingPrincipal + owned.accounts.reduce((sum, account) => sum + account.ownerPrincipalAttoRep, 0n),
+		managedCommitmentAttoEth: snapshot.ownerCommitmentAttoEth + owned.pendingCommitment + owned.accounts.reduce((sum, account) => sum + account.ownerCommitmentAttoEth, 0n),
+		ownedVaults: owned.accounts,
+		chosenVaultChildUniverseIds,
 		selection: { address: scope.address, universeId: scope.universeId },
 		selected: settings.selectedPortfolios.some(selection => selection.address === scope.address && selection.universeId === scope.universeId),
 		approvedUniverse: settings.approvedUniverses.includes(scope.universeId),
@@ -224,10 +244,30 @@ export async function loadPortfolioObservation(client: ReadClient, settings: Ope
 	}
 }
 
-/** Fork exports cannot erase risk: the chosen child must remain within the explicitly managed scope set. */
+/** @internal Fork exports cannot erase risk: the chosen child must remain within the explicitly managed scope set. */
 export function requireCompletePortfolioExposure(observations: readonly PortfolioObservation[]) {
 	for (const observation of observations) {
-		if (observation.chosenChildUniverseId !== undefined && !observations.some(child => child.selection.address === observation.selection.address && child.selection.universeId === observation.chosenChildUniverseId))
-			throw new Error(`Add chosen fork universe ${observation.chosenChildUniverseId} for portfolio ${observation.selection.address} to selectedPortfolios before continuing; exported principal must remain in managed exposure`)
+		for (const universe of [...(observation.chosenVaultChildUniverseIds ?? []), ...(observation.chosenChildUniverseId === undefined ? [] : [observation.chosenChildUniverseId])]) {
+			if (!observations.some(child => child.selection.address === observation.selection.address && child.selection.universeId === universe))
+				throw new Error(`Add chosen fork universe ${universe} for portfolio ${observation.selection.address} to selectedPortfolios before continuing; exported principal must remain in managed exposure`)
+		}
 	}
+}
+
+/** Newly discovered vaults must enter every managed universe before any exposure-based decision. */
+export async function loadManagedPortfolioObservations(client: ReadClient, settings: OperatorSettings, wallet: Address | undefined, requests: readonly { scope: PortfolioScope; targets?: readonly PortfolioTarget[] | undefined }[], blockNumber: bigint) {
+	const observations: PortfolioObservation[] = []
+	for (const request of requests) observations.push(await loadPortfolioObservation(client, settings, wallet, request.scope, blockNumber, request.targets))
+	const scopes = managedPortfolioScopes(
+		observations.map(item => item.nextScope),
+		[],
+	)
+	for (const [index, request] of requests.entries()) {
+		const expanded = scopes.find(scope => scope.address === request.scope.address && scope.universeId === request.scope.universeId)
+		const observed = observations[index]
+		if (expanded === undefined || observed === undefined) throw new Error('Managed exposure scope disappeared')
+		if ((expanded.managedVaults ?? []).some(vault => !observed.ownedVaults?.some(account => account.owner === vault))) observations[index] = await loadPortfolioObservation(client, settings, wallet, { ...request.scope, managedVaults: expanded.managedVaults ?? [] }, blockNumber, request.targets)
+	}
+	requireCompletePortfolioExposure(observations)
+	return observations
 }

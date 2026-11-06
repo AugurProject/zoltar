@@ -12,6 +12,9 @@ const serializedAtomicStringAllowlist = new Set([
 	'augurScan/tests/unit/snapshots.test.ts',
 	'bots/liquidator/scripts/serve-dashboard-fixture.mts',
 	'bots/liquidator/tests/config/settings.test.ts',
+	// Portfolio instructions serialize exact atomic integers as decimal strings.
+	'bots/liquidator/tests/config/portfolio-instructions.test.ts',
+	'bots/liquidator/README.md',
 	'docs/mainnet-deployment-addresses.json',
 	'docs/sepolia-deployment-addresses.json',
 	'docs/mainnet-no-deployment-addresses.json',

@@ -9,6 +9,7 @@ import { usePortfolio } from '../hooks/usePortfolio.js'
 import { usePortfolioActions } from '../hooks/usePortfolioActions.js'
 import { usePortfolioAggregate } from '../hooks/usePortfolioAggregate.js'
 import { usePortfolioPurchase } from '../hooks/usePortfolioPurchase.js'
+import { PortfolioTakeover } from './PortfolioTakeover.js'
 import { PortfolioAggregatePanel } from './PortfolioAggregatePanel.js'
 import { PortfolioSharedFork } from './PortfolioSharedFork.js'
 import { PortfolioPurchasePanel } from './PortfolioPurchasePanel.js'
@@ -79,6 +80,7 @@ export function PortfoliosSection({ parameters, enabled, environmentKey, activeU
 			{actions.feedback === undefined ? undefined : <UserMessage placement='section' tone='success' announcement='polite' detail={actions.feedback} />}
 			<TransactionScopeProvider scope={actions.scope}>
 				<PortfolioAggregatePanel model={capital} actions={actions} />
+				<PortfolioTakeover model={model} actions={actions} />
 				<PortfolioPurchasePanel model={model} purchase={purchase} actions={actions} />
 				<PortfolioSharedFork
 					snapshot={model.snapshot}

@@ -8,8 +8,8 @@ export function renderPortfolios(portfolios: readonly PortfolioView[] | undefine
 	render(
 		<>
 			<p class='muted'>
-				Select portfolio addresses and universes on the Portfolios page. Approve each universe separately in Settings. Enable funded takeovers and set exposure limits under Portfolio policy in Settings. Previously managed portfolios remain visible for exposure accounting. Principal limits cover the signer's direct
-				ledger positions. Separate auction vault accounts are excluded from those limits.
+				Select portfolio addresses and universes on the Portfolios page. Approve each universe separately in Settings. Enable funded takeovers and set exposure limits under Portfolio policy in Settings. Previously managed portfolios remain visible for exposure accounting. Total principal limits include direct ledger
+				capital, owned auction vaults and reserved exposure for pending bids.
 			</p>
 			<details class='portfolio-guidance'>
 				<summary>Monitoring limits</summary>

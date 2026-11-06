@@ -1,3 +1,4 @@
+import { applyPortfolioFundingEffect } from '#state/portfolio-instructions'
 import type { TransactionReceipt } from '@zoltar/bot-shared/ethereum'
 import { recordActivity, resolveRecoveredIntentJournal, saveDurableState, type PendingTransactionIntent, type RuntimeState } from '#state/operator-state'
 import { validateReceiptExpectation } from '#execution/receipt-validation'
@@ -9,6 +10,12 @@ export async function resolveFinalizedReceipt(path: string, state: RuntimeState,
 	const outcome = validateReceiptExpectation(receipt, intent.receiptExpectation, intent)
 	const next = { ...state, activities: [...state.activities], pendingTransactions: [...state.pendingTransactions] }
 	resolveRecoveredIntentJournal(next, intent.hash, receipt.status)
+	if (outcome.type === 'terminal-success' && intent.portfolioFunding !== undefined) next.portfolioFunding = applyPortfolioFundingEffect(state.portfolioFunding ?? {}, intent.portfolioFunding)
+	if (intent.portfolioInstruction !== undefined) {
+		// Consume reverted instructions too: retrying a deliberate financial action
+		// requires a new operator instruction, rather than repeatedly spending gas.
+		next.completedPortfolioInstructions = { ...state.completedPortfolioInstructions, [intent.portfolioInstruction.id]: intent.portfolioInstruction.fingerprint }
+	}
 	recordActivity(next, {
 		hash: intent.hash,
 		kind: intent.kind,
@@ -16,6 +23,8 @@ export async function resolveFinalizedReceipt(path: string, state: RuntimeState,
 		status: outcome.type === 'terminal-failure' ? 'failed' : 'confirmed',
 	})
 	await saveDurableState(path, next)
+	state.portfolioFunding = next.portfolioFunding
+	state.completedPortfolioInstructions = next.completedPortfolioInstructions
 	state.activities = next.activities
 	state.pendingTransactions = next.pendingTransactions
 	if (outcome.type === 'terminal-failure') throw new Error(`${intent.label} failed: ${outcome.reason}`)

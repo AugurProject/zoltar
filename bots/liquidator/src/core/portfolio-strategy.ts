@@ -12,6 +12,7 @@ export type PortfolioTakeover = {
 	ownFunding: bigint
 	maximumOwnRep: bigint
 	maximumOwnerPrincipal: bigint
+	maximumOwnerCommitment: bigint
 	expectedTotalCommitment: bigint
 	expectedDemand: bigint
 	expectedSourceBatch: bigint
@@ -33,7 +34,8 @@ export function portfolioTakeoverPlan(observation: PortfolioObservation, positio
 	if (source.healthy) return reject('Cure restores target health without a takeover')
 	if (receiver !== undefined && receiver.batch !== source.batch) return reject('Receiver and target retirement cohorts differ')
 	const commitment = source.commitment
-	if (snapshot.ownerCommitmentAttoEth + commitment > policy.maximumCommitmentAttoEth) return reject('Owner commitment limit would be exceeded')
+	const maximumOwnerCommitment = policy.maximumCommitmentAttoEth - (observation.managedCommitmentAttoEth ?? snapshot.ownerCommitmentAttoEth) + snapshot.ownerCommitmentAttoEth
+	if (snapshot.ownerCommitmentAttoEth + commitment > maximumOwnerCommitment) return reject('Owner commitment limit would be exceeded')
 	const elapsed = snapshot.timestamp - position.liquidationStarted
 	if (elapsed < 0n) return reject('Adverse observation is in the future')
 	const award = (source.rep * (elapsed < 3600n ? elapsed : 3600n)) / 3600n
@@ -59,6 +61,7 @@ export function portfolioTakeoverPlan(observation: PortfolioObservation, positio
 			ownFunding,
 			maximumOwnRep: snapshot.ownerAccount.freeAttoRep + ownFunding + (receiver === undefined ? snapshot.positions.reduce((sum, position) => sum + position.releasedRep, 0n) : 0n),
 			maximumOwnerPrincipal,
+			maximumOwnerCommitment,
 			expectedSourceBatch: source.batch,
 			expectedTotalCommitment: snapshot.totalCommitmentAttoEth,
 			expectedDemand: snapshot.demandAttoEth,

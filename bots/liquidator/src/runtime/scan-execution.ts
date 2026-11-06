@@ -1,3 +1,5 @@
+import { executeUnusedPortfolioFunding, unusedPortfolioFunding } from '#execution/portfolio-unused-funding'
+import { executePortfolioInstruction } from '#execution/portfolio-instructions'
 import { portfolioTakeoverPlan } from '#core/portfolio-strategy'
 import { executePortfolioTakeover } from '#execution/portfolio-executor'
 import { executePortfolioEarnings } from '#execution/portfolio-earnings'
@@ -27,8 +29,12 @@ export async function runLiveExecutionStep(runtime: LiquidatorRuntime, deps: Liq
 	}
 	const canonicalHash = (blockNumber: bigint) => canonicalBlockHash(runtime.settings, blockNumber, runtime.readPool)
 	const requireDexEvidence: Parameters<typeof canonicalMarketPriceAllowsExecution>[4] = (configuration, estimate) => requireCurrentDexEvidence(runtime, configuration, estimate)
+	for (const instruction of runtime.settings.portfolioInstructions ?? []) {
+		const executed = await executePortfolioInstruction(activeWallet, runtime.settings, state, runtime.readPool, instruction, current => canonicalMarketPriceAllowsExecution({ repToken: current.snapshot.repToken, lastPrice: current.snapshot.acceptedPrice }, runtime.settings, state, canonicalHash, requireDexEvidence))
+		if (executed) return shouldStopAfterSuccessfulCycle(runtime.settings.runtime.once)
+	}
 	if (runtime.settings.portfolioPolicy.allowFundedTakeovers) {
-		const totalPrincipal = state.portfolios.reduce((sum, portfolio) => sum + portfolio.snapshot.ownerPrincipalAttoRep, 0n)
+		const totalPrincipal = state.portfolios.reduce((sum, portfolio) => sum + (portfolio.managedPrincipalAttoRep ?? portfolio.snapshot.ownerPrincipalAttoRep), 0n)
 		for (const portfolio of state.portfolios) {
 			const price = { repToken: portfolio.snapshot.repToken, lastPrice: portfolio.snapshot.acceptedPrice }
 			const priceAllowed = (current: typeof portfolio) => canonicalMarketPriceAllowsExecution({ repToken: current.snapshot.repToken, lastPrice: current.snapshot.acceptedPrice }, runtime.settings, state, canonicalHash, requireDexEvidence)
@@ -46,13 +52,18 @@ export async function runLiveExecutionStep(runtime: LiquidatorRuntime, deps: Liq
 			}
 		}
 	}
+	for (const portfolio of state.portfolios) {
+		if (unusedPortfolioFunding(state, portfolio).amount === 0n) continue
+		const executed = await executeUnusedPortfolioFunding(activeWallet, runtime.settings, state, runtime.readPool, portfolio, current => canonicalMarketPriceAllowsExecution({ repToken: current.snapshot.repToken, lastPrice: current.snapshot.acceptedPrice }, runtime.settings, state, canonicalHash, requireDexEvidence))
+		if (executed) return shouldStopAfterSuccessfulCycle(runtime.settings.runtime.once)
+	}
 	return undefined
 }
 
 /** Records the best dry-run candidate once per distinct pool, target, debt, and price. */
 export function runDryRunStep(runtime: LiquidatorRuntime, deps: LiquidatorDeps) {
 	const { state } = deps
-	const totalPrincipal = state.portfolios.reduce((sum, portfolio) => sum + portfolio.snapshot.ownerPrincipalAttoRep, 0n)
+	const totalPrincipal = state.portfolios.reduce((sum, portfolio) => sum + (portfolio.managedPrincipalAttoRep ?? portfolio.snapshot.ownerPrincipalAttoRep), 0n)
 	for (const portfolio of state.portfolios) {
 		for (const position of portfolio.positions) {
 			const result = portfolioTakeoverPlan(portfolio, position, runtime.settings, totalPrincipal, marketPriceAllowsExecution({ repToken: portfolio.snapshot.repToken, lastPrice: portfolio.snapshot.acceptedPrice }, runtime.settings, state))

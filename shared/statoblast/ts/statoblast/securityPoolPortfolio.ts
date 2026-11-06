@@ -1,3 +1,4 @@
+export { portfolioTakeoverSource } from './securityPoolPortfolioTakeover.js'
 import { type Abi, type Address, type Hex, encodeDeployData, encodeFunctionData, isAddress, isHex, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 
 export type PortfolioOriginConfig = {

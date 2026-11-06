@@ -20,6 +20,7 @@
 				<section id="security-pool-guardrails">
 					<h2>Portfolio capital operations</h2>
 					<p>Every question belongs to a shared portfolio. Verify the factory registration, capital ledger, settlement module and universe before sending funds. Deposits add principal; setting a commitment separately authorizes risk. Withdrawals and retirement check current owner principal and demand. Complete-set purchases use the registered portfolio route and recheck fees, available healthy capacity and backing floor.</p>
+					<p>The Statoblast portfolio view includes <strong>Liquidation takeover</strong>. Its transaction uses <code>takeOverWithBounds</code>: the receiver supplies a minimum REP award and maximum own REP, total principal and total commitment. Price epoch, health target and retirement cohort must still match. The award stays pledged; it is not an immediately withdrawable keeper payout. The preliminary cure can make a quoted takeover unnecessary or unavailable.</p>
 					<p>See the <a href="./contract-inventory.html#portfolio-underwriting">canonical module and accounting reference</a> and the <a href="./contracts.html">contract entrypoints</a>.</p>
 				</section>
 				<section id="share-migration">

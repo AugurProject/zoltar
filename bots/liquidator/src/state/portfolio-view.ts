@@ -5,7 +5,7 @@ import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-vali
 import type { RuntimeState } from './runtime-state.ts'
 
 export function portfolioViews(state: RuntimeState, settings: OperatorSettings) {
-	const totalPrincipal = state.portfolios.reduce((sum, portfolio) => sum + portfolio.snapshot.ownerPrincipalAttoRep, 0n)
+	const totalPrincipal = state.portfolios.reduce((sum, portfolio) => sum + (portfolio.managedPrincipalAttoRep ?? portfolio.snapshot.ownerPrincipalAttoRep), 0n)
 	return state.portfolios.map(portfolio => {
 		const snapshot = portfolio.snapshot
 		const marketAllowed = marketPriceAllowsExecution({ repToken: snapshot.repToken, lastPrice: snapshot.acceptedPrice }, settings, state)
