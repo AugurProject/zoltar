@@ -9,6 +9,7 @@ import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { DeploymentStatus, MarketDetails, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { useZoltarUniverse } from '@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarUniverse.js'
+import { useZoltarOperations } from '@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js'
 import type { UseZoltarUniverseDependencies } from '@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarUniverse.js'
 import { appBlockWatcher } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { describe, expect, mock, test } from 'bun:test'
@@ -87,6 +88,37 @@ function createZoltarUniverseDependencies(overrides: Partial<UseZoltarUniverseDe
 
 describe('useZoltarUniverse', () => {
 	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: NEXT_WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
+
+	test('composed universe operations reset fork and migration drafts together when the selected universe changes', async () => {
+		let state: ReturnType<typeof useZoltarOperations> | undefined
+		function Harness({ universeId }: { universeId: bigint }) {
+			state = useZoltarOperations({
+				accountAddress: NEXT_WALLET_ADDRESS,
+				activeUniverseId: universeId,
+				autoLoadInitialData: false,
+				deploymentStatuses: [],
+				environmentRefreshKey: 0,
+				onTransactionRequested: () => undefined,
+				onTransactionSubmitted: () => undefined,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				refreshState: async () => undefined,
+			})
+			return null
+		}
+		const view = await renderIntoDocument(<Harness universeId={0n} />)
+		trackCleanup(view.cleanup)
+		await act(() => {
+			requireHookState(state).setZoltarForkQuestionId('0x1234')
+			requireHookState(state).setZoltarMigrationForm(current => ({ ...current, amount: '3' }))
+		})
+		expect(requireHookState(state).zoltarForkQuestionId).toBe('0x1234')
+		expect(requireHookState(state).zoltarMigrationForm.amount).toBe('3')
+		await act(() => render(<Harness universeId={42n} />, view.container))
+		expect(requireHookState(state).zoltarForkQuestionId).toBe('')
+		expect(requireHookState(state).zoltarMigrationForm.amount).toBe('')
+		expect(requireHookState(state).zoltarMigrationPending).toBe(false)
+	})
 
 	test('refreshes only picker-selected scalar outcomes and replaces previous selections', async () => {
 		const reads: bigint[][] = []

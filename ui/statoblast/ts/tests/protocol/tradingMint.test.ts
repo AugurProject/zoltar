@@ -1,7 +1,9 @@
 import { describe, expect, mock, test } from 'bun:test'
 import { decodeFunctionData, getAddress, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { createBlockWithTimestamp, createMockWriteClient, asWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
-import { createCompleteSetInSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
+import { createCompleteSetInSecurityPool, redeemSharesInSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
+import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
+import type { TransactionPlanStep, TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 
 const pool = getAddress('0x00000000000000000000000000000000000000a1')
 
@@ -61,8 +63,60 @@ void describe('complete-set mint submission', () => {
 const portfolio = getAddress('0x00000000000000000000000000000000000000b1')
 const portfolioMintAbi = parseAbi(['function createCompleteSet(uint248 universeId,uint256 questionId,uint256 mintEth,address recipient,uint256 minimumShares) payable'])
 
+test('winning-share redemption reviews ETH and REP recovery for the winning balance at one block', async () => {
+	const unit = 10n ** 18n
+	let review: TransactionRequestPreview | undefined
+	const send = mock((request: { to?: unknown; data?: `0x${string}` }) => {
+		expect(request.to).toBe(pool)
+		if (request.data === undefined) throw new Error('Missing redemption calldata')
+		expect(decodeFunctionData({ abi: parseAbi(['function redeemShares()']), data: request.data }).functionName).toBe('redeemShares')
+	})
+	const pinned: (bigint | undefined)[] = []
+	const client = {
+		...asWriteClient(
+			createMockWriteClient(send, async request => {
+				if (request.functionName === 'universeId') return 1n
+				if (request.functionName === 'shareToken' || request.functionName === 'securityPoolForker') return portfolio
+				pinned.push(request.blockNumber)
+				if (request.functionName === 'balanceOfShares') return [unit, 2n * unit, 3n * unit]
+				if (request.functionName === 'getQuestionOutcome') return 2n
+				expect(request.args).toEqual([3n * unit])
+				if (request.functionName === 'attoSharesToAttoEth') return unit
+				if (request.functionName === 'attoSharesToAttoRep') return 2n * unit
+				throw new Error(`Unexpected redemption read ${request.functionName}`)
+			}),
+		),
+		account: { address: pool, type: 'json-rpc' as const },
+		getBlock: async () => ({ ...createBlockWithTimestamp(100n), number: 99n }),
+		onTransactionPrepared: (value: TransactionRequestPreview) => {
+			review = value
+		},
+	}
+	await redeemSharesInSecurityPool(client, pool)
+	expect(pinned).toEqual([99n, 99n, 99n, 99n])
+	expect(review?.reviewDescription).toMatch(/1\sETH/)
+	expect(review?.reviewDescription).toMatch(/2\sREP/)
+	expect(send).toHaveBeenCalledTimes(1)
+})
+
+test('token approval authorizes only the requested spender and amount', async () => {
+	const send = mock((request: { to?: unknown; data?: `0x${string}` }) => {
+		expect(request.to).toBe(pool)
+		if (request.data === undefined) throw new Error('Missing approval calldata')
+		expect(decodeFunctionData({ abi: parseAbi(['function approve(address spender,uint256 amount) returns (bool)']), data: request.data })).toEqual({ functionName: 'approve', args: [portfolio, 123n] })
+	})
+	const result = await approveErc20(asWriteClient(createMockWriteClient(send)), pool, portfolio, 123n, 'approvePortfolioRep')
+	expect(result.action).toBe('approvePortfolioRep')
+	expect(send).toHaveBeenCalledTimes(1)
+})
+
 for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) {
 	test(`shared mint route: ${mode}`, async () => {
+		let quoteFee = 3n
+		let walletBalance = 1_000n
+		let timestamp = 1n
+		let game = zeroAddress
+		let plans: readonly TransactionPlanStep[] = []
 		const send = mock((request: { to?: unknown; data?: `0x${string}`; value?: bigint }) => {
 			expect(request.to).toBe(portfolio)
 			expect(request.value).toBe(104n)
@@ -76,7 +130,7 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 					reads.push(request.functionName)
 					switch (request.functionName) {
 						case 'escalationGame':
-							return zeroAddress
+							return game
 						case 'questionData':
 						case 'securityPoolFactory':
 						case 'getPool':
@@ -93,7 +147,7 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 							return 100n
 						case 'purchaseQuote':
 							expect(request.args).toEqual([1n, 7n, 100n])
-							return [3n, 1n]
+							return [quoteFee, 1n]
 						case 'availableMintCapacity':
 							return mode === 'insufficient backing' ? 99n : 100n
 						case 'attoEthToAttoShares':
@@ -104,12 +158,32 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 				}),
 			),
 			account: { address: pool, type: 'json-rpc' as const },
-			getBlock: async () => createBlockWithTimestamp(1n),
+			getBlock: async () => createBlockWithTimestamp(timestamp),
+			getBalance: async () => walletBalance,
+			estimateGas: async () => 100_000n,
+			onTransactionPlan: (steps: readonly TransactionPlanStep[]) => {
+				plans = steps
+			},
 		}
 		if (mode !== 'insufficient backing') {
 			await createCompleteSetInSecurityPool(client, pool, 100n)
 			expect(send).toHaveBeenCalledTimes(1)
 			expect(reads).not.toContain('getCurrentMintingCapacityAttoEth')
+			const validate = plans[0]?.validateBeforeSubmit
+			if (validate === undefined) throw new Error('Missing purchase review validation')
+			await validate()
+			quoteFee = 5n
+			await expect(validate()).rejects.toThrow('Purchase fee changed')
+			quoteFee = 3n
+			walletBalance = 103n
+			await expect(validate()).rejects.toThrow('Insufficient ETH balance')
+			walletBalance = 1_000n
+			timestamp = 100n
+			await expect(validate()).rejects.toThrow('question ended')
+			timestamp = 1n
+			game = pool
+			await expect(validate()).rejects.toThrow('escalation starts')
+			expect(send).toHaveBeenCalledTimes(1)
 		} else {
 			await expect(createCompleteSetInSecurityPool(client, pool, 100n)).rejects.toThrow('Insufficient shared REP')
 			expect(send).not.toHaveBeenCalled()
