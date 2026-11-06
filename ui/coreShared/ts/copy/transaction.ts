@@ -75,8 +75,6 @@ export const reviewedActions: Record<string, { title: string; completedTitle: st
 	dispute: { title: 'Dispute report', completedTitle: 'Report disputed', description: 'Fund the counter-report and swap against the current report.' },
 	withdrawTo: { title: 'Withdraw oracle balance', completedTitle: 'Oracle balance withdrawn', description: 'Withdraw your available oracle balance to the recipient.' },
 	report: { title: 'Create oracle report', completedTitle: 'Oracle report created', description: 'Deposit the approved tokens and start the oracle report.' },
-	requestPriceIfNeededAndStageLiquidation: { title: 'Queue liquidation', completedTitle: 'Liquidation queued', description: 'Queue the liquidation and fund a price report if needed. Settlement may execute the queued liquidation.' },
-	requestPriceIfNeededAndStageOperation: { title: 'Queue vault operation', completedTitle: 'Vault operation queued', description: 'Queue the vault change and fund a price report if needed. Settlement may execute the queued change.' },
 	aggregate3: { title: 'Batched transaction', completedTitle: 'Batched transaction completed', description: 'Run several contract calls in one transaction.' },
 }
 /** The result title of a finished action: the reviewed action's own noun-first title, else the action title in past tense. */

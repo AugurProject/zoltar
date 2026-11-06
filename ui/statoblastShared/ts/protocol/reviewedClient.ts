@@ -47,11 +47,6 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 	}
 	if (preview.functionName === 'settle') details.title = transactionCopy.settleReportNumber(String(preview.args?.[0] ?? ''))
 	if (preview.functionName === 'withdrawFromEscalationGame') details.title = preview.reviewTitle ?? transactionCopy.settleEscalationDeposits
-	if (preview.functionName === 'requestPriceIfNeededAndStageOperation') {
-		const operation = preview.args?.[0]
-		if (operation === 1 || operation === 1n) details.title = 'Queue REP withdrawal'
-		if (operation === 2 || operation === 2n) details.title = 'Queue commitment limit'
-	}
 	if (preview.functionName !== 'approve' || preview.contractAddress === undefined) return details
 	const [spender, amount] = preview.args ?? []
 	if (typeof spender !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(spender) || typeof amount !== 'bigint') throw new Error('Cannot review this token approval.')
@@ -150,7 +145,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			controller.assertActive()
 			await validate()
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
-			if (transaction.functionName === 'requestPrice' || transaction.functionName === 'requestPriceIfNeededAndStageOperation' || transaction.functionName === 'requestPriceIfNeededAndStageLiquidation' || transaction.functionName === 'submitVaultOperations') {
+			if (transaction.functionName === 'requestPrice') {
 				const gasPrice = await client.getGasPrice()
 				const estimate = await client.estimateGas({ account: client.account, to: transaction.contractAddress, data: transaction.data, value: transaction.value, gasPrice: gasPrice > 0n ? gasPrice : 1n })
 				// Reserve execution headroom for refunds and nested calls when an RPC returns gas spent instead of the minimum successful limit.
