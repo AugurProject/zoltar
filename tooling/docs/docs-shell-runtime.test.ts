@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test'
+import { afterEach, expect, test } from 'bun:test'
 import { installDomEnvironment } from '../../ui/coreShared/ts/tests/testUtils/domEnvironment.ts'
 
 const globalKeys = ['HTMLScriptElement', 'HTMLAnchorElement', 'HTMLDialogElement', 'IntersectionObserver', 'KeyboardEvent'] as const
@@ -7,9 +7,21 @@ type DocsManifest = { sections: Array<Record<string, unknown>>; pages: Array<Rec
 
 type LayoutBox = { bottom: number; height: number; top: number }
 
+const layoutCleanups: (() => void)[] = []
+afterEach(() => {
+	for (const cleanup of layoutCleanups.splice(0).reverse()) cleanup()
+})
+
 // happy-dom has no layout, so a test describes where elements sit before the shell measures them.
 function mockLayout(layout: (element: HTMLElement) => LayoutBox | undefined) {
 	const prototype = HTMLElement.prototype
+	const descriptors = ['getBoundingClientRect', 'getClientRects'].map(name => ({ name, descriptor: Object.getOwnPropertyDescriptor(prototype, name) }))
+	layoutCleanups.push(() => {
+		for (const { name, descriptor } of descriptors) {
+			if (descriptor === undefined) Reflect.deleteProperty(prototype, name)
+			else Object.defineProperty(prototype, name, descriptor)
+		}
+	})
 	Object.defineProperty(prototype, 'getBoundingClientRect', {
 		configurable: true,
 		value(this: HTMLElement) {
