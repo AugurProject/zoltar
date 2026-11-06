@@ -10,7 +10,7 @@ import { capitalUnit as E, useCapitalTestFixture } from '../../../../solidity/ts
 import { createWriteClient, writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients'
 import { executePortfolioTakeover, type refreshPortfolioExecution } from '../../src/execution/portfolio-executor.ts'
 import { portfolioTakeoverPlan } from '../../src/core/portfolio-strategy.ts'
-import { submitCall } from '../../src/execution/liquidation-executor.ts'
+import { submitCall } from '../../src/execution/submit-call.ts'
 import { initialRuntimeState } from '../../src/state/operator-state.ts'
 import { portfolioObservation, portfolioSettings } from '../support/portfolio-observation.ts'
 

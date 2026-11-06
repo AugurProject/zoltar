@@ -17,12 +17,12 @@ import { executionProfileId } from '../../src/runtime/operator.ts'
 import { preflightTransactionSubmissionNetwork } from '../../src/runtime/submission-preflight.ts'
 import { loadRuntimeState } from '../../src/state/operator-state.ts'
 import { initialDurableState, initialRuntimeState } from '../../src/state/initial-state.ts'
-import { ZoltarQuestionData_ZoltarQuestionData, statoblast_SecurityPool_SecurityPool, statoblast_WETH9_WETH9, trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory } from '../../../../solidity/ts/types/contractArtifact.ts'
+import { ZoltarQuestionData_ZoltarQuestionData, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger, statoblast_WETH9_WETH9, trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory } from '../../../../solidity/ts/types/contractArtifact.ts'
 import { CHAOS_TEST_FINALITY_BLOCKS, CHAOS_TEST_PRIVATE_KEY, ONE_TOKEN, WETH_ADDRESS, createChaosAnvilFixture, type ChaosAnvilFixture, type ChaosRpcProxy } from './anvil-fixture.ts'
 
 const SCAN_SEED = 42
 const ANVIL_CLOCK = () => 2_000_000_700_000
-const OPERATION_IDS = ['zoltar.question.create-binary', 'open-oracle.weth.wrap', 'trading.pair.create', 'statoblast.vault.deposit-rep'] as const
+const OPERATION_IDS = ['zoltar.question.create-binary', 'open-oracle.weth.wrap', 'trading.pair.create', 'statoblast.capital.deposit'] as const
 
 let fixture: ChaosAnvilFixture | undefined
 
@@ -99,9 +99,9 @@ function settingsFor(current: ChaosAnvilFixture, proxy: ChaosRpcProxy, stateFile
 				'open-oracle.withdraw',
 				'statoblast.complete-set.create',
 				'statoblast.complete-set.redeem',
-				'statoblast.pool.deploy',
-				'statoblast.vault.deposit-rep',
-				'statoblast.vault.set-limit',
+				'statoblast.portfolio.add-question',
+				'statoblast.capital.deposit',
+				'statoblast.capital.set-commitment',
 				'trading.liquidity.add-eth',
 				'trading.pair.create',
 				'trading.pair.initialize-eth',
@@ -109,7 +109,7 @@ function settingsFor(current: ChaosAnvilFixture, proxy: ChaosRpcProxy, stateFile
 				'zoltar.question.create-categorical',
 			],
 			enabledEcosystems: ['zoltar', 'statoblast', 'open-oracle', 'trading'],
-			maximumEthPerOperationAttoEth: ONE_TOKEN,
+			maximumEthPerOperationAttoEth: ONE_TOKEN / 100n,
 			maximumGasCostAttoEth: ONE_TOKEN,
 			maximumRepPerOperationAttoRep: 200n * ONE_TOKEN,
 			minimumEthReserveAttoEth: ONE_TOKEN,
@@ -197,7 +197,7 @@ describe('real ecosystem workflows through the production chaos runtime', () => 
 			const context = runtimeContext(settingsFor(current, proxy, stateFile.path))
 			const scan = await canonicalRescan(context)
 			const created = await executeCanonicalOperation(context, scan, 'zoltar.question.create-binary')
-			const deployment = requiredPlan(created.scan.evaluations, 'statoblast.pool.deploy')
+			const deployment = requiredPlan(created.scan.evaluations, 'statoblast.portfolio.add-question')
 			const wrap = requiredPlan(created.scan.evaluations, 'open-oracle.weth.wrap')
 			const rejected: string[] = []
 			const before = proxy.successfulSendRawTransactionParams.length
@@ -213,7 +213,7 @@ describe('real ecosystem workflows through the production chaos runtime', () => 
 			expect(proxy.successfulSendRawTransactionParams).toHaveLength(before)
 			expect(selected).toBe(deployment)
 			expect(rejected).toEqual([])
-			await executeCanonicalOperation(context, created.scan, 'statoblast.pool.deploy')
+			await executeCanonicalOperation(context, created.scan, 'statoblast.portfolio.add-question')
 		} finally {
 			proxy.dispose()
 			await stateFile.dispose()
@@ -331,7 +331,9 @@ describe('real ecosystem workflows through the production chaos runtime', () => 
 		try {
 			const settings = settingsFor(current, proxy, stateFile.path)
 			const context = runtimeContext(settings)
-			const { plans } = await canonicalPlans(context)
+			const { plans, scan } = await canonicalPlans(context)
+			const capital = scan.snapshot.portfolioCapital[0]
+			if (capital === undefined) throw new Error('Missing native capital ledger')
 			const readClient = createPublicClient({ chain: context.chain, transport: context.pool.transport })
 			const wethBefore = await readClient.readContract({ abi: statoblast_WETH9_WETH9.abi, address: getAddress(WETH_ADDRESS), args: [context.account.address], functionName: 'balanceOf' })
 
@@ -354,7 +356,7 @@ describe('real ecosystem workflows through the production chaos runtime', () => 
 				readClient.readContract({ abi: ZoltarQuestionData_ZoltarQuestionData.abi, address: current.infra.zoltarQuestionData, functionName: 'getQuestionCount' }),
 				readClient.readContract({ abi: statoblast_WETH9_WETH9.abi, address: getAddress(WETH_ADDRESS), args: [context.account.address], functionName: 'balanceOf' }),
 				readClient.readContract({ abi: trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory.abi, address: current.tradingFactory, args: [current.pool], functionName: 'getPair' }),
-				readClient.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: current.pool, args: [context.account.address], functionName: 'securityVaults' }),
+				readClient.readContract({ abi: statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger.abi, address: capital.capitalLedger, args: [context.account.address], functionName: 'ownerCollateral' }),
 			])
 			expect(questionCount).toBe(current.baselineQuestionCount + 1n)
 			expect(wethAfter).toBeGreaterThan(wethBefore)
@@ -375,8 +377,8 @@ describe('real ecosystem workflows through the production chaos runtime', () => 
 			const settings = settingsFor(current, proxy, stateFile.path)
 			const context = runtimeContext(settings)
 			const { scan } = await canonicalPlans(context)
-			const plan = requiredPlan(scan.evaluations, 'statoblast.vault.deposit-rep')
-			expect(plan.steps.map(step => step.id)).toEqual(['approve-rep', 'deposit-rep'])
+			const plan = requiredPlan(scan.evaluations, 'statoblast.capital.deposit')
+			expect(plan.steps.map(step => step.id)).toEqual(['approve-capital-rep', 'deposit-capital'])
 
 			await expect(executeOperationPlan(context.environment, plan)).rejects.toBeInstanceOf(TransactionAwaitingRecovery)
 			expect(proxy.rawTransactions).toHaveLength(2)
@@ -431,12 +433,12 @@ describe('real ecosystem workflows through the production chaos runtime', () => 
 			const withdrawnCredit = scan.snapshot.wallet.tokens.find(token => token.address.toLowerCase() === creditToken.toLowerCase())?.openOracleCredit
 			expect(withdrawnCredit).toBe('1')
 
-			await execute('statoblast.vault.deposit-rep')
-			const depositedVault = scan.snapshot.pools.find(pool => pool.address.toLowerCase() === current.pool.toLowerCase())?.vaults.find(vault => vault.address.toLowerCase() === context.account.address.toLowerCase())
-			if (depositedVault === undefined) throw new Error('Statoblast deposit did not create a discoverable wallet vault')
-			expect(BigInt(depositedVault.repBackingAttoRep)).toBeGreaterThan(0n)
-			expect(BigInt(depositedVault.underwritingLimitAttoEth)).toBe(0n)
-			await execute('statoblast.vault.set-limit')
+			await execute('statoblast.capital.deposit')
+			const depositedCapital = scan.snapshot.portfolioCapital.find(capital => capital.owner.toLowerCase() === context.account.address.toLowerCase())
+			if (depositedCapital === undefined) throw new Error('Deposit did not expose owner capital')
+			expect(BigInt(depositedCapital.principalAttoRep)).toBeGreaterThan(0n)
+			expect(BigInt(depositedCapital.commitmentAttoEth)).toBe(0n)
+			await execute('statoblast.capital.set-commitment')
 			await execute('statoblast.complete-set.create')
 			const mintedShares = scan.snapshot.wallet.shares.find(shares => shares.universeId === '0')
 			expect(BigInt(mintedShares?.invalid ?? '0')).toBeGreaterThan(0n)

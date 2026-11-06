@@ -2,11 +2,6 @@
 pragma solidity 0.8.35;
 
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
-import { IShareToken } from './interfaces/IShareToken.sol';
-import { IERC1155 } from './interfaces/IERC1155.sol';
-import { IERC1155Receiver } from './interfaces/IERC1155Receiver.sol';
-import { IERC165 } from './interfaces/IERC165.sol';
-import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolCapitalLedger } from './SecurityPoolCapitalLedger.sol';
 import { SecurityPoolPortfolioSettlement } from './SecurityPoolPortfolioSettlement.sol';
 import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
@@ -25,8 +20,8 @@ interface IPurchaseForkReadiness {
 	function isReady(uint248 universeId) external view returns (bool);
 }
 
-/// @notice Shared purchase quotes and atomic delivery of three native outcomes.
-contract SecurityPoolPortfolioPurchase is IERC1155Receiver {
+/// @notice Read-only purchase, capacity, and linear fee quotes.
+contract SecurityPoolPortfolioPurchase {
 	uint256 public constant RESOLUTION_WINDOW = 3 days + 7 weeks;
 	address public immutable portfolio;
 	constructor(address authority) {
@@ -78,7 +73,7 @@ contract SecurityPoolPortfolioPurchase is IERC1155Receiver {
 		uint256 demand = capital.demandAttoEth();
 		return active > demand ? active - demand : 0;
 	}
-	function feeStream(ISecurityPool pool, uint48) external view returns (uint96 rate, uint48 stop) {
+	function feeStream(ISecurityPool pool) external view returns (uint96 rate, uint48 stop) {
 		IPortfolioPurchaseRoot root = IPortfolioPurchaseRoot(portfolio);
 		SecurityPoolPortfolioSettlement engine = root.settlement();
 		uint256 nativeTime = engine.feeTimestamp(pool.universeId());
@@ -91,37 +86,5 @@ contract SecurityPoolPortfolioPurchase is IERC1155Receiver {
 		uint256 duration = Math.min(type(uint48).max - nativeTime, engine.ledger().availableFeeBudget(engine.bookIds(pool.universeId()), pool.questionId()) / calculated);
 		if (duration == 0) return (0, 0);
 		return (uint96(calculated), uint48(nativeTime + duration));
-	}
-	function mintCompleteSets(ISecurityPool pool, address recipient, uint256 minimumShares) external payable returns (uint256 minted) {
-		require(msg.sender == portfolio, 'Only portfolio');
-		require(recipient != address(0) && recipient != address(this), 'Invalid share recipient');
-		IShareToken token = pool.shareToken();
-		uint248 universeId = pool.universeId();
-		uint256 beforeShares = token.balanceOfOutcome(universeId, BinaryOutcomes.BinaryOutcome.Invalid, address(this));
-		pool.createCompleteSet{value: msg.value}();
-		minted = token.balanceOfOutcome(universeId, BinaryOutcomes.BinaryOutcome.Invalid, address(this)) - beforeShares;
-		require(minted > 0 && minted >= minimumShares, 'Minimum shares not met');
-	}
-	/// @dev Recipient callbacks run only after the funded premium is recorded.
-	function deliverCompleteSets(ISecurityPool pool, address recipient, uint256 minted) external {
-		require(msg.sender == portfolio, 'Only portfolio');
-		IShareToken token = pool.shareToken();
-		uint248 universeId = pool.universeId();
-		uint256[] memory ids = new uint256[](3);
-		uint256[] memory amounts = new uint256[](3);
-		for (uint256 i; i < 3; i++) {
-			ids[i] = token.getTokenId(universeId, BinaryOutcomes.BinaryOutcome(i));
-			amounts[i] = minted;
-		}
-		IERC1155(address(token)).safeBatchTransferFrom(address(this), recipient, ids, amounts, '');
-	}
-	function onERC1155Received(address, address, uint256, uint256, bytes calldata) external pure returns (bytes4) {
-		return IERC1155Receiver.onERC1155Received.selector;
-	}
-	function onERC1155BatchReceived(address, address, uint256[] calldata, uint256[] calldata, bytes calldata) external pure returns (bytes4) {
-		return IERC1155Receiver.onERC1155BatchReceived.selector;
-	}
-	function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
-		return interfaceId == type(IERC1155Receiver).interfaceId || interfaceId == type(IERC165).interfaceId;
 	}
 }

@@ -3,8 +3,8 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="description" content="Create a question and SecurityPool in Statoblast, back it with REP, commit to underwrite it through an OpenOracle report, and mint a complete set." />
-		<title>Your first security pool · Augur documentation</title>
+		<meta name="description" content="Add REP to a simulated shared portfolio and purchase question complete sets." />
+		<title>Back a shared portfolio · Augur documentation</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
 	</head>
@@ -12,91 +12,39 @@
 		<main id="main-content">
 			<header>
 				<p class="kicker">Tutorial</p>
-				<h1>Your first security pool</h1>
-				<p>You will create a yes-or-no question and its <a href="../reference/glossary.html#security-pool">SecurityPool</a>, back the pool with 1,000 REP, commit to underwrite 10 ETH of it, and mint the pool's first <a href="../reference/glossary.html#complete-set">complete set</a>. At the end the pool shows 1 ETH of <a href="../reference/glossary.html#open-interest">open interest</a> against a 10 ETH commitment.</p>
+				<h1>Back a shared portfolio and mint shares</h1>
+				<p>Use the browser simulator to add 1 REP to a shared portfolio, then purchase complete sets for one of its questions. A complete set contains one share of every outcome. You will see your principal rise from 5,000 to 5,001 REP and receive shares in your simulated wallet.</p>
 			</header>
 			<section id="before-you-start">
-				<h2>Before you start</h2>
-				<p>Statoblast is the market layer built on <a href="../explanation/zoltar.html">Zoltar</a>, the forkable oracle: a SecurityPool holds the ETH behind one question's outcome shares, and <a href="../reference/glossary.html#vault">vault</a> owners back it with <a href="../reference/glossary.html#rep">REP</a>. <a href="../explanation/statoblast.html">How Statoblast works</a> explains the model; this tutorial only walks through it.</p>
-				<p>Run <code>bun run app:serve:statoblast</code> and open <code>http://localhost:12347/?simulate=1&amp;genesis=yes&amp;simScenario=deployed</code>. That browser-local simulator has the contracts deployed, no pools yet, and a wallet holding ETH and REP; the screenshots below come from it. It never reflects live chain state.</p>
-			</section>
-			<section id="create">
-				<h2>Create the question and pool</h2>
-				<ol>
-					<li>Select <strong>Create pool</strong>. Keep <strong>Create a new question</strong> and the <strong>Binary</strong> question type.</li>
-					<li>Enter a <strong>Title</strong>, for example <code>Will it rain in Lisbon on 1 June 2027?</code>, and an <strong>End time</strong> after the event. Leave <strong>Security multiplier</strong> at 2 and <strong>Initial report priority fee</strong> at 10.</li>
-					<li>Select <strong>Create question and pool</strong> and confirm the transaction.</li>
-				</ol>
-				<figure class="screenshot" id="fig-statoblast-create-pool" aria-labelledby="fig-statoblast-create-pool-caption">
-					<a class="screenshot-link" href="../assets/screenshots/statoblast/create-pool.png"><img width="723" height="1224" src="../assets/screenshots/statoblast/create-pool.png" alt="The Create pool form with a binary question titled Will it rain in Lisbon on 1 June 2027?, an end time of 2 June 2027, security multiplier 2, initial report priority fee 10 nanoETH per gas, a draft preview with Yes, No, and Invalid outcomes, and a Create question and pool button." loading="lazy" /></a>
-					<figcaption id="fig-statoblast-create-pool-caption"><span class="figure-label">The pool form.</span> The security multiplier sets how much REP must back each ETH a vault commits; every binary market has the three outcomes in the preview.</figcaption>
-				</figure>
-				<p>The confirmation card lists the new question and pool. Select <strong>Open pool</strong>.</p>
-				<figure class="screenshot" id="fig-statoblast-pool-created" aria-labelledby="fig-statoblast-pool-created-caption">
-					<a class="screenshot-link" href="../assets/screenshots/statoblast/pool-created.png"><img width="755" height="425" src="../assets/screenshots/statoblast/pool-created.png" alt="The Pool created card for Will it rain in Lisbon on 1 June 2027?, listing question type Binary, the question ID, end time, outcomes Yes, No, and Invalid, the pool address, security multiplier 2, and an Open pool button." loading="lazy" /></a>
-					<figcaption id="fig-statoblast-pool-created-caption"><span class="figure-label">The new pool.</span> One transaction created both the Zoltar question and its SecurityPool.</figcaption>
+				<h2>Open the prepared portfolio</h2>
+				<p>This exercise uses fake assets in a browser-local chain. From a prepared checkout, run <code>bun run app:serve:statoblast</code> and open <code>http://localhost:12347/#/portfolios?simulate=1&amp;genesis=yes&amp;simScenario=portfolio</code>. No wallet extension or live funds are needed. Wait for <strong>Price current</strong> in the Shared backing section.</p>
+				<p>The fixture supplies two registered questions, 5,000 REP of your principal, a 10 ETH commitment and a 120% saved health target. The portfolio shares that commitment across its questions; each question has separate outcome shares. See <a href="../explanation/statoblast.html">How Statoblast works</a> for the economic model.</p>
+				<figure class="screenshot">
+					<a class="screenshot-link" href="../assets/screenshots/statoblast/portfolio-capital.png"><img width="800" height="312" src="../assets/screenshots/statoblast/portfolio-capital.png" alt="The prepared portfolio's Your capital section shows principal, commitment and saved health target." loading="lazy" /></a>
+					<figcaption><span class="figure-label">Your starting account.</span> The fixture has already authorized backing.</figcaption>
 				</figure>
 			</section>
 			<section id="deposit">
-				<h2>Back the pool with REP</h2>
+				<h2>Add one REP</h2>
 				<ol>
-					<li>On the pool page, open <strong>Vaults</strong> and select <strong>My vault</strong>. The <strong>Vault operations</strong> form is shown there.</li>
-					<li>Enter <code>1000</code> in <strong>REP deposit amount (optional)</strong>, select <strong>Review vault operations</strong>, then <strong>Approve 1k REP</strong> and confirm the approval.</li>
-					<li>Select <strong>Submit vault operations</strong> and confirm. The panel shows <strong>REP deposit confirmed</strong>; your vault is now created.</li>
+					<li>In <strong>Deposit REP</strong>, enter <code>1</code> in <strong>REP amount</strong>. If an approval is requested, approve the displayed amount and confirm its review.</li>
+					<li>Select <strong>Deposit REP</strong>, review the transaction, and confirm it.</li>
+					<li>Wait for <strong>Transaction confirmed</strong>. Under <strong>Your capital</strong>, check that <strong>Your total principal</strong> is now 5,001 REP. Your commitment remains 10 ETH: depositing does not automatically increase it.</li>
 				</ol>
-				<figure class="screenshot" id="fig-statoblast-deposit-rep" aria-labelledby="fig-statoblast-deposit-rep-caption">
-					<a class="screenshot-link" href="../assets/screenshots/statoblast/deposit-rep.png"><img width="768" height="471" src="../assets/screenshots/statoblast/deposit-rep.png" alt="The vault operations review with the REP approval completed and Submit vault operations ready to deposit 1,000 REP." loading="lazy" /></a>
-					<figcaption id="fig-statoblast-deposit-rep-caption"><span class="figure-label">The REP deposit.</span> Approval and deposit are separate transactions.</figcaption>
-				</figure>
-			</section>
-			<section id="commit">
-				<h2>Commit to underwrite</h2>
-				<p>REP alone does not let the pool take collateral. Your <a href="../reference/glossary.html#underwriting-commitment">underwriting commitment</a> is the ETH amount you agree to cover, and raising it needs a valid REP/ETH price from <a href="../reference/glossary.html#open-oracle">OpenOracle</a>. A new pool has no price yet, so this first commitment requests one.</p>
-				<ol>
-					<li>Stay in <strong>My vault</strong>.</li>
-					<li>Enter <code>3</code> in <strong>Initial report price</strong>. On a live network, <strong>Fetch from Uniswap</strong> fills in a market price; the simulator has no Uniswap pricing.</li>
-					<li>Enter <code>10</code> in <strong>Commitment limit</strong>. Select <strong>Review vault operations</strong> to review the transaction and its funding requirements.</li>
-					<li>Approve WETH and REP with their separate buttons. Each approval has an editable amount; use the suggested amounts for this tutorial.</li>
-					<li>Select <strong>Submit vault operations</strong>, shown with the ETH amount to send, and confirm that transaction. It funds a new price report and stages your change; the panel shows <strong>Vault operations queued · awaiting oracle settlement</strong>.</li>
-				</ol>
-				<figure class="screenshot" id="fig-statoblast-set-commitment" aria-labelledby="fig-statoblast-set-commitment-caption">
-					<a class="screenshot-link" href="../assets/screenshots/statoblast/set-commitment.png"><img width="768" height="732" src="../assets/screenshots/statoblast/set-commitment.png" alt="The vault operations review with separate WETH and REP approval steps before submitting the commitment change." loading="lazy" /></a>
-					<figcaption id="fig-statoblast-set-commitment-caption"><span class="figure-label">The vault operations review.</span> At 3 REP per ETH and a security multiplier of 2, 1,000 REP backs about 166 ETH, so 10 ETH leaves the vault healthy.</figcaption>
-				</figure>
-			</section>
-			<section id="settle">
-				<h2>Settle the price report</h2>
-				<p>The report can be settled once it has stood unchallenged for eight minutes, and your staged change runs when it settles. The change expires a few minutes after the report becomes settleable, so settle promptly; an expired change must be staged again.</p>
-				<ol>
-					<li>In the simulator, select <strong>Show details</strong> in the banner, open <strong>QA controls, prices, and time travel</strong>, and select <strong>+10 min</strong>. On a live network, wait instead.</li>
-					<li>On the pool page, select <strong>View report</strong> next to the <strong>OpenOracle price</strong>.</li>
-					<li>When the page says <strong>Ready to settle</strong>, select <strong>Settle report</strong> and confirm. Whoever settles collects the report's settlement bounty.</li>
-				</ol>
-				<figure class="screenshot" id="fig-statoblast-settle-report" aria-labelledby="fig-statoblast-settle-report-caption">
-					<a class="screenshot-link" href="../assets/screenshots/statoblast/settle-report.png"><img width="785" height="398" src="../assets/screenshots/statoblast/settle-report.png" alt="Price report #1 at 3.00 REP per ETH, marked Ready to settle, with a Settle report button." loading="lazy" /></a>
-					<figcaption id="fig-statoblast-settle-report-caption"><span class="figure-label">A settleable report.</span> Settling accepts the price and runs the staged commitment change in the same transaction.</figcaption>
-				</figure>
-				<p>Return to the pool with the browser's Back button. In <strong>My vault</strong>, <strong>Commitment limit</strong> now reads 10.00 ETH and the panel shows <strong>Vault operations executed</strong>.</p>
-				<figure class="screenshot" id="fig-statoblast-vault-commitment" aria-labelledby="fig-statoblast-vault-commitment-caption">
-					<a class="screenshot-link" href="../assets/screenshots/statoblast/vault-commitment.png"><img width="755" height="322" src="../assets/screenshots/statoblast/vault-commitment.png" alt="The My vault summary showing a Commitment limit of 10.00 ETH and Vault REP backing of 1 000.00 REP." loading="lazy" /></a>
-					<figcaption id="fig-statoblast-vault-commitment-caption"><span class="figure-label">The applied commitment.</span> The pool can now accept up to 10 ETH of collateral.</figcaption>
-				</figure>
 			</section>
 			<section id="mint">
-				<h2>Mint a complete set</h2>
+				<h2>Purchase complete sets</h2>
 				<ol>
-					<li>Select <strong>Open shares</strong>, then <strong>Mint complete sets</strong>.</li>
-					<li>Enter <code>1</code> in <strong>ETH to mint with</strong>, select <strong>Mint complete sets</strong>, and confirm.</li>
+					<li>In <strong>Mint portfolio complete sets</strong>, choose either entry under <strong>Registered questions on this page</strong>.</li>
+					<li>Enter <code>0.01</code> for <strong>Collateral ETH</strong>, <code>0.1</code> for <strong>Maximum purchase fee ETH</strong>, and <code>0</code> for <strong>Minimum complete sets</strong>. The zero minimum is suitable for this controlled simulation; a live purchase should set a minimum from its quote.</li>
+					<li>Check <strong>Purchase fee ETH</strong>. Select <strong>Mint portfolio complete sets</strong> and confirm the review. Unused fee budget returns to your wallet.</li>
+					<li>Wait for <strong>Transaction confirmed</strong>. Open the selected question through its link and inspect your outcome balances in the Shares view. Each outcome has the same newly minted quantity.</li>
 				</ol>
-				<figure class="screenshot" id="fig-statoblast-mint" aria-labelledby="fig-statoblast-mint-caption">
-					<a class="screenshot-link" href="../assets/screenshots/statoblast/mint-complete-sets.png"><img width="768" height="487" src="../assets/screenshots/statoblast/mint-complete-sets.png" alt="The Mint complete sets dialog showing 10.00 ETH available to mint, 1 ETH entered, and an enabled Mint complete sets button." loading="lazy" /></a>
-					<figcaption id="fig-statoblast-mint-caption"><span class="figure-label">Minting.</span> Minting needs no oracle price; here it only has to fit within the pool's total commitments.</figcaption>
+				<figure class="screenshot">
+					<a class="screenshot-link" href="../assets/screenshots/statoblast/portfolio-purchase.png"><img width="800" height="741" src="../assets/screenshots/statoblast/portfolio-purchase.png" alt="The portfolio purchase form selects a registered question and bounds collateral, purchase fee and shares received." loading="lazy" /></a>
+					<figcaption><span class="figure-label">Purchase controls.</span> The fee budget is separate from collateral.</figcaption>
 				</figure>
-				<p>Your wallet now holds the new Yes, No, and Invalid shares, and the pool summary's <strong>Open interest / commitment</strong> reads 1.00 ETH / 10.00 ETH. That is the whole underwriting loop: back a pool, commit capacity, and let collateral in. <a href="../explanation/fees.html">Open-interest fees</a> explains what your commitment earns, and <a href="./trading-first-market.html">Your first Trading market</a> opens a market for a pool like this one.</p>
-				<figure class="screenshot" id="fig-statoblast-pool-after-mint" aria-labelledby="fig-statoblast-pool-after-mint-caption">
-					<a class="screenshot-link" href="../assets/screenshots/statoblast/pool-after-mint.png"><img width="800" height="1210" src="../assets/screenshots/statoblast/pool-after-mint.png" alt="The pool page for Will it rain in Lisbon on 1 June 2027?, operational, with Open interest / commitment reading 1.00 ETH of 10.00 ETH and the Shares tab showing 1.00 redeemable complete set and 1.00 each of Yes, No, and Invalid." loading="lazy" /></a>
-					<figcaption id="fig-statoblast-pool-after-mint-caption"><span class="figure-label">The finished pool.</span> One ETH of collateral now backs outstanding shares, inside the 10 ETH you committed.</figcaption>
-				</figure>
+				<p>You have added capital and bought question shares through the same portfolio. Reloading a new simulation resets its local chain; these balances are not live assets. To understand fees or exiting capital, continue with <a href="../explanation/fees.html">Fees</a> and the <a href="../reference/operator-guardrails.html#security-pool-guardrails">capital guardrails</a>.</p>
 			</section>
 		</main>
 		<script src="../assets/js/responsiveDocs.js"></script>

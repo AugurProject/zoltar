@@ -54,7 +54,7 @@ test('reconstructs repeated forks and skips consumed inherited identities', asyn
 	origin.local.push(second)
 	middle.inherited.push(second)
 	middle.consumed.push(fixture.leaf.leaf.parentDepositIndex)
-	fixture.games.push({ game: grandchild, parent: child, inherited: [...middle.inherited], local: [], consumed: [], direct: new Set() })
+	fixture.games.push({ game: grandchild, parent: child, inherited: [...middle.inherited], local: [], consumed: [] })
 	const candidates = await load(fixture, grandchild)
 	expect(candidates.map(candidate => candidate.parentDepositIndex)).toEqual([second.leaf.parentDepositIndex])
 	const candidate = candidates[0]
@@ -91,14 +91,6 @@ test('continues through an empty consumed-node page to the oldest live claim', a
 	expect(candidates[0]?.parentDepositIndex).toBe(fixture.leaf.leaf.parentDepositIndex)
 	expect(candidates[0]?.proof?.leafIndex).toBe('0')
 	expect(fixture.calls.filter(call => call.functionName === 'getCarryLeafPageByOutcome')).toHaveLength(2)
-})
-
-test('preserves a directly claimed leaf hash while excluding it from wallet claims', async () => {
-	const fixture = storageFixture()
-	const origin = fixture.games[0]
-	if (origin === undefined) throw new Error('Missing source')
-	origin.direct.add(fixture.leaf.leaf.parentDepositIndex)
-	expect(await load(fixture)).toEqual([])
 })
 
 for (const [name, corrupt, error] of [
@@ -221,7 +213,7 @@ test('reconstructs pop witnesses from one canonical segment without historical l
 	fixture.setCheckpointApplying()
 	const result = await scan(fixture)
 	expect(result.checkpoints).toHaveLength(1)
-	expect(result.checkpoints[0]?.transforms).toEqual([{ repBeforeAttoRep: 20n.toString(), repRemainingAttoRep: 15n.toString(), consumedBeforeAttoRep: 1n.toString() }])
+	expect(result.checkpoints[0]?.transforms).toEqual([{ consumedBeforeAttoRep: 1n.toString() }])
 	expect(result.checkpoints[0]?.baseCommitment).toBe(zeroHash)
 	expect(fixture.calls.filter(call => call.functionName === 'getClaimIntervalTransform')).toHaveLength(2)
 	expect(fixture.calls.filter(call => call.method === 'eth_call').every(call => call.block === toHex(anchor))).toBeTrue()
@@ -328,8 +320,8 @@ test.each([
 	const fixture = storageFixture()
 	const gameAt = (generation: number) => getAddress(toHex(BigInt(generation * 100), { size: 20 }))
 	const childGenerations = [parentGeneration + 1, parentGeneration + 2, parentGeneration + 3]
-	for (let generation = 3; generation <= parentGeneration; generation++) fixture.games.push({ game: gameAt(generation), parent: gameAt(generation - 1), inherited: [fixture.leaf], local: [], consumed: [], direct: new Set() })
-	for (const generation of childGenerations) fixture.games.push({ game: gameAt(generation), parent: gameAt(parentGeneration), inherited: [fixture.leaf], local: [], consumed: [], direct: new Set() })
+	for (let generation = 3; generation <= parentGeneration; generation++) fixture.games.push({ game: gameAt(generation), parent: gameAt(generation - 1), inherited: [fixture.leaf], local: [], consumed: [] })
+	for (const generation of childGenerations) fixture.games.push({ game: gameAt(generation), parent: gameAt(parentGeneration), inherited: [fixture.leaf], local: [], consumed: [] })
 	for (let generation = 1; generation <= parentGeneration + 3; generation++) {
 		fixture.setProgress(gameAt(generation), { nextSourceGame: generation <= 2 ? '0x0000000000000000000000000000000000000000' : gameAt(generation > parentGeneration ? parentGeneration - 1 : generation - 2), pendingSteps: 0n, ready: generation === parentGeneration, complete: false })
 		if (generation <= parentGeneration) fixture.setForked(gameAt(generation))
@@ -375,7 +367,7 @@ test('one canonical scan shares game economics reads while retaining per-leaf ch
 
 test('without Multicall a 24-step target finishes its one-step parent before preparing the target', async () => {
 	const fixture = storageFixture()
-	fixture.games.push({ game: grandchild, parent: child, inherited: [fixture.leaf], local: [], consumed: [], direct: new Set() })
+	fixture.games.push({ game: grandchild, parent: child, inherited: [fixture.leaf], local: [], consumed: [] })
 	fixture.setCheckpointApplying()
 	fixture.setProgress(child, { nextSourceGame: '0x0000000000000000000000000000000000000000', pendingSteps: 1n, ready: true, complete: false })
 	fixture.setProgress(grandchild, { nextSourceGame: '0x0000000000000000000000000000000000000000', pendingSteps: 24n, ready: false, complete: false })

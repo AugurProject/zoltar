@@ -9,13 +9,14 @@ import {
 	statoblast_EscalationGame_EscalationGame,
 	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
-	statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry,
 	statoblast_Multicall3_Multicall3,
 	statoblast_openOracle_OpenOracle_OpenOracle,
 	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed,
+	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio,
+	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator,
+	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex,
 	statoblast_SecurityPool_SecurityPool,
-	statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate,
 	statoblast_SecurityPoolForker_SecurityPoolForker,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger,
 	statoblast_SecurityPoolPortfolioAuction_SecurityPoolPortfolioAuction,
@@ -23,7 +24,6 @@ import {
 	statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault,
 	statoblast_tokens_ERC1155_ERC1155,
 	statoblast_tokens_ShareToken_ShareToken,
-	statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction,
 	statoblast_WETH9_WETH9,
 	trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory,
 	trading_TwoWayConstantProductPair_TwoWayConstantProductPair,
@@ -45,8 +45,10 @@ describe('generated bot contract ABIs', () => {
 			[abis.zoltarAbi, Zoltar_Zoltar.abi],
 			[abis.zoltarQuestionDataAbi, ZoltarQuestionData_ZoltarQuestionData.abi],
 			[abis.securityPoolFactoryAbi, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi],
-			[abis.securityPoolAbi, [...statoblast_SecurityPool_SecurityPool.abi, ...statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.abi.filter(item => item.type === 'function' && item.name === 'setVaultUnderwritingLimit')]],
-			[abis.liquidationApprovalRegistryAbi, statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi],
+			[abis.securityPoolPortfolioAbi, statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio.abi],
+			[abis.securityPoolPortfolioForkCoordinatorAbi, statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator.abi],
+			[abis.securityPoolCommitmentIndexAbi, statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex.abi],
+			[abis.securityPoolAbi, statoblast_SecurityPool_SecurityPool.abi],
 			[abis.openOraclePriceCoordinatorAbi, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi],
 			[abis.sharedPoolPriceFeedAbi, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi],
 			[abis.securityPoolForkerAbi, statoblast_SecurityPoolForker_SecurityPoolForker.abi],
@@ -54,7 +56,6 @@ describe('generated bot contract ABIs', () => {
 			[abis.securityPoolPortfolioAuctionAbi, statoblast_SecurityPoolPortfolioAuction_SecurityPoolPortfolioAuction.abi],
 			[abis.securityPoolUniformPriceAuctionAbi, statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction.abi],
 			[abis.securityPoolAuctionVaultAbi, statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault.abi],
-			[abis.uniformPriceDualCapBatchAuctionAbi, statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi],
 			[abis.openOracleAbi, statoblast_openOracle_OpenOracle_OpenOracle.abi],
 			[abis.weth9Abi, statoblast_WETH9_WETH9.abi],
 			[abis.multicall3Abi, statoblast_Multicall3_Multicall3.abi],
@@ -84,10 +85,6 @@ describe('generated bot contract ABIs', () => {
 
 	test('the named events are the compiled artifact events', () => {
 		expect(generated(abis.deploySecurityPoolEvent)).toEqual(event(statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, 'DeploySecurityPool'))
-		expect(generated(abis.vaultAccountingCheckpointEvent)).toEqual(event(statoblast_SecurityPool_SecurityPool.abi, 'VaultAccountingCheckpoint'))
-		expect(generated(abis.vaultEscrowUpdatedEvent)).toEqual(event(statoblast_EscalationGame_EscalationGame.abi, 'VaultEscrowUpdated'))
-		expect(generated(abis.ordinarySettlementInitializedEvent)).toEqual(event(statoblast_EscalationGame_EscalationGame.abi, 'OrdinarySettlementInitialized'))
-		expect(generated(abis.truthAuctionHaircutAppliedEvent)).toEqual(event(statoblast_EscalationGame_EscalationGame.abi, 'TruthAuctionHaircutApplied'))
 	})
 
 	test('every generated export is covered by an artifact assertion', () => {
@@ -97,12 +94,13 @@ describe('generated bot contract ABIs', () => {
 			'zoltarAbi',
 			'zoltarQuestionDataAbi',
 			'securityPoolFactoryAbi',
+			'securityPoolPortfolioAbi',
+			'securityPoolPortfolioForkCoordinatorAbi',
+			'securityPoolCommitmentIndexAbi',
 			'securityPoolAbi',
-			'liquidationApprovalRegistryAbi',
 			'openOraclePriceCoordinatorAbi',
 			'sharedPoolPriceFeedAbi',
 			'securityPoolForkerAbi',
-			'uniformPriceDualCapBatchAuctionAbi',
 			'openOracleAbi',
 			'weth9Abi',
 			'multicall3Abi',
@@ -116,10 +114,6 @@ describe('generated bot contract ABIs', () => {
 			'genesisUniswapV3PoolStateAbi',
 			'escalationGameAbi',
 			'deploySecurityPoolEvent',
-			'vaultAccountingCheckpointEvent',
-			'vaultEscrowUpdatedEvent',
-			'ordinarySettlementInitializedEvent',
-			'truthAuctionHaircutAppliedEvent',
 			'portfolioRuntimeIdentities',
 			'securityPoolCapitalLedgerAbi',
 			'securityPoolPortfolioAuctionAbi',

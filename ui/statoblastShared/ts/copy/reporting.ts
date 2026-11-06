@@ -92,11 +92,8 @@ export const reportAmountPlaceholder = '0'
 export const reportAmountLabel = (outcome: string, amount: string) => `Report ${outcome} · ${amount} REP`
 export const approveAmountLabel = (amount: string) => `Approve ${amount} REP`
 export const paidFromVault = 'Paid from: pool vault REP (no approval needed)'
-export const loadingPriceReport = 'Loading price report…'
 export const paidFromWallet = 'Paid from: wallet REP'
 export const availableBalance = (amount: string) => `Available: ${amount} REP.`
-export const continuationFundingHelp = 'Your wallet REP first enters your vault in this pool, then funds your report.'
-export const continuationMinimumDeposit = <Amount>(deposit: Amount, remainder: Amount): CopyParts<Amount> => ['This pool requires a ', deposit, ' deposit for this report. Your vault will hold ', remainder, ' afterward.']
 export const yourPositions = 'Your positions'
 export const resultSummary = (outcome: string) => `Resolved as ${outcome}.`
 export const claimDeposits = (outcome: string, amount: string) => `Claim ${amount}\u00a0REP from ${outcome}`
@@ -104,12 +101,6 @@ export const clearDeposits = (outcome: string) => `Clear ${outcome} deposits (wo
 export const clearLosingDepositsDetail = 'Losing deposits return no REP. Clearing them costs gas and is only needed before you redeem your vault REP from this pool: until then they still count as your dispute-staked REP, which blocks redemption.'
 export const clearLosingDepositsReviewDescription = 'Returns no REP. Removes these losing deposits from your vault’s dispute-staked REP so you can redeem your vault REP from this pool.'
 export const results = 'Results'
-
-export const priceExpired = 'Pool price expired. Request a new price to continue.'
-export const priceRequested = (countdown: string) => `Price requested. Ready to settle in ${countdown}.`
-export const priceReportReady = (id: bigint) => `Price report #${id} is ready.`
-export const settlingPriceReport = (id: bigint) => `Settling report #${id}…`
-export const priceUpdated = (time: string) => `Price updated. Valid until ${time}.`
 
 export const reportedAmount = (outcome: string, amount: string) => `Reported ${amount} REP on ${outcome}`
 export const approvedAmount = (amount: string) => `Approved ${amount} REP`
@@ -160,10 +151,7 @@ export const forkViewerStake = <Amount>(side: string, stake: Amount): CopyParts<
 
 export const updateReminder = 'Update your reminder (.ics)'
 export const zeroBalanceStatusDetail = 'If all balances stay at zero, the timeout outcome is Invalid.'
-
-export const repSource = 'REP source'
 export const noVaultRepSelectWallet = 'No REP is available in your pool vault. Select Wallet REP to report.'
-export const insufficientVaultRepSelectWallet = (balance: string) => `Only ${balance} is available in your pool vault. Reduce the amount or select Wallet REP.`
 
 export const loadingVaultFunding = 'Loading vault funding requirements…'
 
@@ -187,3 +175,41 @@ export const depositDeadlinePreview = (deadline: string, extension: string, unch
 export const dismissReminderUpdate = 'Dismiss'
 
 export const responseWindowEndsTooSoon = 'The response window ends too soon. Wait for the result before settling deposits.'
+
+export const recoverySource = 'Reporter recovery'
+
+export const settleInheritedClaim = 'Settle inherited reporter claim'
+
+export const prepareInheritedClaim = 'Prepare inherited reporter claim'
+
+export const claimSettled = 'Reporter claim settled'
+
+export const claimPrepared = 'Reporter claim prepared'
+
+export const inheritedClaims = 'Inherited reporter claims'
+
+export const inheritedClaimsDescription = 'Recover deposits carried from the parent question after this branch resolves. Prepare long histories in bounded batches.'
+
+export const claimPending = 'Another claim transaction is pending.'
+
+export const claimAuthenticationRequired = 'Refresh to authenticate this claim.'
+
+export const claimPreparationRequired = 'Prepare this claim first.'
+
+export const claimResolutionRequired = 'Wait for branch resolution.'
+
+export const claimWinningOutcomeRequired = 'Only the winning outcome can recover REP.'
+
+export const repUnit = 'REP'
+
+export const prepareClaim = 'Prepare claim'
+
+export const preparingClaim = 'Preparing claim'
+
+export const claimAlreadyPrepared = 'Claim prepared.'
+
+export const settleClaim = 'Settle claim'
+
+export const settlingClaim = 'Settling claim'
+
+export const inheritedClaimIdentity = (outcome: string, index: string) => `${outcome} · Deposit #${index} ·`

@@ -1,3 +1,4 @@
+import { auctionFixture } from '../support/portfolio-fixtures.ts'
 import type { ImmutableTopologyIdentity } from '../../src/monitoring/topology-identity.ts'
 import { availableHistoryExecutionReady } from '../../src/runtime/scan-readiness.ts'
 import { indexWithCurrentRefunds, snapshotWithProtocolIndex } from '../../src/runtime/protocol-index-snapshot.ts'
@@ -25,7 +26,7 @@ import { applyLiveNoveltyInventoryReadiness, liveInventoryReadinessBlockers } fr
 
 test('execution waits for the retained range and discovery, without requiring the unavailable prefix', () => {
 	const index: ChaosProtocolIndex = {
-		schemaVersion: 3,
+		schemaVersion: 4,
 		chainId: 1,
 		openOracle: wallet,
 		zoltar: wallet,
@@ -111,16 +112,16 @@ function settings() {
 function snapshot(): EcosystemSnapshot {
 	return {
 		anchor: { baseFeePerGas: '1', blockHash: zeroHash, blockNumber: '10', timestamp: '20' },
-		auctions: [{ address: auction, bids: [], clearingTick: '0', endTime: '30', finalized: false, hasClearingPrice: false, minimumBidAttoEth: 1n.toString(), pendingEthRefund: '0', pool: wallet, startTime: '1', underfunded: false, underfundedWinningAttoEth: 0n.toString() }],
+		auctions: [{ ...auctionFixture(), address: auction, engine: auction }],
 		chainId: 11155111,
 		deployments: { openOracle: oracle, questionData: wallet, securityPoolFactory: wallet, securityPoolForker: wallet, tradingFactory: wallet, tradingRouter: wallet, weth, zoltar: wallet },
 		escalationDeposits: [],
 		pairs: [],
+		portfolioCapital: [],
 		pools: [],
 		questions: [],
 		reports: [],
 		schemaVersion: 1,
-		stagedOperations: [],
 		universes: [
 			{ forkQuestionId: '0', forkThresholdAttoRep: 1n.toString(), forkTime: '0', id: '0', initialEscalationDepositAttoRep: (10n ** 18n).toString(), knownChildOutcomes: [], migrationBalance: '0', migrationRepSplitProgressByOutcome: {}, nonDecisionThresholdAttoRep: (2n * 10n ** 18n).toString(), repToken: rep },
 		],
@@ -191,7 +192,7 @@ describe('canonical scan policy', () => {
 	test('projects indexed identities and wallet funding inventory', () => {
 		const base = snapshot()
 		const index: ChaosProtocolIndex = {
-			auctionBids: { [auction.toLowerCase()]: [{ amountAttoEth: 4n.toString(), index: '2', refunded: false, tick: '-1' }] },
+			auctionBids: { [auction.toLowerCase()]: [{ bidId: '2', vault: wallet, lots: '4', minimumAttoRepPerLot: 1n.toString(), targetHealthBps: '10000', settled: false }] },
 			auctionRefunds: {},
 			chainId: 11155111,
 			childRepSplits: [],
@@ -200,14 +201,14 @@ describe('canonical scan policy', () => {
 			migrationRepSplits: [],
 			openOracle: oracle,
 			reports: [],
-			schemaVersion: 3,
+			schemaVersion: 4,
 			securityPoolForker: wallet,
 			startBlock: '0',
 			wallet,
 			zoltar: wallet,
 		}
 		const projected = snapshotWithProtocolIndex(base, index)
-		expect(projected.auctions[0]?.bids[0]?.tick).toBe('-1')
+		expect(projected.auctions[0]?.bids[0]?.bidId).toBe('2')
 		expect(walletInventory(projected)).toEqual({
 			eth: '12',
 			rep: [{ balance: '9', symbol: 'REP', token: rep, universeId: '0' }],
@@ -234,7 +235,7 @@ describe('canonical scan policy', () => {
 			migrationRepSplits: [],
 			openOracle: partial.deployments.openOracle,
 			reports: [],
-			schemaVersion: 3,
+			schemaVersion: 4,
 			securityPoolForker: partial.deployments.securityPoolForker,
 			startBlock: '0',
 			wallet: partial.wallet.address,
@@ -285,7 +286,7 @@ describe('canonical scan policy', () => {
 			],
 			openOracle: base.deployments.openOracle,
 			reports: [],
-			schemaVersion: 3,
+			schemaVersion: 4,
 			securityPoolForker: base.deployments.securityPoolForker,
 			startBlock: '0',
 			wallet: base.wallet.address,
@@ -293,7 +294,6 @@ describe('canonical scan policy', () => {
 		}
 		const projected = snapshotWithProtocolIndex(base, index)
 		expect(projected.universes[0]?.migrationRepSplitProgressByOutcome).toEqual({ '1': '20', '2': '25' })
-		expect(projected.pools[0]?.forkRepMigrationProgressByOutcome).toEqual({ '1': '30', '2': '40' })
 	})
 
 	test('blocks disabled ecosystems and every executable operation during index backfill', () => {
@@ -548,29 +548,6 @@ describe('canonical scan policy', () => {
 			if (explanation === undefined) throw new Error(`Missing coverage explanation for ${operation.definition.id}`)
 			expect(operation.definition.description, operation.definition.id).toBe(explanation)
 		}
-	})
-
-	test('keeps a semantic selector alias visible beside its one executable catalog route', () => {
-		const coverage = unavailableOperationCatalog('Configure an operator signer')
-		const executable = coverage.filter(operation => operation.definition.id === 'statoblast.auction.settle-bids')
-		const aliases = coverage.filter(operation => operation.definition.contract === 'SecurityPoolForker' && operation.definition.method === 'claimAuctionProceeds')
-		expect(executable).toHaveLength(1)
-		expect(aliases).toHaveLength(1)
-		expect(aliases[0]?.definition).toMatchObject({
-			classification: 'lifecycle-obligation',
-			description: expect.stringContaining('Semantic alias'),
-			id: 'surface.security-pool-forker.claim-auction-proceeds',
-			independentlyExecutable: false,
-			label: 'SecurityPoolForker.claimAuctionProceeds',
-			risk: 'low',
-		})
-		expect(aliases[0]?.eligibility).toEqual({
-			blockers: [expect.stringContaining('SecurityPoolForker.settleAuctionBids')],
-			eligible: false,
-		})
-		expect(aliases[0]?.plan).toBeUndefined()
-		expect(aliases[0]?.definition.id).not.toBe(executable[0]?.definition.id)
-		expect(completeOperationCoverage(coverage).filter(operation => operation.definition.method === 'claimAuctionProceeds')).toHaveLength(1)
 	})
 
 	test('fails closed when any bounded discovery collection is incomplete', () => {

@@ -72,7 +72,6 @@ export function createConfigurationLoader({ state, elements, controls, header, v
 		state.configurationConnected = true
 		header.renderNetworkBadge()
 		state.approvedUniverses = new Set(configuration.approvedUniverses)
-		state.selectedPools = new Set(configuration.selectedPools.map(pool => pool.toLowerCase()))
 		describeNetworkScope(configuration)
 		if (takesLoadedValues('strategy-form')) {
 			loadStrategyForm(elements, configuration)

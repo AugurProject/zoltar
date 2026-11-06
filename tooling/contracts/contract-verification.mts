@@ -13,7 +13,7 @@ export type DeploymentManifest = {
 	// compiled init code, such as the raw proxy deployer.
 	deploymentSteps: readonly { address: Address; constructorArguments?: string; id: string; label: string }[]
 	network: { chainId: number; genesisOutcome: GenesisOutcome; genesisRepTokenAddress: Address; id: 'mainnet' | 'sepolia'; wethAddress: Address }
-	protocolConfig: { forkBurnDivisor: bigint; forkThresholdDivisor: bigint; minimumSecurityBondDebtAttoEth: bigint; minimumVaultRepDepositAttoRep: bigint }
+	protocolConfig: { forkBurnDivisor: bigint; forkThresholdDivisor: bigint }
 }
 
 type ContractCreationArtifact = {
@@ -94,8 +94,6 @@ export function parseDeploymentManifest(rawManifest: unknown, expectedNetworkId:
 		protocolConfig: {
 			forkBurnDivisor: readDecimalBigInt(protocolConfig, 'forkBurnDivisor', 'protocolConfig.forkBurnDivisor'),
 			forkThresholdDivisor: readDecimalBigInt(protocolConfig, 'forkThresholdDivisor', 'protocolConfig.forkThresholdDivisor'),
-			minimumSecurityBondDebtAttoEth: readDecimalBigInt(protocolConfig, 'minimumSecurityBondDebtAttoEth', 'protocolConfig.minimumSecurityBondDebtAttoEth'),
-			minimumVaultRepDepositAttoRep: readDecimalBigInt(protocolConfig, 'minimumVaultRepDepositAttoRep', 'protocolConfig.minimumVaultRepDepositAttoRep'),
 		},
 	}
 }

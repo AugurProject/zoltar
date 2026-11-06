@@ -8,8 +8,6 @@ export type ClaimCheckpointIdentity = {
 }
 
 type ClaimCheckpointTransform = {
-	repBeforeAttoRep: bigint
-	repRemainingAttoRep: bigint
 	consumedBeforeAttoRep: bigint
 }
 
@@ -65,10 +63,10 @@ export async function prepareClaimCheckpointBatch(context: {
 		visited.add(sourceGame.toLowerCase())
 		const next = await readTransform(sourceGame)
 		const transform = next.transform
-		if (transform.repBeforeAttoRep < 0n || transform.repRemainingAttoRep < 0n || transform.consumedBeforeAttoRep < 0n) throw new Error('Invalid claim checkpoint transform')
+		if (transform.consumedBeforeAttoRep < 0n) throw new Error('Invalid claim checkpoint transform')
 		if (step === batchStart) baseCommitment = commitment
 		if (step >= batchStart) transforms.push(transform)
-		commitment = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'bytes32' }, { type: 'bytes32' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [game, claimId, commitment, transform.repBeforeAttoRep, transform.repRemainingAttoRep, transform.consumedBeforeAttoRep]))
+		commitment = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'bytes32' }, { type: 'bytes32' }, { type: 'uint256' }], [game, claimId, commitment, transform.consumedBeforeAttoRep]))
 		sourceGame = next.sourceGame
 	}
 	if (commitment.toLowerCase() !== state.pendingCommitment.toLowerCase()) throw new Error('Claim checkpoint commitment changed or witness is invalid; refresh and retry')

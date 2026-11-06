@@ -43,7 +43,7 @@ export type ForkedClaimCheckpointSnapshot = Pick<ForkedCarryWithdrawalSnapshot, 
 	pendingSteps: string
 	pendingCommitment: Hash
 	baseCommitment: Hash
-	transforms: { repBeforeAttoRep: CanonicalUintString; repRemainingAttoRep: CanonicalUintString; consumedBeforeAttoRep: CanonicalUintString }[]
+	transforms: { consumedBeforeAttoRep: CanonicalUintString }[]
 	targetGame: Address
 	preparationReason: 'required' | 'shared-ancestor' | 'finishing-parent'
 	settlement: ClaimCheckpointSettlement

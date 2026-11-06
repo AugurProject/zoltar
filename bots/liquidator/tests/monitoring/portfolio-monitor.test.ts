@@ -36,9 +36,9 @@ test('authenticates factory, ledger, index and REP identity and pins every read 
 	expect(result.snapshot.blockNumber).toBe(123n)
 	expect(fixture.reads.length).toBeGreaterThan(30)
 	expect(fixture.reads.every(read => read.blockNumber === 123n)).toBe(true)
-	fixture.values['getSecurityPool'] = fixture.settings.deployment.zoltar
-	await expect(loadPortfolioObservation(fixture.client, fixture.settings, undefined, fixture.observation.nextScope, 123n)).rejects.toThrow('canonical origin')
-	fixture.values['getSecurityPool'] = fixture.values['seedPool']
+	fixture.values['factory'] = fixture.settings.deployment.zoltar
+	await expect(loadPortfolioObservation(fixture.client, fixture.settings, undefined, fixture.observation.nextScope, 123n)).rejects.toThrow('another factory')
+	fixture.values['factory'] = fixture.settings.deployment.securityPoolFactory
 	fixture.values['getRepToken'] = fixture.settings.deployment.zoltar
 	await expect(loadPortfolioObservation(fixture.client, fixture.settings, undefined, fixture.observation.nextScope, 123n)).rejects.toThrow('identity')
 })
@@ -87,10 +87,11 @@ test('genuine runtime does not authenticate a hostile fork or protocol authority
 	await expect(loadPortfolioObservation(client, fixture.settings, fixture.observation.snapshot.owner, fixture.observation.nextScope, 123n)).rejects.toThrow('another protocol')
 })
 
-test('accepts a genuine portfolio whose constructor seed remains a standalone pool', async () => {
+test('authenticates a portfolio directly without a seed question mapping', async () => {
 	const fixture = portfolioClient({ getSecurityPoolPortfolio: '0x0000000000000000000000000000000000000000' })
 	const observation = await loadPortfolioObservation(fixture.client, fixture.settings, fixture.observation.snapshot.owner, fixture.observation.nextScope, 123n)
 	expect(observation.snapshot.portfolio).toBe(portfolioAddress)
+	expect(fixture.reads.some(read => read.functionName === 'getSecurityPoolPortfolio')).toBe(false)
 })
 
 test('exported managed principal cannot disappear without its authenticated chosen child scope', async () => {

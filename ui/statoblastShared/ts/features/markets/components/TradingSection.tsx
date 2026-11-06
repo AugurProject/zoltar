@@ -2,7 +2,6 @@ import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as tradingCopy from '../../../copy/trading.js'
 import { useState } from 'preact/hooks'
-import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { ActionLauncherCard } from '@zoltar/ui-core-shared/components/ActionLauncherCard.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
@@ -84,8 +83,6 @@ export function TradingSection({
 		poolState ??
 		evaluateSecurityPoolState({
 			lifecycleState: deriveSecurityPoolLifecycleState({
-				hasForkActivity: selectedPool?.hasForkActivity,
-				isChildPool: selectedPool !== undefined && selectedPool.parent !== zeroAddress,
 				questionOutcome: selectedPool?.questionOutcome,
 				systemState: selectedPool?.systemState,
 				universeHasForked: poolUniverseHasForked,
@@ -116,6 +113,7 @@ export function TradingSection({
 	const mintingPausedByEscalation = selectedPool !== undefined && isMintingPausedByEscalation(selectedPool, resolvedPoolState.lifecycleState)
 	const mintCheckpoint = estimateMintCheckpoint({
 		centralSettlement: selectedPool?.feeAccrualState?.centralSettlement,
+		centralCheckpointTimestamp: selectedPool?.feeAccrualState?.centralCheckpointTimestamp,
 		linearFee: selectedPool?.feeAccrualState?.linearFee,
 		currentRetentionRate: selectedPool?.currentRetentionRate,
 		currentTimestamp,

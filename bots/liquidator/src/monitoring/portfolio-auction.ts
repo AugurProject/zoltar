@@ -2,7 +2,7 @@ import { portfolioRuntimeIdentities, securityPoolCapitalLedgerAbi as capitalAbi,
 import { getAddress, parseAbiItem, type Address } from '@zoltar/bot-shared/ethereum'
 import { verifyRuntimeIdentity } from '@zoltar/bot-shared/monitoring/runtime-identity'
 import { verifyAuctionVaultCode, type PortfolioCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
-import type { ReadClient } from './vault-positions.ts'
+import type { ReadClient } from './read-client.ts'
 import type { PortfolioPosition } from './portfolio-monitor.ts'
 
 export type PortfolioAuctionTarget = { auction: Address; bidId: bigint; vault: Address }

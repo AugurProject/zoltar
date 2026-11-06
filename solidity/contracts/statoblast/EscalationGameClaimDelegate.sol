@@ -9,11 +9,12 @@ import {
 	EscalationClaimCheckpointSegment,
 	EscalationClaimCheckpoint
 } from './EscalationClaimCheckpointTypes.sol';
-import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
-import { SystemState } from './interfaces/ISecurityPool.sol';
+import { ISecurityPool } from './interfaces/ISecurityPool.sol';
+import { BinaryOutcomes } from './BinaryOutcomes.sol';
 
 interface IEscalationClaimGameContext {
 	function securityPool() external view returns (address);
+	function getFinalQuestionResolution() external view returns (BinaryOutcomes.BinaryOutcome);
 }
 
 interface IEscalationClaimCheckpointSource {
@@ -21,18 +22,6 @@ interface IEscalationClaimCheckpointSource {
 	function isClaimHistoryFrozen() external view returns (bool);
 	function rootClaimSourceGame() external view returns (address);
 	function getReusableClaimCheckpoint(uint8 outcomeIndex, uint256 amountAttoRep, uint256 cumulativeAmountAttoRep, uint256 leafIndex) external view returns (bool, address, EscalationClaimInterval memory);
-}
-
-interface IEscalationClaimPoolContext {
-	function securityPoolForker() external view returns (address);
-	function systemState() external view returns (SystemState);
-}
-
-interface IEscalationClaimForkerContext {
-	function forkData(address pool)
-		external
-		view
-		returns (uint256, address, uint256, uint256, uint256, uint256, uint256, uint256, bool, bool, uint256, uint256);
 }
 
 // Claim identity stays in the authenticated MMR leaf. Checkpoints contain only
@@ -58,10 +47,9 @@ contract EscalationGameClaimDelegate is EscalationGameStorage {
 	{
 		EscalationClaimInterval memory interval = _sourceClaimInterval(outcomeIndex, amountAttoRep, cumulativeAmountAttoRep, leafIndex);
 		sourceAmountAttoRep = interval.endAttoRep - interval.startAttoRep;
-		retainedAmountAttoRep =
-			_applyTruthAuctionRetention(interval.endAttoRep) - _applyTruthAuctionRetention(interval.startAttoRep);
-		retainedCumulativeAttoRep = _applyTruthAuctionRetention(interval.rewardEndAttoRep);
-		rewardAmountAttoRep = retainedCumulativeAttoRep - _applyTruthAuctionRetention(interval.rewardStartAttoRep);
+		retainedAmountAttoRep = (interval.endAttoRep) - (interval.startAttoRep);
+		retainedCumulativeAttoRep = (interval.rewardEndAttoRep);
+		rewardAmountAttoRep = retainedCumulativeAttoRep - (interval.rewardStartAttoRep);
 	}
 
 	function getUnresolvedClaimInterval(uint8 outcomeIndex, uint256 amountAttoRep, uint256 cumulativeAmountAttoRep, uint256 leafIndex) external view returns (uint256, uint256, uint256, uint256) {
@@ -78,13 +66,14 @@ contract EscalationGameClaimDelegate is EscalationGameStorage {
 		return _localTransform(outcomeIndex, leafIndex);
 	}
 
-	/// @notice A forked source stops changing only after its direct-claim window closes.
+	/// @notice An unresolved game freezes when its universe forks. Finalized parent
+	/// claims remain withdrawable, so their transforms must never be cached as frozen.
 	function isClaimHistoryFrozen() external view returns (bool) {
-		address pool = IEscalationClaimGameContext(address(this)).securityPool();
-		IEscalationClaimPoolContext sourcePool = IEscalationClaimPoolContext(pool);
-		if (sourcePool.systemState() != SystemState.PoolForked) return false;
-		(, , , , , , , , , , , uint256 forkActivationTime) = IEscalationClaimForkerContext(sourcePool.securityPoolForker()).forkData(pool);
-		return forkActivationTime != 0 && block.timestamp > forkActivationTime + SecurityPoolUtils.MIGRATION_TIME;
+		IEscalationClaimGameContext game = IEscalationClaimGameContext(address(this));
+		ISecurityPool pool = ISecurityPool(payable(game.securityPool()));
+		return
+			pool.zoltar().getForkTime(pool.universeId()) != 0 &&
+			game.getFinalQuestionResolution() == BinaryOutcomes.BinaryOutcome.None;
 	}
 
 	/// @notice Discovers or applies at most eight ancestry steps per call.
@@ -248,8 +237,7 @@ contract EscalationGameClaimDelegate is EscalationGameStorage {
 	}
 
 	function _transformCommitment(bytes32 claimId, bytes32 previousCommitment, EscalationClaimTransform memory transform) private view returns (bytes32) {
-		return
-			keccak256(abi.encode(address(this), claimId, previousCommitment, transform.repBeforeAttoRep, transform.repRemainingAttoRep, transform.consumedBeforeAttoRep));
+		return keccak256(abi.encode(address(this), claimId, previousCommitment, transform.consumedBeforeAttoRep));
 	}
 
 	/// @notice `ready` includes the bounded view fallback; `complete` means a stored checkpoint exists.
@@ -300,22 +288,11 @@ contract EscalationGameClaimDelegate is EscalationGameStorage {
 	function _localTransform(uint8 outcomeIndex, uint256 leafIndex) private view returns (address sourceGame, EscalationClaimTransform memory transform) {
 		if (leafIndex < outcomeState[outcomeIndex].snapshotLeafCount) {
 			sourceGame = forkCarrySourceGame;
-			transform.repBeforeAttoRep = truthAuctionRepBeforeAttoRep;
-			transform.repRemainingAttoRep = truthAuctionRepRemainingAttoRep;
 		}
 		transform.consumedBeforeAttoRep = _consumedPrincipalBefore(outcomeIndex, leafIndex);
 	}
 
 	function _applyTransform(EscalationClaimInterval memory interval, EscalationClaimTransform memory transform) private pure returns (EscalationClaimInterval memory) {
-		if (transform.repBeforeAttoRep != 0) {
-			interval.startAttoRep =
-				(interval.startAttoRep * transform.repRemainingAttoRep) / transform.repBeforeAttoRep;
-			interval.endAttoRep = (interval.endAttoRep * transform.repRemainingAttoRep) / transform.repBeforeAttoRep;
-			interval.rewardStartAttoRep =
-				(interval.rewardStartAttoRep * transform.repRemainingAttoRep) / transform.repBeforeAttoRep;
-			interval.rewardEndAttoRep =
-				(interval.rewardEndAttoRep * transform.repRemainingAttoRep) / transform.repBeforeAttoRep;
-		}
 		// Settled principal compacts only the descendant's principal coordinate.
 		// Reward coordinates must never move into previously paid reward windows.
 		interval.startAttoRep -= transform.consumedBeforeAttoRep;
@@ -353,7 +330,6 @@ contract EscalationGameClaimDelegate is EscalationGameStorage {
 	function initializeForkClaimCheckpoint(address sourceGame) external {
 		require(msg.sender == IEscalationClaimGameContext(address(this)).securityPool(), 'Only pool');
 		require(sourceGame == forkCarrySourceGame, 'Claim source');
-		require(truthAuctionRepBeforeAttoRep == 0, 'Haircut applied');
 		address rootSource = IEscalationClaimCheckpointSource(sourceGame).rootClaimSourceGame();
 		forkCarryRootClaimSourceGame = rootSource == address(0x0) ? sourceGame : rootSource;
 	}

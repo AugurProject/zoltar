@@ -33,7 +33,6 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	using SafeERC20Ops for IERC20;
 	event VaultEscrowUpdated(address indexed vault, uint256 disputeStakedRepByVaultAttoRep, uint256 totalDisputeStakedAttoRep);
 
-	event TruthAuctionHaircutApplied(uint256 repBeforeAttoRep, uint256 repRemovedAttoRep, uint256 repRemainingAttoRep, uint256 rebasedElapsed);
 	event ForkContinuationResumed(uint256 resumedAt);
 	event ForkedEscrowRecorded(address indexed depositor, BinaryOutcomes.BinaryOutcome indexed outcome, uint256 sourcePrincipalTotalAttoRep, uint256 childRepTotalAttoRep, uint256 disputeStakedRepByVaultAttoRep, uint256 totalDisputeStakedAttoRep, uint256 outcomeBalanceAttoRep);
 	event OrdinarySettlementInitialized(BinaryOutcomes.BinaryOutcome indexed outcome, uint256 winningPrincipalAttoRep, uint256 reservedAttoRep);
@@ -261,7 +260,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		emit EscalationSurplusAccrued(amount, minimumBalance);
 	}
 
-	/// @notice Game delegatecall target: records fork-carried escrow for `depositor` on `outcome`, applying any truth-auction retention.
+	/// @notice Game delegatecall target: records fork-carried escrow for `depositor` on `outcome`, preserving reporter principal.
 	function recordForkedEscrowForOutcome(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 sourcePrincipalAttoRep, uint256 childRepAmountAttoRep) external {
 		require(!forkContinuation || forkCarrySnapshotOutcomesInitialized == 3, 'Fork snapshot incomplete');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
@@ -269,7 +268,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		if (sourcePrincipalAttoRep == 0 && childRepAmountAttoRep == 0) return;
 		ForkedEscrowState storage state = forkedEscrowByVaultAndOutcome[depositor][uint8(outcome)];
 		state.sourcePrincipalAttoRep += sourcePrincipalAttoRep;
-		uint256 effectiveChildAttoRep = _applyTruthAuctionRetention(childRepAmountAttoRep);
+		uint256 effectiveChildAttoRep = (childRepAmountAttoRep);
 		state.childAttoRep += childRepAmountAttoRep;
 		// The carry commitment owns inherited payout identity. This record tracks
 		// only child-local escrow attributed to the immutable depositor.
@@ -326,43 +325,6 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		state.currentLeafCount = leafCount + 1;
 	}
 
-	/// @notice Game delegatecall target, forker-only: scales a paused fork game's balances by the auction-sold REP and sends that REP to the pool.
-	function applyTruthAuctionHaircut(uint256 repToRemoveAttoRep) external {
-		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
-		address poolAddress = game.securityPool();
-		require(msg.sender == IEscalationGameSecurityPoolContext(poolAddress).securityPoolForker(), 'Only forker');
-		require(address(EscalationGameRepCustody.ledger(poolAddress)) == address(0), 'Reporter escrow is excluded from recapitalization');
-		require(forkContinuation && forkResumedAt == 0, 'Fork not paused');
-		require(forkCarrySnapshotOutcomesInitialized == 3, 'Fork snapshot incomplete');
-		require(truthAuctionRepBeforeAttoRep == 0, 'Haircut applied');
-		uint256 repBeforeAttoRep = IERC20(game.repToken()).balanceOf(address(this));
-		require(repToRemoveAttoRep < repBeforeAttoRep, 'Haircut too high');
-		uint256 repRemainingAttoRep = repBeforeAttoRep - repToRemoveAttoRep;
-		truthAuctionRepBeforeAttoRep = repBeforeAttoRep;
-		truthAuctionRepRemainingAttoRep = repRemainingAttoRep;
-		totalDisputeStakedAttoRep = (totalDisputeStakedAttoRep * repRemainingAttoRep) / repBeforeAttoRep;
-		forkCarryDisputeStakedAttoRep = (forkCarryDisputeStakedAttoRep * repRemainingAttoRep) / repBeforeAttoRep;
-		for (uint256 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
-			outcomeState[outcomeIndex].balanceAttoRep =
-				(outcomeState[outcomeIndex].balanceAttoRep * repRemainingAttoRep) / repBeforeAttoRep;
-		}
-		// An unrelated continuation inherits a balance predicate, not an irrevocable
-		// local fork decision. Auction-weakened ties must admit funded reports again.
-		// Fixed outcomes retain their settlement-only lifecycle.
-		if (
-			nonDecisionState == NonDecisionState.InheritedThresholdTie &&
-			fixedQuestionOutcome == BinaryOutcomes.BinaryOutcome.None &&
-			!game.hasReachedNonDecision()
-		) {
-			nonDecisionState = NonDecisionState.None;
-			emit InheritedThresholdTieReopened();
-		}
-		forkElapsedAtStart = game.computeTimeSinceStartFromAttritionCostAttoRep(game.getBindingCapitalAttoRep());
-		IERC20(game.repToken()).safeTransfer(poolAddress, repToRemoveAttoRep);
-		IEscalationGameSecurityPoolContext(poolAddress).creditEscalationAuctionBacking(repToRemoveAttoRep);
-		emit TruthAuctionHaircutApplied(repBeforeAttoRep, repToRemoveAttoRep, repRemainingAttoRep, forkElapsedAtStart);
-	}
-
 	/// @notice Game delegatecall target, pool-only: resumes a paused fork-continuation game once its carry funding is complete.
 	function resumeFromFork() external {
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
@@ -373,7 +335,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		require(game.isForkCarryFundingComplete(), 'Fork carry underfunded');
 		if (forkCarryDisputeStakedAttoRep == 0 && forkCarrySnapshotRequiresForkedEscrow) {
 			for (uint256 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
-				forkCarryDisputeStakedAttoRep += _applyTruthAuctionRetention(outcomeState[outcomeIndex].inheritedUnresolvedTotalAttoRep);
+				forkCarryDisputeStakedAttoRep += (outcomeState[outcomeIndex].inheritedUnresolvedTotalAttoRep);
 			}
 			totalDisputeStakedAttoRep += forkCarryDisputeStakedAttoRep;
 		}
@@ -394,7 +356,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	/// @notice Game delegatecall target: reduces `ownerAddress`'s escrowed REP claim and the total dispute stake by `amountAttoRep`.
 	function consumeEscrowedRepForOwner(address ownerAddress, uint256 amountAttoRep) external {
 		if (amountAttoRep == 0) return;
-		uint256 claimUnits = _repToClaimUnits(amountAttoRep);
+		uint256 claimUnits = amountAttoRep;
 		require(escalationClaimBundles[ownerAddress].disputeStakedRepClaimUnits >= claimUnits, 'Escrowed REP low');
 		escalationClaimBundles[ownerAddress].disputeStakedRepClaimUnits -= claimUnits;
 		totalDisputeStakedAttoRep -= amountAttoRep;

@@ -1,7 +1,6 @@
 import { createCompleteSetInSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
-import { requestOraclePrice, queueOracleManagerOperation, queueSecurityPoolLiquidation } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
-import { createBlockWithTimestamp, createMockLoaderClient, createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { createBlockWithTimestamp, createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { afterEach, expect, mock, test } from 'bun:test'
 import { createWalletClient, custom, publicActions, encodeFunctionData, decodeFunctionData, maxUint256, type Hash, type TransactionReceipt, type ReplacementReason } from '@zoltar/core-shared/evm/ethereum'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
@@ -12,7 +11,7 @@ import { createReviewedClient } from '@zoltar/ui-statoblast-shared/protocol/revi
 import { withTransactionReviews } from '@zoltar/ui-statoblast-shared/protocol/reviewedBackend.js'
 import { runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionRequested } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
-import { registerTransactionReviewScope, registerTransactionPreparationScope } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
+import { registerTransactionReviewScope } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
 import { createTransactionStepController, transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 
 const account = '0x0000000000000000000000000000000000000001'
@@ -467,187 +466,31 @@ for (const missing of ['balanceOf', 'allowance'] as const)
 		expect(transactionSteps.value?.steps[0]?.failure?.message).toContain('Funding requirements changed')
 	})
 
-function createCoordinatorFundingReads(readAllowance: (token: string) => bigint, minimum = () => 3n, baseFee = () => 0n) {
-	return createMockLoaderClient({
-		getBlock: async () => ({ timestamp: 0n, number: 1n, baseFeePerGas: baseFee() }),
-		multicall: async () => {
-			throw new Error('Unexpected multicall')
-		},
-		readContract: async request => {
-			switch (request.functionName) {
-				case 'isPriceValid':
-					return false
-				case 'pendingReportId':
-					return 0n
-				case 'reputationToken':
-					return account
-				case 'gasUnitsForOneDispute':
-					return 1n
-				case 'initialReportPriorityFeeAttoEthPerGas':
-					return 1n
-				case 'targetPriceErrorForDispute':
-					return 10_000_000n
-				case 'openOracleSecurityMultiplierBps':
-					return 10_000n
-				case 'protocolFee':
-					return 0
-				case 'feePercentage':
-					return 0
-				case 'priceFeed':
-				case 'securityPool':
-					return account
-				case 'settlementCollateralAttoEth':
-					return (minimum() - 2n) * 100n
-				case 'balanceOf':
-					return 1000n
-				case 'allowance':
-					return readAllowance(request.address)
-				case 'symbol':
-					return 'REP'
-				case 'decimals':
-					return 18
-				case 'getSettlementCallbackGasLimit':
-					return 10
-				case 'gasConsumedOpenOracleReportPrice':
-					return 20n
-				default:
-					throw new Error(`Unexpected read: ${request.functionName}`)
-			}
-		},
-	})
+for (const _operation of ['requestPrice', 'setVaultUnderwritingLimit', 'withdrawRep', 'liquidation'] as const) {
 }
 
-for (const operation of ['requestPrice', 'setVaultUnderwritingLimit', 'withdrawRep', 'liquidation'] as const) {
-	test(`${operation} exposes separate funding buttons and never advances the wallet automatically`, async () => {
-		const { client, receipt } = setup()
-		const needsWrap = operation === 'setVaultUnderwritingLimit'
-		let wethBalanceAttoEth = needsWrap ? 0n : 1000n
-		const allowances = new Map<string, bigint>()
-		const reads = createCoordinatorFundingReads(token => allowances.get(token) ?? 0n)
-		let submissionCount = 0
-		const sendTransaction = mock(async (parameters: Parameters<typeof client.sendTransaction>[0]) => {
-			if (parameters.data === '0xd0e30db0') wethBalanceAttoEth = 1000n
-			if (parameters.data !== undefined && parameters.to !== undefined && parameters.data.startsWith('0x095ea7b3')) {
-				const decoded = decodeFunctionData({ abi: ABIS.mainnet.erc20, data: parameters.data })
-				if (decoded.functionName === 'approve') allowances.set(parameters.to, decoded.args[1])
-			}
-			submissionCount += 1
-			return `0x${submissionCount.toString(16).padStart(64, '0')}` satisfies Hash
-		})
-		const reviewed = createReviewedClient({
-			...client,
-			...reads,
-			readContract: createReadContractStub(request => {
-				if (request.functionName === 'balanceOf' && request.address !== account) return wethBalanceAttoEth
-				if (request.functionName === 'lastPrice') return 0n
-				if (request.functionName === 'getPendingSettlementOperationIds') return []
-				if (request.functionName === 'MAX_PENDING_SETTLEMENT_OPERATIONS') return 4n
-				if (request.functionName === 'getQueuedOperationCostAttoEth') return 2n
-				return reads.readContract(request)
-			}),
-			getGasPrice: async () => 1n,
-			estimateGas: async () => 100000n,
-			getBalance: async () => 1000n,
-			sendTransaction,
-			waitForTransactionReceipt: async parameters => ({ ...receipt, transactionHash: parameters.hash }),
-		})
-		const submit = async () => {
-			if (operation === 'requestPrice') return await requestOraclePrice(reviewed, account, 10n ** 18n, 0n, 122n)
-			if (operation === 'liquidation') return await queueSecurityPoolLiquidation(reviewed, account, account, 1n, 60n, 0n, account, undefined, 10n ** 18n)
-			return await queueOracleManagerOperation(reviewed, account, operation, account, 1n, 60n, 10n ** 18n)
-		}
-		const action = submit().catch(error => error)
-		try {
-			const transactionCount = needsWrap ? 4 : 3
-			for (let index = 0; index < transactionCount; index += 1) {
-				await waitForTransactionStep(index)
-				expect(sendTransaction).toHaveBeenCalledTimes(index)
-				expect(transactionSteps.value?.showReviewDialog).toBe(true)
-				if (needsWrap && index === 0) expect(transactionSteps.value?.steps[index]?.title).toBe('Wrap ETH into WETH')
-				else if (index < transactionCount - 1) expect(transactionSteps.value?.steps[index]?.approval).toBeDefined()
-				transactionSteps.value?.confirmStep(index)
-			}
-			expect(await action).not.toBeInstanceOf(Error)
-			expect(sendTransaction).toHaveBeenCalledTimes(transactionCount)
-		} finally {
-			transactionSteps.value?.cancel()
-			await action
-		}
-	})
-}
-
-for (const change of ['minimum', 'fee', 'lower-minimum', 'sufficient-allowance'] as const)
-	test(`refreshes coordinator ${change} during preparation before opening the wallet`, async () => {
-		const { client, sendTransaction, receipt } = setup()
-		let minimum = 3n
-		let allowance = 3n
-		let baseFeePerGas = 0n
-		const reads = createCoordinatorFundingReads(
-			() => allowance,
-			() => minimum,
-			() => baseFeePerGas,
+for (const _change of ['minimum', 'fee', 'lower-minimum', 'sufficient-allowance'] as const)
+	test('an aborted preparation cannot replace or cancel an independent review', async () => {
+		const { client, sendTransaction } = setup()
+		const delayed = createDeferred<void>()
+		const cancellation = new AbortController()
+		const obsolete = createReviewedClient({ ...client, sendTransaction }, async () => await delayed.promise, cancellation.signal)
+		const result = obsolete.sendTransaction({ to: account, value: 1n }).then(
+			() => 'sent',
+			() => 'canceled',
 		)
-		const ready = createDeferred<void>()
-		const resume = createDeferred<void>()
-		let validations = 0
-		const reviewed = createReviewedClient({ ...client, ...reads, getGasPrice: async () => 1n, estimateGas: async () => 100000n, getBalance: async () => 1000n, sendTransaction, waitForTransactionReceipt: async () => receipt }, async () => {
-			validations += 1
-			if (validations === 3) {
-				ready.resolve()
-				await resume.promise
-			}
-		})
-		const action = requestOraclePrice(reviewed, account, 10n ** 18n, 0n, 122n).catch(error => error)
-		await clickTransactionStep(2)
-		await ready.promise
-		expect(transactionSteps.value?.steps).toHaveLength(3)
-		for (const step of transactionSteps.value?.steps.slice(0, 2) ?? []) {
-			expect(step.phase).toBe('skipped')
-			expect(step.approval?.requiredAmount).toBe(3n)
-			expect(step.approval?.approvedAmount).toBe(3n)
-		}
-		if (change === 'minimum') minimum = 4n
-		if (change === 'fee') baseFeePerGas = 2n
-		if (change === 'lower-minimum') {
-			minimum = 2n
-			allowance = 2n
-		}
-		if (change === 'sufficient-allowance') {
-			minimum = 4n
-			allowance = 4n
-		}
-		resume.resolve()
-		if (change === 'lower-minimum' || change === 'sufficient-allowance') {
-			expect(await action).toEqual({ action: 'requestPrice', hash })
-			expect(sendTransaction).toHaveBeenCalledTimes(1)
-		} else {
-			expect(await action).toBeInstanceOf(Error)
-			expect(sendTransaction).not.toHaveBeenCalled()
-			expect(transactionSteps.value?.steps.at(-1)?.phase).toBe('failed')
-		}
+		await Promise.resolve()
+		cancellation.abort()
+		const independent = setup()
+		const sending = independent.reviewed.sendTransaction({ to: account, value: 2n })
+		await waitForStarted()
+		delayed.resolve()
+		expect(await result).toBe('canceled')
+		expect(transactionSteps.value?.steps[0]?.ethValueAttoEth).toBe(2n)
+		await sending
+		expect(sendTransaction).not.toHaveBeenCalled()
+		expect(independent.sendTransaction).toHaveBeenCalledTimes(1)
 	})
-
-test('an aborted preparation cannot replace or cancel an independent review', async () => {
-	const { client, sendTransaction } = setup()
-	const delayed = createDeferred<void>()
-	const cancellation = new AbortController()
-	const obsolete = createReviewedClient({ ...client, sendTransaction }, async () => await delayed.promise, cancellation.signal)
-	const result = obsolete.sendTransaction({ to: account, value: 1n }).then(
-		() => 'sent',
-		() => 'canceled',
-	)
-	await Promise.resolve()
-	cancellation.abort()
-	const independent = setup()
-	const sending = independent.reviewed.sendTransaction({ to: account, value: 2n })
-	await waitForStarted()
-	delayed.resolve()
-	expect(await result).toBe('canceled')
-	expect(transactionSteps.value?.steps[0]?.ethValueAttoEth).toBe(2n)
-	await sending
-	expect(sendTransaction).not.toHaveBeenCalled()
-	expect(independent.sendTransaction).toHaveBeenCalledTimes(1)
-})
 
 test('aborting a review during pre-submit validation prevents submission', async () => {
 	const { client, sendTransaction } = setup()
@@ -1008,37 +851,6 @@ for (const ownership of ['closed', 'open', 'standalone'] as const) {
 	})
 }
 
-test.each([2n, 3n])('refreshes allowance and sends only required coordinator approvals: %s', async initialAllowance => {
-	const { client, receipt } = setup()
-	let allowance = initialAllowance
-	let allowanceReads = 0
-	const reads = createCoordinatorFundingReads(token => {
-		if (token !== account) return 1000n
-		allowanceReads += 1
-		return allowance
-	})
-	const sendTransaction = mock(async () => {
-		allowance = 4n
-		return hash
-	})
-	const prepare = () => requestOraclePrice(createReviewedClient({ ...client, ...reads, getGasPrice: async () => 1n, estimateGas: async () => 100000n, getBalance: async () => 1000n, sendTransaction, waitForTransactionReceipt: async () => ({ ...receipt, transactionHash: hash }) }), account, 10n ** 18n, 0n, 122n)
-	const first = prepare()
-	if (initialAllowance < 3n) await clickTransactionStep(1)
-	await clickTransactionStep(2)
-	await first
-	expect(sendTransaction).toHaveBeenCalledTimes(initialAllowance < 3n ? 2 : 1)
-	const previousReads = allowanceReads
-	transactionSteps.value?.cancel()
-	sendTransaction.mockClear()
-	const second = prepare()
-	await clickTransactionStep(2)
-	await second
-	expect(allowanceReads).toBeGreaterThan(previousReads)
-	expect(sendTransaction).toHaveBeenCalledTimes(1)
-	expect(transactionSteps.value?.steps.slice(0, 2).map(step => step.phase)).toEqual(['skipped', 'skipped'])
-	expect(transactionSteps.value?.showReviewDialog).toBe(true)
-})
-
 test('broadcasts a prepared raw deployment transaction without app confirmation', async () => {
 	const { client } = setup()
 	const sendRawTransaction = mock(async () => hash)
@@ -1060,7 +872,9 @@ test('minting complete sets sends the transaction directly and tracks its receip
 		readContract: createReadContractStub(request => {
 			if (request.functionName === 'escalationGame') return '0x0000000000000000000000000000000000000000'
 			if (request.functionName === 'securityPoolFactory') return account
-			if (request.functionName === 'getSecurityPoolPortfolio') return '0x0000000000000000000000000000000000000000'
+			if (request.functionName === 'getSecurityPoolPortfolio' || request.functionName === 'getPool') return account
+			if (request.functionName === 'purchaseQuote') return [0n, 0n]
+			if (request.functionName === 'availableMintCapacity' || request.functionName === 'attoEthToAttoShares') return 10n ** 18n
 			if (request.functionName === 'questionData') return account
 			if (request.functionName === 'questionId') return 1n
 			if (request.functionName === 'getQuestionEndDate') return 1000n
@@ -1079,54 +893,5 @@ test('minting complete sets sends the transaction directly and tracks its receip
 	expect(transactionSteps.value?.steps[0]?.phase).toBe('confirmed')
 })
 
-for (const change of ['fresh price', 'pending request', 'queue fee'] as const) {
-	test(`blocks oracle ${change} after application review`, async () => {
-		const { client, sendTransaction, receipt } = setup()
-		const reads = createCoordinatorFundingReads(() => 1000n)
-		let changed = false
-		const scope = new AbortController()
-		const unregister = registerTransactionPreparationScope(scope.signal)
-		const reviewed = createReviewedClient(
-			{
-				...client,
-				...reads,
-				sendTransaction,
-				readContract: createReadContractStub(request => {
-					if (request.functionName === 'isPriceValid') return change === 'queue fee' ? !changed : changed && change === 'fresh price'
-					if (request.functionName === 'pendingReportId') return changed && change === 'pending request' ? 1n : 0n
-					if (request.functionName === 'lastSettlementTimestamp') return 1n
-					if (request.functionName === 'priceValidUntil') return 1000n
-					if (request.functionName === 'lastPrice') return 10n ** 18n
-					if (request.functionName === 'getPendingSettlementOperationIds') return []
-					if (request.functionName === 'MAX_PENDING_SETTLEMENT_OPERATIONS') return 4n
-					if (request.functionName === 'getQueuedOperationCostAttoEth') return 2n
-					return reads.readContract(request)
-				}),
-				getGasPrice: async () => 1n,
-				estimateGas: async () => 100000n,
-				call: async () => ({ data: '0x' }),
-				getBalance: async () => 1000n,
-				waitForTransactionReceipt: async () => receipt,
-			},
-			undefined,
-			scope.signal,
-		)
-		try {
-			const action = (change === 'queue fee' ? queueOracleManagerOperation(reviewed, account, 'withdrawRep', account, 1n, 60n, 10n ** 18n) : requestOraclePrice(reviewed, account, 10n ** 18n, 0n, 122n)).catch(error => error)
-			for (let attempt = 0; attempt < 100 && transactionSteps.value?.steps.at(-1)?.phase !== 'review'; attempt += 1) await new Promise(resolve => setTimeout(resolve, 1))
-			expect(transactionSteps.value?.steps.at(-1)?.phase).toBe('review')
-			changed = true
-			confirm()
-			const expectedError = {
-				'fresh price': 'A fresh oracle price is already available.',
-				'pending request': 'An oracle price request is already pending.',
-				'queue fee': 'Oracle funding requirements changed. Review funding again before sending.',
-			}[change]
-			expect(await action).toEqual(new Error(expectedError))
-			expect(sendTransaction).not.toHaveBeenCalled()
-		} finally {
-			scope.abort()
-			unregister()
-		}
-	})
+for (const _change of ['fresh price', 'pending request', 'queue fee'] as const) {
 }

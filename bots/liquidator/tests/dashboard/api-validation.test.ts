@@ -8,7 +8,7 @@ const configuration = {
 	desiredPools: [],
 	networkConfigured: false,
 	runtime: { execute: false, historicalLogRecovery: false, logLookbackBlocks: 256 },
-	selectedPools: [],
+	selectedPortfolios: [],
 	strategy: { enabled: true, limit: '1', retries: 3 },
 	submission: { minimumBundleRelaySuccesses: 1, mode: 'public' as const, relayUrls: [] },
 }

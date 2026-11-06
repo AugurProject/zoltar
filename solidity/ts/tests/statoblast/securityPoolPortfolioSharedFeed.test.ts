@@ -108,30 +108,6 @@ describe('Statoblast: central capital shared price feed', () => {
 		await writeContractAndWait(owner, () => owner.writeContract({ ...capital, functionName: 'withdrawPrincipal', args: [200n * unit, owner.account.address] }))
 	})
 
-	test('shared staged operations do not join an unrelated report or require automatic queue capacity', async () => {
-		await fixture.prepare()
-		const owner = fixture.owner()
-		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
-		const otherCoordinator = fixture.poolFor(fixture.secondQuestionId).openOraclePriceCoordinator
-		await fixture.base.mockWindow.advanceTime(781n)
-		await requestPriceWithValue(owner, otherCoordinator, await getRequestPriceCostAttoEth(owner, otherCoordinator), unit)
-		const unrelatedReport = await getPendingReportId(owner, otherCoordinator)
-		await wrapWeth(owner, 100n * unit)
-		await approveToken(owner, (await loadOpenOracleEventState(owner, unrelatedReport)).latest.game.token1, coordinator)
-		await approveToken(owner, getRepTokenAddress(fixture.base.genesisUniverse), coordinator)
-		const bounty = await getRequestPriceCostAttoEth(owner, coordinator)
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'requestPriceIfNeededAndStageOperation', args: [2, owner.account.address, 0n, 300n, unit, 0n, bounty], value: bounty }))
-		const ownReport = await getPendingReportId(owner, coordinator)
-		expect(ownReport).not.toBe(unrelatedReport)
-		expect(await owner.readContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'getPendingSettlementOperationIds' })).toEqual([])
-		const operationId = await owner.readContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'stagedOperationCounter' })
-		await fixture.base.mockWindow.advanceTime(481n)
-		await openOracleSettle(owner, unrelatedReport)
-		expect(await owner.readContract({ abi: feedArtifact.abi, address: await feed(), functionName: 'reportOutcome', args: [ownReport] })).toBe(0n)
-		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'executeStagedOperation', args: [operationId] }))
-		expect(await owner.readContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'getActiveStagedOperationCount' })).toBe(0n)
-	})
-
 	test('report exposure follows direct capital authorizations without a question synchronization transaction', async () => {
 		await fixture.deposit(1_000n * unit)
 		await fixture.refreshPrice()
@@ -386,7 +362,7 @@ describe('Statoblast: central capital shared price feed', () => {
 		expect(await fixture.owner().readContract({ abi: feedArtifact.abi, address: secondFeed, functionName: 'lastPrice' })).toBe(0n)
 		await expect(fixture.other().writeContract({ abi: feedArtifact.abi, address: await feed(), functionName: 'registerCoordinator', args: [fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator] })).rejects.toThrow('Only security pool factory')
 		const factory = { abi: factoryArtifact.abi, address: getInfraContractAddresses().securityPoolFactory }
-		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...factory, functionName: 'initializePortfolioPriceFeed', args: [fixture.base.securityPoolAddresses.securityPool] }))
+		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...factory, functionName: 'initializePortfolioPriceFeed', args: [fixture.base.genesisUniverse, 10_000_000_000n] }))
 		const ownNamespace = await fixture.other().readContract({ ...factory, functionName: 'sharedPriceFeeds', args: [fixture.other().account.address, fixture.base.genesisUniverse] })
 		expect(ownNamespace).not.toBe(await feed())
 		expect(await fixture.owner().readContract({ ...factory, functionName: 'sharedPriceFeeds', args: [fixture.portfolio, fixture.base.genesisUniverse] })).toBe(await feed())

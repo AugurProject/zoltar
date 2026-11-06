@@ -5,7 +5,6 @@ export const discoveries: Readonly<Record<string, readonly Discovery[]>> = {
 	PairCreated: [{ argument: 'pair', kind: 'ammPair', label: 'Augur AMM Pair' }],
 	DeploySecurityPool: [
 		{ argument: 'securityPool', kind: 'securityPool', label: 'Security Pool' },
-		{ argument: 'truthAuction', kind: 'truthAuction', label: 'Truth Auction' },
 		{ argument: 'openOraclePriceCoordinator', kind: 'priceCoordinator', label: 'Price Coordinator' },
 		{ argument: 'shareToken', kind: 'shareToken', label: 'Share Token' },
 	],
@@ -17,7 +16,6 @@ export const discoveries: Readonly<Record<string, readonly Discovery[]>> = {
 export const dependencyDiscoveryKinds = {
 	uniswapPair: 'uniswapV2Pair',
 	uniswapPool: 'uniswapV3Pool',
-	liquidationApprovalRegistry: 'liquidationApprovalRegistry',
 } as const satisfies Readonly<Record<string, SystemContractKind>>
 
 export const discoveredContractKinds = [...new Set([...Object.values(discoveries).flatMap(rules => rules.map(rule => rule.kind)), ...Object.values(dependencyDiscoveryKinds)])]

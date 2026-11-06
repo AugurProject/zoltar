@@ -13,7 +13,6 @@ export const fundingRequired = 'Required token balances and approvals must be av
 export const useTransactionButtons = 'Use the transaction buttons to continue.'
 export const prerequisitesRequired = 'Complete the required setup transactions first.'
 export const formatPendingAction = (title: string) => `${formatActionTense(title, 'pending')}…`
-export const requirementsFailed = 'Could not refresh transaction requirements. Close and review the action again.'
 export const formatTokenApproved = (symbol: string) => `${symbol} approved`
 export const formatStepCompleted = (label: string) => `${label} ✓`
 export const wrapEthIntoWeth = 'Wrap ETH into WETH'

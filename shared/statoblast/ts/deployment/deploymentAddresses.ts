@@ -9,7 +9,6 @@ type SecurityPoolFactoryAddressInputs = {
 	securityPoolOperationsDelegate: Address
 	securityPoolEventEmitter: Address
 	shareTokenFactory: Address
-	uniformPriceDualCapBatchAuctionFactory: Address
 	zoltar: Address
 	zoltarQuestionData: Address
 }
@@ -40,7 +39,6 @@ type InfraContractAddressConfig = {
 	securityPoolReporterLedgerDeployerBytecode: Hex
 	securityPoolPortfolioForkCoordinatorDeployerBytecode: Hex
 	securityPoolPortfolioAuctionDeployerBytecode: Hex
-	uniformPriceDualCapBatchAuctionFactoryBytecode: Hex
 	zeroSalt: Hex
 	getZoltarAddress: () => Address
 	getZoltarQuestionDataAddress: () => Address
@@ -72,7 +70,6 @@ type InfraContractAddresses = {
 	securityPoolPortfolioForkCoordinatorDeployer: Address
 	securityPoolPortfolioAuctionDeployer: Address
 	shareTokenFactory: Address
-	uniformPriceDualCapBatchAuctionFactory: Address
 	zoltar: Address
 	zoltarQuestionData: Address
 }
@@ -102,7 +99,6 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 			securityPoolForker: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getSecurityPoolForkerByteCode(config.getZoltarAddress())),
 			escalationGameClaimDelegate: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.escalationGameClaimDelegateBytecode),
 			escalationGameDepositDelegate: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.escalationGameDepositDelegateBytecode),
-			uniformPriceDualCapBatchAuctionFactory: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.uniformPriceDualCapBatchAuctionFactoryBytecode),
 		}
 		const escalationGameFactory = getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getEscalationGameFactoryByteCode(addresses.escalationGameClaimDelegate, addresses.escalationGameDepositDelegate))
 		const securityPoolEventEmitter = getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolEventEmitterBytecode)
@@ -129,7 +125,6 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 					securityPoolOperationsDelegate,
 					securityPoolEventEmitter,
 					shareTokenFactory: addresses.shareTokenFactory,
-					uniformPriceDualCapBatchAuctionFactory: addresses.uniformPriceDualCapBatchAuctionFactory,
 					zoltar: addresses.zoltar,
 					zoltarQuestionData: addresses.zoltarQuestionData,
 				}),

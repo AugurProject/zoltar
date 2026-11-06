@@ -8,8 +8,8 @@ export function renderPortfolios(portfolios: readonly PortfolioView[] | undefine
 	render(
 		<>
 			<p class='muted'>
-				Select portfolio addresses and universes in <code>selectedPortfolios</code> in the operator file, then restart while paused. Approve each universe separately in Settings. Funded takeovers require the separate <code>portfolioPolicy</code> opt-in. Previously managed portfolios remain visible for exposure
-				accounting. Principal limits cover the signer's direct ledger positions. Separate auction vault accounts are excluded from those limits.
+				Select portfolio addresses and universes on the Portfolios page. Approve each universe separately in Settings. Funded takeovers require the separate <code>portfolioPolicy</code> opt-in. Previously managed portfolios remain visible for exposure accounting. Principal limits cover the signer's direct ledger
+				positions. Separate auction vault accounts are excluded from those limits.
 			</p>
 			<details class='portfolio-guidance'>
 				<summary>Monitoring limits</summary>

@@ -1,3 +1,4 @@
+import { auctionFixture, readyChildFixture } from '../support/portfolio-fixtures.ts'
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, encodeAbiParameters } from '@zoltar/bot-shared/ethereum'
 import { openOraclePriceCoordinatorAbi, erc1155Abi, genesisReputationTokenAbi, escalationGameAbi } from '@zoltar/bot-shared/contracts/abi'
@@ -6,7 +7,7 @@ import { CARRY_STORAGE_MAXIMUM_WITHDRAWALS } from '../../src/monitoring/carry-pr
 import { canonicalLifecyclePresence, CHAOS_OPERATION_CATALOG, evaluateOperationCatalog, reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
 import { eligibleOperationPlans, urgentOperationPlans } from '../support/operation-plans.ts'
 import { validForkOutcomeRoutes } from '../../src/operations/fork-outcomes.ts'
-import type { OperationEvidence, OperationPlan } from '../../src/operations/types.ts'
+import type { OperationPlan } from '../../src/operations/types.ts'
 import { address, hash, snapshotFixture } from './fixture.ts'
 
 const permissiveOptions = {
@@ -48,7 +49,8 @@ describe('chaos operation catalog', () => {
 	test('evaluates anchored candidates into JSON-safe calldata plans', () => {
 		const evaluated = evaluateOperationCatalog(snapshotFixture(), permissiveOptions)
 		const plans = evaluated.flatMap(operation => (operation.plan === undefined ? [] : [operation.plan]))
-		expect(plans.length).toBeGreaterThan(15)
+		expect(plans.map(plan => plan.definitionId)).toContain('statoblast.escalation.deposit-wallet-rep')
+		expect(plans.length).toBeGreaterThan(10)
 		for (const plan of plans) {
 			expect(plan.createdAtBlock).toBe('100')
 			expect(plan.steps.length).toBeGreaterThan(0)
@@ -105,19 +107,15 @@ describe('chaos operation catalog', () => {
 		}
 		snapshot.reports = [report, { ...report, reportId: '2', stateHash: hash(42) }]
 		snapshot.auctions = [41, 42].map(index => ({
+			...auctionFixture(),
 			address: address(index),
 			bids: [],
-			clearingTick: '0',
 			endTime: '1',
 			finalized: false,
-			hasClearingPrice: false,
-			minimumBidAttoEth: 1n.toString(),
 			pendingEthRefund: '1000',
 			pendingEthRefundGeneration: hash(index),
 			pool: snapshot.pools[0]?.address ?? address(11),
 			startTime: '1',
-			underfunded: false,
-			underfundedWinningAttoEth: 0n.toString(),
 		}))
 		const identities = (seed: number) =>
 			urgentOperationPlans(snapshot, { ...permissiveOptions, seed })
@@ -443,75 +441,6 @@ describe('chaos operation catalog', () => {
 		expect(evaluated.find(operation => operation.definition.id === 'zoltar.universe.fork')?.eligibility.blockers).toContain('Irreversible operations are disabled')
 	})
 
-	test('requires decoded success=true for staged execution', () => {
-		const snapshot = snapshotFixture()
-		const pool = snapshot.pools[0]
-		if (pool === undefined) throw new Error('Fixture pool missing')
-		snapshot.stagedOperations.push({
-			amount: '1000',
-			coordinator: pool.coordinator,
-			executionExpectedResult: '0x',
-			executionExpectedSuccess: true,
-			id: '42',
-			isPendingSettlement: false,
-			liquidationApprovalId: hash(0),
-			liquidationMinimumReceiverHealthFactorBps: '0',
-			liquidationMinPriceDistanceBps: '0',
-			operation: 1,
-			operator: snapshot.wallet.address,
-			queuedAt: '1999999000',
-			receiverVault: snapshot.wallet.address,
-			reservedLiquidationDebtAttoEth: 0n.toString(),
-			snapshotTargetBackingUnits: '1000000000000000000',
-			snapshotTargetUnderwritingLimitAttoEth: (10n ** 18n).toString(),
-			snapshotTargetDisputeStakedAttoRep: 0n.toString(),
-			snapshotTargetOpenInterestAttoEth: 0n.toString(),
-			snapshotTotalPoolHeldAttoRep: (10n ** 18n).toString(),
-			snapshotTotalRepBackingUnits: '1000000000000000000',
-			targetVault: snapshot.wallet.address,
-			validForSeconds: '3600',
-		})
-		const plan = urgentOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'statoblast.staged.execute')
-		expect(plan).toBeDefined()
-		const evidence = plan?.steps[0]?.evidence.find((candidate): candidate is Extract<OperationEvidence, { kind: 'decoded-event-field' }> => candidate.kind === 'decoded-event-field')
-		if (evidence === undefined) throw new Error('Expected decoded staged-operation evidence')
-		expect(evidence).toEqual({
-			abi: 'event ExecutedStagedOperation(uint256 indexed operationId, uint8 operation, bool success, string errorMessage)',
-			emitter: pool.coordinator,
-			equals: true,
-			field: 'success',
-			indexed: { operationId: '42' },
-			kind: 'decoded-event-field',
-			signature: 'ExecutedStagedOperation(uint256,uint8,bool,string)',
-			topic0: evidence.topic0,
-		})
-		const staged = snapshot.stagedOperations[0]
-		if (staged === undefined) throw new Error('Staged operation fixture missing')
-		staged.executionExpectedSuccess = false
-		expect(urgentOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'statoblast.staged.execute')).toBeUndefined()
-		staged.queuedAt = '1'
-		staged.validForSeconds = '1'
-		const expiry = urgentOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'statoblast.staged.expire')
-		expect(expiry).toBeDefined()
-		expect(expiry?.deadlineTimestamp).toBeUndefined()
-	})
-
-	test('rejects a queued withdrawal whose configured REP cap rounds to zero backing units', () => {
-		const snapshot = snapshotFixture()
-		const pool = snapshot.pools[0]
-		const vault = pool?.vaults.find(candidate => candidate.address === snapshot.wallet.address)
-		if (pool === undefined || vault === undefined) throw new Error('Pool vault fixture missing')
-		pool.totalRepBackingUnits = '1'
-		pool.poolRepBalanceAttoRep = '1000'
-		pool.settlementCollateralAttoEth = '0'
-		pool.totalBadDebtAttoEth = '0'
-		vault.repBackingUnits = '1'
-		vault.repBackingAttoRep = '1000'
-		vault.disputeStakedAttoRep = '0'
-		const plan = eligibleOperationPlans(snapshot, { ...permissiveOptions, maxRepSpendAttoRep: 1n.toString() }).find(candidate => candidate.definitionId === 'statoblast.staged.queue')
-		expect(plan).toBeUndefined()
-	})
-
 	test('binds OpenOracle credit withdrawal to a decrement-capable private next block', () => {
 		const snapshot = snapshotFixture()
 		const token = snapshot.wallet.tokens[0]
@@ -601,25 +530,14 @@ describe('chaos operation catalog', () => {
 		expect(winning?.steps[0]?.evidence[0]).toMatchObject({ signature: 'ClaimDeposit(address,uint8,uint256,uint256,uint256,uint256,bool)' })
 	})
 
-	test('declares escalation deposits as vault-backed REP principal', () => {
+	test('initial reporting debits exact wallet REP through the question host', () => {
 		const snapshot = snapshotFixture()
 		const pool = snapshot.pools[0]
-		if (pool === undefined) throw new Error('Fixture pool missing')
+		if (pool === undefined) throw new Error('Missing question')
+		pool.escalationGame = address(0)
+		pool.initialEscalationGameDepositAttoRep = '1000'
 		const deposit = eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'statoblast.escalation.deposit')
-		const outcome = deposit?.metadata['outcome']
-		if (deposit === undefined || typeof outcome !== 'number') throw new Error('Escalation deposit fixture is unavailable')
-		const maximum = pool.safeEscalationDepositMaximumsAttoRep[outcome]
-		if (maximum === undefined) throw new Error('Escalation deposit maximum is unavailable')
-
-		expect(deposit.steps[0]?.walletAssetDebits).toEqual([
-			{
-				amount: maximum,
-				category: 'rep',
-				kind: 'security-pool-vault-rep',
-				pool: pool.address,
-				vault: snapshot.wallet.address,
-			},
-		])
+		expect(deposit?.steps.at(-1)?.walletAssetDebits).toEqual([{ amount: '1000', asset: pool.repToken, category: 'rep', kind: 'erc20' }])
 	})
 
 	test('plans a distinct exact wallet-funded escalation deposit with canonical evidence', () => {
@@ -795,63 +713,27 @@ describe('chaos operation catalog', () => {
 		for (const deposit of snapshot.escalationDeposits.slice(0, 16)) deposit.claimed = true
 		const second = urgentOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'statoblast.escalation.withdraw')
 		expect(second?.metadata).toMatchObject({ depositCount: 4, depositIndexes: '16,17,18,19' })
-
-		for (const deposit of snapshot.escalationDeposits) deposit.claimed = false
-		pool.escalationCanTriggerOwnFork = true
-		pool.forkActivationTime = (BigInt(snapshot.anchor.timestamp) - 1n).toString()
-		pool.forkOwnQuestion = true
-		pool.forkUnresolvedEscalation = true
-		pool.systemState = 1
-		const claimPlans = urgentOperationPlans(snapshot, permissiveOptions).filter(candidate => candidate.definitionId === 'statoblast.escalation.claim-forked')
-		const claimPresence = canonicalLifecyclePresence(snapshot, permissiveOptions).filter(candidate => candidate.definitionId === 'statoblast.escalation.claim-forked')
-		expect(claimPlans.map(candidate => candidate.metadata)).toEqual([expect.objectContaining({ depositCount: 16, depositIndexes: expectedFirstIndexes }), expect.objectContaining({ depositCount: 4, depositIndexes: '16,17,18,19' })])
-		expect(claimPresence.map(candidate => candidate.metadata)).toEqual(claimPlans.map(candidate => candidate.metadata))
 	})
 
-	test('bounds settlement batches and gives every losing auction refund an immutable singleton identity', () => {
+	test('gives every native auction refund an immutable singleton identity before and after close', () => {
 		const snapshot = snapshotFixture()
-		const pool = snapshot.pools[0]
-		if (pool === undefined) throw new Error('Fixture pool missing')
-		const auctionAddress = address(40)
-		pool.truthAuction = auctionAddress
-		snapshot.auctions = [
-			{
-				address: auctionAddress,
-				bids: Array.from({ length: 20 }, (_, index) => ({ amountAttoEth: 1_000n.toString(), index: index.toString(), refunded: false, tick: index.toString() })),
-				clearingTick: '100',
-				endTime: '1999999000',
-				finalized: true,
-				hasClearingPrice: true,
-				minimumBidAttoEth: 1n.toString(),
-				pendingEthRefund: '0',
-				pool: pool.address,
-				startTime: '1999990000',
-				underfunded: false,
-				underfundedWinningAttoEth: 0n.toString(),
-			},
-		]
-		let plans = urgentOperationPlans(snapshot, permissiveOptions)
-		const settlementPlans = plans.filter(candidate => candidate.definitionId === 'statoblast.auction.settle-bids')
-		const settlementPresence = canonicalLifecyclePresence(snapshot, permissiveOptions).filter(candidate => candidate.definitionId === 'statoblast.auction.settle-bids')
-		expect(settlementPlans.map(candidate => candidate.metadata)).toEqual([
-			expect.objectContaining({
-				bidCount: 16,
-				bidKeys: Array.from({ length: 16 }, (_, index) => `${index.toString()}:${index.toString()}`)
-					.sort()
-					.join(','),
-			}),
-			expect.objectContaining({ bidCount: 4, bidKeys: '16:16,17:17,18:18,19:19' }),
-		])
-		expect(settlementPresence.map(candidate => candidate.metadata)).toEqual(settlementPlans.map(candidate => candidate.metadata))
-		expect(plans.find(candidate => candidate.definitionId === 'statoblast.auction.claim')).toBeUndefined()
-		const auction = snapshot.auctions[0]
-		if (auction === undefined) throw new Error('Auction fixture missing')
-		auction.finalized = false
-		plans = urgentOperationPlans(snapshot, permissiveOptions)
-		const refunds = plans.filter(candidate => candidate.definitionId === 'statoblast.auction.refund')
-		expect(refunds).toHaveLength(20)
-		expect(refunds.map(plan => `${plan.metadata['tick']}:${plan.metadata['bidIndex']}`)).toEqual(Array.from({ length: 20 }, (_, index) => `${index.toString()}:${index.toString()}`))
-		expect(refunds.every(plan => plan.steps[0]?.id === `refund-losing-bid-${plan.metadata['tick']}-${plan.metadata['bidIndex']}`)).toBe(true)
+		const auction = auctionFixture()
+		auction.refundableBidIds = Array.from({ length: 20 }, (_, index) => (index + 1).toString())
+		snapshot.auctions = [auction]
+		for (const finalized of [false, true]) {
+			auction.finalized = finalized
+			const id = finalized ? 'statoblast.auction.settle-bids' : 'statoblast.auction.refund'
+			const plans = urgentOperationPlans(snapshot, permissiveOptions).filter(plan => plan.definitionId === id)
+			expect(plans).toHaveLength(20)
+			expect(plans.map(plan => plan.metadata['bidId'])).toEqual(auction.refundableBidIds)
+			expect(new Set(plans.map(plan => plan.id)).size).toBe(20)
+			expect(plans.every(plan => plan.steps.length === 1)).toBe(true)
+			expect(
+				canonicalLifecyclePresence(snapshot, permissiveOptions)
+					.filter(item => item.definitionId === id)
+					.map(item => item.metadata),
+			).toEqual(plans.map(plan => plan.metadata))
+		}
 	})
 
 	test('keeps repeatable OpenOracle withdrawal selectable as internal credit advances', () => {
@@ -877,16 +759,12 @@ describe('chaos operation catalog', () => {
 		universe.forkTime = '1999999000'
 		universe.forkQuestionId = '77'
 		pool.systemState = 1
-		pool.forkActivationTime = '1999999000'
 		shares.migrationProgressByRoute['0:0'] = '0'
+		pool.childPoolPreparations['0'] = readyChildFixture(pool.address, pool.portfolio)
 		const first = eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'trading.shares.migrate')
 		expect(first?.metadata).toMatchObject({ fromId: '0', targetOutcome: '0' })
-		expect(first?.deadlineTimestamp).toBe('2004837400')
+		expect(first?.deadlineTimestamp).toBeUndefined()
 		expect(first?.steps[0]?.walletAssetDebits).toEqual([{ amount: shares.invalid, asset: shares.shareToken, category: 'outcome-share', kind: 'erc1155', tokenId: '0' }])
-
-		pool.forkActivationTime = (BigInt(snapshot.anchor.timestamp) - 8n * 7n * 24n * 60n * 60n + 60n).toString()
-		expect(eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'trading.shares.migrate')).toBeUndefined()
-		pool.forkActivationTime = '1999999000'
 
 		shares.migrationProgressByRoute['0:0'] = shares.invalid
 		const repeated = eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'trading.shares.migrate')
@@ -895,21 +773,24 @@ describe('chaos operation catalog', () => {
 		expect(() => eligibleOperationPlans(snapshot, permissiveOptions)).toThrow('exceeds the wallet source balance')
 	})
 
-	test('requires an existing child route after the share-migration child-creation window closes', () => {
+	test('share migration requires an activated materialized child even after native migration closes', () => {
 		const snapshot = snapshotFixture()
-		const universe = snapshot.universes[0]
 		const pool = snapshot.pools[0]
-		const shares = snapshot.wallet.shares[0]
-		if (universe === undefined || pool === undefined || shares === undefined) throw new Error('Fork migration fixture is incomplete')
+		const universe = snapshot.universes[0]
+		if (pool === undefined || universe === undefined) throw new Error('Missing fork')
 		universe.forkTime = '1000'
-		universe.forkQuestionId = '77'
+		universe.forkQuestionId = pool.questionId
 		pool.systemState = 1
-		pool.forkActivationTime = '1000'
+		const shares = snapshot.wallet.shares[0]
+		if (shares === undefined) throw new Error('Missing shares')
 		shares.migrationProgressByRoute['0:0'] = '0'
-		expect(eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'trading.shares.migrate')).toBeUndefined()
-
-		snapshot.pools.push({ ...pool, address: address(91), forkOutcomeIndex: '0', parent: pool.address, systemState: 2, universeId: '91', vaults: [] })
-		expect(eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'trading.shares.migrate')?.deadlineTimestamp).toBeUndefined()
+		const find = () => eligibleOperationPlans(snapshot, permissiveOptions).find(plan => plan.definitionId === 'trading.shares.migrate')
+		expect(find()).toBeUndefined()
+		pool.childPoolPreparations['0'] = readyChildFixture(pool.address, pool.portfolio)
+		expect(find()).toBeDefined()
+		expect(find()?.deadlineTimestamp).toBeUndefined()
+		pool.childPoolPreparations['0'].historyReady = false
+		expect(find()).toBeUndefined()
 	})
 
 	test('selects REP add and burn plans only from funded universes', () => {
@@ -1131,6 +1012,7 @@ describe('chaos operation catalog', () => {
 		universe.forkQuestionId = '77'
 		pool.systemState = 0
 		shares.migrationProgressByRoute['0:0'] = '0'
+		pool.childPoolPreparations['0'] = readyChildFixture(pool.address, pool.portfolio)
 		expect(eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'trading.shares.migrate')).toBeDefined()
 
 		universe.forkTime = '0'
@@ -1235,18 +1117,18 @@ describe('chaos operation catalog', () => {
 		expect(plan).toBeUndefined()
 	})
 
-	test('marks deadline-bound pool fork continuation as urgent lifecycle work', () => {
+	test('marks ready native child preparation as urgent without a retired migration cutoff', () => {
 		const snapshot = snapshotFixture()
 		const pool = snapshot.pools[0]
 		const universe = snapshot.universes[0]
 		if (pool === undefined || universe === undefined) throw new Error('Fork fixture missing')
 		pool.systemState = 1
-		pool.forkActivationTime = '1999999000'
 		universe.forkTime = '1999999000'
 		universe.forkQuestionId = pool.questionId
+		pool.childPoolPreparations['0'] = { ...readyChildFixture(pool.address, pool.portfolio), childPool: address(0), historyReady: false }
 		const plan = urgentOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'statoblast.fork.create-child')
 		expect(plan?.priority).toBe('urgent')
-		expect(plan?.deadlineTimestamp).toBe('2004837400')
+		expect(plan?.deadlineTimestamp).toBeUndefined()
 	})
 })
 

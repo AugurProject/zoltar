@@ -11,7 +11,6 @@ type SecurityPoolCoreAddresses = {
 	securityPoolFactory: Address
 	securityPoolForker: Address
 	shareTokenFactory: Address
-	uniformPriceDualCapBatchAuctionFactory: Address
 	zoltar: Address
 	zoltarQuestionData: Address
 }
@@ -37,7 +36,6 @@ type SecurityPoolAddressConfig = {
 		zoltarQuestionData: Address
 	}) => Hex
 	getShareTokenInitCode: (securityPoolFactory: Address, zoltarAddress: Address, questionId: bigint) => Hex
-	getTruthAuctionInitCode: (securityPoolForker: Address) => Hex
 }
 
 function getSecurityPoolSalt(parent: Address, universeId: bigint, questionId: bigint, statoblastSecurityMultiplierBps: bigint, initialReportPriorityFeeAttoEthPerGas: bigint) {
@@ -91,14 +89,7 @@ export function createSecurityPoolAddressHelper(config: SecurityPoolAddressConfi
 			from: infraContracts.shareTokenFactory,
 			salt: originId,
 		})
-		const truthAuction =
-			parent === zeroAddress
-				? zeroAddress
-				: getCreate2Address({
-						bytecode: config.getTruthAuctionInitCode(infraContracts.securityPoolForker),
-						from: infraContracts.uniformPriceDualCapBatchAuctionFactory,
-						salt: securityPoolSaltWithMsgSender,
-					})
+		const truthAuction = zeroAddress
 		const securityPool = getCreate2Address({
 			bytecode: config.getSecurityPoolInitCode({
 				escalationGameFactory: infraContracts.escalationGameFactory,

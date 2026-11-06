@@ -1,14 +1,24 @@
 export const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePath: string }> = [
-	{ name: 'FeeStreamReplaced', parameters: 'uint64 indexed bookId,uint256 indexed questionId,uint96 rateAttoEthPerSecond,uint48 end', sourcePath: 'solidity/contracts/statoblast/SecurityPoolSettlementBook.sol' },
-	{ name: 'ForkFrozen', parameters: 'uint248 indexed universeId,uint256 backing,uint256 cash,uint256 units,uint256 recoveryAttoRep', sourcePath: 'solidity/contracts/statoblast/SecurityPoolPortfolioForkCoordinator.sol' },
-	{ name: 'PortfolioRecoveryRightsConsumed', parameters: 'uint248 indexed universeId,address indexed holder,uint256 amountAttoShares,uint256 cumulativeAttoShares', sourcePath: 'solidity/contracts/statoblast/tokens/ShareToken.sol' },
-	{ name: 'PortfolioRecoveryRightsTransferred', parameters: 'uint248 indexed universeId,address indexed from,address indexed to,uint256[3] amountsAttoShares', sourcePath: 'solidity/contracts/statoblast/tokens/ShareToken.sol' },
-	{ name: 'OrdinarySettlementInitialized', parameters: 'BinaryOutcomes.BinaryOutcome indexed outcome,uint256 winningPrincipalAttoRep,uint256 reservedAttoRep', sourcePath: 'solidity/contracts/statoblast/EscalationGameState.sol' },
-	{ name: 'VaultPositionSplit', parameters: 'address indexed source,address indexed recipient,uint256 numerator,uint256 denominator', sourcePath: 'solidity/contracts/statoblast/SecurityPoolOperationsDelegate.sol' },
-	{ name: 'ClaimCheckpointProgress', parameters: 'bytes32 indexed claimId,address nextSourceGame,uint256 pendingSteps,bool complete', sourcePath: 'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol' },
-	{ name: 'RegistryInitialized', parameters: 'address indexed coordinator', sourcePath: 'solidity/contracts/statoblast/LiquidationApprovalRegistry.sol' },
-	{ name: 'LiquidationApprovalRegistrySet', parameters: 'LiquidationApprovalRegistry indexed registry', sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol' },
-	{ name: 'EthReceived', parameters: 'address indexed sender,uint256 amountAttoEth', sourcePath: 'solidity/contracts/statoblast/SecurityPool.sol' },
+	{
+		name: 'PortfolioRecoveryRightsConsumed',
+		parameters: 'uint248 indexed universeId,address indexed holder,uint256 amountAttoShares,uint256 cumulativeAttoShares',
+		sourcePath: 'solidity/contracts/statoblast/tokens/ShareToken.sol',
+	},
+	{
+		name: 'PortfolioRecoveryRightsTransferred',
+		parameters: 'uint248 indexed universeId,address indexed from,address indexed to,uint256[3] amountsAttoShares',
+		sourcePath: 'solidity/contracts/statoblast/tokens/ShareToken.sol',
+	},
+	{
+		name: 'OrdinarySettlementInitialized',
+		parameters: 'BinaryOutcomes.BinaryOutcome indexed outcome,uint256 winningPrincipalAttoRep,uint256 reservedAttoRep',
+		sourcePath: 'solidity/contracts/statoblast/EscalationGameState.sol',
+	},
+	{
+		name: 'ClaimCheckpointProgress',
+		parameters: 'bytes32 indexed claimId,address nextSourceGame,uint256 pendingSteps,bool complete',
+		sourcePath: 'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol',
+	},
 	{
 		name: 'Transfer',
 		parameters: 'address indexed from,address indexed to,uint256 value',
@@ -40,11 +50,6 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 		sourcePath: 'solidity/contracts/ZoltarQuestionData.sol',
 	},
 	{
-		name: 'UniverseInitialized',
-		parameters: 'uint248 indexed universeId,uint256 forkTime,uint256 forkQuestionId,uint256 forkingOutcomeIndex,ReputationToken reputationToken,uint248 indexed parentUniverseId,uint256 universeTheoreticalSupplyAttoRep',
-		sourcePath: 'solidity/contracts/Zoltar.sol',
-	},
-	{
 		name: 'DeployChild',
 		parameters: 'address deployer,uint248 indexed universeId,uint256 indexed outcomeIndex,uint248 indexed childUniverseId,ReputationToken childReputationToken,uint256 childUniverseTheoreticalSupplyAttoRep',
 		sourcePath: 'solidity/contracts/Zoltar.sol',
@@ -62,46 +67,24 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 	{
 		name: 'DeploySecurityPool',
 		parameters:
-			'ISecurityPool indexed securityPool,UniformPriceDualCapBatchAuction truthAuction,OpenOraclePriceCoordinator openOraclePriceCoordinator,IShareToken shareToken,ISecurityPool indexed parent,uint248 indexed universeId,uint256 questionId,uint256 statoblastSecurityMultiplierBps,uint256 initialReportPriorityFeeAttoEthPerGas,uint256 currentRetentionRate,uint256 settlementCollateralAttoEth',
+			'ISecurityPool indexed securityPool,address truthAuction,OpenOraclePriceCoordinator openOraclePriceCoordinator,IShareToken shareToken,ISecurityPool indexed parent,uint248 indexed universeId,uint256 questionId,uint256 statoblastSecurityMultiplierBps,uint256 initialReportPriorityFeeAttoEthPerGas,uint256 currentRetentionRate,uint256 settlementCollateralAttoEth',
 		sourcePath: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
 	},
 	{
-		name: 'ChildPoolLinked',
-		parameters: 'ISecurityPool indexed parent,uint256 indexed outcomeIndex,ISecurityPool indexed child,UniformPriceDualCapBatchAuction truthAuction',
-		sourcePath: 'solidity/contracts/statoblast/SecurityPoolForker.sol',
+		name: 'TheoreticalSupplySet',
+		parameters: 'uint256 totalTheoreticalSupplyAttoRep',
+		sourcePath: 'solidity/contracts/ReputationToken.sol',
 	},
-	{
-		name: 'ChildRepSplit',
-		parameters: 'ISecurityPool indexed parent,uint256 indexed outcomeIndex,uint256 childPoolRepSplitAttoRep,uint256 pendingChildAttoRep',
-		sourcePath: 'solidity/contracts/statoblast/SecurityPoolForker.sol',
-	},
-	{
-		name: 'ChildDisputeStakedRepMaterialized',
-		parameters: 'ISecurityPool indexed parentPool,ISecurityPool indexed childPool,address indexed childGame,uint256 outcomeIndex,uint256 amountAttoRep,uint256 resultingDisputeStakedRepBalanceAttoRep',
-		sourcePath: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
-	},
-	{
-		name: 'PoolHeldRepSweptToChild',
-		parameters: 'ISecurityPool indexed parentPool,ISecurityPool indexed childPool,uint256 indexed outcomeIndex,uint256 amountAttoRep,uint256 resultingChildPoolHeldRepBalanceAttoRep',
-		sourcePath: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
-	},
-	{
-		name: 'EscalationMigrationEntitlementInitialized',
-		parameters: 'ISecurityPool indexed parent,address indexed vault,uint256[3] sourcePrincipalByOutcomeAttoRep,uint256[3] currentRepByOutcomeAttoRep,uint256 totalCurrentAttoRep',
-		sourcePath: 'solidity/contracts/statoblast/EscalationGameForker.sol',
-	},
-	{
-		name: 'EscalationMigrationEntitlementMaterialized',
-		parameters: 'ISecurityPool indexed parent,address indexed vault,uint256 indexed childOutcomeIndex,ISecurityPool child,uint256 childAttoRep',
-		sourcePath: 'solidity/contracts/statoblast/EscalationGameForker.sol',
-	},
-	{ name: 'TheoreticalSupplySet', parameters: 'uint256 totalTheoreticalSupplyAttoRep', sourcePath: 'solidity/contracts/ReputationToken.sol' },
 	{
 		name: 'ReputationTokenInitialized',
 		parameters: 'uint248 indexed universeId,uint256 indexed repNumber,string name,string symbol,uint256 totalTheoreticalSupplyAttoRep',
 		sourcePath: 'solidity/contracts/ReputationToken.sol',
 	},
-	{ name: 'Mint', parameters: 'address indexed account,uint256 valueAttoRep', sourcePath: 'solidity/contracts/ReputationToken.sol' },
+	{
+		name: 'Mint',
+		parameters: 'address indexed account,uint256 valueAttoRep',
+		sourcePath: 'solidity/contracts/ReputationToken.sol',
+	},
 	{
 		name: 'Burn',
 		parameters: 'address indexed account,uint256 valueAttoRep,uint256 totalTheoreticalSupplyAttoRep',
@@ -123,16 +106,10 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 		sourcePath: 'solidity/contracts/statoblast/SecurityPool.sol',
 	},
 	{
-		name: 'TotalRepBackingUnitsSet',
-		parameters: 'uint256 totalRepBackingUnits',
+		name: 'SystemStateSet',
+		parameters: 'SystemState systemState',
 		sourcePath: 'solidity/contracts/statoblast/SecurityPool.sol',
 	},
-	{
-		name: 'ShareTokenSupplySet',
-		parameters: 'uint256 shareTokenSupplyAttoShares',
-		sourcePath: 'solidity/contracts/statoblast/SecurityPool.sol',
-	},
-	{ name: 'SystemStateSet', parameters: 'SystemState systemState', sourcePath: 'solidity/contracts/statoblast/SecurityPool.sol' },
 	{
 		name: 'VaultEscrowUpdated',
 		parameters: 'address indexed vault,uint256 disputeStakedRepByVaultAttoRep,uint256 totalDisputeStakedAttoRep',
@@ -153,35 +130,14 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 		parameters: 'address indexed vault,address repReceiver,uint256[3] sourcePrincipalByOutcomeAttoRep,uint256[3] childRepByOutcomeAttoRep,uint256 totalChildRepToTransferAttoRep,bool transferredRep',
 		sourcePath: 'solidity/contracts/statoblast/EscalationGameState.sol',
 	},
-	{
-		name: 'InternalApproval',
-		parameters: 'address indexed owner,address indexed spender,address indexed token,uint256 amount',
-		sourcePath: 'solidity/contracts/statoblast/openOracle/OpenOracle.sol',
-	},
-	{
-		name: 'DeploymentAddressesSet',
-		parameters: 'address[] deploymentAddresses',
-		sourcePath: 'solidity/contracts/DeploymentStatusOracle.sol',
-	},
 ]
-
 export const delegateEventDeclarationMirrors: Array<{ name: string; sourcePath: string }> = [
-	{ name: 'OrdinarySettlementInitialized', sourcePath: 'solidity/contracts/statoblast/EscalationGameDepositDelegate.sol' },
-	{ name: 'PoolAccountingCheckpoint', sourcePath: 'solidity/contracts/statoblast/SecurityPoolEventEmitter.sol' },
-	{ name: 'VaultAccountingCheckpoint', sourcePath: 'solidity/contracts/statoblast/SecurityPoolEventEmitter.sol' },
-	{ name: 'ChildPoolLinked', sourcePath: 'solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol' },
-	{ name: 'ChildRepSplit', sourcePath: 'solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol' },
-	{ name: 'ClaimForkedEscalationDepositsToWallet', sourcePath: 'solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol' },
+	{
+		name: 'OrdinarySettlementInitialized',
+		sourcePath: 'solidity/contracts/statoblast/EscalationGameDepositDelegate.sol',
+	},
 ]
-
-export const assemblyEventEmissions: Array<{
-	dataArguments: string
-	indexedArguments: string
-	name: string
-	signature: string
-	signatureConstant: string
-	sourcePath: string
-}> = [
+export const assemblyEventEmissions: Array<{ dataArguments: string; indexedArguments: string; name: string; signature: string; signatureConstant: string; sourcePath: string }> = [
 	{
 		dataArguments: 'outcomeIndex, amountAttoRep, reason, carryTotalAttoRep, _getCurrentNullifierRoot(outcomeIndex), carryRoot',
 		indexedArguments: 'parentDepositIndex, sourceNodeId, depositor',
@@ -191,5 +147,4 @@ export const assemblyEventEmissions: Array<{
 		sourcePath: 'solidity/contracts/statoblast/EscalationGameCarry.sol',
 	},
 ]
-
-export const referencedEventAbiFingerprint = 'd7fa6958b5a6c1ad3763f66cef85d82ecd55bfc8e020650bb1d84799a6a0f14e'
+export const referencedEventAbiFingerprint = '4ac8aa26db91082b7291e5c35bb1d5eb6142fb4cadcdeea17139f1a9fba5ce10'

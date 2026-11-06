@@ -1,5 +1,5 @@
 import { bigintToSafeNumber, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate as claimArtifact, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker } from '../contractArtifact.js'
+import { statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate as claimArtifact, statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import type { ReadClient, ReportingOutcomeKey, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { AuthenticatedForkClaim, CarriedDepositProof, ImportedEscalationDeposit } from '../types/contracts.js'
@@ -11,7 +11,7 @@ import { getCarrySnapshotRoot, buildCarryMerkleMountainRangeProof, compareBigint
 import { claimStateChanged } from './claimActionState.js'
 import { withClaimReadContext } from './claimReadContext.js'
 import { CONTRACT_PAGE_SIZE } from './pagination.js'
-import { submitClaimCheckpoint, submitClaimCheckpointAndSettlement } from './reportingClaimCheckpoint.js'
+import { submitClaimCheckpoint } from './reportingClaimCheckpoint.js'
 
 const EMPTY_CARRY_LEAF_HASH = ('0x' + '00'.repeat(32)) as Hex
 
@@ -119,47 +119,11 @@ async function loadHistoricalLocalCarryLeaves(client: Pick<ReadClient, 'readCont
 async function buildHistoricalLocalCarrySnapshotEntries(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address, outcome: ReportingOutcomeKey, localLeaves: readonly HistoricalCarryLeafViewStruct[]): Promise<HistoricalCarrySnapshotEntry[]> {
 	const activeLeaves = await loadCarryLeafPage(client, escalationGameAddress, outcome)
 	const activeSourceNodeIds = new Set(activeLeaves.map(leaf => leaf.sourceNodeId.toString()))
-	const inactiveLeaves = localLeaves.filter(leaf => !activeSourceNodeIds.has(leaf.sourceNodeId.toString()))
-	const directlyClaimedSourceNodeIds = new Set<string>()
-	if (inactiveLeaves.length > 0) {
-		const securityPoolAddress = await client.readContract({
-			abi: statoblast_EscalationGame_EscalationGame.abi,
-			address: escalationGameAddress,
-			functionName: 'securityPool',
-			args: [],
-		})
-		const securityPoolForkerAddress = await client.readContract({
-			abi: statoblast_SecurityPool_SecurityPool.abi,
-			address: securityPoolAddress,
-			functionName: 'securityPoolForker',
-			args: [],
-		})
-		const directlyClaimed = await Promise.all(
-			inactiveLeaves.map(async leaf =>
-				requireBooleanValue(
-					await client.readContract({
-						abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
-						address: securityPoolForkerAddress,
-						functionName: 'isEscalationDepositClaimedDirectly',
-						args: [securityPoolAddress, getReportingOutcomeValue(outcome), leaf.parentDepositIndex],
-					}),
-					'historical carry direct-claim status',
-				),
-			),
-		)
-		for (const [index, directlyClaimedLeaf] of directlyClaimed.entries()) {
-			if (directlyClaimedLeaf) {
-				const leaf = inactiveLeaves[index]
-				if (leaf === undefined) throw new Error('Missing directly claimed historical carry leaf.')
-				directlyClaimedSourceNodeIds.add(leaf.sourceNodeId.toString())
-			}
-		}
-	}
 	return localLeaves.map(leaf => {
 		const sourceNodeId = leaf.sourceNodeId.toString()
 		return {
 			leaf,
-			leafHash: activeSourceNodeIds.has(sourceNodeId) || directlyClaimedSourceNodeIds.has(sourceNodeId) ? hashCarryLeaf(leaf, outcome) : EMPTY_CARRY_LEAF_HASH,
+			leafHash: activeSourceNodeIds.has(sourceNodeId) ? hashCarryLeaf(leaf, outcome) : EMPTY_CARRY_LEAF_HASH,
 		}
 	})
 }
@@ -438,9 +402,4 @@ export async function withdrawForkedEscalationDeposits(client: WriteClient, secu
 export async function prepareForkClaimCheckpoint(client: WriteClient, securityPoolAddress: Address, identity: AuthenticatedForkClaim) {
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
 	return await executeForkAuctionAction('prepareForkClaim', securityPoolAddress, universeId, async () => await submitClaimCheckpoint(client, securityPoolAddress, identity))
-}
-
-export async function prepareAndSettleForkClaim(client: WriteClient, securityPoolAddress: Address, identity: AuthenticatedForkClaim, proof: CarriedDepositProof, rebuildProof: () => Promise<CarriedDepositProof>) {
-	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
-	return await executeForkAuctionAction('settleForkedEscalation', securityPoolAddress, universeId, async () => await submitClaimCheckpointAndSettlement(client, securityPoolAddress, identity, proof, rebuildProof))
 }

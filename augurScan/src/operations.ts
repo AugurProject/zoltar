@@ -232,18 +232,6 @@ export const vaultRisk = (input: VaultRiskInput) => {
 	}
 }
 
-export const poolCapacity = (settlementCollateralAttoEth: unknown, mintingCapacityAttoEth: unknown) => {
-	const used = positiveInteger(settlementCollateralAttoEth, 'settlementCollateralAttoEth')
-	const capacity = positiveInteger(mintingCapacityAttoEth, 'mintingCapacityAttoEth')
-	const available = capacity > used ? capacity - used : 0n
-	return {
-		usedAttoEth: used.toString(),
-		capacityAttoEth: capacity.toString(),
-		availableAttoEth: available.toString(),
-		utilizationBps: capacity === 0n ? undefined : ((used * BPS_DENOMINATOR) / capacity).toString(),
-	}
-}
-
 export type SwapAnalyticsInput = {
 	readonly yesForNo: boolean
 	readonly amountIn: string

@@ -229,12 +229,13 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 	})
 
 	for (const forkBurnDivisor of [5n, 7n, 100n]) {
-		test(`reopened inherited ties resolve with burn divisor ${forkBurnDivisor}`, async () => {
+		test(`below-threshold inherited ties preserve game thresholds with burn divisor ${forkBurnDivisor}`, async () => {
 			const canonicalQuestionData = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'zoltarQuestionData' })
 			const zoltar = await deployContract(client, encodeDeployData({ abi: Zoltar_Zoltar.abi, bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`, args: [canonicalQuestionData, repTokenAddress, 20n, forkBurnDivisor] }))
 			await mockWindow.addStateOverrides({ [zoltar]: { stateDiff: { [universeSupplySlot]: FORK_THRESHOLD * 20n } } })
 			const proofVerifier = await deployContract(client, encodeDeployData({ abi: statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.abi, bytecode: `0x${statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}` }))
 			const { escalationGame, securityPool } = await deployStartedForkContinuation(zoltar, proofVerifier, [START_BOND, NON_DECISION_THRESHOLD, ESCALATION_TIME_LENGTH, QuestionOutcome.None, false, FORK_THRESHOLD])
+			const inheritedBalance = NON_DECISION_THRESHOLD / (2n * forkBurnDivisor)
 			for (let outcome = 0; outcome < 3; outcome++) {
 				await writeContractAndWait(client, () =>
 					client.writeContract({
@@ -245,18 +246,18 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 							[zeroPeaks(), zeroPeaks(), zeroPeaks()],
 							[0n, 1n, 1n],
 							[0n, NON_DECISION_THRESHOLD, NON_DECISION_THRESHOLD],
-							[0n, NON_DECISION_THRESHOLD, NON_DECISION_THRESHOLD],
+							[0n, inheritedBalance, inheritedBalance],
 							[zeroHash, zeroHash, zeroHash],
 						],
 					}),
 				)
 			}
-			const retainedBacking = FORK_THRESHOLD / (2n * forkBurnDivisor)
-			await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: securityPool, functionName: 'applyTruthAuctionHaircut', args: [FORK_THRESHOLD - retainedBacking] }))
+			const backing = await getERC20Balance(client, repTokenAddress, escalationGame)
+			await writeContractAndWait(client, () => client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: repTokenAddress, functionName: 'transfer', args: [escalationGame, FORK_THRESHOLD - backing] }))
 			assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'canTriggerOwnFork' }), false)
 			await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: securityPool, functionName: 'resumeEscalationGameFromFork' }))
 			// A real REP burn lowers the universe threshold without changing this game's
-			// inherited threshold. Reopening must use the game threshold consistently.
+			// inherited threshold. A new report must use the game threshold consistently.
 			await writeContractAndWait(client, () => client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: repTokenAddress, functionName: 'approve', args: [zoltar, MAX_UINT256] }))
 			await writeContractAndWait(client, () => client.writeContract({ abi: Zoltar_Zoltar.abi, address: zoltar, functionName: 'burnRep', args: [0n, FORK_THRESHOLD * 10n] }))
 			const liveThreshold = await client.readContract({ abi: Zoltar_Zoltar.abi, address: zoltar, functionName: 'getForkThresholdAttoRep', args: [0n] })

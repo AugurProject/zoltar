@@ -6,7 +6,10 @@ import { loadPoolCatalog } from '#monitoring/pool-catalog'
 
 const address = getAddress('0x1111111111111111111111111111111111111111')
 
-function fixture(total: bigint, options: { stallDeploymentBlock?: boolean; stallDeployment?: boolean; unknownPool?: boolean; wrongCanonical?: boolean; failSearch?: boolean; failMetrics?: boolean; failDates?: boolean; failDeployment?: boolean; missingQuestion?: boolean; reorg?: boolean } = {}) {
+function fixture(
+	total: bigint,
+	options: { missingPortfolio?: boolean; missingCapital?: boolean; stallDeploymentBlock?: boolean; stallDeployment?: boolean; unknownPool?: boolean; wrongCanonical?: boolean; failSearch?: boolean; failMetrics?: boolean; failDates?: boolean; failDeployment?: boolean; missingQuestion?: boolean; reorg?: boolean } = {},
+) {
 	const reads: { functionName: string; args: readonly unknown[]; blockNumber: bigint }[] = []
 	let blockReads = 0
 	const client = new Proxy(
@@ -55,8 +58,12 @@ function fixture(total: bigint, options: { stallDeploymentBlock?: boolean; stall
 							case 'systemState':
 								if (options.failMetrics) throw new Error('Pool unavailable')
 								return 0n
-							case 'getTotalPoolHeldAttoRep':
-								return 2n * 10n ** 18n
+							case 'getSecurityPoolPortfolio':
+								return options.missingPortfolio ? zeroAddress : address
+							case 'capitalLedger':
+								return options.missingCapital ? zeroAddress : address
+							case 'totals':
+								return [2n * 10n ** 18n, 3n * 10n ** 18n, 3n * 10n ** 18n]
 							case 'questionData':
 								if (options.failDates) throw new Error('Question unavailable')
 								return address
@@ -64,8 +71,6 @@ function fixture(total: bigint, options: { stallDeploymentBlock?: boolean; stall
 								return options.missingQuestion ? 0n : 1789387200n
 							case 'questions':
 								return ['Question', '', 1789473600n, 1792065600n, 0n, 0n, 0n, '']
-							case 'getVaultCount':
-								return 3n
 							default:
 								throw new Error(`Unexpected read ${parameters.functionName}`)
 						}
@@ -80,7 +85,12 @@ function fixture(total: bigint, options: { stallDeploymentBlock?: boolean; stall
 test('browses unselected factory deployments with bounded ranges at a canonical block', async () => {
 	const { client, reads } = fixture(25n)
 	const result = await loadPoolCatalog(client, address, 1, 2)
-	expect(result).toMatchObject({ total: '25', pageCount: '3', page: 2, pools: [{ address, universeId: '7', questionId: '42', deploymentDate: '1789560000', questionDates: { startTime: '1789473600', endTime: '1792065600' }, metrics: { systemState: '0', totalPoolHeldRep: '2', vaultCount: '3' } }] })
+	expect(result).toMatchObject({
+		total: '25',
+		pageCount: '3',
+		page: 2,
+		pools: [{ address, universeId: '7', questionId: '42', deploymentDate: '1789560000', questionDates: { startTime: '1789473600', endTime: '1792065600' }, metrics: { systemState: '0', portfolio: address, sharedCommittedRep: '2', sharedCommitmentEth: '3' } }],
+	})
 	expect(reads.find(read => read.functionName === 'securityPoolDeploymentsRange')?.args).toEqual([24n, 1n])
 	expect(reads.every(read => read.blockNumber === 42n)).toBe(true)
 	expect(result).not.toHaveProperty('block')
@@ -117,7 +127,7 @@ test('keeps deployment and question dates independent when either source is unav
 	const noQuestion = await loadPoolCatalog(fixture(1n, { failDates: true }).client, address, 1, 0)
 	expect(noQuestion.pools[0]?.questionDates).toBeUndefined()
 	expect(noQuestion.pools[0]?.deploymentDate).toBe('1789560000')
-	expect(noQuestion.pools[0]?.metrics?.vaultCount).toBe('3')
+	expect(noQuestion.pools[0]?.metrics?.sharedCommitmentEth).toBe('3')
 	const noDeployment = await loadPoolCatalog(fixture(1n, { failDeployment: true }).client, address, 1, 0)
 	expect(noDeployment.pools[0]?.deploymentDate).toBeUndefined()
 	expect(noDeployment.pools[0]?.questionDates?.startTime).toBe('1789473600')
@@ -138,7 +148,7 @@ test('returns no match for unknown addresses or a mismatched factory registratio
 	for (const options of [{ unknownPool: true }, { wrongCanonical: true }]) {
 		const { client, reads } = fixture(1n, options)
 		expect(await loadPoolCatalog(client, address, 1, 0, address)).toMatchObject({ total: '0', pageCount: '0', pools: [] })
-		expect(reads.some(read => read.functionName === 'getTotalPoolHeldAttoRep')).toBe(false)
+		expect(reads.some(read => read.functionName === 'totals')).toBe(false)
 	}
 })
 
@@ -170,7 +180,7 @@ test('returns pools within a bounded deadline when deployment date discovery sta
 		}),
 	])
 	expect(result.pools[0]?.address).toBe(address)
-	expect(result.pools[0]?.metrics?.vaultCount).toBe('3')
+	expect(result.pools[0]?.metrics?.sharedCommitmentEth).toBe('3')
 	expect(result.pools[0]?.deploymentDate).toBeUndefined()
 })
 
@@ -181,7 +191,17 @@ test('returns usable pools when deployment timestamp metadata stalls after log d
 			throw new Error('Deployment timestamp blocked discovery')
 		}),
 	])
-	expect(result.pools[0]?.metrics?.vaultCount).toBe('3')
+	expect(result.pools[0]?.metrics?.sharedCommitmentEth).toBe('3')
 	expect(result.pools[0]?.questionDates?.startTime).toBe('1789473600')
 	expect(result.pools[0]?.deploymentDate).toBeUndefined()
+})
+
+test('does not invent capital metrics when the portfolio or universe ledger is unavailable', async () => {
+	for (const options of [{ missingPortfolio: true }, { missingCapital: true }]) {
+		const { client, reads } = fixture(1n, options)
+		const result = await loadPoolCatalog(client, address, 1, 0)
+		expect(result.pools[0]?.metrics).toBeUndefined()
+		expect(result.pools[0]?.questionId).toBe('42')
+		expect(reads.some(read => read.functionName === 'totals')).toBe(false)
+	}
 })

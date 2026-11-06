@@ -1,7 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test'
 import { decodeFunctionData, getAddress, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { createBlockWithTimestamp, createMockWriteClient, asWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
-import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { createCompleteSetInSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 
 const pool = getAddress('0x00000000000000000000000000000000000000a1')
@@ -14,23 +13,27 @@ void describe('complete-set mint submission', () => {
 				createMockWriteClient(send, async request => {
 					if (request.functionName === 'escalationGame') return zeroAddress
 					if (request.functionName === 'securityPoolFactory') return pool
-					if (request.functionName === 'getSecurityPoolPortfolio') return '0x0000000000000000000000000000000000000000'
+					if (request.functionName === 'getSecurityPoolPortfolio') return portfolio
+					if (request.functionName === 'getPool') return pool
+					if (request.functionName === 'purchaseQuote') return [0n, 0n]
+					if (request.functionName === 'availableMintCapacity' || request.functionName === 'attoEthToAttoShares') return 10n ** 18n
 					if (request.functionName === 'questionData') return pool
 					if (request.functionName === 'questionId' || request.functionName === 'universeId') return 1n
 					if (request.functionName === 'getQuestionEndDate') return 100n
 					throw new Error(`Unexpected read ${request.functionName}`)
 				}),
 			),
+			account: { address: pool, type: 'json-rpc' as const },
 			getBlock: async () => createBlockWithTimestamp(currentTimestamp),
 		}
 		await expect(createCompleteSetInSecurityPool(client, pool, 10n ** 18n)).rejects.toThrow('question ended')
 		expect(send).not.toHaveBeenCalled()
 	})
-	test.each([3540n, 10n ** 9n])('submits the selected mint amount without reading the oracle at %s', async currentTimestamp => {
+	test.each([3540n, 10n ** 9n])('submits the selected mint amount through its portfolio at %s', async currentTimestamp => {
 		const send = mock((request: { data?: `0x${string}`; value?: bigint }) => {
 			expect(request.value).toBe(10n ** 18n)
 			if (request.data === undefined) throw new Error('Expected mint calldata')
-			expect(decodeFunctionData({ abi: statoblast_SecurityPool_SecurityPool.abi, data: request.data }).functionName).toBe('createCompleteSet')
+			expect(decodeFunctionData({ abi: portfolioMintAbi, data: request.data }).functionName).toBe('createCompleteSet')
 		})
 		const client = {
 			...asWriteClient(
@@ -38,12 +41,16 @@ void describe('complete-set mint submission', () => {
 					if (request.functionName === 'escalationGame') return zeroAddress
 					if (request.functionName === 'universeId' || request.functionName === 'questionId') return 1n
 					if (request.functionName === 'securityPoolFactory') return pool
-					if (request.functionName === 'getSecurityPoolPortfolio') return '0x0000000000000000000000000000000000000000'
+					if (request.functionName === 'getSecurityPoolPortfolio') return portfolio
+					if (request.functionName === 'getPool') return pool
+					if (request.functionName === 'purchaseQuote') return [0n, 0n]
+					if (request.functionName === 'availableMintCapacity' || request.functionName === 'attoEthToAttoShares') return 10n ** 18n
 					if (request.functionName === 'questionData') return pool
 					if (request.functionName === 'getQuestionEndDate') return currentTimestamp + 1n
 					throw new Error(`Unexpected read ${request.functionName}`)
 				}),
 			),
+			account: { address: pool, type: 'json-rpc' as const },
 			getBlock: async () => createBlockWithTimestamp(currentTimestamp),
 		}
 		await createCompleteSetInSecurityPool(client, pool, 10n ** 18n)

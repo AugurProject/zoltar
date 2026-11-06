@@ -64,7 +64,7 @@ peaks[0] = third
 peaks[1] = bagCarryPeaks([first, second])
 
 const fixtureRead =
-	(options: { consumed?: bigint[]; directlyClaimed?: boolean; badRoot?: boolean; badNullifier?: boolean; pending?: boolean; cycle?: boolean; checkpointRequired?: boolean; ordinarySettled?: boolean } = {}): StateRead =>
+	(options: { consumed?: bigint[]; badRoot?: boolean; badNullifier?: boolean; pending?: boolean; cycle?: boolean; checkpointRequired?: boolean; ordinarySettled?: boolean } = {}): StateRead =>
 	async (target, _abi, name, args = []) => {
 		const kind = ['getInheritedClaimAllocation', 'getClaimCheckpointProgress'].includes(name) ? 'escalationGameClaimDelegate' : fixtureKinds.get(target)
 		if (kind === undefined) throw new Error(`Unexpected claim target ${target}`)
@@ -114,8 +114,6 @@ const fixtureRead =
 			}
 			case 'getProofConsumedCarriedDepositIndexesByOutcome':
 				return target === child && outcome === 1 ? (options.consumed ?? []) : []
-			case 'isEscalationDepositClaimedDirectly':
-				return options.directlyClaimed === true && args[2] === 1n
 			case 'getClaimCheckpointProgress':
 				return [root, 0n, false, !options.checkpointRequired]
 			case 'getInheritedClaimAllocation':
@@ -166,10 +164,10 @@ test('claim snapshots continue past empty consumed-node pages', async () => {
 	expect(cursors).toEqual([0n, 28n])
 })
 
-test('excludes consumed leaves, suppresses direct parent claims, and retains pending statuses', async () => {
-	const consumed = await sampleClaimPositions(child, fixtureRead({ consumed: [0n], directlyClaimed: true }), state)
+test('excludes consumed leaves and retains unspent inherited claims and pending statuses', async () => {
+	const consumed = await sampleClaimPositions(child, fixtureRead({ consumed: [0n] }), state)
 	expect(consumed.positions).toHaveLength(2)
-	expect(consumed.positions[0]).toMatchObject({ status: 'claimed-in-parent', payout_atto_rep: undefined })
+	expect(consumed.positions[0]).toMatchObject({ status: 'claimable' })
 	expect(consumed.positions[1]).toMatchObject({ status: 'claimable' })
 	const pending = await sampleClaimPositions(child, fixtureRead({ pending: true }), { ...state, finalQuestionResolution: '3' })
 	expect(pending.positions.every(position => position['status'] === 'pending' && position['payout_atto_rep'] === undefined)).toBe(true)

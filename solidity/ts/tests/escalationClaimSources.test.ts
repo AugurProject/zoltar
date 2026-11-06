@@ -12,8 +12,8 @@ describe('Escalation claim interval checkpoints', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
 	let client: WriteClient
 
-	const deployCheckpointSource = async (source: Address, before: bigint, remaining: bigint) => {
-		const hash = await client.sendTransaction({ data: encodeDeployData({ abi: checkpointArtifact.abi, bytecode: `0x${checkpointArtifact.evm.bytecode.object}`, args: [source, source === zeroAddress ? 0n : 2n, before, remaining, 0n] }) })
+	const deployCheckpointSource = async (source: Address) => {
+		const hash = await client.sendTransaction({ data: encodeDeployData({ abi: checkpointArtifact.abi, bytecode: `0x${checkpointArtifact.evm.bytecode.object}`, args: [source, source === zeroAddress ? 0n : 2n, 0n] }) })
 		const receipt = await client.waitForTransactionReceipt({ hash })
 		if (receipt.contractAddress === undefined) throw new Error('Checkpoint source deployment address missing')
 		return receipt.contractAddress
@@ -26,16 +26,14 @@ describe('Escalation claim interval checkpoints', () => {
 		await ethereum.setTime(16n * 7n * DAY)
 	})
 
-	test('nine successive non-dyadic haircuts telescope exactly at every checkpoint', async () => {
-		let source = await deployCheckpointSource(zeroAddress, 0n, 0n)
+	test('nine successive forks preserve principal exactly at every checkpoint', async () => {
+		let source = await deployCheckpointSource(zeroAddress)
 		const firstAmount = 8n * 10n ** 18n + 3n
 		const secondAmount = firstAmount + 2n
-		let firstEnd = firstAmount
-		let totalEnd = firstAmount + secondAmount
+		const firstEnd = firstAmount
+		const totalEnd = firstAmount + secondAmount
 		for (let depth = 0; depth < 9; depth++) {
-			const descendant = await deployCheckpointSource(source, 7n, 5n)
-			firstEnd = (firstEnd * 5n) / 7n
-			totalEnd = (totalEnd * 5n) / 7n
+			const descendant = await deployCheckpointSource(source)
 			for (const tuple of [
 				[1, firstAmount, firstAmount, 0n],
 				[1, secondAmount, firstAmount + secondAmount, 1n],
@@ -59,18 +57,18 @@ describe('Escalation claim interval checkpoints', () => {
 		}
 	})
 
-	test('export compacts a removed prefix before applying the next haircut', async () => {
-		const root = await deployCheckpointSource(zeroAddress, 0n, 0n)
-		const child = await deployCheckpointSource(root, 2n, 1n)
+	test('export compacts a removed principal prefix without moving reward coordinates', async () => {
+		const root = await deployCheckpointSource(zeroAddress)
+		const child = await deployCheckpointSource(root)
 		const firstAmount = 8n * 10n ** 18n + 3n
 		const secondAmount = firstAmount + 2n
-		const firstRetained = firstAmount / 2n
-		const secondRetained = (firstAmount + secondAmount) / 2n - firstRetained
+		const firstRetained = firstAmount
+		const secondRetained = secondAmount
 		await writeContractAndWait(client, () => client.writeContract({ abi: checkpointArtifact.abi, address: child, functionName: 'setConsumedBefore', args: [1, firstRetained] }))
-		const grandchild = await deployCheckpointSource(child, 4n, 3n)
+		const grandchild = await deployCheckpointSource(child)
 		const allocation = await client.readContract({ abi: checkpointArtifact.abi, address: grandchild, functionName: 'getInheritedClaimAllocation', args: [1, secondAmount, firstAmount + secondAmount, 1n] })
 		assert.strictEqual(allocation.sourceAmountAttoRep, secondRetained)
-		assert.strictEqual(allocation.retainedAmountAttoRep, (secondRetained * 3n) / 4n)
-		assert.strictEqual(allocation.retainedCumulativeAttoRep, (((firstAmount + secondAmount) / 2n) * 3n) / 4n, 'removing principal must preserve the original reward position')
+		assert.strictEqual(allocation.retainedAmountAttoRep, secondRetained)
+		assert.strictEqual(allocation.retainedCumulativeAttoRep, firstAmount + secondAmount, 'removing principal must preserve the original reward position')
 	})
 })

@@ -1,4 +1,3 @@
-import { getPoolAnnualFeePercent } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/retentionRate.js'
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
@@ -6,10 +5,8 @@ import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import {
 	estimateMintCheckpoint,
 	convertAttoSharesToSettlementCollateralAttoEth,
-	formatStatoblastSecurityMultiplier,
 	getDefaultShareMigrationTargetOutcomeIndexes,
 	getMaximumMintAmount,
-	getPoolRemainingMintCapacity,
 	getRemainingMintCapacity,
 	getSelectedOutcomeShareBalance,
 	getTradingMigrateSharesGuardMessage,
@@ -131,15 +128,6 @@ void describe('trading helpers', () => {
 		expect(getRemainingMintCapacity(undefined, 12n)).toBeUndefined()
 	})
 
-	void test('gives a listed pool no mintable remainder once escalation starts or the complete-set exchange rate is undefined', () => {
-		const pool = { mintingCapacityAttoEth: 10n, hasForkContinuationEscalationGame: false, ordinaryEscalationGameStarted: false, settlementCollateralAttoEth: 4n, shareTokenSupplyAttoShares: 4n }
-		expect(getPoolRemainingMintCapacity(pool)).toBe(6n)
-		expect(getPoolRemainingMintCapacity({ ...pool, ordinaryEscalationGameStarted: true })).toBe(0n)
-		expect(getPoolRemainingMintCapacity({ ...pool, hasForkContinuationEscalationGame: true })).toBe(0n)
-		expect(getPoolRemainingMintCapacity({ ...pool, settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 5n })).toBe(0n)
-		expect(getPoolRemainingMintCapacity({ ...pool, mintingCapacityAttoEth: undefined })).toBe(0n)
-	})
-
 	void test('limits the maximum mint amount by both spendable wallet ETH and remaining capacity', () => {
 		expect(getMaximumMintAmount(3n * TOKEN_PRECISION, 5n * TOKEN_PRECISION)).toBe(3n * TOKEN_PRECISION - ETH_GAS_RESERVE_ATTO_ETH)
 		expect(getMaximumMintAmount(7n * TOKEN_PRECISION, 5n * TOKEN_PRECISION)).toBe(5n * TOKEN_PRECISION)
@@ -199,12 +187,6 @@ void describe('trading helpers', () => {
 		expect(isTradingSystemDeployed([])).toBe(false)
 		expect(isTradingSystemDeployed([createDeploymentStep('proxyDeployer', true), createDeploymentStep('zoltar', true), createDeploymentStep('securityPoolFactory', true)])).toBe(true)
 		expect(isTradingSystemDeployed([createDeploymentStep('proxyDeployer', true), createDeploymentStep('zoltar', true), createDeploymentStep('securityPoolFactory', false)])).toBe(false)
-	})
-
-	void test('formats security multiplier basis points with the multiplication sign', () => {
-		expect(formatStatoblastSecurityMultiplier(20_000n)).toBe('2×')
-		expect(formatStatoblastSecurityMultiplier(25_000n)).toBe('2.5×')
-		expect(formatStatoblastSecurityMultiplier(20_001n)).toBe('2.0001×')
 	})
 
 	void test('detects pools that have REP backing but no active underwriting commitments', () => {
@@ -702,13 +684,6 @@ test('shared pool mint guard defers backing availability to the purchase quote',
 	expect(getTradingMintGuardMessage({ ...request, usesSharedBacking: true, escalationGameActive: true })).toBe(MINTING_PAUSED_DURING_DISPUTE_MESSAGE)
 })
 
-test('annual fee preview accounts for fees since the last checkpoint and stops at expiry', () => {
-	const pool = { currentRetentionRate: TOKEN_PRECISION, settlementCollateralAttoEth: 63_072_000n, feeAccrualState: { linearFee: { rateAttoEthPerSecond: 1n, endTime: 100_000_000n }, feeEndTimestamp: 100_000_000n, lastUpdatedFeeAccumulator: 0n, feeIndexRemainder: 0n, totalFeesOwedRemainder: 0n } }
-	expect(getPoolAnnualFeePercent(pool, 0n)).toBe(50n * TOKEN_PRECISION)
-	expect(getPoolAnnualFeePercent(pool, 31_536_000n)).toBe(100n * TOKEN_PRECISION)
-	expect(getPoolAnnualFeePercent(pool, 100_000_000n)).toBe(0n)
-})
-
 test('central settlement previews do not charge wall-clock time across paused price or fork intervals', () => {
 	expect(
 		estimateMintCheckpoint({
@@ -723,14 +698,9 @@ test('central settlement previews do not charge wall-clock time across paused pr
 			totalFeesOwedRemainder: 0n,
 			linearFee: { rateAttoEthPerSecond: 3n, endTime: 25n },
 			centralSettlement: true,
+			centralCheckpointTimestamp: 30n,
 		}),
 	).toEqual({ estimatedRetentionFeeAttoEth: 0n, settlementCollateralAfterFeesAttoEth: 300n })
-})
-
-test('central annual fee display does not extrapolate a logical checkpoint on the native calendar', () => {
-	const pool = { settlementCollateralAttoEth: 63_072_000n, feeAccrualState: { centralSettlement: true, linearFee: { rateAttoEthPerSecond: 1n, endTime: 100_000_000n }, feeEndTimestamp: 100_000_000n, lastUpdatedFeeAccumulator: 0n, feeIndexRemainder: 0n, totalFeesOwedRemainder: 0n } }
-	expect(getPoolAnnualFeePercent(pool, 31_536_000n)).toBe(50n * TOKEN_PRECISION)
-	expect(getPoolAnnualFeePercent(pool, 100_000_000n)).toBe(0n)
 })
 
 test('complete-set redemption accepts share amounts when the claim pays only REP', () => {

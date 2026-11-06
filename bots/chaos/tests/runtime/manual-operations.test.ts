@@ -521,3 +521,34 @@ test('failed preflight invalidates an earlier preview and redacts sensitive erro
 	expect(second['blockers']).toEqual(['RPC [redacted endpoint] failed'])
 	await expect(controller.handle({ action: 'execute', previewId: first['previewId'] })).rejects.toThrow('Preview the operation again')
 })
+
+test('manual portfolio mint refreshes the exact cash quote for both preview and execution', async () => {
+	const base = fixture('statoblast.complete-set.create')
+	base.configuration.settings.submission.mode = 'private'
+	const pool = base.scan.snapshot.pools[0]
+	const question = base.scan.snapshot.questions[0]
+	if (pool === undefined || question === undefined) throw new Error('Missing question')
+	question.endTime = '2100000000'
+	const requests: Array<bigint | undefined> = []
+	const executed: unknown[] = []
+	const controller = createManualOperationController({
+		configuration: base.configuration,
+		state: base.state,
+		gate: base.gate,
+		preflight: async () => {},
+		execute: async plan => {
+			executed.push(plan)
+		},
+		scan: async (cash?: bigint) => {
+			requests.push(cash)
+			pool.purchaseQuote = cash === undefined ? undefined : { mintAttoEth: cash.toString(), feeAttoEth: 100n.toString(), premiumAttoEth: 200n.toString(), minimumShares: cash.toString() }
+			return base.scan
+		},
+	})
+	const preview = object(await controller.handle({ action: 'preview', definitionId: 'statoblast.complete-set.create', inputs: { amount: { source: 'custom', value: '10000' } } }))
+	expect(preview['blockers']).toEqual([])
+	await controller.handle({ action: 'execute', previewId: preview['previewId'] })
+	expect((await finished(controller, preview['previewId']))['status']).toBe('completed')
+	expect(requests).toEqual([10000n, 10000n])
+	expect(executed).toHaveLength(1)
+})

@@ -1,7 +1,6 @@
 import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from './securityPoolAbi.js'
 import { requireAddressValue, requireBigintValue } from './decoders.js'
 import { loadCentralPortfolioQuestion } from './securityPoolPortfolioState.js'
-import { decodeLinearFeeState, linearFeeReadContracts } from './linearFeeState.js'
 import type { LinearFeeState } from '@zoltar/statoblast-shared/statoblast/retentionRate'
 import { encodeFunctionData, getAddress, isAddress, parseAbi, zeroAddress, type Address, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { sortBigIntsAscending } from '@zoltar/core-shared/serialization/bigInt'
@@ -19,6 +18,7 @@ import { ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/co
 
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
 type SecurityPoolMintCapacity = {
+	centralCheckpointTimestamp?: bigint
 	centralSettlement?: boolean
 	linearFee?: LinearFeeState
 	currentRetentionRate?: bigint
@@ -39,71 +39,19 @@ type SecurityPoolMintCapacity = {
 export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'getBlock' | 'multicall'>, securityPoolAddress: Address): Promise<SecurityPoolMintCapacity> {
 	const currentBlock = await client.getBlock()
 	if (typeof currentBlock.number !== 'bigint') throw new Error('Mint capacity requires a mined block.')
-	const [poolAccountingSnapshot, shareTokenSupplyAttoShares, totalPoolHeldAttoRep, mintingCapacityAttoEth, currentRetentionRate, feeEndTimestamp, escalationGame, portfolioCustody, linearRate, linearEnd] = await readRequiredMulticall(
+	const [escalationGame, custody] = await readRequiredMulticall(
 		client,
 		[
-			{
-				abi: statoblast_SecurityPool_SecurityPool.abi,
-				functionName: 'getPoolAccountingSnapshot',
-				address: securityPoolAddress,
-				args: [],
-			},
-			{
-				abi: statoblast_SecurityPool_SecurityPool.abi,
-				functionName: 'shareTokenSupplyAttoShares',
-				address: securityPoolAddress,
-				args: [],
-			},
-			{
-				abi: statoblast_SecurityPool_SecurityPool.abi,
-				functionName: 'getTotalPoolHeldAttoRep',
-				address: securityPoolAddress,
-				args: [],
-			},
-			{
-				abi: statoblast_SecurityPool_SecurityPool.abi,
-				functionName: 'getCurrentMintingCapacityAttoEth',
-				address: securityPoolAddress,
-				args: [],
-			},
-			{
-				abi: statoblast_SecurityPool_SecurityPool.abi,
-				functionName: 'currentRetentionRate',
-				address: securityPoolAddress,
-				args: [],
-			},
-			{
-				abi: statoblast_SecurityPool_SecurityPool.abi,
-				functionName: 'getFeeEpochEndTime',
-				address: securityPoolAddress,
-				args: [],
-			},
-			{ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'escalationGame', address: securityPoolAddress, args: [] },
-			...linearFeeReadContracts(securityPoolAddress),
+			{ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'escalationGame', args: [] },
+			{ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'portfolioCustody', args: [] },
 		],
 		currentBlock.number,
 	)
-	const linearFee = decodeLinearFeeState(portfolioCustody, linearRate, linearEnd)
+	const capital = requireAddressValue(custody, 'portfolio custody')
+	if (capital === zeroAddress) throw new Error('Question ledger is not bound to a portfolio.')
+	const central = await loadCentralPortfolioQuestion(client, securityPoolAddress, capital, currentBlock.number)
 	const escalationGameActive = requireAddressValue(escalationGame, 'escalation game') !== zeroAddress
-	const central = portfolioCustody === zeroAddress ? undefined : await loadCentralPortfolioQuestion(client, securityPoolAddress, requireAddressValue(portfolioCustody, 'portfolio custody'), currentBlock.number)
-	return {
-		...(linearFee === undefined ? {} : { linearFee }),
-		currentRetentionRate,
-		currentTimestamp: currentBlock.timestamp,
-		escalationGameActive,
-		feeEndTimestamp,
-		feeIndexRemainder: poolAccountingSnapshot.feeIndexRemainder,
-		lastUpdatedFeeAccumulator: poolAccountingSnapshot.lastUpdatedFeeAccumulator,
-		settlementCollateralAttoEth: poolAccountingSnapshot.settlementCollateralAttoEth,
-		feeEligibleUnderwritingLimitAttoEth: poolAccountingSnapshot.feeEligibleUnderwritingLimitAttoEth,
-		mintingCapacityAttoEth: escalationGameActive ? 0n : mintingCapacityAttoEth,
-		shareTokenSupplyAttoShares,
-		totalPoolHeldAttoRep,
-		totalUnderwritingLimitAttoEth: poolAccountingSnapshot.totalUnderwritingLimitAttoEth,
-		totalFeesOwedRemainder: poolAccountingSnapshot.totalFeesOwedRemainder,
-		...central,
-		...(central === undefined || !escalationGameActive ? {} : { mintingCapacityAttoEth: 0n }),
-	}
+	return { ...central, currentTimestamp: currentBlock.timestamp, escalationGameActive, mintingCapacityAttoEth: escalationGameActive ? 0n : central.mintingCapacityAttoEth }
 }
 export async function loadTradingDetails(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<TradingDetails> {
 	if (accountAddress === undefined) {
@@ -253,7 +201,7 @@ export async function createCompleteSetInSecurityPool(client: WriteClient, secur
 	const portfolioValue = await client.readContract({ abi: purchaseAbi, address: factory, functionName: 'getSecurityPoolPortfolio', args: [securityPoolAddress] })
 	if (typeof portfolioValue !== 'string' || !isAddress(portfolioValue)) throw new Error('Invalid shared pool purchase authority.')
 	const portfolio = getAddress(portfolioValue)
-	const pooled = portfolio !== zeroAddress
+	if (portfolio === zeroAddress) throw new Error('Question has no portfolio.')
 	const quote = async () => {
 		const canonicalPool = await client.readContract({ abi: purchaseAbi, address: portfolio, functionName: 'getPool', args: [questionId, universeId] })
 		if (typeof canonicalPool !== 'string' || canonicalPool.toLowerCase() !== securityPoolAddress.toLowerCase()) throw new Error('Portfolio question pool is not canonical.')
@@ -264,26 +212,18 @@ export async function createCompleteSetInSecurityPool(client: WriteClient, secur
 		if (typeof fee !== 'bigint' || fee < 0n) throw new Error('Invalid shared REP purchase quote.')
 		return fee
 	}
-	const purchaseFee = pooled ? await quote() : 0n
+	const purchaseFee = await quote()
 	const maximumFee = (purchaseFee * 10_100n + 9_999n) / 10_000n
-	const minimumShares = pooled ? await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'attoEthToAttoShares', args: [amount] }) : 0n
-	const callParams = pooled
-		? {
-				address: portfolio,
-				abi: purchaseAbi,
-				functionName: 'createCompleteSet',
-				args: [universeId, questionId, amount, client.account.address, minimumShares],
-				value: amount + maximumFee,
-				reviewTitle: 'Buy complete sets',
-				reviewDescription: `Estimated purchase fee: ${formatCurrencyBalanceWithUnit(purchaseFee, 'ETH')}. Includes 1% fee budget headroom; unused ETH is refunded.`,
-			}
-		: {
-				address: securityPoolAddress,
-				abi: statoblast_SecurityPool_SecurityPool.abi,
-				functionName: 'createCompleteSet',
-				args: [],
-				value: amount,
-			}
+	const minimumShares = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'attoEthToAttoShares', args: [amount] })
+	const callParams = {
+		address: portfolio,
+		abi: purchaseAbi,
+		functionName: 'createCompleteSet',
+		args: [universeId, questionId, amount, client.account.address, minimumShares],
+		value: amount + maximumFee,
+		reviewTitle: 'Buy complete sets',
+		reviewDescription: `Estimated purchase fee: ${formatCurrencyBalanceWithUnit(purchaseFee, 'ETH')}. Includes 1% fee budget headroom; unused ETH is refunded.`,
+	} as const
 	client.onTransactionPlan?.([
 		{
 			...callParams,
@@ -291,12 +231,7 @@ export async function createCompleteSetInSecurityPool(client: WriteClient, secur
 			validateBeforeSubmit: async () => {
 				const balance = await client.getBalance({ address: client.account.address })
 				if (balance < callParams.value) throw new Error('Insufficient ETH balance for minting and purchase fees. Gas is additional.')
-				if (pooled) {
-					if ((await quote()) > maximumFee) throw new Error('Purchase fee changed. Review the amount again.')
-				} else {
-					const capacity = await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getCurrentMintingCapacityAttoEth' })
-					if (capacity < amount) throw new Error('Mint capacity changed. Review the amount again.')
-				}
+				if ((await quote()) > maximumFee) throw new Error('Purchase fee changed. Review the amount again.')
 				await client.estimateGas({ account: client.account, to: callParams.address, data: encodeFunctionData(callParams), value: callParams.value })
 				await validateBeforeSubmit()
 			},
@@ -323,8 +258,6 @@ export async function redeemCompleteSetInSecurityPool(client: WriteClient, secur
 		universeId,
 	} satisfies TradingActionResult
 }
-
-export { loadLinearFeeState } from './linearFeeState.js'
 
 async function redemptionReview(client: Pick<ReadClient, 'readContract'>, pool: Address, shares: bigint, blockNumber: bigint | undefined) {
 	const recoveryAbi = parseAbi(['function attoSharesToAttoRep(uint256 amountAttoShares) view returns (uint256)'])

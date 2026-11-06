@@ -1,4 +1,3 @@
-import { registerTransactionPreparationScope } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
 import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 /// <reference types="bun-types" />
 
@@ -7,10 +6,8 @@ import { createWalletClient, custom, publicActions, encodeAbiParameters, encodeE
 import { getOpenOracleGameTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TRACK_DISPUTES, OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { createOpenOracleReportInstance, disputeOracleReport, loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, loadOpenOracleReportSummaries, settleOracleReport, withdrawOpenOracleBalance } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
 import { getOracleManagerPriceValidUntilTimestamp } from '@zoltar/ui-statoblast-shared/protocol/oracleTiming.js'
-import { loadOracleManagerDetails } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
 import { getInfraContractAddresses, getOpenOracleAddress } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { loadCoordinatorPriceValidUntilTimestamp } from '@zoltar/ui-statoblast-shared/protocol/openOracleSettlement.js'
-import { loadLiquidationApproval, type LiquidationApprovalParams } from '@zoltar/ui-statoblast-shared/protocol/liquidationApprovals.js'
 import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { asWriteClient, createMulticallStub, createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
@@ -321,97 +318,6 @@ describe('openOracle protocol client', () => {
 		await expect(loadOpenOracleReportSummaries(client, 0, 10)).rejects.toThrow(error)
 	})
 
-	test('loadOracleManagerDetails caps active staged operation previews and preserves the pending slot outside the preview window', async () => {
-		const managerAddress = getAddress('0x00000000000000000000000000000000000000d4')
-		const pendingOperationSlotId = 12n
-		const previewOperationIds = Array.from({ length: 25 }, (_, index) => 40n - BigInt(index))
-		let capturedActiveOperationArgs: readonly [bigint, bigint] | undefined
-		const requestedFunctionNames: string[] = []
-		const client = createMockLoaderClient({
-			getBlock: async () => ({ timestamp: 0n, baseFeePerGas: 0n, number: 51n, hash: '0x11' }),
-			multicall: async request => {
-				expect(request.blockNumber).toBe(51n)
-				for (const contract of request.contracts) {
-					requestedFunctionNames.push(getContractFunctionName(contract))
-				}
-				return [1n, pendingOperationSlotId, [pendingOperationSlotId, 13n], 4n, 0n, 1n, true, 10n, 40n, 60n, 1_000n, 790n]
-			},
-			readContract: async request => {
-				if (request.functionName === 'priceFeed') return managerAddress
-				if (request.functionName === 'getSettlementCallbackGasLimit') return 10
-				if (request.functionName === 'gasConsumedOpenOracleReportPrice') return 20n
-				if (request.functionName === 'getActiveStagedOperationsPage') {
-					expect(request.blockNumber).toBe(51n)
-					const args = request.args
-					if (args === undefined) throw new Error('Expected getActiveStagedOperationsPage args')
-					const startIndex = args[0]
-					const count = args[1]
-					if (typeof startIndex !== 'bigint' || typeof count !== 'bigint') throw new Error('Expected bigint staged operation args')
-					capturedActiveOperationArgs = [startIndex, count]
-					return [
-						previewOperationIds,
-						previewOperationIds.map(operationId => ({
-							operationValue: operationId,
-							operator: vaultAddress,
-							operation: 1,
-							queuedAt: 0n,
-							snapshotTotalRepBackingUnits: 0n,
-							snapshotTargetUnderwritingLimitAttoEth: 0n,
-							snapshotTargetBackingUnits: 0n,
-							snapshotTotalPoolHeldAttoRep: 0n,
-							targetVault: vaultAddress,
-							validForSeconds: 60n,
-						})),
-						15n,
-					]
-				}
-				if (request.functionName === 'getPendingOperationSlot') {
-					return {
-						operationValue: 999n,
-						operator: vaultAddress,
-						operation: 0,
-						queuedAt: 0n,
-						snapshotTotalRepBackingUnits: 0n,
-						snapshotTargetUnderwritingLimitAttoEth: 0n,
-						snapshotTargetBackingUnits: 0n,
-						snapshotTotalPoolHeldAttoRep: 0n,
-						targetVault: alternateSecurityPoolAddress,
-						validForSeconds: 60n,
-					}
-				}
-				throw new Error(`Unexpected readContract function: ${request.functionName}`)
-			},
-		})
-
-		const details = await loadOracleManagerDetails(client, managerAddress)
-
-		expect(requestedFunctionNames).toEqual([
-			'lastPrice',
-			'pendingOperationSlotId',
-			'getPendingSettlementOperationIds',
-			'MAX_PENDING_SETTLEMENT_OPERATIONS',
-			'pendingReportId',
-			'getQueuedOperationCostAttoEth',
-			'isPriceValid',
-			'lastSettlementTimestamp',
-			'getActiveStagedOperationCount',
-			'settlementTime',
-			'minLiquidationPriceDistanceBps',
-			'priceValidUntil',
-		])
-		expect(details.priceValidUntilTimestamp).toBe(790n)
-		expect(details.minLiquidationPriceDistanceBps).toBe(1_000n)
-		expect(capturedActiveOperationArgs).toEqual([0n, 25n])
-		expect(details.activeStagedOperationCount).toBe(40n)
-		expect(details.pendingOperation?.operationId).toBe(pendingOperationSlotId)
-		expect(details.pendingSettlementOperationIds).toEqual([pendingOperationSlotId, 13n])
-		expect(details.stagedOperations?.[0]?.operationId).toBe(40n)
-		expect(details.stagedOperations?.at(-1)?.operationId).toBe(pendingOperationSlotId)
-		expect(details.stagedOperations).toHaveLength(26)
-		let headerReads = 0
-		await expect(loadOracleManagerDetails({ ...client, getBlock: async () => ({ ...(await client.getBlock()), hash: headerReads++ === 0 ? '0x11' : '0x22' }) }, managerAddress)).rejects.toThrow('Chain changed while reading the operation queue')
-	})
-
 	for (const association of ['verified', 'different oracle', 'different coordinator', 'generic callback'] as const) {
 		test(`report freshness is attached only to a verified pool coordinator: ${association}`, async () => {
 			const preimage = createOpenOraclePreimage()
@@ -645,52 +551,6 @@ describe('openOracle protocol client', () => {
 		await expect(withdrawOpenOracleBalance(writeClient, getOpenOracleAddress(), token1Address, 7n, holder)).resolves.toMatchObject({ action: 'withdrawBalance' })
 		expect(withdrawalAttempts).toBe(2)
 	})
-
-	test('loads the liquidation approval registry and encodes approval lifecycle writes', async () => {
-		const coordinatorAddress = getAddress('0x00000000000000000000000000000000000000a1')
-		const registryAddress = getAddress('0x00000000000000000000000000000000000000a2')
-		const receiverVault = getAddress('0x00000000000000000000000000000000000000a3')
-		const operator = getAddress('0x00000000000000000000000000000000000000a4')
-		const securityPool = getAddress('0x00000000000000000000000000000000000000a5')
-		const params = {
-			securityPool,
-			receiverVault,
-			operator,
-			targetVault: zeroAddress,
-			maxCumulativeDebtAttoEth: 10n,
-			maxDebtPerLiquidationAttoEth: 2n,
-			minPostLiquidationHealthFactorBps: 12_000n,
-			validAfter: 1n,
-			validUntil: 100n,
-			nonce: 7n,
-		} satisfies LiquidationApprovalParams
-		const approvalId = toHex(9n, { size: 32 })
-		const approvalState = {
-			params,
-			availableDebtAttoEth: 8n,
-			reservedDebtAttoEth: 1n,
-			consumedDebtAttoEth: 1n,
-			revoked: false,
-		}
-		const approvalReadClient = createMockLoaderClient({
-			getBlock: async () => ({ timestamp: 0n }),
-			multicall: async () => [],
-			readContract: async request => {
-				switch (request.functionName) {
-					case 'liquidationApprovalRegistry':
-						return registryAddress
-					case 'getLiquidationApproval':
-						return approvalState
-					case 'minimumLiquidationApprovalNonce':
-						expect(request.args).toEqual([receiverVault])
-						return 9n
-					default:
-						throw new Error(`Unexpected approval read ${request.functionName}`)
-				}
-			},
-		})
-		await expect(loadLiquidationApproval(approvalReadClient, coordinatorAddress, approvalId)).resolves.toEqual({ registryAddress, ...approvalState, minimumValidNonce: 9n })
-	})
 })
 
 for (const change of ['settlement preimage', 'settled report', 'withdraw balance', 'create ETH', 'settlement unchanged', 'settlement price expiry', 'settlement stale unchanged', 'withdraw unchanged', 'create unchanged'] as const) {
@@ -722,7 +582,6 @@ for (const change of ['settlement preimage', 'settled report', 'withdraw balance
 			}),
 		}).extend(publicActions)
 		const scope = new AbortController()
-		const unregister = registerTransactionPreparationScope(scope.signal)
 		const reviewed = createReviewedClient(
 			{
 				...wallet,
@@ -743,6 +602,8 @@ for (const change of ['settlement preimage', 'settled report', 'withdraw balance
 			undefined,
 			scope.signal,
 		)
+		const acceptPlan = reviewed.onTransactionPlan
+		reviewed.onTransactionPlan = plan => acceptPlan?.(plan.map(step => ({ ...step, requireReview: true })))
 		try {
 			const execute = () => {
 				if (change.startsWith('withdraw')) return withdrawOpenOracleBalance(reviewed, getOpenOracleAddress(), token1Address, 7n, initialReporter)
@@ -783,7 +644,6 @@ for (const change of ['settlement preimage', 'settled report', 'withdraw balance
 			}
 		} finally {
 			scope.abort()
-			unregister()
 			transactionSteps.value?.cancel()
 		}
 	})

@@ -1,10 +1,11 @@
-import { encodeFunctionData, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { encodeFunctionData } from '@zoltar/core-shared/evm/ethereum'
 import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 import { buildPortfolioPrepareNextRequest, buildPortfolioCapitalDepositRequest, buildPortfolioCapitalSetHealthRequest, buildPortfolioCapitalSetCommitmentRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
-import { advanceSimulationTime } from '@zoltar/ui-core-shared/simulation/clock.js'
+import { advanceSimulationTime, getSimulationChainTimestamp } from '@zoltar/ui-core-shared/simulation/clock.js'
 import { createRangeProgressReporter, requireQaAccount } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
 import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact } from '../contractArtifact.js'
+import { createMarket } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 import { loadAllSecurityPools } from '../protocol/securityPools.js'
 import { portfolioContractRequest, portfolioCreationRequest, portfolioReadClient, sendPortfolioTransaction } from '../protocol/securityPoolPortfolio.js'
 import { settleSeededOracleReport, settleOracleReportIfNeeded, type ScenarioSeedParameters } from './statoblastScenarioSeeding.js'
@@ -12,21 +13,30 @@ import { portfolioAdmissionCreationRequest } from '../protocol/securityPoolPortf
 import { prepareSeededPortfolioMint } from './portfolioScenarioMint.js'
 
 /** Seeds real portfolio contracts on the browser-local chain, with no production RPC writes. */
-export async function seedPortfolioScenario({ accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile }: ScenarioSeedParameters) {
+export async function seedPortfolioScenario({ accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile }: ScenarioSeedParameters, questionCount = 2) {
 	const reportStep = createRangeProgressReporter(onProgress, { start: 0.98, end: 0.99 }, 20)
 	await reportStep('Preparing shared portfolio')
 	const owner = requireQaAccount(accounts[0], 'Expected portfolio simulation owner')
 	const client = createWriteClient(owner)
 	const readClient = createReadClient()
-	const pools = (await loadAllSecurityPools(readClient)).filter(pool => pool.universeId === 0n && pool.parent === zeroAddress).slice(0, 2)
+	const timestamp = await getSimulationChainTimestamp(memoryClient)
+	const pools: Array<{ questionId: string }> = []
+	for (let index = 0; index < questionCount; index++) {
+		const market = await createMarket(client, {
+			marketType: 'binary',
+			outcomeLabels: ['Yes', 'No'],
+			questionData: { answerUnit: '', description: '', displayValueMax: 0n, displayValueMin: 0n, endTime: timestamp + 365n * 86400n, numTicks: 0n, startTime: 0n, title: `Will this resolve? (portfolio question ${index + 1})` },
+		})
+		pools.push({ questionId: market.questionId })
+	}
 	const initial = pools[0]
-	if (initial === undefined) throw new Error('Expected seeded origin pools')
+	if (initial === undefined) throw new Error('A simulation portfolio needs a question')
 	const admission = await sendPortfolioTransaction(client, portfolioAdmissionCreationRequest(owner, 'open', 0n, []), 'Deploy admission policy')
 	const policy = admission.receipt.contractAddress
 	if (policy === null || policy === undefined) throw new Error('Expected deployed admission policy')
 	const deployment = await sendPortfolioTransaction(
 		client,
-		portfolioCreationRequest(owner, initial.securityPoolAddress, 366n * 86400n, policy, {
+		portfolioCreationRequest(owner, { universeId: 0n, securityMultiplierBps: 20_000n, reportPriorityFeeAttoEthPerGas: 10_000_000_000n }, 366n * 86400n, policy, {
 			annualFeeBps: 1000n,
 			purchaseFeeBps: 100n,
 			minimumPurchaseFeeAttoEth: 10n ** 15n,
@@ -64,7 +74,7 @@ export async function seedPortfolioScenario({ accounts, createReadClient, create
 	const [minimumReport, exposureDivider] = await Promise.all([readClient.readContract({ address: feed, abi: feedArtifact.abi, functionName: 'minimumToken1ReportAttoEth' }), readClient.readContract({ address: feed, abi: feedArtifact.abi, functionName: 'OPEN_INTEREST_DIVIDER' })])
 	// Prepay the forthcoming commitment as well as the feed's current gas-security floor.
 	const requestedInitialAttoWeth = minimumReport + ceilDiv(commitment, exposureDivider)
-	const report = await settleSeededOracleReport({ accountAddress: owner, createWriteClient, managerAddress, onProgressStep: reportStep, poolLabel: 'portfolio', readClient, requestedInitialAttoWeth })
+	const report = await settleSeededOracleReport({ accountAddress: owner, createWriteClient, portfolio, onProgressStep: reportStep, poolLabel: 'portfolio', readClient, requestedInitialAttoWeth })
 	await settleOracleReportIfNeeded({ memoryClient, readClient, writeClient: client, ...report })
 	await reportStep('Settled shared portfolio oracle')
 	await sendPortfolioTransaction(client, buildPortfolioCapitalSetHealthRequest({ owner, capitalLedger, targetHealthFactorBps: 12_000n }), 'Set owner health target')

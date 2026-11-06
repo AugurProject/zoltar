@@ -42,3 +42,11 @@ test('linear portfolio fee bounds stop at funded expiry for signed returns and l
 	expect(sellHoldingFeeBlocker(linear, unit, (unit * 8n) / 10n + 1n, 1000n)).toContain('Holding fees')
 	expect(liquidityHoldingFeeBlocker(linear, unit, (unit * 125n) / 100n, (unit * 125n) / 100n, 1000n, { completeSetShares: unit, yesUsed: unit, noUsed: unit })).toBeUndefined()
 })
+
+test('central snapshots project only future eligible time without charging past pauses twice', () => {
+	const central = { ...market, valuation: { timestamp: 100n, feeEndTime: 21n, projectedCollateralAttoEth: unit, feeAccounting: { ...accounting, centralSettlement: true, centralCheckpointTimestamp: 100n, linearFee: { rateAttoEthPerSecond: unit / 100n, endTime: 21n } } } }
+	expect(sellHoldingFeeBlocker(central, unit, unit, 100n)).toBeUndefined()
+	expect(sellHoldingFeeBlocker(central, unit, unit, 101n)).toContain('Holding fees')
+	expect(sellHoldingFeeBlocker(central, unit, (unit * 8n) / 10n, 1_000n)).toBeUndefined()
+	expect(liquidityHoldingFeeBlocker(central, unit, unit, unit, 101n, { completeSetShares: unit, yesUsed: unit, noUsed: unit })).toContain('Holding fees')
+})

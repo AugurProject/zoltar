@@ -70,7 +70,7 @@ RUN cd /source/ui/zoltarShared && bun run build
 # Build Zoltar from only its inward dependencies.
 FROM common-builder AS zoltar-builder
 
-RUN bun ./tooling/ui/vendor.mts zoltar --scoped-artifacts
+RUN bun ./tooling/ui/vendor.mts zoltar
 COPY ./ui/zoltar/tsconfig.json /source/ui/zoltar/tsconfig.json
 COPY ./ui/zoltar/index.html /source/ui/zoltar/index.html
 COPY ./ui/zoltar/favicon.svg /source/ui/zoltar/favicon.svg
@@ -106,7 +106,7 @@ RUN cd /source/ui/statoblastShared && bun run build
 # Build Statoblast as an application leaf.
 FROM statoblast-dependencies AS statoblast-builder
 
-RUN bun ./tooling/ui/vendor.mts statoblast --scoped-artifacts
+RUN bun ./tooling/ui/vendor.mts statoblast
 COPY ./ui/statoblast/tsconfig.json /source/ui/statoblast/tsconfig.json
 COPY ./ui/statoblast/index.html /source/ui/statoblast/index.html
 COPY ./ui/statoblast/favicon.svg /source/ui/statoblast/favicon.svg
@@ -128,7 +128,7 @@ CMD [ "bun", "/app/tooling/ui/dockerServe.mts" ]
 
 FROM statoblast-dependencies AS openoracle-builder
 
-RUN bun ./tooling/ui/vendor.mts openoracle --scoped-artifacts
+RUN bun ./tooling/ui/vendor.mts openoracle
 COPY ./ui/openoracle/tsconfig.json /source/ui/openoracle/tsconfig.json
 COPY ./ui/openoracle/index.html /source/ui/openoracle/index.html
 COPY ./ui/openoracle/favicon.svg /source/ui/openoracle/favicon.svg
@@ -160,7 +160,7 @@ COPY ./ui/trading/favicon.svg /source/ui/trading/favicon.svg
 COPY ./ui/trading/ts/ /source/ui/trading/ts/
 COPY ./ui/trading/css/ /source/ui/trading/css/
 COPY ./ui/trading/build/ /source/ui/trading/build/
-RUN bun ./tooling/ui/vendor.mts trading --scoped-artifacts
+RUN bun ./tooling/ui/vendor.mts trading
 RUN cd /source/ui/trading && bun x tsc --project tsconfig.json && bun ../../tooling/ui/production.mts trading
 
 FROM oven/bun:${BUN_VERSION}-alpine AS local-runtime-trading

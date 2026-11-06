@@ -12,12 +12,29 @@ describe('Statoblast: central internal settlement units', () => {
 	let address: Address
 	let baselineAddress: Address
 	const target = () => ({ abi: artifact.abi, address })
-	const mint = (book: bigint, question: bigint, cash: bigint, minimum = 0n, timestamp = 0) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'mint', args: [book, question, cash, minimum, timestamp] }))
-	const redeem = (book: bigint, question: bigint, shares: bigint, timestamp = 0) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'redeem', args: [book, question, shares, 0n, timestamp] }))
-	const fee = (book: bigint, question: bigint, cash: bigint, timestamp = 0) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'chargeFee', args: [book, question, cash, timestamp] }))
-	const seal = (book: bigint, timestamp = 0) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'sealForFork', args: [book, timestamp] }))
+	const mint = async (book: bigint, question: bigint, cash: bigint, minimum = 0n, timestamp?: number) => {
+		const nowTime = timestamp ?? Number((await client.readContract({ ...target(), functionName: 'totals', args: [book] }))[3])
+		return writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'mint', args: [book, question, cash, minimum, nowTime] }))
+	}
+	const redeem = async (book: bigint, question: bigint, shares: bigint, timestamp?: number) => {
+		const nowTime = timestamp ?? Number((await client.readContract({ ...target(), functionName: 'totals', args: [book] }))[3])
+		return writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'redeem', args: [book, question, shares, 0n, nowTime] }))
+	}
+	const fee = async (bookId: bigint, questionId: bigint, cash: bigint, timestamp?: number) => {
+		const nowTime = timestamp ?? Number((await client.readContract({ ...target(), functionName: 'totals', args: [bookId] }))[3])
+		const nativeTime = Number(await client.readContract({ ...target(), functionName: 'feeTimestamp', args: [bookId] }))
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [bookId, questionId, cash, nativeTime + 1, nowTime] }))
+		await freeze(bookId, nowTime + 1)
+	}
+	const seal = async (book: bigint, timestamp?: number) => {
+		const nowTime = timestamp ?? Number((await client.readContract({ ...target(), functionName: 'totals', args: [book] }))[3])
+		return writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'sealForFork', args: [book, nowTime] }))
+	}
 	const child = (source: bigint, cash: bigint, recovery = 0n) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createChildBook', args: [source, cash, recovery] }))
-	const schedule = (book: bigint, question: bigint, finalAfter: number, timestamp = 0) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'scheduleFinality', args: [book, question, finalAfter, timestamp] }))
+	const schedule = async (book: bigint, question: bigint, finalAfter: number, timestamp?: number) => {
+		const nowTime = timestamp ?? Number((await client.readContract({ ...target(), functionName: 'totals', args: [book] }))[3])
+		return writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'scheduleFinality', args: [book, question, finalAfter, nowTime] }))
+	}
 	const freeze = (book: bigint, timestamp: number) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'freezeMatured', args: [book, timestamp] }))
 	const book = (id: bigint) => client.readContract({ ...target(), functionName: 'books', args: [id] })
 	const question = (bookId: bigint, id: bigint) => client.readContract({ ...target(), functionName: 'question', args: [bookId, id] })
@@ -69,7 +86,8 @@ describe('Statoblast: central internal settlement units', () => {
 		expect((await question(2n, 1n))[0].outcomeSupplyAttoShares).toBe(100n)
 		expect(await quote(2n, 1n, 40n)).toEqual([20n, 40n])
 		await expect(mint(2n, 1n, 10n)).rejects.toThrow('Settlement in runoff')
-		await expect(fee(2n, 1n, 1n)).rejects.toThrow('Runoff fees paused')
+		await fee(2n, 1n, 1n)
+		expect((await book(2n))[2]).toBe(0n)
 		await expect(redeem(1n, 1n, 1n)).rejects.toThrow('Use child settlement book')
 		await redeem(2n, 1n, 40n)
 		expect((await book(2n)).slice(0, 2)).toEqual([130n, 260n])
@@ -94,6 +112,17 @@ describe('Statoblast: central internal settlement units', () => {
 		await redeem(3n, 1n, 7n)
 		await redeem(3n, 2n, 4n)
 		expect((await book(3n)).slice(0, 2)).toEqual([0n, 0n])
+	})
+
+	test('exhausted questions quote zero without making invalid burns payable', async () => {
+		await mint(1n, 1n, 100n)
+		await mint(1n, 2n, 200n)
+		await expect(quote(1n, 1n, 101n)).rejects.toThrow('Invalid outcome burn')
+		await redeem(1n, 1n, 100n)
+		expect(await quote(1n, 1n, 100n)).toEqual([0n, 0n])
+		expect(await client.readContract({ ...target(), functionName: 'quoteRecoveryRep', args: [1n, 1n, 100n] })).toBe(0n)
+		await expect(redeem(1n, 1n, 100n)).rejects.toThrow('Invalid outcome burn')
+		expect(await quote(1n, 2n, 200n)).toEqual([200n, 200n])
 	})
 
 	test('REP is proportional to shares before nearly exhausted ETH units are rounded', async () => {
@@ -242,7 +271,8 @@ describe('Statoblast: central internal settlement units', () => {
 		await seal(1n)
 		await child(1n, 100n, 200n)
 		await expect(mint(2n, 1n, 100n)).rejects.toThrow('Settlement in runoff')
-		await expect(fee(2n, 1n, 1n)).rejects.toThrow('Runoff fees paused')
+		await fee(2n, 1n, 1n)
+		expect((await book(2n))[2]).toBe(0n)
 		await freeze(2n, 100)
 		expect((await book(2n)).slice(0, 3)).toEqual([100n, 100n, 0n])
 		expect(await client.readContract({ ...target(), functionName: 'recoveryRep', args: [2n] })).toBe(200n)
@@ -281,13 +311,15 @@ describe('Statoblast: central internal settlement units', () => {
 		const supply = 10n ** 18n
 		const reserve = 10n ** 12n
 		await mint(1n, 1n, supply)
-		await expect(fee(1n, 1n, supply - reserve + 1n)).rejects.toThrow('Fee exceeds backing floor')
+		await fee(1n, 1n, supply - reserve + 1n)
+		expect((await question(1n, 1n))[0].units).toBe(supply)
 		await fee(1n, 1n, supply - reserve)
 		expect(await quote(1n, 1n, supply)).toEqual([reserve, reserve])
 		await mint(1n, 1n, reserve, supply)
 		expect((await question(1n, 1n))[0]).toMatchObject({ units: 2n * reserve, outcomeSupplyAttoShares: 2n * supply })
 		await redeem(1n, 1n, supply)
-		await expect(fee(1n, 1n, 1n)).rejects.toThrow('Fee exceeds backing floor')
+		await fee(1n, 1n, 1n)
+		expect((await question(1n, 1n))[0].units).toBe(reserve)
 		await redeem(1n, 1n, supply)
 		await mint(1n, 1n, 10n)
 		expect((await question(1n, 1n))[0].outcomeSupplyAttoShares).toBe(10n)
@@ -311,7 +343,6 @@ describe('Statoblast: central internal settlement units', () => {
 		await deployBook(minimum)
 		await mint(1n, 1n, 101n)
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [1n, 1n, 9n, 100, 0] }))
-		await expect(fee(1n, 1n, 1n)).rejects.toThrow('Question fees unfunded')
 		await redeem(1n, 1n, 13n, 3)
 		await freeze(1n, 100)
 		const state = (await question(1n, 1n))[0]
@@ -434,10 +465,10 @@ describe('Statoblast: central internal settlement units', () => {
 	test('same-deadline aggregation, canceled deadlines and partial redemption preserve frozen budgets', async () => {
 		await mint(1n, 1n, 100n)
 		await mint(1n, 2n, 200n)
+		await fee(1n, 2n, 20n)
 		await schedule(1n, 1n, 50)
 		await schedule(1n, 2n, 50)
 		await redeem(1n, 1n, 10n)
-		await fee(1n, 2n, 20n)
 		await schedule(1n, 2n, 0)
 		await freeze(1n, 50)
 		expect((await book(1n)).slice(0, 3)).toEqual([270n, 270n, 20n])

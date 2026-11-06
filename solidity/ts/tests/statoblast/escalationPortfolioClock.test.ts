@@ -65,7 +65,7 @@ describe('Statoblast: fixed portfolio reporter clock', () => {
 		await setupTestAccounts(ethereum)
 		let source: Address = zeroAddress
 		for (let depth = 0; depth < 20; depth++) {
-			source = await deployContract(owner, encodeDeployData({ abi: checkpointArtifact.abi, bytecode: `0x${checkpointArtifact.evm.bytecode.object}`, args: [source, 2n, 0n, 0n, 0n] }))
+			source = await deployContract(owner, encodeDeployData({ abi: checkpointArtifact.abi, bytecode: `0x${checkpointArtifact.evm.bytecode.object}`, args: [source, 2n, 0n] }))
 		}
 		const target = await deployContract(owner, encodeDeployData({ abi: centralCheckpointArtifact.abi, bytecode: `0x${centralCheckpointArtifact.evm.bytecode.object}`, args: [source] }))
 		const args = [1, 7n, 19n, 1n] as const

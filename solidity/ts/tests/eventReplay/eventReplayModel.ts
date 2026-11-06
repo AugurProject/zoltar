@@ -12,30 +12,11 @@ export type ReplayLog = {
 	args: Readonly<Record<string, unknown>>
 }
 
-export type PoolAccountingReplay = {
+export type QuestionAccountingReplay = {
 	reason: bigint
-	vault: Address
 	settlementCollateralAttoEth: bigint
-	totalUnderwritingLimitAttoEth: bigint
-	feeEligibleUnderwritingLimitAttoEth: bigint
-	totalClaimableVaultFeesAttoEth: bigint
-	unallocatedAccruedFeesAttoEth: bigint
-	feeIndex: bigint
-	feeIndexRemainder: bigint
-	totalFeesOwedRemainder: bigint
-	uncheckpointedFeeEligibleUnderwritingLimitAttoEth: bigint
+	shareTokenSupplyAttoShares: bigint
 	lastUpdatedFeeAccumulator: bigint
-	currentRetentionRate: bigint
-}
-
-export type VaultAccountingReplay = {
-	repBackingUnits: bigint
-	underwritingLimitAttoEth: bigint
-	claimableFeesAttoEth: bigint
-	feeIndex: bigint
-	vaultFeeRemainder: bigint
-	resultingTotalRepBackingUnits: bigint
-	resultingFeeEligibleUnderwritingLimitAttoEth: bigint
 }
 
 export type PoolStateReplay = {
@@ -49,48 +30,15 @@ export type PoolStateReplay = {
 	currentRetentionRate?: bigint
 }
 
-export type ForkReplay = {
-	migrationProxy: Address
-	ownFork: boolean
-	unresolvedEscalation: boolean
-	settlementCollateralAtForkAttoEth: bigint
-	totalPoolHeldRepAtForkAttoRep: bigint
-	auctionableAttoRepAtFork: bigint
-	escalationSourceRepAtForkAttoRep: bigint
-	escalationChildRepAtForkAttoRep: bigint
-	escalationStartBondAtForkAttoRep: bigint
-	escalationNonDecisionThresholdAtForkAttoRep: bigint
-	escalationElapsedAtFork: bigint
-	escalationSnapshotId: Hex
-}
-
-export type VaultMigrationReplay = {
-	childPool: Address
-	outcomeIndex: bigint
-	migratedRepDeltaAttoRep: bigint
-	resultingChildMigratedRepTotalAttoRep: bigint
-	resultingParentRepBackingUnits: bigint
-	resultingParentUnderwritingLimitAttoEth: bigint
-	resultingChildRepBackingUnits: bigint
-	resultingChildUnderwritingLimitAttoEth: bigint
-	resultingParentTotalRepBackingUnits: bigint
-	resultingChildTotalRepBackingUnits: bigint
-	resultingParentTotalUnderwritingLimitAttoEth: bigint
-	resultingChildTotalUnderwritingLimitAttoEth: bigint
-	settlementCollateralTransferredAttoEth: bigint
-	cumulativeSettlementCollateralTransferredAttoEth: bigint
-}
-
 export type AuctionBidReplay = {
 	bidder: Address
-	tick: bigint
-	bidIndex: bigint
-	bidAmountAttoEth: bigint
-	cumulativeBidAtTickAttoEth: bigint
-	bidUsedAttoEth?: bigint
-	attoRepFilled?: bigint
+	vault: Address
+	bidId: bigint
+	lots: bigint
+	minimumAttoRepPerLot: bigint
+	targetHealthBps: bigint
+	filledLots?: bigint
 	refundAttoEth?: bigint
-	status?: bigint
 }
 
 export type PoolDeploymentReplay = {
@@ -108,29 +56,16 @@ export type PoolDeploymentReplay = {
 }
 
 export type AuctionLifecycleReplay = {
-	startTimestamp?: bigint
-	endTimestamp?: bigint
-	clearingTick?: bigint
-	grossAcceptedAttoEth?: bigint
-	attoRepSold?: bigint
-	funded?: boolean
-}
-
-export type CoordinatorOperationReplay = {
-	operation: bigint
-	operator: Address
-	targetVault: Address
-	operationValue: bigint
-	queuedAt: bigint
-	validForSeconds: bigint
-	snapshotTargetBackingUnits: bigint
-	snapshotTargetUnderwritingLimitAttoEth: bigint
-	snapshotTargetDisputeStakedAttoRep: bigint
-	snapshotTotalPoolHeldAttoRep: bigint
-	snapshotTotalRepBackingUnits: bigint
-	isPendingSlot: boolean
-	status: 'Queued' | 'Succeeded' | 'Failed'
-	errorMessage?: string
+	opensAt?: bigint
+	closesAt?: bigint
+	lotAttoEth?: bigint
+	targetLots?: bigint
+	inventoryAttoRep?: bigint
+	maximumAttoRepPerLot?: bigint
+	attoRepPerLot?: bigint
+	filledLots?: bigint
+	raisedAttoEth?: bigint
+	soldAttoRep?: bigint
 }
 
 export type DisputeStakedRepDepositReplay = {
@@ -244,18 +179,10 @@ export type CoordinatorReportReplay = {
 
 export type CoordinatorReplay = {
 	securityPool?: Address
-	checkpointReason?: bigint
-	checkpointReportId?: bigint
-	checkpointOperationId?: bigint
 	lastPrice: bigint
 	lastSettlementTimestamp: bigint
 	pendingReportId: bigint
-	pendingReportSponsor: Address
-	pendingOperationSlotId: bigint
 	pendingReportMaxSettlementBaseFeeAttoEthPerGas: bigint
-	stagedOperationCounter: bigint
-	activeStagedOperationCount: bigint
-	pendingSettlementOperationCount: bigint
 	reports: Map<bigint, CoordinatorReportReplay>
 }
 
@@ -275,11 +202,6 @@ export type EscalationClaimBundleReplay = {
 	depositor: Address
 }
 
-export type EscalationHaircutReplay = {
-	repBefore: bigint
-	repRemaining: bigint
-}
-
 export type ReplayState = {
 	chainId?: bigint | undefined
 	identities: Set<string>
@@ -294,14 +216,9 @@ export type ReplayState = {
 	migrationRepBalancesAttoRep: Map<string, Map<Address, bigint>>
 	childMigrationRepAmounts: Map<string, Map<Address, Map<string, bigint>>>
 	poolDeployments: Map<Address, PoolDeploymentReplay>
-	pools: Map<Address, PoolAccountingReplay>
+	pools: Map<Address, QuestionAccountingReplay>
 	poolStates: Map<Address, PoolStateReplay>
 	completeSetSupplies: Map<Address, bigint>
-	vaults: Map<Address, Map<Address, VaultAccountingReplay>>
-	forks: Map<Address, ForkReplay>
-	vaultMigrations: Map<Address, Map<Address, Map<Address, VaultMigrationReplay>>>
-	poolChildren: Map<Address, Map<bigint, Address>>
-	forkEscalationSources: Map<Address, Address>
 	escalationCarrySnapshots: Map<Hex, EscalationCarrySnapshotReplay>
 	escalationSnapshots: Map<Address, Hex>
 	escalationCarryRoots: Map<Address, HexTriple>
@@ -316,7 +233,6 @@ export type ReplayState = {
 	escalationConsumptions: Map<Address, Map<string, EscalationConsumptionReplay>>
 	escalationClaims: Map<Address, Map<string, EscalationClaimReplay>>
 	escalationClaimBundles: Map<Address, Map<Address, EscalationClaimBundleReplay>>
-	escalationHaircuts: Map<Address, EscalationHaircutReplay>
 	escalationVaultEscrowedRep: Map<Address, Map<Address, bigint>>
 	escalationLocalUnresolvedByVault: Map<Address, Map<Address, BigIntTriple>>
 	escalationForkedEscrow: Map<Address, Map<string, ForkedEscrowReplay>>
@@ -330,7 +246,6 @@ export type ReplayState = {
 	authorizations: Map<Address, Map<Address, boolean>>
 	shareTokenBalances: Map<Address, Map<bigint, Map<Address, bigint>>>
 	shareTokenSupplies: Map<Address, Map<bigint, bigint>>
-	coordinatorOperations: Map<Address, Map<bigint, CoordinatorOperationReplay>>
 	coordinators: Map<Address, CoordinatorReplay>
 }
 
@@ -351,11 +266,6 @@ export function createReplayState(): ReplayState {
 		pools: new Map(),
 		poolStates: new Map(),
 		completeSetSupplies: new Map(),
-		vaults: new Map(),
-		forks: new Map(),
-		vaultMigrations: new Map(),
-		poolChildren: new Map(),
-		forkEscalationSources: new Map(),
 		escalationCarrySnapshots: new Map(),
 		escalationSnapshots: new Map(),
 		escalationCarryRoots: new Map(),
@@ -370,7 +280,6 @@ export function createReplayState(): ReplayState {
 		escalationConsumptions: new Map(),
 		escalationClaims: new Map(),
 		escalationClaimBundles: new Map(),
-		escalationHaircuts: new Map(),
 		escalationVaultEscrowedRep: new Map(),
 		escalationLocalUnresolvedByVault: new Map(),
 		escalationForkedEscrow: new Map(),
@@ -384,7 +293,6 @@ export function createReplayState(): ReplayState {
 		authorizations: new Map(),
 		shareTokenBalances: new Map(),
 		shareTokenSupplies: new Map(),
-		coordinatorOperations: new Map(),
 		coordinators: new Map(),
 	}
 }
@@ -850,21 +758,12 @@ export function reduceShareTokenEvent(state: ReplayState, log: ReplayLog) {
 }
 
 export function reduceSecurityPoolEvent(state: ReplayState, log: ReplayLog) {
-	if (log.eventName === 'PoolAccountingCheckpoint') {
+	if (log.eventName === 'QuestionAccountingCheckpoint') {
 		state.pools.set(log.emitter, {
 			reason: requireBigInt(log.args, 'reason'),
-			vault: requireAddress(log.args, 'vault'),
 			settlementCollateralAttoEth: requireBigInt(log.args, 'settlementCollateralAttoEth'),
-			totalUnderwritingLimitAttoEth: requireBigInt(log.args, 'totalUnderwritingLimitAttoEth'),
-			feeEligibleUnderwritingLimitAttoEth: requireBigInt(log.args, 'feeEligibleUnderwritingLimitAttoEth'),
-			totalClaimableVaultFeesAttoEth: requireBigInt(log.args, 'totalClaimableVaultFeesAttoEth'),
-			unallocatedAccruedFeesAttoEth: requireBigInt(log.args, 'unallocatedAccruedFeesAttoEth'),
-			feeIndex: requireBigInt(log.args, 'feeIndex'),
-			feeIndexRemainder: requireBigInt(log.args, 'feeIndexRemainder'),
-			totalFeesOwedRemainder: requireBigInt(log.args, 'totalFeesOwedRemainder'),
-			uncheckpointedFeeEligibleUnderwritingLimitAttoEth: requireBigInt(log.args, 'uncheckpointedFeeEligibleUnderwritingLimitAttoEth'),
+			shareTokenSupplyAttoShares: requireBigInt(log.args, 'shareTokenSupplyAttoShares'),
 			lastUpdatedFeeAccumulator: requireBigInt(log.args, 'lastUpdatedFeeAccumulator'),
-			currentRetentionRate: requireBigInt(log.args, 'currentRetentionRate'),
 		})
 		return
 	}
@@ -912,105 +811,6 @@ export function reduceSecurityPoolEvent(state: ReplayState, log: ReplayLog) {
 		state.poolStates.set(log.emitter, poolState)
 		return
 	}
-	if (log.eventName === 'VaultAccountingCheckpoint') {
-		let vaults = state.vaults.get(log.emitter)
-		if (vaults === undefined) {
-			vaults = new Map()
-			state.vaults.set(log.emitter, vaults)
-		}
-		vaults.set(requireAddress(log.args, 'vault'), {
-			repBackingUnits: requireBigInt(log.args, 'repBackingUnits'),
-			underwritingLimitAttoEth: requireBigInt(log.args, 'underwritingLimitAttoEth'),
-			claimableFeesAttoEth: requireBigInt(log.args, 'claimableFeesAttoEth'),
-			feeIndex: requireBigInt(log.args, 'feeIndex'),
-			vaultFeeRemainder: requireBigInt(log.args, 'vaultFeeRemainder'),
-			resultingTotalRepBackingUnits: requireBigInt(log.args, 'resultingTotalRepBackingUnits'),
-			resultingFeeEligibleUnderwritingLimitAttoEth: requireBigInt(log.args, 'resultingFeeEligibleUnderwritingLimitAttoEth'),
-		})
-		poolState.totalRepBackingUnits = requireBigInt(log.args, 'resultingTotalRepBackingUnits')
-		state.poolStates.set(log.emitter, poolState)
-	}
-}
-
-export function reduceForkerEvent(state: ReplayState, log: ReplayLog) {
-	if (log.eventName === 'DisputeStakedRepDrainedAtFork') {
-		state.forkEscalationSources.set(requireAddress(log.args, 'parentPool'), requireAddress(log.args, 'sourceGame'))
-		return
-	}
-	if (log.eventName === 'SecurityPoolForkSnapshot') {
-		const parentPool = requireAddress(log.args, 'parentPool')
-		const unresolvedEscalation = requireBoolean(log.args, 'unresolvedEscalation')
-		const escalationSnapshotId = requireHex(log.args, 'escalationSnapshotId')
-		state.forks.set(parentPool, {
-			migrationProxy: requireAddress(log.args, 'migrationProxy'),
-			ownFork: requireBoolean(log.args, 'ownFork'),
-			unresolvedEscalation,
-			settlementCollateralAtForkAttoEth: requireBigInt(log.args, 'settlementCollateralAtForkAttoEth'),
-			totalPoolHeldRepAtForkAttoRep: requireBigInt(log.args, 'totalPoolHeldRepAtForkAttoRep'),
-			auctionableAttoRepAtFork: requireBigInt(log.args, 'auctionableAttoRepAtFork'),
-			escalationSourceRepAtForkAttoRep: requireBigInt(log.args, 'escalationSourceRepAtForkAttoRep'),
-			escalationChildRepAtForkAttoRep: requireBigInt(log.args, 'escalationChildRepAtForkAttoRep'),
-			escalationStartBondAtForkAttoRep: requireBigInt(log.args, 'escalationStartBondAtForkAttoRep'),
-			escalationNonDecisionThresholdAtForkAttoRep: requireBigInt(log.args, 'escalationNonDecisionThresholdAtForkAttoRep'),
-			escalationElapsedAtFork: requireBigInt(log.args, 'escalationElapsedAtFork'),
-			escalationSnapshotId,
-		})
-		if (unresolvedEscalation) {
-			const sourceGame = state.forkEscalationSources.get(parentPool) ?? state.poolStates.get(parentPool)?.escalationGame
-			if (sourceGame === undefined) throw new Error('fork snapshot references an unknown escalation game')
-			const carryRoots = state.escalationCarryRoots.get(sourceGame)
-			const carryPeaks = state.escalationCarryPeaks.get(sourceGame)
-			const carryLeaves = state.escalationCarryLeaves.get(sourceGame)
-			const leafCounts = state.escalationLeafCounts.get(sourceGame)
-			if (carryRoots === undefined || carryPeaks === undefined || carryLeaves === undefined || leafCounts === undefined) {
-				throw new Error('fork snapshot source carry state is incomplete')
-			}
-			state.escalationCarrySnapshots.set(escalationSnapshotId, {
-				sourceGame,
-				carryRoots: cloneHexTriple(carryRoots),
-				carryPeaks: cloneHexPeaksTriple(carryPeaks),
-				carryLeaves: cloneHexPeaksTriple(carryLeaves),
-				leafCounts: cloneBigIntTriple(leafCounts),
-			})
-		}
-		return
-	}
-	if (log.eventName === 'VaultMigrationCheckpoint') {
-		const parentPool = requireAddress(log.args, 'parentPool')
-		const childPool = requireAddress(log.args, 'childPool')
-		const migrationsByChild = getOrCreateNestedMap(state.vaultMigrations, parentPool)
-		let migrations = migrationsByChild.get(childPool)
-		if (migrations === undefined) {
-			migrations = new Map()
-			migrationsByChild.set(childPool, migrations)
-		}
-		migrations.set(requireAddress(log.args, 'vault'), {
-			childPool,
-			outcomeIndex: requireBigInt(log.args, 'outcomeIndex'),
-			migratedRepDeltaAttoRep: requireBigInt(log.args, 'migratedRepDeltaAttoRep'),
-			resultingChildMigratedRepTotalAttoRep: requireBigInt(log.args, 'resultingChildMigratedRepTotalAttoRep'),
-			resultingParentRepBackingUnits: requireBigInt(log.args, 'resultingParentRepBackingUnits'),
-			resultingParentUnderwritingLimitAttoEth: requireBigInt(log.args, 'resultingParentUnderwritingLimitAttoEth'),
-			resultingChildRepBackingUnits: requireBigInt(log.args, 'resultingChildRepBackingUnits'),
-			resultingChildUnderwritingLimitAttoEth: requireBigInt(log.args, 'resultingChildUnderwritingLimitAttoEth'),
-			resultingParentTotalRepBackingUnits: requireBigInt(log.args, 'resultingParentTotalRepBackingUnits'),
-			resultingChildTotalRepBackingUnits: requireBigInt(log.args, 'resultingChildTotalRepBackingUnits'),
-			resultingParentTotalUnderwritingLimitAttoEth: requireBigInt(log.args, 'resultingParentTotalUnderwritingLimitAttoEth'),
-			resultingChildTotalUnderwritingLimitAttoEth: requireBigInt(log.args, 'resultingChildTotalUnderwritingLimitAttoEth'),
-			settlementCollateralTransferredAttoEth: requireBigInt(log.args, 'settlementCollateralTransferredAttoEth'),
-			cumulativeSettlementCollateralTransferredAttoEth: requireBigInt(log.args, 'cumulativeSettlementCollateralTransferredAttoEth'),
-		})
-		return
-	}
-	if (log.eventName === 'ChildPoolLinked') {
-		const parentPool = requireAddress(log.args, 'parent')
-		let children = state.poolChildren.get(parentPool)
-		if (children === undefined) {
-			children = new Map()
-			state.poolChildren.set(parentPool, children)
-		}
-		children.set(requireBigInt(log.args, 'outcomeIndex'), requireAddress(log.args, 'child'))
-	}
 }
 
 export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
@@ -1041,23 +841,6 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 		}
 		const escrow = getOrCreateNestedMap(state.escalationVaultEscrowedRep, log.emitter)
 		for (const [vault, totals] of state.escalationLocalUnresolvedByVault.get(log.emitter) ?? []) escrow.set(vault, totals[Number(outcome)] ?? 0n)
-		return
-	}
-	if (log.eventName === 'TruthAuctionHaircutApplied') {
-		const repBefore = requireBigInt(log.args, 'repBefore')
-		const repRemaining = requireBigInt(log.args, 'repRemaining')
-		if (repBefore <= 0n || repRemaining <= 0n || repRemaining >= repBefore) throw new Error('truth-auction haircut ratio is invalid')
-		state.escalationHaircuts.set(log.emitter, { repBefore, repRemaining })
-		const totalDisputeStakedAttoRep = state.escalationTotalEscrowedRep.get(log.emitter)
-		if (totalDisputeStakedAttoRep !== undefined) state.escalationTotalEscrowedRep.set(log.emitter, (totalDisputeStakedAttoRep * repRemaining) / repBefore)
-		const outcomeBalances = state.escalationResolutionBalances.get(log.emitter)
-		if (outcomeBalances !== undefined) {
-			for (let outcomeIndex = 0; outcomeIndex < 3; outcomeIndex += 1) {
-				const outcomeBalance = outcomeBalances[outcomeIndex]
-				if (outcomeBalance === undefined) throw new Error('escalation resolution balance outcome is out of range')
-				outcomeBalances[outcomeIndex] = (outcomeBalance * repRemaining) / repBefore
-			}
-		}
 		return
 	}
 	if (log.eventName === 'GameStarted') {
@@ -1204,12 +987,7 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 			}
 			bundles.set(deposit.depositor, bundle)
 		}
-		const haircut = state.escalationHaircuts.get(log.emitter)
-		if (haircut === undefined) bundle.claimRepUnits += deposit.amountAttoRep
-		else {
-			const numerator = deposit.amountAttoRep * haircut.repBefore
-			bundle.claimRepUnits += (numerator + haircut.repRemaining - 1n) / haircut.repRemaining
-		}
+		bundle.claimRepUnits += deposit.amountAttoRep
 		return
 	}
 	if (log.eventName === 'DepositOnOutcome') {
@@ -1362,24 +1140,27 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 export function reduceAuctionEvent(state: ReplayState, log: ReplayLog) {
 	if (log.eventName === 'AuctionStarted') {
 		state.auctions.set(log.emitter, {
-			startTimestamp: requireBigInt(log.args, 'startTimestamp'),
-			endTimestamp: requireBigInt(log.args, 'endTimestamp'),
+			opensAt: requireBigInt(log.args, 'opensAt'),
+			closesAt: requireBigInt(log.args, 'closesAt'),
+			lotAttoEth: requireBigInt(log.args, 'lotAttoEth'),
+			targetLots: requireBigInt(log.args, 'targetLots'),
+			inventoryAttoRep: requireBigInt(log.args, 'inventoryAttoRep'),
+			maximumAttoRepPerLot: requireBigInt(log.args, 'maximumAttoRepPerLot'),
 		})
 		return
 	}
 	if (log.eventName === 'AuctionFinalized') {
 		const auction = state.auctions.get(log.emitter) ?? {}
-		auction.clearingTick = requireBigInt(log.args, 'clearingTick')
-		auction.grossAcceptedAttoEth = requireBigInt(log.args, 'grossAcceptedAttoEth')
-		auction.attoRepSold = requireBigInt(log.args, 'attoRepSold')
-		auction.funded = requireBoolean(log.args, 'funded')
+		auction.attoRepPerLot = requireBigInt(log.args, 'attoRepPerLot')
+		auction.filledLots = requireBigInt(log.args, 'filledLots')
+		auction.raisedAttoEth = requireBigInt(log.args, 'raisedAttoEth')
+		auction.soldAttoRep = requireBigInt(log.args, 'soldAttoRep')
 		state.auctions.set(log.emitter, auction)
 		return
 	}
 	if (log.eventName !== 'BidSubmitted' && log.eventName !== 'BidSettled') return
-	const tick = requireBigInt(log.args, 'tick')
-	const bidIndex = requireBigInt(log.args, 'bidIndex')
-	const key = `${tick.toString()}:${bidIndex.toString()}`
+	const bidId = requireBigInt(log.args, 'bidId')
+	const key = bidId.toString()
 	let bids = state.auctionBids.get(log.emitter)
 	if (bids === undefined) {
 		bids = new Map()
@@ -1388,23 +1169,22 @@ export function reduceAuctionEvent(state: ReplayState, log: ReplayLog) {
 	if (log.eventName === 'BidSubmitted') {
 		bids.set(key, {
 			bidder: requireAddress(log.args, 'bidder'),
-			tick,
-			bidIndex,
-			bidAmountAttoEth: requireBigInt(log.args, 'bidAmountAttoEth'),
-			cumulativeBidAtTickAttoEth: requireBigInt(log.args, 'cumulativeBidAtTickAttoEth'),
+			vault: requireAddress(log.args, 'vault'),
+			bidId,
+			lots: requireBigInt(log.args, 'lots'),
+			minimumAttoRepPerLot: requireBigInt(log.args, 'minimumAttoRepPerLot'),
+			targetHealthBps: requireBigInt(log.args, 'targetHealthBps'),
 		})
 		return
 	}
 	const bid = bids.get(key)
 	if (bid === undefined) throw new Error(`BidSettled references unknown bid ${key}`)
-	bid.bidUsedAttoEth = requireBigInt(log.args, 'bidUsedAttoEth')
-	bid.attoRepFilled = requireBigInt(log.args, 'attoRepFilled')
+	bid.filledLots = requireBigInt(log.args, 'filledLots')
 	bid.refundAttoEth = requireBigInt(log.args, 'refundAttoEth')
-	bid.status = requireBigInt(log.args, 'status')
 }
 
 export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
-	const coordinatorEventNames = new Set(['SecurityPoolSet', 'RepEthPriceSet', 'PriceRequested', 'PriceReported', 'PriceReportRejected', 'PendingReportRecovered', 'StagedOperationQueued', 'ExecutedStagedOperation', 'CoordinatorStateCheckpoint'])
+	const coordinatorEventNames = new Set(['SecurityPoolSet', 'RepEthPriceSet', 'PriceRequested', 'PriceReported', 'PriceReportRejected', 'PendingReportRecovered'])
 	if (!coordinatorEventNames.has(log.eventName)) return
 	let coordinator = state.coordinators.get(log.emitter)
 	if (coordinator === undefined) {
@@ -1412,30 +1192,10 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 			lastPrice: 0n,
 			lastSettlementTimestamp: 0n,
 			pendingReportId: 0n,
-			pendingReportSponsor: ZERO_ADDRESS,
-			pendingOperationSlotId: 0n,
 			pendingReportMaxSettlementBaseFeeAttoEthPerGas: 0n,
-			stagedOperationCounter: 0n,
-			activeStagedOperationCount: 0n,
-			pendingSettlementOperationCount: 0n,
 			reports: new Map(),
 		}
 		state.coordinators.set(log.emitter, coordinator)
-	}
-	if (log.eventName === 'CoordinatorStateCheckpoint') {
-		coordinator.checkpointReason = requireBigInt(log.args, 'reason')
-		coordinator.checkpointReportId = requireBigInt(log.args, 'reportId')
-		coordinator.checkpointOperationId = requireBigInt(log.args, 'operationId')
-		coordinator.pendingReportId = requireBigInt(log.args, 'pendingReportId')
-		coordinator.pendingReportSponsor = requireAddress(log.args, 'pendingReportSponsor')
-		coordinator.pendingOperationSlotId = requireBigInt(log.args, 'pendingOperationSlotId')
-		coordinator.pendingReportMaxSettlementBaseFeeAttoEthPerGas = requireBigInt(log.args, 'pendingReportMaxSettlementBaseFeeAttoEthPerGas')
-		coordinator.lastPrice = requireBigInt(log.args, 'lastPrice')
-		coordinator.lastSettlementTimestamp = requireBigInt(log.args, 'lastSettlementTimestamp')
-		coordinator.stagedOperationCounter = requireBigInt(log.args, 'stagedOperationCounter')
-		coordinator.activeStagedOperationCount = requireBigInt(log.args, 'activeStagedOperationCount')
-		coordinator.pendingSettlementOperationCount = requireBigInt(log.args, 'pendingSettlementOperationCount')
-		return
 	}
 	if (log.eventName === 'SecurityPoolSet') {
 		coordinator.securityPool = requireAddress(log.args, 'securityPool')
@@ -1482,41 +1242,6 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 		coordinator.reports.set(reportId, { status: 'Recovered', settlementTimestamp })
 		return
 	}
-	let operations = state.coordinatorOperations.get(log.emitter)
-	if (operations === undefined) {
-		operations = new Map()
-		state.coordinatorOperations.set(log.emitter, operations)
-	}
-	const operationId = requireBigInt(log.args, 'operationId')
-	if (log.eventName === 'StagedOperationQueued') {
-		operations.set(operationId, {
-			operation: requireBigInt(log.args, 'operation'),
-			operator: requireAddress(log.args, 'operator'),
-			targetVault: requireAddress(log.args, 'targetVault'),
-			operationValue: requireBigInt(log.args, 'operationValue'),
-			queuedAt: requireBigInt(log.args, 'queuedAt'),
-			validForSeconds: requireBigInt(log.args, 'validForSeconds'),
-			snapshotTargetBackingUnits: requireBigInt(log.args, 'snapshotTargetBackingUnits'),
-			snapshotTargetUnderwritingLimitAttoEth: requireBigInt(log.args, 'snapshotTargetUnderwritingLimitAttoEth'),
-			snapshotTargetDisputeStakedAttoRep: requireBigInt(log.args, 'snapshotTargetDisputeStakedAttoRep'),
-			snapshotTotalPoolHeldAttoRep: requireBigInt(log.args, 'snapshotTotalPoolHeldAttoRep'),
-			snapshotTotalRepBackingUnits: requireBigInt(log.args, 'snapshotTotalRepBackingUnits'),
-			isPendingSlot: requireBoolean(log.args, 'isPendingSlot'),
-			status: 'Queued',
-		})
-		return
-	}
-	if (log.eventName !== 'ExecutedStagedOperation') return
-	const success = requireBoolean(log.args, 'success')
-	const queued = operations.get(operationId)
-	if (queued === undefined) return
-	operations.set(operationId, {
-		...queued,
-		operation: requireBigInt(log.args, 'operation'),
-		isPendingSlot: false,
-		status: success ? 'Succeeded' : 'Failed',
-		errorMessage: requireString(log.args, 'errorMessage'),
-	})
 }
 
 type PoolRelationshipDiscovery = {
@@ -1535,7 +1260,6 @@ export function reduceZoltarLog(state: ReplayState, log: ReplayLog, recognizedRe
 	if (poolRelationships === undefined || poolRelationships.factories.has(emitter)) reducePoolFactoryEvent(state, log)
 	if (poolRelationships === undefined || poolRelationships.shareTokens.has(emitter)) reduceShareTokenEvent(state, log)
 	if (poolRelationships === undefined || poolRelationships.pools.has(emitter)) reduceSecurityPoolEvent(state, log)
-	reduceForkerEvent(state, log)
 	if (poolRelationships === undefined || poolRelationships.escalationGames.has(emitter)) reduceEscalationEvent(state, log)
 	if (poolRelationships === undefined || poolRelationships.auctions.has(emitter)) reduceAuctionEvent(state, log)
 	if (poolRelationships === undefined || poolRelationships.coordinators.has(emitter)) reduceCoordinatorEvent(state, log)

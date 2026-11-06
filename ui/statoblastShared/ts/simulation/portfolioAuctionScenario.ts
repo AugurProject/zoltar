@@ -6,6 +6,7 @@ import {
 	buildPortfolioCapitalDepositRequest,
 	buildPortfolioCapitalSetHealthRequest,
 	buildPortfolioForkChoiceRequest,
+	buildPortfolioForkPreparationRequest,
 	buildPortfolioForkStartRequest,
 	buildPortfolioPriceApprovalRequest,
 	buildPortfolioPricePreparationRequest,
@@ -57,7 +58,7 @@ export async function seedPortfolioAuctionScenario(parameters: ScenarioSeedParam
 	const seeded = await seedPortfolioScenario(parameters)
 	const { accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile } = parameters
 	// Every step reports progress: the browser worker restarts its request timeout on each report.
-	const reportStep = createRangeProgressReporter(onProgress, { start: 0.99, end: 0.999 }, 34)
+	const reportStep = createRangeProgressReporter(onProgress, { start: 0.99, end: 0.999 }, 35)
 	const owner = requireQaAccount(accounts[0], 'Expected portfolio auction simulation owner')
 	const rival = requireQaAccount(accounts[1], 'Expected portfolio auction simulation rival bidder')
 	const ownerClient = createWriteClient(owner)
@@ -84,7 +85,7 @@ export async function seedPortfolioAuctionScenario(parameters: ScenarioSeedParam
 	])
 	const now = await getSimulationChainTimestamp(memoryClient)
 	if (BigInt(validUntil) >= now) await advanceSimulationTime(memoryClient, BigInt(validUntil) - now + 1n)
-	const report = await settleSeededOracleReport({ accountAddress: owner, createWriteClient, managerAddress: seeded.managerAddress, onProgressStep: reportStep, poolLabel: 'portfolio auction', readClient, requestedInitialAttoWeth: minimumReport + ceilDiv(4n * 10n * unit, exposureDivider) })
+	const report = await settleSeededOracleReport({ accountAddress: owner, createWriteClient, portfolio, onProgressStep: reportStep, poolLabel: 'portfolio auction', readClient, requestedInitialAttoWeth: minimumReport + ceilDiv(4n * 10n * unit, exposureDivider) })
 	await reportStep('Requested a larger shared price report')
 	await settleOracleReportIfNeeded({ memoryClient, readClient, writeClient: ownerClient, ...report })
 	await reportStep('Challenged a larger shared price report')
@@ -110,7 +111,9 @@ export async function seedPortfolioAuctionScenario(parameters: ScenarioSeedParam
 	await sendPortfolioTransaction(ownerClient, { account: owner, to: zoltar, value: 0n, data: encodeFunctionData({ abi: zoltarArtifact.abi, functionName: 'forkUniverse', args: [0n, questionId] }) }, 'Fork the origin universe')
 	await reportStep('Forked the origin universe on the first question')
 	const controller = await readClient.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'forkController' })
-	await sendPortfolioTransaction(ownerClient, buildPortfolioForkChoiceRequest({ owner, controller, universeId: 0n, outcomeIndex: FORK_OUTCOME }), 'Choose the Yes branch')
+	await sendPortfolioTransaction(ownerClient, { ...buildPortfolioForkPreparationRequest({ owner, controller, universeId: 0n, outcomeIndex: FORK_OUTCOME }), gas: 16_777_216n }, 'Prepare the Yes branch capital')
+	await reportStep('Prepared the Yes branch capital')
+	await sendPortfolioTransaction(ownerClient, { ...buildPortfolioForkChoiceRequest({ owner, controller, universeId: 0n, outcomeIndex: FORK_OUTCOME }), gas: 16_777_216n }, 'Choose the Yes branch')
 	await reportStep('Owner chose the Yes branch')
 	await advanceSimulationTime(memoryClient, FORK_MIGRATION_DURATION_SECONDS + 60n)
 	await reportStep('Closed the branch choice window')

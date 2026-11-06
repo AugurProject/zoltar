@@ -24,7 +24,7 @@ function fixture(overrides: Record<string, unknown> = {}) {
 	const calls: { functionName: string; address: Address; blockNumber: bigint }[] = []
 	const values: Record<string, unknown> = {
 		factory,
-		seedPool: seed,
+		originUniverseId: 0n,
 		getQuestions: [123n],
 		getPool: seed,
 		zoltar,
@@ -80,7 +80,7 @@ describe('portfolio branch price SDK', () => {
 	test('authenticates one feed and all funding reads at the same block', async () => {
 		const { client, calls } = fixture()
 		const snapshot = await load(client)
-		expect(snapshot).toMatchObject({ owner, portfolio, factory, seedPool: seed, feed, repToken: rep, universeId: 42n, reportingOpen: true })
+		expect(snapshot).toMatchObject({ owner, portfolio, factory, originUniverseId: 0n, feed, repToken: rep, universeId: 42n, reportingOpen: true })
 		expect(snapshot.observation).toMatchObject({ weth, openOracle: oracle, minimumWethAttoEth: 2n * unit, bounty: 101n, repAllowanceAttoRep: 10n * unit })
 		expect(new Set(calls.map(call => call.blockNumber))).toEqual(new Set([10n]))
 		expect(calls.length).toBeLessThan(40)

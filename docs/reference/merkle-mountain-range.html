@@ -29,22 +29,7 @@
 					<tbody>
 						<tr>
 							<td><code>depositor</code></td>
-							<td>
-								Binds the payout to the original depositor; see <a href="./invariants.html#vault-04"><code>VAULT-04</code></a
-								>.
-							</td>
-						</tr>
-						<tr>
-							<td><code>outcome</code></td>
-							<td>Separates Invalid, Yes, and No carry domains.</td>
-						</tr>
-						<tr>
-							<td><code>amountAttoRep</code></td>
-							<td>Commits to the source principal.</td>
-						</tr>
-						<tr>
-							<td><code>parentDepositIndex</code></td>
-							<td>Provides the stable identity that selects the deposit's leaf in the <a href="#nullifier-tree">nullifier tree</a>, the per-continuation record of claimed carried deposits that prevents a proof from being replayed.</td>
+							<td>Binds the payout to the original depositor; see <a href="./invariants.html#escalation">reporter claims</a>, the per-continuation record of claimed carried deposits that prevents a proof from being replayed.</td>
 						</tr>
 						<tr>
 							<td><code>cumulativeAmountAttoRep</code></td>

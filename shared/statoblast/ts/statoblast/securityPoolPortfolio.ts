@@ -1,5 +1,10 @@
 import { type Abi, type Address, type Hex, encodeDeployData, encodeFunctionData, isAddress, isHex, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 
+export type PortfolioOriginConfig = {
+	universeId: bigint
+	securityMultiplierBps: bigint
+	reportPriorityFeeAttoEthPerGas: bigint
+}
 export type PortfolioEconomicsConfig = {
 	purchaseFeeBps: bigint
 	annualFeeBps: bigint
@@ -36,16 +41,20 @@ export function validatePortfolioEconomics(config: PortfolioEconomicsConfig) {
 }
 
 /** Compiled artifacts are injected so this SDK does not depend on generated contracts. */
-export function buildPortfolioDeploymentRequest(parameters: { owner: Address; factory: Address; initialOriginPool: Address; maximumQuestionHorizonSeconds: bigint; deployers: PortfolioDeployers; questionAdmissionPolicy: Address; economics: PortfolioEconomicsConfig; artifact: { abi: Abi; bytecode: Hex } }) {
+export function buildPortfolioDeploymentRequest(parameters: { owner: Address; factory: Address; origin: PortfolioOriginConfig; maximumQuestionHorizonSeconds: bigint; deployers: PortfolioDeployers; questionAdmissionPolicy: Address; economics: PortfolioEconomicsConfig; artifact: { abi: Abi; bytecode: Hex } }) {
 	address(parameters.owner, 'Owner')
 	address(parameters.factory, 'Factory')
-	address(parameters.initialOriginPool, 'Initial origin pool')
+	uint(parameters.origin.universeId, 248, 'Origin universe')
+	uint(parameters.origin.securityMultiplierBps, 256, 'Security multiplier')
+	uint(parameters.origin.reportPriorityFeeAttoEthPerGas, 256, 'Report priority fee')
+	if (parameters.origin.securityMultiplierBps <= 10_001n) throw new Error('Security multiplier must exceed 10001 BPS.')
+	if (parameters.origin.reportPriorityFeeAttoEthPerGas === 0n) throw new Error('Report priority fee must be positive.')
 	address(parameters.questionAdmissionPolicy, 'Question admission policy')
 	for (const [name, value] of Object.entries(parameters.deployers)) address(value, `${name} deployer`)
 	uint(parameters.maximumQuestionHorizonSeconds, 48, 'Question horizon')
 	if (parameters.maximumQuestionHorizonSeconds === 0n) throw new Error('Question horizon must be positive.')
 	validatePortfolioEconomics(parameters.economics)
-	return { account: parameters.owner, data: encodeDeployData({ abi: parameters.artifact.abi, bytecode: parameters.artifact.bytecode, args: [parameters.factory, parameters.initialOriginPool, parameters.maximumQuestionHorizonSeconds, parameters.deployers, parameters.questionAdmissionPolicy, parameters.economics] }) }
+	return { account: parameters.owner, data: encodeDeployData({ abi: parameters.artifact.abi, bytecode: parameters.artifact.bytecode, args: [parameters.factory, parameters.origin, parameters.maximumQuestionHorizonSeconds, parameters.deployers, parameters.questionAdmissionPolicy, parameters.economics] }) }
 }
 
 /** Each call completes one immutable setup stage; anyone can resume an interrupted setup. */

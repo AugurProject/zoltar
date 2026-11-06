@@ -1,3 +1,4 @@
+import type { PortfolioCapitalSnapshot } from './portfolio-types.ts'
 import type { ForkedCarryWithdrawalPresenceSnapshot, ForkedCarryWithdrawalSnapshot, ForkedClaimCheckpointSnapshot } from './carry-types.ts'
 import type { UniverseUniswapSnapshot } from './uniswap-types.ts'
 import type { OperationInputValues } from './input-values.ts'
@@ -86,18 +87,6 @@ export interface QuestionSnapshot {
 	outcomeLabels: string[]
 }
 
-export interface VaultSnapshot {
-	address: Address
-	feeIndex: string
-	repBackingUnits: string
-	repBackingAttoRep: CanonicalUintString
-	underwritingLimitAttoEth: CanonicalUintString
-	claimableFeesAttoEth: CanonicalUintString
-	openInterestAttoEth: CanonicalUintString
-	badDebtAttoEth: CanonicalUintString
-	disputeStakedAttoRep: CanonicalUintString
-}
-
 /** Immutable coordinator inputs used to bound inclusion-time oracle funding. */
 export interface OracleRequestFundingSnapshot {
 	/** Shared feeds use a fixed native bounty instead of the standalone gas formula. */
@@ -126,8 +115,7 @@ interface DirectEscalationDepositQuoteSnapshot {
 
 export interface PoolSnapshot {
 	address: Address
-	/** Exact authenticated size of the canonical pool vault registry. */
-	canonicalVaultCount: CanonicalUintString
+	portfolio: Address
 	parent: Address
 	universeId: string
 	questionId: string
@@ -141,7 +129,6 @@ export interface PoolSnapshot {
 	reportEscrows?: Readonly<Record<string, Address>>
 	/** Conservative report exposure across this feed at the snapshot block. */
 	oracleExposureAttoEth: CanonicalUintString
-	vaultOperations: Address
 	escalationGame: Address
 	/** Canonical operational-resolution state used to classify inherited carry work. */
 	escalationResolved: boolean
@@ -149,55 +136,30 @@ export interface PoolSnapshot {
 	forkCarrySnapshotInitialized: boolean
 	/** Canonical final escalation outcome, or the contract's unresolved sentinel. */
 	escalationFinalQuestionResolution: number
-	truthAuction: Address
 	systemState: number
 	awaitingForkContinuation: boolean
 	questionOutcome: number
 	settlementCollateralAttoEth: CanonicalUintString
+	purchaseQuote?: { mintAttoEth: CanonicalUintString; feeAttoEth: CanonicalUintString; premiumAttoEth: CanonicalUintString; minimumShares: string } | undefined
 	projectedSettlementCollateralAttoEth: CanonicalUintString
 	shareTokenSupplyAttoShares: CanonicalUintString
 	currentMintingCapacityAttoEth: CanonicalUintString
-	totalUnderwritingLimitAttoEth: CanonicalUintString
 	statoblastSecurityMultiplierBps: string
-	unassignedRepBackingAttoRep: CanonicalUintString
-	unassignedUnderwritingLimitAttoEth: CanonicalUintString
-	unassignedBadDebtAttoEth: CanonicalUintString
-	totalBadDebtAttoEth: CanonicalUintString
-	feeIndex: string
 	lastUpdatedFeeAccumulator: string
-	parentForkActivationTime: string
 	poolRepBalanceAttoRep: CanonicalUintString
-	totalRepBackingUnits: string
 	escalationRepBalanceAttoRep: CanonicalUintString
 	escalationResidualSweepExpectedSuccess: boolean
-	minimumVaultRepDepositAttoRep: CanonicalUintString
-	/** Smallest REP input whose anchored post-transfer backing round-trip satisfies the vault minimum. */
-	minimumSafeWalletVaultDepositAttoRep: CanonicalUintString
 	oraclePriceValid: boolean
 	requestPriceCostAttoEth: CanonicalUintString
 	oracleSettlementTime: string
 	lastRepPerEthPrice: string
 	lastOracleSettlementTimestamp: string
 	oraclePriceValidUntilTimestamp: string
-	stagedOperationCounter: string
-	totalPoolHeldAttoRep: CanonicalUintString
 	minimumToken1ReportAttoEth: CanonicalUintString
 	oracleRequestFunding: OracleRequestFundingSnapshot
 	pendingReportId: string
 	pendingReportSettled: boolean
-	forkActivationTime: string
-	forkOutcomeIndex: string
-	forkOwnQuestion: boolean
-	/** REP already attributed to this pool by parent-vault migration. */
-	forkMigratedAttoRep: CanonicalUintString
-	/** Fork-time pool-held REP bucket that migrateRepToZoltar must split into every child route. */
-	forkRepMigrationTargetAttoRep: CanonicalUintString
-	/** Canonical cumulative pool-held REP split per fork outcome, reconstructed from forker events. */
-	forkRepMigrationProgressByOutcome: Record<string, string>
-	forkUnresolvedEscalation: boolean
-	walletEscalationMaterializedOutcomes: [boolean, boolean, boolean]
-	/** Generic universe-fork outcomes whose unresolved entitlement migration simulates successfully at the anchor. */
-	unresolvedEscalationMigrationReadyOutcomes: string[]
+	ownQuestionForkReady: boolean
 	escalationCanTriggerOwnFork: boolean
 	escalationForkContinuation: boolean
 	escalationForkCarryFundingComplete: boolean
@@ -205,6 +167,7 @@ export interface PoolSnapshot {
 	escalationGameEndTime: string
 	escalationHasReachedNonDecision: boolean
 	escalationNonDecisionState: number
+	initialEscalationGameDepositAttoRep: CanonicalUintString
 	escalationStartBondAttoRep: CanonicalUintString
 	escalationNonDecisionThresholdAttoRep: CanonicalUintString
 	escalationOutcomeBalancesAttoRep: [CanonicalUintString, CanonicalUintString, CanonicalUintString]
@@ -212,39 +175,6 @@ export interface PoolSnapshot {
 	directEscalationDepositQuotes: [DirectEscalationDepositQuoteSnapshot, DirectEscalationDepositQuoteSnapshot, DirectEscalationDepositQuoteSnapshot]
 	/** Maximum arguments proven by anchored simulation for outcomes Invalid/Yes/No. */
 	safeEscalationDepositMaximumsAttoRep: [CanonicalUintString, CanonicalUintString, CanonicalUintString]
-	/** True only when every canonical vault was included in this anchored snapshot. */
-	vaultDiscoveryComplete: boolean
-	vaults: VaultSnapshot[]
-	/** Whether the complete authenticated vault registry contains the configured wallet. */
-	walletVaultRegistered: boolean
-}
-
-export interface StagedOperationSnapshot {
-	coordinator: Address
-	id: string
-	operation: number
-	operator: Address
-	targetVault: Address
-	receiverVault: Address
-	amount: string
-	queuedAt: string
-	validForSeconds: string
-	isPendingSettlement: boolean
-	/** True only when an anchored direct simulation proves the underlying mutation succeeds. */
-	executionExpectedSuccess: boolean
-	/** Exact ABI-encoded return bytes quorum-agreed during anchored discovery. */
-	executionExpectedResult: Hex
-	/** Exact liquidation policy arguments used by the successful direct downstream simulation. */
-	liquidationMinimumReceiverHealthFactorBps: string
-	liquidationMinPriceDistanceBps: string
-	snapshotTargetBackingUnits: string
-	snapshotTargetUnderwritingLimitAttoEth: CanonicalUintString
-	snapshotTargetOpenInterestAttoEth: CanonicalUintString
-	snapshotTargetDisputeStakedAttoRep: CanonicalUintString
-	snapshotTotalPoolHeldAttoRep: CanonicalUintString
-	snapshotTotalRepBackingUnits: string
-	liquidationApprovalId: Hash
-	reservedLiquidationDebtAttoEth: CanonicalUintString
 }
 
 export interface EscalationDepositSnapshot {
@@ -272,10 +202,12 @@ export interface ChildRepSplitProgressSnapshot {
 }
 
 export interface AuctionBidSnapshot {
-	tick: string
-	index: string
-	amountAttoEth: CanonicalUintString
-	refunded: boolean
+	bidId: string
+	vault: Address
+	lots: CanonicalUintString
+	minimumAttoRepPerLot: CanonicalUintString
+	targetHealthBps: CanonicalUintString
+	settled: boolean
 }
 
 export interface AuctionRefundSnapshot {
@@ -285,18 +217,23 @@ export interface AuctionRefundSnapshot {
 
 export interface AuctionSnapshot {
 	address: Address
-	pool: Address
+	engine: Address
+	portfolio: Address
+	universeId: string
+	forkController: Address
 	startTime: string
 	endTime: string
+	opened: boolean
 	finalized: boolean
-	minimumBidAttoEth: CanonicalUintString
-	hasClearingPrice: boolean
-	clearingTick: string
-	underfunded: boolean
-	underfundedWinningAttoEth: CanonicalUintString
+	lotAttoEth: CanonicalUintString
+	repGrid: CanonicalUintString
+	unroundedCollateralAttoRepPerLot: CanonicalUintString
+	minimumCollateralAttoRepPerLot: CanonicalUintString
+	maximumBidAttoRepPerLot: CanonicalUintString
 	pendingEthRefund: string
 	pendingEthRefundGeneration?: Hash
 	bids: AuctionBidSnapshot[]
+	refundableBidIds: string[]
 }
 
 export interface OracleGameSnapshot {
@@ -381,7 +318,7 @@ export interface EcosystemSnapshot {
 	questions: QuestionSnapshot[]
 	universes: UniverseSnapshot[]
 	pools: PoolSnapshot[]
-	stagedOperations: StagedOperationSnapshot[]
+	portfolioCapital: PortfolioCapitalSnapshot[]
 	escalationDeposits: EscalationDepositSnapshot[]
 	/** Verified, unconsumed inherited deposits owned by the configured wallet. */
 	forkedClaimCheckpoints?: ForkedClaimCheckpointSnapshot[]
@@ -433,7 +370,6 @@ export type OperationWalletAssetDebit =
 	| { kind: 'erc20'; asset: Address; amount: string; category: 'rep' | 'weth' | 'lp-token' | 'other' }
 	| { kind: 'erc1155'; asset: Address; tokenId: string; amount: string; category: 'outcome-share' }
 	| { kind: 'open-oracle-credit'; openOracle: Address; asset: 'ETH' | Address; amount: string; category: 'rep' | 'weth' | 'other' }
-	| { kind: 'security-pool-vault-rep'; pool: Address; vault: Address; amount: string; category: 'rep' }
 
 /**
  * An exact read-only call that must succeed at the same canonical block as the

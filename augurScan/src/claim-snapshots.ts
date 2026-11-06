@@ -80,7 +80,6 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 		let nodeId = uint(view['localHeadNodeId'])
 		const visited = new Set<bigint>()
 		const leaves: Leaf[] = []
-		const ctx = await context(game)
 		while (nodeId !== 0n) {
 			if (visited.has(nodeId) || leaves.length >= 256) throw new Error('Carry node cycle or 256-leaf limit exceeded')
 			visited.add(nodeId)
@@ -88,8 +87,7 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 			if (uint(node[2]) !== BigInt(outcome)) throw new Error('Carry node outcome mismatch')
 			const leaf = { depositor: address(node[1]), amountAttoRep: uint(node[3]), parentDepositIndex: uint(node[4]), cumulativeAmountAttoRep: uint(node[5]), sourceNodeId: nodeId, index: uint(node[6]) }
 			const isActive = active.has(nodeId.toString())
-			const directlyClaimed = !isActive && flag(await call(ctx.forker, 'securityPoolForker', 'isEscalationDepositClaimedDirectly', [ctx.pool, outcome, leaf.parentDepositIndex]))
-			leaves.push({ ...leaf, localIndex: 0n, active: isActive, leafHash: isActive || directlyClaimed ? hashCarryLeaf(leaf, outcome) : ZERO })
+			leaves.push({ ...leaf, localIndex: 0n, active: isActive, leafHash: isActive ? hashCarryLeaf(leaf, outcome) : ZERO })
 			nodeId = uint(node[0])
 		}
 		leaves.sort((a, b) => compareBigintAscending(a.index, b.index))
@@ -160,10 +158,8 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 				truncated = true
 				continue
 			}
-			const directlyClaimed = isInherited && flag(await call(ctx.forker, 'securityPoolForker', 'isEscalationDepositClaimedDirectly', [ctx.parentPool, outcome, leaf.parentDepositIndex]))
 			let status = 'pending'
-			if (directlyClaimed) status = 'claimed-in-parent'
-			else if (resolution !== 3n && resolution === poolResolution) status = resolution === BigInt(outcome) ? 'claimable' : 'losing'
+			if (resolution !== 3n && resolution === poolResolution) status = resolution === BigInt(outcome) ? 'claimable' : 'losing'
 			else if (resolution !== poolResolution) status = 'resolution-mismatch'
 			const membership = isInherited ? buildCarryMerkleMountainRangeProof(inheritedHashes, Number(leaf.index)) : undefined
 			const proof =
@@ -184,8 +180,8 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 			let principal = leaf.amountAttoRep
 			let rewardAmount = leaf.amountAttoRep
 			let rewardCumulative = leaf.cumulativeAmountAttoRep
-			let allocationReady = !directlyClaimed
-			if (isInherited && !directlyClaimed) {
+			let allocationReady = true
+			if (isInherited) {
 				const claim = [outcome, leaf.amountAttoRep, leaf.cumulativeAmountAttoRep, leaf.index]
 				const progress = array(await call(gameAddress, 'escalationGameClaimDelegate', 'getClaimCheckpointProgress', claim))
 				allocationReady = flag(progress[3])

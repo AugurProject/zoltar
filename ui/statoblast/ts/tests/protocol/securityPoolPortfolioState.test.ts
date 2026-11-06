@@ -10,6 +10,10 @@ test.each(['active', 'stale', 'runoff', 'sealed', 'disabled', 'frozen', 'basket'
 			blocks.push(request.blockNumber)
 			return request.contracts.map(call => {
 				switch (call.functionName) {
+					case 'refreshPortfolioFees':
+						return undefined
+					case 'getCurrentBlockTimestamp':
+						return 5_000n
 					case 'portfolio':
 						return portfolio
 					case 'universeId':
@@ -44,6 +48,12 @@ test.each(['active', 'stale', 'runoff', 'sealed', 'disabled', 'frozen', 'basket'
 	})
 	expect(await loadCentralPortfolioQuestion(client, owner, capital, 99n)).toEqual({
 		centralSettlement: true,
+		centralCheckpointTimestamp: 5_000n,
+		portfolioAddress: portfolio,
+		feePrincipalAttoEth: 100n,
+		currentRetentionRate: 10n ** 18n,
+		feeIndexRemainder: 0n,
+		totalFeesOwedRemainder: 0n,
 		settlementCollateralAttoEth: 60n,
 		settlementRecoveryAttoRep: mode === 'basket' ? 90n : 0n,
 		shareTokenSupplyAttoShares: 100n,

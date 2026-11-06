@@ -142,6 +142,7 @@ contract TradingMockCoreFactory {
 
 	function setPool(address pool, uint248 universeId) external {
 		originByPool[pool] = ORIGIN_ID;
+		portfolios[pool] = pool;
 		poolByOriginAndUniverse[ORIGIN_ID][universeId] = pool;
 	}
 
@@ -232,6 +233,21 @@ contract TradingMockSecurityPool {
 
 	function attoSharesToAttoRep(uint256 amountAttoShares) public view returns (uint256) {
 		return (amountAttoShares / sharesPerEth) * recoveryPerCompleteSet;
+	}
+
+	function refreshPortfolioFees() external {}
+
+	function purchaseQuote(uint248, uint256, uint256) external pure returns (uint256, uint256) {
+		return (0, 0);
+	}
+
+	function createCompleteSet(uint248 universe, uint256 question, uint256 cash, address recipient, uint256 minimumShares) external payable returns (uint256 amount) {
+		require(universe == universeId && question == questionId && msg.value == cash, 'Invalid mock portfolio purchase');
+		amount = attoEthToAttoShares(cash);
+		require(amount > 0 && amount >= minimumShares, 'Mint is zero');
+		shareTokenSupplyAttoShares += amount;
+		settlementCollateralAttoEth += cash;
+		shareToken.mintCompleteSets(universeId, recipient, amount);
 	}
 
 	function createCompleteSet() external payable {

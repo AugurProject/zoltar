@@ -89,7 +89,6 @@ contract SecurityPoolSettlementBook {
 	event BookCreated(uint64 indexed bookId, uint64 indexed sourceBookId, uint256 cashAttoEth, uint256 units);
 	event SettlementMinted(uint64 indexed bookId, uint256 indexed questionId, uint256 cashAttoEth, uint256 outcomeShares);
 	event SettlementRedeemed(uint64 indexed bookId, uint256 indexed questionId, uint256 outcomeShares, uint256 units, uint256 cashAttoEth);
-	event FeesCharged(uint64 indexed bookId, uint256 indexed questionId, uint256 cashAttoEth);
 	event FinalityScheduled(uint64 indexed bookId, uint256 indexed questionId, uint48 finalAfter);
 	event FinalClaimsFrozen(uint64 indexed bookId, uint64 indexed frozenBookId, uint48 timestamp, uint256 units, uint256 cashAttoEth);
 	event FeeStreamReplaced(uint64 indexed bookId, uint256 indexed questionId, uint96 rateAttoEthPerSecond, uint48 end);
@@ -319,25 +318,6 @@ contract SecurityPoolSettlementBook {
 		emit FeeStreamReplaced(bookId, questionId, rateAttoEthPerSecond, state.feeEnd);
 	}
 
-	/// @notice Move collateral-funded fees to a disjoint liability, burning equal settlement units.
-	function chargeFee(uint64 bookId, uint256 questionId, uint256 cashAttoEth, uint48 timestamp) external onlyPortfolio {
-		Book storage book = _activeBook(bookId);
-		_freezeMatured(bookId, book, timestamp);
-		require(book.cashAttoEth == book.units && book.recoveryAttoRep == 0, 'Runoff fees paused');
-		(Question memory state, uint64 frozenBookId) = question(bookId, questionId);
-		require(frozenBookId == 0, 'Final claim fees closed');
-		require(cashAttoEth <= _feeBudget(state), 'Fee exceeds backing floor');
-		state.units -= cashAttoEth;
-		uint48 nativeTimestamp = _feeTimestamp(book);
-		require(state.feeEnd <= nativeTimestamp || uint256(state.feeRateAttoEthPerSecond) * (state.feeEnd - nativeTimestamp) <= _feeBudget(state), 'Question fees unfunded');
-		book.units -= cashAttoEth;
-		book.cashAttoEth -= cashAttoEth;
-		book.feeCashAttoEth += cashAttoEth;
-		_changeFinalityUnits(book, state.finalAfter, cashAttoEth, false);
-		_writeQuestion(bookId, book, questionId, state);
-		emit FeesCharged(bookId, questionId, cashAttoEth);
-	}
-
 	function collectFees(uint64 bookId, uint256 cashAttoEth) external onlyPortfolio {
 		Book storage book = _book(bookId);
 		require(cashAttoEth <= book.feeCashAttoEth, 'Fee escrow insufficient');
@@ -377,6 +357,8 @@ contract SecurityPoolSettlementBook {
 	function quoteRedemption(uint64 bookId, uint256 questionId, uint256 outcomeShares) public view returns (uint256 cashAttoEth, uint256 unitsBurned) {
 		Book storage book = _book(bookId);
 		(Question memory state, uint64 frozenBookId) = question(bookId, questionId);
+		// Losing outcome tokens may remain after every payable claim is burned.
+		if (state.outcomeSupplyAttoShares == 0) return (0, 0);
 		require(outcomeShares <= state.outcomeSupplyAttoShares, 'Invalid outcome burn');
 		if (outcomeShares == 0) return (0, 0);
 		unitsBurned =
@@ -393,6 +375,7 @@ contract SecurityPoolSettlementBook {
 	function quoteRecoveryRep(uint64 bookId, uint256 questionId, uint256 outcomeShares) external view returns (uint256) {
 		Book storage book = _book(bookId);
 		(Question memory state, uint64 frozenBookId) = question(bookId, questionId);
+		if (state.outcomeSupplyAttoShares == 0) return 0;
 		require(outcomeShares <= state.outcomeSupplyAttoShares, 'Invalid outcome burn');
 		if (outcomeShares == 0 || (frozenBookId != 0 && frozenBooks[frozenBookId].sourceBookId != bookId)) return 0;
 		return

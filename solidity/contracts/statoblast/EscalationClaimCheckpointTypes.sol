@@ -9,8 +9,6 @@ struct EscalationClaimInterval {
 }
 
 struct EscalationClaimTransform {
-	uint256 repBeforeAttoRep;
-	uint256 repRemainingAttoRep;
 	uint256 consumedBeforeAttoRep;
 }
 

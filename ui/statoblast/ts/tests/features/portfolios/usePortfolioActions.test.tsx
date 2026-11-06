@@ -1,3 +1,5 @@
+import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
+import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
@@ -212,4 +214,14 @@ test('presentation-only accounts explain refresh without enabling writes or repl
 	expect(hook.state().ownerReason).toBe('Account refresh pending.')
 	await hook.setProps({ parameters: { ...parameters, accountAddress: undefined } })
 	expect(hook.state().ownerReason).toBe('Connect a wallet to send transactions')
+})
+
+test('portfolio creation rejects priority fees above the oracle funding bound before any transaction', async () => {
+	capitalClient().install()
+	const hook = await renderHookWithProps(usePortfolioActionsWrapper, { model: model() })
+	lifecycle.trackRendered(hook)
+	await act(() => hook.state().setPriorityFeeInput(formatUnits(MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS + 1n, 9)))
+	expect(hook.state().creationError).toContain('Oracle priority fee exceeds the report funding limit.')
+	await act(() => hook.state().setPriorityFeeInput(formatUnits(MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, 9)))
+	expect(hook.state().creationError).toBeUndefined()
 })

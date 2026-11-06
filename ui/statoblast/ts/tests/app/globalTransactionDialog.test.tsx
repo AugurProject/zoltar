@@ -17,7 +17,6 @@ import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal
 import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
 import { TransactionStepsContent } from '@zoltar/ui-core-shared/components/TransactionStepsContent.js'
 import { createMarketCreationSuccessPresentation, createMarketCreationTransactionIntent } from '@zoltar/ui-zoltar-shared/features/zoltarTransactionPresentations.js'
-import { createSecurityPoolCreationWarningPresentation } from '@zoltar/ui-statoblast-shared/features/transactionPresentations.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
@@ -519,10 +518,7 @@ describe('GlobalTransactionDialog', () => {
 
 	test('renders complete copyable question identifiers across success notices', async () => {
 		const questionId = '0x0000000000000000000000000000000000000000000000000000000000000001'
-		const presentations = [
-			createMarketCreationSuccessPresentation({ createQuestionHash: '0x1001', marketType: 'binary', questionId }),
-			createSecurityPoolCreationWarningPresentation({ deployPoolHash: '0x1002', initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n, questionId, securityPoolAddress: '0x00000000000000000000000000000000000000a1', statoblastSecurityMultiplierBps: 20_000n, universeId: 0n }, 'Pool created with a warning.'),
-		]
+		const presentations = [createMarketCreationSuccessPresentation({ createQuestionHash: '0x1001', marketType: 'binary', questionId })]
 		const renderedComponent = await renderIntoDocument(
 			<>
 				{presentations.map(presentation => (
@@ -533,7 +529,7 @@ describe('GlobalTransactionDialog', () => {
 		trackRendered(renderedComponent)
 
 		const identifierButtons = within(document.body).getAllByRole('button', { name: `Copy identifier ${questionId}` })
-		expect(identifierButtons).toHaveLength(2)
+		expect(identifierButtons).toHaveLength(1)
 		for (const identifierButton of identifierButtons) expect(identifierButton.textContent).toBe(questionId)
 	})
 

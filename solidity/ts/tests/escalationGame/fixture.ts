@@ -19,7 +19,6 @@ import {
 	test_statoblast_EscalationGameForkerHarness_EscalationGameForkerHarness as escalationGameForkerHarnessArtifact,
 	test_statoblast_FalseReturningERC20_FalseReturningERC20,
 	test_statoblast_IncompatibleEscalationGameProofVerifier_IncompatibleEscalationGameProofVerifier as incompatibleProofVerifierArtifact,
-	test_statoblast_SecurityPoolAncestorTestNode_SecurityPoolAncestorTestNode as securityPoolAncestorTestNodeArtifact,
 } from '../../types/contractArtifact'
 import { isIgnorableLogDecodeError } from '../logDecodeErrors'
 import { computeForkContinuationParentDepositIndex, createCarryProof as createCarryProofFromHelpers, readCarryLeafHash as readCarryLeafHashFromHelpers } from '../carryProofHelpers'
@@ -108,18 +107,6 @@ export function useEscalationGameFixture() {
 		})
 		const testSecurityPoolDeploymentReceipt = await client.waitForTransactionReceipt({ hash: testSecurityPoolDeploymentHash })
 		return requireContractAddress(testSecurityPoolDeploymentReceipt.contractAddress, 'proof test security pool deployment address')
-	}
-
-	async function deploySecurityPoolAncestorNode(parent: Address) {
-		const deploymentHash = await client.sendTransaction({
-			data: encodeDeployData({
-				abi: securityPoolAncestorTestNodeArtifact.abi,
-				bytecode: `0x${securityPoolAncestorTestNodeArtifact.evm.bytecode.object}`,
-				args: [parent],
-			}),
-		})
-		const deploymentReceipt = await client.waitForTransactionReceipt({ hash: deploymentHash })
-		return requireContractAddress(deploymentReceipt.contractAddress, 'security pool ancestor node deployment address')
 	}
 
 	async function deployIncompatibleProofVerifier() {
@@ -298,16 +285,6 @@ export function useEscalationGameFixture() {
 				}),
 		)
 
-	const applyTruthAuctionHaircutViaTestSecurityPool = async (testSecurityPoolAddress: Address, repToRemove: bigint) =>
-		await writeContractAndWait(client, async () =>
-			client.writeContract({
-				abi: escalationGameProofTestPoolArtifact.abi,
-				address: testSecurityPoolAddress,
-				functionName: 'applyTruthAuctionHaircut',
-				args: [repToRemove],
-			}),
-		)
-
 	const withdrawDepositViaProofTestSecurityPool = async (
 		testSecurityPoolAddress: Address,
 		outcome: QuestionOutcome,
@@ -459,7 +436,6 @@ export function useEscalationGameFixture() {
 		deployEscalationGameWithProofPool,
 		deployEscalationGameForkerHarness,
 		deployProofTestSecurityPool,
-		deploySecurityPoolAncestorNode,
 		deployIncompatibleProofVerifier,
 		deployFalseReturningToken,
 		startEscalation,
@@ -474,7 +450,6 @@ export function useEscalationGameFixture() {
 		assertEscrowAccounting,
 		assertLocalYesAccountingModel,
 		recordForkedEscrowForOutcomeViaTestSecurityPool,
-		applyTruthAuctionHaircutViaTestSecurityPool,
 		withdrawDepositViaProofTestSecurityPool,
 		withdrawDepositViaProofTestSecurityPoolWithGas,
 		claimDepositForWinningViaTestSecurityPool,

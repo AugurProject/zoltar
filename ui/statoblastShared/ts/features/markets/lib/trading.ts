@@ -3,7 +3,7 @@ import * as statoblastAppCopy from '../../../copy/app.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
-import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit, formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { tryParseBigIntListInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { tryParseTradingAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
@@ -42,11 +42,6 @@ export function getRemainingMintCapacity(mintingCapacityAttoEth: bigint | undefi
 	return mintingCapacityAttoEth > settlementCollateralAttoEth ? mintingCapacityAttoEth - settlementCollateralAttoEth : 0n
 }
 
-/** A listed pool's mintable remainder, the figure the pool directory and the pool header both show: zero once an escalation game starts, the backing capacity is zero or unknown, or the complete-set exchange rate is undefined. */
-export function getPoolRemainingMintCapacity(pool: { mintingCapacityAttoEth?: bigint | undefined; hasForkContinuationEscalationGame: boolean; ordinaryEscalationGameStarted: boolean; settlementCollateralAttoEth: bigint; shareTokenSupplyAttoShares: bigint }) {
-	return getRemainingMintCapacity(getPoolMintingCapacityAttoEth(pool), pool.settlementCollateralAttoEth, pool.shareTokenSupplyAttoShares)
-}
-
 /** The largest mint that fits both the remaining capacity and the wallet ETH left after the gas reserve. */
 export function getMaximumMintAmount(walletEthBalanceAttoEth: bigint | undefined, remainingMintCapacityAttoEth: bigint | undefined) {
 	if (walletEthBalanceAttoEth === undefined || remainingMintCapacityAttoEth === undefined) return undefined
@@ -56,6 +51,7 @@ export function getMaximumMintAmount(walletEthBalanceAttoEth: bigint | undefined
 
 export function estimateMintCheckpoint({
 	centralSettlement,
+	centralCheckpointTimestamp,
 	linearFee,
 	currentRetentionRate,
 	currentTimestamp,
@@ -67,6 +63,7 @@ export function estimateMintCheckpoint({
 	settlementCollateralAttoEth,
 	totalFeesOwedRemainder,
 }: {
+	centralCheckpointTimestamp?: bigint | undefined
 	centralSettlement?: boolean | undefined
 	linearFee?: LinearFeeState | undefined
 	currentRetentionRate: bigint | undefined
@@ -91,8 +88,16 @@ export function estimateMintCheckpoint({
 		totalFeesOwedRemainder === undefined
 	)
 		return undefined
-	// Central books track eligible logical time and pauses; wall-clock extrapolation would backcharge stale-price and fork intervals.
-	if (centralSettlement === true) return { estimatedRetentionFeeAttoEth: 0n, settlementCollateralAfterFeesAttoEth: settlementCollateralAttoEth }
+	if (centralSettlement === true) {
+		if (centralCheckpointTimestamp === undefined || linearFee === undefined) return undefined
+		// The simulated checkpoint includes historical pauses. Only future elapsed time
+		// can accrue again, bounded by the stream's remaining logical duration.
+		const elapsed = currentTimestamp > centralCheckpointTimestamp ? currentTimestamp - centralCheckpointTimestamp : 0n
+		const remaining = linearFee.endTime > lastUpdatedFeeAccumulator ? linearFee.endTime - lastUpdatedFeeAccumulator : 0n
+		const fees = (elapsed < remaining ? elapsed : remaining) * linearFee.rateAttoEthPerSecond
+		const estimatedRetentionFeeAttoEth = fees < settlementCollateralAttoEth ? fees : settlementCollateralAttoEth
+		return { estimatedRetentionFeeAttoEth, settlementCollateralAfterFeesAttoEth: settlementCollateralAttoEth - estimatedRetentionFeeAttoEth }
+	}
 	if (linearFee !== undefined) return previewLinearFeeCheckpoint({ linearFee, currentTimestamp, feeEndTimestamp, lastUpdatedFeeAccumulator, settlementCollateralAttoEth })
 	const checkpointTimestamp = currentTimestamp < feeEndTimestamp ? currentTimestamp : feeEndTimestamp
 	if (lastUpdatedFeeAccumulator >= checkpointTimestamp || feeEligibleUnderwritingLimitAttoEth === 0n) return { estimatedRetentionFeeAttoEth: 0n, settlementCollateralAfterFeesAttoEth: settlementCollateralAttoEth }
@@ -110,10 +115,6 @@ export function estimateMintCheckpoint({
 		estimatedRetentionFeeAttoEth,
 		settlementCollateralAfterFeesAttoEth: settlementCollateralAttoEth - estimatedRetentionFeeAttoEth,
 	}
-}
-
-export function formatStatoblastSecurityMultiplier(statoblastSecurityMultiplierBps: bigint) {
-	return formatMultiplier(statoblastSecurityMultiplierBps, 4)
 }
 
 export function hasRepBackedPoolWithNoActiveCapacityOwnership(totalPoolHeldAttoRep: bigint | undefined, feeEligibleUnderwritingLimitAttoEth: bigint | undefined) {

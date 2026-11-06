@@ -83,10 +83,10 @@ describe('UI build dependency direction', () => {
 		const commands = getAppBuildCommands(UI_APP_IDS)
 		expect(commands.filter(command => command[0] === 'x').map(command => command[3])).toEqual(['coreShared', 'zoltarShared', 'zoltar', 'statoblastShared', 'statoblast', 'trading', 'openoracle'].map(packageId => `ui/${packageId}/tsconfig.json`))
 		expect(commands.filter(command => command[0]?.endsWith('/vendor.mts') === true)).toEqual([
-			['./tooling/ui/vendor.mts', 'zoltar', '--scoped-artifacts'],
-			['./tooling/ui/vendor.mts', 'statoblast', '--scoped-artifacts'],
-			['./tooling/ui/vendor.mts', 'trading', '--scoped-artifacts'],
-			['./tooling/ui/vendor.mts', 'openoracle', '--scoped-artifacts'],
+			['./tooling/ui/vendor.mts', 'zoltar'],
+			['./tooling/ui/vendor.mts', 'statoblast'],
+			['./tooling/ui/vendor.mts', 'trading'],
+			['./tooling/ui/vendor.mts', 'openoracle'],
 		])
 		expect(commands.filter(command => command[0]?.endsWith('/workers.mts') === true).map(command => command[1])).toEqual([...UI_APP_IDS])
 		expect(commands.filter(command => command.includes('ensure-contract-artifacts'))).toHaveLength(0)
@@ -182,7 +182,7 @@ describe('UI watcher build dependencies', () => {
 		await builds.runProjectArtifactBuild('contract output')
 		expect(builds.calls).toEqual(['vendor', 'worker', 'reload'])
 		expect(builds.commands).toEqual([
-			[process.execPath, builds.appPaths.vendorBuildScript, 'trading', '--scoped-artifacts'],
+			[process.execPath, builds.appPaths.vendorBuildScript, 'trading'],
 			[process.execPath, builds.appPaths.workersBuildScript, 'trading', '--artifacts-current', '--prune-stale-snapshots'],
 		])
 		expect(builds.workingDirectories).toEqual([builds.appPaths.coreSharedRoot, builds.appPaths.coreSharedRoot])

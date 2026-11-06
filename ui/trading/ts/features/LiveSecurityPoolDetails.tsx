@@ -137,7 +137,6 @@ export function LiveSecurityPoolDetails({
 								<DataGrid dense>
 									<MetricField label={liveCopy.securityMultiplier}>{formatMultiplier(market.statoblastSecurityMultiplierBps, 4)}</MetricField>
 									<MetricField label={liveCopy.initialReportPriorityFee}>{formatInitialReportPriorityFee(market.initialReportPriorityFeeAttoEthPerGas)}</MetricField>
-									<MetricField label={liveCopy.registeredVaults}>{market.vaultCount.toString()}</MetricField>
 									<MetricField label={liveCopy.retentionRatePerSecond}>{formatMultiplier(market.currentRetentionRate, 18, 12)}</MetricField>
 									<MetricField label={liveCopy.commitmentLimits}>{formatEthAmountPair(market.totalUnderwritingLimitAttoEth, market.feeEligibleUnderwritingLimitAttoEth)}</MetricField>
 								</DataGrid>

@@ -1,35 +1,25 @@
 import { expect, test } from 'bun:test'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { createWalletClient, defineChain, encodeAbiParameters, encodeFunctionData, parseTransaction, privateKeyToAccount, type Hex } from '@zoltar/bot-shared/ethereum'
+import { createWalletClient, defineChain, privateKeyToAccount, type Hex } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
-import { securityPoolAbi, securityPoolFactoryAbi } from '@zoltar/bot-shared/contracts/abi'
-import { prepareSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
 import { parseSettings } from '#config/settings'
 import { loadSettings, saveSettings } from '#config/settings-store'
 import { createGoLiveControls } from '#core/go-live-controls'
 import { recoverPendingTransactions } from '#execution/recovery'
 import { initialRuntimeState, loadDurableState, saveDurableState } from '#state/operator-state'
+import { portfolioReceiptIntent } from './portfolio-receipt-fixture.ts'
 
-async function fixture(kind: 'fees' | 'deployment' = 'fees') {
-	const directory = await mkdtemp(join(tmpdir(), 'private-recovery-'))
+async function fixture() {
+	const directory = await mkdtemp(join(tmpdir(), 'portfolio-private-recovery-'))
+	const { intent, receipt } = await portfolioReceiptIntent()
+	intent.mode = 'private'
 	const settings = parseSettings(JSON.parse(await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).text()))
-	const account = privateKeyToAccount(`0x${'01'.repeat(32)}`)
-	const target = kind === 'fees' ? '0x0000000000000000000000000000000000000020' : settings.deployment.securityPoolFactory
-	const desired = { universeId: 0n, questionId: 1n, statoblastSecurityMultiplierBps: 20_000n, initialReportPriorityFeeAttoEthPerGas: 1n }
-	settings.desiredPools = [desired]
-	settings.approvedUniverses = [0n]
-	settings.strategy.allowAutomaticPoolCreation = true
-	if (account.signTransaction === undefined) throw new Error('Test account cannot sign')
-	const data =
-		kind === 'fees'
-			? encodeFunctionData({ abi: securityPoolAbi, functionName: 'redeemFees', args: [account.address] })
-			: encodeFunctionData({ abi: securityPoolFactoryAbi, functionName: 'deployOriginSecurityPool', args: [desired.universeId, desired.questionId, desired.statoblastSecurityMultiplierBps, desired.initialReportPriorityFeeAttoEthPerGas] })
-	const signed = await prepareSignedTransaction({ baseFeePerGas: 1n, blockNumber: 100n, chainId: settings.network.chainId, data, from: account.address, gasEstimate: 250_000n, nonce: 0n, signTransaction: account.signTransaction, to: target })
-	const control = { head: 140n, nonce: 0n, pendingNonce: 0n, fail: false, simulationFails: false, baseFee: 1n, receipt: false, advanceDuringSimulation: 0n, claimableFees: 10n ** 18n, systemState: 0n, universeId: 0n }
-	const broadcasts: unknown[] = []
-	const persistedWindows: string[] = []
+	settings.network.chainId = 1
+	settings.runtime.stateFile = join(directory, 'state.json')
+	const control = { head: 140n, nonce: 0n, receipt: false }
+	const requests: string[] = []
 	const server = Bun.serve({
 		hostname: '127.0.0.1',
 		port: 0,
@@ -37,68 +27,43 @@ async function fixture(kind: 'fees' | 'deployment' = 'fees') {
 			const payload = await request.json()
 			const method = Reflect.get(payload, 'method')
 			const id = Reflect.get(payload, 'id')
+			if (typeof method !== 'string') throw new Error('Missing JSON-RPC method')
+			requests.push(method)
 			let result: unknown
 			if (method === 'eth_getTransactionReceipt')
 				result = control.receipt
-					? { blockHash: `0x${'11'.repeat(32)}`, blockNumber: '0x64', contractAddress: null, cumulativeGasUsed: '0x5208', effectiveGasPrice: '0x1', from: account.address, gasUsed: '0x5208', logs: [], status: '0x1', to: target, transactionHash: signed.hash, transactionIndex: '0x0', type: '0x2' }
+					? { blockHash: receipt.blockHash, blockNumber: '0x64', contractAddress: null, cumulativeGasUsed: '0x5208', effectiveGasPrice: '0x1', from: intent.sender, gasUsed: '0x5208', logs: [], status: '0x1', to: receipt.to, transactionHash: intent.hash, transactionIndex: '0x0', type: '0x2' }
 					: null
-			else if (method === 'eth_getTransactionCount') {
-				const pendingNonce = control.pendingNonce > control.nonce ? control.pendingNonce : control.nonce
-				const nonce = Reflect.get(payload, 'params')?.[1] === 'pending' ? pendingNonce : control.nonce
-				result = `0x${nonce.toString(16)}`
-			} else if (method === 'eth_blockNumber') result = `0x${control.head.toString(16)}`
-			else if (method === 'eth_getBlockByNumber') result = { number: Reflect.get(payload, 'params')?.[0] === 'latest' ? `0x${control.head.toString(16)}` : Reflect.get(payload, 'params')?.[0], hash: `0x${'11'.repeat(32)}`, baseFeePerGas: `0x${control.baseFee.toString(16)}`, timestamp: '0x1', transactions: [] }
-			else if (method === 'eth_call') {
-				const data = Reflect.get(payload, 'params')?.[0]?.data
-				if (data === encodeFunctionData({ abi: securityPoolAbi, functionName: 'securityVaults', args: [account.address] })) return Response.json({ id, jsonrpc: '2.0', result: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [0n, 0n, control.claimableFees, 0n]) })
-				if (data === encodeFunctionData({ abi: securityPoolAbi, functionName: 'systemState' })) return Response.json({ id, jsonrpc: '2.0', result: encodeAbiParameters([{ type: 'uint256' }], [control.systemState]) })
-				if (data === encodeFunctionData({ abi: securityPoolAbi, functionName: 'universeId' })) return Response.json({ id, jsonrpc: '2.0', result: encodeAbiParameters([{ type: 'uint256' }], [control.universeId]) })
-				if (control.simulationFails) return Response.json({ id, jsonrpc: '2.0', error: { code: -32000, message: 'execution reverted' } })
-				control.head += control.advanceDuringSimulation
-				result = '0x'
-			} else if (method === 'eth_sendPrivateTransaction') {
-				broadcasts.push(Reflect.get(payload, 'params'))
-				const disk = JSON.parse(await Bun.file(settings.runtime.stateFile).text())
-				persistedWindows.push(disk.pendingTransactions[0].maxBlockNumber)
-				if (control.fail) return Response.json({ id, jsonrpc: '2.0', error: { code: -32000, message: 'relay unavailable' } })
-				result = signed.hash
-			} else if (method === 'eth_sendRawTransaction') {
-				broadcasts.push(Reflect.get(payload, 'params'))
-				return Response.json({ id, jsonrpc: '2.0', error: { code: -32000, message: 'already known' } })
-			} else throw new Error(`Unexpected RPC ${String(method)}`)
+			else if (method === 'eth_getTransactionCount') result = `0x${control.nonce.toString(16)}`
+			else if (method === 'eth_blockNumber') result = `0x${control.head.toString(16)}`
+			else if (method === 'eth_getBlockByNumber') result = { number: Reflect.get(payload, 'params')?.[0], hash: receipt.blockHash, baseFeePerGas: '0x1', timestamp: '0x1', transactions: [] }
+			else return Response.json({ id, jsonrpc: '2.0', error: { code: -32000, message: `Unexpected recovery RPC ${method}` } })
 			return Response.json({ id, jsonrpc: '2.0', result })
 		},
 	})
 	const url = server.url.toString()
-	settings.runtime.stateFile = join(directory, 'state.json')
 	settings.connectivity = { readRpcUrl: url, quorumRpcUrls: [], publicRpcUrls: [], rpcQuorum: 1 }
-	settings.selectedPools = [target]
 	settings.submission = { mode: 'private', relayUrls: [url], minimumBundleRelaySuccesses: 1 }
-	const chain = defineChain({ id: settings.network.chainId, name: 'Recovery test', nativeCurrency: { decimals: 18, name: 'Ether', symbol: 'ETH' }, rpcUrls: { default: { http: [url] } } })
-	const wallet = createWalletClient({ account, chain, transport: custom({ request: async () => '0x1' }) })
-	const state = initialRuntimeState(false, account.address, settings.network.chainId)
-	state.pendingTransactions.push({
-		hash: signed.hash,
-		kind,
-		label: 'Redeem fees',
-		maxBlockNumber: signed.maxBlockNumber,
-		mode: 'private',
-		nonce: 0n,
-		receiptExpectation: { type: 'transaction' },
-		requiresMarketEvidence: false,
-		sender: account.address,
-		serializedTransaction: signed.serializedTransaction,
-		submissionBlock: 100n,
+	const chain = defineChain({ id: 1, name: 'Recovery', nativeCurrency: { decimals: 18, name: 'Ether', symbol: 'ETH' }, rpcUrls: { default: { http: [url] } } })
+	const wallet = createWalletClient({
+		account: privateKeyToAccount(`0x${'01'.repeat(32)}`),
+		chain,
+		transport: custom({
+			request: async () => {
+				throw new Error('Recovery must not submit through the wallet')
+			},
+		}),
 	})
+	const state = initialRuntimeState(false, intent.sender, 1)
+	state.pendingTransactions.push(intent)
 	await saveDurableState(settings.runtime.stateFile, state)
 	return {
 		settings,
 		wallet,
 		state,
-		signed,
+		intent,
 		control,
-		broadcasts,
-		persistedWindows,
+		requests,
 		async close() {
 			server.stop(true)
 			await rm(directory, { recursive: true, force: true })
@@ -106,177 +71,75 @@ async function fixture(kind: 'fees' | 'deployment' = 'fees') {
 	}
 }
 
-for (const head of [110n, 140n])
-	test(`renews the private envelope at block ${head} before broadcast without changing the signature`, async () => {
-		const f = await fixture()
-		try {
-			f.control.head = head
-			expect(await recoverPendingTransactions(f.settings, f.wallet, f.state)).toBe(true)
-			expect(f.broadcasts).toEqual([[{ maxBlockNumber: `0x${(head + 25n).toString(16)}`, tx: f.signed.serializedTransaction }]])
-			expect(f.persistedWindows).toEqual([(head + 25n).toString()])
-			expect(f.state.pendingTransactions[0]?.hash).toBe(f.signed.hash)
-		} finally {
-			await f.close()
-		}
-	})
-
-for (const kind of ['fees', 'deployment'] as const)
-	for (const mode of ['public', 'private'] as const)
-		test(`recovers its own unmined ${mode} ${kind} transaction after restart without treating its pending nonce as consumed`, async () => {
-			const f = await fixture(kind)
+for (const mode of ['public', 'private'] as const)
+	for (const head of [110n, 140n]) {
+		test(`retains signed ${mode} intent at block ${head} without renewing or broadcasting stale portfolio decisions`, async () => {
+			const f = await fixture()
 			try {
-				f.control.pendingNonce = 1n
-				const intent = f.state.pendingTransactions[0]
-				if (intent === undefined) throw new Error('Missing test intent')
-				intent.mode = mode
-				f.settings.submission.mode = mode
-				f.settings.connectivity.publicRpcUrls = [f.settings.connectivity.readRpcUrl]
+				f.intent.mode = mode
+				f.control.head = head
+				const original = { ...f.intent }
 				await saveDurableState(f.settings.runtime.stateFile, f.state)
-				const restarted = initialRuntimeState(false, f.wallet.account.address, f.settings.network.chainId)
-				restarted.pendingTransactions = (await loadDurableState(f.settings.runtime.stateFile, f.settings.network.chainId)).pendingTransactions
-				expect(await recoverPendingTransactions(f.settings, f.wallet, restarted)).toBe(true)
-				expect(f.broadcasts).toEqual(mode === 'public' ? [[f.signed.serializedTransaction]] : [[{ maxBlockNumber: `0x${(f.control.head + 25n).toString(16)}`, tx: f.signed.serializedTransaction }]])
-				expect(restarted.pendingTransactions[0]?.hash).toBe(f.signed.hash)
-				expect(restarted.pendingTransactions[0]?.reconciliationReason).toBeUndefined()
-				expect((await loadDurableState(f.settings.runtime.stateFile, f.settings.network.chainId)).pendingTransactions[0]?.reconciliationReason).toBeUndefined()
-				f.control.receipt = true
-				f.control.nonce = 1n
-				expect(await recoverPendingTransactions(f.settings, f.wallet, restarted)).toBe(false)
-				expect(restarted.pendingTransactions).toHaveLength(0)
-				expect(f.broadcasts).toHaveLength(1)
+				f.state.pendingTransactions = (await loadDurableState(f.settings.runtime.stateFile, 1)).pendingTransactions
+				await expect(recoverPendingTransactions(f.settings, f.wallet, f.state)).rejects.toThrow('automatic replay is disabled')
+				const pending = (await loadDurableState(f.settings.runtime.stateFile, 1)).pendingTransactions[0]
+				expect(pending).toMatchObject(original)
+				expect(pending?.reconciliationReason).toContain('replace signer nonce 0')
+				expect(f.requests).toEqual(['eth_getTransactionReceipt', 'eth_getTransactionCount'])
 			} finally {
 				await f.close()
 			}
 		})
+	}
 
-test('persists renewal through broadcast failure and restart, preserving privacy and calldata validity', async () => {
+test('a consumed nonce without a receipt remains tracked and never falls back to public broadcast', async () => {
 	const f = await fixture()
 	try {
-		const intent = f.state.pendingTransactions[0]
-		if (intent === undefined) throw new Error('Missing test intent')
-		intent.lastValidBlockNumber = 150n
-		f.control.fail = true
-		await expect(recoverPendingTransactions(f.settings, f.wallet, f.state)).rejects.toThrow('relay unavailable')
-		expect(f.persistedWindows).toEqual(['150'])
-		const durable = await loadDurableState(f.settings.runtime.stateFile, f.settings.network.chainId)
-		const restarted = initialRuntimeState(false, f.wallet.account.address, f.settings.network.chainId)
-		restarted.pendingTransactions = durable.pendingTransactions
-		expect(restarted.pendingTransactions[0]).toMatchObject({ maxBlockNumber: 150n, lastValidBlockNumber: 150n, serializedTransaction: f.signed.serializedTransaction, nonce: 0n, hash: f.signed.hash })
-		f.control.fail = false
-		f.control.head = 145n
-		f.settings.submission.mode = 'public'
-		await recoverPendingTransactions(f.settings, f.wallet, restarted)
-		expect(f.broadcasts).toEqual(Array.from({ length: 2 }, () => [{ maxBlockNumber: '0x96', tx: f.signed.serializedTransaction }]))
-		f.control.head = 150n
-		await expect(recoverPendingTransactions(f.settings, f.wallet, restarted)).rejects.toThrow('calldata validity deadline has expired')
-		expect(f.broadcasts).toHaveLength(2)
-		expect((await loadDurableState(f.settings.runtime.stateFile, f.settings.network.chainId)).pendingTransactions[0]?.reconciliationReason).toContain('replace signer nonce 0')
+		f.control.nonce = 1n
+		await expect(recoverPendingTransactions(f.settings, f.wallet, f.state)).rejects.toThrow('nonce was consumed')
+		expect((await loadDurableState(f.settings.runtime.stateFile, 1)).pendingTransactions[0]?.hash).toBe(f.intent.hash)
+		expect(f.requests).toEqual(['eth_getTransactionReceipt', 'eth_getTransactionCount'])
 	} finally {
 		await f.close()
 	}
 })
 
-for (const reason of ['nonce', 'market', 'migration', 'settings', 'simulation', 'fees'] as const)
-	test(`retains unresolved intents without broadcasting when blocked by ${reason}`, async () => {
-		const f = await fixture()
-		try {
-			const intent = f.state.pendingTransactions[0]
-			if (intent === undefined) throw new Error('Missing test intent')
-			if (reason === 'fees') f.control.baseFee = 10n ** 20n
-			if (reason === 'nonce') f.control.nonce = 1n
-			if (reason === 'market') intent.requiresMarketEvidence = true
-			if (reason === 'migration') intent.kind = 'migration'
-			if (reason === 'settings') f.settings.selectedPools = []
-			if (reason === 'simulation') f.control.simulationFails = true
-			await expect(recoverPendingTransactions(f.settings, f.wallet, f.state)).rejects.toThrow()
-			expect(f.broadcasts).toHaveLength(0)
-			expect(f.state.pendingTransactions).toHaveLength(1)
-			expect((await loadDurableState(f.settings.runtime.stateFile, f.settings.network.chainId)).pendingTransactions).toHaveLength(1)
-		} finally {
-			await f.close()
-		}
-	})
-
-test('replays only an origin deployment still authorized by current settings', async () => {
-	const f = await fixture('deployment')
-	try {
-		await recoverPendingTransactions(f.settings, f.wallet, f.state)
-		expect(f.persistedWindows).toEqual(['165'])
-		f.settings.strategy.allowAutomaticPoolCreation = false
-		await expect(recoverPendingTransactions(f.settings, f.wallet, f.state)).rejects.toThrow('no longer authorized')
-		expect(f.broadcasts).toHaveLength(1)
-	} finally {
-		await f.close()
-	}
-})
-
-test('does not broadcast when renewed metadata cannot be persisted', async () => {
+test('failed persistence cannot discard an ambiguous signed transaction', async () => {
 	const f = await fixture()
 	try {
-		f.settings.runtime.stateFile = join(f.settings.runtime.stateFile, 'impossible.json')
+		const originalPath = f.settings.runtime.stateFile
+		const blocker = join(dirname(originalPath), 'blocked')
+		await writeFile(blocker, 'not a directory')
+		f.settings.runtime.stateFile = join(blocker, 'state.json')
 		await expect(recoverPendingTransactions(f.settings, f.wallet, f.state)).rejects.toThrow()
-		expect(f.broadcasts).toHaveLength(0)
 		expect(f.state.pendingTransactions).toHaveLength(1)
+		expect((await loadDurableState(originalPath, 1)).pendingTransactions[0]?.hash).toBe(f.intent.hash)
+		expect(f.requests).toEqual(['eth_getTransactionReceipt', 'eth_getTransactionCount'])
 	} finally {
 		await f.close()
 	}
 })
 
-test('requires quorum agreement on the current block before renewing the envelope', async () => {
-	const f = await fixture()
-	const secondary = Bun.serve({
-		hostname: '127.0.0.1',
-		port: 0,
-		async fetch(request) {
-			const payload = await request.json()
-			const response = await fetch(f.settings.connectivity.readRpcUrl, { method: 'POST', body: JSON.stringify(payload) })
-			const body = await response.json()
-			if (Reflect.get(payload, 'method') === 'eth_getBlockByNumber') body.result.hash = `0x${'22'.repeat(32)}`
-			return Response.json(body)
-		},
-	})
-	try {
-		f.settings.connectivity.quorumRpcUrls = [secondary.url.toString()]
-		f.settings.connectivity.rpcQuorum = 2
-		await expect(recoverPendingTransactions(f.settings, f.wallet, f.state)).rejects.toThrow()
-		expect(f.broadcasts).toHaveLength(0)
-		expect(f.state.pendingTransactions[0]?.maxBlockNumber).toBe(125n)
-	} finally {
-		secondary.stop(true)
-		await f.close()
-	}
-})
-
-test('recovers after stopping between window persistence and broadcast', async () => {
+test('shutdown leaves pending recovery untouched without starting RPC work', async () => {
 	const f = await fixture()
 	try {
-		let stoppingChecks = 0
-		await recoverPendingTransactions(f.settings, f.wallet, f.state, undefined, () => ++stoppingChecks === 2)
-		expect(f.broadcasts).toHaveLength(0)
-		const durable = await loadDurableState(f.settings.runtime.stateFile, f.settings.network.chainId)
-		expect(durable.pendingTransactions[0]?.maxBlockNumber).toBe(165n)
-		const restarted = initialRuntimeState(false, f.wallet.account.address, f.settings.network.chainId)
-		restarted.pendingTransactions = durable.pendingTransactions
-		f.control.head = 170n
-		await recoverPendingTransactions(f.settings, f.wallet, restarted)
-		expect(f.persistedWindows).toEqual(['195'])
-		expect(restarted.pendingTransactions[0]?.serializedTransaction).toBe(f.signed.serializedTransaction)
+		expect(await recoverPendingTransactions(f.settings, f.wallet, f.state, undefined, () => true)).toBe(true)
+		expect(f.requests).toEqual([])
+		expect((await loadDurableState(f.settings.runtime.stateFile, 1)).pendingTransactions[0]?.hash).toBe(f.intent.hash)
 	} finally {
 		await f.close()
 	}
 })
 
-test('resolves a canonical finalized receipt before considering an expired window', async () => {
+test('a finalized receipt resolves an expired private envelope before nonce reconciliation', async () => {
 	const f = await fixture()
 	try {
 		f.control.receipt = true
-		const intent = f.state.pendingTransactions[0]
-		if (intent === undefined) throw new Error('Missing test intent')
-		intent.lastValidBlockNumber = 100n
 		expect(await recoverPendingTransactions(f.settings, f.wallet, f.state)).toBe(false)
-		expect(f.broadcasts).toHaveLength(0)
 		expect(f.state.pendingTransactions).toHaveLength(0)
-		expect((await loadDurableState(f.settings.runtime.stateFile, f.settings.network.chainId)).pendingTransactions).toHaveLength(0)
+		expect((await loadDurableState(f.settings.runtime.stateFile, 1)).pendingTransactions).toHaveLength(0)
+		expect(f.requests).not.toContain('eth_getTransactionCount')
+		expect(f.requests.every(method => ['eth_getTransactionReceipt', 'eth_blockNumber', 'eth_getBlockByNumber'].includes(method))).toBe(true)
 	} finally {
 		await f.close()
 	}
@@ -334,93 +197,3 @@ test('restores the authenticated pending signer after restarting with a differen
 		await f.close()
 	}
 })
-
-test('derives the future window after a slow simulation advances the chain', async () => {
-	const f = await fixture()
-	try {
-		f.control.advanceDuringSimulation = 30n
-		await recoverPendingTransactions(f.settings, f.wallet, f.state)
-		expect(f.persistedWindows).toEqual(['195'])
-	} finally {
-		await f.close()
-	}
-})
-
-for (const reason of ['zero fees', 'below threshold', 'forked pool', 'unapproved universe'] as const)
-	test(`retains fee redemption without broadcasting after ${reason}`, async () => {
-		const f = await fixture()
-		try {
-			if (reason === 'zero fees') {
-				f.control.claimableFees = 0n
-				f.settings.strategy.redeemFeesAboveAttoEth = 0n
-			}
-			if (reason === 'below threshold') f.control.claimableFees = 1n
-			if (reason === 'forked pool') f.control.systemState = 1n
-			if (reason === 'unapproved universe') f.control.universeId = 1n
-			await expect(recoverPendingTransactions(f.settings, f.wallet, f.state)).rejects.toThrow('Fee redemption')
-			expect(f.broadcasts).toHaveLength(0)
-			expect(f.state.pendingTransactions).toHaveLength(1)
-			expect((await loadDurableState(f.settings.runtime.stateFile, f.settings.network.chainId)).pendingTransactions[0]?.reconciliationReason).toContain('Fee redemption')
-		} finally {
-			await f.close()
-		}
-	})
-
-test('allows fee redemption exactly at a positive configured threshold', async () => {
-	const f = await fixture()
-	try {
-		f.control.claimableFees = f.settings.strategy.redeemFeesAboveAttoEth
-		await recoverPendingTransactions(f.settings, f.wallet, f.state)
-		expect(f.broadcasts).toHaveLength(1)
-	} finally {
-		await f.close()
-	}
-})
-
-test('requires quorum agreement on claimable fees before replay', async () => {
-	const f = await fixture()
-	const secondary = Bun.serve({
-		hostname: '127.0.0.1',
-		port: 0,
-		async fetch(request) {
-			const payload = await request.json()
-			const response = await fetch(f.settings.connectivity.readRpcUrl, { method: 'POST', body: JSON.stringify(payload) })
-			const body = await response.json()
-			if (Reflect.get(payload, 'method') === 'eth_call' && Reflect.get(payload, 'params')?.[0]?.data === encodeFunctionData({ abi: securityPoolAbi, functionName: 'securityVaults', args: [f.wallet.account.address] }))
-				body.result = encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [0n, 0n, 0n, 0n])
-			return Response.json(body)
-		},
-	})
-	try {
-		f.settings.connectivity.quorumRpcUrls = [secondary.url.toString()]
-		f.settings.connectivity.rpcQuorum = 2
-		await expect(recoverPendingTransactions(f.settings, f.wallet, f.state)).rejects.toThrow('RPC disagreement')
-		expect(f.broadcasts).toHaveLength(0)
-		expect(f.state.pendingTransactions[0]?.maxBlockNumber).toBe(125n)
-	} finally {
-		secondary.stop(true)
-		await f.close()
-	}
-})
-
-for (const exceedsLimit of [true, false])
-	test(`checks signed maximum gas cost against the current spending limit (exceeds=${exceedsLimit})`, async () => {
-		const f = await fixture()
-		try {
-			const transaction = parseTransaction(f.signed.serializedTransaction)
-			if (transaction.gas === undefined || transaction.maxFeePerGas === undefined) throw new Error('Missing signed gas limits')
-			f.settings.strategy.maximumGasCostAttoEth = transaction.gas * transaction.maxFeePerGas - (exceedsLimit ? 1n : 0n)
-			if (exceedsLimit) {
-				await expect(recoverPendingTransactions(f.settings, f.wallet, f.state)).rejects.toThrow('current maximum gas cost')
-				expect(f.broadcasts).toHaveLength(0)
-				const durable = await loadDurableState(f.settings.runtime.stateFile, f.settings.network.chainId)
-				expect(durable.pendingTransactions[0]).toMatchObject({ maxBlockNumber: 125n, serializedTransaction: f.signed.serializedTransaction })
-				expect(durable.pendingTransactions[0]?.reconciliationReason).toContain('current maximum gas cost')
-			} else {
-				await recoverPendingTransactions(f.settings, f.wallet, f.state)
-				expect(f.broadcasts).toHaveLength(1)
-			}
-		} finally {
-			await f.close()
-		}
-	})

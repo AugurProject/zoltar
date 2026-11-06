@@ -1,5 +1,5 @@
+import { discoverPortfolioEventDependencies } from './portfolio-discovery.ts'
 import { transactionCallTrace, unsupportedTraceError } from './transaction-selection.ts'
-import { dependencyDiscoveryKinds } from '../contract-discovery.ts'
 import { canonicalBlockLogs, type IndexedBlock, type RichListBalance, type StoredTransaction } from '../database.ts'
 import { readRichListBalance } from '../direct-observations.ts'
 import { type Address, getAddress, type Hash, type Log, type BlockTransaction, type TransactionReceipt, zeroAddress } from '../ethereum.ts'
@@ -8,7 +8,7 @@ import { decodeAction, decodeLogRecord, discoveriesFrom, tokenAddressesFrom } fr
 import { sampleEntityState } from '../snapshot-client.ts'
 import { bigintToSafeNumber, unixSecondsToDate } from '../time.ts'
 import type { ContractMetadata, StoredLog, TokenMetadata } from '../types.ts'
-import { erc20BalanceAbi, erc20MetadataAbi, mapLimit, priceCoordinatorDependenciesAbi, prunedTokenMetadataError, type RpcBlockHeader, readTokenMetadata as readTokenMetadataFromRpc, tokenMetadataNeedsRead } from './planning.ts'
+import { erc20BalanceAbi, erc20MetadataAbi, mapLimit, prunedTokenMetadataError, type RpcBlockHeader, readTokenMetadata as readTokenMetadataFromRpc, tokenMetadataNeedsRead } from './planning.ts'
 import { type BlockHeaderReader, discoverStateStartBlock, getBlockHeader, type HistoricalStateContext } from './network-provider.ts'
 import { assertLease, type NetworkIndexerState, type ProviderState, requireLease } from './network-state.ts'
 
@@ -75,6 +75,7 @@ export async function indexBlock(
 	}
 	await fetchMissingEvidence()
 	const discovered: ContractMetadata[] = []
+	const dependencyEvents = new Set<string>()
 	while (true) {
 		const discoveredAddresses: Address[] = []
 		const labels = labelsFrom(contracts)
@@ -84,7 +85,21 @@ export async function indexBlock(
 				const contract = contracts.get(emitter)
 				if (contract === undefined) continue
 				const decoded = decodeLogRecord(contract.kind, log.topics, log.data, labels)
-				for (const candidate of discoveriesFrom(decoded, contracts)) {
+				const eventKey = `${receipt.transactionHash}:${log.logIndex}`
+				const dependencies = dependencyEvents.has(eventKey)
+					? []
+					: await discoverPortfolioEventDependencies(contract, decoded, async (address, abi, functionName, args) => {
+							const requestedBlock = number < state.stateBoundary.startBlock ? observedHead : number
+							const result = await readWithPrunedStateFallback(
+								requestedBlock,
+								observedHead,
+								blockNumber => state.providers.client.readContract({ address, abi, functionName, args, blockNumber }),
+								prunedBlock => discoverStateStartBlock(state, observedHead, prunedBlock, true),
+							)
+							return result.value
+						})
+				dependencyEvents.add(eventKey)
+				for (const candidate of [...discoveriesFrom(decoded, contracts), ...dependencies]) {
 					const key = candidate.address.toLowerCase()
 					if (contracts.has(key)) continue
 					const metadata: ContractMetadata = {
@@ -97,38 +112,6 @@ export async function indexBlock(
 					discovered.push(metadata)
 					discoveredAddresses.push(metadata.address)
 				}
-			}
-		}
-		for (const coordinator of discovered.filter(contract => contract.kind === 'priceCoordinator')) {
-			const requestedStateBlock = number < state.stateBoundary.startBlock ? observedHead : number
-			const registryRead = await readWithPrunedStateFallback(
-				requestedStateBlock,
-				observedHead,
-				async blockNumber =>
-					await state.providers.client.readContract({
-						address: coordinator.address,
-						abi: priceCoordinatorDependenciesAbi,
-						functionName: 'liquidationApprovalRegistry',
-						blockNumber,
-					}),
-				async prunedBlock => discoverStateStartBlock(state, observedHead, prunedBlock, true),
-			)
-			if (registryRead.blockNumber !== number) console.warn(`[${state.network.id}] historical state unavailable at block #${number} while discovering ${coordinator.label} dependencies; used observed head #${registryRead.blockNumber} instead`)
-			const registryResult = registryRead.value
-			if (typeof registryResult !== 'string') throw new Error(`${coordinator.label}.liquidationApprovalRegistry returned an invalid address`)
-			const registry = getAddress(registryResult)
-			if (!contracts.has(registry.toLowerCase())) {
-				const metadata: ContractMetadata = {
-					address: registry,
-					kind: dependencyDiscoveryKinds.liquidationApprovalRegistry,
-					label: 'Liquidation Approval Registry',
-					provenance: `${coordinator.label}.liquidationApprovalRegistry`,
-					discoveryBlock: number,
-					discoveryTxHash: coordinator.discoveryTxHash,
-				}
-				contracts.set(registry.toLowerCase(), metadata)
-				discovered.push(metadata)
-				discoveredAddresses.push(registry)
 			}
 		}
 		if (discoveredAddresses.length === 0) break

@@ -25,24 +25,24 @@ test('claim checkpoint batches use one base commitment and forward-ordered trans
 	if (transform === undefined) throw new Error('Checkpoint transforms missing')
 	assert.deepStrictEqual(
 		getArray(transform['components'], 'Transform fields missing').map(entry => getRecord(entry, 'Invalid transform field')['name']),
-		['repBeforeAttoRep', 'repRemainingAttoRep', 'consumedBeforeAttoRep'],
+		['consumedBeforeAttoRep'],
 	)
 })
 
-test('compact checkpoint calldata adds one discovery word and removes seven eight-step commitment words', () => {
+test('checkpoint calldata retains one commitment and only principal compaction per transform', () => {
 	const previousAbi = parseAbi(['function processClaimCheckpoint(uint8,uint256,uint256,uint256,uint256,((uint256,uint256,uint256),bytes32)[])'])
-	const compactAbi = parseAbi(['function processClaimCheckpoint(uint8,uint256,uint256,uint256,uint256,bytes32,(uint256,uint256,uint256)[])'])
+	const compactAbi = parseAbi(['function processClaimCheckpoint(uint8,uint256,uint256,uint256,uint256,bytes32,(uint256)[])'])
 	const tuple = [1, 33n, 99n, 1n, 8n] as const
 	const transform = [101n, 98n, 1n] as const
 	for (const count of [0, 1, 8]) {
 		const transforms = Array.from({ length: count }, () => transform)
 		const previous = encodeFunctionData({ abi: previousAbi, functionName: 'processClaimCheckpoint', args: [...tuple, transforms.map(item => [item, zeroHash] as const)] })
-		const compact = encodeFunctionData({ abi: compactAbi, functionName: 'processClaimCheckpoint', args: [...tuple, zeroHash, transforms] })
+		const compact = encodeFunctionData({ abi: compactAbi, functionName: 'processClaimCheckpoint', args: [...tuple, zeroHash, transforms.map(item => [item[2]] as const)] })
 		const previousBytes = (previous.length - 2) / 2
 		const compactBytes = (compact.length - 2) / 2
 		assert.strictEqual(previousBytes, 228 + 128 * count)
-		assert.strictEqual(compactBytes, 260 + 96 * count)
-		assert.strictEqual(compactBytes - previousBytes, 32 * (1 - count))
+		assert.strictEqual(compactBytes, 260 + 32 * count)
+		assert.strictEqual(compactBytes - previousBytes, 32 - 96 * count)
 	}
 })
 
@@ -174,17 +174,15 @@ test('EscalationGame storage layout matches the shared delegate accounting', () 
 			{ label: 'fixedQuestionOutcome', slot: '447', offset: 20, type: 'enum BinaryOutcomes.BinaryOutcome' },
 			{ label: 'nonDecisionState', slot: '447', offset: 21, type: 'enum NonDecisionState' },
 			{ label: 'forkCarryBackingExportedBeforeResumeAttoRep', slot: '448', offset: 0, type: 'uint256' },
-			{ label: 'truthAuctionRepBeforeAttoRep', slot: '449', offset: 0, type: 'uint256' },
-			{ label: 'truthAuctionRepRemainingAttoRep', slot: '450', offset: 0, type: 'uint256' },
-			{ label: 'forkCarrySnapshotOutcomesInitialized', slot: '451', offset: 0, type: 'uint8' },
-			{ label: 'forkCarrySnapshotId', slot: '452', offset: 0, type: 'bytes32' },
-			{ label: 'claimCheckpoints', slot: '453', offset: 0, type: 'mapping(bytes32 => struct EscalationClaimCheckpoint)' },
-			{ label: 'ordinarySettlementInitialized', slot: '454', offset: 0, type: 'bool' },
-			{ label: 'ordinarySettlementOutcome', slot: '454', offset: 1, type: 'enum BinaryOutcomes.BinaryOutcome' },
-			{ label: 'ordinaryWinningReserveAttoRep', slot: '455', offset: 0, type: 'uint256' },
-			{ label: 'ordinarySettlementForkThresholdAttoRep', slot: '456', offset: 0, type: 'uint256' },
-			{ label: 'creditedSurplusAttoRep', slot: '457', offset: 0, type: 'uint256' },
-			{ label: 'collateralBackingByVault', slot: '458', offset: 0, type: 'mapping(address => uint256)' },
+			{ label: 'forkCarrySnapshotOutcomesInitialized', slot: '449', offset: 0, type: 'uint8' },
+			{ label: 'forkCarrySnapshotId', slot: '450', offset: 0, type: 'bytes32' },
+			{ label: 'claimCheckpoints', slot: '451', offset: 0, type: 'mapping(bytes32 => struct EscalationClaimCheckpoint)' },
+			{ label: 'ordinarySettlementInitialized', slot: '452', offset: 0, type: 'bool' },
+			{ label: 'ordinarySettlementOutcome', slot: '452', offset: 1, type: 'enum BinaryOutcomes.BinaryOutcome' },
+			{ label: 'ordinaryWinningReserveAttoRep', slot: '453', offset: 0, type: 'uint256' },
+			{ label: 'ordinarySettlementForkThresholdAttoRep', slot: '454', offset: 0, type: 'uint256' },
+			{ label: 'creditedSurplusAttoRep', slot: '455', offset: 0, type: 'uint256' },
+			{ label: 'collateralBackingByVault', slot: '456', offset: 0, type: 'mapping(address => uint256)' },
 		],
 	)
 

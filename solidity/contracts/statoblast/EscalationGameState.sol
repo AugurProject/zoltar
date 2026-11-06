@@ -31,7 +31,6 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 	event ForkedEscrowExported(address indexed vault, address repReceiver, uint256[3] sourcePrincipalByOutcomeAttoRep, uint256[3] childRepByOutcomeAttoRep, uint256 totalChildRepToTransferAttoRep, bool transferredRep);
 	event OrdinarySettlementInitialized(BinaryOutcomes.BinaryOutcome indexed outcome, uint256 winningPrincipalAttoRep, uint256 reservedAttoRep);
 	event ForkContinuationResidualRepBurned(uint256 amountAttoRep);
-	event TruthAuctionHaircutApplied(uint256 repBeforeAttoRep, uint256 repRemovedAttoRep, uint256 repRemainingAttoRep, uint256 rebasedElapsed);
 
 	constructor(ISecurityPool _securityPool, ReputationToken _repToken, EscalationGameProofVerifier _proofVerifier, EscalationGameClaimDelegate _claimDelegate) {
 		securityPool = _securityPool;
@@ -71,7 +70,7 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 	function _consumeEscrowedRepForBundle(address depositor, uint256 amountAttoRep) internal {
 		if (amountAttoRep == 0) return;
 		EscalationClaimBundle storage bundle = escalationClaimBundles[depositor];
-		uint256 claimUnits = _repToClaimUnits(amountAttoRep);
+		uint256 claimUnits = amountAttoRep;
 		require(bundle.disputeStakedRepClaimUnits >= claimUnits, 'Escrowed REP low');
 		bundle.disputeStakedRepClaimUnits -= claimUnits;
 		totalDisputeStakedAttoRep -= amountAttoRep;

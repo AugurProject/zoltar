@@ -3,7 +3,7 @@ import { beforeEach, describe, test } from 'bun:test'
 import { decodeEventLog } from '@zoltar/core-shared/evm/ethereum'
 import type { AnvilWindowEthereum } from '../../testSupport/simulator/AnvilWindowEthereum'
 import { writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
-import { BURN_ADDRESS, DAY } from '../../testSupport/simulator/utils/constants'
+import { BURN_ADDRESS } from '../../testSupport/simulator/utils/constants'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { getERC20Balance } from '../../testSupport/simulator/utils/utilities'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
@@ -44,7 +44,6 @@ describe('Escalation Game: fork continuation funding and inherited ties', () => 
 		advanceForkContinuationPastStart,
 		depositOnOutcomeViaProofTestSecurityPool,
 		recordForkedEscrowForOutcomeViaTestSecurityPool,
-		applyTruthAuctionHaircutViaTestSecurityPool,
 		withdrawDepositViaProofTestSecurityPool,
 		createCarryProof,
 		initializeSnapshotWithResolutionBalancesViaTestSecurityPool,
@@ -230,8 +229,8 @@ describe('Escalation Game: fork continuation funding and inherited ties', () => 
 		assert.strictEqual(snapshotEventNames.filter(eventName => eventName === 'InheritedThresholdTie').length, 1, 'snapshot initialization should emit one inherited-threshold-tie lifecycle event')
 	})
 
-	for (const retainedBacking of [2n * nonDecisionThresholdAttoRep, 2n * nonDecisionThresholdAttoRep - 1n, nonDecisionThresholdAttoRep / 10n, 1n]) {
-		test(`auction reconciles an inherited threshold tie with ${retainedBacking} retained backing`, async () => {
+	for (const donation of [0n, 1n, 1_000n * reportBond]) {
+		test(`donating ${donation} REP cannot change an inherited threshold tie`, async () => {
 			const child = await deployEscalationGameWithProofPool()
 			await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, ESCALATION_TIME_LENGTH)
 			await initializeSnapshotWithResolutionBalancesViaTestSecurityPool(
@@ -242,35 +241,21 @@ describe('Escalation Game: fork continuation funding and inherited ties', () => 
 				[0n, nonDecisionThresholdAttoRep, nonDecisionThresholdAttoRep],
 				[zeroHash(), zeroHash(), zeroHash()],
 			)
-			await applyTruthAuctionHaircutViaTestSecurityPool(child.testSecurityPoolAddress, 2n * nonDecisionThresholdAttoRep - retainedBacking)
-			const remainsFull = retainedBacking === 2n * nonDecisionThresholdAttoRep
-			assert.strictEqual(await readNonDecisionState(client, child.escalationGameAddress), remainsFull ? NON_DECISION_STATE_INHERITED_THRESHOLD_TIE : NON_DECISION_STATE_NONE, 'only a structurally full inherited tie may retain the fork commitment')
-			assert.strictEqual(await readCanTriggerOwnFork(client, child.escalationGameAddress), remainsFull)
+			if (donation !== 0n) await fundEscalationGame(child.escalationGameAddress, donation)
+			assert.strictEqual(await readNonDecisionState(client, child.escalationGameAddress), NON_DECISION_STATE_INHERITED_THRESHOLD_TIE)
+			assert.strictEqual(await readCanTriggerOwnFork(client, child.escalationGameAddress), true)
 			assert.strictEqual(await readNonDecisionTimestamp(client, child.escalationGameAddress), 0n)
-			assert.strictEqual((await getEscalationGameOutcomeState(client, child.escalationGameAddress, QuestionOutcome.Yes)).balanceAttoRep, retainedBacking / 2n)
-			assert.strictEqual((await getEscalationGameOutcomeState(client, child.escalationGameAddress, QuestionOutcome.Yes)).inheritedUnresolvedTotalAttoRep, retainedBacking / 2n, 'effective inherited principal must retain the same auction fraction')
+			for (const outcome of [QuestionOutcome.Yes, QuestionOutcome.No]) {
+				const state = await getEscalationGameOutcomeState(client, child.escalationGameAddress, outcome)
+				assert.strictEqual(state.balanceAttoRep, nonDecisionThresholdAttoRep)
+				assert.strictEqual(state.inheritedUnresolvedTotalAttoRep, nonDecisionThresholdAttoRep)
+			}
 			await resumeEscalationFromFork(child.escalationGameAddress)
-			if (remainsFull) {
-				await assert.rejects(depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond), /revert/i)
-				return
-			}
-			const resumedAt = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'forkResumedAt' })
-			const endDate = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'getEscalationGameEndDate' })
-			assert.strictEqual(endDate, resumedAt + 3n * DAY, 'the rebased continuation must retain a fresh response window')
-			if (retainedBacking === 1n) {
-				await mockWindow.setTime(endDate + 1n)
-				assert.strictEqual(await getQuestionResolution(client, child.escalationGameAddress), QuestionOutcome.Invalid, 'zero-rounded balances resolve without new funding')
-				return
-			}
-			const preview = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'previewDepositOnOutcome', args: [QuestionOutcome.Yes, reportBond] })
-			await depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
-			assert.strictEqual((await getEscalationGameOutcomeState(client, child.escalationGameAddress, QuestionOutcome.Yes)).balanceAttoRep, preview[1], 'execution must admit the previewed deposit')
-			await mockWindow.setTime(endDate + ESCALATION_TIME_LENGTH)
-			assert.strictEqual(await getQuestionResolution(client, child.escalationGameAddress), QuestionOutcome.Yes, 'a funded report must break the inherited tie')
+			await assert.rejects(depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond), /revert/i)
 		})
 	}
 
-	test('a reopened inherited tie carries retention and authenticated payouts through another continuation', async () => {
+	test('an inherited tie survives an unrelated continuation and pays authenticated claims in a fixed branch', async () => {
 		const parent = await deployEscalationGameWithProofPool()
 		await startEscalation(parent.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep)
 		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, nonDecisionThresholdAttoRep)
@@ -279,7 +264,7 @@ describe('Escalation Game: fork continuation funding and inherited ties', () => 
 		let descendant = parent
 		for (let generation = 0; generation < 2; generation += 1) {
 			descendant = await deployEscalationGameWithProofPool()
-			await startEscalationFromFork(descendant.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+			await startEscalationFromFork(descendant.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n, generation === 1 ? QuestionOutcome.Yes : QuestionOutcome.None)
 			await initializeSnapshotFromSourceViaTestSecurityPool(
 				descendant.testSecurityPoolAddress,
 				source,
@@ -289,15 +274,13 @@ describe('Escalation Game: fork continuation funding and inherited ties', () => 
 				[0n, await readCarryTotal(client, source, QuestionOutcome.Yes), await readCarryTotal(client, source, QuestionOutcome.No)],
 				[zeroHash(), await readNullifierRoot(client, source, QuestionOutcome.Yes), await readNullifierRoot(client, source, QuestionOutcome.No)],
 			)
-			const backing = await getERC20Balance(client, getRepTokenAddress(0n), descendant.escalationGameAddress)
-			await applyTruthAuctionHaircutViaTestSecurityPool(descendant.testSecurityPoolAddress, backing / 2n)
 			await resumeEscalationFromFork(descendant.escalationGameAddress)
-			assert.strictEqual(await readNonDecisionState(client, descendant.escalationGameAddress), NON_DECISION_STATE_NONE)
-			assert.strictEqual(await readCanTriggerOwnFork(client, descendant.escalationGameAddress), false)
+			assert.strictEqual(await readNonDecisionState(client, descendant.escalationGameAddress), NON_DECISION_STATE_INHERITED_THRESHOLD_TIE)
+			assert.strictEqual(await readCanTriggerOwnFork(client, descendant.escalationGameAddress), generation === 0)
 			source = descendant.escalationGameAddress
 		}
-		assert.strictEqual(await readNonDecisionState(client, parent.escalationGameAddress), NON_DECISION_STATE_LOCAL, 'descendant auctions must preserve the original local transition')
-		await depositOnOutcomeViaProofTestSecurityPool(descendant.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		assert.strictEqual(await readNonDecisionState(client, parent.escalationGameAddress), NON_DECISION_STATE_LOCAL, 'descendant continuations must preserve the original local transition')
+		await assert.rejects(depositOnOutcomeViaProofTestSecurityPool(descendant.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond), /revert/i)
 		const endDate = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: descendant.escalationGameAddress, functionName: 'getEscalationGameEndDate' })
 		await mockWindow.setTime(endDate + 1n)
 		assert.strictEqual(await getQuestionResolution(client, descendant.escalationGameAddress), QuestionOutcome.Yes)
@@ -308,10 +291,10 @@ describe('Escalation Game: fork continuation funding and inherited ties', () => 
 		await withdrawDepositViaProofTestSecurityPool(descendant.testSecurityPoolAddress, QuestionOutcome.Yes, proof)
 		const paid = (await getERC20Balance(client, getRepTokenAddress(0n), client.account.address)) - walletBefore
 		const burned = (await getERC20Balance(client, getRepTokenAddress(0n), addressString(BURN_ADDRESS))) - burnedBefore
-		assert.ok(paid > 0n, 'the original depositor must receive a funded retained payout')
+		assert.ok(paid > 0n, 'the original depositor must receive a funded payout')
 		assert.strictEqual(backingBefore - (await getERC20Balance(client, getRepTokenAddress(0n), descendant.escalationGameAddress)), paid + burned, 'payout plus deterrence burn must conserve backing')
-		assert.strictEqual(await readCarryTotal(client, descendant.escalationGameAddress, QuestionOutcome.Yes), reportBond, 'only the fresh local claim remains after the ancestor claim is consumed')
-		await assert.rejects(withdrawDepositViaProofTestSecurityPool(descendant.testSecurityPoolAddress, QuestionOutcome.Yes, proof), /revert/i, 'reopening must not permit duplicate ancestor claims')
+		assert.strictEqual(await readCarryTotal(client, descendant.escalationGameAddress, QuestionOutcome.Yes), 0n, 'the ancestor claim consumes the complete winning liability')
+		await assert.rejects(withdrawDepositViaProofTestSecurityPool(descendant.testSecurityPoolAddress, QuestionOutcome.Yes, proof), /revert/i, 'continuation must not permit duplicate ancestor claims')
 	})
 
 	test('a fixed-outcome continuation settles an inherited threshold tie instead of authorizing another fork', async () => {
@@ -326,9 +309,8 @@ describe('Escalation Game: fork continuation funding and inherited ties', () => 
 			[zeroHash(), zeroHash(), zeroHash()],
 		)
 
-		await applyTruthAuctionHaircutViaTestSecurityPool(child.testSecurityPoolAddress, nonDecisionThresholdAttoRep)
 		assert.strictEqual(await readNonDecisionState(client, child.escalationGameAddress), NON_DECISION_STATE_INHERITED_THRESHOLD_TIE, 'the fixed child should retain the inherited threshold-tie lifecycle state')
-		await assert.rejects(depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond), /revert/i, 'a haircut must not reopen fixed-outcome reporting')
+		await assert.rejects(depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond), /revert/i, 'a fixed-outcome continuation must not reopen reporting')
 		assert.strictEqual(await readCanTriggerOwnFork(client, child.escalationGameAddress), false, 'a fixed child should continue to its selected outcome instead of forking again')
 		await resumeEscalationFromFork(child.escalationGameAddress)
 		const continuationEndDate = await client.readContract({

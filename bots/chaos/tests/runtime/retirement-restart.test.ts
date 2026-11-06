@@ -34,7 +34,7 @@ function emptySnapshot() {
 	snapshot.wallet.shares = []
 	snapshot.wallet.lpTokens = []
 	snapshot.wallet.openOracleEthCredit = '0'
-	for (const pool of snapshot.pools) pool.vaults = []
+	snapshot.portfolioCapital = []
 	for (const pair of snapshot.pairs) pair.walletLiquidity = '0'
 	snapshot.warnings = []
 	return snapshot

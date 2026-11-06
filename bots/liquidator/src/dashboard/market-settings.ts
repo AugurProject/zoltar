@@ -49,7 +49,7 @@ export function registerMarketSettings({ state, elements, controls, populateConf
 					title: 'Review market and pool changes',
 					description: 'Market sources and desired pools can change which assets the bot funds on the next scan.',
 					confirmLabel: 'Save markets',
-					changes: reviewChangeRows({ root: reviewableRootMarket(saved?.centralizedMarkets), children: saved?.childMarketConfigurations, desiredPools: saved?.desiredPools }, value),
+					changes: reviewChangeRows({ root: reviewableRootMarket(saved?.centralizedMarkets), children: saved?.childMarketConfigurations }, value),
 				}))
 			) {
 				actionStatus(marketConfigurationSaveStatus, '')

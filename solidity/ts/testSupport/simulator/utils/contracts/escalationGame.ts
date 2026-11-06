@@ -62,17 +62,6 @@ export const getQuestionResolution = async (client: ReadClient, escalationGame: 
 		}),
 	)
 
-export const getStartBond = async (client: ReadClient, escalationGame: AccountAddress): Promise<bigint> =>
-	requireBigInt(
-		await client.readContract({
-			abi: statoblast_EscalationGame_EscalationGame.abi,
-			functionName: 'startBondAttoRep',
-			address: escalationGame,
-			args: [],
-		}),
-		'Start bond',
-	)
-
 export const getTotalEscrowedRep = async (client: ReadClient, escalationGame: AccountAddress): Promise<bigint> =>
 	requireBigInt(
 		await client.readContract({
@@ -197,17 +186,6 @@ export const getActivationTime = async (client: ReadClient, escalationGame: Acco
 			args: [],
 		}),
 		'Escalation activation time',
-	)
-
-export const getEscalationGameTotalCost = async (client: ReadClient, escalationGame: AccountAddress): Promise<bigint> =>
-	requireBigInt(
-		await client.readContract({
-			abi: statoblast_EscalationGame_EscalationGame.abi,
-			functionName: 'totalCostAttoRep',
-			address: escalationGame,
-			args: [],
-		}),
-		'Escalation total cost',
 	)
 
 export const depositOnOutcome = async (writeClient: WriteClient, escalationGame: AccountAddress, depositor: AccountAddress, outcome: QuestionOutcome, amount: bigint) => {

@@ -20,7 +20,6 @@ const RECOVERY_OPERATIONS = [
 	'statoblast.auction.start',
 	'statoblast.auction.withdraw-refund',
 	'statoblast.complete-set.redeem',
-	'statoblast.escalation.claim-forked',
 	'statoblast.escalation.resume',
 	'statoblast.escalation.sweep-residual',
 	'statoblast.escalation.withdraw',
@@ -31,17 +30,15 @@ const RECOVERY_OPERATIONS = [
 	'statoblast.pool.checkpoint-collateral',
 	'statoblast.pool.checkpoint-retention',
 	'statoblast.shares.redeem-winning',
-	'statoblast.staged.execute',
-	'statoblast.staged.execute-liquidation-excluded',
-	'statoblast.staged.expire',
-	'statoblast.vault.redeem-fees',
-	'statoblast.vault.exit-limit',
-	'statoblast.vault.redeem-rep',
+	'statoblast.capital.claim',
+	'statoblast.capital.retire',
+	'statoblast.capital.serve-retirement',
+	'statoblast.capital.withdraw',
 	'trading.complete-set.redeem',
 	'trading.liquidity.remove',
 ] as const
 
-const CLAIM_LINKED_MIGRATIONS = new Set(['statoblast.child.prepare-feed', 'statoblast.child.prepare-contracts', 'statoblast.fork.create-child', 'statoblast.fork.migrate-rep', 'statoblast.fork.migrate-vault', 'statoblast.fork.migrate-vault-unresolved', 'trading.shares.migrate'])
+const CLAIM_LINKED_MIGRATIONS = new Set(['statoblast.fork.create-child', 'trading.shares.migrate'])
 
 const PROHIBITED_OPERATIONS = [
 	'trading.uniswap.mint-range',
@@ -59,13 +56,11 @@ const PROHIBITED_OPERATIONS = [
 	'statoblast.escalation.deposit-wallet-rep',
 	'statoblast.fork.initiate',
 	'statoblast.fork.own-question',
-	'statoblast.liquidation.queue',
 	'statoblast.oracle.request-price',
-	'statoblast.pool.deploy',
-	'statoblast.staged.queue',
-	'statoblast.vault.deposit-rep',
-	'statoblast.vault.set-limit',
-	'statoblast.vault.update-fees',
+	'statoblast.portfolio.add-question',
+	'statoblast.capital.deposit',
+	'statoblast.capital.set-commitment',
+	'statoblast.capital.set-health',
 	'token.rep.approve',
 	'token.shares.approve',
 	'token.weth.approve',
@@ -132,20 +127,18 @@ const RETIREMENT_OPERATION_ORDER = [
 	'statoblast.escalation.withdraw-forked',
 	'statoblast.escalation.prepare-claim',
 	'statoblast.child.initialize-history',
-	'statoblast.escalation.claim-forked',
 	'statoblast.auction.withdraw-refund',
 	'statoblast.auction.refund',
 	'statoblast.auction.settle-bids',
-	'statoblast.vault.redeem-fees',
-	'statoblast.vault.exit-limit',
-	'statoblast.vault.redeem-rep',
+	'statoblast.capital.claim',
+	'statoblast.capital.retire',
+	'statoblast.capital.serve-retirement',
+	'statoblast.capital.withdraw',
 	'statoblast.complete-set.redeem',
 	'statoblast.shares.redeem-winning',
 	'trading.liquidity.remove',
 	'trading.complete-set.redeem',
 	'trading.position.exit',
-	'statoblast.staged.execute',
-	'statoblast.staged.expire',
 	'statoblast.auction.start',
 	'statoblast.auction.finalize-route',
 	'statoblast.escalation.sweep-residual',
@@ -161,10 +154,8 @@ function migrationPlanRecoversWalletClaim(plan: OperationPlan, snapshot: Ecosyst
 	if (typeof poolAddress !== 'string') return false
 	const pool = snapshot.pools.find(candidate => candidate.address.toLowerCase() === poolAddress.toLowerCase())
 	if (pool === undefined) return false
-	const vault = pool.vaults.find(candidate => candidate.address.toLowerCase() === snapshot.wallet.address.toLowerCase())
-	const hasVaultClaim = vault !== undefined && [vault.repBackingUnits, vault.repBackingAttoRep, vault.underwritingLimitAttoEth, vault.claimableFeesAttoEth, vault.disputeStakedAttoRep].some(value => BigInt(value) > 0n)
 	const shares = snapshot.wallet.shares.find(candidate => candidate.shareToken.toLowerCase() === pool.shareToken.toLowerCase() && candidate.universeId === pool.universeId)
-	return hasVaultClaim || (shares !== undefined && [shares.invalid, shares.yes, shares.no].some(value => BigInt(value) > 0n)) || pool.unresolvedEscalationMigrationReadyOutcomes.length > 0
+	return (shares !== undefined && [shares.invalid, shares.yes, shares.no].some(value => BigInt(value) > 0n)) || snapshot.escalationDeposits.some(deposit => deposit.pool.toLowerCase() === pool.address.toLowerCase() && deposit.vault.toLowerCase() === snapshot.wallet.address.toLowerCase() && !deposit.claimed)
 }
 
 function planPaysOnlySigner(plan: OperationPlan, snapshot: EcosystemSnapshot | undefined) {

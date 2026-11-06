@@ -35,6 +35,8 @@ export function PortfoliosSection({ parameters, enabled, environmentKey, activeU
 					<summary>{copy.deploy}</summary>
 					<div className='form-grid portfolio-creation-form'>
 						<PortfolioInput label={copy.originPool} hint={copy.originPoolHint} value={actions.originInput} onChange={actions.setOriginInput} disabled={disabled} />
+						<PortfolioInput label={copy.securityMultiplier} hint={copy.securityMultiplierHint} value={actions.multiplierInput} onChange={actions.setMultiplierInput} disabled={disabled} />
+						<PortfolioInput label={copy.oraclePriorityFee} value={actions.priorityFeeInput} onChange={actions.setPriorityFeeInput} disabled={disabled} />
 						<ViewTabs
 							ariaLabel={copy.admissionMode}
 							variant='segmented'

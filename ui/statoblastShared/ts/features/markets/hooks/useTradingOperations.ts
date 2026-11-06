@@ -217,6 +217,7 @@ export function useTradingOperations(
 						const walletBalanceAttoEth = await dependencies.getWalletEthBalance(walletAddress)
 						const mintCheckpoint = estimateMintCheckpoint({
 							centralSettlement: latestMintCapacity.centralSettlement,
+							centralCheckpointTimestamp: latestMintCapacity.centralCheckpointTimestamp,
 							linearFee: latestMintCapacity.linearFee,
 							currentRetentionRate: latestMintCapacity.currentRetentionRate,
 							currentTimestamp: latestMintCapacity.currentTimestamp,

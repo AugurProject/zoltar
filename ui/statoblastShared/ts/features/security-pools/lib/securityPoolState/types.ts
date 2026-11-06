@@ -1,64 +1,9 @@
-import type { ReportingStage } from '../../../reporting/lib/reporting.js'
-
 import type { SecurityPoolLifecycleState } from '../../../../types/app.js'
 export type { SecurityPoolLifecycleState } from '../../../../types/app.js'
-
-export type SecurityPoolReportingStage = ReportingStage
-
-export type SecurityPoolForkStage = 'disabled' | 'initiate' | 'migration' | 'auction' | 'settlement'
-
-export type SecurityPoolActionId =
-	| 'approveRep'
-	| 'depositRepToVault'
-	| 'queueWithdrawRep'
-	| 'redeemRepFromVault'
-	| 'redeemFees'
-	| 'createCompleteSet'
-	| 'redeemCompleteSet'
-	| 'migrateShares'
-	| 'redeemShares'
-	| 'reportOutcome'
-	| 'withdrawEscalation'
-	| 'requestPrice'
-	| 'executeStagedOperation'
-	| 'queueLiquidation'
-	| 'forkWithOwnEscalation'
-	| 'initiateFork'
-	| 'forkUniverse'
-	| 'prepareChildPriceFeed'
-	| 'prepareChildDependencies'
-	| 'createChildUniverse'
-	| 'initializeChildHistory'
-	| 'prepareForkClaim'
-	| 'migrateRepToZoltar'
-	| 'migrateVault'
-	| 'claimParentEscalationDeposits'
-	| 'migrateUnresolvedEscalation'
-	| 'startTruthAuction'
-	| 'submitBid'
-	| 'finalizeTruthAuction'
-	| 'refundLosingBids'
-	| 'withdrawAuctionRefund'
-	| 'claimAuctionProceeds'
-	| 'settleForkedEscalation'
-
-export type SecurityPoolActionState = {
-	enabled: boolean
-}
-
 export type SecurityPoolStateInput = {
 	lifecycleState?: SecurityPoolLifecycleState | undefined
-	reportingStage?: SecurityPoolReportingStage | undefined
-	forkStage?: SecurityPoolForkStage | undefined
 	universeHasForked: boolean
-	vaultAdmissionClosed?: boolean | undefined
 }
-
-export type SecurityPoolStateModel = {
-	lifecycleState?: SecurityPoolLifecycleState | undefined
-	reportingStage?: SecurityPoolReportingStage | undefined
-	forkStage?: SecurityPoolForkStage | undefined
-	universeHasForked: boolean
-	vaultAdmissionClosed: boolean
-	actions: Record<SecurityPoolActionId, SecurityPoolActionState>
+export type SecurityPoolStateModel = SecurityPoolStateInput & {
+	actions: Record<'createCompleteSet' | 'redeemCompleteSet' | 'migrateShares' | 'redeemShares', { enabled: boolean }>
 }

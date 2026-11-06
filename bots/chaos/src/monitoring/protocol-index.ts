@@ -14,7 +14,7 @@ interface ProtocolIndexCursor {
 }
 
 export interface ChaosProtocolIndex {
-	schemaVersion: 3
+	schemaVersion: 4
 	chainId: number
 	openOracle: Address
 	zoltar: Address
@@ -78,10 +78,9 @@ export interface ProtocolIndexUpdate {
 const REPORT_SUBMITTED = eventTopic('ReportSubmitted(uint256,bytes)')
 const REPORT_DISPUTED = eventTopic('ReportDisputed(uint256,bytes)')
 const REPORT_SETTLED = eventTopic('ReportSettled(uint256)')
-const BID_SUBMITTED = eventTopic('BidSubmitted(address,int256,uint256,uint256,uint256)')
-const BID_SETTLED = eventTopic('BidSettled(address,int256,uint256,uint256,uint256,uint256,uint256,uint8)')
-const ETH_REFUND_CREDITED = eventTopic('EthRefundCredited(address,uint256,uint256)')
-const PENDING_ETH_REFUND_WITHDRAWN = eventTopic('PendingEthRefundWithdrawn(address,uint256)')
+const BID_SUBMITTED = eventTopic('BidSubmitted(uint256,address,address,uint256,uint256,uint256)')
+const BID_SETTLED = eventTopic('BidSettled(uint256,address,uint256,uint256)')
+const REFUND_WITHDRAWN = eventTopic('RefundWithdrawn(address,address,uint256)')
 const LOCAL_DEPOSIT_APPENDED = eventTopic('LocalDepositAppended(uint256,uint8,address,uint256,uint256,uint256)')
 const DEPOSIT_ON_OUTCOME = eventTopic('DepositOnOutcome(address,uint8,uint256,uint256,uint256,uint256,uint256)')
 const ORDINARY_SETTLEMENT_INITIALIZED = eventTopic('OrdinarySettlementInitialized(uint8,uint256,uint256)')
@@ -219,10 +218,6 @@ function deriveChildUniverseId(universeId: bigint, outcomeIndex: bigint) {
 	return BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [universeId, outcomeIndex]))) & (UINT248_LIMIT - 1n)
 }
 
-function signed256(value: bigint) {
-	return value >= 1n << 255n ? value - (1n << 256n) : value
-}
-
 function decodePackedOracleReport(reportId: bigint, openOracle: Address, packed: `0x${string}`): OracleGameSnapshot {
 	const bytes = hexToBytes(packed)
 	if (bytes.length !== 235) throw new Error(`OpenOracle report ${reportId.toString()} packed payload has ${bytes.length} bytes instead of 235`)
@@ -273,7 +268,7 @@ function decodePackedOracleReport(reportId: bigint, openOracle: Address, packed:
 function activeAuctionBids(source: Readonly<Record<string, readonly AuctionBidSnapshot[]>>) {
 	const copy: Record<string, AuctionBidSnapshot[]> = {}
 	for (const [address, bids] of Object.entries(source)) {
-		const active = bids.filter(bid => !bid.refunded).map(bid => ({ ...bid }))
+		const active = bids.filter(bid => !bid.settled).map(bid => ({ ...bid }))
 		if (active.length > 0) copy[address] = active
 	}
 	return copy
@@ -423,7 +418,7 @@ async function scanProtocolIndex(context: UpdateProtocolIndexContext): Promise<P
 		const [rawOracleLogs, rawMigrationLogs, rawAuctionLogs, rawEscalationLogs] = await Promise.all([
 			fetchProtocolLogs(context.client, { address: context.openOracle, fromBlock, toBlock, topics: [REPORT_SUBMITTED, REPORT_DISPUTED, REPORT_SETTLED] }),
 			fetchProtocolLogs(context.client, { address: [context.zoltar, context.securityPoolForker], fromBlock, toBlock, topics: [MIGRATION_REP_SPLIT, CHILD_REP_SPLIT] }),
-			context.auctionAddresses.length === 0 ? [] : fetchProtocolLogs(context.client, { address: [...context.auctionAddresses], fromBlock, toBlock, topics: [BID_SUBMITTED, BID_SETTLED, ETH_REFUND_CREDITED, PENDING_ETH_REFUND_WITHDRAWN] }),
+			context.auctionAddresses.length === 0 ? [] : fetchProtocolLogs(context.client, { address: [...context.auctionAddresses], fromBlock, toBlock, topics: [BID_SUBMITTED, BID_SETTLED, REFUND_WITHDRAWN] }),
 			context.escalationGames.length === 0 ? [] : fetchProtocolLogs(context.client, { address: context.escalationGames.map(route => route.escalationGame), fromBlock, toBlock, topics: [LOCAL_DEPOSIT_APPENDED, DEPOSIT_ON_OUTCOME, CLAIM_DEPOSIT, CARRY_DEPOSIT_CONSUMED, ORDINARY_SETTLEMENT_INITIALIZED] }),
 		])
 		const oracleLogs = orderedCanonicalLogs(rawOracleLogs, fromBlock, toBlock, 'OpenOracle report index')
@@ -504,51 +499,43 @@ async function scanProtocolIndex(context: UpdateProtocolIndexContext): Promise<P
 				const key = log.address.toLowerCase()
 				if (!auctionAddressKeys.has(key)) throw new Error(`Auction event index returned unexpected emitter ${log.address}`)
 				const topic0 = log.topics[0]
-				if (topic0 === ETH_REFUND_CREDITED || topic0 === PENDING_ETH_REFUND_WITHDRAWN) {
-					if (log.topics.length !== 2) throw new Error('Auction refund event has an invalid indexed-field count')
-					const bidder = strictTopicAddress(log.topics[1], 'Auction refund bidder')
+				if (topic0 === REFUND_WITHDRAWN) {
+					if (log.topics.length !== 3 || hexToBytes(log.data).length !== 32) throw new Error('RefundWithdrawn has an invalid event shape')
+					const bidder = strictTopicAddress(log.topics[1], 'Refund bidder')
+					strictTopicAddress(log.topics[2], 'Refund recipient')
 					if (bidder.toLowerCase() !== context.wallet.toLowerCase()) continue
-					const data = hexToBytes(log.data)
-					if (topic0 === ETH_REFUND_CREDITED) {
-						if (data.length !== 64) throw new Error('EthRefundCredited has an invalid data length')
-						const amountAttoEth = readUnsigned(data, 0, 32)
-						const pendingAttoEth = readUnsigned(data, 32, 32)
-						if (amountAttoEth === 0n || pendingAttoEth === 0n) throw new Error('EthRefundCredited has a zero refund amount')
-						const existing = auctionRefunds[key]
-						if (existing === undefined) {
-							if (pendingAttoEth !== amountAttoEth) {
-								if (partialHistory && pendingAttoEth > amountAttoEth) continue
-								throw new Error(`EthRefundCredited for auction ${log.address} did not start from zero; protocolStartBlock is after the episode start or the event history is incomplete`)
-							}
-							auctionRefunds[key] = { generation: refundEpisodeGeneration(log), pendingAttoEth: pendingAttoEth.toString() }
-						} else {
-							const expectedPendingAttoEth = BigInt(existing.pendingAttoEth) + amountAttoEth
-							if (pendingAttoEth !== expectedPendingAttoEth) throw new Error(`EthRefundCredited continuity failed for auction ${log.address}`)
-							auctionRefunds[key] = { ...existing, pendingAttoEth: pendingAttoEth.toString() }
-						}
-					} else {
-						if (data.length !== 32) throw new Error('PendingEthRefundWithdrawn has an invalid data length')
-						const amountAttoEth = readUnsigned(data, 0, 32)
-						const existing = auctionRefunds[key]
-						if (existing === undefined && partialHistory && amountAttoEth > 0n) continue
-						if (existing === undefined) throw new Error(`PendingEthRefundWithdrawn for auction ${log.address} has no authenticated active refund episode`)
-						if (amountAttoEth === 0n || amountAttoEth !== BigInt(existing.pendingAttoEth)) throw new Error(`PendingEthRefundWithdrawn amount does not match the active refund episode for auction ${log.address}`)
-						delete auctionRefunds[key]
-					}
+					const withdrawn = readUnsigned(hexToBytes(log.data), 0, 32)
+					const existing = auctionRefunds[key]
+					if (existing === undefined && partialHistory && withdrawn > 0n) continue
+					if (existing === undefined || withdrawn === 0n || withdrawn !== BigInt(existing.pendingAttoEth)) throw new Error('Refund withdrawal does not match the indexed credit')
+					delete auctionRefunds[key]
 					continue
 				}
 				if (topic0 !== BID_SUBMITTED && topic0 !== BID_SETTLED) continue
-				const bidder = topicAddress(log.topics[1], 'Auction bidder')
+				const submitted = topic0 === BID_SUBMITTED
+				const data = hexToBytes(log.data)
+				if (log.topics.length !== (submitted ? 4 : 3) || data.length !== (submitted ? 96 : 64)) throw new Error('Auction bid event has an invalid shape')
+				const bidder = strictTopicAddress(log.topics[2], 'Auction bidder')
 				if (bidder.toLowerCase() !== context.wallet.toLowerCase()) continue
-				const tick = signed256(topicUnsigned(log.topics[2], 'Auction tick')).toString()
-				const index = topicUnsigned(log.topics[3], 'Auction bid index').toString()
+				const bidId = topicUnsigned(log.topics[1], 'Auction bid id').toString()
 				const bids = auctionBids[key] ?? []
-				const existing = bids.find(bid => bid.tick === tick && bid.index === index)
-				if (topic0 === BID_SUBMITTED) {
-					const bid: AuctionBidSnapshot = { amountAttoEth: readUnsigned(hexToBytes(log.data), 0, 32).toString(), index, refunded: false, tick }
-					if (existing === undefined) bids.push(bid)
-					else Object.assign(existing, bid)
-				} else if (existing !== undefined) existing.refunded = true
+				const existing = bids.find(bid => bid.bidId === bidId)
+				if (submitted) {
+					if (existing !== undefined) throw new Error('Duplicate auction bid identity')
+					bids.push({ bidId, vault: strictTopicAddress(log.topics[3], 'Auction vault'), lots: readUnsigned(data, 0, 32).toString(), minimumAttoRepPerLot: readUnsigned(data, 32, 32).toString(), targetHealthBps: readUnsigned(data, 64, 32).toString(), settled: false })
+				} else {
+					if (existing === undefined && !partialHistory) throw new Error('Auction settlement has no indexed bid')
+					if (existing?.settled) throw new Error('Auction bid settled twice')
+					if (existing !== undefined) existing.settled = true
+					const credit = readUnsigned(data, 32, 32)
+					if (credit > 0n) {
+						const prior = auctionRefunds[key]
+						// Without cumulative credit events, a partial prefix cannot establish a zero balance.
+						// Quorum-verified storage seeds the missing episode at the scan anchor.
+						if (partialHistory && prior === undefined) continue
+						auctionRefunds[key] = { generation: prior?.generation ?? refundEpisodeGeneration(log), pendingAttoEth: ((prior === undefined ? 0n : BigInt(prior.pendingAttoEth)) + credit).toString() }
+					}
+				}
 				auctionBids[key] = bids
 			}
 		}
@@ -626,7 +613,7 @@ async function scanProtocolIndex(context: UpdateProtocolIndexContext): Promise<P
 		migrationRepSplits: sortedMigrationRepSplits([...migrationRepSplits.values()]),
 		openOracle: context.openOracle,
 		reports: [...reports.values()].sort((left, right) => (BigInt(left.reportId) < BigInt(right.reportId) ? -1 : 1)),
-		schemaVersion: 3,
+		schemaVersion: 4,
 		securityPoolForker: context.securityPoolForker,
 		startBlock: context.startBlock.toString(),
 		...(partialHistory ? { availableStartBlock: availableStartBlock.toString() } : {}),

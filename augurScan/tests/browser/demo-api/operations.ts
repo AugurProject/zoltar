@@ -83,7 +83,8 @@ export const demoOperations = (env: DemoEnvironment, chainId: string, atBlock?: 
 		? [...Array.from({ length: 250 }, (_, index) => ({ ...escalationTemplate, game_address: `0x${(index + 1).toString(16).padStart(40, '0')}`, event_name: index % 2 === 0 ? 'OrdinarySettlementInitialized' : 'NonDecisionReached' })), { ...escalationTemplate, game_address: `0x${(251).toString(16).padStart(40, '0')}` }]
 		: escalations
 	const allAuctions = cappedKpiCatalog ? [...Array.from({ length: 250 }, (_, index) => ({ ...auctionTemplate, auction_address: `0x${(index + 1).toString(16).padStart(40, '0')}`, status: 'Closed' })), { ...auctionTemplate, auction_address: `0x${(251).toString(16).padStart(40, '0')}` }] : auctions
-	const poolMetricsUnavailable = context.pageUrl.searchParams.get('poolMetrics') === 'unavailable'
+	const poolMetricsMode = context.pageUrl.searchParams.get('poolMetrics')
+	const poolMetricsUnavailable = poolMetricsMode === 'unavailable' || poolMetricsMode === 'stale-unavailable'
 	const risk = {
 		pools: [
 			{
@@ -92,22 +93,17 @@ export const demoOperations = (env: DemoEnvironment, chainId: string, atBlock?: 
 				read_status: poolMetricsUnavailable ? 'failed' : 'success',
 				source_method: 'poolAccountingState()',
 				protocol_state: poolMetricsUnavailable ? 'unavailable' : '0',
-				scanner_severity: poolMetricsUnavailable ? 'unavailable' : 'warning',
-				scanner_reason: poolMetricsUnavailable ? 'Tagged pool read unavailable' : 'Pool is above the scanner capacity warning band',
-				read_result: {
-					currentRetentionRate: String(999999987000000000n),
-					settlementCollateralAttoEth: String(42n * 10n ** 18n),
-					currentMintingCapacityAttoEth: String(50n * 10n ** 18n),
-					totalPoolHeldAttoRep: String(120n * 10n ** 18n),
-					totalUnderwritingLimitAttoEth: String(100n * 10n ** 18n),
-					securityMultiplierBps: '25000',
-				},
-				capacity: {
-					usedAttoEth: (42n * 10n ** 18n).toString(),
-					capacityAttoEth: (50n * 10n ** 18n).toString(),
-					availableAttoEth: (8n * 10n ** 18n).toString(),
-					utilizationBps: '8400',
-				},
+				scanner_severity: 'unavailable',
+				scanner_reason: poolMetricsUnavailable ? 'Tagged pool read unavailable' : 'Question settlement is shown here. Underwriting risk belongs to the shared portfolio capital positions.',
+				read_result:
+					poolMetricsMode === 'unavailable'
+						? {}
+						: {
+								questionSettlementAttoEth: String(42n * 10n ** 18n),
+								averageValueAttoEthPerShare: String(7n * 10n ** 17n),
+								shareTokenSupplyAttoShares: String(60n * 10n ** 18n),
+								securityMultiplierBps: '25000',
+							},
 			},
 		],
 		vaults: [

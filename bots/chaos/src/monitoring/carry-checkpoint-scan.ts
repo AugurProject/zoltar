@@ -134,7 +134,7 @@ export function createCarryCheckpointReader(context: { client: Pick<ChaosReadCli
 				pendingSteps: checkpoint.pendingSteps.toString(),
 				pendingCommitment: state.pendingCommitment,
 				baseCommitment: batch.baseCommitment,
-				transforms: batch.transforms.map(value => ({ repBeforeAttoRep: value.repBeforeAttoRep.toString(), repRemainingAttoRep: value.repRemainingAttoRep.toString(), consumedBeforeAttoRep: value.consumedBeforeAttoRep.toString() })),
+				transforms: batch.transforms.map(value => ({ consumedBeforeAttoRep: value.consumedBeforeAttoRep.toString() })),
 			} satisfies ForkedClaimCheckpointSnapshot
 		})
 	}

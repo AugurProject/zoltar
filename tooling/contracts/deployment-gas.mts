@@ -17,7 +17,6 @@ export const CONSERVATIVE_DEPLOYMENT_GAS: Readonly<Record<string, bigint>> = {
 	weth: 1_000_000n,
 	reputationToken: 1_250_000n,
 	multicall3: 1_250_000n,
-	uniformPriceDualCapBatchAuctionFactory: 5_250_000n,
 	securityPoolUtils: 2_250_000n,
 	securityPoolOperationsDelegate: 7_000_000n,
 	securityPoolEventEmitter: 5_000_000n,

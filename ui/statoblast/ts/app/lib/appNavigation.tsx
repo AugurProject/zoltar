@@ -11,7 +11,7 @@ import type { RouteTabDefinition } from '@zoltar/ui-core-shared/types/components
 
 type PoolsListView = Exclude<SecurityPoolsView, 'operate'>
 
-export function getPoolsViewHref(view: PoolsListView) {
+function getPoolsViewHref(view: PoolsListView) {
 	const search = writePoolsLocationSearch(getRouteHashSearch(), parsePoolsRouteHash(parseRouteHash(window.location.hash).routeHash), { view })
 	return buildRouteHref(buildPoolsRouteHash({ view }), search)
 }
@@ -24,7 +24,7 @@ export function getStatoblastRouteTabs({ applicationDeploymentMissing, route, sh
 		deploymentIncomplete: showDeployTab,
 		route,
 		tabs: [
-			{ hash: statoblastRouting.getHash('pools'), label: statoblastAppCopy.pools, route: 'pools' },
+			{ hash: statoblastRouting.getHash('pools'), label: statoblastAppCopy.questions, route: 'pools' },
 			{ hash: statoblastRouting.getHash('portfolios'), label: statoblastAppCopy.portfolios, route: 'portfolios' },
 			{ hash: statoblastRouting.getHash('open-oracle'), label: openOracleCopy.priceReports, route: 'open-oracle' },
 		],
@@ -41,8 +41,7 @@ export function getRouteSecondaryNavigation({ activeSecurityPoolsView, route, se
 					value: activeSecurityPoolsView,
 					onChange: setSecurityPoolsView,
 					options: [
-						{ href: getPoolsViewHref('browse'), label: commonCopy.browsePools, value: 'browse' },
-						{ href: getPoolsViewHref('create'), label: commonCopy.createPool, value: 'create' },
+						{ href: getPoolsViewHref('browse'), label: statoblastAppCopy.browseQuestions, value: 'browse' },
 						{ href: getPoolsViewHref('universes'), label: zoltarCopy.universesTitle, value: 'universes' },
 						...(activeSecurityPoolsView === 'migrate' ? [{ href: getPoolsViewHref('migrate'), label: zoltarCopy.migrateRep, value: 'migrate' as const }] : []),
 					],

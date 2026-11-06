@@ -80,10 +80,6 @@ contract EscalationGameProofTestSecurityPool {
 		return escalationGame.recordDepositFromSecurityPool(depositor, outcome, amount, expectedCumulativeAmount);
 	}
 
-	function applyTruthAuctionHaircut(uint256 repToRemoveAttoRep) external {
-		escalationGame.applyTruthAuctionHaircut(repToRemoveAttoRep);
-	}
-
 	function initializeForkCarrySnapshot(bytes32[64][3] memory inheritedCarryPeaks, uint256[3] memory inheritedCarryLeafCounts, uint256[3] memory inheritedCarryTotals, bytes32[3] memory inheritedNullifierRoots) external {
 		uint256 totalInheritedPrincipal = inheritedCarryTotals[0] + inheritedCarryTotals[1] + inheritedCarryTotals[2];
 		if (totalInheritedPrincipal > 0 && escalationGame.forkCarrySnapshotOutcomesInitialized() == 0) {

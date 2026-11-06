@@ -1,5 +1,5 @@
+import { loadBudgetMint, loadMintFees } from './minting.js'
 import { loadCentralPortfolioQuestion } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolioState.js'
-import { loadLinearFeeState } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { submissionDeadline, requireFreshSubmissionWindow } from './submissionWindow.js'
 import { outcomeLabel } from '../copy/outcomes.js'
 import { createRegistryIndex, readIncrementalRegistry, type RegistryIndex } from '@zoltar/ui-core-shared/lib/incrementalRegistry.js'
@@ -37,44 +37,41 @@ async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address)
 	const block = await client.getBlock()
 	const blockNumber = block.number
 	if (block.hash === null || block.hash === undefined || blockNumber === undefined) throw new Error('Latest block identity is unavailable')
-	const [questionData, zoltar, parent, shareTokenSupplyAttoShares, mintingCapacityCeilingAttoEth, accounting, feeEndTime, systemState, awaitingForkContinuation, vaultCount, forker, escalationGame, linearFee] = await Promise.all([
+	const [questionData, zoltar, parent, systemState, awaitingForkContinuation, forker, escalationGame, capital] = await Promise.all([
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'questionData' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'zoltar' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'parent' }),
-		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'shareTokenSupplyAttoShares' }),
-		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'getCurrentMintingCapacityAttoEth' }),
-		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'getPoolAccountingSnapshot' }),
-		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'getFeeEpochEndTime' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'systemState' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'awaitingForkContinuation' }),
-		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'getVaultCount' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'securityPoolForker' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'escalationGame' }),
-		loadLinearFeeState(client, pool, blockNumber),
+		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'portfolioCustody' }),
 	])
-	const capital = linearFee === undefined ? undefined : await client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'portfolioCustody' })
-	const central = capital === undefined ? undefined : await loadCentralPortfolioQuestion(client, pool, capital, blockNumber)
-	const feeAccounting = { ...accounting, ...(linearFee === undefined ? {} : { linearFee }), ...central }
+	const central = await loadCentralPortfolioQuestion(client, pool, capital, blockNumber)
+	const mintFees = await loadMintFees(client, central, blockNumber)
+	const feeAccounting = central
+	const feeEndTime = central.feeEndTimestamp
+	const mintingCapacityCeilingAttoEth = central.mintingCapacityAttoEth
 	const checkpoint = (timestamp: bigint) => estimateMintCheckpoint({ ...feeAccounting, currentTimestamp: timestamp, feeEndTimestamp: feeEndTime })
 	const current = checkpoint(block.timestamp)
 	const projected = checkpoint(block.timestamp + 30n * 24n * 60n * 60n)
 	if (current === undefined || projected === undefined) throw new Error('Security pool fee accounting unavailable')
 	return {
 		questionData,
+		mintFees,
 		zoltar,
 		parent,
-		shareTokenSupplyAttoShares: central?.shareTokenSupplyAttoShares ?? shareTokenSupplyAttoShares,
+		shareTokenSupplyAttoShares: central.shareTokenSupplyAttoShares,
 		settlementCollateralAttoEth: current.settlementCollateralAfterFeesAttoEth,
 		settlementRecoveryAttoRep: central?.settlementRecoveryAttoRep ?? 0n,
 		valuation: { timestamp: block.timestamp, feeEndTime, projectedCollateralAttoEth: projected.settlementCollateralAfterFeesAttoEth, feeAccounting },
-		currentRetentionRate: accounting.currentRetentionRate,
-		totalUnderwritingLimitAttoEth: accounting.totalUnderwritingLimitAttoEth,
-		feeEligibleUnderwritingLimitAttoEth: accounting.feeEligibleUnderwritingLimitAttoEth,
+		currentRetentionRate: central.currentRetentionRate,
+		totalUnderwritingLimitAttoEth: central.totalUnderwritingLimitAttoEth,
+		feeEligibleUnderwritingLimitAttoEth: central.feeEligibleUnderwritingLimitAttoEth,
 		mintingCapacityCeilingAttoEth,
 		availableMintingCapacityAttoEth: BigInt(escalationGame) === 0n && mintingCapacityCeilingAttoEth > current.settlementCollateralAfterFeesAttoEth ? mintingCapacityCeilingAttoEth - current.settlementCollateralAfterFeesAttoEth : 0n,
 		systemState,
 		awaitingForkContinuation,
-		vaultCount,
 		forker,
 	}
 }
@@ -170,7 +167,6 @@ export function unavailableMarket(deployment: SecurityPoolDeployment, error: unk
 		systemState: -1,
 		awaitingForkContinuation: false,
 		universeForkTime: 0n,
-		vaultCount: 0n,
 		shareTokenSupplyAttoShares: 0n,
 		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 0n,
@@ -207,7 +203,6 @@ export async function loadLiveMarket(client: PublicClient, configuration: Deploy
 		availableMintingCapacityAttoEth,
 		systemState,
 		awaitingForkContinuation,
-		vaultCount,
 		forker,
 	} = poolSettings
 	const [question, questionOutcome, universeForkTime, originUniverseId] = await Promise.all([
@@ -251,11 +246,11 @@ export async function loadLiveMarket(client: PublicClient, configuration: Deploy
 		systemState: bigintToSafeNumber(systemState, 'SecurityPool system state'),
 		awaitingForkContinuation,
 		universeForkTime,
-		vaultCount,
 		shareTokenSupplyAttoShares,
 		settlementCollateralAttoEth,
 		settlementRecoveryAttoRep,
 		valuation: poolSettings.valuation,
+		mintFees: poolSettings.mintFees,
 		currentRetentionRate,
 		totalUnderwritingLimitAttoEth,
 		feeEligibleUnderwritingLimitAttoEth,
@@ -452,6 +447,7 @@ async function simulateEntryWithExpiry(client: WalletClient, configuration: Depl
 	requireTransactionSlippageBps(slippageBps)
 	const pairAddress = market.pair
 	if (pairAddress === undefined) throw new Error('Create the market and add liquidity before trading')
+	let mintAttoEth = 0n
 	const {
 		blockNumber,
 		blockHash,
@@ -460,10 +456,13 @@ async function simulateEntryWithExpiry(client: WalletClient, configuration: Depl
 	} = await simulateWithDeadline(
 		client,
 		expiry,
-		async (block, deadline) => await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [pairAddress, side === 'YES' ? 1 : 2, 0n, account, deadline], value: amount, blockNumber: block.blockNumber }),
+		async (block, deadline) => {
+			mintAttoEth = await loadBudgetMint(client, market, amount, block.blockNumber)
+			return await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [pairAddress, mintAttoEth, side === 'YES' ? 1 : 2, 0n, account, deadline], value: amount, blockNumber: block.blockNumber })
+		},
 		(block, deadline) => submissionDeadline(client, market, 'entry', block, deadline),
 	)
-	return { blockNumber, blockHash, result: simulation.result, amount, side, market, deadline, slippageBps, minimumLongShares: minimumAfterSlippage(simulation.result.totalLongShares, slippageBps) }
+	return { blockNumber, blockHash, result: simulation.result, mintAttoEth, amount, side, market, deadline, slippageBps, minimumLongShares: minimumAfterSlippage(simulation.result.totalLongShares, slippageBps) }
 }
 
 export async function simulateEntry(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, side: 'YES' | 'NO', amount: bigint, validityMinutes = 20n, slippageBps = UI_SLIPPAGE_BPS) {
@@ -478,7 +477,7 @@ export async function submitFreshEntry(client: WalletClient, configuration: Depl
 	const minimumLongShares = retainApprovedMinimum(quote.minimumLongShares, refreshed.result.totalLongShares, 'long shares')
 	return await guardedWrite(async () => {
 		await requireFreshSubmissionWindow(client, quote.market, 'entry', quote.deadline)
-		return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [pairAddress, quote.side === 'YES' ? 1 : 2, minimumLongShares, account, quote.deadline], value: quote.amount })
+		return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [pairAddress, refreshed.mintAttoEth, quote.side === 'YES' ? 1 : 2, minimumLongShares, account, quote.deadline], value: quote.amount })
 	})
 }
 

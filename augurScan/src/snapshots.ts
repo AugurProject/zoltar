@@ -4,7 +4,7 @@ import { type Abi, type AbiValue, type Address, getAddress } from './ethereum.ts
 import type { SystemContractKind } from './system-interfaces.ts'
 
 export type StateSnapshotTarget = {
-	readonly entityType: 'auction' | 'escalation' | 'pool' | 'vault'
+	readonly entityType: 'auction' | 'escalation' | 'pool'
 	readonly entityIdentity: string
 	readonly address: Address
 	readonly poolAddress?: Address | undefined
@@ -30,7 +30,7 @@ const snapshotAbi = (kind: SystemContractKind): Abi => {
 const poolAbi = snapshotAbi('securityPool')
 const coordinatorAbi = snapshotAbi('priceCoordinator')
 const escalationAbi = snapshotAbi('escalationGame')
-const auctionAbi = snapshotAbi('truthAuction')
+const auctionAbi = snapshotAbi('securityPoolUniformPriceAuction')
 
 export type StateRead = (address: Address, abi: Abi, functionName: string, args?: readonly AbiValue[]) => Promise<unknown>
 
@@ -58,35 +58,24 @@ const poolSnapshot = async (target: StateSnapshotTarget, read: StateRead): Promi
 	const address = target.address
 	const values = await Promise.all([
 		read(address, poolAbi, 'settlementCollateralAttoEth'),
-		read(address, poolAbi, 'totalUnderwritingLimitAttoEth'),
-		read(address, poolAbi, 'totalRepBackingUnits'),
-		read(address, poolAbi, 'totalClaimableVaultFeesAttoEth'),
-		read(address, poolAbi, 'totalAccruedFeesAttoEth'),
-		read(address, poolAbi, 'getTotalPoolHeldAttoRep'),
-		read(address, poolAbi, 'getCurrentMintingCapacityAttoEth'),
-		read(address, poolAbi, 'totalBadDebtAttoEth'),
 		read(address, poolAbi, 'systemState'),
 		read(address, poolAbi, 'awaitingForkContinuation'),
 		read(address, poolAbi, 'isEscalationResolved'),
 		read(address, poolAbi, 'shareTokenSupplyAttoShares'),
-		read(address, poolAbi, 'currentRetentionRate'),
 		read(address, poolAbi, 'statoblastSecurityMultiplierBps'),
 	])
+	const supply = exact(values[4], 'shareTokenSupplyAttoShares')
+	const settlement = exact(await read(address, poolAbi, 'attoSharesToAttoEth', [BigInt(supply)]), 'attoSharesToAttoEth(supply)')
 	const result: Record<string, unknown> = {
 		settlementCollateralAttoEth: exact(values[0], 'settlementCollateralAttoEth'),
-		totalUnderwritingLimitAttoEth: exact(values[1], 'totalUnderwritingLimitAttoEth'),
-		totalRepBackingUnits: exact(values[2], 'totalRepBackingUnits'),
-		totalClaimableVaultFeesAttoEth: exact(values[3], 'totalClaimableVaultFeesAttoEth'),
-		totalAccruedFeesAttoEth: exact(values[4], 'totalAccruedFeesAttoEth'),
-		totalPoolHeldAttoRep: exact(values[5], 'getTotalPoolHeldAttoRep'),
-		currentMintingCapacityAttoEth: exact(values[6], 'getCurrentMintingCapacityAttoEth'),
-		totalBadDebtAttoEth: exact(values[7], 'totalBadDebtAttoEth'),
-		systemState: exact(values[8], 'systemState'),
-		awaitingForkContinuation: flag(values[9], 'awaitingForkContinuation'),
-		escalationResolved: flag(values[10], 'isEscalationResolved'),
-		shareTokenSupplyAttoShares: exact(values[11], 'shareTokenSupplyAttoShares'),
-		currentRetentionRate: exact(values[12], 'currentRetentionRate'),
-		securityMultiplierBps: exact(values[13], 'statoblastSecurityMultiplierBps'),
+		questionSettlementAttoEth: settlement,
+		// Average value avoids requesting a whole share when less than one remains.
+		averageValueAttoEthPerShare: BigInt(supply) === 0n ? '0' : ((BigInt(settlement) * 10n ** 18n) / BigInt(supply)).toString(),
+		systemState: exact(values[1], 'systemState'),
+		awaitingForkContinuation: flag(values[2], 'awaitingForkContinuation'),
+		escalationResolved: flag(values[3], 'isEscalationResolved'),
+		shareTokenSupplyAttoShares: supply,
+		securityMultiplierBps: exact(values[5], 'statoblastSecurityMultiplierBps'),
 	}
 	if (target.coordinatorAddress !== undefined) {
 		const coordinator = target.coordinatorAddress
@@ -101,37 +90,6 @@ const poolSnapshot = async (target: StateSnapshotTarget, read: StateRead): Promi
 		}
 	}
 	return result
-}
-
-const vaultSnapshot = async (target: StateSnapshotTarget, read: StateRead): Promise<Readonly<Record<string, unknown>>> => {
-	if (target.poolAddress === undefined) throw new Error('Vault snapshot target is missing its pool')
-	const pool = target.poolAddress
-	const vault = target.address
-	const values = await Promise.all([read(pool, poolAbi, 'securityVaults', [vault]), read(pool, poolAbi, 'getVaultOpenInterestAttoEth', [vault]), read(pool, poolAbi, 'vaultBadDebtAttoEth', [vault]), read(pool, poolAbi, 'statoblastSecurityMultiplierBps')])
-	const state = tuple(values[0], 4, 'securityVaults')
-	const repBackingUnits = exact(state[0], 'securityVaults.repBackingUnits')
-	const backingAttoRep = await read(pool, poolAbi, 'backingUnitsToAttoRep', [BigInt(repBackingUnits)])
-	let disputeStakedAttoRep = '0'
-	let disputeBackingAttoRep = '0'
-	if (target.escalationAddress !== undefined) {
-		const [nominal, backing] = await Promise.all([read(target.escalationAddress, escalationAbi, 'disputeStakedRepByVaultAttoRep', [vault]), read(target.escalationAddress, escalationAbi, 'getVaultDisputeBackingAttoRep', [vault])])
-		disputeStakedAttoRep = exact(nominal, 'disputeStakedRepByVaultAttoRep')
-		disputeBackingAttoRep = exact(backing, 'getVaultDisputeBackingAttoRep')
-	}
-	return {
-		poolAddress: pool.toLowerCase(),
-		vaultAddress: vault.toLowerCase(),
-		repBackingUnits,
-		poolHeldBackingAttoRep: exact(backingAttoRep, 'backingUnitsToAttoRep'),
-		underwritingLimitAttoEth: exact(state[1], 'securityVaults.underwritingLimitAttoEth'),
-		claimableFeesAttoEth: exact(state[2], 'securityVaults.claimableFeesAttoEth'),
-		feeIndex: exact(state[3], 'securityVaults.feeIndex'),
-		openInterestAttoEth: exact(values[1], 'getVaultOpenInterestAttoEth'),
-		badDebtAttoEth: exact(values[2], 'vaultBadDebtAttoEth'),
-		securityMultiplierBps: exact(values[3], 'statoblastSecurityMultiplierBps'),
-		disputeStakedAttoRep,
-		disputeBackingAttoRep,
-	}
 }
 
 const escalationSnapshot = async (target: StateSnapshotTarget, read: StateRead): Promise<Readonly<Record<string, unknown>>> => {
@@ -163,36 +121,25 @@ const escalationSnapshot = async (target: StateSnapshotTarget, read: StateRead):
 }
 
 const auctionSnapshot = async (target: StateSnapshotTarget, read: StateRead): Promise<Readonly<Record<string, unknown>>> => {
-	const values = await Promise.all([
-		read(target.address, auctionAbi, 'auctionStarted'),
-		read(target.address, auctionAbi, 'maxAttoRepBeingSold'),
-		read(target.address, auctionAbi, 'attoEthRaiseCap'),
-		read(target.address, auctionAbi, 'minBidSizeAttoEth'),
-		read(target.address, auctionAbi, 'finalized'),
-		read(target.address, auctionAbi, 'clearingTick'),
-		read(target.address, auctionAbi, 'ethFilledAtClearingAttoEth'),
-		read(target.address, auctionAbi, 'attoEthRaised'),
-		read(target.address, auctionAbi, 'totalAttoRepPurchased'),
-		read(target.address, auctionAbi, 'activeTickCount'),
-		read(target.address, auctionAbi, 'computeClearing'),
-	])
-	const clearing = tuple(values[10], 4, 'computeClearing')
+	const quantities = ['opensAt', 'closesAt', 'lotAttoEth', 'targetLots', 'inventoryAttoRep', 'maximumBidAttoRepPerLot', 'repGrid', 'depositedAttoEth', 'bidCount'] as const
+	const values = await Promise.all(quantities.map(name => read(target.address, auctionAbi, name)))
+	const [initialized, finalized, rawClearing] = await Promise.all([read(target.address, auctionAbi, 'initialized'), read(target.address, auctionAbi, 'finalized'), read(target.address, auctionAbi, 'clearing')])
+	const clearing = tuple(rawClearing, 10, 'clearing')
 	return {
-		auctionStarted: exact(values[0], 'auctionStarted'),
-		maxAttoRepBeingSold: exact(values[1], 'maxAttoRepBeingSold'),
-		attoEthRaiseCap: exact(values[2], 'attoEthRaiseCap'),
-		minBidSizeAttoEth: exact(values[3], 'minBidSizeAttoEth'),
-		finalized: flag(values[4], 'finalized'),
-		clearingTick: exact(values[5], 'clearingTick'),
-		ethFilledAtClearingAttoEth: exact(values[6], 'ethFilledAtClearingAttoEth'),
-		attoEthRaised: exact(values[7], 'attoEthRaised'),
-		totalAttoRepPurchased: exact(values[8], 'totalAttoRepPurchased'),
-		activeTickCount: exact(values[9], 'activeTickCount'),
-		indicativeClearing: {
-			hitCap: flag(clearing[0], 'computeClearing.hitCap'),
-			clearingTick: exact(clearing[1], 'computeClearing.clearingTick'),
-			accumulatedBidAttoEth: exact(clearing[2], 'computeClearing.accumulatedBidAttoEth'),
-			bidAtClearingTickAttoEth: exact(clearing[3], 'computeClearing.bidAtClearingTickAttoEth'),
+		...Object.fromEntries(quantities.map((name, index) => [name, exact(values[index], name)])),
+		initialized: flag(initialized, 'initialized'),
+		finalized: flag(finalized, 'finalized'),
+		clearing: {
+			attoRepPerLot: exact(clearing[0], 'clearing.attoRepPerLot'),
+			filledLots: exact(clearing[1], 'clearing.filledLots'),
+			raisedAttoEth: exact(clearing[2], 'clearing.raisedAttoEth'),
+			soldAttoRep: exact(clearing[3], 'clearing.soldAttoRep'),
+			roundingAttoRep: exact(clearing[4], 'clearing.roundingAttoRep'),
+			marginalMinimumAttoRepPerLot: exact(clearing[5], 'clearing.marginalMinimumAttoRepPerLot'),
+			marginalFillLots: exact(clearing[6], 'clearing.marginalFillLots'),
+			marginalDemandLots: exact(clearing[7], 'clearing.marginalDemandLots'),
+			fullBeforeLots: exact(clearing[8], 'clearing.fullBeforeLots'),
+			raiseLimitReached: flag(clearing[9], 'clearing.raiseLimitReached'),
 		},
 	}
 }
@@ -201,7 +148,6 @@ const ENTITY_SNAPSHOTS: Record<StateSnapshotTarget['entityType'], (target: State
 	auction: auctionSnapshot,
 	escalation: escalationSnapshot,
 	pool: poolSnapshot,
-	vault: vaultSnapshot,
 }
 
 const entitySnapshot = (target: StateSnapshotTarget, read: StateRead) => ENTITY_SNAPSHOTS[target.entityType](target, read)
@@ -249,7 +195,7 @@ export const sampleEntityStateWithRead = async (target: StateSnapshotTarget, rea
 
 export const normalizeSnapshotTarget = (row: Record<string, unknown>): StateSnapshotTarget => {
 	const entityType = String(row['entity_type'])
-	if (entityType !== 'auction' && entityType !== 'escalation' && entityType !== 'pool' && entityType !== 'vault') throw new Error(`Unsupported snapshot entity type ${entityType}`)
+	if (entityType !== 'auction' && entityType !== 'escalation' && entityType !== 'pool') throw new Error(`Unsupported snapshot entity type ${entityType}`)
 	const optionalAddress = (key: string): Address | undefined => {
 		const value = row[key]
 		return value === null || value === undefined ? undefined : getAddress(String(value))

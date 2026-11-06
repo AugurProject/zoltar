@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { attoPrecision, auctionRules, computeWinningWithdrawal, escalationPayoutExample, escalationRules, escalationTimeLengthSeconds, formatRep, liquidationRules, retentionRules, type RoundingDirection } from './contract-reference-rules.mts'
+import { attoPrecision, computeWinningWithdrawal, escalationPayoutExample, escalationRules, escalationTimeLengthSeconds, formatRep } from './contract-reference-rules.mts'
 import { htmlToDocumentationText } from './docs-html-text.mts'
 
 // Exact numbers live on the generated contract pages; explanation pages keep the rule and link there.
@@ -9,9 +9,6 @@ import { htmlToDocumentationText } from './docs-html-text.mts'
 export async function assertAccountingExampleOwnership(): Promise<void> {
 	await assertExplanationPagesDelegateToReference()
 	await assertEscalationRulesMatchContracts()
-	await assertRetentionRulesMatchContracts()
-	await assertLiquidationRulesMatchContracts()
-	await assertAuctionRulesMatchContracts()
 	await assertGeneratedPagesRenderComputedValues()
 }
 
@@ -24,12 +21,11 @@ async function assertExplanationPagesDelegateToReference(): Promise<void> {
 	assert.match(escalationGameHtml, /href="\.\.\/reference\/contracts\/escalationgame\.html#winning-deposit-payout"/, 'escalation explanation must delegate the exact payout to the EscalationGame reference')
 	assert.match(escalationGameHtml, /href="\.\.\/reference\/contracts\/escalationgame\.html#required-support-threshold"/, 'escalation explanation must delegate the attrition curve to the EscalationGame reference')
 	assert.doesNotMatch(escalationGameHtml, /class="equation"/, 'escalation explanation must not repeat the attrition formula')
-	assert.match(feesHtml, /href="\.\.\/reference\/contracts\/securitypool\.html#retention-rate-and-annualized-fee"/, 'fees explanation must delegate retention constants to the SecurityPool reference')
+	assert.match(feesHtml, /href="\.\.\/reference\/contract-inventory\.html#portfolio-underwriting"/, 'fees explanation must delegate fee configuration to the portfolio reference')
 	assert.doesNotMatch(feesHtml, /class="equation"/, 'fees explanation must not repeat the annualization formula')
-	assert.match(liquidationsHtml, /href="\.\.\/reference\/contracts\/securitypool\.html#liquidation-transfer-rounding"/, 'liquidation explanation must delegate rounding to the SecurityPool reference')
-	assert.match(liquidationsHtml, /href="\.\.\/reference\/contracts\/liquidationapprovalregistry\.html#minimum-post-liquidation-health-factor"/, 'liquidation explanation must delegate the health-factor field to the registry reference')
-	assert.match(truthAuctionsHtml, /href="\.\.\/reference\/contracts\/uniformpricedualcapbatchauction\.html#tick-pricing"/, 'truth auction explanation must delegate tick pricing to the auction reference')
-	assert.doesNotMatch(truthAuctionsHtml, /class="equation"/, 'truth auction explanation must not repeat the tick price formula')
+	assert.match(liquidationsHtml, /href="\.\.\/reference\/contract-inventory\.html#portfolio-liquidation"/, 'liquidation explanation must delegate liquidation details to the portfolio reference')
+	assert.match(truthAuctionsHtml, /href="\.\.\/reference\/contract-inventory\.html#portfolio-truth-auction"/, 'truth auction explanation must delegate lot pricing to the portfolio auction reference')
+	assert.doesNotMatch(truthAuctionsHtml, /class="equation"/, 'truth auction explanation must not repeat the auction allocation formula')
 }
 
 const SOLIDITY_TIME_UNIT_SECONDS: Record<string, bigint> = { seconds: 1n, minutes: 60n, hours: 3_600n, days: 86_400n, weeks: 604_800n }
@@ -46,12 +42,6 @@ function solidityFunction(source: string, name: string, sourceLabel: string): st
 	const match = source.match(new RegExp(`function ${name}\\([^{]*\\{[\\s\\S]*?\\n\\t\\}`))
 	assert.ok(match !== null, `${sourceLabel} must define ${name}`)
 	return match[0]
-}
-
-// Math.mulDiv rounds down unless the call names Math.Rounding.Ceil; a statement's direction follows its call.
-function roundingDirectionOf(statement: string, label: string): RoundingDirection {
-	assert.match(statement, /Math\.mulDiv\(/, `${label} must compute through Math.mulDiv so its rounding direction is explicit`)
-	return statement.includes('Math.Rounding.Ceil') ? 'up' : 'down'
 }
 
 async function assertEscalationRulesMatchContracts(): Promise<void> {
@@ -95,45 +85,6 @@ async function assertEscalationRulesMatchContracts(): Promise<void> {
 	assert.equal(belowCap.burnAttoRep, (escalationPayoutExample.depositAmountAttoRep * belowCap.haircutPoolAttoRep) / belowCap.rewardEligiblePrincipalAttoRep, 'the haircut must divide by the reward-eligible principal')
 }
 
-async function assertRetentionRulesMatchContracts(): Promise<void> {
-	const securityPoolUtils = await readFile('solidity/contracts/statoblast/SecurityPoolUtils.sol', 'utf8')
-	assert.equal(solidityConstant(securityPoolUtils, 'MAX_RETENTION_RATE', 'SecurityPoolUtils.sol'), retentionRules.maxRetentionRate)
-	assert.equal(solidityConstant(securityPoolUtils, 'MIN_RETENTION_RATE', 'SecurityPoolUtils.sol'), retentionRules.minRetentionRate)
-	const dip = securityPoolUtils.match(/RETENTION_RATE_DIP = \((\d+) \* PRICE_PRECISION\) \/ 100;/)
-	assert.ok(dip?.[1] !== undefined, 'SecurityPoolUtils.sol must express RETENTION_RATE_DIP as a percentage of PRICE_PRECISION')
-	assert.equal(BigInt(dip[1]), retentionRules.dipUtilizationPercent)
-	assert.match(
-		securityPoolUtils,
-		/if \(mintingCapacityAttoEth == 0\) return MAX_RETENTION_RATE;[\s\S]*if \(utilization <= RETENTION_RATE_DIP\) \{[\s\S]*return MAX_RETENTION_RATE - \(slopeSpan \* utilizationRatio\) \/ PRICE_PRECISION;[\s\S]*return MIN_RETENTION_RATE;/,
-		'retention must be maximal at zero capacity, linear until the dip, then minimal',
-	)
-}
-
-async function assertLiquidationRulesMatchContracts(): Promise<void> {
-	const securityPoolUtils = await readFile('solidity/contracts/statoblast/SecurityPoolUtils.sol', 'utf8')
-	assert.equal(solidityConstant(securityPoolUtils, 'LIQUIDATION_REP_BONUS_BPS', 'SecurityPoolUtils.sol'), liquidationRules.repBonusBps)
-	assert.equal(solidityConstant(securityPoolUtils, 'BPS_DENOMINATOR', 'SecurityPoolUtils.sol'), liquidationRules.bpsDenominator)
-	const transfer = solidityFunction(securityPoolUtils, 'calculateBundledLiquidationTransfer', 'SecurityPoolUtils.sol')
-	const capacityStatement = transfer.match(/underwritingLimitToMoveAttoEth =[\s\S]*?;/)?.[0]
-	assert.ok(capacityStatement !== undefined, 'calculateBundledLiquidationTransfer must compute underwritingLimitToMoveAttoEth')
-	assert.match(capacityStatement, /underwritingLimitToMoveAttoEth = debtToMoveAttoEth;/, 'the ETH commitment transfer must be exact rather than a rounded REP allocation')
-	const award = solidityFunction(securityPoolUtils, 'calculateLiquidationBackingUnitsAward', 'SecurityPoolUtils.sol')
-	const grossAwardStatement = award.match(/grossRepAwardAttoRep = Math\.mulDiv\([\s\S]*?\);/)?.[0]
-	const backingUnitsStatement = award.match(/backingUnitsToTransfer =[\s\S]*?;/)?.[0]
-	assert.ok(grossAwardStatement !== undefined && backingUnitsStatement !== undefined, 'calculateLiquidationBackingUnitsAward must derive the gross award and backing units')
-	assert.equal(roundingDirectionOf(grossAwardStatement, 'gross REP award'), liquidationRules.repBackingUnitsRounding, 'published REP-backing rounding must match the gross award')
-	assert.equal(roundingDirectionOf(backingUnitsStatement, 'backing units to transfer'), liquidationRules.repBackingUnitsRounding, 'published REP-backing rounding must match the backing-unit conversion')
-}
-
-async function assertAuctionRulesMatchContracts(): Promise<void> {
-	const auctionStorage = await readFile('solidity/contracts/statoblast/UniformPriceDualCapBatchAuctionStorage.sol', 'utf8')
-	assert.equal(solidityConstant(auctionStorage, 'MIN_TICK', 'UniformPriceDualCapBatchAuctionStorage.sol'), auctionRules.minTick)
-	assert.equal(solidityConstant(auctionStorage, 'MAX_TICK', 'UniformPriceDualCapBatchAuctionStorage.sol'), auctionRules.maxTick)
-	assert.match(auctionStorage, /function tickToPrice\(int256 tick\)[\s\S]*price = PRICE_PRECISION;[\s\S]*_powerOf1Point0001\(i\)[\s\S]*if \(tick < 0\) price = \(PRICE_PRECISION \* PRICE_PRECISION\) \/ price;/, 'tick pricing must start at PRICE_PRECISION, multiply by powers of 1.0001, and invert negative ticks')
-	assert.equal(auctionRules.tickBase, '1.0001', 'the published tick base must match _powerOf1Point0001')
-}
-
-// Generated-output check: the rendered pages carry the values the rules compute, so a stale page fails.
 async function assertGeneratedPagesRenderComputedValues(): Promise<void> {
 	const page = async (slug: string) => htmlToDocumentationText(await readFile(`docs/reference/contracts/${slug}.html`, 'utf8'))
 	const escalation = await page('escalationgame')
@@ -141,12 +92,5 @@ async function assertGeneratedPagesRenderComputedValues(): Promise<void> {
 	for (const value of [payout.bonusAttoRep, payout.payoutAttoRep, payout.burnAttoRep, payout.scaledPayoutAttoRep]) {
 		assert.ok(escalation.includes(`${formatRep(value)} REP`), `EscalationGame page must render the computed ${formatRep(value)} REP`)
 	}
-	const securityPool = await page('securitypool')
-	assert.ok(securityPool.includes(retentionRules.maxRetentionRate.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '_')), 'SecurityPool page must render MAX_RETENTION_RATE')
-	assert.ok(securityPool.includes(retentionRules.minRetentionRate.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '_')), 'SecurityPool page must render MIN_RETENTION_RATE')
-	const auction = await page('uniformpricedualcapbatchauction')
-	assert.ok(auction.includes(auctionRules.minTick.toString()) && auction.includes(auctionRules.maxTick.toString()), 'auction page must render the tick bounds')
-	for (const slug of ['escalationgame', 'securitypool', 'liquidationapprovalregistry', 'uniformpricedualcapbatchauction']) {
-		assert.match(await page(slug), /Accounting examples/, `${slug} must render its accounting examples`)
-	}
+	assert.match(escalation, /Accounting examples/)
 }

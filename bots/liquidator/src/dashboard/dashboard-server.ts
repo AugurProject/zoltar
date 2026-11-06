@@ -28,8 +28,8 @@ export type DashboardController = {
 	setPaused: (value: unknown) => unknown | Promise<unknown>
 	reconcileTransaction?: (value: unknown) => unknown | Promise<unknown>
 	testMarketSources?: (value: unknown) => unknown | Promise<unknown>
-	setSupportedPool?: (value: unknown) => unknown | Promise<unknown>
-	setSelectedPools: (value: unknown) => unknown | Promise<unknown>
+	setSupportedPortfolio?: (value: unknown) => unknown | Promise<unknown>
+	setSelectedPortfolios: (value: unknown) => unknown | Promise<unknown>
 	setExecution?: (value: unknown) => unknown | Promise<unknown>
 	setSigner: (value: unknown) => unknown | Promise<unknown>
 	setStrategy: (value: unknown) => unknown | Promise<unknown>
@@ -275,11 +275,11 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			const handlers = new Map<string, (value: unknown) => unknown | Promise<unknown>>([
 				['/api/approved-universes', controller.setApprovedUniverses],
 				['/api/paused', controller.setPaused],
-				['/api/selected-pools', controller.setSelectedPools],
+				['/api/selected-portfolios', controller.setSelectedPortfolios],
 				['/api/signer', controller.setSigner],
 				['/api/strategy', controller.setStrategy],
 			])
-			if (controller.setSupportedPool !== undefined) handlers.set('/api/supported-pool', controller.setSupportedPool)
+			if (controller.setSupportedPortfolio !== undefined) handlers.set('/api/supported-portfolio', controller.setSupportedPortfolio)
 			if (controller.setExecution !== undefined) handlers.set('/api/execution', controller.setExecution)
 			if (controller.setSubmission !== undefined) handlers.set('/api/submission', controller.setSubmission)
 			if (controller.setMarketConfiguration !== undefined) handlers.set('/api/market-configuration', controller.setMarketConfiguration)

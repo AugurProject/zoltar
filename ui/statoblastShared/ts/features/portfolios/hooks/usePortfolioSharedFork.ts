@@ -109,6 +109,7 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 		branchReason ??
 		(state?.choice.recorded ? 'Your irreversible branch choice is already recorded.' : undefined) ??
 		(state !== undefined && state.timestamp >= state.choiceDeadline ? 'The fork choice window has closed.' : undefined) ??
+		(!state?.branch?.prepared ? 'Prepare the branch capital first.' : undefined) ??
 		(portfolio !== undefined && universeId === portfolio.universeId && !portfolio.positions.some(position => position.rep > 0n && position.commitment > 0n) ? 'No pledged REP to move.' : undefined)
 	const prepareBranchReason = branchReason ?? (state?.branch?.prepared ? 'This branch capital is already prepared.' : undefined)
 	const startReason = branchReason ?? (!state?.branch?.prepared ? 'Prepare the branch capital first.' : undefined) ?? (state !== undefined && state.timestamp < state.choiceDeadline ? 'Wait until the choice deadline.' : undefined) ?? (state?.branch?.started ? 'This branch migration is already started.' : undefined)
@@ -212,6 +213,7 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 				},
 				async latest => {
 					if (latest.choice.recorded || latest.timestamp >= latest.choiceDeadline) throw new Error('Fork choice is no longer available.')
+					if (!latest.branch?.prepared) throw new Error('Prepare the branch capital first.')
 				},
 			),
 		prepareBranch: () =>

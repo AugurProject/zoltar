@@ -59,7 +59,6 @@ contract EscalationGameFactory {
 
 	function deployEscalationGameFromFork(uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep, uint256 elapsedAtFork, BinaryOutcomes.BinaryOutcome fixedQuestionOutcome) external returns (EscalationGame) {
 		ISecurityPool child = ISecurityPool(payable(msg.sender));
-		ISecurityPool parent = child.parent();
 		bool winnerHaircutPaidByFork;
 		uint256 forkCarryInitialBackingAttoRep;
 		address portfolio = EscalationGameRepCustody.portfolio(address(child));
@@ -67,10 +66,6 @@ contract EscalationGameFactory {
 			(SecurityPoolReporterLedger.Question memory state, ) = SecurityPoolReporterLedger(ISecurityPoolPortfolioNative(portfolio).reporterLedger(child.universeId())).question(child.universeId(), child.questionId());
 			winnerHaircutPaidByFork = state.winnerHaircutPaidByFork;
 			forkCarryInitialBackingAttoRep = state.balanceAttoRep;
-		} else if (address(parent) != address(0x0)) {
-			ISecurityPoolForker forker = ISecurityPoolForker(child.securityPoolForker());
-			winnerHaircutPaidByFork = forker.isEscalationWinnerHaircutPaidByFork(parent);
-			(, forkCarryInitialBackingAttoRep, ) = forker.getOwnForkRepBuckets(parent);
 		}
 		EscalationGame gameImplementation = _deployEscalationGame();
 		gameImplementation.startFromFork(startBondAttoRep, nonDecisionThresholdAttoRep, elapsedAtFork, fixedQuestionOutcome, winnerHaircutPaidByFork, forkCarryInitialBackingAttoRep);

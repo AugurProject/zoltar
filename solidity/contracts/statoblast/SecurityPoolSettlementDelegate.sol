@@ -6,7 +6,7 @@ import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 import { IPortfolioSettlement } from './interfaces/IPortfolioSettlement.sol';
 
 interface ISecurityPoolPortfolioPurchaseAuthority {
-	function quoteHelper() external view returns (address);
+	function services() external view returns (address);
 }
 
 abstract contract SecurityPoolSettlementDelegate is SecurityPoolStorage {
@@ -17,7 +17,7 @@ abstract contract SecurityPoolSettlementDelegate is SecurityPoolStorage {
 		require(!awaitingForkContinuation, 'Fork await');
 		if (portfolioCustody != address(0)) {
 			address portfolio = pool.securityPoolFactory().getSecurityPoolPortfolio(pool);
-			require(msg.sender == ISecurityPoolPortfolioPurchaseAuthority(portfolio).quoteHelper(), 'Use portfolio purchase');
+			require(msg.sender == ISecurityPoolPortfolioPurchaseAuthority(portfolio).services(), 'Use portfolio purchase');
 		}
 		require(address(escalationGame) == address(0), 'Escalation mint closed');
 		if (msg.value == 0 || pool.isEscalationResolved()) revert('Settlement unavailable');
@@ -31,28 +31,11 @@ abstract contract SecurityPoolSettlementDelegate is SecurityPoolStorage {
 			emit CompleteSetCreated(msg.sender, msg.value, completeSetsToMintAttoShares, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
 			return completeSetsToMintAttoShares;
 		}
-		pool.updateSettlementCollateral();
-		completeSetsToMintAttoShares = pool.attoEthToAttoShares(msg.value);
-		require(completeSetsToMintAttoShares > 0, 'Exchange rate undefined');
-		// Vaults already answer for their full standing commitments, so minting
-		// within them adds no REP exposure and needs no oracle price.
-		uint256 nextSettlementCollateralAttoEth = settlementCollateralAttoEth + msg.value;
-		require(nextSettlementCollateralAttoEth <= totalUnderwritingLimitAttoEth, 'Over capacity');
-		shareTokenSupplyAttoShares += completeSetsToMintAttoShares;
-		settlementCollateralAttoEth = nextSettlementCollateralAttoEth;
-		emit CompleteSetCreated(msg.sender, msg.value, completeSetsToMintAttoShares, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
+		revert('Portfolio settlement missing');
 	}
 
 	function _redeemPortfolioSettlement(address recipient, uint256 burnedShares) internal returns (uint256 paidCashAttoEth) {
 		if (burnedShares == 0) return 0;
 		(paidCashAttoEth, shareTokenSupplyAttoShares, settlementCollateralAttoEth) = IPortfolioSettlement(address(portfolioAccounting)).redeemQuestionSettlement(recipient, burnedShares);
-	}
-
-	function setFundedSettlementCollateral(uint256 inheritedCollateralAttoEth) external {
-		// Inherited share liabilities need funded ETH, even when they exceed the
-		// child's standing commitments. Activation opens redemption and recovery.
-		uint256 feeLiabilitiesAttoEth = totalClaimableVaultFeesAttoEth + unallocatedAccruedFeesAttoEth;
-		require(feeLiabilitiesAttoEth <= address(this).balance && inheritedCollateralAttoEth <= address(this).balance - feeLiabilitiesAttoEth, 'Collateral unfunded');
-		settlementCollateralAttoEth = inheritedCollateralAttoEth;
 	}
 }

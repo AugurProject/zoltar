@@ -4,7 +4,7 @@ import { buildPortfolioDeploymentRequest, buildPortfolioPrepareNextRequest, expo
 
 const owner: Address = '0x0000000000000000000000000000000000000001'
 const factory: Address = '0x0000000000000000000000000000000000000002'
-const initialOriginPool: Address = '0x0000000000000000000000000000000000000003'
+const origin = { universeId: 0n, securityMultiplierBps: 20_000n, reportPriorityFeeAttoEthPerGas: 10_000_000_000n }
 const questionAdmissionPolicy: Address = '0x0000000000000000000000000000000000000004'
 const deployers = { capital: factory, commitments: factory, fees: factory, books: factory, settlement: factory, reporters: factory, forks: factory, services: factory, auctions: factory }
 const economics: PortfolioEconomicsConfig = {
@@ -16,17 +16,17 @@ const economics: PortfolioEconomicsConfig = {
 	rewardVestingSeconds: 86_400n,
 }
 const inputs = parseAbiParameters(
-	'address factory,address seed,uint256 horizon,(address capital,address commitments,address fees,address books,address settlement,address reporters,address forks,address services,address auctions) deployment,address admission,(uint256 purchaseFeeBps,uint256 annualFeeBps,uint256 minimumPurchaseFeeAttoEth,uint256 minimumCommitmentAttoEth,uint256 minimumOutcomeRate,uint48 rewardVestingSeconds) config',
+	'address factory,(uint248 universeId,uint256 securityMultiplierBps,uint256 reportPriorityFeeAttoEthPerGas) origin,uint256 horizon,(address capital,address commitments,address fees,address books,address settlement,address reporters,address forks,address services,address auctions) deployment,address admission,(uint256 purchaseFeeBps,uint256 annualFeeBps,uint256 minimumPurchaseFeeAttoEth,uint256 minimumCommitmentAttoEth,uint256 minimumOutcomeRate,uint48 rewardVestingSeconds) config',
 )
 const abi = [{ type: 'constructor', stateMutability: 'nonpayable', inputs }] as const
-const base = { owner, factory, initialOriginPool, questionAdmissionPolicy, maximumQuestionHorizonSeconds: 31_536_000n, deployers, economics, artifact: { abi, bytecode: '0x1234' as const } }
+const base = { owner, factory, origin, questionAdmissionPolicy, maximumQuestionHorizonSeconds: 31_536_000n, deployers, economics, artifact: { abi, bytecode: '0x1234' as const } }
 
 describe('shared capital portfolio deployment', () => {
 	test('encodes module deployment addresses and pool economics without a shared owner health target', () => {
 		const request = buildPortfolioDeploymentRequest(base)
 		const constructor = abi.find(entry => entry.type === 'constructor')
 		if (constructor === undefined || constructor.type !== 'constructor') throw new Error('Missing test constructor')
-		const encoded = encodeAbiParameters(constructor.inputs, [factory, initialOriginPool, base.maximumQuestionHorizonSeconds, deployers, questionAdmissionPolicy, economics])
+		const encoded = encodeAbiParameters(constructor.inputs, [factory, origin, base.maximumQuestionHorizonSeconds, deployers, questionAdmissionPolicy, economics])
 		expect(request).toEqual({ account: owner, data: `0x1234${encoded.slice(2)}` })
 	})
 
@@ -41,6 +41,12 @@ describe('shared capital portfolio deployment', () => {
 		expect(() => validatePortfolioEconomics({ ...economics, rewardVestingSeconds: 2n ** 48n })).toThrow('uint48')
 		expect(() => buildPortfolioDeploymentRequest({ ...base, deployers: { ...deployers, commitments: zeroAddress } })).toThrow('commitments deployer')
 		expect(() => buildPortfolioDeploymentRequest({ ...base, maximumQuestionHorizonSeconds: 0n })).toThrow('positive')
+	})
+
+	test('validates explicit universe, security multiplier and oracle priority fee without a seed pool', () => {
+		for (const universeId of [-1n, 1n << 248n]) expect(() => buildPortfolioDeploymentRequest({ ...base, origin: { ...origin, universeId } })).toThrow('Origin universe')
+		for (const securityMultiplierBps of [0n, 10_000n, 10_001n]) expect(() => buildPortfolioDeploymentRequest({ ...base, origin: { ...origin, securityMultiplierBps } })).toThrow('10001')
+		expect(() => buildPortfolioDeploymentRequest({ ...base, origin: { ...origin, reportPriorityFeeAttoEthPerGas: 0n } })).toThrow('positive')
 	})
 
 	test('exports exact unsigned smart-account transactions and rejects malformed values', () => {

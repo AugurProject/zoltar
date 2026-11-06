@@ -1,6 +1,6 @@
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import { getTransactionReviewSignal, isTransactionPreparationScope } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
+import { getTransactionReviewSignal } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
 import { getAddress, encodeFunctionData, maxUint256 } from '@zoltar/core-shared/evm/ethereum'
 import { formatCurrencyBalance, formatCurrencyBalanceWithUnit, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { TransactionPlanStep, TransactionRequestPreview, WriteClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
@@ -77,7 +77,6 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 
 export function createReviewedClient(client: WriteClient, validate: () => Promise<void> = async () => undefined, signal = getTransactionReviewSignal(), registerBeforeSubmit?: (assertActive: () => void) => void): WriteClient {
 	let controller = createTransactionStepController(signal, false)
-	const prepareInForm = isTransactionPreparationScope(signal)
 	const environment = createActiveEnvironmentGuard()
 	// The injected backend can await wallet validation after our final review checks.
 	// Close over the current controller because initialization replaces it.
@@ -85,7 +84,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 		if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 		controller.assertActive()
 	})
-	const requiresReview = () => prepareInForm || (plan?.length ?? 0) > 1 || (plan?.some(step => step.requireReview) ?? false)
+	const requiresReview = () => (plan?.length ?? 0) > 1 || (plan?.some(step => step.requireReview) ?? false)
 	let preview: TransactionRequestPreview | undefined
 	let plan: readonly TransactionPlanStep[] | undefined
 	let stepIndex = 0

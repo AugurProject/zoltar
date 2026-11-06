@@ -3,7 +3,7 @@ import type { PortfolioReadClient } from './securityPoolPortfolioRead.js'
 
 const abi = parseAbi([
 	'function factory() view returns (address)',
-	'function seedPool() view returns (address)',
+	'function originUniverseId() view returns (uint248)',
 	'function getQuestions(uint256 start,uint256 count) view returns (uint256[])',
 	'function getPool(uint256 questionId,uint248 universeId) view returns (address)',
 	'function zoltar() view returns (address)',
@@ -60,37 +60,28 @@ export async function loadPortfolioPriceSnapshot(parameters: { client: PriceRead
 	if (block.number === undefined || block.hash === undefined) throw new Error('Price preparation requires a mined block.')
 	const blockNumber = block.number
 	const read = (target: Address, functionName: string, args: readonly AbiValue[] = []) => client.readContract({ address: target, abi, functionName, args, blockNumber })
-	const [factoryValue, seedValue, protocolValue, feedValue, openValue, eth] = await Promise.all([
+	const [factoryValue, originUniverseValue, protocolValue, feedValue, openValue, eth] = await Promise.all([
 		read(portfolio, 'factory'),
-		read(portfolio, 'seedPool'),
+		read(portfolio, 'originUniverseId'),
 		read(portfolio, 'zoltar'),
 		read(portfolio, 'priceFeed', [universeId]),
 		read(portfolio, 'isPriceReportingOpen', [universeId]),
 		client.getBalance({ address: owner, blockNumber }),
 	])
 	const factory = address(factoryValue, 'Portfolio factory')
-	const seedPool = address(seedValue, 'Portfolio seed')
+	const originUniverseId = uint(originUniverseValue, 'Origin universe', 248)
 	const zoltar = address(protocolValue, 'Portfolio protocol')
 	const feed = address(feedValue, 'Portfolio price feed', true)
 	const reportingOpen = bool(openValue, 'Reporting window')
-	const [questionPage, seedOrigin, seedUniverse, seedProtocol, registeredFeed, repValue] = await Promise.all([
-		read(portfolio, 'getQuestions', [0n, 1n]),
-		read(factory, 'getSecurityPoolOriginId', [seedPool]),
-		read(seedPool, 'universeId'),
-		read(seedPool, 'zoltar'),
-		read(factory, 'sharedPriceFeeds', [portfolio, universeId]),
-		read(zoltar, 'getRepToken', [universeId]),
-	])
-	if (address(seedProtocol, 'Seed protocol') !== zoltar || address(registeredFeed, 'Canonical price feed', true) !== feed) throw new Error('Portfolio price identities do not match.')
-	if (typeof seedOrigin !== 'string' || !isHex(seedOrigin) || seedOrigin.length !== 66) throw new Error('Invalid seed pool origin.')
-	if (address(await read(factory, 'getSecurityPool', [seedOrigin, uint(seedUniverse, 'Seed universe', 248)]), 'Canonical seed') !== seedPool) throw new Error('Portfolio seed is not canonical.')
+	const [questionPage, factoryProtocol, registeredFeed, repValue] = await Promise.all([read(portfolio, 'getQuestions', [0n, 1n]), read(factory, 'zoltar'), read(factory, 'sharedPriceFeeds', [portfolio, universeId]), read(zoltar, 'getRepToken', [universeId])])
+	if (address(factoryProtocol, 'Factory protocol') !== zoltar || address(registeredFeed, 'Canonical price feed', true) !== feed) throw new Error('Portfolio price identities do not match.')
 	if (!Array.isArray(questionPage) || questionPage.length > 1) throw new Error('Invalid portfolio preparation source page.')
 	let sourcePool: Address | undefined
 	if (questionPage.length === 1) {
-		sourcePool = address(await read(portfolio, 'getPool', [uint(questionPage[0], 'Source question'), uint(seedUniverse, 'Origin universe', 248)]), 'Preparation source')
+		sourcePool = address(await read(portfolio, 'getPool', [uint(questionPage[0], 'Source question'), originUniverseId]), 'Preparation source')
 		const [sourcePortfolio, sourceOrigin] = await Promise.all([read(factory, 'getSecurityPoolPortfolio', [sourcePool]), read(factory, 'getSecurityPoolOriginId', [sourcePool])])
 		if (typeof sourceOrigin !== 'string' || !isHex(sourceOrigin) || sourceOrigin.length !== 66) throw new Error('Invalid preparation source origin.')
-		if (address(sourcePortfolio, 'Source portfolio') !== portfolio || address(await read(factory, 'getSecurityPool', [sourceOrigin, uint(seedUniverse, 'Origin universe', 248)]), 'Canonical source') !== sourcePool) throw new Error('Portfolio preparation source is not canonical.')
+		if (address(sourcePortfolio, 'Source portfolio') !== portfolio || address(await read(factory, 'getSecurityPool', [sourceOrigin, originUniverseId]), 'Canonical source') !== sourcePool) throw new Error('Portfolio preparation source is not canonical.')
 	}
 	const repToken = address(repValue, 'Branch REP', true)
 	let observation:
@@ -149,7 +140,7 @@ export async function loadPortfolioPriceSnapshot(parameters: { client: PriceRead
 	}
 	const [finalBlock, finalChain] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
 	if (finalChain !== chainId || finalBlock.hash !== block.hash) throw new Error('Price preparation changed. Refresh and retry.')
-	return { chainId, blockNumber, blockHash: block.hash, timestamp: block.timestamp, portfolio, owner, universeId, factory, seedPool, sourcePool, zoltar, feed, repToken, reportingOpen, ethBalanceAttoEth: uint(eth, 'ETH balance'), observation }
+	return { chainId, blockNumber, blockHash: block.hash, timestamp: block.timestamp, portfolio, owner, universeId, factory, originUniverseId, sourcePool, zoltar, feed, repToken, reportingOpen, ethBalanceAttoEth: uint(eth, 'ETH balance'), observation }
 }
 export type PortfolioPriceSnapshot = Awaited<ReturnType<typeof loadPortfolioPriceSnapshot>>
 

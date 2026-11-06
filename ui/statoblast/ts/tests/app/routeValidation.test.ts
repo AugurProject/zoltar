@@ -18,9 +18,9 @@ describe('statoblast route validation', () => {
 		expect(validateRoute({ selectedPoolView: 'invalid' }).hasInvalidSelectedPoolView).toBe(true)
 	})
 
-	test('accepts current and legacy pool tabs and pool pages without a tab', () => {
+	test('rejects removed standalone tabs and accepts question pages without a tab', () => {
 		for (const selectedPoolView of ['', 'vaults', 'fork-workflow', 'fork-auction', 'resolution']) {
-			expect(validateRoute({ selectedPoolView }).hasInvalidSelectedPoolView).toBe(false)
+			expect(validateRoute({ selectedPoolView }).hasInvalidSelectedPoolView).toBe(selectedPoolView !== '')
 		}
 	})
 

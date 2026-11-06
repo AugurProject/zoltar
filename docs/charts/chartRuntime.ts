@@ -1,18 +1,5 @@
-import { areaY, dot, line, lineY, plot, rect, ruleX, ruleY, text } from '@observablehq/plot'
-import {
-	AUCTION_STATUS_SYMBOLS,
-	auctionStatusKey,
-	calculateAnnualizedRetentionFeePercent,
-	computeCanonicalEscalationBindingCapital,
-	computeCanonicalEscalationDeadlineDays,
-	projectDocumentationEscalationDeposit,
-	calculateAuctionModel,
-	calculateForkThresholdSeries,
-	ESCALATION_ACTIVATION_DELAY_DAYS,
-	ESCALATION_TIME_LENGTH_DAYS,
-	quantitativeChartAxisLabels,
-	quantitativeChartIds,
-} from './chartModels'
+import { areaY, dot, line, lineY, plot, rect, ruleX, text } from '@observablehq/plot'
+import { computeCanonicalEscalationBindingCapital, computeCanonicalEscalationDeadlineDays, projectDocumentationEscalationDeposit, calculateForkThresholdSeries, ESCALATION_ACTIVATION_DELAY_DAYS, ESCALATION_TIME_LENGTH_DAYS, quantitativeChartAxisLabels, quantitativeChartIds } from './chartModels'
 import { centeredDiagramScrollLeft, type DiagramAttributeState, type DiagramBackgroundState, enforceDiagramBackground, expandDiagramAttributes, hasDiagramOverflow, isolateDiagramBackground, resolveChartEnvelopeWidth, restoreDiagramAttributes, restoreDiagramBackground, updateDiagramControl } from './diagramControl'
 import { fitArrowEndpointOutsideRectangles, layerDiagramRectangles } from './diagramGeometry'
 import chartSpecsSource from 'virtual:diagram-layouts'
@@ -524,172 +511,12 @@ function forkThresholdDecayChart(spec: ChartSpec): SVGSVGElement {
 	}) as SVGSVGElement
 }
 
-function retentionUtilizationChart(spec: ChartSpec): SVGSVGElement {
-	const axes = quantitativeChartAxisLabels['fig-statoblast-retention-utilization']
-	const curve = Array.from({ length: 101 }, (_, utilizationPercent) => {
-		return {
-			annualFeePercent: calculateAnnualizedRetentionFeePercent(utilizationPercent),
-			utilizationPercent,
-		}
-	})
-	return plot({
-		ariaDescription: spec.ariaDescription,
-		ariaLabel: spec.ariaLabel,
-		height: spec.height,
-		marginBottom: 46,
-		marginLeft: 60,
-		marginRight: 28,
-		marginTop: 22,
-		marks: [
-			areaY(curve, { fill: 'var(--gold-soft, #f3e4c6)', x: 'utilizationPercent', y: 'annualFeePercent' }),
-			lineY(curve, { stroke: 'var(--gold, #8a5d18)', strokeWidth: 3, x: 'utilizationPercent', y: 'annualFeePercent' }),
-			ruleX([80], { stroke: 'var(--red, #99453f)', strokeDasharray: '5,4', strokeWidth: 2 }),
-			text([{ annualFeePercent: curve[80]?.annualFeePercent ?? 50, label: '80% utilization dip', utilizationPercent: 80 }], {
-				dx: -8,
-				dy: -10,
-				fill: 'var(--red, #99453f)',
-				fontWeight: 700,
-				text: 'label',
-				textAnchor: 'end',
-				x: 'utilizationPercent',
-				y: 'annualFeePercent',
-			}),
-		],
-		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
-		width: spec.width,
-		x: { domain: [0, 100], grid: true, label: axes.x },
-		y: { domain: [0, 55], grid: true, label: axes.y },
-	}) as SVGSVGElement
-}
-
-function auctionDemandChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
-	const axes = quantitativeChartAxisLabels['fig-auction-clearing-ladder']
-	const compact = spec.width < 480
-	const example = document.querySelector('#simple-auction-example')
-	const repInventory = Math.max(readInput(example, 'repInventory', 4), 1)
-	const ethRaiseCap = Math.max(readInput(example, 'ethRaiseCap', 10), 0)
-	const model = calculateAuctionModel(ethRaiseCap, repInventory, [
-		{ eth: readInput(example, 'aliceEth', 5), key: 'alice', name: 'Alice', price: 5 },
-		{ eth: readInput(example, 'bobEth', 4), key: 'bob', name: 'Bob', price: 4 },
-		{ eth: readInput(example, 'carolEth', 5), key: 'carol', name: 'Carol', price: 3 },
-	])
-	const rawBids = model.bids.filter(bid => bid.eth > 0)
-	const bids = rawBids.map(bid => ({ ...bid, cumulativeRep: bid.chartRep }))
-	const firstDemandPoint = model.demandPoints[0]
-	const demandCurve = firstDemandPoint === undefined ? [] : [{ cumulativeRep: 0, price: firstDemandPoint.price }, ...model.demandPoints]
-	const clearingPrice = model.clearingPrice
-	const maxRep = Math.max(repInventory, ...bids.map(bid => bid.cumulativeRep), ...model.demandPoints.map(point => point.cumulativeRep), 1)
-	const yMax = Math.max(5.8, clearingPrice * 1.16, ...rawBids.map(bid => bid.price * 1.16))
-	const priceDescription = model.mode === 'uniform' ? `uniform clearing at ${clearingPrice.toFixed(2)} ETH per REP` : `underfunded allocation at an effective ${model.effectivePrice.toFixed(2)} ETH per REP, with a ${model.qualificationPrice.toFixed(2)} ETH per REP qualification boundary`
-	const priceLabel = compact ? `${model.mode === 'uniform' ? 'clear' : 'qualify'} ${clearingPrice.toFixed(2)}` : `${model.mode === 'uniform' ? 'clearing' : 'qualification'} ${clearingPrice.toFixed(2)} ETH/REP`
-	const legendItems = auctionStatusKey(compact, maxRep)
-
-	const chart = plot({
-		ariaDescription: `${spec.ariaDescription} The current result is ${priceDescription}, with ${model.ethRaised.toFixed(2)} ETH retained for ${repInventory.toFixed(2)} REP of inventory.`,
-		ariaLabel: 'Interactive truth-auction aggregate demand curve',
-		color: {
-			domain: ['Accepted', 'Partially filled', 'Rejected'],
-			range: ['var(--green, #1d735d)', 'var(--gold, #8a5d18)', 'var(--red, #99453f)'],
-			type: 'ordinal',
-		},
-		symbol: AUCTION_STATUS_SYMBOLS,
-		height: spec.height,
-		marginBottom: 50,
-		marginLeft: 66,
-		marginRight: 28,
-		marginTop: 24,
-		marks: [
-			areaY(demandCurve, {
-				curve: 'step-after',
-				fill: 'var(--blue-soft, #dceaf8)',
-				x: 'cumulativeRep',
-				y: 'price',
-				y1: 0,
-			}),
-			lineY(demandCurve, {
-				curve: 'step-after',
-				stroke: 'var(--blue, #245f9f)',
-				strokeWidth: 3,
-				x: 'cumulativeRep',
-				y: 'price',
-			}),
-			ruleX([repInventory], {
-				stroke: 'var(--red, #99453f)',
-				strokeDasharray: '5,4',
-				strokeWidth: 2,
-			}),
-			ruleY([clearingPrice], {
-				stroke: 'var(--gold, #8a5d18)',
-				strokeDasharray: '5,4',
-				strokeWidth: 2,
-			}),
-			dot(bids, {
-				fill: 'status',
-				r: 6,
-				symbol: 'status',
-				x: 'cumulativeRep',
-				y: 'price',
-			}),
-			text([{ label: `REP inventory ${repInventory.toFixed(2)}`, x: repInventory, y: yMax * 0.72 }], {
-				dx: -6,
-				dy: -7,
-				fill: 'var(--ink, currentColor)',
-				fontSize: 12,
-				text: 'label',
-				textAnchor: 'end',
-				x: 'x',
-				y: 'y',
-			}),
-			text(
-				[
-					{
-						label: priceLabel,
-						x: maxRep * (compact ? 0.96 : 0.72),
-						y: clearingPrice,
-					},
-				],
-				{
-					dx: compact ? -4 : 6,
-					dy: -7,
-					fill: 'var(--ink, currentColor)',
-					fontSize: 12,
-					text: 'label',
-					textAnchor: compact ? 'end' : 'start',
-					x: 'x',
-					y: 'y',
-				},
-			),
-			text(legendItems, {
-				fill: 'status',
-				fontSize: compact ? 10 : 12,
-				text: 'label',
-				textAnchor: 'middle',
-				x: 'x',
-				y: yMax * 0.97,
-			}),
-		],
-		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
-		width: spec.width,
-		x: { domain: [0, maxRep * 1.08], grid: true, label: axes.x },
-		y: { domain: [0, yMax], grid: true, label: axes.y },
-	}) as SVGSVGElement
-	chart.dataset['chartState'] = model.mode
-	mount.dataset['chartState'] = chart.dataset['chartState']
-	return chart
-}
-
-function createChart(chartId: string, spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
+function createChart(chartId: string, spec: ChartSpec): SVGSVGElement {
 	if (chartId === 'fig-statoblast-escalation-cost-curve') {
 		return bindingCapitalThresholdChart(spec)
 	}
 	if (chartId === 'fig-zoltar-fork-threshold-decay') {
 		return forkThresholdDecayChart(spec)
-	}
-	if (chartId === 'fig-statoblast-retention-utilization') {
-		return retentionUtilizationChart(spec)
-	}
-	if (chartId === 'fig-auction-clearing-ladder') {
-		return auctionDemandChart(spec, mount)
 	}
 	return markDrivenDiagramChart(spec)
 }
@@ -843,7 +670,6 @@ function ensureDiagramToolbar(overflowEnvelope: HTMLElement): void {
 const observedEnvelopes = new WeakSet<HTMLElement>()
 
 function quantitativeInputRoot(chartId: string, mount: HTMLElement): HTMLElement | null {
-	if (chartId === 'fig-auction-clearing-ladder') return document.querySelector('#simple-auction-example')
 	if (chartId === 'fig-statoblast-escalation-cost-curve') return document.querySelector('#escalation-game-example')
 	return mount.closest('.interactive-example')
 }
@@ -888,7 +714,7 @@ function renderMount(mount: HTMLElement): void {
 	}
 	const isQuantitative = quantitativeChartIdSet.has(chartId)
 	const renderSpec = isQuantitative ? responsiveChartSpec(spec, overflowEnvelope) : spec
-	const chart = createChart(chartId, renderSpec, mount)
+	const chart = createChart(chartId, renderSpec)
 	if (!(chart instanceof SVGSVGElement)) {
 		throw new Error(`Plot chart ${chartId} did not produce an SVG root`)
 	}
@@ -1033,7 +859,7 @@ function updateEscalationSimulator(): void {
 
 updateEscalationSimulator()
 
-for (const chartId of ['fig-auction-clearing-ladder', 'fig-statoblast-escalation-cost-curve']) {
+for (const chartId of ['fig-statoblast-escalation-cost-curve']) {
 	const mount = document.querySelector<HTMLElement>(`[data-plot-chart="${chartId}"]`)
 	const inputRoot = mount === null ? null : quantitativeInputRoot(chartId, mount)
 	for (const input of Array.from(inputRoot?.querySelectorAll<HTMLElement>('[data-example-input]') ?? [])) {

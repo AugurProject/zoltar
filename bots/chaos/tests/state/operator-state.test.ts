@@ -29,7 +29,7 @@ function protocolIndex(): NonNullable<DurableState['protocolIndex']> {
 	const childUniverseId = (BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [0n, 1n]))) & ((1n << 248n) - 1n)).toString()
 	return {
 		auctionBids: {
-			[emitter.toLowerCase()]: [{ amountAttoEth: 25n.toString(), index: '2', refunded: false, tick: '-7' }],
+			[emitter.toLowerCase()]: [{ bidId: '2', vault: emitter, lots: '25', minimumAttoRepPerLot: 7n.toString(), targetHealthBps: '15000', settled: false }],
 		},
 		auctionRefunds: {},
 		chainId: 1,
@@ -86,7 +86,7 @@ function protocolIndex(): NonNullable<DurableState['protocolIndex']> {
 				token2: getAddress('0x0000000000000000000000000000000000000027'),
 			},
 		],
-		schemaVersion: 3,
+		schemaVersion: 4,
 		securityPoolForker: getAddress('0x0000000000000000000000000000000000000030'),
 		startBlock: '10',
 		wallet: getAddress('0x0000000000000000000000000000000000000022'),
@@ -147,7 +147,6 @@ function workflow(): DurableWorkflow {
 				walletAssetDebits: [
 					{ amount: '7', asset: 'ETH', kind: 'native' },
 					{ amount: '3', asset: emitter, category: 'rep', kind: 'open-oracle-credit', openOracle: emitter },
-					{ amount: '2', category: 'rep', kind: 'security-pool-vault-rep', pool: emitter, vault: privateKeyToAccount(`0x${'11'.repeat(32)}`).address },
 				],
 			},
 		],
@@ -508,7 +507,6 @@ describe('chaos-bot durable state', () => {
 		expect(restored.workflows[0]?.steps[0]?.walletAssetDebits).toEqual([
 			{ amount: '7', asset: 'ETH', kind: 'native' },
 			{ amount: '3', asset: emitter, category: 'rep', kind: 'open-oracle-credit', openOracle: emitter },
-			{ amount: '2', category: 'rep', kind: 'security-pool-vault-rep', pool: emitter, vault: privateKeyToAccount(`0x${'11'.repeat(32)}`).address },
 		])
 		expect((await stat(path)).mode & 0o777).toBe(0o600)
 	})
@@ -788,7 +786,7 @@ describe('chaos-bot durable state', () => {
 		const restored = await loadDurableState(path, 1)
 		expect(restored.protocolIndex).toEqual(state.protocolIndex)
 		expect(restored.protocolIndex?.reports[0]?.stateHash).toBe(`0x${'55'.repeat(32)}`)
-		expect(restored.protocolIndex?.auctionBids[emitter.toLowerCase()]?.[0]).toEqual({ amountAttoEth: 25n.toString(), index: '2', refunded: false, tick: '-7' })
+		expect(restored.protocolIndex?.auctionBids[emitter.toLowerCase()]?.[0]).toEqual({ bidId: '2', vault: emitter, lots: '25', minimumAttoRepPerLot: 7n.toString(), targetHealthBps: '15000', settled: false })
 		expect(restored.protocolIndex?.escalationDeposits[0]).toMatchObject({ depositIndex: '3', parentDepositIndex: '8', claimed: false })
 		expect(restored.protocolIndex?.migrationRepSplits[0]?.childMigrationRepAmountAttoRep).toBe('25')
 		expect(restored.protocolIndex?.childRepSplits[0]).toMatchObject({ childPoolRepSplitAttoRep: 45n.toString(), outcomeIndex: '1', pool: emitter })

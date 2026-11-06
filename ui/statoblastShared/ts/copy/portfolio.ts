@@ -4,13 +4,13 @@ export const manager = 'Portfolio address'
 export const owner = 'Owner address'
 export const ownerHint = 'Holdings load automatically for this wallet or smart account.'
 export const loading = 'Loading portfolio…'
-export const originPool = 'Source pool address'
-export const originPoolHint = 'Uses this canonical pool’s universe and security multiplier. Complete the four setup stages after deployment, then register questions.'
+export const originPool = 'Origin universe ID'
+export const originPoolHint = 'Create a portfolio directly in this unforked universe. Complete the four setup stages after deployment, then register questions.'
 export const deploy = 'Deploy portfolio'
 export const deploying = 'Deploying portfolio…'
 export const connect = 'Connect a wallet to send transactions'
 export const enterPortfolio = 'Open a portfolio first'
-export const enterOrigin = 'Enter a valid origin pool address'
+export const enterOrigin = 'Enter a valid origin universe ID'
 export const ownerRequired = 'Connect the selected owner account'
 export const universe = 'Universe'
 export const addQuestion = 'Register question'
@@ -59,3 +59,41 @@ export const admissionCheckFailed = 'Could not verify the question admission pol
 export const approvedQuestionCount = (count: bigint) => `${count} permanently approved question${count === 1n ? '' : 's'}. Only the current page is listed below.`
 
 export const readUnavailable = 'Account refresh pending.'
+
+export const triggerUniverseFork = 'Trigger universe fork'
+
+export const triggerUniverseForkDescription = 'This unresolved question forks its universe. Portfolio owners and reporters must choose their recovery branch.'
+
+export const universeForkTriggered = 'Universe fork triggered'
+
+export const loadingQuestion = 'Loading question…'
+
+export const questionUnavailable = 'Question unavailable'
+
+export const selectRegisteredQuestion = 'Select a registered question from its portfolio.'
+
+export const portfolioQuestions = 'Portfolio questions'
+
+export const portfolioQuestionsDescription = 'Each question has separate outcome shares and reporting. Its portfolio provides the backing.'
+
+export const loadingQuestions = 'Loading questions…'
+
+export const noRegisteredQuestions = 'No registered questions'
+
+export const registerQuestionsHint = 'Create a portfolio and register its questions.'
+
+export const securityMultiplier = 'Security multiplier (%)'
+
+export const securityMultiplierHint = 'Minimum backing policy for this portfolio. Vault owners can choose a higher health setting.'
+
+export const oraclePriorityFee = 'Oracle priority fee (nanoETH/gas)'
+
+export const openPortfolios = 'Open portfolios'
+
+export const questionColumn = 'Question'
+
+export const portfolioColumn = 'Portfolio'
+
+export const outcomeColumn = 'Outcome'
+
+export const manageBackingAndRecovery = 'Manage portfolio backing and fork recovery'

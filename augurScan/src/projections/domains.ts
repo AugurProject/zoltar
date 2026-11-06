@@ -23,20 +23,7 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	...definitions('system', 'token-authorization', ['AuthorizationUsed', 'AuthorizationCanceled']),
 	...definitions('system', 'weth', ['Deposit', 'Withdrawal']),
 	...definitions('report', 'open-oracle-report', ['ReportSubmitted', 'ReportDisputed', 'ReportSettled'], ['reportId']),
-	...definitions('oracle', 'price-coordinator', [
-		'CoordinatorStateCheckpoint',
-		'ExecutedStagedOperation',
-		'LiquidationRouteStaged',
-		'PendingReportRecovered',
-		'PriceReportRejected',
-		'PriceReported',
-		'PriceRequested',
-		'RepEthPriceSet',
-		'SecurityPoolSet',
-		'SharedPriceFeedSet',
-		'StagedOperationQueued',
-		'InternalApproval',
-	]),
+	...definitions('oracle', 'price-coordinator', ['PendingReportRecovered', 'PriceReportRejected', 'PriceReported', 'PriceRequested', 'RepEthPriceSet', 'SecurityPoolSet', 'SharedPriceFeedSet', 'InternalApproval']),
 	...definitions('oracle', 'price-feed', ['CoordinatorRegistered', 'ExposureCheckpoint', 'ReportFundingAssigned']),
 	...definitions('escalation', 'escalation', [
 		'CarryDepositConsumed',
@@ -56,50 +43,17 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 		'EscalationSurplusAccrued',
 		'OrdinaryResidualRepBurned',
 		'ForkContinuationResidualRepBurned',
-		'TruthAuctionHaircutApplied',
 		'VaultEscrowUpdated',
 		'VaultUnresolvedTotalsExported',
 	]),
-	...definitions('auction', 'auction', ['AuctionStarted', 'BidSubmitted', 'AuctionFinalized', 'BidSettled', 'EthRefundCredited', 'PendingEthRefundWithdrawn']),
-	...definitions(
-		'risk',
-		'pool',
-		['DeploySecurityPool', 'SecurityPoolRegistered', 'AwaitingForkContinuationSet', 'CompleteSetCreated', 'CompleteSetRedeemed', 'EscalationGameSet', 'PoolAccountingCheckpoint', 'PoolForkModeActivated', 'ShareTokenSupplySet', 'SharesRedeemed', 'SystemStateSet', 'TotalRepBackingUnitsSet'],
-		['securityPool'],
-	),
-	...definitions('risk', 'vault', ['DepositToEscalationGame', 'RepDepositedToVault', 'RepRedeemedFromVault', 'RepWithdrawnFromVault', 'VaultAccountingCheckpoint', 'VaultLiquidated'], ['vault', 'targetVault']),
-	...definitions('approval', 'liquidation-approval', ['LiquidationApprovalSet', 'LiquidationApprovalReserved', 'LiquidationApprovalReleased', 'LiquidationApprovalConsumed', 'LiquidationApprovalRevoked', 'LiquidationApprovalNonceInvalidated'], ['approvalId', 'receiverVault']),
+	...definitions('auction', 'auction', ['AuctionStarted', 'BidSubmitted', 'AuctionFinalized', 'BidSettled']),
+	...definitions('risk', 'pool', ['DeploySecurityPool', 'SecurityPoolRegistered', 'AwaitingForkContinuationSet', 'CompleteSetCreated', 'CompleteSetRedeemed', 'EscalationGameSet', 'QuestionAccountingCheckpoint', 'ShareTokenSupplySet', 'SharesRedeemed', 'SystemStateSet'], ['securityPool']),
+	...definitions('risk', 'vault', ['PrincipalDeposited', 'PrincipalWithdrawn', 'CommitmentAuthorized', 'EarningsClaimed'], ['owner']),
+	...definitions('risk', 'capital-position', ['CommitmentCured', 'CommitmentTakenOver', 'AuctionCohortInstalled', 'AuctionBidMaterialized'], ['positionId', 'sourceId']),
+	...definitions('risk', 'portfolio', ['QuestionRegistered', 'CompleteSetsFunded', 'UniversePrepared', 'SetupAdvanced', 'RetirementServed', 'CapitalPriceAccepted', 'UnassignedFeesBurned']),
+	...definitions('fork', 'portfolio-branch', ['ForkFrozen', 'BranchChosen', 'BranchStarted', 'BranchActivated', 'NeutralCashRecovered'], ['universeId']),
 	...definitions('trading', 'amm', ['PositionExitedByTransfer', 'PairCreated', 'LiquidityAdded', 'LiquidityInitialized', 'LiquidityRemoved', 'PredeploymentSharesQuarantined', 'Swap', 'Sync', 'Transfer', 'Approval'], ['pair']),
-	...definitions(
-		'fork',
-		'fork',
-		[
-			'ChildReputationTokenInitialized',
-			'UniverseInitialized',
-			'UniverseForked',
-			'DeployChild',
-			'EscalationMigrationEntitlementInitialized',
-			'EscalationMigrationEntitlementMaterialized',
-			'MigrationRepAdded',
-			'MigrationRepSplit',
-			'RepBurned',
-			'ChildDisputeStakedRepMaterialized',
-			'ChildPoolLinked',
-			'ChildRepSplit',
-			'ClaimAuctionProceeds',
-			'UnassignedCommitmentTakenOver',
-			'ClaimForkedEscalationDepositsToWallet',
-			'DisputeStakedRepDrainedAtFork',
-			'ParentRepLocked',
-			'PoolHeldRepSweptToChild',
-			'SecurityPoolForkSnapshot',
-			'TruthAuctionFinalized',
-			'TruthAuctionStarted',
-			'VaultBadDebtMigrated',
-			'VaultMigrationCheckpoint',
-		],
-		['universeId', 'parentUniverseId', 'parent', 'parentPool', 'securityPool', 'childUniverseId', 'childPool'],
-	),
+	...definitions('fork', 'fork', ['ChildReputationTokenInitialized', 'UniverseInitialized', 'UniverseForked', 'DeployChild', 'MigrationRepAdded', 'MigrationRepSplit', 'RepBurned'], ['universeId', 'parentUniverseId', 'parent', 'parentPool', 'securityPool', 'childUniverseId', 'childPool']),
 }
 
 // Every taxonomy entry must name an event the pinned ABI catalog can decode;
@@ -115,7 +69,7 @@ const liquidationApprovalIdentity = (approvalId: unknown, receiverVault: unknown
 
 const domainEntityIdentity = (definition: { readonly domain: string; readonly entityType: string }, address: string, identity: { approvalIdentity: string | undefined; identitySuffix: string | undefined; reportId: unknown }): string => {
 	if (definition.domain === 'report' && typeof identity.reportId === 'string') return `${address}:${identity.reportId}`
-	if (definition.entityType === 'vault' && identity.identitySuffix !== undefined) return `${address}:${identity.identitySuffix}`
+	if (['vault', 'capital-position', 'portfolio-branch'].includes(definition.entityType) && identity.identitySuffix !== undefined) return `${address}:${identity.identitySuffix}`
 	if (definition.entityType === 'liquidation-approval' && identity.approvalIdentity !== undefined) return `${address}:${identity.approvalIdentity}`
 	return identity.identitySuffix ?? address
 }

@@ -1,9 +1,11 @@
+import type { PortfolioMintFees } from '@zoltar/trading-shared/trading/portfolioMint'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getReportingOutcomeKey } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 import type { FeeAccounting } from './holdingFees.js'
 import * as blockerCopy from '../copy/marketBlockers.js'
 
 export type LiveMarket = Readonly<{
+	mintFees?: Omit<PortfolioMintFees, 'cashAttoEth' | 'outcomeSupplyAttoShares'>
 	loadError?: string
 	pool: Address
 	pair: Address | undefined
@@ -19,7 +21,6 @@ export type LiveMarket = Readonly<{
 	systemState: number
 	awaitingForkContinuation: boolean
 	universeForkTime: bigint
-	vaultCount: bigint
 	shareTokenSupplyAttoShares: bigint
 	settlementCollateralAttoEth: bigint
 	/** Child REP delivered alongside the question’s ETH on redemption. */

@@ -21,12 +21,12 @@ export function slot(game: Address, index: number, depositor = wallet): CarryLea
 	return { leaf, originGame: game, hash: hashCarryLeaf(leaf), consumedLocally: false }
 }
 
-type Game = { game: Address; parent: Address; inherited: CarryLeafSlot[]; local: CarryLeafSlot[]; consumed: string[]; direct: Set<string> }
+type Game = { game: Address; parent: Address; inherited: CarryLeafSlot[]; local: CarryLeafSlot[]; consumed: string[] }
 export function storageFixture() {
 	const leaf = slot(source, 0)
 	const games: Game[] = [
-		{ game: source, parent: zeroAddress, inherited: [], local: [leaf], consumed: [], direct: new Set() },
-		{ game: child, parent: source, inherited: [leaf], local: [], consumed: [], direct: new Set() },
+		{ game: source, parent: zeroAddress, inherited: [], local: [leaf], consumed: [] },
+		{ game: child, parent: source, inherited: [leaf], local: [], consumed: [] },
 	]
 	const calls: { method: string; functionName?: string; block?: unknown }[] = []
 	let badSnapshot = false
@@ -100,7 +100,7 @@ export function storageFixture() {
 			case 'getCarryLeafPageByOutcome': {
 				const available = outcome === 0n ? (game?.local ?? []).filter(slot => args[1] === 0n || BigInt(slot.leaf.sourceNodeId) <= BigInt(String(args[1]))).reverse() : []
 				const visited = available.slice(0, Number(args[2]))
-				const page = visited.filter(slot => slot.hash !== zeroHash && !game?.direct.has(slot.leaf.parentDepositIndex))
+				const page = visited.filter(slot => slot.hash !== zeroHash)
 				const last = visited.at(-1)
 				return [
 					page.map(slot => ({ depositor: slot.leaf.depositor, amountAttoRep: BigInt(slot.leaf.amountAttoRep), parentDepositIndex: BigInt(slot.leaf.parentDepositIndex), cumulativeAmountAttoRep: BigInt(slot.leaf.cumulativeAmountAttoRep), sourceNodeId: BigInt(slot.leaf.sourceNodeId) })),
@@ -111,10 +111,6 @@ export function storageFixture() {
 				const node = game?.local[Number(args[0]) - 1]
 				if (node === undefined || game === undefined) break
 				return [cycle ? BigInt(node.leaf.sourceNodeId) : BigInt(node.leaf.sourceNodeId) - 1n, node.leaf.depositor, 0n, BigInt(node.leaf.amountAttoRep), BigInt(node.leaf.parentDepositIndex), BigInt(node.leaf.cumulativeAmountAttoRep), BigInt(game.inherited.length) + BigInt(node.leaf.sourceNodeId) - 1n]
-			}
-			case 'isEscalationDepositClaimedDirectly': {
-				const sourceGame = typeof args[0] === 'string' ? games.find(game => pool(game.game).toLowerCase() === args[0]?.toString().toLowerCase()) : undefined
-				return [sourceGame?.direct.has(String(args[2])) ?? false]
 			}
 			case 'systemState':
 				return [game !== undefined && forkedGames.has(game.game.toLowerCase()) ? 2n : 0n]
@@ -132,7 +128,7 @@ export function storageFixture() {
 			}
 			case 'getClaimCheckpointState': {
 				const claimId = keccak256(encodeAbiParameters([{ type: 'uint8' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], args))
-				const commitment = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'bytes32' }, { type: 'bytes32' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [target, claimId, zeroHash, 20n, 15n, 1n]))
+				const commitment = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'bytes32' }, { type: 'bytes32' }, { type: 'uint256' }], [target, claimId, zeroHash, 1n]))
 				return [true, checkpointApplying && !badCheckpointCommitment ? commitment : zeroHash, zeroAddress, { startAttoRep: 0n, endAttoRep: 10n, rewardStartAttoRep: 0n, rewardEndAttoRep: 10n }]
 			}
 			case 'getClaimCheckpointWitnessSegment':
@@ -140,7 +136,7 @@ export function storageFixture() {
 			case 'isClaimHistoryFrozen':
 				return [game?.game !== child || forkedGames.has(game.game.toLowerCase())]
 			case 'getClaimIntervalTransform':
-				return [game !== undefined && BigInt(String(args[1])) < BigInt(game.inherited.length) ? game.parent : zeroAddress, { repBeforeAttoRep: 20n, repRemainingAttoRep: 15n, consumedBeforeAttoRep: 1n }]
+				return [game !== undefined && BigInt(String(args[1])) < BigInt(game.inherited.length) ? game.parent : zeroAddress, { consumedBeforeAttoRep: 1n }]
 			case 'getInheritedClaimAllocation':
 				return [args[1] ?? 0n, principalAttoRep, args[1] ?? 0n, args[2] ?? 0n]
 			case 'getBindingCapitalAttoRep':

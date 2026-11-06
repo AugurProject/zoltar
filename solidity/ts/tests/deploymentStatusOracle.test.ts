@@ -7,7 +7,7 @@ import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import { setupTestAccounts, ensureProxyDeployerDeployed } from '../testSupport/simulator/utils/utilities'
 import { ensureDeploymentStatusOracleDeployed, ensureInfraDeployed, getDeploymentStepAddresses, getInfraContractAddresses, loadDeploymentStatusOracleMask } from '../testSupport/simulator/utils/contracts/deployStatoblast'
-import { statoblast_Multicall3_Multicall3, statoblast_SecurityPoolUtils_SecurityPoolUtils, statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, statoblast_openOracle_OpenOracle_OpenOracle } from '../types/contractArtifact'
+import { statoblast_Multicall3_Multicall3, statoblast_SecurityPoolUtils_SecurityPoolUtils, statoblast_openOracle_OpenOracle_OpenOracle } from '../types/contractArtifact'
 import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
 import { PROXY_DEPLOYER_ADDRESS } from '../testSupport/simulator/utils/constants'
 
@@ -62,7 +62,6 @@ describe('Deployment Status Oracle Test Suite', () => {
 	test('ensureInfraDeployed repairs an out-of-order partial deployment', async () => {
 		await deployViaProxy(`0x${statoblast_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`)
 		await deployViaProxy(`0x${statoblast_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`)
-		await deployViaProxy(`0x${statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`)
 
 		await ensureInfraDeployed(client)
 

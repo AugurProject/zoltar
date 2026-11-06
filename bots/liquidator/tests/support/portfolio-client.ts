@@ -55,10 +55,6 @@ export function portfolioClient(overrides: Record<string, unknown> = {}) {
 	const values: Record<string, unknown> = {
 		factory: settings.deployment.securityPoolFactory,
 		zoltar: settings.deployment.zoltar,
-		seedPool: targetAddress,
-		getSecurityPoolPortfolio: '0x0000000000000000000000000000000000000000',
-		getSecurityPoolOriginId: `0x${'1'.repeat(64)}`,
-		getSecurityPool: targetAddress,
 		securityPoolFactory: settings.deployment.securityPoolFactory,
 		parent: '0x0000000000000000000000000000000000000000',
 		originUniverseId: 0n,

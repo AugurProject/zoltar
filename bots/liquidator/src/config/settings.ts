@@ -1,6 +1,6 @@
 import { parsePortfolioPolicy, parsePortfolioSelections, serializePortfolioPolicy, type PortfolioPolicy, type PortfolioSelection } from './portfolio-policy.ts'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
-import { bigintToSafeNumber, getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { bigintToSafeNumber, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
 import { boolean, formatDecimalAmount, integer, parseDecimalAmount, record, nonemptyString as string } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { parseCentralizedMarketSettings, serializeCentralizedMarketSettings, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
@@ -11,14 +11,7 @@ import { parseApprovedUniverses } from '@zoltar/bot-shared/monitoring/universe-p
 import { resolve } from 'node:path'
 import { canonicalDeployment, parseRootMarketSettings, presetNetwork } from './canonical-deployment.ts'
 
-export type CandidatePriority = 'largest-bonus' | 'largest-debt' | 'lowest-top-up'
-
-export type DesiredPoolSettings = {
-	initialReportPriorityFeeAttoEthPerGas: bigint
-	questionId: bigint
-	statoblastSecurityMultiplierBps: bigint
-	universeId: bigint
-}
+type CandidatePriority = 'largest-bonus' | 'largest-debt' | 'lowest-top-up'
 
 export type StrategySettings = {
 	allowAutomaticDeposits: boolean
@@ -58,7 +51,6 @@ export type OperatorSettings = {
 		weth: Address
 		zoltar: Address
 	}
-	desiredPools: DesiredPoolSettings[]
 	network: {
 		chainId: number
 		explorerUrl: string
@@ -80,7 +72,6 @@ export type OperatorSettings = {
 	}
 	selectedPortfolios: PortfolioSelection[]
 	portfolioPolicy: PortfolioPolicy
-	selectedPools: Address[]
 	strategy: StrategySettings
 	submission: SubmissionSettings
 	version: typeof SETTINGS_VERSION
@@ -99,38 +90,6 @@ function parseNetworkName(value: unknown): NetworkName {
 function parseCandidatePriority(value: unknown): CandidatePriority {
 	if (value === 'largest-bonus' || value === 'largest-debt' || value === 'lowest-top-up') return value
 	throw new Error('strategy.candidatePriority is invalid')
-}
-
-function unsignedInteger(value: unknown, label: string, bits: 248 | 256) {
-	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)$/.test(value)) throw new Error(`${label} must be a non-negative integer string`)
-	const parsed = BigInt(value)
-	if (parsed >= 2n ** BigInt(bits)) throw new Error(`${label} must fit in uint${bits}`)
-	return parsed
-}
-
-function universeId(value: unknown, label: string) {
-	return unsignedInteger(value, label, 248)
-}
-
-function uint256(value: unknown, label: string) {
-	return unsignedInteger(value, label, 256)
-}
-
-export function parseDesiredPools(value: unknown): DesiredPoolSettings[] {
-	if (!Array.isArray(value)) throw new Error('desiredPools must be an array')
-	const parsed = value.map((entry, index) => {
-		const desired = record(entry, `desiredPools[${index.toString()}]`)
-		const pool = {
-			initialReportPriorityFeeAttoEthPerGas: uint256(desired['initialReportPriorityFeeAttoEthPerGas'], `desiredPools[${index.toString()}].initialReportPriorityFeeAttoEthPerGas`),
-			questionId: uint256(desired['questionId'], `desiredPools[${index.toString()}].questionId`),
-			statoblastSecurityMultiplierBps: BigInt(integer(desired['statoblastSecurityMultiplierBps'], `desiredPools[${index.toString()}].statoblastSecurityMultiplierBps`, 10_001, Number.MAX_SAFE_INTEGER)),
-			universeId: universeId(desired['universeId'], `desiredPools[${index.toString()}].universeId`),
-		}
-		return pool
-	})
-	const ids = parsed.map(pool => `${pool.universeId.toString()}:${pool.questionId.toString()}:${pool.statoblastSecurityMultiplierBps.toString()}:${pool.initialReportPriorityFeeAttoEthPerGas.toString()}`)
-	if (new Set(ids).size !== ids.length) throw new Error('desiredPools must not contain duplicates')
-	return parsed
 }
 
 export function parseStrategy(value: unknown): StrategySettings {
@@ -165,29 +124,9 @@ export function parseStrategy(value: unknown): StrategySettings {
 	return parsed
 }
 
-/**
- * Upgrades an older saved document to the current shape, so files and dashboard-saved settings written by an earlier
- * release keep loading. Version 1 stored the desired-pool multiplier as a uint256 string.
- */
-function migrateSettingsDocument(root: Record<string, unknown>): Record<string, unknown> {
-	if (root['version'] === SETTINGS_VERSION) return root
-	if (root['version'] !== 1) throw new Error('operator settings version must be 1 or 2')
-	const desiredPools = root['desiredPools']
-	return {
-		...root,
-		desiredPools: Array.isArray(desiredPools)
-			? desiredPools.map(entry => {
-					if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) return entry
-					const multiplier: unknown = Reflect.get(entry, 'statoblastSecurityMultiplierBps')
-					return typeof multiplier === 'string' && /^(?:0|[1-9]\d*)$/.test(multiplier) ? { ...entry, statoblastSecurityMultiplierBps: Number(multiplier) } : entry
-				})
-			: desiredPools,
-		version: SETTINGS_VERSION,
-	}
-}
-
 export function parseSettings(value: unknown): OperatorSettings {
-	const root = migrateSettingsDocument(record(value, 'operator settings'))
+	const root = record(value, 'operator settings')
+	if (root['version'] !== SETTINGS_VERSION) throw new Error('operator settings version must be 2')
 	const networkConfigured = root['networkConfigured'] === undefined ? root['connectivity'] !== undefined : boolean(root['networkConfigured'], 'networkConfigured')
 	if (networkConfigured && (root['network'] === undefined || root['connectivity'] === undefined)) throw new Error('A configured operator requires network and connectivity')
 	if (!networkConfigured && root['connectivity'] !== undefined) throw new Error('An unconfigured operator cannot retain RPC connectivity')
@@ -195,18 +134,7 @@ export function parseSettings(value: unknown): OperatorSettings {
 	const chainId = integer(network['chainId'], 'network.chainId', 1, 2 ** 31 - 1)
 	const runtime = record(root['runtime'], 'runtime')
 	const connectivity = networkConfigured ? parseQuorumConnectivitySettings(root['connectivity']) : unconfiguredQuorumConnectivity()
-	const selectedPools = root['selectedPools']
-	if (!Array.isArray(selectedPools)) throw new Error('selectedPools must be an array')
 	const parsedApprovedUniverses = parseApprovedUniverses(root['approvedUniverses'])
-	const parsedSelectedPools = [
-		...new Map(
-			selectedPools.map(value => {
-				const address = getAddress(string(value, 'selected pool'))
-				return [address.toLowerCase(), address] as const
-			}),
-		).values(),
-	]
-	const parsedDesiredPools = parseDesiredPools(root['desiredPools'] ?? [])
 	const privateKey = signerCandidate(root['privateKey']).privateKey
 	const settings: OperatorSettings = {
 		approvedUniverses: parsedApprovedUniverses,
@@ -218,7 +146,6 @@ export function parseSettings(value: unknown): OperatorSettings {
 		centralizedMarkets: parseRootMarketSettings(root['centralizedMarkets'], chainId),
 		connectivity,
 		deployment: canonicalDeployment(chainId),
-		desiredPools: parsedDesiredPools,
 		network: {
 			chainId,
 			explorerUrl: string(network['explorerUrl'], 'network.explorerUrl'),
@@ -238,7 +165,6 @@ export function parseSettings(value: unknown): OperatorSettings {
 			uiHost: uiHost(runtime['uiHost']),
 			uiPort: integer(runtime['uiPort'], 'runtime.uiPort', 1, 65_535),
 		},
-		selectedPools: parsedSelectedPools,
 		selectedPortfolios: parsePortfolioSelections(root['selectedPortfolios']),
 		portfolioPolicy: parsePortfolioPolicy(root['portfolioPolicy']),
 		strategy: parseStrategy(root['strategy']),
@@ -263,18 +189,11 @@ export function serializedSettings(settings: OperatorSettings, redactPrivateKey 
 		childMarketConfigurations: settings.childMarketConfigurations.map(serializeCentralizedMarketSettings),
 		centralizedMarkets,
 		connectivity: settings.networkConfigured ? { ...settings.connectivity } : undefined,
-		desiredPools: settings.desiredPools.map(pool => ({
-			initialReportPriorityFeeAttoEthPerGas: pool.initialReportPriorityFeeAttoEthPerGas.toString(),
-			questionId: pool.questionId.toString(),
-			statoblastSecurityMultiplierBps: bigintToSafeNumber(pool.statoblastSecurityMultiplierBps, 'Desired pool security multiplier basis points'),
-			universeId: pool.universeId.toString(),
-		})),
 		network: settings.network,
 		networkConfigured: settings.networkConfigured,
 		paused: settings.paused,
 		privateKey: redactPrivateKey || settings.privateKey === undefined ? null : settings.privateKey,
 		runtime: settings.runtime,
-		selectedPools: settings.selectedPools,
 		selectedPortfolios: settings.selectedPortfolios.map(selection => ({ address: selection.address, universeId: selection.universeId.toString() })),
 		portfolioPolicy: serializePortfolioPolicy(settings.portfolioPolicy),
 		strategy: {

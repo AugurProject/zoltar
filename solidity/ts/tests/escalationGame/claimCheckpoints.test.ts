@@ -18,8 +18,7 @@ import { getArray, getContractOutput, getRecord, getString, loadContractsJson, n
 describe('Escalation Game: bounded claim checkpoints', () => {
 	const fixture = useEscalationGameFixture()
 	beforeEach(async () => {
-		// Anvil starts at timestamp 1; synthetic ancestors forked then and must
-		// be past the canonical eight-week direct-claim window before caching.
+		// Keep the synthetic fork timestamp in the past.
 		await fixture.mockWindow.setTime(16n * 7n * 24n * 60n * 60n)
 	})
 
@@ -49,17 +48,16 @@ describe('Escalation Game: bounded claim checkpoints', () => {
 		)
 	})
 
-	type Transform = { before: bigint; remaining: bigint; consumed: bigint }
+	type Transform = { consumed: bigint }
 	type Interval = readonly [bigint, bigint, bigint, bigint]
 	const tuple = [QuestionOutcome.Yes, 333_333_333_333_333n, 999_999_999_999_999n, 1n] as const
 	const initialInterval = (amount: bigint = tuple[1], cumulative: bigint = tuple[2]): Interval => [cumulative - amount, cumulative, cumulative - amount, cumulative]
 	const applyTransform = (interval: Interval, transform: Transform): Interval => {
-		const retain = (value: bigint) => (transform.before === 0n ? value : (value * transform.remaining) / transform.before)
-		return [retain(interval[0]) - transform.consumed, retain(interval[1]) - transform.consumed, retain(interval[2]), retain(interval[3])]
+		return [interval[0] - transform.consumed, interval[1] - transform.consumed, interval[2], interval[3]]
 	}
 	const deployHistoryNode = async (source: Address, transform: Transform, snapshotLeafCount = 2n) => {
 		const hash = await fixture.client.sendTransaction({
-			data: encodeDeployData({ abi: checkpointHarness.abi, bytecode: `0x${checkpointHarness.evm.bytecode.object}`, args: [source, snapshotLeafCount, transform.before, transform.remaining, transform.consumed] }),
+			data: encodeDeployData({ abi: checkpointHarness.abi, bytecode: `0x${checkpointHarness.evm.bytecode.object}`, args: [source, snapshotLeafCount, transform.consumed] }),
 		})
 		const receipt = await fixture.client.waitForTransactionReceipt({ hash })
 		if (receipt.contractAddress === null || receipt.contractAddress === undefined) throw new Error('Claim history deployment missing')
@@ -71,14 +69,13 @@ describe('Escalation Game: bounded claim checkpoints', () => {
 		let source = addressString(0n)
 		let interval = initialInterval()
 		for (let generation = 0; generation < depth; generation += 1) {
-			const before = generation === 0 ? 0n : 101n + BigInt(generation)
-			const transform = { before, remaining: before === 0n ? 0n : before - 3n, consumed: BigInt(generation % 3) }
+			const transform = { consumed: BigInt(generation % 3) }
 			source = await deployHistoryNode(source, transform, generation === 0 ? 0n : 2n)
 			nodes.push(source)
 			transforms.push(transform)
 			interval = applyTransform(interval, transform)
 		}
-		const targetTransform = { before: 17n, remaining: 13n, consumed: 9n }
+		const targetTransform = { consumed: 9n }
 		const target = await deployHistoryNode(source, targetTransform)
 		return { target, nodes, transforms, interval, targetTransform }
 	}
@@ -114,11 +111,11 @@ describe('Escalation Game: bounded claim checkpoints', () => {
 		await fixture.initializeSnapshotFromSourceViaTestSecurityPool(target.testSecurityPoolAddress, history.target, zeroHash(), [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 2n, 0n], [0n, tuple[2], 0n], [zeroHash(), zeroHash(), zeroHash()])
 		await finish(target.escalationGameAddress)
 		const expected = applyTransform(history.interval, history.targetTransform)
-		assert.deepStrictEqual(await allocation(target.escalationGameAddress), expectedAllocation(expected, { before: 0n, remaining: 0n, consumed: 0n }))
+		assert.deepStrictEqual(await allocation(target.escalationGameAddress), expectedAllocation(expected, { consumed: 0n }))
 		assert.deepStrictEqual(await progress(target.escalationGameAddress), [addressString(0n), 0n, true, true])
 	})
 
-	test('deep checkpoints preserve each floor, compact only principal, and resume permissionlessly', async () => {
+	test('deep checkpoints preserve rewards, compact only principal, and resume permissionlessly', async () => {
 		const { target, interval, targetTransform } = await deployHistory(25)
 		assert.strictEqual((await progress(target))[3], false)
 		await assert.rejects(allocation(target), /Claim checkpoint required/)
@@ -147,14 +144,14 @@ describe('Escalation Game: bounded claim checkpoints', () => {
 		assert.deepStrictEqual(before, expectedAllocation(interval, targetTransform))
 		await finish(target)
 		assert.deepStrictEqual(await allocation(target), before)
-		const extra = await deployHistoryNode(target, { before: 0n, remaining: 0n, consumed: 0n })
+		const extra = await deployHistoryNode(target, { consumed: 0n })
 		assert.strictEqual((await progress(extra))[3], false)
 		await assert.rejects(allocation(extra), /Claim checkpoint required/)
 		await finish(extra)
 		assert.strictEqual((await progress(extra))[3], true)
 	})
 
-	test('immediate parent consumption and target retention remain live after checkpoint completion', async () => {
+	test('immediate parent consumption remains live after checkpoint completion', async () => {
 		const history = await deployHistory(12)
 		const parent = history.nodes.at(-1)
 		const parentTransform = history.transforms.at(-1)
@@ -167,24 +164,22 @@ describe('Escalation Game: bounded claim checkpoints', () => {
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: checkpointHarness.abi, address: parent, functionName: 'setConsumedBefore', args: [QuestionOutcome.Yes, parentTransform.consumed + 17n] }))
 		const updatedInterval: Interval = [history.interval[0] - 17n, history.interval[1] - 17n, history.interval[2], history.interval[3]]
 		assert.deepStrictEqual(await allocation(history.target), expectedAllocation(updatedInterval, history.targetTransform))
-		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: checkpointHarness.abi, address: history.target, functionName: 'setRetention', args: [19n, 11n] }))
-		assert.deepStrictEqual(await allocation(history.target), expectedAllocation(updatedInterval, { before: 19n, remaining: 11n, consumed: 0n }))
-		assert.notStrictEqual((await allocation(history.target))[1], before[1])
+		assert.deepStrictEqual(await allocation(history.target), expectedAllocation(updatedInterval, { consumed: 0n }))
+		assert.strictEqual((await allocation(history.target))[1], before[1])
 	})
 
-	test('mutable ancestors cannot be cached, and the exact migration deadline remains mutable', async () => {
+	test('mutable or finalized ancestors cannot be cached; unresolved fork history freezes immediately', async () => {
 		const { target, nodes } = await deployHistory(12)
 		const grandparent = nodes.at(-2)
 		if (grandparent === undefined) throw new Error('Missing grandparent')
 		const block = await fixture.client.getBlock()
-		const migrationPeriod = 8n * 7n * 24n * 60n * 60n
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: checkpointHarness.abi, address: grandparent, functionName: 'setForkState', args: [0, 1n] }))
 		await assert.rejects(process(target), /Claim source still mutable/)
 		assert.strictEqual((await progress(target))[1], 0n, 'failed processing must not commit partial frames')
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: checkpointHarness.abi, address: grandparent, functionName: 'setForkState', args: [1, block.timestamp] }))
-		await fixture.mockWindow.setTime(block.timestamp + migrationPeriod)
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: checkpointHarness.abi, address: grandparent, functionName: 'setFinalResolution', args: [1] }))
 		assert.strictEqual(await fixture.client.readContract({ abi: checkpointHarness.abi, address: grandparent, functionName: 'isClaimHistoryFrozen' }), false)
-		await fixture.mockWindow.setTime(block.timestamp + migrationPeriod + 1n)
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: checkpointHarness.abi, address: grandparent, functionName: 'setFinalResolution', args: [3] }))
 		assert.strictEqual(await fixture.client.readContract({ abi: checkpointHarness.abi, address: grandparent, functionName: 'isClaimHistoryFrozen' }), true)
 		await finish(target)
 		assert.strictEqual((await progress(target))[2], true)
@@ -210,22 +205,22 @@ describe('Escalation Game: bounded claim checkpoints', () => {
 		assert.strictEqual((await progress(target))[2], true)
 	})
 
-	test('local leaves stop ancestry traversal at their origin and cannot inherit an older haircut', async () => {
+	test('local leaves stop ancestry traversal at their origin and cannot inherit older consumption', async () => {
 		const { target: ancestor } = await deployHistory(12)
 		// leafIndex1 was added locally because only one leaf was inherited here.
-		const origin = await deployHistoryNode(ancestor, { before: 9n, remaining: 1n, consumed: 5n }, 1n)
-		const target = await deployHistoryNode(origin, { before: 0n, remaining: 0n, consumed: 0n })
+		const origin = await deployHistoryNode(ancestor, { consumed: 5n }, 1n)
+		const target = await deployHistoryNode(origin, { consumed: 0n })
 		assert.strictEqual((await progress(target))[3], true)
-		const expected = applyTransform(initialInterval(), { before: 0n, remaining: 0n, consumed: 5n })
-		assert.deepStrictEqual(await allocation(target), expectedAllocation(expected, { before: 0n, remaining: 0n, consumed: 0n }))
+		const expected = applyTransform(initialInterval(), { consumed: 5n })
+		assert.deepStrictEqual(await allocation(target), expectedAllocation(expected, { consumed: 0n }))
 		await finish(target)
-		assert.deepStrictEqual(await allocation(target), expectedAllocation(expected, { before: 0n, remaining: 0n, consumed: 0n }))
+		assert.deepStrictEqual(await allocation(target), expectedAllocation(expected, { consumed: 0n }))
 	})
 
 	test('a descendant reuses its canonical parent checkpoint instead of rebuilding the prepared prefix', async () => {
 		const history = await deployHistory(25)
 		await finish(history.target)
-		const descendant = await deployHistoryNode(history.target, { before: 23n, remaining: 19n, consumed: 0n })
+		const descendant = await deployHistoryNode(history.target, { consumed: 0n })
 		await process(descendant)
 		assert.strictEqual((await progress(descendant))[1], 0n, 'the canonical parent cache plus one frozen boundary transform completes preparation')
 		assert.strictEqual((await progress(descendant))[2], true)
@@ -259,11 +254,11 @@ describe('Escalation Game: bounded claim checkpoints', () => {
 		let source = history.target
 		let expected = applyTransform(history.interval, history.targetTransform)
 		for (let generation = 0; generation < 3; generation += 1) {
-			const transform = { before: 29n + BigInt(generation), remaining: 17n, consumed: BigInt(generation) }
+			const transform = { consumed: BigInt(generation) }
 			source = await deployHistoryNode(source, transform)
 			expected = applyTransform(expected, transform)
 		}
-		const targetTransform = { before: 11n, remaining: 7n, consumed: 0n }
+		const targetTransform = { consumed: 0n }
 		const target = await deployHistoryNode(source, targetTransform)
 		await process(target, 1n)
 		assert.strictEqual((await progress(target))[1], 1n)
@@ -316,7 +311,7 @@ describe('Escalation Game: bounded claim checkpoints', () => {
 		const stateBefore = await state()
 		const segmentBefore = await segment()
 		for (const malformed of [
-			{ ...batch, transforms: [{ ...first, repRemainingAttoRep: first.repRemainingAttoRep + 1n }, ...batch.transforms.slice(1)] },
+			{ ...batch, transforms: [{ ...first, consumedBeforeAttoRep: first.consumedBeforeAttoRep + 1n }, ...batch.transforms.slice(1)] },
 			{ ...batch, baseCommitment: zeroHash() },
 			{ ...batch, transforms: [...batch.transforms].reverse() },
 			{ ...batch, transforms: batch.transforms.slice(1) },
@@ -350,20 +345,20 @@ describe('Escalation Game: bounded claim checkpoints', () => {
 		await finish(history.target)
 		const source = history.nodes.at(-1)
 		if (source === undefined) throw new Error('Missing branch source')
-		const sibling = await deployHistoryNode(source, { before: 37n, remaining: 19n, consumed: 0n })
-		const descendant = await deployHistoryNode(sibling, { before: 0n, remaining: 0n, consumed: 0n })
+		const sibling = await deployHistoryNode(source, { consumed: 0n })
+		const descendant = await deployHistoryNode(sibling, { consumed: 0n })
 		await process(descendant)
 		assert.strictEqual((await progress(descendant))[1], 8n, 'a sibling checkpoint is not on this canonical path')
-		const differentTupleTarget = await deployHistoryNode(history.target, { before: 0n, remaining: 0n, consumed: 0n })
+		const differentTupleTarget = await deployHistoryNode(history.target, { consumed: 0n })
 		const foreignTuple = [QuestionOutcome.Yes, tuple[1] + 1n, tuple[2], tuple[3]] as const
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: checkpointHarness.abi, address: differentTupleTarget, functionName: 'processClaimCheckpoint', args: [...foreignTuple, 8n, zeroHash(), []] }))
 		const foreignState = await fixture.client.readContract({ abi: checkpointHarness.abi, address: differentTupleTarget, functionName: 'getClaimCheckpointState', args: foreignTuple })
 		assert.strictEqual(foreignState[2], addressString(0n))
-		const localOrigin = await deployHistoryNode(history.target, { before: 13n, remaining: 1n, consumed: 3n }, 1n)
+		const localOrigin = await deployHistoryNode(history.target, { consumed: 3n }, 1n)
 		await finish(localOrigin)
-		const localDescendant = await deployHistoryNode(localOrigin, { before: 0n, remaining: 0n, consumed: 0n })
+		const localDescendant = await deployHistoryNode(localOrigin, { consumed: 0n })
 		await finish(localDescendant)
-		assert.deepStrictEqual(await allocation(localDescendant), expectedAllocation(applyTransform(initialInterval(), { before: 0n, remaining: 0n, consumed: 3n }), { before: 0n, remaining: 0n, consumed: 0n }))
+		assert.deepStrictEqual(await allocation(localDescendant), expectedAllocation(applyTransform(initialInterval(), { consumed: 3n }), { consumed: 0n }))
 	})
 
 	test('reused boundary must be frozen while the immediate parent and target stay live', async () => {
@@ -374,19 +369,17 @@ describe('Escalation Game: bounded claim checkpoints', () => {
 		if (parent === undefined || grandparent === undefined || parentTransform === undefined) throw new Error('Missing reuse boundary')
 		await finish(parent)
 		const block = await fixture.client.getBlock()
-		const cutoff = block.timestamp + 8n * 7n * 24n * 60n * 60n
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: checkpointHarness.abi, address: grandparent, functionName: 'setForkState', args: [1, block.timestamp] }))
-		await fixture.mockWindow.setTime(cutoff)
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: checkpointHarness.abi, address: grandparent, functionName: 'setForkState', args: [0, block.timestamp] }))
 		await assert.rejects(fixture.client.simulateContract({ abi: checkpointHarness.abi, address: history.target, functionName: 'processClaimCheckpoint', args: [...tuple, 1n, zeroHash(), []] }), /Claim source still mutable/)
 		assert.strictEqual((await progress(history.target))[1], 0n)
-		await fixture.mockWindow.setTime(cutoff + 1n)
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: checkpointHarness.abi, address: grandparent, functionName: 'setForkState', args: [1, block.timestamp] }))
 		await process(history.target, 1n)
 		assert.strictEqual((await progress(history.target))[2], true)
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: checkpointHarness.abi, address: parent, functionName: 'setConsumedBefore', args: [QuestionOutcome.Yes, parentTransform.consumed + 7n] }))
 		const updated: Interval = [history.interval[0] - 7n, history.interval[1] - 7n, history.interval[2], history.interval[3]]
 		assert.deepStrictEqual(await allocation(history.target), expectedAllocation(updated, history.targetTransform))
-		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: checkpointHarness.abi, address: history.target, functionName: 'setRetention', args: [47n, 29n] }))
-		assert.deepStrictEqual(await allocation(history.target), expectedAllocation(updated, { before: 47n, remaining: 29n, consumed: 0n }))
+		assert.deepStrictEqual(await allocation(history.target), expectedAllocation(updated, { consumed: 0n }))
 	})
 
 	test('every partial suffix size preserves its exact base, segment, and four interval coordinates', async () => {
@@ -429,12 +422,12 @@ describe('Escalation Game: bounded claim checkpoints', () => {
 		assert.notStrictEqual(await readSlot(segmentSlot + 1n), zeroHash())
 		let baseCommitment: Hash = zeroHash()
 		for (const transform of history.transforms.slice(8, 17).reverse()) {
-			baseCommitment = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'bytes32' }, { type: 'bytes32' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [history.target, claimId, baseCommitment, transform.before, transform.remaining, transform.consumed]))
+			baseCommitment = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'bytes32' }, { type: 'bytes32' }, { type: 'uint256' }], [history.target, claimId, baseCommitment, transform.consumed]))
 		}
 		const transforms = history.transforms
 			.slice(0, 8)
 			.reverse()
-			.map(transform => ({ repBeforeAttoRep: transform.before, repRemainingAttoRep: transform.remaining, consumedBeforeAttoRep: transform.consumed }))
+			.map(transform => ({ consumedBeforeAttoRep: transform.consumed }))
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: checkpointHarness.abi, address: history.target, functionName: 'processClaimCheckpoint', args: [...tuple, 8n, baseCommitment, transforms] }))
 		assert.strictEqual((await progress(history.target))[1], 9n)
 		const segment = await fixture.client.readContract({ abi: checkpointHarness.abi, address: history.target, functionName: 'getClaimCheckpointWitnessSegment', args: tuple })
@@ -452,7 +445,7 @@ describe('Escalation Game: bounded claim checkpoints', () => {
 	test('cold sparse storage stays bounded and prepared descendants reuse checkpoint work', async () => {
 		const history = await deployHistory(25)
 		const cold = await finish(history.target)
-		const descendant = await deployHistoryNode(history.target, { before: 0n, remaining: 0n, consumed: 0n })
+		const descendant = await deployHistoryNode(history.target, { consumed: 0n })
 		const warm = await finish(descendant)
 		// Includes the bounded central-custody checks added to each native claim path.
 		// The six-call budget is separate from the per-transaction cap below.
@@ -468,7 +461,7 @@ describe('Escalation Game: bounded claim checkpoints', () => {
 		const deepTuple = [QuestionOutcome.Yes, tuple[1], tuple[2], leafCount - 1n] as const
 		let source = addressString(0n)
 		let interval = initialInterval()
-		const transform = { before: 101n, remaining: 99n, consumed: 0n }
+		const transform = { consumed: 0n }
 		for (let generation = 0; generation < 11; generation += 1) {
 			source = await deployHistoryNode(source, transform, generation === 0 ? 0n : leafCount)
 			if (generation !== 0) interval = applyTransform(interval, transform)

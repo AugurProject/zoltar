@@ -17,7 +17,7 @@ describe('checkpoint planner executed preparation costs', () => {
 		await fixture.mockWindow.setTime(16n * 7n * 24n * 60n * 60n)
 	})
 	async function deploy(source: Address) {
-		const hash = await fixture.client.sendTransaction({ data: encodeDeployData({ abi: harness.abi, bytecode: `0x${harness.evm.bytecode.object}`, args: [source, source === zeroAddress ? 0n : 2n, 1000n, 997n, 0n] }) })
+		const hash = await fixture.client.sendTransaction({ data: encodeDeployData({ abi: harness.abi, bytecode: `0x${harness.evm.bytecode.object}`, args: [source, source === zeroAddress ? 0n : 2n, 0n] }) })
 		const receipt = await fixture.client.waitForTransactionReceipt({ hash })
 		if (receipt.contractAddress === null || receipt.contractAddress === undefined) throw new Error('Missing checkpoint harness address')
 		return receipt.contractAddress

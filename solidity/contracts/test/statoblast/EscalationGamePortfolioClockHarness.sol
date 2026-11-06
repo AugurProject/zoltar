@@ -58,7 +58,7 @@ contract EscalationGamePortfolioClockHarness is EscalationGameProofTestSecurityP
 import { EscalationClaimCheckpointHarness } from './EscalationClaimCheckpointHarness.sol';
 
 contract EscalationCentralClaimCheckpointHarness is EscalationClaimCheckpointHarness {
-	constructor(address source) EscalationClaimCheckpointHarness(source, 2, 0, 0, 0) {}
+	constructor(address source) EscalationClaimCheckpointHarness(source, 2, 0) {}
 	function portfolioCustody() external view returns (address) {
 		return address(this);
 	}

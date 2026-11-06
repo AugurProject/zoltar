@@ -3,9 +3,8 @@ import { createSecurityPoolAddressHelper } from '../../../evm/securityPoolAddres
 import { createDeploymentStatusOracleAddressHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { createStatoblastInitCodes, encodeOpenOraclePriceCoordinatorArguments } from '@zoltar/statoblast-shared/deployment/initCodes'
 import { createZoltarAddressHelpers } from '@zoltar/zoltar-shared/deployment/deploymentAddresses'
-import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
-import { WriteClient, writeContractAndWait } from '../clients'
+import { WriteClient } from '../clients'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS } from '../constants'
 import { addressString } from '../bigint'
 import { contractExists } from '../utilities'
@@ -22,7 +21,6 @@ import {
 	statoblast_factories_OpenOraclePriceCoordinatorFactory_SharedPoolPriceFeedDeploymentWorker,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 	statoblast_factories_ShareTokenFactory_ShareTokenFactory,
-	statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
 	statoblast_openOracle_OpenOracle_OpenOracle,
 	statoblast_SecurityPool_SecurityPool,
 	statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate,
@@ -42,7 +40,6 @@ import {
 	statoblast_tokens_ShareToken_ShareToken,
 	Zoltar_Zoltar,
 	ZoltarQuestionData_ZoltarQuestionData,
-	statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction,
 } from '../../../../types/contractArtifact'
 import { objectEntries } from '../typescript'
 import { getRepTokenAddress } from './zoltar'
@@ -77,7 +74,6 @@ const statoblastInitCodes = createStatoblastInitCodes(
 		securityPoolPortfolioAuctionDeployer: statoblast_SecurityPoolPortfolioAuction_SecurityPoolPortfolioAuctionDeployer,
 		securityPoolUtils: statoblast_SecurityPoolUtils_SecurityPoolUtils,
 		shareTokenFactory: statoblast_factories_ShareTokenFactory_ShareTokenFactory,
-		uniformPriceDualCapBatchAuctionFactory: statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
 	},
 	{ proxyDeployerAddress: addressString(PROXY_DEPLOYER_ADDRESS), zeroSalt: ZERO_SALT },
 )
@@ -141,7 +137,7 @@ const { getZoltarAddress, getZoltarQuestionDataAddress } = createZoltarAddressHe
 
 export const getInfraContractAddresses = statoblastInitCodes.createInfraContractAddresses(MAINNET_WETH_ADDRESS, { getZoltarAddress, getZoltarQuestionDataAddress })
 
-export const { getDeploymentStatusOracleAddress } = createDeploymentStatusOracleAddressHelper({
+const { getDeploymentStatusOracleAddress } = createDeploymentStatusOracleAddressHelper({
 	deploymentStatusOracleBytecode: getDeploymentStatusOracleByteCode,
 	proxyDeployerAddress: addressString(PROXY_DEPLOYER_ADDRESS),
 	zeroSalt: ZERO_SALT,
@@ -175,12 +171,6 @@ export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 			bytecode: `0x${statoblast_tokens_ShareToken_ShareToken.evm.bytecode.object}`,
 			args: [securityPoolFactory, zoltarAddress, questionId],
 		}),
-	getTruthAuctionInitCode: securityPoolForker =>
-		encodeDeployData({
-			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-			bytecode: `0x${statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.evm.bytecode.object}`,
-			args: [securityPoolForker],
-		}),
 })
 
 export async function loadDeploymentStatusOracleMask(client: Pick<WriteClient, 'readContract'>): Promise<bigint> {
@@ -206,7 +196,6 @@ function getDeploymentStatusOracleSteps() {
 	return [
 		{ id: 'proxyDeployer', address: addressString(PROXY_DEPLOYER_ADDRESS) },
 		{ id: 'multicall3', address: infraContracts.multicall3 },
-		{ id: 'uniformPriceDualCapBatchAuctionFactory', address: infraContracts.uniformPriceDualCapBatchAuctionFactory },
 		{ id: 'securityPoolUtils', address: infraContracts.securityPoolUtils },
 		{ id: 'securityPoolOperationsDelegate', address: infraContracts.securityPoolOperationsDelegate },
 		{ id: 'securityPoolEventEmitter', address: infraContracts.securityPoolEventEmitter },
@@ -263,7 +252,6 @@ async function getInfraDeployedInformation(client: WriteClient): Promise<{ [key 
 		escalationGameProofVerifier: isDeploymentStatusOracleStepDeployed(deploymentMask, 'escalationGameFactory'),
 		escalationGameDepositDelegate: isDeploymentStatusOracleStepDeployed(deploymentMask, 'escalationGameDepositDelegate'),
 		zoltarQuestionData: isDeploymentStatusOracleStepDeployed(deploymentMask, 'zoltarQuestionData'),
-		uniformPriceDualCapBatchAuctionFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'uniformPriceDualCapBatchAuctionFactory'),
 		securityPoolFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolFactory'),
 		securityPoolCapitalLedgerDeployer: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolCapitalLedgerDeployer'),
 		securityPoolCommitmentIndexDeployer: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolCommitmentIndexDeployer'),
@@ -289,7 +277,6 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	const existence = await getInfraDeployedInformation(client)
 
 	if (!existence['multicall3']) await deployBytecode('multicall3', MULTICALL3_BYTECODE)
-	if (!existence['uniformPriceDualCapBatchAuctionFactory']) await deployBytecode('uniformPriceDualCapBatchAuctionFactory', `0x${statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`)
 	if (!existence['securityPoolUtils']) await deployBytecode('securityPoolUtils', `0x${statoblast_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`)
 	if (!existence['securityPoolOperationsDelegate']) await deployBytecode('securityPoolOperationsDelegate', getSecurityPoolOperationsDelegateByteCode())
 	if (!existence['securityPoolEventEmitter']) await deployBytecode('securityPoolEventEmitter', getSecurityPoolEventEmitterByteCode())
@@ -327,16 +314,4 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 		if (!(await contractExists(client, contractAddress))) throw new Error(`${name} does not exist even though we deployed it`)
 	}
 	if (!(await contractExists(client, getDeploymentStatusOracleAddress()))) throw new Error('deploymentStatusOracle does not exist even though we deployed it')
-}
-
-export const deployOriginSecurityPool = async (client: WriteClient, universeId: bigint, questionId: bigint, statoblastSecurityMultiplierBps: bigint, initialReportPriorityFeeAttoEthPerGas = DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) => {
-	const infraAddresses = getInfraContractAddresses()
-	return await writeContractAndWait(client, () =>
-		client.writeContract({
-			abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
-			functionName: 'deployOriginSecurityPool',
-			address: infraAddresses.securityPoolFactory,
-			args: [universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas],
-		}),
-	)
 }

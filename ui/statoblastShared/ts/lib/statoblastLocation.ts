@@ -59,11 +59,6 @@ export function buildPoolsRouteHash(location: PoolsLocation) {
 	}
 }
 
-/** The pool page hash, or the browse list when no address is given. */
-export function buildPoolPageRouteHash(securityPoolAddress: string, tab = '') {
-	return buildPoolsRouteHash({ securityPoolAddress, tab, view: 'operate' })
-}
-
 /**
  * Maps the legacy `#/security-pools?securityPoolsView=…&securityPool=…&selectedPoolView=…` links onto the path routes so
  * bookmarked pool links and the documented simulator entry points keep opening the same pool, tab, or view.

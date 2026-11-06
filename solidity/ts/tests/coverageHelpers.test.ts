@@ -109,9 +109,9 @@ const readCoverageFileSummary = async (sourceSuffix: string): Promise<CoverageFi
 test('coverage runtime matching preserves linked PCs and masks generated mutable ranges exactly', async () => {
 	const artifactDocument: unknown = JSON.parse(await readFile('solidity/artifacts/Contracts.json', 'utf8'))
 	if (!isRecord(artifactDocument) || !isRecord(artifactDocument['contracts'])) throw new Error('Contract artifact must contain contracts')
-	const sourceContracts = artifactDocument['contracts']['contracts/statoblast/SecurityPool.sol']
-	if (!isRecord(sourceContracts) || !isRecord(sourceContracts['SecurityPool'])) throw new Error('Contract artifact must contain SecurityPool')
-	const evm = sourceContracts['SecurityPool']['evm']
+	const sourceContracts = artifactDocument['contracts']['contracts/statoblast/factories/SecurityPoolFactory.sol']
+	if (!isRecord(sourceContracts) || !isRecord(sourceContracts['SecurityPoolFactory'])) throw new Error('Contract artifact must contain SecurityPool')
+	const evm = sourceContracts['SecurityPoolFactory']['evm']
 	if (!isRecord(evm) || !isRecord(evm['deployedBytecode'])) throw new Error('SecurityPool must contain deployed bytecode')
 	const bytecode = evm['deployedBytecode']['object']
 	const sourceMap = evm['deployedBytecode']['sourceMap']
@@ -193,10 +193,6 @@ test('coverage classifier keeps side-effect-only call statements coverable', () 
 
 test('coverage classifier keeps known untraceable source-map lines from manifest out of production totals', () => {
 	const cases = [
-		{
-			sourcePath: '/tmp/solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol',
-			source: ['contract SecurityPoolForkerVaultMigrationBase {', '    constructor() {', '        pool = _pool;', '    }', '}'],
-		},
 		{
 			sourcePath: '/tmp/solidity/contracts/statoblast/tokens/ERC1155.sol',
 			source: [
@@ -358,17 +354,17 @@ describe('Solidity bytecode coverage helpers', () => {
 				data: encodeDeployData({
 					abi: factoryArtifact.abi,
 					bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
-					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 0n, 1n * 10n ** 18n, zeroAddress, zeroAddress],
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress],
 				}),
 			}),
-			/Minimum security bond debt zero/,
+			/Operations delegate zero/,
 		)
 		await assert.rejects(
 			client.sendTransaction({
 				data: encodeDeployData({
 					abi: factoryArtifact.abi,
 					bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
-					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 1n * 10n ** 18n, 1n * 10n ** 18n, client.account.address, zeroAddress],
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, client.account.address, zeroAddress],
 				}),
 			}),
 			/Operations delegate has no code/,
@@ -386,7 +382,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				data: encodeDeployData({
 					abi: factoryArtifact.abi,
 					bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
-					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 1n * 10n ** 18n, 1n * 10n ** 18n, operationsDelegate, zeroAddress],
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, operationsDelegate, zeroAddress],
 				}),
 			}),
 			/Accounting delegate has no code/,
@@ -404,7 +400,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeDeployData({
 				abi: factoryArtifact.abi,
 				bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
-				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 1n * 10n ** 18n, 1n * 10n ** 18n, operationsDelegate, eventEmitter],
+				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, operationsDelegate, eventEmitter],
 			}),
 		)
 		await assert.rejects(

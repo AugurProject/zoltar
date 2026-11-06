@@ -58,7 +58,7 @@ function initializedState(overrides: Partial<GenesisInitializationState>): Genes
 		hasUniswapPool: true,
 		hasUniswapSeeder: true,
 		hasWeth: true,
-		hasWalletVault: true,
+		hasPortfolioCapital: true,
 		tradingFactoryDeployed: true,
 		tradingRouterDeployed: true,
 		...overrides,
@@ -89,8 +89,8 @@ describe('chaos operation selection', () => {
 	})
 
 	test('retries the earliest missing genesis prerequisite before later initialization work', () => {
-		const evaluations = [evaluation(plan('trading.pair.create', 'random')), evaluation(plan('statoblast.vault.deposit-rep', 'random')), evaluation(plan('statoblast.pool.deploy', 'random'))]
-		expect(genesisInitializationPlan(evaluations, initializedState({ hasInitializedPair: false, hasPair: false, hasPool: false, hasWalletVault: false }))?.definitionId).toBe('statoblast.pool.deploy')
+		const evaluations = [evaluation(plan('trading.pair.create', 'random')), evaluation(plan('statoblast.capital.deposit', 'random')), evaluation(plan('statoblast.portfolio.add-question', 'random'))]
+		expect(genesisInitializationPlan(evaluations, initializedState({ hasInitializedPair: false, hasPair: false, hasPool: false, hasPortfolioCapital: false }))?.definitionId).toBe('statoblast.portfolio.add-question')
 		expect(genesisInitializationPlan([evaluation(plan('trading.pair.create', 'random'))], initializedState({ hasInitializedPair: false, hasPair: false }))?.definitionId).toBe('trading.pair.create')
 		expect(genesisInitializationPlan(evaluations, initializedState({ genesisUniversePresent: false }))).toBeUndefined()
 	})
@@ -107,7 +107,7 @@ describe('chaos operation selection', () => {
 })
 
 test('rejects a reverting candidate before selecting an executable operation', async () => {
-	const reverting = plan('statoblast.pool.deploy', 'random')
+	const reverting = plan('statoblast.portfolio.add-question', 'random')
 	const executable = plan('open-oracle.weth.wrap', 'random')
 	const checked: string[] = []
 	const rejected: string[] = []
@@ -128,7 +128,7 @@ test('rejects a reverting candidate before selecting an executable operation', a
 })
 
 test('returns no selection when every candidate reverts and does not mutate candidates', async () => {
-	const candidates = [plan('statoblast.pool.deploy', 'random')]
+	const candidates = [plan('statoblast.portfolio.add-question', 'random')]
 	expect(
 		await selectExecutableOperationPlan(
 			candidates,

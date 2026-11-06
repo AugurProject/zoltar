@@ -598,8 +598,6 @@ type RecoveryEnvironmentOptions = {
 	thirdGasEstimate?: RecoveryGasEstimateOutcome | undefined
 	transactionValue?: bigint | undefined
 	unavailableThirdAttester?: boolean | undefined
-	vaultBackingAttoRep?: bigint | undefined
-	vaultRepDebit?: bigint | undefined
 }
 
 async function forkedRecoveryEnvironment(options: RecoveryEnvironmentOptions = {}) {
@@ -622,7 +620,6 @@ async function forkedRecoveryEnvironment(options: RecoveryEnvironmentOptions = {
 		ethBalanceAttoEth: options.ethBalanceAttoEth,
 		exactTransactionVisible: options.exactTransactionVisible,
 		repBalances: options.repBalances,
-		vaultBacking: options.vaultBackingAttoRep === undefined ? undefined : { amountAttoRep: options.vaultBackingAttoRep, vault: account.address },
 	}
 	const first = recoveryRpcServer(`0x${'11'.repeat(32)}`, hash, commonRpcOptions)
 	const second = recoveryRpcServer(`0x${'11'.repeat(32)}`, hash, { ...commonRpcOptions, ethBalanceAttoEthUnavailable: options.secondEthBalanceAttoEthUnavailable })
@@ -656,11 +653,7 @@ async function forkedRecoveryEnvironment(options: RecoveryEnvironmentOptions = {
 		step.walletAssetDebits = [{ amount: '40', asset: target, category: 'rep', kind: 'open-oracle-credit', openOracle }]
 		settings.strategy.minimumRepReserveAttoRep = 70n
 	}
-	if (options.vaultRepDebit !== undefined) {
-		const step = plan.steps[0]
-		if (step === undefined) throw new Error('Recovery test plan is missing its step')
-		step.walletAssetDebits = [{ amount: options.vaultRepDebit.toString(), category: 'rep', kind: 'security-pool-vault-rep', pool: target, vault: account.address }]
-	}
+
 	const workflow = createDurableWorkflow(plan)
 	const intent: PendingTransactionIntent = {
 		data: '0x1234',
@@ -923,7 +916,6 @@ describe('pending chaos transaction recovery decisions', () => {
 	test.each([
 		{ options: { maximumEthPerOperationAttoEth: 4n, transactionValue: 5n }, policy: 'strategy.maximumEthPerOperation' },
 		{ options: { maximumRepPerOperationAttoRep: 39n, repBalances: { credit: 1_000n, wallet: 1_000n } }, policy: 'strategy.maximumRepPerOperation' },
-		{ options: { maximumRepPerOperationAttoRep: 39n, vaultRepDebit: 40n }, policy: 'strategy.maximumRepPerOperation' },
 	])('retains identical bytes when the current principal cap tightens below $policy', async ({ options, policy }) => {
 		const fixture = await forkedRecoveryEnvironment(options)
 
@@ -955,16 +947,6 @@ describe('pending chaos transaction recovery decisions', () => {
 			expect(methods).not.toContain('eth_estimateGas')
 			expect(methods).not.toContain('eth_sendRawTransaction')
 		}
-		expect(fixture.environment.state.pendingTransactions[0]?.status).toBe('signed')
-		expect(fixture.environment.state.workflows[0]?.status).toBe('waiting-transaction')
-	})
-
-	test('revalidates SecurityPool vault REP backing before identical-byte resubmission', async () => {
-		const fixture = await forkedRecoveryEnvironment({ vaultBackingAttoRep: 39n, vaultRepDebit: 40n })
-
-		await expect(recoverPendingTransactions(fixture.environment, { resubmit: true })).rejects.toThrow('no longer has the declared SecurityPool vault REP backing')
-
-		for (const methods of fixture.requestedMethods) expect(methods).not.toContain('eth_sendRawTransaction')
 		expect(fixture.environment.state.pendingTransactions[0]?.status).toBe('signed')
 		expect(fixture.environment.state.workflows[0]?.status).toBe('waiting-transaction')
 	})

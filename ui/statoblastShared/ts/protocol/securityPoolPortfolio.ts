@@ -1,5 +1,5 @@
 import { encodeFunctionData, getAddress, parseAbi, parseAbiItem, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { buildPortfolioDeploymentRequest, buildPortfolioPrepareNextRequest, decodeAuctionVaultBindings, loadPortfolioCapitalSnapshot, type PortfolioReadClient, type PortfolioEconomicsConfig } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { buildPortfolioDeploymentRequest, buildPortfolioPrepareNextRequest, decodeAuctionVaultBindings, loadPortfolioCapitalSnapshot, type PortfolioReadClient, type PortfolioEconomicsConfig, type PortfolioOriginConfig } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
@@ -181,8 +181,8 @@ export async function loadPortfolioAccount(client: ReadClient, portfolio: Addres
 }
 export type PortfolioAccountSnapshot = Awaited<ReturnType<typeof loadPortfolioAccount>>
 
-export function portfolioCreationRequest(owner: Address, initialOriginPool: Address, maximumQuestionHorizonSeconds: bigint, questionAdmissionPolicy: Address, economics: PortfolioEconomicsConfig) {
-	return buildPortfolioDeploymentRequest({ owner, initialOriginPool, maximumQuestionHorizonSeconds, questionAdmissionPolicy, economics, factory: getInfraContractAddresses().securityPoolFactory, deployers: getPortfolioDeployers(), artifact: { abi: portfolioArtifact.abi, bytecode: getSecurityPoolPortfolioByteCode() } })
+export function portfolioCreationRequest(owner: Address, origin: PortfolioOriginConfig, maximumQuestionHorizonSeconds: bigint, questionAdmissionPolicy: Address, economics: PortfolioEconomicsConfig) {
+	return buildPortfolioDeploymentRequest({ owner, origin, maximumQuestionHorizonSeconds, questionAdmissionPolicy, economics, factory: getInfraContractAddresses().securityPoolFactory, deployers: getPortfolioDeployers(), artifact: { abi: portfolioArtifact.abi, bytecode: getSecurityPoolPortfolioByteCode() } })
 }
 export function portfolioContractRequest(account: Address, to: Address, functionName: string, args: readonly unknown[] = []): PortfolioTransaction {
 	return { account, to, value: 0n, data: encodeFunctionData({ abi: portfolioArtifact.abi, functionName, args }) }

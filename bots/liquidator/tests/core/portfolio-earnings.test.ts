@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { executePortfolioEarnings } from '../../src/execution/portfolio-earnings.ts'
 import type { refreshPortfolioExecution } from '../../src/execution/portfolio-executor.ts'
-import type { submitCall } from '../../src/execution/liquidation-executor.ts'
+import type { submitCall } from '../../src/execution/submit-call.ts'
 import { initialRuntimeState } from '../../src/state/operator-state.ts'
 import { portfolioObservation, portfolioSettings, unit } from '../support/portfolio-observation.ts'
 import { createWalletClient, createRpcEndpointPool, decodeFunctionData, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'

@@ -105,7 +105,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 			// funding requirement. Direct exports and auction sales spend only this
 			// authenticated bucket; neither can recreate discharged surplus.
 			if (forkCarryBackingExportedBeforeResumeAttoRep > forkCarryInitialBackingAttoRep) return false;
-			requiredAttoRep = _applyTruthAuctionRetention(forkCarryInitialBackingAttoRep - forkCarryBackingExportedBeforeResumeAttoRep);
+			requiredAttoRep = (forkCarryInitialBackingAttoRep - forkCarryBackingExportedBeforeResumeAttoRep);
 		}
 		return _reporterRepBalance() >= requiredAttoRep;
 	}
@@ -276,16 +276,8 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		OutcomeState storage state = outcomeState[outcomeIndex];
 		uint256 inheritedUnresolvedTotalAttoRep =
 			state.inheritedUnresolvedTotalAttoRep + state.inheritedConsumedSourceAttoRep;
-		if (forkContinuation) {
-			address parentPoolAddress = address(securityPool.parent());
-			if (parentPoolAddress != address(0x0)) {
-				uint256 directlyClaimedPrincipalAttoRep = ISecurityPoolForker(securityPool.securityPoolForker()).getDirectlyClaimedEscalationPrincipal(securityPool.parent(), BinaryOutcomes.BinaryOutcome(outcomeIndex));
-				require(directlyClaimedPrincipalAttoRep <= inheritedUnresolvedTotalAttoRep, 'Direct principal high');
-				inheritedUnresolvedTotalAttoRep -= directlyClaimedPrincipalAttoRep;
-			}
-		}
 		BinaryOutcomes.BinaryOutcome finalResolution = getFinalQuestionResolution();
 		if (finalResolution != BinaryOutcomes.BinaryOutcome.None && uint8(finalResolution) != outcomeIndex) return 0;
-		return _applyTruthAuctionRetention(inheritedUnresolvedTotalAttoRep) - state.inheritedConsumedRetainedAttoRep;
+		return (inheritedUnresolvedTotalAttoRep) - state.inheritedConsumedRetainedAttoRep;
 	}
 }

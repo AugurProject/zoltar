@@ -5,8 +5,6 @@ import { SecurityPoolReporterLedger } from './SecurityPoolReporterLedger.sol';
 import { Zoltar } from '../Zoltar.sol';
 import { ISecurityPool, ISecurityPoolFactory, SystemState } from './interfaces/ISecurityPool.sol';
 import { ISecurityPoolPortfolioNative } from './interfaces/ISecurityPoolPortfolioNative.sol';
-import { SecurityPoolForkEventEmitter } from './SecurityPoolEventEmitter.sol';
-import { EscalationForkSnapshot, SecurityPoolForkerForkData } from './SecurityPoolForkerTypes.sol';
 import { EscalationGame } from './EscalationGame.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { ESCALATION_TIME_LENGTH } from './EscalationGameTypes.sol';
@@ -17,7 +15,7 @@ import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
 /// @notice Materialize one question directly from its last live source game.
 /// @dev Portfolio assets already migrated at branch level. No per-question truth
 /// auction, vault migration, ancestor walk, or reporter-token transfer occurs here.
-contract SecurityPoolForkerPortfolioDelegate is SecurityPoolForkEventEmitter {
+contract SecurityPoolForkerPortfolioDelegate {
 	Zoltar public immutable zoltar;
 	constructor(Zoltar protocol) {
 		require(address(protocol).code.length != 0, 'Native fork protocol is missing');
@@ -90,7 +88,7 @@ contract SecurityPoolForkerPortfolioDelegate is SecurityPoolForkEventEmitter {
 			return (child, portfolio, sourceGame);
 		}
 		factory.preparePortfolioPriceFeed(source, targetUniverse);
-		(child, ) = factory.deployChildSecurityPool(source, source.shareToken(), targetUniverse, source.questionId(), source.statoblastSecurityMultiplierBps(), SecurityPoolUtils.calculateRetentionRate(0, 0), 0);
+		(child, ) = factory.deployChildSecurityPool(source, source.shareToken(), targetUniverse, source.questionId(), source.statoblastSecurityMultiplierBps(), 0, 0);
 		require(child.truthAuction() == address(0), 'Portfolio question cannot have a truth auction');
 		source.authorizeChildPool(child);
 		portfolio.registerChildPool(child);
@@ -108,64 +106,6 @@ contract SecurityPoolForkerPortfolioDelegate is SecurityPoolForkEventEmitter {
 			isFixed && portfolio.logicalTime(pool.universeId()) > anchor + 3 days
 				? BinaryOutcomes.BinaryOutcome(fixedValue)
 				: BinaryOutcomes.BinaryOutcome.None;
-	}
-
-	function _forkOccurredBeforeEscalationSettled(EscalationGame game, uint256 forkTime) private view returns (bool) {
-		return
-			address(game) != address(0) &&
-			(game.getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None ||
-				game.getEscalationGameEndDate() >= forkTime);
-	}
-
-	function _getEscalationElapsedAtFork(EscalationGame escalationGame, uint256 forkTime) private view returns (uint256 elapsedAtFork) {
-		if (escalationGame.forkContinuation()) {
-			elapsedAtFork = escalationGame.forkElapsedAtStart();
-			uint256 resumedAt = escalationGame.forkResumedAt();
-			if (resumedAt != 0) {
-				if (forkTime > resumedAt) {
-					elapsedAtFork += forkTime - resumedAt;
-				}
-			}
-		} else {
-			uint256 activationTime = escalationGame.activationTime();
-			if (forkTime <= activationTime) return 0;
-			elapsedAtFork = forkTime - activationTime;
-		}
-		if (elapsedAtFork > ESCALATION_TIME_LENGTH) {
-			elapsedAtFork = ESCALATION_TIME_LENGTH;
-		}
-	}
-
-	function snapshotNativeEscalationAtFork(ISecurityPool securityPool, EscalationGame escalationGame, uint256 forkTime) external {
-		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
-		if (!_forkOccurredBeforeEscalationSettled(escalationGame, forkTime)) return;
-		require(!escalationGame.forkContinuation() || escalationGame.forkCarrySnapshotInitialized(), 'Fork snapshot incomplete');
-		EscalationForkSnapshot storage snapshot = escalationForkSnapshotByPool[securityPool];
-		// Keep this unreachable initialization guard data-free for the EIP-170 size limit.
-		if (snapshot.initialized) revert();
-		(
-			bytes32[64][3] memory carryPeaks,
-			uint256[3] memory carryLeafCounts,
-			uint256[3] memory carryTotalsAttoRep,
-			bytes32[3] memory nullifierRoots
-		) = escalationGame.getForkCarrySnapshot();
-		uint256[3] memory resolutionBalancesAttoRep = escalationGame.getOutcomeBalancesAttoRep();
-		bytes32[3] memory carryRoots = escalationGame.getForkCarryRoots();
-		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
-			for (uint8 peakIndex = 0; peakIndex < 64; peakIndex++) {
-				snapshot.carryPeaks[outcomeIndex][peakIndex] = carryPeaks[outcomeIndex][peakIndex];
-			}
-			snapshot.carryLeafCounts[outcomeIndex] = carryLeafCounts[outcomeIndex];
-			snapshot.carryTotalsAttoRep[outcomeIndex] = carryTotalsAttoRep[outcomeIndex];
-			snapshot.resolutionBalancesAttoRep[outcomeIndex] = resolutionBalancesAttoRep[outcomeIndex];
-			snapshot.nullifierRoots[outcomeIndex] = nullifierRoots[outcomeIndex];
-		}
-		snapshot.initialized = true;
-		data.escalationSnapshotId = keccak256(abi.encode(address(escalationGame), carryRoots, nullifierRoots, carryLeafCounts, carryTotalsAttoRep, resolutionBalancesAttoRep));
-		data.unresolvedEscalationAtFork = true;
-		data.escalationStartBondAtForkAttoRep = escalationGame.startBondAttoRep();
-		data.escalationNonDecisionThresholdAtForkAttoRep = escalationGame.nonDecisionThresholdAttoRep();
-		data.escalationElapsedAtFork = _getEscalationElapsedAtFork(escalationGame, forkTime);
 	}
 
 	function _continueReporterGame(ISecurityPoolPortfolioNative portfolio, ISecurityPool source, ISecurityPool child, EscalationGame game) private returns (bool complete) {

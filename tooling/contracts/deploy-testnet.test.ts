@@ -519,7 +519,6 @@ describe('testnet deployment plan', () => {
 			infrastructure.securityPoolPortfolioAuctionDeployer,
 			infrastructure.securityPoolUtils,
 			infrastructure.shareTokenFactory,
-			infrastructure.uniformPriceDualCapBatchAuctionFactory,
 			infrastructure.zoltar,
 			infrastructure.zoltarQuestionData,
 		]
@@ -537,12 +536,10 @@ describe('testnet deployment plan', () => {
 		const publishedAddresses = [SEPOLIA_NETWORK_PROFILE.wethAddress, uniswap.addresses.uniswapV3FactoryAddress, uniswap.addresses.uniswapV3QuoterAddress, uniswap.addresses.uniswapV4PoolManagerAddress, uniswap.addresses.uniswapV4QuoterAddress]
 		expect(uniswap.publishedContracts.map(contract => contract.address)).toEqual(publishedAddresses)
 		for (const address of publishedAddresses) expect(addressSet.has(address)).toBe(false)
-		expect(Object.keys(bootstrapDescendants)).toHaveLength(25)
-		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(25)
+		expect(Object.keys(bootstrapDescendants)).toHaveLength(21)
+		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(21)
 		for (const address of Object.values(bootstrapDescendants)) expect(addressSet.has(address)).toBe(false)
 		expect(bootstrapDescendants.escalationGameProofVerifier).toBe(infrastructure.escalationGameProofVerifier)
-		expect(bootstrapDescendants.liquidationApprovalRegistryDeployer).toBe(getCreateAddress({ from: infrastructure.openOraclePriceCoordinatorFactory, nonce: 1n }))
-		expect(bootstrapDescendants.liquidationApprovalRegistryImplementation).toBe(getCreateAddress({ from: bootstrapDescendants.liquidationApprovalRegistryDeployer, nonce: 1n }))
 		expect(bootstrapDescendants.oracleReportDelegate).toBe(getCreateAddress({ from: infrastructure.priceCoordinatorDeploymentWorker, nonce: 3n }))
 		expect(bootstrapDescendants.priceCoordinatorCreationCodeFirstChunk).toBe(getCreateAddress({ from: infrastructure.priceCoordinatorDeploymentWorker, nonce: 1n }))
 		expect(bootstrapDescendants.priceCoordinatorCreationCodeSecondChunk).toBe(getCreateAddress({ from: infrastructure.priceCoordinatorDeploymentWorker, nonce: 2n }))
@@ -562,12 +559,12 @@ describe('testnet deployment plan', () => {
 		expect(bootstrapDescendants['securityPoolForkCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioForkCoordinatorDeployer, nonce: 2n }))
 		expect(bootstrapDescendants['securityPoolAuctionCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolPortfolioAuctionDeployer, nonce: 2n }))
 		expect(plan.some(step => step.id === 'escalationGameFactory')).toBe(true)
-		expect(plan).toHaveLength(36)
+		expect(plan).toHaveLength(35)
 		expect(new Set(plan.map(step => step.id)).size).toBe(plan.length)
 		expect(new Set(plan.map(step => step.address)).size).toBe(plan.length)
 		for (const step of plan) expect(CONSERVATIVE_DEPLOYMENT_GAS[step.id]).toBeGreaterThan(0n)
 		const deterministicPlan = createCompleteDeploymentPlan(SEPOLIA_NETWORK_PROFILE, await getUniswapDeployment(31_337))
-		expect(deterministicPlan).toHaveLength(41)
+		expect(deterministicPlan).toHaveLength(40)
 		expect(Object.keys(CONSERVATIVE_DEPLOYMENT_GAS).sort()).toEqual(deterministicPlan.map(step => step.id).sort())
 		const indexById = new Map(plan.map((step, index) => [step.id, index]))
 		for (const [index, step] of plan.entries()) {
@@ -741,8 +738,8 @@ describe('testnet deployment plan', () => {
 	test('rejects incorrect code at direct deployment and descendant addresses', async () => {
 		await expect(runDeploymentPlan([firstStep()], { getCode: async () => '0x02' }, () => undefined)).rejects.toThrow('Unexpected runtime code for first')
 
-		await expect(assertBootstrapDescendantCode({ getCode: async () => undefined }, SEPOLIA_NETWORK_PROFILE, async () => undefined)).rejects.toThrow('Bootstrap descendant liquidationApprovalRegistryDeployer is missing')
-		await expect(assertBootstrapDescendantCode({ getCode: async () => '0x1234' }, SEPOLIA_NETWORK_PROFILE)).rejects.toThrow('Unexpected runtime code for liquidationApprovalRegistryDeployer')
+		await expect(assertBootstrapDescendantCode({ getCode: async () => undefined }, SEPOLIA_NETWORK_PROFILE, async () => undefined)).rejects.toThrow('Bootstrap descendant sharedPoolPriceFeedCreationCodeFirstChunk is missing')
+		await expect(assertBootstrapDescendantCode({ getCode: async () => '0x1234' }, SEPOLIA_NETWORK_PROFILE)).rejects.toThrow('Unexpected runtime code for sharedPoolPriceFeedCreationCodeFirstChunk')
 
 		const descendants = getBootstrapDescendantAddresses(SEPOLIA_NETWORK_PROFILE)
 		const expectedRuntimeCodeHashes = Object.fromEntries(Object.keys(descendants).map(id => [id, keccak256('0x01')]))

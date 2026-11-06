@@ -1,11 +1,9 @@
 import { shareTokenAbi } from '@zoltar/bot-shared/contracts/abi'
 import { zeroAddress } from '@zoltar/bot-shared/ethereum'
-import { sameAddress } from '@zoltar/core-shared/evm/address'
 import { validForkOutcomeRoutes } from '../fork-outcomes.ts'
 import { amount, choose, eligible, encodeStep, erc1155WalletDebit, eventEvidence, mixSeed, planBase } from '../planning.ts'
-import { MIGRATION_TIME_SECONDS, shareTokenId, walletShares } from '../statoblast/planning.ts'
-import { timestampDeadlineHasRequiredSafety } from '../timing.ts'
-import type { EcosystemSnapshot, OperationDefinition, PlanningOptions, PoolSnapshot, ShareInventory } from '../types.ts'
+import { shareTokenId, walletShares } from '../statoblast/planning.ts'
+import type { EcosystemSnapshot, OperationDefinition, PoolSnapshot, ShareInventory } from '../types.ts'
 
 type ShareMigrationRoute = {
 	deadline?: bigint
@@ -17,20 +15,16 @@ type ShareMigrationRoute = {
 
 function shareMigrationPoolReady(pool: PoolSnapshot, forkTime: string) {
 	if (pool.systemState === 1) return true
-	if (pool.systemState !== 0 || pool.forkActivationTime !== '0') return false
+	if (pool.systemState !== 0) return false
 	return pool.escalationGame === zeroAddress || pool.questionOutcome === 3 || amount(pool.escalationGameEndTime) >= amount(forkTime)
 }
 
-function shareMigrationRouteAvailability(snapshot: EcosystemSnapshot, pool: PoolSnapshot, targetOutcome: string, options: PlanningOptions): { deadline?: bigint } | undefined {
-	const childExists = snapshot.pools.some(child => sameAddress(child.parent, pool.address) && child.forkOutcomeIndex === targetOutcome)
-	if (childExists || pool.systemState === 0) return {}
-	const activation = amount(pool.forkActivationTime)
-	if (activation === 0n) return undefined
-	const deadline = activation + MIGRATION_TIME_SECONDS
-	return timestampDeadlineHasRequiredSafety(amount(snapshot.anchor.timestamp), deadline, options) ? { deadline } : undefined
+function shareMigrationRouteAvailability(pool: PoolSnapshot, targetOutcome: string): { deadline?: bigint } | undefined {
+	const preparation = pool.childPoolPreparations[targetOutcome]
+	return preparation !== undefined && preparation.branchReady && preparation.childPool !== zeroAddress && preparation.historyReady ? {} : undefined
 }
 
-function shareMigrationRoutes(snapshot: EcosystemSnapshot, options: PlanningOptions): ShareMigrationRoute[] {
+function shareMigrationRoutes(snapshot: EcosystemSnapshot): ShareMigrationRoute[] {
 	return snapshot.pools.flatMap(pool => {
 		const universe = snapshot.universes.find(candidate => candidate.id === pool.universeId)
 		const forkQuestion = universe === undefined ? undefined : snapshot.questions.find(question => question.id === universe.forkQuestionId)
@@ -44,7 +38,7 @@ function shareMigrationRoutes(snapshot: EcosystemSnapshot, options: PlanningOpti
 				const progress = amount(shares.migrationProgressByRoute[`${sourceOutcome.toString()}:${targetOutcome}`] ?? sourceBalance.toString())
 				if (progress > sourceBalance) throw new Error(`Share migration progress for ${pool.address} route ${sourceOutcome.toString()}:${targetOutcome} exceeds the wallet source balance`)
 				if (progress === sourceBalance) return []
-				const availability = shareMigrationRouteAvailability(snapshot, pool, targetOutcome, options)
+				const availability = shareMigrationRouteAvailability(pool, targetOutcome)
 				return availability === undefined ? [] : [{ ...availability, fromId: shareTokenId(pool.universeId, sourceOutcome), shares, sourceBalance, targetOutcome }]
 			})
 		})
@@ -53,7 +47,7 @@ function shareMigrationRoutes(snapshot: EcosystemSnapshot, options: PlanningOpti
 
 export const migrateShares: OperationDefinition = {
 	buildPlan(snapshot, options) {
-		const route = choose(shareMigrationRoutes(snapshot, options), mixSeed(options.seed, migrateShares.id))
+		const route = choose(shareMigrationRoutes(snapshot), mixSeed(options.seed, migrateShares.id))
 		if (route === undefined) return undefined
 		return planBase({
 			...(route.deadline === undefined ? {} : { deadlineTimestamp: route.deadline.toString() }),
@@ -84,7 +78,7 @@ export const migrateShares: OperationDefinition = {
 	discoveryInputs: ['forked source pool', 'share balances', 'child pool routing'],
 	ecosystem: 'trading',
 	evaluate(snapshot, options) {
-		const found = shareMigrationRoutes(snapshot, options).length > 0
+		const found = shareMigrationRoutes(snapshot).length > 0
 		return eligible(options.allowIrreversibleOperations === true ? undefined : 'Irreversible operations are disabled', found ? undefined : 'No fork share route has anchored unmigrated progress')
 	},
 	id: 'trading.shares.migrate',

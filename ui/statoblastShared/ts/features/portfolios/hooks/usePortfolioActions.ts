@@ -1,7 +1,7 @@
+import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
-import { formatEther, formatUnits, getAddress, isAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_SecurityPool_SecurityPool as poolArtifact } from '../../../contractArtifact.js'
+import { formatEther, formatUnits, getAddress, parseUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { createTransactionScope, mergeTransactionScopes } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
@@ -18,7 +18,9 @@ import { buildPortfolioAuctionVaultExecuteRequest } from '@zoltar/statoblast-sha
 import { authenticatePortfolioAuctionVault } from '../../../protocol/securityPoolPortfolioAuction.js'
 
 export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, parameters: WriteOperationsParameters) {
-	const originInput = useSignal('')
+	const originInput = useSignal('0')
+	const multiplierInput = useSignal('200')
+	const priorityFeeInput = useSignal((DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS / 10n ** 9n).toString())
 	const horizonDays = useSignal('30')
 	const admissionMode = useSignal<CuratedAdmissionMode>('open')
 	const fixedQuestions = useSignal('')
@@ -99,7 +101,16 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 	let fixedQuestionIds: bigint[] = []
 	let economics: ReturnType<typeof parsePortfolioCreationEconomics> | undefined
 	let horizon: bigint | undefined
+	let origin: { universeId: bigint; securityMultiplierBps: bigint; reportPriorityFeeAttoEthPerGas: bigint } | undefined
 	try {
+		const originUniverse = portfolioUnsignedId(originInput.value, 248)
+		if (originUniverse === undefined) throw new Error(copy.enterOrigin)
+		const securityMultiplierBps = parseUnits(multiplierInput.value, 2)
+		const reportPriorityFeeAttoEthPerGas = parseUnits(priorityFeeInput.value, 9)
+		if (securityMultiplierBps <= 10_001n) throw new Error('Security multiplier must exceed 100.01%.')
+		if (reportPriorityFeeAttoEthPerGas <= 0n) throw new Error('Oracle priority fee must be positive.')
+		if (reportPriorityFeeAttoEthPerGas > MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) throw new Error('Oracle priority fee exceeds the report funding limit.')
+		origin = { universeId: originUniverse, securityMultiplierBps, reportPriorityFeeAttoEthPerGas }
 		if (admissionMode.value === 'fixed') fixedQuestionIds = parseFixedPortfolioQuestions(fixedQuestions.value)
 		economics = parsePortfolioCreationEconomics(economicsDraft.value)
 		if (!/^\d+$/.test(horizonDays.value)) throw new Error(copy.horizonInvalid)
@@ -145,6 +156,14 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 		feedback: feedback.value,
 		scope,
 		ownerReason,
+		multiplierInput: multiplierInput.value,
+		setMultiplierInput: (value: string) => {
+			multiplierInput.value = value
+		},
+		priorityFeeInput: priorityFeeInput.value,
+		setPriorityFeeInput: (value: string) => {
+			priorityFeeInput.value = value
+		},
 		originInput: originInput.value,
 		setOriginInput: (value: string) => {
 			originInput.value = value
@@ -167,8 +186,8 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 		},
 		admissionAddress: admission?.address,
 		creationError,
-		admissionDeployReason: walletReason ?? (!isAddress(originInput.value) ? copy.enterOrigin : creationError) ?? (admission !== undefined ? copy.admissionDeployed : undefined),
-		deployReason: walletReason ?? (!isAddress(originInput.value) ? copy.enterOrigin : creationError) ?? (admission === undefined ? copy.deployAdmissionFirst : undefined),
+		admissionDeployReason: walletReason ?? (origin === undefined ? copy.enterOrigin : creationError) ?? (admission !== undefined ? copy.admissionDeployed : undefined),
+		deployReason: walletReason ?? (origin === undefined ? copy.enterOrigin : creationError) ?? (admission === undefined ? copy.deployAdmissionFirst : undefined),
 		deployAdmission: async () => {
 			let captured: { key: string; universeId: bigint } | undefined
 			await run(
@@ -180,7 +199,8 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 					const key = admissionKey
 					const mode = admissionMode.value
 					const ids = [...fixedQuestionIds]
-					const originUniverse = await createConnectedReadClient().readContract({ address: getAddress(originInput.value), abi: poolArtifact.abi, functionName: 'universeId' })
+					if (origin === undefined) throw new Error(copy.enterOrigin)
+					const originUniverse = origin.universeId
 					captured = { key, universeId: originUniverse }
 					return portfolioAdmissionCreationRequest(parameters.accountAddress, mode, originUniverse, ids)
 				},
@@ -198,18 +218,18 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 				copy.deploy,
 				async () => {
 					if (parameters.accountAddress === undefined) throw new Error(copy.connect)
-					if (creationError !== undefined || economics === undefined || admission === undefined || horizon === undefined) throw new Error(creationError ?? copy.deployAdmissionFirst)
+					if (creationError !== undefined || economics === undefined || admission === undefined || horizon === undefined || origin === undefined) throw new Error(creationError ?? copy.deployAdmissionFirst)
 					const chosen = admission
 					const mode = admissionMode.value
 					const config = { ...economics }
-					const initialPool = getAddress(originInput.value)
+					const originConfig = { ...origin }
 					const validateAdmission = async () => {
 						const verified = await loadPortfolioAdmission(createConnectedReadClient(), chosen.address, chosen.universeId)
 						if (verified.mode !== mode) throw new Error(copy.unsupportedAdmission)
 					}
 					await validateAdmission()
 					return {
-						...portfolioCreationRequest(parameters.accountAddress, initialPool, horizon, chosen.address, config),
+						...portfolioCreationRequest(parameters.accountAddress, originConfig, horizon, chosen.address, config),
 						validateBeforeSubmit: validateAdmission,
 						reviewDescription: `Deploy a portfolio with immutable ${mode} question admission. Fixed annual time fee ${formatUnits(config.annualFeeBps, 2)}%. Purchase fee ${formatUnits(config.purchaseFeeBps, 2)}% of required backing value, minimum ${formatEther(config.minimumPurchaseFeeAttoEth)} ETH. Each purchase also prepays up to 52 days of resolution fees. The whole purchase fee goes to underwriters; price reporters and keepers pay their own costs. Winners can retire if spare backing permits; there is no minimum holding period. Minimum commitment and auction ETH lot ${formatEther(config.minimumCommitmentAttoEth)} ETH; prepaid rewards vest over ${config.rewardVestingSeconds} seconds. Each owner chooses their own health target. Register eligible questions in a separate transaction.`,
 					}

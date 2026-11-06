@@ -1,6 +1,6 @@
 import { carryStorageAbi as storageAbi } from '../contracts/carry-storage-abi.ts'
 import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/bot-shared/ethereum'
-import { escalationGameAbi, securityPoolAbi, securityPoolForkerAbi } from '@zoltar/bot-shared/contracts/abi'
+import { escalationGameAbi, securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
 import { drainConcurrent, type ChaosReadClient } from './discovery-client.ts'
 import { carryCommitment, createMerkleMountainRangeProof, createSparseNullifierProof, hashCarryLeaf, nullifierPath, sparseNullifierRoot, type CarryLeafSlot, type CarryOutcome } from './carry-proof-index.ts'
 
@@ -119,8 +119,7 @@ export async function loadCarryStorageCandidates(client: CarryStorageClient, rou
 			const [parentNode, depositor, nodeOutcome, amount, parentIndex, cumulative, index] = await client.readContract({ abi: storageAbi, address: game, args: [nodeId], blockNumber, functionName: 'nodes' })
 			if (Number(nodeOutcome) !== outcome || amount === 0n) throw new Error('Invalid historical carry node')
 			const leaf = { depositor, outcome, amountAttoRep: amount.toString(), parentDepositIndex: parentIndex.toString(), cumulativeAmountAttoRep: cumulative.toString(), sourceNodeId: nodeId.toString() }
-			const direct = active.has(nodeId.toString()) ? false : await client.readContract({ abi: securityPoolForkerAbi, address: info.forker, args: [info.pool, outcome, parentIndex], blockNumber, functionName: 'isEscalationDepositClaimedDirectly' })
-			const present = active.has(nodeId.toString()) || direct
+			const present = active.has(nodeId.toString())
 			locals.push({ index, slot: { leaf, hash: present ? hashCarryLeaf(leaf) : zeroHash, originGame: game, consumedLocally: !present } })
 			nodeId = parentNode
 		}
@@ -158,8 +157,6 @@ export async function loadCarryStorageCandidates(client: CarryStorageClient, rou
 				const claimSourceGame = encodedSource === zeroAddress ? await client.readContract({ abi: storageAbi, address: route.escalationGame, blockNumber, functionName: 'rootClaimSourceGame' }) : encodedSource
 				const claimInfo = await gameInfo(claimSourceGame)
 				if (claimInfo.forker.toLowerCase() !== info.forker.toLowerCase()) throw new Error('Carry claim source uses a different forker')
-				const direct = await client.readContract({ abi: securityPoolForkerAbi, address: info.forker, args: [claimInfo.pool, outcome, BigInt(leaf.parentDepositIndex)], blockNumber, functionName: 'isEscalationDepositClaimedDirectly' })
-				if (direct) continue
 				candidates.push({ pool: route.pool, game: route.escalationGame, sourcePool: info.parent, sourceGame: info.parentGame, claimSourceGame, forker: info.forker, state, ...leaf, slots, index, nullifier })
 			}
 		}

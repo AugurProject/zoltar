@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createPublicClient } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
-import { mainnet, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { mainnet } from '@zoltar/core-shared/evm/ethereum'
 import { securityPoolFactoryAbi } from '@zoltar/bot-shared/contracts/abi'
 import { useSecurityPoolPortfolioFixture } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioFixture'
 import { getInfraContractAddresses } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
@@ -12,7 +12,7 @@ import example from '../../config/operator.example.json'
 
 describe('portfolio operator production integration', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
-	test('authenticates actual deployed modules and monitors fresh standalone-seeded portfolio capital', async () => {
+	test('authenticates actual deployed modules and monitors portfolio capital without a standalone seed', async () => {
 		const client = createPublicClient({ chain: mainnet, transport: custom(fixture.base.mockWindow) })
 		const settings = parseSettings(example)
 		settings.deployment.securityPoolFactory = getInfraContractAddresses().securityPoolFactory
@@ -20,7 +20,7 @@ describe('portfolio operator production integration', () => {
 		const scope = { address: fixture.portfolio, universeId: fixture.base.genesisUniverse, nextPositionId: 1n, sweepEnd: 0n }
 		settings.selectedPortfolios = [scope]
 		settings.approvedUniverses = [scope.universeId]
-		expect(await client.readContract({ address: settings.deployment.securityPoolFactory, abi: securityPoolFactoryAbi, functionName: 'getSecurityPoolPortfolio', args: [fixture.base.securityPoolAddresses.securityPool] })).toBe(zeroAddress)
+		expect(await client.readContract({ address: settings.deployment.securityPoolFactory, abi: securityPoolFactoryAbi, functionName: 'getSecurityPoolPortfolio', args: [fixture.poolFor(fixture.base.questionId).securityPool] })).toBe(fixture.portfolio)
 		const initial = await loadPortfolioObservation(client, settings, fixture.owner().account.address, scope, await client.getBlockNumber())
 		expect(initial.snapshot.capitalLedger).toBe(fixture.capitalLedger)
 		expect(initial.positions).toHaveLength(0)

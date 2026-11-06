@@ -20,7 +20,7 @@ function startServer(overrides: Partial<DashboardControls> = {}) {
 		isNetworkConfigured: () => true,
 		setApprovedUniverses: value => value,
 		setPaused: value => value,
-		setSelectedPools: value => value,
+		setSelectedPortfolios: value => value,
 		setSigner: value => value,
 		setStrategy: value => value,
 		...overrides,
@@ -172,7 +172,7 @@ describe('liquidator dashboard server', () => {
 			isNetworkConfigured: () => true,
 			setApprovedUniverses: value => value,
 			setPaused: value => value,
-			setSelectedPools: value => value,
+			setSelectedPortfolios: value => value,
 			setSigner: value => value,
 			setStrategy: value => value,
 		})
@@ -476,7 +476,7 @@ describe('liquidator dashboard server', () => {
 				pauseMutations += 1
 				return value
 			},
-			setSelectedPools: mutate,
+			setSelectedPortfolios: mutate,
 			setExecution: mutate,
 			setSigner: mutate,
 			setStrategy: mutate,
@@ -499,7 +499,7 @@ describe('liquidator dashboard server', () => {
 			['/api/market-configuration', {}],
 			['/api/paused', { paused: false }],
 			['/api/reconcile-transaction', {}],
-			['/api/selected-pools', []],
+			['/api/selected-portfolios', []],
 			['/api/signer', {}],
 			['/api/strategy', {}],
 			['/api/submission', {}],
@@ -570,13 +570,13 @@ test('bounds factory browsing, gates network setup, sanitizes failures, and prot
 			if (fail) throw new Error('RPC secret at /protected/path')
 			return { chainId: 1, snapshotTimestamp: '1789560060', page, pageCount: '0', total: '0', pools: [] }
 		},
-		setSupportedPool: value => {
+		setSupportedPortfolio: value => {
 			selections.push(value)
 			return {}
 		},
 		setApprovedUniverses: () => ({}),
 		setPaused: () => ({}),
-		setSelectedPools: () => ({}),
+		setSelectedPortfolios: () => ({}),
 		setSigner: () => ({}),
 		setStrategy: () => ({}),
 	})
@@ -603,7 +603,7 @@ test('bounds factory browsing, gates network setup, sanitizes failures, and prot
 	expect(failed.status).toBe(503)
 	expect(await failed.text()).not.toContain('secret')
 	const request = { address: '0x1111111111111111111111111111111111111111', chainId: 1, supported: true }
-	const mutation = new URL('/api/supported-pool', server.url)
+	const mutation = new URL('/api/supported-portfolio', server.url)
 	expect((await fetch(mutation, { method: 'PUT', body: JSON.stringify(request), headers: { origin: 'https://foreign.example', 'content-type': 'application/json' } })).status).toBe(403)
 	expect(selections).toEqual([])
 	expect((await fetch(mutation, { method: 'PUT', body: JSON.stringify(request), headers: { origin: server.url.origin, 'content-type': 'application/json' } })).status).toBe(200)

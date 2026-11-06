@@ -15,16 +15,8 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		returns (address depositor, uint256 amountToWithdrawAttoRep, uint256 originalDepositAmountAttoRep)
 	{
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
-		(depositor, amountToWithdrawAttoRep, originalDepositAmountAttoRep) = _claimDepositForWinning(depositIndex, outcome, true);
+		(depositor, amountToWithdrawAttoRep, originalDepositAmountAttoRep) = _claimDepositForWinning(depositIndex, outcome);
 		_creditClaimOwners(depositor, amountToWithdrawAttoRep);
-	}
-
-	function claimDepositForWinningWithoutTransfer(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome)
-		public
-		onlySecurityPoolOrForker
-		returns (address depositor, uint256 amountToWithdrawAttoRep, uint256 originalDepositAmountAttoRep)
-	{
-		return _claimDepositForWinning(depositIndex, outcome, false);
 	}
 
 	function exportUnresolvedDeposit(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) public onlySecurityPoolOrForker returns (address depositor, uint256 amountAttoRep, uint256 parentDepositIndex) {
@@ -49,7 +41,6 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		uint8 outcomeIndex = uint8(outcome);
 		depositor = proof.depositor;
 		originalDepositAmountAttoRep = proof.amountAttoRep;
-		require(!ISecurityPoolForker(securityPool.securityPoolForker()).isEscalationDepositClaimedDirectly(securityPool.parent(), outcome, proof.parentDepositIndex), 'Parent deposit claimed');
 		require(outcome == questionResolution, 'Not winning outcome');
 		_verifyAndConsumeCarriedDepositProof(outcomeIndex, proof);
 		_emitCarryDepositConsumed(outcomeIndex, proof.depositor, proof.amountAttoRep, proof.parentDepositIndex, proof.sourceNodeId, CarryConsumptionReason.WinningClaim);
@@ -149,20 +140,20 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		require(questionResolution == ISecurityPoolForker(securityPool.securityPoolForker()).getQuestionOutcome(securityPool), 'Pool/game outcome mismatch');
 	}
 
-	function _claimDepositForWinning(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome, bool transferredRep) private returns (address depositor, uint256 amountToWithdrawAttoRep, uint256 originalDepositAmountAttoRep) {
+	function _claimDepositForWinning(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) private returns (address depositor, uint256 amountToWithdrawAttoRep, uint256 originalDepositAmountAttoRep) {
 		if (!forkContinuation && nonDecisionState == NonDecisionState.None) {
 			if (!ordinarySettlementInitialized) _settleOrdinaryGame(false);
-			require(transferredRep && outcome == ordinarySettlementOutcome, 'Not winning ordinary claim');
+			require(outcome == ordinarySettlementOutcome, 'Not winning ordinary claim');
 		}
-		Deposit memory deposit = _consumeLocalDeposit(uint8(outcome), depositIndex, transferredRep ? CarryConsumptionReason.WinningClaim : CarryConsumptionReason.DirectParentClaim);
+		Deposit memory deposit = _consumeLocalDeposit(uint8(outcome), depositIndex, CarryConsumptionReason.WinningClaim);
 		depositor = deposit.depositor;
 		originalDepositAmountAttoRep = deposit.amountAttoRep;
 		uint256 burnAmountAttoRep;
 		(amountToWithdrawAttoRep, burnAmountAttoRep) = _computeWinningWithdrawal(uint8(outcome), deposit.amountAttoRep, deposit.cumulativeAmountAttoRep);
 		if (ordinarySettlementInitialized) ordinaryWinningReserveAttoRep -= amountToWithdrawAttoRep + burnAmountAttoRep;
 		_consumeEscrowedRepForBundle(depositor, originalDepositAmountAttoRep);
-		if (transferredRep) _burnWinningHaircut(burnAmountAttoRep, false);
-		emit ClaimDeposit(depositor, outcome, _getStableLocalParentDepositIndex(uint8(outcome), depositIndex), originalDepositAmountAttoRep, amountToWithdrawAttoRep, burnAmountAttoRep, transferredRep);
+		_burnWinningHaircut(burnAmountAttoRep, false);
+		emit ClaimDeposit(depositor, outcome, _getStableLocalParentDepositIndex(uint8(outcome), depositIndex), originalDepositAmountAttoRep, amountToWithdrawAttoRep, burnAmountAttoRep, true);
 	}
 
 	function _burnWinningHaircut(uint256 burnAmountAttoRep, bool haircutPaidByFork) private {

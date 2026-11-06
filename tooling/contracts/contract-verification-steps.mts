@@ -48,11 +48,6 @@ export const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
 		compilerProfile: 'main',
 		contractName: 'Zoltar',
 	},
-	uniformPriceDualCapBatchAuctionFactory: {
-		artifactPath: 'contracts/statoblast/factories/UniformPriceDualCapBatchAuctionFactory.sol',
-		compilerProfile: 'main',
-		contractName: 'UniformPriceDualCapBatchAuctionFactory',
-	},
 	securityPoolUtils: {
 		artifactPath: SECURITY_POOL_UTILS_SOURCE_PATH,
 		compilerProfile: 'main',

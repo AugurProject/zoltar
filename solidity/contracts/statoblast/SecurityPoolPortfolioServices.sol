@@ -10,11 +10,17 @@ import { Constants } from '../Constants.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 import { IPortfolioServiceRoot } from './interfaces/IPortfolioServiceRoot.sol';
 
+import { IShareToken } from './interfaces/IShareToken.sol';
+import { IERC1155 } from './interfaces/IERC1155.sol';
+import { IERC1155Receiver } from './interfaces/IERC1155Receiver.sol';
+import { IERC165 } from './interfaces/IERC165.sol';
+import { BinaryOutcomes } from './BinaryOutcomes.sol';
+
 /// @notice Question-specific prepaid resolution risk compensation.
 /// @dev Premium roots copy across forks; no call walks questions or ancestors.
 /// No shared pot pays keepers or price sponsors. ETH whose payer is not
 /// recorded, or that would otherwise accrue to no one, is burned.
-contract SecurityPoolPortfolioServices {
+contract SecurityPoolPortfolioServices is IERC1155Receiver {
 	address public immutable portfolio;
 	SecurityPoolResolutionPremiumBook public immutable premiumLedger;
 	bool private entered;
@@ -55,11 +61,11 @@ contract SecurityPoolPortfolioServices {
 		(fee, premium) = root.quoteHelper().purchaseQuote(universeId, questionId, cash);
 		require(msg.value >= cash + fee, 'Purchase fee exceeds budget');
 		require(cash <= root.quoteHelper().availableMintCapacity(universeId), 'Purchase exceeds healthy capacity');
-		minted = root.executeServiceMint{value: cash}(pool, recipient, minimumShares);
+		minted = _mintCompleteSets(pool, recipient, minimumShares, cash);
 		if (premium != 0) _fundPremium(universeId, questionId, premium);
 		uint256 earnings = fee - premium;
 		if (earnings != 0) root.capitalLedger(universeId).fundVestedFees{value: earnings}(0);
-		root.deliverServiceMint(pool, recipient, minted);
+		_deliverCompleteSets(pool, recipient, minted);
 		_send(trader, msg.value - cash - fee);
 	}
 	function mintQuestionSettlement(ISecurityPool pool) external payable onlyPortfolio returns (uint256, uint256, uint256) {
@@ -93,7 +99,7 @@ contract SecurityPoolPortfolioServices {
 		if (!refresh || capital.zoltar().getForkTime(universeId) != 0 || settlement.isQuestionFrozen(address(pool)))
 			snapshot = settlement.checkpointQuestion(address(pool), timestamp);
 		else {
-			(uint96 rate, uint48 end) = root.quoteHelper().feeStream(pool, timestamp);
+			(uint96 rate, uint48 end) = root.quoteHelper().feeStream(pool);
 			snapshot = settlement.replaceFeeStream(address(pool), rate, end, timestamp);
 		}
 		_creditSnapshot(universeId, snapshot);
@@ -143,9 +149,7 @@ contract SecurityPoolPortfolioServices {
 		_creditSnapshot(universeId, root.settlement().scheduleFinality(address(pool), finalAfter, root.logicalTime(universeId)));
 		premiumLedger.schedule(universeId, pool.questionId(), finalAfter);
 	}
-	function cancelUnusedPremium(ISecurityPool pool) external onlyPortfolio {
-		_cancelUnusedPremium(pool);
-	}
+
 	function _cancelUnusedPremium(ISecurityPool pool) private {
 		IPortfolioServiceRoot root = IPortfolioServiceRoot(portfolio);
 		(SecurityPoolSettlementBook.Question memory question, ) = root.settlement().ledger().question(root.settlement().bookIds(pool.universeId()), pool.questionId());
@@ -210,5 +214,35 @@ contract SecurityPoolPortfolioServices {
 		if (amount == 0) return;
 		(bool sent, ) = recipient.call{value: amount}('');
 		require(sent, 'Service ETH transfer failed');
+	}
+	function _mintCompleteSets(ISecurityPool pool, address recipient, uint256 minimumShares, uint256 cash) private returns (uint256 minted) {
+		require(recipient != address(0) && recipient != address(this), 'Invalid share recipient');
+		IShareToken token = pool.shareToken();
+		uint248 universeId = pool.universeId();
+		uint256 beforeShares = token.balanceOfOutcome(universeId, BinaryOutcomes.BinaryOutcome.Invalid, address(this));
+		pool.createCompleteSet{value: cash}();
+		minted = token.balanceOfOutcome(universeId, BinaryOutcomes.BinaryOutcome.Invalid, address(this)) - beforeShares;
+		require(minted > 0 && minted >= minimumShares, 'Minimum shares not met');
+	}
+	/// @dev Recipient callbacks run only after the funded premium is recorded.
+	function _deliverCompleteSets(ISecurityPool pool, address recipient, uint256 minted) private {
+		IShareToken token = pool.shareToken();
+		uint248 universeId = pool.universeId();
+		uint256[] memory ids = new uint256[](3);
+		uint256[] memory amounts = new uint256[](3);
+		for (uint256 i; i < 3; i++) {
+			ids[i] = token.getTokenId(universeId, BinaryOutcomes.BinaryOutcome(i));
+			amounts[i] = minted;
+		}
+		IERC1155(address(token)).safeBatchTransferFrom(address(this), recipient, ids, amounts, '');
+	}
+	function onERC1155Received(address, address, uint256, uint256, bytes calldata) external pure returns (bytes4) {
+		return IERC1155Receiver.onERC1155Received.selector;
+	}
+	function onERC1155BatchReceived(address, address, uint256[] calldata, uint256[] calldata, bytes calldata) external pure returns (bytes4) {
+		return IERC1155Receiver.onERC1155BatchReceived.selector;
+	}
+	function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
+		return interfaceId == type(IERC1155Receiver).interfaceId || interfaceId == type(IERC165).interfaceId;
 	}
 }

@@ -1,13 +1,7 @@
 import type { SQL } from 'bun'
-import { auctionLifecycle, poolCapacity, reportLifecycle, reportLifecycleEventName, vaultRisk } from '../operations.ts'
+import { auctionLifecycle, reportLifecycle, reportLifecycleEventName, vaultRisk } from '../operations.ts'
 import { ApiRequestError } from '../query-errors.ts'
 import { jsonRecord } from '../record-serialization.ts'
-
-const poolRiskAssessment = (badDebt: bigint, priceUnavailable: boolean, systemState: string) => {
-	if (badDebt > 0n) return { protocol_state: 'bad-debt', scanner_severity: 'critical', scanner_reason: 'Pool has recorded bad debt' }
-	if (priceUnavailable) return { protocol_state: 'unavailable', scanner_severity: 'unavailable', scanner_reason: 'Accounting price is invalid at the tagged evidence block; capacity is not usable for risk decisions' }
-	return { protocol_state: systemState, scanner_severity: 'healthy', scanner_reason: 'Tagged pool accounting read completed' }
-}
 
 export const operationsAsOf = async (sql: SQL, chainId: number, atBlock?: string): Promise<Record<string, unknown>> => {
 	const rows =
@@ -327,17 +321,13 @@ export const riskCatalogData = async (sql: SQL, chainId: number, options: { pool
 				scanner_severity: 'unavailable',
 				scanner_reason: row['read_failure_reason'] ?? 'Current tagged pool read is awaiting completion',
 			}
-		const capacity = poolCapacity(String(state['settlementCollateralAttoEth']), String(state['currentMintingCapacityAttoEth']))
-		const badDebt = BigInt(String(state['totalBadDebtAttoEth'] ?? '0'))
-		const price = jsonRecord(state['price'])
-		const priceRequired = BigInt(String(state['settlementCollateralAttoEth'] ?? '0')) > 0n || BigInt(String(state['currentMintingCapacityAttoEth'] ?? '0')) > 0n
-		const priceValid = price['protocolValid'] === true
 		return {
 			...row,
 			read_result: state,
-			capacity,
-			price_provenance: price,
-			...poolRiskAssessment(badDebt, priceRequired && !priceValid, String(state['systemState'] ?? '0')),
+			price_provenance: jsonRecord(state['price']),
+			protocol_state: String(state['systemState'] ?? 'unavailable'),
+			scanner_severity: 'unavailable',
+			scanner_reason: 'Question settlement is shown here. Underwriting risk belongs to the shared portfolio capital positions.',
 		}
 	})
 	const vaultData = vaults.slice(0, options.limit ?? 250).map((row: Record<string, unknown>) => {

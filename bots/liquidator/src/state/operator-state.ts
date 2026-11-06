@@ -66,7 +66,7 @@ export type UniverseObservation = {
 	repToken: Address
 }
 
-export type StagedOperationObservation = {
+type StagedOperationObservation = {
 	operationValue: bigint
 	id: bigint
 	liquidationApprovalId: `0x${string}`
@@ -195,10 +195,6 @@ export function clearMarketEvidenceForConfigurationChange(state: { centralizedMa
 	state.marketConsensus = undefined
 	state.marketConsensusByAsset?.clear()
 	state.marketObservations = []
-}
-
-export function recoveredIntentCanBeResubmitted(intent: Pick<PendingTransactionIntent, 'requiresMarketEvidence'>) {
-	return !intent.requiresMarketEvidence
 }
 
 export function resolveRecoveredIntentJournal(state: Pick<RuntimeState, 'pendingTransactions'>, hash: Hex, receiptStatus: 'reverted' | 'success' | undefined) {

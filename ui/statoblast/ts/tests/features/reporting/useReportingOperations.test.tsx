@@ -60,6 +60,8 @@ function createReportingDetails(securityPoolAddress: Address, overrides: Partial
 		settlementState: 'locked',
 		parentWithdrawalEnabled: false,
 		viewerPoolHeldVaultRepBackingAttoRep: 8n,
+		viewerWalletRepAllowanceAttoRep: 100n * ATTO_REP,
+		viewerWalletRepBalanceAttoRep: 100n * ATTO_REP,
 		viewerVaultExists: true,
 		viewerVaultDisputeStakedAttoRep: 2n,
 		viewerVaultRepBackingAttoRep: 10n,
@@ -390,14 +392,15 @@ describe('useReportingOperations', () => {
 		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('Reporting actions are unavailable until this pool is operational.')
 	})
 
-	test.each(['wallet', 'vault'] as const)('reportOutcome uses the selected %s balance and passes the funding choice to the transaction', async contributionFunding => {
+	test.each([false, true])('reportOutcome uses wallet REP in ordinary and continuation games (continuation: %s)', async forkContinuation => {
 		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d2')
 		const walletFundingDetails = createReportingDetails(securityPoolAddress, {
+			forkContinuation,
 			contributionFunding: 'wallet',
-			viewerPoolHeldVaultRepBackingAttoRep: contributionFunding === 'vault' ? 10n * ATTO_REP : 0n,
-			viewerVaultExists: contributionFunding === 'vault',
-			viewerWalletRepAllowanceAttoRep: contributionFunding === 'wallet' ? 10n * ATTO_REP : 0n,
-			viewerWalletRepBalanceAttoRep: contributionFunding === 'wallet' ? 10n * ATTO_REP : 0n,
+			viewerPoolHeldVaultRepBackingAttoRep: 0n,
+			viewerVaultExists: false,
+			viewerWalletRepAllowanceAttoRep: 10n * ATTO_REP,
+			viewerWalletRepBalanceAttoRep: 10n * ATTO_REP,
 		})
 		let submittedFunding: 'wallet' | 'vault' | undefined
 		let submittedMaximumAttoRep: bigint | undefined
@@ -430,7 +433,7 @@ describe('useReportingOperations', () => {
 		await act(async () => {
 			requireHookState(hookState).setReportingForm(current => ({
 				...current,
-				contributionFunding,
+				contributionFunding: 'wallet',
 				reportAmount: '5',
 				securityPoolAddress,
 				selectedOutcome: 'yes',
@@ -441,11 +444,11 @@ describe('useReportingOperations', () => {
 		})
 
 		expect(reportOutcomeInSecurityPool).toHaveBeenCalledTimes(1)
-		expect(submittedFunding).toBe(contributionFunding)
+		expect(submittedFunding).toBe('wallet')
 		// The typed 5 REP exceeds the remaining threshold room, so the previewed accepted amount is smaller.
 		expect(submittedReviewAttoRep ?? 0n).toBeLessThan(5n * ATTO_REP)
 		// Wallet deposits pull the accepted amount with transferFrom, so the maximum must not exceed the reviewed and approved amount.
-		expect(submittedMaximumAttoRep).toBe(contributionFunding === 'wallet' ? submittedReviewAttoRep : 5n * ATTO_REP)
+		expect(submittedMaximumAttoRep).toBe(submittedReviewAttoRep)
 		expect(requireHookState(hookState).reportingResult?.action).toBe('reportOutcome')
 		// A submitted report clears its amount so a second click cannot repeat it.
 		expect(requireHookState(hookState).reportingForm.reportAmount).toBe('')
@@ -479,7 +482,7 @@ describe('useReportingOperations', () => {
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		trackCleanup(renderedComponent.cleanup)
 		await act(async () => {
-			requireHookState(hookState).setReportingForm(current => ({ ...current, contributionFunding: 'vault', reportAmount: '0.000000000000000018', securityPoolAddress, selectedOutcome: 'yes' }))
+			requireHookState(hookState).setReportingForm(current => ({ ...current, contributionFunding: 'wallet', reportAmount: '0.000000000000000018', securityPoolAddress, selectedOutcome: 'yes' }))
 		})
 		await act(async () => {
 			await requireHookState(hookState).loadReporting()
@@ -497,181 +500,6 @@ describe('useReportingOperations', () => {
 			expect(requireHookState(hookState).reportingDetails).toBe(latestDetails)
 			expect(requireHookState(hookState).reportingForm.reportAmount).toBe('0.000000000000000018')
 		}
-	})
-
-	test('does not silently switch a wallet report to vault funding when preflight discovers a continuation', async () => {
-		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d2')
-		const ordinary = createReportingDetails(securityPoolAddress, { contributionFunding: 'wallet', viewerWalletRepAllowanceAttoRep: 10n * ATTO_REP, viewerWalletRepBalanceAttoRep: 10n * ATTO_REP })
-		let loadCount = 0
-		const loadReportingDetails = async () => (++loadCount === 1 ? ordinary : createReportingDetails(securityPoolAddress, { contributionFunding: 'vault', forkContinuation: true }))
-		const reportOutcomeInSecurityPool = mock(async () => {
-			throw new Error('Must not change funding source')
-		})
-		let hookState: UseReportingOperationsState | undefined
-		const Harness = createHarness(
-			useReportingOperations,
-			state => {
-				hookState = state
-			},
-			createReportingOperationsDependencies({ loadReportingDetails, reportOutcomeInSecurityPool }),
-		)
-		const rendered = await renderIntoDocument(h(Harness, {}))
-		trackCleanup(rendered.cleanup)
-		await act(async () => {
-			requireHookState(hookState).setReportingForm(current => ({ ...current, securityPoolAddress, selectedOutcome: 'yes', reportAmount: '5' }))
-		})
-		await act(async () => {
-			await requireHookState(hookState).loadReporting()
-		})
-		await act(async () => {
-			await requireHookState(hookState).onReportOutcome()
-		})
-		expect(reportOutcomeInSecurityPool).not.toHaveBeenCalled()
-		expect(requireHookState(hookState).reportingFeedback?.status.detail).toContain('Reporting now needs a vault deposit first')
-	})
-
-	test.each([false, true])('wallet continuation reporting uses the minimum deposit and recovers funded vaults (failure: %s)', async failReport => {
-		const pool = getAddress('0x00000000000000000000000000000000000000d4')
-		let funded = false
-		let hookState: UseReportingOperationsState | undefined
-		const execute = mock(async (_account, _callbacks, securityPoolAddress, outcome, _amount, depositAmount, onVaultFunded, _triggersFork) => {
-			expect(depositAmount).toBe(15n)
-			funded = true
-			onVaultFunded()
-			if (failReport) throw new Error('Your REP was deposited into your vault, but the report did not complete.')
-			return { action: 'reportOutcome' as const, hash: '0x1234' as const, outcome, securityPoolAddress, universeId: 1n }
-		}) satisfies NonNullable<UseReportingOperationsDependencies['reportOutcomeWithWalletViaVault']>
-		const Harness = createHarness(
-			useReportingOperations,
-			state => {
-				hookState = state
-			},
-			createReportingOperationsDependencies({
-				loadReportingDetails: async () =>
-					createReportingDetails(pool, {
-						contributionFunding: 'wallet',
-						forkContinuation: true,
-						minimumVaultRepDepositAttoRep: 10n,
-						walletVaultFunding: { vaultRepBackingUnits: 0n, totalRepBackingUnits: 0n, totalPoolHeldRepAttoRep: 0n },
-						viewerPoolHeldVaultRepBackingAttoRep: funded ? 15n : 0n,
-						viewerWalletRepAllowanceAttoRep: 100n,
-						viewerWalletRepBalanceAttoRep: 100n,
-					}),
-				reportOutcomeWithWalletViaVault: execute,
-			}),
-		)
-		const rendered = await renderIntoDocument(h(Harness, {}))
-		trackCleanup(rendered.cleanup)
-		await act(async () => {
-			requireHookState(hookState).setReportingForm(current => ({ ...current, securityPoolAddress: pool, selectedOutcome: 'yes', reportAmount: '0.000000000000000005', contributionFunding: 'wallet' }))
-		})
-		await act(async () => {
-			await requireHookState(hookState).loadReporting()
-		})
-		await act(async () => {
-			await requireHookState(hookState).onReportOutcome()
-		})
-		expect(execute).toHaveBeenCalledTimes(1)
-		expect(execute.mock.calls[0]?.[7]).toBe(false)
-		if (failReport) {
-			expect(requireHookState(hookState).reportingForm.contributionFunding).toBe('vault')
-			expect(requireHookState(hookState).reportingDetails?.viewerPoolHeldVaultRepBackingAttoRep).toBe(15n)
-		} else expect(requireHookState(hookState).reportingResult?.action).toBe('reportOutcome')
-	})
-
-	test('wallet continuation reporting carries the fork-trigger review into the vault-funded report', async () => {
-		const pool = getAddress('0x00000000000000000000000000000000000000d6')
-		// Invalid already sits at the 20 attoREP threshold, so filling Yes with 18 attoREP ends escalation and triggers the fork.
-		const forkReadySides: ActiveReportingDetails['sides'] = [
-			{ balance: 20n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-			{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-			{ balance: 1n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
-		]
-		let hookState: UseReportingOperationsState | undefined
-		const execute = mock(async (_account, _callbacks, securityPoolAddress, outcome, _amount, _depositAmount, _onVaultFunded, _triggersFork) => ({ action: 'reportOutcome' as const, hash: '0x1234' as const, outcome, securityPoolAddress, universeId: 1n })) satisfies NonNullable<
-			UseReportingOperationsDependencies['reportOutcomeWithWalletViaVault']
-		>
-		const Harness = createHarness(
-			useReportingOperations,
-			state => {
-				hookState = state
-			},
-			createReportingOperationsDependencies({
-				loadReportingDetails: async () =>
-					createReportingDetails(pool, {
-						contributionFunding: 'wallet',
-						forkContinuation: true,
-						minimumVaultRepDepositAttoRep: 10n,
-						sides: forkReadySides,
-						walletVaultFunding: { vaultRepBackingUnits: 0n, totalRepBackingUnits: 0n, totalPoolHeldRepAttoRep: 0n },
-						viewerPoolHeldVaultRepBackingAttoRep: 0n,
-						viewerWalletRepAllowanceAttoRep: 100n,
-						viewerWalletRepBalanceAttoRep: 100n,
-					}),
-				reportOutcomeWithWalletViaVault: execute,
-			}),
-		)
-		const rendered = await renderIntoDocument(h(Harness, {}))
-		trackCleanup(rendered.cleanup)
-		await act(async () => {
-			requireHookState(hookState).setReportingForm(current => ({ ...current, securityPoolAddress: pool, selectedOutcome: 'yes', reportAmount: '0.000000000000000018', contributionFunding: 'wallet' }))
-		})
-		await act(async () => {
-			await requireHookState(hookState).loadReporting()
-		})
-		await act(async () => {
-			await requireHookState(hookState).onReportOutcome()
-		})
-		expect(execute).toHaveBeenCalledTimes(1)
-		expect(execute.mock.calls[0]?.[7]).toBe(true)
-	})
-
-	test.each([false, true])('requires a new click after the displayed vault funding changes (decrease: %s)', async decrease => {
-		const pool = getAddress('0x00000000000000000000000000000000000000d5')
-		let hookState: UseReportingOperationsState | undefined
-		let reads = 0
-		const details = (hasBacking: boolean) =>
-			createReportingDetails(pool, {
-				contributionFunding: 'wallet',
-				forkContinuation: true,
-				minimumVaultRepDepositAttoRep: 10n,
-				walletVaultFunding: { vaultRepBackingUnits: hasBacking ? 10n : 0n, totalRepBackingUnits: 100n, totalPoolHeldRepAttoRep: 100n },
-				viewerPoolHeldVaultRepBackingAttoRep: hasBacking ? 10n : 0n,
-				viewerWalletRepAllowanceAttoRep: 100n,
-				viewerWalletRepBalanceAttoRep: 100n,
-			})
-		const displayed = details(!decrease)
-		const refreshed = details(decrease)
-		const execute = mock(async (_account, _callbacks, securityPoolAddress, outcome, _amount, _depositAmount) => ({ action: 'reportOutcome' as const, hash: '0x1234' as const, outcome, securityPoolAddress, universeId: 1n })) satisfies NonNullable<UseReportingOperationsDependencies['reportOutcomeWithWalletViaVault']>
-		const Harness = createHarness(
-			useReportingOperations,
-			state => {
-				hookState = state
-			},
-			createReportingOperationsDependencies({
-				loadReportingDetails: async () => (++reads === 1 ? displayed : refreshed),
-				reportOutcomeWithWalletViaVault: execute,
-			}),
-		)
-		const rendered = await renderIntoDocument(h(Harness, {}))
-		trackCleanup(rendered.cleanup)
-		await act(async () => {
-			requireHookState(hookState).setReportingForm(current => ({ ...current, securityPoolAddress: pool, selectedOutcome: 'yes', reportAmount: '0.000000000000000005', contributionFunding: 'wallet' }))
-		})
-		await act(async () => {
-			await requireHookState(hookState).loadReporting()
-		})
-		await act(async () => {
-			await requireHookState(hookState).onReportOutcome()
-		})
-		expect(execute).not.toHaveBeenCalled()
-		expect(requireHookState(hookState).reportingFeedback?.status.detail).toContain('Review the updated amount')
-		expect(requireHookState(hookState).reportingDetails).toEqual(refreshed)
-		await act(async () => {
-			await requireHookState(hookState).onReportOutcome()
-		})
-		expect(execute).toHaveBeenCalledTimes(1)
-		expect(execute.mock.calls[0]?.[5]).toBe(decrease ? 5n : 15n)
 	})
 
 	test('onApproveReportingRep approves the accepted contribution amount for an active ordinary game', async () => {

@@ -1,4 +1,3 @@
-import { previewLinearFeeCheckpoint, type LinearFeeState } from '@zoltar/statoblast-shared/statoblast/retentionRate'
 import { escalationGameAbi } from '@zoltar/bot-shared/contracts/abi'
 import { type Address, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { sameAddress } from '@zoltar/core-shared/evm/address'
@@ -6,70 +5,6 @@ import { genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
 import { canonicalUintString } from '../core/units.ts'
 import { type EcosystemDeployments, type PoolSnapshot } from '../operations/types.ts'
 import { type ChaosReadClient, contractSimulationReverted, drainConcurrent } from './discovery-client.ts'
-
-function fixedPointPower(value: bigint, exponent: bigint) {
-	const precision = 10n ** 18n
-	let result = exponent % 2n === 0n ? precision : value
-	let base = value
-	for (let remaining = exponent / 2n; remaining !== 0n; remaining /= 2n) {
-		base = (base * base) / precision
-		if (remaining % 2n !== 0n) result = (result * base) / precision
-	}
-	return result
-}
-
-export function projectSettlementCollateral(
-	accounting: {
-		settlementCollateralAttoEth: bigint
-		feeEligibleUnderwritingLimitAttoEth: bigint
-		totalUnderwritingLimitAttoEth: bigint
-		feeIndexRemainder: bigint
-		totalFeesOwedRemainder: bigint
-		lastUpdatedFeeAccumulator: bigint
-		currentRetentionRate: bigint
-	},
-	feeEndTimestamp: bigint | undefined,
-	anchorTimestamp: bigint,
-	linearFee?: LinearFeeState,
-) {
-	if (feeEndTimestamp === undefined) return 0n
-	if (linearFee !== undefined) return previewLinearFeeCheckpoint({ linearFee, currentTimestamp: anchorTimestamp, feeEndTimestamp, lastUpdatedFeeAccumulator: accounting.lastUpdatedFeeAccumulator, settlementCollateralAttoEth: accounting.settlementCollateralAttoEth })?.settlementCollateralAfterFeesAttoEth ?? 0n
-	const clamped = anchorTimestamp < feeEndTimestamp ? anchorTimestamp : feeEndTimestamp
-	if (accounting.lastUpdatedFeeAccumulator >= clamped || accounting.feeEligibleUnderwritingLimitAttoEth === 0n) return accounting.settlementCollateralAttoEth
-	const timeDelta = clamped - accounting.lastUpdatedFeeAccumulator
-	if (accounting.totalUnderwritingLimitAttoEth === 0n) return accounting.settlementCollateralAttoEth
-	const feeBearingCollateral = (accounting.settlementCollateralAttoEth * accounting.feeEligibleUnderwritingLimitAttoEth) / accounting.totalUnderwritingLimitAttoEth
-	const pendingDecay = (accounting.feeIndexRemainder + accounting.totalFeesOwedRemainder) / 10n ** 18n
-	const decayingCollateral = feeBearingCollateral > pendingDecay ? feeBearingCollateral - pendingDecay : 0n
-	const resultingCollateral = (decayingCollateral * fixedPointPower(accounting.currentRetentionRate, timeDelta)) / 10n ** 18n
-	const scaledFeeDelta = (decayingCollateral - resultingCollateral) * 10n ** 18n + accounting.feeIndexRemainder
-	const feeIndexDelta = scaledFeeDelta / accounting.feeEligibleUnderwritingLimitAttoEth
-	const feesOwedDelta = feeIndexDelta * accounting.feeEligibleUnderwritingLimitAttoEth + accounting.totalFeesOwedRemainder
-	const creditedFees = feesOwedDelta / 10n ** 18n
-	return creditedFees > accounting.settlementCollateralAttoEth ? 0n : accounting.settlementCollateralAttoEth - creditedFees
-}
-
-function resultingVaultBackingAfterDeposit(deposit: bigint, vaultBackingUnits: bigint, totalBackingUnits: bigint, poolRepBalance: bigint) {
-	const addedBackingUnits = totalBackingUnits === 0n || poolRepBalance === 0n ? deposit * 10n ** 18n : (deposit * totalBackingUnits) / poolRepBalance
-	const nextTotalBackingUnits = totalBackingUnits + addedBackingUnits
-	if (nextTotalBackingUnits === 0n) return 0n
-	return ((vaultBackingUnits + addedBackingUnits) * (poolRepBalance + deposit)) / nextTotalBackingUnits
-}
-
-export function minimumSafeVaultDeposit(minimumBacking: bigint, vaultBackingUnits: bigint, totalBackingUnits: bigint, poolRepBalance: bigint) {
-	let lower = minimumBacking > 0n ? minimumBacking : 1n
-	let upper = lower
-	while (resultingVaultBackingAfterDeposit(upper, vaultBackingUnits, totalBackingUnits, poolRepBalance) < minimumBacking) {
-		if (upper > ((1n << 256n) - 1n) / 2n) throw new Error('No representable REP deposit satisfies the vault minimum')
-		upper *= 2n
-	}
-	while (lower < upper) {
-		const middle = lower + (upper - lower) / 2n
-		if (resultingVaultBackingAfterDeposit(middle, vaultBackingUnits, totalBackingUnits, poolRepBalance) >= minimumBacking) upper = middle
-		else lower = middle + 1n
-	}
-	return lower
-}
 
 export function relevantTokenSpenders(deployments: EcosystemDeployments, pools: readonly PoolSnapshot[], token: Address): Address[] {
 	const spenders = new Map<string, Address>()

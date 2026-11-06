@@ -6,10 +6,10 @@ const address = (index: number) => getAddress(`0x${index.toString(16).padStart(4
 const game = address(100)
 const claim = { outcomeIndex: 1, amountAttoRep: 10n, cumulativeAmountAttoRep: 30n, leafIndex: 2n }
 const claimId = keccak256(encodeAbiParameters([{ type: 'uint8' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [claim.outcomeIndex, claim.amountAttoRep, claim.cumulativeAmountAttoRep, claim.leafIndex]))
-const transform = (index: number) => ({ repBeforeAttoRep: 101n + BigInt(index), repRemainingAttoRep: 99n + BigInt(index), consumedBeforeAttoRep: BigInt(index) })
+const transform = (index: number) => ({ consumedBeforeAttoRep: BigInt(index) })
 function push(previous: Hash, index: number) {
 	const value = transform(index)
-	return keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'bytes32' }, { type: 'bytes32' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [game, claimId, previous, value.repBeforeAttoRep, value.repRemainingAttoRep, value.consumedBeforeAttoRep]))
+	return keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'bytes32' }, { type: 'bytes32' }, { type: 'uint256' }], [game, claimId, previous, value.consumedBeforeAttoRep]))
 }
 function fixture(count = 3, prefix = zeroHash) {
 	const commitments = [prefix]

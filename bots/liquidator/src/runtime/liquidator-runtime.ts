@@ -5,7 +5,6 @@ import { createSystemDeploymentGate } from '#core/deployment-gate'
 import { createSettingsUpdateQueue } from '#core/settings-update-queue'
 import { setExecutionShutdownCheck } from '#execution/execution-safety'
 import { chainFor } from '#monitoring/operator-chain'
-import { createPoolMonitorIndex } from '#monitoring/vault-positions'
 import { initialRuntimeState, loadDurableState, type RuntimeState } from '#state/operator-state'
 import { createPoolDeploymentDateCache } from '../monitoring/pool-deployment-date.ts'
 import { readBotEnvironment, type DashboardEnvironment } from '@zoltar/bot-shared/config/environment'
@@ -15,7 +14,6 @@ import type { BotProcessLocks, BotShutdownController } from '@zoltar/bot-shared/
 export type LoadedSettings = Awaited<ReturnType<typeof loadSettings>>
 type OperatorChain = ReturnType<typeof chainFor>
 type ReadPool = ReturnType<typeof createRpcEndpointPool>
-type PoolMonitorIndex = ReturnType<typeof createPoolMonitorIndex>
 
 function primaryClientFor(chain: OperatorChain, readPool: ReadPool) {
 	return createPublicClient({ chain, transport: readPool.transport })
@@ -39,7 +37,6 @@ export type LiquidatorRuntime = {
 	client: LiquidatorClient
 	lastDryRunKey: string | undefined
 	missingDeploymentAddress: string | undefined
-	poolMonitorIndexes: Map<string, PoolMonitorIndex>
 	profileSwitchRequested: boolean
 	readPool: ReadPool
 	settings: OperatorSettings
@@ -93,7 +90,6 @@ export async function createLiquidatorRuntime(loaded: LoadedSettings, collaborat
 		client: primaryClientFor(chain, readPool),
 		lastDryRunKey: undefined,
 		missingDeploymentAddress: undefined,
-		poolMonitorIndexes: new Map(),
 		profileSwitchRequested: false,
 		readPool,
 		settings,
@@ -134,15 +130,6 @@ export async function persistSettings(runtime: LiquidatorRuntime, deps: Liquidat
 		runtime.settings = next
 		return next
 	})
-}
-
-export function poolMonitorIndexFor(runtime: LiquidatorRuntime, endpoint: string) {
-	const key = `${runtime.settings.network.chainId.toString()}:${runtime.settings.deployment.securityPoolFactory.toLowerCase()}:${endpoint}`
-	const existing = runtime.poolMonitorIndexes.get(key)
-	if (existing !== undefined) return existing
-	const created = createPoolMonitorIndex()
-	runtime.poolMonitorIndexes.set(key, created)
-	return created
 }
 
 export function requestProfileSwitch(runtime: LiquidatorRuntime) {

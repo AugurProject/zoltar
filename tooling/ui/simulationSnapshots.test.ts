@@ -6,7 +6,6 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import { getUiAppPaths } from './appPaths.mts'
 import {
-	computeSimulationSnapshotKey,
 	computeSimulationSnapshotKeyFromMetafile,
 	generateSimulationSnapshots,
 	getSimulationSnapshotScenarios,
@@ -106,6 +105,30 @@ describe('simulation snapshots', () => {
 		expect(await pruneStaleSimulationSnapshots(paths, 'key')).toBe('pruned')
 	})
 
+	test('derives a stable key from the real worker bundle', async () => {
+		// Bun caches Node resolution after another test imports TEVM; production builds run in a fresh process.
+		const child = Bun.spawn(
+			[
+				process.execPath,
+				'--eval',
+				`
+			import { computeSimulationSnapshotKey } from './tooling/ui/simulationSnapshots.mts'
+			import { getUiAppPaths } from './tooling/ui/appPaths.mts'
+			const paths = getUiAppPaths('zoltar')
+			console.log(JSON.stringify([await computeSimulationSnapshotKey(paths), await computeSimulationSnapshotKey(paths)]))
+		`,
+			],
+			{ cwd: getUiAppPaths('zoltar').repositoryRoot, stdout: 'pipe', stderr: 'pipe' },
+		)
+		const [stdout, stderr, exitCode] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited])
+		expect(stderr).toBe('')
+		expect(exitCode).toBe(0)
+		const keys: unknown = JSON.parse(stdout)
+		expect(keys).toEqual([expect.stringMatching(/^[0-9a-f]{64}$/), expect.stringMatching(/^[0-9a-f]{64}$/)])
+		if (!Array.isArray(keys)) throw new Error('Expected two snapshot keys')
+		expect(keys[1]).toBe(keys[0])
+	}, 60_000)
+
 	test('lists the core scenarios before each app scenario', async () => {
 		expect(await getSimulationSnapshotScenarios('zoltar')).toEqual(['baseline', 'deployed', 'two-questions', 'forked-categorical'])
 		expect((await getSimulationSnapshotScenarios('statoblast')).slice(0, 3)).toEqual(['baseline', 'deployed', 'portfolio'])
@@ -125,14 +148,6 @@ describe('simulation snapshots', () => {
 		expect(output).not.toContain('SIMULATION_SNAPSHOT_KEY')
 	})
 
-	test('derives a stable key from the real worker bundle', async () => {
-		const appPaths = getUiAppPaths('zoltar')
-		const key = await computeSimulationSnapshotKey(appPaths)
-		expect(key).toMatch(/^[0-9a-f]{64}$/)
-		expect(await computeSimulationSnapshotKey(appPaths)).toBe(key)
-	}, 60_000)
-
-	// Seeding loads tevm into this process, after which the in-process bundler behind the key no longer builds the worker; keep the key test above.
 	test('a targeted regeneration keeps the other scenarios of a manifest made under the same key', async () => {
 		const paths = await createTemporaryPaths()
 		const appPaths = getUiAppPaths('zoltar')

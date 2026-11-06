@@ -17,7 +17,6 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { createRpcEndpointPool, createWalletClient, encodeAbiParameters, encodeFunctionData, getAddress, isHex, keccak256, privateKeyToAccount, toHex } from '@zoltar/bot-shared/ethereum'
 import { mainnet } from '@zoltar/core-shared/evm/ethereum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
-import { securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
 import type { OperatorSettings } from '../../src/config/settings.ts'
 import { OperationRediscoveryRequired, assertRequestedTransactionHash, type ExecutionEnvironment } from '../../src/execution/execution-context.ts'
 import { TransactionAwaitingRecovery, executeOperationPlan } from '../../src/execution/transaction-executor.ts'
@@ -201,32 +200,6 @@ function combinedRepBalanceRpcServer(balances: { credit: () => bigint; wallet: (
 				jsonrpc: '2.0',
 				result: toHex(balance, { size: 32 }),
 			})
-		},
-	})
-	servers.push(server)
-	if (server.port === undefined) throw new Error('RPC test server did not expose a port')
-	return `http://127.0.0.1:${server.port.toString()}`
-}
-
-function vaultBackingRpcServer(backingAttoRep: () => bigint) {
-	const vaultCall = encodeFunctionData({ abi: securityPoolAbi, args: [sender], functionName: 'securityVaults' })
-	const backingCall = encodeFunctionData({ abi: securityPoolAbi, args: [10n], functionName: 'backingUnitsToAttoRep' })
-	const server = Bun.serve({
-		port: 0,
-		async fetch(request) {
-			const body = rpcRequest(await request.json())
-			if (!('params' in body) || !Array.isArray(body.params)) return new Response('Expected eth_call parameters', { status: 400 })
-			const transaction = rpcRequest(body.params[0])
-			const data = 'data' in transaction ? transaction.data : undefined
-			if (data === vaultCall) {
-				return Response.json({
-					id: 'id' in body ? body.id : 1,
-					jsonrpc: '2.0',
-					result: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [10n, 0n, 0n, 0n]),
-				})
-			}
-			if (data === backingCall) return Response.json({ id: 'id' in body ? body.id : 1, jsonrpc: '2.0', result: toHex(backingAttoRep(), { size: 32 }) })
-			return new Response(`Unexpected SecurityPool call ${String(data)}`, { status: 400 })
 		},
 	})
 	servers.push(server)
@@ -566,19 +539,6 @@ describe('transaction downstream preflights', () => {
 		if (changedBalance === 'credit') creditBalance -= 1n
 		else walletBalance -= 1n
 		await expect(assertFreshWalletAssetDebits(currentEnvironment, creditStep, anchor)).rejects.toThrow('combined wallet and OpenOracle REP reserve')
-	})
-
-	test('fresh-checks SecurityPool vault REP backing at the canonical anchor', async () => {
-		let backing = 10n
-		const firstUrl = vaultBackingRpcServer(() => backing)
-		const secondUrl = vaultBackingRpcServer(() => backing)
-		const currentStep = step()
-		currentStep.walletAssetDebits = [{ amount: '10', category: 'rep', kind: 'security-pool-vault-rep', pool: caller, vault: sender }]
-		const anchor = { attestingRpcUrls: new Set([firstUrl, secondUrl]), number: 123n }
-
-		await expect(assertFreshWalletAssetDebits(environment(firstUrl, secondUrl), currentStep, anchor)).resolves.toBeUndefined()
-		backing = 9n
-		await expect(assertFreshWalletAssetDebits(environment(firstUrl, secondUrl), currentStep, anchor)).rejects.toThrow('no longer has the declared SecurityPool vault REP backing')
 	})
 
 	test('does not substitute a nonattester when a canonical REP-balance reader is unavailable', async () => {

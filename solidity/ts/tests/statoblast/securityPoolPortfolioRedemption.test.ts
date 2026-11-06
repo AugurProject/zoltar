@@ -59,6 +59,15 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		const target = { abi: shareArtifact.abi, address: fixture.poolFor(fixture.base.questionId).shareToken }
 		await expect(writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...target, functionName: 'transferPortfolioRecoveryRights', args: [fixture.base.genesisUniverse, fixture.owner().account.address, [0n, 1n, 0n]] }))).rejects.toThrow('No live source recovery right')
 		expect(await fixture.other().readContract({ ...target, functionName: 'balanceOfPortfolioRecoveryRights', args: [fixture.base.genesisUniverse, fixture.other().account.address] })).toEqual([0n, 0n, 0n])
+		const protectedBalances = await shares()
+		const forkTime = (await getUniverseData(fixture.owner(), fixture.base.genesisUniverse)).forkTime
+		for (const timestamp of [await fixture.base.mockWindow.getTime(), forkTime + 56n * DAY - 1n, forkTime + 63n * DAY]) {
+			await fixture.base.mockWindow.setTime(timestamp)
+			for (const outcome of [0n, 1n, 2n]) {
+				await expect(fixture.other().writeContract({ ...target, functionName: 'migrate', args: [fixture.base.genesisUniverse * 256n + outcome, [1n]] })).rejects.toThrow('Question finalized before fork')
+			}
+			expect(await shares()).toEqual(protectedBalances)
+		}
 		const before = await settlementState()
 		const cash = await fixture.owner().getBalance({ address: before.engine })
 		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...pool(), functionName: 'redeemShares' }))

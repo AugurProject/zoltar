@@ -2,7 +2,7 @@ import { portfolioRuntimeIdentities } from '@zoltar/bot-shared/contracts/abi'
 import { getAddress, parseAbiItem, type Address } from '@zoltar/bot-shared/ethereum'
 import { verifyRuntimeIdentity } from '@zoltar/bot-shared/monitoring/runtime-identity'
 import type { PortfolioCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
-import type { ReadClient } from './vault-positions.ts'
+import type { ReadClient } from './read-client.ts'
 
 const links = [
 	parseAbiItem('function forkAuthority() view returns (address)'),

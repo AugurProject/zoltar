@@ -103,11 +103,10 @@ export type Configuration = {
 	childMarketConfigurations: unknown[]
 	centralizedMarkets: unknown
 	connectivity?: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string; rpcQuorum: 1 | 2 } | undefined
-	desiredPools: unknown[]
 	network?: { chainId: number; explorerUrl: string; name: 'mainnet' | 'sepolia' } | undefined
 	networkConfigured?: boolean | undefined
 	runtime: { execute: boolean; historicalLogRecovery: boolean; logLookbackBlocks: number }
-	selectedPools: string[]
+	selectedPortfolios: { address: string; universeId: string }[]
 	strategy: Record<string, string | number | boolean>
 	submission: { minimumBundleRelaySuccesses: number; mode: 'private' | 'public'; relayUrls: string[] }
 }
@@ -186,11 +185,10 @@ const configuration = object<Configuration>({
 	childMarketConfigurations: array(unknownValue),
 	centralizedMarkets: unknownValue,
 	connectivity: optional(object<NonNullable<Configuration['connectivity']>>({ publicRpcUrls: strings, quorumRpcUrls: strings, readRpcUrl: stringValue, rpcQuorum: oneOf(1, 2) })),
-	desiredPools: array(unknownValue),
 	network: optional(object<NonNullable<Configuration['network']>>({ chainId: numberValue, explorerUrl: stringValue, name: network })),
 	networkConfigured: optional(booleanValue),
 	runtime: object<Configuration['runtime']>({ execute: booleanValue, historicalLogRecovery: booleanValue, logLookbackBlocks: numberValue }),
-	selectedPools: strings,
+	selectedPortfolios: array(object<{ address: string; universeId: string }>({ address: stringValue, universeId: stringValue })),
 	strategy: dictionary((value): value is string | number | boolean => stringValue(value) || numberValue(value) || booleanValue(value)),
 	submission: object<Configuration['submission']>({ minimumBundleRelaySuccesses: numberValue, mode: oneOf('private', 'public'), relayUrls: strings }),
 })

@@ -14,7 +14,10 @@ const bindings: Record<string, Abi> = {
 	SecurityPool: abis.securityPoolAbi,
 	OpenOraclePriceCoordinator: abis.openOraclePriceCoordinatorAbi,
 	SecurityPoolForker: abis.securityPoolForkerAbi,
-	UniformPriceDualCapBatchAuction: abis.uniformPriceDualCapBatchAuctionAbi,
+	SecurityPoolPortfolioAuction: abis.securityPoolPortfolioAuctionAbi,
+	SecurityPoolPortfolio: abis.securityPoolPortfolioAbi,
+	SecurityPoolCapitalLedger: abis.securityPoolCapitalLedgerAbi,
+	SecurityPoolPortfolioForkCoordinator: abis.securityPoolPortfolioForkCoordinatorAbi,
 	EscalationGame: abis.escalationGameAbi,
 	EscalationGameClaimDelegate: abis.escalationGameAbi,
 	OpenOracle: abis.openOracleAbi,
@@ -30,9 +33,11 @@ const bindings: Record<string, Abi> = {
 
 // Fields read from durable metadata still own these transaction arguments.
 const metadataArguments: Record<string, Record<string, string>> = {
-	'statoblast.vault.deposit-rep': { 'args.0': 'amount' },
-	'statoblast.auction.bid': { 'args.0': 'tick', value: 'amount' },
-	'statoblast.complete-set.create': { value: 'amount' },
+	'statoblast.capital.deposit': { 'args.1': 'amount' },
+	'statoblast.capital.set-commitment': { 'args.0': 'commitmentAttoEth' },
+	'statoblast.capital.set-health': { 'args.0': 'healthFactorBps' },
+	'statoblast.auction.bid': { 'args.0': 'lots', 'args.1': 'minimumAttoRepPerLot', 'args.2': 'healthFactorBps' },
+	'statoblast.complete-set.create': { 'args.2': 'amount' },
 	'statoblast.complete-set.redeem': { 'args.0': 'amount' },
 	'open-oracle.deposit': { 'args.0': 'token', 'args.1': 'amount' },
 	'open-oracle.withdraw': { 'args.0': 'token' },

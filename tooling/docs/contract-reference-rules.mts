@@ -4,11 +4,8 @@
 
 import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
 
-export type RoundingDirection = 'down' | 'up'
-
 export const attoPrecision = 10n ** 18n
 const secondsPerDay = 86_400n
-const secondsPerYear = 31_536_000
 
 export const escalationRules = {
 	activationDays: 3n,
@@ -21,24 +18,6 @@ export const escalationRules = {
 
 export const escalationTimeLengthSeconds = escalationRules.escalationDays * secondsPerDay
 export const escalationFinalDay = escalationRules.activationDays + escalationRules.escalationDays
-
-export const retentionRules = {
-	maxRetentionRate: 999_999_996_848_000_000n,
-	minRetentionRate: 999_999_977_880_000_000n,
-	dipUtilizationPercent: 80n,
-} as const
-
-export const liquidationRules: { repBonusBps: bigint; bpsDenominator: bigint; repBackingUnitsRounding: RoundingDirection } = {
-	repBonusBps: 500n,
-	bpsDenominator: 10_000n,
-	repBackingUnitsRounding: 'up',
-}
-
-export const auctionRules = {
-	minTick: -524_288n,
-	maxTick: 524_288n,
-	tickBase: '1.0001',
-} as const
 
 export type EscalationPayoutInput = {
 	bindingCapitalAttoRep: bigint
@@ -93,14 +72,4 @@ export const escalationPayoutExample: EscalationPayoutInput = {
 // Renders an attoREP amount as REP with trailing zeros removed, keeping full precision otherwise.
 export function formatRep(attoRep: bigint): string {
 	return formatUnits(attoRep, 18)
-}
-
-export function formatUnderscored(value: bigint): string {
-	return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '_')
-}
-
-// Client-side annualization of a per-second retention factor; the contract never computes this value.
-export function annualizedFeePercent(retentionRate: bigint): number {
-	const perSecond = Number(retentionRate) / Number(attoPrecision)
-	return (1 - perSecond ** secondsPerYear) * 100
 }

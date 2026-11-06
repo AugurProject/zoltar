@@ -17,7 +17,7 @@ const config = (options => {
 			'.': {
 				entry: [
 					'docs/charts/chartRuntime.ts!',
-					'docs/runtime/{auctionClearing,deploymentMaskDecoder,docsShell,responsiveDocs,interactiveTools,invariantExplorer,mmrProofPlanner,openOracleTools}.ts!',
+					'docs/runtime/{deploymentMaskDecoder,docsShell,responsiveDocs,interactiveTools,invariantExplorer,mmrProofPlanner,openOracleTools}.ts!',
 					'tooling/**/*.test.ts',
 					'tooling/contracts/prettier-solidity-batch.mjs!',
 					'bun-test-setup*.ts',
@@ -132,7 +132,7 @@ const config = (options => {
 				},
 			},
 			solidity: {
-				entry: ['ts/compile.ts!', ...productionOnly(['ts/gas-costs.ts!']), 'ts/abi/abis.ts!', 'ts/trading/deploy/*.mts!', 'ts/tests/**/*.ts', 'ts/fuzz/**/*.ts', 'ts/types/*.d.ts'],
+				entry: ['ts/compile.ts!', ...productionOnly(['ts/gas-costs.ts!']), 'ts/abi/abis.ts!', 'ts/trading/deploy/*.mts!', 'ts/tests/**/*.ts', 'ts/types/*.d.ts'],
 				project: ['**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}!', '!ts/testSupport/**!', '!ts/tests/**!'],
 				paths: {
 					'@zoltar/core-shared/*': ['../shared/core/ts/*'],

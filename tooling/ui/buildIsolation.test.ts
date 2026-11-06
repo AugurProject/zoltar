@@ -56,3 +56,7 @@ test('every canonical Solidity source invalidates application contract builds', 
 	}
 	for (const name of ['WETH9', 'Multicall3']) expect(affectedProjects([`solidity/contracts/statoblast/${name}.sol`]).map(entry => entry.id)).toContain('ui-zoltar')
 })
+
+test('app builds consume the canonical contract artifact instead of a stale per-project cache', () => {
+	for (const app of UI_APP_IDS) expect(getAppBuildCommands([app]).flat()).not.toContain('--scoped-artifacts')
+})

@@ -12,7 +12,7 @@ import { createQuestion, makeQuestion } from '../../testSupport/simulator/utils/
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { manipulatePriceOracle } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
-import { useStatoblastVaultAccountingFixture } from './fixture'
+import { usePortfolioProtocolFixture } from './portfolioProtocolFixture'
 
 export const unit = 10n ** 18n
 export const maximumQuestionHorizonSeconds = 20n * 365n * DAY
@@ -27,7 +27,7 @@ export const portfolioEconomics: PortfolioEconomicsConfig = {
 
 export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<PortfolioEconomicsConfig> = {}) {
 	const economics = { ...portfolioEconomics, ...economicsOverrides }
-	const base = useStatoblastVaultAccountingFixture()
+	const base = usePortfolioProtocolFixture()
 	let portfolio: Address
 	let capitalLedger: Address
 	let questionAdmissionPolicy: Address
@@ -36,12 +36,13 @@ export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<Port
 	const owner = () => base.client
 	const other = () => createWriteClient(base.mockWindow, TEST_ADDRESSES[1])
 	const poolFor = (questionId: bigint, universeId = base.genesisUniverse, parent = zeroAddress, namespace = portfolio) => getSecurityPoolAddresses(parent, universeId, questionId, base.statoblastSecurityMultiplierBps, base.genesisUniverse, DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, namespace)
-	const deployPortfolio = async (policy = questionAdmissionPolicy, configuration = economics) => {
+	const deployPortfolio = async (policy = questionAdmissionPolicy, configuration = economics, originOverrides: Partial<{ universeId: bigint; securityMultiplierBps: bigint; reportPriorityFeeAttoEthPerGas: bigint }> = {}) => {
 		const infrastructure = getInfraContractAddresses()
+		const origin = { universeId: base.genesisUniverse, securityMultiplierBps: base.statoblastSecurityMultiplierBps, reportPriorityFeeAttoEthPerGas: DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, ...originOverrides }
 		const request = buildPortfolioDeploymentRequest({
 			owner: owner().account.address,
 			factory: infrastructure.securityPoolFactory,
-			initialOriginPool: base.securityPoolAddresses.securityPool,
+			origin,
 			maximumQuestionHorizonSeconds,
 			questionAdmissionPolicy: policy,
 			economics: configuration,
@@ -66,7 +67,7 @@ export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<Port
 		for (let stage = 1; stage <= 4; stage++) {
 			const sender = other()
 			await expect(sender.writeContract({ abi: portfolioArtifact.abi, address: created, functionName: 'addQuestion', args: [base.questionId] })).rejects.toThrow('Portfolio setup incomplete')
-			await expect(sender.writeContract({ abi: portfolioArtifact.abi, address: created, functionName: 'createCompleteSet', args: [base.genesisUniverse, base.questionId, unit, sender.account.address, 0n], value: 2n * unit })).rejects.toThrow('Portfolio setup incomplete')
+			await expect(sender.writeContract({ abi: portfolioArtifact.abi, address: created, functionName: 'createCompleteSet', args: [origin.universeId, base.questionId, unit, sender.account.address, 0n], value: 2n * unit })).rejects.toThrow('Portfolio setup incomplete')
 			const setup = buildPortfolioPrepareNextRequest({ caller: sender.account.address, portfolio: created })
 			const hash = await writeContractAndWait(sender, () => sender.sendTransaction({ ...setup, gas: 16_777_216n }))
 			const setupReceipt = await sender.waitForTransactionReceipt({ hash })

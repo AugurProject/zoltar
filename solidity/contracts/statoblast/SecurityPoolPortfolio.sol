@@ -54,6 +54,11 @@ interface IPortfolioReporterIdentity {
 /// @notice Shared REP custody and aggregate settlement with personal vault commitments.
 contract SecurityPoolPortfolio is IPortfolioSettlement {
 	using SafeERC20Ops for IERC20;
+	struct OriginConfig {
+		uint248 universeId;
+		uint256 securityMultiplierBps;
+		uint256 reportPriorityFeeAttoEthPerGas;
+	}
 	struct EconomicsConfig {
 		uint256 purchaseFeeBps;
 		uint256 annualFeeBps;
@@ -74,7 +79,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		IPortfolioAuctionDeployer auctions;
 	}
 	ISecurityPoolFactory public immutable factory;
-	ISecurityPool public immutable seedPool;
+
 	Zoltar public immutable zoltar;
 	uint248 public immutable originUniverseId;
 	ISecurityPoolQuestionAdmissionPolicy public immutable questionAdmissionPolicy;
@@ -108,24 +113,24 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	event UniversePrepared(uint248 indexed universeId, address capitalLedger);
 	event SetupAdvanced(uint8 stage);
 
-	constructor(ISecurityPoolFactory _factory, ISecurityPool seed, uint256 horizon, Deployers memory deployment, ISecurityPoolQuestionAdmissionPolicy admission, EconomicsConfig memory config) {
+	constructor(ISecurityPoolFactory _factory, OriginConfig memory origin, uint256 horizon, Deployers memory deployment, ISecurityPoolQuestionAdmissionPolicy admission, EconomicsConfig memory config) {
 		require(address(admission).code.length != 0, 'Admission policy has no code');
 		require(config.purchaseFeeBps <= 10_000 && config.annualFeeBps <= 10_000 && config.minimumCommitmentAttoEth > 0, 'Invalid portfolio economics');
 		require(address(deployment.auctions).code.length != 0, 'Auction deployer has no code');
 		require(config.minimumOutcomeRate > 0 && config.minimumOutcomeRate <= 1e18, 'Invalid minimum exchange rate');
 		require(address(deployment.capital).code.length != 0 && address(deployment.commitments).code.length != 0 && address(deployment.fees).code.length != 0 && address(deployment.books).code.length != 0 && address(deployment.settlement).code.length != 0 && address(deployment.reporters).code.length != 0 && address(deployment.forks).code.length != 0 && address(deployment.services).code.length != 0, 'Portfolio deployer has no code');
 		require(config.rewardVestingSeconds > 0 && horizon > 0 && horizon <= type(uint48).max, 'Invalid portfolio duration');
-		require(address(seed.parent()) == address(0) && address(seed.securityPoolFactory()) == address(_factory), 'Invalid portfolio seed');
-		bytes32 origin = _factory.getSecurityPoolOriginId(seed);
-		require(address(_factory.getSecurityPool(origin, seed.universeId())) == address(seed), 'Seed is not canonical');
+		require(origin.reportPriorityFeeAttoEthPerGas > 0, 'Initial priority fee zero');
+		require(origin.securityMultiplierBps > 10_001, 'Multiplier must exceed 10001 BPS');
 		factory = _factory;
-		seedPool = seed;
-		zoltar = seed.zoltar();
-		originUniverseId = seed.universeId();
+		zoltar = _factory.zoltar();
+		originUniverseId = origin.universeId;
+		require(address(zoltar.getRepToken(origin.universeId)) != address(0), 'Universe REP token missing');
+		require(zoltar.getForkTime(origin.universeId) == 0, 'Origin universe forked');
 		questionAdmissionPolicy = admission;
 		maximumQuestionHorizonSeconds = horizon;
-		statoblastSecurityMultiplierBps = seed.statoblastSecurityMultiplierBps();
-		initialReportPriorityFeeAttoEthPerGas = seed.openOraclePriceCoordinator().initialReportPriorityFeeAttoEthPerGas();
+		statoblastSecurityMultiplierBps = origin.securityMultiplierBps;
+		initialReportPriorityFeeAttoEthPerGas = origin.reportPriorityFeeAttoEthPerGas;
 		purchaseFeeBps = config.purchaseFeeBps;
 		annualFeeBps = config.annualFeeBps;
 		minimumPurchaseFeeAttoEth = config.minimumPurchaseFeeAttoEth;
@@ -172,7 +177,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		} else if (setupStage == 2) {
 			_createCapital(originUniverseId);
 		} else {
-			factory.initializePortfolioPriceFeed(seedPool);
+			factory.initializePortfolioPriceFeed(originUniverseId, initialReportPriorityFeeAttoEthPerGas);
 			IPortfolioForkCoordinator(forkController).activateOrigin(originUniverseId);
 		}
 		setupStage++;
@@ -246,7 +251,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		capital.beginForkImport();
 	}
 	function activateForkChild(uint248 child) external onlyForkController {
-		factory.initializePortfolioPriceFeedForUniverse(seedPool, child);
+		factory.initializePortfolioPriceFeedForUniverse(child);
 		if (zoltar.getForkTime(child) == 0 && capitalLedger[child].isPriceValid()) services.activateFees(child);
 	}
 	function creditForkFees(uint248 universeId, uint256 amount) external onlyForkController {
@@ -297,6 +302,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	function createCompleteSet(uint248 universeId, uint256 questionId, uint256 mintAttoEth, address recipient, uint256 minimumShares) external payable nonReentrant returns (uint256 minted) {
 		uint256 fee;
 		(minted, fee) = services.purchase{value: msg.value}(msg.sender, universeId, questionId, mintAttoEth, recipient, minimumShares);
+		purchasingPool = address(0);
 		emit CompleteSetsFunded(universeId, questionId, recipient, mintAttoEth, minted, fee);
 	}
 	function prepareServicePurchase(uint248 universeId, uint256 questionId) external onlyServices returns (ISecurityPool pool) {
@@ -306,16 +312,10 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		if (universeId != originUniverseId)
 			require(questionAdmissionPolicy.isQuestionAllowed(address(this), originUniverseId, questionId), 'Question rejected by admission policy');
 		pool = universeId == originUniverseId ? addQuestion(questionId) : getPool(questionId, universeId);
+		purchasingPool = address(pool);
 		capitalLedger[universeId].checkpoint();
 	}
-	function executeServiceMint(ISecurityPool pool, address recipient, uint256 minimumShares) external payable onlyServices returns (uint256 minted) {
-		purchasingPool = address(pool);
-		minted = quoteHelper.mintCompleteSets{value: msg.value}(pool, recipient, minimumShares);
-		purchasingPool = address(0);
-	}
-	function deliverServiceMint(ISecurityPool pool, address recipient, uint256 shares) external onlyServices {
-		quoteHelper.deliverCompleteSets(pool, recipient, shares);
-	}
+
 	function mintQuestionSettlement() external payable returns (uint256, uint256, uint256) {
 		ISecurityPool pool = _pool(msg.sender);
 		require(entered && purchasingPool == msg.sender, 'No authorized portfolio purchase');
@@ -378,14 +378,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		require(address(pool.escalationGame()) == msg.sender, 'Finality caller is not canonical');
 		services.onQuestionFinalityChanged(pool, nativeFinalAfter);
 	}
-	function onQuestionAccountingChanged() external view {
-		_pool(msg.sender);
-	}
-	function onCompleteSetsReturned() external {
-		ISecurityPool pool = _pool(msg.sender);
-		services.cancelUnusedPremium(pool);
-		if (zoltar.getForkTime(pool.universeId()) == 0) capitalLedger[pool.universeId()].serveRetirement(0);
-	}
+
 	function freezeForFork() external {
 		ISecurityPool pool = _pool(msg.sender);
 		IPortfolioForkCoordinator(forkController).freeze(pool.universeId());

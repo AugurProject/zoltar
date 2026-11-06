@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { chmod, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { assertIntentSender, clearMarketEvidenceForConfigurationChange, commitReconciledIntent, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, recoveredIntentCanBeResubmitted, resolveRecoveredIntentJournal, saveDurableState } from '../../src/state/operator-state.ts'
+import { assertIntentSender, clearMarketEvidenceForConfigurationChange, commitReconciledIntent, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, resolveRecoveredIntentJournal, saveDurableState } from '../../src/state/operator-state.ts'
 import { getAddress, keccak256, privateKeyToAccount, type Hex } from '@zoltar/bot-shared/ethereum'
 
 describe('liquidator durable state', () => {
@@ -106,11 +106,6 @@ describe('liquidator durable state', () => {
 		} finally {
 			await rm(directory, { force: true, recursive: true })
 		}
-	})
-
-	test('never resubmits a recovered price-dependent intent without fresh evidence', () => {
-		expect(recoveredIntentCanBeResubmitted({ requiresMarketEvidence: true })).toBe(false)
-		expect(recoveredIntentCanBeResubmitted({ requiresMarketEvidence: false })).toBe(true)
 	})
 	test('clears all prior venue evidence when the configured source set changes', () => {
 		const evidence: { centralizedMarket: unknown; marketConsensus: unknown; marketObservations: unknown[] } = { centralizedMarket: 'old-cex', marketConsensus: 'old-consensus', marketObservations: ['old-observation'] }

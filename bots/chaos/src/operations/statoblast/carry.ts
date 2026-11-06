@@ -1,4 +1,4 @@
-import { EcosystemSnapshot, OperationDefinition, OperationEvidence, PlanningOptions, PoolSnapshot } from '../types.ts'
+import { EcosystemSnapshot, OperationDefinition, OperationEvidence, PoolSnapshot } from '../types.ts'
 
 import { amount, choose, eligible, encodePreflightCall, encodeStep, eventEvidence, eventTopic, mixSeed, planBase } from '../planning.ts'
 
@@ -7,8 +7,6 @@ import { escalationGameAbi, multicall3Abi, securityPoolAbi } from '@zoltar/bot-s
 import { CARRY_DEPOSIT_CONSUMED_ABI, CARRY_DEPOSIT_CONSUMED_SIGNATURE, CLAIM_DEPOSIT_ABI, CLAIM_DEPOSIT_SIGNATURE } from './planning.ts'
 
 import { claimCheckpointArguments, claimCheckpointWithdrawalCalls } from './checkpoint-call.ts'
-
-import { walletVaultRegistrationCapacityBlocker } from './vaults.ts'
 
 function buildResidualSweepPlan(snapshot: EcosystemSnapshot, pool: PoolSnapshot) {
 	const signature = pool.escalationForkContinuation ? 'ForkContinuationResidualRepBurned(uint256)' : 'OrdinaryResidualRepBurned(uint256)'
@@ -152,21 +150,21 @@ function buildForkedCarryWithdrawalPlan(snapshot: EcosystemSnapshot, candidate: 
 	})
 }
 
-function actionableForkedCarryWithdrawals(snapshot: EcosystemSnapshot, options: PlanningOptions) {
+function actionableForkedCarryWithdrawals(snapshot: EcosystemSnapshot) {
 	return (snapshot.forkedCarryWithdrawals ?? []).filter(candidate => {
 		if (candidate.depositor.toLowerCase() !== snapshot.wallet.address.toLowerCase()) return false
 		const pool = snapshot.pools.find(value => value.address.toLowerCase() === candidate.pool.toLowerCase())
-		return pool !== undefined && walletVaultRegistrationCapacityBlocker(pool, options, 'Forked carry withdrawal vault registration') === undefined
+		return pool !== undefined
 	})
 }
 
 export const withdrawForkedCarry: OperationDefinition = {
 	buildPlan(snapshot, options) {
-		const candidate = choose(actionableForkedCarryWithdrawals(snapshot, options), mixSeed(options.seed, withdrawForkedCarry.id))
+		const candidate = choose(actionableForkedCarryWithdrawals(snapshot), mixSeed(options.seed, withdrawForkedCarry.id))
 		return candidate === undefined ? undefined : buildForkedCarryWithdrawalPlan(snapshot, candidate)
 	},
-	buildLifecyclePlans(snapshot, options) {
-		return actionableForkedCarryWithdrawals(snapshot, options).map(candidate => buildForkedCarryWithdrawalPlan(snapshot, candidate))
+	buildLifecyclePlans(snapshot) {
+		return actionableForkedCarryWithdrawals(snapshot).map(candidate => buildForkedCarryWithdrawalPlan(snapshot, candidate))
 	},
 	enumerateLifecycleObstructingPresence(snapshot) {
 		if (snapshot.forkedCarryWithdrawalPresence === undefined) {
@@ -187,13 +185,11 @@ export const withdrawForkedCarry: OperationDefinition = {
 	description: 'Withdraws one canonically replayed, anchor-verified inherited escalation deposit per private next-block transaction.',
 	discoveryInputs: ['anchored contract storage', 'snapshot MMR proof', 'sparse nullifier proof', 'anchored source/child graph and direct-claim state'],
 	ecosystem: 'statoblast',
-	evaluate(snapshot, options) {
+	evaluate(snapshot) {
 		const verified = snapshot.forkedCarryWithdrawals ?? []
-		const actionable = actionableForkedCarryWithdrawals(snapshot, options)
+		const actionable = actionableForkedCarryWithdrawals(snapshot)
 		const first = verified.find(candidate => candidate.depositor.toLowerCase() === snapshot.wallet.address.toLowerCase())
-		const pool = first === undefined ? undefined : snapshot.pools.find(value => value.address.toLowerCase() === first.pool.toLowerCase())
-		const capacityBlocker = pool === undefined || actionable.length > 0 ? undefined : walletVaultRegistrationCapacityBlocker(pool, options, 'Forked carry withdrawal vault registration')
-		return eligible(capacityBlocker, verified.length > 0 ? undefined : 'No verified wallet-owned inherited escalation deposit is withdrawable', first !== undefined ? undefined : 'Verified inherited escalation deposit is not owned by the configured wallet')
+		return eligible(actionable.length > 0 ? undefined : 'No verified wallet-owned inherited escalation deposit is withdrawable', first !== undefined ? undefined : 'Verified inherited escalation deposit is not owned by the configured wallet')
 	},
 	id: 'statoblast.escalation.withdraw-forked',
 	label: 'Withdraw forked escalation deposits',

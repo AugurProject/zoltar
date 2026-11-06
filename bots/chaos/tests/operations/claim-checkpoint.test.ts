@@ -66,13 +66,13 @@ test('uses verified witnesses for the same preparation method and includes the c
 		pendingSteps: '1',
 		pendingCommitment: zeroHash,
 		baseCommitment: zeroHash,
-		transforms: [{ repBeforeAttoRep: 20n.toString(), repRemainingAttoRep: 15n.toString(), consumedBeforeAttoRep: 1n.toString() }],
+		transforms: [{ consumedBeforeAttoRep: 1n.toString() }],
 	}
 	snapshot.forkedClaimCheckpoints = [candidate]
 	const plan = prepareInheritedClaim.buildPlan(snapshot, options)
 	const step = plan?.steps[0]
 	if (step === undefined) throw new Error('Missing witness transaction')
-	expect(decodeFunctionData({ abi: escalationGameAbi, data: step.data })).toMatchObject({ functionName: 'processClaimCheckpoint', args: [1n, 10n, 20n, 1n, 8n, zeroHash, [{ repBeforeAttoRep: 20n, repRemainingAttoRep: 15n, consumedBeforeAttoRep: 1n }]] })
+	expect(decodeFunctionData({ abi: escalationGameAbi, data: step.data })).toMatchObject({ functionName: 'processClaimCheckpoint', args: [1n, 10n, 20n, 1n, 8n, zeroHash, [{ consumedBeforeAttoRep: 1n }]] })
 	candidate.pendingCommitment = `0x${'1'.repeat(64)}`
 	expect(prepareInheritedClaim.buildPlan(snapshot, options)?.metadata).not.toEqual(plan?.metadata)
 })
@@ -97,7 +97,7 @@ test('final preparation calls the game then pool atomically with a committed rec
 		pendingSteps: '1',
 		pendingCommitment: zeroHash,
 		baseCommitment: zeroHash,
-		transforms: [{ repBeforeAttoRep: 20n.toString(), repRemainingAttoRep: 15n.toString(), consumedBeforeAttoRep: 1n.toString() }],
+		transforms: [{ consumedBeforeAttoRep: 1n.toString() }],
 		finalWithdrawal: {
 			multicall3: address(90),
 			resultingCarryRoot: zeroHash,
@@ -128,7 +128,7 @@ test('final preparation calls the game then pool atomically with a committed rec
 	expect(step.preflightCalls).toHaveLength(1)
 	const finalTransforms = candidate.transforms
 	candidate.pendingSteps = '9'
-	candidate.transforms = Array.from({ length: 9 }, () => ({ repBeforeAttoRep: 20n.toString(), repRemainingAttoRep: 15n.toString(), consumedBeforeAttoRep: 1n.toString() }))
+	candidate.transforms = Array.from({ length: 9 }, () => ({ consumedBeforeAttoRep: 1n.toString() }))
 	expect(() => claimCheckpointWithdrawalCalls(candidate)).toThrow('withdrawal target')
 	candidate.pendingSteps = '1'
 	candidate.transforms = finalTransforms

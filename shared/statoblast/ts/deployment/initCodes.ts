@@ -1,6 +1,5 @@
 import { concatHex, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, toHex, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { createApplyLinkedLibrariesHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
-import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
 import {
 	OPEN_ORACLE_SECURITY_MULTIPLIER_BPS,
 	ORACLE_DISPUTE_DELAY,
@@ -94,7 +93,6 @@ type StatoblastInfrastructureArtifacts = {
 	securityPoolPortfolioAuctionDeployer: BytecodeArtifact
 	securityPoolUtils: BytecodeArtifact
 	shareTokenFactory: ContractArtifact
-	uniformPriceDualCapBatchAuctionFactory: BytecodeArtifact
 }
 
 type SecurityPoolFactoryInputs = {
@@ -105,7 +103,6 @@ type SecurityPoolFactoryInputs = {
 	securityPoolOperationsDelegate: Address
 	securityPoolEventEmitter: Address
 	shareTokenFactory: Address
-	uniformPriceDualCapBatchAuctionFactory: Address
 	zoltar: Address
 	zoltarQuestionData: Address
 }
@@ -146,20 +143,7 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 		encodeDeployData({
 			abi: artifacts.securityPoolFactory.abi,
 			bytecode: applyLibraries(artifacts.securityPoolFactory.evm.bytecode.object),
-			args: [
-				inputs.securityPoolForker,
-				inputs.zoltarQuestionData,
-				inputs.escalationGameFactory,
-				inputs.openOracle,
-				inputs.zoltar,
-				inputs.shareTokenFactory,
-				inputs.uniformPriceDualCapBatchAuctionFactory,
-				inputs.openOraclePriceCoordinatorFactory,
-				DEFAULT_PROTOCOL_CONFIG.minimumSecurityBondDebtAttoEth,
-				DEFAULT_PROTOCOL_CONFIG.minimumVaultRepDepositAttoRep,
-				inputs.securityPoolOperationsDelegate,
-				inputs.securityPoolEventEmitter,
-			],
+			args: [inputs.securityPoolForker, inputs.zoltarQuestionData, inputs.escalationGameFactory, inputs.openOracle, inputs.zoltar, inputs.shareTokenFactory, inputs.openOraclePriceCoordinatorFactory, inputs.securityPoolOperationsDelegate, inputs.securityPoolEventEmitter],
 		})
 
 	/** CREATE2 addresses of every infrastructure contract for one WETH deployment and Zoltar core. */
@@ -192,7 +176,6 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 			securityPoolReporterLedgerDeployerBytecode: getSecurityPoolReporterLedgerDeployerByteCode(),
 			securityPoolPortfolioForkCoordinatorDeployerBytecode: getSecurityPoolPortfolioForkCoordinatorDeployerByteCode(),
 			securityPoolPortfolioAuctionDeployerBytecode: getSecurityPoolPortfolioAuctionDeployerByteCode(),
-			uniformPriceDualCapBatchAuctionFactoryBytecode: bytecodeOf(artifacts.uniformPriceDualCapBatchAuctionFactory),
 			zeroSalt,
 		}).getInfraContractAddresses
 

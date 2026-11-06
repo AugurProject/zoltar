@@ -46,8 +46,8 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		return (
 			state.sourcePrincipalAttoRep,
 			state.sourcePrincipalClaimedAttoRep,
-			_applyTruthAuctionRetention(state.childAttoRep),
-			_applyTruthAuctionRetention(state.childRepClaimedAttoRep)
+			(state.childAttoRep),
+			(state.childRepClaimedAttoRep)
 		);
 	}
 
@@ -108,7 +108,7 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 			uint256 sourcePrincipalAttoRep = state.sourcePrincipalAttoRep;
 			uint256 childAttoRep = state.childAttoRep;
 			uint256 remainingSourcePrincipalAttoRep = sourcePrincipalAttoRep - state.sourcePrincipalClaimedAttoRep;
-			uint256 remainingChildAttoRep = _applyTruthAuctionRetention(childAttoRep - state.childRepClaimedAttoRep);
+			uint256 remainingChildAttoRep = (childAttoRep - state.childRepClaimedAttoRep);
 			if (remainingSourcePrincipalAttoRep == 0 && remainingChildAttoRep == 0) continue;
 			sourcePrincipalByOutcomeAttoRep[outcomeIndex] = remainingSourcePrincipalAttoRep;
 			childRepByOutcomeAttoRep[outcomeIndex] = remainingChildAttoRep;

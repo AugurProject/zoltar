@@ -8,7 +8,7 @@ installDomTestLifecycle({ url: 'http://localhost/#/pools?universe=7' })
 test('shows one primary row with Pools, Portfolios and Price reports', () => {
 	const tabs = getStatoblastRouteTabs({ applicationDeploymentMissing: false, route: 'pools', showDeployTab: false })
 	expect(tabs.map(tab => tab.route)).toEqual(['pools', 'portfolios', 'open-oracle'])
-	expect(tabs.map(tab => tab.label)).toEqual(['Pools', 'Portfolios', 'Price reports'])
+	expect(tabs.map(tab => tab.label)).toEqual(['Questions', 'Portfolios', 'Price reports'])
 	expect(tabs.map(tab => tab.hash)).toEqual(['#/pools', '#/portfolios', '#/open-oracle'])
 })
 
@@ -33,12 +33,12 @@ test('lists pool views as paths without a Manage Pool peer and preserves the uni
 	const navigation = getRouteSecondaryNavigation({ activeSecurityPoolsView: 'browse', route: 'pools', setSecurityPoolsView })
 	if (navigation === undefined) throw new Error('Expected secondary navigation')
 	// Browse search opens a pasted pool address, so there is no separate Open pool view.
-	expect(navigation.options.map(option => option.value)).toEqual(['browse', 'create', 'universes'])
-	expect(navigation.options.map(option => option.href)).toEqual(['#/pools?universe=7', '#/pools/create?universe=7', '#/pools/universes?universe=7'])
-	navigation.onChange('create')
+	expect(navigation.options.map(option => option.value)).toEqual(['browse', 'universes'])
+	expect(navigation.options.map(option => option.href)).toEqual(['#/pools?universe=7', '#/pools/universes?universe=7'])
+	navigation.onChange('universes')
 	navigation.onChange('operate')
 	expect(setSecurityPoolsView).toHaveBeenCalledTimes(1)
-	expect(setSecurityPoolsView).toHaveBeenCalledWith('create')
+	expect(setSecurityPoolsView).toHaveBeenCalledWith('universes')
 })
 
 test('hides the list views on a pool page', () => {

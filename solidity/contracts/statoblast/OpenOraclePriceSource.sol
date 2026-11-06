@@ -12,15 +12,8 @@ import { OpenOracleReportDelegate } from './OpenOracleReportDelegate.sol';
 import { DelegateCall } from './DelegateCall.sol';
 import './OpenOraclePriceCoordinatorTypes.sol';
 
-/// @notice Report lifecycle and price-source routing, independent of a question's operation queue.
+/// @notice Report lifecycle and price-source routing, using the portfolio universe shared feed.
 abstract contract OpenOraclePriceSource {
-	uint256 public constant MAX_PENDING_SETTLEMENT_OPERATIONS = 4;
-	uint256 public constant SETTLEMENT_GAS_OVERHEAD = 50_000;
-	uint256 public constant OPEN_INTEREST_DIVIDER = 100;
-	uint256 private standalonePendingReportId;
-	address private standalonePendingReportSponsor;
-	uint256 private standaloneLastSettlementTimestamp;
-	uint256 private standaloneLastPrice; // (REP * SecurityPoolUtils.PRICE_PRECISION) / ETH;
 	ReputationToken public immutable reputationToken;
 	ISecurityPool public securityPool;
 	OpenOracle public immutable openOracle;
@@ -42,7 +35,6 @@ abstract contract OpenOraclePriceSource {
 	uint256 public immutable escalationHaltMultiplierBps;
 	uint256 public immutable maxSettlementBaseFeeMultiplierBps;
 	uint256 public immutable minLiquidationPriceDistanceBps;
-	uint256 private standalonePendingReportMaxSettlementBaseFeeAttoEthPerGas;
 	address internal immutable coordinatorFactory;
 	OpenOracleReportDelegate public immutable reportDelegate;
 
@@ -104,7 +96,7 @@ abstract contract OpenOraclePriceSource {
 	}
 
 	function priceFeed() public view returns (address) {
-		return address(sharedPriceFeed) == address(0) ? address(this) : address(sharedPriceFeed);
+		return address(sharedPriceFeed);
 	}
 
 	function setSharedPriceFeed(SharedPoolPriceFeed feed) external {
@@ -119,32 +111,23 @@ abstract contract OpenOraclePriceSource {
 	}
 
 	function pendingReportId() public view returns (uint256) {
-		return address(sharedPriceFeed) == address(0) ? standalonePendingReportId : sharedPriceFeed.pendingReportId();
+		return sharedPriceFeed.pendingReportId();
 	}
 
 	function pendingReportSponsor() public view returns (address) {
-		return
-			address(sharedPriceFeed) == address(0)
-				? standalonePendingReportSponsor
-				: sharedPriceFeed.pendingReportSponsor();
+		return sharedPriceFeed.pendingReportSponsor();
 	}
 
 	function lastSettlementTimestamp() public view returns (uint256) {
-		return
-			address(sharedPriceFeed) == address(0)
-				? standaloneLastSettlementTimestamp
-				: sharedPriceFeed.lastSettlementTimestamp();
+		return sharedPriceFeed.lastSettlementTimestamp();
 	}
 
 	function lastPrice() public view returns (uint256) {
-		return address(sharedPriceFeed) == address(0) ? standaloneLastPrice : sharedPriceFeed.lastPrice();
+		return sharedPriceFeed.lastPrice();
 	}
 
 	function pendingReportMaxSettlementBaseFeeAttoEthPerGas() public view returns (uint256) {
-		return
-			address(sharedPriceFeed) == address(0)
-				? standalonePendingReportMaxSettlementBaseFeeAttoEthPerGas
-				: sharedPriceFeed.pendingReportMaxSettlementBaseFeeAttoEthPerGas();
+		return sharedPriceFeed.pendingReportMaxSettlementBaseFeeAttoEthPerGas();
 	}
 
 	function setSecurityPool(ISecurityPool _securityPool) public {
@@ -152,46 +135,22 @@ abstract contract OpenOraclePriceSource {
 		require(msg.sender == coordinatorFactory, 'Only coordinator factory');
 		securityPool = _securityPool;
 		emit SecurityPoolSet(securityPool);
-		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.SecurityPoolSetup, 0, 0);
-	}
-
-	function setRepEthPrice(uint256 _lastPrice) public {
-		require(msg.sender == address(securityPool), 'Only pool');
-		if (address(sharedPriceFeed) != address(0)) return;
-		standaloneLastPrice = _lastPrice;
-		emit RepEthPriceSet(lastPrice());
-		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PriceSeeded, 0, 0);
 	}
 
 	function getRequestPriceCostAttoEth() public view returns (uint256) {
-		if (address(sharedPriceFeed) != address(0)) return sharedPriceFeed.getRequestPriceCostAttoEth();
-		return block.basefee * _requestGasUnits() + REQUEST_BOUNTY_OFFSET_ATTO_ETH;
-	}
-
-	function _requestGasUnits() private view returns (uint256) {
-		return 4 * (getSettlementCallbackGasLimit() + gasConsumedOpenOracleReportPrice);
-	}
-
-	function getQueuedOperationCostAttoEth() public pure returns (uint256) {
-		return 0;
+		return sharedPriceFeed.getRequestPriceCostAttoEth();
 	}
 
 	function getSettlementCallbackGasLimit() public view returns (uint32) {
-		if (address(sharedPriceFeed) != address(0)) return sharedPriceFeed.getSettlementCallbackGasLimit();
-		uint256 limit = (uint256(gasConsumedSettlement) + SETTLEMENT_GAS_OVERHEAD) * MAX_PENDING_SETTLEMENT_OPERATIONS;
-		require(limit <= type(uint32).max, 'Callback gas exceeds uint32');
-		return uint32(limit);
+		return sharedPriceFeed.getSettlementCallbackGasLimit();
 	}
 
 	function minimumToken1ReportAttoEth() public view returns (uint256) {
-		if (address(sharedPriceFeed) != address(0)) return sharedPriceFeed.minimumToken1ReportAttoEth();
-		return
-			reportDelegate.minimumReportAttoEth(address(this), address(securityPool) == address(0) ? 0 : securityPool.settlementCollateralAttoEth());
+		return sharedPriceFeed.minimumToken1ReportAttoEth();
 	}
 
 	function requestPrice(uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) public payable {
 		_requireRequestBounty(bountyAttoEth);
-		require(address(sharedPriceFeed) != address(0) || !isPriceValid(), 'Oracle price already fresh');
 		_requestPrice(msg.sender, bountyAttoEth, proposedRepPerEthPrice, requestedInitialAttoWeth);
 
 		uint256 excess = msg.value - bountyAttoEth;
@@ -208,95 +167,19 @@ abstract contract OpenOraclePriceSource {
 	}
 
 	function _requestPrice(address sponsor, uint256 bountyAttoEth, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth) internal {
-		if (address(sharedPriceFeed) != address(0)) {
-			DelegateCall.invoke(address(reportDelegate), abi.encodeCall(OpenOracleReportDelegate.createSharedReport, (sponsor, bountyAttoEth, proposedRepPerEthPrice, requestedInitialAttoWeth)));
-			return;
-		}
-		require(pendingReportId() == 0, 'Oracle request already pending');
-		standalonePendingReportSponsor = sponsor;
-		bytes memory result = DelegateCall.invoke(address(reportDelegate), abi.encodeCall(OpenOracleReportDelegate.createReport, (sponsor, bountyAttoEth, proposedRepPerEthPrice, requestedInitialAttoWeth)));
-		(standalonePendingReportId, standalonePendingReportMaxSettlementBaseFeeAttoEthPerGas) = abi.decode(result, (uint256, uint256));
-		emit PriceRequested(pendingReportId(), pendingReportMaxSettlementBaseFeeAttoEthPerGas());
-		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PriceRequested, pendingReportId(), 0);
+		DelegateCall.invoke(address(reportDelegate), abi.encodeCall(OpenOracleReportDelegate.createSharedReport, (sponsor, bountyAttoEth, proposedRepPerEthPrice, requestedInitialAttoWeth)));
 	}
 
 	function recoverSettledPendingReport() public {
-		if (address(sharedPriceFeed) != address(0)) {
-			sharedPriceFeed.recoverSettledPendingReport();
-			return;
-		}
-		uint256 reportId = pendingReportId();
-		require(reportId != 0, 'No report to recover');
-		(, , , , uint48 settlementTimestamp) = IStoredOpenOracleGame(address(openOracle)).storedGame(reportId);
-		require(settlementTimestamp != 0, 'Report not settled');
-		_withdrawOpenOracleReporterBalances(pendingReportSponsor());
-		standalonePendingReportId = 0;
-		standalonePendingReportSponsor = address(0);
-		standalonePendingReportMaxSettlementBaseFeeAttoEthPerGas = 0;
-		_failPendingSettlementOperations('Report recovered');
-		emit PendingReportRecovered(reportId, settlementTimestamp, pendingReportId(), pendingReportMaxSettlementBaseFeeAttoEthPerGas(), lastPrice(), lastSettlementTimestamp());
-		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PendingReportRecovered, reportId, 0);
-	}
-
-	function openOracleCallback(uint256 reportId, uint256 amount1, uint256 amount2, uint256, address, address) external {
-		require(msg.sender == address(openOracle), 'Only OpenOracle');
-		require(address(sharedPriceFeed) == address(0), 'Shared feed handles settlement');
-		require(reportId == pendingReportId(), 'Oracle report mismatch');
-		_withdrawOpenOracleReporterBalances(pendingReportSponsor());
-		standalonePendingReportId = 0;
-		standalonePendingReportSponsor = address(0);
-		uint256 maxSettlementBaseFeeAttoEthPerGas = pendingReportMaxSettlementBaseFeeAttoEthPerGas();
-		standalonePendingReportMaxSettlementBaseFeeAttoEthPerGas = 0;
-		(string memory rejectionReason, uint256 priceTimestamp) = reportDelegate.validateSettledReport(address(this), reportId, amount1, amount2, maxSettlementBaseFeeAttoEthPerGas);
-		if (bytes(rejectionReason).length != 0) {
-			_rejectReportAndPendingOperations(reportId, rejectionReason);
-			return;
-		}
-		// Freshness runs from settlement eligibility: the final report is frozen then, however late settle() is called.
-		standaloneLastSettlementTimestamp = priceTimestamp;
-		standaloneLastPrice = Math.mulDiv(amount2, SecurityPoolUtils.PRICE_PRECISION, amount1);
-		securityPool.updateRetentionRate();
-		emit PriceReported(reportId, lastPrice(), lastSettlementTimestamp());
-		_acceptPendingSettlementOperations();
-		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PriceReported, reportId, 0);
-	}
-
-	function _rejectReportAndPendingOperations(uint256 reportId, string memory reason) private {
-		_emitPriceReportRejected(reportId, reason);
-		_failPendingSettlementOperations(reason);
-	}
-
-	function _withdrawOpenOracleReporterBalances(address sponsor) private {
-		openOracle.withdrawTo(address(weth), type(uint256).max, sponsor);
-		openOracle.withdrawTo(address(reputationToken), type(uint256).max, sponsor);
-	}
-
-	function _emitPriceReportRejected(uint256 reportId, string memory reason) private {
-		emit PriceReportRejected(reportId, reason, pendingReportId(), pendingReportMaxSettlementBaseFeeAttoEthPerGas(), lastPrice(), lastSettlementTimestamp());
-		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PriceRejected, reportId, 0);
+		sharedPriceFeed.recoverSettledPendingReport();
 	}
 
 	function isPriceValid() public view returns (bool) {
-		if (address(sharedPriceFeed) != address(0)) return sharedPriceFeed.isPriceValid();
-		return lastPrice() > 0 && _isFreshPriceTimestamp(lastSettlementTimestamp());
+		return sharedPriceFeed.isPriceValid();
 	}
 
-	/// @notice Canonical expiry for either a standalone price or the portfolio's shared price.
+	/// @notice Canonical expiry for the portfolio universe shared price.
 	function priceValidUntil() public view returns (uint256) {
-		if (address(sharedPriceFeed) != address(0)) return sharedPriceFeed.priceValidUntil();
-		uint256 timestamp = lastSettlementTimestamp();
-		uint256 validForSeconds =
-			block.chainid == SEPOLIA_CHAIN_ID ? SEPOLIA_PRICE_VALID_FOR_SECONDS : PRICE_VALID_FOR_SECONDS;
-		return timestamp == 0 ? 0 : timestamp + validForSeconds;
+		return sharedPriceFeed.priceValidUntil();
 	}
-
-	function _isFreshPriceTimestamp(uint256 priceTimestamp) private view returns (bool) {
-		uint256 validForSeconds =
-			block.chainid == SEPOLIA_CHAIN_ID ? SEPOLIA_PRICE_VALID_FOR_SECONDS : PRICE_VALID_FOR_SECONDS;
-		return priceTimestamp != 0 && priceTimestamp + validForSeconds > block.timestamp;
-	}
-
-	function _acceptPendingSettlementOperations() internal virtual;
-	function _failPendingSettlementOperations(string memory reason) internal virtual;
-	function _emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason reason, uint256 reportId, uint256 operationId) internal virtual;
 }

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { encodeDeployData, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
+	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
 	statoblast_SecurityPool_SecurityPool as poolArtifact,
@@ -37,18 +38,29 @@ describe('Statoblast: central portfolio and native question integration', () => 
 			auctions: infrastructure.securityPoolPortfolioAuctionDeployer,
 			services: infrastructure.securityPoolPortfolioServicesDeployer,
 		}
-		const deploy = (configuration = portfolioEconomics, modules = deployers) =>
+		const deploy = (configuration = portfolioEconomics, modules = deployers, reportPriorityFeeAttoEthPerGas = 10_000_000_000n) =>
 			deployContract(
 				fixture.owner(),
 				encodeDeployData({
 					abi: portfolioArtifact.abi,
 					bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object),
-					args: [infrastructure.securityPoolFactory, fixture.base.securityPoolAddresses.securityPool, maximumQuestionHorizonSeconds, modules, fixture.questionAdmissionPolicy, configuration],
+					args: [infrastructure.securityPoolFactory, { universeId: fixture.base.genesisUniverse, securityMultiplierBps: fixture.base.statoblastSecurityMultiplierBps, reportPriorityFeeAttoEthPerGas }, maximumQuestionHorizonSeconds, modules, fixture.questionAdmissionPolicy, configuration],
 				}),
 			)
+		await expect(deploy(portfolioEconomics, deployers, 0n)).rejects.toThrow('Initial priority fee zero')
 		for (const minimumOutcomeRate of [0n, unit + 1n]) await expect(deploy({ ...portfolioEconomics, minimumOutcomeRate })).rejects.toThrow('Invalid minimum exchange rate')
 		await expect(deploy({ ...portfolioEconomics, annualFeeBps: 10_001n })).rejects.toThrow('Invalid portfolio economics')
 		for (const key of Object.keys(deployers)) await expect(deploy(portfolioEconomics, { ...deployers, [key]: fixture.owner().account.address })).rejects.toThrow(key === 'auctions' ? 'Auction deployer has no code' : 'Portfolio deployer has no code')
+	})
+
+	test('portfolio setup creates its shared capital and oracle without any seed question ledger', async () => {
+		const factory = { abi: factoryArtifact.abi, address: getInfraContractAddresses().securityPoolFactory }
+		const before = await fixture.owner().readContract({ ...factory, functionName: 'securityPoolDeploymentCount' })
+		const created = await fixture.deployPortfolio()
+		expect(await fixture.owner().readContract({ ...factory, functionName: 'securityPoolDeploymentCount' })).toBe(before)
+		expect(await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: created, functionName: 'questionCount' })).toBe(0n)
+		expect(await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: created, functionName: 'capitalLedger', args: [fixture.base.genesisUniverse] })).not.toBe(zeroAddress)
+		expect(await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: created, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })).not.toBe(zeroAddress)
 	})
 
 	test('permissionless registration binds distinct canonical shares without authorizing or moving owner capital', async () => {

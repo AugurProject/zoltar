@@ -9,8 +9,6 @@ const kindAliases: Readonly<Record<string, string>> = {
 	TwoWayConstantProductFactory: 'ammFactory',
 	TwoWayConstantProductPair: 'ammPair',
 	TwoWayConstantProductRouter: 'ammRouter',
-	UniformPriceDualCapBatchAuction: 'truthAuction',
-	UniformPriceDualCapBatchAuctionFactory: 'truthAuctionFactory',
 	WETH9: 'weth',
 }
 

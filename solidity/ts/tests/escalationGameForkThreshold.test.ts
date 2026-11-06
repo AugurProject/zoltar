@@ -4,21 +4,22 @@ import { beforeEach, describe, test } from 'bun:test'
 import { deployContract } from '../testSupport/deployContract'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
-import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import { useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
 import assert from '../testSupport/simulator/utils/assert'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
-import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, GENESIS_UNIVERSE, STATOBLAST_SECURITY_MULTIPLIER_BPS } from '../testSupport/simulator/utils/constants'
-import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, GENESIS_UNIVERSE } from '../testSupport/simulator/utils/constants'
 import { getNonDecisionThresholdAttoRep } from '../testSupport/simulator/utils/contracts/escalationGame'
-import { backingUnitsToAttoRep, depositToEscalationGame, getSecurityVault, redeemRepFromVault, withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
-import { approveAndDepositRepToVault, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
-import { addRepToMigrationBalance, ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
+import { withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
+import { addRepToMigrationBalance, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, makeQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
-import { approveToken, getERC20Balance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
+import { approveToken, getERC20Balance } from '../testSupport/simulator/utils/utilities'
 import {
 	statoblast_EscalationGame_EscalationGame,
+	statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact,
+	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
+	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier,
 	statoblast_SecurityPool_SecurityPool,
 	test_statoblast_EscalationGameForkThresholdHarness_EscalationGameForkBoundarySecurityPool,
@@ -30,17 +31,11 @@ import {
 const DAY = 86400n
 const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
 
-const getUserRepClaim = async (client: WriteClient, securityPoolAddress: Address) => {
-	const vault = await getSecurityVault(client, securityPoolAddress, client.account.address)
-	return await backingUnitsToAttoRep(client, securityPoolAddress, vault.repBackingUnits)
-}
-
 describe('Escalation Game Fork Threshold Test', () => {
-	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
+	const fixture = useSecurityPoolPortfolioFixture()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
-	const currentTimestamp = BigInt(Math.floor(Date.now() / 1000))
-	const questionEndDate = currentTimestamp + 365n * DAY
+	let questionEndDate: bigint
 	let securityPoolAddresses: {
 		securityPool: Address
 		escalationGame: Address
@@ -54,29 +49,25 @@ describe('Escalation Game Fork Threshold Test', () => {
 	}
 
 	beforeEach(async () => {
-		mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
-		await setupTestAccounts(mockWindow)
-		await ensureZoltarDeployed(client)
-		await ensureInfraDeployed(client)
-
-		const questionData = makeQuestion('Test', questionEndDate)
-		const outcomes = ['Yes', 'No']
-		questionId = getQuestionId(questionData, outcomes)
-		await createQuestion(client, questionData, outcomes)
-
-		await deployOriginSecurityPool(client, GENESIS_UNIVERSE, questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS)
-		await approveAndDepositRepToVault(client, 10_000n * 10n ** 18n, questionId)
-
-		securityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), GENESIS_UNIVERSE, questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS)
+		mockWindow = fixture.base.mockWindow
+		client = fixture.owner()
+		questionId = fixture.base.questionId
+		questionEndDate = fixture.base.questionData.endTime
+		securityPoolAddresses = fixture.poolFor(questionId)
+		await approveToken(client, getRepTokenAddress(GENESIS_UNIVERSE), securityPoolAddresses.securityPool)
 	})
+	const depositToEscalationGame = (sender: WriteClient, pool: Address, outcome: QuestionOutcome, amount: bigint) => writeContractAndWait(sender, () => sender.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [outcome, amount] }))
+	const reporterBalance = async () => {
+		const ledger = await client.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'reporterLedger', args: [GENESIS_UNIVERSE] })
+		return client.readContract({ abi: reporterArtifact.abi, address: ledger, functionName: 'balanceOfGame', args: [securityPoolAddresses.escalationGame] })
+	}
+	const capitalBalance = (owner = client.account.address) => client.readContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'ownerCollateral', args: [owner] })
 
 	test('withdrawal amount scaled by actual fork threshold after decrease', async () => {
 		const depositAmount = 100n * 10n ** 18n
 
 		// Advance time past the question's end date to allow escalation game deposit
 		await mockWindow.setTime(questionEndDate + 1n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 
 		// Deploy escalation game and deposit on Yes
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, depositAmount)
@@ -104,7 +95,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 		await mockWindow.advanceTime(10n * DAY)
 
 		// Withdraw via SecurityPool's withdrawFromEscalationGame
-		const repBefore = await getUserRepClaim(client, securityPoolAddresses.securityPool)
+		const repBefore = await capitalBalance()
 		const walletRepBefore = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		await writeContractAndWait(
 			client,
@@ -116,17 +107,16 @@ describe('Escalation Game Fork Threshold Test', () => {
 					args: [QuestionOutcome.Yes, [0n]], // deposit index 0
 				}),
 		)
-		const repAfter = await getUserRepClaim(client, securityPoolAddresses.securityPool)
+		const repAfter = await capitalBalance()
 		const walletRepAfter = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 
-		assert.strictEqual(repAfter, repBefore, 'settlement should not re-mint vault claim under escrow custody')
+		assert.deepStrictEqual(repAfter, repBefore, 'reporter settlement must not create underwriting collateral')
 		assert.strictEqual(walletRepAfter - walletRepBefore, depositAmount / 5n, 'winning payout should be scaled by the lowered fork threshold after applying the single-sided winner payout schedule')
 	})
 
 	test('ordinary settlement freezes a reduced payout before later supply changes', async () => {
 		const depositAmount = 100n * 10n ** 18n
 		await mockWindow.setTime(questionEndDate + 1n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, depositAmount / 2n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, depositAmount / 2n)
 		const initialSupply = await getTotalTheoreticalSupply(client, getRepTokenAddress(GENESIS_UNIVERSE))
@@ -136,10 +126,10 @@ describe('Escalation Game Fork Threshold Test', () => {
 		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
 		await overrideGenesisTheoreticalSupply(initialSupply)
 		await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: securityPoolAddresses.escalationGame, functionName: 'settleOrdinaryGame' }))
-		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.escalationGame), depositAmount / 10n, 'the reserve should cover precisely the remaining frozen claim')
+		assert.strictEqual(await reporterBalance(), depositAmount / 10n, 'the reserve should cover precisely the remaining frozen claim')
 		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [1n])
 		assert.strictEqual((await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)) - before, depositAmount / 5n, 'supply changes after settlement must neither enlarge nor shrink the reserved payout')
-		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.escalationGame), 0n)
+		assert.strictEqual(await reporterBalance(), 0n)
 	})
 
 	test('reduced-threshold scaling remains active immediately before and exactly at game end, but not one second after', async () => {
@@ -217,10 +207,9 @@ describe('Escalation Game Fork Threshold Test', () => {
 		const firstDeposit = (depositAmount * 3n) / 10n
 		const secondDeposit = depositAmount - firstDeposit
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
-		await approveAndDepositRepToVault(attacker, depositAmount, questionId)
+		await fixture.deposit(depositAmount, attacker)
 
 		await mockWindow.setTime(questionEndDate + 1n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, firstDeposit)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, secondDeposit)
 		const configuredThreshold = await getNonDecisionThresholdAttoRep(client, securityPoolAddresses.escalationGame)
@@ -261,7 +250,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 		await withdrawFromEscalationGame(attacker, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [1n])
 		const victimWalletAfterSecondSettlement = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		assert.strictEqual(victimWalletAfterSecondSettlement - victimWalletBeforeSecondSettlement, secondDeposit, 'a remaining finalized winner settled after unrelated migration must receive the same frozen principal')
-		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.escalationGame), 0n, 'late migration must not leave confiscated winner principal in the escalation game')
+		assert.strictEqual(await reporterBalance(), 0n, 'late migration must not leave confiscated winner principal in the escalation game')
 		await assert.rejects(
 			client.writeContract({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
@@ -277,12 +266,12 @@ describe('Escalation Game Fork Threshold Test', () => {
 				functionName: 'settleOrdinaryGame',
 			}),
 		)
-		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.escalationGame), 0n, 'idempotent settlement must not invent residual after every winner claims')
+		assert.strictEqual(await reporterBalance(), 0n, 'idempotent settlement must not invent residual after every winner claims')
 
 		const attackerWalletBefore = await getERC20Balance(attacker, addressString(GENESIS_REPUTATION_TOKEN), attacker.account.address)
-		await redeemRepFromVault(attacker, securityPoolAddresses.securityPool, attacker.account.address)
+		await writeContractAndWait(attacker, () => attacker.writeContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'withdrawPrincipal', args: [depositAmount, attacker.account.address] }))
 		const attackerWalletAfter = await getERC20Balance(attacker, addressString(GENESIS_REPUTATION_TOKEN), attacker.account.address)
-		assert.strictEqual(attackerWalletAfter - attackerWalletBefore, depositAmount, 'remaining REP backing units must redeem only its original REP, not a winner haircut')
+		assert.strictEqual(attackerWalletAfter - attackerWalletBefore, depositAmount, 'idle underwriting principal must remain separate from reporter payouts')
 	})
 
 	test('deploys the escalation game with the tracked Zoltar fork threshold instead of the token supply', async () => {
@@ -297,7 +286,6 @@ describe('Escalation Game Fork Threshold Test', () => {
 		await overrideGenesisTheoreticalSupply(overriddenTotalSupply)
 
 		await mockWindow.setTime(questionEndDate + 1n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, depositAmount)
 
 		assert.strictEqual(
@@ -310,11 +298,10 @@ describe('Escalation Game Fork Threshold Test', () => {
 			initialTotalSupply / 10_000_000n,
 			'initial escalation deposit should apply the theoretical-supply floor',
 		)
-		assert.strictEqual(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'minimumVaultRepDepositAttoRep', args: [] }), initialTotalSupply / 100_000n, 'the default vault REP floor should follow the theoretical supply')
 		assert.strictEqual(await getNonDecisionThresholdAttoRep(client, securityPoolAddresses.escalationGame), expectedThreshold, 'escalation threshold should follow Zoltar tracked supply')
 	})
 
-	test('derives newly deployed genesis pool parameters from live supply after multiple burns', async () => {
+	test('derives newly registered question parameters from live supply after multiple burns', async () => {
 		const initialSupply = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getUniverseTheoreticalSupplyAttoRep', args: [GENESIS_UNIVERSE] })
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		let expectedLiveSupply = initialSupply
@@ -329,12 +316,11 @@ describe('Escalation Game Fork Threshold Test', () => {
 		const nextOutcomes = ['Yes', 'No']
 		const nextQuestionId = getQuestionId(nextQuestionData, nextOutcomes)
 		await createQuestion(client, nextQuestionData, nextOutcomes)
-		await deployOriginSecurityPool(client, GENESIS_UNIVERSE, nextQuestionId, STATOBLAST_SECURITY_MULTIPLIER_BPS)
-		const nextPool = getSecurityPoolAddresses(addressString(0x0n), GENESIS_UNIVERSE, nextQuestionId, STATOBLAST_SECURITY_MULTIPLIER_BPS).securityPool
+		await fixture.register(nextQuestionId)
+		const nextPool = fixture.poolFor(nextQuestionId).securityPool
 		const expectedInitialDeposit = liveSupply / 10_000_000n < 10n ** 18n ? 10n ** 18n : liveSupply / 10_000_000n
 
 		assert.strictEqual(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: nextPool, functionName: 'initialEscalationGameDepositAttoRep' }), expectedInitialDeposit, 'initial escalation deposit should use live Zoltar supply')
-		assert.strictEqual(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: nextPool, functionName: 'minimumVaultRepDepositAttoRep' }), liveSupply / 100_000n, 'minimum vault deposit should use live Zoltar supply')
 	})
 
 	test.each([

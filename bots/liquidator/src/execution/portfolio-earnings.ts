@@ -5,7 +5,7 @@ import type { RuntimeState } from '#state/operator-state'
 import { securityPoolCapitalLedgerAbi as capitalAbi } from '@zoltar/bot-shared/contracts/abi'
 import { encodeFunctionData, type Account, type Chain, type Transport, type WalletClient, type createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { PortfolioOpportunityExpired, refreshPortfolioExecution } from './portfolio-executor.ts'
-import { submitCall } from './liquidation-executor.ts'
+import { submitCall } from './submit-call.ts'
 
 type Wallet = WalletClient<Transport, Chain, Account>
 type RpcPool = ReturnType<typeof createRpcEndpointPool>

@@ -57,20 +57,3 @@ export function topologyMutationCapacityBlocker(snapshot: EcosystemSnapshot, opt
 	}
 	return undefined
 }
-
-export interface VaultRegistrationCapacity {
-	canonicalVaultCount: string
-	registered: boolean
-}
-
-/** Existing vault routes remain executable at the exact resident limit. */
-export function vaultRegistrationCapacityBlocker(registration: VaultRegistrationCapacity, options: PlanningOptions, label = 'Vault registration') {
-	if (registration.registered) return undefined
-	const capacity = configuredImmutableTopologyCapacity(options)
-	if (capacity === undefined) return INVALID_IMMUTABLE_TOPOLOGY_CAPACITY_BLOCKER
-	if (!/^(?:0|[1-9][0-9]*)$/.test(registration.canonicalVaultCount)) return INVALID_IMMUTABLE_TOPOLOGY_CAPACITY_BLOCKER
-	if (BigInt(registration.canonicalVaultCount) + 1n > BigInt(capacity.maxVaultsPerPool)) {
-		return `${label} would exceed the configured ${capacity.maxVaultsPerPool.toString()}-vault per-pool discovery resident limit`
-	}
-	return undefined
-}

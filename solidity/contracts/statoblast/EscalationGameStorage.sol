@@ -49,8 +49,6 @@ abstract contract EscalationGameStorage {
 	BinaryOutcomes.BinaryOutcome public fixedQuestionOutcome;
 	NonDecisionState public nonDecisionState;
 	uint256 internal forkCarryBackingExportedBeforeResumeAttoRep;
-	uint256 public truthAuctionRepBeforeAttoRep;
-	uint256 public truthAuctionRepRemainingAttoRep;
 	uint8 public forkCarrySnapshotOutcomesInitialized;
 	bytes32 internal forkCarrySnapshotId;
 	// A checkpoint stores only frozen grandparent-and-earlier transforms. The
@@ -81,7 +79,7 @@ abstract contract EscalationGameStorage {
 	function _claimEscrowedRepByVault(address vault) internal view returns (uint256 amountAttoRep) {
 		if (ordinarySettlementInitialized)
 			return localUnresolvedPrincipalByVaultAndOutcome[vault][uint8(ordinarySettlementOutcome)];
-		return _applyTruthAuctionRetention(escalationClaimBundles[vault].disputeStakedRepClaimUnits);
+		return (escalationClaimBundles[vault].disputeStakedRepClaimUnits);
 	}
 
 	function _isRetiredOrdinaryOutcome(uint8 outcomeIndex) internal view returns (bool) {
@@ -89,14 +87,9 @@ abstract contract EscalationGameStorage {
 	}
 
 	function _increaseEscrowedRepForBundle(address bundleId, uint256 amountAttoRep) internal {
-		uint256 claimUnits = _repToClaimUnits(amountAttoRep);
+		uint256 claimUnits = amountAttoRep;
 		escalationClaimBundles[bundleId].disputeStakedRepClaimUnits += claimUnits;
 		totalDisputeStakedAttoRep += amountAttoRep;
-	}
-
-	function _applyTruthAuctionRetention(uint256 amountAttoRep) internal view returns (uint256) {
-		if (truthAuctionRepBeforeAttoRep == 0) return amountAttoRep;
-		return (amountAttoRep * truthAuctionRepRemainingAttoRep) / truthAuctionRepBeforeAttoRep;
 	}
 
 	function _recordConsumedPrincipal(uint8 outcomeIndex, uint256 leafIndex, uint256 amountAttoRep) internal {
@@ -130,12 +123,5 @@ abstract contract EscalationGameStorage {
 		if (!success) DelegateCall.bubbleRevert(data);
 		require(data.length == 128, 'Invalid allocation response');
 		return abi.decode(data, (uint256, uint256, uint256, uint256));
-	}
-
-	function _repToClaimUnits(uint256 amountAttoRep) internal view returns (uint256 claimUnits) {
-		if (truthAuctionRepBeforeAttoRep == 0) return amountAttoRep;
-		uint256 numerator = amountAttoRep * truthAuctionRepBeforeAttoRep;
-		claimUnits = numerator / truthAuctionRepRemainingAttoRep;
-		if (claimUnits * truthAuctionRepRemainingAttoRep < numerator) claimUnits += 1;
 	}
 }

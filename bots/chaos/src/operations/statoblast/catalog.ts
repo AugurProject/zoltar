@@ -1,55 +1,46 @@
-import { CHILD_PREPARATION_OPERATIONS, initializeChildHistory } from './child-preparation.ts'
+import { capitalAction, capitalPolicy, depositCapital } from './capital.ts'
+import { initializeChildHistory } from './child-preparation.ts'
 import { OperationDefinition } from '../types.ts'
 
-import { checkpointDefinition, deployPool, depositVault, exitCommitmentLimit, setCommitmentLimit, vaultActionDefinition } from './vaults.ts'
+import { checkpointDefinition, deployPool } from './vaults.ts'
 
 import { completeSetDefinition } from './complete-sets.ts'
 
-import { directEscalationDeposit, escalationDeposit } from './deposits.ts'
+import { directEscalationDeposit } from './direct-deposits.ts'
+import { escalationDeposit } from './deposits.ts'
 
-import { queueWithdrawal, withdrawEscalation } from './withdrawals.ts'
+import { withdrawEscalation } from './reporter-claims.ts'
 
 import { recoverSettledReport, requestOraclePrice } from './oracle.ts'
 
-import { executeStagedLiquidation, queueLiquidation, stagedObligation } from './liquidation.ts'
-
-import { claimForkedEscalation, forkDefinition, migrateVaultWithUnresolvedEscalation, resumeEscalation } from './forks.ts'
+import { forkDefinition, resumeEscalation } from './forks.ts'
 
 import { auctionDefinition, finalizeTruthAuctionRoute, refundLosingAuctionBids, settleAuctionBids, startTruthAuction } from './auctions.ts'
 
 import { sweepResidualEscalation, withdrawForkedCarry, prepareInheritedClaim } from './carry.ts'
 
 export const STATOBLAST_OPERATIONS: readonly OperationDefinition[] = [
-	...CHILD_PREPARATION_OPERATIONS,
 	initializeChildHistory,
 	deployPool,
 	checkpointDefinition('collateral'),
 	checkpointDefinition('retention'),
-	depositVault,
-	setCommitmentLimit,
-	exitCommitmentLimit,
-	vaultActionDefinition('update-fees'),
-	vaultActionDefinition('redeem-fees'),
-	vaultActionDefinition('redeem-rep'),
+	depositCapital,
+	capitalPolicy('commitment'),
+	capitalPolicy('health'),
+	capitalAction('retire'),
+	capitalAction('serve-retirement'),
+	capitalAction('claim'),
+	capitalAction('withdraw'),
 	completeSetDefinition('create'),
 	completeSetDefinition('redeem'),
 	completeSetDefinition('winning'),
 	directEscalationDeposit,
 	escalationDeposit,
-	queueWithdrawal,
 	requestOraclePrice,
 	recoverSettledReport,
-	queueLiquidation,
 	resumeEscalation,
-	claimForkedEscalation,
-	migrateVaultWithUnresolvedEscalation,
-	stagedObligation('execute'),
-	executeStagedLiquidation,
-	stagedObligation('expire'),
 	forkDefinition('initiate'),
-	forkDefinition('migrate-rep'),
 	forkDefinition('create-child'),
-	forkDefinition('migrate-vault'),
 	forkDefinition('own-question'),
 	startTruthAuction,
 	finalizeTruthAuctionRoute,

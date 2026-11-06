@@ -10,7 +10,7 @@ import { createWalletClient, createRpcEndpointPool, decodeFunctionData, parseAbi
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { erc20Abi, securityPoolCapitalLedgerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { mainnet } from '@zoltar/core-shared/evm/ethereum'
-import type { submitCall } from '../../src/execution/liquidation-executor.ts'
+import type { submitCall } from '../../src/execution/submit-call.ts'
 import { portfolioObservation, portfolioSettings, unit } from '../support/portfolio-observation.ts'
 
 const abi = [

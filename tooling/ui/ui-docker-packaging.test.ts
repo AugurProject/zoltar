@@ -102,7 +102,7 @@ describe('UI Docker packaging', () => {
 		}
 		expect(copies.some(copy => copy.includes('ui/coreShared/tsconfig.vendor.json'))).toBe(false)
 		expect(runSegments).not.toContain('bun run vendor')
-		expect(runSegments).toEqual(expect.arrayContaining(['bun ./tooling/ui/vendor.mts zoltar --scoped-artifacts', 'bun ./tooling/ui/vendor.mts statoblast --scoped-artifacts']))
+		expect(runSegments).toEqual(expect.arrayContaining(['bun ./tooling/ui/vendor.mts zoltar', 'bun ./tooling/ui/vendor.mts statoblast']))
 		expect(runSegments.filter(command => command.includes('bun install') || command.includes('install-frozen.mts'))).toEqual(['bun install --frozen-lockfile'])
 		expect(runSegments.some(command => /cd \/source\/ui\/\w+ && bun install/u.test(command))).toBe(false)
 		expect(relative(join(dirname(dockerfile), '..'), join(dirname(staticServer)))).toBe('tooling/ui')
@@ -167,7 +167,7 @@ describe('UI Docker packaging', () => {
 			if (appId === 'trading') {
 				const instructions = builder.instructions
 				expect(instructions.findIndex(instruction => instruction.keyword === 'COPY' && instruction.value === './ui/trading/ts/ /source/ui/trading/ts/')).toBeLessThan(
-					instructions.findIndex(instruction => instruction.keyword === 'RUN' && shellCommandSegments(instruction.value).includes('bun ./tooling/ui/vendor.mts trading --scoped-artifacts')),
+					instructions.findIndex(instruction => instruction.keyword === 'RUN' && shellCommandSegments(instruction.value).includes('bun ./tooling/ui/vendor.mts trading')),
 				)
 			}
 		}

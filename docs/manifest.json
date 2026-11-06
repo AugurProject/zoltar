@@ -94,10 +94,10 @@
 		{
 			"path": "reference/contracts/securitypool.html",
 			"title": "SecurityPool",
-			"summary": "Read surface, security assumptions, and the vault, complete-set, escalation, executor-only, forker-only, and fallback-routed entrypoints, with accounting examples.",
+			"summary": "Question-ledger reads, complete-set purchases and redemptions, wallet reporting, and shared-fork entrypoints.",
 			"section": "reference",
 			"topic": "Contracts",
-			"keywords": ["collateral", "vault", "complete set", "fees", "liquidation"]
+			"keywords": ["portfolio", "question", "complete set", "reporting", "settlement"]
 		},
 		{
 			"path": "reference/contracts/securitypoolforker.html",
@@ -116,14 +116,6 @@
 			"keywords": ["escalation", "dispute", "deposit", "non-decision"]
 		},
 		{
-			"path": "reference/contracts/liquidationapprovalregistry.html",
-			"title": "LiquidationApprovalRegistry",
-			"summary": "Read surface and the approval, permit, revoke, reserve, release, and consume entrypoints.",
-			"section": "reference",
-			"topic": "Contracts",
-			"keywords": ["liquidation", "approval", "receiver", "operator"]
-		},
-		{
 			"path": "reference/contracts/openoraclepricecoordinator.html",
 			"title": "OpenOraclePriceCoordinator",
 			"summary": "Read surface and the price request, staged operation, recovery, and openOracleCallback entrypoints.",
@@ -132,28 +124,12 @@
 			"keywords": ["OpenOracle", "price", "coordinator", "staged operation"]
 		},
 		{
-			"path": "reference/contracts/vaultoperations.html",
-			"title": "VaultOperations",
-			"summary": "Read surface and the submitVaultOperations, execute, executeSingle, and release entrypoints of the vault bundle executor.",
-			"section": "reference",
-			"topic": "Contracts",
-			"keywords": ["vault", "bundle", "executor", "submitVaultOperations"]
-		},
-		{
 			"path": "reference/contracts/sharetoken.html",
 			"title": "ShareToken",
 			"summary": "Read surface and the ERC-1155 transfer, migrate, authorize, and complete-set entrypoints.",
 			"section": "reference",
 			"topic": "Contracts",
 			"keywords": ["shares", "ERC-1155", "migrate", "outcome"]
-		},
-		{
-			"path": "reference/contracts/uniformpricedualcapbatchauction.html",
-			"title": "UniformPriceDualCapBatchAuction",
-			"summary": "Read surface and the startAuction, submitBid, refund, finalize, and withdrawal entrypoints.",
-			"section": "reference",
-			"topic": "Contracts",
-			"keywords": ["truth auction", "bids", "clearing", "settlement"]
 		},
 		{
 			"path": "reference/invariants.html",
@@ -317,11 +293,11 @@
 		},
 		{
 			"path": "tutorials/statoblast-first-pool.html",
-			"title": "Your first security pool",
-			"summary": "Create a SecurityPool, back it with REP, commit to underwrite it, and mint a complete set.",
+			"title": "Back a shared portfolio and mint shares",
+			"summary": "Add REP to a simulated portfolio and purchase complete sets for one question.",
 			"section": "tutorials",
 			"topic": "Statoblast",
-			"keywords": ["Statoblast", "SecurityPool", "vault", "underwriting commitment", "OpenOracle", "screenshots"]
+			"keywords": ["Statoblast", "portfolio", "REP", "complete sets", "screenshots"]
 		},
 		{
 			"path": "tutorials/trading-first-market.html",

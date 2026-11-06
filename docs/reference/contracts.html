@@ -51,48 +51,33 @@
 						</tr>
 						<tr id="securitypoolfactory">
 							<td><a href="./contracts/securitypoolfactory.html">SecurityPoolFactory</a></td>
-							<td>Creates and canonically registers origin and child security pools with their share token, oracle coordinator, and optional Truth Auction.</td>
-							<td>8</td>
+							<td>Deploys and registers portfolio question ledgers and their shared price feeds.</td>
+							<td>7</td>
 						</tr>
 						<tr id="securitypool">
 							<td><a href="./contracts/securitypool.html">SecurityPool</a></td>
-							<td>Exposes question shares and reporting.</td>
-							<td>44</td>
+							<td>Question ledger for one shared portfolio, question and universe.</td>
+							<td>22</td>
 						</tr>
 						<tr id="securitypoolforker">
 							<td><a href="./contracts/securitypoolforker.html">SecurityPoolForker</a></td>
-							<td>Creates canonical question children, delegates portfolio materialization to its fixed native module, and handles standalone vault migration and collateral-repair <a href="./glossary.html#truth-auction">Truth Auctions</a>. <a id="child-game-trust-boundary" href="./contracts/securitypoolforker.html#child-game-trust-boundary">Child-game trust boundary</a></td>
-							<td>17</td>
+							<td>Routes shared-portfolio question forks and lazy child question preparation. <a id="child-game-trust-boundary" href="./contracts/securitypoolforker.html#child-game-trust-boundary">Child-game trust boundary</a></td>
+							<td>5</td>
 						</tr>
 						<tr id="escalationgame">
 							<td><a href="./contracts/escalationgame.html">EscalationGame</a></td>
 							<td>Escrows outcome REP, raises the running resolution cost, detects <a href="./glossary.html#non-decision-threshold">non-decision</a>, and settles local or carried deposits.</td>
-							<td>23</td>
-						</tr>
-						<tr id="liquidationapprovalregistry">
-							<td><a href="./contracts/liquidationapprovalregistry.html">LiquidationApprovalRegistry</a></td>
-							<td>Stores coordinator-local, bounded authorization for a receiver vault to accept liquidation debt from an exact operator.</td>
-							<td>8</td>
+							<td>21</td>
 						</tr>
 						<tr id="openoraclepricecoordinator">
 							<td><a href="./contracts/openoraclepricecoordinator.html">OpenOraclePriceCoordinator</a></td>
-							<td>Obtains a fresh REP-per-ETH price and coordinates withdrawals, delegated liquidation routing, approval reservations, and terminal cleanup.</td>
-							<td>13</td>
-						</tr>
-						<tr id="vaultoperations">
-							<td><a href="./contracts/vaultoperations.html">VaultOperations</a></td>
-							<td>Accepts a wallet bundle of vault actions for one security pool, stores the price-dependent actions, and is the only caller that pool accepts for executor-gated vault entrypoints.</td>
-							<td>4</td>
+							<td>Per-question adapter to the portfolio universe’s shared REP/ETH feed.</td>
+							<td>5</td>
 						</tr>
 						<tr id="sharetoken">
 							<td><a href="./contracts/sharetoken.html">ShareToken</a></td>
 							<td>Stores universe-aware ERC-1155 <a href="./glossary.html#outcome-share">outcome shares</a> and materializes a holder's persistent source entitlement in selected fork branches.</td>
 							<td>12</td>
-						</tr>
-						<tr id="uniformpricedualcapbatchauction">
-							<td><a href="./contracts/uniformpricedualcapbatchauction.html">UniformPriceDualCapBatchAuction</a></td>
-							<td>Collects ETH bids under ETH-raise and REP-sale caps, computes one clearing result, and supports paged settlement.</td>
-							<td>7</td>
 						</tr>
 					</tbody>
 				</table>

@@ -1,18 +1,17 @@
 import { getEscalationGameDeposits } from '../../testSupport/simulator/utils/contracts/escalationGame'
-import { depositToEscalationGame, getRepToken } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { getRepToken } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
-import { manipulatePriceOracle, setVaultCapacityFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import assert from '../../testSupport/simulator/utils/assert'
-import { encodeDeployData, encodeFunctionData, getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData, encodeFunctionData, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { beforeEach, describe, test } from 'bun:test'
 import { deployContract } from '../../testSupport/deployContract'
 import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
-import { getCurrentRetentionRate, getSecurityPoolsEscalationGame, getSecurityVault, getSettlementCollateralAttoEth, getTotalUnderwritingLimitAttoEth, getTotalPoolHeldAttoRep, getTotalRepBackingUnits } from '../../testSupport/simulator/utils/contracts/securityPool'
-import { getERC20Balance, getETHBalance } from '../../testSupport/simulator/utils/utilities'
-import { ReputationToken_ReputationToken, statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate, statoblast_SecurityPool_SecurityPool } from '../../types/contractArtifact'
-import { useStatoblastVaultAccountingFixture, type StatoblastVaultAccountingFixture } from './fixture'
+import { getSecurityPoolsEscalationGame, getSettlementCollateralAttoEth } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { approveToken, getERC20Balance, getETHBalance } from '../../testSupport/simulator/utils/utilities'
+import { ReputationToken_ReputationToken, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate, statoblast_SecurityPool_SecurityPool } from '../../types/contractArtifact'
+import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 const assertRejectsWithoutStateChange = async <Snapshot>(readSnapshot: () => Promise<Snapshot>, execute: () => Promise<unknown>, expected: RegExp) => {
 	const before = await readSnapshot()
@@ -21,17 +20,18 @@ const assertRejectsWithoutStateChange = async <Snapshot>(readSnapshot: () => Pro
 }
 
 describe('Statoblast: privileged authorization matrix', () => {
-	const fixture = useStatoblastVaultAccountingFixture()
+	const portfolio = useSecurityPoolPortfolioFixture()
+	const fixture = portfolio.base
 
-	const { repDeposit } = fixture
-	let client: StatoblastVaultAccountingFixture['client']
-	let mockWindow: StatoblastVaultAccountingFixture['mockWindow']
+	const repDeposit = 1_000n * unit
+	let client: typeof fixture.client
+	let mockWindow: typeof fixture.mockWindow
 	let securityPool: Address
 
 	beforeEach(() => {
 		client = fixture.client
 		mockWindow = fixture.mockWindow
-		securityPool = fixture.securityPoolAddresses.securityPool
+		securityPool = portfolio.poolFor(fixture.questionId).securityPool
 	})
 
 	test('REP supply selectors reject attackers without changing balances or supply', async () => {
@@ -124,118 +124,31 @@ describe('Statoblast: privileged authorization matrix', () => {
 		assert.strictEqual(finalSnapshot.attackerBalance, 0n)
 	})
 
-	test('factory and oracle-only pool selectors reject attackers with full accounting unchanged', async () => {
-		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
-		const readSnapshot = async () => ({
-			attackerVault: await getSecurityVault(client, securityPool, attacker.account.address),
-			collateral: await getSettlementCollateralAttoEth(client, securityPool),
-			ethBalanceAttoEth: await getETHBalance(client, securityPool),
-			ownerVault: await getSecurityVault(client, securityPool, client.account.address),
-			backingUnitsDenominator: await getTotalRepBackingUnits(client, securityPool),
-			poolHeldRepBalanceAttoRep: await getTotalPoolHeldAttoRep(client, securityPool),
-			retentionRate: await getCurrentRetentionRate(client, securityPool),
-			totalUnderwritingLimitAttoEth: await getTotalUnderwritingLimitAttoEth(client, securityPool),
-		})
-		const assertUnauthorizedUnchanged = async (execute: () => Promise<unknown>, expected: RegExp) => await assertRejectsWithoutStateChange(readSnapshot, execute, expected)
+	const readPoolSnapshot = async () => ({
+		collateral: await getSettlementCollateralAttoEth(client, securityPool),
+		eth: await getETHBalance(client, securityPool),
+		capitalRep: await getERC20Balance(client, await getRepToken(client, securityPool), portfolio.capitalLedger),
+		capital: await client.readContract({ abi: capitalArtifact.abi, address: portfolio.capitalLedger, functionName: 'totals' }),
+		owner: await client.readContract({ abi: capitalArtifact.abi, address: portfolio.capitalLedger, functionName: 'storedOwnerAccount', args: [client.account.address] }),
+	})
 
-		await assertUnauthorizedUnchanged(
-			() =>
-				writeContractAndWait(attacker, () =>
-					attacker.writeContract({
-						abi: statoblast_SecurityPool_SecurityPool.abi,
-						address: securityPool,
-						functionName: 'setStartingParams',
-						args: [1n, 0n],
-					}),
-				),
-			/Only factory/,
-		)
-		await assertUnauthorizedUnchanged(
-			() =>
-				writeContractAndWait(attacker, () =>
-					attacker.writeContract({
-						abi: statoblast_SecurityPool_SecurityPool.abi,
-						address: securityPool,
-						functionName: 'withdrawRepFromVault',
-						args: [client.account.address, 1n],
-					}),
-				),
-			/Unauthorized/,
-		)
-		await assertUnauthorizedUnchanged(
-			() =>
-				writeContractAndWait(attacker, () =>
-					attacker.writeContract({
-						abi: statoblast_SecurityPool_SecurityPool.abi,
-						address: securityPool,
-						functionName: 'performLiquidation',
-						args: [
-							{
-								operationId: 1n,
-								operator: attacker.account.address,
-								receiverVault: attacker.account.address,
-								targetVault: client.account.address,
-								requestedDebtAttoEth: 1n,
-								snapshot: { targetBackingUnits: 0n, targetUnderwritingLimitAttoEth: 0n },
-								minimumReceiverHealthFactorBps: 10_000n,
-								minLiquidationPriceDistanceBps: 0n,
-							},
-						],
-					}),
-				),
-			/Unauthorized/,
-		)
-
-		const authorizedUnderwritingLimitAttoEth = repDeposit / 5n
-		await setVaultCapacityFixture(client, mockWindow, fixture.securityPoolAddresses.openOraclePriceCoordinator, client.account.address, authorizedUnderwritingLimitAttoEth)
-		assert.strictEqual(await getTotalUnderwritingLimitAttoEth(client, securityPool), authorizedUnderwritingLimitAttoEth)
-
-		const rawFactory = await client.readContract({
-			abi: statoblast_SecurityPool_SecurityPool.abi,
-			address: securityPool,
-			functionName: 'securityPoolFactory',
-			args: [],
-		})
-		const factory = getAddress(rawFactory)
-		await mockWindow.impersonateAccount(factory)
-		const factoryClient = createWriteClient(mockWindow, BigInt(factory))
-		const currentRetentionRate = await getCurrentRetentionRate(client, securityPool)
-		const currentCollateral = await getSettlementCollateralAttoEth(client, securityPool)
-		await writeContractAndWait(factoryClient, () =>
-			factoryClient.writeContract({
-				abi: statoblast_SecurityPool_SecurityPool.abi,
-				address: securityPool,
-				functionName: 'setStartingParams',
-				args: [currentRetentionRate, currentCollateral],
-			}),
-		)
-		assert.strictEqual(await getCurrentRetentionRate(client, securityPool), currentRetentionRate)
-		assert.strictEqual(await getSettlementCollateralAttoEth(client, securityPool), currentCollateral)
+	test('factory initialization and portfolio custody binding reject attackers without changing capital', async () => {
+		await portfolio.prepare()
+		const attacker = portfolio.other()
+		await assertRejectsWithoutStateChange(readPoolSnapshot, () => attacker.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'setStartingParams', args: [1n, 0n] }), /Only factory/)
+		await assertRejectsWithoutStateChange(readPoolSnapshot, () => attacker.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'setPortfolioCustody', args: [attacker.account.address] }), /Only portfolio/)
 	})
 
 	test('every forker-only pool mutation rejects direct callers without changing accounting', async () => {
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const poolAbi = statoblast_SecurityPool_SecurityPool.abi
-		const readSnapshot = async () => ({
-			settlementCollateralAttoEth: await getSettlementCollateralAttoEth(client, securityPool),
-			totalRepBackingUnits: await getTotalRepBackingUnits(client, securityPool),
-			poolHeldRepBalanceAttoRep: await getTotalPoolHeldAttoRep(client, securityPool),
-			totalUnderwritingLimitAttoEth: await getTotalUnderwritingLimitAttoEth(client, securityPool),
-			vault: await getSecurityVault(client, securityPool, attacker.account.address),
-		})
+		const readSnapshot = readPoolSnapshot
 		const calls = [
-			{ name: 'activateForkMode', data: encodeFunctionData({ abi: poolAbi, functionName: 'activateForkMode', args: [false] }) },
+			{ name: 'activateForkMode', data: encodeFunctionData({ abi: poolAbi, functionName: 'activateForkMode', args: [] }) },
 			{ name: 'initializeForkedEscalationGame', data: encodeFunctionData({ abi: poolAbi, functionName: 'initializeForkedEscalationGame', args: [1n, 2n, 0n, QuestionOutcome.None] }) },
 			{ name: 'setAwaitingForkContinuation', data: encodeFunctionData({ abi: poolAbi, functionName: 'setAwaitingForkContinuation', args: [true] }) },
 			{ name: 'setSystemState', data: encodeFunctionData({ abi: poolAbi, functionName: 'setSystemState', args: [1] }) },
-			{ name: 'configureVault', data: encodeFunctionData({ abi: poolAbi, functionName: 'configureVault', args: [attacker.account.address, 1n, 1n, 1n, 0n, 0n] }) },
-			{ name: 'configureFinalizedAuctionVault', data: encodeFunctionData({ abi: poolAbi, functionName: 'configureFinalizedAuctionVault', args: [attacker.account.address, 1n, 1n, 1n, 0n, 0n] }) },
-			{ name: 'activateRecoveredCommitment', data: encodeFunctionData({ abi: poolAbi, functionName: 'activateRecoveredCommitment', args: [attacker.account.address, 1n] }) },
-			{ name: 'assignFinalizedAuctionFees', data: encodeFunctionData({ abi: poolAbi, functionName: 'assignFinalizedAuctionFees', args: [attacker.account.address, 1n, 0n] }) },
-			{ name: 'setTotalRepBackingUnits', data: encodeFunctionData({ abi: poolAbi, functionName: 'setTotalRepBackingUnits', args: [1n] }) },
 			{ name: 'setShareTokenSupplyAttoShares', data: encodeFunctionData({ abi: poolAbi, functionName: 'setShareTokenSupplyAttoShares', args: [1n] }) },
-			{ name: 'setPoolFinancials', data: encodeFunctionData({ abi: poolAbi, functionName: 'setPoolFinancials', args: [0n, 0n, 0n, 0n] }) },
-			{ name: 'transferEth', data: encodeFunctionData({ abi: poolAbi, functionName: 'transferEth', args: [attacker.account.address, 0n] }) },
 			{ name: 'authorizeChildPool', data: encodeFunctionData({ abi: poolAbi, functionName: 'authorizeChildPool', args: [zeroAddress] }) },
 		]
 		const before = await readSnapshot()
@@ -248,8 +161,8 @@ describe('Statoblast: privileged authorization matrix', () => {
 	test('pool-only escalation deposit and withdrawal selectors reject direct callers', async () => {
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await mockWindow.setTime(fixture.questionData.endTime + 1n)
-		await manipulatePriceOracle(client, mockWindow, fixture.securityPoolAddresses.openOraclePriceCoordinator)
-		await depositToEscalationGame(client, securityPool, QuestionOutcome.Yes, repDeposit / 10n)
+		await approveToken(client, await getRepToken(client, securityPool), securityPool)
+		await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'depositWalletRepToEscalationGame', args: [QuestionOutcome.Yes, repDeposit / 10n] }))
 		const escalationGame = await getSecurityPoolsEscalationGame(client, securityPool)
 		const deposits = await getEscalationGameDeposits(client, escalationGame, QuestionOutcome.Yes)
 		assert.strictEqual(deposits.length, 1, 'authorized pool path should record one escalation deposit')

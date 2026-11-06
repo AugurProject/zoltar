@@ -8,7 +8,7 @@ import { createPublicClient, encodeFunctionData, type Account, type Chain, type 
 import { settledQuorumValue, sharedQuorumReadTargets } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { buildPortfolioCapitalTakeOverWithBoundsRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { buildPortfolioCapitalDepositRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
-import { submitCall } from './liquidation-executor.ts'
+import { submitCall } from './submit-call.ts'
 
 export class PortfolioOpportunityExpired extends Error {
 	override name = 'PortfolioOpportunityExpired'

@@ -1,8 +1,6 @@
 import type { PriceRequestStatusProps } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/PriceRequestStatusSection.js'
-import { useSettledPoolOracleManagerRefresh } from './useSettledPoolOracleManagerRefresh.js'
 import { useOpenOracleOperations } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleOperations.js'
 import { selectOpenOracleReport } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleRouteSync.js'
-import { useOpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOraclePriceCoordinator.js'
 import { setFormField } from '@zoltar/ui-core-shared/hooks/useFormState.js'
 import type { WriteOperationsParameters } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { StatoblastRoute } from '@zoltar/ui-statoblast-shared/types/app.js'
@@ -24,13 +22,9 @@ export function useOpenOracleRoute({
 	urlOpenOracleReportId: string
 	walletScopedHookConfig: WriteOperationsParameters
 }) {
-	const openOraclePriceCoordinator = useOpenOraclePriceCoordinator(walletScopedHookConfig)
-	const { loadPoolOracleManager, poolOracleManagerDetails } = openOraclePriceCoordinator
-	const onReportSettled = useSettledPoolOracleManagerRefresh(poolOracleManagerDetails?.managerAddress, loadPoolOracleManager)
 	const { loadOracleReport, openOracleSectionState, openOracleForm, setOpenOracleForm, settleReport } = useOpenOracleOperations({
 		...walletScopedHookConfig,
 		enabled: (route === 'open-oracle' || route === 'pools') && canReadOnchainData,
-		onReportSettled,
 	})
 	const onViewPendingReport = (reportId: bigint) => {
 		// Open the request status route first, then record the report on that entry, so Back returns to the pool page that linked here.
@@ -57,7 +51,6 @@ export function useOpenOracleRoute({
 		loadOracleReport,
 		onViewPendingReport,
 		openOracleRouteContentProps,
-		openOraclePriceCoordinator,
 		setOpenOracleReportId: (reportId: string) => setFormField(setOpenOracleForm, 'reportId', reportId),
 	}
 }

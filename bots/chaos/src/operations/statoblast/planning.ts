@@ -1,16 +1,12 @@
-import { ONE_TOKEN, allowance, amount, encodePreflightCall, encodeStep, erc20AllowanceEvidence, eventTopic, optionAmount, planBase, tokenInventory } from '../planning.ts'
+import { ONE_TOKEN, allowance, amount, encodeStep, erc20AllowanceEvidence, eventTopic, optionAmount, planBase, tokenInventory } from '../planning.ts'
 
 import { EcosystemSnapshot, OperationContinuationContext, OperationEvidence, OperationPlan, PlanningOptions, PoolSnapshot } from '../types.ts'
 
-import { validForkOutcomeRoutes } from '../fork-outcomes.ts'
-
 import { topologyMutationCapacityBlocker } from '../topology-capacity.ts'
-
-import { timestampDeadlineHasRequiredSafety } from '../timing.ts'
 
 import { sharesToProjectedEth } from '../pool-economics.ts'
 
-import { erc20Abi, securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
+import { erc20Abi } from '@zoltar/bot-shared/contracts/abi'
 
 import { isOracleRequestFundingError, poolOracleExposure, oracleRequestFundingEnvelope, oracleRequestSettlementCollateralCeiling, type OracleRequestFundingBounds } from '../oracle-request-funding.ts'
 
@@ -18,13 +14,7 @@ import { maximumFeePerGas } from '@zoltar/bot-shared/execution/transaction-submi
 
 export const BINARY_OUTCOME_NONE = 3
 
-export const MIGRATION_TIME_SECONDS = 8n * 7n * 24n * 60n * 60n
-
 const LIFECYCLE_BATCH_LIMIT = 16
-
-export const oraclePriceValidUntil = (pool: Pick<PoolSnapshot, 'oraclePriceValidUntilTimestamp'>) => amount(pool.oraclePriceValidUntilTimestamp)
-
-export const STAGED_WITHDRAWAL_VALIDITY_SECONDS = 5n * 60n
 
 export const CARRY_DEPOSIT_CONSUMED_SIGNATURE = 'CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32,bytes32)'
 
@@ -33,10 +23,6 @@ export const CARRY_DEPOSIT_CONSUMED_ABI = 'event CarryDepositConsumed(uint256 in
 export const CLAIM_DEPOSIT_SIGNATURE = 'ClaimDeposit(address,uint8,uint256,uint256,uint256,uint256,bool)'
 
 export const CLAIM_DEPOSIT_ABI = 'event ClaimDeposit(address indexed depositor, uint8 indexed outcome, uint256 indexed parentDepositIndex, uint256 originalDepositAmountAttoRep, uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep, bool transferredRep)'
-
-const CHILD_REP_SPLIT_SIGNATURE = 'ChildRepSplit(address,uint256,uint256,uint256)'
-
-const CHILD_REP_SPLIT_ABI = 'event ChildRepSplit(address indexed parent, uint256 indexed outcomeIndex, uint256 childPoolRepSplitAttoRep, uint256 pendingChildAttoRep)'
 
 export const DEPOSIT_ON_OUTCOME_SIGNATURE = 'DepositOnOutcome(address,uint8,uint256,uint256,uint256,uint256,uint256)'
 
@@ -50,10 +36,7 @@ export const ERC20_TRANSFER_SIGNATURE = 'Transfer(address,address,uint256)'
 
 export const ERC20_TRANSFER_ABI = 'event Transfer(address indexed from, address indexed to, uint256 value)'
 
-const VAULT_MIGRATION_SIGNATURE = 'VaultMigrationCheckpoint(address,address,address,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)'
-
-const VAULT_MIGRATION_ABI =
-	'event VaultMigrationCheckpoint(address indexed parentPool, address indexed childPool, address indexed vault, uint256 outcomeIndex, uint256 migratedRepDeltaAttoRep, uint256 resultingChildMigratedRepTotalAttoRep, uint256 resultingParentRepBackingUnits, uint256 resultingParentUnderwritingLimitAttoEth, uint256 resultingChildRepBackingUnits, uint256 resultingChildUnderwritingLimitAttoEth, uint256 resultingParentTotalRepBackingUnits, uint256 resultingChildTotalRepBackingUnits, uint256 resultingParentTotalUnderwritingLimitAttoEth, uint256 resultingChildTotalUnderwritingLimitAttoEth, uint256 settlementCollateralTransferredAttoEth, uint256 cumulativeSettlementCollateralTransferredAttoEth)'
+;('event VaultMigrationCheckpoint(address indexed parentPool, address indexed childPool, address indexed vault, uint256 outcomeIndex, uint256 migratedRepDeltaAttoRep, uint256 resultingChildMigratedRepTotalAttoRep, uint256 resultingParentRepBackingUnits, uint256 resultingParentUnderwritingLimitAttoEth, uint256 resultingChildRepBackingUnits, uint256 resultingChildUnderwritingLimitAttoEth, uint256 resultingParentTotalRepBackingUnits, uint256 resultingChildTotalRepBackingUnits, uint256 resultingParentTotalUnderwritingLimitAttoEth, uint256 resultingChildTotalUnderwritingLimitAttoEth, uint256 settlementCollateralTransferredAttoEth, uint256 cumulativeSettlementCollateralTransferredAttoEth)')
 
 export const shareTokenId = (universeId: string, outcome: number) => (amount(universeId) << 8n) | BigInt(outcome)
 
@@ -65,27 +48,13 @@ const compareBigInts = (left: bigint, right: bigint) => {
 
 export const compareDecimalStrings = (left: string, right: string) => compareBigInts(BigInt(left), BigInt(right))
 
-export const compareAuctionBids = (left: EcosystemSnapshot['auctions'][number]['bids'][number], right: EcosystemSnapshot['auctions'][number]['bids'][number]) => {
-	const tickOrder = compareDecimalStrings(left.tick, right.tick)
-	return tickOrder === 0 ? compareDecimalStrings(left.index, right.index) : tickOrder
-}
-
 export function lifecycleBatches<T>(values: readonly T[]) {
 	return Array.from({ length: Math.ceil(values.length / LIFECYCLE_BATCH_LIMIT) }, (_, index) => values.slice(index * LIFECYCLE_BATCH_LIMIT, (index + 1) * LIFECYCLE_BATCH_LIMIT))
 }
 
 export const walletShares = (snapshot: EcosystemSnapshot, pool: PoolSnapshot) => snapshot.wallet.shares.find(candidate => candidate.shareToken.toLowerCase() === pool.shareToken.toLowerCase() && candidate.universeId === pool.universeId)
 
-export const forkOutcomesForPool = (snapshot: EcosystemSnapshot, pool: PoolSnapshot) => {
-	const universe = snapshot.universes.find(candidate => candidate.id === pool.universeId)
-	if (universe === undefined || universe.forkTime === '0') return []
-	return validForkOutcomeRoutes(
-		snapshot.questions.find(question => question.id === universe.forkQuestionId),
-		universe.knownChildOutcomes,
-	)
-}
-
-export const childPoolForOutcome = (snapshot: EcosystemSnapshot, pool: PoolSnapshot, outcome: string) => snapshot.pools.find(child => child.parent.toLowerCase() === pool.address.toLowerCase() && child.forkOutcomeIndex === outcome)
+const childPoolForOutcome = (snapshot: EcosystemSnapshot, pool: PoolSnapshot, outcome: string) => snapshot.pools.find(child => child.address.toLowerCase() === pool.childPoolPreparations[outcome]?.childPool.toLowerCase())
 
 const childUniverseForOutcome = (snapshot: EcosystemSnapshot, pool: PoolSnapshot, outcome: string) => snapshot.universes.find(universe => universe.parentUniverseId === pool.universeId && universe.forkingOutcomeIndex === outcome)
 
@@ -98,53 +67,7 @@ export function childRouteTopologyCapacityBlocker(snapshot: EcosystemSnapshot, p
 	})
 }
 
-export function childUniverseTopologyCapacityBlocker(snapshot: EcosystemSnapshot, pool: PoolSnapshot, outcome: string, options: PlanningOptions, label: string) {
-	if (childUniverseForOutcome(snapshot, pool, outcome) !== undefined) return undefined
-	return topologyMutationCapacityBlocker(snapshot, options, {
-		additionalPools: 0,
-		additionalUniverses: 1,
-		label,
-	})
-}
-
 export const operationalPools = (snapshot: EcosystemSnapshot) => snapshot.pools.filter(pool => pool.systemState === 0 && !pool.awaitingForkContinuation && pool.questionOutcome === BINARY_OUTCOME_NONE && snapshot.universes.find(universe => universe.id === pool.universeId)?.forkTime === '0')
-
-export const walletVault = (snapshot: EcosystemSnapshot, pool: PoolSnapshot) => pool.vaults.find(vault => vault.address.toLowerCase() === snapshot.wallet.address.toLowerCase())
-
-export const canDeployOriginPool = (universe: EcosystemSnapshot['universes'][number]) => universe.forkTime === '0' && amount(universe.nonDecisionThresholdAttoRep) > amount(universe.initialEscalationDepositAttoRep)
-
-export function safeOraclePriceDeadline(snapshot: EcosystemSnapshot, pool: PoolSnapshot, options: PlanningOptions, prerequisiteCount = 0) {
-	if (!pool.oraclePriceValid) return undefined
-	const deadline = oraclePriceValidUntil(pool)
-	return timestampDeadlineHasRequiredSafety(amount(snapshot.anchor.timestamp), deadline, options, prerequisiteCount) ? deadline : undefined
-}
-
-export function decodedVaultMigrationEvidence(snapshot: EcosystemSnapshot, pool: PoolSnapshot, field: 'outcomeIndex' | 'resultingParentRepBackingUnits', expected: string, child?: PoolSnapshot): OperationEvidence {
-	return {
-		abi: VAULT_MIGRATION_ABI,
-		emitter: snapshot.deployments.securityPoolForker,
-		equals: expected,
-		field,
-		indexed: { ...(child === undefined ? {} : { childPool: child.address }), parentPool: pool.address, vault: snapshot.wallet.address },
-		kind: 'decoded-event-field',
-		signature: VAULT_MIGRATION_SIGNATURE,
-		topic0: eventTopic(VAULT_MIGRATION_SIGNATURE),
-	}
-}
-
-export function decodedChildRepSplitEvidence(snapshot: EcosystemSnapshot, pool: PoolSnapshot, outcome: string): OperationEvidence {
-	return {
-		abi: CHILD_REP_SPLIT_ABI,
-		canonicalLifecycleConfirmation: true,
-		emitter: snapshot.deployments.securityPoolForker,
-		equals: pool.forkRepMigrationTargetAttoRep,
-		field: 'childPoolRepSplitAttoRep',
-		indexed: { outcomeIndex: outcome, parent: pool.address },
-		kind: 'decoded-event-field',
-		signature: CHILD_REP_SPLIT_SIGNATURE,
-		topic0: eventTopic(CHILD_REP_SPLIT_SIGNATURE),
-	}
-}
 
 export function feeCheckpointDue(snapshot: EcosystemSnapshot, pool: PoolSnapshot) {
 	const target = feeCheckpointTarget(snapshot, pool)
@@ -174,25 +97,6 @@ export function poolAccountingCurrentEvidence(snapshot: EcosystemSnapshot, pool:
 	}
 }
 
-export function vaultFeeAccountingEvidence(snapshot: EcosystemSnapshot, pool: PoolSnapshot): OperationEvidence[] {
-	// `securityVaults(address)` exposes the target fee index only inside a tuple, while durable
-	// evidence reads one scalar. A successful exact call guarantees that the vault is synchronized
-	// to the pool index before returning; these monotonic pool targets prove which index and
-	// checkpoint boundary the call reached even when another keeper made the call a no-op.
-	return [
-		{
-			abi: 'function feeIndex() view returns (uint256)',
-			args: [],
-			contract: pool.address,
-			expected: pool.feeIndex,
-			functionName: 'feeIndex',
-			kind: 'storage-postcondition',
-			relation: 'at-least',
-		},
-		poolAccountingCurrentEvidence(snapshot, pool),
-	]
-}
-
 export function sharesToEth(pool: PoolSnapshot, attoShares: bigint) {
 	return sharesToProjectedEth(pool, attoShares)
 }
@@ -211,7 +115,7 @@ export function approvePool(snapshot: EcosystemSnapshot, pool: PoolSnapshot, req
 	return [poolApprovalStep(snapshot, pool.repToken, pool.address, required)]
 }
 
-export function poolApprovalStep(snapshot: EcosystemSnapshot, token: `0x${string}`, pool: `0x${string}`, required: bigint, id = 'approve-rep', label = 'Approve REP for security pool') {
+function poolApprovalStep(snapshot: EcosystemSnapshot, token: `0x${string}`, pool: `0x${string}`, required: bigint, id = 'approve-rep', label = 'Approve REP for security pool') {
 	return encodeStep({ abi: erc20Abi, args: [pool, required], evidence: [erc20AllowanceEvidence(token, snapshot.wallet.address, pool, required)], functionName: 'approve', id, label, to: token })
 }
 
@@ -227,7 +131,7 @@ export function requiredVaultMetadataAmount(metadata: OperationPlan['metadata'],
 	return BigInt(value)
 }
 
-export function exactPreviousPoolApproval(snapshot: EcosystemSnapshot, context: OperationContinuationContext, token: `0x${string}`, pool: `0x${string}`, required: bigint) {
+function exactPreviousPoolApproval(snapshot: EcosystemSnapshot, context: OperationContinuationContext, token: `0x${string}`, pool: `0x${string}`, required: bigint) {
 	const previous = context.previousPlan.steps.find(step => step.id === 'approve-rep')
 	if (previous === undefined) return undefined
 	const expected = poolApprovalStep(snapshot, token, pool, required)
@@ -260,14 +164,6 @@ export function poolCleanupPlan(snapshot: EcosystemSnapshot, context: OperationC
 
 export function approveCoordinatorToken(snapshot: EcosystemSnapshot, coordinator: `0x${string}`, tokenAddress: `0x${string}`, required: bigint, id: string, label: string) {
 	return encodeStep({ abi: erc20Abi, args: [coordinator, required], evidence: [erc20AllowanceEvidence(tokenAddress, snapshot.wallet.address, coordinator, required)], functionName: 'approve', id, label, to: tokenAddress })
-}
-
-export function oracleRequestStagingParameters(pool: PoolSnapshot) {
-	const minimumWeth = amount(pool.minimumToken1ReportAttoEth)
-	return {
-		initialWethAttoEth: minimumWeth > 0n ? minimumWeth : 1n,
-		price: amount(pool.lastRepPerEthPrice) > 0n ? amount(pool.lastRepPerEthPrice) : ONE_TOKEN,
-	}
 }
 
 export type PreparedOracleRequest = {
@@ -341,33 +237,4 @@ export function exactTokenTransferToCoordinatorEvidence(snapshot: EcosystemSnaps
 		signature: 'Transfer(address,address,uint256)',
 		topic0: eventTopic('Transfer(address,address,uint256)'),
 	}
-}
-
-export function decodedStagedSuccess(coordinator: `0x${string}`): OperationEvidence {
-	const signature = 'ExecutedStagedOperation(uint256,uint8,bool,string)'
-	return {
-		abi: 'event ExecutedStagedOperation(uint256 indexed operationId, uint8 operation, bool success, string errorMessage)',
-		emitter: coordinator,
-		equals: true,
-		field: 'success',
-		indexed: {},
-		kind: 'decoded-event-field',
-		signature,
-		topic0: eventTopic(signature),
-	}
-}
-
-export function stagedDownstreamPreflight(pool: PoolSnapshot, staged: EcosystemSnapshot['stagedOperations'][number]) {
-	if (staged.operation === 1 || staged.operation === 2) {
-		return encodePreflightCall({
-			abi: securityPoolAbi,
-			args: [staged.operator, amount(staged.amount)],
-			caller: pool.vaultOperations,
-			expectedResult: staged.executionExpectedResult,
-			functionName: staged.operation === 1 ? 'withdrawRepFromVault' : 'setVaultUnderwritingLimit',
-			label: `${staged.operation === 1 ? 'withdraw REP' : 'adjust backing target'} for staged operation ${staged.id}`,
-			to: pool.address,
-		})
-	}
-	return undefined
 }

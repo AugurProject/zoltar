@@ -2,7 +2,6 @@
 	"version": 2,
 	"approvedUniverses": [],
 	"childMarketConfigurations": [],
-	"desiredPools": [],
 	"centralizedMarkets": {
 		"assetSymbol": "REP",
 		"depthBps": 500,
@@ -45,7 +44,6 @@
 		"uiPort": 4183,
 		"stateFile": ".state/operator-state.json"
 	},
-	"selectedPools": [],
 	"strategy": {
 		"allowAutomaticDeposits": true,
 		"allowAutomaticPoolCreation": false,

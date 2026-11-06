@@ -10,7 +10,7 @@ export type WalletBalanceState = {
 
 export type RuntimeTopologySummary = {
 	anchor: { blockNumber: bigint; timestamp: bigint }
-	auctions: { address: string; bidCount: number; endTime: string; finalized: boolean; pool: string; startTime: string }[]
+	auctions: { address: string; bidCount: number; endTime: string; finalized: boolean; portfolio: string; universeId: string; startTime: string }[]
 	complete: boolean
 	pairs: { address: string; feeBps: number; pool: string; status: number; universeId: string }[]
 	pools: {
@@ -20,8 +20,8 @@ export type RuntimeTopologySummary = {
 		questionId: string
 		systemState: number
 		universeId: string
-		/** Total canonical registry entries, independent of how many vault states this scan inspected. */
-		vaultCount: number
+		/** Authenticated shared portfolio owning this question namespace. */
+		portfolio: Address
 	}[]
 	reports: { currentReporter: string; flags: number; reportId: string; settlementTime: string; token1: string; token2: string }[]
 	universes: { forkQuestionId: string; forkTime: string; id: string; knownChildOutcomeCount: number; parentUniverseId?: string | undefined; repToken: string }[]

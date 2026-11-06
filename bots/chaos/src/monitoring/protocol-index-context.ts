@@ -78,7 +78,7 @@ export function orderedCanonicalLogs<T extends CanonicalLogPosition>(logs: reado
 }
 
 export function validatePreviousProtocolIndex(context: UpdateProtocolIndexContext, previous: ChaosProtocolIndex) {
-	if (previous.schemaVersion !== 3) throw new Error(`Unsupported protocol index schema ${previous.schemaVersion}`)
+	if (previous.schemaVersion !== 4) throw new Error(`Unsupported protocol index schema ${previous.schemaVersion}`)
 	if (previous.chainId !== context.chainId) throw new Error('Protocol index chain does not match discovery chain')
 	if (previous.openOracle.toLowerCase() !== context.openOracle.toLowerCase()) throw new Error('Protocol index OpenOracle deployment changed')
 	if (previous.zoltar.toLowerCase() !== context.zoltar.toLowerCase()) throw new Error('Protocol index Zoltar deployment changed')

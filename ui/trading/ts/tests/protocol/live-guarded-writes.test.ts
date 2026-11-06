@@ -67,7 +67,7 @@ function blockTwoWalletClient(handle: (method: string, params: unknown) => Promi
 				if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'aa'.repeat(32)}`, timestamp: '0x1', transactions: [] }
 				if (method === 'eth_call' && Array.isArray(params)) {
 					const transaction = params[0]
-					if (typeof transaction === 'object' && transaction !== null && 'to' in transaction && 'data' in transaction && typeof transaction.to === 'string' && transaction.to.toLowerCase() === pool.toLowerCase() && typeof transaction.data === 'string') {
+					if (typeof transaction === 'object' && transaction !== null && 'to' in transaction && 'data' in transaction && typeof transaction.to === 'string' && typeof transaction.data === 'string') {
 						const response = feeAccountingRpcResult(transaction.data as Hex, market, 1n)
 						if (response !== undefined) return response
 					}
@@ -235,7 +235,7 @@ describe('live guarded transaction writes', () => {
 				expect(call.args[1]).toBe(4n)
 				expect(call.args[2]).toBe(4n)
 			} else expect(call.args.at(-3)).toBe(9n)
-			if (call.functionName === 'addLiquidityWithEth') expect(call.args.slice(1, 3)).toEqual([6n, 6n])
+			if (call.functionName === 'addLiquidityWithEth') expect(call.args.slice(2, 4)).toEqual([6n, 6n])
 		}
 		const chainTimedQuote = await simulateLiquidity(client, configuration, market, account, 'add', 10n, 5_000n, { validityMinutes: 1_440n }, slippageBps)
 		expect(chainTimedQuote.deadline).toBe(86_401n)

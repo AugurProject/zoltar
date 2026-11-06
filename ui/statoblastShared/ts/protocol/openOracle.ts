@@ -1,3 +1,4 @@
+import { wrapWeth } from './wethFunding.js'
 import { runFundingTransactions, type FundingTransaction } from './fundingTransactions.js'
 import { bigintToSafeNumber, toEventSelector, zeroAddress, type Address, type Hex, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hasOpenOracleFlag, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_STORE_PRICE, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
@@ -431,7 +432,7 @@ function getOpenOracleReportSubmittedTopic() {
 	return toEventSelector(event).toLowerCase()
 }
 
-export function getOpenOracleSubmittedReportId(receipt: { logs?: readonly Pick<TransactionReceipt['logs'][number], 'address' | 'topics'>[] }, openOracleAddress: Address) {
+function getOpenOracleSubmittedReportId(receipt: { logs?: readonly Pick<TransactionReceipt['logs'][number], 'address' | 'topics'>[] }, openOracleAddress: Address) {
 	const reportSubmittedTopic = getOpenOracleReportSubmittedTopic()
 	for (const log of receipt.logs ?? []) {
 		if (!sameAddress(log.address, openOracleAddress)) continue
@@ -445,26 +446,6 @@ export function getOpenOracleSubmittedReportId(receipt: { logs?: readonly Pick<T
 /** Reads the report ID of a successful create result; other action results carry none. */
 export function getCreatedOpenOracleReportId(result: OpenOracleActionResult | undefined) {
 	return result?.action === 'createReportInstance' ? result.reportId : undefined
-}
-export async function wrapWeth(client: WriteClient, amountAttoEth: bigint) {
-	const hash = await writeContractAndWait(client, () => ({
-		address: getWethAddress(),
-		abi: [
-			{
-				type: 'function',
-				name: 'deposit',
-				stateMutability: 'payable',
-				inputs: [],
-				outputs: [],
-			},
-		],
-		functionName: 'deposit',
-		value: amountAttoEth,
-	}))
-	return {
-		action: 'wrapWeth',
-		hash,
-	} satisfies OpenOracleActionResult
 }
 export async function loadOpenOracleWithdrawableBalances(client: Pick<ReadClient, 'readContract'>, openOracleAddress: Address, holder: Address, token1: Address, token2: Address): Promise<OpenOracleWithdrawableBalances> {
 	const loadBalance = async (token: Address) =>

@@ -4,7 +4,7 @@ pragma solidity 0.8.35;
 import { SecurityPoolStorage } from './SecurityPoolStorage.sol';
 import { IPortfolioSettlement } from './interfaces/IPortfolioSettlement.sol';
 
-/// @dev Portfolio-native fee accounting. Ordinary standalone pools retain their exponential curve.
+/// @dev Question accounting mirrors the portfolio settlement book.
 abstract contract SecurityPoolLinearFees is SecurityPoolStorage {
 	/// @notice Mirror the central book after its aggregate fee and finality checkpoint.
 	function updateLinearFees() public payable {

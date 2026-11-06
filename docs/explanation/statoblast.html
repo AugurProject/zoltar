@@ -21,9 +21,9 @@
 					<h2>1. Mental model</h2>
 					<a class="anchor-link" href="#mental-model" aria-label="Link to Mental model">#</a>
 				</div>
-				<p>Statoblast is the market layer. Each <a href="../reference/glossary.html#security-pool">SecurityPool</a> ledger serves one question in one universe. Separate <a href="#question-portfolios">portfolios</a> keep separate ledgers even when their question and configuration match. A standalone ledger holds ETH <a href="../reference/glossary.html#settlement-collateral">settlement collateral</a> and tracks vault owners' <a href="../reference/glossary.html#underwriting-commitment">underwriting commitments</a>. Portfolio-bound ledgers use shared capital and settlement accounting. Both mint, migrate and settle question shares. <a href="./zoltar.html">Zoltar</a> owns the questions, universes, REP, and forks underneath it; <a href="./trading.html">Trading</a> and <a href="./open-oracle.html">OpenOracle</a> sit beside it. The <a href="./system-overview.html">system overview</a> introduces all four.</p>
+				<p>Statoblast is the market layer. Each <a href="../reference/glossary.html#security-pool">SecurityPool</a> ledger serves one question in one universe. Separate <a href="#question-portfolios">portfolios</a> keep separate ledgers even when their question and configuration match. Every ledger belongs to a portfolio and uses its shared capital and settlement accounting. A fixed portfolio containing one question uses the same contracts and rules as a portfolio containing many questions. <a href="./zoltar.html">Zoltar</a> owns the questions, universes, REP, and forks underneath it; <a href="./trading.html">Trading</a> and <a href="./open-oracle.html">OpenOracle</a> sit beside it. The <a href="./system-overview.html">system overview</a> introduces all four.</p>
 				<figure class="diagram" id="fig-statoblast-system-decision-flow">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-system-decision-flow" data-plot-width="940" data-plot-height="1564" role="img" aria-label="Statoblast market lifecycle from question registration through local resolution or fork migration and redemption"><span class="plot-chart-fallback">The example question enters a SecurityPool. Local reporting may resolve the market or produce a non-decision; an independent fork of the pool's universe can also interrupt the pool while it remains unresolved and operational. Either fork trigger leads through child migration, collateral repair where needed, and branch-specific redemption.</span></div>
+					<div class="plot-chart" data-plot-chart="fig-statoblast-system-decision-flow" data-plot-width="940" data-plot-height="1444" role="img" aria-label="Statoblast market lifecycle from question registration through local resolution or fork migration and redemption"><span class="plot-chart-fallback">A portfolio shares capital across registered questions. Questions resolve locally through reporting. A universe fork uses shared owner choices and branch accounting; individual child questions are prepared on demand.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Market lifecycle.</span> Local resolution is the ordinary route. An own-question non-decision or an independent universe fork while the pool remains unresolved and operational enters the migration and collateral-repair route.</p>
 				</figure>
 			</section>
@@ -34,7 +34,7 @@
 					<a class="anchor-link" href="#normal-lifecycle" aria-label="Link to Normal market lifecycle">#</a>
 				</div>
 				<ol>
-					<li>Register the example question in Zoltar and deploy its SecurityPool in one universe.</li>
+					<li>Register the example question in Zoltar and add it to a portfolio whose admission policy permits it.</li>
 					<li>Vault owners deposit REP; traders deposit ETH to mint complete sets.</li>
 					<li>Traders may exchange shares through an exchange such as <a href="./trading.html">Trading</a>.</li>
 					<li>After the question ends, the first REP deposit on an outcome opens the <a href="../reference/glossary.html#escalation-game">Escalation Game</a>.</li>
@@ -59,7 +59,7 @@
 					<dt>Reporters</dt>
 					<dd>Place REP-backed positions on Invalid, Yes, or No in the Escalation Game.</dd>
 					<dt>Liquidation receivers and operators</dt>
-					<dd>A receiver vault accepts a transferred underwriting commitment and receives REP backing. An operator submits the operation but receives no automatic protocol payment.</dd>
+					<dd>A funded receiver accepts an underbacked commitment and receives a REP award from that owner’s deposit. Execution is worthwhile only when the award covers its cost.</dd>
 					<dt>Truth Auction bidders</dt>
 					<dd>Supply ETH in exchange for child-pool REP-backed accounting positions when a child needs collateral repair.</dd>
 				</dl>
@@ -75,12 +75,12 @@
 						<tr>
 							<td>ETH settlement collateral</td>
 							<td>Backing for outstanding <a href="../reference/glossary.html#complete-set">complete sets</a></td>
-							<td>The SecurityPool; it is allocated, not copied, during migration</td>
+							<td>The portfolio settlement contract holds ETH; the settlement book records its liabilities. Migration allocates rather than copies collateral.</td>
 						</tr>
 						<tr>
 							<td>REP</td>
 							<td>Universe-specific reporting and security capital; never settlement collateral</td>
-							<td>Wallets, SecurityPool vault accounting, Escalation Games, or migration contracts</td>
+							<td>Wallets hold liquid REP, the capital ledger holds underwriting principal, and the reporter ledger holds reporting escrow. Escalation Games record the associated claims.</td>
 						</tr>
 						<tr>
 							<td>Outcome shares</td>
@@ -90,7 +90,7 @@
 						<tr>
 							<td>Underwriting commitment</td>
 							<td>ETH a vault owner agrees to underwrite; its share of the pool total sets the vault's collateral obligations and fee rights</td>
-							<td>SecurityPool vault accounting</td>
+							<td>The portfolio capital ledger</td>
 						</tr>
 						<tr>
 							<td>Escalation claims</td>
@@ -112,41 +112,17 @@
 					<a class="anchor-link" href="#local-resolution" aria-label="Link to Local resolution">#</a>
 				</div>
 				<p>The game opens with the first REP deposit after the question ends. REP-backed balances then accumulate behind Invalid, Yes, and No. Their median is <a href="../reference/glossary.html#binding-capital">binding capital</a> and determines the moving deadline. After that deadline, exactly one strict balance leader produces the local winner. Winning shares redeem from that pool.</p>
-				<p>If two outcomes reach the <a href="../reference/glossary.html#non-decision-threshold">non-decision threshold</a>, the game does not choose between them. Anyone can then fork the universe on the market question through Statoblast, which pays the <a href="../reference/glossary.html#fork-threshold">fork threshold</a> from the REP held by the pool and the game. See <a href="./escalation-game.html">the Escalation Game explanation</a> for the required-support curve, deadlines, payouts, and how games continue across forks.</p>
+				<p>If two outcomes reach the <a href="../reference/glossary.html#non-decision-threshold">non-decision threshold</a>, the game does not choose between them. Anyone can then fork the universe on the market question through Statoblast, which pays the <a href="../reference/glossary.html#fork-threshold">fork threshold</a> from the triggering question’s REP escrow in the portfolio reporter ledger. See <a href="./escalation-game.html">the Escalation Game explanation</a> for the required-support curve, deadlines, payouts, and how games continue across forks.</p>
 			</section>
 
 			<section class="paper-section" id="forks-migration">
-				<div class="section-heading">
-					<h2>5. Standalone pool forks and migration</h2>
-					<a class="anchor-link" href="#forks-migration" aria-label="Link to Standalone pool forks and migration">#</a>
-				</div>
-				<p>An unresolved operational standalone pool can enter the fork path in two ways. Its own Escalation Game can reach non-decision and fork Zoltar on the market question; in this example, that creates Invalid, Yes, and No children. A fork of the pool's universe on another question can also interrupt it, in which case the children represent that categorical or scalar question's valid answers. A finalized pool remains settled and rejects later fork migration. Multi-question portfolios use the <a href="#portfolio-shared-forks">shared fork process and fixed deadlines</a> described below.</p>
-				<figure class="diagram" id="fig-statoblast-fork-state-machine">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-fork-state-machine" data-plot-width="960" data-plot-height="906" role="img" aria-label="SecurityPool fork state machine"><span class="plot-chart-fallback">A pool moves from active operation through fork, child deployment, REP and collateral migration, and any auction repair to an operational child.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Standalone fork timeline.</span> The parent halts permanently; each child becomes operational only after migration and any required repair.</p>
-				</figure>
-				<p>Migration is open for a <a href="../reference/glossary.html#migration-window">migration window</a> of eight weeks, counted from the call that puts the parent pool into fork mode. A vault's parent backing claim, underwriting commitment, and proportional pool collateral are routed into one selected child pool. The same parent vault migration cannot be reused across siblings. Eligible outcome-share balances work differently: users can materialize branch-specific ledger claims in multiple selected child pools. That reproduces claims, not ETH; see <a href="./zoltar.html#non-guarantees">what Zoltar does not guarantee</a>.</p>
-				<figure class="diagram" id="fig-statoblast-share-migration">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-share-migration" data-plot-width="900" data-plot-height="468" role="img" aria-label="Share migration materializes persistent branch entitlements"><span class="plot-chart-fallback">The full eligible source balance can materialize in each selected child as a separate branch claim, while the source remains locked. ETH is not copied.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Share migration.</span> Branch-specific token claims may appear in more than one child; settlement collateral follows vault migration and remains finite.</p>
-				</figure>
-				<p>If a standalone child receives too little ETH, it can sell child REP through a one-week Truth Auction, which anyone can start once the migration window has closed. Full demand can repair the shortfall; weak demand can leave redemption below face value.</p>
-				<figure class="diagram" id="fig-statoblast-auction-balance-sheet">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-auction-balance-sheet" data-plot-width="960" data-plot-height="330" role="img" aria-label="Truth Auction collateral repair balance sheet"><span class="plot-chart-fallback">A child begins with a collateral shortfall. Auction ETH may fully repair it, partially repair it, or leave it unchanged when there is no demand.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Collateral repair.</span> The auction raises what demand supports and never selects truth.</p>
-				</figure>
+				<h2>5. Forks and migration</h2>
+				<p>A question's non-decision or a fork on another question enters the same shared branch process. Owners choose once per portfolio and universe. Questions, outcome tokens and reporter claims are prepared lazily when used. See <a href="#portfolio-shared-forks">the choice windows and recovery rules below</a>.</p>
 			</section>
-
 			<section class="paper-section" id="fees-capacity-liquidations">
-				<div class="section-heading">
-					<h2>6. Fees, underwriting, and liquidations</h2>
-					<a class="anchor-link" href="#fees-capacity-liquidations" aria-label="Link to Fees, underwriting, and liquidations">#</a>
-				</div>
-				<p>REP deposits do not create underwriting commitments; each vault owner sets one separately. A vault's share of total commitments sets its share of the pool's settlement collateral obligations and of the <a href="./fees.html">open-interest fees</a> that outstanding collateral pays.</p>
-				<p>New complete sets can be minted only before the question ends, while total commitments cover the resulting collateral and no Escalation Game has opened. Standalone minting needs no oracle price or backing check, because vault owners already answer for their full commitments (<a href="../reference/invariants.html#bal-03">invariant BAL-03</a>).</p>
-				<p>A vault whose REP no longer backs its commitment can be liquidated: some or all of its commitment and backing move to an authorized receiver vault. See <a href="./liquidations.html">vault liquidation</a>.</p>
+				<h2>6. Fees, underwriting, and liquidations</h2>
+				<p>Each owner's REP backs their authorized ETH commitment. Purchases require sufficient healthy aggregate commitment and a fresh funded oracle price. Returning complete sets releases demand; it does not require owners to recover REP question by question. <a href="./fees.html">Fees</a> accrue separately from principal. <a href="./liquidations.html">Liquidation</a> transfers only the affected owner's commitment and REP.</p>
 			</section>
-
 			<section class="paper-section" id="question-portfolios">
 				<div class="section-heading">
 					<h2>7. Managing several questions</h2>

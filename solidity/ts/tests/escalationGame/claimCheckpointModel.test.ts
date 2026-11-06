@@ -7,7 +7,7 @@ import { test_statoblast_EscalationClaimCheckpointHarness_EscalationClaimCheckpo
 import { useEscalationGameFixture } from './fixture'
 
 type Interval = readonly [bigint, bigint, bigint, bigint]
-type Transform = { before: bigint; remaining: bigint; consumed: bigint }
+type Transform = { consumed: bigint }
 
 // Deterministic inputs and scheduling share a replay seed, but expectations never
 // read the contract's transform getters, checkpoint cache, or allocation output.
@@ -21,10 +21,9 @@ function randomIntegers(seed: number) {
 	}
 }
 
-function sequentialFloor(interval: Interval, { before, remaining, consumed }: Transform): Interval {
-	const scaled = interval.map(value => (before === 0n ? value : (value * remaining) / before))
-	const [start, end, rewardStart, rewardEnd] = scaled
-	if (start === undefined || end === undefined || rewardStart === undefined || rewardEnd === undefined || start < consumed) throw new Error('Invalid reference interval')
+function applyConsumedPrefix(interval: Interval, { consumed }: Transform): Interval {
+	const [start, end, rewardStart, rewardEnd] = interval
+	if (start < consumed) throw new Error('Invalid reference interval')
 	return [start - consumed, end - consumed, rewardStart, rewardEnd]
 }
 
@@ -35,7 +34,7 @@ describe('Escalation Game: seeded checkpoint state machine', () => {
 	})
 
 	for (const seed of [0xc1a10001, 0xc1a10002, 0xc1a10003, 0xc1a10004, 0xc1a10005, 0xc1a10006, 0xc1a10007, 0xc1a10008]) {
-		test(`sequential floors and fair cache schedules agree for seed 0x${seed.toString(16)}`, async () => {
+		test(`consumed prefixes and fair cache schedules agree for seed 0x${seed.toString(16)}`, async () => {
 			const random = randomIntegers(seed)
 			const amount = BigInt(1 + random(24))
 			const leafIndex = seed % 4 === 0 ? 0n : 1n
@@ -47,7 +46,7 @@ describe('Escalation Game: seeded checkpoint state machine', () => {
 			const trace: string[] = []
 			const context = () => `seed=0x${seed.toString(16)} depth=${depth} schedule=${schedule} trace=${trace.join(',')}`
 			const deploy = async (source: Address, transform: Transform, inherited = true) => {
-				const hash = await fixture.client.sendTransaction({ data: encodeDeployData({ abi: harness.abi, bytecode: `0x${harness.evm.bytecode.object}`, args: [source, inherited ? leafIndex + 1n : leafIndex, transform.before, transform.remaining, transform.consumed] }) })
+				const hash = await fixture.client.sendTransaction({ data: encodeDeployData({ abi: harness.abi, bytecode: `0x${harness.evm.bytecode.object}`, args: [source, inherited ? leafIndex + 1n : leafIndex, transform.consumed] }) })
 				const receipt = await fixture.client.waitForTransactionReceipt({ hash })
 				if (receipt.contractAddress === undefined) throw new Error(`Missing history node: ${context()}`)
 				return receipt.contractAddress
@@ -79,31 +78,28 @@ describe('Escalation Game: seeded checkpoint state machine', () => {
 			// Unrelated history preceding the local leaf must never influence it.
 			let source = zeroAddress
 			const olderGenerations = 1 + random(3)
-			for (let older = 0; older < olderGenerations; older += 1) source = await deploy(source, { before: 17n, remaining: 1n, consumed: 1000n })
+			for (let older = 0; older < olderGenerations; older += 1) source = await deploy(source, { consumed: 1000n })
 			const nodes: Address[] = []
 			const expected: Interval[] = []
 			let current = initial
 			for (let generation = 0; generation < depth; generation += 1) {
-				const before = BigInt(10 + random(24))
-				const remaining = seed % 3 === 0 && generation === 5 ? 0n : before - BigInt(random(2))
-				const retainedStart = generation === 0 ? current[0] : (current[0] * remaining) / before
-				const consumed = leafIndex === 0n ? 0n : BigInt(random(Number(retainedStart < 3n ? retainedStart : 3n) + 1))
-				const transform = { before, remaining, consumed }
+				const consumed = leafIndex === 0n ? 0n : BigInt(random(Number(current[0] < 3n ? current[0] : 3n) + 1))
+				const transform = { consumed }
 				source = await deploy(source, transform, generation !== 0)
-				current = sequentialFloor(current, generation === 0 ? { ...transform, before: 0n } : transform)
+				current = applyConsumedPrefix(current, transform)
 				nodes.push(source)
 				expected.push(current)
 				if (generation <= 8) assert.deepStrictEqual(await interval(source), current, `shallow local-origin view: ${context()}`)
 			}
-			const targetTransform = { before: 11n, remaining: BigInt(7 + random(5)), consumed: 0n }
+			const targetTransform = { consumed: 0n }
 			const cold = await deploy(source, targetTransform)
 			const reused = await deploy(source, targetTransform)
-			const output = sequentialFloor(current, targetTransform)
+			const output = applyConsumedPrefix(current, targetTransform)
 			assert.strictEqual((await progress(cold))[3], false, context())
 			await assert.rejects(interval(cold), /Claim checkpoint required/)
 
 			// A cold cache's stored coordinates advance through the independent
-			// prefix one budget at a time, including intervals rounded to zero.
+			// prefix one budget at a time, without changing earned reward coordinates.
 			for (let turn = 0; turn <= 2 * depth + 2; turn += 1) {
 				if ((await progress(cold))[2]) break
 				const after = await step(cold, 'cold')

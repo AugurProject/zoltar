@@ -1,10 +1,6 @@
 const RETENTION_RATE_PRECISION = 10n ** 18n
 const SECONDS_PER_YEAR = 31_536_000n
 
-// Matches SecurityPoolUtils.calculateRetentionRate(0, 0), the on-chain
-// initial retention for public origin-pool deployments.
-export const ORIGIN_POOL_INITIAL_RETENTION_RATE = 999_999_996_848_000_000n
-
 /** Fixed-point exponentiation by squaring with floor division, mirroring the contract's `rpow`. */
 export function rpow(value: bigint, exponent: bigint, baseUnit: bigint) {
 	let result = exponent % 2n !== 0n ? value : baseUnit
@@ -17,20 +13,12 @@ export function rpow(value: bigint, exponent: bigint, baseUnit: bigint) {
 }
 
 /** Annual open interest fee as a percentage with 18 decimals, compounded from the per-second retention rate. */
-export function openInterestFeePerYearBigint(retentionRate: bigint | undefined): bigint | undefined {
+function openInterestFeePerYearBigint(retentionRate: bigint | undefined): bigint | undefined {
 	if (retentionRate === undefined) return undefined
 	if (retentionRate <= 0n) return 100n * RETENTION_RATE_PRECISION
 	const annualRetention = rpow(retentionRate, SECONDS_PER_YEAR, RETENTION_RATE_PRECISION)
 	if (annualRetention >= RETENTION_RATE_PRECISION) return 0n
 	return (RETENTION_RATE_PRECISION - annualRetention) * 100n
-}
-
-/** Annualized linear fee as a percentage of current collateral, capped at that funded collateral. */
-export function linearOpenInterestFeePerYearBigint(rateAttoEthPerSecond: bigint, collateralAttoEth: bigint): bigint | undefined {
-	if (rateAttoEthPerSecond < 0n || collateralAttoEth < 0n) return undefined
-	if (rateAttoEthPerSecond === 0n || collateralAttoEth === 0n) return 0n
-	const annualFee = rateAttoEthPerSecond * SECONDS_PER_YEAR
-	return annualFee >= collateralAttoEth ? 100n * RETENTION_RATE_PRECISION : (annualFee * 100n * RETENTION_RATE_PRECISION) / collateralAttoEth
 }
 
 /** Annual open interest fee percentage rounded half up to `fractionDigits` decimals, as a scaled integer. */

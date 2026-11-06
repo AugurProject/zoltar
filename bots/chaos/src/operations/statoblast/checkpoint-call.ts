@@ -4,15 +4,7 @@ import { escalationGameAbi, securityPoolAbi } from '@zoltar/bot-shared/contracts
 import type { ForkedClaimCheckpointSnapshot } from '../carry-types.ts'
 
 export function claimCheckpointArguments(candidate: ForkedClaimCheckpointSnapshot) {
-	return [
-		candidate.outcome,
-		BigInt(candidate.amountAttoRep),
-		BigInt(candidate.cumulativeAmountAttoRep),
-		BigInt(candidate.leafIndex),
-		CLAIM_CHECKPOINT_MAX_STEPS,
-		candidate.baseCommitment,
-		candidate.transforms.map(value => ({ repBeforeAttoRep: BigInt(value.repBeforeAttoRep), repRemainingAttoRep: BigInt(value.repRemainingAttoRep), consumedBeforeAttoRep: BigInt(value.consumedBeforeAttoRep) })),
-	] as const
+	return [candidate.outcome, BigInt(candidate.amountAttoRep), BigInt(candidate.cumulativeAmountAttoRep), BigInt(candidate.leafIndex), CLAIM_CHECKPOINT_MAX_STEPS, candidate.baseCommitment, candidate.transforms.map(value => ({ consumedBeforeAttoRep: BigInt(value.consumedBeforeAttoRep) }))] as const
 }
 
 export function claimCheckpointWithdrawalCalls(candidate: ForkedClaimCheckpointSnapshot) {

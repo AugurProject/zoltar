@@ -105,18 +105,18 @@ async function waitForDevelopmentServer(serverUrl: string) {
 }
 
 describe('split development server paths', () => {
-	for (const [appId, port] of [
-		['zoltar', 4153],
-		['statoblast', 12347],
-		['trading', 4163],
-		['openoracle', 4173],
-	] as const) {
+	for (const appId of UI_APP_IDS) {
 		test(`serves the ${appId} application root`, async () => {
 			const titles: Record<UiAppId, string> = { openoracle: '<title>OpenOracle</title>', statoblast: '<title>Augur Statoblast</title>', trading: '<title>Statoblast Trading</title>', zoltar: '<title>Zoltar</title>' }
 			const paths = getUiAppPaths(appId)
-			const processHandle = Bun.spawn([process.execPath, paths.devServerScript, appId], { stderr: 'pipe', stdout: 'pipe' })
+			const processHandle = Bun.spawn([process.execPath, paths.devServerScript, appId], { env: { ...process.env, UI_DEV_SERVER_PORT: '0' }, stderr: 'pipe', stdout: 'pipe' })
 			try {
-				const html = await waitForDevelopmentServer(`http://127.0.0.1:${port.toString()}/`)
+				const reader = processHandle.stdout.getReader()
+				const startup = await reader.read()
+				reader.releaseLock()
+				const address = new TextDecoder().decode(startup.value).match(/http:\/\/localhost:(\d+)/)?.[1]
+				if (address === undefined) throw new Error('Development server did not report its port')
+				const html = await waitForDevelopmentServer(`http://127.0.0.1:${address}/`)
 				expect(html).toContain(titles[appId])
 			} finally {
 				processHandle.kill()

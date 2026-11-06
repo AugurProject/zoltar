@@ -2,11 +2,11 @@ import { verifyPortfolioCustody } from './portfolio-identity.ts'
 import { authenticatePortfolioAuction, loadPortfolioAuctionPosition, portfolioAuctionPage, type PortfolioAuctionTarget, type PortfolioTarget } from './portfolio-auction.ts'
 import type { OperatorSettings } from '#config/settings'
 import type { PortfolioSelection } from '#config/portfolio-policy'
-import { erc20Abi, securityPoolAbi, securityPoolFactoryAbi, securityPoolCapitalLedgerAbi, securityPoolAuctionVaultAbi, portfolioRuntimeIdentities } from '@zoltar/bot-shared/contracts/abi'
+import { erc20Abi, securityPoolCapitalLedgerAbi, securityPoolAuctionVaultAbi, portfolioRuntimeIdentities } from '@zoltar/bot-shared/contracts/abi'
 import { verifyRuntimeIdentity } from '@zoltar/bot-shared/monitoring/runtime-identity'
 import { getAddress, parseAbiItem, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { decodeAuctionVaultBindings, loadPortfolioCapitalSnapshot, type PortfolioCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
-import type { ReadClient } from './vault-positions.ts'
+import type { ReadClient } from './read-client.ts'
 import { record } from '@zoltar/bot-shared/infrastructure/json-validation'
 
 function uint(value: unknown): bigint {
@@ -23,7 +23,6 @@ const portfolioMonitorAbi = [
 	parseAbiItem('function forkController() view returns (address)'),
 	parseAbiItem('function choices(uint248 universeId,address owner) view returns (uint256 outcome,bool recorded)'),
 	parseAbiItem('function getChildUniverseId(uint248 universeId,uint256 outcome) view returns (uint248)'),
-	parseAbiItem('function seedPool() view returns (address)'),
 	parseAbiItem('function originUniverseId() view returns (uint248)'),
 	parseAbiItem('function zoltar() view returns (address)'),
 	parseAbiItem('function portfolio() view returns (address)'),
@@ -142,24 +141,8 @@ async function loadPortfolioPosition(client: ReadClient, snapshot: PortfolioCapi
 }
 
 export async function loadPortfolioObservation(client: ReadClient, settings: OperatorSettings, wallet: Address | undefined, scope: PortfolioScope, blockNumber: bigint, targets?: readonly PortfolioTarget[]): Promise<PortfolioObservation> {
-	const [factory, protocol, seed] = await Promise.all([
-		client.readContract({ address: scope.address, abi: portfolioMonitorAbi, functionName: 'factory', blockNumber }),
-		client.readContract({ address: scope.address, abi: portfolioMonitorAbi, functionName: 'zoltar', blockNumber }),
-		client.readContract({ address: scope.address, abi: portfolioMonitorAbi, functionName: 'seedPool', blockNumber }),
-	])
+	const [factory, protocol] = await Promise.all([client.readContract({ address: scope.address, abi: portfolioMonitorAbi, functionName: 'factory', blockNumber }), client.readContract({ address: scope.address, abi: portfolioMonitorAbi, functionName: 'zoltar', blockNumber })])
 	if (address(factory) !== settings.deployment.securityPoolFactory || address(protocol) !== settings.deployment.zoltar) throw new Error('Selected portfolio belongs to another factory or Zoltar')
-	const seedAddress = address(seed)
-	const [origin, seedUniverse, seedFactory, seedParent, seedProtocol, originUniverse] = await Promise.all([
-		client.readContract({ address: address(factory), abi: securityPoolFactoryAbi, functionName: 'getSecurityPoolOriginId', args: [seedAddress], blockNumber }),
-		client.readContract({ address: seedAddress, abi: securityPoolAbi, functionName: 'universeId', blockNumber }),
-		client.readContract({ address: seedAddress, abi: securityPoolAbi, functionName: 'securityPoolFactory', blockNumber }),
-		client.readContract({ address: seedAddress, abi: securityPoolAbi, functionName: 'parent', blockNumber }),
-		client.readContract({ address: seedAddress, abi: securityPoolAbi, functionName: 'zoltar', blockNumber }),
-		client.readContract({ address: scope.address, abi: portfolioMonitorAbi, functionName: 'originUniverseId', blockNumber }),
-	])
-	const canonicalSeed = await client.readContract({ address: address(factory), abi: securityPoolFactoryAbi, functionName: 'getSecurityPool', args: [origin, seedUniverse], blockNumber })
-	if (getAddress(canonicalSeed) !== seedAddress || getAddress(seedFactory) !== settings.deployment.securityPoolFactory || getAddress(seedParent) !== zeroAddress || getAddress(seedProtocol) !== settings.deployment.zoltar || seedUniverse !== originUniverse)
-		throw new Error('Portfolio constructor seed is not a canonical origin pool')
 	// A fixed nonzero observer permits monitoring before a signer is configured; no action can use it.
 	const owner = wallet ?? getAddress('0x0000000000000000000000000000000000000001')
 	const snapshot = await loadPortfolioCapitalSnapshot({ client, portfolio: scope.address, universeId: scope.universeId, owner, blockNumber })

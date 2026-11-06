@@ -2,21 +2,6 @@ import { centralizedMarketConfigurationAllowsExecution, centralizedPriceAllowsEx
 import { discardDexMarketObservations, marketConsensusAllowsExecution, requireCanonicalDexEvidence, type MarketConsensusEstimate } from '@zoltar/bot-shared/monitoring/market-consensus'
 import type { OperatorSettings } from '#config/settings'
 import { initialRuntimeState, type PoolObservation } from '#state/operator-state'
-import { selectAllowedCandidate } from '#core/strategy'
-
-export function selectedCandidate(pools: readonly PoolObservation[], settings: OperatorSettings, allowed: (pool: PoolObservation) => boolean) {
-	const candidates = pools.flatMap(pool => pool.candidates)
-	const candidate = selectAllowedCandidate(candidates, settings.strategy.candidatePriority, candidate => {
-		const pool = pools.find(pool => pool.address.toLowerCase() === candidate.pool.address.toLowerCase())
-		// The execution guard cannot bound REP exposure for a full close at a stale price; try another candidate.
-		if (pool !== undefined && !pool.isPriceValid && candidate.requestedDebtAttoEth >= candidate.target.underwritingLimitAttoEth) return false
-		return pool !== undefined && allowed(pool)
-	})
-	if (candidate === undefined) return undefined
-	const pool = pools.find(pool => pool.address.toLowerCase() === candidate.pool.address.toLowerCase())
-	if (pool === undefined) throw new Error('Selected candidate pool disappeared from the scan')
-	return { candidate, pool }
-}
 
 export function marketConfigurations(settings: OperatorSettings) {
 	return [settings.centralizedMarkets, ...settings.childMarketConfigurations]

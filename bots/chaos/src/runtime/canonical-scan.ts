@@ -1,3 +1,5 @@
+import { validateDiscoveryIndexAnchor } from '../monitoring/discovery-index-anchor.ts'
+import { requireCanonicalBlock } from '../monitoring/protocol-index-context.ts'
 import type { ImmutableTopologyIdentity } from '../monitoring/topology-identity.ts'
 import { canonicalPoolReportRoutes } from '../monitoring/discovery-price-feed.ts'
 import { discoveryCoverageIsComplete } from '../monitoring/discovery-coverage.ts'
@@ -54,6 +56,7 @@ export type CanonicalScanResult = {
 }
 
 export type CanonicalScanOptions = {
+	purchaseQuoteAttoEth?: bigint | undefined
 	clock?: (() => number) | undefined
 }
 
@@ -191,8 +194,18 @@ function immutableTopologyIdentity(settings: OperatorSettings): ImmutableTopolog
 	}
 }
 
-export async function discoverWithQuorum(settings: OperatorSettings, pool: RpcPool, wallet: Address | undefined, anchor: CanonicalAnchor, index: ChaosProtocolIndex | undefined, topologyCache: CanonicalImmutableTopologyCache | undefined) {
+export async function discoverWithQuorum(settings: OperatorSettings, pool: RpcPool, wallet: Address | undefined, anchor: CanonicalAnchor, index: ChaosProtocolIndex | undefined, topologyCache: CanonicalImmutableTopologyCache | undefined, purchaseQuoteAttoEth?: bigint) {
 	const connectivity = requiredConnectivity(settings)
+	await validateDiscoveryIndexAnchor(
+		index,
+		anchor.blockNumber,
+		async blockNumber =>
+			await settledQuorumValue(
+				`indexed discovery block ${blockNumber}`,
+				chaosReadClients(settings, pool).map(async ({ client, endpoint }) => ({ endpoint, value: await requireCanonicalBlock(client, blockNumber) })),
+				connectivity.rpcQuorum,
+			),
+	)
 	const indexed = index === undefined ? {} : protocolIndexDiscoveryInputs(index)
 	return await settledQuorumValue(
 		`ecosystem snapshot at ${anchor.blockNumber.toString()}`,
@@ -201,6 +214,7 @@ export async function discoverWithQuorum(settings: OperatorSettings, pool: RpcPo
 			let topologyChanged: boolean | undefined
 			const snapshot = await discoverEcosystemSnapshot({
 				discoverGenesisDeployment: settings.strategy.initializeGenesisUniverse,
+				purchaseQuoteAttoEth: purchaseQuoteAttoEth ?? settings.strategy.maximumEthPerOperationAttoEth / 2n,
 				anchorBlockNumber: anchor.blockNumber,
 				client,
 				deployments: settings.deployment,
@@ -224,7 +238,7 @@ export async function discoverWithQuorum(settings: OperatorSettings, pool: RpcPo
 
 async function updateIndexWithQuorum(settings: OperatorSettings, pool: RpcPool, wallet: Address, anchor: CanonicalAnchor, topology: EcosystemSnapshot, previous: ChaosProtocolIndex | undefined) {
 	const connectivity = requiredConnectivity(settings)
-	const auctionAddresses = uniqueAddresses(topology.auctions.map(auction => auction.address))
+	const auctionAddresses = uniqueAddresses(topology.auctions.map(auction => auction.engine))
 	const games = escalationRoutes(topology)
 	const coordinatorReports = canonicalPoolReportRoutes(topology.pools)
 	const trustedRepTokens = uniqueAddresses(topology.universes.map(candidate => candidate.repToken))
@@ -396,7 +410,7 @@ export async function performCanonicalScan(settings: OperatorSettings, pool: Rpc
 		...(previousTopologyCache === undefined ? {} : { previous: previousTopologyCache }),
 		statePath: settings.runtime.stateFile,
 	})
-	const discovery = await discoverWithQuorum(settings, pool, wallet, anchor, compatibleIndex, cachedTopology)
+	const discovery = await discoverWithQuorum(settings, pool, wallet, anchor, compatibleIndex, cachedTopology, options.purchaseQuoteAttoEth)
 	if (discovery.topologyChanged) await saveImmutableTopologyCache(settings.runtime.stateFile, topologyIdentity, discovery.topologyCache, settings.discovery)
 	const topology = discovery.snapshot
 	const discoveryComplete = discoveryCoverageIsComplete(topology.discoveryIssues)

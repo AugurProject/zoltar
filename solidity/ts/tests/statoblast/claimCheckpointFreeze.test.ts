@@ -1,24 +1,27 @@
-import { describe, test } from 'bun:test'
-import assert from '../../testSupport/simulator/utils/assert'
-import { statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate } from '../../types/contractArtifact'
-import { getSecurityPoolsEscalationGame } from '../../testSupport/simulator/utils/contracts/securityPool'
-import { getSecurityPoolForkerForkData } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
-import { useStatoblastForkMigrationFixture } from './fixture'
+import { describe, expect, test } from 'bun:test'
+import { statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate as claimArtifact, statoblast_SecurityPool_SecurityPool as poolArtifact, statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact, Zoltar_Zoltar as zoltarArtifact } from '../../types/contractArtifact'
+import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
+import { approveToken } from '../../testSupport/simulator/utils/utilities'
+import { getRepTokenAddress, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
+import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
-describe('Claim checkpoints: canonical source freeze boundary', () => {
-	const fixture = useStatoblastForkMigrationFixture()
-
-	test('an actual own-fork source becomes immutable strictly after its direct-claim window', async () => {
-		const { client, mockWindow, securityPoolAddresses } = fixture
-		await fixture.forkOwnGameAfterQuestionEnd()
-		const game = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
-		const frozen = async () => await client.readContract({ abi: statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.abi, address: game, functionName: 'isClaimHistoryFrozen' })
-		assert.strictEqual(await frozen(), false, 'forking alone must not authorize caching mutable direct-claim offsets')
-		const fork = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
-		const cutoff = fork.forkActivationTime + 8n * 7n * 24n * 60n * 60n
-		await mockWindow.setTime(cutoff)
-		assert.strictEqual(await frozen(), false, 'the inclusive direct-claim deadline is still mutable')
-		await mockWindow.setTime(cutoff + 1n)
-		assert.strictEqual(await frozen(), true, 'canonical forker data, rather than a caller flag, closes the history')
+describe('Claim checkpoints: immutable portfolio own-fork source', () => {
+	const fixture = useSecurityPoolPortfolioFixture()
+	test('own-fork history freezes immediately because reporter withdrawals use child proofs', async () => {
+		const owner = fixture.owner()
+		const pool = fixture.poolFor(fixture.base.questionId).securityPool
+		const threshold = await owner.readContract({ abi: zoltarArtifact.abi, address: getZoltarAddress(), functionName: 'getNonDecisionThresholdAttoRep', args: [fixture.base.genesisUniverse] })
+		await approveToken(owner, getRepTokenAddress(fixture.base.genesisUniverse), pool)
+		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
+		for (const outcome of [1, 2]) await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [outcome, threshold] }))
+		const game = await owner.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'escalationGame' })
+		const frozen = () => owner.readContract({ abi: claimArtifact.abi, address: game, functionName: 'isClaimHistoryFrozen' })
+		expect(await frozen()).toBe(false)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker, functionName: 'forkZoltarWithOwnEscalationGame', args: [pool] }))
+		expect(await frozen()).toBe(true)
+		await expect(owner.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'withdrawFromEscalationGame', args: [1, [0n]] })).rejects.toThrow()
+		await fixture.base.mockWindow.advanceTime(56n * 86_400n)
+		expect(await frozen()).toBe(true)
 	})
 })

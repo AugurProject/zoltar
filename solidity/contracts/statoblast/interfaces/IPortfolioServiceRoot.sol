@@ -12,8 +12,6 @@ interface IPortfolioServiceRoot {
 	function capitalLedger(uint248 universeId) external view returns (SecurityPoolCapitalLedger);
 	function quoteHelper() external view returns (SecurityPoolPortfolioPurchase);
 	function prepareServicePurchase(uint248 universeId, uint256 questionId) external returns (ISecurityPool);
-	function executeServiceMint(ISecurityPool pool, address recipient, uint256 minimumShares) external payable returns (uint256);
-	function deliverServiceMint(ISecurityPool pool, address recipient, uint256 shares) external;
 	function registeredPools(address pool) external view returns (bool);
 	function inheritedFixedOutcome(uint248 universeId, uint256 questionId) external view returns (bool, uint256);
 	function logicalTime(uint248 universeId) external view returns (uint48);

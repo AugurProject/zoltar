@@ -5,7 +5,7 @@ import { createGoLiveControls } from '#core/go-live-controls'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { loadPoolCatalog } from '#monitoring/pool-catalog'
 import { operatorSnapshot } from '#state/operator-state'
-import { setApprovedUniverses, setMarketConfiguration, setNetworkConnectivity, setSelectedPools, setStrategy, setSupportedPool, switchNetworkProfile } from './configuration-handlers.ts'
+import { setApprovedUniverses, setMarketConfiguration, setNetworkConnectivity, setSelectedPortfolios, setStrategy, setSupportedPortfolio, switchNetworkProfile } from './configuration-handlers.ts'
 import { persistSettings, signerWalletFor, type LiquidatorDeps, type LiquidatorRuntime } from './liquidator-runtime.ts'
 import { testMarketSources } from './market-source-test.ts'
 import { reconcileTransaction } from './transaction-reconciliation-handler.ts'
@@ -51,8 +51,8 @@ export function startLiquidatorDashboard(runtime: LiquidatorRuntime, deps: Liqui
 		setApprovedUniverses: value => setApprovedUniverses(runtime, deps, value),
 		setMarketConfiguration: value => setMarketConfiguration(runtime, deps, value),
 		setNetworkConnectivity: value => setNetworkConnectivity(runtime, deps, value),
-		setSupportedPool: value => setSupportedPool(runtime, deps, value),
-		setSelectedPools: value => setSelectedPools(runtime, deps, value),
+		setSupportedPortfolio: value => setSupportedPortfolio(runtime, deps, value),
+		setSelectedPortfolios: value => setSelectedPortfolios(runtime, deps, value),
 		...goLiveControls,
 		setStrategy: value => setStrategy(runtime, deps, value),
 	})
