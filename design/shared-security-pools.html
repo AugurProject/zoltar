@@ -419,9 +419,6 @@
 				<p class="lede">Pull request <a href="https://github.com/AugurProject/zoltar/pull/1164">#1164</a> lets many Statoblast questions share one pool of REP security and one set of underwriting commitments, instead of each question running its own isolated SecurityPool. It also rebuilds the post-fork Truth Auction as a uniform-price auction of whole ETH lots whose winners automatically become funded capital providers. This page explains what the change does, how the new system works, the math and incentives behind it, and where its weak points are. It closes with the page author's assessment of the pull request and concrete suggestions for improving it.</p>
 				<ul class="meta">
 					<li>Branch <code>t3code/multi-question-security-pool</code> → <code>main</code></li>
-					<li>Describes the pull request at commit <code>cfa690c48</code></li>
-					<li>771 files changed, about 52,000 lines added and 4,100 removed</li>
-					<li>33 new Solidity contracts and libraries plus nine new interfaces; roughly 7,300 lines of new contract code excluding interfaces</li>
 					<li>Contracts, SDK, Statoblast and Trading UIs, bots, scanner, deployment tooling and documentation change together</li>
 				</ul>
 				<nav class="toc" aria-label="Contents">
@@ -454,7 +451,7 @@
 
 			<section id="problem">
 				<h2>2. The problem: fragmented security</h2>
-				<p>In the standalone design each SecurityPool is an island. A vault owner deposits REP into a specific pool and sets an underwriting commitment there. The pool can mint complete sets only up to the sum of its vault commitments, charges an open-interest fee that depends on that pool's utilization, and requires its own fresh REP/ETH price for any solvency-sensitive step. When the universe forks, each pool migrates its vaults one by one and each child pool runs its own Truth Auction, in which winners must come back later to claim a vault.</p>
+				<p>Before this PR, each standalone SecurityPool was an island. A vault owner deposits REP into a specific pool and sets an underwriting commitment there. The pool can mint complete sets only up to the sum of its vault commitments, charges an open-interest fee that depends on that pool's utilization, and requires its own fresh REP/ETH price for any solvency-sensitive step. When the universe forks, each pool migrates its vaults one by one and each child pool runs its own Truth Auction, in which winners must come back later to claim a vault.</p>
 				<p>Three costs follow from that isolation:</p>
 				<ul>
 					<li><strong>Idle capital.</strong> REP locked in a quiet question cannot back a busy one. Underwriting capacity is wherever it happened to be deposited, not where demand is.</li>
@@ -540,7 +537,7 @@
 					</svg>
 					<figcaption><strong>Figure 1. Before and after.</strong> Standalone pools duplicate vaults, collateral accounting, pricing and repair per question. A portfolio centralizes REP custody, ETH settlement and pricing per universe and leaves each question with only its shares and reporting.</figcaption>
 				</figure>
-				<p>Standalone pools are not removed. A question can still be deployed as an ordinary SecurityPool with the existing vault, fee and auction rules. The portfolio is a second way to deploy and back questions, and the per-question SecurityPool contract now has a <em>bound</em> mode in which it mirrors the central books instead of holding assets itself.</p>
+				<p>Portfolios are the only pool architecture. Every question pool is associated with a portfolio at deployment. To back just one question, create a portfolio with fixed admission for that question; it uses the same capital, fees and fork machinery as a portfolio with many questions.</p>
 			</section>
 
 			<section id="overview">
@@ -637,8 +634,8 @@
 						<text x="785" y="420" text-anchor="middle" class="lbl-small">one per bid, bidder-controlled</text>
 						<text x="785" y="437" text-anchor="middle" class="lbl-small">becomes a capital owner</text>
 						<rect x="20" y="380" width="430" height="70" rx="8" class="box"></rect>
-						<text x="235" y="402" text-anchor="middle" class="lbl-title">SecurityPool (bound mode) · ShareToken · EscalationGame</text>
-						<text x="235" y="420" text-anchor="middle" class="lbl-small">one set per question and universe, deployed by the factory on the hub's request</text>
+						<text x="235" y="402" text-anchor="middle" class="lbl-title">SecurityPool · ShareToken · EscalationGame</text>
+						<text x="235" y="420" text-anchor="middle" class="lbl-small">per question and universe; factory-deployed for the hub</text>
 						<text x="235" y="437" text-anchor="middle" class="lbl-small">holds no provider capital or question cash; mirrors the central books</text>
 						<path d="M 380 76 L 160 128" class="arrow"></path>
 						<path d="M 440 76 L 440 128" class="arrow"></path>
@@ -1155,7 +1152,7 @@
 
 			<section id="forks">
 				<h2>5. Forks and the Truth Auction</h2>
-				<p>A fork is Zoltar's last resort: when an Escalation Game cannot decide, the universe splits into one child per outcome and every REP holder picks the child they believe is true. Statoblast must then move each question's security into the children. In a standalone pool each vault owner migrates per pool and each child pool auctions REP to repair its missing ETH. The portfolio does this once per universe.</p>
+				<p>A fork is Zoltar's last resort: when an Escalation Game cannot decide, the universe splits into one child per outcome and every REP holder picks the child they believe is true. Statoblast must then move each question's security into the children. In the former standalone design each vault owner migrated per pool and each child pool auctioned REP to repair its missing ETH. The portfolio does this once per universe.</p>
 
 				<h3 id="fork-schedule">5.1 A fixed schedule</h3>
 				<p>The pull request adds three constants to Zoltar so that every participant can compute every deadline from the fork time alone, and so that nobody can extend a window by being slow:</p>
@@ -1530,7 +1527,7 @@
 										<li>New capital modules: the portfolio hub, the capital ledger with its lifecycle and auction delegates, the commitment index and tree, fee streams.</li>
 										<li>New settlement and service modules: the settlement book and portfolio settlement, services with the premium book, the reporter ledger.</li>
 										<li>New fork modules: the fork coordinator and forker portfolio delegate, the portfolio auction with its uniform-price engine and per-bid vault clones, the shared price feed and report escrow, the open and fixed admission policies, persistent-map and frozen-history libraries.</li>
-										<li>Changed: SecurityPool, ShareToken and the Escalation Game delegates gain a bound mode; the factory gains portfolio namespaces and shared-feed preparation; the OpenOracle coordinator is split into a price source and a report delegate; Zoltar gains the fixed fork schedule.</li>
+										<li>Changed: SecurityPool, ShareToken and the Escalation Game delegates require portfolio association; the factory gains portfolio namespaces and shared-feed preparation; the OpenOracle coordinator is split into a price source and a report delegate; Zoltar gains the fixed fork schedule.</li>
 									</ul>
 								</td>
 							</tr>
@@ -1575,11 +1572,11 @@
 							</tr>
 							<tr>
 								<td><strong>Deployment and CI</strong></td>
-								<td>Fourteen new infrastructure steps (event emitter, deployment workers, delegates and nine module deployers, with the auction deployer also publishing the shared vault implementation), a deployment-status bitmask that grows from 14 to 28 entries, refreshed runtime pins and manifests for every network and genesis variant, a dependency-audit runner wired into CI, and a lockfile bump.</td>
+								<td>Portfolio deployment workers and module deployers replace the standalone deployment path. Runtime pins and manifests are refreshed for every network and genesis variant; the deployment-status bitmask follows the current ordered deployment plan. The auction deployer also publishes the shared vault implementation.</td>
 							</tr>
 							<tr>
 								<td><strong>Documentation</strong></td>
-								<td>The explanation pages distinguish standalone and portfolio paths, the SecurityPool, forker, factory and share-token references document bound mode and the shared auction, the invariant and security-model pages add the portfolio claims, and the deployment-address files list the new contracts.</td>
+								<td>The explanation pages describe portfolios as the only pool architecture. The contract references, invariants, deployment manifests, bots and scanner all use portfolio-bound question pools. Obsolete standalone vault, retention-curve, liquidation-registry and tick-auction references are removed.</td>
 							</tr>
 						</tbody>
 					</table>
@@ -1644,19 +1641,19 @@
 				</ul>
 				<h3>10.3 Engineering</h3>
 				<ul>
-					<li><strong>Size and novelty.</strong> Roughly 7,300 lines of new Solidity across 33 contracts and libraries (plus nine new interfaces), with custom AVL trees, persistent maps, modular prefix arithmetic and 128-bit recovery scaling, delivered in one pull request. The author's own validation note ends with “tests and reviews do not prove absence of bugs”.</li>
+					<li><strong>Size and novelty.</strong> The shared portfolio introduces custom AVL trees, persistent maps, modular prefix arithmetic and 128-bit recovery scaling. The author's own validation note ends with “tests and reviews do not prove absence of bugs”.</li>
 					<li><strong>Storage only grows.</strong> Refunded bids, retired positions, frozen books and premium schedules are never deleted, and work follows tree paths rather than being constant.</li>
 					<li><strong>Delegate and module sprawl.</strong> The capital ledger runs through two delegatecall helpers, the forker through a portfolio delegate, and the hub through nine module deployers. Each boundary is authenticated, but the call graph is harder to audit than the standalone pool's.</li>
 					<li><strong>Hand-assembled bytecode.</strong> Vault clones are built from raw minimal-proxy forwarder bytes with 92 bytes of bindings appended and read back with <code>extcodecopy</code>, and the SDK, the UI and the bot reproduce those exact bytes to authenticate a vault. The compiler checks none of it, so the byte layout is now part of the protocol's verified surface and every verifier must change together with it.</li>
 					<li><strong>Native share migration still needs intervening forks.</strong> Shares move universe by universe as before; only capital and books skip the per-pool work.</li>
 					<li><strong>Dependency overrides need upkeep.</strong> The audit advisories in <code>follow-redirects</code>, <code>glob</code> and <code>minimatch</code> are cleared by the pins of <code>e4ce60108</code> (<a href="#changes">section 8</a>), but overrides force transitive versions the depending packages did not choose, so they need rechecking whenever those packages update.</li>
-					<li><strong>Two systems to maintain.</strong> Standalone pools keep their vaults, retention curve, approval registry and tick auction; portfolios use the new rules. Documentation, bots and the scanner must describe both for as long as both exist.</li>
+					<li><strong>One pool architecture.</strong> Standalone single-question pools are removed. A fixed portfolio can admit just one question while using the same capital ledger, shared price feed and uniform branch auction. Each question still has its own shares, settlement cash and reporting game; it cannot deploy or operate independently of its portfolio.</li>
 				</ul>
 			</section>
 
 			<section id="review">
 				<h2>11. Assessment and suggested improvements</h2>
-				<p>The preceding sections describe the implemented design at the pinned revision. The proposals below are alternatives for future evaluation, not features of PR #1164 or conclusions that they would improve security without tradeoffs.</p>
+				<p>The preceding sections describe the portfolio-only implementation. The proposals below are alternatives for future evaluation, not features of PR #1164 or conclusions that they would improve security without tradeoffs.</p>
 
 				<h3>11.1 What the design achieves</h3>
 				<ul>
