@@ -66,7 +66,7 @@ export function PortfoliosSection({ parameters, enabled, environmentKey, activeU
 					</div>
 				</details>
 			</SectionBlock>
-			<SectionBlock title={capitalCopy.prepareTitle} description={capitalCopy.prepareHint}>
+			<SectionBlock title={capitalCopy.prepareTitle} description={actions.setupStage === 4 ? undefined : capitalCopy.prepareHint}>
 				<UserMessage tone={actions.setupStage === 4 ? 'success' : 'neutral'} detail={capitalCopy.prepareProgress(actions.setupStage ?? 0)} />
 				<div className='actions'>
 					{capitalCopy.prepareStages.map((label, index) => (

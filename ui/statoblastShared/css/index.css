@@ -4273,3 +4273,20 @@ span.rep-price-status.stale,
 	white-space: normal;
 	overflow-wrap: anywhere;
 }
+
+.portfolio-questions-table {
+	min-width: 0;
+	max-width: 100%;
+	overflow-x: auto;
+}
+
+.portfolio-questions-table table {
+	width: 100%;
+}
+
+.portfolio-questions-table td,
+.portfolio-questions-table td button,
+.portfolio-questions-table td a {
+	white-space: normal;
+	overflow-wrap: anywhere;
+}

@@ -1,4 +1,6 @@
+import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { startDashboardServer } from '../src/dashboard/dashboard-server.ts'
+import { parsePortfolioPolicy, serializePortfolioPolicy } from '../src/config/portfolio-policy.ts'
 import { parseStrategy } from '../src/config/settings.ts'
 
 let paused = false
@@ -44,29 +46,8 @@ const centralizedMarkets = {
 	},
 }
 const childMarketConfigurations: unknown[] = []
-let strategy = {
-	allowAutomaticDeposits: true,
-	allowAutomaticPoolCreation: false,
-	allowAutomaticVaultMigrations: true,
-	allowAutomaticWithdrawals: true,
-	candidatePriority: 'largest-bonus',
-	fallbackRepPerEthPrice: '12.4',
-	maximumGasCostEth: '0.02',
-	maximumLiquidationDebtEth: '25',
-	maximumOracleRequestCostEth: '0.02',
-	maximumPerPoolRep: '10000',
-	maximumTotalDeployedRep: '25000',
-	minimumLiquidationDebtEth: '1',
-	minimumRepWithdrawalRep: '10',
-	minimumRewardValueEth: '0.02',
-	redeemFeesAboveEth: '0.01',
-	stalePriceFundingBufferBps: 15000,
-	stagedOperationValidForSeconds: 240,
-	vaultTargetHealthBps: 12500,
-	vaultTopUpHealthBps: 11000,
-	vaultWithdrawHealthBps: 15000,
-	walletReserveRep: '100',
-}
+let strategy = { maximumGasCostEth: '0.02', walletReserveRep: '100' }
+let portfolioPolicy = serializePortfolioPolicy(parsePortfolioPolicy(undefined))
 
 function pool(address: string, questionId: string, selected: boolean, isPriceValid: boolean, candidateCount: number, universeId: string, approvedUniverse: boolean, parent = '0x0000000000000000000000000000000000000000', systemState = '0', forkOutcomeIndex?: string) {
 	return {
@@ -146,7 +127,19 @@ const activities = [
 ]
 
 function currentConfiguration() {
-	return { approvedUniverses, centralizedMarkets, childMarketConfigurations, connectivity, network, networkConfigured, runtime: { execute: false, historicalLogRecovery: false, logLookbackBlocks: 256 }, selectedPortfolios, strategy, submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] } }
+	return {
+		approvedUniverses,
+		centralizedMarkets,
+		childMarketConfigurations,
+		connectivity,
+		network,
+		networkConfigured,
+		runtime: { execute: false, historicalLogRecovery: false, logLookbackBlocks: 256 },
+		selectedPortfolios,
+		strategy,
+		portfolioPolicy,
+		submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] },
+	}
 }
 
 const monitoredPools = () => [
@@ -400,8 +393,9 @@ const server = startDashboardServer(Number(process.env['DASHBOARD_FIXTURE_PORT']
 		if (typeof value !== 'object' || value === null || Array.isArray(value)) {
 			throw new Error('Expected strategy object')
 		}
-		parseStrategy(value)
-		strategy = { ...strategy, ...value }
+		const parsed = parseStrategy(value)
+		portfolioPolicy = serializePortfolioPolicy(parsePortfolioPolicy(Reflect.get(value, 'portfolioPolicy')))
+		strategy = { maximumGasCostEth: formatDecimalAmount(parsed.maximumGasCostAttoEth), walletReserveRep: formatDecimalAmount(parsed.walletAttoRepReserve) }
 		return currentConfiguration()
 	},
 	testMarketSources: () => ({

@@ -10,8 +10,7 @@ import { parseSettings, parseStrategy, serializedSettings } from '../../src/conf
 import { loadSettings, saveSettings, switchSettingsNetworkProfile } from '../../src/config/settings-store.ts'
 import { storedStrategyFixture } from '../support/strategy-settings.ts'
 
-// Pool creation follows deposits so the serialized key order matches what the round-trip test compares byte for byte.
-const { allowAutomaticDeposits, ...storedStrategy } = storedStrategyFixture()
+const storedStrategy = storedStrategyFixture()
 
 const settings = {
 	approvedUniverses: ['0'],
@@ -61,7 +60,7 @@ const settings = {
 		uiPort: 4183,
 	},
 	selectedPools: [],
-	strategy: { allowAutomaticDeposits, allowAutomaticPoolCreation: false, ...storedStrategy },
+	strategy: storedStrategy,
 	submission: {
 		minimumBundleRelaySuccesses: 1,
 		mode: 'public',
@@ -164,12 +163,9 @@ describe('liquidator settings', () => {
 	test('round trips the operator configuration without losing decimal precision', () => {
 		const parsed = parseSettings(settings)
 		expect(parsed.strategy.maximumGasCostAttoEth).toBe(2n * 10n ** 16n)
-		expect(parsed.strategy.maximumAttoRepPerPool).toBe(10_000n * 10n ** 18n)
-		expect(parsed.strategy.minimumLiquidationDebtAttoEth).toBe(10n ** 18n)
 		expect(parsed.strategy.walletAttoRepReserve).toBe(100n * 10n ** 18n)
 		const serialized = serializedSettings(parsed)
 		expect(serialized.strategy.maximumGasCostEth).toBe('0.02')
-		expect(serialized.strategy.maximumPerPoolRep).toBe('10000')
 		expect(JSON.stringify(serialized.strategy)).toBe(JSON.stringify(settings.strategy))
 		expect(serialized.connectivity).toEqual({
 			publicRpcUrls: ['https://public.example/'],
@@ -187,14 +183,8 @@ describe('liquidator settings', () => {
 		for (const logLookbackBlocks of [0, 257]) expect(() => parseSettings({ ...settings, runtime: { ...settings.runtime, logLookbackBlocks } })).toThrow('runtime.logLookbackBlocks must be an integer from 1 through 256')
 	})
 
-	test('rejects overlapping health-management thresholds', () => {
-		expect(() =>
-			parseStrategy({
-				...settings.strategy,
-				vaultTargetHealthBps: 15000,
-				vaultWithdrawHealthBps: 15000,
-			}),
-		).toThrow('Withdrawal health must exceed target health')
+	test('rejects invalid execution amounts', () => {
+		for (const amount of ['-1', '0.0000000000000000001']) expect(() => parseStrategy({ ...settings.strategy, maximumGasCostEth: amount })).toThrow('strategy.maximumGasCostEth')
 	})
 
 	test('rejects contradictory network name and chain identity', () => {

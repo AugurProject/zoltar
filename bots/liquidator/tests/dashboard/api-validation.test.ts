@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+import { parsePortfolioPolicy, serializePortfolioPolicy } from '../../src/config/portfolio-policy.ts'
 import { decodeConfiguration, decodeMarketProbe, decodeSigner, decodeSnapshot } from '../../src/dashboard/api-validation.ts'
 
 const configuration = {
@@ -9,6 +10,7 @@ const configuration = {
 	networkConfigured: false,
 	runtime: { execute: false, historicalLogRecovery: false, logLookbackBlocks: 256 },
 	selectedPortfolios: [],
+	portfolioPolicy: serializePortfolioPolicy(parsePortfolioPolicy(undefined)),
 	strategy: { enabled: true, limit: '1', retries: 3 },
 	submission: { minimumBundleRelaySuccesses: 1, mode: 'public' as const, relayUrls: [] },
 }

@@ -1,4 +1,4 @@
-import { parsePortfolioSelections } from '#config/portfolio-policy'
+import { parsePortfolioPolicy, parsePortfolioSelections } from '#config/portfolio-policy'
 import { parseRootMarketSettings } from '#config/canonical-deployment'
 import { updateSupportedPortfolio } from '#config/pool-selection'
 import { parseStrategy, serializedSettings } from '#config/settings'
@@ -121,14 +121,16 @@ export function setStrategy(runtime: LiquidatorRuntime, deps: LiquidatorDeps, va
 	return deps.configurationMutationGate.run(async () => {
 		const strategy = parseStrategy(value)
 		if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Strategy settings must be an object')
+		if (Reflect.get(value, 'portfolioPolicy') === undefined) throw new Error('Portfolio policy is required')
+		const portfolioPolicy = parsePortfolioPolicy(Reflect.get(value, 'portfolioPolicy'))
 		const logLookbackBlocks = Number(Reflect.get(value, 'logLookbackBlocks'))
 		const historicalLogRecovery = Reflect.get(value, 'historicalLogRecovery')
 		if (!Number.isSafeInteger(logLookbackBlocks) || logLookbackBlocks < 1 || logLookbackBlocks > 256) throw new Error('Latest log blocks must be an integer from 1 through 256')
 		if (typeof historicalLogRecovery !== 'boolean') throw new Error('Historical log recovery must be enabled or disabled explicitly')
-		await persistSettings(runtime, deps, current => ({ ...current, runtime: { ...current.runtime, historicalLogRecovery, logLookbackBlocks }, strategy }))
+		await persistSettings(runtime, deps, current => ({ ...current, runtime: { ...current.runtime, historicalLogRecovery, logLookbackBlocks }, strategy, portfolioPolicy }))
 		recordActivity(deps.state, {
 			kind: 'configuration',
-			message: 'Liquidation strategy saved',
+			message: 'Portfolio policy saved',
 			status: 'info',
 		})
 		return serializedSettings(runtime.settings, true)

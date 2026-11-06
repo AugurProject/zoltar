@@ -1,17 +1,13 @@
 # Statoblast liquidator
 
-The liquidator monitors configured standalone security pools, their direct child pools, resolved desired pools, and explicitly selected portfolio/universe pairs from the canonical `SecurityPoolFactory`. It shows pool and vault statistics in a local dashboard and evaluates unsafe vaults in operator-selected pools. Dry-run is the default. Live execution requires an explicit signer, the configured read RPC quorum, the execution flag, and deployed canonical contracts.
+The liquidator monitors selected portfolio/universe pairs authenticated against the canonical `SecurityPoolFactory`. Its dashboard shows capital, distressed positions, retirement blockers, and funded takeover candidates. Dry-run is the default; live execution requires a signer, the configured RPC agreement, canonical contracts, and explicit automation settings.
 
-Portfolio questions use a shared capital ledger with separate monitoring and takeover policy. Select their portfolio address and universe in `selectedPortfolios`; selecting a bound question in `selectedPools` reports a diagnostic. The **Portfolio capital** panel on Overview shows authenticated capital, distressed positions, retirement blockers, and funded takeover candidates. See [Portfolio operation](#portfolio-operation) before enabling its separate automation setting.
-
-The bot owns an ordinary vault under its signer address in each selected pool. A liquidation moves ETH-denominated open-interest debt, the proportional attoREP capacity ownership, and a 5%-bonus REP backing award from the target into that vault. When the award would not satisfy both protocol health branches, the bot first makes a backing-only REP top-up using `MAX_UINT256` as the target health factor, which adds REP backing while rounding new capacity ownership to zero. It then ends the cycle and reloads the target, receiver, aggregate capacity ownership, and live open interest before deciding whether to stage the liquidation. Ordinary fee-earning deposits create price-independent capacity ownership, and the pool's live REP/ETH price converts that ownership into current ETH minting capacity. Actual ETH open interest comes from settlement collateral and is allocated among vaults in proportion to their capacity ownership. For stale prices the bot pre-funds against a configurable higher price bound before queueing the operation. It later withdraws surplus REP when the vault is safely above the withdrawal threshold.
-
-> Use a dedicated low-balance signer, begin on Sepolia, keep dry-run logs, and supervise pool health. Assumed pool open interest remains an economic obligation even when the fixed liquidation bonus is positive.
+The signer funds portfolio takeovers within explicit principal, commitment, wallet-reserve, and gas limits. Acquired underwriting remains an economic obligation; a positive REP award alone is not evidence of a profitable takeover. Begin paused in dry-run mode and review candidates before enabling execution.
 
 ## Contents
 
 - [Operator setup](#operator-setup)
-- [Universe and pool selection](#universe-and-pool-selection)
+- [Universe and portfolio selection](#universe-and-portfolio-selection)
 - [Portfolio operation](#portfolio-operation)
 - [Independent market consensus](#independent-market-consensus)
 - [Strategy controls](#strategy-controls)
@@ -76,36 +72,24 @@ To operate on Sepolia, choose Sepolia in the dashboard's **Chain** selector and 
 
 ### Settings and going live
 
-The dashboard's Settings page is grouped into setup steps with a jump bar: **1 · Connect** (chain and RPCs), **2 · Markets** (approved universes, market and pool configuration), **3 · Liquidation policy** (strategy and automation), and **4 · Go live** (execution signer, submission, execution mode). Each form's save button unlocks only after an edit differs from the loaded values and its panel shows an **Unsaved changes** badge until it is saved. Saving one panel keeps unsaved edits in the others.
+The dashboard's Settings page is grouped into setup steps with a jump bar: **1 · Connect** (chain and RPCs), **2 · Markets** (approved universes, market configuration), **3 · Liquidation policy** (strategy and automation), and **4 · Go live** (execution signer, submission, execution mode). Each form's save button unlocks only after an edit differs from the loaded values and its panel shows an **Unsaved changes** badge until it is saved. Saving one panel keeps unsaved edits in the others.
 
-Keep live execution off until the factory, WETH, signer, selected pools, RPC endpoints, gas limits, and REP limits have been reviewed. The **Execution mode** panel under Go live lists every prerequisite the bot enforces (execution signer, chain and RPC endpoints, independent quorum RPCs, canonical contracts, delivery) plus advisory rows for approved universes, supported pools, and market evidence, and keeps the live switch locked until the required rows hold. Enabling it pauses the bot and reserves the signer for this process; resume through the readiness check to start signing. A memory-only signer arms live mode in the running process alone: the saved file keeps paused dry-run mode so a restart cannot execute without its key. `runtime.execute` in the operator file remains the startup mode.
+Keep live execution off until the factory, WETH, signer, selected portfolios, RPC endpoints, gas limits, and REP limits have been reviewed. The **Execution mode** panel under Go live lists every prerequisite the bot enforces (execution signer, chain and RPC endpoints, independent quorum RPCs, canonical contracts, delivery) plus advisory rows for approved universes, supported portfolios, and market evidence, and keeps the live switch locked until the required rows hold. Enabling it pauses the bot and reserves the signer for this process; resume through the readiness check to start signing. A memory-only signer arms live mode in the running process alone: the saved file keeps paused dry-run mode so a restart cannot execute without its key. `runtime.execute` in the operator file remains the startup mode.
 
 Submission and signer:
 
-- `submission.mode` may be `public` or `private` and is edited in the **Submission** panel; private relays are checked against the selected chain before they are saved. The mode cannot change while a pending transaction sent under the current mode awaits recovery, because recovery resubmits with the saved delivery policy. ETH-funded stale-price requests use the same signed-transaction delivery policy as other actions.
+- `submission.mode` may be `public` or `private` and is edited in the **Submission** panel; private relays are checked against the selected chain before they are saved. The mode cannot change while a pending transaction sent under the current mode awaits recovery, because recovery resubmits with the saved delivery policy. Portfolio transactions use the same signed-transaction delivery policy.
 - `privateKey` is stored in the local operator file only when explicitly saved. The dashboard never returns it.
 
-## Universe and pool selection
+## Universe and portfolio selection
 
-The universe browser walks Zoltar's deployed child-universe tree from universe zero, including deployed universes that do not have a security pool yet. The bot monitors the chain profile's `selectedPools`, the direct child deployments of those pools, and deployed pools resolved from `desiredPools`; the monitor does not scan unrelated pools for vaults or liquidation candidates. On the **Pool work** page, the **All pools** tab automatically browses the active chain's factory registry in pages of 12, including pools you have not selected. Cards show the question, universe, security multiplier, pool-held REP, and vault count. Use **Refresh** to reload the listing, counts, and metrics. **Catalog snapshot** shows the last successful catalog snapshot in UTC and how long ago it was taken; a failed refresh preserves that snapshot.
+Use the **Portfolios** page to select a portfolio address and universe. Selection does not approve that universe or enable execution. The bot authenticates each selection against the canonical factory and universe registry before using its capital state.
 
-Pool deployment date comes from the factory deployment event’s block timestamp. Question start date and Question end date come from the question’s stored time bounds. All three dates use UTC; unavailable dates are marked as such. Optional deployment-date discovery has a 1.5-second deadline, so a stalled historical RPC cannot hold up the pool catalog. Verified dates are cached per chain, factory, and pool, with their deployment block hash checked before reuse.
-
-To find a known pool, paste its full address into **Search by pool address** in the **All pools** tab, then select **Add to supported** on the matching card. Search checks the active chain’s factory, including pools outside the current page. Clear the search to return to browsing. Switch to **Monitored pools** to filter the same cards to pools the bot is currently monitoring. Expand **Monitoring details** for oracle freshness, vault balances, and liquidation targets. These cards and monitoring values come from the bot snapshot and remain visible when catalog discovery fails; catalog dates are optional enrichment.
-
-Use **Add to supported** on a card to save a pool to the chain profile's `selectedPools`, or **Remove from supported** to remove it. This does not approve its universe or change execution mode. A pool with unavailable metrics remains visible. Use **Refresh** if discovery fails. For an existing or undeployed origin pool, you can instead add its universe, question, multiplier, and priority-fee tuple to `desiredPools` in **Market and pool configuration**. The bot resolves the canonical factory address and selects it when present; when `allowAutomaticPoolCreation` is enabled, it deploys a missing desired pool before continuing liquidation. Selecting a pool enables candidate evaluation and execution only while its universe is also approved and its system state is operational. The universe table shows parent and fork-outcome lineage, operational and forked pool counts, pool selection, and whether a bot vault can migrate into that universe.
-
-The canonical Zoltar contract identifies the universe registry, and `approvedUniverses` is the operator's explicit truth policy, shared with the arbitrager. The liquidator and arbitrager example configurations both start with no approvals. Select the root or truthful child in the universe UI; approvals are saved per network profile and REP addresses come from the canonical universe registry. A root universe or fork-created child remains inert until it is approved. For a given forked parent universe, the bot rejects configuration that approves more than one direct child outcome. This prevents an ambiguous vault route. Universe approval does not enable every pool in that universe: both the universe and each individual pool must be selected before the bot liquidates or maintains its vault there. Every discovered pool's REP token must match the configured Zoltar registry's token for that universe. A mismatch fails the scan instead of applying the truth policy to another universe tree; this also supports the external genesis REP token, which does not expose a Zoltar accessor.
-
-When `allowAutomaticVaultMigrations` is enabled, the bot looks for a selected forked parent pool where its signer has non-escrowed vault accounting and one deployed direct child universe is approved. During the protocol's eight-week migration window it calls the parent's `SecurityPoolForker.migrateVault(parent, outcomeIndex)`. The migration moves the signer's REP backing units and capacity ownership to the chosen child and atomically creates the child security pool when it does not exist. Claimable fees remain redeemable from the parent, while escalation accounting follows its separate migration path described in the [canonical migration design](../../docs/explanation/statoblast.html#forks-migration). The bot does not split a parent vault across outcomes. Once the child becomes operational, normal vault maintenance and liquidation continue there because the next registry scan inherits the selected parent pool onto its approved child. A missing approved child, closed migration window, empty vault, active staged operation involving the bot vault, disabled migration setting, or conflicting child approval produces no migration.
-
-Pool-selection inheritance is a configuration reconciliation and remains active in dry-run mode and when automatic vault migrations are disabled. Only the on-chain vault movement is controlled by `allowAutomaticVaultMigrations`.
-
-The bot bootstraps every registered vault, then keeps an incremental index of vaults with REP backing or REP committed to a dispute. In steady state, later scans reread only newest registry entries and vaults named by `VaultAccountingCheckpoint` or `VaultEscrowUpdated`. A `TruthAuctionHaircutApplied` event refreshes every retained dispute-staked vault; reorg recovery rebuilds the full registry. An adaptive bounded log scan catches up after long outages. Current pool totals and price recompute backing, open interest, health, and liquidation candidates locally for every retained vault. Vaults whose pool-held and dispute-staked REP both reach zero are evicted until a later event reactivates them. Empty registrations are discarded after inspection, so they do not consume steady-state memory or hide older liquidation opportunities.
+Approve the root or truthful child universe in Settings. Approvals are saved per chain profile; more than one direct child outcome of the same fork cannot be approved. Both selection and universe approval are required for acquisitions. The bot does not choose fork outcomes or migrate positions automatically: use the Statoblast interface for those transactions, then add the chosen child to the bot's managed selections.
 
 ## Portfolio operation
 
-Portfolio configuration is edited in the private operator JSON file. Pause the bot, stop its process, edit the file, and restart paused. The dashboard displays portfolio observations; its pool-selection controls configure standalone pools. Each selection is `{ "address": "0x…", "universeId": "0" }` in `selectedPortfolios`, with at most 16 selections. A selection does not approve its universe, arm live mode, or enable automation. Every default portfolio exposure and funding limit is zero, `allowFundedTakeovers` is false, and the example remains paused with dry-run execution and no approved universes.
+Select addresses and universes on the **Portfolios** page, then edit limits and automation under **Portfolio policy** in Settings. The saved file represents each selection as `{ "address": "0x…", "universeId": "0" }` in `selectedPortfolios`, with at most 16 selections. Every default portfolio exposure and funding limit is zero, `allowFundedTakeovers` is false, and the example remains paused with dry-run execution and no approved universes.
 
 The monitor checks the constructor seed's canonical factory origin, portfolio factory and Zoltar, capital authority, commitment-index authority, universe, and canonical REP token. It authenticates auction controllers, engines, individual vaults, and the capital auction delegate before exposing winning bids as targets. All reads, including owner and wallet balances, use one confirmed block; reorgs invalidate the snapshot. Live scans and final execution reads require the configured RPC quorum. A missing or unreadable managed scope blocks acquisitions instead of being counted as zero exposure.
 
@@ -113,7 +97,7 @@ Position discovery reads at most `maximumPositionsPerScan` historical IDs per ma
 
 Previously selected portfolio/universe pairs remain in durable exposure history even after deselection, including unapproved or forked universes. Their owner principal is reread before every acquisition. An exported parent requires its authenticated chosen child universe to be included in managed scope history; add that child to `selectedPortfolios` before continuing. This does not approve the child for execution. The total cap covers **managed portfolio principal in the signer's direct ledger accounts**, including lazily released principal. It cannot discover manually funded, never-selected portfolios or include principal owned by separate auction vault accounts. Add all directly managed scopes before enabling automation. The bot does not bid or manage those separate vault accounts, and excludes vaults controlled by its signer from external-profit candidates. History is limited to 64 explicitly managed scopes and is never silently evicted. Keep the durable state file when upgrading or restarting. Scope-history exhaustion requires operator reconciliation; there is no automatic pruning. Each chain profile has separate history. Do not use another process or wallet to submit transactions for the same signer while this operator is armed.
 
-To enable funded takeovers, first set the owner's exact health target through the Statoblast portfolio interface, select the portfolio and approve its universe, configure positive principal, commitment and REP funding limits below, and review dry-run candidates. Set `portfolioPolicy.allowFundedTakeovers` explicitly, then use the existing Go live and Resume controls. Independent market evidence, price freshness, signer locking, pending recovery, and gas ceilings still apply. Portfolio settings are independent of the standalone `allowAutomaticDeposits` and vault-health settings.
+To enable funded takeovers, first set the owner's exact health target through the Statoblast portfolio interface, select the portfolio and approve its universe, configure positive principal, commitment and REP funding limits below, and review dry-run candidates. Enable **Funded takeovers and earnings claims**, then use the existing Go live and Resume controls. Independent market evidence, price freshness, signer locking, pending recovery, and gas ceilings still apply. The saved policy is also the policy used by execution; editing the bot target does not change the owner’s on-chain health target.
 
 | `portfolioPolicy` key | Default | Meaning |
 | --- | --- | --- |
@@ -144,7 +128,7 @@ The liquidator uses the shared market observer described under [independent mark
 
 **Where the settings live.** Put root REP sources in `centralizedMarkets` with `assetSymbol: "REP"`. The root asset address and chain come from the selected network's deployment manifest; saved settings omit those two fields and cannot override them. Put child REP configurations in `childMarketConfigurations`, including each child's exact `assetAddress`, `assetChainId`, and `assetSymbol: "REP"`. Child assets must match the selected chain and the discovered universe REP, and each child stays fail-closed until its own market history is reliable.
 
-**What the guard gates.** The guarded estimate never replaces the coordinator price in protocol arithmetic. In required mode, liquidation and price-dependent vault maintenance recheck evidence age after preparation and immediately before persisting each signed intent, including after approvals or funding transactions. Migration, transaction recovery, and price-independent fee redemption continue, because they do not rely on a REP market price. In advisory mode, healthy independent evidence can still reject an outlying coordinator price.
+**What the guard gates.** The guarded estimate never replaces the coordinator price in protocol arithmetic. In required mode, price-dependent portfolio takeovers recheck evidence age after preparation and immediately before persisting each signed intent, including after approvals or funding transactions. Transaction recovery and price-independent earnings claims continue, because they do not rely on a REP market price. In advisory mode, healthy independent evidence can still reject an outlying coordinator price.
 
 **DEX sources.** The liquidator's DEX group consists only of the explicit constant-product pairs in `venueConsensus.dexSources`. The arbitrager dynamically observes authenticated V2, V3, and V4 deployments, but the liquidator has no configurable V3 or V4 source format.
 
@@ -162,11 +146,7 @@ Run that smoke check before enabling execution and after changing an adapter.
 
 ## Strategy controls
 
-The [`strategy` table](#strategy) lists every key with its range and example value. Three rules apply across them:
-
-- The protocol safety boundary is 10,000 bps. The top-up threshold must not exceed the target, and the withdrawal threshold must be above the target.
-- `maximumPerPoolRep` and `maximumTotalDeployedRep` bound liquidation acquisitions and every automatic maintenance deposit.
-- Stale full-close candidates are rejected because the target can add REP and the eventual oracle price is not bounded on-chain; that branch cannot guarantee the configured REP exposure limits.
+The Settings form saves `portfolioPolicy` together with the gas ceiling, wallet REP reserve, and log-recovery settings. Principal and commitment caps are acquisition limits; lowering them does not withdraw existing capital or change its on-chain health target. Disable **Funded takeovers and earnings claims** to stop new automated portfolio transactions. Pending signed intents still require transaction recovery.
 
 ## Configuration keys
 
@@ -183,13 +163,11 @@ The operator file is `version: 2`. A key is required unless the Default column g
 | `networkConfigured` | boolean | — | `true` when `connectivity` is present | absent | An unconfigured file must be paused and dry-run. |
 | `connectivity` | object | [shared](../README.md#connectivity) | absent until saved | absent | RPC endpoints and the agreement requirement. |
 | `approvedUniverses` | string array | decimal universe ids below 2^248 | required | `[]` | The operator's truth policy. |
-| `selectedPools` | address array | — | required | `[]` | Pools the bot evaluates and maintains a vault in. |
-| `desiredPools` | array | see below | `[]` | `[]` | Origin pools resolved through the factory. |
+| `selectedPortfolios` | array | up to 16 address/universe pairs | `[]` | `[]` | Portfolios the bot monitors. |
+| `portfolioPolicy` | object | see [Portfolio operation](#portfolio-operation) | conservative defaults | absent | Portfolio acquisition and scanning limits. |
 | `centralizedMarkets` | object | [shared](../README.md#centralizedmarkets-keys) | required | no sources | Root REP market policy. |
 | `childMarketConfigurations` | array | each entry uses the shared keys plus `assetAddress` and `assetChainId` | `[]` | `[]` | Child-universe REP market policies. |
 | `submission` | object | [shared](../README.md#submission) | required | public | Delivery mode and relays. |
-
-Each `desiredPools` entry has four required fields: `universeId` (decimal string below 2^248), `questionId` and `initialReportPriorityFeeAttoEthPerGas` (decimal uint256 strings), and `statoblastSecurityMultiplierBps` (a number above `10000`). Duplicate entries are rejected.
 
 ### `runtime`
 
@@ -207,49 +185,20 @@ Each `desiredPools` entry has four required fields: `universeId` (decimal string
 
 ### `strategy`
 
-Every key is required except `allowAutomaticPoolCreation`.
+Both keys are required. Portfolio amounts and limits are documented under [Portfolio operation](#portfolio-operation).
 
-| Key | Type | Range | Example | Effect |
-| --- | --- | --- | --- | --- |
-| `allowAutomaticDeposits` | boolean | — | `true` | Permits REP deposits into the bot vault. When `false`, a candidate that requires REP is rejected. |
-| `allowAutomaticWithdrawals` | boolean | — | `true` | Permits surplus REP withdrawals. |
-| `allowAutomaticVaultMigrations` | boolean | — | `true` | Permits the fork migration described under [universe and pool selection](#universe-and-pool-selection). |
-| `allowAutomaticPoolCreation` | boolean | — | `false` | Deploys a missing desired pool before continuing liquidation. Defaults to `false` when absent. |
-| `candidatePriority` | string | `largest-bonus`, `largest-debt`, or `lowest-top-up` | `largest-bonus` | Ranks liquidation candidates by bonus value, by debt moved, or by the smallest required top-up. |
-| `minimumLiquidationDebtEth` | decimal string | not above the maximum | `"1"` | Smallest ETH debt requested from a target. |
-| `maximumLiquidationDebtEth` | decimal string | — | `"25"` | Largest ETH debt requested from a target. |
-| `minimumRewardValueEth` | decimal string | — | `"0.02"` | Filters the fixed-bonus value before gas. |
-| `maximumGasCostEth` | decimal string | — | `"0.02"` | Caps the padded EIP-1559 gas limit actually signed for every automated action. |
-| `maximumOracleRequestCostEth` | decimal string | — | `"0.02"` | Caps fresh-price bounty funding. |
-| `maximumPerPoolRep` | decimal string | not above `maximumTotalDeployedRep` | `"10000"` | Bounds liquidation acquisitions and automatic maintenance deposits in one pool. |
-| `maximumTotalDeployedRep` | decimal string | — | `"25000"` | Bounds them across all pools. |
-| `walletReserveRep` | decimal string | — | `"100"` | REP that remains outside pools. |
-| `minimumRepWithdrawalRep` | decimal string | — | `"10"` | Avoids small staged withdrawals. |
-| `redeemFeesAboveEth` | decimal string | — | `"0.01"` | Controls ETH fee redemption. |
-| `fallbackRepPerEthPrice` | decimal string | — | `"0"` | Used only for a never-seeded stale coordinator. |
-| `stalePriceFundingBufferBps` | number | 10,000–1,000,000 | `15000` | Pre-funds the liquidator vault before a stale-price operation is queued. |
-| `stagedOperationValidForSeconds` | number | 1–300 | `240` | Validity window passed to each staged liquidation or withdrawal request. |
-| `vaultTopUpHealthBps` | number | 10,000–1,000,000, not above the target | `11000` | Triggers maintenance. |
-| `vaultTargetHealthBps` | number | 10,001–1,000,000 | `12500` | Post-deposit and post-liquidation target. |
-| `vaultWithdrawHealthBps` | number | 10,001–1,000,000, above the target | `15000` | Gates surplus withdrawals. |
+| Key | Type | Example | Effect |
+| --- | --- | --- | --- |
+| `maximumGasCostEth` | Non-negative decimal string | `"0.02"` | Caps the padded EIP-1559 gas budget for each automated transaction. |
+| `walletReserveRep` | Non-negative decimal string | `"100"` | REP retained outside the portfolio when funding a takeover. |
 
 ## Execution lifecycle
 
-Each cycle performs an authoritative factory read, loads current positions from the known-vault registry, computes exact protocol floor and rounding behavior, and selects at most one action:
-
-1. Migrate an applicable selected parent vault into its one approved child universe.
-2. Top up an existing bot vault that is approaching its safety boundary.
-3. Withdraw REP that is safely above the configured threshold.
-4. Redeem accrued ETH fees.
-5. Pre-fund a liquidation vault and submit the best liquidation candidate.
-
-The bot uses the self-receiving route: the signer is both operator and receiver vault, the target is distinct, and the approval ID is zero. The operator therefore pays gas and any oracle costs and its own receiver vault receives the debt, capacity ownership, and REP award. The contracts also support separately authorized receiver vaults, but this bot does not install or consume delegated receiver approvals.
+Each cycle authenticates selected portfolio state, advances bounded position and auction-bid discovery, and evaluates funded takeovers and earnings claims. Execution rechecks the selected target, receiver, price evidence, exposure, and wallet reserves. Funding and approvals are separate transactions followed by fresh checks before takeover. The bot does not bid in truth auctions or manage separate auction vault accounts.
 
 Transaction intent and outcomes are written to `runtime.stateFile`. The activity journal is restored on restart. A signed intent, nonce, serialized transaction, submission block, and validity ceiling are fsynced before relay or RPC submission. Restart recovery quorum-checks receipts and nonce state. It never rebroadcasts an ambiguous price-dependent intent using stale market evidence. Public intents remain blocked until the original receipt appears or a finalized replacement or cancellation proves that the same signer nonce was consumed. Private intents expire only after their relay validity ceiling plus twelve canonical confirmation blocks. Non-price-dependent intents can resubmit the exact durable signed transaction while it remains viable. Transport failures enter `connectivity-degraded`, remain visible, and retry with bounded backoff. Safety failures such as contradictory chain state or execution evidence still pause automatic execution until operator review.
 
 For a replaced or canceled public intent, pause the bot and use **Transaction recovery** to enter the finalized replacement hash. The replacement must have the same sender and nonce, quorum-confirmed receipt evidence, a canonical receipt block, and twelve confirmations. Successful reconciliation is recorded in the durable activity journal. There is deliberately no unsafe “forget transaction” action.
-
-When a coordinator price is stale, the bot wraps and approves the buffered minimum WETH report amount, approves the matching REP amount, and funds a staged liquidation only if the request remains within configured limits. Settlement and execution of that staged operation remain visible in subsequent pool scans. The queued operation ID is persisted across restarts and reconciled against quorum event reads; a failed execution or oracle-recovery consumption pauses execution and is recorded instead of being treated as a successful liquidation. Active staged liquidations are paged from the coordinator, reserved in REP exposure accounting, and excluded from candidate selection until consumed.
 
 ## Development
 
@@ -261,7 +210,4 @@ The reusable Ethereum, connectivity, quorum, block synchronization, signer gate,
 
 ## Upgrading
 
-Configuration written by earlier releases still loads:
-
-- **Operator file `version: 1`.** Its string `desiredPools[].statoblastSecurityMultiplierBps` values become JSON numbers, and the next save writes version 2.
-- **Saved deployment address fields.** They are ignored and removed when settings are saved; addresses come from the selected network's manifest.
+The operator file must use `version: 2`. Deployment addresses come from the selected network's manifest. Removed standalone-pool settings are ignored and disappear on the next save; configure `selectedPortfolios` and `portfolioPolicy` explicitly before enabling portfolio automation. Keep the durable state file and chain profiles so managed exposure and pending transactions remain recoverable.

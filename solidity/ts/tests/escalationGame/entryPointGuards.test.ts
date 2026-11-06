@@ -226,6 +226,13 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond * 2n)
 
+		for (const [outcome, expected] of [
+			[QuestionOutcome.Yes, 2n],
+			[QuestionOutcome.No, 0n],
+			[QuestionOutcome.None, 0n],
+		] as const) {
+			assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'getDepositsByOutcomeLength', args: [outcome] }), expected)
+		}
 		const deposits = await getEscalationGameDeposits(client, escalationGame, QuestionOutcome.Yes)
 		const depositPage = deposits.slice(1, 6)
 		const maxCountDepositPage = await client.readContract({

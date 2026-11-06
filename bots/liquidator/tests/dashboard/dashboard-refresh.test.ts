@@ -1,3 +1,4 @@
+import { parsePortfolioPolicy, serializePortfolioPolicy } from '../../src/config/portfolio-policy.ts'
 import { decodeSnapshot, type MarketSourceRow } from '../../src/dashboard/api-validation.ts'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { Browser } from 'happy-dom'
@@ -50,6 +51,7 @@ type DashboardConfiguration = {
 	runtime: { execute: boolean; historicalLogRecovery: boolean; logLookbackBlocks: number }
 	selectedPortfolios: { address: string; universeId: string }[]
 	strategy: Record<string, string | number | boolean>
+	portfolioPolicy: ReturnType<typeof serializePortfolioPolicy>
 	submission: { minimumBundleRelaySuccesses: number; mode: 'private' | 'public'; relayUrls: string[] }
 }
 
@@ -80,7 +82,8 @@ function configuration(approvedUniverses = ['1'], network?: DashboardConfigurati
 		networkConfigured: network !== undefined,
 		runtime: { execute: false, historicalLogRecovery: false, logLookbackBlocks: 256 },
 		selectedPortfolios: [{ address: '0x1111111111111111111111111111111111111111', universeId: '0' }],
-		strategy: {},
+		strategy: { ...example.strategy },
+		portfolioPolicy: serializePortfolioPolicy(parsePortfolioPolicy(undefined)),
 		submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] },
 	}
 }
@@ -1317,8 +1320,8 @@ describe('liquidator go-live settings', () => {
 			await Bun.sleep(10)
 			review = page.window.document.querySelector('.operator-confirm-dialog')
 		}
-		expect(review?.textContent).toContain('log lookback blocks48 blocks→64 blocks')
-		expect(review?.textContent).toContain('historical log recoveryEnabled→Disabled')
+		expect(review?.textContent).toContain('Latest log window48 blocks→64 blocks')
+		expect(review?.textContent).toContain('Historical log recoveryEnabled→Disabled')
 	})
 
 	test('rejects an invalid liquidation limit before opening the strategy review', async () => {
@@ -1326,13 +1329,13 @@ describe('liquidator go-live settings', () => {
 		saved.strategy = { ...example.strategy }
 		const page = await dashboard(saved, state())
 		const form = page.window.document.getElementById('strategy-form')
-		const minimum = page.window.document.querySelector('#strategy-form input[name="minimumLiquidationDebtEth"]')
+		const minimum = page.window.document.querySelector('#strategy-form input[name="maximumPrincipalRep"]')
 		if (!(form instanceof page.window.HTMLFormElement) || !(minimum instanceof page.window.HTMLInputElement)) throw new Error('Expected strategy controls')
 		minimum.value = '26'
 		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
 		await Bun.sleep(20)
 		expect(page.window.document.querySelector('.operator-confirm-dialog')).toBeNull()
-		expect(page.window.document.getElementById('strategy-status')?.textContent).toContain('Minimum liquidation debt cannot exceed the maximum')
+		expect(page.window.document.getElementById('strategy-status')?.textContent).toContain('Portfolio principal limit exceeds total portfolio principal limit')
 	})
 
 	test('strategy review includes units for ETH, REP, and bps changes', async () => {
@@ -1344,7 +1347,7 @@ describe('liquidator go-live settings', () => {
 		for (const [name, value] of [
 			['maximumGasCostEth', '0.03'],
 			['walletReserveRep', '120'],
-			['vaultTargetHealthBps', '13000'],
+			['targetHealthFactorBps', '13000'],
 		] as const) {
 			const input = form.querySelector(`[name="${name}"]`)
 			if (!(input instanceof page.window.HTMLInputElement)) throw new Error(`Expected ${name} input`)
@@ -1358,8 +1361,26 @@ describe('liquidator go-live settings', () => {
 		}
 		expect(review?.textContent).toContain('0.02 ETH→0.03 ETH')
 		expect(review?.textContent).toContain('100 REP→120 REP')
-		expect(review?.textContent).toContain('12500 bps→13000 bps')
+		expect(review?.textContent).toContain('15000 bps→13000 bps')
 		expect(review?.textContent).not.toContain('decimal places')
+	})
+
+	test('saves the reviewed portfolio limits in the executor policy', async () => {
+		const page = await dashboard(mainnetConfiguration(), state())
+		const form = page.window.document.getElementById('strategy-form')
+		if (!(form instanceof page.window.HTMLFormElement)) throw new Error('Missing strategy form')
+		for (const [name, value] of Object.entries({ maximumPrincipalRep: '5', maximumTotalPrincipalRep: '10', maximumCommitmentEth: '2', maximumOwnFundingRep: '3' })) {
+			const input = form.querySelector(`[name="${name}"]`)
+			if (!(input instanceof page.window.HTMLInputElement)) throw new Error(`Missing ${name}`)
+			input.value = value
+		}
+		const enabled = form.querySelector('[name="allowFundedTakeovers"]')
+		if (!(enabled instanceof page.window.HTMLInputElement)) throw new Error('Missing opt-in')
+		enabled.checked = true
+		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		await page.confirmOperatorAction()
+		for (let attempt = 0; attempt < 100 && page.strategyRequests.length === 0; attempt++) await Bun.sleep(10)
+		expect(page.strategyRequests).toEqual([expect.objectContaining({ portfolioPolicy: expect.objectContaining({ allowFundedTakeovers: true, maximumPrincipalRep: '5', maximumTotalPrincipalRep: '10', maximumCommitmentEth: '2', maximumOwnFundingRep: '3' }) })])
 	})
 
 	test('rejects an amount with more than 18 decimal places before opening strategy review', async () => {
@@ -1812,9 +1833,9 @@ describe('liquidator dashboard operator safeguards', () => {
 
 	test('resume preflight names the saved automatic actions instead of unsaved form edits', async () => {
 		const saved = mainnetConfiguration()
-		saved.strategy = { ...example.strategy, allowAutomaticDeposits: true, allowAutomaticPoolCreation: false, allowAutomaticVaultMigrations: false, allowAutomaticWithdrawals: true }
+		saved.portfolioPolicy = { ...saved.portfolioPolicy, allowFundedTakeovers: true, maximumPrincipalRep: '1000', maximumTotalPrincipalRep: '1000', maximumCommitmentEth: '100' }
 		const page = await dashboard(saved, state(undefined, [], { execute: true, paused: true }))
-		for (const name of ['allowAutomaticDeposits', 'allowAutomaticWithdrawals']) {
+		for (const name of ['allowFundedTakeovers']) {
 			const toggle = control(page, `#strategy-form input[name="${name}"]`, page.window.HTMLInputElement)
 			toggle.checked = false
 			toggle.dispatchEvent(new page.window.Event('change', { bubbles: true }))
@@ -1822,7 +1843,7 @@ describe('liquidator dashboard operator safeguards', () => {
 		control(page, '#pause-button', page.window.HTMLButtonElement).click()
 		await page.waitUntilComplete()
 		const preflight = page.window.document.getElementById('resume-preflight')?.textContent ?? ''
-		expect(preflight).toContain('Automatic actions enabled2 · REP deposits, REP withdrawals')
+		expect(preflight).toContain('Automatic actions enabled2 · funded takeovers, earnings claims')
 		expect(preflight).toContain('unsaved strategy edits are not applied')
 	})
 

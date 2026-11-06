@@ -29,6 +29,7 @@ test('completed setup preserves the four transaction controls in their original 
 	source.setSetupStage(4n)
 	await act(() => render(<PortfoliosSection parameters={parameters} enabled environmentKey={1} activeUniverseId={0n} />, view.container))
 	await waitFor(() => expect(view.container.textContent).toContain(copy.prepareProgress(4)))
+	expect(setup.textContent).not.toContain(copy.prepareHint)
 	expect(setup.isConnected).toBe(true)
 	expect([...setup.querySelectorAll('button')]).toEqual(buttons)
 	expect(buttons.map(button => button.disabled)).toEqual([true, true, true, true])

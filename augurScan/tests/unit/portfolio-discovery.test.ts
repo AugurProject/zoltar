@@ -7,17 +7,19 @@ const factory = getAddress('0x1111111111111111111111111111111111111111')
 const pool = getAddress('0x2222222222222222222222222222222222222222')
 const portfolio = getAddress('0x3333333333333333333333333333333333333333')
 const controller = getAddress('0x4444444444444444444444444444444444444444')
+const capital = getAddress('0x7777777777777777777777777777777777777777')
 const emitter = { address: factory, kind: 'securityPoolFactory', label: 'Question factory', provenance: 'test' }
-const event = { name: 'DeploySecurityPool', status: 'decoded' as const, arguments: { securityPool: pool }, summary: 'Question created' }
+const event = { name: 'DeploySecurityPool', status: 'decoded' as const, arguments: { securityPool: pool, universeId: 0n }, summary: 'Question created' }
 const reader =
 	(overrides: Readonly<Record<string, unknown>> = {}): StateRead =>
 	async (address, abi, name, args = []) => {
 		encodeFunctionData({ abi, functionName: name, args })
-		const values: Readonly<Record<string, unknown>> = { getSecurityPoolPortfolio: portfolio, factory, forkController: controller, portfolio, ...overrides }
+		const values: Readonly<Record<string, unknown>> = { getSecurityPoolPortfolio: portfolio, factory, forkController: controller, portfolio, capitalLedger: capital, universeId: 0n, ...overrides }
 		if (name === 'getSecurityPoolPortfolio') {
 			expect(address).toBe(factory)
 			expect(args).toEqual([pool])
-		} else expect(address).toBe(name === 'portfolio' ? controller : portfolio)
+		} else if (name === 'portfolio') expect([controller, capital]).toContain(address)
+		else expect(address).toBe(name === 'universeId' ? capital : portfolio)
 		if (!(name in values)) throw new Error(`Unexpected discovery read ${name}`)
 		return values[name]
 	}
@@ -26,6 +28,7 @@ test('question factory deployment discovers authenticated portfolio and shared f
 	expect(await discoverPortfolioEventDependencies(emitter, event, reader())).toEqual([
 		{ address: portfolio, kind: 'securityPoolPortfolio', label: 'Security Portfolio' },
 		{ address: controller, kind: 'securityPoolPortfolioForkCoordinator', label: 'Portfolio Fork Coordinator' },
+		{ address: capital, kind: 'securityPoolCapitalLedger', label: 'Portfolio Capital Ledger' },
 	])
 })
 
@@ -81,5 +84,20 @@ for (const [name, value, error] of [
 			return values[functionName]
 		}
 		await expect(discoverPortfolioEventDependencies({ ...emitter, address: controller, kind: 'securityPoolPortfolioForkCoordinator' }, { ...event, name: 'BranchStarted', arguments: { universeId: '2' } }, read)).rejects.toThrow(error)
+	})
+}
+
+test('universe preparation discovers authenticated capital custody', async () => {
+	expect(await discoverPortfolioEventDependencies({ ...emitter, address: portfolio, kind: 'securityPoolPortfolio' }, { ...event, name: 'UniversePrepared', arguments: { universeId: 0n, capitalLedger: capital } }, reader())).toEqual([
+		{ address: capital, kind: 'securityPoolCapitalLedger', label: 'Portfolio Capital Ledger' },
+	])
+})
+for (const [name, value] of [
+	['capitalLedger', zeroAddress],
+	['portfolio', pool],
+	['universeId', 1n],
+] as const) {
+	test(`rejects mismatched capital ${name}`, async () => {
+		await expect(discoverPortfolioEventDependencies({ ...emitter, address: portfolio, kind: 'securityPoolPortfolio' }, { ...event, name: 'UniversePrepared', arguments: { universeId: 0n, capitalLedger: capital } }, reader({ [name]: value }))).rejects.toThrow('capital')
 	})
 }

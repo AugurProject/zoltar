@@ -123,7 +123,7 @@ export function PortfolioQuestionWorkspace({ accountState, parameters, deploymen
 				{loading && <EmptyState title={copy.loadingQuestions} />}
 				{!loading && questions.filter(question => question.universeId === universeId).length === 0 && <EmptyState title={copy.noRegisteredQuestions} detail={copy.registerQuestionsHint} actions={<a href='#/portfolios'>{copy.openPortfolios}</a>} />}
 				{!loading && questions.filter(question => question.universeId === universeId).length > 0 && (
-					<div className='table-wrap'>
+					<div className='portfolio-questions-table' role='region' aria-label={copy.portfolioQuestions} tabIndex={0}>
 						<table>
 							<thead>
 								<tr>

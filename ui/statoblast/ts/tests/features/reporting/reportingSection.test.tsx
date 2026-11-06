@@ -1,3 +1,5 @@
+import { getRuntimeNetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { InheritedReporterClaims } from '@zoltar/ui-statoblast-shared/features/reporting/components/InheritedReporterClaims.js'
 import * as pricingCopy from '@zoltar/ui-core-shared/copy/pricing.js'
 import { formatReportingDeadline, getViewerStatusSentence } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingViewerStatus.js'
 import { createMarketDetails as marketDetailsFixture } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
@@ -2825,5 +2827,32 @@ describe('ReportingSection', () => {
 				expect(within(document.body).getAllByRole('button', { name: fixLabel })).toHaveLength(1)
 				expectWalletFixDescribesAction(document.body, /^(Settle selected Yes|Claim .* REP from Yes|Clear Yes deposits)/, fixLabel)
 			})
+	})
+})
+
+describe('InheritedReporterClaims', () => {
+	installDomTestLifecycle()
+	test('inherited claims keep preparation and settlement separate and require a finalized winning outcome', async () => {
+		const identity = { escalationGame: zeroAddress, outcome: 'yes' as const, snapshotRoot: `0x${'ab'.repeat(32)}` as const, snapshotLeafCount: 1n, amountAttoRep: rep(1n), cumulativeAmountAttoRep: rep(1n), depositor: zeroAddress, parentDepositIndex: 7n, leafIndex: 0n }
+		const parameters = { accountAddress: zeroAddress, onTransactionRequested: () => undefined, onTransactionSubmitted: () => undefined, onTransactionFinished: () => undefined, onTransactionPresented: () => undefined, refreshState: async () => undefined }
+		const details = createReportingDetails()
+		details.sides[1]?.importedUserDeposits.push({ ...identity, claimIdentity: identity, claimCheckpoint: { nextSourceGame: zeroAddress, pendingSteps: 1n, complete: false, ready: false } })
+		const view = await renderIntoDocument(<InheritedReporterClaims parameters={parameters} accountState={createAccountState({ chainId: getRuntimeNetworkProfile().chainIdHex })} details={details} onRefresh={async () => undefined} />)
+		const buttons = [...view.container.querySelectorAll('button')]
+		expect(buttons).toHaveLength(2)
+		expect(buttons.map(button => button.disabled)).toEqual([false, true])
+		const deposit = details.sides[1]?.importedUserDeposits[0]
+		if (deposit === undefined) throw new Error('Missing inherited claim')
+		deposit.claimCheckpoint = { nextSourceGame: zeroAddress, pendingSteps: 0n, complete: true, ready: true }
+		await act(() => render(<InheritedReporterClaims parameters={parameters} accountState={createAccountState({ chainId: getRuntimeNetworkProfile().chainIdHex })} details={{ ...details }} onRefresh={async () => undefined} />, view.container))
+		expect([...view.container.querySelectorAll('button')]).toEqual(buttons)
+		expect(buttons.map(button => button.disabled)).toEqual([true, true])
+		await act(() => render(<InheritedReporterClaims parameters={parameters} accountState={createAccountState({ chainId: getRuntimeNetworkProfile().chainIdHex })} details={{ ...details, settlementState: 'resolved', questionOutcome: 'no' }} onRefresh={async () => undefined} />, view.container))
+		expect(buttons.map(button => button.disabled)).toEqual([true, true])
+		await act(() => render(<InheritedReporterClaims parameters={parameters} accountState={createAccountState({ chainId: getRuntimeNetworkProfile().chainIdHex })} details={{ ...details, settlementState: 'resolved', questionOutcome: 'yes' }} onRefresh={async () => undefined} />, view.container))
+		expect(buttons.map(button => button.disabled)).toEqual([true, false])
+		await act(() => render(<InheritedReporterClaims parameters={parameters} accountState={createAccountState({ address: undefined })} details={{ ...details, settlementState: 'resolved', questionOutcome: 'yes' }} onRefresh={async () => undefined} />, view.container))
+		expect(buttons.every(button => button.disabled)).toBe(true)
+		await view.cleanup()
 	})
 })

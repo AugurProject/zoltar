@@ -1,6 +1,6 @@
 import { parsePortfolioPolicy, parsePortfolioSelections, serializePortfolioPolicy, type PortfolioPolicy, type PortfolioSelection } from './portfolio-policy.ts'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
-import { bigintToSafeNumber, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
 import { boolean, formatDecimalAmount, integer, parseDecimalAmount, record, nonemptyString as string } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { parseCentralizedMarketSettings, serializeCentralizedMarketSettings, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
@@ -11,33 +11,12 @@ import { parseApprovedUniverses } from '@zoltar/bot-shared/monitoring/universe-p
 import { resolve } from 'node:path'
 import { canonicalDeployment, parseRootMarketSettings, presetNetwork } from './canonical-deployment.ts'
 
-type CandidatePriority = 'largest-bonus' | 'largest-debt' | 'lowest-top-up'
-
 export type StrategySettings = {
-	allowAutomaticDeposits: boolean
-	allowAutomaticPoolCreation: boolean
-	allowAutomaticVaultMigrations: boolean
-	allowAutomaticWithdrawals: boolean
-	candidatePriority: CandidatePriority
-	fallbackRepPerEthPrice: bigint
 	maximumGasCostAttoEth: bigint
-	maximumLiquidationDebtAttoEth: bigint
-	maximumOracleRequestCostAttoEth: bigint
-	maximumAttoRepPerPool: bigint
-	maximumTotalDeployedRep: bigint
-	minimumLiquidationDebtAttoEth: bigint
-	minimumRepWithdrawalAttoRep: bigint
-	minimumRewardValueAttoEth: bigint
-	redeemFeesAboveAttoEth: bigint
-	stalePriceFundingBufferBps: bigint
-	stagedOperationValidForSeconds: bigint
-	vaultTargetHealthBps: bigint
-	vaultTopUpHealthBps: bigint
-	vaultWithdrawHealthBps: bigint
 	walletAttoRepReserve: bigint
 }
 
-/** Version 2 stores the desired-pool `statoblastSecurityMultiplierBps` as a JSON number like every other basis-point setting. */
+/** Operator settings use decimal strings for token amounts and numbers for basis points. */
 const SETTINGS_VERSION = 2
 
 export type OperatorSettings = {
@@ -87,41 +66,12 @@ function parseNetworkName(value: unknown): NetworkName {
 	throw new Error('network.name must be mainnet or sepolia')
 }
 
-function parseCandidatePriority(value: unknown): CandidatePriority {
-	if (value === 'largest-bonus' || value === 'largest-debt' || value === 'lowest-top-up') return value
-	throw new Error('strategy.candidatePriority is invalid')
-}
-
 export function parseStrategy(value: unknown): StrategySettings {
 	const strategy = record(value, 'strategy')
-	const parsed: StrategySettings = {
-		allowAutomaticDeposits: boolean(strategy['allowAutomaticDeposits'], 'strategy.allowAutomaticDeposits'),
-		allowAutomaticPoolCreation: strategy['allowAutomaticPoolCreation'] === undefined ? false : boolean(strategy['allowAutomaticPoolCreation'], 'strategy.allowAutomaticPoolCreation'),
-		allowAutomaticVaultMigrations: boolean(strategy['allowAutomaticVaultMigrations'], 'strategy.allowAutomaticVaultMigrations'),
-		allowAutomaticWithdrawals: boolean(strategy['allowAutomaticWithdrawals'], 'strategy.allowAutomaticWithdrawals'),
-		candidatePriority: parseCandidatePriority(strategy['candidatePriority']),
-		fallbackRepPerEthPrice: parseDecimalAmount(strategy['fallbackRepPerEthPrice'], 'strategy.fallbackRepPerEthPrice'),
+	return {
 		maximumGasCostAttoEth: parseDecimalAmount(strategy['maximumGasCostEth'], 'strategy.maximumGasCostEth'),
-		maximumLiquidationDebtAttoEth: parseDecimalAmount(strategy['maximumLiquidationDebtEth'], 'strategy.maximumLiquidationDebtEth'),
-		maximumOracleRequestCostAttoEth: parseDecimalAmount(strategy['maximumOracleRequestCostEth'], 'strategy.maximumOracleRequestCostEth'),
-		maximumAttoRepPerPool: parseDecimalAmount(strategy['maximumPerPoolRep'], 'strategy.maximumPerPoolRep'),
-		maximumTotalDeployedRep: parseDecimalAmount(strategy['maximumTotalDeployedRep'], 'strategy.maximumTotalDeployedRep'),
-		minimumLiquidationDebtAttoEth: parseDecimalAmount(strategy['minimumLiquidationDebtEth'], 'strategy.minimumLiquidationDebtEth'),
-		minimumRepWithdrawalAttoRep: parseDecimalAmount(strategy['minimumRepWithdrawalRep'], 'strategy.minimumRepWithdrawalRep'),
-		minimumRewardValueAttoEth: parseDecimalAmount(strategy['minimumRewardValueEth'], 'strategy.minimumRewardValueEth'),
-		redeemFeesAboveAttoEth: parseDecimalAmount(strategy['redeemFeesAboveEth'], 'strategy.redeemFeesAboveEth'),
-		stalePriceFundingBufferBps: BigInt(integer(strategy['stalePriceFundingBufferBps'], 'strategy.stalePriceFundingBufferBps', 10_000, 1_000_000)),
-		stagedOperationValidForSeconds: BigInt(integer(strategy['stagedOperationValidForSeconds'], 'strategy.stagedOperationValidForSeconds', 1, 300)),
-		vaultTargetHealthBps: BigInt(integer(strategy['vaultTargetHealthBps'], 'strategy.vaultTargetHealthBps', 10_001, 1_000_000)),
-		vaultTopUpHealthBps: BigInt(integer(strategy['vaultTopUpHealthBps'], 'strategy.vaultTopUpHealthBps', 10_000, 1_000_000)),
-		vaultWithdrawHealthBps: BigInt(integer(strategy['vaultWithdrawHealthBps'], 'strategy.vaultWithdrawHealthBps', 10_001, 1_000_000)),
 		walletAttoRepReserve: parseDecimalAmount(strategy['walletReserveRep'], 'strategy.walletReserveRep'),
 	}
-	if (parsed.minimumLiquidationDebtAttoEth > parsed.maximumLiquidationDebtAttoEth) throw new Error('Minimum liquidation debt cannot exceed the maximum')
-	if (parsed.vaultTopUpHealthBps > parsed.vaultTargetHealthBps) throw new Error('Top-up health must not exceed target health')
-	if (parsed.vaultTargetHealthBps >= parsed.vaultWithdrawHealthBps) throw new Error('Withdrawal health must exceed target health')
-	if (parsed.maximumAttoRepPerPool > parsed.maximumTotalDeployedRep) throw new Error('Per-pool REP limit cannot exceed the total deployed REP limit')
-	return parsed
 }
 
 export function parseSettings(value: unknown): OperatorSettings {
@@ -197,26 +147,7 @@ export function serializedSettings(settings: OperatorSettings, redactPrivateKey 
 		selectedPortfolios: settings.selectedPortfolios.map(selection => ({ address: selection.address, universeId: selection.universeId.toString() })),
 		portfolioPolicy: serializePortfolioPolicy(settings.portfolioPolicy),
 		strategy: {
-			allowAutomaticDeposits: settings.strategy.allowAutomaticDeposits,
-			allowAutomaticPoolCreation: settings.strategy.allowAutomaticPoolCreation,
-			allowAutomaticVaultMigrations: settings.strategy.allowAutomaticVaultMigrations,
-			allowAutomaticWithdrawals: settings.strategy.allowAutomaticWithdrawals,
-			candidatePriority: settings.strategy.candidatePriority,
-			fallbackRepPerEthPrice: formatDecimalAmount(settings.strategy.fallbackRepPerEthPrice),
 			maximumGasCostEth: formatDecimalAmount(settings.strategy.maximumGasCostAttoEth),
-			maximumLiquidationDebtEth: formatDecimalAmount(settings.strategy.maximumLiquidationDebtAttoEth),
-			maximumOracleRequestCostEth: formatDecimalAmount(settings.strategy.maximumOracleRequestCostAttoEth),
-			maximumPerPoolRep: formatDecimalAmount(settings.strategy.maximumAttoRepPerPool),
-			maximumTotalDeployedRep: formatDecimalAmount(settings.strategy.maximumTotalDeployedRep),
-			minimumLiquidationDebtEth: formatDecimalAmount(settings.strategy.minimumLiquidationDebtAttoEth),
-			minimumRepWithdrawalRep: formatDecimalAmount(settings.strategy.minimumRepWithdrawalAttoRep),
-			minimumRewardValueEth: formatDecimalAmount(settings.strategy.minimumRewardValueAttoEth),
-			redeemFeesAboveEth: formatDecimalAmount(settings.strategy.redeemFeesAboveAttoEth),
-			stalePriceFundingBufferBps: bigintToSafeNumber(settings.strategy.stalePriceFundingBufferBps, 'Stale-price funding buffer basis points'),
-			stagedOperationValidForSeconds: bigintToSafeNumber(settings.strategy.stagedOperationValidForSeconds, 'Staged-operation validity'),
-			vaultTargetHealthBps: bigintToSafeNumber(settings.strategy.vaultTargetHealthBps, 'Vault target health basis points'),
-			vaultTopUpHealthBps: bigintToSafeNumber(settings.strategy.vaultTopUpHealthBps, 'Vault top-up health basis points'),
-			vaultWithdrawHealthBps: bigintToSafeNumber(settings.strategy.vaultWithdrawHealthBps, 'Vault withdrawal health basis points'),
 			walletReserveRep: formatDecimalAmount(settings.strategy.walletAttoRepReserve),
 		},
 		submission: settings.submission,

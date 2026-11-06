@@ -108,6 +108,7 @@ export type Configuration = {
 	runtime: { execute: boolean; historicalLogRecovery: boolean; logLookbackBlocks: number }
 	selectedPortfolios: { address: string; universeId: string }[]
 	strategy: Record<string, string | number | boolean>
+	portfolioPolicy: Record<string, string | number | boolean>
 	submission: { minimumBundleRelaySuccesses: number; mode: 'private' | 'public'; relayUrls: string[] }
 }
 
@@ -189,6 +190,7 @@ const configuration = object<Configuration>({
 	networkConfigured: optional(booleanValue),
 	runtime: object<Configuration['runtime']>({ execute: booleanValue, historicalLogRecovery: booleanValue, logLookbackBlocks: numberValue }),
 	selectedPortfolios: array(object<{ address: string; universeId: string }>({ address: stringValue, universeId: stringValue })),
+	portfolioPolicy: dictionary((value): value is string | number | boolean => stringValue(value) || numberValue(value) || booleanValue(value)),
 	strategy: dictionary((value): value is string | number | boolean => stringValue(value) || numberValue(value) || booleanValue(value)),
 	submission: object<Configuration['submission']>({ minimumBundleRelaySuccesses: numberValue, mode: oneOf('private', 'public'), relayUrls: strings }),
 })
