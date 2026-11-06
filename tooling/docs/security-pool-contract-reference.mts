@@ -1,6 +1,6 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const securityPoolContractReference: ContractReference = {
-	compiledAbiFingerprint: 'c1c9adbd06a8691ffb97a0e091828a5b98d599e4633ecbd33a653e0fdf47689f',
+	compiledAbiFingerprint: 'e147bc36ab1d3343ca30c88666ec72d36b19246490e6dbd562bb117ec58f4e9f',
 	name: 'SecurityPool',
 	interactionNotes:
 		'All deployed question ledgers belong to a portfolio. Providers use its capital ledger for deposits, commitments, health targets, retirement and liquidation. Reporters fund separate reporter custody with wallet REP. Purchases use the registered portfolio route; traders redeem through the question ledger. There is no standalone vault, tick auction or operation queue.',

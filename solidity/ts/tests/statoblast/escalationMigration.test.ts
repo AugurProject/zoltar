@@ -136,7 +136,9 @@ describe('Statoblast: portfolio reporting carry and atomic claims', () => {
 	test('an unresolved continuation accepts a funded opposing challenge during its response window', async () => {
 		await prepareReports(false, 0n)
 		const child = await activate(sourcePool(), fixture.base.genesisUniverse, 1, true)
-		expect(await fixture.owner().readContract({ abi: gameArtifact.abi, address: child.game, functionName: 'getQuestionResolution' })).toBe(1n)
+		// The unrelated fork interrupted activation, so the child retains its zero-cost pending interval.
+		expect(await fixture.owner().readContract({ abi: gameArtifact.abi, address: child.game, functionName: 'totalCostAttoRep' })).toBe(0n)
+		expect(await fixture.owner().readContract({ abi: gameArtifact.abi, address: child.game, functionName: 'getQuestionResolution' })).toBe(3n)
 		await deposit(fixture.owner(), child.pool, 2, 200n * unit, child.universe)
 		const balances = await fixture.owner().readContract({ abi: gameArtifact.abi, address: child.game, functionName: 'getOutcomeBalancesAttoRep' })
 		expect(balances[2]).toBe(200n * unit)

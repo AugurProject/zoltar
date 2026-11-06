@@ -309,7 +309,7 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	/// @notice Forker-only: deploys the fork-continuation escalation game.
-	function initializeForkedEscalationGame(uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep, uint256 elapsedAtFork, BinaryOutcomes.BinaryOutcome fixedQuestionOutcome) external onlyForker {
+	function initializeForkedEscalationGame(uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep, int256 elapsedAtFork, BinaryOutcomes.BinaryOutcome fixedQuestionOutcome) external onlyForker {
 		require(address(escalationGame) == address(0), 'Game already initialized');
 		escalationGame = escalationGameFactory.deployEscalationGameFromFork(startBondAttoRep, nonDecisionThresholdAttoRep, elapsedAtFork, fixedQuestionOutcome);
 		emit EscalationGameSet(escalationGame);

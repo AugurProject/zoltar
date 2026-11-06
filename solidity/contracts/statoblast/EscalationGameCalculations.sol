@@ -32,11 +32,11 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 		if (forkContinuation) {
 			if (forkResumedAt == 0) return type(uint256).max;
 			if (fixedQuestionOutcome != BinaryOutcomes.BinaryOutcome.None) return forkResumedAt + ACTIVATION_DELAY;
-			uint256 requiredElapsed = computeTimeSinceStartFromAttritionCostAttoRep(getBindingCapitalAttoRep());
+			int256 requiredElapsed = int256(computeTimeSinceStartFromAttritionCostAttoRep(getBindingCapitalAttoRep()));
 			uint256 curveEnd =
 				requiredElapsed <= forkElapsedAtStart
 					? forkResumedAt
-					: forkResumedAt + (requiredElapsed - forkElapsedAtStart);
+					: forkResumedAt + uint256(requiredElapsed - forkElapsedAtStart);
 			uint256 minimumResponseEnd = forkResumedAt + ACTIVATION_DELAY;
 			return curveEnd > minimumResponseEnd ? curveEnd : minimumResponseEnd;
 		}
@@ -44,13 +44,12 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 	}
 
 	function totalCostAttoRep() public view returns (uint256) {
-		if (forkContinuation && forkResumedAt == 0 && forkElapsedAtStart == 0) return 0;
-		if (forkContinuation && forkResumedAt == 0) return computeIterativeAttritionCostAttoRep(forkElapsedAtStart);
 		if (forkContinuation) {
-			uint256 forkElapsed = forkElapsedAtStart + (block.timestamp - forkResumedAt);
-			if (forkElapsed == 0) return 0;
-			if (forkElapsed >= ESCALATION_TIME_LENGTH) return nonDecisionThresholdAttoRep;
-			return computeIterativeAttritionCostAttoRep(forkElapsed);
+			int256 elapsed = forkElapsedAtStart;
+			if (forkResumedAt != 0) elapsed += int256(block.timestamp - forkResumedAt);
+			if (elapsed <= 0) return 0;
+			if (elapsed >= int256(ESCALATION_TIME_LENGTH)) return nonDecisionThresholdAttoRep;
+			return computeIterativeAttritionCostAttoRep(uint256(elapsed));
 		}
 		if (activationTime >= block.timestamp) return 0;
 		uint256 elapsedSinceActivation = block.timestamp - activationTime;

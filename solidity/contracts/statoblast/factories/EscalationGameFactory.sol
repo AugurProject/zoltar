@@ -57,7 +57,7 @@ contract EscalationGameFactory {
 		return gameImplementation;
 	}
 
-	function deployEscalationGameFromFork(uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep, uint256 elapsedAtFork, BinaryOutcomes.BinaryOutcome fixedQuestionOutcome) external returns (EscalationGame) {
+	function deployEscalationGameFromFork(uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep, int256 elapsedAtFork, BinaryOutcomes.BinaryOutcome fixedQuestionOutcome) external returns (EscalationGame) {
 		ISecurityPool child = ISecurityPool(payable(msg.sender));
 		bool winnerHaircutPaidByFork;
 		uint256 forkCarryInitialBackingAttoRep;

@@ -20,7 +20,8 @@ abstract contract EscalationGameStorage {
 	uint256 internal lnRatioScaled;
 	uint256 public nonDecisionTimestamp;
 	bool public forkContinuation;
-	uint256 public forkElapsedAtStart;
+	// Negative elapsed time preserves activation delay still pending at the fork.
+	int256 public forkElapsedAtStart;
 	uint256 public forkResumedAt;
 	OutcomeState[3] internal outcomeState;
 	uint256 internal nextNodeId = 1;

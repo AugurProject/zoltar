@@ -22,7 +22,7 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 	bytes32 internal immutable EMPTY_NULLIFIER_ROOT;
 
 	event GameStarted(uint256 activationTime, uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep);
-	event GameContinuedFromFork(uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep, uint256 elapsedAtFork);
+	event GameContinuedFromFork(uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep, int256 elapsedAtFork);
 	event ForkContinuationResumed(uint256 resumedAt);
 	event ClaimDeposit(address indexed depositor, BinaryOutcomes.BinaryOutcome indexed outcome, uint256 indexed parentDepositIndex, uint256 originalDepositAmountAttoRep, uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep, bool transferredRep);
 	event VaultUnresolvedTotalsExported(address indexed vault, address repReceiver, uint256[3] principalByOutcomeAttoRep, uint256 principalToTransferAttoRep, bool transferredRep);

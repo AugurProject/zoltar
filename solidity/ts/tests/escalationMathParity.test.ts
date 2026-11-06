@@ -5,7 +5,7 @@ import { concatHex, encodeAbiParameters, encodeDeployData, keccak256, zeroAddres
 import assert from '../testSupport/simulator/utils/assert'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
-import { TEST_ADDRESSES, MAX_UINT256 } from '../testSupport/simulator/utils/constants'
+import { DAY, TEST_ADDRESSES, MAX_UINT256 } from '../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { ensureInfraDeployed, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getActivationTime, getBalances, getEscalationGameDeposits } from '../testSupport/simulator/utils/contracts/escalationGame'
@@ -341,6 +341,15 @@ describe('Escalation math parity', () => {
 	beforeEach(() => {
 		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
+	})
+
+	test('continuation offsets include pending activation but reject clocks outside the reporting window', async () => {
+		const { escalationGameAddress } = await deployEscalationGameWithProofPool()
+		await assert.rejects(startEscalationFromFork(escalationGameAddress, -3n * DAY - 1n), /Invalid fork elapsed time/)
+		await assert.rejects(startEscalationFromFork(escalationGameAddress, 49n * DAY + 1n), /Invalid fork elapsed time/)
+		await startEscalationFromFork(escalationGameAddress, -3n * DAY)
+		assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'forkElapsedAtStart' }), -3n * DAY)
+		assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'totalCostAttoRep' }), 0n)
 	})
 
 	test('scanner allocated payouts and shared carry proofs match the deployed Solidity verifier', async () => {

@@ -42,8 +42,25 @@ contract SecurityPoolForkerPortfolioDelegate {
 		if (sourceGame != address(0)) {
 			portfolio.registerReporterGame(address(child.escalationGame()));
 			child.resumeForkedEscalationGame();
+			_validateFinalizedContinuation(portfolio, child);
 		}
 		child.updateSettlementCollateral();
+	}
+
+	/// @dev Late materialization may checkpoint an inherited deadline, never replace
+	/// it with now. Refuse an operational game whose final claims disagree with custody.
+	function _validateFinalizedContinuation(ISecurityPoolPortfolioNative portfolio, ISecurityPool child) private view {
+		EscalationGame game = child.escalationGame();
+		if (game.getFinalQuestionResolution() == BinaryOutcomes.BinaryOutcome.None) return;
+		uint248 universe = child.universeId();
+		uint48 finalAfter = portfolio.logicalTimeForNative(universe, uint48(game.getEscalationGameEndDate()));
+		uint48 minimum = portfolio.logicalTimeForNative(universe, 0) + 3 days;
+		(SecurityPoolReporterLedger.Question memory reporter, ) = SecurityPoolReporterLedger(portfolio.reporterLedger(universe)).question(universe, child.questionId());
+		require(reporter.finalAfter != 0 && (reporter.finalAfter > minimum ? reporter.finalAfter : minimum) == finalAfter, 'Reporter continuation finality mismatch');
+		SecurityPoolPortfolioSettlement settlement = SecurityPoolPortfolioSettlement(portfolio.settlement());
+		(SecurityPoolSettlementBook.Question memory claim, ) = settlement.ledger().question(settlement.bookIds(universe), child.questionId());
+		if (claim.outcomeSupplyAttoShares != 0)
+			require(claim.finalAfter != 0 && (claim.finalAfter > minimum ? claim.finalAfter : minimum) == finalAfter, 'Settlement continuation finality mismatch');
 	}
 
 	function _hasProtectedQuestionCash(ISecurityPoolPortfolioNative portfolio, uint248 universe, uint256 questionId) private view returns (bool) {
@@ -132,9 +149,11 @@ contract SecurityPoolForkerPortfolioDelegate {
 		uint256 sourceStart = game.forkContinuation() ? game.forkResumedAt() : game.activationTime();
 		require(sourceStart != 0 && sourceStart <= type(uint48).max, 'Source reporter clock is invalid');
 		uint256 logicalStart = portfolio.logicalTimeForNative(source.universeId(), uint48(sourceStart));
-		uint256 elapsed = game.forkContinuation() ? game.forkElapsedAtStart() : 0;
-		if (logicalAnchor > logicalStart) elapsed += logicalAnchor - logicalStart;
-		if (elapsed > ESCALATION_TIME_LENGTH) elapsed = ESCALATION_TIME_LENGTH;
+		int256 elapsed = game.forkContinuation() ? game.forkElapsedAtStart() : int256(0);
+		// Preserve pre-activation time too: dropping a negative offset makes the
+		// game finalize before its inherited settlement and reporter schedules.
+		elapsed += int256(uint256(logicalAnchor)) - int256(logicalStart);
+		if (elapsed > int256(ESCALATION_TIME_LENGTH)) elapsed = int256(ESCALATION_TIME_LENGTH);
 		(bool fixedOutcome, uint256 outcome) = portfolio.inheritedFixedOutcome(child.universeId(), child.questionId());
 		require(!fixedOutcome || outcome < uint256(BinaryOutcomes.BinaryOutcome.None), 'Unsupported inherited reporter outcome');
 		child.setAwaitingForkContinuation(true);

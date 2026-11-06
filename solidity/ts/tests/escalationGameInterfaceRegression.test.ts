@@ -148,7 +148,7 @@ test('EscalationGame storage layout matches the shared delegate accounting', () 
 			{ label: 'lnRatioScaled', slot: '3', offset: 0, type: 'uint256' },
 			{ label: 'nonDecisionTimestamp', slot: '4', offset: 0, type: 'uint256' },
 			{ label: 'forkContinuation', slot: '5', offset: 0, type: 'bool' },
-			{ label: 'forkElapsedAtStart', slot: '6', offset: 0, type: 'uint256' },
+			{ label: 'forkElapsedAtStart', slot: '6', offset: 0, type: 'int256' },
 			{ label: 'forkResumedAt', slot: '7', offset: 0, type: 'uint256' },
 			{ label: 'outcomeState', slot: '8', offset: 0, type: 'struct OutcomeState[3]' },
 			{ label: 'nextNodeId', slot: '434', offset: 0, type: 'uint256' },
