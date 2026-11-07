@@ -5,6 +5,7 @@ import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 import { SecurityPoolCapitalLedger } from './SecurityPoolCapitalLedger.sol';
 import { SecurityPoolPortfolioSettlement } from './SecurityPoolPortfolioSettlement.sol';
 import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
+import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
 interface IPortfolioPurchaseRoot {
@@ -29,9 +30,7 @@ contract SecurityPoolPortfolioPurchase {
 	}
 	function purchaseFee(uint256 cash) external view returns (uint256) {
 		IPortfolioPurchaseRoot root = IPortfolioPurchaseRoot(portfolio);
-		uint256 backingValue = Math.mulDiv(cash, Math.max(root.statoblastSecurityMultiplierBps(), 10_500), 10_000, Math.Rounding.Ceil);
-		return
-			Math.max(root.minimumPurchaseFeeAttoEth(), Math.mulDiv(backingValue, root.purchaseFeeBps(), 10_000, Math.Rounding.Ceil));
+		return _basePurchaseFee(root, cash);
 	}
 	/// @notice Every purchase prepays its resolution tail.
 	/// @dev Quotes use the current central checkpoint. The transaction checkpoints
@@ -42,10 +41,14 @@ contract SecurityPoolPortfolioPurchase {
 		uint64 bookId = engine.bookIds(universeId);
 		(SecurityPoolSettlementBook.Question memory question, ) = engine.ledger().question(bookId, questionId);
 		uint256 principal = _addedPrincipal(question, cash);
-		premium = Math.mulDiv(principal, root.annualFeeBps() * RESOLUTION_WINDOW, 10_000 * 365 days, Math.Rounding.Ceil);
-		uint256 backing = Math.mulDiv(cash, Math.max(root.statoblastSecurityMultiplierBps(), 10_500), 10_000, Math.Rounding.Ceil);
-		uint256 base = Math.max(root.minimumPurchaseFeeAttoEth(), Math.mulDiv(backing, root.purchaseFeeBps(), 10_000, Math.Rounding.Ceil));
-		fee = base + premium;
+		premium = Math.mulDiv(principal, root.annualFeeBps() * RESOLUTION_WINDOW, SecurityPoolUtils.BPS_DENOMINATOR * 365 days, Math.Rounding.Ceil);
+		fee = _basePurchaseFee(root, cash) + premium;
+	}
+	/// @dev Round collateral up before rounding its fee up; combining these divisions changes dust fees.
+	function _basePurchaseFee(IPortfolioPurchaseRoot root, uint256 cashAttoEth) private view returns (uint256) {
+		uint256 backingValueAttoEth = Math.mulDiv(cashAttoEth, Math.max(root.statoblastSecurityMultiplierBps(), SecurityPoolUtils.MINIMUM_SECURITY_MULTIPLIER_BPS), SecurityPoolUtils.BPS_DENOMINATOR, Math.Rounding.Ceil);
+		return
+			Math.max(root.minimumPurchaseFeeAttoEth(), Math.mulDiv(backingValueAttoEth, root.purchaseFeeBps(), SecurityPoolUtils.BPS_DENOMINATOR, Math.Rounding.Ceil));
 	}
 	function _addedPrincipal(SecurityPoolSettlementBook.Question memory question, uint256 cash) private pure returns (uint256 principal) {
 		require(question.outcomeSupplyAttoShares == 0 || question.units != 0, 'Question backing exhausted');
@@ -80,7 +83,7 @@ contract SecurityPoolPortfolioPurchase {
 		if (address(pool.escalationGame()) != address(0)) return (0, 0);
 		(SecurityPoolSettlementBook.Question memory question, ) = engine.ledger().question(engine.bookIds(pool.universeId()), pool.questionId());
 		if (question.finalAfter != 0) return (0, 0);
-		uint256 calculated = Math.mulDiv(question.feePrincipalAttoEth, root.annualFeeBps(), 10_000 * 365 days);
+		uint256 calculated = Math.mulDiv(question.feePrincipalAttoEth, root.annualFeeBps(), SecurityPoolUtils.BPS_DENOMINATOR * 365 days);
 		require(calculated <= type(uint96).max, 'Question fee domain exceeded');
 		if (calculated == 0) return (0, 0);
 		uint256 duration = Math.min(type(uint48).max - nativeTime, engine.ledger().availableFeeBudget(engine.bookIds(pool.universeId()), pool.questionId()) / calculated);

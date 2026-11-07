@@ -571,7 +571,7 @@ test('shared scenarios reject invalid number control values', async () => {
 		await runGeneratedRuntime('interactiveTools')
 		const alice = document.querySelector<HTMLInputElement>('[data-example-input="yes"]')
 		const status = document.querySelector<HTMLElement>('#escalation-game-example .interactive-tool-status')
-		if (alice === null || status === null) throw new Error('Interactive truth-auction fixture is missing')
+		if (alice === null || status === null) throw new Error('Interactive collateral-repair-auction fixture is missing')
 		expect(alice.value).toBe('1')
 		expect(alice.hasAttribute('aria-invalid')).toBeFalse()
 		expect(status.textContent).toBe('The shared scenario contains invalid values; defaults remain active.')

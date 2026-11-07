@@ -16,15 +16,15 @@ export type ForkAuctionAction =
 	| 'migrateVault'
 	| 'claimParentEscalationDeposits'
 	| 'migrateUnresolvedEscalation'
-	| 'startTruthAuction'
+	| 'startCollateralRepairAuction'
 	| 'submitBid'
 	| 'refundLosingBids'
 	| 'withdrawAuctionRefund'
-	| 'finalizeTruthAuction'
+	| 'finalizeCollateralRepairAuction'
 	| 'claimAuctionProceeds'
 	| 'settleForkedEscalation'
 	| 'forkUniverse'
-type TruthAuctionSettlementMode = 'claim' | 'mixed' | 'refund'
+type CollateralRepairAuctionSettlementMode = 'claim' | 'mixed' | 'refund'
 type OracleQueueOperation = 'liquidation' | 'withdrawRep' | 'setVaultUnderwritingLimit' | 'vaultOperations'
 type StagedOracleExecutionResult = {
 	errorMessage: string | undefined
@@ -124,7 +124,7 @@ export type ListedSecurityPool = {
 		linearFee?: LinearFeeState
 		feeEndTimestamp: bigint
 		feeIndexRemainder: bigint
-		lastUpdatedFeeAccumulator: bigint
+		lastFeeCheckpointNativeTime: bigint
 		totalFeesOwedRemainder: bigint
 	}
 	feeEligibleUnderwritingLimitAttoEth: bigint
@@ -284,7 +284,7 @@ export type ReportingActionResult = ActionResult & {
 	universeId: bigint
 }
 
-type TruthAuctionMetrics = {
+type CollateralRepairAuctionMetrics = {
 	accumulatedBidAttoEth: bigint
 	auctionEndsAt: bigint | undefined
 	clearingPrice: bigint | undefined
@@ -322,15 +322,15 @@ export type ForkAuctionDetails = {
 	auctionableAttoRepAtFork: bigint
 	securityPoolAddress: Address
 	systemState: SecurityPoolSystemState
-	truthAuction: TruthAuctionMetrics | undefined
-	truthAuctionAddress: Address
-	truthAuctionStartedAt: bigint
+	collateralRepairAuction: CollateralRepairAuctionMetrics | undefined
+	collateralRepairAuctionAddress: Address
+	collateralRepairAuctionStartedAt: bigint
 	universeId: bigint
 }
 
 export type ForkAuctionActionResult = ActionResult & {
 	action: ForkAuctionAction
 	securityPoolAddress: Address
-	settlementMode?: TruthAuctionSettlementMode
+	settlementMode?: CollateralRepairAuctionSettlementMode
 	universeId: bigint
 }

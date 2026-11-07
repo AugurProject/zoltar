@@ -14,6 +14,6 @@ interface IPortfolioServiceRoot {
 	function prepareServicePurchase(uint248 universeId, uint256 questionId) external returns (ISecurityPool);
 	function registeredPools(address pool) external view returns (bool);
 	function inheritedFixedOutcome(uint248 universeId, uint256 questionId) external view returns (bool, uint256);
-	function logicalTime(uint248 universeId) external view returns (uint48);
-	function logicalTimeForNative(uint248 universeId, uint48 timestamp) external view returns (uint48);
+	function portfolioTime(uint248 universeId) external view returns (uint48);
+	function portfolioTimeForNative(uint248 universeId, uint48 timestamp) external view returns (uint48);
 }

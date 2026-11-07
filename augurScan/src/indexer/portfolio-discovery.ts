@@ -47,7 +47,7 @@ export async function discoverPortfolioEventDependencies(emitter: ContractMetada
 		const engine = address(await call(auction, 'securityPoolPortfolioAuction', 'engine'))
 		if (engine === zeroAddress || address(await call(engine, 'securityPoolUniformPriceAuction', 'controller')) !== auction) throw new Error('Branch auction engine binding mismatch')
 		return [
-			{ address: auction, kind: 'securityPoolPortfolioAuction', label: 'Portfolio Truth Auction' },
+			{ address: auction, kind: 'securityPoolPortfolioAuction', label: 'Portfolio Collateral Repair Auction' },
 			{ address: engine, kind: 'securityPoolUniformPriceAuction', label: 'Uniform Price Auction' },
 		]
 	}

@@ -44,10 +44,10 @@ describe('LoadingText', () => {
 	})
 
 	test('decorates messages explicitly marked as loading', async () => {
-		const renderedComponent = await renderIntoDocument(<LoadingAwareText loading>Loading truth auction status…</LoadingAwareText>)
+		const renderedComponent = await renderIntoDocument(<LoadingAwareText loading>Loading collateral repair auction status…</LoadingAwareText>)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(within(document.body).getByRole('status').textContent).toContain('Loading truth auction status…')
+		expect(within(document.body).getByRole('status').textContent).toContain('Loading collateral repair auction status…')
 		expect(document.body.querySelector('.loading-value .spinner')).not.toBeNull()
 	})
 
@@ -58,14 +58,14 @@ describe('LoadingText', () => {
 					<LoadingAwareText>Connect a wallet before submitting.</LoadingAwareText>
 				</span>
 				<span>
-					<LoadingAwareText>Loading truth auction status…</LoadingAwareText>
+					<LoadingAwareText>Loading collateral repair auction status…</LoadingAwareText>
 				</span>
 			</>,
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(within(document.body).getByText('Connect a wallet before submitting.')).not.toBeNull()
-		expect(within(document.body).getByText('Loading truth auction status…')).not.toBeNull()
+		expect(within(document.body).getByText('Loading collateral repair auction status…')).not.toBeNull()
 		expect(document.body.querySelector('.spinner')).toBeNull()
 		expect(within(document.body).queryByRole('status')).toBeNull()
 	})
