@@ -1,3 +1,6 @@
+import { discoverAuctions } from './discovery-auctions.ts'
+import type { PortfolioCapitalSnapshot } from '../operations/portfolio-types.ts'
+import { discoverPortfolioCapital } from './discovery-portfolios.ts'
 import type { DiscoveryRun } from './discovery-context.ts'
 import { hasCode } from './discovery-graph.ts'
 import { canonicalDiscoveryIssues, formatDiscoveryWarnings } from './discovery-coverage.ts'
@@ -9,7 +12,7 @@ import { requireDeployedContracts } from '@zoltar/bot-shared/monitoring/deployed
 import { sameAddress } from '@zoltar/core-shared/evm/address'
 import { discoverUniverseUniswap } from './discovery-uniswap.ts'
 
-import type { AuctionSnapshot, EcosystemSnapshot, OracleGameSnapshot, PairSnapshot, PoolSnapshot, TokenInventory, UniverseSnapshot } from '../operations/types.ts'
+import type { EcosystemSnapshot, OracleGameSnapshot, PairSnapshot, PoolSnapshot, TokenInventory, UniverseSnapshot } from '../operations/types.ts'
 import { DISCOVERY_RPC_CONCURRENCY, drainConcurrent, limitDiscoveryConcurrency, mapWithConcurrency, requirePositiveLimit } from './discovery-client.ts'
 import { limitsWithDefaults, requireAggregateDiscoveryEnvelope, type EcosystemDiscoveryContext } from './discovery-context.ts'
 import { relevantTokenSpenders } from './discovery-escalation.ts'
@@ -121,7 +124,7 @@ async function discoverPairs(context: EcosystemDiscoveryContext, pools: readonly
 	return pairs
 }
 
-async function discoverTokenInventory(context: EcosystemDiscoveryContext, universes: readonly UniverseSnapshot[], pools: readonly PoolSnapshot[], blockNumber: bigint) {
+async function discoverTokenInventory(context: EcosystemDiscoveryContext, universes: readonly UniverseSnapshot[], pools: readonly PoolSnapshot[], capital: readonly PortfolioCapitalSnapshot[], blockNumber: bigint) {
 	const { client, deployments, wallet } = context
 	if (wallet === undefined) return []
 	const addresses = new Map<string, Address>()
@@ -135,7 +138,7 @@ async function discoverTokenInventory(context: EcosystemDiscoveryContext, univer
 			client.readContract({ abi: abis.openOracleAbi, address: deployments.openOracle, args: [wallet, wallet, address], blockNumber, functionName: 'internalAllowance' }),
 		])
 		const allowances: Record<string, string> = {}
-		const spenders = relevantTokenSpenders(deployments, pools, address)
+		const spenders = [...new Set([...relevantTokenSpenders(deployments, pools, address), ...capital.filter(position => sameAddress(position.repToken, address)).map(position => position.capitalLedger)])]
 		if (deployments.uniswapV3Factory !== undefined || context.discoverGenesisDeployment) spenders.push(canonicalUniswapDeployment(await client.getChainId()).router)
 		for (const spender of spenders) {
 			allowances[spender] = (await client.readContract({ abi: abis.erc20Abi, address, args: [wallet, spender], blockNumber, functionName: 'allowance' })).toString()
@@ -160,48 +163,6 @@ async function discoverLpInventory(context: EcosystemDiscoveryContext, pairs: re
 		balance: pair.walletLiquidity,
 		pair: pair.address,
 	}))
-}
-
-function authenticatedAuctionRefundGeneration(context: EcosystemDiscoveryContext, auction: Address, pendingAttoEth: bigint) {
-	const indexed = context.indexedAuctionRefunds?.[auction.toLowerCase()]
-	return pendingAttoEth > 0n && indexed !== undefined && BigInt(indexed.pendingAttoEth) === pendingAttoEth ? indexed.generation : undefined
-}
-
-async function discoverAuctions(context: EcosystemDiscoveryContext, pools: readonly PoolSnapshot[], blockNumber: bigint): Promise<AuctionSnapshot[]> {
-	const auctions: AuctionSnapshot[] = []
-	for (const pool of pools) {
-		if (pool.truthAuction === zeroAddress) continue
-		const started = await context.client.readContract({ abi: abis.uniformPriceDualCapBatchAuctionAbi, address: pool.truthAuction, blockNumber, functionName: 'auctionStarted' })
-		const [minimumBid, finalized, pendingRefund, clearing, storedClearingTick, underfunded, underfundedWinningAttoEth] =
-			started === 0n
-				? [0n, false, 0n, [false, 0n, 0n, 0n] as const, 0n, false, 0n]
-				: await drainConcurrent([
-						context.client.readContract({ abi: abis.uniformPriceDualCapBatchAuctionAbi, address: pool.truthAuction, blockNumber, functionName: 'minBidSizeAttoEth' }),
-						context.client.readContract({ abi: abis.uniformPriceDualCapBatchAuctionAbi, address: pool.truthAuction, blockNumber, functionName: 'finalized' }),
-						context.wallet === undefined ? Promise.resolve(0n) : context.client.readContract({ abi: abis.uniformPriceDualCapBatchAuctionAbi, address: pool.truthAuction, args: [context.wallet], blockNumber, functionName: 'pendingEthRefundsAttoEth' }),
-						context.client.readContract({ abi: abis.uniformPriceDualCapBatchAuctionAbi, address: pool.truthAuction, blockNumber, functionName: 'computeClearing' }),
-						context.client.readContract({ abi: abis.uniformPriceDualCapBatchAuctionAbi, address: pool.truthAuction, blockNumber, functionName: 'clearingTick' }),
-						context.client.readContract({ abi: abis.uniformPriceDualCapBatchAuctionAbi, address: pool.truthAuction, blockNumber, functionName: 'underfunded' }),
-						context.client.readContract({ abi: abis.uniformPriceDualCapBatchAuctionAbi, address: pool.truthAuction, blockNumber, functionName: 'underfundedWinningAttoEth' }),
-					])
-		const pendingEthRefundGeneration = authenticatedAuctionRefundGeneration(context, pool.truthAuction, pendingRefund)
-		auctions.push({
-			address: pool.truthAuction,
-			bids: [...(context.indexedAuctionBids?.[pool.truthAuction.toLowerCase()] ?? [])],
-			endTime: (started + 7n * 24n * 60n * 60n).toString(),
-			finalized,
-			hasClearingPrice: finalized ? !underfunded || underfundedWinningAttoEth > 0n : clearing[0],
-			clearingTick: (finalized ? storedClearingTick : clearing[1]).toString(),
-			minimumBidAttoEth: minimumBid.toString(),
-			pendingEthRefund: pendingRefund.toString(),
-			...(pendingEthRefundGeneration === undefined ? {} : { pendingEthRefundGeneration }),
-			pool: pool.address,
-			startTime: started.toString(),
-			underfunded,
-			underfundedWinningAttoEth: underfundedWinningAttoEth.toString(),
-		})
-	}
-	return auctions
 }
 
 async function verifyIndexedReports(context: EcosystemDiscoveryContext, blockNumber: bigint) {
@@ -254,7 +215,8 @@ export async function discoverEcosystemSnapshot(context: EcosystemDiscoveryConte
 		discoverQuestions(run),
 		context.wallet === undefined ? Promise.resolve(0n) : context.client.readContract({ abi: abis.openOracleAbi, address: context.deployments.openOracle, args: [context.wallet, zeroAddress], blockNumber, functionName: 'tokenHolder' }),
 	])
-	const { pools, staged } = await discoverPools({ ...run, anchorTimestamp: block.timestamp, anchorBaseFeePerGas: block.baseFeePerGas, universes, questions })
+	const { pools } = await discoverPools({ ...run, anchorTimestamp: block.timestamp, anchorBaseFeePerGas: block.baseFeePerGas, universes, questions })
+	const portfolioCapital = await discoverPortfolioCapital(context, pools, blockNumber, questions)
 	const pairs = tradingDeployment.factory ? await discoverPairs(context, pools, blockNumber, topology, topologyMutation) : []
 	const universeUniswap = context.deployments.uniswapV3Factory !== undefined || context.discoverGenesisDeployment ? await discoverUniverseUniswap(context, universes, blockNumber, chainId) : undefined
 	const genesis = universeUniswap?.pools.find(pool => pool.universeId === '0')
@@ -265,7 +227,7 @@ export async function discoverEcosystemSnapshot(context: EcosystemDiscoveryConte
 	const indexedReports = context.wallet === undefined ? [] : trustedIndexedReportsForDiscovery({ deployments: context.deployments, pools, reports: context.indexedReports ?? [], universes, wallet: context.wallet })
 	context = { ...context, indexedReports }
 	const [tokens, shares, lpTokens, auctions, reports] = await drainConcurrent([
-		discoverTokenInventory(context, universes, pools, blockNumber),
+		discoverTokenInventory(context, universes, pools, portfolioCapital, blockNumber),
 		discoverShareInventory(context, pools, pairs, universes, questions, blockNumber, issues),
 		discoverLpInventory(context, pairs, blockNumber),
 		discoverAuctions(context, pools, blockNumber),
@@ -279,10 +241,10 @@ export async function discoverEcosystemSnapshot(context: EcosystemDiscoveryConte
 		escalationDeposits: [...(context.indexedEscalationDeposits ?? [])],
 		pairs,
 		pools,
+		portfolioCapital,
 		questions,
 		reports,
 		schemaVersion: 1,
-		stagedOperations: staged,
 		tradingDeployment,
 		...(genesisUniswap === undefined ? {} : { genesisUniswap }),
 		...(universeUniswap === undefined ? {} : { universeUniswap }),

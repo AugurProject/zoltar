@@ -7,11 +7,12 @@ import type { GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUni
 import type { SimulationController } from './controller.js'
 import { predictSimulationTokenAddresses } from './bootstrap.js'
 import type { SimulationScenario } from './scenarios.js'
+import { fetchSimulationScenarioSnapshot, type SimulationScenarioSnapshot } from './scenarioSnapshots.js'
 import type { SavedSimulationStateEnvelopeV1, SimulationInitialization } from './savedStates.js'
 import { createSimulationProvider, type SimulationProviderRequest } from './simulationProvider.js'
 import { DEFAULT_SIMULATION_WALLET_MODE, SIMULATION_WRONG_CHAIN_ID_HEX, type SimulationWalletMode } from './simulationWallet.js'
 import { withTransactionCallbacks } from './writeClientCallbacks.js'
-import type { SimulationWorkerCallMap, SimulationWorkerCallMessage, SimulationWorkerCallMethod, SimulationWorkerEvent, SimulationWorkerMessage, SimulationWorkerResultValue, SimulationWorkerRpcMessage, SimulationWorkerState } from './tevmWorkerProtocol.js'
+import type { SimulationBootstrapParameters, SimulationWorkerCallMap, SimulationWorkerCallMessage, SimulationWorkerCallMethod, SimulationWorkerEvent, SimulationWorkerMessage, SimulationWorkerResultValue, SimulationWorkerRpcMessage, SimulationWorkerState } from './tevmWorkerProtocol.js'
 
 const QA_ACCOUNTS = [normalizeAccount('0x00000000000000000000000000000000000000a1'), normalizeAccount('0x00000000000000000000000000000000000000b2'), normalizeAccount('0x00000000000000000000000000000000000000c3')].filter((account): account is Address => account !== undefined)
 
@@ -38,6 +39,7 @@ type SimulationWorkerConnection = {
 
 type CreateSimulationBackendDependencies = {
 	createWorkerConnection?: (workerPath: URL) => SimulationWorkerConnection
+	fetchScenarioSnapshot?: (workerPath: URL, scenario: SimulationScenario) => Promise<SimulationScenarioSnapshot | undefined>
 }
 
 type SimulationBackend = ChainBackend &
@@ -96,8 +98,19 @@ export async function createSimulationBackend(
 		savedState,
 		savedStateId,
 		scenario,
+		scenarioSnapshot,
 		walletMode = DEFAULT_SIMULATION_WALLET_MODE,
-	}: { appId?: 'zoltar' | 'statoblast' | 'trading' | 'openoracle'; genesisOutcome?: GenesisOutcome; initialBootstrapWarning?: string; savedState?: SavedSimulationStateEnvelopeV1; savedStateId?: string; scenario?: SimulationScenario; walletMode?: SimulationWalletMode },
+	}: {
+		appId?: 'zoltar' | 'statoblast' | 'trading' | 'openoracle'
+		genesisOutcome?: GenesisOutcome
+		initialBootstrapWarning?: string
+		savedState?: SavedSimulationStateEnvelopeV1
+		savedStateId?: string
+		scenario?: SimulationScenario
+		/** A serialized saved-state envelope to restore for the scenario instead of looking one up next to the worker. */
+		scenarioSnapshot?: string
+		walletMode?: SimulationWalletMode
+	},
 	dependencies: CreateSimulationBackendDependencies = {},
 ): Promise<SimulationBackend> {
 	const primaryAccount = QA_ACCOUNTS[0]
@@ -301,6 +314,19 @@ export async function createSimulationBackend(
 		return currentState
 	}
 
+	// A prepared state restores in about a second where seeding takes minutes; a missing or unreadable one just seeds live.
+	const resolveScenarioSnapshot = async (): Promise<SimulationBootstrapParameters> => {
+		if (initialization.kind !== 'scenario') return {}
+		if (scenarioSnapshot !== undefined) return { scenarioSnapshot }
+		try {
+			const prepared = await (dependencies.fetchScenarioSnapshot ?? fetchSimulationScenarioSnapshot)(workerPath, initialization.scenario)
+			return prepared === undefined ? {} : { scenarioSnapshot: prepared.snapshot, scenarioSnapshotKey: prepared.manifestKey }
+		} catch (error) {
+			console.warn(`[simulation] Seeding ${initialization.scenario} live because its prepared state could not be loaded`, error)
+			return {}
+		}
+	}
+
 	// The wallet-facing provider honours the QA wallet mode (wrong chain or no accounts) so the app's wrong-network and
 	// connect states render in simulation. Reads keep using a provider pinned to the simulation chain, mirroring a real
 	// deployment whose configured read RPC stays on the app chain regardless of the wallet.
@@ -340,7 +366,7 @@ export async function createSimulationBackend(
 					bootstrapProgress: 0,
 					isBootstrapping: true,
 				})
-				bootstrapPromise = callWorker('bootstrap', undefined)
+				bootstrapPromise = resolveScenarioSnapshot().then(parameters => callWorker('bootstrap', parameters))
 			}
 			return await bootstrapPromise
 		},

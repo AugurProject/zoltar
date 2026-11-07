@@ -315,13 +315,11 @@ describe('chaos operator runtime', () => {
 		const snapshot = snapshotFixture()
 		const firstPool = snapshot.pools[0]
 		if (firstPool === undefined) throw new Error('Topology fixture requires one pool')
-		const firstVault = firstPool.vaults[0]
-		if (firstVault === undefined) throw new Error('Topology fixture requires one vault')
 		const summary = runtimeTopologySummary({
 			anchor: { baseFeePerGas: 1n, blockHash: zeroHash, blockNumber: 77n, timestamp: 1n },
 			executionReady: false,
 			snapshot,
-			topologyCache: topologyCacheWithVaults(firstPool.address, [firstVault.address]),
+			topologyCache: topologyCacheWithVaults(firstPool.address, []),
 		})
 		expect(summary.anchor).toEqual({ blockNumber: 77n, timestamp: 1n })
 		expect(summary.complete).toBeFalse()
@@ -333,35 +331,11 @@ describe('chaos operator runtime', () => {
 			questionId: firstPool.questionId,
 			systemState: firstPool.systemState,
 			universeId: firstPool.universeId,
-			vaultCount: firstPool.vaults.length,
+			portfolio: firstPool.portfolio,
 		})
 		expect(summary.reports).toHaveLength(snapshot.reports.length)
 		expect(summary.auctions).toHaveLength(snapshot.auctions.length)
 		expect(summary.pairs).toHaveLength(snapshot.pairs.length)
-	})
-
-	test('publishes the canonical registry total when only the wallet vault was inspected', () => {
-		const snapshot = snapshotFixture()
-		const firstPool = snapshot.pools[0]
-		if (firstPool === undefined) throw new Error('Topology fixture requires one pool')
-		const walletVault = firstPool.vaults[0]
-		if (walletVault === undefined) throw new Error('Topology fixture requires one wallet vault')
-		firstPool.vaultDiscoveryComplete = false
-		firstPool.vaults = [walletVault]
-		const registeredVaults = [walletVault.address, address(91), address(92)]
-
-		const summary = runtimeTopologySummary({
-			anchor: { baseFeePerGas: 1n, blockHash: zeroHash, blockNumber: 77n, timestamp: 1n },
-			executionReady: true,
-			snapshot,
-			topologyCache: topologyCacheWithVaults(firstPool.address, registeredVaults),
-		})
-
-		expect(firstPool.vaultDiscoveryComplete).toBeFalse()
-		expect(firstPool.vaults).toHaveLength(1)
-		expect(summary.complete).toBeTrue()
-		expect(summary.pools[0]?.vaultCount).toBe(registeredVaults.length)
-		expect(Object.keys(summary.pools[0] ?? {}).sort()).toEqual(['address', 'awaitingForkContinuation', 'coordinator', 'questionId', 'systemState', 'universeId', 'vaultCount'])
 	})
 
 	test('replaces stale healthy preflight checks on failure and recovery', async () => {
@@ -718,7 +692,7 @@ describe('chaos operator runtime', () => {
 			migrationRepSplits: [],
 			openOracle: settings.deployment.openOracle,
 			reports: [],
-			schemaVersion: 3,
+			schemaVersion: 4,
 			securityPoolForker: settings.deployment.securityPoolForker,
 			startBlock: settings.runtime.protocolStartBlock.toString(),
 			wallet: zeroAddress,

@@ -1,10 +1,10 @@
 import { readFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 import assert from 'node:assert/strict'
-import { checkMmrConformanceVector, checkNonDecisionThresholdExample } from './check-docs-worked-examples.mts'
+import { checkMmrConformanceVector } from './check-docs-worked-examples.mts'
 
 import { Window } from 'happy-dom'
-import { calculateAnnualizedRetentionFeePercent, calculateAuctionModel, computeCanonicalEscalationBindingCapital, computeCanonicalEscalationDeadlineDays, calculateEscalationDepositModel, calculateForkThresholdSeries, calculateResolutionModel, ESCALATION_TIME_LENGTH_SECONDS } from '../../docs/charts/chartModels'
+import { computeCanonicalEscalationBindingCapital, computeCanonicalEscalationDeadlineDays, calculateEscalationDepositModel, calculateForkThresholdSeries, calculateResolutionModel, ESCALATION_TIME_LENGTH_SECONDS } from '../../docs/charts/chartModels'
 import { getWinningEscalationDepositClaimAmount } from '../../shared/statoblast/ts/escalationGame/escalationMath'
 import { centeredDiagramScrollLeft, updateDiagramControl } from '../../docs/charts/diagramControl'
 
@@ -17,16 +17,6 @@ type InteractiveExampleHarness = {
 	textFor: (name: string) => string
 	textPosition: (name: string) => { x: number; y: number }
 	valueFor: (name: string) => string
-}
-
-type AuctionExampleScenario = {
-	defaultBindingCondition: string
-	defaultAliceReceives: string
-	defaultBobReceives: string
-	defaultCarolReceives: string
-	underfundedAliceReceives: string
-	filePath: string
-	exampleId: string
 }
 
 type DeploymentManifestResponse = {
@@ -52,7 +42,7 @@ async function loadInteractiveExample(filePath: string, exampleId: string): Prom
 	window.document.write(html)
 	window.document.close()
 
-	const runtimeName = exampleId === 'simple-auction-example' ? 'auctionClearing' : 'openOracleTools'
+	const runtimeName = 'openOracleTools'
 	const runtimeSource = await readFile(`docs/assets/js/${runtimeName}.js`, 'utf8')
 	const runScript = new Function('document', 'HTMLElement', 'HTMLInputElement', 'HTMLOutputElement', runtimeSource)
 	runScript(window.document, window.HTMLElement, window.HTMLInputElement, window.HTMLOutputElement)
@@ -474,253 +464,8 @@ function checkDiagramControlStates(): void {
 	}
 }
 
-async function checkInteractiveToolControls(): Promise<void> {
-	const linkedState = JSON.stringify({ aliceEth: '9', ethRaiseCap: '23' })
-	const window = new Window({
-		url: `https://docs.example/truth-auctions.html?tool=simple-auction-example&state=${encodeURIComponent(linkedState)}#simple-auction-example`,
-	})
-	try {
-		window.document.write(`
-			<details class="interactive-example" id="simple-auction-example">
-				<summary>Try a simple auction clearing run</summary>
-				<input data-example-input="aliceEth" value="1">
-				<input data-example-input="bobEth" value="2">
-				<input data-example-input="carolEth" value="3">
-				<input data-example-input="ethRaiseCap" value="4">
-				<input data-example-input="repInventory" value="5">
-				<div class="example-output-grid"><output>Default output</output></div>
-			</details>
-			<details class="interactive-example" id="initial-report-estimator-example">
-				<summary>Initial report</summary>
-				<input data-example-input="openInterestWeth" value="1">
-				<input data-example-input="requestedInitialWeth" value="2">
-				<div class="example-output-grid"><output>Default output</output></div>
-			</details>
-			<details class="interactive-example" id="binary-censorship-example">
-				<summary>Binary censorship</summary>
-				<input data-example-input="censorshipDuration" value="24">
-				<input data-example-input="externalPayoff" value="1000">
-				<input data-example-input="oracleReportLiquidity" value="4000">
-				<div class="example-output-grid"><output>Default output</output></div>
-			</details>
-		`)
-		window.document.close()
-		let inputEventCount = 0
-		window.document.addEventListener('input', () => {
-			inputEventCount += 1
-		})
-		let copiedUrl = ''
-		Object.defineProperty(window.navigator, 'clipboard', {
-			configurable: true,
-			value: {
-				writeText: async (value: string) => {
-					copiedUrl = value
-				},
-			},
-		})
-		const source = await readFile('docs/assets/js/interactiveTools.js', 'utf8')
-		const runScript = new Function('window', 'document', 'CustomEvent', 'DOMException', 'Event', 'HTMLDetailsElement', 'HTMLElement', 'HTMLInputElement', 'HTMLSelectElement', 'navigator', 'URL', source)
-		runScript(window, window.document, window.CustomEvent, window.DOMException, window.Event, window.HTMLDetailsElement, window.HTMLElement, window.HTMLInputElement, window.HTMLSelectElement, window.navigator, window.URL)
-
-		const tool = window.document.querySelector('#simple-auction-example')
-		if (!(tool instanceof window.HTMLDetailsElement)) throw new Error('Interactive tool test fixture is missing')
-		const value = (name: string) => {
-			const input = tool.querySelector(`[data-example-input="${name}"]`)
-			if (!(input instanceof window.HTMLInputElement)) throw new Error(`Missing interactive tool input: ${name}`)
-			return input.value
-		}
-		const toolbar = tool.querySelector('.interactive-tool-toolbar')
-		const scenario = toolbar?.querySelector('select')
-		const status = toolbar?.querySelector('.interactive-tool-status')
-		const buttons = Array.from(toolbar?.querySelectorAll('button') ?? [])
-		const reset = buttons.find(button => button.textContent === 'Reset')
-		const copy = buttons.find(button => button.textContent === 'Copy scenario link')
-		if (!(toolbar instanceof window.HTMLElement) || !(scenario instanceof window.HTMLSelectElement) || !(status instanceof window.HTMLElement) || !(reset instanceof window.HTMLButtonElement) || !(copy instanceof window.HTMLButtonElement)) {
-			throw new Error('Interactive tool toolbar is incomplete')
-		}
-
-		assert.equal(tool.open, true, 'a shared scenario must open its calculator')
-		assert.equal(value('aliceEth'), '9', 'a shared scenario must restore a linked input')
-		assert.equal(value('ethRaiseCap'), '23', 'a shared scenario must restore every linked input')
-		assert.equal(status.textContent, 'Shared scenario loaded; results updated.', 'shared-state restoration must announce completion')
-		assert.equal(tool.querySelector('.example-output-grid')?.getAttribute('aria-live'), 'polite', 'calculator output must be a live region')
-		assert(inputEventCount >= 2, 'shared-state restoration must notify the calculator runtime about changed inputs')
-
-		scenario.value = '0'
-		scenario.dispatchEvent(new window.Event('change', { bubbles: true }))
-		assert.deepEqual(
-			{
-				aliceEth: value('aliceEth'),
-				bobEth: value('bobEth'),
-				carolEth: value('carolEth'),
-				ethRaiseCap: value('ethRaiseCap'),
-				repInventory: value('repInventory'),
-			},
-			{
-				aliceEth: '3',
-				bobEth: '4',
-				carolEth: '6',
-				ethRaiseCap: '24',
-				repInventory: '8',
-			},
-			'a calculator preset must apply its complete input scenario',
-		)
-		assert.equal(status.textContent, '', 'preset application must avoid redundant status narration')
-
-		for (const presetCase of [
-			{ expected: '25', input: 'requestedInitialWeth', presetIndex: '1', toolId: 'initial-report-estimator-example' },
-			{ expected: '168', input: 'censorshipDuration', presetIndex: '2', toolId: 'binary-censorship-example' },
-		] as const) {
-			const presetTool = window.document.getElementById(presetCase.toolId)
-			if (!(presetTool instanceof window.HTMLDetailsElement)) throw new Error(`Missing preset tool: ${presetCase.toolId}`)
-			const presetSelect = presetTool.querySelector('.interactive-tool-toolbar select')
-			const presetInput = presetTool.querySelector(`[data-example-input="${presetCase.input}"]`)
-			if (!(presetSelect instanceof window.HTMLSelectElement) || !(presetInput instanceof window.HTMLInputElement)) throw new Error(`Incomplete preset fixture: ${presetCase.toolId}`)
-			presetInput.value = '999'
-			assert.notEqual(presetInput.value, presetCase.expected, `${presetCase.input} must begin away from its preset value`)
-			presetSelect.value = presetCase.presetIndex
-			presetSelect.dispatchEvent(new window.Event('change', { bubbles: true }))
-			assert.equal(presetInput.value, presetCase.expected, `${presetCase.input} preset must update its human-unit control`)
-		}
-
-		reset.click()
-		assert.deepEqual(
-			{
-				aliceEth: value('aliceEth'),
-				bobEth: value('bobEth'),
-				carolEth: value('carolEth'),
-				ethRaiseCap: value('ethRaiseCap'),
-				repInventory: value('repInventory'),
-			},
-			{
-				aliceEth: '1',
-				bobEth: '2',
-				carolEth: '3',
-				ethRaiseCap: '4',
-				repInventory: '5',
-			},
-			'Reset must restore the calculator values that were present before linked state was applied',
-		)
-		assert.equal(status.textContent, '', 'Reset must avoid redundant status narration')
-
-		copy.click()
-		await Promise.resolve()
-		const copied = new URL(copiedUrl)
-		assert.equal(copied.searchParams.get('tool'), 'simple-auction-example', 'a copied scenario must identify its calculator')
-		assert.deepEqual(JSON.parse(copied.searchParams.get('state') ?? ''), {
-			aliceEth: '1',
-			bobEth: '2',
-			carolEth: '3',
-			ethRaiseCap: '4',
-			repInventory: '5',
-		})
-		assert.equal(copied.hash, '#simple-auction-example', 'a copied scenario must include the stable calculator fragment')
-	} finally {
-		window.close()
-	}
-}
-
-async function loadAuctionExample({ filePath, exampleId }: AuctionExampleScenario): Promise<InteractiveExampleHarness> {
-	return loadInteractiveExample(filePath, exampleId)
-}
-
 function assertEqual(actual: string, expected: string, message: string): void {
-	assert.equal(actual, expected, `${message}: expected "${expected}", got "${actual}"`)
-}
-
-async function checkDefaultFundedClearing(scenario: AuctionExampleScenario): Promise<void> {
-	const example = await loadAuctionExample(scenario)
-	try {
-		assertEqual(example.output('clearingMode'), 'uniform clearing near 3 ETH/REP', `${scenario.filePath} clearing mode`)
-		assertEqual(example.output('bindingCondition'), scenario.defaultBindingCondition, `${scenario.filePath} default binding condition`)
-		assertEqual(example.labelFor('ethRaised'), 'ETH retained', `${scenario.filePath} ETH retained label`)
-		assertEqual(example.output('ethRaised'), '12 ETH', `${scenario.filePath} default retained ETH`)
-		assertEqual(example.labelFor('thresholdInputEth'), 'Winning ETH kept', `${scenario.filePath} threshold input label`)
-		assertEqual(example.output('thresholdInputEth'), 'not underfunded', `${scenario.filePath} default threshold input ETH`)
-		assertEqual(example.output('aliceReceives'), scenario.defaultAliceReceives, `${scenario.filePath} Alice REP`)
-		assertEqual(example.output('bobReceives'), scenario.defaultBobReceives, `${scenario.filePath} Bob REP`)
-		assertEqual(example.output('carolReceives'), scenario.defaultCarolReceives, `${scenario.filePath} Carol REP`)
-		assertEqual(example.output('totalRepAllocated'), '4 REP', `${scenario.filePath} default total REP allocation`)
-		assertEqual(example.output('refunds'), '1 ETH', `${scenario.filePath} default refunds`)
-	} finally {
-		example.close()
-	}
-}
-
-async function checkExplicitEthCapScenario(scenario: AuctionExampleScenario): Promise<void> {
-	const example = await loadAuctionExample(scenario)
-	try {
-		example.setInput('ethRaiseCap', 6)
-		example.setInput('repInventory', 10)
-		example.setInput('aliceEth', 8)
-		example.setInput('bobEth', 4)
-		example.setInput('carolEth', 2)
-
-		assertEqual(example.output('bindingCondition'), 'ETH cap', `${scenario.filePath} ETH-cap binding condition`)
-		assertEqual(example.output('clearingMode'), 'uniform clearing near 5 ETH/REP', `${scenario.filePath} ETH-cap clearing mode`)
-		assertEqual(example.output('ethRaised'), '6 ETH', `${scenario.filePath} ETH-cap retained ETH`)
-		assertEqual(example.output('refunds'), '8 ETH', `${scenario.filePath} ETH-cap refunds`)
-	} finally {
-		example.close()
-	}
-}
-
-async function checkUnderfundedPath(scenario: AuctionExampleScenario): Promise<void> {
-	const example = await loadAuctionExample(scenario)
-	try {
-		example.setInput('ethRaiseCap', 20)
-		example.setInput('repInventory', 4)
-		example.setInput('aliceEth', 16)
-		example.setInput('bobEth', 0)
-		example.setInput('carolEth', 0)
-
-		assertEqual(example.output('clearingMode'), 'underfunded qualification clearing', `${scenario.filePath} underfunded clearing mode`)
-		assertEqual(example.output('bindingCondition'), 'underfunded', `${scenario.filePath} underfunded binding condition`)
-		assertEqual(example.labelFor('ethRaised'), 'ETH retained', `${scenario.filePath} underfunded ETH retained label`)
-		assertEqual(example.output('ethRaised'), '16 ETH', `${scenario.filePath} underfunded retained ETH`)
-		assertEqual(example.labelFor('thresholdInputEth'), 'Winning ETH kept', `${scenario.filePath} underfunded threshold label`)
-		assertEqual(example.output('thresholdInputEth'), '16 ETH', `${scenario.filePath} underfunded threshold input ETH`)
-		assertEqual(example.output('underfundedThreshold'), '5 ETH/REP', `${scenario.filePath} underfunded threshold`)
-		assertEqual(example.output('aliceReceives'), scenario.underfundedAliceReceives, `${scenario.filePath} underfunded Alice REP`)
-		assertEqual(example.output('bobReceives'), '0 REP', `${scenario.filePath} underfunded Bob REP`)
-		assertEqual(example.output('carolReceives'), '0 REP', `${scenario.filePath} underfunded Carol REP`)
-		assertEqual(example.output('totalRepAllocated'), '4 REP', `${scenario.filePath} underfunded total REP allocation`)
-		assertEqual(example.output('refunds'), '0 ETH', `${scenario.filePath} underfunded refunds`)
-	} finally {
-		example.close()
-	}
-}
-
-async function checkAllZeroBids(scenario: AuctionExampleScenario): Promise<void> {
-	const example = await loadAuctionExample(scenario)
-	try {
-		example.setInput('ethRaiseCap', 30)
-		example.setInput('repInventory', 4)
-		example.setInput('aliceEth', 0)
-		example.setInput('bobEth', 0)
-		example.setInput('carolEth', 0)
-
-		assertEqual(example.output('clearingMode'), 'underfunded qualification clearing', `${scenario.filePath} zero-bid clearing mode`)
-		assertEqual(example.output('bindingCondition'), 'underfunded', `${scenario.filePath} zero-bid binding condition`)
-		assertEqual(example.output('ethRaised'), '0 ETH', `${scenario.filePath} zero-bid retained ETH`)
-		assertEqual(example.output('thresholdInputEth'), '0 ETH', `${scenario.filePath} zero-bid threshold input ETH`)
-		const expectedThreshold = scenario.filePath === 'docs/explanation/statoblast.html' ? '7.50 ETH/REP' : '7.5 ETH/REP'
-		assertEqual(example.output('underfundedThreshold'), expectedThreshold, `${scenario.filePath} zero-bid threshold`)
-		assertEqual(example.output('aliceReceives'), '0 REP', `${scenario.filePath} zero-bid Alice REP`)
-		assertEqual(example.output('bobReceives'), '0 REP', `${scenario.filePath} zero-bid Bob REP`)
-		assertEqual(example.output('carolReceives'), '0 REP', `${scenario.filePath} zero-bid Carol REP`)
-		assertEqual(example.output('totalRepAllocated'), '0 REP', `${scenario.filePath} zero-bid total REP allocation`)
-		assertEqual(example.output('refunds'), '0 ETH', `${scenario.filePath} zero-bid refunds`)
-	} finally {
-		example.close()
-	}
-}
-
-async function checkSourceLabelsAndThresholdText(filePath: string, requiredSourceSnippets: string[]): Promise<void> {
-	const runtimeSource = await readFile('docs/runtime/auctionClearing.ts', 'utf8')
-	for (const snippet of requiredSourceSnippets) {
-		assert.match(runtimeSource, new RegExp(escapeRegExp(snippet)), `${filePath} runtime is missing expected source snippet: ${snippet}`)
-	}
+	assert.equal(actual, expected, message)
 }
 
 async function checkDynamicWethReportExample(): Promise<void> {
@@ -755,12 +500,12 @@ async function checkDynamicWethReportExample(): Promise<void> {
 		assertEqual(example.output('selectedEscalationHalt'), '60.000000000000000000 WETH', 'escalation halt should scale from selected initial WETH')
 
 		example.setInput('blockBaseFeeNanoEth', 0)
-		example.setInput('openInterestWeth', 0)
+		example.setInput('aggregateExposureEth', 0)
 		example.setInput('requestedInitialWeth', 0)
 		assertEqual(example.output('estimatedMinimumWethReport'), '0.807692307692307693 WETH', 'zero base fee should retain the configured priority security')
 
 		example.setInput('blockBaseFeeNanoEth', 30)
-		example.setInput('openInterestWeth', 10000)
+		example.setInput('aggregateExposureEth', 10000)
 		assertEqual(example.output('openInterestEscalationHalt'), '100.000000000000000000 WETH', 'one percent of open interest should set the open-interest halt floor')
 		assertEqual(example.output('estimatedMinimumWethReport'), '100.807692307692307693 WETH', 'initial report should add priority security to the larger open-interest component')
 		assertEqual(example.output('selectedEscalationHalt'), '1008.076923076923076930 WETH', 'priority plus open-interest initial report should determine the larger escalation halt')
@@ -775,45 +520,6 @@ async function checkDynamicWethReportExample(): Promise<void> {
 	}
 }
 
-async function checkBinaryCensorshipExample(): Promise<void> {
-	const example = await loadInteractiveExample('docs/reference/open-oracle.html', 'binary-censorship-example')
-
-	try {
-		assertEqual(example.output('executionErrorThreshold'), '12.22%', 'binary censorship default execution threshold')
-		assertEqual(example.output('manipulatedPriceError'), '13.00%', 'binary censorship default price error')
-		assertEqual(example.output('liquidationExecutable'), 'yes', 'binary censorship default liquidation state')
-		assertEqual(example.valueFor('honestDisputeBarrierFraction'), '1.10%', 'binary censorship default fee barrier')
-		assertEqual(example.output('attackerPayoff'), '1000.00 ETH', 'binary censorship default outside payoff')
-		assertEqual(example.output('censorshipCost'), '11424.00 ETH', 'binary censorship default cost')
-		assertEqual(example.output('durationToTargetCost'), '4.20', 'binary censorship default duration bound')
-
-		example.setInput('manipulatedPrice', 108)
-		assertEqual(example.output('liquidationExecutable'), 'no', 'distance guard should block a small manipulation')
-		assertEqual(example.output('attackerPayoff'), '0.00 ETH', 'blocked liquidation should have no outside payoff')
-		assertEqual(example.output('durationToTargetCost'), 'not applicable without attacker payoff', 'blocked liquidation should have no payoff-relative duration threshold')
-
-		example.setInput('manipulatedPrice', 113)
-		example.setInput('honestDisputeBarrierFraction', 0.13)
-		assertEqual(example.output('censorshipCost'), '0.00 ETH', 'a calibrated barrier above the fixed-fee floor should remove censorship pressure at equal price error')
-		assertEqual(example.output('durationToTargetCost'), 'unbounded when censorship rate is zero', 'zero censorship pressure should have no finite duration bound')
-	} finally {
-		example.close()
-	}
-}
-
-function checkExactRepCapEquality(): void {
-	const precision = 10n ** 18n
-	const ethAtTick = 1n * precision
-	const priceAtTick = precision / 10n
-	const repDemand = (ethAtTick * precision) / priceAtTick
-	const maxAttoRepBeingSold = 10n * precision
-	assert.ok(repDemand >= maxAttoRepBeingSold, 'demand exactly equal to the REP cap should select funded clearing')
-}
-
-function escapeRegExp(value: string): string {
-	return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
 function blockWithId(html: string, id: string): string {
 	const start = html.indexOf(`id="${id}"`)
 	assert.notEqual(start, -1, `Missing documentation block #${id}`)
@@ -822,42 +528,10 @@ function blockWithId(html: string, id: string): string {
 	return html.slice(start, end)
 }
 
-const scenarios: AuctionExampleScenario[] = [
-	{
-		defaultBindingCondition: 'both caps',
-		defaultAliceReceives: '1 REP',
-		defaultBobReceives: '1.33 REP',
-		defaultCarolReceives: '1.67 REP',
-		filePath: 'docs/explanation/truth-auctions.html',
-		exampleId: 'simple-auction-example',
-		underfundedAliceReceives: '4 REP',
-	},
-]
-
-for (const scenario of scenarios) {
-	await checkDefaultFundedClearing(scenario)
-	await checkExplicitEthCapScenario(scenario)
-	await checkUnderfundedPath(scenario)
-	await checkAllZeroBids(scenario)
-}
-
-await checkSourceLabelsAndThresholdText('docs/explanation/truth-auctions.html', [
-	"import { type AuctionBidInput, calculateAuctionModel } from '../charts/chartModels'",
-	'const model = calculateAuctionModel(ethRaiseCap, repInventory, bids)',
-	"write('clearingMode', 'underfunded qualification clearing')",
-	"write('bindingCondition', 'underfunded')",
-	"write('thresholdInputEth', formatEth(model.ethRaised))",
-	"write('underfundedThreshold', `${formatFixed(model.qualificationPrice)} ETH/REP`)",
-])
-
 await checkDynamicWethReportExample()
-await checkBinaryCensorshipExample()
 await checkMmrProofPlannerStates()
 await checkMmrConformanceVector()
-await checkNonDecisionThresholdExample()
 checkDiagramControlStates()
-await checkInteractiveToolControls()
-checkExactRepCapEquality()
 
 const openOracleHtml = await readFile('docs/reference/open-oracle.html', 'utf8')
 assert.doesNotMatch(blockWithId(openOracleHtml, 'eq-openoracle-initial-report-size'), /<mi>(?:R|P|e|E|Q|N|D|T|H|m|u|F)<\/mi>/, 'dynamic report equation should use descriptive domain names instead of one-letter identifiers')
@@ -874,7 +548,6 @@ const chartRuntimeSource = await readFile('docs/charts/chartRuntime.ts', 'utf8')
 assert.doesNotMatch(chartRuntimeSource, /normalizedEscalationCost|escalationCostChart|requiredRepFraction/i, 'escalation chart runtime should use cumulative binding-capital terminology')
 assert.match(chartRuntimeSource, /ESCALATION_ACTIVATION_DELAY_DAYS \+ ESCALATION_TIME_LENGTH_DAYS \+ 1/, 'escalation Plot should sample every day from game start through day 52')
 assert.match(chartRuntimeSource, /ticks: spec\.width < 720 \? \[0, 52\] : \[0, 3, 52\]/, 'whitepaper escalation Plot should preserve all milestone ticks on wide screens without colliding day 0 and day 3 on narrow screens')
-assert.ok(/label: '● won'[\s\S]*label: '▲ partial'[\s\S]*label: '◆ refund'/.test(await readFile('docs/charts/chartModels.ts', 'utf8')) && /symbol: 'status'/.test(chartRuntimeSource), 'narrow truth-auction charts should keep a non-color status key whose shapes match the bid dots')
 assert.equal(computeCanonicalEscalationBindingCapital(1, 10, 3), 1, 'canonical escalation fixture should start at the configured start bond on activation')
 assert.equal(computeCanonicalEscalationBindingCapital(1, 10, 52), 10, 'canonical escalation fixture should end at the configured threshold after seven weeks')
 const oneThirdPowerOfTwoTimeDays = Number.parseInt((ESCALATION_TIME_LENGTH_SECONDS / 3n).toString(), 10) / 86_400
@@ -905,70 +578,11 @@ assert.equal(
 	4n * payoutFixture,
 	'fork scaling should reduce even an above-cap principal-only withdrawal',
 )
-const zeroUtilizationFee = calculateAnnualizedRetentionFeePercent(0)
-const dipUtilizationFee = calculateAnnualizedRetentionFeePercent(80)
-assert.ok(zeroUtilizationFee > 9 && zeroUtilizationFee < 11, 'retention Plot should annualize the maximum retention rate to roughly ten percent fees')
-assert.ok(dipUtilizationFee > 49 && dipUtilizationFee < 51, 'retention Plot should annualize the minimum retention rate to roughly fifty percent fees')
-assert.equal(calculateAnnualizedRetentionFeePercent(100), dipUtilizationFee, 'retention Plot should stay at its minimum retention rate above the eighty-percent dip')
-assert.match(chartRuntimeSource, /fig-statoblast-retention-utilization[\s\S]*retentionUtilizationChart/, 'retention chart should use its native Plot renderer')
 const forkThresholdSeries = calculateForkThresholdSeries(21)
 assert.equal(forkThresholdSeries.length, 21, 'fork-threshold Plot should include genesis plus twenty descendants')
 assert.deepEqual(forkThresholdSeries[0], { forkThresholdRep: 5, generation: 0, theoreticalSupply: 100 }, 'fork-threshold Plot should begin from the genesis theoretical supply and five-percent threshold')
 assert.ok((forkThresholdSeries[20]?.theoreticalSupply ?? 0) < (forkThresholdSeries[19]?.theoreticalSupply ?? 0), 'fork-threshold Plot should decay monotonically by generation')
 assert.equal(forkThresholdSeries[20]?.forkThresholdRep, (forkThresholdSeries[20]?.theoreticalSupply ?? 0) / 20, 'fork-threshold Plot should keep the threshold at five percent of theoretical supply')
-const defaultAuction = calculateAuctionModel(12, 4, [
-	{ eth: 3, key: 'alice', name: 'Alice', price: 5 },
-	{ eth: 4, key: 'bob', name: 'Bob', price: 4 },
-	{ eth: 6, key: 'carol', name: 'Carol', price: 3 },
-])
-assert.deepEqual(
-	defaultAuction.demandPoints,
-	[
-		{ cumulativeRep: 0.6, price: 5 },
-		{ cumulativeRep: 1.75, price: 4 },
-		{ cumulativeRep: 4, price: 3 },
-	],
-	'auction Plot demand points should reprice cumulative accepted ETH at every candidate tick and clip at the ETH cap',
-)
-
-const belowQualificationAuction = calculateAuctionModel(20, 5, [
-	{ eth: 0, key: 'alice', name: 'Alice', price: 5 },
-	{ eth: 0, key: 'bob', name: 'Bob', price: 4 },
-	{ eth: 20, key: 'carol', name: 'Carol', price: 3 },
-])
-assert.equal(belowQualificationAuction.mode, 'underfunded', 'below-qualification demand must not establish uniform clearing')
-assert.equal(belowQualificationAuction.ethRaised, 0, 'below-qualification demand should be fully refunded')
-assert.equal(belowQualificationAuction.clearingPrice, 4, 'no-winner underfunded chart should retain the cap-implied qualification boundary')
-assert.equal(belowQualificationAuction.effectivePrice, 0, 'no-winner underfunded chart should not claim an allocation price')
-assert.ok(
-	belowQualificationAuction.bids.every(bid => bid.status === 'Rejected'),
-	'below-qualification bids should be rejected',
-)
-
-const qualifyingWeakDemandAuction = calculateAuctionModel(20, 5, [
-	{ eth: 5, key: 'alice', name: 'Alice', price: 5 },
-	{ eth: 0, key: 'bob', name: 'Bob', price: 4 },
-	{ eth: 0, key: 'carol', name: 'Carol', price: 3 },
-])
-assert.equal(qualifyingWeakDemandAuction.clearingPrice, 4, 'qualifying weak demand should still plot the cap-implied qualification boundary')
-assert.equal(qualifyingWeakDemandAuction.effectivePrice, 1, 'qualifying weak demand should expose its separate proportional-allocation price')
-
-const maximumQualificationAuction = calculateAuctionModel(30, 1, [
-	{ eth: 5, key: 'alice', name: 'Alice', price: 5 },
-	{ eth: 4, key: 'bob', name: 'Bob', price: 4 },
-	{ eth: 5, key: 'carol', name: 'Carol', price: 3 },
-])
-assert.equal(maximumQualificationAuction.clearingPrice, 30, 'maximum controls should retain the visible qualification boundary')
-assert.match(chartRuntimeSource, /const yMax = Math\.max\(5\.8, clearingPrice \* 1\.16/, 'auction Plot y domain should expand to include reachable qualification boundaries')
-
-const sameTickAuction = calculateAuctionModel(8, 2, [
-	{ eth: 6, key: 'alice', name: 'Alice', price: 4 },
-	{ eth: 6, key: 'bob', name: 'Bob', price: 4 },
-	{ eth: 0, key: 'carol', name: 'Carol', price: 3 },
-])
-assert.equal(sameTickAuction.bids[0]?.rep, 1.5, 'the first bid at a partially filled clearing tick should settle FIFO')
-assert.equal(sameTickAuction.bids[1]?.rep, 0.5, 'the second bid at a partially filled clearing tick should receive the FIFO remainder')
-
 const clippedDeposit = calculateEscalationDepositModel({
 	invalidBalance: 1,
 	noBalance: 7,

@@ -43,6 +43,7 @@ const STATOBLAST_ROUTING_CONFIG: RoutingConfig<NavigableStatoblastRoute> = {
 		// Pools lands on Browse pools. The legacy security pools hash resolves to Pools; the URL state rewrites its query onto the pool path.
 		{ aliases: ['#/security-pools'], hash: POOLS_ROUTE_HASH, name: 'pools', queryParameters: new Set(['questionId', ...STATOBLAST_CONTEXT_QUERY_PARAMS]) },
 		{ match: routeHash => (parsePoolsRouteHash(routeHash) === undefined ? undefined : 'pools') },
+		{ hash: '#/portfolios', name: 'portfolios', queryParameters: new Set(['portfolio', 'owner', ...STATOBLAST_CONTEXT_QUERY_PARAMS]) },
 		{ hash: '#/open-oracle', name: 'open-oracle', queryParameters: new Set(STATOBLAST_CONTEXT_QUERY_PARAMS) },
 	],
 }

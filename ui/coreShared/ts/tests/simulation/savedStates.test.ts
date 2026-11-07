@@ -50,6 +50,14 @@ describe('saved simulation states', () => {
 		})
 	})
 
+	test('accepts saved block history and rejects malformed blocks', () => {
+		const envelope = parseSavedSimulationStateEnvelope(createSerializedSavedState({ name: 'History', savedAt: '2026-06-02T12:34:56.000Z' }))
+		const receipt = { cumulativeGasUsed: '0x5208', logs: [['0x00000000000000000000000000000000000000b2', [`0x${'11'.repeat(32)}`], '0x1234']], logsBloom: `0x${'00'.repeat(256)}`, status: 1 }
+		expect(() => serializeSavedSimulationStateEnvelope({ ...envelope, state: { ...envelope.state, blocks: [{ block: '0xf90100', receipts: [receipt], senders: ['0x00000000000000000000000000000000000000a1'] }] } })).not.toThrow()
+		expect(() => serializeSavedSimulationStateEnvelope({ ...envelope, state: { ...envelope.state, blocks: [{ block: 'f901', receipts: [], senders: [] }] } })).toThrow('invalid block history')
+		expect(() => serializeSavedSimulationStateEnvelope({ ...envelope, state: { ...envelope.state, blocks: [{ block: '0xf90100', receipts: [{ ...receipt, status: 2 }], senders: [] }] } })).toThrow('invalid block history')
+	})
+
 	test('serializes and parses a versioned simulation state envelope', () => {
 		const serialized = createSerializedSavedState({
 			name: 'Saved baseline',

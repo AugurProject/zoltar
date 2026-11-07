@@ -15,7 +15,7 @@ export type ProtocolIndexIdentity = {
 	chainId: number
 	cursor: { blockHash: Hash; blockNumber: string }
 	openOracle: Address
-	schemaVersion: 3
+	schemaVersion: 4
 	securityPoolForker: Address
 	startBlock: string
 	availableStartBlock?: string
@@ -33,11 +33,6 @@ export type AuctionRefundRecord = {
 	refund: AuctionRefundSnapshot
 }
 
-function signedIntegerString(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^(?:0|-?[1-9]\d*)$/.test(value)) throw new Error(`${label} must be an integer string`)
-	return value
-}
-
 function boundedInteger(value: unknown, label: string, maximum = Number.MAX_SAFE_INTEGER) {
 	if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0 || value > maximum) throw new Error(`${label} must be an integer between 0 and ${maximum.toString()}`)
 	return value
@@ -51,18 +46,10 @@ function boundedUnsignedString(value: unknown, label: string, bits: number) {
 	return parsed
 }
 
-function compareSignedStrings(left: string, right: string) {
-	const leftValue = BigInt(left)
-	const rightValue = BigInt(right)
-	if (leftValue < rightValue) return -1
-	if (leftValue > rightValue) return 1
-	return 0
-}
-
 export function parseIdentity(value: unknown, expectedChainId: number, label = 'protocolIndex'): ProtocolIndexIdentity {
 	const index = requiredRecord(value, label)
 	assertExactKeys(index, ['chainId', 'cursor', 'openOracle', 'schemaVersion', 'securityPoolForker', 'startBlock', 'wallet', 'zoltar'], ['availableStartBlock'], label)
-	if (index['schemaVersion'] !== 3) throw new Error(`${label}.schemaVersion is unsupported`)
+	if (index['schemaVersion'] !== 4) throw new Error(`${label}.schemaVersion is unsupported`)
 	if (index['chainId'] !== expectedChainId) throw new Error(`Protocol index belongs to chain ${String(index['chainId'])}, expected chain ${expectedChainId.toString()}`)
 	const startBlock = boundedUnsignedString(index['startBlock'], `${label}.startBlock`, 256)
 	const cursor = requiredRecord(index['cursor'], `${label}.cursor`)
@@ -75,7 +62,7 @@ export function parseIdentity(value: unknown, expectedChainId: number, label = '
 		chainId: expectedChainId,
 		cursor: { blockHash: hash(cursor['blockHash'], `${label}.cursor.blockHash`), blockNumber: cursorBlockNumber },
 		openOracle: getAddress(nonemptyString(index['openOracle'], `${label}.openOracle`)),
-		schemaVersion: 3,
+		schemaVersion: 4,
 		securityPoolForker: getAddress(nonemptyString(index['securityPoolForker'], `${label}.securityPoolForker`)),
 		startBlock,
 		...(availableStartBlock === undefined ? {} : { availableStartBlock }),
@@ -144,17 +131,15 @@ export function parseOracleGame(value: unknown, label: string, expectedOpenOracl
 
 function parseAuctionBid(value: unknown, label: string): AuctionBidSnapshot {
 	const bid = requiredRecord(value, label)
-	assertExactKeys(bid, ['amountAttoEth', 'index', 'refunded', 'tick'], [], label)
-	if (typeof bid['refunded'] !== 'boolean') throw new Error(`${label}.refunded must be a boolean`)
-	const tick = signedIntegerString(bid['tick'], `${label}.tick`)
-	if ((tick.startsWith('-') ? tick.length - 1 : tick.length) > 78) throw new Error(`${label}.tick is outside the int256 range`)
-	const parsedTick = BigInt(tick)
-	if (parsedTick < -(1n << 255n) || parsedTick >= 1n << 255n) throw new Error(`${label}.tick is outside the int256 range`)
+	assertExactKeys(bid, ['bidId', 'vault', 'lots', 'minimumAttoRepPerLot', 'targetHealthBps', 'settled'], [], label)
+	if (typeof bid['settled'] !== 'boolean') throw new Error(`${label}.settled must be a boolean`)
 	return {
-		amountAttoEth: boundedUnsignedString(bid['amountAttoEth'], `${label}.amountAttoEth`, 256),
-		index: boundedUnsignedString(bid['index'], `${label}.index`, 256),
-		refunded: bid['refunded'],
-		tick,
+		bidId: boundedUnsignedString(bid['bidId'], `${label}.bidId`, 96),
+		vault: getAddress(nonemptyString(bid['vault'], `${label}.vault`)),
+		lots: boundedUnsignedString(bid['lots'], `${label}.lots`, 256),
+		minimumAttoRepPerLot: boundedUnsignedString(bid['minimumAttoRepPerLot'], `${label}.minimumAttoRepPerLot`, 256),
+		targetHealthBps: boundedUnsignedString(bid['targetHealthBps'], `${label}.targetHealthBps`, 256),
+		settled: bid['settled'],
 	}
 }
 
@@ -241,8 +226,7 @@ export function compareReports(left: OracleGameSnapshot, right: OracleGameSnapsh
 export function compareAuctionBidRecords(left: AuctionBidRecord, right: AuctionBidRecord) {
 	const auctionOrder = left.auction.toLowerCase().localeCompare(right.auction.toLowerCase())
 	if (auctionOrder !== 0) return auctionOrder
-	const tickOrder = compareSignedStrings(left.bid.tick, right.bid.tick)
-	return tickOrder === 0 ? compareUnsignedStrings(left.bid.index, right.bid.index) : tickOrder
+	return compareUnsignedStrings(left.bid.bidId, right.bid.bidId)
 }
 
 export function compareAuctionRefundRecords(left: AuctionRefundRecord, right: AuctionRefundRecord) {

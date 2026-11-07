@@ -1,37 +1,40 @@
-import { setUnderwritingLimit } from '../testSupport/simulator/utils/contracts/securityPool'
+import { statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact } from '../types/contractArtifact'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
-import { manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, setVaultCapacityFixture } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
-import { getSecurityPoolsEscalationGame, redeemRepFromVault, withdrawFromEscalationGame, depositToEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
+import { getSecurityPoolsEscalationGame, withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
 import { getQuestionOutcome } from '../testSupport/simulator/utils/contracts/securityPoolForker'
 import assert from '../testSupport/simulator/utils/assert'
 import { describe, test } from 'bun:test'
 import { encodeAbiParameters, keccak256 } from '@zoltar/core-shared/evm/ethereum'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
-import { useStatoblastVaultAccountingFixture } from './statoblast/fixture'
-import { createCompleteSet, getSettlementCollateralAttoEth, redeemShares } from '../testSupport/simulator/utils/contracts/securityPool'
+import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { getSettlementCollateralAttoEth, redeemShares } from '../testSupport/simulator/utils/contracts/securityPool'
 import { statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier, statoblast_SecurityPool_SecurityPool, Zoltar_Zoltar } from '../types/contractArtifact'
 import { createWriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { approveToken, getERC20Balance } from '../testSupport/simulator/utils/utilities'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
-import { OperationType } from '../testSupport/simulator/utils/contracts/statoblast'
 import { getTotalPoolHeldAttoRep } from '../testSupport/simulator/utils/contracts/securityPool'
 
 const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
 const ESCALATION_TIME_LENGTH = 4_233_600n
 
 describe('Audit PoC: escalation logarithm precision liveness', () => {
-	const fixture = useStatoblastVaultAccountingFixture()
+	const portfolio = useSecurityPoolPortfolioFixture()
+	const fixture = portfolio.base
 
-	const { reportBond, reportedRepEthPrice } = fixture
+	const reportBond = 11n * 10n ** 17n
+	const depositToEscalationGame = async (client: typeof fixture.client, pool: `0x${string}`, outcome: QuestionOutcome, amount: bigint) => {
+		await approveToken(client, getRepTokenAddress(fixture.genesisUniverse), pool)
+		return writeContractAndWait(client, () => client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [outcome, amount] }))
+	}
 
 	test('wallet-funded reports resolve and unlock after burning supply to a zero-log threshold ratio', async () => {
-		const { client, genesisUniverse, mockWindow, questionData, securityPoolAddresses, repDeposit } = fixture
+		const { client, genesisUniverse, mockWindow, questionData } = fixture
+		const securityPoolAddresses = portfolio.poolFor(fixture.questionId)
 		const pool = securityPoolAddresses.securityPool
 		const token = getRepTokenAddress(genesisUniverse)
 		const zoltar = getZoltarAddress()
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, OperationType.WithdrawRep, client.account.address, repDeposit, reportedRepEthPrice)
 		assert.strictEqual(await getTotalPoolHeldAttoRep(client, pool), 0n, 'wallet reporting must not depend on vault backing or its immutable minimum')
 		const readTrackedSupply = () => client.readContract({ abi: Zoltar_Zoltar.abi, address: zoltar, functionName: 'getUniverseTheoreticalSupplyAttoRep', args: [genesisUniverse] })
 		for (const account of TEST_ADDRESSES.slice(1)) {
@@ -79,10 +82,11 @@ describe('Audit PoC: escalation logarithm precision liveness', () => {
 	})
 
 	test('a funded game with a power-of-two threshold ratio resolves and releases its assets', async () => {
-		const { client, genesisUniverse, mockWindow, questionData, securityPoolAddresses } = fixture
+		const { client, genesisUniverse, mockWindow, questionData } = fixture
+		const securityPoolAddresses = portfolio.poolFor(fixture.questionId)
 		const underwritingLimitAttoEth = 25n * 10n ** 18n
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, underwritingLimitAttoEth, reportedRepEthPrice)
-		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+		await portfolio.prepare(1_000n * unit, underwritingLimitAttoEth)
+		await portfolio.mint(unit, fixture.questionId, { sender: client })
 		assert.ok((await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)) > 0n, 'PoC pool must hold redeemable ETH collateral')
 
 		const nonDecisionThresholdAttoRep = reportBond * 2n
@@ -97,7 +101,7 @@ describe('Audit PoC: escalation logarithm precision liveness', () => {
 		})
 
 		await mockWindow.setTime(questionData.endTime + 1n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, reportedRepEthPrice)
+		await portfolio.refreshPrice()
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond + 2n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, reportBond + 1n)
 
@@ -129,7 +133,8 @@ describe('Audit PoC: escalation logarithm precision liveness', () => {
 		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
 		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, [0n])
 		await redeemShares(client, securityPoolAddresses.securityPool)
-		await setUnderwritingLimit(client, securityPoolAddresses.securityPool, 0n)
-		await redeemRepFromVault(client, securityPoolAddresses.securityPool, client.account.address)
+		await portfolio.refreshPrice()
+		await portfolio.authorize(0n)
+		await writeContractAndWait(client, () => client.writeContract({ abi: capitalArtifact.abi, address: portfolio.capitalLedger, functionName: 'withdrawPrincipal', args: [1_000n * unit, client.account.address] }))
 	})
 })

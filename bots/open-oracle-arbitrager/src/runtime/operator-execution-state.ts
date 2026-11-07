@@ -74,6 +74,7 @@ export function applyQueuedExecutionSettings(config: Configuration, state: Opera
 		pending.maxHedgeSlippageBps = undefined
 	}
 	if (pending.operatorSettings !== undefined) {
+		if (config.operatorSettings.approvedUniverses.join(',') !== pending.operatorSettings.approvedUniverses.join(',')) reportScanReset = true
 		config.operatorSettings = pending.operatorSettings
 		pending.operatorSettings = undefined
 	}

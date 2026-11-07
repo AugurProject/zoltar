@@ -1,18 +1,18 @@
-import { getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
-import { formatStorageSlot, getAddressMappingStorageSlot } from '../../testSupport/storage'
-import { getChildUniverseId } from '../../testSupport/simulator/utils/utilities'
-import { migrateRepToZoltar, createChildUniverse, claimAuctionProceeds } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
+import { getZoltarAddress, getRepTokenAddress, forkUniverse } from '../../testSupport/simulator/utils/contracts/zoltar'
+import { DAY } from '../../testSupport/simulator/utils/constants'
+import { approveToken, getChildUniverseId } from '../../testSupport/simulator/utils/utilities'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
-import { depositToEscalationGame, updateSettlementCollateral, updateVaultFees, redeemFees, getSecurityVault, getTotalPoolHeldAttoRep, getSettlementCollateralAttoEth } from '../../testSupport/simulator/utils/contracts/securityPool'
-import { setVaultCapacityFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
-import { requestPriceIfNeededAndStageOperation, OperationType } from '../../testSupport/simulator/utils/contracts/statoblast'
-import { getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { withdrawFromEscalationGame } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { strictEqualTypeSafe } from '../../testSupport/simulator/utils/testUtils'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { decodeEventLog, zeroAddress, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import {
+	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
+	statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as uniformAuctionArtifact,
+	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
 	statoblast_EscalationGame_EscalationGame,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
@@ -24,77 +24,10 @@ import {
 import { getMigrationRepBalanceAttoRep, getUniverseData, getUniverseTheoreticalSupplyAttoRep } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { hashCarryLeaf, hashParent } from '../carryProofHelpers'
 import { isIgnorableLogDecodeError } from '../logDecodeErrors'
-import { useStatoblastForkMigrationFixture, type StatoblastForkMigrationFixture } from '../statoblast/fixture'
+import { unit, useSecurityPoolPortfolioFixture } from '../statoblast/securityPoolPortfolioFixture'
+import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
+import { advancePastOrdinaryEscalationDeadline, ordinaryEscalationPrincipals } from '../residualCaptureHelpers'
 import { getCanonicalEventIdentity, replayZoltarEvents, type ReplayLog } from './eventReplayModel'
-
-const poolAccountingCheckpointEvent = {
-	type: 'event',
-	name: 'PoolAccountingCheckpoint',
-	inputs: [
-		{ name: 'reason', type: 'uint8', indexed: false },
-		{ name: 'vault', type: 'address', indexed: true },
-		{ name: 'settlementCollateralAttoEth', type: 'uint256', indexed: false },
-		{ name: 'totalUnderwritingLimitAttoEth', type: 'uint256', indexed: false },
-		{ name: 'feeEligibleUnderwritingLimitAttoEth', type: 'uint256', indexed: false },
-		{ name: 'totalClaimableVaultFeesAttoEth', type: 'uint256', indexed: false },
-		{ name: 'unallocatedAccruedFeesAttoEth', type: 'uint256', indexed: false },
-		{ name: 'feeIndex', type: 'uint256', indexed: false },
-		{ name: 'feeIndexRemainder', type: 'uint256', indexed: false },
-		{ name: 'totalFeesOwedRemainder', type: 'uint256', indexed: false },
-		{ name: 'uncheckpointedFeeEligibleUnderwritingLimitAttoEth', type: 'uint256', indexed: false },
-		{ name: 'lastUpdatedFeeAccumulator', type: 'uint256', indexed: false },
-		{ name: 'currentRetentionRate', type: 'uint256', indexed: false },
-	],
-} as const
-
-const poolAccountingSnapshotAbi = [
-	{
-		type: 'function',
-		name: 'getPoolAccountingSnapshot',
-		stateMutability: 'view',
-		inputs: [],
-		outputs: [
-			{
-				name: 'snapshot',
-				type: 'tuple',
-				components: [
-					{ name: 'settlementCollateralAttoEth', type: 'uint256' },
-					{ name: 'totalUnderwritingLimitAttoEth', type: 'uint256' },
-					{ name: 'feeEligibleUnderwritingLimitAttoEth', type: 'uint256' },
-					{ name: 'totalClaimableVaultFeesAttoEth', type: 'uint256' },
-					{ name: 'unallocatedAccruedFeesAttoEth', type: 'uint256' },
-					{ name: 'feeIndex', type: 'uint256' },
-					{ name: 'feeIndexRemainder', type: 'uint256' },
-					{ name: 'totalFeesOwedRemainder', type: 'uint256' },
-					{ name: 'uncheckpointedFeeEligibleUnderwritingLimitAttoEth', type: 'uint256' },
-					{ name: 'lastUpdatedFeeAccumulator', type: 'uint256' },
-					{ name: 'currentRetentionRate', type: 'uint256' },
-					{ name: 'badDebtGeneration', type: 'uint256' },
-				],
-			},
-		],
-	},
-] as const
-
-const securityPoolForkSnapshotEvent = {
-	type: 'event',
-	name: 'SecurityPoolForkSnapshot',
-	inputs: [
-		{ name: 'parentPool', type: 'address', indexed: true },
-		{ name: 'migrationProxy', type: 'address', indexed: true },
-		{ name: 'ownFork', type: 'bool', indexed: false },
-		{ name: 'unresolvedEscalation', type: 'bool', indexed: false },
-		{ name: 'settlementCollateralAtForkAttoEth', type: 'uint256', indexed: false },
-		{ name: 'totalPoolHeldRepAtForkAttoRep', type: 'uint256', indexed: false },
-		{ name: 'auctionableAttoRepAtFork', type: 'uint256', indexed: false },
-		{ name: 'escalationSourceRepAtForkAttoRep', type: 'uint256', indexed: false },
-		{ name: 'escalationChildRepAtForkAttoRep', type: 'uint256', indexed: false },
-		{ name: 'escalationStartBondAtForkAttoRep', type: 'uint256', indexed: false },
-		{ name: 'escalationNonDecisionThresholdAtForkAttoRep', type: 'uint256', indexed: false },
-		{ name: 'escalationElapsedAtFork', type: 'uint256', indexed: false },
-		{ name: 'escalationSnapshotId', type: 'bytes32', indexed: false },
-	],
-} as const
 
 function createReplayLog(overrides: Partial<ReplayLog> = {}): ReplayLog {
 	const blockNumber = overrides.blockNumber ?? 1n
@@ -107,21 +40,12 @@ function createReplayLog(overrides: Partial<ReplayLog> = {}): ReplayLog {
 		transactionIndex,
 		logIndex: 0,
 		emitter: '0x1111111111111111111111111111111111111111',
-		eventName: 'PoolAccountingCheckpoint',
+		eventName: 'QuestionAccountingCheckpoint',
 		args: {
 			reason: 0n,
-			vault: zeroAddress,
 			settlementCollateralAttoEth: 1n,
-			totalUnderwritingLimitAttoEth: 2n,
-			feeEligibleUnderwritingLimitAttoEth: 2n,
-			totalClaimableVaultFeesAttoEth: 0n,
-			unallocatedAccruedFeesAttoEth: 0n,
-			feeIndex: 0n,
-			feeIndexRemainder: 0n,
-			totalFeesOwedRemainder: 0n,
-			uncheckpointedFeeEligibleUnderwritingLimitAttoEth: 0n,
+			shareTokenSupplyAttoShares: 2n,
 			lastUpdatedFeeAccumulator: 1n,
-			currentRetentionRate: 1n,
 		},
 		...overrides,
 	}
@@ -172,55 +96,32 @@ describe('event-only replay', () => {
 		expect(() => replayZoltarEvents([canonical, createReplayLog({ transactionHash: `0x${'fe'.repeat(32)}`, transactionIndex: 1 })])).toThrow('block log position contains conflicting transactions')
 	})
 
-	test('vault checkpoints preserve the fractional fee entitlement carried into later accrual', () => {
-		const pool = '0x1111111111111111111111111111111111111111'
-		const vault = '0x2222222222222222222222222222222222222222'
-		const replayed = replayZoltarEvents([
-			createReplayLog({
-				emitter: pool,
-				eventName: 'VaultAccountingCheckpoint',
-				args: {
-					vault,
-					repBackingUnits: 10n,
-					underwritingLimitAttoEth: 3n,
-					claimableFeesAttoEth: 1n,
-					feeIndex: 4n,
-					vaultFeeRemainder: 7n,
-					resultingTotalRepBackingUnits: 10n,
-					resultingFeeEligibleUnderwritingLimitAttoEth: 3n,
-				},
-			}),
-		])
-		const replayedVault = replayed.vaults.get(pool)?.get(vault)
-		if (replayedVault?.vaultFeeRemainder !== 7n) throw new Error('vault fee remainder was not replayed')
+	test('uniform auction replay tracks bid IDs, lots, partial fills and refunds', () => {
+		const auction = '0x1111111111111111111111111111111111111111'
+		const bidder = '0x2222222222222222222222222222222222222222'
+		const vault = '0x3333333333333333333333333333333333333333'
+		const logs = [
+			createReplayLog({ emitter: auction, logIndex: 0, eventName: 'AuctionStarted', args: { opensAt: 10n, closesAt: 20n, lotAttoEth: 5n, targetLots: 3n, inventoryAttoRep: 60n, maximumAttoRepPerLot: 20n } }),
+			createReplayLog({ emitter: auction, logIndex: 1, eventName: 'BidSubmitted', args: { bidId: 1n, bidder, vault, lots: 4n, minimumAttoRepPerLot: 20n, targetHealthBps: 15_000n } }),
+			createReplayLog({ emitter: auction, logIndex: 2, eventName: 'AuctionFinalized', args: { attoRepPerLot: 20n, filledLots: 3n, raisedAttoEth: 15n, soldAttoRep: 60n } }),
+			createReplayLog({ emitter: auction, logIndex: 3, eventName: 'BidSettled', args: { bidId: 1n, bidder, filledLots: 3n, refundAttoEth: 5n } }),
+		]
+		for (const log of logs) {
+			const event = uniformAuctionArtifact.abi.find(item => item.type === 'event' && item.name === log.eventName)
+			if (event?.type !== 'event') throw new Error(`Missing uniform auction event ${log.eventName}`)
+			expect(Object.keys(log.args).sort()).toEqual(event.inputs.map(input => input.name).sort())
+		}
+		const replayed = replayZoltarEvents(logs.toReversed())
+		expect(replayed.auctions.get(auction)).toEqual({ opensAt: 10n, closesAt: 20n, lotAttoEth: 5n, targetLots: 3n, inventoryAttoRep: 60n, maximumAttoRepPerLot: 20n, attoRepPerLot: 20n, filledLots: 3n, raisedAttoEth: 15n, soldAttoRep: 60n })
+		expect(replayed.auctionBids.get(auction)?.get('1')).toEqual({ bidder, vault, bidId: 1n, lots: 4n, minimumAttoRepPerLot: 20n, targetHealthBps: 15_000n, filledLots: 3n, refundAttoEth: 5n })
+		expect(() => replayZoltarEvents(logs.slice(3))).toThrow('BidSettled references unknown bid')
 	})
 
-	test('coordinator checkpoints preserve report sponsorship and operation state', () => {
+	test('coordinator reports preserve pending report and maximum settlement fee', () => {
 		const coordinator = '0x1111111111111111111111111111111111111111'
-		const sponsor = '0x2222222222222222222222222222222222222222'
-		const replayed = replayZoltarEvents([
-			createReplayLog({
-				emitter: coordinator,
-				eventName: 'CoordinatorStateCheckpoint',
-				args: {
-					reason: 2n,
-					reportId: 9n,
-					operationId: 4n,
-					pendingReportId: 9n,
-					pendingReportSponsor: sponsor,
-					pendingOperationSlotId: 4n,
-					pendingReportMaxSettlementBaseFeeAttoEthPerGas: 100n,
-					lastPrice: 12n,
-					lastSettlementTimestamp: 20n,
-					stagedOperationCounter: 4n,
-					activeStagedOperationCount: 2n,
-					pendingSettlementOperationCount: 1n,
-				},
-			}),
-		])
-		const replayedCoordinator = replayed.coordinators.get(coordinator)
-		if (replayedCoordinator?.pendingReportSponsor !== sponsor) throw new Error('pending report sponsor was not replayed')
-		if (replayedCoordinator.activeStagedOperationCount !== 2n) throw new Error('active operation count was not replayed')
+		const replayed = replayZoltarEvents([createReplayLog({ emitter: coordinator, eventName: 'PriceRequested', args: { reportId: 9n, pendingReportMaxSettlementBaseFeeAttoEthPerGas: 100n } })])
+		expect(replayed.coordinators.get(coordinator)?.pendingReportId).toBe(9n)
+		expect(replayed.coordinators.get(coordinator)?.pendingReportMaxSettlementBaseFeeAttoEthPerGas).toBe(100n)
 	})
 
 	test('REP discovery replays genesis token history before the ZoltarQuestionData event anchor', () => {
@@ -301,25 +202,7 @@ describe('event-only replay', () => {
 				args: { account: pool, actor: factory, authorized: true },
 			}),
 			createReplayLog({ emitter: pool, logIndex: 1 }),
-			createReplayLog({
-				emitter: coordinator,
-				eventName: 'CoordinatorStateCheckpoint',
-				logIndex: 2,
-				args: {
-					reason: 0n,
-					reportId: 0n,
-					operationId: 0n,
-					pendingReportId: 0n,
-					pendingReportSponsor: zeroAddress,
-					pendingOperationSlotId: 0n,
-					pendingReportMaxSettlementBaseFeeAttoEthPerGas: 0n,
-					lastPrice: 0n,
-					lastSettlementTimestamp: 0n,
-					stagedOperationCounter: 0n,
-					activeStagedOperationCount: 0n,
-					pendingSettlementOperationCount: 0n,
-				},
-			}),
+			createReplayLog({ emitter: coordinator, logIndex: 2, eventName: 'SecurityPoolSet', args: { securityPool: pool } }),
 			createReplayLog({
 				emitter: shareToken,
 				eventName: 'TransferBatch',
@@ -374,7 +257,7 @@ describe('event-only replay', () => {
 		if (replayed.escalationLifecycles.get(game)?.activationTime !== 10n) throw new Error('initial game lifecycle was not retained')
 		if (replayed.escalationLifecycles.has(unrecognizedGame)) throw new Error('unrecognized escalation-game emitter was accepted')
 		if (replayed.pools.get(pool)?.settlementCollateralAttoEth !== 1n) throw new Error('pool initialization checkpoint was not retained')
-		if (replayed.coordinators.get(coordinator)?.checkpointReason !== 0n) throw new Error('coordinator setup checkpoint was not retained')
+		if (replayed.coordinators.get(coordinator)?.securityPool !== pool) throw new Error('coordinator setup checkpoint was not retained')
 		if (replayed.shareTokenBalances.get(shareToken)?.get(1n)?.get(holder) !== 7n) throw new Error('token 1 holder balance mismatch')
 		if (replayed.shareTokenBalances.get(shareToken)?.get(2n)?.get(receiver) !== 3n) throw new Error('token 2 receiver balance mismatch')
 		if (replayed.shareTokenSupplies.get(shareToken)?.get(1n) !== 9n) throw new Error('token 1 supply mismatch')
@@ -491,26 +374,6 @@ describe('event-only replay', () => {
 					lastSettlementTimestamp: 25n,
 				},
 			}),
-			createReplayLog({
-				emitter: coordinator,
-				eventName: 'StagedOperationQueued',
-				logIndex: 11,
-				args: {
-					operationId: 7n,
-					operation: 2n,
-					operator: forker,
-					targetVault: pool,
-					operationValue: 3n,
-					queuedAt: 27n,
-					validForSeconds: 300n,
-					snapshotTargetBackingUnits: 11n,
-					snapshotTargetUnderwritingLimitAttoEth: 12n,
-					snapshotTargetDisputeStakedAttoRep: 112n,
-					snapshotTotalPoolHeldAttoRep: 13n,
-					snapshotTotalRepBackingUnits: 14n,
-					isPendingSlot: true,
-				},
-			}),
 		]
 
 		const secondBlockHash: Hex = `0x${'2'.padStart(64, '0')}`
@@ -533,9 +396,6 @@ describe('event-only replay', () => {
 		if (coordinatorState.reports.get(2n)?.status !== 'Reported') throw new Error('reported coordinator report mismatch')
 		if (coordinatorState.reports.get(3n)?.status !== 'Recovered') throw new Error('recovered coordinator report mismatch')
 		if (coordinatorState.pendingReportId !== 0n || coordinatorState.lastPrice !== 15n) throw new Error('coordinator resulting state mismatch')
-		const queuedOperation = replayed.coordinatorOperations.get(coordinator)?.get(7n)
-		if (queuedOperation?.status !== 'Queued') throw new Error('queued operation status mismatch')
-		if (queuedOperation.snapshotTargetDisputeStakedAttoRep !== 112n) throw new Error('queued dispute-staked REP snapshot mismatch')
 	})
 
 	test('contract-local escalation and coordinator counters remain isolated by emitter', () => {
@@ -558,56 +418,18 @@ describe('event-only replay', () => {
 				logIndex: 1,
 				args: { nodeId: 1n, outcome: 1n, depositor: secondVault, amountAttoRep: 20n, parentDepositIndex: 1n, cumulativeRepAmountAttoRep: 20n },
 			}),
-			createReplayLog({
-				emitter: firstCoordinator,
-				eventName: 'StagedOperationQueued',
-				logIndex: 2,
-				args: {
-					operationId: 1n,
-					operation: 0n,
-					operator: firstVault,
-					targetVault: firstVault,
-					operationValue: 3n,
-					queuedAt: 10n,
-					validForSeconds: 300n,
-					snapshotTargetBackingUnits: 5n,
-					snapshotTargetUnderwritingLimitAttoEth: 6n,
-					snapshotTargetDisputeStakedAttoRep: 106n,
-					snapshotTotalPoolHeldAttoRep: 7n,
-					snapshotTotalRepBackingUnits: 8n,
-					isPendingSlot: true,
-				},
-			}),
-			createReplayLog({
-				emitter: secondCoordinator,
-				eventName: 'StagedOperationQueued',
-				logIndex: 3,
-				args: {
-					operationId: 1n,
-					operation: 1n,
-					operator: secondVault,
-					targetVault: secondVault,
-					operationValue: 4n,
-					queuedAt: 11n,
-					validForSeconds: 600n,
-					snapshotTargetBackingUnits: 9n,
-					snapshotTargetUnderwritingLimitAttoEth: 10n,
-					snapshotTargetDisputeStakedAttoRep: 110n,
-					snapshotTotalPoolHeldAttoRep: 11n,
-					snapshotTotalRepBackingUnits: 12n,
-					isPendingSlot: false,
-				},
-			}),
+			createReplayLog({ emitter: firstCoordinator, logIndex: 2, eventName: 'PriceReported', args: { reportId: 1n, price: 3n, lastSettlementTimestamp: 10n } }),
+			createReplayLog({ emitter: secondCoordinator, logIndex: 3, eventName: 'PriceReported', args: { reportId: 1n, price: 4n, lastSettlementTimestamp: 11n } }),
 		]
 
 		const replayed = replayZoltarEvents(logs.toReversed())
 		if (replayed.escalationDeposits.get(firstGame)?.get('1:1')?.depositor !== firstVault) throw new Error('first game deposit counter collided')
 		if (replayed.escalationDeposits.get(secondGame)?.get('1:1')?.depositor !== secondVault) throw new Error('second game deposit counter collided')
-		if (replayed.coordinatorOperations.get(firstCoordinator)?.get(1n)?.operationValue !== 3n) throw new Error('first coordinator operation counter collided')
-		if (replayed.coordinatorOperations.get(secondCoordinator)?.get(1n)?.operationValue !== 4n) throw new Error('second coordinator operation counter collided')
+		if (replayed.coordinators.get(firstCoordinator)?.reports.get(1n)?.price !== 3n) throw new Error('first coordinator report counter collided')
+		if (replayed.coordinators.get(secondCoordinator)?.reports.get(1n)?.price !== 4n) throw new Error('second coordinator report counter collided')
 	})
 
-	test('escalation claim replay preserves immutable depositors and truth-auction retention', () => {
+	test('escalation claim replay preserves immutable depositors and complete reporter principal', () => {
 		const game: Address = '0x1111111111111111111111111111111111111111'
 		const firstVault: Address = '0x2222222222222222222222222222222222222222'
 		const secondVault: Address = '0x3333333333333333333333333333333333333333'
@@ -637,12 +459,7 @@ describe('event-only replay', () => {
 				logIndex: 3,
 				args: { depositor: secondVault, outcome: 2n, amountAttoRep: 50n, depositIndex: 0n, cumulativeRepAmountAttoRep: 50n, resultingVaultDisputeStakedAttoRep: 50n, resultingTotalDisputeStakedAttoRep: 150n },
 			}),
-			createReplayLog({
-				emitter: game,
-				eventName: 'TruthAuctionHaircutApplied',
-				logIndex: 4,
-				args: { repBefore: 150n, repRemoved: 60n, repRemaining: 90n, rebasedElapsed: 10n },
-			}),
+
 			createReplayLog({
 				emitter: game,
 				eventName: 'LocalDepositAppended',
@@ -659,12 +476,11 @@ describe('event-only replay', () => {
 		if (firstBundle === undefined || secondBundle === undefined || postResumeBundle === undefined) throw new Error('claim bundles missing')
 		expect(firstBundle.depositor).toBe(firstVault)
 		expect(secondBundle.depositor).toBe(secondVault)
-		expect((firstBundle.claimRepUnits * 90n) / 150n).toBe(60n)
-		expect((secondBundle.claimRepUnits * 90n) / 150n).toBe(30n)
-		expect(replayed.escalationTotalEscrowedRep.get(game)).toBe(90n)
-		expect(replayed.escalationResolutionBalances.get(game)).toEqual([1n, 60n, 30n])
-		expect(postResumeBundle.claimRepUnits).toBe(2n)
-		expect((postResumeBundle.claimRepUnits * 90n) / 150n).toBe(1n)
+		expect(firstBundle.claimRepUnits).toBe(100n)
+		expect(secondBundle.claimRepUnits).toBe(50n)
+		expect(replayed.escalationTotalEscrowedRep.get(game)).toBe(150n)
+		expect(replayed.escalationResolutionBalances.get(game)).toEqual([1n, 100n, 50n])
+		expect(postResumeBundle.claimRepUnits).toBe(1n)
 	})
 
 	test('local carry consumption updates peaks before a recursive fork checkpoint', () => {
@@ -824,85 +640,6 @@ describe('event-only replay', () => {
 			inheritedTie,
 		]
 		expect(() => replayZoltarEvents(checkpointLogs)).toThrow('inherited threshold tie source game does not match its fork carry checkpoint')
-	})
-
-	test('late children inherit the immutable fork-time carry snapshot after source consumption', () => {
-		const parentPool = '0x1111111111111111111111111111111111111111'
-		const parentGame = '0x2222222222222222222222222222222222222222'
-		const childGame = '0x3333333333333333333333333333333333333333'
-		const depositor = '0x4444444444444444444444444444444444444444'
-		const forker = '0x5555555555555555555555555555555555555555'
-		const migrationProxy = '0x6666666666666666666666666666666666666666'
-		const zeroHash = `0x${'0'.repeat(64)}` as Hex
-		const snapshotId = `0x${'1'.repeat(64)}` as Hex
-		const parentLeaf = hashCarryLeaf(depositor, 1n, 10n, 0n, 10n, 1n)
-		const logs = [
-			createReplayLog({ emitter: parentGame, eventName: 'GameStarted', logIndex: 0, args: { activationTime: 1n, startBondAttoRep: 1n, nonDecisionThresholdAttoRep: 100n } }),
-			createReplayLog({
-				emitter: parentGame,
-				eventName: 'LocalDepositAppended',
-				logIndex: 1,
-				args: { nodeId: 1n, outcome: 1n, depositor, amountAttoRep: 10n, parentDepositIndex: 0n, cumulativeRepAmountAttoRep: 10n },
-			}),
-			createReplayLog({ emitter: forker, eventName: 'DisputeStakedRepDrainedAtFork', logIndex: 2, args: { parentPool, sourceGame: parentGame, amountAttoRep: 10n } }),
-			createReplayLog({
-				emitter: forker,
-				eventName: 'SecurityPoolForkSnapshot',
-				logIndex: 3,
-				args: {
-					parentPool,
-					migrationProxy,
-					ownFork: true,
-					unresolvedEscalation: true,
-					settlementCollateralAtForkAttoEth: 0n,
-					totalPoolHeldRepAtForkAttoRep: 0n,
-					auctionableAttoRepAtFork: 0n,
-					escalationSourceRepAtForkAttoRep: 10n,
-					escalationChildRepAtForkAttoRep: 0n,
-					escalationStartBondAtForkAttoRep: 1n,
-					escalationNonDecisionThresholdAtForkAttoRep: 100n,
-					escalationElapsedAtFork: 0n,
-					escalationSnapshotId: snapshotId,
-				},
-			}),
-			createReplayLog({
-				emitter: parentGame,
-				eventName: 'CarryDepositConsumed',
-				logIndex: 4,
-				args: {
-					parentDepositIndex: 0n,
-					sourceNodeId: 1n,
-					depositor,
-					outcome: 1n,
-					amountAttoRep: 10n,
-					reason: 0n,
-					resultingUnresolvedTotalAttoRep: 0n,
-					resultingNullifierRoot: zeroHash,
-					resultingCarryRoot: zeroHash,
-				},
-			}),
-			createReplayLog({ emitter: childGame, eventName: 'GameContinuedFromFork', logIndex: 5, args: { startBondAttoRep: 1n, nonDecisionThresholdAttoRep: 100n, elapsedAtFork: 0n } }),
-			createReplayLog({
-				emitter: childGame,
-				eventName: 'ForkCarryCheckpoint',
-				logIndex: 6,
-				args: {
-					sourceGame: parentGame,
-					snapshotId,
-					carryRoots: [zeroHash, parentLeaf, zeroHash],
-					nullifierRoots: [zeroHash, zeroHash, zeroHash],
-					leafCounts: [0n, 1n, 0n],
-					unresolvedTotalsAttoRep: [0n, 10n, 0n],
-					resolutionBalancesAttoRep: [0n, 10n, 0n],
-				},
-			}),
-		]
-
-		const replayed = replayZoltarEvents(logs)
-		if (replayed.escalationCarryRoots.get(parentGame)?.[1] !== zeroHash) throw new Error('source carry root was not consumed')
-		if (replayed.escalationCarrySnapshots.get(snapshotId)?.carryRoots[1] !== parentLeaf) throw new Error('fork-time carry snapshot was not preserved')
-		if (replayed.escalationCarryRoots.get(childGame)?.[1] !== parentLeaf) throw new Error('late child carry root mismatch')
-		if (replayed.escalationCarryPeaks.get(childGame)?.[1]?.[0] !== parentLeaf) throw new Error('late child did not inherit fork-time carry peaks')
 	})
 
 	test('universe migration and child records use canonical resulting state', () => {
@@ -1102,14 +839,14 @@ describe('event-only replay', () => {
 				logIndex: 13,
 				args: {
 					vault: secondVault,
-					repReceiver: receiver,
+					repReceiver: zeroAddress,
 					principalByOutcomeAttoRep: [0n, 0n, 4n],
 					principalToTransferAttoRep: 4n,
-					transferredRep: true,
+					transferredRep: false,
 				},
 			}),
 			createReplayLog({ emitter: game, eventName: 'VaultEscrowUpdated', logIndex: 14, args: { vault: secondVault, disputeStakedRepByVaultAttoRep: 0n, totalDisputeStakedAttoRep: 0n } }),
-			createReplayLog({ emitter: game, eventName: 'ResidualRepSweptToSecurityPool', logIndex: 15, args: { amountAttoRep: 2n } }),
+			createReplayLog({ emitter: game, eventName: 'EscalationSurplusAccrued', logIndex: 15, args: { amountAttoRep: 2n, cumulativeSurplusAttoRep: 2n } }),
 		]
 
 		const replayed = replayZoltarEvents(logs.toReversed())
@@ -1123,49 +860,7 @@ describe('event-only replay', () => {
 		const forkedEscrow = replayed.escalationForkedEscrow.get(game)?.get(`${vault}:2`)
 		if (forkedEscrow?.sourcePrincipalClaimedAttoRep !== 20n || forkedEscrow.childRepClaimedAttoRep !== 15n) throw new Error('forked escrow settlement mismatch')
 		if (replayed.escalationForkedExports.get(game)?.get(vault)?.totalChildRepToTransferAttoRep !== 15n) throw new Error('forked escrow export mismatch')
-		if (replayed.escalationResidualRepSwept.get(game) !== 2n) throw new Error('residual REP sweep mismatch')
-	})
-
-	test('vault migration replay keeps the same vault isolated across parallel child pools', () => {
-		const parentPool: Address = '0x1111111111111111111111111111111111111111'
-		const yesChildPool: Address = '0x2222222222222222222222222222222222222222'
-		const noChildPool: Address = '0x3333333333333333333333333333333333333333'
-		const vault: Address = '0x4444444444444444444444444444444444444444'
-		const migrationLog = (childPool: Address, outcomeIndex: bigint, logIndex: number) =>
-			createReplayLog({
-				emitter: '0x5555555555555555555555555555555555555555',
-				eventName: 'VaultMigrationCheckpoint',
-				logIndex,
-				args: {
-					parentPool,
-					childPool,
-					vault,
-					outcomeIndex,
-					migratedRepDeltaAttoRep: 1n,
-					resultingChildMigratedRepTotalAttoRep: 1n,
-					resultingParentRepBackingUnits: 0n,
-					resultingParentUnderwritingLimitAttoEth: 0n,
-					resultingChildRepBackingUnits: 1n,
-					resultingChildUnderwritingLimitAttoEth: 1n,
-					resultingParentTotalRepBackingUnits: 0n,
-					resultingChildTotalRepBackingUnits: 1n,
-					resultingParentTotalUnderwritingLimitAttoEth: 0n,
-					resultingChildTotalUnderwritingLimitAttoEth: 1n,
-					settlementCollateralTransferredAttoEth: 0n,
-					cumulativeSettlementCollateralTransferredAttoEth: 0n,
-				},
-			})
-
-		const replayed = replayZoltarEvents([migrationLog(noChildPool, 2n, 1), migrationLog(yesChildPool, 1n, 0)])
-		const migrationsByChild = replayed.vaultMigrations.get(parentPool)
-		const yesMigrations = migrationsByChild?.get(yesChildPool)
-		const noMigrations = migrationsByChild?.get(noChildPool)
-		if (!(yesMigrations instanceof Map) || !yesMigrations.has(vault)) {
-			throw new Error('Yes-child vault migration was overwritten')
-		}
-		if (!(noMigrations instanceof Map) || !noMigrations.has(vault)) {
-			throw new Error('No-child vault migration was overwritten')
-		}
+		if (replayed.escalationSurplusAccrued.get(game) !== 2n) throw new Error('source-accrued REP surplus mismatch')
 	})
 
 	test('protocol reducers reconstruct relationships, REP, lifecycle, and commitment state', () => {
@@ -1296,40 +991,16 @@ describe('event-only replay', () => {
 				emitter: auction,
 				eventName: 'AuctionStarted',
 				logIndex: 10,
-				args: { startTimestamp: 20n, endTimestamp: 30n },
+				args: { opensAt: 20n, closesAt: 30n, lotAttoEth: 5n, targetLots: 1n, inventoryAttoRep: 8n, maximumAttoRepPerLot: 8n },
 			}),
 			createReplayLog({
 				emitter: auction,
 				eventName: 'AuctionFinalized',
 				logIndex: 11,
-				args: { clearingTick: -1n, grossAcceptedAttoEth: 5n, attoRepSold: 8n, bidAtClearingTickAttoEth: 5n, funded: true },
+				args: { attoRepPerLot: 8n, filledLots: 1n, raisedAttoEth: 5n, soldAttoRep: 8n },
 			}),
-			createReplayLog({
-				emitter: coordinator,
-				eventName: 'StagedOperationQueued',
-				logIndex: 12,
-				args: {
-					operationId: 3n,
-					operation: 1n,
-					operator: migrator,
-					targetVault: pool,
-					operationValue: 2n,
-					queuedAt: 21n,
-					validForSeconds: 300n,
-					snapshotTargetBackingUnits: 5n,
-					snapshotTargetUnderwritingLimitAttoEth: 6n,
-					snapshotTargetDisputeStakedAttoRep: 106n,
-					snapshotTotalPoolHeldAttoRep: 7n,
-					snapshotTotalRepBackingUnits: 8n,
-					isPendingSlot: true,
-				},
-			}),
-			createReplayLog({
-				emitter: coordinator,
-				eventName: 'ExecutedStagedOperation',
-				logIndex: 13,
-				args: { operationId: 3n, operation: 1n, success: true, errorMessage: '' },
-			}),
+			createReplayLog({ emitter: coordinator, logIndex: 12, eventName: 'PriceRequested', args: { reportId: 3n, pendingReportMaxSettlementBaseFeeAttoEthPerGas: 100n } }),
+			createReplayLog({ emitter: coordinator, logIndex: 13, eventName: 'PriceReported', args: { reportId: 3n, price: 7n, lastSettlementTimestamp: 22n } }),
 		]
 
 		const replayed = replayZoltarEvents(logs.toReversed())
@@ -1344,21 +1015,46 @@ describe('event-only replay', () => {
 		if (replayed.escalationUnresolvedTotals.get(game)?.[1] !== 0n) throw new Error('carry total mismatch')
 		if (replayed.escalationNullifierRoots.get(game)?.[1] !== rootC) throw new Error('nullifier root mismatch')
 		if (replayed.escalationDeposits.get(game)?.get('1:0')?.consumed !== true) throw new Error('deposit consumption mismatch')
-		if (replayed.auctions.get(auction)?.funded !== true) throw new Error('auction lifecycle mismatch')
-		if (replayed.coordinatorOperations.get(coordinator)?.get(3n)?.status !== 'Succeeded') throw new Error('coordinator terminal state mismatch')
+		if (replayed.auctions.get(auction)?.soldAttoRep !== 8n) throw new Error('auction lifecycle mismatch')
+		if (replayed.coordinators.get(coordinator)?.reports.get(3n)?.status !== 'Reported') throw new Error('coordinator terminal state mismatch')
 	})
 
-	const fixture = useStatoblastForkMigrationFixture()
+	const portfolioFixture = useSecurityPoolPortfolioFixture()
+	const fixture = portfolioFixture.base
+	const reportBond = 100n * unit
 
-	let client: StatoblastForkMigrationFixture['client']
-	let mockWindow: StatoblastForkMigrationFixture['mockWindow']
-	let securityPoolAddresses: StatoblastForkMigrationFixture['securityPoolAddresses']
+	let client: typeof fixture.client
+	let mockWindow: typeof fixture.mockWindow
+	let securityPoolAddresses: ReturnType<typeof portfolioFixture.poolFor>
 
 	beforeEach(() => {
 		client = fixture.client
 		mockWindow = fixture.mockWindow
-		securityPoolAddresses = fixture.securityPoolAddresses
+		securityPoolAddresses = portfolioFixture.poolFor(fixture.questionId)
 	})
+
+	const depositWallet = async (outcome: number, amount: bigint) => {
+		const now = await mockWindow.getTime()
+		if (now <= fixture.questionData.endTime) await mockWindow.setTime(fixture.questionData.endTime + 1n)
+		await approveToken(client, getRepTokenAddress(fixture.genesisUniverse), securityPoolAddresses.securityPool)
+		return writeContractAndWait(client, () => client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'depositWalletRepToEscalationGame', args: [outcome, amount] }))
+	}
+	const activateChild = async (title: string) => {
+		const question = { ...fixture.questionData, title, endTime: (await mockWindow.getTime()) - 1n, startTime: 0n }
+		await createQuestion(client, question, fixture.outcomes)
+		await approveToken(client, getRepTokenAddress(fixture.genesisUniverse), getZoltarAddress())
+		await forkUniverse(client, fixture.genesisUniverse, getQuestionId(question, fixture.outcomes))
+		const controller = await client.readContract({ abi: portfolioArtifact.abi, address: portfolioFixture.portfolio, functionName: 'forkController' })
+		const forkTime = (await getUniverseData(client, fixture.genesisUniverse)).forkTime
+		await mockWindow.setTime(forkTime + 63n * DAY)
+		const childUniverseId = getChildUniverseId(fixture.genesisUniverse, 1n)
+		await writeContractAndWait(client, () => client.writeContract({ abi: forkArtifact.abi, address: controller, functionName: 'startBranch', args: [fixture.genesisUniverse, 1n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: forkArtifact.abi, address: controller, functionName: 'finalizeBranch', args: [childUniverseId] }))
+		const target = { abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi, address: getInfraContractAddresses().securityPoolForker }
+		const childDeploymentHash = await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'preparePortfolioQuestion', args: [securityPoolAddresses.securityPool, childUniverseId] }))
+		for (let outcome = 0; outcome < 3; outcome++) await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'materializePortfolioQuestion', args: [securityPoolAddresses.securityPool, childUniverseId] }))
+		return { childUniverseId, childDeploymentHash }
+	}
 
 	const getContractReplayLogs = async (address: Address, abi: Abi, fromBlock: bigint, toBlock: bigint) => {
 		const chainId = BigInt(await client.getChainId())
@@ -1409,15 +1105,10 @@ describe('event-only replay', () => {
 		const questionId = getQuestionId(questionData, fixture.outcomes)
 		await createQuestion(client, questionData, fixture.outcomes)
 		const factory = getInfraContractAddresses().securityPoolFactory
-		const deploymentHash = await client.writeContract({
-			address: factory,
-			abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
-			functionName: 'deployOriginSecurityPool',
-			args: [fixture.genesisUniverse, questionId, fixture.statoblastSecurityMultiplierBps, 10n * 10n ** 9n],
-		})
+		const deploymentHash = await portfolioFixture.register(questionId)
 		const receipt = await client.waitForTransactionReceipt({ hash: deploymentHash })
 		if (receipt.status === 'reverted') throw new Error('origin pool deployment reverted')
-		const addresses = getSecurityPoolAddresses(zeroAddress, fixture.genesisUniverse, questionId, fixture.statoblastSecurityMultiplierBps)
+		const addresses = portfolioFixture.poolFor(questionId)
 		const blockNumber = receipt.blockNumber
 		const replayLogs = (
 			await Promise.all([
@@ -1431,12 +1122,11 @@ describe('event-only replay', () => {
 			.filter(log => log.transactionHash === deploymentHash)
 		const deploymentLog = replayLogs.find(log => log.eventName === 'DeploySecurityPool')
 		const authorizationLog = replayLogs.find(log => log.eventName === 'AuthorizationUpdated')
-		const poolCheckpointLog = replayLogs.find(log => log.eventName === 'PoolAccountingCheckpoint')
-		const coordinatorCheckpointLog = replayLogs.find(log => log.eventName === 'CoordinatorStateCheckpoint')
-		if (deploymentLog === undefined || authorizationLog === undefined || poolCheckpointLog === undefined || coordinatorCheckpointLog === undefined) {
-			throw new Error('origin deployment receipt is missing replay relationships or setup checkpoints')
+		const coordinatorCheckpointLog = replayLogs.find(log => log.eventName === 'SecurityPoolSet')
+		if (deploymentLog === undefined || authorizationLog === undefined || coordinatorCheckpointLog === undefined) {
+			throw new Error('origin deployment receipt is missing replay relationships or setup events')
 		}
-		for (const setupLog of [authorizationLog, poolCheckpointLog, coordinatorCheckpointLog]) {
+		for (const setupLog of [authorizationLog, coordinatorCheckpointLog]) {
 			if (setupLog.logIndex >= deploymentLog.logIndex) throw new Error('setup checkpoint did not precede relationship discovery')
 		}
 
@@ -1450,54 +1140,40 @@ describe('event-only replay', () => {
 		})
 		strictEqualTypeSafe(replayed.poolDeployments.get(addresses.securityPool)?.initialReportPriorityFeeAttoEthPerGas, storedOriginPriorityFee, 'origin priority fee replay mismatch')
 		if (replayed.authorizations.get(addresses.shareToken)?.get(addresses.securityPool) !== true) throw new Error('origin pool authorization was not replayed')
-		if (replayed.pools.get(addresses.securityPool)?.reason !== 5n) throw new Error('origin pool initialization checkpoint was not replayed')
 		if (replayed.coordinators.get(addresses.openOraclePriceCoordinator)?.securityPool !== addresses.securityPool) {
 			throw new Error('origin coordinator setup checkpoint was not replayed')
 		}
 	})
 
-	test('actual queued coordinator operation replays every governing field and pending membership', async () => {
-		const coordinator = securityPoolAddresses.openOraclePriceCoordinator
-		const validForSeconds = 300n
-		const transactionHash = await requestPriceIfNeededAndStageOperation(client, coordinator, OperationType.WithdrawRep, client.account.address, fixture.reportBond, validForSeconds)
-		const receipt = await client.getTransactionReceipt({ hash: transactionHash })
-		const replayLogs = (await getContractReplayLogs(coordinator, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, receipt.blockNumber, receipt.blockNumber)).filter(log => log.transactionHash === transactionHash)
-		const queuedLog = replayLogs.find(log => log.eventName === 'StagedOperationQueued')
-		if (queuedLog === undefined) throw new Error('queued operation event missing')
-		const operationId = queuedLog.args['operationId']
-		if (typeof operationId !== 'bigint') throw new Error('queued operation ID missing')
-		const replayed = replayZoltarEvents(replayLogs)
-		const operation = replayed.coordinatorOperations.get(coordinator)?.get(operationId)
-		if (operation === undefined) throw new Error('queued operation replay missing')
-		const storedOperation = await client.readContract({
-			address: coordinator,
-			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'stagedOperations',
-			args: [operationId],
-		})
-		strictEqualTypeSafe(operation.operation, storedOperation[0], 'queued operation type replay mismatch')
-		strictEqualTypeSafe(operation.operator, storedOperation[1], 'queued operator replay mismatch')
-		strictEqualTypeSafe(operation.targetVault, storedOperation[3], 'queued target replay mismatch')
-		strictEqualTypeSafe(operation.operationValue, storedOperation[4], 'queued operation amount replay mismatch')
-		strictEqualTypeSafe(operation.queuedAt, storedOperation[5], 'queued timestamp replay mismatch')
-		strictEqualTypeSafe(operation.validForSeconds, storedOperation[6], 'queued validity replay mismatch')
-		strictEqualTypeSafe(operation.snapshotTargetBackingUnits, storedOperation[7], 'queued backingUnits snapshot replay mismatch')
-		strictEqualTypeSafe(operation.snapshotTargetUnderwritingLimitAttoEth, storedOperation[8], 'capacity ownership')
-		strictEqualTypeSafe(operation.snapshotTargetDisputeStakedAttoRep, queuedLog.args['snapshotTargetDisputeStakedAttoRep'], 'queued dispute-staked REP snapshot replay mismatch')
-		const pendingOperationIds = await client.readContract({
-			address: coordinator,
-			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'getPendingSettlementOperationIds',
-			args: [],
-		})
-		strictEqualTypeSafe(operation.isPendingSlot, pendingOperationIds.includes(operationId), 'queued pending-set membership replay mismatch')
-		strictEqualTypeSafe(replayed.coordinators.get(coordinator)?.pendingOperationSlotId, operationId, 'queued compatibility slot replay mismatch')
+	test('shared question accounting and share balances replay across purchases and returns', async () => {
+		await portfolioFixture.prepare()
+		const holder = portfolioFixture.other()
+		for (const question of [fixture.questionId, portfolioFixture.secondQuestionId]) {
+			const pool = portfolioFixture.poolFor(question)
+			for (const amount of [3n * unit, 5n * unit, 2n * unit]) {
+				await portfolioFixture.mint(amount, question)
+				await writeContractAndWait(holder, () => holder.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool.securityPool, functionName: 'redeemCompleteSet', args: [amount / 2n] }))
+			}
+			await mockWindow.advanceTime(10n)
+			await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool.securityPool, functionName: 'updateSettlementCollateral' }))
+			const latest = await client.getBlockNumber()
+			const logs = (await Promise.all([getContractReplayLogs(pool.securityPool, statoblast_SecurityPool_SecurityPool.abi, 0n, latest), getContractReplayLogs(pool.shareToken, statoblast_tokens_ShareToken_ShareToken.abi, 0n, latest)])).flat()
+			const replayed = replayZoltarEvents(logs)
+			const state = replayed.pools.get(pool.securityPool)
+			if (state === undefined) throw new Error('Question accounting event missing')
+			expect(state.settlementCollateralAttoEth).toBe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool.securityPool, functionName: 'settlementCollateralAttoEth' }))
+			expect(state.shareTokenSupplyAttoShares).toBe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool.securityPool, functionName: 'shareTokenSupplyAttoShares' }))
+			expect(state.lastUpdatedFeeAccumulator).toBe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool.securityPool, functionName: 'lastUpdatedFeeAccumulator' }))
+			for (const outcome of [0n, 1n, 2n]) {
+				const id = fixture.genesisUniverse * 256n + outcome
+				expect(replayed.shareTokenBalances.get(pool.shareToken)?.get(id)?.get(holder.account.address)).toBe(await holder.readContract({ abi: statoblast_tokens_ShareToken_ShareToken.abi, address: pool.shareToken, functionName: 'balanceOf', args: [holder.account.address, id] }))
+			}
+		}
 	})
 
 	test('actual first escalation deposit pre-discovers the game before its lifecycle event', async () => {
 		await mockWindow.setTime(fixture.questionData.endTime + 1n)
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, 0n)
-		const depositHash = await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, fixture.reportBond)
+		const depositHash = await depositWallet(QuestionOutcome.Yes, reportBond)
 		const receipt = await client.getTransactionReceipt({ hash: depositHash })
 		const factory = getInfraContractAddresses().securityPoolFactory
 		const factoryLogs = await getContractReplayLogs(factory, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, 0n, receipt.blockNumber)
@@ -1524,33 +1200,68 @@ describe('event-only replay', () => {
 		}
 	})
 
+	test('actual ordinary settlement replays global losing retirement without synthetic per-deposit cleanup', async () => {
+		const fromBlock = (await client.getBlockNumber()) + 1n
+		const pool = securityPoolAddresses.securityPool
+		const game = securityPoolAddresses.escalationGame
+		const abi = statoblast_EscalationGame_EscalationGame.abi
+		await mockWindow.setTime(fixture.questionData.endTime + 1n)
+		for (const [outcome, principal] of [
+			[0, ordinaryEscalationPrincipals.lowLosingPrincipal],
+			[2, ordinaryEscalationPrincipals.bindingLosingPrincipal],
+			[1, ordinaryEscalationPrincipals.winningPrincipal],
+		] as const)
+			await depositWallet(outcome, principal)
+		await advancePastOrdinaryEscalationDeadline(client, mockWindow, pool)
+		const settlement = await writeContractAndWait(client, () => client.writeContract({ abi, address: game, functionName: 'settleOrdinaryGame' }))
+		const checkpointBlock = await client.getBlockNumber()
+		const logs = await getContractReplayLogs(game, abi, fromBlock, checkpointBlock)
+		const checkpointLogs = logs.filter(log => log.transactionHash === settlement)
+		expect(checkpointLogs.filter(log => log.eventName === 'OrdinarySettlementInitialized')).toHaveLength(1)
+		expect(checkpointLogs.some(log => log.eventName === 'CarryDepositConsumed' || log.eventName === 'VaultEscrowUpdated')).toBe(false)
+		const replayed = replayZoltarEvents(logs)
+		expect(replayed.escalationTotalEscrowedRep.get(game)).toBe(ordinaryEscalationPrincipals.winningPrincipal)
+		expect(replayed.escalationVaultEscrowedRep.get(game)?.get(client.account.address)).toBe(ordinaryEscalationPrincipals.winningPrincipal)
+		expect(replayed.escalationLocalUnresolvedByVault.get(game)?.get(client.account.address)).toEqual([0n, ordinaryEscalationPrincipals.winningPrincipal, 0n])
+		const snapshot = await client.readContract({ abi, address: game, functionName: 'getForkCarrySnapshot' })
+		expect(replayed.escalationCarryRoots.get(game)).toEqual([...(await client.readContract({ abi, address: game, functionName: 'getForkCarryRoots' }))])
+		expect(replayed.escalationLeafCounts.get(game)).toEqual([...snapshot[1]])
+		expect(replayed.escalationUnresolvedTotals.get(game)).toEqual([...snapshot[2]])
+		expect(replayed.escalationNullifierRoots.get(game)).toEqual([...snapshot[3]])
+		expect(replayed.escalationLifecycles.get(game)?.ordinarySettlementOutcome).toBe(BigInt(QuestionOutcome.Yes))
+		expect(replayed.escalationLifecycles.get(game)?.ordinaryWinningReserveAttoRep).toBe(await client.readContract({ abi, address: game, functionName: 'ordinaryWinningReserveAttoRep' }))
+		expect(replayed.escalationConsumptions.get(game)?.size ?? 0).toBe(0)
+		expect(replayed.escalationDeposits.get(game)?.get('0:0')?.consumed).toBe(false)
+		await withdrawFromEscalationGame(client, pool, QuestionOutcome.Yes, [0n])
+		const afterClaim = replayZoltarEvents(await getContractReplayLogs(game, abi, fromBlock, await client.getBlockNumber()))
+		expect(afterClaim.escalationTotalEscrowedRep.get(game)).toBe(0n)
+		expect(afterClaim.escalationUnresolvedTotals.get(game)).toEqual([0n, 0n, 0n])
+		expect(afterClaim.escalationConsumptions.get(game)?.size).toBe(1)
+		expect(afterClaim.escalationLifecycles.get(game)?.ordinaryWinningReserveAttoRep).toBe(0n)
+	})
+
 	test('actual child continuation replays its inherited carry checkpoint and storage', async () => {
 		const fromBlock = (await client.getBlockNumber()) + 1n
 		await mockWindow.setTime(fixture.questionData.endTime + 1n)
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, 0n)
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, fixture.reportBond)
-		await fixture.triggerExternalForkForSecurityPool(undefined, 'event replay child continuation')
-		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
-		const childDeploymentHash = await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		await depositWallet(QuestionOutcome.Yes, reportBond)
+		const { childUniverseId, childDeploymentHash } = await activateChild('event replay child continuation')
 		const receipt = await client.getTransactionReceipt({ hash: childDeploymentHash })
-		const childUniverseId = getChildUniverseId(fixture.genesisUniverse, QuestionOutcome.Yes)
-		const child = getSecurityPoolAddresses(securityPoolAddresses.securityPool, childUniverseId, fixture.questionId, fixture.statoblastSecurityMultiplierBps)
+		const initializedAtBlock = await client.getBlockNumber()
+		const child = portfolioFixture.poolFor(fixture.questionId, childUniverseId, securityPoolAddresses.securityPool)
 		const factory = getInfraContractAddresses().securityPoolFactory
 		const forker = getInfraContractAddresses().securityPoolForker
-		const factoryLogs = await getContractReplayLogs(factory, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, 0n, receipt.blockNumber)
+		const factoryLogs = await getContractReplayLogs(factory, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, 0n, initializedAtBlock)
 		const canonicalPools = new Set([securityPoolAddresses.securityPool.toLowerCase(), child.securityPool.toLowerCase()])
 		const deploymentLogs = factoryLogs.filter(log => {
 			const deployedPool = log.args['securityPool']
 			return log.eventName === 'DeploySecurityPool' && typeof deployedPool === 'string' && canonicalPools.has(deployedPool.toLowerCase())
 		})
 		const [sourcePoolLogs, sourceGameLogs, forkerLogs] = await Promise.all([
-			getContractReplayLogs(securityPoolAddresses.securityPool, statoblast_SecurityPool_SecurityPool.abi, fromBlock, receipt.blockNumber),
-			getContractReplayLogs(securityPoolAddresses.escalationGame, statoblast_EscalationGame_EscalationGame.abi, fromBlock, receipt.blockNumber),
-			getContractReplayLogs(forker, statoblast_SecurityPoolForker_SecurityPoolForker.abi, fromBlock, receipt.blockNumber),
+			getContractReplayLogs(securityPoolAddresses.securityPool, statoblast_SecurityPool_SecurityPool.abi, fromBlock, initializedAtBlock),
+			getContractReplayLogs(securityPoolAddresses.escalationGame, statoblast_EscalationGame_EscalationGame.abi, fromBlock, initializedAtBlock),
+			getContractReplayLogs(forker, statoblast_SecurityPoolForker_SecurityPoolForker.abi, fromBlock, initializedAtBlock),
 		])
-		const receiptLogs = (await Promise.all([getContractReplayLogs(child.securityPool, statoblast_SecurityPool_SecurityPool.abi, receipt.blockNumber, receipt.blockNumber), getContractReplayLogs(child.escalationGame, statoblast_EscalationGame_EscalationGame.abi, receipt.blockNumber, receipt.blockNumber)]))
-			.flat()
-			.filter(log => log.transactionHash === childDeploymentHash)
+		const receiptLogs = (await Promise.all([getContractReplayLogs(child.securityPool, statoblast_SecurityPool_SecurityPool.abi, receipt.blockNumber, initializedAtBlock), getContractReplayLogs(child.escalationGame, statoblast_EscalationGame_EscalationGame.abi, receipt.blockNumber, initializedAtBlock)])).flat()
 		const continued = receiptLogs.find(log => log.eventName === 'GameContinuedFromFork')
 		const carryCheckpoint = receiptLogs.find(log => log.eventName === 'ForkCarryCheckpoint')
 		const gameSet = receiptLogs.find(log => log.eventName === 'EscalationGameSet')
@@ -1558,12 +1269,13 @@ describe('event-only replay', () => {
 			throw new Error('child continuation is missing deployment, carry, or discovery events')
 		}
 		if (continued.logIndex >= gameSet.logIndex) throw new Error('child continuation event did not precede pool relationship event')
-		if (receiptLogs.some(log => log.eventName === 'SystemStateSet')) throw new Error('child constructor state should not depend on a synthetic system-state event')
+		if (carryCheckpoint.transactionHash === childDeploymentHash) throw new Error('carry checkpoint must follow bounded initialization in a separate transaction')
+		expect(receiptLogs.find(log => log.eventName === 'SystemStateSet')?.args['systemState']).toBe(0n)
 
 		const replayed = replayZoltarEvents([...deploymentLogs, ...sourcePoolLogs, ...sourceGameLogs, ...forkerLogs, ...receiptLogs], new Set(), new Set([factory]))
 		const deployment = replayed.poolDeployments.get(child.securityPool)
 		if (deployment === undefined) throw new Error('child pool deployment replay missing')
-		const [storedStatoblastSecurityMultiplierBps, storedPriorityFee, storedCurrentRetentionRate, storedCollateral, storedSystemState, storedCarryRoots, storedCarrySnapshot] = await Promise.all([
+		const [storedStatoblastSecurityMultiplierBps, storedPriorityFee, storedCollateral, storedSystemState, storedCarryRoots, storedCarrySnapshot] = await Promise.all([
 			client.readContract({ address: child.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'statoblastSecurityMultiplierBps', args: [] }),
 			client.readContract({
 				address: child.openOraclePriceCoordinator,
@@ -1571,7 +1283,6 @@ describe('event-only replay', () => {
 				functionName: 'initialReportPriorityFeeAttoEthPerGas',
 				args: [],
 			}),
-			client.readContract({ address: child.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'currentRetentionRate', args: [] }),
 			client.readContract({ address: child.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'settlementCollateralAttoEth', args: [] }),
 			client.readContract({ address: child.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'systemState', args: [] }),
 			client.readContract({ address: child.escalationGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getForkCarryRoots', args: [] }),
@@ -1597,7 +1308,6 @@ describe('event-only replay', () => {
 		strictEqualTypeSafe(deployment.shareToken, child.shareToken, 'child share token replay mismatch')
 		strictEqualTypeSafe(deployment.statoblastSecurityMultiplierBps, storedStatoblastSecurityMultiplierBps, 'child security multiplier replay mismatch')
 		strictEqualTypeSafe(deployment.initialReportPriorityFeeAttoEthPerGas, storedPriorityFee, 'child priority fee replay mismatch')
-		strictEqualTypeSafe(deployment.currentRetentionRate, storedCurrentRetentionRate, 'child retention rate replay mismatch')
 		strictEqualTypeSafe(deployment.settlementCollateralAttoEth, storedCollateral, 'child collateral replay mismatch')
 		strictEqualTypeSafe(replayed.poolStates.get(child.securityPool)?.systemState, storedSystemState, 'child constructor system state replay mismatch')
 		if (replayed.escalationLifecycles.get(child.escalationGame)?.forkContinuation !== true) {
@@ -1630,8 +1340,8 @@ describe('event-only replay', () => {
 	})
 
 	test('actual universe logs reconstruct migration balances and child storage', async () => {
-		await fixture.triggerExternalForkForSecurityPool(undefined, 'event replay universe state source')
-		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		await depositWallet(QuestionOutcome.Yes, reportBond)
+		await activateChild('event replay universe state source')
 		const toBlock = await client.getBlockNumber()
 		const replayLogs = await getContractReplayLogs(getZoltarAddress(), Zoltar_Zoltar.abi, 0n, toBlock)
 		const replayed = replayZoltarEvents(replayLogs)
@@ -1660,248 +1370,5 @@ describe('event-only replay', () => {
 		for (const [migrator, migrationBalance] of migrationBalances) {
 			strictEqualTypeSafe(migrationBalance, await getMigrationRepBalanceAttoRep(client, fixture.genesisUniverse, migrator), `migration balance replay mismatch for ${migrator}`)
 		}
-	})
-
-	test('seeded actual-log accounting replay matches child pool and vault storage', async () => {
-		const fromBlock = (await client.getBlockNumber()) + 1n
-		const scenario = await fixture.setupFinalizedTruthAuctionWithMixedBids()
-		let seed = 0x5eedn
-		const nextRandom = () => {
-			seed = (seed * 1103515245n + 12345n) % (1n << 31n)
-			return seed
-		}
-		for (let updateIndex = 0; updateIndex < 6; updateIndex += 1) {
-			await mockWindow.advanceTime((nextRandom() % 7n) + 1n)
-			await updateSettlementCollateral(client, scenario.yesSecurityPool.securityPool)
-		}
-		await updateVaultFees(client, scenario.yesSecurityPool.securityPool, client.account.address)
-		await mockWindow.advanceTime((nextRandom() % 17n) + 3n)
-		await claimAuctionProceeds(client, scenario.yesSecurityPool.securityPool, scenario.winningBidder.account.address, [{ tick: scenario.winningTick, bidIndex: 0n }])
-
-		const checkpointVaults = [client.account.address, scenario.winningBidder.account.address]
-		if ((nextRandom() & 1n) === 1n) checkpointVaults.reverse()
-		await mockWindow.advanceTime((nextRandom() % 11n) + 1n)
-		for (const vault of checkpointVaults) await updateVaultFees(client, scenario.yesSecurityPool.securityPool, vault)
-		for (let updateIndex = 0; updateIndex < 4; updateIndex += 1) {
-			await mockWindow.advanceTime((nextRandom() % 5n) + 1n)
-			await updateSettlementCollateral(client, scenario.yesSecurityPool.securityPool)
-		}
-		for (const vault of checkpointVaults.toReversed()) await updateVaultFees(client, scenario.yesSecurityPool.securityPool, vault)
-		for (const vault of checkpointVaults) await redeemFees(client, scenario.yesSecurityPool.securityPool, vault)
-
-		const toBlock = await client.getBlockNumber()
-		const replayLogs = await getContractReplayLogs(scenario.yesSecurityPool.securityPool, statoblast_SecurityPool_SecurityPool.abi, fromBlock, toBlock)
-		const replayedState = replayZoltarEvents(replayLogs)
-		const replayedPool = replayedState.pools.get(scenario.yesSecurityPool.securityPool)
-		if (replayedPool === undefined) throw new Error('seeded pool accounting replay state missing')
-		const snapshot = await client.readContract({ address: scenario.yesSecurityPool.securityPool, abi: poolAccountingSnapshotAbi, functionName: 'getPoolAccountingSnapshot', args: [] })
-		strictEqualTypeSafe(replayedPool.settlementCollateralAttoEth, snapshot.settlementCollateralAttoEth, 'seeded collateral replay mismatch')
-		strictEqualTypeSafe(replayedPool.totalUnderwritingLimitAttoEth, snapshot.totalUnderwritingLimitAttoEth, 'capacity ownership')
-		strictEqualTypeSafe(replayedPool.feeEligibleUnderwritingLimitAttoEth, snapshot.feeEligibleUnderwritingLimitAttoEth, 'capacity ownership')
-		strictEqualTypeSafe(replayedPool.totalClaimableVaultFeesAttoEth, snapshot.totalClaimableVaultFeesAttoEth, 'seeded fee liability replay mismatch')
-		strictEqualTypeSafe(replayedPool.unallocatedAccruedFeesAttoEth, snapshot.unallocatedAccruedFeesAttoEth, 'seeded fee reserve replay mismatch')
-		strictEqualTypeSafe(replayedPool.feeIndex, snapshot.feeIndex, 'seeded fee-index replay mismatch')
-		strictEqualTypeSafe(replayedPool.feeIndexRemainder, snapshot.feeIndexRemainder, 'seeded fee-index remainder replay mismatch')
-		strictEqualTypeSafe(replayedPool.totalFeesOwedRemainder, snapshot.totalFeesOwedRemainder, 'seeded total-fee remainder replay mismatch')
-		strictEqualTypeSafe(replayedPool.uncheckpointedFeeEligibleUnderwritingLimitAttoEth, snapshot.uncheckpointedFeeEligibleUnderwritingLimitAttoEth, 'capacity ownership')
-		strictEqualTypeSafe(replayedPool.lastUpdatedFeeAccumulator, snapshot.lastUpdatedFeeAccumulator, 'seeded accumulator replay mismatch')
-		strictEqualTypeSafe(replayedPool.currentRetentionRate, snapshot.currentRetentionRate, 'seeded retention-rate replay mismatch')
-
-		for (const vault of checkpointVaults) {
-			const replayedVault = replayedState.vaults.get(scenario.yesSecurityPool.securityPool)?.get(vault)
-			if (replayedVault === undefined) throw new Error(`seeded vault replay state missing for ${vault}`)
-			const storedVault = await getSecurityVault(client, scenario.yesSecurityPool.securityPool, vault)
-			const storedVaultFeeRemainder = await client.readContract({
-				address: scenario.yesSecurityPool.securityPool,
-				abi: statoblast_SecurityPool_SecurityPool.abi,
-				functionName: 'getVaultFeeRemainder',
-				args: [vault],
-			})
-			strictEqualTypeSafe(replayedVault.repBackingUnits, storedVault.repBackingUnits, `seeded backingUnits replay mismatch for ${vault}`)
-			strictEqualTypeSafe(replayedVault.underwritingLimitAttoEth, storedVault.underwritingLimitAttoEth, `seeded underwritingLimitAttoEth replay mismatch for ${vault}`)
-			strictEqualTypeSafe(replayedVault.claimableFeesAttoEth, storedVault.claimableFeesAttoEth, `seeded unpaid-fees replay mismatch for ${vault}`)
-			strictEqualTypeSafe(replayedVault.feeIndex, storedVault.feeIndex, `seeded vault fee-index replay mismatch for ${vault}`)
-			strictEqualTypeSafe(replayedVault.vaultFeeRemainder, storedVaultFeeRemainder, `seeded vault fee remainder replay mismatch for ${vault}`)
-		}
-		const replayedPoolState = replayedState.poolStates.get(scenario.yesSecurityPool.securityPool)
-		if (replayedPoolState === undefined) throw new Error('seeded child pool state replay missing')
-		const storedShareSupply = await client.readContract({ address: scenario.yesSecurityPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'shareTokenSupplyAttoShares', args: [] })
-		const storedBackingUnitsDenominator = await client.readContract({ address: scenario.yesSecurityPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'totalRepBackingUnits', args: [] })
-		const storedSystemState = await client.readContract({ address: scenario.yesSecurityPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'systemState', args: [] })
-		const storedAwaitingContinuation = await client.readContract({ address: scenario.yesSecurityPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'awaitingForkContinuation', args: [] })
-		const storedEscalationGame = await client.readContract({ address: scenario.yesSecurityPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'escalationGame', args: [] })
-		strictEqualTypeSafe(replayedPoolState.shareTokenSupplyAttoShares, storedShareSupply, 'seeded child share supply replay mismatch')
-		strictEqualTypeSafe(replayedPoolState.totalRepBackingUnits, storedBackingUnitsDenominator, 'seeded child backingUnits denominator replay mismatch')
-		strictEqualTypeSafe(replayedPoolState.systemState, storedSystemState, 'seeded child system state replay mismatch')
-		strictEqualTypeSafe(replayedPoolState.awaitingForkContinuation ?? false, storedAwaitingContinuation, 'seeded child continuation state replay mismatch')
-		strictEqualTypeSafe(replayedPoolState.escalationGame ?? zeroAddress, storedEscalationGame, 'seeded child escalation-game replay mismatch')
-	})
-
-	test('actual vault checkpoints carry a fractional fee entitlement into a later whole attoETH', async () => {
-		const pool = securityPoolAddresses.securityPool
-		const vault = client.account.address
-		const storedVaultBefore = await getSecurityVault(client, pool, vault)
-		const backing = await client.readContract({ address: pool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'backingUnitsToAttoRep', args: [storedVaultBefore.repBackingUnits] })
-		const targetSlot = getAddressMappingStorageSlot(vault, 28n)
-		const vaultSlot = getAddressMappingStorageSlot(vault, 16n)
-		const vaultFeeRemainderSlot = getAddressMappingStorageSlot(vault, 17n)
-		const firstFeeIndex = storedVaultBefore.feeIndex + 1n
-		const maxUint256 = (1n << 256n) - 1n
-		await mockWindow.addStateOverrides({
-			[pool]: {
-				stateDiff: {
-					// Keep the saved target consistent with this synthetic one-unit vault.
-					[formatStorageSlot(targetSlot)]: backing * 20_000n,
-					[formatStorageSlot(1n)]: 1n,
-					[formatStorageSlot(7n)]: maxUint256,
-					[formatStorageSlot(8n)]: firstFeeIndex,
-					[formatStorageSlot(12n)]: 1n,
-					[formatStorageSlot(13n)]: 1n,
-					[formatStorageSlot(vaultSlot + 1n)]: 1n,
-					[formatStorageSlot(vaultFeeRemainderSlot)]: fixture.PRICE_PRECISION - 2n,
-				},
-			},
-		})
-
-		const firstCheckpointHash = await updateVaultFees(client, pool, vault)
-		const firstCheckpointReceipt = await client.getTransactionReceipt({ hash: firstCheckpointHash })
-		const remainderAfterFirstCheckpoint = await client.readContract({
-			address: pool,
-			abi: statoblast_SecurityPool_SecurityPool.abi,
-			functionName: 'getVaultFeeRemainder',
-			args: [vault],
-		})
-		const vaultAfterFirstCheckpoint = await getSecurityVault(client, pool, vault)
-		strictEqualTypeSafe(remainderAfterFirstCheckpoint, fixture.PRICE_PRECISION - 1n, 'first checkpoint should preserve the sub-attoETH vault entitlement')
-		strictEqualTypeSafe(vaultAfterFirstCheckpoint.claimableFeesAttoEth, storedVaultBefore.claimableFeesAttoEth, 'fractional entitlement alone should not credit a whole attoETH')
-
-		await mockWindow.addStateOverrides({
-			[pool]: {
-				stateDiff: {
-					[formatStorageSlot(8n)]: firstFeeIndex + 1n,
-					[formatStorageSlot(11n)]: 1n,
-					[formatStorageSlot(13n)]: 1n,
-				},
-			},
-		})
-		const secondCheckpointHash = await updateVaultFees(client, pool, vault)
-		const secondCheckpointReceipt = await client.getTransactionReceipt({ hash: secondCheckpointHash })
-		const replayLogs = await getContractReplayLogs(pool, statoblast_SecurityPool_SecurityPool.abi, firstCheckpointReceipt.blockNumber, secondCheckpointReceipt.blockNumber)
-		const replayedVault = replayZoltarEvents(replayLogs).vaults.get(pool)?.get(vault)
-		if (replayedVault === undefined) throw new Error('fractional vault checkpoint replay state missing')
-		const storedVaultAfter = await getSecurityVault(client, pool, vault)
-		const storedRemainderAfter = await client.readContract({
-			address: pool,
-			abi: statoblast_SecurityPool_SecurityPool.abi,
-			functionName: 'getVaultFeeRemainder',
-			args: [vault],
-		})
-		strictEqualTypeSafe(storedVaultAfter.claimableFeesAttoEth, storedVaultBefore.claimableFeesAttoEth + 1n, 'the carried fraction plus one fee-index unit should credit one whole attoETH')
-		strictEqualTypeSafe(storedRemainderAfter, 0n, 'whole-attoETH credit should consume the carried fraction exactly')
-		strictEqualTypeSafe(replayedVault.claimableFeesAttoEth, storedVaultAfter.claimableFeesAttoEth, 'replayed whole-attoETH vault credit mismatch')
-		strictEqualTypeSafe(replayedVault.vaultFeeRemainder, storedRemainderAfter, 'replayed final vault fee remainder mismatch')
-	})
-
-	test('zero fee eligibility emits an authoritative accounting checkpoint matching storage', async () => {
-		await mockWindow.advanceTime(10n)
-		const transactionHash = await updateSettlementCollateral(client, securityPoolAddresses.securityPool)
-		const receipt = await client.getTransactionReceipt({ hash: transactionHash })
-		const logs = await client.getLogs({
-			address: securityPoolAddresses.securityPool,
-			event: poolAccountingCheckpointEvent,
-			fromBlock: receipt.blockNumber,
-			toBlock: receipt.blockNumber,
-		})
-		const checkpointLog = logs.find(log => log.transactionHash === transactionHash)
-		if (checkpointLog === undefined) throw new Error('PoolAccountingCheckpoint log missing')
-		if (
-			checkpointLog.blockHash === null ||
-			checkpointLog.blockHash === undefined ||
-			checkpointLog.blockNumber === null ||
-			checkpointLog.blockNumber === undefined ||
-			checkpointLog.transactionHash === null ||
-			checkpointLog.transactionHash === undefined ||
-			checkpointLog.logIndex === null ||
-			checkpointLog.logIndex === undefined ||
-			checkpointLog.transactionIndex === null ||
-			checkpointLog.transactionIndex === undefined ||
-			checkpointLog.args === undefined
-		) {
-			throw new Error('checkpoint log identity is incomplete')
-		}
-		const replayLog: ReplayLog = {
-			chainId: BigInt(await client.getChainId()),
-			blockHash: checkpointLog.blockHash,
-			blockNumber: checkpointLog.blockNumber,
-			transactionHash: checkpointLog.transactionHash,
-			transactionIndex: Number.parseInt(checkpointLog.transactionIndex.toString(), 10),
-			logIndex: Number.parseInt(checkpointLog.logIndex.toString(), 10),
-			emitter: checkpointLog.address,
-			eventName: 'PoolAccountingCheckpoint',
-			args: {
-				reason: checkpointLog.args.reason,
-				vault: checkpointLog.args.vault,
-				settlementCollateralAttoEth: checkpointLog.args.settlementCollateralAttoEth,
-				totalUnderwritingLimitAttoEth: checkpointLog.args.totalUnderwritingLimitAttoEth,
-				feeEligibleUnderwritingLimitAttoEth: checkpointLog.args.feeEligibleUnderwritingLimitAttoEth,
-				totalClaimableVaultFeesAttoEth: checkpointLog.args.totalClaimableVaultFeesAttoEth,
-				unallocatedAccruedFeesAttoEth: checkpointLog.args.unallocatedAccruedFeesAttoEth,
-				feeIndex: checkpointLog.args.feeIndex,
-				feeIndexRemainder: checkpointLog.args.feeIndexRemainder,
-				totalFeesOwedRemainder: checkpointLog.args.totalFeesOwedRemainder,
-				uncheckpointedFeeEligibleUnderwritingLimitAttoEth: checkpointLog.args.uncheckpointedFeeEligibleUnderwritingLimitAttoEth,
-				lastUpdatedFeeAccumulator: checkpointLog.args.lastUpdatedFeeAccumulator,
-				currentRetentionRate: checkpointLog.args.currentRetentionRate,
-			},
-		}
-		const replayed = replayZoltarEvents([replayLog]).pools.get(securityPoolAddresses.securityPool)
-		if (replayed === undefined) throw new Error('pool checkpoint was not replayed')
-		const snapshot = await client.readContract({
-			address: securityPoolAddresses.securityPool,
-			abi: poolAccountingSnapshotAbi,
-			functionName: 'getPoolAccountingSnapshot',
-			args: [],
-		})
-		strictEqualTypeSafe(replayed.settlementCollateralAttoEth, snapshot.settlementCollateralAttoEth, 'collateral checkpoint mismatch')
-		strictEqualTypeSafe(replayed.totalUnderwritingLimitAttoEth, snapshot.totalUnderwritingLimitAttoEth, 'capacity ownership')
-		strictEqualTypeSafe(replayed.feeEligibleUnderwritingLimitAttoEth, snapshot.feeEligibleUnderwritingLimitAttoEth, 'capacity ownership')
-		strictEqualTypeSafe(replayed.totalClaimableVaultFeesAttoEth, snapshot.totalClaimableVaultFeesAttoEth, 'vault fee liability checkpoint mismatch')
-		strictEqualTypeSafe(replayed.unallocatedAccruedFeesAttoEth, snapshot.unallocatedAccruedFeesAttoEth, 'unallocated reserve checkpoint mismatch')
-		strictEqualTypeSafe(replayed.feeIndex, snapshot.feeIndex, 'fee-index checkpoint mismatch')
-		strictEqualTypeSafe(replayed.feeIndexRemainder, snapshot.feeIndexRemainder, 'fee-index remainder checkpoint mismatch')
-		strictEqualTypeSafe(replayed.totalFeesOwedRemainder, snapshot.totalFeesOwedRemainder, 'total fee remainder checkpoint mismatch')
-		strictEqualTypeSafe(replayed.uncheckpointedFeeEligibleUnderwritingLimitAttoEth, snapshot.uncheckpointedFeeEligibleUnderwritingLimitAttoEth, 'uncheckpointed eligibility checkpoint mismatch')
-		strictEqualTypeSafe(replayed.lastUpdatedFeeAccumulator, snapshot.lastUpdatedFeeAccumulator, 'fee accumulator checkpoint mismatch')
-		strictEqualTypeSafe(replayed.currentRetentionRate, snapshot.currentRetentionRate, 'retention-rate checkpoint mismatch')
-		strictEqualTypeSafe(replayed.vault, zeroAddress, 'accrual checkpoint should not attribute a vault')
-	})
-
-	test('external forks emit one canonical pool snapshot after REP is locked', async () => {
-		const totalPoolHeldRepAtForkAttoRep = await getTotalPoolHeldAttoRep(client, securityPoolAddresses.securityPool)
-		const settlementCollateralAtForkAttoEth = await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)
-		const transactionHash = await fixture.triggerExternalForkForSecurityPool(undefined, 'event replay fork source')
-		const receipt = await client.getTransactionReceipt({ hash: transactionHash })
-		const forker = getInfraContractAddresses().securityPoolForker
-		const logs = await client.getLogs({
-			address: forker,
-			event: securityPoolForkSnapshotEvent,
-			fromBlock: receipt.blockNumber,
-			toBlock: receipt.blockNumber,
-		})
-		const snapshotLog = logs.find(log => log.transactionHash === transactionHash && log.args?.parentPool === securityPoolAddresses.securityPool)
-		if (snapshotLog === undefined) throw new Error('SecurityPoolForkSnapshot log missing')
-		if (snapshotLog.args === undefined) throw new Error('SecurityPoolForkSnapshot arguments missing')
-		const expectedMigrationProxy = await client.readContract({
-			address: forker,
-			abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
-			functionName: 'getMigrationProxyAddress',
-			args: [securityPoolAddresses.securityPool],
-		})
-		strictEqualTypeSafe(snapshotLog.args.migrationProxy, expectedMigrationProxy, 'migration proxy snapshot mismatch')
-		strictEqualTypeSafe(snapshotLog.args.settlementCollateralAtForkAttoEth, settlementCollateralAtForkAttoEth, 'fork collateral snapshot mismatch')
-		strictEqualTypeSafe(snapshotLog.args.totalPoolHeldRepAtForkAttoRep, totalPoolHeldRepAtForkAttoRep, 'fork REP snapshot mismatch')
-		strictEqualTypeSafe(snapshotLog.args.auctionableAttoRepAtFork, totalPoolHeldRepAtForkAttoRep, 'external-fork auctionable REP mismatch')
-		strictEqualTypeSafe(snapshotLog.args.ownFork, false, 'external fork should not be marked as own fork')
-		strictEqualTypeSafe(snapshotLog.args.unresolvedEscalation, false, 'test fork should not report unresolved escalation')
 	})
 })

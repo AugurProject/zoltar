@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { parseSettings } from '../../src/config/settings.ts'
-import { inheritedChildPoolSelections, isPoolExecutionEligible, isVaultMigrationSourceEligible, selectVaultMigration, validateApprovedUniverseSelection } from '../../src/core/fork-migration.ts'
-import { validatePoolUniverseRep } from '../../src/monitoring/pool-identity.ts'
+import { isVaultMigrationSourceEligible, validateApprovedUniverseSelection } from '../../src/core/fork-migration.ts'
 
 const FORK_MIGRATION_WINDOW_SECONDS = 8n * 7n * 24n * 60n * 60n
 import { initialRuntimeState, operatorSnapshot, type PoolObservation, type UniverseObservation } from '../../src/state/operator-state.ts'
@@ -56,14 +55,14 @@ function settings(approvedUniverses = ['101']) {
 			uiHost: '127.0.0.1',
 			uiPort: 4183,
 		},
-		selectedPools: [],
+		selectedPortfolios: [],
 		strategy: storedStrategyFixture(),
 		submission: {
 			minimumBundleRelaySuccesses: 1,
 			mode: 'public',
 			relayUrls: [],
 		},
-		version: 1,
+		version: 2,
 	})
 }
 
@@ -150,39 +149,6 @@ const rootUniverse = universe(0n, false)
 const approvedChildUniverse = universe(101n, true, 0n, 1n)
 
 describe('fork migration strategy', () => {
-	test('trusts genesis REP through the configured Zoltar universe record without a token accessor', () => {
-		const genesisRep = getAddress('0x0000000000000000000000000000000000000077')
-		const genesisPool = { ...parent, repToken: genesisRep }
-		const genesisUniverse = { ...rootUniverse, repToken: genesisRep }
-		expect(() => validatePoolUniverseRep(genesisPool, [genesisUniverse])).not.toThrow()
-		expect(() => validatePoolUniverseRep({ ...genesisPool, repToken: wallet }, [genesisUniverse])).toThrow('does not match universe 0 REP')
-		expect(() => validatePoolUniverseRep({ ...genesisPool, universeId: 999n }, [genesisUniverse])).toThrow('belongs to unknown universe 999')
-	})
-
-	test('routes a selected parent vault to its approved direct child during the migration window', () => {
-		const migration = selectVaultMigration([parent, approvedChild], [rootUniverse, approvedChildUniverse], settings(), 1_000n)
-		expect(migration?.parent.address).toBe(parent.address)
-		expect(migration?.childPool?.address).toBe(approvedChild.address)
-		expect(migration?.childUniverse.id).toBe(101n)
-		expect(migration?.outcomeIndex).toBe(1n)
-		expect(migration?.deadline).toBe(1_000n + FORK_MIGRATION_WINDOW_SECONDS)
-	})
-
-	test('can route into an approved universe before its child pool exists', () => {
-		const migration = selectVaultMigration([parent], [rootUniverse, approvedChildUniverse], settings(), 1_000n)
-		expect(migration?.childPool).toBeUndefined()
-		expect(migration?.childUniverse.id).toBe(101n)
-	})
-
-	test('inherits a selected parent pool onto its registered approved child independent of execution settings', () => {
-		expect(inheritedChildPoolSelections([parent, approvedChild], [parent.address]).map(pool => pool.address)).toEqual([approvedChild.address])
-		expect(inheritedChildPoolSelections([parent, approvedChild], [parent.address, approvedChild.address])).toEqual([])
-	})
-
-	test('does not migrate after the fork migration window closes', () => {
-		expect(selectVaultMigration([parent, approvedChild], [rootUniverse, approvedChildUniverse], settings(), 1_000n + FORK_MIGRATION_WINDOW_SECONDS + 1n)).toBeUndefined()
-	})
-
 	test('uses the exact migration window boundary for planning and dashboard eligibility', () => {
 		const deadline = parent.forkActivationTime + FORK_MIGRATION_WINDOW_SECONDS
 		expect(isVaultMigrationSourceEligible(parent, deadline)).toBe(true)
@@ -330,34 +296,6 @@ describe('fork migration strategy', () => {
 		expect(persistenceSnapshot.marketSources.find(source => source.id === 'one')).toMatchObject({ reason: 'Observed but excluded by persistence, depth, or dispersion policy', status: 'excluded' })
 	})
 
-	test('waits while a staged operation still involves the bot vault', () => {
-		const stagedParent: PoolObservation = {
-			...parent,
-			stagedOperations: [
-				{
-					operationValue: 1n,
-					id: 1n,
-					liquidationApprovalId: `0x${'00'.repeat(32)}`,
-					isPendingSettlement: true,
-					operation: 0n,
-					operator: wallet,
-					queuedAt: 1n,
-					receiverVault: wallet,
-					reservedLiquidationDebtAttoEth: 0n,
-					snapshotTotalRepBackingUnits: 1n,
-					snapshotTargetUnderwritingLimitAttoEth: 1n,
-					snapshotTargetDisputeStakedAttoRep: 0n,
-					snapshotTargetOpenInterestAttoEth: 1n,
-					snapshotTargetBackingUnits: 1n,
-					snapshotTotalPoolHeldAttoRep: 1n,
-					targetVault: getAddress('0x0000000000000000000000000000000000000099'),
-					validForSeconds: 240n,
-				},
-			],
-		}
-		expect(selectVaultMigration([stagedParent], [rootUniverse, approvedChildUniverse], settings(), 1_000n)).toBeUndefined()
-	})
-
 	test('rejects competing approved children of the same parent universe', () => {
 		const competingChildUniverse = universe(102n, true, 0n, 2n)
 		expect(() => validateApprovedUniverseSelection([rootUniverse, approvedChildUniverse, competingChildUniverse], [101n, 102n])).toThrow('Select only one truthful child of universe 0')
@@ -369,12 +307,5 @@ describe('fork migration strategy', () => {
 		const tree = [rootUniverse, approvedChildUniverse, competingChildUniverse, competingGrandchildUniverse]
 		expect(() => validateApprovedUniverseSelection(tree, [101n, 201n])).toThrow('Select only one truthful child of universe 0')
 		expect(() => validateApprovedUniverseSelection(tree, [102n, 201n])).not.toThrow()
-	})
-
-	test('only executes pool strategy for selected operational pools in approved universes', () => {
-		expect(isPoolExecutionEligible({ approvedUniverse: true, selected: true, systemState: 0n })).toBe(true)
-		expect(isPoolExecutionEligible({ approvedUniverse: false, selected: true, systemState: 0n })).toBe(false)
-		expect(isPoolExecutionEligible({ approvedUniverse: true, selected: false, systemState: 0n })).toBe(false)
-		expect(isPoolExecutionEligible({ approvedUniverse: true, selected: true, systemState: 2n })).toBe(false)
 	})
 })

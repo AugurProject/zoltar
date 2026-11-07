@@ -53,7 +53,7 @@ function publicTopologyItem(value: unknown, kind: 'auction' | 'pair' | 'pool' | 
 			questionId: stringField(source, 'questionId'),
 			systemState: scalar(source, 'systemState'),
 			universeId: stringField(source, 'universeId'),
-			vaultCount: Array.isArray(source['vaults']) ? source['vaults'].length : safeIntegerField(source, 'vaultCount'),
+			portfolio: stringField(source, 'portfolio'),
 		})
 	}
 	if (kind === 'report') {
@@ -76,7 +76,8 @@ function publicTopologyItem(value: unknown, kind: 'auction' | 'pair' | 'pool' | 
 			bidCount: Array.isArray(source['bids']) ? source['bids'].length : safeIntegerField(source, 'bidCount'),
 			endTime: scalar(source, 'endTime'),
 			finalized: booleanField(source, 'finalized'),
-			pool: stringField(source, 'pool'),
+			portfolio: stringField(source, 'portfolio'),
+			universeId: stringField(source, 'universeId'),
 			startTime: scalar(source, 'startTime'),
 		})
 	}

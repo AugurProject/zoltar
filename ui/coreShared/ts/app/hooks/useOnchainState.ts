@@ -2,7 +2,7 @@ import { useOnchainClock } from './useOnchainClock.js'
 import { useOnchainWalletActions } from './useOnchainWalletActions.js'
 import { readOperationClient, runReadOperation } from '../../lib/readOperation.js'
 import { batch, useComputed, useSignal } from '@preact/signals'
-import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { createConnectedReadClient, normalizeAccount } from '../../wallet/clients.js'
 import type { ChainBackend, ReadBackendIssue, ReadBackendStatus } from '../../wallet/chainBackend.js'
@@ -40,12 +40,10 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		ethBalanceAttoEth: undefined,
 		wethBalanceAttoEth: undefined,
 	})
-	const deploymentStatuses = useSignal<DeploymentStatus[]>(
-		dependencies.getDeploymentSteps().map(step => ({
-			...step,
-			deployed: false,
-		})),
-	)
+	// useSignal ignores later initial values. Build this expensive bytecode catalogue only on mount;
+	// the environment-change effect below owns subsequent resets.
+	const initialDeploymentStatuses = useMemo(() => dependencies.getDeploymentSteps().map(step => ({ ...step, deployed: false })), [])
+	const deploymentStatuses = useSignal<DeploymentStatus[]>(initialDeploymentStatuses)
 	const hasInjectedWallet = useSignal(getActiveBackend().hasWallet())
 	const walletStateLoad = useLoadController()
 	const deploymentStatusLoad = useLoadController()

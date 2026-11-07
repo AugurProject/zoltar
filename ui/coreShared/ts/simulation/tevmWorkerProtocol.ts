@@ -21,9 +21,16 @@ export type SimulationWorkerState = {
 	transactionDelayMilliseconds: number
 }
 
+/** A serialized saved-state envelope prepared for the scenario, restored instead of seeding when it matches. */
+export type SimulationBootstrapParameters = {
+	scenarioSnapshot?: string | undefined
+	/** The source key its manifest carried; a bundle built for other sources ignores the snapshot. */
+	scenarioSnapshotKey?: string | undefined
+}
+
 export type SimulationWorkerCallMap = {
 	advanceTime: { params: { seconds: bigint }; result: undefined }
-	bootstrap: { params: undefined; result: undefined }
+	bootstrap: { params: SimulationBootstrapParameters | undefined; result: undefined }
 	exportState: { params: { name: string }; result: string }
 	getAccounts: { params: undefined; result: readonly Address[] }
 	getState: { params: undefined; result: SimulationWorkerState }

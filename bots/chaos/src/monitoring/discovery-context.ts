@@ -26,6 +26,7 @@ export interface DiscoveryLimits {
 }
 
 export interface EcosystemDiscoveryContext {
+	purchaseQuoteAttoEth?: bigint
 	discoverGenesisDeployment?: boolean
 	client: ChaosReadClient
 	deployments: EcosystemDeployments

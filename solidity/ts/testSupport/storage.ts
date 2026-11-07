@@ -14,8 +14,3 @@ export function getAddressMappingStorageSlot(key: Address, mappingSlot: bigint):
 export function getUintMappingStorageSlot(key: bigint, mappingSlot: bigint): bigint {
 	return BigInt(keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [key, mappingSlot])))
 }
-
-/** Solidity storage slot of `mapping(int256 => ...)` entry `key` whose mapping is declared at `mappingSlot`. */
-export function getIntMappingStorageSlot(key: bigint, mappingSlot: bigint): bigint {
-	return BigInt(keccak256(encodeAbiParameters([{ type: 'int256' }, { type: 'uint256' }], [key, mappingSlot])))
-}

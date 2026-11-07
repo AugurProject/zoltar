@@ -1,19 +1,22 @@
+import { PortfolioOpportunityExpired } from '#execution/portfolio-executor'
+import { sharedQuorumReadTargets } from '@zoltar/bot-shared/monitoring/read-quorum'
+import { loadManagedPortfolioObservations, managedPortfolioScopes } from '#monitoring/portfolio-monitor'
 import { shouldStopAfterSuccessfulCycle } from '#core/cycle-control'
-import { inheritedChildPoolSelections, validateApprovedUniverseSelection } from '#core/fork-migration'
+import { validateApprovedUniverseSelection } from '@zoltar/bot-shared/monitoring/universe-policy'
 import { OperatorStopping, TransactionAwaitingCanonicalFinality } from '#execution/execution-safety'
 import { availableExecutionObservations, liquidationExecutionSnapshotObservation } from '#monitoring/execution-quorum'
-import { canonicalBlockHash, chainFor, desiredPoolStatus } from '#monitoring/operator-chain'
-import { scanPools } from '#monitoring/pool-monitor'
+import { canonicalBlockHash, chainFor } from '#monitoring/operator-chain'
+import { scanPortfolioContext } from '#monitoring/portfolio-context'
 import { recordActivity, saveDurableState } from '#state/operator-state'
 import { recordSystemDeploymentCheck } from '../core/deployment-observation.ts'
 import { createLiquidatorScanReport, cycleFailureMessage, runningStatus } from '../monitoring/scan-status.ts'
-import { createPublicClient, getAddress } from '@zoltar/bot-shared/ethereum'
+import { createPublicClient } from '@zoltar/bot-shared/ethereum'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { clearOrphanedDexEvidenceForHeadReplacement } from '@zoltar/bot-shared/monitoring/market-consensus'
 import { operationalFailureDisposition } from '@zoltar/bot-shared/monitoring/resilience'
-import { createPrimaryClient, persistSettings, poolMonitorIndexFor, readEndpoints, type LiquidatorDeps, type LiquidatorRuntime } from './liquidator-runtime.ts'
+import { createPrimaryClient, persistSettings, readEndpoints, type LiquidatorDeps, type LiquidatorRuntime } from './liquidator-runtime.ts'
 import { collectMarketEvidence } from './market-evidence.ts'
-import { runDryRunStep, runLiveExecutionStep, type DesiredPoolStatus } from './scan-execution.ts'
+import { runDryRunStep, runLiveExecutionStep } from './scan-execution.ts'
 
 /**
  * Scans the monitored pools. Live execution requires the RPC quorum to agree on one execution snapshot and adopts the
@@ -21,45 +24,30 @@ import { runDryRunStep, runLiveExecutionStep, type DesiredPoolStatus } from './s
  */
 async function scanExecutionSnapshot(runtime: LiquidatorRuntime, deps: LiquidatorDeps, currentChain: LiquidatorRuntime['chain']) {
 	const { shutdown, state } = deps
-	if (!runtime.settings.runtime.execute) return await scanPools(runtime.client, runtime.settings, state.wallet, poolMonitorIndexFor(runtime, runtime.settings.connectivity.readRpcUrl), shutdown.isRequested)
-	const settled = await Promise.allSettled(
-		readEndpoints(runtime.settings).map(async endpoint => {
-			const endpointClient = createPublicClient({ chain: currentChain, transport: runtime.readPool.transportFor(endpoint) })
-			return { client: endpointClient, endpoint, scan: await scanPools(endpointClient, runtime.settings, state.wallet, poolMonitorIndexFor(runtime, endpoint), shutdown.isRequested) }
-		}),
+	state.portfolioScopes = managedPortfolioScopes(state.portfolioScopes, runtime.settings.selectedPortfolios)
+	const scanClient = async (client: typeof runtime.client, blockNumber?: bigint) => {
+		const scan = await scanPortfolioContext(client, runtime.settings, state.wallet, shutdown.isRequested, blockNumber)
+		if (shutdown.isRequested()) throw new OperatorStopping()
+		const portfolios = await loadManagedPortfolioObservations(
+			client,
+			runtime.settings,
+			state.wallet,
+			state.portfolioScopes.map(scope => ({ scope })),
+			scan.block.number,
+		)
+		return { ...scan, portfolios }
+	}
+	if (!runtime.settings.runtime.execute) return await scanClient(runtime.client)
+	const pinned = await sharedQuorumReadTargets(
+		readEndpoints(runtime.settings).map(endpoint => ({ endpoint, client: createPublicClient({ chain: currentChain, transport: runtime.readPool.transportFor(endpoint) }) })),
+		runtime.settings.connectivity.rpcQuorum,
 	)
+	const settled = await Promise.allSettled(pinned.readers.map(async ({ client, endpoint }) => ({ client, endpoint, scan: await scanClient(client, pinned.blockNumber) })))
 	const available = availableExecutionObservations('liquidation execution snapshot', settled, liquidationExecutionSnapshotObservation, runtime.settings.connectivity.rpcQuorum)
 	const selected = available[0]
 	if (selected === undefined) throw new Error('Liquidation execution snapshot is unavailable')
 	runtime.client = selected.client
 	return selected.scan
-}
-
-/**
- * Adds deployed desired pools and inherited child pools to the saved pool selection. Resolves to the desired pool
- * statuses, or `undefined` when shutdown was requested before any selection was saved.
- */
-async function selectDesiredAndInheritedPools(runtime: LiquidatorRuntime, deps: LiquidatorDeps): Promise<readonly DesiredPoolStatus[] | undefined> {
-	const { state } = deps
-	const desiredPoolStatuses = await Promise.all(runtime.settings.desiredPools.map(desired => desiredPoolStatus(runtime.settings, desired, runtime.readPool)))
-	if (deps.shutdown.isRequested()) return undefined
-	const deployedDesiredPools = desiredPoolStatuses.filter(status => status.address !== getAddress('0x0000000000000000000000000000000000000000'))
-	const desiredSelections = deployedDesiredPools.filter(status => !runtime.settings.selectedPools.some(pool => pool.toLowerCase() === status.address.toLowerCase()))
-	if (desiredSelections.length > 0) {
-		await persistSettings(runtime, deps, current => ({ ...current, selectedPools: [...current.selectedPools, ...desiredSelections.map(status => status.address)] }))
-		for (const pool of state.pools) {
-			if (desiredSelections.some(status => status.address.toLowerCase() === pool.address.toLowerCase())) pool.selected = true
-		}
-	}
-	const inheritedSelections = inheritedChildPoolSelections(state.pools, runtime.settings.selectedPools)
-	if (inheritedSelections.length > 0) {
-		await persistSettings(runtime, deps, current => ({
-			...current,
-			selectedPools: [...current.selectedPools, ...inheritedSelections.map(pool => pool.address)],
-		}))
-		for (const pool of inheritedSelections) pool.selected = true
-	}
-	return desiredPoolStatuses
 }
 
 /** The scan cycle body; resolves to the poll loop's stop decision, or `'deferred'` while the system is undeployed. */
@@ -83,6 +71,7 @@ async function scanAndAct(runtime: LiquidatorRuntime, deps: LiquidatorDeps, scan
 	state.lastScannedBlockHash = scannedBlock.hash
 	state.lastScannedTimestamp = scannedBlock.timestamp
 	if (replacedMarketHead) {
+		state.portfolioScopes = state.portfolioScopes.map(scope => ({ ...scope, nextPositionId: 1n, sweepEnd: 0n, retirementObservations: [] }))
 		recordActivity(state, {
 			details: `block=${scannedBlock.number.toString()}`,
 			kind: 'scan',
@@ -93,15 +82,14 @@ async function scanAndAct(runtime: LiquidatorRuntime, deps: LiquidatorDeps, scan
 		await saveDurableState(runtime.settings.runtime.stateFile, state)
 		return shouldStopAfterSuccessfulCycle(runtime.settings.runtime.once)
 	}
-	state.pools = primary.pools
+	state.portfolios = primary.portfolios
+	state.portfolioScopes = primary.portfolios.map(portfolio => portfolio.nextScope)
 	state.universes = primary.universes
 	state.walletRepByToken = primary.walletRepByToken
 	const rootUniverse = state.universes.find(universe => universe.parentId === undefined)
 	if (rootUniverse === undefined) throw new Error('Universe scan did not return the root REP asset')
 	if (await collectMarketEvidence(runtime, deps, scannedBlock, rootUniverse.repToken)) return true
 	validateApprovedUniverseSelection(state.universes, runtime.settings.approvedUniverses)
-	const desiredPoolStatuses = await selectDesiredAndInheritedPools(runtime, deps)
-	if (desiredPoolStatuses === undefined) return true
 	state.lastScanAt = new Date().toISOString()
 	if (state.wallet !== undefined) {
 		state.walletAttoEth = await runtime.client.getBalance({ address: state.wallet })
@@ -113,7 +101,7 @@ async function scanAndAct(runtime: LiquidatorRuntime, deps: LiquidatorDeps, scan
 		return true
 	}
 	if (!state.paused && runtime.settings.runtime.execute) {
-		const stop = await runLiveExecutionStep(runtime, deps, desiredPoolStatuses, scannedBlock.timestamp)
+		const stop = await runLiveExecutionStep(runtime, deps)
 		if (stop !== undefined) return stop
 	} else if (!state.paused) {
 		runDryRunStep(runtime, deps)
@@ -122,8 +110,8 @@ async function scanAndAct(runtime: LiquidatorRuntime, deps: LiquidatorDeps, scan
 	return shouldStopAfterSuccessfulCycle(runtime.settings.runtime.once)
 }
 
-/** Settles a cycle interrupted by shutdown or an unfinalized transaction; `undefined` means the error is a failure. */
-async function settleInterruptedCycle(runtime: LiquidatorRuntime, deps: LiquidatorDeps, error: unknown) {
+/** @internal Tests verify interrupted-cycle recovery; `undefined` means the error is a failure. */
+export async function settleInterruptedCycle(runtime: Pick<LiquidatorRuntime, 'settings'>, deps: Pick<LiquidatorDeps, 'state'> & { shutdown: Pick<LiquidatorDeps['shutdown'], 'isRequested'> }, error: unknown) {
 	const { state } = deps
 	if (deps.shutdown.isRequested()) {
 		await saveDurableState(runtime.settings.runtime.stateFile, state)
@@ -132,6 +120,12 @@ async function settleInterruptedCycle(runtime: LiquidatorRuntime, deps: Liquidat
 	if (error instanceof OperatorStopping) {
 		await saveDurableState(runtime.settings.runtime.stateFile, state)
 		return true
+	}
+	if (error instanceof PortfolioOpportunityExpired) {
+		state.status = runningStatus(state.paused, runtime.settings.runtime.execute)
+		recordActivity(state, { kind: 'liquidation', status: 'info', message: 'Portfolio opportunity expired; rescreen next cycle', details: error.message })
+		await saveDurableState(runtime.settings.runtime.stateFile, state)
+		return shouldStopAfterSuccessfulCycle(runtime.settings.runtime.once)
 	}
 	if (error instanceof TransactionAwaitingCanonicalFinality) {
 		state.status = 'running'

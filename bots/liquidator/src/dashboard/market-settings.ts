@@ -47,9 +47,9 @@ export function registerMarketSettings({ state, elements, controls, populateConf
 			if (
 				!(await confirmOperatorAction({
 					title: 'Review market and pool changes',
-					description: 'Market sources and desired pools can change which assets the bot funds on the next scan.',
+					description: 'Market sources can change which portfolio takeovers the bot accepts on the next scan.',
 					confirmLabel: 'Save markets',
-					changes: reviewChangeRows({ root: reviewableRootMarket(saved?.centralizedMarkets), children: saved?.childMarketConfigurations, desiredPools: saved?.desiredPools }, value),
+					changes: reviewChangeRows({ root: reviewableRootMarket(saved?.centralizedMarkets), children: saved?.childMarketConfigurations }, value),
 				}))
 			) {
 				actionStatus(marketConfigurationSaveStatus, '')

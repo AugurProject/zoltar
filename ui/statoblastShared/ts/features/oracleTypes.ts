@@ -19,7 +19,7 @@ export type OpenOracleSectionProps = OpenOracleRouteContentProps & {
 	onActiveViewChange: (view: OpenOracleView) => void
 }
 
-export type ReportingRouteContentProps = {
+type ReportingRouteContentProps = {
 	accountState: AccountState
 	loadingReportingDetails: boolean
 	onApproveReportingRep: () => void

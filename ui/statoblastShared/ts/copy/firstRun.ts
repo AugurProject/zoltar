@@ -1,8 +1,0 @@
-export const firstRunTitle = 'New here? Start with your role'
-export const dismissFirstRunLabel = 'Dismiss the role guide'
-export const vaultProviderRole = 'Vault provider'
-export const vaultProviderGuide = 'How vaults work'
-export const traderRole = 'Trader'
-export const traderGuide = 'How shares and trading work'
-export const reporterRole = 'Reporter'
-export const reporterGuide = 'How reporting works'

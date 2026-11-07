@@ -1,5 +1,7 @@
+import { parsePortfolioInstructions, serializePortfolioInstructions, type PortfolioInstruction } from './portfolio-instructions.ts'
+import { parsePortfolioPolicy, parsePortfolioSelections, serializePortfolioPolicy, type PortfolioPolicy, type PortfolioSelection } from './portfolio-policy.ts'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
-import { bigintToSafeNumber, getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
 import { boolean, formatDecimalAmount, integer, parseDecimalAmount, record, nonemptyString as string } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { parseCentralizedMarketSettings, serializeCentralizedMarketSettings, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
@@ -10,40 +12,12 @@ import { parseApprovedUniverses } from '@zoltar/bot-shared/monitoring/universe-p
 import { resolve } from 'node:path'
 import { canonicalDeployment, parseRootMarketSettings, presetNetwork } from './canonical-deployment.ts'
 
-export type CandidatePriority = 'largest-bonus' | 'largest-debt' | 'lowest-top-up'
-
-export type DesiredPoolSettings = {
-	initialReportPriorityFeeAttoEthPerGas: bigint
-	questionId: bigint
-	statoblastSecurityMultiplierBps: bigint
-	universeId: bigint
-}
-
 export type StrategySettings = {
-	allowAutomaticDeposits: boolean
-	allowAutomaticPoolCreation: boolean
-	allowAutomaticVaultMigrations: boolean
-	allowAutomaticWithdrawals: boolean
-	candidatePriority: CandidatePriority
-	fallbackRepPerEthPrice: bigint
 	maximumGasCostAttoEth: bigint
-	maximumLiquidationDebtAttoEth: bigint
-	maximumOracleRequestCostAttoEth: bigint
-	maximumAttoRepPerPool: bigint
-	maximumTotalDeployedRep: bigint
-	minimumLiquidationDebtAttoEth: bigint
-	minimumRepWithdrawalAttoRep: bigint
-	minimumRewardValueAttoEth: bigint
-	redeemFeesAboveAttoEth: bigint
-	stalePriceFundingBufferBps: bigint
-	stagedOperationValidForSeconds: bigint
-	vaultTargetHealthBps: bigint
-	vaultTopUpHealthBps: bigint
-	vaultWithdrawHealthBps: bigint
 	walletAttoRepReserve: bigint
 }
 
-/** Version 2 stores the desired-pool `statoblastSecurityMultiplierBps` as a JSON number like every other basis-point setting. */
+/** Operator settings use decimal strings for token amounts and numbers for basis points. */
 const SETTINGS_VERSION = 2
 
 export type OperatorSettings = {
@@ -57,7 +31,6 @@ export type OperatorSettings = {
 		weth: Address
 		zoltar: Address
 	}
-	desiredPools: DesiredPoolSettings[]
 	network: {
 		chainId: number
 		explorerUrl: string
@@ -77,7 +50,9 @@ export type OperatorSettings = {
 		uiHost: '0.0.0.0' | '127.0.0.1'
 		uiPort: number
 	}
-	selectedPools: Address[]
+	selectedPortfolios: PortfolioSelection[]
+	portfolioInstructions?: PortfolioInstruction[]
+	portfolioPolicy: PortfolioPolicy
 	strategy: StrategySettings
 	submission: SubmissionSettings
 	version: typeof SETTINGS_VERSION
@@ -93,98 +68,17 @@ function parseNetworkName(value: unknown): NetworkName {
 	throw new Error('network.name must be mainnet or sepolia')
 }
 
-function parseCandidatePriority(value: unknown): CandidatePriority {
-	if (value === 'largest-bonus' || value === 'largest-debt' || value === 'lowest-top-up') return value
-	throw new Error('strategy.candidatePriority is invalid')
-}
-
-function unsignedInteger(value: unknown, label: string, bits: 248 | 256) {
-	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)$/.test(value)) throw new Error(`${label} must be a non-negative integer string`)
-	const parsed = BigInt(value)
-	if (parsed >= 2n ** BigInt(bits)) throw new Error(`${label} must fit in uint${bits}`)
-	return parsed
-}
-
-function universeId(value: unknown, label: string) {
-	return unsignedInteger(value, label, 248)
-}
-
-function uint256(value: unknown, label: string) {
-	return unsignedInteger(value, label, 256)
-}
-
-export function parseDesiredPools(value: unknown): DesiredPoolSettings[] {
-	if (!Array.isArray(value)) throw new Error('desiredPools must be an array')
-	const parsed = value.map((entry, index) => {
-		const desired = record(entry, `desiredPools[${index.toString()}]`)
-		const pool = {
-			initialReportPriorityFeeAttoEthPerGas: uint256(desired['initialReportPriorityFeeAttoEthPerGas'], `desiredPools[${index.toString()}].initialReportPriorityFeeAttoEthPerGas`),
-			questionId: uint256(desired['questionId'], `desiredPools[${index.toString()}].questionId`),
-			statoblastSecurityMultiplierBps: BigInt(integer(desired['statoblastSecurityMultiplierBps'], `desiredPools[${index.toString()}].statoblastSecurityMultiplierBps`, 10_001, Number.MAX_SAFE_INTEGER)),
-			universeId: universeId(desired['universeId'], `desiredPools[${index.toString()}].universeId`),
-		}
-		return pool
-	})
-	const ids = parsed.map(pool => `${pool.universeId.toString()}:${pool.questionId.toString()}:${pool.statoblastSecurityMultiplierBps.toString()}:${pool.initialReportPriorityFeeAttoEthPerGas.toString()}`)
-	if (new Set(ids).size !== ids.length) throw new Error('desiredPools must not contain duplicates')
-	return parsed
-}
-
 export function parseStrategy(value: unknown): StrategySettings {
 	const strategy = record(value, 'strategy')
-	const parsed: StrategySettings = {
-		allowAutomaticDeposits: boolean(strategy['allowAutomaticDeposits'], 'strategy.allowAutomaticDeposits'),
-		allowAutomaticPoolCreation: strategy['allowAutomaticPoolCreation'] === undefined ? false : boolean(strategy['allowAutomaticPoolCreation'], 'strategy.allowAutomaticPoolCreation'),
-		allowAutomaticVaultMigrations: boolean(strategy['allowAutomaticVaultMigrations'], 'strategy.allowAutomaticVaultMigrations'),
-		allowAutomaticWithdrawals: boolean(strategy['allowAutomaticWithdrawals'], 'strategy.allowAutomaticWithdrawals'),
-		candidatePriority: parseCandidatePriority(strategy['candidatePriority']),
-		fallbackRepPerEthPrice: parseDecimalAmount(strategy['fallbackRepPerEthPrice'], 'strategy.fallbackRepPerEthPrice'),
-		maximumGasCostAttoEth: parseDecimalAmount(strategy['maximumGasCostEth'], 'strategy.maximumGasCostEth'),
-		maximumLiquidationDebtAttoEth: parseDecimalAmount(strategy['maximumLiquidationDebtEth'], 'strategy.maximumLiquidationDebtEth'),
-		maximumOracleRequestCostAttoEth: parseDecimalAmount(strategy['maximumOracleRequestCostEth'], 'strategy.maximumOracleRequestCostEth'),
-		maximumAttoRepPerPool: parseDecimalAmount(strategy['maximumPerPoolRep'], 'strategy.maximumPerPoolRep'),
-		maximumTotalDeployedRep: parseDecimalAmount(strategy['maximumTotalDeployedRep'], 'strategy.maximumTotalDeployedRep'),
-		minimumLiquidationDebtAttoEth: parseDecimalAmount(strategy['minimumLiquidationDebtEth'], 'strategy.minimumLiquidationDebtEth'),
-		minimumRepWithdrawalAttoRep: parseDecimalAmount(strategy['minimumRepWithdrawalRep'], 'strategy.minimumRepWithdrawalRep'),
-		minimumRewardValueAttoEth: parseDecimalAmount(strategy['minimumRewardValueEth'], 'strategy.minimumRewardValueEth'),
-		redeemFeesAboveAttoEth: parseDecimalAmount(strategy['redeemFeesAboveEth'], 'strategy.redeemFeesAboveEth'),
-		stalePriceFundingBufferBps: BigInt(integer(strategy['stalePriceFundingBufferBps'], 'strategy.stalePriceFundingBufferBps', 10_000, 1_000_000)),
-		stagedOperationValidForSeconds: BigInt(integer(strategy['stagedOperationValidForSeconds'], 'strategy.stagedOperationValidForSeconds', 1, 300)),
-		vaultTargetHealthBps: BigInt(integer(strategy['vaultTargetHealthBps'], 'strategy.vaultTargetHealthBps', 10_001, 1_000_000)),
-		vaultTopUpHealthBps: BigInt(integer(strategy['vaultTopUpHealthBps'], 'strategy.vaultTopUpHealthBps', 10_000, 1_000_000)),
-		vaultWithdrawHealthBps: BigInt(integer(strategy['vaultWithdrawHealthBps'], 'strategy.vaultWithdrawHealthBps', 10_001, 1_000_000)),
-		walletAttoRepReserve: parseDecimalAmount(strategy['walletReserveRep'], 'strategy.walletReserveRep'),
-	}
-	if (parsed.minimumLiquidationDebtAttoEth > parsed.maximumLiquidationDebtAttoEth) throw new Error('Minimum liquidation debt cannot exceed the maximum')
-	if (parsed.vaultTopUpHealthBps > parsed.vaultTargetHealthBps) throw new Error('Top-up health must not exceed target health')
-	if (parsed.vaultTargetHealthBps >= parsed.vaultWithdrawHealthBps) throw new Error('Withdrawal health must exceed target health')
-	if (parsed.maximumAttoRepPerPool > parsed.maximumTotalDeployedRep) throw new Error('Per-pool REP limit cannot exceed the total deployed REP limit')
-	return parsed
-}
-
-/**
- * Upgrades an older saved document to the current shape, so files and dashboard-saved settings written by an earlier
- * release keep loading. Version 1 stored the desired-pool multiplier as a uint256 string.
- */
-function migrateSettingsDocument(root: Record<string, unknown>): Record<string, unknown> {
-	if (root['version'] === SETTINGS_VERSION) return root
-	if (root['version'] !== 1) throw new Error('operator settings version must be 1 or 2')
-	const desiredPools = root['desiredPools']
 	return {
-		...root,
-		desiredPools: Array.isArray(desiredPools)
-			? desiredPools.map(entry => {
-					if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) return entry
-					const multiplier: unknown = Reflect.get(entry, 'statoblastSecurityMultiplierBps')
-					return typeof multiplier === 'string' && /^(?:0|[1-9]\d*)$/.test(multiplier) ? { ...entry, statoblastSecurityMultiplierBps: Number(multiplier) } : entry
-				})
-			: desiredPools,
-		version: SETTINGS_VERSION,
+		maximumGasCostAttoEth: parseDecimalAmount(strategy['maximumGasCostEth'], 'strategy.maximumGasCostEth'),
+		walletAttoRepReserve: parseDecimalAmount(strategy['walletReserveRep'], 'strategy.walletReserveRep'),
 	}
 }
 
 export function parseSettings(value: unknown): OperatorSettings {
-	const root = migrateSettingsDocument(record(value, 'operator settings'))
+	const root = record(value, 'operator settings')
+	if (root['version'] !== SETTINGS_VERSION) throw new Error('operator settings version must be 2')
 	const networkConfigured = root['networkConfigured'] === undefined ? root['connectivity'] !== undefined : boolean(root['networkConfigured'], 'networkConfigured')
 	if (networkConfigured && (root['network'] === undefined || root['connectivity'] === undefined)) throw new Error('A configured operator requires network and connectivity')
 	if (!networkConfigured && root['connectivity'] !== undefined) throw new Error('An unconfigured operator cannot retain RPC connectivity')
@@ -192,18 +86,7 @@ export function parseSettings(value: unknown): OperatorSettings {
 	const chainId = integer(network['chainId'], 'network.chainId', 1, 2 ** 31 - 1)
 	const runtime = record(root['runtime'], 'runtime')
 	const connectivity = networkConfigured ? parseQuorumConnectivitySettings(root['connectivity']) : unconfiguredQuorumConnectivity()
-	const selectedPools = root['selectedPools']
-	if (!Array.isArray(selectedPools)) throw new Error('selectedPools must be an array')
 	const parsedApprovedUniverses = parseApprovedUniverses(root['approvedUniverses'])
-	const parsedSelectedPools = [
-		...new Map(
-			selectedPools.map(value => {
-				const address = getAddress(string(value, 'selected pool'))
-				return [address.toLowerCase(), address] as const
-			}),
-		).values(),
-	]
-	const parsedDesiredPools = parseDesiredPools(root['desiredPools'] ?? [])
 	const privateKey = signerCandidate(root['privateKey']).privateKey
 	const settings: OperatorSettings = {
 		approvedUniverses: parsedApprovedUniverses,
@@ -215,7 +98,6 @@ export function parseSettings(value: unknown): OperatorSettings {
 		centralizedMarkets: parseRootMarketSettings(root['centralizedMarkets'], chainId),
 		connectivity,
 		deployment: canonicalDeployment(chainId),
-		desiredPools: parsedDesiredPools,
 		network: {
 			chainId,
 			explorerUrl: string(network['explorerUrl'], 'network.explorerUrl'),
@@ -235,7 +117,9 @@ export function parseSettings(value: unknown): OperatorSettings {
 			uiHost: uiHost(runtime['uiHost']),
 			uiPort: integer(runtime['uiPort'], 'runtime.uiPort', 1, 65_535),
 		},
-		selectedPools: parsedSelectedPools,
+		selectedPortfolios: parsePortfolioSelections(root['selectedPortfolios']),
+		portfolioInstructions: parsePortfolioInstructions(root['portfolioInstructions']),
+		portfolioPolicy: parsePortfolioPolicy(root['portfolioPolicy']),
 		strategy: parseStrategy(root['strategy']),
 		submission: validateSubmissionSettings(root['submission']),
 		version: SETTINGS_VERSION,
@@ -258,39 +142,16 @@ export function serializedSettings(settings: OperatorSettings, redactPrivateKey 
 		childMarketConfigurations: settings.childMarketConfigurations.map(serializeCentralizedMarketSettings),
 		centralizedMarkets,
 		connectivity: settings.networkConfigured ? { ...settings.connectivity } : undefined,
-		desiredPools: settings.desiredPools.map(pool => ({
-			initialReportPriorityFeeAttoEthPerGas: pool.initialReportPriorityFeeAttoEthPerGas.toString(),
-			questionId: pool.questionId.toString(),
-			statoblastSecurityMultiplierBps: bigintToSafeNumber(pool.statoblastSecurityMultiplierBps, 'Desired pool security multiplier basis points'),
-			universeId: pool.universeId.toString(),
-		})),
 		network: settings.network,
 		networkConfigured: settings.networkConfigured,
 		paused: settings.paused,
 		privateKey: redactPrivateKey || settings.privateKey === undefined ? null : settings.privateKey,
 		runtime: settings.runtime,
-		selectedPools: settings.selectedPools,
+		selectedPortfolios: settings.selectedPortfolios.map(selection => ({ address: selection.address, universeId: selection.universeId.toString() })),
+		portfolioInstructions: serializePortfolioInstructions(settings.portfolioInstructions ?? []),
+		portfolioPolicy: serializePortfolioPolicy(settings.portfolioPolicy),
 		strategy: {
-			allowAutomaticDeposits: settings.strategy.allowAutomaticDeposits,
-			allowAutomaticPoolCreation: settings.strategy.allowAutomaticPoolCreation,
-			allowAutomaticVaultMigrations: settings.strategy.allowAutomaticVaultMigrations,
-			allowAutomaticWithdrawals: settings.strategy.allowAutomaticWithdrawals,
-			candidatePriority: settings.strategy.candidatePriority,
-			fallbackRepPerEthPrice: formatDecimalAmount(settings.strategy.fallbackRepPerEthPrice),
 			maximumGasCostEth: formatDecimalAmount(settings.strategy.maximumGasCostAttoEth),
-			maximumLiquidationDebtEth: formatDecimalAmount(settings.strategy.maximumLiquidationDebtAttoEth),
-			maximumOracleRequestCostEth: formatDecimalAmount(settings.strategy.maximumOracleRequestCostAttoEth),
-			maximumPerPoolRep: formatDecimalAmount(settings.strategy.maximumAttoRepPerPool),
-			maximumTotalDeployedRep: formatDecimalAmount(settings.strategy.maximumTotalDeployedRep),
-			minimumLiquidationDebtEth: formatDecimalAmount(settings.strategy.minimumLiquidationDebtAttoEth),
-			minimumRepWithdrawalRep: formatDecimalAmount(settings.strategy.minimumRepWithdrawalAttoRep),
-			minimumRewardValueEth: formatDecimalAmount(settings.strategy.minimumRewardValueAttoEth),
-			redeemFeesAboveEth: formatDecimalAmount(settings.strategy.redeemFeesAboveAttoEth),
-			stalePriceFundingBufferBps: bigintToSafeNumber(settings.strategy.stalePriceFundingBufferBps, 'Stale-price funding buffer basis points'),
-			stagedOperationValidForSeconds: bigintToSafeNumber(settings.strategy.stagedOperationValidForSeconds, 'Staged-operation validity'),
-			vaultTargetHealthBps: bigintToSafeNumber(settings.strategy.vaultTargetHealthBps, 'Vault target health basis points'),
-			vaultTopUpHealthBps: bigintToSafeNumber(settings.strategy.vaultTopUpHealthBps, 'Vault top-up health basis points'),
-			vaultWithdrawHealthBps: bigintToSafeNumber(settings.strategy.vaultWithdrawHealthBps, 'Vault withdrawal health basis points'),
 			walletReserveRep: formatDecimalAmount(settings.strategy.walletAttoRepReserve),
 		},
 		submission: settings.submission,

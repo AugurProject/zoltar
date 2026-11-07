@@ -208,12 +208,6 @@ describe('chaos execution safety gates', () => {
 			walletAssetDebits: cappedStep.walletAssetDebits.map(debit => ({ ...debit, category: 'rep' as const })),
 		}
 		expect(() => assertOperationPrincipalCaps({ id: 'rep-credit', steps: [repStep] }, { maximumEthPerOperationAttoEth: 100n, maximumRepPerOperationAttoRep: 10n })).toThrow('maximumRepPerOperation')
-
-		const vaultRepStep = {
-			...stepWithoutValue,
-			walletAssetDebits: [{ amount: '11', category: 'rep' as const, kind: 'security-pool-vault-rep' as const, pool: oracle, vault: token }],
-		}
-		expect(() => assertOperationPrincipalCaps({ id: 'vault-rep', steps: [vaultRepStep] }, { maximumEthPerOperationAttoEth: 100n, maximumRepPerOperationAttoRep: 10n })).toThrow('maximumRepPerOperation')
 	})
 
 	test('applies cumulative principal caps independently to each workflow', () => {

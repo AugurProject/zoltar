@@ -257,7 +257,7 @@ describe('useTradingOperations', () => {
 		expect(createCompleteSetInSecurityPool.mock.calls[0]?.[3]).toBe(2n * ATTO_ETH_PER_ETH - 1n)
 	})
 
-	test('converts redeem complete-set input to share units before submitting', async () => {
+	test('submits complete-set inputs in fixed share units', async () => {
 		const firstMintShareAmount = ATTO_ETH_PER_ETH
 		let submittedRedeemAmount: bigint | undefined
 		const redeemCompleteSetInSecurityPool = mock(async (_accountAddress: Address, _callbacks: unknown, securityPoolAddress: Address, amount: bigint) => {
@@ -296,7 +296,7 @@ describe('useTradingOperations', () => {
 		expect(submittedRedeemAmount).toBe(firstMintShareAmount)
 	})
 
-	test('redeems the exact share balance when the ETH amount is the redeemable maximum', async () => {
+	test('redeems the exact share amount even when its ETH backing is zero', async () => {
 		let submittedRedeemAmount: bigint | undefined
 		const redeemCompleteSetInSecurityPool = mock(async (_accountAddress: Address, _callbacks: unknown, securityPoolAddress: Address, amount: bigint) => {
 			submittedRedeemAmount = amount
@@ -304,14 +304,14 @@ describe('useTradingOperations', () => {
 		})
 		const hook = await renderTradingHook(
 			createMintDependencies({
-				loadSecurityPoolMintCapacity: mock(async () => createMintCapacity({ settlementCollateralAttoEth: 7n, shareTokenSupplyAttoShares: 100n })),
+				loadSecurityPoolMintCapacity: mock(async () => createMintCapacity({ settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 100n })),
 				loadTradingDetails: mock(async () => createTradingDetails({ maxRedeemableCompleteSetsAttoShares: 99n, shareBalances: { invalidAttoShares: 99n, noAttoShares: 99n, yesAttoShares: 99n } })),
 				redeemCompleteSetInSecurityPool,
 			}),
 		)
 
-		// 99 shares are worth 6 attoETH, which converts back to only 86 shares.
-		await hook.setForm({ redeemAmount: '0.000000000000000006' })
+		// Input represents the shares to burn, independently of cash backing.
+		await hook.setForm({ redeemAmount: '0.000000000000000099' })
 		await act(async () => {
 			await hook.state().redeemCompleteSet()
 		})

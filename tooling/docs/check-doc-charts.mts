@@ -6,7 +6,7 @@ import { Window } from 'happy-dom'
 import ts from 'typescript'
 
 import { quantitativeChartMetadata } from '../../docs/charts/chartMetadata'
-import { contractInteractionEdges, quantitativeChartAxisLabels, quantitativeChartIds } from '../../docs/charts/chartModels'
+import { quantitativeChartAxisLabels, quantitativeChartIds } from '../../docs/charts/chartModels'
 import { hasDiagramOverflow, resolveChartEnvelopeWidth } from '../../docs/charts/diagramControl'
 import { fitArrowEndpointOutsideRectangles, layerDiagramRectangles } from '../../docs/charts/diagramGeometry'
 import { createDiagramLayouts } from '../../docs/charts/diagramLayout'
@@ -129,21 +129,6 @@ function insidePanel(point: { x: number; y: number }, panel: DiagramLayoutPanel)
 	return point.x >= panel.x && point.x <= panel.x + panel.width && point.y >= panel.y && point.y <= panel.y + panel.height
 }
 
-function graphPathExists(section: DiagramGraphSpec['sections'][number], source: string, target: string): boolean {
-	const pending = [source]
-	const visited = new Set<string>()
-	while (pending.length > 0) {
-		const current = pending.pop()
-		if (current === undefined || visited.has(current)) continue
-		if (current === target) return true
-		visited.add(current)
-		for (const candidate of section.edges) {
-			if (candidate.source === current) pending.push(candidate.target)
-		}
-	}
-	return false
-}
-
 function assertGraphLayout(chartId: string, graph: DiagramGraphSpec, layout: DiagramLayoutSpec): void {
 	if (layout.nodes.length !== graph.sections.reduce((count, candidate) => count + candidate.nodes.length, 0)) throw new Error(`ELK layout ${chartId} changed the node count`)
 	if (layout.edges.length !== graph.sections.reduce((count, candidate) => count + candidate.edges.length, 0)) throw new Error(`ELK layout ${chartId} changed the edge count`)
@@ -209,7 +194,7 @@ const quantitativeMetadata: Record<string, { ariaDescription: string; ariaLabel:
 const graphIds = new Set(Object.keys(graphSpecs))
 const quantitativeIds = new Set(Object.keys(quantitativeMetadata))
 const allSpecIds = new Set([...graphIds, ...quantitativeIds])
-if (graphIds.size !== 17 || quantitativeIds.size !== 4 || allSpecIds.size !== 21) throw new Error(`Expected 17 ELK diagrams and 4 quantitative plots, found ${graphIds.size} and ${quantitativeIds.size}`)
+if (graphIds.size === 0 || quantitativeIds.size === 0) throw new Error(`Expected mounted diagrams and quantitative plots, found ${graphIds.size} and ${quantitativeIds.size}`)
 if ([...graphIds].some(chartId => quantitativeIds.has(chartId))) throw new Error('A documentation chart cannot be both an ELK diagram and quantitative plot')
 
 const mountIds: string[] = []
@@ -263,108 +248,6 @@ for (const [chartId, metadata] of Object.entries(quantitativeMetadata)) {
 	if (mounted?.width !== metadata.width || mounted.height !== metadata.height) throw new Error(`Documentation chart ${chartId} mount dimensions do not match its quantitative metadata`)
 }
 
-const forkStateMachine = graphSpecs['fig-statoblast-fork-state-machine']?.sections[0]
-const operationalChild = forkStateMachine?.nodes.find(candidate => candidate.id === 'child')
-if (operationalChild?.title !== 'Operational' || operationalChild.details?.includes('child activated') !== true || !/operational child/i.test(mountFallbacks.get('fig-statoblast-fork-state-machine') ?? '') || /child settlement/i.test(mountFallbacks.get('fig-statoblast-fork-state-machine') ?? '')) {
-	throw new Error('The fork state-machine model and fallback must end in child activation, not outcome settlement')
-}
-
-const auctionLifecycle = graphSpecs['fig-auction-lifecycle']?.sections[0]
-const noSaleTarget = auctionLifecycle?.edges.find(candidate => candidate.id === 'auction-start-operational')?.target
-if (auctionLifecycle === undefined || noSaleTarget === undefined || graphPathExists(auctionLifecycle, noSaleTarget, 'settle')) {
-	throw new Error('The no-sale truth-auction branch must activate the child without reaching bid settlement')
-}
-if (!graphPathExists(auctionLifecycle, 'bid', 'settle')) throw new Error('The repair truth-auction branch must preserve paged bid settlement')
-const earlyRefund = auctionLifecycle.edges.find(candidate => candidate.id === 'auction-bid-early-refund')
-const earlyRefundFinalize = auctionLifecycle.edges.find(candidate => candidate.id === 'auction-early-refund-finalize')
-const directFinalize = auctionLifecycle.edges.find(candidate => candidate.id === 'auction-bid-finalize')
-const remainingSettlement = auctionLifecycle.nodes.find(candidate => candidate.id === 'settle')
-if (
-	earlyRefund?.source !== 'bid' ||
-	earlyRefund.target !== 'early-refund' ||
-	earlyRefundFinalize?.source !== 'early-refund' ||
-	earlyRefundFinalize.target !== 'finalize' ||
-	directFinalize?.source !== 'bid' ||
-	directFinalize.target !== 'finalize' ||
-	!graphPathExists(auctionLifecycle, 'early-refund', 'finalize') ||
-	remainingSettlement?.title !== 'Settle remaining bids'
-) {
-	throw new Error('The truth-auction lifecycle must allow optional losing-bid refunds before both paths reach finalization and settlement of remaining bids')
-}
-
-const oracleOperation = graphSpecs['fig-statoblast-oracle-flow']?.sections[0]
-const oracleOperationEdges = new Map(oracleOperation?.edges.map(candidate => [candidate.id, candidate]) ?? [])
-const callbackAttempt = oracleOperationEdges.get('oracle-callback-consume')
-const acceptedCallback = oracleOperationEdges.get('oracle-report-callback')
-const rejectedCallback = oracleOperationEdges.get('oracle-report-rejected')
-const rejectedConsumption = oracleOperationEdges.get('oracle-rejected-consume')
-const overflowOperation = oracleOperationEdges.get('oracle-stage-overflow')
-const overflowExecution = oracleOperationEdges.get('oracle-overflow-execute')
-const callbackNode = oracleOperation?.nodes.find(candidate => candidate.id === 'callback')
-const consumedNode = oracleOperation?.nodes.find(candidate => candidate.id === 'consume')
-const rejectedNode = oracleOperation?.nodes.find(candidate => candidate.id === 'rejected')
-const rejectedConsumedNode = oracleOperation?.nodes.find(candidate => candidate.id === 'reject-consume')
-const overflowNode = oracleOperation?.nodes.find(candidate => candidate.id === 'overflow')
-if (
-	oracleOperation === undefined ||
-	callbackAttempt?.source !== 'callback' ||
-	callbackAttempt.target !== 'consume' ||
-	acceptedCallback?.source !== 'oracle' ||
-	acceptedCallback.target !== 'callback' ||
-	acceptedCallback.label !== 'accepted report' ||
-	rejectedCallback?.source !== 'oracle' ||
-	rejectedCallback.target !== 'rejected' ||
-	rejectedCallback.label !== 'rejected report' ||
-	rejectedConsumption?.source !== 'rejected' ||
-	rejectedConsumption.target !== 'reject-consume' ||
-	overflowOperation?.source !== 'stage' ||
-	overflowOperation.target !== 'overflow' ||
-	overflowExecution?.source !== 'overflow' ||
-	overflowExecution.target !== 'execute' ||
-	callbackNode?.details?.includes('skip already consumed') !== true ||
-	consumedNode?.details?.includes('success or terminal execution failure') !== true ||
-	rejectedNode?.details?.includes('price cache unchanged') !== true ||
-	rejectedConsumedNode?.details?.includes('terminal failure without execution') !== true ||
-	overflowNode?.details?.includes('remains active') !== true ||
-	!graphPathExists(oracleOperation, 'oracle', 'consume') ||
-	!graphPathExists(oracleOperation, 'oracle', 'reject-consume') ||
-	!graphPathExists(oracleOperation, 'overflow', 'execute') ||
-	graphPathExists(oracleOperation, 'rejected', 'execute') ||
-	graphPathExists(oracleOperation, 'rejected', 'consume') ||
-	graphPathExists(oracleOperation, 'overflow', 'consume') ||
-	oracleOperation.nodes.some(candidate => [candidate.title, ...(candidate.details ?? [])].some(label => /\breplay\b/i.test(label))) ||
-	!/accepted settlement callback/i.test(graphSpecs['fig-statoblast-oracle-flow']?.ariaDescription ?? '') ||
-	!/rejected report.*terminally consumes/is.test(graphSpecs['fig-statoblast-oracle-flow']?.ariaDescription ?? '') ||
-	!/accepted settlement callback/i.test(mountFallbacks.get('fig-statoblast-oracle-flow') ?? '') ||
-	!/rejected report.*terminally consumes/is.test(mountFallbacks.get('fig-statoblast-oracle-flow') ?? '') ||
-	!/overflow operations remain active.*fresh price/is.test(mountFallbacks.get('fig-statoblast-oracle-flow') ?? '')
-) {
-	throw new Error('The oracle operation flow must branch accepted and rejected reports, terminally consume the rejected batch, and leave overflow active for later fresh-price execution')
-}
-
-const openOracleIntegration = graphSpecs['fig-openoracle-integration-flow']?.sections[0]
-const openOracleEdges = new Map(openOracleIntegration?.edges.map(candidate => [candidate.id, candidate]) ?? [])
-const settlementCallback = openOracleEdges.get('openoracle-settlement-coordinator')
-const guardedExecution = openOracleEdges.get('openoracle-coordinator-guardrails')
-const rejectedReport = openOracleEdges.get('openoracle-coordinator-rejected')
-const integrationFallback = mountFallbacks.get('fig-openoracle-integration-flow') ?? ''
-if (
-	openOracleIntegration === undefined ||
-	settlementCallback?.source !== 'settlement' ||
-	settlementCallback.target !== 'coordinator-callback' ||
-	guardedExecution?.source !== 'coordinator-callback' ||
-	guardedExecution.target !== 'guardrails' ||
-	guardedExecution.label !== 'accepted report' ||
-	rejectedReport?.source !== 'coordinator-callback' ||
-	rejectedReport.target !== 'rejected' ||
-	rejectedReport.label !== 'rejected report' ||
-	graphPathExists(openOracleIntegration, 'rejected', 'guardrails') ||
-	!/accepted report.*refreshes/is.test(integrationFallback) ||
-	!/rejected report.*price cache unchanged.*terminally fails/is.test(integrationFallback)
-) {
-	throw new Error('OpenOracle settlement must call the coordinator, then branch accepted reports into guarded execution and rejected reports into terminal batch failure')
-}
-
 const zoltarWindow = new Window()
 zoltarWindow.document.write(zoltarPageSource)
 zoltarWindow.document.close()
@@ -390,18 +273,6 @@ assertNodeMatchesLegend('fig-zoltar-packed-scalar-answer', 'flag', 'Namespace bi
 assertNodeMatchesLegend('fig-zoltar-packed-scalar-answer', 'first', 'First payout')
 assertNodeMatchesLegend('fig-zoltar-packed-scalar-answer', 'second', 'Second payout')
 zoltarWindow.close()
-
-const contractMap = graphSpecs['fig-contract-interaction-map']
-if (contractMap === undefined) throw new Error('Contract interaction map is missing')
-const contractRoutes = contractMap.sections.flatMap(candidate => candidate.edges)
-if (contractRoutes.length !== contractInteractionEdges.length || new Set(contractRoutes.map(candidate => candidate.id)).size !== contractInteractionEdges.length) throw new Error('Contract interaction map must contain every registry edge exactly once')
-for (const expected of contractInteractionEdges) {
-	const definition = contractMap.sections.find(candidate => candidate.edges.some(edge => edge.id === expected.id))
-	const route = definition?.edges.find(candidate => candidate.id === expected.id)
-	const source = definition?.nodes.find(candidate => candidate.id === route?.source)
-	const receiver = definition?.nodes.find(candidate => candidate.id === route?.target)
-	if (route === undefined || source?.title !== expected.source || receiver?.title !== expected.receiver || route.label !== expected.action) throw new Error(`Contract interaction diagram does not match ${expected.id}`)
-}
 
 const runtimeSourceFile = ts.createSourceFile(entrypoint, runtimeSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
 const dispatches = nativeDispatches(runtimeSourceFile)

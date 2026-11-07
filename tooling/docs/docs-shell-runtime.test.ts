@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test'
+import { afterEach, expect, test } from 'bun:test'
 import { installDomEnvironment } from '../../ui/coreShared/ts/tests/testUtils/domEnvironment.ts'
 
 const globalKeys = ['HTMLScriptElement', 'HTMLAnchorElement', 'HTMLDialogElement', 'IntersectionObserver', 'KeyboardEvent'] as const
@@ -7,9 +7,21 @@ type DocsManifest = { sections: Array<Record<string, unknown>>; pages: Array<Rec
 
 type LayoutBox = { bottom: number; height: number; top: number }
 
+const layoutCleanups: (() => void)[] = []
+afterEach(() => {
+	for (const cleanup of layoutCleanups.splice(0).reverse()) cleanup()
+})
+
 // happy-dom has no layout, so a test describes where elements sit before the shell measures them.
 function mockLayout(layout: (element: HTMLElement) => LayoutBox | undefined) {
 	const prototype = HTMLElement.prototype
+	const descriptors = ['getBoundingClientRect', 'getClientRects'].map(name => ({ name, descriptor: Object.getOwnPropertyDescriptor(prototype, name) }))
+	layoutCleanups.push(() => {
+		for (const { name, descriptor } of descriptors) {
+			if (descriptor === undefined) Reflect.deleteProperty(prototype, name)
+			else Object.defineProperty(prototype, name, descriptor)
+		}
+	})
 	Object.defineProperty(prototype, 'getBoundingClientRect', {
 		configurable: true,
 		value(this: HTMLElement) {
@@ -141,12 +153,12 @@ test('contract reference index preserves the fragment ids of the former single p
 })
 
 test('documentation navigation adds word-break opportunities inside camel-case contract titles', async () => {
-	const shell = await loadShell('http://localhost/docs/reference/contracts/uniformpricedualcapbatchauction.html')
+	const shell = await loadShell('http://localhost/docs/reference/contracts/openoraclepricecoordinator.html')
 	try {
 		const link = Array.from(document.querySelectorAll<HTMLAnchorElement>('.docs-navigation-list a')).find(candidate => candidate.getAttribute('aria-current') === 'page')
 		if (link === undefined) throw new Error('Current contract page is missing from the navigation')
-		expect(link.textContent).toBe('UniformPriceDualCapBatchAuction')
-		expect(Array.from(link.childNodes).map(node => node.nodeName)).toEqual(['#text', 'WBR', '#text', 'WBR', '#text', 'WBR', '#text', 'WBR', '#text', 'WBR', '#text'])
+		expect(link.textContent).toBe('OpenOraclePriceCoordinator')
+		expect(Array.from(link.childNodes).map(node => node.nodeName)).toEqual(['#text', 'WBR', '#text', 'WBR', '#text', 'WBR', '#text'])
 		const plainLink = Array.from(document.querySelectorAll<HTMLAnchorElement>('.docs-navigation-list a')).find(candidate => candidate.textContent === 'Statoblast security model')
 		expect(plainLink?.querySelector('wbr')).toBeNull()
 	} finally {
@@ -388,7 +400,7 @@ test('previous and next follow the sidebar order and continue into the next sect
 })
 
 test('contract page titles get word-break points and the navigation column reveals the current page', async () => {
-	const shell = await loadShell('http://localhost/docs/reference/contracts/uniformpricedualcapbatchauction.html', 1280, undefined, () =>
+	const shell = await loadShell('http://localhost/docs/reference/contracts/openoraclepricecoordinator.html', 1280, undefined, () =>
 		mockLayout(element => {
 			if (element.classList.contains('docs-left')) return { bottom: 900, height: 836, top: 64 }
 			if (element.getAttribute('aria-current') === 'page') return { bottom: 1045, height: 44, top: 1001 }
@@ -397,8 +409,8 @@ test('contract page titles get word-break points and the navigation column revea
 	)
 	try {
 		const heading = document.querySelector('main h1')
-		expect(heading?.textContent).toBe('UniformPriceDualCapBatchAuction')
-		expect(heading?.querySelectorAll('wbr')).toHaveLength(5)
+		expect(heading?.textContent).toBe('OpenOraclePriceCoordinator')
+		expect(heading?.querySelectorAll('wbr')).toHaveLength(3)
 		expect(document.querySelector('.docs-brand-name')?.textContent).toBe('Augur documentation')
 		expect(document.querySelector<HTMLElement>('.docs-left')?.scrollTop).toBeGreaterThan(0)
 	} finally {

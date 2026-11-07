@@ -2,9 +2,8 @@
 
 import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { getReportingOutcomeKey, getReportingOutcomeValue, getSecurityPoolSystemState } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 import { getGenesisReputationTokenAddress } from '@zoltar/ui-zoltar-shared/protocol/activeProtocolAddresses.js'
-import { bigintToAddress, getEscalationSideLabel, getForkOutcomeKey, getMarketType, getMinBigintValue, getProtocolPageOffset, hasTimestamp, hasTimestampAndNumber, isBigintTriple, isStringArray, requireUniverseTupleArray } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
+import { bigintToAddress, getMarketType, getMinBigintValue, getProtocolPageOffset, hasTimestamp, hasTimestampAndNumber, isBigintTriple, isStringArray, requireUniverseTupleArray } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 
@@ -65,23 +64,6 @@ describe('contracts helpers', () => {
 		expect(idA).toBe(idB)
 		expect(idDifferent).not.toBe(idA)
 		expect(formatQuestionIdHex(idA)).toBe(`0x${idA.toString(16)}`)
-	})
-
-	test('mapping helpers cover all enumerations and default/unknown branches', () => {
-		expect(getReportingOutcomeValue('invalid')).toBe(0)
-		expect(getReportingOutcomeValue('yes')).toBe(1)
-		expect(getReportingOutcomeValue('no')).toBe(2)
-		expect(() => getReportingOutcomeValue('bad' as never)).toThrow('Unhandled reporting outcome')
-
-		expect(getReportingOutcomeKey(0)).toBe('invalid')
-		expect(getReportingOutcomeKey(1n)).toBe('yes')
-		expect(getReportingOutcomeKey(2)).toBe('no')
-		expect(getReportingOutcomeKey(4)).toBe('none')
-
-		expect(getForkOutcomeKey(0n, zeroAddress)).toBe('none')
-		expect(getForkOutcomeKey(1n, getAddress('0x00000000000000000000000000000000000000a1'))).toBe('yes')
-		expect(() => getEscalationSideLabel('bad' as never)).toThrow('Unhandled escalation side')
-		expect(() => getSecurityPoolSystemState(4)).toThrow('Unhandled security pool system state')
 	})
 
 	test('market utilities cover binary and categorical paths', () => {

@@ -1,3 +1,5 @@
+import { getRuntimeNetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { InheritedReporterClaims } from '@zoltar/ui-statoblast-shared/features/reporting/components/InheritedReporterClaims.js'
 import * as pricingCopy from '@zoltar/ui-core-shared/copy/pricing.js'
 import { formatReportingDeadline, getViewerStatusSentence } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingViewerStatus.js'
 import { createMarketDetails as marketDetailsFixture } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
@@ -101,6 +103,8 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 		settlementState: 'locked',
 		parentWithdrawalEnabled: false,
 		viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP,
+		viewerWalletRepBalanceAttoRep: 10n * ATTO_REP,
+		viewerWalletRepAllowanceAttoRep: 10n * ATTO_REP,
 		viewerVaultExists: true,
 		viewerVaultDisputeStakedAttoRep: 1n * ATTO_REP,
 		viewerVaultRepBackingAttoRep: 11n * ATTO_REP,
@@ -146,6 +150,8 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 		settlementState: 'locked',
 		parentWithdrawalEnabled: false,
 		viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP,
+		viewerWalletRepBalanceAttoRep: 10n * ATTO_REP,
+		viewerWalletRepAllowanceAttoRep: 10n * ATTO_REP,
 		viewerVaultExists: true,
 		viewerVaultDisputeStakedAttoRep: 1n * ATTO_REP,
 		viewerVaultRepBackingAttoRep: 11n * ATTO_REP,
@@ -181,6 +187,8 @@ function createNotStartedReportingDetails(overrides: Partial<Extract<ReportingDe
 		settlementState: 'locked',
 		parentWithdrawalEnabled: false,
 		viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP,
+		viewerWalletRepBalanceAttoRep: 10n * ATTO_REP,
+		viewerWalletRepAllowanceAttoRep: 10n * ATTO_REP,
 		viewerVaultExists: true,
 		viewerVaultDisputeStakedAttoRep: 0n,
 		viewerVaultRepBackingAttoRep: 10n * ATTO_REP,
@@ -866,13 +874,13 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes('Assumes no later contributions.')).toBe(false)
 	})
 
-	test('removes the approval explainer copy and still blocks when pool-held vault REP backing is insufficient', async () => {
+	test('blocks reporting when wallet REP is insufficient', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
 				createProps({
 					reportingDetails: createReportingDetails({
-						viewerPoolHeldVaultRepBackingAttoRep: 2n * ATTO_REP,
+						viewerWalletRepBalanceAttoRep: 2n * ATTO_REP,
 					}),
 					reportingForm: createReportingForm({
 						reportAmount: '5',
@@ -883,78 +891,8 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		expect(document.body.textContent?.includes('It does not spend wallet REP directly or require a wallet approval.')).toBe(false)
-		expect(document.body.textContent?.includes('Paid from: pool vault REP (no approval needed)')).toBe(true)
-		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'Only 2 REP is available in your pool vault. Reduce the amount or select Wallet REP.')
-	})
-
-	test('switches ordinary reporting between wallet REP and pool vault REP', async () => {
-		const rendered = await renderIntoDocument(
-			<ReportingSectionHarness
-				initialProps={{
-					reportingDetails: createReportingDetails({ contributionFunding: 'wallet', viewerWalletRepAllowanceAttoRep: 0n, viewerWalletRepBalanceAttoRep: rep(10n), viewerPoolHeldVaultRepBackingAttoRep: rep(6n), viewerVaultExists: true }),
-					reportingForm: createReportingForm({ reportAmount: '5', selectedOutcome: 'yes' }),
-				}}
-			/>,
-		)
-		cleanupRenderedComponent = rendered.cleanup
-		fireEvent.click(within(document.body).getByRole('button', { name: 'Pool vault REP' }))
-		expect(document.body.textContent).toContain('Paid from: pool vault REP (no approval needed)')
-		expect(document.body.textContent).not.toContain('Fork continuations use')
-		expect(within(document.body).queryByRole('button', { name: /^Approve / })).toBeNull()
-		expectTransactionButtonEnabled(document.body, reportingButtonLabel('Yes'))
-		fireEvent.click(within(document.body).getByRole('button', { name: 'Wallet REP' }))
-		expectTransactionButtonEnabled(document.body, 'Approve 5 REP')
-		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'Approve REP for this security pool before reporting.')
-	})
-
-	test('offers wallet funding through the child vault after a fork', async () => {
-		const rendered = await renderIntoDocument(<ReportingSectionHarness initialProps={{ reportingDetails: createReportingDetails({ forkContinuation: true, contributionFunding: 'vault' }), reportingForm: createReportingForm({ contributionFunding: 'wallet', selectedOutcome: 'yes', reportAmount: '5' }) }} />)
-		cleanupRenderedComponent = rendered.cleanup
-		expect(within(document.body).getByRole('button', { name: 'Wallet REP' }).getAttribute('aria-pressed')).toBe('true')
-		expect(document.body.textContent).toContain('Paid from: wallet REP')
-		expect(document.body.textContent).toContain('Your wallet REP first enters your vault in this pool, then funds your report.')
-	})
-
-	test('discloses the child pool minimum and approves the full wallet deposit', async () => {
-		const rendered = await renderIntoDocument(
-			<ReportingSectionHarness
-				initialProps={{
-					reportingDetails: createReportingDetails({
-						forkContinuation: true,
-						contributionFunding: 'wallet',
-						minimumVaultRepDepositAttoRep: rep(10n),
-						walletVaultFunding: { vaultRepBackingUnits: 0n, totalRepBackingUnits: 0n, totalPoolHeldRepAttoRep: 0n },
-						viewerPoolHeldVaultRepBackingAttoRep: 0n,
-						viewerVaultExists: false,
-						viewerWalletRepBalanceAttoRep: rep(20n),
-						viewerWalletRepAllowanceAttoRep: rep(5n),
-					}),
-					reportingForm: createReportingForm({ contributionFunding: 'wallet', selectedOutcome: 'yes', reportAmount: '5' }),
-				}}
-			/>,
-		)
-		cleanupRenderedComponent = rendered.cleanup
-		expect(document.body.textContent).toContain('This pool requires a 15.00 REP deposit for this report. Your vault will hold 10.00 REP afterward.')
-		expect(
-			within(document.body)
-				.getByRole('button', { name: /Approve 15 REP/ })
-				.hasAttribute('disabled'),
-		).toBe(false)
-	})
-
-	test('keeps the funding selector available when vault reporting is oracle-blocked', async () => {
-		const rendered = await renderIntoDocument(<ReportingSectionHarness initialProps={{ reportActionGuardMessage: 'Price expired' }} />)
-		cleanupRenderedComponent = rendered.cleanup
-		expect(within(document.body).getByRole('button', { name: 'Wallet REP' }).hasAttribute('disabled')).toBe(false)
-	})
-
-	test('offers wallet recovery from an empty selected pool vault', async () => {
-		const rendered = await renderIntoDocument(
-			<ReportingSectionHarness initialProps={{ reportingDetails: createReportingDetails({ contributionFunding: 'wallet', viewerVaultExists: false, viewerPoolHeldVaultRepBackingAttoRep: 0n }), reportingForm: createReportingForm({ contributionFunding: 'vault', selectedOutcome: 'yes', reportAmount: '5' }) }} />,
-		)
-		cleanupRenderedComponent = rendered.cleanup
-		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'No REP is available in your pool vault. Select Wallet REP to report.')
-		expect(document.body.textContent).not.toContain('No pool-held vault REP backing is available for reporting.')
+		expect(document.body.textContent?.includes('Paid from: wallet REP')).toBe(true)
+		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'Add 3\u00a0more\u00a0REP to this wallet before reporting.')
 	})
 
 	test.each(['not-started', 'active'] as const)('offers wallet REP approval to a %s ordinary-game participant without a vault', async status => {
@@ -980,7 +918,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(document.body.textContent).toContain('Paid from: wallet REP')
-		expect(document.body.textContent).not.toContain('Paid from: pool vault REP (no approval needed)')
+		expect(document.body.textContent).not.toContain('Paid from: pool vault REP')
 		expectTransactionButtonEnabled(document.body, 'Approve 5 REP')
 		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'Approve REP for this security pool before reporting.')
 		const reportButton = within(document.body).getByRole('button', { name: /^Report Yes ·/ })
@@ -1776,7 +1714,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(findProjectionPreviewText()).toBe('')
-		expect(document.body.textContent?.includes('from pool-held backing into dispute-staked REP')).toBe(true)
+		expect(document.body.textContent?.includes('from wallet REP into dispute-staked REP')).toBe(true)
 		expect(document.body.textContent?.includes('instead of the full entered amount.')).toBe(true)
 	})
 
@@ -2889,5 +2827,32 @@ describe('ReportingSection', () => {
 				expect(within(document.body).getAllByRole('button', { name: fixLabel })).toHaveLength(1)
 				expectWalletFixDescribesAction(document.body, /^(Settle selected Yes|Claim .* REP from Yes|Clear Yes deposits)/, fixLabel)
 			})
+	})
+})
+
+describe('InheritedReporterClaims', () => {
+	installDomTestLifecycle()
+	test('inherited claims keep preparation and settlement separate and require a finalized winning outcome', async () => {
+		const identity = { escalationGame: zeroAddress, outcome: 'yes' as const, snapshotRoot: `0x${'ab'.repeat(32)}` as const, snapshotLeafCount: 1n, amountAttoRep: rep(1n), cumulativeAmountAttoRep: rep(1n), depositor: zeroAddress, parentDepositIndex: 7n, leafIndex: 0n }
+		const parameters = { accountAddress: zeroAddress, onTransactionRequested: () => undefined, onTransactionSubmitted: () => undefined, onTransactionFinished: () => undefined, onTransactionPresented: () => undefined, refreshState: async () => undefined }
+		const details = createReportingDetails()
+		details.sides[1]?.importedUserDeposits.push({ ...identity, claimIdentity: identity, claimCheckpoint: { nextSourceGame: zeroAddress, pendingSteps: 1n, complete: false, ready: false } })
+		const view = await renderIntoDocument(<InheritedReporterClaims parameters={parameters} accountState={createAccountState({ chainId: getRuntimeNetworkProfile().chainIdHex })} details={details} onRefresh={async () => undefined} />)
+		const buttons = [...view.container.querySelectorAll('button')]
+		expect(buttons).toHaveLength(2)
+		expect(buttons.map(button => button.disabled)).toEqual([false, true])
+		const deposit = details.sides[1]?.importedUserDeposits[0]
+		if (deposit === undefined) throw new Error('Missing inherited claim')
+		deposit.claimCheckpoint = { nextSourceGame: zeroAddress, pendingSteps: 0n, complete: true, ready: true }
+		await act(() => render(<InheritedReporterClaims parameters={parameters} accountState={createAccountState({ chainId: getRuntimeNetworkProfile().chainIdHex })} details={{ ...details }} onRefresh={async () => undefined} />, view.container))
+		expect([...view.container.querySelectorAll('button')]).toEqual(buttons)
+		expect(buttons.map(button => button.disabled)).toEqual([true, true])
+		await act(() => render(<InheritedReporterClaims parameters={parameters} accountState={createAccountState({ chainId: getRuntimeNetworkProfile().chainIdHex })} details={{ ...details, settlementState: 'resolved', questionOutcome: 'no' }} onRefresh={async () => undefined} />, view.container))
+		expect(buttons.map(button => button.disabled)).toEqual([true, true])
+		await act(() => render(<InheritedReporterClaims parameters={parameters} accountState={createAccountState({ chainId: getRuntimeNetworkProfile().chainIdHex })} details={{ ...details, settlementState: 'resolved', questionOutcome: 'yes' }} onRefresh={async () => undefined} />, view.container))
+		expect(buttons.map(button => button.disabled)).toEqual([true, false])
+		await act(() => render(<InheritedReporterClaims parameters={parameters} accountState={createAccountState({ address: undefined })} details={{ ...details, settlementState: 'resolved', questionOutcome: 'yes' }} onRefresh={async () => undefined} />, view.container))
+		expect(buttons.every(button => button.disabled)).toBe(true)
+		await view.cleanup()
 	})
 })

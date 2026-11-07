@@ -99,6 +99,26 @@ function isHexValue(value: unknown): value is Hex {
 	return typeof value === 'string' && /^0x(?:[0-9a-fA-F]{2})*$/.test(value)
 }
 
+function activeFeeValuation(unit: bigint, rate = unit / 1000n) {
+	return {
+		timestamp: 1n,
+		feeEndTime: 2n ** 48n - 1n,
+		projectedCollateralAttoEth: unit,
+		feeAccounting: {
+			settlementCollateralAttoEth: unit,
+			totalUnderwritingLimitAttoEth: unit,
+			feeEligibleUnderwritingLimitAttoEth: unit,
+			currentRetentionRate: unit,
+			lastUpdatedFeeAccumulator: 1n,
+			feeIndexRemainder: 0n,
+			totalFeesOwedRemainder: 0n,
+			centralSettlement: true,
+			centralCheckpointTimestamp: 1n,
+			linearFee: { rateAttoEthPerSecond: rate, endTime: 2n ** 48n - 1n },
+		},
+	}
+}
+
 describe('live settlement contract encoding', () => {
 	for (const [side, outcome] of [
 		['YES', 1],
@@ -192,7 +212,7 @@ describe('live settlement contract encoding', () => {
 			totalUnderwritingLimitAttoEth: unit,
 			feeEligibleUnderwritingLimitAttoEth: unit,
 			currentRetentionRate: 999_000_000_000_000_000n,
-			valuation: { timestamp: 1n, feeEndTime: 2n ** 256n - 1n, projectedCollateralAttoEth: unit },
+			valuation: activeFeeValuation(unit),
 		}
 		const { client, counts } = recordingSettlementClient(child)
 		await expect(simulateSettlement(client, configuration, child, account, 'redeem-complete-set', { amount: unit, slippageBps: MINIMUM_SLIPPAGE_BPS })).rejects.toThrow(holdingFeesBoundsReason)
@@ -214,7 +234,7 @@ describe('live settlement contract encoding', () => {
 		const { client, chain, counts } = recordingSettlementClient(ended)
 		const quote = await simulateSettlement(client, configuration, ended, account, 'redeem-complete-set', { amount: unit, slippageBps: MINIMUM_SLIPPAGE_BPS })
 		expect(await submitFreshSettlement(client, configuration, account, quote, async write => await write())).toBe(transactionHash)
-		chain.market = { ...ended, valuation: { timestamp: 1n, feeEndTime: 2n ** 256n - 1n, projectedCollateralAttoEth: unit } }
+		chain.market = { ...ended, valuation: activeFeeValuation(unit) }
 		await expect(submitFreshSettlement(client, configuration, account, quote, async write => await write())).rejects.toThrow(holdingFeesBoundsReason)
 		expect(counts.sends).toBe(1)
 	})
@@ -225,7 +245,7 @@ describe('live settlement contract encoding', () => {
 		const { client, chain, counts } = recordingSettlementClient(ended)
 		const quote = await simulateSettlement(client, configuration, ended, account, 'redeem-complete-set', { amount: unit, slippageBps: 500n })
 		if (quote.operation !== 'redeem-complete-set') throw new Error('Expected complete-set quote')
-		chain.market = { ...ended, valuation: { timestamp: 1n, feeEndTime: 2n ** 256n - 1n, projectedCollateralAttoEth: unit } }
+		chain.market = { ...ended, valuation: activeFeeValuation(unit, unit / 100000n) }
 		await expect(submitFreshSettlement(client, configuration, account, { ...quote, minimumAttoEth: unit }, async write => await write())).rejects.toThrow(holdingFeesBoundsReason)
 		expect(counts.sends).toBe(0)
 	})
@@ -238,7 +258,7 @@ describe('live settlement contract encoding', () => {
 		if (quote.operation !== 'redeem-complete-set') throw new Error('Expected complete-set quote')
 		await expect(
 			submitFreshSettlement(client, configuration, account, quote, async write => {
-				chain.market = { ...ended, valuation: { timestamp: 1n, feeEndTime: 2n ** 256n - 1n, projectedCollateralAttoEth: unit } }
+				chain.market = { ...ended, valuation: activeFeeValuation(unit) }
 				return await write()
 			}),
 		).rejects.toThrow(holdingFeesBoundsReason)
@@ -266,4 +286,12 @@ describe('live settlement contract encoding', () => {
 		expect(guards).toBe(1)
 		expect(counts.sends).toBe(0)
 	})
+})
+
+test('REP-only complete-set redemption accepts zero ETH and retains the received-asset quote', async () => {
+	const unit = 10n ** 18n
+	const basket = { ...market, shareTokenSupplyAttoShares: 10n * unit, settlementCollateralAttoEth: 0n, settlementRecoveryAttoRep: 30n * unit, currentRetentionRate: unit, feeEligibleUnderwritingLimitAttoEth: 0n }
+	const fixture = recordingSettlementClient(basket)
+	const quote = await simulateSettlement(fixture.client, configuration, basket, account, 'redeem-complete-set', { amount: 2n * unit })
+	expect(quote).toMatchObject({ expectedAttoEth: 0n, expectedAttoRep: 6n * unit, minimumAttoEth: 0n })
 })

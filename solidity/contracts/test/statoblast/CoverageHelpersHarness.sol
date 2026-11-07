@@ -70,7 +70,7 @@ contract EscalationGameFactoryCoverageSecurityPool {
 		return factory.deployEscalationGame(startBondAttoRep, nonDecisionThresholdAttoRep);
 	}
 
-	function deployForkedGame(EscalationGameFactory factory, uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep, uint256 elapsedAtFork) external returns (EscalationGame) {
+	function deployForkedGame(EscalationGameFactory factory, uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep, int256 elapsedAtFork) external returns (EscalationGame) {
 		return
 			factory.deployEscalationGameFromFork(startBondAttoRep, nonDecisionThresholdAttoRep, elapsedAtFork, BinaryOutcomes.BinaryOutcome.None);
 	}

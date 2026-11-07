@@ -607,10 +607,10 @@ for (const result of ['pending', 'reverted'] as const) {
 	})
 }
 
-test('uses one action vocabulary for queued transaction states', () => {
-	expect(completedAction('Queue liquidation')).toBe('Liquidation queued')
+test('uses reviewed result titles and generic action tenses', () => {
+	expect(completedAction('Request new price')).toBe('Price requested')
 	expect(completedAction('Queue custom operation')).toBe('Queued custom operation')
-	expect(formatPendingAction('Queue liquidation')).toBe('Queuing liquidation…')
+	expect(formatPendingAction('Queue custom operation')).toBe('Queuing custom operation…')
 	expect(completedAction('Custom operation')).toBe('Custom operation – done')
 })
 

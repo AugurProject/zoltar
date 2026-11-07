@@ -1,37 +1,25 @@
-import { manipulatePriceOracle } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
-import { getQuestionEndDate } from '../../testSupport/simulator/utils/contracts/statoblast'
-import { depositToEscalationGame } from '../../testSupport/simulator/utils/contracts/securityPool'
-import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import assert from '../../testSupport/simulator/utils/assert'
-import { beforeEach, describe, test } from 'bun:test'
-import { statoblast_interfaces_IEscalationGame_IEscalationGameAuthorization } from '../../types/contractArtifact'
-import { useStatoblastVaultAccountingFixture, type StatoblastVaultAccountingFixture } from './fixture'
+import { describe, test } from 'bun:test'
+import { statoblast_interfaces_IEscalationGame_IEscalationGameAuthorization, statoblast_SecurityPool_SecurityPool as poolArtifact } from '../../types/contractArtifact'
+import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
+import { approveToken } from '../../testSupport/simulator/utils/utilities'
+import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
+import { QuestionOutcome } from '../../testSupport/simulator/types/types'
+import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 describe('Statoblast REP authorization entry points', () => {
-	const fixture = useStatoblastVaultAccountingFixture()
-	const { getAnvilWindowEthereum, reportBond } = fixture
-
-	let mockWindow: StatoblastVaultAccountingFixture['mockWindow']
-	let client: StatoblastVaultAccountingFixture['client']
-	let securityPoolAddresses: StatoblastVaultAccountingFixture['securityPoolAddresses']
-	let questionId: bigint
-
-	beforeEach(() => {
-		mockWindow = getAnvilWindowEthereum()
-		client = fixture.client
-		securityPoolAddresses = fixture.securityPoolAddresses
-		questionId = fixture.questionId
-	})
-
+	const fixture = useSecurityPoolPortfolioFixture()
+	const reportBond = 100n * unit
 	const initializeEscalationGame = async () => {
-		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10_000n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
-		return securityPoolAddresses.escalationGame
+		const client = fixture.owner()
+		const pool = fixture.poolFor(fixture.base.questionId).securityPool
+		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
+		await approveToken(client, getRepTokenAddress(fixture.base.genesisUniverse), pool)
+		await writeContractAndWait(client, () => client.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [1, reportBond] }))
+		return client.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'escalationGame' })
 	}
-
 	test('genesis REP escalation deposits reject ERC-2612 permit routing', async () => {
+		const client = fixture.owner()
 		const escalationGame = await initializeEscalationGame()
 		await assert.rejects(
 			client.writeContract({
@@ -45,6 +33,7 @@ describe('Statoblast REP authorization entry points', () => {
 	})
 
 	test('genesis REP escalation deposits reject ERC-3009 authorization routing', async () => {
+		const client = fixture.owner()
 		const escalationGame = await initializeEscalationGame()
 		await assert.rejects(
 			client.writeContract({

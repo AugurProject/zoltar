@@ -17,10 +17,6 @@ interface KnownSourceMapCoverageGapFileRule {
 // Source-map ranges with adjacent executed PCs but no traceable PC for the line itself.
 export const knownSourceMapCoverageGaps = [
 	{
-		sourcePath: 'solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol',
-		lineRules: [{ currentSourceMatches: 0, linePattern: /^[A-Za-z_][A-Za-z0-9_]*\s*=\s*_[A-Za-z_][A-Za-z0-9_]*;$/ }],
-	},
-	{
 		sourcePath: 'solidity/contracts/statoblast/tokens/ERC1155.sol',
 		lineRules: [
 			{ currentSourceMatches: 1, linePattern: /^return\s+[A-Za-z_][A-Za-z0-9_]*;$/ },

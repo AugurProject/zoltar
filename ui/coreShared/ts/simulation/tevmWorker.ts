@@ -39,7 +39,7 @@ async function handleCall(message: SimulationWorkerCallMessage) {
 			await engine.advanceTime(message.params.seconds)
 			return undefined
 		case 'bootstrap':
-			await engine.bootstrap()
+			await engine.bootstrap(message.params)
 			return undefined
 		case 'exportState':
 			return await engine.exportState(message.params.name)

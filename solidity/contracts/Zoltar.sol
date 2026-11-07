@@ -67,6 +67,24 @@ contract Zoltar {
 		return universes[universeId].forkTime;
 	}
 
+	/// @notice Returns the fixed choice deadline, or zero for an unforked universe.
+	function getForkChoiceDeadline(uint248 universeId) public view returns (uint256) {
+		uint256 forkTime = universes[universeId].forkTime;
+		return forkTime == 0 ? 0 : forkTime + Constants.FORK_CHOICE_TIME;
+	}
+
+	/// @notice Returns the fixed recapitalization deadline, independent of when a pool initializes.
+	function getForkRecapitalizationDeadline(uint248 universeId) public view returns (uint256) {
+		uint256 choiceDeadline = getForkChoiceDeadline(universeId);
+		return choiceDeadline == 0 ? 0 : choiceDeadline + Constants.FORK_RECAPITALIZATION_TIME;
+	}
+
+	/// @notice Returns when this universe may fork after its parent's fixed phases and response interval.
+	function getEarliestForkTime(uint248 universeId) public view returns (uint256) {
+		if (universeId == 0) return 0;
+		return getForkRecapitalizationDeadline(universes[universeId].parentUniverseId) + Constants.FORK_RESPONSE_TIME;
+	}
+
 	/// @notice Returns whether the universe's recorded fork question id equals `questionId`.
 	function forkQuestionMatches(uint248 universeId, uint256 questionId) external view returns (bool) {
 		return universes[universeId].forkQuestionId == questionId;
@@ -107,6 +125,7 @@ contract Zoltar {
 		require(address(universe.reputationToken).code.length != 0, 'Universe REP token address must contain code');
 		require(universeTheoreticalSupplies[universeId] != 0, 'Universe theoretical REP supply must be non-zero');
 		require(universe.forkTime == 0, 'Universe already forked');
+		require(block.timestamp >= getEarliestForkTime(universeId), 'Parent fork response period is still active');
 		// Intended behavior: Zoltar treats questions as global protocol objects rather
 		// than binding them to a specific universe. Any ended question can force a fork
 		// in any unforked universe, and downstream protocols are expected to enforce any

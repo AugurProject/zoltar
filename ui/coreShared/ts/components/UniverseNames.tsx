@@ -15,8 +15,3 @@ export function useUniverseName(universeId: bigint) {
 	const names = useContext(UniverseNamesContext)
 	return names?.get(universeId.toString()) ?? formatUniverseLineageLabel(undefined, universeId)
 }
-
-/** Inline universe name for prose and dense rows that should not link. */
-export function UniverseName({ universeId }: { universeId: bigint }) {
-	return <>{useUniverseName(universeId)}</>
-}

@@ -1,4 +1,4 @@
-import { DEFAULT_PROTOCOL_CONFIG, type ProtocolConfig } from '../../shared/core/ts/deployment/protocolConfig'
+import { type ProtocolConfig } from '../../shared/core/ts/deployment/protocolConfig'
 
 // Frozen mainnet protocol configuration, guarded against environment or global override drift.
 type ProtocolConfigInput = Partial<{
@@ -8,18 +8,14 @@ type ProtocolConfigInput = Partial<{
 export const MAINNET_PROTOCOL_CONFIG: ProtocolConfig = {
 	forkBurnDivisor: 5n,
 	forkThresholdDivisor: 20n,
-	minimumSecurityBondDebtAttoEth: DEFAULT_PROTOCOL_CONFIG.minimumSecurityBondDebtAttoEth,
-	minimumVaultRepDepositAttoRep: DEFAULT_PROTOCOL_CONFIG.minimumVaultRepDepositAttoRep,
 }
 
 const PROTOCOL_CONFIG_GLOBAL_KEY = '__ZOLTAR_PROTOCOL_CONFIG__'
 const PROTOCOL_CONFIG_ENV_KEYS = {
 	forkBurnDivisor: 'ZOLTAR_FORK_BURN_DIVISOR',
 	forkThresholdDivisor: 'ZOLTAR_FORK_THRESHOLD_DIVISOR',
-	minimumSecurityBondDebtAttoEth: 'ZOLTAR_MINIMUM_SECURITY_BOND_DEBT',
-	minimumVaultRepDepositAttoRep: 'ZOLTAR_MINIMUM_VAULT_REP_DEPOSIT',
 } as const
-const PROTOCOL_CONFIG_FIELDS = ['forkBurnDivisor', 'forkThresholdDivisor', 'minimumSecurityBondDebtAttoEth', 'minimumVaultRepDepositAttoRep'] as const satisfies readonly (keyof ProtocolConfig)[]
+const PROTOCOL_CONFIG_FIELDS = ['forkBurnDivisor', 'forkThresholdDivisor'] as const satisfies readonly (keyof ProtocolConfig)[]
 
 function parseConfigBigInt(value: bigint | number | string | undefined, field: keyof ProtocolConfig): bigint | undefined {
 	if (value === undefined) return undefined

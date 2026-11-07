@@ -6,6 +6,8 @@ import { DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARI
 import { getRegisteredSimulationScenarios, getSimulationScenarioDescription, getSimulationScenarioLabel } from '@zoltar/ui-core-shared/simulation/scenarios.js'
 import * as appCopy from '../../copy/app.js'
 import { TradingSecurityPoolLink } from '../../components/TradingSecurityPoolLink.js'
+import { SecurityPoolLink } from '@zoltar/ui-core-shared/components/SecurityPoolLink.js'
+import { renderRepPriceSourceLabel } from '@zoltar/ui-core-shared/lib/repPriceSource.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
@@ -245,6 +247,76 @@ test('Trading pool addresses offer explorer and copy controls beside the local p
 	expect(rendered.container.querySelector('a a, a button, a [role=button], button a, button button, button [role=button], [role=button] a')).toBeNull()
 	await rendered.cleanup()
 	dom.cleanup()
+})
+
+test('shared pool navigation preserves modified clicks and blocks disabled links', async () => {
+	const dom = installDomEnvironment()
+	let navigations = 0
+	const props = {
+		href: '#/pool',
+		securityPoolAddress: '0x00000000000000000000000000000000000000a1',
+		onNavigate: () => {
+			navigations++
+		},
+	}
+	const view = await renderIntoDocument(<SecurityPoolLink {...props}>Selected pool</SecurityPoolLink>)
+	try {
+		const link = view.container.querySelector('a')
+		if (link === null) throw new Error('Missing pool link')
+		for (const modifiers of [{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { altKey: true }, { button: 1 }]) {
+			const event = new MouseEvent('click', { ...modifiers, bubbles: true, cancelable: true })
+			link.dispatchEvent(event)
+			expect(event.defaultPrevented).toBe(false)
+		}
+		expect(navigations).toBe(0)
+		const primary = new MouseEvent('click', { bubbles: true, cancelable: true })
+		link.dispatchEvent(primary)
+		expect(primary.defaultPrevented).toBe(true)
+		expect(navigations).toBe(1)
+		await act(() =>
+			render(
+				<SecurityPoolLink {...props} disabled>
+					Selected pool
+				</SecurityPoolLink>,
+				view.container,
+			),
+		)
+		const disabled = new MouseEvent('click', { bubbles: true, cancelable: true })
+		link.dispatchEvent(disabled)
+		expect(disabled.defaultPrevented).toBe(true)
+		expect(navigations).toBe(1)
+		expect(link.getAttribute('aria-disabled')).toBe('true')
+	} finally {
+		await view.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('price source attribution distinguishes simulation and both live quote sources', async () => {
+	const dom = installDomEnvironment()
+	try {
+		for (const [source, label] of [
+			['mock', 'MOCK'],
+			['v3', 'V3'],
+			['v4', 'V4'],
+		] as const) {
+			const view = await renderIntoDocument(<div>{renderRepPriceSourceLabel(source, 'https://example.test/quote')}</div>)
+			try {
+				const link = view.container.querySelector('a')
+				expect(link?.textContent).toContain(label)
+				expect(link?.getAttribute('href')).toBe('https://example.test/quote')
+				expect(link?.getAttribute('rel')).toBe('noreferrer')
+				await act(() => render(<div>{renderRepPriceSourceLabel(source, undefined)}</div>, view.container))
+				expect(view.container.textContent).toContain(label)
+				expect(view.container.querySelector('a')).toBeNull()
+			} finally {
+				await view.cleanup()
+			}
+		}
+		expect(renderRepPriceSourceLabel(undefined, undefined)).toBeUndefined()
+	} finally {
+		dom.cleanup()
+	}
 })
 
 test('Trading keeps the shared shell, route header, section, field, and button styles', async () => {

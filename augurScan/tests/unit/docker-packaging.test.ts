@@ -52,11 +52,11 @@ describe('Docker packaging', () => {
 				}
 			}
 			const probe = join(runtime, 'augurScan/probe.ts')
-			await Bun.write(probe, "import { getLiquidationVaultRepBackingToTransfer } from '@zoltar/statoblast-shared/statoblast/liquidation'\nconsole.log(getLiquidationVaultRepBackingToTransfer(100n, 10n ** 18n))\n")
+			await Bun.write(probe, "import { getLiquidationMigrationSecurityMultiplierBps } from '@zoltar/statoblast-shared/statoblast/liquidation'\nconsole.log(getLiquidationMigrationSecurityMultiplierBps(12000n))\n")
 			const result = Bun.spawnSync([process.execPath, '--no-install', probe], { cwd: runtime, stdout: 'pipe', stderr: 'pipe' })
 			expect(result.stderr.toString()).toBe('')
 			expect(result.exitCode).toBe(0)
-			expect(result.stdout.toString().trim()).toBe('105n')
+			expect(result.stdout.toString().trim()).toBe('11000n')
 		} finally {
 			await rm(runtime, { recursive: true, force: true })
 			await rm(dependencies, { recursive: true, force: true })

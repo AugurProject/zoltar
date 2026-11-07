@@ -28,8 +28,8 @@ export type DashboardController = {
 	setPaused: (value: unknown) => unknown | Promise<unknown>
 	reconcileTransaction?: (value: unknown) => unknown | Promise<unknown>
 	testMarketSources?: (value: unknown) => unknown | Promise<unknown>
-	setSupportedPool?: (value: unknown) => unknown | Promise<unknown>
-	setSelectedPools: (value: unknown) => unknown | Promise<unknown>
+	setSupportedPortfolio?: (value: unknown) => unknown | Promise<unknown>
+	setSelectedPortfolios: (value: unknown) => unknown | Promise<unknown>
 	setExecution?: (value: unknown) => unknown | Promise<unknown>
 	setSigner: (value: unknown) => unknown | Promise<unknown>
 	setStrategy: (value: unknown) => unknown | Promise<unknown>
@@ -194,6 +194,12 @@ function publicOperatorSnapshot(value: unknown) {
 	const snapshot = publicFields(value, ['configurationRevision', 'deploymentMissingName', 'deploymentCheckedBlock', 'deploymentCheckedTimestamp', 'execute', 'lastScanAt', 'lastScannedBlock', 'lastScannedTimestamp', 'network', 'operatorCapable', 'paused', 'scanning', 'status', 'wallet'])
 	const error = source['error']
 	if (typeof error === 'string') snapshot['error'] = publicOperatorFailure(error)
+	if (Array.isArray(source['portfolios']))
+		snapshot['portfolios'] = publicList(source['portfolios'], value => {
+			const view = publicFields(value, ['address', 'universeId', 'selected', 'approvedUniverse', 'blockNumber', 'priceValid', 'principalRep', 'commitmentEth', 'managedPrincipalRep', 'maximumTotalPrincipalRep', 'automation', 'knownPositionCount', 'nextPositionId', 'knownAuctionBidCount', 'auctionAfterBidId'])
+			view['positions'] = publicList(record(value)?.['positions'], position => publicFields(position, ['id', 'label', 'commitmentEth', 'distressed', 'retirementStatus', 'stalledRetirement', 'takeoverStatus']))
+			return view
+		})
 	if (Array.isArray(source['activities'])) snapshot['activities'] = publicList(source['activities'], publicActivity)
 	if (Array.isArray(source['alerts'])) snapshot['alerts'] = publicList(source['alerts'], publicAlert)
 	if (record(source['centralizedMarket']) !== undefined) snapshot['centralizedMarket'] = publicCentralizedMarket(source['centralizedMarket'])
@@ -269,11 +275,11 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			const handlers = new Map<string, (value: unknown) => unknown | Promise<unknown>>([
 				['/api/approved-universes', controller.setApprovedUniverses],
 				['/api/paused', controller.setPaused],
-				['/api/selected-pools', controller.setSelectedPools],
+				['/api/selected-portfolios', controller.setSelectedPortfolios],
 				['/api/signer', controller.setSigner],
 				['/api/strategy', controller.setStrategy],
 			])
-			if (controller.setSupportedPool !== undefined) handlers.set('/api/supported-pool', controller.setSupportedPool)
+			if (controller.setSupportedPortfolio !== undefined) handlers.set('/api/supported-portfolio', controller.setSupportedPortfolio)
 			if (controller.setExecution !== undefined) handlers.set('/api/execution', controller.setExecution)
 			if (controller.setSubmission !== undefined) handlers.set('/api/submission', controller.setSubmission)
 			if (controller.setMarketConfiguration !== undefined) handlers.set('/api/market-configuration', controller.setMarketConfiguration)

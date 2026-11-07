@@ -1,5 +1,5 @@
 // Evidence seeding for the operations snapshot integration test: one decoded block with report and
-// liquidation-approval events, ten thousand blocks of AMM trading history, and bulk risk, portfolio,
+// capital commitment events, ten thousand blocks of AMM trading history, and bulk risk, portfolio,
 // fork, report, question, and vault rows that exercise every paginated catalog.
 import { expect } from 'bun:test'
 import { handleApi } from '../../src/api.ts'
@@ -15,7 +15,7 @@ export type OperationsContext = {
 	readonly network: NetworkConfig
 }
 
-// Stores the decoded report and approval block, then an auction state snapshot at that block.
+// Stores the decoded report and capital commitment block, then an auction state snapshot at that block.
 export const storeOperationsEvidenceBlock = async ({ database, operationsChainId, oracle, hash }: OperationsContext): Promise<void> => {
 	const lease = await database.tryAcquireIndexerLock(operationsChainId)
 	if (lease === undefined) throw new Error('operations integration writer did not acquire its lock')
@@ -33,19 +33,13 @@ export const storeOperationsEvidenceBlock = async ({ database, operationsChainId
 		}
 		const submitted = { ...decodedLog(hash, 0, oracle, 'ReportSubmitted', reportData), blockNumber: 1n }
 		const disputed = { ...decodedLog(hash, 1, oracle, 'ReportDisputed', { ...reportData, numReports: '2' }), blockNumber: 1n, transactionHash }
-		const approvalId = `0x${'a'.repeat(64)}`
-		const approvalEvidence: Array<{ name: string; argumentsValue: Record<string, unknown> }> = [
-			{
-				name: 'LiquidationApprovalSet',
-				argumentsValue: { approvalId, receiverVault: address, operator: discoveredAddress, securityPool: oracle, targetVault: address },
-			},
-			{ name: 'LiquidationApprovalReserved', argumentsValue: { approvalId, operationId: '1', reservedDebtAttoEth: 10n.toString() } },
-			{ name: 'LiquidationApprovalReleased', argumentsValue: { approvalId, operationId: '1', releasedDebtAttoEth: 2n.toString() } },
-			{ name: 'LiquidationApprovalConsumed', argumentsValue: { approvalId, operationId: '1', consumedDebtAttoEth: 8n.toString() } },
-			{ name: 'LiquidationApprovalRevoked', argumentsValue: { approvalId, receiverVault: address } },
-			{ name: 'LiquidationApprovalNonceInvalidated', argumentsValue: { receiverVault: address, previousNonce: '1', newNonce: '2' } },
+		const capitalEvidence = [
+			{ name: 'PrincipalDeposited', argumentsValue: { payer: address, owner: address, amountAttoRep: 120n.toString() } },
+			{ name: 'CommitmentAuthorized', argumentsValue: { owner: address, positionId: '1', rep: '120', commitment: '100', targetHealthFactorBps: '12000' } },
+			{ name: 'CommitmentCured', argumentsValue: { positionId: '1', removedCommitment: '10' } },
+			{ name: 'CommitmentTakenOver', argumentsValue: { sourceId: '1', receiverId: '2', commitment: '90', awardAttoRep: 5n.toString() } },
 		]
-		const approvalEvents = approvalEvidence.map(({ name, argumentsValue }, index) => ({
+		const capitalEvents = capitalEvidence.map(({ name, argumentsValue }, index) => ({
 			...decodedLog(hash, index + 2, oracle, name, argumentsValue),
 			blockNumber: 1n,
 		}))
@@ -61,25 +55,29 @@ export const storeOperationsEvidenceBlock = async ({ database, operationsChainId
 				contracts: [],
 				tokenMetadata: [],
 				transactions: [storedTransaction],
-				logs: [submitted, disputed, ...approvalEvents],
+				logs: [submitted, disputed, ...capitalEvents],
 				addressActivity: [],
 				contractDeploymentObservations: [],
 				logScanCursors: [],
 			},
 			lease,
 		)
-		const storedApprovalEvents = await database.sql`
-					SELECT event_name FROM liquidation_approval_events
-					WHERE chain_id = ${operationsChainId} AND canonical ORDER BY log_index
-				`
-		expect(storedApprovalEvents.map((row: Record<string, unknown>) => row['event_name'])).toEqual(['LiquidationApprovalSet', 'LiquidationApprovalReserved', 'LiquidationApprovalReleased', 'LiquidationApprovalConsumed', 'LiquidationApprovalRevoked', 'LiquidationApprovalNonceInvalidated'])
-		const indexedOperationsResponse = await handleApi(new Request(`http://localhost/api/v1/operations?chainId=${operationsChainId}`), database.sql)
-		if (indexedOperationsResponse === undefined) throw new Error('indexed operations endpoint did not return a response')
-		const indexedOperations = (await indexedOperationsResponse.json()) as {
-			data: { risk: { approvalEvents: Array<{ event_name: string }> } }
-		}
-		expect(indexedOperations.data.risk.approvalEvents).toHaveLength(6)
-		expect(indexedOperations.data.risk.approvalEvents.map(event => event.event_name)).toContain('LiquidationApprovalNonceInvalidated')
+		const storedCapitalEvents = await database.sql`
+			SELECT semantic_event_kind, entity_type, entity_identity FROM protocol_timeline_entries
+			WHERE chain_id = ${operationsChainId} AND canonical AND log_index >= 2 ORDER BY log_index
+		`
+		expect(storedCapitalEvents).toEqual([
+			{ semantic_event_kind: 'PrincipalDeposited', entity_type: 'vault', entity_identity: `${oracle.toLowerCase()}:${address.toLowerCase()}` },
+			{ semantic_event_kind: 'CommitmentAuthorized', entity_type: 'vault', entity_identity: `${oracle.toLowerCase()}:${address.toLowerCase()}` },
+			{ semantic_event_kind: 'CommitmentCured', entity_type: 'capital-position', entity_identity: `${oracle.toLowerCase()}:1` },
+			{ semantic_event_kind: 'CommitmentTakenOver', entity_type: 'capital-position', entity_identity: `${oracle.toLowerCase()}:1` },
+		])
+		const indexedResponse = await handleApi(new Request(`http://localhost/api/v1/state/timeline?chainId=${operationsChainId}&event=CommitmentTakenOver`), database.sql)
+		if (indexedResponse === undefined) throw new Error('indexed timeline endpoint did not return a response')
+		expect(indexedResponse.status).toBe(200)
+		expect(await indexedResponse.json()).toMatchObject({
+			data: { items: [{ semantic_event_kind: 'CommitmentTakenOver', entity_identity: `${oracle.toLowerCase()}:1`, summary_data: capitalEvidence[3]?.argumentsValue }], total: '1' },
+		})
 		await database.storeEntityStateSnapshots(
 			operationsChainId,
 			1n,
@@ -91,7 +89,7 @@ export const storeOperationsEvidenceBlock = async ({ database, operationsChainId
 					entityIdentity: oracle.toLowerCase(),
 					sourceMethod: 'augurscan.auction-state.v1',
 					readStatus: 'success',
-					readResult: { finalized: false, activeTickCount: '2' },
+					readResult: { finalized: false, bidCount: '2' },
 				},
 			],
 			lease,
@@ -217,7 +215,7 @@ export const seedRiskAndPortfolioEvidence = async ({ database, operationsChainId
 				${operationsChainId}, 'vault', ${`${oracle.toLowerCase()}:${address.toLowerCase()}`}, 2,
 				${`0x${(2).toString(16).padStart(64, '0')}`}, timestamptz '2026-01-01 00:00:22+00',
 				'augurscan.vault-risk.v1', 'success',
-				jsonb_build_object('poolHeldBackingAttoRep', '200', 'disputeStakedAttoRep', '0',
+				jsonb_build_object('poolHeldBackingAttoRep', '200', 'disputeStakedAttoRep', '100', 'disputeBackingAttoRep', '0',
 					'openInterestAttoEth', '1000000000000000000', 'securityMultiplierBps', '15000',
 					'targetHealthFactorBps', '12000', 'badDebtAttoEth', '0'), true
 			)

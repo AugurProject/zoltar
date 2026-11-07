@@ -1,3 +1,4 @@
+import { estimateBudgetMint } from '../../protocol/minting.js'
 import { capSubmissionDeadline, submissionWindowBlocker } from '../../protocol/submissionWindow.js'
 import { largestExitForLongShares, maximumInsuredExit, quoteEnterPosition, quoteExitPosition, type EnterPositionQuote, type ExitPositionQuote } from '@zoltar/trading-shared/trading/positions'
 import { tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
@@ -83,7 +84,8 @@ type EstimateResult = Readonly<{ estimate: TradeEstimate | undefined; problem: s
 
 function estimateBuy(market: LiveMarket, side: Side, payAttoEth: bigint, slippageBps: bigint): EstimateResult {
 	if (payAttoEth === 0n) return { estimate: undefined, problem: undefined }
-	const completeSets = collateralAttoEthToAttoShares(payAttoEth, market)
+	const mintAmount = estimateBudgetMint(market, payAttoEth)
+	const completeSets = mintAmount === undefined ? undefined : collateralAttoEthToAttoShares(mintAmount, market)
 	if (completeSets === undefined || completeSets === 0n) return { estimate: undefined, problem: ticketCopy.amountTooSmall }
 	// Mirror the swap's rejection of an input that rounds to no output, so the shared math never throws here.
 	const { reserveIn, reserveOut } = reservesFor(side, market, 'entry')

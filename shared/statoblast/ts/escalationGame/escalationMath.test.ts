@@ -1,7 +1,14 @@
 import { describe, expect, test } from 'bun:test'
-import { computeEscalationBindingCapitalAttoRep, computeEscalationTimeSinceStartFromAttritionCostAttoRep, ESCALATION_TIME_LENGTH, hasReachedNonDecision, projectEscalationDeposit } from './escalationMath'
+import { getWinningEscalationDepositClaimAmount, getWinningImportedEscalationDepositClaimAmount, computeEscalationBindingCapitalAttoRep, computeEscalationTimeSinceStartFromAttritionCostAttoRep, ESCALATION_TIME_LENGTH, hasReachedNonDecision, projectEscalationDeposit } from './escalationMath'
 
 describe('escalation math', () => {
+	test('ordinary intervals preserve total payout through reward and haircut rounding', () => {
+		const base = { bindingCapitalAttoRep: 7n, winningOutcomeBalanceAttoRep: 11n, forkThresholdAttoRep: 13n, nonDecisionThresholdAttoRep: 19n, ordinarySettlement: true }
+		let total = 0n
+		for (let end = 1n; end <= 11n; end++) total += getWinningEscalationDepositClaimAmount({ ...base, depositAmountAttoRep: 1n, cumulativeAmountAttoRep: end })
+		expect(total).toBe(getWinningEscalationDepositClaimAmount({ ...base, depositAmountAttoRep: 11n, cumulativeAmountAttoRep: 11n }))
+		expect(total).toBe(10n)
+	})
 	test('preserves logarithm components at exact power-of-two ratios', () => {
 		expect(computeEscalationTimeSinceStartFromAttritionCostAttoRep(1n, 8n, 2n)).toBe(ESCALATION_TIME_LENGTH / 3n)
 		expect(computeEscalationTimeSinceStartFromAttritionCostAttoRep(1n, 8n, 4n)).toBe((ESCALATION_TIME_LENGTH * 2n) / 3n)
@@ -37,4 +44,8 @@ describe('escalation math', () => {
 		expect(hasReachedNonDecision([3n, 3n, 1n], 3n)).toBe(true)
 		expect(hasReachedNonDecision([3n, 3n, 3n], 3n)).toBe(true)
 	})
+})
+
+void test('inherited rewards retain the canonical principal after distinct ancestry haircuts', () => {
+	expect(getWinningImportedEscalationDepositClaimAmount({ bindingCapitalAttoRep: 100n, depositAmountAttoRep: 10n, principalAttoRep: 4n, postDepositCumulativeAmountAttoRep: 10n, forkThresholdAttoRep: 100n, nonDecisionThresholdAttoRep: 100n, winningOutcomeBalanceAttoRep: 100n })).toBe(10n)
 })

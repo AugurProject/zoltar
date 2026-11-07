@@ -38,7 +38,9 @@ export function PortfolioRowValue({ valuation }: { valuation: PortfolioValuation
 	return (
 		<div className='portfolio-position-value'>
 			<span className='metric-label'>{portfolioCopy.valueNow}</span>
-			<strong className={valuation.kind === 'unavailable' ? 'is-unpriced' : undefined}>{valuation.kind === 'unavailable' ? <UnpricedValue /> : formatPortfolioEth(valuation.attoEth)}</strong>
+			<strong className={valuation.kind === 'unavailable' ? 'is-unpriced' : undefined}>
+				{valuation.kind === 'unavailable' ? <UnpricedValue /> : `${formatPortfolioEth(valuation.attoEth)}${(valuation.attoRep ?? 0n) === 0n ? '' : portfolioCopy.formatRecoveryRepTail(formatRoundedUnits(valuation.attoRep ?? 0n, 18, 4))}`}
+			</strong>
 			<small className='payout-caption'>{valuationCaption(valuation)}</small>
 		</div>
 	)
@@ -46,7 +48,7 @@ export function PortfolioRowValue({ valuation }: { valuation: PortfolioValuation
 
 /** Every reason the total leaves something out, or the pricing basis when it leaves nothing out. */
 function totalValueCaptions(overview: PortfolioOverview) {
-	const captions = [...(overview.unvaluedCount > 0 ? [portfolioCopy.excludedFromTotal(overview.unvaluedCount)] : []), ...(overview.pendingResolutionCount > 0 ? [portfolioCopy.pendingResolutionExcluded] : [])]
+	const captions = [...((overview.recoveryRepCount ?? 0) > 0 ? [portfolioCopy.recoveryRepExcluded] : []), ...(overview.unvaluedCount > 0 ? [portfolioCopy.excludedFromTotal(overview.unvaluedCount)] : []), ...(overview.pendingResolutionCount > 0 ? [portfolioCopy.pendingResolutionExcluded] : [])]
 	return captions.length === 0 ? [portfolioCopy.totalValueBasis] : captions
 }
 

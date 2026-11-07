@@ -228,6 +228,18 @@ const withFakeDevToolsBrowser = async (prefix: string, emptyTargetResponses: num
 	}
 }
 
+test.skipIf(process.platform === 'win32')('stalled evaluations include cached Chromium diagnostics without another DevTools command', async () => {
+	await withFakeDevToolsBrowser('zoltar-browser-stall-diagnostics-', 0, async ({ executablePath, fixtureRoot, server }) => {
+		await writeFile(executablePath, `#!/bin/sh\nprintf 'renderer-stall-diagnostic\\nDevTools listening on ws://127.0.0.1:${server.port.toString()}/devtools/browser/example\\n' >&2\nexec sleep 60\n`)
+		const session = await createDevToolsSession(executablePath, 'http://127.0.0.1', viewport, { commandTimeoutMilliseconds: 5, pollMilliseconds: 1, profileParentPath: fixtureRoot })
+		try {
+			await expect(session.evaluate('document.body.innerText')).rejects.toThrow(/socket readyState 1.*browser running.*stderr: renderer-stall-diagnostic/s)
+		} finally {
+			await session.close()
+		}
+	})
+})
+
 test.skipIf(process.platform === 'win32')('worker termination remains actionable when Chromium reports an empty target URL', async () => {
 	await withFakeDevToolsBrowser('zoltar-browser-empty-worker-url-', 0, async ({ executablePath, server }) => {
 		const session = await createDevToolsSession(executablePath, 'http://127.0.0.1', viewport)

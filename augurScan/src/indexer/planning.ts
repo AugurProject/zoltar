@@ -30,7 +30,6 @@ const RPC_MAX_PENDING = 100
 
 export const erc20MetadataAbi = parseAbi(['function decimals() view returns (uint8)', 'function name() view returns (string)', 'function symbol() view returns (string)'])
 export const erc20BalanceAbi = parseAbi(['function balanceOf(address owner) view returns (uint256)'])
-export const priceCoordinatorDependenciesAbi = parseAbi(['function liquidationApprovalRegistry() view returns (address)'])
 export const uniswapV4InitializeEvent = parseAbiItem('event Initialize(bytes32 indexed id,address indexed currency0,address indexed currency1,uint24 fee,int24 tickSpacing,address hooks,uint160 sqrtPriceX96,int24 tick)')
 export const uniswapV2PairCreatedEvent = parseAbiItem('event PairCreated(address indexed token0,address indexed token1,address pair,uint256 pairIndex)')
 export const uniswapV3PoolCreatedEvent = parseAbiItem('event PoolCreated(address indexed token0,address indexed token1,uint24 indexed fee,int24 tickSpacing,address pool)')

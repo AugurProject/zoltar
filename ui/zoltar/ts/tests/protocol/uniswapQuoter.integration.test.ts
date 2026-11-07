@@ -1,3 +1,4 @@
+import { quoteSinglePool } from './testSupport/singlePoolQuote.js'
 /// <reference types="bun-types" />
 
 /**
@@ -9,7 +10,7 @@
 import { describe as baseDescribe, expect, test } from 'bun:test'
 import { createPublicClient, http, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { mainnet } from '@zoltar/core-shared/evm/ethereum'
-import { ETH_ADDRESS, quoteExactInput } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
+import { ETH_ADDRESS } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 
 const RPC_URL = 'https://ethereum.dark.florist'
@@ -26,14 +27,14 @@ void describe('Uniswap mainnet smoke checks', () => {
 	// Sanity check: ETH/USDC 0.05% pool is established and should always return a price
 	void describe('ETH/USDC (0.05% pool — known to exist on V4)', () => {
 		void test('quotes 1 ETH → USDC and returns a plausible price', async () => {
-			const usdcOut = await quoteExactInput(client, ETH_ADDRESS, MAINNET_NETWORK_PROFILE.usdcAddress, ATTO_ETH_PER_ETH, { fee: 500, tickSpacing: 10 })
+			const usdcOut = await quoteSinglePool(client, ETH_ADDRESS, MAINNET_NETWORK_PROFILE.usdcAddress, ATTO_ETH_PER_ETH, { fee: 500, tickSpacing: 10 })
 			// Broad bounds keep this live-network smoke check stable as ETH prices change.
 			expect(usdcOut).toBeGreaterThan(100n * 10n ** 6n) // > $100 USDC
 			expect(usdcOut).toBeLessThan(100_000n * 10n ** 6n) // < $100 000 USDC
 		})
 
 		void test('quotes 1 USDC → ETH and returns a plausible price', async () => {
-			const ethOut = await quoteExactInput(client, MAINNET_NETWORK_PROFILE.usdcAddress, ETH_ADDRESS, 1n * 10n ** 6n, { fee: 500, tickSpacing: 10 })
+			const ethOut = await quoteSinglePool(client, MAINNET_NETWORK_PROFILE.usdcAddress, ETH_ADDRESS, 1n * 10n ** 6n, { fee: 500, tickSpacing: 10 })
 			// 1 USDC should buy a small fraction of ETH (more than 0 attoETH, less than 1 ETH)
 			expect(ethOut).toBeGreaterThan(0n)
 			expect(ethOut).toBeLessThan(ATTO_ETH_PER_ETH)

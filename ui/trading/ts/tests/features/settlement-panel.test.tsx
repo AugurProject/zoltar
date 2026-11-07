@@ -9,6 +9,7 @@ import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { buttonByLabel } from '../support/dom.js'
 import { etherScaleMarketFixture } from '../support/liveMarketFixture.js'
+import { invalidShareAmount } from '../../copy/tradeTicket.js'
 
 const account = getAddress(`0x${'11'.repeat(20)}`)
 const configuration = deploymentConfigurationFixture({ securityPoolFactory: getAddress(`0x${'88'.repeat(20)}`), factory: getAddress(`0x${'99'.repeat(20)}`), router: getAddress(`0x${'55'.repeat(20)}`) })
@@ -205,6 +206,30 @@ describe('settlement panel', () => {
 			const redeem = buttonByLabel('Redeem complete sets')
 			expect(redeem.disabled).toBe(true)
 			expect(describedText(redeem)).toContain('You hold no complete sets. Redeeming needs equal Yes, No, and Invalid shares.')
+		} finally {
+			await rendered.cleanup()
+		}
+	})
+})
+
+describe('fork recovery claim basket', () => {
+	installDomTestLifecycle()
+	test('REP-only basket claims remain redeemable and show the separate recovered asset', async () => {
+		const unit = 10n ** 18n
+		const rendered = await renderPanel({ ...closedMarket, settlementCollateralAttoEth: 0n, settlementRecoveryAttoRep: 30n * unit }, { invalid: 2n * unit, yes: 3n * unit, no: 2n * unit })
+		try {
+			await act(() => buttonByLabel('Max').click())
+			expect(amountInput().value).toBe('2')
+			expect(buttonByLabel('Redeem complete sets').disabled).toBe(false)
+			const estimate = document.querySelector('.trade-estimate')?.textContent?.replaceAll('\u00a0', ' ')
+			expect(estimate).toContain('0 ETH')
+			expect(estimate).toContain('6 REP')
+			await act(() => {
+				amountInput().value = '0.0000000000000000001'
+				amountInput().dispatchEvent(new Event('input', { bubbles: true }))
+			})
+			expect(buttonByLabel('Redeem complete sets').disabled).toBe(true)
+			expect(describedText(amountInput())).toContain(invalidShareAmount)
 		} finally {
 			await rendered.cleanup()
 		}

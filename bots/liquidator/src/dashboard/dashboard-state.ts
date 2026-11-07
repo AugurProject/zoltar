@@ -14,7 +14,6 @@ export type DashboardState = {
 	profileRequestEpoch: number
 	approvedUniverses: Set<string>
 	/** Lower-cased addresses of the pools the operator selected. */
-	selectedPools: Set<string>
 	pendingPoolMutations: number
 	/** The last reconciliation outcome per lower-cased intent hash, kept across recovery re-renders. */
 	recoveryActionStates: Map<string, { failed: boolean; message: string }>
@@ -41,7 +40,6 @@ export function createDashboardState(): DashboardState {
 		pendingProfileStateConfirmed: false,
 		profileRequestEpoch: 0,
 		approvedUniverses: new Set<string>(),
-		selectedPools: new Set<string>(),
 		pendingPoolMutations: 0,
 		recoveryActionStates: new Map(),
 		marketSourceProbeRows: undefined,

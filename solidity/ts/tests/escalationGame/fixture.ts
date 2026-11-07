@@ -19,7 +19,6 @@ import {
 	test_statoblast_EscalationGameForkerHarness_EscalationGameForkerHarness as escalationGameForkerHarnessArtifact,
 	test_statoblast_FalseReturningERC20_FalseReturningERC20,
 	test_statoblast_IncompatibleEscalationGameProofVerifier_IncompatibleEscalationGameProofVerifier as incompatibleProofVerifierArtifact,
-	test_statoblast_SecurityPoolAncestorTestNode_SecurityPoolAncestorTestNode as securityPoolAncestorTestNodeArtifact,
 } from '../../types/contractArtifact'
 import { isIgnorableLogDecodeError } from '../logDecodeErrors'
 import { computeForkContinuationParentDepositIndex, createCarryProof as createCarryProofFromHelpers, readCarryLeafHash as readCarryLeafHashFromHelpers } from '../carryProofHelpers'
@@ -67,7 +66,7 @@ export function useEscalationGameFixture() {
 			data: encodeDeployData({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
 				bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
-				args: [testSecurityPoolAddress, repTokenAddress, proofVerifierAddress, getInfraContractAddresses().escalationGameClaimDelegate],
+				args: [testSecurityPoolAddress, repTokenAddress, proofVerifierAddress, getInfraContractAddresses().escalationGameClaimDelegate, getInfraContractAddresses().escalationGameDepositDelegate],
 			}),
 		})
 		const escalationGameDeploymentReceipt = await client.waitForTransactionReceipt({ hash: escalationGameDeploymentHash })
@@ -108,18 +107,6 @@ export function useEscalationGameFixture() {
 		})
 		const testSecurityPoolDeploymentReceipt = await client.waitForTransactionReceipt({ hash: testSecurityPoolDeploymentHash })
 		return requireContractAddress(testSecurityPoolDeploymentReceipt.contractAddress, 'proof test security pool deployment address')
-	}
-
-	async function deploySecurityPoolAncestorNode(parent: Address) {
-		const deploymentHash = await client.sendTransaction({
-			data: encodeDeployData({
-				abi: securityPoolAncestorTestNodeArtifact.abi,
-				bytecode: `0x${securityPoolAncestorTestNodeArtifact.evm.bytecode.object}`,
-				args: [parent],
-			}),
-		})
-		const deploymentReceipt = await client.waitForTransactionReceipt({ hash: deploymentHash })
-		return requireContractAddress(deploymentReceipt.contractAddress, 'security pool ancestor node deployment address')
 	}
 
 	async function deployIncompatibleProofVerifier() {
@@ -269,7 +256,7 @@ export function useEscalationGameFixture() {
 			assert.strictEqual(await getEscrowedRepByVault(client, escalationGameAddress, vault), expectedVaultTotal, 'vault escrow should match active local deposits')
 		}
 
-		const [carryPage] = await readCarryLeafPage(client, escalationGameAddress, QuestionOutcome.Yes, 0n, BigInt(activeCarryDeposits.length + 1))
+		const [carryPage] = await readCarryLeafPage(client, escalationGameAddress, QuestionOutcome.Yes, 0n, BigInt(deposits.length + 1))
 		const expectedNewestFirst = activeCarryDeposits.slice().reverse()
 		assert.deepStrictEqual(
 			carryPage.map(leaf => ({
@@ -296,16 +283,6 @@ export function useEscalationGameFixture() {
 					functionName: 'recordForkedEscrowForOutcome',
 					args: [depositor, outcome, sourcePrincipalAttoRep, childRepAmountAttoRep],
 				}),
-		)
-
-	const applyTruthAuctionHaircutViaTestSecurityPool = async (testSecurityPoolAddress: Address, repToRemove: bigint) =>
-		await writeContractAndWait(client, async () =>
-			client.writeContract({
-				abi: escalationGameProofTestPoolArtifact.abi,
-				address: testSecurityPoolAddress,
-				functionName: 'applyTruthAuctionHaircut',
-				args: [repToRemove],
-			}),
 		)
 
 	const withdrawDepositViaProofTestSecurityPool = async (
@@ -459,7 +436,6 @@ export function useEscalationGameFixture() {
 		deployEscalationGameWithProofPool,
 		deployEscalationGameForkerHarness,
 		deployProofTestSecurityPool,
-		deploySecurityPoolAncestorNode,
 		deployIncompatibleProofVerifier,
 		deployFalseReturningToken,
 		startEscalation,
@@ -474,7 +450,6 @@ export function useEscalationGameFixture() {
 		assertEscrowAccounting,
 		assertLocalYesAccountingModel,
 		recordForkedEscrowForOutcomeViaTestSecurityPool,
-		applyTruthAuctionHaircutViaTestSecurityPool,
 		withdrawDepositViaProofTestSecurityPool,
 		withdrawDepositViaProofTestSecurityPoolWithGas,
 		claimDepositForWinningViaTestSecurityPool,

@@ -14,6 +14,7 @@ import {
 	loadSecurityPoolRegistry,
 	mapWithConcurrency,
 	loadLiveMarket,
+	shareBalanceScope,
 	loadUniverseIds,
 	marketDiscoveryPage,
 	refreshSecurityPoolDeploymentIndex,
@@ -89,11 +90,44 @@ export async function discoverUniverses(client: PublicClient, configuration: Dep
 
 export type SavedPortfolioPool = Readonly<{ pool: Address; universeId: bigint | undefined; market: LiveMarket | undefined }>
 
-/** Refresh only saved addresses; cached summaries identify scope and error rows, never current balances or prices. */
-export async function discoverSavedMarkets(client: PublicClient, configuration: DeploymentConfiguration, requestedUniverseId: bigint | undefined, savedMarkets: readonly SavedPortfolioPool[], onProgress?: MarketDiscoveryProgress, isCurrent = () => true) {
+/** Find holdings across registered questions, including pools the browser has never opened. */
+async function discoverWalletPools(client: PublicClient, configuration: DeploymentConfiguration, universeId: bigint, account: Address, isCurrent: () => boolean): Promise<SavedPortfolioPool[]> {
+	const anchor = await latestBlockIdentity(client)
+	const deployments = await loadSecurityPoolRegistry(client, configuration, universeId, anchor.blockNumber, isCurrent)
+	const owned = await mapWithConcurrency(deployments, 4, async deployment => {
+		if (!isCurrent()) throw new Error('Portfolio refresh cancelled')
+		const pool = { pool: deployment.securityPool, shareToken: deployment.shareToken, universeId: deployment.universeId }
+		try {
+			return await runReadOperation(
+				async operation => {
+					const reader = readOperationClient(client, operation)
+					const scope = shareBalanceScope(pool)
+					const pair = await reader.readContract({ abi: tradingFactoryAbi, address: configuration.factory, functionName: 'getPair', args: [pool.pool], blockNumber: anchor.blockNumber })
+					const balances = await Promise.all([
+						...[scope.invalidTokenId, scope.yesTokenId, scope.noTokenId].map(id => reader.readContract({ abi: shareTokenAbi, address: pool.shareToken, functionName: 'balanceOf', args: [account, id], blockNumber: anchor.blockNumber })),
+						pair === zeroAddress ? 0n : reader.readContract({ abi: tradingContracts['contracts/trading/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair.abi, address: pair, functionName: 'balanceOf', args: [account], blockNumber: anchor.blockNumber }),
+					])
+					return balances.some(balance => balance > 0n) ? [{ ...pool, market: undefined }] : []
+				},
+				{ isCurrent },
+			)
+		} catch (error) {
+			if (!isCurrent()) throw error
+			// Keep uncertain rows visible: an RPC failure must not masquerade as zero holdings.
+			return [{ ...pool, market: undefined }]
+		}
+	})
+	if (!isCurrent()) throw new Error('Portfolio refresh cancelled')
+	if (!(await registryBlockAnchorIsCanonical(anchor, () => latestBlockIdentity(client), getActiveBackend().id === 'simulation' ? undefined : async blockNumber => latestBlockIdentity({ getBlock: () => client.getBlock({ blockNumber }) })))) throw new Error('Portfolio discovery head changed; refresh again')
+	return owned.flat()
+}
+
+/** Refresh wallet-wide holdings plus saved addresses; cached summaries never supply balances or prices. */
+export async function discoverSavedMarkets(client: PublicClient, configuration: DeploymentConfiguration, requestedUniverseId: bigint | undefined, savedMarkets: readonly SavedPortfolioPool[], onProgress?: MarketDiscoveryProgress, isCurrent = () => true, account?: Address) {
 	const universeIds = await runReadOperation(operation => loadUniverseIds(readOperationClient(client, operation), configuration, isCurrent), { isCurrent })
 	const selectedUniverseId = requestedUniverseId !== undefined && universeIds.includes(requestedUniverseId) ? requestedUniverseId : universeIds[0]
-	const saved = [...new Map(savedMarkets.filter(market => market.universeId === undefined || market.universeId === selectedUniverseId).map(market => [market.pool.toLowerCase(), market])).values()]
+	const walletPools = account === undefined || selectedUniverseId === undefined ? [] : await discoverWalletPools(client, configuration, selectedUniverseId, account, isCurrent)
+	const saved = [...new Map([...walletPools, ...savedMarkets].filter(market => market.universeId === undefined || market.universeId === selectedUniverseId).map(market => [market.pool.toLowerCase(), market])).values()]
 	const total = BigInt(saved.length)
 	const result = { start: 0n, count: total, total, previousStart: undefined, nextStart: undefined, universeIds, selectedUniverseId }
 	const markets = await mapWithConcurrency(

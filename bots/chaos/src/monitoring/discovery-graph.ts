@@ -19,8 +19,6 @@ interface PoolProtocolBindingAuthentication {
 }
 
 /** Authenticates the immutable oracle and token bindings that authorize pool transactions. */
-
-/** Authenticates the immutable oracle and token bindings that authorize pool transactions. */
 export async function authenticatePoolProtocolBindings(authentication: PoolProtocolBindingAuthentication) {
 	const { blockNumber, canonicalRepToken, client, configuredOpenOracle, configuredWeth, coordinator, pool } = authentication
 	const [poolOpenOracle, coordinatorOpenOracle, coordinatorWeth, coordinatorRepToken] = await drainConcurrent([
@@ -52,8 +50,6 @@ interface PoolGraphIdentity {
 	deploymentShareToken: Address
 	poolRepToken: Address
 	universeRepToken: Address
-	poolTruthAuction: Address
-	deploymentTruthAuction: Address
 	poolUniverseId: string
 	deploymentUniverseId: string
 	poolQuestionId: string
@@ -69,7 +65,6 @@ export function assertCanonicalPoolGraph(identity: PoolGraphIdentity) {
 	requireGraphEdge(identity.coordinatorPool, identity.pool, `Coordinator ${identity.deploymentCoordinator} pool edge`)
 	requireGraphEdge(identity.poolShareToken, identity.deploymentShareToken, `Pool ${identity.pool} share-token edge`)
 	requireGraphEdge(identity.poolRepToken, identity.universeRepToken, `Pool ${identity.pool} REP edge`)
-	requireGraphEdge(identity.poolTruthAuction, identity.deploymentTruthAuction, `Pool ${identity.pool} truth-auction edge`)
 	if (identity.poolUniverseId !== identity.deploymentUniverseId || identity.poolQuestionId !== identity.deploymentQuestionId) {
 		throw new Error(`Pool ${identity.pool} immutable question identity does not match its canonical factory deployment`)
 	}

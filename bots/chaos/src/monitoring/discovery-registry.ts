@@ -1,6 +1,6 @@
 import { requirePositiveLimit } from './discovery-client.ts'
 import { type CountedRegistryCursor, emptyCountedRegistryCursor } from './topology-schema.ts'
-import { type Address, type Hash, getAddress } from '@zoltar/bot-shared/ethereum'
+import { type Hash } from '@zoltar/bot-shared/ethereum'
 import { createHash } from 'node:crypto'
 
 export async function collectCountedPages<T>(parameters: { count: bigint; label: string; maximumItems: number; pageSize: number; readPage: (start: bigint, count: bigint) => Promise<readonly T[]>; start: bigint }) {
@@ -53,56 +53,4 @@ export function assertRegistryCountNotRegressed(cursor: CountedRegistryCursor | 
 
 export function sameRegistryCursor(left: CountedRegistryCursor, right: CountedRegistryCursor) {
 	return left.canonicalCount === right.canonicalCount && left.commitment === right.commitment && left.nextIndex === right.nextIndex && left.residentLimit === right.residentLimit && left.retentionMode === right.retentionMode
-}
-
-export async function advanceVaultRegistryCursor(parameters: { cachedVaults: readonly Address[]; canonicalCount: bigint; cursor: CountedRegistryCursor | undefined; label: string; limit: number; readNewestFirstPage: (start: bigint, count: bigint) => Promise<readonly Address[]> }) {
-	requirePositiveLimit(parameters.limit, `${parameters.label} resident limit`)
-	let changed = false
-	let cachedVaults = [...parameters.cachedVaults]
-	let cursor = parameters.cursor
-	assertRegistryCountNotRegressed(cursor, parameters.canonicalCount, parameters.label)
-	const retentionMode: CountedRegistryCursor['retentionMode'] = parameters.canonicalCount <= BigInt(parameters.limit) ? 'resident' : 'overflow'
-	if (cursor?.retentionMode === 'overflow' && retentionMode === 'resident') {
-		cursor = emptyCountedRegistryCursor()
-		cachedVaults = []
-		changed = true
-	}
-	if (retentionMode === 'overflow' && cachedVaults.length > 0) {
-		cachedVaults = []
-		changed = true
-	}
-	const canonicalCursor = cursorWithCanonicalCount(cursor, parameters.canonicalCount, parameters.limit, retentionMode)
-	if (cursor === undefined || !sameRegistryCursor(cursor, canonicalCursor)) changed = true
-	cursor = canonicalCursor
-	if (cursor.retentionMode === 'resident' && BigInt(cachedVaults.length) !== BigInt(cursor.nextIndex)) throw new Error(`${parameters.label} cursor does not match its retained canonical prefix`)
-	const collected = await collectCountedPages({
-		count: parameters.canonicalCount,
-		label: parameters.label,
-		maximumItems: parameters.limit,
-		pageSize: parameters.limit,
-		readPage: async (start, pageCount) => {
-			const end = start + pageCount
-			const newestFirst = await parameters.readNewestFirstPage(parameters.canonicalCount - end, pageCount)
-			return [...newestFirst].reverse().map(getAddress)
-		},
-		start: BigInt(cursor.nextIndex),
-	})
-	const newlyRegisteredVaults = collected.values
-	if (newlyRegisteredVaults.length > 0) {
-		cursor = {
-			...cursor,
-			commitment: updateRegistryCommitment(
-				cursor.commitment,
-				BigInt(cursor.nextIndex),
-				newlyRegisteredVaults.map(vault => vault.toLowerCase()),
-			),
-			nextIndex: collected.nextStart.toString(),
-		}
-		changed = true
-	}
-	const vaults = cursor.retentionMode === 'resident' ? [...newlyRegisteredVaults].reverse().concat(cachedVaults) : []
-	if (cursor.retentionMode === 'resident' && (BigInt(vaults.length) !== parameters.canonicalCount || new Set(vaults.map(vault => vault.toLowerCase())).size !== vaults.length)) {
-		throw new Error(`${parameters.label} contains duplicate or missing immutable entries`)
-	}
-	return { changed, complete: collected.complete, cursor, vaults }
 }

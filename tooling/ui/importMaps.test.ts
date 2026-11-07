@@ -56,6 +56,7 @@ for (const appId of UI_APP_IDS) {
 		if (appId === 'trading') {
 			expect(imports['@zoltar/trading-shared/trading/math']).toBe('../shared/trading/js/trading/math.js')
 			expect(imports['@zoltar/trading-shared/trading/positions']).toBe('../shared/trading/js/trading/positions.js')
+			expect(imports['@zoltar/trading-shared/trading/portfolioMint']).toBe('../shared/trading/js/trading/portfolioMint.js')
 		}
 		expect(imports['@zoltar/ui-trading-shared']).toBeUndefined()
 		expect(imports['@zoltar/ui-trading-shared/']).toBeUndefined()

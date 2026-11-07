@@ -8,16 +8,6 @@ interface ToolPreset {
 }
 
 const presetDefinitions: Record<string, ToolPreset[]> = {
-	'simple-auction-example': [
-		{
-			label: 'Weak demand',
-			values: { aliceEth: '3', bobEth: '4', carolEth: '6', ethRaiseCap: '24', repInventory: '8' },
-		},
-		{
-			label: 'No qualifying bids',
-			values: { aliceEth: '3', bobEth: '4', carolEth: '6', ethRaiseCap: '30', repInventory: '4' },
-		},
-	],
 	'escalation-game-example': [
 		{
 			label: 'Leader deposit does not extend',
@@ -39,23 +29,10 @@ const presetDefinitions: Record<string, ToolPreset[]> = {
 		},
 		{
 			label: 'Caller raises report',
-			values: { openInterestWeth: '100', requestedInitialWeth: '25' },
+			values: { aggregateExposureEth: '100', requestedInitialWeth: '25' },
 		},
 	],
-	'binary-censorship-example': [
-		{
-			label: 'Executable manipulation',
-			values: { censorshipDuration: '24', honestPrice: '100', liquidationThresholdPrice: '101', manipulatedPrice: '113' },
-		},
-		{
-			label: 'Below execution guard',
-			values: { censorshipDuration: '24', honestPrice: '100', liquidationThresholdPrice: '101', manipulatedPrice: '108' },
-		},
-		{
-			label: 'Long censorship',
-			values: { censorshipDuration: '168', externalPayoff: '1000', oracleReportLiquidity: '4000' },
-		},
-	],
+
 	'liquidation-health-example': [
 		{
 			label: 'Healthy vault',

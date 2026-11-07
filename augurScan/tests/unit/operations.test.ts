@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { auctionDemandCurve, auctionLifecycle, candlestickBuckets, fixedWindowTwap, poolCapacity, reportLifecycle, reportRoundChanges, swapAnalytics, vaultRisk } from '../../src/operations.ts'
+import { auctionDemandCurve, auctionLifecycle, candlestickBuckets, fixedWindowTwap, reportLifecycle, reportRoundChanges, swapAnalytics, vaultRisk } from '../../src/operations.ts'
 
 test('derives OpenOracle boundaries with the report clock selected by flags', () => {
 	expect(
@@ -112,11 +112,6 @@ test('matches the Solidity vault health constraints and keeps scanner severity s
 		badDebtAttoEth: String(0),
 	})
 	expect(liquidatable).toMatchObject({ protocolState: 'liquidatable', scannerSeverity: 'critical' })
-})
-
-test('derives exact pool capacity without treating over-utilization as negative availability', () => {
-	expect(poolCapacity('25', '100')).toEqual({ usedAttoEth: String(25), capacityAttoEth: String(100), availableAttoEth: String(75), utilizationBps: '2500' })
-	expect(poolCapacity('125', '100')).toMatchObject({ availableAttoEth: String(0), utilizationBps: '12500' })
 })
 
 test('reconstructs pre-swap reserves and exact price impact from Swap evidence', () => {

@@ -16,7 +16,6 @@ import type { ListedSecurityPool, TradingActionResult, TradingDetails, TradingSh
 import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { TradingSection as ProductionTradingSection } from '@zoltar/ui-statoblast-shared/features/markets/components/TradingSection.js'
 import { NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE, UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE } from '@zoltar/ui-statoblast-shared/features/markets/lib/trading.js'
-import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
 import type { TradingSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { AccountState, TradingFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { describe, expect, mock, test } from 'bun:test'
@@ -78,7 +77,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 	}
 	return {
 		...selectedPool,
-		hasForkActivity: overrides.hasForkActivity ?? deriveHasForkActivity(selectedPool),
+		hasForkActivity: overrides.hasForkActivity ?? selectedPool.hasForkActivity,
 	}
 }
 
@@ -270,6 +269,25 @@ void describe('TradingSection', () => {
 			await cleanupRenderedComponent?.()
 			cleanupRenderedComponent = undefined
 		},
+	})
+
+	test('quotes shared backing and discloses the purchase fee when native spare capacity is exhausted', async () => {
+		const onCreateCompleteSet = mock(() => undefined)
+		const selectedPool = createSelectedPool({
+			settlementCollateralAttoEth: 10n ** 18n,
+			shareTokenSupplyAttoShares: 10n ** 18n,
+			totalUnderwritingLimitAttoEth: 10n ** 18n,
+			feeAccrualState: { linearFee: { rateAttoEthPerSecond: 0n, endTime: 100n }, lastUpdatedFeeAccumulator: 0n, feeEndTimestamp: 100n, feeIndexRemainder: 0n, totalFeesOwedRemainder: 0n },
+		})
+		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool, onCreateCompleteSet, tradingForm: createTradingForm({ completeSetAmount: '0.1' }) })} />)
+		cleanupRenderedComponent = rendered.cleanup
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
+		const dialog = within(document.body).getByRole('dialog')
+		expect(within(dialog).getByText('Quoted before submission')).not.toBeNull()
+		expect(dialog.textContent).toContain('quoted purchase fee')
+		expect(getTransactionButtonState(dialog, 'Mint complete sets').disabled).toBe(false)
+		fireEvent.click(within(dialog).getByRole('button', { name: 'Mint complete sets' }))
+		expect(onCreateCompleteSet).toHaveBeenCalledTimes(1)
 	})
 
 	test('keeps an open mint form enabled after the oracle price lapses', async () => {
@@ -825,6 +843,27 @@ void describe('TradingSection', () => {
 		const redeemSharesButton = documentQueries.getByRole('button', { name: 'Redeem resolved shares' }) as HTMLButtonElement
 		expect(redeemSharesButton.disabled).toBe(true)
 		expect(getTransactionButtonState(document.body, 'Redeem resolved shares').reason).toBe('Wait for the selected pool to resolve before redeeming shares.')
+	})
+
+	test('keeps finalized parent winning-share redemption available after an unrelated fork', async () => {
+		const redeem = mock(() => undefined)
+		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ questionOutcome: 'yes', universeHasForked: true, hasForkActivity: true }), onRedeemShares: redeem })} />)
+		cleanupRenderedComponent = rendered.cleanup
+		const queries = within(document.body)
+		const redeemButton = queries.getByRole('button', { name: 'Redeem resolved shares' })
+		if (!(redeemButton instanceof HTMLButtonElement)) throw new Error('Missing redemption button')
+		expect(redeemButton.disabled).toBe(false)
+		await act(() => {
+			fireEvent.click(redeemButton)
+		})
+		const dialog = queries.getByRole('dialog', { name: 'Redeem resolved shares' })
+		await act(() => {
+			fireEvent.click(within(dialog).getByRole('button', { name: 'Redeem resolved shares' }))
+		})
+		expect(redeem).toHaveBeenCalledTimes(1)
+		const migrate = queries.getByRole('button', { name: 'Migrate forked shares' })
+		if (!(migrate instanceof HTMLButtonElement)) throw new Error('Missing migration button')
+		expect(migrate.disabled).toBe(true)
 	})
 
 	void test('reviews the winning shares and expected ETH payout before redeeming resolved shares', async () => {

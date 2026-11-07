@@ -30,7 +30,7 @@ async function recursiveDirectoryCopy(source: string, destination: string, inclu
 		}
 	}
 }
-import { copyProjectArtifacts, defaultProjectArtifactPaths } from './projectArtifacts.mts'
+import { copyProjectArtifacts } from './projectArtifacts.mts'
 
 function getVendorOutputPath() {
 	return path.join(getUiAppPaths(parseUiAppIdFromProcess('vendor build')).appRoot, 'vendor')
@@ -153,11 +153,8 @@ function createDefaultVendorBuildSteps(): VendorBuildSteps {
 		vendorFonts,
 		copyProjectArtifacts: async () => {
 			const app = parseUiAppIdFromProcess('vendor build')
-			const { repositoryRoot } = getUiAppPaths(app)
 			const project = getUiAppContractProject(app)
-			const scopedPath = path.join(repositoryRoot, 'solidity/artifacts', project, 'Contracts.json')
-			const useScoped = process.argv.includes('--scoped-artifacts')
-			await copyProjectArtifacts({ project, includeTrading: app === 'trading' }, useScoped ? { ...defaultProjectArtifactPaths, contractArtifactsJsonPath: scopedPath } : defaultProjectArtifactPaths)
+			await copyProjectArtifacts({ project, includeTrading: app === 'trading' })
 		},
 	}
 }

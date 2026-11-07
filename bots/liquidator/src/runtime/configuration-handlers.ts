@@ -1,6 +1,7 @@
+import { parsePortfolioPolicy, parsePortfolioSelections } from '#config/portfolio-policy'
 import { parseRootMarketSettings } from '#config/canonical-deployment'
-import { parsePoolSelection, updateSupportedPool } from '#config/pool-selection'
-import { parseDesiredPools, parseStrategy, serializedSettings } from '#config/settings'
+import { updateSupportedPortfolio } from '#config/pool-selection'
+import { parseStrategy, serializedSettings } from '#config/settings'
 import { switchSettingsNetworkProfile } from '#config/settings-store'
 import { validateApprovedUniverseSelection } from '#core/fork-migration'
 import { updateNetworkConnectivity } from '#core/network-connectivity'
@@ -50,15 +51,6 @@ export function setMarketConfiguration(runtime: LiquidatorRuntime, deps: Liquida
 		if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Market configuration must be an object')
 		const rootValue = Reflect.get(value, 'root')
 		const childrenValue = Reflect.get(value, 'children')
-		const desiredPools = parseDesiredPools(
-			Reflect.get(value, 'desiredPools') ??
-				settings.desiredPools.map(pool => ({
-					initialReportPriorityFeeAttoEthPerGas: pool.initialReportPriorityFeeAttoEthPerGas.toString(),
-					questionId: pool.questionId.toString(),
-					statoblastSecurityMultiplierBps: Number(pool.statoblastSecurityMultiplierBps),
-					universeId: pool.universeId.toString(),
-				})),
-		)
 		const centralizedMarkets = parseRootMarketSettings(rootValue ?? value, settings.network.chainId)
 		if (childrenValue !== undefined && !Array.isArray(childrenValue)) throw new Error('Market configuration children must be an array')
 		const childValues: readonly unknown[] = childrenValue ?? []
@@ -71,7 +63,7 @@ export function setMarketConfiguration(runtime: LiquidatorRuntime, deps: Liquida
 		if (rootUniverse !== undefined && centralizedMarkets.assetAddress.toLowerCase() !== rootUniverse.repToken.toLowerCase()) throw new Error('Market consensus configuration targets another REP asset')
 		const knownChildRep = new Set(state.universes.filter(universe => universe.parentId !== undefined).map(universe => universe.repToken.toLowerCase()))
 		if (knownChildRep.size > 0 && childMarketConfigurations.some(configuration => !knownChildRep.has(configuration.assetAddress.toLowerCase()))) throw new Error('Child market configuration targets an unknown universe REP asset')
-		await persistSettings(runtime, deps, current => ({ ...current, centralizedMarkets, childMarketConfigurations, desiredPools }))
+		await persistSettings(runtime, deps, current => ({ ...current, centralizedMarkets, childMarketConfigurations }))
 		clearMarketEvidenceForConfigurationChange(state)
 		recordActivity(state, {
 			details: `${(centralizedMarkets.sources.length + childMarketConfigurations.reduce((total, configuration) => total + configuration.sources.length, 0)).toString()} CEX source(s) across ${(childMarketConfigurations.length + 1).toString()} REP asset(s)`,
@@ -90,7 +82,6 @@ export function setNetworkConnectivity(runtime: LiquidatorRuntime, deps: Liquida
 			apply: applied => {
 				runtime.chain = chainFor(applied)
 				runtime.readPool = createReadPool(applied)
-				runtime.poolMonitorIndexes = new Map()
 				runtime.client = createPrimaryClient(runtime)
 				runtime.wallet = runtime.activePrivateKey === undefined ? undefined : signerWalletFor(runtime.activePrivateKey, runtime.chain, runtime.readPool)
 				clearMarketEvidenceForConfigurationChange(deps.state)
@@ -104,22 +95,22 @@ export function setNetworkConnectivity(runtime: LiquidatorRuntime, deps: Liquida
 	})
 }
 
-export function setSupportedPool(runtime: LiquidatorRuntime, deps: LiquidatorDeps, value: unknown) {
+export function setSupportedPortfolio(runtime: LiquidatorRuntime, deps: LiquidatorDeps, value: unknown) {
 	return deps.configurationMutationGate.run(async () => {
-		await persistSettings(runtime, deps, current => updateSupportedPool(current, value))
-		recordActivity(deps.state, { kind: 'configuration', message: 'Supported pools updated', status: 'info' })
+		await persistSettings(runtime, deps, current => updateSupportedPortfolio(current, value))
+		recordActivity(deps.state, { kind: 'configuration', message: 'Supported portfolios updated', status: 'info' })
 		return serializedSettings(runtime.settings, true)
 	})
 }
 
-export function setSelectedPools(runtime: LiquidatorRuntime, deps: LiquidatorDeps, value: unknown) {
+export function setSelectedPortfolios(runtime: LiquidatorRuntime, deps: LiquidatorDeps, value: unknown) {
 	return deps.configurationMutationGate.run(async () => {
-		const selectedPools = parsePoolSelection(value)
-		await persistSettings(runtime, deps, current => ({ ...current, selectedPools }))
+		const selectedPortfolios = parsePortfolioSelections(value)
+		await persistSettings(runtime, deps, current => ({ ...current, selectedPortfolios }))
 		recordActivity(deps.state, {
-			details: selectedPools.join(', '),
+			details: selectedPortfolios.map(item => `${item.address}:${item.universeId}`).join(', '),
 			kind: 'configuration',
-			message: 'Pool selection saved',
+			message: 'Portfolio selection saved',
 			status: 'info',
 		})
 		return serializedSettings(runtime.settings, true)
@@ -130,14 +121,16 @@ export function setStrategy(runtime: LiquidatorRuntime, deps: LiquidatorDeps, va
 	return deps.configurationMutationGate.run(async () => {
 		const strategy = parseStrategy(value)
 		if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Strategy settings must be an object')
+		if (Reflect.get(value, 'portfolioPolicy') === undefined) throw new Error('Portfolio policy is required')
+		const portfolioPolicy = parsePortfolioPolicy(Reflect.get(value, 'portfolioPolicy'))
 		const logLookbackBlocks = Number(Reflect.get(value, 'logLookbackBlocks'))
 		const historicalLogRecovery = Reflect.get(value, 'historicalLogRecovery')
 		if (!Number.isSafeInteger(logLookbackBlocks) || logLookbackBlocks < 1 || logLookbackBlocks > 256) throw new Error('Latest log blocks must be an integer from 1 through 256')
 		if (typeof historicalLogRecovery !== 'boolean') throw new Error('Historical log recovery must be enabled or disabled explicitly')
-		await persistSettings(runtime, deps, current => ({ ...current, runtime: { ...current.runtime, historicalLogRecovery, logLookbackBlocks }, strategy }))
+		await persistSettings(runtime, deps, current => ({ ...current, runtime: { ...current.runtime, historicalLogRecovery, logLookbackBlocks }, strategy, portfolioPolicy }))
 		recordActivity(deps.state, {
 			kind: 'configuration',
-			message: 'Liquidation strategy saved',
+			message: 'Portfolio policy saved',
 			status: 'info',
 		})
 		return serializedSettings(runtime.settings, true)

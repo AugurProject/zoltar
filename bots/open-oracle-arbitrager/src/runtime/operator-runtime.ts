@@ -1,3 +1,4 @@
+import type { ReportIndexCursor } from '#monitoring/report-index'
 import type { Configuration } from '#config/configuration'
 import type { DeploymentSettings } from '#config/deployment-settings'
 import type { NetworkConfiguration } from '#config/network'
@@ -52,6 +53,7 @@ export type OperatorRuntime = {
 	client: OperatorClient
 	clientRpcUrl: string | undefined
 	coordinatorPolicies: Awaited<ReturnType<typeof loadCoordinatorPolicies>>
+	reportIndexCursor?: ReportIndexCursor | undefined
 	cursor: SyncCursor | undefined
 	operatorStopped: boolean
 	positionJournal: PositionJournalState
@@ -144,6 +146,7 @@ export function resetReadClients(runtime: OperatorRuntime, context: Pick<Operato
 /** Drops every report, log, and market cache so the next scan rebuilds them from the current deployment and head. */
 export function clearReportCaches(runtime: OperatorRuntime, context: Pick<OperatorContext, 'config' | 'state'>) {
 	const { state } = context
+	runtime.reportIndexCursor = undefined
 	runtime.reports.clear()
 	runtime.cachedLogs = []
 	state.activeReportCount = 0

@@ -92,7 +92,7 @@ export function useMarketDiscoveryController({
 			{ isCurrent },
 		)
 		// Saved pools own separate deadlines so one stalled pool cannot cancel the remaining queue.
-		if (route === 'portfolio' && routePool === undefined && isCurrent()) return await services.discoverSavedMarkets(client, nextConfiguration, requestedUniverseId, savedMarkets, onProgress, isCurrent)
+		if (route === 'portfolio' && routePool === undefined && isCurrent()) return await services.discoverSavedMarkets(client, nextConfiguration, requestedUniverseId, savedMarkets, onProgress, isCurrent, wallet.accountRef.current)
 		return discovered
 	}
 
@@ -159,15 +159,12 @@ export function useMarketDiscoveryController({
 				const refreshPortfolio = background && route === 'portfolio'
 				if ((!publishProgress && !refreshPortfolio) || !acceptingProgress || (background && !refreshPortfolio) || !discoveryRequests.isCurrent(request) || !commitAllowed()) return
 				if (refreshPortfolio) {
-					const previousByPool = new Map(previousMarkets.map(market => [market.pool.toLowerCase(), market]))
-					const targets = savedMarkets.filter(pool => pool.universeId === undefined || pool.universeId === discovered.selectedUniverseId)
-					market.setMarkets(
-						discovered.markets.flatMap((row, index) => {
-							const pool = targets[index]?.pool.toLowerCase()
-							const refreshed = row ?? (pool === undefined ? undefined : previousByPool.get(pool))
-							return refreshed === undefined ? [] : [refreshed]
-						}),
-					)
+					// Wallet discovery can add unsaved pools, so progress indexes no longer
+					// correspond to the favorites list. Preserve old rows by pool identity
+					// until the completed snapshot can remove absent holdings.
+					const refreshedByPool = new Map(previousMarkets.map(market => [market.pool.toLowerCase(), market]))
+					for (const row of discovered.markets) if (row !== undefined) refreshedByPool.set(row.pool.toLowerCase(), row)
+					market.setMarkets([...refreshedByPool.values()])
 					return
 				}
 				partialSnapshot.current ??= { markets: previousMarkets, page: previousPage, rows: market.discoveryRows }
@@ -240,13 +237,13 @@ export function useMarketDiscoveryController({
 			else transaction.dispatchWorkflow({ type: 'failed', message: configurationError })
 			return
 		}
-		if (route === 'portfolio') {
+		if (route === 'portfolio' && wallet.accountRef.current === undefined) {
 			const savedIds = new Set(savedMarkets.map(pool => pool.pool.toLowerCase()))
 			const retained = market.markets.filter(pool => savedIds.has(pool.pool.toLowerCase()))
 			if (retained.length !== market.markets.length) market.setMarkets(retained)
 		}
 		void refresh(configuration, 0n)
-	}, [configuration, configurationError, routePool === undefined ? selectedUniverseId : undefined, savedScope])
+	}, [configuration, configurationError, routePool === undefined ? selectedUniverseId : undefined, savedScope, route === 'portfolio' ? wallet.account : undefined])
 
 	useEffect(() => {
 		if (previousWalletSummaryRetryNonce.current === walletSummaryRetryNonce) return

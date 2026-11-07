@@ -241,6 +241,7 @@ const expectRiskHistoryAndSeverity = async ({ database, operationsChainId, oracl
 	if (healthyResponse === undefined) throw new Error('healthy vault risk endpoint did not return a response')
 	expect(healthyResponse.status).toBe(200)
 	const healthy = await healthyResponse.json()
+	// The nominal 100 REP escrow was already credited as surplus and cannot increase vault health.
 	expect(healthy).toMatchObject({ data: { protocol_state: 'healthy', scanner_severity: 'healthy', risk: { healthFactorBps: '13333' } } })
 
 	await database.sql`
@@ -256,7 +257,9 @@ const expectRiskHistoryAndSeverity = async ({ database, operationsChainId, oracl
 	if (badDebtPoolResponse === undefined || badDebtVaultResponse === undefined) throw new Error('bad-debt risk endpoint did not return a response')
 	const badDebtPool = (await badDebtPoolResponse.json()) as { data: Record<string, unknown> }
 	const badDebtVault = (await badDebtVaultResponse.json()) as { data: Record<string, unknown> }
-	expect(badDebtPool.data).toMatchObject({ protocol_state: 'bad-debt', scanner_severity: 'critical' })
+	// A question pool reports settlement state; capital risk belongs to the portfolio.
+	expect(badDebtPool.data).toMatchObject({ protocol_state: '1', scanner_severity: 'unavailable' })
+	expect(badDebtPool.data['scanner_reason']).toContain('shared portfolio capital positions')
 	expect(badDebtVault.data).toMatchObject({ protocol_state: 'bad-debt', scanner_severity: 'critical' })
 }
 
@@ -265,7 +268,7 @@ const expectSnapshotsAndIndexedPlans = async ({ database, operationsChainId, ora
 			SELECT read_status, read_result, canonical FROM entity_state_snapshots
 			WHERE chain_id = ${operationsChainId} AND entity_type = 'auction'
 		`
-	expect(snapshotRows[0]).toMatchObject({ read_status: 'success', canonical: true, read_result: { finalized: false, activeTickCount: '2' } })
+	expect(snapshotRows[0]).toMatchObject({ read_status: 'success', canonical: true, read_result: { finalized: false, bidCount: '2' } })
 
 	const explainQueries = [
 		database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM open_oracle_report_events WHERE chain_id = ${operationsChainId} AND open_oracle_address = ${oracle.toLowerCase()} AND report_id = 7 AND canonical ORDER BY block_number DESC, log_index DESC, tx_hash DESC LIMIT 100`,

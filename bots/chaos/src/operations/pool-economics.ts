@@ -14,10 +14,3 @@ export function projectedEthToShares(pool: PoolSnapshot, attoEth: bigint) {
 	if (supply === 0n) return collateral === 0n ? attoEth : 0n
 	return collateral === 0n ? 0n : (attoEth * supply) / collateral
 }
-
-export function canCreateCompleteSet(pool: PoolSnapshot, spend: bigint) {
-	if (spend === 0n || projectedEthToShares(pool, spend) === 0n) return false
-	const nextCollateral = value(pool.projectedSettlementCollateralAttoEth) + spend
-	if (pool.escalationGame !== '0x0000000000000000000000000000000000000000') return false
-	return nextCollateral <= value(pool.currentMintingCapacityAttoEth) && nextCollateral <= value(pool.totalUnderwritingLimitAttoEth)
-}

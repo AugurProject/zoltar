@@ -65,7 +65,7 @@ export function createDashboardTopologyView({ elements }: { elements: DashboardE
 			topologyRow(topologyIdentifier(stringValue(source['address']), 'Pool unavailable', 'security pool address'), [
 				`universe ${String(source['universeId'] ?? '—')}`,
 				`state ${String(source['systemState'] ?? '—')}`,
-				`${String(source['vaultCount'] ?? 0)} vaults${source['awaitingForkContinuation'] === true ? ' · fork continuation pending' : ''}`,
+				`Portfolio ${String(source['portfolio'] ?? 'unavailable')}${source['awaitingForkContinuation'] === true ? ' · fork continuation pending' : ''}`,
 			]),
 		)
 		renderTopologyGroup(elements.topologyReports, value.reports, source =>
@@ -77,7 +77,12 @@ export function createDashboardTopologyView({ elements }: { elements: DashboardE
 			]),
 		)
 		renderTopologyGroup(elements.topologyAuctions, value.auctions, source =>
-			topologyRow(topologyIdentifier(stringValue(source['address']), 'Auction unavailable', 'truth auction address'), [topologyIdentifierFact('Pool', stringValue(source['pool']), 'truth auction pool address'), source['finalized'] === true ? 'finalized' : 'active', `${String(source['bidCount'] ?? 0)} indexed bids`]),
+			topologyRow(topologyIdentifier(stringValue(source['address']), 'Auction unavailable', 'truth auction address'), [
+				topologyIdentifierFact('Portfolio', stringValue(source['portfolio']), 'truth auction portfolio address'),
+				`universe ${String(source['universeId'] ?? 'unavailable')}`,
+				source['finalized'] === true ? 'finalized' : 'active',
+				`${String(source['bidCount'] ?? 0)} indexed bids`,
+			]),
 		)
 		renderTopologyGroup(elements.topologyPairs, value.pairs, source =>
 			topologyRow(topologyIdentifier(stringValue(source['address']), 'Pair unavailable', 'trading pair address'), [

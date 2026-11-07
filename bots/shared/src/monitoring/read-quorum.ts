@@ -58,3 +58,22 @@ export function sharedQuorumBlockNumber(heads: readonly bigint[], requiredQuorum
 	if (shared === undefined) throw new Error('Quorum head selection did not select a block')
 	return shared
 }
+
+/** Select a common available height before comparing state; a lagging endpoint is not a conflicting chain. */
+export async function sharedQuorumReadTargets<T extends { endpoint: string; client: { getBlock(): Promise<{ number?: bigint | undefined }> } }>(readers: readonly T[], requirement: RpcQuorumRequirement) {
+	const available = availableSettledValues(
+		await Promise.allSettled(
+			readers.map(async reader => {
+				const block = await reader.client.getBlock()
+				if (block.number === undefined) throw new Error('RPC head has no confirmed block number')
+				return { reader, number: block.number }
+			}),
+		),
+	)
+	if (new Set(available.map(item => item.reader.endpoint)).size < requirement) throw new ConnectivityDegradedError('Not enough independent RPC heads for the configured quorum')
+	const blockNumber = sharedQuorumBlockNumber(
+		available.map(item => item.number),
+		requirement,
+	)
+	return { blockNumber, readers: available.filter(item => item.number >= blockNumber).map(item => item.reader) }
+}

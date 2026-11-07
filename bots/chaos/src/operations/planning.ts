@@ -129,11 +129,6 @@ export function openOracleCreditDebit(openOracle: Address, asset: 'ETH' | Addres
 	return { amount: debitAmount.toString(), asset, category, kind: 'open-oracle-credit', openOracle }
 }
 
-export function securityPoolVaultRepDebit(pool: Address, vault: Address, debitAmount: bigint): OperationWalletAssetDebit {
-	if (debitAmount <= 0n) throw new Error('SecurityPool vault REP debit must be positive')
-	return { amount: debitAmount.toString(), category: 'rep', kind: 'security-pool-vault-rep', pool, vault }
-}
-
 export function planBase(parameters: {
 	snapshot: EcosystemSnapshot
 	definitionId: string

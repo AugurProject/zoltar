@@ -5,13 +5,18 @@ import * as payoutCopy from '../copy/payout.js'
 import { outcomeLabel } from '../copy/outcomes.js'
 
 /** The SecurityPool fields that define how many attoShares one attoETH of settlement collateral currently represents. */
-export type ShareValueRate = Pick<LiveMarket, 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares'>
+export type ShareValueRate = Pick<LiveMarket, 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares' | 'settlementRecoveryAttoRep'>
 
 /** Settlement-collateral value of a share amount at the pool's current rate; mirrors SecurityPool.attoSharesToAttoEth. */
 export function attoSharesToCollateralAttoEth(amountAttoShares: bigint, rate: ShareValueRate) {
 	if (amountAttoShares < 0n) throw new Error('Share amounts cannot be negative')
 	if (rate.shareTokenSupplyAttoShares === 0n) return amountAttoShares
 	return (amountAttoShares * rate.settlementCollateralAttoEth) / rate.shareTokenSupplyAttoShares
+}
+
+/** The separate REP asset delivered by a fork recovery claim; it has no assumed ETH valuation. */
+export function attoSharesToRecoveryAttoRep(amountAttoShares: bigint, rate: ShareValueRate) {
+	return rate.shareTokenSupplyAttoShares === 0n ? 0n : (amountAttoShares * (rate.settlementRecoveryAttoRep ?? 0n)) / rate.shareTokenSupplyAttoShares
 }
 
 /** Share amount worth the given settlement-collateral value, rounded down; undefined while the pool has shares but no collateral. */
@@ -62,7 +67,9 @@ export function formatCompleteSetQuantity(amountAttoShares: bigint, maximumFract
 
 /** Collateral value of a share amount as an ETH figure; limits round down so the displayed amount is always accepted. */
 export function formatCollateralEth(amountAttoShares: bigint, rate: ShareValueRate, rounding: ShareValueRounding = 'nearest') {
-	return `${formatCollateralValue(amountAttoShares, rate, 4, rounding)} ETH`
+	const eth = `${formatCollateralValue(amountAttoShares, rate, 4, rounding)} ETH`
+	const rep = attoSharesToRecoveryAttoRep(amountAttoShares, rate)
+	return rep === 0n ? eth : `${eth} + ${formatTrimmedUnits(rep, 18, 4)} REP`
 }
 
 /** Average price paid per ETH of long-share payout, in basis points. */

@@ -240,7 +240,7 @@ export async function persistProtocolIndexGeneration(statePath: string, index: C
 		chainId: parsed.chainId,
 		cursor: parsed.cursor,
 		openOracle: parsed.openOracle,
-		schemaVersion: 3,
+		schemaVersion: 4,
 		securityPoolForker: parsed.securityPoolForker,
 		startBlock: parsed.startBlock,
 		...(parsed.availableStartBlock === undefined ? {} : { availableStartBlock: parsed.availableStartBlock }),

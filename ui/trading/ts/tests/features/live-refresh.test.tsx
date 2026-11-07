@@ -341,6 +341,35 @@ describe('live market refresh', () => {
 				}
 			})
 
+	test('background wallet discovery preserves unsaved rows while another row refreshes', async () => {
+		const finish = createDeferred<void>()
+		const second = { ...market, pool: '0x8888888888888888888888888888888888888888' as const, title: 'Unsaved second' }
+		let reads = 0
+		const discover: typeof discoverSavedMarkets = async (_client, _configuration, _universe, _saved, onProgress) => {
+			if (++reads === 1) return discoveryPage([market, second])
+			onProgress?.({ ...discoveryPage([market, second]), markets: [undefined, { ...second, title: 'Refreshed second' }] })
+			await finish.promise
+			return discoveryPage([second])
+		}
+		const rendered = await renderDiscoveryController({ ...offlineControllerServices, discoverSavedMarkets: discover })
+		cleanupRendered = rendered.cleanup
+		await waitForDom(() => rendered.state().discovery.visibleMarkets.length === 2, 'initial unsaved holdings')
+		let refresh: Promise<void> | undefined
+		await act(() => {
+			refresh = rendered.state().discovery.refresh(undefined, 0n, undefined, { background: true, explicit: true })
+		})
+		try {
+			await waitForDom(() => document.body.textContent?.includes('Refreshed second') === true, 'partial wallet refresh')
+			expect(rendered.state().discovery.visibleMarkets.map(row => row.pool)).toEqual([market.pool, second.pool])
+		} finally {
+			await act(async () => {
+				finish.resolve()
+				await refresh
+			})
+		}
+		expect(rendered.state().discovery.visibleMarkets.map(row => row.pool)).toEqual([second.pool])
+	})
+
 	test('preserves every loaded market when a partial foreground refresh later times out', async () => {
 		const timeout = createDeferred<void>()
 		const first = { ...market, title: 'Fast market' }
