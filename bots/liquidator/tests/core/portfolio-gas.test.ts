@@ -1,3 +1,4 @@
+import { PORTFOLIO_CHECKPOINT_GAS_RESERVE } from '../../src/execution/gas-estimate.ts'
 import { expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -120,8 +121,8 @@ test('portfolio estimates exact pinned calldata across heuristic differences and
 		expect(f.estimates).toHaveLength(2)
 		expect(f.estimates.every(estimate => estimate.block === '0x7b')).toBe(true)
 		for (const estimate of f.estimates) expect(estimate.transaction).toMatchObject({ from: f.observation.snapshot.owner, to: f.observation.snapshot.capitalLedger, value: '0x0' })
-		expect(f.simulatedGas).toEqual([paddedTransactionGas(2_600_000n), paddedTransactionGas(2_600_000n)])
-		expect(f.signedGas()).toBe(paddedTransactionGas(2_600_000n))
+		expect(f.simulatedGas).toEqual([paddedTransactionGas(2_600_000n + PORTFOLIO_CHECKPOINT_GAS_RESERVE), paddedTransactionGas(2_600_000n + PORTFOLIO_CHECKPOINT_GAS_RESERVE)])
+		expect(f.signedGas()).toBe(paddedTransactionGas(2_600_000n + PORTFOLIO_CHECKPOINT_GAS_RESERVE))
 		expect(f.state.pendingTransactions).toHaveLength(0)
 		expect(f.unexpected).toEqual([])
 	} finally {
@@ -174,3 +175,15 @@ for (const mode of ['malformed', 'zero', 'revert', 'reorg', 'transport'] as cons
 			await f.close()
 		}
 	})
+
+test('the mining-time checkpoint reserve is included in the spend ceiling before signing', async () => {
+	const f = await fixture('success')
+	f.settings.strategy.maximumGasCostAttoEth = unit / 100n
+	try {
+		await expect(f.run()).rejects.toThrow('strategy.maximumGasCostEth')
+		expect(f.signedGas()).toBeUndefined()
+		expect(f.state.pendingTransactions).toHaveLength(0)
+	} finally {
+		await f.close()
+	}
+})

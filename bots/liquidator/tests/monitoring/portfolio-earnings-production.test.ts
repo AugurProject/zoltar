@@ -27,7 +27,7 @@ describe('portfolio operator earnings integration', () => {
 		await fixture.deposit(1_000n * unit, keeper)
 		await fixture.refreshPrice()
 		await fixture.authorize(100n * unit, keeper)
-		await fixture.mint(10n * unit)
+		await fixture.mint(100n * unit)
 		await mock.advanceTime(DAY + 1n)
 		await fixture.refreshPrice()
 		const capital = await fixture.capitalFor()
@@ -42,7 +42,7 @@ describe('portfolio operator earnings integration', () => {
 		settings.deployment.multicall3 = getInfraContractAddresses().multicall3
 		settings.selectedPortfolios = [scope]
 		settings.approvedUniverses = [base.genesisUniverse]
-		settings.strategy.maximumGasCostAttoEth = unit / 1_000n
+		settings.strategy.maximumGasCostAttoEth = unit / 100n
 		settings.portfolioPolicy.minimumNetRewardAttoEth = 0n
 		const { pool, state, stop } = await serveMockChainRpc(mock, settings, account.address, scope)
 		try {

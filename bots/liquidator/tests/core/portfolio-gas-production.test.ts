@@ -1,3 +1,4 @@
+import { PORTFOLIO_CHECKPOINT_GAS_RESERVE } from '../../src/execution/gas-estimate.ts'
 import { describe, expect, test } from 'bun:test'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -141,7 +142,7 @@ describe('portfolio operator production gas execution', () => {
 			const estimate = estimates.at(-1)
 			if (estimate === undefined) throw new Error('Production takeover did not estimate upfront gas')
 			expect(estimate.block).toBe(`0x${target.observation.snapshot.blockNumber.toString(16)}`)
-			expect(transaction.gas).toBe(paddedTransactionGas(estimate.gas))
+			expect(transaction.gas).toBe(paddedTransactionGas(estimate.gas + PORTFOLIO_CHECKPOINT_GAS_RESERVE))
 			expect(receipt.status).toBe('success')
 			expect(estimate.gas).toBeGreaterThan(receipt.gasUsed)
 			expect(await fixture.position(sourceId)).toMatchObject({ rep: 0n, commitment: 0n })

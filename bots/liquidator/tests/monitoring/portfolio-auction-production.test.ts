@@ -1,3 +1,4 @@
+import { PORTFOLIO_CHECKPOINT_GAS_RESERVE } from '../../src/execution/gas-estimate.ts'
 import { describe, expect, test } from 'bun:test'
 import { createPublicClient, createWalletClient, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
@@ -92,7 +93,7 @@ describe('portfolio operator funded auction capital integration', () => {
 			const acquiredReceipt = await reader.waitForTransactionReceipt({ hash: acquisition.hash })
 			const acquisitionEstimate = estimates.at(-1)
 			if (acquisitionEstimate === undefined) throw new Error('Takeover gas estimate missing')
-			expect(acquiredTransaction.gas).toBe(paddedTransactionGas(acquisitionEstimate))
+			expect(acquiredTransaction.gas).toBe(paddedTransactionGas(acquisitionEstimate + PORTFOLIO_CHECKPOINT_GAS_RESERVE))
 			expect(acquiredTransaction.gas).toBeLessThanOrEqual(16_777_216n)
 			expect(acquiredReceipt.status).toBe('success')
 			if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ auctionKeeperTakeoverGas: { estimate: estimates.at(-1), signed: acquiredTransaction.gas, used: acquiredReceipt.gasUsed } })

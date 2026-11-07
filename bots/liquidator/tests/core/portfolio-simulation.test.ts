@@ -15,7 +15,7 @@ type Mode = 'healed' | 'unexplained' | 'authentication' | 'malformed' | 'disagre
 async function simulationFixture(mode: Mode) {
 	const directory = await mkdtemp(join(tmpdir(), 'portfolio-simulation-'))
 	const settings = portfolioSettings()
-	settings.strategy.maximumGasCostAttoEth = unit / 100n
+	settings.strategy.maximumGasCostAttoEth = unit / 50n
 	settings.runtime.execute = true
 	settings.runtime.once = false
 	settings.runtime.stateFile = join(directory, 'state.json')
