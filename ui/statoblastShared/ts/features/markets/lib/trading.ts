@@ -233,11 +233,11 @@ export function getTradingMintGuardMessage({
 	}
 
 	const trimmedAmount = mintAmountInput.trim()
-	if (trimmedAmount === '') return undefined
+	if (trimmedAmount === '') return tradingCopy.mintAmountRequired
 	const mintAmount = tryParseTradingAmountInput(trimmedAmount)
 	if (mintAmount === undefined) return 'Enter a valid mint amount.'
 
-	if (mintAmount <= 0n) return undefined
+	if (mintAmount <= 0n) return tradingCopy.mintAmountRequired
 	if (!usesSharedBacking && remainingCapacity !== undefined && mintAmount > remainingCapacity) return `Max mint capacity is ${formatCurrencyBalanceWithUnit(remainingCapacity, 'ETH')}.`
 	if (ethBalanceAttoEth === undefined) return statoblastAppCopy.loadingWalletEthBalance
 	const spendableEthAttoEth = getSpendableEthBalance(ethBalanceAttoEth)
@@ -272,11 +272,11 @@ export function getTradingRedeemCompleteSetGuardMessage({
 	if (maxRedeemableCompleteSetsAttoShares === 0n) return NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE
 
 	const trimmedAmount = redeemAmountInput.trim()
-	if (trimmedAmount === '') return undefined
+	if (trimmedAmount === '') return tradingCopy.redeemAmountRequired
 	const redeemAmount = tryParseTradingAmountInput(trimmedAmount)
 	if (redeemAmount === undefined) return 'Enter a valid redeem amount.'
 
-	if (redeemAmount <= 0n) return undefined
+	if (redeemAmount <= 0n) return tradingCopy.redeemAmountRequired
 	if (redeemAmount > maxRedeemableCompleteSetsAttoShares) return `Max redeemable amount is ${formatCurrencyBalanceWithUnit(maxRedeemableCompleteSetsAttoShares, 'sets')}.`
 	return undefined
 }

@@ -57,7 +57,7 @@ export function PortfolioSharedFork(parameters: PortfolioSharedForkParameters) {
 				<PortfolioButton model={parameters.actions} action='finalizePortfolioFork' label={copy.finalize} pendingLabel={copy.finalizing} reason={model.finalizeReason} onClick={model.finalize} />
 				<ActionLauncherButton tone='secondary' idleLabel={copy.open} pendingLabel={copy.loading} availability={{ disabled: disabled || model.openReason !== undefined, reason: disabled ? copy.busy : model.openReason }} onClick={model.open} />
 			</div>
-			<PortfolioPriceReport fork={state} actions={parameters.actions} bidder={parameters.bidder} />
+			<PortfolioPriceReport fork={state} actions={parameters.actions} bidder={parameters.bidder} referencePrice={parameters.snapshot?.acceptedPrice} />
 			<PortfolioAuction fork={state} actions={parameters.actions} bidder={parameters.bidder} openVault={parameters.openVault} />
 			<WorkflowSubsection title={copy.basketTitle}>
 				<UserMessage detail={copy.basketHint} />

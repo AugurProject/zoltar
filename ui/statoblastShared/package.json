@@ -329,6 +329,10 @@
 			"bun": "./ts/features/portfolios/lib/capital.ts",
 			"default": "./js/features/portfolios/lib/capital.js"
 		},
+		"./features/portfolios/lib/priceWarning.js": {
+			"bun": "./ts/features/portfolios/lib/priceWarning.ts",
+			"default": "./js/features/portfolios/lib/priceWarning.js"
+		},
 		"./features/portfolios/lib/draft.js": {
 			"bun": "./ts/features/portfolios/lib/draft.ts",
 			"default": "./js/features/portfolios/lib/draft.js"

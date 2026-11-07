@@ -62,3 +62,85 @@ test('an unreported feed has no accepted price until its first accepted settleme
 	await act(() => refresh.click())
 	await waitFor(() => expect(acceptedPrice()).toBe('3.00'))
 })
+
+async function renderReportWithPrice(fixture: ReturnType<typeof priceFixture>, price: string, referencePrice?: bigint) {
+	const fork = await fixture.fork()
+	const actions: PortfolioPriceParameters['actions'] = { scope: unscopedTransaction, busy: undefined, ownerReason: undefined, runPortfolioAction: async () => undefined }
+	const view = await renderIntoDocument(<PortfolioPriceReport fork={fork} actions={actions} referencePrice={referencePrice} />)
+	lifecycle.trackRendered(view)
+	await waitFor(() => expect(view.container.textContent).toContain('already prepared'))
+	const input = Array.from(view.container.querySelectorAll('input')).find(input => input.closest('.field')?.querySelector('label')?.textContent?.includes('Proposed price'))
+	if (input === undefined) throw new Error('Missing proposed price input')
+	await act(() => {
+		input.value = price
+		input.dispatchEvent(new Event('input', { bubbles: true }))
+	})
+	return view
+}
+
+test('a price far from the feed price warns before any funds move and leaves the request available', async () => {
+	const fixture = priceFixture()
+	fixture.values['lastPrice'] = 300n * 10n ** 18n
+	fixture.values['lastSettlementTimestamp'] = 1n
+	const view = await renderReportWithPrice(fixture, '0.0033')
+	await waitFor(() => expect(view.container.textContent?.replaceAll('\u00a0', ' ')).toContain('This looks inverted (ETH per REP). Enter REP per ETH; the last accepted price is 300.00 REP per ETH.'))
+	expect(view.container.querySelector('.initial-price-input [aria-live="polite"]')?.textContent).toContain('looks inverted')
+	const describedBy = view.container.querySelector('.initial-price-input input')?.getAttribute('aria-describedby') ?? ''
+	expect(
+		describedBy
+			.split(' ')
+			.map(id => document.getElementById(id)?.textContent ?? '')
+			.join(' '),
+	).toContain('looks inverted')
+	expect(Array.from(view.container.querySelectorAll('button')).find(button => button.textContent === 'Wrap ETH for report')?.disabled).toBe(false)
+})
+
+test('a new branch feed compares against the portfolio price until it has its own', async () => {
+	const fixture = priceFixture()
+	fixture.values['lastPrice'] = 0n
+	fixture.values['lastSettlementTimestamp'] = 0n
+	const view = await renderReportWithPrice(fixture, '3000', 300n * 10n ** 18n)
+	await waitFor(() => expect(view.container.textContent?.replaceAll('\u00a0', ' ')).toContain('More than double the last accepted price of 300.00 REP per ETH.'))
+})
+
+test('a price with no reference to compare against shows no warning', async () => {
+	const fixture = priceFixture()
+	fixture.values['lastPrice'] = 0n
+	fixture.values['lastSettlementTimestamp'] = 0n
+	const view = await renderReportWithPrice(fixture, '3000')
+	expect(view.container.textContent).not.toContain('last accepted price of')
+})
+
+test('a branch reload keeps comparing against the feed price, never the portfolio price', async () => {
+	const fixture = priceFixture()
+	fixture.values['lastPrice'] = 900n * 10n ** 18n
+	fixture.values['lastSettlementTimestamp'] = 1n
+	const fork = await fixture.fork()
+	const actions: PortfolioPriceParameters['actions'] = { scope: unscopedTransaction, busy: undefined, ownerReason: undefined, runPortfolioAction: async () => undefined }
+	const referencePrice = 300n * 10n ** 18n
+	const view = await renderIntoDocument(<PortfolioPriceReport fork={fork} actions={actions} referencePrice={referencePrice} />)
+	lifecycle.trackRendered(view)
+	await waitFor(() => expect(view.container.textContent).toContain('already prepared'))
+	const input = Array.from(view.container.querySelectorAll('input')).find(input => input.closest('.field')?.querySelector('label')?.textContent?.includes('Proposed price'))
+	if (input === undefined) throw new Error('Missing proposed price input')
+	const propose = async (price: string) => {
+		await act(() => {
+			input.value = price
+			input.dispatchEvent(new Event('input', { bubbles: true }))
+		})
+	}
+	const warning = () => view.container.querySelector('.initial-price-input [aria-live="polite"]')?.textContent?.replaceAll('\u00a0', ' ')
+	// 850 is fine against the feed but more than double the portfolio price.
+	await propose('850')
+	expect(warning()).toBe('')
+	await act(() => render(<PortfolioPriceReport fork={undefined} actions={actions} referencePrice={referencePrice} />, view.container))
+	expect(warning()).toBe('')
+	await act(() => render(<PortfolioPriceReport fork={fork} actions={actions} referencePrice={referencePrice} />, view.container))
+	await waitFor(() => expect(view.container.textContent).toContain('already prepared'))
+	// 3000 warns against the feed, and that warning must survive the reload unchanged.
+	await propose('3000')
+	const feedWarning = 'More than double the last accepted price of 900.00 REP per ETH. Check the price before sending.'
+	expect(warning()).toBe(feedWarning)
+	await act(() => render(<PortfolioPriceReport fork={undefined} actions={actions} referencePrice={referencePrice} />, view.container))
+	expect(warning()).toBe(feedWarning)
+})

@@ -209,10 +209,10 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 			<SectionBlock title={copy.earnings} description={copy.earningsHint}>
 				<MetricGrid>
 					<MetricField label={copy.ethEarnings} loading={model.loading}>
-						<CurrencyValue value={snapshot?.accruedFeesAttoEth} suffix={common.eth} />
+						<CurrencyValue value={snapshot?.claimableEarnings?.attoEth ?? snapshot?.accruedFeesAttoEth} suffix={common.eth} />
 					</MetricField>
 					<MetricField label={copy.repEarnings} loading={model.loading}>
-						<CurrencyValue value={snapshot?.accruedFeesAttoRep} suffix={common.rep} />
+						<CurrencyValue value={snapshot?.claimableEarnings?.attoRep ?? snapshot?.accruedFeesAttoRep} suffix={common.rep} />
 					</MetricField>
 				</MetricGrid>
 				<PortfolioButton model={actions} action='claimPortfolioEarnings' label={copy.claim} pendingLabel={copy.claiming} reason={model.claimReason} onClick={model.claim} />
