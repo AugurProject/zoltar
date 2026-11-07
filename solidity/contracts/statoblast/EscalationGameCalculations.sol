@@ -32,7 +32,7 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 		if (forkContinuation) {
 			if (forkResumedAt == 0) return type(uint256).max;
 			if (fixedQuestionOutcome != BinaryOutcomes.BinaryOutcome.None) return forkResumedAt + ACTIVATION_DELAY;
-			int256 requiredElapsed = int256(computeTimeSinceStartFromAttritionCostAttoRep(getBindingCapitalAttoRep()));
+			int256 requiredElapsed = int256(_finalityElapsed());
 			uint256 curveEnd =
 				requiredElapsed <= forkElapsedAtStart
 					? forkResumedAt
@@ -40,19 +40,38 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 			uint256 minimumResponseEnd = forkResumedAt + ACTIVATION_DELAY;
 			return curveEnd > minimumResponseEnd ? curveEnd : minimumResponseEnd;
 		}
-		return activationTime + computeTimeSinceStartFromAttritionCostAttoRep(getBindingCapitalAttoRep());
+		return activationTime + _finalityElapsed();
+	}
+
+	/// @dev Finality is strictly after this last second at or below binding capital.
+	/// Search the forward curve so reporter and settlement schedules cannot mature early.
+	function _finalityElapsed() private view returns (uint256) {
+		uint256 bindingCapital = getBindingCapitalAttoRep();
+		if (bindingCapital < startBondAttoRep) return 0;
+		if (bindingCapital >= nonDecisionThresholdAttoRep) return ESCALATION_TIME_LENGTH;
+		uint256 lower;
+		uint256 upper = ESCALATION_TIME_LENGTH;
+		while (upper - lower > 1) {
+			uint256 middle = lower + (upper - lower) / 2;
+			if (computeIterativeAttritionCostAttoRep(middle) <= bindingCapital) lower = middle;
+			else upper = middle;
+		}
+		return lower;
 	}
 
 	function totalCostAttoRep() public view returns (uint256) {
+		// Freeze the forward curve at the actual fork, including before continuation resume.
+		uint256 timestamp = _getUniverseForkTime();
+		if (timestamp == 0) timestamp = block.timestamp;
 		if (forkContinuation) {
 			int256 elapsed = forkElapsedAtStart;
-			if (forkResumedAt != 0) elapsed += int256(block.timestamp - forkResumedAt);
+			if (forkResumedAt != 0 && timestamp > forkResumedAt) elapsed += int256(timestamp - forkResumedAt);
 			if (elapsed <= 0) return 0;
 			if (elapsed >= int256(ESCALATION_TIME_LENGTH)) return nonDecisionThresholdAttoRep;
 			return computeIterativeAttritionCostAttoRep(uint256(elapsed));
 		}
-		if (activationTime >= block.timestamp) return 0;
-		uint256 elapsedSinceActivation = block.timestamp - activationTime;
+		if (activationTime >= timestamp) return 0;
+		uint256 elapsedSinceActivation = timestamp - activationTime;
 		if (elapsedSinceActivation >= ESCALATION_TIME_LENGTH) return nonDecisionThresholdAttoRep;
 		return computeIterativeAttritionCostAttoRep(elapsedSinceActivation);
 	}
