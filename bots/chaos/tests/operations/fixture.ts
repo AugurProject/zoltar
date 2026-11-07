@@ -80,7 +80,7 @@ export function snapshotFixture(): EcosystemSnapshot {
 				lastRepPerEthPrice: '1000000000000000000',
 				lastOracleSettlementTimestamp: '1999999900',
 				oraclePriceValidUntilTimestamp: '2000000200',
-				lastSettlementLogicalTime: '1999999999',
+				lastSettlementPortfolioTime: '1999999999',
 				minimumToken1ReportAttoEth: 10_000_000_000_000_002n.toString(),
 				oraclePriceValid: true,
 				oracleRequestFunding: {

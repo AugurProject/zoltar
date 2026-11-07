@@ -344,8 +344,8 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		else {
 			uint248 universeId = IEscalationGameSecurityPoolContext(game.securityPool()).universeId();
 			ISecurityPoolReporterPortfolio portfolio = ISecurityPoolReporterPortfolio(authority);
-			uint48 logicalAnchor = portfolio.logicalTimeForNative(universeId, 0);
-			forkResumedAt = portfolio.nativeTimeForLogical(universeId, logicalAnchor);
+			uint48 portfolioTimeAnchor = portfolio.portfolioTimeForNative(universeId, 0);
+			forkResumedAt = portfolio.nativeTimeForPortfolioTime(universeId, portfolioTimeAnchor);
 			require(block.timestamp >= forkResumedAt, 'Portfolio response period has not started');
 		}
 		if (game.getEscalationGameEndDate() >= block.timestamp) _scheduleReporterFinality();

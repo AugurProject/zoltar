@@ -16,7 +16,7 @@ export type QuestionAccountingReplay = {
 	reason: bigint
 	settlementCollateralAttoEth: bigint
 	shareTokenSupplyAttoShares: bigint
-	lastSettlementLogicalTime: bigint
+	lastSettlementPortfolioTime: bigint
 }
 
 export type PoolStateReplay = {
@@ -763,7 +763,7 @@ export function reduceSecurityPoolEvent(state: ReplayState, log: ReplayLog) {
 			reason: requireBigInt(log.args, 'reason'),
 			settlementCollateralAttoEth: requireBigInt(log.args, 'settlementCollateralAttoEth'),
 			shareTokenSupplyAttoShares: requireBigInt(log.args, 'shareTokenSupplyAttoShares'),
-			lastSettlementLogicalTime: requireBigInt(log.args, 'lastSettlementLogicalTime'),
+			lastSettlementPortfolioTime: requireBigInt(log.args, 'lastSettlementPortfolioTime'),
 		})
 		return
 	}

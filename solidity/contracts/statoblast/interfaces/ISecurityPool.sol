@@ -41,7 +41,7 @@ interface ISecurityPool {
 	function portfolioCustody() external view returns (address);
 	function setPortfolioCustody(address custody) external;
 	function refreshPortfolioFees() external;
-	event QuestionAccountingCheckpoint(AccountingReason reason, uint256 settlementCollateralAttoEth, uint256 shareTokenSupplyAttoShares, uint256 lastSettlementLogicalTime);
+	event QuestionAccountingCheckpoint(AccountingReason reason, uint256 settlementCollateralAttoEth, uint256 shareTokenSupplyAttoShares, uint256 lastSettlementPortfolioTime);
 
 	event CompleteSetCreated(address indexed creator, uint256 settlementCollateralProvidedAttoEth, uint256 completeSetsMintedAttoShares, uint256 resultingShareTokenSupplyAttoShares, uint256 resultingSettlementCollateralAttoEth);
 	event CompleteSetRedeemed(address indexed redeemer, uint256 completeSetsBurnedAttoShares, uint256 settlementCollateralRedeemedAttoEth, uint256 resultingShareTokenSupplyAttoShares, uint256 resultingSettlementCollateralAttoEth);
@@ -53,7 +53,7 @@ interface ISecurityPool {
 	function zoltar() external view returns (Zoltar);
 	function settlementCollateralAttoEth() external view returns (uint256);
 	function statoblastSecurityMultiplierBps() external view returns (uint256);
-	function lastSettlementLogicalTime() external view returns (uint256);
+	function lastSettlementPortfolioTime() external view returns (uint256);
 	function awaitingForkContinuation() external view returns (bool);
 	function parent() external view returns (ISecurityPool);
 	function systemState() external view returns (SystemState);

@@ -31,10 +31,10 @@ interface IPortfolioForkCoordinator {
 	function isReady(uint248 universeId) external view returns (bool);
 	function isPriceReportingOpen(uint248 universeId) external view returns (bool);
 	function auctionExposure(uint248 universeId) external view returns (uint256 commitment, uint256 rep);
-	function logicalTime(uint248 universeId) external view returns (uint48);
-	function forkLogicalTime(uint248 universeId) external view returns (uint48);
-	function nativeTimeForLogical(uint248 universeId, uint48 timestamp) external view returns (uint48);
-	function logicalTimeForNative(uint248 universeId, uint48 timestamp) external view returns (uint48);
+	function portfolioTime(uint248 universeId) external view returns (uint48);
+	function forkPortfolioTime(uint248 universeId) external view returns (uint48);
+	function nativeTimeForPortfolioTime(uint248 universeId, uint48 timestamp) external view returns (uint48);
+	function portfolioTimeForNative(uint248 universeId, uint48 timestamp) external view returns (uint48);
 	function ensureReady(uint248 universeId) external;
 	function freeze(uint248 universeId) external;
 	function inheritedFixedOutcome(uint248 universeId, uint256 questionId) external view returns (bool, uint256);
@@ -230,17 +230,17 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	function isPriceReportingOpen(uint248 universeId) external view returns (bool) {
 		return IPortfolioForkCoordinator(forkController).isPriceReportingOpen(universeId);
 	}
-	function logicalTime(uint248 universeId) public view returns (uint48) {
-		return IPortfolioForkCoordinator(forkController).logicalTime(universeId);
+	function portfolioTime(uint248 universeId) public view returns (uint48) {
+		return IPortfolioForkCoordinator(forkController).portfolioTime(universeId);
 	}
-	function forkLogicalTime(uint248 universeId) external view returns (uint48) {
-		return IPortfolioForkCoordinator(forkController).forkLogicalTime(universeId);
+	function forkPortfolioTime(uint248 universeId) external view returns (uint48) {
+		return IPortfolioForkCoordinator(forkController).forkPortfolioTime(universeId);
 	}
-	function nativeTimeForLogical(uint248 universeId, uint48 timestamp) external view returns (uint48) {
-		return IPortfolioForkCoordinator(forkController).nativeTimeForLogical(universeId, timestamp);
+	function nativeTimeForPortfolioTime(uint248 universeId, uint48 timestamp) external view returns (uint48) {
+		return IPortfolioForkCoordinator(forkController).nativeTimeForPortfolioTime(universeId, timestamp);
 	}
-	function logicalTimeForNative(uint248 universeId, uint48 timestamp) external view returns (uint48) {
-		return IPortfolioForkCoordinator(forkController).logicalTimeForNative(universeId, timestamp);
+	function portfolioTimeForNative(uint248 universeId, uint48 timestamp) external view returns (uint48) {
+		return IPortfolioForkCoordinator(forkController).portfolioTimeForNative(universeId, timestamp);
 	}
 	function sourceGame(uint248 universeId, uint256 questionId) external view returns (address) {
 		(SecurityPoolReporterLedger.Question memory question, ) = reporters.question(universeId, questionId);

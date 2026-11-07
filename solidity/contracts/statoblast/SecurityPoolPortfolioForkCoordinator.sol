@@ -22,8 +22,8 @@ interface IPortfolioForkRoot {
 	function settlement() external view returns (SecurityPoolPortfolioSettlement);
 	function reporters() external view returns (SecurityPoolReporterLedger);
 	function services() external view returns (address);
-	function logicalTime(uint248 universeId) external view returns (uint48);
-	function forkLogicalTime(uint248 universeId) external view returns (uint48);
+	function portfolioTime(uint248 universeId) external view returns (uint48);
+	function forkPortfolioTime(uint248 universeId) external view returns (uint48);
 	function clocks(uint248 universeId) external view returns (uint48, uint48, bool, bool);
 	function prepareForkChild(uint248 parent, uint256 outcome) external returns (SecurityPoolCapitalLedger);
 	function activateForkChild(uint248 child) external;
@@ -59,8 +59,11 @@ contract SecurityPoolPortfolioForkCoordinator {
 	IPortfolioForkRoot public immutable portfolio;
 	Zoltar public immutable zoltar;
 	bool private entered;
+	/// @dev Portfolio time freezes at a source fork. Each child inherits that time,
+	/// then advances from its fixed recapitalization deadline, independent of when
+	/// activation is called. Native fee deadlines continue to use blockchain time.
 	struct UniverseClock {
-		uint48 logicalAnchor;
+		uint48 portfolioTimeAnchor;
 		uint48 wallAnchor;
 		bool registered;
 		bool ready;
@@ -190,29 +193,31 @@ contract SecurityPoolPortfolioForkCoordinator {
 		if (address(auction) == address(0)) return (branch.chosenCommitment, 0);
 		return (branch.chosenCommitment + auction.targetLots() * auction.lotAttoEth(), auction.inventoryAttoRep());
 	}
-	function logicalTime(uint248 universeId) public view returns (uint48) {
+	/// @notice The portfolio clock used for settlement and finality, adjusted for fork pauses.
+	function portfolioTime(uint248 universeId) public view returns (uint48) {
 		uint256 wall = zoltar.getForkTime(universeId);
-		return _logicalAt(universeId, wall == 0 ? block.timestamp : Math.min(wall, block.timestamp));
+		return _portfolioTimeAt(universeId, wall == 0 ? block.timestamp : Math.min(wall, block.timestamp));
 	}
-	function _logicalAt(uint248 universeId, uint256 wall) private view returns (uint48) {
+	function _portfolioTimeAt(uint248 universeId, uint256 wall) private view returns (uint48) {
 		UniverseClock memory clock = clocks[universeId];
 		require(clock.registered, 'Unknown portfolio universe');
-		uint256 logical = clock.logicalAnchor + (wall > clock.wallAnchor ? wall - clock.wallAnchor : 0);
-		require(logical <= type(uint48).max, 'Portfolio clock exhausted');
-		return uint48(logical);
+		uint256 portfolioTimestamp =
+			clock.portfolioTimeAnchor + (wall > clock.wallAnchor ? wall - clock.wallAnchor : 0);
+		require(portfolioTimestamp <= type(uint48).max, 'Portfolio clock exhausted');
+		return uint48(portfolioTimestamp);
 	}
-	function forkLogicalTime(uint248 universeId) external view returns (uint48) {
+	function forkPortfolioTime(uint248 universeId) external view returns (uint48) {
 		uint256 forkTime = zoltar.getForkTime(universeId);
 		require(forkTime != 0, 'Universe has not forked');
-		return _logicalAt(universeId, forkTime);
+		return _portfolioTimeAt(universeId, forkTime);
 	}
-	function logicalTimeForNative(uint248 universeId, uint48 timestamp) external view returns (uint48) {
-		return _logicalAt(universeId, timestamp);
+	function portfolioTimeForNative(uint248 universeId, uint48 timestamp) external view returns (uint48) {
+		return _portfolioTimeAt(universeId, timestamp);
 	}
-	function nativeTimeForLogical(uint248 universeId, uint48 timestamp) external view returns (uint48) {
+	function nativeTimeForPortfolioTime(uint248 universeId, uint48 timestamp) external view returns (uint48) {
 		UniverseClock memory clock = clocks[universeId];
-		require(clock.registered && timestamp >= clock.logicalAnchor, 'Logical time precedes universe');
-		uint256 wall = uint256(clock.wallAnchor) + timestamp - clock.logicalAnchor;
+		require(clock.registered && timestamp >= clock.portfolioTimeAnchor, 'Portfolio time precedes universe');
+		uint256 wall = uint256(clock.wallAnchor) + timestamp - clock.portfolioTimeAnchor;
 		require(wall <= type(uint48).max, 'Native clock exhausted');
 		return uint48(wall);
 	}
@@ -232,7 +237,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 		require(clocks[universeId].ready, 'Prepare source branch first');
 		SecurityPoolCapitalLedger capital = portfolio.capitalLedger(universeId);
 		capital.freeze();
-		(fork.cash, fork.units, ) = portfolio.settlement().sealUniverse(universeId, portfolio.forkLogicalTime(universeId));
+		(fork.cash, fork.units, ) = portfolio.settlement().sealUniverse(universeId, portfolio.forkPortfolioTime(universeId));
 		IPortfolioForkServices(portfolio.services()).freezePremiumUniverse(universeId);
 		portfolio.reporters().freezeFork(universeId);
 		fork.backing = capital.frozenBackingAttoRep();
@@ -275,7 +280,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 		if (branch.prepared) return child;
 		uint256 anchor = zoltar.getForkRecapitalizationDeadline(parent);
 		require(anchor <= type(uint48).max, 'Fork clock exhausted');
-		clocks[child] = UniverseClock(_logicalAt(parent, zoltar.getForkTime(parent)), uint48(anchor), true, false);
+		clocks[child] = UniverseClock(_portfolioTimeAt(parent, zoltar.getForkTime(parent)), uint48(anchor), true, false);
 		portfolio.prepareForkChild(parent, outcome);
 		branch.parent = parent;
 		branch.outcome = outcome;
@@ -395,7 +400,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 		settlement.createChildUniverse{value: raisedAttoEth}(branch.parent, child, branch.parentCash, token, branch.recoveryAttoRep);
 		settlement.setFeeClock(child, uint48(zoltar.getForkRecapitalizationDeadline(branch.parent)));
 		(, uint256 forkQuestion, , , ) = zoltar.universes(branch.parent);
-		settlement.fixInheritedQuestionFinality(child, forkQuestion, clocks[child].logicalAnchor + 3 days);
+		settlement.fixInheritedQuestionFinality(child, forkQuestion, clocks[child].portfolioTimeAnchor + 3 days);
 	}
 
 	/// @notice Resolve only this actual fork, never recursively walk ancestors.

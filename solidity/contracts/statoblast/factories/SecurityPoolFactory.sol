@@ -209,7 +209,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	function initializePortfolioPriceFeedForUniverse(uint248 universeId) external returns (address) {
 		OpenOraclePriceCoordinator coordinator = portfolioConfigurations[msg.sender];
 		require(address(coordinator) != address(0), 'Portfolio configuration missing');
-		ISecurityPoolPortfolioNative(msg.sender).logicalTime(universeId);
+		ISecurityPoolPortfolioNative(msg.sender).portfolioTime(universeId);
 		require(address(zoltar.getRepToken(universeId)) != address(0), 'Branch REP is missing');
 		return address(_getOrCreateSharedPriceFeed(coordinator, msg.sender, universeId));
 	}
@@ -232,7 +232,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		address portfolio = poolMetadata[source].portfolio;
 		require(portfolio != address(0), 'Source has no portfolio');
 		require(address(poolRegistrations[getPoolId(poolMetadata[source].originId, source.universeId())].pool) == address(source), 'Source pool is not canonical');
-		ISecurityPoolPortfolioNative(portfolio).logicalTime(universeId);
+		ISecurityPoolPortfolioNative(portfolio).portfolioTime(universeId);
 		require(address(zoltar.getRepToken(universeId)) != address(0), 'Branch REP is missing');
 		return address(_getOrCreateSharedPriceFeed(source.openOraclePriceCoordinator(), portfolio, universeId));
 	}

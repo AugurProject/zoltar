@@ -11,8 +11,8 @@ abstract contract SecurityPoolStorage {
 	uint256 public settlementCollateralAttoEth;
 	uint256 public statoblastSecurityMultiplierBps;
 	uint256 public shareTokenSupplyAttoShares;
-	/// @dev Logical time returned by central settlement, not an accumulated fee amount.
-	uint256 public lastSettlementLogicalTime;
+	/// @dev Portfolio time returned by central settlement, not an accumulated fee amount.
+	uint256 public lastSettlementPortfolioTime;
 	bool public awaitingForkContinuation;
 	SystemState public systemState;
 	uint256 internal feeEpochEndTime;

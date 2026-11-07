@@ -463,7 +463,7 @@ export const coreContractReferences: ContractReference[] = [
 						name: 'initializePortfolioPriceFeedForUniverse',
 					},
 				],
-				preconditions: 'Canonical configuration seed; the caller\u2019s logical clock recognizes the target universe; the target REP token exists. The seed belongs to a registered portfolio.',
+				preconditions: 'Canonical configuration seed; the caller\u2019s portfolio clock recognizes the target universe; the target REP token exists. The seed belongs to a registered portfolio.',
 				signals: 'Returns the canonical feed address; no question-deployment event.',
 			},
 			{
@@ -475,7 +475,7 @@ export const coreContractReferences: ContractReference[] = [
 						name: 'preparePortfolioPriceFeed',
 					},
 				],
-				preconditions: 'Canonical portfolio source; the portfolio logical clock recognizes the target; the target REP token exists.',
+				preconditions: 'Canonical portfolio source; the portfolio clock recognizes the target; the target REP token exists.',
 				signals: 'Returns the canonical feed address.',
 			},
 			{

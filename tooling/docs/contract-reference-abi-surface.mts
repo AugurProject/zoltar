@@ -150,7 +150,7 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/vendor/authorization/ERC20Authorization.sol': '6bfae34f9210ed80f176774eb2b5a3624060ce4be34825ca84949ddcfb8024d2',
 }
 export const readDeclarationExclusionsBySource: Record<string, string[]> = {
-	'solidity/contracts/statoblast/tokens/ShareToken.sol': ['forkController', 'forkLogicalTime', 'settlement'],
+	'solidity/contracts/statoblast/tokens/ShareToken.sol': ['forkController', 'forkPortfolioTime', 'settlement'],
 	'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol': ['securityPool', 'securityPoolForker', 'systemState', 'forkData'],
 	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': ['storedGame', 'disputeHistory'],
 	'solidity/contracts/statoblast/SecurityPool.sol': ['eventEmitter', 'factory', 'operationsDelegate'],

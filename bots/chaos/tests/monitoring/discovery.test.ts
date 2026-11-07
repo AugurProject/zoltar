@@ -591,7 +591,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				case 'minimumOutcomeExchangeRate':
 				case 'acceptedExposureLimitAttoEth':
 				case 'settlementCollateralAttoEth':
-				case 'lastSettlementLogicalTime':
+				case 'lastSettlementPortfolioTime':
 					return 0n
 				case 'repToken':
 				case 'reputationToken':

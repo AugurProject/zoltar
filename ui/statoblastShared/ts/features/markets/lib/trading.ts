@@ -91,7 +91,7 @@ export function estimateMintCheckpoint({
 	if (centralSettlement === true) {
 		if (centralCheckpointTimestamp === undefined || linearFee === undefined) return undefined
 		// The simulated checkpoint includes historical pauses. Only future elapsed time
-		// can accrue again, bounded by the stream's remaining logical duration.
+		// can accrue again, bounded by the stream's remaining duration in native time.
 		const elapsed = currentTimestamp > centralCheckpointTimestamp ? currentTimestamp - centralCheckpointTimestamp : 0n
 		const remaining = linearFee.endTime > lastFeeCheckpointNativeTime ? linearFee.endTime - lastFeeCheckpointNativeTime : 0n
 		const fees = (elapsed < remaining ? elapsed : remaining) * linearFee.rateAttoEthPerSecond
