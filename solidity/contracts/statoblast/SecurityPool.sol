@@ -125,30 +125,32 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	/// @notice Active-game-only burn of REP already transferred for settlement.
-	function burnEscalationWinnerHaircut(uint256) external {
-		_forwardAccountingOperation();
+	function burnEscalationWinnerHaircut(uint256 amountAttoRep) external {
+		_delegateAccounting(abi.encodeCall(SecurityPoolPortfolioAccountingDelegate.burnEscalationWinnerHaircut, (amountAttoRep)));
 	}
 	/// @notice Binds the canonical portfolio's central capital ledger once.
-	function setPortfolioCustody(address) external {
-		_forwardAccountingOperation();
+	function setPortfolioCustody(address custody) external {
+		_delegateAccounting(abi.encodeCall(SecurityPoolPortfolioAccountingDelegate.setPortfolioCustody, (custody)));
 	}
 	/// @notice Credit irrevocable REP surplus already transferred by the active game.
-	function creditEscalationSurplus(uint256) external {
-		_forwardAccountingOperation();
+	function creditEscalationSurplus(uint256 amountAttoRep) external {
+		_delegateAccounting(abi.encodeCall(SecurityPoolPortfolioAccountingDelegate.creditEscalationSurplus, (amountAttoRep)));
 	}
 
-	function _forwardAccountingOperation() private {
-		DelegateCallForwarder.invokeWithDecodedRevert(address(eventEmitter), msg.data);
+	/// @dev The fixed eventEmitter target also owns portfolio accounting and fee mutations.
+	/// Delegatecall preserves the original caller; authorization lives in each named target method.
+	function _delegateAccounting(bytes memory callData) private {
+		DelegateCallForwarder.invokeWithDecodedRevert(address(eventEmitter), callData);
 	}
 
 	/// @notice Factory-only: initializes the question fee clock and settlement collateral.
-	function setStartingParams(uint256, uint256) external {
-		_forwardAccountingOperation();
+	function setStartingParams(uint256 currentRetentionRate, uint256 initialCollateral) external {
+		_delegateAccounting(abi.encodeCall(SecurityPoolEventEmitter.setStartingParams, (currentRetentionRate, initialCollateral)));
 	}
 
 	/// @notice Checkpoints the portfolio settlement book; callable by anyone.
 	function updateSettlementCollateral() public {
-		DelegateCallForwarder.invokeWithDecodedRevert(address(eventEmitter), abi.encodeCall(SecurityPoolPortfolioAccountingDelegate.accrueSettlementCollateral, ()));
+		_delegateAccounting(abi.encodeCall(SecurityPoolPortfolioAccountingDelegate.accrueSettlementCollateral, ()));
 	}
 
 	/// @notice Returns the native fee-epoch cutoff; bound portfolio fee accrual follows the central stream.
@@ -162,11 +164,11 @@ contract SecurityPool is SecurityPoolStorage {
 
 	/// @notice Refreshes the portfolio's linear fee stream.
 	function updateRetentionRate() public {
-		DelegateCallForwarder.invokeWithDecodedRevert(address(eventEmitter), abi.encodeCall(SecurityPoolPortfolioAccountingDelegate.updateRetentionRate, ()));
+		_delegateAccounting(abi.encodeCall(SecurityPoolPortfolioAccountingDelegate.updateRetentionRate, ()));
 	}
 
 	function refreshPortfolioFees() public {
-		DelegateCallForwarder.invokeWithDecodedRevert(address(eventEmitter), abi.encodeCall(SecurityPoolLinearFees.refreshLinearFeeStream, ()));
+		_delegateAccounting(abi.encodeCall(SecurityPoolLinearFees.refreshLinearFeeStream, ()));
 	}
 
 	function _emitPoolAccountingCheckpoint(AccountingReason reason) private {
@@ -174,7 +176,7 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function _emitEvent(bytes memory eventCall) private {
-		DelegateCallForwarder.invokeWithDecodedRevert(address(eventEmitter), eventCall);
+		_delegateAccounting(eventCall);
 	}
 
 	/// @notice Native question ledgers hold no underwriting REP; the portfolio owns its shared capital.
