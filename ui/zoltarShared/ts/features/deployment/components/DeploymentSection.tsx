@@ -1,5 +1,7 @@
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as userMessagesCopy from '@zoltar/ui-core-shared/copy/userMessages.js'
+import { useHasInjectedWallet } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import * as deploymentCopy from '../../../copy/deployment.js'
 import type { BadgeTone, DeploymentSectionProps } from '../../types.js'
 import { DeploymentStepList, type DeploymentStepRow } from '@zoltar/ui-core-shared/components/DeploymentStepList.js'
@@ -14,7 +16,7 @@ type StepStatus = {
 	buttonLabel: string
 }
 
-function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefined, isBusy: boolean, accountAddress: string | undefined, isOnActiveAppChain: boolean): StepStatus {
+function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefined, isBusy: boolean, accountAddress: string | undefined, isOnActiveAppChain: boolean, hasInjectedWallet: boolean | undefined): StepStatus {
 	if (stepDeployed)
 		return {
 			badgeTone: 'ok',
@@ -35,7 +37,8 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 		if (accountAddress === undefined)
 			return {
 				badgeTone: 'pending',
-				detail: commonCopy.walletConnectionRequired,
+				// Without a browser wallet, connecting cannot help, so the step says what is missing instead.
+				detail: hasInjectedWallet === false ? userMessagesCopy.walletInstallationRequired : commonCopy.walletConnectionRequired,
 				label: commonCopy.notDeployed,
 				buttonLabel: commonCopy.deploy,
 			}
@@ -53,8 +56,9 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 		}
 	}
 
+	// Waiting on an earlier contract is the normal deployment order, not an error, so the badge stays neutral.
 	return {
-		badgeTone: 'blocked',
+		badgeTone: 'muted',
 		detail: deploymentCopy.formatPrerequisiteDetail(prerequisiteLabel),
 		label: deploymentCopy.waiting,
 		buttonLabel: commonCopy.deploy,
@@ -62,6 +66,7 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 }
 
 export function DeploymentSection({ title, completedGroup = false, steps, allSteps, accountAddress, busyStepId, deploymentStateReady, deploymentStatusReasonElementId, isOnActiveAppChain, onDeploy }: DeploymentSectionProps) {
+	const hasInjectedWallet = useHasInjectedWallet()
 	return (
 		<SectionBlock className='contract-panel' title={completedGroup ? undefined : title} variant='plain'>
 			<DeploymentStepList
@@ -70,7 +75,7 @@ export function DeploymentSection({ title, completedGroup = false, steps, allSte
 					const prerequisiteLabel = stepIndex === -1 ? undefined : getPrerequisiteLabel(allSteps, stepIndex)
 					const isBusy = busyStepId === step.id
 					const stepStatus = deploymentStateReady
-						? getStepStatus(step.deployed, prerequisiteLabel, isBusy, accountAddress, isOnActiveAppChain)
+						? getStepStatus(step.deployed, prerequisiteLabel, isBusy, accountAddress, isOnActiveAppChain, hasInjectedWallet)
 						: {
 								badgeTone: 'muted' as const,
 								buttonLabel: commonCopy.deploy,
@@ -88,21 +93,26 @@ export function DeploymentSection({ title, completedGroup = false, steps, allSte
 					const statusDetailId = stepStatus.detail === undefined ? undefined : `deployment-${step.id}-status-detail`
 					// Without a wallet the status detail already carries the wallet reason unless a prerequisite occupies it; with a wallet the detail explains a prerequisite.
 					const showInlineDisabledReason = deploymentStateReady && (prerequisiteLabel === undefined ? accountAddress !== undefined : accountAddress === undefined)
+					// A deployed step keeps its button in place, disabled and labelled with the result, so the button carries the status instead of a badge.
+					const deployedStep = deploymentStateReady && step.deployed
+					let ariaLabel = appCopy.formatDeployContract(step.label)
+					if (deployedStep) ariaLabel = deploymentCopy.formatContractDeployed(step.label)
+					else if (isBusy) ariaLabel = appCopy.formatDeployingContract(step.label)
 					return {
-						action: step.deployed ? undefined : (
+						action: (
 							<TransactionActionButton
-								ariaLabel={isBusy ? appCopy.formatDeployingContract(step.label) : appCopy.formatDeployContract(step.label)}
+								ariaLabel={ariaLabel}
 								idleLabel={stepStatus.buttonLabel}
 								pendingLabel={deploymentCopy.deploying}
 								onClick={() => void onDeploy(step.id)}
 								pending={isBusy}
 								availability={availability}
 								disabledReasonElementId={deploymentStateReady ? statusDetailId : deploymentStatusReasonElementId}
-								showDisabledReason={showInlineDisabledReason}
+								showDisabledReason={showInlineDisabledReason && !deployedStep}
 							/>
 						),
 						address: step.address,
-						badge: stepStatus.label === undefined || (completedGroup && step.deployed) ? undefined : { label: stepStatus.label, tone: stepStatus.badgeTone },
+						badge: stepStatus.label === undefined || deployedStep ? undefined : { label: stepStatus.label, tone: stepStatus.badgeTone },
 						detail: stepStatus.detail,
 						detailId: statusDetailId,
 						key: step.id,

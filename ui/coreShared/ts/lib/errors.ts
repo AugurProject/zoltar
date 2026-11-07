@@ -10,14 +10,18 @@ export const transactionErrorMessages = {
 	nonceConflict: 'Another transaction from this wallet used the same nonce. Wait for pending wallet transactions to finish, then try again.',
 	reviewCanceled: 'Remaining transactions canceled. Transactions already sent are unchanged.',
 	trackingStopped: 'Stopped tracking the transaction. It can still confirm.',
-	walletRejected: 'Rejected in wallet.',
+	walletRejected: 'Canceled in wallet.',
 	walletRpcInternalError: 'The wallet RPC returned an internal error. Try again; if it repeats, check the network in the wallet.',
 }
+
+const rpcUnavailableMessage = 'The network RPC is busy or unavailable. Try again shortly.'
 
 /** Node errors users meet often, rewritten to the step that fixes them instead of the node's own text in attoETH. */
 const classifiedTransactionErrors = [
 	{ message: transactionErrorMessages.insufficientFundsForGas, pattern: /insufficient funds/i },
 	{ message: transactionErrorMessages.nonceConflict, pattern: /nonce too low|correct nonce|replacement transaction underpriced|already known|transaction already imported/i },
+	// Rate limits, timeouts, and gateway failures from the RPC transport clear on their own; the status code means nothing to users.
+	{ message: rpcUnavailableMessage, pattern: /HTTP (408|429|5\d\d) while calling|Malformed JSON-RPC (response|error)/i },
 ]
 
 type UserFacingErrorMarker = Readonly<{ userFacingMessage: true }>
@@ -55,7 +59,7 @@ function isTransactionErrorMessage(message: string | undefined) {
 	return message !== undefined && Object.values(transactionErrorMessages).includes(message)
 }
 
-const closeableErrorPatterns = ['user rejected the request', 'user rejected request', 'user denied transaction signature', 'user denied message signature', 'user denied account authorization', 'rejected in wallet']
+const closeableErrorPatterns = ['user rejected the request', 'user rejected request', 'user denied transaction signature', 'user denied message signature', 'user denied account authorization', 'canceled in wallet']
 const technicalWriteErrorPatterns = ['allowance', 'balance', 'call reverted', 'connector', 'erc20', 'estimategas', 'execution reverted', 'fee', 'gas', 'insufficient funds', 'internal json-rpc', 'json-rpc', 'network', 'nonce', 'replacement transaction', 'reverted', 'rpc', 'transaction', 'transfer', 'underpriced']
 
 export function hasErrorCode(value: unknown): value is { code: number | string } {

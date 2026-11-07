@@ -13,6 +13,7 @@ import { ForkQuestion } from '@zoltar/ui-core-shared/components/Question.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { TransactionActionButton, TransactionActionGroup } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { useHasInjectedWallet } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { normalizeQuestionId } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
@@ -78,6 +79,7 @@ export function ForkZoltarSection({
 	zoltarUniverseState,
 }: ForkZoltarSectionProps) {
 	const chainCurrentTimestamp = useChainTimestamp()
+	const hasInjectedWallet = useHasInjectedWallet()
 	const [confirmedForkKey, setConfirmedForkKey] = useState<string | undefined>(undefined)
 	const effectiveCurrentTimestamp = currentTimestamp ?? chainCurrentTimestamp
 	const rootUniverse = zoltarUniverse
@@ -90,6 +92,8 @@ export function ForkZoltarSection({
 	const hasEnoughApproval = rootUniverse !== undefined && (!requiresApproval || approvalRequirement.hasSufficientApproval)
 	const hasForkEconomics = rootUniverse?.forkBurnDivisor !== undefined && rootUniverse.forkBurnDivisor > 1n && rootUniverse.zoltarAddress !== undefined
 	const permanentRepBurn = rootUniverse?.forkBurnDivisor === undefined || rootUniverse.forkBurnDivisor <= 1n ? undefined : rootUniverse.forkThresholdAttoRep / rootUniverse.forkBurnDivisor
+	// The rest of the burned threshold becomes the forker's migration balance, which migrates into child universes 1:1.
+	const forkMigrationCredit = rootUniverse === undefined || permanentRepBurn === undefined ? undefined : rootUniverse.forkThresholdAttoRep - permanentRepBurn
 	const selectedQuestionId = zoltarForkQuestionId.trim()
 	const hasSelectedQuestionId = selectedQuestionId !== ''
 	const normalizedSelectedQuestionId = normalizeQuestionId(selectedQuestionId)
@@ -125,14 +129,14 @@ export function ForkZoltarSection({
 		return undefined
 	})()
 	const approvalGuardMessage = (() => {
-		const walletPresentation = getWalletPresentation({ accountAddress, isOnActiveAppChain })
+		const walletPresentation = getWalletPresentation({ accountAddress, isOnActiveAppChain, ...(hasInjectedWallet === undefined ? {} : { hasInjectedWallet }) })
 		if (walletPresentation !== undefined) return walletPresentation.detail
 		if (rootUniverse === undefined) return undefined
 		if (hasForked) return zoltarCopy.alreadyForkedReason
 		return questionTimingReason
 	})()
 	const forkGuardMessage = (() => {
-		const walletPresentation = getWalletPresentation({ accountAddress, isOnActiveAppChain })
+		const walletPresentation = getWalletPresentation({ accountAddress, isOnActiveAppChain, ...(hasInjectedWallet === undefined ? {} : { hasInjectedWallet }) })
 		if (walletPresentation !== undefined) return walletPresentation.detail
 		if (rootUniverse === undefined) return getUniversePresentation(zoltarUniverseState)?.detail
 
@@ -153,7 +157,7 @@ export function ForkZoltarSection({
 		<WarningSurface className='fork-confirmation' surface='flat' variant='compact'>
 			<label className='fork-confirmation-control'>
 				<input type='checkbox' checked={forkConfirmed} disabled={forkConfirmationKey === undefined || zoltarForkPending} onChange={event => setConfirmedForkKey(event.currentTarget.checked ? forkConfirmationKey : undefined)} />
-				<span>{permanentRepBurn === undefined ? zoltarCopy.forkConfirmationUnknownBurn : zoltarCopy.formatForkConfirmation(formatAmountDisplay(permanentRepBurn))}</span>
+				<span>{permanentRepBurn === undefined || forkMigrationCredit === undefined ? zoltarCopy.forkConfirmationUnknownBurn : zoltarCopy.formatForkConfirmation(formatAmountDisplay(permanentRepBurn), formatAmountDisplay(forkMigrationCredit))}</span>
 			</label>
 		</WarningSurface>
 	)
@@ -203,6 +207,9 @@ export function ForkZoltarSection({
 					</MetricField>
 					<MetricField label={zoltarCopy.permanentRepBurn}>
 						<CurrencyValue loading={loadingZoltarForkAccess || rootUniverse === undefined} value={permanentRepBurn} suffix={commonCopy.rep} />
+					</MetricField>
+					<MetricField label={zoltarCopy.forkMigrationCredit}>
+						<CurrencyValue loading={loadingZoltarForkAccess || rootUniverse === undefined} value={forkMigrationCredit} suffix={commonCopy.rep} />
 					</MetricField>
 				</DataGrid>
 			)}

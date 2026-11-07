@@ -64,6 +64,7 @@ type OpenOracleRouteContentProps = {
 	onOpenOracleCreateFormChange: (update: Partial<OpenOracleCreateFormState>) => void
 	onSettleReport: () => void
 	onWithdrawOpenOracleBalance: (balance: keyof OpenOracleWithdrawableBalances, reviewedAmount: bigint) => void
+	onWrapDisputeWeth: () => void
 	loadingOpenOracleCreate: boolean
 	openOracleActiveAction: OpenOracleActionResult['action'] | undefined
 	openOracleActiveWithdrawalBalance: keyof OpenOracleWithdrawableBalances | undefined

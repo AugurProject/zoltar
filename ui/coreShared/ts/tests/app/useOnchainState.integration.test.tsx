@@ -826,7 +826,41 @@ describe('useOnchainState (integration)', () => {
 		resetEnvironment()
 	})
 
-	test('shows a wallet-install message when connectWallet is requested without a wallet provider', async () => {
+	test('notices a wallet that injects its provider after the page loaded and listens to it', async () => {
+		const { backend, subscriptionState } = createBackend({ hasWallet: false })
+		let walletInjected = false
+		const lateWalletBackend: ChainBackend = { ...backend, hasWallet: () => walletInjected }
+		const dependencies = createOnchainStateDependencies({
+			getDeploymentSteps,
+			loadDeploymentStatusOracleSnapshot: mock(async () => ({
+				applicationDeploymentComplete: false,
+				deploymentStatuses,
+			})),
+			loadErc20Balance: mock(async () => 0n),
+		})
+		const resetEnvironment = installActiveEnvironmentForTesting(lateWalletBackend)
+		let hookState: UseOnchainStateState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(requireHookState(hookState).hasInjectedWallet).toBe(false)
+		const accountHandlerBeforeInjection = subscriptionState.accountHandler
+
+		// MetaMask announces a late provider with `ethereum#initialized`.
+		walletInjected = true
+		await act(() => {
+			window.dispatchEvent(new Event('ethereum#initialized'))
+		})
+		expect(requireHookState(hookState).hasInjectedWallet).toBe(true)
+		// The account and network subscriptions are made again, now that a provider exists to deliver them.
+		expect(subscriptionState.unsub.accounts).toBe(1)
+		expect(subscriptionState.accountHandler).not.toBe(accountHandlerBeforeInjection)
+		resetEnvironment()
+	})
+
+	test('reports a missing wallet provider to the wallet controls instead of as a page error', async () => {
 		const { backend } = createBackend({
 			hasWallet: false,
 		})
@@ -851,7 +885,9 @@ describe('useOnchainState (integration)', () => {
 			fireEvent.click(connectButton)
 		})
 
-		expect(requireHookState(hookState).errorMessage).toBe('No wallet detected. Install or enable a wallet to continue.')
+		expect(requireHookState(hookState).hasInjectedWallet).toBe(false)
+		expect(requireHookState(hookState).walletActionMessage).toBe('No browser wallet found. Install or enable one to connect.')
+		expect(requireHookState(hookState).errorMessages).toEqual([])
 		expect(requireHookState(hookState).isConnectingWallet).toBe(false)
 		resetEnvironment()
 	})
@@ -956,7 +992,7 @@ describe('useOnchainState (integration)', () => {
 		resetEnvironment()
 	})
 
-	test('prevents concurrent connectWallet calls and reports connection failures', async () => {
+	test('prevents concurrent connectWallet calls and reports connection failures beside the wallet controls until dismissed', async () => {
 		const account = getAddress('0x00000000000000000000000000000000000000a3')
 		const connectDeferred = createDeferred<readonly Address[]>()
 		let requestAccountsCalls = 0
@@ -998,9 +1034,12 @@ describe('useOnchainState (integration)', () => {
 		})
 		expect(requestAccountsCalls).toBe(1)
 
-		connectDeferred.reject(new Error('wallet rejected'))
-		await waitFor(() => expect(requireHookState(hookState).errorMessage).toBe('Wallet connection failed. Reason: wallet rejected.'))
+		connectDeferred.reject(new Error('wallet unavailable'))
+		await waitFor(() => expect(requireHookState(hookState).walletActionMessage).toBe('Wallet connection failed. Reason: wallet unavailable.'))
+		expect(requireHookState(hookState).errorMessages).toEqual([])
 		expect(requireHookState(hookState).isConnectingWallet).toBe(false)
+		await act(() => requireHookState(hookState).dismissWalletActionMessage())
+		expect(requireHookState(hookState).walletActionMessage).toBeUndefined()
 		resetEnvironment()
 	})
 
@@ -1036,6 +1075,7 @@ describe('useOnchainState (integration)', () => {
 		await waitFor(() => expect(requireHookState(hookState).isConnectingWallet).toBe(false))
 		expect(requireHookState(hookState).errorMessage).toBeUndefined()
 		expect(requireHookState(hookState).errorMessages).toEqual([])
+		expect(requireHookState(hookState).walletActionMessage).toBeUndefined()
 		resetEnvironment()
 	})
 
@@ -1068,6 +1108,7 @@ describe('useOnchainState (integration)', () => {
 			await connection.promise.catch(() => undefined)
 		})
 		expect(requireHookState(hookState).errorMessages).toEqual([])
+		expect(requireHookState(hookState).walletActionMessage).toBeUndefined()
 		resetEnvironment()
 	})
 
@@ -1099,6 +1140,7 @@ describe('useOnchainState (integration)', () => {
 			await accountSelection.promise.catch(() => undefined)
 		})
 		expect(requireHookState(hookState).errorMessages).toEqual([])
+		expect(requireHookState(hookState).walletActionMessage).toBeUndefined()
 		resetEnvironment()
 	})
 

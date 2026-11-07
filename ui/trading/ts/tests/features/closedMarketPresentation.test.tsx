@@ -24,15 +24,14 @@ describe('closed market presentation', () => {
 	test('leads an open market with its odds and labels a closed market odds as history', async () => {
 		const open = await renderIntoDocument(<MarketOverview market={openMarket} nowSeconds={0n} position={null} />)
 		expect(document.querySelectorAll('.market-overview .probability--headline')).toHaveLength(1)
-		expect(document.querySelector('.market-odds-closed')).toBeNull()
+		expect(document.querySelector('.market-overview .probability--last')).toBeNull()
 		await open.cleanup()
 
 		const closed = await renderIntoDocument(<MarketOverview market={forkedMarket} nowSeconds={0n} position={null} />)
 		cleanupRendered = closed.cleanup
 		expect(document.querySelectorAll('.market-overview .probability')).toHaveLength(1)
 		expect(document.querySelector('.market-overview .probability--headline')).toBeNull()
-		expect(document.querySelector('.market-odds-closed .metric-label')?.textContent).toBe('Last conditional prices before trading closed')
-		expect(document.querySelector('.market-odds-closed .probability')).not.toBeNull()
+		expect(document.querySelector('.market-overview .probability--last .probability__caption')?.textContent).toBe('Last price if not Invalid')
 	})
 
 	const renderForkedPosition = async (balance: bigint) => {

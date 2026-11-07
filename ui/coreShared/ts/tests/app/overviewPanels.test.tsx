@@ -210,6 +210,31 @@ describe('OverviewPanels', () => {
 		expect(connectButton.disabled).toBe(true)
 	})
 
+	test('disables Connect with a visible reason when the browser has no wallet', async () => {
+		// A connect request from elsewhere on the page reports the same reason, which the top bar shows once.
+		const documentQueries = await renderOverviewPanels({ hasInjectedWallet: false, walletActionMessage: 'No browser wallet found. Install or enable one to connect.' })
+		const connectButton = documentQueries.getByRole('button', { name: 'Connect wallet' })
+		if (!(connectButton instanceof HTMLButtonElement)) throw new Error('Expected connect button')
+		expect(connectButton.disabled).toBe(true)
+		const reason = documentQueries.getByText('No browser wallet found. Install or enable one to connect.')
+		expect(connectButton.getAttribute('aria-describedby')).toBe(reason.id)
+		// The reason sits under the top bar instead of stretching the one-row toolbar.
+		expect(document.body.querySelector('.header-toolbar')?.contains(reason)).toBe(false)
+		expect(document.body.querySelector('.notice')).toBeNull()
+	})
+
+	test('shows a wallet request failure as a neutral notice under the top bar until it is dismissed', async () => {
+		const onDismissWalletActionMessage = mock(() => undefined)
+		const documentQueries = await renderOverviewPanels({ onDismissWalletActionMessage, walletActionMessage: 'Wallet connection failed. Reason: wallet unavailable.' })
+		const notice = documentQueries.getByText('Wallet connection failed. Reason: wallet unavailable.').closest('.notice')
+		if (!(notice instanceof HTMLElement)) throw new Error('Expected the wallet notice')
+		expect(notice.getAttribute('data-message-tone')).toBe('neutral')
+		expect(notice.getAttribute('role')).toBe('status')
+		expect(document.body.querySelector('[role="alert"]')).toBeNull()
+		fireEvent.click(within(notice).getByRole('button', { name: 'Dismiss notice' }))
+		expect(onDismissWalletActionMessage).toHaveBeenCalledTimes(1)
+	})
+
 	test('offers account management and wrong-network recovery for a connected wallet', async () => {
 		const onChangeWallet = mock(() => undefined)
 		const onDisconnectWallet = mock(() => undefined)

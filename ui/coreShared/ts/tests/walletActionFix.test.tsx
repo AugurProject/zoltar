@@ -85,6 +85,18 @@ describe('wallet action fix', () => {
 		expect(calls).toEqual(['connect'])
 	})
 
+	test('says no browser wallet was found instead of offering a connect fix that cannot succeed', async () => {
+		const { walletActions } = createWalletActions({ hasInjectedWallet: false })
+		await renderPage(
+			<WalletActionsProvider walletActions={walletActions}>
+				<TransactionActionButton availability={disconnectedAvailability} idleLabel='Create question' onClick={() => undefined} pendingLabel='Creating…' />
+			</WalletActionsProvider>,
+		)
+		const page = within(document.body)
+		expect(page.queryByRole('button', { name: 'Connect wallet' })).toBeNull()
+		expect(getDescriptionText(page.getByRole('button', { name: 'Create question' }))).toBe('No browser wallet found. Install or enable one to connect.')
+	})
+
 	test('offers the switch fix for a wallet on another network', async () => {
 		const { calls, walletActions } = createWalletActions()
 		await renderPage(

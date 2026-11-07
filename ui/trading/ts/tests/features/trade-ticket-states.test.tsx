@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
+import { render } from 'preact'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -13,7 +14,7 @@ import { positionTicket } from '../support/positionTicket.js'
 const eth = 10n ** 18n
 const pool = `0x${'11'.repeat(20)}` as Address
 const market = liveMarketFixture({ pool, endTime: 10_000n })
-const connectedWallet: TicketWallet = { connected: true, networkMismatchReason: undefined, actionLabel: 'Connect wallet', walletEthAttoEth: eth, connect: async () => undefined }
+const connectedWallet: TicketWallet = { connected: true, networkMismatchReason: undefined, actionLabel: 'Connect wallet', walletEthAttoEth: eth, walletEthState: 'ready', connect: async () => undefined }
 const disconnectedHoldings: TicketBalances = { balances: undefined, balanceState: 'disconnected', balanceError: undefined, retry: async () => undefined }
 const readyHoldings: TicketBalances = { balances: { scope: { pool, shareToken: market.shareToken, invalidTokenId: 1n, yesTokenId: 2n, noTokenId: 3n }, yes: 0n, no: 0n, invalid: 0n, lp: 0n }, balanceState: 'ready', balanceError: undefined, retry: async () => undefined }
 
@@ -76,13 +77,13 @@ describe('trade ticket states', () => {
 		expect(amounts).toEqual(['0.2475', '0.495'])
 	})
 
-	test('the outcome buttons carry the conditional price', async () => {
+	test('the outcome buttons carry the price if not Invalid', async () => {
 		const container = await renderTicket(positionTicket())
 		const picker = container.querySelector('.outcome-picker')
-		expect(picker?.getAttribute('aria-label')).toBe('Outcome, with conditional price')
-		expect(Array.from(picker?.querySelectorAll('button') ?? []).map(button => button.textContent)).toEqual(['Yes 50%', 'No 50%'])
-		// With no amount entered there is no odds preview, so the caption is what says the percentages are conditional.
-		expect(container.querySelector('.trade-ticket-switchers')?.textContent).toContain('Conditional price')
+		expect(picker?.getAttribute('aria-label')).toBe('Outcome, with price if not Invalid')
+		expect(Array.from(picker?.querySelectorAll('button') ?? []).map(button => button.textContent)).toEqual(['Yes 50.0%', 'No 50.0%'])
+		// With no amount entered there is no odds preview, so the caption is what says what the percentages are conditional on.
+		expect(container.querySelector('.trade-ticket-switchers')?.textContent).toContain('Price if not Invalid')
 	})
 
 	test('switching to Sell selects the outcome the wallet holds', async () => {
@@ -149,12 +150,60 @@ describe('trade ticket states', () => {
 		for (const phrase of ['Price impact', 'Trading fee', '0.3% · ≈ 0.00', 'you keep their Invalid shares', 'Holding fees reduce ETH payouts']) expect(details).toContain(phrase)
 		// The headline states what each resolution pays: the bought outcome, the Invalid shares the buy keeps, and nothing on the other outcome.
 		const headline = container.querySelector('.transaction-review-primary')?.textContent
-		for (const phrase of ['You receive ≈', 'if the question resolves Yes', 'Invalid insurance', 'Invalid (', 'if the question resolves Invalid', '0 ETH if No']) expect(headline).toContain(phrase)
+		for (const phrase of ['You receive ≈', 'if the question resolves Yes', 'Invalid insurance', 'if the question resolves Invalid', '0 ETH if No']) expect(headline).toContain(phrase)
+		expect(container.querySelectorAll('.transaction-review-primary .trade-estimate-value-detail')).toHaveLength(2)
 		expect(headline).not.toContain('0 ETH otherwise')
 		expect(details).not.toContain('Invalid insurance')
 		// The odds preview sits in the estimate, below the amount, so typing never moves the field.
 		expect(container.querySelector('.trade-estimate .probability')).not.toBeNull()
 		expect(container.querySelector('.position-controls > .probability')).toBeNull()
+	})
+
+	test('typing does not announce the estimate catching up, and the settled estimate is announced once', async () => {
+		const ticketFor = (amount: string) => <LivePositionControls market={market} nowSeconds={1n} settings={DEFAULT_TRADE_SETTINGS} ticket={positionTicket({ amount })} wallet={connectedWallet} holdings={readyHoldings} externallyLocked={false} />
+		const rendered = await renderIntoDocument(ticketFor('0.5'))
+		cleanup = rendered.cleanup
+		const feedback = () => rendered.container.querySelector('.transaction-outcome .tx-action-feedback')
+		const quoteStatus = () => rendered.container.querySelector('.trade-quote-announcement')
+		expect(quoteStatus()?.getAttribute('role')).toBe('status')
+		const firstQuote = quoteStatus()?.textContent ?? ''
+		expect(firstQuote).toMatch(/^Estimate: you receive about [\d.]+ Yes\.$/)
+		await act(() => render(ticketFor('0.25'), rendered.container))
+		// The disabled button still says why, but the live region stays quiet while the amount settles.
+		expect(feedback()?.textContent).toContain('Updating estimate…')
+		expect(feedback()?.getAttribute('aria-live')).toBe('off')
+		expect(quoteStatus()?.textContent).toBe(firstQuote)
+		await act(async () => {
+			await Bun.sleep(300)
+		})
+		expect(feedback()?.getAttribute('aria-live')).toBe('polite')
+		expect(feedback()?.textContent).not.toContain('Updating estimate…')
+		expect(quoteStatus()?.textContent).toMatch(/^Estimate: you receive about [\d.]+ Yes\.$/)
+		expect(quoteStatus()?.textContent).not.toBe(firstQuote)
+	})
+
+	test('a sale names its shares without a conditional payout and is held to the typed amount', async () => {
+		const holdings: TicketBalances = { ...readyHoldings, balances: readyHoldings.balances === undefined ? undefined : { ...readyHoldings.balances, yes: 3n * eth, invalid: eth } }
+		const container = await renderTicket(positionTicket({ mode: 'exit', amount: '0.5' }), { holdings })
+		// The hint, the estimate, and the INVALID shortfall name share quantities; the ETH a sale pays is the estimate's own figure.
+		const input = container.querySelector('input[name="amount"]')
+		const hint = (input?.getAttribute('aria-describedby')?.split(' ') ?? []).map(id => container.ownerDocument.getElementById(id)?.textContent ?? '').join(' ')
+		expect(hint).toContain('You hold 3 Yes')
+		expect(hint).not.toContain('ETH if')
+		expect(container.querySelector('.trade-estimate')?.textContent).not.toContain('ETH if')
+		expect(container.querySelector('.transaction-review-details')?.textContent).toContain('Maximum sold')
+		await cleanup?.()
+		const short = await renderTicket(positionTicket({ mode: 'exit', amount: '2.5' }), { holdings })
+		const explanation = short.querySelector('.trade-invalid-coverage')?.textContent ?? ''
+		expect(explanation).toContain('This sale needs')
+		expect(explanation).not.toContain('ETH if')
+	})
+
+	test('a buy waits for an unknown wallet ETH balance', async () => {
+		const rendered = await renderIntoDocument(<LivePositionControls market={market} nowSeconds={1n} settings={DEFAULT_TRADE_SETTINGS} ticket={positionTicket({ amount: '0.5' })} wallet={{ ...connectedWallet, walletEthAttoEth: undefined, walletEthState: 'loading' }} holdings={readyHoldings} externallyLocked={false} />)
+		cleanup = rendered.cleanup
+		expect(buttonNamed(rendered.container, 'Buy Yes').disabled).toBeTrue()
+		expect(rendered.container.querySelector('.transaction-outcome .tx-action-feedback')?.textContent).toContain('Loading wallet balances…')
 	})
 
 	test('slippage and validity can be changed from the estimate', async () => {

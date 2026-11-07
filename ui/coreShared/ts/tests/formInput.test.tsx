@@ -78,6 +78,27 @@ describe('FormInput', () => {
 		expect(input.getAttribute('aria-describedby')).toBe(adornment.id)
 	})
 
+	test('leaves the unit out of the description when the hint or error already names it', async () => {
+		const renderedComponent = await renderIntoDocument(<FormInput adornment='REP' hint='Balance: 1 200 REP' value='90' />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const hint = within(document.body).getByText('Balance: 1 200 REP', { selector: 'p.field-hint' })
+		expect(getInput().getAttribute('aria-describedby')).toBe(hint.id)
+
+		await renderedComponent.unmount()
+		const erroredComponent = await renderIntoDocument(<FormInput adornment='REP' error='Exceeds your balance of 10 REP.' value='11' />)
+		cleanupRenderedComponent = erroredComponent.cleanup
+		const error = within(document.body).getByText('Exceeds your balance of 10 REP.', { selector: 'p.field-error' })
+		expect(getInput().getAttribute('aria-describedby')).toBe(error.id)
+
+		await erroredComponent.unmount()
+		const unrelatedHintComponent = await renderIntoDocument(<FormInput adornment='REP' hint='Reported bonds stay locked.' value='' />)
+		cleanupRenderedComponent = unrelatedHintComponent.cleanup
+		const unrelatedHint = within(document.body).getByText('Reported bonds stay locked.', { selector: 'p.field-hint' })
+		const adornment = unrelatedHintComponent.container.querySelector('.form-input-adornment')
+		if (adornment === null) throw new Error('Expected the unit adornment')
+		expect(getInput().getAttribute('aria-describedby')?.split(' ')).toEqual([unrelatedHint.id, adornment.id])
+	})
+
 	test('places an action beside the input and keeps a polite live region for errors', async () => {
 		const renderedComponent = await renderIntoDocument(<FormInput action={<button type='button'>Max</button>} adornment='ETH' errorId='amount-error' hint='Balance: 2 ETH' liveError value='' />)
 		cleanupRenderedComponent = renderedComponent.cleanup

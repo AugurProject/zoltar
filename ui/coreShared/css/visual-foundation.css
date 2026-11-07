@@ -32,13 +32,13 @@ body {
 	font-size: var(--font-body);
 }
 
-:where(main, .app-shell) {
+:where(.app-frame, .app-shell) {
 	width: min(var(--content-max), 100%);
 	padding-inline: var(--gutter-desktop);
 }
 
-/* An application shell already carries the page inset, so its main landmark spans the shell. */
-.app-shell > main {
+/* An application shell already carries the page inset, so its page frame spans the shell. */
+.app-shell > .app-frame {
 	width: 100%;
 	padding-inline: 0;
 }
@@ -127,13 +127,13 @@ a.secondary-action,
 }
 
 @media (max-width: 64rem) {
-	:where(main, .app-shell) {
+	:where(.app-frame, .app-shell) {
 		padding-inline: var(--gutter-tablet);
 	}
 }
 
 @media (max-width: 40rem) {
-	:where(main, .app-shell) {
+	:where(.app-frame, .app-shell) {
 		padding-inline: var(--gutter-mobile);
 	}
 }

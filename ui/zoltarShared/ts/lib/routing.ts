@@ -7,7 +7,7 @@ const ZOLTAR_ROUTING_CONFIG: RoutingConfig<NavigableZoltarRoute> = {
 	defaultRoute: 'zoltar',
 	routes: [
 		{ hash: '#/deploy', name: 'deploy' },
-		{ hash: '#/zoltar', name: 'zoltar', queryParameters: new Set(['universe', 'zoltarView']) },
+		{ hash: '#/zoltar', name: 'zoltar', queryParameters: new Set(['forkQuestion', 'universe', 'zoltarView']) },
 	],
 }
 

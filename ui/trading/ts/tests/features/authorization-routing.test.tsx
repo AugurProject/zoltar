@@ -31,7 +31,7 @@ describe('trading authorization routing', () => {
 				nowSeconds={1n}
 				settings={DEFAULT_TRADE_SETTINGS}
 				ticket={positionTicket({ mode: 'exit' })}
-				wallet={{ connected: true, networkMismatchReason: undefined, actionLabel: 'Connect wallet', walletEthAttoEth: 10n ** 18n, connect: async () => undefined }}
+				wallet={{ connected: true, networkMismatchReason: undefined, actionLabel: 'Connect wallet', walletEthAttoEth: 10n ** 18n, walletEthState: 'ready', connect: async () => undefined }}
 				holdings={{ balances, balanceState: 'ready', balanceError: undefined, retry: async () => undefined }}
 				externallyLocked={false}
 			/>,

@@ -2,7 +2,7 @@ import { exactUnit } from './format.ts'
 import type { ActivityRecord, ArgumentDefinition, DetailContextSnapshot, DetailOptions, LogReference } from './browser-types.ts'
 import type { ActivityDetailState } from './activity-detail-state.ts'
 import type { CanonicalState } from './canonical-state.ts'
-import { captureActivityDetailFocus, captureDisclosureState, decodedActionLabel, placeActivityDetailDrawer, restoreActivityDetailFocus, restoreDisclosureState } from './activity-detail-dom.ts'
+import { activityDetailRevealTarget, captureActivityDetailFocus, captureDisclosureState, decodedActionLabel, placeOrPinActivityDetailDrawer, restoreActivityDetailFocus, restoreDisclosureState } from './activity-detail-dom.ts'
 import { isCurrentCanonicalGeneration } from './live-refresh.ts'
 import { nativeSymbolFor } from './network-freshness.ts'
 import { isNoncanonicalDetailFailure, refreshPresentation } from './refresh-presentation.ts'
@@ -47,6 +47,7 @@ export const createEventDetailRoute = (deps: EventDetailRouteDeps) => {
 	const closeEventDrawer = ({ clearUrl = true, restoreFocus = false, key }: { clearUrl?: boolean; restoreFocus?: boolean; key?: string } = {}) => {
 		const drawer = key === undefined ? eventDrawers().at(-1) : eventDrawerFor(key)
 		const triggerKey = drawer?.dataset['triggerKey']
+		const focusWasInDrawer = drawer?.contains(document.activeElement) ?? false
 		if (key === undefined) {
 			activityDetailState.detailContextVersion++
 			activityDetailState.detailRequestVersion++
@@ -61,11 +62,14 @@ export const createEventDetailRoute = (deps: EventDetailRouteDeps) => {
 		}
 		updateLogDisclosures()
 		if (clearUrl && (key === undefined || new URL(location.href).searchParams.get('log') === key)) clearDetailUrl()
-		if (restoreFocus && triggerKey)
-			[...feed.querySelectorAll<HTMLElement>('.log-row[data-live-key]')]
-				.find(row => row.dataset['liveKey'] === triggerKey)
-				?.querySelector<HTMLElement>('button')
-				?.focus({ preventScroll: true })
+		if (!restoreFocus || triggerKey === undefined) return
+		const trigger = [...feed.querySelectorAll<HTMLElement>('.log-row[data-live-key]')].find(row => row.dataset['liveKey'] === triggerKey)?.querySelector<HTMLElement>('button')
+		if (trigger) trigger.focus({ preventScroll: true })
+		else if (focusWasInDrawer) {
+			// A pinned drawer has no row to return to; focus moves to the feed it was shown above instead of being lost.
+			if (!feed.hasAttribute('tabindex')) feed.tabIndex = -1
+			feed.focus({ preventScroll: true })
+		}
 	}
 
 	const captureDetailContext = (drawer = eventDrawers().find(item => item.contains(document.activeElement)) ?? eventDrawers()[0]): DetailContextSnapshot => {
@@ -83,15 +87,10 @@ export const createEventDetailRoute = (deps: EventDetailRouteDeps) => {
 		const feedShell = feed.closest<HTMLElement>('.feed-shell')
 		if (feedShell) drawer.style.width = `${feedShell.clientWidth}px`
 		else drawer.style.removeProperty('width')
-		if (placeActivityDetailDrawer(feed, drawer)) {
-			updateLogDisclosures()
-			return true
-		}
-		if (allowOutsideShellFallback && feedShell && drawer.previousElementSibling !== feedShell) {
-			feedShell.after(drawer)
-			return true
-		}
-		return false
+		// A drawer without a loaded row stays pinned above the feed, so live refreshes keep it and its deep link.
+		const placement = placeOrPinActivityDetailDrawer(feed, feedShell, drawer, allowOutsideShellFallback)
+		if (placement === 'row') updateLogDisclosures()
+		return placement !== undefined
 	}
 
 	const collapsibleDetailCard = (title: string, disclosureKey: string, ...content: Node[]): HTMLDetailsElement => {
@@ -109,7 +108,7 @@ export const createEventDetailRoute = (deps: EventDetailRouteDeps) => {
 		return document.activeElement === focusable[snapshot.focusIndex]
 	}
 
-	const performOpenDetail = async (log: ActivityRecord | LogReference, { live = false, canonicalRecovery = false, contextVersion }: DetailOptions = {}): Promise<boolean> => {
+	const performOpenDetail = async (log: ActivityRecord | LogReference, { live = false, canonicalRecovery = false, reveal = false, contextVersion }: DetailOptions = {}): Promise<boolean> => {
 		if (contextVersion !== activityDetailState.detailContextVersion) return false
 		const canonicalGeneration = canonicalState.dataGeneration
 		const existingDrawer = eventDrawerFor(logKeyFor(log))
@@ -135,11 +134,18 @@ export const createEventDetailRoute = (deps: EventDetailRouteDeps) => {
 		drawer.setAttribute('aria-label', 'Event details')
 		const drawerContent = existingDrawer?.querySelector<HTMLElement>('.event-detail-content') ?? element('div', 'event-detail-content')
 		if (!existingDrawer) {
+			// A drawer pinned above the feed has no row to toggle it closed, so it carries its own Close control; styles show it only while pinned.
+			const bar = element('div', 'event-detail-bar')
+			const close = element('button', 'icon-button event-detail-close', '×')
+			close.type = 'button'
+			close.setAttribute('aria-label', 'Close log details')
+			close.addEventListener('click', () => closeEventDrawer({ restoreFocus: true, key: logKeyFor(log) }))
+			bar.append(element('p', 'eyebrow', 'Log details'), close)
 			const canonicalStatus = element('div', 'detail-canonical-status event-detail-canonical-status')
 			canonicalStatus.hidden = true
 			canonicalStatus.setAttribute('role', 'status')
 			canonicalStatus.setAttribute('aria-live', 'polite')
-			drawer.append(canonicalStatus, drawerContent)
+			drawer.append(bar, canonicalStatus, drawerContent)
 		}
 		drawer.dataset['triggerKey'] = logKeyFor(log)
 		updateLogDisclosures()
@@ -153,6 +159,9 @@ export const createEventDetailRoute = (deps: EventDetailRouteDeps) => {
 			drawer.tabIndex = -1
 			drawer.focus({ preventScroll: true })
 		}
+		// A deep link opens the drawer after the route scrolled to the top, so the drawer is brought into view.
+		const revealTarget = reveal ? activityDetailRevealTarget(drawer, window.innerHeight) : undefined
+		if (revealTarget !== undefined) (revealTarget === 'row' ? (drawer.previousElementSibling ?? drawer) : drawer).scrollIntoView({ block: 'start' })
 		if (!live) {
 			const url = new URL(location.href)
 			url.searchParams.delete('account')

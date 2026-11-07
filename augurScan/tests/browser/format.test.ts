@@ -1,6 +1,6 @@
 import { questionIdHex, short, shortIdentifier } from '../../browser/identifier-format.ts'
 import { expect, test } from 'bun:test'
-import { exactNumber, exactUnit, percentFromBps, utcDateTime } from '../../browser/format.ts'
+import { exactDecimal, exactNumber, exactUnit, percentFromBps, utcDateTime } from '../../browser/format.ts'
 
 test('preserves integers above the JavaScript safe range', () => {
 	expect(exactNumber('123456789012345678901234567')).toBe('123,456,789,012,345,678,901,234,567')
@@ -20,6 +20,18 @@ test('keeps exact token units, including zero-decimal values', () => {
 	expect(exactUnit('9007199254740993123456789', 18, 'REP')).toBe('9,007,199.254740993123456789 REP')
 	expect(exactUnit('1', 18, 'REP')).toBe('0.000000000000000001 REP')
 	expect(exactUnit('9007199254740993', 0)).toBe('9,007,199,254,740,993')
+})
+
+test('writes percentages like percentFromBps, without a space before the sign', () => {
+	expect(exactUnit('4550', 2, '%')).toBe('45.5%')
+	expect(exactUnit('4550', 2, '%')).toBe(percentFromBps('4550'))
+})
+
+test('exports exact amounts as plain decimals without grouping', () => {
+	expect(exactDecimal('9007199254740993123456789', 18)).toBe('9007199.254740993123456789')
+	expect(exactDecimal('-1500000000000000000')).toBe('-1.5')
+	expect(exactDecimal('1.5')).toBeUndefined()
+	expect(exactDecimal(undefined)).toBeUndefined()
 })
 
 test('question IDs display in hex without numeric precision loss', () => {

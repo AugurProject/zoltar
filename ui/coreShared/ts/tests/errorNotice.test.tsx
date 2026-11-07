@@ -25,20 +25,26 @@ describe('ErrorNotice', () => {
 		expect(documentQueries.queryByRole('alert')).toBeNull()
 	})
 
-	test('dismisses a closeable error message when the close button is used', async () => {
-		const renderedComponent = await renderIntoDocument(<ErrorNotice message='user rejected the request' />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+	test('shows a wallet cancellation as a neutral, polite notice that can be dismissed', async () => {
+		for (const message of ['user rejected the request', 'Canceled in wallet.']) {
+			const renderedComponent = await renderIntoDocument(<ErrorNotice message={message} />)
+			cleanupRenderedComponent = renderedComponent.cleanup
 
-		const documentQueries = within(document.body)
-		const dismiss = documentQueries.getByRole('button', { name: 'Dismiss error' })
-		expect(documentQueries.getByText('user rejected the request')).not.toBeNull()
-		expect(dismiss).not.toBeNull()
+			const documentQueries = within(document.body)
+			const notice = documentQueries.getByText(message).closest('.notice')
+			if (!(notice instanceof HTMLElement)) throw new Error('Expected the cancellation notice')
+			// Declining in the wallet is the user's choice: it is reported calmly instead of as a failure.
+			expect(notice.getAttribute('data-message-tone')).toBe('neutral')
+			expect(notice.getAttribute('role')).toBe('status')
+			expect(documentQueries.queryByRole('alert')).toBeNull()
 
-		await act(() => {
-			fireEvent.click(dismiss)
-		})
-		expect(documentQueries.queryByText('user rejected the request')).toBeNull()
-		expect(documentQueries.queryByRole('button', { name: 'Dismiss error' })).toBeNull()
+			await act(() => {
+				fireEvent.click(documentQueries.getByRole('button', { name: 'Dismiss notice' }))
+			})
+			expect(documentQueries.queryByText(message)).toBeNull()
+			await renderedComponent.cleanup()
+			cleanupRenderedComponent = undefined
+		}
 	})
 
 	test('keeps non-closeable notices visible and non-dismissible', async () => {
@@ -50,6 +56,6 @@ describe('ErrorNotice', () => {
 		expect(alert.textContent).toContain('Something failed')
 		expect(alert.getAttribute('aria-live')).toBe('assertive')
 		expect(alert.getAttribute('aria-atomic')).toBe('true')
-		expect(documentQueries.queryByRole('button', { name: 'Dismiss error' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: /Dismiss/ })).toBeNull()
 	})
 })

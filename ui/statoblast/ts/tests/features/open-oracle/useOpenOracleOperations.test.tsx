@@ -11,6 +11,7 @@ import type { TransactionIntent } from '@zoltar/ui-core-shared/types/components.
 import type { OpenOracleReportDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { useOpenOracleOperations, type UseOpenOracleOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleOperations.js'
 import { describe, expect, mock, test } from 'bun:test'
+import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 
@@ -145,6 +146,9 @@ function createOpenOracleOperationsDependencies(overrides: Partial<UseOpenOracle
 		},
 		withdrawOpenOracleBalance: async () => {
 			throw new Error('withdrawOpenOracleBalance should not be called in this test')
+		},
+		wrapWeth: async () => {
+			throw new Error('wrapWeth should not be called in this test')
 		},
 		...overrides,
 	}
@@ -1631,6 +1635,68 @@ describe('useOpenOracleOperations', () => {
 
 		expect(disputeOracleReport).toHaveBeenCalledTimes(1)
 		expect(readOptionalMulticall.mock.calls.length).toBe(tokenAccessLoadsBeforeDispute + 2)
+	})
+
+	test('wrapDisputeWeth wraps exactly the WETH the dispute lacks, in one transaction', async () => {
+		const walletEthBalanceAttoEth = 10n ** 20n
+		const reportDetails = createOpenOracleReportDetails({
+			currentAmount1: 149n,
+			currentReporter: WALLET_ADDRESS,
+			initialReporter: WALLET_ADDRESS,
+			reportTimestamp: 5n,
+			token2: getWethAddress(),
+		})
+		const readOptionalMulticall = mock(async () => [
+			{ result: 500n, status: 'success' as const },
+			{ result: 500n, status: 'success' as const },
+			{ result: 500n, status: 'success' as const },
+			{ result: 0n, status: 'success' as const },
+		])
+		const wrapWeth = mock(async (_client: TestOpenOracleWriteClient, _amountAttoEth: bigint) => ({
+			action: 'wrapWeth' as const,
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000d3' as const,
+		}))
+		const dependencies = createOpenOracleOperationsDependencies({
+			createConnectedReadClient: mock(() => ({
+				getBalance: async () => walletEthBalanceAttoEth,
+				getBlockNumber: async () => 0n,
+				readContract: async () => 18,
+			})),
+			loadOpenOracleReportDetails: mock(async () => reportDetails),
+			readOptionalMulticall,
+			wrapWeth,
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(
+			dependencies,
+			state => {
+				hookState = state
+			},
+			true,
+			{ walletEthBalanceAttoEth },
+		)
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		trackCleanup(renderedComponent.cleanup)
+
+		await act(async () => {
+			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+		})
+		await waitFor(() => {
+			expect(readOptionalMulticall).toHaveBeenCalledTimes(1)
+		})
+		await act(async () => {
+			requireHookState(hookState).setOpenOracleForm(current => ({ ...current, disputeNewAmount1: '150', disputeNewAmount2: '30', reportId: REPORT_ID.toString(), stateHash: STATE_HASH }))
+		})
+
+		await act(async () => {
+			await requireHookState(hookState).wrapDisputeWeth()
+		})
+
+		// The wallet holds no WETH, so the whole WETH payment is wrapped, re-derived from the refreshed report and balances.
+		const wethPayment = requireHookState(hookState).openOracleDisputeSubmission?.token2ContributionAmount
+		expect((wethPayment ?? 0n) > 0n).toBe(true)
+		expect(wrapWeth).toHaveBeenCalledTimes(1)
+		expect(wrapWeth.mock.calls[0]?.[1]).toBe(wethPayment)
 	})
 
 	test('disputeReport rejects a direction changed by the forced report reload before refreshing token access', async () => {

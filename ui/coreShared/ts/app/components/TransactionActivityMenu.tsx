@@ -18,8 +18,9 @@ function getStatusPresentation(entry: TransactionActivityEntry): { label: string
 	if (entry.status === 'pending') return { label: commonCopy.pending, tone: 'pending' }
 	if (entry.status === 'confirmed') return { label: transactionCopy.confirmed, tone: 'ok' }
 	switch (entry.failureKind) {
+		// Declining in the wallet sent nothing, so it reads as a neutral cancellation rather than a failure.
 		case 'rejected':
-			return { label: copy.rejected, tone: 'danger' }
+			return { label: copy.rejected, tone: 'muted' }
 		case 'reverted':
 			return { label: copy.reverted, tone: 'danger' }
 		case 'replaced':

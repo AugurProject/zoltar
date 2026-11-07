@@ -1,7 +1,7 @@
 import type { ScannerContext } from './app-context.ts'
 import { lookup, type HistoryRangeElements } from './app-dom.ts'
 import { nextTabIndex } from './app-presentation.ts'
-import { restartActivityQuery } from './app-routing.ts'
+import { restartActivityQuery, restartRichListQuery } from './app-routing.ts'
 import { isStateTab } from './app-state.ts'
 import type { ScannerViews } from './app-views.ts'
 import { handleActivityDetailDrawerEscape } from './activity-detail-dom.ts'
@@ -178,19 +178,7 @@ export const bindRichListControls = (context: ScannerContext, views: ScannerView
 		url.searchParams.set('sort', lookup('#rich-sort').value)
 		history.pushState(null, '', url)
 		state.pageUrl = url
-		state.viewContextVersion++
-		richList.invalidate()
-		richList.clear()
-		lookup('#richlist-rows').replaceChildren()
-		lookup('#richlist-rows').setAttribute('aria-busy', 'true')
-		lookup('#richlist-summary').textContent = ''
-		lookup('#richlist-status').hidden = false
-		lookup('#richlist-status').className = 'system-status'
-		lookup('#richlist-status').textContent = 'Loading known addresses…'
-		lookup('#richlist-more').hidden = true
-		lookup('#richlist-more').disabled = true
-		lookup('#richlist-more-status').hidden = true
-		lookup('#richlist-more-status').replaceChildren()
+		restartRichListQuery(context, views)
 		void richList.loadRichList()
 	})
 
