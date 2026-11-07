@@ -656,7 +656,7 @@
 				<p>This section follows a portfolio from creation to redemption. Numbers in the examples use illustrative parameters: a security multiplier of 150% (15,000 basis points), a 5% oracle tolerance, a 1% purchase fee, a 10% annual holding fee and a 1 ETH minimum commitment. All of these are configured per portfolio or per deployment, not fixed by the protocol, except where the text says otherwise.</p>
 
 				<h3 id="create">4.1 Creating a portfolio and registering questions</h3>
-				<p>A portfolio is created from a <em>seed</em>: an ordinary origin SecurityPool whose security multiplier and oracle priority fee the portfolio inherits. The creator supplies an immutable <strong>admission policy</strong> contract and an <strong>economics configuration</strong>. The repository ships two policies: <em>Open</em>, which admits any question, and <em>Fixed</em>, which admits a sorted list of question identifiers that can never change. Anyone can write another policy; it is consulted with a static call on registration, quotes and purchases, never on withdrawals or recovery, so a broken policy cannot trap funds.</p>
+				<p>A portfolio is created with an <code>OriginConfig</code> specifying its universe, security multiplier and oracle report priority fee. The multiplier must exceed 10,001 basis points and the priority fee must be positive; question adapters are registered within the portfolio rather than supplied as standalone seed pools. The creator supplies an immutable <strong>admission policy</strong> contract and an <strong>economics configuration</strong>. The repository ships two policies: <em>Open</em>, which admits any question, and <em>Fixed</em>, which admits a sorted list of question identifiers that can never change. Anyone can write another policy; it is consulted with a static call on registration, quotes and purchases, never on withdrawals or recovery, so a broken policy cannot trap funds.</p>
 				<div class="table-wrap">
 					<table>
 						<thead>
@@ -724,7 +724,7 @@
 							<mfrac><mi>healthTarget</mi><mn>10 000</mn></mfrac>
 						</mrow>
 					</math>
-					<p class="equation-caption">Each multiplication rounds up in the contract. The security multiplier is the seed pool's value, floored at 10,500 basis points (105%). The health target is at least 10,000 basis points.</p>
+					<p class="equation-caption">Each multiplication rounds up in the contract. The capital ledger uses the portfolio’s configured security multiplier, floored at 10,500 basis points (105%). The health target is at least 10,000 basis points.</p>
 				</div>
 				<p>Rather than re-evaluating every position at each new price, the index stores for every position the highest price at which it is still healthy at the protocol floor:</p>
 				<div class="equation" id="eq-max-healthy-price">
@@ -779,7 +779,7 @@
 						<text x="648" y="42" text-anchor="middle" class="lbl-small">admission, growth, surplus withdrawal</text>
 						<circle cx="457" cy="76" r="6" class="fill-cool"></circle>
 						<text x="470" y="124" class="lbl-small">position admitted exactly at the edge: maxHealthyPrice = 210.5</text>
-						<text x="60" y="176" class="lbl-title">After REP loses 10.5% of its ETH value: accepted price 221.1</text>
+						<text x="60" y="176" class="lbl-title">After the accepted REP-per-ETH price rises to 221.1</text>
 						<rect x="60" y="200" width="397" height="26" class="band-warn"></rect>
 						<rect x="457" y="200" width="289" height="26" class="band-neutral"></rect>
 						<rect x="746" y="200" width="94" height="26" class="band-ok"></rect>
@@ -1206,7 +1206,7 @@
 				</div>
 				<p>After the choice deadline anyone can <em>start</em> a branch. Zoltar migrates the frozen backing REP plus live recovery REP into the child as child REP; the branch's chosen backing goes to its capital ledger, and the frozen backing of owners who chose another branch or did not choose at all becomes the branch's <strong>fresh inventory</strong>. If the branch has outstanding question units, fresh inventory and a shortfall of at least one minimum commitment, the coordinator deploys a <strong>branch Truth Auction</strong> and hands it the inventory. Older recovery REP from previous forks never enters the auction; it stays with the claims that already own it.</p>
 				<div class="callout warn">
-					<p><strong>Missing the cutoff is costly.</strong> An owner who does not choose within eight weeks loses their pledged principal's branch fallback: that REP is sold in <em>every</em> branch's auction to repair the cash their commitment was backing. Their idle principal and already-earned fees remain separately claimable from the parent ledger.</p>
+					<p><strong>Missing the cutoff is costly.</strong> An owner who does not choose within eight weeks loses their pledged principal's branch fallback: that REP becomes unchosen backing in each branch. It can be auctioned to repair outstanding claims, retained for recovery, or burned when no question units remain. Their idle principal and already-earned fees remain separately claimable from the parent ledger.</p>
 				</div>
 
 				<h3 id="auction">5.3 The Truth Auction: uniform-price lots</h3>
@@ -1421,7 +1421,7 @@
 				<p>Vesting is the anti-sniping device for lump sums. Without it, a provider could join seconds before a backing fee is credited, take a proportional share and leave. With vesting, joining late only earns the slice of each stream that vests after joining. Time-earned income needs no vesting: each checkpoint pays only the interval since the last one, to the commitments healthy during it, and the checkpoint-before-mutation rule guarantees that income already earned at the old weights is distributed at those weights.</p>
 
 				<h3>6.3 The two-price band as a griefing defence</h3>
-				<p>The oracle is contestable, not infallible: a report within the dispute tolerance is accepted. If one price were used for both admission and liquidation, a reporter could post a price at the top of the tolerance, watch providers be admitted at the edge, then post one at the bottom and liquidate them, all within “acceptable” reports. Using the conservative price for admission and the liquidation price for punishment means an accepted report can never do both: the minimum move between the two is (1 + tolerance) ÷ (1 − tolerance). Distress itself is declared by the oracle's observations, not by keepers. An owner can cure as soon as a fresh price leaves their position unhealthy, and the takeover award ramps over an hour from that observation, so before the full REP behind a commitment is at stake the owner has a window that no keeper can shorten.</p>
+				<p>The oracle is contestable, not infallible: a report within the dispute tolerance is accepted. If one price were used for both admission and liquidation, a reporter could post a REP-per-ETH price at the bottom of the tolerance, watch providers be admitted at the edge, then post one at the top and liquidate them, all within “acceptable” reports. Using the conservative price for admission and the liquidation price for punishment means an accepted report can never do both: the minimum move between the two is (1 + tolerance) ÷ (1 − tolerance). Distress itself is declared by the oracle's observations, not by keepers. An owner can cure as soon as a fresh price leaves their position unhealthy, and the takeover award ramps over an hour from that observation, so before the full REP behind a commitment is at stake the owner has a window that no keeper can shorten.</p>
 
 				<h3>6.4 Keepers: paid in REP for takeovers; cures belong to owners</h3>
 				<p>A cure pays nobody, and since <code>c07ee07e5</code> only the owner can send one, by lowering their own commitment; a takeover also cures first. A cure removes <em>unused</em> commitment, so it costs the provider nothing, and it is the owner who needs it: when the cure removes the position's whole deficit (subject to the minimum rules in <a href="#distress">4.6</a>), the cured remainder is healthy again, earns fees again and is no longer distressed, so no takeover can follow on that observation. Until <code>c07ee07e5</code> anyone could cure, so another provider, a buyer or a retiring owner could cut someone else's position; until <code>aa5f8efce</code> a keeper also earned 1% of the backing value removed, in REP from the cured position. Owner-only cures end any hunting of marginal positions, and nobody else can shrink a commitment without an adverse observation. The liquidator bot cannot send a standalone cure; it cures only inside a takeover, which runs the cure first. The takeover award can be large, up to all the REP behind the taken commitment, but it starts at zero and takes an hour to ramp, and the keeper must usually bring REP of their own, because the award alone was by definition not enough to back the commitment, so taking over is a capital decision rather than a free option. There is no ETH liquidation bonus and no ETH execution reserve: keepers are paid in REP they must value and, if they want ETH, sell themselves. The liquidator bot shipped with the pull request values REP awards conservatively, predicts the unpaid cure a takeover performs first, rejects every takeover candidate unless independent REP price evidence agrees, and ships with portfolio exposure limits that default to zero.</p>
@@ -1435,7 +1435,7 @@
 				<p>Early refunds make bidding cheaper for losers and let ETH recycle into better bids, but they rely on the fact that excluded bids can never become winning demand again; that is why refunded bids stay in the tree as zero-fill history rather than being removed.</p>
 
 				<h3>6.7 Choosers: one branch, one position, no hedging with pledged REP</h3>
-				<p>A fork is a vote with capital. Each owner's live principal and commitment go to exactly one child. Idle principal is left in the parent and can be withdrawn and used anywhere, so an owner who wants to hedge must do it with free REP, not with the REP that is earning fees. Cash following <em>commitment</em> rather than REP removes a subtler game: an owner who over-collateralized could otherwise drag more than their share of ETH into a branch by holding excess REP. Not choosing is strictly dominated, because the pledged REP is auctioned in every branch for the benefit of share holders, while choosing any branch at least preserves it there.</p>
+				<p>A fork is a vote with capital. Each owner's live principal and commitment go to exactly one child. Idle principal is left in the parent and can be withdrawn and used anywhere, so an owner who wants to hedge must do it with free REP, not with the REP that is earning fees. Cash following <em>commitment</em> rather than REP removes a subtler game: an owner who over-collateralized could otherwise drag more than their share of ETH into a branch by holding excess REP. An owner who does not choose loses their pledged principal’s branch fallback; <a href="#fork-choice">section 5.2</a> explains how that backing is handled. Choosing preserves the owner’s position in the selected branch.</p>
 
 				<h3>6.8 The retirement queue</h3>
 				<p>Exits compete with new purchases for the same spare capacity. Serving the queue before purchases, in cohort order, and refusing targeted service that would skip a healthy earlier request, means a provider cannot be trapped behind a stream of new buyers and cannot buy their way to the front. An owner's cure may skip the queue only because it removes unbacked commitment that earlier requests were never waiting for, and a pending request is locked until served, so a provider cannot hold an early slot while changing what they asked for.</p>
@@ -1628,7 +1628,7 @@
 					<li><strong>The premium is prepaid and not refunded on resolution.</strong> The resolution premium is charged for the full 52-day window, and when a question resolves early its unused portion is burned rather than returned; only the fork-time recovery of <a href="#fork-choice">5.2</a> returns premium to a holder. Buyers of a question that resolves quickly pay for reporting time that never happens.</li>
 					<li><strong>Quotes drift.</strong> On a question that already has shares, a fee quoted in one block can be slightly too low a few blocks later (<a href="#eq-fee-total">4.3</a>); a caller with a budget tighter than the SDK's 1% allowance sees the purchase revert.</li>
 					<li><strong>Unassigned income is destroyed, not reused.</strong> ETH from unhealthy or stale intervals and unused premiums is burned. Nothing leaks to new providers and nothing rewards whoever let a price go stale, but the ETH no longer pays for anyone's upkeep either, and providers still lose the income of every stale interval.</li>
-					<li><strong>Fork cutoff forfeiture.</strong> An owner who does not choose a branch within eight weeks loses their pledged principal to the branch Truth Auctions. Absent, sleeping or unaware providers are penalized hard.</li>
+					<li><strong>Fork cutoff forfeiture.</strong> An owner who does not choose a branch within eight weeks loses their pledged principal’s <a href="#fork-choice">branch fallback</a>. Absent, sleeping or unaware providers are penalized hard.</li>
 					<li><strong>Shared fate within a universe.</strong> Providers back every admitted question, including ones they would not have chosen. The admission policy is the only filter, and a custom policy can be arbitrary; the UI labels a custom policy “Custom policy — underwriting unavailable”.</li>
 				</ul>
 				<h3>10.2 Oracle and operational</h3>
@@ -1704,7 +1704,7 @@
 					<dt>OpenOracle</dt>
 					<dd>The contestable price-report mechanism from which Statoblast takes REP/ETH prices for solvency checks, never for market outcomes.</dd>
 					<dt>Portfolio</dt>
-					<dd>A deployment that shares REP custody, commitments, ETH settlement and pricing across many questions in one namespace. Created from a seed pool with an admission policy and an economics configuration.</dd>
+					<dd>A deployment that shares REP custody, commitments, ETH settlement and pricing across many questions in one namespace. Created with an origin configuration, an admission policy and an economics configuration.</dd>
 					<dt>Capital ledger</dt>
 					<dd>The per-universe contract holding provider REP principal and recording each provider's single commitment, health target and earnings.</dd>
 					<dt>Principal, free and pledged</dt>
@@ -1754,7 +1754,7 @@
 					<dt>Recovery REP</dt>
 					<dd>Child REP owed to existing claims: unsold auction inventory plus baskets inherited from earlier forks, tracked at 128-bit precision.</dd>
 				</dl>
-				<p class="colophon">This explainer describes PR #1164 at commit <code>340d802f1</code>. Section 11 separates proposed alternatives from implemented behavior. The authoritative implementation is the Solidity under <code>solidity/contracts/statoblast</code> at that revision; this explanation is not an audit certificate.</p>
+				<p class="colophon">This explainer describes PR #1164 as merged at commit <code>6a8bc91f7</code>. Section 11 separates proposed alternatives from implemented behavior. The authoritative implementation is the Solidity under <code>solidity/contracts/statoblast</code> at that revision; this explanation is not an audit certificate.</p>
 			</section>
 		</main>
 	</body>
