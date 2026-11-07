@@ -11,6 +11,7 @@ import { LiveMarketBrowser } from '../../features/LiveMarketBrowser.js'
 import { getRememberableMarket, marketDownloadStore, selectFavoriteMarkets, selectMarketCacheUpdates, selectPortfolioMarkets } from '../../lib/favoriteMarkets.js'
 import type { LiveMarket } from '../../protocol/liveMarket.js'
 import { smallReserveMarketFixture } from '../support/liveMarketFixture.js'
+import { readyMarketRegistry } from '../support/liveTradingServices.js'
 
 function createMarket(index: number, overrides: Partial<LiveMarket> = {}): LiveMarket {
 	return smallReserveMarketFixture({
@@ -132,10 +133,11 @@ describe('favorite markets', () => {
 		resetLocalEntityStoreForTesting()
 		const favorite = createMarket(1)
 		setEntityFavorite(getLocalEntityScope('trading', 'market'), favorite.pool, true)
-		const rendered = await renderIntoDocument(<LiveMarketBrowser lookupRoute='market' markets={[createMarket(2), favorite]} discoveryState='ready' discoveryError={undefined} workflowLocked={false} nowSeconds={0n} retry={() => undefined} />)
+		const rendered = await renderIntoDocument(<LiveMarketBrowser lookupRoute='market' markets={[createMarket(2), favorite]} registry={readyMarketRegistry()} discoveryState='ready' discoveryError={undefined} workflowLocked={false} nowSeconds={0n} retry={() => undefined} />)
 		try {
+			// Favorites lead under their own heading; with nothing else on the registry page no second heading follows.
 			const headings = [...rendered.container.querySelectorAll('.market-list-heading')].map(heading => heading.textContent)
-			expect(headings).toEqual([])
+			expect(headings).toEqual(['Favorites (2)'])
 			const stars = [...rendered.container.querySelectorAll('button.favorite-toggle')].map(star => [star.getAttribute('aria-label'), star.getAttribute('aria-pressed')])
 			expect(stars).toEqual([
 				['Favorite: Market 2', 'false'],

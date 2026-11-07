@@ -26,11 +26,12 @@ function getQuestionTypeCopy(marketType: MarketType) {
 	}
 }
 
-function QuestionTypeCopy({ marketType, showExample }: { marketType: MarketType; showExample: boolean }) {
+/** `hidden` keeps the card text visual only when a radio already names and describes it by ID, so browse mode does not read it twice. */
+function QuestionTypeCopy({ hidden = false, marketType, showExample }: { hidden?: boolean; marketType: MarketType; showExample: boolean }) {
 	const { description, example } = getQuestionTypeCopy(marketType)
 	const optionId = `market-create-type-${marketType}`
 	return (
-		<span className='question-type-option-copy'>
+		<span aria-hidden={hidden ? 'true' : undefined} className='question-type-option-copy'>
 			<strong id={`${optionId}-label`}>{getMarketTypeLabel(marketType)}</strong>
 			<span id={`${optionId}-description`}>{description}</span>
 			{showExample ? <em id={`${optionId}-example`}>{example}</em> : undefined}
@@ -60,7 +61,7 @@ export function QuestionTypeOptions({ allowedMarketTypes, disabled, onChange, va
 					return (
 						<label className='question-type-option' key={marketType}>
 							<input aria-describedby={`${optionId}-description ${optionId}-example`} aria-labelledby={`${optionId}-label`} checked={value === marketType} disabled={disabled} name='market-create-type' onChange={() => onChange(marketType)} type='radio' value={marketType} />
-							<QuestionTypeCopy marketType={marketType} showExample />
+							<QuestionTypeCopy hidden marketType={marketType} showExample />
 						</label>
 					)
 				})}

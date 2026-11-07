@@ -11,7 +11,7 @@ export const formatActivityTriggerLabel = (pendingCount: number, newResultCount 
 }
 export const formatSettledTransactionAnnouncement = (title: CopyTemplateValue, status: CopyTemplateValue) => `${title}: ${status}`
 export const formatPendingTransactionCount = (pendingCount: number) => (pendingCount === 1 ? '1 transaction pending' : `${pendingCount} transactions pending`)
-export const rejected = 'Rejected in wallet'
+export const rejected = 'Canceled in wallet'
 export const reverted = 'Reverted'
 export const replaced = 'Replaced'
 export const dropped = 'No longer tracked'

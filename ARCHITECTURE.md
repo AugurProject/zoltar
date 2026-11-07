@@ -44,6 +44,7 @@ The UI apps are dependency leaves: shared libraries never import apps, and apps 
 - **UI code**: runtime-neutral primitives, wallet, simulation, and generic workflows in `ui/coreShared`; product capabilities in `ui/zoltarShared` or `ui/statoblastShared`; bootstrap, routes, pages, and app tests in `ui/<app>`. See [ui/AGENTS.md](./ui/AGENTS.md).
 - **Build, CI, test, and documentation tooling**: `tooling/{repo,ci,testing,contracts,docs,ui}`. The pinned Uniswap deployment input is the only file under `scripts/`.
 - **Published documentation**: HTML under `docs/`, with its rules in [docs/AGENTS.md](./docs/AGENTS.md).
+- **Design explainers**: standalone HTML pages under `design/` that explain one pull request or design decision. They are outside the published documentation corpus and its manifest, so the `docs/` tooling does not apply to them; the repository-wide HTML structure, HTML format, and unit-terminology checks still do.
 - **Generated output**: never hand-edit it. `tooling/repo/generated-artifacts.ts` lists every output, whether Git tracks it, and the command that recreates it.
 
 ## Generate pipeline

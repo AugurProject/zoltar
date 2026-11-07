@@ -2,7 +2,7 @@ import type { ScannerContext } from './app-context.ts'
 import { element, lookup } from './app-dom.ts'
 import type { ScannerState } from './app-state.ts'
 import { eventStreamState, setTextIfChanged } from './app-presentation.ts'
-import { indexerHeadFreshness } from './network-freshness.ts'
+import { indexerHeadFreshness, indexerRetryNotice, staleChainHeadNotice } from './network-freshness.ts'
 import { networkIndicator } from './network-indicator.ts'
 
 const canonicalIncompleteTitle = 'Chain update refresh incomplete'
@@ -92,12 +92,19 @@ export const updateFreshness = (context: ScannerContext): void => {
 		lookup('#freshness-banner').hidden = true
 		return
 	}
+	const retryNotice = indexerRetryNotice(networkRenderState.latestNetworks.find(network => String(network.chain_id) === context.selectedChainId()))
+	if (retryNotice !== undefined) {
+		lookup('#freshness-banner').hidden = false
+		setTextIfChanged(lookup('#freshness-title'), 'Indexer retrying')
+		setTextIfChanged(lookup('#freshness-detail'), retryNotice)
+		return
+	}
 	const staleHead = networkRenderState.latestNetworks.filter(network => String(network.chain_id) === context.selectedChainId()).find(network => indexerHeadFreshness(network, Date.now() + liveState.serverClockOffsetMs).stale)
 	if (staleHead !== undefined) {
 		const banner = lookup('#freshness-banner')
 		banner.hidden = false
 		setTextIfChanged(lookup('#freshness-title'), 'RPC chain head is stale')
-		setTextIfChanged(lookup('#freshness-detail'), `Newest observed block is ${context.age(staleHead.indexed_timestamp)}; block-based catch-up status may be misleading.`)
+		setTextIfChanged(lookup('#freshness-detail'), staleChainHeadNotice(staleHead.indexed_timestamp))
 		return
 	}
 	const stale = networkRenderState.latestNetworks.filter(network => String(network.chain_id) === context.selectedChainId()).filter(network => !network.last_success_at || Date.now() + liveState.serverClockOffsetMs - new Date(network.last_success_at).getTime() > liveState.networkFreshnessThresholdMs)

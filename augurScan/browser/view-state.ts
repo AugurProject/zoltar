@@ -29,3 +29,17 @@ export const restoreViewState = (container: HTMLElement, snapshot: ViewStateSnap
 	for (const [details, key] of disclosureKeys(container)) if (snapshot.openDetails.has(key)) details.open = true
 	if (snapshot.focus !== undefined) restoreActivityDetailFocus(container, snapshot.focus)
 }
+
+/** Replaces a container's children while leaving any listed node that is already a child in place, so focus, caret, and typed text inside it survive. */
+export const replaceChildrenKeeping = (container: Node, nodes: readonly Node[]): void => {
+	const kept = new Set(nodes)
+	for (const child of [...container.childNodes]) if (!kept.has(child)) container.removeChild(child)
+	let cursor = container.firstChild
+	for (const node of nodes) {
+		if (node === cursor) {
+			cursor = cursor.nextSibling
+			continue
+		}
+		container.insertBefore(node, cursor)
+	}
+}

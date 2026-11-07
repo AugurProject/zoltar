@@ -5,6 +5,7 @@ import { firstVisibleHeading } from './app-presentation.ts'
 import { invalidateStateRequestVersions, isStateTab, abortActivityRequests } from './app-state.ts'
 import type { ScannerViews } from './app-views.ts'
 import { renderExplorerPage } from './explorer-page.ts'
+import { richListSort } from './rich-list-page.ts'
 import { classifyRoute, routeDataContext, routeTitle, type ScannerRoute } from './routes.ts'
 
 const routeContextKey = (context: ScannerContext): string => routeDataContext(context.selectedChainId(), new URL(location.href))
@@ -161,6 +162,24 @@ export const restartActivityQuery = (context: ScannerContext, views: ScannerView
 	resetActivityFilterContext(context, views)
 }
 
+/** Clears the rich list before reloading it under another ranking. */
+export const restartRichListQuery = (context: ScannerContext, views: ScannerViews): void => {
+	const { richList } = views.entity
+	context.state.viewContextVersion++
+	richList.invalidate()
+	richList.clear()
+	lookup('#richlist-rows').replaceChildren()
+	lookup('#richlist-rows').setAttribute('aria-busy', 'true')
+	lookup('#richlist-summary').textContent = ''
+	lookup('#richlist-status').hidden = false
+	lookup('#richlist-status').className = 'system-status'
+	lookup('#richlist-status').textContent = 'Loading known addresses…'
+	lookup('#richlist-more').hidden = true
+	lookup('#richlist-more').disabled = true
+	lookup('#richlist-more-status').hidden = true
+	lookup('#richlist-more-status').replaceChildren()
+}
+
 /** Restores route controls from the URL after history navigation. */
 export const hydrateVisibleRoute = (context: ScannerContext, views: ScannerViews, historyRange: HistoryRangeElements): void => {
 	const { state } = context
@@ -184,15 +203,22 @@ export const hydrateVisibleRoute = (context: ScannerContext, views: ScannerViews
 		historyRange.fromBlock.value = state.pageUrl.searchParams.get('fromBlock') ?? ''
 		historyRange.toBlock.value = state.pageUrl.searchParams.get('toBlock') ?? ''
 	}
+	// Detail tabs share one rendered page, so history traversal between them only changes which tab is shown.
+	if (state.route === 'operations') views.operations.showDetailTab()
 	if (state.route === 'contracts') {
 		if (views.entity.contracts.items.length > 0) views.entity.contracts.renderContracts()
 	}
 	if (state.route === 'richlist') {
-		const sort = state.pageUrl.searchParams.get('sort')
-		if (sort !== null && [...lookup('#rich-sort').options].some(option => option.value === sort) && lookup('#rich-sort').value !== sort) {
-			lookup('#rich-sort').value = sort
-			views.entity.richList.clear()
-		}
+		const sortSelect = lookup('#rich-sort')
+		const sort = richListSort(
+			state.pageUrl,
+			[...sortSelect.options].map(option => option.value),
+		)
+		if (sortSelect.value !== sort) {
+			sortSelect.value = sort
+			restartRichListQuery(context, views)
+			state.loadedRouteContexts.delete(routeContextKey(context))
+		} else if (views.entity.richList.items.length > 0) views.entity.richList.renderRichList()
 	}
 }
 
@@ -249,7 +275,7 @@ export const restoreRouteDeepLink = async (context: ScannerContext, views: Scann
 			parsedLogIndex !== undefined &&
 			Number.isSafeInteger(parsedLogIndex)
 		) {
-			await views.detail.eventDetail.openDetail({ chain_id: chainId, block_hash: blockHash, tx_hash: transactionHash, log_index: parsedLogIndex })
+			await views.detail.eventDetail.openDetail({ chain_id: chainId, block_hash: blockHash, tx_hash: transactionHash, log_index: parsedLogIndex }, { reveal: true })
 			return
 		}
 		currentUrl.searchParams.delete('log')

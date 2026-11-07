@@ -79,15 +79,26 @@ contract SharedPoolPriceFeed {
 		SharedPoolReportEscrow escrow;
 		address sponsor;
 		address coordinator;
+		uint8 outcome;
 		uint256 maxSettlementBaseFee;
 	}
-	mapping(uint256 => ReportCandidate) public reportCandidates;
+	mapping(uint256 => ReportCandidate) private reports;
 	uint256 public lastPrice;
 	uint256 public lastSettlementTimestamp;
 	uint256 private checkpointedExposureAttoEth;
 	mapping(address => bool) public registeredCoordinators;
+	function reportCandidates(uint256 reportId)
+		external
+		view
+		returns (SharedPoolReportEscrow escrow, address sponsor, address coordinator, uint256 maxSettlementBaseFee)
+	{
+		ReportCandidate storage candidate = reports[reportId];
+		return (candidate.escrow, candidate.sponsor, candidate.coordinator, candidate.maxSettlementBaseFee);
+	}
 	/// @dev 0 = unknown or pending, 1 = accepted, 2 = rejected or recovered.
-	mapping(uint256 => uint8) public reportOutcome;
+	function reportOutcome(uint256 reportId) external view returns (uint8) {
+		return reports[reportId].outcome;
+	}
 
 	event CoordinatorRegistered(address indexed coordinator, address indexed securityPool);
 	event ExposureCheckpoint(address indexed coordinator, uint256 exposureAttoEth, uint256 aggregateExposureAttoEth);
@@ -271,7 +282,7 @@ contract SharedPoolPriceFeed {
 		SharedPoolReportEscrow escrow;
 		(reportId, escrow) = this.createReportEscrow(msg.sender, sponsor, initialWethReportAttoEth, initialRepReportAttoRep, escalationHaltAttoEth, bountyAttoEth);
 		pendingReportId = reportId;
-		reportCandidates[reportId] = ReportCandidate(escrow, sponsor, coordinator, pendingReportMaxSettlementBaseFeeAttoEthPerGas);
+		reports[reportId] = ReportCandidate(escrow, sponsor, coordinator, 0, pendingReportMaxSettlementBaseFeeAttoEthPerGas);
 		emit PriceRequested(pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas);
 		emit ReportFundingAssigned(pendingReportId, coordinator, sponsor);
 	}
@@ -305,12 +316,12 @@ contract SharedPoolPriceFeed {
 	/// Every candidate remains individually recoverable. A disputed report cannot
 	/// prevent a different sponsor from establishing a fresh, funded observation.
 	function settleReport(uint256 reportId, uint256 amount1, uint256 amount2) external {
-		ReportCandidate memory candidate = reportCandidates[reportId];
+		ReportCandidate memory candidate = reports[reportId];
 		require(address(candidate.escrow) == msg.sender && msg.sender != address(0), 'Wrong report escrow');
-		require(reportOutcome[reportId] == 0, 'Report already completed');
+		require(reports[reportId].outcome == 0, 'Report already completed');
 		(string memory reason, uint256 priceTimestamp) = _validateSettledReport(reportId, amount1, amount2, candidate.maxSettlementBaseFee);
 		bool accepted = bytes(reason).length == 0;
-		reportOutcome[reportId] = accepted ? 1 : 2;
+		reports[reportId].outcome = accepted ? 1 : 2;
 		_clearLatestReport(reportId);
 		if (accepted) {
 			uint256 nextPrice = Math.mulDiv(amount2, SecurityPoolUtils.PRICE_PRECISION, amount1);
@@ -338,11 +349,11 @@ contract SharedPoolPriceFeed {
 
 	/// @notice Retire one failed callback without accepting its price late.
 	function recoverReport(uint256 reportId) public {
-		ReportCandidate memory candidate = reportCandidates[reportId];
-		require(address(candidate.escrow) != address(0) && reportOutcome[reportId] == 0, 'No report to recover');
+		ReportCandidate memory candidate = reports[reportId];
+		require(address(candidate.escrow) != address(0) && reports[reportId].outcome == 0, 'No report to recover');
 		(, , , , uint48 settlementTimestamp) = IStoredOpenOracleGame(address(openOracle)).storedGame(reportId);
 		require(settlementTimestamp != 0, 'Report not settled');
-		reportOutcome[reportId] = 2;
+		reports[reportId].outcome = 2;
 		_clearLatestReport(reportId);
 		candidate.escrow.withdrawFunding();
 		emit PendingReportRecovered(reportId, settlementTimestamp, pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas, lastPrice, lastSettlementTimestamp);
@@ -387,7 +398,7 @@ contract SharedPoolPriceFeed {
 	/// retains this conservative quote as that owner's withdrawal floor until
 	/// a later canonical epoch has independently secured the enlarged exposure.
 	function reportAuthorization(uint256 reportId, uint256 newExposure) external view returns (uint256 conservativeReportPrice, uint256 epoch) {
-		ReportCandidate memory candidate = reportCandidates[reportId];
+		ReportCandidate memory candidate = reports[reportId];
 		require(address(candidate.escrow) != address(0), 'Unknown report candidate');
 		(
 			uint128 amount1,

@@ -1,10 +1,10 @@
-import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import type { MarketFormState } from '../../../types/app.js'
 
 export function getDefaultMarketFormState(): MarketFormState {
 	return {
 		answerUnit: '',
-		categoricalOutcomes: [commonCopy.yes, commonCopy.no],
+		// Categorical outcomes start empty: Yes and No would create the Binary question's ID.
+		categoricalOutcomes: ['', ''],
 		description: '',
 		endTime: '',
 		marketType: 'binary',

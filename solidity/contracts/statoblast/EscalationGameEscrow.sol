@@ -17,14 +17,14 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 	function getVaultDisputeBackingAttoRep(address vault) external view returns (uint256) {
 		if (forkContinuation || ordinarySettlementInitialized || _usesCentralReporterCustody()) return 0;
 		uint256 nominal = disputeStakedRepByVaultAttoRep(vault);
-		uint256 backing = collateralBackingByVault[vault];
+		uint256 backing = vaultAccounting[vault].collateralBackingAttoRep;
 		return nominal < backing ? nominal : backing;
 	}
 
 	function getLocalUnresolvedPrincipalByVaultAndOutcome(address vault, BinaryOutcomes.BinaryOutcome outcome) external view returns (uint256) {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
 		if (_isRetiredOrdinaryOutcome(uint8(outcome))) return 0;
-		return localUnresolvedPrincipalByVaultAndOutcome[vault][uint8(outcome)];
+		return vaultAccounting[vault].localUnresolvedPrincipalByOutcome[uint8(outcome)];
 	}
 
 	function recordForkedEscrowForOutcome(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 sourcePrincipalAttoRep, uint256 childRepAmountAttoRep) external onlySecurityPoolOrForker {
@@ -42,7 +42,7 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		)
 	{
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
-		ForkedEscrowState storage state = forkedEscrowByVaultAndOutcome[depositor][uint8(outcome)];
+		ForkedEscrowState storage state = vaultAccounting[depositor].forkedEscrowByOutcome[uint8(outcome)];
 		return (
 			state.sourcePrincipalAttoRep,
 			state.sourcePrincipalClaimedAttoRep,
@@ -84,14 +84,14 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 	function _exportVaultUnresolvedTotals(address vault) private returns (uint256[3] memory principalByOutcomeAttoRep) {
 		require(!ordinarySettlementInitialized, 'Final claims not exportable');
 		require(vault != address(0x0), 'Vault is zero');
-		require(!localUnresolvedTotalsExportedByVault[vault], 'Vault totals exported');
-		localUnresolvedTotalsExportedByVault[vault] = true;
+		require(!vaultAccounting[vault].localUnresolvedTotalsExported, 'Vault totals exported');
+		vaultAccounting[vault].localUnresolvedTotalsExported = true;
 		uint256 principalToTransferAttoRep;
 		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
-			uint256 principal = localUnresolvedPrincipalByVaultAndOutcome[vault][outcomeIndex];
+			uint256 principal = vaultAccounting[vault].localUnresolvedPrincipalByOutcome[outcomeIndex];
 			principalByOutcomeAttoRep[outcomeIndex] = principal;
 			principalToTransferAttoRep += principal;
-			delete localUnresolvedPrincipalByVaultAndOutcome[vault][outcomeIndex];
+			delete vaultAccounting[vault].localUnresolvedPrincipalByOutcome[outcomeIndex];
 		}
 		emit VaultUnresolvedTotalsExported(vault, address(0x0), principalByOutcomeAttoRep, principalToTransferAttoRep, false);
 		if (principalToTransferAttoRep == 0) return principalByOutcomeAttoRep;
@@ -104,7 +104,7 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		uint256 totalChildRepToTransferAttoRep;
 		bool exported;
 		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
-			ForkedEscrowState storage state = forkedEscrowByVaultAndOutcome[vault][outcomeIndex];
+			ForkedEscrowState storage state = vaultAccounting[vault].forkedEscrowByOutcome[outcomeIndex];
 			uint256 sourcePrincipalAttoRep = state.sourcePrincipalAttoRep;
 			uint256 childAttoRep = state.childAttoRep;
 			uint256 remainingSourcePrincipalAttoRep = sourcePrincipalAttoRep - state.sourcePrincipalClaimedAttoRep;

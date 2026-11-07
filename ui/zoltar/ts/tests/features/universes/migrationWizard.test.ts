@@ -25,6 +25,7 @@ function input(overrides: Partial<MigrationWizardInput> = {}): MigrationWizardIn
 		childMigratedAttoRep: { '101': 0n },
 		childUniverses,
 		migrationBalanceAttoRep: 0n,
+		outcomesExhaustive: true,
 		requiresApproval: true,
 		selectedOutcomeIndexes: [],
 		walletRepAttoRep: 1_200n * ATTO_REP_PER_REP,
@@ -113,6 +114,14 @@ describe('deriveMigrationWizard', () => {
 		const walletLeft = deriveMigrationWizard(input({ childMigratedAttoRep: { '101': 5n * ATTO_REP_PER_REP, '102': 5n * ATTO_REP_PER_REP }, childUniverses: everyOutcomeCreated, migrationBalanceAttoRep: 5n * ATTO_REP_PER_REP, walletRepAttoRep: 1n }))
 		expect(walletLeft.migrationComplete).toBe(false)
 		expect(deriveMigrationWizard(input({ migrationBalanceAttoRep: 5n * ATTO_REP_PER_REP, walletRepAttoRep: 0n })).migrationComplete).toBe(false)
+	})
+
+	test('never marks a scalar migration complete from the loaded subset of outcomes', () => {
+		// A scalar fork only loads the ticks the user picked; every other tick can still receive the whole migration balance.
+		const pickedTick = [child(7n, '70 °C', true)]
+		const scalar = deriveMigrationWizard(input({ childHeldAttoRep: { '107': 5n * ATTO_REP_PER_REP }, childMigratedAttoRep: { '107': 5n * ATTO_REP_PER_REP }, childUniverses: pickedTick, migrationBalanceAttoRep: 5n * ATTO_REP_PER_REP, outcomesExhaustive: false, walletRepAttoRep: 0n }))
+		expect(scalar.outcomes.every(outcome => outcome.fullyMigrated)).toBe(true)
+		expect(scalar.migrationComplete).toBe(false)
 	})
 })
 

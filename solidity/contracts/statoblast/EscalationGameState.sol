@@ -69,7 +69,7 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 
 	function _consumeEscrowedRepForBundle(address depositor, uint256 amountAttoRep) internal {
 		if (amountAttoRep == 0) return;
-		EscalationClaimBundle storage bundle = escalationClaimBundles[depositor];
+		EscalationClaimBundle storage bundle = vaultAccounting[depositor].claimBundle;
 		uint256 claimUnits = amountAttoRep;
 		require(bundle.disputeStakedRepClaimUnits >= claimUnits, 'Escrowed REP low');
 		bundle.disputeStakedRepClaimUnits -= claimUnits;
@@ -98,10 +98,10 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 
 	function _consumeUnresolvedRepForVault(address depositor, uint256 amountAttoRep) internal {
 		if (amountAttoRep == 0) return;
-		uint256 unresolvedAttoRep = unresolvedRepByVaultAttoRep[depositor];
+		uint256 unresolvedAttoRep = vaultAccounting[depositor].unresolvedAttoRep;
 		require(unresolvedAttoRep >= amountAttoRep, 'Vault unresolved REP low');
 		require(totalLocalUnresolvedAttoRep >= amountAttoRep, 'Local unresolved REP low');
-		unresolvedRepByVaultAttoRep[depositor] = unresolvedAttoRep - amountAttoRep;
+		vaultAccounting[depositor].unresolvedAttoRep = unresolvedAttoRep - amountAttoRep;
 		totalLocalUnresolvedAttoRep -= amountAttoRep;
 	}
 

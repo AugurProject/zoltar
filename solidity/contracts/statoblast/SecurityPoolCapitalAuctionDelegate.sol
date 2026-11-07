@@ -74,8 +74,8 @@ contract SecurityPoolCapitalAuctionDelegate is SecurityPoolCapitalState {
 		id = auctionBidPositionIds[bidId];
 		if (id != 0 || bid.filledLots == 0) return (vault, id);
 		require(bid.filledLots <= cohort.remainingLots && bid.targetHealthFactorBps >= BPS, 'Invalid auction position');
-		Owner storage owner = owners[vault];
-		require(owner.positionId == 0 && owner.freeAttoRep == 0 && !exported[vault], 'Auction vault already has principal');
+		Owner storage owner = owners[vault].account;
+		require(owner.positionId == 0 && owner.freeAttoRep == 0 && !owners[vault].exported, 'Auction vault already has principal');
 		(uint256 released, uint256 ethFees, uint256 repFees, ) = commitmentIndex.claim(cohort.positionId);
 		require(released == 0, 'Auction cohort cannot retire');
 		(ethFees, repFees) = cohort.adapter.claimAndRemoveFees(bidId, ethFees, repFees);

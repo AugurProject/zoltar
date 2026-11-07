@@ -53,7 +53,6 @@ function createOperations(universe: ZoltarUniverseSummary | undefined, universeE
 		questionResult: undefined,
 		resetQuestion: () => undefined,
 		setQuestionForm: () => undefined,
-		setZoltarForkQuestionId: () => undefined,
 		setZoltarMigrationForm: () => undefined,
 		zoltarChildUniverseError: undefined,
 		zoltarChildUniversePendingOutcomeIndex: undefined,
@@ -103,6 +102,7 @@ describe('ZoltarRoutes', () => {
 			environmentRefreshKey: 0,
 			isConnectingWallet: false,
 			onConnectWallet: () => undefined,
+			onForkQuestionIdChange: () => undefined,
 			onGoToGenesisUniverse: () => undefined,
 			onRetryUniverse: () => retries.push('universe'),
 			onSwitchNetwork: () => undefined,
@@ -276,7 +276,7 @@ describe('ZoltarRoutes', () => {
 		const { queries } = await renderRoute('overview', undefined, 'missing')
 		expect(queries.getByText('Not found')).toBeTruthy()
 		expect(queries.queryByText('Not forked')).toBeNull()
-		expect(queries.queryByText('REP in this universe')).toBeNull()
+		expect(queries.queryByText('Wallet REP')).toBeNull()
 		expect(queries.queryByText('Migration')).toBeNull()
 		expect(queries.getByRole('button', { name: 'Go to root universe' })).toBeTruthy()
 	})
@@ -307,6 +307,7 @@ describe('ZoltarRoutes', () => {
 			environmentRefreshKey: 0,
 			isConnectingWallet: false,
 			onConnectWallet: () => undefined,
+			onForkQuestionIdChange: () => undefined,
 			onGoToGenesisUniverse: () => undefined,
 			onRetryUniverse: () => undefined,
 			onSwitchNetwork: () => undefined,
@@ -322,7 +323,8 @@ describe('ZoltarRoutes', () => {
 				</ZoltarWorkspaceProvider>,
 			)
 		).cleanup
-		const repField = within(document.body).getByText('REP in this universe').parentElement
+		// The overview names the balance the same way as the fork and migrate pages.
+		const repField = within(document.body).getByText('Wallet REP').parentElement
 		expect(repField?.textContent).toContain('Unavailable')
 		expect(repField?.querySelector('.loading-text, [aria-busy="true"]')).toBeNull()
 	})

@@ -197,11 +197,26 @@ describe('AppStatusNotices', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Setup incomplete')).not.toBeNull()
+		expect(documentQueries.getByText('Setup incomplete').closest('.notice')?.getAttribute('data-message-tone')).toBe('error')
 		expect(documentQueries.getByText('Required application contracts are not deployed.')).not.toBeNull()
 		expect(documentQueries.queryByText('Wrong network')).toBeNull()
 		expect(documentQueries.getByText('Error')).not.toBeNull()
 		expect(documentQueries.getByText('Top-level error')).not.toBeNull()
+	})
+
+	test('leaves the setup notice off the deployment route, which already shows what is missing', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(AppStatusNotices, {
+				isDeploymentRoute: true,
+				readBackendMessage: undefined,
+				showApplicationDeploymentWarning: true,
+				simulationBootstrapError: undefined,
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).queryByText('Setup incomplete')).toBeNull()
+		expect(document.body.querySelector('[role="alert"]')).toBeNull()
 	})
 
 	test('shows every concurrent top-level error', async () => {

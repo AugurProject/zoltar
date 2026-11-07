@@ -23,7 +23,10 @@ type UseProtocolAppShellParameters = {
 	onRefresh?: () => void
 }
 
-type OverviewWalletProps = Pick<OverviewPanelsProps, 'accountState' | 'isConnectingWallet' | 'isManagingWallet' | 'isRefreshing' | 'onChangeWallet' | 'onConnect' | 'onDisconnectWallet' | 'onSwitchNetwork' | 'readBackendStatus' | 'walletBootstrapComplete'>
+type OverviewWalletProps = Pick<
+	OverviewPanelsProps,
+	'accountState' | 'hasInjectedWallet' | 'isConnectingWallet' | 'isManagingWallet' | 'isRefreshing' | 'onChangeWallet' | 'onConnect' | 'onDisconnectWallet' | 'onDismissWalletActionMessage' | 'onSwitchNetwork' | 'readBackendStatus' | 'walletActionMessage' | 'walletBootstrapComplete'
+>
 
 /** The application shell Zoltar and Statoblast share on the protocol on-chain runtime: environment runtime, deployment flow, merged notices, and the header wallet controls. Trading keeps its own wallet session and composes the shared header panel directly. */
 export function useProtocolAppShell({ deploymentRoute = {}, initializeEnvironment, isDeploymentRoute, onchainStateDependencies, onEnvironmentCommitted, onRefresh }: UseProtocolAppShellParameters) {
@@ -92,14 +95,17 @@ export function useProtocolAppShell({ deploymentRoute = {}, initializeEnvironmen
 	})
 	const overviewWalletProps: OverviewWalletProps = {
 		accountState,
+		hasInjectedWallet: runtime.hasInjectedWallet,
 		isConnectingWallet: runtime.isConnectingWallet,
 		isManagingWallet: runtime.isManagingWallet,
 		isRefreshing: runtime.isRefreshing,
 		onChangeWallet: () => void runtime.changeWallet(),
 		onConnect: () => void runtime.connectWallet(),
 		onDisconnectWallet: () => void runtime.disconnectWallet(),
+		onDismissWalletActionMessage: runtime.dismissWalletActionMessage,
 		onSwitchNetwork: () => void runtime.switchNetwork(),
 		readBackendStatus: runtime.readBackendStatus,
+		walletActionMessage: runtime.walletActionMessage,
 		walletBootstrapComplete: runtime.walletBootstrapComplete,
 	}
 

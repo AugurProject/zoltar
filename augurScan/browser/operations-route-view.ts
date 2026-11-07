@@ -1,11 +1,12 @@
 import { semanticSummary } from './semantic-evidence.ts'
 import type { OperationsCatalogSection, OperationsDetailRoute, OperationsRenderContext } from './browser-types.ts'
-import { approvalTransitionFields } from './operations-presentation.ts'
+import { approvalTransitionFields, operationsDetailRecordKey } from './operations-presentation.ts'
 import { isRecord, operationRecords, type JsonRecord } from './api-validation.ts'
 import { exactUnit } from './format.ts'
+import { nativeSymbolFor } from './network-freshness.ts'
 import { shortIdentifier } from './identifier-format.ts'
 import { canonicalOperationsPath, parseOperationsDetailRoute } from './routes.ts'
-import { renderOperationsRiskSnapshotFilter, renderOperationsTimelineFilters, type createOperationsComponents } from './operations-components.ts'
+import { renderOperationsRiskSnapshotFilter, renderOperationsTimelineFilters, retainedFilterForm, type createOperationsComponents } from './operations-components.ts'
 
 interface OperationsRouteViewDeps {
 	lookup: (selector: string) => HTMLElement
@@ -33,7 +34,7 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 		const eventData = isRecord(item['event_data']) ? item['event_data'] : {}
 		const receiver = String(item['receiver_vault'] ?? eventData['receiverVault'] ?? '')
 		const operation = typeof eventData['operationId'] === 'string' ? `operation ${shortIdentifier(eventData['operationId'])}` : undefined
-		const fields = approvalTransitionFields(eventData).map(field => `${field.label} ${operationNumber(field.value)}${field.unit === '' ? '' : ` ${field.unit}`}`)
+		const fields = approvalTransitionFields(eventData, nativeSymbolFor(requiredChainId())).map(field => `${field.label} ${field.value}`)
 		const details = [operation, ...fields, receiver === '' ? undefined : `receiver ${shortIdentifier(receiver, 10, 6)}`].filter((value): value is string => value !== undefined)
 		return details.length === 0 ? 'Authorization lifecycle transition' : details.join(' · ')
 	}
@@ -58,7 +59,8 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 		const completion = content.querySelector<HTMLElement>('.operations-pagination-complete')
 		const historyContinuation = content.querySelector<HTMLButtonElement>('.operations-history-more')
 		const historyCompletion = content.querySelector<HTMLElement>('.operations-history-complete')
-		const catalogRows = [...content.querySelectorAll<HTMLAnchorElement>('a.operations-row')]
+		// Rows on an inactive detail tab are hidden and cannot take focus.
+		const catalogRows = [...content.querySelectorAll<HTMLAnchorElement>('a.operations-row')].filter(row => row.closest('[hidden]') === null)
 		const riskTarget = snapshot.focusRiskKind === undefined ? undefined : content.querySelector<HTMLElement>(`[data-risk-kind="${snapshot.focusRiskKind}"]`)
 		const focusTarget = () => {
 			if (snapshot.focusHref !== undefined) return catalogRows.find(candidate => candidate.href === snapshot.focusHref)
@@ -103,8 +105,9 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 	const operationsDetailRoute = (): OperationsDetailRoute | undefined => parseOperationsDetailRoute(location.pathname)
 
 	const operationsSectionFilters = (selected: string): HTMLElement[] => {
-		if (selected === 'timeline') return [operationsTimelineFilters()]
-		return selected === 'risk' ? [operationsRiskSnapshotFilter()] : []
+		const content = $('#operations-content')
+		if (selected === 'timeline') return [retainedFilterForm(content, operationsTimelineFilters())]
+		return selected === 'risk' ? [retainedFilterForm(content, operationsRiskSnapshotFilter())] : []
 	}
 
 	const historyBlockRangeLabel = (oldestBlock: bigint | undefined, newestBlock: bigint | undefined, emptyLabel = 'No block-numbered evidence is loaded') => {
@@ -115,9 +118,14 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 
 	const operationsDetailRouteKey = (route: OperationsDetailRoute): string => `${route.kind}:${route.identity.join(':').toLowerCase()}`
 
+	// Evidence disclosures are keyed by their canonical occurrence, so a live re-render reopens the same record even after newer rows arrive above it.
+	const evidenceDisclosureKey = (prefix: string, value: unknown): string | undefined => (isRecord(value) && typeof value['tx_hash'] === 'string' ? `${prefix}:${operationsDetailRecordKey(value)}` : undefined)
+
 	const rawEvidence = (value: unknown) => {
 		const disclosure = document.createElement('details')
 		disclosure.className = 'operations-raw-evidence'
+		const disclosureKey = evidenceDisclosureKey('raw', value)
+		if (disclosureKey !== undefined) disclosure.dataset['detailKey'] = disclosureKey
 		disclosure.append(element('summary', '', 'Raw chain evidence'))
 		const raw = document.createElement('pre')
 		raw.textContent = JSON.stringify(value, null, 2) ?? 'Unavailable'
@@ -129,7 +137,7 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 		items.map(item => {
 			const eventName = String(item['event_name'] ?? item['semantic_event_kind'] ?? 'Protocol evidence')
 			const block = item['block_number']
-			const row = operationRow(eventName, semanticSummary(item), String(item['tx_hash'] ?? ''), block)
+			const row = operationRow(eventName, semanticSummary(item, nativeSymbolFor(requiredChainId())), String(item['tx_hash'] ?? ''), block)
 			row.append(rawEvidence(item))
 			return row
 		})
@@ -139,7 +147,7 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 			const eventName = String(item['event_name'] ?? 'AMM event')
 			const data = isRecord(item['event_data']) ? item['event_data'] : {}
 			const analytics = isRecord(item['analytics']) ? item['analytics'] : {}
-			let summary = semanticSummary(item)
+			let summary = semanticSummary(item, nativeSymbolFor(requiredChainId()))
 			if (eventName === 'Swap')
 				summary = `${String(analytics['direction'] ?? 'Swap')} · ${exactUnit(String(analytics['amountIn'] ?? '0'), 18, String(analytics['baseAsset'] ?? 'shares'))} in → ${exactUnit(String(analytics['amountOut'] ?? '0'), 18, String(analytics['quoteAsset'] ?? 'shares'))} out · ${exactUnit(String(analytics['feeAmount'] ?? '0'), 18, 'shares')} fee${isRecord(analytics['priceImpact']) && analytics['priceImpact']['bps'] !== undefined ? ` · ${exactUnit(String(analytics['priceImpact']['bps']), 2, '%')} impact` : ''}`
 			else if (eventName === 'Sync') summary = `${exactUnit(String(data['yesReserve'] ?? '0'), 18, 'YES')} · ${exactUnit(String(data['noReserve'] ?? '0'), 18, 'NO')} reserves`
@@ -162,6 +170,8 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 			const row = operationRow(`${String(item['event_name'] ?? 'Report round')} · round ${String(item['round_number'] ?? '—')}`, `${values} · reporter ${shortIdentifier(String(data['currentReporter'] ?? 'unknown'))}`, String(item['tx_hash'] ?? ''), item['block_number'])
 			const changeDetails = document.createElement('details')
 			changeDetails.className = 'operations-round-changes'
+			const changeDetailsKey = evidenceDisclosureKey('changes', item)
+			if (changeDetailsKey !== undefined) changeDetails.dataset['detailKey'] = changeDetailsKey
 			changeDetails.append(element('summary', '', comparison['state'] === 'initial' ? `Initial values (${changes.length})` : `Changes from round ${String(comparison['previousRoundNumber'] ?? '—')} (${changes.length})`))
 			const changeList = document.createElement('ul')
 			for (const change of changes) {

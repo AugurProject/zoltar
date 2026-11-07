@@ -44,6 +44,23 @@ describe('TransactionActionButton', () => {
 		}
 	})
 
+	test('keeps a transient group message visible and describing the action without announcing it', async () => {
+		const group = (announce: boolean) => (
+			<TransactionActionGroup announce={announce} loading message='Updating estimate…'>
+				<TransactionActionButton availability={{ disabled: true, loading: true, reason: 'Updating estimate…' }} idleLabel='Buy' pendingLabel='Buying' onClick={() => undefined} />
+			</TransactionActionGroup>
+		)
+		const rendered = await renderIntoDocument(group(false))
+		cleanupRenderedComponent = rendered.cleanup
+		const feedback = rendered.container.querySelector('.tx-action-group > .tx-action-feedback')
+		expect(feedback?.getAttribute('aria-live')).toBe('off')
+		expect(feedback?.textContent).toContain('Updating estimate…')
+		const describedBy = rendered.container.querySelector('button')?.getAttribute('aria-describedby') ?? ''
+		expect(document.getElementById(describedBy)?.textContent).toContain('Updating estimate…')
+		await act(() => render(group(true), rendered.container))
+		expect(feedback?.getAttribute('aria-live')).toBe('polite')
+	})
+
 	test('renders pending button text while the action is in flight', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<GlobalTransactionPresentationProvider transaction={{ title: 'Submitting transaction', tone: 'pending' }}>

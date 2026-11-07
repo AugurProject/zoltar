@@ -8,6 +8,7 @@ import { useCallback, useEffect, useReducer, useRef } from 'preact/hooks'
 import type { WalletSummaryState } from '../../lib/walletSummaryState.js'
 import { formatNetworkRequiredReason } from '../../copy/availability.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
+import { coreDeploymentChain } from '../../protocol/deployment.js'
 import { getActiveInjectedProvider, subscribeToWalletContextChanges, type InjectedEthereum, type WalletContextChangeEvent } from '../../protocol/injected.js'
 import { publicErrorMessage, type LiveMarket } from '../../protocol/live.js'
 import { walletSummaryAvailability, walletSummaryRefreshState, type WorkflowOwner } from '../liveTradingControllerHelpers.js'
@@ -54,7 +55,8 @@ export function useWalletSessionController({
 	portfolio: ReturnType<typeof usePortfolioQueries>
 	transaction: ReturnType<typeof useTransactionWorkflow>
 	requests: { balance: RequestGuard; connection: RequestGuard; portfolioBalance: RequestGuard; walletSummary: RequestGuard }
-	refresh(configuration?: DeploymentConfiguration, start?: bigint, owner?: WorkflowOwner): Promise<void>
+	/** Its result (whether fresh market data was committed) is not needed here. */
+	refresh(configuration?: DeploymentConfiguration, start?: bigint, owner?: WorkflowOwner): Promise<unknown>
 }) {
 	const { balance: balanceRequests, connection: connectionRequests, portfolioBalance: portfolioBalanceRequests, walletSummary: walletSummaryRequests } = requests
 	const { dispatch } = session
@@ -186,7 +188,7 @@ export function useWalletSessionController({
 		let chainId = await services.walletChainId(provider)
 		if (!requireCurrent()) return
 		if (chainId !== configuration.chainId && eventName === undefined && !restoreExisting) {
-			await services.switchWalletChain(provider, configuration.chainId)
+			await services.switchWalletChain(provider, configuration.chainId, coreDeploymentChain(configuration, configuration.rpcUrl))
 			if (!requireCurrent()) return
 			chainId = await services.walletChainId(provider)
 		}

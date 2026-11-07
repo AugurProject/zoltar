@@ -116,6 +116,7 @@ function OpenOracleSectionHarness({ accountAddress, initialActiveView = 'create'
 				onOpenOracleFormChange={update => openOracle.setOpenOracleForm(current => ({ ...current, ...update }))}
 				onSettleReport={() => void openOracle.settleReport()}
 				onWithdrawOpenOracleBalance={(balance, reviewedAmount) => void openOracle.withdrawBalance(balance, reviewedAmount)}
+				onWrapDisputeWeth={() => void openOracle.wrapDisputeWeth()}
 				openOracleActiveAction={openOracle.openOracleActiveAction}
 				openOracleActiveWithdrawalBalance={openOracle.openOracleActiveWithdrawalBalance}
 				openOracleCreateForm={openOracle.openOracleCreateForm}

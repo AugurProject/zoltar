@@ -1,6 +1,6 @@
 /// <reference types='bun-types' />
 
-import { type Address, getAddress, type Hash, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, type Hash, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
@@ -79,6 +79,7 @@ function createForkParameters(overrides: Partial<UseZoltarForkParameters> = {}):
 		refreshState: async () => undefined,
 		refreshZoltarUniverse: async () => undefined,
 		shouldAutoLoadForkAccess: false,
+		zoltarForkQuestionId: '',
 		zoltarUniverse: universe,
 		...overrides,
 	}
@@ -203,31 +204,19 @@ describe('useZoltarFork', () => {
 		expect(state().zoltarForkPending).toBe(false)
 	})
 
-	test('preserves question selection across accounts but scopes it by environment and universe', async () => {
-		const scopedParameters = (accountAddress: Address, activeUniverseId: bigint, environmentRefreshKey: number) => createForkParameters({ accountAddress, activeUniverseId, environmentRefreshKey, zoltarUniverse: createUniverse({ universeId: activeUniverseId }) })
-		const { rerender, state } = await renderForkHook(scopedParameters(WALLET_ADDRESS, 1n, 0), createZoltarForkDependencies())
-
-		await act(async () => {
-			state().setZoltarForkQuestionId('0x01')
-		})
+	test('forks with the question the caller selected, which the application keeps in the URL', async () => {
+		const forkZoltarUniverse = mock(async (_accountAddress: string, _callbacks: unknown, universeId: bigint, questionId: bigint) => ({ action: 'forkZoltar' as const, hash: `0x${'3'.repeat(64)}` as Hash, questionId: `0x${questionId.toString(16)}`, universeId }))
+		replaceEnvironment(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
+		const parameters = createForkParameters({ onTransactionFailed: () => undefined, zoltarForkQuestionId: '0x01' })
+		const { rerender, state } = await renderForkHook(parameters, createZoltarForkDependencies({ forkZoltarUniverse, loadZoltarForkAccess: async () => createForkAccessResults() }))
 		expect(state().zoltarForkQuestionId).toBe('0x01')
 
-		await act(async () => {
-			rerender(scopedParameters(WALLET_ADDRESS, 2n, 0))
-		})
-		expect(state().zoltarForkQuestionId).toBe('')
-
-		await act(async () => {
-			state().setZoltarForkQuestionId('0x02')
-			rerender(scopedParameters(WALLET_ADDRESS, 2n, 1))
-		})
-		expect(state().zoltarForkQuestionId).toBe('')
-
-		await act(async () => {
-			state().setZoltarForkQuestionId('0x03')
-			rerender(scopedParameters(NEXT_WALLET_ADDRESS, 2n, 1))
-		})
+		await act(async () => rerender({ ...parameters, zoltarForkQuestionId: '0x03' }))
 		expect(state().zoltarForkQuestionId).toBe('0x03')
+		await act(async () => {
+			await state().forkZoltar()
+		})
+		expect(forkZoltarUniverse.mock.calls[0]?.[3]).toBe(3n)
 	})
 
 	test('forkZoltar snapshots the submitted question id before universe preflight resolves', async () => {
@@ -247,12 +236,8 @@ describe('useZoltarFork', () => {
 
 		replaceEnvironment(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
 
-		const parameters = createForkParameters({ ensureZoltarUniverse: async () => await universeLoad.promise, onTransactionFailed: () => undefined })
+		const parameters = createForkParameters({ ensureZoltarUniverse: async () => await universeLoad.promise, onTransactionFailed: () => undefined, zoltarForkQuestionId: '0x0b' })
 		const { state, rerender } = await renderForkHook(parameters, dependencies)
-
-		await act(async () => {
-			state().setZoltarForkQuestionId('0x0b')
-		})
 
 		let forkPromise = Promise.resolve()
 		await act(() => {
@@ -264,9 +249,7 @@ describe('useZoltarFork', () => {
 		expect(state().zoltarForkActiveAction).toBe('fork')
 		expect(state().zoltarForkFeedback).toBeUndefined()
 
-		await act(async () => {
-			state().setZoltarForkQuestionId('0x0c')
-		})
+		await act(async () => rerender({ ...parameters, activeUniverseId: 2n, zoltarForkQuestionId: '0x0c' }))
 
 		await act(async () => {
 			universeLoad.resolve(createUniverse({ reputationToken: REPUTATION_TOKEN_ADDRESS }))
@@ -292,16 +275,14 @@ describe('useZoltarFork', () => {
 			loadZoltarForkAccess: async () => createForkAccessResults(),
 		})
 		replaceEnvironment(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
-		const { rerender, state } = await renderForkHook(createForkParameters(), dependencies)
-		await act(async () => state().setZoltarForkQuestionId('0x01'))
+		const { rerender, state } = await renderForkHook(createForkParameters({ zoltarForkQuestionId: '0x01' }), dependencies)
 		let oldPromise = Promise.resolve()
 		await act(() => {
 			oldPromise = state().forkZoltar()
 		})
 
 		replaceEnvironment(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
-		await act(async () => rerender(createForkParameters({ environmentRefreshKey: 1 })))
-		await act(async () => state().setZoltarForkQuestionId('0x02'))
+		await act(async () => rerender(createForkParameters({ environmentRefreshKey: 1, zoltarForkQuestionId: '0x02' })))
 		let newPromise = Promise.resolve()
 		await act(() => {
 			newPromise = state().forkZoltar()
@@ -342,11 +323,7 @@ describe('useZoltarFork', () => {
 		const approveForkRep = mockApproveForkRep('0x00000000000000000000000000000000000000000000000000000000000000ac')
 		const loadZoltarForkAccess = mock(async () => createForkAccessResults())
 		replaceEnvironment(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
-		const { state } = await renderForkHook(createForkParameters({ onTransactionFailed: () => undefined }), createZoltarForkDependencies({ approveForkRep, loadZoltarForkAccess }))
-
-		await act(async () => {
-			state().setZoltarForkQuestionId('0x0e')
-		})
+		const { state } = await renderForkHook(createForkParameters({ onTransactionFailed: () => undefined, zoltarForkQuestionId: '0x0e' }), createZoltarForkDependencies({ approveForkRep, loadZoltarForkAccess }))
 
 		await act(async () => {
 			await state().approveZoltarForkRep()

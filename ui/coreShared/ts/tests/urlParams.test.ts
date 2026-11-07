@@ -20,10 +20,13 @@ void describe('url params', () => {
 		expect(readUniverseQueryParam('')).toBe(undefined)
 	})
 
-	void test('rejects universe IDs outside uint256 while preserving the maximum', () => {
-		const maximum = (1n << 256n) - 1n
+	void test('rejects universe IDs outside uint248 while preserving the maximum', () => {
+		const maximum = (1n << 248n) - 1n
 		for (const value of [maximum.toString(), `0x${maximum.toString(16)}`]) expect(readUniverseQueryParam(`?universe=${value}`)).toBe(maximum)
-		for (const value of [(maximum + 1n).toString(), `0x${(maximum + 1n).toString(16)}`]) expect(readUniverseQueryParam(`?universe=${value}`)).toBeUndefined()
+		for (const value of [(maximum + 1n).toString(), `0x${(maximum + 1n).toString(16)}`, ((1n << 256n) - 1n).toString()]) {
+			expect(readUniverseQueryParam(`?universe=${value}`)).toBeUndefined()
+			expect(hasInvalidUniverseQueryParam(`?universe=${value}`)).toBe(true)
+		}
 	})
 
 	void test('flags a present universe query param that is not a non-negative integer', () => {

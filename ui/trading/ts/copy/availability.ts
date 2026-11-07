@@ -10,11 +10,13 @@ export const connectWalletReason = walletConnectionRequired
 export const balancesLoadingReason = 'Loading wallet balances…'
 export const balancesUnavailableReason = `${walletBalancesUnavailable}.`
 export const insufficientEthReason = 'Insufficient ETH balance.'
+export { gasReserveReason } from './tradeTicket.js'
 export const insufficientLpReason = 'Insufficient LP balance.'
 export const initializePriceInvalidReason = conditionalYesPriceValidation
 export const transactionInProgressReason = 'Transaction in progress.'
 /** Every Trading ticket names a missing or zero amount the same way, as a neutral reason on its disabled action. */
 const amountRequiredReason = 'Enter an amount.'
+/** @internal Exported for tests; the UI reads it through `amountReason`. */
 export const amountPositiveReason = 'Enter an amount greater than 0.'
 
 /** The reason an amount alone blocks the action: missing, or zero. Undefined once it is positive. */

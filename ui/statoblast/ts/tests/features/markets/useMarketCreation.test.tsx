@@ -138,7 +138,7 @@ describe('useMarketCreation', () => {
 		await secondCreate
 
 		expect(hook.loadCreatedZoltarQuestion).not.toHaveBeenCalled()
-		expect(hook.setZoltarForkQuestionId).toHaveBeenCalledWith('0x0b')
+		expect(hook.setZoltarForkQuestionId).not.toHaveBeenCalled()
 	})
 
 	test('clears the submission-in-progress latch after a pre-request wallet disconnect', async () => {
@@ -199,7 +199,7 @@ describe('useMarketCreation', () => {
 		expect(createMarketTransaction).toHaveBeenCalledTimes(1)
 		expect(createMarketTransaction.mock.calls[0]?.[2].questionData.title).toBe('Question A')
 		expect(hook.loadCreatedZoltarQuestion).toHaveBeenCalledTimes(1)
-		expect(hook.setZoltarForkQuestionId).toHaveBeenCalledWith('0x0b')
+		expect(hook.setZoltarForkQuestionId).not.toHaveBeenCalled()
 	})
 
 	test('shows a rendered error source when global transaction admission rejects creation', async () => {

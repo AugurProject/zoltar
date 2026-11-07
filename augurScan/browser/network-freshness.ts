@@ -1,3 +1,4 @@
+import { utcDateTime } from './format.ts'
 import type { RefreshOperation } from './live-refresh.ts'
 
 export const knownNetworkName = (chainId: string): string => {
@@ -83,6 +84,28 @@ export const indexerConnectionStatus = (network: NetworkFreshnessRecord | undefi
 	if (streamState === 'open') return { label: 'Live connection', tone: 'live' }
 	if (network !== undefined) return { label: 'Reconnecting', tone: 'error' }
 	return { label: 'Connecting', tone: 'pending' }
+}
+
+// The freshness banner is a live region, so its text uses absolute times that do not change while the condition persists.
+export const staleChainHeadNotice = (indexedTimestamp: string | null | undefined): string => `Newest observed block is from ${utcDateTime(indexedTimestamp)}; block-based catch-up status may be misleading.`
+
+interface IndexerRetryRecord {
+	readonly phase?: string
+	readonly consecutive_failures?: number
+	readonly next_retry_at?: string | null | undefined
+	readonly last_error?: string | null | undefined
+}
+
+const lastErrorPreviewLength = 300
+
+/** Explains why the indexer is retrying: how many attempts failed, when it retries, and the last error. */
+export const indexerRetryNotice = (network: IndexerRetryRecord | undefined): string | undefined => {
+	const failures = network?.consecutive_failures ?? 0
+	if (network === undefined || (network.phase !== 'degraded' && failures <= 0)) return undefined
+	const attempts = failures > 0 ? `${failures.toLocaleString('en-US')} consecutive ${failures === 1 ? 'failure' : 'failures'}` : 'Indexing failed'
+	const retry = network.next_retry_at ? `next retry at ${utcDateTime(network.next_retry_at)}` : 'retry scheduled'
+	const error = network.last_error ? ` Last error: ${network.last_error.length > lastErrorPreviewLength ? `${network.last_error.slice(0, lastErrorPreviewLength)}…` : network.last_error}` : ''
+	return `${attempts}; ${retry}.${error}`
 }
 
 const decimalBlock = (value: string | number | bigint | null | undefined): bigint | undefined => {

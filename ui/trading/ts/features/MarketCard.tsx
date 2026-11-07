@@ -7,12 +7,13 @@ import { FavoriteToggle } from '@zoltar/ui-core-shared/components/FavoriteToggle
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { MarketOddsBar } from '../components/MarketOddsBar.js'
+import { MarketResolution } from '../components/MarketResolution.js'
 import * as appCopy from '../copy/app.js'
 import { liveCopy } from '../copy/live.js'
 import { formatEthAmount } from '../copy/outcomes.js'
 import { marketsCopy } from '../copy/markets.js'
 import { formatRoundedUnits } from '../lib/format.js'
-import { coarseDuration, marketLiquidityAttoEth, marketOddsPercent } from '../lib/marketListing.js'
+import { coarseDuration, marketLiquidityAttoEth, marketOddsPercent, marketPriceState } from '../lib/marketListing.js'
 import { getTradingRouteHref, type TradingListKind, type TradingLookupRoute } from '../lib/routing.js'
 import { marketTicketHref } from '../lib/routeState.js'
 import { marketAcceptsNewRisk, type LiveMarket } from '../protocol/live.js'
@@ -33,12 +34,15 @@ export function formatMarketLiquidity(market: LiveMarket) {
 	return liquidity === undefined ? undefined : formatEthAmount(formatRoundedUnits(liquidity, 18, 4))
 }
 
-function MarketCardOdds({ market, tradeable }: { market: LiveMarket; tradeable: boolean }) {
+/** A resolved market shows its outcome instead of a price; one that stopped trading shows its last price, muted. */
+function MarketCardOdds({ market, tradeable, nowSeconds }: { market: LiveMarket; tradeable: boolean; nowSeconds: bigint }) {
+	const priceState = marketPriceState(market, nowSeconds)
+	if (priceState.kind === 'resolved') return <MarketResolution outcome={priceState.outcome} />
 	const odds = marketOddsPercent(market)
 	if (odds === undefined) return <UserMessage className='detail market-card__odds-note' detail={marketsCopy.priceUnavailable} />
 	return (
 		<div className='market-card__odds'>
-			<MarketOddsBar yesPercent={odds.yes} noPercent={odds.no} showValues={!tradeable} />
+			<MarketOddsBar yesPercent={odds.yes} noPercent={odds.no} showValues={!tradeable} last={priceState.kind === 'last'} />
 			{tradeable ? (
 				<div className='market-card__outcomes'>
 					<a className='button-link outcome-button outcome-button--yes' href={marketTicketHref(market.pool, { mode: 'entry', side: 'YES' })} aria-label={marketsCopy.buyOutcomeAt(marketsCopy.yes, odds.yes)}>
@@ -93,7 +97,7 @@ export function MarketCard({ listKind, lookupRoute, market, nowSeconds, fetchedA
 				</>
 			}
 		>
-			{listKind === 'markets' && loaded ? <MarketCardOdds market={market} tradeable={outcomeButtons} /> : undefined}
+			{listKind === 'markets' && loaded ? <MarketCardOdds market={market} tradeable={outcomeButtons} nowSeconds={nowSeconds} /> : undefined}
 			{loaded ? (
 				<DataGrid dense>
 					{liquidity === undefined ? undefined : <MetricField label={marketsCopy.liquidity}>{liquidity}</MetricField>}

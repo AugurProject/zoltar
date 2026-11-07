@@ -122,6 +122,8 @@ export const mountSearch = (api: (path: string) => Promise<unknown>, chainId: ()
 			input.focus()
 		}
 		if (event.key === 'Escape' && (document.activeElement === input || results.contains(document.activeElement))) {
+			// The search consumes this Escape, so other Escape handlers such as the log drawer leave it alone.
+			event.preventDefault()
 			const focusWasInResults = results.contains(document.activeElement)
 			generation++
 			clearTimer()

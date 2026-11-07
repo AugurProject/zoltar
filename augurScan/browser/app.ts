@@ -13,6 +13,7 @@ import type { DemoFactory } from './demo-runtime.ts'
 import { fetchApi } from './fetch-api.ts'
 import { loadInitialNetworkStatus, nativeSymbolFor } from './network-freshness.ts'
 import { createQueryCache } from './query-cache.ts'
+import { richListSort } from './rich-list-page.ts'
 import { mountSearch } from './search-ui.ts'
 
 /** Composes the AugurScan browser application: state, route views, live updates, and in-place navigation. */
@@ -52,7 +53,7 @@ export async function startScanner(demoFactory?: DemoFactory) {
 
 	const views = createScannerViews(context)
 	const network = createNetworkControls(context, views, networkSnapshotCache)
-	links.resetSelectedNetworkContext = () => resetSelectedNetworkContext(context, views)
+	links.resetSelectedNetworkContext = options => resetSelectedNetworkContext(context, views, options)
 
 	bindActivityFilterControls(context, views)
 	bindDetailControls(context, views)
@@ -81,8 +82,10 @@ export async function startScanner(demoFactory?: DemoFactory) {
 	}
 
 	syncVisibleRoute(context)
-	const initialRichSort = state.pageUrl.searchParams.get('sort')
-	if (initialRichSort !== null && [...lookup('#rich-sort').options].some(option => option.value === initialRichSort)) lookup('#rich-sort').value = initialRichSort
+	lookup('#rich-sort').value = richListSort(
+		state.pageUrl,
+		[...lookup('#rich-sort').options].map(option => option.value),
+	)
 	if (state.route === 'system') selectSystemRouteEntity(context, views)
 
 	const initialNetworkStatusLoad = loadInitialNetworkStatus(state.liveState.restoredCurrentNetworkSnapshot, () => network.loadNetworks({ synchronizeActivity: false }))
