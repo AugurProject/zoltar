@@ -1,11 +1,11 @@
 import type { OperatorSettings } from '#config/settings'
 import { portfolioTakeoverPlan, type PortfolioTakeover } from '#core/portfolio-strategy'
-import { loadManagedPortfolioObservations, type PortfolioObservation, type PortfolioScope } from '#monitoring/portfolio-monitor'
+import type { PortfolioObservation, PortfolioScope } from '#monitoring/portfolio-monitor'
 import type { RuntimeState } from '#state/operator-state'
 import { erc20Abi, securityPoolCapitalLedgerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { portfolioTarget, samePortfolioTarget, type PortfolioTarget } from '#monitoring/portfolio-auction'
-import { createPublicClient, encodeFunctionData, type Account, type Chain, type Transport, type WalletClient, type createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
-import { settledQuorumValue, sharedQuorumReadTargets } from '@zoltar/bot-shared/monitoring/read-quorum'
+import { encodeFunctionData, type Account, type Chain, type Transport, type WalletClient, type createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
+import { readPortfolioExecutionSnapshot } from './portfolio-execution-snapshot.ts'
 import { buildPortfolioCapitalTakeOverWithBoundsRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { buildPortfolioCapitalDepositRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { submitCall } from './submit-call.ts'
@@ -18,35 +18,17 @@ type Wallet = WalletClient<Transport, Chain, Account>
 type RpcPool = ReturnType<typeof createRpcEndpointPool>
 
 /** Authenticate exposure and the exact target again at an agreed RPC height before execution. */
-export async function refreshPortfolioExecution(
-	wallet: Wallet,
-	settings: OperatorSettings,
-	scopes: readonly PortfolioScope[],
-	pool: RpcPool,
-	target: PortfolioObservation,
-	positionId: PortfolioTarget | undefined,
-	readers = [settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls].map(endpoint => ({ endpoint, client: createPublicClient({ chain: wallet.chain, transport: pool.transportFor(endpoint) }) })),
-) {
-	const pinned = await sharedQuorumReadTargets(readers, settings.connectivity.rpcQuorum)
-	return settledQuorumValue(
-		'portfolio execution snapshot',
-		pinned.readers.map(async ({ endpoint, client }) => {
-			const block = await client.getBlock({ blockNumber: pinned.blockNumber })
-			if (block.number === undefined || block.hash === undefined) throw new Error('Portfolio execution requires a confirmed block')
-			const observations = await loadManagedPortfolioObservations(
-				client,
-				settings,
-				wallet.account.address,
-				scopes.map(scope => ({ scope, targets: positionId !== undefined && scope.address === target.selection.address && scope.universeId === target.selection.universeId ? [positionId] : [] })),
-				block.number,
-			)
-			const observation = observations.find(observation => observation.selection.address === target.selection.address && observation.selection.universeId === target.selection.universeId)
-			if (observation === undefined) throw new Error('Portfolio disappeared from managed exposure history')
-			const allowance = await client.readContract({ address: observation.snapshot.repToken, abi: erc20Abi, functionName: 'allowance', args: [wallet.account.address, observation.snapshot.capitalLedger], blockNumber: block.number })
-			return { endpoint, value: { observation, totalPrincipal: observations.reduce((sum, observation) => sum + (observation.managedPrincipalAttoRep ?? observation.snapshot.ownerPrincipalAttoRep), 0n), allowance } }
-		}),
-		settings.connectivity.rpcQuorum,
+export async function refreshPortfolioExecution(wallet: Wallet, settings: OperatorSettings, scopes: readonly PortfolioScope[], pool: RpcPool, target: PortfolioObservation, positionId: PortfolioTarget | undefined, readers?: Parameters<typeof readPortfolioExecutionSnapshot>[6]) {
+	const result = await readPortfolioExecutionSnapshot(
+		wallet,
+		settings,
+		pool,
+		scopes.map(scope => ({ scope, targets: positionId !== undefined && scope.address === target.selection.address && scope.universeId === target.selection.universeId ? [positionId] : [] })),
+		target.selection,
+		async ({ client, observation, blockNumber }) => ({ allowance: await client.readContract({ address: observation.snapshot.repToken, abi: erc20Abi, functionName: 'allowance', args: [wallet.account.address, observation.snapshot.capitalLedger], blockNumber }) }),
+		readers,
 	)
+	return { observation: result.observation, totalPrincipal: result.totalPrincipal, allowance: result.details.allowance }
 }
 
 /** One durable action per cycle. Each prerequisite settles before a fresh, independent cycle can take over. */

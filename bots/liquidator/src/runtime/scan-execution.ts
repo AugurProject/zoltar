@@ -1,3 +1,4 @@
+import { totalManagedPrincipalAttoRep } from '#core/portfolio-exposure'
 import { executeUnusedPortfolioFunding, unusedPortfolioFunding } from '#execution/portfolio-unused-funding'
 import { executePortfolioInstruction } from '#execution/portfolio-instructions'
 import { portfolioTakeoverPlan } from '#core/portfolio-strategy'
@@ -34,7 +35,7 @@ export async function runLiveExecutionStep(runtime: LiquidatorRuntime, deps: Liq
 		if (executed) return shouldStopAfterSuccessfulCycle(runtime.settings.runtime.once)
 	}
 	if (runtime.settings.portfolioPolicy.allowFundedTakeovers) {
-		const totalPrincipal = state.portfolios.reduce((sum, portfolio) => sum + (portfolio.managedPrincipalAttoRep ?? portfolio.snapshot.ownerPrincipalAttoRep), 0n)
+		const totalPrincipal = totalManagedPrincipalAttoRep(state.portfolios)
 		for (const portfolio of state.portfolios) {
 			const price = { repToken: portfolio.snapshot.repToken, lastPrice: portfolio.snapshot.acceptedPrice }
 			const priceAllowed = (current: typeof portfolio) => canonicalMarketPriceAllowsExecution({ repToken: current.snapshot.repToken, lastPrice: current.snapshot.acceptedPrice }, runtime.settings, state, canonicalHash, requireDexEvidence)
@@ -63,7 +64,7 @@ export async function runLiveExecutionStep(runtime: LiquidatorRuntime, deps: Liq
 /** Records the best dry-run candidate once per distinct pool, target, debt, and price. */
 export function runDryRunStep(runtime: LiquidatorRuntime, deps: LiquidatorDeps) {
 	const { state } = deps
-	const totalPrincipal = state.portfolios.reduce((sum, portfolio) => sum + (portfolio.managedPrincipalAttoRep ?? portfolio.snapshot.ownerPrincipalAttoRep), 0n)
+	const totalPrincipal = totalManagedPrincipalAttoRep(state.portfolios)
 	for (const portfolio of state.portfolios) {
 		for (const position of portfolio.positions) {
 			const result = portfolioTakeoverPlan(portfolio, position, runtime.settings, totalPrincipal, marketPriceAllowsExecution({ repToken: portfolio.snapshot.repToken, lastPrice: portfolio.snapshot.acceptedPrice }, runtime.settings, state))

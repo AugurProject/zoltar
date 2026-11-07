@@ -210,3 +210,15 @@ test('virtual winner takeover uses the bid API and rejects materialization or id
 	delete position.auctionTarget
 	await expect(call.preSubmit?.()).rejects.toThrow('target position is missing')
 })
+
+test('final refresh rejects a block replacement during action-specific reads', async () => {
+	const f = fixture()
+	const source = portfolioClient({ allowance: 0n })
+	const client = new Proxy(source.client, {
+		get(target, property) {
+			if (property === 'getBlock') return async () => ({ number: 123n, hash: source.reads.some(read => read.functionName === 'allowance') ? `0x${'99'.repeat(32)}` : source.observation.snapshot.blockHash, timestamp: 3700n })
+			return Reflect.get(target, property, target)
+		},
+	})
+	await expect(refreshPortfolioExecution(f.wallet, f.settings, f.state.portfolioScopes, f.pool, f.observation, 1n, [{ endpoint: 'https://rpc.example', client }])).rejects.toThrow('snapshot was replaced')
+})
