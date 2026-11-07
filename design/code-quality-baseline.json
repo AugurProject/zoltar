@@ -1,0 +1,95 @@
+{
+	"baselineCommit": "d842266e10162d973ddf46d0946923d686534079",
+	"dateUtc": "2026-11-07",
+	"purpose": "Static-review follow-up baseline for six independent code-quality pull requests. This is a scoped verification record, not a security audit or full-suite certification.",
+	"environment": {
+		"bun": "1.4.2",
+		"initialSetupFailure": "System Bun 1.4.3 rejected by install-frozen.mts; rerun with the pinned 1.4.2 binary outside the repository."
+	},
+	"checks": [
+		{
+			"command": "bun run setup",
+			"result": "passed with Bun 1.4.2"
+		},
+		{
+			"command": "bun run test:preflight",
+			"result": "passed"
+		},
+		{
+			"command": "bun run format:check",
+			"result": "passed before adding this record"
+		},
+		{
+			"command": "bun ./tooling/testing/bun-test.mts shared/trading/ts/trading/math.test.ts shared/trading/ts/trading/estimates.test.ts tooling/testing/coverage-report.test.ts tooling/repo/run-affected-checks.test.ts",
+			"result": "46 passed"
+		},
+		{
+			"command": "cd bots/chaos && bun ../../tooling/testing/bun-test.mts tests/execution/recovery.test.ts tests/execution/transaction-executor.test.ts",
+			"result": "102 passed"
+		},
+		{
+			"command": "cd bots/open-oracle-arbitrager && bun ../../tooling/testing/bun-test.mts tests/contracts/OpenOracleArbitrageExecutor.test.ts tests/execution/create2-executor.test.ts",
+			"result": "48 passed"
+		},
+		{
+			"command": "bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup.ts solidity/ts/tests/securityPoolEventEmitterStorageLayout.test.ts solidity/ts/tests/statoblast/privilegedAuthorization.test.ts",
+			"result": "6 passed"
+		},
+		{
+			"command": "bun run knip",
+			"result": "passed after setup"
+		},
+		{
+			"command": "bun run tsc",
+			"result": "passed across registered projects"
+		},
+		{
+			"command": "bun run check",
+			"result": "passed after setup and formatting this record"
+		}
+	],
+	"sensitiveOperations": [
+		{
+			"operation": "SecurityPool initialization and custody binding",
+			"implementation": ["solidity/contracts/statoblast/SecurityPool.sol", "solidity/contracts/statoblast/SecurityPoolEventEmitter.sol", "solidity/contracts/statoblast/SecurityPoolPortfolioAccountingDelegate.sol"],
+			"tests": ["solidity/ts/tests/statoblast/privilegedAuthorization.test.ts", "solidity/ts/tests/securityPoolEventEmitterStorageLayout.test.ts"]
+		},
+		{
+			"operation": "Atomic dispute funding, hedging and withdrawal",
+			"implementation": ["bots/open-oracle-arbitrager/contracts/OpenOracleArbitrageExecutor.sol"],
+			"tests": ["bots/open-oracle-arbitrager/tests/contracts/OpenOracleArbitrageExecutor.test.ts", "bots/open-oracle-arbitrager/tests/execution/create2-executor.test.ts"]
+		},
+		{
+			"operation": "Identical-byte recovery, replacements and receipt persistence",
+			"implementation": ["bots/chaos/src/execution/recovery.ts", "bots/chaos/src/execution/recovery-policy.ts", "bots/chaos/src/execution/receipt-disposition.ts"],
+			"tests": ["bots/chaos/tests/execution/recovery.test.ts", "bots/chaos/tests/execution/transaction-executor.test.ts"]
+		}
+	],
+	"priorities": [
+		{
+			"step": 2,
+			"goal": "Give the SecurityPool accounting delegate a name matching its state-changing responsibility; retain existing authorization and storage-layout protections."
+		},
+		{
+			"step": 3,
+			"goal": "Extract venue execution from OpenOracle dispute and lifecycle orchestration without weakening balance, approval or callback checks."
+		},
+		{
+			"step": 4,
+			"goal": "Separate recovery observation from orchestration and exercise restart after persistence failures using existing deterministic RPC fixtures."
+		},
+		{
+			"step": 5,
+			"goal": "Separate LCOV parsing and source-map remapping from coverage policy and reporting; remove the oversized coverage-report allowance."
+		},
+		{
+			"step": 6,
+			"goal": "Expose the affected-check plan without executing it, using the existing ownership graph and complete task change set."
+		}
+	],
+	"excludedValidation": {
+		"browserQA": "No rendered UI or documentation changes in this baseline record.",
+		"liveNetwork": "No live network or historical routing behavior changed.",
+		"fullSuite": "Baseline is bounded to the implementations and consumers targeted by the quality plan; independent explorer and unrelated UI behavior are not certified."
+	}
+}
