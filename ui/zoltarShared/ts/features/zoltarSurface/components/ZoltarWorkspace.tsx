@@ -16,6 +16,8 @@ export type ZoltarWorkspace = {
 	environmentRefreshKey: number
 	isConnectingWallet: boolean
 	onConnectWallet: () => void
+	/** Records the question chosen to fork the selected universe; operations read it back as `zoltarForkQuestionId`. */
+	onForkQuestionIdChange: (questionId: string) => void
 	onGoToGenesisUniverse: () => void
 	onRetryUniverse: () => void
 	onSwitchNetwork: () => void

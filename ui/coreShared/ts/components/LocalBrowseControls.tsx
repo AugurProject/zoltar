@@ -7,6 +7,7 @@ import { FormInput } from './FormInput.js'
 import { LoadingText } from './LoadingText.js'
 import { UpdatedAgo } from './UpdatedAgo.js'
 import { ViewTabs } from './ViewTabs.js'
+import { useFocusRetainingDisabled } from '../hooks/useFocusRetainingDisabled.js'
 
 function LocalCollectionSwitcher({ collection, downloadedCount, favoritesCount, onChange }: { collection: LocalBrowseCollection; downloadedCount: number; favoritesCount: number; onChange: (collection: LocalBrowseCollection) => void }) {
 	return (
@@ -34,6 +35,16 @@ type DiscoveryState = {
 	totalCount: bigint | undefined
 }
 
+/** Keeps keyboard focus while the page it requested loads, instead of dropping it to the page. */
+function DiscoverMoreButton({ disabled, emphasize, loading, onClick }: { disabled: boolean; emphasize: boolean; loading: boolean; onClick: () => void }) {
+	const { buttonProps, guardClick } = useFocusRetainingDisabled(disabled || loading)
+	return (
+		<button className={emphasize ? 'primary' : 'secondary'} type='button' aria-busy={loading} {...buttonProps} onClick={guardClick(onClick)}>
+			{loading ? <LoadingText>{favoritesCopy.discovering}</LoadingText> : favoritesCopy.discoverMore}
+		</button>
+	)
+}
+
 /** The first page loads automatically; users request only additional bounded pages. */
 function DiscoveryControl({ discovery, disabled = false, emphasize = false, nounPlural }: { disabled?: boolean; discovery: DiscoveryState; emphasize?: boolean; nounPlural: string }) {
 	if (!discovery.hasScanned) return discovery.loading ? <LoadingText>{favoritesCopy.discovering}</LoadingText> : undefined
@@ -43,9 +54,7 @@ function DiscoveryControl({ discovery, disabled = false, emphasize = false, noun
 			<p className='detail' role='status'>
 				{favoritesCopy.formatDiscoveredProgress(discovery.scannedItemCount.toString(), discovery.totalCount?.toString() ?? '', nounPlural)}
 			</p>
-			<button className={emphasize ? 'primary' : 'secondary'} type='button' disabled={disabled || discovery.loading} onClick={discovery.discoverNext}>
-				{discovery.loading ? <LoadingText>{favoritesCopy.discovering}</LoadingText> : favoritesCopy.discoverMore}
-			</button>
+			<DiscoverMoreButton disabled={disabled} emphasize={emphasize} loading={discovery.loading} onClick={discovery.discoverNext} />
 		</div>
 	)
 }

@@ -9,6 +9,8 @@ const fillQuestion: readonly UiScreenshotStep[] = [
 	{ fill: 'Description', value: 'Resolves Yes if IPMA reports measurable rain at its Lisbon station on 1 June 2027 (UTC). Invalid if IPMA publishes no reading.' },
 	{ fill: 'End time', value: '2027-06-02T00:00' },
 	{ waitForText: 'Draft preview' },
+	// Create stays disabled until the draft's question ID is confirmed not to exist yet.
+	{ waitForNoText: 'Checking for an existing question…' },
 ]
 const createQuestion: readonly UiScreenshotStep[] = [...fillQuestion, { click: 'Create question', nth: -1 }, { waitForText: 'Use for fork' }]
 

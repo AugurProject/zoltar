@@ -74,12 +74,28 @@ export const routeDataContext = (chainId: string, url: URL): string => {
 // Parameters that select content within one route (details, tabs, and filters); they never follow the user to another route.
 const routeScopedParameters = ['log', 'account', 'contract', 'entity', 'tab', 'fromBlock', 'toBlock', 'event', 'address', 'q', 'entityType', 'canonical', 'atBlock']
 
+// Preferences that only one route reads; they follow the user only back to that route.
+const routePreferenceParameters: Readonly<Record<string, string>> = { sort: '/richlist', view: '/richlist' }
+
 /** Builds the destination of a navigation link: the link's own URL plus the current page-wide parameters (network, demo flags, preferences). */
 export const navigationTarget = (linkUrl: URL, currentUrl: URL): URL => {
 	const target = new URL(linkUrl)
 	for (const name of routeScopedParameters) target.searchParams.delete(name)
 	for (const [name, value] of currentUrl.searchParams) {
+		const preferenceRoute = routePreferenceParameters[name]
+		if (preferenceRoute !== undefined && preferenceRoute !== target.pathname) continue
 		if (!target.searchParams.has(name) && !routeScopedParameters.includes(name)) target.searchParams.set(name, value)
 	}
+	return target
+}
+
+// Selected records and block numbers name positions on one chain; they mean something else, or nothing, on another.
+const chainRecordParameters = ['log', 'entity', 'account', 'contract']
+const chainBlockParameters = ['atBlock', 'fromBlock', 'toBlock']
+
+/** The current URL after the selected network changed: every record, and unless kept every block number, of the previous chain is dropped. */
+export const networkSwitchUrl = (currentUrl: URL, { keepBlockNumbers = false }: { readonly keepBlockNumbers?: boolean } = {}): URL => {
+	const target = new URL(currentUrl)
+	for (const name of keepBlockNumbers ? chainRecordParameters : [...chainRecordParameters, ...chainBlockParameters]) target.searchParams.delete(name)
 	return target
 }

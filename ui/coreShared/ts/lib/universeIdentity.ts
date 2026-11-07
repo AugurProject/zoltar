@@ -64,7 +64,7 @@ export function createUniverseIdentity(universeId: bigint) {
 		return `${curve(contour(-1), 'M', roundness)} ${curve(contour(1).reverse(), 'L', roundness)} Z`
 	})
 	const renderImage = (dark: boolean, miniature: boolean) => {
-		const palette = dark ? { ground: 17, fold: 24, miniature: 32, miniatureGround: 27, foldChroma: 0.075, foldRange: 2.5 } : { ground: 94, fold: 88, miniature: 84, miniatureGround: 93, foldChroma: 0.055, foldRange: 3 }
+		const palette = dark ? { ground: 17, fold: 21, miniature: 32, miniatureGround: 27, foldChroma: 0.055, foldRange: 2 } : { ground: 94, fold: 90, miniature: 84, miniatureGround: 93, foldChroma: 0.04, foldRange: 2 }
 		const groundL = miniature ? palette.miniatureGround : palette.ground
 		const baseL = miniature ? palette.miniature : palette.fold
 		const rangeL = miniature ? 8 : palette.foldRange

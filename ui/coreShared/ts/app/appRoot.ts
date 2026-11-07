@@ -58,8 +58,8 @@ export async function mountApp(options: MountAppOptions) {
 	if (rootOption === undefined) throw new Error('mountApp requires a root component factory')
 	const root = rootOption
 	const target = options.target ?? document.body
-	// Only capture the static fallback on startup; later mounts must leave Preact's main landmark alone.
-	const startupPlaceholder = mountedDocuments.has(target.ownerDocument) ? undefined : (target.ownerDocument.querySelector('body > main') ?? undefined)
+	// Only capture the static fallback, the page's top-level frame, on startup; later mounts must leave Preact's frame alone.
+	const startupPlaceholder = mountedDocuments.has(target.ownerDocument) ? undefined : (target.ownerDocument.querySelector('body > .app-frame') ?? undefined)
 	mountedDocuments.add(target.ownerDocument)
 	const genesisOutcome = readGenesisOutcomeFromLocation()
 	applyThemePreference(readThemePreference())

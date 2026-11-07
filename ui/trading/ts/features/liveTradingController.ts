@@ -38,7 +38,7 @@ export function useLiveTradingController({
 	const marketDiscovery = useMarketDiscovery(configuration, marketDiscoveryScope(route, selectedUniverseId))
 	const { markets, discoveryState, discoveryError, marketPage } = marketDiscovery
 	const walletSession = useWalletSession()
-	const { account, accountRef, walletClient, walletChainId, walletEthAttoEth, walletContextInvalidated, walletConnectionFeedback } = walletSession
+	const { account, accountRef, walletClient, walletChainId, walletEthAttoEth, walletSummaryStatus, walletContextInvalidated, walletConnectionFeedback } = walletSession
 	const portfolioQueries = usePortfolioQueries()
 	const { balances, setBalances, balanceState, setBalanceState, balanceError, setBalanceError, portfolioEntries, portfolioBalanceState, portfolioBalanceError, setPortfolioRefreshNonce } = portfolioQueries
 	const portfolioBalanceRequests = useRef(createLatestRequestGuard()).current
@@ -97,7 +97,7 @@ export function useLiveTradingController({
 	useBlockRefresh(event => {
 		if (event.reason === 'invalidate' && account !== undefined) refreshWalletSummaryAfterReceipt()
 	})
-	usePortfolioRefreshEffects({ route, configuration, account, selected, visibleMarkets, marketRevision: markets, selectedUniverseId: walletUniverseId, walletContextInvalidated, accountRef, queries: portfolioQueries, services, portfolioBalanceRequests, balanceRequests })
+	const { revalidateBalances } = usePortfolioRefreshEffects({ route, configuration, account, selected, visibleMarkets, marketRevision: markets, selectedUniverseId: walletUniverseId, walletContextInvalidated, accountRef, queries: portfolioQueries, services, portfolioBalanceRequests, balanceRequests })
 	useWalletSummaryEffects({
 		route,
 		configuration,
@@ -162,6 +162,7 @@ export function useLiveTradingController({
 		executeWithCurrentWalletContext,
 		// A trade can confirm after navigation; its refresh must load the route now on screen, not the one it started on.
 		refresh: refreshCurrentRoute,
+		revalidateBalances,
 	})
 
 	return {
@@ -169,6 +170,8 @@ export function useLiveTradingController({
 			account,
 			walletClient,
 			walletEthAttoEth,
+			/** The read behind `walletEthAttoEth`, so an unknown balance can wait or report the failure instead of skipping a funds check. */
+			walletEthStatus: walletSummaryStatus,
 			networkMismatchReason: walletNetworkMismatchReason(walletChainId, configuration),
 			connect,
 			connectionMessage: walletConnectionFeedback?.route === route ? walletConnectionFeedback.detail : undefined,

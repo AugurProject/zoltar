@@ -142,6 +142,7 @@ export function renderSelectedReportActionSection({
 	onDisputeReport,
 	onOpenOracleFormChange,
 	onSettleReport,
+	onWrapDisputeWeth,
 	openOracleActiveAction,
 	openOracleForm,
 	openOracleTokenAccessState,
@@ -160,6 +161,7 @@ export function renderSelectedReportActionSection({
 	onDisputeReport: () => void
 	onOpenOracleFormChange: (update: Partial<OpenOracleFormState>) => void
 	onSettleReport: () => void
+	onWrapDisputeWeth: () => void
 	openOracleActiveAction: OpenOracleSectionProps['openOracleActiveAction']
 	openOracleForm: OpenOracleFormState
 	openOracleTokenAccessState: OpenOracleSectionProps['openOracleTokenAccessState']
@@ -228,6 +230,28 @@ export function renderSelectedReportActionSection({
 					</SectionBlock>
 				)
 			}
+			const wethWrap = disputeSubmission?.wethWrap
+			// WETH the wallet lacks is wrapped first, so the wrap step comes before the approvals that spend it.
+			const disputeWrapStep =
+				wethWrap === undefined ? undefined : (
+					<SectionBlock headingLevel={4} title={openOracleCopy.wrapEth} variant='embedded'>
+						<div className='actions'>
+							<TransactionActionButton
+								idleLabel={wethWrap.amountAttoEth === undefined || wethWrap.amountAttoEth === 0n ? openOracleCopy.wrapEth : openOracleCopy.formatWrapEthAmount(formatCeilingAmountDisplay(wethWrap.amountAttoEth))}
+								pendingLabel={openOracleCopy.wrappingEth}
+								onClick={onWrapDisputeWeth}
+								pending={openOracleActiveAction === 'wrapWeth'}
+								tone='secondary'
+								availability={withWalletGuardFirst(
+									{ disabled: wethWrap.blockMessage !== undefined, loading: wethWrap.blockMessage?.kind === 'hidden-loading', reason: wethWrap.blockMessage?.message },
+									getWalletConnectionActiveAppChainGuardState({ isOnActiveAppChain, walletConnected: isConnected, walletRequiredReason: openOracleCopy.disputeWalletRequiredReason }),
+								)}
+								disabledReasonElementId={sharedApprovalGuardMessage === undefined ? undefined : sharedApprovalGuardMessageId}
+								showDisabledReason={sharedApprovalGuardMessage === undefined}
+							/>
+						</div>
+					</SectionBlock>
+				)
 			const allDisputeInputFieldErrors = disputeSubmission?.inputFieldErrors ?? {}
 			// Amount errors wait for blur so typing stays quiet.
 			const disputeInputFieldErrors = {
@@ -353,7 +377,8 @@ export function renderSelectedReportActionSection({
 							</WalletActionFixReason>
 						)}
 						{disputeInputBlockDetail}
-						{/* Approval steps stay in place while amounts are invalid; each explains why it is unavailable. */}
+						{/* The wrap and approval steps stay in place while amounts are invalid; each explains why it is unavailable. */}
+						{disputeWrapStep}
 						{renderDisputeTokenApproval('token1')}
 						{renderDisputeTokenApproval('token2')}
 						{!isOnActiveAppChain || disputeSubmission?.blockMessage?.kind !== 'visible' || disputeSubmission.blockMessage === disputeSubmission.inputBlockMessage ? undefined : <UserMessage className='detail' detail={disputeSubmission.blockMessage.message} />}

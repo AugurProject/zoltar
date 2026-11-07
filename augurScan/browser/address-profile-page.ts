@@ -108,7 +108,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		card.append(
 			element('span', 'rich-position-kind', 'Vault'),
 			element('strong', '', position.questionTitle ?? 'Vault position'),
-			element('span', '', `${exactUnit(position.underwritingLimitAttoEth, 18, 'ETH')} underwriting commitment · ${exactUnit(position.claimableFeesAttoEth, 18, itemNativeSymbol)} claimable`),
+			element('span', '', `${exactUnit(position.underwritingLimitAttoEth, 18, itemNativeSymbol)} underwriting commitment · ${exactUnit(position.claimableFeesAttoEth, 18, itemNativeSymbol)} claimable`),
 			protocolAddressLink(position.poolAddress, { chainId, className: 'rich-token-address address-link' }),
 		)
 		involvementGrid.append(card)
@@ -118,7 +118,9 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 	setLiveRecord(involvement, 'involvement', { pools: item.pool_associations, vaults: item.vault_positions })
 	const escalationClaims = operationsPanel(
 		'Escalation interactions',
-		(item.escalation_claims ?? []).map(claim => operationRow(String(claim['type'] ?? 'Escalation position'), `${semanticSummary({ event_data: claim['data'] })} · Historical position; winning payout depends on final resolution, carry proofs and haircut allocation`, String(claim['entity'] ?? ''), claim['blockNumber'])),
+		(item.escalation_claims ?? []).map(claim =>
+			operationRow(String(claim['type'] ?? 'Escalation position'), `${semanticSummary({ event_data: claim['data'] }, itemNativeSymbol)} · Historical position; winning payout depends on final resolution, carry proofs and haircut allocation`, String(claim['entity'] ?? ''), claim['blockNumber']),
+		),
 		'No escalation interactions are associated with this address.',
 	)
 	const escalationPositions = operationsPanel(
@@ -152,7 +154,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 	)
 	const refundPanel = operationsPanel(
 		'Pending auction refunds',
-		(item.pending_refunds ?? []).slice(0, 250).map(refund => operationRow('Pending ETH refund', exactUnit(String(refund['pending_atto_eth']), 18, 'ETH'), String(refund['auction_address']), undefined, operationsHref(`/auction/${refund['auction_address']}`))),
+		(item.pending_refunds ?? []).slice(0, 250).map(refund => operationRow('Pending refund', exactUnit(String(refund['pending_atto_eth']), 18, itemNativeSymbol), String(refund['auction_address']), undefined, operationsHref(`/auction/${refund['auction_address']}`))),
 		'No indexed refund credits remain.',
 		{ label: `Balances cover indexed history.${item.pending_refunds_truncated === true ? ' First 250 auctions shown.' : ''}` },
 	)
@@ -172,7 +174,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 	)
 	const auctionClaims = operationsPanel(
 		'Auction interactions',
-		(item.auction_claims ?? []).map(claim => operationRow(String(claim['type'] ?? 'Auction position'), `${semanticSummary({ event_data: claim['data'] })}`, String(claim['entity'] ?? ''), claim['blockNumber'])),
+		(item.auction_claims ?? []).map(claim => operationRow(String(claim['type'] ?? 'Auction position'), `${semanticSummary({ event_data: claim['data'] }, itemNativeSymbol)}`, String(claim['entity'] ?? ''), claim['blockNumber'])),
 		'No truth-auction interactions are associated with this address.',
 	)
 	const lpPositions = operationsPanel(
@@ -188,7 +190,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		),
 		'No current AMM liquidity-token position has been reconstructed for this address.',
 	)
-	const tradingPnl = tradingPnlPanel(item.trading_pnl, { operationRow, operationsPanel, operationsHref, element })
+	const tradingPnl = tradingPnlPanel(item.trading_pnl, { operationRow, operationsPanel, operationsHref, element, nativeSymbol: itemNativeSymbol })
 	const forkParticipation = operationsPanel(
 		'Fork and migration participation',
 		operationRecords(item['fork_participation']).map(event =>

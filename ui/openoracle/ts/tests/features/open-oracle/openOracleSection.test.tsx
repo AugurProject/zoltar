@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TransactionActionButton, TransactionActionButtonLockProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
@@ -215,6 +215,7 @@ function createOpenOracleSectionProps(overrides: Partial<OpenOracleSectionProps>
 		onOpenOracleFormChange: () => undefined,
 		onSettleReport: () => undefined,
 		onWithdrawOpenOracleBalance: () => undefined,
+		onWrapDisputeWeth: () => undefined,
 		openOracleActiveAction: undefined,
 		openOracleActiveWithdrawalBalance: undefined,
 		openOracleCreateForm: getDefaultOpenOracleCreateFormState(),
@@ -330,10 +331,14 @@ function createOpenOracleDisputeSubmission({
 		disputeDelay: 10n,
 		reportTimestamp: 100n,
 	}),
+	walletEthBalanceAttoEth,
+	wethAddress,
 }: {
 	openOracleForm?: OpenOracleFormState
 	openOracleTokenAccessState?: OpenOracleSectionProps['openOracleTokenAccessState']
 	openOracleReportDetails?: OpenOracleReportDetails
+	walletEthBalanceAttoEth?: bigint | undefined
+	wethAddress?: Address | undefined
 } = {}): OpenOracleDisputeSubmissionDetails {
 	return deriveOpenOracleDisputeSubmissionDetails({
 		approvedToken1Amount: openOracleTokenAccessState.token1Approval.value,
@@ -349,6 +354,8 @@ function createOpenOracleDisputeSubmission({
 		token2Balance: openOracleTokenAccessState.token2Balance,
 		token2BalanceError: openOracleTokenAccessState.token2BalanceError,
 		token2Decimals: openOracleTokenAccessState.token2Decimals ?? openOracleReportDetails.token2Decimals,
+		walletEthBalanceAttoEth,
+		wethAddress,
 	})
 }
 
@@ -375,6 +382,7 @@ function renderReportActionSection(
 		onDisputeReport: () => undefined,
 		onOpenOracleFormChange: () => undefined,
 		onSettleReport: () => undefined,
+		onWrapDisputeWeth: () => undefined,
 		openOracleActiveAction: undefined,
 		openOracleForm,
 		openOracleTokenAccessState,
@@ -391,9 +399,11 @@ function renderDisputeActionSection({
 		currentReporter: REPORTER,
 		reportTimestamp: 100n,
 	}),
+	walletEthBalanceAttoEth,
+	wethAddress,
 	...options
-}: ReportActionSectionOptions & { openOracleTokenAccessState?: OpenOracleSectionProps['openOracleTokenAccessState'] } = {}) {
-	const disputeSubmission = createOpenOracleDisputeSubmission({ openOracleForm, openOracleTokenAccessState, openOracleReportDetails })
+}: ReportActionSectionOptions & { openOracleTokenAccessState?: OpenOracleSectionProps['openOracleTokenAccessState']; walletEthBalanceAttoEth?: bigint | undefined; wethAddress?: Address | undefined } = {}) {
+	const disputeSubmission = createOpenOracleDisputeSubmission({ openOracleForm, openOracleTokenAccessState, openOracleReportDetails, walletEthBalanceAttoEth, wethAddress })
 	return renderReportActionSection('dispute', { ...options, openOracleForm, openOracleReportDetails }, openOracleTokenAccessState, disputeSubmission)
 }
 
@@ -814,6 +824,40 @@ void describe('OpenOracleSection', () => {
 		expect(higherPrice.swapTokenKey).toBe('token2')
 		expect(higherPrice.token1ContributionAmount).toBe(10n * TOKEN_UNITS)
 		expect(higherPrice.token2ContributionAmount).toBe(35n * TOKEN_UNITS)
+	})
+
+	void test('shows a wrap step before the approvals, sized to the WETH the dispute lacks', () => {
+		const report = createDisputableReportDetails()
+		const options = {
+			openOracleForm: createOpenOracleForm({ disputeNewAmount2: '30' }),
+			openOracleReportDetails: report,
+			openOracleTokenAccessState: createApprovedTokenAccessState(0n, { token2Balance: 5n * TOKEN_UNITS }),
+			walletEthBalanceAttoEth: 100n * TOKEN_UNITS,
+			wethAddress: report.token2,
+		}
+		// The dispute pays 35 WETH and the wallet holds 5, so 30 ETH is wrapped first.
+		const section = renderDisputeActionSection(options)
+		const titles = getSectionTitles(section)
+		expect(titles.indexOf('Wrap ETH')).toBeGreaterThan(-1)
+		expect(titles.indexOf('Wrap ETH')).toBeLessThan(titles.indexOf('REPv2 approval'))
+		const wrapButton = requireButton(section, 'Wrap 30.00 ETH')
+		expect(getButtonDisabled(wrapButton)).toBe(false)
+		expect(getButtonDisabledReason(requireButton(section, 'Dispute & swap'))).toBe('Wrap 30.00 ETH to WETH first.')
+
+		const covered = renderDisputeActionSection({ ...options, openOracleTokenAccessState: createApprovedTokenAccessState(0n) })
+		const coveredWrapButton = requireButton(covered, 'Wrap ETH')
+		expect(getButtonDisabled(coveredWrapButton)).toBe(true)
+		expect(getButtonDisabledReason(coveredWrapButton)).toBe('Not needed. Your WETH covers this dispute.')
+
+		const ethShort = renderDisputeActionSection({ ...options, walletEthBalanceAttoEth: 10n * TOKEN_UNITS })
+		expect(getButtonDisabledReason(requireButton(ethShort, 'Wrap 30.00 ETH'))).toBe('Insufficient ETH to wrap. Need 30 ETH, wallet has 10 ETH.')
+		expect(getButtonDisabledReason(requireButton(ethShort, 'Dispute & swap'))).toContain('Insufficient WETH balance')
+
+		const invalidAmounts = renderDisputeActionSection({ ...options, openOracleForm: createOpenOracleForm({ disputeNewAmount2: '' }) })
+		expect(getButtonDisabledReason(requireButton(invalidAmounts, 'Wrap ETH'))).toBe('Enter valid dispute amounts before wrapping ETH.')
+
+		const noWeth = renderDisputeActionSection({ ...options, wethAddress: undefined })
+		expect(getSectionTitles(noWeth)).not.toContain('Wrap ETH')
 	})
 
 	void test('keeps dispute approval steps in place while the amounts are invalid', () => {

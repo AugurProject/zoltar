@@ -76,7 +76,6 @@ export const retrying = 'Retrying…'
 export const reportDetails = 'Report details'
 export const returnToBrowse = 'Return to browse'
 export const formatLabelValue = (label: CopyTemplateValue, value: CopyTemplateValue) => `${label}: ${value}`
-export const dismissErrorActionLabel = 'Dismiss error'
 export const dropdownOptions = 'Dropdown options'
 export const availableNow = 'Available now'
 export const blocked = 'Blocked'

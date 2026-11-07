@@ -1,4 +1,5 @@
 import { bigintToSafeNumber } from '@zoltar/core-shared/evm/ethereum'
+import { getReportingOutcomeKey } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 import { compareBigint } from '@zoltar/core-shared/math/bigint'
 import { marketAcceptsNewRisk, type LiveMarket } from '../protocol/liveMarket.js'
 import { attoSharesToCollateralAttoEth } from './shareValue.js'
@@ -24,12 +25,23 @@ export function marketYesTenths(market: OddsInputs) {
 	return bigintToSafeNumber((market.noReserve * 1_000n) / total, 'Conditional YES tenths')
 }
 
-/** Whole-percent YES / NO odds for compact displays; the two always add up to 100. */
+/** YES / NO odds in percent to one decimal, the precision every price display uses; NO is 100 minus YES, so the two always add up to 100. */
 export function marketOddsPercent(market: OddsInputs) {
 	const tenths = marketYesTenths(market)
 	if (tenths === undefined) return undefined
-	const yes = Math.round(tenths / 10)
-	return { yes, no: 100 - yes }
+	return { yes: tenths / 10, no: (1_000 - tenths) / 10 }
+}
+
+const RESOLVED_OUTCOMES = { invalid: 'INVALID', yes: 'YES', no: 'NO' } as const
+
+/**
+ * How a market's price reads: `live` while it takes new risk, `last` once it stops (the pool's final price, still
+ * conditional on a valid resolution), and `resolved` once the question has an outcome, which replaces the price.
+ */
+export function marketPriceState(market: Parameters<typeof marketAcceptsNewRisk>[0], nowSeconds: bigint): Readonly<{ kind: 'live' | 'last' }> | Readonly<{ kind: 'resolved'; outcome: 'INVALID' | 'YES' | 'NO' }> {
+	const key = market.loadError === undefined ? getReportingOutcomeKey(market.questionOutcome) : 'none'
+	if (key !== 'none') return { kind: 'resolved', outcome: RESOLVED_OUTCOMES[key] }
+	return { kind: marketAcceptsNewRisk(market, nowSeconds) ? 'live' : 'last' }
 }
 
 /**

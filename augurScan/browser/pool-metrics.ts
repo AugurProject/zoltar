@@ -15,14 +15,14 @@ export const annualFeeText = (value: unknown): string => {
 	return fee === undefined ? 'Unavailable' : exactUnit(fee, 6, '%')
 }
 
-export const poolSummaryMetrics = (state: Readonly<Record<string, unknown>>): ReadonlyArray<readonly [string, string]> => {
+export const poolSummaryMetrics = (state: Readonly<Record<string, unknown>>, nativeSymbol = 'ETH'): ReadonlyArray<readonly [string, string]> => {
 	const display = (key: string, decimals: number, unit: string) => {
 		const value = atomic(state[key])
 		return value === undefined ? 'Unavailable' : exactUnit(value, decimals, unit)
 	}
 	return [
-		['Question settlement value', display('questionSettlementAttoEth', 18, 'ETH')],
-		['Average value per share', display('averageValueAttoEthPerShare', 18, 'ETH')],
+		['Question settlement value', display('questionSettlementAttoEth', 18, nativeSymbol)],
+		['Average value per share', display('averageValueAttoEthPerShare', 18, nativeSymbol)],
 		['Outcome share supply', display('shareTokenSupplyAttoShares', 18, 'shares')],
 		['Question escalation multiplier', display('securityMultiplierBps', 4, '×')],
 	]

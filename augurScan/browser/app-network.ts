@@ -1,6 +1,6 @@
 import { decodeNetworkResponse } from './api-decoding.ts'
 import type { ScannerContext } from './app-context.ts'
-import { element, lookup } from './app-dom.ts'
+import { element, historyRangeElements, lookup } from './app-dom.ts'
 import { exactTimestamp, setLiveRecord } from './app-presentation.ts'
 import { loadRouteAfterNetworkChange, loadRouteAfterNetworkSelection, selectSystemRouteEntity } from './app-routing.ts'
 import { abortActivityRequests, clearLiveTimers, invalidateStateRequestVersions } from './app-state.ts'
@@ -11,6 +11,8 @@ import { knownNetworkName, restoredNetworkSnapshotIsCurrent } from './network-fr
 import { availableSessionSnapshotStorage, createSessionSnapshotCache } from './session-snapshot-cache.ts'
 import { createNetworkRenderer } from './network-render.ts'
 import { createNetworkRoute } from './network-route.ts'
+import { applyNetworkSelection } from './network-selection.ts'
+import { networkSwitchUrl } from './routes.ts'
 
 export const createNetworkSnapshotCache = () =>
 	createSessionSnapshotCache(
@@ -59,7 +61,7 @@ export const createNetworkControls = (context: ScannerContext, views: ScannerVie
 		canonicalState: state.canonicalState,
 		api: context.api,
 		writeSnapshot: snapshot => snapshotCache.write(snapshot),
-		resetSelectedNetworkContext: () => links.resetSelectedNetworkContext(),
+		resetSelectedNetworkContext: options => links.resetSelectedNetworkContext(options),
 		renderNetworks,
 		getLatestNetworks: () => networkRenderState.latestNetworks,
 		updateFreshness: () => updateFreshness(context),
@@ -79,8 +81,8 @@ const presentSelectedNetwork = (context: ScannerContext, network: NetworkControl
 	updateFreshness(context)
 }
 
-/** Drops every cached view, request, and detail that belongs to the previously selected network. */
-export const resetSelectedNetworkContext = (context: ScannerContext, views: ScannerViews): void => {
+/** Drops every cached view, request, detail, and (unless kept) block number that belongs to the previously selected network. */
+export const resetSelectedNetworkContext = (context: ScannerContext, views: ScannerViews, { keepBlockNumbers = false }: { readonly keepBlockNumbers?: boolean } = {}): void => {
 	const { state, elements } = context
 	const { activityDetailState, canonicalState, systemRouteState, operationsState } = state
 	const { contracts, richList, addressProfile, systemCatalog } = views.entity
@@ -110,12 +112,14 @@ export const resetSelectedNetworkContext = (context: ScannerContext, views: Scan
 	lookup('#activity-summary').textContent = 'No logs shown'
 	lookup('#more').hidden = true
 	if (elements.dialog.open) views.detail.account.closeDetail({ preservePendingCanonicalAccount: true })
-	const url = new URL(location.href)
-	url.searchParams.delete('log')
-	url.searchParams.delete('entity')
-	url.searchParams.delete('account')
-	url.searchParams.delete('contract')
+	const url = networkSwitchUrl(new URL(location.href), { keepBlockNumbers })
 	history.replaceState(null, '', url)
+	state.pageUrl = url
+	if (!keepBlockNumbers) {
+		const historyRange = historyRangeElements()
+		historyRange.fromBlock.value = ''
+		historyRange.toBlock.value = ''
+	}
 	systemRouteState.detailRequestVersion++
 	systemRouteState.data = undefined
 	systemRouteState.selectedKey = undefined
@@ -143,8 +147,14 @@ export const resetSelectedNetworkContext = (context: ScannerContext, views: Scan
 	if (location.pathname.startsWith('/question/') || location.pathname.startsWith('/universe/')) selectSystemRouteEntity(context, views)
 }
 
+/** Switches networks only when the user applies the selector's choice; changing the selection alone leaves the page as it is. */
 export const bindNetworkFilter = (context: ScannerContext, views: ScannerViews, network: NetworkControls): void => {
-	context.elements.globalNetworkFilter.addEventListener('change', async () => {
+	const { globalNetworkFilter } = context.elements
+	lookup('#global-network-form').addEventListener('submit', async event => {
+		event.preventDefault()
+		const choice = globalNetworkFilter.value
+		if (choice === context.selectedChainId() || ![...globalNetworkFilter.options].some(option => option.value === choice)) return
+		applyNetworkSelection(globalNetworkFilter, choice)
 		document.querySelector('#network-notice')?.remove()
 		resetSelectedNetworkContext(context, views)
 		presentSelectedNetwork(context, network)
@@ -158,8 +168,7 @@ export const restoreInitialNetwork = (context: ScannerContext, network: NetworkC
 	const { initialChainId, liveState } = state
 	if (initialChainId) {
 		elements.globalNetworkFilter.replaceChildren(new Option(knownNetworkName(initialChainId), initialChainId))
-		elements.globalNetworkFilter.value = initialChainId
-		elements.globalNetworkFilter.dataset['restored'] = 'true'
+		applyNetworkSelection(elements.globalNetworkFilter, initialChainId)
 		network.syncNetworkUrl()
 		network.updateNetworkLabels()
 	}
@@ -182,9 +191,9 @@ export const reconcileRouteNetwork = (context: ScannerContext, views: ScannerVie
 	const routeChainId = state.pageUrl.searchParams.get('chainId')
 	if (routeChainId === null || routeChainId === context.selectedChainId() || ![...elements.globalNetworkFilter.options].some(option => option.value === routeChainId)) return
 	const routeUrl = new URL(location.href)
-	elements.globalNetworkFilter.value = routeChainId
-	elements.globalNetworkFilter.dataset['restored'] = 'true'
-	resetSelectedNetworkContext(context, views)
+	applyNetworkSelection(elements.globalNetworkFilter, routeChainId)
+	// The navigated URL's block numbers were written for the chain it names.
+	resetSelectedNetworkContext(context, views, { keepBlockNumbers: true })
 	history.replaceState(null, '', routeUrl)
 	state.pageUrl = routeUrl
 	presentSelectedNetwork(context, network)

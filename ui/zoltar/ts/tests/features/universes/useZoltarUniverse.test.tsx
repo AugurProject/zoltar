@@ -89,12 +89,13 @@ function createZoltarUniverseDependencies(overrides: Partial<UseZoltarUniverseDe
 describe('useZoltarUniverse', () => {
 	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: NEXT_WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
 
-	test('composed universe operations reset fork and migration drafts together when the selected universe changes', async () => {
+	test('composed universe operations preserve the supplied fork question and reset migration drafts when the universe changes', async () => {
 		let state: ReturnType<typeof useZoltarOperations> | undefined
 		function Harness({ universeId }: { universeId: bigint }) {
 			state = useZoltarOperations({
 				accountAddress: NEXT_WALLET_ADDRESS,
 				activeUniverseId: universeId,
+				zoltarForkQuestionId: '0x1234',
 				autoLoadInitialData: false,
 				deploymentStatuses: [],
 				environmentRefreshKey: 0,
@@ -109,13 +110,12 @@ describe('useZoltarUniverse', () => {
 		const view = await renderIntoDocument(<Harness universeId={0n} />)
 		trackCleanup(view.cleanup)
 		await act(() => {
-			requireHookState(state).setZoltarForkQuestionId('0x1234')
 			requireHookState(state).setZoltarMigrationForm(current => ({ ...current, amount: '3' }))
 		})
 		expect(requireHookState(state).zoltarForkQuestionId).toBe('0x1234')
 		expect(requireHookState(state).zoltarMigrationForm.amount).toBe('3')
 		await act(() => render(<Harness universeId={42n} />, view.container))
-		expect(requireHookState(state).zoltarForkQuestionId).toBe('')
+		expect(requireHookState(state).zoltarForkQuestionId).toBe('0x1234')
 		expect(requireHookState(state).zoltarMigrationForm.amount).toBe('')
 		expect(requireHookState(state).zoltarMigrationPending).toBe(false)
 	})

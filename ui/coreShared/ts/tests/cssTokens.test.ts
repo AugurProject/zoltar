@@ -113,3 +113,47 @@ test('every custom property referenced by a stylesheet is declared in tokens.css
 	for (const source of stylesheets.values()) for (const reference of source.matchAll(/var\((--[a-z0-9-]+)/g)) if (!declared.has(reference[1] ?? '')) undeclared.add(reference[1] ?? '')
 	expect([...undeclared]).toEqual([])
 })
+
+function readLightDarkRgb(tokensSource: string, name: string) {
+	const match = new RegExp(`^\\s*${name}:\\s*light-dark\\(rgba\\((\\d+), (\\d+), (\\d+), 1\\), rgba\\((\\d+), (\\d+), (\\d+), 1\\)\\);`, 'm').exec(tokensSource)
+	if (match === null) throw new Error(`Expected ${name} to be an opaque light-dark() pair`)
+	const channels = match.slice(1).map(Number)
+	return { light: channels.slice(0, 3), dark: channels.slice(3, 6) }
+}
+
+function relativeLuminance(channels: readonly number[]) {
+	const [red = 0, green = 0, blue = 0] = channels.map(channel => {
+		const value = channel / 255
+		return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+	})
+	return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+}
+
+function contrastRatio(foreground: readonly number[], background: readonly number[]) {
+	const [lighter, darker] = [relativeLuminance(foreground), relativeLuminance(background)].sort((left, right) => right - left)
+	return ((lighter ?? 0) + 0.05) / ((darker ?? 0) + 0.05)
+}
+
+test('focus outlines use the full product accent, which keeps 3:1 against the page in both themes', () => {
+	const { stylesheets } = readSources()
+	const tokensSource = stylesheets.get(tokensPath)
+	if (tokensSource === undefined) throw new Error(`Missing ${tokensPath}`)
+	expect(/^\s*--focus:\s*([^;]+);/m.exec(tokensSource)?.[1]).toBe('var(--accent)')
+	const backgrounds = ['--bg', '--bg-deep', '--surface-section-opaque'].map(name => readLightDarkRgb(tokensSource, name))
+	for (const product of ['zoltar', 'statoblast', 'trading']) {
+		const accent = readLightDarkRgb(tokensSource, `--accent-${product}`)
+		for (const background of backgrounds) {
+			expect(contrastRatio(accent.light, background.light)).toBeGreaterThanOrEqual(3)
+			expect(contrastRatio(accent.dark, background.dark)).toBeGreaterThanOrEqual(3)
+		}
+	}
+	// A translucent mix fades the outline below 3:1, so focus rules draw their outline with a token instead.
+	const translucentFocusOutlines: string[] = []
+	for (const [file, source] of stylesheets) {
+		for (const rule of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+			const [, selector = '', body = ''] = rule
+			if (selector.includes(':focus') && /^\s*outline(?:-color)?:[^;]*color-mix\(/m.test(body)) translucentFocusOutlines.push(`${file}: ${selector.trim()}`)
+		}
+	}
+	expect(translucentFocusOutlines).toEqual([])
+})

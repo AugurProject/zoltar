@@ -166,6 +166,7 @@ describe('liquidity workflow controller state', () => {
 				walletClient={undefined}
 				networkMismatchReason={undefined}
 				walletEthAttoEth={10n ** 18n}
+				walletEthStatus='ready'
 				wallet={{ actionLabel: 'Connect wallet', connect: async () => undefined }}
 				settings={DEFAULT_TRADE_SETTINGS}
 				externallyLocked={false}

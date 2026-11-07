@@ -225,8 +225,10 @@ test('disables both ordinary outcome controls while the chosen deployment initia
 for (const useSeparateTarget of [false, true]) {
 	test(`replaces the static loading placeholder without adopting it or removing the pending chooser in ${useSeparateTarget ? 'a separate target' : 'the production body target'}`, async () => {
 		window.history.replaceState({}, '', '/')
-		const placeholder = document.createElement('main')
-		placeholder.textContent = 'Loading…'
+		// The same static fallback every app's index.html ships.
+		const placeholder = document.createElement('div')
+		placeholder.className = 'app-frame'
+		placeholder.innerHTML = '<main>Loading…</main>'
 		document.body.append(placeholder)
 		const target = useSeparateTarget ? document.createElement('div') : document.body
 		if (useSeparateTarget) document.body.append(target)
@@ -321,6 +323,43 @@ test('shows an initialization error and retries once even when retry is clicked 
 		})
 		expect(document.body.textContent).toBe('Application ready')
 		expect(document.querySelector('[role="alert"]')).toBeNull()
+	} finally {
+		errorLog.mockRestore()
+	}
+})
+
+test('replaces the static loading placeholder with the initialization error instead of leaving both on the page', async () => {
+	// The same static fallback every app's index.html ships.
+	document.body.innerHTML = '<div class="app-frame"><main>Loading…</main></div>'
+	const errorLog = spyOn(console, 'error').mockImplementation(() => undefined)
+	try {
+		await act(async () => {
+			await mountApp({ applicationTitle, initialize: async () => Promise.reject(new Error('Read RPC unavailable')), root: () => createElement('p', {}, 'Application ready') })
+		})
+		expect(within(document.body).getByRole('alert').textContent).toContain('Read RPC unavailable')
+		expect(document.querySelectorAll('main')).toHaveLength(1)
+		expect(document.querySelectorAll('.app-frame')).toHaveLength(1)
+		expect(document.body.textContent).not.toContain('Loading…')
+	} finally {
+		errorLog.mockRestore()
+	}
+})
+
+test('keeps the initialization error and its Retry when a retry fails again', async () => {
+	document.body.innerHTML = '<div class="app-frame"><main>Loading…</main></div>'
+	const errorLog = spyOn(console, 'error').mockImplementation(() => undefined)
+	try {
+		await act(async () => {
+			await mountApp({ applicationTitle, initialize: async () => Promise.reject(new Error('Read RPC unavailable')), root: () => createElement('p', {}, 'Application ready') })
+		})
+		await act(async () => {
+			within(document.body).getByRole('button', { name: 'Retry' }).click()
+			await Promise.resolve()
+		})
+		await act(async () => await Promise.resolve())
+		expect(within(document.body).getByRole('alert').textContent).toContain('Read RPC unavailable')
+		expect(within(document.body).getByRole('button', { name: 'Retry' })).not.toBeNull()
+		expect(document.querySelectorAll('main')).toHaveLength(1)
 	} finally {
 		errorLog.mockRestore()
 	}

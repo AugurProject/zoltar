@@ -9,6 +9,12 @@ import { TradeEstimatePanel } from '../../features/TradeEstimatePanel.js'
 import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
 import { liveMarketFixture, ticketEstimateFor } from '../support/liveMarketFixture.js'
 import { shareBalanceScope } from '../../protocol/live.js'
+import { formatOutcomeQuantity } from '../../lib/shareValue.js'
+
+/** The text of each estimate row's value, keyed by its label. */
+function estimateRows(container: ParentNode) {
+	return new Map(Array.from(container.querySelectorAll('.transaction-review-row, .transaction-review-detail-row')).map(row => [row.querySelector('span')?.textContent ?? '', row.querySelector('strong')?.textContent ?? '']))
+}
 
 beforeEach(() => installTradingRouting())
 
@@ -44,13 +50,28 @@ describe('essential trading copy', () => {
 			expect(entry.container.textContent).toContain(phrase)
 		// The buy keeps Invalid shares that pay on Invalid, so the headline never says the trade pays nothing otherwise.
 		expect(entry.container.textContent).not.toContain('0 ETH otherwise')
+		// Each headline value leads with the quantity; what it pays sits on its own line under it instead of inside the figure.
+		const payouts = Array.from(entry.container.querySelectorAll('.transaction-review-primary .trade-estimate-value-detail')).map(detail => detail.textContent ?? '')
+		expect(payouts).toHaveLength(2)
+		expect(payouts[0]).toMatch(/^[\d.]+ ETH if the question resolves Yes · 0 ETH if No$/)
+		expect(payouts[1]).toMatch(/^[\d.]+ ETH if the question resolves Invalid$/)
+		const entryRows = estimateRows(entry.container)
+		expect(entryRows.get('You receive ≈')).toBe(`${formatOutcomeQuantity(buy.quote.totalLongShares, 'YES', 6)}${payouts[0]}`)
+		expect(entryRows.get('Minimum received')).toBe(buy.kind === 'entry' ? formatOutcomeQuantity(buy.minimumLongShares, 'YES', 6, 'down') : '')
 		// The share mechanics stay available behind one disclosure instead of a second always-open breakdown.
 		expect(entry.container.querySelectorAll('details')).toHaveLength(1)
 		await entry.cleanup()
 		const exit = await renderIntoDocument(<TradeEstimatePanel estimate={sell} market={market} settings={DEFAULT_TRADE_SETTINGS} impactTier='low' impactAcknowledged={false} disabled={false} onAcknowledgeImpact={() => undefined} />)
 		cleanupRendered = exit.cleanup
-		for (const phrase of ['You sell', 'You receive ≈', 'Average price', 'Minimum received', 'Invalid used', 'Trading fee']) expect(exit.container.textContent).toContain(phrase)
-		expect(exit.container.textContent).toContain('2 Yes (1.9684 ETH if the question resolves Yes)')
+		for (const phrase of ['You sell', 'You receive ≈', 'Average price', 'Minimum received', 'Maximum sold', 'Invalid used', 'Trading fee']) expect(exit.container.textContent).toContain(phrase)
+		// A sale names the shares it takes, without a conditional payout beside the ETH it actually pays.
+		expect(exit.container.textContent).not.toContain('if the question resolves')
+		const exitRows = estimateRows(exit.container)
+		if (sell.kind !== 'exit') throw new Error('Expected a sell estimate')
+		expect(exitRows.get('You sell')).toBe(formatOutcomeQuantity(sell.quote.totalLongShares, 'YES', 6))
+		// The most the wallet signs over is shown beside the minimum it receives, and it never exceeds the 2 Yes typed.
+		expect(sell.maximumLongShares).toBeLessThanOrEqual(2n * 10n ** 18n)
+		expect(exitRows.get('Maximum sold')).toBe(formatOutcomeQuantity(sell.maximumLongShares, 'YES', 6))
 		expect(exit.container.textContent).not.toContain('0 ETH otherwise')
 		expect(exit.container.textContent).not.toContain('Profit if the question resolves Yes')
 		expect(exit.container.textContent).not.toContain('Holding fees reduce')

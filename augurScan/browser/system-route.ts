@@ -7,6 +7,7 @@ import { refreshPresentation } from './refresh-presentation.ts'
 import { exactUnit } from './format.ts'
 import { short, shortIdentifier } from './identifier-format.ts'
 import { questionStatus } from './question-time.ts'
+import { captureViewState, restoreViewState } from './view-state.ts'
 
 interface SystemRouteDeps {
 	state: SystemRouteState
@@ -36,6 +37,8 @@ interface SystemRouteDeps {
 export const createSystemRoute = (deps: SystemRouteDeps) => {
 	const { state: systemRouteState, canonicalState, element, number, counted, nativeSymbol, fetchEntityHistory, renderPoolDetail, renderVaultDetail, renderQuestionDetail, renderUniverseDetail, systemDetailRefreshGate, liveSnapshot, setLiveRecord, applyLiveChanges, errorMessage, retryCanonicalViewOr } = deps
 	const $ = deps.lookup
+	// The rendered detail and the inputs it was built from; an unchanged live refresh keeps those nodes.
+	let renderedDetail: { readonly signature: string; readonly firstNode: Element } | undefined
 	const entityKey = (type: StateTab, item: StateEntity): string => {
 		if (type === 'pools' && 'pool_address' in item) return `${item.chain_id}:${item.pool_address}`
 		if (type === 'vaults' && 'vault_address' in item) return `${item.chain_id}:${item.pool_address}:${item.vault_address}`
@@ -46,7 +49,7 @@ export const createSystemRoute = (deps: SystemRouteDeps) => {
 
 	const entityCopy = (type: StateTab, item: StateEntity): [string, string] => {
 		if (type === 'pools' && 'settlement_collateral_atto_eth' in item) return [item.question_title ?? short(item.pool_address), `${short(item.pool_address, 8, 6)} · ${counted(item.vault_count, 'vault')} · ${exactUnit(item.settlement_collateral_atto_eth, 18, nativeSymbol(item.chain_id))}`]
-		if (type === 'vaults' && 'vault_address' in item) return [short(item.vault_address, 10, 6), `${exactUnit(item.capacity_ownership_atto_rep, 18, 'ETH')} commitment`]
+		if (type === 'vaults' && 'vault_address' in item) return [short(item.vault_address, 10, 6), `${exactUnit(item.capacity_ownership_atto_rep, 18, nativeSymbol(item.chain_id))} commitment`]
 		if (type === 'questions' && 'outcome_options' in item) return [item.title, `${questionStatus(item)} · ${counted(item.pool_count, 'pool')}`]
 		if ('universe_id' in item && 'pool_count' in item) return [item.universe_id === '0' ? 'Genesis universe' : `Universe ${shortIdentifier(item.universe_id, 9, 6)}`, `${counted(item.child_count, 'child', 'children')} · ${counted(item.pool_count, 'pool')}`]
 		throw new Error(`State entity does not match the selected ${type} tab`)
@@ -86,14 +89,27 @@ export const createSystemRoute = (deps: SystemRouteDeps) => {
 		}
 		try {
 			const loadedHistory = suppliedHistory ?? (await fetchEntityHistory(systemRouteState.activeType, item, targetHistoryOffset))
-			if (systemRouteState.activeType === 'pools' && 'settlement_collateral_atto_eth' in item) await renderPoolDetail(item, requestVersion, canonicalGeneration, loadedHistory)
-			if (systemRouteState.activeType === 'vaults' && 'vault_address' in item) await renderVaultDetail(item, requestVersion, canonicalGeneration, loadedHistory)
-			if (systemRouteState.activeType === 'questions' && 'outcome_options' in item) await renderQuestionDetail(item, requestVersion, canonicalGeneration, loadedHistory)
-			if (systemRouteState.activeType === 'universes' && 'reputation_token_address' in item) await renderUniverseDetail(item, requestVersion, canonicalGeneration, loadedHistory)
-			const current = isCurrentContextRequest(contextVersion, systemRouteState.detailContextVersion, requestVersion, systemRouteState.detailRequestVersion) && isCurrentCanonicalGeneration(canonicalGeneration, canonicalState.dataGeneration)
+			const isCurrent = () => isCurrentContextRequest(contextVersion, systemRouteState.detailContextVersion, requestVersion, systemRouteState.detailRequestVersion) && isCurrentCanonicalGeneration(canonicalGeneration, canonicalState.dataGeneration)
+			// A question's time window is read from the clock, so an open question re-renders once it ends even with unchanged data.
+			const clockStatus = systemRouteState.activeType === 'questions' && 'outcome_options' in item ? questionStatus(item) : undefined
+			const signature = JSON.stringify([detailKey, location.pathname, location.search, item, loadedHistory, systemRouteState.activeType === 'universes' ? systemRouteState.data?.universes : undefined, clockStatus])
+			// Any replacement of the detail, including a prepended refresh status, changes its first node and forces a render.
+			const unchanged = quiet && renderedDetail !== undefined && renderedDetail.signature === signature && renderedDetail.firstNode === detail.firstElementChild && systemRouteState.renderedDetailKey === detailKey
+			if (!unchanged) {
+				// Re-rendering the same entity reopens its disclosures, such as exact chart data, and refocuses the control the reader was using.
+				const viewState = systemRouteState.renderedDetailKey === detailKey && !replaceWithLoading ? captureViewState(detail) : undefined
+				if (systemRouteState.activeType === 'pools' && 'settlement_collateral_atto_eth' in item) await renderPoolDetail(item, requestVersion, canonicalGeneration, loadedHistory)
+				if (systemRouteState.activeType === 'vaults' && 'vault_address' in item) await renderVaultDetail(item, requestVersion, canonicalGeneration, loadedHistory)
+				if (systemRouteState.activeType === 'questions' && 'outcome_options' in item) await renderQuestionDetail(item, requestVersion, canonicalGeneration, loadedHistory)
+				if (systemRouteState.activeType === 'universes' && 'reputation_token_address' in item) await renderUniverseDetail(item, requestVersion, canonicalGeneration, loadedHistory)
+				if (viewState !== undefined && isCurrent()) restoreViewState(detail, viewState)
+			}
+			const current = isCurrent()
 			if (current) {
 				systemRouteState.historyOffset = loadedHistory.loadedOffset ?? 0
 				systemRouteState.renderedDetailKey = detailKey
+				const firstNode = detail.firstElementChild
+				renderedDetail = firstNode === null ? undefined : { signature, firstNode }
 			}
 			return current
 		} catch (error) {

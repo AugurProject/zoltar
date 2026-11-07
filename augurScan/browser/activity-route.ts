@@ -162,6 +162,8 @@ export const createActivityRoute = (deps: ActivityRouteDeps) => {
 			const anchorTop = anchor?.getBoundingClientRect().top
 			const renderScrollY = window.scrollY
 			const retainedDrawers = append ? [] : eventDrawers()
+			// "Show more" can load the row of a drawer pinned above the feed; that drawer then moves under its row.
+			const pinnedDrawers = append ? eventDrawers().filter(drawer => drawer.dataset['placement'] === 'pinned') : []
 			const activeDrawer = retainedDrawers.find(drawer => drawer.contains(document.activeElement)) ?? retainedDrawers[0]
 			const activeDrawerContext = activeDrawer ? captureDetailContext(activeDrawer) : undefined
 			const currentRows = [...feed.querySelectorAll<HTMLElement>('.log-row[data-live-key]')]
@@ -181,12 +183,15 @@ export const createActivityRoute = (deps: ActivityRouteDeps) => {
 				const focusedRowKey = focusedRow?.dataset['liveKey']
 				const focusedControlIndex = focusedRow === null || focusedRow === undefined ? -1 : [...focusedRow.querySelectorAll<HTMLElement>('a, button')].findIndex(control => control === document.activeElement)
 				if (!append) {
-					for (const drawer of retainedDrawers) drawer.remove()
+					// A pinned drawer sits above the feed, outside the rows being replaced, so it keeps its focus and scroll position.
+					for (const drawer of retainedDrawers) if (drawer.dataset['placement'] !== 'pinned') drawer.remove()
 					feed.replaceChildren()
 				}
 				feed.append(...nextRows)
 				applyLiveChanges(feed, previousRows, { live, selector: '.log-row[data-live-key]' })
-				for (const drawer of retainedDrawers) placeEventDrawer(drawer, { allowOutsideShellFallback: false })
+				// A drawer anchored to a row that left the feed closes; a pinned drawer, whose row was never loaded, stays.
+				for (const drawer of retainedDrawers) placeEventDrawer(drawer, { allowOutsideShellFallback: drawer.dataset['placement'] === 'pinned' })
+				for (const drawer of pinnedDrawers) placeEventDrawer(drawer)
 				if (!append && focusedRowKey !== undefined && focusedControlIndex >= 0) {
 					const nextFocusedRow = nextRows.find(row => row.dataset['liveKey'] === focusedRowKey)
 					nextFocusedRow?.querySelectorAll<HTMLElement>('a, button')[focusedControlIndex]?.focus({ preventScroll: true })

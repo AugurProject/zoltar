@@ -15,8 +15,8 @@ test('matches Statoblast annual fee presentation, including normal limits and no
 		[1000000000000000000n, '0'],
 	]
 	for (const [rate, millionths] of expected) expect(annualFeeMillionths(rate)).toBe(millionths)
-	expect(annualFeeText('1000000000000000000')).toBe('0 %')
-	expect(annualFeeText('0')).toBe('100 %')
+	expect(annualFeeText('1000000000000000000')).toBe('0%')
+	expect(annualFeeText('0')).toBe('100%')
 	for (const invalid of [undefined, null, '', 'bad', '-1']) expect(annualFeeMillionths(invalid)).toBeUndefined()
 })
 

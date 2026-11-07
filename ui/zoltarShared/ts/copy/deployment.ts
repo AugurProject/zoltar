@@ -12,6 +12,7 @@ export const loadingDeploymentStatus = 'Loading deployment status…'
 export const deploymentStatusUnavailableReason = 'Deployment status is unavailable.'
 export const nextDeployable = 'Next deployable'
 export const alreadyDeployedReason = 'Already deployed.'
+export const formatContractDeployed = (contractLabel: string) => `${contractLabel} deployed`
 export const otherDeploymentRunningReason = 'Another deployment is already in progress.'
 export const allContractsDeployedReason = 'All contracts are already deployed.'
 export const deploymentFailed = 'Deployment failed'

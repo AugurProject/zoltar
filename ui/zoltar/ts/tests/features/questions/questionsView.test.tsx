@@ -10,6 +10,7 @@ import type { MarketDetails, MarketDetailsPage } from '@zoltar/ui-core-shared/ty
 import { QuestionsView } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/QuestionsView.js'
 import { questionDownloadStore } from '@zoltar/ui-zoltar-shared/lib/questionBrowse.js'
 import type { ZoltarView } from '@zoltar/ui-zoltar-shared/features/types.js'
+import type { ForkHandoff } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/lib/zoltarViewModels.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
@@ -44,7 +45,8 @@ function seedQuestions(questions: readonly MarketDetails[], { favorite = true }:
 }
 
 type ViewOverrides = {
-	canFork?: boolean
+	currentTimestamp?: bigint | undefined
+	forkHandoff?: ForkHandoff
 	loadPage?: (pageIndex: number, pageSize: number) => Promise<void>
 	onActiveViewChange?: (view: ZoltarView) => void
 	onZoltarForkQuestionIdChange?: (questionId: string) => void
@@ -53,12 +55,14 @@ type ViewOverrides = {
 	zoltarQuestionsError?: string | undefined
 }
 
-function view({ canFork = false, hasForked = false, loadPage = async () => undefined, onActiveViewChange = () => undefined, onZoltarForkQuestionIdChange = () => undefined, requestContextKey = 0, zoltarQuestionPage, zoltarQuestionsError }: ViewOverrides = {}) {
+const offeredHandoff: ForkHandoff = { kind: 'offered', universeReason: undefined }
+
+function view({ currentTimestamp = 10n, forkHandoff = { kind: 'omitted' }, loadPage = async () => undefined, onActiveViewChange = () => undefined, onZoltarForkQuestionIdChange = () => undefined, requestContextKey = 0, zoltarQuestionPage, zoltarQuestionsError }: ViewOverrides = {}) {
 	return (
 		<QuestionsView
+			currentTimestamp={currentTimestamp}
+			forkHandoff={forkHandoff}
 			zoltarQuestionsFreshness={{ refreshing: false, updatedAt: undefined }}
-			canFork={canFork}
-			hasForked={hasForked}
 			loadingZoltarQuestions={false}
 			onActiveViewChange={onActiveViewChange}
 			onLoadZoltarQuestionPage={loadPage}
@@ -140,7 +144,7 @@ describe('QuestionsView', () => {
 		const loadPage = mock(async () => undefined)
 		const activeViews: string[] = []
 		const selectedQuestionIds: string[] = []
-		const renderedComponent = await renderIntoDocument(view({ canFork: true, loadPage, onActiveViewChange: nextView => activeViews.push(nextView), onZoltarForkQuestionIdChange: questionId => selectedQuestionIds.push(questionId) }))
+		const renderedComponent = await renderIntoDocument(view({ forkHandoff: offeredHandoff, loadPage, onActiveViewChange: nextView => activeViews.push(nextView), onZoltarForkQuestionIdChange: questionId => selectedQuestionIds.push(questionId) }))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(renderedComponent.container.querySelector('details')?.open).toBe(false)
@@ -290,7 +294,7 @@ describe('QuestionsView', () => {
 
 	test('does not promise forking in a universe that has already forked', async () => {
 		seedQuestions([question])
-		const renderedComponent = await renderIntoDocument(view({ canFork: true, hasForked: true }))
+		const renderedComponent = await renderIntoDocument(view({ forkHandoff: { kind: 'forked' } }))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(
@@ -302,7 +306,42 @@ describe('QuestionsView', () => {
 		expect(within(document.body).getByText('Find reusable questions in the global registry and inspect their resolution terms.')).toBeDefined()
 	})
 
-	test('omits universe fork actions when no universe is available', async () => {
+	test('keeps Use for fork in place, disabled with a reason, until the question has ended', async () => {
+		seedQuestions([question])
+		const selectedQuestionIds: string[] = []
+		const renderedComponent = await renderIntoDocument(view({ currentTimestamp: question.endTime - 1n, forkHandoff: offeredHandoff, onZoltarForkQuestionIdChange: questionId => selectedQuestionIds.push(questionId) }))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const useForFork = within(document.body).getByRole('button', { name: `Use for fork: ${question.title} (${question.questionId})` })
+		expect(useForFork.hasAttribute('disabled')).toBe(true)
+		expect(document.getElementById(useForFork.getAttribute('aria-describedby') ?? '')?.textContent).toBe('Only an ended question can fork a universe.')
+		fireEvent.click(useForFork)
+		expect(selectedQuestionIds).toEqual([])
+		await act(async () => render(view({ currentTimestamp: question.endTime, forkHandoff: offeredHandoff }), renderedComponent.container))
+		expect(
+			within(document.body)
+				.getByRole('button', { name: `Use for fork: ${question.title} (${question.questionId})` })
+				.hasAttribute('disabled'),
+		).toBe(false)
+		expect(document.body.textContent).not.toContain('Only an ended question can fork a universe.')
+	})
+
+	test('states a universe read failure once and points every Use for fork at it instead of hiding the action', async () => {
+		const otherQuestion = createQuestion(2)
+		seedQuestions([question, otherQuestion])
+		const renderedComponent = await renderIntoDocument(view({ forkHandoff: { kind: 'offered', universeReason: 'Universe details could not be loaded.' } }))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent?.split('Universe details could not be loaded.')).toHaveLength(2)
+		const buttons = within(document.body).getAllByRole('button', { name: /^Use for fork:/ })
+		expect(buttons).toHaveLength(2)
+		for (const button of buttons) {
+			expect(button.hasAttribute('disabled')).toBe(true)
+			expect(document.getElementById(button.getAttribute('aria-describedby') ?? '')?.textContent).toBe('Universe details could not be loaded.')
+		}
+	})
+
+	test('omits universe fork actions for a universe that does not exist', async () => {
 		seedQuestions([question])
 		const renderedComponent = await renderIntoDocument(view())
 		cleanupRenderedComponent = renderedComponent.cleanup

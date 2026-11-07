@@ -3,7 +3,7 @@ import type { OpenOracleReportDetails } from '../../../types/contracts.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { ensureSentence, sanitizeErrorDetail } from '@zoltar/ui-core-shared/lib/errors.js'
-import { formatCurrencyBalance, formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCeilingAmountDisplay, formatCurrencyBalance, formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { getOpenOracleDisputeSwapTokenKey } from '../../../protocol/openOracleMath.js'
 import { calculateOpenOraclePrice } from '../../../protocol/openOracle.js'
@@ -38,6 +38,33 @@ function formatOpenOracleDisputeBalanceStatusUnavailableMessage({ reason, tokenL
 	if (sanitizedReason !== undefined) segments.push(`Reason: ${ensureSentence(sanitizedReason)}`)
 	segments.push('Retry loading the report or balance status before disputing this report.')
 	return segments.join(' ')
+}
+/** Which report token is WETH, the only token a wallet can fund by wrapping ETH. */
+function getOpenOracleWethTokenKey(report: Pick<OpenOracleReportDetails, 'token1' | 'token2'> | undefined, wethAddress: Address | undefined) {
+	if (report === undefined || wethAddress === undefined) return undefined
+	if (sameAddress(report.token1, wethAddress)) return 'token1'
+	if (sameAddress(report.token2, wethAddress)) return 'token2'
+	return undefined
+}
+function getOpenOracleDisputeWrapBlockMessage({
+	inputBlocked,
+	shortfallAttoEth,
+	walletEthBalanceAttoEth,
+	wethBalanceError,
+	wethContributionAttoEth,
+}: {
+	inputBlocked: boolean
+	shortfallAttoEth: bigint | undefined
+	walletEthBalanceAttoEth: bigint | undefined
+	wethBalanceError: string | undefined
+	wethContributionAttoEth: bigint | undefined
+}): OpenOracleGateMessage | undefined {
+	if (inputBlocked || wethContributionAttoEth === undefined) return createVisibleGateMessage(openOracleCopy.disputeAmountsRequiredBeforeWrap)
+	if (shortfallAttoEth === undefined) return wethBalanceError === undefined ? createHiddenLoadingGateMessage(openOracleCopy.loadingWethBalance) : createVisibleGateMessage(formatOpenOracleDisputeBalanceStatusUnavailableMessage({ reason: wethBalanceError, tokenLabel: 'WETH' }))
+	if (shortfallAttoEth === 0n) return createVisibleGateMessage(openOracleCopy.wrapEthNotNeeded)
+	if (walletEthBalanceAttoEth === undefined) return createHiddenLoadingGateMessage(openOracleCopy.loadingEthBalance)
+	if (walletEthBalanceAttoEth < shortfallAttoEth) return createVisibleGateMessage(openOracleCopy.formatInsufficientEthToWrap(formatCurrencyBalance(shortfallAttoEth), formatCurrencyBalance(walletEthBalanceAttoEth)))
+	return undefined
 }
 function formatOpenOracleDisputeInsufficientBalanceMessage({ available, required, tokenDecimals, tokenLabel }: { available: bigint; required: bigint; tokenDecimals: number | undefined; tokenLabel: string }) {
 	return `Insufficient ${tokenLabel} balance for this dispute. Need ${formatCurrencyBalance(required, tokenDecimals ?? 18)}, wallet has ${formatCurrencyBalance(available, tokenDecimals ?? 18)}.`
@@ -107,6 +134,8 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 	token2Balance,
 	token2BalanceError,
 	token2Decimals,
+	walletEthBalanceAttoEth,
+	wethAddress,
 }: {
 	accountAddress?: Address | undefined
 	approvedToken1Amount: bigint | undefined
@@ -146,6 +175,9 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 	token2Balance: bigint | undefined
 	token2BalanceError: string | undefined
 	token2Decimals: number | undefined
+	/** The wallet's ETH, which can be wrapped when the report's WETH side needs more than the wallet holds. */
+	walletEthBalanceAttoEth: bigint | undefined
+	wethAddress: Address | undefined
 }): OpenOracleDisputeSubmissionDetails {
 	const token1Label = resolveOpenOracleTokenLabel({
 		fallbackLabel: 'Token1',
@@ -187,6 +219,18 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 	const proposedPrice = newAmount1 === undefined || newAmount2 === undefined || token1Decimals === undefined || token2Decimals === undefined || newAmount1 <= 0n || newAmount2 <= 0n ? undefined : calculateOpenOraclePrice(newAmount1, newAmount2, token1Decimals, token2Decimals)
 	const token1Approval = deriveTokenApprovalRequirement(token1ContributionAmount, approvedToken1Amount)
 	const token2Approval = deriveTokenApprovalRequirement(token2ContributionAmount, approvedToken2Amount)
+	const wethTokenKey = getOpenOracleWethTokenKey(reportDetails, wethAddress)
+	const wethContributionAttoEth = wethTokenKey === 'token1' ? token1ContributionAmount : token2ContributionAmount
+	const wethBalanceAttoEth = wethTokenKey === 'token1' ? token1Balance : token2Balance
+	const wethShortfallAttoEth = (() => {
+		if (wethTokenKey === undefined || wethContributionAttoEth === undefined || wethBalanceAttoEth === undefined) return undefined
+		return wethContributionAttoEth > wethBalanceAttoEth ? wethContributionAttoEth - wethBalanceAttoEth : 0n
+	})()
+	// A WETH shortfall the wallet's ETH covers is fixed by the wrap step, so the dispute names that step instead of the missing balance.
+	const formatInsufficientBalanceMessage = (token: 'token1' | 'token2', parameters: Parameters<typeof formatOpenOracleDisputeInsufficientBalanceMessage>[0]) => {
+		if (token === wethTokenKey && wethShortfallAttoEth !== undefined && walletEthBalanceAttoEth !== undefined && walletEthBalanceAttoEth >= wethShortfallAttoEth) return openOracleCopy.formatWrapEthFirst(formatCeilingAmountDisplay(wethShortfallAttoEth))
+		return formatOpenOracleDisputeInsufficientBalanceMessage(parameters)
+	}
 	let blockMessage: OpenOracleGateMessage | undefined
 	const inputFieldErrors: Partial<Record<OpenOracleDisputeInputField, string>> = {}
 	let inputBlockMessage: OpenOracleGateMessage | undefined
@@ -253,7 +297,7 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 				blockMessage = createHiddenLoadingGateMessage(`Loading current ${token2Label} balance…`)
 			} else if (token1ContributionAmount !== undefined && token1Balance < token1ContributionAmount) {
 				blockMessage = createVisibleGateMessage(
-					formatOpenOracleDisputeInsufficientBalanceMessage({
+					formatInsufficientBalanceMessage('token1', {
 						available: token1Balance,
 						required: token1ContributionAmount,
 						tokenDecimals: token1Decimals,
@@ -262,7 +306,7 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 				)
 			} else if (token2ContributionAmount !== undefined && token2Balance < token2ContributionAmount) {
 				blockMessage = createVisibleGateMessage(
-					formatOpenOracleDisputeInsufficientBalanceMessage({
+					formatInsufficientBalanceMessage('token2', {
 						available: token2Balance,
 						required: token2ContributionAmount,
 						tokenDecimals: token2Decimals,
@@ -298,5 +342,18 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 		token2Approval,
 		token2ContributionAmount,
 		token2Decimals,
+		wethWrap:
+			wethTokenKey === undefined
+				? undefined
+				: {
+						amountAttoEth: wethShortfallAttoEth,
+						blockMessage: getOpenOracleDisputeWrapBlockMessage({
+							inputBlocked: inputBlockMessage !== undefined,
+							shortfallAttoEth: wethShortfallAttoEth,
+							walletEthBalanceAttoEth,
+							wethBalanceError: wethTokenKey === 'token1' ? token1BalanceError : token2BalanceError,
+							wethContributionAttoEth,
+						}),
+					},
 	}
 }

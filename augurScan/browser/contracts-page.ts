@@ -12,6 +12,12 @@ export interface ContractsPageDeps {
 	readonly exactTimestamp: (value: string | number | Date | null | undefined) => string
 }
 
+// Groups have no headings, so every contract outside the protocol deployment says where it came from.
+const contractProvenanceLabel = (section: ContractRegistrySection): string | undefined => {
+	if (section === 'System dependencies') return 'System dependency'
+	return section === 'Discovered contracts' ? 'Discovered · not in deployment manifest' : undefined
+}
+
 export const renderContractsPage = (deps: ContractsPageDeps) => {
 	const { lookup: $, contractItems, element, internalEvidenceLink, number, age, exactTimestamp } = deps
 	const pageScrollY = window.scrollY
@@ -47,7 +53,12 @@ export const renderContractsPage = (deps: ContractsPageDeps) => {
 		deployment.dataset['contractAction'] = `${addressKey}:deployment`
 		const deploymentDetails = element('span', 'contract-deployment')
 		deploymentDetails.append(deployment)
-		head.append(element('strong', '', contract.label), deploymentDetails)
+		const section = contractRegistrySection(contract)
+		const title = element('span', 'contract-row-title')
+		title.append(element('strong', '', contract.label))
+		const provenance = contractProvenanceLabel(section)
+		if (provenance !== undefined) title.append(element('span', 'contract-provenance', provenance))
+		head.append(title, deploymentDetails)
 		if (contract.deployment_timestamp) {
 			const deployed = element('time', 'data-note', `${contract.deployment_block_exact === false ? 'At or before ' : ''}${utcDateTime(contract.deployment_timestamp)} · ${age(contract.deployment_timestamp)}`)
 			deployed.dateTime = exactTimestamp(contract.deployment_timestamp)
@@ -58,7 +69,6 @@ export const renderContractsPage = (deps: ContractsPageDeps) => {
 		address.className = 'contract-address-link'
 		address.dataset['contractAction'] = `${addressKey}:address`
 		row.replaceChildren(head, address)
-		const section = contractRegistrySection(contract)
 		const rows = groupedRows.get(section) ?? []
 		rows.push(row)
 		groupedRows.set(section, rows)
