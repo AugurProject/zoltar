@@ -108,7 +108,7 @@ function hasPendingShares(leftover: readonly bigint[], market: Pick<LiveMarket, 
 	return leftover.some(amount => amount > 0n && !isDust(amount, market))
 }
 
-/** Shares that pay less than the smallest displayed ETH amount even if their outcome wins are rounding dust, not something to act on. */
+/** Shares that pay no REP and less than the smallest displayed ETH amount even if their outcome wins are rounding dust. */
 function isDust(attoShares: bigint, market: Pick<LiveMarket, 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares' | 'settlementRecoveryAttoRep'>) {
 	return attoSharesToCollateralAttoEth(attoShares, market) < DISPLAY_DUST_ATTO_ETH && attoSharesToRecoveryAttoRep(attoShares, market) === 0n
 }

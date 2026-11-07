@@ -173,8 +173,7 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 
 	const amountId = useId()
 	let amountFieldError: string | undefined
-	const invalidAmountReason = hasRecoveryRep ? settlementCopy.invalidShareAmount : settlementCopy.invalidEthAmount
-	if (amount.trim() !== '' && operationAvailable) amountFieldError = parsedInputAmount === undefined ? invalidAmountReason : inputBlocker
+	if (amount.trim() !== '' && operationAvailable) amountFieldError = inputBlocker
 	const selectOperation = (next: SettlementOperation) => {
 		invalidateSettlementInputs()
 		setOperation(next)

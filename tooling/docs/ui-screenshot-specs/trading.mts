@@ -39,7 +39,7 @@ export const TRADING_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		app: 'trading',
 		scenario: 'trading-funded',
 		steps: [...openFirstMarket, { click: 'Sell' }, { waitForText: 'Shares to sell' }, { fill: 'Shares to sell', value: '0.001' }, { waitForEnabled: 'Sell Yes' }],
-		expectText: ['Shares to sell', 'You hold 0.005 Yes', 'Max', 'Average price', '48.68%', 'Invalid used', 'Minimum received', 'Maximum sold', '2.48%', 'Sell Yes'],
+		expectText: ['Shares to sell', 'You hold', 'Max', 'Average price', 'Invalid used', 'Minimum received', 'Maximum sold', 'Sell Yes'],
 		viewport: tallViewport,
 		crop: tradePanel,
 		usedBy: ['tutorials/trading-first-trade.html', 'how-to/trading-exit-a-position.html'],

@@ -9,7 +9,7 @@ import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { buttonByLabel } from '../support/dom.js'
 import { etherScaleMarketFixture } from '../support/liveMarketFixture.js'
-import { invalidShareAmount } from '../../copy/tradeTicket.js'
+import { formatDecimalPrecisionError } from '@zoltar/ui-core-shared/copy/common.js'
 
 const account = getAddress(`0x${'11'.repeat(20)}`)
 const configuration = deploymentConfigurationFixture({ securityPoolFactory: getAddress(`0x${'88'.repeat(20)}`), factory: getAddress(`0x${'99'.repeat(20)}`), router: getAddress(`0x${'55'.repeat(20)}`) })
@@ -286,7 +286,7 @@ describe('fork recovery claim basket', () => {
 				amountInput().dispatchEvent(new Event('input', { bubbles: true }))
 			})
 			expect(buttonByLabel('Redeem complete sets').disabled).toBe(true)
-			expect(describedText(amountInput())).toContain(invalidShareAmount)
+			expect(describedText(amountInput())).toContain(formatDecimalPrecisionError(18))
 		} finally {
 			await rendered.cleanup()
 		}
