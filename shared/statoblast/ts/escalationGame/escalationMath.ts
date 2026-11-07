@@ -63,14 +63,20 @@ export function computeEscalationBindingCapitalAttoRep(startBondAttoRep: bigint,
 	return computeIterativeAttritionCostAttoRep(startBondAttoRep, nonDecisionThresholdAttoRep, computeLnRatioScaled(startBondAttoRep, nonDecisionThresholdAttoRep), timeSinceStart)
 }
 
-export function computeEscalationTimeSinceStartFromAttritionCostAttoRep(startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint, attritionCostAttoRep: bigint) {
-	if (attritionCostAttoRep <= startBondAttoRep) return 0n
-	if (attritionCostAttoRep >= nonDecisionThresholdAttoRep) return ESCALATION_TIME_LENGTH
+/** Last second before the forward curve strictly exceeds binding capital. */
+export function computeEscalationFinalityElapsed(startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint, bindingCapitalAttoRep: bigint) {
+	if (startBondAttoRep <= 0n || nonDecisionThresholdAttoRep <= startBondAttoRep) throw new Error('Escalation threshold must exceed the start bond')
+	if (bindingCapitalAttoRep < startBondAttoRep) return 0n
+	if (bindingCapitalAttoRep >= nonDecisionThresholdAttoRep) return ESCALATION_TIME_LENGTH
 	const lnRatioScaled = computeLnRatioScaled(startBondAttoRep, nonDecisionThresholdAttoRep)
-	// A zero-resolution logarithm leaves the forward curve flat until its terminal step.
-	if (lnRatioScaled === 0n) return ESCALATION_TIME_LENGTH
-	const lnCostRatioScaled = computeLnRatioScaled(startBondAttoRep, attritionCostAttoRep)
-	return (lnCostRatioScaled * ESCALATION_TIME_LENGTH) / lnRatioScaled
+	let lower = 0n
+	let upper = ESCALATION_TIME_LENGTH
+	while (upper - lower > 1n) {
+		const middle = lower + (upper - lower) / 2n
+		if (computeIterativeAttritionCostAttoRep(startBondAttoRep, nonDecisionThresholdAttoRep, lnRatioScaled, middle) <= bindingCapitalAttoRep) lower = middle
+		else upper = middle
+	}
+	return lower
 }
 
 function getEscalationOutcomeIndex(outcome: EscalationOutcomeKey) {

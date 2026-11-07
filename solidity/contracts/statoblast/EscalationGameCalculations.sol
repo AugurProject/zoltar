@@ -32,7 +32,7 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 		if (forkContinuation) {
 			if (forkResumedAt == 0) return type(uint256).max;
 			if (fixedQuestionOutcome != BinaryOutcomes.BinaryOutcome.None) return forkResumedAt + ACTIVATION_DELAY;
-			int256 requiredElapsed = int256(computeTimeSinceStartFromAttritionCostAttoRep(getBindingCapitalAttoRep()));
+			int256 requiredElapsed = int256(_finalityElapsed());
 			uint256 curveEnd =
 				requiredElapsed <= forkElapsedAtStart
 					? forkResumedAt
@@ -40,11 +40,27 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 			uint256 minimumResponseEnd = forkResumedAt + ACTIVATION_DELAY;
 			return curveEnd > minimumResponseEnd ? curveEnd : minimumResponseEnd;
 		}
-		return activationTime + computeTimeSinceStartFromAttritionCostAttoRep(getBindingCapitalAttoRep());
+		return activationTime + _finalityElapsed();
+	}
+
+	/// @dev Finality is strictly after this last second at or below binding capital.
+	/// Search the forward curve so reporter and settlement schedules cannot mature early.
+	function _finalityElapsed() private view returns (uint256) {
+		uint256 bindingCapital = getBindingCapitalAttoRep();
+		if (bindingCapital < startBondAttoRep) return 0;
+		if (bindingCapital >= nonDecisionThresholdAttoRep) return ESCALATION_TIME_LENGTH;
+		uint256 lower;
+		uint256 upper = ESCALATION_TIME_LENGTH;
+		while (upper - lower > 1) {
+			uint256 middle = lower + (upper - lower) / 2;
+			if (computeIterativeAttritionCostAttoRep(middle) <= bindingCapital) lower = middle;
+			else upper = middle;
+		}
+		return lower;
 	}
 
 	function totalCostAttoRep() public view returns (uint256) {
-		// The inverse deadline is approximate; freeze the forward curve at the actual fork.
+		// Freeze the forward curve at the actual fork, including before continuation resume.
 		uint256 timestamp = _getUniverseForkTime();
 		if (timestamp == 0) timestamp = block.timestamp;
 		if (forkContinuation) {

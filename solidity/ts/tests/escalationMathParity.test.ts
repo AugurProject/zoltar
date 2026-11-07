@@ -12,7 +12,7 @@ import { getActivationTime, getBalances, getEscalationGameDeposits } from '../te
 import { ensureZoltarDeployed, getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { ReputationToken_ReputationToken, statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier, statoblast_EscalationGame_EscalationGame, test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact } from '../types/contractArtifact'
-import { computeEscalationTimeSinceStartFromAttritionCostAttoRep, ESCALATION_TIME_LENGTH, getWinningEscalationDepositClaimAmount, getWinningImportedEscalationDepositClaimAmount, projectEscalationDeposit } from '@zoltar/statoblast-shared/escalationGame/escalationMath'
+import { computeEscalationFinalityElapsed, ESCALATION_TIME_LENGTH, getWinningEscalationDepositClaimAmount, getWinningImportedEscalationDepositClaimAmount, projectEscalationDeposit } from '@zoltar/statoblast-shared/escalationGame/escalationMath'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 
 const initializeForkCarrySnapshotTestPoolAbi: Abi = [
@@ -397,18 +397,17 @@ describe('Escalation math parity', () => {
 		assert.strictEqual(root, nullifiers.getRoot())
 	})
 
-	test('shared attrition-time inversion matches the deployed contract', async () => {
-		const { escalationGameAddress: escalationGame, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.No, 15n * reportBond)
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 7n * reportBond)
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, 11n * reportBond)
-
-		const bindingCapital = await readBindingCapital(escalationGame)
-
-		for (const attritionCost of [reportBond, bindingCapital, nonDecisionThresholdAttoRep]) {
-			const solidityTimeSinceStart = await readTimeSinceStartFromAttritionCost(escalationGame, attritionCost)
-			const sharedTimeSinceStart = computeEscalationTimeSinceStartFromAttritionCostAttoRep(reportBond, nonDecisionThresholdAttoRep, attritionCost)
-			assert.strictEqual(solidityTimeSinceStart, sharedTimeSinceStart, `attrition inversion mismatch at ${attritionCost.toString()}`)
+	test('shared finality cutoffs match deployed forward-curve deadlines', async () => {
+		for (const binding of [reportBond, 7n * reportBond, 11n * reportBond, nonDecisionThresholdAttoRep - 1n]) {
+			const { escalationGameAddress: game, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
+			await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, binding + reportBond)
+			await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.No, binding)
+			assert.strictEqual(await readBindingCapital(game), binding)
+			const elapsed = computeEscalationFinalityElapsed(reportBond, nonDecisionThresholdAttoRep, binding)
+			assert.strictEqual(await readEscalationEndDate(game), (await getActivationTime(client, game)) + elapsed)
+			const curve = (time: bigint) => client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'computeIterativeAttritionCostAttoRep', args: [time] })
+			assert.ok((await curve(elapsed)) <= binding, 'the scheduled second must remain unresolved')
+			assert.ok((await curve(elapsed + 1n)) > binding, 'the next second must strictly cross binding capital')
 		}
 	})
 
@@ -435,7 +434,7 @@ describe('Escalation math parity', () => {
 
 		const activationTime = await getActivationTime(client, escalationGame)
 		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, acceptedAmount)
-		const expectedEndTime = activationTime + computeEscalationTimeSinceStartFromAttritionCostAttoRep(reportBond, nonDecisionThresholdAttoRep, await readBindingCapital(escalationGame))
+		const expectedEndTime = activationTime + computeEscalationFinalityElapsed(reportBond, nonDecisionThresholdAttoRep, await readBindingCapital(escalationGame))
 		assert.strictEqual(await readEscalationEndDate(escalationGame), expectedEndTime, 'shared projected end time should match the contract after the same deposit')
 	})
 

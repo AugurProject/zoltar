@@ -552,7 +552,7 @@ assert.equal(computeCanonicalEscalationBindingCapital(1, 10, 3), 1, 'canonical e
 assert.equal(computeCanonicalEscalationBindingCapital(1, 10, 52), 10, 'canonical escalation fixture should end at the configured threshold after seven weeks')
 const oneThirdPowerOfTwoTimeDays = Number.parseInt((ESCALATION_TIME_LENGTH_SECONDS / 3n).toString(), 10) / 86_400
 assert.equal(computeCanonicalEscalationBindingCapital(1, 8, 3 + oneThirdPowerOfTwoTimeDays), 2, 'canonical escalation fixture should match the contract one-third-time power-of-two ratio')
-assert.equal(computeCanonicalEscalationDeadlineDays(1, 8, 2), 3 + oneThirdPowerOfTwoTimeDays, 'canonical deadline fixture should match the contract inverse calculation')
+assert.equal(computeCanonicalEscalationDeadlineDays(1, 8, 2), 3 + oneThirdPowerOfTwoTimeDays + 2 / 86_400, 'canonical deadline includes the two-second forward-curve plateau at 2 REP')
 const payoutFixture = 10n ** 18n
 assert.equal(
 	getWinningEscalationDepositClaimAmount({

@@ -1,4 +1,4 @@
-import { computeEscalationTimeSinceStartFromAttritionCostAttoRep } from '@zoltar/statoblast-shared/escalationGame/escalationMath'
+import { computeEscalationFinalityElapsed } from '@zoltar/statoblast-shared/escalationGame/escalationMath'
 import { getDisplayedLeadingEscalationOutcome, hasReportingOpened } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reporting.js'
 import { formatReportingDeadline } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingViewerStatus.js'
 import { getReportingStagePresentation } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingStagePresentation.js'
@@ -478,7 +478,7 @@ test('display leaders exclude all-zero balances but retain unique positive leade
 describe('deposit deadline preview', () => {
 	test('uses the projected median balance, including deposits that leave the timer unchanged', () => {
 		const details = createReportingDetails({ currentRequiredBond: rep(3n) })
-		const elapsed = (amount: bigint) => computeEscalationTimeSinceStartFromAttritionCostAttoRep(details.startBondAttoRep, details.nonDecisionThresholdAttoRep, amount)
+		const elapsed = (amount: bigint) => computeEscalationFinalityElapsed(details.startBondAttoRep, details.nonDecisionThresholdAttoRep, amount)
 		details.escalationEndTime = details.activationTime + elapsed(rep(5n))
 		expect(previewReportingDeadline(details, 'no', rep(10n))).toEqual({ deadline: details.escalationEndTime, extension: 0n, reachesNonDecision: false })
 		expect(previewReportingDeadline(details, 'yes', rep(10n))).toEqual({ deadline: details.activationTime + elapsed(rep(8n)), extension: elapsed(rep(8n)) - elapsed(rep(5n)), reachesNonDecision: false })
@@ -493,7 +493,7 @@ describe('deposit deadline preview', () => {
 	test('preserves pending activation time in a resumed reporting deadline preview', () => {
 		const pending = 2n * 86400n
 		const details = createReportingDetails({ forkContinuation: true, forkResumedAt: 100n, forkElapsedAtStart: -pending, currentRequiredBond: rep(3n), escalationEndTime: 259300n })
-		const curve = computeEscalationTimeSinceStartFromAttritionCostAttoRep(details.startBondAttoRep, details.nonDecisionThresholdAttoRep, rep(8n))
+		const curve = computeEscalationFinalityElapsed(details.startBondAttoRep, details.nonDecisionThresholdAttoRep, rep(8n))
 		const deadline = 100n + pending + curve
 		expect(previewReportingDeadline(details, 'yes', rep(10n))).toEqual({ deadline, extension: deadline - details.escalationEndTime, reachesNonDecision: false })
 	})

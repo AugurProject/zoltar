@@ -1,7 +1,31 @@
 import { describe, expect, test } from 'bun:test'
-import { getWinningEscalationDepositClaimAmount, getWinningImportedEscalationDepositClaimAmount, computeEscalationBindingCapitalAttoRep, computeEscalationTimeSinceStartFromAttritionCostAttoRep, ESCALATION_TIME_LENGTH, hasReachedNonDecision, projectEscalationDeposit } from './escalationMath'
+import {
+	getWinningEscalationDepositClaimAmount,
+	getWinningImportedEscalationDepositClaimAmount,
+	computeEscalationBindingCapitalAttoRep,
+	computeEscalationFinalityElapsed,
+	ESCALATION_TIME_LENGTH,
+	hasReachedNonDecision,
+	projectEscalationDeposit,
+} from './escalationMath'
 
 describe('escalation math', () => {
+	test('finality uses the strict forward crossing through quantized and flat curves', () => {
+		const bond = 10n ** 18n
+		for (const [start, threshold, binding] of [
+			[1n, 8n, 1n],
+			[1n, 8n, 2n],
+			[bond, 1000n * bond, 7n * bond],
+			[bond, bond + 10n ** 12n, bond],
+			[bond, bond + 10n ** 12n, bond + 1n],
+		] as const) {
+			const elapsed = computeEscalationFinalityElapsed(start, threshold, binding)
+			expect(computeEscalationBindingCapitalAttoRep(start, threshold, elapsed)).toBeLessThanOrEqual(binding)
+			expect(computeEscalationBindingCapitalAttoRep(start, threshold, elapsed + 1n)).toBeGreaterThan(binding)
+		}
+		expect(computeEscalationFinalityElapsed(bond, 10n * bond, 0n)).toBe(0n)
+		expect(computeEscalationFinalityElapsed(bond, 10n * bond, 10n * bond)).toBe(ESCALATION_TIME_LENGTH)
+	})
 	test('ordinary intervals preserve total payout through reward and haircut rounding', () => {
 		const base = { bindingCapitalAttoRep: 7n, winningOutcomeBalanceAttoRep: 11n, forkThresholdAttoRep: 13n, nonDecisionThresholdAttoRep: 19n, ordinarySettlement: true }
 		let total = 0n
@@ -9,9 +33,10 @@ describe('escalation math', () => {
 		expect(total).toBe(getWinningEscalationDepositClaimAmount({ ...base, depositAmountAttoRep: 11n, cumulativeAmountAttoRep: 11n }))
 		expect(total).toBe(10n)
 	})
-	test('preserves logarithm components at exact power-of-two ratios', () => {
-		expect(computeEscalationTimeSinceStartFromAttritionCostAttoRep(1n, 8n, 2n)).toBe(ESCALATION_TIME_LENGTH / 3n)
-		expect(computeEscalationTimeSinceStartFromAttritionCostAttoRep(1n, 8n, 4n)).toBe((ESCALATION_TIME_LENGTH * 2n) / 3n)
+	test('includes the final two seconds of power-of-two forward plateaus', () => {
+		const bond = 10n ** 18n
+		expect(computeEscalationFinalityElapsed(bond, 8n * bond, 2n * bond)).toBe(ESCALATION_TIME_LENGTH / 3n + 2n)
+		expect(computeEscalationFinalityElapsed(bond, 8n * bond, 4n * bond)).toBe((ESCALATION_TIME_LENGTH * 2n) / 3n + 2n)
 	})
 
 	test('maps a zero-log curve to its terminal step without an early projected deadline', () => {
@@ -21,14 +46,14 @@ describe('escalation math', () => {
 		expect(computeEscalationBindingCapitalAttoRep(bond, threshold, ESCALATION_TIME_LENGTH)).toBe(threshold)
 		for (const [cost, expectedTime] of [
 			[0n, 0n],
-			[bond, 0n],
-			[bond + 1n, ESCALATION_TIME_LENGTH],
-			[bond + 10n ** 11n, ESCALATION_TIME_LENGTH],
-			[threshold - 1n, ESCALATION_TIME_LENGTH],
+			[bond, ESCALATION_TIME_LENGTH - 1n],
+			[bond + 1n, ESCALATION_TIME_LENGTH - 1n],
+			[bond + 10n ** 11n, ESCALATION_TIME_LENGTH - 1n],
+			[threshold - 1n, ESCALATION_TIME_LENGTH - 1n],
 			[threshold, ESCALATION_TIME_LENGTH],
 			[threshold + 1n, ESCALATION_TIME_LENGTH],
 		] as const) {
-			expect(computeEscalationTimeSinceStartFromAttritionCostAttoRep(bond, threshold, cost)).toBe(expectedTime)
+			expect(computeEscalationFinalityElapsed(bond, threshold, cost)).toBe(expectedTime)
 		}
 	})
 

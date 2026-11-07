@@ -10,8 +10,8 @@ export type BootstrapDescendantHashProfile = 'deterministic' | 'mainnet' | 'sepo
 
 export const EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Record<BootstrapDescendantHashProfile, Readonly<Record<string, Hash>>>> = {
 	sepolia: {
-		escalationGameCreationCodePartOne: '0x2ec1632603d86f57038542c7129f3dcc88c93d35b15128b8bb44db1a750ad908',
-		escalationGameCreationCodePartTwo: '0x185bbe7e50a5536ef3aebd107a8ec64ce78491eddbaf1085756bbdd766e8832d',
+		escalationGameCreationCodePartOne: '0x47b7df45744196388360a847f5bae40b39c25ceeea5af62f009ffb59b5c86cd3',
+		escalationGameCreationCodePartTwo: '0x4353b6da3ced3961cfdfb922ca5498413b337e55bfa8341d5e31d4b38d8f0697',
 		escalationGameProofVerifier: '0xae36c0b208871ec2ab53bbcac4fd1ca7d2c39e1a406889adcd12545127b0d2a3',
 		oracleReportDelegate: '0x8bcf58192aa546a58d6c63ae764397ed2f00b31761b1b511e603c333c1fb7724',
 		priceCoordinatorCreationCodeFirstChunk: '0x8172d34674d39b659c7bf493a3ef46dc46e912905b2068c061f035322eebee69',
@@ -23,8 +23,8 @@ export const EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Record<
 		securityPoolCapitalCreationCodeSecondChunk: '0xa043635d8703c668bf9345ba4cef075841b5c8cd6ddda62a66656087e21e88b0',
 		securityPoolCreationCodeFirstChunk: '0x1ca0e641de6f04807e6ffbe19a6136768a8a86dfd7d14725cdd251195805235c',
 		securityPoolCreationCodeSecondChunk: '0x9a1df11a0aad8c5a3afa385bc1484c08b0fad3c21185649e7ac5e2382611fe76',
-		securityPoolDeployer: '0x9f79ccae0941e848980078dadfc603a4bf93ae56afdc6ee3bc1867026555ddff',
-		securityPoolDeploymentWorker: '0x2a1d33c245dd2aa0d28263df8531c64f2c2e19d95c6f2411af64a4b3019d5831',
+		securityPoolDeployer: '0x147ff986bbfc0328d592dd5640298982d2b936bfb56d8fe726aed63aa4863f65',
+		securityPoolDeploymentWorker: '0x4683304b0d0850fbaa8263dc63b68c4f5d8a515786bffe8530dbcb8219f7a801',
 		securityPoolForkCreationCodeFirstChunk: '0xd388e04808ff3f9e1fcafdabd565007bafdc6a3d8a11af8b00e0f1eb42fce0df',
 		securityPoolForkCreationCodeSecondChunk: '0xda0c0a06788bca9e91d8005ce83a44060f3261b7c890c0e0177772a2c2294fa4',
 		securityPoolServicesCreationCodeFirstChunk: '0xafafece4e4ccb9867b674866a2624c901f341545375b4de1daea904a99a2af91',
@@ -33,8 +33,8 @@ export const EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Record<
 		sharedPoolPriceFeedCreationCodeSecondChunk: '0x002623404bf5e2276e652d1893edc3b158939953ca5b5d72faa6ffbea7e66046',
 	},
 	deterministic: {
-		escalationGameCreationCodePartOne: '0x2ec1632603d86f57038542c7129f3dcc88c93d35b15128b8bb44db1a750ad908',
-		escalationGameCreationCodePartTwo: '0x185bbe7e50a5536ef3aebd107a8ec64ce78491eddbaf1085756bbdd766e8832d',
+		escalationGameCreationCodePartOne: '0x47b7df45744196388360a847f5bae40b39c25ceeea5af62f009ffb59b5c86cd3',
+		escalationGameCreationCodePartTwo: '0x4353b6da3ced3961cfdfb922ca5498413b337e55bfa8341d5e31d4b38d8f0697',
 		escalationGameProofVerifier: '0xae36c0b208871ec2ab53bbcac4fd1ca7d2c39e1a406889adcd12545127b0d2a3',
 		oracleReportDelegate: '0x8bcf58192aa546a58d6c63ae764397ed2f00b31761b1b511e603c333c1fb7724',
 		priceCoordinatorCreationCodeFirstChunk: '0x8172d34674d39b659c7bf493a3ef46dc46e912905b2068c061f035322eebee69',
@@ -46,8 +46,8 @@ export const EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Record<
 		securityPoolCapitalCreationCodeSecondChunk: '0xa043635d8703c668bf9345ba4cef075841b5c8cd6ddda62a66656087e21e88b0',
 		securityPoolCreationCodeFirstChunk: '0x1ca0e641de6f04807e6ffbe19a6136768a8a86dfd7d14725cdd251195805235c',
 		securityPoolCreationCodeSecondChunk: '0x9a1df11a0aad8c5a3afa385bc1484c08b0fad3c21185649e7ac5e2382611fe76',
-		securityPoolDeployer: '0x7ae403be1a321a48cd02606b777152f96a454e3652c1f9da987d062e4254d7dd',
-		securityPoolDeploymentWorker: '0x94cd0b0aa6ba6d4c0af07e0e70f414977f0f3799000416426dd3fd991444f0c0',
+		securityPoolDeployer: '0xf6f0b30bc194b21974fdcd18c260db297cd3ab0de216acef11d37716f4f7174a',
+		securityPoolDeploymentWorker: '0x6c189db5aea07d81ee579e1d9d3ea92f1df885fde90ecc599e59b3e45ef504cd',
 		securityPoolForkCreationCodeFirstChunk: '0xd388e04808ff3f9e1fcafdabd565007bafdc6a3d8a11af8b00e0f1eb42fce0df',
 		securityPoolForkCreationCodeSecondChunk: '0xda0c0a06788bca9e91d8005ce83a44060f3261b7c890c0e0177772a2c2294fa4',
 		securityPoolServicesCreationCodeFirstChunk: '0xafafece4e4ccb9867b674866a2624c901f341545375b4de1daea904a99a2af91',
@@ -56,8 +56,8 @@ export const EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Record<
 		sharedPoolPriceFeedCreationCodeSecondChunk: '0x002623404bf5e2276e652d1893edc3b158939953ca5b5d72faa6ffbea7e66046',
 	},
 	mainnet: {
-		escalationGameCreationCodePartOne: '0x2ec1632603d86f57038542c7129f3dcc88c93d35b15128b8bb44db1a750ad908',
-		escalationGameCreationCodePartTwo: '0x185bbe7e50a5536ef3aebd107a8ec64ce78491eddbaf1085756bbdd766e8832d',
+		escalationGameCreationCodePartOne: '0x47b7df45744196388360a847f5bae40b39c25ceeea5af62f009ffb59b5c86cd3',
+		escalationGameCreationCodePartTwo: '0x4353b6da3ced3961cfdfb922ca5498413b337e55bfa8341d5e31d4b38d8f0697',
 		escalationGameProofVerifier: '0xae36c0b208871ec2ab53bbcac4fd1ca7d2c39e1a406889adcd12545127b0d2a3',
 		oracleReportDelegate: '0x8bcf58192aa546a58d6c63ae764397ed2f00b31761b1b511e603c333c1fb7724',
 		priceCoordinatorCreationCodeFirstChunk: '0x8172d34674d39b659c7bf493a3ef46dc46e912905b2068c061f035322eebee69',
@@ -69,8 +69,8 @@ export const EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Record<
 		securityPoolCapitalCreationCodeSecondChunk: '0xa043635d8703c668bf9345ba4cef075841b5c8cd6ddda62a66656087e21e88b0',
 		securityPoolCreationCodeFirstChunk: '0x1ca0e641de6f04807e6ffbe19a6136768a8a86dfd7d14725cdd251195805235c',
 		securityPoolCreationCodeSecondChunk: '0x9a1df11a0aad8c5a3afa385bc1484c08b0fad3c21185649e7ac5e2382611fe76',
-		securityPoolDeployer: '0x2ace996209c51f87b6161f13439b0c973b8409b7e51e7dfedb3d7af862b95b18',
-		securityPoolDeploymentWorker: '0x44cd01143036652ee0aaa5ce6941350ad141feb832d70b0069bb02a9e2c0bdff',
+		securityPoolDeployer: '0xed3e712c1ed516ae0d361b67e8a54a69e76588a9e9f2783dc999ec40f0577c5d',
+		securityPoolDeploymentWorker: '0x3ca2c93666bd23792ad8af286b3243d03dad70812d989ac31a43433b7cfbd42c',
 		securityPoolForkCreationCodeFirstChunk: '0xd388e04808ff3f9e1fcafdabd565007bafdc6a3d8a11af8b00e0f1eb42fce0df',
 		securityPoolForkCreationCodeSecondChunk: '0xda0c0a06788bca9e91d8005ce83a44060f3261b7c890c0e0177772a2c2294fa4',
 		securityPoolServicesCreationCodeFirstChunk: '0xafafece4e4ccb9867b674866a2624c901f341545375b4de1daea904a99a2af91',
@@ -83,15 +83,15 @@ export const EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Record<
 // Only descendants that embed a selected Zoltar address differ between the two genesis deployments.
 export const EXPECTED_NO_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Record<BootstrapDescendantHashProfile, Readonly<Record<string, Hash>>>> = {
 	sepolia: {
-		securityPoolDeployer: '0xe0a2ce745b9f6ad7c1e30c66af612eef810c9e086ddad5f534ab71c35dcfc315',
-		securityPoolDeploymentWorker: '0xac2a404ad2125f74b3f4e8491b0c91b9a539d53a571519488f5f1a776057cb78',
+		securityPoolDeployer: '0x1f6db77d435f732e33b5f52b37a198e52534c9d72bd33f2d87f55e082a400d0f',
+		securityPoolDeploymentWorker: '0x4b5f0bfe09fac6811024c62d3b69b2e48bfe513dede8f618e407fa9b8f95dc65',
 	},
 	deterministic: {
-		securityPoolDeployer: '0xd616f4d23d33cc0467295a2949eb4d0f666df72c26163b4bbaf4009ffc8dccfa',
-		securityPoolDeploymentWorker: '0xca3201c58be88efb3501a2e5a738e56e8e7666f58df29d7d871539255f8f589b',
+		securityPoolDeployer: '0x9ca12b99627efb6403c57cf662f811b6699604c13c34b687cf13bbe3ec9af0af',
+		securityPoolDeploymentWorker: '0x296ec84d5a0f26d89ac04179f3c4d99ef886b959a09b9151a185a4b34bebcd51',
 	},
 	mainnet: {
-		securityPoolDeployer: '0xb2118836d79d4d2ec8e890e61ecba293b1252e53779320c2c479c991929c4881',
-		securityPoolDeploymentWorker: '0xa5b4ed5a45cdbfef7bed3badd1ff647fabce09fec4b8f9fcda02cb01fec17c8b',
+		securityPoolDeployer: '0x7c51fdf06d84e7e0f051ae4896f9166c5ec0e93629470278e7a539f316ec5fb8',
+		securityPoolDeploymentWorker: '0xc702aa932b014b8972fe104f6e63748a787f87c1f781f24cc23fea976a007c1b',
 	},
 }
