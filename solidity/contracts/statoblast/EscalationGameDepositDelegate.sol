@@ -208,9 +208,9 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		EscalationGameRepCustody.receiveDeposit(game.securityPool(), game.repToken(), amountAttoRep);
 		selectedOutcomeState.balanceAttoRep = expectedCumulativeRepAmountAttoRep;
 		_increaseEscrowedRepForBundle(depositor, amountAttoRep);
-		unresolvedRepByVaultAttoRep[depositor] += amountAttoRep;
+		vaultAccounting[depositor].unresolvedAttoRep += amountAttoRep;
 		totalLocalUnresolvedAttoRep += amountAttoRep;
-		localUnresolvedPrincipalByVaultAndOutcome[depositor][outcomeIndex] += amountAttoRep;
+		vaultAccounting[depositor].localUnresolvedPrincipalByOutcome[outcomeIndex] += amountAttoRep;
 
 		uint256 depositIndex = selectedOutcomeState.localNodeIds.length;
 		parentDepositIndex = depositIndex;
@@ -251,7 +251,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		if (outcomeState[1].balanceAttoRep < minimumBalance) minimumBalance = outcomeState[1].balanceAttoRep;
 		if (outcomeState[2].balanceAttoRep < minimumBalance) minimumBalance = outcomeState[2].balanceAttoRep;
 		uint256 amount = minimumBalance - creditedSurplusAttoRep;
-		collateralBackingByVault[depositor] += depositedAttoRep - amount;
+		vaultAccounting[depositor].collateralBackingAttoRep += depositedAttoRep - amount;
 		if (amount == 0) return;
 		creditedSurplusAttoRep = minimumBalance;
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
@@ -266,7 +266,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
 		require(depositor != address(0x0), 'Depositor is zero');
 		if (sourcePrincipalAttoRep == 0 && childRepAmountAttoRep == 0) return;
-		ForkedEscrowState storage state = forkedEscrowByVaultAndOutcome[depositor][uint8(outcome)];
+		ForkedEscrowState storage state = vaultAccounting[depositor].forkedEscrowByOutcome[uint8(outcome)];
 		state.sourcePrincipalAttoRep += sourcePrincipalAttoRep;
 		uint256 effectiveChildAttoRep = (childRepAmountAttoRep);
 		state.childAttoRep += childRepAmountAttoRep;
@@ -357,8 +357,8 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	function consumeEscrowedRepForOwner(address ownerAddress, uint256 amountAttoRep) external {
 		if (amountAttoRep == 0) return;
 		uint256 claimUnits = amountAttoRep;
-		require(escalationClaimBundles[ownerAddress].disputeStakedRepClaimUnits >= claimUnits, 'Escrowed REP low');
-		escalationClaimBundles[ownerAddress].disputeStakedRepClaimUnits -= claimUnits;
+		require(vaultAccounting[ownerAddress].claimBundle.disputeStakedRepClaimUnits >= claimUnits, 'Escrowed REP low');
+		vaultAccounting[ownerAddress].claimBundle.disputeStakedRepClaimUnits -= claimUnits;
 		totalDisputeStakedAttoRep -= amountAttoRep;
 		emit VaultEscrowUpdated(ownerAddress, _claimEscrowedRepByVault(ownerAddress), totalDisputeStakedAttoRep);
 	}
@@ -380,10 +380,10 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	/// @notice Game delegatecall target: reduces `bundleId`'s local unresolved principal on `outcomeIndex` by `amountAttoRep`.
 	function consumeUnresolvedRepForClaimOwners(address bundleId, uint8 outcomeIndex, uint256 amountAttoRep, uint256 leafIndex) external {
 		_recordConsumedPrincipal(outcomeIndex, leafIndex, amountAttoRep);
-		require(unresolvedRepByVaultAttoRep[bundleId] >= amountAttoRep, 'Claim accounting remainder');
-		require(localUnresolvedPrincipalByVaultAndOutcome[bundleId][outcomeIndex] >= amountAttoRep, 'Claim accounting remainder');
-		unresolvedRepByVaultAttoRep[bundleId] -= amountAttoRep;
-		localUnresolvedPrincipalByVaultAndOutcome[bundleId][outcomeIndex] -= amountAttoRep;
+		require(vaultAccounting[bundleId].unresolvedAttoRep >= amountAttoRep, 'Claim accounting remainder');
+		require(vaultAccounting[bundleId].localUnresolvedPrincipalByOutcome[outcomeIndex] >= amountAttoRep, 'Claim accounting remainder');
+		vaultAccounting[bundleId].unresolvedAttoRep -= amountAttoRep;
+		vaultAccounting[bundleId].localUnresolvedPrincipalByOutcome[outcomeIndex] -= amountAttoRep;
 		totalLocalUnresolvedAttoRep -= amountAttoRep;
 	}
 

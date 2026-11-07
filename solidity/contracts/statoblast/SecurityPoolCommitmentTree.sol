@@ -32,6 +32,7 @@ abstract contract SecurityPoolCommitmentTree {
 		uint256 node;
 		uint256 releasedRep;
 		bool retiredRepClaimed;
+		uint64 healthyMutationEpoch;
 		uint256 remainingCommitment;
 	}
 	mapping(uint256 => Node) internal nodes;

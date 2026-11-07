@@ -80,11 +80,14 @@ contract SecurityPoolSettlementBook {
 
 	mapping(uint64 => Book) public books;
 	mapping(uint64 => FrozenBook) public frozenBooks;
-	mapping(uint64 => Question) private questionStates;
+	struct StoredQuestionState {
+		Question question;
+		uint256 recoveryCorrection;
+		uint256 recoveryIndex;
+	}
+	mapping(uint64 => StoredQuestionState) private questionStates;
 	mapping(uint64 => FeeMode) private feeModes;
 	mapping(uint64 => RecoveryState) private recoveryStates;
-	mapping(uint64 => uint256) private questionRecoveryCorrections;
-	mapping(uint64 => uint256) private questionRecoveryIndices;
 
 	event BookCreated(uint64 indexed bookId, uint64 indexed sourceBookId, uint256 cashAttoEth, uint256 units);
 	event SettlementMinted(uint64 indexed bookId, uint256 indexed questionId, uint256 cashAttoEth, uint256 outcomeShares);
@@ -163,7 +166,7 @@ contract SecurityPoolSettlementBook {
 	/// @notice Return economic outcome supply, including inherited shares not materialized locally.
 	function question(uint64 bookId, uint256 questionId) public view returns (Question memory state, uint64 frozenBookId) {
 		Book storage book = _book(bookId);
-		state = questionStates[uint64(tree.get(book.questionRoot, questionId))];
+		state = questionStates[uint64(tree.get(book.questionRoot, questionId))].question;
 		state = _materializeFees(book, state);
 		if (state.finalAfter != 0) frozenBookId = uint64(frozenHistory.ceiling(book.frozenRoot, state.finalAfter));
 	}
@@ -398,8 +401,8 @@ contract SecurityPoolSettlementBook {
 			// at the stored index, before new child REP was allocated.
 			scaled =
 				state.units * recoveryStates[bookId].index +
-				questionRecoveryCorrections[stateId] +
-				(questionStates[stateId].units - state.units) * questionRecoveryIndices[stateId];
+				questionStates[stateId].recoveryCorrection +
+				(questionStates[stateId].question.units - state.units) * questionStates[stateId].recoveryIndex;
 		}
 	}
 
@@ -529,25 +532,23 @@ contract SecurityPoolSettlementBook {
 
 	function _writeQuestionWithRecovery(uint64 bookId, Book storage book, uint256 questionId, Question memory state, uint256 correction) private {
 		uint64 previousId = uint64(tree.get(book.questionRoot, questionId));
-		Question storage previous = questionStates[previousId];
+		Question storage previous = questionStates[previousId].question;
 		uint64 frozen =
 			previous.finalAfter == 0 ? 0 : uint64(frozenHistory.ceiling(book.frozenRoot, previous.finalAfter));
 		if (frozen == 0) {
 			if (previous.finalAfter == state.finalAfter) {
 				uint256 change;
 				unchecked {
-					change = correction - questionRecoveryCorrections[previousId];
+					change = correction - questionStates[previousId].recoveryCorrection;
 				}
 				_changeFinalityCorrection(bookId, state.finalAfter, change, true);
 			} else {
-				_changeFinalityCorrection(bookId, previous.finalAfter, questionRecoveryCorrections[previousId], false);
+				_changeFinalityCorrection(bookId, previous.finalAfter, questionStates[previousId].recoveryCorrection, false);
 				_changeFinalityCorrection(bookId, state.finalAfter, correction, true);
 			}
 		}
 		uint64 stateId = ++lastQuestionStateId;
-		questionStates[stateId] = state;
-		questionRecoveryCorrections[stateId] = correction;
-		questionRecoveryIndices[stateId] = recoveryStates[bookId].index;
+		questionStates[stateId] = StoredQuestionState(state, correction, recoveryStates[bookId].index);
 		book.questionRoot = tree.set(book.questionRoot, questionId, stateId, 0);
 	}
 

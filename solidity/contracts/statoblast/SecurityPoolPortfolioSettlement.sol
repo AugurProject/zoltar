@@ -35,12 +35,32 @@ contract SecurityPoolPortfolioSettlement {
 		uint48 timestamp;
 	}
 
-	mapping(uint248 => uint64) public bookIds;
 	mapping(address => QuestionSource) public questions;
 	mapping(uint248 => mapping(uint256 => address)) public poolsByQuestion;
-	mapping(uint248 => uint256) public availableForkCashAttoEth;
-	mapping(uint248 => uint256) public availableForkRecoveryAttoRep;
-	mapping(uint248 => IERC20) public recoveryTokens;
+
+	struct UniverseSettlement {
+		uint64 bookId;
+		IERC20 recoveryToken;
+		uint256 availableForkCashAttoEth;
+		uint256 availableForkRecoveryAttoRep;
+	}
+	mapping(uint248 => UniverseSettlement) private universes;
+
+	function bookIds(uint248 universeId) public view returns (uint64) {
+		return universes[universeId].bookId;
+	}
+
+	function availableForkCashAttoEth(uint248 universeId) public view returns (uint256) {
+		return universes[universeId].availableForkCashAttoEth;
+	}
+
+	function availableForkRecoveryAttoRep(uint248 universeId) public view returns (uint256) {
+		return universes[universeId].availableForkRecoveryAttoRep;
+	}
+
+	function recoveryTokens(uint248 universeId) public view returns (IERC20) {
+		return universes[universeId].recoveryToken;
+	}
 
 	event RecoveryRepPaid(uint248 indexed universeId, uint256 indexed questionId, address indexed recipient, uint256 amountAttoRep);
 
@@ -79,10 +99,10 @@ contract SecurityPoolPortfolioSettlement {
 	}
 
 	function registerUniverse(uint248 universeId, uint48 timestamp) external onlyPortfolio returns (uint64 bookId) {
-		require(bookIds[universeId] == 0, 'Settlement universe registered');
+		require(universes[universeId].bookId == 0, 'Settlement universe registered');
 		bookId = ledger.createBook(timestamp);
 		ledger.setFeeAccrualEnabled(bookId, false, timestamp);
-		bookIds[universeId] = bookId;
+		universes[universeId].bookId = bookId;
 	}
 
 	function registerQuestion(address pool, uint248 universeId, uint256 questionId) external onlyPortfolio {
@@ -162,8 +182,8 @@ contract SecurityPoolPortfolioSettlement {
 		uint64 bookId = _bookId(universeId);
 		ledger.sealForFork(bookId, timestamp);
 		(cashAttoEth, units, , , ) = ledger.totals(bookId);
-		availableForkCashAttoEth[universeId] = cashAttoEth;
-		availableForkRecoveryAttoRep[universeId] = ledger.recoveryRep(bookId);
+		universes[universeId].availableForkCashAttoEth = cashAttoEth;
+		universes[universeId].availableForkRecoveryAttoRep = ledger.recoveryRep(bookId);
 		earnedFeesAttoEth = _collectFees(bookId);
 	}
 
@@ -171,15 +191,15 @@ contract SecurityPoolPortfolioSettlement {
 	/// @dev Additional auction ETH is supplied as msg.value. Only assigned source
 	/// cash consumes the parent's balance; unsold and old recovery REP stay claims.
 	function createChildUniverse(uint248 sourceUniverseId, uint248 childUniverseId, uint256 parentContributionAttoEth, IERC20 recoveryToken, uint256 recoveryAttoRep) external payable onlyForkAuthority nonReentrant returns (uint64 bookId) {
-		require(bookIds[childUniverseId] == 0, 'Settlement universe registered');
-		uint256 available = availableForkCashAttoEth[sourceUniverseId];
+		require(universes[childUniverseId].bookId == 0, 'Settlement universe registered');
+		uint256 available = universes[sourceUniverseId].availableForkCashAttoEth;
 		require(parentContributionAttoEth <= available, 'Fork settlement cash insufficient');
-		availableForkCashAttoEth[sourceUniverseId] = available - parentContributionAttoEth;
+		universes[sourceUniverseId].availableForkCashAttoEth = available - parentContributionAttoEth;
 		bookId = ledger.createChildBook(_bookId(sourceUniverseId), parentContributionAttoEth + msg.value, recoveryAttoRep);
 		(, , , uint48 timestamp, ) = ledger.totals(bookId);
 		ledger.setFeeAccrualEnabled(bookId, false, timestamp);
-		bookIds[childUniverseId] = bookId;
-		recoveryTokens[childUniverseId] = recoveryToken;
+		universes[childUniverseId].bookId = bookId;
+		universes[childUniverseId].recoveryToken = recoveryToken;
 		if (recoveryAttoRep != 0) recoveryToken.safeTransferFrom(msg.sender, address(this), recoveryAttoRep);
 	}
 
@@ -195,16 +215,16 @@ contract SecurityPoolPortfolioSettlement {
 
 	/// @notice Transfer an explicit part of unassigned source cash to the portfolio's recovery book.
 	function withdrawForkRecoveryCash(uint248 universeId, uint256 cashAttoEth) external onlyForkAuthority nonReentrant {
-		require(cashAttoEth <= availableForkCashAttoEth[universeId], 'Fork settlement cash insufficient');
-		availableForkCashAttoEth[universeId] -= cashAttoEth;
+		require(cashAttoEth <= universes[universeId].availableForkCashAttoEth, 'Fork settlement cash insufficient');
+		universes[universeId].availableForkCashAttoEth -= cashAttoEth;
 		_sendEth(msg.sender, cashAttoEth);
 	}
 
 	/// @notice Migrate only live claim REP once; finalized source REP stays payable.
 	function withdrawForkRecoveryRep(uint248 universeId) external onlyForkAuthority nonReentrant returns (uint256 recoveryAttoRep) {
-		recoveryAttoRep = availableForkRecoveryAttoRep[universeId];
-		availableForkRecoveryAttoRep[universeId] = 0;
-		if (recoveryAttoRep != 0) recoveryTokens[universeId].safeTransfer(msg.sender, recoveryAttoRep);
+		recoveryAttoRep = universes[universeId].availableForkRecoveryAttoRep;
+		universes[universeId].availableForkRecoveryAttoRep = 0;
+		if (recoveryAttoRep != 0) universes[universeId].recoveryToken.safeTransfer(msg.sender, recoveryAttoRep);
 	}
 
 	function snapshotQuestion(address pool) external view returns (Snapshot memory) {
@@ -266,7 +286,7 @@ contract SecurityPoolPortfolioSettlement {
 	}
 
 	function _bookId(uint248 universeId) private view returns (uint64 bookId) {
-		bookId = bookIds[universeId];
+		bookId = universes[universeId].bookId;
 		require(bookId != 0, 'Unknown settlement universe');
 	}
 
@@ -278,7 +298,7 @@ contract SecurityPoolPortfolioSettlement {
 
 	function _payRecoveryRep(QuestionSource memory source, address recipient, uint256 amount) private {
 		if (amount == 0) return;
-		recoveryTokens[source.universeId].safeTransfer(recipient, amount);
+		universes[source.universeId].recoveryToken.safeTransfer(recipient, amount);
 		emit RecoveryRepPaid(source.universeId, source.questionId, recipient, amount);
 	}
 }

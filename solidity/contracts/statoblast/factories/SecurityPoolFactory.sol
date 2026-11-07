@@ -28,13 +28,18 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	ISecurityPoolForker immutable securityPoolForker;
 	SecurityPoolDeployer immutable securityPoolDeployer;
 	SecurityPoolDeployment[] private securityPoolDeployments;
-	// Pool ID from getPoolId(originId, universeId) -> the registered pool.
-	mapping(bytes32 => ISecurityPool) private securityPoolsById;
-	// The same pool ID -> whether its deployment slot has been reserved.
-	mapping(bytes32 => bool) private securityPoolIdClaims;
-	mapping(ISecurityPool => bytes32) private securityPoolOriginIds;
-	mapping(ISecurityPool => bool) private securityPoolHasInheritedForkOutcome;
-	mapping(ISecurityPool => address) private securityPoolPortfolios;
+	struct PoolRegistration {
+		ISecurityPool pool;
+		bool claimed;
+	}
+	struct SecurityPoolMetadata {
+		bytes32 originId;
+		address portfolio;
+		bool hasInheritedForkOutcome;
+	}
+	// Pool ID from getPoolId(originId, universeId) -> reservation and eventual pool.
+	mapping(bytes32 => PoolRegistration) private poolRegistrations;
+	mapping(ISecurityPool => SecurityPoolMetadata) private poolMetadata;
 	mapping(address => mapping(uint248 => address)) public sharedPriceFeeds;
 	mapping(address => OpenOraclePriceCoordinator) private portfolioConfigurations;
 	struct ChildPoolDependencies {
@@ -65,15 +70,15 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	}
 
 	function getSecurityPool(bytes32 originId, uint248 universeId) external view returns (ISecurityPool) {
-		return securityPoolsById[getPoolId(originId, universeId)];
+		return poolRegistrations[getPoolId(originId, universeId)].pool;
 	}
 
 	function getSecurityPoolOriginId(ISecurityPool securityPool) external view returns (bytes32) {
-		return securityPoolOriginIds[securityPool];
+		return poolMetadata[securityPool].originId;
 	}
 
 	function getSecurityPoolHasInheritedForkOutcome(ISecurityPool securityPool) external view returns (bool) {
-		return securityPoolHasInheritedForkOutcome[securityPool];
+		return poolMetadata[securityPool].hasInheritedForkOutcome;
 	}
 
 	function getPortfolioOriginId(address portfolio, uint248 originUniverseId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) public pure returns (bytes32) {
@@ -82,7 +87,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	}
 
 	function getSecurityPoolPortfolio(ISecurityPool securityPool) external view returns (address) {
-		return securityPoolPortfolios[securityPool];
+		return poolMetadata[securityPool].portfolio;
 	}
 
 	function getPoolId(bytes32 originId, uint248 universeId) public pure returns (bytes32) {
@@ -100,9 +105,9 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 
 	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 currentRetentionRate, uint256 settlementCollateralAttoEth) external returns (ISecurityPool securityPool, address truthAuction) {
 		require(msg.sender == address(securityPoolForker), 'Only security pool forker');
-		bytes32 originId = securityPoolOriginIds[parent];
-		require(address(securityPoolsById[getPoolId(originId, parent.universeId())]) == address(parent), 'Parent pool is not canonical');
-		address portfolio = securityPoolPortfolios[parent];
+		bytes32 originId = poolMetadata[parent].originId;
+		require(address(poolRegistrations[getPoolId(originId, parent.universeId())].pool) == address(parent), 'Parent pool is not canonical');
+		address portfolio = poolMetadata[parent].portfolio;
 		require(portfolio != address(0), 'Portfolio missing');
 		require(sharedPriceFeeds[portfolio][universeId] != address(0), 'Prepare shared child price feed');
 		(bool hasInheritedForkOutcome, ) = ISecurityPoolPortfolioNative(portfolio).inheritedFixedOutcome(universeId, questionId);
@@ -163,17 +168,15 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 
 	function _reserveSecurityPool(bytes32 originId, uint248 universeId) private {
 		bytes32 poolId = getPoolId(originId, universeId);
-		require(!securityPoolIdClaims[poolId], 'Security pool origin and universe already claimed');
-		securityPoolIdClaims[poolId] = true;
+		require(!poolRegistrations[poolId].claimed, 'Security pool origin and universe already claimed');
+		poolRegistrations[poolId].claimed = true;
 	}
 
 	function _registerSecurityPool(bytes32 originId, uint248 universeId, ISecurityPool securityPool, bool hasInheritedForkOutcome, address portfolio) private {
 		bytes32 poolId = getPoolId(originId, universeId);
-		require(address(securityPoolsById[poolId]) == address(0x0), 'Pool already registered');
-		securityPoolsById[poolId] = securityPool;
-		securityPoolOriginIds[securityPool] = originId;
-		securityPoolHasInheritedForkOutcome[securityPool] = hasInheritedForkOutcome;
-		securityPoolPortfolios[securityPool] = portfolio;
+		require(address(poolRegistrations[poolId].pool) == address(0x0), 'Pool already registered');
+		poolRegistrations[poolId].pool = securityPool;
+		poolMetadata[securityPool] = SecurityPoolMetadata(originId, portfolio, hasInheritedForkOutcome);
 		emit SecurityPoolRegistered(originId, poolId, universeId, securityPool);
 	}
 
@@ -215,8 +218,8 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	/// @dev Anyone may prepare; the canonical forked parent fixes all namespace and oracle configuration.
 	function preparePortfolioChildPriceFeed(ISecurityPool parent, uint256 outcomeIndex) external returns (address) {
 		uint248 parentUniverseId = parent.universeId();
-		require(address(securityPoolsById[getPoolId(securityPoolOriginIds[parent], parentUniverseId)]) == address(parent), 'Parent pool is not canonical');
-		address portfolio = securityPoolPortfolios[parent];
+		require(address(poolRegistrations[getPoolId(poolMetadata[parent].originId, parentUniverseId)].pool) == address(parent), 'Parent pool is not canonical');
+		address portfolio = poolMetadata[parent].portfolio;
 		require(portfolio != address(0), 'Parent has no portfolio');
 		require(parent.systemState() == SystemState.PoolForked, 'Parent not forked');
 		uint248 universeId = zoltar.getChildUniverseId(parentUniverseId, outcomeIndex);
@@ -226,9 +229,9 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 
 	/// @notice Prepare one known portfolio branch without materializing its ancestor questions.
 	function preparePortfolioPriceFeed(ISecurityPool source, uint248 universeId) external returns (address) {
-		address portfolio = securityPoolPortfolios[source];
+		address portfolio = poolMetadata[source].portfolio;
 		require(portfolio != address(0), 'Source has no portfolio');
-		require(address(securityPoolsById[getPoolId(securityPoolOriginIds[source], source.universeId())]) == address(source), 'Source pool is not canonical');
+		require(address(poolRegistrations[getPoolId(poolMetadata[source].originId, source.universeId())].pool) == address(source), 'Source pool is not canonical');
 		ISecurityPoolPortfolioNative(portfolio).logicalTime(universeId);
 		require(address(zoltar.getRepToken(universeId)) != address(0), 'Branch REP is missing');
 		return address(_getOrCreateSharedPriceFeed(source.openOraclePriceCoordinator(), portfolio, universeId));
@@ -237,11 +240,11 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	/// @notice Prepare canonical coordinator and auction dependencies without exposing a partial child ledger.
 	function prepareChildPoolDependencies(ISecurityPool parent, uint256 outcomeIndex) external returns (OpenOraclePriceCoordinator coordinator, address auction) {
 		uint248 parentUniverseId = parent.universeId();
-		require(address(securityPoolsById[getPoolId(securityPoolOriginIds[parent], parentUniverseId)]) == address(parent), 'Parent pool is not canonical');
+		require(address(poolRegistrations[getPoolId(poolMetadata[parent].originId, parentUniverseId)].pool) == address(parent), 'Parent pool is not canonical');
 		require(parent.systemState() == SystemState.PoolForked, 'Parent not forked');
 		uint248 universeId = zoltar.getChildUniverseId(parentUniverseId, outcomeIndex);
 		if (address(zoltar.getRepToken(universeId)) == address(0)) zoltar.deployChild(parentUniverseId, outcomeIndex);
-		address portfolio = securityPoolPortfolios[parent];
+		address portfolio = poolMetadata[parent].portfolio;
 		require(portfolio != address(0), 'Portfolio missing');
 		require(sharedPriceFeeds[portfolio][universeId] != address(0), 'Prepare shared child price feed');
 		return _prepareChildPoolDependencies(parent, universeId);
@@ -249,13 +252,13 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 
 	function getChildPoolDependencies(ISecurityPool parent, uint256 outcomeIndex) external view returns (OpenOraclePriceCoordinator coordinator, address auction) {
 		ChildPoolDependencies storage dependencies = childPoolDependencies[
-			getPoolId(securityPoolOriginIds[parent], zoltar.getChildUniverseId(parent.universeId(), outcomeIndex))
+			getPoolId(poolMetadata[parent].originId, zoltar.getChildUniverseId(parent.universeId(), outcomeIndex))
 		];
 		return (dependencies.coordinator, dependencies.auction);
 	}
 
 	function _prepareChildPoolDependencies(ISecurityPool parent, uint248 universeId) private returns (OpenOraclePriceCoordinator coordinator, address auction) {
-		bytes32 poolId = getPoolId(securityPoolOriginIds[parent], universeId);
+		bytes32 poolId = getPoolId(poolMetadata[parent].originId, universeId);
 		ChildPoolDependencies storage dependencies = childPoolDependencies[poolId];
 		if (address(dependencies.coordinator) != address(0)) return (dependencies.coordinator, dependencies.auction);
 		uint256 priorityFee = parent.openOraclePriceCoordinator().initialReportPriorityFeeAttoEthPerGas();
