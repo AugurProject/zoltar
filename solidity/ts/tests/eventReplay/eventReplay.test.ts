@@ -227,7 +227,7 @@ describe('event-only replay', () => {
 				logIndex: 8,
 				args: {
 					securityPool: pool,
-					truthAuction: zeroAddress,
+					collateralRepairAuction: zeroAddress,
 					openOraclePriceCoordinator: coordinator,
 					shareToken,
 					parent: zeroAddress,
@@ -694,7 +694,7 @@ describe('event-only replay', () => {
 				logIndex: 0,
 				args: {
 					securityPool: pool,
-					truthAuction: zeroAddress,
+					collateralRepairAuction: zeroAddress,
 					openOraclePriceCoordinator: zeroAddress,
 					shareToken: zeroAddress,
 					parent,
@@ -920,7 +920,7 @@ describe('event-only replay', () => {
 				logIndex: 4,
 				args: {
 					securityPool: pool,
-					truthAuction: auction,
+					collateralRepairAuction: auction,
 					openOraclePriceCoordinator: coordinator,
 					shareToken: repToken,
 					parent: zeroAddress,
@@ -1303,7 +1303,7 @@ describe('event-only replay', () => {
 		strictEqualTypeSafe(deployment.parent, securityPoolAddresses.securityPool, 'child parent replay mismatch')
 		strictEqualTypeSafe(deployment.universeId, childUniverseId, 'child universe replay mismatch')
 		strictEqualTypeSafe(deployment.questionId, fixture.questionId, 'child question replay mismatch')
-		strictEqualTypeSafe(deployment.truthAuction, child.truthAuction, 'child auction replay mismatch')
+		strictEqualTypeSafe(deployment.collateralRepairAuction, child.collateralRepairAuction, 'child auction replay mismatch')
 		strictEqualTypeSafe(deployment.coordinator, child.openOraclePriceCoordinator, 'child coordinator replay mismatch')
 		strictEqualTypeSafe(deployment.shareToken, child.shareToken, 'child share token replay mismatch')
 		strictEqualTypeSafe(deployment.statoblastSecurityMultiplierBps, storedStatoblastSecurityMultiplierBps, 'child security multiplier replay mismatch')

@@ -382,7 +382,7 @@ describe('ABI metadata', () => {
 		expect(
 			discoveriesFrom({
 				name: 'DeploySecurityPool',
-				arguments: { truthAuction: zeroAddress },
+				arguments: { collateralRepairAuction: zeroAddress },
 				status: 'decoded',
 				summary: 'deployment',
 			}),

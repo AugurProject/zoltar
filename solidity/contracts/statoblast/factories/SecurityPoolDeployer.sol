@@ -24,11 +24,11 @@ contract SecurityPoolDeployer {
 		worker = new SecurityPoolDeploymentWorker(factory, eventEmitter, operationsDelegate);
 	}
 
-	function deploy(address securityPoolForker, ZoltarQuestionData questionData, EscalationGameFactory escalationGameFactory, OpenOraclePriceCoordinator openOraclePriceCoordinator, IShareToken shareToken, OpenOracle openOracle, ISecurityPool parent, Zoltar zoltar, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, address truthAuction) external returns (ISecurityPool securityPool) {
+	function deploy(address securityPoolForker, ZoltarQuestionData questionData, EscalationGameFactory escalationGameFactory, OpenOraclePriceCoordinator openOraclePriceCoordinator, IShareToken shareToken, OpenOracle openOracle, ISecurityPool parent, Zoltar zoltar, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, address collateralRepairAuction) external returns (ISecurityPool securityPool) {
 		require(msg.sender == address(factory), 'Only SecurityPoolFactory can use the deployer');
 
 		return
-			worker.deploy(securityPoolForker, questionData, escalationGameFactory, openOraclePriceCoordinator, shareToken, openOracle, parent, zoltar, universeId, questionId, statoblastSecurityMultiplierBps, truthAuction);
+			worker.deploy(securityPoolForker, questionData, escalationGameFactory, openOraclePriceCoordinator, shareToken, openOracle, parent, zoltar, universeId, questionId, statoblastSecurityMultiplierBps, collateralRepairAuction);
 	}
 }
 
@@ -48,12 +48,12 @@ contract SecurityPoolDeploymentWorker {
 		(creationCodeFirstChunk, creationCodeSecondChunk) = CreationCodeStorage.store(type(SecurityPool).creationCode);
 	}
 
-	function deploy(address securityPoolForker, ZoltarQuestionData questionData, EscalationGameFactory escalationGameFactory, OpenOraclePriceCoordinator openOraclePriceCoordinator, IShareToken shareToken, OpenOracle openOracle, ISecurityPool parent, Zoltar zoltar, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, address truthAuction) external returns (ISecurityPool securityPool) {
+	function deploy(address securityPoolForker, ZoltarQuestionData questionData, EscalationGameFactory escalationGameFactory, OpenOraclePriceCoordinator openOraclePriceCoordinator, IShareToken shareToken, OpenOracle openOracle, ISecurityPool parent, Zoltar zoltar, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, address collateralRepairAuction) external returns (ISecurityPool securityPool) {
 		require(msg.sender == deployer, 'Only SecurityPoolDeployer can use the deployment worker');
 
 		// Keep SecurityPool init code in code chunks so this worker's runtime stays below EIP-170
 		// without paying storage-write gas during the factory deployment.
-		bytes memory initCode = abi.encodePacked(CreationCodeStorage.load(creationCodeFirstChunk, creationCodeSecondChunk), abi.encode(securityPoolForker, questionData, escalationGameFactory, openOraclePriceCoordinator, shareToken, openOracle, parent, zoltar, universeId, questionId, statoblastSecurityMultiplierBps, truthAuction));
+		bytes memory initCode = abi.encodePacked(CreationCodeStorage.load(creationCodeFirstChunk, creationCodeSecondChunk), abi.encode(securityPoolForker, questionData, escalationGameFactory, openOraclePriceCoordinator, shareToken, openOracle, parent, zoltar, universeId, questionId, statoblastSecurityMultiplierBps, collateralRepairAuction));
 		address deployed = Create2Deployment.deploy(initCode, 0);
 		require(deployed != address(0x0), 'Security pool deployment failed');
 		return ISecurityPool(payable(deployed));

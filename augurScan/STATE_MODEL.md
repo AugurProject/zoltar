@@ -9,7 +9,7 @@ augurScan separates retained evidence from the current view so an operator can t
 3. **Observations** are contract values read at a tagged canonical block. Every pool, vault, escalation, auction, address-balance, or token-metadata attempt is appended with its result or failure, block hash, observation time, run, and source hashes.
 4. **Current materializations** are replaceable registries, domain projections, and latest state rows used by the UI and ordinary canonical APIs. They are convenient views of the first three layers, not independent historical evidence.
 
-OpenOracle reports, escalation games, truth auctions, AMM activity, registrations, forks, and migrations use this same model. One decoded occurrence can create several semantic timeline entries because it can affect several entities. Current views keep stable entity and occurrence identities so replay remains idempotent.
+OpenOracle reports, escalation games, collateral repair auctions, AMM activity, registrations, forks, and migrations use this same model. One decoded occurrence can create several semantic timeline entries because it can affect several entities. Current views keep stable entity and occurrence identities so replay remains idempotent.
 
 ## What a replacement changes
 
@@ -25,7 +25,7 @@ Every replacement has an audit record. `chain_reorganizations` stores its bounda
 
 Event-first indexing retains event-bearing blocks and scan-range endpoints; quiet intervening blocks need no individual records. Every Operations response after indexing begins is anchored to one fully indexed canonical block. The overview and risk surfaces accept `atBlock` for a retained canonical boundary. Their `asOf` envelope distinguishes that selected block from the current indexed and observed heads and includes the latest invalidation and applied source hashes. Before the first indexed block, Operations returns empty evidence with an explicit availability message; its zero block is only a loading anchor.
 
-At the live head, the indexer samples bounded sets of least-recently observed pools, vaults, escalation games, and truth auctions. Every call in one entity read is tagged to the same indexed block and the block hash is checked before commit. A failure is an availability observation, never numeric zero. Repeated cycles continue until every known entity has a snapshot at that head.
+At the live head, the indexer samples bounded sets of least-recently observed pools, vaults, escalation games, and collateral repair auctions. Every call in one entity read is tagged to the same indexed block and the block hash is checked before commit. A failure is an availability observation, never numeric zero. Repeated cycles continue until every known entity has a snapshot at that head.
 
 The [API reference](API_REFERENCE.md) is the canonical source for collection ordering, limits, point-in-time filters, opaque cursors, completeness fields, and invalidated-continuation behavior. The browser refetches the visible depth of paged Operations views after a committed update so it does not mix materialization generations.
 

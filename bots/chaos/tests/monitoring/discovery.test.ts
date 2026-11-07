@@ -282,7 +282,7 @@ interface GraphOverrides {
 		questionId: bigint
 		securityPool: Address
 		shareToken: Address
-		truthAuction: Address
+		collateralRepairAuction: Address
 		universeId: bigint
 	}[]
 	questionIds?: readonly bigint[]
@@ -482,7 +482,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 	const pool = address(20)
 	const coordinator = address(21)
 	const shareToken = address(22)
-	const truthAuction = address(23)
+	const collateralRepairAuction = address(23)
 	const contractReads: string[] = []
 	const baseFeePerGas = overrides.baseFeePerGas ?? 1n
 	const base = fakeClient(10n, hash(10), {
@@ -494,7 +494,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				questionId: 101n,
 				securityPool: pool,
 				shareToken,
-				truthAuction,
+				collateralRepairAuction,
 				universeId: 0n,
 			},
 		],
@@ -534,11 +534,11 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				case 'forkAuthority':
 					return address(95)
 				case 'auctions':
-					return truthAuction
+					return collateralRepairAuction
 				case 'engine':
 					return address(24)
 				case 'controller':
-					return truthAuction
+					return collateralRepairAuction
 				case 'ownerAccount':
 					return [0n, 0n, 0n, 10000n, 0n]
 				case 'ownerCollateral':
@@ -605,8 +605,8 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				case 'escalationGame':
 				case 'portfolioCustody':
 					return address(0)
-				case 'truthAuction':
-					return truthAuction
+				case 'collateralRepairAuction':
+					return collateralRepairAuction
 				case 'systemState':
 					return 0n
 				case 'awaitingForkContinuation':
@@ -714,7 +714,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 			return override ?? Reflect.get(base.client, property)
 		},
 	})
-	return { client, contractReads, pool, truthAuction }
+	return { client, contractReads, pool, collateralRepairAuction }
 }
 
 interface PoolBindingOverrides {
@@ -763,7 +763,7 @@ describe('anchored ecosystem discovery', () => {
 		const deployments = { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) }
 		const missing = refundBackfillClient(8n)
 		const withoutIndex = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: missing.client, deployments, wallet: address(1) })
-		expect(withoutIndex.auctions).toContainEqual(expect.objectContaining({ address: missing.truthAuction, pendingEthRefund: '8' }))
+		expect(withoutIndex.auctions).toContainEqual(expect.objectContaining({ address: missing.collateralRepairAuction, pendingEthRefund: '8' }))
 		expect(withoutIndex.auctions[0]?.pendingEthRefundGeneration).toBeUndefined()
 
 		const lagging = refundBackfillClient(8n)
@@ -774,7 +774,7 @@ describe('anchored ecosystem discovery', () => {
 			indexedAuctionRefunds: { [address(24).toLowerCase()]: { generation: hash(700), pendingAttoEth: 5n.toString() } },
 			wallet: address(1),
 		})
-		expect(withLaggingIndex.auctions).toContainEqual(expect.objectContaining({ address: lagging.truthAuction, pendingEthRefund: '8' }))
+		expect(withLaggingIndex.auctions).toContainEqual(expect.objectContaining({ address: lagging.collateralRepairAuction, pendingEthRefund: '8' }))
 		expect(withLaggingIndex.auctions[0]?.pendingEthRefundGeneration).toBeUndefined()
 	})
 
@@ -1050,7 +1050,7 @@ describe('anchored ecosystem discovery', () => {
 			questionId: questionIds[index] ?? 0n,
 			securityPool: address(2_000 + index),
 			shareToken: address(3_000 + index),
-			truthAuction: address(4_000 + index),
+			collateralRepairAuction: address(4_000 + index),
 			universeId: 0n,
 		}))
 		const limits = { maxPools: 3, maxQuestions: 3, maxStagedOperationsPerPool: 3, maxUniverses: 3, maxVaultsPerPool: 3 }
@@ -1631,7 +1631,7 @@ describe('anchored ecosystem discovery', () => {
 			deploymentCoordinator: address(21),
 			deploymentQuestionId: '7',
 			deploymentShareToken: address(22),
-			deploymentTruthAuction: address(23),
+			deploymentCollateralRepairAuction: address(23),
 			deploymentUniverseId: '6',
 			pool,
 			poolCoordinator: address(21),
@@ -1641,7 +1641,7 @@ describe('anchored ecosystem discovery', () => {
 			poolQuestionId: '7',
 			poolRepToken: address(24),
 			poolShareToken: address(22),
-			poolTruthAuction: address(23),
+			poolCollateralRepairAuction: address(23),
 			poolUniverseId: '6',
 			poolZoltar: address(2),
 			universeRepToken: address(24),

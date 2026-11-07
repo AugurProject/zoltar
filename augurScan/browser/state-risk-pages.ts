@@ -149,7 +149,7 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 	const currentCard = element('section', 'static-card')
 	currentCard.append(element('h4', '', 'Latest available accounting and lifecycle'))
 	const currentGrid = element('div', 'static-grid')
-	const systemStates = ['Operational', 'Pool forked', 'Fork migration', 'Fork truth auction']
+	const systemStates = ['Operational', 'Pool forked', 'Fork migration', 'Fork collateral repair auction']
 	const currentState = poolItem.current_state ?? {}
 	currentGrid.append(
 		staticField('System state', currentState['systemState'] === undefined ? 'No lifecycle event yet' : (systemStates[Number(currentState['systemState'])] ?? `State ${currentState['systemState']}`)),
@@ -173,7 +173,7 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 		staticAddressField('Price coordinator', poolItem.coordinator_address, poolItem.chain_id),
 		history.market === undefined || history.market === null ? staticField('Augur AMM pair', 'Unavailable') : staticAddressField('Augur AMM pair', history.market.pair_address, poolItem.chain_id),
 		staticField('Augur AMM fee', history.market === undefined || history.market === null ? '—' : percentFromBps(history.market.fee_bps)),
-		staticAddressField('Truth auction', poolItem.truth_auction_address, poolItem.chain_id),
+		staticAddressField('Collateral repair auction', poolItem.collateral_repair_auction_address, poolItem.chain_id),
 		staticField('Security multiplier', percentFromBps(poolItem.security_multiplier_bps)),
 		staticField('Initial priority fee', exactUnit(poolItem.initial_priority_fee_atto_eth_per_gas, 9, 'nanoETH')),
 		staticField('Child pools', number(poolItem.child_count)),

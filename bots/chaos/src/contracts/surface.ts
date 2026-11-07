@@ -76,7 +76,7 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('SecurityPool', 'setSystemState', 'role-restricted', undefined, 'Only SecurityPoolForker controls lifecycle state.'),
 	entry('SecurityPool', 'setShareTokenSupplyAttoShares', 'role-restricted', undefined, 'Only SecurityPoolForker migrates share supply.'),
 	entry('SecurityPool', 'authorizeChildPool', 'role-restricted', undefined, 'Only SecurityPoolForker authorizes child pools.'),
-	entry('SecurityPool', 'receive', 'role-restricted', undefined, 'Only the canonical forker, truth auction, or parent pool may send ETH directly.', undefined, 'receive'),
+	entry('SecurityPool', 'receive', 'role-restricted', undefined, 'Only the canonical forker, collateral repair auction, or parent pool may send ETH directly.', undefined, 'receive'),
 	entry('SecurityPoolOperationsDelegate', 'decodeError', 'excluded-dangerous', undefined, 'This helper decodes revert data for canonical SecurityPool delegate calls and has no direct protocol effect.'),
 	entry('SecurityPoolOperationsDelegate', 'depositWalletRepToEscalationGame', 'excluded-dangerous', undefined, 'Wallet reporting must use the SecurityPool host, which checks inherited outcomes before delegating; direct calls use isolated delegate storage.'),
 

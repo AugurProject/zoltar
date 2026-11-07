@@ -397,12 +397,12 @@ export const coreContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'b98fe3fd0e736b10fa5051104c9f1b06d7621839c9021157a357bfaf97546669',
+		compiledAbiFingerprint: '93f3678c31b7c059acbbb471b22ff99ebfaaa57c851f0ef3bd570747a4b0ed77',
 		name: 'SecurityPoolFactory',
 		purpose: 'Deploys and registers portfolio question ledgers and their shared price feeds. No standalone deployment entry point exists.',
 		readAbiFingerprint: '34c0330a029fda185ef279091d48b684a96d2c49478b1999ab304458a1808fb6',
 		readSurface:
-			'Each question derives its start bond as max(1 REP, universe theoretical REP supply / 10,000,000). The factory has no standalone vault or debt minima. Deployment requires the configured operations and accounting delegates. `securityPoolDeploymentCount` and strict `securityPoolDeploymentsRange` enumerate canonical question ledgers. `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId` and `getSecurityPoolHasInheritedForkOutcome` identify their lineage. `getPortfolioOriginId` includes the caller portfolio namespace. `getSecurityPoolPortfolio` authenticates its portfolio; `sharedPriceFeeds` is indexed by portfolio and universe. `getChildPoolDependencies` returns a prepared coordinator and a zero per-question auction address. Branch truth auctions are created by the shared fork coordinator. `zoltar` identifies the protocol root.',
+			'Each question derives its start bond as max(1 REP, universe theoretical REP supply / 10,000,000). The factory has no standalone vault or debt minima. Deployment requires the configured operations and accounting delegates. `securityPoolDeploymentCount` and strict `securityPoolDeploymentsRange` enumerate canonical question ledgers. `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId` and `getSecurityPoolHasInheritedForkOutcome` identify their lineage. `getPortfolioOriginId` includes the caller portfolio namespace. `getSecurityPoolPortfolio` authenticates its portfolio; `sharedPriceFeeds` is indexed by portfolio and universe. `getChildPoolDependencies` returns a prepared coordinator and a zero per-question auction address. Branch collateral repair auctions are created by the shared fork coordinator. `zoltar` identifies the protocol root.',
 		readDeclarations: [
 			{
 				name: 'securityPoolDeploymentCount',
@@ -506,7 +506,7 @@ export const coreContractReferences: ContractReference[] = [
 			{
 				call: '`prepareChildPoolDependencies(parent, outcomeIndex)`',
 				caller: 'Anyone',
-				effect: 'Predeploys the canonical child coordinator separately from the question ledger. Repeated calls return the same coordinator; the auction result is zero because truth auctions belong to shared portfolio branches.',
+				effect: 'Predeploys the canonical child coordinator separately from the question ledger. Repeated calls return the same coordinator; the auction result is zero because collateral repair auctions belong to shared portfolio branches.',
 				declarations: [
 					{
 						name: 'prepareChildPoolDependencies',

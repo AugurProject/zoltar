@@ -30,10 +30,10 @@ interface IPortfolioForkRoot {
 	function creditForkFees(uint248 universeId, uint256 amount) external;
 	function getPool(uint256 questionId, uint248 universeId) external view returns (ISecurityPool);
 	function minimumCommitmentAttoEth() external view returns (uint256);
-	function auctionDeployer() external view returns (IPortfolioTruthAuctionDeployer);
+	function auctionDeployer() external view returns (IPortfolioCollateralRepairAuctionDeployer);
 }
 
-interface IPortfolioTruthAuctionDeployer {
+interface IPortfolioCollateralRepairAuctionDeployer {
 	function create(address authority, address portfolio, uint248 child, uint256 close, uint256 inventory, uint256 shortfall) external returns (address);
 }
 

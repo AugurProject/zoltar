@@ -31,7 +31,7 @@ export type MarketType = 'binary' | 'categorical' | 'scalar'
 
 export type ReportingOutcomeKey = 'invalid' | 'yes' | 'no'
 export type ForkOutcomeKey = ReportingOutcomeKey | 'none'
-export type SecurityPoolSystemState = 'operational' | 'poolForked' | 'forkMigration' | 'forkTruthAuction'
+export type SecurityPoolSystemState = 'operational' | 'poolForked' | 'forkMigration' | 'forkCollateralRepairAuction'
 
 export type QuestionData = {
 	title: string

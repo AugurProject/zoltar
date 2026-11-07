@@ -13,8 +13,8 @@ import { SecurityPoolPortfolioSettlement } from './SecurityPoolPortfolioSettleme
 import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
 
 /// @notice Materialize one question directly from its last live source game.
-/// @dev Portfolio assets already migrated at branch level. No per-question truth
-/// auction, vault migration, ancestor walk, or reporter-token transfer occurs here.
+/// @dev Portfolio assets already migrated at branch level. No per-question collateral
+/// repair auction, vault migration, ancestor walk, or reporter-token transfer occurs here.
 contract SecurityPoolForkerPortfolioDelegate {
 	Zoltar public immutable zoltar;
 	constructor(Zoltar protocol) {
@@ -106,7 +106,7 @@ contract SecurityPoolForkerPortfolioDelegate {
 		}
 		factory.preparePortfolioPriceFeed(source, targetUniverse);
 		(child, ) = factory.deployChildSecurityPool(source, source.shareToken(), targetUniverse, source.questionId(), source.statoblastSecurityMultiplierBps(), 0, 0);
-		require(child.truthAuction() == address(0), 'Portfolio question cannot have a truth auction');
+		require(child.collateralRepairAuction() == address(0), 'Portfolio question cannot have a collateral repair auction');
 		source.authorizeChildPool(child);
 		portfolio.registerChildPool(child);
 		if (zoltar.getForkTime(targetUniverse) != 0) child.setSystemState(SystemState.PoolForked);

@@ -28,7 +28,7 @@ enum SystemState {
 	Operational,
 	PoolForked,
 	ForkMigration,
-	ForkTruthAuction
+	ForkCollateralRepairAuction
 }
 
 enum QuestionOutcome {
@@ -63,7 +63,7 @@ interface ISecurityPool {
 	function openOraclePriceCoordinator() external view returns (OpenOraclePriceCoordinator);
 	function openOracle() external view returns (OpenOracle);
 	function shareTokenSupplyAttoShares() external view returns (uint256);
-	function truthAuction() external view returns (address);
+	function collateralRepairAuction() external view returns (address);
 
 	function attoSharesToAttoEth(uint256 amountAttoShares) external view returns (uint256);
 	function attoSharesToAttoRep(uint256 amountAttoShares) external view returns (uint256);
@@ -106,7 +106,7 @@ interface ISecurityPoolFactory {
 
 	struct SecurityPoolDeployment {
 		ISecurityPool securityPool;
-		address truthAuction;
+		address collateralRepairAuction;
 		OpenOraclePriceCoordinator openOraclePriceCoordinator;
 		IShareToken shareToken;
 		ISecurityPool parent;
@@ -118,7 +118,7 @@ interface ISecurityPoolFactory {
 		uint256 settlementCollateralAttoEth;
 	}
 
-	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 currentRetentionRate, uint256 settlementCollateralAttoEth) external returns (ISecurityPool securityPool, address truthAuction);
+	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 currentRetentionRate, uint256 settlementCollateralAttoEth) external returns (ISecurityPool securityPool, address collateralRepairAuction);
 	function deployPortfolioSecurityPool(uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) external returns (ISecurityPool securityPool);
 	function getPortfolioOriginId(address portfolio, uint248 originUniverseId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) external pure returns (bytes32 originId);
 	function getSecurityPoolPortfolio(ISecurityPool securityPool) external view returns (address portfolio);

@@ -762,7 +762,7 @@ test('a live System refresh keeps unchanged details untouched and reopens disclo
 				universe_id: '0',
 				question_id: '1',
 				question_title: 'Question one',
-				truth_auction_address: addressB,
+				collateral_repair_auction_address: addressB,
 				coordinator_address: addressB,
 				share_token_address: addressB,
 				security_multiplier_bps: '10000',

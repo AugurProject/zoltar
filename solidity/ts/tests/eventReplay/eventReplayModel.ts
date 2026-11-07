@@ -46,7 +46,7 @@ export type PoolDeploymentReplay = {
 	parent: Address
 	universeId: bigint
 	questionId: bigint
-	truthAuction: Address
+	collateralRepairAuction: Address
 	coordinator: Address
 	shareToken: Address
 	statoblastSecurityMultiplierBps: bigint
@@ -684,7 +684,7 @@ export function reducePoolFactoryEvent(state: ReplayState, log: ReplayLog) {
 		parent,
 		universeId: requireBigInt(log.args, 'universeId'),
 		questionId: requireBigInt(log.args, 'questionId'),
-		truthAuction: requireAddress(log.args, 'truthAuction'),
+		collateralRepairAuction: requireAddress(log.args, 'collateralRepairAuction'),
 		coordinator: requireAddress(log.args, 'openOraclePriceCoordinator'),
 		shareToken: requireAddress(log.args, 'shareToken'),
 		statoblastSecurityMultiplierBps: requireBigInt(log.args, 'statoblastSecurityMultiplierBps'),
@@ -1325,8 +1325,8 @@ export function replayZoltarEvents(logs: readonly ReplayLog[], orphanedBlockHash
 			reducePoolFactoryEvent(state, log)
 			pools.add(requireAddress(log.args, 'securityPool'))
 			shareTokens.add(requireAddress(log.args, 'shareToken'))
-			const truthAuction = requireAddress(log.args, 'truthAuction')
-			if (truthAuction !== ZERO_ADDRESS) auctions.add(truthAuction)
+			const collateralRepairAuction = requireAddress(log.args, 'collateralRepairAuction')
+			if (collateralRepairAuction !== ZERO_ADDRESS) auctions.add(collateralRepairAuction)
 			coordinators.add(requireAddress(log.args, 'openOraclePriceCoordinator'))
 		}
 		for (const log of orderedLogs) {

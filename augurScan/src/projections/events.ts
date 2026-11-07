@@ -25,7 +25,7 @@ type PoolProjection = {
 	parentAddress: string
 	universeId: string
 	questionId: string
-	truthAuctionAddress: string
+	collateralRepairAuctionAddress: string
 	coordinatorAddress: string
 	shareTokenAddress: string
 	securityMultiplierBps: string
@@ -227,7 +227,7 @@ export const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 				parentAddress: address(args['parent'], 'parent'),
 				universeId: integerString(args['universeId'], 'universeId'),
 				questionId: integerString(args['questionId'], 'questionId'),
-				truthAuctionAddress: address(args['truthAuction'], 'truthAuction'),
+				collateralRepairAuctionAddress: address(args['collateralRepairAuction'], 'collateralRepairAuction'),
 				coordinatorAddress: address(args['openOraclePriceCoordinator'], 'openOraclePriceCoordinator'),
 				shareTokenAddress: address(args['shareToken'], 'shareToken'),
 				securityMultiplierBps: integerString(args['statoblastSecurityMultiplierBps'], 'statoblastSecurityMultiplierBps'),

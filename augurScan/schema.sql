@@ -480,7 +480,7 @@ CREATE TABLE public.pools (
     parent_address text NOT NULL,
     universe_id numeric(78,0) NOT NULL,
     question_id numeric(78,0) NOT NULL,
-    truth_auction_address text NOT NULL,
+    collateral_repair_auction_address text NOT NULL,
     coordinator_address text NOT NULL,
     share_token_address text NOT NULL,
     security_multiplier_bps numeric(78,0) NOT NULL,
@@ -600,10 +600,10 @@ CREATE TABLE public.transactions (
 
 
 --
--- Name: truth_auction_events; Type: TABLE; Schema: public; Owner: -
+-- Name: collateral_repair_auction_events; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.truth_auction_events (
+CREATE TABLE public.collateral_repair_auction_events (
     chain_id bigint NOT NULL,
     block_hash text NOT NULL,
     tx_hash text NOT NULL,
@@ -948,11 +948,11 @@ ALTER TABLE ONLY public.transactions
 
 
 --
--- Name: truth_auction_events truth_auction_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: collateral_repair_auction_events collateral_repair_auction_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.truth_auction_events
-    ADD CONSTRAINT truth_auction_events_pkey PRIMARY KEY (chain_id, block_hash, tx_hash, log_index, auction_address);
+ALTER TABLE ONLY public.collateral_repair_auction_events
+    ADD CONSTRAINT collateral_repair_auction_events_pkey PRIMARY KEY (chain_id, block_hash, tx_hash, log_index, auction_address);
 
 
 --
@@ -1282,17 +1282,17 @@ CREATE UNIQUE INDEX transactions_canonical_hash ON public.transactions USING btr
 
 
 --
--- Name: truth_auction_event_page; Type: INDEX; Schema: public; Owner: -
+-- Name: collateral_repair_auction_event_page; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX truth_auction_event_page ON public.truth_auction_events USING btree (chain_id, auction_address, block_number DESC, log_index DESC, tx_hash DESC) WHERE canonical;
+CREATE INDEX collateral_repair_auction_event_page ON public.collateral_repair_auction_events USING btree (chain_id, auction_address, block_number DESC, log_index DESC, tx_hash DESC) WHERE canonical;
 
 
 --
--- Name: truth_auctions_current; Type: INDEX; Schema: public; Owner: -
+-- Name: collateral_repair_auctions_current; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX truth_auctions_current ON public.truth_auction_events USING btree (chain_id, auction_address, block_number DESC, log_index DESC) WHERE canonical;
+CREATE INDEX collateral_repair_auctions_current ON public.collateral_repair_auction_events USING btree (chain_id, auction_address, block_number DESC, log_index DESC) WHERE canonical;
 
 
 --
@@ -1554,11 +1554,11 @@ ALTER TABLE ONLY public.transactions
 
 
 --
--- Name: truth_auction_events truth_auction_events_chain_id_block_hash_tx_hash_log_index_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: collateral_repair_auction_events collateral_repair_auction_events_log_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.truth_auction_events
-    ADD CONSTRAINT truth_auction_events_chain_id_block_hash_tx_hash_log_index_fkey FOREIGN KEY (chain_id, block_hash, tx_hash, log_index) REFERENCES public.logs(chain_id, block_hash, tx_hash, log_index);
+ALTER TABLE ONLY public.collateral_repair_auction_events
+    ADD CONSTRAINT collateral_repair_auction_events_log_fkey FOREIGN KEY (chain_id, block_hash, tx_hash, log_index) REFERENCES public.logs(chain_id, block_hash, tx_hash, log_index);
 
 
 --

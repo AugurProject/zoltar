@@ -59,7 +59,7 @@ describe('state projections', () => {
 				parent: '0x0000000000000000000000000000000000000000',
 				universeId: '0',
 				questionId: '42',
-				truthAuction: '0x0000000000000000000000000000000000000000',
+				collateralRepairAuction: '0x0000000000000000000000000000000000000000',
 				openOraclePriceCoordinator: vault,
 				shareToken: vault,
 				statoblastSecurityMultiplierBps: '15000',
