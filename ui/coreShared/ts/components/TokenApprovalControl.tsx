@@ -7,6 +7,7 @@ import { ApprovedAmountValue } from './ApprovedAmountValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
+import { AMOUNT_INPUT_PATTERN } from '../forms/amountInput.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricGrid } from './MetricGrid.js'
 import { MetricField } from './MetricField.js'
@@ -220,6 +221,8 @@ export function TokenApprovalControl({
 				<FormInput
 					aria-describedby={amountValidationMessage === undefined ? undefined : amountValidationMessageId}
 					className='field-inline-input'
+					inputMode='decimal'
+					pattern={AMOUNT_INPUT_PATTERN}
 					value={amountValue}
 					onInput={event => setDraftAmount(event.currentTarget.value)}
 					placeholder={amountPlaceholder}

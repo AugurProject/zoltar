@@ -48,6 +48,8 @@
 
 .migration-wizard-step.is-current .migration-wizard-step-button {
 	border-top-color: var(--accent);
+	/* A thicker bar marks the current step by shape as well as colour, without shifting the layout. */
+	box-shadow: inset 0 2px 0 var(--accent);
 	color: var(--text);
 }
 
@@ -89,7 +91,7 @@
 .migration-wizard-step-status {
 	overflow: hidden;
 	color: var(--muted);
-	font-size: var(--font-xs);
+	font-size: var(--font-label);
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
@@ -102,7 +104,7 @@
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--space-3);
-	align-items: center;
+	align-items: flex-start;
 	margin-top: var(--space-4);
 	padding-top: var(--space-3);
 	border-top: 1px solid var(--border-subtle);
@@ -110,11 +112,14 @@
 
 .migration-wizard-nav-hint {
 	flex: 1 1 12rem;
+	align-self: center;
 	margin: 0;
 	text-align: right;
 }
 
-.migration-wizard-nav > button:last-child {
+/* Continue and Migrate REP keep their own slots on every step; a wallet fix under Migrate REP keeps the buttons top-aligned. */
+.migration-wizard-nav > button.primary,
+.migration-wizard-nav > .tx-action {
 	min-width: 8rem;
 }
 
@@ -156,8 +161,9 @@
 		font-size: var(--font-xs);
 	}
 
-	.migration-wizard-step-status {
-		display: none;
+	/* The status stays visible in the compact layout so Done, Blocked, and To do are never shown by colour alone; it ellipsizes within the step. */
+	.migration-wizard-step-copy {
+		max-width: 100%;
 	}
 
 	.migration-wizard-nav-hint {
@@ -166,7 +172,8 @@
 		text-align: left;
 	}
 
-	.migration-wizard-nav > button {
+	.migration-wizard-nav > button,
+	.migration-wizard-nav > .tx-action {
 		flex: 1 1 0;
 	}
 }

@@ -8,6 +8,8 @@ import type { ReadBackendStatus } from '../../wallet/chainBackend.js'
 type AppStatusNoticesProps = {
 	errorMessage?: string | undefined
 	errorMessages?: readonly string[]
+	/** The deployment route is where missing contracts get deployed, so its setup notice informs instead of alarming. */
+	isDeploymentRoute?: boolean
 	loadingZoltarUniverse?: boolean
 	onRetryZoltarUniverse?: (() => void) | undefined
 	/** Validates an unreachable read RPC again now; without it the notice relies on the automatic retries. */
@@ -95,7 +97,7 @@ function buildRpcOverrideNotice(readBackendStatus: ReadBackendStatus | undefined
 	}
 }
 
-export function AppStatusNotices({ errorMessage, errorMessages = [], loadingZoltarUniverse = false, onRetryReadBackend, onRetryZoltarUniverse, readBackendMessage, readBackendStatus, simulationBootstrapError, showApplicationDeploymentWarning, zoltarUniverseError }: AppStatusNoticesProps) {
+export function AppStatusNotices({ errorMessage, errorMessages = [], isDeploymentRoute = false, loadingZoltarUniverse = false, onRetryReadBackend, onRetryZoltarUniverse, readBackendMessage, readBackendStatus, simulationBootstrapError, showApplicationDeploymentWarning, zoltarUniverseError }: AppStatusNoticesProps) {
 	const items: NoticeItem[] = []
 	const distinctErrorMessages = [...new Set([errorMessage, ...errorMessages].filter((message): message is string => message !== undefined))]
 	// Error reports (a failed wallet request, a refresh that did not load) can be closed; one reappears only after it clears and recurs.
@@ -110,7 +112,8 @@ export function AppStatusNotices({ errorMessage, errorMessages = [], loadingZolt
 	}, [distinctErrorKey])
 	const rpcOverrideNotice = buildRpcOverrideNotice(readBackendStatus)
 	if (simulationBootstrapError !== undefined) items.push({ detail: simulationBootstrapError, id: 'simulation-bootstrap-error', tone: 'blocking', title: appCopy.simulationBootstrapFailed })
-	if (showApplicationDeploymentWarning) items.push({ detail: appCopy.deploymentIncompleteReason, id: 'setup-incomplete', tone: 'blocking', title: appCopy.setupIncomplete })
+	// The deployment route already shows what is missing and how to deploy it, so the notice is only for the other routes.
+	if (showApplicationDeploymentWarning && !isDeploymentRoute) items.push({ detail: appCopy.deploymentIncompleteReason, id: 'setup-incomplete', tone: 'blocking', title: appCopy.setupIncomplete })
 	if (readBackendMessage !== undefined) items.push(buildReadBackendNotice(readBackendMessage, readBackendStatus, onRetryReadBackend))
 	if (zoltarUniverseError !== undefined)
 		items.push({

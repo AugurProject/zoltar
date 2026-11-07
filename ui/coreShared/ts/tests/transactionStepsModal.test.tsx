@@ -366,6 +366,34 @@ for (const choice of ['default', 'buffered', 'custom'] as const) {
 	})
 }
 
+for (const purpose of [undefined, 'Vault deposit']) {
+	test(`names the action a partial approval still blocks for ${purpose ?? 'report funding'}`, async () => {
+		const dom = installDomEnvironment()
+		const controller = createTransactionStepController()
+		const common = { description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
+		controller.setPlan([
+			{ ...common, title: 'Approve REP', approval: { purpose, requiredAmount: 3n, approvedAmount: 0n, tokenSymbol: 'REP', tokenUnits: 0 } },
+			{ ...common, title: purpose === undefined ? 'Request price' : 'Deposit REP' },
+		])
+		const review = controller.review()
+		review.catch(() => undefined)
+		const rendered = await renderIntoDocument(<TransactionStepsModal contextKey={`approval-purpose-${purpose ?? 'report'}`} />)
+		try {
+			const queries = within(rendered.container)
+			await act(() => fireEvent.input(queries.getByRole('textbox'), { target: { value: '2' } }))
+			// Only report funding is described as funding the report; any other approval names no action it does not unlock.
+			const expectedAction = purpose === undefined ? 'funding the report' : 'continuing'
+			const text = rendered.container.textContent?.replaceAll('\u00a0', ' ')
+			expect(text).toContain(`Approving 2 REP will still leave 1.00 more REP needed before ${expectedAction}.`)
+			if (purpose !== undefined) expect(text).not.toContain('funding the report')
+		} finally {
+			transactionSteps.value?.cancel()
+			await rendered.cleanup()
+			dom.cleanup()
+		}
+	})
+}
+
 for (const result of ['success', 'reverted'] as const) {
 	test(`keeps one button per transaction and gates the next action after ${result}`, async () => {
 		const dom = installDomEnvironment()
@@ -643,7 +671,7 @@ test('sends a standalone page approval directly and keeps rejection retryable', 
 		expect(within(document.body).queryByRole('dialog')).toBeNull()
 		expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
 		expect(await review).toBeUndefined()
-		await act(() => controller.failed({ kind: 'rejected', message: 'Rejected in wallet.' }))
+		await act(() => controller.failed({ kind: 'rejected', message: 'Canceled in wallet.' }))
 		expect(transactionSteps.value).toBeUndefined()
 	} finally {
 		review?.catch(() => undefined)

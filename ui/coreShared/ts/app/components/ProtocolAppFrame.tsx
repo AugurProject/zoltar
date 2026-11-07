@@ -56,26 +56,29 @@ export function ProtocolAppFrame({
 	return (
 		<ChainBlockNumberContext.Provider value={currentBlockNumber}>
 			<ChainTimestampContext.Provider value={currentTimestamp}>
-				<main data-universe-id={activeUniverseId?.toString()}>
+				<div className='app-frame' data-universe-id={activeUniverseId?.toString()}>
 					{activeUniverseId === undefined ? undefined : <UniverseIdentity universeId={activeUniverseId} variant='backdrop' />}
-					{header}
-					{/* Notices follow the header, so one appearing or clearing never moves the brand, navigation, or account controls. */}
-					{notices}
-					<WalletActionsProvider walletActions={walletActions}>
-						<GlobalTransactionPresentationProvider transaction={activeTransaction}>
-							<div id='app-content' tabIndex={-1}>
-								{/* The page heading opens the content, so focus moved to it on a page change continues into the page. */}
-								{heading}
-								<TransactionActionButtonLockProvider lock={lock}>
-									<fieldset className='route-shell' disabled={routeContentDisabled}>
-										{children}
-									</fieldset>
-								</TransactionActionButtonLockProvider>
-							</div>
-							{transactionState === undefined ? undefined : <GlobalTransactionDialog {...(activeUniverseId === undefined ? {} : { activeUniverseId })} routeKey={transactionRouteKey} transaction={activeTransaction} />}
-						</GlobalTransactionPresentationProvider>
-					</WalletActionsProvider>
-				</main>
+					{/* The skip link, simulation banner, brand, navigation, and wallet controls are page chrome, so they form the banner landmark and only route content is main. */}
+					<header className='app-header'>{header}</header>
+					<main>
+						{/* Notices follow the header, so one appearing or clearing never moves the brand, navigation, or account controls. */}
+						{notices}
+						<WalletActionsProvider walletActions={walletActions}>
+							<GlobalTransactionPresentationProvider transaction={activeTransaction}>
+								<div id='app-content' tabIndex={-1}>
+									{/* The page heading opens the content, so focus moved to it on a page change continues into the page. */}
+									{heading}
+									<TransactionActionButtonLockProvider lock={lock}>
+										<fieldset className='route-shell' disabled={routeContentDisabled}>
+											{children}
+										</fieldset>
+									</TransactionActionButtonLockProvider>
+								</div>
+								{transactionState === undefined ? undefined : <GlobalTransactionDialog {...(activeUniverseId === undefined ? {} : { activeUniverseId })} routeKey={transactionRouteKey} transaction={activeTransaction} />}
+							</GlobalTransactionPresentationProvider>
+						</WalletActionsProvider>
+					</main>
+				</div>
 			</ChainTimestampContext.Provider>
 		</ChainBlockNumberContext.Provider>
 	)

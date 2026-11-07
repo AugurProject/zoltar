@@ -26,6 +26,8 @@ export type UseQuestionCreationParameters = TransactionLifecycleParameters &
 		includeRelatedUniverses?: boolean
 		deploymentStatuses: DeploymentStatus[]
 		environmentRefreshKey: number
+		/** The question chosen to fork the selected universe; creating a question never changes it. */
+		zoltarForkQuestionId?: string
 	}
 
 export type UseQuestionCreationDependencies = {
@@ -132,11 +134,41 @@ function getValueForStorageKey<T>(keyedValue: KeyedValue<T> | undefined, storage
 }
 
 export function useQuestionCreation(
-	{ accountAddress, activeUniverseId, autoLoadInitialData, includeRelatedUniverses = false, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseQuestionCreationParameters,
+	{
+		accountAddress,
+		activeUniverseId,
+		autoLoadInitialData,
+		includeRelatedUniverses = false,
+		deploymentStatuses,
+		environmentRefreshKey,
+		onTransactionFailed,
+		onTransactionFinished,
+		onTransactionPresented,
+		onTransactionPrepared,
+		onTransactionRequested,
+		onTransactionSubmitted,
+		refreshState,
+		zoltarForkQuestionId = '',
+	}: UseQuestionCreationParameters,
 	dependencies: UseQuestionCreationDependencies = defaultUseQuestionCreationDependencies,
 	{ fixedMarketType, universeScoped = false }: UseQuestionCreationOptions = {},
 ) {
-	const zoltar = useZoltarOperations({ accountAddress, activeUniverseId, autoLoadInitialData, includeRelatedUniverses, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState })
+	const zoltar = useZoltarOperations({
+		accountAddress,
+		activeUniverseId,
+		autoLoadInitialData,
+		includeRelatedUniverses,
+		deploymentStatuses,
+		environmentRefreshKey,
+		onTransactionFailed,
+		onTransactionFinished,
+		onTransactionPresented,
+		onTransactionPrepared,
+		onTransactionRequested,
+		onTransactionSubmitted,
+		refreshState,
+		zoltarForkQuestionId,
+	})
 	const normalizeForm: NormalizeQuestionForm = form => (fixedMarketType === undefined ? form : { ...form, marketType: fixedMarketType })
 	const draftUniverseId = universeScoped ? activeUniverseId : undefined
 	const questionDraftStorageKey = getQuestionDraftStorageKey(accountAddress, draftUniverseId)
@@ -254,10 +286,8 @@ export function useQuestionCreation(
 					clearQuestionDraftIfUnchanged(submittedQuestionDraftStorageKey, submittedMarketForm, normalizeForm)
 					questionResult.value = { storageKey: submittedQuestionActionScopeKey, value: result }
 					questionFeedback.value = { storageKey: submittedQuestionActionScopeKey, value: createSuccessActionFeedback('createMarket', transactionCopy.questionCreated, result.hash) }
-					if (isCurrentQuestionActionScope()) {
-						onTransactionPresented(createMarketCreationSuccessPresentation(result, transactionContext))
-						zoltar.setZoltarForkQuestionId(result.questionId)
-					}
+					// Creating a question never replaces the question the user chose for a fork; the result card offers it instead.
+					if (isCurrentQuestionActionScope()) onTransactionPresented(createMarketCreationSuccessPresentation(result, transactionContext))
 				},
 			)
 		} finally {

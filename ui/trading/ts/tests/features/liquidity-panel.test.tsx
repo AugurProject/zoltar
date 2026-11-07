@@ -34,6 +34,7 @@ function renderPanel(market: LiveMarket, connected: boolean, balances: LiveBalan
 			walletClient={walletClient}
 			networkMismatchReason={undefined}
 			walletEthAttoEth={connected ? 10n ** 18n : undefined}
+			walletEthStatus={connected ? 'ready' : 'disconnected'}
 			wallet={{ actionLabel: 'Connect wallet', connect: async () => undefined }}
 			settings={DEFAULT_TRADE_SETTINGS}
 			externallyLocked={false}
@@ -47,6 +48,18 @@ function renderPanel(market: LiveMarket, connected: boolean, balances: LiveBalan
 			services={quoteServices}
 		/>,
 	)
+}
+
+/** A connected wallet whose every request fails, for tests that need the submit action rather than the connect step. */
+function offlineWalletClient() {
+	return createWalletClient({
+		account,
+		transport: custom({
+			request: async () => {
+				throw new Error('Unexpected wallet read')
+			},
+		}),
+	})
 }
 
 function amountInput() {
@@ -145,18 +158,72 @@ describe('liquidity panel', () => {
 		}
 	})
 
-	test('explains malformed and over-precise amounts instead of asking for a positive amount', async () => {
-		const rendered = await renderPanel(openMarket, true)
+	test('explains malformed and over-precise amounts with one specific message each, at the field and the action', async () => {
+		const rendered = await renderPanel(openMarket, true, undefined, services, offlineWalletClient())
 		try {
 			await typeAmount('1.2.3')
 			expect(amountInput().getAttribute('aria-invalid')).toBe('true')
-			expect(amountErrorText()).toContain('Enter an ETH amount with at most 18 decimal places.')
+			// Repeated separators are rejected in every locale; the message names the separators the locale accepts.
+			expect(amountErrorText()).toContain('as the decimal separator, without thousands separators.')
 			await typeAmount(`0.${'1'.repeat(19)}`)
-			expect(amountErrorText()).toContain('at most 18 decimal places')
+			expect(amountErrorText()).toContain('Use no more than 18 decimal places.')
+			await typeAmount('abc')
+			expect(amountErrorText()).toContain('Enter a number, such as 1.5.')
+			// The action names the same problem instead of asking for an amount the field already holds.
+			expect(document.querySelector('.tx-action-feedback')?.textContent).toContain('Enter a number, such as 1.5.')
+			await typeAmount('-1')
+			expect(amountErrorText()).toContain('Enter an amount greater than 0.')
 			await typeAmount('0')
 			await act(() => operationButton('Remove').click())
-			await typeAmount('1.2.3')
-			expect(amountErrorText()).toContain('Enter an LP amount with at most 18 decimal places.')
+			await typeAmount('1e3')
+			expect(amountErrorText()).toContain('Enter a number, such as 1.5.')
+		} finally {
+			await rendered.cleanup()
+		}
+	})
+
+	test('keeps ETH back for gas at the field and the action when a deposit would use the whole balance', async () => {
+		const rendered = await renderPanel(openMarket, true, undefined, services, offlineWalletClient())
+		try {
+			await typeAmount('1')
+			expect(amountErrorText()).toContain('Leave 0.01 ETH in the wallet for gas.')
+			const action = Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Add liquidity')
+			expect(action?.disabled).toBe(true)
+			await typeAmount('0.99')
+			expect(amountErrorText()).not.toContain('for gas')
+			expect(action?.disabled).toBe(false)
+		} finally {
+			await rendered.cleanup()
+		}
+	})
+
+	test('Max removes the exact LP balance, and the removal preview names what is removed and the minimum signed for', async () => {
+		const lp = 1_234_567_890_123_456_789n
+		const rendered = await renderPanel(openMarket, true, { scope: shareBalanceScope(openMarket), invalid: 0n, yes: 0n, no: 0n, lp }, services, offlineWalletClient())
+		try {
+			await act(() => operationButton('Remove').click())
+			const max = Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Max')
+			if (max === undefined) throw new Error('Missing Max')
+			await act(() => max.click())
+			// The full-precision balance, not a rounded figure that would leave LP behind.
+			expect(amountInput().value).toBe('1.234567890123456789')
+			const removal = document.querySelector('section[aria-label="Liquidity estimate"]')
+			expect(removal?.textContent).toContain('You remove')
+			expect(removal?.textContent).not.toContain('You provide')
+			// The LP withdraws the same quantity of Yes and No; the 0.5% default slippage bounds each minimum, shown rounded down.
+			expect(removal?.textContent).toContain('Minimum received1.2283 Yes / 1.2283 No')
+			expect(Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Remove liquidity')?.disabled).toBe(false)
+		} finally {
+			await rendered.cleanup()
+		}
+	})
+
+	test('shows the minimum LP an addition signs for', async () => {
+		const rendered = await renderPanel(openMarket, true)
+		try {
+			await typeAmount('0.1')
+			// 0.1 ETH mints 0.1 LP; the 0.5% default slippage makes 0.0995 LP the signed minimum.
+			expect(document.querySelector('section[aria-label="Liquidity estimate"]')?.textContent).toContain('Minimum received0.0995 LP')
 		} finally {
 			await rendered.cleanup()
 		}

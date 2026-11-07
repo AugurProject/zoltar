@@ -47,7 +47,9 @@ browserTest(
 			const { evaluate, waitFor } = session
 			await waitFor(`document.querySelector('.log-row .cell-time .activity-age') !== null`)
 			await Bun.sleep(2_200)
-			expect(await evaluate(`[...document.querySelectorAll('.log-row .cell-time')].every(cell => cell.children.length === 2 && cell.querySelector('.activity-age') !== null)`)).toBe(true)
+			expect(await evaluate(`[...document.querySelectorAll('.log-row .cell-time')].every(cell => cell.children.length === 3 && cell.querySelector(':scope > .activity-field-label') !== null && cell.querySelector(':scope > .activity-time-value') !== null && cell.querySelector(':scope > .activity-age') !== null)`)).toBe(
+				true,
+			)
 			await evaluate(`document.querySelector('.skip-link').click()`)
 			expect(await evaluate(`location.hash`)).toBe('')
 			expect(await evaluate(`document.querySelector('#activity').contains(document.activeElement)`)).toBe(true)
@@ -117,6 +119,8 @@ browserTest(
 			const { evaluate, waitFor } = session
 			await waitFor(`document.querySelector('.log-row .cell-tx') !== null`)
 			expect(await evaluate(`[...document.querySelectorAll('.log-row')].every(row => row.scrollWidth <= row.clientWidth)`)).toBe(true)
+			expect(await evaluate(`document.querySelector('.feed-shell').scrollWidth <= document.querySelector('.feed-shell').clientWidth`)).toBe(true)
+			expect(await evaluate(`getComputedStyle(document.querySelector('.log-row .activity-field-label')).position`)).toBe('static')
 		})
 	},
 	60_000,

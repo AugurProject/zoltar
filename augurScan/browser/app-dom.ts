@@ -3,7 +3,7 @@ import { requiredElementRole } from './dom-elements.ts'
 export function lookup(selector: '#detail-dialog'): HTMLDialogElement
 export function lookup(selector: '#event-filter' | '#address-filter' | '#entity-search'): HTMLInputElement
 export function lookup(selector: '#global-network-filter' | '#operations-route-select' | '#rich-sort'): HTMLSelectElement
-export function lookup(selector: '#filters'): HTMLFormElement
+export function lookup(selector: '#filters' | '#global-network-form' | '#operations-route-form'): HTMLFormElement
 export function lookup(selector: '#address-back' | '.skip-link'): HTMLAnchorElement
 export function lookup(selector: '#more' | '#clear-filters' | '#close-detail' | '#richlist-more' | '#filters button[type="submit"]'): HTMLButtonElement
 export function lookup(selector: string): HTMLElement

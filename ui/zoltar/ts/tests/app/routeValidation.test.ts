@@ -18,7 +18,7 @@ describe('zoltar route validation', () => {
 
 	test('rejects a malformed universe instead of silently opening Genesis', () => {
 		for (const resolvedRoute of ['zoltar', 'deploy'] as const) {
-			for (const search of ['?universe=abc', '?universe=-1', '?universe=']) expect(isInvalidZoltarRoute({ resolvedRoute, search, zoltarView: '' })).toBe(true)
+			for (const search of ['?universe=abc', '?universe=-1', '?universe=', `?universe=${1n << 248n}`]) expect(isInvalidZoltarRoute({ resolvedRoute, search, zoltarView: '' })).toBe(true)
 			expect(isInvalidZoltarRoute({ resolvedRoute, search: '?universe=0', zoltarView: '' })).toBe(false)
 			expect(isInvalidZoltarRoute({ resolvedRoute, search: '?universe=7&simulate=1', zoltarView: '' })).toBe(false)
 		}

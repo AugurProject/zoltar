@@ -7,7 +7,7 @@ import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { formatCurrencyInputBalance, formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { formatOutcomeWithValue, SHARE_QUANTITY_DECIMALS, shareOutcome } from '../lib/shareValue.js'
+import { formatOutcomeQuantity, SHARE_QUANTITY_DECIMALS, shareOutcome } from '../lib/shareValue.js'
 import type { TradeSettings } from '../lib/tradeSettings.js'
 import { marketAcceptsNewRisk, marketSettlementPath, type LiveBalances, type LiveMarket } from '../protocol/live.js'
 import * as workflowCopy from '../copy/workflows.js'
@@ -19,7 +19,7 @@ import type { BalanceState } from './live/liveTradingTypes.js'
 import type { TransactionPhase } from './live/transactionWorkflow.js'
 import type { TradeMode } from './live/useTransactionWorkflow.js'
 import { panelWalletStep, QuotedTransactionPanel } from './QuotedTransactionPanel.js'
-import { TradeEstimatePanel } from './TradeEstimatePanel.js'
+import { estimateAnnouncement, TradeEstimatePanel } from './TradeEstimatePanel.js'
 import { roundDownShortcut, tradeTicketModel, type TradeEstimate, type TradeTicketModel } from './live/tradeTicketModel.js'
 import { useDebouncedValue } from './live/useDebouncedValue.js'
 
@@ -50,6 +50,8 @@ export type TicketWallet = Readonly<{
 	/** Connecting also switches a wallet on another network to the deployment chain. */
 	actionLabel: string
 	walletEthAttoEth: bigint | undefined
+	/** Whether an unknown `walletEthAttoEth` is still loading or failed to load; a buy waits for the balance either way. */
+	walletEthState: BalanceState
 	connect(): Promise<void>
 }>
 
@@ -60,28 +62,40 @@ export type TicketBalances = Readonly<{
 	retry(): Promise<void>
 }>
 
-function amountHint(model: TradeTicketModel, mode: TradeMode, side: 'YES' | 'NO', holdings: LiveBalances | undefined, walletEthAttoEth: bigint | undefined, market: LiveMarket) {
+// A sale is entered and paid in its own terms (shares in, ETH out), so its hints name share quantities without the conditional payout a holding shows elsewhere.
+function amountHint(model: TradeTicketModel, mode: TradeMode, side: 'YES' | 'NO', holdings: LiveBalances | undefined, walletEthAttoEth: bigint | undefined) {
 	if (mode === 'entry') return walletEthAttoEth === undefined ? undefined : workflowCopy.formatWalletBalance(`${formatTrimmedUnits(walletEthAttoEth)} ${workflowCopy.eth}`)
 	const holding = side === 'YES' ? holdings?.yes : holdings?.no
 	if (holding === undefined || model.sellable === undefined) return undefined
-	// The sellable amount only needs saying when INVALID coverage or pool depth holds it below the holding.
-	if (model.sellable >= holding) return workflowCopy.formatHolding(formatOutcomeWithValue(holding, side, market, 4, 'down'))
-	return ticketCopy.sellableHint(formatOutcomeWithValue(holding, side, market, 4, 'down'), formatOutcomeWithValue(model.sellable, side, market, 4, 'down'))
+	// The sellable amount only needs saying when INVALID coverage, pool depth, or the price-impact limit holds it below the holding.
+	if (model.sellable >= holding) return workflowCopy.formatHolding(formatOutcomeQuantity(holding, side, 4, 'down'))
+	return ticketCopy.sellableHint(formatOutcomeQuantity(holding, side, 4, 'down'), formatOutcomeQuantity(model.sellable, side, 4, 'down'))
 }
 
-function InvalidCoverageExplanation({ model, side, disabled, onUseSellable, market }: { model: TradeTicketModel; market: LiveMarket; side: 'YES' | 'NO'; disabled: boolean; onUseSellable(value: string): void }) {
+function InvalidCoverageExplanation({ model, side, disabled, onUseSellable }: { model: TradeTicketModel; side: 'YES' | 'NO'; disabled: boolean; onUseSellable(value: string): void }) {
 	if (model.shortfall === undefined) return null
 	const sellable = model.sellable ?? 0n
 	return (
 		<WarningSurface role='status' surface='flat' variant='compact' className='trade-invalid-coverage'>
-			<p>{ticketCopy.invalidCoverageExplanation(formatOutcomeWithValue(model.shortfall.invalidRequired, shareOutcome.invalid, market), formatOutcomeWithValue(model.shortfall.invalidHeld, shareOutcome.invalid, market), formatOutcomeWithValue(sellable, side, market, 4, 'down'), side)}</p>
+			<p>{ticketCopy.invalidCoverageExplanation(formatOutcomeQuantity(model.shortfall.invalidRequired, shareOutcome.invalid), formatOutcomeQuantity(model.shortfall.invalidHeld, shareOutcome.invalid), formatOutcomeQuantity(sellable, side, 4, 'down'), side)}</p>
 			{sellable > 0n ? (
 				<button type='button' className='secondary' disabled={disabled} onClick={() => onUseSellable(formatCurrencyInputBalance(roundDownShortcut(sellable), SHARE_QUANTITY_DECIMALS))}>
-					{ticketCopy.sellInsteadAction(formatOutcomeWithValue(sellable, side, market, 4, 'down'))}
+					{ticketCopy.sellInsteadAction(formatOutcomeQuantity(sellable, side, 4, 'down'))}
 				</button>
 			) : null}
 		</WarningSurface>
 	)
+}
+
+/**
+ * The estimate's headline for screen readers. It follows the typed trade, not each block that re-prices it, so a
+ * settled entry is announced once and a moving pool stays quiet.
+ */
+function useEstimateAnnouncement(estimate: TradeEstimate | undefined, tradeKey: string) {
+	const announced = useRef({ tradeKey: '', text: '' })
+	if (estimate === undefined) announced.current = { tradeKey: '', text: '' }
+	else if (announced.current.tradeKey !== tradeKey) announced.current = { tradeKey, text: estimateAnnouncement(estimate) }
+	return announced.current.text
 }
 
 /**
@@ -127,6 +141,7 @@ export function LivePositionControls({
 		walletConnected: wallet.connected,
 		networkMismatchReason: wallet.networkMismatchReason,
 		walletEthAttoEth: wallet.walletEthAttoEth,
+		walletEthState: wallet.walletEthState,
 		marketClosed: closed,
 		nowSeconds,
 		acknowledgedImpactBps: ticket.acknowledgedImpactBps,
@@ -140,7 +155,8 @@ export function LivePositionControls({
 	const walletStep = panelWalletStep(wallet, model.primaryStep === 'submit', workflowLocked)
 	const confirmedText = revalidatingAfterReceipt ? workflowCopy.revalidatingAfterReceipt(workflowCopy.actionConfirmedOnchain(model.actionLabel)) : undefined
 	const requoted = state === 'error' && ticket.requoteNotice !== undefined
-	const odds = marketOddsPercent(market)
+	// A closed market's outcome buttons carry no price: its last price is not a live quote.
+	const odds = closed ? undefined : marketOddsPercent(market)
 	const selectMode = (next: TradeMode) => {
 		ticket.setMode(next)
 		// Selling starts on the outcome the wallet holds, instead of an empty holding of the outcome last bought.
@@ -156,6 +172,7 @@ export function LivePositionControls({
 		if (actionButton !== null && actionButton !== undefined && !actionButton.disabled) actionButton.click()
 	}
 	const amountFieldError = model.amountError ?? model.insufficientReason
+	const announcement = useEstimateAnnouncement(estimate, `${mode}|${side}|${settledAmount}`)
 	return (
 		<div ref={controlsRef} className='position-controls' aria-busy={revalidatingAfterReceipt}>
 			{closed ? (
@@ -211,7 +228,7 @@ export function LivePositionControls({
 					autoComplete='off'
 					adornment={mode === 'entry' ? workflowCopy.eth : outcomeLabel(side)}
 					error={amountFieldError}
-					hint={amountHint(model, mode, side, holdings.balances, wallet.walletEthAttoEth, market)}
+					hint={amountHint(model, mode, side, holdings.balances, wallet.walletEthAttoEth)}
 					onInput={event => ticket.setAmount(event.currentTarget.value)}
 					onKeyDown={event => {
 						if (event.key === 'Enter') submitFromKeyboard()
@@ -227,8 +244,11 @@ export function LivePositionControls({
 					))}
 				</div>
 			)}
-			<InvalidCoverageExplanation market={market} model={model} side={side} disabled={controlsDisabled} onUseSellable={ticket.setAmount} />
+			<InvalidCoverageExplanation model={model} side={side} disabled={controlsDisabled} onUseSellable={ticket.setAmount} />
 			{requoted ? <UserMessage placement='page' tone='warning' announcement='polite' className='trade-requote-notice' detail={ticket.requoteNotice} /> : null}
+			<p className='visually-hidden trade-quote-announcement' role='status'>
+				{announcement}
+			</p>
 			<QuotedTransactionPanel
 				phase={state}
 				actionLabel={model.actionLabel}
@@ -238,6 +258,8 @@ export function LivePositionControls({
 				receiptWarning={ticket.positionReceiptWarning}
 				error={requoted ? undefined : ticket.message}
 				walletStep={walletStep}
+				// Typing pauses would otherwise announce the estimate catching up each time; the settled estimate is announced above instead.
+				announceMessage={model.availability.reason !== ticketCopy.updatingEstimate}
 				onSubmit={() => void ticket.submit(estimate)}
 			>
 				{estimate === undefined || model.impactTier === undefined ? null : (

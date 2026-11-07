@@ -50,6 +50,28 @@ test('page colors use uniform OKLCH roles with AA contrast for theme text and tr
 	}
 })
 
+test('page artwork stays quiet behind content: folds keep low chroma and stay within 1.2:1 of the ground', () => {
+	const luminance = (rgb: readonly number[]) => rgb.reduce((sum, channel, index) => sum + ([0.2126, 0.7152, 0.0722][index] ?? 0) * (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4), 0)
+	const parse = (match: RegExpMatchArray | null) => {
+		if (match === null) throw new Error('Expected an OKLCH color')
+		return { chroma: Number(match[2]), rgb: oklchToSrgb(Number(match[1]) / 100, Number(match[2]), Number(match[3])) }
+	}
+	for (let id = 0; id < 64; id++) {
+		const identity = createUniverseIdentity(BigInt(id))
+		for (const image of [identity.image.light, identity.image.dark]) {
+			const svg = decodeURIComponent(image)
+			const ground = luminance(parse(/<rect x="-2000"[^>]*fill="oklch\(([\d.]+)% ([\d.]+) ([\d.]+)\)"/.exec(svg)).rgb)
+			const folds = [...svg.matchAll(/<linearGradient id="fold\d+"[^>]*>(.*?)<\/linearGradient>/g)].flatMap(gradient => [...(gradient[1] ?? '').matchAll(/oklch\(([\d.]+)% ([\d.]+) ([\d.]+)\)/g)].map(parse))
+			expect(folds.length).toBeGreaterThan(3)
+			for (const fold of folds) {
+				const foldLuminance = luminance(fold.rgb)
+				expect((Math.max(foldLuminance, ground) + 0.05) / (Math.min(foldLuminance, ground) + 0.05)).toBeLessThanOrEqual(1.2)
+				expect(fold.chroma).toBeLessThanOrEqual(0.055)
+			}
+		}
+	}
+})
+
 test('page recognition retains at least half of the fold shading in the top content column', () => {
 	for (let id = 0; id < 32; id++) {
 		const identity = createUniverseIdentity(BigInt(id))

@@ -19,38 +19,42 @@ export function GenesisUniverseEntry({ applicationTitle, onSelect }: { applicati
 	const pending = openingOutcome !== undefined
 	const formatDocumentTitle = useCallback((pageTitle: string) => formatAppDocumentTitle(pageTitle, applicationTitle), [applicationTitle])
 	return (
-		<main>
-			<AppPageHeading pageTitle={copy.chooseTruthfulUniverse} formatDocumentTitle={formatDocumentTitle} />
-			{/* Only the shared brand is available before a deployment starts the backend and its navigation. */}
-			<div className='app-chrome'>
-				<HeaderToolbar brand={<ApplicationBrand applicationTitle={applicationTitle} />} />
-			</div>
-			<div id='app-content' className='route-view-flow'>
-				<RouteHeader title={commonCopy.universe} description={copy.chooseTruthfulUniverse} />
-				{/* Keep the announcement outside the busy section so it is delivered during initialization. */}
-				<UserMessage placement='field' as='span' className='visually-hidden' announcement='polite' detail={openingOutcome === undefined ? '' : copy.formatOpeningGenesisUniverse(openingOutcome)} />
-				<UniverseBrowserView
-					name={copy.augurUniverse}
-					hasForked
-					navigation={
-						<ForkUniverseNavigation question={AUGUR_GENESIS_FORK_QUESTION} loading={pending} hasOutcomes explorerProfile={MAINNET_NETWORK_PROFILE}>
-							<OutcomeUniverseList
-								outcomes={GENESIS_OUTCOMES.map(outcome => ({
-									key: outcome,
-									label: copy.formatGenesisOutcome(outcome),
-									disabled: pending,
-									pendingLabel: openingOutcome === outcome ? copy.formatOpeningGenesisUniverse(outcome) : undefined,
-									onSelect: () => {
-										if (pending) return
-										setOpeningOutcome(outcome)
-										void onSelect(outcome)
-									},
-								}))}
-							/>
-						</ForkUniverseNavigation>
-					}
-				/>
-			</div>
-		</main>
+		<div className='app-frame'>
+			{/* The same banner and main landmarks as the application frame; only the shared brand is available before a deployment starts the backend and its navigation. */}
+			<header className='app-header'>
+				<div className='app-chrome'>
+					<HeaderToolbar brand={<ApplicationBrand applicationTitle={applicationTitle} />} />
+				</div>
+			</header>
+			<main>
+				<AppPageHeading pageTitle={copy.chooseTruthfulUniverse} formatDocumentTitle={formatDocumentTitle} />
+				<div id='app-content' className='route-view-flow'>
+					<RouteHeader title={commonCopy.universe} description={copy.chooseTruthfulUniverse} />
+					{/* Keep the announcement outside the busy section so it is delivered during initialization. */}
+					<UserMessage placement='field' as='span' className='visually-hidden' announcement='polite' detail={openingOutcome === undefined ? '' : copy.formatOpeningGenesisUniverse(openingOutcome)} />
+					<UniverseBrowserView
+						name={copy.augurUniverse}
+						hasForked
+						navigation={
+							<ForkUniverseNavigation question={AUGUR_GENESIS_FORK_QUESTION} loading={pending} hasOutcomes explorerProfile={MAINNET_NETWORK_PROFILE}>
+								<OutcomeUniverseList
+									outcomes={GENESIS_OUTCOMES.map(outcome => ({
+										key: outcome,
+										label: copy.formatGenesisOutcome(outcome),
+										disabled: pending,
+										pendingLabel: openingOutcome === outcome ? copy.formatOpeningGenesisUniverse(outcome) : undefined,
+										onSelect: () => {
+											if (pending) return
+											setOpeningOutcome(outcome)
+											void onSelect(outcome)
+										},
+									}))}
+								/>
+							</ForkUniverseNavigation>
+						}
+					/>
+				</div>
+			</main>
+		</div>
 	)
 }

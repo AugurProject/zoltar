@@ -4,6 +4,7 @@ import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
 import { describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { TokenApprovalControl } from '../components/TokenApprovalControl.js'
+import { AMOUNT_INPUT_PATTERN } from '../forms/amountInput.js'
 import { TransactionActionButton, TransactionActionGroup } from '../components/TransactionActionButton.js'
 import { fireEvent, within } from './testUtils/queries'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
@@ -41,7 +42,10 @@ describe('TokenApprovalControl', () => {
 					/>,
 				)
 				cleanupRenderedComponent = rendered.cleanup
-				expect(within(document.body).getByRole('textbox', { name: `${purpose}: REP approval amount` })).toBeTruthy()
+				const amountInput = within(document.body).getByRole('textbox', { name: `${purpose}: REP approval amount` })
+				// The decimal keypad and the shared amount pattern match every other amount field.
+				expect(amountInput.getAttribute('inputmode')).toBe('decimal')
+				expect(amountInput.getAttribute('pattern')).toBe(AMOUNT_INPUT_PATTERN)
 			})
 		}
 	}

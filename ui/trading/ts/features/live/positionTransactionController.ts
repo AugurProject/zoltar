@@ -3,20 +3,22 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type { LiveMarket } from '../../protocol/live.js'
 import type { TradeSettings } from '../../lib/tradeSettings.js'
-import { formatOutcomeWithValue } from '../../lib/shareValue.js'
+import { formatOutcomeQuantity, formatOutcomeWithValue } from '../../lib/shareValue.js'
 import * as ticketCopy from '../../copy/tradeTicket.js'
 import type { LiveTradingControllerServices, Quote } from './liveTradingTypes.js'
 import type { TradeMode, useTransactionWorkflow } from './useTransactionWorkflow.js'
 import type { WorkflowOwner } from '../liveTradingControllerHelpers.js'
 import type { GuardedWalletWrite } from '../../protocol/tradeQuote.js'
+import { describeTransactionFailure } from '../../protocol/transactionFailure.js'
 import { authoritativeQuoteMoved, type TradeEstimate } from './tradeTicketModel.js'
 
 type TransactionWorkflow = ReturnType<typeof useTransactionWorkflow>
-type Refresh = (configuration?: DeploymentConfiguration, requestedStart?: bigint, owner?: WorkflowOwner, options?: Readonly<{ ownerMarket?: Address }>) => Promise<void>
+/** Resolves true only when the refresh committed fresh market data. */
+type Refresh = (configuration?: DeploymentConfiguration, requestedStart?: bigint, owner?: WorkflowOwner, options?: Readonly<{ ownerMarket?: Address }>) => Promise<boolean>
 
 function priceMovedDetail(estimate: TradeEstimate, authoritativeLongShares: bigint, market: LiveMarket) {
-	const amount = formatOutcomeWithValue(authoritativeLongShares, estimate.side, market)
-	return estimate.kind === 'entry' ? ticketCopy.formatRequotedReceive(amount) : ticketCopy.formatRequotedSell(amount)
+	// A buy receives shares, so their payout explains them; a sale pays with its shares, so they are named alone beside the ETH it receives.
+	return estimate.kind === 'entry' ? ticketCopy.formatRequotedReceive(formatOutcomeWithValue(authoritativeLongShares, estimate.side, market)) : ticketCopy.formatRequotedSell(formatOutcomeQuantity(authoritativeLongShares, estimate.side))
 }
 
 /**
@@ -47,6 +49,7 @@ export function createPositionTransactionController({
 	createGuardedWalletWrite,
 	executeWithCurrentWalletContext,
 	refresh,
+	revalidateBalances,
 }: {
 	configuration: DeploymentConfiguration | undefined
 	selected: LiveMarket | undefined
@@ -58,6 +61,8 @@ export function createPositionTransactionController({
 	createGuardedWalletWrite(expectedAccount: Address, networkFailure: string, accountFailure: string): GuardedWalletWrite
 	executeWithCurrentWalletContext<T>(expectedAccount: Address, networkFailure: string, accountFailure: string, action: () => Promise<T>): Promise<T>
 	refresh: Refresh
+	/** Re-reads the wallet's share balances for the market on screen; resolves once that read has settled, whatever its result. */
+	revalidateBalances(): Promise<void>
 }) {
 	const { mode, side, transaction, isPositionLocked, liquidityWorkflowLockedRef, setMode, setSide, setAmount, setAcknowledgedImpactBps } = workflow
 	// Only this market's own trade holds its inputs; a trade running on another market leaves them free.
@@ -79,10 +84,18 @@ export function createPositionTransactionController({
 						? { ...quoteContext, kind: 'entry', value: await withReadTimeout(services.simulateEntry(walletClient, configuration, market, account, side, estimate.payAttoEth, validityMinutes, slippageBps)) }
 						: { ...quoteContext, kind: 'exit', value: await withReadTimeout(services.simulateExit(walletClient, configuration, market, account, side, estimate.quote.completeSetShares, validityMinutes, slippageBps)) }
 				if (authoritativeQuoteMoved(estimate, quote.value.result.totalLongShares, quote.kind === 'exit' ? quote.value.result.ethOut : undefined)) {
-					// Reload the reserves so the estimate on screen shows the price the chain now quotes.
-					void refresh(undefined, undefined, 'position', ownerRefresh)
-					const requote = ticketCopy.formatPriceMoved(priceMovedDetail(estimate, quote.value.result.totalLongShares, quote.value.market), estimate.kind === 'entry' ? ticketCopy.buyOutcome(estimate.side) : ticketCopy.sellOutcome(estimate.side))
-					// The submission still stops here; the ticket presents the stop as a prompt to review the new estimate.
+					const detail = priceMovedDetail(estimate, quote.value.result.totalLongShares, quote.value.market)
+					// Reload the reserves before the ticket unlocks, so the estimate on screen shows the price the chain now quotes
+					// and pressing again cannot reuse the old one. A refresh that failed, timed out, or was held or superseded left the
+					// old estimate on screen, so the notice says the estimate could not be updated instead of asking for a review.
+					let refreshed = false
+					try {
+						refreshed = await withReadTimeout(refresh(undefined, undefined, 'position', ownerRefresh))
+					} catch (refreshError) {
+						console.warn('Market refresh after a price move failed:', describeTransactionFailure(refreshError, 'Market refresh failed'))
+					}
+					const requote = refreshed ? ticketCopy.formatPriceMoved(detail, estimate.kind === 'entry' ? ticketCopy.buyOutcome(estimate.side) : ticketCopy.sellOutcome(estimate.side)) : ticketCopy.formatPriceMovedUnrefreshed(detail)
+					// The submission still stops here; the ticket presents the stop as a notice, not a failure.
 					workflow.setRequoteNotice(market.pool, requote)
 					throw new Error(requote)
 				}
@@ -96,6 +109,8 @@ export function createPositionTransactionController({
 			afterConfirmed: async () => {
 				workflow.clearConfirmedAmount(market.pool)
 				await refresh(undefined, undefined, 'position', ownerRefresh)
+				// The ticket stays locked until the balances the trade changed have been read again, so neither its checks nor its shortcuts use the old ones.
+				await revalidateBalances()
 			},
 		})
 	}

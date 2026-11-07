@@ -20,6 +20,7 @@ type UseQuestionCreationState = ReturnType<UseQuestionCreation>
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a1')
 const NEXT_WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a2')
 const QUESTION_ID = `0x${'12'.repeat(32)}`
+const CHOSEN_FORK_QUESTION_ID = `0x${'34'.repeat(32)}`
 const CREATION_RESULT: MarketCreationResult & { hash: Hash } = {
 	createQuestionHash: zeroHash,
 	hash: zeroHash,
@@ -54,9 +55,13 @@ describe('useQuestionCreation', () => {
 		} = {},
 	) {
 		const loadCreatedZoltarQuestion = mock(options.loadCreatedZoltarQuestion ?? (async (_questionId: string) => undefined))
-		const setZoltarForkQuestionId = mock(() => undefined)
+		// Records the fork question the operations receive; creating a question must never replace it.
+		const forkQuestionIds: (string | undefined)[] = []
 		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
-			useZoltarOperations: () => ({ loadCreatedZoltarQuestion, setZoltarForkQuestionId }),
+			useZoltarOperations: ({ zoltarForkQuestionId }: { zoltarForkQuestionId?: string }) => {
+				forkQuestionIds.push(zoltarForkQuestionId)
+				return { loadCreatedZoltarQuestion }
+			},
 		}))
 		const { useQuestionCreation } = await import(`@zoltar/ui-zoltar-shared/features/questions/hooks/useQuestionCreation.js?case=${crypto.randomUUID()}`)
 		const createQuestion = mock(options.createQuestion ?? (async () => CREATION_RESULT))
@@ -84,6 +89,7 @@ describe('useQuestionCreation', () => {
 					onTransactionRequested,
 					onTransactionSubmitted,
 					refreshState,
+					zoltarForkQuestionId: CHOSEN_FORK_QUESTION_ID,
 				},
 				{ createQuestion },
 			)
@@ -127,17 +133,17 @@ describe('useQuestionCreation', () => {
 			remount,
 			rerenderAccount,
 			rerenderEnvironment,
-			setZoltarForkQuestionId,
+			forkQuestionIds,
 		}
 	}
 
-	test('records a successful creation, selects it for a fork, and loads only the created question', async () => {
+	test('records a successful creation, keeps the chosen fork question, and loads only the created question', async () => {
 		const harness = await renderHook()
 		await act(async () => await harness.hookState().createQuestion())
 		expect(harness.createQuestion).toHaveBeenCalledTimes(1)
 		expect(harness.hookState().questionResult).toEqual(CREATION_RESULT)
 		expect(harness.hookState().questionFeedback?.status.tone).toBe('success')
-		expect(harness.setZoltarForkQuestionId).toHaveBeenCalledWith(QUESTION_ID)
+		expect(new Set(harness.forkQuestionIds)).toEqual(new Set([CHOSEN_FORK_QUESTION_ID]))
 		expect(harness.refreshState).toHaveBeenCalledTimes(1)
 		expect(harness.loadCreatedZoltarQuestion).toHaveBeenCalledTimes(1)
 		expect(harness.loadCreatedZoltarQuestion).toHaveBeenCalledWith(QUESTION_ID)
@@ -264,7 +270,7 @@ describe('useQuestionCreation', () => {
 		expect(harness.onTransactionFinished).toHaveBeenCalledTimes(1)
 		expect(harness.refreshState).not.toHaveBeenCalled()
 		expect(harness.loadCreatedZoltarQuestion).not.toHaveBeenCalled()
-		expect(harness.setZoltarForkQuestionId).not.toHaveBeenCalled()
+		expect(new Set(harness.forkQuestionIds)).toEqual(new Set([CHOSEN_FORK_QUESTION_ID]))
 	})
 
 	test('allows a replacement environment submission without letting the old completion unlock it', async () => {
@@ -375,7 +381,7 @@ describe('useQuestionCreation', () => {
 
 	test('keeps global question drafts across universe changes and isolates them by account', async () => {
 		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
-			useZoltarOperations: () => ({ loadCreatedZoltarQuestion: async () => undefined, setZoltarForkQuestionId: () => undefined }),
+			useZoltarOperations: () => ({ loadCreatedZoltarQuestion: async () => undefined }),
 		}))
 		const { useQuestionCreation } = await import(`@zoltar/ui-zoltar-shared/features/questions/hooks/useQuestionCreation.js?case=${crypto.randomUUID()}`)
 		let hookState: UseQuestionCreationState | undefined

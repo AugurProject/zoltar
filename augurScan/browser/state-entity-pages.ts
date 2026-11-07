@@ -4,6 +4,7 @@ import { semanticFields } from './semantic-evidence.ts'
 import type { EntityHistory, QuestionRecord, StateCatalog, StateEntity, StateTab, UniverseRecord } from './browser-types.ts'
 import { exactUnit, utcDateTime } from './format.ts'
 import { short, shortIdentifier } from './identifier-format.ts'
+import { nativeSymbolFor } from './network-freshness.ts'
 import { questionDateLabel, questionStatus } from './question-time.ts'
 import type { createStateComponents } from './state-components.ts'
 
@@ -39,7 +40,7 @@ export const renderQuestionDetailPage = async (deps: StateEntityDeps, question: 
 		const row = element('div', 'static-grid')
 		row.append(
 			staticField('Universe', String(pool['universe_id'])),
-			...semanticFields({ questionResolution: state['questionResolution'], finalQuestionResolution: state['finalQuestionResolution'] }).map(([label, value]) => staticField(label, value)),
+			...semanticFields({ questionResolution: state['questionResolution'], finalQuestionResolution: state['finalQuestionResolution'] }, nativeSymbolFor(question.chain_id)).map(([label, value]) => staticField(label, value)),
 			staticField('Resolution read block', String(pool['resolution_block'] ?? 'Unavailable')),
 		)
 		if (typeof pool['escalation_address'] === 'string') {
@@ -221,7 +222,7 @@ export const renderUniverseDetailPage = async (deps: StateEntityDeps, universe: 
 		staticField('Forking outcome', universe.forking_outcome_index),
 		staticAddressField('REP token', universe.reputation_token_address, universe.chain_id),
 		staticField('Fork question', questionIdHex(universe.active_fork_question_id)),
-		staticField('Fork time', universe.active_fork_time ? new Date(universe.active_fork_time).toISOString() : 'Not forked'),
+		staticField('Fork time', universe.active_fork_time ? utcDateTime(universe.active_fork_time) : 'Not forked'),
 		staticAddressField('Fork initiator', universe.forker_address, universe.chain_id),
 		staticField('Fork threshold', exactUnit(universe.fork_threshold_atto_rep, 18, 'REP')),
 		staticField('Fork initiator migration balance at fork', exactUnit(universe.migration_rep_balance_atto_rep, 18, 'REP')),

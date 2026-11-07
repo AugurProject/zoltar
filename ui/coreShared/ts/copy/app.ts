@@ -1,4 +1,5 @@
 export const connecting = 'Connecting…'
+export const walletConnectionFailed = 'Wallet connection failed'
 export const changeWallet = 'Change wallet'
 export const disconnectWallet = 'Disconnect'
 const accountMenu = 'Account menu'

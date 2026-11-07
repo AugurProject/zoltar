@@ -54,6 +54,10 @@
 			"bun": "./ts/features/questions/components/QuestionCreateSection.tsx",
 			"default": "./js/features/questions/components/QuestionCreateSection.js"
 		},
+		"./features/questions/hooks/useExistingQuestionCheck.js": {
+			"bun": "./ts/features/questions/hooks/useExistingQuestionCheck.ts",
+			"default": "./js/features/questions/hooks/useExistingQuestionCheck.js"
+		},
 		"./features/questions/hooks/useQuestionCreation.js": {
 			"bun": "./ts/features/questions/hooks/useQuestionCreation.ts",
 			"default": "./js/features/questions/hooks/useQuestionCreation.js"

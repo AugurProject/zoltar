@@ -117,7 +117,7 @@ export function AmountField({ allowZero = false, balance, balanceLabel = commonC
 			{percentPresets.length === 0 ? undefined : (
 				<div className='amount-field-presets'>
 					{percentPresets.map(percent => (
-						<button key={percent} className='quiet' type='button' disabled={fillUnavailable} onClick={() => (fillMaxAmount === undefined ? undefined : fillAmount(getAmountPreset(fillMaxAmount, percent)))}>
+						<button key={percent} className='quiet' type='button' disabled={fillUnavailable} aria-describedby={maxReasonDescriptionId} onClick={() => (fillMaxAmount === undefined ? undefined : fillAmount(getAmountPreset(fillMaxAmount, percent)))}>
 							{commonCopy.formatAmountPresetLabel(percent)}
 						</button>
 					))}

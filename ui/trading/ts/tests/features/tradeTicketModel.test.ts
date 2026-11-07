@@ -1,10 +1,14 @@
 import { describe, expect, test } from 'bun:test'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { quoteEnterPosition } from '@zoltar/trading-shared/trading/positions'
-import { authoritativeQuoteMoved, buyReturn, holdingAfterTrade, poolFeeAttoEth, ticketInputsAfterSelection, tradeTicketModel, type TicketInputs, type TradeTicketInputs } from '../../features/live/tradeTicketModel.js'
+import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import { getDecimalSeparatorError } from '@zoltar/ui-core-shared/forms/decimal.js'
+import { authoritativeQuoteMoved, buyReturn, holdingAfterTrade, poolFeeAttoEth, roundDownShortcut, ticketInputsAfterSelection, tradeTicketModel, type TicketInputs, type TradeTicketInputs } from '../../features/live/tradeTicketModel.js'
 import { shareBalanceScope, type LiveBalances } from '../../protocol/live.js'
 import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
 import { MINIMUM_SLIPPAGE_BPS } from '../../protocol/tradeQuote.js'
+import { formatOutcomeQuantity } from '../../lib/shareValue.js'
 import * as ticketCopy from '../../copy/tradeTicket.js'
 import * as availabilityCopy from '../../copy/availability.js'
 import { ETH_GAS_RESERVE_ATTO_ETH } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
@@ -29,6 +33,7 @@ const ready: TradeTicketInputs = {
 	walletConnected: true,
 	networkMismatchReason: undefined,
 	walletEthAttoEth: 5n * eth,
+	walletEthState: 'ready',
 	marketClosed: false,
 	nowSeconds: 1n,
 	acknowledgedImpactBps: undefined,
@@ -105,7 +110,21 @@ describe('trade ticket estimate', () => {
 		expect(estimate.receiveAttoEth).toBe(estimate.quote.completeSetShares)
 		expect(estimate.minimumAttoEth).toBe((estimate.receiveAttoEth * 9_950n) / 10_000n)
 		expect(estimate.maximumLongShares).toBeLessThanOrEqual(balances.yes)
+		// The router takes up to the signed maximum from the wallet, so the slippage allowance comes out of the typed amount, never on top of it.
+		expect(estimate.maximumLongShares).toBeLessThanOrEqual(2n * shares)
+		expect(estimate.maximumLongShares).toBeGreaterThanOrEqual(estimate.quote.totalLongShares)
 		expect(estimate.quote.conditionalYesBpsAfter).toBeLessThan(estimate.quote.conditionalYesBpsBefore)
+	})
+
+	test('never signs more shares than typed at any slippage tolerance', () => {
+		const holding = { ...balances, yes: 50n * shares, invalid: 50n * shares }
+		for (const slippageBps of [MINIMUM_SLIPPAGE_BPS, 50n, 100n, 300n])
+			for (const amount of ['0.000001', '0.5', '2', '7.123456789', '20']) {
+				const { estimate } = tradeTicketModel({ ...ready, mode: 'exit', amount, balances: holding, settings: { ...DEFAULT_TRADE_SETTINGS, slippageBps } })
+				if (estimate?.kind !== 'exit') throw new Error(`Expected a sell estimate for ${amount}`)
+				expect(estimate.maximumLongShares).toBeLessThanOrEqual(estimate.requestedShares)
+				expect(estimate.maximumLongShares).toBeGreaterThanOrEqual(estimate.quote.totalLongShares)
+			}
 	})
 
 	test('reports the profit a buy makes if its outcome wins, the fee in ETH, and the holding after the trade', () => {
@@ -149,22 +168,55 @@ describe('trade ticket inputs', () => {
 		expect(ticketModelFor(market, 'entry', '')).toMatchObject({ parsedAmount: undefined, amountError: undefined })
 		expect(ticketModelFor(market, 'entry', '0.5').parsedAmount).toBe(5n * 10n ** 17n)
 		expect(ticketModelFor(market, 'exit', '1.5').parsedAmount).toBe(15n * 10n ** 17n)
-		expect(ticketModelFor(market, 'entry', 'abc').amountError).toBe(ticketCopy.invalidEthAmount)
-		expect(ticketModelFor(market, 'exit', '0.0000000000000000001').amountError).toBe(ticketCopy.invalidShareAmount)
+		expect(ticketModelFor(market, 'exit', '0.0000000000000000001').amountError).toBe(commonCopy.formatDecimalPrecisionError(18))
 		expect(formatCurrencyInputBalance(15n * 10n ** 17n, 18)).toBe('1.5')
 		expect(formatCurrencyInputBalance(1_000n * shares, 18)).toBe('1000')
+	})
+
+	test('names what is wrong with an amount that cannot be read', () => {
+		for (const mode of ['entry', 'exit'] as const) {
+			expect(ticketModelFor(market, mode, 'abc').amountError).toBe(commonCopy.amountInvalidError)
+			expect(ticketModelFor(market, mode, '1e3').amountError).toBe(commonCopy.amountInvalidError)
+			expect(ticketModelFor(market, mode, '-1').amountError).toBe(commonCopy.amountPositiveRequiredError)
+			expect(ticketModelFor(market, mode, '1,234.5').amountError).toBe(getDecimalSeparatorError())
+			// The button gives the same reason as the field.
+			expect(ticketModelFor(market, mode, '-1', balances).availability.reason).toBe(commonCopy.amountPositiveRequiredError)
+		}
+		// Zero is still being typed towards an amount, so only the button says it is not enough.
+		expect(ticketModelFor(market, 'entry', '0').amountError).toBeUndefined()
 	})
 
 	test('offers 25%, 50%, and the largest insured sale as shortcuts', () => {
 		const { shortcuts, sellable } = ticketModelFor(market, 'exit', '', balances)
 		expect(shortcuts.map(shortcut => shortcut.label)).toEqual([ticketCopy.quarter, ticketCopy.half, ticketCopy.max])
-		expect(shortcuts[0]?.value).toBe(balances.yes / 4n)
+		if (sellable === undefined) throw new Error('Expected a sellable amount')
+		// The percentages divide what can be sold now, like Max, so none fills a sale the INVALID balance cannot insure.
+		expect(shortcuts[0]?.value).toBe(roundDownShortcut(sellable / 4n))
+		expect(shortcuts[1]?.value).toBe(roundDownShortcut(sellable / 2n))
+		for (const shortcut of shortcuts) expect(ticketModelFor(market, 'exit', formatCurrencyInputBalance(shortcut.value, 18), balances).shortfall).toBeUndefined()
 		// INVALID (2 shares) bounds the complete sets, so Max is well below the 10-share holding.
 		// Max is trimmed to eight decimals so the field shows a readable amount that can still be sold in full.
 		expect(shortcuts[2]?.value).toBe(sellable === undefined ? undefined : sellable - (sellable % 10n ** 10n))
 		expect(sellable).toBeGreaterThan(2n * shares)
 		expect(sellable).toBeLessThan(5n * shares)
 		expect(ticketModelFor(market, 'exit', '', { ...balances, yes: 0n }).shortcuts).toEqual([])
+		// Without INVALID nothing can be sold, so no percentage of the holding is offered either.
+		expect(ticketModelFor(market, 'exit', '', { ...balances, invalid: 0n }).shortcuts).toEqual([])
+		// When only the holding limits the sale, all of it can be entered; the slippage allowance comes out of it.
+		const holdingBound = { ...balances, yes: shares, invalid: 10n * shares }
+		expect(ticketModelFor(market, 'exit', '', holdingBound).sellable).toBe(shares)
+		expect(ticketModelFor(market, 'exit', '1', holdingBound).availability).toEqual({ disabled: false, reason: undefined })
+	})
+
+	test('caps the sell shortcuts where the price impact would be refused', () => {
+		const large = { ...balances, yes: 1_000n * shares, invalid: 1_000n * shares }
+		const { shortcuts, sellable } = ticketModelFor(market, 'exit', '', large)
+		const maximum = shortcuts[2]?.value
+		if (maximum === undefined || sellable === undefined) throw new Error('Missing Max shortcut')
+		// The holding and its INVALID cover far more, but this pool absorbs much less before the 15% limit.
+		expect(sellable).toBeLessThan(100n * shares)
+		for (const shortcut of shortcuts) expect(ticketModelFor(market, 'exit', formatCurrencyInputBalance(shortcut.value, 18), large).impactTier).not.toBe('blocked')
+		expect(ticketModelFor(market, 'exit', formatCurrencyInputBalance(maximum + shares, 18), large).impactTier).toBe('blocked')
 	})
 
 	test('offers buy shortcuts for 25%, 50%, and all of the wallet ETH less the gas reserve', () => {
@@ -191,6 +243,36 @@ describe('trade ticket inputs', () => {
 		expect(maximum).toBeLessThan(100n * eth)
 		for (const shortcut of shortcuts) expect(ticketModelFor(market, 'entry', formatCurrencyInputBalance(shortcut.value, 18)).impactTier).not.toBe('blocked')
 		expect(ticketModelFor(market, 'entry', formatCurrencyInputBalance(maximum + eth / 10n, 18)).impactTier).toBe('blocked')
+	})
+
+	test('caps the buy shortcuts at what the security pool can still mint and states that limit above it', () => {
+		const limited = { ...market, availableMintingCapacityAttoEth: 2n * eth }
+		const shortcuts = tradeTicketModel({ ...ready, market: limited, amount: '' }).shortcuts
+		expect(shortcuts).toEqual([
+			{ label: ticketCopy.quarter, value: eth / 2n },
+			{ label: ticketCopy.half, value: eth },
+			{ label: ticketCopy.max, value: 2n * eth },
+		])
+		expect(tradeTicketModel({ ...ready, market: limited, amount: '2' }).availability).toEqual({ disabled: false, reason: undefined })
+		expect(tradeTicketModel({ ...ready, market: limited, amount: '2.5' }).availability).toEqual({ disabled: true, reason: ticketCopy.formatMintingCapacityReason('2') })
+		const exhausted = { ...market, availableMintingCapacityAttoEth: 0n }
+		expect(tradeTicketModel({ ...ready, market: exhausted, amount: '' }).shortcuts).toEqual([])
+		expect(tradeTicketModel({ ...ready, market: exhausted, amount: '1' }).availability.reason).toBe(ticketCopy.mintingCapacityExhaustedReason)
+		// Selling burns complete sets instead of minting them, so the capacity never limits a sale.
+		expect(tradeTicketModel({ ...ready, market: exhausted, mode: 'exit', amount: '1' }).availability).toEqual({ disabled: false, reason: undefined })
+	})
+
+	test('states the price-impact limit instead of the minting capacity when the capacity itself would be refused for impact', () => {
+		// The pool could mint far more than this market absorbs within the 15% impact limit.
+		const deepCapacity = { ...market, availableMintingCapacityAttoEth: 500n * eth }
+		const overCapacity = tradeTicketModel({ ...ready, market: deepCapacity, amount: '600', walletEthAttoEth: 1_000n * eth, acknowledgedImpactBps: 10_000n })
+		const largest = tradeTicketModel({ ...ready, market: deepCapacity, amount: '', walletEthAttoEth: 1_000n * eth }).shortcuts[2]?.value
+		if (largest === undefined) throw new Error('Missing Max shortcut')
+		expect(largest).toBeLessThan(500n * eth)
+		const largestText = formatTrimmedUnits(largest, 18, 6)
+		expect(overCapacity.availability.reason).toBe(ticketCopy.formatPriceImpactBlockedReason(`${largestText} ETH`))
+		// Following the stated amount is accepted.
+		expect(tradeTicketModel({ ...ready, market: deepCapacity, amount: largestText, walletEthAttoEth: 1_000n * eth, acknowledgedImpactBps: 10_000n }).availability.disabled).toBeFalse()
 	})
 
 	test('names an empty or zero amount as the reason the action is disabled', () => {
@@ -237,6 +319,13 @@ describe('trade ticket model', () => {
 		expect(tradeTicketModel({ ...ready, workflowLocked: true }).availability.reason).toBe(availabilityCopy.transactionInProgressReason)
 	})
 
+	test('waits for an unknown wallet ETH balance instead of skipping the funds check', () => {
+		expect(tradeTicketModel({ ...ready, walletEthAttoEth: undefined, walletEthState: 'loading' }).availability).toEqual({ disabled: true, loading: true, reason: availabilityCopy.balancesLoadingReason })
+		expect(tradeTicketModel({ ...ready, walletEthAttoEth: undefined, walletEthState: 'error' }).availability).toEqual({ disabled: true, reason: availabilityCopy.balancesUnavailableReason })
+		// A sale pays ETH out, so it does not wait for the ETH balance.
+		expect(tradeTicketModel({ ...ready, mode: 'exit', walletEthAttoEth: undefined, walletEthState: 'loading' }).availability).toEqual({ disabled: false, reason: undefined })
+	})
+
 	test('keeps the gas reserve in the wallet when a buy would spend the whole ETH balance', () => {
 		const reserveReason = ticketCopy.gasReserveReason('0.01')
 		expect(tradeTicketModel({ ...ready, amount: '5' }).availability).toEqual({ disabled: true, reason: reserveReason })
@@ -267,6 +356,16 @@ describe('trade ticket model', () => {
 		expect(larger.availability.reason).toBe(ticketCopy.acknowledgeImpactReason)
 		const blocked = tradeTicketModel({ ...ready, amount: '80', walletEthAttoEth: 1_000n * eth, acknowledgedImpactBps: 10_000n })
 		expect(blocked.impactTier).toBe('blocked')
-		expect(blocked.availability.reason).toBe(ticketCopy.priceImpactBlockedReason)
+		// The reason names the largest amount this pool takes within the limit, the same amount Max fills.
+		const largest = tradeTicketModel({ ...ready, amount: '', walletEthAttoEth: 1_000n * eth }).shortcuts[2]?.value
+		if (largest === undefined) throw new Error('Missing Max shortcut')
+		const largestText = formatTrimmedUnits(largest, 18, 6)
+		expect(blocked.availability.reason).toBe(ticketCopy.formatPriceImpactBlockedReason(`${largestText} ETH`))
+		expect(tradeTicketModel({ ...ready, amount: largestText, walletEthAttoEth: 1_000n * eth, acknowledgedImpactBps: 10_000n }).impactTier).not.toBe('blocked')
+		const blockedSale = tradeTicketModel({ ...ready, mode: 'exit', amount: '80', balances: { ...balances, yes: 1_000n * shares, invalid: 1_000n * shares } })
+		expect(blockedSale.impactTier).toBe('blocked')
+		const sellable = blockedSale.sellable
+		if (sellable === undefined) throw new Error('Expected a sellable amount')
+		expect(blockedSale.availability.reason).toBe(ticketCopy.formatPriceImpactBlockedReason(formatOutcomeQuantity(sellable, 'YES', 6, 'down')))
 	})
 })
