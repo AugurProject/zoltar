@@ -35,13 +35,13 @@
 			<section id="mint">
 				<h2>Purchase complete sets</h2>
 				<ol>
-					<li>In <strong>Mint portfolio complete sets</strong>, choose either entry under <strong>Registered questions on this page</strong>.</li>
+					<li>In <strong>Mint portfolio complete sets</strong>, choose a title under <strong>Question</strong>. Read the question details and verify its full ID. Use <strong>Find by question ID</strong> to enter an exact identifier instead.</li>
 					<li>Enter <code>0.01</code> for <strong>Collateral ETH</strong>, <code>0.1</code> for <strong>Maximum purchase fee ETH</strong>, and <code>0</code> for <strong>Minimum complete sets</strong>. The zero minimum is suitable for this controlled simulation; a live purchase should set a minimum from its quote.</li>
 					<li>Check <strong>Purchase fee ETH</strong>. Select <strong>Mint portfolio complete sets</strong> and confirm the review. Unused fee budget returns to your wallet.</li>
 					<li>Wait for <strong>Transaction confirmed</strong>. Open the selected question through its link and inspect your outcome balances in the Shares view. Each outcome has the same newly minted quantity.</li>
 				</ol>
 				<figure class="screenshot">
-					<a class="screenshot-link" href="../assets/screenshots/statoblast/portfolio-purchase.png"><img width="800" height="741" src="../assets/screenshots/statoblast/portfolio-purchase.png" alt="The portfolio purchase form selects a registered question and bounds collateral, purchase fee and shares received." loading="lazy" /></a>
+					<a class="screenshot-link" href="../assets/screenshots/statoblast/portfolio-purchase.png"><img width="800" height="704" src="../assets/screenshots/statoblast/portfolio-purchase.png" alt="The portfolio purchase form selects a registered question and bounds collateral, purchase fee and shares received." loading="lazy" /></a>
 					<figcaption><span class="figure-label">Purchase controls.</span> The fee budget is separate from collateral.</figcaption>
 				</figure>
 				<p>You have added capital and bought question shares through the same portfolio. Reloading a new simulation resets its local chain; these balances are not live assets. To understand fees or exiting capital, continue with <a href="../explanation/fees.html">Fees</a> and the <a href="../reference/operator-guardrails.html#security-pool-guardrails">capital guardrails</a>.</p>

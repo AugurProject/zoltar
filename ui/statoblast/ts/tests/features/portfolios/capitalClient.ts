@@ -1,5 +1,5 @@
 import { createPublicClient, http, getAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { createMockReadClient, createBlockWithTimestamp } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { createMockReadClient, createBlockWithTimestamp, createMulticallStub, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getInfraContractAddresses, getSecurityPoolPortfolioRuntimeCode } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
@@ -55,6 +55,13 @@ export function capitalClient(initial = capitalSnapshot()) {
 	])
 	const client = createPublicClient({ transport: http('https://example.test') }).extend(() => ({
 		getChainId: async () => snapshot.chainId,
+		multicall: createMulticallStub(async request =>
+			request.contracts.map(contract => {
+				const name = getContractFunctionName(contract)
+				if (!(name in overrides)) throw new Error(`Unexpected capital multicall ${name}`)
+				return overrides[name]
+			}),
+		),
 		getCode: async ({ address }: { address: Address }) => codes.get(address),
 		getBalance: async () => snapshot.walletAttoEth,
 		getBlock: async () => ({ ...createBlockWithTimestamp(snapshot.timestamp), number: snapshot.blockNumber, hash: snapshot.blockHash }),
@@ -131,6 +138,7 @@ export function capitalClient(initial = capitalSnapshot()) {
 				return preview === undefined ? [0n, snapshot.currentBatch, 0n, 0n, 0n, 0n, 0n] : [BigInt(statuses.indexOf(preview.status)), preview.effectiveCurrentBatch, preview.healthyCommitment, preview.spareCommitment, preview.queuedAheadCommitment, preview.commitmentReduction, preview.releasedRep]
 			}
 			if (request.functionName === 'getQuestions') {
+				if ('getQuestions' in overrides) return overrides['getQuestions']
 				const start = request.args?.[0]
 				const count = request.args?.[1]
 				if (typeof start !== 'bigint' || typeof count !== 'bigint') throw new Error('Missing page bounds')

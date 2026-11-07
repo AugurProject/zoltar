@@ -1,3 +1,5 @@
+import { Question, getQuestionTitle } from '@zoltar/ui-core-shared/components/Question.js'
+import { usePortfolioQuestionDetails } from '../hooks/usePortfolioQuestionDetails.js'
 import { useId } from 'preact/hooks'
 import { toHex, formatUnits } from '@zoltar/core-shared/evm/ethereum'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
@@ -17,6 +19,7 @@ import * as common from '@zoltar/ui-core-shared/copy/common.js'
 export function PortfolioPurchasePanel({ model, purchase, actions }: { model: ReturnType<typeof usePortfolio>; purchase: ReturnType<typeof usePortfolioPurchase>; actions: PortfolioActions }) {
 	const snapshot = model.snapshot
 	const id = useId()
+	const details = usePortfolioQuestionDetails(snapshot, purchase.questionInput)
 	const admission = snapshot?.admission
 	const admissionLabels = { open: copy.admissionOpen, fixed: copy.admissionFixed, custom: copy.admissionCustom }
 	const selected = snapshot?.questions.find(value => String(value) === purchase.questionInput || toHex(value) === purchase.questionInput)
@@ -56,13 +59,23 @@ export function PortfolioPurchasePanel({ model, purchase, actions }: { model: Re
 						<option value=''>{copy.chooseRegisteredQuestion}</option>
 						{snapshot?.questions.map(questionId => (
 							<option key={String(questionId)} value={toHex(questionId)}>
-								{toHex(questionId)}
+								{details.entries?.get(questionId)?.question === undefined ? toHex(questionId) : getQuestionTitle(details.entries.get(questionId)?.question ?? { title: '' })}
 							</option>
 						))}
 					</select>
 				</div>
 				<PaginationControls hasPreviousPage={(snapshot?.questionStart ?? 0n) > 0n} hasNextPage={snapshot !== undefined && snapshot.questionStart + 64n < snapshot.questionCount} loading={model.loading} onPreviousPage={() => void model.previousQuestionPage()} onNextPage={() => void model.nextQuestionPage()} />
-				<PortfolioInput label={copy.questionId} value={purchase.questionInput} onChange={purchase.setQuestionInput} disabled={actions.busy !== undefined} />
+				<details>
+					<summary>{copy.findQuestionById}</summary>
+					<PortfolioInput label={copy.questionId} value={purchase.questionInput} onChange={purchase.setQuestionInput} disabled={actions.busy !== undefined} />
+				</details>
+				{details.selected?.error === undefined ? undefined : <UserMessage tone='error' detail={details.selected.error} />}
+				{details.selectedId !== undefined && details.selected?.error === undefined && <Question question={details.selected?.question} loading={details.selected?.question === undefined} abbreviateIdentifier={false} />}
+				{[...(details.entries?.values() ?? [])].some(entry => entry.error !== undefined) ? (
+					<button type='button' onClick={details.retry}>
+						{copy.retryQuestionDetails}
+					</button>
+				) : undefined}
 				{purchase.position === undefined ? undefined : <a href={buildPoolsRouteHash({ view: 'operate', securityPoolAddress: purchase.position.pool, tab: 'vaults' })}>{copy.openPrice}</a>}
 				<MetricGrid>
 					<PortfolioInput label={copy.mintAmount} value={purchase.mintAmount} onChange={purchase.setMintAmount} disabled={actions.busy !== undefined} numeric />
@@ -72,7 +85,7 @@ export function PortfolioPurchasePanel({ model, purchase, actions }: { model: Re
 				<MetricField label={copy.estimatedPurchaseFee} loading={purchase.quoteLoading}>
 					<CurrencyValue value={purchase.quote?.purchaseFeeAttoEth} suffix={common.eth} />
 				</MetricField>
-				<PortfolioButton model={actions} action='mintPortfolioCompleteSets' label={copy.mint} pendingLabel={copy.minting} reason={purchase.reason} onClick={purchase.buy} />
+				<PortfolioButton model={actions} action='mintPortfolioCompleteSets' label={copy.mint} pendingLabel={copy.minting} reason={purchase.reason ?? (details.selected?.question === undefined ? copy.reviewQuestionDetails : undefined)} onClick={purchase.buy} />
 			</SectionBlock>
 		</>
 	)

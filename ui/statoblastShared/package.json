@@ -428,6 +428,10 @@
 		"./features/portfolios/components/PortfolioTakeover.js": {
 			"bun": "./ts/features/portfolios/components/PortfolioTakeover.tsx",
 			"default": "./js/features/portfolios/components/PortfolioTakeover.js"
+		},
+		"./features/portfolios/hooks/usePortfolioQuestionDetails.js": {
+			"bun": "./ts/features/portfolios/hooks/usePortfolioQuestionDetails.ts",
+			"default": "./js/features/portfolios/hooks/usePortfolioQuestionDetails.js"
 		}
 	},
 	"version": "1.0.0"
