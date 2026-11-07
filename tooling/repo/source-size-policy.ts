@@ -15,15 +15,12 @@ const allowances = (reason: string, entries: readonly (readonly [path: string, m
  */
 export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Chaos: extract dashboard features, operation handlers, and persistence responsibilities into focused modules.', [
-		['bots/chaos/src/dashboard/dashboard-server.ts', 817],
 		['bots/chaos/src/execution/recovery.ts', 644],
 		['bots/chaos/src/monitoring/protocol-index.ts', 635],
 	]),
-	...allowances('Owning UI library: separate workflow state and actions from rendering, and extract simulation scenario handlers.', [['ui/coreShared/ts/simulation/tevmEngine.ts', 760]]),
 	...allowances('Bot QA and documentation capture scripts grew with every dashboard surface they exercise.', [['bots/chaos/scripts/capture-dashboard-qa.mts', 884]]),
 	...allowances('Repository tooling modules accumulated responsibilities that belong in separate modules.', [
 		['tooling/docs/check-docs-examples.mts', 657],
-		['tooling/testing/coverage-report.mts', 931],
 		['tooling/contracts/deploy-testnet.mts', 636],
 	]),
 	...allowances('Documentation runtime bundles and Solidity-side TypeScript utilities still need responsibility extraction.', [
