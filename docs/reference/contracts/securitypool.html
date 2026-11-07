@@ -22,7 +22,7 @@
 				<h2 id="interactions">State-changing interactions</h2>
 				<p>Each call lists its parameter names in ABI order. The <a href="../contracts.html#table-columns">contract index</a> defines the columns. All deployed question ledgers belong to a portfolio. Providers use its capital ledger for deposits, commitments, health targets, retirement and liquidation. Reporters fund separate reporter custody with wallet REP. Purchases use the registered portfolio route; traders redeem through the question ledger. There is no standalone vault, tick auction or operation queue.</p>
 				<!-- Validated read ABI fingerprint: 2c146710571c345bfcd78d7da6ffb8e0e9705d2c4efe5317b77b3233b7e9e9f3 -->
-				<!-- Validated complete compiled ABI fingerprint: e147bc36ab1d3343ca30c88666ec72d36b19246490e6dbd562bb117ec58f4e9f -->
+				<!-- Validated complete compiled ABI fingerprint: c2048a23059af0a2124e6ca1887bd3e89e3519296a5034eb34274d842ce79b16 -->
 				<table>
 					<thead>
 						<tr>
@@ -119,7 +119,7 @@
 							<td>Relevant share, reporting or central accounting events; no standalone vault accounting.</td>
 						</tr>
 						<tr>
-							<td><code>setStartingParams(currentRetentionRate, settlementCollateralAttoEth)</code><wbr /></td>
+							<td><code>setStartingParams(currentRetentionRate, initialCollateral)</code><wbr /></td>
 							<td>The factory</td>
 							<td>Factory authentication; deployment initialization.</td>
 							<td>Initializes the question fee clock and settlement mirror.</td>
