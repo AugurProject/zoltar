@@ -27,18 +27,24 @@ abstract contract EscalationGameStorage {
 	uint256 internal nextNodeId = 1;
 	// Game-local node ID -> deposit node; zero is the absent-node sentinel.
 	mapping(uint256 => Node) public nodes;
-	mapping(address => EscalationClaimBundle) internal escalationClaimBundles;
+	struct VaultAccounting {
+		EscalationClaimBundle claimBundle;
+		uint256 unresolvedAttoRep;
+		// Original unconsumed principal indexed by BinaryOutcome (Invalid, Yes, No).
+		uint256[3] localUnresolvedPrincipalByOutcome;
+		bool localUnresolvedTotalsExported;
+		// Each branch retains its independent escrow accounting.
+		mapping(uint8 => ForkedEscrowState) forkedEscrowByOutcome;
+		// Only the new report generating surplus relinquishes this collateral credit.
+		uint256 collateralBackingAttoRep;
+	}
+	mapping(address => VaultAccounting) internal vaultAccounting;
+
 	// Logical escrow: unsettled local/bundle principal plus remaining inherited
 	// backing. This is not the token balance or a budget for winner rewards.
 	uint256 public totalDisputeStakedAttoRep;
-	mapping(address => uint256) internal unresolvedRepByVaultAttoRep;
 	// Original local principal still represented by unconsumed claims.
 	uint256 internal totalLocalUnresolvedAttoRep;
-	// Vault address -> principal in attoREP indexed by BinaryOutcome (Invalid, Yes, No).
-	mapping(address => uint256[3]) internal localUnresolvedPrincipalByVaultAndOutcome;
-	mapping(address => bool) internal localUnresolvedTotalsExportedByVault;
-	// Vault address -> BinaryOutcome index -> forked escrow accounting.
-	mapping(address => mapping(uint8 => ForkedEscrowState)) internal forkedEscrowByVaultAndOutcome;
 	bool internal forkCarrySnapshotRequiresForkedEscrow;
 	bool public winnerHaircutPaidByFork;
 	uint256 internal forkCarryInitialBackingAttoRep;
@@ -62,9 +68,6 @@ abstract contract EscalationGameStorage {
 	// Ordinary deposits irrevocably release the minimum outcome balance. Reporter
 	// principal remains nominal because only one outcome can claim in each child.
 	uint256 public creditedSurplusAttoRep;
-	// Only the new report that generates surplus relinquishes collateral credit.
-	// Existing reporters cannot be pushed into liquidation by a third-party report.
-	mapping(address => uint256) internal collateralBackingByVault;
 
 	function _isDepositResolutionOpen(BinaryOutcomes.BinaryOutcome provisionalResolution) internal view returns (bool) {
 		// A provisional leader cannot close an unresolved unrelated continuation's
@@ -79,8 +82,8 @@ abstract contract EscalationGameStorage {
 
 	function _claimEscrowedRepByVault(address vault) internal view returns (uint256 amountAttoRep) {
 		if (ordinarySettlementInitialized)
-			return localUnresolvedPrincipalByVaultAndOutcome[vault][uint8(ordinarySettlementOutcome)];
-		return (escalationClaimBundles[vault].disputeStakedRepClaimUnits);
+			return vaultAccounting[vault].localUnresolvedPrincipalByOutcome[uint8(ordinarySettlementOutcome)];
+		return (vaultAccounting[vault].claimBundle.disputeStakedRepClaimUnits);
 	}
 
 	function _isRetiredOrdinaryOutcome(uint8 outcomeIndex) internal view returns (bool) {
@@ -89,7 +92,7 @@ abstract contract EscalationGameStorage {
 
 	function _increaseEscrowedRepForBundle(address bundleId, uint256 amountAttoRep) internal {
 		uint256 claimUnits = amountAttoRep;
-		escalationClaimBundles[bundleId].disputeStakedRepClaimUnits += claimUnits;
+		vaultAccounting[bundleId].claimBundle.disputeStakedRepClaimUnits += claimUnits;
 		totalDisputeStakedAttoRep += amountAttoRep;
 	}
 

@@ -59,7 +59,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 	/// and required an open universe with a fresh accepted price.
 	function authorize(uint256 commitment, uint256 reportId, bool useReport, uint256 minimumCommitment) external onlyLedger returns (uint96 id) {
 		_settleOwner(msg.sender);
-		Owner storage owner = owners[msg.sender];
+		Owner storage owner = owners[msg.sender].account;
 		uint256 health = _target(owner);
 		require(commitment >= minimumCommitment, 'Commitment below minimum');
 		id = owner.positionId;
@@ -72,8 +72,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 			(, uint256 totalCommitment) = commitmentIndex.totals();
 			(uint256 reportPrice, uint256 epoch) = feed.reportAuthorization(reportId, Math.max(demandAttoEth, totalCommitment - old.commitment + commitment));
 			require(epoch == acceptedPriceEpoch, 'Capital price epoch changed');
-			fundingPriceFloor[msg.sender] = Math.max(host.ownerConservativePrice(msg.sender), reportPrice);
-			fundingPriceEpoch[msg.sender] = epoch;
+			owners[msg.sender].fundingPrice = FundingPrice(Math.max(host.ownerConservativePrice(msg.sender), reportPrice), epoch);
 		}
 		uint256 rep = owner.freeAttoRep + old.rep;
 		require(rep >= commitmentIndex.requiredRep(commitment, host.ownerConservativePrice(msg.sender), host.securityMultiplierBps(), health), 'Chosen health target unmet');
@@ -98,7 +97,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 	function withdrawPrincipal(uint256 amount, address recipient) external onlyLedger {
 		require(recipient != address(0) && amount > 0, 'Invalid capital withdrawal');
 		_settleOwner(msg.sender);
-		Owner storage owner = owners[msg.sender];
+		Owner storage owner = owners[msg.sender].account;
 		uint256 free = Math.min(amount, owner.freeAttoRep);
 		owner.freeAttoRep -= free;
 		totalFreeAttoRep -= free;
@@ -120,7 +119,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 	}
 	function claimEarnings() external onlyLedger {
 		_settleOwner(msg.sender);
-		Owner storage owner = owners[msg.sender];
+		Owner storage owner = owners[msg.sender].account;
 		uint256 ethAmount = owner.feesAttoEth;
 		uint256 repAmount = owner.feesAttoRep;
 		owner.feesAttoEth = 0;
@@ -131,9 +130,9 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 	}
 
 	function exportChoice(address owner) external onlyLedger returns (ChoicePosition memory choice, uint256 target) {
-		require(frozen && !exported[owner], 'Fork choice unavailable');
+		require(frozen && !owners[owner].exported, 'Fork choice unavailable');
 		_settleOwner(owner);
-		Owner storage account = owners[owner];
+		Owner storage account = owners[owner].account;
 		uint96 id = account.positionId;
 		if (id != 0) {
 			SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(id);
@@ -141,7 +140,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 			if (position.batch != 0) batch = position.batch == commitmentIndex.currentBatch() ? 1 : 2;
 			choice = ChoicePosition(position.rep, position.commitment, batch, position.remainingCommitment);
 		}
-		exported[owner] = true;
+		owners[owner].exported = true;
 		target = _target(account);
 	}
 	function beginForkImport() external onlyLedger {
@@ -152,7 +151,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 	}
 	function importChoice(address owner, ChoicePosition calldata position, uint256 target) external onlyLedger {
 		require(importing && target >= BPS, 'Fork import unavailable');
-		Owner storage account = owners[owner];
+		Owner storage account = owners[owner].account;
 		require(account.positionId == 0 && account.freeAttoRep == 0, 'Owner already imported');
 		account.targetHealthFactorBps = target;
 		require(position.commitment != 0 && position.rep != 0, 'Empty fork choice');
