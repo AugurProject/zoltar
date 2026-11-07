@@ -260,7 +260,8 @@ export function useReportingOperations(
 		return { actualDepositAmount: contributionPreview.actualDepositAmount, walletDepositAmount: getReportingWalletDepositAmount(latestDetails, contributionPreview.actualDepositAmount), contributionFunding, latestDetails, reportAmount, selectedOutcome }
 	}
 
-	const approveRepForReporting = async () =>
+	/** Approves the amount chosen in the approval control, or exactly this report's wallet deposit by default. */
+	const approveRepForReporting = async (amountAttoRep?: bigint) =>
 		await runReportingAction(
 			'approveReportingRep',
 			async (walletAddress, securityPoolAddress, currentForm, isCurrentSelection, context) => {
@@ -268,8 +269,10 @@ export function useReportingOperations(
 				if (preflight === undefined) return undefined
 				if (preflight.walletDepositAmount === undefined) throw new Error(reportingCopy.loadingVaultFunding)
 				if (preflight.contributionFunding !== 'wallet') throw new Error('This report uses vault backing and does not require wallet REP approval.')
-				if ((preflight.latestDetails.viewerWalletRepAllowanceAttoRep ?? 0n) >= preflight.walletDepositAmount) throw new Error('The security pool already has enough REP allowance for this report.')
-				return { ...(await dependencies.approveReportingRep(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, preflight.selectedOutcome, preflight.walletDepositAmount)), amountAttoRep: preflight.walletDepositAmount }
+				const approvalAmountAttoRep = amountAttoRep ?? preflight.walletDepositAmount
+				const allowanceAttoRep = preflight.latestDetails.viewerWalletRepAllowanceAttoRep ?? 0n
+				if (allowanceAttoRep >= approvalAmountAttoRep) throw new Error(allowanceAttoRep >= preflight.walletDepositAmount ? 'The security pool already has enough REP allowance for this report.' : commonCopy.formatApprovalNotIncreasedReason(formatCurrencyBalanceWithUnit(allowanceAttoRep, 'REP')))
+				return { ...(await dependencies.approveReportingRep(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, preflight.selectedOutcome, approvalAmountAttoRep)), amountAttoRep: approvalAmountAttoRep }
 			},
 			'Failed to approve REP for reporting',
 		)

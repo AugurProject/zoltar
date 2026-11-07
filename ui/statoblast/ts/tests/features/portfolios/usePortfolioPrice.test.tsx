@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { decodeFunctionData, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { unscopedTransaction } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
@@ -196,4 +196,17 @@ test('a sponsor change during fresh price validation invalidates the reviewed ac
 	await state.hook.setProps({ bidder: token })
 	pending.resolve(2n * unit)
 	await expect(validation).rejects.toThrow('wallet environment changed')
+})
+
+test("another environment never compares against the previous one's price", async () => {
+	const state = await setup(fixture => {
+		fixture.values['lastPrice'] = 900n * unit
+		fixture.values['lastSettlementTimestamp'] = 1n
+	})
+	expect(state.hook.state().comparisonPrice).toBe(900n * unit)
+	// The other environment's branch read never answers, so only the reset can remove the old reference.
+	const pendingClient = { ...state.backend.createReadClient(), readContract: () => new Promise<never>(() => undefined) }
+	installActiveEnvironmentForTesting({ ...state.backend, createReadClient: () => pendingClient })
+	await state.hook.setProps({ actions: state.actions })
+	expect(state.hook.state().comparisonPrice).toBeUndefined()
 })

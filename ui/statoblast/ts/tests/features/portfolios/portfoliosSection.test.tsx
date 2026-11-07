@@ -106,3 +106,30 @@ test('purchase selection uses question text with a full copyable identifier and 
 	expect(lookup?.open).toBe(false)
 	expect(lookup?.querySelector('input')?.value).toBe(`0x${'ab'.repeat(32)}`)
 })
+
+test('a forked origin is announced on its field and stated once beside the deploy actions', async () => {
+	const source = capitalClient()
+	source.setRead('getForkTime', 1n)
+	source.install()
+	const view = await renderIntoDocument(<PortfoliosSection parameters={parameters} enabled environmentKey={0} activeUniverseId={0n} />)
+	lifecycle.trackRendered(view)
+	const form = view.container.querySelector('.portfolio-creation-form')
+	await waitFor(() => expect(form?.textContent).toContain('This universe has forked.'))
+	expect(form?.textContent?.split('This universe has forked.')).toHaveLength(2)
+	const originField = Array.from(form?.querySelectorAll('.field') ?? []).find(field => field.querySelector('label')?.textContent === 'Origin universe ID')
+	expect(originField?.querySelector('input')?.getAttribute('aria-invalid')).toBe('true')
+	expect(originField?.querySelector('[aria-live="polite"]')?.textContent).toContain('This universe has forked.')
+	const reasons = form?.querySelectorAll('.shared-action-reason')
+	expect(reasons).toHaveLength(1)
+	const reason = reasons?.item(0)
+	expect(reason?.textContent).toBe('The origin universe has forked.')
+	const reasonId = reason?.firstElementChild?.id
+	const buttons = ['Deploy admission policy', 'Deploy portfolio'].map(name => Array.from(form?.querySelectorAll('button') ?? []).find(candidate => candidate.textContent === name))
+	for (const button of buttons) {
+		expect(button?.disabled).toBe(true)
+		expect(button?.getAttribute('aria-describedby')).toBe(reasonId ?? null)
+	}
+	const deployButton = buttons[1]
+	if (deployButton === undefined || reason === null || reason === undefined) throw new Error('Missing deploy action')
+	expect(deployButton.compareDocumentPosition(reason) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+})

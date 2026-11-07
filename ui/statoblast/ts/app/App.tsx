@@ -159,6 +159,7 @@ export function App() {
 				notices={
 					<AppStatusNotices
 						errorMessages={errorMessages}
+						isDeploymentRoute={activeRoute === 'deploy'}
 						onRetryReadBackend={() => void retryReadBackend()}
 						readBackendMessage={readBackendMessage}
 						readBackendStatus={readBackendStatus}

@@ -11,8 +11,14 @@ import type { PortfolioSharedForkParameters } from './usePortfolioSharedFork.js'
 import { portfolioAmountOrUndefined, portfolioUnsignedId } from '../lib/draft.js'
 import * as copy from '../../../copy/portfolioPrice.js'
 
-export type PortfolioPriceParameters = { fork: PortfolioForkSnapshot | undefined; bidder?: Address | undefined; actions: PortfolioSharedForkParameters['actions'] }
-export function usePortfolioPrice({ fork, bidder, actions }: PortfolioPriceParameters) {
+export type PortfolioPriceParameters = {
+	fork: PortfolioForkSnapshot | undefined
+	bidder?: Address | undefined
+	actions: PortfolioSharedForkParameters['actions']
+	/** Compared with the proposed price until this branch's feed has accepted one of its own. */
+	referencePrice?: bigint | undefined
+}
+export function usePortfolioPrice({ fork, bidder, actions, referencePrice }: PortfolioPriceParameters) {
 	const backend = getActiveBackend()
 	const priceInput = useSignal('')
 	const wethInput = useSignal('')
@@ -23,6 +29,7 @@ export function usePortfolioPrice({ fork, bidder, actions }: PortfolioPriceParam
 	const sponsor = bidder ?? fork?.owner
 	const identity = fork?.branch === undefined ? undefined : `${fork.portfolio}:${sponsor}:${fork.branch.universeId}`
 	const previous = useRef<{ backend: typeof backend; identity: string }>()
+	const loadedReference = useRef<{ backend: typeof backend; identity: string; price: bigint | undefined }>()
 	useEffect(() => {
 		if (previous.current?.backend === backend && (identity === undefined || previous.current.identity === identity)) return
 		previous.current = identity === undefined ? undefined : { backend, identity }
@@ -49,6 +56,13 @@ export function usePortfolioPrice({ fork, bidder, actions }: PortfolioPriceParam
 	}, [backend, key])
 	const current = loaded.value?.key === key ? loaded.value : undefined
 	const snapshot = current?.snapshot
+	// The branch reloads on every block, so its last loaded reference stands in until the next load instead of the portfolio's price.
+	if (loadedReference.current?.backend !== backend || (identity !== undefined && loadedReference.current.identity !== identity)) loadedReference.current = undefined
+	// `previous` updates after the render that follows a backend change, so a snapshot from the old environment cannot set the new reference.
+	if (identity !== undefined && snapshot !== undefined && previous.current?.backend === backend) {
+		const observation = snapshot.observation
+		loadedReference.current = { backend, identity, price: observation !== undefined && observation.lastSettlementTimestamp !== 0n ? observation.lastPrice : referencePrice }
+	}
 	const reportId = reportInput.value.trim() === '' ? snapshot?.observation?.pendingReportId : portfolioUnsignedId(reportInput.value)
 	const reportKey = `${key}:${snapshot?.blockHash}:${reportId}`
 	useEffect(() => {
@@ -164,6 +178,8 @@ export function usePortfolioPrice({ fork, bidder, actions }: PortfolioPriceParam
 		return fresh
 	}
 	return {
+		proposedPrice: price,
+		comparisonPrice: loadedReference.current?.price,
 		snapshot,
 		report,
 		funding,
