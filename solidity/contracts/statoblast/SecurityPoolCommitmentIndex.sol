@@ -19,7 +19,6 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	uint64 public healthObservationEpoch;
 	uint256 private observedPrice;
 	mapping(uint64 => uint48) private observationTimes;
-	mapping(uint96 => uint64) private healthyMutationEpochs;
 	struct Account {
 		address owner;
 		uint96 batch;
@@ -153,7 +152,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		// Touch first: the latest healthy observation may exist only on an
 		// ancestor. Mutation epochs are independent and must also survive.
 		uint64 observedEpoch = leaf.healthEpoch;
-		uint64 mutationEpoch = healthyMutationEpochs[id];
+		uint64 mutationEpoch = positions[id].healthyMutationEpoch;
 		uint256 price = leaf.price;
 		_detach(0, source.node);
 		leaf.rep -= rep;
@@ -161,7 +160,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		_reinsert(source);
 		receiverId = _create(receiver, 0, rep, commitment, price, 0);
 		nodes[positions[receiverId].node].healthEpoch = observedEpoch;
-		healthyMutationEpochs[receiverId] = mutationEpoch;
+		positions[receiverId].healthyMutationEpoch = mutationEpoch;
 	}
 
 	/// @dev Supports an existing receiver slot without refreshing retirement
@@ -233,7 +232,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		uint256 cursor = positions[id].node;
 		Node storage leaf = nodes[cursor];
 		if (cursor == 0 || leaf.commitment == 0 || leaf.price >= observedPrice) return 0;
-		uint64 epoch = healthyMutationEpochs[id];
+		uint64 epoch = positions[id].healthyMutationEpoch;
 		while (cursor != 0) {
 			Node storage node = nodes[cursor];
 			if (node.retired) return 0;
@@ -247,7 +246,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	/// @dev The controller calls only after an actual healthy mutation at a fresh
 	/// price, or full retirement. A stale-price deposit must not reset distress.
 	function clearLiquidation(uint96 id) external onlyPortfolio {
-		healthyMutationEpochs[id] = healthObservationEpoch;
+		positions[id].healthyMutationEpoch = healthObservationEpoch;
 	}
 
 	/// @dev Remove unbacked nominal K, down to `target`, under exactly the ordinary
@@ -262,7 +261,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		uint256 supported = Math.mulDiv(Math.mulDiv(account.rep, 10_000, multiplier), 1e18, price);
 		result.owner = account.owner;
 		if (supported >= account.commitment) {
-			healthyMutationEpochs[id] = healthObservationEpoch;
+			positions[id].healthyMutationEpoch = healthObservationEpoch;
 			return result;
 		}
 		(, uint256 totalCommitment) = totals();
@@ -295,7 +294,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 				replace(id, account.rep, remaining, maxPrice);
 			}
 		}
-		if (remaining <= supported) healthyMutationEpochs[id] = healthObservationEpoch;
+		if (remaining <= supported) positions[id].healthyMutationEpoch = healthObservationEpoch;
 	}
 
 	function eligibleCommitment(uint256 acceptedPrice) public view returns (uint256) {
@@ -550,8 +549,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		id = ++lastPositionId;
 		uint256 node = ++lastNode;
 		nodes[node] = Node(0, 0, 0, rep, commitment, 0, 0, price, price, id, 0, false, 0, remainingCommitment);
-		positions[id] = Position(owner, batch, node, 0, false, remainingCommitment);
-		healthyMutationEpochs[id] = healthObservationEpoch;
+		positions[id] = Position(owner, batch, node, 0, false, healthObservationEpoch, remainingCommitment);
 		_insert(batch, node);
 	}
 

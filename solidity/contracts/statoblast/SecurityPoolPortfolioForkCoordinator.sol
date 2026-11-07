@@ -81,6 +81,8 @@ contract SecurityPoolPortfolioForkCoordinator {
 		bool migrationPrepared;
 	}
 	struct Branch {
+		SecurityPoolPortfolioAuction auction;
+		uint64 fixedRoot;
 		uint248 parent;
 		uint256 outcome;
 		uint256 chosenBacking;
@@ -91,6 +93,37 @@ contract SecurityPoolPortfolioForkCoordinator {
 		bool started;
 		bool ready;
 	}
+	function auctions(uint248 universeId) external view returns (SecurityPoolPortfolioAuction) {
+		return branchStates[universeId].auction;
+	}
+	function branches(uint248 universeId)
+		external
+		view
+		returns (
+			uint248 parent,
+			uint256 outcome,
+			uint256 chosenBacking,
+			uint256 chosenCommitment,
+			uint256 parentCash,
+			uint256 recoveryAttoRep,
+			bool prepared,
+			bool started,
+			bool ready
+		)
+	{
+		Branch storage branch = branchStates[universeId];
+		return (
+			branch.parent,
+			branch.outcome,
+			branch.chosenBacking,
+			branch.chosenCommitment,
+			branch.parentCash,
+			branch.recoveryAttoRep,
+			branch.prepared,
+			branch.started,
+			branch.ready
+		);
+	}
 	struct Choice {
 		uint256 outcome;
 		bool recorded;
@@ -99,11 +132,9 @@ contract SecurityPoolPortfolioForkCoordinator {
 		uint256 outcome;
 	}
 	mapping(uint248 => Fork) public forks;
-	mapping(uint248 => Branch) public branches;
-	mapping(uint248 => SecurityPoolPortfolioAuction) public auctions;
+	mapping(uint248 => Branch) private branchStates;
 	mapping(uint248 => mapping(address => Choice)) public choices;
 	mapping(uint248 => mapping(uint256 => uint256)) public recoveredQuestionShares;
-	mapping(uint248 => uint64) private fixedRoots;
 	SecurityPoolPersistentMap.Store private fixedTree;
 	FixedOutcome[] private fixedOutcomes;
 
@@ -132,7 +163,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 		clocks[origin] = UniverseClock(0, 0, true, false);
 	}
 	function activateOrigin(uint248 origin) external {
-		require(msg.sender == address(portfolio) && clocks[origin].registered && !branches[origin].prepared, 'Origin activation unavailable');
+		require(msg.sender == address(portfolio) && clocks[origin].registered && !branchStates[origin].prepared, 'Origin activation unavailable');
 		clocks[origin].ready = true;
 	}
 	function isReady(uint248 universeId) external view returns (bool) {
@@ -144,15 +175,15 @@ contract SecurityPoolPortfolioForkCoordinator {
 	function isPriceReportingOpen(uint248 universeId) external view returns (bool) {
 		if (zoltar.getForkTime(universeId) != 0) return false;
 		if (clocks[universeId].ready) return true;
-		Branch storage branch = branches[universeId];
+		Branch storage branch = branchStates[universeId];
 		return branch.started && block.timestamp < zoltar.getForkRecapitalizationDeadline(branch.parent);
 	}
 	/// @notice Reports reserve the maximum winning liability before bids begin.
 	/// These budgets remain fixed until activation, including a delayed closing.
 	function auctionExposure(uint248 universeId) external view returns (uint256 commitment, uint256 rep) {
-		Branch storage branch = branches[universeId];
+		Branch storage branch = branchStates[universeId];
 		if (!branch.started || branch.ready) return (0, 0);
-		SecurityPoolPortfolioAuction auction = auctions[universeId];
+		SecurityPoolPortfolioAuction auction = branch.auction;
 		if (address(auction) == address(0)) return (branch.chosenCommitment, 0);
 		return (branch.chosenCommitment + auction.targetLots() * auction.lotAttoEth(), auction.inventoryAttoRep());
 	}
@@ -184,7 +215,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 	}
 
 	function inheritedFixedOutcome(uint248 universeId, uint256 questionId) external view returns (bool, uint256) {
-		uint256 id = fixedTree.get(fixedRoots[universeId], questionId);
+		uint256 id = fixedTree.get(branchStates[universeId].fixedRoot, questionId);
 		return id == 0 ? (false, uint256(0)) : (true, fixedOutcomes[id].outcome);
 	}
 
@@ -220,7 +251,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 		uint256 commitment = position.commitment;
 		require(rep != 0, 'No pledged fork principal');
 		Fork storage fork = forks[source];
-		Branch storage branch = branches[child];
+		Branch storage branch = branchStates[child];
 		uint256 previousCash = branch.parentCash;
 		branch.chosenBacking += rep;
 		branch.chosenCommitment += commitment;
@@ -237,7 +268,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 
 	function _prepare(uint248 parent, uint256 outcome) private returns (uint248 child) {
 		child = zoltar.getChildUniverseId(parent, outcome);
-		Branch storage branch = branches[child];
+		Branch storage branch = branchStates[child];
 		if (branch.prepared) return child;
 		uint256 anchor = zoltar.getForkRecapitalizationDeadline(parent);
 		require(anchor <= type(uint48).max, 'Fork clock exhausted');
@@ -246,14 +277,14 @@ contract SecurityPoolPortfolioForkCoordinator {
 		branch.parent = parent;
 		branch.outcome = outcome;
 		branch.prepared = true;
-		uint64 root = fixedRoots[parent];
+		uint64 root = branchStates[parent].fixedRoot;
 		(, uint256 questionId, , , ) = zoltar.universes(parent);
 		// A later fork cannot overwrite a question outcome already fixed in an ancestor.
 		if (fixedTree.get(root, questionId) == 0) {
 			fixedOutcomes.push(FixedOutcome(outcome));
 			root = fixedTree.set(root, questionId, fixedOutcomes.length - 1, 0);
 		}
-		fixedRoots[child] = root;
+		branch.fixedRoot = root;
 	}
 
 	/// @notice Prepare custody separately from migration and auction deployment.
@@ -269,7 +300,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 		_start(child);
 	}
 	function _start(uint248 child) private {
-		Branch storage branch = branches[child];
+		Branch storage branch = branchStates[child];
 		if (branch.started) return;
 		require(block.timestamp >= zoltar.getForkChoiceDeadline(branch.parent), 'Fork choices still open');
 		Fork storage fork = forks[branch.parent];
@@ -306,7 +337,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 		uint256 shortfall = fork.cash - branch.parentCash;
 		if (fork.units != 0 && freshInventory != 0 && shortfall >= portfolio.minimumCommitmentAttoEth()) {
 			SecurityPoolPortfolioAuction auction = SecurityPoolPortfolioAuction(portfolio.auctionDeployer().create(address(this), address(portfolio), child, zoltar.getForkRecapitalizationDeadline(branch.parent), freshInventory, shortfall));
-			auctions[child] = auction;
+			branch.auction = auction;
 			token.safeTransfer(address(auction), freshInventory);
 		}
 		IPortfolioForkServices(portfolio.services()).createPremiumChild(branch.parent, child);
@@ -317,14 +348,14 @@ contract SecurityPoolPortfolioForkCoordinator {
 		_finalize(child);
 	}
 	function _finalize(uint248 child) private {
-		Branch storage branch = branches[child];
+		Branch storage branch = branchStates[child];
 		require(branch.prepared, 'Fork branch unknown');
 		if (branch.ready) return;
 		_start(child);
 		// The fixed native response schedule survives missing bids or quotes.
 		require(block.timestamp >= zoltar.getForkRecapitalizationDeadline(branch.parent), 'Fork activation window still open');
 		uint256 raised;
-		SecurityPoolPortfolioAuction auction = auctions[child];
+		SecurityPoolPortfolioAuction auction = branch.auction;
 		if (address(auction) != address(0)) {
 			SecurityPoolUniformPriceAuction.Clearing memory result = auction.finalize();
 			raised = result.raisedAttoEth;
@@ -350,7 +381,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 	/// @notice Resolve only this actual fork, never recursively walk ancestors.
 	function ensureReady(uint248 child) external nonReentrant {
 		if (child == portfolio.originUniverseId()) return;
-		if (!branches[child].prepared) {
+		if (!branchStates[child].prepared) {
 			(, , uint256 outcome, , uint248 parent) = zoltar.universes(child);
 			require(address(zoltar.getRepToken(child)) != address(0), 'Native child not deployed');
 			_freeze(parent);

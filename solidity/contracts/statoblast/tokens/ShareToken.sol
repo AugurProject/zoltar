@@ -32,12 +32,15 @@ contract ShareToken is ERC1155, IShareToken {
 	// cannot let both sender and receiver reproduce the same claim.
 	// Source token ID -> target universe ID -> account -> shares already materialized, in attoShares.
 	mapping(uint256 => mapping(uint248 => mapping(address => uint256))) private migratedShareAmountAttoShares;
-	// Source token ID -> account -> whether its source balance is locked against transfers.
-	mapping(uint256 => mapping(address => bool)) private migratedSourceBalanceLocked;
 	// Recovery credits are independently transferable. Spending a source-backed
 	// right locks its source token; incoming credits alone never lock a recipient.
-	mapping(uint256 => mapping(address => uint256)) private portfolioRecoveryCredits;
-	mapping(uint256 => mapping(address => uint256)) private portfolioRecoverySourceSpent;
+	struct SourceAccount {
+		uint256 recoveryCredits;
+		uint256 recoverySourceSpent;
+		bool balanceLocked;
+	}
+	// Source token ID -> account -> branch-independent recovery and transfer state.
+	mapping(uint256 => mapping(address => SourceAccount)) private sourceAccounts;
 	mapping(uint248 => mapping(address => uint256)) public recoveredCompleteSetShares;
 	event PortfolioRecoveryRightsTransferred(uint248 indexed universeId, address indexed from, address indexed to, uint256[3] amountsAttoShares);
 	event PortfolioRecoveryRightsConsumed(uint248 indexed universeId, address indexed holder, uint256 amountAttoShares, uint256 cumulativeAttoShares);
@@ -229,7 +232,7 @@ contract ShareToken is ERC1155, IShareToken {
 			uint256 amountAttoShares = fromIdBalanceAttoShares - alreadyMigratedAttoShares;
 			if (amountAttoShares == 0) continue;
 			migratedShareAmountAttoShares[fromId][targetUniverseId][msg.sender] = fromIdBalanceAttoShares;
-			migratedSourceBalanceLocked[fromId][msg.sender] = true;
+			sourceAccounts[fromId][msg.sender].balanceLocked = true;
 			migratedAnyShares = true;
 			uint256 toId = getChildId(fromId, targetUniverseId);
 			_mint(msg.sender, toId, amountAttoShares);
@@ -245,8 +248,8 @@ contract ShareToken is ERC1155, IShareToken {
 			uint256 id = TokenId.getTokenId(sourceUniverse, BinaryOutcomes.BinaryOutcome(outcome));
 			amountsAttoShares[outcome] =
 				balanceOf(holder, id) -
-				portfolioRecoverySourceSpent[id][holder] +
-				portfolioRecoveryCredits[id][holder];
+				sourceAccounts[id][holder].recoverySourceSpent +
+				sourceAccounts[id][holder].recoveryCredits;
 		}
 	}
 
@@ -275,7 +278,7 @@ contract ShareToken is ERC1155, IShareToken {
 			transferred = true;
 			uint256 id = TokenId.getTokenId(sourceUniverse, BinaryOutcomes.BinaryOutcome(outcome));
 			_spendPortfolioRecoveryRights(id, msg.sender, amount, 'Insufficient recovery rights');
-			portfolioRecoveryCredits[id][recipient] += amount;
+			sourceAccounts[id][recipient].recoveryCredits += amount;
 		}
 		require(transferred, 'Recovery transfer amount is zero');
 		emit PortfolioRecoveryRightsTransferred(sourceUniverse, msg.sender, recipient, amountsAttoShares);
@@ -289,16 +292,17 @@ contract ShareToken is ERC1155, IShareToken {
 	}
 
 	function _spendPortfolioRecoveryRights(uint256 id, address holder, uint256 amount, string memory insufficientReason) private {
-		uint256 credits = portfolioRecoveryCredits[id][holder];
+		SourceAccount storage account = sourceAccounts[id][holder];
+		uint256 credits = account.recoveryCredits;
 		if (amount <= credits) {
-			portfolioRecoveryCredits[id][holder] = credits - amount;
+			account.recoveryCredits = credits - amount;
 			return;
 		}
-		uint256 spent = portfolioRecoverySourceSpent[id][holder] + (amount - credits);
+		uint256 spent = account.recoverySourceSpent + (amount - credits);
 		require(spent <= balanceOf(holder, id), insufficientReason);
-		portfolioRecoveryCredits[id][holder] = 0;
-		portfolioRecoverySourceSpent[id][holder] = spent;
-		migratedSourceBalanceLocked[id][holder] = true;
+		account.recoveryCredits = 0;
+		account.recoverySourceSpent = spent;
+		account.balanceLocked = true;
 	}
 
 	/// @notice Consume one independent recovery right per outcome, preserving every branch entitlement.
@@ -317,7 +321,7 @@ contract ShareToken is ERC1155, IShareToken {
 	}
 
 	function _burn(address account, uint256 id, uint256 value) internal override {
-		uint256 spent = portfolioRecoverySourceSpent[id][account];
+		uint256 spent = sourceAccounts[id][account].recoverySourceSpent;
 		if (spent != 0)
 			require(value <= balanceOf(account, id) - spent, 'ShareToken source recovery rights already separated');
 		super._burn(account, id, value);
@@ -325,7 +329,7 @@ contract ShareToken is ERC1155, IShareToken {
 
 	function _burnBatch(address account, uint256[] memory ids, uint256[] memory values) internal override {
 		for (uint256 i; i < ids.length; i++) {
-			uint256 spent = portfolioRecoverySourceSpent[ids[i]][account];
+			uint256 spent = sourceAccounts[ids[i]][account].recoverySourceSpent;
 			if (spent != 0)
 				require(values[i] <= balanceOf(account, ids[i]) - spent, 'ShareToken source recovery rights already separated');
 		}
@@ -333,13 +337,13 @@ contract ShareToken is ERC1155, IShareToken {
 	}
 
 	function _internalTransferFrom(address from, address to, uint256 id, uint256 value, bytes memory data) internal override {
-		require(!migratedSourceBalanceLocked[id][from], 'ShareToken migrated source balance is locked');
+		require(!sourceAccounts[id][from].balanceLocked, 'ShareToken migrated source balance is locked');
 		super._internalTransferFrom(from, to, id, value, data);
 	}
 
 	function _internalBatchTransferFrom(address from, address to, uint256[] memory ids, uint256[] memory values, bytes memory data) internal override {
 		for (uint256 i = 0; i < ids.length; i++) {
-			require(!migratedSourceBalanceLocked[ids[i]][from], 'ShareToken migrated source balance is locked');
+			require(!sourceAccounts[ids[i]][from].balanceLocked, 'ShareToken migrated source balance is locked');
 		}
 		super._internalBatchTransferFrom(from, to, ids, values, data);
 	}

@@ -18,8 +18,6 @@ abstract contract SecurityPoolCapitalState {
 	uint256 public conservativePrice;
 	uint256 public liquidationPrice;
 	uint256 public acceptedPriceEpoch;
-	mapping(address => uint256) public fundingPriceFloor;
-	mapping(address => uint256) public fundingPriceEpoch;
 	uint48 public priceValidUntil;
 	uint256 public demandAttoEth;
 	uint256 public totalFreeAttoRep;
@@ -45,8 +43,26 @@ abstract contract SecurityPoolCapitalState {
 		uint96 batch;
 		uint256 remainingCommitment;
 	}
-	mapping(address => Owner) internal owners;
-	mapping(address => bool) public exported;
+	struct FundingPrice {
+		uint256 floor;
+		uint256 epoch;
+	}
+	struct OwnerState {
+		Owner account;
+		FundingPrice fundingPrice;
+		bool exported;
+	}
+	mapping(address => OwnerState) internal owners;
+
+	function fundingPriceFloor(address owner) public view returns (uint256) {
+		return owners[owner].fundingPrice.floor;
+	}
+	function fundingPriceEpoch(address owner) public view returns (uint256) {
+		return owners[owner].fundingPrice.epoch;
+	}
+	function exported(address owner) public view returns (bool) {
+		return owners[owner].exported;
+	}
 
 	struct AuctionCohort {
 		ISecurityPoolAuctionCapital adapter;
@@ -71,7 +87,7 @@ abstract contract SecurityPoolCapitalState {
 
 	function _settleOwner(address owner) internal {
 		require(owner != address(auctionCohort.adapter), 'Materialize an individual auction vault');
-		Owner storage account = owners[owner];
+		Owner storage account = owners[owner].account;
 		uint96 id = account.positionId;
 		if (id == 0) return;
 		(uint256 rep, uint256 ethFees, uint256 repFees, uint256 commitment) = commitmentIndex.claim(id);

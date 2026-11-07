@@ -97,7 +97,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	}
 
 	function storedOwnerAccount(address owner) external view returns (Owner memory) {
-		return owners[owner];
+		return owners[owner].account;
 	}
 	function ownerAccount(address owner) external view returns (Owner memory) {
 		return auctionDelegate.previewOwner(owner);
@@ -142,8 +142,8 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	/// canonical report covers the enlarged portfolio. No owner scan is needed.
 	function ownerConservativePrice(address owner) public view returns (uint256) {
 		return
-			fundingPriceEpoch[owner] == acceptedPriceEpoch
-				? Math.max(conservativePrice, fundingPriceFloor[owner])
+			owners[owner].fundingPrice.epoch == acceptedPriceEpoch
+				? Math.max(conservativePrice, owners[owner].fundingPrice.floor)
 				: conservativePrice;
 	}
 	function _requiredRep(uint256 commitment, uint256 health, uint256 price) private view returns (uint256) {
@@ -172,7 +172,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		require(owner == msg.sender && owner != forkAuthority && amount > 0, 'Invalid capital deposit');
 		_checkpoint();
 		_settleOwner(owner);
-		Owner storage account = owners[owner];
+		Owner storage account = owners[owner].account;
 		if (account.positionId == 0) {
 			account.freeAttoRep += amount;
 			totalFreeAttoRep += amount;
@@ -198,7 +198,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		require(targetHealthFactorBps >= BPS, 'Health below protocol floor');
 		_checkpoint();
 		_settleOwner(msg.sender);
-		Owner storage owner = owners[msg.sender];
+		Owner storage owner = owners[msg.sender].account;
 		if (owner.positionId != 0 && targetHealthFactorBps > _target(owner)) {
 			_requireFresh();
 			SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(owner.positionId);
@@ -228,7 +228,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		_checkpoint();
 		_serveRetirement(0);
 		_settleOwner(msg.sender);
-		id = owners[msg.sender].positionId;
+		id = owners[msg.sender].account.positionId;
 		SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(id);
 		bool pending = position.batch != 0;
 		require(!pending || commitment == position.remainingCommitment, 'Retirement pending');
@@ -361,7 +361,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		SecurityPoolCommitmentIndex.Cure memory result = commitmentIndex.cure(id, liquidationPrice, securityMultiplierBps, minimumCommitmentAttoEth, demandAttoEth, target);
 		removed = result.removed;
 		if (removed != 0) {
-			owners[result.owner].freeAttoRep += result.freedRep;
+			owners[result.owner].account.freeAttoRep += result.freedRep;
 			totalFreeAttoRep += result.freedRep;
 			emit CommitmentCured(id, removed);
 		}
@@ -391,7 +391,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		_cure(id, 0);
 		(SecurityPoolCommitmentIndex.Account memory source, uint256 award, uint256 debit) = commitmentIndex.takeoverQuote(id, msg.sender, commitment, minimumCommitmentAttoEth, minimumAward, liquidationPrice);
 		_settleOwner(msg.sender);
-		Owner storage receiver = owners[msg.sender];
+		Owner storage receiver = owners[msg.sender].account;
 		if (enforceBounds) {
 			require(acceptedPriceEpoch == bounds.expectedAcceptedPriceEpoch, 'Takeover price epoch changed');
 			require(_target(receiver) == bounds.expectedTargetHealthFactorBps, 'Takeover owner target changed');
@@ -433,7 +433,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		_clearHealthyLiquidation(id, remainingK, maximumHealthyPrice(remainingRep, remainingK));
 		receiver.freeAttoRep -= ownRep;
 		totalFreeAttoRep -= ownRep;
-		owners[source.owner].freeAttoRep += debit - award;
+		owners[source.owner].account.freeAttoRep += debit - award;
 		totalFreeAttoRep += debit - award;
 		emit CommitmentTakenOver(id, receiverId, commitment, award);
 	}
