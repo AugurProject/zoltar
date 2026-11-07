@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { type Address } from '@zoltar/core-shared/evm/ethereum'
+import { encodeFunctionData, isHex, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
@@ -13,8 +13,8 @@ import {
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	Zoltar_Zoltar as zoltarArtifact,
 } from '../../types/contractArtifact'
-import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
-import { DAY } from '../../testSupport/simulator/utils/constants'
+import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
+import { DAY, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { approveToken, getChildUniverseId, getERC20Balance } from '../../testSupport/simulator/utils/utilities'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { addRepToMigrationBalance, splitMigrationRep, deployChild, forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
@@ -143,7 +143,13 @@ describe('Statoblast: portfolio namespaces and own-fork claims', () => {
 		expect(await owner.readContract({ abi: shareArtifact.abi, address: token, functionName: 'canonicalPoolByUniverse', args: [universe] })).toBe(native)
 	})
 
-	test.each([false, true])('own-fork reporter payouts conserve escrow in either claim order (reverse: %s)', async reverse => {
+	const payoutCases = [false, true].flatMap(reverse => [
+		{ reverse, sameBlock: false, migrationDivisor: 0n },
+		{ reverse, sameBlock: true, migrationDivisor: 0n },
+		{ reverse, sameBlock: true, migrationDivisor: 2n },
+		{ reverse, sameBlock: true, migrationDivisor: 1n },
+	])
+	test.each(payoutCases)('own-fork reporter payouts conserve escrow (reverse $reverse, same block $sameBlock, migration divisor $migrationDivisor)', async ({ reverse, sameBlock, migrationDivisor }) => {
 		const owner = fixture.owner()
 		const other = fixture.other()
 		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
@@ -155,9 +161,43 @@ describe('Statoblast: portfolio namespaces and own-fork claims', () => {
 			await approveToken(sender, getRepTokenAddress(fixture.base.genesisUniverse), pool())
 			await writeContractAndWait(sender, () => sender.writeContract({ abi: poolArtifact.abi, address: pool(), functionName: 'depositWalletRepToEscalationGame', args: [1, amount] }))
 		}
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: pool(), functionName: 'depositWalletRepToEscalationGame', args: [2, threshold] }))
+		if (sameBlock) {
+			await fixture.base.mockWindow.requestRaw({ method: 'anvil_setAutomine', params: [false] })
+			try {
+				const submit = async (to: Address, data: `0x${string}`): Promise<Hash> => {
+					const hash = await fixture.base.mockWindow.requestRaw({ method: 'eth_sendTransaction', params: [{ from: owner.account.address, to, data, gas: '0x7a1200', gasPrice: '0x0' }] })
+					if (typeof hash !== 'string' || !isHex(hash, { strict: true }) || hash.length !== 66) throw new Error('Anvil returned an invalid transaction hash')
+					return `0x${hash.slice(2)}`
+				}
+				const deposit = await submit(pool(), encodeFunctionData({ abi: poolArtifact.abi, functionName: 'depositWalletRepToEscalationGame', args: [2, threshold] }))
+				const fork = await submit(forker().address, encodeFunctionData({ abi: forkerArtifact.abi, functionName: 'forkZoltarWithOwnEscalationGame', args: [pool()] }))
+				await fixture.base.mockWindow.requestRaw({ method: 'evm_mine', params: [] })
+				const depositReceipt = await owner.getTransactionReceipt({ hash: deposit })
+				const forkReceipt = await owner.getTransactionReceipt({ hash: fork })
+				expect(depositReceipt.status).toBe('success')
+				expect(forkReceipt.status).toBe('success')
+				expect(depositReceipt.blockHash).toBe(forkReceipt.blockHash)
+			} finally {
+				await fixture.base.mockWindow.requestRaw({ method: 'anvil_setAutomine', params: [true] })
+			}
+		} else {
+			await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: pool(), functionName: 'depositWalletRepToEscalationGame', args: [2, threshold] }))
+			await writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName: 'forkZoltarWithOwnEscalationGame', args: [pool()] }))
+		}
 		const source = await owner.readContract({ abi: poolArtifact.abi, address: pool(), functionName: 'escalationGame' })
-		await writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName: 'forkZoltarWithOwnEscalationGame', args: [pool()] }))
+		const forkTime = (await getUniverseData(owner, fixture.base.genesisUniverse)).forkTime
+		const completion = await owner.readContract({ abi: gameArtifact.abi, address: source, functionName: 'getEscalationGameEndDate' })
+		expect(forkTime === completion).toBe(sameBlock)
+		if (migrationDivisor !== 0n) {
+			for (const account of TEST_ADDRESSES) {
+				const sender = createWriteClient(fixture.base.mockWindow, account)
+				const amount = (await getERC20Balance(owner, getRepTokenAddress(fixture.base.genesisUniverse), sender.account.address)) / migrationDivisor
+				if (amount === 0n) continue
+				await approveToken(sender, getRepTokenAddress(fixture.base.genesisUniverse), getZoltarAddress())
+				await addRepToMigrationBalance(sender, fixture.base.genesisUniverse, amount)
+			}
+			if (migrationDivisor === 1n) expect(await owner.readContract({ abi: zoltarArtifact.abi, address: getZoltarAddress(), functionName: 'getForkThresholdAttoRep', args: [fixture.base.genesisUniverse] })).toBeLessThan(threshold)
+		}
 		const { child, childPool } = await activate(1)
 		const childGame = await owner.readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'escalationGame' })
 		const reporters = await owner.readContract({ ...portfolio(), functionName: 'reporterLedger', args: [child] })
