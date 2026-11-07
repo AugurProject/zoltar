@@ -16,7 +16,7 @@ export type UiScreenshotStep =
 	/** Click the visible, enabled control whose label or accessible name equals `click`; `nth` picks among duplicates, and -1 picks the last. */
 	| { readonly click: string; readonly nth?: number }
 	/** Replace the value of the input labelled `fill`. */
-	| { readonly fill: string; readonly value: string }
+	| { readonly fill: string; readonly value: string | { readonly from: 'simulationSecurityPool' } }
 	/** Wait until the page text contains the value. */
 	| { readonly waitForText: string }
 	/** Wait until the page text no longer contains the value, for example a loading indicator. */

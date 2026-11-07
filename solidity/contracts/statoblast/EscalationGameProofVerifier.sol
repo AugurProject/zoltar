@@ -54,6 +54,15 @@ contract EscalationGameProofVerifier {
 			computeAllocatedWinningWithdrawal(depositAmountAttoRep, depositAmountAttoRep, cumulativeAmountAttoRep, bindingCapitalAttoRep, winningOutcomeBalanceAttoRep, actualForkThresholdAttoRep, nonDecisionThresholdAttoRep);
 	}
 
+	// Ordinary claims partition one immutable cumulative payout curve. The
+	// differences telescope even when a reward window or haircut rounds down.
+	function computeOrdinaryWinningWithdrawal(uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep, uint256 bindingCapitalAttoRep, uint256 winningOutcomeBalanceAttoRep, uint256 actualForkThresholdAttoRep, uint256 nonDecisionThresholdAttoRep) external pure returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
+		uint256 start = cumulativeAmountAttoRep - depositAmountAttoRep;
+		(uint256 payoutEnd, uint256 burnEnd) = computeAllocatedWinningWithdrawal(cumulativeAmountAttoRep, cumulativeAmountAttoRep, cumulativeAmountAttoRep, bindingCapitalAttoRep, winningOutcomeBalanceAttoRep, actualForkThresholdAttoRep, nonDecisionThresholdAttoRep);
+		(uint256 payoutStart, uint256 burnStart) = computeAllocatedWinningWithdrawal(start, start, start, bindingCapitalAttoRep, winningOutcomeBalanceAttoRep, actualForkThresholdAttoRep, nonDecisionThresholdAttoRep);
+		return (payoutEnd - payoutStart, burnEnd - burnStart);
+	}
+
 	function computeAllocatedWinningWithdrawal(uint256 principalAttoRep, uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep, uint256 bindingCapitalAttoRep, uint256 winningOutcomeBalanceAttoRep, uint256 actualForkThresholdAttoRep, uint256 nonDecisionThresholdAttoRep) public pure returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
 		uint256 depositStartAttoRep = cumulativeAmountAttoRep - depositAmountAttoRep;
 		uint256 rewardEligibleCapAttoRep = bindingCapitalAttoRep + bindingCapitalAttoRep / EXCESS_REWARD_WINDOW_DIVISOR;

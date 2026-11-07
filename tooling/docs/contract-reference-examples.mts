@@ -1,5 +1,5 @@
 import { escapeHtml, headingId, renderRichText } from './contract-reference-rich-text.mts'
-import { annualizedFeePercent, auctionRules, computeWinningWithdrawal, escalationFinalDay, escalationPayoutExample, escalationRules, formatRep, formatUnderscored, liquidationRules, retentionRules } from './contract-reference-rules.mts'
+import { computeWinningWithdrawal, escalationFinalDay, escalationPayoutExample, escalationRules, formatRep } from './contract-reference-rules.mts'
 
 // Exact accounting examples and formulas belong to the contract that enforces them. Explanation pages
 // keep the qualitative rule and link here. Every number below is derived from the rules module, which
@@ -15,7 +15,6 @@ const paragraph = (text: string): AccountingExampleBlock => ({ kind: 'paragraph'
 const list = (...items: string[]): AccountingExampleBlock => ({ kind: 'list', items })
 // mathml is the structured MathML body so the responsive runtime can wrap and compact it.
 const equation = (id: string, label: string, source: string, mathml: string): AccountingExampleBlock => ({ id, kind: 'equation', label, mathml, source })
-const percent = (value: number): string => `${value.toFixed(1)}%`
 
 const activationDay = escalationRules.activationDays.toString()
 const finalDay = escalationFinalDay.toString()
@@ -69,79 +68,7 @@ const accountingExamplesByContract: ReadonlyMap<string, readonly AccountingExamp
 			},
 		],
 	],
-	[
-		'SecurityPool',
-		[
-			{
-				heading: 'Retention rate and annualized fee',
-				blocks: [
-					paragraph(
-						`\`SecurityPoolUtils.calculateRetentionRate\` returns a per-second retention factor scaled by \`PRICE_PRECISION\` (\`1e18\`). It equals \`MAX_RETENTION_RATE\` at zero utilization, declines linearly until utilization reaches \`RETENTION_RATE_DIP\` (${retentionRules.dipUtilizationPercent}% of minting capacity, which is total underwriting commitments outside an escalation game), and stays at \`MIN_RETENTION_RATE\` above that. Zero minting capacity selects \`MAX_RETENTION_RATE\`.`,
-					),
-					list(
-						`\`MAX_RETENTION_RATE = ${formatUnderscored(retentionRules.maxRetentionRate)}\`, about a ${percent(annualizedFeePercent(retentionRules.maxRetentionRate))} yearly fee.`,
-						`\`MIN_RETENTION_RATE = ${formatUnderscored(retentionRules.minRetentionRate)}\`, about a ${percent(annualizedFeePercent(retentionRules.minRetentionRate))} yearly fee.`,
-					),
-					paragraph('Clients annualize a retention rate for display as follows; the contract never computes this value.'),
-					equation(
-						'eq-securitypool-annual-fee',
-						'annual fee equals one minus the retention rate divided by price precision, raised to the number of seconds in a year',
-						'annualFee = 1 - (retentionRate / PRICE_PRECISION)^SECONDS_PER_YEAR',
-						'<mrow><mi>annualFee</mi><mo>=</mo><mn>1</mn><mo>−</mo><msup><mrow><mo>(</mo><mfrac><mi>retentionRate</mi><mi>PRICE_PRECISION</mi></mfrac><mo>)</mo></mrow><mi>SECONDS_PER_YEAR</mi></msup></mrow>',
-					),
-				],
-			},
-			{
-				heading: 'Liquidation transfer rounding',
-				blocks: [
-					paragraph(
-						`A liquidation request bounds the underwriting commitment transferred, capped by the target’s underwriting commitment. The nominal REP award includes \`LIQUIDATION_REP_BONUS_BPS\` = ${liquidationRules.repBonusBps} (${formatBps(liquidationRules.repBonusBps)}). REP and backing units round upward before the award is capped at available units. The receiver is checked against its entire resulting underwriting commitment and backing-unit position. Total underwriting commitments remain constant, including at zero settlement collateral. Target claims and earned fees remain with their owners.`,
-					),
-					paragraph(
-						'No liquidation writes off a commitment. An untransferred residual stays visible and continues earning fees. A fully backed receiver can accept the target’s entire underwriting commitment even when the nominal REP award is not fully funded. Partial transfers reserve available target REP for the minimum balance, and the remaining commitment must be zero or meet the commitment floor.',
-					),
-				],
-			},
-		],
-	],
-	[
-		'LiquidationApprovalRegistry',
-		[
-			{
-				heading: 'Minimum post-liquidation health factor',
-				blocks: [
-					paragraph(
-						`\`minPostLiquidationHealthFactorBps\` is applied to both vault-health branches at execution. \`${formatUnderscored(liquidationRules.bpsDenominator).replace('_', ',')}\` (\`BPS_DENOMINATOR\`) means exactly the protocol minimum; a larger value multiplies both REP requirements by that ratio, so \`12,000\` requires 1.2 times each requirement, rounded up, after the receiver accepts the position. The factor is checked against live post-liquidation state, not the queue-time preview.`,
-					),
-				],
-			},
-		],
-	],
-	[
-		'UniformPriceDualCapBatchAuction',
-		[
-			{
-				heading: 'Tick pricing',
-				blocks: [
-					paragraph(
-						`Bids are placed at integer ticks between \`MIN_TICK\` (\`${auctionRules.minTick}\`) and \`MAX_TICK\` (\`${auctionRules.maxTick}\`). \`tickToPrice(0)\` is \`PRICE_PRECISION\`, one ETH per REP. Each tick above zero multiplies the price by ${auctionRules.tickBase} through a binary-exponentiation table of \`_powerOf1Point0001\`; negative ticks take the reciprocal. The price at tick \`t\` is therefore approximately:`,
-					),
-					equation(
-						'eq-auction-tick-price',
-						`price at tick t is approximately ${auctionRules.tickBase} to the power t ETH per REP`,
-						`price(t) ≈ ${auctionRules.tickBase}^t ETH/REP`,
-						`<mrow><mi>price</mi><mo>(</mo><mi>t</mi><mo>)</mo><mo>≈</mo><msup><mn>${auctionRules.tickBase}</mn><mi>t</mi></msup><mspace width="0.3em"></mspace><mtext>ETH per REP</mtext></mrow>`,
-					),
-					paragraph('A tick whose price rounds to zero is rejected. Within one tick, the uniform-clearing branch fills bids first in, first out, so earlier same-tick bids are consumed before later ones.'),
-				],
-			},
-		],
-	],
 ])
-
-function formatBps(bps: bigint): string {
-	return `${(Number(bps) / 100).toString()}%`
-}
 
 export function renderAccountingExamples(contractName: string): string {
 	const examples = accountingExamplesByContract.get(contractName)

@@ -1,7 +1,6 @@
 import { expect, test } from 'bun:test'
 import { abiForKind } from '../../src/abi-catalog.ts'
 import { decodeFunctionResult, encodeAbiParameters, encodeFunctionData, getAddress, toFunctionSelector } from '../../src/ethereum.ts'
-import { vaultRisk } from '../../src/operations.ts'
 import { normalizeSnapshotTarget, type StateRead, sampleEntityStateWithRead } from '../../src/snapshots.ts'
 
 const pool = getAddress('0x1111111111111111111111111111111111111111')
@@ -10,19 +9,19 @@ const coordinator = getAddress('0x3333333333333333333333333333333333333333')
 
 for (const [entityType, contractKind] of [
 	['pool', 'securityPool'],
-	['vault', 'securityPool'],
-	['auction', 'truthAuction'],
+	['auction', 'securityPoolUniformPriceAuction'],
 	['escalation', 'escalationGame'],
 ] as const) {
 	test(`${entityType} snapshot reads match the compiled contract interfaces`, async () => {
 		const mismatches: string[] = []
 		const outputValues: Readonly<Record<string, readonly unknown[]>> = {
-			securityVaults: [200n, 100n, 5n, 7n],
 			getOutcomeBalancesAttoRep: [[1n, 2n, 3n]],
-			computeClearing: [true, -2n, 400n, 4n],
+			clearing: [2n, 200n, 400n, 800n, 0n, 2n, 100n, 100n, 100n, true],
+			initialized: [true],
 			awaitingForkContinuation: [false],
 			isEscalationResolved: [false],
 			isPriceValid: [false],
+			priceFeed: [coordinator],
 			finalized: [false],
 		}
 		const read: StateRead = async (address, abi, functionName, args = []) => {
@@ -47,42 +46,6 @@ for (const [entityType, contractKind] of [
 	})
 }
 
-test('samples vault accounting without a stored target health factor and feeds risk assessment', async () => {
-	const values: Readonly<Record<string, unknown>> = {
-		securityVaults: [200n, 100n, 5n, 7n],
-		backingUnitsToAttoRep: 200n,
-		getVaultOpenInterestAttoEth: 10n ** 18n,
-		vaultBadDebtAttoEth: 0n,
-		statoblastSecurityMultiplierBps: 15000n,
-		disputeStakedRepByVaultAttoRep: 0n,
-	}
-	const read: StateRead = async (_address, _abi, name) => {
-		const value = values[name]
-		if (value === undefined) throw new Error(`Unsupported pool operation: ${name}`)
-		return value
-	}
-	const snapshot = await sampleEntityStateWithRead({ entityType: 'vault', entityIdentity: vault, address: vault, poolAddress: pool, escalationAddress: coordinator }, read)
-	expect(snapshot.readStatus).toBe('success')
-	expect(snapshot.readResult).toEqual({
-		poolAddress: pool,
-		vaultAddress: vault,
-		repBackingUnits: '200',
-		poolHeldBackingAttoRep: '200',
-		underwritingLimitAttoEth: '100',
-		claimableFeesAttoEth: '5',
-		feeIndex: '7',
-		openInterestAttoEth: String(10n ** 18n),
-		badDebtAttoEth: '0',
-		securityMultiplierBps: '15000',
-		disputeStakedAttoRep: '0',
-	})
-	const state = snapshot.readResult
-	if (state === undefined) throw new Error('Missing vault snapshot')
-	expect(
-		vaultRisk({ poolHeldBackingAttoRep: state['poolHeldBackingAttoRep'], disputeStakedAttoRep: state['disputeStakedAttoRep'], openInterestAttoEth: state['openInterestAttoEth'], repPerEth1e18: '100', securityMultiplierBps: String(state['securityMultiplierBps']), badDebtAttoEth: state['badDebtAttoEth'] }),
-	).toMatchObject({ protocolState: 'healthy', healthFactorBps: '13333' })
-})
-
 test('normalizes chain snapshot targets and rejects unsupported entity types', () => {
 	expect(
 		normalizeSnapshotTarget({
@@ -94,22 +57,24 @@ test('normalizes chain snapshot targets and rejects unsupported entity types', (
 			escalation_address: null,
 		}),
 	).toEqual({ entityType: 'pool', entityIdentity: pool.toLowerCase(), address: pool })
+	expect(() => normalizeSnapshotTarget({ entity_type: 'vault', entity_identity: 'x', address: pool })).toThrow('Unsupported snapshot entity type')
 	expect(() => normalizeSnapshotTarget({ entity_type: 'unknown', entity_identity: 'x', address: pool })).toThrow('Unsupported snapshot entity type')
 })
 
 test('samples a complete auction state through tagged reads', async () => {
 	const values: Readonly<Record<string, unknown>> = {
-		auctionStarted: 100n,
-		maxAttoRepBeingSold: 1_000n,
-		attoEthRaiseCap: 500n,
-		minBidSizeAttoEth: 1n,
-		finalized: false,
-		clearingTick: -2n,
-		ethFilledAtClearingAttoEth: 4n,
-		attoEthRaised: 400n,
-		totalAttoRepPurchased: 800n,
-		activeTickCount: 3n,
-		computeClearing: [true, -2n, 400n, 4n],
+		opensAt: 100n,
+		closesAt: 200n,
+		lotAttoEth: 2n,
+		targetLots: 250n,
+		inventoryAttoRep: 1_000n,
+		maximumBidAttoRepPerLot: 100n,
+		repGrid: 1n,
+		depositedAttoEth: 400n,
+		bidCount: 3n,
+		initialized: true,
+		finalized: true,
+		clearing: [2n, 200n, 400n, 800n, 0n, 2n, 100n, 100n, 100n, true],
 	}
 	const read: StateRead = async (_address, _abi, functionName) => {
 		const value = values[functionName]
@@ -121,9 +86,9 @@ test('samples a complete auction state through tagged reads', async () => {
 		readStatus: 'success',
 		sourceMethod: 'augurscan.auction-state.v1',
 		readResult: {
-			auctionStarted: '100',
-			clearingTick: '-2',
-			indicativeClearing: { hitCap: true, accumulatedBidAttoEth: String(400) },
+			opensAt: '100',
+			closesAt: '200',
+			clearing: { attoRepPerLot: '2', filledLots: '200', raisedAttoEth: '400', soldAttoRep: '800', raiseLimitReached: true },
 		},
 	})
 })
@@ -184,4 +149,17 @@ test('unavailable claim reconstruction preserves the tagged basic escalation sta
 	const snapshot = await sampleEntityStateWithRead({ entityType: 'escalation', entityIdentity: pool, address: pool }, read)
 	expect(snapshot.readStatus).toBe('success')
 	expect(snapshot.readResult).toMatchObject({ outcomeBalancesAttoRep: ['1', '2', '3'], claimEvidence: { status: 'unavailable', reason: 'Claim ancestry unavailable' } })
+})
+
+test('attributes a member ledger snapshot to its shared pool price feed', async () => {
+	const feed = getAddress('0x4444444444444444444444444444444444444444')
+	const read: StateRead = async (_address, _abi, name) => {
+		if (name === 'priceFeed') return feed
+		if (name === 'isPriceValid') return true
+		if (name === 'awaitingForkContinuation' || name === 'isEscalationResolved') return false
+		return 1n
+	}
+	const snapshot = await sampleEntityStateWithRead({ entityType: 'pool', entityIdentity: pool, address: pool, coordinatorAddress: coordinator }, read)
+	expect(snapshot.readStatus).toBe('success')
+	expect(snapshot.readResult?.['price']).toEqual({ repPerEth1e18: '1', settlementTimestamp: '1', protocolValid: true, sourceContract: feed.toLowerCase() })
 })

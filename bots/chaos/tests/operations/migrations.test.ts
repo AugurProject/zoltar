@@ -1,15 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData, encodeAbiParameters, toHex } from '@zoltar/bot-shared/ethereum'
-import { securityPoolForkerAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
-import { stepReceiptEvidenceDisposition } from '../../src/execution/receipt-validation.ts'
-import { canonicalLifecyclePresence, evaluateOperationCatalog, reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
-import { eligibleOperationPlans, urgentOperationPlans } from '../support/operation-plans.ts'
-import type { OperationEvidence } from '../../src/operations/types.ts'
+import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
+import { zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
+import { evaluateOperationCatalog, reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
+import { eligibleOperationPlans } from '../support/operation-plans.ts'
 import { deriveChildUniverseId } from '../support/universe.ts'
-import { beginLifecycleObligation, completeLifecycleObligation, obligationForPlan, synchronizeLifecycleObligations, waitForCanonicalLifecycleConfirmation } from '../../src/runtime/obligations.ts'
-import { createDurableWorkflow, markWorkflowStepConfirmed, markWorkflowStepWaitingCanonical } from '../../src/runtime/workflows.ts'
-import type { DurableObligation, DurableObligationTombstone, DurableWorkflow } from '../../src/state/operator-state.ts'
-import { hash, snapshotFixture } from './fixture.ts'
+import { snapshotFixture } from './fixture.ts'
 
 const options = {
 	allowHighRisk: true,
@@ -39,7 +34,6 @@ function forkedSnapshot() {
 	universe.forkTime = '1999999000'
 	universe.forkQuestionId = question.id
 	pool.systemState = 1
-	pool.forkActivationTime = '1999999000'
 	return { pool, snapshot, universe }
 }
 
@@ -91,161 +85,5 @@ describe('indexed REP migration operations', () => {
 		expect(blocked?.plan).toBeUndefined()
 		universe.migrationRepSplitProgressByOutcome['0'] = '101'
 		expect(() => eligibleOperationPlans(snapshot, options)).toThrow('migration progress exceeds wallet credit')
-	})
-
-	test('enumerates singleton pool-held REP obligations from cumulative progress with an exact private deadline', () => {
-		const { pool, snapshot } = forkedSnapshot()
-		pool.forkRepMigrationTargetAttoRep = '100'
-		pool.forkRepMigrationProgressByOutcome = {}
-		const allRoutes = urgentOperationPlans(snapshot, options).filter(plan => plan.definitionId === 'statoblast.fork.migrate-rep')
-		expect(allRoutes.map(plan => plan.metadata['outcome']).sort()).toEqual(['0', '1', '2'])
-		expect(new Set(allRoutes.map(plan => plan.id)).size).toBe(3)
-		for (const route of allRoutes) {
-			const routeStep = route.steps[0]
-			if (routeStep === undefined) throw new Error('Expected a singleton pool migration step')
-			const decoded = decodeFunctionData({ abi: securityPoolForkerAbi, data: routeStep.data })
-			expect(decoded.args?.[1]).toHaveLength(1)
-		}
-		pool.forkRepMigrationProgressByOutcome = { '0': '25', '1': '100', '2': '100' }
-		const plans = urgentOperationPlans(snapshot, options).filter(plan => plan.definitionId === 'statoblast.fork.migrate-rep')
-		expect(plans).toHaveLength(1)
-		const plan = plans[0]
-		if (plan === undefined) throw new Error('Expected a pool-held REP migration plan')
-		expect(plan.metadata).toEqual({ outcome: '0', pool: pool.address, targetAttoRep: 100n.toString() })
-		expect(plan.deadlineTimestamp).toBe('2004837400')
-		expect(plan.risk).toBe('irreversible')
-		const step = plan.steps[0]
-		if (step === undefined) throw new Error('Expected a migrateRepToZoltar step')
-		expect(decodeFunctionData({ abi: securityPoolForkerAbi, data: step.data })).toEqual({ args: [pool.address, [0n]], functionName: 'migrateRepToZoltar' })
-		expect(step.evidence).toEqual([
-			expect.objectContaining({
-				canonicalLifecycleConfirmation: true,
-				equals: 100n.toString(),
-				field: 'childPoolRepSplitAttoRep',
-				indexed: { outcomeIndex: '0', parent: pool.address },
-				kind: 'decoded-event-field',
-				signature: 'ChildRepSplit(address,uint256,uint256,uint256)',
-			}),
-		])
-		const receipt = {
-			blockHash: hash(101),
-			blockNumber: 101n,
-			logs: [],
-			status: 'success' as const,
-			transactionHash: hash(102),
-		}
-		expect(stepReceiptEvidenceDisposition(step, receipt)).toBe('waiting-canonical')
-		const evidence = step.evidence[0] as Extract<OperationEvidence, { kind: 'decoded-event-field' }> | undefined
-		if (evidence === undefined) throw new Error('Expected decoded ChildRepSplit evidence')
-		const matchingReceipt = {
-			...receipt,
-			logs: [
-				{
-					address: evidence.emitter,
-					data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [100n, 0n]),
-					topics: [evidence.topic0, toHex(BigInt(pool.address), { size: 32 }), toHex(0n, { size: 32 })],
-				},
-			],
-		}
-		expect(stepReceiptEvidenceDisposition(step, matchingReceipt)).toBe('confirmed')
-		expect(
-			stepReceiptEvidenceDisposition(step, {
-				...matchingReceipt,
-				logs: matchingReceipt.logs.map(log => ({ ...log, topics: [evidence.topic0, toHex(BigInt(pool.address), { size: 32 }), toHex(1n, { size: 32 })] })),
-			}),
-		).toBe('waiting-canonical')
-		const eventWorkflow = createDurableWorkflow(plan)
-		markWorkflowStepConfirmed(eventWorkflow, step.id, matchingReceipt.transactionHash)
-		expect(eventWorkflow.status).toBe('completed')
-
-		const state = {
-			lastScannedBlock: 100n,
-			lifecyclePresenceBlocker: undefined,
-			obligationTombstones: [] as DurableObligationTombstone[],
-			obligations: [] as DurableObligation[],
-			pendingTransactions: [],
-			includedTransactions: [],
-			rollbackQueue: [],
-			workflows: [] as DurableWorkflow[],
-		}
-		const initialEvaluations = evaluateOperationCatalog(snapshot, options)
-		synchronizeLifecycleObligations(state, initialEvaluations, canonicalLifecyclePresence(snapshot, options), true, 100n, BigInt(snapshot.anchor.timestamp))
-		const obligation = obligationForPlan(state, plan)
-		if (obligation === undefined) throw new Error('Expected a durable REP migration obligation')
-		const workflow = state.workflows.find(candidate => candidate.id === obligation.workflowId)
-		if (workflow === undefined) throw new Error('Expected a durable REP migration workflow')
-		beginLifecycleObligation(obligation)
-		markWorkflowStepWaitingCanonical(workflow, step.id, receipt.transactionHash)
-		waitForCanonicalLifecycleConfirmation(obligation)
-		expect(completeLifecycleObligation(state, obligation)).toBeFalse()
-
-		synchronizeLifecycleObligations(state, initialEvaluations, canonicalLifecyclePresence(snapshot, options), true, 101n, BigInt(snapshot.anchor.timestamp))
-		expect(workflow.status).toBe('waiting-obligation')
-		expect(obligation.status).toBe('pending')
-		expect(obligationForPlan(state, plan)).toBeUndefined()
-
-		const policyDisabled = { ...options, allowIrreversibleOperations: false }
-		expect(urgentOperationPlans(snapshot, policyDisabled).find(candidate => candidate.definitionId === 'statoblast.fork.migrate-rep')).toBeUndefined()
-		expect(canonicalLifecyclePresence(snapshot, policyDisabled)).toContainEqual({ blocksNovelty: true, definitionId: 'statoblast.fork.migrate-rep', ecosystem: 'statoblast', metadata: plan.metadata })
-
-		pool.forkRepMigrationProgressByOutcome['0'] = '100'
-		expect(canonicalLifecyclePresence(snapshot, policyDisabled).find(candidate => candidate.definitionId === 'statoblast.fork.migrate-rep')).toBeUndefined()
-		synchronizeLifecycleObligations(state, evaluateOperationCatalog(snapshot, options), canonicalLifecyclePresence(snapshot, options), true, 102n, BigInt(snapshot.anchor.timestamp))
-		expect(workflow.status).toBe('completed')
-		expect(obligation.status).toBe('completed')
-		expect(state.obligationTombstones).toContainEqual(expect.objectContaining({ id: obligation.id, resolution: 'completed', resolvedAtBlock: '102' }))
-	})
-
-	test('retains raw pool migration presence past actionability until indexed progress reaches the target', () => {
-		const { pool, snapshot } = forkedSnapshot()
-		pool.forkRepMigrationTargetAttoRep = '100'
-		pool.forkRepMigrationProgressByOutcome = { '0': '25', '1': '100', '2': '100' }
-		const deadline = BigInt(pool.forkActivationTime) + 8n * 7n * 24n * 60n * 60n
-		snapshot.anchor.timestamp = (deadline - 60n).toString()
-		expect(urgentOperationPlans(snapshot, options).find(plan => plan.definitionId === 'statoblast.fork.migrate-rep')).toBeUndefined()
-		expect(canonicalLifecyclePresence(snapshot, options)).toContainEqual({
-			blocksNovelty: false,
-			definitionId: 'statoblast.fork.migrate-rep',
-			ecosystem: 'statoblast',
-			metadata: { outcome: '0', pool: pool.address, targetAttoRep: 100n.toString() },
-		})
-		snapshot.anchor.timestamp = (deadline + 1n).toString()
-		expect(canonicalLifecyclePresence(snapshot, options)).toContainEqual({
-			blocksNovelty: false,
-			definitionId: 'statoblast.fork.migrate-rep',
-			ecosystem: 'statoblast',
-			metadata: { outcome: '0', pool: pool.address, targetAttoRep: 100n.toString() },
-		})
-		pool.forkRepMigrationProgressByOutcome['0'] = '101'
-		expect(canonicalLifecyclePresence(snapshot, options).find(candidate => candidate.definitionId === 'statoblast.fork.migrate-rep')).toBeUndefined()
-	})
-
-	test('materializes unresolved escalation entitlements for categorical and scalar routes above outcome two', () => {
-		const { pool, snapshot, universe } = forkedSnapshot()
-		const question = snapshot.questions[0]
-		if (question === undefined) throw new Error('Fork question fixture is missing')
-		pool.forkUnresolvedEscalation = true
-		question.kind = 'categorical'
-		question.outcomeLabels = ['Alpha', 'Beta', 'Gamma']
-		pool.unresolvedEscalationMigrationReadyOutcomes = ['3']
-
-		let plan = urgentOperationPlans(snapshot, options).find(candidate => candidate.definitionId === 'statoblast.fork.migrate-vault-unresolved')
-		expect(plan?.metadata['childOutcomeIndex']).toBe('3')
-		expect(canonicalLifecyclePresence(snapshot, options)).toContainEqual({
-			blocksNovelty: true,
-			definitionId: 'statoblast.fork.migrate-vault-unresolved',
-			ecosystem: 'statoblast',
-			metadata: { childOutcomeIndex: '3', pool: pool.address },
-		})
-
-		const scalarOutcome = ((1n << 255n) | (37n << 120n) | 63n).toString()
-		question.kind = 'scalar'
-		question.numTicks = '100'
-		question.outcomeLabels = []
-		universe.knownChildOutcomes = [scalarOutcome]
-		pool.unresolvedEscalationMigrationReadyOutcomes = [scalarOutcome]
-		plan = urgentOperationPlans(snapshot, options).find(candidate => candidate.definitionId === 'statoblast.fork.migrate-vault-unresolved')
-		expect(plan?.metadata['childOutcomeIndex']).toBe(scalarOutcome)
-		expect(decodeFunctionData({ abi: securityPoolForkerAbi, data: plan?.steps[0]?.data ?? '0x' })).toEqual({ args: [pool.address, snapshot.wallet.address, BigInt(scalarOutcome)], functionName: 'migrateVaultWithUnresolvedEscalation' })
 	})
 })

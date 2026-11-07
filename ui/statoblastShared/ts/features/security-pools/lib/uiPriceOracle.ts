@@ -1,6 +1,5 @@
 import { formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as pricingCopy from '../../../copy/pricing.js'
-import { getOracleManagerPriceValidUntilTimestamp } from '../../../protocol/oracleTiming.js'
 
 const UI_PRICE_ORACLES = ['uniswap', 'open-oracle', 'open-oracle-fallback'] as const
 
@@ -38,6 +37,7 @@ type OpenOracleReading = {
 	isPriceValid?: boolean | undefined
 	price: bigint | undefined
 	settlementTimestamp: bigint | undefined
+	validUntil?: bigint | undefined
 }
 
 /**
@@ -45,10 +45,11 @@ type OpenOracleReading = {
  * Oracle-manager details are fresher than the pool listing, so they win when both are present.
  */
 export function resolveRepPrice({ now, oracleManager, poolOracle, setting, uniswapPrice }: { now: bigint | undefined; oracleManager?: OpenOracleReading | undefined; poolOracle?: OpenOracleReading | undefined; setting: UiPriceOracle; uniswapPrice: bigint | undefined }): ResolvedRepPrice {
-	const oraclePrice = oracleManager?.price ?? poolOracle?.price
-	const settlementTimestamp = oracleManager?.settlementTimestamp ?? poolOracle?.settlementTimestamp
+	const reading = oracleManager ?? poolOracle
+	const oraclePrice = reading?.price
+	const settlementTimestamp = reading?.settlementTimestamp
 	const hasOracleReport = oraclePrice !== undefined && settlementTimestamp !== undefined && settlementTimestamp > 0n
-	const validUntil = hasOracleReport ? getOracleManagerPriceValidUntilTimestamp(settlementTimestamp) : undefined
+	const validUntil = hasOracleReport ? reading?.validUntil : undefined
 	const expiredByTime = now !== undefined && validUntil !== undefined && now >= validUntil
 	const oracleStale = oracleManager?.isPriceValid === false || expiredByTime
 	const oracleProvablyFresh = !oracleStale && now !== undefined && validUntil !== undefined

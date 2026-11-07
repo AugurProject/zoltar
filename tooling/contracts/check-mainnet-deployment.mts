@@ -11,8 +11,6 @@ import { deploymentManifestIds, getDeploymentManifestFileName, parseDeploymentMa
 type ManifestProtocolConfig = {
 	forkBurnDivisor: string
 	forkThresholdDivisor: string
-	minimumSecurityBondDebtAttoEth: string
-	minimumVaultRepDepositAttoRep: string
 }
 
 type ManifestDeploymentStep = {
@@ -102,17 +100,11 @@ function readProtocolConfig(source: unknown): ManifestProtocolConfig {
 	if (!isRecord(source)) throw new Error('Mainnet protocol config did not load as an object')
 	const forkBurnDivisor = Reflect.get(source, 'forkBurnDivisor')
 	const forkThresholdDivisor = Reflect.get(source, 'forkThresholdDivisor')
-	const minimumSecurityBondDebtAttoEth = Reflect.get(source, 'minimumSecurityBondDebtAttoEth')
-	const minimumVaultRepDepositAttoRep = Reflect.get(source, 'minimumVaultRepDepositAttoRep')
 	if (typeof forkBurnDivisor !== 'bigint') throw new Error('Mainnet protocol config forkBurnDivisor must be a bigint')
 	if (typeof forkThresholdDivisor !== 'bigint') throw new Error('Mainnet protocol config forkThresholdDivisor must be a bigint')
-	if (typeof minimumSecurityBondDebtAttoEth !== 'bigint') throw new Error('Mainnet protocol config minimumSecurityBondDebtAttoEth must be a bigint')
-	if (typeof minimumVaultRepDepositAttoRep !== 'bigint') throw new Error('Mainnet protocol config minimumVaultRepDepositAttoRep must be a bigint')
 	return {
 		forkBurnDivisor: forkBurnDivisor.toString(),
 		forkThresholdDivisor: forkThresholdDivisor.toString(),
-		minimumSecurityBondDebtAttoEth: minimumSecurityBondDebtAttoEth.toString(),
-		minimumVaultRepDepositAttoRep: minimumVaultRepDepositAttoRep.toString(),
 	}
 }
 
@@ -229,6 +221,11 @@ async function loadComputedManifest(manifestId: ManifestId): Promise<DeploymentM
 					label: 'Escalation Game Proof Verifier',
 					address: readStringField(infraContractAddresses, 'escalationGameProofVerifier', 'infraContractAddresses.escalationGameProofVerifier'),
 				},
+				{
+					id: 'escalationGameDepositDelegate',
+					label: 'Escalation Game Deposit Delegate',
+					address: readStringField(infraContractAddresses, 'escalationGameDepositDelegate', 'infraContractAddresses.escalationGameDepositDelegate'),
+				},
 			],
 		}
 	} catch (error) {
@@ -272,8 +269,6 @@ async function readManifest(manifestId: ManifestId): Promise<DeploymentManifest>
 		protocolConfig: {
 			forkBurnDivisor: readStringField(protocolConfig, 'forkBurnDivisor', 'protocolConfig.forkBurnDivisor'),
 			forkThresholdDivisor: readStringField(protocolConfig, 'forkThresholdDivisor', 'protocolConfig.forkThresholdDivisor'),
-			minimumSecurityBondDebtAttoEth: readStringField(protocolConfig, 'minimumSecurityBondDebtAttoEth', 'protocolConfig.minimumSecurityBondDebtAttoEth'),
-			minimumVaultRepDepositAttoRep: readStringField(protocolConfig, 'minimumVaultRepDepositAttoRep', 'protocolConfig.minimumVaultRepDepositAttoRep'),
 		},
 		deploymentSteps: readDeploymentSteps(deploymentSteps),
 		derivedContracts: readDeploymentSteps(derivedContracts),

@@ -20,11 +20,11 @@ test('ABI fingerprints ignore declaration and property order but retain paramete
 })
 
 test('coordinator metadata retains ABI event indexing and source enum values', () => {
-	const data = { events: ['CoordinatorStateCheckpoint'], eventDeclarations: { CoordinatorStateCheckpoint: 'CoordinatorStateCheckpoint(uint256 indexed reportId)' }, checkpoint: { fields: ['reportId'], indexed: ['reportId'] }, enumValues: { Operation: { '0': 'None', '1': 'Vault' } } }
+	const data = { events: ['CoordinatorStateCheckpoint'], eventDeclarations: { CoordinatorStateCheckpoint: 'CoordinatorStateCheckpoint(uint256 indexed reportId)' }, enumValues: { Operation: { '0': 'None', '1': 'Vault' } } }
 	const artifacts = { contracts: { 'contracts/statoblast/OpenOraclePriceCoordinator.sol': { OpenOraclePriceCoordinator: { abi: [{ type: 'event', name: 'CoordinatorStateCheckpoint', inputs: [{ type: 'uint256', name: 'reportId', indexed: true }] }] } } } }
 	const source = 'enum Operation { None, Vault }'
 	expect(() => assertCoordinatorDataEventAndEnumDeclarations(JSON.stringify(data), artifacts, source)).not.toThrow()
-	expect(() => assertCoordinatorDataEventAndEnumDeclarations(JSON.stringify({ ...data, checkpoint: { ...data.checkpoint, indexed: [] } }), artifacts, source)).toThrow('indexed checkpoint fields')
+	expect(() => assertCoordinatorDataEventAndEnumDeclarations(JSON.stringify({ ...data, eventDeclarations: { CoordinatorStateCheckpoint: 'CoordinatorStateCheckpoint(uint256 reportId)' } }), artifacts, source)).toThrow('event declarations')
 	expect(() => assertCoordinatorDataEventAndEnumDeclarations(JSON.stringify(data), artifacts, 'enum Operation { None, Withdraw }')).toThrow('enum values')
 })
 
@@ -68,7 +68,7 @@ test('every fallback-routed selector is documented by a row on the contract that
 })
 
 test('accounting examples render only for the contracts whose rules they explain', () => {
-	for (const contractName of ['EscalationGame', 'SecurityPool', 'LiquidationApprovalRegistry', 'UniformPriceDualCapBatchAuction']) expect(renderAccountingExamples(contractName)).toContain('<h2 id="accounting-examples">Accounting examples</h2>')
+	for (const contractName of ['EscalationGame']) expect(renderAccountingExamples(contractName)).toContain('<h2 id="accounting-examples">Accounting examples</h2>')
 	expect(renderAccountingExamples('Zoltar')).toBe('')
 })
 

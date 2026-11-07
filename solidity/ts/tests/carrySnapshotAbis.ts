@@ -52,19 +52,19 @@ export const initializeForkCarrySnapshotFromSourceAbi: Abi = [
 	},
 ]
 
-// The game-level overload also takes the source game and snapshot id ahead of the balances.
+// Game initialization accepts one bounded outcome from the pool's canonical snapshot.
 export const initializeGameForkCarrySnapshotAbi: Abi = [
 	{
 		inputs: [
 			{ name: 'sourceGame', type: 'address' },
 			{ name: 'snapshotId', type: 'bytes32' },
-			{ name: 'snapshotPeaksInput', type: 'bytes32[64][3]' },
-			{ name: 'snapshotLeafCountsInput', type: 'uint256[3]' },
-			{ name: 'snapshotCarryTotals', type: 'uint256[3]' },
-			{ name: 'snapshotResolutionBalances', type: 'uint256[3]' },
-			{ name: 'snapshotNullifierRoots', type: 'bytes32[3]' },
+			{ name: 'peaks', type: 'bytes32[64]' },
+			{ name: 'leafCount', type: 'uint256' },
+			{ name: 'carryTotalAttoRep', type: 'uint256' },
+			{ name: 'resolutionBalanceAttoRep', type: 'uint256' },
+			{ name: 'nullifierRoot', type: 'bytes32' },
 		],
-		name: 'initializeForkCarrySnapshotWithResolutionBalances',
+		name: 'initializeForkCarryOutcome',
 		outputs: [],
 		stateMutability: 'nonpayable',
 		type: 'function',

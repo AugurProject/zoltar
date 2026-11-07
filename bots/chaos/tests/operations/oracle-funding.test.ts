@@ -5,7 +5,7 @@ import { assertOperationEthFunding } from '../../src/execution/safety.ts'
 import { assertAnchoredOracleRequestFunding, assertOracleRequestFundingEnvelope, oracleRequestFundingEnvelope } from '../../src/operations/oracle-request-funding.ts'
 import { reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
 import { eligibleOperationPlans } from '../support/operation-plans.ts'
-import { planningOptionsFixture, snapshotFixture } from './fixture.ts'
+import { address, planningOptionsFixture, snapshotFixture } from './fixture.ts'
 
 const options = planningOptionsFixture()
 
@@ -41,6 +41,52 @@ function requestPricePlan(snapshot: ReturnType<typeof snapshotFixture>) {
 }
 
 describe('oracle request funding bounds', () => {
+	test('shared report funding keeps its fixed bounty at every inclusion base fee', () => {
+		const coordinator = { ...simpleCoordinatorFunding, fixedRequestPriceCostAttoEth: 101n.toString() }
+		expect(() => assertAnchoredOracleRequestFunding({ baseFeePerGas: '1', coordinator, minimumToken1ReportAttoEth: 4n.toString(), requestPriceCostAttoEth: 101n.toString(), settlementCollateralAttoEth: 100n.toString() })).not.toThrow()
+		const envelope = oracleRequestFundingEnvelope({
+			coordinator,
+			maximumEthPrincipalAttoEth: 1000n.toString(),
+			maximumNativePrincipalAttoEth: 101n.toString(),
+			maximumRepPrincipalAttoRep: 1000n.toString(),
+			maximumWethPrincipalAttoEth: 1000n.toString(),
+			proposedRepPerEthPrice: (10n ** 18n).toString(),
+			settlementCollateralCeilingAttoEth: 100n.toString(),
+		})
+		expect(envelope.maximumRequestPriceCostAttoEth).toBe('101')
+		expect(BigInt(envelope.maximumBaseFeePerGas)).toBeGreaterThan(1n)
+		expect(() => assertOracleRequestFundingEnvelope({ coordinator, envelope, proposedRepPerEthPrice: (10n ** 18n).toString(), settlementCollateralAttoEth: 100n.toString() })).not.toThrow()
+	})
+	test('renews a fresh shared portfolio price without allowing duplicate or fresh standalone reports', () => {
+		const { pool, snapshot } = requestPriceSnapshot()
+		pool.oraclePriceValid = true
+		expect(requestPricePlan(snapshot)).toBeUndefined()
+		Object.assign(pool, { priceFeed: address(80), oracleExposureAttoEth: 100n.toString() })
+		expect(requestPricePlan(snapshot)).toBeDefined()
+		pool.pendingReportId = '1'
+		pool.reportEscrows = { '1': address(81) }
+		expect(requestPricePlan(snapshot)).toBeUndefined()
+	})
+
+	test('uses shared aggregate exposure and the feed event while approving the question coordinator', () => {
+		const { pool, snapshot } = requestPriceSnapshot()
+		Object.assign(pool, { priceFeed: address(80), oracleExposureAttoEth: (10n ** 40n).toString() })
+		expect(requestPricePlan(snapshot)).toBeUndefined()
+		Object.assign(pool, { oracleExposureAttoEth: 100n.toString() })
+		const plan = requestPricePlan(snapshot)
+		const request = plan?.steps.find(step => step.id === 'request-price')
+		expect(request?.to).toBe(pool.coordinator)
+		expect(request?.evidence).toContainEqual(expect.objectContaining({ emitter: address(80) }))
+		expect(plan?.steps.filter(step => step.id.startsWith('approve')).every(step => decodeFunctionData({ abi: genesisReputationTokenAbi, data: step.data }).args?.[0] === pool.coordinator)).toBe(true)
+		if (plan === undefined) throw new Error('Missing shared feed request plan')
+		const ceiling = plan.metadata['settlementCollateralCeilingAttoEth']
+		if (typeof ceiling !== 'string') throw new Error('Missing exposure ceiling')
+		pool.oracleExposureAttoEth = (BigInt(ceiling) + 1n).toString()
+		const continued = reevaluateOperationContinuation(snapshot, plan, options, { confirmedStepIds: ['approve-oracle-weth'] })
+		expect(continued.plan?.continuationDisposition).toBe('cleanup-only')
+		expect(continued.plan?.steps.map(step => step.id)).toEqual(['revoke-oracle-weth'])
+	})
+
 	test('fails closed when an anchored coordinator getter disagrees with its immutable inputs', () => {
 		const observation = {
 			baseFeePerGas: '1',

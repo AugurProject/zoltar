@@ -1,6 +1,7 @@
 import { retainReportsAndLogs } from '#config/runtime-deployment'
 import { canonicalBlockHashWithQuorum, REORG_OVERLAP_BLOCKS } from '#execution/execution-orchestration'
 import { pendingCoordinatorReports, pendingCoordinatorReportsWithQuorum } from '#execution/recovery-support'
+import { discoverStoredReports } from '#monitoring/report-index'
 import { discoverCoordinatorPolicies } from '#monitoring/coordinator-discovery'
 import { applyCoordinatorReports, applyLogs, compareLogs, logBlockNumber } from '#monitoring/oracle-log-state'
 import { recordOperation } from '#state/operator-state'
@@ -43,26 +44,38 @@ export async function discoverReports(runtime: OperatorRuntime, context: Operato
 	const { config, fixedState, state } = context
 	const blockNumber = block.number
 	const blockHash = block.hash
-	runtime.coordinatorPolicies = await discoverCoordinatorPolicies(config.execute ? runtime.readClients : [runtime.client], config, blockNumber, blockHash)
-	config.coordinatorAddresses = runtime.coordinatorPolicies.map(policy => policy.coordinator)
-	fixedState.deployment = { ...fixedState.deployment, coordinatorAddresses: config.coordinatorAddresses }
-	const executionReady = runtime.positions.every(position => position.historyOutbox === undefined) && scan.nextError === undefined
-	const discoversReportsFromCoordinators = config.coordinatorAddresses.length !== 0
-	runtime.cursor ??=
-		discoversReportsFromCoordinators || config.logLookbackBlocks === 0n
-			? initialCursor(blockNumber, 0n)
-			: {
-					...initialCursor(blockNumber, 0n),
-					nextBlock: latestLogRange(blockNumber, config.logLookbackBlocks).fromBlock,
-				}
+	const retainedReportIds = [
+		...new Set(
+			[...runtime.reports.values()]
+				.filter(report => !report.settled)
+				.map(report => report.latest.helper.reportId)
+				.concat(runtime.positions.map(position => BigInt(position.reportId))),
+		),
+	]
+	runtime.cursor ??= { ...initialCursor(blockNumber, 0n), nextBlock: config.logLookbackBlocks > 0n ? latestLogRange(blockNumber, config.logLookbackBlocks).fromBlock : blockNumber }
 	const cursor = runtime.cursor
 	const replacedMarketHead = await clearOrphanedDexEvidenceForHeadReplacement({ hash: cursor.lastHeadHash, number: cursor.lastHeadNumber }, { hash: blockHash, number: blockNumber }, state, previousBlockNumber =>
 		canonicalBlockHashWithQuorum(runtime.readClients, readEndpoints(config), 'previous market head', previousBlockNumber, config.rpcQuorum),
 	)
 	const scanCursor = cursorForHeadScan(cursor, blockNumber, blockHash, REORG_OVERLAP_BLOCKS)
 	if (scanCursor === undefined) return { kind: 'head-unchanged' }
+	const clients = config.execute ? runtime.readClients : [runtime.client]
+	const indexed = await discoverStoredReports(
+		clients,
+		config,
+		blockNumber,
+		blockHash,
+		replacedMarketHead ? undefined : runtime.reportIndexCursor,
+		runtime.positions.map(position => BigInt(position.reportId)),
+	)
+	const retainedReports = [...runtime.reports.values()].filter(report => !report.settled).map(report => ({ reportId: report.latest.helper.reportId, creator: report.latest.helper.creator }))
+	runtime.coordinatorPolicies = await discoverCoordinatorPolicies(clients, config, blockNumber, blockHash, retainedReportIds, [...indexed.reports, ...retainedReports])
+	config.coordinatorAddresses = runtime.coordinatorPolicies.map(policy => policy.coordinator)
+	fixedState.deployment = { ...fixedState.deployment, coordinatorAddresses: config.coordinatorAddresses }
+	const executionReady = runtime.positions.every(position => position.historyOutbox === undefined) && scan.nextError === undefined
+	const discoversReportsFromCoordinators = config.coordinatorAddresses.length !== 0
 	if (discoversReportsFromCoordinators) {
-		const pendingReports = config.execute ? await pendingCoordinatorReportsWithQuorum(runtime.readClients, config, blockNumber) : await pendingCoordinatorReports(runtime.client, config, blockNumber)
+		const pendingReports = config.execute ? await pendingCoordinatorReportsWithQuorum(runtime.readClients, config, blockNumber, runtime.coordinatorPolicies) : await pendingCoordinatorReports(runtime.client, config, blockNumber, runtime.coordinatorPolicies)
 		applyCoordinatorReports(runtime.reports, pendingReports)
 		runtime.cachedLogs = []
 	} else if (config.logLookbackBlocks > 0n) {
@@ -71,6 +84,7 @@ export async function discoverReports(runtime: OperatorRuntime, context: Operato
 		runtime.cachedLogs = []
 		runtime.reports.clear()
 	}
+	runtime.reportIndexCursor = indexed.cursor
 	if (replacedMarketHead) {
 		recordOperation(state, {
 			category: 'decision',

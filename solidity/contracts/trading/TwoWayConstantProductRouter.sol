@@ -9,8 +9,17 @@ import { ITwoWayConstantProductFactory } from './interfaces/ITwoWayConstantProdu
 import { ITwoWayConstantProductPair } from './interfaces/ITwoWayConstantProductPair.sol';
 import { ITradingShareToken } from './interfaces/ITradingShareToken.sol';
 import { TwoWayConstantProductMath } from './TwoWayConstantProductMath.sol';
+import { IERC20 } from '../IERC20.sol';
+import { SafeERC20Ops } from '../SafeERC20Ops.sol';
+
+interface ITradingPortfolioSettlement {
+	function settlement() external view returns (address);
+	function purchaseQuote(uint248 universeId, uint256 questionId, uint256 cash) external view returns (uint256 fee, uint256 premium);
+	function createCompleteSet(uint248 universeId, uint256 questionId, uint256 cash, address recipient, uint256 minimumShares) external payable returns (uint256);
+}
 
 contract TwoWayConstantProductRouter is IERC1155Receiver {
+	using SafeERC20Ops for IERC20;
 	struct EnterResult {
 		uint256 ethSpent;
 		uint256 completeSetShares;
@@ -68,6 +77,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 	bool private ethCallbackActive;
 	ISecurityPool private callbackPool;
 	ITradingShareToken private callbackShareToken;
+	address private callbackSettlement;
 
 	modifier nonReentrant() {
 		require(!entered, 'Reentrant call');
@@ -86,7 +96,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		factory = _factory;
 	}
 
-	function enterPosition(ITwoWayConstantProductPair pair, BinaryOutcomes.BinaryOutcome longOutcome, uint256 minLongSharesOut, address recipient, uint256 deadline) external payable nonReentrant beforeDeadline(deadline) returns (EnterResult memory result) {
+	function enterPosition(ITwoWayConstantProductPair pair, uint256 mintAttoEth, BinaryOutcomes.BinaryOutcome longOutcome, uint256 minLongSharesOut, address recipient, uint256 deadline) external payable nonReentrant beforeDeadline(deadline) returns (EnterResult memory result) {
 		_validatePair(pair);
 		bool longYes = _isDirectionalOutcome(longOutcome);
 		require(recipient != address(0) && recipient != address(this), 'Invalid recipient');
@@ -94,7 +104,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		ISecurityPool pool = pair.securityPool();
 		(uint256 startInvalid, uint256 startYes, uint256 startNo) = _beginShareOperation(pool);
 		(uint256 yesBefore, uint256 noBefore) = pair.getEffectiveReserves();
-		pool.createCompleteSet{value: msg.value}();
+		uint256 spent = _mintCompleteSets(pool, mintAttoEth);
 		(uint256 mintedInvalid, uint256 mintedYes, uint256 mintedNo) = _balanceDeltas(pool, startInvalid, startYes, startNo);
 		require(mintedInvalid > 0 && mintedInvalid == mintedYes && mintedYes == mintedNo, 'Unequal complete set');
 		_approvePair(pair);
@@ -104,28 +114,29 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		_transferPosition(pool, recipient, longYes, mintedInvalid, totalLong);
 		(uint256 yesAfter, uint256 noAfter) = pair.getReserves();
 		_endShareOperation(startInvalid, startYes, startNo);
-		result = EnterResult(msg.value, mintedInvalid, mintedInvalid, additionalLong, totalLong, mintedInvalid, feeAmount, TwoWayConstantProductMath.conditionalYesBps(yesBefore, noBefore), TwoWayConstantProductMath.conditionalYesBps(yesAfter, noAfter));
+		_refundBudget(spent);
+		result = EnterResult(spent, mintedInvalid, mintedInvalid, additionalLong, totalLong, mintedInvalid, feeAmount, TwoWayConstantProductMath.conditionalYesBps(yesBefore, noBefore), TwoWayConstantProductMath.conditionalYesBps(yesAfter, noAfter));
 	}
 
-	function createPairAndInitializeWithEth(ISecurityPool pool, uint256 conditionalYesBpsValue, uint256 minLiquidity, address recipient, uint256 deadline) external payable nonReentrant beforeDeadline(deadline) returns (LiquidityResult memory result) {
+	function createPairAndInitializeWithEth(ISecurityPool pool, uint256 mintAttoEth, uint256 conditionalYesBpsValue, uint256 minLiquidity, address recipient, uint256 deadline) external payable nonReentrant beforeDeadline(deadline) returns (LiquidityResult memory result) {
 		ITwoWayConstantProductPair pair = factory.createPair(pool);
 		require(pair.totalSupply() == 0, 'Pair already initialized');
-		result = _initializeWithEth(pair, conditionalYesBpsValue, minLiquidity, recipient);
+		result = _initializeWithEth(pair, mintAttoEth, conditionalYesBpsValue, minLiquidity, recipient);
 	}
 
-	function initializeWithEth(ITwoWayConstantProductPair pair, uint256 conditionalYesBpsValue, uint256 minLiquidity, address recipient, uint256 deadline) external payable nonReentrant beforeDeadline(deadline) returns (LiquidityResult memory result) {
+	function initializeWithEth(ITwoWayConstantProductPair pair, uint256 mintAttoEth, uint256 conditionalYesBpsValue, uint256 minLiquidity, address recipient, uint256 deadline) external payable nonReentrant beforeDeadline(deadline) returns (LiquidityResult memory result) {
 		_validatePair(pair);
 		require(pair.totalSupply() == 0, 'Pair already initialized');
-		result = _initializeWithEth(pair, conditionalYesBpsValue, minLiquidity, recipient);
+		result = _initializeWithEth(pair, mintAttoEth, conditionalYesBpsValue, minLiquidity, recipient);
 	}
 
-	function addLiquidityWithEth(ITwoWayConstantProductPair pair, uint256 maxYesUsed, uint256 maxNoUsed, uint256 minLiquidity, address recipient, uint256 deadline) external payable nonReentrant beforeDeadline(deadline) returns (LiquidityResult memory result) {
+	function addLiquidityWithEth(ITwoWayConstantProductPair pair, uint256 mintAttoEth, uint256 maxYesUsed, uint256 maxNoUsed, uint256 minLiquidity, address recipient, uint256 deadline) external payable nonReentrant beforeDeadline(deadline) returns (LiquidityResult memory result) {
 		_validatePair(pair);
 		require(msg.value > 0, 'ETH input is zero');
 		require(recipient != address(0) && recipient != address(this), 'Invalid recipient');
 		ISecurityPool pool = pair.securityPool();
 		(uint256 startInvalid, uint256 startYes, uint256 startNo) = _beginShareOperation(pool);
-		pool.createCompleteSet{value: msg.value}();
+		uint256 spent = _mintCompleteSets(pool, mintAttoEth);
 		(uint256 mintedInvalid, uint256 mintedYes, uint256 mintedNo) = _balanceDeltas(pool, startInvalid, startYes, startNo);
 		require(mintedInvalid > 0 && mintedInvalid == mintedYes && mintedYes == mintedNo, 'Unequal complete set');
 		_approvePair(pair);
@@ -137,6 +148,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		uint256 noReturned = mintedNo - noUsed;
 		_transferShares(pool, recipient, mintedInvalid, yesReturned, noReturned);
 		_endShareOperation(startInvalid, startYes, startNo);
+		_refundBudget(spent);
 		result = LiquidityResult(pair, mintedInvalid, yesUsed, noUsed, yesReturned, noReturned, mintedInvalid, liquidity);
 	}
 
@@ -193,7 +205,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 	}
 
 	receive() external payable {
-		require(ethCallbackActive && msg.sender == address(callbackPool), 'Unexpected ETH');
+		require(ethCallbackActive && (msg.sender == address(callbackPool) || msg.sender == callbackSettlement), 'Unexpected ETH');
 	}
 
 	function _exitReceivedPosition(ReceiveRequest memory request, address owner, uint256[] calldata ids, uint256[] calldata values) private {
@@ -229,13 +241,24 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 
 	function _redeemReceivedShares(ReceiveRequest memory request) private {
 		uint256 ethBefore = address(this).balance;
+		IERC20 rep = IERC20(address(request.securityPool.repToken()));
+		uint256 repBefore = rep.balanceOf(address(this));
+		if (request.securityPool.portfolioCustody() != address(0)) {
+			address portfolio = request.securityPool.securityPoolFactory().getSecurityPoolPortfolio(request.securityPool);
+			callbackSettlement = ITradingPortfolioSettlement(portfolio).settlement();
+		}
 		ethCallbackActive = true;
 		request.securityPool.redeemCompleteSet(request.completeSetShares);
 		ethCallbackActive = false;
+		callbackSettlement = address(0);
 		uint256 ethOut = address(this).balance - ethBefore;
-		require(ethOut > 0 && ethOut >= request.minEthOut, 'Minimum ETH output');
-		(bool success, ) = request.payoutRecipient.call{value: ethOut}('');
-		require(success, 'ETH transfer failed');
+		uint256 repOut = rep.balanceOf(address(this)) - repBefore;
+		require(ethOut >= request.minEthOut && (ethOut > 0 || repOut > 0), 'Minimum ETH output');
+		if (repOut != 0) rep.safeTransfer(request.payoutRecipient, repOut);
+		if (ethOut != 0) {
+			(bool success, ) = request.payoutRecipient.call{value: ethOut}('');
+			require(success, 'ETH transfer failed');
+		}
 	}
 
 	function _validateReceiveRequest(ReceiveRequest memory request) private view {
@@ -243,12 +266,18 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		require(request.completeSetShares > 0, 'Complete set is zero');
 		require(request.payoutRecipient != address(0) && request.payoutRecipient != address(this), 'Invalid payout recipient');
 		require(request.refundRecipient != address(0) && request.refundRecipient != address(this), 'Invalid refund recipient');
-		_validatePair(request.pair);
-		require(address(request.securityPool) == address(request.pair.securityPool()), 'Wrong security pool');
-		require(request.shareToken == address(request.pair.shareToken()), 'Wrong request share token');
-		require(request.universeId == request.securityPool.universeId() && request.universeId == request.pair.universeId(), 'Wrong universe');
-		require(request.questionId == request.securityPool.questionId() && request.questionId == request.pair.questionId(), 'Wrong question');
-		require(request.invalidTokenId == request.pair.invalidTokenId() && request.yesTokenId == request.pair.yesTokenId() && request.noTokenId == request.pair.noTokenId(), 'Wrong outcome IDs');
+		if (address(request.pair) != address(0) || request.operation != ReceiveOperation.RedeemCompleteSet) {
+			_validatePair(request.pair);
+			require(address(request.securityPool) == address(request.pair.securityPool()), 'Wrong security pool');
+		}
+		require(address(request.securityPool.securityPoolFactory()) == address(factory.securityPoolFactory()), 'Wrong security pool factory');
+		bytes32 origin = factory.securityPoolFactory().getSecurityPoolOriginId(request.securityPool);
+		require(address(factory.securityPoolFactory().getSecurityPool(origin, request.universeId)) == address(request.securityPool), 'Noncanonical security pool');
+		require(request.shareToken == address(request.securityPool.shareToken()), 'Wrong request share token');
+		require(request.universeId == request.securityPool.universeId(), 'Wrong universe');
+		require(request.questionId == request.securityPool.questionId(), 'Wrong question');
+		ITradingShareToken shares = ITradingShareToken(request.shareToken);
+		require(request.invalidTokenId == shares.getTokenId(request.universeId, BinaryOutcomes.BinaryOutcome.Invalid) && request.yesTokenId == shares.getTokenId(request.universeId, BinaryOutcomes.BinaryOutcome.Yes) && request.noTokenId == shares.getTokenId(request.universeId, BinaryOutcomes.BinaryOutcome.No), 'Wrong outcome IDs');
 		require(address(request.securityPool.shareToken().canonicalPoolByUniverse(request.universeId)) == address(request.securityPool), 'Noncanonical share pool');
 	}
 
@@ -278,12 +307,12 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		require(callbackShareToken.balanceOf(address(this), callbackShareToken.getTokenId(callbackPool.universeId(), BinaryOutcomes.BinaryOutcome.No)) == expected[2], 'Router NO residue');
 	}
 
-	function _initializeWithEth(ITwoWayConstantProductPair pair, uint256 conditionalYesBpsValue, uint256 minLiquidity, address recipient) private returns (LiquidityResult memory result) {
+	function _initializeWithEth(ITwoWayConstantProductPair pair, uint256 mintAttoEth, uint256 conditionalYesBpsValue, uint256 minLiquidity, address recipient) private returns (LiquidityResult memory result) {
 		require(msg.value > 0, 'ETH input is zero');
 		require(recipient != address(0) && recipient != address(this), 'Invalid recipient');
 		ISecurityPool pool = pair.securityPool();
 		(uint256 startInvalid, uint256 startYes, uint256 startNo) = _beginShareOperation(pool);
-		pool.createCompleteSet{value: msg.value}();
+		uint256 spent = _mintCompleteSets(pool, mintAttoEth);
 		(uint256 mintedInvalid, uint256 mintedYes, uint256 mintedNo) = _balanceDeltas(pool, startInvalid, startYes, startNo);
 		require(mintedInvalid > 0 && mintedInvalid == mintedYes && mintedYes == mintedNo, 'Unequal complete set');
 		(uint256 yesUsed, uint256 noUsed) = TwoWayConstantProductMath.initialLiquidityAmounts(mintedInvalid, conditionalYesBpsValue);
@@ -293,7 +322,28 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		uint256 noReturned = mintedNo - noUsed;
 		_transferShares(pool, recipient, mintedInvalid, yesReturned, noReturned);
 		_endShareOperation(startInvalid, startYes, startNo);
+		_refundBudget(spent);
 		result = LiquidityResult(pair, mintedInvalid, yesUsed, noUsed, yesReturned, noReturned, mintedInvalid, liquidity);
+	}
+
+	function _mintCompleteSets(ISecurityPool pool, uint256 cash) private returns (uint256 spent) {
+		require(cash > 0, 'Mint amount is zero');
+		address root = pool.securityPoolFactory().getSecurityPoolPortfolio(pool);
+		require(root != address(0), 'Question has no portfolio');
+		// Quote after the same-block capital/fee checkpoint used by purchase.
+		pool.refreshPortfolioFees();
+		ITradingPortfolioSettlement portfolio = ITradingPortfolioSettlement(root);
+		(uint256 fee, ) = portfolio.purchaseQuote(pool.universeId(), pool.questionId(), cash);
+		spent = cash + fee;
+		require(spent <= msg.value, 'Purchase fee exceeds budget');
+		portfolio.createCompleteSet{value: spent}(pool.universeId(), pool.questionId(), cash, address(this), 0);
+	}
+
+	function _refundBudget(uint256 spent) private {
+		uint256 refund = msg.value - spent;
+		if (refund == 0) return;
+		(bool success, ) = msg.sender.call{value: refund}('');
+		require(success, 'Fee budget refund failed');
 	}
 
 	function _validatePair(ITwoWayConstantProductPair pair) private view {

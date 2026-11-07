@@ -490,6 +490,14 @@ describe('deposit deadline preview', () => {
 		details.sides = details.sides.map(side => ({ ...side, balance: side.key === 'yes' ? details.nonDecisionThresholdAttoRep : 0n }))
 		expect(previewReportingDeadline(details, 'no', details.nonDecisionThresholdAttoRep)?.reachesNonDecision).toBe(true)
 	})
+	test('preserves pending activation time in a resumed reporting deadline preview', () => {
+		const pending = 2n * 86400n
+		const details = createReportingDetails({ forkContinuation: true, forkResumedAt: 100n, forkElapsedAtStart: -pending, currentRequiredBond: rep(3n), escalationEndTime: 259300n })
+		const curve = computeEscalationTimeSinceStartFromAttritionCostAttoRep(details.startBondAttoRep, details.nonDecisionThresholdAttoRep, rep(8n))
+		const deadline = 100n + pending + curve
+		expect(previewReportingDeadline(details, 'yes', rep(10n))).toEqual({ deadline, extension: deadline - details.escalationEndTime, reachesNonDecision: false })
+	})
+
 	test('respects the fresh response window for resumed games', () => {
 		const details = createReportingDetails({ forkContinuation: true, forkResumedAt: 100n, forkElapsedAtStart: 4000000n, currentRequiredBond: rep(3n), escalationEndTime: 259300n })
 		expect(previewReportingDeadline(details, 'yes', rep(10n))).toEqual({ deadline: 259300n, extension: 0n, reachesNonDecision: false })

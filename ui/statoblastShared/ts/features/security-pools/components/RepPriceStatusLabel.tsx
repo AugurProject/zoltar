@@ -6,7 +6,7 @@ import * as pricingCopy from '../../../copy/pricing.js'
 import { describeRepPriceStatus, type ResolvedRepPrice } from '../lib/uiPriceOracle.js'
 
 /** The REP price resolved for the selected pool; figures inside the pool workspace label themselves from it. */
-export const SelectedPoolRepPriceContext = createContext<ResolvedRepPrice | undefined>(undefined)
+const SelectedPoolRepPriceContext = createContext<ResolvedRepPrice | undefined>(undefined)
 
 export const RepPriceRefreshContext = createContext<{ onRefresh: () => void; busy: boolean } | undefined>(undefined)
 

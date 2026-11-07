@@ -1,11 +1,13 @@
+import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { startDashboardServer } from '../src/dashboard/dashboard-server.ts'
+import { parsePortfolioPolicy, serializePortfolioPolicy } from '../src/config/portfolio-policy.ts'
 import { parseStrategy } from '../src/config/settings.ts'
 
 let paused = false
 let configurationRequests = 0
 const longUniverseId = '452312848583266388373324160190187140051835877600158453279131187530910662655'
 let approvedUniverses = ['101', longUniverseId]
-let selectedPools = ['0x1111111111111111111111111111111111111111', '0x3333333333333333333333333333333333333333']
+let selectedPortfolios = [{ address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', universeId: '0' }]
 let network: { chainId: number; explorerUrl: string; name: 'mainnet' | 'sepolia' } | undefined
 let networkConfigured = false
 let connectivity: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string; rpcQuorum: 1 | 2 } | undefined
@@ -44,30 +46,8 @@ const centralizedMarkets = {
 	},
 }
 const childMarketConfigurations: unknown[] = []
-const desiredPools = [{ initialReportPriorityFeeAttoEthPerGas: '1000000000', questionId: '42', statoblastSecurityMultiplierBps: 12500, universeId: '101' }]
-let strategy = {
-	allowAutomaticDeposits: true,
-	allowAutomaticPoolCreation: false,
-	allowAutomaticVaultMigrations: true,
-	allowAutomaticWithdrawals: true,
-	candidatePriority: 'largest-bonus',
-	fallbackRepPerEthPrice: '12.4',
-	maximumGasCostEth: '0.02',
-	maximumLiquidationDebtEth: '25',
-	maximumOracleRequestCostEth: '0.02',
-	maximumPerPoolRep: '10000',
-	maximumTotalDeployedRep: '25000',
-	minimumLiquidationDebtEth: '1',
-	minimumRepWithdrawalRep: '10',
-	minimumRewardValueEth: '0.02',
-	redeemFeesAboveEth: '0.01',
-	stalePriceFundingBufferBps: 15000,
-	stagedOperationValidForSeconds: 240,
-	vaultTargetHealthBps: 12500,
-	vaultTopUpHealthBps: 11000,
-	vaultWithdrawHealthBps: 15000,
-	walletReserveRep: '100',
-}
+let strategy = { maximumGasCostEth: '0.02', walletReserveRep: '100' }
+let portfolioPolicy = serializePortfolioPolicy(parsePortfolioPolicy(undefined))
 
 function pool(address: string, questionId: string, selected: boolean, isPriceValid: boolean, candidateCount: number, universeId: string, approvedUniverse: boolean, parent = '0x0000000000000000000000000000000000000000', systemState = '0', forkOutcomeIndex?: string) {
 	return {
@@ -147,7 +127,19 @@ const activities = [
 ]
 
 function currentConfiguration() {
-	return { approvedUniverses, centralizedMarkets, childMarketConfigurations, connectivity, desiredPools, network, networkConfigured, runtime: { execute: false, historicalLogRecovery: false, logLookbackBlocks: 256 }, selectedPools, strategy, submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] } }
+	return {
+		approvedUniverses,
+		centralizedMarkets,
+		childMarketConfigurations,
+		connectivity,
+		network,
+		networkConfigured,
+		runtime: { execute: false, historicalLogRecovery: false, logLookbackBlocks: 256 },
+		selectedPortfolios,
+		strategy,
+		portfolioPolicy,
+		submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] },
+	}
 }
 
 const monitoredPools = () => [
@@ -159,7 +151,12 @@ const monitoredPools = () => [
 const server = startDashboardServer(Number(process.env['DASHBOARD_FIXTURE_PORT'] ?? '4183'), {
 	getPoolCatalog: async (page, address, scope) => {
 		await Bun.sleep(500)
-		const monitored = monitoredPools().map(pool => ({ ...pool, deploymentDate: '1789387200', questionDates: { startTime: '1789473600', endTime: '1792065600' }, metrics: { systemState: pool.systemState, totalPoolHeldRep: pool.totalPoolHeldRep, vaultCount: pool.knownVaultCount } }))
+		const monitored = monitoredPools().map(pool => ({
+			...pool,
+			deploymentDate: '1789387200',
+			questionDates: { startTime: '1789473600', endTime: '1792065600' },
+			metrics: { systemState: pool.systemState, portfolio: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sharedCommittedRep: pool.totalPoolHeldRep, sharedCommitmentEth: '650' },
+		}))
 		const unmonitored = Array.from({ length: 10 }, (_, offset) => {
 			const index = offset + 3
 			return {
@@ -168,19 +165,21 @@ const server = startDashboardServer(Number(process.env['DASHBOARD_FIXTURE_PORT']
 				questionId: (42 + index).toString(),
 				universeId: '101',
 				multiplierBps: '12500',
-				...(index === 3 ? {} : { deploymentDate: '1789387200', questionDates: { startTime: '1789473600', endTime: '1792065600' }, metrics: { systemState: '0', totalPoolHeldRep: '125000.123456789', vaultCount: '18' } }),
+				...(index === 3 ? {} : { deploymentDate: '1789387200', questionDates: { startTime: '1789473600', endTime: '1792065600' }, metrics: { systemState: '0', portfolio: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sharedCommittedRep: '125000.123456789', sharedCommitmentEth: '650' } }),
 			}
 		})
 		const pools = scope === 'monitored' ? monitored : [...monitored, ...unmonitored]
 		const matches = pools.filter(pool => address === undefined || pool.address.toLowerCase() === address.toLowerCase())
 		return { chainId: network?.chainId ?? 1, snapshotTimestamp: String(Math.floor(Date.now() / 1000) - 12), page, total: String(matches.length), pageCount: String(Math.ceil(matches.length / 12)), pools: matches.slice(page * 12, (page + 1) * 12) }
 	},
-	setSupportedPool: value => {
+	setSupportedPortfolio: value => {
 		if (typeof value !== 'object' || value === null || Reflect.get(value, 'chainId') !== network?.chainId) throw new Error('Invalid pool selection chain')
 		const address = Reflect.get(value, 'address')
 		if (typeof address !== 'string') throw new Error('Pool address required')
-		selectedPools = selectedPools.filter(pool => pool.toLowerCase() !== address.toLowerCase())
-		if (Reflect.get(value, 'supported') === true) selectedPools.push(address)
+		const universeId = Reflect.get(value, 'universeId')
+		if (typeof universeId !== 'string') throw new Error('Universe ID required')
+		selectedPortfolios = selectedPortfolios.filter(item => item.address.toLowerCase() !== address.toLowerCase() || item.universeId !== universeId)
+		if (Reflect.get(value, 'supported') === true) selectedPortfolios.push({ address, universeId })
 		return currentConfiguration()
 	},
 
@@ -231,7 +230,7 @@ const server = startDashboardServer(Number(process.env['DASHBOARD_FIXTURE_PORT']
 			deployedRep: '1636.84',
 			eligiblePoolCount: 1,
 			poolCount: 3,
-			selectedPoolCount: selectedPools.length,
+			selectedPoolCount: selectedPortfolios.length,
 			walletEth: '2.184',
 			walletRep: '2508.19',
 		},
@@ -262,6 +261,55 @@ const server = startDashboardServer(Number(process.env['DASHBOARD_FIXTURE_PORT']
 				operationId: '27',
 				queuedBlock: '8841500',
 				target: '0x4444444444444444444444444444444444444444',
+			},
+		],
+		portfolios: [
+			{
+				address: '0x5555555555555555555555555555555555555555',
+				universeId: '101',
+				selected: true,
+				approvedUniverse: true,
+				blockNumber: '8842011',
+				priceValid: true,
+				principalRep: '750',
+				commitmentEth: '300',
+				managedPrincipalRep: '950',
+				maximumTotalPrincipalRep: '2000',
+				automation: false,
+				knownPositionCount: '143',
+				knownAuctionBidCount: '512',
+				auctionAfterBidId: '33',
+				nextPositionId: '33',
+				positions: [
+					{ id: '12', label: 'Position 12', commitmentEth: '100', distressed: true, retirementStatus: 'Earlier requests reserve available capacity', stalledRetirement: true, takeoverStatus: 'Receiver and target retirement cohorts differ' },
+					{
+						id: 'auction:19',
+						label: 'Auction bid 19 · awaiting individual position',
+						commitmentEth: '25',
+						distressed: true,
+						retirementStatus: 'Not retiring',
+						stalledRetirement: false,
+						takeoverStatus: 'Funded takeover ready; automation is disabled',
+					},
+				],
+			},
+			{
+				address: '0x6666666666666666666666666666666666666666',
+				universeId: '301',
+				selected: false,
+				approvedUniverse: false,
+				blockNumber: '8842011',
+				priceValid: false,
+				principalRep: '200',
+				commitmentEth: '0',
+				managedPrincipalRep: '950',
+				maximumTotalPrincipalRep: '2000',
+				automation: false,
+				knownPositionCount: '82',
+				knownAuctionBidCount: '0',
+				auctionAfterBidId: '0',
+				nextPositionId: '65',
+				positions: [],
 			},
 		],
 		pools: monitoredPools(),
@@ -295,9 +343,12 @@ const server = startDashboardServer(Number(process.env['DASHBOARD_FIXTURE_PORT']
 		paused = Reflect.get(value as object, 'paused') === true
 		return { paused }
 	},
-	setSelectedPools: value => {
+	setSelectedPortfolios: value => {
 		if (!Array.isArray(value)) throw new Error('Expected selected-pool array')
-		selectedPools = value.map(String)
+		selectedPortfolios = value.map(item => {
+			if (typeof item?.address !== 'string' || typeof item?.universeId !== 'string') throw new Error('Invalid portfolio selection')
+			return { address: item.address, universeId: item.universeId }
+		})
 		return currentConfiguration()
 	},
 	setApprovedUniverses: value => {
@@ -333,7 +384,7 @@ const server = startDashboardServer(Number(process.env['DASHBOARD_FIXTURE_PORT']
 	},
 	setMarketConfiguration: value => {
 		if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Expected market configuration object')
-		return { ...currentConfiguration(), centralizedMarkets: Reflect.get(value, 'root'), childMarketConfigurations: Reflect.get(value, 'children'), desiredPools: Reflect.get(value, 'desiredPools') }
+		return { ...currentConfiguration(), centralizedMarkets: Reflect.get(value, 'root'), childMarketConfigurations: Reflect.get(value, 'children') }
 	},
 	setSigner: value => ({
 		wallet: Reflect.get(value as object, 'privateKey') === '' ? undefined : '0x9999999999999999999999999999999999999999',
@@ -342,8 +393,9 @@ const server = startDashboardServer(Number(process.env['DASHBOARD_FIXTURE_PORT']
 		if (typeof value !== 'object' || value === null || Array.isArray(value)) {
 			throw new Error('Expected strategy object')
 		}
-		parseStrategy(value)
-		strategy = { ...strategy, ...value }
+		const parsed = parseStrategy(value)
+		portfolioPolicy = serializePortfolioPolicy(parsePortfolioPolicy(Reflect.get(value, 'portfolioPolicy')))
+		strategy = { maximumGasCostEth: formatDecimalAmount(parsed.maximumGasCostAttoEth), walletReserveRep: formatDecimalAmount(parsed.walletAttoRepReserve) }
 		return currentConfiguration()
 	},
 	testMarketSources: () => ({

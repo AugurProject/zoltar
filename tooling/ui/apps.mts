@@ -5,7 +5,7 @@ export function getAppBuildCommands(appIds: readonly UiAppId[]): readonly string
 	return [
 		...appIds.map(appId => ['./tooling/contracts/build-app-contracts.mts', appId]),
 		...appIds.map(appId => ['./tooling/repo/build-shared.mts', appId]),
-		...appIds.map(appId => ['./tooling/ui/vendor.mts', appId, '--scoped-artifacts']),
+		...appIds.map(appId => ['./tooling/ui/vendor.mts', appId]),
 		...packages.map(packageId => ['x', 'tsc', '--project', `ui/${packageId}/tsconfig.json`]),
 		...appIds.map(appId => ['./tooling/ui/workers.mts', appId, '--artifacts-current']),
 	]

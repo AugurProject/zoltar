@@ -1,3 +1,4 @@
+import { auctionFixture, capitalFixture } from '../support/portfolio-fixtures.ts'
 import { expect, test } from 'bun:test'
 import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
 import { CHAOS_OPERATION_CATALOG, evaluateOperationCatalog, reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
@@ -38,17 +39,16 @@ function editableSnapshot() {
 	if (question === undefined || pool === undefined) throw new Error('Missing fixture')
 	question.endTime = (BigInt(snapshot.anchor.timestamp) + 10000n).toString()
 	pool.escalationGame = '0x0000000000000000000000000000000000000000'
-	pool.totalUnderwritingLimitAttoEth = (2n * 10n ** 18n).toString()
-	const vault = pool.vaults[0]
-	if (vault === undefined) throw new Error('Missing underwriting vault')
-	vault.underwritingLimitAttoEth = pool.totalUnderwritingLimitAttoEth
-	pool.currentMintingCapacityAttoEth = pool.totalUnderwritingLimitAttoEth
+	pool.currentMintingCapacityAttoEth = (2n * 10n ** 18n).toString()
+	pool.purchaseQuote = { mintAttoEth: 10000n.toString(), feeAttoEth: 100n.toString(), premiumAttoEth: 200n.toString(), minimumShares: '10000' }
+	snapshot.portfolioCapital = [capitalFixture(snapshot)]
 	pool.shareTokenSupplyAttoShares = '1000000000000000000'
 	for (const token of snapshot.wallet.tokens) token.openOracleCredit = '1000000000000000000'
 	return snapshot
 }
 
 function build(id: string, values: Record<string, string>, snapshot = editableSnapshot()) {
+	if (id === 'statoblast.capital.set-health') values = { healthFactorBps: '16000', ...values }
 	const inputs: ManualInputs = Object.fromEntries(Object.entries(values).map(([key, value]): [string, ManualInput] => [key, { source: 'custom', value }]))
 	const operationInputs = resolveOperationInputs(id, inputs, snapshot)
 	const evaluated = evaluateOperationCatalog(snapshot, { ...options, operationInputs }, id)[0]
@@ -89,12 +89,12 @@ test('all catalog entries expose coverage and every supported field resolves fro
 	const pool = winning.pools[0]
 	if (pool === undefined) throw new Error('Missing pool')
 	pool.questionOutcome = 1
-	baseline.auctions.push({ address: address(90), pool: pool.address, startTime: '1999999999', endTime: '2000001000', finalized: false, minimumBidAttoEth: 100n.toString(), hasClearingPrice: false, clearingTick: '0', underfunded: false, underfundedWinningAttoEth: 0n.toString(), pendingEthRefund: '0', bids: [] })
+	baseline.auctions.push(auctionFixture())
 	const covered = new Set<string>()
 	for (const snapshot of [baseline, initializing, deploying, forked, winning])
 		for (const definition of CHAOS_OPERATION_CATALOG) {
 			expect(operationInputCoverage(definition).length, definition.id).toBeGreaterThan(0)
-			const evaluated = evaluateOperationCatalog(snapshot, options, definition.id)[0]
+			const evaluated = evaluateOperationCatalog(snapshot, definition.id === 'statoblast.capital.set-health' ? { ...options, operationInputs: { healthFactorBps: '16000' } } : options, definition.id)[0]
 			if (evaluated?.plan === undefined) continue
 			for (const field of operationInputSchema(definition.id)) {
 				covered.add(definition.id)
@@ -118,7 +118,8 @@ test('decimal amount controls preserve single base units and large integers exac
 })
 
 test('exact principal changes ETH value, approvals, debits, and decoded token arguments', () => {
-	for (const id of ['open-oracle.weth.wrap', 'statoblast.complete-set.create', 'trading.liquidity.add-eth', 'trading.position.enter']) expect(transaction(build(id, { amount: '10000' })).value, id).toBe('10000')
+	expect(transaction(build('open-oracle.weth.wrap', { amount: '10000' })).value).toBe('10000')
+	for (const id of ['statoblast.complete-set.create', 'trading.liquidity.add-eth', 'trading.position.enter']) expect(transaction(build(id, { amount: '10000' })).value, id).toBe('10300')
 	for (const id of ['open-oracle.weth.unwrap', 'open-oracle.withdraw', 'open-oracle.withdraw-to', 'open-oracle.push-or-credit', 'zoltar.rep.burn', 'statoblast.complete-set.redeem']) {
 		const plan = build(id, { amount: '10000' })
 		const field = operationInputSchema(id).find(field => field.key === 'amount')
@@ -176,8 +177,8 @@ test('trading controls affect amounts, direction, quote bounds, and deadlines', 
 	const removal = build('trading.liquidity.remove', { amount: '10000', minimumYes: '8000', minimumNo: '9000' })
 	expect(transaction(removal).args.slice(0, 3)).toEqual([10000n, 8000n, 9000n])
 	const enter = build('trading.position.enter', { amount: '10000', longOutcome: '2', minimumOutput: '15000', deadline: '2000000190' })
-	expect(transaction(enter).args.slice(1, 3)).toEqual([2n, 15000n])
-	expect(transaction(enter).args[4]).toBe(2000000190n)
+	expect(transaction(enter).args.slice(2, 4)).toEqual([2n, 15000n])
+	expect(transaction(enter).args[5]).toBe(2000000190n)
 	for (const deadline of ['1999999999', '2000010001']) expect(() => build('trading.position.enter', { deadline })).toThrow()
 	expect(() => build('trading.swap.exact-input', { amount: '10000', minimumOutput: '100000' })).toThrow()
 	expect(() => build('open-oracle.weth.wrap', { amount: '1000000000000001' })).toThrow()

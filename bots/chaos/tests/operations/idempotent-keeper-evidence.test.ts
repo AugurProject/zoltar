@@ -18,12 +18,9 @@ function dueFeeSnapshot() {
 	const snapshot = snapshotFixture()
 	const pool = snapshot.pools[0]
 	const question = snapshot.questions[0]
-	const vault = pool?.vaults[0]
-	if (pool === undefined || question === undefined || vault === undefined) throw new Error('Statoblast fixture is incomplete')
+	if (pool === undefined || question === undefined) throw new Error('Statoblast fixture is incomplete')
 	question.endTime = (BigInt(snapshot.anchor.timestamp) + 100n).toString()
 	pool.lastUpdatedFeeAccumulator = (BigInt(snapshot.anchor.timestamp) - 10n).toString()
-	pool.feeIndex = '42'
-	vault.feeIndex = '41'
 	return snapshot
 }
 
@@ -60,38 +57,6 @@ describe('idempotent Statoblast keeper evidence', () => {
 			const step = plan.steps[0]
 			if (step === undefined) throw new Error(`${definitionId} is missing its keeper step`)
 			expect(step.evidence).toEqual([
-				{
-					abi: 'function lastUpdatedFeeAccumulator() view returns (uint256)',
-					args: [],
-					contract: pool.address,
-					expected: snapshot.anchor.timestamp,
-					functionName: 'lastUpdatedFeeAccumulator',
-					kind: 'storage-postcondition',
-					relation: 'at-least',
-				},
-			])
-			validateAlreadyAchieved(plan)
-		}
-	})
-
-	test('accepts keeper-raced vault fee updates and redemptions at the anchored targets', () => {
-		const snapshot = dueFeeSnapshot()
-		const pool = snapshot.pools[0]
-		if (pool === undefined) throw new Error('Statoblast pool fixture is missing')
-		for (const definitionId of ['statoblast.vault.update-fees', 'statoblast.vault.redeem-fees']) {
-			const plan = planFor(snapshot, definitionId)
-			const step = plan.steps[0]
-			if (step === undefined) throw new Error(`${definitionId} is missing its keeper step`)
-			expect(storageEvidence(step)).toEqual([
-				{
-					abi: 'function feeIndex() view returns (uint256)',
-					args: [],
-					contract: pool.address,
-					expected: '42',
-					functionName: 'feeIndex',
-					kind: 'storage-postcondition',
-					relation: 'at-least',
-				},
 				{
 					abi: 'function lastUpdatedFeeAccumulator() view returns (uint256)',
 					args: [],

@@ -1,8 +1,7 @@
-import { createPublicClient, defineChain, getAddress, http, type Hex } from '@zoltar/bot-shared/ethereum'
+import { createPublicClient, defineChain, http, type Hex } from '@zoltar/bot-shared/ethereum'
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import type { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
-import { securityPoolFactoryAbi } from '@zoltar/bot-shared/contracts/abi'
-import type { DesiredPoolSettings, OperatorSettings } from '#config/settings'
+import type { OperatorSettings } from '#config/settings'
 
 export function chainFor(settings: OperatorSettings) {
 	return defineChain({
@@ -39,33 +38,4 @@ export async function canonicalBlockHash(settings: OperatorSettings, blockNumber
 		const block = await createPublicClient({ chain: currentChain, transport: pool?.transportFor(endpoint) ?? http(endpoint) }).getBlock({ blockNumber })
 		return block.hash
 	})
-}
-
-export async function desiredPoolStatus(settings: OperatorSettings, desired: DesiredPoolSettings, pool?: ReturnType<typeof createRpcEndpointPool>) {
-	const currentChain = chainFor(settings)
-	const address = await settledQuorumValue(
-		'desired origin security pool',
-		[settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls].map(async endpoint => {
-			const client = createPublicClient({ chain: currentChain, transport: pool?.transportFor(endpoint) ?? http(endpoint) })
-			const originId = await client.readContract({
-				abi: securityPoolFactoryAbi,
-				address: settings.deployment.securityPoolFactory,
-				args: [desired.universeId, desired.questionId, desired.statoblastSecurityMultiplierBps, desired.initialReportPriorityFeeAttoEthPerGas],
-				functionName: 'getOriginId',
-			})
-			return {
-				endpoint,
-				value: getAddress(
-					await client.readContract({
-						abi: securityPoolFactoryAbi,
-						address: settings.deployment.securityPoolFactory,
-						args: [originId, desired.universeId],
-						functionName: 'getSecurityPool',
-					}),
-				),
-			}
-		}),
-		settings.connectivity.rpcQuorum,
-	)
-	return { address, desired }
 }

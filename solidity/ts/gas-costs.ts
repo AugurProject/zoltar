@@ -1,55 +1,24 @@
-import { bigintToSafeNumber, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import type { Hash } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_openOracle_OpenOracle_OpenOracle, Zoltar_Zoltar } from './types/contractArtifact'
+import { bigintToSafeNumber, encodeDeployData, type Hash } from '@zoltar/core-shared/evm/ethereum'
+import { buildPortfolioDeploymentRequest, buildPortfolioPrepareNextRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import {
+	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
+	statoblast_SecurityPoolOpenAdmissionPolicy_SecurityPoolOpenAdmissionPolicy as policyArtifact,
+	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
+	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
+	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
+} from './types/contractArtifact'
 import { createAnvilNodeForConnectionMode, getGasCostsAnvilConnectionMode } from './testSupport/simulator/anvilNode'
-import { submitBid, refundLosingBids } from './testSupport/simulator/utils/contracts/auction'
-import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from './testSupport/simulator/utils/contracts/deployStatoblast'
-import { getPendingReportId, getRequestPriceCostAttoEth, migrateShares, openOracleSettle, OperationType, requestPrice, requestPriceIfNeededAndStageOperation, requestPriceIfNeededAndStageOperationWithInitialReportPrice, wrapWeth } from './testSupport/simulator/utils/contracts/statoblast'
-import { manipulatePriceOracle, setVaultCapacityFixture } from './testSupport/simulator/utils/contracts/statoblastTestUtils'
-import { claimAuctionProceeds, claimForkedEscalationDeposits, createChildUniverse, finalizeTruthAuction, forkZoltarWithOwnEscalationGame, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault, startTruthAuction } from './testSupport/simulator/utils/contracts/securityPoolForker'
-import { createCompleteSet, depositRepToVault, depositToEscalationGame, getRepToken, redeemCompleteSet, redeemFees, redeemRepFromVault, redeemShares, updateVaultFees, withdrawFromEscalationGame } from './testSupport/simulator/utils/contracts/securityPool'
-import { ensureZoltarDeployed, forkUniverse, getTotalTheoreticalSupply, getZoltarAddress } from './testSupport/simulator/utils/contracts/zoltar'
-import { createQuestion } from './testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { getQuestionId, type ZoltarQuestionData as QuestionData } from '@zoltar/zoltar-shared/questions/questionId'
-import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from './testSupport/simulator/utils/constants'
-import { addressString } from './testSupport/simulator/utils/bigint'
-import { approveToken, getChildUniverseId, getERC20Balance, setupTestAccounts, sortStringArrayByKeccak } from './testSupport/simulator/utils/utilities'
-import { QuestionOutcome } from './testSupport/simulator/types/types'
-import { createWriteClient, WriteClient, writeContractAndWait } from './testSupport/simulator/utils/clients'
+import { createWriteClient, type WriteClient } from './testSupport/simulator/utils/clients'
+import { DAY, TEST_ADDRESSES } from './testSupport/simulator/utils/constants'
+import { setupTestAccounts, approveToken, getChildUniverseId } from './testSupport/simulator/utils/utilities'
+import { ensureZoltarDeployed, getRepTokenAddress, getZoltarAddress, forkUniverse, getUniverseData } from './testSupport/simulator/utils/contracts/zoltar'
+import { applyLibraries, ensureInfraDeployed, getInfraContractAddresses } from './testSupport/simulator/utils/contracts/deployStatoblast'
+import { manipulatePriceOracle } from './testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { createQuestion, makeQuestion } from './testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 
-const genesisUniverse = 0n
-const statoblastSecurityMultiplierBps = 20_000n
-const repDepositAmount = 1_000n * 10n ** 18n
-const underwritingLimitAttoEth = repDepositAmount / 4n
-const openInterestAmount = 100n * 10n ** 18n
-const reportBond = 1n * 10n ** 18n
-const questionOutcomes = ['Yes', 'No']
-const coordinatorPricePrecision = 10n ** 18n
-const defaultSelfOperationValidForSeconds = 5n * 60n
-
-const isHash = (value: string): value is Hash => value.startsWith('0x')
-
-const requireHash = (value: unknown, context: string): Hash => {
-	if (typeof value !== 'string' || !isHash(value)) throw new Error(`${context} must be a transaction hash`)
-	return value
-}
-
-type PoolContext = {
-	questionData: QuestionData
-	questionId: bigint
-	addresses: ReturnType<typeof getSecurityPoolAddresses>
-}
-
-type Scenario = {
-	section: string
-	label: string
-	init?: {
-		deployZoltar: boolean
-		deployInfra: boolean
-	}
-	run: () => Promise<bigint>
-}
-
+const unit = 10n ** 18n
 const numberFormatter = new Intl.NumberFormat('en-US')
 const ethFormatter = new Intl.NumberFormat('en-US', { minimumFractionDigits: 6, maximumFractionDigits: 6 })
 const usdFormatter = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -57,7 +26,6 @@ const ethPriceUsd = Number.parseFloat(process.env['ETH_PRICE_USD'] ?? '2170.63')
 const priorityFeeNanoEth = Number.parseFloat(process.env['PRIORITY_FEE_NANO_ETH'] ?? '1')
 const baseFeeNanoEth = Number.parseFloat(process.env['BASE_FEE_NANO_ETH'] ?? '0.035')
 const totalGasPriceNanoEth = baseFeeNanoEth + priorityFeeNanoEth
-
 if (!Number.isFinite(ethPriceUsd) || ethPriceUsd <= 0) throw new Error('ETH_PRICE_USD must be a positive number')
 if (!Number.isFinite(priorityFeeNanoEth) || priorityFeeNanoEth < 0) throw new Error('PRIORITY_FEE_NANO_ETH must be a non-negative number')
 if (!Number.isFinite(baseFeeNanoEth) || baseFeeNanoEth < 0) throw new Error('BASE_FEE_NANO_ETH must be a non-negative number')
@@ -65,629 +33,93 @@ if (totalGasPriceNanoEth <= 0) throw new Error('BASE_FEE_NANO_ETH + PRIORITY_FEE
 
 const anvilNode = await createAnvilNodeForConnectionMode(getGasCostsAnvilConnectionMode(), { context: 'gas-costs', startTimestamp: 1n })
 const anvil = anvilNode.anvilWindowEthereum
-const alice = createWriteClient(anvil, TEST_ADDRESSES[0])
-const bob = createWriteClient(anvil, TEST_ADDRESSES[1])
-const carol = createWriteClient(anvil, TEST_ADDRESSES[2])
-const dave = createWriteClient(anvil, TEST_ADDRESSES[3])
-
-const waitForGas = async (client: WriteClient, txHashPromise: Promise<Hash>) => {
-	const hash = await txHashPromise
-	const receipt = await client.waitForTransactionReceipt({ hash })
-	return receipt.gasUsed
-}
-
-const confirmTx = async (client: WriteClient, txHashPromise: Promise<Hash>) => {
-	const hash = await txHashPromise
-	await client.waitForTransactionReceipt({ hash })
-}
-
-const measureActionGas = async (client: WriteClient, action: () => Promise<void>) => {
-	const blockBefore = await client.getBlockNumber()
-	await action()
-	const blockAfter = await client.getBlockNumber()
-	let totalGas = 0n
-	for (let blockNumber = blockBefore + 1n; blockNumber <= blockAfter; blockNumber++) {
-		const block = await client.getBlock({ blockNumber, includeTransactions: true })
-		for (const transaction of block.transactions) {
-			if (typeof transaction !== 'object' || transaction === null) throw new Error('Expected block transactions to be expanded objects')
-			const transactionHash = requireHash(Reflect.get(transaction, 'hash'), 'Expanded block transaction hash')
-			const receipt = await client.getTransactionReceipt({ hash: transactionHash })
-			totalGas += receipt.gasUsed
-		}
-	}
-	return totalGas
-}
-
-const initializeChain = async ({ deployZoltar, deployInfra }: { deployZoltar: boolean; deployInfra: boolean }) => {
-	await anvil.resetToCleanState()
-	await setupTestAccounts(anvil)
-	if (deployZoltar || deployInfra) await ensureZoltarDeployed(alice)
-	if (deployInfra) await ensureInfraDeployed(alice)
-}
-
-const buildQuestionData = async (title: string): Promise<QuestionData> => {
-	const now = await anvil.getTime()
-	return {
-		title,
-		description: '',
-		startTime: 0n,
-		endTime: now + 365n * DAY,
-		numTicks: 0n,
-		displayValueMin: 0n,
-		displayValueMax: 0n,
-		answerUnit: '',
+const owner = createWriteClient(anvil, TEST_ADDRESSES[0])
+const trader = createWriteClient(anvil, TEST_ADDRESSES[1])
+const results: { section: string; label: string; gas: bigint }[] = []
+const measure = async (section: string, label: string, sender: WriteClient, action: () => Promise<Hash>) => {
+	try {
+		const receipt = await sender.waitForTransactionReceipt({ hash: await action() })
+		if (receipt.status !== 'success') throw new Error('Transaction reverted')
+		if (receipt.gasUsed > 16_777_216n) throw new Error('Transaction exceeds the protocol gas cap')
+		results.push({ section, label, gas: receipt.gasUsed })
+		return receipt
+	} catch (error) {
+		throw new Error(`Scenario failed: ${section} / ${label}`, { cause: error })
 	}
 }
-
-const buildCategoricalQuestionData = async (title: string): Promise<QuestionData> => {
-	const now = await anvil.getTime()
-	return {
-		title,
-		description: 'categorical benchmark',
-		startTime: 0n,
-		endTime: now + 365n * DAY,
-		numTicks: 0n,
-		displayValueMin: 0n,
-		displayValueMax: 0n,
-		answerUnit: '',
-	}
-}
-
-const buildScalarQuestionData = async (title: string): Promise<QuestionData> => {
-	const now = await anvil.getTime()
-	return {
-		title,
-		description: 'scalar benchmark',
-		startTime: 0n,
-		endTime: now + 365n * DAY,
-		numTicks: 100n,
-		displayValueMin: 0n,
-		displayValueMax: 100n,
-		answerUnit: '%',
-	}
-}
-
-const setupPool = async (title: string): Promise<PoolContext> => {
-	const questionData = await buildQuestionData(title)
-	const questionId = getQuestionId(questionData, questionOutcomes)
-	await confirmTx(alice, createQuestion(alice, questionData, [...questionOutcomes]))
-	await confirmTx(alice, deployOriginSecurityPool(alice, genesisUniverse, questionId, statoblastSecurityMultiplierBps))
-	const addresses = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
-	return { questionData, questionId, addresses }
-}
-
-const confirmApproveAndDepositRepToVault = async (client: WriteClient, context: PoolContext, amount: bigint = repDepositAmount) => {
-	await confirmTx(client, approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), context.addresses.securityPool))
-	await confirmTx(client, depositRepToVault(client, context.addresses.securityPool, amount))
-}
-
-const prepareEscalationFork = async (context: PoolContext) => {
-	const repToken = await getRepToken(alice, context.addresses.securityPool)
-	const forkThresholdAttoRep = (await getTotalTheoreticalSupply(alice, repToken)) / 20n
-	await anvil.setTime(context.questionData.endTime + 10_000n)
-	await manipulatePriceOracle(alice, anvil, context.addresses.openOraclePriceCoordinator)
-	await confirmTx(alice, approveToken(alice, addressString(GENESIS_REPUTATION_TOKEN), context.addresses.securityPool))
-	await confirmTx(alice, depositRepToVault(alice, context.addresses.securityPool, 2n * forkThresholdAttoRep))
-	await confirmTx(alice, depositToEscalationGame(alice, context.addresses.securityPool, QuestionOutcome.Yes, forkThresholdAttoRep))
-	await confirmTx(alice, depositToEscalationGame(alice, context.addresses.securityPool, QuestionOutcome.No, forkThresholdAttoRep))
-	return { forkThresholdAttoRep }
-}
-
-const prepareExternalZoltarFork = async (context: PoolContext, titlePrefix: string) => {
-	const now = await anvil.getTime()
-	const forkQuestionData = {
-		...context.questionData,
-		title: `${titlePrefix} ${now}`,
-		endTime: now + DAY,
-	}
-	const forkQuestionId = getQuestionId(forkQuestionData, questionOutcomes)
-	await confirmTx(alice, createQuestion(alice, forkQuestionData, [...questionOutcomes]))
-	await anvil.setTime(forkQuestionData.endTime + 1n)
-	await confirmTx(alice, approveToken(alice, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress()))
-	await confirmTx(alice, forkUniverse(alice, genesisUniverse, forkQuestionId))
-}
-
-const prepareYesChildForAuction = async (migrateOpenInterestShares = false) => {
-	const context = await setupPool('Gas auction question')
-	await confirmTx(alice, approveToken(alice, addressString(GENESIS_REPUTATION_TOKEN), context.addresses.securityPool))
-	await confirmTx(alice, depositRepToVault(alice, context.addresses.securityPool, repDepositAmount))
-	await confirmTx(bob, approveToken(bob, addressString(GENESIS_REPUTATION_TOKEN), context.addresses.securityPool))
-	await confirmTx(bob, depositRepToVault(bob, context.addresses.securityPool, repDepositAmount))
-	await setVaultCapacityFixture(alice, anvil, context.addresses.openOraclePriceCoordinator, alice.account.address, underwritingLimitAttoEth)
-	await confirmTx(carol, createCompleteSet(carol, context.addresses.securityPool, openInterestAmount))
-	await prepareEscalationFork(context)
-	await confirmTx(alice, forkZoltarWithOwnEscalationGame(alice, context.addresses.securityPool))
-	await confirmTx(alice, migrateRepToZoltar(alice, context.addresses.securityPool, [QuestionOutcome.Yes]))
-	await confirmTx(alice, migrateVault(alice, context.addresses.securityPool, QuestionOutcome.Yes))
-	await confirmTx(alice, claimForkedEscalationDeposits(alice, context.addresses.securityPool, alice.account.address, QuestionOutcome.Yes, [0n]))
-	const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-	const yesPool = getSecurityPoolAddresses(context.addresses.securityPool, yesUniverse, context.questionId, statoblastSecurityMultiplierBps)
-	const forkData = await getSecurityPoolForkerForkData(alice, context.addresses.securityPool)
-	const attoEthRaiseCap = openInterestAmount - (openInterestAmount * forkData.migratedAttoRep) / forkData.auctionableAttoRepAtFork
-	if (migrateOpenInterestShares) {
-		const winningChildTarget = [QuestionOutcome.Yes]
-		await confirmTx(carol, migrateShares(carol, context.addresses.shareToken, genesisUniverse, QuestionOutcome.Invalid, winningChildTarget))
-		await confirmTx(carol, migrateShares(carol, context.addresses.shareToken, genesisUniverse, QuestionOutcome.Yes, winningChildTarget))
-		await confirmTx(carol, migrateShares(carol, context.addresses.shareToken, genesisUniverse, QuestionOutcome.No, winningChildTarget))
-	}
-	await anvil.advanceTime(8n * 7n * DAY + DAY)
-	return { context, yesPool, attoEthRaiseCap }
-}
-
-const prepareYesChildFinalized = async (migrateOpenInterestShares = false) => {
-	const { context, yesPool, attoEthRaiseCap } = await prepareYesChildForAuction(migrateOpenInterestShares)
-	await confirmTx(alice, startTruthAuction(alice, yesPool.securityPool))
-	await confirmTx(dave, submitBid(dave, yesPool.truthAuction, 0n, attoEthRaiseCap))
-	await anvil.advanceTime(8n * DAY)
-	await confirmTx(alice, finalizeTruthAuction(alice, yesPool.securityPool))
-	return { context, yesPool, attoEthRaiseCap }
-}
-
-const prepareDirectOpenOracleInitialReport = async () => {
-	const openOracleAddress = getInfraContractAddresses().openOracle
-	const reportId: bigint = await alice.readContract({
-		address: openOracleAddress,
-		abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
-		functionName: 'nextReportId',
-		args: [],
-	})
-	const amount1 = reportBond
-	const amount2 = reportBond
-	await confirmTx(alice, approveToken(alice, addressString(GENESIS_REPUTATION_TOKEN), getInfraContractAddresses().openOracle))
-	await confirmTx(alice, approveToken(alice, WETH_ADDRESS, getInfraContractAddresses().openOracle))
-	const wethBalanceAttoEthBefore = await getERC20Balance(alice, WETH_ADDRESS, alice.account.address)
-	await confirmTx(alice, wrapWeth(alice, amount2))
-	const wethBalanceAttoEthAfter = await getERC20Balance(alice, WETH_ADDRESS, alice.account.address)
-	if (BigInt(wethBalanceAttoEthAfter) - BigInt(wethBalanceAttoEthBefore) !== amount2) throw new Error('Failed to wrap the expected amount of WETH')
-	const submit = () =>
-		writeContractAndWait(alice, () =>
-			alice.writeContract({
-				address: openOracleAddress,
-				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
-				functionName: 'report',
-				args: [
-					{
-						callbackContract: zeroAddress,
-						callbackGasLimit: 0,
-						currentAmount1: amount1,
-						currentAmount2: amount2,
-						currentReporter: alice.account.address,
-						disputeDelay: 0,
-						escalationHalt: reportBond,
-						feePercentage: 0,
-						flags: 13,
-						lastReportOppoTime: 0,
-						multiplier: 100,
-						numReports: 0,
-						protocolFee: 0,
-						protocolFeeRecipient: zeroAddress,
-						reportTimestamp: 0,
-						settlementTime: DAY,
-						settlementTimestamp: 0,
-						settlerReward: 0n,
-						token1: addressString(GENESIS_REPUTATION_TOKEN),
-						token2: WETH_ADDRESS,
-					},
-					false,
-					false,
-					[0n, 0n, 0n, 0n],
-				],
-			}),
-		)
-	return { reportId, submit }
-}
-
-const deployChildTx = async (universeId: bigint, outcomeIndex: bigint) =>
-	await writeContractAndWait(alice, () =>
-		alice.writeContract({
-			abi: Zoltar_Zoltar.abi,
-			functionName: 'deployChild',
-			address: getZoltarAddress(),
-			args: [universeId, outcomeIndex],
-		}),
-	)
-
-const addRepToMigrationBalanceTx = async (universeId: bigint, amount: bigint) =>
-	await writeContractAndWait(alice, () =>
-		alice.writeContract({
-			abi: Zoltar_Zoltar.abi,
-			functionName: 'addRepToMigrationBalance',
-			address: getZoltarAddress(),
-			args: [universeId, amount],
-		}),
-	)
-
-const splitMigrationRepTx = async (universeId: bigint, amount: bigint, outcomeIndexes: bigint[]) =>
-	await writeContractAndWait(alice, () =>
-		alice.writeContract({
-			abi: Zoltar_Zoltar.abi,
-			functionName: 'splitMigrationRep',
-			address: getZoltarAddress(),
-			args: [universeId, amount, outcomeIndexes],
-		}),
-	)
-
-const scenarios: Scenario[] = [
-	{
-		section: '1. Core Deployment',
-		label: 'deploy Zoltar core contracts',
-		init: { deployZoltar: false, deployInfra: false },
-		run: async () =>
-			await measureActionGas(alice, async () => {
-				await ensureZoltarDeployed(alice)
-			}),
-	},
-	{
-		section: '2. Statoblast Deployment',
-		label: 'deploy statoblast contracts',
-		init: { deployZoltar: true, deployInfra: false },
-		run: async () =>
-			await measureActionGas(alice, async () => {
-				await ensureInfraDeployed(alice)
-			}),
-	},
-	{
-		section: '3. Question Creation',
-		label: 'create binary question',
-		run: async () => {
-			const questionData = await buildQuestionData('Gas create binary question')
-			return await waitForGas(alice, createQuestion(alice, questionData, [...questionOutcomes]))
-		},
-	},
-	{
-		section: '3. Question Creation',
-		label: 'create categorical question',
-		run: async () => {
-			const questionData = await buildCategoricalQuestionData('Gas create categorical question')
-			return await waitForGas(alice, createQuestion(alice, questionData, sortStringArrayByKeccak(['Apple', 'Banana', 'Cherry'])))
-		},
-	},
-	{
-		section: '3. Question Creation',
-		label: 'create scalar question',
-		run: async () => {
-			const questionData = await buildScalarQuestionData('Gas create scalar question')
-			return await waitForGas(alice, createQuestion(alice, questionData, []))
-		},
-	},
-	{
-		section: '4. Security Pool Creation',
-		label: 'deploy security pool for question',
-		run: async () => {
-			const questionData = await buildQuestionData('Gas deploy pool')
-			const questionId = getQuestionId(questionData, questionOutcomes)
-			await confirmTx(alice, createQuestion(alice, questionData, [...questionOutcomes]))
-			return await waitForGas(alice, deployOriginSecurityPool(alice, genesisUniverse, questionId, statoblastSecurityMultiplierBps))
-		},
-	},
-	{
-		section: '5. Vault Creation & Funding',
-		label: 'vault owner deposits initial REP into vault',
-		run: async () => {
-			const context = await setupPool('Gas deposit rep')
-			await confirmTx(alice, approveToken(alice, addressString(GENESIS_REPUTATION_TOKEN), context.addresses.securityPool))
-			return await waitForGas(alice, depositRepToVault(alice, context.addresses.securityPool, repDepositAmount))
-		},
-	},
-	{
-		section: '6. Open Oracle Operation',
-		label: 'request REP/ETH price from coordinator with atomic initial report',
-		run: async () => {
-			const context = await setupPool('Gas request price')
-			return await waitForGas(alice, requestPrice(alice, context.addresses.openOraclePriceCoordinator))
-		},
-	},
-	{
-		section: '6. Open Oracle Operation',
-		label: 'submit atomic OpenOracle report',
-		run: async () => {
-			await setupPool('Gas submit report')
-			const initialReport = await prepareDirectOpenOracleInitialReport()
-			return await waitForGas(alice, initialReport.submit())
-		},
-	},
-	{
-		section: '6. Open Oracle Operation',
-		label: 'settle OpenOracle report',
-		run: async () => {
-			await setupPool('Gas settle report')
-			const initialReport = await prepareDirectOpenOracleInitialReport()
-			await confirmTx(alice, initialReport.submit())
-			await anvil.advanceTime(DAY)
-			return await waitForGas(alice, openOracleSettle(alice, initialReport.reportId))
-		},
-	},
-	{
-		section: '7. Vault REP Withdrawal',
-		label: 'vault owner withdraws REP from vault with valid price',
-		run: async () => {
-			const context = await setupPool('Gas withdraw rep')
-			await confirmApproveAndDepositRepToVault(alice, context)
-			await manipulatePriceOracle(alice, anvil, context.addresses.openOraclePriceCoordinator)
-			return await waitForGas(alice, requestPriceIfNeededAndStageOperation(alice, context.addresses.openOraclePriceCoordinator, OperationType.WithdrawRep, alice.account.address, repDepositAmount))
-		},
-	},
-	{
-		section: '8. Vault Liquidation',
-		label: 'queue vault liquidation with stale price',
-		run: async () => {
-			const context = await setupPool('Gas queue liquidation')
-			await confirmApproveAndDepositRepToVault(alice, context)
-			await setVaultCapacityFixture(alice, anvil, context.addresses.openOraclePriceCoordinator, alice.account.address, underwritingLimitAttoEth)
-			await confirmApproveAndDepositRepToVault(bob, context, repDepositAmount * 10n)
-			await confirmTx(carol, createCompleteSet(carol, context.addresses.securityPool, openInterestAmount))
-			await anvil.advanceTime(2n * DAY)
-			return await waitForGas(bob, requestPriceIfNeededAndStageOperation(bob, context.addresses.openOraclePriceCoordinator, OperationType.Liquidation, alice.account.address, underwritingLimitAttoEth))
-		},
-	},
-	{
-		section: '8. Vault Liquidation',
-		label: 'execute queued vault liquidation during oracle settlement',
-		run: async () => {
-			const context = await setupPool('Gas execute liquidation')
-			await confirmApproveAndDepositRepToVault(alice, context)
-			await setVaultCapacityFixture(alice, anvil, context.addresses.openOraclePriceCoordinator, alice.account.address, underwritingLimitAttoEth)
-			await confirmApproveAndDepositRepToVault(bob, context, repDepositAmount * 10n)
-			await confirmTx(carol, createCompleteSet(carol, context.addresses.securityPool, openInterestAmount))
-			await anvil.advanceTime(2n * DAY)
-			const initialReportPrice = (reportBond * coordinatorPricePrecision) / 10n ** 19n
-			const costAttoEth = await getRequestPriceCostAttoEth(bob, context.addresses.openOraclePriceCoordinator)
-			await confirmTx(bob, requestPriceIfNeededAndStageOperationWithInitialReportPrice(bob, context.addresses.openOraclePriceCoordinator, OperationType.Liquidation, alice.account.address, underwritingLimitAttoEth, defaultSelfOperationValidForSeconds, initialReportPrice, costAttoEth))
-			const pendingReportId = await getPendingReportId(bob, context.addresses.openOraclePriceCoordinator)
-			await anvil.advanceTime(DAY)
-			return await waitForGas(bob, openOracleSettle(bob, pendingReportId))
-		},
-	},
-	{
-		section: '9. Trading Before Resolution',
-		label: 'create complete set for question',
-		run: async () => {
-			const context = await setupPool('Gas create complete set')
-			await confirmApproveAndDepositRepToVault(alice, context)
-			await setVaultCapacityFixture(alice, anvil, context.addresses.openOraclePriceCoordinator, alice.account.address, underwritingLimitAttoEth)
-			return await waitForGas(carol, createCompleteSet(carol, context.addresses.securityPool, openInterestAmount))
-		},
-	},
-	{
-		section: '9. Trading Before Resolution',
-		label: 'redeem complete set before escalation',
-		run: async () => {
-			const context = await setupPool('Gas redeem complete set')
-			await confirmApproveAndDepositRepToVault(alice, context)
-			await setVaultCapacityFixture(alice, anvil, context.addresses.openOraclePriceCoordinator, alice.account.address, underwritingLimitAttoEth)
-			await confirmTx(carol, createCompleteSet(carol, context.addresses.securityPool, openInterestAmount))
-			return await waitForGas(carol, redeemCompleteSet(carol, context.addresses.securityPool, openInterestAmount))
-		},
-	},
-	{
-		section: '10. Escalation Game Creation',
-		label: 'create escalation game with first stake',
-		run: async () => {
-			const context = await setupPool('Gas escalation deposit')
-			await confirmApproveAndDepositRepToVault(alice, context)
-			await anvil.setTime(context.questionData.endTime + 10_000n)
-			return await waitForGas(alice, depositToEscalationGame(alice, context.addresses.securityPool, QuestionOutcome.Yes, reportBond))
-		},
-	},
-	{
-		section: '11. Escalation Game Operation',
-		label: 'withdraw winning stake after normal escalation completion',
-		run: async () => {
-			const context = await setupPool('Gas escalation withdraw')
-			await confirmApproveAndDepositRepToVault(alice, context)
-			await anvil.setTime(context.questionData.endTime + 10_000n)
-			await confirmTx(alice, depositToEscalationGame(alice, context.addresses.securityPool, QuestionOutcome.Yes, reportBond))
-			await anvil.advanceTime(10n * DAY)
-			return await waitForGas(alice, withdrawFromEscalationGame(alice, context.addresses.securityPool, QuestionOutcome.Yes, [0n]))
-		},
-	},
-	{
-		section: '12. Normal Completion & Redemption',
-		label: 'redeem vault REP after normal completion',
-		run: async () => {
-			const context = await setupPool('Gas redeem rep')
-			await confirmApproveAndDepositRepToVault(alice, context)
-			await anvil.setTime(context.questionData.endTime + 10_000n)
-			await confirmTx(alice, depositToEscalationGame(alice, context.addresses.securityPool, QuestionOutcome.Yes, reportBond))
-			await anvil.advanceTime(10n * DAY)
-			await confirmTx(alice, withdrawFromEscalationGame(alice, context.addresses.securityPool, QuestionOutcome.Yes, [0n]))
-			return await waitForGas(alice, redeemRepFromVault(alice, context.addresses.securityPool, alice.account.address))
-		},
-	},
-	{
-		section: '12. Normal Completion & Redemption',
-		label: 'redeem accrued vault fees',
-		run: async () => {
-			const context = await setupPool('Gas redeem fees')
-			await confirmApproveAndDepositRepToVault(alice, context)
-			await setVaultCapacityFixture(alice, anvil, context.addresses.openOraclePriceCoordinator, alice.account.address, underwritingLimitAttoEth)
-			await anvil.setTime((await anvil.getTime()) + 30n * DAY)
-			await confirmTx(carol, createCompleteSet(carol, context.addresses.securityPool, openInterestAmount))
-			await anvil.setTime(context.questionData.endTime + 10_000n)
-			await confirmTx(alice, updateVaultFees(alice, context.addresses.securityPool, alice.account.address))
-			return await waitForGas(alice, redeemFees(alice, context.addresses.securityPool, alice.account.address))
-		},
-	},
-	{
-		section: '13. Escalation Triggers Fork',
-		label: 'fork universe directly in Zoltar',
-		run: async () => {
-			const questionData = await buildQuestionData('Gas fork universe')
-			const questionId = getQuestionId(questionData, questionOutcomes)
-			await confirmTx(alice, createQuestion(alice, questionData, [...questionOutcomes]))
-			await confirmTx(alice, approveToken(alice, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress()))
-			await anvil.setTime(questionData.endTime + 10_000n)
-			return await waitForGas(alice, forkUniverse(alice, genesisUniverse, questionId))
-		},
-	},
-	{
-		section: '14. Forking',
-		label: 'deploy child universe for fork outcome',
-		run: async () => {
-			const questionData = await buildQuestionData('Gas deploy child')
-			const questionId = getQuestionId(questionData, questionOutcomes)
-			await confirmTx(alice, createQuestion(alice, questionData, [...questionOutcomes]))
-			await confirmTx(alice, approveToken(alice, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress()))
-			await anvil.setTime(questionData.endTime + 10_000n)
-			await confirmTx(alice, forkUniverse(alice, genesisUniverse, questionId))
-			return await waitForGas(alice, deployChildTx(genesisUniverse, BigInt(QuestionOutcome.Yes)))
-		},
-	},
-	{
-		section: '14. Forking',
-		label: 'add REP to migration balance for fork migration',
-		run: async () => {
-			const questionData = await buildQuestionData('Gas prepare migration')
-			const questionId = getQuestionId(questionData, questionOutcomes)
-			await confirmTx(alice, createQuestion(alice, questionData, [...questionOutcomes]))
-			await confirmTx(alice, approveToken(alice, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress()))
-			await anvil.setTime(questionData.endTime + 10_000n)
-			await confirmTx(alice, forkUniverse(alice, genesisUniverse, questionId))
-			return await waitForGas(alice, addRepToMigrationBalanceTx(genesisUniverse, repDepositAmount))
-		},
-	},
-	{
-		section: '14. Forking',
-		label: 'split migration REP across all fork outcomes',
-		run: async () => {
-			const questionData = await buildQuestionData('Gas migrate internal rep')
-			const questionId = getQuestionId(questionData, questionOutcomes)
-			await confirmTx(alice, createQuestion(alice, questionData, [...questionOutcomes]))
-			await confirmTx(alice, approveToken(alice, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress()))
-			await anvil.setTime(questionData.endTime + 10_000n)
-			await confirmTx(alice, forkUniverse(alice, genesisUniverse, questionId))
-			await confirmTx(alice, addRepToMigrationBalanceTx(genesisUniverse, repDepositAmount))
-			return await waitForGas(alice, splitMigrationRepTx(genesisUniverse, repDepositAmount, [0n, 1n, 2n]))
-		},
-	},
-	{
-		section: '13. Escalation Triggers Fork',
-		label: 'trigger fork from non-decision escalation game',
-		run: async () => {
-			const context = await setupPool('Gas fork zoltar from pool')
-			await confirmApproveAndDepositRepToVault(alice, context)
-			await prepareEscalationFork(context)
-			return await waitForGas(alice, forkZoltarWithOwnEscalationGame(alice, context.addresses.securityPool))
-		},
-	},
-	{
-		section: '14. Forking',
-		label: 'initiate security pool fork',
-		run: async () => {
-			const context = await setupPool('Gas initiate security pool fork')
-			await confirmApproveAndDepositRepToVault(alice, context)
-			await prepareExternalZoltarFork(context, 'Gas initiate security pool fork source')
-			return await waitForGas(alice, initiateSecurityPoolFork(alice, context.addresses.securityPool))
-		},
-	},
-	{
-		section: '16. Migration',
-		label: 'migrate vault position to child security pool',
-		run: async () => {
-			const context = await setupPool('Gas migrate vault')
-			await confirmApproveAndDepositRepToVault(alice, context)
-			await prepareExternalZoltarFork(context, 'Gas migrate vault fork source')
-			await confirmTx(alice, initiateSecurityPoolFork(alice, context.addresses.securityPool))
-			await confirmTx(alice, migrateRepToZoltar(alice, context.addresses.securityPool, [QuestionOutcome.Yes]))
-			return await waitForGas(alice, migrateVault(alice, context.addresses.securityPool, QuestionOutcome.Yes))
-		},
-	},
-	{
-		section: '16. Migration',
-		label: 'migrate escalation stake to child security pool',
-		run: async () => {
-			const context = await setupPool('Gas migrate escalation stake')
-			await confirmApproveAndDepositRepToVault(alice, context)
-			await prepareEscalationFork(context)
-			await confirmTx(alice, forkZoltarWithOwnEscalationGame(alice, context.addresses.securityPool))
-			await confirmTx(alice, migrateRepToZoltar(alice, context.addresses.securityPool, [QuestionOutcome.Yes]))
-			await confirmTx(alice, migrateVault(alice, context.addresses.securityPool, QuestionOutcome.Yes))
-			return await waitForGas(alice, claimForkedEscalationDeposits(alice, context.addresses.securityPool, alice.account.address, QuestionOutcome.Yes, [0n]))
-		},
-	},
-	{
-		section: '14. Forking',
-		label: 'create child security pool for outcome',
-		run: async () => {
-			const context = await setupPool('Gas create child pool')
-			await confirmApproveAndDepositRepToVault(alice, context)
-			await prepareExternalZoltarFork(context, 'Gas create child pool fork source')
-			await confirmTx(alice, initiateSecurityPoolFork(alice, context.addresses.securityPool))
-			await confirmTx(alice, migrateRepToZoltar(alice, context.addresses.securityPool, [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No]))
-			return await waitForGas(alice, createChildUniverse(alice, context.addresses.securityPool, QuestionOutcome.Invalid))
-		},
-	},
-	{
-		section: '15. Truth Auction',
-		label: 'start truth auction',
-		run: async () => {
-			const prepared = await prepareYesChildForAuction()
-			return await waitForGas(alice, startTruthAuction(alice, prepared.yesPool.securityPool))
-		},
-	},
-	{
-		section: '15. Truth Auction',
-		label: 'submit truth auction bid',
-		run: async () => {
-			const prepared = await prepareYesChildForAuction()
-			await confirmTx(alice, startTruthAuction(alice, prepared.yesPool.securityPool))
-			return await waitForGas(dave, submitBid(dave, prepared.yesPool.truthAuction, 0n, prepared.attoEthRaiseCap))
-		},
-	},
-	{
-		section: '15. Truth Auction',
-		label: 'refund losing truth auction bid',
-		run: async () => {
-			const prepared = await prepareYesChildForAuction()
-			await confirmTx(alice, startTruthAuction(alice, prepared.yesPool.securityPool))
-			await confirmTx(dave, submitBid(dave, prepared.yesPool.truthAuction, 0n, prepared.attoEthRaiseCap))
-			await confirmTx(bob, submitBid(bob, prepared.yesPool.truthAuction, -100n, 1n * 10n ** 18n))
-			return await waitForGas(bob, refundLosingBids(bob, prepared.yesPool.truthAuction, [{ tick: -100n, bidIndex: 0n }]))
-		},
-	},
-	{
-		section: '15. Truth Auction',
-		label: 'finalize truth auction',
-		run: async () => {
-			const prepared = await prepareYesChildForAuction()
-			await confirmTx(alice, startTruthAuction(alice, prepared.yesPool.securityPool))
-			await confirmTx(dave, submitBid(dave, prepared.yesPool.truthAuction, 0n, prepared.attoEthRaiseCap))
-			await anvil.advanceTime(8n * DAY)
-			return await waitForGas(alice, finalizeTruthAuction(alice, prepared.yesPool.securityPool))
-		},
-	},
-	{
-		section: '15. Truth Auction',
-		label: 'claim truth auction proceeds',
-		run: async () => {
-			const prepared = await prepareYesChildFinalized()
-			return await waitForGas(alice, claimAuctionProceeds(alice, prepared.yesPool.securityPool, dave.account.address, [{ tick: 0n, bidIndex: 0n }]))
-		},
-	},
-	{
-		section: '16. Migration',
-		label: 'redeem winning shares after migration to child',
-		run: async () => {
-			const prepared = await prepareYesChildFinalized(true)
-			await confirmTx(alice, claimAuctionProceeds(alice, prepared.yesPool.securityPool, dave.account.address, [{ tick: 0n, bidIndex: 0n }]))
-			return await waitForGas(carol, redeemShares(carol, prepared.yesPool.securityPool))
-		},
-	},
-]
 
 try {
-	const results: { section: string; label: string; gas: bigint }[] = []
-
-	for (const scenario of scenarios) {
-		await initializeChain(scenario.init ?? { deployZoltar: true, deployInfra: true })
-		try {
-			const gas = await scenario.run()
-			results.push({ section: scenario.section, label: scenario.label, gas })
-		} catch (error) {
-			throw new Error(`Scenario failed: ${scenario.section} / ${scenario.label} - ${error instanceof Error ? error.message : String(error)}`)
-		}
-	}
-
+	await anvil.resetToCleanState()
+	await setupTestAccounts(anvil)
+	await ensureZoltarDeployed(owner)
+	await ensureInfraDeployed(owner)
+	const infra = getInfraContractAddresses()
+	const policyReceipt = await measure('1. Portfolio deployment', 'Open question admission policy', owner, () => owner.sendTransaction({ data: encodeDeployData({ abi: policyArtifact.abi, bytecode: applyLibraries(policyArtifact.evm.bytecode.object) }) }))
+	const policy = policyReceipt.contractAddress
+	if (policy === undefined) throw new Error('Missing admission policy')
+	const deployment = buildPortfolioDeploymentRequest({
+		owner: owner.account.address,
+		factory: infra.securityPoolFactory,
+		origin: { universeId: 0n, securityMultiplierBps: 20_000n, reportPriorityFeeAttoEthPerGas: 10n * 10n ** 9n },
+		maximumQuestionHorizonSeconds: 20n * 365n * DAY,
+		questionAdmissionPolicy: policy,
+		economics: { purchaseFeeBps: 100n, annualFeeBps: 0n, minimumPurchaseFeeAttoEth: unit / 1_000n, minimumCommitmentAttoEth: unit, minimumOutcomeRate: 1_000n, rewardVestingSeconds: DAY },
+		deployers: {
+			capital: infra.securityPoolCapitalLedgerDeployer,
+			commitments: infra.securityPoolCommitmentIndexDeployer,
+			fees: infra.securityPoolCapitalFeeStreamsDeployer,
+			books: infra.securityPoolSettlementBookDeployer,
+			settlement: infra.securityPoolPortfolioSettlementDeployer,
+			reporters: infra.securityPoolReporterLedgerDeployer,
+			forks: infra.securityPoolPortfolioForkCoordinatorDeployer,
+			auctions: infra.securityPoolPortfolioAuctionDeployer,
+			services: infra.securityPoolPortfolioServicesDeployer,
+		},
+		artifact: { abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object) },
+	})
+	const deployed = await measure('1. Portfolio deployment', 'Deploy shared portfolio', owner, () => owner.sendTransaction({ ...deployment, gas: 16_777_216n }))
+	const portfolioAddress = deployed.contractAddress
+	if (portfolioAddress === undefined) throw new Error('Missing portfolio')
+	const portfolio = { abi: portfolioArtifact.abi, address: portfolioAddress }
+	for (let step = 1; step <= 4; step++) await measure('1. Portfolio deployment', `Prepare portfolio stage ${step}`, trader, () => trader.sendTransaction({ ...buildPortfolioPrepareNextRequest({ caller: trader.account.address, portfolio: portfolioAddress }), gas: 16_777_216n }))
+	const question = makeQuestion('Shared portfolio gas benchmark', (await anvil.getTime()) + 365n * DAY)
+	const outcomes = ['Yes', 'No']
+	await createQuestion(owner, question, outcomes)
+	const questionId = getQuestionId(question, outcomes)
+	await measure('1. Portfolio deployment', 'Register question', trader, () => trader.writeContract({ ...portfolio, functionName: 'addQuestion', args: [questionId] }))
+	const poolAddress = await owner.readContract({ ...portfolio, functionName: 'getPool', args: [questionId, 0n] })
+	const pool = { abi: poolArtifact.abi, address: poolAddress }
+	const capital = { abi: capitalArtifact.abi, address: await owner.readContract({ ...portfolio, functionName: 'capitalLedger', args: [0n] }) }
+	await approveToken(owner, getRepTokenAddress(0n), capital.address)
+	await measure('2. Shared underwriting and trading', 'Deposit shared REP principal', owner, () => owner.writeContract({ ...capital, functionName: 'depositFor', args: [owner.account.address, 1_000n * unit] }))
+	const coordinator = await owner.readContract({ ...pool, functionName: 'openOraclePriceCoordinator' })
+	await manipulatePriceOracle(owner, anvil, coordinator, unit, 100n * unit)
+	await measure('2. Shared underwriting and trading', 'Set owner commitment', owner, () => owner.writeContract({ ...capital, functionName: 'setCommitment', args: [200n * unit] }))
+	const quote = await trader.readContract({ ...portfolio, functionName: 'purchaseQuote', args: [0n, questionId, 100n * unit] })
+	await measure('2. Shared underwriting and trading', 'Purchase complete sets', trader, () => trader.writeContract({ ...portfolio, functionName: 'createCompleteSet', args: [0n, questionId, 100n * unit, trader.account.address, 0n], value: 100n * unit + (quote[0] * 10_100n + 9_999n) / 10_000n }))
+	const shares = await trader.readContract({ ...pool, functionName: 'shareTokenSupplyAttoShares' })
+	await measure('2. Shared underwriting and trading', 'Return half of complete sets', trader, () => trader.writeContract({ ...pool, functionName: 'redeemCompleteSet', args: [shares / 2n] }))
+	await measure('2. Shared underwriting and trading', 'Checkpoint question accounting', trader, () => trader.writeContract({ ...pool, functionName: 'updateSettlementCollateral' }))
+	// An unrelated native fork leaves this question open. All underwriting moves
+	// once at branch level; lazy question creation does not process owner lists.
+	const forkQuestion = makeQuestion('Shared portfolio benchmark fork', (await anvil.getTime()) + DAY)
+	await createQuestion(owner, forkQuestion, outcomes)
+	await anvil.setTime(forkQuestion.endTime + 1n)
+	await approveToken(owner, getRepTokenAddress(0n), getZoltarAddress())
+	await measure('3. Shared fork', 'Trigger native fork', owner, () => forkUniverse(owner, 0n, getQuestionId(forkQuestion, outcomes)))
+	const branch = { abi: forkArtifact.abi, address: await owner.readContract({ ...portfolio, functionName: 'forkController' }) }
+	await measure('3. Shared fork', 'Prepare branch capital and freeze source', owner, () => owner.writeContract({ ...branch, functionName: 'prepareBranch', args: [0n, 1n] }))
+	await measure('3. Shared fork', 'Choose prepared owner branch', owner, () => owner.writeContract({ ...branch, functionName: 'choose', args: [0n, 1n] }))
+	const forkTime = (await getUniverseData(owner, 0n)).forkTime
+	await anvil.setTime(forkTime + 56n * DAY)
+	await measure('3. Shared fork', 'Migrate chosen branch once', owner, () => owner.writeContract({ ...branch, functionName: 'startBranch', args: [0n, 1n] }))
+	const child = getChildUniverseId(0n, 1)
+	await anvil.setTime(forkTime + 63n * DAY)
+	await measure('3. Shared fork', 'Activate shared branch', owner, () => owner.writeContract({ ...branch, functionName: 'finalizeBranch', args: [child] }))
+	const forker = { abi: forkerArtifact.abi, address: infra.securityPoolForker }
+	await measure('3. Shared fork', 'Materialize question without reporter history', owner, () => owner.writeContract({ ...forker, functionName: 'materializePortfolioQuestion', args: [poolAddress, child] }))
+	console.log('Measured one-question portfolio lifecycle; infrastructure, approvals and oracle funding are setup costs excluded from these rows.')
+	console.log('For auction and large-history transaction bounds, run the portfolio auction and bounded fork gas test suites.')
 	const labelWidth = results.reduce((max, result) => (result.label.length > max ? result.label.length : max), 0)
 	const gasCostInEth = (gas: bigint) => (bigintToSafeNumber(gas, 'Gas usage') * totalGasPriceNanoEth) / 1_000_000_000
 	const gasCostInUsd = (gas: bigint) => gasCostInEth(gas) * ethPriceUsd

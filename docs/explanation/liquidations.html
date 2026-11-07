@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="description" content="When a vault can be liquidated, who takes over its underwriting commitment, and how receiver approvals and reservations bound the transfer." />
+		<meta name="description" content="When a vault can be liquidated, who takes over its underwriting commitment, and how funded receivers and quote bounds protect the transfer." />
 		<title>Vault liquidation · Augur documentation</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
@@ -12,64 +12,35 @@
 		<main>
 			<header>
 				<h1>Vault liquidation</h1>
-				<p>Liquidation moves part or all of an unhealthy vault's <a href="../reference/glossary.html#underwriting-commitment">underwriting commitment</a>, with a capped REP award, to an authorized receiver vault. The receiver must back its entire resulting commitment. Total commitments remain constant, so unrelated vaults retain their proportional obligations. The account that submits the liquidation receives no automatic protocol payment.</p>
+				<p>Liquidation transfers an underbacked owner's commitment and a quoted REP award to a funded receiver. Only the target's principal pays the award; other owners do not absorb its loss.</p>
 			</header>
-
 			<section id="position-model">
-				<h2>Target, receiver, and operator</h2>
-				<ul>
-					<li>The <dfn>target vault</dfn> is the unhealthy vault whose commitment is reduced.</li>
-					<li>The <dfn>receiver vault</dfn> accepts the transferred commitment and receives the REP award.</li>
-					<li>The <dfn>operator</dfn> requests and stages the liquidation, paying that transaction's gas and any oracle cost.</li>
-				</ul>
-				<p>If the liquidation remains staged, any account may execute it later and pay the execution transaction's gas. The operator recorded at staging does not change when another account executes.</p>
-				<p>The receiver and target must differ. The operator may be either one, but identity alone is not a health or Sybil-resistance boundary. Staging through the generic <code>requestPriceIfNeededAndStageOperation</code> call makes the operator the receiver and requires no signed approval; <code>requestPriceIfNeededAndStageLiquidation</code> names the receiver explicitly; a receiver other than the operator also needs a delegated approval.</p>
-				<p>The first release assumes the operator and receiver coordinate compensation externally; the protocol neither creates a keeper marketplace nor takes a fee from the award.</p>
+				<h2>Target, receiver, and keeper</h2>
+				<p>The target owns an underbacked position. The receiver accepts its commitment and must back the resulting position at the receiver's chosen health target. A keeper can be the receiver and earn the REP award. There is no separate ETH execution reserve or protocol-funded gas reimbursement.</p>
 			</section>
-
 			<section id="capacity-and-health">
-				<h2>When a vault is liquidatable</h2>
-				<p>Each owner sets an underwriting commitment separately from REP deposits. A price change affects health, not commitments. Each vault covers settlement collateral in proportion to its share of total commitments, but health is measured against its entire commitment, so a vault may be liquidatable with zero settlement collateral.</p>
-				<p><a href="../reference/glossary.html#vault-health">Vault health</a> combines two backing constraints, each evaluated with upward rounding at the coordinator's <a href="./open-oracle.html">fresh accepted oracle price</a>. That price is quoted as REP per ETH, so a higher price means cheaper REP and a larger REP requirement. The <dfn>associated-REP constraint</dfn> requires pool-held backing plus eligible dispute stake to cover the commitment's REP value times the pool's <a href="../reference/glossary.html#security-multiplier">security multiplier</a>. The <dfn>pool-held constraint</dfn> requires pool-held backing alone to cover that REP value times a second multiplier: halfway between one and the security multiplier, but never below the <dfn>liquidation reserve</dfn> of 10,500 BPS (one plus the 5% award bonus). The reserve means a vault that meets the pool-held constraint holds enough REP to pay a full liquidation award.</p>
-				<p>A liquidation executes only when the target fails at least one constraint, the oracle price exceeds the price at which the target first fails a constraint by at least <code>minLiquidationPriceDistanceBps</code> of the oracle price (10% in the deployment configuration), and neither the target nor the receiver carries <a href="../reference/glossary.html#bad-debt">bad debt</a>. The distance guard keeps a slightly wrong accepted price from liquidating a vault that is only marginally unhealthy. The <a href="../reference/contracts/securitypool.html">SecurityPool reference</a> specifies the exact checks.</p>
-				<p>A delegated approval may demand that the receiver be healthier than the protocol minimum after the transfer. That requirement is checked against live post-liquidation state at execution; a queue-time preview is never a guarantee. The <a href="../reference/contracts/liquidationapprovalregistry.html#minimum-post-liquidation-health-factor">LiquidationApprovalRegistry reference</a> defines the field.</p>
+				<h2>When a position is liquidatable</h2>
+				<p>All free and committed REP deposited for the owner in this portfolio universe counts toward its backing. Earned REP income is separate. The owner's voluntary health target controls new exposure and surplus withdrawals; merely falling below that buffer does not trigger liquidation.</p>
+				<p>The protocol compares backing with the commitment's required REP at the shared oracle's liquidation price, using the protective edge of its error band. Admission uses the opposite, conservative edge. An accepted adverse observation starts the takeover clock automatically. The award grows according to the indexed takeover rules, without a keeper transaction to start the clock.</p>
 			</section>
-
 			<section id="rule">
-				<h2>Commitment transfer and residual exposure</h2>
-				<p>The requested amount bounds the commitment transferred. The REP award is the moved commitment's REP value at that price plus a 5% bonus, capped by the target's transferable backing; a partial liquidation also leaves the target its minimum REP deposit. A sufficiently funded receiver can take the entire commitment even when the award is underfunded. Partial liquidation leaves the residual commitment with the target; it writes off nothing and deletes no settlement liabilities.</p>
-				<figure class="diagram" id="fig-liquidation-punitive-flow">
-					<div class="plot-chart" data-plot-chart="fig-liquidation-punitive-flow" data-plot-width="900" data-plot-height="230" role="img" aria-label="An authorized receiver takes commitment and capped REP backing; residual commitments and earned fees remain visible."><span class="plot-chart-fallback">Commitment and capped REP move from the target to the receiver. Total commitments stay constant. Residual commitments and earned fees remain with the target.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Commitment transfer.</span> The receiver authorizes the transferred commitment and backs its entire resulting commitment.</p>
-				</figure>
-				<p>The receiver must authorize the transferred commitment and satisfy both backing constraints for its entire resulting commitment. Remaining target commitments and receiver positions must meet the minimum sizes. Earned fees stay with their owners and are checkpointed before weights move. Retained underbacked commitments continue earning fees; poor health does not suspend fee rights. The <a href="../reference/contracts/securitypool.html#liquidation-transfer-rounding">contract reference</a> specifies award rounding.</p>
+				<h2>Cure before takeover</h2>
+				<p>The owner can deposit REP or reduce commitment. Removing unbacked commitment uses spare capacity above demand, so a cure cannot erase outstanding trader claims. A takeover first performs the available cure, then quotes the remaining obligation and award. The receiver supplies any missing backing. Minimum commitment and award bounds prevent involuntary dust execution, and caller limits constrain the REP the receiver contributes.</p>
+				<p>Existing earned fees remain with their owner. Underbacked commitment stops earning new fees. Principal, fees, and reporter claims use separate accounting. See <a href="./statoblast.html#question-portfolios">portfolio capital and retirement</a> for exits and <a href="../reference/contract-inventory.html#portfolio-liquidation">the liquidation reference</a> for exact contract bounds.</p>
 			</section>
-
 			<section id="receiver-approvals">
-				<h2>Bounded receiver approval</h2>
-				<p>A receiver can approve an operator directly or by a bounded signature. The approval is specific to a pool, limits how much commitment the receiver will accept, sets a validity window and minimum resulting health, and can be revoked for future liquidations. A liquidation that is already staged keeps its reservation. See the <a href="../reference/contracts/liquidationapprovalregistry.html">LiquidationApprovalRegistry reference</a> for fields, nonce rules, and wallet-signature handling.</p>
+				<h2>Receiver consent</h2>
+				<p>The receiver calls the capital ledger directly. Bounded takeover calls pin the accepted price epoch, target health, source cohort, maximum resulting principal and commitment, minimum REP award, and maximum own REP contribution.</p>
 			</section>
-
 			<section id="queue-semantics">
-				<h2>Reservation and queued execution</h2>
-				<p>When the receiver is not the operator, the price coordinator reserves the receiver's approval quota when the liquidation is staged, whether it runs immediately on a fresh REP-per-ETH price or waits for one. Execution then rechecks the live target and receiver rather than trusting the earlier preview. Success consumes only the commitment actually moved and releases unused quota; expiration or terminal failure releases the reservation so the receiver is not blocked permanently. The <a href="../reference/operator-guardrails.html#repeth-oracle-operations">REP/ETH oracle operations reference</a> covers staging, recovery, and failure handling.</p>
+				<h2>Execution and incentives</h2>
+				<p>Quotes are checked against live state in the transaction. A stale quote or insufficient backing reverts atomically. Keepers maintain their own indexes and choose profitable targets; no onchain scan of all owners is required. A small or illiquid REP award may not attract a keeper, so liquidation liveness depends on economically viable participation.</p>
 			</section>
-
 			<section id="fork-behavior">
 				<h2>Fork isolation</h2>
-				<p>Approvals and reservations belong to one pool and its coordinator and are not copied into child pools or universes; see <a href="./zoltar.html#non-guarantees">what Zoltar does not guarantee</a>. A receiver approving liabilities in one universe has not approved them in a child. Pending parent operations remain permissionlessly cleanable after the parent becomes unable to execute, releasing their reservations.</p>
-			</section>
-
-			<section id="related-references">
-				<h2>Related references</h2>
-				<ul>
-					<li><a href="../reference/contracts/securitypool.html">SecurityPool functions and accounting</a></li>
-					<li><a href="../reference/contracts/liquidationapprovalregistry.html">Liquidation approval fields and signatures</a></li>
-					<li><a href="../reference/operator-guardrails.html#repeth-oracle-operations">Price-coordinator operations and recovery</a></li>
-				</ul>
+				<p>Positions belong to one portfolio and universe. A fork stops ordinary parent operations. Each owner chooses a branch during the shared choice window; the receiver in a child must authorize its own child-universe exposure. See <a href="./statoblast.html#portfolio-shared-forks">shared fork choices</a>.</p>
 			</section>
 		</main>
-		<script src="../assets/js/chartRuntime.js"></script>
 		<script src="../assets/js/responsiveDocs.js"></script>
 		<script src="../assets/js/docsData.js"></script>
 		<script src="../assets/js/docsShell.js"></script>

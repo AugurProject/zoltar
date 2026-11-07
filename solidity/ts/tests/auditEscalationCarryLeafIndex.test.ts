@@ -48,7 +48,7 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 			encodeDeployData({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
 				bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
-				args: [securityPool, repToken, proofVerifier, getInfraContractAddresses().escalationGameClaimDelegate],
+				args: [securityPool, repToken, proofVerifier, getInfraContractAddresses().escalationGameClaimDelegate, getInfraContractAddresses().escalationGameDepositDelegate],
 			}),
 		)
 		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: securityPool, functionName: 'setEscalationGame', args: [escalationGame] }))
@@ -62,14 +62,16 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 		await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: continuation.escalationGame, functionName: 'startFromFork', args: [REPORT_BOND, NON_DECISION_THRESHOLD, 0n, QuestionOutcome.None, false, 0n] }))
 		const sourceYes = await readYesState(source)
 		const yesPeaks = [...sourceYes.currentPeaks]
-		await writeContractAndWait(client, () =>
-			client.writeContract({
-				abi: initializeForkCarrySnapshotFromSourceAbi,
-				address: continuation.securityPool,
-				functionName: 'initializeForkCarrySnapshotFromSource',
-				args: [source, zeroHash, [zeroPeaks(), yesPeaks, zeroPeaks()], [0n, sourceYes.currentLeafCount, 0n], [0n, sourceYes.currentCarryTotalAttoRep, 0n], [zeroHash, sourceYes.currentNullifierRoot, zeroHash]],
-			}),
-		)
+		for (let outcome = 0; outcome < 3; outcome++) {
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					abi: initializeForkCarrySnapshotFromSourceAbi,
+					address: continuation.securityPool,
+					functionName: 'initializeForkCarrySnapshotFromSource',
+					args: [source, zeroHash, [zeroPeaks(), yesPeaks, zeroPeaks()], [0n, sourceYes.currentLeafCount, 0n], [0n, sourceYes.currentCarryTotalAttoRep, 0n], [zeroHash, sourceYes.currentNullifierRoot, zeroHash]],
+				}),
+			)
+		}
 		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: continuation.securityPool, functionName: 'recordForkedEscrowForOutcome', args: [client.account.address, QuestionOutcome.Yes, sourceYes.currentCarryTotalAttoRep, sourceYes.currentCarryTotalAttoRep] }))
 		return continuation
 	}
@@ -82,7 +84,7 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 		assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'getFinalQuestionResolution' }), BigInt(QuestionOutcome.Yes))
 	}
 
-	test('a child-local deposit in a lower MMR peak keeps its local, unhaircut interval in a grandchild claim', async () => {
+	test('a child-local deposit in a lower MMR peak keeps its original interval in a grandchild claim', async () => {
 		const childDepositorA = addressString(TEST_ADDRESSES[1])
 		const childDepositorB = addressString(TEST_ADDRESSES[2])
 
@@ -91,17 +93,15 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 		await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: root.escalationGame, functionName: 'start', args: [REPORT_BOND, NON_DECISION_THRESHOLD] }))
 		await depositYes(root.securityPool, client.account.address, 4n * REPORT_BOND)
 
-		// Child continuation inherits leaf 0, takes a 50% truth-auction haircut, then appends
+		// Child continuation inherits leaf 0 and appends
 		// two local YES leaves (global indexes 1 and 2). Leaf 2 is alone in the height-0 peak.
 		const child = await deployContinuation(root.escalationGame)
-		const childRepBefore = await getERC20Balance(client, repToken, child.escalationGame)
-		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: child.securityPool, functionName: 'applyTruthAuctionHaircut', args: [childRepBefore / 2n] }))
 		await depositYes(child.securityPool, childDepositorA, REPORT_BOND)
 		await depositYes(child.securityPool, childDepositorB, 2n * REPORT_BOND)
 		const childYes = await readYesState(child.escalationGame)
 		assert.strictEqual(childYes.snapshotLeafCount, 1n)
 		assert.strictEqual(childYes.currentLeafCount, 3n)
-		assert.strictEqual(childYes.currentCarryTotalAttoRep, 2n * REPORT_BOND + 3n * REPORT_BOND, 'child carry = haircut inherited principal + unhaircut local principal')
+		assert.strictEqual(childYes.currentCarryTotalAttoRep, 4n * REPORT_BOND + 3n * REPORT_BOND, 'child carry preserves inherited plus local reporter principal')
 
 		const grandchild = await deployContinuation(child.escalationGame)
 		await finalizeContinuation(grandchild)
@@ -121,12 +121,12 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 			nullifierSiblings: nullifiers.getProof(childLocalParentDepositIndex),
 		})
 		// The offset inside the height-0 peak (0) would alias global leaf 0, which the
-		// child inherited from the root and therefore haircuts. It must not verify.
+		// child inherited from the root. It must not verify.
 		await assert.rejects(client.writeContract({ abi: proofTestPoolArtifact.abi, address: grandchild.securityPool, functionName: 'withdrawDeposit', args: [QuestionOutcome.Yes, { ...lowerPeakProof, leafIndex: 0n }] }), /Bad carry peak/)
 		const balanceBefore = await getERC20Balance(client, repToken, childDepositorB)
 		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: grandchild.securityPool, functionName: 'withdrawDeposit', args: [QuestionOutcome.Yes, lowerPeakProof] }))
 		const payout = (await getERC20Balance(client, repToken, childDepositorB)) - balanceBefore
-		assert.strictEqual(payout, 2n * REPORT_BOND, 'a child-local deposit must not receive the child haircut that only applies to root-inherited principal')
+		assert.strictEqual(payout, 2n * REPORT_BOND, 'the authenticated child-local depositor receives its complete original stake')
 		nullifiers.consume(childLocalParentDepositIndex)
 
 		// Settle the remaining leaves; the inherited aggregate must reconcile exactly.

@@ -1,4 +1,5 @@
-import { getAddress, zeroAddress, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
+import { topologyAddress as address } from './topology-identity.ts'
+import { zeroAddress, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
 import { compareUnsignedStrings } from '../core/units.ts'
 import type { QuestionSnapshot } from '../operations/types.ts'
 
@@ -21,19 +22,6 @@ export function configuredResidentLimitError(message: string) {
 	const error = new Error(message)
 	configuredResidentLimitErrors.add(error)
 	return error
-}
-
-export interface ImmutableTopologyIdentity {
-	chainId: number
-	openOracle: Address
-	questionData: Address
-	securityPoolFactory: Address
-	securityPoolForker: Address
-	tradingFactory: Address
-	tradingRouter: Address
-	uniswapV3Factory?: Address | undefined
-	weth: Address
-	zoltar: Address
 }
 
 export interface CachedPoolDeployment {
@@ -133,15 +121,6 @@ function boundedUtf8String(value: unknown, label: string, maximumBytes: number) 
 	return value
 }
 
-function address(value: unknown, label: string) {
-	if (typeof value !== 'string') throw new Error(`${label} must be an address`)
-	try {
-		return getAddress(value)
-	} catch (error) {
-		throw new Error(`${label} must be an address`, { cause: error })
-	}
-}
-
 export function parseCountedRegistryCursor(value: unknown, label: string): CountedRegistryCursor {
 	const cursor = requiredRecord(value, label)
 	assertExactKeys(cursor, ['canonicalCount', 'commitment', 'nextIndex', 'residentLimit', 'retentionMode'], [], label)
@@ -172,25 +151,6 @@ function parseDiscoveryCursors(value: unknown, label: string): ImmutableTopology
 		poolDeployments: parseCountedRegistryCursor(cursors['poolDeployments'], `${label}.poolDeployments`),
 		questions: parseCountedRegistryCursor(cursors['questions'], `${label}.questions`),
 		vaultsByPool,
-	}
-}
-
-export function parseIdentity(value: unknown, label: string): ImmutableTopologyIdentity {
-	const identity = requiredRecord(value, label)
-	const addressFields = ['openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', 'weth', 'zoltar'] as const
-	assertExactKeys(identity, ['chainId', ...addressFields, ...('uniswapV3Factory' in identity ? ['uniswapV3Factory'] : [])], [], label)
-	if (typeof identity['chainId'] !== 'number' || !Number.isSafeInteger(identity['chainId']) || identity['chainId'] <= 0) throw new Error(`${label}.chainId must be a positive safe integer`)
-	return {
-		chainId: identity['chainId'],
-		openOracle: address(identity['openOracle'], `${label}.openOracle`),
-		questionData: address(identity['questionData'], `${label}.questionData`),
-		securityPoolFactory: address(identity['securityPoolFactory'], `${label}.securityPoolFactory`),
-		securityPoolForker: address(identity['securityPoolForker'], `${label}.securityPoolForker`),
-		tradingFactory: address(identity['tradingFactory'], `${label}.tradingFactory`),
-		tradingRouter: address(identity['tradingRouter'], `${label}.tradingRouter`),
-		...('uniswapV3Factory' in identity ? { uniswapV3Factory: address(identity['uniswapV3Factory'], `${label}.uniswapV3Factory`) } : {}),
-		weth: address(identity['weth'], `${label}.weth`),
-		zoltar: address(identity['zoltar'], `${label}.zoltar`),
 	}
 }
 

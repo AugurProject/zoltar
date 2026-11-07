@@ -10,6 +10,7 @@ function applyQueuedSettingsWithScanReset(runtime: OperatorRuntime, context: Ope
 	const appliedSettings = applyQueuedExecutionSettings(context.config, context.state, context.pending)
 	if (!appliedSettings.reportScanReset) return
 	const reset = resetReportScanState<TransactionLog>(context.state, runtime.reports)
+	runtime.reportIndexCursor = undefined
 	runtime.cursor = reset.cursor
 	runtime.cachedLogs = reset.cachedLogs
 }

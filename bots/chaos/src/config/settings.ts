@@ -23,6 +23,7 @@ export const CHAOS_ECOSYSTEMS = ['zoltar', 'statoblast', 'open-oracle', 'trading
 type ChaosEcosystem = (typeof CHAOS_ECOSYSTEMS)[number]
 
 export type DeploymentSettings = {
+	multicall3: Address
 	openOracle: Address
 	questionData: Address
 	securityPoolFactory: Address
@@ -274,7 +275,7 @@ function parseStrategy(value: unknown): StrategySettings {
 
 function parseDeploymentPin(value: unknown, network: OperatorSettings['network']): DeploymentSettings {
 	const pin = requiredRecord(value, 'deploymentPin')
-	const addressKeys = ['openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', 'uniswapV3Factory', 'weth', 'zoltar'] as const
+	const addressKeys = ['multicall3', 'openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', 'uniswapV3Factory', 'weth', 'zoltar'] as const
 	assertExactKeys(pin, ['factoryId', 'profileId', ...addressKeys], [], 'deploymentPin')
 	const address = (key: (typeof addressKeys)[number]) => {
 		const value = pin[key]
@@ -284,6 +285,7 @@ function parseDeploymentPin(value: unknown, network: OperatorSettings['network']
 		return parsed
 	}
 	const deployment = {
+		multicall3: address('multicall3'),
 		openOracle: address('openOracle'),
 		questionData: address('questionData'),
 		securityPoolFactory: address('securityPoolFactory'),

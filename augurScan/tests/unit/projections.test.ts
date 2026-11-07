@@ -38,6 +38,11 @@ const questionCreatedLog = log('QuestionCreated', {
 })
 
 describe('state projections', () => {
+	test('projects portfolio question accounting without standalone vault fields', () => {
+		const projections = projectionsFrom(log('QuestionAccountingCheckpoint', { reason: 2, settlementCollateralAttoEth: 100n.toString(), shareTokenSupplyAttoShares: 200n.toString(), lastUpdatedFeeAccumulator: '300' }))
+		expect(projections).toContainEqual({ type: 'poolState', poolAddress: pool.toLowerCase(), eventName: 'QuestionAccountingCheckpoint', state: { settlementCollateralAttoEth: 100n.toString(), shareTokenSupplyAttoShares: 200n.toString(), lastUpdatedFeeAccumulator: '300' } })
+	})
+
 	test('captures immutable question metadata', () => {
 		const [projection] = projectionsFrom(questionCreatedLog)
 		expect(projection?.type).toBe('question')
@@ -370,7 +375,7 @@ describe('state projections', () => {
 	})
 
 	test('covers coordinator, escalation, risk, trading, and fork lifecycle taxonomy with stable keys', () => {
-		expect(projectionsFrom(log('CoordinatorStateCheckpoint', { reportId: '1' })).at(-1)).toMatchObject({
+		expect(projectionsFrom(log('PendingReportRecovered', { reportId: '1' })).at(-1)).toMatchObject({
 			type: 'domainEvent',
 			domain: 'oracle',
 			entityType: 'price-coordinator',
@@ -385,12 +390,12 @@ describe('state projections', () => {
 			semanticEventKind: 'InheritedThresholdTieReopened',
 			entityIdentity: pool.toLowerCase(),
 		})
-		expect(projectionsFrom(log('VaultLiquidated', { receiverVault: pool, targetVault: vault })).at(-1)).toMatchObject({
+		expect(projectionsFrom(log('CommitmentAuthorized', { owner: vault, positionId: '1' })).at(-1)).toMatchObject({
 			domain: 'risk',
 			entityType: 'vault',
 			entityIdentity: `${pool.toLowerCase()}:${vault.toLowerCase()}`,
 		})
-		expect(projectionsFrom(log('RepDepositedToVault', { vault })).at(-1)).toMatchObject({
+		expect(projectionsFrom(log('PrincipalDeposited', { owner: vault })).at(-1)).toMatchObject({
 			domain: 'risk',
 			entityType: 'vault',
 			entityIdentity: `${pool.toLowerCase()}:${vault.toLowerCase()}`,
@@ -399,25 +404,15 @@ describe('state projections', () => {
 			domain: 'escalation',
 			entityIdentity: pool.toLowerCase(),
 		})
-		for (const eventName of ['LiquidationApprovalSet', 'LiquidationApprovalReserved', 'LiquidationApprovalReleased', 'LiquidationApprovalConsumed', 'LiquidationApprovalRevoked', 'LiquidationApprovalNonceInvalidated'])
-			expect(projectionsFrom(log(eventName, { approvalId: `0x${'a'.repeat(64)}`, receiverVault: vault })).at(-1)).toMatchObject({
-				domain: 'approval',
-				entityType: 'liquidation-approval',
-				semanticEventKind: eventName,
-			})
 		expect(projectionsFrom(log('PredeploymentSharesQuarantined', { invalidAmount: '1' })).at(-1)).toMatchObject({
 			domain: 'trading',
 			entityType: 'amm',
 		})
-		expect(projectionsFrom(log('SecurityPoolForkSnapshot', { parentPool: vault })).at(-1)).toMatchObject({
+		expect(projectionsFrom(log('BranchActivated', { universeId: '7' })).at(-1)).toMatchObject({
 			domain: 'fork',
-			entityIdentity: vault.toLowerCase(),
+			entityType: 'portfolio-branch',
+			entityIdentity: `${pool.toLowerCase()}:7`,
 		})
-		for (const eventName of ['EscalationMigrationEntitlementInitialized', 'EscalationMigrationEntitlementMaterialized'])
-			expect(projectionsFrom(log(eventName, { parent: vault, vault: pool, childOutcomeIndex: '1' })).at(-1)).toMatchObject({
-				domain: 'fork',
-				entityIdentity: vault.toLowerCase(),
-			})
 		expect(projectionsFrom(log('MigrationRepSplit', { universeId: '2', childUniverseId: '7' })).at(-1)).toMatchObject({
 			domain: 'fork',
 			entityIdentity: '2',
@@ -446,6 +441,7 @@ for (const seconds of ['0', '8640000000000', '8640000000001', '281474976710655']
 
 describe('previously raw-only lifecycle evidence', () => {
 	for (const [name, data, kind, entityType, identity] of [
+		['OrdinarySettlementInitialized', { outcome: '1', winningPrincipalAttoRep: 100n.toString(), reservedAttoRep: 130n.toString() }, 'escalationGame', 'escalation', pool],
 		['ReputationTokenInitialized', { universeId: '7', repNumber: '2' }, 'reputationToken', 'reputation-token', pool],
 		['ChildReputationTokenInitialized', { universeId: '7', reputationToken: vault, repNumber: '2' }, 'zoltar', 'fork', '7'],
 		['PositionExitedByTransfer', { owner: vault, pair: vault, completeSetShares: '12' }, 'ammRouter', 'amm', vault],

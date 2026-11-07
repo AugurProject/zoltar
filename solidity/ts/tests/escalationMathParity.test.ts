@@ -1,14 +1,14 @@
-import { allocatedWinningPayout } from '../../../augurScan/src/claim-payout'
+import { allocatedWinningPayout, ordinaryWinningPayout } from '../../../augurScan/src/claim-payout'
 import { buildCarryMerkleMountainRangeProof, createSparseNullifier, hashCarryLeaf as hashSharedCarryLeaf } from '@zoltar/core-shared/evm/carryProof'
 import { beforeAll, beforeEach, describe, test } from 'bun:test'
 import { concatHex, encodeAbiParameters, encodeDeployData, keccak256, zeroAddress, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import assert from '../testSupport/simulator/utils/assert'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
-import { TEST_ADDRESSES, MAX_UINT256 } from '../testSupport/simulator/utils/constants'
+import { DAY, TEST_ADDRESSES, MAX_UINT256 } from '../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { ensureInfraDeployed, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
-import { deployEscalationGame, depositOnOutcome, getActivationTime, getBalances, getEscalationGameDeposits } from '../testSupport/simulator/utils/contracts/escalationGame'
+import { getActivationTime, getBalances, getEscalationGameDeposits } from '../testSupport/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { ReputationToken_ReputationToken, statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier, statoblast_EscalationGame_EscalationGame, test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact } from '../types/contractArtifact'
@@ -169,7 +169,7 @@ describe('Escalation math parity', () => {
 			data: encodeDeployData({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
 				bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
-				args: [testSecurityPoolAddress, getRepTokenAddress(0n), proofVerifierAddress, getInfraContractAddresses().escalationGameClaimDelegate],
+				args: [testSecurityPoolAddress, getRepTokenAddress(0n), proofVerifierAddress, getInfraContractAddresses().escalationGameClaimDelegate, getInfraContractAddresses().escalationGameDepositDelegate],
 			}),
 		})
 		const escalationGameDeploymentReceipt = await client.waitForTransactionReceipt({ hash: escalationGameDeploymentHash })
@@ -219,17 +219,20 @@ describe('Escalation math parity', () => {
 		inheritedCarryLeafCounts: readonly [bigint, bigint, bigint],
 		inheritedCarryTotals: readonly [bigint, bigint, bigint],
 		inheritedNullifierRoots: readonly [Hex, Hex, Hex],
-	) =>
-		await writeContractAndWait(
-			client,
-			async () =>
-				await client.writeContract({
-					abi: initializeForkCarrySnapshotTestPoolAbi,
-					address: testSecurityPoolAddress,
-					functionName: 'initializeForkCarrySnapshot',
-					args: [inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedNullifierRoots],
-				}),
-		)
+	) => {
+		for (let outcome = 0; outcome < 3; outcome++) {
+			await writeContractAndWait(
+				client,
+				async () =>
+					await client.writeContract({
+						abi: initializeForkCarrySnapshotTestPoolAbi,
+						address: testSecurityPoolAddress,
+						functionName: 'initializeForkCarrySnapshot',
+						args: [inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedNullifierRoots],
+					}),
+			)
+		}
+	}
 
 	const recordForkedEscrowForOutcomeViaTestSecurityPool = async (testSecurityPoolAddress: Address, depositor: Address, outcome: QuestionOutcome, sourcePrincipalAttoRep: bigint, childRepAmountAttoRep: bigint) =>
 		await writeContractAndWait(
@@ -340,6 +343,15 @@ describe('Escalation math parity', () => {
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 	})
 
+	test('continuation offsets include pending activation but reject clocks outside the reporting window', async () => {
+		const { escalationGameAddress } = await deployEscalationGameWithProofPool()
+		await assert.rejects(startEscalationFromFork(escalationGameAddress, -3n * DAY - 1n), /Invalid fork elapsed time/)
+		await assert.rejects(startEscalationFromFork(escalationGameAddress, 49n * DAY + 1n), /Invalid fork elapsed time/)
+		await startEscalationFromFork(escalationGameAddress, -3n * DAY)
+		assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'forkElapsedAtStart' }), -3n * DAY)
+		assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'totalCostAttoRep' }), 0n)
+	})
+
 	test('scanner allocated payouts and shared carry proofs match the deployed Solidity verifier', async () => {
 		const hash = await client.sendTransaction({ data: `0x${statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}` })
 		const receipt = await client.waitForTransactionReceipt({ hash })
@@ -355,6 +367,22 @@ describe('Escalation math parity', () => {
 			const actual = allocatedWinningPayout({ principal, rewardAmount, rewardCumulative, binding, winningBalance, forkThreshold, nonDecisionThreshold })
 			assert.strictEqual(actual.payout, expected.amountToWithdrawAttoRep)
 			assert.strictEqual(actual.burn, expected.burnAmountAttoRep)
+			const ordinary = await client.readContract({ abi, address: verifier, functionName: 'computeOrdinaryWinningWithdrawal', args: [rewardAmount, rewardCumulative, binding, winningBalance, forkThreshold, nonDecisionThreshold] })
+			const ordinaryModel = ordinaryWinningPayout({ principal: rewardAmount, rewardAmount, rewardCumulative, binding, winningBalance, forkThreshold, nonDecisionThreshold })
+			assert.strictEqual(ordinaryModel.payout, ordinary.amountToWithdrawAttoRep)
+			assert.strictEqual(ordinaryModel.burn, ordinary.burnAmountAttoRep)
+			assert.strictEqual(
+				getWinningEscalationDepositClaimAmount({
+					depositAmountAttoRep: rewardAmount,
+					cumulativeAmountAttoRep: rewardCumulative,
+					bindingCapitalAttoRep: binding,
+					winningOutcomeBalanceAttoRep: winningBalance,
+					forkThresholdAttoRep: forkThreshold,
+					nonDecisionThresholdAttoRep: nonDecisionThreshold,
+					ordinarySettlement: true,
+				}),
+				ordinary.amountToWithdrawAttoRep,
+			)
 		}
 		const leaves = Array.from({ length: 6 }, (_, index) => hashSharedCarryLeaf({ depositor: '0x1111111111111111111111111111111111111111', amountAttoRep: 17n, cumulativeAmountAttoRep: BigInt(index + 1) * 17n, parentDepositIndex: BigInt(index), sourceNodeId: BigInt(index + 1) }, 1))
 		for (let index = 0; index < leaves.length; index++) {
@@ -370,10 +398,10 @@ describe('Escalation math parity', () => {
 	})
 
 	test('shared attrition-time inversion matches the deployed contract', async () => {
-		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThresholdAttoRep)
-		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.No, 15n * reportBond)
-		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, 7n * reportBond)
-		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Invalid, 11n * reportBond)
+		const { escalationGameAddress: escalationGame, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.No, 15n * reportBond)
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 7n * reportBond)
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, 11n * reportBond)
 
 		const bindingCapital = await readBindingCapital(escalationGame)
 
@@ -385,9 +413,9 @@ describe('Escalation math parity', () => {
 	})
 
 	test('shared deposit projection matches previewDepositOnOutcome and projected end time', async () => {
-		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThresholdAttoRep)
-		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, 9n * reportBond)
-		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.No, 6n * reportBond)
+		const { escalationGameAddress: escalationGame, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 9n * reportBond)
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.No, 6n * reportBond)
 
 		const balances = await getBalances(client, escalationGame)
 		const requestedAmount = 8n * reportBond
@@ -406,7 +434,7 @@ describe('Escalation math parity', () => {
 		assert.strictEqual(resultingCumulativeAmount, projection.projectedBalancesAttoRep[0], 'projected invalid balance should match preview cumulative amount')
 
 		const activationTime = await getActivationTime(client, escalationGame)
-		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Invalid, acceptedAmount)
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, acceptedAmount)
 		const expectedEndTime = activationTime + computeEscalationTimeSinceStartFromAttritionCostAttoRep(reportBond, nonDecisionThresholdAttoRep, await readBindingCapital(escalationGame))
 		assert.strictEqual(await readEscalationEndDate(escalationGame), expectedEndTime, 'shared projected end time should match the contract after the same deposit')
 	})
@@ -432,6 +460,7 @@ describe('Escalation math parity', () => {
 			forkThresholdAttoRep: nonDecisionThresholdAttoRep,
 			nonDecisionThresholdAttoRep,
 			winningOutcomeBalanceAttoRep: balances.yes,
+			ordinarySettlement: true,
 		})
 		const preview = await client.simulateContract({
 			abi: escalationGameProofTestPoolArtifact.abi,

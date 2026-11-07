@@ -1,3 +1,4 @@
+import { canonicalPoolReportRoutes } from './discovery-price-feed.ts'
 import type { DiscoveryIssue } from '../operations/types.ts'
 import { DISCOVERY_AGGREGATE_ITEM_LIMIT, type EcosystemDiscoveryContext } from './discovery-context.ts'
 import { erc1155Abi, shareTokenAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
@@ -8,17 +9,7 @@ import { OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, trustedOpenOracleReportPredicate
 import { type Address } from '@zoltar/bot-shared/ethereum'
 
 export function trustedIndexedReportsForDiscovery(parameters: { deployments: EcosystemDeployments; wallet: Address; reports: readonly OracleGameSnapshot[]; universes: readonly UniverseSnapshot[]; pools: readonly PoolSnapshot[] }) {
-	const coordinatorReports = parameters.pools.flatMap(pool =>
-		pool.pendingReportId === '0'
-			? []
-			: [
-					{
-						coordinator: pool.coordinator,
-						pendingReportId: pool.pendingReportId,
-						repToken: pool.repToken,
-					},
-				],
-	)
+	const coordinatorReports = canonicalPoolReportRoutes(parameters.pools)
 	const trustedReport = trustedOpenOracleReportPredicate({
 		coordinatorReports,
 		maximumSettlementStepGasLimit: OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT,

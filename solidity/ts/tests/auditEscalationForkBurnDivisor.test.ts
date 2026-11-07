@@ -16,6 +16,7 @@ import {
 	ReputationToken_ReputationToken,
 	statoblast_EscalationGame_EscalationGame,
 	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
+	statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate,
 	statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier,
 	Zoltar_Zoltar,
 } from '../types/contractArtifact'
@@ -32,6 +33,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 	let claimDelegate: Address
+	let depositDelegate: Address
 	const repTokenAddress = addressString(GENESIS_REPUTATION_TOKEN)
 	const zeroHash = `0x${'0'.repeat(64)}` as Hex
 	const universeSupplySlot = keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [0n, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT]))
@@ -54,7 +56,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			encodeDeployData({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
 				bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
-				args: [securityPool, repTokenAddress, proofVerifier, claimDelegate],
+				args: [securityPool, repTokenAddress, proofVerifier, claimDelegate, depositDelegate],
 			}),
 		)
 		await writeContractAndWait(client, () =>
@@ -88,6 +90,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 		await setupTestAccounts(mockWindow)
+		depositDelegate = await deployContract(client, encodeDeployData({ abi: statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.abi, bytecode: `0x${statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.evm.bytecode.object}`, args: [] }))
 		await ensureZoltarDeployed(client)
 		claimDelegate = await deployContract(
 			client,
@@ -98,7 +101,44 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		)
 	})
 
-	test('rounds the own-fork minimum backing up for non-divisible source principal', async () => {
+	for (const ownFork of [false, true])
+		test(`funds three-outcome carry from the exact escrow remaining after irrevocable surplus (${ownFork ? 'own fork' : 'unrelated fork'})`, async () => {
+			const proofVerifier = await deployContract(client, encodeDeployData({ abi: statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.abi, bytecode: `0x${statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}` }))
+			const lowStake = NON_DECISION_THRESHOLD - START_BOND
+			const childBacking = FORK_THRESHOLD - (ownFork ? FORK_THRESHOLD / 5n : 0n)
+			const { escalationGame, securityPool } = await deployStartedForkContinuation(getZoltarAddress(), proofVerifier, [START_BOND, NON_DECISION_THRESHOLD, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes, ownFork, childBacking])
+			const balances = [lowStake, NON_DECISION_THRESHOLD, NON_DECISION_THRESHOLD] as const
+			const peaks = [zeroPeaks(), zeroPeaks(), zeroPeaks()] as const
+			for (const outcome of [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No] as const) {
+				peaks[outcome][0] = hashCarryLeaf(client.account.address, outcome, balances[outcome], BigInt(outcome), balances[outcome], BigInt(outcome + 1))
+			}
+			for (let outcome = 0; outcome < 3; outcome++) {
+				await writeContractAndWait(client, () => client.writeContract({ abi: initializeForkCarrySnapshotWithResolutionBalancesAbi, address: securityPool, functionName: 'initializeForkCarrySnapshotWithResolutionBalances', args: [peaks, [1n, 1n, 1n], balances, balances, [zeroHash, zeroHash, zeroHash]] }))
+			}
+			await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: securityPool, functionName: 'drainAllRep', args: [client.account.address] }))
+			await writeContractAndWait(client, () => client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: repTokenAddress, functionName: 'transfer', args: [escalationGame, childBacking] }))
+			assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'isForkCarryFundingComplete' }), true, 'mutually exclusive reporter claims must use the actual remaining escrow, not sum of all original principal')
+			await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: securityPool, functionName: 'resumeEscalationGameFromFork' }))
+			const resumedAt = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'forkResumedAt' })
+			await mockWindow.setTime(resumedAt + 3n * 24n * 60n * 60n + 1n)
+			const walletBefore = await getERC20Balance(client, repTokenAddress, client.account.address)
+			const proof = {
+				depositor: client.account.address,
+				amountAttoRep: NON_DECISION_THRESHOLD,
+				parentDepositIndex: 1n,
+				cumulativeAmountAttoRep: NON_DECISION_THRESHOLD,
+				sourceNodeId: 2n,
+				leafIndex: 0n,
+				merkleMountainRangeSiblings: [] as readonly Hex[],
+				merkleMountainRangePeakIndex: 0n,
+				nullifierSiblings: new SparseNullifierTree().getProof(1n),
+			}
+			await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: securityPool, functionName: 'withdrawDeposit', args: [QuestionOutcome.Yes, proof] }))
+			assert.strictEqual((await getERC20Balance(client, repTokenAddress, client.account.address)) - walletBefore, NON_DECISION_THRESHOLD + (NON_DECISION_THRESHOLD * 3n) / 5n, 'the full original winning payout must remain funded after the surplus is removed')
+			assert.strictEqual(await getERC20Balance(client, repTokenAddress, escalationGame), 0n)
+		})
+
+	test('requires the full authenticated backing snapshot even for a small nominal source', async () => {
 		const proofVerifier = await deployContract(
 			client,
 			encodeDeployData({
@@ -107,7 +147,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			}),
 		)
 		const sourcePrincipalAtFork = 6n
-		const exactMinimumBacking = sourcePrincipalAtFork - sourcePrincipalAtFork / 5n
+		const exactMinimumBacking = sourcePrincipalAtFork
 
 		const deployContinuation = async (initialBacking: bigint) => {
 			const { escalationGame, securityPool } = await deployStartedForkContinuation(getZoltarAddress(), proofVerifier, [1n, 10n, 0n, QuestionOutcome.Yes, true, initialBacking])
@@ -116,24 +156,28 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			const yesPeaks = zeroPeaks()
 			const noPeaks = zeroPeaks()
 			yesPeaks[0] = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, sourcePrincipalAtFork, 1n, sourcePrincipalAtFork, 1n)
-			await writeContractAndWait(client, () =>
-				client.writeContract({
-					abi: initializeForkCarrySnapshotWithResolutionBalancesAbi,
-					address: securityPool,
-					functionName: 'initializeForkCarrySnapshotWithResolutionBalances',
-					args: [
-						[invalidPeaks, yesPeaks, noPeaks],
-						[0n, 1n, 0n],
-						[0n, sourcePrincipalAtFork, 0n],
-						[0n, sourcePrincipalAtFork, 0n],
-						[zeroHash, zeroHash, zeroHash],
-					],
-				}),
-			)
+			for (let outcome = 0; outcome < 3; outcome++) {
+				await writeContractAndWait(client, () =>
+					client.writeContract({
+						abi: initializeForkCarrySnapshotWithResolutionBalancesAbi,
+						address: securityPool,
+						functionName: 'initializeForkCarrySnapshotWithResolutionBalances',
+						args: [
+							[invalidPeaks, yesPeaks, noPeaks],
+							[0n, 1n, 0n],
+							[0n, sourcePrincipalAtFork, 0n],
+							[0n, sourcePrincipalAtFork, 0n],
+							[zeroHash, zeroHash, zeroHash],
+						],
+					}),
+				)
+			}
 			return { escalationGame, securityPool }
 		}
 
-		const { escalationGame: underfundedGame, securityPool: underfundedPool } = await deployContinuation(exactMinimumBacking - 1n)
+		const { escalationGame: underfundedGame, securityPool: underfundedPool } = await deployContinuation(exactMinimumBacking)
+		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: underfundedPool, functionName: 'drainAllRep', args: [client.account.address] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: repTokenAddress, functionName: 'transfer', args: [underfundedGame, exactMinimumBacking - 1n] }))
 		assert.strictEqual(
 			await client.readContract({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
@@ -142,7 +186,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 				args: [],
 			}),
 			false,
-			'four units must not fund a six-unit own-fork source principal',
+			'a one-unit shortfall from the authenticated inventory must block resumption',
 		)
 		await assert.rejects(
 			client.writeContract({
@@ -163,7 +207,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 				args: [],
 			}),
 			true,
-			'five units must exactly fund a six-unit own-fork source principal',
+			'the exact authenticated source inventory must permit resumption',
 		)
 		await writeContractAndWait(client, () =>
 			client.writeContract({
@@ -185,32 +229,35 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 	})
 
 	for (const forkBurnDivisor of [5n, 7n, 100n]) {
-		test(`reopened inherited ties resolve with burn divisor ${forkBurnDivisor}`, async () => {
+		test(`below-threshold inherited ties preserve game thresholds with burn divisor ${forkBurnDivisor}`, async () => {
 			const canonicalQuestionData = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'zoltarQuestionData' })
 			const zoltar = await deployContract(client, encodeDeployData({ abi: Zoltar_Zoltar.abi, bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`, args: [canonicalQuestionData, repTokenAddress, 20n, forkBurnDivisor] }))
 			await mockWindow.addStateOverrides({ [zoltar]: { stateDiff: { [universeSupplySlot]: FORK_THRESHOLD * 20n } } })
 			const proofVerifier = await deployContract(client, encodeDeployData({ abi: statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.abi, bytecode: `0x${statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}` }))
 			const { escalationGame, securityPool } = await deployStartedForkContinuation(zoltar, proofVerifier, [START_BOND, NON_DECISION_THRESHOLD, ESCALATION_TIME_LENGTH, QuestionOutcome.None, false, FORK_THRESHOLD])
-			await writeContractAndWait(client, () =>
-				client.writeContract({
-					abi: initializeForkCarrySnapshotWithResolutionBalancesAbi,
-					address: securityPool,
-					functionName: 'initializeForkCarrySnapshotWithResolutionBalances',
-					args: [
-						[zeroPeaks(), zeroPeaks(), zeroPeaks()],
-						[0n, 1n, 1n],
-						[0n, NON_DECISION_THRESHOLD, NON_DECISION_THRESHOLD],
-						[0n, NON_DECISION_THRESHOLD, NON_DECISION_THRESHOLD],
-						[zeroHash, zeroHash, zeroHash],
-					],
-				}),
-			)
-			const retainedBacking = FORK_THRESHOLD / (2n * forkBurnDivisor)
-			await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: securityPool, functionName: 'applyTruthAuctionHaircut', args: [FORK_THRESHOLD - retainedBacking] }))
+			const inheritedBalance = NON_DECISION_THRESHOLD / (2n * forkBurnDivisor)
+			for (let outcome = 0; outcome < 3; outcome++) {
+				await writeContractAndWait(client, () =>
+					client.writeContract({
+						abi: initializeForkCarrySnapshotWithResolutionBalancesAbi,
+						address: securityPool,
+						functionName: 'initializeForkCarrySnapshotWithResolutionBalances',
+						args: [
+							[zeroPeaks(), zeroPeaks(), zeroPeaks()],
+							[0n, 1n, 1n],
+							[0n, NON_DECISION_THRESHOLD, NON_DECISION_THRESHOLD],
+							[0n, inheritedBalance, inheritedBalance],
+							[zeroHash, zeroHash, zeroHash],
+						],
+					}),
+				)
+			}
+			const backing = await getERC20Balance(client, repTokenAddress, escalationGame)
+			await writeContractAndWait(client, () => client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: repTokenAddress, functionName: 'transfer', args: [escalationGame, FORK_THRESHOLD - backing] }))
 			assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'canTriggerOwnFork' }), false)
 			await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: securityPool, functionName: 'resumeEscalationGameFromFork' }))
 			// A real REP burn lowers the universe threshold without changing this game's
-			// inherited threshold. Reopening must use the game threshold consistently.
+			// inherited threshold. A new report must use the game threshold consistently.
 			await writeContractAndWait(client, () => client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: repTokenAddress, functionName: 'approve', args: [zoltar, MAX_UINT256] }))
 			await writeContractAndWait(client, () => client.writeContract({ abi: Zoltar_Zoltar.abi, address: zoltar, functionName: 'burnRep', args: [0n, FORK_THRESHOLD * 10n] }))
 			const liveThreshold = await client.readContract({ abi: Zoltar_Zoltar.abi, address: zoltar, functionName: 'getForkThresholdAttoRep', args: [0n] })
@@ -295,20 +342,22 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		const noPeaks = zeroPeaks()
 		yesPeaks[0] = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, NON_DECISION_THRESHOLD, yesParentDepositIndex, NON_DECISION_THRESHOLD, yesSourceNodeId)
 		noPeaks[0] = hashCarryLeaf(client.account.address, QuestionOutcome.No, NON_DECISION_THRESHOLD, noParentDepositIndex, NON_DECISION_THRESHOLD, noSourceNodeId)
-		await writeContractAndWait(client, () =>
-			client.writeContract({
-				abi: initializeForkCarrySnapshotWithResolutionBalancesAbi,
-				address: securityPool,
-				functionName: 'initializeForkCarrySnapshotWithResolutionBalances',
-				args: [
-					[invalidPeaks, yesPeaks, noPeaks],
-					[0n, 1n, 1n],
-					[0n, NON_DECISION_THRESHOLD, NON_DECISION_THRESHOLD],
-					[0n, NON_DECISION_THRESHOLD, NON_DECISION_THRESHOLD],
-					[zeroHash, zeroHash, zeroHash],
-				],
-			}),
-		)
+		for (let outcome = 0; outcome < 3; outcome++) {
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					abi: initializeForkCarrySnapshotWithResolutionBalancesAbi,
+					address: securityPool,
+					functionName: 'initializeForkCarrySnapshotWithResolutionBalances',
+					args: [
+						[invalidPeaks, yesPeaks, noPeaks],
+						[0n, 1n, 1n],
+						[0n, NON_DECISION_THRESHOLD, NON_DECISION_THRESHOLD],
+						[0n, NON_DECISION_THRESHOLD, NON_DECISION_THRESHOLD],
+						[zeroHash, zeroHash, zeroHash],
+					],
+				}),
+			)
+		}
 
 		// Snapshot initialization transfers the full parent REP principal. Replacing it
 		// with one attoREP less than the exact post-fork backing tests both the view gate and

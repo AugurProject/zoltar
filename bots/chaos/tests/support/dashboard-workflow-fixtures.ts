@@ -31,7 +31,7 @@ export const topologyIdentifiers = [
 	{ type: 'report token 1', value: topologyValues.reportToken1 },
 	{ type: 'report token 2', value: topologyValues.reportToken2 },
 	{ type: 'truth auction address', value: topologyValues.auctionAddress },
-	{ type: 'truth auction pool address', value: topologyValues.auctionPoolAddress },
+	{ type: 'truth auction portfolio address', value: topologyValues.auctionPoolAddress },
 	{ type: 'trading pair address', value: topologyValues.pairAddress },
 	{ type: 'trading pair pool address', value: topologyValues.pairPoolAddress },
 ]
@@ -175,7 +175,7 @@ export const workflowRenderingState = state({
 	scheduler: { lastDelaySeconds: 60, nextRunAt: '2020-08-24T00:01:00.000Z', selectedOperationId: 'open-oracle.settle', status: 'running' },
 	topology: {
 		anchor: { blockNumber: '4242', timestamp: '1000' },
-		auctions: [{ address: topologyValues.auctionAddress, bids: [], finalized: false, pool: topologyValues.auctionPoolAddress }],
+		auctions: [{ address: topologyValues.auctionAddress, bids: [], finalized: false, portfolio: topologyValues.auctionPoolAddress }],
 		complete: true,
 		pairs: [{ address: topologyValues.pairAddress, feeBps: 30, pool: topologyValues.pairPoolAddress, status: 1, universeId: '0' }],
 		pools: [{ address: topologyValues.poolAddress, systemState: 0, universeId: '0', vaults: [] }],

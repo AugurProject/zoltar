@@ -14,9 +14,10 @@ import { EscalationGameClaimDelegate } from './EscalationGameClaimDelegate.sol';
 contract EscalationGame is EscalationGameSettlement {
 	EscalationGameDepositDelegate private immutable depositDelegate;
 
-	constructor(ISecurityPool _securityPool, ReputationToken _repToken, EscalationGameProofVerifier _proofVerifier, EscalationGameClaimDelegate _claimDelegate) EscalationGameState(_securityPool, _repToken, _proofVerifier, _claimDelegate) {
+	constructor(ISecurityPool _securityPool, ReputationToken _repToken, EscalationGameProofVerifier _proofVerifier, EscalationGameClaimDelegate _claimDelegate, EscalationGameDepositDelegate _depositDelegate) EscalationGameState(_securityPool, _repToken, _proofVerifier, _claimDelegate) {
 		fixedQuestionOutcome = BinaryOutcomes.BinaryOutcome.None;
-		depositDelegate = new EscalationGameDepositDelegate();
+		require(address(_depositDelegate).code.length > 0, 'Deposit delegate');
+		depositDelegate = _depositDelegate;
 	}
 
 	function start(uint256 _startBondAttoRep, uint256 _nonDecisionThresholdAttoRep) external {
@@ -25,9 +26,10 @@ contract EscalationGame is EscalationGameSettlement {
 		emit GameStarted(activationTime, startBondAttoRep, nonDecisionThresholdAttoRep);
 	}
 
-	function startFromFork(uint256 _startBondAttoRep, uint256 _nonDecisionThresholdAttoRep, uint256 elapsedAtFork, BinaryOutcomes.BinaryOutcome _fixedQuestionOutcome, bool _winnerHaircutPaidByFork, uint256 _forkCarryInitialBackingAttoRep) external {
+	function startFromFork(uint256 _startBondAttoRep, uint256 _nonDecisionThresholdAttoRep, int256 elapsedAtFork, BinaryOutcomes.BinaryOutcome _fixedQuestionOutcome, bool _winnerHaircutPaidByFork, uint256 _forkCarryInitialBackingAttoRep) external {
 		_initializeStartParams(_startBondAttoRep, _nonDecisionThresholdAttoRep);
-		if (elapsedAtFork > ESCALATION_TIME_LENGTH) revert('Invalid fork elapsed time');
+		if (elapsedAtFork < -int256(ACTIVATION_DELAY) || elapsedAtFork > int256(ESCALATION_TIME_LENGTH))
+			revert('Invalid fork elapsed time');
 		forkContinuation = true;
 		forkElapsedAtStart = elapsedAtFork;
 		fixedQuestionOutcome = _fixedQuestionOutcome;
@@ -38,10 +40,6 @@ contract EscalationGame is EscalationGameSettlement {
 
 	function resumeFromFork() external {
 		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.resumeFromFork, ()));
-	}
-
-	function applyTruthAuctionHaircut(uint256 repToRemoveAttoRep) external {
-		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.applyTruthAuctionHaircut, (repToRemoveAttoRep)));
 	}
 
 	function previewDepositOnOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep) external view returns (uint256 acceptedAmountAttoRep, uint256 resultingCumulativeAmountAttoRep) {

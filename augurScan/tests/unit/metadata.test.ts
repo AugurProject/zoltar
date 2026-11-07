@@ -14,8 +14,8 @@ const requireTopics = (topics: readonly (Hex | readonly Hex[] | null)[]): readon
 	})
 
 describe('ABI metadata', () => {
-	test('includes the merged liquidation approval registry contract', () => {
-		expect(abiForKind('liquidationApprovalRegistry')).toBeDefined()
+	test('includes the shared capital ledger contract', () => {
+		expect(abiForKind('securityPoolCapitalLedger')).toBeDefined()
 	})
 
 	test('decodes direct wallet REP deposits into escalation games', () => {
@@ -340,10 +340,8 @@ describe('ABI metadata', () => {
 		const transferTopics = requireTopics(encodeEventTopics({ abi: transferAbi, eventName: 'Transfer', args: { from: account, to: childToken } }))
 		expect(decodeLogRecord('reputationToken', transferTopics, '0x', new Map()).status).toBe('failed')
 
-		const checkpointAbi = parseAbi([
-			'event PoolAccountingCheckpoint(uint8 reason,address indexed vault,uint256 settlementCollateralAttoEth,uint256 totalUnderwritingLimitAttoEth,uint256 feeEligibleUnderwritingLimitAttoEth,uint256 totalClaimableVaultFeesAttoEth,uint256 unallocatedAccruedFeesAttoEth,uint256 feeIndex,uint256 feeIndexRemainder,uint256 totalFeesOwedRemainder,uint256 uncheckpointedFeeEligibleUnderwritingLimitAttoEth,uint256 lastUpdatedFeeAccumulator,uint256 currentRetentionRate)',
-		])
-		const checkpointTopics = requireTopics(encodeEventTopics({ abi: checkpointAbi, eventName: 'PoolAccountingCheckpoint', args: { vault: childToken } }))
+		const checkpointAbi = parseAbi(['event QuestionAccountingCheckpoint(uint8 reason,uint256 settlementCollateralAttoEth,uint256 shareTokenSupplyAttoShares,uint256 lastUpdatedFeeAccumulator)'])
+		const checkpointTopics = requireTopics(encodeEventTopics({ abi: checkpointAbi, eventName: 'QuestionAccountingCheckpoint' }))
 		const decoded = decodeLogRecord('securityPool', checkpointTopics, '0x', new Map())
 		expect(decoded.status).toBe('failed')
 		const stored: StoredLog = {

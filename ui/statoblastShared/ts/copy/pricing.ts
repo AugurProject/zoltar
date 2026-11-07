@@ -1,7 +1,3 @@
-export const openOraclePriceSourceDetail = 'Uses the latest price reported by the selected pool OpenOracle.'
-export const priceFromOpenOracle = 'Price from the selected pool OpenOracle'
-export const targetCollateralizationAtOpenOraclePrice = 'Target collateralization at OpenOracle price'
-export const openOracleRepEth = 'OpenOracle REP per ETH'
 export const viaUniswap = 'via Uniswap'
 export const viaOpenOracle = 'via OpenOracle'
 export const liveQuote = 'live'
@@ -21,12 +17,4 @@ export function formatPriceObservedAgo(duration: string) {
 
 export function formatOpenOraclePriceExpiredAgo(duration: string) {
 	return `OpenOracle price expired ${duration} ago`
-}
-
-export function formatPendingPriceAvailability(remainingSeconds: bigint, hasSettledPrice = false) {
-	if (remainingSeconds <= 0n) return 'Awaiting settlement'
-	const prefix = hasSettledPrice ? 'New price available in' : 'Available in'
-	if (remainingSeconds < 60n) return `${prefix} ${remainingSeconds}s`
-	if (remainingSeconds < 3600n) return `${prefix} ${remainingSeconds / 60n}m ${remainingSeconds % 60n}s`
-	return `${prefix} ${remainingSeconds / 3600n}h ${(remainingSeconds % 3600n) / 60n}m ${remainingSeconds % 60n}s`
 }

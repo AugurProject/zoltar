@@ -37,7 +37,7 @@ describe('canonical test discovery', () => {
 		expect(command).toContain('bun run test:browser:smoke')
 	})
 
-	test('local and CI discovery include source, shared, and fuzz tests exactly once', async () => {
+	test('local and CI discovery include source, shared, and stateful tests exactly once', async () => {
 		const canonicalFiles = await discoverTestFiles()
 		const weightedFiles = await getWeightedTestFiles()
 		const weightedPaths = weightedFiles.map(file => file.filePath).sort((left, right) => left.localeCompare(right))
@@ -45,7 +45,7 @@ describe('canonical test discovery', () => {
 		expect(weightedPaths).toEqual(canonicalFiles)
 		expect(canonicalFiles).toContain('tooling/testing/testnetwork.test.ts')
 		expect(canonicalFiles).toContain('shared/core/ts/evm/ethereum.test.ts')
-		expect(canonicalFiles).toContain('solidity/ts/fuzz/auctionTickMath.fuzz.ts')
+		expect(canonicalFiles).toContain('solidity/ts/tests/statoblast/securityPoolCommitmentStateful.test.ts')
 		expect(canonicalFiles).not.toContain('tooling/ui/browserSmoke.test.ts')
 		expect(canonicalFiles).not.toContain('tooling/ui/productionBuild.test.ts')
 		expect(canonicalFiles.some(file => file.includes('/js/'))).toBe(false)
@@ -100,9 +100,11 @@ describe('canonical test discovery', () => {
 		expect([...files].sort()).toEqual([...(await discoverTestFilesForDomain('solidity'))].sort())
 		expect(new Set(files).size).toBe(files.length)
 		expect(shards.every(shard => shard.files.length > 0)).toBe(true)
-		for (const slice of ['Entry', 'Liquidation', 'Shares', 'MultiPool', 'Recovery', 'Vault', 'Claims']) {
+		for (const slice of ['Entry', 'MultiPool', 'Recovery', 'Vault', 'Claims']) {
 			expect(files).toContain(`solidity/ts/tests/statoblast/forkMigration${slice}.test.ts`)
 		}
+		for (const suite of ['Delivery', 'Redemption', 'ReportingFork']) expect(files).toContain(`solidity/ts/tests/statoblast/securityPoolPortfolio${suite}.test.ts`)
+		expect(files).not.toContain('solidity/ts/tests/statoblast/forkMigrationShares.test.ts')
 		expect(files).not.toContain('solidity/ts/tests/statoblast/forkMigration.test.ts')
 	})
 
@@ -118,13 +120,24 @@ describe('canonical test discovery', () => {
 
 		expect(shardedFiles).toEqual(expectedFiles)
 		expect(shardedFiles).toContain('solidity/ts/tests/openOracleDispute.test.ts')
-		expect(shardedFiles).toContain('solidity/ts/fuzz/auctionTickMath.fuzz.ts')
+		expect(shardedFiles).toContain('solidity/ts/tests/statoblast/securityPoolCommitmentStateful.test.ts')
 		expect(new Set(shardedFiles).size).toBe(shardedFiles.length)
 		expect(shards.every(shard => shard.length > 0)).toBe(true)
 	})
 
+	test('fuzz extensions remain discoverable without depending on a particular production model', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-fuzz-discovery-'))
+		try {
+			await writeFile(join(directory, 'model.fuzz.ts'), '')
+			await writeFile(join(directory, 'boundary.test.ts'), '')
+			expect(await discoverTestFiles(directory, ['.'])).toEqual(['boundary.test.ts', 'model.fuzz.ts'])
+		} finally {
+			await rm(directory, { recursive: true, force: true })
+		}
+	})
+
 	test('Bun receives explicit source paths so nonstandard fuzz filenames execute', () => {
-		expect(toBunTestPath('solidity/ts/fuzz/auctionTickMath.fuzz.ts')).toBe('./solidity/ts/fuzz/auctionTickMath.fuzz.ts')
+		expect(toBunTestPath('solidity/ts/fuzz/model.fuzz.ts')).toBe('./solidity/ts/fuzz/model.fuzz.ts')
 		expect(toBunTestPath('./solidity/ts/tests/auction.test.ts')).toBe('./solidity/ts/tests/auction.test.ts')
 	})
 
@@ -136,7 +149,7 @@ describe('canonical test discovery', () => {
 
 	test('explicit source files and directories suppress canonical full-suite injection', () => {
 		expect(isExplicitTestPath('solidity/ts/tests/statoblast')).toBe(true)
-		expect(isExplicitTestPath('./solidity/ts/fuzz/auctionTickMath.fuzz.ts')).toBe(true)
+		expect(isExplicitTestPath('./solidity/ts/fuzz/model.fuzz.ts')).toBe(true)
 		expect(isExplicitTestPath('--test-name-pattern')).toBe(false)
 		expect(isExplicitTestPath('not-a-repository-path')).toBe(false)
 	})

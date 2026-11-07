@@ -1,7 +1,10 @@
+import type { SecurityPoolsView } from '@zoltar/ui-statoblast-shared/features/types.js'
+import { resolveRepPrice } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
+import { resolveLoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { RepPriceRefreshContext } from '@zoltar/ui-statoblast-shared/features/security-pools/components/RepPriceStatusLabel.js'
 import { TransactionStepsModal } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
-import { useCallback, useState } from 'preact/hooks'
+import { useState } from 'preact/hooks'
 import { UniverseNamesProvider } from '@zoltar/ui-core-shared/components/UniverseNames.js'
 import { UniverseSwitcher } from '@zoltar/ui-core-shared/components/UniverseSwitcher.js'
 import { AppHeaderShell } from '@zoltar/ui-core-shared/app/components/AppHeaderShell.js'
@@ -10,14 +13,15 @@ import { AppStatusNotices } from '@zoltar/ui-core-shared/app/components/AppStatu
 import { ProtocolAppFrame } from '@zoltar/ui-core-shared/app/components/ProtocolAppFrame.js'
 import { AppRouteContent } from './components/AppRouteContent.js'
 import { OverviewPanels } from '@zoltar/ui-core-shared/app/components/OverviewPanels.js'
-import { useAppRouteEffects } from './hooks/useAppRouteEffects.js'
+import { useOpenOracleRouteSync } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleRouteSync.js'
+import { useMissingDeploymentRedirect } from '@zoltar/ui-core-shared/app/hooks/useMissingDeploymentRedirect.js'
 import { useProtocolAppShell } from '@zoltar/ui-zoltar-shared/features/appShell/hooks/useProtocolAppShell.js'
 import { useHashRoute } from '@zoltar/ui-core-shared/app/hooks/useHashRoute.js'
 import { useMarketCreation } from '@zoltar/ui-statoblast-shared/features/markets/hooks/useMarketCreation.js'
 import { useRepPrices } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useRepPrices.js'
 import { useStatoblastUrlState } from './hooks/useStatoblastUrlState.js'
 import { initializeStatoblastActiveEnvironment } from './activeEnvironment.js'
-import { applicationTitle, formatAppDocumentTitle, getAppPageTitle, getPoolDocumentTitleDetail } from './lib/appPageTitle.js'
+import { applicationTitle, formatAppDocumentTitle, getAppPageTitle } from './lib/appPageTitle.js'
 import { buildRouteHref, getTopLevelRouteSearch, parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { resolveEnumValue } from '@zoltar/ui-core-shared/forms/viewState.js'
 import { onchainStateDependencies } from './onchainStateDependencies.js'
@@ -30,13 +34,11 @@ import { getHeaderRepPerEthPrice } from './lib/headerRepPrice.js'
 import { getRouteSecondaryNavigation, getStatoblastRouteTabs, getTransactionRouteKey } from './lib/appNavigation.js'
 import { getStatoblastOverviewUniverse, getStatoblastUniversePresentation } from './lib/overviewUniverse.js'
 import { useOpenOracleRoute } from './hooks/useOpenOracleRoute.js'
-import { useSecurityPoolsRoute } from './hooks/useSecurityPoolsRoute.js'
 
 export function App() {
 	const [uiPriceOracle, setUiPriceOracle] = useState(readUiPriceOracle)
-	const [selectedPoolRefreshNonce, setSelectedPoolRefreshNonce] = useState(0)
 	const urlState = useStatoblastUrlState()
-	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, securityPoolAddress, securityPoolQuestionId, selectedPoolView, setActiveUniverseId, setOpenOracleReport, setSecurityPoolsView, vaultAddress } = urlState
+	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, securityPoolAddress, selectedPoolView, setActiveUniverseId, setOpenOracleReport, setSecurityPoolsView } = urlState
 	const { navigate, route } = useHashRoute()
 	const resolvedRoute = resolveEnumValue<StatoblastRoute>(route, 'not-found', STATOBLAST_ROUTES)
 	const repPrices = useRepPrices()
@@ -74,7 +76,6 @@ export function App() {
 		initializeEnvironment: options => initializeStatoblastActiveEnvironment(window.location, options),
 		isDeploymentRoute: route === 'deploy',
 		onchainStateDependencies,
-		onEnvironmentCommitted: () => setSelectedPoolRefreshNonce(currentNonce => currentNonce + 1),
 		onRefresh: refreshRepPrices,
 	})
 	const { transactionState } = transactionTray
@@ -88,7 +89,7 @@ export function App() {
 		environmentRefreshKey: activeEnvironmentNonce,
 	})
 	const { zoltarUniverse, zoltarUniverseError } = marketCreation
-	const { loadOracleReport, onViewPendingReport, openOracleRouteContentProps, openOraclePriceCoordinator, setOpenOracleReportId } = useOpenOracleRoute({
+	const { loadOracleReport, openOracleRouteContentProps, setOpenOracleReportId } = useOpenOracleRoute({
 		accountState,
 		canReadOnchainData,
 		navigate,
@@ -97,14 +98,7 @@ export function App() {
 		urlOpenOracleReportId,
 		walletScopedHookConfig,
 	})
-	const { activeSecurityPoolsView, formSync, loadSecurityPools, resetSecurityPoolCreation, securityPoolResult, securityPoolsRouteContentProps, selectedPool, selectedPoolRepPrice, tradingResult } = useSecurityPoolsRoute({
-		context: { accountState, activeEnvironmentNonce, activeUniverseId, canReadOnchainData, currentTimestamp, deploymentStatuses, route, uiPriceOracle, walletBootstrapComplete, walletScopedAccountAddress, walletScopedHookConfig },
-		marketCreation,
-		openOracle: { inlineOracle: openOracleRouteContentProps, onViewPendingReport, priceCoordinator: openOraclePriceCoordinator },
-		repPrices,
-		selectedPoolRefresh: { nonce: selectedPoolRefreshNonce, setNonce: setSelectedPoolRefreshNonce },
-		urlState,
-	})
+	const activeSecurityPoolsView = resolveEnumValue<SecurityPoolsView>(urlState.securityPoolsView, securityPoolAddress === '' ? 'browse' : 'operate', ['browse', 'operate', 'universes', 'migrate'])
 	const overviewProps = {
 		...overviewWalletProps,
 		activeUniverseId,
@@ -114,7 +108,7 @@ export function App() {
 			isLoading: isLoadingRepPrices,
 			isRefreshing: isRefreshingRepPrices,
 			onRefresh: refreshRepPrices,
-			...getHeaderRepPerEthPrice({ currentTimestamp, hasSelectedPool: selectedPool !== undefined, repPerEthFailure, repPerEthSource, repPerEthSourceUrl, repPrice: selectedPoolRepPrice }),
+			...getHeaderRepPerEthPrice({ currentTimestamp, hasSelectedPool: false, repPerEthFailure, repPerEthSource, repPerEthSourceUrl, repPrice: resolveRepPrice({ now: currentTimestamp, setting: uiPriceOracle, uniswapPrice: repPrices.repPerEthPrice }) }),
 			repUsdcFailure,
 			repUsdcPrice,
 			repUsdcSource,
@@ -138,29 +132,8 @@ export function App() {
 		onRouteChange: navigate,
 	}
 	const pageTitle = getAppPageTitle({ activeSecurityPoolsView, route: activeRoute })
-	// Only the document title names the pool, so the pool loading in does not move focus to the page heading again.
-	const documentTitleDetail = activeRoute === 'pools' && activeSecurityPoolsView === 'operate' ? getPoolDocumentTitleDetail({ requestedPoolAddress: securityPoolAddress, selectedPool }) : undefined
-	const formatDocumentTitle = useCallback((title: string) => formatAppDocumentTitle(title, documentTitleDetail), [documentTitleDetail])
-	useAppRouteEffects({
-		accountAddress: walletScopedAccountAddress,
-		applicationDeploymentMissing,
-		environmentReady: canReadOnchainData,
-		activeEnvironmentNonce,
-		formSync: { ...formSync, setOpenOracleReportId },
-		loadOracleReport: async reportId => await loadOracleReport(reportId),
-		loadSecurityPools: async requestedSecurityPoolAddress => await loadSecurityPools(requestedSecurityPoolAddress),
-		navigate,
-		resetSecurityPoolCreation,
-		route: activeRoute,
-		securityPoolAddress,
-		securityPoolQuestionId,
-		securityPoolResultHash: securityPoolResult?.deployPoolHash,
-		selectedPoolSecurityPoolAddress: selectedPool?.securityPoolAddress,
-		tradingResultHash: tradingResult?.hash,
-		urlOpenOracleReportId,
-		urlVaultAddress: vaultAddress,
-		walletBootstrapComplete,
-	})
+	useOpenOracleRouteSync({ activeEnvironmentNonce, environmentReady: canReadOnchainData, isOpenOracleRoute: activeRoute === 'open-oracle', loadOracleReport, reportId: urlOpenOracleReportId, setOpenOracleFormReportId: setOpenOracleReportId })
+	useMissingDeploymentRedirect({ isDeploymentRoute: route === 'deploy', missing: applicationDeploymentMissing, navigateToDeployment: () => navigate('deploy') })
 	const secondaryNavigation = getRouteSecondaryNavigation({ activeSecurityPoolsView, route: activeRoute, setSecurityPoolsView })
 	const transactionRouteKey = getTransactionRouteKey({ activeSecurityPoolsView, route })
 
@@ -182,7 +155,7 @@ export function App() {
 						settingsContent={<UiPriceOracleSettings priceOracle={uiPriceOracle} onPriceOracleChange={setUiPriceOracle} />}
 					/>
 				}
-				heading={<AppPageHeading formatDocumentTitle={formatDocumentTitle} pageTitle={pageTitle} />}
+				heading={<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle={pageTitle} />}
 				notices={
 					<AppStatusNotices
 						errorMessages={errorMessages}
@@ -200,7 +173,27 @@ export function App() {
 				walletActions={overviewWalletProps}
 			>
 				<RepPriceRefreshContext.Provider value={{ onRefresh: refreshRepPrices, busy: isLoadingRepPrices || isRefreshingRepPrices }}>
-					<AppRouteContent deploy={deployRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={activeRoute} securityPools={securityPoolsRouteContentProps} />
+					<AppRouteContent
+						deploy={deployRouteContentProps}
+						openOracle={openOracleRouteContentProps}
+						portfolios={{ parameters: walletScopedHookConfig, enabled: canReadOnchainData && walletBootstrapComplete, environmentKey: activeEnvironmentNonce, activeUniverseId }}
+						readBackendMessage={readBackendMessage}
+						route={activeRoute}
+						questions={{
+							accountState,
+							parameters: walletScopedHookConfig,
+							deploymentStatuses,
+							enabled: canReadOnchainData && walletBootstrapComplete,
+							environmentKey: activeEnvironmentNonce,
+							universeId: activeUniverseId,
+							currentTimestamp,
+							selectedAddress: securityPoolAddress,
+							onSelect: urlState.openSecurityPoolInUniverse,
+						}}
+						questionView={activeSecurityPoolsView}
+						universeDirectory={{ activeUniverseId, zoltarUniverse, universeMissing: marketCreation.zoltarUniverseMissing, universeError: marketCreation.zoltarUniverseError, onRetryUniverse: () => void marketCreation.loadZoltarUniverse(), onMigrateRep: () => setSecurityPoolsView('migrate') }}
+						migration={{ accountState, activeUniverseId, operations: marketCreation, universeState: resolveLoadableValueState({ isLoading: marketCreation.loadingZoltarUniverse, isMissing: marketCreation.zoltarUniverseMissing, value: zoltarUniverse }), universeBrowserHref: '#/pools/universes' }}
+					/>
 				</RepPriceRefreshContext.Provider>
 				<TransactionStepsModal contextKey={`${activeEnvironmentNonce}:${walletScopedAccountAddress ?? ''}`} />
 			</ProtocolAppFrame>

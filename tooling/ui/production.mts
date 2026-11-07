@@ -3,6 +3,7 @@ import * as path from 'path'
 import * as process from 'node:process'
 import { normalizeBundlerPath, resolveBundlerSpecifierPath } from './bundlerPaths.mts'
 import { featureStylesheets, parseUiAppIdFromProcess, getUiAppPaths, type UiAppPaths } from './appPaths.mts'
+import { computeSimulationSnapshotKey, getSimulationSnapshotPaths, getSimulationSnapshotScenarios, getSimulationSnapshotStatus, simulationSnapshotKeyDefine } from './simulationSnapshots.mts'
 import { createTevmBufferImportPlugin } from './tevmBufferImport.mts'
 import { vendorFonts } from './vendor.mts'
 
@@ -111,9 +112,10 @@ async function buildProductionApp(paths: UiAppPaths) {
 	assertBuildSucceeded('Production application bundle', result)
 }
 
-async function buildProductionWorker(paths: UiAppPaths) {
+async function buildProductionWorker(paths: UiAppPaths, snapshotKey: string) {
 	const result = await Bun.build({
 		banner: WORKER_BANNER,
+		define: simulationSnapshotKeyDefine(snapshotKey),
 		entrypoints: [normalizeBundlerPath(paths.workerEntrypoint)],
 		naming: { entry: 'tevmWorker.worker.js' },
 		outdir: paths.appDistAssetsRoot,
@@ -124,13 +126,26 @@ async function buildProductionWorker(paths: UiAppPaths) {
 	assertBuildSucceeded('Production worker bundle', result)
 }
 
+/** The key of the worker's sources, and the prepared scenario states to ship next to it when the development build's are current for them. */
+async function findCurrentSimulationSnapshots(paths: UiAppPaths) {
+	const snapshotPaths = getSimulationSnapshotPaths(paths)
+	const key = await computeSimulationSnapshotKey(paths)
+	const status = await getSimulationSnapshotStatus(snapshotPaths, key, await getSimulationSnapshotScenarios(paths.appId))
+	if (status === 'current') return { directory: snapshotPaths.directory, key }
+	console.log(`[production] ${paths.appId} simulation snapshots are ${status}; run bun run ui:snapshots ${paths.appId} before the production build to ship them`)
+	return { directory: undefined, key }
+}
+
 export async function buildProductionBundle() {
+	// Resolved before the bundles build: the key bundles the worker in memory and must not share the process with the aliased production builds.
+	const { directory: snapshotDirectory, key: snapshotKey } = await findCurrentSimulationSnapshots(paths)
 	await fs.rm(paths.appDistRoot, { recursive: true, force: true })
 	await fs.mkdir(paths.appDistAssetsRoot, { recursive: true })
 
 	await Promise.all([
 		buildProductionApp(paths),
-		buildProductionWorker(paths),
+		buildProductionWorker(paths, snapshotKey),
+		...(snapshotDirectory === undefined ? [] : [fs.cp(snapshotDirectory, path.join(paths.appDistAssetsRoot, path.basename(snapshotDirectory)), { recursive: true })]),
 		writeProductionIndexHtml(paths),
 		...coreSharedStylesheets.map(stylesheet => copyStaticAsset(path.join(paths.coreSharedCssRoot, stylesheet), path.join(paths.appDistRoot, 'css', stylesheet))),
 		...featureStylesheets[appId].map(stylesheet => {

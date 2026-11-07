@@ -87,8 +87,9 @@ describe('live portfolio scope', () => {
 		const empty = rendered.container.querySelector('.empty-state')
 		// The genesis universe is named without its raw identifier.
 		expect(empty?.querySelector('.empty-state-title')?.textContent).toBe('No positions in Augur v2 › Yes')
-		// The list only covers markets this browser opened, and the empty state says so.
-		expect(empty?.textContent).toContain('only covers markets opened in this browser')
+		// Holdings discovery covers registered pools in the selected universe.
+		expect(empty?.textContent).toContain('No Yes, No, Invalid, or LP balance was found in registered security pools in this universe.')
+		expect(empty?.textContent).not.toContain('only covers markets opened in this browser')
 		const links = Array.from(empty?.querySelectorAll('a') ?? [])
 		expect(links.map(link => [link.textContent, link.getAttribute('href'), link.classList.contains('primary')])).toEqual([
 			['Browse markets', '#/market', true],

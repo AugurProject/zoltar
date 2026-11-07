@@ -1,5 +1,3 @@
-import type { Address } from '@zoltar/bot-shared/ethereum'
-import type { CanonicalImmutableTopologyCache } from '../monitoring/topology-schema.ts'
 import type { RuntimeTopologySummary } from '../state/operator-state.ts'
 import type { CanonicalScanResult } from './canonical-scan.ts'
 
@@ -11,7 +9,8 @@ export function runtimeTopologySummary(scan: Pick<CanonicalScanResult, 'anchor' 
 			bidCount: auction.bids.length,
 			endTime: auction.endTime,
 			finalized: auction.finalized,
-			pool: auction.pool,
+			portfolio: auction.portfolio,
+			universeId: auction.universeId,
 			startTime: auction.startTime,
 		})),
 		complete: scan.executionReady,
@@ -23,7 +22,7 @@ export function runtimeTopologySummary(scan: Pick<CanonicalScanResult, 'anchor' 
 			questionId: pool.questionId,
 			systemState: pool.systemState,
 			universeId: pool.universeId,
-			vaultCount: registeredVaultCount(scan.topologyCache, pool.address),
+			portfolio: pool.portfolio,
 		})),
 		reports: scan.snapshot.reports.map(report => ({
 			currentReporter: report.currentReporter,
@@ -42,12 +41,4 @@ export function runtimeTopologySummary(scan: Pick<CanonicalScanResult, 'anchor' 
 			repToken: universe.repToken,
 		})),
 	}
-}
-
-function registeredVaultCount(topologyCache: CanonicalImmutableTopologyCache, pool: Address) {
-	const cursor = topologyCache.discoveryCursors.vaultsByPool[pool.toLowerCase()]
-	if (cursor === undefined) throw new Error(`Canonical topology cache omitted the vault registry cursor for pool ${pool}`)
-	const count = BigInt(cursor.canonicalCount)
-	if (count > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error(`Canonical vault count for pool ${pool} exceeds the dashboard safe integer range`)
-	return Number(count)
 }

@@ -1,3 +1,4 @@
+import type { ImmutableTopologyIdentity } from '../../src/monitoring/topology-identity.ts'
 import type { DiscoveryIssue } from '../../src/operations/types.ts'
 import { formatDiscoveryWarnings } from '../../src/monitoring/discovery-coverage.ts'
 import { canonicalUniswapDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
@@ -8,19 +9,19 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { encodeAbiParameters, getAddress, privateKeyToAccount, type Abi, type AbiValue, type Address } from '@zoltar/bot-shared/ethereum'
+import { getAddress, zeroAddress, privateKeyToAccount, type Abi, type AbiValue, type Address } from '@zoltar/bot-shared/ethereum'
+import { discoverChildPoolPreparations } from '../../src/monitoring/discovery-child-preparation.ts'
+import { discoverPoolPriceFeed } from '../../src/monitoring/discovery-price-feed.ts'
 import { discoverEcosystemSnapshot } from '../../src/monitoring/discovery.ts'
 import { DISCOVERY_RPC_CONCURRENCY, DISCOVERY_RPC_QUEUE_LIMIT, drainConcurrent, limitDiscoveryConcurrency, mapWithConcurrency, type ChaosReadClient } from '../../src/monitoring/discovery-client.ts'
-import { discoverDirectEscalationDepositQuotes, minimumSafeVaultDeposit, relevantTokenSpenders } from '../../src/monitoring/discovery-escalation.ts'
-import { forkMigrationWindowIsOpen, forkRepMigrationTarget } from '../../src/monitoring/discovery-fork-migration.ts'
+import { discoverDirectEscalationDepositQuotes, relevantTokenSpenders } from '../../src/monitoring/discovery-escalation.ts'
 import { assertCanonicalPairGraph, assertCanonicalPoolGraph, authenticatePoolProtocolBindings } from '../../src/monitoring/discovery-graph.ts'
-import { advanceVaultRegistryCursor, collectCountedPages } from '../../src/monitoring/discovery-registry.ts'
+import { collectCountedPages } from '../../src/monitoring/discovery-registry.ts'
 import { discoverShareInventory, trustedIndexedReportsForDiscovery } from '../../src/monitoring/discovery-share-inventory.ts'
-import { discoverStagedOperations } from '../../src/monitoring/discovery-staged-operations.ts'
 import { canonicalLifecyclePresence } from '../../src/operations/catalog.ts'
 import { urgentOperationPlans } from '../support/operation-plans.ts'
-import type { OracleGameSnapshot, PlanningOptions } from '../../src/operations/types.ts'
-import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity } from '../../src/monitoring/topology-schema.ts'
+import type { OracleGameSnapshot } from '../../src/operations/types.ts'
+import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES, type CanonicalImmutableTopologyCache } from '../../src/monitoring/topology-schema.ts'
 import { loadImmutableTopologyCacheWithinLimits, saveImmutableTopologyCache } from '../../src/monitoring/topology-cache.ts'
 import { address, hash, snapshotFixture } from '../operations/fixture.ts'
 
@@ -61,6 +62,51 @@ test('monitors inventory for a known execution address without requiring a signe
 	expect(fake.contractReads.filter(read => read.functionName === 'balanceOf').every(read => read.args?.[0] === wallet)).toBe(true)
 })
 
+test('discovers a shared feed with aggregate exposure instead of empty question collateral', async () => {
+	const fake = refundBackfillClient(0n, false, { sharedExposure: 10n ** 18n })
+	const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet: undefined })
+	expect(snapshot.pools[0]).toMatchObject({ priceFeed: address(80), oracleExposureAttoEth: (10n ** 18n).toString(), settlementCollateralAttoEth: 0n.toString(), oracleRequestFunding: { fixedRequestPriceCostAttoEth: 101n.toString() } })
+})
+
+test('authenticates latest and retained candidate escrows at the same discovery block', async () => {
+	const fake = refundBackfillClient(0n, false, { sharedExposure: 0n })
+	const funding = {
+		escalationHaltMultiplierBps: '10000',
+		feePercentage: '0',
+		gasConsumedOpenOracleReportPrice: '1',
+		gasUnitsForOneDispute: '1',
+		initialReportPriorityFeeAttoEthPerGas: 1n.toString(),
+		openOracleSecurityMultiplierBps: '10000',
+		protocolFee: '0',
+		settlementCallbackGasLimit: '1',
+		targetPriceErrorForDispute: '1000',
+	}
+	const snapshot = await discoverPoolPriceFeed(fake.client, address(21), 10n, 0n, funding, 20_002n, 101n, 1n, 7n, [6n, 9n])
+	expect(snapshot.reportEscrows).toEqual({ '6': address(86), '7': address(87) })
+	await expect(discoverPoolPriceFeed(fake.client, address(21), 10n, 0n, funding, 20_002n, 101n, 1n, 9n)).rejects.toThrow('pending report has no authenticated escrow')
+})
+
+for (const shared of [false, true])
+	for (const ready of [false, true])
+		test(`discovers canonical child preparation at the pinned block (${shared}, ${ready})`, async () => {
+			const fake = fakeClient(10n, hash(10), { childPreparation: { shared, ready } })
+			const preparation = await discoverChildPoolPreparations(fake.client, address(4), address(2), address(50), 0n, ['1'], 10n)
+			expect(preparation['1']).toEqual({
+				portfolio: shared ? address(90) : zeroAddress,
+				branchReady: !shared || ready,
+				sourcePool: address(50),
+				sourceGame: zeroAddress,
+				childUniverseId: '88',
+				childPool: ready ? address(93) : zeroAddress,
+				game: zeroAddress,
+				historyOutcomesInitialized: 0,
+				historyReady: ready,
+				feedRequired: false,
+				dependenciesRequired: !shared && !ready,
+			})
+			expect(fake.contractReads.some(read => read.functionName === 'sharedPriceFeeds')).toBe(shared)
+		})
+
 test('keyless pool discovery keeps auctions and vault topology without execution-account reads', async () => {
 	const fake = refundBackfillClient(25n)
 	const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet: undefined })
@@ -90,7 +136,7 @@ test('canonical scans publish inventory only for a successfully scanned executio
 			networkConfigured: true,
 			runtime: { ...example.runtime, protocolStartBlock: '0', stateFile: await temporaryStatePath() },
 		})
-		settings.deployment = snapshotFixture().deployments
+		settings.deployment = { ...snapshotFixture().deployments, multicall3: address(90) }
 		const pool = createChaosReadPool(settings)
 		const read = chaosReadClients(settings, pool)[0]
 		if (read === undefined) throw new Error('Canonical scan fixture needs one client')
@@ -218,6 +264,7 @@ function topologyIdentity(): ImmutableTopologyIdentity {
 }
 
 interface GraphOverrides {
+	childPreparation?: { shared: boolean; ready: boolean }
 	chainId?: number
 	missingContract?: Address
 	missingContracts?: readonly Address[]
@@ -339,6 +386,28 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 					return graph.universeTheoreticalSupplyAttoRep ?? 1_000_000n
 				case 'forkBurnDivisor':
 					return 5n
+				case 'getChildUniverseId':
+					return 88n
+				case 'getSecurityPoolPortfolio':
+					return graph.childPreparation?.shared ? address(90) : zeroAddress
+				case 'getSecurityPoolOriginId':
+					return hash(90)
+				case 'getChildPoolDependencies':
+					return graph.childPreparation?.ready ? [address(91), graph.childPreparation.shared ? zeroAddress : address(92)] : [zeroAddress, zeroAddress]
+				case 'clocks':
+					return [0n, 0n, true, graph.childPreparation?.ready ?? false]
+				case 'getForkTime':
+					return 0n
+				case 'sourceGame':
+					return zeroAddress
+				case 'questionId':
+					return 101n
+				case 'systemState':
+					return 0n
+				case 'getSecurityPool':
+					return graph.childPreparation?.ready ? address(93) : zeroAddress
+				case 'sharedPriceFeeds':
+					return graph.childPreparation?.ready ? address(94) : zeroAddress
 				case 'getMigrationRepBalanceAttoRep':
 					return 0n
 				case 'getDeployedChildUniverses': {
@@ -378,6 +447,9 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 					if (typeof start !== 'bigint' || typeof count !== 'bigint') throw new Error('Pool-deployment page arguments required')
 					return [...(graph.poolDeployments ?? [])].slice(Number(start), Number(start + count))
 				}
+				case 'escalationGame':
+				case 'portfolioCustody':
+					return zeroAddress
 				case 'balanceOf':
 				case 'allowance':
 					return 0n
@@ -401,23 +473,16 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 }
 
 interface RefundBackfillOverrides {
+	sharedExposure?: bigint
 	auctionFinalized?: boolean
-	badDebtGeneration?: bigint
 	baseFeePerGas?: bigint
-	computedClearing?: readonly [boolean, bigint, bigint, bigint]
-	storedClearingTick?: bigint
-	underfunded?: boolean
-	underfundedWinningAttoEth?: bigint
-	unassignedPosition?: readonly [bigint, bigint, bigint, bigint, bigint]
-	vaults?: readonly Address[]
 }
 
-function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistered = false, overrides: RefundBackfillOverrides = {}) {
+function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegistered = false, overrides: RefundBackfillOverrides = {}) {
 	const pool = address(20)
 	const coordinator = address(21)
 	const shareToken = address(22)
 	const truthAuction = address(23)
-	const vaults = overrides.vaults ?? (walletVaultRegistered ? [address(1)] : [])
 	const contractReads: string[] = []
 	const baseFeePerGas = overrides.baseFeePerGas ?? 1n
 	const base = fakeClient(10n, hash(10), {
@@ -436,15 +501,98 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 		questionIds: [101n],
 	})
 	const implementation = {
+		async simulateContract(parameters: { functionName: string; blockNumber?: bigint; args?: readonly AbiValue[] }) {
+			expect(parameters.blockNumber).toBe(10n)
+			expect(parameters.functionName).toBe('settleRefund')
+			expect(parameters.args).toEqual([1n])
+			return { result: undefined }
+		},
 		async readContract(parameters: { abi: Abi; address: Address; args?: readonly AbiValue[]; blockNumber?: bigint; functionName: string; gasPrice?: bigint }) {
 			contractReads.push(parameters.functionName)
 			// Geth evaluates BASEFEE as zero for eth_call without a nonzero fee.
 			const callBaseFee = (parameters.gasPrice ?? 0n) === 0n ? 0n : baseFeePerGas
 			switch (parameters.functionName) {
-				case 'getVaultCount':
-					return BigInt(vaults.length)
-				case 'getVaults':
-					return vaults
+				case 'getSecurityPoolPortfolio':
+					return address(90)
+				case 'getPool':
+					return pool
+				case 'factory':
+					return parameters.address === address(90) ? address(4) : address(8)
+				case 'capitalLedger':
+				case 'capital':
+					return address(91)
+				case 'commitmentIndex':
+					return address(92)
+				case 'settlement':
+					return address(93)
+				case 'ledger':
+					return address(94)
+				case 'forkController':
+					return address(95)
+				case 'portfolio':
+					return parameters.address === address(92) ? address(91) : address(90)
+				case 'forkAuthority':
+					return address(95)
+				case 'auctions':
+					return truthAuction
+				case 'engine':
+					return address(24)
+				case 'controller':
+					return truthAuction
+				case 'ownerAccount':
+					return [0n, 0n, 0n, 10000n, 0n]
+				case 'ownerCollateral':
+				case 'totals':
+					return [0n, 0n, 0n]
+				case 'bids':
+					return [address(1), address(25), 10000n, 1n, 100n, false]
+				case 'purchaseQuote':
+					return [0n, 0n]
+				case 'attoSharesToAttoEth':
+					return parameters.args?.[0]
+				case 'attoEthToAttoShares':
+					return 0n
+				case 'opened':
+					return true
+				case 'frozen':
+				case 'importing':
+				case 'exported':
+					return false
+				case 'securityMultiplierBps':
+					return 10000n
+				case 'acceptedPrice':
+				case 'conservativePrice':
+				case 'liquidationPrice':
+				case 'ownerConservativePrice':
+				case 'openingConservativePrice':
+					return 10n ** 18n
+				case 'closesAt':
+					return 2000n
+				case 'opensAt':
+				case 'repGrid':
+				case 'lotAttoEth':
+				case 'minimumCollateralAttoRepPerLot':
+					return 1n
+				case 'maximumBidAttoRepPerLot':
+					return 1000n
+				case 'refundCreditAttoEth':
+					return pendingRefundAttoEth
+				case 'originUniverseId':
+				case 'purchaseFeeBps':
+				case 'annualFeeBps':
+				case 'minimumPurchaseFeeAttoEth':
+				case 'minimumCommitmentAttoEth':
+				case 'rewardVestingSeconds':
+				case 'demandAttoEth':
+				case 'totalFreeAttoRep':
+				case 'getForkChoiceDeadline':
+				case 'currentBatch':
+				case 'nextBatch':
+				case 'minimumOutcomeExchangeRate':
+				case 'acceptedExposureLimitAttoEth':
+				case 'settlementCollateralAttoEth':
+				case 'lastUpdatedFeeAccumulator':
+					return 0n
 				case 'repToken':
 				case 'reputationToken':
 					return address(10)
@@ -455,6 +603,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 				case 'questionId':
 					return 101n
 				case 'escalationGame':
+				case 'portfolioCustody':
 					return address(0)
 				case 'truthAuction':
 					return truthAuction
@@ -462,27 +611,15 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 					return 0n
 				case 'awaitingForkContinuation':
 					return false
-				case 'getPoolAccountingSnapshot':
-					return {
-						badDebtGeneration: overrides.badDebtGeneration ?? 0n,
-						currentRetentionRate: 10n ** 18n,
-						feeEligibleUnderwritingLimitAttoEth: 0n,
-						feeIndex: 0n,
-						feeIndexRemainder: 0n,
-						lastUpdatedFeeAccumulator: 0n,
-						settlementCollateralAttoEth: 0n,
-						totalUnderwritingLimitAttoEth: 0n,
-						totalClaimableVaultFeesAttoEth: 0n,
-						totalFeesOwedRemainder: 0n,
-						unallocatedAccruedFeesAttoEth: 0n,
-						uncheckpointedFeeEligibleUnderwritingLimitAttoEth: 0n,
-					}
+				case 'getFeeEpochEndTime':
+					return 2_000n
 				case 'shareTokenSupplyAttoShares':
 				case 'totalRepBackingUnits':
 				case 'totalBadDebtAttoEth':
 				case 'minimumVaultRepDepositAttoRep':
 				case 'initialEscalationGameDepositAttoRep':
 				case 'lastSettlementTimestamp':
+				case 'priceValidUntil':
 				case 'stagedOperationCounter':
 				case 'pendingReportId':
 				case 'getTotalPoolHeldAttoRep':
@@ -496,15 +633,26 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 				case 'isPriceValid':
 					return true
 				case 'getRequestPriceCostAttoEth':
-					return 8n * callBaseFee + 101n
+					return overrides.sharedExposure === undefined ? 8n * callBaseFee + 101n : 101n
 				case 'vaultOperations':
 					return address(70)
 				case 'settlementTime':
 					return 100n
 				case 'lastPrice':
 					return 10n ** 18n
+				case 'priceFeed':
+					return overrides.sharedExposure === undefined ? coordinator : address(80)
+				case 'aggregateExposureAttoEth':
+					expect(parameters.blockNumber).toBe(10n)
+					expect(parameters.address).toBe(address(80))
+					return overrides.sharedExposure ?? 0n
+				case 'reportCandidates':
+					expect(parameters.blockNumber).toBe(10n)
+					expect(parameters.address).toBe(address(80))
+					if (parameters.args?.[0] === 7n) return [address(87), address(1), coordinator, 1n]
+					return [parameters.args?.[0] === 6n ? address(86) : zeroAddress, address(1), coordinator, 1n]
 				case 'minimumToken1ReportAttoEth':
-					return 10_001n * (1n + callBaseFee)
+					return 10_001n + ((overrides.sharedExposure ?? 0n) / 100n > 10_001n * callBaseFee ? (overrides.sharedExposure ?? 0n) / 100n : 10_001n * callBaseFee)
 				case 'gasConsumedOpenOracleReportPrice':
 				case 'getSettlementCallbackGasLimit':
 				case 'gasUnitsForOneDispute':
@@ -527,8 +675,6 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 					return [false, 0n, 0n, 0n, 0n] as const
 				case 'getEscalationMigrationEntitlementStatus':
 					return [false, 0n, [false, false, false]] as const
-				case 'getUnassignedPosition':
-					return overrides.unassignedPosition ?? ([0n, 0n, 0n, 0n, 0n] as const)
 				case 'securityPoolFactory':
 					return address(4)
 				case 'securityPoolForker':
@@ -557,16 +703,6 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 					return 1n
 				case 'finalized':
 					return overrides.auctionFinalized ?? false
-				case 'clearingTick':
-					return overrides.storedClearingTick ?? 0n
-				case 'underfunded':
-					return overrides.underfunded ?? false
-				case 'underfundedWinningAttoEth':
-					return overrides.underfundedWinningAttoEth ?? 0n
-				case 'pendingEthRefundsAttoEth':
-					return pendingRefundAttoEth
-				case 'computeClearing':
-					return overrides.computedClearing ?? ([false, 0n, 0n, 0n] as const)
 				default:
 					return await Reflect.apply(base.client.readContract, base.client, [parameters])
 			}
@@ -623,25 +759,6 @@ describe('anchored ecosystem discovery', () => {
 		})
 	})
 
-	test('ignores unassigned bad debt from an expired accounting generation', async () => {
-		const deployments = { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) }
-		const graph = refundBackfillClient(0n, false, { badDebtGeneration: 7n, unassignedPosition: [0n, 0n, 50n, 6n, 0n] })
-		const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: graph.client, deployments, wallet: address(1) })
-		expect(snapshot.pools[0]?.unassignedBadDebtAttoEth).toBe('0')
-		expect(graph.contractReads).not.toContain('getForkActivationTime')
-	})
-
-	test('authenticates the canonical vault count and wallet registry membership', async () => {
-		const deployments = { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) }
-		const registered = refundBackfillClient(0n, true)
-		const registeredSnapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: registered.client, deployments, wallet: address(1) })
-		expect(registeredSnapshot.pools[0]).toMatchObject({ canonicalVaultCount: '1', walletVaultRegistered: true })
-
-		const absent = refundBackfillClient(0n)
-		const absentSnapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: absent.client, deployments, wallet: address(1) })
-		expect(absentSnapshot.pools[0]).toMatchObject({ canonicalVaultCount: '0', walletVaultRegistered: false })
-	})
-
 	test('allows positive auction refunds while the authenticated episode index is absent or lagging', async () => {
 		const deployments = { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) }
 		const missing = refundBackfillClient(8n)
@@ -654,59 +771,25 @@ describe('anchored ecosystem discovery', () => {
 			anchorBlockNumber: 10n,
 			client: lagging.client,
 			deployments,
-			indexedAuctionRefunds: { [lagging.truthAuction.toLowerCase()]: { generation: hash(700), pendingAttoEth: 5n.toString() } },
+			indexedAuctionRefunds: { [address(24).toLowerCase()]: { generation: hash(700), pendingAttoEth: 5n.toString() } },
 			wallet: address(1),
 		})
 		expect(withLaggingIndex.auctions).toContainEqual(expect.objectContaining({ address: lagging.truthAuction, pendingEthRefund: '8' }))
 		expect(withLaggingIndex.auctions[0]?.pendingEthRefundGeneration).toBeUndefined()
 	})
 
-	test('uses finalized auction settlement state to classify losing bids without consuming a vault slot', async () => {
-		const deployments = { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) }
-		const planningOptions: PlanningOptions = {
-			allowHighRisk: true,
-			allowIrreversibleOperations: true,
-			immutableTopologyCapacity: {
-				maxPools: 2,
-				maxQuestions: 2,
-				maxStagedOperationsPerPool: 2,
-				maxUniverses: 2,
-				maxVaultsPerPool: 1,
-				maximumAggregateItems: 4,
-			},
-			maximumBlockIntervalSeconds: 15,
-			seed: 1,
-		}
-		const discoverFinalized = async (storedClearingTick: bigint, underfundedWinningAttoEth: bigint, bidTick: bigint) => {
-			const fixture = refundBackfillClient(0n, false, {
-				auctionFinalized: true,
-				computedClearing: [false, 0n, 1n, 0n],
-				storedClearingTick,
-				underfunded: true,
-				underfundedWinningAttoEth,
-				vaults: [address(99)],
-			})
-			const snapshot = await discoverEcosystemSnapshot({
-				anchorBlockNumber: 10n,
-				client: fixture.client,
-				deployments,
-				indexedAuctionBids: { [fixture.truthAuction.toLowerCase()]: [{ amountAttoEth: 1n.toString(), index: '0', refunded: false, tick: bidTick.toString() }] },
-				limits: { maxPools: 2, maxQuestions: 2, maxStagedOperationsPerPool: 2, maxUniverses: 2, maxVaultsPerPool: 1 },
-				wallet: address(1),
-			})
-			expect(snapshot.pools[0]).toMatchObject({ canonicalVaultCount: '1', walletVaultRegistered: false })
-			return snapshot
-		}
-
-		const belowReserve = await discoverFinalized(5n, 1n, 4n)
-		expect(belowReserve.auctions[0]).toMatchObject({ clearingTick: '5', finalized: true, underfunded: true, underfundedWinningAttoEth: 1n.toString() })
-		expect(urgentOperationPlans(belowReserve, planningOptions).filter(plan => plan.definitionId === 'statoblast.auction.settle-bids')).toEqual([expect.objectContaining({ metadata: expect.objectContaining({ bidKeys: '4:0' }) })])
-		expect(canonicalLifecyclePresence(belowReserve, planningOptions).filter(item => item.definitionId === 'statoblast.auction.settle-bids')).toEqual([expect.objectContaining({ blocksNovelty: true, metadata: expect.objectContaining({ bidKeys: '4:0' }) })])
-
-		const noQualifyingWinner = await discoverFinalized(524_288n, 0n, 524_288n)
-		expect(noQualifyingWinner.auctions[0]).toMatchObject({ clearingTick: '524288', finalized: true, underfunded: true, underfundedWinningAttoEth: 0n.toString() })
-		expect(urgentOperationPlans(noQualifyingWinner, planningOptions).filter(plan => plan.definitionId === 'statoblast.auction.settle-bids')).toEqual([expect.objectContaining({ metadata: expect.objectContaining({ bidKeys: '524288:0' }) })])
-		expect(canonicalLifecyclePresence(noQualifyingWinner, planningOptions).filter(item => item.definitionId === 'statoblast.auction.settle-bids')).toEqual([expect.objectContaining({ blocksNovelty: true, metadata: expect.objectContaining({ bidKeys: '524288:0' }) })])
+	test('uses anchored refund simulation to classify finalized losing bids', async () => {
+		const fixture = refundBackfillClient(0n, false, { auctionFinalized: true })
+		const snapshot = await discoverEcosystemSnapshot({
+			anchorBlockNumber: 10n,
+			client: fixture.client,
+			deployments: snapshotFixture().deployments,
+			wallet: address(1),
+			indexedAuctionBids: { [address(24).toLowerCase()]: [{ bidId: '1', vault: address(25), lots: '1', minimumAttoRepPerLot: 100n.toString(), targetHealthBps: '10000', settled: false }] },
+		})
+		expect(snapshot.auctions[0]).toMatchObject({ finalized: true, refundableBidIds: ['1'] })
+		expect(urgentOperationPlans(snapshot, { seed: 1, maximumBlockIntervalSeconds: 15 }).filter(plan => plan.definitionId === 'statoblast.auction.settle-bids')).toEqual([expect.objectContaining({ metadata: expect.objectContaining({ bidId: '1' }) })])
+		expect(canonicalLifecyclePresence(snapshot, { seed: 1, maximumBlockIntervalSeconds: 15 }).filter(item => item.definitionId === 'statoblast.auction.settle-bids')).toEqual([expect.objectContaining({ blocksNovelty: true, metadata: expect.objectContaining({ bidId: '1' }) })])
 	})
 
 	test('never queries or schedules an indexed report backed by an untrusted token', async () => {
@@ -1010,95 +1093,6 @@ describe('anchored ecosystem discovery', () => {
 		expect(exact?.discoveryCursors.poolDeployments).toMatchObject({ canonicalCount: '11', nextIndex: '11', retentionMode: 'overflow' })
 		expect(exact?.questions).toEqual([])
 		expect(exact?.poolDeployments).toEqual([])
-	})
-
-	test('advances an oversized newest-first vault registry across restarts and safely rebuilds after a limit increase', async () => {
-		const statePath = await temporaryStatePath()
-		const pool = address(20).toLowerCase()
-		const oldestFirst = Array.from({ length: 11 }, (_, index) => address(500 + index))
-		const limits = { maxPools: 3, maxQuestions: 3, maxUniverses: 3, maxVaultsPerPool: 3 }
-		const canonicalCounts = [5, 7, 9, 11]
-		const expectedCalls: Array<[bigint, bigint]> = [
-			[2n, 3n],
-			[1n, 3n],
-			[0n, 3n],
-			[0n, 2n],
-		]
-		for (let cycle = 0; cycle < expectedCalls.length; cycle += 1) {
-			const canonicalCount = canonicalCounts[cycle]
-			if (canonicalCount === undefined) throw new Error(`Missing canonical vault count for cycle ${cycle.toString()}`)
-			const newestFirst = [...oldestFirst.slice(0, canonicalCount)].reverse()
-			const restored = await loadImmutableTopologyCacheWithinLimits({ identity: topologyIdentity(), limits, statePath })
-			const calls: Array<[bigint, bigint]> = []
-			const advanced = await advanceVaultRegistryCursor({
-				cachedVaults: restored?.vaultsByPool[pool] ?? [],
-				canonicalCount: BigInt(canonicalCount),
-				cursor: restored?.discoveryCursors.vaultsByPool[pool],
-				label: `Vault registry ${pool}`,
-				limit: limits.maxVaultsPerPool,
-				readNewestFirstPage: async (start, count) => {
-					calls.push([start, count])
-					return newestFirst.slice(Number(start), Number(start + count))
-				},
-			})
-			const expectedNextIndex = Math.min((cycle + 1) * limits.maxVaultsPerPool, oldestFirst.length)
-			const expectedCall = expectedCalls[cycle]
-			if (expectedCall === undefined) throw new Error(`Missing expected vault page call for cycle ${cycle.toString()}`)
-			expect(calls).toEqual([expectedCall])
-			expect(advanced.cursor).toMatchObject({ canonicalCount: canonicalCount.toString(), nextIndex: expectedNextIndex.toString(), retentionMode: 'overflow' })
-			expect(advanced.vaults).toEqual([])
-			await saveImmutableTopologyCache(
-				statePath,
-				topologyIdentity(),
-				{
-					anchor: { blockHash: hash(600 + cycle), blockNumber: (600 + cycle).toString() },
-					discoveryCursors: {
-						poolDeployments: restored?.discoveryCursors.poolDeployments ?? { canonicalCount: '0', commitment: hash(0), nextIndex: '0', residentLimit: '3', retentionMode: 'resident' },
-						questions: restored?.discoveryCursors.questions ?? { canonicalCount: '0', commitment: hash(0), nextIndex: '0', residentLimit: '3', retentionMode: 'resident' },
-						vaultsByPool: { [pool]: advanced.cursor },
-					},
-					pairsByPool: {},
-					poolDeployments: [],
-					questions: [],
-					schemaVersion: IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION,
-					universeChildren: { '0': { childUniverseIds: [], outcomeIndexes: [] } },
-					vaultsByPool: {},
-				},
-				limits,
-			)
-		}
-		const exact = await loadImmutableTopologyCacheWithinLimits({ identity: topologyIdentity(), limits, statePath })
-		const exactCursor = exact?.discoveryCursors.vaultsByPool[pool]
-		if (exactCursor === undefined) throw new Error('Exact oversized vault cursor was not persisted')
-		expect(exactCursor).toMatchObject({ canonicalCount: '11', nextIndex: '11', retentionMode: 'overflow' })
-
-		const newestFirst = [...oldestFirst].reverse()
-		const rebuildCalls: Array<[bigint, bigint]> = []
-		const rebuilt = await advanceVaultRegistryCursor({
-			cachedVaults: [],
-			canonicalCount: 11n,
-			cursor: exactCursor,
-			label: `Vault registry ${pool}`,
-			limit: 11,
-			readNewestFirstPage: async (start, count) => {
-				rebuildCalls.push([start, count])
-				return newestFirst.slice(Number(start), Number(start + count))
-			},
-		})
-		expect(rebuildCalls).toEqual([[0n, 11n]])
-		expect(rebuilt.cursor).toMatchObject({ canonicalCount: '11', nextIndex: '11', retentionMode: 'resident' })
-		expect(rebuilt.cursor.commitment).toBe(exactCursor.commitment)
-		expect(rebuilt.vaults).toEqual(newestFirst)
-		await expect(
-			advanceVaultRegistryCursor({
-				cachedVaults: [],
-				canonicalCount: 10n,
-				cursor: exactCursor,
-				label: `Vault registry ${pool}`,
-				limit: 11,
-				readNewestFirstPage: async () => [],
-			}),
-		).rejects.toThrow('no longer extends its authenticated cursor')
 	})
 
 	test('exhausts categorical outcome labels beyond the first 256-entry page', async () => {
@@ -1483,258 +1477,6 @@ describe('anchored ecosystem discovery', () => {
 		const quotes = await discoverDirectEscalationDepositQuotes(client, address(1), address(15), 1_000n, [0n, 0n, 0n], 1_000n, 55n)
 		expect(quotes.every(quote => quote.acceptedAmountAttoRep === '0' && !quote.mutationExpectedSuccess)).toBeTrue()
 		expect(simulations).toBe(0)
-	})
-
-	test('rounds the wallet REP deposit up until post-transfer backing satisfies the minimum', () => {
-		expect(minimumSafeVaultDeposit(1n, 0n, 3n, 2n)).toBe(2n)
-	})
-
-	test('selects the normal or own-fork REP migration bucket and rejects inconsistent reads', () => {
-		const pool = address(11)
-		expect(forkRepMigrationTarget({ auctionableAttoRepAtFork: 90n, ownFork: false }, { auctionableAttoRepAtFork: 90n, ownFork: false, vaultRepAtForkAttoRep: 70n }, pool)).toBe(90n)
-		expect(forkRepMigrationTarget({ auctionableAttoRepAtFork: 90n, ownFork: true }, { auctionableAttoRepAtFork: 90n, ownFork: true, vaultRepAtForkAttoRep: 70n }, pool)).toBe(70n)
-		expect(() => forkRepMigrationTarget({ auctionableAttoRepAtFork: 90n, ownFork: false }, { auctionableAttoRepAtFork: 91n, ownFork: false, vaultRepAtForkAttoRep: 70n }, pool)).toThrow('inconsistent fork migration buckets')
-	})
-
-	test('bounds fork-wide vault and unresolved-escalation discovery to the exact migration window', () => {
-		const activation = 1_000n
-		const deadline = activation + 8n * 7n * 24n * 60n * 60n
-		expect(forkMigrationWindowIsOpen(1n, activation, activation)).toBe(true)
-		expect(forkMigrationWindowIsOpen(1n, activation, deadline)).toBe(true)
-		expect(forkMigrationWindowIsOpen(1n, activation, deadline + 1n)).toBe(false)
-		expect(forkMigrationWindowIsOpen(0n, activation, activation)).toBe(false)
-		expect(forkMigrationWindowIsOpen(1n, 0n, activation)).toBe(false)
-	})
-
-	test('marks a staged liquidation executable only after exact executor-context simulation', async () => {
-		const fixture = snapshotFixture()
-		const fixturePool = fixture.pools[0]
-		if (fixturePool === undefined) throw new Error('Pool fixture missing')
-		const fixtureVault = fixturePool.vaults[0]
-		if (fixtureVault === undefined) throw new Error('Vault fixture missing')
-		const pool = {
-			...fixturePool,
-			vaults: [
-				...fixturePool.vaults,
-				{
-					...fixtureVault,
-					address: address(88),
-					underwritingLimitAttoEth: String(20n),
-					disputeStakedAttoRep: String(0n),
-					openInterestAttoEth: String(100n),
-					repBackingAttoRep: String(10n),
-					repBackingUnits: String(10n),
-				},
-			],
-		}
-		const anchor = 555n
-		let simulationFailure: Error | undefined
-		let registryCoordinator = pool.coordinator
-		let reservationSettled = false
-		let reservationAmount = 80n
-		let approvalReceiver = address(87)
-		let approvalRevoked = false
-		const simulations: Array<{ account?: Address; blockNumber?: bigint; functionName: string; args?: readonly AbiValue[] }> = []
-		const implementation = {
-			async readContract(parameters: { functionName: string }) {
-				switch (parameters.functionName) {
-					case 'getActiveStagedOperationCount':
-						return 1n
-					case 'getPendingSettlementOperationIds':
-						return []
-					case 'getActiveStagedOperations':
-						return [
-							[42n],
-							[
-								{
-									liquidationApprovalId: hash(5),
-									operation: 0n,
-									operationValue: 100n,
-									operator: fixture.wallet.address,
-									queuedAt: 500n,
-									receiverVault: address(87),
-									reservedLiquidationDebtAttoEth: 80n,
-									snapshotTargetBackingUnits: 10n,
-									snapshotTargetUnderwritingLimitAttoEth: 20n,
-									targetVault: address(88),
-									validForSeconds: 3_600n,
-								},
-							],
-						]
-					case 'minLiquidationPriceDistanceBps':
-						return 250n
-					case 'liquidationApprovalRegistry':
-						return address(89)
-					case 'coordinator':
-						return registryCoordinator
-					case 'liquidationReservations':
-						return { approvalId: hash(5), reservedDebtAttoEth: reservationAmount, settled: reservationSettled }
-					case 'getLiquidationApproval':
-						return {
-							availableDebtAttoEth: 20n,
-							consumedDebtAttoEth: 0n,
-							params: {
-								maxCumulativeDebtAttoEth: 100n,
-								maxDebtPerLiquidationAttoEth: 100n,
-								minPostLiquidationHealthFactorBps: 12_000n,
-								nonce: 1n,
-								operator: fixture.wallet.address,
-								receiverVault: approvalReceiver,
-								securityPool: pool.address,
-								targetVault: address(88),
-								validAfter: 0n,
-								validUntil: 10_000n,
-							},
-							reservedDebtAttoEth: 80n,
-							revoked: approvalRevoked,
-						}
-					case 'securityVaults':
-						return [10n, 20n, 0n, 0n]
-					case 'getVaultOpenInterestAttoEth':
-						return 100n
-					case 'vaultBadDebtAttoEth':
-						return 0n
-					case 'backingUnitsToAttoRep':
-						return 10n
-					case 'disputeStakedRepByVaultAttoRep':
-						return 0n
-					default:
-						throw new Error(`Unexpected read ${parameters.functionName}`)
-				}
-			},
-			async simulateContract(parameters: { account?: Address; blockNumber?: bigint; functionName: string; args?: readonly AbiValue[] }) {
-				simulations.push(parameters)
-				if (simulationFailure !== undefined) throw simulationFailure
-				return { result: [80n, 20n, 0n] }
-			},
-		}
-		const client = new Proxy({} as ChaosReadClient, {
-			get(_target, property) {
-				const value = implementation[property as keyof typeof implementation]
-				if (value === undefined) throw new Error(`Unexpected client method ${String(property)}`)
-				return value
-			},
-		})
-		const executable = await discoverStagedOperations(client, pool, anchor, 10, [])
-		expect(executable[0]?.executionExpectedSuccess).toBe(true)
-		expect(executable[0]?.executionExpectedResult).toBe(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [80n, 20n, 0n]))
-		expect(simulations[0]?.account).toBe(pool.vaultOperations)
-		expect(simulations[0]?.blockNumber).toBe(anchor)
-		expect(simulations[0]?.functionName).toBe('performLiquidation')
-		expect(simulations[0]?.args?.[0]).toMatchObject({ minimumReceiverHealthFactorBps: 12_000n, operationId: 42n, requestedDebtAttoEth: 80n })
-
-		const unregisteredTarget = await discoverStagedOperations(client, { ...pool, vaults: fixturePool.vaults }, anchor, 10, [])
-		expect(unregisteredTarget[0]?.executionExpectedSuccess).toBe(true)
-		expect(unregisteredTarget[0]?.snapshotTargetDisputeStakedAttoRep).toBe('0')
-		expect(unregisteredTarget[0]?.snapshotTargetOpenInterestAttoEth).toBe('100')
-		expect(unregisteredTarget[0]?.targetVault).toBe(address(88))
-
-		const revertedSimulation = new Error('Contract simulation failed', { cause: new Error('execution reverted: stale liquidation snapshot') })
-		revertedSimulation.name = 'ContractFunctionExecutionError'
-		simulationFailure = revertedSimulation
-		const blocked = await discoverStagedOperations(client, pool, anchor, 10, [])
-		expect(blocked[0]?.executionExpectedSuccess).toBe(false)
-
-		simulationFailure = new Error('RPC transport timed out')
-		await expect(discoverStagedOperations(client, pool, anchor, 10, [])).rejects.toThrow('RPC transport timed out')
-
-		simulationFailure = undefined
-		registryCoordinator = address(99)
-		const wrongRegistry = await discoverStagedOperations(client, pool, anchor, 10, [])
-		expect(wrongRegistry[0]?.executionExpectedSuccess).toBe(false)
-
-		registryCoordinator = pool.coordinator
-		reservationSettled = true
-		const settledReservation = await discoverStagedOperations(client, pool, anchor, 10, [])
-		expect(settledReservation[0]?.executionExpectedSuccess).toBe(false)
-
-		reservationSettled = false
-		reservationAmount = 79n
-		const mismatchedReservation = await discoverStagedOperations(client, pool, anchor, 10, [])
-		expect(mismatchedReservation[0]?.executionExpectedSuccess).toBe(false)
-
-		reservationAmount = 80n
-		approvalReceiver = address(99)
-		const mismatchedApproval = await discoverStagedOperations(client, pool, anchor, 10, [])
-		expect(mismatchedApproval[0]?.executionExpectedSuccess).toBe(false)
-
-		approvalReceiver = address(87)
-		approvalRevoked = true
-		const durableReservedRoute = await discoverStagedOperations(client, pool, anchor, 10, [])
-		expect(durableReservedRoute[0]?.executionExpectedSuccess).toBe(true)
-	})
-
-	test.each([1, 2])('retains an exact direct downstream simulation for self operation type %s', async operationType => {
-		const fixture = snapshotFixture()
-		const pool = fixture.pools[0]
-		if (pool === undefined) throw new Error('Pool fixture missing')
-		let receiver = fixture.wallet.address
-		let simulationFailure: Error | undefined
-		const simulations: Array<{ account?: Address; functionName: string; args?: readonly AbiValue[] }> = []
-		const pageRequests: Array<readonly AbiValue[]> = []
-		const operation = () => ({
-			liquidationApprovalId: hash(0),
-			operation: BigInt(operationType),
-			operationValue: 100n,
-			operator: fixture.wallet.address,
-			queuedAt: 500n,
-			receiverVault: receiver,
-			reservedLiquidationDebtAttoEth: 0n,
-			snapshotTargetBackingUnits: 10n,
-			snapshotTargetUnderwritingLimitAttoEth: 20n,
-			snapshotTargetDisputeStakedAttoRep: 0n,
-			snapshotTargetOpenInterestAttoEth: 0n,
-			snapshotTotalPoolHeldAttoRep: 1_000n,
-			snapshotTotalRepBackingUnits: 900n,
-			targetVault: fixture.wallet.address,
-			validForSeconds: 3_600n,
-		})
-		const client = new Proxy({} as ChaosReadClient, {
-			get(_target, property) {
-				if (property === 'readContract') {
-					return async (parameters: { args?: readonly AbiValue[]; functionName: string }) => {
-						if (parameters.functionName === 'getActiveStagedOperationCount') return 2n
-						if (parameters.functionName === 'getPendingSettlementOperationIds') return []
-						if (parameters.functionName === 'getActiveStagedOperations') {
-							pageRequests.push(parameters.args ?? [])
-							const start = parameters.args?.[0]
-							if (start === 0n)
-								return [
-									[42n, 43n],
-									[operation(), operation()],
-								]
-							return [[], []]
-						}
-						throw new Error(`Unexpected read ${parameters.functionName}`)
-					}
-				}
-				if (property === 'simulateContract') {
-					return async (parameters: { account?: Address; functionName: string; args?: readonly AbiValue[] }) => {
-						simulations.push(parameters)
-						if (simulationFailure !== undefined) throw simulationFailure
-						return { result: undefined }
-					}
-				}
-				throw new Error(`Unexpected client method ${String(property)}`)
-			},
-		})
-		const overflowWarnings: DiscoveryIssue[] = []
-		expect(await discoverStagedOperations(client, pool, 555n, 1, overflowWarnings)).toEqual([])
-		expect(formatDiscoveryWarnings(overflowWarnings)).toEqual([`Staged-operation discovery truncated for ${pool.coordinator}: exact canonical total 2 exceeds the configured 1-entry resident limit`])
-		expect(pageRequests).toEqual([])
-
-		const executable = await discoverStagedOperations(client, pool, 555n, 2, [])
-		expect(executable[0]).toMatchObject({ executionExpectedResult: '0x', executionExpectedSuccess: true, operation: operationType })
-		expect(executable).toHaveLength(2)
-		expect(pageRequests).toEqual([[0n, 2n]])
-		expect(simulations[0]).toMatchObject({ account: pool.vaultOperations, args: [fixture.wallet.address, 100n], functionName: operationType === 1 ? 'withdrawRepFromVault' : 'setVaultUnderwritingLimit' })
-		simulationFailure = new Error('execution reverted: stale withdrawal')
-		expect((await discoverStagedOperations(client, pool, 555n, 2, []))[0]?.executionExpectedSuccess).toBe(false)
-		simulationFailure = new Error('RPC connection closed')
-		await expect(discoverStagedOperations(client, pool, 555n, 2, [])).rejects.toThrow('RPC connection closed')
-		simulationFailure = undefined
-		receiver = address(99)
-		expect((await discoverStagedOperations(client, pool, 555n, 2, []))[0]?.executionExpectedSuccess).toBe(false)
 	})
 
 	test('pins the block fetch, every contract read, and wallet balance to the supplied anchor', async () => {

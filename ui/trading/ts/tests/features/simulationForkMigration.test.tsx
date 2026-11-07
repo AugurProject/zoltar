@@ -75,7 +75,7 @@ describe(`${FORKED_TRADING_SIMULATION_SCENARIO} simulation scenario`, () => {
 		for (const balance of [balances.yes, balances.no, balances.invalid, balances.lp]) expect(balance).toBeGreaterThan(0n)
 		const context = await loadForkMigrationContext(client, market)
 		expect(context.kind).toBe('categorical')
-		expect(context.question).toMatchObject({ title: 'Will this resolve?', marketType: 'binary', outcomeLabels: ['Yes', 'No'], outcomesComplete: true })
+		expect(context.question).toMatchObject({ title: 'Will this resolve? (portfolio question 1)', marketType: 'binary', outcomeLabels: ['Yes', 'No'], outcomesComplete: true })
 		expect(context.question.createdAt).toBeGreaterThan(0n)
 		expect(context.question.endTime).toBeGreaterThan(0n)
 		expect(context.availableTargets.map(target => target.label)).toEqual(['Invalid', 'Yes', 'No'])

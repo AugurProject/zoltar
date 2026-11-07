@@ -18,3 +18,12 @@ export const allocatedWinningPayout = (input: { principal: bigint; rewardAmount:
 	if (forkThreshold < nonDecisionThreshold) payout = (payout * forkThreshold) / nonDecisionThreshold
 	return { payout, burn }
 }
+
+export const ordinaryWinningPayout = (input: Parameters<typeof allocatedWinningPayout>[0]) => {
+	const end = input.rewardCumulative
+	const start = end - input.rewardAmount
+	const cumulative = (amount: bigint) => allocatedWinningPayout({ ...input, principal: amount, rewardAmount: amount, rewardCumulative: amount })
+	const before = cumulative(start)
+	const after = cumulative(end)
+	return { payout: after.payout - before.payout, burn: after.burn - before.burn }
+}

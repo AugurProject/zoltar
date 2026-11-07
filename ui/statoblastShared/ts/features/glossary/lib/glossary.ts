@@ -6,7 +6,7 @@ import * as statoblastAppCopy from '../../../copy/app.js'
 export type GlossaryTermId = 'non-decision-threshold' | 'open-interest-fee' | 'security-multiplier' | 'security-pool' | 'universe' | 'universe-fork'
 
 /** Resolves a documentation page (relative to the protocol guide) to an absolute link that opens outside the app. */
-export function getProtocolDocsHref(documentPath: string) {
+function getProtocolDocsHref(documentPath: string) {
 	return new URL(documentPath, protocolGuideHref).href
 }
 

@@ -31,11 +31,12 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 		if (nonDecisionState == NonDecisionState.Local) return nonDecisionTimestamp;
 		if (forkContinuation) {
 			if (forkResumedAt == 0) return type(uint256).max;
-			uint256 requiredElapsed = computeTimeSinceStartFromAttritionCostAttoRep(getBindingCapitalAttoRep());
+			if (fixedQuestionOutcome != BinaryOutcomes.BinaryOutcome.None) return forkResumedAt + ACTIVATION_DELAY;
+			int256 requiredElapsed = int256(computeTimeSinceStartFromAttritionCostAttoRep(getBindingCapitalAttoRep()));
 			uint256 curveEnd =
 				requiredElapsed <= forkElapsedAtStart
 					? forkResumedAt
-					: forkResumedAt + (requiredElapsed - forkElapsedAtStart);
+					: forkResumedAt + uint256(requiredElapsed - forkElapsedAtStart);
 			uint256 minimumResponseEnd = forkResumedAt + ACTIVATION_DELAY;
 			return curveEnd > minimumResponseEnd ? curveEnd : minimumResponseEnd;
 		}
@@ -43,13 +44,12 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 	}
 
 	function totalCostAttoRep() public view returns (uint256) {
-		if (forkContinuation && forkResumedAt == 0 && forkElapsedAtStart == 0) return 0;
-		if (forkContinuation && forkResumedAt == 0) return computeIterativeAttritionCostAttoRep(forkElapsedAtStart);
 		if (forkContinuation) {
-			uint256 forkElapsed = forkElapsedAtStart + (block.timestamp - forkResumedAt);
-			if (forkElapsed == 0) return 0;
-			if (forkElapsed >= ESCALATION_TIME_LENGTH) return nonDecisionThresholdAttoRep;
-			return computeIterativeAttritionCostAttoRep(forkElapsed);
+			int256 elapsed = forkElapsedAtStart;
+			if (forkResumedAt != 0) elapsed += int256(block.timestamp - forkResumedAt);
+			if (elapsed <= 0) return 0;
+			if (elapsed >= int256(ESCALATION_TIME_LENGTH)) return nonDecisionThresholdAttoRep;
+			return computeIterativeAttritionCostAttoRep(uint256(elapsed));
 		}
 		if (activationTime >= block.timestamp) return 0;
 		uint256 elapsedSinceActivation = block.timestamp - activationTime;
@@ -69,11 +69,11 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 	function getFinalQuestionResolution() public view returns (BinaryOutcomes.BinaryOutcome) {
 		uint256 endDate = getEscalationGameEndDate();
 		if (block.timestamp <= endDate) return BinaryOutcomes.BinaryOutcome.None;
-		// An inherited branch outcome is already fixed, but still observes the fresh response period.
-		if (fixedQuestionOutcome != BinaryOutcomes.BinaryOutcome.None) return fixedQuestionOutcome;
 		// A fork at the deadline interrupts finality, even when migration is initialized later.
 		uint256 forkTime = _getUniverseForkTime();
 		if (forkTime != 0 && forkTime <= endDate) return BinaryOutcomes.BinaryOutcome.None;
+		// An inherited branch outcome is already fixed, but still observes the fresh response period.
+		if (fixedQuestionOutcome != BinaryOutcomes.BinaryOutcome.None) return fixedQuestionOutcome;
 		return getQuestionResolution();
 	}
 
@@ -115,6 +115,9 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 	}
 
 	function _computeWinningWithdrawal(uint8 outcomeIndex, uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep) internal view returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
+		if (ordinarySettlementInitialized)
+			return
+				proofVerifier.computeOrdinaryWinningWithdrawal(depositAmountAttoRep, cumulativeAmountAttoRep, getBindingCapitalAttoRep(), outcomeState[outcomeIndex].balanceAttoRep, ordinarySettlementForkThresholdAttoRep, nonDecisionThresholdAttoRep);
 		return
 			_computeAllocatedWinningWithdrawal(outcomeIndex, depositAmountAttoRep, depositAmountAttoRep, cumulativeAmountAttoRep);
 	}

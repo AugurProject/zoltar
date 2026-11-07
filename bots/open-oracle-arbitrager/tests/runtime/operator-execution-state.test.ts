@@ -354,3 +354,12 @@ for (const name of ['mainnet', 'sepolia'] as const)
 			await expect(authenticateConfiguredDeployments([client], config, {})).rejects.toThrow('is not deployed')
 		}
 	})
+
+test('approving another universe restarts historical report discovery', async () => {
+	const config = await exampleConfiguration()
+	const pending = noPendingUpdates()
+	pending.operatorSettings = { ...config.operatorSettings, approvedUniverses: [...config.operatorSettings.approvedUniverses, 999n] }
+	expect(applyQueuedExecutionSettings(config, operatorState(), pending).reportScanReset).toBe(true)
+	pending.operatorSettings = { ...config.operatorSettings }
+	expect(applyQueuedExecutionSettings(config, operatorState(), pending).reportScanReset).toBe(false)
+})

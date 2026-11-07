@@ -90,7 +90,7 @@ function manualOperationInputError(message: string) {
 }
 
 /** Scan canonical state on behalf of a dashboard operation request. */
-async function scanForManualOperation(operator: OperatorState, deps: OperatorDependencies) {
+async function scanForManualOperation(operator: OperatorState, deps: OperatorDependencies, purchaseQuoteAttoEth?: bigint) {
 	const { configuration, runtime: state } = operator
 	if (operator.resources === undefined || state.wallet === undefined) throw manualOperationInputError('Configure the network and signer before planning an operation')
 	const settings = configuration.settings
@@ -99,7 +99,7 @@ async function scanForManualOperation(operator: OperatorState, deps: OperatorDep
 	assertDurableSignerScope(state, configuredWallet(settings), settings.runtime.stateFile)
 	if (operator.topology.stateFile !== settings.runtime.stateFile || operator.topology.profileId !== expectedProfile) operator.topology.cache = undefined
 	await ensureReadPreflight(currentResources(operator), settings)
-	const scan = await performCanonicalScan(settings, currentResources(operator).pool, state.wallet, 0, state.protocolIndex, operator.topology.cache)
+	const scan = await performCanonicalScan(settings, currentResources(operator).pool, state.wallet, 0, state.protocolIndex, operator.topology.cache, { purchaseQuoteAttoEth })
 	recordScanResult(operator, scan, executionProfileId(settings), settings.runtime.stateFile, scan.evaluations)
 	synchronizeScanObligations(state, scan.evaluations, scan)
 	await persistState(configuration, state)
@@ -144,7 +144,7 @@ function createOperatorDashboard(operator: OperatorState, deps: OperatorDependen
 		configuration,
 		gate: deps.gate,
 		state,
-		scan: async () => await scanForManualOperation(operator, deps),
+		scan: async purchaseQuoteAttoEth => await scanForManualOperation(operator, deps, purchaseQuoteAttoEth),
 		preflight: async plan => {
 			const resources = currentResources(operator, 'Operation RPC resources are unavailable')
 			await preflightOperationPreview(executionEnvironment(configuration.settings, state, resources), plan)

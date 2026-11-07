@@ -173,7 +173,12 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			'overview',
 			operationsPanel(
 				headerPresentation.riskPanelTitle,
-				[protocolStateRow, scannerAssessmentRow, ...semanticFields({ ...(isRecord(data['read_result']) ? data['read_result'] : {}), ...(isRecord(data['risk']) ? data['risk'] : {}) }).map(([label, value]) => operationRow(label, value, undefined, data['block_number'])), rawEvidence(data)],
+				[
+					protocolStateRow,
+					scannerAssessmentRow,
+					...semanticFields({ ...(data['read_status'] === 'success' && isRecord(data['read_result']) ? data['read_result'] : {}), ...(data['read_status'] === 'success' && isRecord(data['risk']) ? data['risk'] : {}) }).map(([label, value]) => operationRow(label, value, undefined, data['block_number'])),
+					rawEvidence(data),
+				],
 				'Risk state unavailable',
 			),
 		)

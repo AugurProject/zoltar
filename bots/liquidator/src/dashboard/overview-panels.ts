@@ -8,13 +8,13 @@ import type { Configuration, Snapshot } from './api-validation.ts'
 let renderedAlertKey: string | undefined
 const stateReceiptTimes = new WeakMap<Snapshot, number>()
 
-export function renderOverviewHealth(snapshot: Snapshot, configuration: Configuration | undefined, stale = false) {
+export function renderOverviewHealth(snapshot: Snapshot, _configuration: Configuration | undefined, stale = false) {
 	if (!stateReceiptTimes.has(snapshot)) stateReceiptTimes.set(snapshot, Date.now())
-	const limit = configuration?.strategy['maximumTotalDeployedRep']
+	const portfolio = snapshot.portfolios?.[0]
 	renderOperatorHealth(element('operator-health', HTMLDivElement), {
 		mode: snapshot.execute ? 'Live armed' : 'Dry run',
 		lastScanAt: snapshot.lastScanAt,
-		capitalAtRisk: `${formatAmount(snapshot.metrics.deployedRep, 'REP')} / ${formatAmount(limit === undefined ? undefined : String(limit), 'REP')}`,
+		capitalAtRisk: portfolio === undefined ? 'Awaiting portfolio exposure scan' : `${formatAmount(portfolio.managedPrincipalRep, 'REP')} / ${formatAmount(portfolio.maximumTotalPrincipalRep, 'REP')} portfolios`,
 		recoveryItems: snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length,
 		lastAction: snapshot.activities[0]?.message ?? 'No action yet',
 		paused: snapshot.paused,
@@ -25,14 +25,13 @@ export function renderOverviewHealth(snapshot: Snapshot, configuration: Configur
 
 export function renderOverviewMetrics(snapshot: Snapshot, configuration: Configuration | undefined, stale = false) {
 	element('metrics', HTMLDivElement).replaceChildren(
-		createMetric('Monitored pools', snapshot.metrics.poolCount.toString()),
-		createMetric('Supported pools', snapshot.metrics.selectedPoolCount.toString()),
+		createMetric('Managed portfolios', String(snapshot.portfolios?.length ?? 0)),
+		createMetric('Selected portfolios', String(configuration?.selectedPortfolios.length ?? 0)),
 		createMetric('Approved universes', snapshot.metrics.approvedUniverseCount.toString()),
-		createMetric('Eligible pools', snapshot.metrics.eligiblePoolCount.toString()),
-		createMetric('Candidates', snapshot.metrics.candidateCount.toString()),
-		createMetric('Open interest assumed', formatAmount(snapshot.metrics.assumedOpenInterestEth, 'ETH')),
+		createMetric('Automated scopes', String(snapshot.portfolios?.filter(portfolio => portfolio.automation).length ?? 0)),
+		createMetric('Distressed positions in page', String(snapshot.portfolios?.flatMap(portfolio => portfolio.positions).filter(position => position.distressed).length ?? 0)),
 	)
-	element('wallet-metrics', HTMLDivElement).replaceChildren(createMetric('Wallet ETH', formatAmount(snapshot.metrics.walletEth, 'ETH')), createMetric('Wallet REP', formatAmount(snapshot.metrics.walletRep, 'REP')), createMetric('REP deployed in pools', formatAmount(snapshot.metrics.deployedRep, 'REP')))
+	element('wallet-metrics', HTMLDivElement).replaceChildren(createMetric('Wallet ETH', formatAmount(snapshot.metrics.walletEth, 'ETH')), createMetric('Wallet REP', formatAmount(snapshot.metrics.walletRep, 'REP')), createMetric('Managed principal', formatAmount(snapshot.portfolios?.[0]?.managedPrincipalRep, 'REP')))
 	renderOverviewHealth(snapshot, configuration, stale)
 }
 

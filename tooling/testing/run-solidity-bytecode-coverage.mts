@@ -128,21 +128,10 @@ const writeCoverageSummary = async (summary: SolidityCoverageSummary): Promise<v
 
 const bytecodeCoverageWeights = new Map<string, number>([
 	['solidity/ts/tests/statoblast/forkMigrationEntry.test.ts', 4],
-	['solidity/ts/tests/statoblast/forkMigrationLiquidation.test.ts', 4],
-	['solidity/ts/tests/statoblast/forkMigrationShares.test.ts', 11],
 	['solidity/ts/tests/statoblast/forkMigrationMultiPool.test.ts', 2],
 	['solidity/ts/tests/statoblast/forkMigrationRecovery.test.ts', 2],
 	['solidity/ts/tests/statoblast/forkMigrationVault.test.ts', 7],
 	['solidity/ts/tests/statoblast/forkMigrationClaims.test.ts', 2],
-	['solidity/ts/tests/statoblast/truthAuction/forkerEntryGuards.test.ts', 1],
-	['solidity/ts/tests/statoblast/truthAuction/settlementBatchAndLiquidation.test.ts', 3],
-	['solidity/ts/tests/statoblast/truthAuction/settlementCapacityOwnership.test.ts', 3],
-	['solidity/ts/tests/statoblast/truthAuction/settlementClaims.test.ts', 3],
-	['solidity/ts/tests/statoblast/truthAuction/settlementRefunds.test.ts', 3],
-	['solidity/ts/tests/statoblast/truthAuction/startupDeadlines.test.ts', 3],
-	['solidity/ts/tests/statoblast/truthAuction/startupForkPaths.test.ts', 3],
-	['solidity/ts/tests/statoblast/truthAuction/startupMigrationProxies.test.ts', 2],
-	['solidity/ts/tests/statoblast/truthAuction/startupUnassignedPositions.test.ts', 4],
 	['solidity/ts/tests/escalationGame/attritionMath.test.ts', 1],
 	['solidity/ts/tests/escalationGame/continuationTies.test.ts', 2],
 	['solidity/ts/tests/escalationGame/entryPointGuards.test.ts', 2],
@@ -188,7 +177,8 @@ if (import.meta.main) {
 		console.log(`Running Solidity bytecode coverage shard ${shardIndex}/${testShards.length}`)
 		await rm(coverageDirectory, { recursive: true, force: true })
 		const exitCode = await runBunTestProcess({
-			cmd: [process.execPath, 'test', ...testShard.map(toBunTestPath)],
+			// Trace collection makes large gas-regression fixtures exceed the ordinary five-minute test budget.
+			cmd: [process.execPath, 'test', '--timeout', '1200000', ...testShard.map(toBunTestPath)],
 			env: {
 				...Bun.env,
 				SOLIDITY_BYTECODE_COVERAGE: '1',

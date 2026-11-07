@@ -1,5 +1,6 @@
+import { capitalFixture } from '../support/portfolio-fixtures.ts'
 import { describe, expect, test } from 'bun:test'
-import { genesisReputationTokenAbi, escalationGameAbi, openOracleAbi, securityPoolAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
+import { genesisReputationTokenAbi, escalationGameAbi, openOracleAbi, securityPoolCapitalLedgerAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
 import { reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
 import { eligibleOperationPlans } from '../support/operation-plans.ts'
 import type { EcosystemSnapshot, OperationPlan } from '../../src/operations/types.ts'
@@ -96,7 +97,7 @@ function disputeSnapshot() {
 describe('non-Trading exact approval continuations', () => {
 	test('keeps persisted principal exact after inbound inventory for every approval workflow', () => {
 		const cases: Array<{
-			abi: typeof openOracleAbi | typeof zoltarAbi | typeof securityPoolAbi | typeof escalationGameAbi
+			abi: typeof openOracleAbi | typeof zoltarAbi | typeof securityPoolCapitalLedgerAbi | typeof escalationGameAbi
 			definitionId: string
 			prepare(snapshot: EcosystemSnapshot): void
 		}> = [
@@ -121,7 +122,13 @@ describe('non-Trading exact approval continuations', () => {
 				},
 			},
 			{ abi: zoltarAbi, definitionId: 'zoltar.rep.burn', prepare: () => undefined },
-			{ abi: securityPoolAbi, definitionId: 'statoblast.vault.deposit-rep', prepare: () => undefined },
+			{
+				abi: securityPoolCapitalLedgerAbi,
+				definitionId: 'statoblast.capital.deposit',
+				prepare: snapshot => {
+					snapshot.portfolioCapital = [capitalFixture(snapshot)]
+				},
+			},
 			{ abi: escalationGameAbi, definitionId: 'statoblast.escalation.deposit-wallet-rep', prepare: () => undefined },
 		]
 
@@ -173,14 +180,14 @@ describe('non-Trading exact approval continuations', () => {
 		expectOnlyExactRevokes(continuation(zoltarSnapshot, burn, [burnConfirmed], { ...options, maxRepSpendAttoRep: 0n.toString() }), [{ spender: zoltarSnapshot.deployments.zoltar, token: burnApproval.to }])
 
 		const poolSnapshot = snapshotFixture()
-		const deposit = requiredPlan(poolSnapshot, 'statoblast.vault.deposit-rep')
+		const capital = capitalFixture(poolSnapshot)
+		poolSnapshot.portfolioCapital = [capital]
+		const deposit = requiredPlan(poolSnapshot, 'statoblast.capital.deposit')
 		const poolApproval = approvalSteps(deposit)[0]
 		if (poolApproval === undefined) throw new Error('Missing vault approval')
 		const poolConfirmed = confirmApproval(poolSnapshot, poolApproval)
-		const pool = poolSnapshot.pools[0]
-		if (pool === undefined) throw new Error('Missing vault pool')
-		pool.minimumSafeWalletVaultDepositAttoRep = (BigInt(String(deposit.metadata['amountAttoRep'])) + 1n).toString()
-		expectOnlyExactRevokes(continuation(poolSnapshot, deposit, [poolConfirmed]), [{ spender: pool.address, token: poolApproval.to }])
+		capital.frozen = true
+		expectOnlyExactRevokes(continuation(poolSnapshot, deposit, [poolConfirmed]), [{ spender: capital.capitalLedger, token: poolApproval.to }])
 
 		const directSnapshot = snapshotFixture()
 		const direct = requiredPlan(directSnapshot, 'statoblast.escalation.deposit-wallet-rep')

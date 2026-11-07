@@ -4,7 +4,7 @@ import { recheckedBeforeWallet } from './workflows.js'
 export const operationLabel = 'Settlement operation'
 export const completeSetAction = 'Redeem sets'
 export const forkMigrationAction = 'Migrate'
-export const completeSetRedemptionGuidance = 'Burn equal amounts of your Yes, No, and Invalid shares for ETH at the security pool’s current collateral rate.'
+export const completeSetRedemptionGuidance = 'Burn equal amounts of your Yes, No, and Invalid shares for their share of the pool’s collateral.'
 export { max } from '@zoltar/ui-core-shared/copy/common.js'
 /** The field takes ETH; the hint below it converts that to complete sets. */
 export const completeSetValueToRedeem = 'ETH to redeem'
@@ -14,7 +14,7 @@ export const marketDataUnavailableReason = 'Market data is unavailable. Refresh 
 export const universeNotForkedReason = 'The universe has not forked, so there is nothing to migrate.'
 export const noSharesToMigrateReason = 'You hold no Yes, No, or Invalid shares to migrate.'
 export const universeForkedReason = 'The universe forked; migrate your shares instead.'
-export const poolNotOperationalReason = 'The security pool is not operational, so it cannot pay out ETH.'
+export const poolNotOperationalReason = 'The security pool is not operational, so it cannot redeem shares.'
 export const noCompleteSetsReason = 'You hold no complete sets. Redeeming needs equal Yes, No, and Invalid shares.'
 export const questionNotResolvedReason = 'The question has not resolved yet.'
 export const questionResolvedReason = 'The question resolved. Redeem your winning shares instead.'
@@ -79,13 +79,16 @@ export function formatWinningRedemptionGuidance(outcome: 'INVALID' | 'YES' | 'NO
 export const settlementTransaction = 'Settlement transaction'
 export const transactionFailed = 'Settlement transaction failed.'
 export const estimateHeading = 'Redemption estimate'
-export { invalidEthAmount, minimumReceived, youReceiveEstimate as youReceive } from './tradeTicket.js'
+export { invalidEthAmount, invalidShareAmount, minimumReceived, youReceiveEstimate as youReceive } from './tradeTicket.js'
 export const redeemCompleteSetsAction = 'Redeem complete sets'
 
 export function migrationAction(count: number) {
 	return count === 0 ? 'Migrate shares' : `Migrate to ${count.toString()} child ${count === 1 ? 'universe' : 'universes'}`
 }
 
-export const zeroRedemptionReason = 'Complete-set redemption would return zero ETH.'
+export const zeroRedemptionReason = 'Complete-set redemption would return no ETH or REP.'
+export const completeSetsToRedeem = 'Complete sets to redeem'
+export const sets = 'sets'
+export const recoveryRep = 'Recovery REP'
 
 export const estimateNote = `Estimate from the current collateral rate. ${recheckedBeforeWallet}`

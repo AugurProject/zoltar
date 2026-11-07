@@ -73,12 +73,12 @@ uint256 value=1;
 		}
 	})
 	test('preserves CLI ignore behavior for check and write', async () => {
-		const directory = await mkdtemp(join(import.meta.dir, '../../solidity/contracts/statoblast/openOracle/openzeppelin/formatter-test-'))
+		const directory = await mkdtemp(join(import.meta.dir, '../../node_modules/formatter-test-'))
 		const file = join(directory, 'Ignored.sol')
 		const source = 'contract Example { uint256 value=1; }'
 		try {
 			await writeFile(file, source)
-			const expected = execFileSync('bunx', ['prettier', '--config', join(import.meta.dir, '../../.prettierrc.json'), '--stdin-filepath', file], { input: source, encoding: 'utf8' })
+			const expected = execFileSync('node', [join(import.meta.dir, '../../node_modules/prettier/bin/prettier.cjs'), '--config', join(import.meta.dir, '../../.prettierrc.json'), '--stdin-filepath', file], { input: source, encoding: 'utf8' })
 			expect(expected).toBe(source)
 			expect(await checkSolidityFiles([file])).toEqual([])
 			expect(await writeSolidityFiles([file])).toEqual([])
@@ -93,7 +93,7 @@ uint256 value=1;
 			const files = [join(directory, 'First.sol'), join(directory, 'Second.sol')]
 			const source = 'contract Example { function update(uint256 x, address y) external { emit Changed(x,y); } event Changed(uint256 x,address y); }'
 			for (const file of files) await writeFile(file, source)
-			const expected = files.map(file => enforceSolidityOneLineForms(execFileSync('bunx', ['prettier', '--config', join(import.meta.dir, '../../.prettierrc.json'), '--stdin-filepath', file], { input: source, encoding: 'utf8' })))
+			const expected = files.map(file => enforceSolidityOneLineForms(execFileSync('node', [join(import.meta.dir, '../../node_modules/prettier/bin/prettier.cjs'), '--config', join(import.meta.dir, '../../.prettierrc.json'), '--stdin-filepath', file], { input: source, encoding: 'utf8' })))
 			expect(await checkSolidityFiles(files)).toHaveLength(2)
 			for (const file of files) expect(await readFile(file, 'utf8')).toBe(source)
 			expect(await writeSolidityFiles(files)).toHaveLength(2)

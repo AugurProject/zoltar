@@ -1,25 +1,9 @@
 import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 
-export type { AccountState, TransactionCancellationParameters, TransactionLifecycleParameters, WriteOperationContext, WriteOperationsParameters } from '@zoltar/ui-core-shared/types/app.js'
-export type { MarketFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
+export type { AccountState, WriteOperationsParameters } from '@zoltar/ui-core-shared/types/app.js'
 
-export const STATOBLAST_ROUTES = ['deploy', 'pools', 'open-oracle', 'not-found'] as const
+export const STATOBLAST_ROUTES = ['deploy', 'pools', 'portfolios', 'open-oracle', 'not-found'] as const
 export type StatoblastRoute = (typeof STATOBLAST_ROUTES)[number]
-
-export type SecurityPoolFormState = {
-	initialReportPriorityFeeNanoEth: string
-	marketId: string
-	statoblastSecurityMultiplierBps: string
-}
-
-export type SecurityVaultFormState = {
-	depositAmount: string
-	targetHealthFactor: string
-	repWithdrawAmount: string
-	selectedVaultOwner: string
-	securityPoolAddress: string
-	stagedOperationTimeoutMinutes?: string
-}
 
 export type TradingFormState = {
 	completeSetAmount: string

@@ -1,8 +1,6 @@
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { isObjectRecord, requireArrayOf } from '@zoltar/core-shared/validation/guards'
 
-type SecurityVaultTuple = readonly [bigint, bigint, bigint, bigint] | readonly [bigint, bigint, bigint, bigint, bigint]
-
 export type SecurityPoolDeploymentTuple = {
 	initialReportPriorityFeeAttoEthPerGas: bigint
 	parent: Address
@@ -29,9 +27,3 @@ function isSecurityPoolDeploymentTuple(value: unknown): value is SecurityPoolDep
 }
 
 export const requireSecurityPoolDeploymentTupleArray = requireArrayOf(isSecurityPoolDeploymentTuple)
-
-function isSecurityVaultTuple(value: unknown): value is SecurityVaultTuple {
-	return Array.isArray(value) && (value.length === 4 || value.length === 5) && value.every(item => typeof item === 'bigint')
-}
-
-export const requireSecurityVaultTupleArray = requireArrayOf(isSecurityVaultTuple)

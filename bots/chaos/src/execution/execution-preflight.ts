@@ -2,12 +2,11 @@ import { type Address, toHex, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import type { OperationPreflightCall, OperationStep } from '../operations/types.ts'
 import { unsignedQuantity } from './safety.ts'
 import { type ExecutionEnvironment, type CanonicalCallAnchor, OperationRediscoveryRequired } from './execution-context.ts'
-import { exactAttestedSecurityPoolVaultRep, exactAttestedTokenBalance, exactAttestedOpenOracleCredit, exactAttestedErc1155Balance, agreedExactCall, agreedMaximumGasEstimate } from './execution-quorum.ts'
+import { exactAttestedTokenBalance, exactAttestedOpenOracleCredit, exactAttestedErc1155Balance, agreedExactCall, agreedMaximumGasEstimate } from './execution-quorum.ts'
 
 export async function assertFreshWalletAssetDebits(environment: ExecutionEnvironment, step: Pick<OperationStep, 'label' | 'walletAssetDebits'>, anchor: CanonicalCallAnchor) {
 	const erc20Debits = new Map<string, { address: Address; amount: bigint; categories: Set<string> }>()
 	const erc1155Debits = new Map<string, { address: Address; amount: bigint; tokenId: bigint }>()
-	const securityPoolVaultDebits = new Map<string, { amount: bigint; pool: Address; vault: Address }>()
 	const openOracleDebits = new Map<
 		string,
 		{
@@ -35,13 +34,6 @@ export async function assertFreshWalletAssetDebits(environment: ExecutionEnviron
 				existing.amount += amount
 				existing.categories.add(debit.category)
 			}
-			continue
-		}
-		if (debit.kind === 'security-pool-vault-rep') {
-			const key = `${debit.pool.toLowerCase()}:${debit.vault.toLowerCase()}`
-			const existing = securityPoolVaultDebits.get(key)
-			if (existing === undefined) securityPoolVaultDebits.set(key, { amount, pool: debit.pool, vault: debit.vault })
-			else existing.amount += amount
 			continue
 		}
 		if (debit.kind === 'erc20') {
@@ -79,12 +71,6 @@ export async function assertFreshWalletAssetDebits(environment: ExecutionEnviron
 		}
 		if (debit.categories.has('rep') && debit.asset === zeroAddress) {
 			throw new Error(`${step.label} cannot classify native OpenOracle credit as REP`)
-		}
-	}
-	for (const debit of securityPoolVaultDebits.values()) {
-		const backing = await exactAttestedSecurityPoolVaultRep(environment, debit.pool, debit.vault, anchor)
-		if (backing < debit.amount) {
-			throw new OperationRediscoveryRequired(`${step.label} no longer has the declared SecurityPool vault REP backing for ${debit.pool}/${debit.vault}`)
 		}
 	}
 	const repCreditAssets = new Set([...openOracleDebits.values()].flatMap(debit => (debit.categories.has('rep') ? [debit.asset.toLowerCase()] : [])))

@@ -2,7 +2,6 @@
 	"version": 2,
 	"approvedUniverses": [],
 	"childMarketConfigurations": [],
-	"desiredPools": [],
 	"centralizedMarkets": {
 		"assetSymbol": "REP",
 		"depthBps": 500,
@@ -45,30 +44,23 @@
 		"uiPort": 4183,
 		"stateFile": ".state/operator-state.json"
 	},
-	"selectedPools": [],
 	"strategy": {
-		"allowAutomaticDeposits": true,
-		"allowAutomaticPoolCreation": false,
-		"allowAutomaticVaultMigrations": true,
-		"allowAutomaticWithdrawals": true,
-		"candidatePriority": "largest-bonus",
-		"fallbackRepPerEthPrice": "0",
 		"maximumGasCostEth": "0.02",
-		"maximumLiquidationDebtEth": "25",
-		"maximumOracleRequestCostEth": "0.02",
-		"maximumPerPoolRep": "10000",
-		"maximumTotalDeployedRep": "25000",
-		"minimumLiquidationDebtEth": "1",
-		"minimumRepWithdrawalRep": "10",
-		"minimumRewardValueEth": "0.02",
-		"redeemFeesAboveEth": "0.01",
-		"stalePriceFundingBufferBps": 15000,
-		"stagedOperationValidForSeconds": 240,
-		"vaultTargetHealthBps": 12500,
-		"vaultTopUpHealthBps": 11000,
-		"vaultWithdrawHealthBps": 15000,
 		"walletReserveRep": "100"
 	},
 	"paused": true,
-	"privateKey": null
+	"privateKey": null,
+	"selectedPortfolios": [],
+	"portfolioPolicy": {
+		"allowFundedTakeovers": false,
+		"maximumPositionsPerScan": 32,
+		"maximumPrincipalRep": "0",
+		"maximumTotalPrincipalRep": "0",
+		"maximumCommitmentEth": "0",
+		"maximumOwnFundingRep": "0",
+		"minimumNetRewardEth": "0.001",
+		"walletReserveEth": "0.01",
+		"targetHealthFactorBps": 15000,
+		"stalledRetirementSeconds": 3600
+	}
 }

@@ -3,7 +3,6 @@
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { getDefaultOpenOracleCreateFormState } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/formDefaults.js'
 import {
-	formatOpenOraclePriceInput,
 	formatOpenOracleSecondsInputHint,
 	formatOpenOracleTimingDuration,
 	getOpenOracleCreateEthSent,
@@ -97,19 +96,6 @@ describe('OpenOracle create form helpers', () => {
 		expect(formatOpenOracleSecondsInputHint('soon')).toBeUndefined()
 		expect(formatOpenOracleTimingDuration(3600n, true)).toBe('1h')
 		expect(formatOpenOracleTimingDuration(12n, false)).toBe('12 blocks')
-	})
-})
-
-describe('OpenOracle fetched price input', () => {
-	test('rounds an 18-decimal quote to six significant digits', () => {
-		expect(formatOpenOraclePriceInput(1_234_567_890_123_456_789n, 18)).toBe('1.23457')
-		expect(formatOpenOraclePriceInput(123_456_789_000_000_000_000n, 18)).toBe('123.457')
-		// Large prices keep every whole digit and drop only the fraction.
-		expect(formatOpenOraclePriceInput(12_345_678_900_000_000_000_000_000n, 18)).toBe('12345679')
-		expect(formatOpenOraclePriceInput(1_234_567_890_123n, 18)).toBe('0.00000123457')
-		expect(formatOpenOraclePriceInput(2n * 10n ** 18n, 18)).toBe('2')
-		expect(formatOpenOraclePriceInput(1_999_999_900_000_000_000n, 18)).toBe('2')
-		expect(formatOpenOraclePriceInput(0n, 18)).toBe('0')
 	})
 })
 

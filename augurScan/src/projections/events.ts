@@ -188,6 +188,7 @@ const poolStateFields: Readonly<Record<string, readonly string[]>> = {
 	CompleteSetCreated: ['resultingShareTokenSupplyAttoShares', 'resultingSettlementCollateralAttoEth'],
 	CompleteSetRedeemed: ['resultingShareTokenSupplyAttoShares', 'resultingSettlementCollateralAttoEth'],
 	EscalationGameSet: ['escalationGame'],
+	QuestionAccountingCheckpoint: ['settlementCollateralAttoEth', 'shareTokenSupplyAttoShares', 'lastUpdatedFeeAccumulator'],
 	PoolForkModeActivated: ['repTransferredAttoRep', 'currentRetentionRate', 'systemState'],
 	ShareTokenSupplySet: ['shareTokenSupplyAttoShares'],
 	SharesRedeemed: ['resultingShareTokenSupplyAttoShares', 'resultingSettlementCollateralAttoEth'],

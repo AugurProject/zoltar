@@ -10,7 +10,6 @@ type ReportingStatus = 'missing' | 'not-started' | 'active'
 export function getReportingReportGuardMessage({
 	actualDepositAmount,
 	accountAddress,
-	contributionFunding,
 	contributionPreviewReason,
 	isOnActiveAppChain,
 	remainingSelectedOutcomeCapacity,
@@ -19,16 +18,12 @@ export function getReportingReportGuardMessage({
 	selectedOutcome,
 	selectedAmount,
 	requireAllowance = true,
-	walletFundingAvailable = false,
 	walletDepositAmount = actualDepositAmount,
-	viewerPoolHeldVaultRepBackingAttoRep,
-	viewerVaultExists,
 	viewerWalletRepAllowanceAttoRep,
 	viewerWalletRepBalanceAttoRep,
 }: {
 	actualDepositAmount: bigint | undefined
 	accountAddress: Address | undefined
-	contributionFunding?: 'vault' | 'wallet' | undefined
 	contributionPreviewReason: string | undefined
 	isOnActiveAppChain: boolean
 	remainingSelectedOutcomeCapacity: bigint | undefined
@@ -37,10 +32,7 @@ export function getReportingReportGuardMessage({
 	selectedOutcome: ReportingOutcomeKey | undefined
 	selectedAmount: bigint | undefined
 	requireAllowance?: boolean | undefined
-	walletFundingAvailable?: boolean | undefined
 	walletDepositAmount?: bigint | undefined
-	viewerPoolHeldVaultRepBackingAttoRep: bigint | undefined
-	viewerVaultExists: boolean
 	viewerWalletRepAllowanceAttoRep?: bigint | undefined
 	viewerWalletRepBalanceAttoRep?: bigint | undefined
 }) {
@@ -56,20 +48,11 @@ export function getReportingReportGuardMessage({
 		if (remainingSelectedOutcomeCapacity === 0n) return reportingCopy.selectedSideCapacityEmpty
 		return `Only ${formatCurrencyBalanceWithUnit(remainingSelectedOutcomeCapacity, 'REP')} remains before the selected side reaches the non-decision threshold.`
 	}
-	if (contributionFunding === 'wallet') {
-		if (walletDepositAmount === undefined) return reportingCopy.loadingVaultFunding
-		if (viewerWalletRepBalanceAttoRep === undefined) return reportingCopy.loadingWalletRepBalance
-		if (walletDepositAmount > viewerWalletRepBalanceAttoRep) return `Add ${formatAdditionalCurrencyBalance(walletDepositAmount - viewerWalletRepBalanceAttoRep, 'REP')} to this wallet before reporting.`
-		if (!requireAllowance) return undefined
-		if (viewerWalletRepAllowanceAttoRep === undefined) return 'Loading REP allowance for the security pool…'
-		if (walletDepositAmount > viewerWalletRepAllowanceAttoRep) return reportingCopy.reportingRepApprovalRequired
-		return undefined
-	}
-	if (walletFundingAvailable && (!viewerVaultExists || (viewerPoolHeldVaultRepBackingAttoRep ?? 1n) === 0n)) return reportingCopy.noVaultRepSelectWallet
-	if (walletFundingAvailable && viewerPoolHeldVaultRepBackingAttoRep !== undefined && actualDepositAmount > viewerPoolHeldVaultRepBackingAttoRep) return reportingCopy.insufficientVaultRepSelectWallet(formatCurrencyBalanceWithUnit(viewerPoolHeldVaultRepBackingAttoRep, 'REP'))
-	if (!viewerVaultExists) return 'This report uses pool-held REP backing. Deposit REP into your vault before reporting.'
-	if (viewerPoolHeldVaultRepBackingAttoRep === undefined) return reportingCopy.loadingPoolHeldVaultRepBacking
-	if (actualDepositAmount > viewerPoolHeldVaultRepBackingAttoRep) return `Deposit ${formatAdditionalCurrencyBalance(actualDepositAmount - viewerPoolHeldVaultRepBackingAttoRep, 'REP')} into your vault’s pool-held backing before reporting.`
+	if (walletDepositAmount === undefined || viewerWalletRepBalanceAttoRep === undefined) return reportingCopy.loadingWalletRepBalance
+	if (walletDepositAmount > viewerWalletRepBalanceAttoRep) return `Add ${formatAdditionalCurrencyBalance(walletDepositAmount - viewerWalletRepBalanceAttoRep, 'REP')} to this wallet before reporting.`
+	if (!requireAllowance) return undefined
+	if (viewerWalletRepAllowanceAttoRep === undefined) return 'Loading REP allowance for the question…'
+	if (walletDepositAmount > viewerWalletRepAllowanceAttoRep) return reportingCopy.reportingRepApprovalRequired
 	return undefined
 }
 

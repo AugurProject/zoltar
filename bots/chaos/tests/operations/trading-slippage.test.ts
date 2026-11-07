@@ -15,11 +15,8 @@ function openTradingSnapshot() {
 	const pool = snapshot.pools[0]
 	if (pool === undefined) throw new Error('Trading pool fixture is missing')
 	pool.escalationGame = '0x0000000000000000000000000000000000000000'
-	pool.totalUnderwritingLimitAttoEth = (2n * 10n ** 18n).toString()
-	const vault = pool.vaults[0]
-	if (vault === undefined) throw new Error('Missing underwriting vault')
-	vault.underwritingLimitAttoEth = pool.totalUnderwritingLimitAttoEth
-	pool.currentMintingCapacityAttoEth = pool.totalUnderwritingLimitAttoEth
+	pool.currentMintingCapacityAttoEth = (2n * 10n ** 18n).toString()
+	pool.purchaseQuote = { mintAttoEth: 1000000000000n.toString(), feeAttoEth: 10000000000n.toString(), premiumAttoEth: 20000000000n.toString(), minimumShares: '1000000000000' }
 	pool.shareTokenSupplyAttoShares = '1000000000000000000'
 	shares.isApprovedForAll = Object.fromEntries(Object.keys(shares.isApprovedForAll).map(operator => [operator, true]))
 	const lp = snapshot.wallet.lpTokens[0]
@@ -58,10 +55,10 @@ describe('trading economic bounds', () => {
 		const enter = decodeFunctionData({ abi: twoWayConstantProductRouterAbi, data: planData('trading.position.enter') })
 		const exit = decodeFunctionData({ abi: erc1155Abi, data: planData('trading.position.exit') })
 		const redeem = decodeFunctionData({ abi: erc1155Abi, data: planData('trading.complete-set.redeem') })
-		positive(add.args[1], 'router add maximum YES')
-		positive(add.args[2], 'router add maximum NO')
-		positive(add.args[3], 'router add minimum liquidity')
-		positive(enter.args[2], 'router enter minimum long shares')
+		positive(add.args[2], 'router add maximum YES')
+		positive(add.args[3], 'router add maximum NO')
+		positive(add.args[4], 'router add minimum liquidity')
+		positive(enter.args[3], 'router enter minimum long shares')
 		expect(exit.args[4]).not.toBe('0x')
 		expect(redeem.args[4]).not.toBe('0x')
 	})
@@ -77,6 +74,6 @@ describe('trading economic bounds', () => {
 		const direct = decodeFunctionData({ abi: twoWayConstantProductPairAbi, data: planData('trading.pair.initialize-shares', directSnapshot) })
 		const router = decodeFunctionData({ abi: twoWayConstantProductRouterAbi, data: planData('trading.pair.initialize-eth', directSnapshot) })
 		positive(direct.args[2], 'direct initialization minimum liquidity')
-		positive(router.args[2], 'router initialization minimum liquidity')
+		positive(router.args[3], 'router initialization minimum liquidity')
 	})
 })

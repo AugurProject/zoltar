@@ -215,3 +215,11 @@ describe('portfolio overview', () => {
 		expect(overview.actionGroups[0]?.items.map(item => item.kind)).toEqual(['settle', 'withdraw-liquidity'])
 	})
 })
+
+test('portfolio records REP-only redemption without inventing an ETH value', () => {
+	const overview = portfolioOverview([entry({ questionOutcome: 1, settlementCollateralAttoEth: 0n, settlementRecoveryAttoRep: 300n * SET }, { yes: 2n * SET })], NOW)
+	expect(overview.rows[0]?.valuation).toEqual({ kind: 'redemption', attoEth: 0n, attoRep: 6n * SET })
+	expect(overview.rows[0]?.canRedeem).toBe(true)
+	expect(overview.totalValueAttoEth).toBe(0n)
+	expect(overview.recoveryRepCount).toBe(1)
+})

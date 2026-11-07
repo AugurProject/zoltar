@@ -4,7 +4,7 @@ import type { EcosystemSnapshot } from '../operations/types.ts'
 
 function verifiedRefundGeneration(auction: EcosystemSnapshot['auctions'][number], index: ChaosProtocolIndex) {
 	const pendingAttoEth = BigInt(auction.pendingEthRefund)
-	const indexed = index.auctionRefunds[auction.address.toLowerCase()]
+	const indexed = index.auctionRefunds[auction.engine.toLowerCase()]
 	if (pendingAttoEth === 0n) {
 		if (indexed !== undefined) throw new Error(`Auction ${auction.address} has an authenticated active refund episode but zero anchored pending storage`)
 		return undefined
@@ -22,9 +22,9 @@ export function indexWithCurrentRefunds(snapshot: EcosystemSnapshot, index: Chao
 	if (index.chainId !== snapshot.chainId || index.wallet.toLowerCase() !== snapshot.wallet.address.toLowerCase()) throw new Error('Refund reconciliation requires the indexed chain and wallet')
 	const auctionRefunds = { ...index.auctionRefunds }
 	for (const auction of snapshot.auctions) {
-		const key = auction.address.toLowerCase()
+		const key = auction.engine.toLowerCase()
 		if (auctionRefunds[key] !== undefined || BigInt(auction.pendingEthRefund) === 0n) continue
-		const generation = keccak256(encodeAbiParameters([{ type: 'string' }, { type: 'uint256' }, { type: 'address' }, { type: 'address' }, { type: 'bytes32' }], ['chaos:observed-refund:v1', BigInt(snapshot.chainId), snapshot.wallet.address, auction.address, snapshot.anchor.blockHash]))
+		const generation = keccak256(encodeAbiParameters([{ type: 'string' }, { type: 'uint256' }, { type: 'address' }, { type: 'address' }, { type: 'bytes32' }], ['chaos:observed-refund:v1', BigInt(snapshot.chainId), snapshot.wallet.address, auction.engine, snapshot.anchor.blockHash]))
 		auctionRefunds[key] = { generation, pendingAttoEth: auction.pendingEthRefund }
 	}
 	const reconciled = { ...index, auctionRefunds }
@@ -53,7 +53,7 @@ export function snapshotWithProtocolIndex(snapshot: EcosystemSnapshot, index: Ch
 			const { pendingEthRefundGeneration: _partialGeneration, ...topologyAuction } = auction
 			return {
 				...topologyAuction,
-				bids: [...(index.auctionBids[auction.address.toLowerCase()] ?? [])],
+				bids: [...(index.auctionBids[auction.engine.toLowerCase()] ?? [])],
 				...(refundGeneration === undefined ? {} : { pendingEthRefundGeneration: refundGeneration }),
 			}
 		}),

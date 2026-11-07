@@ -1,10 +1,11 @@
+import { deployTestPortfolio } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/deployTestPortfolio.ts'
 import { eip191Signer } from 'micro-eth-signer'
-import { encodeDeployData, getAddress, keccak256, privateKeyToAccount, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { encodeDeployData, keccak256, privateKeyToAccount, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { createAnvilNodeForConnectionMode, type AnvilNode } from '../../../../solidity/ts/testSupport/simulator/anvilNode.ts'
 import { addressString } from '../../../../solidity/ts/testSupport/simulator/utils/bigint.ts'
 import { createWriteClient, writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients.ts'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../../../../solidity/ts/testSupport/simulator/utils/constants.ts'
-import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast.ts'
+import { ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast.ts'
 import { createQuestion } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData.ts'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { manipulatePriceOracle } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/statoblastTestUtils.ts'
@@ -266,11 +267,10 @@ export async function createChaosAnvilFixture(): Promise<ChaosAnvilFixture> {
 		const outcomes = ['Yes', 'No']
 		const questionId = getQuestionId(question, outcomes)
 		await createQuestion(deployer, question, outcomes)
-		await deployOriginSecurityPool(deployer, ORIGIN_UNIVERSE, questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS)
+		const poolAddresses = await deployTestPortfolio(deployer, ORIGIN_UNIVERSE, questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS)
 		const infra = getInfraContractAddresses()
-		const poolAddresses = getSecurityPoolAddresses(getAddress('0x0000000000000000000000000000000000000000'), ORIGIN_UNIVERSE, questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS)
 		const pool = poolAddresses.securityPool
-		await manipulatePriceOracle(deployer, simulator, poolAddresses.openOraclePriceCoordinator)
+		await manipulatePriceOracle(deployer, simulator, poolAddresses.openOraclePriceCoordinator, ONE_TOKEN, 100n * ONE_TOKEN)
 
 		const tradingFactory = await deploy(
 			deployer,

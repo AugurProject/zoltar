@@ -34,11 +34,11 @@ export async function submitFreshLiquidity(client: WalletClient, configuration: 
 		return initializedPairAddress === undefined
 			? await guardedWrite(async () => {
 					await requireFreshSubmissionWindow(client, quote.market, quote.operation, refreshed.deadline)
-					return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [quote.market.pool, quote.conditionalYesBps, minimumLiquidity, account, refreshed.deadline], value: quote.amount })
+					return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [quote.market.pool, refreshed.mintAttoEth, quote.conditionalYesBps, minimumLiquidity, account, refreshed.deadline], value: quote.amount })
 				})
 			: await guardedWrite(async () => {
 					await requireFreshSubmissionWindow(client, quote.market, quote.operation, refreshed.deadline)
-					return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [initializedPairAddress, quote.conditionalYesBps, minimumLiquidity, account, refreshed.deadline], value: quote.amount })
+					return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [initializedPairAddress, refreshed.mintAttoEth, quote.conditionalYesBps, minimumLiquidity, account, refreshed.deadline], value: quote.amount })
 				})
 	}
 	const pairAddress = quote.market.pair
@@ -51,11 +51,11 @@ export async function submitFreshLiquidity(client: WalletClient, configuration: 
 		const maximumNo = retainApprovedMaximum(maximumAfterSlippage(quote.expectedNoDeposit, quote.slippageBps), refreshed.expectedNoDeposit, 'NO deposit')
 		const block = await latestBlockIdentity(client)
 		const feeMarket = await loadTransactionFeeMarket(client, quote.market, block.blockNumber, block.blockTimestamp)
-		const feeBlocker = liquidityHoldingFeeBlocker(feeMarket, quote.amount, maximumYes, maximumNo, refreshed.deadline, refreshed.result)
+		const feeBlocker = liquidityHoldingFeeBlocker(feeMarket, refreshed.mintAttoEth, maximumYes, maximumNo, refreshed.deadline, refreshed.result)
 		if (feeBlocker !== undefined) throw new Error(feeBlocker)
 		return await guardedWrite(async () => {
 			await requireFreshSubmissionWindow(client, quote.market, quote.operation, refreshed.deadline)
-			return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithEth', account, args: [pairAddress, maximumYes, maximumNo, minimumLiquidity, account, refreshed.deadline], value: quote.amount })
+			return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithEth', account, args: [pairAddress, refreshed.mintAttoEth, maximumYes, maximumNo, minimumLiquidity, account, refreshed.deadline], value: quote.amount })
 		})
 	}
 	const minimumYes = retainApprovedMinimum(minimumAfterSlippage(quote.expectedYes, quote.slippageBps), refreshed.expectedYes, 'YES')

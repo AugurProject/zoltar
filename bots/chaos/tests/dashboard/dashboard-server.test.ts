@@ -1063,10 +1063,10 @@ describe('chaos dashboard server', () => {
 			publicChaosState({
 				topology: {
 					anchor: { blockHash: `0x${'ab'.repeat(32)}`, blockNumber: '42', timestamp: '1000' },
-					auctions: [{ address: '0x1111111111111111111111111111111111111111', bids: [{ rawTransaction: secret }], finalized: false, pool: '0x2222222222222222222222222222222222222222' }],
+					auctions: [{ address: '0x1111111111111111111111111111111111111111', bids: [{ rawTransaction: secret }], finalized: false, portfolio: '0x2222222222222222222222222222222222222222' }],
 					complete: true,
 					pairs: [{ address: '0x3333333333333333333333333333333333333333', pool: '0x2222222222222222222222222222222222222222', reserve: secret, status: 1, universeId: '0' }],
-					pools: [{ address: '0x2222222222222222222222222222222222222222', coordinator: '0x4444444444444444444444444444444444444444', universeId: '0', vaults: [{ privateKey: secret }] }],
+					pools: [{ address: '0x2222222222222222222222222222222222222222', coordinator: '0x4444444444444444444444444444444444444444', universeId: '0', portfolio: '0x9999999999999999999999999999999999999999', vaults: [{ privateKey: secret }] }],
 					reports: [{ calldata: secret, currentReporter: '0x5555555555555555555555555555555555555555', reportId: '7', token1: '0x6666666666666666666666666666666666666666', token2: '0x7777777777777777777777777777777777777777' }],
 					universes: [{ id: '0', knownChildOutcomes: ['1', '2'], privateRpcUrl: `https://${secret}.example`, repToken: '0x8888888888888888888888888888888888888888' }],
 				},
@@ -1077,10 +1077,10 @@ describe('chaos dashboard server', () => {
 		expect(topology).toEqual({
 			anchorBlock: '42',
 			anchorTimestamp: '1000',
-			auctions: [{ address: '0x1111111111111111111111111111111111111111', bidCount: 1, finalized: false, pool: '0x2222222222222222222222222222222222222222' }],
+			auctions: [{ address: '0x1111111111111111111111111111111111111111', bidCount: 1, finalized: false, portfolio: '0x2222222222222222222222222222222222222222' }],
 			complete: true,
 			pairs: [{ address: '0x3333333333333333333333333333333333333333', pool: '0x2222222222222222222222222222222222222222', status: 1, universeId: '0' }],
-			pools: [{ address: '0x2222222222222222222222222222222222222222', coordinator: '0x4444444444444444444444444444444444444444', universeId: '0', vaultCount: 1 }],
+			pools: [{ address: '0x2222222222222222222222222222222222222222', coordinator: '0x4444444444444444444444444444444444444444', universeId: '0', portfolio: '0x9999999999999999999999999999999999999999' }],
 			reports: [{ currentReporter: '0x5555555555555555555555555555555555555555', reportId: '7', token1: '0x6666666666666666666666666666666666666666', token2: '0x7777777777777777777777777777777777777777' }],
 			totalCounts: { auctions: 1, pairs: 1, pools: 1, reports: 1, universes: 1 },
 			truncated: false,

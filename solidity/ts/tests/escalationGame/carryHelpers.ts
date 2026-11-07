@@ -71,6 +71,12 @@ const bagCarryPeaks = (peaks: readonly Hex[], leafCount: bigint) => {
 }
 
 export function createEscalationGameCarryHelpers(getClient: () => WriteClient) {
+	const completeSnapshot = async (step: () => Promise<Hex>) => {
+		await step()
+		await step()
+		return await step()
+	}
+
 	const assertOutcomeCarryTotalsMatchComponents = async (escalationGameAddress: Address) => {
 		for (const outcome of [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No]) {
 			const state = await getEscalationGameOutcomeState(getClient(), escalationGameAddress, outcome)
@@ -85,15 +91,17 @@ export function createEscalationGameCarryHelpers(getClient: () => WriteClient) {
 		inheritedCarryTotals: readonly [bigint, bigint, bigint],
 		inheritedNullifierRoots: readonly [Hex, Hex, Hex],
 	) =>
-		await writeContractAndWait(
-			getClient(),
-			async () =>
-				await getClient().writeContract({
-					abi: initializeForkCarrySnapshotAbi,
-					address: testSecurityPoolAddress,
-					functionName: 'initializeForkCarrySnapshot',
-					args: [inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedNullifierRoots],
-				}),
+		await completeSnapshot(() =>
+			writeContractAndWait(
+				getClient(),
+				async () =>
+					await getClient().writeContract({
+						abi: initializeForkCarrySnapshotAbi,
+						address: testSecurityPoolAddress,
+						functionName: 'initializeForkCarrySnapshot',
+						args: [inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedNullifierRoots],
+					}),
+			),
 		)
 
 	const initializeSnapshotWithResolutionBalancesViaTestSecurityPool = async (
@@ -104,15 +112,17 @@ export function createEscalationGameCarryHelpers(getClient: () => WriteClient) {
 		inheritedResolutionBalances: readonly [bigint, bigint, bigint],
 		inheritedNullifierRoots: readonly [Hex, Hex, Hex],
 	) =>
-		await writeContractAndWait(
-			getClient(),
-			async () =>
-				await getClient().writeContract({
-					abi: initializeForkCarrySnapshotWithResolutionBalancesAbi,
-					address: testSecurityPoolAddress,
-					functionName: 'initializeForkCarrySnapshotWithResolutionBalances',
-					args: [inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedResolutionBalances, inheritedNullifierRoots],
-				}),
+		await completeSnapshot(() =>
+			writeContractAndWait(
+				getClient(),
+				async () =>
+					await getClient().writeContract({
+						abi: initializeForkCarrySnapshotWithResolutionBalancesAbi,
+						address: testSecurityPoolAddress,
+						functionName: 'initializeForkCarrySnapshotWithResolutionBalances',
+						args: [inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedResolutionBalances, inheritedNullifierRoots],
+					}),
+			),
 		)
 
 	const initializeSnapshotFromSourceViaTestSecurityPool = async (
@@ -124,15 +134,17 @@ export function createEscalationGameCarryHelpers(getClient: () => WriteClient) {
 		inheritedCarryTotals: readonly [bigint, bigint, bigint],
 		inheritedNullifierRoots: readonly [Hex, Hex, Hex],
 	) =>
-		await writeContractAndWait(
-			getClient(),
-			async () =>
-				await getClient().writeContract({
-					abi: initializeForkCarrySnapshotFromSourceAbi,
-					address: testSecurityPoolAddress,
-					functionName: 'initializeForkCarrySnapshotFromSource',
-					args: [sourceGame, snapshotId, inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedNullifierRoots],
-				}),
+		await completeSnapshot(() =>
+			writeContractAndWait(
+				getClient(),
+				async () =>
+					await getClient().writeContract({
+						abi: initializeForkCarrySnapshotFromSourceAbi,
+						address: testSecurityPoolAddress,
+						functionName: 'initializeForkCarrySnapshotFromSource',
+						args: [sourceGame, snapshotId, inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedNullifierRoots],
+					}),
+			),
 		)
 
 	const getEscalationReplayLogs = async (transactionHashes: readonly Hex[], gameAddresses: ReadonlySet<string>) => {

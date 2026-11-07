@@ -1,3 +1,4 @@
+import { isHex, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { getErrorMessage } from '../lib/errors.js'
 import { getBrowserStorage } from '../lib/browserStorage.js'
 import type { SimulationScenario } from './scenarios.js'
@@ -24,7 +25,27 @@ const MAX_CORRUPTED_SAVED_STATE_BACKUPS = 5
 
 const SAVED_SIMULATION_STATE_VERSION = 1 as const
 
+/** A receipt as a saved state carries it; `chainHistory.ts` produces and restores these inside the simulation worker. */
+export type SerializedSimulationReceipt = {
+	cumulativeGasUsed: Hex
+	logs: SerializedSimulationLog[]
+	logsBloom: Hex
+	status: 0 | 1
+}
+
+type SerializedSimulationLog = [address: Address, topics: Hex[], data: Hex]
+
+export type SerializedSimulationBlock = {
+	/** The RLP-encoded block. */
+	block: Hex
+	receipts: SerializedSimulationReceipt[]
+	/** The sender of each transaction, which the RLP of an unsigned, impersonated transaction cannot carry. */
+	senders: Address[]
+}
+
 type SimulationSnapshotV1 = {
+	/** Mined blocks with receipts, oldest first; states saved before this field existed restore without their history. */
+	blocks?: SerializedSimulationBlock[] | undefined
 	blockCountSinceReset: bigint
 	currentTimestamp: bigint
 	queryDelayMilliseconds: number
@@ -118,6 +139,23 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function isHexString(value: unknown): value is Hex {
+	return typeof value === 'string' && isHex(value, { strict: true })
+}
+
+function isSerializedLog(value: unknown): value is SerializedSimulationLog {
+	return Array.isArray(value) && value.length === 3 && isHexString(value[0]) && Array.isArray(value[1]) && value[1].every(isHexString) && isHexString(value[2])
+}
+
+function isSerializedReceipt(value: unknown): value is SerializedSimulationReceipt {
+	if (!isObjectRecord(value)) return false
+	return isHexString(value['cumulativeGasUsed']) && isHexString(value['logsBloom']) && (value['status'] === 0 || value['status'] === 1) && Array.isArray(value['logs']) && value['logs'].every(isSerializedLog)
+}
+
+function isSerializedSimulationBlock(value: unknown): value is SerializedSimulationBlock {
+	return isObjectRecord(value) && isHexString(value['block']) && Array.isArray(value['receipts']) && value['receipts'].every(isSerializedReceipt) && Array.isArray(value['senders']) && value['senders'].every(isHexString)
+}
+
 function isTaggedBigIntValue(value: unknown): value is Record<typeof BIGINT_VALUE_TAG, string> {
 	return isObjectRecord(value) && Object.keys(value).length === 1 && typeof value[BIGINT_VALUE_TAG] === 'string'
 }
@@ -185,6 +223,7 @@ function assertSavedStateEnvelope(value: unknown): asserts value is SavedSimulat
 	if (!isNonNegativeBigInt(state['repPerEthPrice']) || state['repPerEthPrice'] === 0n) throw new SavedSimulationStateError('Saved simulation state is missing a valid REP/ETH price')
 	if (!isNonNegativeBigInt(state['repPerUsdcPrice']) || state['repPerUsdcPrice'] === 0n) throw new SavedSimulationStateError('Saved simulation state is missing a valid REP/USDC price')
 	if (!isObjectRecord(state['snapshot'])) throw new SavedSimulationStateError('Saved simulation state is missing a valid TEVM snapshot')
+	if (state['blocks'] !== undefined && (!Array.isArray(state['blocks']) || !state['blocks'].every(isSerializedSimulationBlock))) throw new SavedSimulationStateError('Saved simulation state has invalid block history')
 }
 
 function assertSavedStateRecord(value: unknown): asserts value is SavedSimulationStateStorageRecord {
@@ -312,7 +351,7 @@ export function serializeSavedSimulationStateEnvelope(envelope: SavedSimulationS
 	return stringifySimulationValue(envelope)
 }
 
-function parseSavedSimulationStateEnvelope(serialized: string) {
+export function parseSavedSimulationStateEnvelope(serialized: string) {
 	let parsed: unknown
 	try {
 		parsed = parseSimulationValue(serialized)

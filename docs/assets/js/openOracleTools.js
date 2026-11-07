@@ -45,22 +45,6 @@ function bindExample(exampleId, update) {
     input.addEventListener("input", () => update(context));
   update(context);
 }
-function formatPercent(fractionValue) {
-  return `${(fractionValue * 100).toFixed(2)}%`;
-}
-function formatEth(ethValue) {
-  return `${ethValue.toFixed(2)} ETH`;
-}
-function formatExecutionThreshold(thresholdValue) {
-  return Number.isFinite(thresholdValue) ? formatPercent(thresholdValue) : "no finite threshold";
-}
-function formatDuration(durationValue) {
-  if (durationValue === undefined)
-    return "not applicable without attacker payoff";
-  if (!Number.isFinite(durationValue))
-    return "unbounded when censorship rate is zero";
-  return durationValue.toFixed(2);
-}
 function calculateMinimumWethEstimate(parameters) {
   const percentagePrecision = 10000000n;
   const targetErrorUnits = BigInt(Math.round(parameters.targetPriceErrorForDispute * 1e5));
@@ -80,11 +64,11 @@ function calculateMinimumWethEstimate(parameters) {
     };
     const priorityFeeReportAttoEth = calculateGasPriceReport(parameters.initialReportPriorityFeeNanoEth);
     const baseFeeReportAttoEth = calculateGasPriceReport(parameters.blockBaseFeeNanoEth);
-    const openInterestAttoWeth = BigInt(Math.round(parameters.openInterestWeth)) * 10n ** 18n;
+    const openInterestAttoWeth = BigInt(Math.round(parameters.aggregateExposureEth)) * 10n ** 18n;
     const openInterestReportAttoEth = (openInterestAttoWeth + 99n) / 100n;
     minimumWethReportAttoEth = priorityFeeReportAttoEth + (baseFeeReportAttoEth > openInterestReportAttoEth ? baseFeeReportAttoEth : openInterestReportAttoEth);
   }
-  const openInterestAttoWeth = BigInt(Math.round(parameters.openInterestWeth)) * 10n ** 18n;
+  const openInterestAttoWeth = BigInt(Math.round(parameters.aggregateExposureEth)) * 10n ** 18n;
   const openInterestEscalationHaltAttoEth = (openInterestAttoWeth + 99n) / 100n;
   const requestedInitialAttoWeth = BigInt(Math.round(parameters.requestedInitialWeth * 1000000000000000000));
   let selectedInitialWethReportAttoEth;
@@ -134,7 +118,7 @@ bindExample("#initial-report-estimator-example", (context) => {
     escalationHaltMultiplier: context.read("escalationHaltMultiplier"),
     gasUnitsForOneDispute: context.read("gasUnitsForOneDispute"),
     initialReportPriorityFeeNanoEth: context.read("initialReportPriorityFeeNanoEth"),
-    openInterestWeth: context.read("openInterestWeth"),
+    aggregateExposureEth: context.read("aggregateExposureEth"),
     openOracleProtocolFee: context.read("openOracleProtocolFee"),
     openOracleReporterFee: context.read("openOracleReporterFee"),
     openOracleSecurityMultiplier: context.read("openOracleSecurityMultiplier"),
@@ -144,7 +128,7 @@ bindExample("#initial-report-estimator-example", (context) => {
   const estimate = calculateMinimumWethEstimate(parameters);
   context.writeValue("blockBaseFeeNanoEth", `${parameters.blockBaseFeeNanoEth.toFixed(0)} nanoETH`);
   context.writeValue("initialReportPriorityFeeNanoEth", `${parameters.initialReportPriorityFeeNanoEth.toFixed(0)} nanoETH`);
-  context.writeValue("openInterestWeth", `${parameters.openInterestWeth.toFixed(0)} WETH`);
+  context.writeValue("aggregateExposureEth", `${parameters.aggregateExposureEth.toFixed(0)} WETH`);
   context.writeValue("gasUnitsForOneDispute", `${parameters.gasUnitsForOneDispute.toLocaleString()} gas`);
   context.writeValue("openOracleSecurityMultiplier", `${parameters.openOracleSecurityMultiplier.toFixed(1)}x`);
   context.writeValue("targetPriceErrorForDispute", `${parameters.targetPriceErrorForDispute.toFixed(1)}%`);
@@ -171,49 +155,4 @@ bindExample("#initial-report-estimator-example", (context) => {
   const maximum = Math.max(...meterValues.map(([, value]) => Number(value ?? 0n)), 1);
   for (const [name, value] of meterValues)
     setMeter(context, name, Number(value ?? 0n), maximum);
-});
-bindExample("#binary-censorship-example", (context) => {
-  const honestPrice = Math.max(context.read("honestPrice"), 0.0001);
-  const manipulatedPrice = Math.max(context.read("manipulatedPrice"), 0.0001);
-  const liquidationThresholdPrice = Math.max(context.read("liquidationThresholdPrice"), 0.0001);
-  const boundedLiquidationDistanceBps = Math.min(Math.max(context.read("minLiquidationPriceDistanceBps"), 0), 1e4);
-  const externalPayoff = Math.max(context.read("externalPayoff"), 0.0001);
-  const oracleReportLiquidity = Math.max(context.read("oracleReportLiquidity"), 0.0001);
-  const honestDisputeBarrierFraction = Math.max(context.read("honestDisputeBarrierFraction"), 0);
-  const censorshipDuration = Math.max(context.read("censorshipDuration"), 0);
-  const targetGriefRatio = Math.max(context.read("targetGriefRatio"), 0);
-  const discountedHonestPrice = honestPrice * (1 - boundedLiquidationDistanceBps / 1e4);
-  const executionErrorThreshold = discountedHonestPrice === 0 ? Number.POSITIVE_INFINITY : Math.max(0, liquidationThresholdPrice / discountedHonestPrice - 1);
-  const manipulatedPriceError = Math.max(0, (manipulatedPrice - honestPrice) / honestPrice);
-  const liquidationExecutable = manipulatedPrice > liquidationThresholdPrice && manipulatedPriceError >= executionErrorThreshold;
-  const attackerPayoff = liquidationExecutable ? externalPayoff : 0;
-  const censorshipRate = Math.max(0, manipulatedPriceError - honestDisputeBarrierFraction);
-  const censorshipCost = censorshipDuration * censorshipRate * oracleReportLiquidity;
-  const oracleLiquidityRatio = oracleReportLiquidity / externalPayoff;
-  let durationToTargetCost;
-  if (liquidationExecutable)
-    durationToTargetCost = censorshipRate === 0 ? Number.POSITIVE_INFINITY : (targetGriefRatio + 1) / (censorshipRate * oracleLiquidityRatio);
-  context.writeValue("honestPrice", honestPrice.toFixed(0));
-  context.writeValue("manipulatedPrice", manipulatedPrice.toFixed(0));
-  context.writeValue("liquidationThresholdPrice", liquidationThresholdPrice.toFixed(0));
-  context.writeValue("minLiquidationPriceDistanceBps", `${boundedLiquidationDistanceBps.toFixed(0)} bps`);
-  context.writeValue("externalPayoff", formatEth(externalPayoff));
-  context.writeValue("oracleReportLiquidity", formatEth(oracleReportLiquidity));
-  context.writeValue("honestDisputeBarrierFraction", formatPercent(honestDisputeBarrierFraction));
-  context.writeValue("censorshipDuration", `${censorshipDuration.toFixed(0)} steps`);
-  context.writeValue("targetGriefRatio", targetGriefRatio.toFixed(1));
-  context.writeOutput("executionErrorThreshold", formatExecutionThreshold(executionErrorThreshold));
-  context.writeOutput("manipulatedPriceError", formatPercent(manipulatedPriceError));
-  context.writeOutput("liquidationExecutable", liquidationExecutable ? "yes" : "no");
-  context.writeOutput("attackerPayoff", formatEth(attackerPayoff));
-  context.writeOutput("censorshipCost", formatEth(censorshipCost));
-  context.writeOutput("oracleLiquidityRatio", oracleLiquidityRatio.toFixed(2));
-  context.writeOutput("durationToTargetCost", formatDuration(durationToTargetCost));
-  context.root.dataset["widgetState"] = liquidationExecutable ? "unsafe" : "safe";
-  const maximum = Math.max(attackerPayoff, censorshipCost, 1);
-  setMeter(context, "attackerPayoff", attackerPayoff, maximum);
-  setMeter(context, "censorshipCost", censorshipCost, maximum);
-  const maximumError = Math.max(executionErrorThreshold, manipulatedPriceError, 0.01);
-  setMeter(context, "executionErrorThreshold", executionErrorThreshold, maximumError);
-  setMeter(context, "manipulatedPriceError", manipulatedPriceError, maximumError);
 });

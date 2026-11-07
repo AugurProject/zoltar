@@ -4,14 +4,10 @@ import { describe, expect, test } from 'bun:test'
 import { registerStatoblastSimulationScenarios } from '@zoltar/ui-statoblast-shared/simulation/registerStatoblastScenarios.js'
 import { getRegisteredSimulationScenarios, getSimulationScenarioDescription, getSimulationScenarioLabel } from '@zoltar/ui-core-shared/simulation/scenarios.js'
 const EXPECTED_PRESENTATION = {
-	'security-pool': ['Security pool', 'seeded question'],
-	securitypoolx2: ['Security pool x2', 'Two seeded questions with two security pools'],
-	'securitypoolx2-auction': ['Security pool x2 auction', 'child truth auction seeded with ten bids'],
-	'finalized-truth-auction': ['Finalized truth auction', 'run past its end and finalized'],
-	'ended-pool-commitment': ['Ended pool commitment', 'question has resolved while the pool stays operational'],
-	'escalation-in-progress': ['Escalation in progress', 'disputed by a larger No report'],
-	'liquidation-distance': ['Liquidation distance', 'minimum liquidation price distance'],
-	'near-minimum-vault': ['Near-minimum vault', 'just above the security multiplier'],
+	portfolio: ['Shared portfolio', 'two registered questions'],
+	'portfolio-auction': ['Portfolio branch auction', 'winning and excluded bids'],
+	'security-pool': ['One-question portfolio', 'one registered question'],
+	securitypoolx2: ['Two-question portfolio', 'two registered questions'],
 } satisfies Record<string, readonly [label: string, descriptionFragment: string]>
 
 void describe('statoblast simulation scenarios', () => {

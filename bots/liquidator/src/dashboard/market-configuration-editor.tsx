@@ -6,7 +6,7 @@ import { refreshFormButton } from '@zoltar/bot-shared/dashboard/form-state'
 import { isRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
 
 type Market = Record<string, unknown>
-type Draft = { root: Market; children: Market[]; desiredPools: Market[] }
+type Draft = { root: Market; children: Market[] }
 
 const numberFields = [
 	['depthBps', 'Depth band (bps)', 1, 5000],
@@ -149,12 +149,6 @@ function integer(value: unknown, label: string, min: number, max: number) {
 	return parsed
 }
 
-function uintString(value: unknown, label: string, minimum = 0n) {
-	const text = String(value)
-	if (!/^(?:0|[1-9]\d*)$/.test(text) || BigInt(text) < minimum || BigInt(text) >= 2n ** 256n) throw new Error(`${label} must be a whole number from ${minimum.toString()} to the uint256 limit.`)
-	return text
-}
-
 function marketDocument(market: Market, child: boolean) {
 	const result: Market = { assetSymbol: String(market['assetSymbol'] ?? ''), requiredForExecution: market['requiredForExecution'] === true }
 	if (child) {
@@ -196,13 +190,6 @@ function marketDocument(market: Market, child: boolean) {
 	return result
 }
 
-const desiredPoolFields = [
-	['universeId', 'Universe ID'],
-	['questionId', 'Question ID'],
-	['statoblastSecurityMultiplierBps', 'Security multiplier (bps)'],
-	['initialReportPriorityFeeAttoEthPerGas', 'Initial report priority fee (attoETH per gas)'],
-] as const
-
 let currentDraft: Draft | undefined
 
 export function readMarketConfiguration() {
@@ -210,12 +197,6 @@ export function readMarketConfiguration() {
 	return {
 		root: marketDocument(currentDraft.root, false),
 		children: currentDraft.children.map(child => marketDocument(child, true)),
-		desiredPools: currentDraft.desiredPools.map(pool => ({
-			universeId: uintString(pool['universeId'], 'Universe ID'),
-			questionId: uintString(pool['questionId'], 'Question ID'),
-			statoblastSecurityMultiplierBps: integer(pool['statoblastSecurityMultiplierBps'], 'Security multiplier (bps)', 10_001, Number.MAX_SAFE_INTEGER),
-			initialReportPriorityFeeAttoEthPerGas: uintString(pool['initialReportPriorityFeeAttoEthPerGas'], 'Initial report priority fee (attoETH per gas)'),
-		})),
 	}
 }
 
@@ -226,8 +207,8 @@ export function reviewableRootMarket(value: unknown) {
 	return root
 }
 
-export function renderMarketConfiguration(target: HTMLElement, configuration: { centralizedMarkets: unknown; childMarketConfigurations: unknown[]; desiredPools: unknown[]; network?: { chainId: number } | undefined }) {
-	const initial: Draft = { root: record(configuration.centralizedMarkets), children: records(configuration.childMarketConfigurations), desiredPools: records(configuration.desiredPools) }
+export function renderMarketConfiguration(target: HTMLElement, configuration: { centralizedMarkets: unknown; childMarketConfigurations: unknown[]; network?: { chainId: number } | undefined }) {
+	const initial: Draft = { root: record(configuration.centralizedMarkets), children: records(configuration.childMarketConfigurations) }
 	currentDraft = initial
 	function Editor() {
 		const [draft, setDraft] = useState(initial)
@@ -261,22 +242,6 @@ export function renderMarketConfiguration(target: HTMLElement, configuration: { 
 							</div>
 							{marketEditor(child, next => update({ ...draft, children: draft.children.map((old, at) => (at === index ? next : old)) }), true)}
 						</article>
-					))}
-				</section>
-				<section>
-					<div className='panel-heading'>
-						<h3>Desired security pools</h3>
-						<button type='button' className='secondary' onClick={() => update({ ...draft, desiredPools: [...draft.desiredPools, { universeId: '', questionId: '', statoblastSecurityMultiplierBps: 12_500, initialReportPriorityFeeAttoEthPerGas: String(0n) }] })}>
-							Add pool
-						</button>
-					</div>
-					{draft.desiredPools.map((pool, index) => (
-						<div className='market-editor-row' key={index}>
-							{desiredPoolFields.map(([key, label]) => textField(label, pool[key], value => update({ ...draft, desiredPools: draft.desiredPools.map((old, at) => (at === index ? { ...old, [key]: value } : old)) }), { inputMode: 'numeric' }))}
-							<button type='button' className='secondary' onClick={() => update({ ...draft, desiredPools: draft.desiredPools.filter((_, at) => at !== index) })}>
-								Remove
-							</button>
-						</div>
 					))}
 				</section>
 			</div>

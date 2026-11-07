@@ -1,5 +1,4 @@
 import { hasInvalidUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
-import { isSupportedSelectedPoolView } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolWorkflow.js'
 import type { StatoblastRoute } from '@zoltar/ui-statoblast-shared/types/app.js'
 
 type StatoblastRouteValidationInput = {
@@ -15,7 +14,7 @@ type StatoblastRouteValidationInput = {
 export function getInvalidStatoblastRouteState({ pageSearch, resolvedRoute, search, selectedPoolView }: StatoblastRouteValidationInput) {
 	return {
 		hasInvalidOpenOracleView: new URLSearchParams(search).has('openOracleView'),
-		hasInvalidSelectedPoolView: resolvedRoute === 'pools' && !isSupportedSelectedPoolView(selectedPoolView),
+		hasInvalidSelectedPoolView: resolvedRoute === 'pools' && selectedPoolView !== '',
 		// A malformed universe would otherwise open Genesis as if the link had named it.
 		hasInvalidUniverse: hasInvalidUniverseQueryParam(search) || hasInvalidUniverseQueryParam(pageSearch),
 	}

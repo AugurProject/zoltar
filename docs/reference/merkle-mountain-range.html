@@ -29,22 +29,7 @@
 					<tbody>
 						<tr>
 							<td><code>depositor</code></td>
-							<td>
-								Binds the payout to the original depositor; see <a href="./invariants.html#vault-04"><code>VAULT-04</code></a
-								>.
-							</td>
-						</tr>
-						<tr>
-							<td><code>outcome</code></td>
-							<td>Separates Invalid, Yes, and No carry domains.</td>
-						</tr>
-						<tr>
-							<td><code>amountAttoRep</code></td>
-							<td>Commits to the source principal.</td>
-						</tr>
-						<tr>
-							<td><code>parentDepositIndex</code></td>
-							<td>Provides the stable identity that selects the deposit's leaf in the <a href="#nullifier-tree">nullifier tree</a>, the per-continuation record of claimed carried deposits that prevents a proof from being replayed.</td>
+							<td>Binds the payout to the original depositor; see <a href="./invariants.html#escalation">reporter claims</a>, the per-continuation record of claimed carried deposits that prevents a proof from being replayed.</td>
 						</tr>
 						<tr>
 							<td><code>cumulativeAmountAttoRep</code></td>
@@ -277,7 +262,7 @@ bagPeaks(peaks, peakCount):
 						</tr>
 					</tbody>
 				</table>
-				<p><code>getForkCarrySnapshot()</code> reports the current carry peaks, leaf counts, totals, and nullifier roots after local appends and proof consumption. <code>getCarryLeafPageByOutcome()</code> pages only local unresolved leaves.</p>
+				<p><code>getForkCarrySnapshot()</code> reports the current carry peaks, leaf counts, totals, and nullifier roots after local appends and proof consumption. <code>getCarryLeafPageByOutcome()</code> pages only local unresolved leaves in newest-first order. Its <code>maxEntries</code> parameter bounds visited nodes, including consumed leaves. An empty or short page can return a nonzero <code>nextPageNodeId</code>; pass that cursor as <code>startNodeId</code> to continue until the cursor is zero.</p>
 			</section>
 
 			<section id="sources">

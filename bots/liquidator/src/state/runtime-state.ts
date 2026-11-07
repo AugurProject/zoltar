@@ -1,9 +1,13 @@
+import type { PortfolioFunding } from './portfolio-instructions.ts'
+import type { PortfolioObservation, PortfolioScope } from '#monitoring/portfolio-monitor'
 import type { Address, Hex, RpcEndpointHealth } from '@zoltar/bot-shared/ethereum'
 import type { CentralizedMarketEstimate } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import type { MarketConsensusEstimate, MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
 import type { Activity, PendingStagedOperation, PendingTransactionIntent, PoolObservation, UniverseObservation } from './operator-state.ts'
 
 export type RuntimeState = {
+	portfolioFunding?: Record<string, PortfolioFunding> | undefined
+	completedPortfolioInstructions?: Record<string, string> | undefined
 	activities: Activity[]
 	chainId: number
 	centralizedMarket: CentralizedMarketEstimate | undefined
@@ -23,6 +27,8 @@ export type RuntimeState = {
 	rpcEndpointHealth: readonly RpcEndpointHealth[]
 	pendingStagedOperations: PendingStagedOperation[]
 	pendingTransactions: PendingTransactionIntent[]
+	portfolios: PortfolioObservation[]
+	portfolioScopes: PortfolioScope[]
 	pools: PoolObservation[]
 	scanning: boolean
 	startedAt: string

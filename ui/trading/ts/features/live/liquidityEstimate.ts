@@ -1,3 +1,4 @@
+import { estimateBudgetMint } from '../../protocol/minting.js'
 import { conditionalYesBps } from '@zoltar/trading-shared/trading/math'
 import { attoSharesToCollateralAttoEth, collateralAttoEthToAttoShares } from '../../lib/shareValue.js'
 import type { LiquidityOperation, LiveMarket } from '../../protocol/live.js'
@@ -6,7 +7,7 @@ const BPS = 10_000n
 /** Mirrors TwoWayConstantProductPair.MINIMUM_LIQUIDITY, the LP locked forever by the first deposit. */
 export const MINIMUM_LIQUIDITY = 1_000n
 
-type PoolState = Pick<LiveMarket, 'yesReserve' | 'noReserve' | 'lpTotalSupply' | 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares'>
+type PoolState = Pick<LiveMarket, 'mintFees' | 'yesReserve' | 'noReserve' | 'lpTotalSupply' | 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares'>
 
 /**
  * What a liquidity operation moves, in one shape for both the wallet simulation and the public-state estimate.
@@ -44,7 +45,8 @@ export function estimateLiquidity(market: PoolState, operation: LiquidityOperati
 		const noOut = (market.noReserve * amount) / market.lpTotalSupply
 		return yesOut === 0n || noOut === 0n ? undefined : { operation, amount, yesOut, noOut }
 	}
-	const completeSets = collateralAttoEthToAttoShares(amount, market)
+	const mintAmount = estimateBudgetMint(market, amount)
+	const completeSets = mintAmount === undefined ? undefined : collateralAttoEthToAttoShares(mintAmount, market)
 	if (completeSets === undefined || completeSets === 0n) return undefined
 	if (operation === 'initialize') {
 		if (initialYesBps === undefined || initialYesBps <= 0n || initialYesBps >= BPS) return undefined

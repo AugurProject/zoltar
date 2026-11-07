@@ -1,15 +1,21 @@
 import { describe, test } from 'bun:test'
 import { type Address } from '@zoltar/core-shared/evm/ethereum'
 import { formatStorageSlot, getAddressMappingStorageSlot } from '../../testSupport/storage'
-import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker, Zoltar_Zoltar } from '../../types/contractArtifact'
+import {
+	statoblast_EscalationGame_EscalationGame,
+	statoblast_SecurityPool_SecurityPool,
+	statoblast_SecurityPoolForker_SecurityPoolForker,
+	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
+	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as coordinatorArtifact,
+	statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact,
+	Zoltar_Zoltar,
+} from '../../types/contractArtifact'
 import assert from '../../testSupport/simulator/utils/assert'
-import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
+import { createWriteClient, writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { DAY, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
-import { getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getEscalationGameOutcomeState } from '../../testSupport/simulator/utils/contracts/escalationGame'
-import { depositToEscalationGame, getAwaitingForkContinuation, getRepToken, getSecurityPoolsEscalationGame, getSystemState, depositRepToVault } from '../../testSupport/simulator/utils/contracts/securityPool'
-import { createChildUniverse, finalizeTruthAuction, initiateSecurityPoolFork, migrateRepToZoltar, startTruthAuction } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
-import { approveAndDepositRepToVault, setVaultCapacityFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { getAwaitingForkContinuation, getRepToken, getSecurityPoolsEscalationGame, getSystemState } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { addRepToMigrationBalance, splitMigrationRep, forkUniverse, getZoltarAddress, getZoltarForkThreshold } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
@@ -17,31 +23,43 @@ import { approveToken, getChildUniverseId, getERC20Balance } from '../../testSup
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import { SystemState } from '../../testSupport/simulator/types/statoblastTypes'
 import { createCarryProof, SparseNullifierTree } from '../carryProofHelpers'
-import { useStatoblastEscalationMigrationFixture } from './fixture'
+import { useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 const ATTO_REP_PER_REP = 10n ** 18n
 
 describe('Statoblast: delayed repeated-fork carry', () => {
-	const fixture = useStatoblastEscalationMigrationFixture()
+	const portfolio = useSecurityPoolPortfolioFixture()
+	const fixture = portfolio.base
+	const native = () => portfolio.poolFor(fixture.questionId)
+	const depositToEscalationGame = async (sender: WriteClient, pool: Address, outcome: QuestionOutcome, amount: bigint) => {
+		await approveToken(sender, await getRepToken(sender, pool), pool)
+		return writeContractAndWait(sender, () => sender.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [outcome, amount] }))
+	}
+	const activateChild = async (source: Address, universe: bigint) => {
+		const { client, mockWindow } = fixture
+		const controller = await client.readContract({ abi: portfolioArtifact.abi, address: portfolio.portfolio, functionName: 'forkController' })
+		const forkTime = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getForkTime', args: [universe] })
+		await mockWindow.setTime(forkTime + 63n * DAY)
+		await writeContractAndWait(client, () => client.writeContract({ abi: coordinatorArtifact.abi, address: controller, functionName: 'startBranch', args: [universe, 1n] }))
+		const child = getChildUniverseId(universe, QuestionOutcome.Yes)
+		await writeContractAndWait(client, () => client.writeContract({ abi: coordinatorArtifact.abi, address: controller, functionName: 'finalizeBranch', args: [child] }))
+		const target = { abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi, address: getInfraContractAddresses().securityPoolForker }
+		await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'preparePortfolioQuestion', args: [source, child] }))
+		for (let outcome = 0; outcome < 3; outcome++) await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'materializePortfolioQuestion', args: [source, child] }))
+		return portfolio.poolFor(fixture.questionId, child, source)
+	}
 
 	async function resumePool(pool: Address) {
-		const { client, mockWindow } = fixture
-		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
-		await startTruthAuction(client, pool)
-		if ((await getSystemState(client, pool)) === SystemState.ForkTruthAuction) await finalizeTruthAuction(client, pool)
-		for (let attempt = 0; attempt < 16 && (await getAwaitingForkContinuation(client, pool)); attempt++) {
-			await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool, functionName: 'resumeForkedEscalationGame', args: [] }))
-		}
+		const { client } = fixture
 		assert.equal(await getSystemState(client, pool), SystemState.Operational)
 		assert.equal(await getAwaitingForkContinuation(client, pool), false)
 	}
 
 	async function setupInheritedDispute() {
-		const { client, mockWindow, securityPoolAddresses, questionData, questionId, outcomes, genesisUniverse, statoblastSecurityMultiplierBps } = fixture
+		const { client, mockWindow, questionData, outcomes, genesisUniverse } = fixture
+		const securityPoolAddresses = native()
 		const noDepositor = createWriteClient(mockWindow, TEST_ADDRESSES[1])
-		await approveAndDepositRepToVault(noDepositor, fixture.repDeposit, questionId)
 		await mockWindow.setTime(questionData.endTime + 10000n)
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, 0n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, 100n * ATTO_REP_PER_REP)
 		await depositToEscalationGame(noDepositor, securityPoolAddresses.securityPool, QuestionOutcome.No, 80n * ATTO_REP_PER_REP)
 		const parentGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
@@ -58,11 +76,8 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 		await createQuestion(noDepositor, firstQuestion, outcomes)
 		await approveToken(noDepositor, await getRepToken(client, securityPoolAddresses.securityPool), getZoltarAddress())
 		await forkUniverse(noDepositor, genesisUniverse, getQuestionId(firstQuestion, outcomes))
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
-		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
-		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		const universe = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const pool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, universe, questionId, statoblastSecurityMultiplierBps)
+		const pool = await activateChild(securityPoolAddresses.securityPool, genesisUniverse)
 		await resumePool(pool.securityPool)
 		const game = await getSecurityPoolsEscalationGame(client, pool.securityPool)
 		assert.equal((await getEscalationGameOutcomeState(client, game, QuestionOutcome.Yes)).inheritedUnresolvedTotalAttoRep, 100n * ATTO_REP_PER_REP)
@@ -85,7 +100,7 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 		{ offset: 1n, name: 'a fork after the deadline preserves genuine settlement and retires losing inherited principal' },
 	]) {
 		test(name, async () => {
-			const { client, mockWindow, questionId, statoblastSecurityMultiplierBps } = fixture
+			const { client, mockWindow } = fixture
 			const { noDepositor, pool, game, universe, deadline, proof, secondQuestionId } = await setupInheritedDispute()
 			const beforeFork = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getForkCarrySnapshot' })
 			// The fixture includes each transaction at latest block time + 1.
@@ -106,7 +121,7 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 				assert.equal(delayedSnapshot[2][QuestionOutcome.No], 0n, 'genuinely losing inherited principal must retire')
 				assert.equal(delayedSnapshot[2][QuestionOutcome.Yes], 100n * ATTO_REP_PER_REP)
 				await assert.rejects(noDepositor.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool.securityPool, functionName: 'withdrawForkedEscalationDeposits', args: [QuestionOutcome.No, [proof]] }), /Not winning outcome/)
-				const winningProof = await createCarryProof(client, fixture.securityPoolAddresses.escalationGame, {
+				const winningProof = await createCarryProof(client, await getSecurityPoolsEscalationGame(client, native().securityPool), {
 					expectedOutcome: QuestionOutcome.Yes,
 					parentDepositIndex: 0n,
 					leafIndex: 0n,
@@ -122,14 +137,12 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 				return
 			}
 
-			await initiateSecurityPoolFork(client, pool.securityPool)
-			await migrateRepToZoltar(client, pool.securityPool, [QuestionOutcome.Yes])
-			await createChildUniverse(client, pool.securityPool, QuestionOutcome.Yes)
 			const nextUniverse = getChildUniverseId(universe, QuestionOutcome.Yes)
-			const nextPool = getSecurityPoolAddresses(pool.securityPool, nextUniverse, questionId, statoblastSecurityMultiplierBps)
+			const nextPool = await activateChild(pool.securityPool, universe)
 			const nextGame = await getSecurityPoolsEscalationGame(client, nextPool.securityPool)
 			const nextRep = await getRepToken(client, nextPool.securityPool)
-			const migratedBacking = await getERC20Balance(client, nextRep, nextGame)
+			const reporter = await client.readContract({ abi: portfolioArtifact.abi, address: portfolio.portfolio, functionName: 'reporterLedger', args: [nextUniverse] })
+			const migratedBacking = await client.readContract({ abi: reporterArtifact.abi, address: reporter, functionName: 'balanceOfGame', args: [nextGame] })
 			const inheritedNo = await getEscalationGameOutcomeState(client, nextGame, QuestionOutcome.No)
 			assert.deepStrictEqual(inheritedNo.snapshotPeaks, beforeFork[0][QuestionOutcome.No], 'the original proof commitment must reach the next continuation')
 			assert.equal(inheritedNo.currentNullifierRoot, beforeFork[3][QuestionOutcome.No])
@@ -154,11 +167,9 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 			}
 
 			// Fund a new 30 REP deposit without touching game backing or the inherited 80 REP claim.
-			await addRepToMigrationBalance(noDepositor, universe, 2n * fixture.repDeposit)
-			await splitMigrationRep(noDepositor, universe, 2n * fixture.repDeposit, [QuestionOutcome.Yes])
+			await addRepToMigrationBalance(noDepositor, universe, 60n * ATTO_REP_PER_REP)
+			await splitMigrationRep(noDepositor, universe, 60n * ATTO_REP_PER_REP, [QuestionOutcome.Yes])
 			await approveToken(noDepositor, nextRep, nextPool.securityPool)
-			await depositRepToVault(noDepositor, nextPool.securityPool, fixture.repDeposit)
-			await setVaultCapacityFixture(noDepositor, mockWindow, nextPool.openOraclePriceCoordinator, noDepositor.account.address, 0n)
 			await depositToEscalationGame(noDepositor, nextPool.securityPool, QuestionOutcome.No, 30n * ATTO_REP_PER_REP)
 			assert.equal((await getEscalationGameOutcomeState(client, nextGame, QuestionOutcome.No)).balanceAttoRep, 110n * ATTO_REP_PER_REP)
 			const finalDeadline = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: nextGame, functionName: 'getEscalationGameEndDate' })
