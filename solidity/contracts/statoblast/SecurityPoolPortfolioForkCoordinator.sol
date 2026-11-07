@@ -89,6 +89,9 @@ contract SecurityPoolPortfolioForkCoordinator {
 		uint256 chosenCommitment;
 		uint256 parentCash;
 		uint256 recoveryAttoRep;
+		// Prepared: child custody and inherited outcomes exist. Started: choice
+		// window closed and backing migrated. Ready: settlement/import activated.
+		// These flags remain independent of the universe clock's readiness.
 		bool prepared;
 		bool started;
 		bool ready;
@@ -307,41 +310,52 @@ contract SecurityPoolPortfolioForkCoordinator {
 		branch.started = true;
 		SecurityPoolCapitalLedger sourceCapital = portfolio.capitalLedger(branch.parent);
 		SecurityPoolCapitalLedger childCapital = portfolio.capitalLedger(child);
-		uint256 migratingRep = fork.backing + fork.recoveryAttoRep;
-		if (!fork.migrationPrepared) {
-			fork.migrationPrepared = true;
-			sourceCapital.releaseForkBacking();
-			uint256 releasedRecovery = portfolio.settlement().withdrawForkRecoveryRep(branch.parent);
-			require(releasedRecovery == fork.recoveryAttoRep, 'Fork recovery REP mismatch');
-			if (migratingRep != 0) {
-				IERC20 sourceToken = IERC20(address(zoltar.getRepToken(branch.parent)));
-				if (address(sourceToken) == address(zoltar.genesisReputationToken()))
-					sourceToken.safeApprove(address(zoltar), migratingRep);
-				zoltar.addRepToMigrationBalance(branch.parent, migratingRep);
-			}
-		}
-		if (migratingRep != 0) {
+		uint256 migratingPrincipalAttoRep = fork.backing + fork.recoveryAttoRep;
+		_prepareSourceMigration(branch.parent, fork, sourceCapital, migratingPrincipalAttoRep);
+		if (migratingPrincipalAttoRep != 0) {
 			uint256[] memory outcomes = new uint256[](1);
 			outcomes[0] = branch.outcome;
-			zoltar.splitMigrationRep(branch.parent, migratingRep, outcomes);
+			zoltar.splitMigrationRep(branch.parent, migratingPrincipalAttoRep, outcomes);
 		}
 		IERC20 token = IERC20(address(zoltar.getRepToken(child)));
 		if (branch.chosenBacking != 0) token.safeTransfer(address(childCapital), branch.chosenBacking);
 		portfolio.reporters().createChild(branch.parent, branch.outcome);
-		branch.recoveryAttoRep = migratingRep - branch.chosenBacking;
+		branch.recoveryAttoRep = migratingPrincipalAttoRep - branch.chosenBacking;
 		if (fork.units == 0 && branch.recoveryAttoRep != 0) {
 			zoltar.burnRep(child, branch.recoveryAttoRep);
 			branch.recoveryAttoRep = 0;
 		}
-		uint256 freshInventory = fork.backing - branch.chosenBacking;
-		uint256 shortfall = fork.cash - branch.parentCash;
-		if (fork.units != 0 && freshInventory != 0 && shortfall >= portfolio.minimumCommitmentAttoEth()) {
-			SecurityPoolPortfolioAuction auction = SecurityPoolPortfolioAuction(portfolio.auctionDeployer().create(address(this), address(portfolio), child, zoltar.getForkRecapitalizationDeadline(branch.parent), freshInventory, shortfall));
-			branch.auction = auction;
-			token.safeTransfer(address(auction), freshInventory);
-		}
+		_createBranchAuctionIfNeeded(child, branch, fork, token);
 		IPortfolioForkServices(portfolio.services()).createPremiumChild(branch.parent, child);
 		emit BranchStarted(child, branch.parentCash, branch.recoveryAttoRep);
+	}
+
+	function _prepareSourceMigration(uint248 sourceUniverseId, Fork storage fork, SecurityPoolCapitalLedger sourceCapital, uint256 migratingPrincipalAttoRep) private {
+		if (!fork.migrationPrepared) {
+			fork.migrationPrepared = true;
+			sourceCapital.releaseForkBacking();
+			uint256 releasedRecoveryAttoRep = portfolio.settlement().withdrawForkRecoveryRep(sourceUniverseId);
+			require(releasedRecoveryAttoRep == fork.recoveryAttoRep, 'Fork recovery REP mismatch');
+			if (migratingPrincipalAttoRep != 0) {
+				IERC20 sourceToken = IERC20(address(zoltar.getRepToken(sourceUniverseId)));
+				if (address(sourceToken) == address(zoltar.genesisReputationToken()))
+					sourceToken.safeApprove(address(zoltar), migratingPrincipalAttoRep);
+				zoltar.addRepToMigrationBalance(sourceUniverseId, migratingPrincipalAttoRep);
+			}
+		}
+	}
+	function _createBranchAuctionIfNeeded(uint248 child, Branch storage branch, Fork storage fork, IERC20 token) private {
+		uint256 freshInventoryAttoRep = fork.backing - branch.chosenBacking;
+		uint256 settlementShortfallAttoEth = fork.cash - branch.parentCash;
+		if (
+			fork.units != 0 &&
+			freshInventoryAttoRep != 0 &&
+			settlementShortfallAttoEth >= portfolio.minimumCommitmentAttoEth()
+		) {
+			SecurityPoolPortfolioAuction auction = SecurityPoolPortfolioAuction(portfolio.auctionDeployer().create(address(this), address(portfolio), child, zoltar.getForkRecapitalizationDeadline(branch.parent), freshInventoryAttoRep, settlementShortfallAttoEth));
+			branch.auction = auction;
+			token.safeTransfer(address(auction), freshInventoryAttoRep);
+		}
 	}
 
 	function finalizeBranch(uint248 child) external nonReentrant {
@@ -354,28 +368,34 @@ contract SecurityPoolPortfolioForkCoordinator {
 		_start(child);
 		// The fixed native response schedule survives missing bids or quotes.
 		require(block.timestamp >= zoltar.getForkRecapitalizationDeadline(branch.parent), 'Fork activation window still open');
-		uint256 raised;
+		uint256 raisedAttoEth = _settleBranchAuction(child, branch);
+		_initializeChildSettlement(child, branch, raisedAttoEth);
+		IPortfolioForkServices(portfolio.services()).checkpointPreparationPremium(child);
+		portfolio.capitalLedger(child).finishForkImport(branch.parentCash + raisedAttoEth);
+		branch.ready = true;
+		clocks[child].ready = true;
+		portfolio.activateForkChild(child);
+		emit BranchActivated(child, branch.parentCash + raisedAttoEth, branch.recoveryAttoRep);
+	}
+
+	function _settleBranchAuction(uint248 child, Branch storage branch) private returns (uint256 raisedAttoEth) {
 		SecurityPoolPortfolioAuction auction = branch.auction;
 		if (address(auction) != address(0)) {
 			SecurityPoolUniformPriceAuction.Clearing memory result = auction.finalize();
-			raised = result.raisedAttoEth;
+			raisedAttoEth = result.raisedAttoEth;
 			branch.recoveryAttoRep -= result.soldAttoRep;
 			if (result.filledLots != 0)
 				portfolio.capitalLedger(child).installAuctionCohort(address(auction), result.filledLots, result.attoRepPerLot, auction.lotAttoEth());
 		}
+	}
+	function _initializeChildSettlement(uint248 child, Branch storage branch, uint256 raisedAttoEth) private {
 		SecurityPoolPortfolioSettlement settlement = portfolio.settlement();
 		IERC20 token = IERC20(address(zoltar.getRepToken(child)));
 		if (branch.recoveryAttoRep != 0) token.safeApprove(address(settlement), branch.recoveryAttoRep);
-		settlement.createChildUniverse{value: raised}(branch.parent, child, branch.parentCash, token, branch.recoveryAttoRep);
+		settlement.createChildUniverse{value: raisedAttoEth}(branch.parent, child, branch.parentCash, token, branch.recoveryAttoRep);
 		settlement.setFeeClock(child, uint48(zoltar.getForkRecapitalizationDeadline(branch.parent)));
 		(, uint256 forkQuestion, , , ) = zoltar.universes(branch.parent);
 		settlement.fixInheritedQuestionFinality(child, forkQuestion, clocks[child].logicalAnchor + 3 days);
-		IPortfolioForkServices(portfolio.services()).checkpointPreparationPremium(child);
-		portfolio.capitalLedger(child).finishForkImport(branch.parentCash + raised);
-		branch.ready = true;
-		clocks[child].ready = true;
-		portfolio.activateForkChild(child);
-		emit BranchActivated(child, branch.parentCash + raised, branch.recoveryAttoRep);
 	}
 
 	/// @notice Resolve only this actual fork, never recursively walk ancestors.

@@ -32,6 +32,15 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	uint256 public immutable securityMultiplierBps;
 	uint256 private immutable minimumCommitmentAttoEth;
 
+	bool private constant ENFORCE_TAKEOVER_BOUNDS = true;
+	bool private constant OMIT_TAKEOVER_BOUNDS = false;
+	bool private constant USE_FUNDED_REPORT = true;
+	bool private constant USE_ACCEPTED_PRICE = false;
+	struct TakeoverPlan {
+		uint256 remainingCommitmentAttoEth;
+		uint256 remainingPrincipalAttoRep;
+		uint256 receivedPrincipalAttoRep;
+	}
 	struct TakeoverBounds {
 		uint256 maximumOwnerPrincipal;
 		uint256 maximumOwnerCommitment;
@@ -217,11 +226,11 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	/// retirement queue. A pending request is locked until it is served: only
 	/// its own value is accepted, which cures an underwater position in place.
 	function setCommitment(uint256 commitment) external nonReentrant returns (uint96 id) {
-		return _setCommitment(commitment, 0, false);
+		return _setCommitment(commitment, 0, USE_ACCEPTED_PRICE);
 	}
 	/// @notice Raise the commitment under a funded growth report's price floor.
 	function setCommitmentWithReport(uint256 reportId, uint256 commitment) external nonReentrant returns (uint96 id) {
-		return _setCommitment(commitment, reportId, true);
+		return _setCommitment(commitment, reportId, USE_FUNDED_REPORT);
 	}
 	function _setCommitment(uint256 commitment, uint256 reportId, bool useReport) private returns (uint96 id) {
 		_requireOpen();
@@ -370,18 +379,18 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	/// @notice Competitive takeover: only the target funds the REP award.
 	function takeOver(uint96 id, uint256 commitment, uint256 minimumAward, uint256 maximumOwnRep) external nonReentrant returns (uint96 receiverId) {
 		TakeoverBounds memory bounds;
-		return _takeOver(id, commitment, minimumAward, maximumOwnRep, bounds, false);
+		return _takeOver(id, commitment, minimumAward, maximumOwnRep, bounds, OMIT_TAKEOVER_BOUNDS);
 	}
 	/// @notice Keeper-owned acquisition with signed owner exposure and quote bounds.
 	function takeOverWithBounds(uint96 id, uint256 commitment, uint256 minimumAward, uint256 maximumOwnRep, TakeoverBounds calldata bounds) external nonReentrant returns (uint96 receiverId) {
-		return _takeOver(id, commitment, minimumAward, maximumOwnRep, bounds, true);
+		return _takeOver(id, commitment, minimumAward, maximumOwnRep, bounds, ENFORCE_TAKEOVER_BOUNDS);
 	}
 	function takeOverAuctionBid(uint256 bidId, uint256 commitment, uint256 minimumAward, uint256 maximumOwnRep, TakeoverBounds calldata bounds) external nonReentrant returns (uint96 receiverId) {
 		_requireOpen();
 		_requireFresh();
 		_checkpoint();
 		(, uint96 id) = _materializeAuctionBid(bidId);
-		return _takeOver(id, commitment, minimumAward, maximumOwnRep, bounds, true);
+		return _takeOver(id, commitment, minimumAward, maximumOwnRep, bounds, ENFORCE_TAKEOVER_BOUNDS);
 	}
 	function _takeOver(uint96 id, uint256 commitment, uint256 minimumAward, uint256 maximumOwnRep, TakeoverBounds memory bounds, bool enforceBounds) private returns (uint96 receiverId) {
 		_requireOpen();
@@ -389,7 +398,11 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		_checkpoint();
 		_serveRetirement(0);
 		_cure(id, 0);
-		(SecurityPoolCommitmentIndex.Account memory source, uint256 award, uint256 debit) = commitmentIndex.takeoverQuote(id, msg.sender, commitment, minimumCommitmentAttoEth, minimumAward, liquidationPrice);
+		(
+			SecurityPoolCommitmentIndex.Account memory source,
+			uint256 receiverAwardAttoRep,
+			uint256 sourcePrincipalDebitAttoRep
+		) = commitmentIndex.takeoverQuote(id, msg.sender, commitment, minimumCommitmentAttoEth, minimumAward, liquidationPrice);
 		_settleOwner(msg.sender);
 		Owner storage receiver = owners[msg.sender].account;
 		if (enforceBounds) {
@@ -404,38 +417,46 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 			require(existing.batch == source.batch, 'Receiver retirement differs');
 		}
 		// Any previously idle receiver principal joins its one live position.
-		uint256 ownRep = receiver.freeAttoRep;
-		require(ownRep <= maximumOwnRep, 'Receiver consent exceeded');
-		uint256 needed = _requiredRep(existing.commitment + commitment, _target(receiver), ownerConservativePrice(msg.sender));
-		require(existing.rep + award + ownRep >= needed, 'Receiver collateral insufficient');
-		uint256 remainingK = source.commitment - commitment;
-		uint256 remainingRep = source.rep - debit;
-		uint256 receivedRep = award + ownRep;
+		uint256 receiverFreePrincipalAttoRep = receiver.freeAttoRep;
+		require(receiverFreePrincipalAttoRep <= maximumOwnRep, 'Receiver consent exceeded');
+		uint256 requiredReceiverPrincipalAttoRep = _requiredRep(existing.commitment + commitment, _target(receiver), ownerConservativePrice(msg.sender));
+		require(existing.rep + receiverAwardAttoRep + receiverFreePrincipalAttoRep >= requiredReceiverPrincipalAttoRep, 'Receiver collateral insufficient');
+		TakeoverPlan memory plan = _planTakeover(source, commitment, sourcePrincipalDebitAttoRep, receiverAwardAttoRep, receiverFreePrincipalAttoRep);
 		if (enforceBounds) {
-			require(existing.rep + receivedRep <= bounds.maximumOwnerPrincipal, 'Takeover owner principal exceeds limit');
+			require(existing.rep + plan.receivedPrincipalAttoRep <= bounds.maximumOwnerPrincipal, 'Takeover owner principal exceeds limit');
 			require(existing.commitment + commitment <= bounds.maximumOwnerCommitment, 'Takeover owner commitment exceeds limit');
 		}
-		uint256 receiverRep;
-		uint256 receiverK;
+		receiverId = _transferTakeoverPosition(id, commitment, sourcePrincipalDebitAttoRep, receiver, existing, plan);
+		_clearHealthyLiquidation(id, plan.remainingCommitmentAttoEth, maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth));
+		receiver.freeAttoRep -= receiverFreePrincipalAttoRep;
+		totalFreeAttoRep -= receiverFreePrincipalAttoRep;
+		owners[source.owner].account.freeAttoRep += sourcePrincipalDebitAttoRep - receiverAwardAttoRep;
+		totalFreeAttoRep += sourcePrincipalDebitAttoRep - receiverAwardAttoRep;
+		emit CommitmentTakenOver(id, receiverId, commitment, receiverAwardAttoRep);
+	}
+
+	function _planTakeover(SecurityPoolCommitmentIndex.Account memory source, uint256 commitmentAttoEth, uint256 sourcePrincipalDebitAttoRep, uint256 receiverAwardAttoRep, uint256 receiverFreePrincipalAttoRep) private pure returns (TakeoverPlan memory plan) {
+		plan.remainingCommitmentAttoEth = source.commitment - commitmentAttoEth;
+		plan.remainingPrincipalAttoRep = source.rep - sourcePrincipalDebitAttoRep;
+		plan.receivedPrincipalAttoRep = receiverAwardAttoRep + receiverFreePrincipalAttoRep;
+	}
+	function _transferTakeoverPosition(uint96 id, uint256 commitment, uint256 sourcePrincipalDebitAttoRep, Owner storage receiver, SecurityPoolCommitmentIndex.Account memory existing, TakeoverPlan memory plan) private returns (uint96 receiverId) {
+		receiverId = receiver.positionId;
+		uint256 receiverPrincipalAttoRep;
+		uint256 receiverCommitmentAttoEth;
 		if (receiverId == 0) {
-			receiverId = commitmentIndex.split(id, msg.sender, debit, commitment, maximumHealthyPrice(remainingRep, remainingK), maximumHealthyPrice(receivedRep, commitment));
+			receiverId = commitmentIndex.split(id, msg.sender, sourcePrincipalDebitAttoRep, commitment, maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth), maximumHealthyPrice(plan.receivedPrincipalAttoRep, commitment));
 			receiver.positionId = receiverId;
-			receiverRep = receivedRep;
-			receiverK = commitment;
+			receiverPrincipalAttoRep = plan.receivedPrincipalAttoRep;
+			receiverCommitmentAttoEth = commitment;
 		} else {
-			receiverRep = existing.rep + receivedRep;
-			receiverK = existing.commitment + commitment;
-			commitmentIndex.transferTo(id, receiverId, debit, commitment, maximumHealthyPrice(remainingRep, remainingK), maximumHealthyPrice(receiverRep, receiverK));
+			receiverPrincipalAttoRep = existing.rep + plan.receivedPrincipalAttoRep;
+			receiverCommitmentAttoEth = existing.commitment + commitment;
+			commitmentIndex.transferTo(id, receiverId, sourcePrincipalDebitAttoRep, commitment, maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth), maximumHealthyPrice(receiverPrincipalAttoRep, receiverCommitmentAttoEth));
 		}
-		// Balanced transfer preserved a closed cohort's K. This replacement only
+		// Balanced transfer preserved a closed cohort's commitment. This replacement only
 		// adjusts collateral and therefore cannot refill that cohort.
-		_replace(receiverId, receiverRep, receiverK);
-		_clearHealthyLiquidation(id, remainingK, maximumHealthyPrice(remainingRep, remainingK));
-		receiver.freeAttoRep -= ownRep;
-		totalFreeAttoRep -= ownRep;
-		owners[source.owner].account.freeAttoRep += debit - award;
-		totalFreeAttoRep += debit - award;
-		emit CommitmentTakenOver(id, receiverId, commitment, award);
+		_replace(receiverId, receiverPrincipalAttoRep, receiverCommitmentAttoEth);
 	}
 
 	function freeze() external onlyForkAuthority {

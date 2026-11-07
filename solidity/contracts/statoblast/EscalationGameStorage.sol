@@ -12,6 +12,11 @@ import { EscalationClaimCheckpoint } from './EscalationClaimCheckpointTypes.sol'
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { DelegateCall } from './DelegateCall.sol';
 
+/// @dev EscalationGame owns this storage and routes mutations through delegatecall.
+/// DepositDelegate writes deposits, carry initialization and escrow; ClaimDelegate
+/// processes bounded claim checkpoints. Both must share this exact layout.
+/// Pool/custody bindings and authorization live in the host context: delegates
+/// execute with the original caller and the host's storage, not their own accounts.
 abstract contract EscalationGameStorage {
 	uint256 internal constant ACTIVATION_DELAY = 3 days;
 	uint256 public activationTime;
