@@ -11,7 +11,7 @@ abstract contract SecurityPoolLinearFees is SecurityPoolStorage {
 		require(portfolioCustody != address(0), 'Portfolio settlement missing');
 		uint48 logicalClock;
 		(shareTokenSupplyAttoShares, settlementCollateralAttoEth, logicalClock) = IPortfolioSettlement(address(portfolioAccounting)).checkpointQuestionSettlement();
-		lastUpdatedFeeAccumulator = logicalClock;
+		lastSettlementLogicalTime = logicalClock;
 	}
 
 	/// @notice Synchronize a reporting change and the question's prospective central fee stream.
@@ -19,6 +19,6 @@ abstract contract SecurityPoolLinearFees is SecurityPoolStorage {
 		require(portfolioCustody != address(0), 'Portfolio settlement missing');
 		uint48 logicalClock;
 		(shareTokenSupplyAttoShares, settlementCollateralAttoEth, logicalClock) = IPortfolioSettlement(address(portfolioAccounting)).refreshQuestionSettlement();
-		lastUpdatedFeeAccumulator = logicalClock;
+		lastSettlementLogicalTime = logicalClock;
 	}
 }

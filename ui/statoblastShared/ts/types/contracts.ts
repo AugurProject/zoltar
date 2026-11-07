@@ -124,7 +124,7 @@ export type ListedSecurityPool = {
 		linearFee?: LinearFeeState
 		feeEndTimestamp: bigint
 		feeIndexRemainder: bigint
-		lastUpdatedFeeAccumulator: bigint
+		lastFeeCheckpointNativeTime: bigint
 		totalFeesOwedRemainder: bigint
 	}
 	feeEligibleUnderwritingLimitAttoEth: bigint

@@ -38,7 +38,7 @@ import { IPortfolioSettlement } from './interfaces/IPortfolioSettlement.sol';
 // Security pool for one question, one universe, one denomination (ETH)
 contract SecurityPool is SecurityPoolStorage {
 	using SafeERC20Ops for IERC20;
-	event QuestionAccountingCheckpoint(AccountingReason reason, uint256 settlementCollateralAttoEth, uint256 shareTokenSupplyAttoShares, uint256 lastUpdatedFeeAccumulator);
+	event QuestionAccountingCheckpoint(AccountingReason reason, uint256 settlementCollateralAttoEth, uint256 shareTokenSupplyAttoShares, uint256 lastSettlementLogicalTime);
 
 	uint256 public immutable questionId;
 	uint248 public immutable universeId;

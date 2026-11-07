@@ -6,12 +6,13 @@ import { SecurityPoolPortfolioAccountingDelegate } from './SecurityPoolPortfolio
 
 /// @notice Fixed delegate for native fee accounting, portfolio credits and verbose checkpoint encoding.
 contract SecurityPoolEventEmitter is SecurityPoolPortfolioAccountingDelegate {
-	event QuestionAccountingCheckpoint(AccountingReason reason, uint256 settlementCollateralAttoEth, uint256 shareTokenSupplyAttoShares, uint256 lastUpdatedFeeAccumulator);
+	event QuestionAccountingCheckpoint(AccountingReason reason, uint256 settlementCollateralAttoEth, uint256 shareTokenSupplyAttoShares, uint256 lastSettlementLogicalTime);
 
 	function setStartingParams(uint256, uint256 initialCollateral) external {
 		ISecurityPool pool = ISecurityPool(payable(address(this)));
 		require(msg.sender == address(pool.securityPoolFactory()), 'Only factory');
-		lastUpdatedFeeAccumulator = block.timestamp;
+		// Bootstrap placeholder until portfolio binding checkpoints the central logical clock.
+		lastSettlementLogicalTime = block.timestamp;
 		feeEpochEndTime = pool.questionData().getQuestionEndDate(pool.questionId());
 		settlementCollateralAttoEth = initialCollateral;
 		_emitCheckpoint(AccountingReason.PoolInitialization);
@@ -28,6 +29,6 @@ contract SecurityPoolEventEmitter is SecurityPoolPortfolioAccountingDelegate {
 	function _emitCheckpoint(AccountingReason reason) private {
 		// Every capacity/collateral checkpoint also reconciles the shared report security budget.
 		ISecurityPool(payable(address(this))).openOraclePriceCoordinator().syncExposure();
-		emit QuestionAccountingCheckpoint(reason, settlementCollateralAttoEth, shareTokenSupplyAttoShares, lastUpdatedFeeAccumulator);
+		emit QuestionAccountingCheckpoint(reason, settlementCollateralAttoEth, shareTokenSupplyAttoShares, lastSettlementLogicalTime);
 	}
 }

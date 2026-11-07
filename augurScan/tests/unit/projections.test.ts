@@ -39,8 +39,8 @@ const questionCreatedLog = log('QuestionCreated', {
 
 describe('state projections', () => {
 	test('projects portfolio question accounting without standalone vault fields', () => {
-		const projections = projectionsFrom(log('QuestionAccountingCheckpoint', { reason: 2, settlementCollateralAttoEth: 100n.toString(), shareTokenSupplyAttoShares: 200n.toString(), lastUpdatedFeeAccumulator: '300' }))
-		expect(projections).toContainEqual({ type: 'poolState', poolAddress: pool.toLowerCase(), eventName: 'QuestionAccountingCheckpoint', state: { settlementCollateralAttoEth: 100n.toString(), shareTokenSupplyAttoShares: 200n.toString(), lastUpdatedFeeAccumulator: '300' } })
+		const projections = projectionsFrom(log('QuestionAccountingCheckpoint', { reason: 2, settlementCollateralAttoEth: 100n.toString(), shareTokenSupplyAttoShares: 200n.toString(), lastSettlementLogicalTime: '300' }))
+		expect(projections).toContainEqual({ type: 'poolState', poolAddress: pool.toLowerCase(), eventName: 'QuestionAccountingCheckpoint', state: { settlementCollateralAttoEth: 100n.toString(), shareTokenSupplyAttoShares: 200n.toString(), lastSettlementLogicalTime: '300' } })
 	})
 
 	test('captures immutable question metadata', () => {
@@ -83,7 +83,7 @@ describe('state projections', () => {
 				feeIndexRemainder: '1',
 				totalFeesOwedRemainder: '2',
 				uncheckpointedFeeEligibleUnderwritingLimitAttoEth: atomic(4n),
-				lastUpdatedFeeAccumulator: '2000',
+				lastSettlementLogicalTime: '2000',
 				currentRetentionRate: '999999000000000000',
 			}),
 		)

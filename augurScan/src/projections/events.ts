@@ -48,7 +48,7 @@ type PoolSnapshotProjection = {
 	feeIndexRemainder: string
 	totalFeesOwedRemainder: string
 	uncheckpointedFeeEligibleUnderwritingLimitAttoEth: AtomicValue
-	lastUpdatedFeeAccumulator: Date
+	lastSettlementLogicalTime: Date
 	currentRetentionRate: string
 }
 
@@ -188,7 +188,7 @@ const poolStateFields: Readonly<Record<string, readonly string[]>> = {
 	CompleteSetCreated: ['resultingShareTokenSupplyAttoShares', 'resultingSettlementCollateralAttoEth'],
 	CompleteSetRedeemed: ['resultingShareTokenSupplyAttoShares', 'resultingSettlementCollateralAttoEth'],
 	EscalationGameSet: ['escalationGame'],
-	QuestionAccountingCheckpoint: ['settlementCollateralAttoEth', 'shareTokenSupplyAttoShares', 'lastUpdatedFeeAccumulator'],
+	QuestionAccountingCheckpoint: ['settlementCollateralAttoEth', 'shareTokenSupplyAttoShares', 'lastSettlementLogicalTime'],
 	PoolForkModeActivated: ['repTransferredAttoRep', 'currentRetentionRate', 'systemState'],
 	ShareTokenSupplySet: ['shareTokenSupplyAttoShares'],
 	SharesRedeemed: ['resultingShareTokenSupplyAttoShares', 'resultingSettlementCollateralAttoEth'],
@@ -383,7 +383,7 @@ export const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 				feeIndexRemainder: integerString(args['feeIndexRemainder'], 'feeIndexRemainder'),
 				totalFeesOwedRemainder: integerString(args['totalFeesOwedRemainder'], 'totalFeesOwedRemainder'),
 				uncheckpointedFeeEligibleUnderwritingLimitAttoEth: integerString(args['uncheckpointedFeeEligibleUnderwritingLimitAttoEth'], 'uncheckpointedFeeEligibleUnderwritingLimitAttoEth'),
-				lastUpdatedFeeAccumulator: timestamp(args['lastUpdatedFeeAccumulator'], 'lastUpdatedFeeAccumulator'),
+				lastSettlementLogicalTime: timestamp(args['lastSettlementLogicalTime'], 'lastSettlementLogicalTime'),
 				currentRetentionRate: integerString(args['currentRetentionRate'], 'currentRetentionRate'),
 			},
 		]

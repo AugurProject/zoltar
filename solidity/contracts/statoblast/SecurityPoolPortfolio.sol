@@ -98,6 +98,12 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	SecurityPoolPortfolioSettlement public settlement;
 	SecurityPoolReporterLedger public reporters;
 	address public forkController;
+	// setupStage names the next operation; completion is terminal and idempotent.
+	uint8 private constant SETUP_SETTLEMENT = 0;
+	uint8 private constant SETUP_REPORTERS_AND_FORKS = 1;
+	uint8 private constant SETUP_CAPITAL = 2;
+	uint8 private constant SETUP_PRICE_FEED = 3;
+	uint8 private constant SETUP_COMPLETE = 4;
 	uint8 public setupStage;
 	Deployers private deployers;
 	mapping(uint248 => SecurityPoolCapitalLedger) public capitalLedger;
@@ -160,23 +166,23 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	/// @notice Advance one fixed setup stage without exceeding the transaction gas limit.
 	/// No caller can change the constructor configuration or replace an existing module.
 	function prepareNext() external nonReentrant {
-		if (setupStage == 4) return;
+		if (setupStage == SETUP_COMPLETE) return;
 		require(zoltar.getForkTime(originUniverseId) == 0, 'Origin universe forked');
-		if (setupStage == 0) {
+		if (setupStage == SETUP_SETTLEMENT) {
 			settlement = deployers.settlement.create(address(this));
 			settlement.initialize(deployers.books.create(address(settlement), minimumOutcomeRate));
 			settlement.authorizeServices(address(services));
 			settlement.registerUniverse(originUniverseId, uint48(block.timestamp));
 			settlement.setFeesEnabled(originUniverseId, false, uint48(block.timestamp));
 			services.registerUniverse(originUniverseId);
-		} else if (setupStage == 1) {
+		} else if (setupStage == SETUP_REPORTERS_AND_FORKS) {
 			reporters = deployers.reporters.create(address(this), zoltar);
 			reporters.registerUniverse(originUniverseId);
 			forkController = deployers.forks.create(address(this), zoltar);
 			IPortfolioForkCoordinator(forkController).initialize(originUniverseId);
-		} else if (setupStage == 2) {
+		} else if (setupStage == SETUP_CAPITAL) {
 			_createCapital(originUniverseId);
-		} else {
+		} else if (setupStage == SETUP_PRICE_FEED) {
 			factory.initializePortfolioPriceFeed(originUniverseId, initialReportPriorityFeeAttoEthPerGas);
 			IPortfolioForkCoordinator(forkController).activateOrigin(originUniverseId);
 		}
@@ -258,7 +264,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		if (amount != 0) capitalLedger[universeId].creditTimedFees{value: amount}();
 	}
 	function addQuestion(uint256 questionId) public returns (ISecurityPool pool) {
-		require(setupStage == 4, 'Portfolio setup incomplete');
+		require(setupStage == SETUP_COMPLETE, 'Portfolio setup incomplete');
 		require(questionAdmissionPolicy.isQuestionAllowed(address(this), originUniverseId, questionId), 'Question rejected by admission policy');
 		bytes32 origin = questionOriginIds[questionId];
 		if (origin != bytes32(0)) return factory.getSecurityPool(origin, originUniverseId);
@@ -306,7 +312,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		emit CompleteSetsFunded(universeId, questionId, recipient, mintAttoEth, minted, fee);
 	}
 	function prepareServicePurchase(uint248 universeId, uint256 questionId) external onlyServices returns (ISecurityPool pool) {
-		require(setupStage == 4, 'Portfolio setup incomplete');
+		require(setupStage == SETUP_COMPLETE, 'Portfolio setup incomplete');
 		IPortfolioForkCoordinator(forkController).ensureReady(universeId);
 		require(IPortfolioForkCoordinator(forkController).isReady(universeId), 'Universe is not ready');
 		if (universeId != originUniverseId)

@@ -1,13 +1,13 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const securityPoolContractReference: ContractReference = {
-	compiledAbiFingerprint: 'e147bc36ab1d3343ca30c88666ec72d36b19246490e6dbd562bb117ec58f4e9f',
+	compiledAbiFingerprint: '948a9ce44334396807bc9c666a92b13b4684ab02c73001431f0bc0f6d85c927f',
 	name: 'SecurityPool',
 	interactionNotes:
 		'All deployed question ledgers belong to a portfolio. Providers use its capital ledger for deposits, commitments, health targets, retirement and liquidation. Reporters fund separate reporter custody with wallet REP. Purchases use the registered portfolio route; traders redeem through the question ledger. There is no standalone vault, tick auction or operation queue.',
 	purpose: 'Question ledger for one shared portfolio, question and universe. Shares and reporting are question-specific; provider capital, settlement cash and fees are accounted centrally.',
-	readAbiFingerprint: '2c146710571c345bfcd78d7da6ffb8e0e9705d2c4efe5317b77b3233b7e9e9f3',
+	readAbiFingerprint: 'a9a9428c5bbcc5dba621c2a81cb96d8686e2af7768b41a7e9f953db963eeeb00',
 	readSurface:
-		'Read portfolio owner positions from the capital ledger and question fee streams from the settlement book. Native storage mirrors settlement cash, share supply and the last fee checkpoint; it does not enumerate owners. `getTotalPoolHeldAttoRep` is always zero because provider capital is central. `getCurrentMintingCapacityAttoEth` is zero after reporting starts; otherwise it includes current question collateral and available shared capacity. `attoSharesToAttoEth`, `attoSharesToAttoRep` and `attoEthToAttoShares` quote central settlement including fork recovery rights. `isEscalationResolved` recognizes inherited final outcomes and locally finalized reports. `getFeeEpochEndTime` is the native fee cutoff, bounded by the universe fork time. Additional validated configuration and accounting getters: `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `openOraclePriceCoordinator`, `openOracle`, `escalationGameFactory`, `eventEmitter`, `escalationGame`, `questionData`, `securityPoolForker`, `truthAuction`, `securityPoolFactory`, `settlementCollateralAttoEth`, `statoblastSecurityMultiplierBps`, `shareTokenSupplyAttoShares`, `lastUpdatedFeeAccumulator`, `awaitingForkContinuation`, `systemState`, `portfolioCustody`.',
+		'Read portfolio owner positions from the capital ledger and question fee streams from the settlement book. After portfolio binding, question storage mirrors settlement cash, share supply and `lastSettlementLogicalTime`, the portfolio logical time of its last checkpoint. Fee stream deadlines use native time; question storage does not enumerate owners. `getTotalPoolHeldAttoRep` is always zero because provider capital is central. `getCurrentMintingCapacityAttoEth` is zero after reporting starts; otherwise it includes current question collateral and available shared capacity. `attoSharesToAttoEth`, `attoSharesToAttoRep` and `attoEthToAttoShares` quote central settlement including fork recovery rights. `isEscalationResolved` recognizes inherited final outcomes and locally finalized reports. `getFeeEpochEndTime` is the native fee cutoff, bounded by the universe fork time. Additional validated configuration and accounting getters: `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `openOraclePriceCoordinator`, `openOracle`, `escalationGameFactory`, `eventEmitter`, `escalationGame`, `questionData`, `securityPoolForker`, `truthAuction`, `securityPoolFactory`, `settlementCollateralAttoEth`, `statoblastSecurityMultiplierBps`, `shareTokenSupplyAttoShares`, `awaitingForkContinuation`, `systemState`, `portfolioCustody`.',
 	securityBoundary:
 		'Price-sensitive withdrawal, commitment-increase, and liquidation calls depend on [A16 timely inclusion](./security-model.html#assumption-a16), [A21 genesis REP and WETH behavior](./security-model.html#assumption-a21), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). User-initiated pool calls additionally depend on [A28 account authority](./security-model.html#assumption-a28).',
 	readDeclarations: [
@@ -96,7 +96,7 @@ export const securityPoolContractReference: ContractReference = {
 			sourcePath: 'solidity/contracts/statoblast/SecurityPoolStorage.sol',
 		},
 		{
-			name: 'lastUpdatedFeeAccumulator',
+			name: 'lastSettlementLogicalTime',
 			sourcePath: 'solidity/contracts/statoblast/SecurityPoolStorage.sol',
 		},
 		{

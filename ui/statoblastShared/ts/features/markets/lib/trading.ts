@@ -59,7 +59,7 @@ export function estimateMintCheckpoint({
 	totalUnderwritingLimitAttoEth,
 	feeEndTimestamp,
 	feeIndexRemainder,
-	lastUpdatedFeeAccumulator,
+	lastFeeCheckpointNativeTime,
 	settlementCollateralAttoEth,
 	totalFeesOwedRemainder,
 }: {
@@ -72,7 +72,7 @@ export function estimateMintCheckpoint({
 	totalUnderwritingLimitAttoEth: bigint | undefined
 	feeEndTimestamp: bigint | undefined
 	feeIndexRemainder: bigint | undefined
-	lastUpdatedFeeAccumulator: bigint | undefined
+	lastFeeCheckpointNativeTime: bigint | undefined
 	settlementCollateralAttoEth: bigint | undefined
 	totalFeesOwedRemainder: bigint | undefined
 }) {
@@ -83,7 +83,7 @@ export function estimateMintCheckpoint({
 		totalUnderwritingLimitAttoEth === undefined ||
 		feeEndTimestamp === undefined ||
 		feeIndexRemainder === undefined ||
-		lastUpdatedFeeAccumulator === undefined ||
+		lastFeeCheckpointNativeTime === undefined ||
 		settlementCollateralAttoEth === undefined ||
 		totalFeesOwedRemainder === undefined
 	)
@@ -93,15 +93,15 @@ export function estimateMintCheckpoint({
 		// The simulated checkpoint includes historical pauses. Only future elapsed time
 		// can accrue again, bounded by the stream's remaining logical duration.
 		const elapsed = currentTimestamp > centralCheckpointTimestamp ? currentTimestamp - centralCheckpointTimestamp : 0n
-		const remaining = linearFee.endTime > lastUpdatedFeeAccumulator ? linearFee.endTime - lastUpdatedFeeAccumulator : 0n
+		const remaining = linearFee.endTime > lastFeeCheckpointNativeTime ? linearFee.endTime - lastFeeCheckpointNativeTime : 0n
 		const fees = (elapsed < remaining ? elapsed : remaining) * linearFee.rateAttoEthPerSecond
 		const estimatedRetentionFeeAttoEth = fees < settlementCollateralAttoEth ? fees : settlementCollateralAttoEth
 		return { estimatedRetentionFeeAttoEth, settlementCollateralAfterFeesAttoEth: settlementCollateralAttoEth - estimatedRetentionFeeAttoEth }
 	}
-	if (linearFee !== undefined) return previewLinearFeeCheckpoint({ linearFee, currentTimestamp, feeEndTimestamp, lastUpdatedFeeAccumulator, settlementCollateralAttoEth })
+	if (linearFee !== undefined) return previewLinearFeeCheckpoint({ linearFee, currentTimestamp, feeEndTimestamp, lastFeeCheckpointNativeTime, settlementCollateralAttoEth })
 	const checkpointTimestamp = currentTimestamp < feeEndTimestamp ? currentTimestamp : feeEndTimestamp
-	if (lastUpdatedFeeAccumulator >= checkpointTimestamp || feeEligibleUnderwritingLimitAttoEth === 0n) return { estimatedRetentionFeeAttoEth: 0n, settlementCollateralAfterFeesAttoEth: settlementCollateralAttoEth }
-	const timeDelta = checkpointTimestamp - lastUpdatedFeeAccumulator
+	if (lastFeeCheckpointNativeTime >= checkpointTimestamp || feeEligibleUnderwritingLimitAttoEth === 0n) return { estimatedRetentionFeeAttoEth: 0n, settlementCollateralAfterFeesAttoEth: settlementCollateralAttoEth }
+	const timeDelta = checkpointTimestamp - lastFeeCheckpointNativeTime
 	if (totalUnderwritingLimitAttoEth === 0n || feeEligibleUnderwritingLimitAttoEth > totalUnderwritingLimitAttoEth) return undefined
 	const feeBearingCollateral = (settlementCollateralAttoEth * feeEligibleUnderwritingLimitAttoEth) / totalUnderwritingLimitAttoEth
 	const pendingDecay = (feeIndexRemainder + totalFeesOwedRemainder) / PRICE_PRECISION

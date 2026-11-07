@@ -61,7 +61,7 @@ test.each(['active', 'stale', 'runoff', 'sealed', 'disabled', 'frozen', 'basket'
 		totalPoolHeldAttoRep: 300n,
 		totalUnderwritingLimitAttoEth: 200n,
 		feeEligibleUnderwritingLimitAttoEth: 120n,
-		lastUpdatedFeeAccumulator: 1000n,
+		lastFeeCheckpointNativeTime: 1000n,
 		linearFee: { rateAttoEthPerSecond: mode === 'active' ? 2n : 0n, endTime: 2000n },
 		feeEndTimestamp: 2000n,
 	})

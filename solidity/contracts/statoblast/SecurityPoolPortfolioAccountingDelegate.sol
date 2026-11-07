@@ -19,9 +19,9 @@ abstract contract SecurityPoolPortfolioAccountingDelegate is SecurityPoolLinearF
 
 	/// @notice Pool delegate target; payable because delegatecall retains the outer call value.
 	function accrueSettlementCollateral() external payable {
-		uint256 previousTimestamp = lastUpdatedFeeAccumulator;
+		uint256 previousTimestamp = lastSettlementLogicalTime;
 		updateLinearFees();
-		if (lastUpdatedFeeAccumulator != previousTimestamp) _emitAccountingCheckpoint(AccountingReason.Accrual);
+		if (lastSettlementLogicalTime != previousTimestamp) _emitAccountingCheckpoint(AccountingReason.Accrual);
 	}
 
 	/// @notice Refresh the portfolio's linear stream.

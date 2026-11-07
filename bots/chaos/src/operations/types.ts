@@ -145,7 +145,7 @@ export interface PoolSnapshot {
 	shareTokenSupplyAttoShares: CanonicalUintString
 	currentMintingCapacityAttoEth: CanonicalUintString
 	statoblastSecurityMultiplierBps: string
-	lastUpdatedFeeAccumulator: string
+	lastSettlementLogicalTime: string
 	poolRepBalanceAttoRep: CanonicalUintString
 	escalationRepBalanceAttoRep: CanonicalUintString
 	escalationResidualSweepExpectedSuccess: boolean
