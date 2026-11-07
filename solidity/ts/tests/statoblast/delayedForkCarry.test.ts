@@ -97,7 +97,7 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 	for (const { offset, name } of [
 		{ offset: -DAY, name: 'a pre-deadline fork preserves the original NO claim through delayed migration and a winner reversal' },
 		{ offset: 0n, name: 'a fork exactly at the deadline preserves every outcome through delayed migration' },
-		{ offset: 1n, name: 'a fork after the deadline preserves genuine settlement and retires losing inherited principal' },
+		{ offset: DAY, name: 'a fork after genuine settlement retires losing inherited principal' },
 	]) {
 		test(name, async () => {
 			const { client, mockWindow } = fixture
@@ -105,9 +105,11 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 			const beforeFork = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getForkCarrySnapshot' })
 			// The fixture includes each transaction at latest block time + 1.
 			await mockWindow.setTime(deadline + offset - 1n)
+			const finalizedBeforeFork = offset === DAY
+			assert.equal(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getFinalQuestionResolution' }), BigInt(finalizedBeforeFork ? QuestionOutcome.Yes : QuestionOutcome.None))
 			await forkUniverse(noDepositor, universe, secondQuestionId)
 			assert.equal(await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getForkTime', args: [universe] }), deadline + offset)
-			await mockWindow.setTime(deadline + DAY)
+			await mockWindow.setTime(deadline + offset + DAY)
 			const delayedSnapshot = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getForkCarrySnapshot' })
 			const delayedFinality = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getFinalQuestionResolution' })
 			const poolOutcome = await client.readContract({ abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi, address: getInfraContractAddresses().securityPoolForker, functionName: 'getQuestionOutcome', args: [pool.securityPool] })
@@ -115,7 +117,7 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 			assert.deepStrictEqual(delayedSnapshot[1], beforeFork[1], 'delay must preserve leaf counts')
 			assert.deepStrictEqual(delayedSnapshot[3], beforeFork[3], 'delay must not consume claims')
 
-			if (offset > 0n) {
+			if (finalizedBeforeFork) {
 				assert.equal(delayedFinality, BigInt(QuestionOutcome.Yes), 'a dispute finalized before the fork stays settled')
 				assert.equal(poolOutcome, BigInt(QuestionOutcome.Yes))
 				assert.equal(delayedSnapshot[2][QuestionOutcome.No], 0n, 'genuinely losing inherited principal must retire')
