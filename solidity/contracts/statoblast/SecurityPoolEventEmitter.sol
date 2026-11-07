@@ -2,33 +2,32 @@
 pragma solidity 0.8.35;
 
 import { AccountingReason, ISecurityPool } from './interfaces/ISecurityPool.sol';
-import { ISecurityPoolForkerEvents } from './interfaces/ISecurityPoolForker.sol';
-import { SecurityPoolForkerStorage } from './SecurityPoolForkerStorage.sol';
-import { SecurityPoolForkerForkData } from './SecurityPoolForkerTypes.sol';
-import { SecurityPoolStorage } from './SecurityPoolStorage.sol';
+import { SecurityPoolPortfolioAccountingDelegate } from './SecurityPoolPortfolioAccountingDelegate.sol';
 
-/// @notice Delegate-called event encoder that keeps verbose checkpoint schemas out of SecurityPool runtime code.
-contract SecurityPoolEventEmitter is SecurityPoolStorage {
-	event PoolAccountingCheckpoint(AccountingReason reason, address indexed vault, uint256 settlementCollateralAttoEth, uint256 totalUnderwritingLimitAttoEth, uint256 feeEligibleUnderwritingLimitAttoEth, uint256 totalClaimableVaultFeesAttoEth, uint256 unallocatedAccruedFeesAttoEth, uint256 feeIndex, uint256 feeIndexRemainder, uint256 totalFeesOwedRemainder, uint256 uncheckpointedFeeEligibleUnderwritingLimitAttoEth, uint256 lastUpdatedFeeAccumulator, uint256 currentRetentionRate);
-	event VaultAccountingCheckpoint(address indexed vault, uint256 repBackingUnits, uint256 underwritingLimitAttoEth, uint256 claimableFeesAttoEth, uint256 feeIndex, uint256 vaultFeeRemainder, uint256 resultingTotalRepBackingUnits, uint256 resultingFeeEligibleUnderwritingLimitAttoEth);
+/// @notice Fixed delegate for native fee accounting, portfolio credits and verbose checkpoint encoding.
+contract SecurityPoolEventEmitter is SecurityPoolPortfolioAccountingDelegate {
+	event QuestionAccountingCheckpoint(AccountingReason reason, uint256 settlementCollateralAttoEth, uint256 shareTokenSupplyAttoShares, uint256 lastUpdatedFeeAccumulator);
 
-	function emitPoolAccountingCheckpoint(AccountingReason reason, address vault) external payable {
-		emit PoolAccountingCheckpoint(reason, vault, settlementCollateralAttoEth, totalUnderwritingLimitAttoEth, feeEligibleUnderwritingLimitAttoEth, totalClaimableVaultFeesAttoEth, unallocatedAccruedFeesAttoEth, feeIndex, feeIndexRemainder, totalFeesOwedRemainder, uncheckpointedFeeEligibleUnderwritingLimitAttoEth, lastUpdatedFeeAccumulator, currentRetentionRate);
+	function setStartingParams(uint256, uint256 initialCollateral) external {
+		ISecurityPool pool = ISecurityPool(payable(address(this)));
+		require(msg.sender == address(pool.securityPoolFactory()), 'Only factory');
+		lastUpdatedFeeAccumulator = block.timestamp;
+		feeEpochEndTime = pool.questionData().getQuestionEndDate(pool.questionId());
+		settlementCollateralAttoEth = initialCollateral;
+		_emitCheckpoint(AccountingReason.PoolInitialization);
 	}
 
-	function emitVaultAccountingCheckpoint(address vault) external payable {
-		emit VaultAccountingCheckpoint(vault, securityVaults[vault].repBackingUnits, securityVaults[vault].underwritingLimitAttoEth, securityVaults[vault].claimableFeesAttoEth, securityVaults[vault].feeIndex, vaultFeeRemainders[vault], totalRepBackingUnits, feeEligibleUnderwritingLimitAttoEth);
+	function emitPoolAccountingCheckpoint(AccountingReason reason) external payable {
+		_emitCheckpoint(reason);
 	}
-}
 
-/// @notice Delegate-called fork event encoder sharing the forker's typed storage base.
-contract SecurityPoolForkEventEmitter is SecurityPoolForkerStorage, ISecurityPoolForkerEvents {
-	function emitForkSnapshotEvents(ISecurityPool parent, address migrationProxy, address sourceGame, uint256 totalPoolHeldRepAtForkAttoRep, uint256 disputeStakedRepAtForkAttoRep, uint256 resultingLockedAttoRep) external payable {
-		SecurityPoolForkerForkData storage data = forkDataByPool[parent];
-		if (data.unresolvedEscalationAtFork) {
-			emit DisputeStakedRepDrainedAtFork(parent, sourceGame, disputeStakedRepAtForkAttoRep);
-		}
-		emit ParentRepLocked(parent, migrationProxy, totalPoolHeldRepAtForkAttoRep, disputeStakedRepAtForkAttoRep, resultingLockedAttoRep);
-		emit SecurityPoolForkSnapshot(parent, migrationProxy, data.ownFork, data.unresolvedEscalationAtFork, data.settlementCollateralAtForkAttoEth, totalPoolHeldRepAtForkAttoRep, data.auctionableAttoRepAtFork, data.escalationSourceRepAtForkAttoRep, data.escalationChildRepAtForkAttoRep, data.escalationStartBondAtForkAttoRep, data.escalationNonDecisionThresholdAtForkAttoRep, data.escalationElapsedAtFork, data.escalationSnapshotId);
+	function _emitAccountingCheckpoint(AccountingReason reason) internal override {
+		_emitCheckpoint(reason);
+	}
+
+	function _emitCheckpoint(AccountingReason reason) private {
+		// Every capacity/collateral checkpoint also reconciles the shared report security budget.
+		ISecurityPool(payable(address(this))).openOraclePriceCoordinator().syncExposure();
+		emit QuestionAccountingCheckpoint(reason, settlementCollateralAttoEth, shareTokenSupplyAttoShares, lastUpdatedFeeAccumulator);
 	}
 }

@@ -90,12 +90,10 @@ export const minimumPreset = <Amount>(kind: keyof typeof minimumPresetLabels, am
 export const rewardPreset = <Amount>(amount?: Amount): CopyParts<Amount> => (amount === undefined ? ['Max reward'] : ['Max reward (', amount, ')'])
 export const reportAmountPlaceholder = '0'
 export const reportAmountLabel = (outcome: string, amount: string) => `Report ${outcome} · ${amount} REP`
+export const approveAmountLabel = (amount: string) => `Approve ${amount} REP`
 export const paidFromVault = 'Paid from: pool vault REP (no approval needed)'
-export const loadingPriceReport = 'Loading price report…'
 export const paidFromWallet = 'Paid from: wallet REP'
 export const availableBalance = (amount: string) => `Available: ${amount} REP.`
-export const continuationFundingHelp = 'Your wallet REP first enters your vault in this pool, then funds your report.'
-export const continuationMinimumDeposit = <Amount>(deposit: Amount, remainder: Amount): CopyParts<Amount> => ['This pool requires a ', deposit, ' deposit for this report. Your vault will hold ', remainder, ' afterward.']
 export const yourPositions = 'Your positions'
 export const resultSummary = (outcome: string) => `Resolved as ${outcome}.`
 export const claimDeposits = (outcome: string, amount: string) => `Claim ${amount}\u00a0REP from ${outcome}`
@@ -104,24 +102,11 @@ export const clearLosingDepositsDetail = 'Losing deposits return no REP. Clearin
 export const clearLosingDepositsReviewDescription = 'Returns no REP. Removes these losing deposits from your vault’s dispute-staked REP so you can redeem your vault REP from this pool.'
 export const results = 'Results'
 
-function formatPriceWindow(seconds: bigint) {
-	if (seconds % 3600n === 0n) return seconds === 3600n ? '1 hour' : `${seconds / 3600n} hours`
-	const minutes = seconds / 60n
-	return minutes === 1n ? '1 minute' : `${minutes} minutes`
-}
-export const priceExpired = (windowSeconds: bigint) => `Pool price expired. Reports need a price newer than ${formatPriceWindow(windowSeconds)}.`
-export const priceRequested = (countdown: string) => `Price requested. Ready to settle in ${countdown}.`
-export const priceReportReady = (id: bigint) => `Price report #${id} is ready.`
-export const settlingPriceReport = (id: bigint) => `Settling report #${id}…`
-export const priceRequestAlreadyPending = 'A price request is already pending.'
-export const noPriceReportToSettle = 'No price report to settle yet.'
-export const priceReportNotReady = 'The price report is not ready to settle yet.'
-export const priceUpdated = (time: string) => `Price updated. Valid until ${time}.`
-
 export const reportedAmount = (outcome: string, amount: string) => `Reported ${amount} REP on ${outcome}`
 export const approvedAmount = (amount: string) => `Approved ${amount} REP`
 
 export const reportingAmount = (outcome: string, amount: string) => `Reporting ${outcome} · ${amount} REP…`
+export const approvingAmount = (amount: string) => `Approving ${amount} REP…`
 
 export const claimedDeposits = (outcome: string, amount: string) => `Claimed ${amount} REP from ${outcome}`
 export const clearedDeposits = (outcome: string) => `Cleared ${outcome} deposits (worth 0 REP)`
@@ -166,10 +151,7 @@ export const forkViewerStake = <Amount>(side: string, stake: Amount): CopyParts<
 
 export const updateReminder = 'Update your reminder (.ics)'
 export const zeroBalanceStatusDetail = 'If all balances stay at zero, the timeout outcome is Invalid.'
-
-export const repSource = 'REP source'
 export const noVaultRepSelectWallet = 'No REP is available in your pool vault. Select Wallet REP to report.'
-export const insufficientVaultRepSelectWallet = (balance: string) => `Only ${balance} is available in your pool vault. Reduce the amount or select Wallet REP.`
 
 export const loadingVaultFunding = 'Loading vault funding requirements…'
 
@@ -179,8 +161,6 @@ export const forkTriggerWarning = (outcome: string, threshold: string) => `Anoth
 export const forkTriggerConfirmation = 'I understand this report ends escalation and leads to a universe fork.'
 export const forkTriggerConfirmationRequired = 'Confirm that this report triggers the universe fork.'
 export const reportingRepApprovalRequired = 'Approve REP for this security pool before reporting.'
-export const reportingApprovalAction = 'reporting'
-export const reportAmountRequired = 'Enter a report amount.'
 export const forkTriggerConfirmationAndApprovalRequired = 'Confirm that this report triggers the universe fork and approve REP for this security pool before reporting.'
 export const maxBelowForkHint = <Amount>(amount: Amount): CopyParts<Amount> => ['Max stops at ', amount, ', just below the non-decision threshold. Confirm the fork warning to fill the side.']
 export const maxBelowForkReason = 'Max stops below the non-decision threshold, which leaves less than the minimum first report. Enter an amount to fill the side and trigger the fork.'
@@ -194,4 +174,42 @@ export const depositDeadlinePreview = (deadline: string, extension: string, unch
 
 export const dismissReminderUpdate = 'Dismiss'
 
-export const responseWindowEndsTooSoon = 'The response window ends too soon to report. Wait for the result.'
+export const responseWindowEndsTooSoon = 'The response window ends too soon. Wait for the result before settling deposits.'
+
+export const recoverySource = 'Reporter recovery'
+
+export const settleInheritedClaim = 'Settle inherited reporter claim'
+
+export const prepareInheritedClaim = 'Prepare inherited reporter claim'
+
+export const claimSettled = 'Reporter claim settled'
+
+export const claimPrepared = 'Reporter claim prepared'
+
+export const inheritedClaims = 'Inherited reporter claims'
+
+export const inheritedClaimsDescription = 'Recover deposits carried from the parent question after this branch resolves. Prepare long histories in bounded batches.'
+
+export const claimPending = 'Another claim transaction is pending.'
+
+export const claimAuthenticationRequired = 'Refresh to authenticate this claim.'
+
+export const claimPreparationRequired = 'Prepare this claim first.'
+
+export const claimResolutionRequired = 'Wait for branch resolution.'
+
+export const claimWinningOutcomeRequired = 'Only the winning outcome can recover REP.'
+
+export const repUnit = 'REP'
+
+export const prepareClaim = 'Prepare claim'
+
+export const preparingClaim = 'Preparing claim'
+
+export const claimAlreadyPrepared = 'Claim prepared.'
+
+export const settleClaim = 'Settle claim'
+
+export const settlingClaim = 'Settling claim'
+
+export const inheritedClaimIdentity = (outcome: string, index: string) => `${outcome} · Deposit #${index} ·`

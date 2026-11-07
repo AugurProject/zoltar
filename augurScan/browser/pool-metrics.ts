@@ -15,20 +15,15 @@ export const annualFeeText = (value: unknown): string => {
 	return fee === undefined ? 'Unavailable' : exactUnit(fee, 6, '%')
 }
 
-export const poolSummaryMetrics = (state: Readonly<Record<string, unknown>>, nativeSymbol: string): ReadonlyArray<readonly [string, string]> => {
-	const used = atomic(state['settlementCollateralAttoEth'])
-	const capacity = atomic(state['currentMintingCapacityAttoEth'])
-	const backing = atomic(state['totalPoolHeldAttoRep'])
-	const ownership = atomic(state['totalUnderwritingLimitAttoEth'])
-	const multiplier = atomic(state['securityMultiplierBps'])
-	const display = (value: bigint | undefined, decimals: number, unit: string) => (value === undefined ? 'Unavailable' : exactUnit(value, decimals, unit))
+export const poolSummaryMetrics = (state: Readonly<Record<string, unknown>>, nativeSymbol = 'ETH'): ReadonlyArray<readonly [string, string]> => {
+	const display = (key: string, decimals: number, unit: string) => {
+		const value = atomic(state[key])
+		return value === undefined ? 'Unavailable' : exactUnit(value, decimals, unit)
+	}
 	return [
-		['Annual open-interest fee', annualFeeText(state['currentRetentionRate'])],
-		['Open interest', display(used, 18, nativeSymbol)],
-		['Minting capacity', display(capacity, 18, nativeSymbol)],
-		['Capacity used', display(used === undefined || capacity === undefined || capacity === 0n ? undefined : (used * 10_000n) / capacity, 2, '%')],
-		['Pool-held REP', display(backing, 18, 'REP')],
-		['REP per committed ETH', display(backing === undefined || ownership === undefined || ownership === 0n ? undefined : (backing * 10_000n) / ownership, 4, 'REP/ETH')],
-		['Security multiplier', display(multiplier, 4, '×')],
+		['Question settlement value', display('questionSettlementAttoEth', 18, nativeSymbol)],
+		['Average value per share', display('averageValueAttoEthPerShare', 18, nativeSymbol)],
+		['Outcome share supply', display('shareTokenSupplyAttoShares', 18, 'shares')],
+		['Question escalation multiplier', display('securityMultiplierBps', 4, '×')],
 	]
 }

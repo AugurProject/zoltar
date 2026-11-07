@@ -1,3 +1,4 @@
+import { loadBudgetMint } from './minting.js'
 import { submissionDeadline } from './submissionWindow.js'
 import { maxUint256, type Address, type WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { tradingContracts } from '../generated/contractArtifact.js'
@@ -12,6 +13,7 @@ export type LiquidityOperation = 'initialize' | 'add' | 'remove'
 
 export async function simulateLiquidity(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, operation: LiquidityOperation, amount: bigint, conditionalYesBps = 5_000n, expiry: TransactionExpiry = { validityMinutes: 20n }, slippageBps = UI_SLIPPAGE_BPS) {
 	requireTransactionSlippageBps(slippageBps)
+	let mintAttoEth = 0n
 	const pairAddress = market.pair
 	if (operation === 'initialize') {
 		const {
@@ -22,13 +24,15 @@ export async function simulateLiquidity(client: WalletClient, configuration: Dep
 		} = await simulateWithDeadline(
 			client,
 			expiry,
-			async (block, deadline) =>
-				pairAddress === undefined
-					? await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [market.pool, conditionalYesBps, 0n, account, deadline], value: amount, blockNumber: block.blockNumber })
-					: await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [pairAddress, conditionalYesBps, 0n, account, deadline], value: amount, blockNumber: block.blockNumber }),
+			async (block, deadline) => {
+				mintAttoEth = await loadBudgetMint(client, market, amount, block.blockNumber)
+				return pairAddress === undefined
+					? await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [market.pool, mintAttoEth, conditionalYesBps, 0n, account, deadline], value: amount, blockNumber: block.blockNumber })
+					: await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [pairAddress, mintAttoEth, conditionalYesBps, 0n, account, deadline], value: amount, blockNumber: block.blockNumber })
+			},
 			(block, deadline) => submissionDeadline(client, market, operation, block, deadline),
 		)
-		return { blockNumber, blockHash, operation, amount, conditionalYesBps, deadline, slippageBps, market, result: simulation.result, expectedLiquidity: simulation.result.liquidity, expectedYes: 0n, expectedNo: 0n, expectedYesDeposit: 0n, expectedNoDeposit: 0n }
+		return { blockNumber, blockHash, operation, mintAttoEth, amount, conditionalYesBps, deadline, slippageBps, market, result: simulation.result, expectedLiquidity: simulation.result.liquidity, expectedYes: 0n, expectedNo: 0n, expectedYesDeposit: 0n, expectedNoDeposit: 0n }
 	}
 	if (pairAddress === undefined) throw new Error('The trading pool is unavailable')
 	if (operation === 'add') {
@@ -41,15 +45,16 @@ export async function simulateLiquidity(client: WalletClient, configuration: Dep
 			client,
 			expiry,
 			async (block, deadline) => {
-				const simulation = await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithEth', account, args: [pairAddress, maxUint256, maxUint256, 0n, account, deadline], value: amount, blockNumber: block.blockNumber })
+				mintAttoEth = await loadBudgetMint(client, market, amount, block.blockNumber)
+				const simulation = await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithEth', account, args: [pairAddress, mintAttoEth, maxUint256, maxUint256, 0n, account, deadline], value: amount, blockNumber: block.blockNumber })
 				const feeMarket = await loadTransactionFeeMarket(client, market, block.blockNumber, block.blockTimestamp)
-				const feeBlocker = liquidityHoldingFeeBlocker(feeMarket, amount, maximumAfterSlippage(simulation.result.yesUsed, slippageBps), maximumAfterSlippage(simulation.result.noUsed, slippageBps), deadline, simulation.result)
+				const feeBlocker = liquidityHoldingFeeBlocker(feeMarket, mintAttoEth, maximumAfterSlippage(simulation.result.yesUsed, slippageBps), maximumAfterSlippage(simulation.result.noUsed, slippageBps), deadline, simulation.result)
 				if (feeBlocker !== undefined) throw new Error(feeBlocker)
 				return simulation
 			},
 			(block, deadline) => submissionDeadline(client, market, operation, block, deadline),
 		)
-		return { blockNumber, blockHash, operation, amount, conditionalYesBps, deadline, slippageBps, market, result: simulation.result, expectedLiquidity: simulation.result.liquidity, expectedYes: 0n, expectedNo: 0n, expectedYesDeposit: simulation.result.yesUsed, expectedNoDeposit: simulation.result.noUsed }
+		return { blockNumber, blockHash, operation, mintAttoEth, amount, conditionalYesBps, deadline, slippageBps, market, result: simulation.result, expectedLiquidity: simulation.result.liquidity, expectedYes: 0n, expectedNo: 0n, expectedYesDeposit: simulation.result.yesUsed, expectedNoDeposit: simulation.result.noUsed }
 	}
 	const {
 		blockNumber,
@@ -57,5 +62,5 @@ export async function simulateLiquidity(client: WalletClient, configuration: Dep
 		deadline,
 		result: simulation,
 	} = await simulateWithDeadline(client, expiry, async (block, deadline) => await client.simulateContract({ abi: pair.abi, address: pairAddress, functionName: 'removeLiquidity', account, args: [amount, 0n, 0n, account, deadline], blockNumber: block.blockNumber }))
-	return { blockNumber, blockHash, operation, amount, conditionalYesBps, deadline, slippageBps, market, result: simulation.result, expectedLiquidity: 0n, expectedYes: simulation.result[0], expectedNo: simulation.result[1], expectedYesDeposit: 0n, expectedNoDeposit: 0n }
+	return { blockNumber, blockHash, operation, mintAttoEth, amount, conditionalYesBps, deadline, slippageBps, market, result: simulation.result, expectedLiquidity: 0n, expectedYes: simulation.result[0], expectedNo: simulation.result[1], expectedYesDeposit: 0n, expectedNoDeposit: 0n }
 }

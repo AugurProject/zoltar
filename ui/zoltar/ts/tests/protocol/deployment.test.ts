@@ -4,14 +4,14 @@ import { describe, expect, mock, test } from 'bun:test'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { type Address, type Hash, type Hex, type TransactionReceipt, encodeDeployData, getAddress, getCreate2Address, keccak256 } from '@zoltar/core-shared/evm/ethereum'
-import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
+import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, withExpectedDeploymentRuntimeCodeHashes } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 import { getGenesisReputationTokenAddress } from '@zoltar/ui-zoltar-shared/protocol/activeProtocolAddresses.js'
 import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createInitialTransactionTrayState, markTransactionPrepared, markTransactionRequested } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { getGenesisNetworkProfile, MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { getSepoliaGenesisRepDeployment } from '@zoltar/ui-core-shared/lib/sepoliaDeploymentConfig.js'
 import { DeploymentStatusOracle_DeploymentStatusOracle, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
@@ -95,6 +95,15 @@ contract AtomicFunding {
 }`
 
 describe('contract deployment internals', () => {
+	test('retains an explicitly computed module hash when the base deployment table has no entry', () => {
+		const hash = keccak256('0x1234')
+		const profiles = [MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE].flatMap(profile => (['yes', 'no'] as const).map(outcome => getGenesisNetworkProfile(profile, outcome)))
+		for (const profile of profiles) {
+			const [module] = withExpectedDeploymentRuntimeCodeHashes([{ id: 'securityPoolCommitmentIndexDeployer', label: 'Commitment index deployer', address: PROXY_DEPLOYER_ADDRESS, dependencies: [], deploy: async () => ZERO_HASH, expectedRuntimeCodeHash: hash }], profile)
+			expect(module?.expectedRuntimeCodeHash).toBe(hash)
+		}
+	})
+
 	test('rejects generated deployment artifacts that do not match the pinned runtime hashes', () => {
 		expect(assertStaticDeploymentArtifactRuntimeCodeHashes()).toEqual(['deploymentStatusOracle', 'multicall3', 'zoltarQuestionData'])
 		expect(() =>
@@ -1207,43 +1216,5 @@ describe('contract deployment internals', () => {
 			expect(seenAddress).not.toBeUndefined()
 			expect(seenAddress?.length).toBe(42)
 		}
-	})
-
-	test('ERC20 helper readers call the expected contract methods', async () => {
-		const tokenAddress = getAddress('0x1111111111111111111111111111111111111111')
-		const ownerAddress = getAddress('0x2222222222222222222222222222222222222222')
-		const spenderAddress = getAddress('0x3333333333333333333333333333333333333333')
-		const seen: Array<{ functionName: string; address: Address; args: readonly unknown[] }> = []
-		const readClient: MockReadClient = {
-			getCode: async () => '0x',
-			readContract: async request => {
-				if (request.address === undefined) {
-					throw new Error('Expected token address')
-				}
-				seen.push({
-					address: request.address,
-					args: Array.isArray(request.args) ? request.args : [],
-					functionName: request.functionName,
-				})
-				if (request.functionName === 'balanceOf') return 2_000n as never
-				if (request.functionName === 'allowance') return 500n as never
-				throw new Error(`Unexpected function name: ${request.functionName}`)
-			},
-		}
-
-		expect(await loadErc20Balance(readClient as ReadClient, tokenAddress, ownerAddress)).toBe(2_000n)
-		expect(await loadErc20Allowance(readClient as ReadClient, tokenAddress, ownerAddress, spenderAddress)).toBe(500n)
-		expect(seen).toEqual([
-			{
-				functionName: 'balanceOf',
-				address: tokenAddress,
-				args: [ownerAddress],
-			},
-			{
-				functionName: 'allowance',
-				address: tokenAddress,
-				args: [ownerAddress, spenderAddress],
-			},
-		])
 	})
 })

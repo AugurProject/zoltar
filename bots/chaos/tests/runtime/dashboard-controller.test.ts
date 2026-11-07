@@ -734,7 +734,7 @@ describe('chaos dashboard configuration boundary', () => {
 			migrationRepSplits: [],
 			openOracle: current.deployment.openOracle,
 			reports: [],
-			schemaVersion: 3,
+			schemaVersion: 4,
 			securityPoolForker: current.deployment.securityPoolForker,
 			startBlock: current.runtime.protocolStartBlock.toString(),
 			wallet: zeroAddress,

@@ -3,6 +3,7 @@ import { erc20Abi, openOracleAbi, openOracleArbitrageExecutorAbi, openOraclePric
 import type { Configuration } from '#config/configuration'
 import { receiptGasExpendituresWithQuorum, recoveredTransactionIntentMismatch, transactionIntentWithQuorum } from '#execution/execution-orchestration'
 import type { ReadClient, RecoveryConfiguration } from '#core/operator-types'
+import type { CoordinatorGamePolicy } from '#core/game-policy'
 import { requiredBigint, requiredRpcAddress, requiredTuple } from '#core/rpc-validation'
 import { batchRead, batchValue, type BatchReader } from '#core/batch-read'
 import { type ActiveReport } from '#monitoring/oracle-log-state'
@@ -212,7 +213,7 @@ async function storedReport(client: ReadClient, openOracle: Address, id: bigint,
 type CoordinatorReportConfiguration = Pick<Configuration, 'connectivity' | 'coordinatorAddresses' | 'openOracle' | 'quorumRpcUrls' | 'rpcQuorum'> & { network: Pick<Configuration['network'], 'multicall3'> }
 
 /** Reads every coordinator's pending report id in one batch, then every pending report's stored state in a second. */
-export async function pendingCoordinatorReports(client: BatchReader, config: Pick<CoordinatorReportConfiguration, 'coordinatorAddresses' | 'network' | 'openOracle'>, blockNumber: bigint) {
+export async function pendingCoordinatorReports(client: BatchReader, config: Pick<CoordinatorReportConfiguration, 'coordinatorAddresses' | 'network' | 'openOracle'>, blockNumber: bigint, policies: readonly CoordinatorGamePolicy[] = []) {
 	const pendingIds = await batchRead(
 		client,
 		config.network.multicall3,
@@ -221,7 +222,12 @@ export async function pendingCoordinatorReports(client: BatchReader, config: Pic
 	)
 	const pending = config.coordinatorAddresses.flatMap((coordinator, index) => {
 		const reportId = requiredBigint(batchValue(pendingIds[index], `Coordinator ${coordinator} pending report id`), `Coordinator ${coordinator} pending report id`)
-		return reportId === 0n ? [] : [{ coordinator, reportId }]
+		const reportEscrows = policies.find(policy => policy.coordinator.toLowerCase() === coordinator.toLowerCase())?.reportEscrows
+		if (reportEscrows !== undefined) {
+			if (reportId !== 0n && reportEscrows[reportId.toString()] === undefined) throw new Error('Shared feed pending report is outside its authenticated candidate set')
+			return Object.entries(reportEscrows).map(([id, creator]) => ({ coordinator, reportId: BigInt(id), creator }))
+		}
+		return reportId === 0n ? [] : [{ coordinator, reportId, creator: coordinator }]
 	})
 	const stored = await batchRead(
 		client,
@@ -232,20 +238,21 @@ export async function pendingCoordinatorReports(client: BatchReader, config: Pic
 		]),
 		blockNumber,
 	)
-	return pending.map(({ coordinator, reportId }, index) => {
+	return pending.map(({ coordinator, reportId, creator }, index) => {
 		const report = decodeStoredReport(batchValue(stored[index * 2], `Stored OpenOracle game ${reportId.toString()}`), batchValue(stored[index * 2 + 1], `Stored OpenOracle helper ${reportId.toString()}`), reportId)
-		if (report.helper.creator.toLowerCase() !== coordinator.toLowerCase()) throw new Error(`Coordinator ${coordinator} pending report ${reportId.toString()} was created by ${report.helper.creator}`)
+		if (report.helper.creator.toLowerCase() !== creator.toLowerCase()) throw new Error(`Coordinator ${coordinator} pending report ${reportId.toString()} was created by ${report.helper.creator}`)
+		if (report.game.callbackContract.toLowerCase() !== creator.toLowerCase()) throw new Error(`Coordinator ${coordinator} pending report ${reportId.toString()} has an unauthenticated callback`)
 		return report
 	})
 }
 
-export async function pendingCoordinatorReportsWithQuorum(clients: readonly ReadClient[], config: CoordinatorReportConfiguration, blockNumber: bigint) {
+export async function pendingCoordinatorReportsWithQuorum(clients: readonly ReadClient[], config: CoordinatorReportConfiguration, blockNumber: bigint, policies: readonly CoordinatorGamePolicy[] = []) {
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
 	return settledQuorumValue(
 		`pending coordinator reports at block ${blockNumber.toString()}`,
 		clients.map(async (client, index) => {
 			const endpoint = endpointLabel(endpoints[index] ?? '')
-			const snapshot = await canonicalBlockSnapshot(client, endpoint, blockNumber, 'pending coordinator report snapshot', () => pendingCoordinatorReports(client, config, blockNumber))
+			const snapshot = await canonicalBlockSnapshot(client, endpoint, blockNumber, 'pending coordinator report snapshot', () => pendingCoordinatorReports(client, config, blockNumber, policies))
 			return { endpoint, value: { blockHash: snapshot.blockHash, reports: snapshot.value } }
 		}),
 		config.rpcQuorum,

@@ -53,8 +53,9 @@ describe('useMarketCreation', () => {
 
 	async function renderMarketCreationHook(options: { createMarket?: CreateMarket; initialProps?: HarnessProps; onRender?: (state: UseMarketCreationState) => void; parameters?: Partial<UseQuestionCreationParameters> } = {}) {
 		const loadCreatedZoltarQuestion = mock(async (_questionId: string) => undefined)
+		const setZoltarForkQuestionId = mock((_questionId: string) => undefined)
 		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
-			useZoltarOperations: () => ({ loadCreatedZoltarQuestion }),
+			useZoltarOperations: () => ({ loadCreatedZoltarQuestion, setZoltarForkQuestionId }),
 		}))
 		const { useMarketCreation }: { useMarketCreation: UseMarketCreation } = await import(`../../../../../statoblastShared/ts/features/markets/hooks/useMarketCreation.ts?case=${crypto.randomUUID()}`)
 		let hookState: UseMarketCreationState | undefined
@@ -83,6 +84,7 @@ describe('useMarketCreation', () => {
 		const state = () => requireHookState(hookState)
 		return {
 			loadCreatedZoltarQuestion,
+			setZoltarForkQuestionId,
 			state,
 			/** Renders new props without an `act` boundary so callers can combine it with other updates. */
 			renderProps: (props: HarnessProps) => render(<Harness {...props} />, rendered.container),
@@ -136,6 +138,7 @@ describe('useMarketCreation', () => {
 		await secondCreate
 
 		expect(hook.loadCreatedZoltarQuestion).not.toHaveBeenCalled()
+		expect(hook.setZoltarForkQuestionId).toHaveBeenCalledWith('0x0b')
 	})
 
 	test('clears the submission-in-progress latch after a pre-request wallet disconnect', async () => {
@@ -196,6 +199,7 @@ describe('useMarketCreation', () => {
 		expect(createMarketTransaction).toHaveBeenCalledTimes(1)
 		expect(createMarketTransaction.mock.calls[0]?.[2].questionData.title).toBe('Question A')
 		expect(hook.loadCreatedZoltarQuestion).toHaveBeenCalledTimes(1)
+		expect(hook.setZoltarForkQuestionId).toHaveBeenCalledWith('0x0b')
 	})
 
 	test('shows a rendered error source when global transaction admission rejects creation', async () => {
@@ -483,5 +487,6 @@ describe('useMarketCreation', () => {
 		expect(onTransactionFinished).toHaveBeenCalledTimes(1)
 		expect(refreshState).not.toHaveBeenCalled()
 		expect(hook.loadCreatedZoltarQuestion).not.toHaveBeenCalled()
+		expect(hook.setZoltarForkQuestionId).not.toHaveBeenCalled()
 	})
 })

@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { getRouteHref, resetRoutingForTesting } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { installStatoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
+import { installStatoblastRouting, statoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
+import { getInvalidStatoblastRouteState, isInvalidStatoblastRouteState } from '../../app/lib/routeValidation.js'
 
 let cleanup: (() => void) | undefined
 beforeEach(() => {
@@ -22,7 +23,7 @@ test('preserves the selected pool and tab through Advanced navigation and refres
 	installStatoblastRouting()
 	expect(getRouteHref('pools')).toBe(`#/pools/${pool}/vaults?universe=7`)
 	window.history.replaceState({}, '', '#/pools?universe=7')
-	expect(getRouteHref('open-oracle')).toBe('#/open-oracle?universe=7')
+	expect(getRouteHref('open-oracle')).toBe('#/open-oracle?universe=7&poolsView=browse')
 })
 
 test('does not remember incomplete pool addresses or invent a pool tab', () => {
@@ -35,10 +36,10 @@ test('does not remember incomplete pool addresses or invent a pool tab', () => {
 	expect(getRouteHref('pools')).toBe(`#/pools/${pool}?openOracleReportId=42`)
 })
 
-test('keeps Advanced report, vault context and universe across primary routes', () => {
+test('keeps Advanced report, browser controls, vault context and universe across primary routes', () => {
 	const pool = '0x1111111111111111111111111111111111111111'
 	const vault = '0x2222222222222222222222222222222222222222'
-	window.history.replaceState({}, '', `#/open-oracle?universe=7&securityPool=${pool}&selectedPoolView=vaults&vault=${vault}&vaultView=vault-by-address&openOracleReportId=42&openOracleView=selected-report`)
+	window.history.replaceState({}, '', `#/open-oracle?universe=7&securityPool=${pool}&selectedPoolView=vaults&vault=${vault}&vaultView=vault-by-address&openOracleReportId=42&openOracleView=selected-report&poolSearch=hello&poolFilter=ended&poolSort=endTime`)
 	const pools = getRouteHref('pools')
 	const params = new URLSearchParams(pools.split('?')[1])
 	expect(params.has('openOracleView')).toBe(false)
@@ -50,25 +51,34 @@ test('keeps Advanced report, vault context and universe across primary routes', 
 	expect(new URLSearchParams(getRouteHref('open-oracle').split('?')[1]).get('openOracleReportId')).toBe('42')
 })
 
-test('keeps the pool list controls out of Advanced and Deploy links and returns to the same list view and controls', () => {
-	for (const path of ['#/pools', '#/pools/universes']) {
-		window.history.replaceState({}, '', path + '?universe=7&poolSearch=hello&poolSort=endTime&poolFilter=ended')
-		expect(getRouteHref('deploy')).toBe('#/deploy?universe=7')
+test('returns to Browse or Universes with the same list controls and selected universe', () => {
+	for (const [path, view] of [
+		['#/pools', 'browse'],
+		['#/pools/universes', 'universes'],
+	]) {
+		window.history.replaceState({}, '', path + '?universe=7&poolSearch=hello')
 		const advanced = getRouteHref('open-oracle')
-		expect(advanced).toBe('#/open-oracle?universe=7')
+		expect(advanced).toContain('poolsView=' + view)
 		window.history.replaceState({}, '', advanced)
-		expect(getRouteHref('pools')).toBe(path + '?universe=7&poolSearch=hello&poolSort=endTime&poolFilter=ended')
+		expect(getRouteHref('pools')).toBe(path + '?universe=7&poolSearch=hello')
 	}
-})
-
-test('opens Browse without stale list controls after a reload on Advanced', () => {
-	window.history.replaceState({}, '', '#/pools/universes?universe=7&poolSearch=hello')
-	window.history.replaceState({}, '', getRouteHref('open-oracle'))
-	installStatoblastRouting()
-	expect(getRouteHref('pools')).toBe('#/pools?universe=7')
 })
 
 test('uses the Favorites browser when no pool context was selected', () => {
 	window.history.replaceState({}, '', '#/open-oracle')
 	expect(getRouteHref('pools')).toBe('#/pools')
+})
+
+test('opens Portfolios with the price report return context and drops removed oracle views', () => {
+	for (const openOracleView of ['create', 'selected-report']) {
+		window.history.replaceState({}, '', `#/open-oracle?openOracleView=${openOracleView}&openOracleReportId=42&universe=7`)
+		const href = getRouteHref('portfolios')
+		const search = href.split('?')[1] ?? ''
+		const resolvedRoute = statoblastRouting.resolve(href)
+		expect(resolvedRoute).toBe('portfolios')
+		expect(new URLSearchParams(search).has('openOracleView')).toBe(false)
+		expect(isInvalidStatoblastRouteState(getInvalidStatoblastRouteState({ pageSearch: '', resolvedRoute, search, selectedPoolView: '' }))).toBe(false)
+		window.history.replaceState({}, '', href)
+		expect(getRouteHref('open-oracle')).toBe('#/open-oracle?openOracleReportId=42&universe=7')
+	}
 })

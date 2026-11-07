@@ -1,7 +1,65 @@
 import { expect, test } from 'bun:test'
+import { spawnSync } from 'node:child_process'
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import { countSolidityCommentOnlyLines, countSourceLines, inspectSourceSizes, isProductionSource } from './check-source-size.mts'
+import { runGit } from './git.mts'
+import { repositoryRoot } from './root.mts'
 
 const source = (lines: number) => `${'line\n'.repeat(lines)}`
+
+function withSourceSizeRepository(verify: (root: string, check: () => ReturnType<typeof runSourceSizeCheck>) => void) {
+	const root = mkdtempSync(path.join(tmpdir(), 'source-size-'))
+	try {
+		const tooling = path.join(root, 'tooling/repo')
+		mkdirSync(tooling, { recursive: true })
+		for (const file of ['check-source-size.mts', 'git.mts', 'root.mts']) copyFileSync(path.join(repositoryRoot, 'tooling/repo', file), path.join(tooling, file))
+		writeFileSync(path.join(tooling, 'source-size-policy.ts'), 'export const productionSourceLineLimit = 600\nexport const sourceSizeAllowances = new Map()\n')
+		mkdirSync(path.join(root, 'solidity/contracts'), { recursive: true })
+		writeFileSync(path.join(root, 'solidity/contracts/Deleted.sol'), source(700))
+		writeFileSync(path.join(root, 'solidity/contracts/Current.sol'), source(10))
+		runGit(['init'], { cwd: root })
+		runGit(['add', 'solidity/contracts'], { cwd: root })
+		rmSync(path.join(root, 'solidity/contracts/Deleted.sol'))
+		verify(root, () => runSourceSizeCheck(root))
+	} finally {
+		rmSync(root, { recursive: true, force: true })
+	}
+}
+
+function runSourceSizeCheck(root: string) {
+	return spawnSync(process.execPath, [path.join(root, 'tooling/repo/check-source-size.mts')], { cwd: root, encoding: 'utf8' })
+}
+
+test('CLI checks the worktree when a tracked production source has been deleted', () => {
+	withSourceSizeRepository((_root, check) => {
+		const result = check()
+		expect(result.stderr).toBe('')
+		expect(result.status).toBe(0)
+		expect(result.stdout).toContain('Production source-size guard passed')
+	})
+})
+
+test('CLI preserves missing-file diagnostics for allowances on deleted sources', () => {
+	withSourceSizeRepository((root, check) => {
+		writeFileSync(path.join(root, 'tooling/repo/source-size-policy.ts'), "export const productionSourceLineLimit = 600\nexport const sourceSizeAllowances = new Map([['solidity/contracts/Deleted.sol', { maxLines: 700, reason: 'Temporary allowance.' }]])\n")
+		const result = check()
+		expect(result.status).toBe(1)
+		expect(result.stderr).toContain('solidity/contracts/Deleted.sol: 0 lines; configured limit 700 (missing-file)')
+		expect(result.stderr).not.toContain('ENOENT')
+	})
+})
+
+test('CLI does not silently ignore source read failures other than missing files', () => {
+	withSourceSizeRepository((root, check) => {
+		mkdirSync(path.join(root, 'solidity/contracts/Deleted.sol'))
+		const result = check()
+		expect(result.status).not.toBe(0)
+		expect(result.stderr).toContain('EISDIR')
+		expect(result.stdout).not.toContain('Production source-size guard passed')
+	})
+})
 
 test('recognizes production sources and excludes generated, vendored, fixture, and test files', () => {
 	expect(isProductionSource('ui/zoltar/ts/app/App.tsx')).toBe(true)

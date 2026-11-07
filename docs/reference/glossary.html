@@ -45,42 +45,40 @@
 			<section id="security-pools">
 				<h2>SecurityPools, shares, and vaults</h2>
 				<dl>
+					<dt id="portfolio">Portfolio</dt>
+					<dd>A shared REP capital ledger and ETH settlement system backing questions admitted by its configured policy. Owners retain individual commitments and health settings; questions have separate outcome shares and settlement balances. A portfolio with one fixed question uses the same architecture as a portfolio admitting many questions.</dd>
 					<dt id="security-pool">SecurityPool</dt>
-					<dd>The Statoblast contract for one question, universe, and pool configuration (its security multiplier, which sets the REP-to-ETH backing it requires, and the gas priority fee it budgets for oracle price reports); each lineage has at most one pool per universe. It holds settlement collateral and coordinates shares, vaults, resolution, migration, and repair.</dd>
+					<dd>The portfolio-bound contract for one question in one universe. It exposes shares, local reporting and redemption; its portfolio modules hold capital and settlement cash.</dd>
 					<dt id="lineage">Lineage</dt>
 					<dd>An origin SecurityPool and every child pool forked from it. Pools in one lineage share an origin ID and one outcome-share token contract.</dd>
 					<dt id="origin-pool">Origin pool</dt>
-					<dd>A SecurityPool deployed for a question with no parent pool (<code>deployOriginSecurityPool</code>). Child pools created by forks descend from it and form its lineage.</dd>
+					<dd>A question pool first registered in a portfolio, before any child pool is prepared for its lineage.</dd>
 					<dt id="settlement-collateral">Settlement collateral</dt>
-					<dd>The ETH a SecurityPool records as backing its outcome shares (<code>settlementCollateralAttoEth</code>). Complete sets and winning shares redeem against it pro rata, and fees decay out of it into the fee reserve.</dd>
+					<dd>The question’s backing in the portfolio settlement book. Complete sets and winning shares redeem their proportional value; holding fees reduce backing only above the configured floor.</dd>
 					<dt id="open-interest">Open interest</dt>
-					<dd>The ETH exposure of outstanding complete sets that vaults underwrite. The contracts measure it with settlement collateral: <code>getVaultOpenInterestAttoEth</code> returns a vault's share of settlement collateral in proportion to its underwriting commitment. When a forked child holds less settlement collateral than its inherited shares claim, the gap is a shortfall for a Truth Auction to repair, not open interest.</dd>
+					<dd>The exposure created by outstanding question claims. Portfolio settlement demand aggregates the obligations that healthy underwriting commitments must support.</dd>
 					<dt id="complete-set">Complete set</dt>
 					<dd>One matching unit each of Invalid, Yes, and No shares, minted against ETH and redeemable together while the pool is operational.</dd>
 					<dt id="outcome-share">Outcome share</dt>
 					<dd>An ERC-1155 token representing one outcome claim in one universe-specific SecurityPool.</dd>
 					<dt id="vault">Vault</dt>
-					<dd>A SecurityPool account that records a participant's REP backing, underwriting commitment, obligations, and fees.</dd>
-					<dt id="backing-units">Backing units</dt>
-					<dd>Accounting units that represent a proportional claim on REP held for SecurityPool vaults.</dd>
+					<dd>An owner’s capital account: its own REP principal, commitment and fee claims in the shared capital ledger. An auction winner may control a separate vault contract that owns such an account.</dd>
 					<dt id="underwriting-commitment">Underwriting commitment</dt>
-					<dd>A vault owner's standing ETH underwriting amount, separate from REP backing. The code field is <code>underwritingLimitAttoEth</code>; liquidation parameters and events name the same quantity debt or <code>securityBondDebt</code>. Its share of the pool total determines proportional settlement obligations and fee rights.</dd>
+					<dd>An owner’s authorized amount of ETH obligations. Healthy commitments contribute to shared portfolio capacity and earn fees; losses from a distressed position stay with that owner.</dd>
 					<dt id="security-multiplier">Security multiplier</dt>
-					<dd>A pool's required ratio, in basis points, of a vault's REP value to its underwriting commitment (<code>statoblastSecurityMultiplierBps</code>). It is fixed when the origin pool is deployed and must exceed 10,001 BPS.</dd>
+					<dd>The portfolio’s fixed protocol backing multiplier, expressed in basis points. Owners can select an additional personal health target; the two settings have different purposes.</dd>
 					<dt id="vault-health">Vault health</dt>
-					<dd>Whether a vault's REP backs its whole underwriting commitment at the cached REP-per-ETH price (<code>isVaultHealthy</code>). An unhealthy vault can be liquidated; see <a href="../explanation/liquidations.html#capacity-and-health">when a vault is liquidatable</a> for the two constraints.</dd>
-					<dt id="health-factor">Health factor</dt>
-					<dd>A multiplier in basis points applied to both vault-health requirements of the receiver in a liquidation. 10,000 BPS is the protocol minimum; a liquidation approval can demand more through <code>minPostLiquidationHealthFactorBps</code>. The <code>targetHealthFactorBps</code> of a REP deposit is a separate value that must be at least the pool's security multiplier.</dd>
-					<dt id="bad-debt">Bad debt</dt>
-					<dd>An ETH amount recorded against a vault (<code>vaultBadDebtAttoEth</code>) and summed for the pool (<code>totalBadDebtAttoEth</code>). A vault that carries any can be neither the target nor the receiver of a liquidation. Fork migration moves it to the child pool with its vault, and it is cleared when the pool's last share is redeemed. Liquidation itself records none.</dd>
+					<dd>Whether an owner’s total free and pledged principal covers its commitment at the protocol backing requirement and conservative REP price. See <a href="../explanation/liquidations.html#capacity-and-health">liquidations</a>.</dd>
+					<dt id="health-factor">Health target</dt>
+					<dd>An owner-selected target of at least 100% relative to the protocol backing requirement. It constrains commitment changes and surplus withdrawals; falling below that personal buffer alone does not trigger liquidation.</dd>
 					<dt id="minting-capacity">Minting capacity</dt>
-					<dd>The ceiling on a pool's settlement collateral: its total underwriting commitments while no Escalation Game exists, and zero afterwards (<code>getCurrentMintingCapacityAttoEth</code>).</dd>
+					<dd>The healthy portfolio commitment available to support additional settlement demand. Purchases also require a current funded price and an eligible question.</dd>
 					<dt id="utilization">Utilization</dt>
-					<dd>Settlement collateral divided by minting capacity. It sets the retention rate.</dd>
+					<dd>The fraction of shared capacity already supporting settlement demand. The portfolio’s configured annual holding-fee rate does not vary with utilization.</dd>
 					<dt id="fee-reserve">Fee reserve</dt>
-					<dd>ETH that has decayed out of settlement collateral as fees and is not yet assigned to a vault (<code>unallocatedAccruedFeesAttoEth</code>). A vault checkpoint moves the vault's share into its claimable fees.</dd>
-					<dt id="retention">Retention</dt>
-					<dd>The per-second fraction of a SecurityPool's outstanding complete-set collateral that stays with complete-set holders; the remainder moves continuously into the pool's fee reserve. Because retention is below one, the ETH backing one complete set falls over time; see <a href="../explanation/fees.html">open-interest fees</a>.</dd>
+					<dd>Fees retained for underwriters rather than for outcome-share redemption. Accumulators credit eligible owners without visiting every question when an owner claims.</dd>
+					<dt id="holding-fee">Holding fee</dt>
+					<dd>The configured linear charge on a question’s fee principal while its stream is eligible to run. It reduces share backing over time but stops before crossing the minimum backing floor. See <a href="../explanation/fees.html">fees</a>.</dd>
 				</dl>
 			</section>
 			<section id="escalation">
@@ -108,30 +106,26 @@
 				<h2>Forks and repair</h2>
 				<dl>
 					<dt id="security-pool-forker">SecurityPoolForker</dt>
-					<dd>The shared Statoblast contract that runs a SecurityPool through a fork: it snapshots the parent pool, migrates its REP and vaults into child pools, and runs each child's Truth Auction.</dd>
+					<dd>The shared contract that prepares question children and their inherited reporting state after portfolio branch migration.</dd>
 					<dt id="migration-window">Migration window</dt>
-					<dd>The eight weeks (<code>MIGRATION_TIME</code>) after a parent pool enters fork mode, during which its vaults and REP can move into child pools. A child's Truth Auction can start only after it closes.</dd>
+					<dd>The period in which parent REP can migrate to a child universe. Portfolio owners must record their branch choice before an earlier choice cutoff; shared branch processing then uses that recorded allocation.</dd>
 					<dt id="carried-game">Carried game</dt>
-					<dd>An Escalation Game that a child pool continues from its parent's unresolved game, with the parent's balances and elapsed time. The game's <code>forkContinuation</code> flag marks it permanently, and it never accepts deposits from a wallet. The reference pages also call it a continuation game.</dd>
+					<dd>A child question’s continuation of an unresolved parent Escalation Game. Frozen history authenticates inherited claims; new wallet REP deposits use the continuation’s current rules.</dd>
 					<dt id="fork-continuation">Fork continuation</dt>
-					<dd>The temporary state of a child pool whose carried game has not yet been resumed (<code>awaitingForkContinuation</code>). While it is pending, the pool rejects complete-set minting and Escalation Game deposits.</dd>
+					<dd>The preparation needed before a child question resumes an inherited unresolved reporting game. Purchases wait until the question and shared branch are ready.</dd>
 					<dt id="truth-auction">Truth Auction</dt>
-					<dd>A Statoblast auction that sells child REP to repair a child pool's ETH collateral shortfall. It does not select truth.</dd>
-					<dt id="clearing-tick">Clearing tick</dt>
-					<dd>The price tick at which a Truth Auction clears (<code>clearingTick</code>). In a funded auction, bids above it win in full, bids below it lose, and bids at it fill in arrival order, all at its price.</dd>
-					<dt id="underfunded-threshold">Underfunded threshold</dt>
-					<dd>The ETH-per-REP price at which selling the whole REP sale cap raises exactly the ETH raise cap, rounded up (<code>underfundedThreshold</code>). In an underfunded auction, where bids never reach either cap at their own prices, only bids at or above it buy REP, and together they receive the whole REP sale cap.</dd>
+					<dd>A uniform-price auction of a portfolio branch’s saleable REP for ETH to repair branch claims. Winning bids automatically own separately accounted capital positions. It does not select truth.</dd>
 				</dl>
 			</section>
 			<section id="liquidation">
 				<h2>Liquidation</h2>
 				<dl>
 					<dt id="target-vault">Target vault</dt>
-					<dd>The unhealthy vault whose underwriting commitment a liquidation reduces (<code>targetVault</code>).</dd>
+					<dd>The unhealthy vault whose underwriting commitment a liquidation reduces.</dd>
 					<dt id="receiver-vault">Receiver vault</dt>
-					<dd>The vault that accepts the transferred commitment and the REP award (<code>receiverVault</code>). It must stay healthy on its whole resulting commitment.</dd>
+					<dd>The vault that accepts the transferred commitment and the REP award. It must stay healthy on its whole resulting commitment.</dd>
 					<dt id="operator">Operator</dt>
-					<dd>The account that stages a liquidation (<code>operator</code>). It is the receiver unless the receiver approved it through the LiquidationApprovalRegistry, and it receives no protocol payment.</dd>
+					<dd>An account submitting permissionless maintenance transactions, such as a funded takeover of distressed commitment. A takeover receiver must authorize its own capital and satisfy the transaction bounds.</dd>
 				</dl>
 			</section>
 			<section id="prices">
@@ -140,11 +134,7 @@
 					<dt id="open-oracle">OpenOracle</dt>
 					<dd>An economically contestable price-reporting contract used by Statoblast for fresh REP-per-ETH prices (written REP/ETH elsewhere in these pages), not market outcomes.</dd>
 					<dt id="price-coordinator">Price coordinator</dt>
-					<dd>The per-pool contract that requests OpenOracle prices, caches accepted reports, and queues solvency-sensitive SecurityPool operations.</dd>
-					<dt id="sponsor-lane">Sponsor lane</dt>
-					<dd>The rule that, while a price report is pending, only the account that opened it (<code>pendingReportSponsor</code>) can add operations to that settlement. Other callers wait until the report finishes.</dd>
-					<dt id="vault-operations-executor">VaultOperations executor</dt>
-					<dd>The <code>VaultOperations</code> contract each price coordinator deploys. It stores a vault owner's bundle of up to four actions and is the only caller a SecurityPool accepts for price-checked REP withdrawals and liquidations.</dd>
+					<dd>A question-facing adapter to the portfolio’s shared REP/ETH feed. It exposes current prices and requests funded OpenOracle reports; it does not queue vault operations.</dd>
 				</dl>
 			</section>
 			<section id="trading">

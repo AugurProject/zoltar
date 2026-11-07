@@ -1,91 +1,55 @@
-import { createMemoryClient } from '@tevm/memory-client'
-import { bytesToHex, hexToBytes, type Hash } from '@zoltar/core-shared/evm/ethereum'
+import type { createMemoryClient } from '@tevm/memory-client'
+import { toHex, type Hash } from '@zoltar/core-shared/evm/ethereum'
+import { formatSimulationTransactionReceipt } from './transactionReceipts.js'
 
 const SIMULATION_INITIAL_TIMESTAMP = 1_735_689_600n
 const SIMULATION_BLOCK_INTERVAL_SECONDS = 1n
 
-type TevmLikeClient = ReturnType<typeof createMemoryClient>
-type SimulationBlock = {
+export type TevmLikeClient = ReturnType<typeof createMemoryClient>
+export type SimulationNode = TevmLikeClient['transport']['tevm']
+export type SimulationVm = Awaited<ReturnType<SimulationNode['getVm']>>
+type SimulationBlockBuilder = Awaited<ReturnType<SimulationVm['buildBlock']>>
+type SimulationTransactionResult = Awaited<ReturnType<SimulationBlockBuilder['addTransaction']>>
+/** `[address, topics, data]` as tevm stores a log in a receipt. */
+export type SimulationReceiptLog = [Uint8Array, Uint8Array[], Uint8Array]
+/** The parts of a pooled tevm transaction the simulation reads; tevm types them through a package the UI does not depend on. */
+export type SimulationTransaction = {
+	getSenderAddress(): { toString(): string }
 	hash(): Uint8Array
-	header: {
-		calcNextBaseFee(): bigint
-		gasLimit: bigint
-		number: bigint
-		stateRoot: Uint8Array
-	}
-}
-type SimulationBlockchain = {
-	getCanonicalHeadBlock(): Promise<SimulationBlock>
-	putBlock(block: SimulationBlock): Promise<void>
-}
-type SimulationVm = {
-	blockchain: SimulationBlockchain
-	common: unknown
-	deepCopy(): Promise<SimulationVm>
-	evm: {
-		blockchain: unknown
-	}
-	stateManager: {
-		_baseState: {
-			getCurrentStateRoot(): `0x${string}`
-			stateRoots: Map<`0x${string}`, Uint8Array>
-		}
-		checkpoint(): Promise<void>
-		commit(commitStateRoot?: boolean): Promise<void>
-		saveStateRoot(root: Uint8Array, value: Uint8Array): void
-		setStateRoot(root: Uint8Array): Promise<void>
-	}
-	buildBlock(parameters: {
-		headerData: {
-			baseFeePerGas: bigint
-			gasLimit: bigint
-			number: bigint
-			timestamp: bigint
-		}
-		parentBlock: SimulationBlock
-		blockOpts: {
-			common: unknown
-			freeze: boolean
-			putBlockIntoBlockchain: boolean
-			setHardfork: boolean
-		}
-	}): Promise<SimulationBlockBuilder>
-}
-type SimulationBlockBuilder = {
-	addTransaction(
-		tx: unknown,
-		options: {
-			skipBalance: boolean
-			skipHardForkValidation: boolean
-			skipNonce: boolean
-		},
-	): Promise<{ receipt: unknown }>
-	build(): Promise<SimulationBlock>
-}
-type SimulationReceiptsManager = {
-	chain: unknown
-	saveReceipts(block: SimulationBlock, receipts: readonly unknown[]): Promise<void>
-}
-type SimulationTxPool = {
-	getByHash(txHash: Hash): unknown | null
-	removeByHash(txHash: Hash): void
-	removeNewBlockTxs(blocks: readonly SimulationBlock[]): void
-}
-type SimulationNode = {
-	getReceiptsManager(): Promise<SimulationReceiptsManager>
-	getTxPool(): Promise<SimulationTxPool>
-	getVm(): Promise<SimulationVm>
-}
+	nonce: bigint
+	to?: { toString(): string } | undefined
+	type: number
+} & ({ gasPrice: bigint } | { maxFeePerGas: bigint; maxPriorityFeePerGas: bigint })
 
-function isSimulationNode(value: unknown): value is SimulationNode {
+function hasFunctions(value: unknown, names: readonly string[]) {
 	if (typeof value !== 'object' || value === null) return false
-	return 'getReceiptsManager' in value && typeof value.getReceiptsManager === 'function' && 'getTxPool' in value && typeof value.getTxPool === 'function' && 'getVm' in value && typeof value.getVm === 'function'
+	return names.every(name => name in value && typeof Reflect.get(value, name) === 'function')
 }
 
-function getSimulationNode(memoryClient: TevmLikeClient): SimulationNode {
+export function getSimulationNode(memoryClient: TevmLikeClient): SimulationNode {
 	const tevmNode = memoryClient.transport.tevm
-	if (!isSimulationNode(tevmNode)) throw new Error('Simulation transport did not expose a compatible Tevm node')
+	if (!hasFunctions(tevmNode, ['getReceiptsManager', 'getTxPool', 'getVm'])) throw new Error('Simulation transport did not expose a compatible Tevm node')
 	return tevmNode
+}
+
+const simulationLocks = new WeakMap<TevmLikeClient, Promise<void>>()
+
+/**
+ * Runs `work` after every earlier locked operation on the same chain has settled. Blocks, calls and transactions all
+ * mutate the live VM through state checkpoints that must nest last-in-first-out, so the worker must never interleave
+ * two of them even though it handles requests concurrently.
+ */
+export async function withSimulationLock<TResult>(memoryClient: TevmLikeClient, work: () => Promise<TResult>): Promise<TResult> {
+	const previous = simulationLocks.get(memoryClient) ?? Promise.resolve()
+	const current = previous.then(work)
+	simulationLocks.set(
+		memoryClient,
+		current.then(
+			() => undefined,
+			() => undefined,
+		),
+	)
+	return await current
 }
 
 function requireSimulationTimestamp(timestamp: bigint | undefined) {
@@ -93,21 +57,9 @@ function requireSimulationTimestamp(timestamp: bigint | undefined) {
 	return timestamp
 }
 
-function requireSimulationTransaction<T>(tx: T | null, txHash: Hash) {
+function requireSimulationTransaction(tx: SimulationTransaction | null, txHash: Hash) {
 	if (tx === null) throw new Error(`Simulation transaction ${txHash} was not found in the tx pool`)
 	return tx
-}
-
-async function syncSimulationVmState({ block, memoryClient, receiptsManager, vm }: { block: SimulationBlock; memoryClient: TevmLikeClient; receiptsManager: SimulationReceiptsManager; vm: SimulationVm }) {
-	const simulationNode = getSimulationNode(memoryClient)
-	const originalVm = await simulationNode.getVm()
-	const stateRootValue = vm.stateManager._baseState.stateRoots.get(bytesToHex(block.header.stateRoot))
-	if (stateRootValue === undefined) throw new Error('Simulation state root was not found after advancing a block')
-	originalVm.stateManager.saveStateRoot(block.header.stateRoot, stateRootValue)
-	originalVm.blockchain = vm.blockchain
-	originalVm.evm.blockchain = vm.evm.blockchain
-	receiptsManager.chain = vm.evm.blockchain
-	await originalVm.stateManager.setStateRoot(hexToBytes(vm.stateManager._baseState.getCurrentStateRoot()))
 }
 
 export async function getSimulationChainTimestamp(memoryClient: TevmLikeClient) {
@@ -119,12 +71,13 @@ export function getNextSimulationTimestamp(currentTimestamp: bigint) {
 	return currentTimestamp + SIMULATION_BLOCK_INTERVAL_SECONDS
 }
 
+/** Opens a block on the live VM. tevm's own miner builds on a deep copy of the VM, which costs a serialization of the whole state per block. */
 async function startSimulationBlock(memoryClient: TevmLikeClient, timestamp: bigint) {
-	const simulationNode = getSimulationNode(memoryClient)
-	const receiptsManager = await simulationNode.getReceiptsManager()
-	const originalVm = await simulationNode.getVm()
-	const vm = await originalVm.deepCopy()
+	const node = getSimulationNode(memoryClient)
+	const vm = await node.getVm()
 	const parentBlock = await vm.blockchain.getCanonicalHeadBlock()
+	const parentRoot = toHex(parentBlock.header.stateRoot)
+	const parentState = vm.stateManager._baseState.stateRoots.get(parentRoot)
 	const blockBuilder = await vm.buildBlock({
 		headerData: {
 			baseFeePerGas: parentBlock.header.calcNextBaseFee(),
@@ -140,59 +93,78 @@ async function startSimulationBlock(memoryClient: TevmLikeClient, timestamp: big
 			setHardfork: false,
 		},
 	})
-	return { blockBuilder, receiptsManager, vm }
+	return { blockBuilder, node, parentRoot, parentState, vm }
 }
 
-async function sealSimulationBlock({ blockBuilder, receiptsManager, vm }: Awaited<ReturnType<typeof startSimulationBlock>>, receipts: readonly unknown[]) {
+async function sealSimulationBlock({ blockBuilder, node, parentRoot, parentState, vm }: Awaited<ReturnType<typeof startSimulationBlock>>, receipts: readonly SimulationTransactionResult['receipt'][]) {
+	// A committed checkpoint with a fresh root is how tevm records the block's state for later block-tagged reads.
 	await vm.stateManager.checkpoint()
 	await vm.stateManager.commit(true)
 	const block = await blockBuilder.build()
+	const receiptsManager = await node.getReceiptsManager()
 	await Promise.all([receiptsManager.saveReceipts(block, receipts), vm.blockchain.putBlock(block)])
+	// tevm re-records the current root's snapshot on every ordinary commit, which on the live VM would leave the parent
+	// block's root describing the child's state. Block-tagged reads of the parent need the snapshot it had.
+	const stateRoots = vm.stateManager._baseState.stateRoots
+	if (parentState !== undefined && stateRoots.get(parentRoot) !== parentState) stateRoots.set(parentRoot, parentState)
 	return block
 }
 
-async function advanceSimulationBlockAtTimestamp(memoryClient: TevmLikeClient, timestamp: bigint) {
+async function mineEmptySimulationBlock(memoryClient: TevmLikeClient, timestamp: bigint) {
 	const pendingBlock = await startSimulationBlock(memoryClient, timestamp)
-	const block = await sealSimulationBlock(pendingBlock, [])
-	await syncSimulationVmState({ block, memoryClient, receiptsManager: pendingBlock.receiptsManager, vm: pendingBlock.vm })
+	await sealSimulationBlock(pendingBlock, [])
 }
 
-export async function includePendingSimulationTransactionAtTimestamp(memoryClient: TevmLikeClient, txHash: Hash, timestamp: bigint) {
-	const pool = await getSimulationNode(memoryClient).getTxPool()
+async function minePooledSimulationTransaction(memoryClient: TevmLikeClient, txHash: Hash, timestamp: bigint) {
 	const pendingBlock = await startSimulationBlock(memoryClient, timestamp)
-	const tx = requireSimulationTransaction(pool.getByHash(txHash), txHash)
+	const pool = await pendingBlock.node.getTxPool()
+	const transaction = requireSimulationTransaction(pool.getByHash(txHash), txHash)
 	pool.removeByHash(txHash)
-	const txResult = await pendingBlock.blockBuilder.addTransaction(tx, {
-		skipBalance: true,
-		skipHardForkValidation: true,
-		skipNonce: true,
-	})
-	const block = await sealSimulationBlock(pendingBlock, [txResult.receipt])
+	let result: SimulationTransactionResult
+	try {
+		result = await pendingBlock.blockBuilder.addTransaction(transaction, {
+			skipBalance: true,
+			skipHardForkValidation: true,
+			skipNonce: true,
+		})
+	} catch (error) {
+		await pendingBlock.blockBuilder.revert()
+		throw error
+	}
+	const block = await sealSimulationBlock(pendingBlock, [result.receipt])
 	pool.removeNewBlockTxs([block])
-	await syncSimulationVmState({ block, memoryClient, receiptsManager: pendingBlock.receiptsManager, vm: pendingBlock.vm })
-	return bytesToHex(block.hash())
+	return formatSimulationTransactionReceipt({ block, result, transaction, transactionIndex: 0 })
+}
+
+/** Mines the pooled transaction into its own block at `timestamp` and returns its receipt; a transaction the builder rejects leaves the state untouched. */
+export async function includePendingSimulationTransactionAtTimestamp(memoryClient: TevmLikeClient, txHash: Hash, timestamp: bigint) {
+	return await withSimulationLock(memoryClient, async () => await minePooledSimulationTransaction(memoryClient, txHash, timestamp))
+}
+
+/** `includePendingSimulationTransaction` for callers that already hold the chain's lock. */
+export async function mineLockedSimulationTransaction(memoryClient: TevmLikeClient, txHash: Hash) {
+	return await minePooledSimulationTransaction(memoryClient, txHash, getNextSimulationTimestamp(await getSimulationChainTimestamp(memoryClient)))
 }
 
 export async function includePendingSimulationTransaction(memoryClient: TevmLikeClient, txHash: Hash) {
-	const chainTimestamp = await getSimulationChainTimestamp(memoryClient)
-	return await includePendingSimulationTransactionAtTimestamp(memoryClient, txHash, getNextSimulationTimestamp(chainTimestamp))
+	return await withSimulationLock(memoryClient, async () => await mineLockedSimulationTransaction(memoryClient, txHash))
 }
 
 export async function advanceNextSimulationBlock(memoryClient: TevmLikeClient) {
-	const currentTimestamp = await getSimulationChainTimestamp(memoryClient)
-	await advanceSimulationBlockAtTimestamp(memoryClient, getNextSimulationTimestamp(currentTimestamp))
+	await withSimulationLock(memoryClient, async () => await mineEmptySimulationBlock(memoryClient, getNextSimulationTimestamp(await getSimulationChainTimestamp(memoryClient))))
 }
 
 export async function advanceSimulationTime(memoryClient: TevmLikeClient, seconds: bigint) {
-	const currentTimestamp = await getSimulationChainTimestamp(memoryClient)
 	const offset = seconds > 0n ? seconds : SIMULATION_BLOCK_INTERVAL_SECONDS
-	await advanceSimulationBlockAtTimestamp(memoryClient, currentTimestamp + offset)
+	await withSimulationLock(memoryClient, async () => await mineEmptySimulationBlock(memoryClient, (await getSimulationChainTimestamp(memoryClient)) + offset))
 }
 
 export async function initializeSimulationClock(memoryClient: TevmLikeClient, initialTimestamp: bigint = SIMULATION_INITIAL_TIMESTAMP) {
-	const currentTimestamp = await getSimulationChainTimestamp(memoryClient)
-	if (currentTimestamp >= initialTimestamp) return currentTimestamp
-	const nextTimestamp = currentTimestamp + SIMULATION_BLOCK_INTERVAL_SECONDS > initialTimestamp ? currentTimestamp + SIMULATION_BLOCK_INTERVAL_SECONDS : initialTimestamp
-	await advanceSimulationBlockAtTimestamp(memoryClient, nextTimestamp)
-	return nextTimestamp
+	return await withSimulationLock(memoryClient, async () => {
+		const currentTimestamp = await getSimulationChainTimestamp(memoryClient)
+		if (currentTimestamp >= initialTimestamp) return currentTimestamp
+		const nextTimestamp = currentTimestamp + SIMULATION_BLOCK_INTERVAL_SECONDS > initialTimestamp ? currentTimestamp + SIMULATION_BLOCK_INTERVAL_SECONDS : initialTimestamp
+		await mineEmptySimulationBlock(memoryClient, nextTimestamp)
+		return nextTimestamp
+	})
 }

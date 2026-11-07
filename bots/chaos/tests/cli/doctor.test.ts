@@ -377,7 +377,7 @@ describe('chaos launch doctor', () => {
 			migrationRepSplits: [],
 			openOracle: privateKeyToAccount(`0x${'77'.repeat(32)}`).address,
 			reports: [],
-			schemaVersion: 3,
+			schemaVersion: 4,
 			securityPoolForker: settings.deployment.securityPoolForker,
 			startBlock: settings.runtime.protocolStartBlock.toString(),
 			wallet,

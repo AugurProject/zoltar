@@ -1,178 +1,122 @@
-import { beforeEach } from 'bun:test'
-import { setUnderwritingLimit } from '../testSupport/simulator/utils/contracts/securityPool'
-import { manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
-import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
-import { getQuestionEndDate } from '../testSupport/simulator/utils/contracts/statoblast'
-import { getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
-import { forkUniverse, getZoltarAddress, getZoltarForkThreshold } from '../testSupport/simulator/utils/contracts/zoltar'
-import { createQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { describe, expect, test } from 'bun:test'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
-	createCompleteSet,
-	getAwaitingForkContinuation,
-	getRepToken,
-	getSecurityPoolsEscalationGame,
-	getSettlementCollateralAttoEth,
-	getSystemState,
-	getTotalAccruedFees,
-	getTotalClaimableVaultFeesAttoEth,
-	redeemCompleteSet,
-	updateSettlementCollateral,
-	updateVaultFees,
-} from '../testSupport/simulator/utils/contracts/securityPool'
-import { createChildUniverse, finalizeTruthAuction, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault, migrateVaultWithUnresolvedEscalation, startTruthAuction } from '../testSupport/simulator/utils/contracts/securityPoolForker'
+	Zoltar_Zoltar as zoltarArtifact,
+	ReputationToken_ReputationToken as tokenArtifact,
+	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
+	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
+	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
+	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
+	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
+	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_EscalationGame_EscalationGame as gameArtifact,
+	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
+} from '../types/contractArtifact'
+import { writeContractAndWait } from '../testSupport/simulator/utils/clients'
+import { DAY } from '../testSupport/simulator/utils/constants'
 import { approveToken, getChildUniverseId } from '../testSupport/simulator/utils/utilities'
-import { addressString } from '../testSupport/simulator/utils/bigint'
-import { SystemState } from '../testSupport/simulator/types/statoblastTypes'
-import { QuestionOutcome } from '../testSupport/simulator/types/types'
-import { DAY, GENESIS_REPUTATION_TOKEN } from '../testSupport/simulator/utils/constants'
-import assert from '../testSupport/simulator/utils/assert'
-import { describe, test } from 'bun:test'
-import { ReputationToken_ReputationToken, statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool, Zoltar_Zoltar } from '../types/contractArtifact'
-import { addRepToMigrationBalance, getMigrationRepBalanceAttoRep, splitMigrationRep } from '../testSupport/simulator/utils/contracts/zoltar'
-import { sortStringArrayByKeccak } from '../testSupport/simulator/utils/utilities'
-import { useStatoblastForkMigrationFixture } from './statoblast/fixture'
+import { getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { addRepToMigrationBalance, splitMigrationRep, forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress, getZoltarForkThreshold } from '../testSupport/simulator/utils/contracts/zoltar'
+import { createQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
 
-describe('Child-pool fee epoch regression', () => {
-	const fixture = useStatoblastForkMigrationFixture()
-	beforeEach(async () => {
-		await manipulatePriceOracle(fixture.client, fixture.mockWindow, fixture.securityPoolAddresses.openOraclePriceCoordinator)
-		await setUnderwritingLimit(fixture.client, fixture.securityPoolAddresses.securityPool, fixture.repDeposit / 4n)
-	})
-	const { setupFinalizedTruthAuctionWithMixedBids, setupOwnForkWithEscrow, statoblastSecurityMultiplierBps, triggerExternalForkForSecurityPool } = fixture
-
-	const migrateFullyAndStartYesChild = async () => {
-		const { client, mockWindow, questionId, securityPoolAddresses } = fixture
-		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
-		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-		const childUniverse = getChildUniverseId(0n, QuestionOutcome.Yes)
-		const child = getSecurityPoolAddresses(securityPoolAddresses.securityPool, childUniverse, questionId, statoblastSecurityMultiplierBps)
-		await mockWindow.advanceTime(8n * 7n * DAY + 1n)
-		await startTruthAuction(client, child.securityPool)
-		return { childUniverse, child }
-	}
-
-	const setupResumedOwnForkYesChild = async () => {
-		const { client, mockWindow, questionId, securityPoolAddresses } = fixture
-		await createCompleteSet(client, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
-		await setupOwnForkWithEscrow()
-		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
-		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
-		const childUniverse = getChildUniverseId(0n, QuestionOutcome.Yes)
-		const child = getSecurityPoolAddresses(securityPoolAddresses.securityPool, childUniverse, questionId, statoblastSecurityMultiplierBps)
-		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
-		await startTruthAuction(client, child.securityPool)
-		if ((await getSystemState(client, child.securityPool)) === SystemState.ForkTruthAuction) await finalizeTruthAuction(client, child.securityPool)
-		for (let attempt = 0; attempt < 16 && (await getAwaitingForkContinuation(client, child.securityPool)); attempt++) {
-			const hash = await client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'resumeForkedEscalationGame' })
-			await client.waitForTransactionReceipt({ hash })
+describe('Shared portfolio child fee clock', () => {
+	const fixture = useSecurityPoolPortfolioFixture()
+	test.each([
+		{ own: false, delay: 0n },
+		{ own: false, delay: 10n * DAY },
+		{ own: true, delay: 0n },
+		{ own: true, delay: 10n * DAY },
+	])('activation preserves cash through unavailable pricing and finality (own: $own, delay: $delay)', async ({ own, delay }) => {
+		await fixture.prepare()
+		await fixture.mint()
+		const { base } = fixture
+		const owner = fixture.owner()
+		const portfolio = { abi: portfolioArtifact.abi, address: fixture.portfolio }
+		const parent = fixture.poolFor(base.questionId).securityPool
+		const forkQuestion = { ...base.questionData, title: 'Unrelated child fee fork', endTime: (await base.mockWindow.getTime()) - 1n, startTime: 0n }
+		if (own) await base.mockWindow.setTime(base.questionData.endTime + 1n)
+		else await createQuestion(owner, forkQuestion, base.outcomes)
+		await approveToken(owner, getRepTokenAddress(base.genesisUniverse), getZoltarAddress())
+		await forkUniverse(owner, base.genesisUniverse, own ? base.questionId : getQuestionId(forkQuestion, base.outcomes))
+		const controller = await owner.readContract({ ...portfolio, functionName: 'forkController' })
+		const fork = { abi: forkArtifact.abi, address: controller }
+		await writeContractAndWait(owner, () => owner.writeContract({ ...fork, functionName: 'choose', args: [base.genesisUniverse, 1n] }))
+		// Fund a future child report without depending on underwriter principal withdrawals.
+		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: tokenArtifact.abi, address: getRepTokenAddress(base.genesisUniverse), functionName: 'transfer', args: [owner.account.address, 1_000_000n * unit] }))
+		const reportingRep = 1_000n * unit + 2n * (await getZoltarForkThreshold(owner, base.genesisUniverse))
+		await addRepToMigrationBalance(owner, base.genesisUniverse, reportingRep)
+		await splitMigrationRep(owner, base.genesisUniverse, reportingRep, [1n])
+		const forkTime = (await getUniverseData(owner, base.genesisUniverse)).forkTime
+		const child = getChildUniverseId(base.genesisUniverse, 1n)
+		const frozenCash = await owner.readContract({ ...portfolio, functionName: 'quoteQuestionSettlement', args: [parent, 10n * unit] })
+		await base.mockWindow.setTime(forkTime + 63n * DAY + delay)
+		await writeContractAndWait(owner, () => owner.writeContract({ ...fork, functionName: 'startBranch', args: [base.genesisUniverse, 1n] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ ...fork, functionName: 'finalizeBranch', args: [child] }))
+		const clock = await owner.readContract({ ...fork, functionName: 'clocks', args: [child] })
+		expect(clock[0]).toBe(forkTime)
+		expect(clock[1]).toBe(forkTime + 63n * DAY)
+		expect(await owner.readContract({ ...fork, functionName: 'logicalTime', args: [child] })).toBe((await owner.getBlock()).timestamp - 63n * DAY)
+		const engine = await owner.readContract({ ...portfolio, functionName: 'settlement' })
+		expect(await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'feeTimestamp', args: [child] })).toBe(forkTime + 63n * DAY)
+		const book = await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'ledger' })
+		const bookId = await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'bookIds', args: [child] })
+		const feeRate = async () => (await owner.readContract({ abi: bookArtifact.abi, address: book, functionName: 'question', args: [bookId, base.questionId] }))[0].feeRateAttoEthPerSecond
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker, functionName: 'materializePortfolioQuestion', args: [parent, child] }))
+		const poolAddress = await owner.readContract({ ...portfolio, functionName: 'getPool', args: [base.questionId, child] })
+		const pool = { abi: poolArtifact.abi, address: poolAddress }
+		const refresh = () => writeContractAndWait(owner, () => owner.writeContract({ ...pool, functionName: 'refreshPortfolioFees' }))
+		const cash = () => owner.readContract({ ...portfolio, functionName: 'quoteQuestionSettlement', args: [poolAddress, 10n * unit] })
+		await refresh()
+		expect(await cash()).toBe(frozenCash)
+		await base.mockWindow.advanceTime(DAY)
+		await refresh()
+		expect(await cash()).toBe(frozenCash)
+		const oracle = await owner.readContract({ ...pool, functionName: 'openOraclePriceCoordinator' })
+		await manipulatePriceOracle(owner, base.mockWindow, oracle, unit, 100n * unit)
+		await refresh()
+		const liveCash = await cash()
+		await base.mockWindow.advanceTime(100n)
+		await refresh()
+		if (own) {
+			expect(await cash()).toBe(frozenCash)
+			await base.mockWindow.advanceTime(7n * DAY)
+			await refresh()
+			expect(await cash()).toBe(frozenCash)
+		} else {
+			expect(await cash()).toBeLessThan(liveCash)
+			const capital = await owner.readContract({ ...portfolio, functionName: 'capitalLedger', args: [child] })
+			expect(await owner.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'demandAttoEth' })).toBe(await cash())
+			// Reporting replaces the holding charge with the prepaid resolution premium.
+			await base.mockWindow.setTime(base.questionData.endTime + 1n)
+			await manipulatePriceOracle(owner, base.mockWindow, oracle, unit, 100n * unit)
+			await refresh()
+			expect(await feeRate()).toBeGreaterThan(0n)
+			await approveToken(owner, getRepTokenAddress(child), poolAddress)
+			await writeContractAndWait(owner, () => owner.writeContract({ ...pool, functionName: 'depositWalletRepToEscalationGame', args: [1, 100n * unit] }))
+			await refresh()
+			expect(await feeRate()).toBe(0n)
+			const reportedCash = await cash()
+			await base.mockWindow.advanceTime(100n)
+			await refresh()
+			expect(await cash()).toBe(reportedCash)
+			const game = await owner.readContract({ ...pool, functionName: 'escalationGame' })
+			const end = await owner.readContract({ abi: gameArtifact.abi, address: game, functionName: 'getEscalationGameEndDate' })
+			await base.mockWindow.setTime(end + DAY)
+			await manipulatePriceOracle(owner, base.mockWindow, oracle, unit, 100n * unit)
+			if (delay !== 0n) await refresh()
+			expect(await feeRate()).toBe(0n)
+			const nextQuestion = { ...forkQuestion, title: 'Later fork must preserve finalized child cash', endTime: end }
+			await createQuestion(owner, nextQuestion, base.outcomes)
+			const earliest = await owner.readContract({ abi: zoltarArtifact.abi, address: getZoltarAddress(), functionName: 'getEarliestForkTime', args: [child] })
+			if (earliest > (await base.mockWindow.getTime())) await base.mockWindow.setTime(earliest)
+			await forkUniverse(owner, child, getQuestionId(nextQuestion, base.outcomes))
+			await refresh()
+			expect(await cash()).toBe(reportedCash)
+			await base.mockWindow.advanceTime(DAY)
+			await refresh()
+			expect(await cash()).toBe(reportedCash)
 		}
-		return { childUniverse, child }
-	}
-
-	test('resolved child without a continuation game preserves collateral after activation', async () => {
-		const { client, mockWindow, questionId, securityPoolAddresses } = fixture
-		await createCompleteSet(client, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
-		await mockWindow.setTime((await getQuestionEndDate(client, questionId)) + 1n)
-		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
-		await forkUniverse(client, 0n, questionId)
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
-		const { child } = await migrateFullyAndStartYesChild()
-		strictEqualTypeSafe(await getSystemState(client, child.securityPool), SystemState.Operational, 'fully migrated child should activate')
-		strictEqualTypeSafe(await getSecurityPoolsEscalationGame(client, child.securityPool), addressString(0n), 'resolved child needs no continuation game')
-		const activationCheckpoint = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'lastUpdatedFeeAccumulator' })
-		strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'getFeeEpochEndTime' }), activationCheckpoint, 'resolved child horizon should be its activation checkpoint')
-		const collateral = await getSettlementCollateralAttoEth(client, child.securityPool)
-		const fees = await getTotalAccruedFees(client, child.securityPool)
-		assert.ok(collateral > 0n, 'activated child should hold settlement collateral')
-		for (let checkpoint = 0; checkpoint < 2; checkpoint++) {
-			await mockWindow.advanceTime(DAY)
-			await updateSettlementCollateral(client, child.securityPool)
-			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, child.securityPool), collateral, 'resolved child collateral should remain unchanged')
-			strictEqualTypeSafe(await getTotalAccruedFees(client, child.securityPool), fees, 'resolved child should accrue no further fees')
-		}
-	})
-
-	test('external-fork child without an auction charges mint and redemption during its continuation epoch', async () => {
-		const { client, mockWindow, questionId, securityPoolAddresses } = fixture
-		await createCompleteSet(client, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
-		await triggerExternalForkForSecurityPool()
-		const { childUniverse, child } = await migrateFullyAndStartYesChild()
-		strictEqualTypeSafe(await getSystemState(client, child.securityPool), SystemState.Operational, 'complete migration should finalize without an auction')
-		const childLiveSupply = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getUniverseTheoreticalSupplyAttoRep', args: [childUniverse] })
-		const childRepToken = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'repToken' })
-		strictEqualTypeSafe(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: childRepToken, functionName: 'getTotalTheoreticalSupply' }), childLiveSupply, 'child REP and Zoltar live supply should retain their existing equality')
-		strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'initialEscalationGameDepositAttoRep' }), childLiveSupply / 10_000_000n, 'child escalation economics should remain based on its unchanged live supply')
-		strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'minimumVaultRepDepositAttoRep' }), childLiveSupply / 100_000n, 'child vault economics should remain based on its unchanged live supply')
-
-		await mockWindow.setTime((await getQuestionEndDate(client, questionId)) + 1n)
-		await updateSettlementCollateral(client, child.securityPool)
-		strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'getFeeEpochEndTime' }), 2n ** 256n - 1n, 'unresolved child horizon must remain open beyond question end')
-		const mintedShares = 2n * 10n ** 18n
-		await createCompleteSet(client, child.securityPool, mintedShares)
-		const collateralBefore = await getSettlementCollateralAttoEth(client, child.securityPool)
-		await mockWindow.advanceTime(DAY)
-		await updateSettlementCollateral(client, child.securityPool)
-		const collateralAfter = await getSettlementCollateralAttoEth(client, child.securityPool)
-		assert.ok(collateralAfter < collateralBefore, 'child continuation collateral must pay retention fees after its reused parent question end')
-		assert.ok((await getTotalAccruedFees(client, child.securityPool)) > 0n, 'child vaults must receive compensation during the continuation epoch')
-		await updateVaultFees(client, child.securityPool, client.account.address)
-		assert.ok((await getTotalClaimableVaultFeesAttoEth(client, child.securityPool)) > 0n, 'migrated fee-eligible capacity must receive the child fee accrual')
-		await redeemCompleteSet(client, child.securityPool, mintedShares)
-	})
-
-	test('external-fork child finalized by a truth auction starts fees at auction finalization', async () => {
-		const { client, mockWindow } = fixture
-		const { yesSecurityPool } = await setupFinalizedTruthAuctionWithMixedBids()
-		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'auction should finalize the child')
-		const collateralBefore = await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool)
-		await mockWindow.advanceTime(DAY)
-		await updateSettlementCollateral(client, yesSecurityPool.securityPool)
-		assert.ok((await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool)) < collateralBefore, 'truth-auction finalization must start a fresh child fee epoch')
-	})
-
-	test('own-question fork resumes unresolved escalation and accrues until the child game resolves', async () => {
-		const { client, mockWindow } = fixture
-		const { child } = await setupResumedOwnForkYesChild()
-		strictEqualTypeSafe(await getAwaitingForkContinuation(client, child.securityPool), false, 'child game should resume')
-		const game = await getSecurityPoolsEscalationGame(client, child.securityPool)
-		const gameEnd = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getEscalationGameEndDate' })
-		const collateralBefore = await getSettlementCollateralAttoEth(client, child.securityPool)
-		await mockWindow.advanceTime(DAY)
-		await updateSettlementCollateral(client, child.securityPool)
-		assert.ok((await getSettlementCollateralAttoEth(client, child.securityPool)) < collateralBefore, 'resumed own-fork child must accrue before resolution')
-		await mockWindow.setTime(gameEnd + 1n)
-		strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'getFeeEpochEndTime' }), gameEnd, 'view should expose resolution cutoff before checkpointing')
-		await updateSettlementCollateral(client, child.securityPool)
-		const accruedAtResolution = await getTotalAccruedFees(client, child.securityPool)
-		await mockWindow.advanceTime(DAY)
-		await updateSettlementCollateral(client, child.securityPool)
-		strictEqualTypeSafe(await getTotalAccruedFees(client, child.securityPool), accruedAtResolution, 'normal child resolution must stop the epoch exactly once')
-	})
-
-	test('child resolution remains the fee cutoff when its universe forks later without an intervening checkpoint', async () => {
-		const { client, mockWindow, questionData } = fixture
-		const { childUniverse, child } = await setupResumedOwnForkYesChild()
-		const game = await getSecurityPoolsEscalationGame(client, child.securityPool)
-		const gameEnd = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getEscalationGameEndDate' })
-		const recursiveForkQuestion = { ...questionData, title: 'later child fee epoch cutoff fork', endTime: gameEnd }
-		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
-		const recursiveForkQuestionId = getQuestionId(recursiveForkQuestion, outcomes)
-		await createQuestion(client, recursiveForkQuestion, outcomes)
-		const childForkThreshold = await getZoltarForkThreshold(client, childUniverse)
-		const migrationBalance = await getMigrationRepBalanceAttoRep(client, 0n, client.account.address)
-		if (migrationBalance < childForkThreshold) {
-			await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
-			await addRepToMigrationBalance(client, 0n, childForkThreshold - migrationBalance)
-		}
-		await splitMigrationRep(client, 0n, childForkThreshold, [QuestionOutcome.Yes])
-		const childRepToken = await getRepToken(client, child.securityPool)
-		await approveToken(client, childRepToken, getZoltarAddress())
-		await mockWindow.setTime(gameEnd + DAY)
-		await forkUniverse(client, childUniverse, recursiveForkQuestionId)
-		await updateSettlementCollateral(client, child.securityPool)
-		strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'lastUpdatedFeeAccumulator' }), gameEnd, 'a later fork must not extend fees past an already-resolved child game')
 	})
 })

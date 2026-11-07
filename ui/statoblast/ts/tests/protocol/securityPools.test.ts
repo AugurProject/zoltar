@@ -1,633 +1,128 @@
-/// <reference types="bun-types" />
-
-import { describe, expect, test } from 'bun:test'
-import { bigintToSafeNumber, getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { loadAllSecurityPools, loadSecurityPoolLineage, loadSecurityPoolChildren, loadSecurityPoolPage } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
+import { expect, test } from 'bun:test'
+import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { loadAllSecurityPools } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
 import { loadSecurityPoolMintCapacity } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
-import { createBlockWithTimestamp, createMockLoaderClient, createMulticallStub, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { createMockLoaderClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { owner, portfolio, capital, token } from '../features/portfolios/capitalFixture.js'
 
-type LoaderClientOptions = Parameters<typeof createMockLoaderClient>[0]
-type MulticallRequest = Parameters<LoaderClientOptions['multicall']>[0]
-type ReadContractRequest = Parameters<LoaderClientOptions['readContract']>[0]
-
-const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000a1')
-const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
-const alternateSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000a2')
-const escalationGameAddress = getAddress('0x00000000000000000000000000000000000000e1')
-const defaultForkData = [0n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, false, false, 0n, 0n] as const
-const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
-const anchoredBlock = { hash: `0x${'11'.repeat(32)}`, number: 100n, timestamp: 0n } as const
-const createPoolAccountingSnapshot = (settlementCollateralAttoEth = 0n, totalUnderwritingLimitAttoEth = 0n, feeEligibleUnderwritingLimitAttoEth = totalUnderwritingLimitAttoEth) => ({
-	settlementCollateralAttoEth,
-	currentRetentionRate: 0n,
-	feeEligibleUnderwritingLimitAttoEth,
-	feeIndex: 0n,
-	feeIndexRemainder: 0n,
-	lastUpdatedFeeAccumulator: 0n,
-	totalFeesOwedRemainder: 0n,
-	totalClaimableVaultFeesAttoEth: 0n,
-	totalUnderwritingLimitAttoEth,
-	unallocatedAccruedFeesAttoEth: 0n,
-	uncheckpointedFeeEligibleUnderwritingLimitAttoEth: 0n,
-	badDebtGeneration: 0n,
-})
-
-// Mirrors the pool-detail multicall order in loadSecurityPoolDetails.
-const createPoolRead = ({
-	minimumSecurityBondDebtAttoEth = 10n ** 18n,
-	minimumVaultRepDepositAttoRep = 10n * 10n ** 18n,
-	forkData = defaultForkData,
-	totalPoolHeldAttoRep = 100n,
-	poolAccountingSnapshot = createPoolAccountingSnapshot(),
-	universeForkTime = 0n,
-	escalationGame = zeroAddress,
-}: {
-	minimumSecurityBondDebtAttoEth?: bigint
-	minimumVaultRepDepositAttoRep?: bigint
-	forkData?: readonly unknown[]
-	totalPoolHeldAttoRep?: bigint
-	poolAccountingSnapshot?: ReturnType<typeof createPoolAccountingSnapshot>
-	universeForkTime?: bigint
-	escalationGame?: Address
-} = {}) => [0n, 10n, minimumSecurityBondDebtAttoEth, minimumVaultRepDepositAttoRep, forkData, 0n, 0n, 3n, 0n, 0n, totalPoolHeldAttoRep, poolAccountingSnapshot, universeForkTime, escalationGame, 200n]
-
-const createDeployment = (securityPool: Address, { parent = zeroAddress, universeId = 1n }: { parent?: Address; universeId?: bigint } = {}) => ({
-	initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
-	parent,
-	openOraclePriceCoordinator: zeroAddress,
-	questionId: 1n,
-	statoblastSecurityMultiplierBps: 20_000n,
-	securityPool,
-	truthAuction: zeroAddress,
-	universeId,
-})
-
-function getRequiredAddress(value: unknown, field: string) {
-	const address = Reflect.get(Object(value), field)
-	if (typeof address !== 'string') throw new Error(`Expected ${field} address`)
-	return getAddress(address)
-}
-
-function getFirstArgAddress(contract: unknown) {
-	const args = Reflect.get(Object(contract), 'args')
-	if (!Array.isArray(args) || typeof args[0] !== 'string') throw new Error('Expected a vault address argument')
-	return getAddress(args[0])
-}
-
-function createPagedGetVaults(knownVaultAddresses: readonly Address[], calls: [bigint, bigint][]) {
-	return (request: ReadContractRequest) => {
-		const [startIndex, count] = request.args ?? []
-		if (typeof startIndex !== 'bigint' || typeof count !== 'bigint') throw new Error('Expected getVaults pagination args')
-		calls.push([startIndex, count])
-		return knownVaultAddresses.slice(bigintToSafeNumber(startIndex, 'Vault start index'), bigintToSafeNumber(startIndex + count, 'Vault end index'))
+const mode = 'active'
+const block = { hash: `0x${'11'.repeat(32)}`, number: 99n, timestamp: 1000n } as const
+const deployment = { securityPool: owner, parent: zeroAddress, universeId: 42n, questionId: 7n, initialReportPriorityFeeAttoEthPerGas: 1n, openOraclePriceCoordinator: token, statoblastSecurityMultiplierBps: 20000n, truthAuction: zeroAddress }
+function centralRead(name: string) {
+	switch (name) {
+		case 'refreshPortfolioFees':
+			return undefined
+		case 'getCurrentBlockTimestamp':
+			return 5_000n
+		case 'portfolio':
+			return portfolio
+		case 'universeId':
+			return 42n
+		case 'totals':
+			return [300n, 200n, 120n]
+		case 'questionId':
+			return 7n
+		case 'isPriceValid':
+			return mode !== 'stale'
+		case 'ledger':
+			return token
+		case 'bookIds':
+			return 1n
+		case 'feeTimestamp':
+			return 1000n
+		case 'question':
+			return [{ units: 60n, outcomeSupplyAttoShares: 100n, finalAfter: 0n, feeRateAttoEthPerSecond: 2n, feeStart: 1000n, feeEnd: 2000n, feePrincipalAttoEth: 100n }, mode === 'frozen' ? 1n : 0n]
+		case 'books':
+			return [mode === 'runoff' ? 50n : 100n, 100n, 0n, 1n, 0n, 0n, 123n, mode === 'sealed', 1n, 1n, 1n, mode !== 'disabled', 0n, 877n, 40n, mode === 'basket' ? 150n : 0n]
+		case 'settlement':
+			return token
+		case 'availableMintCapacity':
+			return 20n
+		case 'snapshotQuestion':
+			return { outcomeSupplyAttoShares: 100n, questionCashAttoEth: 60n, questionRecoveryAttoRep: mode === 'basket' ? 90n : 0n, demandAttoEth: 100n, earnedFeesAttoEth: 0n, timestamp: 123n }
+		default:
+			throw new Error(`Unexpected ${name}`)
 	}
 }
-
-const zeroPerContract = (contracts: MulticallRequest['contracts']) => contracts.map(() => 0n)
-// Vault-summary multicalls with zero open interest and bad debt around the given securityVaults tuples.
-const createVaultSummaryMulticall = (securityVaults: (contracts: MulticallRequest['contracts']) => unknown) => ({ getVaultOpenInterestAttoEth: zeroPerContract, vaultBadDebtAttoEth: zeroPerContract, securityVaults })
-
-function createPoolLoaderClient({
-	deployments,
-	poolRead = () => createPoolRead(),
-	multicall = {},
-	read = {},
-}: {
-	deployments: readonly ReturnType<typeof createDeployment>[]
-	poolRead?: (securityPool: Address) => unknown
-	multicall?: Record<string, (contracts: MulticallRequest['contracts'], request: MulticallRequest) => unknown>
-	read?: Record<string, (request: ReadContractRequest) => unknown>
-}) {
-	return createMockLoaderClient({
-		getBlock: async () => anchoredBlock,
-		multicall: async request => {
-			const firstContract = request.contracts[0]
-			const functionName = getContractFunctionName(firstContract)
-			if (functionName === 'settlementCollateralAttoEth') return poolRead(getRequiredAddress(firstContract, 'address'))
-			if (functionName === 'questions') return [questionTuple, 1n]
-			if (functionName === 'updateVaultFees') {
-				// The loader checkpoints each vault's fees right before reading it, in one batch with failures allowed.
-				const securityVaultsHandler = multicall['securityVaults']
-				if (securityVaultsHandler === undefined) throw new Error('Unexpected multicall contract: securityVaults')
-				const vaultData = securityVaultsHandler(
-					request.contracts.filter((_contract, index) => index % 2 === 1),
-					request,
-				)
-				if (!Array.isArray(vaultData)) throw new Error('Expected one securityVaults tuple per vault')
-				return vaultData.flatMap(result => [
-					{ result: undefined, status: 'success' },
-					{ result, status: 'success' },
-				])
-			}
-			const handler = multicall[functionName]
-			if (handler === undefined) throw new Error(`Unexpected multicall contract: ${functionName}`)
-			return handler(request.contracts, request)
+function fixture({ forked = false, reporting = false, missingPortfolio = false, reorg = false } = {}) {
+	const reads: string[] = []
+	let headReads = 0
+	const client = createMockLoaderClient({
+		getBlock: async () => {
+			headReads++
+			return reorg && headReads > 2 ? { ...block, hash: `0x${'22'.repeat(32)}` as const } : block
 		},
 		readContract: async request => {
-			const handler = read[request.functionName]
-			if (handler !== undefined) return handler(request)
+			reads.push(request.functionName)
+			if (request.functionName !== 'getOutcomeLabels') expect(request.blockNumber).toBe(99n)
 			switch (request.functionName) {
-				case 'getCurrentMintingCapacityAttoEth':
-				case 'getVaultCount':
-					return 0n
 				case 'securityPoolDeploymentCount':
-					return BigInt(deployments.length)
+					return 1n
 				case 'securityPoolDeploymentsRange':
-					return deployments
-				case 'securityVaults':
-					throw new Error('Expected batched securityVaults multicall')
+					return [deployment]
+				case 'portfolioCustody':
+					return missingPortfolio ? zeroAddress : capital
+				case 'getSecurityPoolPortfolio':
+					return portfolio
 				case 'escalationGame':
-					return zeroAddress
-				case 'getTotalPoolHeldAttoRep':
-					return 100n
-				case 'totalRepBackingUnits':
+					return reporting ? token : zeroAddress
+				case 'forkContinuation':
+					return forked
+				case 'systemState':
+					return 0n
+				case 'getQuestionOutcome':
+					return 3n
+				case 'getForkTime':
+					return forked ? 900n : 0n
+				case 'lastPrice':
 					return 10n
+				case 'lastSettlementTimestamp':
+					return 950n
+				case 'priceValidUntil':
+					return 1200n
+				case 'questions':
+					return ['Question', 'Description', 1n, 2n, 2n, 0n, 2000n, '']
 				case 'getOutcomeLabels':
-					return ['Yes', 'No']
+					return ['Invalid', 'Yes', 'No']
 				default:
-					throw new Error(`Unexpected readContract function: ${request.functionName}`)
+					throw new Error(`Unexpected read ${request.functionName}`)
 			}
 		},
+		multicall: async request => {
+			if (request.contracts[0]?.functionName !== 'questions') expect(request.blockNumber).toBe(99n)
+			return request.contracts.map(call => {
+				reads.push(call.functionName)
+				if (call.functionName === 'questions') return ['Question', 'Description', 1n, 2000n, 2n, 0n, 2000n, '']
+				if (call.functionName === 'questionCreatedTimestamp') return 1n
+				if (call.functionName === 'portfolioCustody') return capital
+				if (call.functionName === 'escalationGame') return reporting ? token : zeroAddress
+				return centralRead(call.functionName)
+			})
+		},
 	})
+	return { client, reads }
 }
-
-describe('securityPools protocol client', () => {
-	test.each([
-		['opens a pool using the deployment registry without scanning historical logs', loadSecurityPoolLineage],
-		['loads selected children without log access', loadSecurityPoolChildren],
-	])('%s', async (_name, load) => {
-		const client = createMockLoaderClient({
-			getBlock: async () => anchoredBlock,
-			getLogs: async () => {
-				throw new Error('Pool lookup must not scan historical logs')
-			},
-			multicall: async () => [],
-			readContract: async request => {
-				if (request.functionName === 'getCurrentMintingCapacityAttoEth') return 0n
-				if (request.functionName === 'securityPoolDeploymentCount') return 0n
-				throw new Error(`Unexpected read: ${request.functionName}`)
-			},
-		})
-		expect(await load(client, securityPoolAddress)).toEqual([])
-	})
-
-	test('reuses canonical deployment pages when opening another pool with the same registry index', async () => {
-		const ranges: unknown[] = []
-		const index = { snapshot: undefined, pending: undefined }
-		const client = createMockLoaderClient({
-			getBlock: async () => ({ hash: `0x${'11'.repeat(32)}`, number: 100n, timestamp: 0n }),
-			multicall: async () => [],
-			readContract: async request => {
-				if (request.functionName === 'securityPoolDeploymentCount') return 1n
-				if (request.functionName === 'securityPoolDeploymentsRange') {
-					ranges.push(request.args)
-					return [createDeployment(alternateSecurityPoolAddress, { universeId: 0n })]
-				}
-				throw new Error(`Unexpected read: ${request.functionName}`)
-			},
-		})
-		await loadSecurityPoolLineage(client, securityPoolAddress, undefined, index)
-		await loadSecurityPoolLineage(client, securityPoolAddress, undefined, index)
-		expect(ranges).toHaveLength(1)
-	})
-
-	test('rejects selected child deployments when their discovery anchor is replaced', async () => {
-		const originalHash = `0x${'11'.repeat(32)}` as const
-		const replacementHash = `0x${'22'.repeat(32)}` as const
-		let blockReads = 0
-		const client = createMockLoaderClient({
-			getBlock: async () => {
-				blockReads += 1
-				return { hash: blockReads === 1 ? originalHash : replacementHash, number: 100n, timestamp: 0n }
-			},
-			getLogs: async () => [],
-			multicall: async () => [],
-			readContract: async request => {
-				if (request.functionName === 'getCurrentMintingCapacityAttoEth') return 0n
-				if (request.functionName === 'securityPoolDeploymentCount') return 0n
-				throw new Error(`Unexpected readContract function: ${request.functionName}`)
-			},
-		})
-
-		await expect(loadSecurityPoolChildren(client, securityPoolAddress)).rejects.toThrow('changed during discovery')
-	})
-
-	test('resolves an address the registry does not list after one read unless a new deployment is expected', async () => {
-		let registryReads = 0
-		const client = createPoolLoaderClient({
-			deployments: [createDeployment(securityPoolAddress)],
-			read: {
-				securityPoolDeploymentCount: () => {
-					registryReads += 1
-					return 0n
-				},
-			},
-		})
-
-		expect(await loadSecurityPoolLineage(client, securityPoolAddress)).toEqual([])
-		expect(registryReads).toBe(1)
-	})
-
-	test.each(['all', 'new-pool-lineage'])('loads %s with the default root-pool fork outcome unset and inactive', async mode => {
-		let registryReads = 0
-		const client = createPoolLoaderClient({
-			deployments: [createDeployment(securityPoolAddress)],
-			poolRead: () => createPoolRead({ minimumSecurityBondDebtAttoEth: 7n * 10n ** 18n, minimumVaultRepDepositAttoRep: 30n * 10n ** 18n, escalationGame: escalationGameAddress }),
-			read: {
-				forkContinuation: () => false,
-				securityPoolDeploymentCount: () => {
-					registryReads += 1
-					return mode === 'new-pool-lineage' && registryReads === 1 ? 0n : 1n
-				},
-			},
-		})
-
-		// A freshly created pool may be missing from the first registry read, so its first open waits for the registry to list it.
-		const pools = mode === 'all' ? await loadAllSecurityPools(client) : await loadSecurityPoolLineage(client, securityPoolAddress, undefined, undefined, { expectDeployment: true })
-		const [pool] = pools
-		if (pool === undefined) throw new Error('Expected one security pool')
-
-		expect(pool.parent).toBe(zeroAddress)
-		expect(pool.minimumSecurityBondDebtAttoEth).toBe(7n * 10n ** 18n)
-		expect(pool.minimumVaultRepDepositAttoRep).toBe(30n * 10n ** 18n)
-		expect(pool.hasForkContinuationEscalationGame).toBe(false)
-		expect(pool.ordinaryEscalationGameStarted).toBe(true)
-		expect(pool.forkOutcome).toBe('none')
-		expect(pool.hasForkActivity).toBe(false)
-	})
-
-	test('loadAllSecurityPools rejects malformed fork data instead of casting tuple reads', async () => {
-		const client = createPoolLoaderClient({
-			deployments: [createDeployment(securityPoolAddress)],
-			poolRead: () => createPoolRead({ forkData: [0n, zeroAddress, 0n, 'bad-migrated-rep', 0n, 0n, 0n, 0n, false, false, 0n, 0n] }),
-		})
-
-		await expect(loadAllSecurityPools(client)).rejects.toThrow('Unexpected security pool fork data migrated REP response')
-	})
-
-	describe('parent fork activity', () => {
-		const parentSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000d1')
-		const childSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000d2')
-		const createParentChildClient = () =>
-			createPoolLoaderClient({
-				deployments: [createDeployment(parentSecurityPoolAddress), createDeployment(childSecurityPoolAddress, { parent: parentSecurityPoolAddress, universeId: 2n })],
-				poolRead: () => createPoolRead({ universeForkTime: 1n }),
-			})
-		const findParent = (pools: readonly { securityPoolAddress: Address; hasForkActivity: boolean; universeHasForked: boolean }[]) => {
-			const parentPool = pools.find(pool => pool.securityPoolAddress === parentSecurityPoolAddress)
-			if (parentPool === undefined) throw new Error('Expected parent security pool')
-			return parentPool
-		}
-
-		test('loadAllSecurityPools infers parent fork activity when a loaded child points to it', async () => {
-			const parentPool = findParent(await loadAllSecurityPools(createParentChildClient()))
-
-			expect(parentPool.hasForkActivity).toBe(true)
-			expect(parentPool.universeHasForked).toBe(true)
-		})
-	})
-
-	test('loadAllSecurityPools batches vault summary tuple reads through multicall', async () => {
-		const previewVaultAddresses = [getAddress('0x00000000000000000000000000000000000000c1'), getAddress('0x00000000000000000000000000000000000000c2'), getAddress('0x00000000000000000000000000000000000000c3')] as const
-		const vaultEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000c9')
-		const loadedVaultAddresses: Address[] = []
-		let securityVaultSummaryBatchCount = 0
-		const expectLatestBlock = (request: MulticallRequest) => expect(request.blockNumber).toBe(0n)
-		const client = createPoolLoaderClient({
-			deployments: [createDeployment(securityPoolAddress)],
-			multicall: {
-				getVaultOpenInterestAttoEth: (contracts, request) => {
-					expectLatestBlock(request)
-					return zeroPerContract(contracts)
-				},
-				vaultBadDebtAttoEth: (contracts, request) => {
-					expectLatestBlock(request)
-					return contracts.map(contract => (getFirstArgAddress(contract) === previewVaultAddresses[1] ? 7n : 0n))
-				},
-				securityVaults: (contracts, request) => {
-					expectLatestBlock(request)
-					securityVaultSummaryBatchCount += 1
-					return contracts.map(contract => {
-						const currentVaultAddress = getFirstArgAddress(contract)
-						loadedVaultAddresses.push(currentVaultAddress)
-						return currentVaultAddress === previewVaultAddresses[0] ? [2n, 0n, 0n, 0n, 0n] : [0n, 0n, 0n, 0n, 0n]
-					})
-				},
-				disputeStakedRepByVaultAttoRep: contracts => contracts.map(contract => (getFirstArgAddress(contract) === previewVaultAddresses[0] ? 5n : 0n)),
-			},
-			read: {
-				getVaultCount: () => 3n,
-				getVaults: () => previewVaultAddresses,
-				escalationGame: () => vaultEscalationGameAddress,
-				disputeStakedRepByVaultAttoRep: request => (request.args?.[0] === previewVaultAddresses[0] ? 5n : 0n),
-			},
-		})
-
-		const pools = await loadAllSecurityPools(client)
-		const [pool] = pools
-		if (pool === undefined) throw new Error('Expected one security pool')
-
-		expect(securityVaultSummaryBatchCount).toBe(1)
-		expect(loadedVaultAddresses).toEqual([...previewVaultAddresses])
-		expect(pool.feeAccrualState?.feeEndTimestamp).toBe(200n)
-		expect(pool.vaults.map(vault => vault.vaultAddress)).toEqual([previewVaultAddresses[0], previewVaultAddresses[1]])
-		expect(pool.vaults.map(vault => vault.disputeStakedAttoRep)).toEqual([5n, 0n])
-		expect(pool.vaults.map(vault => vault.badDebtAttoEth)).toEqual([0n, 7n])
-	})
-
-	test('loadAllSecurityPools includes bounded actionable vault previews', async () => {
-		const viewerVaultAddress = getAddress('0x00000000000000000000000000000000000000c4')
-		const previewVaultAddresses = [getAddress('0x00000000000000000000000000000000000000c1'), getAddress('0x00000000000000000000000000000000000000c2'), getAddress('0x00000000000000000000000000000000000000c3')]
-		let getVaultsCallCount = 0
-		let securityVaultSummaryMulticallCount = 0
-		const client = createPoolLoaderClient({
-			deployments: [createDeployment(securityPoolAddress)],
-			multicall: createVaultSummaryMulticall(contracts => {
-				securityVaultSummaryMulticallCount += 1
-				return contracts.map(() => [2n, 0n, 0n, 0n, 0n])
-			}),
-			read: {
-				getVaultCount: () => 5n,
-				getVaults: request => {
-					getVaultsCallCount += 1
-					expect(request.args).toEqual([0n, 5n])
-					return previewVaultAddresses
-				},
-			},
-		})
-
-		const pools = await loadAllSecurityPools(client, { accountAddress: viewerVaultAddress })
-		const [pool] = pools
-		if (pool === undefined) throw new Error('Expected one security pool')
-
-		expect(getVaultsCallCount).toBe(1)
-		expect(securityVaultSummaryMulticallCount).toBe(1)
-		expect(pool.hasLoadedVaults).toBe(true)
-		expect(pool.vaults.map(vault => vault.vaultAddress)).toEqual([...previewVaultAddresses, viewerVaultAddress])
-		expect(pool.vaultCount).toBe(5n)
-		expect(pool.totalPoolHeldAttoRep).toBe(100n)
-		expect(pool.questionId).toBe('0x1')
-	})
-
-	test('a superseded vault scan does not leave the eagerly started pool totals read as an unhandled rejection', async () => {
-		const supersededError = new Error('Read superseded by a changed selection or environment')
-		const unhandledRejections: unknown[] = []
-		const recordUnhandledRejection = (reason: unknown) => unhandledRejections.push(reason)
-		process.on('unhandledRejection', recordUnhandledRejection)
-		try {
-			const client = createPoolLoaderClient({
-				deployments: [createDeployment(securityPoolAddress)],
-				read: {
-					getVaultCount: () => 5n,
-					// Every in-flight read observes the supersession, so the totals fail alongside the vault page.
-					getTotalPoolHeldAttoRep: () => Promise.reject(supersededError),
-					getVaults: () => Promise.reject(supersededError),
-				},
-			})
-			await expect(loadAllSecurityPools(client)).rejects.toBe(supersededError)
-			await new Promise(resolve => setTimeout(resolve, 0))
-			expect(unhandledRejections).toEqual([])
-		} finally {
-			process.off('unhandledRejection', recordUnhandledRejection)
-		}
-	})
-
-	test('loadAllSecurityPools scans past exited known vaults to fill actionable previews', async () => {
-		const knownVaultAddresses = [getAddress('0x00000000000000000000000000000000000000c1'), getAddress('0x00000000000000000000000000000000000000c2'), getAddress('0x00000000000000000000000000000000000000c3'), getAddress('0x00000000000000000000000000000000000000c4')]
-		const currentVaultAddress = knownVaultAddresses[3]
-		if (currentVaultAddress === undefined) throw new Error('Expected a current vault address')
-		const getVaultsCalls: [bigint, bigint][] = []
-		const getVaults = createPagedGetVaults(knownVaultAddresses, getVaultsCalls)
-		const client = createPoolLoaderClient({
-			deployments: [createDeployment(securityPoolAddress)],
-			multicall: createVaultSummaryMulticall(contracts => contracts.map(contract => (getFirstArgAddress(contract) === currentVaultAddress ? [2n, 0n, 0n, 0n, 0n] : [0n, 0n, 0n, 0n, 0n]))),
-			read: {
-				getVaultCount: request => {
-					expect(request.blockNumber).toBe(0n)
-					return BigInt(knownVaultAddresses.length)
-				},
-				getVaults: request => {
-					expect(request.blockNumber).toBe(0n)
-					return getVaults(request)
-				},
-			},
-		})
-
-		const pools = await loadAllSecurityPools(client)
-		const [pool] = pools
-		if (pool === undefined) throw new Error('Expected one security pool')
-
-		expect(getVaultsCalls).toEqual([[0n, 4n]])
-		expect(pool.vaults.map(vault => vault.vaultAddress)).toEqual([currentVaultAddress])
-		expect(pool.vaultCount).toBe(4n)
-	})
-
-	test('loadAllSecurityPools caps registry scans when arbitrary empty addresses exceed the scan budget', async () => {
-		const knownVaultAddresses = Array.from({ length: 600 }, (_, index) =>
-			getAddress(
-				`0x${BigInt(index + 1)
-					.toString(16)
-					.padStart(40, '0')}`,
-			),
-		)
-		const getVaultsCalls: [bigint, bigint][] = []
-		const client = createPoolLoaderClient({
-			deployments: [createDeployment(securityPoolAddress)],
-			multicall: createVaultSummaryMulticall(contracts => contracts.map(() => [0n, 0n, 0n, 0n, 0n])),
-			read: {
-				getVaultCount: () => BigInt(knownVaultAddresses.length),
-				getVaults: createPagedGetVaults(knownVaultAddresses, getVaultsCalls),
-			},
-		})
-
-		const pools = await loadAllSecurityPools(client)
-		const [pool] = pools
-		if (pool === undefined) throw new Error('Expected one security pool')
-
-		expect(getVaultsCalls).toHaveLength(10)
-		expect(getVaultsCalls[0]).toEqual([0n, 50n])
-		expect(getVaultsCalls[9]).toEqual([450n, 50n])
-		expect(pool.vaults).toEqual([])
-		expect(pool.vaultScanCapped).toBe(true)
-	})
-
-	test('loadAllSecurityPools preserves the connected account beyond the bounded vault preview', async () => {
-		const knownVaultAddresses = Array.from({ length: 51 }, (_, index) =>
-			getAddress(
-				`0x${BigInt(index + 1)
-					.toString(16)
-					.padStart(40, '0')}`,
-			),
-		)
-		const accountAddress = knownVaultAddresses[50]
-		if (accountAddress === undefined) throw new Error('Expected the account vault beyond the preview')
-		const getVaultsCalls: [bigint, bigint][] = []
-		const client = createPoolLoaderClient({
-			deployments: [createDeployment(securityPoolAddress)],
-			multicall: createVaultSummaryMulticall(contracts => contracts.map(() => [2n, 0n, 0n, 0n, 0n])),
-			read: {
-				getVaultCount: () => BigInt(knownVaultAddresses.length),
-				getVaults: createPagedGetVaults(knownVaultAddresses, getVaultsCalls),
-			},
-		})
-		const [pool] = await loadAllSecurityPools(client, { accountAddress })
-		if (pool === undefined) throw new Error('Expected one security pool')
-		expect(getVaultsCalls).toEqual([[0n, 50n]])
-		expect(pool.vaults.map(vault => vault.vaultAddress)).toEqual(knownVaultAddresses)
-	})
-
-	test('loadAllSecurityPools marks empty vault sets as already loaded', async () => {
-		let getVaultsCallCount = 0
-		let securityVaultSummaryMulticallCount = 0
-		const client = createPoolLoaderClient({
-			deployments: [createDeployment(securityPoolAddress)],
-			multicall: createVaultSummaryMulticall(contracts => {
-				securityVaultSummaryMulticallCount += 1
-				return contracts.map(() => [2n, 0n, 0n, 0n, 0n])
-			}),
-			read: {
-				getVaults: () => {
-					getVaultsCallCount += 1
-					throw new Error('Empty pool loads should not fetch preview vault addresses')
-				},
-				securityVaults: () => {
-					throw new Error('Empty pool loads should not fetch per-vault summaries')
-				},
-			},
-		})
-
-		const pools = await loadAllSecurityPools(client)
-		const [pool] = pools
-		if (pool === undefined) throw new Error('Expected one security pool')
-
-		expect(getVaultsCallCount).toBe(0)
-		expect(securityVaultSummaryMulticallCount).toBe(0)
-		expect(pool.hasLoadedVaults).toBe(true)
-		expect(pool.vaultCount).toBe(0n)
-		expect(pool.vaults).toEqual([])
-	})
-
-	test('loadSecurityPoolPage reads one registry page, newest deployment first, without vault positions', async () => {
-		const deployedAddresses = [1, 2, 3].map(index => getAddress(`0x${(0xd0 + index).toString(16).padStart(40, '0')}`))
-		const deployments = deployedAddresses.map(address => createDeployment(address))
-		const rangeReads: [bigint, bigint][] = []
-		const client = createPoolLoaderClient({
-			deployments,
-			read: {
-				getVaults: () => {
-					throw new Error('Registry pages must not load vault positions')
-				},
-				securityPoolDeploymentsRange: request => {
-					const [startIndex, count] = request.args ?? []
-					if (typeof startIndex !== 'bigint' || typeof count !== 'bigint') throw new Error('Expected registry range args')
-					rangeReads.push([startIndex, count])
-					return deployments.slice(bigintToSafeNumber(startIndex, 'Start index'), bigintToSafeNumber(startIndex + count, 'End index'))
-				},
-			},
-		})
-
-		const firstPage = await loadSecurityPoolPage(client, 0, 2)
-		const secondPage = await loadSecurityPoolPage(client, 1, 2)
-		const pastLastPage = await loadSecurityPoolPage(client, 2, 2)
-
-		expect(firstPage.pools.map(pool => pool.securityPoolAddress)).toEqual([deployedAddresses[2], deployedAddresses[1]])
-		expect(secondPage.pools.map(pool => pool.securityPoolAddress)).toEqual([deployedAddresses[0]])
-		expect(pastLastPage.pools).toEqual([])
-		expect([firstPage.poolCount, secondPage.poolCount, pastLastPage.poolCount]).toEqual([3n, 3n, 3n])
-		expect(rangeReads).toEqual([
-			[1n, 2n],
-			[0n, 1n],
-		])
-		expect(firstPage.pools.every(pool => pool.vaults.length === 0)).toBe(true)
-	})
-
-	test('loadAllSecurityPools defers vault detail loading for unselected pools in selected mode', async () => {
-		const getVaultCalls: Address[] = []
-		const vaultSummaryCalls: Address[] = []
-		const client = createPoolLoaderClient({
-			deployments: [createDeployment(securityPoolAddress), createDeployment(alternateSecurityPoolAddress, { universeId: 2n })],
-			poolRead: () => createPoolRead({ totalPoolHeldAttoRep: 5n, poolAccountingSnapshot: createPoolAccountingSnapshot(0n, 9n, 3n) }),
-			multicall: {
-				backingUnitsToAttoRep: () => [5n],
-				getVaultOpenInterestAttoEth: zeroPerContract,
-				vaultBadDebtAttoEth: zeroPerContract,
-				securityVaults: contracts => {
-					vaultSummaryCalls.push(getRequiredAddress(contracts[0], 'address'))
-					return contracts.map(() => [1n, 3n, 0n, 0n, 0n])
-				},
-			},
-			read: {
-				getVaultCount: request => (getRequiredAddress(request, 'address') === securityPoolAddress ? 1n : 2n),
-				getVaults: request => {
-					const normalizedAddress = getRequiredAddress(request, 'address')
-					getVaultCalls.push(normalizedAddress)
-					if (normalizedAddress === alternateSecurityPoolAddress) throw new Error('Unexpected vault load for unselected pool')
-					return [vaultAddress]
-				},
-				getTotalPoolHeldAttoRep: () => 5n,
-				totalRepBackingUnits: () => 1n,
-			},
-		})
-
-		const pools = await loadAllSecurityPools(client, {
-			selectedSecurityPoolAddress: securityPoolAddress,
-			vaultDetailMode: 'selected',
-		})
-
-		const selectedPool = pools.find(pool => pool.securityPoolAddress === securityPoolAddress)
-		const deferredPool = pools.find(pool => pool.securityPoolAddress === alternateSecurityPoolAddress)
-		if (selectedPool === undefined || deferredPool === undefined) throw new Error('Expected both security pools')
-
-		expect(getVaultCalls).toEqual([securityPoolAddress])
-		expect(vaultSummaryCalls).toEqual([securityPoolAddress])
-		expect(selectedPool.hasLoadedVaults).toBe(true)
-		expect(selectedPool.vaults).toHaveLength(1)
-		expect(selectedPool.feeEligibleUnderwritingLimitAttoEth).toBe(3n)
-		expect(selectedPool.totalPoolHeldAttoRep).toBe(5n)
-		expect(selectedPool.totalUnderwritingLimitAttoEth).toBe(9n)
-		expect(deferredPool.hasLoadedVaults).toBe(false)
-		expect(deferredPool.vaults).toEqual([])
-		expect(deferredPool.vaultCount).toBe(2n)
-	})
-
-	test.each([77n, 200n, 2n ** 256n - 1n])('loadSecurityPoolMintCapacity reads the pool fee horizon %s', async feeEndTimestamp => {
-		const requestedFunctionNames: string[] = []
-		const requestedAddresses: Address[] = []
-		const client = createMockLoaderClient({
-			getBlock: async () => createBlockWithTimestamp(99n),
-			multicall: createMulticallStub(async request => {
-				for (const contract of request.contracts) {
-					requestedFunctionNames.push(getContractFunctionName(contract))
-					const address = Reflect.get(contract, 'address')
-					if (typeof address !== 'string') throw new Error('Expected security pool address')
-					requestedAddresses.push(getAddress(address))
-				}
-				if (request.contracts.length !== 7) throw new Error('Expected one mint-capacity multicall')
-				return [createPoolAccountingSnapshot(11n, 44n, 17n), 22n, 33n, 55n, 88n, feeEndTimestamp, zeroAddress]
-			}),
-			readContract: async () => {
-				throw new Error('readContract should not be called')
-			},
-		})
-
-		const capacity = await loadSecurityPoolMintCapacity(client, securityPoolAddress)
-
-		expect(capacity).toEqual({
-			currentRetentionRate: 88n,
-			currentTimestamp: 99n,
-			escalationGameActive: false,
-			feeEndTimestamp,
-			feeIndexRemainder: 0n,
-			lastUpdatedFeeAccumulator: 0n,
-			settlementCollateralAttoEth: 11n,
-			feeEligibleUnderwritingLimitAttoEth: 17n,
-			mintingCapacityAttoEth: 55n,
-			shareTokenSupplyAttoShares: 22n,
-			totalPoolHeldAttoRep: 33n,
-			totalUnderwritingLimitAttoEth: 44n,
-			totalFeesOwedRemainder: 0n,
-		})
-		expect(requestedFunctionNames).toEqual(['getPoolAccountingSnapshot', 'shareTokenSupplyAttoShares', 'getTotalPoolHeldAttoRep', 'getCurrentMintingCapacityAttoEth', 'currentRetentionRate', 'getFeeEpochEndTime', 'escalationGame'])
-		expect(requestedAddresses).toEqual(Array.from({ length: 7 }, () => securityPoolAddress))
-	})
+test.each([false, true])('discovers native portfolio question snapshots (reporting: %s)', async reporting => {
+	const { client, reads } = fixture({ reporting })
+	const pools = await loadAllSecurityPools(client)
+	expect(pools).toHaveLength(1)
+	expect(pools[0]).toMatchObject({ portfolioAddress: portfolio, securityPoolAddress: owner, settlementCollateralAttoEth: 60n, totalPoolHeldAttoRep: 300n, mintingCapacityAttoEth: reporting ? 0n : 80n })
+	expect(reads).not.toContain('getVaults')
+	expect(reads).not.toContain('securityVaults')
+})
+test('rejects a question with no portfolio custody', async () => {
+	await expect(loadAllSecurityPools(fixture({ missingPortfolio: true }).client)).rejects.toThrow('Question has no portfolio')
+})
+test('rejects a replaced discovery anchor after loading question snapshots', async () => {
+	await expect(loadAllSecurityPools(fixture({ reorg: true }).client)).rejects.toThrow('deployments changed')
+})
+test('reflects a forked universe without per-question vault scans', async () => {
+	const pools = await loadAllSecurityPools(fixture({ forked: true }).client)
+	expect(pools[0]?.universeHasForked).toBe(true)
+	expect(pools[0]?.hasForkActivity).toBe(true)
+})
+test.each([false, true])('mint capacity uses central fees and closes when reporting starts (%s)', async reporting => {
+	const capacity = await loadSecurityPoolMintCapacity(fixture({ reporting }).client, owner)
+	expect(capacity.feeEndTimestamp).toBe(2000n)
+	expect(capacity.mintingCapacityAttoEth).toBe(reporting ? 0n : 80n)
 })

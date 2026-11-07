@@ -34,6 +34,8 @@ export type WriteClient = WalletClient<Transport, NetworkProfile['chain'], Accou
 	}
 
 export type CreateWriteClientCallbacks = {
+	/** Synchronous final guard immediately before an injected provider receives a transaction. */
+	assertBeforeSubmit?: () => void
 	// Cancels the UI review, not transactions already submitted to the chain.
 	reviewSignal?: AbortSignal | undefined
 	onTransactionPrepared?: ((preview: TransactionRequestPreview) => void) | undefined
@@ -218,7 +220,13 @@ export function createInjectedBackend({ profile = getDefaultNetworkProfile(), rp
 			const ethereum = getProvider()
 			if (ethereum === undefined) throw new Error('No browser wallet was found.')
 
-			const readRecoveringProvider = createRetryEmptyReadProvider(ethereum, profile, configuredRpc.url)
+			const guardedProvider: InjectedEthereum = {
+				request: parameters => {
+					if (parameters.method === 'eth_sendTransaction' || parameters.method === 'eth_sendRawTransaction') callbacks.assertBeforeSubmit?.()
+					return ethereum.request(parameters)
+				},
+			}
+			const readRecoveringProvider = createRetryEmptyReadProvider(guardedProvider, profile, configuredRpc.url)
 
 			const baseClient = createWalletClient({
 				account: accountAddress,

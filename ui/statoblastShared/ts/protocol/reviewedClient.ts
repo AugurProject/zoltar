@@ -1,6 +1,6 @@
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import { getTransactionReviewSignal, isTransactionPreparationScope } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
+import { getTransactionReviewSignal } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
 import { getAddress, encodeFunctionData, maxUint256 } from '@zoltar/core-shared/evm/ethereum'
 import { formatCurrencyBalance, formatCurrencyBalanceWithUnit, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { TransactionPlanStep, TransactionRequestPreview, WriteClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
@@ -47,11 +47,6 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 	}
 	if (preview.functionName === 'settle') details.title = transactionCopy.settleReportNumber(String(preview.args?.[0] ?? ''))
 	if (preview.functionName === 'withdrawFromEscalationGame') details.title = preview.reviewTitle ?? transactionCopy.settleEscalationDeposits
-	if (preview.functionName === 'requestPriceIfNeededAndStageOperation') {
-		const operation = preview.args?.[0]
-		if (operation === 1 || operation === 1n) details.title = 'Queue REP withdrawal'
-		if (operation === 2 || operation === 2n) details.title = 'Queue commitment limit'
-	}
 	if (preview.functionName !== 'approve' || preview.contractAddress === undefined) return details
 	const [spender, amount] = preview.args ?? []
 	if (typeof spender !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(spender) || typeof amount !== 'bigint') throw new Error('Cannot review this token approval.')
@@ -75,11 +70,16 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 	return details
 }
 
-export function createReviewedClient(client: WriteClient, validate: () => Promise<void> = async () => undefined, signal = getTransactionReviewSignal()): WriteClient {
+export function createReviewedClient(client: WriteClient, validate: () => Promise<void> = async () => undefined, signal = getTransactionReviewSignal(), registerBeforeSubmit?: (assertActive: () => void) => void): WriteClient {
 	let controller = createTransactionStepController(signal, false)
-	const prepareInForm = isTransactionPreparationScope(signal)
 	const environment = createActiveEnvironmentGuard()
-	const requiresReview = () => prepareInForm || (plan?.length ?? 0) > 1 || (plan?.some(step => step.requireReview) ?? false)
+	// The injected backend can await wallet validation after our final review checks.
+	// Close over the current controller because initialization replaces it.
+	registerBeforeSubmit?.(() => {
+		if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
+		controller.assertActive()
+	})
+	const requiresReview = () => (plan?.length ?? 0) > 1 || (plan?.some(step => step.requireReview) ?? false)
 	let preview: TransactionRequestPreview | undefined
 	let plan: readonly TransactionPlanStep[] | undefined
 	let stepIndex = 0
@@ -145,7 +145,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			controller.assertActive()
 			await validate()
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
-			if (transaction.functionName === 'requestPrice' || transaction.functionName === 'requestPriceIfNeededAndStageOperation' || transaction.functionName === 'requestPriceIfNeededAndStageLiquidation' || transaction.functionName === 'submitVaultOperations') {
+			if (transaction.functionName === 'requestPrice') {
 				const gasPrice = await client.getGasPrice()
 				const estimate = await client.estimateGas({ account: client.account, to: transaction.contractAddress, data: transaction.data, value: transaction.value, gasPrice: gasPrice > 0n ? gasPrice : 1n })
 				// Reserve execution headroom for refunds and nested calls when an RPC returns gas spent instead of the minimum successful limit.

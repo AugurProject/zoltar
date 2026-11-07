@@ -2,64 +2,25 @@
 pragma solidity 0.8.35;
 
 import { EscalationGame } from './EscalationGame.sol';
-import { SecurityVault, SystemState } from './interfaces/ISecurityPool.sol';
+import { SystemState } from './interfaces/ISecurityPool.sol';
+import { ISecurityPoolPortfolioAccounting } from './interfaces/ISecurityPoolPortfolioAccounting.sol';
 
-struct VaultBadDebt {
-	uint256 badDebtAttoEth;
-	uint256 generation;
-}
-
+/// @dev Per-question settlement caches and reporting state. All delegate targets share this layout.
 abstract contract SecurityPoolStorage {
-	event UnderwritingLimitSet(address indexed vault, uint256 underwritingLimitAttoEth, uint256 totalUnderwritingLimitAttoEth);
-
 	EscalationGame public escalationGame;
-	uint256 public totalUnderwritingLimitAttoEth;
 	uint256 public settlementCollateralAttoEth;
-	uint256 public totalRepBackingUnits;
 	uint256 public statoblastSecurityMultiplierBps;
 	uint256 public shareTokenSupplyAttoShares;
-	uint256 public totalClaimableVaultFeesAttoEth;
 	uint256 public lastUpdatedFeeAccumulator;
-	uint256 public feeIndex;
-	uint256 internal feeIndexRemainder;
-	uint256 internal totalFeesOwedRemainder;
-	uint256 internal unallocatedAccruedFeesAttoEth;
-	uint256 internal feeEligibleUnderwritingLimitAttoEth;
-	uint256 internal uncheckpointedFeeEligibleUnderwritingLimitAttoEth;
-	uint256 public currentRetentionRate;
 	bool public awaitingForkContinuation;
-	mapping(address => SecurityVault) public securityVaults;
-	mapping(address => uint256) internal vaultFeeRemainders;
-	address[] internal vaultAddresses;
-	mapping(address => bool) internal isKnownVault;
 	SystemState public systemState;
-	uint256 public totalBadDebtAttoEth;
-	mapping(address => VaultBadDebt) internal vaultBadDebtByVault;
-	// Appended for delegatecall compatibility. Never reorder fields above this line.
-	uint256 public minimumSecurityBondDebtAttoEth;
-	uint256 public minimumVaultRepDepositAttoRep;
-	/// @dev Set only when this child initializes an inherited fork-continuation game whose terminal residual is burned.
-	bool internal postEndVaultAdmissionAllowed;
-	uint256 internal badDebtGeneration;
-	/// @dev Initial pools use the question end; an activated child uses max until resolution or its next fork fixes the cutoff.
 	uint256 internal feeEpochEndTime;
+	address public portfolioCustody;
+	ISecurityPoolPortfolioAccounting internal portfolioAccounting;
 
-	/// @dev Shared operational guard for the pool and its operations delegate. Callers pass the
-	/// universe fork time so each keeps its own Zoltar lookup; the fork check reverts first.
 	function _requireUnforkedOperational(uint256 forkTime) internal view {
 		require(forkTime == 0, 'Forked');
+		require(portfolioCustody != address(0), 'Portfolio settlement missing');
 		require(systemState == SystemState.Operational, 'Pool inactive');
-	}
-
-	function _getVaultBadDebtAttoEth(address vault) internal view returns (uint256 badDebtAttoEth) {
-		VaultBadDebt storage vaultBadDebt = vaultBadDebtByVault[vault];
-		if (vaultBadDebt.generation == badDebtGeneration) return vaultBadDebt.badDebtAttoEth;
-		return 0;
-	}
-
-	function _setVaultBadDebtAttoEth(address vault, uint256 badDebtAttoEth) internal {
-		VaultBadDebt storage vaultBadDebt = vaultBadDebtByVault[vault];
-		vaultBadDebt.badDebtAttoEth = badDebtAttoEth;
-		vaultBadDebt.generation = badDebtGeneration;
 	}
 }

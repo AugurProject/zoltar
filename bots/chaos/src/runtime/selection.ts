@@ -79,7 +79,7 @@ export type GenesisInitializationState = {
 	hasPair: boolean
 	hasPool: boolean
 	hasQuestion: boolean
-	hasWalletVault: boolean
+	hasPortfolioCapital: boolean
 	hasUniswapPool: boolean
 	hasUniswapSeeder: boolean
 	hasWeth: boolean
@@ -91,8 +91,8 @@ export type GenesisInitializationState = {
 
 export const genesisInitializationDefinitionIds = new Set([
 	'zoltar.question.create-binary',
-	'statoblast.pool.deploy',
-	'statoblast.vault.deposit-rep',
+	'statoblast.portfolio.add-question',
+	'statoblast.capital.deposit',
 	'trading.genesis-uniswap.deploy-seeder',
 	'trading.genesis-uniswap.create-pool',
 	'trading.genesis-uniswap.initialize-pool',
@@ -108,8 +108,8 @@ export function genesisInitializationDefinitionId(state: GenesisInitializationSt
 	if (!state.genesisUniversePresent) return undefined
 	let definitionId: string | undefined
 	if (!state.hasQuestion) definitionId = 'zoltar.question.create-binary'
-	else if (!state.hasPool) definitionId = 'statoblast.pool.deploy'
-	else if (!state.hasWalletVault) definitionId = 'statoblast.vault.deposit-rep'
+	else if (!state.hasPool) definitionId = 'statoblast.portfolio.add-question'
+	else if (!state.hasPortfolioCapital) definitionId = 'statoblast.capital.deposit'
 	else if (!state.hasUniswapSeeder) definitionId = 'trading.genesis-uniswap.deploy-seeder'
 	else if (!state.hasUniswapPool) definitionId = 'trading.genesis-uniswap.create-pool'
 	else if (!state.hasInitializedUniswapPool) definitionId = 'trading.genesis-uniswap.initialize-pool'

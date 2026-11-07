@@ -59,11 +59,6 @@ export function buildPoolsRouteHash(location: PoolsLocation) {
 	}
 }
 
-/** The pool page hash, or the browse list when no address is given. */
-export function buildPoolPageRouteHash(securityPoolAddress: string, tab = '') {
-	return buildPoolsRouteHash({ securityPoolAddress, tab, view: 'operate' })
-}
-
 /**
  * Maps the legacy `#/security-pools?securityPoolsView=…&securityPool=…&selectedPoolView=…` links onto the path routes so
  * bookmarked pool links and the documented simulator entry points keep opening the same pool, tab, or view.
@@ -99,9 +94,7 @@ export function writePoolsLocationSearch(search: string, current: PoolsLocation 
 	})
 }
 
-export const STATOBLAST_CONTEXT_QUERY_PARAMS = ['openOracleReportId', 'vault', 'vaultView'] as const
-/** The Pools browse controls; only the Pools route carries them in its URL. */
-export const POOL_BROWSE_QUERY_PARAMS = ['poolSearch', 'poolSort', 'poolFilter'] as const
+export const STATOBLAST_CONTEXT_QUERY_PARAMS = ['poolsView', 'openOracleReportId', 'vault', 'vaultView', 'poolSearch', 'poolSort', 'poolFilter'] as const
 
 export function readPoolBrowseState(search: string): PoolBrowseState {
 	const params = new URLSearchParams(search)

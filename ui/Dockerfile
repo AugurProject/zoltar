@@ -45,9 +45,8 @@ RUN bun ./tooling/repo/build-shared.mts zoltar
 # Solidity contracts and TypeScript source
 COPY ./solidity/tsconfig.json /source/solidity/tsconfig.json
 COPY ./solidity/tsconfig-compile.json /source/solidity/tsconfig-compile.json
-COPY ./solidity/contracts/*.sol /source/solidity/contracts/
-COPY ./solidity/contracts/vendor/ /source/solidity/contracts/vendor/
-COPY ./solidity/contracts/statoblast/WETH9.sol ./solidity/contracts/statoblast/Multicall3.sol /source/solidity/contracts/statoblast/
+# Keep the compiler source set identical to canonical deployment builds.
+COPY ./solidity/contracts/ /source/solidity/contracts/
 COPY ./solidity/ts/compile.ts ./solidity/ts/contractProjects.ts /source/solidity/ts/
 COPY ./solidity/ts/abi/ /source/solidity/ts/abi/
 RUN mkdir -p /source/ui/coreShared/ts && bun ./tooling/contracts/build-app-contracts.mts zoltar
@@ -71,7 +70,7 @@ RUN cd /source/ui/zoltarShared && bun run build
 # Build Zoltar from only its inward dependencies.
 FROM common-builder AS zoltar-builder
 
-RUN bun ./tooling/ui/vendor.mts zoltar --scoped-artifacts
+RUN bun ./tooling/ui/vendor.mts zoltar
 COPY ./ui/zoltar/tsconfig.json /source/ui/zoltar/tsconfig.json
 COPY ./ui/zoltar/index.html /source/ui/zoltar/index.html
 COPY ./ui/zoltar/favicon.svg /source/ui/zoltar/favicon.svg
@@ -98,7 +97,6 @@ COPY ./shared/openOracle/tsconfig.json /source/shared/openOracle/
 COPY ./shared/statoblast/tsconfig.json /source/shared/statoblast/
 COPY ./shared/openOracle/ts/ /source/shared/openOracle/ts/
 COPY ./shared/statoblast/ts/ /source/shared/statoblast/ts/
-COPY ./solidity/contracts/statoblast/ /source/solidity/contracts/statoblast/
 RUN bun ./tooling/repo/build-shared.mts statoblast && bun ./tooling/contracts/build-app-contracts.mts statoblast
 COPY ./ui/statoblastShared/tsconfig.json /source/ui/statoblastShared/tsconfig.json
 COPY ./ui/statoblastShared/css/ /source/ui/statoblastShared/css/
@@ -108,7 +106,7 @@ RUN cd /source/ui/statoblastShared && bun run build
 # Build Statoblast as an application leaf.
 FROM statoblast-dependencies AS statoblast-builder
 
-RUN bun ./tooling/ui/vendor.mts statoblast --scoped-artifacts
+RUN bun ./tooling/ui/vendor.mts statoblast
 COPY ./ui/statoblast/tsconfig.json /source/ui/statoblast/tsconfig.json
 COPY ./ui/statoblast/index.html /source/ui/statoblast/index.html
 COPY ./ui/statoblast/favicon.svg /source/ui/statoblast/favicon.svg
@@ -130,7 +128,7 @@ CMD [ "bun", "/app/tooling/ui/dockerServe.mts" ]
 
 FROM statoblast-dependencies AS openoracle-builder
 
-RUN bun ./tooling/ui/vendor.mts openoracle --scoped-artifacts
+RUN bun ./tooling/ui/vendor.mts openoracle
 COPY ./ui/openoracle/tsconfig.json /source/ui/openoracle/tsconfig.json
 COPY ./ui/openoracle/index.html /source/ui/openoracle/index.html
 COPY ./ui/openoracle/favicon.svg /source/ui/openoracle/favicon.svg
@@ -154,7 +152,6 @@ CMD [ "bun", "/app/tooling/ui/dockerServe.mts" ]
 FROM statoblast-dependencies AS trading-builder
 COPY ./shared/trading/tsconfig.json /source/shared/trading/
 COPY ./shared/trading/ts/ /source/shared/trading/ts/
-COPY ./solidity/contracts/trading/ /source/solidity/contracts/trading/
 RUN bun ./tooling/repo/build-shared.mts trading && bun ./tooling/contracts/build-app-contracts.mts trading
 
 COPY ./ui/trading/tsconfig.json /source/ui/trading/tsconfig.json
@@ -163,7 +160,7 @@ COPY ./ui/trading/favicon.svg /source/ui/trading/favicon.svg
 COPY ./ui/trading/ts/ /source/ui/trading/ts/
 COPY ./ui/trading/css/ /source/ui/trading/css/
 COPY ./ui/trading/build/ /source/ui/trading/build/
-RUN bun ./tooling/ui/vendor.mts trading --scoped-artifacts
+RUN bun ./tooling/ui/vendor.mts trading
 RUN cd /source/ui/trading && bun x tsc --project tsconfig.json && bun ../../tooling/ui/production.mts trading
 
 FROM oven/bun:${BUN_VERSION}-alpine AS local-runtime-trading

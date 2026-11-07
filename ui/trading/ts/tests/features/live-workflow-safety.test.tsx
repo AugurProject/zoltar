@@ -226,7 +226,8 @@ describe('live workflow safety boundary', () => {
 			deferredWalletChainRead = undefined
 			walletChainReadStarted = undefined
 		}
-		const expectOnlyUniverseTwoRefreshedSince = (discoveriesBefore: number) => {
+		const expectOnlyUniverseTwoRefreshedSince = async (discoveriesBefore: number) => {
+			await waitForDom(() => walletSummaries.at(-1)?.status === 'ready', 'wallet summary after account discovery refresh')
 			expect(discoveredUniverseIds.slice(discoveriesBefore)).not.toContain(1n)
 			expect(discoveredUniverseIds.at(-1)).toBe(2n)
 			expect(walletSummaries.at(-1)).toMatchObject({ account: connectedAccount, universeId: '2', status: 'ready', repAttoRep: 6n * 10n ** 18n })
@@ -307,7 +308,7 @@ describe('live workflow safety boundary', () => {
 		await show('portfolio', { selectedUniverseId: '2' })
 		midConnectChainRead.resolve(configuration.chainId)
 		await settleAsyncWorkflow()
-		expectOnlyUniverseTwoRefreshedSince(discoveriesBeforeMidConnectUniverseChange)
+		await expectOnlyUniverseTwoRefreshedSince(discoveriesBeforeMidConnectUniverseChange)
 		releaseWalletChainRead()
 		deferSecondPortfolioBalance = true
 		await show('portfolio')
@@ -338,11 +339,11 @@ describe('live workflow safety boundary', () => {
 		const universeTwoDiscoveryCount = discoveredUniverseIds.length
 		await act(async () => walletListeners.get('accountsChanged')?.([connectedAccount]))
 		await settleAsyncWorkflow()
-		expectOnlyUniverseTwoRefreshedSince(universeTwoDiscoveryCount)
+		await expectOnlyUniverseTwoRefreshedSince(universeTwoDiscoveryCount)
 		const universeTwoChainDiscoveryCount = discoveredUniverseIds.length
 		await act(async () => walletListeners.get('chainChanged')?.('0x7a69'))
 		await settleAsyncWorkflow()
-		expectOnlyUniverseTwoRefreshedSince(universeTwoChainDiscoveryCount)
+		await expectOnlyUniverseTwoRefreshedSince(universeTwoChainDiscoveryCount)
 		deferChildDiscovery = false
 		await show('portfolio')
 		await flush()
@@ -352,7 +353,7 @@ describe('live workflow safety boundary', () => {
 		await show('portfolio', { selectedUniverseId: '2' })
 		midEventChainRead.resolve(configuration.chainId)
 		await settleAsyncWorkflow()
-		expectOnlyUniverseTwoRefreshedSince(discoveriesBeforeMidEventUniverseChange)
+		await expectOnlyUniverseTwoRefreshedSince(discoveriesBeforeMidEventUniverseChange)
 		releaseWalletChainRead()
 		await show('portfolio')
 		await flush()

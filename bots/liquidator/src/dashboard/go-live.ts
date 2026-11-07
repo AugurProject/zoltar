@@ -32,7 +32,7 @@ function readinessRows(snapshot: Snapshot, configuration: Configuration): Readin
 		canonicalContractsRow(snapshot),
 		relayDeliveryRow(configuration.submission.mode, configuration.submission.relayUrls.length),
 		{ advisory: true, detail: `${snapshot.metrics.approvedUniverseCount.toString()} approved`, label: 'Approved universes', ready: snapshot.metrics.approvedUniverseCount > 0 },
-		{ advisory: true, detail: `${snapshot.metrics.selectedPoolCount.toString()} supported · ${snapshot.metrics.eligiblePoolCount.toString()} eligible`, label: 'Supported pools', ready: snapshot.metrics.selectedPoolCount > 0 },
+		{ advisory: true, detail: `${configuration.selectedPortfolios.length} selected`, label: 'Selected portfolios', ready: configuration.selectedPortfolios.length > 0 },
 		{ advisory: true, detail: marketDetail, label: 'Market evidence', ready: consensus?.reliable === true },
 	]
 }

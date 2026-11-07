@@ -73,9 +73,9 @@ describe('OpenOracle compiler profile', () => {
 	test('generated artifacts retain immutable and link ranges required for deployed-bytecode coverage matching', async () => {
 		const artifact: unknown = JSON.parse(await fs.readFile('solidity/artifacts/Contracts.json', 'utf8'))
 		if (!isRecord(artifact) || !isRecord(artifact['contracts'])) throw new Error('Generated contract artifact is missing contracts')
-		const securityPoolSource = artifact['contracts']['contracts/statoblast/SecurityPool.sol']
-		if (!isRecord(securityPoolSource) || !isRecord(securityPoolSource['SecurityPool'])) throw new Error('Generated contract artifact is missing SecurityPool')
-		const evm = securityPoolSource['SecurityPool']['evm']
+		const securityPoolSource = artifact['contracts']['contracts/statoblast/factories/SecurityPoolFactory.sol']
+		if (!isRecord(securityPoolSource) || !isRecord(securityPoolSource['SecurityPoolFactory'])) throw new Error('Generated contract artifact is missing SecurityPool')
+		const evm = securityPoolSource['SecurityPoolFactory']['evm']
 		if (!isRecord(evm) || !isRecord(evm['deployedBytecode'])) throw new Error('Generated SecurityPool artifact is missing deployed bytecode')
 		const immutableReferences = evm['deployedBytecode']['immutableReferences']
 		const linkReferences = evm['deployedBytecode']['linkReferences']

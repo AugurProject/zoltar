@@ -10,7 +10,6 @@ import { getReportingOutcomeLabel } from './reporting/lib/reporting.js'
 import { buildIntent, buildPresentation, getPoolUniverseTransactionRows, withWarning } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import type { PoolUniverseTransactionContext } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import type { OpenOracleActionResult, ReportingActionResult } from '../types/contracts.js'
-import * as priceRequestCopy from '../copy/priceRequest.js'
 
 type ReportingTransactionContext = PoolUniverseTransactionContext & {
 	outcome?: ReportingActionResult['outcome'] | undefined
@@ -57,56 +56,6 @@ export function createReportingSuccessPresentation(result: ReportingActionResult
 
 export function createReportingWarningPresentation(result: ReportingActionResult, message: string) {
 	return withWarning(createReportingSuccessPresentation(result), message)
-}
-
-type PoolOracleTransactionContext = {
-	managerAddress: string
-	securityPoolAddress?: string | undefined
-	universeId?: bigint | undefined
-	proposedRepPerEthPrice?: bigint | undefined
-}
-
-function getPoolOracleTransactionRows(context: PoolOracleTransactionContext | undefined) {
-	if (context === undefined) return undefined
-	return [
-		...(context.securityPoolAddress === undefined ? [] : [{ label: commonCopy.securityPoolAddress, value: context.securityPoolAddress }]),
-		{ label: commonCopy.oracleManager, value: context.managerAddress },
-		...(context.proposedRepPerEthPrice === undefined ? [] : [{ label: priceRequestCopy.attemptedRepPerEthPrice, value: formatCurrencyBalance(context.proposedRepPerEthPrice) }]),
-	]
-}
-
-export function createPoolOracleTransactionIntent(actionName: 'executeStagedOperation' | 'requestPrice', context?: PoolOracleTransactionContext) {
-	let submittedTitle: string = transactionCopy.executingStagedOperation
-	if (actionName === 'requestPrice') {
-		submittedTitle = transactionCopy.requestingPrice
-	}
-	return buildIntent({
-		action: actionName,
-		rows: getPoolOracleTransactionRows(context),
-		scope: securityPoolTransactionScope(context?.securityPoolAddress),
-		failedTitle: actionName === 'requestPrice' ? transactionCopy.priceRequest : undefined,
-		source: 'pool-oracle',
-		submittedTitle,
-		universeId: context?.universeId,
-	})
-}
-
-export function createPoolOracleSuccessPresentation(result: OpenOracleActionResult, context?: PoolOracleTransactionContext) {
-	let title: string = transactionCopy.stagedOperationExecuted
-	if (result.action === 'requestPrice') {
-		title = transactionCopy.priceRequested
-	}
-	return buildPresentation({
-		hash: result.hash,
-		rows: getPoolOracleTransactionRows(context),
-		title,
-		tone: 'success',
-		universeId: context?.universeId,
-	})
-}
-
-export function createPoolOracleWarningPresentation(result: OpenOracleActionResult, message: string, context?: PoolOracleTransactionContext) {
-	return withWarning(createPoolOracleSuccessPresentation(result, context), message)
 }
 
 type OpenOracleTransactionContext = {

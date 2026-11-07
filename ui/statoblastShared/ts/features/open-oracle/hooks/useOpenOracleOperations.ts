@@ -34,14 +34,13 @@ import { defaultUseOpenOracleOperationsDependencies, type OpenOracleProductionWr
 import { useOpenOracleSelectedReport } from './useOpenOracleSelectedReport.js'
 import { useOpenOracleTokenAccess } from './useOpenOracleTokenAccess.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 
 export type { UseOpenOracleOperationsDependencies } from './openOracleOperationDependencies.js'
 
 const MAX_TIMEOUT_MS = 2_147_483_647
 
 function useOpenOracleOperationsWithDependencies<TWriteClient>(
-	{ accountAddress, enabled, onReportSettled, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState, walletEthBalanceAttoEth }: UseOpenOracleOperationsParameters,
+	{ accountAddress, enabled, onReportSettled, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseOpenOracleOperationsParameters,
 	dependencies: UseOpenOracleOperationsDependencies<TWriteClient>,
 ) {
 	const loadingOpenOracleCreate = useSignal(false)
@@ -113,7 +112,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 	const enabledRef = useRef(enabled)
 	enabledRef.current = enabled
 
-	const getDisputeSubmission = (reportDetails: OpenOracleReportDetails, form: OpenOracleFormState = openOracleForm.value, ethBalanceAttoEth: bigint | undefined = walletEthBalanceAttoEth) =>
+	const getDisputeSubmission = (reportDetails: OpenOracleReportDetails, form: OpenOracleFormState = openOracleForm.value) =>
 		deriveOpenOracleDisputeSubmissionDetails({
 			accountAddress,
 			approvedToken1Amount: openOracleToken1Approval.value.value,
@@ -129,8 +128,6 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			token2Balance: openOracleToken2Balance.value,
 			token2BalanceError: openOracleToken2BalanceError.value,
 			token2Decimals: reportDetails.token2Decimals,
-			walletEthBalanceAttoEth: ethBalanceAttoEth,
-			wethAddress: getWethAddress(),
 		})
 
 	// The proposed price picks the swapped token, so a refreshed report that flips it must be reviewed before any write.
@@ -276,28 +273,6 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 		})()
 
 	const approveToken1 = async (amount?: bigint) => await approveDisputeToken('token1', amount)
-
-	/** Wraps exactly the WETH the dispute lacks, re-checked against the refreshed report, balances, and wallet ETH. One transaction; the approvals and the dispute stay separate steps. */
-	const wrapDisputeWeth = async () =>
-		await (() => {
-			const submittedOpenOracleForm = openOracleForm.value
-			return runOracleAction(
-				'wrapWeth',
-				async (walletAddress, context) => {
-					const { details } = await ensureLoadedSelectedReport({ forceReload: true, reportIdInput: submittedOpenOracleForm.reportId.trim(), requireCurrentSelection: true })
-					if (getOpenOracleSelectedReportActionMode(details) !== 'dispute') throw new Error(openOracleCopy.wrapEthDisputeOnly)
-					await refreshOpenOracleTokenAccess(details, { preserveExisting: true })
-					assertSelectedReportCurrent(details.reportId.toString())
-					const ethBalanceAttoEth = await dependencies.createConnectedReadClient().getBalance({ address: walletAddress })
-					const wethWrap = getDisputeSubmission(details, submittedOpenOracleForm, ethBalanceAttoEth).wethWrap
-					if (wethWrap === undefined) throw new Error(openOracleCopy.wrapEthNotNeeded)
-					if (wethWrap.blockMessage !== undefined || wethWrap.amountAttoEth === undefined) throw new Error(wethWrap.blockMessage?.message ?? openOracleCopy.loadingWethBalance)
-					return await dependencies.wrapWeth(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), wethWrap.amountAttoEth)
-				},
-				openOracleCopy.wrapEthFailed,
-				{ refreshTokenAccessOnSuccess: true },
-			)
-		})()
 
 	const approveToken2 = async (amount?: bigint) => await approveDisputeToken('token2', amount)
 
@@ -562,7 +537,6 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 		setOpenOracleForm,
 		settleReport,
 		withdrawBalance,
-		wrapDisputeWeth,
 	}
 }
 

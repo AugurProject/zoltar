@@ -1,3 +1,8 @@
+export type { DurableState } from './durable-state-document.ts'
+import { durableStateDocument, type DurableState } from './durable-state-document.ts'
+import { parseCompletedInstructions, parsePortfolioFunding, type PortfolioFundingEffect, type InstructionIdentity } from './portfolio-instructions.ts'
+import { marketConfigurationList, poolCentralizedPriceAllowed, poolCentralizedPriceDeviationBps } from './market-snapshot.ts'
+import { parsePortfolioScopes } from './portfolio-scopes.ts'
 import { parsePendingTransactionIntent } from './pending-transaction-intent.ts'
 import type { RuntimeState } from './runtime-state.ts'
 export type { RuntimeState } from './runtime-state.ts'
@@ -8,8 +13,8 @@ import { compareBigint } from '@zoltar/core-shared/math/bigint'
 import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { isVaultMigrationSourceEligible } from '#core/fork-migration'
 import { vaultHealthBps, type LiquidationCandidate, type VaultPosition } from '#core/strategy'
-import { centralizedMarketConfigurationAllowsExecution, centralizedPriceAllowsExecution, centralizedPriceDeviationBps, serializeCentralizedMarketEstimate, type CentralizedMarketEstimate, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
-import { marketConsensusAllowsExecution, marketConsensusDeviationBps, serializeMarketConsensusEstimate, type MarketConsensusEstimate } from '@zoltar/bot-shared/monitoring/market-consensus'
+import { serializeCentralizedMarketEstimate, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
+import { serializeMarketConsensusEstimate } from '@zoltar/bot-shared/monitoring/market-consensus'
 
 /** Durable state holds bounded activity and recovery lists; a larger file means corruption or runaway growth. */
 const MAXIMUM_STATE_BYTES = 5 * 1024 * 1024
@@ -63,7 +68,7 @@ export type UniverseObservation = {
 	repToken: Address
 }
 
-export type StagedOperationObservation = {
+type StagedOperationObservation = {
 	operationValue: bigint
 	id: bigint
 	liquidationApprovalId: `0x${string}`
@@ -92,15 +97,6 @@ export type Activity = {
 	status: 'confirmed' | 'dry-run' | 'failed' | 'info' | 'pending'
 }
 
-export type DurableState = {
-	activities: Activity[]
-	chainId: number
-	lastScannedBlock: string | undefined
-	pendingStagedOperations: PendingStagedOperation[]
-	pendingTransactions: PendingTransactionIntent[]
-	version: 2
-}
-
 export type PendingStagedOperation = {
 	candidateOutcome?: {
 		blockHash: Hex
@@ -124,6 +120,8 @@ export type PendingStagedOperation = {
 }
 
 export type PendingTransactionIntent = {
+	portfolioFunding?: PortfolioFundingEffect | undefined
+	portfolioInstruction?: InstructionIdentity | undefined
 	hash: Hex
 	kind: 'deployment' | 'deposit' | 'fees' | 'liquidation' | 'migration' | 'withdrawal'
 	label: string
@@ -139,34 +137,6 @@ export type PendingTransactionIntent = {
 	sender: Address
 	serializedTransaction: Hex
 	submissionBlock: bigint
-}
-
-function marketConfigurationList(marketConfigurations: CentralizedMarketSettings | readonly CentralizedMarketSettings[] | undefined): readonly CentralizedMarketSettings[] {
-	if (marketConfigurations === undefined) return []
-	return 'assetAddress' in marketConfigurations ? [marketConfigurations] : marketConfigurations
-}
-
-function poolCentralizedPriceAllowed(pool: { lastPrice: bigint; repToken: Address }, noConfigurations: boolean, settings: CentralizedMarketSettings | undefined, centralizedMarket: CentralizedMarketEstimate | undefined, marketConsensus: MarketConsensusEstimate | undefined) {
-	if (settings === undefined) return noConfigurations
-	if (!centralizedMarketConfigurationAllowsExecution(settings)) return false
-	if (settings.venueConsensus === undefined) return settings.requiredForExecution ? false : centralizedPriceAllowsExecution(pool.lastPrice, centralizedMarket, settings, pool.repToken)
-	return marketConsensusAllowsExecution(
-		pool.lastPrice,
-		marketConsensus,
-		{
-			maximumDeviationBps: settings.maximumDexDeviationBps,
-			maximumObservationAgeMilliseconds: settings.maximumObservationAgeMilliseconds,
-			requiredForExecution: settings.requiredForExecution,
-		},
-		pool.repToken,
-		settings.assetChainId,
-	)
-}
-
-function poolCentralizedPriceDeviationBps(pool: { lastPrice: bigint; repToken: Address }, settings: CentralizedMarketSettings | undefined, centralizedMarket: CentralizedMarketEstimate | undefined, marketConsensus: MarketConsensusEstimate | undefined) {
-	if (settings?.venueConsensus !== undefined) return marketConsensusDeviationBps(pool.lastPrice, marketConsensus, pool.repToken)
-	if (centralizedMarket === undefined || settings === undefined) return undefined
-	return centralizedPriceDeviationBps(pool.lastPrice, centralizedMarket, pool.repToken)
 }
 
 function parseStagedOperation(value: unknown): 0 | 1 {
@@ -200,6 +170,8 @@ export function initialRuntimeState(paused: boolean, wallet: Address | undefined
 		rpcEndpointHealth: [],
 		pendingStagedOperations: [],
 		pendingTransactions: [],
+		portfolios: [],
+		portfolioScopes: [],
 		pools: [],
 		scanning: false,
 		startedAt: new Date().toISOString(),
@@ -217,10 +189,6 @@ export function clearMarketEvidenceForConfigurationChange(state: { centralizedMa
 	state.marketConsensus = undefined
 	state.marketConsensusByAsset?.clear()
 	state.marketObservations = []
-}
-
-export function recoveredIntentCanBeResubmitted(intent: Pick<PendingTransactionIntent, 'requiresMarketEvidence'>) {
-	return !intent.requiresMarketEvidence
 }
 
 export function resolveRecoveredIntentJournal(state: Pick<RuntimeState, 'pendingTransactions'>, hash: Hex, receiptStatus: 'reverted' | 'success' | undefined) {
@@ -523,7 +491,7 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 export async function loadDurableState(path: string, expectedChainId: number): Promise<DurableState> {
 	if (!Number.isSafeInteger(expectedChainId) || expectedChainId < 1) throw new Error('Expected state chain ID must be a positive integer')
 	const contents = await readOwnerFileIfPresent(path, 'Liquidator state', MAXIMUM_STATE_BYTES)
-	if (contents === undefined) return { activities: [], chainId: expectedChainId, lastScannedBlock: undefined, pendingStagedOperations: [], pendingTransactions: [], version: 2 }
+	if (contents === undefined) return { portfolioFunding: {}, completedPortfolioInstructions: {}, portfolioScopes: [], activities: [], chainId: expectedChainId, lastScannedBlock: undefined, pendingStagedOperations: [], pendingTransactions: [], version: 2 }
 	const value: unknown = JSON.parse(contents)
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Liquidator state must be an object')
 	const version = Reflect.get(value, 'version')
@@ -609,18 +577,9 @@ export async function loadDurableState(path: string, expectedChainId: number): P
 			}
 		}),
 		pendingTransactions: await Promise.all(pendingTransactions.map((intent: unknown) => parsePendingTransactionIntent(intent, expectedChainId))),
-		version: 2,
-	}
-}
-
-/** The on-disk document: bigints are written as decimal strings, which `loadDurableState` parses back. */
-function durableStateDocument(state: RuntimeState) {
-	return {
-		activities: state.activities,
-		chainId: state.chainId,
-		lastScannedBlock: state.lastScannedBlock,
-		pendingStagedOperations: state.pendingStagedOperations,
-		pendingTransactions: state.pendingTransactions,
+		portfolioFunding: parsePortfolioFunding(Reflect.get(value, 'portfolioFunding')),
+		completedPortfolioInstructions: parseCompletedInstructions(Reflect.get(value, 'completedPortfolioInstructions')),
+		portfolioScopes: parsePortfolioScopes(Reflect.get(value, 'portfolioScopes')),
 		version: 2,
 	}
 }

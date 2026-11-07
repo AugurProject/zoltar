@@ -70,7 +70,7 @@ export function settlementAvailability(market: SettlementLifecycle, balances: Se
 
 /** Local settlement intent, with the displayed minimum retained through fresh validation. */
 export type SettlementApproval =
-	| Readonly<{ operation: 'redeem-complete-set'; market: LiveMarket; amount: bigint; deadline: TransactionExpiry; slippageBps: bigint; expectedAttoEth: bigint; minimumAttoEth: bigint }>
+	| Readonly<{ operation: 'redeem-complete-set'; market: LiveMarket; amount: bigint; deadline: TransactionExpiry; slippageBps: bigint; expectedAttoEth: bigint; expectedAttoRep?: bigint; minimumAttoEth: bigint }>
 	| Readonly<{ operation: 'redeem-winning-shares'; market: LiveMarket }>
 	| Readonly<{ operation: 'migrate-shares'; market: LiveMarket; sourceOutcome: ShareOutcome; targetOutcomeIndexes: readonly bigint[] }>
 

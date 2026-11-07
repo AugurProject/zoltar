@@ -189,7 +189,7 @@ function buildUniswapV3PoolUrl(poolAddress: Address) {
 // Returns how much tokenOut you receive for swapping `amountIn` of tokenIn.
 // Use ETH_ADDRESS (zeroAddress) for ETH. Tokens can be in any order — currency0/1
 // ordering and zeroForOne direction are derived from the addresses automatically.
-export async function quoteExactInput(client: ReadClient, tokenIn: Address, tokenOut: Address, amountIn: bigint, poolConfig: PoolConfig = DEFAULT_POOL_CONFIG): Promise<bigint> {
+async function quoteExactInput(client: ReadClient, tokenIn: Address, tokenOut: Address, amountIn: bigint, poolConfig: PoolConfig = DEFAULT_POOL_CONFIG): Promise<bigint> {
 	assertRepPricingEnabled()
 	const mockResult = await assertMockPairSupported(client, tokenIn, tokenOut, amountIn)
 	if (mockResult !== undefined) return mockResult.amountOut

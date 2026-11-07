@@ -1,14 +1,13 @@
 import * as tradingCopy from '../../../copy/trading.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
-import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit, formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { tryParseBigIntListInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { tryParseTradingAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
-import { rpow } from '@zoltar/statoblast-shared/statoblast/retentionRate'
+import { rpow, previewLinearFeeCheckpoint, type LinearFeeState } from '@zoltar/statoblast-shared/statoblast/retentionRate'
 import { isValidScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import type { DeploymentStatus, ReportingOutcomeKey, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { TradingShareBalances } from '../../../types/contracts.js'
@@ -43,11 +42,6 @@ export function getRemainingMintCapacity(mintingCapacityAttoEth: bigint | undefi
 	return mintingCapacityAttoEth > settlementCollateralAttoEth ? mintingCapacityAttoEth - settlementCollateralAttoEth : 0n
 }
 
-/** A listed pool's mintable remainder, the figure the pool directory and the pool header both show: zero once an escalation game starts, the backing capacity is zero or unknown, or the complete-set exchange rate is undefined. */
-export function getPoolRemainingMintCapacity(pool: { mintingCapacityAttoEth?: bigint | undefined; hasForkContinuationEscalationGame: boolean; ordinaryEscalationGameStarted: boolean; settlementCollateralAttoEth: bigint; shareTokenSupplyAttoShares: bigint }) {
-	return getRemainingMintCapacity(getPoolMintingCapacityAttoEth(pool), pool.settlementCollateralAttoEth, pool.shareTokenSupplyAttoShares)
-}
-
 /** The largest mint that fits both the remaining capacity and the wallet ETH left after the gas reserve. */
 export function getMaximumMintAmount(walletEthBalanceAttoEth: bigint | undefined, remainingMintCapacityAttoEth: bigint | undefined) {
 	if (walletEthBalanceAttoEth === undefined || remainingMintCapacityAttoEth === undefined) return undefined
@@ -56,6 +50,9 @@ export function getMaximumMintAmount(walletEthBalanceAttoEth: bigint | undefined
 }
 
 export function estimateMintCheckpoint({
+	centralSettlement,
+	centralCheckpointTimestamp,
+	linearFee,
 	currentRetentionRate,
 	currentTimestamp,
 	feeEligibleUnderwritingLimitAttoEth,
@@ -66,6 +63,9 @@ export function estimateMintCheckpoint({
 	settlementCollateralAttoEth,
 	totalFeesOwedRemainder,
 }: {
+	centralCheckpointTimestamp?: bigint | undefined
+	centralSettlement?: boolean | undefined
+	linearFee?: LinearFeeState | undefined
 	currentRetentionRate: bigint | undefined
 	currentTimestamp: bigint | undefined
 	feeEligibleUnderwritingLimitAttoEth: bigint | undefined
@@ -88,6 +88,17 @@ export function estimateMintCheckpoint({
 		totalFeesOwedRemainder === undefined
 	)
 		return undefined
+	if (centralSettlement === true) {
+		if (centralCheckpointTimestamp === undefined || linearFee === undefined) return undefined
+		// The simulated checkpoint includes historical pauses. Only future elapsed time
+		// can accrue again, bounded by the stream's remaining logical duration.
+		const elapsed = currentTimestamp > centralCheckpointTimestamp ? currentTimestamp - centralCheckpointTimestamp : 0n
+		const remaining = linearFee.endTime > lastUpdatedFeeAccumulator ? linearFee.endTime - lastUpdatedFeeAccumulator : 0n
+		const fees = (elapsed < remaining ? elapsed : remaining) * linearFee.rateAttoEthPerSecond
+		const estimatedRetentionFeeAttoEth = fees < settlementCollateralAttoEth ? fees : settlementCollateralAttoEth
+		return { estimatedRetentionFeeAttoEth, settlementCollateralAfterFeesAttoEth: settlementCollateralAttoEth - estimatedRetentionFeeAttoEth }
+	}
+	if (linearFee !== undefined) return previewLinearFeeCheckpoint({ linearFee, currentTimestamp, feeEndTimestamp, lastUpdatedFeeAccumulator, settlementCollateralAttoEth })
 	const checkpointTimestamp = currentTimestamp < feeEndTimestamp ? currentTimestamp : feeEndTimestamp
 	if (lastUpdatedFeeAccumulator >= checkpointTimestamp || feeEligibleUnderwritingLimitAttoEth === 0n) return { estimatedRetentionFeeAttoEth: 0n, settlementCollateralAfterFeesAttoEth: settlementCollateralAttoEth }
 	const timeDelta = checkpointTimestamp - lastUpdatedFeeAccumulator
@@ -104,10 +115,6 @@ export function estimateMintCheckpoint({
 		estimatedRetentionFeeAttoEth,
 		settlementCollateralAfterFeesAttoEth: settlementCollateralAttoEth - estimatedRetentionFeeAttoEth,
 	}
-}
-
-export function formatStatoblastSecurityMultiplier(statoblastSecurityMultiplierBps: bigint) {
-	return formatMultiplier(statoblastSecurityMultiplierBps, 4)
 }
 
 export function hasRepBackedPoolWithNoActiveCapacityOwnership(totalPoolHeldAttoRep: bigint | undefined, feeEligibleUnderwritingLimitAttoEth: bigint | undefined) {
@@ -129,34 +136,6 @@ export function convertAttoSharesToSettlementCollateralAttoEth(amountAttoShares:
 	if (settlementCollateralAttoEth === undefined || shareTokenSupplyAttoShares === undefined) return amountAttoShares
 	if (shareTokenSupplyAttoShares === 0n) return amountAttoShares
 	return (amountAttoShares * settlementCollateralAttoEth) / shareTokenSupplyAttoShares
-}
-
-function convertSettlementCollateralAttoEthToAttoShares(amountAttoEth: bigint, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares: bigint | undefined) {
-	if (settlementCollateralAttoEth === undefined || shareTokenSupplyAttoShares === undefined) return amountAttoEth
-	if (settlementCollateralAttoEth === 0n) {
-		if (shareTokenSupplyAttoShares !== 0n) return undefined
-		return amountAttoEth
-	}
-	return ceilDiv(amountAttoEth * shareTokenSupplyAttoShares, settlementCollateralAttoEth)
-}
-
-// Converting ETH back to shares rounds up, yet a maximum ETH amount rounded down from the share balance can map to fewer
-// shares and strand dust. An amount at the redeemable maximum therefore redeems the exact share balance.
-export function getCompleteSetRedeemAttoShares({
-	maxRedeemableAttoShares,
-	redeemAmountAttoEth,
-	settlementCollateralAttoEth,
-	shareTokenSupplyAttoShares,
-}: {
-	maxRedeemableAttoShares: bigint | undefined
-	redeemAmountAttoEth: bigint
-	settlementCollateralAttoEth: bigint | undefined
-	shareTokenSupplyAttoShares: bigint | undefined
-}) {
-	const convertedAttoShares = convertSettlementCollateralAttoEthToAttoShares(redeemAmountAttoEth, settlementCollateralAttoEth, shareTokenSupplyAttoShares)
-	if (convertedAttoShares === undefined || maxRedeemableAttoShares === undefined || convertedAttoShares > maxRedeemableAttoShares) return convertedAttoShares
-	const maxRedeemableAttoEth = convertAttoSharesToSettlementCollateralAttoEth(maxRedeemableAttoShares, settlementCollateralAttoEth, shareTokenSupplyAttoShares)
-	return redeemAmountAttoEth >= maxRedeemableAttoEth ? maxRedeemableAttoShares : convertedAttoShares
 }
 
 export function getShareSettlementBalances(shareBalances: TradingShareBalances | undefined, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares: bigint | undefined) {
@@ -213,6 +192,7 @@ export function isTradingSystemDeployed(deploymentStatuses: DeploymentStatus[]) 
 export function getTradingMintGuardMessage({
 	accountAddress,
 	escalationGameActive = false,
+	usesSharedBacking = false,
 	settlementCollateralAttoEth,
 	ethBalanceAttoEth,
 	mintingCapacityAttoEth,
@@ -225,6 +205,7 @@ export function getTradingMintGuardMessage({
 	accountAddress: Address | undefined
 	/** An open escalation game closes minting; it explains a zero capacity before any capacity message. */
 	escalationGameActive?: boolean
+	usesSharedBacking?: boolean
 	settlementCollateralAttoEth: bigint | undefined
 	ethBalanceAttoEth: bigint | undefined
 	mintingCapacityAttoEth: bigint | undefined
@@ -244,20 +225,20 @@ export function getTradingMintGuardMessage({
 	if (undefinedExchangeRate) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
 
 	const remainingCapacity = getRemainingMintCapacity(mintingCapacityAttoEth, settlementCollateralAttoEth, shareTokenSupplyAttoShares)
-	if (remainingCapacity === undefined) return 'Loading mint capacity…'
-	if (remainingCapacity === 0n) {
+	if (!usesSharedBacking && remainingCapacity === undefined) return 'Loading mint capacity…'
+	if (!usesSharedBacking && remainingCapacity === 0n) {
 		if ((totalPoolHeldAttoRep ?? 0n) > 0n && mintingCapacityAttoEth === 0n) return NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE
 
 		return 'No mint capacity remaining.'
 	}
 
 	const trimmedAmount = mintAmountInput.trim()
-	if (trimmedAmount === '') return tradingCopy.mintAmountRequired
+	if (trimmedAmount === '') return undefined
 	const mintAmount = tryParseTradingAmountInput(trimmedAmount)
 	if (mintAmount === undefined) return 'Enter a valid mint amount.'
 
-	if (mintAmount <= 0n) return tradingCopy.mintAmountRequired
-	if (mintAmount > remainingCapacity) return `Max mint capacity is ${formatCurrencyBalanceWithUnit(remainingCapacity, 'ETH')}.`
+	if (mintAmount <= 0n) return undefined
+	if (!usesSharedBacking && remainingCapacity !== undefined && mintAmount > remainingCapacity) return `Max mint capacity is ${formatCurrencyBalanceWithUnit(remainingCapacity, 'ETH')}.`
 	if (ethBalanceAttoEth === undefined) return statoblastAppCopy.loadingWalletEthBalance
 	const spendableEthAttoEth = getSpendableEthBalance(ethBalanceAttoEth)
 	if (mintAmount > spendableEthAttoEth) return `Need ${formatAdditionalCurrencyBalance(mintAmount - spendableEthAttoEth, 'ETH')} in this wallet to mint the selected amount and keep ${formatCurrencyBalanceWithUnit(ETH_GAS_RESERVE_ATTO_ETH, 'ETH')} for gas.`
@@ -266,13 +247,11 @@ export function getTradingMintGuardMessage({
 
 export function getTradingRedeemCompleteSetGuardMessage({
 	accountAddress,
-	settlementCollateralAttoEth,
 	hasSelectedPool,
 	isOnActiveAppChain,
 	loadingTradingDetails,
 	redeemAmountInput,
 	shareBalances,
-	shareTokenSupplyAttoShares,
 }: {
 	accountAddress: Address | undefined
 	settlementCollateralAttoEth: bigint | undefined
@@ -293,17 +272,12 @@ export function getTradingRedeemCompleteSetGuardMessage({
 	if (maxRedeemableCompleteSetsAttoShares === 0n) return NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE
 
 	const trimmedAmount = redeemAmountInput.trim()
-	if (trimmedAmount === '') return tradingCopy.redeemAmountRequired
+	if (trimmedAmount === '') return undefined
 	const redeemAmount = tryParseTradingAmountInput(trimmedAmount)
 	if (redeemAmount === undefined) return 'Enter a valid redeem amount.'
 
-	if (redeemAmount <= 0n) return tradingCopy.redeemAmountRequired
-	const redeemAmountAttoShares = convertSettlementCollateralAttoEthToAttoShares(redeemAmount, settlementCollateralAttoEth, shareTokenSupplyAttoShares)
-	if (redeemAmountAttoShares === undefined) return 'Redeeming is unavailable because this pool has complete-set shares but no collateral.'
-	if (redeemAmountAttoShares > maxRedeemableCompleteSetsAttoShares) {
-		const maximumRedeemableAmountAttoEth = convertAttoSharesToSettlementCollateralAttoEth(maxRedeemableCompleteSetsAttoShares, settlementCollateralAttoEth, shareTokenSupplyAttoShares)
-		return `Max redeemable amount is ${formatCurrencyBalanceWithUnit(maximumRedeemableAmountAttoEth, 'ETH')}.`
-	}
+	if (redeemAmount <= 0n) return undefined
+	if (redeemAmount > maxRedeemableCompleteSetsAttoShares) return `Max redeemable amount is ${formatCurrencyBalanceWithUnit(maxRedeemableCompleteSetsAttoShares, 'sets')}.`
 	return undefined
 }
 

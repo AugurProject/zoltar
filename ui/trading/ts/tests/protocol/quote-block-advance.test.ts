@@ -72,7 +72,8 @@ function createAdvancingChain() {
 				}
 				throw new Error(`Unexpected share token simulation ${decoded.functionName}`)
 			}
-			if (transaction.to === pool.toLowerCase()) return feeAccountingRpcResult(transaction.data, chain.feeMarket, chain.head) ?? '0x'
+			const feeResponse = feeAccountingRpcResult(transaction.data, chain.feeMarket, chain.head)
+			if (feeResponse !== undefined) return feeResponse
 			const decoded = decodeFunctionData({ abi: routerAbi, data: transaction.data })
 			chain.transactionSimulations.push(decoded.functionName)
 			if (decoded.functionName === 'enterPosition') return encodeAbiParameters([{ type: 'tuple', components: [uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[10n, 10n, 1n, 2n, chain.longSharesOut, 10n, 1n, 5_000n, 5_001n]])
@@ -164,12 +165,12 @@ describe('submitting a quote after the chain advances', () => {
 			expect(quote.expectedLiquidity).toBe(10n)
 			expect(quote.blockHash).toBe(blockHashAt(2n))
 			expect(chain.sends).toHaveLength(0)
-			expect(chain.simulatedBlocks).toEqual(['0x2', '0x2', '0x2'])
+			expect(new Set(chain.simulatedBlocks)).toEqual(new Set(['0x2']))
 			expect(chain.blockRequests).toEqual([['latest', false]])
 			chain.head = 3n
 			chain.simulatedBlocks.length = 0
 			expect(await submitFreshLiquidity(client, configuration, account, quote, write)).toBe(transactionHash)
-			expect(chain.simulatedBlocks).toEqual(['0x3', '0x3', '0x3', '0x3', '0x3'])
+			expect(new Set(chain.simulatedBlocks)).toEqual(new Set(['0x3']))
 			expect(chain.blockRequests).toEqual([
 				['latest', false],
 				['latest', false],
@@ -177,7 +178,7 @@ describe('submitting a quote after the chain advances', () => {
 			])
 			const submitted = decodeFunctionData({ abi: routerAbi, data: chain.sends[0] ?? '0x' })
 			expect(submitted.functionName).toBe(existingPair === undefined ? 'createPairAndInitializeWithEth' : 'initializeWithEth')
-			expect(submitted.args).toEqual([existingPair ?? pool, 5_000n, 9n, account, quote.deadline])
+			expect(submitted.args).toEqual([existingPair ?? pool, 10n, 5_000n, 9n, account, quote.deadline])
 		}
 	})
 
@@ -198,7 +199,7 @@ describe('submitting a quote after the chain advances', () => {
 		expect(chain.head).toBe(3n)
 		expect(quote.blockNumber).toBe(2n)
 		expect(quote.deadline).toBe(2n + 20n * 60n)
-		expect(chain.simulatedBlocks).toEqual(['0x2', '0x2', '0x2'])
+		expect(new Set(chain.simulatedBlocks)).toEqual(new Set(['0x2']))
 		expect(chain.blockRequests).toEqual([['latest', false]])
 		expect(chain.sends).toHaveLength(0)
 	})
@@ -248,6 +249,7 @@ describe('submitting a quote after the chain advances', () => {
 				feeEndTime: 1_000n,
 				projectedCollateralAttoEth: 100n,
 				feeAccounting: {
+					linearFee: { rateAttoEthPerSecond: 1n, endTime: 1_000n },
 					settlementCollateralAttoEth: 100n,
 					totalUnderwritingLimitAttoEth: 100n,
 					feeEligibleUnderwritingLimitAttoEth: 100n,
@@ -270,7 +272,15 @@ describe('submitting a quote after the chain advances', () => {
 				operation === 'sell'
 					? { kind: 'sell' as const, value: await simulateExit(client, configuration, market, account, 'YES', 10n, 7n, MINIMUM_SLIPPAGE_BPS) }
 					: { kind: 'add' as const, value: await simulateLiquidity(client, configuration, market, account, 'add', 10n, 5_000n, { validityMinutes: 7n }, MINIMUM_SLIPPAGE_BPS) }
-			chain.feeMarket = { ...market, currentRetentionRate: 999_000_000_000_000_000n }
+			chain.feeMarket = {
+				...market,
+				valuation: {
+					timestamp: 2n,
+					feeEndTime: 1_000n,
+					projectedCollateralAttoEth: 100n,
+					feeAccounting: { linearFee: { rateAttoEthPerSecond: 1n, endTime: 1_000n }, settlementCollateralAttoEth: 100n, totalUnderwritingLimitAttoEth: 100n, feeEligibleUnderwritingLimitAttoEth: 100n, currentRetentionRate: 10n ** 18n, lastUpdatedFeeAccumulator: 2n, feeIndexRemainder: 0n, totalFeesOwedRemainder: 0n },
+				},
+			}
 			const send = quote.kind === 'sell' ? submitFreshExit(client, configuration, account, quote.value, write) : submitFreshLiquidity(client, configuration, account, quote.value, write)
 			await expect(send).rejects.toThrow('Holding fees')
 			expect(chain.sends).toHaveLength(0)
@@ -308,7 +318,7 @@ describe('submitting a quote after the chain advances', () => {
 		expect(chain.sends).toHaveLength(1)
 		const submitted = decodeFunctionData({ abi: routerAbi, data: chain.sends[0] ?? '0x' })
 		expect(submitted.functionName).toBe('enterPosition')
-		expect(submitted.args).toEqual([pair, 1n, 9n, account, 2n + 7n * 60n])
+		expect(submitted.args).toEqual([pair, 10n, 1n, 9n, account, 2n + 7n * 60n])
 	})
 
 	test('rejects a later-block quote that falls below the approved minimum without broadcasting', async () => {

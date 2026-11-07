@@ -1,7 +1,7 @@
 import { requestWithTimeout } from '@zoltar/bot-shared/dashboard/polling'
 import { deploySecurityPoolEvent } from '@zoltar/bot-shared/contracts/abi'
 import type { Address } from '@zoltar/bot-shared/ethereum'
-import type { ReadClient } from './vault-positions.ts'
+import type { ReadClient } from './read-client.ts'
 
 type VerifiedDate = { blockNumber: bigint; blockHash: string; timestamp: string }
 const caches = new WeakMap<ReadClient, ReturnType<typeof createPoolDeploymentDateCache>>()

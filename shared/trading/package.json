@@ -14,6 +14,11 @@
 			"bun": "./ts/trading/positions.ts",
 			"default": "./js/trading/positions.js"
 		},
+		"./trading/portfolioMint": {
+			"types": "./ts/trading/portfolioMint.ts",
+			"bun": "./ts/trading/portfolioMint.ts",
+			"default": "./js/trading/portfolioMint.js"
+		},
 		"./trading/receiveRequest": {
 			"types": "./ts/trading/receiveRequest.ts",
 			"bun": "./ts/trading/receiveRequest.ts",

@@ -1,4 +1,4 @@
-import { allocatedWinningPayout } from './claim-payout.ts'
+import { allocatedWinningPayout, ordinaryWinningPayout } from './claim-payout.ts'
 import { bagCarryPeaks, compareBigintAscending, buildCarryMerkleMountainRangeProof, buildCarryPeakHeights, createSparseNullifier, hashCarryLeaf, type CarryLeaf } from '@zoltar/core-shared/evm/carryProof'
 import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
 import { abiForKind } from './abi-catalog.ts'
@@ -80,7 +80,6 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 		let nodeId = uint(view['localHeadNodeId'])
 		const visited = new Set<bigint>()
 		const leaves: Leaf[] = []
-		const ctx = await context(game)
 		while (nodeId !== 0n) {
 			if (visited.has(nodeId) || leaves.length >= 256) throw new Error('Carry node cycle or 256-leaf limit exceeded')
 			visited.add(nodeId)
@@ -88,8 +87,7 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 			if (uint(node[2]) !== BigInt(outcome)) throw new Error('Carry node outcome mismatch')
 			const leaf = { depositor: address(node[1]), amountAttoRep: uint(node[3]), parentDepositIndex: uint(node[4]), cumulativeAmountAttoRep: uint(node[5]), sourceNodeId: nodeId, index: uint(node[6]) }
 			const isActive = active.has(nodeId.toString())
-			const directlyClaimed = !isActive && flag(await call(ctx.forker, 'securityPoolForker', 'isEscalationDepositClaimedDirectly', [ctx.pool, outcome, leaf.parentDepositIndex]))
-			leaves.push({ ...leaf, localIndex: 0n, active: isActive, leafHash: isActive || directlyClaimed ? hashCarryLeaf(leaf, outcome) : ZERO })
+			leaves.push({ ...leaf, localIndex: 0n, active: isActive, leafHash: isActive ? hashCarryLeaf(leaf, outcome) : ZERO })
 			nodeId = uint(node[0])
 		}
 		leaves.sort((a, b) => compareBigintAscending(a.index, b.index))
@@ -128,7 +126,13 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 	const zoltar = address(await call(ctx.pool, 'securityPool', 'zoltar'))
 	const universe = uint(await call(ctx.pool, 'securityPool', 'universeId'))
 	const forkTime = uint(await call(zoltar, 'zoltar', 'getForkTime', [universe]))
-	const forkThreshold = forkTime > uint(state['endTimestamp']) ? uint(state['nonDecisionThresholdAttoRep']) : uint(await call(zoltar, 'zoltar', 'getForkThresholdAttoRep', [universe]))
+	const ordinarySettled = !ctx.continuation && flag(await call(gameAddress, 'escalationGame', 'ordinarySettlementInitialized'))
+	const readForkThreshold = async () => {
+		if (ordinarySettled) return uint(await call(gameAddress, 'escalationGame', 'ordinarySettlementForkThresholdAttoRep'))
+		if (forkTime > uint(state['endTimestamp'])) return uint(state['nonDecisionThresholdAttoRep'])
+		return uint(await call(zoltar, 'zoltar', 'getForkThresholdAttoRep', [universe]))
+	}
+	const forkThreshold = await readForkThreshold()
 	const positions: Record<string, unknown>[] = []
 	let truncated = false
 	for (let outcome = 0; outcome < 3; outcome++) {
@@ -154,10 +158,8 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 				truncated = true
 				continue
 			}
-			const directlyClaimed = isInherited && flag(await call(ctx.forker, 'securityPoolForker', 'isEscalationDepositClaimedDirectly', [ctx.parentPool, outcome, leaf.parentDepositIndex]))
 			let status = 'pending'
-			if (directlyClaimed) status = 'claimed-in-parent'
-			else if (resolution !== 3n && resolution === poolResolution) status = resolution === BigInt(outcome) ? 'claimable' : 'losing'
+			if (resolution !== 3n && resolution === poolResolution) status = resolution === BigInt(outcome) ? 'claimable' : 'losing'
 			else if (resolution !== poolResolution) status = 'resolution-mismatch'
 			const membership = isInherited ? buildCarryMerkleMountainRangeProof(inheritedHashes, Number(leaf.index)) : undefined
 			const proof =
@@ -178,15 +180,22 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 			let principal = leaf.amountAttoRep
 			let rewardAmount = leaf.amountAttoRep
 			let rewardCumulative = leaf.cumulativeAmountAttoRep
-			if (isInherited && !directlyClaimed) {
-				const allocation = array(await call(gameAddress, 'escalationGameClaimDelegate', 'getInheritedClaimAllocation', [outcome, leaf.amountAttoRep, leaf.cumulativeAmountAttoRep, leaf.index]))
-				sourcePrincipal = uint(allocation[0])
-				principal = uint(allocation[1])
-				rewardAmount = uint(allocation[2])
-				rewardCumulative = uint(allocation[3])
+			let allocationReady = true
+			if (isInherited) {
+				const claim = [outcome, leaf.amountAttoRep, leaf.cumulativeAmountAttoRep, leaf.index]
+				const progress = array(await call(gameAddress, 'escalationGameClaimDelegate', 'getClaimCheckpointProgress', claim))
+				allocationReady = flag(progress[3])
+				if (allocationReady) {
+					const allocation = array(await call(gameAddress, 'escalationGameClaimDelegate', 'getInheritedClaimAllocation', claim))
+					sourcePrincipal = uint(allocation[0])
+					principal = uint(allocation[1])
+					rewardAmount = uint(allocation[2])
+					rewardCumulative = uint(allocation[3])
+				} else if (status === 'claimable') status = 'checkpoint-required'
 			}
 			if (principal > sourcePrincipal) throw new Error('Retained claim principal exceeds source allocation')
-			const result = status === 'claimable' ? allocatedWinningPayout({ principal, rewardAmount, rewardCumulative, binding: uint(state['bindingCapitalAttoRep']), winningBalance: uint(view['balanceAttoRep']), forkThreshold, nonDecisionThreshold: uint(state['nonDecisionThresholdAttoRep']) }) : undefined
+			const payout = ctx.continuation ? allocatedWinningPayout : ordinaryWinningPayout
+			const result = allocationReady && status === 'claimable' ? payout({ principal, rewardAmount, rewardCumulative, binding: uint(state['bindingCapitalAttoRep']), winningBalance: uint(view['balanceAttoRep']), forkThreshold, nonDecisionThreshold: uint(state['nonDecisionThresholdAttoRep']) }) : undefined
 			positions.push({
 				depositor: leaf.depositor.toLowerCase(),
 				outcome: String(outcome),
@@ -195,11 +204,12 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 				kind: isInherited ? 'inherited' : 'local',
 				status,
 				principal_atto_rep: leaf.amountAttoRep.toString(),
-				source_principal_atto_rep: directlyClaimed ? undefined : sourcePrincipal.toString(),
-				retained_principal_atto_rep: directlyClaimed ? undefined : principal.toString(),
-				auction_haircut_atto_rep: directlyClaimed ? undefined : (sourcePrincipal - principal).toString(),
-				reward_amount_atto_rep: directlyClaimed ? undefined : rewardAmount.toString(),
-				reward_cumulative_atto_rep: directlyClaimed ? undefined : rewardCumulative.toString(),
+				source_principal_atto_rep: allocationReady ? sourcePrincipal.toString() : undefined,
+				retained_principal_atto_rep: allocationReady ? principal.toString() : undefined,
+				auction_haircut_atto_rep: allocationReady ? (sourcePrincipal - principal).toString() : undefined,
+				reward_amount_atto_rep: allocationReady ? rewardAmount.toString() : undefined,
+				reward_cumulative_atto_rep: allocationReady ? rewardCumulative.toString() : undefined,
+				checkpoint_ready: isInherited ? allocationReady : undefined,
 				calculation: { binding_capital_atto_rep: state['bindingCapitalAttoRep'], winning_balance_atto_rep: uint(view['balanceAttoRep']).toString(), fork_threshold_atto_rep: forkThreshold.toString(), non_decision_threshold_atto_rep: state['nonDecisionThresholdAttoRep'] },
 				payout_atto_rep: result?.payout.toString(),
 				burn_atto_rep: result?.burn.toString(),

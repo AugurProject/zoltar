@@ -1,3 +1,4 @@
+import { portfolioView, type PortfolioView } from './portfolio-response.ts'
 import type { MonitoredPool } from './pool-presentation.ts'
 import { array, booleanValue, decode, dictionary, numberValue, object, oneOf, optional, stringValue, unknownValue } from '@zoltar/bot-shared/dashboard/response-validation'
 
@@ -88,6 +89,7 @@ export type Snapshot = {
 	pendingStagedOperations: { candidateBlock?: string; coordinator: string; historicalRecoveryComplete: boolean; latestRecoveryBlock?: string; nextHistoricalBlock?: string; operationId: string; queuedBlock: string; target: string }[]
 	pendingTransactions: { hash: string; label: string; mode: 'private' | 'public'; nonce: string; submissionBlock: string }[]
 	operatorCapable: boolean
+	portfolios?: PortfolioView[]
 	pools: MonitoredPool[]
 	scanning: boolean
 	status: 'connectivity-degraded' | 'dry-run' | 'error' | 'paused' | 'running' | 'starting'
@@ -101,12 +103,12 @@ export type Configuration = {
 	childMarketConfigurations: unknown[]
 	centralizedMarkets: unknown
 	connectivity?: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string; rpcQuorum: 1 | 2 } | undefined
-	desiredPools: unknown[]
 	network?: { chainId: number; explorerUrl: string; name: 'mainnet' | 'sepolia' } | undefined
 	networkConfigured?: boolean | undefined
 	runtime: { execute: boolean; historicalLogRecovery: boolean; logLookbackBlocks: number }
-	selectedPools: string[]
+	selectedPortfolios: { address: string; universeId: string }[]
 	strategy: Record<string, string | number | boolean>
+	portfolioPolicy: Record<string, string | number | boolean>
 	submission: { minimumBundleRelaySuccesses: number; mode: 'private' | 'public'; relayUrls: string[] }
 }
 
@@ -169,6 +171,7 @@ const snapshot = object<Snapshot>({
 	),
 	pendingTransactions: array(object<Snapshot['pendingTransactions'][number]>({ hash: stringValue, label: stringValue, mode: oneOf('private', 'public'), nonce: stringValue, submissionBlock: stringValue })),
 	operatorCapable: booleanValue,
+	portfolios: optional(array(portfolioView)),
 	pools: array(pool),
 	scanning: booleanValue,
 	status: oneOf('connectivity-degraded', 'dry-run', 'error', 'paused', 'running', 'starting'),
@@ -183,11 +186,11 @@ const configuration = object<Configuration>({
 	childMarketConfigurations: array(unknownValue),
 	centralizedMarkets: unknownValue,
 	connectivity: optional(object<NonNullable<Configuration['connectivity']>>({ publicRpcUrls: strings, quorumRpcUrls: strings, readRpcUrl: stringValue, rpcQuorum: oneOf(1, 2) })),
-	desiredPools: array(unknownValue),
 	network: optional(object<NonNullable<Configuration['network']>>({ chainId: numberValue, explorerUrl: stringValue, name: network })),
 	networkConfigured: optional(booleanValue),
 	runtime: object<Configuration['runtime']>({ execute: booleanValue, historicalLogRecovery: booleanValue, logLookbackBlocks: numberValue }),
-	selectedPools: strings,
+	selectedPortfolios: array(object<{ address: string; universeId: string }>({ address: stringValue, universeId: stringValue })),
+	portfolioPolicy: dictionary((value): value is string | number | boolean => stringValue(value) || numberValue(value) || booleanValue(value)),
 	strategy: dictionary((value): value is string | number | boolean => stringValue(value) || numberValue(value) || booleanValue(value)),
 	submission: object<Configuration['submission']>({ minimumBundleRelaySuccesses: numberValue, mode: oneOf('private', 'public'), relayUrls: strings }),
 })

@@ -1,26 +1,15 @@
-import { getAddress } from '@zoltar/bot-shared/ethereum'
+import { parsePortfolioSelections } from './portfolio-policy.ts'
 import type { OperatorSettings } from './settings.ts'
 
-export function updateSupportedPool(settings: OperatorSettings, value: unknown) {
-	if (typeof value !== 'object' || value === null) throw new Error('Pool selection request must be an object')
-	if (Reflect.get(value, 'chainId') !== settings.network.chainId) throw new Error('Pool selection belongs to a different chain')
-	const rawAddress = Reflect.get(value, 'address')
+export function updateSupportedPortfolio(settings: OperatorSettings, value: unknown) {
+	if (typeof value !== 'object' || value === null) throw new Error('Portfolio selection request must be an object')
+	if (Reflect.get(value, 'chainId') !== settings.network.chainId) throw new Error('Portfolio selection belongs to a different chain')
 	const supported = Reflect.get(value, 'supported')
-	if (typeof rawAddress !== 'string' || typeof supported !== 'boolean') throw new Error('Pool selection requires an address and supported flag')
-	const address = getAddress(rawAddress)
-	const remaining = settings.selectedPools.filter(pool => pool.toLowerCase() !== address.toLowerCase())
-	return { ...settings, selectedPools: supported ? [...remaining, address] : remaining }
-}
-
-export function parsePoolSelection(value: unknown) {
-	if (!Array.isArray(value)) throw new Error('Selected pools must be an array of addresses')
-	return [
-		...new Map(
-			value.map(raw => {
-				if (typeof raw !== 'string') throw new Error('Selected pools must contain addresses')
-				const address = getAddress(raw)
-				return [address.toLowerCase(), address] as const
-			}),
-		).values(),
-	]
+	if (typeof supported !== 'boolean') throw new Error('Portfolio selection requires a supported flag')
+	const selection = parsePortfolioSelections([{ address: Reflect.get(value, 'address'), universeId: Reflect.get(value, 'universeId') }])[0]
+	if (selection === undefined) throw new Error('Portfolio selection is missing')
+	const remaining = settings.selectedPortfolios.filter(item => item.address.toLowerCase() !== selection.address.toLowerCase() || item.universeId !== selection.universeId)
+	const next = supported ? [...remaining, selection] : remaining
+	if (next.length > 16) throw new Error('Select at most 16 portfolio/universe scopes')
+	return { ...settings, selectedPortfolios: next }
 }

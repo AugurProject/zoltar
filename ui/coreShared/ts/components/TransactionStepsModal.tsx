@@ -5,7 +5,7 @@ import { transactionSteps } from '../transactions/transactionSteps.js'
 import { isEmbeddedTransactionReview } from '../transactions/transactionReviewScope.js'
 
 /** Marks a review whose initiating surface renders the steps itself, such as the pool creation page. */
-export const embeddedTransactionSteps = signal<AbortSignal | undefined>(undefined)
+const embeddedTransactionSteps = signal<AbortSignal | undefined>(undefined)
 
 /**
  * Hosts the review of a transaction started outside any dialog. It is the same `OperationModal` review path a

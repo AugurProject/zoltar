@@ -15,16 +15,17 @@
 				<h1>Exit an insured position</h1>
 				<p>Use this guide to turn Yes or No shares back into ETH while the market's <a href="../reference/glossary.html#trading-pool">trading pool</a> is open. The exit spends one <a href="../reference/glossary.html#invalid">Invalid</a> share for each complete set it redeems, so your Invalid balance limits it.</p>
 			</header>
+			<p>Connect your wallet and open <strong>Portfolio</strong> to discover Yes, No, Invalid and LP holdings across registered security pools in the selected universe, including pools never opened in this browser. Discovery covers the configured deployment; switch universes to inspect other branches. A failed balance read remains visible as unavailable rather than being counted as zero.</p>
 			<section id="in-the-ui">
 				<h2>Exit in the UI</h2>
 				<ol>
 					<li>Open the market, select <strong>Sell</strong> and the side you hold.</li>
-					<li>Select <strong>Max</strong> to fill <strong>Shares to sell</strong> with the largest amount you can sell now, or enter a smaller amount. The hint under the field shows your holding, and also how much you can sell now when your Invalid, the trading pool's depth, or the 15% price-impact limit holds the sale below it.</li>
-					<li>Check <strong>You receive ≈</strong>, <strong>Minimum received</strong>, <strong>Maximum sold</strong>, and <strong>Invalid used</strong>, then select <strong>Sell Yes</strong> (or <strong>Sell No</strong>) and confirm.</li>
+					<li>Select <strong>Max</strong> to fill <strong>Shares to sell</strong> with the largest amount you can sell now, or enter a smaller amount. The hint under the field shows your holding and that limit.</li>
+					<li>Check <strong>You receive ≈</strong>, <strong>Minimum received</strong>, and <strong>Invalid used</strong>, then select <strong>Sell Yes</strong> (or <strong>Sell No</strong>) and confirm.</li>
 				</ol>
 				<figure class="screenshot" id="fig-trading-exit" aria-labelledby="fig-trading-exit-caption">
-					<a class="screenshot-link" href="../assets/screenshots/trading/sell-ticket.png"><img width="480" height="1114" src="../assets/screenshots/trading/sell-ticket.png" alt="The Trade tab with Sell and Yes selected, 0.001 Yes in Shares to sell, the hint You hold 0.005 Yes, 25%, 50%, and Max shortcuts, and the estimate with Invalid used, above an enabled Sell Yes button." loading="lazy" /></a>
-					<figcaption id="fig-trading-exit-caption"><span class="figure-label">An insured Yes exit.</span> The estimate shows the Invalid this sale spends as insurance.</figcaption>
+					<a class="screenshot-link" href="../assets/screenshots/trading/sell-ticket.png"><img width="480" height="1278" src="../assets/screenshots/trading/sell-ticket.png" alt="The Trade tab with Sell and Yes selected, 0.001 Yes in Shares to sell, the hint that up to 1.005 Yes can be sold now, 25%, 50%, and Max shortcuts, and the estimate with Invalid used, above an enabled Sell Yes button." loading="lazy" /></a>
+					<figcaption id="fig-trading-exit-caption"><span class="figure-label">An insured Yes exit.</span> The hint under the amount is the limit set by your Invalid, your Yes, and the trading pool's liquidity.</figcaption>
 				</figure>
 				<p>If Invalid is the binding limit and you enter more than it covers, the ticket shows <strong>Not enough Invalid shares to insure this sale.</strong> and offers <strong>Sell … instead</strong> with the largest amount. The shares you do not sell stay in your wallet. Acquiring more Invalid helps only when Invalid is the binding limit; <a href="../explanation/trading/early-exit-limit.html">Why early ETH exits are limited</a> works through the bounds.</p>
 				<p>When the sale confirms, the Invalid balance under <strong>Your position</strong> has dropped by <strong>Invalid used</strong> and the ETH is in your wallet.</p>

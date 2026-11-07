@@ -1,7 +1,7 @@
 import type { UiScreenshotCrop, UiScreenshotSpec, UiScreenshotStep } from '../ui-screenshot-specs.mts'
 
-// This seeded pool address is deterministic in the deployed and trading-funded fixtures.
-const seededPool = '0x5e4EDB416494DbB62DD8C76E849aDee8e3c44d49'
+// Resolve the fixture's canonical pool at capture time; deployment changes alter its address.
+const seededPool = { from: 'simulationSecurityPool' } as const
 const openSeededPool: readonly UiScreenshotStep[] = [{ fill: 'Search markets', value: seededPool }, { click: 'Open security pool' }, { waitForText: 'Question end' }]
 const openFirstMarket: readonly UiScreenshotStep[] = openSeededPool
 const openSeededPoolForCreation: readonly UiScreenshotStep[] = [{ fill: 'Search security pools', value: seededPool }, { click: 'Open security pool' }, { waitForText: 'Question end' }]
@@ -28,7 +28,7 @@ export const TRADING_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		id: 'buy-ticket',
 		app: 'trading',
 		scenario: 'trading-funded',
-		steps: [...openFirstMarket, { fill: 'You pay', value: '0.001' }, { waitForEnabled: 'Buy Yes' }],
+		steps: [...openFirstMarket, { fill: 'You pay', value: '0.002' }, { waitForEnabled: 'Buy Yes' }],
 		expectText: ['Trade', 'Buy', 'Sell', 'You pay', 'You receive ≈', 'Invalid insurance', 'Average price', 'Profit if the question resolves Yes', 'Minimum received', 'Price impact', 'Trade details', 'Buy Yes'],
 		viewport: tallViewport,
 		crop: tradePanel,

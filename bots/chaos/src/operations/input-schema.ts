@@ -33,7 +33,9 @@ const schemas: Record<string, InputField[]> = {
 	'trading.uniswap.swap-weth-for-rep': [universe],
 	'trading.uniswap.remove-liquidity': [universe],
 	'trading.uniswap.collect-fees': [universe],
-	'statoblast.vault.deposit-rep': [pool, amountField(['metadata', 'amountAttoRep'], 'REP amount')],
+	'statoblast.capital.deposit': [universe, amountField(['metadata', 'amountAttoRep'], 'REP amount')],
+	'statoblast.capital.set-commitment': [universe, amountField(['metadata', 'value'], 'Commitment ETH', 'commitmentAttoEth')],
+	'statoblast.capital.set-health': [universe, integer('healthFactorBps', 'Owner health target (basis points)', ['metadata', 'value'], '10000')],
 	'open-oracle.weth.wrap': [amountField(['value'], 'ETH amount')],
 	'open-oracle.weth.unwrap': [amountField(['args', 0], 'WETH amount')],
 	'open-oracle.report': [amountField(['metadata', 'amount1'], 'WETH contribution', 'amount1'), amountField(['metadata', 'amount2'], 'REP contribution', 'amount2')],
@@ -41,7 +43,12 @@ const schemas: Record<string, InputField[]> = {
 	'open-oracle.withdraw': [token, amountField(['args', 1])],
 	'open-oracle.withdraw-to': [token, amountField(['args', 1]), { key: 'recipient', label: 'Recipient address', kind: 'address', path: ['args', 2] }],
 	'open-oracle.push-or-credit': [token, amountField(['args', 2])],
-	'statoblast.auction.bid': [selection('auctions', 'Auction', ['metadata', 'auction']), amountField(['metadata', 'bidAttoEth'], 'Exact ETH bid'), integer('tick', 'Bid tick', ['metadata', 'tick'], '-10000', '10000')],
+	'statoblast.auction.bid': [
+		selection('auctions', 'Auction', ['metadata', 'auction']),
+		integer('lots', 'ETH lots', ['metadata', 'lots'], '1'),
+		amountField(['metadata', 'minimumAttoRepPerLot'], 'Minimum REP per lot', 'minimumAttoRepPerLot'),
+		integer('healthFactorBps', 'Owner health target (basis points)', ['metadata', 'healthFactorBps'], '10000'),
+	],
 	'trading.pair.initialize-shares': [pair, amountField(['metadata', 'shareAmount'], 'Shares per outcome'), amountField(['metadata', 'minimumLiquidity'], 'Minimum LP tokens', 'minimumLiquidity')],
 	'trading.liquidity.add-shares': [pair, amountField(['metadata', 'shareAmount'], 'Shares per outcome'), amountField(['metadata', 'minimumLiquidity'], 'Minimum LP tokens', 'minimumLiquidity')],
 	'trading.swap.exact-input': [
@@ -84,16 +91,16 @@ for (const id of ['trading.pair.create-and-initialize', 'trading.pair.initialize
 	const adding = id === 'trading.liquidity.add-eth'
 	schemas[id] = [
 		{ key: 'target', label: id === 'trading.pair.create-and-initialize' ? 'Security pool' : 'Trading pair', kind: 'choice', choices: id === 'trading.pair.create-and-initialize' ? 'pools' : 'pairs', path: ['args', 0] },
-		amountField(['value'], 'Exact ETH amount'),
-		amountField(['args', adding ? 3 : 2], entering ? 'Minimum long shares' : 'Minimum LP tokens', entering ? 'minimumOutput' : 'minimumLiquidity'),
-		integer('deadline', 'Deadline (Unix seconds)', ['args', adding ? 5 : 4]),
+		amountField(['args', 1], 'Mint cash (ETH, excluding fees)'),
+		amountField(['args', adding ? 4 : 3], entering ? 'Minimum long shares' : 'Minimum LP tokens', entering ? 'minimumOutput' : 'minimumLiquidity'),
+		integer('deadline', 'Deadline (Unix seconds)', ['args', adding ? 6 : 5]),
 		...(entering
 			? [
 					{
 						key: 'longOutcome',
 						label: 'Long outcome',
 						kind: 'choice',
-						path: ['args', 1],
+						path: ['args', 2],
 						options: [
 							{ value: '1', label: 'Yes' },
 							{ value: '2', label: 'No' },

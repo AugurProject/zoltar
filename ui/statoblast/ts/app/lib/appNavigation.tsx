@@ -11,12 +11,12 @@ import type { RouteTabDefinition } from '@zoltar/ui-core-shared/types/components
 
 type PoolsListView = Exclude<SecurityPoolsView, 'operate'>
 
-export function getPoolsViewHref(view: PoolsListView) {
+function getPoolsViewHref(view: PoolsListView) {
 	const search = writePoolsLocationSearch(getRouteHashSearch(), parsePoolsRouteHash(parseRouteHash(window.location.hash).routeHash), { view })
 	return buildRouteHref(buildPoolsRouteHash({ view }), search)
 }
 
-/** Pools and price requests share one primary row; Deploy joins while deployment is incomplete, and the other sections are disabled while required contracts are missing. */
+/** Pools, portfolios and price reports share one primary row; Deploy joins while deployment is incomplete, and the other sections are disabled while required contracts are missing. */
 export function getStatoblastRouteTabs({ applicationDeploymentMissing, route, showDeployTab }: { applicationDeploymentMissing: boolean; route: string; showDeployTab: boolean }): RouteTabDefinition[] {
 	return withDeploymentTab({
 		deploymentMissing: applicationDeploymentMissing,
@@ -24,7 +24,8 @@ export function getStatoblastRouteTabs({ applicationDeploymentMissing, route, sh
 		deploymentIncomplete: showDeployTab,
 		route,
 		tabs: [
-			{ hash: statoblastRouting.getHash('pools'), label: statoblastAppCopy.pools, route: 'pools' },
+			{ hash: statoblastRouting.getHash('pools'), label: statoblastAppCopy.questions, route: 'pools' },
+			{ hash: statoblastRouting.getHash('portfolios'), label: statoblastAppCopy.portfolios, route: 'portfolios' },
 			{ hash: statoblastRouting.getHash('open-oracle'), label: openOracleCopy.priceReports, route: 'open-oracle' },
 		],
 	})
@@ -40,8 +41,7 @@ export function getRouteSecondaryNavigation({ activeSecurityPoolsView, route, se
 					value: activeSecurityPoolsView,
 					onChange: setSecurityPoolsView,
 					options: [
-						{ href: getPoolsViewHref('browse'), label: commonCopy.browsePools, value: 'browse' },
-						{ href: getPoolsViewHref('create'), label: commonCopy.createPool, value: 'create' },
+						{ href: getPoolsViewHref('browse'), label: statoblastAppCopy.browseQuestions, value: 'browse' },
 						{ href: getPoolsViewHref('universes'), label: zoltarCopy.universesTitle, value: 'universes' },
 						...(activeSecurityPoolsView === 'migrate' ? [{ href: getPoolsViewHref('migrate'), label: zoltarCopy.migrateRep, value: 'migrate' as const }] : []),
 					],

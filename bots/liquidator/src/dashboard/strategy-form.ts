@@ -6,16 +6,8 @@ import type { DashboardElements } from './dashboard-elements.ts'
 import { actionStatus, put } from './dashboard-requests.ts'
 import type { DashboardState } from './dashboard-state.ts'
 import { publicFailure } from './pool-presentation.ts'
-import { strategyReviewRows, validateStrategyReview } from './strategy-review.ts'
-
-/** The automatic actions the strategy can enable, with the name the dashboard gives each one. */
-const AUTOMATIC_ACTION_LABELS = [
-	['allowAutomaticDeposits', 'REP deposits'],
-	['allowAutomaticPoolCreation', 'pool creation'],
-	['allowAutomaticVaultMigrations', 'vault migrations'],
-	['allowAutomaticWithdrawals', 'REP withdrawals'],
-] as const
-const NUMERIC_STRATEGY_FIELDS = ['stalePriceFundingBufferBps', 'stagedOperationValidForSeconds', 'vaultTargetHealthBps', 'vaultTopUpHealthBps', 'vaultWithdrawHealthBps']
+import { parsePortfolioPolicy, serializePortfolioPolicy } from '../config/portfolio-policy.ts'
+import { strategyReviewRows, validateStrategyReview, type StrategyUpdate } from './strategy-review.ts'
 
 type StrategyFormContext = {
 	state: DashboardState
@@ -39,7 +31,7 @@ function setFormValue(form: HTMLFormElement, name: string, value: string | numbe
 /** Fills the strategy form, including the runtime log-recovery fields it edits, from a loaded configuration. */
 export function loadStrategyForm(elements: DashboardElements, configuration: Configuration) {
 	const form = elements.strategyForm
-	for (const [name, value] of Object.entries(configuration.strategy)) setFormValue(form, name, value)
+	for (const [name, value] of Object.entries({ ...configuration.strategy, ...configuration.portfolioPolicy })) setFormValue(form, name, value)
 	setFormValue(form, 'logLookbackBlocks', configuration.runtime.logLookbackBlocks)
 	setFormValue(form, 'historicalLogRecovery', configuration.runtime.historicalLogRecovery)
 }
@@ -47,7 +39,7 @@ export function loadStrategyForm(elements: DashboardElements, configuration: Con
 /** Names the automatic actions the saved strategy enables: what the running bot does, not what the form currently shows. */
 export function enabledAutomaticActions(configuration: Configuration | undefined) {
 	if (configuration === undefined) return undefined
-	return AUTOMATIC_ACTION_LABELS.filter(([name]) => configuration.strategy[name] === true).map(([, label]) => label)
+	return configuration.portfolioPolicy['allowFundedTakeovers'] === true ? ['funded takeovers', 'earnings claims'] : []
 }
 
 function healthPercent(value: string) {
@@ -62,24 +54,28 @@ export function updateHealthPolicyPreview(elements: DashboardElements) {
 		const field = elements.strategyForm.elements.namedItem(name)
 		return field instanceof HTMLInputElement ? field.value.trim() : ''
 	}
-	const topUp = healthPercent(strategyInput('vaultTopUpHealthBps'))
-	const target = healthPercent(strategyInput('vaultTargetHealthBps'))
-	const withdraw = healthPercent(strategyInput('vaultWithdrawHealthBps'))
-	elements.healthPolicyPreview.textContent = `Top up below ${topUp} · restore to ${target} · withdraw excess above ${withdraw}`
+	const target = healthPercent(strategyInput('targetHealthFactorBps'))
+	elements.healthPolicyPreview.textContent = `Receiver health target ${target}; the on-chain target must match before a takeover.`
 }
 
-function readStrategyForm(form: HTMLFormElement, saved: Configuration) {
+function readStrategyForm(form: HTMLFormElement): StrategyUpdate {
 	const data = new FormData(form)
-	const next = { ...saved.strategy }
-	for (const [name, value] of data.entries()) next[name] = String(value)
-	for (const name of NUMERIC_STRATEGY_FIELDS) {
-		const value = next[name]
-		if (typeof value === 'string' && value !== '') next[name] = Number(value)
+	const fields = Object.fromEntries(data.entries())
+	return {
+		maximumGasCostEth: String(data.get('maximumGasCostEth') ?? ''),
+		walletReserveRep: String(data.get('walletReserveRep') ?? ''),
+		logLookbackBlocks: Number(data.get('logLookbackBlocks')),
+		historicalLogRecovery: checkboxChecked(form, 'historicalLogRecovery'),
+		portfolioPolicy: serializePortfolioPolicy(
+			parsePortfolioPolicy({
+				...fields,
+				allowFundedTakeovers: checkboxChecked(form, 'allowFundedTakeovers'),
+				targetHealthFactorBps: Number(data.get('targetHealthFactorBps')),
+				maximumPositionsPerScan: Number(data.get('maximumPositionsPerScan')),
+				stalledRetirementSeconds: Number(data.get('stalledRetirementSeconds')),
+			}),
+		),
 	}
-	for (const [name] of AUTOMATIC_ACTION_LABELS) next[name] = checkboxChecked(form, name)
-	next['logLookbackBlocks'] = Number(data.get('logLookbackBlocks'))
-	next['historicalLogRecovery'] = checkboxChecked(form, 'historicalLogRecovery')
-	return next
 }
 
 /** Keeps the health preview in step with each strategy edit. */
@@ -94,9 +90,10 @@ export function registerStrategyForm({ state, elements, populateConfiguration, s
 		event.preventDefault()
 		if (state.configuration === undefined || formIsSubmitting('strategy-form')) return
 		const savedConfiguration = state.configuration
-		const next = readStrategyForm(strategyForm, savedConfiguration)
+		let next: StrategyUpdate
 		try {
-			validateStrategyReview(savedConfiguration, next)
+			next = readStrategyForm(strategyForm)
+			validateStrategyReview(next)
 		} catch (error) {
 			actionStatus(strategyStatus, error instanceof Error ? error.message : 'Review the strategy values and retry.', true)
 			return
@@ -105,7 +102,7 @@ export function registerStrategyForm({ state, elements, populateConfiguration, s
 		setFormSubmitting('strategy-form', true)
 		try {
 			const changes = strategyReviewRows(savedConfiguration, next)
-			if (changes.length > 0 && !(await confirmOperatorAction({ title: 'Review liquidation strategy', description: 'Changes to amounts and automation apply on the next scan.', changes, confirmLabel: 'Save strategy' }))) {
+			if (changes.length > 0 && !(await confirmOperatorAction({ title: 'Review portfolio policy', description: 'Changes to amounts and automation apply on the next scan.', changes, confirmLabel: 'Save policy' }))) {
 				actionStatus(strategyStatus, '')
 				return
 			}
@@ -114,7 +111,7 @@ export function registerStrategyForm({ state, elements, populateConfiguration, s
 			populateConfiguration(configuration, 'strategy-form')
 			actionStatus(strategyStatus, 'Saved')
 		} catch (error) {
-			actionStatus(strategyStatus, publicFailure(error, 'Could not save strategy. Review the fields and retry.'), true)
+			actionStatus(strategyStatus, publicFailure(error, 'Could not save portfolio policy. Review the fields and retry.'), true)
 		} finally {
 			setFormSubmitting('strategy-form', false)
 			syncControls()

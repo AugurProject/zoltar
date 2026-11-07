@@ -2,7 +2,6 @@ export const openOracle = 'OpenOracle'
 export const loadingWalletEthBalance = 'Loading wallet ETH balance…'
 export const pools = 'Pools'
 export const poolsViews = 'Pools views'
-export const openOraclePrice = 'OpenOracle price'
 export const createOracleReport = 'Create OpenOracle report'
 export const oracleReportDetails = 'OpenOracle report details'
 export const oracleReportViews = 'OpenOracle views'
@@ -17,3 +16,9 @@ export const openOracleUiPriceDetail = 'Uses the latest pool OpenOracle price, e
 export const openOracleFallbackUiPriceDetail = 'Uses a valid pool OpenOracle price, or falls back to Uniswap when it is unavailable or expired.'
 export const priceOracleSaveFailed = 'Unable to save the UI price oracle.'
 export const openPoolForOraclePrice = 'Open a pool to see its oracle price'
+
+export const portfolios = 'Portfolios'
+
+export const questions = 'Questions'
+
+export const browseQuestions = 'Browse questions'

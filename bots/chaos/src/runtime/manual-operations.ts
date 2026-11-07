@@ -23,7 +23,7 @@ type Options = {
 	configuration: ConfigurationState
 	state: RuntimeState
 	gate: SignerOperationGate
-	scan: () => Promise<ManualScan>
+	scan: (purchaseQuoteAttoEth?: bigint) => Promise<ManualScan>
 	preflight: (plan: OperationPlan) => Promise<void>
 	execute: (plan: OperationPlan) => Promise<void>
 }
@@ -79,6 +79,16 @@ export function createManualOperationController(options: Options) {
 	let preview: Preview | undefined
 	const executions = new Map<string, ManualExecution>()
 	let seed = Math.floor(Math.random() * 0x1_0000_0000)
+
+	function purchaseQuoteAmount(id: string, inputs: ManualInputs) {
+		if (!['statoblast.complete-set.create', 'trading.pair.create-and-initialize', 'trading.pair.initialize-eth', 'trading.liquidity.add-eth', 'trading.position.enter'].includes(id)) return undefined
+		const amount = inputs['amount']
+		if (amount?.source !== 'custom') return undefined
+		if (!/^[1-9]\d*$/.test(amount.value) || amount.value.length > 78) failure('Mint cash must be a positive integer')
+		const cash = BigInt(amount.value)
+		if (cash > options.configuration.settings.strategy.maximumEthPerOperationAttoEth) failure('Mint cash exceeds the configured ETH budget')
+		return cash
+	}
 
 	function runtimeBlockers() {
 		const { state, configuration } = options
@@ -182,7 +192,7 @@ export function createManualOperationController(options: Options) {
 			void track(
 				(async () => {
 					try {
-						const scan = await options.scan()
+						const scan = await options.scan(purchaseQuoteAmount(current.definitionId, current.inputs))
 						if (current.revision !== options.configuration.revision) failure('Configuration changed. Preview the operation again')
 						const frozenInputs = { ...current.inputs }
 						for (const [key, value] of Object.entries(current.plan.operationInputs ?? {})) frozenInputs[key] = { source: 'custom', value }
@@ -220,7 +230,7 @@ export function createManualOperationController(options: Options) {
 			const revision = options.configuration.revision
 			const inputs = parseInputs(body['inputs'] ?? {})
 			if (body['action'] === 'inspect' && Object.keys(inputs).length === 0) seed = Math.floor(Math.random() * 0x1_0000_0000)
-			const scan = await options.scan()
+			const scan = await options.scan(purchaseQuoteAmount(id, inputs))
 			if (revision !== options.configuration.revision) failure('Configuration changed. Reopen the operation')
 			const result = plans(scan, id, inputs, seed)
 			const candidate = body['candidate']

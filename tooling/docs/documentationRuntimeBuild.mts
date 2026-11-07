@@ -1,13 +1,13 @@
 import path from 'node:path'
 
-export const documentationRuntimeNames = ['auctionClearing', 'deploymentMaskDecoder', 'docsShell', 'interactiveTools', 'invariantExplorer', 'mmrProofPlanner', 'openOracleTools', 'responsiveDocs'] as const
+export const documentationRuntimeNames = ['deploymentMaskDecoder', 'docsShell', 'interactiveTools', 'invariantExplorer', 'mmrProofPlanner', 'openOracleTools', 'responsiveDocs'] as const
 
 export type DocumentationRuntimeName = (typeof documentationRuntimeNames)[number]
 
 const generatedBanner = '// Generated from docs/runtime TypeScript by bun run docs:build-runtime. Do not edit.\n'
 
 // Runtimes whose top-level bindings no tooling reads stay wrapped so their helpers do not leak into page globals.
-const isolatedRuntimeNames: ReadonlySet<DocumentationRuntimeName> = new Set(['auctionClearing'])
+const isolatedRuntimeNames: ReadonlySet<DocumentationRuntimeName> = new Set()
 
 // Each runtime is bundled on its own so runtimes can share helpers through imports. The ESM format emits
 // no wrapper, so top-level bindings stay reachable for tooling that evaluates the output as a script.

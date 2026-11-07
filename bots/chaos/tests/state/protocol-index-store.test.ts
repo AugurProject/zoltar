@@ -73,7 +73,7 @@ function protocolIndex(cursorBlockNumber = '50', cursorByte = '44'): ChaosProtoc
 	const openOracle = address(20)
 	return {
 		auctionBids: {
-			[openOracle.toLowerCase()]: [{ amountAttoEth: 25n.toString(), index: '2', refunded: false, tick: '-7' }],
+			[openOracle.toLowerCase()]: [{ bidId: '2', vault: openOracle, lots: '25', minimumAttoRepPerLot: 7n.toString(), targetHealthBps: '15000', settled: false }],
 		},
 		auctionRefunds: {
 			[openOracle.toLowerCase()]: { generation: `0x${'33'.repeat(32)}`, pendingAttoEth: 8n.toString() },
@@ -96,7 +96,7 @@ function protocolIndex(cursorBlockNumber = '50', cursorByte = '44'): ChaosProtoc
 		migrationRepSplits: [{ childMigrationRepAmountAttoRep: 25n.toString(), childUniverseId: childUniverseId('0', '1'), outcomeIndex: '1', universeId: '0' }],
 		openOracle,
 		reports: [report(openOracle)],
-		schemaVersion: 3,
+		schemaVersion: 4,
 		securityPoolForker: address(30),
 		startBlock: '10',
 		wallet: address(22),
@@ -144,7 +144,7 @@ function largeProtocolIndex(count: number) {
 	const auction = index.openOracle.toLowerCase()
 	index.reports = []
 	index.auctionBids = {
-		[auction]: Array.from({ length: count }, (_, position) => ({ amountAttoEth: (position + 1).toString(), index: position.toString(), refunded: false, tick: position.toString() })),
+		[auction]: Array.from({ length: count }, (_, position) => ({ bidId: (position + 1).toString(), vault: index.openOracle, lots: '1', minimumAttoRepPerLot: (position + 1).toString(), targetHealthBps: '15000', settled: false })),
 	}
 	index.escalationDeposits = Array.from({ length: count }, (_, position) => ({
 		amountAttoRep: (position + 1).toString(),

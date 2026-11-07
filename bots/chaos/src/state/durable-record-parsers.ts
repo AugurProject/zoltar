@@ -205,17 +205,7 @@ export function parseWalletAssetDebits(value: unknown, label: string): Operation
 				openOracle: getAddress(nonemptyString(debit['openOracle'], `${debitLabel}.openOracle`)),
 			}
 		}
-		if (debit['kind'] === 'security-pool-vault-rep') {
-			assertExactKeys(debit, ['amount', 'category', 'kind', 'pool', 'vault'], [], debitLabel)
-			if (debit['category'] !== 'rep') throw new Error(`${debitLabel}.category must be rep`)
-			return {
-				amount: positiveIntegerString(debit['amount'], `${debitLabel}.amount`),
-				category: 'rep' as const,
-				kind: 'security-pool-vault-rep' as const,
-				pool: getAddress(nonemptyString(debit['pool'], `${debitLabel}.pool`)),
-				vault: getAddress(nonemptyString(debit['vault'], `${debitLabel}.vault`)),
-			}
-		}
+
 		if (debit['kind'] === 'erc1155') {
 			assertExactKeys(debit, ['amount', 'asset', 'category', 'kind', 'tokenId'], [], debitLabel)
 			if (debit['category'] !== 'outcome-share') {

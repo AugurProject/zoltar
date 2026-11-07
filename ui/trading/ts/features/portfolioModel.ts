@@ -1,7 +1,7 @@
 import { quoteExactOutput } from '@zoltar/trading-shared/trading/math'
 import { maximumInsuredExit } from '@zoltar/trading-shared/trading/positions'
 import { compareBigint } from '@zoltar/core-shared/math/bigint'
-import { attoSharesToCollateralAttoEth } from '../lib/shareValue.js'
+import { attoSharesToRecoveryAttoRep, attoSharesToCollateralAttoEth } from '../lib/shareValue.js'
 import { forkMigrationSettled, marketAcceptsNewRisk, settlementAvailability, type LiveBalances, type LiveMarket } from '../protocol/live.js'
 import type { PortfolioBalanceEntry } from './live/liveTradingTypes.js'
 
@@ -21,9 +21,9 @@ type PortfolioRowState = 'open' | 'closed' | 'resolved' | 'settlement-required' 
  * `redemption` values a resolved position at its winning-share payout. Settlement and failed reads have no price.
  */
 export type PortfolioValuation =
-	| Readonly<{ kind: 'exit'; attoEth: bigint; pendingResolution: boolean }>
-	| Readonly<{ kind: 'complete-sets'; attoEth: bigint; pendingResolution: boolean }>
-	| Readonly<{ kind: 'redemption'; attoEth: bigint }>
+	| Readonly<{ kind: 'exit'; attoEth: bigint; attoRep?: bigint; pendingResolution: boolean }>
+	| Readonly<{ kind: 'complete-sets'; attoEth: bigint; attoRep?: bigint; pendingResolution: boolean }>
+	| Readonly<{ kind: 'redemption'; attoEth: bigint; attoRep?: bigint }>
 	| Readonly<{ kind: 'unavailable'; reason: 'settlement-required' | 'pool-inactive' | 'market-unavailable' | 'balance-unavailable' }>
 
 /** Why the item needs attention, which the list shows as its badge. */
@@ -53,6 +53,7 @@ export type PortfolioOverview = Readonly<{
 	rows: readonly PortfolioRow[]
 	positionCount: number
 	totalValueAttoEth: bigint
+	recoveryRepCount?: number
 	/** Rows left out of the total because they have no trustworthy value yet. */
 	unvaluedCount: number
 	/** Rows with shares left out of the total until the question resolves. */
@@ -103,17 +104,17 @@ function exitPosition(market: Pick<LiveMarket, 'yesReserve' | 'noReserve' | 'lpT
 	return { sets: completeSets + exitedSets, leftover }
 }
 
-function hasPendingShares(leftover: readonly bigint[], market: Pick<LiveMarket, 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares'>) {
+function hasPendingShares(leftover: readonly bigint[], market: Pick<LiveMarket, 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares' | 'settlementRecoveryAttoRep'>) {
 	return leftover.some(amount => amount > 0n && !isDust(amount, market))
 }
 
 /** Shares that pay less than the smallest displayed ETH amount even if their outcome wins are rounding dust, not something to act on. */
-function isDust(attoShares: bigint, market: Pick<LiveMarket, 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares'>) {
-	return attoSharesToCollateralAttoEth(attoShares, market) < DISPLAY_DUST_ATTO_ETH
+function isDust(attoShares: bigint, market: Pick<LiveMarket, 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares' | 'settlementRecoveryAttoRep'>) {
+	return attoSharesToCollateralAttoEth(attoShares, market) < DISPLAY_DUST_ATTO_ETH && attoSharesToRecoveryAttoRep(attoShares, market) === 0n
 }
 
 /** LP whose larger reserve claim is dust is a rounding remainder; withdrawing it is not worth an action item. */
-function holdsLiquidity(market: Pick<LiveMarket, 'yesReserve' | 'noReserve' | 'lpTotalSupply' | 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares'>, lp: bigint) {
+function holdsLiquidity(market: Pick<LiveMarket, 'yesReserve' | 'noReserve' | 'lpTotalSupply' | 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares' | 'settlementRecoveryAttoRep'>, lp: bigint) {
 	if (lp === 0n) return false
 	const claims = lpReserveClaims(market, lp)
 	return !isDust(claims.yes > claims.no ? claims.yes : claims.no, market)
@@ -142,13 +143,17 @@ function rowValuation(entry: PortfolioBalanceEntry, state: PortfolioRowState): P
 	if (market.loadError !== undefined) return { kind: 'unavailable', reason: 'market-unavailable' }
 	if (balances === undefined || entry.error !== undefined) return { kind: 'unavailable', reason: 'balance-unavailable' }
 	if (state === 'settlement-required') return { kind: 'unavailable', reason: market.universeForkTime === 0n ? 'pool-inactive' : 'settlement-required' }
-	if (state === 'resolved') return { kind: 'redemption', attoEth: attoSharesToCollateralAttoEth(winningAttoShares(market, balances), market) }
+	const recovery = (shares: bigint) => {
+		const attoRep = attoSharesToRecoveryAttoRep(shares, market)
+		return attoRep === 0n ? {} : { attoRep }
+	}
+	if (state === 'resolved') return { kind: 'redemption', ...recovery(winningAttoShares(market, balances)), attoEth: attoSharesToCollateralAttoEth(winningAttoShares(market, balances), market) }
 	if (state === 'closed') {
 		const { completeSets, remainingInvalid, remainingYes, remainingNo } = completeSetSplit(market, balances)
-		return { kind: 'complete-sets', attoEth: attoSharesToCollateralAttoEth(completeSets, market), pendingResolution: hasPendingShares([remainingInvalid, remainingYes, remainingNo], market) }
+		return { kind: 'complete-sets', ...recovery(completeSets), attoEth: attoSharesToCollateralAttoEth(completeSets, market), pendingResolution: hasPendingShares([remainingInvalid, remainingYes, remainingNo], market) }
 	}
 	const exit = exitPosition(market, balances)
-	return { kind: 'exit', attoEth: attoSharesToCollateralAttoEth(exit.sets, market), pendingResolution: hasPendingShares(exit.leftover, market) }
+	return { kind: 'exit', ...recovery(exit.sets), attoEth: attoSharesToCollateralAttoEth(exit.sets, market), pendingResolution: hasPendingShares(exit.leftover, market) }
 }
 
 function portfolioRow(entry: PortfolioBalanceEntry, nowSeconds: bigint): PortfolioRow {
@@ -208,5 +213,6 @@ export function portfolioOverview(entries: readonly PortfolioBalanceEntry[], now
 		.filter(row => row.actionItems.length > 0)
 		.map(row => ({ pool: row.entry.market.pool, title: row.entry.market.title, deadline: soonestDeadline(row.actionItems), items: row.actionItems }))
 		.sort(compareActionGroups)
-	return { rows, positionCount: rows.length, totalValueAttoEth, unvaluedCount, pendingResolutionCount, actionGroups }
+	const recoveryRepCount = rows.filter(row => row.valuation.kind !== 'unavailable' && (row.valuation.attoRep ?? 0n) > 0n).length
+	return { ...(recoveryRepCount === 0 ? {} : { recoveryRepCount }), rows, positionCount: rows.length, totalValueAttoEth, unvaluedCount, pendingResolutionCount, actionGroups }
 }

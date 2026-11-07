@@ -6,14 +6,12 @@ import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import type { BadgeTone } from '@zoltar/ui-core-shared/types/components.js'
 import { getDecimalSeparatorError, parseDecimalInput, parseDecimalInputResult, tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { ensureSentence, formatWriteErrorMessage, getErrorDetail, transactionErrorMessages } from '@zoltar/ui-core-shared/lib/errors.js'
-import { formatAdditionalCurrencyBalance, formatAmountDisplay, formatDuration, formatMultiplier, formatScaledPercentage } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { getTimeRemaining } from '@zoltar/ui-core-shared/lib/time.js'
-import { getOracleManagerPriceValidUntilTimestamp } from '../../../protocol/oracleTiming.js'
+import { formatAdditionalCurrencyBalance, formatDuration, formatMultiplier, formatScaledPercentage } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getOpenOracleDisputeSubmissionReserve, getOpenOracleDisputeSubmissionTimingGuard } from '../../../protocol/openOracleDisputeTiming.js'
 import { parseAddressInput, tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { parseBigIntInput, tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import type { TokenApprovalRequirement } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
-import { addOpenOracleBountyBuffer, OPEN_ORACLE_PRICE_UNITS } from '../../../protocol/openOracleMath.js'
+import { OPEN_ORACLE_PRICE_UNITS } from '../../../protocol/openOracleMath.js'
 import { getOpenOracleCreateParameterValidation } from '../../../protocol/openOracleValidation.js'
 import * as openOracleCopy from '../../../copy/openOracle.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
@@ -24,7 +22,7 @@ import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.
 const OPEN_ORACLE_UNKNOWN_SCALE_DECIMALS = 255
 type OpenOracleReportStatus = 'Pending' | 'Disputed' | 'Settled'
 export type OpenOracleSelectedReportActionMode = 'dispute' | 'settle' | 'read-only'
-export { addOpenOracleBountyBuffer, OPEN_ORACLE_PRICE_UNITS }
+export { OPEN_ORACLE_PRICE_UNITS }
 export type OpenOracleDisputeInputField = 'disputeNewAmount1' | 'disputeNewAmount2'
 export type OpenOracleGateMessage = { kind: 'hidden-loading' | 'visible'; message: string } | { kind: 'incomplete'; message?: undefined }
 type OpenOracleReportActionAvailability = {
@@ -56,8 +54,6 @@ export type OpenOracleDisputeSubmissionDetails = {
 	token2Approval: TokenApprovalRequirement
 	token2ContributionAmount: bigint | undefined
 	token2Decimals: number | undefined
-	/** The ETH-to-WETH wrap step before the approvals; undefined when neither report token is WETH. `amountAttoEth` is the WETH the wallet lacks for this dispute. */
-	wethWrap: { amountAttoEth: bigint | undefined; blockMessage: OpenOracleGateMessage | undefined } | undefined
 }
 export function formatOpenOracleSettleWriteErrorMessage(error: unknown, fallbackMessage = 'Failed to settle report') {
 	const genericMessage = formatWriteErrorMessage(error, fallbackMessage)
@@ -483,24 +479,6 @@ export function formatOpenOracleReportPriceUnit(report: Pick<OpenOracleReportSum
 	return openOracleCopy.formatReportPriceUnit(getOpenOraclePriceTokenLabel(report.token1, report.token1Symbol), getOpenOraclePriceTokenLabel(report.token2, report.token2Symbol))
 }
 
-export function getOracleLastPriceDisplay({ lastPrice, lastSettlementTimestamp }: { lastPrice: bigint; lastSettlementTimestamp: bigint }) {
-	if (lastSettlementTimestamp === 0n) return commonCopy.metricUnavailablePlaceholder
-	return `${formatAmountDisplay(lastPrice)}\u00a0REP per ETH`
-}
-
-export function getOraclePriceValidityPresentation({ currentTimestamp, lastSettlementTimestamp, priceValidUntilTimestamp }: { currentTimestamp: bigint; lastSettlementTimestamp: bigint; priceValidUntilTimestamp: bigint | undefined }) {
-	if (lastSettlementTimestamp === 0n) return undefined
-	const validUntilTimestamp = priceValidUntilTimestamp ?? getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp)
-	if (validUntilTimestamp === undefined) return undefined
-	const timeRemaining = getTimeRemaining(validUntilTimestamp, currentTimestamp)
-	if (timeRemaining === undefined) return undefined
-	if (timeRemaining === 0n) {
-		const expiredFor = currentTimestamp > validUntilTimestamp ? currentTimestamp - validUntilTimestamp : 0n
-		return { text: `(expired ${expiredFor === 0n ? 'less than a minute' : formatDuration(expiredFor)} ago)`, tone: 'danger' as const }
-	}
-	return { text: `(valid for ${formatDuration(timeRemaining)})`, tone: 'success' as const }
-}
-
 /** Report timing values are seconds for time-based reports and blocks otherwise. */
 export function formatOpenOracleTimingDuration(value: bigint, timeType: boolean) {
 	if (!timeType) return openOracleCopy.formatTimingValue(value.toString(), openOracleCopy.blocks)
@@ -522,28 +500,4 @@ export function getOpenOracleImpliedPrice({ token1Amount, token2Amount }: { toke
 	const amount2 = tryParseDecimalInput(token2Amount, OPEN_ORACLE_HUMAN_PRICE_PARSE_DECIMALS)
 	if (amount1 === undefined || amount2 === undefined || amount1 <= 0n || amount2 <= 0n) return undefined
 	return (amount2 * 10n ** BigInt(OPEN_ORACLE_PRICE_UNITS)) / amount1
-}
-
-/**
- * Rounds a fixed-point price to a few significant digits for an editable input. The whole-number part is never rounded,
- * and the fraction keeps enough digits to show `significantDigits` meaningful figures for small prices.
- */
-export function formatOpenOraclePriceInput(value: bigint, decimals: number, significantDigits = 6) {
-	if (value <= 0n) return '0'
-	const base = 10n ** BigInt(decimals)
-	const whole = value / base
-	const wholeDigits = whole === 0n ? 0 : whole.toString().length
-	const fractionDigits = (() => {
-		if (whole > 0n) return Math.max(0, significantDigits - wholeDigits)
-		const fraction = (value % base).toString().padStart(decimals, '0')
-		const leadingZeros = fraction.length - fraction.replace(/^0+/, '').length
-		return leadingZeros + significantDigits
-	})()
-	const keptDigits = Math.min(fractionDigits, decimals)
-	const scale = 10n ** BigInt(decimals - keptDigits)
-	const rounded = (value + scale / 2n) / scale
-	const roundedBase = 10n ** BigInt(keptDigits)
-	const roundedWhole = rounded / roundedBase
-	const roundedFraction = keptDigits === 0 ? '' : (rounded % roundedBase).toString().padStart(keptDigits, '0').replace(/0+$/, '')
-	return roundedFraction === '' ? roundedWhole.toString() : `${roundedWhole.toString()}.${roundedFraction}`
 }

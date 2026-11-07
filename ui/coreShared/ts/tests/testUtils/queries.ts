@@ -14,7 +14,7 @@ type TextOptions = {
 type FireEventInit = Record<string, unknown>
 
 /** Collapses whitespace runs to single spaces and trims the ends, as the text and role queries do before matching. */
-export function normalizeText(text: string): string {
+function normalizeText(text: string): string {
 	return text.replace(/\s+/g, ' ').trim()
 }
 

@@ -10,7 +10,7 @@ import { GlobalTransactionDialog } from '@zoltar/ui-core-shared/app/components/G
 import type { MarketCreationResult, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { QuestionCreateSection } from '@zoltar/ui-zoltar-shared/features/questions/components/QuestionCreateSection.js'
-import { getDraftOutcomeLabels } from '@zoltar/ui-zoltar-shared/features/questions/lib/questionCreation.js'
+import { createQuestionParameters, getDraftOutcomeLabels, hasMarketEndTimePassed, validateMarketForm } from '@zoltar/ui-zoltar-shared/features/questions/lib/questionCreation.js'
 import type { MarketFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
@@ -30,6 +30,37 @@ function createQuestionForm(overrides: Partial<MarketFormState> = {}): MarketFor
 		...overrides,
 	}
 }
+
+test('question creation validates scalar bounds, categorical identities and time boundaries before encoding', () => {
+	for (const overrides of [
+		{ title: '', endTime: '' },
+		{ startTime: 'bad', endTime: 'bad' },
+		{ startTime: '2000', endTime: '1000' },
+		{ marketType: 'categorical', categoricalOutcomes: ['', ''] },
+		{ marketType: 'categorical', categoricalOutcomes: ['A', ' A '] },
+		{ marketType: 'scalar', scalarMin: '', scalarMax: '', scalarIncrement: '' },
+		{ marketType: 'scalar', scalarMin: '10', scalarMax: '0' },
+		{ marketType: 'scalar', scalarIncrement: '0' },
+		{ marketType: 'scalar', scalarIncrement: '3' },
+		{ marketType: 'scalar', scalarMin: 'bad' },
+	] satisfies Partial<MarketFormState>[]) {
+		const form = createQuestionForm(overrides)
+		const validation = validateMarketForm(form)
+		expect(validation.isValid).toBe(false)
+		expect(Object.keys(validation.fieldErrors).length).toBeGreaterThan(0)
+		expect(validation.notice).toBeDefined()
+		expect(() => createQuestionParameters(form)).toThrow()
+	}
+	const scalar = createQuestionForm({ marketType: 'scalar', scalarMin: '-1', scalarMax: '1', scalarIncrement: '0.5', answerUnit: ' USD ', startTime: '' })
+	expect(validateMarketForm(scalar)).toMatchObject({ isValid: true, notice: undefined })
+	expect(createQuestionParameters(scalar)).toMatchObject({ outcomeLabels: [], questionData: { numTicks: 4n, displayValueMin: -(10n ** 18n), displayValueMax: 10n ** 18n, answerUnit: 'USD', startTime: 0n } })
+	const categorical = createQuestionForm({ marketType: 'categorical', categoricalOutcomes: [' B ', 'A', ''] })
+	expect(new Set(createQuestionParameters(categorical).outcomeLabels)).toEqual(new Set(['A', 'B']))
+	expect(hasMarketEndTimePassed(scalar, undefined)).toBe(false)
+	expect(hasMarketEndTimePassed(scalar, 1999n)).toBe(false)
+	expect(hasMarketEndTimePassed(scalar, 2000n)).toBe(true)
+	expect(hasMarketEndTimePassed({ ...scalar, endTime: 'invalid' }, 2000n)).toBe(false)
+})
 
 const question: MarketDetails = {
 	answerUnit: '',
@@ -260,6 +291,22 @@ describe('QuestionCreateSection', () => {
 	test('previews missing categorical outcomes without a placeholder chip', () => {
 		expect(getDraftOutcomeLabels(createQuestionForm({ marketType: 'categorical', categoricalOutcomes: ['', ''] }))).toEqual(['Invalid'])
 		expect(getDraftOutcomeLabels(createQuestionForm({ marketType: 'categorical', categoricalOutcomes: ['Alpha', ''] }))).toEqual(['Alpha', 'Invalid'])
+	})
+
+	test('scalar question preview supports a numeric answer and an explicit invalid outcome', async () => {
+		await renderSection({ questionForm: createQuestionForm({ marketType: 'scalar', answerUnit: 'USD' }) })
+		const queries = within(document.body)
+		const slider = queries.getByRole('slider')
+		expect(slider.getAttribute('max')).toBe('100')
+		await act(() => fireEvent.input(slider, { target: { value: '50' } }))
+		const value = queries.getByLabelText('Scalar value')
+		if (!(value instanceof HTMLInputElement)) throw new Error('Missing scalar preview value')
+		expect(value.value).toBe('5')
+		const invalid = queries.getByRole('checkbox', { name: 'Invalid' })
+		await act(() => fireEvent.click(invalid))
+		expect(slider.hasAttribute('disabled')).toBe(true)
+		await act(() => fireEvent.click(invalid))
+		expect(slider.hasAttribute('disabled')).toBe(false)
 	})
 
 	test('explains the disabled remove buttons at the two-outcome minimum without asking for more outcomes', async () => {

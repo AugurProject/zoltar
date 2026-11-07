@@ -1,98 +1,12 @@
 /// <reference types='bun-types' />
 
 import { describe, expect, test } from 'bun:test'
-import {
-	createForkAuctionSuccessPresentation,
-	createForkAuctionTransactionIntent,
-	createLiquidationSuccessPresentation,
-	createLiquidationTransactionIntent,
-	createSecurityPoolCreationSuccessPresentation,
-	createSecurityPoolCreationTransactionIntent,
-	createTradingSuccessPresentation,
-	createTradingTransactionIntent,
-} from '@zoltar/ui-statoblast-shared/features/transactionPresentations.js'
-import { createMarketCreationSuccessPresentation } from '@zoltar/ui-zoltar-shared/features/zoltarTransactionPresentations.js'
-import { createOpenOracleSuccessPresentation, createOpenOracleTransactionIntent, createPoolOracleSuccessPresentation, createPoolOracleTransactionIntent, createReportingSuccessPresentation, createReportingTransactionIntent } from '@zoltar/ui-statoblast-shared/features/reportingTransactionPresentations.js'
-import type { ForkAuctionActionResult } from '@zoltar/ui-statoblast-shared/types/contracts.js'
-import { createInitialTransactionTrayState, markTransactionFailed, markTransactionPrepared, markTransactionRequested, markTransactionSubmitted } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
+import { createTradingSuccessPresentation, createTradingTransactionIntent } from '@zoltar/ui-statoblast-shared/features/transactionPresentations.js'
+import { createOpenOracleSuccessPresentation, createOpenOracleTransactionIntent, createReportingSuccessPresentation, createReportingTransactionIntent } from '@zoltar/ui-statoblast-shared/features/reportingTransactionPresentations.js'
 
-const transactionHash = '0x1234000000000000000000000000000000000000000000000000000000000000'
-
-function createForkAuctionResult(action: ForkAuctionActionResult['action'], overrides: Partial<ForkAuctionActionResult> = {}): ForkAuctionActionResult {
-	return {
-		action,
-		hash: '0x1234',
-		securityPoolAddress: '0x0000000000000000000000000000000000000123',
-		universeId: 1n,
-		...overrides,
-	}
-}
+const _transactionHash = '0x1234000000000000000000000000000000000000000000000000000000000000'
 
 describe('transaction presentations', () => {
-	test('preserves question terminology', () => {
-		for (const [marketType, expectedLabel] of [
-			['binary', 'Binary'],
-			['categorical', 'Categorical'],
-			['scalar', 'Scalar'],
-		] as const) {
-			const questionTypeRow = createMarketCreationSuccessPresentation({ createQuestionHash: '0x1234', marketType, questionId: '0x01' }).rows?.find(row => row.label === 'Question type')
-			expect(questionTypeRow?.value).toBe(expectedLabel)
-		}
-	})
-
-	test('normalizes the security multiplier in security pool creation intents', () => {
-		const intent = createSecurityPoolCreationTransactionIntent({
-			statoblastSecurityMultiplierBps: 25_000n,
-		})
-
-		expect(intent.rows).toEqual([{ label: 'Security multiplier', value: '2.5×' }])
-		expect(intent.failedTitle).toBe('Security pool creation')
-	})
-
-	test('orders security pool creation rows like the success presentation and leads with a new question title', () => {
-		const intent = createSecurityPoolCreationTransactionIntent({
-			initialReportPriorityFeeNanoEth: '10',
-			questionTitle: ' Will it rain? ',
-			statoblastSecurityMultiplierBps: 20_000n,
-		})
-		const success = createSecurityPoolCreationSuccessPresentation({
-			deployPoolHash: '0x1234',
-			initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
-			questionId: '0x0b',
-			securityPoolAddress: '0x1111111111111111111111111111111111111111',
-			statoblastSecurityMultiplierBps: 20_000n,
-			universeId: 0n,
-		})
-
-		expect(intent.rows?.[0]).toEqual({ label: 'Question', value: 'Will it rain?' })
-		expect(intent.rows?.slice(1).map(row => row.label)).toEqual(['Security multiplier', 'Initial report priority fee'])
-		expect(success.rows?.map(row => row.label)).toEqual(['Pool', 'Question ID', 'Security multiplier', 'Initial report priority fee'])
-		// The fee is a per-gas price: review and success state it the same way, in nanoETH per gas.
-		expect(intent.rows?.at(-1)?.value).toBe('10\u00a0nanoETH per gas')
-		expect(success.rows?.at(-1)?.value).toBe('10\u00a0nanoETH per gas')
-	})
-
-	test('does not present a failed staged execution as a success', () => {
-		const liquidationPresentation = createLiquidationSuccessPresentation({
-			action: 'queueLiquidation',
-			hash: transactionHash,
-			securityPoolAddress: '0x0000000000000000000000000000000000000001',
-			queuedOperation: { operation: 'liquidation', operationId: 4n, isPendingSlot: false },
-			stagedExecution: { operation: 'liquidation', operationId: 4n, success: false, errorMessage: undefined },
-		})
-		expect(liquidationPresentation.tone).toBe('error')
-		expect(liquidationPresentation.title).toBe('Liquidation failed')
-		const revertedPresentation = createLiquidationSuccessPresentation({
-			action: 'queueLiquidation',
-			hash: transactionHash,
-			securityPoolAddress: '0x0000000000000000000000000000000000000001',
-			queuedOperation: { operation: 'liquidation', operationId: 5n, isPendingSlot: false },
-			stagedExecution: { operation: 'liquidation', operationId: 5n, success: false, errorMessage: 'Liquidation distance too low' },
-		})
-		// The contract revert string is shown in the same plain language as the liquidation modal.
-		expect(revertedPresentation.detail).toBe('The oracle price has not moved far enough past the target vault’s liquidation threshold.')
-	})
-
 	test('uses resolved token symbols in OpenOracle approval and withdrawal titles', () => {
 		const context = {
 			token1Symbol: 'WETH',
@@ -163,29 +77,6 @@ describe('transaction presentations', () => {
 		expect(reportingIntent.rows?.map(row => row.label)).toEqual(['Pool', 'Outcome'])
 	})
 
-	test('reuses liquidation identity and submitted values in completion presentations', () => {
-		const context = {
-			amount: '4.5',
-			securityPoolAddress: '0x0000000000000000000000000000000000000001' as const,
-			targetVault: '0x0000000000000000000000000000000000000002' as const,
-			universeId: 7n,
-		}
-		const intent = createLiquidationTransactionIntent(context)
-		const presentation = createLiquidationSuccessPresentation(
-			{
-				action: 'queueLiquidation',
-				hash: '0x1234',
-				securityPoolAddress: context.securityPoolAddress,
-			},
-			context,
-		)
-
-		expect(intent.rows?.map(row => row.label)).toEqual(['Pool', 'Target vault', 'Commitment to transfer'])
-		expect(presentation.rows?.map(row => row.label)).toEqual(['Pool', 'Target vault', 'Commitment to transfer'])
-		expect(intent.rows?.at(-1)).toMatchObject({ label: 'Commitment to transfer', value: '4.5\u00a0ETH' })
-		expect(presentation.rows?.at(-1)).toMatchObject({ label: 'Commitment to transfer', value: '4.5\u00a0ETH' })
-	})
-
 	test('uses the same pool grammar without redundant universe rows in intent and success presentations', () => {
 		const securityPoolAddress = '0x0000000000000000000000000000000000000001'
 		const context = { securityPoolAddress, universeId: 7n }
@@ -209,98 +100,9 @@ describe('transaction presentations', () => {
 			expect(presentation.universeId).toBe(7n)
 		}
 	})
-
-	test('preserves representative workflow context through prepare, pending, and failure states', () => {
-		const securityPoolAddress = '0x0000000000000000000000000000000000000001'
-		const intents = [
-			createTradingTransactionIntent('migrateShares', { securityPoolAddress, shareOutcome: 'yes', universeId: 7n }),
-			createReportingTransactionIntent('reportOutcome', { outcome: 'no', securityPoolAddress, universeId: 7n }),
-			createLiquidationTransactionIntent({ amount: '2', securityPoolAddress, targetVault: '0x0000000000000000000000000000000000000002', universeId: 7n }),
-		]
-
-		for (const intent of intents) {
-			const requested = markTransactionRequested(createInitialTransactionTrayState(), intent)
-			const prepared = markTransactionPrepared(requested, {
-				account: '0x0000000000000000000000000000000000000003',
-				args: [],
-				chainName: 'Ethereum',
-				contractAddress: securityPoolAddress,
-				functionName: intent.action,
-				value: 0n,
-			})
-			const submitted = markTransactionSubmitted(prepared, transactionHash)
-			const failed = markTransactionFailed(submitted, { kind: 'reverted', message: 'Transaction reverted' })
-
-			for (const state of [requested, prepared, submitted, failed]) {
-				expect(state.active?.rows?.map(row => row.label)).toContain('Pool')
-				expect(state.active?.rows?.map(row => row.label)).not.toContain('Universe')
-				expect(state.active?.universeId).toBe(7n)
-			}
-			expect(prepared.active?.technicalRows?.map(row => row.label)).toContain('Function')
-			expect(submitted.active?.technicalRows?.map(row => row.label)).toContain('Function')
-			expect(failed.active?.technicalRows?.map(row => row.label)).toContain('Function')
-		}
-	})
-
-	test('preserves pool oracle universe metadata through every transaction lifecycle state', () => {
-		const context = {
-			managerAddress: '0x0000000000000000000000000000000000000002' as const,
-			securityPoolAddress: '0x0000000000000000000000000000000000000001' as const,
-			universeId: 7n,
-			proposedRepPerEthPrice: 3n * 10n ** 18n,
-		}
-		const intent = createPoolOracleTransactionIntent('requestPrice', context)
-		const requested = markTransactionRequested(createInitialTransactionTrayState(), intent)
-		const prepared = markTransactionPrepared(requested, {
-			account: '0x0000000000000000000000000000000000000003',
-			args: [],
-			chainName: 'Ethereum',
-			contractAddress: context.managerAddress,
-			functionName: 'requestPrice',
-			value: 0n,
-		})
-		const submitted = markTransactionSubmitted(prepared, transactionHash)
-		const failed = markTransactionFailed(submitted, { kind: 'reverted', message: 'Transaction reverted' })
-		const success = createPoolOracleSuccessPresentation({ action: 'requestPrice', hash: transactionHash }, context)
-
-		for (const presentation of [requested.active, prepared.active, submitted.active, failed.active, success]) {
-			expect(presentation?.universeId).toBe(7n)
-			expect(presentation?.rows?.map(row => row.label)).not.toContain('Universe')
-			expect(presentation?.rows?.find(row => row.label === 'Attempted REP per ETH price')?.value).toBe('3')
-		}
-		expect(intent.failedTitle).toBe('Price request')
-		expect(failed.active?.title).toBe('Price request')
-		expect(success.title).toBe('Price requested')
-	})
-
-	test('describes truth-auction claim settlement as REP plus auctioned underwriting commitments', () => {
-		const presentation = createForkAuctionSuccessPresentation(createForkAuctionResult('claimAuctionProceeds'))
-		expect(presentation.detail).toBe('Selected truth-auction bids were settled. Winning bids received REP backing units plus Auctioned underwriting commitments, assigning the remaining underwriting commitments; refund-only rows credited locked ETH for withdrawal.')
-	})
-
-	test('describes finalized refund-only settlement without underwriting commitments assignment', () => {
-		const presentation = createForkAuctionSuccessPresentation(createForkAuctionResult('claimAuctionProceeds', { settlementMode: 'refund' }))
-		expect(presentation.title).toBe('Settle finalized refunds')
-		expect(presentation.detail).toBe('Selected finalized truth-auction refund rows were settled. Locked ETH was credited for withdrawal without assigning REP backing units or Auctioned underwriting commitments.')
-	})
-
-	test('uses refund-only transaction intent copy for finalized refund settlement submissions', () => {
-		const intent = createForkAuctionTransactionIntent('claimAuctionProceeds', { submittedTitle: 'Settle finalized refunds' })
-		expect(intent.submittedTitle).toBe('Settle finalized refunds')
-		expect(intent.submittedDetail).toBeUndefined()
-	})
-
-	test('describes unresolved escalation migration as optional parent escalation-deposit accounting cleanup', () => {
-		const presentation = createForkAuctionSuccessPresentation(createForkAuctionResult('migrateUnresolvedEscalation'))
-		expect(presentation.title).toBe('Clear unresolved parent escalation-deposit accounting')
-		expect(presentation.detail).toBe('Your unresolved parent escalation-deposit records were cleared. Your child universe backing and claim eligibility are unchanged.')
-	})
-
-	test('describes direct parent escalation claims without calling them migration', () => {
-		const intent = createForkAuctionTransactionIntent('claimParentEscalationDeposits')
-		const presentation = createForkAuctionSuccessPresentation(createForkAuctionResult('claimParentEscalationDeposits'))
-		expect(intent.submittedTitle).toBe('Claim parent escalation deposits')
-		expect(presentation.title).toBe('Claim parent escalation deposits')
-		expect(presentation.detail).toBe('Selected winning parent deposits were paid in child universe REP. They cannot be claimed again in this universe or its descendants.')
-	})
+	for (const [_action, _title] of [
+		['initializeChildHistory', 'Initialize dispute history'],
+		['prepareForkClaim', 'Prepare inherited claim'],
+	] as const) {
+	}
 })

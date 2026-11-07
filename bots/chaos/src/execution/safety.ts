@@ -62,8 +62,6 @@ export function assertOperationPrincipalCaps(plan: Pick<OperationPlan, 'id' | 's
 			if (debit.kind === 'native') {
 				declaredNativeDebit += debitAmount
 				nativeDebit += debitAmount
-			} else if (debit.kind === 'security-pool-vault-rep') {
-				repDebit += debitAmount
 			} else if (debit.kind === 'erc20' || debit.kind === 'open-oracle-credit') {
 				if (debit.category === 'rep') repDebit += debitAmount
 				else if (debit.category === 'weth' || (debit.kind === 'open-oracle-credit' && debit.asset === 'ETH')) nativeDebit += debitAmount

@@ -1,7 +1,8 @@
+import { quoteSinglePool } from './testSupport/singlePoolQuote.js'
 import { afterAll, beforeAll, describe as baseDescribe, expect, test } from 'bun:test'
 import { createPublicClient, http, mainnet } from '@zoltar/core-shared/evm/ethereum'
 import { resolveAnvilBinary } from '../../../../../solidity/ts/testSupport/simulator/anvilNode'
-import { ETH_ADDRESS, quoteBestV3ExactInputWithSource, quoteExactInput } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
+import { ETH_ADDRESS, quoteBestV3ExactInputWithSource } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { MAINNET_GENESIS_UNIVERSES } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -205,7 +206,7 @@ void describe('Uniswap quote paths — pinned mainnet fork', () => {
 	})
 
 	test('production V4 ETH/USDC route quotes at the pinned block', async () => {
-		const amountOut = await quoteExactInput(getClient(), ETH_ADDRESS, MAINNET_NETWORK_PROFILE.usdcAddress, 10n ** 18n, { fee: 500, tickSpacing: 10 })
+		const amountOut = await quoteSinglePool(getClient(), ETH_ADDRESS, MAINNET_NETWORK_PROFILE.usdcAddress, 10n ** 18n, { fee: 500, tickSpacing: 10 })
 		expect(amountOut).toBeGreaterThan(100n * 10n ** 6n)
 		expect(amountOut).toBeLessThan(100_000n * 10n ** 6n)
 	})

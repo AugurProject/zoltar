@@ -5,11 +5,8 @@ import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import {
 	estimateMintCheckpoint,
 	convertAttoSharesToSettlementCollateralAttoEth,
-	formatStatoblastSecurityMultiplier,
-	getCompleteSetRedeemAttoShares,
 	getDefaultShareMigrationTargetOutcomeIndexes,
 	getMaximumMintAmount,
-	getPoolRemainingMintCapacity,
 	getRemainingMintCapacity,
 	getSelectedOutcomeShareBalance,
 	getTradingMigrateSharesGuardMessage,
@@ -131,15 +128,6 @@ void describe('trading helpers', () => {
 		expect(getRemainingMintCapacity(undefined, 12n)).toBeUndefined()
 	})
 
-	void test('gives a listed pool no mintable remainder once escalation starts or the complete-set exchange rate is undefined', () => {
-		const pool = { mintingCapacityAttoEth: 10n, hasForkContinuationEscalationGame: false, ordinaryEscalationGameStarted: false, settlementCollateralAttoEth: 4n, shareTokenSupplyAttoShares: 4n }
-		expect(getPoolRemainingMintCapacity(pool)).toBe(6n)
-		expect(getPoolRemainingMintCapacity({ ...pool, ordinaryEscalationGameStarted: true })).toBe(0n)
-		expect(getPoolRemainingMintCapacity({ ...pool, hasForkContinuationEscalationGame: true })).toBe(0n)
-		expect(getPoolRemainingMintCapacity({ ...pool, settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 5n })).toBe(0n)
-		expect(getPoolRemainingMintCapacity({ ...pool, mintingCapacityAttoEth: undefined })).toBe(0n)
-	})
-
 	void test('limits the maximum mint amount by both spendable wallet ETH and remaining capacity', () => {
 		expect(getMaximumMintAmount(3n * TOKEN_PRECISION, 5n * TOKEN_PRECISION)).toBe(3n * TOKEN_PRECISION - ETH_GAS_RESERVE_ATTO_ETH)
 		expect(getMaximumMintAmount(7n * TOKEN_PRECISION, 5n * TOKEN_PRECISION)).toBe(5n * TOKEN_PRECISION)
@@ -160,30 +148,6 @@ void describe('trading helpers', () => {
 		} as const
 		expect(getTradingMintGuardMessage({ ...mintGuardInput, ethBalanceAttoEth: TOKEN_PRECISION, mintAmountInput: '1' })).toBe('Need 0.01\u00a0more\u00a0ETH in this wallet to mint the selected amount and keep 0.01\u00a0ETH for gas.')
 		expect(getTradingMintGuardMessage({ ...mintGuardInput, ethBalanceAttoEth: TOKEN_PRECISION, mintAmountInput: '0.99' })).toBeUndefined()
-	})
-
-	void test('names a missing mint or redeem amount instead of disabling without a reason', () => {
-		const mintGuardInput = {
-			accountAddress: '0x1234567890123456789012345678901234567890',
-			settlementCollateralAttoEth: 0n,
-			ethBalanceAttoEth: TOKEN_PRECISION,
-			hasSelectedPool: true,
-			isOnActiveAppChain: true,
-			shareTokenSupplyAttoShares: 0n,
-			totalPoolHeldAttoRep: 0n,
-			mintingCapacityAttoEth: 5n * TOKEN_PRECISION,
-		} as const
-		for (const mintAmountInput of ['', ' ', '0']) expect(getTradingMintGuardMessage({ ...mintGuardInput, mintAmountInput })).toBe('Enter a mint amount.')
-		const redeemGuardInput = {
-			accountAddress: '0x1234567890123456789012345678901234567890',
-			settlementCollateralAttoEth: 10n * TOKEN_PRECISION,
-			hasSelectedPool: true,
-			isOnActiveAppChain: true,
-			loadingTradingDetails: false,
-			shareBalances: { invalidAttoShares: TOKEN_PRECISION, noAttoShares: TOKEN_PRECISION, yesAttoShares: TOKEN_PRECISION },
-			shareTokenSupplyAttoShares: 10n * TOKEN_PRECISION,
-		} as const
-		for (const redeemAmountInput of ['', '0']) expect(getTradingRedeemCompleteSetGuardMessage({ ...redeemGuardInput, redeemAmountInput })).toBe('Enter a redeem amount.')
 	})
 
 	void test('explains that an escalation game pauses minting before reporting capacity', () => {
@@ -223,12 +187,6 @@ void describe('trading helpers', () => {
 		expect(isTradingSystemDeployed([])).toBe(false)
 		expect(isTradingSystemDeployed([createDeploymentStep('proxyDeployer', true), createDeploymentStep('zoltar', true), createDeploymentStep('securityPoolFactory', true)])).toBe(true)
 		expect(isTradingSystemDeployed([createDeploymentStep('proxyDeployer', true), createDeploymentStep('zoltar', true), createDeploymentStep('securityPoolFactory', false)])).toBe(false)
-	})
-
-	void test('formats security multiplier basis points with the multiplication sign', () => {
-		expect(formatStatoblastSecurityMultiplier(20_000n)).toBe('2×')
-		expect(formatStatoblastSecurityMultiplier(25_000n)).toBe('2.5×')
-		expect(formatStatoblastSecurityMultiplier(20_001n)).toBe('2.0001×')
 	})
 
 	void test('detects pools that have REP backing but no active underwriting commitments', () => {
@@ -484,7 +442,7 @@ void describe('trading helpers', () => {
 				shareBalances,
 				shareTokenSupplyAttoShares: 10n * TOKEN_PRECISION,
 			}),
-		).toBe('Max redeemable amount is 2\u00a0ETH.')
+		).toBe('Max redeemable amount is 2\u00a0sets.')
 
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
@@ -503,7 +461,6 @@ void describe('trading helpers', () => {
 	void test('converts first-mint share token amounts through the pool exchange rate', () => {
 		const firstMintShareAmount = TOKEN_PRECISION
 		expect(convertAttoSharesToSettlementCollateralAttoEth(firstMintShareAmount, TOKEN_PRECISION, firstMintShareAmount)).toBe(TOKEN_PRECISION)
-		expect(getCompleteSetRedeemAttoShares({ maxRedeemableAttoShares: undefined, redeemAmountAttoEth: TOKEN_PRECISION, settlementCollateralAttoEth: TOKEN_PRECISION, shareTokenSupplyAttoShares: firstMintShareAmount })).toBe(firstMintShareAmount)
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
@@ -519,14 +476,7 @@ void describe('trading helpers', () => {
 				},
 				shareTokenSupplyAttoShares: firstMintShareAmount,
 			}),
-		).toBe('Max redeemable amount is 1\u00a0ETH.')
-	})
-
-	void test('redeems every complete-set share when the ETH amount reaches the redeemable maximum', () => {
-		// 99 shares at 7 / 100 ETH per share are worth 6 ETH, but 6 ETH converts back to only 86 shares.
-		expect(getCompleteSetRedeemAttoShares({ maxRedeemableAttoShares: 99n, redeemAmountAttoEth: 6n, settlementCollateralAttoEth: 7n, shareTokenSupplyAttoShares: 100n })).toBe(99n)
-		expect(getCompleteSetRedeemAttoShares({ maxRedeemableAttoShares: 99n, redeemAmountAttoEth: 5n, settlementCollateralAttoEth: 7n, shareTokenSupplyAttoShares: 100n })).toBe(72n)
-		expect(getCompleteSetRedeemAttoShares({ maxRedeemableAttoShares: undefined, redeemAmountAttoEth: 6n, settlementCollateralAttoEth: 7n, shareTokenSupplyAttoShares: 100n })).toBe(86n)
+		).toBe('Max redeemable amount is 1\u00a0sets.')
 	})
 
 	void test('explains that share migration waits for the pool to fork', () => {
@@ -697,4 +647,73 @@ void describe('trading helpers', () => {
 		expect(getTradingRedeemSharesGuardMessage({ ...redeemInput, questionOutcome: 'no', shareBalances })).toBeUndefined()
 		expect(getTradingRedeemSharesGuardMessage({ ...redeemInput, questionOutcome: 'none', shareBalances })).toBe('Wait for the selected pool to resolve before redeeming shares.')
 	})
+})
+
+test('portfolio-native mint previews use the linear funded fee stream', () => {
+	expect(
+		estimateMintCheckpoint({
+			currentRetentionRate: 900_000_000_000_000_000n,
+			currentTimestamp: 30n,
+			totalUnderwritingLimitAttoEth: 100n,
+			feeEligibleUnderwritingLimitAttoEth: 100n,
+			feeEndTimestamp: 100n,
+			feeIndexRemainder: 0n,
+			lastUpdatedFeeAccumulator: 10n,
+			settlementCollateralAttoEth: 300n,
+			totalFeesOwedRemainder: 0n,
+			linearFee: { rateAttoEthPerSecond: 3n, endTime: 25n },
+		}),
+	).toEqual({ estimatedRetentionFeeAttoEth: 45n, settlementCollateralAfterFeesAttoEth: 255n })
+})
+
+test('shared pool mint guard defers backing availability to the purchase quote', () => {
+	const request = {
+		accountAddress: zeroAddress,
+		hasSelectedPool: true,
+		isOnActiveAppChain: true,
+		escalationGameActive: false,
+		settlementCollateralAttoEth: TOKEN_PRECISION,
+		shareTokenSupplyAttoShares: TOKEN_PRECISION,
+		mintingCapacityAttoEth: TOKEN_PRECISION,
+		totalPoolHeldAttoRep: TOKEN_PRECISION,
+		ethBalanceAttoEth: 10n * TOKEN_PRECISION,
+		mintAmountInput: '1',
+	}
+	expect(getTradingMintGuardMessage(request)).toBe('No mint capacity remaining.')
+	expect(getTradingMintGuardMessage({ ...request, usesSharedBacking: true })).toBeUndefined()
+	expect(getTradingMintGuardMessage({ ...request, usesSharedBacking: true, escalationGameActive: true })).toBe(MINTING_PAUSED_DURING_DISPUTE_MESSAGE)
+})
+
+test('central settlement previews do not charge wall-clock time across paused price or fork intervals', () => {
+	expect(
+		estimateMintCheckpoint({
+			currentRetentionRate: 900_000_000_000_000_000n,
+			currentTimestamp: 30n,
+			totalUnderwritingLimitAttoEth: 100n,
+			feeEligibleUnderwritingLimitAttoEth: 100n,
+			feeEndTimestamp: 100n,
+			feeIndexRemainder: 0n,
+			lastUpdatedFeeAccumulator: 10n,
+			settlementCollateralAttoEth: 300n,
+			totalFeesOwedRemainder: 0n,
+			linearFee: { rateAttoEthPerSecond: 3n, endTime: 25n },
+			centralSettlement: true,
+			centralCheckpointTimestamp: 30n,
+		}),
+	).toEqual({ estimatedRetentionFeeAttoEth: 0n, settlementCollateralAfterFeesAttoEth: 300n })
+})
+
+test('complete-set redemption accepts share amounts when the claim pays only REP', () => {
+	expect(
+		getTradingRedeemCompleteSetGuardMessage({
+			accountAddress: zeroAddress,
+			hasSelectedPool: true,
+			isOnActiveAppChain: true,
+			loadingTradingDetails: false,
+			redeemAmountInput: '1',
+			settlementCollateralAttoEth: 0n,
+			shareTokenSupplyAttoShares: 2n * TOKEN_PRECISION,
+			shareBalances: { invalidAttoShares: TOKEN_PRECISION, yesAttoShares: TOKEN_PRECISION, noAttoShares: TOKEN_PRECISION },
+		}),
+	).toBeUndefined()
 })

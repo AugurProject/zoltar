@@ -2,24 +2,25 @@
 pragma solidity 0.8.35;
 
 import '../../statoblast/interfaces/IERC1155Receiver.sol';
-import '../../statoblast/interfaces/ISecurityPool.sol';
+import { SecurityPoolPortfolio } from '../../statoblast/SecurityPoolPortfolio.sol';
 
 contract CompleteSetReentrantReceiver is IERC1155Receiver {
-	bytes4 private constant ERC1155_RECEIVED_SELECTOR = IERC1155Receiver.onERC1155Received.selector;
-	bytes4 private constant ERC1155_BATCH_RECEIVED_SELECTOR = IERC1155Receiver.onERC1155BatchReceived.selector;
-
-	ISecurityPool public immutable securityPool;
+	SecurityPoolPortfolio public immutable portfolio;
+	uint248 public immutable universeId;
+	uint256 public immutable questionId;
 	uint256 public reentrantValue;
 	uint256 public reentryCount;
 
-	constructor(ISecurityPool _securityPool) payable {
-		securityPool = _securityPool;
+	constructor(SecurityPoolPortfolio root, uint248 universe, uint256 question) {
+		portfolio = root;
+		universeId = universe;
+		questionId = question;
 	}
 
-	function attack(uint256 initialValue, uint256 _reentrantValue) external payable {
-		require(msg.value == initialValue + _reentrantValue, 'Reentrant receiver funding must equal initial plus reentrant value');
-		reentrantValue = _reentrantValue;
-		securityPool.createCompleteSet{value: initialValue}();
+	function attack(uint256 initialValue, uint256 nestedValue) external payable {
+		reentrantValue = nestedValue;
+		(uint256 fee, ) = portfolio.purchaseQuote(universeId, questionId, initialValue);
+		portfolio.createCompleteSet{value: initialValue + fee}(universeId, questionId, initialValue, address(this), 0);
 	}
 
 	function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
@@ -27,15 +28,16 @@ contract CompleteSetReentrantReceiver is IERC1155Receiver {
 	}
 
 	function onERC1155Received(address, address, uint256, uint256, bytes calldata) external pure returns (bytes4) {
-		return ERC1155_RECEIVED_SELECTOR;
+		return IERC1155Receiver.onERC1155Received.selector;
 	}
 
 	function onERC1155BatchReceived(address, address, uint256[] calldata, uint256[] calldata, bytes calldata) external returns (bytes4) {
 		if (reentryCount == 0 && reentrantValue > 0) {
 			reentryCount = 1;
-			securityPool.createCompleteSet{value: reentrantValue}();
+			(uint256 fee, ) = portfolio.purchaseQuote(universeId, questionId, reentrantValue);
+			portfolio.createCompleteSet{value: reentrantValue + fee}(universeId, questionId, reentrantValue, address(this), 0);
 		}
-		return ERC1155_BATCH_RECEIVED_SELECTOR;
+		return IERC1155Receiver.onERC1155BatchReceived.selector;
 	}
 
 	receive() external payable {}

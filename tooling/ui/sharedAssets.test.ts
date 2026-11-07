@@ -12,12 +12,11 @@ const coreSharedPaths = getUiCoreSharedPaths()
 const repositoryRootPath = coreSharedPaths.repositoryRoot
 const uiRootPath = coreSharedPaths.uiRoot
 const statoblastSharedSourceRoot = path.join(getUiPackageRoot(uiRootPath, 'statoblastShared'), 'ts')
-const uiProtocolPaths = [path.join(statoblastSharedSourceRoot, 'protocol', 'forks.ts'), path.join(statoblastSharedSourceRoot, 'protocol', 'openOracle.ts'), path.join(statoblastSharedSourceRoot, 'protocol', 'trading.ts')]
+const uiProtocolPaths = [path.join(statoblastSharedSourceRoot, 'protocol', 'openOracle.ts'), path.join(statoblastSharedSourceRoot, 'protocol', 'trading.ts')]
 const uiDeploymentHelpersPath = path.join(statoblastSharedSourceRoot, 'protocol', 'deploymentHelpers.ts')
 const uiReportingDomainPath = path.join(statoblastSharedSourceRoot, 'features', 'reporting', 'lib', 'reportingDomain.ts')
 const uiSepoliaDeploymentConfigPath = path.join(coreSharedPaths.coreSharedSourceRoot, 'lib', 'sepoliaDeploymentConfig.ts')
 const uiSimulationBootstrapPath = path.join(coreSharedPaths.coreSharedSourceRoot, 'simulation', 'bootstrap.ts')
-const uiTruthAuctionBookPath = path.join(statoblastSharedSourceRoot, 'features', 'truth-auctions', 'lib', 'truthAuctionBook.ts')
 const uiIndexHtmlPaths = new Map(UI_APP_IDS.map(appId => [appId, path.join(uiRootPath, appId, 'index.html')]))
 const uiVendorBuildPath = path.join(import.meta.dir, 'vendor.mts')
 const uiWatchBuildPath = path.join(import.meta.dir, 'watch.mts')
@@ -349,7 +348,6 @@ test('shared helper package imports resolve to browser-served shared outputs', (
 	expect(deploymentHelpersSource).toContain("from '@zoltar/statoblast-shared/deployment/initCodes'")
 	expect(protocolSource).toContain("from '@zoltar/core-shared/evm/ethereum'")
 	expect(fs.readFileSync(uiReportingDomainPath, 'utf8')).toContain("from '@zoltar/statoblast-shared/escalationGame/escalationMath'")
-	expect(fs.readFileSync(uiTruthAuctionBookPath, 'utf8')).toContain("from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'")
 	expect(protocolSource).not.toContain('./shared/bigInt.js')
 	expect(simulationBootstrapSource).not.toContain('../shared/constants.js')
 	expect(deploymentHelpersSource).not.toContain('../shared/deploymentAddresses.js')

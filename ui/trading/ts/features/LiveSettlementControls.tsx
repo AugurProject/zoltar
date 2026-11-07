@@ -69,11 +69,11 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 	const [migrationAcknowledgedKey, setMigrationAcknowledgedKey] = useState<string>()
 	const forkClient = useMemo(() => services.createPublicClient(configuration), [configuration, services])
 	const availability = settlementAvailability(market, balances)
-	const parsedAmountAttoEth = tryParseNonNegativeDecimalInput(amount)
+	const parsedInputAmount = tryParseNonNegativeDecimalInput(amount)
+	const hasRecoveryRep = (market.settlementRecoveryAttoRep ?? 0n) > 0n
 	const maxFillCurrent = maxFill !== undefined && maxFill.text === amount && maxFill.completeSets === availability.completeSets
-	let parsedAmount = parsedAmountAttoEth === undefined ? undefined : collateralAttoEthToAttoShares(parsedAmountAttoEth, market)
+	let parsedAmount = parsedInputAmount === undefined || hasRecoveryRep ? parsedInputAmount : collateralAttoEthToAttoShares(parsedInputAmount, market)
 	if (maxFillCurrent) parsedAmount = maxFill.completeSets
-	// A typed amount that cannot be read says what is wrong with it: a stray separator, too many decimals, or not a number.
 	const amountFormatError = operation === 'redeem-complete-set' ? getAmountInputErrorMessage(validateAmountInput(amount)) : undefined
 	const targetOutcomeIndexes = useMemo(() => selectedForkTargets.map(target => target.outcomeIndex), [selectedForkTargets])
 	const targetOutcomeKey = targetOutcomeIndexes.map(target => target.toString()).join(',')
@@ -173,7 +173,8 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 
 	const amountId = useId()
 	let amountFieldError: string | undefined
-	if (amount.trim() !== '' && operationAvailable) amountFieldError = inputBlocker
+	const invalidAmountReason = hasRecoveryRep ? settlementCopy.invalidShareAmount : settlementCopy.invalidEthAmount
+	if (amount.trim() !== '' && operationAvailable) amountFieldError = parsedInputAmount === undefined ? invalidAmountReason : inputBlocker
 	const selectOperation = (next: SettlementOperation) => {
 		invalidateSettlementInputs()
 		setOperation(next)
@@ -192,8 +193,9 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 	// Shown before the action once there is a balance to move and a branch to move it to.
 	const migrationBalance = operation === 'migrate-shares' && balanceState === 'ready' && sourceBalance !== undefined && sourceBalance > 0n && selectedForkTargets.length > 0 ? formatOutcomeWithValue(sourceBalance, sourceOutcome, market, 4, 'nearest', { noteRedemption: false }) : undefined
 	const redeemableAttoEth = balanceState === 'ready' && balances !== undefined ? attoSharesToCollateralAttoEth(availability.completeSets, market) : undefined
-	// Max shows a readable ETH amount: six decimals, rounded down so it never reads above what the sets redeem for.
-	const maxRedeemAttoEth = redeemableAttoEth === undefined || redeemableAttoEth < MAX_FILL_STEP_ATTO_ETH ? redeemableAttoEth : redeemableAttoEth - (redeemableAttoEth % MAX_FILL_STEP_ATTO_ETH)
+	// Cash-only Max uses six decimals rounded down; baskets use their exact share amount.
+	const maxRedeemableCollateral = redeemableAttoEth === undefined || redeemableAttoEth < MAX_FILL_STEP_ATTO_ETH ? redeemableAttoEth : redeemableAttoEth - (redeemableAttoEth % MAX_FILL_STEP_ATTO_ETH)
+	const maxRedeemAmount = hasRecoveryRep ? availability.completeSets : maxRedeemableCollateral
 	const completeSetHint = redeemableAttoEth === undefined ? undefined : settlementCopy.completeSetsHeld(formatCompleteSetQuantity(availability.completeSets, 4, 'down'), formatCollateralEth(availability.completeSets, market, 'down'))
 	return (
 		<div className='settlement-controls'>
@@ -203,7 +205,7 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 					return (
 						<>
 							<UserMessage className='detail' detail={settlementCopy.completeSetRedemptionGuidance} />
-							<FormField id={amountId} label={settlementCopy.completeSetValueToRedeem}>
+							<FormField id={amountId} label={hasRecoveryRep ? settlementCopy.completeSetsToRedeem : settlementCopy.completeSetValueToRedeem}>
 								<FormInput
 									id={amountId}
 									name='amount'
@@ -212,17 +214,17 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 									autoComplete='off'
 									disabled={workflowLocked}
 									inputMode='decimal'
-									adornment={settlementCopy.eth}
+									adornment={hasRecoveryRep ? settlementCopy.sets : settlementCopy.eth}
 									hint={completeSetHint}
 									action={
-										redeemableAttoEth === undefined || redeemableAttoEth === 0n ? undefined : (
+										redeemableAttoEth === undefined || (redeemableAttoEth === 0n && !hasRecoveryRep) ? undefined : (
 											<button
 												type='button'
 												className='secondary'
 												disabled={workflowLocked}
 												onClick={() => {
 													invalidateSettlementInputs()
-													const text = formatCurrencyInputBalance(maxRedeemAttoEth ?? redeemableAttoEth, 18)
+													const text = formatCurrencyInputBalance(maxRedeemAmount ?? redeemableAttoEth, 18)
 													setAmount(text)
 													setMaxFill({ text, completeSets: availability.completeSets })
 												}}
@@ -307,7 +309,10 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 					<section className='trade-estimate' aria-label={settlementCopy.estimateHeading}>
 						<TransactionReview
 							variant='inline'
-							primary={[{ label: settlementCopy.youReceive, value: formatValueWithUnit(formatRoundedUnits(approval.expectedAttoEth), settlementCopy.eth) }]}
+							primary={[
+								{ label: settlementCopy.youReceive, value: formatValueWithUnit(formatRoundedUnits(approval.expectedAttoEth), settlementCopy.eth) },
+								...((approval.expectedAttoRep ?? 0n) === 0n ? [] : [{ label: settlementCopy.recoveryRep, value: formatValueWithUnit(formatTrimmedUnits(approval.expectedAttoRep ?? 0n), commonCopy.rep) }]),
+							]}
 							details={[{ label: settlementCopy.minimumReceived, value: formatValueWithUnit(formatTrimmedUnits(approval.minimumAttoEth), settlementCopy.eth) }]}
 						/>
 						<UserMessage

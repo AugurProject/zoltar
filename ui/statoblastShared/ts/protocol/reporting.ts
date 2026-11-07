@@ -6,40 +6,19 @@ import { formatCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { statoblast_EscalationGame_EscalationGame, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker } from '../contractArtifact.js'
-import { requireForkDataView } from './forkData.js'
-import { getForkMigrationEndsAt, isMigrationClosed } from './forkMigrationTiming.js'
-import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
+import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
 import type { ReadClient, ReportingOutcomeKey, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { EscalationDeposit, EscalationSide, ReportingActionResult, ReportingDetails, ReportingSettlementState, VaultReportingLimits } from '../types/contracts.js'
+import type { EscalationDeposit, EscalationSide, ReportingActionResult, ReportingDetails, ReportingSettlementState } from '../types/contracts.js'
 import { readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { requireAddressValue, requireArrayValue, requireBigintValue, requireIntegerLikeValue, requireObjectValue, requireTupleValue } from './decoders.js'
 import { getInfraContractAddresses } from './deploymentHelpers.js'
 import { getReportingOutcomeKey, getReportingOutcomeValue, getSecurityPoolSystemState } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 import { getEscalationSideLabel, hasTimestamp } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
-import { requireSecurityVaultTupleArray } from './helpers.js'
 import { readSecurityPoolUniverseId } from './securityPoolActions.js'
 import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from './securityPoolAbi.js'
 import { loadMarketDetails } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 import { loadForkCarriedEscalationDepositsFromParentSnapshot, readEscalationOutcomeState, readForkContinuation } from './reportingCarryState.js'
 import { CONTRACT_PAGE_SIZE } from './pagination.js'
-
-const ESCALATION_MIGRATION_ENTITLEMENT_STATUS_ABI = [
-	{
-		inputs: [
-			{ name: 'securityPool', type: 'address' },
-			{ name: 'vault', type: 'address' },
-		],
-		name: 'getEscalationMigrationEntitlementStatus',
-		outputs: [
-			{ name: 'initialized', type: 'bool' },
-			{ name: 'totalCurrentAttoRep', type: 'uint256' },
-			{ name: 'materializedByOutcome', type: 'bool[3]' },
-		],
-		stateMutability: 'view',
-		type: 'function',
-	},
-] as const
 
 type ReportingBootstrapReadResult = {
 	questionId: bigint
@@ -129,96 +108,6 @@ async function loadViewerReportingWalletState(client: ReadClient, fundingAddress
 	return { viewerWalletRepAllowanceAttoRep, viewerWalletRepBalanceAttoRep, viewerWalletRepTokenAddress }
 }
 
-async function loadVaultReportingPoolLimits(client: ReadClient, securityPoolAddress: Address) {
-	const abi = statoblast_SecurityPool_SecurityPool.abi
-	const [minimumVaultRepDepositAttoRep, managerAddress, statoblastSecurityMultiplierBps, totalPoolHeldAttoRep, totalRepBackingUnits, totalUnderwritingLimitAttoEth] = await Promise.all([
-		client.readContract({ abi, functionName: 'minimumVaultRepDepositAttoRep', address: securityPoolAddress, args: [] }),
-		client.readContract({ abi, functionName: 'openOraclePriceCoordinator', address: securityPoolAddress, args: [] }),
-		client.readContract({ abi, functionName: 'statoblastSecurityMultiplierBps', address: securityPoolAddress, args: [] }),
-		client.readContract({ abi, functionName: 'getTotalPoolHeldAttoRep', address: securityPoolAddress, args: [] }),
-		client.readContract({ abi, functionName: 'totalRepBackingUnits', address: securityPoolAddress, args: [] }),
-		client.readContract({ abi, functionName: 'totalUnderwritingLimitAttoEth', address: securityPoolAddress, args: [] }),
-	])
-	// The pool checks coverage at the coordinator's last price.
-	const repPerEthPrice = await client.readContract({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'lastPrice', address: managerAddress, args: [] })
-	return { minimumVaultRepDepositAttoRep, repPerEthPrice, statoblastSecurityMultiplierBps, totalPoolHeldAttoRep, totalRepBackingUnits, totalUnderwritingLimitAttoEth }
-}
-
-async function loadViewerReportingVaultState(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined) {
-	if (accountAddress === undefined)
-		return {
-			viewerRepBackingUnits: undefined,
-			viewerPoolHeldVaultRepBackingAttoRep: undefined,
-			viewerEscalationMigrationEntitlement: undefined,
-			viewerVaultExists: false,
-			viewerVaultDisputeStakedAttoRep: undefined,
-			viewerVaultRepBackingAttoRep: undefined,
-			viewerVaultReportingLimits: undefined,
-		}
-	const [viewerVaultTuple, escalationMigrationEntitlementTuple, poolLimits] = await Promise.all([
-		client.readContract({
-			abi: statoblast_SecurityPool_SecurityPool.abi,
-			functionName: 'securityVaults',
-			address: securityPoolAddress,
-			args: [accountAddress],
-		}),
-		client.readContract({
-			abi: ESCALATION_MIGRATION_ENTITLEMENT_STATUS_ABI,
-			functionName: 'getEscalationMigrationEntitlementStatus',
-			address: getInfraContractAddresses().securityPoolForker,
-			args: [securityPoolAddress, accountAddress],
-		}),
-		loadVaultReportingPoolLimits(client, securityPoolAddress),
-	])
-	const [entitlementInitialized, entitlementTotalCurrentRep, materializedByOutcome] = escalationMigrationEntitlementTuple
-	const viewerVaultTuples = requireSecurityVaultTupleArray([viewerVaultTuple], 'viewer security vault tuple')
-	const [viewerRepBackingUnits, viewerUnderwritingLimitAttoEth, viewerClaimableFeesAttoEth, viewerFeeIndex] = viewerVaultTuples[0] ?? []
-	if (typeof viewerRepBackingUnits !== 'bigint' || typeof viewerUnderwritingLimitAttoEth !== 'bigint' || typeof viewerClaimableFeesAttoEth !== 'bigint' || typeof viewerFeeIndex !== 'bigint') throw new Error('Unexpected viewer security vault tuple response')
-	const viewerVaultRepBackingAttoRep =
-		viewerRepBackingUnits === 0n
-			? 0n
-			: await client.readContract({
-					abi: statoblast_SecurityPool_SecurityPool.abi,
-					functionName: 'backingUnitsToAttoRep',
-					address: securityPoolAddress,
-					args: [viewerRepBackingUnits],
-				})
-	const escalationGameAddress = await client.readContract({
-		abi: statoblast_SecurityPool_SecurityPool.abi,
-		functionName: 'escalationGame',
-		address: securityPoolAddress,
-		args: [],
-	})
-	const viewerVaultDisputeStakedAttoRep = sameAddress(escalationGameAddress, zeroAddress)
-		? 0n
-		: await client.readContract({
-				abi: statoblast_EscalationGame_EscalationGame.abi,
-				functionName: 'disputeStakedRepByVaultAttoRep',
-				address: escalationGameAddress,
-				args: [accountAddress],
-			})
-	const viewerVaultExists = viewerRepBackingUnits !== 0n || viewerUnderwritingLimitAttoEth !== 0n || viewerClaimableFeesAttoEth !== 0n || viewerFeeIndex !== 0n || viewerVaultDisputeStakedAttoRep !== 0n
-	const viewerPoolHeldVaultRepBackingAttoRep = viewerVaultRepBackingAttoRep
-	const viewerVaultReportingLimits: VaultReportingLimits = { ...poolLimits, underwritingLimitAttoEth: viewerUnderwritingLimitAttoEth, vaultRepBackingUnits: viewerRepBackingUnits }
-	return {
-		viewerRepBackingUnits,
-		viewerPoolHeldVaultRepBackingAttoRep,
-		viewerEscalationMigrationEntitlement: {
-			initialized: entitlementInitialized,
-			materializedByOutcome: {
-				invalid: materializedByOutcome[0],
-				yes: materializedByOutcome[1],
-				no: materializedByOutcome[2],
-			},
-			totalCurrentAttoRep: entitlementTotalCurrentRep,
-		},
-		viewerVaultExists,
-		viewerVaultDisputeStakedAttoRep,
-		viewerVaultRepBackingAttoRep,
-		viewerVaultReportingLimits,
-	}
-}
-
 export async function loadReportingDetails(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<ReportingDetails> {
 	const reportingPoolReads: readonly ContractFunctionParameters[] = [
 		{
@@ -279,11 +168,10 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 	const { questionId, escalationGameAddress, settlementCollateralAttoEth, universeId, zoltarAddress, initialEscalationGameDepositAttoRep, systemStateValue, questionOutcomeValue, parentSecurityPoolAddress } = requireReportingBootstrapReadResult(await readRequiredMulticall(client, reportingPoolReads))
 	const systemState = getSecurityPoolSystemState(systemStateValue)
 	const normalizedQuestionOutcome = getReportingOutcomeKey(questionOutcomeValue)
-	const [marketDetails, block, escalationGameCode, viewerVaultState, forkThresholdAttoRep] = await Promise.all([
+	const [marketDetails, block, escalationGameCode, forkThresholdAttoRep] = await Promise.all([
 		loadMarketDetails(client, questionId),
 		client.getBlock(),
 		escalationGameAddress === zeroAddress ? Promise.resolve('0x' as const) : client.getCode({ address: escalationGameAddress }),
-		loadViewerReportingVaultState(client, securityPoolAddress, accountAddress),
 		client.readContract({
 			abi: Zoltar_Zoltar.abi,
 			address: zoltarAddress,
@@ -313,10 +201,11 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			systemState,
 			universeId,
 			parentWithdrawalEnabled: false,
-			...viewerVaultState,
 		}
 	}
 	const forkContinuationSnapshot = await readForkContinuation(client, escalationGameAddress)
+	const ordinarySettlementInitialized = !forkContinuationSnapshot && (await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'ordinarySettlementInitialized' }))
+	const frozenOrdinaryForkThreshold = ordinarySettlementInitialized ? await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'ordinarySettlementForkThresholdAttoRep' }) : undefined
 	const continuationTiming = forkContinuationSnapshot
 		? await Promise.all([
 				client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'forkResumedAt', args: [] }),
@@ -424,27 +313,17 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 	if (normalizedQuestionOutcome !== 'none' && systemState === 'operational') {
 		settlementState = 'resolved'
 	} else if (universeForkTime > 0n && universeForkTime < escalationEndTime && hasReachedNonDecision === false) {
-		const { forkActivationTime } = requireForkDataView(await client.readContract({ abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi, functionName: 'forkData', address: getInfraContractAddresses().securityPoolForker, args: [securityPoolAddress] }))
-		const migrationEndsAt = getForkMigrationEndsAt(forkActivationTime)
-		settlementState = migrationEndsAt === undefined || !isMigrationClosed(block.timestamp, migrationEndsAt) ? 'migration-required' : 'migration-expired'
+		settlementState = 'migration-required'
 	}
 	return {
 		bindingCapital,
 		contributionFunding: 'wallet',
-		walletVaultFunding: forkContinuationSnapshot
-			? {
-					vaultRepBackingUnits: viewerVaultState.viewerRepBackingUnits ?? 0n,
-					totalRepBackingUnits: await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'totalRepBackingUnits', args: [] }),
-					totalPoolHeldRepAttoRep: await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getTotalPoolHeldAttoRep', args: [] }),
-				}
-			: undefined,
-		minimumVaultRepDepositAttoRep: forkContinuationSnapshot ? await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'minimumVaultRepDepositAttoRep', args: [] }) : undefined,
 		settlementCollateralAttoEth,
 		currentRequiredBond: totalCostAttoRep === 0n ? startBondAttoRep : totalCostAttoRep,
 		currentTime: block.timestamp,
 		escalationEndTime,
 		escalationGameAddress,
-		forkThresholdAttoRep,
+		forkThresholdAttoRep: frozenOrdinaryForkThreshold ?? (universeForkTime > escalationEndTime ? nonDecisionThresholdAttoRep : forkThresholdAttoRep),
 		hasReachedNonDecision,
 		marketDetails,
 		nonDecisionThresholdAttoRep,
@@ -464,12 +343,11 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		universeId,
 		parentWithdrawalEnabled: settlementState === 'resolved',
 		...walletReportingState,
-		...viewerVaultState,
 	}
 }
 
-/** Review text for an escalation report; vault-funded and direct reports share it so a fork-triggering report always warns. */
-export function getReportReviewText(outcome: ReportingOutcomeKey, amountAttoRep: bigint, triggersFork: boolean) {
+/** A fork-triggering wallet report always includes the fork consequence in its review. */
+function getReportReviewText(outcome: ReportingOutcomeKey, amountAttoRep: bigint, triggersFork: boolean) {
 	const outcomeLabel = getEscalationSideLabel(outcome)
 	const amount = formatCurrencyBalance(amountAttoRep)
 	return {
@@ -489,16 +367,7 @@ export async function reportOutcomeInSecurityPool(client: WriteClient, securityP
 			args: [],
 		}),
 	])
-	const forkContinuation =
-		escalationGameAddress !== zeroAddress &&
-		(await client.readContract({
-			address: escalationGameAddress,
-			abi: statoblast_EscalationGame_EscalationGame.abi,
-			functionName: 'forkContinuation',
-			args: [],
-		}))
-	const useWalletFunding = (contributionFunding ?? (forkContinuation ? 'vault' : 'wallet')) === 'wallet'
-	if (useWalletFunding && forkContinuation) throw new Error('Reports in a pool continued after a fork are funded from your vault.')
+	if (contributionFunding === 'vault') throw new Error('Reports use wallet REP. Withdraw free REP from your portfolio before reporting.')
 	if (escalationGameAddress !== zeroAddress) {
 		const [escalationEndTime, block] = await Promise.all([client.readContract({ address: escalationGameAddress, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getEscalationGameEndDate', args: [] }), client.getBlock()])
 		const timingGuard = getReportingSubmissionTimingGuard({ currentTime: block.timestamp, escalationEndTime })
@@ -508,7 +377,7 @@ export async function reportOutcomeInSecurityPool(client: WriteClient, securityP
 	const callParams = {
 		address: securityPoolAddress,
 		abi: statoblast_SecurityPool_SecurityPool.abi,
-		functionName: useWalletFunding ? 'depositWalletRepToEscalationGame' : 'depositToEscalationGame',
+		functionName: 'depositWalletRepToEscalationGame',
 		...getReportReviewText(outcome, reviewAmountAttoRep, triggersFork),
 		args: [getReportingOutcomeValue(outcome), amountAttoRep],
 	}
@@ -517,7 +386,6 @@ export async function reportOutcomeInSecurityPool(client: WriteClient, securityP
 			...callParams,
 			contractAddress: securityPoolAddress,
 			refreshFundingRequirements: async () => {
-				if (!useWalletFunding) return undefined
 				const tokenAddress = await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'repToken' })
 				return [{ tokenAddress, amount: reviewAmountAttoRep }]
 			},
@@ -527,18 +395,11 @@ export async function reportOutcomeInSecurityPool(client: WriteClient, securityP
 					client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'systemState' }),
 				])
 				if (currentGame !== escalationGameAddress || getSecurityPoolSystemState(systemState) !== 'operational') throw new Error('Reporting changed. Review the pool again.')
-				if (!useWalletFunding) {
-					const [backingUnits] = await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'securityVaults', args: [client.account.address] })
-					const backing = await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'backingUnitsToAttoRep', args: [backingUnits] })
-					if (backing < reviewAmountAttoRep) throw new Error('Vault REP backing changed. Review the report again.')
-				}
 				if (currentGame !== zeroAddress) {
-					const [continuation, endTime, acceptedDeposit] = await Promise.all([
-						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'forkContinuation' }),
+					const [endTime, acceptedDeposit] = await Promise.all([
 						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getEscalationGameEndDate' }),
 						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'previewDepositOnOutcome', args: [getReportingOutcomeValue(outcome), amountAttoRep] }),
 					])
-					if (useWalletFunding && continuation) throw new Error('Reports in a pool continued after a fork are funded from your vault.')
 					if (acceptedDeposit[0] !== reviewAmountAttoRep || acceptedDeposit[0] <= 0n) throw new Error('The report amount changed. Review the report again.')
 					const block = await client.getBlock()
 					const timingGuard = getReportingSubmissionTimingGuard({ currentTime: block.timestamp, escalationEndTime: endTime })

@@ -5,28 +5,6 @@ import { concatHex, encodeAbiParameters, getAddress, keccak256 } from '../../sha
 
 // Worked examples in the reference pages, recomputed from the contract rules they illustrate.
 
-/** Recomputes the ESC-13 example from Zoltar's non-decision threshold formula. */
-export async function checkNonDecisionThresholdExample(): Promise<void> {
-	const zoltar = await readFile('solidity/contracts/Zoltar.sol', 'utf8')
-	const invariantsHtml = await readFile('docs/reference/invariants.html', 'utf8')
-	assert.match(zoltar, /function getNonDecisionThresholdAttoRep\([\s\S]*?return forkThresholdAttoRep \/ 2 \+ \(forkThresholdAttoRep % 2\);/, 'Zoltar non-decision threshold must remain the ceiling of half the fork threshold')
-	const nonDecisionThresholdAttoRep = (forkThresholdAttoRep: bigint): bigint => forkThresholdAttoRep / 2n + (forkThresholdAttoRep % 2n)
-	const entry = invariantsHtml.match(/<details class="invariant-entry" id="esc-13"\s*>[\s\S]*?<\/details>/)?.[0]
-	assert.ok(entry, 'Invariant catalog must retain ESC-13')
-	const example = (entry.match(/<p class="invariant-example">[\s\S]*?<\/p>/)?.[0] ?? '').replaceAll(/<[^>]+>/g, '').replaceAll(/\s+/g, ' ')
-	const values = example.match(/F = (\d+) attoREP, non-decision requires (\d+) attoREP on two outcomes, which total (\d+) attoREP; one attoREP less on both, (\d+) and (\d+), totals (\d+) attoREP, below the fork threshold/)
-	assert.ok(values, 'ESC-13 example must state the fork threshold, per-outcome non-decision threshold, and one-less boundary in attoREP')
-	const [forkThreshold, perOutcome, thresholdTotal, lessA, lessB, lessTotal] = values.slice(1).map(value => BigInt(value))
-	if (forkThreshold === undefined || perOutcome === undefined || thresholdTotal === undefined || lessA === undefined || lessB === undefined || lessTotal === undefined) throw new Error('ESC-13 example values are incomplete')
-	assert.equal(perOutcome, nonDecisionThresholdAttoRep(forkThreshold), 'ESC-13 example must use the Zoltar non-decision threshold formula')
-	assert.equal(thresholdTotal, perOutcome * 2n, 'ESC-13 example threshold total must equal two threshold balances')
-	assert.ok(thresholdTotal >= forkThreshold, 'ESC-13 example threshold balances must total at least the fork threshold')
-	assert.equal(lessA, perOutcome - 1n, 'ESC-13 example must reduce the first balance by one attoREP')
-	assert.equal(lessB, perOutcome - 1n, 'ESC-13 example must reduce the second balance by one attoREP')
-	assert.equal(lessTotal, lessA + lessB, 'ESC-13 example one-less total must add both balances')
-	assert.ok(lessTotal < forkThreshold, 'ESC-13 example one-less balances must total strictly less than the fork threshold')
-}
-
 /** Recomputes the Merkle Mountain Range conformance vector from the contract's hashing rules. */
 export async function checkMmrConformanceVector(): Promise<void> {
 	const contractSource = await readFile('solidity/contracts/statoblast/MerkleMountainRange.sol', 'utf8')

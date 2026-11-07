@@ -18,7 +18,24 @@ export const poolStateHistory = async (sql: SQL, address: string, query: StateHi
 		sql`SELECT e.*, b.timestamp FROM pool_state_events e JOIN blocks b ON b.chain_id = e.chain_id AND b.hash = e.block_hash WHERE e.chain_id = ${chainId} AND e.pool_address = ${address} AND e.canonical AND e.block_number BETWEEN ${fromBlock} AND ${toBlock} ORDER BY e.block_number DESC, e.log_index DESC, e.tx_hash DESC, e.block_hash DESC LIMIT ${queryLimit} OFFSET ${offset}`,
 		sql`SELECT market.chain_id::text AS chain_id, market.block_hash, market.tx_hash, market.log_index, market.block_number::text AS block_number, market.pair_address, market.pool_address, market.share_token_address, market.universe_id::text AS universe_id, market.fee_bps::text AS fee_bps, market.canonical, block.timestamp FROM amm_markets market JOIN blocks block ON block.chain_id = market.chain_id AND block.hash = market.block_hash WHERE market.chain_id = ${chainId} AND market.pool_address = ${address} AND market.canonical ORDER BY market.block_number DESC, market.log_index DESC LIMIT 1`,
 		sql`SELECT price.chain_id::text AS chain_id, price.block_hash, price.tx_hash, price.log_index, price.block_number::text AS block_number, price.pair_address, price.yes_reserve_atto_shares::text AS yes_reserve_atto_shares, price.no_reserve_atto_shares::text AS no_reserve_atto_shares, price.conditional_yes_bps::text AS conditional_yes_bps, price.conditional_no_bps::text AS conditional_no_bps, price.canonical, block.timestamp FROM amm_price_snapshots price JOIN blocks block ON block.chain_id = price.chain_id AND block.hash = price.block_hash JOIN amm_markets market ON market.chain_id = price.chain_id AND market.pair_address = price.pair_address AND market.canonical WHERE price.chain_id = ${chainId} AND market.pool_address = ${address} AND price.canonical AND price.block_number BETWEEN ${fromBlock} AND ${toBlock} ORDER BY price.block_number DESC, price.log_index DESC, price.tx_hash DESC, price.block_hash DESC, price.pair_address LIMIT ${queryLimit} OFFSET ${offset}`,
-		sql`SELECT price.chain_id::text AS chain_id, price.block_hash, price.tx_hash, price.log_index, price.block_number::text AS block_number, price.coordinator_address, price.event_name, price.report_id::text AS report_id, price.rep_per_eth_1e18::text AS rep_per_eth_1e18, price.settlement_timestamp, price.canonical, block.timestamp FROM rep_eth_price_snapshots price JOIN blocks block ON block.chain_id = price.chain_id AND block.hash = price.block_hash JOIN pools pool ON pool.chain_id = price.chain_id AND pool.coordinator_address = price.coordinator_address AND pool.canonical WHERE price.chain_id = ${chainId} AND pool.pool_address = ${address} AND price.canonical AND price.block_number BETWEEN ${fromBlock} AND ${toBlock} ORDER BY price.block_number DESC, price.log_index DESC, price.tx_hash DESC, price.block_hash DESC, price.coordinator_address LIMIT ${queryLimit} OFFSET ${offset}`,
+		sql`SELECT price.chain_id::text AS chain_id, price.block_hash, price.tx_hash, price.log_index,
+			price.block_number::text AS block_number, price.coordinator_address, price.event_name,
+			price.report_id::text AS report_id, price.rep_per_eth_1e18::text AS rep_per_eth_1e18,
+			price.settlement_timestamp, price.canonical, block.timestamp
+			FROM pools pool
+			LEFT JOIN LATERAL (
+				SELECT lower(binding.arguments->>'priceFeed') AS price_feed_address FROM logs binding
+				WHERE binding.chain_id = pool.chain_id AND binding.emitter_address = pool.coordinator_address
+					AND binding.event_name = 'SharedPriceFeedSet' AND binding.canonical
+				ORDER BY binding.block_number DESC, binding.log_index DESC LIMIT 1
+			) feed ON true
+			JOIN rep_eth_price_snapshots price ON price.chain_id = pool.chain_id
+				AND price.coordinator_address = COALESCE(feed.price_feed_address, pool.coordinator_address)
+			JOIN blocks block ON block.chain_id = price.chain_id AND block.hash = price.block_hash
+			WHERE pool.chain_id = ${chainId} AND pool.pool_address = ${address} AND pool.canonical
+				AND price.canonical AND price.block_number BETWEEN ${fromBlock} AND ${toBlock}
+			ORDER BY price.block_number DESC, price.log_index DESC, price.tx_hash DESC, price.block_hash DESC, price.coordinator_address
+			LIMIT ${queryLimit} OFFSET ${offset}`,
 		sql`
 			WITH target_pool AS (
 				SELECT pools.universe_id FROM pools
@@ -86,13 +103,22 @@ export const poolStateHistory = async (sql: SQL, address: string, query: StateHi
 		`,
 		sql`SELECT log.block_number::text AS block_number, log.block_hash, log.tx_hash, log.log_index, log.event_name,
 			log.arguments, log.summary, log.emitter_address AS coordinator_address, block.timestamp
-			FROM logs log JOIN blocks block ON block.chain_id = log.chain_id AND block.hash = log.block_hash
-			JOIN pools pool ON pool.chain_id = log.chain_id AND pool.coordinator_address = log.emitter_address AND pool.canonical
-			WHERE log.chain_id = ${chainId} AND pool.pool_address = ${address} AND log.canonical
+			FROM pools pool
+			LEFT JOIN LATERAL (
+				SELECT lower(binding.arguments->>'priceFeed') AS price_feed_address FROM logs binding
+				WHERE binding.chain_id = pool.chain_id AND binding.emitter_address = pool.coordinator_address
+					AND binding.event_name = 'SharedPriceFeedSet' AND binding.canonical
+				ORDER BY binding.block_number DESC, binding.log_index DESC LIMIT 1
+			) feed ON true
+			JOIN logs log ON log.chain_id = pool.chain_id
+				AND log.emitter_address IN (pool.coordinator_address, COALESCE(feed.price_feed_address, pool.coordinator_address))
+			JOIN blocks block ON block.chain_id = log.chain_id AND block.hash = log.block_hash
+			WHERE pool.chain_id = ${chainId} AND pool.pool_address = ${address} AND pool.canonical AND log.canonical
 				AND log.block_number BETWEEN ${fromBlock} AND ${toBlock}
 				AND log.event_name IN (
 					'PriceRequested', 'PriceReportRejected', 'PriceReported', 'PendingReportRecovered', 'CoordinatorStateCheckpoint',
-					'LiquidationRouteStaged', 'StagedOperationQueued', 'ExecutedStagedOperation', 'SecurityPoolSet'
+					'LiquidationRouteStaged', 'StagedOperationQueued', 'ExecutedStagedOperation', 'SecurityPoolSet',
+					'SharedPriceFeedSet', 'ReportFundingAssigned', 'ExposureCheckpoint'
 				)
 			ORDER BY log.block_number DESC, log.transaction_index DESC, log.log_index DESC, log.tx_hash DESC, log.block_hash DESC
 			LIMIT ${queryLimit} OFFSET ${offset}`,

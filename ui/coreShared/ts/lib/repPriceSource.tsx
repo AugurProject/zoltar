@@ -15,7 +15,7 @@ type RepPriceSourceCopy = {
 	tooltip: string
 }
 
-export function getRepPriceSourceCopy(source: RepPriceSource | undefined): RepPriceSourceCopy {
+function getRepPriceSourceCopy(source: RepPriceSource | undefined): RepPriceSourceCopy {
 	switch (source) {
 		case 'mock':
 			return {

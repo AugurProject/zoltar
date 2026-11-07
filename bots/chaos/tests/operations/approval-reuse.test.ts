@@ -1,3 +1,4 @@
+import { capitalFixture } from '../support/portfolio-fixtures.ts'
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
 import { erc20Abi } from '@zoltar/bot-shared/contracts/abi'
@@ -14,12 +15,13 @@ const definitions = [
 	'open-oracle.deposit',
 	'open-oracle.report',
 	'zoltar.rep.burn',
-	'statoblast.vault.deposit-rep',
+	'statoblast.capital.deposit',
 	'statoblast.escalation.deposit-wallet-rep',
 ]
 
 function fixture(definitionId: string) {
 	const snapshot = snapshotFixture()
+	snapshot.portfolioCapital = [capitalFixture(snapshot)]
 	const pool = snapshot.pools[0]
 	const universe = snapshot.universes[0]
 	if (pool === undefined || universe === undefined) throw new Error('Missing fixtures')

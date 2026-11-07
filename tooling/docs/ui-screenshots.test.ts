@@ -3,12 +3,26 @@ import type { UiScreenshotSpec } from './ui-screenshot-specs.mts'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { extractScreenshotReferences, findScreenshotProblems, isScreenshotSourcePath, screenshotAppIds, pickMatch, readPngSize, updateEmbeddingPages, withScreenshotSize } from './ui-screenshots.mts'
+import { runInNewContext } from 'node:vm'
+import { clickScreenshotControl, extractScreenshotReferences, findScreenshotProblems, isScreenshotSourcePath, screenshotAppIds, pickMatch, readPngSize, updateEmbeddingPages, withScreenshotSize } from './ui-screenshots.mts'
 
 const spec: UiScreenshotSpec = { id: 'buy-ticket', app: 'trading', scenario: 'trading-funded', usedBy: ['tutorials/trading-first-trade.html'] }
 const outputPath = 'docs/assets/screenshots/trading/buy-ticket.png'
 const page = 'tutorials/trading-first-trade.html'
 const embed = (attributes: string) => `<p>Intro</p><img src="../assets/screenshots/trading/buy-ticket.png" ${attributes} /><img src="../assets/diagram.png" alt="unrelated" />`
+const previousPool = `0x${'12'.repeat(20)}`
+const currentPool = `0x${'aB'.repeat(20)}`
+
+async function withEmbeddingPage(html: string, check: (docsRoot: string, pagePath: string) => Promise<void>) {
+	const docsRoot = await mkdtemp(join(tmpdir(), 'docs-screenshots-'))
+	const pagePath = join(docsRoot, 'existing.html')
+	try {
+		await writeFile(pagePath, html)
+		await check(docsRoot, pagePath)
+	} finally {
+		await rm(docsRoot, { recursive: true, force: true })
+	}
+}
 
 const pngHeader = (width: number, height: number) => {
 	const bytes = new Uint8Array(24)
@@ -20,6 +34,40 @@ const pngHeader = (width: number, height: number) => {
 }
 
 describe('documentation screenshots', () => {
+	test('clicks once when a background refresh disables the control between browser commands', async () => {
+		let enabled = false
+		let clicks = 0
+		const browser = {
+			window: {
+				__docsScreenshot: {
+					enabled: () => enabled,
+					click: () => {
+						if (!enabled) return 'No enabled control labelled "Settle report"'
+						clicks++
+						return ''
+					},
+				},
+			},
+		}
+		const evaluate = async (expression: string): Promise<unknown> => runInNewContext(expression, browser)
+		const session = {
+			evaluate,
+			waitFor: async (expression: string) => {
+				for (let attempt = 0; attempt < 3; attempt++) {
+					enabled = attempt > 0
+					if (await evaluate(expression)) {
+						// The next CDP command observes a new refresh, after this one saw readiness.
+						enabled = false
+						return
+					}
+				}
+				throw new Error('The screenshot action never became available')
+			},
+		}
+		await clickScreenshotControl(session, 'Settle report', 0, 'Screenshot')
+		expect(clicks).toBe(1)
+	})
+
 	test('reads PNG dimensions and rejects other files', () => {
 		expect(readPngSize(pngHeader(480, 1213))).toEqual({ width: 480, height: 1213 })
 		expect(() => readPngSize(new Uint8Array(24))).toThrow('Not a PNG file')
@@ -89,6 +137,51 @@ describe('documentation screenshots', () => {
 			expect(warnings).toEqual([expect.stringContaining('docs/missing.html does not exist yet')])
 		} finally {
 			await rm(docsRoot, { recursive: true, force: true })
+		}
+	})
+
+	test('syncs marked simulation addresses and market routes while preserving surrounding content', async () => {
+		const marketPrefix = `http://localhost:4163/trading/?simulate=1&amp;hint=${previousPool}#/market/`
+		const marketSuffix = `?tab=trade&amp;recipient=${previousPool}`
+		const unchanged = `<p>Keep ${previousPool}</p><code>${previousPool}</code><code>${marketPrefix}${previousPool}${marketSuffix}</code><span data-simulation-security-pool="address">${previousPool}</span>`
+		const marked = (address: string) => `<code class="address" data-simulation-security-pool="address"> ${address} </code><code data-simulation-security-pool="market-url">${marketPrefix}${address}${marketSuffix}</code>`
+		await withEmbeddingPage(`${unchanged}${marked(previousPool)}`, async (docsRoot, pagePath) => {
+			await updateEmbeddingPages(docsRoot, { usedBy: ['existing.html'] }, outputPath, { width: 480, height: 1213 }, () => undefined, currentPool)
+			expect(await readFile(pagePath, 'utf8')).toBe(`${unchanged}${marked(currentPool)}`)
+		})
+	})
+
+	test('keeps marked simulation content unchanged when syncing sizes without a runtime address', async () => {
+		const marked = `<code data-simulation-security-pool="address">${previousPool}</code><code data-simulation-security-pool="market-url">http://localhost:4163/?simulate=1#/market/${previousPool}</code>`
+		await withEmbeddingPage(`${marked}<img src="./assets/screenshots/trading/buy-ticket.png" width="1" height="1" alt="Ticket" />`, async (docsRoot, pagePath) => {
+			await updateEmbeddingPages(docsRoot, { usedBy: ['existing.html'] }, outputPath, { width: 480, height: 1213 }, () => undefined)
+			const updated = await readFile(pagePath, 'utf8')
+			expect(updated).toContain(marked)
+			expect(updated).toContain('width="480" height="1213"')
+		})
+	})
+
+	test('rejects invalid runtime addresses before changing any embedding page', async () => {
+		const html = `<code data-simulation-security-pool="address">${previousPool}</code><img src="./assets/screenshots/trading/buy-ticket.png" width="1" height="1" alt="Ticket" />`
+		await withEmbeddingPage(html, async (docsRoot, pagePath) => {
+			for (const invalid of ['', '0x1234', `0x${'z'.repeat(40)}`, `${currentPool}0`, ` ${currentPool}`]) {
+				await expect(updateEmbeddingPages(docsRoot, { usedBy: ['existing.html'] }, outputPath, { width: 480, height: 1213 }, () => undefined, invalid)).rejects.toThrow('simulation SecurityPool address')
+				expect(await readFile(pagePath, 'utf8')).toBe(html)
+			}
+		})
+	})
+
+	test('rejects malformed marked content without writing the page', async () => {
+		for (const marked of [
+			'<code data-simulation-security-pool="address">0x1234</code>',
+			`<code data-simulation-security-pool="address"><span>${previousPool}</span></code>`,
+			`<code data-simulation-security-pool="market-url">http://localhost:4163/#/market/0x1234</code>`,
+			`<code data-simulation-security-pool="market-url">http://localhost:4163/#/portfolio/${previousPool}</code>`,
+		]) {
+			await withEmbeddingPage(marked, async (docsRoot, pagePath) => {
+				await expect(updateEmbeddingPages(docsRoot, { usedBy: ['existing.html'] }, outputPath, { width: 480, height: 1213 }, () => undefined, currentPool)).rejects.toThrow('docs/existing.html')
+				expect(await readFile(pagePath, 'utf8')).toBe(marked)
+			})
 		}
 	})
 })

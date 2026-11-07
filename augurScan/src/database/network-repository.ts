@@ -311,20 +311,11 @@ export async function stateSnapshotTargets(this: ScannerDatabase, chainId: numbe
 					SELECT DISTINCT ON (pool_address) pool_address, NULLIF(state->>'escalationGame', '0x0000000000000000000000000000000000000000') AS escalation_address
 					FROM pool_state_events WHERE chain_id = ${chainId} AND canonical AND event_name = 'EscalationGameSet'
 					ORDER BY pool_address, block_number DESC, log_index DESC
-				), latest_vaults AS (
-					SELECT DISTINCT ON (pool_address, vault_address) pool_address, vault_address
-					FROM vault_snapshots WHERE chain_id = ${chainId} AND canonical
-					ORDER BY pool_address, vault_address, block_number DESC, log_index DESC
 				), candidates AS (
 					SELECT 'pool'::text AS entity_type, pool.pool_address AS entity_identity,
 						pool.pool_address AS address, NULL::text AS pool_address,
 						pool.coordinator_address, escalation.escalation_address
 					FROM latest_pools pool LEFT JOIN pool_escalations escalation USING (pool_address)
-					UNION ALL
-					SELECT 'vault', vault.pool_address || ':' || vault.vault_address, vault.vault_address,
-						vault.pool_address, pool.coordinator_address, escalation.escalation_address
-					FROM latest_vaults vault JOIN latest_pools pool USING (pool_address)
-					LEFT JOIN pool_escalations escalation USING (pool_address)
 					UNION ALL
 					SELECT 'escalation', game_address, game_address, NULL, NULL, game_address
 					FROM (SELECT DISTINCT game_address FROM escalation_game_events WHERE chain_id = ${chainId} AND canonical) game

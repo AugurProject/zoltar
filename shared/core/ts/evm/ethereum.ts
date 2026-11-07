@@ -39,7 +39,8 @@ export { requestRpc, http, custom } from './ethereum/transport.js'
 export { publicActions, createPublicClient, createWalletClient } from './ethereum/clients.js'
 export { parseTransaction, recoverTransactionAddress, privateKeyToAccount, getCreateAddress, getCreate2Address } from './ethereum/accounts.js'
 
-/** @internal Used by tests that construct or decode raw RPC evidence. */
-export { decodeFunctionResult, encodeEventTopics } from './ethereum/abi.js'
+export { decodeFunctionResult } from './ethereum/abi.js'
+/** @internal Used by tests that construct raw RPC evidence. */
+export { encodeEventTopics } from './ethereum/abi.js'
 
 export { boundedResponseText } from './ethereum/bounded-response.js'

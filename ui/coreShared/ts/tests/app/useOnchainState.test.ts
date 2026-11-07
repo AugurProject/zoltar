@@ -4,7 +4,7 @@ import { createDeferred } from '../testUtils/deferred.js'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '../testUtils/domTestLifecycle.js'
 import { describe, expect, test } from 'bun:test'
-import { h } from 'preact'
+import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { loadWalletState } from '../../app/hooks/loadWalletState.js'
 import type { UseOnchainStateDependencies } from '../../app/hooks/useOnchainState.js'
@@ -284,5 +284,27 @@ void describe('useOnchainState', () => {
 
 		expect(documentQueries.getByLabelText('Wallet message').textContent).toBe('No browser wallet found. Install or enable one to connect.')
 		expect(documentQueries.getByLabelText('Error message').textContent).toBe('')
+	})
+
+	test('ordinary rerenders do not rebuild the deployment bytecode catalogue', async () => {
+		installActiveEnvironmentForTesting(createFakeBackend())
+		let catalogueReads = 0
+		const dependencies: UseOnchainStateDependencies = {
+			...fakeOnchainStateDependencies,
+			getDeploymentSteps: () => {
+				catalogueReads += 1
+				return []
+			},
+		}
+		const Probe = ({ revision }: { revision: number }) => {
+			useOnchainState({ enableChainClock: false }, dependencies)
+			return h('span', {}, revision)
+		}
+		const rendered = await renderIntoDocument(h(Probe, { revision: 0 }))
+		cleanupRenderedComponent = rendered.cleanup
+		await act(async () => {})
+		const readsAfterMount = catalogueReads
+		await act(() => render(h(Probe, { revision: 1 }), rendered.container))
+		expect(catalogueReads).toBe(readsAfterMount)
 	})
 })

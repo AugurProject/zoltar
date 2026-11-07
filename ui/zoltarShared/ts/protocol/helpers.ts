@@ -1,23 +1,10 @@
-import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { isObjectRecord, requireArrayOf } from '@zoltar/core-shared/validation/guards'
-import type { ForkOutcomeKey, MarketType, QuestionData, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
-import { getReportingOutcomeKey } from '@zoltar/ui-core-shared/lib/contractEnums.js'
-
-type IntegerLike = bigint | number
+import type { MarketType, QuestionData, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 
 export type UniverseTuple = readonly [bigint, bigint, bigint, Address, bigint]
-type StagedOperationTuple = {
-	operationValue: bigint
-	operator: Address
-	operation: IntegerLike
-	targetVault: Address
-}
 export function bigintToAddress(value: bigint): Address {
 	return getAddress(`0x${value.toString(16).padStart(40, '0')}`)
-}
-
-function isIntegerLike(value: unknown): value is IntegerLike {
-	return typeof value === 'bigint' || typeof value === 'number'
 }
 
 export function isStringArray(value: unknown): value is string[] {
@@ -59,17 +46,6 @@ function isUniverseTuple(value: unknown): value is UniverseTuple {
 }
 
 export const requireUniverseTupleArray = requireArrayOf(isUniverseTuple)
-
-function isStagedOperationTuple(value: unknown): value is StagedOperationTuple {
-	return isObjectRecord(value) && typeof value['operationValue'] === 'bigint' && typeof value['operator'] === 'string' && isIntegerLike(value['operation']) && typeof value['targetVault'] === 'string'
-}
-
-export const requireStagedOperationTupleArray = requireArrayOf(isStagedOperationTuple)
-
-export function getForkOutcomeKey(outcome: bigint | number, parentSecurityPoolAddress: Address): ForkOutcomeKey {
-	if (parentSecurityPoolAddress === zeroAddress) return 'none'
-	return getReportingOutcomeKey(outcome)
-}
 
 export function getEscalationSideLabel(key: ReportingOutcomeKey) {
 	switch (key) {

@@ -4,7 +4,7 @@ import { endpointLabel } from '@zoltar/bot-shared/monitoring/connectivity'
 import { availableSettledValues, quorumValue, settledQuorumValue, sharedQuorumBlockNumber } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import type { OperatorSettings } from '../config/settings.ts'
-import { erc1155Abi, erc20Abi, openOracleAbi, securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
+import { erc1155Abi, erc20Abi, openOracleAbi } from '@zoltar/bot-shared/contracts/abi'
 import { assertCanonicalAnchorFreshness } from '../core/canonical-freshness.ts'
 import { type CanonicalExecutionAnchor, type ExecutionEnvironment, type CanonicalCallAnchor, type ExactRpcTransaction } from './execution-context.ts'
 
@@ -240,30 +240,6 @@ export async function exactAttestedOpenOracleCredit(environment: ExecutionEnviro
 			functionName: 'tokenHolder',
 		}),
 	}))
-	return quorumValue(label, observations, requiredConnectivity(environment.settings).rpcQuorum)
-}
-
-export async function exactAttestedSecurityPoolVaultRep(environment: ExecutionEnvironment, pool: Address, vault: Address, anchor: CanonicalCallAnchor) {
-	const label = `SecurityPool ${pool} vault REP backing for ${vault}`
-	const observations = await everyCanonicalAttester(environment, label, anchor.attestingRpcUrls, async ({ client, endpoint }) => {
-		const [repBackingUnits] = await client.readContract({
-			abi: securityPoolAbi,
-			address: pool,
-			args: [vault],
-			blockNumber: anchor.number,
-			functionName: 'securityVaults',
-		})
-		return {
-			endpoint,
-			value: await client.readContract({
-				abi: securityPoolAbi,
-				address: pool,
-				args: [repBackingUnits],
-				blockNumber: anchor.number,
-				functionName: 'backingUnitsToAttoRep',
-			}),
-		}
-	})
 	return quorumValue(label, observations, requiredConnectivity(environment.settings).rpcQuorum)
 }
 

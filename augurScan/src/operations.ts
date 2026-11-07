@@ -173,6 +173,7 @@ const positiveInteger = (value: unknown, name: string): bigint => {
 
 export type VaultRiskInput = {
 	readonly poolHeldBackingAttoRep: unknown
+	/** Collateral-eligible escrow, excluding surplus already credited to the pool. */
 	readonly disputeStakedAttoRep: unknown
 	readonly openInterestAttoEth: unknown
 	readonly repPerEth1e18: string
@@ -228,18 +229,6 @@ export const vaultRisk = (input: VaultRiskInput) => {
 			freeRequiredBeforeHealthFactorAttoRep: freeBeforeFactor.toString(),
 			migrationSecurityMultiplierBps: migrationMultiplier.toString(),
 		},
-	}
-}
-
-export const poolCapacity = (settlementCollateralAttoEth: unknown, mintingCapacityAttoEth: unknown) => {
-	const used = positiveInteger(settlementCollateralAttoEth, 'settlementCollateralAttoEth')
-	const capacity = positiveInteger(mintingCapacityAttoEth, 'mintingCapacityAttoEth')
-	const available = capacity > used ? capacity - used : 0n
-	return {
-		usedAttoEth: used.toString(),
-		capacityAttoEth: capacity.toString(),
-		availableAttoEth: available.toString(),
-		utilizationBps: capacity === 0n ? undefined : ((used * BPS_DENOMINATOR) / capacity).toString(),
 	}
 }
 

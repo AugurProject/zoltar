@@ -1,6 +1,6 @@
 /// <reference types='bun-types' />
 
-import { setEntityFavorite } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
+import { readFavoriteEntries, setEntityFavorite } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { getLocalEntityScope } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { marketDownloadStore } from '../../lib/favoriteMarkets.js'
 import { h } from 'preact'
@@ -333,7 +333,8 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 						}),
 					)
 					try {
-						await waitFor(() => expect(addressed.container.textContent).toContain(directRoute.startsWith('security-pool/') ? 'Registered vaults' : 'Trading fee'), simulationWaitOptions)
+						await waitFor(() => expect(addressed.container.textContent).toContain(directRoute.startsWith('security-pool/') ? 'Minting capacity' : 'Trading fee'), simulationWaitOptions)
+						await waitFor(() => expect(readFavoriteEntries(getLocalEntityScope('trading', 'pool')).some(entry => entry.id === addressedPool.toLowerCase())).toBe(true), simulationWaitOptions)
 						expect(addressed.container.querySelector('.market-list')).toBeNull()
 						expect(addressed.container.querySelector('.mobile-return')).toBeNull()
 					} finally {
@@ -357,6 +358,9 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 				expect([...attemptedPools]).toEqual(pairIndex.deployments.slice(25, 50).map(deployment => deployment.securityPool))
 				expect(page.previousStart).toBe(0n)
 				expect(page.nextStart).toBe(50n)
+				// Addressed views automatically save favorites; remove those visits before checking empty browse lists.
+				setEntityFavorite(getLocalEntityScope('trading', 'pool'), addressedPool, false)
+				setEntityFavorite(getLocalEntityScope('trading', 'market'), addressedPool, false)
 				for (const route of ['market', 'liquidity', 'create-market', 'portfolio'] as const) {
 					let summary: WalletSummaryState | undefined
 					const rendered = await renderIntoDocument(
@@ -394,7 +398,7 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 
 			expect(discovery.universeIds).toEqual([0n])
 			expect(discovery.markets).toHaveLength(1)
-			expect(discovery.markets[0]?.title).toBe('Will this resolve?')
+			expect(discovery.markets[0]?.title).toBe('Will this resolve? (portfolio question 1)')
 			expect(discovery.markets[0]?.originUniverseId).toBe(0n)
 			const market = discovery.markets[0]
 			if (market === undefined) throw new Error('Seeded market is missing')
@@ -410,6 +414,11 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 			if (account === undefined) throw new Error('Simulation wallet is missing')
 			const balances = await loadLiveBalances(backend.createReadClient(), market, account)
 			for (const balance of [balances.yes, balances.no, balances.invalid, balances.lp]) expect(balance).toBeGreaterThan(0n)
+			const walletWide = await discoverSavedMarkets(backend.createReadClient(), configuration, 0n, [], undefined, () => true, account)
+			expect(walletWide.markets.map(market => market.pool)).toContain(market.pool)
+			const emptyWallet = await discoverSavedMarkets(backend.createReadClient(), configuration, 0n, [], undefined, () => true, getAddress('0x1111111111111111111111111111111111111111'))
+			expect(emptyWallet.markets).toEqual([])
+
 			await backend.advanceTime(60n)
 			const refreshed = await discoverLiveUniverseMarketPage(backend.createReadClient(), configuration, 0n)
 			const valued = refreshed.markets[0]

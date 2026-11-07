@@ -1,75 +1,35 @@
-/// <reference types="bun-types" />
-
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
+import { parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { loadAllSecurityPools, loadSecurityVaultDetails } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
-import type { SimulationScenario } from '@zoltar/ui-core-shared/simulation/scenarios.js'
-import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, simulationSetupTimeoutMs, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
+import { loadAllSecurityPools } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
+import { createBootstrappedSimulationBackendWithRetry, simulationSetupTimeoutMs } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
 
-const SEEDED_REP_DEPOSIT = 10_000n * 10n ** 18n
-const SEEDED_CAPACITY_OWNERSHIP_ATTO_REP = 80n * 10n ** 18n
-
-void describe('security-pool simulation backends', () => {
-	let securityPoolBackend: SimulationBackend
-	let securityPoolX2Backend: SimulationBackend
-	let securityPoolX2AuctionBackend: SimulationBackend
-
-	beforeAll(async () => {
-		const backends = await Promise.all([createBootstrappedSimulationBackendWithRetry('security-pool', 1, 'statoblast'), createBootstrappedSimulationBackendWithRetry('securitypoolx2', 1, 'statoblast'), createBootstrappedSimulationBackendWithRetry('securitypoolx2-auction', 1, 'statoblast')])
-		const [nextSecurityPoolBackend, nextSecurityPoolX2Backend, nextSecurityPoolX2AuctionBackend] = backends
-		if (nextSecurityPoolBackend === undefined || nextSecurityPoolX2Backend === undefined || nextSecurityPoolX2AuctionBackend === undefined) {
-			throw new Error('Expected every seeded security-pool simulation backend')
-		}
-		securityPoolBackend = nextSecurityPoolBackend
-		securityPoolX2Backend = nextSecurityPoolX2Backend
-		securityPoolX2AuctionBackend = nextSecurityPoolX2AuctionBackend
-		await securityPoolBackend.setTransactionDelayMilliseconds(0)
-		await securityPoolX2Backend.setTransactionDelayMilliseconds(0)
-		await securityPoolX2AuctionBackend.setTransactionDelayMilliseconds(0)
-	}, simulationSetupTimeoutMs)
-
-	beforeEach(() => {
-		activateSimulationBackendProfile(securityPoolBackend)
-	})
-
-	afterAll(async () => {
-		if (securityPoolBackend !== undefined) await securityPoolBackend.dispose()
-		if (securityPoolX2Backend !== undefined) await securityPoolX2Backend.dispose()
-		if (securityPoolX2AuctionBackend !== undefined) await securityPoolX2AuctionBackend.dispose()
-		resetActiveEnvironmentForTesting()
-	}, 30_000)
-
-	void test('bootstraps seeded security-pool scenarios without reverting', async () => {
-		const seededScenarios = [
-			{ backend: securityPoolBackend, scenario: 'security-pool' },
-			{ backend: securityPoolX2Backend, scenario: 'securitypoolx2' },
-			{ backend: securityPoolX2AuctionBackend, scenario: 'securitypoolx2-auction' },
-		] satisfies Array<{ backend: SimulationBackend; scenario: SimulationScenario }>
-		for (const { backend, scenario } of seededScenarios) {
-			expect(backend.currentScenario).toBe(scenario)
-			const pools = await loadAllSecurityPools(backend.createReadClient())
-			expect(pools.length).toBeGreaterThan(0)
-		}
-	}, 180_000)
-
-	void test('bootstraps the security-pool scenario with one undercollateralized seeded vault', async () => {
-		const backend = securityPoolBackend
-		const primaryAccount = backend.accounts[0]
-		if (primaryAccount === undefined) throw new Error('Expected seeded simulation QA accounts')
-
-		const readClient = backend.createReadClient()
-		const pools = await loadAllSecurityPools(readClient)
-		const seededPool = pools[0]
-		if (seededPool === undefined) throw new Error('Expected a seeded security pool')
-		const seededVault = await loadSecurityVaultDetails(readClient, seededPool.securityPoolAddress, primaryAccount)
-		if (seededVault === undefined) throw new Error('Expected a seeded security vault')
-
-		expect(backend.currentScenario).toBe('security-pool')
-		expect(pools).toHaveLength(1)
-		expect(seededPool.vaultCount).toBe(1n)
-		expect(seededPool.totalPoolHeldAttoRep).toBe(SEEDED_REP_DEPOSIT)
-		expect(seededPool.totalUnderwritingLimitAttoEth).toBe(SEEDED_CAPACITY_OWNERSHIP_ATTO_REP)
-		expect(seededVault.vaultAttoRepBacking).toBe(SEEDED_REP_DEPOSIT)
-		expect(seededVault.underwritingLimitAttoEth).toBe(SEEDED_CAPACITY_OWNERSHIP_ATTO_REP)
-	}, 60_000)
-})
+const abi = parseAbi(['function portfolioCustody() view returns (address)', 'function totals() view returns (uint256 rep,uint256 commitment,uint256 healthy)'])
+for (const [scenario, count] of [
+	['security-pool', 1],
+	['securitypoolx2', 2],
+] as const) {
+	test(
+		`${scenario} seeds ${count} questions sharing funded portfolio capital`,
+		async () => {
+			const backend = await createBootstrappedSimulationBackendWithRetry(scenario, 1, 'statoblast')
+			try {
+				const client = backend.createReadClient()
+				const pools = await loadAllSecurityPools(client)
+				expect(pools).toHaveLength(count)
+				const capitals = await Promise.all(pools.map(pool => client.readContract({ address: pool.securityPoolAddress, abi, functionName: 'portfolioCustody' })))
+				expect(new Set(capitals).size).toBe(1)
+				const capital = capitals[0]
+				if (capital === undefined || capital === zeroAddress) throw new Error('Missing shared portfolio capital')
+				const [rep, commitment] = await client.readContract({ address: capital, abi, functionName: 'totals' })
+				expect(rep).toBe(5000n * 10n ** 18n)
+				expect(commitment).toBe(10n * 10n ** 18n)
+				for (const pool of pools) expect(pool.shareTokenSupplyAttoShares).toBeGreaterThan(0n)
+			} finally {
+				await backend.dispose()
+				resetActiveEnvironmentForTesting()
+			}
+		},
+		simulationSetupTimeoutMs,
+	)
+}

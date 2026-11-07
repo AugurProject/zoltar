@@ -69,10 +69,11 @@ function canonicalClaimableAssetCount(snapshot: EcosystemSnapshot, retirement: D
 	count += (snapshot.forkedCarryWithdrawalPresence ?? snapshot.forkedCarryWithdrawals ?? []).length
 	if (BigInt(snapshot.wallet.openOracleEthCredit) > 1n) count += 1
 	if (retirement.policies.migrateExistingClaims) count += snapshot.universes.filter(universe => BigInt(universe.migrationBalance) > 0n).length
+	for (const capital of snapshot.portfolioCapital) {
+		if (BigInt(capital.feesAttoEth) + BigInt(capital.feesAttoRep) > 0n) count += 1
+		if (BigInt(capital.withdrawableAttoRep) > 0n) count += 1
+	}
 	for (const pool of snapshot.pools) {
-		const vault = pool.vaults.find(candidate => candidate.address.toLowerCase() === snapshot.wallet.address.toLowerCase())
-		if (vault !== undefined && BigInt(vault.claimableFeesAttoEth) > 0n) count += 1
-		if (vault !== undefined && BigInt(vault.repBackingAttoRep) > 0n && BigInt(vault.disputeStakedAttoRep) === 0n && pool.questionOutcome !== 3 && pool.systemState === 0) count += 1
 		const shares = snapshot.wallet.shares.find(candidate => candidate.shareToken.toLowerCase() === pool.shareToken.toLowerCase() && candidate.universeId === pool.universeId)
 		if (shares === undefined) continue
 		const balances = [BigInt(shares.invalid), BigInt(shares.yes), BigInt(shares.no)]

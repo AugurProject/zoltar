@@ -75,7 +75,7 @@ export function decodeStoredValue<TValue>(value: unknown, build: (reader: Stored
 	}
 }
 
-export function readStoredMarketDetails(read: StoredValueReader): MarketDetails {
+function readStoredMarketDetails(read: StoredValueReader): MarketDetails {
 	return {
 		answerUnit: read.string('answerUnit'),
 		createdAt: read.bigint('createdAt'),

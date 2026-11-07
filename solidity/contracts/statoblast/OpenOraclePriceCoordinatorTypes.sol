@@ -5,9 +5,8 @@ uint256 constant PRICE_VALID_FOR_SECONDS = 5 minutes;
 // Sepolia test deployments have sparse oracle activity, so their prices stay valid longer.
 uint256 constant SEPOLIA_CHAIN_ID = 11155111;
 uint256 constant SEPOLIA_PRICE_VALID_FOR_SECONDS = 1 hours;
-uint256 constant MAX_OPERATION_VALID_FOR_SECONDS = 5 minutes;
 uint256 constant OPEN_ORACLE_PERCENTAGE_PRECISION = 1e7;
-// Keeps the request bounty strictly above the settlement gas product so the settler reward has a positive buffer.
+// Minimum positive public bounty; sponsors and settlers pay their own transaction gas.
 uint256 constant REQUEST_BOUNTY_OFFSET_ATTO_ETH = 101;
 uint8 constant OPEN_ORACLE_FLAG_TIME_TYPE = 1 << 0;
 uint8 constant OPEN_ORACLE_FLAG_TRACK_DISPUTES = 1 << 1;
@@ -24,45 +23,4 @@ interface IStoredOpenOracleGame {
 			uint48 reportTimestamp,
 			uint48 settlementTimestamp
 		);
-}
-
-enum OperationType {
-	Liquidation,
-	WithdrawRep,
-	SetVaultUnderwritingLimit,
-	VaultOperations
-}
-
-enum CoordinatorCheckpointReason {
-	SecurityPoolSetup,
-	PriceSeeded,
-	PriceRequested,
-	PriceReported,
-	PriceRejected,
-	PendingReportRecovered,
-	OperationQueued,
-	OperationExecuted
-}
-
-struct StagedOperation {
-	OperationType operation;
-	address operator;
-	address receiverVault;
-	address targetVault;
-	uint256 operationValue;
-	uint256 queuedAt;
-	uint256 validForSeconds;
-	uint256 snapshotTargetBackingUnits;
-	uint256 snapshotTargetUnderwritingLimitAttoEth;
-	bytes32 liquidationApprovalId;
-	uint256 reservedLiquidationDebtAttoEth;
-}
-
-struct HistoricalQueueSnapshot {
-	uint256 targetBackingUnits;
-	uint256 targetUnderwritingLimitAttoEth;
-	uint256 targetOpenInterestAttoEth;
-	uint256 targetDisputeStakedAttoRep;
-	uint256 totalPoolHeldAttoRep;
-	uint256 totalRepBackingUnits;
 }

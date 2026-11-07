@@ -102,7 +102,7 @@ describe('UI Docker packaging', () => {
 		}
 		expect(copies.some(copy => copy.includes('ui/coreShared/tsconfig.vendor.json'))).toBe(false)
 		expect(runSegments).not.toContain('bun run vendor')
-		expect(runSegments).toEqual(expect.arrayContaining(['bun ./tooling/ui/vendor.mts zoltar --scoped-artifacts', 'bun ./tooling/ui/vendor.mts statoblast --scoped-artifacts']))
+		expect(runSegments).toEqual(expect.arrayContaining(['bun ./tooling/ui/vendor.mts zoltar', 'bun ./tooling/ui/vendor.mts statoblast']))
 		expect(runSegments.filter(command => command.includes('bun install') || command.includes('install-frozen.mts'))).toEqual(['bun install --frozen-lockfile'])
 		expect(runSegments.some(command => /cd \/source\/ui\/\w+ && bun install/u.test(command))).toBe(false)
 		expect(relative(join(dirname(dockerfile), '..'), join(dirname(staticServer)))).toBe('tooling/ui')
@@ -150,7 +150,11 @@ describe('UI Docker packaging', () => {
 		const common = requireDockerStage(stages, 'common-builder')
 		expect(dockerInstructions(common, 'RUN').flatMap(shellCommandSegments)).toEqual(expect.arrayContaining(['mkdir -p /source/ui/coreShared/ts', 'bun ./tooling/contracts/build-app-contracts.mts zoltar']))
 		const upstreamCopies = dockerInstructions(common, 'COPY')
-		for (const forbidden of ['./shared/', './solidity/contracts/', './shared/statoblast/ts/', './shared/openOracle/ts/', './shared/trading/ts/', './ui/statoblastShared/ts/']) expect(upstreamCopies.some(copy => copy.startsWith(`${forbidden} `))).toBe(false)
+		for (const forbidden of ['./shared/', './shared/statoblast/ts/', './shared/openOracle/ts/', './shared/trading/ts/', './ui/statoblastShared/ts/']) expect(upstreamCopies.some(copy => copy.startsWith(`${forbidden} `))).toBe(false)
+		const contractsCopy = common.instructions.findIndex(instruction => instruction.keyword === 'COPY' && instruction.value === './solidity/contracts/ /source/solidity/contracts/')
+		const contractsBuild = common.instructions.findIndex(instruction => instruction.keyword === 'RUN' && shellCommandSegments(instruction.value).includes('bun ./tooling/contracts/build-app-contracts.mts zoltar'))
+		expect(contractsCopy).toBeGreaterThanOrEqual(0)
+		expect(contractsCopy).toBeLessThan(contractsBuild)
 		expect(requireDockerStage(stages, 'zoltar-builder').base).toBe('common-builder')
 		expect(requireDockerStage(stages, 'statoblast-dependencies').base).toBe('common-builder')
 		for (const app of ['statoblast', 'trading', 'openoracle']) expect(requireDockerStage(stages, `${app}-builder`).base).toBe('statoblast-dependencies')
@@ -163,7 +167,7 @@ describe('UI Docker packaging', () => {
 			if (appId === 'trading') {
 				const instructions = builder.instructions
 				expect(instructions.findIndex(instruction => instruction.keyword === 'COPY' && instruction.value === './ui/trading/ts/ /source/ui/trading/ts/')).toBeLessThan(
-					instructions.findIndex(instruction => instruction.keyword === 'RUN' && shellCommandSegments(instruction.value).includes('bun ./tooling/ui/vendor.mts trading --scoped-artifacts')),
+					instructions.findIndex(instruction => instruction.keyword === 'RUN' && shellCommandSegments(instruction.value).includes('bun ./tooling/ui/vendor.mts trading')),
 				)
 			}
 		}

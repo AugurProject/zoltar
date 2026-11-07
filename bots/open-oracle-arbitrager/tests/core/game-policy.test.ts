@@ -58,6 +58,14 @@ const report = {
 } satisfies OpenOracleStatePreimage
 
 describe('trusted coordinator game policy', () => {
+	test('authenticates each shared candidate escrow only for its canonical report id', () => {
+		const sharedPolicy = { ...policy, reportEscrows: { '7': other } }
+		const escrowReport = { ...report, helper: { ...report.helper, creator: other }, game: { ...report.game, callbackContract: other } }
+		expect(gamePolicyMismatch(escrowReport, [sharedPolicy], openOracle)).toBeUndefined()
+		expect(gamePolicyMismatch({ ...escrowReport, helper: { ...escrowReport.helper, reportId: 8n } }, [sharedPolicy], openOracle)).toBe('Report creator is not an approved coordinator')
+		expect(gamePolicyMismatch(report, [sharedPolicy], openOracle)).toBe('Report creator is not an approved coordinator')
+		expect(gamePolicyMismatch({ ...escrowReport, game: { ...escrowReport.game, callbackContract: coordinator } }, [sharedPolicy], openOracle)).toBe('Settlement callback is not the report coordinator')
+	})
 	test('accepts only the exact safe coordinator template', () => {
 		expect(gamePolicyMismatch(report, [policy], openOracle)).toBeUndefined()
 		expect(gamePolicyMismatch({ ...report, helper: { ...report.helper, creator: other } }, [policy], openOracle)).toBe('Report creator is not an approved coordinator')
