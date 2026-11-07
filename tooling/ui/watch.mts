@@ -4,7 +4,8 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as process from 'node:process'
 import { walkFiles } from '../repo/walk.mts'
-import { getUiAppContractProject, getUiAppDependencyOrder, getUiAppPaths, getUiPackageRoot, parseUiAppIdFromProcess, type UiAppId } from './appPaths.mts'
+import { getUiAppContractProject, getUiAppDependencyOrder, getUiAppPaths, getUiPackageRoot, parseUiAppIdFromProcess } from './appPaths.mts'
+import { createDevServerLiveReload } from './devServerLiveReload.mts'
 import { isWatchedContractSource } from './watchContractSources.mts'
 
 const appId = parseUiAppIdFromProcess('the UI watch process')
@@ -30,8 +31,6 @@ const VENDOR_BUILD_PATH = appPaths.vendorBuildScript
 const VENDOR_INPUT_PATHS = [VENDOR_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH, path.join(APP_ROOT_PATH, 'package.json')]
 const WORKER_BUILD_PATH = appPaths.workersBuildScript
 const WORKER_INPUT_PATHS = [WORKER_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH]
-const liveReloadEndpoints: Record<UiAppId, string> = { openoracle: 'http://127.0.0.1:4173/__live-reload', statoblast: 'http://127.0.0.1:12347/__live-reload', trading: 'http://127.0.0.1:4163/__live-reload', zoltar: 'http://127.0.0.1:4153/__live-reload' }
-const LIVE_RELOAD_ENDPOINT = liveReloadEndpoints[appId]
 const BUN_EXECUTABLE_PATH = process.execPath
 
 type ManagedProcess = ReturnType<typeof spawn>
@@ -41,8 +40,8 @@ let restartingServer = false
 let serverProcess: ManagedProcess | undefined
 let buildProcess: ManagedProcess | undefined
 const typeScriptWatchProcesses: ManagedProcess[] = []
-let liveReloadQueued = false
-let liveReloadTimeout: NodeJS.Timeout | undefined
+const liveReload = createDevServerLiveReload()
+const queueLiveReload = liveReload.queue
 
 const unwatchCallbacks: Array<() => void> = []
 
@@ -137,35 +136,12 @@ const getAllFiles = async (dirPath: string) => {
 
 const getAllDirectories = async (dirPath: string) => [dirPath, ...(await walkFiles(dirPath, { includeDirectories: true, include: (_path, entry) => entry.isDirectory() }))]
 
-const queueLiveReload = (reason: string) => {
-	if (shuttingDown) return
-	if (liveReloadTimeout !== undefined) clearTimeout(liveReloadTimeout)
-	liveReloadQueued = true
-	liveReloadTimeout = setTimeout(() => {
-		liveReloadTimeout = undefined
-		void sendLiveReload(reason)
-	}, 250)
-}
-
-const sendLiveReload = async (reason: string) => {
-	if (shuttingDown) return
-	if (!liveReloadQueued) return
-	liveReloadQueued = false
-	try {
-		await fetch(`${LIVE_RELOAD_ENDPOINT}?reason=${encodeURIComponent(reason)}`, { method: 'POST' })
-		console.log(`[app:watch] Reload requested (${reason})`)
-	} catch (error) {
-		console.error(`[app:watch] Failed to signal browser reload because ${reason} changed`)
-		console.error(error)
-	}
-}
-
 const spawnServer = () => {
 	console.log('[app:watch] Starting the dev server')
 	try {
 		serverProcess = spawn(BUN_EXECUTABLE_PATH, [DEV_SERVER_PATH, appId], {
 			cwd: REPOSITORY_ROOT_PATH,
-			stdio: 'inherit',
+			stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
 		})
 	} catch (error) {
 		console.error('[app:watch] Failed to start the dev server')
@@ -174,6 +150,13 @@ const spawnServer = () => {
 		return
 	}
 	attachProcessErrorHandler(serverProcess, 'dev server')
+	const childProcess = serverProcess
+	void liveReload.connect(childProcess).catch(error => {
+		if (shuttingDown || restartingServer || childProcess !== serverProcess) return
+		console.error('[app:watch] Failed to receive the dev server listening port')
+		console.error(error)
+		void shutdown(1)
+	})
 	serverProcess.on('exit', (exitCode, signalCode) => {
 		if (shuttingDown || restartingServer) return
 		const failureCode = exitCode ?? 1
@@ -401,6 +384,7 @@ const watchFile = (filePath: string, onChange: (relativePath: string) => void) =
 const shutdown = async (exitCode: number) => {
 	if (shuttingDown) return
 	shuttingDown = true
+	liveReload.stop()
 	for (const unwatch of unwatchCallbacks) {
 		unwatch()
 	}
