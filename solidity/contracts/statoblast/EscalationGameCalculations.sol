@@ -44,15 +44,18 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 	}
 
 	function totalCostAttoRep() public view returns (uint256) {
+		// The inverse deadline is approximate; freeze the forward curve at the actual fork.
+		uint256 timestamp = _getUniverseForkTime();
+		if (timestamp == 0) timestamp = block.timestamp;
 		if (forkContinuation) {
 			int256 elapsed = forkElapsedAtStart;
-			if (forkResumedAt != 0) elapsed += int256(block.timestamp - forkResumedAt);
+			if (forkResumedAt != 0 && timestamp > forkResumedAt) elapsed += int256(timestamp - forkResumedAt);
 			if (elapsed <= 0) return 0;
 			if (elapsed >= int256(ESCALATION_TIME_LENGTH)) return nonDecisionThresholdAttoRep;
 			return computeIterativeAttritionCostAttoRep(uint256(elapsed));
 		}
-		if (activationTime >= block.timestamp) return 0;
-		uint256 elapsedSinceActivation = block.timestamp - activationTime;
+		if (activationTime >= timestamp) return 0;
+		uint256 elapsedSinceActivation = timestamp - activationTime;
 		if (elapsedSinceActivation >= ESCALATION_TIME_LENGTH) return nonDecisionThresholdAttoRep;
 		return computeIterativeAttritionCostAttoRep(elapsedSinceActivation);
 	}
