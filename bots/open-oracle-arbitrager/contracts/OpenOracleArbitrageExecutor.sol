@@ -4,163 +4,20 @@ pragma solidity 0.8.35;
 import { IERC20 } from '../../solidity/contracts/IERC20.sol';
 import { SafeERC20Ops } from '../../solidity/contracts/SafeERC20Ops.sol';
 
-interface IOpenOracleDispute {
-	struct OracleGame {
-		uint128 currentAmount1;
-		uint128 currentAmount2;
-		address currentReporter;
-		uint48 reportTimestamp;
-		uint48 settlementTimestamp;
-		address token1;
-		uint48 lastReportOppoTime;
-		uint48 settlementTime;
-		uint128 escalationHalt;
-		address protocolFeeRecipient;
-		uint96 settlerRewardAttoEth;
-		address token2;
-		uint24 numReports;
-		uint24 disputeDelay;
-		uint24 feePercentage;
-		uint16 multiplier;
-		address callbackContract;
-		uint32 callbackGasLimit;
-		uint24 protocolFee;
-		uint8 flags;
-	}
-
-	struct PreimageHelper {
-		uint256 reportId;
-		address creator;
-		uint256 blockTimestamp;
-		uint256 blockNumber;
-	}
-
-	struct TimingBoundaries {
-		uint256 blockNumber;
-		uint256 blockNumberBound;
-		uint256 blockTimestamp;
-		uint256 blockTimestampBound;
-	}
-
-	function dispute(
-		uint256 reportId,
-		uint128 newAmount1,
-		uint128 newAmount2,
-		address disputer,
-		bool tryInternalBalance1,
-		bool tryInternalBalance2,
-		OracleGame calldata params,
-		PreimageHelper calldata helper,
-		TimingBoundaries calldata timing
-	) external payable;
-}
-
-interface IOpenOracleLifecycle {
-	function settle(
-		uint256 reportId,
-		IOpenOracleDispute.OracleGame calldata params,
-		IOpenOracleDispute.PreimageHelper calldata helper
-	) external;
-
-	function internalTransferFrom(address from, address to, address token, uint128 amount) external;
-
-	function withdrawTo(address tokenToGet, uint256 amount, address to) external returns (uint256 sent);
-}
-
-interface IUniswapV3SwapRouter {
-	struct ExactInputSingleParams {
-		address tokenIn;
-		address tokenOut;
-		uint24 fee;
-		address recipient;
-		uint256 deadline;
-		uint256 amountIn;
-		uint256 amountOutMinimum;
-		uint160 sqrtPriceLimitX96;
-	}
-
-	struct ExactOutputSingleParams {
-		address tokenIn;
-		address tokenOut;
-		uint24 fee;
-		address recipient;
-		uint256 deadline;
-		uint256 amountOut;
-		uint256 amountInMaximum;
-		uint160 sqrtPriceLimitX96;
-	}
-
-	function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut);
-
-	function exactOutputSingle(ExactOutputSingleParams calldata params) external payable returns (uint256 amountIn);
-}
-
-interface IUniswapV2Router {
-	function swapExactTokensForTokens(
-		uint256 amountIn,
-		uint256 amountOutMin,
-		address[] calldata path,
-		address to,
-		uint256 deadline
-	) external returns (uint256[] memory amounts);
-
-	function swapTokensForExactTokens(
-		uint256 amountOut,
-		uint256 amountInMax,
-		address[] calldata path,
-		address to,
-		uint256 deadline
-	) external returns (uint256[] memory amounts);
-}
-
-interface IWETH is IERC20 {
-	function deposit() external payable;
-
-	function withdraw(uint256 amount) external;
-}
-
-interface IUniswapV4PoolManager {
-	struct PoolKey {
-		address currency0;
-		address currency1;
-		uint24 fee;
-		int24 tickSpacing;
-		address hooks;
-	}
-
-	struct SwapParams {
-		bool zeroForOne;
-		int256 amountSpecified;
-		uint160 sqrtPriceLimitX96;
-	}
-
-	function unlock(bytes calldata data) external returns (bytes memory);
-
-	function swap(
-		PoolKey calldata key,
-		SwapParams calldata params,
-		bytes calldata hookData
-	) external returns (int256 delta);
-
-	function sync(address currency) external;
-
-	function take(address currency, address to, uint256 amount) external;
-
-	function settle() external payable returns (uint256 paid);
-}
+import {
+	IOpenOracleDispute,
+	IOpenOracleLifecycle,
+	IUniswapV3SwapRouter,
+	IUniswapV2Router
+} from './OpenOracleExecutionInterfaces.sol';
+import { OpenOracleV4Hedge } from './OpenOracleV4Hedge.sol';
 
 /// @notice Funds one OpenOracle dispute atomically and rejects non-exact ERC-20 transfers.
 /// @dev The caller remains the OpenOracle disputer. A successful dispute retains no operation-pulled token balance or OpenOracle allowance.
-contract OpenOracleArbitrageExecutor {
+contract OpenOracleArbitrageExecutor is OpenOracleV4Hedge {
 	using SafeERC20Ops for IERC20;
 
 	uint256 private constant PERCENTAGE_PRECISION = 1e7;
-	uint160 private constant MIN_SQRT_PRICE_PLUS_ONE = 4_295_128_740;
-	uint160 private constant MAX_SQRT_PRICE_MINUS_ONE =
-		1_461_446_703_485_210_103_287_273_052_203_988_822_378_723_970_341;
-	bool private entered;
-	address private activeV4PoolManager;
-	bytes32 private activeV4CallbackHash;
 
 	struct HedgeRequest {
 		address openOracle;
@@ -203,14 +60,6 @@ contract OpenOracleArbitrageExecutor {
 		uint256 contribution2;
 		uint256 hedgeAmountToken2;
 		uint256 hedgeAmountAttoWeth;
-	}
-
-	struct V4SwapCallbackData {
-		address token;
-		uint24 poolFee;
-		bool buyToken;
-		uint256 amount;
-		uint256 limit;
 	}
 
 	event HedgeAndDisputeExecuted(
@@ -380,58 +229,6 @@ contract OpenOracleArbitrageExecutor {
 		entered = false;
 	}
 
-	receive() external payable {
-		require(entered, 'OpenOracle arbitrage executor rejects unsolicited ETH');
-	}
-
-	/// @notice Settles one hookless Uniswap V4 pool swap while its authenticated PoolManager is unlocked.
-	/// @dev Only the PoolManager and exact one-shot payload selected by the active parent-bound hedge are accepted.
-	function unlockCallback(bytes calldata data) external returns (bytes memory result) {
-		require(entered && msg.sender == activeV4PoolManager, 'Unauthorized Uniswap V4 unlock callback');
-		require(keccak256(data) == activeV4CallbackHash, 'Unauthorized Uniswap V4 callback payload');
-		activeV4PoolManager = address(0);
-		activeV4CallbackHash = bytes32(0);
-		V4SwapCallbackData memory callback = abi.decode(data, (V4SwapCallbackData));
-		IUniswapV4PoolManager manager = IUniswapV4PoolManager(msg.sender);
-		IUniswapV4PoolManager.PoolKey memory key = IUniswapV4PoolManager.PoolKey({
-			currency0: address(0),
-			currency1: callback.token,
-			fee: callback.poolFee,
-			tickSpacing: _v4TickSpacing(callback.poolFee),
-			hooks: address(0)
-		});
-		int256 delta = manager.swap(
-			key,
-			IUniswapV4PoolManager.SwapParams({
-				zeroForOne: callback.buyToken,
-				amountSpecified: callback.buyToken ? int256(callback.amount) : -int256(callback.amount),
-				sqrtPriceLimitX96: callback.buyToken ? MIN_SQRT_PRICE_PLUS_ONE : MAX_SQRT_PRICE_MINUS_ONE
-			}),
-			bytes('')
-		);
-		int128 nativeDelta = int128(delta >> 128);
-		int128 tokenDelta = int128(uint128(uint256(delta)));
-		if (callback.buyToken) {
-			require(tokenDelta == int128(int256(callback.amount)), 'Uniswap V4 buy output was not exact');
-			require(nativeDelta < 0, 'Uniswap V4 buy input was invalid');
-			uint256 amountIn = uint256(uint128(-nativeDelta));
-			require(amountIn <= callback.limit, 'Uniswap V4 buy hedge exceeded maximum WETH');
-			manager.sync(address(0));
-			require(manager.settle{ value: amountIn }() == amountIn, 'Uniswap V4 native settlement was not exact');
-			manager.take(callback.token, address(this), callback.amount);
-			return abi.encode(amountIn);
-		}
-		require(tokenDelta == -int128(int256(callback.amount)), 'Uniswap V4 sell input was not exact');
-		require(nativeDelta > 0, 'Uniswap V4 sell output was invalid');
-		uint256 amountOut = uint256(uint128(nativeDelta));
-		require(amountOut >= callback.limit, 'Uniswap V4 sell hedge received too little WETH');
-		manager.sync(callback.token);
-		IERC20(callback.token).safeTransfer(address(manager), callback.amount);
-		require(manager.settle() == callback.amount, 'Uniswap V4 token settlement was not exact');
-		manager.take(address(0), address(this), amountOut);
-		return abi.encode(amountOut);
-	}
-
 	/// @notice Atomically settles when needed and withdraws only one position's exact proceeds.
 	/// @dev The caller must approve this executor through OpenOracle's internal allowance for both tokens.
 	///      Permissionless credits and proceeds belonging to other positions remain in the caller's OpenOracle balance.
@@ -577,7 +374,9 @@ contract OpenOracleArbitrageExecutor {
 		_pullExact(token2, result.contribution2 - result.hedgeAmountToken2, balances.executorToken2);
 		if (request.venue == 2) {
 			result.hedgeAmountAttoWeth = _executeV4Hedge(
-				request,
+				request.router,
+				request.poolFee,
+				request.hedgeWethLimitAttoEth,
 				game.token1,
 				game.token2,
 				result.hedgeAmountToken2,
@@ -633,7 +432,9 @@ contract OpenOracleArbitrageExecutor {
 		_pullExact(token2, result.contribution2 + result.hedgeAmountToken2, balances.executorToken2);
 		if (request.venue == 2) {
 			result.hedgeAmountAttoWeth = _executeV4Hedge(
-				request,
+				request.router,
+				request.poolFee,
+				request.hedgeWethLimitAttoEth,
 				game.token1,
 				game.token2,
 				result.hedgeAmountToken2,
@@ -677,50 +478,6 @@ contract OpenOracleArbitrageExecutor {
 		);
 		if (request.venue != 2) _approveExact(token2, request.router, 0);
 		return result;
-	}
-
-	function _executeV4Hedge(
-		HedgeRequest calldata request,
-		address weth,
-		address token,
-		uint256 amount,
-		bool buyToken
-	) private returns (uint256 hedgeAmountAttoWeth) {
-		_v4TickSpacing(request.poolFee);
-		require(amount <= uint256(uint128(type(int128).max)), 'Uniswap V4 hedge amount exceeds signed delta bounds');
-		uint256 ethBalanceAttoEth = address(this).balance;
-		if (buyToken) IWETH(weth).withdraw(request.hedgeWethLimitAttoEth);
-		activeV4PoolManager = request.router;
-		bytes memory callbackData = abi.encode(
-			V4SwapCallbackData({
-				token: token,
-				poolFee: request.poolFee,
-				buyToken: buyToken,
-				amount: amount,
-				limit: request.hedgeWethLimitAttoEth
-			})
-		);
-		activeV4CallbackHash = keccak256(callbackData);
-		bytes memory encodedResult = IUniswapV4PoolManager(request.router).unlock(callbackData);
-		require(
-			activeV4PoolManager == address(0) && activeV4CallbackHash == bytes32(0),
-			'Uniswap V4 callback was not consumed'
-		);
-		hedgeAmountAttoWeth = abi.decode(encodedResult, (uint256));
-		uint256 expectedAttoEth = buyToken ? request.hedgeWethLimitAttoEth - hedgeAmountAttoWeth : hedgeAmountAttoWeth;
-		require(
-			address(this).balance == ethBalanceAttoEth + expectedAttoEth,
-			'Uniswap V4 native balance delta was not exact'
-		);
-		if (expectedAttoEth != 0) IWETH(weth).deposit{ value: expectedAttoEth }();
-	}
-
-	function _v4TickSpacing(uint24 poolFee) private pure returns (int24) {
-		if (poolFee == 100) return 1;
-		if (poolFee == 500) return 10;
-		if (poolFee == 3000) return 60;
-		if (poolFee == 10000) return 200;
-		revert('Unsupported Uniswap V4 pool fee');
 	}
 
 	function contributions(
