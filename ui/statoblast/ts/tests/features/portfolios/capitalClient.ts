@@ -69,14 +69,15 @@ export function capitalClient(initial = capitalSnapshot()) {
 			reads.push({ name: request.functionName, args: request.args, blockNumber: request.blockNumber })
 			const scopedKey = `${request.address}:${request.functionName}`
 			if (scopedOverrides.has(scopedKey)) return scopedOverrides.get(scopedKey)
-			const infrastructure = getInfraContractAddresses()
+			// Deriving deployment addresses hashes large init codes; unrelated reads need no derivation.
+			const infrastructure = ['zoltar', 'factory', 'auctionDeployer'].includes(request.functionName) ? getInfraContractAddresses() : undefined
 			const values: Record<string, unknown> = {
 				setupStage,
 				originUniverseId: snapshot.originUniverseId,
 				universeId: snapshot.universeId,
 				capitalLedger: capital,
-				zoltar: infrastructure.zoltar,
-				factory: infrastructure.securityPoolFactory,
+				zoltar: infrastructure?.zoltar,
+				factory: infrastructure?.securityPoolFactory,
 				settlement: modules.engine,
 				commitmentIndex: index,
 				repToken: token,
@@ -84,7 +85,7 @@ export function capitalClient(initial = capitalSnapshot()) {
 				ledger: request.address === modules.lifecycle || request.address === modules.auctionDelegate ? capital : modules.book,
 				lifecycleDelegate: modules.lifecycle,
 				auctionDelegate: modules.auctionDelegate,
-				auctionDeployer: infrastructure.securityPoolPortfolioAuctionDeployer,
+				auctionDeployer: infrastructure?.securityPoolPortfolioAuctionDeployer,
 				services: modules.services,
 				forkAuthority: modules.fork,
 				premiumLedger: modules.premium,
