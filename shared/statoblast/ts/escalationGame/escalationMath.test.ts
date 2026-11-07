@@ -1,13 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import {
-	getWinningEscalationDepositClaimAmount,
-	getWinningImportedEscalationDepositClaimAmount,
-	computeEscalationBindingCapitalAttoRep,
-	computeEscalationFinalityElapsed,
-	ESCALATION_TIME_LENGTH,
-	hasReachedNonDecision,
-	projectEscalationDeposit,
-} from './escalationMath'
+import { getWinningEscalationDepositClaimAmount, getWinningImportedEscalationDepositClaimAmount, computeEscalationBindingCapitalAttoRep, computeEscalationFinalityElapsed, ESCALATION_TIME_LENGTH, hasReachedNonDecision, projectEscalationDeposit } from './escalationMath'
 
 describe('escalation math', () => {
 	test('finality uses the strict forward crossing through quantized and flat curves', () => {
