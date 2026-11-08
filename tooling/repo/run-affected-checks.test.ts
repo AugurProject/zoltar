@@ -1,9 +1,8 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { dirname, join } from 'node:path'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { repositoryRoot } from './root.mts'
-import { getChangedFiles } from './changed-files.mts'
 import { expect, test } from 'bun:test'
 import { projects } from './projects.ts'
 import { affectedCheckPlan, affectedCheckSelection } from './run-affected-checks.mts'
@@ -61,15 +60,33 @@ test('mixed documentation and runtime changes preserve each distinct owner', () 
 	expect(affectedCheckPlan(paths).map(entry => entry.projectId)).toEqual(['chaos', 'docs'])
 })
 
-// Fail immediately if a CLI regression tries to execute a package check from this test.
-function invokeAffectedCli(args: readonly string[]) {
+const cliChangedPath = 'bots/chaos/src/quality-fixture.ts'
+
+// Keep Git scope deterministic even in shallow CI checkouts, and prevent real package checks.
+function invokeAffectedCli(args: readonly string[], changedFiles: readonly string[] = [cliChangedPath]) {
 	const directory = mkdtempSync(join(tmpdir(), 'affected-check-cli-'))
+	const fixtureRoot = join(directory, 'repository')
+	const bin = join(directory, 'bin')
+	const environment = { ...process.env }
+	delete environment['GIT_DIR']
+	delete environment['GIT_WORK_TREE']
 	try {
-		writeFileSync(join(directory, 'bun'), '#!/bin/sh\nprintf "AFFECTED_CHECK_EXECUTED\\n" >&2\nexit 86\n', { mode: 0o755 })
-		return spawnSync(process.execPath, ['tooling/repo/run-affected-checks.mts', ...args], {
-			cwd: repositoryRoot,
+		mkdirSync(fixtureRoot)
+		mkdirSync(bin)
+		const git = (args: readonly string[]) => execFileSync('git', args, { cwd: fixtureRoot, env: environment, encoding: 'utf8' })
+		git(['init', '-q'])
+		git(['-c', 'user.name=Test Runner', '-c', 'user.email=tests@example.com', '-c', 'commit.gpgsign=false', 'commit', '-q', '--allow-empty', '-m', 'baseline'])
+		git(['update-ref', 'refs/remotes/origin/main', 'HEAD'])
+		for (const file of changedFiles) {
+			const target = join(fixtureRoot, file)
+			mkdirSync(dirname(target), { recursive: true })
+			writeFileSync(target, 'export {}\n')
+		}
+		writeFileSync(join(bin, 'bun'), '#!/bin/sh\nprintf "AFFECTED_CHECK_EXECUTED\\n" >&2\nexit 86\n', { mode: 0o755 })
+		return spawnSync(process.execPath, [join(repositoryRoot, 'tooling/repo/run-affected-checks.mts'), ...args], {
+			cwd: fixtureRoot,
 			encoding: 'utf8',
-			env: { ...process.env, PATH: `${directory}:${process.env['PATH'] ?? ''}` },
+			env: { ...environment, PATH: `${bin}:${environment['PATH'] ?? ''}` },
 			timeout: 10_000,
 		})
 	} finally {
@@ -77,11 +94,15 @@ function invokeAffectedCli(args: readonly string[]) {
 	}
 }
 
-test.each([{ args: ['--dry-run'] }, { args: ['--', '--dry-run'] }])('dry-run prints the complete ordered plan without executing checks ($args)', ({ args }) => {
-	const result = invokeAffectedCli(args)
+test.each([
+	{ args: ['--dry-run'], changedFiles: [cliChangedPath] },
+	{ args: ['--', '--dry-run'], changedFiles: [cliChangedPath] },
+	{ args: ['--dry-run'], changedFiles: [] },
+])('dry-run prints the canonical plan without executing checks ($args, $changedFiles)', ({ args, changedFiles }) => {
+	const result = invokeAffectedCli(args, changedFiles)
 	expect(result.status, result.stderr).toBe(0)
 	const plan: unknown = JSON.parse(result.stdout)
-	expect(plan).toEqual(affectedCheckPlan(getChangedFiles()))
+	expect(plan).toEqual(affectedCheckPlan(changedFiles))
 })
 
 test('help explains scope and specialized checks without starting validation', () => {
@@ -100,8 +121,8 @@ test('unknown flags fail before any affected checks execute', () => {
 	expect(result.stdout).toBe('')
 })
 
-test('the default CLI still executes checks and forwards their failure status', () => {
-	const result = invokeAffectedCli([])
+test.each([{ changedFiles: [cliChangedPath] }, { changedFiles: [] }])('the default CLI executes checks and forwards their failure status ($changedFiles)', ({ changedFiles }) => {
+	const result = invokeAffectedCli([], changedFiles)
 	expect(result.status).toBe(86)
 	expect(result.stderr).toContain('AFFECTED_CHECK_EXECUTED')
 	expect(result.stdout).toContain('project:')
