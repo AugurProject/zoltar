@@ -5,6 +5,7 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { invalidateAppData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { PortfoliosSection } from '@zoltar/ui-statoblast-shared/features/portfolios/components/PortfoliosSection.js'
 import * as copy from '@zoltar/ui-statoblast-shared/copy/portfolioCapital.js'
 import * as priceCopy from '@zoltar/ui-statoblast-shared/copy/portfolioPrice.js'
@@ -185,8 +186,7 @@ test('a current price keeps the price request folded under its summary', async (
 	const disclosure = backing()?.querySelector('details')
 	expect(disclosure?.querySelector('summary')?.textContent).toBe(priceCopy.scopes.universe.title)
 	expect(disclosure?.open).toBe(false)
-	// Folded, the report is not mounted and so does not read the price feed every block.
-	expect(disclosure?.querySelectorAll('button').length).toBe(0)
+	// Folded, the report reads nothing, so it does not poll the price feed every block.
 	expect(source.reads.some(read => read.name === 'isPriceReportingOpen')).toBe(false)
 })
 
@@ -201,4 +201,41 @@ test.each([
 	const backing = () => [...view.container.querySelectorAll('section')].find(section => section.querySelector('h3')?.textContent === copy.poolTitle)
 	await waitFor(() => expect(backing()?.textContent).toContain(status))
 	expect(backing()?.querySelector('details')?.open).toBe(false)
+})
+
+test('the price report keeps its drafts when folded and through a failed account refresh', async () => {
+	const fixture = priceFixture(capitalSnapshot({ priceValid: false, priceValidUntil: 900n }))
+	fixture.set(priceFeed, 'universeId', 0n)
+	const view = await renderIntoDocument(<PortfoliosSection parameters={parameters} enabled environmentKey={0} activeUniverseId={0n} />)
+	lifecycle.trackRendered(view)
+	const backing = () => [...view.container.querySelectorAll('section')].find(section => section.querySelector('h3')?.textContent === copy.poolTitle)
+	const report = () => [...(backing()?.querySelectorAll('details') ?? [])].find(details => details.querySelector('summary')?.textContent === priceCopy.scopes.universe.title)
+	const priceInput = () => [...(report()?.querySelectorAll('input') ?? [])].find(candidate => candidate.closest('.field')?.querySelector('label')?.textContent?.includes(priceCopy.price))
+	await waitFor(() => expect(report()?.textContent).toContain('Wallet WETH'))
+	await act(() => {
+		const input = priceInput()
+		if (input === undefined) throw new Error('Missing proposed price input')
+		input.value = '2'
+		input.dispatchEvent(new Event('input', { bubbles: true }))
+	})
+	const toggle = async (open: boolean) => {
+		await act(() => {
+			const details = report()
+			if (details === undefined) throw new Error('Missing price report')
+			details.open = open
+			details.dispatchEvent(new Event('toggle'))
+		})
+	}
+	await toggle(false)
+	await toggle(true)
+	expect(priceInput()?.value).toBe('2')
+	// One failed account read clears the shown account; the report and its draft must outlive it.
+	fixture.source.setRead('getForkTime', 'not a time')
+	await act(() => invalidateAppData())
+	await waitFor(() => expect(view.container.textContent).toContain('Unable to load the portfolio account'))
+	expect(priceInput()?.value).toBe('2')
+	fixture.source.setRead('getForkTime', 0n)
+	await act(() => invalidateAppData())
+	await waitFor(() => expect(backing()?.textContent).toContain(copy.priceStale))
+	expect(priceInput()?.value).toBe('2')
 })

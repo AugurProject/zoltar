@@ -1,4 +1,4 @@
-import { useId } from 'preact/hooks'
+import { useId, useRef } from 'preact/hooks'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
@@ -28,6 +28,11 @@ export function PortfoliosSection({ parameters, enabled, environmentKey, activeU
 	const purchase = usePortfolioPurchase(model, actions)
 	const disabled = actions.busy !== undefined
 	const deployReasonId = useId()
+	// Once an account has been shown, its price report stays mounted through a failed refresh so typed drafts survive;
+	// only opening another portfolio, owner or universe replaces it.
+	const accountIdentity = `${model.managerInput.trim().toLowerCase()}:${model.ownerInput.trim().toLowerCase()}:${model.universeInput.trim()}`
+	const shownAccount = useRef<string>()
+	if (model.presentationSnapshot !== undefined) shownAccount.current = accountIdentity
 	return (
 		<div className='portfolio-flow'>
 			<RouteHeader title={copy.title} />
@@ -89,7 +94,7 @@ export function PortfoliosSection({ parameters, enabled, environmentKey, activeU
 			{actions.error === undefined ? undefined : <UserMessage placement='section' tone='error' announcement='polite' detail={actions.error} />}
 			{actions.feedback === undefined ? undefined : <UserMessage placement='section' tone='success' announcement='polite' detail={actions.feedback} />}
 			<TransactionScopeProvider scope={actions.scope}>
-				<PortfolioAggregatePanel model={capital} actions={actions} priceReport={model.presentationSnapshot === undefined ? undefined : <PortfolioPriceReport scope='universe' target={accountPriceTarget(model.snapshot)} actions={actions} bidder={parameters.accountAddress} />} />
+				<PortfolioAggregatePanel model={capital} actions={actions} priceReport={shownAccount.current === accountIdentity ? unfolded => <PortfolioPriceReport scope='universe' target={unfolded ? accountPriceTarget(model.snapshot) : undefined} actions={actions} bidder={parameters.accountAddress} /> : undefined} />
 				<PortfolioTakeover model={model} actions={actions} />
 				<PortfolioPurchasePanel model={model} purchase={purchase} actions={actions} />
 				<PortfolioSharedFork

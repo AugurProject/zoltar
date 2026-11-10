@@ -115,6 +115,6 @@ export const fundingReturnHint = 'Released funding always returns to this report
 export const refresh = 'Refresh report status'
 export const refreshing = 'Refreshing report status…'
 export const busy = 'Wait for the current transaction.'
-export const formatInvertedPriceWarning = (reference: string) => `This looks inverted (ETH per REP). Enter REP per ETH; the last accepted price is ${reference} REP per ETH.`
-export const formatPriceAboveReferenceWarning = (reference: string) => `More than double the last accepted price of ${reference} REP per ETH. Check the price before sending.`
-export const formatPriceBelowReferenceWarning = (reference: string) => `Less than half the last accepted price of ${reference} REP per ETH. Check the price before sending.`
+export const formatInvertedPriceWarning = (reference: string) => `This looks inverted (ETH per REP). Enter REP per ETH; the last accepted price is ${reference}\u00a0REP per ETH.`
+export const formatPriceAboveReferenceWarning = (reference: string) => `More than double the last accepted price of ${reference}\u00a0REP per ETH. Check the price before sending.`
+export const formatPriceBelowReferenceWarning = (reference: string) => `Less than half the last accepted price of ${reference}\u00a0REP per ETH. Check the price before sending.`

@@ -22,23 +22,23 @@ import * as common from '@zoltar/ui-core-shared/copy/common.js'
 
 type Model = ReturnType<typeof usePortfolioAggregate>
 /** The request form is long, so it stays folded unless the price has expired and a new report can be requested. */
-function PriceReportDisclosure({ requestable, children }: { requestable: boolean; children: ComponentChildren }) {
+function PriceReportDisclosure({ requestable, children }: { requestable: boolean; children: (unfolded: boolean) => ComponentChildren }) {
 	const [open, setOpen] = useState(requestable)
 	// Never folds by itself: settling a report must not hide the control that still has focus.
 	useEffect(() => {
 		if (requestable) setOpen(true)
 	}, [requestable])
-	// Folded, the report is not mounted, so it does not read the price feed on every block.
+	// The report stays mounted so folding keeps its drafts; it learns it is folded and reads nothing until unfolded.
 	return (
 		<details open={open} onToggle={event => setOpen(event.currentTarget.open)}>
 			<summary>{priceCopy.scopes.universe.title}</summary>
-			{open ? children : undefined}
+			{children(open)}
 		</details>
 	)
 }
 
-/** `priceReport` renders inside Shared backing, next to the price status it refreshes. */
-export function PortfolioAggregatePanel({ model, actions, priceReport }: { model: Model; actions: Pick<PortfolioActions, 'scope' | 'busy'>; priceReport?: ComponentChildren }) {
+/** `priceReport` renders inside Shared backing, next to the price status it refreshes, and is told whether its disclosure is unfolded. */
+export function PortfolioAggregatePanel({ model, actions, priceReport }: { model: Model; actions: Pick<PortfolioActions, 'scope' | 'busy'>; priceReport?: ((unfolded: boolean) => ComponentChildren) | undefined }) {
 	const snapshot = model.snapshot
 	const disabled = actions.busy !== undefined || model.loading || model.showingPreviousSnapshot
 	const disabledReason = actions.busy !== undefined ? copy.actionPending : copy.readUnavailable

@@ -131,7 +131,8 @@ test('bounds outlive a snapshot reload and a first target, and clear when an ID 
 })
 
 test.each([
-	['an expired price in an active universe asks for a new price', { priceValid: false }, 'Request a new REP price first.'],
+	// Stated as a condition: a report may already be in its challenge period, so asking for another would invite a duplicate.
+	['an expired price in an active universe needs a new accepted price', { priceValid: false }, 'A new accepted REP price is required.'],
 	['a forked universe cannot take over at all', { priceValid: false, forkTime: 1n }, 'Takeovers require an active universe.'],
 ])('%s', async (_case, overrides, reason) => {
 	const snapshot = capitalSnapshot(overrides)
