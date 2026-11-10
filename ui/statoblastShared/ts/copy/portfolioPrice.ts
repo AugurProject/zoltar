@@ -65,6 +65,7 @@ export const scopes: Record<PortfolioPriceScope, ScopeCopy> = {
 		formatRequestReview: (weth, rep, bounty) => `Fund this REP price report with ${weth} WETH, ${rep} REP and ${bounty} ETH bounty. Disputes may change the token amounts returned to your wallet. An accepted price renews the shared price for this universe.`,
 	},
 }
+export const universeReportSummary = 'REP price report'
 export const prepare = 'Prepare price feed'
 export const preparing = 'Preparing price feed…'
 export const noPreparationSource = 'No registered origin question is available to prepare this feed.'

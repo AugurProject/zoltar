@@ -181,6 +181,19 @@ test('a current price keeps the price request folded under its summary', async (
 	const backing = () => [...view.container.querySelectorAll('section')].find(section => section.querySelector('h3')?.textContent === copy.poolTitle)
 	await waitFor(() => expect(backing()?.textContent).toContain(copy.priceValid))
 	const disclosure = backing()?.querySelector('details')
-	expect(disclosure?.querySelector('summary')?.textContent).toBe(priceCopy.scopes.universe.request)
+	expect(disclosure?.querySelector('summary')?.textContent).toBe(priceCopy.universeReportSummary)
 	expect(disclosure?.open).toBe(false)
+})
+
+test.each([
+	['a forked universe', { forkTime: 1n }, copy.forked],
+	['a universe still importing its fork', { importing: true }, copy.importing],
+])('an expired price stays folded in %s, where no new report can be requested', async (_state, overrides, status) => {
+	const source = capitalClient(capitalSnapshot({ priceValid: false, ...overrides }))
+	source.install()
+	const view = await renderIntoDocument(<PortfoliosSection parameters={parameters} enabled environmentKey={0} activeUniverseId={0n} />)
+	lifecycle.trackRendered(view)
+	const backing = () => [...view.container.querySelectorAll('section')].find(section => section.querySelector('h3')?.textContent === copy.poolTitle)
+	await waitFor(() => expect(backing()?.textContent).toContain(status))
+	expect(backing()?.querySelector('details')?.open).toBe(false)
 })

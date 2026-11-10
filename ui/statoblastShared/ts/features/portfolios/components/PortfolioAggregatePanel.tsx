@@ -21,7 +21,7 @@ import * as priceCopy from '../../../copy/portfolioPrice.js'
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
 
 type Model = ReturnType<typeof usePortfolioAggregate>
-/** The request form is long, so it stays folded while the price is current and unfolds when it expires. */
+/** The request form is long, so it stays folded unless the price has expired and a new report can be requested. */
 function PriceReportDisclosure({ stale, children }: { stale: boolean; children: ComponentChildren }) {
 	const [open, setOpen] = useState(stale)
 	// Never folds by itself: settling a report must not hide the control that still has focus.
@@ -30,7 +30,7 @@ function PriceReportDisclosure({ stale, children }: { stale: boolean; children: 
 	}, [stale])
 	return (
 		<details open={open} onToggle={event => setOpen(event.currentTarget.open)}>
-			<summary>{priceCopy.scopes.universe.request}</summary>
+			<summary>{priceCopy.universeReportSummary}</summary>
 			{children}
 		</details>
 	)
@@ -74,7 +74,7 @@ export function PortfolioAggregatePanel({ model, actions, priceReport }: { model
 						<TimestampValue timestamp={snapshot?.timestamp} relative={false} />
 					</MetricField>
 				</MetricGrid>
-				{priceReport === undefined ? undefined : <PriceReportDisclosure stale={snapshot !== undefined && !snapshot.priceValid}>{priceReport}</PriceReportDisclosure>}
+				{priceReport === undefined ? undefined : <PriceReportDisclosure stale={snapshot !== undefined && status === copy.priceStale}>{priceReport}</PriceReportDisclosure>}
 			</SectionBlock>
 			<SectionBlock title={copy.title} description={copy.description}>
 				{snapshot?.auctionVault === undefined ? undefined : <UserMessage detail={copy.auctionVaultOwnership} />}
