@@ -18,6 +18,7 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 	const model = usePortfolioPrice(parameters)
 	const scoped = copy.scopes[parameters.scope]
 	// Only a branch has a preparation window and a feed to prepare; the account's universe already shows its price expiry.
+	// Its report sits under a disclosure that already names it, so it carries no heading of its own.
 	const branch = parameters.scope === 'branch'
 	const priceWarningId = useId()
 	const observation = model.snapshot?.observation
@@ -33,7 +34,7 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 		if (report.outcome === 2n) reportStatus = copy.states.rejected
 	}
 	return (
-		<WorkflowSubsection title={scoped.title}>
+		<WorkflowSubsection title={branch ? scoped.title : undefined}>
 			<UserMessage detail={scoped.description} />
 			{model.error === undefined ? undefined : <UserMessage tone='error' detail={model.error} />}
 			<MetricGrid>

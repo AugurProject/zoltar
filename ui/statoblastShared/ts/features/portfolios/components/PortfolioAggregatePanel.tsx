@@ -30,7 +30,7 @@ function PriceReportDisclosure({ stale, children }: { stale: boolean; children: 
 	}, [stale])
 	return (
 		<details open={open} onToggle={event => setOpen(event.currentTarget.open)}>
-			<summary>{priceCopy.universeReportSummary}</summary>
+			<summary>{priceCopy.scopes.universe.title}</summary>
 			{children}
 		</details>
 	)

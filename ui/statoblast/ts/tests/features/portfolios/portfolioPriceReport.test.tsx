@@ -155,7 +155,8 @@ test('the universe report has no feed preparation, branch deadline or branch wor
 	lifecycle.trackRendered(view)
 	// The funding guard replaces the loading reason once the feed has loaded.
 	await waitFor(() => expect(view.container.textContent).toContain(copy.priceInvalid))
-	expect(view.container.querySelector('h4')?.textContent).toBe(copy.scopes.universe.title)
+	// The Shared backing disclosure names the universe report, so it has no heading of its own.
+	expect(view.container.querySelector('h4') === null).toBe(true)
 	const labels = Array.from(view.container.querySelectorAll('button')).map(button => button.textContent ?? '')
 	expect(labels).toContain(copy.scopes.universe.request)
 	expect(labels).not.toContain(copy.prepare)
