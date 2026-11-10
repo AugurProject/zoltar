@@ -184,3 +184,32 @@ test('a pending universe request leaves the branch report on the same page idle'
 	expect(labels).toContain(copy.scopes.branch.request)
 	expect(labels).not.toContain(copy.scopes.branch.requesting)
 })
+
+test('a custom approval amount survives block reloads and a folded report', async () => {
+	const fixture = priceFixture()
+	fixture.set(priceFeed, 'universeId', 0n)
+	const actions: PortfolioPriceParameters['actions'] = { scope: unscopedTransaction, busy: undefined, ownerReason: undefined, runPortfolioAction: async () => undefined }
+	const account = capitalSnapshot()
+	const target = accountPriceTarget(account)
+	const view = await renderIntoDocument(<PortfolioPriceReport scope='universe' target={target} actions={actions} bidder={owner} />)
+	lifecycle.trackRendered(view)
+	await waitFor(() => expect(view.container.textContent).toContain(copy.priceInvalid))
+	const approval = () =>
+		Array.from(view.container.querySelectorAll('.approval-amount-field'))
+			.find(field => field.querySelector('.approval-amount-label')?.textContent === 'WETH approval amount')
+			?.querySelector('input')
+	await act(() => {
+		const input = approval()
+		if (input === undefined) throw new Error('Missing WETH approval amount')
+		input.value = '7'
+		input.dispatchEvent(new Event('input', { bubbles: true }))
+	})
+	// Each block reloads the feed under a new block hash; folding removes the target.
+	await act(() => render(<PortfolioPriceReport scope='universe' target={accountPriceTarget({ ...account, blockHash: `0x${'12'.repeat(32)}` })} actions={actions} bidder={owner} />, view.container))
+	expect(approval()?.value).toBe('7')
+	await act(() => render(<PortfolioPriceReport scope='universe' target={undefined} actions={actions} bidder={owner} />, view.container))
+	expect(approval()?.value).toBe('7')
+	await act(() => render(<PortfolioPriceReport scope='universe' target={target} actions={actions} bidder={owner} />, view.container))
+	await waitFor(() => expect(view.container.textContent).toContain(copy.priceInvalid))
+	expect(approval()?.value).toBe('7')
+})

@@ -97,7 +97,7 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 				pending={parameters.actions.busy === model.actionId('approveWeth')}
 				pendingLabel={copy.approving}
 				requiredAmount={model.funding?.weth}
-				resetKey={`${model.snapshot?.feed}:${model.snapshot?.owner}:${model.priceInput}:${model.wethInput}:weth`}
+				resetKey={`${model.draftKey}:${model.priceInput}:${model.wethInput}:weth`}
 				tokenSymbol={common.weth}
 				tokenUnits={18}
 			/>
@@ -114,7 +114,7 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 				pending={parameters.actions.busy === model.actionId('approveRep')}
 				pendingLabel={copy.approving}
 				requiredAmount={model.funding?.rep}
-				resetKey={`${model.snapshot?.feed}:${model.snapshot?.owner}:${model.priceInput}:${model.wethInput}:rep`}
+				resetKey={`${model.draftKey}:${model.priceInput}:${model.wethInput}:rep`}
 				tokenSymbol={common.rep}
 				tokenUnits={18}
 			/>

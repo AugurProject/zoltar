@@ -248,6 +248,8 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 		recoverReason,
 		withdrawReason,
 		refreshReason,
+		/** Changes only when the drafts reset (another portfolio, sponsor, universe or environment), never on a block reload or while folded. */
+		draftKey: previous.current?.identity,
 		refresh: () => {
 			version.value += 1
 		},
