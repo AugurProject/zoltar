@@ -15,6 +15,8 @@ import { PortfolioTakeover } from './PortfolioTakeover.js'
 import { PortfolioAggregatePanel } from './PortfolioAggregatePanel.js'
 import { PortfolioSharedFork } from './PortfolioSharedFork.js'
 import { PortfolioPurchasePanel } from './PortfolioPurchasePanel.js'
+import { PortfolioPriceReport } from './PortfolioPriceReport.js'
+import { accountPriceTarget } from '../hooks/usePortfolioPrice.js'
 import { PortfolioButton, PortfolioInput } from './PortfolioControls.js'
 import * as copy from '../../../copy/portfolio.js'
 import * as capitalCopy from '../../../copy/portfolioCapital.js'
@@ -87,7 +89,7 @@ export function PortfoliosSection({ parameters, enabled, environmentKey, activeU
 			{actions.error === undefined ? undefined : <UserMessage placement='section' tone='error' announcement='polite' detail={actions.error} />}
 			{actions.feedback === undefined ? undefined : <UserMessage placement='section' tone='success' announcement='polite' detail={actions.feedback} />}
 			<TransactionScopeProvider scope={actions.scope}>
-				<PortfolioAggregatePanel model={capital} actions={actions} />
+				<PortfolioAggregatePanel model={capital} actions={actions} priceReport={<PortfolioPriceReport scope='universe' target={accountPriceTarget(model.snapshot)} actions={actions} bidder={parameters.accountAddress} />} />
 				<PortfolioTakeover model={model} actions={actions} />
 				<PortfolioPurchasePanel model={model} purchase={purchase} actions={actions} />
 				<PortfolioSharedFork

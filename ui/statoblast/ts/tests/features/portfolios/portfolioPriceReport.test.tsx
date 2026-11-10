@@ -7,21 +7,23 @@ import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/act
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { unscopedTransaction } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import { PortfolioPriceReport } from '@zoltar/ui-statoblast-shared/features/portfolios/components/PortfolioPriceReport.js'
-import type { PortfolioPriceParameters } from '@zoltar/ui-statoblast-shared/features/portfolios/hooks/usePortfolioPrice.js'
-import { priceFixture } from './priceFixture.js'
+import { accountPriceTarget, branchPriceTarget, type PortfolioPriceParameters } from '@zoltar/ui-statoblast-shared/features/portfolios/hooks/usePortfolioPrice.js'
+import * as copy from '@zoltar/ui-statoblast-shared/copy/portfolioPrice.js'
+import { capitalSnapshot, owner } from './capitalFixture.js'
+import { priceFeed, priceFixture } from './priceFixture.js'
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
 test('branch report keeps preparation, wrap, editable approvals and recovery controls visible in fixed order', async () => {
 	const fixture = priceFixture()
 	const fork = await fixture.fork()
 	const actions: PortfolioPriceParameters['actions'] = { scope: unscopedTransaction, busy: undefined, ownerReason: undefined, runPortfolioAction: async () => undefined }
-	const view = await renderIntoDocument(<PortfolioPriceReport fork={undefined} actions={actions} />)
+	const view = await renderIntoDocument(<PortfolioPriceReport scope='branch' target={undefined} actions={actions} />)
 	lifecycle.trackRendered(view)
 	const labels = () => Array.from(view.container.querySelectorAll('button')).map(button => button.textContent ?? '')
 	const initial = labels()
 	const originalButtons = Array.from(view.container.querySelectorAll('button'))
 	for (const name of ['Prepare price feed', 'Wrap ETH for report', 'Approve WETH', 'Approve REP', 'Request branch price', 'Settle price report', 'Recover settled report', 'Return released funding']) expect(initial.some(label => label.includes(name))).toBe(true)
 	expect(Array.from(view.container.querySelectorAll('button')).filter(button => !button.disabled)).toHaveLength(0)
-	await act(() => render(<PortfolioPriceReport fork={fork} actions={actions} />, view.container))
+	await act(() => render(<PortfolioPriceReport scope='branch' target={branchPriceTarget(fork)} actions={actions} />, view.container))
 	await waitFor(() => expect(view.container.textContent).toContain('already prepared'))
 	expect(labels()).toEqual(initial)
 	expect(view.container.querySelectorAll('.card .card')).toHaveLength(0)
@@ -36,7 +38,7 @@ test('branch report keeps preparation, wrap, editable approvals and recovery con
 	const requestButton = Array.from(view.container.querySelectorAll('button')).find(button => button.textContent === 'Request branch price')
 	expect(requestButton?.disabled).toBe(true)
 	expect(view.container.textContent).toContain('Wrap the required ETH')
-	await act(() => render(<PortfolioPriceReport fork={fork} actions={{ ...actions, busy: 'wrapPortfolioPrice' }} />, view.container))
+	await act(() => render(<PortfolioPriceReport scope='branch' target={branchPriceTarget(fork)} actions={{ ...actions, busy: 'wrapPortfolioPrice' }} />, view.container))
 	expect(view.container.textContent).toContain('Wrapping ETH…')
 	expect(view.container.querySelectorAll('button').length).toBe(initial.length)
 })
@@ -47,7 +49,7 @@ test('an unreported feed has no accepted price until its first accepted settleme
 	fixture.values['lastSettlementTimestamp'] = 0n
 	const fork = await fixture.fork()
 	const actions: PortfolioPriceParameters['actions'] = { scope: unscopedTransaction, busy: undefined, ownerReason: undefined, runPortfolioAction: async () => undefined }
-	const view = await renderIntoDocument(<PortfolioPriceReport fork={fork} actions={actions} />)
+	const view = await renderIntoDocument(<PortfolioPriceReport scope='branch' target={branchPriceTarget(fork)} actions={actions} />)
 	lifecycle.trackRendered(view)
 	const acceptedPrice = () =>
 		Array.from(view.container.querySelectorAll('.metric-label'))
@@ -66,7 +68,7 @@ test('an unreported feed has no accepted price until its first accepted settleme
 async function renderReportWithPrice(fixture: ReturnType<typeof priceFixture>, price: string, referencePrice?: bigint) {
 	const fork = await fixture.fork()
 	const actions: PortfolioPriceParameters['actions'] = { scope: unscopedTransaction, busy: undefined, ownerReason: undefined, runPortfolioAction: async () => undefined }
-	const view = await renderIntoDocument(<PortfolioPriceReport fork={fork} actions={actions} referencePrice={referencePrice} />)
+	const view = await renderIntoDocument(<PortfolioPriceReport scope='branch' target={branchPriceTarget(fork)} actions={actions} referencePrice={referencePrice} />)
 	lifecycle.trackRendered(view)
 	await waitFor(() => expect(view.container.textContent).toContain('already prepared'))
 	const input = Array.from(view.container.querySelectorAll('input')).find(input => input.closest('.field')?.querySelector('label')?.textContent?.includes('Proposed price'))
@@ -118,7 +120,7 @@ test('a branch reload keeps comparing against the feed price, never the portfoli
 	const fork = await fixture.fork()
 	const actions: PortfolioPriceParameters['actions'] = { scope: unscopedTransaction, busy: undefined, ownerReason: undefined, runPortfolioAction: async () => undefined }
 	const referencePrice = 300n * 10n ** 18n
-	const view = await renderIntoDocument(<PortfolioPriceReport fork={fork} actions={actions} referencePrice={referencePrice} />)
+	const view = await renderIntoDocument(<PortfolioPriceReport scope='branch' target={branchPriceTarget(fork)} actions={actions} referencePrice={referencePrice} />)
 	lifecycle.trackRendered(view)
 	await waitFor(() => expect(view.container.textContent).toContain('already prepared'))
 	const input = Array.from(view.container.querySelectorAll('input')).find(input => input.closest('.field')?.querySelector('label')?.textContent?.includes('Proposed price'))
@@ -133,14 +135,33 @@ test('a branch reload keeps comparing against the feed price, never the portfoli
 	// 850 is fine against the feed but more than double the portfolio price.
 	await propose('850')
 	expect(warning()).toBe('')
-	await act(() => render(<PortfolioPriceReport fork={undefined} actions={actions} referencePrice={referencePrice} />, view.container))
+	await act(() => render(<PortfolioPriceReport scope='branch' target={undefined} actions={actions} referencePrice={referencePrice} />, view.container))
 	expect(warning()).toBe('')
-	await act(() => render(<PortfolioPriceReport fork={fork} actions={actions} referencePrice={referencePrice} />, view.container))
+	await act(() => render(<PortfolioPriceReport scope='branch' target={branchPriceTarget(fork)} actions={actions} referencePrice={referencePrice} />, view.container))
 	await waitFor(() => expect(view.container.textContent).toContain('already prepared'))
 	// 3000 warns against the feed, and that warning must survive the reload unchanged.
 	await propose('3000')
 	const feedWarning = 'More than double the last accepted price of 900.00 REP per ETH. Check the price before sending.'
 	expect(warning()).toBe(feedWarning)
-	await act(() => render(<PortfolioPriceReport fork={undefined} actions={actions} referencePrice={referencePrice} />, view.container))
+	await act(() => render(<PortfolioPriceReport scope='branch' target={undefined} actions={actions} referencePrice={referencePrice} />, view.container))
 	expect(warning()).toBe(feedWarning)
+})
+
+test('the universe report has no feed preparation, branch deadline or branch wording', async () => {
+	const fixture = priceFixture()
+	fixture.set(priceFeed, 'universeId', 0n)
+	const actions: PortfolioPriceParameters['actions'] = { scope: unscopedTransaction, busy: undefined, ownerReason: undefined, runPortfolioAction: async () => undefined }
+	const view = await renderIntoDocument(<PortfolioPriceReport scope='universe' target={accountPriceTarget(capitalSnapshot())} actions={actions} bidder={owner} />)
+	lifecycle.trackRendered(view)
+	// The funding guard replaces the loading reason once the feed has loaded.
+	await waitFor(() => expect(view.container.textContent).toContain(copy.priceInvalid))
+	expect(view.container.querySelector('h4')?.textContent).toBe(copy.scopes.universe.title)
+	const labels = Array.from(view.container.querySelectorAll('button')).map(button => button.textContent ?? '')
+	expect(labels).toContain(copy.scopes.universe.request)
+	expect(labels).not.toContain(copy.prepare)
+	const metrics = Array.from(view.container.querySelectorAll('.metric-label')).map(label => label.textContent)
+	expect(metrics).toContain(copy.currentPrice)
+	expect(metrics).not.toContain(copy.reportingDeadline)
+	expect(metrics).not.toContain(copy.validUntil)
+	expect(view.container.textContent).not.toMatch(/branch/i)
 })

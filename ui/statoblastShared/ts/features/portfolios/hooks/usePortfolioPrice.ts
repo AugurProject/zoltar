@@ -6,28 +6,51 @@ import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { buildPortfolioPriceFundingWithdrawal, buildPortfolioPriceRecovery, buildPortfolioPriceSettlement, loadPortfolioBranchPrice, loadPortfolioPriceReport, submittedPortfolioPriceReport, type PortfolioPriceReport } from '../../../protocol/securityPoolPortfolioPrice.js'
-import type { PortfolioTransaction } from '../../../protocol/securityPoolPortfolio.js'
+import type { PortfolioAccountSnapshot, PortfolioTransaction } from '../../../protocol/securityPoolPortfolio.js'
 import type { PortfolioSharedForkParameters } from './usePortfolioSharedFork.js'
 import { portfolioAmountOrUndefined, portfolioUnsignedId } from '../lib/draft.js'
 import * as copy from '../../../copy/portfolioPrice.js'
 
+/** The shared price feed one report funds. */
+export type PortfolioPriceTarget = {
+	portfolio: Address
+	owner: Address
+	universeId: bigint
+	blockHash: string
+	/** Reporting can open: a branch has started migrating, or the account's universe is not still importing one. */
+	started: boolean
+	/** A branch report must settle before the branch activates. */
+	reportingDeadline: bigint | undefined
+}
+export function branchPriceTarget(fork: PortfolioForkSnapshot | undefined): PortfolioPriceTarget | undefined {
+	const branch = fork?.branch
+	if (fork === undefined || branch === undefined) return undefined
+	return { portfolio: fork.portfolio, owner: fork.owner, universeId: branch.universeId, blockHash: fork.blockHash, started: branch.started, reportingDeadline: branch.ready ? undefined : fork.activationDeadline }
+}
+/** A universe still importing a fork reports through its branch, which knows the activation deadline. */
+export function accountPriceTarget(account: Pick<PortfolioAccountSnapshot, 'portfolio' | 'owner' | 'universeId' | 'blockHash' | 'importing'> | undefined): PortfolioPriceTarget | undefined {
+	if (account === undefined) return undefined
+	return { portfolio: account.portfolio, owner: account.owner, universeId: account.universeId, blockHash: account.blockHash, started: !account.importing, reportingDeadline: undefined }
+}
 export type PortfolioPriceParameters = {
-	fork: PortfolioForkSnapshot | undefined
+	scope: copy.PortfolioPriceScope
+	target: PortfolioPriceTarget | undefined
 	bidder?: Address | undefined
 	actions: PortfolioSharedForkParameters['actions']
 	/** Compared with the proposed price until this branch's feed has accepted one of its own. */
 	referencePrice?: bigint | undefined
 }
-export function usePortfolioPrice({ fork, bidder, actions, referencePrice }: PortfolioPriceParameters) {
+export function usePortfolioPrice({ scope, target, bidder, actions, referencePrice }: PortfolioPriceParameters) {
 	const backend = getActiveBackend()
+	const scoped = copy.scopes[scope]
 	const priceInput = useSignal('')
 	const wethInput = useSignal('')
 	const reportInput = useSignal('')
 	const version = useSignal(0)
 	const loaded = useSignal<{ key: string; snapshot?: PortfolioPriceSnapshot; error?: string } | undefined>(undefined)
 	const reports = useSignal<{ key: string; report?: PortfolioPriceReport; error?: string } | undefined>(undefined)
-	const sponsor = bidder ?? fork?.owner
-	const identity = fork?.branch === undefined ? undefined : `${fork.portfolio}:${sponsor}:${fork.branch.universeId}`
+	const sponsor = bidder ?? target?.owner
+	const identity = target === undefined ? undefined : `${target.portfolio}:${sponsor}:${target.universeId}`
 	const previous = useRef<{ backend: typeof backend; identity: string }>()
 	const loadedReference = useRef<{ backend: typeof backend; identity: string; price: bigint | undefined }>()
 	useEffect(() => {
@@ -37,17 +60,17 @@ export function usePortfolioPrice({ fork, bidder, actions, referencePrice }: Por
 		wethInput.value = ''
 		reportInput.value = ''
 	}, [backend, identity])
-	const key = `${backend.id}:${identity}:${fork?.blockHash}:${version.value}`
+	const key = `${backend.id}:${identity}:${target?.blockHash}:${version.value}`
 	useEffect(() => {
 		let active = true
 		loaded.value = undefined
-		if (fork?.branch !== undefined && sponsor !== undefined) {
-			void loadPortfolioBranchPrice(createConnectedReadClient(), fork.portfolio, sponsor, fork.branch.universeId)
+		if (target !== undefined && sponsor !== undefined) {
+			void loadPortfolioBranchPrice(createConnectedReadClient(), target.portfolio, sponsor, target.universeId)
 				.then(snapshot => {
 					if (active && getActiveBackend() === backend) loaded.value = { key, snapshot }
 				})
 				.catch(error => {
-					if (active && getActiveBackend() === backend) loaded.value = { key, error: getErrorMessage(error, 'Unable to load branch price requirements.') }
+					if (active && getActiveBackend() === backend) loaded.value = { key, error: getErrorMessage(error, 'Unable to load price requirements.') }
 				})
 		}
 		return () => {
@@ -56,7 +79,7 @@ export function usePortfolioPrice({ fork, bidder, actions, referencePrice }: Por
 	}, [backend, key])
 	const current = loaded.value?.key === key ? loaded.value : undefined
 	const snapshot = current?.snapshot
-	// The branch reloads on every block, so its last loaded reference stands in until the next load instead of the portfolio's price.
+	// The target reloads on every block, so its last loaded reference stands in until the next load instead of the portfolio's price.
 	if (loadedReference.current?.backend !== backend || (identity !== undefined && loadedReference.current.identity !== identity)) loadedReference.current = undefined
 	// `previous` updates after the render that follows a backend change, so a snapshot from the old environment cannot set the new reference.
 	if (identity !== undefined && snapshot !== undefined && previous.current?.backend === backend) {
@@ -96,16 +119,16 @@ export function usePortfolioPrice({ fork, bidder, actions, referencePrice }: Por
 			fundingError = getErrorMessage(error, 'Invalid report funding.')
 		}
 	}
-	const baseReason = (bidder === undefined ? actions.ownerReason : undefined) ?? (fork?.branch === undefined ? copy.selectBranch : undefined) ?? current?.error ?? (snapshot === undefined ? copy.loading : undefined)
-	const branchReason = baseReason ?? (!fork?.branch?.started ? copy.waitForStart : undefined)
-	const prepareReason = branchReason ?? (snapshot?.feed !== zeroAddress ? copy.prepared : undefined) ?? (snapshot?.sourcePool === undefined ? copy.noPreparationSource : undefined)
-	const reportingDeadline = fork?.branch?.ready ? undefined : fork?.activationDeadline
+	const baseReason = (bidder === undefined ? actions.ownerReason : undefined) ?? (target === undefined ? scoped.missingTarget : undefined) ?? current?.error ?? (snapshot === undefined ? scoped.loading : undefined)
+	const startReason = baseReason ?? (!target?.started ? scoped.waitForStart : undefined)
+	const prepareReason = startReason ?? (snapshot?.feed !== zeroAddress ? scoped.prepared : undefined) ?? (snapshot?.sourcePool === undefined ? copy.noPreparationSource : undefined)
+	const reportingDeadline = target?.reportingDeadline
 	const earliestSettlement = snapshot?.reportingOpen && snapshot.observation !== undefined ? snapshot.timestamp + snapshot.observation.settlementSeconds : undefined
 	const tooLate = earliestSettlement !== undefined && reportingDeadline !== undefined && earliestSettlement >= reportingDeadline
-	const reportWindowReason = branchReason ?? (snapshot?.observation === undefined ? copy.prepareFirst : undefined) ?? (!snapshot?.reportingOpen ? copy.closed : undefined) ?? (tooLate ? copy.tooLate : undefined)
+	const reportWindowReason = startReason ?? (snapshot?.observation === undefined ? scoped.prepareFirst : undefined) ?? (!snapshot?.reportingOpen ? scoped.closed : undefined) ?? (tooLate ? copy.tooLate : undefined)
 	const fundingReason = reportWindowReason ?? (price === undefined || price <= 0n ? copy.priceInvalid : undefined) ?? (requestedWeth === undefined ? copy.wethInvalid : undefined) ?? fundingError
 	const walletReason =
-		fundingReason ?? (snapshot !== undefined && funding !== undefined && snapshot.ethBalanceAttoEth < funding.requiredEth ? copy.insufficientEth : undefined) ?? (snapshot?.observation !== undefined && funding !== undefined && snapshot.observation.repBalanceAttoRep < funding.rep ? copy.insufficientRep : undefined)
+		fundingReason ?? (snapshot !== undefined && funding !== undefined && snapshot.ethBalanceAttoEth < funding.requiredEth ? copy.insufficientEth : undefined) ?? (snapshot?.observation !== undefined && funding !== undefined && snapshot.observation.repBalanceAttoRep < funding.rep ? scoped.insufficientRep : undefined)
 	const wrapReason = walletReason ?? (funding?.wrap === 0n ? copy.noWrap : undefined)
 	const requestReason =
 		walletReason ??
@@ -113,11 +136,11 @@ export function usePortfolioPrice({ fork, bidder, actions, referencePrice }: Por
 		(snapshot?.observation !== undefined && funding !== undefined && (snapshot.observation.wethAllowanceAttoEth < funding.weth || snapshot.observation.repAllowanceAttoRep < funding.rep) ? copy.approvalRequired : undefined)
 	const selectedReportReason =
 		baseReason ??
-		(snapshot?.observation === undefined ? copy.prepareFirst : undefined) ??
+		(snapshot?.observation === undefined ? scoped.prepareFirst : undefined) ??
 		(reportInput.value.trim() !== '' && (reportId === undefined || reportId === 0n) ? copy.reportInvalid : undefined) ??
 		(reportId === undefined || reportId === 0n ? copy.noReport : undefined) ??
 		reportState?.error ??
-		(report === undefined ? copy.reportLoading : undefined)
+		(report === undefined ? scoped.reportLoading : undefined)
 	const settleReason = selectedReportReason ?? (report?.state.settled ? copy.alreadySettled : undefined) ?? (snapshot !== undefined && report !== undefined && snapshot.timestamp < report.eligibleAt ? copy.waitForSettlement : undefined)
 	const recoverReason = selectedReportReason ?? (!report?.state.settled ? copy.notSettled : undefined) ?? (report?.outcome !== 0n ? copy.callbackComplete : undefined)
 	const withdrawReason = selectedReportReason ?? (report?.wethCredit === 0n && report.repCredit === 0n ? copy.noFunding : undefined)
@@ -127,12 +150,12 @@ export function usePortfolioPrice({ fork, bidder, actions, referencePrice }: Por
 			action,
 			label,
 			() => {
-				if (reason !== undefined || snapshot === undefined) throw new Error(reason ?? copy.loading)
+				if (reason !== undefined || snapshot === undefined) throw new Error(reason ?? scoped.loading)
 				const selected = snapshot
 				return {
 					...build(selected),
 					validateBeforeSubmit: async () => {
-						if (getActiveBackend() !== backend || previous.current?.identity !== identity) throw new Error('Branch or wallet environment changed. Review again.')
+						if (getActiveBackend() !== backend || previous.current?.identity !== identity) throw new Error('Price feed or wallet environment changed. Review again.')
 						const latest = await loadPortfolioBranchPrice(createConnectedReadClient(), selected.portfolio, selected.owner, selected.universeId)
 						if (
 							latest.chainId !== selected.chainId ||
@@ -143,9 +166,9 @@ export function usePortfolioPrice({ fork, bidder, actions, referencePrice }: Por
 							latest.observation?.weth !== selected.observation?.weth ||
 							latest.observation?.openOracle !== selected.observation?.openOracle
 						)
-							throw new Error('Branch price identities changed. Review again.')
+							throw new Error('Price feed identities changed. Review again.')
 						await check(latest)
-						if (getActiveBackend() !== backend || previous.current?.identity !== identity) throw new Error('Branch or wallet environment changed. Review again.')
+						if (getActiveBackend() !== backend || previous.current?.identity !== identity) throw new Error('Price feed or wallet environment changed. Review again.')
 					},
 				}
 			},
@@ -160,7 +183,7 @@ export function usePortfolioPrice({ fork, bidder, actions, referencePrice }: Por
 			},
 		)
 	const freshFunding = (latest: PortfolioPriceSnapshot) => {
-		if (!latest.reportingOpen) throw new Error(copy.closed)
+		if (!latest.reportingOpen) throw new Error(scoped.closed)
 		if (reportingDeadline !== undefined && latest.observation !== undefined && latest.timestamp + latest.observation.settlementSeconds >= reportingDeadline) throw new Error(copy.tooLate)
 		if (price === undefined || requestedWeth === undefined || funding === undefined) throw new Error(copy.priceInvalid)
 		const fresh = quotePortfolioPriceFunding(latest, price, requestedWeth)
@@ -233,7 +256,7 @@ export function usePortfolioPrice({ fork, bidder, actions, referencePrice }: Por
 				fundingReason,
 				selected => ({
 					...buildPortfolioPriceApprovalRequest(selected, token, amount),
-					reviewDescription: `Allow branch price feed ${selected.feed} to spend up to ${formatEther(amount)} ${token === 'weth' ? 'WETH' : 'branch REP'} from your wallet. This sets the total allowance; it does not request a price report.`,
+					reviewDescription: scoped.formatApprovalReview(selected.feed, formatEther(amount), token),
 				}),
 				async latest => {
 					freshFunding(latest)
@@ -242,13 +265,13 @@ export function usePortfolioPrice({ fork, bidder, actions, referencePrice }: Por
 		request: () =>
 			run(
 				'requestPortfolioPrice',
-				copy.request,
+				scoped.request,
 				requestReason,
 				selected => {
 					if (price === undefined || requestedWeth === undefined || funding === undefined) throw new Error(copy.priceInvalid)
 					return {
 						...buildPortfolioPriceRequest(selected, price, requestedWeth),
-						reviewDescription: `Fund this branch price report with ${formatEther(funding.weth)} WETH, ${formatEther(funding.rep)} branch REP and ${formatEther(funding.bounty)} ETH bounty. Disputes may change the token amounts returned to your wallet. This does not activate the branch. Accepted prices can enable provider fees once the branch is active.`,
+						reviewDescription: scoped.formatRequestReview(formatEther(funding.weth), formatEther(funding.rep), formatEther(funding.bounty)),
 					}
 				},
 				async latest => {

@@ -6,10 +6,11 @@ import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } 
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { unscopedTransaction } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
-import { usePortfolioPrice, type PortfolioPriceParameters } from '@zoltar/ui-statoblast-shared/features/portfolios/hooks/usePortfolioPrice.js'
-import type { PortfolioTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolio.js'
+import { accountPriceTarget, branchPriceTarget, usePortfolioPrice, type PortfolioPriceParameters } from '@zoltar/ui-statoblast-shared/features/portfolios/hooks/usePortfolioPrice.js'
+import type { PortfolioAccountSnapshot, PortfolioTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolio.js'
+import * as priceCopy from '@zoltar/ui-statoblast-shared/copy/portfolioPrice.js'
 import { renderHookWithProps } from '../../support/renderHook.js'
-import { capitalSnapshot, token, unit } from './capitalFixture.js'
+import { capitalSnapshot, owner, token, unit } from './capitalFixture.js'
 import { priceFixture, priceFeed, priceWeth } from './priceFixture.js'
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
 const abi = parseAbi([
@@ -18,10 +19,14 @@ const abi = parseAbi([
 	'function approve(address spender,uint256 amount) returns (bool)',
 	'function deposit() payable',
 ])
-async function setup(configure: (fixture: ReturnType<typeof priceFixture>) => void = () => undefined) {
+/** Without an account the hook prices the fixture's fork branch; with one, the account's own universe. */
+async function setup(configure: (fixture: ReturnType<typeof priceFixture>) => void = () => undefined, account?: PortfolioAccountSnapshot) {
 	const fixture = priceFixture()
 	configure(fixture)
 	const fork = await fixture.fork()
+	if (account !== undefined) fixture.set(priceFeed, 'universeId', account.universeId)
+	const target = account === undefined ? branchPriceTarget(fork) : accountPriceTarget(account)
+	if (target === undefined) throw new Error('Missing price target')
 	const requests: PortfolioTransaction[] = []
 	const labels: string[] = []
 	const actions: PortfolioPriceParameters['actions'] = {
@@ -33,11 +38,11 @@ async function setup(configure: (fixture: ReturnType<typeof priceFixture>) => vo
 			requests.push(await build())
 		},
 	}
-	const parameters: PortfolioPriceParameters = { fork, actions }
+	const parameters: PortfolioPriceParameters = account === undefined ? { scope: 'branch', target, actions } : { scope: 'universe', target, actions, bidder: owner }
 	const hook = await renderHookWithProps(usePortfolioPrice, parameters)
 	lifecycle.trackRendered(hook)
 	await waitFor(() => expect(hook.state().loading).toBe(false))
-	return { ...fixture, fork, actions, requests, labels, hook }
+	return { ...fixture, fork, target, actions, requests, labels, hook }
 }
 function lastRequest(requests: PortfolioTransaction[]) {
 	const request = requests.at(-1)
@@ -54,9 +59,7 @@ test('price preparation blocks before start and creates only one explicit prepar
 	await act(() => state.hook.state().prepare())
 	expect(state.requests).toHaveLength(1)
 	expect(decodeFunctionData({ abi, data: lastRequest(state.requests).data })).toEqual({ functionName: 'preparePortfolioPriceFeed', args: [token, 42n] })
-	const branch = state.fork.branch
-	if (branch === undefined) throw new Error('Missing branch')
-	await state.hook.setProps({ fork: { ...state.fork, branch: { ...branch, started: false } } })
+	await state.hook.setProps({ target: { ...state.target, started: false } })
 	expect(state.hook.state().prepareReason).toContain('Prepare the branch')
 	await expect(state.hook.state().prepare()).rejects.toThrow('Prepare the branch')
 	expect(state.requests).toHaveLength(1)
@@ -115,11 +118,11 @@ test('persistent older report selection survives pending-report and transient sn
 	})
 	await waitFor(() => expect(state.hook.state().report?.reportId).toBe(9n))
 	state.values['pendingReportId'] = 12n
-	await state.hook.setProps({ fork: undefined })
+	await state.hook.setProps({ target: undefined })
 	expect(state.hook.state()).toMatchObject({ priceInput: '2', reportInput: '9' })
-	await state.hook.setProps({ fork: state.fork })
+	await state.hook.setProps({ target: state.target })
 	await waitFor(() => expect(state.hook.state().report?.reportId).toBe(9n))
-	await state.hook.setProps({ fork: { ...state.fork, owner: token } })
+	await state.hook.setProps({ target: { ...state.target, owner: token } })
 	expect(state.hook.state()).toMatchObject({ priceInput: '', reportInput: '' })
 })
 test('settlement and recovery remain independent after funding closes', async () => {
@@ -176,7 +179,7 @@ test.each(['weth', 'rep'] as const)('the %s approval review names the exact sele
 
 test('reports use the connected sponsor while an independent auction vault is selected', async () => {
 	const state = await setup()
-	await state.hook.setProps({ fork: { ...state.fork, owner: token }, bidder: state.fork.owner, actions: { ...state.actions, ownerReason: 'Activate the selected vault first.' } })
+	await state.hook.setProps({ target: { ...state.target, owner: token }, bidder: state.fork.owner, actions: { ...state.actions, ownerReason: 'Activate the selected vault first.' } })
 	await waitFor(() => expect(state.hook.state().loading).toBe(false))
 	await act(() => state.hook.state().setPrice('2'))
 	expect(state.hook.state().fundingReason).toBeUndefined()
@@ -209,4 +212,54 @@ test("another environment never compares against the previous one's price", asyn
 	installActiveEnvironmentForTesting({ ...state.backend, createReadClient: () => pendingClient })
 	await state.hook.setProps({ actions: state.actions })
 	expect(state.hook.state().comparisonPrice).toBeUndefined()
+})
+
+test('an open account funds its own universe price with no preparation step or branch deadline', async () => {
+	const state = await setup(undefined, capitalSnapshot())
+	expect(state.hook.state().snapshot?.universeId).toBe(0n)
+	expect(state.hook.state().reportingDeadline).toBeUndefined()
+	await act(() => state.hook.state().setPrice('2'))
+	state.setWeth(2n * unit)
+	state.setAllowances(9n * unit, 8n * unit)
+	// A branch would refuse this late report; the account's universe has no activation cutoff.
+	state.source.setSnapshot(capitalSnapshot({ timestamp: 2_700n }))
+	await act(() => state.hook.state().refresh())
+	await waitFor(() => expect(state.hook.state().snapshot?.timestamp).toBe(2_700n))
+	expect(state.hook.state().requestReason).toBeUndefined()
+	await act(() => state.hook.state().request())
+	const request = lastRequest(state.requests)
+	expect(state.labels).toEqual([priceCopy.scopes.universe.request])
+	expect(request.account).toBe(owner)
+	expect(request.reviewDescription).toContain('renews the shared price for this universe')
+	expect(request.reviewDescription).not.toContain('branch')
+	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'requestPortfolioPrice', args: [2n * unit, 2n * unit, 101n] })
+	await request.validateBeforeSubmit?.()
+	await act(() => state.hook.state().approve('rep', 4n * unit))
+	expect(lastRequest(state.requests).reviewDescription).toContain('4 REP')
+	expect(lastRequest(state.requests).reviewDescription).not.toContain('branch')
+})
+
+test('a forked universe stops new reports for itself but still settles the pending one', async () => {
+	const state = await setup(
+		fixture => {
+			fixture.values['isPriceReportingOpen'] = false
+			fixture.values['pendingReportId'] = 9n
+			fixture.source.setSnapshot(capitalSnapshot({ timestamp: 4_000n }))
+		},
+		capitalSnapshot({ forkTime: 100n }),
+	)
+	await waitFor(() => expect(state.hook.state().report?.reportId).toBe(9n))
+	await act(() => state.hook.state().setPrice('2'))
+	expect(state.hook.state().requestReason).toBe(priceCopy.scopes.universe.closed)
+	expect(state.hook.state().settleReason).toBeUndefined()
+	await act(() => state.hook.state().settle())
+	expect(state.requests).toHaveLength(1)
+})
+
+test('a universe still importing its fork sends reporters to the branch, which knows the activation deadline', async () => {
+	const state = await setup(undefined, capitalSnapshot({ importing: true }))
+	await act(() => state.hook.state().setPrice('2'))
+	expect(state.hook.state().requestReason).toBe(priceCopy.scopes.universe.waitForStart)
+	await expect(state.hook.state().request()).rejects.toThrow(priceCopy.scopes.universe.waitForStart)
+	expect(state.requests).toHaveLength(0)
 })

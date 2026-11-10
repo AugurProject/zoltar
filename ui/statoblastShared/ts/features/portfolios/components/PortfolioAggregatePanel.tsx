@@ -1,3 +1,4 @@
+import type { ComponentChildren } from 'preact'
 import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
@@ -18,7 +19,8 @@ import * as copy from '../../../copy/portfolioCapital.js'
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
 
 type Model = ReturnType<typeof usePortfolioAggregate>
-export function PortfolioAggregatePanel({ model, actions }: { model: Model; actions: Pick<PortfolioActions, 'scope' | 'busy'> }) {
+/** `priceReport` renders inside Shared backing, next to the price status it refreshes. */
+export function PortfolioAggregatePanel({ model, actions, priceReport }: { model: Model; actions: Pick<PortfolioActions, 'scope' | 'busy'>; priceReport?: ComponentChildren }) {
 	const snapshot = model.snapshot
 	const disabled = actions.busy !== undefined || model.loading || model.showingPreviousSnapshot
 	const disabledReason = actions.busy !== undefined ? copy.actionPending : copy.readUnavailable
@@ -55,6 +57,7 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 						<TimestampValue timestamp={snapshot?.timestamp} relative={false} />
 					</MetricField>
 				</MetricGrid>
+				{priceReport}
 			</SectionBlock>
 			<SectionBlock title={copy.title} description={copy.description}>
 				{snapshot?.auctionVault === undefined ? undefined : <UserMessage detail={copy.auctionVaultOwnership} />}

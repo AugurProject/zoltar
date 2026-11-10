@@ -7,8 +7,10 @@ import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/act
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { PortfoliosSection } from '@zoltar/ui-statoblast-shared/features/portfolios/components/PortfoliosSection.js'
 import * as copy from '@zoltar/ui-statoblast-shared/copy/portfolioCapital.js'
+import * as priceCopy from '@zoltar/ui-statoblast-shared/copy/portfolioPrice.js'
 import { capitalSnapshot, owner, portfolio } from './capitalFixture.js'
 import { capitalClient } from './capitalClient.js'
+import { priceFeed, priceFixture } from './priceFixture.js'
 
 const lifecycle = installDomTestLifecycle({ url: `https://example.test/#/portfolios?portfolio=${portfolio}&owner=${owner}`, afterTest: resetActiveEnvironmentForTesting })
 const parameters = { accountAddress: owner, onTransactionRequested: () => undefined, onTransactionSubmitted: () => undefined, onTransactionFinished: () => undefined, onTransactionPresented: () => undefined, refreshState: async () => undefined }
@@ -132,4 +134,27 @@ test('a forked origin is announced on its field and stated once beside the deplo
 	const deployButton = buttons[1]
 	if (deployButton === undefined || reason === null || reason === undefined) throw new Error('Missing deploy action')
 	expect(deployButton.compareDocumentPosition(reason) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+})
+
+test('an unforked portfolio with an expired price can fund a new report from its shared backing', async () => {
+	// The fork panel prices only fork branches, so the unforked universe needs its own request path.
+	const fixture = priceFixture(capitalSnapshot({ priceValid: false, priceValidUntil: 900n }))
+	fixture.set(priceFeed, 'universeId', 0n)
+	const view = await renderIntoDocument(<PortfoliosSection parameters={parameters} enabled environmentKey={0} activeUniverseId={0n} />)
+	lifecycle.trackRendered(view)
+	const backing = () => [...view.container.querySelectorAll('section')].find(section => section.querySelector('h3')?.textContent === copy.poolTitle)
+	await waitFor(() => expect(backing()?.textContent).toContain(copy.priceStale))
+	const report = [...(backing()?.querySelectorAll('.workflow-subsection') ?? [])].find(section => section.querySelector('h4')?.textContent === priceCopy.scopes.universe.title)
+	if (report === undefined) throw new Error('Shared backing has no price report')
+	await waitFor(() => expect(report.textContent).toContain('Wallet WETH'))
+	const input = [...report.querySelectorAll('input')].find(candidate => candidate.closest('.field')?.querySelector('label')?.textContent?.includes(priceCopy.price))
+	if (input === undefined) throw new Error('Missing proposed price input')
+	await act(() => {
+		input.value = '2'
+		input.dispatchEvent(new Event('input', { bubbles: true }))
+	})
+	const button = (label: string) => [...report.querySelectorAll('button')].find(candidate => candidate.textContent === label)
+	await waitFor(() => expect(button(priceCopy.wrap)?.disabled).toBe(false))
+	expect(button(priceCopy.scopes.universe.request)?.disabled).toBe(true)
+	expect(report.textContent).toContain(priceCopy.insufficientWeth)
 })

@@ -11,8 +11,8 @@ export const priceFeed = getAddress('0x0000000000000000000000000000000000000081'
 export const priceWeth = getAddress('0x0000000000000000000000000000000000000082')
 export const priceOracle = getAddress('0x0000000000000000000000000000000000000083')
 export const priceEscrow = getAddress('0x0000000000000000000000000000000000000084')
-export function priceFixture() {
-	const source = capitalClient(capitalSnapshot({ forkTime: 100n }))
+export function priceFixture(account = capitalSnapshot({ forkTime: 100n })) {
+	const source = capitalClient(account)
 	const values: Record<string, unknown> = {
 		getForkChoiceDeadline: 500n,
 		getForkRecapitalizationDeadline: 3_000n,
