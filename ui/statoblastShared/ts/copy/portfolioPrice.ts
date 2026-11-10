@@ -1,3 +1,5 @@
+import { readUnavailable } from './portfolio.js'
+
 /** A fork branch reports before activation; an open portfolio account reports for its own universe. */
 export type PortfolioPriceScope = 'branch' | 'universe'
 type ScopeCopy = {
@@ -43,8 +45,9 @@ export const scopes: Record<PortfolioPriceScope, ScopeCopy> = {
 	},
 	universe: {
 		title: 'Shared REP price',
-		description: 'Anyone can fund a challenged REP price report for this universe. Once accepted, it renews the shared price that commitments, purchases and withdrawals of committed principal need.',
-		missingTarget: 'Open a portfolio first.',
+		description: 'Any wallet can fund a report; an accepted one renews this universe’s shared REP price.',
+		// The universe report renders only once an account has been shown, so a missing target means it is reloading.
+		missingTarget: readUnavailable,
 		waitForStart: 'Until this branch activates, fund its price report under Fork choices and recovery.',
 		loading: 'Checking price requirements…',
 		prepared: 'This universe’s price feed is already prepared.',

@@ -263,3 +263,13 @@ test('a universe still importing its fork sends reporters to the branch, which k
 	await expect(state.hook.state().request()).rejects.toThrow(priceCopy.scopes.universe.waitForStart)
 	expect(state.requests).toHaveLength(0)
 })
+
+test('with nothing to price, the report waits for a target instead of loading forever', async () => {
+	const state = await setup()
+	await state.hook.setProps({ target: undefined })
+	expect(state.hook.state().loading).toBe(false)
+	expect(state.hook.state().refreshReason).toBe(priceCopy.scopes.branch.missingTarget)
+	await state.hook.setProps({ scope: 'universe' })
+	expect(state.hook.state().loading).toBe(false)
+	expect(state.hook.state().refreshReason).toBe(priceCopy.scopes.universe.missingTarget)
+})

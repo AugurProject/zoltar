@@ -140,7 +140,7 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 				<PortfolioButton model={parameters.actions} action='settlePortfolioPrice' label={copy.settle} pendingLabel={copy.settling} reason={model.settleReason} onClick={model.settle} />
 				<PortfolioButton model={parameters.actions} action='recoverPortfolioPrice' label={copy.recover} pendingLabel={copy.recovering} reason={model.recoverReason} onClick={model.recover} />
 				<PortfolioButton model={parameters.actions} action='withdrawPortfolioPrice' label={copy.withdraw} pendingLabel={copy.withdrawing} reason={model.withdrawReason} onClick={model.withdraw} />
-				<ActionLauncherButton tone='secondary' idleLabel={copy.refresh} pendingLabel={copy.refreshing} availability={{ disabled: disabled || model.loading, reason: (disabled ? copy.busy : undefined) ?? (model.loading ? scoped.loading : undefined) }} onClick={model.refresh} />
+				<ActionLauncherButton tone='secondary' idleLabel={copy.refresh} pendingLabel={copy.refreshing} availability={{ disabled: disabled || model.refreshReason !== undefined, reason: (disabled ? copy.busy : undefined) ?? model.refreshReason }} onClick={model.refresh} />
 			</div>
 		</WorkflowSubsection>
 	)

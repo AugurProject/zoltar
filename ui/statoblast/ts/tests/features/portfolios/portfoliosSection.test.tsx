@@ -158,3 +158,16 @@ test('an unforked portfolio with an expired price can fund a new report from its
 	expect(button(priceCopy.scopes.universe.request)?.disabled).toBe(true)
 	expect(report.textContent).toContain(priceCopy.insufficientWeth)
 })
+
+test('shared backing has no price report until a portfolio account is shown', async () => {
+	window.localStorage.clear()
+	window.history.replaceState(undefined, '', '/#/portfolios')
+	capitalClient().install()
+	const view = await renderIntoDocument(<PortfoliosSection parameters={parameters} enabled environmentKey={0} activeUniverseId={0n} />)
+	lifecycle.trackRendered(view)
+	const backing = () => [...view.container.querySelectorAll('section')].find(section => section.querySelector('h3')?.textContent === copy.poolTitle)
+	await waitFor(() => expect(backing()?.textContent).toContain(copy.priceExpiry))
+	// Assert on text: with no account there is nothing to price, and an empty report would only show endless loading.
+	expect(backing()?.textContent).not.toContain(priceCopy.scopes.universe.title)
+	expect(view.container.textContent).not.toContain(priceCopy.scopes.universe.request)
+})

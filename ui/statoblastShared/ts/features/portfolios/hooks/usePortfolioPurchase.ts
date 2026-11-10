@@ -52,7 +52,7 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 		if (snapshot === undefined) reason = 'Load a portfolio first.'
 		else if (snapshot.admission.mode === 'custom') reason = 'This interface supports open or fixed question policies.'
 		else if (snapshot.forkTime > 0n || snapshot.frozen || snapshot.importing) reason = 'Purchases are closed in this universe.'
-		else if (!snapshot.priceValid) reason = 'Refresh the shared REP price first.'
+		else if (!snapshot.priceValid) reason = 'Request a new REP price first.'
 		else if (questionId === undefined || amount === undefined || amount === 0n || minimum === undefined) reason = 'Enter a question, positive purchase amount and minimum shares.'
 		else if (current?.error !== undefined) reason = current.error
 		else if (quote === undefined || current?.question === undefined) reason = 'Loading the purchase quote.'

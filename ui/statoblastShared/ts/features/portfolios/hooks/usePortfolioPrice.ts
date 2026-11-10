@@ -141,6 +141,8 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 		(reportId === undefined || reportId === 0n ? copy.noReport : undefined) ??
 		reportState?.error ??
 		(report === undefined ? scoped.reportLoading : undefined)
+	// Nothing loads without a target, so the report waits for one instead of showing a load that never ends.
+	const refreshReason = (target === undefined ? scoped.missingTarget : undefined) ?? (current === undefined ? scoped.loading : undefined)
 	const settleReason = selectedReportReason ?? (report?.state.settled ? copy.alreadySettled : undefined) ?? (snapshot !== undefined && report !== undefined && snapshot.timestamp < report.eligibleAt ? copy.waitForSettlement : undefined)
 	const recoverReason = selectedReportReason ?? (!report?.state.settled ? copy.notSettled : undefined) ?? (report?.outcome !== 0n ? copy.callbackComplete : undefined)
 	const withdrawReason = selectedReportReason ?? (report?.wethCredit === 0n && report.repCredit === 0n ? copy.noFunding : undefined)
@@ -211,7 +213,7 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 		earliestSettlement,
 		fundingReadError: current?.error ?? fundingError,
 		error: current?.error ?? reportState?.error ?? fundingError,
-		loading: current === undefined,
+		loading: target !== undefined && current === undefined,
 		priceInput: priceInput.value,
 		wethInput: wethInput.value,
 		reportInput: reportInput.value,
@@ -231,6 +233,7 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 		settleReason,
 		recoverReason,
 		withdrawReason,
+		refreshReason,
 		refresh: () => {
 			version.value += 1
 		},

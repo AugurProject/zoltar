@@ -89,7 +89,7 @@ export function PortfoliosSection({ parameters, enabled, environmentKey, activeU
 			{actions.error === undefined ? undefined : <UserMessage placement='section' tone='error' announcement='polite' detail={actions.error} />}
 			{actions.feedback === undefined ? undefined : <UserMessage placement='section' tone='success' announcement='polite' detail={actions.feedback} />}
 			<TransactionScopeProvider scope={actions.scope}>
-				<PortfolioAggregatePanel model={capital} actions={actions} priceReport={<PortfolioPriceReport scope='universe' target={accountPriceTarget(model.snapshot)} actions={actions} bidder={parameters.accountAddress} />} />
+				<PortfolioAggregatePanel model={capital} actions={actions} priceReport={model.presentationSnapshot === undefined ? undefined : <PortfolioPriceReport scope='universe' target={accountPriceTarget(model.snapshot)} actions={actions} bidder={parameters.accountAddress} />} />
 				<PortfolioTakeover model={model} actions={actions} />
 				<PortfolioPurchasePanel model={model} purchase={purchase} actions={actions} />
 				<PortfolioSharedFork

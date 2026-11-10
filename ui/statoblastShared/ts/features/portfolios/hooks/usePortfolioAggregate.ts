@@ -153,7 +153,7 @@ export function usePortfolioAggregate(
 	const livePositions = snapshot?.positions.filter(position => position.commitment > 0n) ?? []
 	const pendingRetirement = livePositions.find(position => position.batch !== 0n)
 	const claimReason = ownerReason
-	const serveReason = ownerReason ?? inactiveReason ?? (snapshot?.priceValid === false ? 'Refresh the shared REP price first.' : undefined)
+	const serveReason = ownerReason ?? inactiveReason ?? (snapshot?.priceValid === false ? 'Request a new REP price first.' : undefined)
 	const requireSnapshot = () => {
 		const current = model.snapshot
 		if (current === undefined || accountAddress === undefined || accountAddress.toLowerCase() !== (current.auctionVault?.bidder ?? current.owner).toLowerCase()) throw new Error('Connect the selected owner account.')
@@ -363,7 +363,7 @@ export function usePortfolioAggregate(
 							: `Attempt to finish your request at ${formatEther(pendingRetirement.remainingCommitment)} ETH commitment. ${pendingRetirement.retirementPreview === undefined ? capitalCopy.retirementPreviewUnavailable : capitalCopy.retirementPreviewStatus[pendingRetirement.retirementPreview.status]}. It completes only when spare healthy capacity covers earlier reserved reductions and your entire remaining reduction. Otherwise your commitment remains unchanged. ${capitalCopy.retirementPreviewHint} Ordinary pool activity can still make partial progress.`,
 				}),
 				latest => {
-					if (!latest.priceValid) throw new Error('Refresh the shared REP price first.')
+					if (!latest.priceValid) throw new Error('Request a new REP price first.')
 					if (latest.forkTime > 0n || latest.frozen || latest.importing) throw new Error('This universe is closed to retirement.')
 					if (pendingRetirement === undefined) return
 					const current = latest.positions.find(position => position.id === pendingRetirement.id && position.commitment > 0n && position.batch !== 0n)
