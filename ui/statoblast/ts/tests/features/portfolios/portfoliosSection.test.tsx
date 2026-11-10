@@ -146,6 +146,7 @@ test('an unforked portfolio with an expired price can fund a new report from its
 	await waitFor(() => expect(backing()?.textContent).toContain(copy.priceStale))
 	const report = [...(backing()?.querySelectorAll('.workflow-subsection') ?? [])].find(section => section.querySelector('h4')?.textContent === priceCopy.scopes.universe.title)
 	if (report === undefined) throw new Error('Shared backing has no price report')
+	expect(report.closest('details')?.open).toBe(true)
 	await waitFor(() => expect(report.textContent).toContain('Wallet WETH'))
 	const input = [...report.querySelectorAll('input')].find(candidate => candidate.closest('.field')?.querySelector('label')?.textContent?.includes(priceCopy.price))
 	if (input === undefined) throw new Error('Missing proposed price input')
@@ -170,4 +171,16 @@ test('shared backing has no price report until a portfolio account is shown', as
 	// Assert on text: with no account there is nothing to price, and an empty report would only show endless loading.
 	expect(backing()?.textContent).not.toContain(priceCopy.scopes.universe.title)
 	expect(view.container.textContent).not.toContain(priceCopy.scopes.universe.request)
+})
+
+test('a current price keeps the price request folded under its summary', async () => {
+	const source = capitalClient()
+	source.install()
+	const view = await renderIntoDocument(<PortfoliosSection parameters={parameters} enabled environmentKey={0} activeUniverseId={0n} />)
+	lifecycle.trackRendered(view)
+	const backing = () => [...view.container.querySelectorAll('section')].find(section => section.querySelector('h3')?.textContent === copy.poolTitle)
+	await waitFor(() => expect(backing()?.textContent).toContain(copy.priceValid))
+	const disclosure = backing()?.querySelector('details')
+	expect(disclosure?.querySelector('summary')?.textContent).toBe(priceCopy.scopes.universe.request)
+	expect(disclosure?.open).toBe(false)
 })
