@@ -122,6 +122,8 @@ export function capitalClient(initial = capitalSnapshot()) {
 				questionCount: snapshot.questionCount,
 				balanceOf: snapshot.walletAttoRep,
 				allowance: snapshot.allowanceAttoRep,
+				// No question pools are registered unless a test lists some.
+				securityPoolDeploymentCount: 0n,
 				...overrides,
 			}
 			if (request.functionName === 'portfolio') {

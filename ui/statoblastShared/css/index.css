@@ -4197,6 +4197,30 @@ span.rep-price-status.stale,
 	width: 100%;
 }
 
+.registered-portfolio-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2) var(--space-4);
+	min-width: 0;
+}
+
+.registered-portfolio-action {
+	margin-inline-start: auto;
+}
+
+.registered-portfolio-action-labels {
+	display: inline-grid;
+}
+
+.registered-portfolio-action-labels > span {
+	grid-area: 1 / 1;
+}
+
+.registered-portfolio-action-labels > [aria-hidden="true"] {
+	visibility: hidden;
+}
+
 .portfolio-questions-table td,
 .portfolio-questions-table td button,
 .portfolio-questions-table td a {

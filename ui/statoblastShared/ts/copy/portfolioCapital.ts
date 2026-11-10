@@ -108,6 +108,7 @@ export const prepareTitle = 'Complete portfolio setup'
 export const prepareHint = 'Each stage is one transaction with bounded deployment work. Anyone can resume setup before deposits and purchases open.'
 export const prepareStages = ['1. Prepare settlement', '2. Prepare reporting and forks', '3. Prepare capital ledger', '4. Activate portfolio']
 export const prepareProgress = (stage: number) => `${stage} of 4 setup stages complete`
+export const prepareProgressUnknown = 'Setup progress appears once the portfolio account loads.'
 export const preparing = 'Preparing modules…'
 
 export const annualFee = 'Annual time fee (%)'

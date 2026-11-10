@@ -99,6 +99,30 @@ export const questionColumn = 'Question'
 
 export const portfolioColumn = 'Portfolio'
 
+export const portfoliosWithQuestions = 'Portfolios with questions'
+
+export const loadingPortfolios = 'Loading portfolios…'
+
+export const portfoliosError = 'Unable to load portfolios.'
+
+export const noPortfoliosWithQuestions = 'No portfolio has registered a question in this universe yet.'
+
+export const noPortfoliosWithQuestionsHint = 'Enter a portfolio address to open it.'
+
+export const ownerNeeded = 'Connect a wallet or enter an owner address to load this portfolio.'
+
+export const ownerAddressNeeded = 'Enter an owner address to load this portfolio.'
+
+export const formatRegisteredQuestions = (count: number) => (count === 1 ? '1 registered question' : `${count} registered questions`)
+
+export const openPortfolio = 'Open'
+
+export const portfolioSelected = 'Selected'
+
+export const formatOpenPortfolioLabel = (portfolio: string) => `Open portfolio ${portfolio}`
+
+export const formatSelectedPortfolioLabel = (portfolio: string) => `Portfolio ${portfolio} is selected`
+
 export const outcomeColumn = 'Outcome'
 
 export const manageBackingAndRecovery = 'Manage portfolio backing and fork recovery'

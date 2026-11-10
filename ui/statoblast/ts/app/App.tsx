@@ -177,7 +177,7 @@ export function App() {
 					<AppRouteContent
 						deploy={deployRouteContentProps}
 						openOracle={openOracleRouteContentProps}
-						portfolios={{ parameters: walletScopedHookConfig, enabled: canReadOnchainData && walletBootstrapComplete, environmentKey: activeEnvironmentNonce, activeUniverseId }}
+						portfolios={{ parameters: walletScopedHookConfig, walletConnected: accountState.address !== undefined, enabled: canReadOnchainData && walletBootstrapComplete, environmentKey: activeEnvironmentNonce, activeUniverseId }}
 						readBackendMessage={readBackendMessage}
 						route={activeRoute}
 						questions={{
