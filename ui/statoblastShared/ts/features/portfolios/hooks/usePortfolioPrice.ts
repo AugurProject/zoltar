@@ -32,6 +32,20 @@ export function accountPriceTarget(account: Pick<PortfolioAccountSnapshot, 'port
 	if (account === undefined) return undefined
 	return { portfolio: account.portfolio, owner: account.owner, universeId: account.universeId, blockHash: account.blockHash, started: !account.importing, reportingDeadline: undefined }
 }
+const actionNames = {
+	prepare: 'preparePortfolioPrice',
+	wrap: 'wrapPortfolioPrice',
+	approveWeth: 'approvePortfolioPriceWeth',
+	approveRep: 'approvePortfolioPriceRep',
+	request: 'requestPortfolioPrice',
+	settle: 'settlePortfolioPrice',
+	recover: 'recoverPortfolioPrice',
+	withdraw: 'withdrawPortfolioPrice',
+}
+/** The page shows a universe report and a branch report together, so each owns its action IDs and a pending transaction marks only the button that started it. */
+function portfolioPriceAction(scope: copy.PortfolioPriceScope, name: keyof typeof actionNames) {
+	return scope === 'branch' ? actionNames[name] : `${actionNames[name]}:universe`
+}
 export type PortfolioPriceParameters = {
 	scope: copy.PortfolioPriceScope
 	target: PortfolioPriceTarget | undefined
@@ -237,10 +251,11 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 		refresh: () => {
 			version.value += 1
 		},
-		prepare: () => run('preparePortfolioPrice', copy.prepare, prepareReason, buildPortfolioPricePreparationRequest),
+		actionId: (name: keyof typeof actionNames) => portfolioPriceAction(scope, name),
+		prepare: () => run(portfolioPriceAction(scope, 'prepare'), copy.prepare, prepareReason, buildPortfolioPricePreparationRequest),
 		wrap: () =>
 			run(
-				'wrapPortfolioPrice',
+				portfolioPriceAction(scope, 'wrap'),
 				copy.wrap,
 				wrapReason,
 				selected => {
@@ -254,7 +269,7 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 			),
 		approve: (token: 'weth' | 'rep', amount: bigint) =>
 			run(
-				token === 'weth' ? 'approvePortfolioPriceWeth' : 'approvePortfolioPriceRep',
+				portfolioPriceAction(scope, token === 'weth' ? 'approveWeth' : 'approveRep'),
 				token === 'weth' ? copy.approveWeth : copy.approveRep,
 				fundingReason,
 				selected => ({
@@ -267,7 +282,7 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 			),
 		request: () =>
 			run(
-				'requestPortfolioPrice',
+				portfolioPriceAction(scope, 'request'),
 				scoped.request,
 				requestReason,
 				selected => {
@@ -286,17 +301,17 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 				true,
 			),
 		settle: () =>
-			run('settlePortfolioPrice', copy.settle, settleReason, withReport(buildPortfolioPriceSettlement), async latest => {
+			run(portfolioPriceAction(scope, 'settle'), copy.settle, settleReason, withReport(buildPortfolioPriceSettlement), async latest => {
 				const fresh = await freshReport(latest)
 				if (fresh.state.settled || latest.timestamp < fresh.eligibleAt) throw new Error('This report is not ready to settle.')
 			}),
 		recover: () =>
-			run('recoverPortfolioPrice', copy.recover, recoverReason, withReport(buildPortfolioPriceRecovery), async latest => {
+			run(portfolioPriceAction(scope, 'recover'), copy.recover, recoverReason, withReport(buildPortfolioPriceRecovery), async latest => {
 				const fresh = await freshReport(latest)
 				if (!fresh.state.settled || fresh.outcome !== 0n) throw new Error(copy.callbackComplete)
 			}),
 		withdraw: () =>
-			run('withdrawPortfolioPrice', copy.withdraw, withdrawReason, withReport(buildPortfolioPriceFundingWithdrawal), async latest => {
+			run(portfolioPriceAction(scope, 'withdraw'), copy.withdraw, withdrawReason, withReport(buildPortfolioPriceFundingWithdrawal), async latest => {
 				const fresh = await freshReport(latest)
 				if (fresh.wethCredit === 0n && fresh.repCredit === 0n) throw new Error(copy.noFunding)
 			}),

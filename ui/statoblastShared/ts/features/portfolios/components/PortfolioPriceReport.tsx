@@ -55,7 +55,7 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 					</MetricField>
 				) : undefined}
 			</MetricGrid>
-			{branch ? <PortfolioButton model={parameters.actions} action='preparePortfolioPrice' label={copy.prepare} pendingLabel={copy.preparing} reason={model.prepareReason} onClick={model.prepare} /> : undefined}
+			{branch ? <PortfolioButton model={parameters.actions} action={model.actionId('prepare')} label={copy.prepare} pendingLabel={copy.preparing} reason={model.prepareReason} onClick={model.prepare} /> : undefined}
 			<MetricGrid>
 				<div className='initial-price-input'>
 					<PortfolioInput label={copy.price} value={model.priceInput} onChange={model.setPrice} disabled={disabled} numeric describedBy={priceWarning === undefined ? undefined : priceWarningId} />
@@ -83,7 +83,7 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 					<CurrencyValue value={model.funding?.wrap} suffix={common.eth} />
 				</MetricField>
 			</MetricGrid>
-			<PortfolioButton model={parameters.actions} action='wrapPortfolioPrice' label={copy.wrap} pendingLabel={copy.wrapping} reason={model.wrapReason} onClick={model.wrap} />
+			<PortfolioButton model={parameters.actions} action={model.actionId('wrap')} label={copy.wrap} pendingLabel={copy.wrapping} reason={model.wrapReason} onClick={model.wrap} />
 			<TokenApprovalControl
 				actionLabel={scoped.request}
 				allowanceError={model.fundingReadError}
@@ -94,7 +94,7 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 				onApprove={amount => {
 					if (amount !== undefined) void model.approve('weth', amount)
 				}}
-				pending={parameters.actions.busy === 'approvePortfolioPriceWeth'}
+				pending={parameters.actions.busy === model.actionId('approveWeth')}
 				pendingLabel={copy.approving}
 				requiredAmount={model.funding?.weth}
 				resetKey={`${model.snapshot?.feed}:${model.snapshot?.owner}:${model.priceInput}:${model.wethInput}:weth`}
@@ -111,7 +111,7 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 				onApprove={amount => {
 					if (amount !== undefined) void model.approve('rep', amount)
 				}}
-				pending={parameters.actions.busy === 'approvePortfolioPriceRep'}
+				pending={parameters.actions.busy === model.actionId('approveRep')}
 				pendingLabel={copy.approving}
 				requiredAmount={model.funding?.rep}
 				resetKey={`${model.snapshot?.feed}:${model.snapshot?.owner}:${model.priceInput}:${model.wethInput}:rep`}
@@ -119,7 +119,7 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 				tokenUnits={18}
 			/>
 			<UserMessage tone='warning' detail={scoped.requestWarning} />
-			<PortfolioButton model={parameters.actions} action='requestPortfolioPrice' label={scoped.request} pendingLabel={scoped.requesting} reason={model.requestReason} onClick={model.request} />
+			<PortfolioButton model={parameters.actions} action={model.actionId('request')} label={scoped.request} pendingLabel={scoped.requesting} reason={model.requestReason} onClick={model.request} />
 			<PortfolioInput label={copy.reportId} hint={copy.reportHint} value={model.reportInput} onChange={model.setReportId} disabled={disabled} />
 			<MetricGrid>
 				<MetricField label={copy.reportState}>{reportStatus}</MetricField>
@@ -138,9 +138,9 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 			</MetricGrid>
 			<UserMessage detail={copy.fundingReturnHint} />
 			<div className='actions'>
-				<PortfolioButton model={parameters.actions} action='settlePortfolioPrice' label={copy.settle} pendingLabel={copy.settling} reason={model.settleReason} onClick={model.settle} />
-				<PortfolioButton model={parameters.actions} action='recoverPortfolioPrice' label={copy.recover} pendingLabel={copy.recovering} reason={model.recoverReason} onClick={model.recover} />
-				<PortfolioButton model={parameters.actions} action='withdrawPortfolioPrice' label={copy.withdraw} pendingLabel={copy.withdrawing} reason={model.withdrawReason} onClick={model.withdraw} />
+				<PortfolioButton model={parameters.actions} action={model.actionId('settle')} label={copy.settle} pendingLabel={copy.settling} reason={model.settleReason} onClick={model.settle} />
+				<PortfolioButton model={parameters.actions} action={model.actionId('recover')} label={copy.recover} pendingLabel={copy.recovering} reason={model.recoverReason} onClick={model.recover} />
+				<PortfolioButton model={parameters.actions} action={model.actionId('withdraw')} label={copy.withdraw} pendingLabel={copy.withdrawing} reason={model.withdrawReason} onClick={model.withdraw} />
 				<ActionLauncherButton tone='secondary' idleLabel={copy.refresh} pendingLabel={copy.refreshing} availability={{ disabled: disabled || model.refreshReason !== undefined, reason: (disabled ? copy.busy : undefined) ?? model.refreshReason }} onClick={model.refresh} />
 			</div>
 		</WorkflowSubsection>

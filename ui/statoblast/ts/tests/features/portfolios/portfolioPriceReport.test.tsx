@@ -166,3 +166,21 @@ test('the universe report has no feed preparation, branch deadline or branch wor
 	expect(metrics).not.toContain(copy.validUntil)
 	expect(view.container.textContent).not.toMatch(/branch/i)
 })
+
+test('a pending universe request leaves the branch report on the same page idle', async () => {
+	const fixture = priceFixture()
+	const fork = await fixture.fork()
+	// The universe report's request ID; the branch report keeps the unsuffixed one.
+	const actions: PortfolioPriceParameters['actions'] = { scope: unscopedTransaction, busy: 'requestPortfolioPrice:universe', ownerReason: undefined, runPortfolioAction: async () => undefined }
+	const view = await renderIntoDocument(
+		<>
+			<PortfolioPriceReport scope='branch' target={branchPriceTarget(fork)} actions={actions} />
+			<PortfolioPriceReport scope='universe' target={accountPriceTarget(capitalSnapshot())} actions={actions} bidder={owner} />
+		</>,
+	)
+	lifecycle.trackRendered(view)
+	const labels = Array.from(view.container.querySelectorAll('button')).map(button => button.textContent)
+	expect(labels).toContain(copy.scopes.universe.requesting)
+	expect(labels).toContain(copy.scopes.branch.request)
+	expect(labels).not.toContain(copy.scopes.branch.requesting)
+})

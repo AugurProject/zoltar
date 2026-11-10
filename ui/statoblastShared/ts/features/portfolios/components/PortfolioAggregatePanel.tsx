@@ -22,16 +22,17 @@ import * as common from '@zoltar/ui-core-shared/copy/common.js'
 
 type Model = ReturnType<typeof usePortfolioAggregate>
 /** The request form is long, so it stays folded unless the price has expired and a new report can be requested. */
-function PriceReportDisclosure({ stale, children }: { stale: boolean; children: ComponentChildren }) {
-	const [open, setOpen] = useState(stale)
+function PriceReportDisclosure({ requestable, children }: { requestable: boolean; children: ComponentChildren }) {
+	const [open, setOpen] = useState(requestable)
 	// Never folds by itself: settling a report must not hide the control that still has focus.
 	useEffect(() => {
-		if (stale) setOpen(true)
-	}, [stale])
+		if (requestable) setOpen(true)
+	}, [requestable])
+	// Folded, the report is not mounted, so it does not read the price feed on every block.
 	return (
 		<details open={open} onToggle={event => setOpen(event.currentTarget.open)}>
 			<summary>{priceCopy.scopes.universe.title}</summary>
-			{children}
+			{open ? children : undefined}
 		</details>
 	)
 }
@@ -46,6 +47,8 @@ export function PortfolioAggregatePanel({ model, actions, priceReport }: { model
 	else if (model.targetCapacity === undefined) targetCapacityReason = copy.targetUnavailable
 	let available: bigint | undefined
 	if (snapshot !== undefined) available = snapshot.healthyCommitmentAttoEth > snapshot.demandAttoEth ? snapshot.healthyCommitmentAttoEth - snapshot.demandAttoEth : 0n
+	// A forked or importing universe cannot accept a new report, so only an expired price in an active universe asks for one.
+	const priceRequestable = snapshot !== undefined && !snapshot.priceValid && snapshot.forkTime === 0n && !snapshot.importing
 	let status = snapshot?.priceValid ? copy.priceValid : copy.priceStale
 	if (snapshot?.importing) status = copy.importing
 	if (snapshot !== undefined && snapshot.forkTime > 0n) status = copy.forked
@@ -74,7 +77,7 @@ export function PortfolioAggregatePanel({ model, actions, priceReport }: { model
 						<TimestampValue timestamp={snapshot?.timestamp} relative={false} />
 					</MetricField>
 				</MetricGrid>
-				{priceReport === undefined ? undefined : <PriceReportDisclosure stale={snapshot !== undefined && status === copy.priceStale}>{priceReport}</PriceReportDisclosure>}
+				{priceReport === undefined ? undefined : <PriceReportDisclosure requestable={priceRequestable}>{priceReport}</PriceReportDisclosure>}
 			</SectionBlock>
 			<SectionBlock title={copy.title} description={copy.description}>
 				{snapshot?.auctionVault === undefined ? undefined : <UserMessage detail={copy.auctionVaultOwnership} />}

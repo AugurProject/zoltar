@@ -185,6 +185,9 @@ test('a current price keeps the price request folded under its summary', async (
 	const disclosure = backing()?.querySelector('details')
 	expect(disclosure?.querySelector('summary')?.textContent).toBe(priceCopy.scopes.universe.title)
 	expect(disclosure?.open).toBe(false)
+	// Folded, the report is not mounted and so does not read the price feed every block.
+	expect(disclosure?.querySelectorAll('button').length).toBe(0)
+	expect(source.reads.some(read => read.name === 'isPriceReportingOpen')).toBe(false)
 })
 
 test.each([
