@@ -395,32 +395,15 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		return _takeOver(id, commitment, minimumAward, maximumOwnRep, bounds, ENFORCE_TAKEOVER_BOUNDS, _capitalOwner());
 	}
 	/// @notice Execute one existing owner operation as its funding sponsor.
-	/// The feed isolates calls; the ordinary public entrypoint still owns all
-	/// validation and its reentrancy guard. Privileged entrypoints are excluded.
+	/// The canonical feed filters selectors and isolates calls. The selected
+	/// public entrypoint retains its validation and reentrancy guard.
 	function executeReportOperation(address sponsor, bytes calldata data) external {
 		require(msg.sender == ICapitalLedgerAccounting(portfolio).priceFeed(universeId), 'Only canonical shared feed');
 		require(!entered && reportOwner == address(0) && sponsor != address(0), 'Capital operation active');
-		require(data.length >= 4 && _isReportOperation(bytes4(data[:4])), 'Unsupported report operation');
 		reportOwner = sponsor;
 		(bool success, bytes memory result) = address(this).call(data);
 		if (!success) DelegateCall.bubbleRevert(result);
 		reportOwner = address(0);
-	}
-
-	function _isReportOperation(bytes4 selector) private pure returns (bool) {
-		return
-			selector == this.takeOver.selector ||
-			selector == this.takeOverWithBounds.selector ||
-			selector == this.takeOverAuctionBid.selector ||
-			selector == this.depositFor.selector ||
-			selector == this.depositAndSetHealthTarget.selector ||
-			selector == this.withdrawPrincipal.selector ||
-			selector == this.setHealthTarget.selector ||
-			selector == this.setCommitment.selector ||
-			selector == this.setCommitmentWithReport.selector ||
-			selector == this.claimEarnings.selector ||
-			selector == this.serveRetirement.selector ||
-			selector == this.materializeAuctionBid.selector;
 	}
 
 	function _takeOver(uint96 id, uint256 commitment, uint256 minimumAward, uint256 maximumOwnRep, TakeoverBounds memory bounds, bool enforceBounds, address receiverOwner) private returns (uint96 receiverId) {

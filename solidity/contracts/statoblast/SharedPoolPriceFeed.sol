@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { SecurityPoolCapitalLedger } from './SecurityPoolCapitalLedger.sol';
 import { IReportOperations } from './interfaces/IReportOperations.sol';
 import { IWeth9 } from './interfaces/IWeth9.sol';
 import { ISecurityPool, ISecurityPoolFactory } from './interfaces/ISecurityPool.sol';
@@ -394,6 +395,22 @@ contract SharedPoolPriceFeed {
 			emit PriceReportRejected(reportId, reason, pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas, lastPrice, lastSettlementTimestamp);
 	}
 
+	function _isReportOperation(bytes4 selector) private pure returns (bool) {
+		return
+			selector == SecurityPoolCapitalLedger.takeOver.selector ||
+			selector == SecurityPoolCapitalLedger.takeOverWithBounds.selector ||
+			selector == SecurityPoolCapitalLedger.takeOverAuctionBid.selector ||
+			selector == SecurityPoolCapitalLedger.depositFor.selector ||
+			selector == SecurityPoolCapitalLedger.depositAndSetHealthTarget.selector ||
+			selector == SecurityPoolCapitalLedger.withdrawPrincipal.selector ||
+			selector == SecurityPoolCapitalLedger.setHealthTarget.selector ||
+			selector == SecurityPoolCapitalLedger.setCommitment.selector ||
+			selector == SecurityPoolCapitalLedger.setCommitmentWithReport.selector ||
+			selector == SecurityPoolCapitalLedger.claimEarnings.selector ||
+			selector == SecurityPoolCapitalLedger.serveRetirement.selector ||
+			selector == SecurityPoolCapitalLedger.materializeAuctionBid.selector;
+	}
+
 	function _executeReportOperations(uint256 reportId, address sponsor) private {
 		IReportOperations.Batch storage batch = operationBatches[reportId];
 		if (batch.operations.length == 0) return;
@@ -408,10 +425,13 @@ contract SharedPoolPriceFeed {
 			if (
 				block.timestamp <= batch.deadline && lastPrice >= batch.minimumPrice && lastPrice <= batch.maximumPrice
 			) {
-				bytes memory data = abi.encodeCall(IReportOperations.executeReportOperation, (sponsor, operation.data));
-				uint256 operationGas = uint256(operation.gasLimit);
-				require(gasleft() > operationGas + Math.ceilDiv(operationGas, 63) + REPORT_OPERATION_GAS_OVERHEAD, 'Insufficient operation callback gas');
-				(success, ) = ledger.call{gas: operation.gasLimit}(data);
+				bytes memory ownerData = operation.data;
+				if (ownerData.length >= 4 && _isReportOperation(bytes4(ownerData))) {
+					bytes memory data = abi.encodeCall(IReportOperations.executeReportOperation, (sponsor, ownerData));
+					uint256 operationGas = uint256(operation.gasLimit);
+					require(gasleft() > operationGas + Math.ceilDiv(operationGas, 63) + REPORT_OPERATION_GAS_OVERHEAD, 'Insufficient operation callback gas');
+					(success, ) = ledger.call{gas: operation.gasLimit}(data);
+				}
 			}
 			emit ReportOperationAttempted(reportId, sponsor, index, success);
 		}
