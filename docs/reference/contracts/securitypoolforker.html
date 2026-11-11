@@ -16,7 +16,7 @@
 					<p class="lede">Routes shared-portfolio question forks and lazy child question preparation. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForker.sol">SecurityPoolForker source contract</a></p>
 				</header>
 				<h2 id="read-surface">Read surface</h2>
-				<p><code>zoltar</code> identifies the protocol root. <code>getQuestionOutcome</code> returns the fixed or finalized question outcome, or None while unresolved; the shared logical clock protects pre-fork final claims.</p>
+				<p><code>zoltar</code> identifies the protocol root. <code>getQuestionOutcome</code> returns the fixed or finalized question outcome, or None while unresolved; the shared portfolio clock protects pre-fork final claims.</p>
 				<h2 id="child-game-trust-boundary">Child-game trust boundary</h2>
 				<p>The immutable delegate is validated against Zoltar at deployment. Portfolio paths authenticate the source question through its factory namespace and central books before changing capital or installing claims. Caller-supplied module addresses are never used as delegate targets.</p>
 				<h2 id="interactions">State-changing interactions</h2>
@@ -45,7 +45,7 @@
 							<td><code>materializePortfolioQuestion(source, targetUniverse)</code><wbr /></td>
 							<td>Anyone</td>
 							<td>The preparation guards apply. A target whose native universe has already forked can activate only a protected final reporter or trader claim owned by that universe. Already operational targets return without duplicate installation.</td>
-							<td>Prepares the target if absent. With inherited reporting, installs one outcome of the fixed 64-peak snapshot per call; the third call activates the question and resumes reporting at the fixed logical-clock anchor. Without reporter history, activates immediately. Late installation does not postpone finality. An already-final game must agree with the inherited reporter and outstanding-share settlement deadlines, including the minimum response period, or activation reverts. Preparation may be a separate transaction to bound deployment gas.</td>
+							<td>Prepares the target if absent. With inherited reporting, installs one outcome of the fixed 64-peak snapshot per call; the third call activates the question and resumes reporting at the fixed portfolio time anchor. Without reporter history, activates immediately. Late installation does not postpone finality. An already-final game must agree with the inherited reporter and outstanding-share settlement deadlines, including the minimum response period, or activation reverts. Preparation may be a separate transaction to bound deployment gas.</td>
 							<td>Canonical deployment events when needed, then game continuation and carry checkpoint events when a reporter game is installed.</td>
 						</tr>
 						<tr>

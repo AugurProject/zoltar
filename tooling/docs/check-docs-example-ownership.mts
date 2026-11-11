@@ -16,7 +16,7 @@ async function assertExplanationPagesDelegateToReference(): Promise<void> {
 	const escalationGameHtml = await readFile('docs/explanation/escalation-game.html', 'utf8')
 	const feesHtml = await readFile('docs/explanation/fees.html', 'utf8')
 	const liquidationsHtml = await readFile('docs/explanation/liquidations.html', 'utf8')
-	const truthAuctionsHtml = await readFile('docs/explanation/truth-auctions.html', 'utf8')
+	const collateralRepairAuctionsHtml = await readFile('docs/explanation/collateral-repair-auctions.html', 'utf8')
 	assert.match(escalationGameHtml, /href="\.\.\/reference\/merkle-mountain-range\.html"/)
 	assert.match(escalationGameHtml, /href="\.\.\/reference\/contracts\/escalationgame\.html#winning-deposit-payout"/, 'escalation explanation must delegate the exact payout to the EscalationGame reference')
 	assert.match(escalationGameHtml, /href="\.\.\/reference\/contracts\/escalationgame\.html#required-support-threshold"/, 'escalation explanation must delegate the attrition curve to the EscalationGame reference')
@@ -24,8 +24,8 @@ async function assertExplanationPagesDelegateToReference(): Promise<void> {
 	assert.match(feesHtml, /href="\.\.\/reference\/contract-inventory\.html#portfolio-underwriting"/, 'fees explanation must delegate fee configuration to the portfolio reference')
 	assert.doesNotMatch(feesHtml, /class="equation"/, 'fees explanation must not repeat the annualization formula')
 	assert.match(liquidationsHtml, /href="\.\.\/reference\/contract-inventory\.html#portfolio-liquidation"/, 'liquidation explanation must delegate liquidation details to the portfolio reference')
-	assert.match(truthAuctionsHtml, /href="\.\.\/reference\/contract-inventory\.html#portfolio-truth-auction"/, 'truth auction explanation must delegate lot pricing to the portfolio auction reference')
-	assert.doesNotMatch(truthAuctionsHtml, /class="equation"/, 'truth auction explanation must not repeat the auction allocation formula')
+	assert.match(collateralRepairAuctionsHtml, /href="\.\.\/reference\/contract-inventory\.html#portfolio-collateral-repair-auction"/, 'collateral repair auction explanation must delegate lot pricing to the portfolio auction reference')
+	assert.doesNotMatch(collateralRepairAuctionsHtml, /class="equation"/, 'collateral repair auction explanation must not repeat the auction allocation formula')
 }
 
 const SOLIDITY_TIME_UNIT_SECONDS: Record<string, bigint> = { seconds: 1n, minutes: 60n, hours: 3_600n, days: 86_400n, weeks: 604_800n }

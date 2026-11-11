@@ -125,7 +125,7 @@ describe('TransactionActionButton', () => {
 				availability={{
 					disabled: true,
 					loading: true,
-					reason: 'Loading truth auction status…',
+					reason: 'Loading collateral repair auction status…',
 				}}
 				idleLabel='Submit bid'
 				onClick={() => undefined}
@@ -136,7 +136,7 @@ describe('TransactionActionButton', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const loadingStatus = within(document.body).getByRole('status')
-		expect(loadingStatus.textContent).toContain('Loading truth auction status…')
+		expect(loadingStatus.textContent).toContain('Loading collateral repair auction status…')
 		expect(loadingStatus.querySelector('.spinner')).not.toBeNull()
 	})
 

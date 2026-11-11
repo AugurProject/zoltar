@@ -126,7 +126,7 @@ Simulation mode details:
 - Production users should treat any `?simulate=1` URL as a local sandbox. Simulated balances, deployments, blocks, quotes, and transactions are local to the browser and are not evidence of mainnet state.
 - Every app supports `simScenario=baseline` and `simScenario=deployed`. The other seeded scenarios are app-specific:
   - Zoltar: `two-questions` and `forked-categorical`
-  - Statoblast: `portfolio`, `portfolio-auction`, `security-pool`, `securitypoolx2`, `securitypoolx2-auction`, `finalized-truth-auction`, `ended-pool-commitment`, `escalation-in-progress`, `liquidation-distance`, and `near-minimum-vault`
+  - Statoblast: `portfolio`, `portfolio-auction`, `security-pool`, `securitypoolx2`, `securitypoolx2-auction`, `finalized-collateral-repair-auction`, `ended-pool-commitment`, `escalation-in-progress`, `liquidation-distance`, and `near-minimum-vault`
   - Trading: `trading-funded` and `trading-forked`
 - The live simulation chain is ephemeral and exists only in the current browser tab session; only states explicitly saved from the simulation banner persist in browser storage
 - Serve commands prepare a snapshot of every scenario (`bun run ui:snapshots <app>` does it on its own, `bun run ui:snapshots:check` reports whether they are current), so opening a scenario restores its seeded chain in about a second instead of replaying the seeding. The watch rebuild removes the snapshots whenever a source behind the simulation changes, the serve and watch commands regenerate stale ones before serving, and the production build ships only snapshots that match the current sources; without them the app seeds live

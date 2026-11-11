@@ -99,7 +99,8 @@ test('vault binding rejects another owner, fork route, initial ledger, bid or co
 		[auction, 'bidIdForVault', 4n],
 		[capital, 'portfolio', token],
 		[modules.auctionDelegate, 'ledger', token],
-		[index, 'portfolio', token],
+		[index, 'capitalLedger', token],
+		[modules.fees, 'capitalLedger', token],
 		[capital, 'services', token],
 		[portfolio, 'auctionDeployer', token],
 	] as const) {

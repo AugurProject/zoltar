@@ -6,6 +6,7 @@ test('custody authentication and bounded accounting pin every read to one mined 
 	const fixture = capitalClient(capitalSnapshot({ questionCount: 10_000n }))
 	const snapshot = await loadPortfolioAccount(fixture.client, portfolio, owner, 0n)
 	expect(snapshot.positions).toHaveLength(1)
+	expect(fixture.reads.filter(read => read.name === 'capitalLedger' && read.args === undefined)).toHaveLength(2)
 	expect(snapshot.questions).toHaveLength(64)
 	expect(new Set(fixture.reads.map(read => read.blockNumber))).toEqual(new Set([10n]))
 	expect(fixture.reads.length).toBeLessThan(86)

@@ -14,7 +14,7 @@ import '../SecurityPoolPortfolioSettlement.sol';
 interface IShareTokenPortfolioForkAuthority {
 	function forkController() external view returns (address);
 	function settlement() external view returns (SecurityPoolPortfolioSettlement);
-	function forkLogicalTime(uint248 universeId) external view returns (uint48);
+	function forkPortfolioTime(uint248 universeId) external view returns (uint48);
 }
 
 /**
@@ -264,7 +264,7 @@ contract ShareToken is ERC1155, IShareToken {
 		IShareTokenPortfolioForkAuthority portfolio = IShareTokenPortfolioForkAuthority(source.securityPoolFactory().getSecurityPoolPortfolio(source));
 		SecurityPoolPortfolioSettlement settlement = portfolio.settlement();
 		return
-			settlement.ledger().hasLiveForkRecoveryRight(settlement.bookIds(sourceUniverse), source.questionId(), portfolio.forkLogicalTime(sourceUniverse));
+			settlement.ledger().hasLiveForkRecoveryRight(settlement.bookIds(sourceUniverse), source.questionId(), portfolio.forkPortfolioTime(sourceUniverse));
 	}
 
 	/// @notice Transfer only the caller's recovery rights; all source and child share balances stay intact.

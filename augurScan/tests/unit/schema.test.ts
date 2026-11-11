@@ -30,17 +30,24 @@ test('records every applied migration version when upgrading an older schema', (
 		['3', '003-indexer-ownership.sql'],
 		['4', '004-question-seconds.sql'],
 		['5', '005-invalidation-counts.sql'],
+		['6', '006-collateral-repair-auctions.sql'],
 	])
 	expect(versions('2')).toEqual([
 		['3', '003-indexer-ownership.sql'],
 		['4', '004-question-seconds.sql'],
 		['5', '005-invalidation-counts.sql'],
+		['6', '006-collateral-repair-auctions.sql'],
 	])
 	expect(versions('3')).toEqual([
 		['4', '004-question-seconds.sql'],
 		['5', '005-invalidation-counts.sql'],
+		['6', '006-collateral-repair-auctions.sql'],
 	])
-	expect(versions('4')).toEqual([['5', '005-invalidation-counts.sql']])
+	expect(versions('4')).toEqual([
+		['5', '005-invalidation-counts.sql'],
+		['6', '006-collateral-repair-auctions.sql'],
+	])
+	expect(versions('5')).toEqual([['6', '006-collateral-repair-auctions.sql']])
 	expect(versions(CURRENT_SCHEMA_VERSION)).toEqual([])
 	expect(pendingSchemaMigrations('1').at(-1)?.version).toBe(CURRENT_SCHEMA_VERSION)
 })
@@ -229,4 +236,18 @@ test('retains historical date fingerprints and v3 ownership during migration', a
 	for (const version of ['1', '2', '3'] as const) expect(expectedSchemaLayout(schema, version).columns).toContain('questions.start_time|timestamp with time zone|not-null||')
 	expect(expectedSchemaLayout(schema, '3').relations).toContain('table:indexer_ownership')
 	expect(expectedSchemaLayout(schema, CURRENT_SCHEMA_VERSION).columns).toContain('questions.start_time|bigint|not-null||')
+})
+
+test('upgrades version 5 auction names while fingerprinting its existing layout', async () => {
+	expect(schemaInitializationAction('5', ['augurscan_schema', 'networks'])).toBe('migrate-from-5')
+	const schema = await Bun.file(new URL('../../schema.sql', import.meta.url)).text()
+	const previous = expectedSchemaLayout(schema, '5')
+	const current = expectedSchemaLayout(schema, CURRENT_SCHEMA_VERSION)
+	expect(previous.relations).toContain('table:truth_auction_events')
+	expect(previous.columns.some(column => column.startsWith('pools.truth_auction_address|'))).toBe(true)
+	expect(previous.columns.some(column => column.startsWith('chain_reorganizations.occurrence_counts|'))).toBe(true)
+	expect(current.relations).toContain('table:collateral_repair_auction_events')
+	expect(current.relations).not.toContain('table:truth_auction_events')
+	expect(current.columns.some(column => column.startsWith('pools.collateral_repair_auction_address|'))).toBe(true)
+	expect(pendingSchemaMigrations('5').map(migration => migration.file)).toEqual(['006-collateral-repair-auctions.sql'])
 })

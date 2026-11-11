@@ -3,8 +3,8 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="description" content="A single-page explainer for pull request #1164: shared security pools (portfolios) that let many questions share REP custody and underwriting capacity, and the redesigned uniform-price Truth Auction." />
-		<title>Shared security pools and uniform-price Truth Auctions · PR #1164 explainer</title>
+		<meta name="description" content="A single-page explainer for pull request #1164: shared security pools (portfolios) that let many questions share REP custody and underwriting capacity, and the redesigned uniform-price Collateral Repair Auction." />
+		<title>Shared security pools and uniform-price Collateral Repair Auctions · PR #1164 explainer</title>
 		<style>
 			:root {
 				--bg: #fbfbf9;
@@ -415,8 +415,8 @@
 		<main>
 			<header class="page">
 				<p class="kicker">Design explainer · pull request #1164</p>
-				<h1>Shared security pools and uniform-price Truth Auctions</h1>
-				<p class="lede">Pull request <a href="https://github.com/AugurProject/zoltar/pull/1164">#1164</a> lets many Statoblast questions share one pool of REP security and one set of underwriting commitments, instead of each question running its own isolated SecurityPool. It also rebuilds the post-fork Truth Auction as a uniform-price auction of whole ETH lots whose winners automatically become funded capital providers. This page explains what the change does, how the new system works, the math and incentives behind it, and where its weak points are. It closes with the page author's assessment of the pull request and concrete suggestions for improving it.</p>
+				<h1>Shared security pools and uniform-price Collateral Repair Auctions</h1>
+				<p class="lede">Pull request <a href="https://github.com/AugurProject/zoltar/pull/1164">#1164</a> lets many Statoblast questions share one pool of REP security and one set of underwriting commitments, instead of each question running its own isolated SecurityPool. It also rebuilds the post-fork Collateral Repair Auction as a uniform-price auction of whole ETH lots whose winners automatically become funded capital providers. This page explains what the change does, how the new system works, the math and incentives behind it, and where its weak points are. It closes with the page author's assessment of the pull request and concrete suggestions for improving it.</p>
 				<ul class="meta">
 					<li>Branch <code>t3code/multi-question-security-pool</code> → <code>main</code></li>
 					<li>Contracts, SDK, Statoblast and Trading UIs, bots, scanner, deployment tooling and documentation change together</li>
@@ -428,7 +428,7 @@
 						<li><a href="#problem">The problem: fragmented security</a></li>
 						<li><a href="#overview">The new system at a glance</a></li>
 						<li><a href="#lifecycle">How a portfolio works, step by step</a></li>
-						<li><a href="#forks">Forks and the Truth Auction</a></li>
+						<li><a href="#forks">Forks and the Collateral Repair Auction</a></li>
 						<li><a href="#game-theory">Game theory and incentives</a></li>
 						<li><a href="#scaling">Why it scales: trees instead of scans</a></li>
 						<li><a href="#changes">What the pull request changes, layer by layer</a></li>
@@ -442,16 +442,16 @@
 
 			<section id="summary">
 				<h2>1. The change in one minute</h2>
-				<p>Statoblast is Augur's market layer on top of the Zoltar oracle. Before this pull request, every question had its own SecurityPool: its own vaults holding REP, its own ETH collateral, its own fee curve, its own REP/ETH price coordinator and, after a fork, its own Truth Auction. A REP holder who wanted to secure twenty questions had to run twenty vaults and pay for twenty price reports.</p>
+				<p>Statoblast is Augur's market layer on top of the Zoltar oracle. Before this pull request, every question had its own SecurityPool: its own vaults holding REP, its own ETH collateral, its own fee curve, its own REP/ETH price coordinator and, after a fork, its own Collateral Repair Auction. A REP holder who wanted to secure twenty questions had to run twenty vaults and pay for twenty price reports.</p>
 				<p>After this pull request, a <strong>portfolio</strong> holds REP once per universe in a <strong>capital ledger</strong>, and every question registered in the portfolio draws on that same backing. A provider deposits REP, picks a personal <strong>health target</strong>, and sets one ETH <strong>commitment</strong>. A buyer picks a question and an amount; the portfolio checks that total <strong>demand</strong> (ETH liabilities) stays within the <strong>healthy commitment</strong> of all providers, mints the complete set (one Invalid, one Yes and one No share per unit of ETH), and charges a fee made of a backing fee for providers and a prepaid resolution premium. Each question keeps its own outcome tokens, its own Escalation Game (the REP-staked dispute process that resolves a question locally) and separate settlement accounting, but ETH custody and fee bookkeeping are centralized in a <strong>settlement book</strong>.</p>
-				<p>The pull request also replaces per-vault liquidation with two actions: the owner's own <strong>cure</strong> (at a fresh price, lowering the commitment removes unbacked commitment at once, within unused commitment and never below the new value, for no reward) and a permissionless <strong>takeover</strong> (take over a distressed commitment for a time-ramped REP award), and redesigns the <strong>Truth Auction</strong> that repairs a branch's ETH shortfall after a fork: bids are whole ETH lots with a minimum REP-per-lot limit, every winning lot receives the same clearing REP amount, provably losing bids can be refunded before closing, in one transaction if the bidder wants, and all sold REP enters capital custody immediately so winners never need to claim. Each bid's vault is a cheap clone of one shared implementation, with the bidder, ledger, auction and bid number fixed in its own code.</p>
+				<p>The pull request also replaces per-vault liquidation with two actions: the owner's own <strong>cure</strong> (at a fresh price, lowering the commitment removes unbacked commitment at once, within unused commitment and never below the new value, for no reward) and a permissionless <strong>takeover</strong> (take over a distressed commitment for a time-ramped REP award), and redesigns the <strong>Collateral Repair Auction</strong> that repairs a branch's ETH shortfall after a fork: bids are whole ETH lots with a minimum REP-per-lot limit, every winning lot receives the same clearing REP amount, provably losing bids can be refunded before closing, in one transaction if the bidder wants, and all sold REP enters capital custody immediately so winners never need to claim. Each bid's vault is a cheap clone of one shared implementation, with the bidder, ledger, auction and bid number fixed in its own code.</p>
 				<p>No shared pot pays for upkeep. Whoever needs a fresh price pays for it, an owner pays for their own cure, and ETH that no current underwriter has earned and whose payer is not recorded, such as income from unhealthy or stale intervals and unused premiums, is burned rather than refunded, with one fork-time exception described in <a href="#fork-choice">5.2</a>. Reporters are paid only under the Escalation Game's own REP rules; the portfolio adds no ETH reward.</p>
 				<p>Everything is built so that no operation iterates over all questions, owners or bidders: commitments live in balanced trees keyed by health, fees vest through cumulative integrals, and forks copy immutable roots instead of migrating each vault.</p>
 			</section>
 
 			<section id="problem">
 				<h2>2. The problem: fragmented security</h2>
-				<p>Before this PR, each standalone SecurityPool was an island. A vault owner deposits REP into a specific pool and sets an underwriting commitment there. The pool can mint complete sets only up to the sum of its vault commitments, charges an open-interest fee that depends on that pool's utilization, and requires its own fresh REP/ETH price for any solvency-sensitive step. When the universe forks, each pool migrates its vaults one by one and each child pool runs its own Truth Auction, in which winners must come back later to claim a vault.</p>
+				<p>Before this PR, each standalone SecurityPool was an island. A vault owner deposits REP into a specific pool and sets an underwriting commitment there. The pool can mint complete sets only up to the sum of its vault commitments, charges an open-interest fee that depends on that pool's utilization, and requires its own fresh REP/ETH price for any solvency-sensitive step. When the universe forks, each pool migrates its vaults one by one and each child pool runs its own Collateral Repair Auction, in which winners must come back later to claim a vault.</p>
 				<p>Three costs follow from that isolation:</p>
 				<ul>
 					<li><strong>Idle capital.</strong> REP locked in a quiet question cannot back a busy one. Underwriting capacity is wherever it happened to be deposited, not where demand is.</li>
@@ -483,19 +483,28 @@
 						<text x="80" y="205" text-anchor="middle" class="lbl-small">fee curve</text>
 						<text x="80" y="225" text-anchor="middle" class="lbl-small">price coordinator</text>
 						<text x="80" y="245" text-anchor="middle" class="lbl-small">escalation game</text>
-						<text x="80" y="265" text-anchor="middle" class="lbl-small">own Truth Auction</text>
+						<text x="80" y="265" text-anchor="middle" class="lbl-small">
+							<tspan x="80">own collateral</tspan>
+							<tspan x="80" dy="15">repair auction</tspan>
+						</text>
 						<text x="220" y="165" text-anchor="middle" class="lbl-small">vaults + REP</text>
 						<text x="220" y="185" text-anchor="middle" class="lbl-small">ETH collateral</text>
 						<text x="220" y="205" text-anchor="middle" class="lbl-small">fee curve</text>
 						<text x="220" y="225" text-anchor="middle" class="lbl-small">price coordinator</text>
 						<text x="220" y="245" text-anchor="middle" class="lbl-small">escalation game</text>
-						<text x="220" y="265" text-anchor="middle" class="lbl-small">own Truth Auction</text>
+						<text x="220" y="265" text-anchor="middle" class="lbl-small">
+							<tspan x="220">own collateral</tspan>
+							<tspan x="220" dy="15">repair auction</tspan>
+						</text>
 						<text x="360" y="165" text-anchor="middle" class="lbl-small">vaults + REP</text>
 						<text x="360" y="185" text-anchor="middle" class="lbl-small">ETH collateral</text>
 						<text x="360" y="205" text-anchor="middle" class="lbl-small">fee curve</text>
 						<text x="360" y="225" text-anchor="middle" class="lbl-small">price coordinator</text>
 						<text x="360" y="245" text-anchor="middle" class="lbl-small">escalation game</text>
-						<text x="360" y="265" text-anchor="middle" class="lbl-small">own Truth Auction</text>
+						<text x="360" y="265" text-anchor="middle" class="lbl-small">
+							<tspan x="360">own collateral</tspan>
+							<tspan x="360" dy="15">repair auction</tspan>
+						</text>
 						<path d="M 80 70 L 80 118" class="arrow"></path>
 						<path d="M 220 70 L 220 118" class="arrow"></path>
 						<path d="M 360 70 L 360 118" class="arrow"></path>
@@ -580,7 +589,7 @@
 							</tr>
 							<tr>
 								<td><strong>Auction bidder</strong></td>
-								<td>ETH in whole lots during a branch's Truth Auction</td>
+								<td>ETH in whole lots during a branch's Collateral Repair Auction</td>
 								<td>Child REP at a uniform clearing amount per lot and an automatically funded vault</td>
 								<td>Ordinary provider risk in the chosen branch; nothing if the bid loses, since losing ETH is refunded</td>
 							</tr>
@@ -591,7 +600,7 @@
 				<p>The portfolio is a hub with a small number of modules, each deployed once per portfolio or once per universe. The hub holds configuration and routes authenticated callbacks; the modules hold assets or accounting, never both for the same thing.</p>
 				<figure id="fig-contract-map">
 					<svg viewBox="0 0 900 470" role="img" aria-labelledby="fig-contract-map-title">
-						<title id="fig-contract-map-title">Contract map: the portfolio hub deploys a capital ledger per universe, the central settlement, services, the reporter ledger, the fork coordinator and the shared price feed; the fork coordinator deploys one branch Truth Auction, which deploys one vault per bid.</title>
+						<title id="fig-contract-map-title">Contract map: the portfolio hub deploys a capital ledger per universe, the central settlement, services, the reporter ledger, the fork coordinator and the shared price feed; the fork coordinator deploys one branch Collateral Repair Auction, which deploys one vault per bid.</title>
 						<rect x="290" y="20" width="320" height="56" rx="8" class="box-accent"></rect>
 						<text x="450" y="43" text-anchor="middle" class="lbl-title">SecurityPoolPortfolio (hub)</text>
 						<text x="450" y="62" text-anchor="middle" class="lbl-small">admission policy · economics · question registry</text>
@@ -679,7 +688,7 @@
 							</tr>
 							<tr>
 								<td><code>minimumCommitmentAttoEth</code></td>
-								<td>Smallest commitment, smallest retirement step, and the ETH lot size of the Truth Auction</td>
+								<td>Smallest commitment, smallest retirement step, and the ETH lot size of the Collateral Repair Auction</td>
 								<td>Setting a commitment, retirement, cures, auction bids</td>
 							</tr>
 							<tr>
@@ -1151,14 +1160,14 @@
 			</section>
 
 			<section id="forks">
-				<h2>5. Forks and the Truth Auction</h2>
+				<h2>5. Forks and the Collateral Repair Auction</h2>
 				<p>A fork is Zoltar's last resort: when an Escalation Game cannot decide, the universe splits into one child per outcome and every REP holder picks the child they believe is true. Statoblast must then move each question's security into the children. In the former standalone design each vault owner migrated per pool and each child pool auctioned REP to repair its missing ETH. The portfolio does this once per universe.</p>
 
 				<h3 id="fork-schedule">5.1 A fixed schedule</h3>
 				<p>The pull request adds three constants to Zoltar so that every participant can compute every deadline from the fork time alone, and so that nobody can extend a window by being slow:</p>
 				<figure id="fig-fork-timeline">
 					<svg viewBox="0 0 900 200" role="img" aria-labelledby="fig-fork-timeline-title">
-						<title id="fig-fork-timeline-title">Timeline: eight weeks of branch choice after the fork, one week of recapitalization in which the branch Truth Auction runs and closes, then a one-week response period before a child may itself fork.</title>
+						<title id="fig-fork-timeline-title">Timeline: eight weeks of branch choice after the fork, one week of recapitalization in which the branch Collateral Repair Auction runs and closes, then a one-week response period before a child may itself fork.</title>
 						<line x1="60" y1="110" x2="840" y2="110" class="axis"></line>
 						<rect x="60" y="80" width="560" height="30" class="band-ok"></rect>
 						<rect x="620" y="80" width="70" height="30" class="band-neutral"></rect>
@@ -1180,7 +1189,7 @@
 						<text x="760" y="196" text-anchor="start" class="lbl-small">child may fork</text>
 						<text x="60" y="40" class="lbl-title">Fork schedule fixed by Zoltar constants</text>
 					</svg>
-					<figcaption><strong>Figure 8. The fork clock.</strong> Choice ends eight weeks after the fork, the branch Truth Auction closes one week later, and a child universe cannot itself fork until one further week has passed. Late preparation never moves these dates.</figcaption>
+					<figcaption><strong>Figure 8. The fork clock.</strong> Choice ends eight weeks after the fork, the branch Collateral Repair Auction closes one week later, and a child universe cannot itself fork until one further week has passed. Late preparation never moves these dates.</figcaption>
 				</figure>
 
 				<h3 id="fork-choice">5.2 Freeze, choose, migrate</h3>
@@ -1204,12 +1213,12 @@
 					</math>
 					<p class="equation-caption">Excess personal collateral cannot pull more ETH into a branch than its owners committed to underwrite. The premium book splits by the same ratio; premium that elapses while a child is being prepared is burned. After the choice deadline a holder of a live question's complete sets can recover the unchosen share of its cash from the parent, and the matching share of its remaining premium comes back with it: this is the one path on which unused premium returns to a share holder instead of being burned. Each branch inherits <em>all</em> of the parent's question liabilities, so the shortfall is exactly the cash the non-choosing owners were underwriting.</p>
 				</div>
-				<p>After the choice deadline anyone can <em>start</em> a branch. Zoltar migrates the frozen backing REP plus live recovery REP into the child as child REP; the branch's chosen backing goes to its capital ledger, and the frozen backing of owners who chose another branch or did not choose at all becomes the branch's <strong>fresh inventory</strong>. If the branch has outstanding question units, fresh inventory and a shortfall of at least one minimum commitment, the coordinator deploys a <strong>branch Truth Auction</strong> and hands it the inventory. Older recovery REP from previous forks never enters the auction; it stays with the claims that already own it.</p>
+				<p>After the choice deadline anyone can <em>start</em> a branch. Zoltar migrates the frozen backing REP plus live recovery REP into the child as child REP; the branch's chosen backing goes to its capital ledger, and the frozen backing of owners who chose another branch or did not choose at all becomes the branch's <strong>fresh inventory</strong>. If the branch has outstanding question units, fresh inventory and a shortfall of at least one minimum commitment, the coordinator deploys a <strong>branch Collateral Repair Auction</strong> and hands it the inventory. Older recovery REP from previous forks never enters the auction; it stays with the claims that already own it.</p>
 				<div class="callout warn">
 					<p><strong>Missing the cutoff is costly.</strong> An owner who does not choose within eight weeks loses their pledged principal's branch fallback: that REP becomes unchosen backing in each branch. It can be auctioned to repair outstanding claims, retained for recovery, or burned when no question units remain. Their idle principal and already-earned fees remain separately claimable from the parent ledger.</p>
 				</div>
 
-				<h3 id="auction">5.3 The Truth Auction: uniform-price lots</h3>
+				<h3 id="auction">5.3 The Collateral Repair Auction: uniform-price lots</h3>
 				<p>The auction sells fresh inventory REP for ETH to repair the shortfall, and nothing else. It does not select truth: it sells REP of a child universe that already exists. Its design differs from the standalone tick auction in almost every detail, so it is worth stating the whole mechanism.</p>
 				<h4>Units</h4>
 				<p>The ETH side is denominated in whole <strong>lots</strong>, each equal to the portfolio's minimum commitment. The REP side is denominated in a <strong>grid</strong> that makes the per-lot collateral divide exactly for any number of lots:</p>
@@ -1542,7 +1551,7 @@
 										<li>A new Portfolios tab with portfolio deployment (Open or Fixed admission, every economics field) and the four setup stages.</li>
 										<li>Capital: shared backing and personal capital views, deposit, health target, raising and retiring (both sent as <code>setCommitment</code>), surplus withdrawal, earnings claims.</li>
 										<li>Questions: registration and complete-set purchase with a bounded quote. The reporting-budget setting and the reporting-reward claim panel of earlier revisions are gone since <code>340d802f1</code>.</li>
-										<li>Forks: branch choice, cash recovery, branch price-report funding, and the branch Truth Auction with bidding, early refund credit, separate or combined credit-and-withdrawal, and vault split-out.</li>
+										<li>Forks: branch choice, cash recovery, branch price-report funding, and the branch Collateral Repair Auction with bidding, early refund credit, separate or combined credit-and-withdrawal, and vault split-out.</li>
 										<li>Walletless scenarios seed the origin universe (<code>simScenario=portfolio</code>) and an open branch auction (<code>simScenario=portfolio-auction</code>: the portfolio forked on its first question, the Yes branch started, one winning, one excluded and one rival bid); split-out and runoff still need the auction to be closed. Both scenarios open from prepared snapshots when the build has current ones (see the simulation tooling row).</li>
 									</ul>
 								</td>
@@ -1741,7 +1750,7 @@
 					<dd>The per-universe contract that accepts one REP/ETH report at a time for the whole portfolio and sizes report funding by aggregate exposure.</dd>
 					<dt>Branch, fresh inventory, shortfall</dt>
 					<dd>A child universe's portfolio state after a fork; the REP of owners who did not choose that branch; and the question cash the branch did not receive through choices.</dd>
-					<dt>Truth Auction (branch Truth Auction)</dt>
+					<dt>Collateral Repair Auction (branch Collateral Repair Auction)</dt>
 					<dd>The per-branch uniform-price auction that sells a branch's fresh inventory REP for ETH to repair its shortfall after a fork. It never selects truth.</dd>
 					<dt>Lot, grid</dt>
 					<dd>The auction's ETH unit, equal to the minimum commitment, and its REP rounding unit, derived from the security multiplier.</dd>

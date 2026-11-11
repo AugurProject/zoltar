@@ -73,7 +73,7 @@ export const liveCopy = {
 	operational,
 	poolForked: 'Security pool forked',
 	forkMigration: 'Fork migration',
-	forkTruthAuction: 'Fork truth auction',
+	forkCollateralRepairAuction: 'Fork collateral repair auction',
 	unresolvedOutcome: 'None (unresolved)',
 	neverInitializedDetail: 'This market was never created, so it has no price.',
 	addFirstLiquidity: initializeLiquidityAction,

@@ -175,7 +175,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 	const auctionClaims = operationsPanel(
 		'Auction interactions',
 		(item.auction_claims ?? []).map(claim => operationRow(String(claim['type'] ?? 'Auction position'), `${semanticSummary({ event_data: claim['data'] }, itemNativeSymbol)}`, String(claim['entity'] ?? ''), claim['blockNumber'])),
-		'No truth-auction interactions are associated with this address.',
+		'No collateral-repair-auction interactions are associated with this address.',
 	)
 	const lpPositions = operationsPanel(
 		'AMM liquidity positions',

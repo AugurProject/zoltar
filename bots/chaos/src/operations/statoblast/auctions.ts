@@ -29,7 +29,7 @@ export function auctionDefinition(kind: 'bid' | 'withdraw-refund'): OperationDef
 	}
 	return {
 		id,
-		label: 'Bid in portfolio truth auction',
+		label: 'Bid in portfolio collateral repair auction',
 		method: 'submitBid',
 		contract: 'SecurityPoolPortfolioAuction',
 		classification: 'selectable',
@@ -45,7 +45,7 @@ export function auctionDefinition(kind: 'bid' | 'withdraw-refund'): OperationDef
 			return planBase({
 				definitionId: id,
 				ecosystem: 'statoblast',
-				label: 'Bid in portfolio truth auction',
+				label: 'Bid in portfolio collateral repair auction',
 				metadata: { auction: auction.address, lots: terms.lots.toString(), minimumAttoRepPerLot: terms.minimum.toString(), healthFactorBps: terms.health.toString() },
 				deadlineTimestamp: auction.endTime,
 				postconditions: ['The engine records a funded bid and its dedicated owner vault'],
@@ -61,7 +61,7 @@ type LifecycleKind = 'open' | 'finalize' | 'settle' | 'early-refund' | 'withdraw
 function auctionLifecycle(kind: LifecycleKind): OperationDefinition {
 	const id = { open: 'statoblast.auction.start', finalize: 'statoblast.auction.finalize-route', settle: 'statoblast.auction.settle-bids', 'early-refund': 'statoblast.auction.refund', withdraw: 'statoblast.auction.withdraw-refund' }[kind]
 	const method = { open: 'open', finalize: 'finalizeBranch', settle: 'settleRefund', 'early-refund': 'settleRefund', withdraw: 'withdrawRefunds' }[kind]
-	const label = { open: 'Open portfolio truth auction', finalize: 'Finalize portfolio branch auction', settle: 'Settle auction bid refund', 'early-refund': 'Refund provably losing bid', withdraw: 'Withdraw auction ETH refund' }[kind]
+	const label = { open: 'Open portfolio collateral repair auction', finalize: 'Finalize portfolio branch auction', settle: 'Settle auction bid refund', 'early-refund': 'Refund provably losing bid', withdraw: 'Withdraw auction ETH refund' }[kind]
 	function candidates(snapshot: EcosystemSnapshot, options?: PlanningOptions) {
 		const now = amount(snapshot.anchor.timestamp)
 		return snapshot.auctions.flatMap<{ auction: AuctionSnapshot; bidId: string | undefined }>(auction => {
@@ -114,7 +114,7 @@ function auctionLifecycle(kind: LifecycleKind): OperationDefinition {
 	}
 }
 
-export const startTruthAuction = auctionLifecycle('open')
-export const finalizeTruthAuctionRoute = auctionLifecycle('finalize')
+export const startCollateralRepairAuction = auctionLifecycle('open')
+export const finalizeCollateralRepairAuctionRoute = auctionLifecycle('finalize')
 export const settleAuctionBids = auctionLifecycle('settle')
 export const refundLosingAuctionBids = auctionLifecycle('early-refund')
