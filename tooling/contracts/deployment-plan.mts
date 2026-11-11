@@ -107,7 +107,7 @@ function getTradingDeploymentSteps(profile: NetworkProfile) {
 }
 
 /** Trading steps with the runtime code hashes pinned for this network and its kind of Uniswap deployment. */
-export function getTradingDeploymentPlan(profile: NetworkProfile, hashProfile: BootstrapDescendantHashProfile) {
+export function getPinnedTradingDeploymentSteps(profile: NetworkProfile, hashProfile: BootstrapDescendantHashProfile) {
 	return getTradingDeploymentSteps(profile).map(step => {
 		const expectedRuntimeCodeHash = EXPECTED_TRADING_RUNTIME_CODE_HASHES[hashProfile][profile.genesisOutcome][step.id]
 		if (expectedRuntimeCodeHash === undefined) throw new Error(`Trading step ${step.id} has no pinned ${hashProfile} runtime code hash`)
@@ -127,7 +127,7 @@ export function createCompleteDeploymentPlan(profile: NetworkProfile, uniswap: U
 	const protocolStepsWithExternalDependencies = protocolSteps.map(step => (step.id === 'openOracle' ? { ...step, dependencies: [...step.dependencies, 'permit2'] } : step))
 	const networkHashProfile = profile.id === 'mainnet' ? 'mainnet' : 'sepolia'
 	const hashProfile = uniswap.kind === 'deterministic' ? 'deterministic' : networkHashProfile
-	return [create2DeployerStep, permit2Step, proxyDeployerStep, ...uniswapQuoteSteps, zoltarOracleStep, ...protocolStepsWithExternalDependencies, ...getTradingDeploymentPlan(profile, hashProfile)].map(step => {
+	return [create2DeployerStep, permit2Step, proxyDeployerStep, ...uniswapQuoteSteps, zoltarOracleStep, ...protocolStepsWithExternalDependencies, ...getPinnedTradingDeploymentSteps(profile, hashProfile)].map(step => {
 		const deterministicHash = uniswap.kind === 'deterministic' ? DETERMINISTIC_WETH_DEPENDENT_RUNTIME_CODE_HASHES[profile.genesisOutcome][step.id] : undefined
 		if (deterministicHash !== undefined) return { ...step, expectedRuntimeCodeHash: deterministicHash }
 		if ('verifyRuntimeCode' in step && step.verifyRuntimeCode !== undefined) return step

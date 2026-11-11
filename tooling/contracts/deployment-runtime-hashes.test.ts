@@ -5,7 +5,7 @@ import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot as loadStatoblas
 import { getGenesisNetworkProfile, MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE, getRuntimeNetworkProfile, setRuntimeNetworkProfile } from '../../ui/coreShared/ts/wallet/networkProfile.ts'
 import { createAnvilNodeForConnectionMode, type AnvilNode } from '../../solidity/ts/testSupport/simulator/anvilNode.ts'
 import { assertBootstrapDescendantCode, createPreparedDeploymentClient, deployTestnet, runDeploymentPlan } from './deploy-testnet.mts'
-import { createDualGenesisDeploymentPlan, getTradingDeploymentPlan } from './deployment-plan.mts'
+import { createDualGenesisDeploymentPlan, getPinnedTradingDeploymentSteps } from './deployment-plan.mts'
 import { getUniswapDeployment } from './uniswap-deployment.mts'
 
 const ANVIL_PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' satisfies Hex
@@ -127,7 +127,7 @@ test.each(['yes', 'no'] as const)(
 				rpcUrl: node.rpcUrl,
 			})
 			// Mainnet Trading pins are used only by a complete mainnet plan, which no testnet deployment builds, so they are checked here.
-			const results = await runDeploymentPlan([...getDeploymentSteps(profile), ...getTradingDeploymentPlan(profile, 'mainnet')], client, () => {})
+			const results = await runDeploymentPlan([...getDeploymentSteps(profile), ...getPinnedTradingDeploymentSteps(profile, 'mainnet')], client, () => {})
 			expect(results.every(result => result.status === 'deployed')).toBe(true)
 			expect(results.slice(-2).map(result => result.id)).toEqual(['tradingFactory', 'tradingRouter'])
 			await assertBootstrapDescendantCode(client, profile)
