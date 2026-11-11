@@ -421,6 +421,9 @@ describe('Solidity bytecode coverage helpers', () => {
 			}),
 			/Pool range count too large/,
 		)
+		assert.strictEqual(await client.readContract({ abi: factoryArtifact.abi, address: factoryAddress, functionName: 'portfolioCount' }), 0n)
+		await assert.rejects(client.readContract({ abi: factoryArtifact.abi, address: factoryAddress, functionName: 'portfoliosRange', args: [1n, 0n] }), /Portfolio range start out of bounds/)
+		await assert.rejects(client.readContract({ abi: factoryArtifact.abi, address: factoryAddress, functionName: 'portfoliosRange', args: [0n, 1n] }), /Portfolio range count too large/)
 		await assert.rejects(
 			client.writeContract({
 				abi: factoryArtifact.abi,

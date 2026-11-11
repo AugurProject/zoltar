@@ -28,6 +28,8 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	ISecurityPoolForker immutable securityPoolForker;
 	SecurityPoolDeployer immutable securityPoolDeployer;
 	SecurityPoolDeployment[] private securityPoolDeployments;
+	// Every caller that configured a portfolio namespace, in registration order.
+	address[] private portfolios;
 	struct PoolRegistration {
 		ISecurityPool pool;
 		bool claimed;
@@ -50,6 +52,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 
 	event DeploySecurityPool(ISecurityPool indexed securityPool, address collateralRepairAuction, OpenOraclePriceCoordinator openOraclePriceCoordinator, IShareToken shareToken, ISecurityPool indexed parent, uint248 indexed universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas, uint256 currentRetentionRate, uint256 settlementCollateralAttoEth);
 	event SecurityPoolRegistered(bytes32 indexed originId, bytes32 indexed poolId, uint248 indexed universeId, ISecurityPool securityPool);
+	event PortfolioRegistered(address indexed portfolio, uint248 indexed originUniverseId);
 
 	constructor(ISecurityPoolForker _securityPoolForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOracle _openOracle, Zoltar _zoltar, ShareTokenFactory _shareTokenFactory, OpenOraclePriceCoordinatorFactory _openOraclePriceCoordinatorFactory, address operationsDelegate, SecurityPoolEventEmitter eventEmitter) {
 		securityPoolForker = _securityPoolForker;
@@ -67,6 +70,19 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 
 	function securityPoolDeploymentCount() external view returns (uint256) {
 		return securityPoolDeployments.length;
+	}
+
+	function portfolioCount() external view returns (uint256) {
+		return portfolios.length;
+	}
+
+	function portfoliosRange(uint256 startIndex, uint256 count) external view returns (address[] memory page) {
+		require(startIndex <= portfolios.length, 'Portfolio range start out of bounds');
+		require(count <= portfolios.length - startIndex, 'Portfolio range count too large');
+		page = new address[](count);
+		for (uint256 index = 0; index < count; index++) {
+			page[index] = portfolios[startIndex + index];
+		}
 	}
 
 	function getSecurityPool(bytes32 originId, uint248 universeId) external view returns (ISecurityPool) {
@@ -192,6 +208,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	}
 
 	/// @notice Initialize a portfolio's oracle configuration without a standalone question pool.
+	/// @dev The first call registers the caller for enumeration; registration does not authenticate the portfolio.
 	function initializePortfolioPriceFeed(uint248 universeId, uint256 priorityFee) external returns (address) {
 		require(address(zoltar.getRepToken(universeId)) != address(0), 'Universe REP token missing');
 		require(zoltar.getForkTime(universeId) == 0, 'Origin universe forked');
@@ -199,6 +216,8 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		if (address(coordinator) == address(0)) {
 			coordinator = openOraclePriceCoordinatorFactory.deployOpenOraclePriceCoordinator(openOracle, zoltar.getRepToken(universeId), priorityFee, keccak256(abi.encode('Portfolio configuration', msg.sender)));
 			portfolioConfigurations[msg.sender] = coordinator;
+			portfolios.push(msg.sender);
+			emit PortfolioRegistered(msg.sender, universeId);
 		} else {
 			require(coordinator.initialReportPriorityFeeAttoEthPerGas() == priorityFee && address(coordinator.reputationToken()) == address(zoltar.getRepToken(universeId)), 'Portfolio configuration mismatch');
 		}

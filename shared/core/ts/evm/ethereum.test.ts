@@ -3343,6 +3343,39 @@ describe('shared ethereum compatibility layer', () => {
 		expect(responses).toHaveLength(0)
 	})
 
+	test('a multicall that allows failures still rejects when the request itself fails', async () => {
+		// Per-call failure entries cover only calls the node ran. Callers rely on a failed request rejecting, with the
+		// provider's error, to tell a provider problem from a failing call.
+		const multicall = (respond: () => Response) =>
+			createPublicClient({ chain: mainnet, transport: http('https://rpc.example.test', { fetchFn: async () => respond(), retryCount: 0, retryDelay: 0 }) }).multicall({
+				allowFailure: true,
+				contracts: [{ abi: [parseAbiItem('function balanceOf(address owner) view returns (uint256)')], address: TOKEN_ADDRESS, functionName: 'balanceOf', args: [TOKEN_ADDRESS] }],
+				multicallAddress: MULTICALL_ADDRESS,
+			})
+		await expect(multicall(() => new Response('unavailable', { status: 503 }))).rejects.toMatchObject({ name: 'RpcError', code: 503 })
+		await expect(multicall(() => Response.json({ error: { code: -32_000, message: 'out of gas' }, id: 1, jsonrpc: '2.0' }))).rejects.toMatchObject({ name: 'RpcError', code: -32_000, message: 'out of gas' })
+	})
+
+	test('a node error a wallet wraps as JSON-RPC data stays in the rejection', async () => {
+		// MetaMask reports an upstream error as "Internal JSON-RPC error." with the node's own error as `data`; callers that
+		// tell a failing call from a provider problem look for it there.
+		const walletError = { code: -32_603, message: 'Internal JSON-RPC error.', data: { code: -32_000, message: 'out of gas' } }
+		const client = createPublicClient({
+			transport: custom(
+				createProvider(() => {
+					throw walletError
+				}, []),
+				{ retryCount: 0 },
+			),
+		})
+		const rejection = client.multicall({
+			allowFailure: true,
+			contracts: [{ abi: [parseAbiItem('function balanceOf(address owner) view returns (uint256)')], address: TOKEN_ADDRESS, functionName: 'balanceOf', args: [TOKEN_ADDRESS] }],
+			multicallAddress: MULTICALL_ADDRESS,
+		})
+		await expect(rejection).rejects.toMatchObject({ name: 'RpcError', code: -32_603, message: 'Internal JSON-RPC error.', cause: { data: { code: -32_000, message: 'out of gas' } } })
+	})
+
 	test('custom transport does not advertise an unenforced request timeout', () => {
 		const transport = custom(createProvider(() => '0x', []))
 		expect('requestTimeout' in transport).toBe(false)

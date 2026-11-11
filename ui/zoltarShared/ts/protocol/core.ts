@@ -57,9 +57,10 @@ export async function readRequiredMulticall<const TContracts extends readonly un
 	})) as MulticallReturnType<TContracts, false>
 }
 
-export async function readOptionalMulticall<const TContracts extends readonly unknown[]>(client: Pick<ReadClient, 'multicall'>, contracts: TContracts): Promise<MulticallReturnType<TContracts, true>> {
+export async function readOptionalMulticall<const TContracts extends readonly unknown[]>(client: Pick<ReadClient, 'multicall'>, contracts: TContracts, blockNumber?: bigint): Promise<MulticallReturnType<TContracts, true>> {
 	return (await client.multicall({
 		allowFailure: true,
+		blockNumber,
 		contracts: contracts as readonly ContractFunctionParameters[],
 		multicallAddress: getMulticall3Address(),
 	})) as MulticallReturnType<TContracts, true>

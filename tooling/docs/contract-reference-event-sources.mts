@@ -32,6 +32,7 @@ export const eventSourceByName: Record<string, string> = {
 	Mint: 'solidity/contracts/ReputationToken.sol',
 	NonDecisionReached: 'solidity/contracts/statoblast/interfaces/IEscalationGame.sol',
 	PendingReportRecovered: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol',
+	PortfolioRegistered: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
 	PriceRequested: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol',
 	QuestionCreated: 'solidity/contracts/ZoltarQuestionData.sol',
 	RepBurned: 'solidity/contracts/Zoltar.sol',
