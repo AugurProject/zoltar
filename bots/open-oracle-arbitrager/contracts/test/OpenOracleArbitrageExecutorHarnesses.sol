@@ -7,7 +7,7 @@ import {
 	IUniswapV2Router,
 	IUniswapV4PoolManager,
 	IUniswapV3SwapRouter
-} from '../OpenOracleArbitrageExecutor.sol';
+} from '../OpenOracleExecutionInterfaces.sol';
 import { SafeERC20Ops } from '../../../solidity/contracts/SafeERC20Ops.sol';
 
 contract OpenOracleTestToken is IERC20 {

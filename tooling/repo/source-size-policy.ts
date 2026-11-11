@@ -31,5 +31,4 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['solidity/ts/testSupport/coverage/traceToSource.ts', 965],
 		['solidity/ts/testSupport/simulator/AnvilWindowEthereum.ts', 608],
 	]),
-	...allowances('The arbitrage executor contract bundles routing, settlement, and recovery paths that belong in libraries.', [['bots/open-oracle-arbitrager/contracts/OpenOracleArbitrageExecutor.sol', 754]]),
 ])
