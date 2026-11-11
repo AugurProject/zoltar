@@ -14,7 +14,7 @@
 				<header>
 					<p class="kicker">Reference</p>
 					<h1 id="subsystem-guardrails">Subsystem guardrails</h1>
-					<p>What a Statoblast <a href="./glossary.html#security-pool">security pool</a>, share migration, <a href="./glossary.html#escalation-game">Escalation Game</a>, fork migration, <a href="./glossary.html#truth-auction">Truth Auction</a>, or REP/ETH <a href="./glossary.html#price-coordinator">price coordinator</a> will and will not accept, one subsystem at a time. Statoblast is the prediction-market layer built on the Zoltar fork oracle; see the <a href="../explanation/system-overview.html">system overview</a>. Every rule names the contract source that enforces it, so operators, indexers, and interface maintainers can check it against the exact Solidity.</p>
+					<p>What a Statoblast <a href="./glossary.html#security-pool">security pool</a>, share migration, <a href="./glossary.html#escalation-game">Escalation Game</a>, fork migration, <a href="./glossary.html#collateral-repair-auction">Collateral Repair Auction</a>, or REP/ETH <a href="./glossary.html#price-coordinator">price coordinator</a> will and will not accept, one subsystem at a time. Statoblast is the prediction-market layer built on the Zoltar fork oracle; see the <a href="../explanation/system-overview.html">system overview</a>. Every rule names the contract source that enforces it, so operators, indexers, and interface maintainers can check it against the exact Solidity.</p>
 					<p>The <a href="./invariants.html">invariant catalog</a> connects these local guardrails to cross-contract conservation, liveness, and the stated economic assumptions; the <a href="./security-model.html">security model</a> is normative for external assumptions. Release procedure lives in <a href="../how-to/launch-a-release.html">Prepare a protocol release</a>, assumption monitoring in <a href="../how-to/monitor-security-assumptions.html">Monitor security assumptions</a>, and the remaining support contracts in the <a href="./contract-inventory.html">contract inventory</a>.</p>
 				</header>
 				<section id="security-pool-guardrails">
@@ -38,10 +38,10 @@
 					<p>Owners choose one branch before the native cutoff. The shared coordinator snapshots and prepares each chosen branch once, then lazy owner activation and question materialization apply that state. A missing keeper cannot extend choice or auction deadlines. Native migration still requires inclusion during its finite window.</p>
 					<p>See the <a href="./contract-inventory.html#portfolio-boundary">canonical module and accounting reference</a> and the <a href="./contracts.html">contract entrypoints</a>.</p>
 				</section>
-				<section id="truth-auction-operations">
-					<h2>Truth auctions</h2>
+				<section id="collateral-repair-auction-operations">
+					<h2>Collateral repair auctions</h2>
 					<p>The branch auction sells fresh unchosen provider REP against its aggregate ETH shortfall. Buyers bid ETH lots with minimum REP-per-lot limits and their health targets. Winning backing and commitments enter aggregate accounting immediately at closing. Activating a winner enables individual controls; it is not required to count the winner’s obligation. Losing-bid credits and refunds remain independently withdrawable.</p>
-					<p>See the <a href="./contract-inventory.html#portfolio-truth-auction">canonical module and accounting reference</a> and the <a href="./contracts.html">contract entrypoints</a>.</p>
+					<p>See the <a href="./contract-inventory.html#portfolio-collateral-repair-auction">canonical module and accounting reference</a> and the <a href="./contracts.html">contract entrypoints</a>.</p>
 				</section>
 				<section id="repeth-oracle-operations">
 					<h2>REP/ETH price reports</h2>

@@ -27,7 +27,7 @@ function ceilDiv(value: bigint, denominator: bigint) {
 	return value === 0n ? 0n : (value - 1n) / denominator + 1n
 }
 function requireAuction(snapshot: PortfolioAuctionSnapshot) {
-	if (snapshot.auction === undefined) throw new Error('This branch has no truth auction.')
+	if (snapshot.auction === undefined) throw new Error('This branch has no collateral repair auction.')
 	return snapshot.auction
 }
 

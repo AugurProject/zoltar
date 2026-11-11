@@ -12,7 +12,7 @@ interface IPortfolioForkAuthority {
 
 /// @notice Actual ERC20 custody for the portfolio's virtual question and branch settlement books.
 /// @dev The immutable portfolio authenticates native callbacks, decides fee policy and supplies
-/// its monotonic logical clock. Every returned earned fee is transferred to that authority;
+/// its monotonic portfolio clock. Every returned earned fee is transferred to that authority;
 /// it must credit old underwriting weights before changing commitments or accepted prices.
 contract SecurityPoolPortfolioSettlement {
 	using SafeERC20Ops for IERC20;

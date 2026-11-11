@@ -13,7 +13,7 @@ for (const kind of ['create-and-initialize', 'initialize', 'add', 'enter'] as co
 		if (pool === undefined || pair === undefined || question === undefined) throw new Error('Missing fixture')
 		question.endTime = '2100000000'
 		pool.escalationGame = address(0)
-		pool.purchaseQuote = { mintAttoEth: 1000000n.toString(), feeAttoEth: 100000n.toString(), premiumAttoEth: 200000n.toString(), minimumShares: '1000000' }
+		pool.purchaseQuote = { spender: pool.coordinator, mintAttoEth: 1000000n.toString(), feeAttoEth: 100000n.toString(), premiumAttoEth: 200000n.toString(), minimumShares: '1000000' }
 		pool.projectedSettlementCollateralAttoEth = pool.shareTokenSupplyAttoShares
 		if (kind === 'create-and-initialize') snapshot.pairs = []
 		if (kind === 'initialize') {

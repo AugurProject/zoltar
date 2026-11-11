@@ -40,7 +40,7 @@ function editableSnapshot() {
 	question.endTime = (BigInt(snapshot.anchor.timestamp) + 10000n).toString()
 	pool.escalationGame = '0x0000000000000000000000000000000000000000'
 	pool.currentMintingCapacityAttoEth = (2n * 10n ** 18n).toString()
-	pool.purchaseQuote = { mintAttoEth: 10000n.toString(), feeAttoEth: 100n.toString(), premiumAttoEth: 200n.toString(), minimumShares: '10000' }
+	pool.purchaseQuote = { spender: pool.coordinator, mintAttoEth: 10000n.toString(), feeAttoEth: 100n.toString(), premiumAttoEth: 200n.toString(), minimumShares: '10000' }
 	snapshot.portfolioCapital = [capitalFixture(snapshot)]
 	pool.shareTokenSupplyAttoShares = '1000000000000000000'
 	for (const token of snapshot.wallet.tokens) token.openOracleCredit = '1000000000000000000'

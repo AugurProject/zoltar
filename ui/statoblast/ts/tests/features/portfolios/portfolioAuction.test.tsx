@@ -35,7 +35,7 @@ test('auction funding controls and bid rows stay in place through reload and fai
 	await waitFor(() => expect(view.container.textContent).toContain('Bid 1'))
 	expect(view.container.querySelectorAll('.card .card')).toHaveLength(0)
 	const original = Array.from(view.container.querySelectorAll('button'))
-	for (const name of ['Open truth auction', 'Submit funded bid', 'Credit this bid’s refunds', 'Credit and withdraw refunds', 'Activate vault controls', 'Manage vault', 'Withdraw credited refunds', 'Refresh auction']) expect(original.some(node => node.textContent === name)).toBe(true)
+	for (const name of ['Open collateral repair auction', 'Submit funded bid', 'Credit this bid’s refunds', 'Credit and withdraw refunds', 'Activate vault controls', 'Manage vault', 'Withdraw credited refunds', 'Refresh auction']) expect(original.some(node => node.textContent === name)).toBe(true)
 	await act(() => {
 		for (const [name, value] of [
 			['Number of lots', '2'],

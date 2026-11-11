@@ -10,7 +10,7 @@ import {
 	statoblast_SecurityPoolCapitalFeeStreams_SecurityPoolCapitalFeeStreams as streamsArtifact,
 	test_statoblast_PortfolioPurchaseReceiver_PortfolioPurchaseReceiver as receiverArtifact,
 } from '../../types/contractArtifact'
-import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { portfolioEconomics, unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 import { collateralBalance, burnedCollateralBalance, receiptBurns } from './burnEvidence'
 import { writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { approveToken, getERC20Balance } from '../../testSupport/simulator/utils/utilities'
@@ -53,6 +53,27 @@ describe('Statoblast: reporting and unresolved capital compensation', () => {
 		await fixture.mint(cash)
 		const shares = await balanceOfShares(fixture.other(), fixture.poolFor(fixture.base.questionId).shareToken, fixture.base.genesisUniverse, fixture.other().account.address)
 		expect((await questionState()).outcomeSupplyAttoShares).toBe(shares[0])
+	})
+	test('base purchase quotes preserve separate collateral and fee rounding at dust boundaries', async () => {
+		await fixture.prepare()
+		for (const minimum of [0n, 3n]) {
+			const created = await fixture.deployPortfolio(undefined, { ...portfolioEconomics, purchaseFeeBps: 4_000n, annualFeeBps: 0n, minimumPurchaseFeeAttoEth: minimum }, { securityMultiplierBps: 10_002n })
+			// The effective 105% backing floor rounds 2 attoETH to 3, then its 40% fee to 2.
+			// One combined division would charge only 1. Minimum fees apply after both steps.
+			for (const [cash, expected] of [
+				[1n, 1n],
+				[2n, 2n],
+				[19n, 8n],
+				[20n, 9n],
+				[21n, 10n],
+			]) {
+				if (cash === undefined || expected === undefined) throw new Error('Missing rounding case')
+				const expectedFee = expected > minimum ? expected : minimum
+				expect(await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: created, functionName: 'purchaseFee', args: [cash] })).toBe(expectedFee)
+				const quote = await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: created, functionName: 'purchaseQuote', args: [fixture.base.genesisUniverse, fixture.base.questionId, cash] })
+				expect([...quote]).toEqual([expectedFee, 0n])
+			}
+		}
 	})
 	test('an unreported question keeps paying for occupied underwriting after its calendar end', async () => {
 		await fixture.prepare()

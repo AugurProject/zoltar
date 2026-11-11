@@ -80,7 +80,7 @@ describe('Statoblast: inherited activation delay and finality', () => {
 		const book = await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'ledger' })
 		const bookId = await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'bookIds', args: [child] })
 		const [question, frozen] = await owner.readContract({ abi: bookArtifact.abi, address: book, functionName: 'question', args: [bookId, base.questionId] })
-		const bookEnd = await owner.readContract({ ...p, functionName: 'nativeTimeForLogical', args: [child, question.finalAfter] })
+		const bookEnd = await owner.readContract({ ...p, functionName: 'nativeTimeForPortfolioTime', args: [child, question.finalAfter] })
 
 		expect(gameEnd).toBe(bookEnd)
 		expect(gameEnd).toBe(expectedEnd)

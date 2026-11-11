@@ -45,7 +45,7 @@ function createReplayLog(overrides: Partial<ReplayLog> = {}): ReplayLog {
 			reason: 0n,
 			settlementCollateralAttoEth: 1n,
 			shareTokenSupplyAttoShares: 2n,
-			lastUpdatedFeeAccumulator: 1n,
+			lastSettlementPortfolioTime: 1n,
 		},
 		...overrides,
 	}
@@ -58,7 +58,7 @@ describe('event-only replay', () => {
 			blockHash: '0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
 			blockNumber: 2n,
 			transactionHash: '0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
-			args: { ...canonicalLog.args, settlementCollateralAttoEth: 3n, lastUpdatedFeeAccumulator: 2n },
+			args: { ...canonicalLog.args, settlementCollateralAttoEth: 3n, lastSettlementPortfolioTime: 2n },
 		})
 		const fullState = replayZoltarEvents([orphanedLog, canonicalLog, canonicalLog])
 		const emitter = canonicalLog.emitter
@@ -227,7 +227,7 @@ describe('event-only replay', () => {
 				logIndex: 8,
 				args: {
 					securityPool: pool,
-					truthAuction: zeroAddress,
+					collateralRepairAuction: zeroAddress,
 					openOraclePriceCoordinator: coordinator,
 					shareToken,
 					parent: zeroAddress,
@@ -694,7 +694,7 @@ describe('event-only replay', () => {
 				logIndex: 0,
 				args: {
 					securityPool: pool,
-					truthAuction: zeroAddress,
+					collateralRepairAuction: zeroAddress,
 					openOraclePriceCoordinator: zeroAddress,
 					shareToken: zeroAddress,
 					parent,
@@ -920,7 +920,7 @@ describe('event-only replay', () => {
 				logIndex: 4,
 				args: {
 					securityPool: pool,
-					truthAuction: auction,
+					collateralRepairAuction: auction,
 					openOraclePriceCoordinator: coordinator,
 					shareToken: repToken,
 					parent: zeroAddress,
@@ -1163,7 +1163,7 @@ describe('event-only replay', () => {
 			if (state === undefined) throw new Error('Question accounting event missing')
 			expect(state.settlementCollateralAttoEth).toBe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool.securityPool, functionName: 'settlementCollateralAttoEth' }))
 			expect(state.shareTokenSupplyAttoShares).toBe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool.securityPool, functionName: 'shareTokenSupplyAttoShares' }))
-			expect(state.lastUpdatedFeeAccumulator).toBe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool.securityPool, functionName: 'lastUpdatedFeeAccumulator' }))
+			expect(state.lastSettlementPortfolioTime).toBe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool.securityPool, functionName: 'lastSettlementPortfolioTime' }))
 			for (const outcome of [0n, 1n, 2n]) {
 				const id = fixture.genesisUniverse * 256n + outcome
 				expect(replayed.shareTokenBalances.get(pool.shareToken)?.get(id)?.get(holder.account.address)).toBe(await holder.readContract({ abi: statoblast_tokens_ShareToken_ShareToken.abi, address: pool.shareToken, functionName: 'balanceOf', args: [holder.account.address, id] }))
@@ -1303,7 +1303,7 @@ describe('event-only replay', () => {
 		strictEqualTypeSafe(deployment.parent, securityPoolAddresses.securityPool, 'child parent replay mismatch')
 		strictEqualTypeSafe(deployment.universeId, childUniverseId, 'child universe replay mismatch')
 		strictEqualTypeSafe(deployment.questionId, fixture.questionId, 'child question replay mismatch')
-		strictEqualTypeSafe(deployment.truthAuction, child.truthAuction, 'child auction replay mismatch')
+		strictEqualTypeSafe(deployment.collateralRepairAuction, child.collateralRepairAuction, 'child auction replay mismatch')
 		strictEqualTypeSafe(deployment.coordinator, child.openOraclePriceCoordinator, 'child coordinator replay mismatch')
 		strictEqualTypeSafe(deployment.shareToken, child.shareToken, 'child share token replay mismatch')
 		strictEqualTypeSafe(deployment.statoblastSecurityMultiplierBps, storedStatoblastSecurityMultiplierBps, 'child security multiplier replay mismatch')

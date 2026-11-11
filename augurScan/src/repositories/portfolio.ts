@@ -202,7 +202,7 @@ export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: s
 					'type', event.event_name, 'entity', event.auction_address, 'data', event.event_data,
 					'blockNumber', event.block_number::text, 'provenance', 'historical interaction'
 				) ORDER BY event.block_number DESC, event.log_index DESC)
-				FROM (SELECT * FROM truth_auction_events evidence WHERE evidence.chain_id = page.chain_id
+				FROM (SELECT * FROM collateral_repair_auction_events evidence WHERE evidence.chain_id = page.chain_id
 					AND evidence.canonical ${throughSnapshot('evidence.block_number')} AND lower(evidence.event_data->>'bidder') = page.address
 					ORDER BY evidence.block_number DESC, evidence.log_index DESC LIMIT 100) event
 			), '[]'::jsonb) AS auction_claims

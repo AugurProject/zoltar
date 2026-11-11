@@ -98,7 +98,7 @@ export async function loadCentralPortfolioQuestion(client: Pick<ReadClient, 'mul
 		totalPoolHeldAttoRep: requireBigintValue(totals[0], 'total REP'),
 		totalUnderwritingLimitAttoEth: requireBigintValue(totals[1], 'total commitment'),
 		feeEligibleUnderwritingLimitAttoEth: requireBigintValue(totals[2], 'healthy commitment'),
-		lastUpdatedFeeAccumulator: feeTime,
+		lastFeeCheckpointNativeTime: feeTime,
 		linearFee,
 		feeEndTimestamp: feeEnd,
 	}

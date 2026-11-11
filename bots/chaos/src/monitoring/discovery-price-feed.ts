@@ -10,7 +10,14 @@ export async function discoverPoolPriceFeed(client: ChaosReadClient, coordinator
 	const priceFeed = await client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'priceFeed' })
 	const shared = !sameAddress(priceFeed, coordinator)
 	const oracleExposureAttoEth = shared ? await client.readContract({ abi: sharedPoolPriceFeedAbi, address: priceFeed, blockNumber, functionName: 'aggregateExposureAttoEth' }) : settlementCollateralAttoEth
-	const oracleRequestFunding = shared ? { ...funding, fixedRequestPriceCostAttoEth: requestCost.toString() } : funding
+	const oracleRequestFunding = shared
+		? {
+				...funding,
+				fixedRequestPriceCostAttoEth: requestCost.toString(),
+				collateralToken: getAddress(await client.readContract({ abi: sharedPoolPriceFeedAbi, address: priceFeed, blockNumber, functionName: 'collateralToken' })),
+				minimumReportCollateral: (await client.readContract({ abi: sharedPoolPriceFeedAbi, address: priceFeed, blockNumber, functionName: 'minimumReportCollateral' })).toString(),
+			}
+		: funding
 	assertAnchoredOracleRequestFunding({ baseFeePerGas: baseFee.toString(), coordinator: oracleRequestFunding, minimumToken1ReportAttoEth: minimumReport.toString(), requestPriceCostAttoEth: requestCost.toString(), settlementCollateralAttoEth: oracleExposureAttoEth.toString(), subject: `Coordinator ${coordinator}` })
 	const reportEscrows: Record<string, Address> | undefined = shared ? {} : undefined
 	if (reportEscrows !== undefined) {

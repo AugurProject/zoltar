@@ -1,3 +1,4 @@
+import { evaluateOperationCatalog } from '../../src/operations/catalog.ts'
 import { selectExecutableOperationPlan } from '../../src/runtime/selection.ts'
 import { preflightOperationPreview } from '../../src/execution/operation-preview.ts'
 import { createManualOperationController } from '../../src/runtime/manual-operations.ts'
@@ -12,7 +13,7 @@ import { recoverPendingTransactions } from '../../src/execution/recovery.ts'
 import { TransactionAwaitingRecovery, executeOperationPlan } from '../../src/execution/transaction-executor.ts'
 import { type ExecutionEnvironment } from '../../src/execution/execution-context.ts'
 import type { EvaluatedOperation, OperationPlan } from '../../src/operations/types.ts'
-import { chaosChain, createChaosReadPool, performCanonicalScan } from '../../src/runtime/canonical-scan.ts'
+import { chaosChain, createChaosReadPool, performCanonicalScan, planningOptions } from '../../src/runtime/canonical-scan.ts'
 import { executionProfileId } from '../../src/runtime/operator.ts'
 import { preflightTransactionSubmissionNetwork } from '../../src/runtime/submission-preflight.ts'
 import { loadRuntimeState } from '../../src/state/operator-state.ts'
@@ -439,6 +440,9 @@ describe('real ecosystem workflows through the production chaos runtime', () => 
 			expect(BigInt(depositedCapital.principalAttoRep)).toBeGreaterThan(0n)
 			expect(BigInt(depositedCapital.commitmentAttoEth)).toBe(0n)
 			await execute('statoblast.capital.set-commitment')
+			const purchaseWrap = requiredPlan(evaluateOperationCatalog(scan.snapshot, { ...planningOptions(settings, SCAN_SEED), operationInputs: { amount: (ONE_TOKEN / 100n).toString() } }), 'open-oracle.weth.wrap')
+			expect((await executeOperationPlan(context.environment, purchaseWrap)).status).toBe('completed')
+			scan = await canonicalRescan(context, scan)
 			await execute('statoblast.complete-set.create')
 			const mintedShares = scan.snapshot.wallet.shares.find(shares => shares.universeId === '0')
 			expect(BigInt(mintedShares?.invalid ?? '0')).toBeGreaterThan(0n)
@@ -466,7 +470,7 @@ describe('real ecosystem workflows through the production chaos runtime', () => 
 
 			expect(context.state.pendingTransactions).toEqual([])
 			expect(proxy.rawTransactions).toEqual([])
-			expect(relay.rawTransactions).toHaveLength(13)
+			expect(relay.rawTransactions).toHaveLength(15)
 			expect(relay.rawTransactions.every(rawTransaction => parseTransaction(rawTransaction).type === 'eip1559')).toBeTrue()
 		} finally {
 			relay.dispose()

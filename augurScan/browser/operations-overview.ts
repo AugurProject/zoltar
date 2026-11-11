@@ -114,7 +114,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 			changes.filter(item => item['entity_type'] === 'escalation'),
 		),
 		operationCard(
-			'Truth auctions',
+			'Collateral repair auctions',
 			operationNumber(totals['auctions'] ?? auctions.length),
 			`${number(openAuctionsShown)} open among ${number(auctions.length)} shown`,
 			changes.filter(item => item['entity_type'] === 'auction'),
@@ -148,7 +148,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 	)
 	const auctionRows = auctions.map(item =>
 		operationRow(
-			'Truth auction',
+			'Collateral repair auction',
 			`${String(item['status'] ?? 'Awaiting indexed evidence')} · ${operationCounted(item['bid_count'], 'bid')} · ${operationCounted(item['bidder_count'], 'bidder')}`,
 			String(item['auction_address'] ?? ''),
 			item['block_number'],
@@ -271,7 +271,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 	const sectionPanels = new Map<string, () => HTMLElement[]>([
 		['reports', () => [operationsPanel('OpenOracle reports', reportRows, 'No reports match this view.')]],
 		['escalations', () => [operationsPanel('Escalation games', escalationRows, 'No escalation games match this view.')]],
-		['auctions', () => [operationsPanel('Truth auctions', auctionRows, 'No auctions match this view.')]],
+		['auctions', () => [operationsPanel('Collateral repair auctions', auctionRows, 'No auctions match this view.')]],
 		['risk', () => [riskPoolPanel, riskVaultPanel, operationsPanel('Liquidation approval lifecycle', approvalRows, 'No liquidation approvals match this view.'), operationsPanel('Recent liquidations', liquidationRows, 'No vault liquidations match this view.')]],
 		['trading', () => [operationsPanel('Augur AMM markets', tradingRows, 'No Augur AMM markets match this view.')]],
 		[

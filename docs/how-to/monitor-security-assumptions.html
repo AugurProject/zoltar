@@ -61,7 +61,7 @@
 									<ul>
 										<li>Liquidation candidates and net reward: liquidator bot dashboard</li>
 										<li>Dispute opportunities and net reward: OpenOracle arbitrager dashboard</li>
-										<li>Active reporters, correctors, escalation depositors, and Truth Auction bidders: augurScan <code>/operations/reports</code>, <code>/operations/escalations</code>, <code>/operations/auctions</code></li>
+										<li>Active reporters, correctors, escalation depositors, and Collateral Repair Auction bidders: augurScan <code>/operations/reports</code>, <code>/operations/escalations</code>, <code>/operations/auctions</code></li>
 										<li>Callback-recovery candidates: coordinator <code>pendingReportId</code>, then the settlement timestamp in OpenOracle <code>storedGame(reportId)</code>; anyone can clear one with <code>recoverSettledPendingReport()</code></li>
 										<li>Overflow operations: coordinator <code>getActiveStagedOperationCount()</code> minus <code>getPendingSettlementOperationCount()</code></li>
 									</ul>
@@ -112,10 +112,10 @@
 								<td>Mark the market or action impaired, surface the deadline, and avoid asserting that honest local correction remains fundable</td>
 							</tr>
 							<tr>
-								<td>Truth Auction demand — A12</td>
+								<td>Collateral Repair Auction demand — A12</td>
 								<td>
 									<ul>
-										<li><a href="../reference/glossary.html#truth-auction">Truth Auction</a> bids: auction <code>getActiveTickPage(offset, limit)</code> and <code>previewFinalization()</code>, or augurScan <code>/operations/auctions</code></li>
+										<li><a href="../reference/glossary.html#collateral-repair-auction">Collateral Repair Auction</a> bids: auction <code>engine()</code>, then engine <code>bidCount()</code>, <code>bids(index)</code>, and <code>previewFinalization(maximumFilledLots)</code>, or augurScan <code>/operations/auctions</code></li>
 										<li>REP/ETH depth and expected discount: arbitrager Uniswap venue quotes</li>
 										<li>Bidder gas cost: RPC <code>eth_feeHistory</code></li>
 									</ul>
@@ -131,7 +131,7 @@
 										<li>Block gas limit: latest block</li>
 										<li>Reorg history: augurScan <code>/operations/integrity</code></li>
 										<li>Escalation deadline: <code>getEscalationGameEndDate()</code></li>
-										<li>Truth Auction close: auction <code>auctionStarted</code> plus one week</li>
+										<li>Collateral Repair Auction close: auction <code>closesAt()</code></li>
 										<li>Migration close: forker <code>forkData(pool)</code> <code>forkActivationTime</code> plus eight weeks</li>
 										<li>Margin: each deadline minus expected inclusion delay</li>
 									</ul>

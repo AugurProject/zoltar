@@ -1,10 +1,11 @@
-export const CURRENT_SCHEMA_VERSION = '5'
+export const CURRENT_SCHEMA_VERSION = '6'
 const SUPPORTED_POSTGRES_VERSION = '17.11'
 
 const UNSUPPORTED_POSTGRES_VERSION_MESSAGE = `Unsupported PostgreSQL server version. augurScan requires PostgreSQL ${SUPPORTED_POSTGRES_VERSION} because schema fingerprints are version-specific; the database was not modified.`
 
 export const UNSUPPORTED_SCHEMA_MESSAGE = 'Unsupported augurScan database schema. Restore a compatible backup or upgrade through a supported augurScan release; the database was not modified.'
 
+export const INVALIDATION_COUNTS_SCHEMA_VERSION = '5'
 export const QUESTION_SECONDS_SCHEMA_VERSION = '4'
 export const INDEXER_OWNERSHIP_SCHEMA_VERSION = '3'
 export const HISTORICAL_INTEGRITY_SCHEMA_VERSION = '2'
@@ -19,7 +20,7 @@ const postgresVersionNumber = (release: string): string => {
 
 const SUPPORTED_POSTGRES_VERSION_NUM = postgresVersionNumber(SUPPORTED_POSTGRES_VERSION)
 
-export type SupportedSchemaVersion = typeof INITIAL_MIGRATABLE_SCHEMA_VERSION | typeof INDEXER_OWNERSHIP_SCHEMA_VERSION | typeof CURRENT_SCHEMA_VERSION | typeof HISTORICAL_INTEGRITY_SCHEMA_VERSION | typeof QUESTION_SECONDS_SCHEMA_VERSION
+export type SupportedSchemaVersion = typeof INITIAL_MIGRATABLE_SCHEMA_VERSION | typeof INDEXER_OWNERSHIP_SCHEMA_VERSION | typeof CURRENT_SCHEMA_VERSION | typeof HISTORICAL_INTEGRITY_SCHEMA_VERSION | typeof QUESTION_SECONDS_SCHEMA_VERSION | typeof INVALIDATION_COUNTS_SCHEMA_VERSION
 
 type SchemaMigration = { readonly version: SupportedSchemaVersion; readonly file: string; readonly description: string }
 
@@ -28,7 +29,8 @@ const SCHEMA_MIGRATIONS: readonly SchemaMigration[] = [
 	{ version: HISTORICAL_INTEGRITY_SCHEMA_VERSION, file: '002-historical-integrity.sql', description: 'Historical integrity observations and indexer provenance' },
 	{ version: INDEXER_OWNERSHIP_SCHEMA_VERSION, file: '003-indexer-ownership.sql', description: 'Indexer ownership leases' },
 	{ version: QUESTION_SECONDS_SCHEMA_VERSION, file: '004-question-seconds.sql', description: 'Exact question timestamps in Unix seconds' },
-	{ version: CURRENT_SCHEMA_VERSION, file: '005-invalidation-counts.sql', description: 'Stored history invalidation occurrence counts' },
+	{ version: INVALIDATION_COUNTS_SCHEMA_VERSION, file: '005-invalidation-counts.sql', description: 'Stored history invalidation occurrence counts' },
+	{ version: CURRENT_SCHEMA_VERSION, file: '006-collateral-repair-auctions.sql', description: 'Collateral repair auction storage names' },
 ]
 
 /** Migrations that upgrade a database at `startingVersion` to the current schema, in application order. */
@@ -50,8 +52,9 @@ export const runSchemaTransaction = async <T>(begin: () => Promise<unknown>, com
 	}
 }
 
-export const schemaInitializationAction = (markerVersion: string | undefined, publicObjects: readonly string[]): 'initialize' | 'migrate-from-1' | 'migrate-from-2' | 'migrate-from-3' | 'migrate-from-4' | 'current' => {
+export const schemaInitializationAction = (markerVersion: string | undefined, publicObjects: readonly string[]): 'initialize' | 'migrate-from-1' | 'migrate-from-2' | 'migrate-from-3' | 'migrate-from-4' | 'migrate-from-5' | 'current' => {
 	if (markerVersion === CURRENT_SCHEMA_VERSION) return 'current'
+	if (markerVersion === INVALIDATION_COUNTS_SCHEMA_VERSION) return 'migrate-from-5'
 	if (markerVersion === QUESTION_SECONDS_SCHEMA_VERSION) return 'migrate-from-4'
 	if (markerVersion === INDEXER_OWNERSHIP_SCHEMA_VERSION) return 'migrate-from-3'
 	if (markerVersion === HISTORICAL_INTEGRITY_SCHEMA_VERSION) return 'migrate-from-2'

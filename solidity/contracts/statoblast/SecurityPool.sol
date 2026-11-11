@@ -38,7 +38,7 @@ import { IPortfolioSettlement } from './interfaces/IPortfolioSettlement.sol';
 // Security pool for one question, one universe, one denomination (ETH)
 contract SecurityPool is SecurityPoolStorage {
 	using SafeERC20Ops for IERC20;
-	event QuestionAccountingCheckpoint(AccountingReason reason, uint256 settlementCollateralAttoEth, uint256 shareTokenSupplyAttoShares, uint256 lastUpdatedFeeAccumulator);
+	event QuestionAccountingCheckpoint(AccountingReason reason, uint256 settlementCollateralAttoEth, uint256 shareTokenSupplyAttoShares, uint256 lastSettlementPortfolioTime);
 
 	uint256 public immutable questionId;
 	uint248 public immutable universeId;
@@ -53,7 +53,7 @@ contract SecurityPool is SecurityPoolStorage {
 	EscalationGameFactory public immutable escalationGameFactory;
 	ZoltarQuestionData public immutable questionData;
 	address public immutable securityPoolForker;
-	address public immutable truthAuction;
+	address public immutable collateralRepairAuction;
 	ISecurityPoolFactory public immutable securityPoolFactory;
 	bool private immutable hasInheritedForkOutcome;
 	SecurityPoolEventEmitter public immutable eventEmitter;
@@ -71,7 +71,7 @@ contract SecurityPool is SecurityPoolStorage {
 	modifier isOperational() {
 		// Once a universe forks, the parent pool freezes operational flows permanently.
 		// Outcome child pools can re-enter `SystemState.Operational` after migration and
-		// truth-auction processing complete. Finalized claim paths keep their own state
+		// collateral-repair-auction processing complete. Finalized claim paths keep their own state
 		// and finality guards so late unrelated forks do not block share or REP redemption.
 		_requireUnforkedOperational(zoltar.getForkTime(universeId));
 		_;
@@ -82,7 +82,7 @@ contract SecurityPool is SecurityPoolStorage {
 		_;
 	}
 
-	constructor(address _securityPoolForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOraclePriceCoordinator _openOraclePriceCoordinator, IShareToken _shareToken, OpenOracle _openOracle, ISecurityPool _parent, Zoltar _zoltar, uint248 _universeId, uint256 _questionId, uint256 _statoblastSecurityMultiplierBps, address _truthAuction) {
+	constructor(address _securityPoolForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOraclePriceCoordinator _openOraclePriceCoordinator, IShareToken _shareToken, OpenOracle _openOracle, ISecurityPool _parent, Zoltar _zoltar, uint248 _universeId, uint256 _questionId, uint256 _statoblastSecurityMultiplierBps, address _collateralRepairAuction) {
 		universeId = _universeId;
 		ISecurityPoolDeploymentWorkerConfiguration worker = ISecurityPoolDeploymentWorkerConfiguration(msg.sender);
 		securityPoolFactory = worker.factory();
@@ -99,10 +99,10 @@ contract SecurityPool is SecurityPoolStorage {
 		escalationGameFactory = _escalationGameFactory;
 		openOraclePriceCoordinator = _openOraclePriceCoordinator;
 		securityPoolForker = _securityPoolForker;
-		truthAuction = _truthAuction;
+		collateralRepairAuction = _collateralRepairAuction;
 		questionData = _questionData;
 		if (address(parent) == address(0x0)) {
-			// origin universe never does truthAuction
+			// origin universe never does collateralRepairAuction
 			systemState = SystemState.Operational;
 		} else {
 			systemState = SystemState.ForkMigration;
@@ -353,7 +353,7 @@ contract SecurityPool is SecurityPoolStorage {
 
 	/// @notice Accepts native ETH without creating a settlement-collateral claim.
 	receive() external payable {
-		require(portfolioCustody != address(0) || msg.sender == securityPoolForker || msg.sender == truthAuction || msg.sender == address(parent), 'Bad ETH sender');
+		require(portfolioCustody != address(0) || msg.sender == securityPoolForker || msg.sender == collateralRepairAuction || msg.sender == address(parent), 'Bad ETH sender');
 		emit EthReceived(msg.sender, msg.value);
 	}
 }

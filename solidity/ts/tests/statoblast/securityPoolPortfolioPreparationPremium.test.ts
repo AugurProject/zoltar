@@ -77,7 +77,7 @@ describe('Statoblast: preparation premium ownership', () => {
 		const context = await prepare(300n)
 		const { preparation } = await context.finalize()
 		const [activationCash, , activationTime] = await context.owner.readContract({ abi: premiumArtifact.abi, address: context.premium, functionName: 'totals', args: [context.child] })
-		expect(activationTime).toBe(await context.owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'logicalTime', args: [context.child] }))
+		expect(activationTime).toBe(await context.owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'portfolioTime', args: [context.child] }))
 		expect(await context.fees()).toBe(0n)
 		await context.checkpoint()
 		const remaining = (await context.owner.readContract({ abi: premiumArtifact.abi, address: context.premium, functionName: 'totals', args: [context.child] }))[0]
@@ -117,7 +117,7 @@ describe('Statoblast: preparation premium ownership', () => {
 		await addRepToMigrationBalance(context.owner, fixture.base.genesisUniverse, threshold)
 		await splitMigrationRep(context.owner, fixture.base.genesisUniverse, threshold, [1n])
 		await forkUniverse(context.owner, context.child, fixture.base.questionId)
-		const frozenTime = await context.owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'logicalTime', args: [context.child] })
+		const frozenTime = await context.owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'portfolioTime', args: [context.child] })
 		await context.mock.advanceTime(3600n)
 		const { preparation } = await context.finalize()
 		const [remaining, , timestamp] = await context.owner.readContract({ abi: premiumArtifact.abi, address: context.premium, functionName: 'totals', args: [context.child] })

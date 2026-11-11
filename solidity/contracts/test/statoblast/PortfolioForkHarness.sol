@@ -133,7 +133,7 @@ contract PortfolioForkHarness {
 	uint256 public constant minimumCommitmentAttoEth = 1e15;
 	uint256 public constant initialReportPriorityFeeAttoEthPerGas = 2e9;
 	struct Clock {
-		uint48 logicalAnchor;
+		uint48 portfolioTimeAnchor;
 		uint48 wallAnchor;
 		bool registered;
 		bool ready;
@@ -169,14 +169,14 @@ contract PortfolioForkHarness {
 		_createCapital(0);
 		ITestForkInitializer(coordinator).activateOrigin(0);
 	}
-	function logicalTime(uint248 u) public view returns (uint48) {
+	function portfolioTime(uint248 u) public view returns (uint48) {
 		uint256 wall = zoltar.getForkTime(u);
 		if (wall == 0) wall = block.timestamp;
 		Clock memory c = clocks[u];
-		return c.logicalAnchor + (wall > c.wallAnchor ? uint48(wall - c.wallAnchor) : 0);
+		return c.portfolioTimeAnchor + (wall > c.wallAnchor ? uint48(wall - c.wallAnchor) : 0);
 	}
-	function forkLogicalTime(uint248 u) external view returns (uint48) {
-		return logicalTime(u);
+	function forkPortfolioTime(uint248 u) external view returns (uint48) {
+		return portfolioTime(u);
 	}
 	function _createCapital(uint248 u) private returns (SecurityPoolCapitalLedger capital) {
 		capital = capitalDeployer.create(address(this), Zoltar(address(zoltar)), u, 10_500, 1e15, 1 days);
@@ -188,7 +188,7 @@ contract PortfolioForkHarness {
 		uint248 child = zoltar.getChildUniverseId(source, outcome);
 		if (address(zoltar.getRepToken(child)) == address(0)) zoltar.deployChild(source, outcome);
 		require(!clocks[child].registered, 'Child exists');
-		clocks[child] = Clock(logicalTime(source), uint48(zoltar.getForkRecapitalizationDeadline(source)), true, false);
+		clocks[child] = Clock(portfolioTime(source), uint48(zoltar.getForkRecapitalizationDeadline(source)), true, false);
 		capital = _createCapital(child);
 		capital.beginForkImport();
 	}
@@ -243,8 +243,8 @@ contract PortfolioForkHarness {
 		}
 	}
 	function setQuestionFee(uint248 u, uint256 q, uint96 rate, uint48 end) external {
-		settlement.setFeesEnabled(u, true, logicalTime(u));
-		settlement.replaceFeeStream(address(pools[u][q]), rate, end, logicalTime(u));
+		settlement.setFeesEnabled(u, true, portfolioTime(u));
+		settlement.replaceFeeStream(address(pools[u][q]), rate, end, portfolioTime(u));
 	}
 	function checkpointCapitalFees(uint248 u, uint48) external {
 		require(msg.sender == address(capitalLedger[u]), 'Only capital');
@@ -252,7 +252,7 @@ contract PortfolioForkHarness {
 		if (book == 0) return;
 		(, , , , bool isSealed) = settlement.ledger().totals(book);
 		if (isSealed) return;
-		(uint256 fees, uint256 demand) = settlement.checkpointUniverse(u, logicalTime(u));
+		(uint256 fees, uint256 demand) = settlement.checkpointUniverse(u, portfolioTime(u));
 		if (fees != 0) _creditFees(u, fees);
 		capitalLedger[u].synchronizeDemand(demand);
 	}
@@ -267,15 +267,15 @@ contract PortfolioForkHarness {
 		capitalLedger[0].setDemand(capitalLedger[0].demandAttoEth() + msg.value);
 		collateralToken.deposit{value: msg.value}();
 		collateralToken.approve(address(settlement), msg.value);
-		settlement.mint(address(pools[0][q]), msg.value, 0, logicalTime(0));
+		settlement.mint(address(pools[0][q]), msg.value, 0, portfolioTime(0));
 	}
 	function redeemQuestion(uint248 u, uint256 q, uint256 shares, address recipient) external {
-		settlement.redeem(address(pools[u][q]), recipient, shares, 0, logicalTime(u));
-		(uint256 fees, uint256 demand) = settlement.checkpointUniverse(u, logicalTime(u));
+		settlement.redeem(address(pools[u][q]), recipient, shares, 0, portfolioTime(u));
+		(uint256 fees, uint256 demand) = settlement.checkpointUniverse(u, portfolioTime(u));
 		if (fees != 0) _creditFees(u, fees);
 		capitalLedger[u].synchronizeDemand(demand);
 	}
 	function scheduleQuestionFinality(uint248 u, uint256 q, uint48 finalAfter) external {
-		settlement.scheduleFinality(address(pools[u][q]), finalAfter, logicalTime(u));
+		settlement.scheduleFinality(address(pools[u][q]), finalAfter, portfolioTime(u));
 	}
 }

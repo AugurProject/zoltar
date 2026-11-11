@@ -27,6 +27,7 @@ import { authenticatePortfolioAuctionVault, isCanonicalAuctionVaultImplementatio
 export type PortfolioTransaction = { account: Address; to?: Address; data: Hex; value?: bigint; gas?: bigint; reviewDescription?: string; validateBeforeSubmit?: () => Promise<void> }
 const linksAbi = parseAbi([
 	'function portfolio() view returns (address)',
+	'function capitalLedger() view returns (address)',
 	'function zoltar() view returns (address)',
 	'function universeId() view returns (uint248)',
 	'function ledger() view returns (address)',
@@ -68,7 +69,7 @@ export function verifyRuntimeCode(actual: Hex | undefined, expected: Hex, refere
 	if (mask(actual) !== mask(expected)) throw new Error(`Unrecognized ${label} runtime code.`)
 }
 
-async function verifyModule(client: ReadClient, address: Address, artifact: RuntimeArtifact, authority: Address, label: string, blockNumber: bigint, authorityGetter: 'portfolio' | 'ledger' | 'services' = 'portfolio') {
+async function verifyModule(client: ReadClient, address: Address, artifact: RuntimeArtifact, authority: Address, label: string, blockNumber: bigint, authorityGetter: 'portfolio' | 'capitalLedger' | 'ledger' | 'services' = 'portfolio') {
 	verifyRuntimeCode(await client.getCode({ address, blockNumber }), `0x${artifact.evm.deployedBytecode.object}`, artifact.evm.deployedBytecode.immutableReferences, label)
 	const actualValue = await client.readContract({ address, abi: linksAbi, functionName: authorityGetter, blockNumber })
 	const actual = requireAddressValue(actualValue, 'module authority')
@@ -162,8 +163,8 @@ export async function loadPortfolioAccount(client: ReadClient, portfolio: Addres
 		verifyModule(client, snapshot.capitalLedger, capitalArtifact, portfolio, 'capital ledger', blockNumber),
 		verifyModule(client, lifecycle, lifecycleArtifact, snapshot.capitalLedger, 'capital lifecycle delegate', blockNumber, 'ledger'),
 		verifyModule(client, auctionDelegate, auctionDelegateArtifact, snapshot.capitalLedger, 'capital auction delegate', blockNumber, 'ledger'),
-		verifyModule(client, snapshot.commitmentIndex, indexArtifact, snapshot.capitalLedger, 'commitment index', blockNumber),
-		verifyModule(client, feeStreams, feesArtifact, snapshot.capitalLedger, 'capital fee streams', blockNumber),
+		verifyModule(client, snapshot.commitmentIndex, indexArtifact, snapshot.capitalLedger, 'commitment index', blockNumber, 'capitalLedger'),
+		verifyModule(client, feeStreams, feesArtifact, snapshot.capitalLedger, 'capital fee streams', blockNumber, 'capitalLedger'),
 		verifyModule(client, settlement, settlementArtifact, portfolio, 'settlement engine', blockNumber),
 		verifyModule(client, book, bookArtifact, settlement, 'settlement book', blockNumber),
 		verifyModule(client, reporters, reporterArtifact, portfolio, 'reporter ledger', blockNumber),

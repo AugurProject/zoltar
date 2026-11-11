@@ -5,7 +5,7 @@ import { erc20Abi, zoltarAbi, securityPoolCapitalLedgerAbi as capitalAbi, securi
 import { createWriteClient, writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients'
 import { mainnet } from '@zoltar/core-shared/evm/ethereum'
 import { useSecurityPoolPortfolioFixture, unit } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioFixture'
-import { preparePortfolioTruthAuction } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioTruthAuctionFixture'
+import { preparePortfolioCollateralRepairAuction } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioCollateralRepairAuctionFixture'
 import { getInfraContractAddresses } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
 import { DAY } from '../../../../solidity/ts/testSupport/simulator/utils/constants'
 import { addRepToMigrationBalance, splitMigrationRep, getZoltarForkThreshold, forkUniverse, getZoltarAddress } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
@@ -19,7 +19,7 @@ import { loadPortfolioAuctionSnapshot } from '@zoltar/statoblast-shared/statobla
 describe('explicit portfolio instruction lifecycle', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
 	test('bids once across restart, counts pending exposure, activates and manages the winning vault', async () => {
-		const context = await preparePortfolioTruthAuction(fixture)
+		const context = await preparePortfolioCollateralRepairAuction(fixture)
 		await context.report()
 		await context.open()
 		const account = privateKeyToAccount(`0x${'01'.repeat(32)}`)
@@ -27,6 +27,7 @@ describe('explicit portfolio instruction lifecycle', () => {
 		const client = createPublicClient({ chain: mainnet, transport: custom(context.mock) })
 		const wallet = createWalletClient({ account, chain: mainnet, transport: custom(context.mock) })
 		const settings = portfolioSettings()
+		await wallet.sendTransaction({ to: settings.deployment.weth, value: 10n * unit })
 		const scope = { address: fixture.portfolio, universeId: context.child, nextPositionId: 1n, sweepEnd: 0n }
 		settings.deployment.securityPoolFactory = getInfraContractAddresses().securityPoolFactory
 		settings.deployment.zoltar = getZoltarAddress()
@@ -42,20 +43,31 @@ describe('explicit portfolio instruction lifecycle', () => {
 		const bid = { ...base, id: 'one-bid', action: 'auction-bid' as const, lots: 2n, minimumAttoRepPerLot: 5n * unit, targetHealthFactorBps: 10_000n, maximumValueAttoEth: 10n * unit }
 		try {
 			const lowBid = { ...bid, id: 'losing-bid', minimumAttoRepPerLot: 100n * unit }
+			await expect(executePortfolioInstruction(wallet, settings, state, pool, { ...lowBid, maximumValueAttoEth: unit }, async () => true)).rejects.toThrow('exceeds collateral or commitment limits')
+			await wallet.writeContract({ address: settings.deployment.weth, abi: erc20Abi, functionName: 'approve', args: [context.auction, 1n] })
+			expect(await executePortfolioInstruction(wallet, settings, state, pool, lowBid, async () => true)).toBe(true)
+			expect(state.completedPortfolioInstructions?.[lowBid.id]).toBeUndefined()
+			expect(await client.readContract({ address: settings.deployment.weth, abi: erc20Abi, functionName: 'allowance', args: [account.address, context.auction] })).toBe(0n)
+			expect(await executePortfolioInstruction(wallet, settings, state, pool, lowBid, async () => true)).toBe(true)
+			expect(state.completedPortfolioInstructions?.[lowBid.id]).toBeUndefined()
+			expect(await client.readContract({ address: settings.deployment.weth, abi: erc20Abi, functionName: 'allowance', args: [account.address, context.auction] })).toBe(2n * unit)
+
 			expect(await executePortfolioInstruction(wallet, settings, state, pool, lowBid, async () => true)).toBe(true)
 			const lowAuction = await loadPortfolioAuctionSnapshot({ client, portfolio: fixture.portfolio, universeId: context.child, bidder: account.address })
 			const loser = lowAuction.auction?.bids[0]
 			if (loser === undefined) throw new Error('Missing losing bid')
 			await context.bid(context.owner, 5n, 10n * unit)
-			const beforeRefund = await client.getBalance({ address: account.address })
+			const beforeRefund = await client.readContract({ address: settings.deployment.weth, abi: erc20Abi, functionName: 'balanceOf', args: [account.address] })
 			const refund = { ...base, id: 'early-refund', action: 'auction-refund' as const, bidId: loser.id }
 			expect(await executePortfolioInstruction(wallet, settings, state, pool, refund, async () => true)).toBe(true)
 			const refundHash = state.activities.find(activity => activity.status === 'confirmed')?.hash
 			if (refundHash === undefined) throw new Error('Missing refund transaction')
 			const receipt = await client.getTransactionReceipt({ hash: refundHash })
 			if (receipt.effectiveGasPrice === undefined) throw new Error('Missing refund gas price')
-			expect(await client.getBalance({ address: account.address })).toBe(beforeRefund + 2n * unit - receipt.gasUsed * receipt.effectiveGasPrice)
+			expect(await client.readContract({ address: settings.deployment.weth, abi: erc20Abi, functionName: 'balanceOf', args: [account.address] })).toBe(beforeRefund + 2n * unit)
 			expect(await executePortfolioInstruction(wallet, settings, state, pool, refund, async () => true)).toBe(false)
+			expect(await executePortfolioInstruction(wallet, settings, state, pool, bid, async () => true)).toBe(true)
+			expect(state.completedPortfolioInstructions?.[bid.id]).toBeUndefined()
 			expect(await executePortfolioInstruction(wallet, settings, state, pool, bid, async () => true)).toBe(true)
 			const restored = await loadDurableState(settings.runtime.stateFile, settings.network.chainId)
 			state.completedPortfolioInstructions = restored.completedPortfolioInstructions
@@ -89,13 +101,13 @@ describe('explicit portfolio instruction lifecycle', () => {
 			await expect(executePortfolioInstruction(wallet, settings, state, pool, { ...base, id: 'invalid-child', action: 'vault-fork-choice', vault: winner.vault, outcome: 1n }, async () => true)).rejects.toThrow('Select and approve')
 			await context.mock.advanceTime(2n * DAY)
 			await context.report()
-			const beforeEarnings = await client.getBalance({ address: account.address })
+			const beforeEarnings = await client.readContract({ address: settings.deployment.weth, abi: erc20Abi, functionName: 'balanceOf', args: [account.address] })
 			expect(await executePortfolioInstruction(wallet, settings, state, pool, { ...base, id: 'earnings', action: 'vault-earnings', vault: winner.vault }, async () => true)).toBe(true)
 			const earningsHash = state.activities.find(activity => activity.status === 'confirmed')?.hash
 			if (earningsHash === undefined) throw new Error('Missing earnings transaction')
 			const earningsReceipt = await client.getTransactionReceipt({ hash: earningsHash })
 			if (earningsReceipt.effectiveGasPrice === undefined) throw new Error('Missing earnings gas price')
-			expect((await client.getBalance({ address: account.address })) + earningsReceipt.gasUsed * earningsReceipt.effectiveGasPrice).toBeGreaterThan(beforeEarnings)
+			expect(await client.readContract({ address: settings.deployment.weth, abi: erc20Abi, functionName: 'balanceOf', args: [account.address] })).toBeGreaterThan(beforeEarnings)
 			expect(await executePortfolioInstruction(wallet, settings, state, pool, { ...base, id: 'retire', action: 'vault-retire', vault: winner.vault, commitmentAttoEth: unit }, async () => true)).toBe(true)
 			const retired = await loadPortfolioObservation(client, settings, account.address, pending.nextScope, await client.getBlockNumber())
 			expect(retired.ownedVaults?.find(vault => vault.owner === winner.vault)?.ownerCommitmentAttoEth).toBe(unit)

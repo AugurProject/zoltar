@@ -126,7 +126,7 @@ export function TradingSection({
 		feeEligibleUnderwritingLimitAttoEth: selectedPool?.feeEligibleUnderwritingLimitAttoEth,
 		feeEndTimestamp: selectedPool?.feeAccrualState?.feeEndTimestamp,
 		feeIndexRemainder: selectedPool?.feeAccrualState?.feeIndexRemainder,
-		lastUpdatedFeeAccumulator: selectedPool?.feeAccrualState?.lastUpdatedFeeAccumulator,
+		lastFeeCheckpointNativeTime: selectedPool?.feeAccrualState?.lastFeeCheckpointNativeTime,
 		settlementCollateralAttoEth: selectedPool?.settlementCollateralAttoEth,
 		totalFeesOwedRemainder: selectedPool?.feeAccrualState?.totalFeesOwedRemainder,
 	})

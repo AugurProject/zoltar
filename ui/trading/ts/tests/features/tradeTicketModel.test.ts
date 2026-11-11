@@ -53,7 +53,7 @@ function feeTicketMarket(timestamp: bigint, currentRetentionRate: bigint, feeEnd
 				totalUnderwritingLimitAttoEth: eth,
 				feeEligibleUnderwritingLimitAttoEth: eth,
 				currentRetentionRate,
-				lastUpdatedFeeAccumulator: timestamp,
+				lastFeeCheckpointNativeTime: timestamp,
 				feeIndexRemainder: 0n,
 				totalFeesOwedRemainder: 0n,
 			},

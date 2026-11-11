@@ -1,12 +1,13 @@
+import { collateralSpendContinuation } from './collateral-approval.ts'
 import { EcosystemSnapshot, OperationDefinition, OperationWalletAssetDebit, PlanningOptions, PoolSnapshot } from '../types.ts'
 
 import { inputInteger, inputMatches } from '../input-values.ts'
 
 import { BINARY_OUTCOME_NONE, operationalPools, shareTokenId, sharesToEth, walletShares } from './planning.ts'
 
-import { amount, choose, eligible, encodeStep, erc20WalletDebit, erc1155WalletDebit, eventEvidence, mixSeed, optionAmount, planBase } from '../planning.ts'
+import { allowance, tokenInventory, erc20AllowanceEvidence, amount, choose, eligible, encodeStep, erc20WalletDebit, erc1155WalletDebit, eventEvidence, mixSeed, optionAmount, planBase } from '../planning.ts'
 
-import { securityPoolAbi, securityPoolPortfolioAbi } from '@zoltar/bot-shared/contracts/abi'
+import { erc20Abi, securityPoolAbi, securityPoolPortfolioAbi } from '@zoltar/bot-shared/contracts/abi'
 import { timestampDeadlineHasRequiredSafety } from '../timing.ts'
 
 function mintDeadline(snapshot: EcosystemSnapshot, pool: PoolSnapshot, options: PlanningOptions) {
@@ -20,7 +21,7 @@ function purchase(snapshot: EcosystemSnapshot, pool: PoolSnapshot, options: Plan
 	const quote = pool.purchaseQuote
 	if (quote === undefined || !inputMatches(options, 'pool', pool.address) || !inputMatches(options, 'amount', quote.mintAttoEth) || !operationalPools(snapshot).includes(pool) || mintDeadline(snapshot, pool, options) === undefined) return undefined
 	const mint = amount(quote.mintAttoEth)
-	const value = mint + amount(quote.feeAttoEth) + amount(quote.premiumAttoEth)
+	const value = mint + amount(quote.feeAttoEth)
 	if (
 		mint === 0n ||
 		amount(quote.minimumShares) === 0n ||
@@ -48,7 +49,7 @@ export function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Op
 		actionLabel = 'Redeem winning shares'
 		signature = 'SharesRedeemed(address,uint256,uint256,uint256,uint256)'
 	}
-	return {
+	const definition: OperationDefinition = {
 		buildPlan(snapshot, options) {
 			const candidates = snapshot.pools.filter(pool => {
 				if (!inputMatches(options, 'pool', pool.address)) return false
@@ -92,13 +93,34 @@ export function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Op
 				definitionId: id,
 				ecosystem: 'statoblast',
 				label: actionLabel,
-				metadata: { amount: spend.toString(), pool: pool.address },
+				metadata: { amount: spend.toString(), pool: pool.address, ...(quotedPurchase === undefined ? {} : { collateralToken: snapshot.deployments.weth, portfolio: pool.portfolio, collateralSpender: quotedPurchase.quote.spender, collateralBudget: quotedPurchase.value.toString() }) },
 				deadlineTimestamp: kind === 'create' ? mintDeadline(snapshot, pool, options) : undefined,
 				postconditions: [kind === 'create' ? 'All three outcome share balances increase equally' : 'Pool collateral and wallet share balances decrease consistently'],
 				risk: kind === 'create' ? 'medium' : 'low',
 				snapshot,
-				steps: [encodeStep({ abi: kind === 'create' ? securityPoolPortfolioAbi : securityPoolAbi, args, evidence: [eventEvidence(pool.address, signature)], functionName: method, id: method, label: method, to: kind === 'create' ? pool.portfolio : pool.address, value: 0n, walletAssetDebits })],
+				maximumCleanupTransactionCount: quotedPurchase === undefined ? undefined : 1,
+				steps: [
+					...(quotedPurchase !== undefined && allowance(tokenInventory(snapshot, snapshot.deployments.weth), quotedPurchase.quote.spender) < quotedPurchase.value
+						? [
+								encodeStep({
+									abi: erc20Abi,
+									args: [quotedPurchase.quote.spender, quotedPurchase.value],
+									evidence: [erc20AllowanceEvidence(snapshot.deployments.weth, snapshot.wallet.address, quotedPurchase.quote.spender, quotedPurchase.value)],
+									functionName: 'approve',
+									id: 'approve-portfolio-collateral',
+									label: 'Approve portfolio collateral',
+									to: snapshot.deployments.weth,
+								}),
+							]
+						: []),
+					encodeStep({ abi: kind === 'create' ? securityPoolPortfolioAbi : securityPoolAbi, args, evidence: [eventEvidence(pool.address, signature)], functionName: method, id: method, label: method, to: kind === 'create' ? pool.portfolio : pool.address, value: 0n, walletAssetDebits }),
+				],
 			})
+		},
+
+		buildContinuationPlan(snapshot, options, context) {
+			if (kind !== 'create') return definition.buildPlan(snapshot, options)
+			return collateralSpendContinuation({ snapshot, options, context, buildPlan: definition.buildPlan, approvalId: 'approve-portfolio-collateral', actionId: method, label: 'Revoke portfolio collateral approval', risk: 'medium' })
 		},
 		classification: 'selectable',
 		contract: kind === 'create' ? 'SecurityPoolPortfolio' : 'SecurityPool',
@@ -126,4 +148,5 @@ export function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Op
 		method,
 		risk: kind === 'create' ? 'medium' : 'low',
 	}
+	return definition
 }

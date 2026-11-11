@@ -51,7 +51,7 @@ export async function loadSecurityPoolDetails(client: ReadClient, deployment: Se
 			feeEndTimestamp: central.feeEndTimestamp,
 			feeIndexRemainder: central.feeIndexRemainder,
 			totalFeesOwedRemainder: central.totalFeesOwedRemainder,
-			lastUpdatedFeeAccumulator: central.lastUpdatedFeeAccumulator,
+			lastFeeCheckpointNativeTime: central.lastFeeCheckpointNativeTime,
 		},
 		feeEligibleUnderwritingLimitAttoEth: central.feeEligibleUnderwritingLimitAttoEth,
 		hasForkActivity: forkTime > 0n || deployment.parent !== zeroAddress,

@@ -36,6 +36,9 @@ test('authenticates factory, ledger, index and REP identity and pins every read 
 	expect(result.snapshot.blockNumber).toBe(123n)
 	expect(fixture.reads.length).toBeGreaterThan(30)
 	expect(fixture.reads.every(read => read.blockNumber === 123n)).toBe(true)
+	const ledgerAuthorityReads = fixture.reads.filter(read => read.functionName === 'capitalLedger').map(read => read.address)
+	expect(ledgerAuthorityReads).toContain(fixture.observation.snapshot.commitmentIndex)
+	expect(ledgerAuthorityReads).toContain(fixture.module('SecurityPoolCapitalFeeStreams'))
 	fixture.values['factory'] = fixture.settings.deployment.zoltar
 	await expect(loadPortfolioObservation(fixture.client, fixture.settings, undefined, fixture.observation.nextScope, 123n)).rejects.toThrow('another factory')
 	fixture.values['factory'] = fixture.settings.deployment.securityPoolFactory
