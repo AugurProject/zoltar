@@ -430,7 +430,7 @@
 						</tr>
 						<tr>
 							<td><code>callbackGasLimit</code></td>
-							<td><code>4,000,000 gas</code> for feed acceptance and funding recovery.</td>
+							<td><code>4,000,000 gas</code> for ordinary reports. <a href="#sponsor-takeover">Operation batches</a> add their declared gas allowance.</td>
 							<td>Gas forwarded to the settlement callback. Settlement also needs enough surrounding gas to satisfy OpenOracle's callback headroom check.</td>
 						</tr>
 
@@ -467,7 +467,7 @@
 						<tr>
 							<td><code>callbackContract</code></td>
 							<td>The candidate's <code>SharedPoolReportEscrow</code>.<br />Set when the report is created</td>
-							<td>Callbacks reconcile candidate funding and submit the settled price to the feed. Capital operations execute separately.</td>
+							<td>Callbacks reconcile candidate funding and submit the settled price to the feed, including any <a href="#sponsor-takeover">sponsor-authorized operation batch</a>.</td>
 						</tr>
 						<tr>
 							<td><code>PRICE_VALID_FOR_SECONDS</code> / <code>SEPOLIA_PRICE_VALID_FOR_SECONDS</code></td>
