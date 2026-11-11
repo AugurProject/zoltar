@@ -13,10 +13,10 @@ interface IPortfolioSettlement {
 	function redeemQuestionSettlement(address recipient, uint256 burnedShares) external returns (uint256 paidCashAttoEth, uint256 totalEconomicShares, uint256 questionCashAttoEth);
 	function checkpointQuestionSettlement()
 		external
-		returns (uint256 totalEconomicShares, uint256 questionCashAttoEth, uint48 logicalClock);
+		returns (uint256 totalEconomicShares, uint256 questionCashAttoEth, uint48 portfolioTime);
 	function refreshQuestionSettlement()
 		external
-		returns (uint256 totalEconomicShares, uint256 questionCashAttoEth, uint48 logicalClock);
+		returns (uint256 totalEconomicShares, uint256 questionCashAttoEth, uint48 portfolioTime);
 	function quoteQuestionSettlement(address pool, uint256 outcomeShares) external view returns (uint256 cashAttoEth);
 	function quoteQuestionRecoveryRep(address pool, uint256 outcomeShares) external view returns (uint256 recoveryAttoRep);
 	function quoteQuestionMint(address pool, uint256 cashAttoEth) external view returns (uint256 outcomeShares);

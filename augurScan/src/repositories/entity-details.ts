@@ -65,17 +65,17 @@ export const reportDetailData = async (
 export const eventEntityRows = async (sql: SQL, query: { readonly snapshotBlock: string; readonly chainId: number; readonly address: string; readonly domain: 'auction' | 'escalation'; readonly page: PageBoundary }) => {
 	const { chainId, address, domain, page, snapshotBlock } = query
 	return domain === 'auction'
-		? await sql`SELECT event.*, block.timestamp AS block_timestamp FROM truth_auction_events event JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash AND block.canonical WHERE event.chain_id = ${chainId} AND event.auction_address = ${address} AND event.canonical AND event.block_number <= ${snapshotBlock} AND (event.block_number, event.log_index, event.tx_hash) < (${page.block}::bigint, ${page.log}::integer, ${page.tx}) ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT ${page.limit}`
+		? await sql`SELECT event.*, block.timestamp AS block_timestamp FROM collateral_repair_auction_events event JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash AND block.canonical WHERE event.chain_id = ${chainId} AND event.auction_address = ${address} AND event.canonical AND event.block_number <= ${snapshotBlock} AND (event.block_number, event.log_index, event.tx_hash) < (${page.block}::bigint, ${page.log}::integer, ${page.tx}) ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT ${page.limit}`
 		: await sql`SELECT event.*, block.timestamp AS block_timestamp FROM escalation_game_events event JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash AND block.canonical WHERE event.chain_id = ${chainId} AND event.game_address = ${address} AND event.canonical AND event.block_number <= ${snapshotBlock} AND (event.block_number, event.log_index, event.tx_hash) < (${page.block}::bigint, ${page.log}::integer, ${page.tx}) ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT ${page.limit}`
 }
 
 export const auctionDetailData = async (sql: SQL, chainId: number, address: string, snapshotBlock: string) => {
 	const [bids, finalizations] = await Promise.all([
 		sql`SELECT event_data->>'tick' AS tick, sum((event_data->>'bidAmountAttoEth')::numeric)::text AS amount_atto_eth
-			FROM truth_auction_events WHERE chain_id = ${chainId} AND auction_address = ${address}
+			FROM collateral_repair_auction_events WHERE chain_id = ${chainId} AND auction_address = ${address}
 				AND canonical AND block_number <= ${snapshotBlock} AND event_name = 'BidSubmitted'
 			GROUP BY event_data->>'tick' ORDER BY (event_data->>'tick')::numeric DESC LIMIT 1001`,
-		sql`SELECT * FROM truth_auction_events WHERE chain_id = ${chainId} AND auction_address = ${address}
+		sql`SELECT * FROM collateral_repair_auction_events WHERE chain_id = ${chainId} AND auction_address = ${address}
 			AND canonical AND block_number <= ${snapshotBlock} AND event_name = 'AuctionFinalized' ORDER BY block_number DESC, log_index DESC LIMIT 1`,
 	])
 	return { bids, finalization: finalizations[0] }

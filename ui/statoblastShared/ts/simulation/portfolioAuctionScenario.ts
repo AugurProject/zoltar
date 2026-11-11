@@ -51,7 +51,7 @@ async function sendPortfolioTransaction(client: Parameters<typeof sendUnlabelled
 
 /**
  * Seeds the shared portfolio, forks it on its first question and opens the Yes
- * branch truth auction with the owner's winning bid, the owner's excluded bid and
+ * branch collateral repair auction with the owner's winning bid, the owner's excluded bid and
  * a rival's tied bids, so refunds, activation and vault controls are all reachable.
  */
 export async function seedPortfolioAuctionScenario(parameters: ScenarioSeedParameters) {
@@ -144,11 +144,11 @@ export async function seedPortfolioAuctionScenario(parameters: ScenarioSeedParam
 	await reportStep('Settled the branch REP price')
 
 	const auctionFor = (bidder: Address) => loadPortfolioAuctionSnapshot({ client: reader, portfolio, bidder, universeId: child })
-	await sendPortfolioTransaction(ownerClient, buildPortfolioAuctionOpenRequest(await auctionFor(owner)), 'Open the branch truth auction')
-	await reportStep('Opened the branch truth auction')
+	await sendPortfolioTransaction(ownerClient, buildPortfolioAuctionOpenRequest(await auctionFor(owner)), 'Open the branch collateral repair auction')
+	await reportStep('Opened the branch collateral repair auction')
 	let snapshot = await auctionFor(owner)
 	const auction = snapshot.auction
-	if (auction === undefined) throw new Error('Expected the opened branch truth auction')
+	if (auction === undefined) throw new Error('Expected the opened branch collateral repair auction')
 	const minimum = auction.minimumCollateralAttoRepPerLot
 	await sendPortfolioTransaction(ownerClient, buildPortfolioAuctionBidRequest(snapshot, { lots: 2n, minimumAttoRepPerLot: minimum, targetHealthFactorBps: 10_000n }), 'Submit the winning bid')
 	await reportStep('Owner placed the winning bid')

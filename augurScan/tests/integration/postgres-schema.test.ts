@@ -3,6 +3,7 @@ import { handleApi } from '../../src/api.ts'
 import { canonicalTablePolicies, ScannerDatabase } from '../../src/database.ts'
 import { initializeSchema } from '../../src/schema.ts'
 import { CURRENT_SCHEMA_VERSION, UNSUPPORTED_SCHEMA_MESSAGE } from '../../src/schema-policy.ts'
+import { rewindAuctionNamingToV5 } from '../support/schema-fixtures.ts'
 import { address, blockHash, chainId, discoveredAddress, expectBehaviorChangingSchemaObjectsRejected, inverseUniswapPairAddress, pairAddress, postgresTest, rediscoveredAddress, requirePostgresUrl, wethAddress } from '../support/postgres-fixtures.ts'
 
 const v1ForkLogs = [
@@ -26,6 +27,7 @@ const survivingStateReadResult = {
 
 // Removes every table, column, and index introduced after schema version 1 and marks the database as v1.
 const rewindSchemaToV1Layout = async (database: ScannerDatabase): Promise<void> => {
+	await rewindAuctionNamingToV5(database)
 	await database.sql.unsafe(
 		'DROP TABLE public.indexer_ownership, public.address_balance_observations, public.token_metadata_observations, public.entity_state_observations, public.history_invalidation_causes, public.action_interpretations, public.log_interpretations, public.history_invalidation_occurrences, public.chain_reorganizations, public.indexer_runs, public.augurscan_schema_migrations',
 	)
@@ -185,7 +187,7 @@ const expectMigratedTimelineEvidence = async (database: ScannerDatabase, migrati
 	const migratedMarker = await database.sql`SELECT schema_version FROM augurscan_schema WHERE singleton`
 	expect(migratedMarker).toEqual([{ schema_version: CURRENT_SCHEMA_VERSION }])
 	const appliedMigrations = await database.sql`SELECT schema_version FROM augurscan_schema_migrations ORDER BY schema_version`
-	expect(appliedMigrations).toEqual([{ schema_version: '2' }, { schema_version: '3' }, { schema_version: '4' }, { schema_version: '5' }])
+	expect(appliedMigrations).toEqual([{ schema_version: '2' }, { schema_version: '3' }, { schema_version: '4' }, { schema_version: '5' }, { schema_version: '6' }])
 	const migratedTimeline = await database.sql`
 		SELECT entity_identity, source_event, canonical FROM protocol_timeline_entries
 		WHERE chain_id = ${migrationChainId} ORDER BY block_number
@@ -345,7 +347,7 @@ postgresTest('migrates v1 canonical and orphan timeline evidence through current
 	const migrationChainId = chainId + 20 + process.pid
 	try {
 		await initializeSchema(database.sql)
-		await database.sql`DELETE FROM networks WHERE chain_id = ${migrationChainId}`
+		await database.sql.unsafe('TRUNCATE TABLE networks CASCADE')
 		await rewindSchemaToV1Layout(database)
 		await expectAlteredV1LayoutsRejected(database)
 		await seedV1TimelineEvidence(database, migrationChainId)
@@ -377,6 +379,56 @@ postgresTest('classifies every chain-scoped canonical table', async () => {
 		`
 		expect(rows.map((row: Record<string, unknown>) => String(row['table_name']))).toEqual(canonicalTablePolicies.map(({ table }) => table).toSorted())
 	} finally {
+		await database.close()
+	}
+})
+
+postgresTest('renames v5 auction storage without losing canonical or orphan history and pool bindings', async () => {
+	const database = new ScannerDatabase(requirePostgresUrl())
+	const migrationChainId = chainId + 60 + process.pid
+	try {
+		await initializeSchema(database.sql)
+		await database.sql`INSERT INTO networks (chain_id, id, name, explorer_base_url, start_block) VALUES (${migrationChainId}, ${`auction-rename-${migrationChainId}`}, 'Auction rename fixture', 'https://example.invalid', 0)`
+		for (const canonical of [true, false]) {
+			const number = canonical ? 1 : 2
+			const hash = blockHash(`auction-rename-block-${number}`)
+			const txHash = blockHash(`auction-rename-transaction-${number}`)
+			await database.sql`INSERT INTO blocks (chain_id, number, hash, parent_hash, timestamp, canonical) VALUES (${migrationChainId}, ${number}, ${hash}, ${blockHash('auction-rename-parent')}, now(), ${canonical})`
+			await database.sql`INSERT INTO transactions (chain_id, hash, block_hash, block_number, transaction_index, from_address, to_address, value, input, status, receipt, canonical) VALUES (${migrationChainId}, ${txHash}, ${hash}, ${number}, 0, ${address.toLowerCase()}, ${discoveredAddress.toLowerCase()}, 0, '0x', 'success', '{}'::jsonb, ${canonical})`
+			// These are historical v5 decoded arguments; schema migration must not rewrite their provenance.
+			const deploymentArgs = JSON.stringify({ securityPool: address, truthAuction: discoveredAddress })
+			const auctionArgs = JSON.stringify({ raisedAttoEth: 7n.toString(), soldAttoRep: 11n.toString() })
+			await database.sql`
+				INSERT INTO logs (chain_id, tx_hash, block_hash, block_number, transaction_index, log_index, emitter_address, topics, data, event_name, arguments, decode_status, summary, canonical)
+				VALUES (${migrationChainId}, ${txHash}, ${hash}, ${number}, 0, 0, ${address.toLowerCase()}, '[]'::jsonb, '0x', 'DeploySecurityPool', (${deploymentArgs}::text)::jsonb, 'decoded', 'DeploySecurityPool', ${canonical}),
+				(${migrationChainId}, ${txHash}, ${hash}, ${number}, 0, 1, ${discoveredAddress.toLowerCase()}, '[]'::jsonb, '0x', 'AuctionFinalized', (${auctionArgs}::text)::jsonb, 'decoded', 'AuctionFinalized', ${canonical})
+			`
+			await database.sql`
+				INSERT INTO pools (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, parent_address, universe_id, question_id, collateral_repair_auction_address, coordinator_address, share_token_address, security_multiplier_bps, initial_priority_fee_atto_eth_per_gas, initial_retention_rate, initial_settlement_collateral_atto_eth, canonical)
+				VALUES (${migrationChainId}, ${hash}, ${txHash}, 0, ${number}, ${address.toLowerCase()}, ${discoveredAddress.toLowerCase()}, 1, 2, ${discoveredAddress.toLowerCase()}, ${address.toLowerCase()}, ${rediscoveredAddress.toLowerCase()}, 10500, 1, 1000000000000000000, 7, ${canonical})
+			`
+			await database.sql`INSERT INTO collateral_repair_auction_events (chain_id, block_hash, tx_hash, log_index, block_number, auction_address, event_name, event_data, canonical) VALUES (${migrationChainId}, ${hash}, ${txHash}, 1, ${number}, ${discoveredAddress.toLowerCase()}, 'AuctionFinalized', (${auctionArgs}::text)::jsonb, ${canonical})`
+		}
+		const historyBefore = await database.sql`SELECT block_number, auction_address, event_name, event_data, canonical, observed_at FROM collateral_repair_auction_events WHERE chain_id = ${migrationChainId} ORDER BY block_number`
+		const bindingsBefore = await database.sql`SELECT pool_address, collateral_repair_auction_address, canonical FROM pools WHERE chain_id = ${migrationChainId} ORDER BY block_number`
+		const logsBefore = await database.sql`SELECT arguments FROM logs WHERE chain_id = ${migrationChainId} ORDER BY block_number, log_index`
+		await rewindAuctionNamingToV5(database)
+		await database.sql`UPDATE augurscan_schema SET schema_version = '5' WHERE singleton`
+		await database.sql`DELETE FROM augurscan_schema_migrations WHERE schema_version = '6'`
+		await initializeSchema(database.sql)
+		expect(await database.sql`SELECT block_number, auction_address, event_name, event_data, canonical, observed_at FROM collateral_repair_auction_events WHERE chain_id = ${migrationChainId} ORDER BY block_number`).toEqual(historyBefore)
+		expect(await database.sql`SELECT pool_address, collateral_repair_auction_address, canonical FROM pools WHERE chain_id = ${migrationChainId} ORDER BY block_number`).toEqual(bindingsBefore)
+		expect(await database.sql`SELECT arguments FROM logs WHERE chain_id = ${migrationChainId} ORDER BY block_number, log_index`).toEqual(logsBefore)
+		const migratedMarker = await database.sql`SELECT schema_version FROM augurscan_schema WHERE singleton`
+		expect(migratedMarker).toEqual([{ schema_version: CURRENT_SCHEMA_VERSION }])
+		const oldRelation = await database.sql`SELECT to_regclass('public.truth_auction_events') AS old_name`
+		expect(oldRelation).toEqual([{ old_name: null }])
+		// A second startup must accept the migrated layout without replaying DDL or changing history.
+		await initializeSchema(database.sql)
+		const historyAfterSecondStartup = await database.sql`SELECT count(*)::integer AS count FROM collateral_repair_auction_events WHERE chain_id = ${migrationChainId}`
+		expect(historyAfterSecondStartup).toEqual([{ count: 2 }])
+	} finally {
+		await database.sql.unsafe('TRUNCATE TABLE networks CASCADE')
 		await database.close()
 	}
 })

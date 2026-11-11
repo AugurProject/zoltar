@@ -11,8 +11,8 @@ import { ISecurityPoolReporterLedger } from './interfaces/ISecurityPoolReporterL
 
 interface IReporterPortfolioClock {
 	function forkController() external view returns (address);
-	function logicalTime(uint248 universeId) external view returns (uint48);
-	function forkLogicalTime(uint248 universeId) external view returns (uint48);
+	function portfolioTime(uint248 universeId) external view returns (uint48);
+	function forkPortfolioTime(uint248 universeId) external view returns (uint48);
 }
 
 interface IReporterGameIdentity {
@@ -103,7 +103,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		address existing = registeredGames[universeId][questionId];
 		require(existing == address(0) || existing == game, 'Reporter game already bound');
 		if (existing == game) return;
-		if (!book.isSealed) _freezeMatured(universeId, book, _logicalTime(universeId));
+		if (!book.isSealed) _freezeMatured(universeId, book, _portfolioTime(universeId));
 		(Question memory state, bool finalClaim) = _question(universeId, questionId);
 		require(!finalClaim || state.balanceAttoRep != 0, 'Use source reporter claim');
 		require((!book.isSealed && zoltar.getForkTime(universeId) == 0) || (finalClaim && state.balanceAttoRep != 0), 'Reporter universe sealed');
@@ -134,7 +134,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		Game memory identity = _authorizedGame(game);
 		Book storage book = _book(identity.universeId);
 		require(!book.isSealed && zoltar.getForkTime(identity.universeId) == 0, 'Reporter universe is forked');
-		_freezeMatured(identity.universeId, book, _logicalTime(identity.universeId));
+		_freezeMatured(identity.universeId, book, _portfolioTime(identity.universeId));
 		(Question memory state, bool finalClaim) = _question(identity.universeId, identity.questionId);
 		require(!finalClaim, 'Reporter claim is final');
 		require(IERC20(address(zoltar.getRepToken(identity.universeId))).balanceOf(address(this)) >= book.liveAttoRep + book.finalAttoRep + amountAttoRep, 'Reporter deposit is not funded');
@@ -151,7 +151,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		Book storage book = _book(identity.universeId);
 		if (!book.isSealed) {
 			uint256 forkTime = zoltar.getForkTime(identity.universeId);
-			if (forkTime == 0) _freezeMatured(identity.universeId, book, _logicalTime(identity.universeId));
+			if (forkTime == 0) _freezeMatured(identity.universeId, book, _portfolioTime(identity.universeId));
 			else _sealFork(identity.universeId, book, forkTime);
 		}
 		(Question memory state, bool finalClaim) = _question(identity.universeId, identity.questionId);
@@ -175,11 +175,11 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		require(identity.registered, 'Reporter game is not registered');
 		Book storage book = _book(identity.universeId);
 		require(!book.isSealed && zoltar.getForkTime(identity.universeId) == 0, 'Reporter universe is forked');
-		_freezeMatured(identity.universeId, book, _logicalTime(identity.universeId));
+		_freezeMatured(identity.universeId, book, _portfolioTime(identity.universeId));
 		(Question memory state, bool finalClaim) = _question(identity.universeId, identity.questionId);
 		require(!finalClaim, 'Reporter finality is immutable');
 		// Deadlines are expressed in the portfolio clock, which pauses across forks.
-		require(finalAfter == 0 || finalAfter >= _logicalTime(identity.universeId), 'Reporter finality already elapsed');
+		require(finalAfter == 0 || finalAfter >= _portfolioTime(identity.universeId), 'Reporter finality already elapsed');
 		_changeFinality(book, state.finalAfter, state.balanceAttoRep, false);
 		state.finalAfter = finalAfter;
 		state.scheduledUniverseId = identity.universeId;
@@ -191,7 +191,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 	/// @notice Finalize elapsed reporter deadlines without starting any migration work.
 	function checkpoint(uint248 universeId) external {
 		Book storage book = _book(universeId);
-		if (!book.isSealed) _freezeMatured(universeId, book, _logicalTime(universeId));
+		if (!book.isSealed) _freezeMatured(universeId, book, _portfolioTime(universeId));
 	}
 
 	function freezeFork(uint248 universeId) external onlyForkAuthority {
@@ -204,7 +204,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 	function triggerFork(uint248 universeId, uint256 questionId) external onlyPortfolio {
 		Book storage book = _book(universeId);
 		require(!book.isSealed && zoltar.getForkTime(universeId) == 0, 'Reporter universe already forked');
-		_freezeMatured(universeId, book, _logicalTime(universeId));
+		_freezeMatured(universeId, book, _portfolioTime(universeId));
 		(Question memory state, bool finalClaim) = _question(universeId, questionId);
 		uint256 threshold = zoltar.getForkThresholdAttoRep(universeId);
 		require(!finalClaim && state.balanceAttoRep >= threshold, 'Triggering question lacks fork admission REP');
@@ -247,8 +247,8 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 
 	function _sealFork(uint248 universeId, Book storage book, uint256 forkTime) private {
 		require(forkTime != 0 && forkTime <= type(uint48).max, 'Reporter fork is missing');
-		uint48 logicalForkTime = IReporterPortfolioClock(portfolio).forkLogicalTime(universeId);
-		_freezeMatured(universeId, book, logicalForkTime);
+		uint48 forkPortfolioTime = IReporterPortfolioClock(portfolio).forkPortfolioTime(universeId);
+		_freezeMatured(universeId, book, forkPortfolioTime);
 		book.isSealed = true;
 		uint256 prepared = zoltar.getMigrationRepBalanceAttoRep(address(this), universeId);
 		require(prepared <= book.liveAttoRep, 'Reporter migration exceeds live inventory');
@@ -268,8 +268,8 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		if (finalClaim && finalizingUniversePlusOne - 1 != universeId) state.balanceAttoRep = 0;
 	}
 
-	function _logicalTime(uint248 universeId) private view returns (uint48) {
-		return IReporterPortfolioClock(portfolio).logicalTime(universeId);
+	function _portfolioTime(uint248 universeId) private view returns (uint48) {
+		return IReporterPortfolioClock(portfolio).portfolioTime(universeId);
 	}
 
 	function _freezeMatured(uint248 universeId, Book storage book, uint48 timestamp) private {

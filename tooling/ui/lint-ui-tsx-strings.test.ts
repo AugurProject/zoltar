@@ -106,8 +106,11 @@ test('lint-ui-tsx-strings rejects direct children and factory-call literals', ()
 })
 
 test('lint-ui-tsx-strings ignores lowercase helper mode tokens passed to render helpers', () => {
-	const bidFailures = lintSourceText('ui/zoltar/ts/components/TestRenderHelperMode.tsx', "export function TestRenderHelperMode() { function renderCoverageCommitmentNotice() { return <>{renderTruthAuctionCoverageCommitmentNotice('bid')}</> } return renderCoverageCommitmentNotice() }")
-	const settlementFailures = lintSourceText('ui/zoltar/ts/components/TestRenderHelperSettlementMode.tsx', "export function TestRenderHelperSettlementMode() { const renderCoverageCommitmentNotice = () => <>{renderTruthAuctionCoverageCommitmentNotice('settlement', true)}</>; return renderCoverageCommitmentNotice() }")
+	const bidFailures = lintSourceText('ui/zoltar/ts/components/TestRenderHelperMode.tsx', "export function TestRenderHelperMode() { function renderCoverageCommitmentNotice() { return <>{renderCollateralRepairAuctionCoverageCommitmentNotice('bid')}</> } return renderCoverageCommitmentNotice() }")
+	const settlementFailures = lintSourceText(
+		'ui/zoltar/ts/components/TestRenderHelperSettlementMode.tsx',
+		"export function TestRenderHelperSettlementMode() { const renderCoverageCommitmentNotice = () => <>{renderCollateralRepairAuctionCoverageCommitmentNotice('settlement', true)}</>; return renderCoverageCommitmentNotice() }",
+	)
 
 	expect(bidFailures).toHaveLength(0)
 	expect(settlementFailures).toHaveLength(0)

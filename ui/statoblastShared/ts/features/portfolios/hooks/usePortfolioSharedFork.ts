@@ -224,7 +224,7 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 		start: () =>
 			run('startPortfolioFork', 'Start branch migration', startReason, selected => {
 				if (selected.branch === undefined) throw new Error('Select a branch.')
-				return { ...buildPortfolioForkStartRequest({ ...base(selected), outcomeIndex: selected.branch.outcomeIndex }), reviewDescription: 'Migrate this branch’s shared REP and prepare its truth auction. This does not choose anyone’s branch or process each question.' }
+				return { ...buildPortfolioForkStartRequest({ ...base(selected), outcomeIndex: selected.branch.outcomeIndex }), reviewDescription: 'Migrate this branch’s shared REP and prepare its collateral repair auction. This does not choose anyone’s branch or process each question.' }
 			}),
 		finalize: () =>
 			run('finalizePortfolioFork', 'Activate fork branch', finalizeReason, selected => {

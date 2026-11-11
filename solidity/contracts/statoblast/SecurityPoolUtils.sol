@@ -7,6 +7,7 @@ library SecurityPoolUtils {
 	// fees
 	uint256 constant PRICE_PRECISION = 1e18;
 	uint256 constant BPS_DENOMINATOR = 10_000;
+	uint256 constant MINIMUM_SECURITY_MULTIPLIER_BPS = 10_500;
 
 	function calculateInitialEscalationDepositAttoRep(uint256 theoreticalSupplyAttoRep) public pure returns (uint256) {
 		uint256 supplyBasedDepositAttoRep = theoreticalSupplyAttoRep / 10_000_000;

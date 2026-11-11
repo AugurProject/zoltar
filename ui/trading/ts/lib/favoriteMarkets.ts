@@ -32,7 +32,7 @@ function decodeCachedLiveMarket(value: unknown) {
 					totalUnderwritingLimitAttoEth: accounting.bigint('totalUnderwritingLimitAttoEth'),
 					feeEligibleUnderwritingLimitAttoEth: accounting.bigint('feeEligibleUnderwritingLimitAttoEth'),
 					currentRetentionRate: accounting.bigint('currentRetentionRate'),
-					lastUpdatedFeeAccumulator: accounting.bigint('lastUpdatedFeeAccumulator'),
+					lastFeeCheckpointNativeTime: accounting.bigint('lastFeeCheckpointNativeTime'),
 					feeIndexRemainder: accounting.bigint('feeIndexRemainder'),
 					totalFeesOwedRemainder: accounting.bigint('totalFeesOwedRemainder'),
 				}

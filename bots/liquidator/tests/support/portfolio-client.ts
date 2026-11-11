@@ -125,8 +125,8 @@ export function portfolioClient(overrides: Record<string, unknown> = {}) {
 			if (property === 'readContract')
 				return async (parameters: { address: string; functionName: string; blockNumber?: bigint; args?: readonly unknown[] }) => {
 					reads.push(parameters)
+					if (parameters.functionName === 'capitalLedger' && [snapshot.commitmentIndex, module('SecurityPoolCapitalFeeStreams')].includes(getAddress(parameters.address))) return snapshot.capitalLedger
 					if (parameters.functionName === 'portfolio') {
-						if ([snapshot.commitmentIndex, module('SecurityPoolCapitalFeeStreams')].includes(getAddress(parameters.address))) return snapshot.capitalLedger
 						if (getAddress(parameters.address) === module('SecurityPoolSettlementBook')) return module('SecurityPoolPortfolioSettlement')
 					}
 					if (parameters.functionName === 'ledger' && [module('SecurityPoolCapitalLifecycleDelegate'), module('SecurityPoolCapitalAuctionDelegate')].includes(getAddress(parameters.address))) return snapshot.capitalLedger

@@ -30,7 +30,7 @@ export interface CachedPoolDeployment {
 	questionId: string
 	securityPool: Address
 	shareToken: Address
-	truthAuction: Address
+	collateralRepairAuction: Address
 	universeId: string
 }
 
@@ -181,14 +181,14 @@ function parseQuestion(value: unknown, index: number): QuestionSnapshot {
 function parsePoolDeployment(value: unknown, index: number): CachedPoolDeployment {
 	const label = `immutable topology pool deployment ${index.toString()}`
 	const deployment = requiredRecord(value, label)
-	assertExactKeys(deployment, ['coordinator', 'parent', 'questionId', 'securityPool', 'shareToken', 'truthAuction', 'universeId'], [], label)
+	assertExactKeys(deployment, ['coordinator', 'parent', 'questionId', 'securityPool', 'shareToken', 'collateralRepairAuction', 'universeId'], [], label)
 	return {
 		coordinator: address(deployment['coordinator'], `${label}.coordinator`),
 		parent: address(deployment['parent'], `${label}.parent`),
 		questionId: unsignedIntegerString(deployment['questionId'], `${label}.questionId`),
 		securityPool: address(deployment['securityPool'], `${label}.securityPool`),
 		shareToken: address(deployment['shareToken'], `${label}.shareToken`),
-		truthAuction: address(deployment['truthAuction'], `${label}.truthAuction`),
+		collateralRepairAuction: address(deployment['collateralRepairAuction'], `${label}.collateralRepairAuction`),
 		universeId: unsignedIntegerString(deployment['universeId'], `${label}.universeId`),
 	}
 }
