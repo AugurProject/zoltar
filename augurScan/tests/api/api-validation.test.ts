@@ -279,7 +279,7 @@ test('requires complete, renderable state catalog entities', () => {
 		universe_id: '0',
 		question_id: 'question',
 		question_title: null,
-		truth_auction_address: 'auction',
+		collateral_repair_auction_address: 'auction',
 		coordinator_address: 'coordinator',
 		share_token_address: 'shares',
 		security_multiplier_bps: '15000',

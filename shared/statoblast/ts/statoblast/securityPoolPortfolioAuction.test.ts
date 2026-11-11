@@ -129,7 +129,7 @@ function fixture(overrides: Record<string, unknown> = {}, options: { timestamp?:
 const load = (source: ReturnType<typeof fixture>, bidStart = 0n, bidCount = 16) => loadPortfolioAuctionSnapshot({ client: source.client, portfolio, bidder, universeId: 42n, bidStart, bidCount })
 const bidTerms = { lots: 2n, minimumAttoRepPerLot: 5n * unit, targetHealthFactorBps: 12_000n }
 
-describe('portfolio truth auction SDK', () => {
+describe('portfolio collateral repair auction SDK', () => {
 	test('ETH-only bids need no existing REP or approval and pledge only purchased collateral', async () => {
 		const source = fixture({ balanceOf: 0n, allowance: 0n })
 		const snapshot = await load(source)
@@ -160,7 +160,7 @@ describe('portfolio truth auction SDK', () => {
 		expect(snapshot.auction).toBeUndefined()
 		expect(source.calls.some(call => call.address === zeroAddress || call.functionName === 'oracleExposure')).toBe(false)
 		expect(portfolioAuctionOpeningReason(snapshot)).toContain('Start a branch')
-		expect(() => quotePortfolioAuctionBid(snapshot, bidTerms)).toThrow('no truth auction')
+		expect(() => quotePortfolioAuctionBid(snapshot, bidTerms)).toThrow('no collateral repair auction')
 	})
 	test('rejects mismatched route, ledger, engine and vault bindings before funding', async () => {
 		for (const [address, name, value] of [

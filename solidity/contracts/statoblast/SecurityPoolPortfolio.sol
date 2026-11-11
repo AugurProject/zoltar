@@ -31,10 +31,10 @@ interface IPortfolioForkCoordinator {
 	function isReady(uint248 universeId) external view returns (bool);
 	function isPriceReportingOpen(uint248 universeId) external view returns (bool);
 	function auctionExposure(uint248 universeId) external view returns (uint256 commitment, uint256 rep);
-	function logicalTime(uint248 universeId) external view returns (uint48);
-	function forkLogicalTime(uint248 universeId) external view returns (uint48);
-	function nativeTimeForLogical(uint248 universeId, uint48 timestamp) external view returns (uint48);
-	function logicalTimeForNative(uint248 universeId, uint48 timestamp) external view returns (uint48);
+	function portfolioTime(uint248 universeId) external view returns (uint48);
+	function forkPortfolioTime(uint248 universeId) external view returns (uint48);
+	function nativeTimeForPortfolioTime(uint248 universeId, uint48 timestamp) external view returns (uint48);
+	function portfolioTimeForNative(uint248 universeId, uint48 timestamp) external view returns (uint48);
 	function ensureReady(uint248 universeId) external;
 	function freeze(uint248 universeId) external;
 	function inheritedFixedOutcome(uint248 universeId, uint256 questionId) external view returns (bool, uint256);
@@ -98,6 +98,12 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	SecurityPoolPortfolioSettlement public settlement;
 	SecurityPoolReporterLedger public reporters;
 	address public forkController;
+	// setupStage names the next operation; completion is terminal and idempotent.
+	uint8 private constant SETUP_SETTLEMENT = 0;
+	uint8 private constant SETUP_REPORTERS_AND_FORKS = 1;
+	uint8 private constant SETUP_CAPITAL = 2;
+	uint8 private constant SETUP_PRICE_FEED = 3;
+	uint8 private constant SETUP_COMPLETE = 4;
 	uint8 public setupStage;
 	Deployers private deployers;
 	mapping(uint248 => SecurityPoolCapitalLedger) public capitalLedger;
@@ -160,23 +166,23 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	/// @notice Advance one fixed setup stage without exceeding the transaction gas limit.
 	/// No caller can change the constructor configuration or replace an existing module.
 	function prepareNext() external nonReentrant {
-		if (setupStage == 4) return;
+		if (setupStage == SETUP_COMPLETE) return;
 		require(zoltar.getForkTime(originUniverseId) == 0, 'Origin universe forked');
-		if (setupStage == 0) {
+		if (setupStage == SETUP_SETTLEMENT) {
 			settlement = deployers.settlement.create(address(this));
 			settlement.initialize(deployers.books.create(address(settlement), minimumOutcomeRate));
 			settlement.authorizeServices(address(services));
 			settlement.registerUniverse(originUniverseId, uint48(block.timestamp));
 			settlement.setFeesEnabled(originUniverseId, false, uint48(block.timestamp));
 			services.registerUniverse(originUniverseId);
-		} else if (setupStage == 1) {
+		} else if (setupStage == SETUP_REPORTERS_AND_FORKS) {
 			reporters = deployers.reporters.create(address(this), zoltar);
 			reporters.registerUniverse(originUniverseId);
 			forkController = deployers.forks.create(address(this), zoltar);
 			IPortfolioForkCoordinator(forkController).initialize(originUniverseId);
-		} else if (setupStage == 2) {
+		} else if (setupStage == SETUP_CAPITAL) {
 			_createCapital(originUniverseId);
-		} else {
+		} else if (setupStage == SETUP_PRICE_FEED) {
 			factory.initializePortfolioPriceFeed(originUniverseId, initialReportPriorityFeeAttoEthPerGas);
 			IPortfolioForkCoordinator(forkController).activateOrigin(originUniverseId);
 		}
@@ -224,17 +230,17 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	function isPriceReportingOpen(uint248 universeId) external view returns (bool) {
 		return IPortfolioForkCoordinator(forkController).isPriceReportingOpen(universeId);
 	}
-	function logicalTime(uint248 universeId) public view returns (uint48) {
-		return IPortfolioForkCoordinator(forkController).logicalTime(universeId);
+	function portfolioTime(uint248 universeId) public view returns (uint48) {
+		return IPortfolioForkCoordinator(forkController).portfolioTime(universeId);
 	}
-	function forkLogicalTime(uint248 universeId) external view returns (uint48) {
-		return IPortfolioForkCoordinator(forkController).forkLogicalTime(universeId);
+	function forkPortfolioTime(uint248 universeId) external view returns (uint48) {
+		return IPortfolioForkCoordinator(forkController).forkPortfolioTime(universeId);
 	}
-	function nativeTimeForLogical(uint248 universeId, uint48 timestamp) external view returns (uint48) {
-		return IPortfolioForkCoordinator(forkController).nativeTimeForLogical(universeId, timestamp);
+	function nativeTimeForPortfolioTime(uint248 universeId, uint48 timestamp) external view returns (uint48) {
+		return IPortfolioForkCoordinator(forkController).nativeTimeForPortfolioTime(universeId, timestamp);
 	}
-	function logicalTimeForNative(uint248 universeId, uint48 timestamp) external view returns (uint48) {
-		return IPortfolioForkCoordinator(forkController).logicalTimeForNative(universeId, timestamp);
+	function portfolioTimeForNative(uint248 universeId, uint48 timestamp) external view returns (uint48) {
+		return IPortfolioForkCoordinator(forkController).portfolioTimeForNative(universeId, timestamp);
 	}
 	function sourceGame(uint248 universeId, uint256 questionId) external view returns (address) {
 		(SecurityPoolReporterLedger.Question memory question, ) = reporters.question(universeId, questionId);
@@ -258,7 +264,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		if (amount != 0) capitalLedger[universeId].creditTimedFees{value: amount}();
 	}
 	function addQuestion(uint256 questionId) public returns (ISecurityPool pool) {
-		require(setupStage == 4, 'Portfolio setup incomplete');
+		require(setupStage == SETUP_COMPLETE, 'Portfolio setup incomplete');
 		require(questionAdmissionPolicy.isQuestionAllowed(address(this), originUniverseId, questionId), 'Question rejected by admission policy');
 		bytes32 origin = questionOriginIds[questionId];
 		if (origin != bytes32(0)) return factory.getSecurityPool(origin, originUniverseId);
@@ -306,7 +312,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		emit CompleteSetsFunded(universeId, questionId, recipient, mintAttoEth, minted, fee);
 	}
 	function prepareServicePurchase(uint248 universeId, uint256 questionId) external onlyServices returns (ISecurityPool pool) {
-		require(setupStage == 4, 'Portfolio setup incomplete');
+		require(setupStage == SETUP_COMPLETE, 'Portfolio setup incomplete');
 		IPortfolioForkCoordinator(forkController).ensureReady(universeId);
 		require(IPortfolioForkCoordinator(forkController).isReady(universeId), 'Universe is not ready');
 		if (universeId != originUniverseId)

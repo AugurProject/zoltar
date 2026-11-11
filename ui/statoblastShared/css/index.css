@@ -1,4 +1,4 @@
-/* Statoblast feature styles: truth auction, escalation and reporting visualisations, security pool workspace, vaults, liquidation, staged operations, and the open oracle. Loaded after ui/coreShared/css/index.css by the pages that render these features. */
+/* Statoblast feature styles: collateral repair auction, escalation and reporting visualisations, security pool workspace, vaults, liquidation, staged operations, and the open oracle. Loaded after ui/coreShared/css/index.css by the pages that render these features. */
 
 :root[data-product="statoblast"],
 :root[data-product="openoracle"] {
@@ -271,15 +271,15 @@
 }
 
 .fork-workflow-summary,
-.truth-auction-market-board,
-.truth-auction-market-stack,
-.truth-auction-level-detail,
+.collateral-repair-auction-market-board,
+.collateral-repair-auction-market-stack,
+.collateral-repair-auction-level-detail,
 .fork-workflow-summary-stat-group,
-.truth-auction-progress-group,
-.truth-auction-ladder,
-.truth-auction-manual-tools,
-.truth-auction-stage-actions,
-.truth-auction-settlement-grid {
+.collateral-repair-auction-progress-group,
+.collateral-repair-auction-ladder,
+.collateral-repair-auction-manual-tools,
+.collateral-repair-auction-stage-actions,
+.collateral-repair-auction-settlement-grid {
 	display: grid;
 }
 
@@ -290,7 +290,7 @@
 }
 
 .fork-workflow-summary-primary,
-.truth-auction-panel {
+.collateral-repair-auction-panel {
 	padding: 0;
 	border: 0;
 	background: transparent;
@@ -298,35 +298,35 @@
 }
 
 .fork-workflow-summary-primary,
-.truth-auction-panel,
+.collateral-repair-auction-panel,
 .fork-workflow-summary-stat-group,
-.truth-auction-progress-group,
-.truth-auction-depth-header,
-.truth-auction-panel-header,
-.truth-auction-level-header,
+.collateral-repair-auction-progress-group,
+.collateral-repair-auction-depth-header,
+.collateral-repair-auction-panel-header,
+.collateral-repair-auction-level-header,
 .fork-workflow-summary-stat-copy,
-.truth-auction-price-row-copy,
-.truth-auction-bid-row-actions {
+.collateral-repair-auction-price-row-copy,
+.collateral-repair-auction-bid-row-actions {
 	display: grid;
 	gap: var(--space-3);
 }
 
-.truth-auction-market-section,
-.truth-auction-level-detail {
+.collateral-repair-auction-market-section,
+.collateral-repair-auction-level-detail {
 	display: grid;
 	gap: var(--space-3);
 	align-content: start;
 	min-width: 0;
 }
 
-.truth-auction-market-section {
+.collateral-repair-auction-market-section {
 	padding-top: var(--space-3);
 	border-top: 1px solid var(--divider-subtle);
 }
 
-.truth-auction-market-stack > .truth-auction-market-section:first-child,
-.truth-auction-market-detail-grid > .truth-auction-market-section:first-child,
-.truth-auction-market-board > .truth-auction-market-section:first-child {
+.collateral-repair-auction-market-stack > .collateral-repair-auction-market-section:first-child,
+.collateral-repair-auction-market-detail-grid > .collateral-repair-auction-market-section:first-child,
+.collateral-repair-auction-market-board > .collateral-repair-auction-market-section:first-child {
 	padding-top: 0;
 	border-top: 0;
 }
@@ -419,76 +419,76 @@
 	text-align: start;
 }
 
-.truth-auction-progress-track {
+.collateral-repair-auction-progress-track {
 	overflow: hidden;
 	height: 0.7rem;
 	border-radius: var(--radius-pill);
 	border: 1px solid var(--border-default);
-	background: color-mix(in srgb, var(--surface-card-end) 82%, var(--truth-auction-track) 18%);
+	background: color-mix(in srgb, var(--surface-card-end) 82%, var(--collateral-repair-auction-track) 18%);
 }
 
-.truth-auction-progress-fill {
+.collateral-repair-auction-progress-fill {
 	height: 100%;
 	border-radius: inherit;
 }
 
-.truth-auction-progress-fill.is-eth {
-	background: linear-gradient(90deg, var(--truth-auction-eth) 0%, var(--truth-auction-eth-highlight) 100%);
+.collateral-repair-auction-progress-fill.is-eth {
+	background: linear-gradient(90deg, var(--collateral-repair-auction-eth) 0%, var(--collateral-repair-auction-eth-highlight) 100%);
 }
 
-.truth-auction-progress-fill.is-rep {
-	background: linear-gradient(90deg, var(--truth-auction-rep) 0%, var(--truth-auction-rep-highlight) 100%);
+.collateral-repair-auction-progress-fill.is-rep {
+	background: linear-gradient(90deg, var(--collateral-repair-auction-rep) 0%, var(--collateral-repair-auction-rep-highlight) 100%);
 }
 
-.truth-auction-market-board {
+.collateral-repair-auction-market-board {
 	grid-template-columns: minmax(0, 1fr);
 	gap: var(--space-4);
 }
 
-.truth-auction-market-detail-grid,
-.truth-auction-market-stack,
-.truth-auction-ladder,
-.truth-auction-manual-tools,
-.truth-auction-stage-actions,
-.truth-auction-settlement-grid {
+.collateral-repair-auction-market-detail-grid,
+.collateral-repair-auction-market-stack,
+.collateral-repair-auction-ladder,
+.collateral-repair-auction-manual-tools,
+.collateral-repair-auction-stage-actions,
+.collateral-repair-auction-settlement-grid {
 	gap: var(--space-3);
 }
 
-.truth-auction-market-detail-grid {
+.collateral-repair-auction-market-detail-grid {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr);
 	align-items: start;
 }
 
-.truth-auction-stage-actions,
-.truth-auction-settlement-grid {
+.collateral-repair-auction-stage-actions,
+.collateral-repair-auction-settlement-grid {
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.truth-auction-wallet-summary,
-.truth-auction-selected-bid-summary {
+.collateral-repair-auction-wallet-summary,
+.collateral-repair-auction-selected-bid-summary {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
 	gap: var(--space-4);
 }
 
-.truth-auction-wallet-summary > div,
-.truth-auction-selected-bid-summary > div {
+.collateral-repair-auction-wallet-summary > div,
+.collateral-repair-auction-selected-bid-summary > div {
 	padding-top: var(--space-3);
 	border-top: 1px solid var(--divider-subtle);
 }
 
-.truth-auction-wallet-summary .metric-label,
-.truth-auction-selected-bid-summary .metric-label {
+.collateral-repair-auction-wallet-summary .metric-label,
+.collateral-repair-auction-selected-bid-summary .metric-label {
 	display: block;
 	margin-bottom: var(--space-1);
 }
 
-.truth-auction-panel-header,
-.truth-auction-level-header,
-.truth-auction-price-row-main,
-.truth-auction-bid-row,
-.truth-auction-depth-header {
+.collateral-repair-auction-panel-header,
+.collateral-repair-auction-level-header,
+.collateral-repair-auction-price-row-main,
+.collateral-repair-auction-bid-row,
+.collateral-repair-auction-depth-header {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
@@ -496,49 +496,49 @@
 	gap: var(--space-2) var(--space-3);
 }
 
-.truth-auction-panel-header h4,
-.truth-auction-level-header h4,
-.truth-auction-depth-header h4 {
+.collateral-repair-auction-panel-header h4,
+.collateral-repair-auction-level-header h4,
+.collateral-repair-auction-depth-header h4 {
 	margin: 0;
 	font-size: var(--font-body);
 }
 
-.truth-auction-depth-chart {
+.collateral-repair-auction-depth-chart {
 	position: relative;
 	min-height: 13rem;
 	border: 0;
 	border-block: 1px solid var(--divider-subtle);
 	border-radius: 0;
-	background: linear-gradient(180deg, color-mix(in srgb, var(--truth-auction-eth) 4%, transparent), color-mix(in srgb, var(--truth-auction-rep) 4%, transparent)), color-mix(in srgb, var(--surface-card-end) 82%, var(--truth-auction-track) 18%);
+	background: linear-gradient(180deg, color-mix(in srgb, var(--collateral-repair-auction-eth) 4%, transparent), color-mix(in srgb, var(--collateral-repair-auction-rep) 4%, transparent)), color-mix(in srgb, var(--surface-card-end) 82%, var(--collateral-repair-auction-track) 18%);
 	overflow: hidden;
 }
 
-.truth-auction-depth-chart svg {
+.collateral-repair-auction-depth-chart svg {
 	display: block;
 	width: 100%;
 	height: 13rem;
 }
 
-.truth-auction-depth-base {
+.collateral-repair-auction-depth-base {
 	fill: color-mix(in srgb, var(--surface-modal-opaque) 12%, transparent);
 	stroke: var(--color-white-04);
 	stroke-width: 1px;
 }
 
-.truth-auction-depth-line {
+.collateral-repair-auction-depth-line {
 	fill: none;
-	stroke: color-mix(in srgb, var(--truth-auction-eth) 92%, transparent);
+	stroke: color-mix(in srgb, var(--collateral-repair-auction-eth) 92%, transparent);
 	stroke-width: 2.5px;
 	stroke-linecap: round;
 	stroke-linejoin: round;
 }
 
-.truth-auction-depth-hit-targets {
+.collateral-repair-auction-depth-hit-targets {
 	position: absolute;
 	inset: 0;
 }
 
-.truth-auction-depth-hit-target {
+.collateral-repair-auction-depth-hit-target {
 	position: absolute;
 	top: 0;
 	bottom: 0;
@@ -548,12 +548,12 @@
 	cursor: pointer;
 }
 
-.truth-auction-depth-hit-target:focus-visible {
+.collateral-repair-auction-depth-hit-target:focus-visible {
 	outline: 2px solid var(--interactive-border-hover);
 	outline-offset: -2px;
 }
 
-.truth-auction-depth-marker {
+.collateral-repair-auction-depth-marker {
 	position: absolute;
 	top: 0.55rem;
 	bottom: 0.55rem;
@@ -563,19 +563,19 @@
 	background: var(--color-white-16);
 }
 
-.truth-auction-depth-marker.is-clearing {
-	background: color-mix(in srgb, var(--truth-auction-eth) 78%, transparent);
+.collateral-repair-auction-depth-marker.is-clearing {
+	background: color-mix(in srgb, var(--collateral-repair-auction-eth) 78%, transparent);
 }
 
-.truth-auction-depth-marker.is-selected {
-	background: color-mix(in srgb, var(--truth-auction-rep) 92%, transparent);
+.collateral-repair-auction-depth-marker.is-selected {
+	background: color-mix(in srgb, var(--collateral-repair-auction-rep) 92%, transparent);
 }
 
-.truth-auction-depth-marker.is-preview {
-	box-shadow: 0 0 0 1px color-mix(in srgb, var(--truth-auction-eth) 28%, transparent);
+.collateral-repair-auction-depth-marker.is-preview {
+	box-shadow: 0 0 0 1px color-mix(in srgb, var(--collateral-repair-auction-eth) 28%, transparent);
 }
 
-.truth-auction-depth-marker-dot {
+.collateral-repair-auction-depth-marker-dot {
 	position: absolute;
 	left: 50%;
 	bottom: 0;
@@ -587,26 +587,26 @@
 	transform: translate(-50%, 35%);
 }
 
-.truth-auction-depth-marker.is-clearing .truth-auction-depth-marker-dot {
-	color: var(--truth-auction-eth);
+.collateral-repair-auction-depth-marker.is-clearing .collateral-repair-auction-depth-marker-dot {
+	color: var(--collateral-repair-auction-eth);
 }
 
-.truth-auction-depth-marker.is-selected .truth-auction-depth-marker-dot {
-	color: var(--truth-auction-rep);
+.collateral-repair-auction-depth-marker.is-selected .collateral-repair-auction-depth-marker-dot {
+	color: var(--collateral-repair-auction-rep);
 }
 
-.truth-auction-depth-marker.is-preview .truth-auction-depth-marker-dot {
-	box-shadow: 0 0 0 2px color-mix(in srgb, var(--truth-auction-eth) 16%, transparent);
+.collateral-repair-auction-depth-marker.is-preview .collateral-repair-auction-depth-marker-dot {
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--collateral-repair-auction-eth) 16%, transparent);
 }
 
-.truth-auction-depth-frame {
+.collateral-repair-auction-depth-frame {
 	display: grid;
 	grid-template-columns: minmax(6rem, auto) minmax(0, 1fr);
 	gap: var(--space-3);
 	align-items: stretch;
 }
 
-.truth-auction-depth-y-axis {
+.collateral-repair-auction-depth-y-axis {
 	position: relative;
 	display: flex;
 	align-items: stretch;
@@ -615,23 +615,23 @@
 	min-height: 13rem;
 }
 
-.truth-auction-depth-x-axis {
+.collateral-repair-auction-depth-x-axis {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
 	gap: var(--space-3);
 	margin-top: var(--space-2);
 }
 
-.truth-auction-depth-x-axis.no-midpoint {
+.collateral-repair-auction-depth-x-axis.no-midpoint {
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.truth-auction-depth-axis-title {
+.collateral-repair-auction-depth-axis-title {
 	font-size: var(--font-label);
 	font-weight: 600;
 }
 
-.truth-auction-depth-axis-title-y {
+.collateral-repair-auction-depth-axis-title-y {
 	color: var(--muted);
 	writing-mode: vertical-rl;
 	transform: rotate(180deg);
@@ -640,13 +640,13 @@
 	text-align: center;
 }
 
-.truth-auction-depth-axis-title-x {
+.collateral-repair-auction-depth-axis-title-x {
 	margin-top: var(--space-1);
 	color: var(--muted);
 	text-align: center;
 }
 
-.truth-auction-depth-axis-tick {
+.collateral-repair-auction-depth-axis-tick {
 	min-width: 0;
 	color: var(--muted);
 	font-size: var(--font-label);
@@ -655,13 +655,13 @@
 	overflow-wrap: anywhere;
 }
 
-.truth-auction-depth-y-ticks {
+.collateral-repair-auction-depth-y-ticks {
 	position: absolute;
 	inset: 0 0 0 1.75rem;
 	pointer-events: none;
 }
 
-.truth-auction-depth-y-tick {
+.collateral-repair-auction-depth-y-tick {
 	position: absolute;
 	right: 0;
 	left: 0;
@@ -669,15 +669,15 @@
 	transform: translateY(-50%);
 }
 
-.truth-auction-depth-x-tick.is-mid {
+.collateral-repair-auction-depth-x-tick.is-mid {
 	text-align: center;
 }
 
-.truth-auction-depth-x-tick.is-min {
+.collateral-repair-auction-depth-x-tick.is-min {
 	text-align: right;
 }
 
-.truth-auction-price-row {
+.collateral-repair-auction-price-row {
 	position: relative;
 	display: block;
 	overflow: hidden;
@@ -690,60 +690,60 @@
 	box-shadow: var(--glow-inset-subtle), var(--shadow-raised);
 }
 
-.truth-auction-price-row:hover {
+.collateral-repair-auction-price-row:hover {
 	transform: translateY(-1px);
 	box-shadow: var(--glow-inset-subtle), var(--shadow-raised);
 }
 
-.truth-auction-price-row-bar {
+.collateral-repair-auction-price-row-bar {
 	position: absolute;
 	inset: auto auto 0 0;
 	height: 100%;
 	min-width: 0;
 	opacity: 0.17;
-	background: linear-gradient(90deg, var(--truth-auction-eth) 0%, var(--truth-auction-rep) 100%);
+	background: linear-gradient(90deg, var(--collateral-repair-auction-eth) 0%, var(--collateral-repair-auction-rep) 100%);
 }
 
-.truth-auction-price-row-copy {
+.collateral-repair-auction-price-row-copy {
 	position: relative;
 	padding: var(--space-4);
 }
 
-.truth-auction-price-value {
+.collateral-repair-auction-price-value {
 	display: inline-block;
 	max-width: 100%;
 	overflow-wrap: anywhere;
 	font-variant-numeric: tabular-nums;
 }
 
-.truth-auction-price-row-main strong {
+.collateral-repair-auction-price-row-main strong {
 	font-size: var(--font-body);
 }
 
-.truth-auction-bid-row-address,
-.truth-auction-bid-row-label small {
+.collateral-repair-auction-bid-row-address,
+.collateral-repair-auction-bid-row-label small {
 	color: var(--muted);
 	font-size: var(--font-label);
 }
 
-.truth-auction-price-row-meta,
-.truth-auction-bid-row {
+.collateral-repair-auction-price-row-meta,
+.collateral-repair-auction-bid-row {
 	color: var(--muted);
 	font-size: var(--font-label);
 }
 
-.truth-auction-price-row-meta {
+.collateral-repair-auction-price-row-meta {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
 	gap: var(--space-2) var(--space-3);
 }
 
-.truth-auction-level-detail {
+.collateral-repair-auction-level-detail {
 	position: sticky;
 	top: 1rem;
 }
 
-.truth-auction-status-pill {
+.collateral-repair-auction-status-pill {
 	display: inline-flex;
 	align-items: center;
 	padding: var(--space-1) var(--space-2);
@@ -755,56 +755,56 @@
 	text-transform: uppercase;
 }
 
-.truth-auction-status-pill.is-success,
-.truth-auction-price-row.is-success {
+.collateral-repair-auction-status-pill.is-success,
+.collateral-repair-auction-price-row.is-success {
 	border-color: color-mix(in srgb, var(--success) 42%, var(--border-default) 58%);
 }
 
-.truth-auction-status-pill.is-success {
+.collateral-repair-auction-status-pill.is-success {
 	color: var(--success);
 	background: color-mix(in srgb, var(--success) 12%, transparent 88%);
 }
 
-.truth-auction-status-pill.is-warning,
-.truth-auction-price-row.is-warning {
-	border-color: color-mix(in srgb, var(--truth-auction-eth) 55%, var(--border-default) 45%);
+.collateral-repair-auction-status-pill.is-warning,
+.collateral-repair-auction-price-row.is-warning {
+	border-color: color-mix(in srgb, var(--collateral-repair-auction-eth) 55%, var(--border-default) 45%);
 }
 
-.truth-auction-status-pill.is-warning {
-	color: var(--truth-auction-eth-highlight);
-	background: color-mix(in srgb, var(--truth-auction-eth) 12%, transparent);
+.collateral-repair-auction-status-pill.is-warning {
+	color: var(--collateral-repair-auction-eth-highlight);
+	background: color-mix(in srgb, var(--collateral-repair-auction-eth) 12%, transparent);
 }
 
-.truth-auction-status-pill.is-danger,
-.truth-auction-price-row.is-danger {
+.collateral-repair-auction-status-pill.is-danger,
+.collateral-repair-auction-price-row.is-danger {
 	border-color: color-mix(in srgb, var(--danger) 42%, var(--border-default) 58%);
 }
 
-.truth-auction-status-pill.is-danger {
+.collateral-repair-auction-status-pill.is-danger {
 	color: var(--danger);
 	background: color-mix(in srgb, var(--danger) 10%, transparent 90%);
 }
 
-.truth-auction-status-pill.is-default {
+.collateral-repair-auction-status-pill.is-default {
 	color: var(--muted);
-	background: color-mix(in srgb, var(--surface-card-end) 82%, var(--truth-auction-track) 18%);
+	background: color-mix(in srgb, var(--surface-card-end) 82%, var(--collateral-repair-auction-track) 18%);
 }
 
-.truth-auction-price-row.is-clearing {
-	outline: 1px solid color-mix(in srgb, var(--truth-auction-eth) 40%, transparent);
+.collateral-repair-auction-price-row.is-clearing {
+	outline: 1px solid color-mix(in srgb, var(--collateral-repair-auction-eth) 40%, transparent);
 	outline-offset: -1px;
 }
 
-.truth-auction-price-row.is-selected {
-	outline: 2px solid color-mix(in srgb, var(--truth-auction-rep) 68%, transparent 32%);
+.collateral-repair-auction-price-row.is-selected {
+	outline: 2px solid color-mix(in srgb, var(--collateral-repair-auction-rep) 68%, transparent 32%);
 	outline-offset: 2px;
 }
 
-.truth-auction-price-row.is-preview .truth-auction-price-row-copy {
-	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--truth-auction-eth) 45%, transparent);
+.collateral-repair-auction-price-row.is-preview .collateral-repair-auction-price-row-copy {
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--collateral-repair-auction-eth) 45%, transparent);
 }
 
-.truth-auction-price-row-badges {
+.collateral-repair-auction-price-row-badges {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
@@ -813,7 +813,7 @@
 }
 
 /* A price where the connected wallet has bids carries an accent edge and the amount, so your position on the ladder reads at a glance. The edge sits over the row's own shadows and depth bar without shifting its layout. */
-.truth-auction-ladder-row.has-viewer-bid::after {
+.collateral-repair-auction-ladder-row.has-viewer-bid::after {
 	content: "";
 	position: absolute;
 	inset-block: 0;
@@ -823,50 +823,50 @@
 	pointer-events: none;
 }
 
-.truth-auction-ladder-yours {
+.collateral-repair-auction-ladder-yours {
 	color: var(--accent);
 	font-size: var(--font-label);
 	font-weight: 600;
 	white-space: nowrap;
 }
 
-.truth-auction-bidder-you {
+.collateral-repair-auction-bidder-you {
 	display: block;
 	color: var(--accent);
 }
 
-.truth-auction-ladder-helper {
+.collateral-repair-auction-ladder-helper {
 	display: inline-flex;
 	align-items: center;
 	padding: var(--space-1) var(--space-2);
-	border: 1px solid color-mix(in srgb, var(--truth-auction-eth) 24%, transparent);
+	border: 1px solid color-mix(in srgb, var(--collateral-repair-auction-eth) 24%, transparent);
 	border-radius: var(--radius-pill);
-	background: color-mix(in srgb, var(--truth-auction-eth) 8%, transparent);
-	color: var(--truth-auction-eth-highlight);
+	background: color-mix(in srgb, var(--collateral-repair-auction-eth) 8%, transparent);
+	color: var(--collateral-repair-auction-eth-highlight);
 	font-size: var(--font-label);
 	font-weight: 600;
 }
 
-.truth-auction-ladder-row-cumulative {
+.collateral-repair-auction-ladder-row-cumulative {
 	color: color-mix(in srgb, var(--text) 72%, var(--muted) 28%);
 }
 
-.truth-auction-bid-table {
+.collateral-repair-auction-bid-table {
 	display: grid;
 	gap: var(--space-2);
 }
 
-.truth-auction-bid-table-scroll {
+.collateral-repair-auction-bid-table-scroll {
 	max-width: 100%;
 	border-radius: var(--radius-control);
 }
 
-.truth-auction-bid-table-scroll:focus-visible {
+.collateral-repair-auction-bid-table-scroll:focus-visible {
 	outline: 3px solid var(--focus);
 	outline-offset: 2px;
 }
 
-.truth-auction-bid-row {
+.collateral-repair-auction-bid-row {
 	display: grid;
 	grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.2fr) minmax(0, 0.85fr) minmax(0, 0.9fr) auto minmax(0, 1.15fr);
 	align-items: center;
@@ -876,36 +876,36 @@
 	background: color-mix(in srgb, var(--surface-raised) 86%, transparent 14%);
 }
 
-.truth-auction-bid-row.is-wallet {
+.collateral-repair-auction-bid-row.is-wallet {
 	grid-template-columns: minmax(0, 0.6fr) minmax(0, 1fr) minmax(0, 0.85fr) minmax(0, 1.1fr) minmax(0, 1fr);
 }
 
-.truth-auction-bid-row.is-wide {
+.collateral-repair-auction-bid-row.is-wide {
 	grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 0.9fr) minmax(0, 0.75fr) minmax(0, 1.35fr);
 }
 
-.truth-auction-bid-row.is-wide.is-no-actions {
+.collateral-repair-auction-bid-row.is-wide.is-no-actions {
 	grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 0.75fr);
 }
 
-.truth-auction-bid-row.is-wallet.is-no-actions {
+.collateral-repair-auction-bid-row.is-wallet.is-no-actions {
 	grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr) minmax(0, 1.1fr) minmax(0, 1fr);
 }
 
-.truth-auction-bid-row.is-wallet.is-no-estimate {
+.collateral-repair-auction-bid-row.is-wallet.is-no-estimate {
 	grid-template-columns: minmax(0, 0.6fr) minmax(0, 1fr) minmax(0, 0.85fr) minmax(0, 1fr);
 }
 
-.truth-auction-bid-row.is-wallet.is-no-actions.is-no-estimate {
+.collateral-repair-auction-bid-row.is-wallet.is-no-actions.is-no-estimate {
 	grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr) minmax(0, 1fr);
 }
 
-.truth-auction-bid-estimate {
+.collateral-repair-auction-bid-estimate {
 	display: grid;
 	gap: var(--space-1);
 }
 
-.truth-auction-bid-guidance {
+.collateral-repair-auction-bid-guidance {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
@@ -913,21 +913,21 @@
 	gap: var(--space-2) var(--space-3);
 }
 
-.truth-auction-bid-guidance > .detail {
+.collateral-repair-auction-bid-guidance > .detail {
 	margin: 0;
 }
 
 /* The bid-price warning grows only its own column, so both inputs stay on the same line. */
-.truth-auction-bid-fields {
+.collateral-repair-auction-bid-fields {
 	align-items: start;
 }
 
-.amount-field .field-hint .truth-auction-bid-price-warning {
+.amount-field .field-hint .collateral-repair-auction-bid-price-warning {
 	color: var(--warning);
 	font-weight: 600;
 }
 
-.truth-auction-bid-row.is-header {
+.collateral-repair-auction-bid-row.is-header {
 	background: transparent;
 	border-color: color-mix(in srgb, var(--border-default) 82%, transparent 18%);
 	color: var(--muted);
@@ -935,7 +935,7 @@
 	font-weight: 600;
 }
 
-.truth-auction-bid-row-label {
+.collateral-repair-auction-bid-row-label {
 	display: grid;
 	gap: var(--space-1);
 	min-width: 0;
@@ -943,22 +943,22 @@
 	font-weight: 600;
 }
 
-.truth-auction-bid-row > *,
-.truth-auction-bid-row.is-wallet > *,
-.truth-auction-bid-row.is-wide > * {
+.collateral-repair-auction-bid-row > *,
+.collateral-repair-auction-bid-row.is-wallet > *,
+.collateral-repair-auction-bid-row.is-wide > * {
 	min-width: 0;
 }
 
-.truth-auction-bid-row-address {
+.collateral-repair-auction-bid-row-address {
 	min-width: 0;
 }
 
-.truth-auction-bid-row-status {
+.collateral-repair-auction-bid-row-status {
 	display: flex;
 	justify-content: flex-start;
 }
 
-.truth-auction-bid-row-actions {
+.collateral-repair-auction-bid-row-actions {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
@@ -967,17 +967,17 @@
 	min-width: 0;
 }
 
-.truth-auction-bid-row-actions > button {
+.collateral-repair-auction-bid-row-actions > button {
 	flex: 0 1 auto;
 	max-width: 100%;
 	min-width: 0;
 }
 
-.truth-auction-row-empty {
+.collateral-repair-auction-row-empty {
 	color: var(--muted);
 }
 
-.truth-auction-book-error {
+.collateral-repair-auction-book-error {
 	color: var(--danger);
 }
 
@@ -1607,76 +1607,76 @@
 
 @media (max-width: 64rem) {
 	.fork-workflow-summary,
-	.truth-auction-market-board,
-	.truth-auction-market-detail-grid,
-	.truth-auction-stage-actions,
-	.truth-auction-settlement-grid {
+	.collateral-repair-auction-market-board,
+	.collateral-repair-auction-market-detail-grid,
+	.collateral-repair-auction-stage-actions,
+	.collateral-repair-auction-settlement-grid {
 		grid-template-columns: 1fr;
 	}
 
-	.truth-auction-level-detail {
+	.collateral-repair-auction-level-detail {
 		position: static;
 		top: auto;
 	}
 
-	.truth-auction-depth-chart {
+	.collateral-repair-auction-depth-chart {
 		min-height: 11rem;
 	}
 
-	.truth-auction-depth-chart svg {
+	.collateral-repair-auction-depth-chart svg {
 		height: 11rem;
 	}
 
-	.truth-auction-level-header,
-	.truth-auction-price-row-main,
-	.truth-auction-price-row-meta,
-	.truth-auction-depth-header {
+	.collateral-repair-auction-level-header,
+	.collateral-repair-auction-price-row-main,
+	.collateral-repair-auction-price-row-meta,
+	.collateral-repair-auction-depth-header {
 		align-items: flex-start;
 	}
 
-	.truth-auction-depth-frame {
+	.collateral-repair-auction-depth-frame {
 		grid-template-columns: minmax(5.25rem, auto) minmax(0, 1fr);
 		gap: var(--space-2);
 	}
 
-	.truth-auction-depth-y-axis {
+	.collateral-repair-auction-depth-y-axis {
 		min-height: 11rem;
 	}
 
-	.truth-auction-depth-x-axis {
+	.collateral-repair-auction-depth-x-axis {
 		gap: var(--space-2);
 	}
 
-	.truth-auction-depth-x-axis .truth-auction-depth-axis-tick.is-mid {
+	.collateral-repair-auction-depth-x-axis .collateral-repair-auction-depth-axis-tick.is-mid {
 		display: none;
 	}
 
-	.truth-auction-depth-x-axis.no-midpoint {
+	.collateral-repair-auction-depth-x-axis.no-midpoint {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
-	.truth-auction-depth-x-axis:not(.no-midpoint) {
+	.collateral-repair-auction-depth-x-axis:not(.no-midpoint) {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
-	.truth-auction-price-row-badges {
+	.collateral-repair-auction-price-row-badges {
 		justify-content: flex-start;
 	}
 
-	.truth-auction-bid-table-scroll {
+	.collateral-repair-auction-bid-table-scroll {
 		overflow-x: auto;
 		overscroll-behavior-inline: contain;
 	}
 
-	.truth-auction-bid-table-scroll .truth-auction-bid-table {
+	.collateral-repair-auction-bid-table-scroll .collateral-repair-auction-bid-table {
 		min-width: 43rem;
 	}
 
-	.truth-auction-bid-table-scroll.is-wallet .truth-auction-bid-table {
+	.collateral-repair-auction-bid-table-scroll.is-wallet .collateral-repair-auction-bid-table {
 		min-width: 31rem;
 	}
 
-	.truth-auction-bid-row {
+	.collateral-repair-auction-bid-row {
 		padding: var(--space-2) var(--space-3);
 	}
 
@@ -1741,33 +1741,33 @@
 
 /* Narrow screens stack each bid into a labelled card instead of a sideways-scrolling table. */
 @media (max-width: 40rem) {
-	.truth-auction-bid-table-scroll .truth-auction-bid-table,
-	.truth-auction-bid-table-scroll.is-wallet .truth-auction-bid-table {
+	.collateral-repair-auction-bid-table-scroll .collateral-repair-auction-bid-table,
+	.collateral-repair-auction-bid-table-scroll.is-wallet .collateral-repair-auction-bid-table {
 		min-width: 0;
 	}
 
-	.truth-auction-bid-row.is-header {
+	.collateral-repair-auction-bid-row.is-header {
 		display: none;
 	}
 
-	.truth-auction-bid-row,
-	.truth-auction-bid-row.is-wallet,
-	.truth-auction-bid-row.is-wide,
-	.truth-auction-bid-row.is-wide.is-no-actions,
-	.truth-auction-bid-row.is-wallet.is-no-actions,
-	.truth-auction-bid-row.is-wallet.is-no-estimate,
-	.truth-auction-bid-row.is-wallet.is-no-actions.is-no-estimate {
+	.collateral-repair-auction-bid-row,
+	.collateral-repair-auction-bid-row.is-wallet,
+	.collateral-repair-auction-bid-row.is-wide,
+	.collateral-repair-auction-bid-row.is-wide.is-no-actions,
+	.collateral-repair-auction-bid-row.is-wallet.is-no-actions,
+	.collateral-repair-auction-bid-row.is-wallet.is-no-estimate,
+	.collateral-repair-auction-bid-row.is-wallet.is-no-actions.is-no-estimate {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		align-items: start;
 		gap: var(--space-2) var(--space-3);
 	}
 
-	.truth-auction-bid-row-status {
+	.collateral-repair-auction-bid-row-status {
 		flex-direction: column;
 		align-items: flex-start;
 	}
 
-	.truth-auction-bid-row > [data-label]::before {
+	.collateral-repair-auction-bid-row > [data-label]::before {
 		content: attr(data-label);
 		display: block;
 		margin-bottom: var(--space-1);
@@ -2693,7 +2693,7 @@
 	font-size: 0.8125rem;
 }
 
-/* A pool meter (capacity in use, or a truth auction's ETH against its target) reads as a bare bar under its figure. */
+/* A pool meter (capacity in use, or a collateral repair auction's ETH against its target) reads as a bare bar under its figure. */
 .pool-meter {
 	display: grid;
 	gap: var(--space-2);

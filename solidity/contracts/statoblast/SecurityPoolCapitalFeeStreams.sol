@@ -12,7 +12,8 @@ interface ICapitalFeeEligibility {
 contract SecurityPoolCapitalFeeStreams {
 	uint256 private constant MAX_TIMESTAMP = type(uint48).max;
 	uint256 private constant MAX_OUTSTANDING = type(uint128).max;
-	address public immutable portfolio;
+	/// @dev The capital ledger authorizes mutations and holds tokens; this contract only accounts for them.
+	address public immutable capitalLedger;
 	uint48 public immutable rewardDuration;
 	uint48 public releasedThrough;
 	uint48 private lastExpiryId;
@@ -38,24 +39,24 @@ contract SecurityPoolCapitalFeeStreams {
 		require(authority != address(0), 'Invalid fee authority');
 		require(timestamp <= block.timestamp, 'Future fee checkpoint');
 		require(vestingDuration != 0, 'Invalid fee duration');
-		portfolio = authority;
+		capitalLedger = authority;
 		rewardDuration = vestingDuration;
 		releasedThrough = timestamp;
 	}
 
-	modifier onlyPortfolio() {
-		require(msg.sender == portfolio, 'Only portfolio');
+	modifier onlyCapitalLedger() {
+		require(msg.sender == capitalLedger, 'Only capital ledger');
 		_;
 	}
 
 	/// @dev The caller must allocate all older income before it funds a new stream.
 	/// One checkpoint per wall-clock second is sufficient, regardless of calls.
-	function addStream(uint256 ethAmount, uint256 repAmount) external onlyPortfolio {
+	function addStream(uint256 ethAmount, uint256 repAmount) external onlyCapitalLedger {
 		_addStream(ethAmount, repAmount);
 	}
 
 	/// @notice Unallocatable income stays funded and resumes only as future income.
-	function defer(uint256 ethAmount, uint256 repAmount) external onlyPortfolio {
+	function defer(uint256 ethAmount, uint256 repAmount) external onlyCapitalLedger {
 		deferredEth += ethAmount;
 		deferredRep += repAmount;
 		_requireBudget();
@@ -63,7 +64,7 @@ contract SecurityPoolCapitalFeeStreams {
 
 	/// @dev Called after the authority checkpoints old eligibility. Repeated calls
 	/// cannot restart an existing stream or award past income to a new commitment.
-	function resume(ICapitalFeeEligibility index, uint256 price) external onlyPortfolio {
+	function resume(ICapitalFeeEligibility index, uint256 price) external onlyCapitalLedger {
 		uint256 ethAmount = deferredEth;
 		uint256 repAmount = deferredRep;
 		if ((ethAmount == 0 && repAmount == 0) || index.eligibleCommitment(price) == 0) return;
@@ -96,7 +97,7 @@ contract SecurityPoolCapitalFeeStreams {
 
 	/// @notice Return income earned since the previous checkpoint. The authority
 	/// may split one wall-clock interval at an exact oracle expiry before release.
-	function release(uint48 until) public onlyPortfolio returns (uint256 ethAmount, uint256 repAmount) {
+	function release(uint48 until) public onlyCapitalLedger returns (uint256 ethAmount, uint256 repAmount) {
 		require(until <= block.timestamp, 'Future fee checkpoint');
 		uint48 expiredId;
 		(ethAmount, repAmount, expiredId) = _preview(until);
@@ -110,7 +111,7 @@ contract SecurityPoolCapitalFeeStreams {
 
 	/// @notice Checkpoint old eligibility before the authority changes it. Stale
 	/// elapsed income stays funded separately from the amount returned for credit.
-	function checkpoint(uint48 eligibleThrough) external onlyPortfolio returns (uint256 ethAmount, uint256 repAmount) {
+	function checkpoint(uint48 eligibleThrough) external onlyCapitalLedger returns (uint256 ethAmount, uint256 repAmount) {
 		if (eligibleThrough > releasedThrough) (ethAmount, repAmount) = release(eligibleThrough);
 		if (block.timestamp > releasedThrough) {
 			(uint256 staleEth, uint256 staleRep) = release(uint48(block.timestamp));
@@ -121,7 +122,7 @@ contract SecurityPoolCapitalFeeStreams {
 
 	/// @dev Only the authority can withdraw deferred accounting, after a fork
 	/// fixes eligibility permanently. It must burn exactly the returned amounts.
-	function takeDeferred() external onlyPortfolio returns (uint256 ethAmount, uint256 repAmount) {
+	function takeDeferred() external onlyCapitalLedger returns (uint256 ethAmount, uint256 repAmount) {
 		ethAmount = deferredEth;
 		repAmount = deferredRep;
 		deferredEth = 0;

@@ -52,7 +52,7 @@ export const sharePositions = async (sql: SQL, chainId: number, snapshotBlock: s
 export const pendingAuctionRefunds = async (sql: SQL, chainId: number, snapshotBlock: string, address: string) =>
 	await sql`
 		SELECT auction_address, sum(CASE WHEN event_name = 'EthRefundCredited' THEN (event_data->>'amountAttoEth')::numeric ELSE -(event_data->>'amountAttoEth')::numeric END)::text AS pending_atto_eth
-		FROM truth_auction_events WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock}
+		FROM collateral_repair_auction_events WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock}
 			AND event_name IN ('EthRefundCredited', 'PendingEthRefundWithdrawn') AND lower(event_data->>'bidder') = ${address}
 		GROUP BY auction_address ORDER BY auction_address LIMIT 251
 	`

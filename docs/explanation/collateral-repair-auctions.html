@@ -4,15 +4,15 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="description" content="How a child pool sells REP to repair an ETH collateral shortfall after a fork, and what happens when demand is weak." />
-		<title>Truth Auctions · Augur documentation</title>
+		<title>Collateral Repair Auctions · Augur documentation</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
 			<header>
-				<h1>Truth Auctions</h1>
-				<p>When a <a href="../reference/glossary.html#universe">universe</a> forks, each Statoblast portfolio prepares branches, one per child universe (<a href="./statoblast.html#forks-migration">forks and migration</a>). Each owner chooses one branch for its REP and its commitment-weighted share of the portfolio’s <a href="../reference/glossary.html#settlement-collateral">settlement collateral</a>, so a child receives only the collateral of the vaults that chose it. Suppose the parent held 100 ETH of settlement collateral when it forked and a child receives only 70 ETH through migration. The child inherits the parent's full share supply, so its <a href="../reference/glossary.html#truth-auction">Truth Auction</a> tries to raise the missing 30 ETH by selling child REP.</p>
+				<h1>Collateral Repair Auctions</h1>
+				<p>When a <a href="../reference/glossary.html#universe">universe</a> forks, each Statoblast portfolio prepares branches, one per child universe (<a href="./statoblast.html#forks-migration">forks and migration</a>). Each owner chooses one branch for its REP and its commitment-weighted share of the portfolio’s <a href="../reference/glossary.html#settlement-collateral">settlement collateral</a>, so a child receives only the collateral of the vaults that chose it. Suppose the parent held 100 ETH of settlement collateral when it forked and a child receives only 70 ETH through migration. The child inherits the parent's full share supply, so its <a href="../reference/glossary.html#collateral-repair-auction">Collateral Repair Auction</a> tries to raise the missing 30 ETH by selling child REP.</p>
 				<ul>
 					<li><strong>Full repair:</strong> bidders contribute 30 ETH, so the child reaches its 100 ETH target.</li>
 					<li><strong>Partial repair:</strong> bidders contribute 12 ETH, so the child operates with 82 ETH and remains impaired.</li>
@@ -30,7 +30,7 @@
 					<li><strong>Positive fill below target:</strong> all fresh auction inventory is sold, including when REP availability limits the fill. Winners receive the same grid-rounded REP backing per lot; the indivisible remainder belongs only to winning bids as REP credits.</li>
 					<li><strong>No feasible lot:</strong> no REP is sold, and the inventory remains available for claim recovery.</li>
 				</ul>
-				<p>Equal bids at the marginal bid limit share the remaining lots proportionally, with cumulative rounding to whole lots. That bid limit still determines which bids share a partial fill when the final REP per lot is higher. The <a href="../reference/contract-inventory.html#portfolio-truth-auction">contract reference</a> defines the exact grid and rounding rules.</p>
+				<p>Equal bids at the marginal bid limit share the remaining lots proportionally, with cumulative rounding to whole lots. That bid limit still determines which bids share a partial fill when the final REP per lot is higher. The <a href="../reference/contract-inventory.html#portfolio-collateral-repair-auction">contract reference</a> defines the exact grid and rounding rules.</p>
 				<p>A new bid is rejected if strictly better funded bids already make winning impossible. A bid that could win when submitted can recover its full ETH before closing once later bids permanently rule it out. Anyone can credit that refund; the bidder then withdraws it and decides how to use the ETH, or credits and withdraws in one transaction. That combined withdrawal pays the bidder’s whole refund credit, including refunds already credited for its other bids, and skips a credit someone else already made. A provisional zero fill is not enough: equal-price rounding can change as more bids arrive. Bids that could still win remain binding until closing, and bids cannot be repriced or cancelled.</p>
 				<p>At closing, winning backing and commitments enter capital accounting immediately. A shared position preserves each bid’s funded obligations and fee rights until an owner or keeper splits it out. Delaying that transaction cannot omit a winner from aggregate backing or a later fork snapshot. Refunds are independent of that step. Keepers discover unmaterialized winners directly through the auction tree, skipping losing bids and positions already split out. The controlling wallet must still choose a branch before the next fork-choice deadline.</p>
 				<p>Choices close at week eight and bidding at week nine, even if preparation starts late. Funded prices must cover the maximum auction exposure and fresh inventory. Missing coverage or freshness at closing, or a higher closing conservative REP/ETH price than at opening, cancels the sale. Accepted ETH otherwise repairs inherited claims. Remaining recovery assets or a cash deficit keep the branch in runoff: existing claims can settle, but new purchases and ordinary holding fees stay closed.</p>

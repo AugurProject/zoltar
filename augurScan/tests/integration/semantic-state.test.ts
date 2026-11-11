@@ -13,7 +13,7 @@ test.skipIf(url === undefined)('canonical semantic state respects snapshots, mig
 	await initializeSchema(sql)
 	const connection = await sql.reserve()
 	try {
-		for (const table of ['logs', 'blocks', 'contracts', 'amm_markets', 'escalation_game_events', 'truth_auction_events', 'entity_state_snapshots', 'pool_snapshots', 'transactions', 'actions']) {
+		for (const table of ['logs', 'blocks', 'contracts', 'amm_markets', 'escalation_game_events', 'collateral_repair_auction_events', 'entity_state_snapshots', 'pool_snapshots', 'transactions', 'actions']) {
 			await connection.unsafe(`CREATE TEMP TABLE ${table} AS SELECT * FROM public.${table} WITH NO DATA`)
 		}
 		const token = `0x${'1'.repeat(40)}`
@@ -40,7 +40,7 @@ test.skipIf(url === undefined)('canonical semantic state respects snapshots, mig
 			['EthRefundCredited', '12'],
 			['PendingEthRefundWithdrawn', '5'],
 		].entries())
-			await connection`INSERT INTO truth_auction_events (chain_id, block_number, block_hash, tx_hash, log_index, auction_address, event_name, event_data, canonical) VALUES (1, 1, ${hash}, ${hash}, ${index}, ${token}, ${name}, ${JSON.stringify({ bidder: owner, amountAttoEth: amount })}::text::jsonb, true)`
+			await connection`INSERT INTO collateral_repair_auction_events (chain_id, block_number, block_hash, tx_hash, log_index, auction_address, event_name, event_data, canonical) VALUES (1, 1, ${hash}, ${hash}, ${index}, ${token}, ${name}, ${JSON.stringify({ bidder: owner, amountAttoEth: amount })}::text::jsonb, true)`
 		expect(await pendingAuctionRefunds(connection, 1, '1', owner)).toEqual([expect.objectContaining({ pending_atto_eth: '7' })])
 		await connection`INSERT INTO escalation_game_events (chain_id, game_address, block_number, block_hash, tx_hash, log_index, event_name, event_data, canonical) VALUES (1, ${token}, 1, ${hash}, ${hash}, 1, 'LocalDepositAppended', ${JSON.stringify({ depositor: owner, outcome: '1', parentDepositIndex: '4', amountAttoRep: '200' })}::text::jsonb, true)`
 		await connection`INSERT INTO entity_state_snapshots (chain_id, entity_type, entity_identity, block_number, block_hash, read_status, read_result, canonical) VALUES (1, 'escalation', ${token}, 1, ${hash}, 'success', ${JSON.stringify({ outcomeBalancesAttoRep: ['2', '3', '4'], finalQuestionResolution: '1' })}::text::jsonb, true)`

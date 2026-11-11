@@ -102,7 +102,7 @@
 		{
 			"path": "reference/contracts/securitypoolforker.html",
 			"title": "SecurityPoolForker",
-			"summary": "Read surface, the child-game trust boundary, and the fork initiation, child creation, vault migration, and Truth Auction entrypoints.",
+			"summary": "Read surface, the child-game trust boundary, and the fork initiation, child creation, vault migration, and Collateral Repair Auction entrypoints.",
 			"section": "reference",
 			"topic": "Contracts",
 			"keywords": ["fork", "migration", "child pool", "auction"]
@@ -252,12 +252,12 @@
 			"keywords": ["fees", "open interest", "retention", "utilization", "vaults"]
 		},
 		{
-			"path": "explanation/truth-auctions.html",
-			"title": "Truth Auctions",
+			"path": "explanation/collateral-repair-auctions.html",
+			"title": "Collateral Repair Auctions",
 			"summary": "Auction clearing, settlement, and weak-demand loss allocation.",
 			"section": "explanation",
 			"topic": "Economics",
-			"keywords": ["truth auction", "clearing", "settlement", "repair"]
+			"keywords": ["collateral repair auction", "clearing", "settlement", "repair"]
 		},
 		{
 			"path": "explanation/open-oracle.html",

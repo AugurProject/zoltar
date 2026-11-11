@@ -225,7 +225,7 @@ export function useTradingOperations(
 							feeEligibleUnderwritingLimitAttoEth: latestMintCapacity.feeEligibleUnderwritingLimitAttoEth,
 							feeEndTimestamp: latestMintCapacity.feeEndTimestamp,
 							feeIndexRemainder: latestMintCapacity.feeIndexRemainder,
-							lastUpdatedFeeAccumulator: latestMintCapacity.lastUpdatedFeeAccumulator,
+							lastFeeCheckpointNativeTime: latestMintCapacity.lastFeeCheckpointNativeTime,
 							settlementCollateralAttoEth: latestMintCapacity.settlementCollateralAttoEth,
 							totalFeesOwedRemainder: latestMintCapacity.totalFeesOwedRemainder,
 						})

@@ -184,7 +184,7 @@ export type PoolRecord = {
 	universe_id: string
 	question_id: string
 	question_title: string
-	truth_auction_address: string
+	collateral_repair_auction_address: string
 	coordinator_address: string
 	share_token_address: string
 	security_multiplier_bps: string

@@ -321,7 +321,7 @@ export async function stateSnapshotTargets(this: ScannerDatabase, chainId: numbe
 					FROM (SELECT DISTINCT game_address FROM escalation_game_events WHERE chain_id = ${chainId} AND canonical) game
 					UNION ALL
 					SELECT 'auction', auction_address, auction_address, NULL, NULL, NULL
-					FROM (SELECT DISTINCT auction_address FROM truth_auction_events WHERE chain_id = ${chainId} AND canonical) auction
+					FROM (SELECT DISTINCT auction_address FROM collateral_repair_auction_events WHERE chain_id = ${chainId} AND canonical) auction
 				), ranked AS (
 					SELECT candidate.*, latest.block_number AS latest_snapshot_block
 					FROM candidates candidate

@@ -9,7 +9,7 @@ import { discoverCoordinatorPolicies } from '#monitoring/coordinator-discovery'
 import { pendingCoordinatorReports } from '#execution/recovery-support'
 import example from '../../config/operator.example.json'
 import { useSecurityPoolPortfolioFixture, unit } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioFixture'
-import { preparePortfolioTruthAuction } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioTruthAuctionFixture'
+import { preparePortfolioCollateralRepairAuction } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioCollateralRepairAuctionFixture'
 import { getInfraContractAddresses } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
 import { writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients'
 import { approveToken } from '../../../../solidity/ts/testSupport/simulator/utils/utilities'
@@ -22,7 +22,7 @@ describe('native portfolio report discovery', () => {
 		test(`indexes concurrent ${branch} reports without question adapters and removes settled reports`, async () => {
 			const context = await (async () => {
 				if (branch === 'child') {
-					const child = await preparePortfolioTruthAuction(fixture)
+					const child = await preparePortfolioCollateralRepairAuction(fixture)
 					expect(await child.owner.getCode({ address: fixture.poolFor(fixture.base.questionId, child.child, fixture.poolFor(fixture.base.questionId).securityPool).securityPool })).toBeUndefined()
 					return { owner: child.owner, mock: child.mock, feed: child.feed, universeId: child.child }
 				}
