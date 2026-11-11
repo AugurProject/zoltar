@@ -1,7 +1,8 @@
 import { createRegistryIndex, readIncrementalRegistry, type RegistryIndex } from '@zoltar/ui-core-shared/lib/incrementalRegistry.js'
 import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio } from '../contractArtifact.js'
 
-import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { RpcError, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { errorChain } from '@zoltar/core-shared/errors/errorChain'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ListedSecurityPool } from '../types/contracts.js'
@@ -100,8 +101,6 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 export type RegisteredPortfolio = { portfolio: Address; questionCount: number }
 
 type ListingRead = { status: 'success'; result: unknown } | { status: 'failure' }
-// Retries go out in small groups, so a registry with many failing addresses does not flood the provider.
-const LISTING_RETRY_GROUP = 8
 
 function portfolioListingCalls(portfolio: Address, universeId: bigint) {
 	return [
@@ -118,6 +117,21 @@ function portfolioListing(portfolio: Address, ledger: ListingRead | undefined, q
 }
 
 /**
+ * The node ran the calls and they failed: a revert, missing return data or exhausted gas. A request that got no answer,
+ * such as an HTTP error, a timeout or a lost connection, is not one.
+ */
+function isExecutionFailure(error: unknown) {
+	return [...errorChain(error)].some(current => {
+		if (current instanceof Error && (current.name === 'ContractFunctionRevertedError' || current.name === 'ContractFunctionZeroDataError')) return true
+		// An HTTP status arrives in the same field as a JSON-RPC error code, but then the node never ran the calls.
+		if (!(current instanceof RpcError) || typeof current.code !== 'number' || (current.code >= 100 && current.code < 600)) return false
+		// Nodes word these differently, such as "out of gas" and "EVM error OutOfGas".
+		const message = current.message.toLowerCase().replaceAll(/[\s_-]/g, '')
+		return message.includes('revert') || message.includes('outofgas') || message.includes('gasrequiredexceeds') || message.includes('invalidopcode')
+	})
+}
+
+/**
  * Portfolios that open in this universe, most recently registered first. The factory registers a portfolio when its
  * setup configures its price feed, so a portfolio still in setup can only be opened by its address. Any caller can
  * register its own address the same way, so only addresses that answer as a portfolio with a capital ledger in this
@@ -126,39 +140,39 @@ function portfolioListing(portfolio: Address, ledger: ListingRead | undefined, q
 export async function loadRegisteredPortfolios(client: ReadClient, universeId: bigint): Promise<RegisteredPortfolio[]> {
 	const anchor = await loadDeploymentRegistryAnchor(client)
 	const portfolios = await loadPortfolioRegistry(client, anchor)
-	let unanswered: unknown
-	let answeredRequests = 0
-	const read = async (batch: readonly Address[]) => {
+	const listings = new Map<Address, RegisteredPortfolio>()
+	const read = async (addresses: readonly Address[]): Promise<readonly ListingRead[] | undefined> => {
 		try {
-			const reads = await readOptionalMulticall(
+			return await readOptionalMulticall(
 				client,
-				batch.flatMap(portfolio => portfolioListingCalls(portfolio, universeId)),
+				addresses.flatMap(portfolio => portfolioListingCalls(portfolio, universeId)),
 				anchor.blockNumber,
 			)
-			answeredRequests += 1
-			return reads
 		} catch (error) {
-			unanswered = error
+			// Only a failure the node reports for the calls is put down to a registered contract; anything else fails the list.
+			if (!isExecutionFailure(error)) throw error
 			return undefined
 		}
 	}
-	// One batched read at the anchor block. The calls share its gas, so one registered contract can fail the whole read
-	// or starve the calls after it; those addresses are read again one at a time below.
-	const batch = portfolios.length === 0 ? [] : await read(portfolios)
-	const answered = (index: number) => batch?.[2 * index]?.status === 'success' && batch[2 * index + 1]?.status === 'success'
-	const listings = portfolios.map((portfolio, index) => portfolioListing(portfolio, batch?.[2 * index], batch?.[2 * index + 1]))
-	const retries = portfolios.flatMap((portfolio, index) => (answered(index) ? [] : [{ portfolio, index }]))
-	for (let start = 0; start < retries.length; start += LISTING_RETRY_GROUP) {
-		await Promise.all(
-			retries.slice(start, start + LISTING_RETRY_GROUP).map(async ({ portfolio, index }) => {
-				// Only an address that fails on its own is skipped.
-				const own = await read([portfolio])
-				listings[index] = portfolioListing(portfolio, own?.[0], own?.[1])
-			}),
-		)
+	// Each set of addresses is read in one batched request at the anchor block. Any contract can register, and a request's
+	// calls share its gas, so one contract can fail the whole request or starve the calls after it.
+	const settle = async (addresses: readonly Address[]): Promise<void> => {
+		const reads = await read(addresses)
+		const answered = addresses.map((_, index) => reads?.[2 * index]?.status === 'success' && reads[2 * index + 1]?.status === 'success')
+		for (const [index, portfolio] of addresses.entries()) {
+			const listing = answered[index] ? portfolioListing(portfolio, reads?.[2 * index], reads?.[2 * index + 1]) : undefined
+			if (listing !== undefined) listings.set(portfolio, listing)
+		}
+		// A call that failed before a later call succeeded still had gas, so its address failed on its own and is skipped.
+		// The calls after the last success may have been starved by an earlier contract, so they are read again.
+		const unanswered = addresses.slice(answered.lastIndexOf(true) + 1)
+		if (unanswered.length === 0 || addresses.length === 1) return
+		if (unanswered.length < addresses.length) return await settle(unanswered)
+		// A set that got no answer at all is split, so every round makes progress and one contract costs a few requests.
+		const middle = Math.ceil(addresses.length / 2)
+		await Promise.all([settle(addresses.slice(0, middle)), settle(addresses.slice(middle))])
 	}
-	// With no request answered at all, the provider failed rather than one registered contract, so the list reports it.
-	if (portfolios.length > 0 && answeredRequests === 0) throw unanswered
+	if (portfolios.length > 0) await settle(portfolios)
 	await requireDeploymentRegistryAnchor(client, anchor, 'Portfolios changed during discovery')
-	return listings.filter(listing => listing !== undefined).reverse()
+	return portfolios.flatMap(portfolio => listings.get(portfolio) ?? []).reverse()
 }

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, RpcError, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { loadAllSecurityPools, loadRegisteredPortfolios } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
 import { loadSecurityPoolMintCapacity } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { createMockLoaderClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
@@ -131,25 +131,19 @@ const second = getAddress('0x00000000000000000000000000000000000000c1')
 const unopened = getAddress('0x00000000000000000000000000000000000000c2')
 const stranger = getAddress('0x00000000000000000000000000000000000000c3')
 const partial = getAddress('0x00000000000000000000000000000000000000c4')
+// Nodes word an exhausted call differently; a lone read uses Anvil's wording and a batch uses Geth's.
+const outOfGas = (shared: boolean) => new RpcError(shared ? 'out of gas' : 'EVM error OutOfGas', { code: -32_000 })
 /**
  * A registry where the first portfolio also has a ledger in fork child 42. Any caller can register itself: the stranger
  * answers nothing, and the partial one has a ledger but no question count. `batch` decides how a read of more than one
  * address treats the stranger: it fails alone, or it exhausts the shared gas so every later call fails, or the whole
- * request reverts. Read on its own, every address answers for itself.
+ * request runs out of gas. Read on its own, the stranger's request runs out of gas and every other address answers for
+ * itself. `unavailable` fails every request at the provider; `flaky` fails a lone read of `second` at the provider.
  */
-function registryClient(batch: 'isolated' | 'starving' | 'reverting' | 'unavailable') {
-	const registry = [portfolio, stranger, second, partial, unopened]
-	const ledgers = new Map([
-		[`${portfolio}:0`, capital],
-		[`${second}:0`, token],
-		[`${partial}:0`, token],
-		[`${portfolio}:42`, token],
-	])
-	const questionCounts = new Map([
-		[portfolio, 2n],
-		[second, 0n],
-		[unopened, 0n],
-	])
+function registryClient(batch: 'isolated' | 'starving' | 'reverting' | 'unavailable' | 'flaky', more: readonly Address[] = []) {
+	const registry = [portfolio, stranger, second, partial, unopened, ...more]
+	const ledgers = new Map([[`${portfolio}:0`, capital], [`${second}:0`, token], [`${partial}:0`, token], [`${portfolio}:42`, token], ...more.map(address => [`${address}:0`, token] as const)])
+	const questionCounts = new Map([[portfolio, 2n], [second, 0n], [unopened, 0n], ...more.map(address => [address, 1n] as const)])
 	const blocks: (bigint | undefined)[] = []
 	const batches: number[] = []
 	const client = createMockLoaderClient({
@@ -164,10 +158,11 @@ function registryClient(batch: 'isolated' | 'starving' | 'reverting' | 'unavaila
 			batches.push(request.contracts.length)
 			blocks.push(request.blockNumber)
 			expect(request.allowFailure).toBe(true)
-			if (batch === 'unavailable') throw new Error('provider unavailable')
+			if (batch === 'unavailable') throw new RpcError('HTTP 503 while calling eth_call', { code: 503 })
 			const addresses = request.contracts.map(contract => getAddress(String(contract.address)))
 			const shared = new Set(addresses).size > 1
-			if (addresses.includes(stranger) && (!shared || batch === 'reverting')) throw new Error('out of gas')
+			if (batch === 'flaky' && !shared && addresses.includes(second)) throw new RpcError('HTTP 502 while calling eth_call', { code: 502 })
+			if (addresses.includes(stranger) && (!shared || batch === 'reverting' || batch === 'flaky')) throw outOfGas(shared)
 			const starvedFrom = shared && batch === 'starving' ? addresses.indexOf(stranger) : -1
 			return request.contracts.map((contract, index) => {
 				const address = addresses[index]
@@ -188,25 +183,39 @@ test('registered portfolios list those with a ledger in the universe, newest reg
 		{ portfolio, questionCount: 2 },
 	])
 	expect(await loadRegisteredPortfolios(client, 42n)).toEqual([{ portfolio, questionCount: 2 }])
-	// Each load reads every registered address in one batched read; only the two that failed in it are read again alone.
-	expect(batches).toEqual([10, 2, 2, 10, 2, 2])
+	// Both failures came before a later success, so each load is one batched read with nothing read again.
+	expect(batches).toEqual([10, 10])
 	expect(blocks.every(blockNumber => blockNumber === block.number)).toBe(true)
 })
 
 test.each([
-	['starves', 'starving'],
-	['reverts', 'reverting'],
-] as const)('a registered contract that %s the batched read cannot hide the other portfolios', async (_effect, batch) => {
-	const { client, blocks } = registryClient(batch)
+	['starves', 'starving', [10, 8, 4, 4, 2, 2]],
+	['reverts', 'reverting', [10, 6, 4, 4, 2, 2, 2]],
+] as const)('a registered contract that %s the batched read cannot hide the other portfolios', async (_effect, batch, requests) => {
+	const { client, blocks, batches } = registryClient(batch)
 	expect(await loadRegisteredPortfolios(client, 0n)).toEqual([
 		{ portfolio: second, questionCount: 0 },
 		{ portfolio, questionCount: 2 },
 	])
+	// Unanswered sets are read again or split in half, so the stranger costs a few requests rather than one per portfolio.
+	expect([...batches].sort((left, right) => right - left)).toEqual([...requests])
 	expect(blocks.every(blockNumber => blockNumber === block.number)).toBe(true)
 })
 
+test('one failing contract among many registered portfolios costs a few requests, not one per portfolio', async () => {
+	const more = Array.from({ length: 35 }, (_, index) => getAddress(`0x${(0xd00 + index).toString(16).padStart(40, '0')}`))
+	const { client, batches } = registryClient('reverting', more)
+	const listed = await loadRegisteredPortfolios(client, 0n)
+	expect(listed.map(entry => entry.portfolio)).toEqual([...more].reverse().concat([second, portfolio]))
+	expect(batches.length).toBeLessThanOrEqual(2 * Math.ceil(Math.log2(40)) + 1)
+})
+
 test('a provider that answers no portfolio read reports an error rather than an empty list', async () => {
-	await expect(loadRegisteredPortfolios(registryClient('unavailable').client, 0n)).rejects.toThrow('provider unavailable')
+	await expect(loadRegisteredPortfolios(registryClient('unavailable').client, 0n)).rejects.toThrow('HTTP 503')
+})
+
+test('a provider failure while reading an address again fails the list instead of dropping that portfolio', async () => {
+	await expect(loadRegisteredPortfolios(registryClient('flaky').client, 0n)).rejects.toThrow('HTTP 502')
 })
 
 test('a reorganization during the portfolio reads is reported as such', async () => {
