@@ -127,13 +127,18 @@ test.each([false, true])('mint capacity uses central fees and closes when report
 	expect(capacity.mintingCapacityAttoEth).toBe(reporting ? 0n : 80n)
 })
 
-test('registered portfolios list those with a ledger in the universe, newest registration first', async () => {
-	const second = getAddress('0x00000000000000000000000000000000000000c1')
-	const unopened = getAddress('0x00000000000000000000000000000000000000c2')
-	const stranger = getAddress('0x00000000000000000000000000000000000000c3')
-	const partial = getAddress('0x00000000000000000000000000000000000000c4')
+const second = getAddress('0x00000000000000000000000000000000000000c1')
+const unopened = getAddress('0x00000000000000000000000000000000000000c2')
+const stranger = getAddress('0x00000000000000000000000000000000000000c3')
+const partial = getAddress('0x00000000000000000000000000000000000000c4')
+/**
+ * A registry where the first portfolio also has a ledger in fork child 42. Any caller can register itself: the stranger
+ * answers nothing, and the partial one has a ledger but no question count. `batch` decides how a read of more than one
+ * address treats the stranger: it fails alone, or it exhausts the shared gas so every later call fails, or the whole
+ * request reverts. Read on its own, every address answers for itself.
+ */
+function registryClient(batch: 'isolated' | 'starving' | 'reverting' | 'unavailable') {
 	const registry = [portfolio, stranger, second, partial, unopened]
-	// The first portfolio also has a ledger in fork child 42. Any caller can register itself: the stranger answers nothing, and the partial one has a ledger but no question count.
 	const ledgers = new Map([
 		[`${portfolio}:0`, capital],
 		[`${second}:0`, token],
@@ -159,20 +164,62 @@ test('registered portfolios list those with a ledger in the universe, newest reg
 			batches.push(request.contracts.length)
 			blocks.push(request.blockNumber)
 			expect(request.allowFailure).toBe(true)
-			return request.contracts.map(contract => {
-				const address = getAddress(String(contract.address))
-				if (address === stranger || (address === partial && contract.functionName === 'questionCount')) return { status: 'failure', error: new Error('execution reverted') }
+			if (batch === 'unavailable') throw new Error('provider unavailable')
+			const addresses = request.contracts.map(contract => getAddress(String(contract.address)))
+			const shared = new Set(addresses).size > 1
+			if (addresses.includes(stranger) && (!shared || batch === 'reverting')) throw new Error('out of gas')
+			const starvedFrom = shared && batch === 'starving' ? addresses.indexOf(stranger) : -1
+			return request.contracts.map((contract, index) => {
+				const address = addresses[index]
+				if (address === undefined) throw new Error('Missing call address')
+				if (address === stranger || (starvedFrom >= 0 && index > starvedFrom) || (address === partial && contract.functionName === 'questionCount')) return { status: 'failure', error: new Error('execution reverted') }
 				if (contract.functionName === 'questionCount') return { status: 'success', result: questionCounts.get(address) }
 				return { status: 'success', result: ledgers.get(`${address}:${String(contract.args?.[0])}`) ?? zeroAddress }
 			})
 		},
 	})
+	return { client, blocks, batches }
+}
+
+test('registered portfolios list those with a ledger in the universe, newest registration first', async () => {
+	const { client, blocks, batches } = registryClient('isolated')
 	expect(await loadRegisteredPortfolios(client, 0n)).toEqual([
 		{ portfolio: second, questionCount: 0 },
 		{ portfolio, questionCount: 2 },
 	])
 	expect(await loadRegisteredPortfolios(client, 42n)).toEqual([{ portfolio, questionCount: 2 }])
-	// Each load reads every registered address in one multicall request, pinned with the registry to one block.
-	expect(batches).toEqual([10, 10])
+	// Each load reads every registered address in one batched read; only the two that failed in it are read again alone.
+	expect(batches).toEqual([10, 2, 2, 10, 2, 2])
 	expect(blocks.every(blockNumber => blockNumber === block.number)).toBe(true)
+})
+
+test.each([
+	['starves', 'starving'],
+	['reverts', 'reverting'],
+] as const)('a registered contract that %s the batched read cannot hide the other portfolios', async (_effect, batch) => {
+	const { client, blocks } = registryClient(batch)
+	expect(await loadRegisteredPortfolios(client, 0n)).toEqual([
+		{ portfolio: second, questionCount: 0 },
+		{ portfolio, questionCount: 2 },
+	])
+	expect(blocks.every(blockNumber => blockNumber === block.number)).toBe(true)
+})
+
+test('a provider that answers no portfolio read reports an error rather than an empty list', async () => {
+	await expect(loadRegisteredPortfolios(registryClient('unavailable').client, 0n)).rejects.toThrow('provider unavailable')
+})
+
+test('a reorganization during the portfolio reads is reported as such', async () => {
+	const { client } = registryClient('isolated')
+	// The block is replaced once the portfolio reads begin, after the registry itself was read on the canonical chain.
+	let replaced = false
+	const reorganized = {
+		...client,
+		getBlock: async () => (replaced ? { ...block, hash: `0x${'22'.repeat(32)}` } : block),
+		multicall: async (request: Parameters<typeof client.multicall>[0]) => {
+			replaced = true
+			return await client.multicall(request)
+		},
+	}
+	await expect(loadRegisteredPortfolios(reorganized, 0n)).rejects.toThrow('Portfolios changed during discovery')
 })

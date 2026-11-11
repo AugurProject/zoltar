@@ -41,9 +41,9 @@ async function loadDeploymentRegistryAnchor(client: ReadClient): Promise<Deploym
 	return { blockHash: block.hash, blockNumber: block.number }
 }
 
-async function requireDeploymentRegistryAnchor(client: ReadClient, anchor: DeploymentRegistryAnchor) {
+async function requireDeploymentRegistryAnchor(client: ReadClient, anchor: DeploymentRegistryAnchor, changedMessage = 'Security pool deployments changed during discovery') {
 	const block = await client.getBlock({ blockNumber: anchor.blockNumber })
-	if (block.hash?.toLowerCase() !== anchor.blockHash.toLowerCase()) throw new Error('Security pool deployments changed during discovery')
+	if (block.hash?.toLowerCase() !== anchor.blockHash.toLowerCase()) throw new Error(changedMessage)
 }
 
 function isCanonicalAnchor(client: ReadClient) {
@@ -99,6 +99,24 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 
 export type RegisteredPortfolio = { portfolio: Address; questionCount: number }
 
+type ListingRead = { status: 'success'; result: unknown } | { status: 'failure' }
+// Retries go out in small groups, so a registry with many failing addresses does not flood the provider.
+const LISTING_RETRY_GROUP = 8
+
+function portfolioListingCalls(portfolio: Address, universeId: bigint) {
+	return [
+		{ address: portfolio, abi: securityPoolPortfolioAbi, functionName: 'capitalLedger', args: [universeId] },
+		{ address: portfolio, abi: securityPoolPortfolioAbi, functionName: 'questionCount', args: [] },
+	]
+}
+
+/** A row for an address that answers as a portfolio with a ledger in this universe, or `undefined` for anything else. */
+function portfolioListing(portfolio: Address, ledger: ListingRead | undefined, questions: ListingRead | undefined): RegisteredPortfolio | undefined {
+	if (ledger?.status !== 'success' || questions?.status !== 'success') return undefined
+	if (typeof ledger.result !== 'string' || sameAddress(ledger.result, zeroAddress) || typeof questions.result !== 'bigint') return undefined
+	return { portfolio, questionCount: Number(questions.result) }
+}
+
 /**
  * Portfolios that open in this universe, most recently registered first. The factory registers a portfolio when its
  * setup configures its price feed, so a portfolio still in setup can only be opened by its address. Any caller can
@@ -108,27 +126,39 @@ export type RegisteredPortfolio = { portfolio: Address; questionCount: number }
 export async function loadRegisteredPortfolios(client: ReadClient, universeId: bigint): Promise<RegisteredPortfolio[]> {
 	const anchor = await loadDeploymentRegistryAnchor(client)
 	const portfolios = await loadPortfolioRegistry(client, anchor)
-	// One multicall request at the anchor block. viem splits a large batch into several calls, all at that block.
-	const reads =
-		portfolios.length === 0
-			? []
-			: await readOptionalMulticall(
-					client,
-					portfolios.flatMap(portfolio => [
-						{ address: portfolio, abi: securityPoolPortfolioAbi, functionName: 'capitalLedger', args: [universeId] },
-						{ address: portfolio, abi: securityPoolPortfolioAbi, functionName: 'questionCount', args: [] },
-					]),
-					anchor.blockNumber,
-				)
-	await requireDeploymentRegistryAnchor(client, anchor)
-	const listed: RegisteredPortfolio[] = []
-	for (const [index, portfolio] of portfolios.entries()) {
-		const ledger = reads[2 * index]
-		const questions = reads[2 * index + 1]
-		// An address that does not answer as a portfolio, or has no ledger here, is skipped rather than failing the list.
-		if (ledger?.status !== 'success' || questions?.status !== 'success') continue
-		if (typeof ledger.result !== 'string' || sameAddress(ledger.result, zeroAddress) || typeof questions.result !== 'bigint') continue
-		listed.push({ portfolio, questionCount: Number(questions.result) })
+	let unanswered: unknown
+	let answeredRequests = 0
+	const read = async (batch: readonly Address[]) => {
+		try {
+			const reads = await readOptionalMulticall(
+				client,
+				batch.flatMap(portfolio => portfolioListingCalls(portfolio, universeId)),
+				anchor.blockNumber,
+			)
+			answeredRequests += 1
+			return reads
+		} catch (error) {
+			unanswered = error
+			return undefined
+		}
 	}
-	return listed.reverse()
+	// One batched read at the anchor block. The calls share its gas, so one registered contract can fail the whole read
+	// or starve the calls after it; those addresses are read again one at a time below.
+	const batch = portfolios.length === 0 ? [] : await read(portfolios)
+	const answered = (index: number) => batch?.[2 * index]?.status === 'success' && batch[2 * index + 1]?.status === 'success'
+	const listings = portfolios.map((portfolio, index) => portfolioListing(portfolio, batch?.[2 * index], batch?.[2 * index + 1]))
+	const retries = portfolios.flatMap((portfolio, index) => (answered(index) ? [] : [{ portfolio, index }]))
+	for (let start = 0; start < retries.length; start += LISTING_RETRY_GROUP) {
+		await Promise.all(
+			retries.slice(start, start + LISTING_RETRY_GROUP).map(async ({ portfolio, index }) => {
+				// Only an address that fails on its own is skipped.
+				const own = await read([portfolio])
+				listings[index] = portfolioListing(portfolio, own?.[0], own?.[1])
+			}),
+		)
+	}
+	// With no request answered at all, the provider failed rather than one registered contract, so the list reports it.
+	if (portfolios.length > 0 && answeredRequests === 0) throw unanswered
+	await requireDeploymentRegistryAnchor(client, anchor, 'Portfolios changed during discovery')
+	return listings.filter(listing => listing !== undefined).reverse()
 }
