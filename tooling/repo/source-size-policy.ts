@@ -16,7 +16,6 @@ const allowances = (reason: string, entries: readonly (readonly [path: string, m
 export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Chaos: extract dashboard features, operation handlers, and persistence responsibilities into focused modules.', [
 		['bots/chaos/src/dashboard/dashboard-server.ts', 817],
-		['bots/chaos/src/execution/recovery.ts', 644],
 		['bots/chaos/src/monitoring/protocol-index.ts', 635],
 	]),
 	...allowances('Owning UI library: separate workflow state and actions from rendering, and extract simulation scenario handlers.', [['ui/coreShared/ts/simulation/tevmEngine.ts', 760]]),
@@ -31,5 +30,4 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['solidity/ts/testSupport/coverage/traceToSource.ts', 965],
 		['solidity/ts/testSupport/simulator/AnvilWindowEthereum.ts', 608],
 	]),
-	...allowances('The arbitrage executor contract bundles routing, settlement, and recovery paths that belong in libraries.', [['bots/open-oracle-arbitrager/contracts/OpenOracleArbitrageExecutor.sol', 754]]),
 ])

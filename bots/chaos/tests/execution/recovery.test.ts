@@ -726,6 +726,46 @@ async function forkedRecoveryEnvironment(options: RecoveryEnvironmentOptions = {
 
 describe('pending chaos transaction recovery decisions', () => {
 	describe('atomic recovery disposition persistence', () => {
+		test.each(['original', 'replacement', 'cancellation'] as const)('restarts safely after restoring a failed %s disposition commit', async mode => {
+			const fixture = await finalizedRecoveryEnvironment(mode, 'success')
+			failRecoveryDispositionPersistence(fixture.environment)
+			await expect(recoverPendingTransactions(fixture.environment, { resubmit: false })).rejects.toBeInstanceOf(TransactionAwaitingRecovery)
+			const restarted: ExecutionEnvironment = {
+				...fixture.environment,
+				persistState: undefined,
+				state: await loadRuntimeState(fixture.stateFile, false, fixture.environment.sender, 1),
+			}
+			await expect(recoverPendingTransactions(restarted, { resubmit: true })).resolves.toBeTrue()
+			expect(restarted.state.pendingTransactions).toHaveLength(0)
+			const committed = recoveryDispositionCollections(restarted.state)
+			await expect(recoverPendingTransactions(restarted, { resubmit: true })).resolves.toBeFalse()
+			expect(recoveryDispositionCollections(restarted.state)).toEqual(committed)
+			expect(recoveryDispositionCollections(await loadDurableState(fixture.stateFile, 1))).toEqual(committed)
+			for (const methods of fixture.requestedMethods) expect(methods).not.toContain('eth_sendRawTransaction')
+		})
+
+		test('restart trusts the durable receipt when both commit acknowledgement and journal restoration fail', async () => {
+			const fixture = await finalizedRecoveryEnvironment('original', 'success')
+			let writes = 0
+			const environment: ExecutionEnvironment = fixture.environment
+			environment.persistState = async state => {
+				writes++
+				if (writes === 1) await saveDurableState(fixture.stateFile, state)
+				throw new Error('injected acknowledgement or restoration failure')
+			}
+			await expect(recoverPendingTransactions(environment, { resubmit: false })).rejects.toBeInstanceOf(TransactionAwaitingRecovery)
+			expect(writes).toBe(2)
+			expect(environment.state.pendingTransactions).toHaveLength(1)
+			const restarted: ExecutionEnvironment = {
+				...environment,
+				persistState: undefined,
+				state: await loadRuntimeState(fixture.stateFile, false, environment.sender, 1),
+			}
+			expect(restarted.state.pendingTransactions).toHaveLength(0)
+			await expect(recoverPendingTransactions(restarted, { resubmit: true })).resolves.toBeFalse()
+			for (const methods of fixture.requestedMethods) expect(methods).not.toContain('eth_sendRawTransaction')
+		})
+
 		test.each([
 			{ mode: 'original', outcome: 'success', scenario: 'successful original receipt' },
 			{ mode: 'original', outcome: 'revert', scenario: 'reverted original receipt' },
