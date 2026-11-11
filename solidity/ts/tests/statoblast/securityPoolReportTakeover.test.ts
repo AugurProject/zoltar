@@ -9,7 +9,7 @@ import { ReputationToken_ReputationToken as tokenArtifact } from '../../types/co
 import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { loadOpenOracleEventState, openOracleSettle, wrapWeth } from '../../testSupport/simulator/utils/contracts/statoblast'
-import { preparePortfolioTruthAuction } from './securityPoolPortfolioTruthAuctionFixture'
+import { preparePortfolioCollateralRepairAuction } from './securityPoolPortfolioCollateralRepairAuctionFixture'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 const requestAbi = parseAbi(['function requestPortfolioPriceWithOperations(uint256 price,uint256 weth,uint256 bounty,(uint32 gasLimit,uint256 minimumPrice,uint256 maximumPrice,uint48 deadline,(uint32 gasLimit,bytes data)[] operations) batch) payable returns(uint256)'])
@@ -115,7 +115,7 @@ describe('Statoblast: report sponsor takeover priority', () => {
 	})
 
 	test.each([false, true])('an auction winner materialization rolls back with its failed takeover: %s', async failure => {
-		const context = await preparePortfolioTruthAuction(fixture)
+		const context = await preparePortfolioCollateralRepairAuction(fixture)
 		await context.report()
 		await context.open()
 		await context.bid(context.owner, 2n, (35n * unit) / 10n)

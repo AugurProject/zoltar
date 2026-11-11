@@ -111,7 +111,7 @@ postgresTest(
 							'{"outcome":"0","amountAttoRep":"90"}'::jsonb, true)
 				`
 			await database.sql`
-					INSERT INTO truth_auction_events (
+					INSERT INTO collateral_repair_auction_events (
 						chain_id, block_hash, tx_hash, log_index, block_number, auction_address, event_name, event_data, canonical
 					) VALUES
 						(${historicalChainId}, ${firstHash}, ${firstTransactionHash}, 2, 1, ${auctionAddress}, 'AuctionStarted',

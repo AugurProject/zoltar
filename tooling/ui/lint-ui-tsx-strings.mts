@@ -276,7 +276,7 @@ function isPreactFactoryCall(node: ts.CallExpression) {
 function isRenderHelperModeTokenArgument(node: ts.Node, callExpression: ts.CallExpression) {
 	if (!ts.isExpression(node) || !callExpression.arguments.includes(node)) return false
 	const callName = getCallExpressionName(callExpression)
-	if (callName !== 'renderTruthAuctionCoverageCommitmentNotice') return false
+	if (callName !== 'renderCollateralRepairAuctionCoverageCommitmentNotice') return false
 	const argumentIndex = callExpression.arguments.indexOf(node)
 	if (argumentIndex !== 0) return false
 	return ts.isStringLiteral(node) && (node.text === 'bid' || node.text === 'settlement')

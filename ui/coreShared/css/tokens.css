@@ -213,12 +213,12 @@
 	--simulation-success-bg: rgba(29, 111, 85, 0.82);
 	--simulation-focus-ring: 0 0 0 3px color-mix(in srgb, var(--simulation-accent) 14%, transparent);
 
-	/* truth auction */
-	--truth-auction-track: light-dark(rgba(226, 232, 240, 1), rgba(8, 18, 31, 1));
-	--truth-auction-eth: light-dark(rgba(196, 122, 20, 1), rgba(232, 166, 68, 1));
-	--truth-auction-eth-highlight: light-dark(rgba(150, 90, 8, 1), rgba(243, 209, 123, 1));
-	--truth-auction-rep: light-dark(rgba(40, 136, 98, 1), rgba(62, 159, 120, 1));
-	--truth-auction-rep-highlight: light-dark(rgba(20, 100, 70, 1), rgba(137, 208, 168, 1));
+	/* collateral repair auction */
+	--collateral-repair-auction-track: light-dark(rgba(226, 232, 240, 1), rgba(8, 18, 31, 1));
+	--collateral-repair-auction-eth: light-dark(rgba(196, 122, 20, 1), rgba(232, 166, 68, 1));
+	--collateral-repair-auction-eth-highlight: light-dark(rgba(150, 90, 8, 1), rgba(243, 209, 123, 1));
+	--collateral-repair-auction-rep: light-dark(rgba(40, 136, 98, 1), rgba(62, 159, 120, 1));
+	--collateral-repair-auction-rep-highlight: light-dark(rgba(20, 100, 70, 1), rgba(137, 208, 168, 1));
 
 	/* component hierarchy */
 	--radius-compact: 0.25rem;

@@ -76,7 +76,7 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('SecurityPool', 'setSystemState', 'role-restricted', undefined, 'Only SecurityPoolForker controls lifecycle state.'),
 	entry('SecurityPool', 'setShareTokenSupplyAttoShares', 'role-restricted', undefined, 'Only SecurityPoolForker migrates share supply.'),
 	entry('SecurityPool', 'authorizeChildPool', 'role-restricted', undefined, 'Only SecurityPoolForker authorizes child pools.'),
-	entry('SecurityPool', 'receive', 'role-restricted', undefined, 'Only the canonical forker, truth auction, or parent pool may send ETH directly.', undefined, 'receive'),
+	entry('SecurityPool', 'receive', 'role-restricted', undefined, 'Only the canonical forker, collateral repair auction, or parent pool may send ETH directly.', undefined, 'receive'),
 	entry('SecurityPoolOperationsDelegate', 'decodeError', 'excluded-dangerous', undefined, 'This helper decodes revert data for canonical SecurityPool delegate calls and has no direct protocol effect.'),
 	entry('SecurityPoolOperationsDelegate', 'depositWalletRepToEscalationGame', 'excluded-dangerous', undefined, 'Wallet reporting must use the SecurityPool host, which checks inherited outcomes before delegating; direct calls use isolated delegate storage.'),
 
@@ -114,7 +114,7 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('OpenOracleReportDelegate', 'createSharedReport', 'excluded-dangerous', undefined, 'The stateless report helper requires delegatecall through an authenticated price feed.'),
 	entry('SharedPoolPriceFeedDeploymentWorker', 'deploy', 'excluded-dangerous', undefined, 'Direct deployment creates an orphan feed outside authenticated pool namespace wiring.'),
 	entry('SecurityPoolFactory', 'initializePortfolioPriceFeed', 'excluded-dangerous', undefined, 'Portfolio construction initializes its feed namespace; a direct wallet call creates an unreviewed standalone namespace.'),
-	entry('SecurityPoolFactory', 'initializePortfolioPriceFeedForUniverse', 'excluded-dangerous', undefined, 'The portfolio initializes its registered universe feed; wallet namespaces cannot supply its logical clock.'),
+	entry('SecurityPoolFactory', 'initializePortfolioPriceFeedForUniverse', 'excluded-dangerous', undefined, 'The portfolio initializes its registered universe feed; wallet namespaces cannot supply its portfolio clock.'),
 	entry('SecurityPoolFactory', 'preparePortfolioPriceFeed', 'excluded-dangerous', undefined, 'Bound native question preparation performs this dependency step after shared branch readiness.'),
 	entry('SecurityPoolFactory', 'deployPortfolioSecurityPool', 'excluded-dangerous', undefined, 'Direct calls use the wallet as namespace; portfolio question admission must run through its immutable rules.'),
 	entry('OpenOraclePriceCoordinatorFactory', 'deploySharedPoolPriceFeed', 'role-restricted', undefined, 'Only the recorded coordinator deployer may deploy its shared feed.'),

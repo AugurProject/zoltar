@@ -29,7 +29,7 @@ registerSimulationScenario('securitypoolx2', {
 	label: 'Security Pool x2',
 })
 registerSimulationScenario('securitypoolx2-auction', {
-	description: 'Two security pools with an in-progress truth auction. Use it to test auction bidding and finalization paths.',
+	description: 'Two security pools with an in-progress collateral repair auction. Use it to test auction bidding and finalization paths.',
 	label: 'Security Pool x2 Auction',
 })
 

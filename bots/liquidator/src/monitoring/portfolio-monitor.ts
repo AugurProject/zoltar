@@ -28,6 +28,7 @@ const portfolioMonitorAbi = [
 	parseAbiItem('function originUniverseId() view returns (uint248)'),
 	parseAbiItem('function zoltar() view returns (address)'),
 	parseAbiItem('function portfolio() view returns (address)'),
+	parseAbiItem('function capitalLedger() view returns (address)'),
 	parseAbiItem('function universeId() view returns (uint248)'),
 	parseAbiItem('function acceptedPriceEpoch() view returns (uint256)'),
 	parseAbiItem('function getRepToken(uint248 universeId) view returns (address)'),
@@ -171,7 +172,7 @@ export async function loadPortfolioObservation(client: ReadClient, settings: Ope
 	}
 	const [authority, indexAuthority, universeId, token, epoch, lastPositionId, walletRep, walletAttoEth] = await Promise.all([
 		client.readContract({ address: snapshot.capitalLedger, abi: portfolioMonitorAbi, functionName: 'portfolio', blockNumber }),
-		client.readContract({ address: snapshot.commitmentIndex, abi: portfolioMonitorAbi, functionName: 'portfolio', blockNumber }),
+		client.readContract({ address: snapshot.commitmentIndex, abi: portfolioMonitorAbi, functionName: 'capitalLedger', blockNumber }),
 		client.readContract({ address: snapshot.capitalLedger, abi: portfolioMonitorAbi, functionName: 'universeId', blockNumber }),
 		client.readContract({ address: settings.deployment.zoltar, abi: portfolioMonitorAbi, functionName: 'getRepToken', args: [scope.universeId], blockNumber }),
 		client.readContract({ address: snapshot.capitalLedger, abi: portfolioMonitorAbi, functionName: 'acceptedPriceEpoch', blockNumber }),
