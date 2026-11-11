@@ -1,5 +1,5 @@
 import { createRegistryIndex, readIncrementalRegistry, type RegistryIndex } from '@zoltar/ui-core-shared/lib/incrementalRegistry.js'
-import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '../contractArtifact.js'
+import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio } from '../contractArtifact.js'
 
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
@@ -7,13 +7,14 @@ import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ListedSecurityPool } from '../types/contracts.js'
 
 import { requireSecurityPoolDeploymentTupleArray, type SecurityPoolDeploymentTuple } from './helpers.js'
-import { requireAddressValue } from './decoders.js'
-import { readRequiredMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
+import { requireAddressValue, requireArrayValue } from './decoders.js'
+import { readOptionalMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { getInfraContractAddresses } from './deploymentHelpers.js'
 
 import { loadSecurityPoolDetails } from './securityPoolSnapshot.js'
 
 const securityPoolFactoryAbi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
+const securityPoolPortfolioAbi = statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio.abi
 async function loadSecurityPoolDeployments(client: ReadClient, startIndex: bigint, count: bigint, blockNumber?: bigint) {
 	if (count === 0n) return [] as readonly SecurityPoolDeploymentTuple[]
 	return requireSecurityPoolDeploymentTupleArray(
@@ -45,6 +46,13 @@ async function requireDeploymentRegistryAnchor(client: ReadClient, anchor: Deplo
 	if (block.hash?.toLowerCase() !== anchor.blockHash.toLowerCase()) throw new Error('Security pool deployments changed during discovery')
 }
 
+function isCanonicalAnchor(client: ReadClient) {
+	return async (candidate: DeploymentRegistryAnchor) => {
+		const block = await client.getBlock({ blockNumber: candidate.blockNumber })
+		return block.hash?.toLowerCase() === candidate.blockHash.toLowerCase()
+	}
+}
+
 async function loadDeploymentRegistry(client: ReadClient, anchor: DeploymentRegistryAnchor, index: RegistryIndex<SecurityPoolDeploymentTuple> = createRegistryIndex()): Promise<readonly SecurityPoolDeploymentTuple[]> {
 	const factory = getInfraContractAddresses().securityPoolFactory
 	return await readIncrementalRegistry({
@@ -53,10 +61,19 @@ async function loadDeploymentRegistry(client: ReadClient, anchor: DeploymentRegi
 		anchor,
 		loadCount: async () => await client.readContract({ address: factory, abi: securityPoolFactoryAbi, functionName: 'securityPoolDeploymentCount', args: [], blockNumber: anchor.blockNumber }),
 		loadRange: async (start, count) => await loadSecurityPoolDeployments(client, start, count, anchor.blockNumber),
-		isCanonical: async candidate => {
-			const block = await client.getBlock({ blockNumber: candidate.blockNumber })
-			return block.hash?.toLowerCase() === candidate.blockHash.toLowerCase()
-		},
+		isCanonical: isCanonicalAnchor(client),
+	})
+}
+
+async function loadPortfolioRegistry(client: ReadClient, anchor: DeploymentRegistryAnchor): Promise<readonly Address[]> {
+	const factory = getInfraContractAddresses().securityPoolFactory
+	return await readIncrementalRegistry({
+		index: createRegistryIndex<Address>(),
+		key: `${factory.toLowerCase()}:portfolios`,
+		anchor,
+		loadCount: async () => await client.readContract({ address: factory, abi: securityPoolFactoryAbi, functionName: 'portfolioCount', args: [], blockNumber: anchor.blockNumber }),
+		loadRange: async (start, count) => requireArrayValue(await client.readContract({ address: factory, abi: securityPoolFactoryAbi, functionName: 'portfoliosRange', args: [start, count], blockNumber: anchor.blockNumber }), 'registered portfolios').map(portfolio => requireAddressValue(portfolio, 'registered portfolio')),
+		isCanonical: isCanonicalAnchor(client),
 	})
 }
 
@@ -82,31 +99,35 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 export type RegisteredPortfolio = { portfolio: Address; questionCount: number }
 
 /**
- * Portfolios with at least one question registered in this universe, most recent registration first.
- * Each portfolio keeps a capital ledger per universe, so only these open in it. The factory registers
- * question pools, not portfolios, so a portfolio without a question here can only be opened by its address.
+ * Portfolios that open in this universe, most recently registered first. The factory registers a portfolio when its
+ * setup configures its price feed, so a portfolio still in setup can only be opened by its address. Any caller can
+ * register its own address the same way, so only addresses that answer as a portfolio with a capital ledger in this
+ * universe are listed; a portfolio keeps one ledger per universe it can open in.
  */
 export async function loadRegisteredPortfolios(client: ReadClient, universeId: bigint): Promise<RegisteredPortfolio[]> {
 	const anchor = await loadDeploymentRegistryAnchor(client)
-	const deployments = (await loadDeploymentRegistry(client, anchor)).filter(deployment => deployment.universeId === universeId)
-	const factory = getInfraContractAddresses().securityPoolFactory
+	const portfolios = await loadPortfolioRegistry(client, anchor)
 	// One multicall request at the anchor block. viem splits a large batch into several calls, all at that block.
-	const portfolios =
-		deployments.length === 0
+	const reads =
+		portfolios.length === 0
 			? []
-			: await readRequiredMulticall(
+			: await readOptionalMulticall(
 					client,
-					deployments.map(deployment => ({ address: factory, abi: securityPoolFactoryAbi, functionName: 'getSecurityPoolPortfolio', args: [deployment.securityPool] })),
+					portfolios.flatMap(portfolio => [
+						{ address: portfolio, abi: securityPoolPortfolioAbi, functionName: 'capitalLedger', args: [universeId] },
+						{ address: portfolio, abi: securityPoolPortfolioAbi, functionName: 'questionCount', args: [] },
+					]),
 					anchor.blockNumber,
 				)
 	await requireDeploymentRegistryAnchor(client, anchor)
-	const registrations = deployments.map((deployment, index) => ({ questionId: deployment.questionId, portfolio: requireAddressValue(portfolios[index], 'question portfolio') }))
-	const questions = new Map<Address, Set<bigint>>()
-	for (const { portfolio, questionId } of [...registrations].reverse()) {
-		if (portfolio === zeroAddress) continue
-		const known = questions.get(portfolio) ?? new Set<bigint>()
-		known.add(questionId)
-		questions.set(portfolio, known)
+	const listed: RegisteredPortfolio[] = []
+	for (const [index, portfolio] of portfolios.entries()) {
+		const ledger = reads[2 * index]
+		const questions = reads[2 * index + 1]
+		// An address that does not answer as a portfolio, or has no ledger here, is skipped rather than failing the list.
+		if (ledger?.status !== 'success' || questions?.status !== 'success') continue
+		if (typeof ledger.result !== 'string' || sameAddress(ledger.result, zeroAddress) || typeof questions.result !== 'bigint') continue
+		listed.push({ portfolio, questionCount: Number(questions.result) })
 	}
-	return Array.from(questions, ([portfolio, ids]) => ({ portfolio, questionCount: ids.size }))
+	return listed.reverse()
 }

@@ -127,23 +127,23 @@ test.each([false, true])('mint capacity uses central fees and closes when report
 	expect(capacity.mintingCapacityAttoEth).toBe(reporting ? 0n : 80n)
 })
 
-test('registered portfolios list the pools of one universe by portfolio, newest registration first', async () => {
-	const other = getAddress('0x00000000000000000000000000000000000000c1')
-	const pool = (index: number) => getAddress(`0x${(0xa0 + index).toString(16).padStart(40, '0')}`)
-	// Question 7 is registered in universe 0 and again in fork child 42; each universe lists its own registrations.
-	const deployments = [
-		{ ...deployment, securityPool: pool(0), universeId: 0n, questionId: 7n },
-		{ ...deployment, securityPool: pool(1), universeId: 0n, questionId: 8n },
-		{ ...deployment, securityPool: pool(2), universeId: 0n, questionId: 9n },
-		{ ...deployment, securityPool: pool(3), universeId: 42n, questionId: 7n },
-		{ ...deployment, securityPool: pool(4), universeId: 0n, questionId: 5n },
-	]
-	const owners = new Map([
-		[pool(0), portfolio],
-		[pool(1), other],
-		[pool(2), zeroAddress],
-		[pool(3), portfolio],
-		[pool(4), portfolio],
+test('registered portfolios list those with a ledger in the universe, newest registration first', async () => {
+	const second = getAddress('0x00000000000000000000000000000000000000c1')
+	const unopened = getAddress('0x00000000000000000000000000000000000000c2')
+	const stranger = getAddress('0x00000000000000000000000000000000000000c3')
+	const partial = getAddress('0x00000000000000000000000000000000000000c4')
+	const registry = [portfolio, stranger, second, partial, unopened]
+	// The first portfolio also has a ledger in fork child 42. Any caller can register itself: the stranger answers nothing, and the partial one has a ledger but no question count.
+	const ledgers = new Map([
+		[`${portfolio}:0`, capital],
+		[`${second}:0`, token],
+		[`${partial}:0`, token],
+		[`${portfolio}:42`, token],
+	])
+	const questionCounts = new Map([
+		[portfolio, 2n],
+		[second, 0n],
+		[unopened, 0n],
 	])
 	const blocks: (bigint | undefined)[] = []
 	const batches: number[] = []
@@ -151,22 +151,28 @@ test('registered portfolios list the pools of one universe by portfolio, newest 
 		getBlock: async () => block,
 		readContract: async request => {
 			blocks.push(request.blockNumber)
-			if (request.functionName === 'securityPoolDeploymentCount') return BigInt(deployments.length)
-			if (request.functionName === 'securityPoolDeploymentsRange') return deployments
+			if (request.functionName === 'portfolioCount') return BigInt(registry.length)
+			if (request.functionName === 'portfoliosRange') return registry.slice(Number(request.args?.[0]), Number(request.args?.[0]) + Number(request.args?.[1]))
 			throw new Error(`Unexpected ${request.functionName}`)
 		},
 		multicall: async request => {
 			batches.push(request.contracts.length)
 			blocks.push(request.blockNumber)
-			return request.contracts.map(contract => owners.get(getAddress(String(contract.args?.[0]))))
+			expect(request.allowFailure).toBe(true)
+			return request.contracts.map(contract => {
+				const address = getAddress(String(contract.address))
+				if (address === stranger || (address === partial && contract.functionName === 'questionCount')) return { status: 'failure', error: new Error('execution reverted') }
+				if (contract.functionName === 'questionCount') return { status: 'success', result: questionCounts.get(address) }
+				return { status: 'success', result: ledgers.get(`${address}:${String(contract.args?.[0])}`) ?? zeroAddress }
+			})
 		},
 	})
 	expect(await loadRegisteredPortfolios(client, 0n)).toEqual([
+		{ portfolio: second, questionCount: 0 },
 		{ portfolio, questionCount: 2 },
-		{ portfolio: other, questionCount: 1 },
 	])
-	expect(await loadRegisteredPortfolios(client, 42n)).toEqual([{ portfolio, questionCount: 1 }])
-	// Each load resolves only its universe's pools, in one multicall request pinned with the registry to one block.
-	expect(batches).toEqual([4, 1])
+	expect(await loadRegisteredPortfolios(client, 42n)).toEqual([{ portfolio, questionCount: 2 }])
+	// Each load reads every registered address in one multicall request, pinned with the registry to one block.
+	expect(batches).toEqual([10, 10])
 	expect(blocks.every(blockNumber => blockNumber === block.number)).toBe(true)
 })

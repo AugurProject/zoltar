@@ -99,21 +99,24 @@ export const questionColumn = 'Question'
 
 export const portfolioColumn = 'Portfolio'
 
-export const portfoliosWithQuestions = 'Portfolios with questions'
+export const portfoliosInUniverse = 'Portfolios in this universe'
 
 export const loadingPortfolios = 'Loading portfolios…'
 
 export const portfoliosError = 'Unable to load portfolios.'
 
-export const noPortfoliosWithQuestions = 'No portfolio has registered a question in this universe yet.'
+export const noPortfoliosInUniverse = 'No portfolios in this universe yet.'
 
-export const noPortfoliosWithQuestionsHint = 'Enter a portfolio address to open it.'
+export const noPortfoliosHint = 'Enter a portfolio address to open it.'
 
 export const ownerNeeded = 'Connect a wallet or enter an owner address to load this portfolio.'
 
 export const ownerAddressNeeded = 'Enter an owner address to load this portfolio.'
 
-export const formatRegisteredQuestions = (count: number) => (count === 1 ? '1 registered question' : `${count} registered questions`)
+export const formatRegisteredQuestions = (count: number) => {
+	if (count === 0) return 'No registered questions'
+	return count === 1 ? '1 registered question' : `${count} registered questions`
+}
 
 export const openPortfolio = 'Open'
 
