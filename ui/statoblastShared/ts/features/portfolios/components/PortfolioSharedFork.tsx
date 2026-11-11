@@ -9,6 +9,7 @@ import { formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { PortfolioButton, PortfolioInput } from './PortfolioControls.js'
 import { usePortfolioSharedFork, type PortfolioSharedForkParameters } from '../hooks/usePortfolioSharedFork.js'
 import { PortfolioPriceReport } from './PortfolioPriceReport.js'
+import { branchPriceTarget } from '../hooks/usePortfolioPrice.js'
 import { PortfolioAuction } from './PortfolioAuction.js'
 import * as copy from '../../../copy/portfolioSharedFork.js'
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
@@ -57,7 +58,7 @@ export function PortfolioSharedFork(parameters: PortfolioSharedForkParameters) {
 				<PortfolioButton model={parameters.actions} action='finalizePortfolioFork' label={copy.finalize} pendingLabel={copy.finalizing} reason={model.finalizeReason} onClick={model.finalize} />
 				<ActionLauncherButton tone='secondary' idleLabel={copy.open} pendingLabel={copy.loading} availability={{ disabled: disabled || model.openReason !== undefined, reason: disabled ? copy.busy : model.openReason }} onClick={model.open} />
 			</div>
-			<PortfolioPriceReport fork={state} actions={parameters.actions} bidder={parameters.bidder} />
+			<PortfolioPriceReport scope='branch' target={branchPriceTarget(state)} actions={parameters.actions} bidder={parameters.bidder} referencePrice={parameters.snapshot?.acceptedPrice} />
 			<PortfolioAuction fork={state} actions={parameters.actions} bidder={parameters.bidder} openVault={parameters.openVault} />
 			<WorkflowSubsection title={copy.basketTitle}>
 				<UserMessage detail={copy.basketHint} />

@@ -397,18 +397,24 @@ export const coreContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '93f3678c31b7c059acbbb471b22ff99ebfaaa57c851f0ef3bd570747a4b0ed77',
+		compiledAbiFingerprint: '20d673f95a053965341d4e689a0fbc1d7340e48d506c9fc5945be195fcb118d5',
 		name: 'SecurityPoolFactory',
 		purpose: 'Deploys and registers portfolio question ledgers and their shared price feeds. No standalone deployment entry point exists.',
-		readAbiFingerprint: '34c0330a029fda185ef279091d48b684a96d2c49478b1999ab304458a1808fb6',
+		readAbiFingerprint: '255c67a61707b7f415a1dbdf310ff101ceb7fbef13eae561aa4d588521a146d1',
 		readSurface:
-			'Each question derives its start bond as max(1 REP, universe theoretical REP supply / 10,000,000). The factory has no standalone vault or debt minima. Deployment requires the configured operations and accounting delegates. `securityPoolDeploymentCount` and strict `securityPoolDeploymentsRange` enumerate canonical question ledgers. `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId` and `getSecurityPoolHasInheritedForkOutcome` identify their lineage. `getPortfolioOriginId` includes the caller portfolio namespace. `getSecurityPoolPortfolio` authenticates its portfolio; `sharedPriceFeeds` is indexed by portfolio and universe. `getChildPoolDependencies` returns a prepared coordinator and a zero per-question auction address. Branch collateral repair auctions are created by the shared fork coordinator. `zoltar` identifies the protocol root.',
+			'Each question derives its start bond as max(1 REP, universe theoretical REP supply / 10,000,000). The factory has no standalone vault or debt minima. Deployment requires the configured operations and accounting delegates. `securityPoolDeploymentCount` and strict `securityPoolDeploymentsRange` enumerate canonical question ledgers. `portfolioCount` and strict `portfoliosRange` enumerate every caller that configured a portfolio namespace, in registration order; a listed address is not authenticated as a portfolio. `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId` and `getSecurityPoolHasInheritedForkOutcome` identify their lineage. `getPortfolioOriginId` includes the caller portfolio namespace. `getSecurityPoolPortfolio` authenticates its portfolio; `sharedPriceFeeds` is indexed by portfolio and universe. `getChildPoolDependencies` returns a prepared coordinator and a zero per-question auction address. Branch collateral repair auctions are created by the shared fork coordinator. `zoltar` identifies the protocol root.',
 		readDeclarations: [
 			{
 				name: 'securityPoolDeploymentCount',
 			},
 			{
 				name: 'securityPoolDeploymentsRange',
+			},
+			{
+				name: 'portfolioCount',
+			},
+			{
+				name: 'portfoliosRange',
 			},
 			{
 				name: 'getPoolId',
@@ -443,27 +449,28 @@ export const coreContractReferences: ContractReference[] = [
 		sourcePath: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
 		interactions: [
 			{
-				call: '`initializePortfolioPriceFeed(configurationSeed)`',
+				call: '`initializePortfolioPriceFeed(universeId, priorityFee)`',
 				caller: 'Anyone, within their own caller-address namespace',
-				effect: 'Creates the caller namespace\u2019s origin-universe feed from a canonical origin ledger\u2019s oracle configuration, or returns its existing feed. Portfolio setup uses this step before the separate first-question admission transaction.',
+				effect:
+					'The first call creates the caller namespace\u2019s oracle configuration from the universe\u2019s REP token and the priority fee, and appends the caller to the portfolio registry. Each call creates the namespace\u2019s feed for that universe or returns the existing one. Portfolio setup calls this in its last stage, before any question is admitted.',
 				declarations: [
 					{
 						name: 'initializePortfolioPriceFeed',
 					},
 				],
-				preconditions: 'The seed is a canonical origin ledger in this factory. The feed starts without an accepted price. This call neither registers a question nor allocates REP; a later coordinator must match the feed\u2019s token and priority-fee policy.',
-				signals: 'Returns the canonical feed address; no question-deployment event.',
+				preconditions: 'The universe has a REP token and has not forked. A repeated call must match the first call\u2019s REP token and priority fee. The feed starts without an accepted price. This call neither registers a question nor allocates REP, and registration does not authenticate the caller as a portfolio.',
+				signals: '`PortfolioRegistered` on the first call from a namespace; returns the canonical feed address. No question-deployment event.',
 			},
 			{
-				call: '`initializePortfolioPriceFeedForUniverse(configurationSeed, targetUniverse)`',
+				call: '`initializePortfolioPriceFeedForUniverse(universeId)`',
 				caller: 'A portfolio, within its own caller-address namespace',
-				effect: 'Creates or retrieves the caller namespace\u2019s feed for an already registered child universe, using the canonical seed\u2019s oracle configuration. No question needs to be deployed first.',
+				effect: 'Creates or retrieves the caller namespace\u2019s feed for an already registered child universe, using the oracle configuration from the namespace\u2019s first `initializePortfolioPriceFeed` call. No question needs to be deployed first.',
 				declarations: [
 					{
 						name: 'initializePortfolioPriceFeedForUniverse',
 					},
 				],
-				preconditions: 'Canonical configuration seed; the caller\u2019s portfolio clock recognizes the target universe; the target REP token exists. The seed belongs to a registered portfolio.',
+				preconditions: 'The caller has configured its namespace; the caller\u2019s portfolio clock recognizes the target universe; the target REP token exists.',
 				signals: 'Returns the canonical feed address; no question-deployment event.',
 			},
 			{

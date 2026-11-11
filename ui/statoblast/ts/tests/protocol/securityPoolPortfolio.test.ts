@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { loadPortfolioAccount, loadPortfolioSetup, verifyRuntimeCode } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolio.js'
 import { capitalClient, modules } from '../features/portfolios/capitalClient.js'
-import { capitalSnapshot, owner, portfolio, capital } from '../features/portfolios/capitalFixture.js'
+import { capitalSnapshot, owner, portfolio, capital, index } from '../features/portfolios/capitalFixture.js'
 test('custody authentication and bounded accounting pin every read to one mined block', async () => {
 	const fixture = capitalClient(capitalSnapshot({ questionCount: 10_000n }))
 	const snapshot = await loadPortfolioAccount(fixture.client, portfolio, owner, 0n)
@@ -83,4 +83,27 @@ test('setup readiness includes the separate fourth price-feed stage and rejects 
 	expect((await loadPortfolioSetup(fixture.client, portfolio, owner)).stage).toBe(4)
 	fixture.setSetupStage(5n)
 	await expect(loadPortfolioSetup(fixture.client, portfolio, owner)).rejects.toThrow('Invalid portfolio setup stage')
+})
+
+test('claimable earnings include what the next checkpoint credits, read at the snapshot block', async () => {
+	const fixture = capitalClient(capitalSnapshot())
+	const credited = await loadPortfolioAccount(fixture.client, portfolio, owner, 0n)
+	const position = credited.positions[0]
+	if (position === undefined) throw new Error('Missing position')
+	fixture.setRead('checkpoint', undefined)
+	fixture.setRead('ownerAccount', { ...credited.ownerAccount, feesAttoEth: credited.ownerAccount.feesAttoEth + 5n, feesAttoRep: credited.ownerAccount.feesAttoRep })
+	fixture.setRead('accountOf', { owner, batch: position.batch, rep: position.rep, commitment: position.commitment, maxHealthyPrice: position.maxHealthyPrice, releasedRep: position.releasedRep, ethFees: position.feesAttoEth + 2n, repFees: position.feesAttoRep + 3n, remainingCommitment: position.remainingCommitment })
+	fixture.setRead('ownerAccount', credited.ownerAccount, capital)
+	fixture.setRead('accountOf', { owner, batch: position.batch, rep: position.rep, commitment: position.commitment, maxHealthyPrice: position.maxHealthyPrice, releasedRep: position.releasedRep, ethFees: position.feesAttoEth, repFees: position.feesAttoRep, remainingCommitment: position.remainingCommitment }, index)
+	const snapshot = await loadPortfolioAccount(fixture.client, portfolio, owner, 0n)
+	expect(snapshot.accruedFeesAttoEth).toBe(credited.accruedFeesAttoEth)
+	expect(snapshot.claimableEarnings).toEqual({ attoEth: credited.accruedFeesAttoEth + 7n, attoRep: credited.accruedFeesAttoRep + 3n })
+	expect(new Set(fixture.multicallBlocks)).toEqual(new Set([snapshot.blockNumber]))
+})
+
+test('a failed earnings preview falls back to the credited amounts instead of hiding the account', async () => {
+	const fixture = capitalClient(capitalSnapshot())
+	const snapshot = await loadPortfolioAccount(fixture.client, portfolio, owner, 0n)
+	expect(snapshot.claimableEarnings).toBeUndefined()
+	expect(snapshot.positions).toHaveLength(1)
 })

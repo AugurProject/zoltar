@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { encodeDeployData, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, encodeDeployData, getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact,
@@ -61,6 +61,27 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		expect(await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: created, functionName: 'questionCount' })).toBe(0n)
 		expect(await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: created, functionName: 'capitalLedger', args: [fixture.base.genesisUniverse] })).not.toBe(zeroAddress)
 		expect(await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: created, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })).not.toBe(zeroAddress)
+	})
+
+	test('setup registers each portfolio once, in order, before it has any question', async () => {
+		const factory = { abi: factoryArtifact.abi, address: getInfraContractAddresses().securityPoolFactory }
+		const count = () => fixture.owner().readContract({ ...factory, functionName: 'portfolioCount' })
+		const range = async (start: bigint, size: bigint) => (await fixture.owner().readContract({ ...factory, functionName: 'portfoliosRange', args: [start, size] })).map(address => getAddress(address))
+		const before = await count()
+		expect(await range(before - 1n, 1n)).toEqual([getAddress(fixture.portfolio)])
+		const created = await fixture.deployPortfolio()
+		expect(await count()).toBe(before + 1n)
+		expect(await range(before - 1n, 2n)).toEqual([getAddress(fixture.portfolio), getAddress(created)])
+		expect(await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: created, functionName: 'questionCount' })).toBe(0n)
+		// Registration follows the configured namespace, so configuring it again adds nothing.
+		const sender = fixture.other()
+		const configure = () => writeContractAndWait(sender, () => sender.writeContract({ ...factory, functionName: 'initializePortfolioPriceFeed', args: [fixture.base.genesisUniverse, 10_000_000_000n] }))
+		const receipt = await sender.getTransactionReceipt({ hash: await configure() })
+		const registrations = receipt.logs.filter(log => getAddress(log.address) === getAddress(factory.address)).map(log => decodeEventLog({ abi: factoryArtifact.abi, data: log.data, topics: log.topics }))
+		expect(registrations).toEqual([{ eventName: 'PortfolioRegistered', args: { portfolio: getAddress(sender.account.address), originUniverseId: fixture.base.genesisUniverse } }])
+		await configure()
+		expect(await count()).toBe(before + 2n)
+		expect(await range(before + 1n, 1n)).toEqual([getAddress(sender.account.address)])
 	})
 
 	test('permissionless registration binds distinct canonical shares without authorizing or moving owner capital', async () => {

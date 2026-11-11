@@ -31,32 +31,32 @@ const EXPECTED_RUNTIME_CODE_HASHES: Readonly<Record<string, Hash>> = {
 const EXPECTED_TRADING_RUNTIME_CODE_HASHES: Readonly<Record<BootstrapDescendantHashProfile, Readonly<Record<GenesisOutcome, Readonly<Record<string, Hash>>>>>> = {
 	sepolia: {
 		yes: {
-			tradingFactory: '0x12bd75ffc6f54c4739334e60b2ff4dcf78f6b43d164eb4911424b651aefa089e',
-			tradingRouter: '0xd46ead425c01aee487cff406e2f7b3cc4e4f4940d4dc77f176ebee1c566dccfd',
+			tradingFactory: '0xa3e10bc3731f9dcc9b1d6392628d8425e26266c62f64c2e3b1ca53e6f7fa660b',
+			tradingRouter: '0xff2dbc81248a4fc2620be2cf4b523782369a8f89c02eb16c879aa79c072e2a61',
 		},
 		no: {
-			tradingFactory: '0x3a1d2985ff9cde1fc131d95c659a669426e9050d14f5ba8793a2bc0bf696aea7',
-			tradingRouter: '0x4016a842e369dffff6d0f7708944ac02a04af1fd6821f236b3e4cea766849472',
+			tradingFactory: '0x4024d33b772b92342ca21b0c8d5353e7489b350eb00b8d73032d29f4324f0492',
+			tradingRouter: '0xe2dd83ad733c3019f307c9d09993ce6509f1b9335ca216a159ef678727bb59cd',
 		},
 	},
 	deterministic: {
 		yes: {
-			tradingFactory: '0xd26b4880bdd5184753be5f3ceb17a8adf9da46ed75445b2a8b91665d8b7e2052',
-			tradingRouter: '0x4b3b29afcae3e6af905d16338e5708544bb421d96218202548fa50babb953f71',
+			tradingFactory: '0x1f0dea3deda57f364a6a43c264af98ee6e1dedb50fd2bc5b990359df4532a5c3',
+			tradingRouter: '0xc22b134dbc1fd54837158723a34172dc320b00696738189eba94f18d8e93b3ba',
 		},
 		no: {
-			tradingFactory: '0xe249d1acbdc5e05a889415a01efaa53533cf25947eacd678d028d10aefd0ae5f',
-			tradingRouter: '0x8ecc7204f2fa3a1710fb5890e6fd207df0319da7ba19d88d64e2567b7e541bf1',
+			tradingFactory: '0x91fe823d241d8503d8280424bcb228dc622f163777ea075bde1c4200560f1932',
+			tradingRouter: '0xa940f5c4a2582d27651796aede7ae7f0f54c6aa14c321eb1cd83f50b998e3195',
 		},
 	},
 	mainnet: {
 		yes: {
-			tradingFactory: '0x90c66bb8a032b9704c2f9a5bca8fc9f9e70ae5a3a61f90b99f098a61faeaf54c',
-			tradingRouter: '0x61a98d3d59c2e975ccc02bd1e5e2ad3b416275e3e5a6fc2d440983cce517e7f0',
+			tradingFactory: '0xb256c150eb746d9d9f0bc6ddea5fc74386b51bc93208e15a9eb199822a82cfbf',
+			tradingRouter: '0x55723b07af1852e94f474af9e4e2d206854c0ef827e11fa28ec3f261b371270d',
 		},
 		no: {
-			tradingFactory: '0xaaaa0fdaa289b11f8b4925106a92178729e66d1a0301a093c76310907b88475d',
-			tradingRouter: '0xb02b2689fc4742f0c1387626872d0c0fcbbe7031133564da3041c6bb4af43165',
+			tradingFactory: '0xc39896f5109d468c2d5146591e1ea9533261ba0b39ae6d578959f0485d8765b9',
+			tradingRouter: '0x58e09dfa28c95325f9569ca6558bd87724bec22f46b55f1cc85c7132015be444',
 		},
 	},
 }
@@ -65,11 +65,11 @@ const EXPECTED_TRADING_RUNTIME_CODE_HASHES: Readonly<Record<BootstrapDescendantH
 const DETERMINISTIC_WETH_DEPENDENT_RUNTIME_CODE_HASHES: Readonly<Record<GenesisOutcome, Readonly<Record<string, Hash>>>> = {
 	yes: {
 		openOraclePriceCoordinatorFactory: '0x356bcfeb7beb7f12be242de4f9c2f0d851026bbd96ab9e5fe5d63d1f913f5da5',
-		securityPoolFactory: '0x1e8365636a867a67dab2ca02101ca232b82ae43c9f9810f903ad46b24f638ff7',
+		securityPoolFactory: '0x9bae90bcc0a37bdae8e4c58b6412fec3458423e4de50c3d141b3610aff828de2',
 	},
 	no: {
 		openOraclePriceCoordinatorFactory: '0x356bcfeb7beb7f12be242de4f9c2f0d851026bbd96ab9e5fe5d63d1f913f5da5',
-		securityPoolFactory: '0xd5d0498bacc36267d22307150578106c2ad7fbd2430abb324a65c67df18de5ef',
+		securityPoolFactory: '0xd319a50b5f4e61a5dce07571ac5291679cd32b24436b36a77102668cb96e0238',
 	},
 }
 
@@ -106,6 +106,15 @@ function getTradingDeploymentSteps(profile: NetworkProfile) {
 	]
 }
 
+/** Trading steps with the runtime code hashes pinned for this network and its kind of Uniswap deployment. */
+export function getPinnedTradingDeploymentSteps(profile: NetworkProfile, hashProfile: BootstrapDescendantHashProfile) {
+	return getTradingDeploymentSteps(profile).map(step => {
+		const expectedRuntimeCodeHash = EXPECTED_TRADING_RUNTIME_CODE_HASHES[hashProfile][profile.genesisOutcome][step.id]
+		if (expectedRuntimeCodeHash === undefined) throw new Error(`Trading step ${step.id} has no pinned ${hashProfile} runtime code hash`)
+		return { ...step, expectedRuntimeCodeHash }
+	})
+}
+
 export function createCompleteDeploymentPlan(profile: NetworkProfile, uniswap: UniswapDeployment) {
 	const [create2DeployerStep, permit2Step, ...uniswapQuoteSteps] = uniswap.steps
 	if (create2DeployerStep === undefined || create2DeployerStep.id !== 'arachnidCreate2Deployer') throw new Error('Uniswap deployment plan must begin with the canonical CREATE2 deployer')
@@ -116,13 +125,10 @@ export function createCompleteDeploymentPlan(profile: NetworkProfile, uniswap: U
 	if (zoltarOracle === undefined) throw new Error('Zoltar deployment plan is missing its deployment status oracle')
 	const zoltarOracleStep = { ...zoltarOracle, id: 'zoltarDeploymentStatusOracle', label: 'Zoltar Deployment Status Oracle' }
 	const protocolStepsWithExternalDependencies = protocolSteps.map(step => (step.id === 'openOracle' ? { ...step, dependencies: [...step.dependencies, 'permit2'] } : step))
-	return [create2DeployerStep, permit2Step, proxyDeployerStep, ...uniswapQuoteSteps, zoltarOracleStep, ...protocolStepsWithExternalDependencies, ...getTradingDeploymentSteps(profile)].map(step => {
-		const outcome = profile.genesisOutcome
-		const networkHashProfile = profile.id === 'mainnet' ? 'mainnet' : 'sepolia'
-		const hashProfile = uniswap.kind === 'deterministic' ? 'deterministic' : networkHashProfile
-		const tradingHash = EXPECTED_TRADING_RUNTIME_CODE_HASHES[hashProfile][outcome][step.id]
-		if (tradingHash !== undefined) return { ...step, expectedRuntimeCodeHash: tradingHash }
-		const deterministicHash = uniswap.kind === 'deterministic' ? DETERMINISTIC_WETH_DEPENDENT_RUNTIME_CODE_HASHES[outcome][step.id] : undefined
+	const networkHashProfile = profile.id === 'mainnet' ? 'mainnet' : 'sepolia'
+	const hashProfile = uniswap.kind === 'deterministic' ? 'deterministic' : networkHashProfile
+	return [create2DeployerStep, permit2Step, proxyDeployerStep, ...uniswapQuoteSteps, zoltarOracleStep, ...protocolStepsWithExternalDependencies, ...getPinnedTradingDeploymentSteps(profile, hashProfile)].map(step => {
+		const deterministicHash = uniswap.kind === 'deterministic' ? DETERMINISTIC_WETH_DEPENDENT_RUNTIME_CODE_HASHES[profile.genesisOutcome][step.id] : undefined
 		if (deterministicHash !== undefined) return { ...step, expectedRuntimeCodeHash: deterministicHash }
 		if ('verifyRuntimeCode' in step && step.verifyRuntimeCode !== undefined) return step
 		if ('expectedRuntimeCodeHash' in step && step.expectedRuntimeCodeHash !== undefined) return step

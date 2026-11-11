@@ -1,6 +1,6 @@
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { useSignal } from '@preact/signals'
-import { useEffect } from 'preact/hooks'
+import { useEffect, useRef } from 'preact/hooks'
 import { formatEther, formatUnits, getAddress, parseUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
@@ -8,7 +8,7 @@ import { createTransactionScope, mergeTransactionScopes } from '@zoltar/ui-core-
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import type { WriteOperationsParameters } from '../../../types/app.js'
-import { loadPortfolioSetup, portfolioPreparationRequest, portfolioContractRequest, portfolioCreationRequest, sendPortfolioTransaction, type PortfolioTransaction } from '../../../protocol/securityPoolPortfolio.js'
+import { isUniverseForked, loadPortfolioSetup, portfolioPreparationRequest, portfolioContractRequest, portfolioCreationRequest, sendPortfolioTransaction, type PortfolioTransaction } from '../../../protocol/securityPoolPortfolio.js'
 import { portfolioUnsignedId } from '../lib/draft.js'
 import type { usePortfolio } from './usePortfolio.js'
 import * as copy from '../../../copy/portfolio.js'
@@ -18,7 +18,9 @@ import { buildPortfolioAuctionVaultExecuteRequest } from '@zoltar/statoblast-sha
 import { authenticatePortfolioAuctionVault } from '../../../protocol/securityPoolPortfolioAuction.js'
 
 export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, parameters: WriteOperationsParameters) {
-	const originInput = useSignal('0')
+	const originInput = useSignal(model.universeInput)
+	const originEdited = useRef(false)
+	const originForkState = useSignal<{ backend: ReturnType<typeof getActiveBackend>; key: string; forked: boolean } | undefined>(undefined)
 	const multiplierInput = useSignal('200')
 	const priorityFeeInput = useSignal((DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS / 10n ** 9n).toString())
 	const horizonDays = useSignal('30')
@@ -46,6 +48,25 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 		error.value = undefined
 		feedback.value = undefined
 	}, [backend, model.managerInput, model.ownerInput, universeId])
+	// A forked universe cannot be an origin, so a fixed genesis default would fail once genesis forks.
+	useEffect(() => {
+		if (!originEdited.current) originInput.value = model.universeInput
+	}, [model.universeInput])
+	const originForkKey = originInput.value.trim()
+	useEffect(() => {
+		let current = true
+		const originUniverse = portfolioUnsignedId(originInput.value, 248)
+		// A failed read leaves the check to submission, which repeats it for a universe that forks after this one.
+		const load = async () => {
+			if (originUniverse === undefined) return
+			const forked = await isUniverseForked(createConnectedReadClient(), originUniverse)
+			if (current) originForkState.value = { backend, key: originForkKey, forked }
+		}
+		void load().catch(() => undefined)
+		return () => {
+			current = false
+		}
+	}, [backend, originForkKey])
 	const run = async (action: string, label: string, build: () => Promise<PortfolioTransaction> | PortfolioTransaction, validate: () => Promise<void> = async () => undefined, onConfirmed?: (result: Awaited<ReturnType<typeof sendPortfolioTransaction>>) => Promise<void>) => {
 		if (busy.value !== undefined) return
 		busy.value = action
@@ -119,6 +140,14 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 	} catch (failure) {
 		creationError = getErrorMessage(failure, copy.creationInvalid)
 	}
+	const originForked = originForkState.value?.backend === backend && originForkState.value.key === originForkKey && originForkState.value.forked
+	const originForkReason = originForked ? copy.originForked : undefined
+	const requireUnforkedOrigin = async () => {
+		if (origin === undefined) throw new Error(copy.enterOrigin)
+		if (!(await isUniverseForked(createConnectedReadClient(), origin.universeId))) return
+		originForkState.value = { backend, key: originForkKey, forked: true }
+		throw new Error(copy.originForked)
+	}
 	const admissionKey = `${originInput.value.trim().toLowerCase()}:${admissionMode.value}:${fixedQuestionIds.join(',')}`
 	const admission = deployedAdmission.value?.key === admissionKey && deployedAdmission.value.backend === backend ? deployedAdmission.value : undefined
 	const questionId = portfolioUnsignedId(questionInput.value)
@@ -165,7 +194,9 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 			priorityFeeInput.value = value
 		},
 		originInput: originInput.value,
+		originForked,
 		setOriginInput: (value: string) => {
+			originEdited.current = true
 			originInput.value = value
 		},
 		horizonDays: horizonDays.value,
@@ -186,8 +217,8 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 		},
 		admissionAddress: admission?.address,
 		creationError,
-		admissionDeployReason: walletReason ?? (origin === undefined ? copy.enterOrigin : creationError) ?? (admission !== undefined ? copy.admissionDeployed : undefined),
-		deployReason: walletReason ?? (origin === undefined ? copy.enterOrigin : creationError) ?? (admission === undefined ? copy.deployAdmissionFirst : undefined),
+		admissionDeployReason: walletReason ?? (origin === undefined ? copy.enterOrigin : creationError) ?? originForkReason ?? (admission !== undefined ? copy.admissionDeployed : undefined),
+		deployReason: walletReason ?? (origin === undefined ? copy.enterOrigin : creationError) ?? originForkReason ?? (admission === undefined ? copy.deployAdmissionFirst : undefined),
 		deployAdmission: async () => {
 			let captured: { key: string; universeId: bigint } | undefined
 			await run(
@@ -204,7 +235,7 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 					captured = { key, universeId: originUniverse }
 					return portfolioAdmissionCreationRequest(parameters.accountAddress, mode, originUniverse, ids)
 				},
-				undefined,
+				requireUnforkedOrigin,
 				async result => {
 					const address = result.receipt.contractAddress
 					if (address === null || address === undefined || captured === undefined) throw new Error(copy.admissionAddressMissing)
@@ -234,7 +265,7 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 						reviewDescription: `Deploy a portfolio with immutable ${mode} question admission. Fixed annual time fee ${formatUnits(config.annualFeeBps, 2)}%. Purchase fee ${formatUnits(config.purchaseFeeBps, 2)}% of required backing value, minimum ${formatEther(config.minimumPurchaseFeeAttoEth)} ETH. Each purchase also prepays up to 52 days of resolution fees. The whole purchase fee goes to underwriters; price reporters and keepers pay their own costs. Winners can retire if spare backing permits; there is no minimum holding period. Minimum commitment and auction ETH lot ${formatEther(config.minimumCommitmentAttoEth)} ETH; prepaid rewards vest over ${config.rewardVestingSeconds} seconds. Each owner chooses their own health target. Register eligible questions in a separate transaction.`,
 					}
 				},
-				undefined,
+				requireUnforkedOrigin,
 				async result => {
 					const portfolio = result.receipt.contractAddress
 					if (portfolio === null || portfolio === undefined || parameters.accountAddress === undefined) throw new Error('Portfolio deployment address unavailable.')

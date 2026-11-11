@@ -83,3 +83,21 @@ test('stale prices and closed universes never present a ready retirement preview
 		expect(view.container.textContent).not.toContain(copy.retirementPreviewStatus.ready)
 	}
 })
+
+test('earnings show what claiming pays, and the credited amounts when that preview is unavailable', async () => {
+	const snapshot = capitalSnapshot({ accruedFeesAttoEth: unit, accruedFeesAttoRep: 2n * unit })
+	const metric = (view: Awaited<ReturnType<typeof renderIntoDocument>>, label: string) =>
+		[...view.container.querySelectorAll('.metric-label')]
+			.find(node => node.textContent === label)
+			?.parentElement?.querySelector('.currency-value')
+			?.getAttribute('title')
+			?.replaceAll(/\s/g, '')
+	const credited = await renderIntoDocument(<Harness snapshot={snapshot} />)
+	expect(metric(credited, copy.ethEarnings)).toBe('1ETH')
+	expect(metric(credited, copy.repEarnings)).toBe('2REP')
+	await credited.cleanup()
+	const claimable = await renderIntoDocument(<Harness snapshot={{ ...snapshot, claimableEarnings: { attoEth: 5n * unit, attoRep: 7n * unit } }} />)
+	lifecycle.trackRendered(claimable)
+	expect(metric(claimable, copy.ethEarnings)).toBe('5ETH')
+	expect(metric(claimable, copy.repEarnings)).toBe('7REP')
+})
