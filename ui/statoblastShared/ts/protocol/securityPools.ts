@@ -90,7 +90,7 @@ export async function loadRegisteredPortfolios(client: ReadClient, universeId: b
 	const anchor = await loadDeploymentRegistryAnchor(client)
 	const deployments = (await loadDeploymentRegistry(client, anchor)).filter(deployment => deployment.universeId === universeId)
 	const factory = getInfraContractAddresses().securityPoolFactory
-	// One batched read at the anchor block, however many pools are registered.
+	// One multicall request at the anchor block. viem splits a large batch into several calls, all at that block.
 	const portfolios =
 		deployments.length === 0
 			? []
