@@ -63,7 +63,7 @@ export function capitalClient(initial = capitalSnapshot()) {
 				const name = getContractFunctionName(contract)
 				if (!(name in overrides)) throw new Error(`Unexpected capital multicall ${name}`)
 				multicallBlocks.push(request.blockNumber)
-				// With failures allowed, viem reports each call on its own.
+				// With failures allowed, the client reports each call the node ran as its own success or failure entry.
 				if (request.allowFailure !== true) return overrides[name]
 				return failingMulticallAddresses.has(getAddress(contract.address)) ? { status: 'failure', error: new Error('execution reverted') } : { status: 'success', result: overrides[name] }
 			}),
