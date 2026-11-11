@@ -568,6 +568,15 @@ export const securityPoolFactoryAbi = [
 	},
 	{
 		type: 'event',
+		name: 'PortfolioRegistered',
+		anonymous: false,
+		inputs: [
+			{ name: 'portfolio', type: 'address', internalType: 'address', indexed: true },
+			{ name: 'originUniverseId', type: 'uint248', internalType: 'uint248', indexed: true },
+		],
+	},
+	{
+		type: 'event',
 		name: 'SecurityPoolRegistered',
 		anonymous: false,
 		inputs: [
@@ -667,6 +676,17 @@ export const securityPoolFactoryAbi = [
 		outputs: [{ name: '', type: 'address', internalType: 'address' }],
 	},
 	{ type: 'function', name: 'initializePortfolioPriceFeedForUniverse', stateMutability: 'nonpayable', inputs: [{ name: 'universeId', type: 'uint248', internalType: 'uint248' }], outputs: [{ name: '', type: 'address', internalType: 'address' }] },
+	{ type: 'function', name: 'portfolioCount', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{
+		type: 'function',
+		name: 'portfoliosRange',
+		stateMutability: 'view',
+		inputs: [
+			{ name: 'startIndex', type: 'uint256', internalType: 'uint256' },
+			{ name: 'count', type: 'uint256', internalType: 'uint256' },
+		],
+		outputs: [{ name: 'page', type: 'address[]', internalType: 'address[]' }],
+	},
 	{
 		type: 'function',
 		name: 'prepareChildPoolDependencies',

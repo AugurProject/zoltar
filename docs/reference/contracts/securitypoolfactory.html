@@ -16,12 +16,12 @@
 					<p class="lede">Deploys and registers portfolio question ledgers and their shared price feeds. No standalone deployment entry point exists. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/SecurityPoolFactory.sol">SecurityPoolFactory source contract</a></p>
 				</header>
 				<h2 id="read-surface">Read surface</h2>
-				<p>Each question derives its start bond as max(1 REP, universe theoretical REP supply / 10,000,000). The factory has no standalone vault or debt minima. Deployment requires the configured operations and accounting delegates. <code>securityPoolDeploymentCount</code> and strict <code>securityPoolDeploymentsRange</code> enumerate canonical question ledgers. <code>getPoolId</code>, <code>getSecurityPool</code>, <code>getSecurityPoolOriginId</code> and <code>getSecurityPoolHasInheritedForkOutcome</code> identify their lineage. <code>getPortfolioOriginId</code> includes the caller portfolio namespace. <code>getSecurityPoolPortfolio</code> authenticates its portfolio; <code>sharedPriceFeeds</code> is indexed by portfolio and universe. <code>getChildPoolDependencies</code> returns a prepared coordinator and a zero per-question auction address. Branch collateral repair auctions are created by the shared fork coordinator. <code>zoltar</code> identifies the protocol root.</p>
+				<p>Each question derives its start bond as max(1 REP, universe theoretical REP supply / 10,000,000). The factory has no standalone vault or debt minima. Deployment requires the configured operations and accounting delegates. <code>securityPoolDeploymentCount</code> and strict <code>securityPoolDeploymentsRange</code> enumerate canonical question ledgers. <code>portfolioCount</code> and strict <code>portfoliosRange</code> enumerate every caller that configured a portfolio namespace, in registration order; a listed address is not authenticated as a portfolio. <code>getPoolId</code>, <code>getSecurityPool</code>, <code>getSecurityPoolOriginId</code> and <code>getSecurityPoolHasInheritedForkOutcome</code> identify their lineage. <code>getPortfolioOriginId</code> includes the caller portfolio namespace. <code>getSecurityPoolPortfolio</code> authenticates its portfolio; <code>sharedPriceFeeds</code> is indexed by portfolio and universe. <code>getChildPoolDependencies</code> returns a prepared coordinator and a zero per-question auction address. Branch collateral repair auctions are created by the shared fork coordinator. <code>zoltar</code> identifies the protocol root.</p>
 
 				<h2 id="interactions">State-changing interactions</h2>
 				<p>Each call lists its parameter names in ABI order. The <a href="../contracts.html#table-columns">contract index</a> defines the columns.</p>
-				<!-- Validated read ABI fingerprint: 34c0330a029fda185ef279091d48b684a96d2c49478b1999ab304458a1808fb6 -->
-				<!-- Validated complete compiled ABI fingerprint: 93f3678c31b7c059acbbb471b22ff99ebfaaa57c851f0ef3bd570747a4b0ed77 -->
+				<!-- Validated read ABI fingerprint: 255c67a61707b7f415a1dbdf310ff101ceb7fbef13eae561aa4d588521a146d1 -->
+				<!-- Validated complete compiled ABI fingerprint: 20d673f95a053965341d4e689a0fbc1d7340e48d506c9fc5945be195fcb118d5 -->
 				<table>
 					<thead>
 						<tr>
@@ -34,17 +34,17 @@
 					</thead>
 					<tbody>
 						<tr>
-							<td><code>initializePortfolioPriceFeed(configurationSeed)</code></td>
+							<td><code>initializePortfolioPriceFeed(universeId, priorityFee)</code><wbr /></td>
 							<td>Anyone, within their own caller-address namespace</td>
-							<td>The seed is a canonical origin ledger in this factory. The feed starts without an accepted price. This call neither registers a question nor allocates REP; a later coordinator must match the feed’s token and priority-fee policy.</td>
-							<td>Creates the caller namespace’s origin-universe feed from a canonical origin ledger’s oracle configuration, or returns its existing feed. Portfolio setup uses this step before the separate first-question admission transaction.</td>
-							<td>Returns the canonical feed address; no question-deployment event.</td>
+							<td>The universe has a REP token and has not forked. A repeated call must match the first call’s REP token and priority fee. The feed starts without an accepted price. This call neither registers a question nor allocates REP, and registration does not authenticate the caller as a portfolio.</td>
+							<td>The first call creates the caller namespace’s oracle configuration from the universe’s REP token and the priority fee, and appends the caller to the portfolio registry. Each call creates the namespace’s feed for that universe or returns the existing one. Portfolio setup calls this in its last stage, before any question is admitted.</td>
+							<td><code>PortfolioRegistered</code> on the first call from a namespace; returns the canonical feed address. No question-deployment event.</td>
 						</tr>
 						<tr>
-							<td><code>initializePortfolioPriceFeedForUniverse(configurationSeed, targetUniverse)</code><wbr /></td>
+							<td><code>initializePortfolioPriceFeedForUniverse(universeId)</code></td>
 							<td>A portfolio, within its own caller-address namespace</td>
-							<td>Canonical configuration seed; the caller’s portfolio clock recognizes the target universe; the target REP token exists. The seed belongs to a registered portfolio.</td>
-							<td>Creates or retrieves the caller namespace’s feed for an already registered child universe, using the canonical seed’s oracle configuration. No question needs to be deployed first.</td>
+							<td>The caller has configured its namespace; the caller’s portfolio clock recognizes the target universe; the target REP token exists.</td>
+							<td>Creates or retrieves the caller namespace’s feed for an already registered child universe, using the oracle configuration from the namespace’s first <code>initializePortfolioPriceFeed</code> call. No question needs to be deployed first.</td>
 							<td>Returns the canonical feed address; no question-deployment event.</td>
 						</tr>
 						<tr>

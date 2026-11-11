@@ -67,10 +67,10 @@ export function RegisteredPortfolios({ enabled, environmentKey, universeId, sele
 				if (event.currentTarget.open) setOpened(true)
 			}}
 		>
-			<summary>{copy.portfoliosWithQuestions}</summary>
+			<summary>{copy.portfoliosInUniverse}</summary>
 			{loading ? <UserMessage loading detail={copy.loadingPortfolios} /> : undefined}
 			{error === undefined ? undefined : <RetryableNotice message={error} retryLabel={retrying ? commonCopy.retrying : commonCopy.retry} disabled={retrying} onRetry={retry} />}
-			{portfolios?.length === 0 ? <EmptyState title={copy.noPortfoliosWithQuestions} detail={copy.noPortfoliosWithQuestionsHint} /> : undefined}
+			{portfolios?.length === 0 ? <EmptyState title={copy.noPortfoliosInUniverse} detail={copy.noPortfoliosHint} /> : undefined}
 			{portfolios === undefined || portfolios.length === 0 ? undefined : (
 				<ul className='status-list'>
 					{portfolios.map(entry => (

@@ -38,6 +38,8 @@ export function capitalClient(initial = capitalSnapshot()) {
 	const scopedOverrides = new Map<string, unknown>()
 	const reads: { name: string; args: readonly unknown[] | undefined; blockNumber: bigint | undefined }[] = []
 	const multicallBlocks: (bigint | undefined)[] = []
+	// Calls to these addresses fail in a multicall that allows failures, as calls to a non-portfolio would.
+	const failingMulticallAddresses = new Set<Address>()
 	const codes = new Map<Address, Hex>([
 		[portfolio, getSecurityPoolPortfolioRuntimeCode()],
 		[capital, `0x${capitalArtifact.evm.deployedBytecode.object}`],
@@ -61,7 +63,9 @@ export function capitalClient(initial = capitalSnapshot()) {
 				const name = getContractFunctionName(contract)
 				if (!(name in overrides)) throw new Error(`Unexpected capital multicall ${name}`)
 				multicallBlocks.push(request.blockNumber)
-				return overrides[name]
+				// With failures allowed, the client reports each call the node ran as its own success or failure entry.
+				if (request.allowFailure !== true) return overrides[name]
+				return failingMulticallAddresses.has(getAddress(contract.address)) ? { status: 'failure', error: new Error('execution reverted') } : { status: 'success', result: overrides[name] }
 			}),
 		),
 		getCode: async ({ address }: { address: Address }) => codes.get(address),
@@ -122,8 +126,8 @@ export function capitalClient(initial = capitalSnapshot()) {
 				questionCount: snapshot.questionCount,
 				balanceOf: snapshot.walletAttoRep,
 				allowance: snapshot.allowanceAttoRep,
-				// No question pools are registered unless a test lists some.
-				securityPoolDeploymentCount: 0n,
+				// No portfolios are registered unless a test lists some.
+				portfolioCount: 0n,
 				...overrides,
 			}
 			if (request.functionName === 'portfolio') {
@@ -163,6 +167,9 @@ export function capitalClient(initial = capitalSnapshot()) {
 		setRead: (name: string, value: unknown, address?: Address) => {
 			if (address === undefined) overrides[name] = value
 			else scopedOverrides.set(`${address}:${name}`, value)
+		},
+		failMulticallAt: (address: Address) => {
+			failingMulticallAddresses.add(getAddress(address))
 		},
 		setSetupStage: (stage: bigint) => {
 			setupStage = stage
