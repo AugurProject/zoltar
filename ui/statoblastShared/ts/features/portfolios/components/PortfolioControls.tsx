@@ -6,12 +6,33 @@ import type { usePortfolioActions } from '../hooks/usePortfolioActions.js'
 
 export type PortfolioActions = ReturnType<typeof usePortfolioActions>
 
-export function PortfolioInput({ label, value, onChange, disabled = false, hint, numeric = false }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean; hint?: string; numeric?: boolean }) {
+export function PortfolioInput({
+	label,
+	value,
+	onChange,
+	disabled = false,
+	hint,
+	numeric = false,
+	describedBy,
+	error,
+	liveError = false,
+}: {
+	label: string
+	value: string
+	onChange: (value: string) => void
+	disabled?: boolean
+	hint?: string | undefined
+	numeric?: boolean
+	describedBy?: string | undefined
+	error?: string | undefined
+	/** Announces an error that arrives after the field is shown, such as one from a chain read. */
+	liveError?: boolean
+}) {
 	const id = useId()
 	return (
 		<div className='field'>
 			<label htmlFor={id}>{label}</label>
-			<FormInput id={id} value={value} onInput={event => onChange(event.currentTarget.value)} disabled={disabled} hint={hint} inputMode={numeric ? 'decimal' : 'text'} autoComplete='off' />
+			<FormInput id={id} value={value} onInput={event => onChange(event.currentTarget.value)} disabled={disabled} hint={hint} inputMode={numeric ? 'decimal' : 'text'} autoComplete='off' aria-describedby={describedBy} error={error} liveError={liveError} />
 		</div>
 	)
 }

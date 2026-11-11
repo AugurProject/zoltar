@@ -26,7 +26,7 @@ export function capitalHealthReason(snapshot: PortfolioCapitalSnapshot, health: 
 	if (health >= 1n << 256n) return 'This health target is too large.'
 	const saved = snapshot.ownerAccount.targetHealthFactorBps || 10_000n
 	if (health <= saved || snapshot.ownerCommitmentAttoEth === 0n) return undefined
-	if (!snapshot.priceValid) return 'Refresh the shared REP price before raising your target.'
+	if (!snapshot.priceValid) return 'A new accepted REP price is required before raising your target.'
 	const pledged = snapshot.positions.find(position => position.commitment > 0n)?.rep ?? 0n
 	if (pledged + additionalRep < requiredPortfolioCollateral(snapshot, snapshot.ownerCommitmentAttoEth, undefined, health)) return 'Add REP or complete a commitment reduction before raising your target.'
 	return undefined
@@ -53,7 +53,7 @@ export function capitalRetirementReason(snapshot: PortfolioCapitalSnapshot, id: 
 
 export function capitalAuthorizationReason(snapshot: PortfolioCapitalSnapshot, commitment: bigint | undefined, proofPrice?: bigint) {
 	if (snapshot.forkTime > 0n || snapshot.frozen || snapshot.importing || snapshot.exported) return 'This universe is closed to new commitments.'
-	if (!snapshot.priceValid) return 'Refresh the shared REP price first.'
+	if (!snapshot.priceValid) return 'A new accepted REP price is required.'
 	if (commitment === undefined || commitment === 0n) return 'Enter a positive commitment amount.'
 	if (commitment < snapshot.economics.minimumCommitmentAttoEth) return 'Commitment is below this pool’s minimum.'
 	const active = snapshot.positions.find(position => position.commitment > 0n)
@@ -75,7 +75,7 @@ export function capitalWithdrawalReason(snapshot: PortfolioCapitalSnapshot, amou
 	if (amount <= snapshot.withdrawableAttoRep) return undefined
 	if (snapshot.ownerCommitmentAttoEth > 0n) {
 		if (snapshot.forkTime > 0n || snapshot.frozen || snapshot.importing || snapshot.exported) return 'Committed principal cannot be withdrawn during fork preparation.'
-		if (!snapshot.priceValid) return 'Refresh the shared REP price before withdrawing committed principal.'
+		if (!snapshot.priceValid) return 'A new accepted REP price is required before withdrawing committed principal.'
 	}
 	return 'Amount exceeds your withdrawable REP. Retire commitment to release more principal.'
 }

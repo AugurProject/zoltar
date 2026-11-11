@@ -1,5 +1,5 @@
 import { encodeFunctionData, getAddress, parseAbi, parseAbiItem, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { buildPortfolioDeploymentRequest, buildPortfolioPrepareNextRequest, decodeAuctionVaultBindings, loadPortfolioCapitalSnapshot, type PortfolioReadClient, type PortfolioEconomicsConfig, type PortfolioOriginConfig } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { buildPortfolioDeploymentRequest, buildPortfolioPrepareNextRequest, decodeAuctionVaultBindings, loadPortfolioCapitalSnapshot, loadPortfolioClaimableEarnings, type PortfolioReadClient, type PortfolioEconomicsConfig, type PortfolioOriginConfig } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
@@ -20,6 +20,7 @@ import {
 } from '../contractArtifact.js'
 import { getInfraContractAddresses, getSecurityPoolPortfolioByteCode, getSecurityPoolPortfolioRuntimeCode, getPortfolioDeployers } from './deploymentHelpers.js'
 import { requireAddressValue, requireBigintValue, requireIntegerLikeValue } from './decoders.js'
+import { readRequiredMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { loadPortfolioAdmission } from './securityPoolPortfolioAdmission.js'
 import { authenticatePortfolioAuctionVault, isCanonicalAuctionVaultImplementation } from './securityPoolPortfolioAuction.js'
 
@@ -38,6 +39,7 @@ const linksAbi = parseAbi([
 	'function forkAuthority() view returns (address)',
 	'function premiumLedger() view returns (address)',
 	'function getRepToken(uint248 universeId) view returns (address)',
+	'function getForkTime(uint248 universeId) view returns (uint256)',
 	'function setupStage() view returns (uint8)',
 	'function prepareNext()',
 	'function factory() view returns (address)',
@@ -100,6 +102,11 @@ export async function loadPortfolioSetup(client: ReadClient, portfolio: Address,
 export type PortfolioSetupSnapshot = Awaited<ReturnType<typeof loadPortfolioSetup>>
 export function portfolioPreparationRequest(owner: Address, portfolio: Address): PortfolioTransaction {
 	return buildPortfolioPrepareNextRequest({ caller: owner, portfolio })
+}
+
+export async function isUniverseForked(client: Pick<ReadClient, 'readContract'>, universeId: bigint) {
+	const forkTime = await client.readContract({ abi: linksAbi, address: getInfraContractAddresses().zoltar, functionName: 'getForkTime', args: [universeId] })
+	return requireBigintValue(forkTime, 'universe fork time') !== 0n
 }
 
 /** Authenticate the actual custody tree before offering approvals or transactions. */
@@ -178,7 +185,23 @@ export async function loadPortfolioAccount(client: ReadClient, portfolio: Addres
 
 	const [block, chainId] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
 	if (block.hash !== snapshot.blockHash || chainId !== snapshot.chainId) throw new Error('Chain changed while reading the portfolio. Refresh and try again.')
-	return { ...snapshot, originUniverseId, questionAdmissionPolicy: admissionAddress, admission, questions, questionCount, questionStart: start, walletAttoRep, allowanceAttoRep, walletAttoEth, forkController, ...(auctionVault === undefined ? {} : { auctionVault }) }
+	// The credited amounts stand in when the preview fails: the account stays usable and claiming still pays the full amount.
+	const claimableEarnings = await loadPortfolioClaimableEarnings(snapshot, async (contracts, block) => await readRequiredMulticall(client, contracts, block)).catch(() => undefined)
+	return {
+		...snapshot,
+		...(claimableEarnings === undefined ? {} : { claimableEarnings }),
+		originUniverseId,
+		questionAdmissionPolicy: admissionAddress,
+		admission,
+		questions,
+		questionCount,
+		questionStart: start,
+		walletAttoRep,
+		allowanceAttoRep,
+		walletAttoEth,
+		forkController,
+		...(auctionVault === undefined ? {} : { auctionVault }),
+	}
 }
 export type PortfolioAccountSnapshot = Awaited<ReturnType<typeof loadPortfolioAccount>>
 

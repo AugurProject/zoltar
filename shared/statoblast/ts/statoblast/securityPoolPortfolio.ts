@@ -85,6 +85,7 @@ export {
 	buildPortfolioCapitalServeRetirementRequest,
 	buildPortfolioCapitalClaimEarningsRequest,
 	loadPortfolioCapitalSnapshot,
+	loadPortfolioClaimableEarnings,
 	type PortfolioCapitalSnapshot,
 } from './securityPoolPortfolioCapital.js'
 /** @public Explicitly bounded commitment takeovers for external keeper implementations. */

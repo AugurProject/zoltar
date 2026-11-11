@@ -40,8 +40,7 @@ export function getReportingReportGuardMessage({
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (reportingStatus === 'missing') return reportingCopy.loadingReportingDetails
 	if (selectedOutcome === undefined) return reportingCopy.reportOutcomeSelectionRequired
-	if (reportAmount.trim() === '') return undefined
-	if (selectedAmount === undefined || selectedAmount <= 0n) return undefined
+	if (reportAmount.trim() === '' || selectedAmount === undefined || selectedAmount <= 0n) return reportingCopy.reportAmountRequired
 	if (contributionPreviewReason !== undefined) return contributionPreviewReason
 	if (actualDepositAmount === undefined) return 'Unable to preview the REP that would become dispute-staked for this report.'
 	if (remainingSelectedOutcomeCapacity !== undefined && actualDepositAmount > remainingSelectedOutcomeCapacity) {

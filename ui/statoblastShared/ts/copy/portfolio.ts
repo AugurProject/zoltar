@@ -5,12 +5,14 @@ export const owner = 'Owner address'
 export const ownerHint = 'Holdings load automatically for this wallet or smart account.'
 export const loading = 'Loading portfolio…'
 export const originPool = 'Origin universe ID'
-export const originPoolHint = 'Create a portfolio directly in this unforked universe. Complete the four setup stages after deployment, then register questions.'
+export const originPoolHint = 'Create a portfolio directly in an unforked universe. Complete the four setup stages after deployment, then register questions.'
 export const deploy = 'Deploy portfolio'
 export const deploying = 'Deploying portfolio…'
 export const connect = 'Connect a wallet to send transactions'
 export const enterPortfolio = 'Open a portfolio first'
 export const enterOrigin = 'Enter a valid origin universe ID'
+export const originForked = 'This universe has forked. Choose an unforked universe as the origin.'
+export const originForkedAction = 'The origin universe has forked.'
 export const ownerRequired = 'Connect the selected owner account'
 export const universe = 'Universe'
 export const addQuestion = 'Register question'
@@ -96,6 +98,30 @@ export const openPortfolios = 'Open portfolios'
 export const questionColumn = 'Question'
 
 export const portfolioColumn = 'Portfolio'
+
+export const portfoliosWithQuestions = 'Portfolios with questions'
+
+export const loadingPortfolios = 'Loading portfolios…'
+
+export const portfoliosError = 'Unable to load portfolios.'
+
+export const noPortfoliosWithQuestions = 'No portfolio has registered a question in this universe yet.'
+
+export const noPortfoliosWithQuestionsHint = 'Enter a portfolio address to open it.'
+
+export const ownerNeeded = 'Connect a wallet or enter an owner address to load this portfolio.'
+
+export const ownerAddressNeeded = 'Enter an owner address to load this portfolio.'
+
+export const formatRegisteredQuestions = (count: number) => (count === 1 ? '1 registered question' : `${count} registered questions`)
+
+export const openPortfolio = 'Open'
+
+export const portfolioSelected = 'Selected'
+
+export const formatOpenPortfolioLabel = (portfolio: string) => `Open portfolio ${portfolio}`
+
+export const formatSelectedPortfolioLabel = (portfolio: string) => `Portfolio ${portfolio} is selected`
 
 export const outcomeColumn = 'Outcome'
 
