@@ -131,7 +131,6 @@ export function capitalClient(initial = capitalSnapshot()) {
 				...overrides,
 			}
 			if (request.functionName === 'portfolio') {
-				if (request.address === index || request.address === modules.fees) return capital
 				if (request.address === modules.book) return modules.engine
 				return portfolio
 			}

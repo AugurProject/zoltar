@@ -8,6 +8,7 @@ const links = [
 	parseAbiItem('function forkAuthority() view returns (address)'),
 	parseAbiItem('function zoltar() view returns (address)'),
 	parseAbiItem('function portfolio() view returns (address)'),
+	parseAbiItem('function capitalLedger() view returns (address)'),
 	parseAbiItem('function ledger() view returns (address)'),
 	parseAbiItem('function settlement() view returns (address)'),
 	parseAbiItem('function reporters() view returns (address)'),
@@ -52,8 +53,8 @@ export async function verifyPortfolioCustody(client: ReadClient, snapshot: Portf
 	for (const module of [snapshot.capitalLedger, reporters, fork]) if ((await readAddress(module, 'zoltar')) !== protocol) throw new Error('Portfolio custody module uses another protocol')
 	await Promise.all([
 		verifyModule(snapshot.capitalLedger, 'SecurityPoolCapitalLedger', snapshot.portfolio),
-		verifyModule(snapshot.commitmentIndex, 'SecurityPoolCommitmentIndex', snapshot.capitalLedger),
-		verifyModule(fees, 'SecurityPoolCapitalFeeStreams', snapshot.capitalLedger),
+		verifyModule(snapshot.commitmentIndex, 'SecurityPoolCommitmentIndex', snapshot.capitalLedger, 'capitalLedger'),
+		verifyModule(fees, 'SecurityPoolCapitalFeeStreams', snapshot.capitalLedger, 'capitalLedger'),
 		verifyModule(settlement, 'SecurityPoolPortfolioSettlement', snapshot.portfolio),
 		verifyModule(book, 'SecurityPoolSettlementBook', settlement),
 		verifyModule(reporters, 'SecurityPoolReporterLedger', snapshot.portfolio),

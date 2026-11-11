@@ -1,5 +1,5 @@
 import type { SQL } from 'bun'
-import { CURRENT_SCHEMA_VERSION, INITIAL_MIGRATABLE_SCHEMA_VERSION, type SupportedSchemaVersion } from './schema-policy.ts'
+import { INITIAL_MIGRATABLE_SCHEMA_VERSION, type SupportedSchemaVersion } from './schema-policy.ts'
 
 interface SchemaLayout {
 	readonly relations: readonly string[]
@@ -73,7 +73,9 @@ const identityGeneration = (columnDefinition: string): 'a' | 'd' | '' => {
 }
 
 export const expectedSchemaLayout = (schema: string, version: SupportedSchemaVersion): SchemaLayout => {
-	const normalizedSchema = schema.replaceAll('\r\n', '\n')
+	// Older supported databases retain their original physical names until migration 006.
+	const versionedSchema = Number(version) < 6 ? schema.replaceAll('collateral_repair_auction_events_log_fkey', 'truth_auction_events_chain_id_block_hash_tx_hash_log_index_fkey').replaceAll('collateral_repair_auction', 'truth_auction') : schema
+	const normalizedSchema = versionedSchema.replaceAll('\r\n', '\n')
 	const relations = new Set<string>(['table:augurscan_schema'])
 	const columns = new Set<string>([columnSignature('augurscan_schema', 'singleton', 'boolean', true, '', 'true'), columnSignature('augurscan_schema', 'schema_version', 'text', true, '', undefined), columnSignature('augurscan_schema', 'initialized_at', 'timestamp with time zone', true, '', 'now()')])
 	const constraints = new Set<string>(['augurscan_schema.augurscan_schema_pkey|PRIMARY KEY (singleton)', 'augurscan_schema.augurscan_schema_singleton_check|CHECK (singleton)'])
@@ -101,7 +103,7 @@ export const expectedSchemaLayout = (schema: string, version: SupportedSchemaVer
 			const column = quotedColumn ?? plainColumn
 			if (column === undefined || type === undefined) continue
 			if (version === INITIAL_MIGRATABLE_SCHEMA_VERSION && historicalIntegrityColumns.has(`${table}.${column}`)) continue
-			if (version !== CURRENT_SCHEMA_VERSION && table === 'chain_reorganizations' && column === 'occurrence_counts') continue
+			if (Number(version) < 5 && table === 'chain_reorganizations' && column === 'occurrence_counts') continue
 			const remainder = remainderValue ?? ''
 			const defaultMatch = /\bDEFAULT ([\s\S]*?)(?=\s+NOT NULL|\s+GENERATED (?:ALWAYS|BY DEFAULT) AS IDENTITY|$)/.exec(remainder)
 			const identity = identityGeneration(remainder)

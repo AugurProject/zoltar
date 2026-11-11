@@ -25,7 +25,7 @@ type PoolProjection = {
 	parentAddress: string
 	universeId: string
 	questionId: string
-	truthAuctionAddress: string
+	collateralRepairAuctionAddress: string
 	coordinatorAddress: string
 	shareTokenAddress: string
 	securityMultiplierBps: string
@@ -48,7 +48,7 @@ type PoolSnapshotProjection = {
 	feeIndexRemainder: string
 	totalFeesOwedRemainder: string
 	uncheckpointedFeeEligibleUnderwritingLimitAttoEth: AtomicValue
-	lastUpdatedFeeAccumulator: Date
+	lastSettlementPortfolioTime: Date
 	currentRetentionRate: string
 }
 
@@ -188,7 +188,7 @@ const poolStateFields: Readonly<Record<string, readonly string[]>> = {
 	CompleteSetCreated: ['resultingShareTokenSupplyAttoShares', 'resultingSettlementCollateralAttoEth'],
 	CompleteSetRedeemed: ['resultingShareTokenSupplyAttoShares', 'resultingSettlementCollateralAttoEth'],
 	EscalationGameSet: ['escalationGame'],
-	QuestionAccountingCheckpoint: ['settlementCollateralAttoEth', 'shareTokenSupplyAttoShares', 'lastUpdatedFeeAccumulator'],
+	QuestionAccountingCheckpoint: ['settlementCollateralAttoEth', 'shareTokenSupplyAttoShares', 'lastSettlementPortfolioTime'],
 	PoolForkModeActivated: ['repTransferredAttoRep', 'currentRetentionRate', 'systemState'],
 	ShareTokenSupplySet: ['shareTokenSupplyAttoShares'],
 	SharesRedeemed: ['resultingShareTokenSupplyAttoShares', 'resultingSettlementCollateralAttoEth'],
@@ -227,7 +227,7 @@ export const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 				parentAddress: address(args['parent'], 'parent'),
 				universeId: integerString(args['universeId'], 'universeId'),
 				questionId: integerString(args['questionId'], 'questionId'),
-				truthAuctionAddress: address(args['truthAuction'], 'truthAuction'),
+				collateralRepairAuctionAddress: address(args['collateralRepairAuction'], 'collateralRepairAuction'),
 				coordinatorAddress: address(args['openOraclePriceCoordinator'], 'openOraclePriceCoordinator'),
 				shareTokenAddress: address(args['shareToken'], 'shareToken'),
 				securityMultiplierBps: integerString(args['statoblastSecurityMultiplierBps'], 'statoblastSecurityMultiplierBps'),
@@ -383,7 +383,7 @@ export const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 				feeIndexRemainder: integerString(args['feeIndexRemainder'], 'feeIndexRemainder'),
 				totalFeesOwedRemainder: integerString(args['totalFeesOwedRemainder'], 'totalFeesOwedRemainder'),
 				uncheckpointedFeeEligibleUnderwritingLimitAttoEth: integerString(args['uncheckpointedFeeEligibleUnderwritingLimitAttoEth'], 'uncheckpointedFeeEligibleUnderwritingLimitAttoEth'),
-				lastUpdatedFeeAccumulator: timestamp(args['lastUpdatedFeeAccumulator'], 'lastUpdatedFeeAccumulator'),
+				lastSettlementPortfolioTime: timestamp(args['lastSettlementPortfolioTime'], 'lastSettlementPortfolioTime'),
 				currentRetentionRate: integerString(args['currentRetentionRate'], 'currentRetentionRate'),
 			},
 		]

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { encodeFunctionData, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { preparePortfolioTruthAuction } from './securityPoolPortfolioTruthAuctionFixture'
+import { preparePortfolioCollateralRepairAuction } from './securityPoolPortfolioCollateralRepairAuctionFixture'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { DAY } from '../../testSupport/simulator/utils/constants'
@@ -15,11 +15,11 @@ import {
 	ReputationToken_ReputationToken as tokenArtifact,
 } from '../../types/contractArtifact'
 
-describe('Statoblast: ETH-only truth-auction funding', () => {
+describe('Statoblast: ETH-only collateral-repair-auction funding', () => {
 	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
 
 	test('a bidder with no child REP or allowance buys the full inventory under weak demand', async () => {
-		const context = await preparePortfolioTruthAuction(fixture)
+		const context = await preparePortfolioCollateralRepairAuction(fixture)
 		await context.report()
 		await context.open()
 		const balance = await context.balance(context.other.account.address)
@@ -29,7 +29,7 @@ describe('Statoblast: ETH-only truth-auction funding', () => {
 		const grid = await context.owner.readContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'repGrid' })
 		const minimum = ((100n * unit + grid - 1n) / grid) * grid
 		for (const funding of [2n * unit - 1n, 2n * unit + 1n]) {
-			await expect(context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'submitBid', args: [2n, minimum, 12_000n], value: funding })).rejects.toThrow('Truth auction ETH funding mismatch')
+			await expect(context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'submitBid', args: [2n, minimum, 12_000n], value: funding })).rejects.toThrow('Collateral repair auction ETH funding mismatch')
 		}
 		const bid = await context.bid(context.other, 2n, minimum)
 		expect(await context.other.getBalance({ address: context.auction })).toBe(0n)
@@ -42,7 +42,7 @@ describe('Statoblast: ETH-only truth-auction funding', () => {
 	})
 
 	test('a losing bidder withdraws and freely reuses ETH before branch finalization', async () => {
-		const context = await preparePortfolioTruthAuction(fixture)
+		const context = await preparePortfolioCollateralRepairAuction(fixture)
 		await context.report()
 		await context.open()
 		const loser = await context.bid(context.other, 2n, 100n * unit)
@@ -71,14 +71,14 @@ describe('Statoblast: ETH-only truth-auction funding', () => {
 	})
 
 	test('a bidder credits and withdraws in one transaction, before and after closing, even when a keeper credited first', async () => {
-		const context = await preparePortfolioTruthAuction(fixture)
-		await expect(context.other.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [1n, context.other.account.address] })).rejects.toThrow('Truth auction has not opened')
+		const context = await preparePortfolioCollateralRepairAuction(fixture)
+		await expect(context.other.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [1n, context.other.account.address] })).rejects.toThrow('Collateral repair auction has not opened')
 		await context.report()
 		await context.open()
 		const loser = await context.bid(context.other, 2n, 100n * unit)
 		const tied = await context.bid(context.other, 5n)
 		await context.bid(context.owner, 5n)
-		await expect(context.other.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [loser.id, zeroAddress] })).rejects.toThrow('Truth auction refund recipient missing')
+		await expect(context.other.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [loser.id, zeroAddress] })).rejects.toThrow('Collateral repair auction refund recipient missing')
 		await expect(context.owner.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [loser.id, context.owner.account.address] })).rejects.toThrow('Auction bid belongs to another bidder')
 		await expect(context.other.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [tied.id, context.other.account.address] })).rejects.toThrow('Bid may still win')
 		// Permissionless settlement first, then the bidder's combined transaction only withdraws.
@@ -100,7 +100,7 @@ describe('Statoblast: ETH-only truth-auction funding', () => {
 	})
 
 	test('purchased collateral meets the chosen health target and all rounding belongs to winners', async () => {
-		const context = await preparePortfolioTruthAuction(fixture)
+		const context = await preparePortfolioCollateralRepairAuction(fixture)
 		await context.report()
 		await context.open()
 		const grid = await context.owner.readContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'repGrid' })
@@ -145,7 +145,7 @@ describe('Statoblast: ETH-only truth-auction funding', () => {
 	})
 
 	test('a higher conservative price at closing cancels without imposing a REP loss on bidders', async () => {
-		const context = await preparePortfolioTruthAuction(fixture)
+		const context = await preparePortfolioCollateralRepairAuction(fixture)
 		await context.report()
 		await context.open()
 		const bid = await context.bid(context.other, 2n)

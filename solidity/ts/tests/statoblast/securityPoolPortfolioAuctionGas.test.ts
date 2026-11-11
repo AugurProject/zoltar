@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { encodeFunctionData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { preparePortfolioTruthAuction } from './securityPoolPortfolioTruthAuctionFixture'
+import { preparePortfolioCollateralRepairAuction } from './securityPoolPortfolioCollateralRepairAuctionFixture'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { DAY, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
@@ -34,12 +34,12 @@ const withdrawPrincipalData = (amount: bigint, recipient: Address) => encodeFunc
 // ledger. Every measured amount is receipt gas, net of refunds.
 // A larger tied book only grows logarithmic tree paths; the bounded-growth check
 // guards the owner, keeper and bidder paths against a history-dependent loop.
-describe('Statoblast: truth-auction lifecycle gas baselines', () => {
+describe('Statoblast: collateral-repair-auction lifecycle gas baselines', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
 	const reports = new Map<number, Measurement[]>()
 	for (const bookSize of bookSizes) {
 		test(`a ${bookSize}-bid tied book keeps bidding, refunds, vault, fee, retirement, liquidation and fork paths bounded`, async () => {
-			const context = await preparePortfolioTruthAuction(fixture)
+			const context = await preparePortfolioCollateralRepairAuction(fixture)
 			const { owner, other, mock } = context
 			const filler = createWriteClient(mock, TEST_ADDRESSES[2])
 			const keeper = createWriteClient(mock, TEST_ADDRESSES[3])
@@ -249,7 +249,7 @@ describe('Statoblast: truth-auction lifecycle gas baselines', () => {
 
 			// Every bidder, owner and keeper transaction stays within an ordinary allowance.
 			reports.set(bookSize, measurements)
-			if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log(`truthAuctionGas:${bookSize}`, JSON.stringify(measurements.map(entry => ({ ...entry, gas: entry.gas.toString() }))))
+			if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log(`collateralRepairAuctionGas:${bookSize}`, JSON.stringify(measurements.map(entry => ({ ...entry, gas: entry.gas.toString() }))))
 			expect(measurements.filter(measurement => !branchTransactions.has(measurement.label) && measurement.gas >= 3_000_000n).map(measurement => measurement.label)).toEqual([])
 			expect(secondOwnerOperation).toBeLessThan(firstOwnerOperation)
 			expect(thirdOwnerOperation).toBeLessThan(firstOwnerOperation)

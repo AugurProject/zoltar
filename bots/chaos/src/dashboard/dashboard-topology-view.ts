@@ -77,8 +77,8 @@ export function createDashboardTopologyView({ elements }: { elements: DashboardE
 			]),
 		)
 		renderTopologyGroup(elements.topologyAuctions, value.auctions, source =>
-			topologyRow(topologyIdentifier(stringValue(source['address']), 'Auction unavailable', 'truth auction address'), [
-				topologyIdentifierFact('Portfolio', stringValue(source['portfolio']), 'truth auction portfolio address'),
+			topologyRow(topologyIdentifier(stringValue(source['address']), 'Auction unavailable', 'collateral repair auction address'), [
+				topologyIdentifierFact('Portfolio', stringValue(source['portfolio']), 'collateral repair auction portfolio address'),
 				`universe ${String(source['universeId'] ?? 'unavailable')}`,
 				source['finalized'] === true ? 'finalized' : 'active',
 				`${String(source['bidCount'] ?? 0)} indexed bids`,

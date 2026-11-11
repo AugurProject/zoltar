@@ -236,7 +236,7 @@ describe('useTradingOperations', () => {
 						feeEligibleUnderwritingLimitAttoEth: 3n * ATTO_ETH_PER_ETH,
 						feeEndTimestamp: 100n,
 						feeIndexRemainder: 0n,
-						lastUpdatedFeeAccumulator: 1n,
+						lastFeeCheckpointNativeTime: 1n,
 						mintingCapacityAttoEth: 3n * ATTO_ETH_PER_ETH,
 						settlementCollateralAttoEth: 2n * ATTO_ETH_PER_ETH,
 						shareTokenSupplyAttoShares: 2n * ATTO_ETH_PER_ETH,

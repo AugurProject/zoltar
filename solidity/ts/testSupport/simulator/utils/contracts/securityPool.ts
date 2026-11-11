@@ -26,7 +26,7 @@ function requireSystemState(value: unknown): SystemState {
 		case 2n:
 			return SystemState.ForkMigration
 		case 3n:
-			return SystemState.ForkTruthAuction
+			return SystemState.ForkCollateralRepairAuction
 		default:
 			throw new Error(`Unexpected system state: ${state.toString()}`)
 	}
