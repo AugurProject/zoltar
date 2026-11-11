@@ -55,7 +55,7 @@ const poolProtocolStateLabel = (value: JsonValue | undefined): string => {
 		case '2':
 			return 'Fork migration'
 		case '3':
-			return 'Fork truth auction'
+			return 'Fork collateral repair auction'
 		case 'bad-debt':
 			return 'Bad debt'
 		case 'unavailable':

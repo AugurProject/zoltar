@@ -8,13 +8,13 @@ import { SecurityPoolReporterLedger } from '../../statoblast/SecurityPoolReporte
 /// @dev Real game/report custody with a deterministic portfolio clock for native clock tests.
 contract EscalationGamePortfolioClockHarness is EscalationGameProofTestSecurityPool {
 	uint48 public immutable wallAnchor;
-	uint48 public immutable logicalAnchor;
+	uint48 public immutable portfolioTimeAnchor;
 	uint256 public constant questionId = 17;
 	SecurityPoolReporterLedger public immutable reporters;
 
-	constructor(Zoltar protocol, uint48 wallStart, uint48 logicalStart) EscalationGameProofTestSecurityPool(protocol, 0, address(0)) {
+	constructor(Zoltar protocol, uint48 wallStart, uint48 portfolioStartTime) EscalationGameProofTestSecurityPool(protocol, 0, address(0)) {
 		wallAnchor = wallStart;
-		logicalAnchor = logicalStart;
+		portfolioTimeAnchor = portfolioStartTime;
 		reporters = new SecurityPoolReporterLedger(address(this), protocol);
 		reporters.registerUniverse(0);
 	}
@@ -34,17 +34,17 @@ contract EscalationGamePortfolioClockHarness is EscalationGameProofTestSecurityP
 	function reporterLedger(uint248) external view returns (address) {
 		return address(reporters);
 	}
-	function logicalTime(uint248) external view returns (uint48) {
-		return logicalTimeForNative(0, uint48(block.timestamp));
+	function portfolioTime(uint248) external view returns (uint48) {
+		return portfolioTimeForNative(0, uint48(block.timestamp));
 	}
-	function logicalTimeForNative(uint248, uint48 timestamp) public view returns (uint48) {
-		return logicalAnchor + (timestamp > wallAnchor ? timestamp - wallAnchor : 0);
+	function portfolioTimeForNative(uint248, uint48 timestamp) public view returns (uint48) {
+		return portfolioTimeAnchor + (timestamp > wallAnchor ? timestamp - wallAnchor : 0);
 	}
-	function nativeTimeForLogical(uint248, uint48 timestamp) external view returns (uint48) {
-		return wallAnchor + timestamp - logicalAnchor;
+	function nativeTimeForPortfolioTime(uint248, uint48 timestamp) external view returns (uint48) {
+		return wallAnchor + timestamp - portfolioTimeAnchor;
 	}
-	function forkLogicalTime(uint248) external view returns (uint48) {
-		return logicalAnchor;
+	function forkPortfolioTime(uint248) external view returns (uint48) {
+		return portfolioTimeAnchor;
 	}
 	function registerReporterGame(address game) external {
 		require(game == address(escalationGame), 'Wrong test game');

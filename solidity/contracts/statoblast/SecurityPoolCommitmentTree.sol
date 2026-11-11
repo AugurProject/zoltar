@@ -10,6 +10,8 @@ import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 abstract contract SecurityPoolCommitmentTree {
 	uint256 private constant MAX_DEPTH = 192;
 	uint256 internal lastNode;
+	// Leaves hold one position; internal nodes aggregate principal and commitment.
+	// Fee balances and health/retirement tags may remain lazy on internal nodes.
 	struct Node {
 		uint256 parent;
 		uint256 left;
@@ -258,6 +260,8 @@ abstract contract SecurityPoolCommitmentTree {
 		}
 	}
 
+	/// @dev Move pending tags and exact fee balances one level down before changing a branch.
+	/// The right child receives division remainders so both child credits sum to the parent.
 	function _push(uint256 id) private {
 		Node storage node = nodes[id];
 		if (node.left == 0) return;
@@ -290,6 +294,7 @@ abstract contract SecurityPoolCommitmentTree {
 		node.repFees = uint128(repTotal);
 	}
 
+	/// @dev Push ancestors root-first so a position sees every pending credit and health tag.
 	function _touch(uint96 id) internal {
 		uint256 cursor = positions[id].node;
 		require(cursor != 0, 'Unknown commitment position');

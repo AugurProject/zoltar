@@ -32,7 +32,7 @@ export async function discoverPortfolioCapital(context: EcosystemDiscoveryContex
 		requireGraphEdge(getAddress(zoltar), deployments.zoltar, 'Portfolio protocol binding')
 		const capital = await loadPortfolioCapitalSnapshot({ client, portfolio: scope.portfolio, universeId: scope.universeId, owner: wallet, blockNumber })
 		const ledgerPortfolio = await client.readContract({ address: capital.capitalLedger, abi: securityPoolCapitalLedgerAbi, functionName: 'portfolio', blockNumber })
-		const indexLedger = await client.readContract({ address: capital.commitmentIndex, abi: securityPoolCommitmentIndexAbi, functionName: 'portfolio', blockNumber })
+		const indexLedger = await client.readContract({ address: capital.commitmentIndex, abi: securityPoolCommitmentIndexAbi, functionName: 'capitalLedger', blockNumber })
 		const forkController = getAddress(await client.readContract({ address: scope.portfolio, abi: securityPoolPortfolioAbi, functionName: 'forkController', blockNumber }))
 		const forkPortfolio = await client.readContract({ address: forkController, abi: securityPoolPortfolioForkCoordinatorAbi, functionName: 'portfolio', blockNumber })
 		requireGraphEdge(getAddress(ledgerPortfolio), scope.portfolio, 'Capital portfolio binding')

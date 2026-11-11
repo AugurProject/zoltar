@@ -836,14 +836,15 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		expect(await liquidationStarted(2n)).toBe(started)
 	})
 
-	test('only the owning portfolio can mutate or collect the index', async () => {
-		await expect(writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address, functionName: 'create', args: [owner(1), 10n, 10n, 10n] }))).rejects.toThrow('Only portfolio')
+	test('only the owning capital ledger can mutate or collect the index', async () => {
+		expect(await client.readContract({ abi: artifact.abi, address, functionName: 'capitalLedger' })).toBe(harness)
+		await expect(writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address, functionName: 'create', args: [owner(1), 10n, 10n, 10n] }))).rejects.toThrow('Only capital ledger')
 		await create(10n, 10n, 10n)
-		await expect(writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address, functionName: 'claim', args: [1n] }))).rejects.toThrow('Only portfolio')
-		await expect(writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address, functionName: 'observeHealthy', args: [0n] }))).rejects.toThrow('Only portfolio')
-		await expect(writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address, functionName: 'clearLiquidation', args: [1n] }))).rejects.toThrow('Only portfolio')
-		await expect(writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address, functionName: 'retire', args: [10n, 0n, 1n] }))).rejects.toThrow('Only portfolio')
-		await expect(writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address, functionName: 'creditProportionalFees', args: [10n, 1n, 1n] }))).rejects.toThrow('Only portfolio')
+		await expect(writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address, functionName: 'claim', args: [1n] }))).rejects.toThrow('Only capital ledger')
+		await expect(writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address, functionName: 'observeHealthy', args: [0n] }))).rejects.toThrow('Only capital ledger')
+		await expect(writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address, functionName: 'clearLiquidation', args: [1n] }))).rejects.toThrow('Only capital ledger')
+		await expect(writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address, functionName: 'retire', args: [10n, 0n, 1n] }))).rejects.toThrow('Only capital ledger')
+		await expect(writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address, functionName: 'creditProportionalFees', args: [10n, 1n, 1n] }))).rejects.toThrow('Only capital ledger')
 	})
 
 	test('fork imports preserve cohorts and cannot refill a sealed child retirement group', async () => {

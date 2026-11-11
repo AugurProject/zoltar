@@ -27,7 +27,29 @@ export function affectedCheckPlan(filePaths: readonly string[]): ProjectTaskPlan
 }
 
 async function main() {
-	const exitCode = await runProjectTaskPlan(affectedCheckPlan(getChangedFiles()))
+	const args = process.argv.slice(2)
+	if (args[0] === '--') args.shift()
+	if (args.some(argument => argument !== '--dry-run' && argument !== '--help')) throw new Error('Usage: bun run check:affected -- [--dry-run | --help]')
+	if (args.includes('--help')) {
+		console.log(
+			[
+				'Usage: bun run check:affected -- [--dry-run | --help]',
+				'',
+				'Select checks from committed changes since the merge base with origin/main, worktree changes and untracked files.',
+				'--dry-run prints the ordered plan as JSON without executing checks.',
+				'Each entry includes projectId, cwd and command.',
+				'The plan follows project ownership and dependent projects; inspect relevant imports and test boundaries before relying on it.',
+				'Use bun run test:plan for additional specialized test suggestions.',
+			].join('\n'),
+		)
+		return
+	}
+	const plan = affectedCheckPlan(getChangedFiles())
+	if (args.includes('--dry-run')) {
+		console.log(JSON.stringify(plan, undefined, 2))
+		return
+	}
+	const exitCode = await runProjectTaskPlan(plan)
 	if (exitCode !== 0) process.exit(exitCode)
 }
 

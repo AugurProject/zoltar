@@ -74,7 +74,7 @@ export const operationsOverviewSupplement = async (sql: SQL, chainId: number, sn
 				WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock})::integer AS reports,
 			(SELECT count(DISTINCT game_address) FROM escalation_game_events
 				WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock})::integer AS escalations,
-			(SELECT count(DISTINCT auction_address) FROM truth_auction_events
+			(SELECT count(DISTINCT auction_address) FROM collateral_repair_auction_events
 				WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock})::integer AS auctions,
 			(SELECT count(DISTINCT pool_address) FROM pools
 				WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock})::integer AS pools,
@@ -168,30 +168,30 @@ export const auctionCatalogData = async (sql: SQL, chainId: number, asOf: Record
 	const snapshotBlock = String(asOf['blockNumber'])
 	const rows = await sql`
 		WITH auctions AS (
-			SELECT DISTINCT auction_address FROM truth_auction_events
+			SELECT DISTINCT auction_address FROM collateral_repair_auction_events
 			WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock}
 		)
 		SELECT auction.auction_address,
 			started.event_data AS start_data, finalized.event_data AS final_data,
 			latest.event_name, latest.block_number::text AS block_number, latest.block_hash, latest.tx_hash, latest.log_index,
-			(SELECT count(*) FROM truth_auction_events event WHERE event.chain_id = ${chainId}
+			(SELECT count(*) FROM collateral_repair_auction_events event WHERE event.chain_id = ${chainId}
 				AND event.auction_address = auction.auction_address AND event.canonical AND event.block_number <= ${snapshotBlock}
 				AND event.event_name = 'BidSubmitted')::integer AS bid_count,
-			(SELECT count(DISTINCT event.event_data->>'bidder') FROM truth_auction_events event WHERE event.chain_id = ${chainId}
+			(SELECT count(DISTINCT event.event_data->>'bidder') FROM collateral_repair_auction_events event WHERE event.chain_id = ${chainId}
 				AND event.auction_address = auction.auction_address AND event.canonical AND event.block_number <= ${snapshotBlock}
 				AND event.event_name = 'BidSubmitted')::integer AS bidder_count,
-			(SELECT count(*) FROM truth_auction_events event WHERE event.chain_id = ${chainId}
+			(SELECT count(*) FROM collateral_repair_auction_events event WHERE event.chain_id = ${chainId}
 				AND event.auction_address = auction.auction_address AND event.canonical AND event.block_number <= ${snapshotBlock}
 				AND event.event_name = 'BidSettled')::integer AS settlement_count
 		FROM auctions auction
-		JOIN LATERAL (SELECT * FROM truth_auction_events event WHERE event.chain_id = ${chainId}
+		JOIN LATERAL (SELECT * FROM collateral_repair_auction_events event WHERE event.chain_id = ${chainId}
 			AND event.auction_address = auction.auction_address AND event.canonical AND event.block_number <= ${snapshotBlock}
 			ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT 1) latest ON true
-		LEFT JOIN LATERAL (SELECT * FROM truth_auction_events event WHERE event.chain_id = ${chainId}
+		LEFT JOIN LATERAL (SELECT * FROM collateral_repair_auction_events event WHERE event.chain_id = ${chainId}
 			AND event.auction_address = auction.auction_address AND event.canonical AND event.block_number <= ${snapshotBlock}
 			AND event.event_name = 'AuctionStarted'
 			ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT 1) started ON true
-		LEFT JOIN LATERAL (SELECT * FROM truth_auction_events event WHERE event.chain_id = ${chainId}
+		LEFT JOIN LATERAL (SELECT * FROM collateral_repair_auction_events event WHERE event.chain_id = ${chainId}
 			AND event.auction_address = auction.auction_address AND event.canonical AND event.block_number <= ${snapshotBlock}
 			AND event.event_name = 'AuctionFinalized'
 			ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT 1) finalized ON true

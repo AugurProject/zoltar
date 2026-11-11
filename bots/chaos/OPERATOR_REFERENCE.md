@@ -101,7 +101,7 @@ Before discovery, Chaos checks for code at the expected addresses using the RPC 
 At every canonical scan anchor, the bot authenticates the configured graph before assets can become eligible:
 
 - Zoltar must name the configured QuestionData, SecurityPoolForker must name Zoltar, TradingFactory must name SecurityPoolFactory, and TradingRouter must name TradingFactory.
-- Every security pool must come from the configured factory registry. Its factory, forker, Zoltar, QuestionData, coordinator, share token, truth auction, universe, and question must agree with the registry and configured graph. Its coordinator must point back to it.
+- Every security pool must come from the configured factory registry. Its factory, forker, Zoltar, QuestionData, coordinator, share token, collateral repair auction, universe, and question must agree with the registry and configured graph. Its coordinator must point back to it.
 - Each pool must use its universe's canonical REP. The pool and coordinator must use the configured OpenOracle; the coordinator must use the configured WETH and canonical REP.
 - Every trading pair must name the configured factory, source pool, share token, universe, and question.
 
@@ -161,7 +161,7 @@ Every canonical mutating or special entry is classified as selectable random wor
 | Ecosystem | Supported permissionless families |
 | --- | --- |
 | Zoltar | Create binary, categorical, and scalar questions; approve REP; deploy child universes; fork universes; prepare, split, and continue REP migration; optional direct REP burn |
-| Statoblast | Deploy pools; deposit, withdraw, and redeem vault REP; update or redeem fees; create and redeem complete sets; redeem winning shares; vault-backed and direct wallet-funded escalation deposits and withdrawals; pool forks and vault migrations; truth-auction bid, refund, finalize, and settle; staged REP-withdrawal execution and staged-operation expiry; permissionless lifecycle maintenance |
+| Statoblast | Deploy pools; deposit, withdraw, and redeem vault REP; update or redeem fees; create and redeem complete sets; redeem winning shares; vault-backed and direct wallet-funded escalation deposits and withdrawals; pool forks and vault migrations; collateral-repair-auction bid, refund, finalize, and settle; staged REP-withdrawal execution and staged-operation expiry; permissionless lifecycle maintenance |
 | OpenOracle | Wrap and unwrap WETH; report, randomly selected dispute, and lifecycle settlement; canonical WETH/REP ERC-20 deposit; WETH/REP withdrawal, self-recipient `withdrawTo`, both push-or-credit overloads, wallet-to-self internal allowance management, and dust initialization |
 | Trading | Create and initialize pairs; create, initialize, and seed canonical child-universe REP/WETH Uniswap V3 pools; enter and exit YES or NO; add and remove liquidity; exact-input and exact-output swaps with 1% quote protection; approvals; synchronization; complete-set redemption; fork share migration |
 

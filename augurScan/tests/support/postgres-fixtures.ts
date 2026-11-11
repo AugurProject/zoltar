@@ -98,7 +98,7 @@ export const priceHistoryLogs = (hash: BlockHash): readonly StoredLog[] => [
 		parent: '0x0000000000000000000000000000000000000000',
 		universeId: '0',
 		questionId: '42',
-		truthAuction: rediscoveredAddress,
+		collateralRepairAuction: rediscoveredAddress,
 		openOraclePriceCoordinator: promotedAddress,
 		shareToken: wethAddress,
 		statoblastSecurityMultiplierBps: '15000',

@@ -73,7 +73,7 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 		uint248 universeId = pool.universeId();
 		SecurityPoolCapitalLedger capital = root.capitalLedger(universeId);
 		capital.setDemand(capital.demandAttoEth() + msg.value);
-		(uint256 minted, SecurityPoolPortfolioSettlement.Snapshot memory snapshot) = root.settlement().mint{value: msg.value}(address(pool), 0, root.logicalTime(universeId));
+		(uint256 minted, SecurityPoolPortfolioSettlement.Snapshot memory snapshot) = root.settlement().mint{value: msg.value}(address(pool), 0, root.portfolioTime(universeId));
 		_creditSnapshot(universeId, snapshot);
 		return (minted, snapshot.outcomeSupplyAttoShares, snapshot.questionCashAttoEth);
 	}
@@ -82,7 +82,7 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 		uint248 universeId = pool.universeId();
 		SecurityPoolCapitalLedger capital = root.capitalLedger(universeId);
 		capital.checkpoint();
-		(uint256 paid, SecurityPoolPortfolioSettlement.Snapshot memory snapshot) = root.settlement().redeem(address(pool), recipient, shares, 0, root.logicalTime(universeId));
+		(uint256 paid, SecurityPoolPortfolioSettlement.Snapshot memory snapshot) = root.settlement().redeem(address(pool), recipient, shares, 0, root.portfolioTime(universeId));
 		_creditSnapshot(universeId, snapshot);
 		_cancelUnusedPremium(pool);
 		if (capital.zoltar().getForkTime(universeId) == 0) capital.serveRetirement(0);
@@ -94,7 +94,7 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 		SecurityPoolCapitalLedger capital = root.capitalLedger(universeId);
 		SecurityPoolPortfolioSettlement settlement = root.settlement();
 		capital.checkpoint();
-		uint48 timestamp = root.logicalTime(universeId);
+		uint48 timestamp = root.portfolioTime(universeId);
 		SecurityPoolPortfolioSettlement.Snapshot memory snapshot;
 		if (!refresh || capital.zoltar().getForkTime(universeId) != 0 || settlement.isQuestionFrozen(address(pool)))
 			snapshot = settlement.checkpointQuestion(address(pool), timestamp);
@@ -107,7 +107,7 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 	}
 	function activateFees(uint248 universeId) external onlyPortfolio {
 		IPortfolioServiceRoot root = IPortfolioServiceRoot(portfolio);
-		(uint256 fees, uint256 demand) = root.settlement().setFeesEnabled(universeId, true, root.logicalTime(universeId));
+		(uint256 fees, uint256 demand) = root.settlement().setFeesEnabled(universeId, true, root.portfolioTime(universeId));
 		feesEnabled[universeId] = true;
 		_creditUniverse(universeId, fees, demand);
 	}
@@ -117,8 +117,8 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 		IPortfolioServiceRoot root = IPortfolioServiceRoot(portfolio);
 		SecurityPoolPortfolioSettlement settlement = root.settlement();
 		(, , , uint48 previous, bool isSealed) = settlement.ledger().totals(settlement.bookIds(universeId));
-		uint48 nowTime = root.logicalTime(universeId);
-		uint48 earnedThrough = uint48(Math.min(nowTime, root.logicalTimeForNative(universeId, through)));
+		uint48 nowTime = root.portfolioTime(universeId);
+		uint48 earnedThrough = uint48(Math.min(nowTime, root.portfolioTimeForNative(universeId, through)));
 		// A universe's ledger is bound once at preparation; one read serves the checkpoint.
 		SecurityPoolCapitalLedger capital = root.capitalLedger(universeId);
 		if (!isSealed) {
@@ -145,8 +145,8 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 		IPortfolioServiceRoot root = IPortfolioServiceRoot(portfolio);
 		uint248 universeId = pool.universeId();
 		root.capitalLedger(universeId).checkpoint();
-		uint48 finalAfter = nativeFinalAfter == 0 ? 0 : root.logicalTimeForNative(universeId, nativeFinalAfter);
-		_creditSnapshot(universeId, root.settlement().scheduleFinality(address(pool), finalAfter, root.logicalTime(universeId)));
+		uint48 finalAfter = nativeFinalAfter == 0 ? 0 : root.portfolioTimeForNative(universeId, nativeFinalAfter);
+		_creditSnapshot(universeId, root.settlement().scheduleFinality(address(pool), finalAfter, root.portfolioTime(universeId)));
 		premiumLedger.schedule(universeId, pool.questionId(), finalAfter);
 	}
 
@@ -194,7 +194,7 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 	function checkpointPreparationPremium(uint248 child) external onlyForkController {
 		IPortfolioServiceRoot root = IPortfolioServiceRoot(portfolio);
 		require(premiumChildCreated[child] && root.capitalLedger(child).importing(), 'Premium preparation unavailable');
-		(uint256 earned, uint256 unused) = premiumLedger.checkpoint(child, root.logicalTime(child));
+		(uint256 earned, uint256 unused) = premiumLedger.checkpoint(child, root.portfolioTime(child));
 		_burn(child, earned + unused);
 	}
 	function recoverPremiumCash(uint248 source, uint256 questionId, uint256 shares, address recipient) external onlyForkController returns (uint256 cash) {

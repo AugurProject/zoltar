@@ -34,7 +34,7 @@ contract ShareTokenRecoveryTestPool {
 	function bookIds(uint248) external pure returns (uint64) {
 		return 1;
 	}
-	function forkLogicalTime(uint248) external pure returns (uint48) {
+	function forkPortfolioTime(uint248) external pure returns (uint48) {
 		return 0;
 	}
 	function hasLiveForkRecoveryRight(uint64, uint256, uint48) external pure returns (bool) {

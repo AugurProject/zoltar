@@ -17,7 +17,7 @@ for (const viewport of qaViewports) {
 					}
 					const reports = String(await evaluate(`[...document.querySelectorAll('.operations-metrics .operations-card')].find(card => card.querySelector('span')?.textContent === 'OpenOracle reports')?.textContent`))
 					const escalations = String(await evaluate(`[...document.querySelectorAll('.operations-metrics .operations-card')].find(card => card.querySelector('span')?.textContent === 'Escalation games')?.textContent`))
-					const auctions = String(await evaluate(`[...document.querySelectorAll('.operations-metrics .operations-card')].find(card => card.querySelector('span')?.textContent === 'Truth auctions')?.textContent`))
+					const auctions = String(await evaluate(`[...document.querySelectorAll('.operations-metrics .operations-card')].find(card => card.querySelector('span')?.textContent === 'Collateral repair auctions')?.textContent`))
 					expect(reports).toContain('251')
 					expect(reports).toContain('0 settleable among 250 shown')
 					expect(escalations).toContain('251')
