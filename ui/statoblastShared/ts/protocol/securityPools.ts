@@ -101,6 +101,8 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 export type RegisteredPortfolio = { portfolio: Address; questionCount: number }
 
 type ListingRead = { status: 'success'; result: unknown } | { status: 'failure' }
+// Re-reads stay within this many requests at once, as registry pages do.
+const LISTING_READ_CONCURRENCY = 4
 
 function portfolioListingCalls(portfolio: Address, universeId: bigint) {
 	return [
@@ -117,12 +119,13 @@ function portfolioListing(portfolio: Address, ledger: ListingRead | undefined, q
 }
 
 /**
- * The node ran the calls and they failed: a revert, missing return data or exhausted gas. A request that got no answer,
- * such as an HTTP error, a timeout or a lost connection, is not one.
+ * The node ran the calls and they failed: a revert or exhausted gas. A request that got no answer, such as an HTTP error,
+ * a timeout or a lost connection, is not one, and neither is empty return data: Multicall3 always returns encoded
+ * results or reverts, so empty data means the node or the deployment is at fault, not a registered contract.
  */
 function isExecutionFailure(error: unknown) {
 	return [...errorChain(error)].some(current => {
-		if (current instanceof Error && (current.name === 'ContractFunctionRevertedError' || current.name === 'ContractFunctionZeroDataError')) return true
+		if (current instanceof Error && current.name === 'ContractFunctionRevertedError') return true
 		// An HTTP status arrives in the same field as a JSON-RPC error code, but then the node never ran the calls.
 		if (!(current instanceof RpcError) || typeof current.code !== 'number' || (current.code >= 100 && current.code < 600)) return false
 		// Nodes word these differently, such as "out of gas" and "EVM error OutOfGas".
@@ -144,13 +147,20 @@ export async function loadRegisteredPortfolios(client: ReadClient, universeId: b
 	// Every request ends with this call. A call starved of gas takes almost all that is left with it, so when this one
 	// succeeds, no call before it was starved and each failed address failed on its own.
 	const gasWitness = { address: getInfraContractAddresses().securityPoolFactory, abi: securityPoolFactoryAbi, functionName: 'portfolioCount', args: [] }
+	let reading = 0
+	const queued: (() => void)[] = []
 	const read = async (addresses: readonly Address[]): Promise<readonly ListingRead[] | undefined> => {
+		while (reading >= LISTING_READ_CONCURRENCY) await new Promise<void>(resolve => queued.push(resolve))
+		reading += 1
 		try {
 			return await readOptionalMulticall(client, [...addresses.flatMap(portfolio => portfolioListingCalls(portfolio, universeId)), gasWitness], anchor.blockNumber)
 		} catch (error) {
 			// Only a failure the node reports for the calls is put down to a registered contract; anything else fails the list.
 			if (!isExecutionFailure(error)) throw error
 			return undefined
+		} finally {
+			reading -= 1
+			queued.shift()?.()
 		}
 	}
 	// Each set of addresses is read in one batched request at the anchor block. Any contract can register, and a request's

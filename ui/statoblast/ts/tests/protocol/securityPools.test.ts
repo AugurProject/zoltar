@@ -139,12 +139,20 @@ const outOfGas = (shared: boolean) => new RpcError(shared ? 'out of gas' : 'EVM 
  * address treats the stranger: it fails alone, or it exhausts the shared gas so every later call fails, or the whole
  * request runs out of gas. Read on its own, the stranger's request runs out of gas and every other address answers for
  * itself. `unavailable` fails every request at the provider; `flaky` fails a lone read of `second` with `providerError`.
- * `more` adds working portfolios and `junk` adds addresses whose calls fail on their own, both after the others. Each
- * request ends with the factory's `portfolioCount`, which answers unless the calls before it were starved.
+ * `more` adds working portfolios, `junk` adds addresses whose calls fail on their own, and `burning` adds contracts that
+ * burn all their gas, starving every later call; all come after the others. Each request ends with the factory's
+ * `portfolioCount`, which answers unless the calls before it were starved. Requests take a moment, so overlapping
+ * ones are counted in `mostInFlight`. `empty` answers every request with empty data, as when Multicall3 is missing.
  */
-function registryClient(batch: 'isolated' | 'starving' | 'reverting' | 'unavailable' | 'flaky', { more = [], junk = [], providerError = () => new RpcError('HTTP 502 while calling eth_call', { code: 502 }) }: { more?: readonly Address[]; junk?: readonly Address[]; providerError?: () => Error } = {}) {
-	const registry = [portfolio, stranger, second, partial, unopened, ...more, ...junk]
+function registryClient(
+	batch: 'isolated' | 'starving' | 'reverting' | 'unavailable' | 'flaky' | 'empty',
+	{ more = [], junk = [], burning = [], providerError = () => new RpcError('HTTP 502 while calling eth_call', { code: 502 }) }: { more?: readonly Address[]; junk?: readonly Address[]; burning?: readonly Address[]; providerError?: () => Error } = {},
+) {
+	const registry = [portfolio, stranger, second, partial, unopened, ...more, ...junk, ...burning]
 	const junkAddresses = new Set(junk)
+	const burningAddresses = new Set(burning)
+	let inFlight = 0
+	let mostInFlight = 0
 	const ledgers = new Map([[`${portfolio}:0`, capital], [`${second}:0`, token], [`${partial}:0`, token], [`${portfolio}:42`, token], ...more.map(address => [`${address}:0`, token] as const)])
 	const questionCounts = new Map([[portfolio, 2n], [second, 0n], [unopened, 0n], ...more.map(address => [address, 1n] as const)])
 	const blocks: (bigint | undefined)[] = []
@@ -161,23 +169,31 @@ function registryClient(batch: 'isolated' | 'starving' | 'reverting' | 'unavaila
 			batches.push(request.contracts.length)
 			blocks.push(request.blockNumber)
 			expect(request.allowFailure).toBe(true)
+			inFlight += 1
+			mostInFlight = Math.max(mostInFlight, inFlight)
+			await Bun.sleep(1)
+			inFlight -= 1
 			if (batch === 'unavailable') throw new RpcError('HTTP 503 while calling eth_call', { code: 503 })
+			if (batch === 'empty') throw Object.assign(new Error('The contract function "aggregate3" returned no data ("0x").'), { name: 'ContractFunctionZeroDataError' })
 			const addresses = request.contracts.map(contract => getAddress(String(contract.address)))
 			const shared = new Set(request.contracts.filter(contract => contract.functionName !== 'portfolioCount').map(contract => contract.address)).size > 1
 			if (batch === 'flaky' && !shared && addresses.includes(second)) throw providerError()
 			if (addresses.includes(stranger) && (!shared || batch === 'reverting' || batch === 'flaky')) throw outOfGas(shared)
-			const starvedFrom = shared && batch === 'starving' ? addresses.indexOf(stranger) : -1
+			if (!shared && addresses.some(address => burningAddresses.has(address))) throw outOfGas(shared)
+			const firstBurning = addresses.findIndex(address => burningAddresses.has(address))
+			let starvedFrom = shared && batch === 'starving' ? addresses.indexOf(stranger) : -1
+			if (firstBurning >= 0 && (starvedFrom < 0 || firstBurning < starvedFrom)) starvedFrom = firstBurning
 			return request.contracts.map((contract, index) => {
 				const address = addresses[index]
 				if (address === undefined) throw new Error('Missing call address')
-				if (address === stranger || junkAddresses.has(address) || (starvedFrom >= 0 && index > starvedFrom) || (address === partial && contract.functionName === 'questionCount')) return { status: 'failure', error: new Error('execution reverted') }
+				if (address === stranger || junkAddresses.has(address) || (starvedFrom >= 0 && index >= starvedFrom) || (address === partial && contract.functionName === 'questionCount')) return { status: 'failure', error: new Error('execution reverted') }
 				if (contract.functionName === 'portfolioCount') return { status: 'success', result: BigInt(registry.length) }
 				if (contract.functionName === 'questionCount') return { status: 'success', result: questionCounts.get(address) }
 				return { status: 'success', result: ledgers.get(`${address}:${String(contract.args?.[0])}`) ?? zeroAddress }
 			})
 		},
 	})
-	return { client, blocks, batches }
+	return { client, blocks, batches, mostInFlight: () => mostInFlight }
 }
 
 test('registered portfolios list those with a ledger in the universe, newest registration first', async () => {
@@ -223,6 +239,24 @@ test('addresses that fail on their own at the end of the registry cost no furthe
 		{ portfolio, questionCount: 2 },
 	])
 	expect(batches).toEqual([2 * (5 + junk.length) + 1])
+})
+
+test('contracts that burn all their gas are read again at most four at a time', async () => {
+	const burning = Array.from({ length: 8 }, (_, index) => getAddress(`0x${(0xf00 + index).toString(16).padStart(40, '0')}`))
+	const { client, batches, mostInFlight } = registryClient('isolated', { burning })
+	expect(await loadRegisteredPortfolios(client, 0n)).toEqual([
+		{ portfolio: second, questionCount: 0 },
+		{ portfolio, questionCount: 2 },
+	])
+	// Each such contract must be read on its own, which halving reaches in about two requests per contract.
+	expect(batches.length).toBeLessThanOrEqual(2 * burning.length + 1)
+	expect(mostInFlight()).toBeLessThanOrEqual(4)
+})
+
+test('empty data from the batched read fails the list, since a registered contract cannot cause it', async () => {
+	const { client, batches } = registryClient('empty')
+	await expect(loadRegisteredPortfolios(client, 0n)).rejects.toThrow('returned no data')
+	expect(batches).toHaveLength(1)
 })
 
 test('a provider that answers no portfolio read reports an error rather than an empty list', async () => {
