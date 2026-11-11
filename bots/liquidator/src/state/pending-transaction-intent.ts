@@ -1,3 +1,4 @@
+import { parseReportSponsorship } from './sponsored-reports.ts'
 import { parseInstructionIdentity, parseFundingEffect } from './portfolio-instructions.ts'
 import { getAddress, keccak256, parseTransaction, recoverTransactionAddress, type Hex } from '@zoltar/bot-shared/ethereum'
 import { isHash32 } from '@zoltar/bot-shared/infrastructure/json-validation'
@@ -29,6 +30,14 @@ function parseReceiptExpectation(rawExpectation: object): ReceiptExpectation {
 		}
 	}
 	throw new Error('Pending transaction intent has invalid receipt expectation')
+}
+
+function parseReportOperations(value: unknown): PendingTransactionIntent['reportOperations'] {
+	if (value === undefined) return undefined
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Pending report operations must be an object')
+	const reportId = Reflect.get(value, 'reportId')
+	if (typeof reportId !== 'string' || !/^[1-9][0-9]*$/.test(reportId)) throw new Error('Pending report operations have invalid report ID')
+	return { feed: getAddress(String(Reflect.get(value, 'feed'))), reportId: BigInt(reportId) }
 }
 
 export async function parsePendingTransactionIntent(intent: unknown, expectedChainId: number): Promise<PendingTransactionIntent> {
@@ -73,6 +82,8 @@ export async function parsePendingTransactionIntent(intent: unknown, expectedCha
 		maxBlockNumber: BigInt(maxBlockNumber),
 		mode,
 		nonce: parsedNonce,
+		reportSponsorship: parseReportSponsorship(Reflect.get(intent, 'reportSponsorship')),
+		reportOperations: parseReportOperations(Reflect.get(intent, 'reportOperations')),
 		portfolioFunding: parseFundingEffect(Reflect.get(intent, 'portfolioFunding')),
 		portfolioInstruction: parseInstructionIdentity(Reflect.get(intent, 'portfolioInstruction')),
 		receiptExpectation,

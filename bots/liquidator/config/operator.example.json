@@ -53,6 +53,9 @@
 	"selectedPortfolios": [],
 	"portfolioPolicy": {
 		"allowFundedTakeovers": false,
+		"maximumReportFundingEth": "0",
+		"reportOperationsGasLimit": 3100000,
+		"reportOperationGasLimit": 3000000,
 		"maximumPositionsPerScan": 32,
 		"maximumPrincipalRep": "0",
 		"maximumTotalPrincipalRep": "0",
