@@ -41,10 +41,10 @@
 							<td><code>PortfolioRegistered</code> on the first call from a namespace; returns the canonical feed address. No question-deployment event.</td>
 						</tr>
 						<tr>
-							<td><code>initializePortfolioPriceFeedForUniverse(configurationSeed, targetUniverse)</code><wbr /></td>
+							<td><code>initializePortfolioPriceFeedForUniverse(universeId)</code></td>
 							<td>A portfolio, within its own caller-address namespace</td>
-							<td>Canonical configuration seed; the caller’s portfolio clock recognizes the target universe; the target REP token exists. The seed belongs to a registered portfolio.</td>
-							<td>Creates or retrieves the caller namespace’s feed for an already registered child universe, using the canonical seed’s oracle configuration. No question needs to be deployed first.</td>
+							<td>The caller has configured its namespace; the caller’s portfolio clock recognizes the target universe; the target REP token exists.</td>
+							<td>Creates or retrieves the caller namespace’s feed for an already registered child universe, using the oracle configuration from the namespace’s first <code>initializePortfolioPriceFeed</code> call. No question needs to be deployed first.</td>
 							<td>Returns the canonical feed address; no question-deployment event.</td>
 						</tr>
 						<tr>

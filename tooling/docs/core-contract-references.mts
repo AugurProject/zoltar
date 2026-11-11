@@ -462,15 +462,15 @@ export const coreContractReferences: ContractReference[] = [
 				signals: '`PortfolioRegistered` on the first call from a namespace; returns the canonical feed address. No question-deployment event.',
 			},
 			{
-				call: '`initializePortfolioPriceFeedForUniverse(configurationSeed, targetUniverse)`',
+				call: '`initializePortfolioPriceFeedForUniverse(universeId)`',
 				caller: 'A portfolio, within its own caller-address namespace',
-				effect: 'Creates or retrieves the caller namespace\u2019s feed for an already registered child universe, using the canonical seed\u2019s oracle configuration. No question needs to be deployed first.',
+				effect: 'Creates or retrieves the caller namespace\u2019s feed for an already registered child universe, using the oracle configuration from the namespace\u2019s first `initializePortfolioPriceFeed` call. No question needs to be deployed first.',
 				declarations: [
 					{
 						name: 'initializePortfolioPriceFeedForUniverse',
 					},
 				],
-				preconditions: 'Canonical configuration seed; the caller\u2019s portfolio clock recognizes the target universe; the target REP token exists. The seed belongs to a registered portfolio.',
+				preconditions: 'The caller has configured its namespace; the caller\u2019s portfolio clock recognizes the target universe; the target REP token exists.',
 				signals: 'Returns the canonical feed address; no question-deployment event.',
 			},
 			{
