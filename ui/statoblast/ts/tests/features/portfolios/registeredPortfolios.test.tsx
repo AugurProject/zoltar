@@ -33,7 +33,7 @@ const renderSection = async () => {
 	return view
 }
 
-test('a first visit lists the universe\'s portfolios and opens one without typing its address', async () => {
+test("a first visit lists the universe's portfolios and opens one without typing its address", async () => {
 	// Live networks have no owner discovery, so the tab used to start with an empty address and nothing to choose.
 	window.localStorage.clear()
 	window.history.replaceState(undefined, '', '/#/portfolios')

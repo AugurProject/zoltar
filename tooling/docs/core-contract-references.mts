@@ -451,7 +451,8 @@ export const coreContractReferences: ContractReference[] = [
 			{
 				call: '`initializePortfolioPriceFeed(universeId, priorityFee)`',
 				caller: 'Anyone, within their own caller-address namespace',
-				effect: 'The first call creates the caller namespace\u2019s oracle configuration from the universe\u2019s REP token and the priority fee, and appends the caller to the portfolio registry. Each call creates the namespace\u2019s feed for that universe or returns the existing one. Portfolio setup calls this in its last stage, before any question is admitted.',
+				effect:
+					'The first call creates the caller namespace\u2019s oracle configuration from the universe\u2019s REP token and the priority fee, and appends the caller to the portfolio registry. Each call creates the namespace\u2019s feed for that universe or returns the existing one. Portfolio setup calls this in its last stage, before any question is admitted.',
 				declarations: [
 					{
 						name: 'initializePortfolioPriceFeed',

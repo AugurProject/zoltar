@@ -72,7 +72,8 @@ async function loadPortfolioRegistry(client: ReadClient, anchor: DeploymentRegis
 		key: `${factory.toLowerCase()}:portfolios`,
 		anchor,
 		loadCount: async () => await client.readContract({ address: factory, abi: securityPoolFactoryAbi, functionName: 'portfolioCount', args: [], blockNumber: anchor.blockNumber }),
-		loadRange: async (start, count) => requireArrayValue(await client.readContract({ address: factory, abi: securityPoolFactoryAbi, functionName: 'portfoliosRange', args: [start, count], blockNumber: anchor.blockNumber }), 'registered portfolios').map(portfolio => requireAddressValue(portfolio, 'registered portfolio')),
+		loadRange: async (start, count) =>
+			requireArrayValue(await client.readContract({ address: factory, abi: securityPoolFactoryAbi, functionName: 'portfoliosRange', args: [start, count], blockNumber: anchor.blockNumber }), 'registered portfolios').map(portfolio => requireAddressValue(portfolio, 'registered portfolio')),
 		isCanonical: isCanonicalAnchor(client),
 	})
 }
