@@ -230,6 +230,16 @@ test('one failing contract among many registered portfolios costs a few requests
 	expect(batches.length).toBeLessThanOrEqual(2 * Math.ceil(Math.log2(40)) + 1)
 })
 
+test('a large registry is read in pages of 100 addresses, at most four requests at a time', async () => {
+	const more = Array.from({ length: 150 }, (_, index) => getAddress(`0x${(0x1000 + index).toString(16).padStart(40, '0')}`))
+	const { client, batches, mostInFlight } = registryClient('isolated', { more })
+	const listed = await loadRegisteredPortfolios(client, 0n)
+	expect(listed.map(entry => entry.portfolio)).toEqual([...more].reverse().concat([second, portfolio]))
+	// Each page is two calls per address plus the factory's final call.
+	expect([...batches].sort((left, right) => right - left)).toEqual([2 * 100 + 1, 2 * 55 + 1])
+	expect(mostInFlight()).toBeLessThanOrEqual(4)
+})
+
 test('addresses that fail on their own at the end of the registry cost no further requests', async () => {
 	// Registering costs one call from a fresh address, so the newest registrations can all be junk.
 	const junk = Array.from({ length: 32 }, (_, index) => getAddress(`0x${(0xe00 + index).toString(16).padStart(40, '0')}`))

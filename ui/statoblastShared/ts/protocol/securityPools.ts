@@ -101,7 +101,9 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 export type RegisteredPortfolio = { portfolio: Address; questionCount: number }
 
 type ListingRead = { status: 'success'; result: unknown } | { status: 'failure' }
-// Re-reads stay within this many requests at once, as registry pages do.
+// Listing reads go out in registry-sized pages, at most this many requests at once, as registry pages do; a growing
+// registry then never outgrows the request size a provider accepts.
+const LISTING_PAGE_SIZE = 100
 const LISTING_READ_CONCURRENCY = 4
 
 function portfolioListingCalls(portfolio: Address, universeId: bigint) {
@@ -182,7 +184,7 @@ export async function loadRegisteredPortfolios(client: ReadClient, universeId: b
 		const middle = Math.ceil(addresses.length / 2)
 		await Promise.all([settle(addresses.slice(0, middle)), settle(addresses.slice(middle))])
 	}
-	if (portfolios.length > 0) await settle(portfolios)
+	await Promise.all(Array.from({ length: Math.ceil(portfolios.length / LISTING_PAGE_SIZE) }, (_, page) => settle(portfolios.slice(page * LISTING_PAGE_SIZE, (page + 1) * LISTING_PAGE_SIZE))))
 	await requireDeploymentRegistryAnchor(client, anchor, 'Portfolios changed during discovery')
 	return portfolios.flatMap(portfolio => listings.get(portfolio) ?? []).reverse()
 }
