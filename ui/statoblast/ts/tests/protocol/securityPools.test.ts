@@ -166,7 +166,7 @@ test('registered portfolios list the pools of one universe by portfolio, newest 
 		{ portfolio: other, questionCount: 1 },
 	])
 	expect(await loadRegisteredPortfolios(client, 42n)).toEqual([{ portfolio, questionCount: 1 }])
-	// Each load resolves only its universe's pools, in one multicall request pinned with the registry to one block.
+	// Each load resolves only its universe's pools, in one batched read pinned with the registry to one block.
 	expect(batches).toEqual([4, 1])
 	expect(blocks.every(blockNumber => blockNumber === block.number)).toBe(true)
 })
