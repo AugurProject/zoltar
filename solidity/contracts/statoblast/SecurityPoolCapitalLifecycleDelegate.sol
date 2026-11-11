@@ -58,8 +58,8 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 	/// @dev The ledger has already checkpointed fees, served prior retirements,
 	/// and required an open universe with a fresh accepted price.
 	function authorize(uint256 commitment, uint256 reportId, bool useReport, uint256 minimumCommitment) external onlyLedger returns (uint96 id) {
-		_settleOwner(msg.sender);
-		Owner storage owner = owners[msg.sender].account;
+		_settleOwner(_capitalOwner());
+		Owner storage owner = owners[_capitalOwner()].account;
 		uint256 health = _target(owner);
 		require(commitment >= minimumCommitment, 'Commitment below minimum');
 		id = owner.positionId;
@@ -72,16 +72,16 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 			(, uint256 totalCommitment) = commitmentIndex.totals();
 			(uint256 reportPrice, uint256 epoch) = feed.reportAuthorization(reportId, Math.max(demandAttoEth, totalCommitment - old.commitment + commitment));
 			require(epoch == acceptedPriceEpoch, 'Capital price epoch changed');
-			owners[msg.sender].fundingPrice = FundingPrice(Math.max(host.ownerConservativePrice(msg.sender), reportPrice), epoch);
+			owners[_capitalOwner()].fundingPrice = FundingPrice(Math.max(host.ownerConservativePrice(_capitalOwner()), reportPrice), epoch);
 		}
 		uint256 rep = owner.freeAttoRep + old.rep;
-		require(rep >= commitmentIndex.requiredRep(commitment, host.ownerConservativePrice(msg.sender), host.securityMultiplierBps(), health), 'Chosen health target unmet');
+		require(rep >= commitmentIndex.requiredRep(commitment, host.ownerConservativePrice(_capitalOwner()), host.securityMultiplierBps(), health), 'Chosen health target unmet');
 		// Owners cannot bypass a closed retirement cohort with direct reductions.
 		require(commitment >= old.commitment, 'Retire before reducing');
 		totalFreeAttoRep -= owner.freeAttoRep;
 		owner.freeAttoRep = 0;
 		if (id == 0) {
-			id = commitmentIndex.create(msg.sender, rep, commitment, host.maximumHealthyPrice(rep, commitment));
+			id = commitmentIndex.create(_capitalOwner(), rep, commitment, host.maximumHealthyPrice(rep, commitment));
 			owner.positionId = id;
 		} else {
 			uint256 maxPrice = host.maximumHealthyPrice(rep, commitment);
@@ -90,43 +90,43 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		}
 		// Keeping the commitment adds no exposure.
 		if (!useReport && commitment > old.commitment) feed.validateExposure();
-		emit CommitmentAuthorized(msg.sender, id, rep, commitment, health);
+		emit CommitmentAuthorized(_capitalOwner(), id, rep, commitment, health);
 	}
 
 	/// @dev These owner operations run after the ledger checkpoints old income.
 	function withdrawPrincipal(uint256 amount, address recipient) external onlyLedger {
 		require(recipient != address(0) && amount > 0, 'Invalid capital withdrawal');
-		_settleOwner(msg.sender);
-		Owner storage owner = owners[msg.sender].account;
+		_settleOwner(_capitalOwner());
+		Owner storage owner = owners[_capitalOwner()].account;
 		uint256 free = Math.min(amount, owner.freeAttoRep);
 		owner.freeAttoRep -= free;
 		totalFreeAttoRep -= free;
 		uint256 pledged = amount - free;
 		ICapitalLifecycleHost host = ICapitalLifecycleHost(address(this));
 		if (pledged != 0) {
-			require(owner.positionId != 0 && msg.sender != forkAuthority, 'Insufficient owner principal');
+			require(owner.positionId != 0 && _capitalOwner() != forkAuthority, 'Insufficient owner principal');
 			require(!importing && host.zoltar().getForkTime(host.universeId()) == 0 && !frozen, 'Capital universe inactive');
 			require(host.isPriceValid(), 'Capital price stale');
 			SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(owner.positionId);
-			require(pledged <= position.rep && position.rep - pledged >= commitmentIndex.requiredRep(position.commitment, host.ownerConservativePrice(msg.sender), host.securityMultiplierBps(), _target(owner)), 'Owner collateral too low');
+			require(pledged <= position.rep && position.rep - pledged >= commitmentIndex.requiredRep(position.commitment, host.ownerConservativePrice(_capitalOwner()), host.securityMultiplierBps(), _target(owner)), 'Owner collateral too low');
 			uint256 maxPrice = host.maximumHealthyPrice(position.rep - pledged, position.commitment);
 			commitmentIndex.replace(owner.positionId, position.rep - pledged, position.commitment, maxPrice);
 			if (position.commitment == 0 || maxPrice >= liquidationPrice)
 				commitmentIndex.clearLiquidation(owner.positionId);
 		}
 		host.repToken().safeTransfer(recipient, amount);
-		emit PrincipalWithdrawn(msg.sender, recipient, amount);
+		emit PrincipalWithdrawn(_capitalOwner(), recipient, amount);
 	}
 	function claimEarnings() external onlyLedger {
-		_settleOwner(msg.sender);
-		Owner storage owner = owners[msg.sender].account;
+		_settleOwner(_capitalOwner());
+		Owner storage owner = owners[_capitalOwner()].account;
 		uint256 ethAmount = owner.feesAttoEth;
 		uint256 repAmount = owner.feesAttoRep;
 		owner.feesAttoEth = 0;
 		owner.feesAttoRep = 0;
-		if (repAmount != 0) ICapitalLifecycleHost(address(this)).repToken().safeTransfer(msg.sender, repAmount);
-		_sendEth(msg.sender, ethAmount);
-		emit EarningsClaimed(msg.sender, ethAmount, repAmount);
+		if (repAmount != 0) ICapitalLifecycleHost(address(this)).repToken().safeTransfer(_capitalOwner(), repAmount);
+		_sendEth(_capitalOwner(), ethAmount);
+		emit EarningsClaimed(_capitalOwner(), ethAmount, repAmount);
 	}
 
 	function exportChoice(address owner) external onlyLedger returns (ChoicePosition memory choice, uint256 target) {
@@ -171,6 +171,6 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		require(frozen && !migrationPrepared, 'Fork backing release unavailable');
 		migrationPrepared = true;
 		if (frozenBackingAttoRep != 0)
-			ICapitalLifecycleHost(address(this)).repToken().safeTransfer(msg.sender, frozenBackingAttoRep);
+			ICapitalLifecycleHost(address(this)).repToken().safeTransfer(_capitalOwner(), frozenBackingAttoRep);
 	}
 }

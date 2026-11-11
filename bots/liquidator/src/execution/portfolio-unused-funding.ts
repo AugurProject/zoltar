@@ -1,4 +1,6 @@
+import { assertPortfolioReportFunding } from './portfolio-report.ts'
 import type { OperatorSettings } from '#config/settings'
+import { portfolioReportTakeoverPlan } from '#core/portfolio-report-strategy'
 import { portfolioTakeoverPlan } from '#core/portfolio-strategy'
 import type { PortfolioObservation } from '#monitoring/portfolio-monitor'
 import type { RuntimeState } from '#state/operator-state'
@@ -10,12 +12,12 @@ import { submitCall } from './submit-call.ts'
 type Wallet = WalletClient<Transport, Chain, Account>
 type RpcPool = ReturnType<typeof createRpcEndpointPool>
 
-export function unusedPortfolioFunding(state: Pick<RuntimeState, 'portfolioFunding'>, observation: PortfolioObservation) {
+export function unusedPortfolioFunding(state: Pick<RuntimeState, 'portfolioFunding' | 'sponsoredReports'>, observation: PortfolioObservation) {
 	const snapshot = observation.snapshot
 	const key = `${snapshot.capitalLedger.toLowerCase()}:${snapshot.owner.toLowerCase()}`
 	const funding = state.portfolioFunding?.[key]
 	const tracked = funding?.amount ?? 0n
-	const amount = [tracked, snapshot.ownerAccount.freeAttoRep, snapshot.withdrawableAttoRep].reduce((a, b) => (a < b ? a : b))
+	const amount = observation.pendingOperationReport === undefined && !state.sponsoredReports?.some(report => report.fundingKey === key) ? [tracked, snapshot.ownerAccount.freeAttoRep, snapshot.withdrawableAttoRep].reduce((a, b) => (a < b ? a : b)) : 0n
 	return { key, amount, target: funding?.target }
 }
 
@@ -32,7 +34,18 @@ export async function executeUnusedPortfolioFunding(wallet: Wallet, settings: Op
 		const marketAllowed = await priceAllowed(current.observation)
 		if (!marketAllowed) throw new PortfolioOpportunityExpired('Wait for independent pricing before abandoning funded takeover')
 		const candidate = await execution.refresh(wallet, settings, state.portfolioScopes, pool, target, original.target)
-		for (const fresh of candidate.observation.positions) if (portfolioTakeoverPlan(candidate.observation, fresh, settings, candidate.totalPrincipal, marketAllowed).plan !== undefined) throw new PortfolioOpportunityExpired('The funded takeover is still viable')
+		for (const fresh of candidate.observation.positions) {
+			if (portfolioTakeoverPlan(candidate.observation, fresh, settings, candidate.totalPrincipal, marketAllowed).plan !== undefined) throw new PortfolioOpportunityExpired('The funded takeover is still viable')
+			const report = portfolioReportTakeoverPlan(candidate.observation, fresh, settings, candidate.totalPrincipal, marketAllowed)
+			if (report.plan === undefined) continue
+			try {
+				assertPortfolioReportFunding({ ...candidate, plan: report.plan, reportPlans: report.plans }, settings)
+			} catch (error) {
+				if (error instanceof PortfolioOpportunityExpired) continue
+				throw error
+			}
+			throw new PortfolioOpportunityExpired('The funded takeover is still viable')
+		}
 	}
 	await refresh()
 	await execution.submit(

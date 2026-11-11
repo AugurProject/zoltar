@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { IReportOperations } from './interfaces/IReportOperations.sol';
 import { IWeth9 } from './interfaces/IWeth9.sol';
 import { ISecurityPool, ISecurityPoolFactory } from './interfaces/ISecurityPool.sol';
 import { OpenOracle } from './openOracle/OpenOracle.sol';
@@ -33,6 +34,7 @@ interface ISharedPoolPriceCoordinator {
 
 interface ISharedPoolPortfolioPriceCheckpoint {
 	function onSharedPriceAccepted(uint248 universeId, uint256 price, uint48 validUntil) external;
+	function capitalLedger(uint248 universeId) external view returns (IReportOperations);
 	function oracleExposure(uint248 universeId) external view returns (uint256);
 	function oracleRepExposure(uint248 universeId) external view returns (uint256);
 	function isPriceReportingOpen(uint248 universeId) external view returns (bool);
@@ -45,6 +47,7 @@ contract SharedPoolPriceFeed {
 	bool public constant timeType = true;
 	bool public constant trackDisputes = true;
 	uint256 public constant OPEN_INTEREST_DIVIDER = 100;
+	uint32 public constant REPORT_OPERATION_GAS_OVERHEAD = 100_000;
 	uint256 public constant FEED_SETTLEMENT_GAS_OVERHEAD = 4_000_000;
 	address public immutable configCoordinator;
 	address public immutable securityPoolFactory;
@@ -93,6 +96,12 @@ contract SharedPoolPriceFeed {
 		uint256 maxSettlementBaseFee;
 	}
 	mapping(uint256 => ReportCandidate) private reports;
+	mapping(uint256 => IReportOperations.Batch) private operationBatches;
+	mapping(address => uint256) public sponsorOperationReport;
+	event ReportOperationAttempted(uint256 indexed reportId, address indexed sponsor, uint256 indexed operationIndex, bool success);
+	function reportOperationBatch(uint256 reportId) external view returns (IReportOperations.Batch memory) {
+		return operationBatches[reportId];
+	}
 	uint256 public lastPrice;
 	uint256 public lastSettlementTimestamp;
 	uint256 private checkpointedExposureAttoEth;
@@ -250,7 +259,8 @@ contract SharedPoolPriceFeed {
 	/// @notice A registered coordinator authenticates the sponsor and forwards the report's exact token funding.
 	function requestPrice(address sponsor, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) external payable returns (uint256 reportId) {
 		require(registeredCoordinators[msg.sender], 'Unregistered coordinator');
-		return _requestPrice(msg.sender, sponsor, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth);
+		return
+			_requestPrice(msg.sender, sponsor, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth, getSettlementCallbackGasLimit());
 	}
 
 	/// @notice Fund a shared observation without first deploying a child question.
@@ -258,10 +268,35 @@ contract SharedPoolPriceFeed {
 	/// receives the candidate's returned funding. No pool collateral funds reports.
 	function requestPortfolioPrice(uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) external payable returns (uint256 reportId) {
 		return
-			_requestPrice(address(this), msg.sender, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth);
+			_requestPrice(address(this), msg.sender, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth, getSettlementCallbackGasLimit());
 	}
 
-	function _requestPrice(address coordinator, address sponsor, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) private returns (uint256 reportId) {
+	/// @notice Anyone may settle, but these ordered operations retain the funding sponsor.
+	/// Count is limited only by the declared gas budget and transaction gas limits.
+	function requestPortfolioPriceWithOperations(uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth, IReportOperations.Batch calldata batch) external payable returns (uint256 reportId) {
+		require(batch.deadline > block.timestamp, 'Report operations expired');
+		require(batch.maximumPrice >= batch.minimumPrice && batch.maximumPrice != 0, 'Invalid operation price bounds');
+		require(batch.operations.length != 0, 'No report operations');
+		uint256 requiredGas;
+		for (uint256 index = 0; index < batch.operations.length; index++) {
+			require(batch.operations[index].gasLimit != 0, 'Operation gas zero');
+			requiredGas += uint256(batch.operations[index].gasLimit) + REPORT_OPERATION_GAS_OVERHEAD;
+		}
+		require(requiredGas <= batch.gasLimit, 'Operation gas budget insufficient');
+		uint256 callbackGas = uint256(getSettlementCallbackGasLimit()) + batch.gasLimit;
+		require(callbackGas <= type(uint32).max, 'Callback gas exceeds uint32');
+		reportId = _requestPrice(address(this), msg.sender, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth, uint32(callbackGas));
+		IReportOperations.Batch storage stored = operationBatches[reportId];
+		stored.gasLimit = batch.gasLimit;
+		stored.minimumPrice = batch.minimumPrice;
+		stored.maximumPrice = batch.maximumPrice;
+		stored.deadline = batch.deadline;
+		for (uint256 index = 0; index < batch.operations.length; index++)
+			stored.operations.push(batch.operations[index]);
+		sponsorOperationReport[msg.sender] = reportId;
+	}
+
+	function _requestPrice(address coordinator, address sponsor, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth, uint32 callbackGasLimit) private returns (uint256 reportId) {
 		require(ISharedPoolPortfolioPriceCheckpoint(portfolio).isPriceReportingOpen(universeId), 'Portfolio reporting window closed');
 		require(sponsor != address(0), 'Report sponsor zero');
 		require(proposedRepPerEthPrice > 0, 'Initial oracle price zero');
@@ -273,7 +308,7 @@ contract SharedPoolPriceFeed {
 		pendingReportSponsor = sponsor;
 		pendingCoordinator = coordinator;
 		SharedPoolReportEscrow escrow;
-		(reportId, escrow) = this.createReportEscrow(msg.sender, sponsor, quote.wethAttoEth, quote.repAttoRep, quote.haltAttoEth, bountyAttoEth);
+		(reportId, escrow) = this.createReportEscrow(msg.sender, sponsor, quote.wethAttoEth, quote.repAttoRep, quote.haltAttoEth, bountyAttoEth, callbackGasLimit);
 		pendingReportId = reportId;
 		reports[reportId] = ReportCandidate(escrow, sponsor, coordinator, REPORT_PENDING, pendingReportMaxSettlementBaseFeeAttoEthPerGas);
 		emit PriceRequested(pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas);
@@ -303,7 +338,7 @@ contract SharedPoolPriceFeed {
 		quote.maxSettlementBaseFeeAttoEthPerGas = Math.mulDiv(block.basefee + initialReportPriorityFeeAttoEthPerGas, maxSettlementBaseFeeMultiplierBps, SecurityPoolUtils.BPS_DENOMINATOR);
 	}
 
-	function createReportEscrow(address payer, address sponsor, uint256 wethAmount, uint256 repAmount, uint256 haltAmount, uint256 bounty) external returns (uint256 id, SharedPoolReportEscrow escrow) {
+	function createReportEscrow(address payer, address sponsor, uint256 wethAmount, uint256 repAmount, uint256 haltAmount, uint256 bounty, uint32 callbackGasLimit) external returns (uint256 id, SharedPoolReportEscrow escrow) {
 		require(msg.sender == address(this), 'Only report creation');
 		escrow = new SharedPoolReportEscrow(sponsor, openOracle, weth, reputationToken);
 		require(weth.transferFrom(payer, address(escrow), wethAmount), 'WETH transfer for initial report failed');
@@ -322,7 +357,7 @@ contract SharedPoolPriceFeed {
 		parameters.feePercentage = feePercentage;
 		parameters.multiplier = multiplier;
 		parameters.callbackContract = address(escrow);
-		parameters.callbackGasLimit = getSettlementCallbackGasLimit();
+		parameters.callbackGasLimit = callbackGasLimit;
 		parameters.protocolFee = protocolFee;
 		parameters.flags = OPEN_ORACLE_FLAG_STORE_ALL | OPEN_ORACLE_FLAG_TRACK_DISPUTES | OPEN_ORACLE_FLAG_TIME_TYPE;
 		id = escrow.start{value: bounty}(parameters);
@@ -354,8 +389,32 @@ contract SharedPoolPriceFeed {
 			lastPrice = nextPrice;
 			ISharedPoolPortfolioPriceCheckpoint(portfolio).onSharedPriceAccepted(universeId, nextPrice, uint48(priceTimestamp + validForSeconds));
 			emit PriceReported(reportId, lastPrice, lastSettlementTimestamp);
+			_executeReportOperations(reportId, candidate.sponsor);
 		} else
 			emit PriceReportRejected(reportId, reason, pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas, lastPrice, lastSettlementTimestamp);
+	}
+
+	function _executeReportOperations(uint256 reportId, address sponsor) private {
+		IReportOperations.Batch storage batch = operationBatches[reportId];
+		if (batch.operations.length == 0) return;
+		// Starving any promised attempt rolls back acceptance and earlier operations.
+		// A failing operation itself consumes only its own allowance and rolls back
+		// only that operation. Later operations are still attempted in order.
+		require(gasleft() > uint256(batch.gasLimit) + REPORT_OPERATION_GAS_OVERHEAD, 'Insufficient operations callback gas');
+		address ledger = address(ISharedPoolPortfolioPriceCheckpoint(portfolio).capitalLedger(universeId));
+		for (uint256 index = 0; index < batch.operations.length; index++) {
+			IReportOperations.Operation storage operation = batch.operations[index];
+			bool success;
+			if (
+				block.timestamp <= batch.deadline && lastPrice >= batch.minimumPrice && lastPrice <= batch.maximumPrice
+			) {
+				bytes memory data = abi.encodeCall(IReportOperations.executeReportOperation, (sponsor, operation.data));
+				uint256 operationGas = uint256(operation.gasLimit);
+				require(gasleft() > operationGas + Math.ceilDiv(operationGas, 63) + REPORT_OPERATION_GAS_OVERHEAD, 'Insufficient operation callback gas');
+				(success, ) = ledger.call{gas: operation.gasLimit}(data);
+			}
+			emit ReportOperationAttempted(reportId, sponsor, index, success);
+		}
 	}
 
 	/// @notice Process the latest candidate after a failed OpenOracle callback.

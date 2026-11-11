@@ -100,6 +100,7 @@ export async function createLiquidatorRuntime(loaded: LoadedSettings, collaborat
 	const state = initialRuntimeState(settings.paused, runtime.wallet?.account.address, settings.network.chainId)
 	setExecutionShutdownCheck(state, collaborators.shutdown.isRequested)
 	const durable = await loadDurableState(settings.runtime.stateFile, settings.network.chainId)
+	state.sponsoredReports = durable.sponsoredReports
 	state.portfolioFunding = durable.portfolioFunding
 	state.completedPortfolioInstructions = durable.completedPortfolioInstructions
 	state.portfolioScopes = durable.portfolioScopes
