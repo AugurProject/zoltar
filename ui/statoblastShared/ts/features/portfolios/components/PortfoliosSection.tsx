@@ -1,7 +1,9 @@
+import { useId } from 'preact/hooks'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
+import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import { TransactionScopeProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import type { WriteOperationsParameters } from '../../../types/app.js'
@@ -23,6 +25,7 @@ export function PortfoliosSection({ parameters, enabled, environmentKey, activeU
 	const capital = usePortfolioAggregate(model, actions, parameters.accountAddress)
 	const purchase = usePortfolioPurchase(model, actions)
 	const disabled = actions.busy !== undefined
+	const deployReasonId = useId()
 	return (
 		<div className='portfolio-flow'>
 			<RouteHeader title={copy.title} />
@@ -35,7 +38,7 @@ export function PortfoliosSection({ parameters, enabled, environmentKey, activeU
 				<details>
 					<summary>{copy.deploy}</summary>
 					<div className='form-grid portfolio-creation-form'>
-						<PortfolioInput label={copy.originPool} hint={copy.originPoolHint} value={actions.originInput} onChange={actions.setOriginInput} disabled={disabled} />
+						<PortfolioInput label={copy.originPool} hint={copy.originPoolHint} value={actions.originInput} onChange={actions.setOriginInput} disabled={disabled} error={actions.originForked ? copy.originForked : undefined} liveError />
 						<PortfolioInput label={copy.securityMultiplier} hint={copy.securityMultiplierHint} value={actions.multiplierInput} onChange={actions.setMultiplierInput} disabled={disabled} />
 						<PortfolioInput label={copy.oraclePriorityFee} value={actions.priorityFeeInput} onChange={actions.setPriorityFeeInput} disabled={disabled} />
 						<ViewTabs
@@ -61,9 +64,14 @@ export function PortfoliosSection({ parameters, enabled, environmentKey, activeU
 						</MetricGrid>
 						<UserMessage detail={copy.immutableEconomics} />
 						{actions.creationError === undefined ? undefined : <UserMessage tone='error' detail={actions.creationError} />}
-						<PortfolioButton model={actions} action='deployPortfolioAdmission' label={copy.deployAdmission} pendingLabel={copy.deployingAdmission} reason={actions.admissionDeployReason} onClick={actions.deployAdmission} />
+						<PortfolioButton model={actions} action='deployPortfolioAdmission' label={copy.deployAdmission} pendingLabel={copy.deployingAdmission} reason={actions.admissionDeployReason} sharedReasonId={actions.admissionDeployReason === copy.originForked ? deployReasonId : undefined} onClick={actions.deployAdmission} />
 						{actions.admissionAddress === undefined ? undefined : <code>{actions.admissionAddress}</code>}
-						<PortfolioButton model={actions} action='deployPortfolio' label={copy.deploy} pendingLabel={copy.deploying} reason={actions.deployReason} onClick={actions.deploy} />
+						<PortfolioButton model={actions} action='deployPortfolio' label={copy.deploy} pendingLabel={copy.deploying} reason={actions.deployReason} sharedReasonId={actions.deployReason === copy.originForked ? deployReasonId : undefined} onClick={actions.deploy} />
+						{actions.originForked ? (
+							<div className='tx-action-feedback shared-action-reason'>
+								<InlineHint id={deployReasonId} message={copy.originForkedAction} />
+							</div>
+						) : undefined}
 					</div>
 				</details>
 			</SectionBlock>

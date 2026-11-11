@@ -1,6 +1,6 @@
 import { getReportingSubmissionTimingGuard } from '../../../protocol/reportingTiming.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
-import { ReportingDepositPreview, getReportingApprovalLabel } from './ReportingDepositPreview.js'
+import { ReportingDepositPreview } from './ReportingDepositPreview.js'
 import { getReportingContributionFunding, getReportingWalletDepositAmount } from '../../../lib/reportingFunding.js'
 import { getDisplayedLeadingEscalationOutcome, REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingLockedUntilMessage, getReportingOutcomeLabel, hasReportingOpened, deriveReportingStage, isReportingOutcomeEnabled, isWithdrawEscalationEnabled } from '../lib/reporting.js'
 import { ReportingViewerStatus } from './ReportingViewerStatus.js'
@@ -28,6 +28,7 @@ import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkflowPanel.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
+import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { WalletActionFixReason } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { getActiveAppChainWalletBlocker, withWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
@@ -241,7 +242,9 @@ export function ReportingSection({
 	const reportGuardMessage = vaultFundingLoadingReason ?? fullReportingLoadingReason ?? reportActionGuardMessage ?? reportControlsLockedReason ?? getReportingSubmissionTimingGuard(activeReportingDetails) ?? reportReadinessReason
 	const visiblePresetReasons = presetReasons.filter(reason => reason !== reportingCopy.poolHeldVaultRepBackingEmpty || reportGuardMessage !== reportingCopy.noVaultRepSelectWallet)
 	const reportingApprovalGuardMessage = vaultFundingLoadingReason ?? getReportingReportGuardMessage({ ...reportGuardParameters, requireAllowance: false })
-	const reportingRepApprovalRequired = usesWalletFunding && walletDepositAmount !== undefined && walletDepositAmount > (effectiveReportingDetails?.viewerWalletRepAllowanceAttoRep ?? 0n)
+	const reportingApprovalSatisfied = walletDepositAmount !== undefined && effectiveReportingDetails?.viewerWalletRepAllowanceAttoRep !== undefined && effectiveReportingDetails.viewerWalletRepAllowanceAttoRep >= walletDepositAmount
+	// The approval shares the report's network, lifecycle, and amount checks, but not the allowance it raises.
+	const reportingApprovalGuard = !isOnActiveAppChain ? getWrongNetworkReason() : (reportControlsLockedReason ?? getReportingSubmissionTimingGuard(activeReportingDetails) ?? reportingApprovalGuardMessage)
 
 	const reportButtonGuardMessage = fullReportingLoadingReason ?? (reportActionGuardMessage === undefined ? reportGuardMessage : reportingCopy.currentOraclePriceRequired)
 	const reportActionDisabledReason = !isOnActiveAppChain ? getWrongNetworkReason() : reportButtonGuardMessage
@@ -308,6 +311,18 @@ export function ReportingSection({
 	const standaloneReportDisabledReason = reportOutcomeSelectionMessage === undefined && reportDisabledReasonElementId === undefined ? reportActionDisabledReason : undefined
 	const effectiveReportDisabledReasonElementId = reportDisabledReasonElementId ?? (standaloneReportDisabledReason === undefined && reportOutcomeSelectionMessage === undefined ? undefined : reportDisabledReasonId)
 	const settlementActionDisabledReasonId = sharedReportSettlementDisabledReasonId ?? settlementDisabledReasonId
+	const reportActionButton = (
+		<TransactionActionButton
+			idleLabel={reportButtonLabel}
+			pendingLabel={(reportTriggersFork ? reportingCopy.reportingAndTriggeringFork : reportingCopy.reportingAmount)(selectedOutcomeLabel, reportDisplayAmount)}
+			onClick={onReportOutcome}
+			pending={reportingActiveAction === 'reportOutcome'}
+			actionButtonRef={reportActionButtonRef}
+			availability={reportActionAvailability}
+			disabledReasonElementId={effectiveReportDisabledReasonElementId}
+			showDisabledReason={false}
+		/>
+	)
 	const showReportingHeaderStack = showFullReporting && (showSecurityPoolAddressInput || reportingStageBanner !== undefined)
 	const settlementSection =
 		showSettlementSection && reportingReady !== false ? (
@@ -429,7 +444,6 @@ export function ReportingSection({
 					/>
 					{finalized ? undefined : (
 						<>
-							{reportOutcomeSelectionMessage === undefined ? undefined : <UserMessage id={reportDisabledReasonId} className='detail' detail={reportOutcomeSelectionMessage} />}
 							<AmountField
 								disabled={reportControlsLocked}
 								id='reporting-contribution-amount'
@@ -502,39 +516,49 @@ export function ReportingSection({
 								}
 							/>
 							<div className='reporting-shared-action-region'>
-								<WalletActionFixReason actionButtonRef={reportActionButtonRef} availability={reportActionAvailability} id={settlementDisabledReasonId} visible={shouldRenderSharedReportSettlementDisabledReason}>
-									<UserMessage className='detail' id={settlementDisabledReasonId} loading={loadingReportingDetails} detail={sharedReportSettlementDisabledReason} />
-								</WalletActionFixReason>
-								<div className={`actions${usesWalletFunding ? ' reporting-wallet-action-row' : ''}`}>
-									{usesWalletFunding ? (
-										<TransactionActionButton
-											idleLabel={getReportingApprovalLabel(walletDepositAmount, reportingRepApprovalRequired)}
-											pendingLabel={reportingCopy.approvingAmount(formatCurrencyBalance(walletDepositAmount ?? 0n))}
-											onClick={onApproveReportingRep}
-											showDisabledReason={reportingRepApprovalRequired}
-											pending={reportingActiveAction === 'approveReportingRep'}
-											availability={{
-												disabled: !reportingRepApprovalRequired || !isOnActiveAppChain || !reportOutcomeEnabled || !hasPositiveReportAmount || reportingApprovalGuardMessage !== undefined,
-												reason: !isOnActiveAppChain ? getWrongNetworkReason() : (reportingApprovalGuardMessage ?? (!reportingRepApprovalRequired ? commonCopy.approvalSatisfied : undefined)),
-											}}
-											// While the wallet blocks both actions, the report action's reason holds the row's one wallet fix.
-											{...(reportWalletBlocker === undefined ? {} : { disabledReasonElementId: effectiveReportDisabledReasonElementId, showDisabledReason: false })}
-										/>
-									) : undefined}
-									<TransactionActionButton
-										idleLabel={reportButtonLabel}
-										pendingLabel={(reportTriggersFork ? reportingCopy.reportingAndTriggeringFork : reportingCopy.reportingAmount)(selectedOutcomeLabel, reportDisplayAmount)}
-										onClick={onReportOutcome}
-										pending={reportingActiveAction === 'reportOutcome'}
-										actionButtonRef={reportActionButtonRef}
-										availability={reportActionAvailability}
-										disabledReasonElementId={effectiveReportDisabledReasonElementId}
-										showDisabledReason={false}
+								{usesWalletFunding ? (
+									<TokenApprovalControl
+										// Both actions share one row under a reserved message slot, so neither moves as the approval changes.
+										renderActions={({ button, notice, noticeId }) => (
+											<>
+												<div className='tx-action-feedback reporting-approval-notice' aria-live='polite' aria-atomic='true'>
+													{notice === undefined || (notice === reportingApprovalGuard && effectiveReportDisabledReasonElementId !== undefined) ? undefined : <UserMessage id={noticeId} placement='field' detail={notice} />}
+												</div>
+												<div className='actions reporting-wallet-actions'>
+													{button}
+													{reportActionButton}
+												</div>
+											</>
+										)}
+										// An allowance that already covers the report keeps the approval in place, disabled as done.
+										completedLabel={reportingApprovalSatisfied ? commonCopy.approvalSatisfied : undefined}
+										showRequirementNotice={false}
+										actionLabel={reportingCopy.reportingApprovalAction}
+										allowanceError={undefined}
+										allowanceLoading={accountState.address !== undefined && effectiveReportingDetails !== undefined && effectiveReportingDetails.viewerWalletRepAllowanceAttoRep === undefined}
+										approvedAmount={effectiveReportingDetails?.viewerWalletRepAllowanceAttoRep}
+										disabled={reportControlsLocked}
+										guardMessage={reportingApprovalGuard}
+										// While a reason blocks both actions, the report's copy of it serves the whole region.
+										guardMessageElementId={reportingApprovalGuard === undefined ? undefined : effectiveReportDisabledReasonElementId}
+										onApprove={onApproveReportingRep}
+										pending={reportingActiveAction === 'approveReportingRep'}
+										pendingLabel={commonCopy.approvingRep}
+										requiredAmount={walletDepositAmount}
+										resetKey={`${effectiveReportingDetails?.securityPoolAddress ?? ''}:${selectedOutcome ?? ''}`}
+										tokenSymbol={commonCopy.rep}
+										tokenUnits={18}
 									/>
-								</div>
+								) : (
+									<div className='actions'>{reportActionButton}</div>
+								)}
+								<WalletActionFixReason actionButtonRef={reportActionButtonRef} availability={reportActionAvailability} id={settlementDisabledReasonId} visible={shouldRenderSharedReportSettlementDisabledReason}>
+									<UserMessage className='detail disabled-reason' id={settlementDisabledReasonId} loading={loadingReportingDetails} detail={sharedReportSettlementDisabledReason} />
+								</WalletActionFixReason>
 								<WalletActionFixReason actionButtonRef={reportActionButtonRef} availability={reportActionAvailability} id={reportDisabledReasonId} visible={standaloneReportDisabledReason !== undefined}>
 									<UserMessage className='detail disabled-reason' id={reportDisabledReasonId} loading={reportActionAvailability.loading === true} detail={standaloneReportDisabledReason} />
 								</WalletActionFixReason>
+								{reportOutcomeSelectionMessage === undefined ? undefined : <UserMessage id={reportDisabledReasonId} className='detail disabled-reason' detail={reportOutcomeSelectionMessage} />}
 							</div>
 						</>
 					)}

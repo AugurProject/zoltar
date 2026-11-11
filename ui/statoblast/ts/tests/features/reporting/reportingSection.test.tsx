@@ -285,8 +285,25 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = rendered.cleanup
 		const button = within(document.body).getByRole('button', { name: /Report Yes/ })
 		if (remaining > 60n) expectTransactionButtonEnabled(document.body, button.textContent ?? '')
-		else expectTransactionButtonDisabled(document.body, button.textContent ?? '', 'The response window ends too soon. Wait for the result before settling deposits.')
+		else expectTransactionButtonDisabled(document.body, button.textContent ?? '', 'The response window ends too soon to report. Wait for the result.')
 		expect(within(document.body).queryByText('Resolved as Yes.')).toBeNull()
+	})
+
+	test.each([0n, 60n, 61n])('stops the approval when the report it unlocks can no longer be sent (%s)', async remaining => {
+		const rendered = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					currentTimestamp: 1000n - remaining,
+					reportingDetails: createReportingDetails({ currentTime: 1000n - remaining, escalationEndTime: 1000n, viewerWalletRepAllowanceAttoRep: 0n, viewerWalletRepBalanceAttoRep: rep(10n) }),
+					reportingForm: createReportingForm({ selectedOutcome: 'yes', reportAmount: '5', contributionFunding: 'wallet' }),
+				}),
+			),
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const approval = within(document.body).getByRole('button', { name: /^Approve/ })
+		expect((approval as HTMLButtonElement).disabled).toBe(remaining <= 60n)
+		if (remaining <= 60n) expect(document.body.textContent?.split('The response window ends too soon to report.')).toHaveLength(2)
 	})
 
 	test('describes reporting timing with question terminology', () => {
@@ -379,6 +396,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = rendered.cleanup
 		expect(within(document.body).queryByRole('heading', { name: 'Your positions' })).toBeNull()
 		expect(document.body.textContent?.match(/Select an outcome side/g)).toHaveLength(1)
+		expect(document.body.querySelector('.reporting-shared-action-region')?.textContent).toContain('Select an outcome side')
 		expect(Array.from(document.querySelectorAll('p.detail')).some(element => element.textContent === '')).toBe(false)
 	})
 	test('shows nonzero tiny fork progress and grouped amounts', async () => {
@@ -520,7 +538,8 @@ describe('ReportingSection', () => {
 			})
 			expect(amountInput().value).toBe('225000')
 			expect(document.querySelector('.reporting-fork-trigger-warning')?.textContent).toContain('225\u00a0000 REP')
-			expectTransactionButtonEnabled(document.body, 'Approve 225 000 REP')
+			// The shared approval control abbreviates large approvals and keeps the exact amount in the button title.
+			expectTransactionButtonEnabled(document.body, 'Approve 225k REP')
 			const label = 'Report No & trigger fork · 225 000 REP…'
 			expectTransactionButtonDisabled(document.body, label, 'Confirm that this report triggers the universe fork and approve REP for this security pool before reporting.')
 			await act(() => {
@@ -922,16 +941,83 @@ describe('ReportingSection', () => {
 		expectTransactionButtonEnabled(document.body, 'Approve 5 REP')
 		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'Approve REP for this security pool before reporting.')
 		const reportButton = within(document.body).getByRole('button', { name: /^Report Yes ·/ })
+		const approvalButton = within(document.body).getByRole('button', { name: /^Approve [\d.]+ REP$/ })
 		const reportAction = reportButton.closest('.tx-action')
 		const actionRow = reportButton.closest('.actions')
 		const disabledReason = document.getElementById(reportButton.getAttribute('aria-describedby') ?? '')
-		expect(actionRow?.classList.contains('reporting-wallet-action-row')).toBe(true)
-		expect(Array.from(actionRow?.children ?? []).filter(child => child.classList.contains('tx-action'))).toHaveLength(2)
+		// The approval prerequisite sits before the report it unlocks, in the same action region.
+		expect(approvalButton.compareDocumentPosition(reportButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+		expect(approvalButton.closest('.reporting-shared-action-region')).toBe(reportButton.closest('.reporting-shared-action-region'))
 		expect(actionRow?.contains(disabledReason)).toBe(false)
 		expect(reportAction?.contains(disabledReason)).toBe(false)
 		expect(reportButton.closest('.reporting-shared-action-region')?.contains(disabledReason)).toBe(true)
 		fireEvent.click(within(document.body).getByRole('button', { name: /^Approve [\d.]+ REP$/ }))
 		expect(approvalCalls).toBe(1)
+	})
+
+	test('states the missing report amount, and a lock still takes priority over it', async () => {
+		const details = createReportingDetails({ contributionFunding: 'wallet', viewerWalletRepAllowanceAttoRep: 0n, viewerWalletRepBalanceAttoRep: rep(10n) })
+		const form = createReportingForm({ reportAmount: '', selectedOutcome: 'yes' })
+		const missing = await renderIntoDocument(<ReportingSectionHarness initialProps={{ reportingDetails: details, reportingForm: form }} />)
+		expect(document.body.querySelector('.reporting-shared-action-region')?.textContent).toContain('Enter a report amount.')
+		await missing.cleanup()
+		const locked = await renderIntoDocument(<ReportingSectionHarness initialProps={{ lockedReason: 'Reporting opens after market end.', reportingDetails: details, reportingForm: form }} />)
+		cleanupRenderedComponent = locked.cleanup
+		expect(document.body.textContent).toContain('Reporting opens after market end.')
+		expect(document.body.textContent).not.toContain('Enter a report amount.')
+		const approvalAmount = document.body.querySelector('.approval-amount-field input')
+		if (!(approvalAmount instanceof HTMLInputElement)) throw new Error('Expected the approval amount field')
+		expect(approvalAmount.disabled).toBe(true)
+	})
+
+	test('keeps approval messages out of the way of the wallet-report actions', async () => {
+		const rendered = await renderIntoDocument(
+			<ReportingSectionHarness
+				initialProps={{
+					reportingDetails: createReportingDetails({ contributionFunding: 'wallet', viewerWalletRepAllowanceAttoRep: 0n, viewerWalletRepBalanceAttoRep: rep(10n) }),
+					reportingForm: createReportingForm({ reportAmount: '5', selectedOutcome: 'yes' }),
+				}}
+			/>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const approvalAmount = document.body.querySelector('.approval-amount-field input')
+		if (!(approvalAmount instanceof HTMLInputElement)) throw new Error('Expected the approval amount field')
+		await act(async () => {
+			fireEvent.input(approvalAmount, { target: { value: '1' } })
+		})
+		const reportButton = within(document.body).getByRole('button', { name: reportingButtonLabel('Yes') })
+		const approvalButton = within(document.body).getByRole('button', { name: /^Approve 1\sREP$/ })
+		const row = reportButton.closest('.reporting-wallet-actions')
+		expect(row).not.toBeNull()
+		expect(approvalButton.closest('.reporting-wallet-actions')).toBe(row)
+		const slot = row?.previousElementSibling
+		expect(slot?.classList.contains('tx-action-feedback')).toBe(true)
+		expect(slot?.textContent?.replaceAll('\u00a0', ' ')).toContain('more REP needed')
+	})
+
+	test('approves a custom wallet REP amount through the shared approval control', async () => {
+		const approvedAmounts: Array<bigint | undefined> = []
+		const rendered = await renderIntoDocument(
+			<ReportingSectionHarness
+				initialProps={{
+					onApproveReportingRep: amount => {
+						approvedAmounts.push(amount)
+					},
+					reportingDetails: createReportingDetails({ contributionFunding: 'wallet', viewerWalletRepAllowanceAttoRep: 0n, viewerWalletRepBalanceAttoRep: rep(10n) }),
+					reportingForm: createReportingForm({ reportAmount: '5', selectedOutcome: 'yes' }),
+				}}
+			/>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const approvalAmount = document.body.querySelector('.approval-amount-field input')
+		if (!(approvalAmount instanceof HTMLInputElement)) throw new Error('Expected the approval amount field')
+		await act(async () => {
+			fireEvent.input(approvalAmount, { target: { value: '8' } })
+		})
+		await act(async () => {
+			fireEvent.click(within(document.body).getByRole('button', { name: /^Approve 8\sREP$/ }))
+		})
+		expect(approvedAmounts).toEqual([rep(8n)])
 	})
 
 	test('preserves the wallet-report action positions after REP approval', async () => {
@@ -2751,8 +2837,12 @@ describe('ReportingSection', () => {
 			)
 			cleanupRenderedComponent = rendered.cleanup
 			expect(within(document.body).getAllByRole('button', { name: 'Switch to Sepolia' })).toHaveLength(1)
-			expectWalletFixDescribesAction(document.body, 'Approve 5 REP', 'Switch to Sepolia')
+			expectWalletFixDescribesAction(document.body, 'Approve REP', 'Switch to Sepolia')
 			expectWalletFixDescribesAction(document.body, reportingButtonLabel('Yes'), 'Switch to Sepolia')
+			// The fix sits with the actions it unlocks, after both of them.
+			const switchButton = within(document.body).getByRole('button', { name: 'Switch to Sepolia' })
+			const reportButton = within(document.body).getByRole('button', { name: reportingButtonLabel('Yes') })
+			expect(reportButton.compareDocumentPosition(switchButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 		})
 
 		test('returns focus to the report action once the connect fix unblocks it', async () => {

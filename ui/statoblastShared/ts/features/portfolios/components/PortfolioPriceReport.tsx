@@ -1,3 +1,4 @@
+import { useId } from 'preact/hooks'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
@@ -9,14 +10,17 @@ import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApp
 import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
 import { PortfolioButton, PortfolioInput } from './PortfolioControls.js'
 import { usePortfolioPrice, type PortfolioPriceParameters } from '../hooks/usePortfolioPrice.js'
+import { getPortfolioPriceWarning } from '../lib/priceWarning.js'
 import * as copy from '../../../copy/portfolioPrice.js'
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
 
 export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 	const model = usePortfolioPrice(parameters)
+	const priceWarningId = useId()
 	const observation = model.snapshot?.observation
 	const disabled = parameters.actions.busy !== undefined
 	const report = model.report
+	const priceWarning = getPortfolioPriceWarning(model.proposedPrice, model.comparisonPrice)
 	let reportStatus: string | undefined
 	if (report !== undefined) {
 		reportStatus = copy.states.pending
@@ -45,7 +49,12 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 			</MetricGrid>
 			<PortfolioButton model={parameters.actions} action='preparePortfolioPrice' label={copy.prepare} pendingLabel={copy.preparing} reason={model.prepareReason} onClick={model.prepare} />
 			<MetricGrid>
-				<PortfolioInput label={copy.price} value={model.priceInput} onChange={model.setPrice} disabled={disabled} numeric />
+				<div className='initial-price-input'>
+					<PortfolioInput label={copy.price} value={model.priceInput} onChange={model.setPrice} disabled={disabled} numeric describedBy={priceWarning === undefined ? undefined : priceWarningId} />
+					<div aria-live='polite' className='field-error-live-region'>
+						{priceWarning === undefined ? undefined : <UserMessage id={priceWarningId} placement='field' tone='warning' detail={priceWarning} />}
+					</div>
+				</div>
 				<PortfolioInput label={copy.weth} hint={copy.wethHint} value={model.wethInput} onChange={model.setWeth} disabled={disabled} numeric />
 				<MetricField label={copy.minimumWeth} loading={model.loading}>
 					<CurrencyValue value={model.minimumWethAttoEth} suffix={common.weth} />

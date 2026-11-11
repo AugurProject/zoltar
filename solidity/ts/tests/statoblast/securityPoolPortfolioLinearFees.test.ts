@@ -7,10 +7,11 @@ import {
 	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
 } from '../../types/contractArtifact'
-import { loadPortfolioCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { loadPortfolioCapitalSnapshot, loadPortfolioClaimableEarnings } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/statoblast'
+import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 describe('Statoblast: central question fees and vested capital earnings', () => {
@@ -69,6 +70,24 @@ describe('Statoblast: central question fees and vested capital earnings', () => 
 		expect(after.outcomeSupplyAttoShares).toBe(initial.outcomeSupplyAttoShares)
 		expect(after.feePrincipalAttoEth).toBeGreaterThanOrEqual(initial.feePrincipalAttoEth - 2n)
 		expect(after.feePrincipalAttoEth).toBeLessThanOrEqual(initial.feePrincipalAttoEth + 2n)
+	})
+
+	test('a read-only checkpoint shows passive earnings the ledger has not credited yet, and claiming pays them', async () => {
+		await fixture.prepare()
+		await fixture.mint(100n * unit)
+		await fixture.base.mockWindow.advanceTime(100n)
+		const client = fixture.owner()
+		const owner = client.account.address
+		const credited = await loadPortfolioCapitalSnapshot({ client, owner, portfolio: fixture.portfolio })
+		expect(credited.accruedFeesAttoEth).toBe(0n)
+		const claimable = await loadPortfolioClaimableEarnings(credited, async (contracts, blockNumber) => await client.multicall({ contracts, allowFailure: false, blockNumber, multicallAddress: getInfraContractAddresses().multicall3 }))
+		expect(claimable.attoEth).toBeGreaterThan(0n)
+		const balanceBefore = await client.getBalance({ address: owner })
+		const receipt = await client.waitForTransactionReceipt({ hash: await writeContractAndWait(client, () => client.writeContract({ ...capital(), functionName: 'claimEarnings' })) })
+		if (receipt.effectiveGasPrice === undefined) throw new Error('The claim receipt has no gas price.')
+		const received = (await client.getBalance({ address: owner })) - balanceBefore + receipt.gasUsed * receipt.effectiveGasPrice
+		// The claim runs a moment after the preview, so it can only have earned more.
+		expect(received).toBeGreaterThanOrEqual(claimable.attoEth)
 	})
 
 	test('new deposits do not capture old earnings and stale time stops charging outcome holders', async () => {

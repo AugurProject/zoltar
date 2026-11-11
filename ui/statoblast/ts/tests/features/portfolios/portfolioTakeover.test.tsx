@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { decodeFunctionData, getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -62,4 +63,69 @@ test('manual takeover requires all consent bounds and rejects a changed price be
 	})
 	await waitFor(() => expect(view.container.textContent).toContain('Not started'))
 	expect(button.disabled).toBe(true)
+})
+
+test('entering another target clears the bounds typed for the previous position but a new block keeps them', async () => {
+	const snapshot = capitalSnapshot({ totalCommitmentAttoEth: 20n * unit, demandAttoEth: 20n * unit })
+	const reader = capitalClient(snapshot)
+	reader.setRead('accountOf', { owner: getAddress('0x0000000000000000000000000000000000000099'), batch: 0n, rep: 15n * unit, commitment: 10n * unit, maxHealthyPrice: unit, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 0n }, index)
+	reader.setRead('liquidationStarted', 1n, capital)
+	reader.setRead('acceptedPriceEpoch', 4n, capital)
+	reader.install()
+	const actions = { ownerReason: undefined, scope: undefined, busy: undefined, runPortfolioAction: async () => undefined }
+	const view = await renderIntoDocument(<PortfolioTakeover model={{ snapshot }} actions={actions} />)
+	lifecycle.trackRendered(view)
+	const button = view.container.querySelector('button')
+	if (button === null) throw new Error('Missing takeover button')
+	const fields = Array.from(view.container.querySelectorAll('input'))
+	const fill = async (field: HTMLInputElement | undefined, value: string) => {
+		if (field === undefined) throw new Error('Missing takeover field')
+		await act(() => {
+			field.value = value
+			field.dispatchEvent(new Event('input', { bubbles: true }))
+		})
+	}
+	for (const [offset, value] of ['2', '10', '1', '20', '200', '100'].entries()) await fill(fields[offset], value)
+	await waitFor(() => expect(button.disabled).toBe(false))
+	await act(() => render(<PortfolioTakeover model={{ snapshot: { ...snapshot, blockHash: `0x${'ab'.repeat(32)}` } }} actions={actions} />, view.container))
+	expect(fields.slice(1).map(field => field.value)).toEqual(['10', '1', '20', '200', '100'])
+	await fill(fields[0], '3')
+	await waitFor(() => expect(fields.slice(1).map(field => field.value)).toEqual(['', '', '', '', '']))
+	await waitFor(() => expect(button.disabled).toBe(true))
+	for (const [offset, value] of ['10', '1', '20', '200', '100'].entries()) await fill(fields[offset + 1], value)
+	await act(() => render(<PortfolioTakeover model={{ snapshot: { ...snapshot, capitalLedger: getAddress('0x0000000000000000000000000000000000000abc') } }} actions={actions} />, view.container))
+	await waitFor(() => expect(fields.slice(1).map(field => field.value)).toEqual(['', '', '', '', '']))
+	expect(fields[0]?.value).toBe('3')
+})
+
+test('bounds outlive a snapshot reload and a first target, and clear when an ID is retyped as another', async () => {
+	const snapshot = capitalSnapshot({ totalCommitmentAttoEth: 20n * unit, demandAttoEth: 20n * unit })
+	const reader = capitalClient(snapshot)
+	reader.setRead('accountOf', { owner: getAddress('0x0000000000000000000000000000000000000099'), batch: 0n, rep: 15n * unit, commitment: 10n * unit, maxHealthyPrice: unit, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 0n }, index)
+	reader.setRead('liquidationStarted', 1n, capital)
+	reader.setRead('acceptedPriceEpoch', 4n, capital)
+	reader.install()
+	const actions = { ownerReason: undefined, scope: undefined, busy: undefined, runPortfolioAction: async () => undefined }
+	const view = await renderIntoDocument(<PortfolioTakeover model={{ snapshot }} actions={actions} />)
+	lifecycle.trackRendered(view)
+	const fields = Array.from(view.container.querySelectorAll('input'))
+	const fill = async (field: HTMLInputElement | undefined, value: string) => {
+		if (field === undefined) throw new Error('Missing takeover field')
+		await act(() => {
+			field.value = value
+			field.dispatchEvent(new Event('input', { bubbles: true }))
+		})
+	}
+	const bounds = () => fields.slice(1).map(field => field.value)
+	const typed = ['10', '1', '20', '200', '100']
+	for (const [offset, value] of typed.entries()) await fill(fields[offset + 1], value)
+	await fill(fields[0], '5')
+	expect(bounds()).toEqual(typed)
+	await act(() => render(<PortfolioTakeover model={{ snapshot: undefined }} actions={actions} />, view.container))
+	await act(() => render(<PortfolioTakeover model={{ snapshot }} actions={actions} />, view.container))
+	expect(bounds()).toEqual(typed)
+	await fill(fields[0], '')
+	expect(bounds()).toEqual(typed)
+	await fill(fields[0], '6')
+	await waitFor(() => expect(bounds()).toEqual(['', '', '', '', '']))
 })

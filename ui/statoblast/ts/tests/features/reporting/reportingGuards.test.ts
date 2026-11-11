@@ -32,6 +32,11 @@ describe('reporting guards', () => {
 	test.each<{ expected: string; name: string; overrides: Partial<ReportGuardInput> }>([
 		{ expected: 'Connect a wallet before reporting on a question.', name: 'without a connected wallet', overrides: { accountAddress: undefined } },
 		{ expected: 'Select an outcome side before reporting on a question.', name: 'without a selected outcome', overrides: { actualDepositAmount: undefined, selectedOutcome: undefined } },
+		{ expected: 'Enter a report amount.', name: 'with an empty report amount', overrides: { reportAmount: '  ', selectedAmount: undefined } },
+		{ expected: 'Enter a report amount.', name: 'with a zero report amount', overrides: { reportAmount: '0', selectedAmount: 0n } },
+		{ expected: 'Enter a report amount.', name: 'with an unreadable report amount', overrides: { reportAmount: 'abc', selectedAmount: undefined } },
+		{ expected: 'Select an outcome side before reporting on a question.', name: 'asking for the outcome before the amount', overrides: { reportAmount: '', selectedAmount: undefined, selectedOutcome: undefined } },
+		{ expected: 'Connect a wallet before reporting on a question.', name: 'asking for the wallet before the amount', overrides: { accountAddress: undefined, reportAmount: '', selectedAmount: undefined } },
 		{ expected: 'Loading reporting details…', name: 'while reporting details are missing', overrides: { reportingStatus: 'missing' } },
 		{
 			expected: 'Add 3\u00a0more\u00a0REP to this wallet before reporting.',

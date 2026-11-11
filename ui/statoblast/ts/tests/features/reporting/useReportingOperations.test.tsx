@@ -502,7 +502,7 @@ describe('useReportingOperations', () => {
 		}
 	})
 
-	test('onApproveReportingRep approves the accepted contribution amount for an active ordinary game', async () => {
+	test.each([undefined, 8n * ATTO_REP])('onApproveReportingRep approves the chosen amount, or the accepted contribution by default, for an active ordinary game (%s)', async chosenAmount => {
 		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d3')
 		const walletFundingDetails = createReportingDetails(securityPoolAddress, {
 			contributionFunding: 'wallet',
@@ -542,12 +542,34 @@ describe('useReportingOperations', () => {
 			requireHookState(hookState).setReportingForm(current => ({ ...current, reportAmount: '5', securityPoolAddress, selectedOutcome: 'yes' }))
 		})
 		await act(async () => {
-			await requireHookState(hookState).onApproveReportingRep()
+			await requireHookState(hookState).onApproveReportingRep(chosenAmount)
 		})
 
 		expect(approveReportingRep).toHaveBeenCalledTimes(1)
-		expect(approveReportingRep.mock.calls[0]?.[4]).toBe(5n * ATTO_REP)
+		expect(approveReportingRep.mock.calls[0]?.[4]).toBe(chosenAmount ?? 5n * ATTO_REP)
 		expect(requireHookState(hookState).reportingResult?.action).toBe('approveReportingRep')
+	})
+
+	test('onApproveReportingRep rejects an amount that does not raise the allowance', async () => {
+		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d4')
+		const details = createReportingDetails(securityPoolAddress, { contributionFunding: 'wallet', nonDecisionThresholdAttoRep: 20n * ATTO_REP, viewerWalletRepAllowanceAttoRep: 3n * ATTO_REP, viewerWalletRepBalanceAttoRep: 10n * ATTO_REP })
+		const approveReportingRep = mock(async () => {
+			throw new Error('Must not approve')
+		})
+		let state: UseReportingOperationsState | undefined
+		const Harness = createHarness(
+			useReportingOperations,
+			next => {
+				state = next
+			},
+			createReportingOperationsDependencies({ approveReportingRep, loadReportingDetails: mock(async () => details) }),
+		)
+		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
+		await act(() => requireHookState(state).setReportingForm(current => ({ ...current, reportAmount: '5', securityPoolAddress, selectedOutcome: 'yes' })))
+		await act(async () => await requireHookState(state).onApproveReportingRep(2n * ATTO_REP))
+		expect(approveReportingRep).not.toHaveBeenCalled()
+		const detail = requireHookState(state).reportingFeedback?.status.detail
+		expect(typeof detail === 'string' ? detail.replaceAll('\u00a0', ' ') : detail).toContain('Already approved 3')
 	})
 
 	test('withdrawEscalation validates requested deposit indexes against the provided outcome', async () => {

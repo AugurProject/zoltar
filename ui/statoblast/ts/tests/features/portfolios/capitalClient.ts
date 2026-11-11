@@ -37,6 +37,7 @@ export function capitalClient(initial = capitalSnapshot()) {
 	const overrides: Record<string, unknown> = {}
 	const scopedOverrides = new Map<string, unknown>()
 	const reads: { name: string; args: readonly unknown[] | undefined; blockNumber: bigint | undefined }[] = []
+	const multicallBlocks: (bigint | undefined)[] = []
 	const codes = new Map<Address, Hex>([
 		[portfolio, getSecurityPoolPortfolioRuntimeCode()],
 		[capital, `0x${capitalArtifact.evm.deployedBytecode.object}`],
@@ -59,6 +60,7 @@ export function capitalClient(initial = capitalSnapshot()) {
 			request.contracts.map(contract => {
 				const name = getContractFunctionName(contract)
 				if (!(name in overrides)) throw new Error(`Unexpected capital multicall ${name}`)
+				multicallBlocks.push(request.blockNumber)
 				return overrides[name]
 			}),
 		),
@@ -155,6 +157,7 @@ export function capitalClient(initial = capitalSnapshot()) {
 		backend,
 		reads,
 		codes,
+		multicallBlocks,
 		setRead: (name: string, value: unknown, address?: Address) => {
 			if (address === undefined) overrides[name] = value
 			else scopedOverrides.set(`${address}:${name}`, value)
