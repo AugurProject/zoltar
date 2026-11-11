@@ -144,13 +144,13 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/SecurityPool.sol': '9dacc34dd469b2f6dce254c4024d2e6dd2b11878c6b9c9b7dfc80e85d7a7640d',
 	'solidity/contracts/statoblast/SecurityPoolForker.sol': 'dc42ece125303c4b34ec5b06f287d70376743ec0cad2ff373877746ac29bb106',
-	'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol': 'd8649cae721cc77c1a639e6ab03cc7faa64a0b9d7d80a9eba1ef940bf4df0681',
+	'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol': '814d03c9e5a33ecb7a4c16e495470c17bee1111f7c15c0ffea19f424e72636ec',
 	'solidity/contracts/statoblast/tokens/ERC1155.sol': '7bb87695bc3df8fa177c545209ed58d2e4571c19c869b5598bb0a829e764b218',
 	'solidity/contracts/statoblast/tokens/ShareToken.sol': '68c370c22a6da29cf139846ea2fdf86f9922027ee6d46e2618de0dcdb7bc5e5f',
 	'solidity/contracts/vendor/authorization/ERC20Authorization.sol': '6bfae34f9210ed80f176774eb2b5a3624060ce4be34825ca84949ddcfb8024d2',
 }
 export const readDeclarationExclusionsBySource: Record<string, string[]> = {
-	'solidity/contracts/statoblast/tokens/ShareToken.sol': ['forkController', 'forkLogicalTime', 'settlement'],
+	'solidity/contracts/statoblast/tokens/ShareToken.sol': ['forkController', 'forkPortfolioTime', 'settlement'],
 	'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol': ['securityPool', 'securityPoolForker', 'systemState', 'forkData'],
 	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': ['storedGame', 'disputeHistory'],
 	'solidity/contracts/statoblast/SecurityPool.sol': ['eventEmitter', 'factory', 'operationsDelegate'],

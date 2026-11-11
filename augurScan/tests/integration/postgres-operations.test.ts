@@ -273,7 +273,7 @@ const expectSnapshotsAndIndexedPlans = async ({ database, operationsChainId, ora
 	const explainQueries = [
 		database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM open_oracle_report_events WHERE chain_id = ${operationsChainId} AND open_oracle_address = ${oracle.toLowerCase()} AND report_id = 7 AND canonical ORDER BY block_number DESC, log_index DESC, tx_hash DESC LIMIT 100`,
 		database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM escalation_game_events WHERE chain_id = ${operationsChainId} AND game_address = ${oracle.toLowerCase()} AND canonical ORDER BY block_number DESC, log_index DESC, tx_hash DESC LIMIT 100`,
-		database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM truth_auction_events WHERE chain_id = ${operationsChainId} AND auction_address = ${oracle.toLowerCase()} AND canonical ORDER BY block_number DESC, log_index DESC, tx_hash DESC LIMIT 100`,
+		database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM collateral_repair_auction_events WHERE chain_id = ${operationsChainId} AND auction_address = ${oracle.toLowerCase()} AND canonical ORDER BY block_number DESC, log_index DESC, tx_hash DESC LIMIT 100`,
 		database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM protocol_timeline_entries WHERE chain_id = ${operationsChainId} AND entity_type = 'open-oracle-report' AND entity_identity = ${`${oracle.toLowerCase()}:7`} AND canonical ORDER BY block_number DESC, log_index DESC, tx_hash DESC LIMIT 100`,
 		database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM amm_trade_events WHERE chain_id = ${operationsChainId} AND market_address = ${oracle.toLowerCase()} AND canonical ORDER BY block_number, log_index, tx_hash LIMIT 100`,
 		database.sql`EXPLAIN (FORMAT JSON) SELECT * FROM fork_migration_events WHERE chain_id = ${operationsChainId} AND universe_identity = '7' AND canonical ORDER BY block_number DESC, log_index DESC, tx_hash DESC LIMIT 100`,
@@ -330,7 +330,7 @@ const expectManifestResetRetention = async ({ database, operationsChainId, netwo
 						(SELECT count(*) FROM pool_state_events WHERE chain_id = ${operationsChainId})::integer AS pool_events,
 						(SELECT count(*) FROM vault_snapshots WHERE chain_id = ${operationsChainId})::integer AS vaults,
 						(SELECT count(*) FROM escalation_game_events WHERE chain_id = ${operationsChainId})::integer AS escalations,
-						(SELECT count(*) FROM truth_auction_events WHERE chain_id = ${operationsChainId})::integer AS auctions
+						(SELECT count(*) FROM collateral_repair_auction_events WHERE chain_id = ${operationsChainId})::integer AS auctions
 				`
 	expect(clearedDerivedRows[0]).toEqual({ pools: 0, pool_events: 0, vaults: 0, escalations: 0, auctions: 0 })
 	const resampleTargets = await database.stateSnapshotTargets(operationsChainId, 1n, 1_000)

@@ -39,8 +39,8 @@ const questionCreatedLog = log('QuestionCreated', {
 
 describe('state projections', () => {
 	test('projects portfolio question accounting without standalone vault fields', () => {
-		const projections = projectionsFrom(log('QuestionAccountingCheckpoint', { reason: 2, settlementCollateralAttoEth: 100n.toString(), shareTokenSupplyAttoShares: 200n.toString(), lastUpdatedFeeAccumulator: '300' }))
-		expect(projections).toContainEqual({ type: 'poolState', poolAddress: pool.toLowerCase(), eventName: 'QuestionAccountingCheckpoint', state: { settlementCollateralAttoEth: 100n.toString(), shareTokenSupplyAttoShares: 200n.toString(), lastUpdatedFeeAccumulator: '300' } })
+		const projections = projectionsFrom(log('QuestionAccountingCheckpoint', { reason: 2, settlementCollateralAttoEth: 100n.toString(), shareTokenSupplyAttoShares: 200n.toString(), lastSettlementPortfolioTime: '300' }))
+		expect(projections).toContainEqual({ type: 'poolState', poolAddress: pool.toLowerCase(), eventName: 'QuestionAccountingCheckpoint', state: { settlementCollateralAttoEth: 100n.toString(), shareTokenSupplyAttoShares: 200n.toString(), lastSettlementPortfolioTime: '300' } })
 	})
 
 	test('captures immutable question metadata', () => {
@@ -59,7 +59,7 @@ describe('state projections', () => {
 				parent: '0x0000000000000000000000000000000000000000',
 				universeId: '0',
 				questionId: '42',
-				truthAuction: '0x0000000000000000000000000000000000000000',
+				collateralRepairAuction: '0x0000000000000000000000000000000000000000',
 				openOraclePriceCoordinator: vault,
 				shareToken: vault,
 				statoblastSecurityMultiplierBps: '15000',
@@ -83,7 +83,7 @@ describe('state projections', () => {
 				feeIndexRemainder: '1',
 				totalFeesOwedRemainder: '2',
 				uncheckpointedFeeEligibleUnderwritingLimitAttoEth: atomic(4n),
-				lastUpdatedFeeAccumulator: '2000',
+				lastSettlementPortfolioTime: '2000',
 				currentRetentionRate: '999999000000000000',
 			}),
 		)

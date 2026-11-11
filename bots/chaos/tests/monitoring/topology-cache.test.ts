@@ -89,7 +89,7 @@ function cache(questionCount = 2): CanonicalImmutableTopologyCache {
 				questionId: '1',
 				securityPool: pool,
 				shareToken: address(22),
-				truthAuction: address(23),
+				collateralRepairAuction: address(23),
 				universeId: '0',
 			},
 		],

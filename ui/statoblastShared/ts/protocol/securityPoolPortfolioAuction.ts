@@ -184,14 +184,14 @@ async function verifyAuctionCapitalCustody(client: ReadClient, portfolio: Addres
 	const modules = [
 		{ value: lifecycle, artifact: lifecycleArtifact, label: 'capital lifecycle delegate', getter: 'ledger', authority: capitalLedger },
 		{ value: auctionDelegate, artifact: auctionDelegateArtifact, label: 'capital auction delegate', getter: 'ledger', authority: capitalLedger },
-		{ value: index, artifact: indexArtifact, label: 'commitment index', getter: 'portfolio', authority: capitalLedger },
-		{ value: fees, artifact: feesArtifact, label: 'capital fee streams', getter: 'portfolio', authority: capitalLedger },
+		{ value: index, artifact: indexArtifact, label: 'commitment index', getter: 'capitalLedger', authority: capitalLedger },
+		{ value: fees, artifact: feesArtifact, label: 'capital fee streams', getter: 'capitalLedger', authority: capitalLedger },
 		{ value: portfolioServices, artifact: servicesArtifact, label: 'portfolio services', getter: 'portfolio', authority: portfolio },
 	]
 	await Promise.all(
 		modules.map(async module => {
 			const address = requireAddressValue(module.value, module.label)
-			const [code, authority] = await Promise.all([client.getCode({ address, blockNumber }), read(address, module.getter)])
+			const [code, authority] = await Promise.all([client.getCode({ address, blockNumber }), client.readContract({ abi: module.artifact.abi, address, functionName: module.getter, blockNumber })])
 			verifyRuntimeCode(code, `0x${module.artifact.evm.deployedBytecode.object}`, module.artifact.evm.deployedBytecode.immutableReferences, module.label)
 			if (getAddress(requireAddressValue(authority, 'custody module authority')) !== getAddress(module.authority)) throw new Error(`${module.label} belongs to another authority.`)
 		}),

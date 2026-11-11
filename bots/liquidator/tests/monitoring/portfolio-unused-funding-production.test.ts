@@ -4,7 +4,7 @@ import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { mainnet } from '@zoltar/core-shared/evm/ethereum'
 import { securityPoolCapitalLedgerAbi as capitalAbi, erc20Abi } from '@zoltar/bot-shared/contracts/abi'
 import { useSecurityPoolPortfolioFixture, unit } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioFixture'
-import { preparePortfolioTruthAuction } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioTruthAuctionFixture'
+import { preparePortfolioCollateralRepairAuction } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioCollateralRepairAuctionFixture'
 import { getInfraContractAddresses } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
 import { getZoltarAddress } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
 import { createWriteClient, writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients'
@@ -19,7 +19,7 @@ import { serveMockChainRpc } from '../support/mock-chain-rpc.ts'
 describe('portfolio abandoned funding integration', () => {
 	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
 	test('a restarted keeper returns only its journaled funding after the original target becomes healthy', async () => {
-		const context = await preparePortfolioTruthAuction(fixture)
+		const context = await preparePortfolioCollateralRepairAuction(fixture)
 		await context.report()
 		await context.open()
 		// Set purchased collateral explicitly so the later price makes these

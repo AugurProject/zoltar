@@ -337,7 +337,7 @@ export const isPoolStateEntityValue = (value: unknown): boolean =>
 		'parent_address',
 		'universe_id',
 		'question_id',
-		'truth_auction_address',
+		'collateral_repair_auction_address',
 		'coordinator_address',
 		'share_token_address',
 		'security_multiplier_bps',

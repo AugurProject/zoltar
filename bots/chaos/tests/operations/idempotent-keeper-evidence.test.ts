@@ -20,7 +20,7 @@ function dueFeeSnapshot() {
 	const question = snapshot.questions[0]
 	if (pool === undefined || question === undefined) throw new Error('Statoblast fixture is incomplete')
 	question.endTime = (BigInt(snapshot.anchor.timestamp) + 100n).toString()
-	pool.lastUpdatedFeeAccumulator = (BigInt(snapshot.anchor.timestamp) - 10n).toString()
+	pool.lastSettlementPortfolioTime = (BigInt(snapshot.anchor.timestamp) - 10n).toString()
 	return snapshot
 }
 
@@ -58,11 +58,11 @@ describe('idempotent Statoblast keeper evidence', () => {
 			if (step === undefined) throw new Error(`${definitionId} is missing its keeper step`)
 			expect(step.evidence).toEqual([
 				{
-					abi: 'function lastUpdatedFeeAccumulator() view returns (uint256)',
+					abi: 'function lastSettlementPortfolioTime() view returns (uint256)',
 					args: [],
 					contract: pool.address,
 					expected: snapshot.anchor.timestamp,
-					functionName: 'lastUpdatedFeeAccumulator',
+					functionName: 'lastSettlementPortfolioTime',
 					kind: 'storage-postcondition',
 					relation: 'at-least',
 				},

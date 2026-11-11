@@ -5,7 +5,7 @@ export const forkEscalationContractReferences: ContractReference[] = [
 		name: 'SecurityPoolForker',
 		purpose: 'Routes shared-portfolio question forks and lazy child question preparation.',
 		readAbiFingerprint: '7475fe46e1c2bea5d49502837b2be814dee961b5123cc54df72d8e172bd00691',
-		readSurface: '`zoltar` identifies the protocol root. `getQuestionOutcome` returns the fixed or finalized question outcome, or None while unresolved; the shared logical clock protects pre-fork final claims.',
+		readSurface: '`zoltar` identifies the protocol root. `getQuestionOutcome` returns the fixed or finalized question outcome, or None while unresolved; the shared portfolio clock protects pre-fork final claims.',
 		readDeclarations: [
 			{
 				name: 'getQuestionOutcome',
@@ -37,7 +37,7 @@ export const forkEscalationContractReferences: ContractReference[] = [
 				call: '`materializePortfolioQuestion(source, targetUniverse)`',
 				caller: 'Anyone',
 				effect:
-					'Prepares the target if absent. With inherited reporting, installs one outcome of the fixed 64-peak snapshot per call; the third call activates the question and resumes reporting at the fixed logical-clock anchor. Without reporter history, activates immediately. Late installation does not postpone finality. An already-final game must agree with the inherited reporter and outstanding-share settlement deadlines, including the minimum response period, or activation reverts. Preparation may be a separate transaction to bound deployment gas.',
+					'Prepares the target if absent. With inherited reporting, installs one outcome of the fixed 64-peak snapshot per call; the third call activates the question and resumes reporting at the fixed portfolio time anchor. Without reporter history, activates immediately. Late installation does not postpone finality. An already-final game must agree with the inherited reporter and outstanding-share settlement deadlines, including the minimum response period, or activation reverts. Preparation may be a separate transaction to bound deployment gas.',
 				declarations: [
 					{
 						name: 'materializePortfolioQuestion',

@@ -164,7 +164,7 @@ describe('Statoblast: auction position materialization preserves cohort history'
 		await writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address, functionName: 'importPosition', args: [owner(1), 100n, 10n, 10n, 0n, 0n] }))
 		await expect(split(1n, 50n, 5n)).rejects.toThrow('Commitment imports are open')
 		await writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address, functionName: 'sealImports' }))
-		await expect(writeContractAndWait(outsider, () => outsider.writeContract({ abi: artifact.abi, address, functionName: 'splitAuctionPosition', args: [1n, owner(2), 50n, 5n] }))).rejects.toThrow('Only portfolio')
+		await expect(writeContractAndWait(outsider, () => outsider.writeContract({ abi: artifact.abi, address, functionName: 'splitAuctionPosition', args: [1n, owner(2), 50n, 5n] }))).rejects.toThrow('Only capital ledger')
 		await expect(split(99n, 50n, 5n)).rejects.toThrow('Unknown commitment position')
 		await expect(split(1n, 0n, 5n)).rejects.toThrow('Invalid auction commitment split')
 		await expect(split(1n, 50n, 0n)).rejects.toThrow('Invalid auction commitment split')

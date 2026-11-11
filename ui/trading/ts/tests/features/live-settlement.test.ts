@@ -109,7 +109,7 @@ function activeFeeValuation(unit: bigint, rate = unit / 1000n) {
 			totalUnderwritingLimitAttoEth: unit,
 			feeEligibleUnderwritingLimitAttoEth: unit,
 			currentRetentionRate: unit,
-			lastUpdatedFeeAccumulator: 1n,
+			lastFeeCheckpointNativeTime: 1n,
 			feeIndexRemainder: 0n,
 			totalFeesOwedRemainder: 0n,
 			centralSettlement: true,

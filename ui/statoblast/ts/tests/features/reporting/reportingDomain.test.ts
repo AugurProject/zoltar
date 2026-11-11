@@ -189,7 +189,7 @@ describe('reportingDomain', () => {
 
 	test.each([
 		{ name: 'until pool-level question finalization', overrides: { questionOutcome: 'none' } },
-		{ name: 'when a child outcome is known before the pool becomes operational', overrides: { questionOutcome: 'yes', systemState: 'forkTruthAuction' } },
+		{ name: 'when a child outcome is known before the pool becomes operational', overrides: { questionOutcome: 'yes', systemState: 'forkCollateralRepairAuction' } },
 	] satisfies { name: string; overrides: Partial<ActiveReportingDetails> }[])('getImportedEscalationDepositClaimAmount stays pending $name', ({ overrides }) => {
 		const importedDeposit = { amountAttoRep: rep(2n), cumulativeAmountAttoRep: rep(1n), depositor: zeroAddress, parentDepositIndex: 7n }
 		const details = createReportingDetails({
