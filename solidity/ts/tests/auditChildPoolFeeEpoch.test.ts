@@ -57,7 +57,7 @@ describe('Shared portfolio child fee clock', () => {
 		const clock = await owner.readContract({ ...fork, functionName: 'clocks', args: [child] })
 		expect(clock[0]).toBe(forkTime)
 		expect(clock[1]).toBe(forkTime + 63n * DAY)
-		expect(await owner.readContract({ ...fork, functionName: 'logicalTime', args: [child] })).toBe((await owner.getBlock()).timestamp - 63n * DAY)
+		expect(await owner.readContract({ ...fork, functionName: 'portfolioTime', args: [child] })).toBe((await owner.getBlock()).timestamp - 63n * DAY)
 		const engine = await owner.readContract({ ...portfolio, functionName: 'settlement' })
 		expect(await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'feeTimestamp', args: [child] })).toBe(forkTime + 63n * DAY)
 		const book = await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'ledger' })

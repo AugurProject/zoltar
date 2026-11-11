@@ -75,7 +75,7 @@ export const timelineEntityTypeLabel = (value: JsonValue | undefined): string =>
 		case 'escalation':
 			return 'Escalation game'
 		case 'auction':
-			return 'Truth auction'
+			return 'Collateral repair auction'
 		case 'pool':
 			return 'Security pool'
 		case 'vault':

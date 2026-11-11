@@ -41,7 +41,7 @@ describe('StateHint', () => {
 				presentation={{
 					badgeLabel: 'Loading',
 					badgeTone: 'loading',
-					detail: 'Loading truth auction status…',
+					detail: 'Loading collateral repair auction status…',
 					detailIsLoading: true,
 					key: 'loading',
 				}}
@@ -50,7 +50,7 @@ describe('StateHint', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const loadingStatus = within(document.body).getByRole('status')
-		expect(loadingStatus.textContent).toContain('Loading truth auction status…')
+		expect(loadingStatus.textContent).toContain('Loading collateral repair auction status…')
 		expect(loadingStatus.querySelector('.spinner')).not.toBeNull()
 	})
 

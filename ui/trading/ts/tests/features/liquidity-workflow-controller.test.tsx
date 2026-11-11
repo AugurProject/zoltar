@@ -201,7 +201,7 @@ describe('liquidity workflow controller state', () => {
 			totalUnderwritingLimitAttoEth: 100n * unit,
 			feeEligibleUnderwritingLimitAttoEth: 100n * unit,
 			currentRetentionRate: 999_990_000_000_000_000n,
-			lastUpdatedFeeAccumulator: 1n,
+			lastFeeCheckpointNativeTime: 1n,
 			feeIndexRemainder: 0n,
 			totalFeesOwedRemainder: 0n,
 		}

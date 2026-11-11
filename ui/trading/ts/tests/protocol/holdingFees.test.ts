@@ -3,7 +3,7 @@ import { liquidityHoldingFeeBlocker, sellHoldingFeeBlocker } from '../../protoco
 import { liveMarketFixture } from '../support/liveMarketFixture.js'
 
 const unit = 10n ** 18n
-const accounting = { settlementCollateralAttoEth: unit, totalUnderwritingLimitAttoEth: unit, feeEligibleUnderwritingLimitAttoEth: unit, currentRetentionRate: 900_000_000_000_000_000n, lastUpdatedFeeAccumulator: 1n, feeIndexRemainder: 0n, totalFeesOwedRemainder: 0n }
+const accounting = { settlementCollateralAttoEth: unit, totalUnderwritingLimitAttoEth: unit, feeEligibleUnderwritingLimitAttoEth: unit, currentRetentionRate: 900_000_000_000_000_000n, lastFeeCheckpointNativeTime: 1n, feeIndexRemainder: 0n, totalFeesOwedRemainder: 0n }
 const market = liveMarketFixture({ currentRetentionRate: accounting.currentRetentionRate, valuation: { timestamp: 1n, feeEndTime: 2n, projectedCollateralAttoEth: (unit * 9n) / 10n, feeAccounting: accounting } })
 
 test('caps projection at fee end and leaves zero-slippage transactions available without fee decay', () => {

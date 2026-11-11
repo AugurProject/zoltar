@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { preparePortfolioTruthAuction } from './securityPoolPortfolioTruthAuctionFixture'
+import { preparePortfolioCollateralRepairAuction } from './securityPoolPortfolioCollateralRepairAuctionFixture'
 import { encodeFunctionData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import {
 	auctionVaultRuntimeCode,
@@ -28,9 +28,9 @@ import { addRepToMigrationBalance, forkUniverse, getZoltarForkThreshold, splitMi
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
-describe('Statoblast: automatic truth-auction vaults', () => {
+describe('Statoblast: automatic collateral-repair-auction vaults', () => {
 	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
-	const prepare = () => preparePortfolioTruthAuction(fixture)
+	const prepare = () => preparePortfolioCollateralRepairAuction(fixture)
 
 	test('all winners immediately back claims at one price before any bid is materialized', async () => {
 		const context = await prepare()

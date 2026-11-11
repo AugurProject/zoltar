@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
 import { securityPoolPortfolioAuctionAbi, securityPoolPortfolioForkCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
 import { auctionFixture } from '../support/portfolio-fixtures.ts'
-import { auctionDefinition, finalizeTruthAuctionRoute, refundLosingAuctionBids, settleAuctionBids } from '../../src/operations/statoblast/auctions.ts'
+import { auctionDefinition, finalizeCollateralRepairAuctionRoute, refundLosingAuctionBids, settleAuctionBids } from '../../src/operations/statoblast/auctions.ts'
 import { hash, snapshotFixture, planningOptionsFixture } from './fixture.ts'
 
 test('portfolio auction bids exact ETH lots and chosen REP price on the grid', () => {
@@ -44,7 +44,7 @@ test('branch finalization targets the fork controller and refund withdrawals pre
 	snapshot.auctions = [auction]
 	auction.endTime = '100'
 	const options = planningOptionsFixture()
-	const step = finalizeTruthAuctionRoute.buildPlan(snapshot, options)?.steps[0]
+	const step = finalizeCollateralRepairAuctionRoute.buildPlan(snapshot, options)?.steps[0]
 	if (step === undefined) throw new Error('Missing branch finalization')
 	expect(step.to).toBe(auction.forkController)
 	expect(decodeFunctionData({ abi: securityPoolPortfolioForkCoordinatorAbi, data: step.data })).toMatchObject({ functionName: 'finalizeBranch', args: [2n] })

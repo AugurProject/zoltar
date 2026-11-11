@@ -63,11 +63,11 @@ library EscalationGameRepCustody {
 		if (authority == address(0)) return;
 		ISecurityPoolReporterPortfolio(authority).registerReporterGame(address(this));
 		if (finalAfter != 0 && finalAfter < block.timestamp) finalAfter = uint48(block.timestamp);
-		uint48 logicalFinalAfter =
+		uint48 finalAfterPortfolioTime =
 			finalAfter == 0
 				? 0
-				: ISecurityPoolReporterPortfolio(authority).logicalTimeForNative(ISecurityPool(payable(poolAddress)).universeId(), finalAfter);
-		ledger(poolAddress).scheduleFinality(address(this), logicalFinalAfter);
+				: ISecurityPoolReporterPortfolio(authority).portfolioTimeForNative(ISecurityPool(payable(poolAddress)).universeId(), finalAfter);
+		ledger(poolAddress).scheduleFinality(address(this), finalAfterPortfolioTime);
 		ISecurityPoolReporterPortfolio(authority).onQuestionFinalityChanged(finalAfter);
 	}
 }

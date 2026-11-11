@@ -44,7 +44,7 @@ const storeDomainEvent = async (transaction: SQL, chainId: number, item: StoredL
 	}
 	if (projection.domain === 'auction') {
 		await transaction`
-			INSERT INTO truth_auction_events (chain_id, block_hash, tx_hash, log_index, block_number, auction_address, event_name, event_data, canonical)
+			INSERT INTO collateral_repair_auction_events (chain_id, block_hash, tx_hash, log_index, block_number, auction_address, event_name, event_data, canonical)
 			VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${item.address.toLowerCase()}, ${projection.semanticEventKind}, (${databaseJsonText(projection.data)}::text)::jsonb, true)
 			ON CONFLICT (chain_id, block_hash, tx_hash, log_index, auction_address) DO UPDATE SET canonical = true, event_data = EXCLUDED.event_data
 		`
@@ -92,8 +92,8 @@ const storeProjection = async (transaction: SQL, chainId: number, item: StoredLo
 	}
 	if (projection.type === 'pool') {
 		await transaction`
-			INSERT INTO pools (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, parent_address, universe_id, question_id, truth_auction_address, coordinator_address, share_token_address, security_multiplier_bps, initial_priority_fee_atto_eth_per_gas, initial_retention_rate, initial_settlement_collateral_atto_eth, canonical)
-			VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.poolAddress}, ${projection.parentAddress}, ${projection.universeId}, ${projection.questionId}, ${projection.truthAuctionAddress}, ${projection.coordinatorAddress}, ${projection.shareTokenAddress}, ${projection.securityMultiplierBps}, ${projection.initialPriorityFeeAttoEthPerGas}, ${projection.initialRetentionRate}, ${projection.initialSettlementCollateralAttoEth}, true)
+			INSERT INTO pools (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, parent_address, universe_id, question_id, collateral_repair_auction_address, coordinator_address, share_token_address, security_multiplier_bps, initial_priority_fee_atto_eth_per_gas, initial_retention_rate, initial_settlement_collateral_atto_eth, canonical)
+			VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.poolAddress}, ${projection.parentAddress}, ${projection.universeId}, ${projection.questionId}, ${projection.collateralRepairAuctionAddress}, ${projection.coordinatorAddress}, ${projection.shareTokenAddress}, ${projection.securityMultiplierBps}, ${projection.initialPriorityFeeAttoEthPerGas}, ${projection.initialRetentionRate}, ${projection.initialSettlementCollateralAttoEth}, true)
 			ON CONFLICT (chain_id, block_hash, tx_hash, log_index, pool_address) DO UPDATE SET canonical = true
 		`
 		return
@@ -101,7 +101,7 @@ const storeProjection = async (transaction: SQL, chainId: number, item: StoredLo
 	if (projection.type === 'poolSnapshot') {
 		await transaction`
 			INSERT INTO pool_snapshots (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, reason, vault_address, settlement_collateral_atto_eth, total_capacity_ownership_atto_rep, fee_eligible_capacity_ownership_atto_rep, total_claimable_vault_fees_atto_eth, unallocated_accrued_fees_atto_eth, fee_index, fee_index_remainder, total_fees_owed_remainder, uncheckpointed_fee_eligible_capacity_ownership_atto_rep, last_updated_fee_accumulator, current_retention_rate, canonical)
-			VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.poolAddress}, ${projection.reason}, ${projection.vaultAddress}, ${projection.settlementCollateralAttoEth}, ${projection.totalUnderwritingLimitAttoEth}, ${projection.feeEligibleUnderwritingLimitAttoEth}, ${projection.totalClaimableVaultFeesAttoEth}, ${projection.unallocatedAccruedFeesAttoEth}, ${projection.feeIndex}, ${projection.feeIndexRemainder}, ${projection.totalFeesOwedRemainder}, ${projection.uncheckpointedFeeEligibleUnderwritingLimitAttoEth}, ${projection.lastUpdatedFeeAccumulator}, ${projection.currentRetentionRate}, true)
+			VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.poolAddress}, ${projection.reason}, ${projection.vaultAddress}, ${projection.settlementCollateralAttoEth}, ${projection.totalUnderwritingLimitAttoEth}, ${projection.feeEligibleUnderwritingLimitAttoEth}, ${projection.totalClaimableVaultFeesAttoEth}, ${projection.unallocatedAccruedFeesAttoEth}, ${projection.feeIndex}, ${projection.feeIndexRemainder}, ${projection.totalFeesOwedRemainder}, ${projection.uncheckpointedFeeEligibleUnderwritingLimitAttoEth}, ${projection.lastSettlementPortfolioTime}, ${projection.currentRetentionRate}, true)
 			ON CONFLICT (chain_id, block_hash, tx_hash, log_index, pool_address) DO UPDATE SET canonical = true
 		`
 		return
