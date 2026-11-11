@@ -1,12 +1,12 @@
+import { recoveredReceiptObservations, agreedPendingNonce, availableHeads, assertRecoveryChain, assertIntentIdentity, exactIntentIsVisible } from './recovery-observations.ts'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { advanceRollbackQueue } from './inclusion-journal.ts'
 import { commitReceiptDisposition as commitRecoveryDisposition } from './receipt-disposition.ts'
 import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
-import { keccak256, parseTransaction, toHex, type Hex } from '@zoltar/bot-shared/ethereum'
+import { parseTransaction, toHex, type Hex } from '@zoltar/bot-shared/ethereum'
 import { submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
-import { availableSettledValues, settledQuorumValue, sharedQuorumBlockNumber } from '@zoltar/bot-shared/monitoring/read-quorum'
-import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
+import { settledQuorumValue, sharedQuorumBlockNumber } from '@zoltar/bot-shared/monitoring/read-quorum'
 import {
 	captureWorkflowIntentSubmissionJournal,
 	durableWorkflowPlan,
@@ -23,7 +23,6 @@ import { recordActivity, type PendingTransactionIntent } from '../state/operator
 import { observePendingTransaction } from '../state/pending-transaction-observation.ts'
 import { manualReconciliationBlocker, observeIntent, persist, retainClosedSubmissionWindow, retainManualReconciliation, retainUnreadableReceiptEvidence } from './recovery-journal.ts'
 import { requireSuccessfulReceipt, stepReceiptEvidenceDisposition, type ReceiptEvidenceDisposition } from './receipt-validation.ts'
-import { balanceObservations, captureBalanceEvidence, captureStorageEvidence, storageObservations } from './execution-evidence.ts'
 import { agreedMaximumGasEstimate, agreedLatestBlock, agreedExactCall, exactAttestedEthBalance, executionReadClients, requiredConnectivity, sameCanonicalExecutionAnchor } from './execution-quorum.ts'
 import { assertExecutionActive, assertRequestedTransactionHash, CHAOS_FINALITY_BLOCKS, OperationRediscoveryRequired, type CanonicalExecutionAnchor, type ExecutionEnvironment } from './execution-context.ts'
 import { assertFreshWalletAssetDebits, assertStepPreflightCalls } from './execution-preflight.ts'
@@ -32,108 +31,8 @@ import { TransactionAwaitingRecovery } from './transaction-executor.ts'
 import { assertRecoverySubmissionMode, BOT_COMPATIBLE_RECOVERY_TRANSACTION_TYPE, pendingIntentRecoveryAction, recoveryGasCostBlocker, transactionIsStrictNonceCancellation, transactionMatchesIntent } from './recovery-policy.ts'
 import { assertOperationPrincipalCaps } from './safety.ts'
 
-function baselineMap(intent: PendingTransactionIntent) {
-	return new Map(intent.semanticExpectation.balanceBaselines.map(baseline => [`${baseline.account.toLowerCase()}:${baseline.asset === 'ETH' ? 'ETH' : baseline.asset.toLowerCase()}`, BigInt(baseline.balance)]))
-}
-
-function storageBaselineMap(intent: PendingTransactionIntent) {
-	return new Map(intent.semanticExpectation.storageBaselines.map(baseline => [`${baseline.contract.toLowerCase()}:${baseline.functionName}:${JSON.stringify(baseline.args)}`, baseline.value]))
-}
-
 function removeIntent(environment: ExecutionEnvironment, id: string) {
 	environment.state.pendingTransactions = environment.state.pendingTransactions.filter(intent => intent.id !== id)
-}
-
-async function recoveredReceiptObservations(environment: ExecutionEnvironment, intent: PendingTransactionIntent, receipt: ReturnType<typeof requireSuccessfulReceipt>) {
-	const after = await captureBalanceEvidence(environment, intent.semanticExpectation.evidence, receipt.blockNumber)
-	const afterStorage = await captureStorageEvidence(environment, intent.semanticExpectation.evidence, receipt.blockNumber)
-	return {
-		balances: balanceObservations(intent.semanticExpectation.evidence, baselineMap(intent), after),
-		storage: storageObservations(intent.semanticExpectation.evidence, storageBaselineMap(intent), afterStorage),
-	}
-}
-
-async function agreedPendingNonce(environment: ExecutionEnvironment, intent: PendingTransactionIntent, capableRpcUrls?: ReadonlySet<string> | undefined) {
-	const connectivity = requiredConnectivity(environment.settings)
-	return settledQuorumValue(
-		`pending signer nonce for ${intent.hash}`,
-		executionReadClients(environment)
-			.filter(({ rpcUrl }) => capableRpcUrls?.has(rpcUrl) ?? true)
-			.map(async ({ client, endpoint }) => ({
-				endpoint,
-				value: await client.getTransactionCount({
-					address: intent.sender,
-					blockTag: 'pending',
-				}),
-			})),
-		connectivity.rpcQuorum,
-	)
-}
-
-async function availableHeads(environment: ExecutionEnvironment, intent: PendingTransactionIntent) {
-	const connectivity = requiredConnectivity(environment.settings)
-	const settled = await Promise.allSettled(
-		executionReadClients(environment).map(async ({ client, endpoint, rpcUrl }) => ({
-			endpoint,
-			head: await client.getBlockNumber(),
-			rpcUrl,
-		})),
-	)
-	const heads = availableSettledValues(settled)
-	if (heads.length < connectivity.rpcQuorum) {
-		throw new ConnectivityDegradedError(`Transaction ${intent.hash} recovery does not satisfy the configured RPC quorum requirement`)
-	}
-	return heads
-}
-
-async function assertRecoveryChain(environment: ExecutionEnvironment) {
-	const connectivity = requiredConnectivity(environment.settings)
-	await settledQuorumValue(
-		'pending transaction recovery chain ID',
-		executionReadClients(environment).map(async ({ client, endpoint }) => {
-			const chainId = await client.getChainId()
-			if (chainId !== environment.settings.network.chainId) {
-				throw new Error(`RPC ${endpoint} returned chain ID ${chainId.toString()}, expected ${environment.settings.network.chainId.toString()}`)
-			}
-			return { endpoint, value: chainId }
-		}),
-		connectivity.rpcQuorum,
-	)
-}
-
-function assertIntentIdentity(environment: ExecutionEnvironment, intent: PendingTransactionIntent) {
-	if (intent.sender.toLowerCase() !== environment.sender.toLowerCase()) {
-		throw new Error(`Pending transaction ${intent.hash} belongs to a different signer`)
-	}
-	if (keccak256(intent.serializedTransaction).toLowerCase() !== intent.hash.toLowerCase()) {
-		throw new Error(`Pending transaction ${intent.hash} does not match its signed bytes`)
-	}
-}
-
-async function exactIntentIsVisible(environment: ExecutionEnvironment, intent: PendingTransactionIntent) {
-	const connectivity = requiredConnectivity(environment.settings)
-	const settled = await Promise.allSettled(
-		executionReadClients(environment).map(async ({ client }) => {
-			try {
-				const transaction = await client.getTransaction({ hash: intent.hash })
-				assertRequestedTransactionHash(transaction.hash, intent.hash, 'Pending intent lookup')
-				if (!transactionMatchesIntent(transaction, intent)) {
-					throw new Error(`Transaction ${intent.hash} does not match the persisted intent semantics`)
-				}
-				return true
-			} catch (error) {
-				if (error instanceof Error && (error.name === 'TransactionNotFoundError' || error.message.toLowerCase().includes('could not be found'))) {
-					return false
-				}
-				throw error
-			}
-		}),
-	)
-	const observations = availableSettledValues(settled)
-	if (observations.length < connectivity.rpcQuorum) {
-		throw new ConnectivityDegradedError(`Transaction ${intent.hash} visibility does not satisfy the configured RPC quorum requirement`)
-	}
-	return observations.filter(Boolean).length >= connectivity.rpcQuorum
 }
 
 async function resolveReceipt(environment: ExecutionEnvironment, intent: PendingTransactionIntent) {
