@@ -281,6 +281,7 @@ describe('injected backend read transport', () => {
 			if (method === 'eth_accounts') return [zeroAddress]
 			if (method === 'eth_chainId') return '0xaa36a7'
 			if (method === 'eth_getTransactionCount') return '0x1'
+			if (method === 'eth_call') return '0x'
 			if (method === 'eth_estimateGas') return '0x5208'
 			if (method === 'eth_gasPrice') return '0x1'
 			if (method === 'eth_maxPriorityFeePerGas') return '0x1'
@@ -375,6 +376,7 @@ describe('injected backend read transport', () => {
 				requestCalls.push(method)
 				if (method === 'eth_accounts') return []
 				if (method === 'eth_getTransactionCount') return '0x1'
+				if (method === 'eth_call') return '0x'
 				if (method === 'eth_estimateGas') return '0x5208'
 				if (method === 'eth_gasPrice') return '0x1'
 				if (method === 'eth_maxPriorityFeePerGas') return '0x1'
@@ -396,6 +398,7 @@ describe('injected backend read transport', () => {
 				if (method === 'eth_accounts') return [zeroAddress]
 				if (method === 'eth_chainId') return '0x539'
 				if (method === 'eth_getTransactionCount') return '0x1'
+				if (method === 'eth_call') return '0x'
 				if (method === 'eth_estimateGas') return '0x5208'
 				if (method === 'eth_gasPrice') return '0x1'
 				if (method === 'eth_maxPriorityFeePerGas') return '0x1'
@@ -500,6 +503,7 @@ for (const receiptStatus of ['0x1', '0x0']) {
 			if (method === 'eth_accounts') return [zeroAddress]
 			if (method === 'eth_chainId') return '0xaa36a7'
 			if (method === 'eth_getTransactionCount') return '0x1'
+			if (method === 'eth_call') return '0x'
 			if (method === 'eth_estimateGas') return '0x5208'
 			if (method === 'eth_gasPrice' || method === 'eth_maxPriorityFeePerGas') return '0x1'
 			if (method === 'eth_sendTransaction') {
@@ -575,3 +579,37 @@ for (const receiptStatus of ['0x1', '0x0']) {
 		expect(failed).toHaveBeenCalledTimes(receiptStatus === '0x0' ? 1 : 0)
 	})
 }
+
+for (const operation of guardedWriteOperationCases.filter(operation => operation.name !== 'sendRawTransaction')) {
+	test(`${operation.name} rejects a deterministic contract revert before asking the wallet to send`, async () => {
+		const sends = mock(() => `0x${'1'.repeat(64)}`)
+		ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
+			if (method === 'eth_accounts') return [zeroAddress]
+			if (method === 'eth_chainId') return '0xaa36a7'
+			if (method === 'eth_call') throw new Error('execution reverted: approval must first be reset')
+			if (method === 'eth_sendTransaction') return sends()
+			return '0x'
+		})
+		const backend = createInjectedBackend()
+		await expect(operation.execute(backend.createWriteClient(zeroAddress))).rejects.toThrow('approval must first be reset')
+		expect(sends).not.toHaveBeenCalled()
+	})
+}
+
+test('a wallet network change during preflight prevents the send request', async () => {
+	let chain = '0xaa36a7'
+	const sends = mock(() => `0x${'1'.repeat(64)}`)
+	const provider = createMockInjectedEthereum(async ({ method }) => {
+		if (method === 'eth_accounts') return [zeroAddress]
+		if (method === 'eth_chainId') return chain
+		if (method === 'eth_call') {
+			chain = '0x1'
+			return '0x'
+		}
+		if (method === 'eth_sendTransaction') return sends()
+		return '0x'
+	})
+	const client = createInjectedBackend({ provider }).createWriteClient(zeroAddress)
+	await expect(client.sendTransaction({ to: zeroAddress, gas: 21_000n })).rejects.toThrow('Ethereum mainnet is disabled.')
+	expect(sends).not.toHaveBeenCalled()
+})

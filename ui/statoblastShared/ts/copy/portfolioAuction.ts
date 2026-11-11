@@ -1,11 +1,11 @@
-import { formatEther } from '@zoltar/core-shared/evm/ethereum'
+import { formatEther, formatUnits } from '@zoltar/core-shared/evm/ethereum'
 export const title = 'Branch truth auction'
-export const description = 'Bid ETH to repair branch claims and create your own funded vault. All winning lots receive REP at the same clearing price.'
-export const ownership = 'Purchased REP backs your winning vault’s ETH commitment at your chosen health target. Vault losses, surplus withdrawals and retirement follow the ordinary vault rules.'
+export const description = 'Bid collateral to repair branch claims and create your own funded vault. All winning lots receive REP at the same clearing price.'
+export const ownership = 'Purchased REP backs your winning vault’s collateral commitment at your chosen health target. Vault losses, surplus withdrawals and retirement follow the ordinary vault rules.'
 export const fairness = 'Equal-price bids share the remaining capacity in whole lots. Rounding can change a bid’s fill by less than one lot. With weak demand, winners buy all saleable REP and the branch may remain in runoff. Indivisible REP dust accrues as winner fees.'
 export const connect = 'Connect a wallet to view and fund your auction bids.'
 export const selectBranch = 'Select a fork branch first.'
-export const noAuction = 'Start branch migration with an ETH shortfall and saleable REP first.'
+export const noAuction = 'Start branch migration with a collateral shortfall and saleable REP first.'
 export const loading = 'Checking auction funding…'
 export const loadError = 'Unable to load this branch auction.'
 export const contextChanged = 'Auction, wallet or network changed. Refresh and review again.'
@@ -19,8 +19,8 @@ export const status = 'Auction state'
 export const states = { unopened: 'Awaiting opening', bidding: 'Accepting bids', waiting: 'Awaiting branch activation', finalized: 'Finalized' }
 export const closes = 'Bidding closes'
 export const inventory = 'REP available for sale'
-export const shortfall = 'Branch ETH shortfall'
-export const lotPrice = 'ETH committed per lot'
+export const shortfall = 'Branch collateral shortfall'
+export const lotPrice = 'collateral committed per lot'
 export const lotCount = 'Number of lots'
 export const lotHint = 'Positive whole lots only. Each winning lot becomes one minimum-sized commitment.'
 export const lotsInvalid = 'Enter a positive whole number of lots.'
@@ -29,7 +29,7 @@ export const priceHint = (grid: bigint | undefined) => `This sets your maximum p
 export const repInvalid = 'Enter a positive REP amount with up to 18 decimal places.'
 export const health = 'Target health (%)'
 export const healthInvalid = 'Enter a health target of at least 100%, with up to two decimal places.'
-export const bidEth = 'ETH bid'
+export const bidEth = 'collateral bid'
 export const minimumPrincipal = 'Minimum pledged REP if fully filled'
 export const minimumCollateral = 'Minimum REP per lot at 100% health'
 export const clearingRep = 'Clearing REP per winning lot'
@@ -43,30 +43,30 @@ export const vault = 'Isolated vault account'
 export const requestedLots = 'Lots requested'
 export const filledLots = 'Lots won'
 export const principal = 'Current vault REP principal'
-export const commitment = 'Current ETH commitment'
-export const earnedEth = 'Unclaimed ETH fees'
+export const commitment = 'Current collateral commitment'
+export const earnedEth = 'Unclaimed collateral fees'
 export const earnedRep = 'Unclaimed REP fees'
-export const charged = 'ETH used to repair claims'
-export const refund = 'Unused bid ETH'
+export const charged = 'collateral used to repair claims'
+export const refund = 'Unused bid collateral'
 export const funded = 'Funded vault'
 export const noFill = 'No winning lots'
 export const awaitingClose = 'Waiting for auction closing'
 export const credit = 'Credit this bid’s refunds'
 export const crediting = 'Crediting bid refunds…'
 export const credited = 'This bid’s refunds are already credited.'
-export const bidMayStillWin = 'This bid may still win. Its ETH remains committed until closing.'
-export const earlyRefundAvailable = 'Better funded bids rule out this bid. Its full ETH amount can be refunded now.'
-export const earlyRefundCredited = 'This bid cannot win. Its ETH refund has been credited for withdrawal.'
+export const bidMayStillWin = 'This bid may still win. Its collateral remains committed until closing.'
+export const earlyRefundAvailable = 'Better funded bids rule out this bid. Its full collateral amount can be refunded now.'
+export const earlyRefundCredited = 'This bid cannot win. Its collateral refund has been credited for withdrawal.'
 export const claim = 'Credit and withdraw refunds'
 export const claiming = 'Withdrawing bid refunds…'
 export const refundChanged = 'Your refund credit changed. Refresh and review the new amount.'
-export const earlyRefundWithdrawn = 'This bid cannot win. Its ETH refund has been credited and withdrawn.'
-export const claimReview = (quote: { settles: boolean; bidRefundAttoEth: bigint; creditedAttoEth: bigint; totalAttoEth: bigint }) => {
-	if (quote.creditedAttoEth === 0n) return `Credit this bid’s ${formatEther(quote.bidRefundAttoEth)} ETH refund and withdraw it to your wallet.`
-	if (!quote.settles) return `This bid’s refund is already credited. Withdraw your entire ${formatEther(quote.totalAttoEth)} ETH auction refund credit, possibly including your other bids, to your wallet.`
-	return `Credit this bid’s ${formatEther(quote.bidRefundAttoEth)} ETH refund and withdraw your entire ${formatEther(quote.totalAttoEth)} ETH auction refund credit to your wallet, including ${formatEther(quote.creditedAttoEth)} ETH already credited, possibly from your other bids.`
+export const earlyRefundWithdrawn = 'This bid cannot win. Its collateral refund has been credited and withdrawn.'
+export const claimReview = (quote: { settles: boolean; bidRefundAttoEth: bigint; creditedAttoEth: bigint; totalAttoEth: bigint }, decimals = 18, symbol = 'collateral') => {
+	if (quote.creditedAttoEth === 0n) return `Credit this bid’s ${formatUnits(quote.bidRefundAttoEth, decimals)} ${symbol} refund and withdraw it to your wallet.`
+	if (!quote.settles) return `This bid’s refund is already credited. Withdraw your entire ${formatUnits(quote.totalAttoEth, decimals)} ${symbol} auction refund credit, possibly including your other bids, to your wallet.`
+	return `Credit this bid’s ${formatUnits(quote.bidRefundAttoEth, decimals)} ${symbol} refund and withdraw your entire ${formatUnits(quote.totalAttoEth, decimals)} ${symbol} auction refund credit to your wallet, including ${formatUnits(quote.creditedAttoEth, decimals)} ${symbol} already credited, possibly from your other bids.`
 }
-export const refundEth = 'Credited ETH refund'
+export const refundEth = 'Credited collateral refund'
 export const withdraw = 'Withdraw credited refunds'
 export const withdrawing = 'Withdrawing auction refunds…'
 export const noRefund = 'No credited auction refunds are available.'
@@ -82,5 +82,5 @@ export const refresh = 'Refresh auction'
 export const refreshing = 'Refreshing auction…'
 export const busy = 'Wait for the current transaction.'
 export const pages = (start: bigint, count: number, total: bigint) => `${start + (count === 0 ? 0n : 1n)}–${start + BigInt(count)} of ${total} bids`
-export const bidReview = (lots: bigint, bidAttoEth: bigint, minimumAttoRepPerLot: bigint) =>
-	`Bid ${formatEther(bidAttoEth)} ETH for ${lots} lots with at least ${formatEther(minimumAttoRepPerLot)} REP collateral per winning lot. Purchased REP backs the vault’s accepted ETH commitment immediately at closing. If better funded bids rule out this bid, its ETH can be refunded early; otherwise unused ETH refunds after closing.`
+export const bidReview = (lots: bigint, bidAttoEth: bigint, minimumAttoRepPerLot: bigint, decimals = 18, symbol = 'collateral') =>
+	`Bid ${formatUnits(bidAttoEth, decimals)} ${symbol} for ${lots} lots with at least ${formatEther(minimumAttoRepPerLot)} REP collateral per winning lot. Purchased REP backs the vault’s accepted collateral commitment immediately at closing. If better funded bids rule out this bid, its collateral can be refunded early; otherwise unused collateral refunds after closing.`

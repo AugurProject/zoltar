@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getAddress } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import {
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
@@ -281,6 +281,10 @@ describe('Statoblast: central capital shared price feed', () => {
 		// Only setup impersonates the authority; the measured report is fully native.
 		await mock.impersonateAccount(fixture.portfolio)
 		await mock.setBalance(fixture.portfolio, 1_000n * unit)
+		const collateral = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'collateralToken' })
+		await wrapWeth(root, 200n * unit)
+		await approveToken(root, collateral, settlement)
+		await approveToken(root, collateral, fixture.capitalLedger)
 		await writeContractAndWait(root, () => root.writeContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'beginForkImport' }))
 		let backing = 0n
 		let positionSetupGas = 0n
@@ -308,7 +312,7 @@ describe('Statoblast: central capital shared price feed', () => {
 			)
 			const questionId = 1n << BigInt(i * 2)
 			await writeContractAndWait(root, () => root.writeContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'registerQuestion', args: [pool, universe, questionId] }))
-			await writeContractAndWait(root, () => root.writeContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'mint', args: [pool, 0n, now], value: unit }))
+			await writeContractAndWait(root, () => root.writeContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'mint', args: [pool, unit, 0n, now], value: 0n }))
 			if (i % 3 === 0) {
 				await writeContractAndWait(root, () => root.writeContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'scheduleFinality', args: [pool, now + 500n + (1n << BigInt(i % 47)), now] }))
 			} else {
@@ -321,7 +325,7 @@ describe('Statoblast: central capital shared price feed', () => {
 		for (const price of [unit, unit + 127n]) await writeContractAndWait(root, () => root.writeContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'acceptPrice', args: [price, validUntil] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: getRepTokenAddress(universe), functionName: 'transfer', args: [fixture.portfolio, unit] }))
 		await writeContractAndWait(root, () => root.writeContract({ abi: tokenArtifact.abi, address: getRepTokenAddress(universe), functionName: 'approve', args: [fixture.capitalLedger, unit] }))
-		await writeContractAndWait(root, () => root.writeContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'fundVestedFees', args: [unit], value: unit }))
+		await writeContractAndWait(root, () => root.writeContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'fundVestedFees', args: [unit, unit], value: 0n }))
 		expect((await owner.readContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'totals' }))[1]).toBe(768n * unit)
 		expect((await owner.readContract({ abi: bookArtifact.abi, address: book, functionName: 'totals', args: [bookId] }))[0]).toBeGreaterThan(0n)
 		// A sparse new expiry previously forced expensive cold expiry-tree writes.
@@ -362,9 +366,9 @@ describe('Statoblast: central capital shared price feed', () => {
 		expect(await fixture.owner().readContract({ abi: feedArtifact.abi, address: secondFeed, functionName: 'lastPrice' })).toBe(0n)
 		await expect(fixture.other().writeContract({ abi: feedArtifact.abi, address: await feed(), functionName: 'registerCoordinator', args: [fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator] })).rejects.toThrow('Only security pool factory')
 		const factory = { abi: factoryArtifact.abi, address: getInfraContractAddresses().securityPoolFactory }
-		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...factory, functionName: 'initializePortfolioPriceFeed', args: [fixture.base.genesisUniverse, 10_000_000_000n] }))
+		await expect(fixture.other().writeContract({ ...factory, functionName: 'initializePortfolioPriceFeed', args: [fixture.base.genesisUniverse, 10_000_000_000n] })).rejects.toThrow()
 		const ownNamespace = await fixture.other().readContract({ ...factory, functionName: 'sharedPriceFeeds', args: [fixture.other().account.address, fixture.base.genesisUniverse] })
-		expect(ownNamespace).not.toBe(await feed())
+		expect(ownNamespace).toBe(zeroAddress)
 		expect(await fixture.owner().readContract({ ...factory, functionName: 'sharedPriceFeeds', args: [fixture.portfolio, fixture.base.genesisUniverse] })).toBe(await feed())
 	})
 })

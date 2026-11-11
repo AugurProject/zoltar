@@ -1,3 +1,10 @@
+import { ETH_GAS_RESERVE_ATTO_ETH } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
+import * as collateralCopy from '../copy/collateral.js'
+import { collateralAsset, tokenFunded } from '../protocol/collateral.js'
+import { useCollateralFunding } from './live/useCollateralFunding.js'
+import { CollateralFundingControls } from './CollateralFundingControls.js'
+import type { LiveWorkflowContext } from './live/liveTradingTypes.js'
+import { tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { outcomeLabel } from '../copy/outcomes.js'
 import { useId, useRef } from 'preact/hooks'
 import type { Hash } from '@zoltar/core-shared/evm/ethereum'
@@ -7,7 +14,7 @@ import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { formatCurrencyInputBalance, formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { formatOutcomeQuantity, SHARE_QUANTITY_DECIMALS, shareOutcome } from '../lib/shareValue.js'
+import { formatOutcomeQuantity, shareOutcome } from '../lib/shareValue.js'
 import type { TradeSettings } from '../lib/tradeSettings.js'
 import { marketAcceptsNewRisk, marketSettlementPath, type LiveBalances, type LiveMarket } from '../protocol/live.js'
 import * as workflowCopy from '../copy/workflows.js'
@@ -63,24 +70,24 @@ export type TicketBalances = Readonly<{
 }>
 
 // A sale is entered and paid in its own terms (shares in, ETH out), so its hints name share quantities without the conditional payout a holding shows elsewhere.
-function amountHint(model: TradeTicketModel, mode: TradeMode, side: 'YES' | 'NO', holdings: LiveBalances | undefined, walletEthAttoEth: bigint | undefined) {
-	if (mode === 'entry') return walletEthAttoEth === undefined ? undefined : workflowCopy.formatWalletBalance(`${formatTrimmedUnits(walletEthAttoEth)} ${workflowCopy.eth}`)
+function amountHint(model: TradeTicketModel, mode: TradeMode, side: 'YES' | 'NO', holdings: LiveBalances | undefined, walletEthAttoEth: bigint | undefined, market: LiveMarket) {
+	if (mode === 'entry') return walletEthAttoEth === undefined ? undefined : workflowCopy.formatWalletBalance(`${formatTrimmedUnits(walletEthAttoEth, collateralAsset(market).decimals)} ${collateralAsset(market).symbol}`)
 	const holding = side === 'YES' ? holdings?.yes : holdings?.no
 	if (holding === undefined || model.sellable === undefined) return undefined
 	// The sellable amount only needs saying when INVALID coverage, pool depth, or the price-impact limit holds it below the holding.
-	if (model.sellable >= holding) return workflowCopy.formatHolding(formatOutcomeQuantity(holding, side, 4, 'down'))
-	return ticketCopy.sellableHint(formatOutcomeQuantity(holding, side, 4, 'down'), formatOutcomeQuantity(model.sellable, side, 4, 'down'))
+	if (model.sellable >= holding) return workflowCopy.formatHolding(formatOutcomeQuantity(holding, side, 4, 'down', market))
+	return ticketCopy.sellableHint(formatOutcomeQuantity(holding, side, 4, 'down', market), formatOutcomeQuantity(model.sellable, side, 4, 'down', market))
 }
 
-function InvalidCoverageExplanation({ model, side, disabled, onUseSellable }: { model: TradeTicketModel; side: 'YES' | 'NO'; disabled: boolean; onUseSellable(value: string): void }) {
+function InvalidCoverageExplanation({ model, side, disabled, onUseSellable, market }: { market: LiveMarket; model: TradeTicketModel; side: 'YES' | 'NO'; disabled: boolean; onUseSellable(value: string): void }) {
 	if (model.shortfall === undefined) return null
 	const sellable = model.sellable ?? 0n
 	return (
 		<WarningSurface role='status' surface='flat' variant='compact' className='trade-invalid-coverage'>
-			<p>{ticketCopy.invalidCoverageExplanation(formatOutcomeQuantity(model.shortfall.invalidRequired, shareOutcome.invalid), formatOutcomeQuantity(model.shortfall.invalidHeld, shareOutcome.invalid), formatOutcomeQuantity(sellable, side, 4, 'down'), side)}</p>
+			<p>{ticketCopy.invalidCoverageExplanation(formatOutcomeQuantity(model.shortfall.invalidRequired, shareOutcome.invalid, 4, 'nearest', market), formatOutcomeQuantity(model.shortfall.invalidHeld, shareOutcome.invalid, 4, 'nearest', market), formatOutcomeQuantity(sellable, side, 4, 'down', market), side)}</p>
 			{sellable > 0n ? (
-				<button type='button' className='secondary' disabled={disabled} onClick={() => onUseSellable(formatCurrencyInputBalance(roundDownShortcut(sellable), SHARE_QUANTITY_DECIMALS))}>
-					{ticketCopy.sellInsteadAction(formatOutcomeQuantity(sellable, side, 4, 'down'))}
+				<button type='button' className='secondary' disabled={disabled} onClick={() => onUseSellable(formatCurrencyInputBalance(roundDownShortcut(sellable, collateralAsset(market).decimals), collateralAsset(market).decimals))}>
+					{ticketCopy.sellInsteadAction(formatOutcomeQuantity(sellable, side, 4, 'down', market))}
 				</button>
 			) : null}
 		</WarningSurface>
@@ -91,10 +98,10 @@ function InvalidCoverageExplanation({ model, side, disabled, onUseSellable }: { 
  * The estimate's headline for screen readers. It follows the typed trade, not each block that re-prices it, so a
  * settled entry is announced once and a moving pool stays quiet.
  */
-function useEstimateAnnouncement(estimate: TradeEstimate | undefined, tradeKey: string) {
+function useEstimateAnnouncement(estimate: TradeEstimate | undefined, tradeKey: string, market: LiveMarket) {
 	const announced = useRef({ tradeKey: '', text: '' })
 	if (estimate === undefined) announced.current = { tradeKey: '', text: '' }
-	else if (announced.current.tradeKey !== tradeKey) announced.current = { tradeKey, text: estimateAnnouncement(estimate) }
+	else if (announced.current.tradeKey !== tradeKey) announced.current = { tradeKey, text: estimateAnnouncement(estimate, market) }
 	return announced.current.text
 }
 
@@ -112,7 +119,9 @@ export function LivePositionControls({
 	holdings,
 	externallyLocked,
 	onOpenSettlement,
+	fundingContext,
 }: {
+	fundingContext?: LiveWorkflowContext | undefined
 	market: LiveMarket
 	nowSeconds: bigint
 	settings: TradeSettings
@@ -126,6 +135,15 @@ export function LivePositionControls({
 	onOpenSettlement?: (() => void) | undefined
 }) {
 	const { mode, side, state } = ticket
+	const asset = collateralAsset(market)
+	const required = mode === 'entry' ? tryParseNonNegativeDecimalInput(ticket.amount, asset.decimals) : undefined
+	const funding = useCollateralFunding(market, required, fundingContext, mode === 'entry')
+	let gasReason: string | undefined
+	if (tokenFunded(market) && wallet.connected) {
+		if (wallet.walletEthAttoEth === undefined) gasReason = collateralCopy.loading
+		else if (wallet.walletEthAttoEth < ETH_GAS_RESERVE_ATTO_ETH) gasReason = collateralCopy.gasRequired
+	}
+	const fundingBalance = tokenFunded(market) ? funding.balance : wallet.walletEthAttoEth
 	const settledAmount = useDebouncedValue(ticket.amount, ESTIMATE_DEBOUNCE_MILLISECONDS)
 	const closed = !marketAcceptsNewRisk(market, nowSeconds)
 	const workflowLocked = externallyLocked || positionControlsWorkflowLocked(state, ticket.positionReceiptWarning)
@@ -140,8 +158,8 @@ export function LivePositionControls({
 		balanceState: holdings.balanceState,
 		walletConnected: wallet.connected,
 		networkMismatchReason: wallet.networkMismatchReason,
-		walletEthAttoEth: wallet.walletEthAttoEth,
-		walletEthState: wallet.walletEthState,
+		walletEthAttoEth: fundingBalance,
+		walletEthState: tokenFunded(market) ? funding.balanceState : wallet.walletEthState,
 		marketClosed: closed,
 		nowSeconds,
 		acknowledgedImpactBps: ticket.acknowledgedImpactBps,
@@ -150,7 +168,7 @@ export function LivePositionControls({
 	// After a receipt the workflow stays locked until the market and balances have been re-read; say so instead of showing a silent disabled form.
 	const revalidatingAfterReceipt = state === 'confirmed' && externallyLocked
 	const amountId = useId()
-	const controlsDisabled = closed || workflowLocked
+	const controlsDisabled = closed || workflowLocked || funding.pending
 	const estimate = model.estimate
 	const walletStep = panelWalletStep(wallet, model.primaryStep === 'submit', workflowLocked)
 	const confirmedText = revalidatingAfterReceipt ? workflowCopy.revalidatingAfterReceipt(workflowCopy.actionConfirmedOnchain(model.actionLabel)) : undefined
@@ -172,7 +190,7 @@ export function LivePositionControls({
 		if (actionButton !== null && actionButton !== undefined && !actionButton.disabled) actionButton.click()
 	}
 	const amountFieldError = model.amountError ?? model.insufficientReason
-	const announcement = useEstimateAnnouncement(estimate, `${mode}|${side}|${settledAmount}`)
+	const announcement = useEstimateAnnouncement(estimate, `${market.pool}|${mode}|${side}|${settledAmount}`, market)
 	return (
 		<div ref={controlsRef} className='position-controls' aria-busy={revalidatingAfterReceipt}>
 			{closed ? (
@@ -226,9 +244,9 @@ export function LivePositionControls({
 					disabled={controlsDisabled}
 					inputMode='decimal'
 					autoComplete='off'
-					adornment={mode === 'entry' ? workflowCopy.eth : outcomeLabel(side)}
+					adornment={mode === 'entry' ? asset.symbol : outcomeLabel(side)}
 					error={amountFieldError}
-					hint={amountHint(model, mode, side, holdings.balances, wallet.walletEthAttoEth)}
+					hint={amountHint(model, mode, side, holdings.balances, fundingBalance, market)}
 					onInput={event => ticket.setAmount(event.currentTarget.value)}
 					onKeyDown={event => {
 						if (event.key === 'Enter') submitFromKeyboard()
@@ -238,21 +256,30 @@ export function LivePositionControls({
 			{model.shortcuts.length === 0 ? null : (
 				<div className='trade-amount-shortcuts' role='group' aria-label={mode === 'entry' ? ticketCopy.buyShortcutsLabel : ticketCopy.sellShortcutsLabel}>
 					{model.shortcuts.map(shortcut => (
-						<button key={shortcut.label} type='button' className='secondary' disabled={controlsDisabled} onClick={() => ticket.setAmount(formatCurrencyInputBalance(shortcut.value, SHARE_QUANTITY_DECIMALS))}>
+						<button key={shortcut.label} type='button' className='secondary' disabled={controlsDisabled} onClick={() => ticket.setAmount(formatCurrencyInputBalance(shortcut.value, asset.decimals))}>
 							{shortcut.label}
 						</button>
 					))}
 				</div>
 			)}
-			<InvalidCoverageExplanation model={model} side={side} disabled={controlsDisabled} onUseSellable={ticket.setAmount} />
+			<InvalidCoverageExplanation market={market} model={model} side={side} disabled={controlsDisabled} onUseSellable={ticket.setAmount} />
 			{requoted ? <UserMessage placement='page' tone='warning' announcement='polite' className='trade-requote-notice' detail={ticket.requoteNotice} /> : null}
 			<p className='visually-hidden trade-quote-announcement' role='status'>
 				{announcement}
 			</p>
+			{mode === 'entry' ? (
+				<CollateralFundingControls
+					actionLabel={model.actionLabel}
+					funding={funding}
+					required={required}
+					disabled={controlsDisabled || funding.pending || gasReason !== undefined || !wallet.connected || wallet.networkMismatchReason !== undefined}
+					reason={wallet.networkMismatchReason ?? (!wallet.connected ? wallet.actionLabel : gasReason)}
+				/>
+			) : null}
 			<QuotedTransactionPanel
 				phase={state}
 				actionLabel={model.actionLabel}
-				availability={model.availability}
+				availability={mode === 'entry' && (funding.reason !== undefined || funding.pending || gasReason !== undefined) ? { disabled: true, reason: gasReason ?? funding.reason ?? collateralCopy.loading } : model.availability}
 				statusText={confirmedText}
 				transactionHash={ticket.positionHash}
 				receiptWarning={ticket.positionReceiptWarning}

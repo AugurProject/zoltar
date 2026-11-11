@@ -73,6 +73,7 @@ export function capitalClient(initial = capitalSnapshot()) {
 			const infrastructure = ['zoltar', 'factory', 'auctionDeployer'].includes(request.functionName) ? getInfraContractAddresses() : undefined
 			const values: Record<string, unknown> = {
 				setupStage,
+				collateralToken: snapshot.collateralToken,
 				originUniverseId: snapshot.originUniverseId,
 				universeId: snapshot.universeId,
 				capitalLedger: capital,
@@ -118,8 +119,8 @@ export function capitalClient(initial = capitalSnapshot()) {
 				forkController: modules.fork,
 				feeStreams: modules.fees,
 				questionCount: snapshot.questionCount,
-				balanceOf: snapshot.walletAttoRep,
-				allowance: snapshot.allowanceAttoRep,
+				balanceOf: request.address === snapshot.collateralToken ? snapshot.walletCollateral : snapshot.walletAttoRep,
+				allowance: request.address === snapshot.collateralToken ? snapshot.collateralAllowance : snapshot.allowanceAttoRep,
 				...overrides,
 			}
 			if (request.functionName === 'portfolio') {

@@ -11,9 +11,9 @@ import {
 	test_statoblast_PortfolioPurchaseReceiver_PortfolioPurchaseReceiver as receiverArtifact,
 } from '../../types/contractArtifact'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
-import { burnedEthBalance, receiptBurns } from './burnEvidence'
+import { collateralBalance, burnedCollateralBalance, receiptBurns } from './burnEvidence'
 import { writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
-import { approveToken, getERC20Balance, requireBigInt } from '../../testSupport/simulator/utils/utilities'
+import { approveToken, getERC20Balance } from '../../testSupport/simulator/utils/utilities'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/statoblast'
@@ -79,13 +79,13 @@ describe('Statoblast: reporting and unresolved capital compensation', () => {
 		const outstanding = async () => (await fixture.owner().readContract({ abi: streamsArtifact.abi, address: streams, functionName: 'fundedOutstanding' }))[0]
 		const paidFor = async (expected: bigint, drift = 0n) => {
 			const buyer = fixture.other()
-			const before = await buyer.getBalance({ address: buyer.account.address })
-			const burnedBefore = await burnedEthBalance(buyer)
+			const before = await collateralBalance(buyer, fixture.portfolio, buyer.account.address)
+			const burnedBefore = await burnedCollateralBalance(buyer, fixture.portfolio)
 			const outstandingBefore = await outstanding()
 			const hash = await fixture.mint(amount)
 			const receipt = await buyer.getTransactionReceipt({ hash })
-			const gas = receipt.gasUsed * requireBigInt(receipt.effectiveGasPrice, 'Purchase effective gas price')
-			const paid = before - (await buyer.getBalance({ address: buyer.account.address })) - gas
+			expect(receipt.status).toBe('success')
+			const paid = before - (await collateralBalance(buyer, fixture.portfolio, buyer.account.address))
 			expect(paid).toBeGreaterThanOrEqual(amount + expected)
 			expect(paid).toBeLessThanOrEqual(amount + expected + drift)
 			// The entire base fee vests to underwriters; no part funds a service budget or is burned.
@@ -93,7 +93,7 @@ describe('Statoblast: reporting and unresolved capital compensation', () => {
 			const funded = (await outstanding()) - outstandingBefore
 			expect(funded).toBeLessThanOrEqual(base)
 			expect(funded).toBeGreaterThan(base - outstandingBefore / 1_000n - 1n)
-			expect(await burnedEthBalance(buyer)).toBe(burnedBefore)
+			expect(await burnedCollateralBalance(buyer, fixture.portfolio)).toBe(burnedBefore)
 		}
 		const first = await quote()
 		expect(first.premium).toBeGreaterThan(0n)
@@ -121,14 +121,14 @@ describe('Statoblast: reporting and unresolved capital compensation', () => {
 		expect(premiumCash).toBeGreaterThan(0n)
 		const native = fixture.poolFor(fixture.base.questionId)
 		const shares = await balanceOfShares(fixture.other(), native.shareToken, fixture.base.genesisUniverse, fixture.other().account.address)
-		const burnedBefore = await burnedEthBalance(fixture.owner())
+		const burnedBefore = await burnedCollateralBalance(fixture.owner(), fixture.portfolio)
 		const hash = await redeemCompleteSet(fixture.other(), native.securityPool, shares[0])
 		expect((await fixture.owner().readContract({ ...services, functionName: 'questionPremium', args: [fixture.base.genesisUniverse, fixture.base.questionId] }))[1]).toBe(0n)
 		// The cancelled premium has no recorded payer and is burned rather than kept by services.
 		const cancelled = (await receiptBurns(fixture.owner(), hash)).service.filter(entry => entry.universeId === fixture.base.genesisUniverse).reduce((total, entry) => total + entry.amount, 0n)
 		expect(cancelled).toBeGreaterThan(0n)
 		expect(cancelled).toBeLessThanOrEqual(premiumCash)
-		expect((await burnedEthBalance(fixture.owner())) - burnedBefore).toBeGreaterThanOrEqual(cancelled)
+		expect((await burnedCollateralBalance(fixture.owner(), fixture.portfolio)) - burnedBefore).toBeGreaterThanOrEqual(cancelled)
 		const question = await questionState()
 		expect(question.outcomeSupplyAttoShares).toBe(0n)
 	})
@@ -143,17 +143,17 @@ describe('Statoblast: reporting and unresolved capital compensation', () => {
 		const game = await report(fixture.owner(), 1)
 		expect((await fixture.owner().readContract({ ...services, functionName: 'questionPremium', args: [fixture.base.genesisUniverse, fixture.base.questionId] }))[1]).toBe(premium[1])
 		expect((await questionState()).feeRateAttoEthPerSecond).toBe(0n)
-		const burnedBefore = await burnedEthBalance(fixture.owner())
-		const servicesCashBefore = await fixture.owner().getBalance({ address: services.address })
+		const burnedBefore = await burnedCollateralBalance(fixture.owner(), fixture.portfolio)
+		const servicesCashBefore = await collateralBalance(fixture.owner(), fixture.portfolio, services.address)
 		await mature(game)
 		const hash = await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'checkpoint' }))
 		expect((await fixture.owner().readContract({ ...services, functionName: 'questionPremium', args: [fixture.base.genesisUniverse, fixture.base.questionId] }))[1]).toBe(0n)
 		const burns = await receiptBurns(fixture.owner(), hash)
 		const unused = burns.service.filter(entry => entry.universeId === fixture.base.genesisUniverse).reduce((total, entry) => total + entry.amount, 0n)
 		expect(unused).toBeGreaterThan(0n)
-		expect(await burnedEthBalance(fixture.owner())).toBe(burnedBefore + burns.totalEth)
+		expect(await burnedCollateralBalance(fixture.owner(), fixture.portfolio)).toBe(burnedBefore + burns.totalEth)
 		// Services keep none of the unearned premium: it was either paid to capital or burned.
-		expect(await fixture.owner().getBalance({ address: services.address })).toBeLessThanOrEqual(servicesCashBefore - unused)
+		expect(await collateralBalance(fixture.owner(), fixture.portfolio, services.address)).toBeLessThanOrEqual(servicesCashBefore - unused)
 	})
 
 	test('a minimum-size newcomer cannot collect a large finalized question premium tail', async () => {
@@ -183,10 +183,10 @@ describe('Statoblast: reporting and unresolved capital compensation', () => {
 		const reporter = fixture.other()
 		const rep = getRepTokenAddress(fixture.base.genesisUniverse)
 		const before = await getERC20Balance(reporter, rep, reporter.account.address)
-		const ethBefore = await reporter.getBalance({ address: reporter.account.address })
+		const ethBefore = await collateralBalance(reporter, fixture.portfolio, reporter.account.address)
 		const hash = await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...pool(), functionName: 'withdrawFromEscalationGame', args: [1, [0n]] }))
 		expect(await getERC20Balance(reporter, rep, reporter.account.address)).toBeGreaterThan(before)
-		expect(await reporter.getBalance({ address: reporter.account.address })).toBe(ethBefore)
+		expect(await collateralBalance(reporter, fixture.portfolio, reporter.account.address)).toBe(ethBefore)
 		expect((await fixture.owner().getTransactionReceipt({ hash })).status).toBe('success')
 	})
 

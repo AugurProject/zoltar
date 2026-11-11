@@ -1,6 +1,8 @@
+import { getTokenApprovalResetReason } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
+import { collateralPresentation } from '../../../protocol/collateral.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
-import { formatEther, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { formatEther, formatUnits, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { buildPortfolioPriceApprovalRequest, buildPortfolioPricePreparationRequest, buildPortfolioPriceRequest, buildPortfolioPriceWrapRequest, quotePortfolioPriceFunding, type PortfolioForkSnapshot, type PortfolioPriceSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -49,6 +51,7 @@ export function usePortfolioPrice({ fork, bidder, actions }: PortfolioPriceParam
 	}, [backend, key])
 	const current = loaded.value?.key === key ? loaded.value : undefined
 	const snapshot = current?.snapshot
+	const collateral = collateralPresentation(snapshot?.observation?.weth)
 	const reportId = reportInput.value.trim() === '' ? snapshot?.observation?.pendingReportId : portfolioUnsignedId(reportInput.value)
 	const reportKey = `${key}:${snapshot?.blockHash}:${reportId}`
 	useEffect(() => {
@@ -69,8 +72,8 @@ export function usePortfolioPrice({ fork, bidder, actions }: PortfolioPriceParam
 	}, [backend, reportKey])
 	const reportState = reports.value?.key === reportKey ? reports.value : undefined
 	const report = reportState?.report
-	const price = portfolioAmountOrUndefined(priceInput.value)
-	const requestedWeth = wethInput.value.trim() === '' ? 0n : portfolioAmountOrUndefined(wethInput.value)
+	const price = portfolioAmountOrUndefined(priceInput.value, 36 - collateral.decimals)
+	const requestedWeth = wethInput.value.trim() === '' ? 0n : portfolioAmountOrUndefined(wethInput.value, collateral.decimals)
 	let funding: ReturnType<typeof quotePortfolioPriceFunding> | undefined
 	let minimumWethAttoEth: bigint | undefined
 	let fundingError: string | undefined
@@ -92,10 +95,10 @@ export function usePortfolioPrice({ fork, bidder, actions }: PortfolioPriceParam
 	const fundingReason = reportWindowReason ?? (price === undefined || price <= 0n ? copy.priceInvalid : undefined) ?? (requestedWeth === undefined ? copy.wethInvalid : undefined) ?? fundingError
 	const walletReason =
 		fundingReason ?? (snapshot !== undefined && funding !== undefined && snapshot.ethBalanceAttoEth < funding.requiredEth ? copy.insufficientEth : undefined) ?? (snapshot?.observation !== undefined && funding !== undefined && snapshot.observation.repBalanceAttoRep < funding.rep ? copy.insufficientRep : undefined)
-	const wrapReason = walletReason ?? (funding?.wrap === 0n ? copy.noWrap : undefined)
+	const wrapReason = walletReason ?? (collateral.symbol !== 'WETH' ? 'Wrapping does not apply to this collateral.' : undefined) ?? (funding?.wrap === 0n ? copy.noWrap : undefined)
 	const requestReason =
 		walletReason ??
-		(funding !== undefined && funding.wrap > 0n ? copy.insufficientWeth : undefined) ??
+		(snapshot?.observation !== undefined && funding !== undefined && snapshot.observation.wethBalanceAttoEth < funding.weth ? copy.insufficientWeth : undefined) ??
 		(snapshot?.observation !== undefined && funding !== undefined && (snapshot.observation.wethAllowanceAttoEth < funding.weth || snapshot.observation.repAllowanceAttoRep < funding.rep) ? copy.approvalRequired : undefined)
 	const selectedReportReason =
 		baseReason ??
@@ -164,6 +167,7 @@ export function usePortfolioPrice({ fork, bidder, actions }: PortfolioPriceParam
 		return fresh
 	}
 	return {
+		collateral,
 		snapshot,
 		report,
 		funding,
@@ -212,15 +216,17 @@ export function usePortfolioPrice({ fork, bidder, actions }: PortfolioPriceParam
 			),
 		approve: (token: 'weth' | 'rep', amount: bigint) =>
 			run(
-				token === 'weth' ? 'approvePortfolioPriceWeth' : 'approvePortfolioPriceRep',
+				amount === 0n && token === 'weth' ? 'resetPortfolioPriceCollateral' : `approvePortfolioPrice${token === 'weth' ? 'Weth' : 'Rep'}`,
 				token === 'weth' ? copy.approveWeth : copy.approveRep,
 				fundingReason,
 				selected => ({
 					...buildPortfolioPriceApprovalRequest(selected, token, amount),
-					reviewDescription: `Allow branch price feed ${selected.feed} to spend up to ${formatEther(amount)} ${token === 'weth' ? 'WETH' : 'branch REP'} from your wallet. This sets the total allowance; it does not request a price report.`,
+					reviewDescription: `Allow branch price feed ${selected.feed} to spend up to ${formatUnits(amount, token === 'weth' ? collateral.decimals : 18)} ${token === 'weth' ? collateral.symbol : 'branch REP'} from your wallet. This sets the total allowance; it does not request a price report.`,
 				}),
 				async latest => {
 					freshFunding(latest)
+					const reason = getTokenApprovalResetReason(latest.observation?.wethAllowanceAttoEth, amount, collateral.symbol, token === 'weth' && collateral.symbol === 'USDT')
+					if (reason !== undefined) throw new Error(reason)
 				},
 			),
 		request: () =>
@@ -232,13 +238,13 @@ export function usePortfolioPrice({ fork, bidder, actions }: PortfolioPriceParam
 					if (price === undefined || requestedWeth === undefined || funding === undefined) throw new Error(copy.priceInvalid)
 					return {
 						...buildPortfolioPriceRequest(selected, price, requestedWeth),
-						reviewDescription: `Fund this branch price report with ${formatEther(funding.weth)} WETH, ${formatEther(funding.rep)} branch REP and ${formatEther(funding.bounty)} ETH bounty. Disputes may change the token amounts returned to your wallet. This does not activate the branch. Accepted prices can enable provider fees once the branch is active.`,
+						reviewDescription: `Fund this branch price report with ${formatUnits(funding.weth, collateral.decimals)} ${collateral.symbol}, ${formatEther(funding.rep)} branch REP and ${formatEther(funding.bounty)} ETH bounty. Disputes may change the token amounts returned to your wallet. This does not activate the branch. Accepted prices can enable provider fees once the branch is active.`,
 					}
 				},
 				async latest => {
 					const fresh = freshFunding(latest)
 					const observation = latest.observation
-					if (observation === undefined || fresh.wrap > 0n || observation.repBalanceAttoRep < fresh.rep || latest.ethBalanceAttoEth < fresh.bounty) throw new Error('Wallet report funding is insufficient.')
+					if (observation === undefined || observation.wethBalanceAttoEth < fresh.weth || observation.repBalanceAttoRep < fresh.rep || latest.ethBalanceAttoEth < fresh.bounty) throw new Error('Wallet report funding is insufficient.')
 					if (observation.wethAllowanceAttoEth < fresh.weth || observation.repAllowanceAttoRep < fresh.rep) throw new Error(copy.approvalRequired)
 				},
 				true,

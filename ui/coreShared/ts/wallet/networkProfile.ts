@@ -22,6 +22,7 @@ export type NetworkProfile = {
 	uniswapV3QuoterAddress: Address
 	uniswapV4QuoterAddress: Address
 	usdcAddress: Address
+	usdtAddress?: Address | undefined
 	wethAddress: Address
 }
 
@@ -62,6 +63,7 @@ export const MAINNET_NETWORK_PROFILE: NetworkProfile = {
 	uniswapV3QuoterAddress: MAINNET_UNISWAP.uniswapV3QuoterAddress,
 	uniswapV4QuoterAddress: MAINNET_UNISWAP.uniswapV4QuoterAddress,
 	usdcAddress: MAINNET_USDC_ADDRESS,
+	usdtAddress: getAddress('0xdac17f958d2ee523a2206206994597c13d831ec7'),
 	wethAddress: MAINNET_WETH_ADDRESS,
 }
 
@@ -144,6 +146,7 @@ export function createSimulationProfile({ genesisOutcome, genesisRepTokenAddress
 		uniswapV3QuoterAddress: MAINNET_NETWORK_PROFILE.uniswapV3QuoterAddress,
 		uniswapV4QuoterAddress: MAINNET_NETWORK_PROFILE.uniswapV4QuoterAddress,
 		usdcAddress: MAINNET_NETWORK_PROFILE.usdcAddress,
+		usdtAddress: MAINNET_NETWORK_PROFILE.usdtAddress,
 		wethAddress,
 	}
 }

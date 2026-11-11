@@ -4,7 +4,7 @@ import { inputInteger, inputMatches } from '../input-values.ts'
 
 import { BINARY_OUTCOME_NONE, operationalPools, shareTokenId, sharesToEth, walletShares } from './planning.ts'
 
-import { amount, choose, eligible, encodeStep, erc1155WalletDebit, eventEvidence, mixSeed, optionAmount, planBase } from '../planning.ts'
+import { amount, choose, eligible, encodeStep, erc20WalletDebit, erc1155WalletDebit, eventEvidence, mixSeed, optionAmount, planBase } from '../planning.ts'
 
 import { securityPoolAbi, securityPoolPortfolioAbi } from '@zoltar/bot-shared/contracts/abi'
 import { timestampDeadlineHasRequiredSafety } from '../timing.ts'
@@ -21,7 +21,14 @@ function purchase(snapshot: EcosystemSnapshot, pool: PoolSnapshot, options: Plan
 	if (quote === undefined || !inputMatches(options, 'pool', pool.address) || !inputMatches(options, 'amount', quote.mintAttoEth) || !operationalPools(snapshot).includes(pool) || mintDeadline(snapshot, pool, options) === undefined) return undefined
 	const mint = amount(quote.mintAttoEth)
 	const value = mint + amount(quote.feeAttoEth) + amount(quote.premiumAttoEth)
-	if (mint === 0n || amount(quote.minimumShares) === 0n || value > optionAmount(options, 'maxEthSpendAttoEth', 10n ** 16n) || amount(snapshot.wallet.ethBalanceAttoEth) < value + optionAmount(options, 'minimumEthReserveAttoEth', 10n ** 16n)) return undefined
+	if (
+		mint === 0n ||
+		amount(quote.minimumShares) === 0n ||
+		value > optionAmount(options, 'maxEthSpendAttoEth', 10n ** 16n) ||
+		amount(snapshot.wallet.ethBalanceAttoEth) < optionAmount(options, 'minimumEthReserveAttoEth', 10n ** 16n) ||
+		amount(snapshot.wallet.tokens.find(token => token.address.toLowerCase() === snapshot.deployments.weth.toLowerCase())?.balance ?? '0') < value
+	)
+		return undefined
 	return { quote, mint, value }
 }
 
@@ -71,10 +78,10 @@ export function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Op
 			}
 			let args: (bigint | string)[] | undefined
 			if (kind === 'redeem') args = [spend]
-			if (kind === 'create' && quotedPurchase !== undefined) args = [amount(pool.universeId), amount(pool.questionId), spend, snapshot.wallet.address, amount(quotedPurchase.quote.minimumShares)]
+			if (kind === 'create' && quotedPurchase !== undefined) args = [amount(pool.universeId), amount(pool.questionId), spend, snapshot.wallet.address, amount(quotedPurchase.quote.minimumShares), amount(quotedPurchase.quote.feeAttoEth)]
 			const shares = walletShares(snapshot, pool)
 			if (kind !== 'create' && shares === undefined) return undefined
-			let walletAssetDebits: OperationWalletAssetDebit[] = []
+			let walletAssetDebits: OperationWalletAssetDebit[] = quotedPurchase === undefined ? [] : [erc20WalletDebit(snapshot.deployments.weth, quotedPurchase.value, 'weth')]
 			if (kind === 'redeem') walletAssetDebits = [0, 1, 2].map(outcome => erc1155WalletDebit(pool.shareToken, shareTokenId(pool.universeId, outcome), spend))
 			if (kind === 'winning' && shares !== undefined) {
 				const winningBalance = [shares.invalid, shares.yes, shares.no][pool.questionOutcome]
@@ -90,7 +97,7 @@ export function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Op
 				postconditions: [kind === 'create' ? 'All three outcome share balances increase equally' : 'Pool collateral and wallet share balances decrease consistently'],
 				risk: kind === 'create' ? 'medium' : 'low',
 				snapshot,
-				steps: [encodeStep({ abi: kind === 'create' ? securityPoolPortfolioAbi : securityPoolAbi, args, evidence: [eventEvidence(pool.address, signature)], functionName: method, id: method, label: method, to: kind === 'create' ? pool.portfolio : pool.address, value: quotedPurchase?.value, walletAssetDebits })],
+				steps: [encodeStep({ abi: kind === 'create' ? securityPoolPortfolioAbi : securityPoolAbi, args, evidence: [eventEvidence(pool.address, signature)], functionName: method, id: method, label: method, to: kind === 'create' ? pool.portfolio : pool.address, value: 0n, walletAssetDebits })],
 			})
 		},
 		classification: 'selectable',
@@ -100,7 +107,7 @@ export function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Op
 		ecosystem: 'statoblast',
 		evaluate(snapshot, options) {
 			if (kind === 'create') {
-				return eligible(snapshot.pools.some(pool => purchase(snapshot, pool, options) !== undefined) ? undefined : 'No anchored portfolio purchase fits the full ETH budget and reserve')
+				return eligible(snapshot.pools.some(pool => purchase(snapshot, pool, options) !== undefined) ? undefined : 'No anchored portfolio purchase fits the WETH budget and ETH gas reserve')
 			}
 			const possible = snapshot.pools.some(pool => {
 				const shares = snapshot.wallet.shares.find(candidate => candidate.shareToken.toLowerCase() === pool.shareToken.toLowerCase() && candidate.universeId === pool.universeId)

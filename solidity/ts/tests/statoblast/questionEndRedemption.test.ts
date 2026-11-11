@@ -5,7 +5,7 @@ import { approveToken, getERC20Balance } from '../../testSupport/simulator/utils
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { redeemShares } from '../../testSupport/simulator/utils/contracts/securityPool'
-import { statoblast_EscalationGame_EscalationGame as gameArtifact, statoblast_SecurityPool_SecurityPool as poolArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact } from '../../types/contractArtifact'
+import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_EscalationGame_EscalationGame as gameArtifact, statoblast_SecurityPool_SecurityPool as poolArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact } from '../../types/contractArtifact'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 describe('Statoblast: question end and portfolio principal redemption', () => {
@@ -29,6 +29,9 @@ describe('Statoblast: question end and portfolio principal redemption', () => {
 		await fixture.prepare()
 		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime - 600n)
 		await fixture.refreshPrice()
+		const collateral = await fixture.other().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'collateralToken' })
+		const services = await fixture.other().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'services' })
+		await approveToken(fixture.other(), collateral, services)
 		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime - 2n)
 		await fixture.mint(unit)
 		expect(await fixture.base.mockWindow.getTime()).toBe(fixture.base.questionData.endTime - 1n)

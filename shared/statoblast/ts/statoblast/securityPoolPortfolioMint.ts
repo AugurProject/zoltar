@@ -2,7 +2,7 @@ import { encodeFunctionData, getAddress, isAddress, parseAbi, zeroAddress, type 
 import type { PortfolioReadClient } from './securityPoolPortfolioRead.js'
 
 const abi = parseAbi([
-	'function createCompleteSet(uint248 universeId,uint256 questionId,uint256 mintAttoEth,address recipient,uint256 minimumShares) payable',
+	'function createCompleteSet(uint248 universeId,uint256 questionId,uint256 mintAttoEth,address recipient,uint256 minimumShares,uint256 maximumFee)',
 	'function addQuestion(uint256 questionId) returns (address)',
 	'function getPool(uint256 questionId,uint248 universeId) view returns (address)',
 	'function quoteQuestionMint(address pool,uint256 cash) view returns (uint256)',
@@ -25,10 +25,15 @@ export function buildPortfolioMintRequest(parameters: { trader: Address; portfol
 	const universeId = uint(parameters.universeId, 'Universe id', 248)
 	const questionId = uint(parameters.questionId, 'Question id')
 	const cash = uint(parameters.mintAttoEth, 'Mint collateral')
-	if (cash === 0n) throw new Error('Enter a positive ETH mint amount.')
+	if (cash === 0n) throw new Error('Enter a positive collateral amount.')
 	const fee = uint(parameters.maximumPurchaseFeeAttoEth, 'Maximum purchase fee')
-	const value = uint(cash + fee, 'Transaction value')
-	return { account: address(parameters.trader, 'Trader'), to: address(parameters.portfolio, 'Portfolio'), value, data: encodeFunctionData({ abi, functionName: 'createCompleteSet', args: [universeId, questionId, cash, address(parameters.recipient, 'Recipient'), uint(parameters.minimumShares, 'Minimum shares')] }) }
+	uint(cash + fee, 'Total collateral')
+	return {
+		account: address(parameters.trader, 'Trader'),
+		to: address(parameters.portfolio, 'Portfolio'),
+		value: 0n,
+		data: encodeFunctionData({ abi, functionName: 'createCompleteSet', args: [universeId, questionId, cash, address(parameters.recipient, 'Recipient'), uint(parameters.minimumShares, 'Minimum shares'), fee] }),
+	}
 }
 
 /** @public Register a question without purchasing shares; the pool's admission policy still decides eligibility. */
@@ -54,7 +59,7 @@ export async function loadPortfolioMintQuote(parameters: { client: PortfolioRead
 	const universeId = uint(parameters.universeId, 'Universe id', 248)
 	const questionId = uint(parameters.questionId, 'Question id')
 	const cash = uint(parameters.mintAttoEth, 'Mint collateral')
-	if (cash === 0n) throw new Error('Enter a positive ETH mint amount.')
+	if (cash === 0n) throw new Error('Enter a positive collateral amount.')
 	const blockNumber = parameters.blockNumber ?? (await parameters.client.getBlock()).number
 	if (blockNumber === undefined) throw new Error('A confirmed block is required for a purchase quote.')
 	const read = (target: Address, functionName: string, args: readonly (Address | bigint)[] = []) => parameters.client.readContract({ address: target, abi, functionName, args, blockNumber })

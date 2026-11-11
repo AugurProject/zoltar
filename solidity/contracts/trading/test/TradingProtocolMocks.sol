@@ -1,9 +1,25 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { ERC20 } from '../../ERC20.sol';
 import { BinaryOutcomes } from '../../statoblast/BinaryOutcomes.sol';
 import { IERC1155Receiver } from '../../statoblast/interfaces/IERC1155Receiver.sol';
 import { ISecurityPool, SystemState } from '../../statoblast/interfaces/ISecurityPool.sol';
+
+contract TradingMockWeth is ERC20 {
+	constructor() ERC20('Wrapped Ether', 'WETH') {}
+	function deposit() public payable {
+		_mint(msg.sender, msg.value);
+	}
+	function withdraw(uint256 amount) external {
+		_burn(msg.sender, amount);
+		(bool success, ) = payable(msg.sender).call{value: amount}('');
+		require(success, 'Wrapped native withdrawal failed');
+	}
+	receive() external payable {
+		deposit();
+	}
+}
 
 contract TradingMockZoltar {
 	mapping(uint248 => uint256) public forkTime;
@@ -184,6 +200,16 @@ contract TradingMockSecurityPool {
 	TradingMockForker public immutable securityPoolForker;
 	SystemState public systemState = SystemState.Operational;
 	bool public awaitingForkContinuation;
+	TradingMockWeth public collateralToken = new TradingMockWeth();
+	function services() external view returns (address) {
+		return address(this);
+	}
+	function weth() external view returns (TradingMockWeth) {
+		return collateralToken;
+	}
+	function openOraclePriceCoordinator() external view returns (address) {
+		return address(this);
+	}
 	uint256 public sharesPerEth;
 	uint256 public shareTokenSupplyAttoShares;
 	uint256 public settlementCollateralAttoEth;
@@ -241,8 +267,9 @@ contract TradingMockSecurityPool {
 		return (0, 0);
 	}
 
-	function createCompleteSet(uint248 universe, uint256 question, uint256 cash, address recipient, uint256 minimumShares) external payable returns (uint256 amount) {
-		require(universe == universeId && question == questionId && msg.value == cash, 'Invalid mock portfolio purchase');
+	function createCompleteSet(uint248 universe, uint256 question, uint256 cash, address recipient, uint256 minimumShares, uint256) external returns (uint256 amount) {
+		require(universe == universeId && question == questionId, 'Invalid mock portfolio purchase');
+		collateralToken.transferFrom(msg.sender, address(this), cash);
 		amount = attoEthToAttoShares(cash);
 		require(amount > 0 && amount >= minimumShares, 'Mint is zero');
 		shareTokenSupplyAttoShares += amount;
@@ -251,6 +278,7 @@ contract TradingMockSecurityPool {
 	}
 
 	function createCompleteSet() external payable {
+		collateralToken.deposit{value: msg.value}();
 		uint256 amount = attoEthToAttoShares(msg.value);
 		require(amount > 0, 'Mint is zero');
 		shareTokenSupplyAttoShares += amount;
@@ -264,12 +292,7 @@ contract TradingMockSecurityPool {
 		shareTokenSupplyAttoShares -= amount;
 		settlementCollateralAttoEth -= ethAmount;
 		repToken.mint(msg.sender, attoSharesToAttoRep(amount));
-		if (portfolioCustody != address(0)) {
-			settlement.pay{value: ethAmount}(msg.sender);
-			return;
-		}
-		(bool success, ) = payable(msg.sender).call{value: ethAmount}('');
-		require(success, 'ETH transfer');
+		collateralToken.transfer(msg.sender, ethAmount);
 	}
 
 	receive() external payable {}
@@ -327,7 +350,7 @@ contract TradingMockSafe is IERC1155Receiver {
 	}
 
 	function createCompleteSet(ISecurityPool pool) external payable {
-		pool.createCompleteSet{value: msg.value}();
+		TradingMockSecurityPool(payable(address(pool))).createCompleteSet{value: msg.value}();
 	}
 
 	function transferBatch(address token, address from, address to, uint256[] calldata ids, uint256[] calldata values, bytes calldata data) external {

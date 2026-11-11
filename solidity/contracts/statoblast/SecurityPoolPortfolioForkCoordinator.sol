@@ -4,6 +4,8 @@ pragma solidity 0.8.35;
 import { SecurityPoolCreationCodeDeployer } from './SecurityPoolCreationCode.sol';
 
 import { Zoltar } from '../Zoltar.sol';
+import { Collateral } from '../Collateral.sol';
+import { ICollateralConfig } from './interfaces/ICollateralConfig.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
@@ -392,7 +394,8 @@ contract SecurityPoolPortfolioForkCoordinator {
 		SecurityPoolPortfolioSettlement settlement = portfolio.settlement();
 		IERC20 token = IERC20(address(zoltar.getRepToken(child)));
 		if (branch.recoveryAttoRep != 0) token.safeApprove(address(settlement), branch.recoveryAttoRep);
-		settlement.createChildUniverse{value: raisedAttoEth}(branch.parent, child, branch.parentCash, token, branch.recoveryAttoRep);
+		ICollateralConfig(address(portfolio)).collateralToken().safeApprove(address(settlement), raisedAttoEth);
+		settlement.createChildUniverse(branch.parent, child, branch.parentCash, token, branch.recoveryAttoRep, raisedAttoEth);
 		settlement.setFeeClock(child, uint48(zoltar.getForkRecapitalizationDeadline(branch.parent)));
 		(, uint256 forkQuestion, , , ) = zoltar.universes(branch.parent);
 		settlement.fixInheritedQuestionFinality(child, forkQuestion, clocks[child].logicalAnchor + 3 days);
@@ -421,8 +424,7 @@ contract SecurityPoolPortfolioForkCoordinator {
 		cash = _recordRecovery(source, questionId, question, shares);
 		IPortfolioForkServices(portfolio.services()).recoverPremiumCash(source, questionId, shares, msg.sender);
 		if (cash != 0) {
-			(bool sent, ) = msg.sender.call{value: cash}('');
-			require(sent, 'Recovery transfer failed');
+			Collateral.send(ICollateralConfig(address(portfolio)).collateralToken(), msg.sender, cash);
 		}
 		emit NeutralCashRecovered(source, questionId, msg.sender, shares, cash);
 	}

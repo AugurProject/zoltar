@@ -19,9 +19,9 @@ test('complete set purchase pays fee and premium through the portfolio and prote
 	const step = plan?.steps[0]
 	if (step === undefined) throw new Error('Missing portfolio purchase')
 	expect(step.to).toBe(pool.portfolio)
-	expect(step.value).toBe('1300')
-	expect(step.walletAssetDebits).toEqual([{ amount: '1300', asset: 'ETH', kind: 'native' }])
-	expect(decodeFunctionData({ abi: securityPoolPortfolioAbi, data: step.data }).args).toEqual([BigInt(pool.universeId), BigInt(pool.questionId), 1000n, snapshot.wallet.address, 950n])
+	expect(step.value).toBe('0')
+	expect(step.walletAssetDebits).toEqual([{ amount: '1300', asset: snapshot.deployments.weth, kind: 'erc20', category: 'weth' }])
+	expect(decodeFunctionData({ abi: securityPoolPortfolioAbi, data: step.data }).args).toEqual([BigInt(pool.universeId), BigInt(pool.questionId), 1000n, snapshot.wallet.address, 950n, 100n])
 })
 
 test('purchase never spends fees outside the configured wallet budget', () => {

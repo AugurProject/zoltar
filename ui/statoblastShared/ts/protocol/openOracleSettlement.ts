@@ -66,7 +66,7 @@ export async function loadCoordinatorPriceValidUntilTimestamp(client: Pick<ReadC
 			{ address: feed.result, abi: sharedFeedLinkAbi, functionName: 'securityPoolFactory' },
 			{ address: feed.result, abi: sharedFeedLinkAbi, functionName: 'portfolio' },
 			{ address: feed.result, abi: sharedFeedLinkAbi, functionName: 'universeId' },
-			{ address: feed.result, abi, functionName: 'weth' },
+			{ address: feed.result, abi, functionName: 'collateralToken' },
 			{ address: feed.result, abi, functionName: 'reputationToken' },
 		])
 		if (

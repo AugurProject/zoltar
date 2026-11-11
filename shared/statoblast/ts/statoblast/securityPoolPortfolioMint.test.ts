@@ -6,13 +6,13 @@ const trader: Address = '0x0000000000000000000000000000000000000001'
 const portfolio: Address = '0x0000000000000000000000000000000000000002'
 const pool: Address = '0x0000000000000000000000000000000000000003'
 const capitalLedger: Address = '0x0000000000000000000000000000000000000004'
-const abi = parseAbi(['function createCompleteSet(uint248 universeId,uint256 questionId,uint256 mintAttoEth,address recipient,uint256 minimumShares) payable'])
+const abi = parseAbi(['function createCompleteSet(uint248 universeId,uint256 questionId,uint256 mintAttoEth,address recipient,uint256 minimumShares,uint256 maximumFee)'])
 
 describe('shared capital complete-set purchases', () => {
 	test('binds universe, question, outcome minimum and an explicit fee budget', () => {
 		const request = buildPortfolioMintRequest({ trader, portfolio, universeId: 7n, questionId: 13n, mintAttoEth: 100n, recipient: trader, minimumShares: 99n, maximumPurchaseFeeAttoEth: 2n })
-		expect(request).toMatchObject({ account: trader, to: portfolio, value: 102n })
-		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'createCompleteSet', args: [7n, 13n, 100n, trader, 99n] })
+		expect(request).toMatchObject({ account: trader, to: portfolio, value: 0n })
+		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'createCompleteSet', args: [7n, 13n, 100n, trader, 99n, 2n] })
 		expect(() => buildPortfolioMintRequest({ trader, portfolio, universeId: 2n ** 248n, questionId: 13n, mintAttoEth: 100n, recipient: trader, minimumShares: 99n, maximumPurchaseFeeAttoEth: 2n })).toThrow('uint248')
 	})
 

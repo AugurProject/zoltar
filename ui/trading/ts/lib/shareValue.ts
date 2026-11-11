@@ -1,3 +1,4 @@
+import { collateralAsset, formatCollateralAmount, type CollateralMarket } from '../protocol/collateral.js'
 import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { formatRoundedUnits } from './format.js'
 import type { LiveMarket } from '../protocol/liveMarket.js'
@@ -5,7 +6,7 @@ import * as payoutCopy from '../copy/payout.js'
 import { outcomeLabel } from '../copy/outcomes.js'
 
 /** The SecurityPool fields that define how many attoShares one attoETH of settlement collateral currently represents. */
-export type ShareValueRate = Pick<LiveMarket, 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares' | 'settlementRecoveryAttoRep'>
+export type ShareValueRate = Pick<LiveMarket, 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares' | 'settlementRecoveryAttoRep' | 'collateral'>
 
 /** Settlement-collateral value of a share amount at the pool's current rate; mirrors SecurityPool.attoSharesToAttoEth. */
 export function attoSharesToCollateralAttoEth(amountAttoShares: bigint, rate: ShareValueRate) {
@@ -35,24 +36,24 @@ export type ShareValueRounding = 'nearest' | 'down'
 
 function formatCollateralValue(amountAttoShares: bigint, rate: ShareValueRate, maximumFractionDigits: number, rounding: ShareValueRounding) {
 	const value = attoSharesToCollateralAttoEth(amountAttoShares, rate)
-	const formatted = rounding === 'down' ? formatTrimmedUnits(value, 18, maximumFractionDigits) : formatRoundedUnits(value, 18, maximumFractionDigits)
+	const formatted = rounding === 'down' ? formatTrimmedUnits(value, collateralAsset(rate).decimals, maximumFractionDigits) : formatRoundedUnits(value, collateralAsset(rate).decimals, maximumFractionDigits)
 	return value > 0n && formatted === '0' ? `<${formatTrimmedUnits(1n, maximumFractionDigits, maximumFractionDigits)}` : formatted
 }
 
-/** Shares and LP tokens have 18 decimal places, independent of collateral backing. */
+/** LP tokens use their fixed ERC20 precision; outcome quantities follow their portfolio collateral unit. */
 export const SHARE_QUANTITY_DECIMALS = 18
 
-function formatShareQuantity(amount: bigint, maximumFractionDigits: number, rounding: ShareValueRounding) {
+function formatShareQuantity(amount: bigint, maximumFractionDigits: number, rounding: ShareValueRounding, decimals = SHARE_QUANTITY_DECIMALS) {
 	if (amount < 0n) throw new Error('Share amounts cannot be negative')
-	const formatted = rounding === 'down' ? formatTrimmedUnits(amount, SHARE_QUANTITY_DECIMALS, maximumFractionDigits) : formatRoundedUnits(amount, SHARE_QUANTITY_DECIMALS, maximumFractionDigits)
+	const formatted = rounding === 'down' ? formatTrimmedUnits(amount, decimals, maximumFractionDigits) : formatRoundedUnits(amount, decimals, maximumFractionDigits)
 	return amount > 0n && formatted === '0' ? `<${formatTrimmedUnits(1n, maximumFractionDigits, maximumFractionDigits)}` : formatted
 }
 
 /** Share outcome keys; display text comes from `outcomeLabel`. */
 export const shareOutcome = { yes: 'YES', no: 'NO', invalid: 'INVALID' } as const
 
-export function formatOutcomeQuantity(amountAttoShares: bigint, outcome: 'YES' | 'NO' | 'INVALID', maximumFractionDigits = 4, rounding: ShareValueRounding = 'nearest') {
-	return `${formatShareQuantity(amountAttoShares, maximumFractionDigits, rounding)} ${outcomeLabel(outcome)}`
+export function formatOutcomeQuantity(amountAttoShares: bigint, outcome: 'YES' | 'NO' | 'INVALID', maximumFractionDigits = 4, rounding: ShareValueRounding = 'nearest', market: CollateralMarket = {}) {
+	return `${formatShareQuantity(amountAttoShares, maximumFractionDigits, rounding, collateralAsset(market).decimals)} ${outcomeLabel(outcome)}`
 }
 
 /** LP quantities use a fixed scale too; their underlying reserve claims are displayed separately. */
@@ -60,14 +61,14 @@ export function formatLpQuantity(amountLp: bigint, maximumFractionDigits = 4, ro
 	return `${formatShareQuantity(amountLp, maximumFractionDigits, rounding)} LP`
 }
 
-export function formatCompleteSetQuantity(amountAttoShares: bigint, maximumFractionDigits = 4, rounding: ShareValueRounding = 'nearest') {
-	const formatted = formatShareQuantity(amountAttoShares, maximumFractionDigits, rounding)
+export function formatCompleteSetQuantity(amountAttoShares: bigint, maximumFractionDigits = 4, rounding: ShareValueRounding = 'nearest', market: CollateralMarket = {}) {
+	const formatted = formatShareQuantity(amountAttoShares, maximumFractionDigits, rounding, collateralAsset(market).decimals)
 	return `${formatted} complete ${formatted === '1' ? 'set' : 'sets'}`
 }
 
 /** Collateral value of a share amount as an ETH figure; limits round down so the displayed amount is always accepted. */
 export function formatCollateralEth(amountAttoShares: bigint, rate: ShareValueRate, rounding: ShareValueRounding = 'nearest') {
-	const eth = `${formatCollateralValue(amountAttoShares, rate, 4, rounding)} ETH`
+	const eth = `${formatCollateralValue(amountAttoShares, rate, 4, rounding)} ${collateralAsset(rate).symbol}`
 	const rep = attoSharesToRecoveryAttoRep(amountAttoShares, rate)
 	return rep === 0n ? eth : `${eth} + ${formatTrimmedUnits(rep, 18, 4)} REP`
 }
@@ -90,11 +91,11 @@ export function isUnresolvedRedemptionBlocked(market: OutcomeValueMarket) {
 /** Current payout with its resolution and redemption conditions. A caller whose surroundings already state that redemption is blocked passes `noteRedemption: false`. */
 export function formatOutcomePayout(amount: bigint, outcome: 'YES' | 'NO' | 'INVALID', market: OutcomeValueMarket, rounding: ShareValueRounding = 'nearest', { noteRedemption = true }: { noteRedemption?: boolean } = {}) {
 	if (market.loadError !== undefined) return payoutCopy.unavailable
-	if (amount === 0n) return '0 ETH'
+	if (amount === 0n) return formatCollateralAmount(0n, market)
 	const value = formatCollateralEth(amount, market, rounding)
 	const index = { INVALID: 0, YES: 1, NO: 2 }[outcome]
 	if (market.questionOutcome !== undefined && market.questionOutcome !== 3) {
-		if (market.questionOutcome !== index) return payoutCopy.zeroPayout
+		if (market.questionOutcome !== index) return payoutCopy.formatZeroPayout(collateralAsset(market).symbol)
 		return market.systemState === 0 ? payoutCopy.formatRedeemablePayout(value) : payoutCopy.formatUnredeemableWinningPayout(value)
 	}
 	const payout = payoutCopy.formatConditionalPayout(value, outcome)
@@ -103,16 +104,16 @@ export function formatOutcomePayout(amount: bigint, outcome: 'YES' | 'NO' | 'INV
 
 /** Display current backing as a conditional payout, never as an executable sale quote. `noteRedemption` is as for `formatOutcomePayout`. */
 export function formatOutcomeWithValue(amount: bigint, outcome: 'YES' | 'NO' | 'INVALID', market: OutcomeValueMarket, digits = 4, rounding: ShareValueRounding = 'nearest', { noteRedemption = true }: { noteRedemption?: boolean } = {}) {
-	return `${formatOutcomeQuantity(amount, outcome, digits, rounding)} (${formatOutcomePayout(amount, outcome, market, rounding, { noteRedemption })})`
+	return `${formatOutcomeQuantity(amount, outcome, digits, rounding, market)} (${formatOutcomePayout(amount, outcome, market, rounding, { noteRedemption })})`
 }
 
 export function formatCompleteSetWithValue(amount: bigint, market: ShareValueRate & Partial<Pick<LiveMarket, 'loadError'>>, digits = 4, rounding: ShareValueRounding = 'nearest') {
-	return `${formatCompleteSetQuantity(amount, digits, rounding)} (${market.loadError === undefined ? formatCollateralEth(amount, market, rounding) : payoutCopy.unavailable})`
+	return `${formatCompleteSetQuantity(amount, digits, rounding, market)} (${market.loadError === undefined ? formatCollateralEth(amount, market, rounding) : payoutCopy.unavailable})`
 }
 
 /** LP tokens represent reserve claims, not a fixed number of complete sets. */
 export function formatLpPayout(amount: bigint, market: LiveMarket, rounding: ShareValueRounding = 'nearest') {
-	if (amount === 0n) return '0 ETH'
+	if (amount === 0n) return formatCollateralAmount(0n, market)
 	if (market.loadError !== undefined || market.lpTotalSupply === 0n) return payoutCopy.valueUnavailable
 	const yes = (market.yesReserve * amount) / market.lpTotalSupply
 	const no = (market.noReserve * amount) / market.lpTotalSupply

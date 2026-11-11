@@ -19,6 +19,7 @@ const abi = parseAbi([
 	'function securityPoolFactory() view returns (address)',
 	'function reputationToken() view returns (address)',
 	'function weth() view returns (address)',
+	'function collateralToken() view returns (address)',
 	'function openOracle() view returns (address)',
 	'function minimumToken1ReportAttoEth() view returns (uint256)',
 	'function minimumToken2ReportAttoRep() view returns (uint256)',
@@ -87,6 +88,7 @@ export async function loadPortfolioPriceSnapshot(parameters: { client: PriceRead
 	let observation:
 		| {
 				weth: Address
+				wrappedNative: Address
 				openOracle: Address
 				minimumWethAttoEth: bigint | undefined
 				minimumRepAttoRep: bigint | undefined
@@ -103,9 +105,10 @@ export async function loadPortfolioPriceSnapshot(parameters: { client: PriceRead
 		  }
 		| undefined
 	if (feed !== zeroAddress) {
-		const [authority, feedFactory, feedUniverse, feedRep, wethValue, oracleValue] = await Promise.all([read(feed, 'portfolio'), read(feed, 'securityPoolFactory'), read(feed, 'universeId'), read(feed, 'reputationToken'), read(feed, 'weth'), read(feed, 'openOracle')])
+		const [authority, feedFactory, feedUniverse, feedRep, wethValue, oracleValue] = await Promise.all([read(feed, 'portfolio'), read(feed, 'securityPoolFactory'), read(feed, 'universeId'), read(feed, 'reputationToken'), read(feed, 'collateralToken'), read(feed, 'openOracle')])
 		if (address(authority, 'Feed portfolio') !== portfolio || address(feedFactory, 'Feed factory') !== factory || uint(feedUniverse, 'Feed universe', 248) !== universeId || address(feedRep, 'Feed REP') !== repToken) throw new Error('Price feed belongs to another portfolio or branch.')
-		const weth = address(wethValue, 'WETH')
+		const weth = address(wethValue, 'Collateral')
+		const wrappedNative = address(await read(feed, 'weth'), 'Wrapped native token')
 		const openOracle = address(oracleValue, 'OpenOracle')
 		const [minimum, minimumRep, bounty, price, settled, validity, settlement, pending, wethBalanceAttoEth, repBalanceAttoRep, wethAllowanceAttoEth, repAllowanceAttoRep] = await Promise.all([
 			reportingOpen ? read(feed, 'minimumToken1ReportAttoEth') : undefined,
@@ -122,6 +125,7 @@ export async function loadPortfolioPriceSnapshot(parameters: { client: PriceRead
 			read(repToken, 'allowance', [owner, feed]),
 		])
 		observation = {
+			wrappedNative,
 			weth,
 			openOracle,
 			minimumWethAttoEth: minimum === undefined ? undefined : uint(minimum, 'Minimum WETH', 128),
@@ -155,7 +159,7 @@ export function quotePortfolioPriceFunding(snapshot: PortfolioPriceSnapshot, pro
 	const minimum = inventoryWeth > observation.minimumWethAttoEth ? inventoryWeth : observation.minimumWethAttoEth
 	const weth = uint(requestedWeth > minimum ? requestedWeth : minimum, 'Initial WETH report', 128)
 	const rep = uint((weth * price + 10n ** 18n - 1n) / 10n ** 18n, 'Initial REP report', 128)
-	const wrap = weth > observation.wethBalanceAttoEth ? weth - observation.wethBalanceAttoEth : 0n
+	const wrap = observation.weth === observation.wrappedNative && weth > observation.wethBalanceAttoEth ? weth - observation.wethBalanceAttoEth : 0n
 	return { price, weth, rep, wrap, bounty: observation.bounty, requiredEth: wrap + observation.bounty }
 }
 export function buildPortfolioPricePreparationRequest(snapshot: PortfolioPriceSnapshot) {
@@ -172,6 +176,6 @@ export function buildPortfolioPriceApprovalRequest(snapshot: PortfolioPriceSnaps
 	return { account: snapshot.owner, to: token === 'weth' ? snapshot.observation.weth : snapshot.repToken, value: 0n, data: encodeFunctionData({ abi, functionName: 'approve', args: [snapshot.feed, uint(amount, 'Approval amount')] }) }
 }
 export function buildPortfolioPriceWrapRequest(snapshot: PortfolioPriceSnapshot, amount: bigint) {
-	if (snapshot.observation === undefined || uint(amount, 'ETH to wrap') === 0n) throw new Error('No WETH wrapping is required.')
+	if (snapshot.observation === undefined || snapshot.observation.weth !== snapshot.observation.wrappedNative || uint(amount, 'ETH to wrap') === 0n) throw new Error('No WETH wrapping is required.')
 	return { account: snapshot.owner, to: snapshot.observation.weth, value: amount, data: encodeFunctionData({ abi, functionName: 'deposit' }) }
 }

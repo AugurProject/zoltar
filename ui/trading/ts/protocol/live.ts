@@ -1,3 +1,5 @@
+import { tokenFunded, loadTradingCollateralAsset } from './collateral.js'
+import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { loadBudgetMint, loadMintFees } from './minting.js'
 import { loadCentralPortfolioQuestion } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolioState.js'
 import { submissionDeadline, requireFreshSubmissionWindow } from './submissionWindow.js'
@@ -48,6 +50,8 @@ async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address)
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'portfolioCustody' }),
 	])
 	const central = await loadCentralPortfolioQuestion(client, pool, capital, blockNumber)
+	const token = await client.readContract({ address: central.portfolioAddress, abi: portfolioArtifact.abi, functionName: 'collateralToken', blockNumber })
+	const collateral = await loadTradingCollateralAsset(client, token, blockNumber)
 	const mintFees = await loadMintFees(client, central, blockNumber)
 	const feeAccounting = central
 	const feeEndTime = central.feeEndTimestamp
@@ -58,6 +62,7 @@ async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address)
 	if (current === undefined || projected === undefined) throw new Error('Security pool fee accounting unavailable')
 	return {
 		questionData,
+		collateral,
 		mintFees,
 		zoltar,
 		parent,
@@ -249,6 +254,7 @@ export async function loadLiveMarket(client: PublicClient, configuration: Deploy
 		shareTokenSupplyAttoShares,
 		settlementCollateralAttoEth,
 		settlementRecoveryAttoRep,
+		collateral: poolSettings.collateral,
 		valuation: poolSettings.valuation,
 		mintFees: poolSettings.mintFees,
 		currentRetentionRate,
@@ -458,7 +464,9 @@ async function simulateEntryWithExpiry(client: WalletClient, configuration: Depl
 		expiry,
 		async (block, deadline) => {
 			mintAttoEth = await loadBudgetMint(client, market, amount, block.blockNumber)
-			return await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [pairAddress, mintAttoEth, side === 'YES' ? 1 : 2, 0n, account, deadline], value: amount, blockNumber: block.blockNumber })
+			return tokenFunded(market)
+				? await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'enterPositionWithCollateral', account, args: [pairAddress, mintAttoEth, side === 'YES' ? 1 : 2, 0n, account, deadline, amount], blockNumber: block.blockNumber })
+				: await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [pairAddress, mintAttoEth, side === 'YES' ? 1 : 2, 0n, account, deadline], value: amount, blockNumber: block.blockNumber })
 		},
 		(block, deadline) => submissionDeadline(client, market, 'entry', block, deadline),
 	)
@@ -477,7 +485,9 @@ export async function submitFreshEntry(client: WalletClient, configuration: Depl
 	const minimumLongShares = retainApprovedMinimum(quote.minimumLongShares, refreshed.result.totalLongShares, 'long shares')
 	return await guardedWrite(async () => {
 		await requireFreshSubmissionWindow(client, quote.market, 'entry', quote.deadline)
-		return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [pairAddress, refreshed.mintAttoEth, quote.side === 'YES' ? 1 : 2, minimumLongShares, account, quote.deadline], value: quote.amount })
+		return tokenFunded(quote.market)
+			? await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'enterPositionWithCollateral', account, args: [pairAddress, refreshed.mintAttoEth, quote.side === 'YES' ? 1 : 2, minimumLongShares, account, quote.deadline, quote.amount] })
+			: await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [pairAddress, refreshed.mintAttoEth, quote.side === 'YES' ? 1 : 2, minimumLongShares, account, quote.deadline], value: quote.amount })
 	})
 }
 

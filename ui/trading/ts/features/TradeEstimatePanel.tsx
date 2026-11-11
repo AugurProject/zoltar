@@ -1,3 +1,4 @@
+import { collateralAsset, formatCollateralAmount } from '../protocol/collateral.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { formatScaledPercentage, formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
@@ -12,10 +13,8 @@ import { averagePriceBps, formatCompleteSetWithValue, formatOutcomePayout, forma
 import { formatSlippagePercent, type TradeSettings } from '../lib/tradeSettings.js'
 import type { LiveBalances, LiveMarket } from '../protocol/live.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import { formatEthAmount } from '../copy/outcomes.js'
 import * as ticketCopy from '../copy/tradeTicket.js'
 import * as payoutCopy from '../copy/payout.js'
-import * as workflowCopy from '../copy/workflows.js'
 import * as settingsCopy from '../copy/tradeSettings.js'
 import { buyReturn, holdingAfterTrade, poolFeeAttoEth, probabilityPercent, type PriceImpactTier, type TradeEstimate } from './live/tradeTicketModel.js'
 
@@ -50,13 +49,13 @@ function absolute(value: bigint) {
 	return value < 0n ? -value : value
 }
 
-function formatEstimateEth(amountAttoEth: bigint) {
-	return formatEthAmount(formatRoundedUnits(amountAttoEth, 18, ESTIMATE_DIGITS))
+function formatEstimateEth(amountAttoEth: bigint, market: Pick<LiveMarket, 'collateral'>) {
+	return formatCollateralAmount(amountAttoEth, market, ESTIMATE_DIGITS)
 }
 
 /** What the estimate says a trade receives, for the ticket's screen-reader announcement. */
-export function estimateAnnouncement(estimate: TradeEstimate) {
-	return ticketCopy.formatEstimateAnnouncement(estimate.kind === 'entry' ? formatOutcomeQuantity(estimate.quote.totalLongShares, estimate.side, ESTIMATE_DIGITS) : formatEstimateEth(estimate.receiveAttoEth))
+export function estimateAnnouncement(estimate: TradeEstimate, market: Pick<LiveMarket, 'collateral'> = {}) {
+	return ticketCopy.formatEstimateAnnouncement(estimate.kind === 'entry' ? formatOutcomeQuantity(estimate.quote.totalLongShares, estimate.side, ESTIMATE_DIGITS, 'nearest', market) : formatEstimateEth(estimate.receiveAttoEth, market))
 }
 
 /** A review value whose figure stays in the value face, with what it pays on a quieter line of prose under it. */
@@ -73,14 +72,14 @@ function ValueWithPayout({ quantity, payout }: { quantity: string; payout: strin
  * The gain or loss a winning buy leaves against the ETH paid, with the same figure as a return on that ETH. It uses the
  * digits of the payout shown beside the shares received, so the two reconcile.
  */
-function formatProfit({ profitAttoEth, returnBps }: { profitAttoEth: bigint; returnBps: bigint }) {
+function formatProfit({ profitAttoEth, returnBps }: { profitAttoEth: bigint; returnBps: bigint }, market: LiveMarket) {
 	const format = profitAttoEth < 0n ? payoutCopy.formatLoss : payoutCopy.formatGain
-	return format(`${formatRoundedUnits(absolute(profitAttoEth), 18, PAYOUT_DIGITS)} ${workflowCopy.eth}`, formatScaledPercentage(absolute(returnBps), 2, 1))
+	return format(formatCollateralAmount(absolute(profitAttoEth), market, PAYOUT_DIGITS), formatScaledPercentage(absolute(returnBps), 2, 1))
 }
 
 /** The approximate fee, or the smallest shown amount as an upper bound when the fee rounds to nothing. */
-function formatFeeEth(feeAttoEth: bigint) {
-	const formatted = formatRoundedUnits(feeAttoEth, 18, ESTIMATE_DIGITS)
+function formatFeeEth(feeAttoEth: bigint, market: LiveMarket) {
+	const formatted = formatRoundedUnits(feeAttoEth, collateralAsset(market).decimals, ESTIMATE_DIGITS)
 	return feeAttoEth > 0n && formatted === '0' ? `<${formatTrimmedUnits(1n, ESTIMATE_DIGITS, ESTIMATE_DIGITS)}` : `≈ ${formatted}`
 }
 
@@ -123,13 +122,18 @@ export function TradeEstimatePanel({
 			? [
 					{
 						label: ticketCopy.youReceiveEstimate,
-						value: <ValueWithPayout quantity={formatOutcomeQuantity(quote.totalLongShares, side, ESTIMATE_DIGITS)} payout={`${formatOutcomePayout(quote.totalLongShares, side, market)} · ${entryInvalid === 0n ? payoutCopy.otherwiseZero : payoutCopy.formatShortConditionalPayout(formatEthAmount('0'), opposite)}`} />,
+						value: (
+							<ValueWithPayout
+								quantity={formatOutcomeQuantity(quote.totalLongShares, side, ESTIMATE_DIGITS, 'nearest', market)}
+								payout={`${formatOutcomePayout(quote.totalLongShares, side, market)} · ${entryInvalid === 0n ? payoutCopy.formatOtherwiseZero(collateralAsset(market).symbol) : payoutCopy.formatShortConditionalPayout(formatCollateralAmount(0n, market), opposite)}`}
+							/>
+						),
 					},
-					...(entryInvalid === 0n ? [] : [{ label: ticketCopy.invalidInsurance, value: <ValueWithPayout quantity={formatOutcomeQuantity(entryInvalid, shareOutcome.invalid)} payout={formatOutcomePayout(entryInvalid, shareOutcome.invalid, market)} /> }]),
+					...(entryInvalid === 0n ? [] : [{ label: ticketCopy.invalidInsurance, value: <ValueWithPayout quantity={formatOutcomeQuantity(entryInvalid, shareOutcome.invalid, 4, 'nearest', market)} payout={formatOutcomePayout(entryInvalid, shareOutcome.invalid, market)} /> }]),
 				]
 			: [
-					{ label: ticketCopy.youSellEstimate, value: formatOutcomeQuantity(quote.totalLongShares, side, ESTIMATE_DIGITS) },
-					{ label: ticketCopy.youReceiveEstimate, value: formatEstimateEth(estimate.receiveAttoEth) },
+					{ label: ticketCopy.youSellEstimate, value: formatOutcomeQuantity(quote.totalLongShares, side, ESTIMATE_DIGITS, 'nearest', market) },
+					{ label: ticketCopy.youReceiveEstimate, value: formatEstimateEth(estimate.receiveAttoEth, market) },
 				]
 	const average = averagePriceBps(estimate.kind === 'entry' ? estimate.payAttoEth : estimate.receiveAttoEth, quote.totalLongShares, market)
 	const holdingAfter = holdingAfterTrade(estimate, balances)
@@ -138,10 +142,10 @@ export function TradeEstimatePanel({
 	const detailRows = [
 		// A low price impact needs no attention, so it waits here until it reaches the caution tier.
 		...(impactTier === 'low' ? [impactRow] : []),
-		{ label: ticketCopy.tradingFee, value: ticketCopy.formatTradingFeeValue(formatScaledPercentage(market.feeBps, 2), formatFeeEth(poolFeeAttoEth(estimate, market))) },
+		{ label: ticketCopy.tradingFee, value: ticketCopy.formatTradingFeeValue(formatScaledPercentage(market.feeBps, 2), formatFeeEth(poolFeeAttoEth(estimate, market), market), collateralAsset(market).symbol) },
 		{ label: ticketCopy.completeSets, value: formatCompleteSetWithValue(quote.completeSetShares, market) },
 		// Swapped shares pass through the pool and are never held, so they have no payout to state.
-		estimate.kind === 'entry' ? { label: ticketCopy.swapped(opposite), value: formatOutcomeQuantity(estimate.quote.oppositeSharesSwapped, opposite) } : { label: ticketCopy.swapped(side), value: formatOutcomeQuantity(estimate.quote.longSharesSwapped, side) },
+		estimate.kind === 'entry' ? { label: ticketCopy.swapped(opposite), value: formatOutcomeQuantity(estimate.quote.oppositeSharesSwapped, opposite, 4, 'nearest', market) } : { label: ticketCopy.swapped(side), value: formatOutcomeQuantity(estimate.quote.longSharesSwapped, side, 4, 'nearest', market) },
 	]
 	return (
 		<section className='trade-estimate' aria-label={ticketCopy.estimateHeading}>
@@ -152,14 +156,14 @@ export function TradeEstimatePanel({
 				primary={primary}
 				details={[
 					{ label: ticketCopy.averagePrice, value: average === undefined ? commonCopy.metricUnavailablePlaceholder : formatScaledPercentage(average, 2) },
-					...(estimate.kind === 'entry' ? [{ label: ticketCopy.formatProfitIfResolves(side), value: formatProfit(buyReturn(estimate, market)) }] : []),
-					{ label: ticketCopy.minimumReceived, value: estimate.kind === 'entry' ? formatOutcomeQuantity(estimate.minimumLongShares, side, ESTIMATE_DIGITS, 'down') : formatEthAmount(formatTrimmedUnits(estimate.minimumAttoEth, 18, ESTIMATE_DIGITS)) },
+					...(estimate.kind === 'entry' ? [{ label: ticketCopy.formatProfitIfResolves(side), value: formatProfit(buyReturn(estimate, market), market) }] : []),
+					{ label: ticketCopy.minimumReceived, value: estimate.kind === 'entry' ? formatOutcomeQuantity(estimate.minimumLongShares, side, ESTIMATE_DIGITS, 'down', market) : formatCollateralAmount(estimate.minimumAttoEth, market, ESTIMATE_DIGITS, 'down') },
 					// The most shares the wallet signs over for a sale; the router refunds what the trade does not use.
-					...(estimate.kind === 'exit' ? [{ label: ticketCopy.maximumSold, value: formatOutcomeQuantity(estimate.maximumLongShares, side, ESTIMATE_DIGITS) }] : []),
+					...(estimate.kind === 'exit' ? [{ label: ticketCopy.maximumSold, value: formatOutcomeQuantity(estimate.maximumLongShares, side, ESTIMATE_DIGITS, 'nearest', market) }] : []),
 					// A sale spends Invalid shares, so what it uses stays in view; the Invalid a buy adds is a detail.
-					...(estimate.kind === 'exit' ? [{ label: ticketCopy.invalidUsed, value: formatOutcomeQuantity(estimate.quote.invalidRequired, shareOutcome.invalid) }] : []),
+					...(estimate.kind === 'exit' ? [{ label: ticketCopy.invalidUsed, value: formatOutcomeQuantity(estimate.quote.invalidRequired, shareOutcome.invalid, 4, 'nearest', market) }] : []),
 					...(impactTier === 'low' ? [] : [impactRow]),
-					...(holdingAfter === undefined ? [] : [{ label: ticketCopy.formatHoldingAfter(side), value: formatOutcomeQuantity(holdingAfter, side) }]),
+					...(holdingAfter === undefined ? [] : [{ label: ticketCopy.formatHoldingAfter(side), value: formatOutcomeQuantity(holdingAfter, side, 4, 'nearest', market) }]),
 				]}
 			/>
 			<p className='visually-hidden' role='status'>

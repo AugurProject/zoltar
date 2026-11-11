@@ -19,7 +19,7 @@ export const STATOBLAST_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		route: '#/portfolios',
 		viewport: { width: 800, height: 1000 },
 		steps: [{ waitForText: 'PRICE CURRENT' }],
-		expectText: ['Find by question ID', 'Collateral ETH', 'Maximum purchase fee ETH', 'Minimum complete sets'],
+		expectText: ['Find by question ID', 'Collateral (WETH)', 'Maximum purchase fee (WETH)', 'Minimum complete sets'],
 		crop: { selector: 'section', containing: 'Find by question ID', scrollIntoView: true },
 		usedBy: ['tutorials/statoblast-first-pool.html'],
 	},

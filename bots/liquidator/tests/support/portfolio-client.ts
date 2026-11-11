@@ -53,6 +53,7 @@ export function portfolioClient(overrides: Record<string, unknown> = {}) {
 	)
 	const reads: { address: string; functionName: string; blockNumber?: bigint }[] = []
 	const values: Record<string, unknown> = {
+		collateralToken: settings.deployment.weth,
 		factory: settings.deployment.securityPoolFactory,
 		zoltar: settings.deployment.zoltar,
 		securityPoolFactory: settings.deployment.securityPoolFactory,

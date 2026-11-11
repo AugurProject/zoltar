@@ -25,8 +25,8 @@ export const invalidUsed = 'Invalid used'
 export const tradingFee = 'Trading fee'
 export const completeSets = 'Complete sets'
 export const moreDetails = 'Trade details'
-export const invalidInsuranceNote = 'Buying mints complete sets; you keep their Invalid shares. Selling for ETH later uses 1 per set.'
-export const invalidUsedNote = 'Selling redeems complete sets for ETH, using 1 Invalid share per set.'
+export const invalidInsuranceNote = 'Buying mints complete sets; you keep their Invalid shares. Selling for collateral later uses 1 per set.'
+export const invalidUsedNote = 'Selling redeems complete sets for collateral, using 1 Invalid share per set.'
 export const updatingEstimate = 'Updating estimate…'
 export const amountTooSmall = 'Amount too small to trade.'
 export const invalidCoverageReason = 'Not enough Invalid shares to insure this sale.'
@@ -49,8 +49,8 @@ export function formatPriceImpactBlockedReason(limit: string) {
 }
 
 /** A buy mints complete sets with the ETH paid, up to the security pool's remaining minting capacity. */
-export function formatMintingCapacityReason(limitEth: string) {
-	return `Buy at most ${limitEth} ETH; the security pool cannot mint more now.`
+export function formatMintingCapacityReason(limitEth: string, symbol = 'ETH') {
+	return `Buy at most ${limitEth} ${symbol}; the security pool cannot mint more now.`
 }
 
 export function gasReserveReason(reserve: string) {
@@ -87,8 +87,8 @@ export function formatHoldingAfter(outcome: 'YES' | 'NO') {
 }
 
 /** The trading fee as its rate and its ETH value, which arrives already marked as approximate or as an upper bound. */
-export function formatTradingFeeValue(rate: string, ethAmount: string) {
-	return `${rate} · ${ethAmount} ETH`
+export function formatTradingFeeValue(rate: string, ethAmount: string, symbol = 'ETH') {
+	return `${rate} · ${ethAmount} ${symbol}`
 }
 
 export function swapped(outcome: 'YES' | 'NO') {
@@ -116,7 +116,7 @@ export function acknowledgeImpact(percent: string) {
 }
 
 export function invalidCoverageExplanation(needed: string, held: string, sellable: string, outcome: 'YES' | 'NO') {
-	return `Selling pays out ETH by redeeming complete sets, so each set needs 1 Invalid share. This sale needs ${needed}; you hold ${held}. You can sell up to ${sellable} now, or keep the rest of your ${outcomeLabel(outcome)} as shares.`
+	return `Selling pays out collateral by redeeming complete sets, so each set needs 1 Invalid share. This sale needs ${needed}; you hold ${held}. You can sell up to ${sellable} now, or keep the rest of your ${outcomeLabel(outcome)} as shares.`
 }
 
 export function sellInsteadAction(amount: string) {

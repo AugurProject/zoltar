@@ -16,7 +16,7 @@ import { getInfraContractAddresses } from '../../testSupport/simulator/utils/con
 import { addRepToMigrationBalance, forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress, splitMigrationRep } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { approveToken, getChildUniverseId } from '../../testSupport/simulator/utils/utilities'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
-import { burnedEthBalance, receiptBurns } from './burnEvidence'
+import { collateralBalance, burnedCollateralBalance, receiptBurns } from './burnEvidence'
 
 const preparationAbi = parseAbi(['function checkpointPreparationPremium(uint248 universeId)'])
 
@@ -51,16 +51,16 @@ describe('Statoblast: preparation premium ownership', () => {
 		await mock.setTime(deadline - 1n)
 		const root = createWriteClient(mock, BigInt(fixture.portfolio))
 		await writeContractAndWait(root, () => root.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'acceptPrice', args: [unit, Number(deadline + 780n)] }))
-		const servicesCashBefore = await owner.getBalance({ address: services })
+		const servicesCashBefore = await collateralBalance(owner, fixture.portfolio, services)
 		const premiumBefore = (await owner.readContract({ abi: premiumArtifact.abi, address: premium, functionName: 'totals', args: [child] }))[0]
 		expect(premiumBefore).toBeGreaterThan(0n)
 		await mock.setTime(activation)
 		const finalize = async () => {
-			const burnedBefore = await burnedEthBalance(owner)
+			const burnedBefore = await burnedCollateralBalance(owner, fixture.portfolio)
 			const hash = await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'finalizeBranch', args: [child] }))
 			const burns = await receiptBurns(owner, hash)
 			// Every ownerless amount the activation reports is actually sent to the burn address.
-			expect(await burnedEthBalance(owner)).toBe(burnedBefore + burns.totalEth)
+			expect(await burnedCollateralBalance(owner, fixture.portfolio)).toBe(burnedBefore + burns.totalEth)
 			const preparation = burns.service.filter(entry => entry.universeId === child).reduce((total, entry) => total + entry.amount, 0n)
 			return { burns, preparation }
 		}
@@ -69,7 +69,7 @@ describe('Statoblast: preparation premium ownership', () => {
 			const position = (await owner.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'ownerAccount', args: [owner.account.address] })).positionId
 			return (await owner.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [position] })).ethFees
 		}
-		const servicesCash = () => owner.getBalance({ address: services })
+		const servicesCash = () => collateralBalance(owner, fixture.portfolio, services)
 		return { owner, mock, child, forks, capital, services, premium, servicesCashBefore, servicesCash, premiumBefore, finalize, checkpoint, fees }
 	}
 

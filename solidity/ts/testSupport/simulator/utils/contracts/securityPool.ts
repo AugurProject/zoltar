@@ -62,8 +62,8 @@ export const createCompleteSet = async (client: WriteClient, securityPoolAddress
 			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'createCompleteSet',
 			address: securityPoolAddress,
-			args: [],
-			value: settlementCollateralAttoEth,
+			args: [settlementCollateralAttoEth],
+			value: 0n,
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)

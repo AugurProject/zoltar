@@ -16,6 +16,7 @@ import { getInfraContractAddresses } from '../../testSupport/simulator/utils/con
 import { addRepToMigrationBalance, splitMigrationRep, forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { manipulatePriceOracle } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { collateralBalance } from './burnEvidence'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 describe('Statoblast: lazy child outcome supply', () => {
@@ -59,7 +60,7 @@ describe('Statoblast: lazy child outcome supply', () => {
 		expect(await owner().readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'shareTokenSupplyAttoShares' })).toBe(20n * unit)
 		if (!chosen) {
 			expect(await owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'availableMintCapacity', args: [child] })).toBe(0n)
-			await expect(other().writeContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'createCompleteSet', args: [child, base.questionId, unit, other().account.address, 0n], value: 2n * unit })).rejects.toThrow()
+			await expect(other().writeContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'createCompleteSet', args: [child, base.questionId, unit, other().account.address, 0n, 2n * unit - unit], value: 0n })).rejects.toThrow()
 			expect(await owner().readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'shareTokenSupplyAttoShares' })).toBe(20n * unit)
 			expect(await owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'quoteQuestionSettlement', args: [childPool, 10n * unit] })).toBe(0n)
 			const rep = getRepTokenAddress(child)
@@ -71,15 +72,19 @@ describe('Statoblast: lazy child outcome supply', () => {
 		const oracle = await owner().readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'openOraclePriceCoordinator' })
 		await manipulatePriceOracle(owner(), base.mockWindow, oracle, unit, 100n * unit)
 		const newcomer = createWriteClient(base.mockWindow, TEST_ADDRESSES[2])
+		const collateral = await owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'collateralToken' })
+		const services = await owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'services' })
+		await approveToken(newcomer, collateral, services)
+		await writeContractAndWait(owner(), () => owner().writeContract({ abi: tokenArtifact.abi, address: collateral, functionName: 'transfer', args: [newcomer.account.address, 2n * unit] }))
 		const [fee] = await newcomer.readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'purchaseQuote', args: [child, base.questionId, unit] })
-		await writeContractAndWait(newcomer, () => newcomer.writeContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'createCompleteSet', args: [child, base.questionId, unit, newcomer.account.address, unit], value: unit + fee }))
+		await writeContractAndWait(newcomer, () => newcomer.writeContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'createCompleteSet', args: [child, base.questionId, unit, newcomer.account.address, unit, unit + fee - unit], value: 0n }))
 		expect(await materialized()).toEqual([0, 1, 2].map(outcome => (outcomes.includes(outcome) ? 10n * unit : 0n) + unit))
 		expect(await owner().readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'shareTokenSupplyAttoShares' })).toBe(21n * unit)
 		const cash = await owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'quoteQuestionSettlement', args: [childPool, unit] })
 		expect(cash).toBe(unit)
-		const cashBefore = await owner().getBalance({ address: settlement })
+		const cashBefore = await collateralBalance(owner(), portfolio, settlement)
 		await writeContractAndWait(newcomer, () => newcomer.writeContract({ abi: poolArtifact.abi, address: childPool, functionName: 'redeemCompleteSet', args: [unit] }))
-		expect(await owner().getBalance({ address: settlement })).toBe(cashBefore - unit)
+		expect(await collateralBalance(owner(), portfolio, settlement)).toBe(cashBefore - unit)
 		// Settle while one original holder still has no materialized child shares.
 		if (!outcomes.includes(1)) await writeContractAndWait(other(), () => other().writeContract({ abi: shareArtifact.abi, address: parent.shareToken, functionName: 'migrate', args: [base.genesisUniverse * 256n + 1n, [1n]] }))
 		await base.mockWindow.setTime(base.questionData.endTime + 1n)

@@ -1,3 +1,4 @@
+import { collateralAsset } from '../../protocol/collateral.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { capSubmissionDeadline } from '../../protocol/submissionWindow.js'
 import * as workflowCopy from '../../copy/workflows.js'
@@ -59,7 +60,7 @@ export function useLiquidityWorkflowController({
 	const [amount, setAmount] = useState('')
 	const [probability, setProbability] = useState('50')
 	// ETH deposits and fixed-scale LP quantities use different decimal precisions.
-	const parsed = tryParseNonNegativeDecimalInput(amount.trim(), operation === 'remove' ? SHARE_QUANTITY_DECIMALS : 18)
+	const parsed = tryParseNonNegativeDecimalInput(amount.trim(), operation === 'remove' ? SHARE_QUANTITY_DECIMALS : collateralAsset(market).decimals)
 	const parsedProbability = tryParseNonNegativeDecimalInput(probability.trim(), 2)
 	const conditionalBps = parsedProbability !== undefined && parsedProbability > 0n && parsedProbability < 10_000n ? parsedProbability : undefined
 	const operationAvailable = liquidityOperationAvailable(operation, market, nowSeconds)

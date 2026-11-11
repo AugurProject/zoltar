@@ -1,3 +1,4 @@
+import * as collateralCopy from '../../../copy/collateral.js'
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import { buildPortfolioCapitalTakeOverWithBoundsRequest, portfolioTakeoverSource } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
@@ -54,11 +55,11 @@ export function PortfolioTakeover({ model, actions }: { model: Pick<ReturnType<t
 	const loaded = target.value?.key === key ? target.value : undefined
 	const preview = loaded?.value
 	const source = snapshot !== undefined && preview !== undefined && snapshot.liquidationPrice > 0n ? portfolioTakeoverSource(snapshot, preview.position) : undefined
-	const commitment = portfolioAmountOrUndefined(commitmentInput.value)
+	const commitment = portfolioAmountOrUndefined(commitmentInput.value, snapshot?.collateral.decimals ?? 18)
 	const minimumAward = portfolioAmountOrUndefined(awardInput.value)
 	const maximumOwnRep = portfolioAmountOrUndefined(ownInput.value)
 	const maximumOwnerPrincipal = portfolioAmountOrUndefined(principalInput.value)
-	const maximumOwnerCommitment = portfolioAmountOrUndefined(totalCommitmentInput.value)
+	const maximumOwnerCommitment = portfolioAmountOrUndefined(totalCommitmentInput.value, snapshot?.collateral.decimals ?? 18)
 	let reason = actions.ownerReason
 	if (reason === undefined && (id === undefined || id === 0n)) reason = copy.enterTarget
 	if (reason === undefined && preview === undefined) reason = loaded?.error ?? copy.loading
@@ -103,10 +104,10 @@ export function PortfolioTakeover({ model, actions }: { model: Pick<ReturnType<t
 					<CurrencyValue value={preview?.position.rep} suffix={common.rep} />
 				</MetricField>
 				<MetricField label={copy.targetCommitment}>
-					<CurrencyValue value={preview?.position.commitment} suffix={common.eth} />
+					<CurrencyValue value={preview?.position.commitment} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 				</MetricField>
 				<MetricField label={copy.afterCure}>
-					<CurrencyValue value={source?.commitment} suffix={common.eth} />
+					<CurrencyValue value={source?.commitment} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 				</MetricField>
 				<MetricField label={copy.started}>
 					<TimestampValue timestamp={preview?.started} relative={false} zeroText={copy.notStarted} />

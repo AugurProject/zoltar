@@ -37,7 +37,7 @@ const exactUnits = (value: string, decimals: number): string => {
 	return formatted.includes('.') ? formatted.replace(/\.?0+$/, '') : formatted
 }
 
-type DecodeDisplayContext = { readonly nativeSymbol: string }
+type DecodeDisplayContext = { readonly nativeSymbol: string; readonly collateralUnits?: boolean }
 
 const defaultDisplayContext: DecodeDisplayContext = { nativeSymbol: 'ETH' }
 const maxDelegationDepth = 4
@@ -45,17 +45,19 @@ const maxDelegationDepth = 4
 const semanticUnit = (name: string, context: DecodeDisplayContext): { decimals: number; symbol: string } | undefined => {
 	const lower = name.toLowerCase()
 	if (lower.includes('attoethpergas')) return { decimals: 18, symbol: `${context.nativeSymbol}/gas` }
+	if (lower.includes('attoeth') && /bounty|settlerreward/u.test(lower)) return { decimals: 18, symbol: context.nativeSymbol }
 	if (lower.includes('attorep')) return { decimals: 18, symbol: 'REP' }
-	if (lower.includes('attoeth')) return { decimals: 18, symbol: context.nativeSymbol }
-	if (lower.includes('attoshares')) return { decimals: 18, symbol: 'shares' }
+	if (lower.includes('attoeth')) return context.collateralUnits ? { decimals: 0, symbol: 'collateral units' } : { decimals: 18, symbol: context.nativeSymbol }
+	if (lower.includes('attoshares')) return context.collateralUnits ? { decimals: 0, symbol: 'share units' } : { decimals: 18, symbol: 'shares' }
 	return undefined
 }
 
 const protocolTokenUnit: Readonly<Record<string, { readonly decimals: number; readonly symbol: string }>> = {
 	reputationToken: { decimals: 18, symbol: 'REP' },
-	shareToken: { decimals: 18, symbol: 'shares' },
+	shareToken: { decimals: 0, symbol: 'share units' },
 	weth: { decimals: 18, symbol: 'WETH' },
 	usdc: { decimals: 6, symbol: 'USDC' },
+	usdt: { decimals: 6, symbol: 'USDT' },
 }
 
 type TokenAmountRule = { readonly tokenPath: string; readonly amountPaths: readonly string[] }
@@ -383,11 +385,11 @@ export const decodeLogRecord = (
 	const kindEvents = kindAbi?.filter((item): item is AbiEvent => isAbiEvent(item) && toEventSelector(item) === topic) ?? []
 	const candidates = kindEvents.length > 0 ? kindEvents : (eventByTopic.get(topic) ?? [])
 	if (candidates.length === 0) return { status: 'unknown', summary: `Unknown event ${topic.slice(0, 10)}…` }
-	return decodeWithEvents(candidates, kind, topics, data, labels, tokenMetadata, contractKinds, emitterAddress, context)
+	return decodeWithEvents(candidates, kind, topics, data, labels, tokenMetadata, contractKinds, emitterAddress, /^(securityPool|sharedPool|openOraclePrice|twoWayConstantProduct)/u.test(kind ?? '') ? { ...context, collateralUnits: true } : context)
 }
 
 export const decodeAction = (contract: ContractMetadata | undefined, input: Hex, labels: ReadonlyMap<string, string>, tokenMetadata: ReadonlyMap<string, TokenMetadata> = new Map(), contractKinds: ReadonlyMap<string, string> = new Map(), context: DecodeDisplayContext = defaultDisplayContext): DecodedRecord => {
-	return decodeActionRecord(contract, input, labels, tokenMetadata, contractKinds, context, 0)
+	return decodeActionRecord(contract, input, labels, tokenMetadata, contractKinds, /^(securityPool|sharedPool|openOraclePrice|twoWayConstantProduct)/u.test(contract?.kind ?? '') ? { ...context, collateralUnits: true } : context, 0)
 }
 
 const decodeActionRecord = (contract: ContractMetadata | undefined, input: Hex, labels: ReadonlyMap<string, string>, tokenMetadata: ReadonlyMap<string, TokenMetadata>, contractKinds: ReadonlyMap<string, string>, context: DecodeDisplayContext, depth: number): DecodedRecord => {

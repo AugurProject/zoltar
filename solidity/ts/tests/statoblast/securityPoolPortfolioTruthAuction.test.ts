@@ -1,3 +1,4 @@
+import { collateralBalance } from './burnEvidence'
 import { describe, expect, test } from 'bun:test'
 import { preparePortfolioTruthAuction } from './securityPoolPortfolioTruthAuctionFixture'
 import { encodeFunctionData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
@@ -41,6 +42,8 @@ describe('Statoblast: automatic truth-auction vaults', () => {
 		const readAuction = () => loadPortfolioAuctionSnapshot({ client: context.owner, portfolio: fixture.portfolio, bidder: context.owner.account.address, universeId: context.child })
 		await writeContractAndWait(context.owner, async () => context.owner.sendTransaction(buildPortfolioAuctionOpenRequest(await readAuction())))
 		const grid = await context.owner.readContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'repGrid' })
+		const collateral = await context.owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'collateralToken' })
+		await approveToken(context.owner, collateral, context.auction)
 		const opened = await readAuction()
 		if (opened.auction === undefined) throw new Error('Auction snapshot missing')
 		const terms = { lots: 2n, minimumAttoRepPerLot: 5n * unit - ((5n * unit) % grid), targetHealthFactorBps: 12_000n }
@@ -83,10 +86,10 @@ describe('Statoblast: automatic truth-auction vaults', () => {
 		expect(await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'refundCreditAttoEth', args: [context.other.account.address] })).toBe(unit)
 		const before = await context.balance(context.other.account.address)
 		const refundRecipient = context.owner.account.address
-		const ethBefore = await context.owner.getBalance({ address: refundRecipient })
+		const ethBefore = await collateralBalance(context.owner, fixture.portfolio, refundRecipient)
 		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'withdrawRefunds', args: [refundRecipient] }))
 		expect(await context.balance(context.other.account.address)).toBe(before)
-		expect(await context.owner.getBalance({ address: refundRecipient })).toBe(ethBefore + unit)
+		expect(await collateralBalance(context.owner, fixture.portfolio, refundRecipient)).toBe(ethBefore + unit)
 		const settlement = await context.owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'settlement' })
 		const book = await context.owner.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'ledger' })
 		const bookId = await context.owner.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'bookIds', args: [context.child] })

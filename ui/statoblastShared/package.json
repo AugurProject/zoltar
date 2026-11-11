@@ -93,6 +93,10 @@
 			"bun": "./ts/lib/routing.ts",
 			"default": "./js/lib/routing.js"
 		},
+		"./protocol/collateral.js": {
+			"bun": "./ts/protocol/collateral.ts",
+			"default": "./js/protocol/collateral.js"
+		},
 		"./protocol/contractLabels.js": {
 			"bun": "./ts/protocol/contractLabels.ts",
 			"default": "./js/protocol/contractLabels.js"

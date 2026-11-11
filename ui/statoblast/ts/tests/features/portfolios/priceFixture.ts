@@ -5,10 +5,10 @@ import { createMockReadClient } from '@zoltar/ui-core-shared/tests/testUtils/pro
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { portfolioReadClient } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolio.js'
 import { capitalClient } from './capitalClient.js'
-import { capitalSnapshot, owner, portfolio, token, unit } from './capitalFixture.js'
+import { capitalSnapshot, owner, portfolio, token, unit, collateralToken } from './capitalFixture.js'
 
 export const priceFeed = getAddress('0x0000000000000000000000000000000000000081')
-export const priceWeth = getAddress('0x0000000000000000000000000000000000000082')
+export const priceWeth = collateralToken
 export const priceOracle = getAddress('0x0000000000000000000000000000000000000083')
 export const priceEscrow = getAddress('0x0000000000000000000000000000000000000084')
 export function priceFixture() {
@@ -31,6 +31,7 @@ export function priceFixture() {
 		isPriceReportingOpen: true,
 		reputationToken: token,
 		weth: priceWeth,
+		collateralToken: priceWeth,
 		openOracle: priceOracle,
 		minimumToken1ReportAttoEth: 2n * unit,
 		minimumToken2ReportAttoRep: 0n,

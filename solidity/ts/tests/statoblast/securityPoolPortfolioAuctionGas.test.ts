@@ -1,3 +1,4 @@
+import { wrapWeth } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { describe, expect, test } from 'bun:test'
 import { encodeFunctionData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { preparePortfolioTruthAuction } from './securityPoolPortfolioTruthAuctionFixture'
@@ -8,6 +9,7 @@ import { addRepToMigrationBalance, forkUniverse, getZoltarForkThreshold, splitMi
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import {
 	statoblast_SecurityPoolPortfolioAuction_SecurityPoolPortfolioAuction as auctionArtifact,
+	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact,
 	statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault as vaultArtifact,
@@ -70,8 +72,11 @@ describe('Statoblast: truth-auction lifecycle gas baselines', () => {
 			const token = { abi: tokenArtifact.abi, address: context.token } as const
 			const forks = { abi: forkArtifact.abi, address: context.forks } as const
 			const bid = async (label: string | undefined, bidder: WriteClient, lots: bigint, price: bigint): Promise<Bid> => {
+				const collateral = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'collateralToken' })
+				await wrapWeth(bidder, lots * unit)
+				await approveToken(bidder, collateral, context.auction)
 				const id = (await bidder.readContract({ ...engine, functionName: 'bidCount' })) + 1n
-				const send = () => bidder.writeContract({ ...auction, functionName: 'submitBid', args: [lots, price, health], value: lots * unit })
+				const send = () => bidder.writeContract({ ...auction, functionName: 'submitBid', args: [lots, price, health], value: 0n })
 				if (label === undefined) await writeContractAndWait(bidder, send)
 				else await gasOf(label, bidder, send)
 				const [, vault] = await bidder.readContract({ ...engine, functionName: 'bids', args: [id] })

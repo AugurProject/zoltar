@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { Collateral } from '../Collateral.sol';
+import { IERC20 } from '../IERC20.sol';
+import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { IWeth9 } from './interfaces/IWeth9.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 import { OpenOracle } from './openOracle/OpenOracle.sol';
@@ -37,20 +40,22 @@ interface IOracleReportConfig {
 /// @dev Creation uses delegatecall so report funding, reporter credits, and the callback remain with
 /// the calling coordinator. The delegate never accesses coordinator storage slots directly.
 contract OpenOracleReportDelegate {
+	using SafeERC20Ops for IERC20;
 	uint256 private constant OPEN_INTEREST_DIVIDER = 100;
 
 	/// @dev Delegate-called funding adapter preserves sponsor approvals to the question coordinator.
 	function createSharedReport(address sponsor, uint256 bountyAttoEth, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth) external payable {
 		IOracleReportConfig config = IOracleReportConfig(address(this));
 		SharedPoolPriceFeed feed = config.sharedPriceFeed();
-		uint256 minimum = feed.minimumToken1ReportAttoEth();
+		uint256 minimum = feed.minimumToken1ReportAttoEthForPrice(proposedRepPerEthPrice);
 		uint256 wethAmount = requestedInitialAttoWeth > minimum ? requestedInitialAttoWeth : minimum;
 		uint256 repAmount = Math.mulDiv(wethAmount, proposedRepPerEthPrice, SecurityPoolUtils.PRICE_PRECISION, Math.Rounding.Ceil);
-		IWeth9 weth = config.weth();
+		IERC20 weth = feed.collateralToken();
 		ReputationToken reputationToken = config.reputationToken();
-		require(weth.transferFrom(sponsor, address(this), wethAmount), 'WETH transfer for initial report failed');
+		Collateral.pull(weth, sponsor, address(this), wethAmount);
 		require(reputationToken.transferFrom(sponsor, address(this), repAmount), 'REP transfer for initial report failed');
-		require(weth.approve(address(feed), wethAmount), 'WETH approval for shared report failed');
+		weth.safeApprove(address(feed), 0);
+		weth.safeApprove(address(feed), wethAmount);
 		require(reputationToken.approve(address(feed), repAmount), 'REP approval for shared report failed');
 		feed.requestPrice{value: bountyAttoEth}(sponsor, proposedRepPerEthPrice, wethAmount, bountyAttoEth);
 	}

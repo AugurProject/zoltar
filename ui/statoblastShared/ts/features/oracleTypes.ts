@@ -54,6 +54,8 @@ export type ReportingSectionProps = ReportingRouteContentProps & {
 
 type OpenOracleRouteContentProps = {
 	accountState: AccountState
+	onApproveCreateToken?: ((token: 'token1' | 'token2', amount: bigint) => void) | undefined
+	onWrapCreateWeth?: (() => void) | undefined
 	onApproveToken1: (amount?: bigint) => void
 	onApproveToken2: (amount?: bigint) => void
 	onCancelOpenOracleWithdrawalBalanceCheck: () => void

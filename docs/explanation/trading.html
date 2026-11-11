@@ -16,13 +16,13 @@
 				<p>Trading is a separate on-chain exchange for Statoblast <a href="../reference/glossary.html#outcome-share">outcome shares</a>, one of possibly many that can be built on Statoblast. Statoblast still owns market creation, collateral, migration, resolution, and redemption through each market's <a href="../reference/glossary.html#security-pool">SecurityPool</a>.</p>
 			</header>
 			<section id="complete-set-entry">
-				<h2>From ETH to a directional position</h2>
-				<p>Each ETH entry first creates a <a href="../reference/glossary.html#complete-set">complete set</a>: one Yes, one No, and one Invalid share. A market's <a href="../reference/glossary.html#trading-pool">trading pool</a>, a Yes/No pair, is an automated market maker (AMM) that holds only Yes and No reserves. The <a href="../reference/glossary.html#trading-router">router</a> sends the unwanted directional share into the pair, receives more of the selected directional share, and returns the directional position and the Invalid share to the user. The Invalid share never enters the AMM; it remains a separate claim if the market later resolves Invalid.</p>
+				<h2>From collateral to a directional position</h2>
+				<p>Each collateral deposit first creates a <a href="../reference/glossary.html#complete-set">complete set</a>: one Yes, one No, and one Invalid share. A market's <a href="../reference/glossary.html#trading-pool">trading pool</a>, a Yes/No pair, is an automated market maker (AMM) that holds only Yes and No reserves. The <a href="../reference/glossary.html#trading-router">router</a> sends the unwanted directional share into the pair, receives more of the selected directional share, and returns the directional position and the Invalid share to the user. The Invalid share never enters the AMM; it remains a separate claim if the market later resolves Invalid.</p>
 			</section>
 			<section id="prices">
 				<h2>What the prices mean</h2>
 				<p>Yes and No prices are conditional on valid resolution. They describe the relative price of the two directional outcomes; they are not estimates of invalidity. Interfaces should therefore label the Yes and No values directly and present Invalid separately.</p>
-				<p>Spot prices come from current reserves and are <a href="./trading/pricing.html#not-an-oracle">not an oracle</a>. Settlement uses the SecurityPool's resolved outcome, while solvency-sensitive REP/ETH operations use OpenOracle.</p>
+				<p>Spot prices come from current reserves and are <a href="./trading/pricing.html#not-an-oracle">not an oracle</a>. Settlement uses the SecurityPool's resolved outcome, while solvency-sensitive REP/collateral operations use OpenOracle.</p>
 			</section>
 			<section id="market-isolation">
 				<h2>One pair per SecurityPool</h2>

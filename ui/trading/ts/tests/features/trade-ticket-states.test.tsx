@@ -147,7 +147,7 @@ describe('trade ticket states', () => {
 		expect(visible).toMatch(/Profit if the question resolves Yes\+[\d.]+ ETH \(\+[\d.]+%\)/)
 		expect(visible).not.toContain('Price impact')
 		const details = container.querySelector('.trade-estimate details')?.textContent
-		for (const phrase of ['Price impact', 'Trading fee', '0.3% · ≈ 0.00', 'you keep their Invalid shares', 'Holding fees reduce ETH payouts']) expect(details).toContain(phrase)
+		for (const phrase of ['Price impact', 'Trading fee', '0.3% · ≈ 0.00', 'you keep their Invalid shares', 'Holding fees reduce collateral payouts']) expect(details).toContain(phrase)
 		// The headline states what each resolution pays: the bought outcome, the Invalid shares the buy keeps, and nothing on the other outcome.
 		const headline = container.querySelector('.transaction-review-primary')?.textContent
 		for (const phrase of ['You receive ≈', 'if the question resolves Yes', 'Invalid insurance', 'if the question resolves Invalid', '0 ETH if No']) expect(headline).toContain(phrase)

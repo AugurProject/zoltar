@@ -124,3 +124,8 @@ function formatTokenApprovalPartialMessage({ actionLabel, nextApprovedAmount, re
 	// The amount being approved is shown exactly: rounding it up could read as covering a requirement it falls short of.
 	return `Approving ${formatCurrencyBalanceWithUnit(nextApprovedAmount, tokenLabel, tokenUnits)} will still leave ${formatAdditionalCeilingAmount(requiredAmount - nextApprovedAmount, tokenLabel, tokenUnits)} needed before ${actionLabel}.`
 }
+
+/** Tokens such as USDT reject nonzero-to-nonzero allowance changes. */
+export function getTokenApprovalResetReason(approved: bigint | undefined, next: bigint | undefined, symbol: string, requiresReset: boolean) {
+	return requiresReset && approved !== undefined && approved > 0n && next !== undefined && next > 0n ? commonCopy.formatApprovalResetRequired(symbol) : undefined
+}

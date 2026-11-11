@@ -1,3 +1,5 @@
+import * as collateralCopy from '../../../copy/collateral.js'
+import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { Question, getQuestionTitle } from '@zoltar/ui-core-shared/components/Question.js'
 import { usePortfolioQuestionDetails } from '../hooks/usePortfolioQuestionDetails.js'
 import { useId } from 'preact/hooks'
@@ -14,7 +16,6 @@ import type { usePortfolio } from '../hooks/usePortfolio.js'
 import type { usePortfolioPurchase } from '../hooks/usePortfolioPurchase.js'
 import * as copy from '../../../copy/portfolio.js'
 import * as capitalCopy from '../../../copy/portfolioCapital.js'
-import * as common from '@zoltar/ui-core-shared/copy/common.js'
 
 export function PortfolioPurchasePanel({ model, purchase, actions }: { model: ReturnType<typeof usePortfolio>; purchase: ReturnType<typeof usePortfolioPurchase>; actions: PortfolioActions }) {
 	const snapshot = model.snapshot
@@ -31,7 +32,7 @@ export function PortfolioPurchasePanel({ model, purchase, actions }: { model: Re
 					<MetricField label={capitalCopy.annualFee}>{snapshot === undefined ? undefined : `${formatUnits(snapshot.economics.annualFeeBps, 2)}%`}</MetricField>
 					<MetricField label={copy.purchaseFeePercent}>{snapshot === undefined ? undefined : `${formatUnits(snapshot.economics.purchaseFeeBps, 2)}%`}</MetricField>
 					<MetricField label={copy.minimumPurchaseFee}>
-						<CurrencyValue value={snapshot?.economics.minimumPurchaseFeeAttoEth} suffix={common.eth} />
+						<CurrencyValue value={snapshot?.economics.minimumPurchaseFeeAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 					</MetricField>
 				</MetricGrid>
 				{admission?.mode === 'custom' ? <UserMessage tone='warning' detail={copy.unsupportedAdmission} /> : undefined}
@@ -78,13 +79,34 @@ export function PortfolioPurchasePanel({ model, purchase, actions }: { model: Re
 				) : undefined}
 				{purchase.position === undefined ? undefined : <a href={buildPoolsRouteHash({ view: 'operate', securityPoolAddress: purchase.position.pool, tab: 'vaults' })}>{copy.openPrice}</a>}
 				<MetricGrid>
-					<PortfolioInput label={copy.mintAmount} value={purchase.mintAmount} onChange={purchase.setMintAmount} disabled={actions.busy !== undefined} numeric />
-					<PortfolioInput label={copy.maximumPurchaseFee} hint={copy.maximumPurchaseFeeHint} value={purchase.maximumFee} onChange={purchase.setMaximumFee} disabled={actions.busy !== undefined} numeric />
+					<PortfolioInput label={collateralCopy.amount(copy.mintAmount, snapshot?.collateral.symbol ?? collateralCopy.token)} value={purchase.mintAmount} onChange={purchase.setMintAmount} disabled={actions.busy !== undefined} numeric />
+					<PortfolioInput label={collateralCopy.amount(copy.maximumPurchaseFee, snapshot?.collateral.symbol ?? collateralCopy.token)} hint={copy.maximumPurchaseFeeHint} value={purchase.maximumFee} onChange={purchase.setMaximumFee} disabled={actions.busy !== undefined} numeric />
 					<PortfolioInput label={copy.minimumShares} value={purchase.minimumShares} onChange={purchase.setMinimumShares} disabled={actions.busy !== undefined} numeric />
 				</MetricGrid>
 				<MetricField label={copy.estimatedPurchaseFee} loading={purchase.quoteLoading}>
-					<CurrencyValue value={purchase.quote?.purchaseFeeAttoEth} suffix={common.eth} />
+					<CurrencyValue value={purchase.quote?.purchaseFeeAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 				</MetricField>
+				{snapshot?.collateral.symbol === collateralCopy.usdt ? (
+					<PortfolioButton model={actions} action='resetPurchaseCollateral' label={collateralCopy.reset} pendingLabel={collateralCopy.resetting} reason={actions.ownerReason ?? (snapshot.collateralAllowance === 0n ? collateralCopy.notNeeded : undefined)} onClick={() => purchase.approve(0n)} />
+				) : undefined}
+				<TokenApprovalControl
+					actionLabel={copy.mint}
+					allowanceError={model.error}
+					allowanceLoading={model.loading}
+					approvedAmount={snapshot?.collateralAllowance}
+					disabled={actions.busy !== undefined}
+					guardMessage={actions.ownerReason}
+					requiresAllowanceReset={snapshot?.collateral.symbol === collateralCopy.usdt}
+					onApprove={amount => {
+						if (amount !== undefined) void purchase.approve(amount)
+					}}
+					pending={actions.busy === 'approvePurchaseCollateral'}
+					pendingLabel={collateralCopy.approving}
+					requiredAmount={purchase.requiredCollateral}
+					resetKey={`${snapshot?.portfolio}:${snapshot?.owner}:${purchase.requiredCollateral}`}
+					tokenSymbol={snapshot?.collateral.symbol ?? collateralCopy.fallback}
+					tokenUnits={snapshot?.collateral.decimals ?? 18}
+				/>
 				<PortfolioButton model={actions} action='mintPortfolioCompleteSets' label={copy.mint} pendingLabel={copy.minting} reason={purchase.reason ?? (details.selected?.question === undefined ? copy.reviewQuestionDetails : undefined)} onClick={purchase.buy} />
 			</SectionBlock>
 		</>

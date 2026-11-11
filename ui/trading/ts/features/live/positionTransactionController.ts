@@ -18,7 +18,7 @@ type Refresh = (configuration?: DeploymentConfiguration, requestedStart?: bigint
 
 function priceMovedDetail(estimate: TradeEstimate, authoritativeLongShares: bigint, market: LiveMarket) {
 	// A buy receives shares, so their payout explains them; a sale pays with its shares, so they are named alone beside the ETH it receives.
-	return estimate.kind === 'entry' ? ticketCopy.formatRequotedReceive(formatOutcomeWithValue(authoritativeLongShares, estimate.side, market)) : ticketCopy.formatRequotedSell(formatOutcomeQuantity(authoritativeLongShares, estimate.side))
+	return estimate.kind === 'entry' ? ticketCopy.formatRequotedReceive(formatOutcomeWithValue(authoritativeLongShares, estimate.side, market)) : ticketCopy.formatRequotedSell(formatOutcomeQuantity(authoritativeLongShares, estimate.side, 4, 'nearest', market))
 }
 
 /**

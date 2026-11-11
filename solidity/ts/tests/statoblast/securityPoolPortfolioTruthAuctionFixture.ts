@@ -62,7 +62,8 @@ export async function preparePortfolioTruthAuction(fixture: ReturnType<typeof us
 	const open = () => writeContractAndWait(owner, () => owner.writeContract({ abi: auctionArtifact.abi, address: auction, functionName: 'open' }))
 	const bid = async (bidder: WriteClient, lots: bigint, price = 6n * unit, health = 12_000n) => {
 		const id = (await bidder.readContract({ abi: engineArtifact.abi, address: engine, functionName: 'bidCount' })) + 1n
-		await writeContractAndWait(bidder, () => bidder.writeContract({ abi: auctionArtifact.abi, address: auction, functionName: 'submitBid', args: [lots, price, health], value: lots * unit }))
+		await approveToken(bidder, weth, auction)
+		await writeContractAndWait(bidder, () => bidder.writeContract({ abi: auctionArtifact.abi, address: auction, functionName: 'submitBid', args: [lots, price, health] }))
 		const [, vault] = await bidder.readContract({ abi: engineArtifact.abi, address: engine, functionName: 'bids', args: [id] })
 		return { id, vault }
 	}

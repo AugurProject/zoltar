@@ -6,6 +6,7 @@ interface ITestForkInitializer {
 	function activateOrigin(uint248 origin) external;
 }
 
+import { WETH9 } from '../../statoblast/WETH9.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
 import { Zoltar } from '../../Zoltar.sol';
 import { ISecurityPool } from '../../statoblast/interfaces/ISecurityPool.sol';
@@ -118,6 +119,8 @@ contract PortfolioForkQuestionMock {
 }
 
 contract PortfolioForkHarness {
+	WETH9 public collateralToken;
+	uint256 public constant minimumReportCollateral = 1e16;
 	PortfolioForkZoltarMock public immutable zoltar;
 	SecurityPoolCapitalLedgerDeployer private immutable capitalDeployer;
 	SecurityPoolCommitmentIndexDeployer private immutable indexDeployer;
@@ -140,6 +143,7 @@ contract PortfolioForkHarness {
 	mapping(uint248 => mapping(uint256 => ISecurityPool)) private pools;
 
 	constructor(PortfolioForkZoltarMock protocol, SecurityPoolCapitalLedgerDeployer capitals, SecurityPoolCommitmentIndexDeployer indices, SecurityPoolCapitalFeeStreamsDeployer streams, address auctions) {
+		collateralToken = new WETH9();
 		zoltar = protocol;
 		capitalDeployer = capitals;
 		indexDeployer = indices;
@@ -148,6 +152,11 @@ contract PortfolioForkHarness {
 		clocks[0] = Clock(0, 0, true, true);
 	}
 	receive() external payable {}
+	function _creditFees(uint248 u, uint256 amount) private {
+		collateralToken.approve(address(capitalLedger[u]), amount);
+		capitalLedger[u].creditTimedFees(amount);
+	}
+
 	function initialize(SecurityPoolPortfolioSettlement engine, SecurityPoolSettlementBook book, SecurityPoolReporterLedger reporter, address coordinator) external {
 		require(forkController == address(0), 'Already initialized');
 		settlement = engine;
@@ -189,7 +198,7 @@ contract PortfolioForkHarness {
 	}
 	function creditForkFees(uint248 u, uint256 amount) external {
 		require(msg.sender == forkController, 'Only fork coordinator');
-		capitalLedger[u].creditTimedFees{value: amount}();
+		_creditFees(u, amount);
 	}
 	function setPrice(uint248 u, uint256 price, uint48 expiry) external {
 		capitalLedger[u].acceptPrice(price, expiry);
@@ -244,7 +253,7 @@ contract PortfolioForkHarness {
 		(, , , , bool isSealed) = settlement.ledger().totals(book);
 		if (isSealed) return;
 		(uint256 fees, uint256 demand) = settlement.checkpointUniverse(u, logicalTime(u));
-		if (fees != 0) capitalLedger[u].creditTimedFees{value: fees}();
+		if (fees != 0) _creditFees(u, fees);
 		capitalLedger[u].synchronizeDemand(demand);
 	}
 	function registerQuestion(uint248 u, uint256 q, ISecurityPool pool) external {
@@ -256,12 +265,14 @@ contract PortfolioForkHarness {
 	}
 	function mintQuestion(uint256 q) external payable {
 		capitalLedger[0].setDemand(capitalLedger[0].demandAttoEth() + msg.value);
-		settlement.mint{value: msg.value}(address(pools[0][q]), 0, logicalTime(0));
+		collateralToken.deposit{value: msg.value}();
+		collateralToken.approve(address(settlement), msg.value);
+		settlement.mint(address(pools[0][q]), msg.value, 0, logicalTime(0));
 	}
 	function redeemQuestion(uint248 u, uint256 q, uint256 shares, address recipient) external {
 		settlement.redeem(address(pools[u][q]), recipient, shares, 0, logicalTime(u));
 		(uint256 fees, uint256 demand) = settlement.checkpointUniverse(u, logicalTime(u));
-		if (fees != 0) capitalLedger[u].creditTimedFees{value: fees}();
+		if (fees != 0) _creditFees(u, fees);
 		capitalLedger[u].synchronizeDemand(demand);
 	}
 	function scheduleQuestionFinality(uint248 u, uint256 q, uint48 finalAfter) external {

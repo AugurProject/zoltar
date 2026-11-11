@@ -35,6 +35,10 @@ const demoSeries = (base: string, count = 12, variation = 0.32) =>
 	})
 export const demoHistory = (env: DemoEnvironment, path: string) => {
 	const { context } = env
+	const requestedCollateral = context.pageUrl.searchParams.get('collateral')
+	const decimals = requestedCollateral === 'USDC' || requestedCollateral === 'USDT' ? 6 : 18
+	const collateralScale = 10n ** BigInt(18 - decimals)
+	const collateralAmount = (value: bigint) => String(value / collateralScale)
 	const { priceDemo } = env.settings
 	const { mainnetDemoQuestion, demoPools, demoVaults, demoUniverses } = env.fixtures
 	const request = new URL(path, location.origin)
@@ -78,7 +82,7 @@ export const demoHistory = (env: DemoEnvironment, path: string) => {
 		const capacity = demoSeries(poolItem.total_capacity_ownership_atto_rep, 12, 0.4)
 		const hasAmm = poolItem.question_id === mainnetDemoQuestion.question_id
 		const hasRepEthPrices = poolItem !== requiredArrayItem(demoPools, 2, 'REP price demo pool')
-		const repEthPrices = demoRepEthPriceHistory()
+		const repEthPrices = demoRepEthPriceHistory().map(price => ({ ...price, rep_per_eth_1e18: String(BigInt(price.rep_per_eth_1e18) * collateralScale) }))
 		const firstRepEthPrice = requiredArrayItem(repEthPrices, 0, 'Demo REP/ETH price')
 		const displayedRepEthPrices = demoDisplayedRepEthPrices(priceDemo, repEthPrices, firstRepEthPrice)
 		return pagedHistory(
@@ -88,9 +92,9 @@ export const demoHistory = (env: DemoEnvironment, path: string) => {
 					block_number: String(23100000 + index * 7700),
 					settlement_collateral_atto_eth: value,
 					total_capacity_ownership_atto_rep: requiredArrayItem(capacity, index, 'Demo capacity point'),
-					total_claimable_vault_fees_atto_eth: String(BigInt(20 + index * 8) * 10n ** 16n),
+					total_claimable_vault_fees_atto_eth: collateralAmount(BigInt(20 + index * 8) * 10n ** 16n),
 					fee_index: context.pageUrl.searchParams.get('feeSeries') === 'missing' ? undefined : String(BigInt(index + 1) * 10n ** 16n),
-					unallocated_accrued_fees_atto_eth: ['missing', 'partial'].includes(context.pageUrl.searchParams.get('feeSeries') ?? '') ? undefined : String(BigInt(index + 1) * 10n ** 15n),
+					unallocated_accrued_fees_atto_eth: ['missing', 'partial'].includes(context.pageUrl.searchParams.get('feeSeries') ?? '') ? undefined : collateralAmount(BigInt(index + 1) * 10n ** 15n),
 					current_retention_rate: demoRetentionRate(context, poolItem.current_retention_rate),
 				})),
 				events: [],
@@ -111,6 +115,7 @@ export const demoHistory = (env: DemoEnvironment, path: string) => {
 							timestamp: price.timestamp,
 							block_number: price.block_number,
 							...DEMO_OPEN_ORACLE_HISTORY[Math.min(index, DEMO_OPEN_ORACLE_HISTORY.length - 1)],
+							summary: index === 0 ? `REP/${poolItem.collateral?.symbol ?? 'WETH'} report submitted` : DEMO_OPEN_ORACLE_HISTORY[Math.min(index, DEMO_OPEN_ORACLE_HISTORY.length - 1)]?.summary,
 							coordinator_address: poolItem.coordinator_address,
 						}))
 					: [],

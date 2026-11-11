@@ -23,6 +23,7 @@ const abi = parseAbi([
 function fixture(overrides: Record<string, unknown> = {}) {
 	const calls: { functionName: string; address: Address; blockNumber: bigint }[] = []
 	const values: Record<string, unknown> = {
+		collateralToken: weth,
 		factory,
 		originUniverseId: 0n,
 		getQuestions: [123n],
@@ -143,4 +144,15 @@ describe('portfolio branch price SDK', () => {
 		chain.client.getChainId = async () => ++calls
 		await expect(load(chain.client)).rejects.toThrow('changed')
 	})
+})
+
+test('a non-WETH collateral report uses raw-unit pricing and never adds token funding to its ETH budget', async () => {
+	const collateralToken = '0x0000000000000000000000000000000000000010'
+	const snapshot = await load(fixture({ collateralToken, minimumToken1ReportAttoEth: 10_000n, minimumToken2ReportAttoRep: 0n }).client)
+	const funding = quotePortfolioPriceFunding(snapshot, 10n ** 30n, 1_000_000n)
+	expect(funding.rep).toBe(10n ** 18n)
+	expect(funding.wrap).toBe(0n)
+	expect(funding.requiredEth).toBe(funding.bounty)
+	expect(buildPortfolioPriceApprovalRequest(snapshot, 'weth', funding.weth).to).toBe(collateralToken)
+	expect(() => buildPortfolioPriceWrapRequest(snapshot, 1n)).toThrow()
 })

@@ -225,3 +225,19 @@ test('portfolio creation rejects priority fees above the oracle funding bound be
 	await act(() => hook.state().setPriorityFeeInput(formatUnits(MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, 9)))
 	expect(hook.state().creationError).toBeUndefined()
 })
+
+for (const symbol of ['USDC', 'USDT'] as const)
+	test(`${symbol} creation validates the configured oracle floor in six-decimal collateral units`, async () => {
+		capitalClient().install()
+		const hook = await renderHookWithProps(usePortfolioActionsWrapper, { model: model() })
+		lifecycle.trackRendered(hook)
+		await act(() => {
+			hook.state().setCollateralSymbol(symbol)
+			hook.state().setReportFloor('0.0000001')
+		})
+		expect(hook.state().deployReason).toContain('up to 6 decimal places')
+		await act(() => hook.state().setReportFloor('0.000001'))
+		expect(hook.state().deployReason).toContain('admission policy first')
+		await act(() => hook.state().setReportFloor('0'))
+		expect(hook.state().deployReason).toContain('positive report stake floor')
+	})

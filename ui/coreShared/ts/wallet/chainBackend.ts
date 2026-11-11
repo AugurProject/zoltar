@@ -1,5 +1,5 @@
 import { assertNetworkEnabled } from './networkAvailability.js'
-import { createPublicClient, createWalletClient, custom, http, publicActions, type Account, type Address, type Hash, type Hex, type PublicActions, type Transport, type WalletClient } from '@zoltar/core-shared/evm/ethereum'
+import { encodeFunctionData, createPublicClient, createWalletClient, custom, http, publicActions, type Account, type Address, type Hash, type Hex, type PublicActions, type Transport, type WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { getInjectedEthereum, isUnsupportedWalletMethodError, normalizeInjectedAccount, parseInjectedChainId, readInjectedAccounts, requestWalletRpc, switchInjectedChain, type InjectedEthereum } from './injectedEthereum.js'
 import { createUserFacingError, hasErrorCode, hasErrorMessage } from '../lib/errors.js'
 import { sameChainId } from './chainId.js'
@@ -140,12 +140,16 @@ function withTransactionCallbacks(baseClient: WriteClient, callbacks: CreateWrit
 
 	const sendTransaction: typeof baseClient.sendTransaction = async parameters => {
 		await validateBeforeSend?.()
+		await baseClient.call({ account: parameters.account ?? baseClient.account, to: parameters.to ?? undefined, data: parameters.data, value: parameters.value ?? parameters.amount, gas: parameters.gas })
+		await validateBeforeSend?.()
 		const hash = await baseClient.sendTransaction(parameters)
 		callbacks.onTransactionSubmitted?.(hash)
 		return hash
 	}
 
 	const writeContract: typeof baseClient.writeContract = async parameters => {
+		await validateBeforeSend?.()
+		await baseClient.call({ account: parameters.account ?? baseClient.account, to: parameters.address, data: encodeFunctionData({ abi: parameters.abi, functionName: parameters.functionName, args: parameters.args ?? [] }), value: parameters.value, gas: parameters.gas })
 		await validateBeforeSend?.()
 		const hash = await baseClient.writeContract(parameters)
 		callbacks.onTransactionSubmitted?.(hash)

@@ -369,3 +369,13 @@ describe('trade ticket model', () => {
 		expect(blockedSale.availability.reason).toBe(ticketCopy.formatPriceImpactBlockedReason(formatOutcomeQuantity(sellable, 'YES', 6, 'down')))
 	})
 })
+
+for (const symbol of ['USDC', 'USDT']) {
+	test(`${symbol} buys parse collateral decimals without subtracting an ETH gas reserve from tokens`, () => {
+		const collateral = { token: '0x00000000000000000000000000000000000000aa' as const, symbol, decimals: 6, native: false }
+		const result = tradeTicketModel({ ...ready, amount: '1.000001', market: { ...market, collateral }, walletEthAttoEth: 2_000_000n })
+		expect(result.parsedAmount).toBe(1_000_001n)
+		expect(result.insufficientReason).toBeUndefined()
+		expect(tradeTicketModel({ ...ready, amount: '1.0000001', market: { ...market, collateral } }).amountError).toBeDefined()
+	})
+}

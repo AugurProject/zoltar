@@ -170,7 +170,7 @@ describe('submitting a quote after the chain advances', () => {
 			chain.head = 3n
 			chain.simulatedBlocks.length = 0
 			expect(await submitFreshLiquidity(client, configuration, account, quote, write)).toBe(transactionHash)
-			expect(new Set(chain.simulatedBlocks)).toEqual(new Set(['0x3']))
+			expect(new Set(chain.simulatedBlocks)).toEqual(new Set(['0x3', 'latest']))
 			expect(chain.blockRequests).toEqual([
 				['latest', false],
 				['latest', false],

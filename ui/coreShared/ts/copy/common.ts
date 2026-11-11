@@ -161,3 +161,7 @@ export const formatUpdatedDaysAgo = (days: number) => `Updated ${days}d ago`
 export const formatStaleUpdatedLabel = (updatedLabel: CopyTemplateValue) => `${updatedLabel} (stale)`
 export const formatLastReadAtTitle = (time: string) => `Last read at ${time}.`
 export const formatLocalTimeLabel = (localTimestamp: CopyTemplateValue) => `Local time ${localTimestamp}`
+
+export const formatApprovalResetRequired = (symbol: string) => `Reset ${symbol} approval first.`
+
+export const formatResetTokenApproval = (symbol: string) => `Reset ${symbol} approval`

@@ -56,7 +56,7 @@ function PortfolioValues({ market, balances, valuation }: { market: LiveMarket; 
 			{availability.completeSets === 0n ? undefined : (
 				<div className='portfolio-position-value is-secondary'>
 					<span className='metric-label'>{availability.canRedeemCompleteSets ? payoutCopy.redemptionValue : payoutCopy.backingValue}</span>
-					<strong>{formatCompleteSetQuantity(availability.completeSets)}</strong>
+					<strong>{formatCompleteSetQuantity(availability.completeSets, 4, 'nearest', market)}</strong>
 					<small className='payout-caption'>({market.loadError === undefined ? formatCollateralEth(availability.completeSets, market) : payoutCopy.unavailable})</small>
 				</div>
 			)}

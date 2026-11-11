@@ -1,3 +1,4 @@
+import { portfolioCollateral, type CollateralSymbol } from '../protocol/collateral.js'
 import { encodeFunctionData } from '@zoltar/core-shared/evm/ethereum'
 import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 import { buildPortfolioPrepareNextRequest, buildPortfolioCapitalDepositRequest, buildPortfolioCapitalSetHealthRequest, buildPortfolioCapitalSetCommitmentRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
@@ -13,7 +14,10 @@ import { portfolioAdmissionCreationRequest } from '../protocol/securityPoolPortf
 import { prepareSeededPortfolioMint } from './portfolioScenarioMint.js'
 
 /** Seeds real portfolio contracts on the browser-local chain, with no production RPC writes. */
-export async function seedPortfolioScenario({ accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile }: ScenarioSeedParameters, questionCount = 2) {
+export async function seedPortfolioScenario({ accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile }: ScenarioSeedParameters, questionCount = 2, collateralSymbol: CollateralSymbol = 'WETH') {
+	const collateral = portfolioCollateral(profile, collateralSymbol)
+	if (collateral.address === undefined) throw new Error('Simulation collateral is unavailable.')
+	const collateralUnit = 10n ** BigInt(collateral.decimals)
 	const reportStep = createRangeProgressReporter(onProgress, { start: 0.98, end: 0.99 }, 20)
 	await reportStep('Preparing shared portfolio')
 	const owner = requireQaAccount(accounts[0], 'Expected portfolio simulation owner')
@@ -36,11 +40,11 @@ export async function seedPortfolioScenario({ accounts, createReadClient, create
 	if (policy === null || policy === undefined) throw new Error('Expected deployed admission policy')
 	const deployment = await sendPortfolioTransaction(
 		client,
-		portfolioCreationRequest(owner, { universeId: 0n, securityMultiplierBps: 20_000n, reportPriorityFeeAttoEthPerGas: 10_000_000_000n }, 366n * 86400n, policy, {
+		portfolioCreationRequest(owner, { collateralToken: collateral.address, minimumReportCollateral: collateralUnit / 100n, universeId: 0n, securityMultiplierBps: 20_000n, reportPriorityFeeAttoEthPerGas: 10_000_000_000n }, 366n * 86400n, policy, {
 			annualFeeBps: 1000n,
 			purchaseFeeBps: 100n,
-			minimumPurchaseFeeAttoEth: 10n ** 15n,
-			minimumCommitmentAttoEth: 10n ** 18n,
+			minimumPurchaseFeeAttoEth: collateralUnit / 1000n,
+			minimumCommitmentAttoEth: collateralUnit,
 			minimumOutcomeRate: 10n ** 16n,
 			rewardVestingSeconds: 86400n,
 		}),
@@ -48,6 +52,9 @@ export async function seedPortfolioScenario({ accounts, createReadClient, create
 	)
 	const portfolio = deployment.receipt.contractAddress
 	if (portfolio === null || portfolio === undefined) throw new Error('Expected deployed portfolio address')
+	const services = await readClient.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'services' })
+	await sendPortfolioTransaction(client, { account: owner, to: collateral.address, value: 0n, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [services, (1n << 256n) - 1n] }) }, 'Approve simulated collateral')
+
 	await reportStep('Deployed shared portfolio')
 	for (let stage = 1; stage <= 4; stage++) {
 		await sendPortfolioTransaction(client, buildPortfolioPrepareNextRequest({ caller: owner, portfolio }), 'Prepare portfolio modules')
@@ -69,7 +76,7 @@ export async function seedPortfolioScenario({ accounts, createReadClient, create
 	const managerAddress = (await loadAllSecurityPools(readClient)).find(pool => pool.securityPoolAddress.toLowerCase() === questionPool.toLowerCase())?.managerAddress
 	if (managerAddress === undefined) throw new Error('Expected namespaced portfolio question pool')
 	await reportStep('Preparing shared portfolio oracle')
-	const commitment = 10n * 10n ** 18n
+	const commitment = 10n * collateralUnit
 	const feed = await readClient.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'priceFeed', args: [0n] })
 	const [minimumReport, exposureDivider] = await Promise.all([readClient.readContract({ address: feed, abi: feedArtifact.abi, functionName: 'minimumToken1ReportAttoEth' }), readClient.readContract({ address: feed, abi: feedArtifact.abi, functionName: 'OPEN_INTEREST_DIVIDER' })])
 	// Prepay the forthcoming commitment as well as the feed's current gas-security floor.
@@ -83,10 +90,10 @@ export async function seedPortfolioScenario({ accounts, createReadClient, create
 	await sendPortfolioTransaction(client, buildPortfolioCapitalSetCommitmentRequest({ owner, capitalLedger, commitment }), 'Authorize shared commitment')
 	await reportStep('Authorized individual healthy commitment')
 	for (const [index, pool] of pools.entries()) {
-		const request = await prepareSeededPortfolioMint(portfolioReadClient(readClient), owner, portfolio, BigInt(pool.questionId))
+		const request = await prepareSeededPortfolioMint(portfolioReadClient(readClient), owner, portfolio, BigInt(pool.questionId), collateralUnit)
 		await sendPortfolioTransaction(client, request, 'Mint portfolio complete sets')
 		await reportStep(`Minted shared portfolio question ${index + 1} of ${pools.length}`)
 	}
 	await reportStep('Shared portfolio scenario is ready')
-	return { portfolio, capitalLedger, managerAddress, questionIds: pools.map(pool => BigInt(pool.questionId)) }
+	return { portfolio, capitalLedger, managerAddress, questionIds: pools.map(pool => BigInt(pool.questionId), collateralUnit) }
 }

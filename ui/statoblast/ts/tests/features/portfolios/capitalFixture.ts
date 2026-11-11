@@ -5,6 +5,7 @@ export const owner = getAddress('0x0000000000000000000000000000000000000011')
 export const portfolio = getAddress('0x0000000000000000000000000000000000000022')
 export const capital = getAddress('0x0000000000000000000000000000000000000033')
 export const token = getAddress('0x0000000000000000000000000000000000000044')
+export const collateralToken = getAddress('0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2')
 export const index = getAddress('0x0000000000000000000000000000000000000055')
 export const auctionAddress = getAddress('0x0000000000000000000000000000000000000091')
 export const auctionEngine = getAddress('0x0000000000000000000000000000000000000092')
@@ -26,6 +27,11 @@ export function auctionCapitalSnapshot(overrides: Partial<PortfolioAccountSnapsh
 }
 export function capitalSnapshot(overrides: Partial<PortfolioAccountSnapshot> = {}): PortfolioAccountSnapshot {
 	return {
+		collateralToken,
+		collateral: { address: collateralToken, symbol: 'WETH', decimals: 18 },
+		walletCollateral: 100n * unit,
+		collateralAllowance: 100n * unit,
+		services: getAddress('0x0000000000000000000000000000000000000068'),
 		chainId: 1,
 		blockNumber: 10n,
 		blockHash: zeroHash,

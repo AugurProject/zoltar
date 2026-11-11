@@ -1,3 +1,4 @@
+import * as collateralCopy from '../../../copy/collateral.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
@@ -37,7 +38,7 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 					<TimestampValue timestamp={model.earliestSettlement} relative={false} />
 				</MetricField>
 				<MetricField label={copy.currentPrice} loading={model.loading}>
-					<CurrencyValue value={observation?.lastSettlementTimestamp === 0n ? undefined : observation?.lastPrice} />
+					<CurrencyValue value={observation?.lastSettlementTimestamp === 0n ? undefined : observation?.lastPrice} units={36 - model.collateral.decimals} />
 				</MetricField>
 				<MetricField label={copy.validUntil} loading={model.loading}>
 					<TimestampValue timestamp={observation === undefined || observation.lastSettlementTimestamp === 0n ? undefined : observation.lastSettlementTimestamp + observation.validitySeconds} relative={false} />
@@ -46,9 +47,9 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 			<PortfolioButton model={parameters.actions} action='preparePortfolioPrice' label={copy.prepare} pendingLabel={copy.preparing} reason={model.prepareReason} onClick={model.prepare} />
 			<MetricGrid>
 				<PortfolioInput label={copy.price} value={model.priceInput} onChange={model.setPrice} disabled={disabled} numeric />
-				<PortfolioInput label={copy.weth} hint={copy.wethHint} value={model.wethInput} onChange={model.setWeth} disabled={disabled} numeric />
-				<MetricField label={copy.minimumWeth} loading={model.loading}>
-					<CurrencyValue value={model.minimumWethAttoEth} suffix={common.weth} />
+				<PortfolioInput label={collateralCopy.reportStake(model.collateral.symbol)} hint={copy.wethHint} value={model.wethInput} onChange={model.setWeth} disabled={disabled} numeric />
+				<MetricField label={collateralCopy.minimumReportStake(model.collateral.symbol)} loading={model.loading}>
+					<CurrencyValue value={model.minimumWethAttoEth} suffix={model.collateral.symbol} units={model.collateral.decimals} />
 				</MetricField>
 				<MetricField label={copy.requiredRep}>
 					<CurrencyValue value={model.funding?.rep} suffix={common.rep} />
@@ -56,17 +57,30 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 				<MetricField label={copy.bounty} loading={model.loading}>
 					<CurrencyValue value={observation?.bounty} suffix={common.eth} />
 				</MetricField>
-				<MetricField label={copy.walletWeth} loading={model.loading}>
-					<CurrencyValue value={observation?.wethBalanceAttoEth} suffix={common.weth} />
+				<MetricField label={collateralCopy.walletBalance(model.collateral.symbol)} loading={model.loading}>
+					<CurrencyValue value={observation?.wethBalanceAttoEth} suffix={model.collateral.symbol} units={model.collateral.decimals} />
 				</MetricField>
 				<MetricField label={copy.walletRep} loading={model.loading}>
 					<CurrencyValue value={observation?.repBalanceAttoRep} suffix={common.rep} />
 				</MetricField>
-				<MetricField label={copy.wrapAmount}>
-					<CurrencyValue value={model.funding?.wrap} suffix={common.eth} />
-				</MetricField>
+				{model.collateral.symbol === collateralCopy.weth ? (
+					<MetricField label={copy.wrapAmount}>
+						<CurrencyValue value={model.funding?.wrap} suffix={common.eth} />
+					</MetricField>
+				) : undefined}
 			</MetricGrid>
-			<PortfolioButton model={parameters.actions} action='wrapPortfolioPrice' label={copy.wrap} pendingLabel={copy.wrapping} reason={model.wrapReason} onClick={model.wrap} />
+			{model.collateral.symbol === collateralCopy.weth ? <PortfolioButton model={parameters.actions} action='wrapPortfolioPrice' label={copy.wrap} pendingLabel={copy.wrapping} reason={model.wrapReason} onClick={model.wrap} /> : undefined}
+			{model.collateral.symbol === collateralCopy.usdt ? (
+				<PortfolioButton
+					model={parameters.actions}
+					action='resetPortfolioPriceCollateral'
+					label={collateralCopy.reset}
+					pendingLabel={collateralCopy.resetting}
+					reason={model.fundingReason ?? ((observation?.wethAllowanceAttoEth ?? 0n) === 0n ? collateralCopy.notNeeded : undefined)}
+					onClick={() => model.approve('weth', 0n)}
+				/>
+			) : undefined}
+
 			<TokenApprovalControl
 				actionLabel={copy.request}
 				allowanceError={model.fundingReadError}
@@ -74,6 +88,7 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 				approvedAmount={observation?.wethAllowanceAttoEth}
 				disabled={disabled}
 				guardMessage={model.fundingReason}
+				requiresAllowanceReset={model.collateral.symbol === collateralCopy.usdt}
 				onApprove={amount => {
 					if (amount !== undefined) void model.approve('weth', amount)
 				}}
@@ -81,8 +96,8 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 				pendingLabel={copy.approving}
 				requiredAmount={model.funding?.weth}
 				resetKey={`${model.snapshot?.feed}:${model.snapshot?.owner}:${model.priceInput}:${model.wethInput}:weth`}
-				tokenSymbol={common.weth}
-				tokenUnits={18}
+				tokenSymbol={model.collateral.symbol}
+				tokenUnits={model.collateral.decimals}
 			/>
 			<TokenApprovalControl
 				actionLabel={copy.request}
@@ -112,8 +127,8 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 				<MetricField label={copy.sponsor}>
 					<AddressValue address={report?.sponsor} />
 				</MetricField>
-				<MetricField label={copy.releasedWeth}>
-					<CurrencyValue value={report?.wethCredit} suffix={common.weth} />
+				<MetricField label={collateralCopy.released(model.collateral.symbol)}>
+					<CurrencyValue value={report?.wethCredit} suffix={model.collateral.symbol} units={model.collateral.decimals} />
 				</MetricField>
 				<MetricField label={copy.releasedRep}>
 					<CurrencyValue value={report?.repCredit} suffix={common.rep} />

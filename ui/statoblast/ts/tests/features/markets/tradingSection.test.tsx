@@ -117,6 +117,26 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 
 function createTradingSectionProps(overrides: Partial<TradingSectionProps> = {}): TradingSectionProps {
 	return {
+		collateralFunding: {
+			collateral: {
+				address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+				token: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+				services: '0x0000000000000000000000000000000000000068',
+				portfolio: '0x0000000000000000000000000000000000000022',
+				symbol: 'WETH',
+				decimals: 18,
+				balance: overrides.accountState?.ethBalanceAttoEth ?? 10n ** 19n,
+				allowance: 2n ** 256n - 1n,
+			},
+			requiredCollateral: 1n,
+			reason: undefined,
+			loading: false,
+			error: undefined,
+			pending: false,
+			resetting: false,
+			approve: async () => undefined,
+		},
+
 		accountState: createAccountState(),
 		embedInCard: true,
 		loadingTradingForkUniverse: false,
@@ -514,8 +534,8 @@ void describe('TradingSection', () => {
 		expect(documentQueries.getAllByText(/^1\.00( sets)?$/).length).toBeGreaterThanOrEqual(4)
 		expect(getExactValueTitles(document.body, '1').length).toBeGreaterThanOrEqual(4)
 		expect(document.body.textContent?.includes('1 000 000 000 000 000 000')).toBe(false)
-		expect(getExactValueTitles(document.body, '0.9 ETH')).toHaveLength(4)
-		expect(document.body.textContent).toContain('(0.9000 ETH)')
+		expect(getExactValueTitles(document.body, '0.9 WETH')).toHaveLength(4)
+		expect(document.body.textContent).toContain('(0.9000 WETH)')
 	})
 
 	void test('keeps losing share quantities visible with zero ETH value after resolution', async () => {
@@ -532,8 +552,8 @@ void describe('TradingSection', () => {
 		const outcomes = document.querySelector('.trading-share-distribution')
 		if (outcomes === null) throw new Error('Missing holdings')
 		expect(getExactValueTitles(outcomes, '1')).toHaveLength(3)
-		expect(getExactValueTitles(outcomes, '0 ETH')).toHaveLength(2)
-		expect(getExactValueTitles(outcomes, '0.9 ETH')).toHaveLength(1)
+		expect(getExactValueTitles(outcomes, '0 WETH')).toHaveLength(2)
+		expect(getExactValueTitles(outcomes, '0.9 WETH')).toHaveLength(1)
 	})
 
 	void test('keeps minting inputs and the submit action without a review panel', async () => {
@@ -588,7 +608,7 @@ void describe('TradingSection', () => {
 		})
 
 		const modalQueries = within(documentQueries.getByRole('dialog', { name: 'Mint complete sets' }))
-		const walletMetric = modalQueries.getByText('Wallet ETH').parentElement
+		const walletMetric = modalQueries.getByText('Wallet collateral').parentElement
 		const mintableMetric = modalQueries.getByText('Available to mint').parentElement
 		if (walletMetric === null || mintableMetric === null) throw new Error('Expected mint balance metrics')
 		expect(getExactValueTitles(walletMetric, '1.25')).toHaveLength(1)
@@ -974,7 +994,7 @@ void describe('TradingSection', () => {
 		const ethMetric = modalQueries.getByText('Available to redeem').parentElement
 		if (setsMetric === null || ethMetric === null) throw new Error('Expected complete-set redemption metrics')
 		expect(getExactValueTitles(setsMetric, '2 sets')).toHaveLength(1)
-		expect(getExactValueTitles(ethMetric, '1.5 ETH')).toHaveLength(1)
+		expect(getExactValueTitles(ethMetric, '1.5 WETH')).toHaveLength(1)
 	})
 
 	void test('leaves minting out once the selected market has finalized, since it can never apply again', async () => {

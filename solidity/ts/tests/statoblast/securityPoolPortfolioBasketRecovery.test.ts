@@ -1,3 +1,4 @@
+import { collateralBalance } from './burnEvidence'
 import { describe, expect, test } from 'bun:test'
 import { useSecurityPoolPortfolioFixture, unit } from './securityPoolPortfolioFixture'
 import {
@@ -55,11 +56,11 @@ describe('Statoblast: native fork claim basket recovery', () => {
 		if (!chosen) expect(expectedCash).toBe(0n)
 		const token = await owner().readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'repToken' })
 		const repBefore = await owner().readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [other().account.address] })
-		const cashBefore = await owner().getBalance({ address: engine })
+		const cashBefore = await collateralBalance(owner(), fixture.portfolio, engine)
 		await base.mockWindow.setTime(forkTime + 66n * DAY + 1n)
 		await writeContractAndWait(other(), () => other().writeContract({ abi: poolArtifact.abi, address: childPool, functionName: 'redeemShares' }))
 		expect(await owner().readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [other().account.address] })).toBe(repBefore + expectedRep)
-		expect(await owner().getBalance({ address: engine })).toBe(cashBefore - expectedCash)
+		expect(await collateralBalance(owner(), fixture.portfolio, engine)).toBe(cashBefore - expectedCash)
 		expect((await other().readContract({ abi: sharesArtifact.abi, address: shares, functionName: 'balanceOfShares', args: [child, other().account.address] }))[1]).toBe(0n)
 		await writeContractAndWait(other(), () => other().writeContract({ abi: poolArtifact.abi, address: childPool, functionName: 'redeemShares' }))
 		expect(await owner().readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [other().account.address] })).toBe(repBefore + expectedRep)

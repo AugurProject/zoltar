@@ -1,3 +1,4 @@
+import * as collateralCopy from '../../../copy/collateral.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
@@ -63,7 +64,7 @@ export function PortfolioSharedFork(parameters: PortfolioSharedForkParameters) {
 				<UserMessage detail={copy.basketHint} />
 				<MetricGrid>
 					<MetricField label={copy.cashRecovery} loading={model.loading}>
-						<CurrencyValue value={branch?.parentCash} suffix={common.eth} />
+						<CurrencyValue value={branch?.parentCash} suffix={parameters.snapshot?.collateral.symbol ?? collateralCopy.fallback} units={parameters.snapshot?.collateral.decimals ?? 0} />
 					</MetricField>
 					<MetricField label={copy.repRecovery} loading={model.loading}>
 						<CurrencyValue value={branch?.started ? branch.recoveryAttoRep : undefined} suffix={common.rep} />

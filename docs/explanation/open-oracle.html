@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="description" content="Why Statoblast uses OpenOracle for fresh REP/ETH prices." />
+		<meta name="description" content="Why Statoblast uses OpenOracle for fresh REP/collateral prices." />
 		<title>Why Statoblast uses OpenOracle · Augur documentation</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
@@ -13,7 +13,7 @@
 			<header>
 				<p class="kicker">Explanation</p>
 				<h1>Why Statoblast uses OpenOracle</h1>
-				<p>Statoblast needs a fresh REP/ETH exchange rate (quoted as REP per ETH) when it measures whether REP adequately secures ETH obligations. <a href="../reference/glossary.html#open-oracle">OpenOracle</a> supplies an economically contestable price. A reporter posts a WETH/REP position at the claimed price, and anyone who believes the price is wrong can replace the report by trading against that position, so an inaccurate report is a profit opportunity. OpenOracle never decides whether a prediction-market answer is Yes, No, or Invalid.</p>
+				<p>Statoblast needs a fresh REP/collateral exchange rate (quoted as REP per collateral token) when it measures whether REP adequately secures collateral obligations. <a href="../reference/glossary.html#open-oracle">OpenOracle</a> supplies an economically contestable price. A reporter posts a collateral/REP position at the claimed price, and anyone who believes the price is wrong can replace the report by trading against that position, so an inaccurate report is a profit opportunity. OpenOracle never decides whether a prediction-market answer is Yes, No, or Invalid.</p>
 			</header>
 			<section id="protected-operations">
 				<h2>Protected operations</h2>
@@ -25,14 +25,14 @@
 			</section>
 			<section id="example">
 				<h2>One request, dispute, and settlement</h2>
-				<p>Alice wants to increase her commitment while the shared REP/ETH price is stale. She funds an independent report. Bob can trade against an inaccurate report before it settles; a dispute restarts its settlement clock. Once a valid report settles and is accepted, Alice submits her capital change with explicit bounds. Report settlement does not execute a queued vault operation.</p>
+				<p>Alice wants to increase her commitment while the shared REP/collateral price is stale. She funds an independent report. Bob can trade against an inaccurate report before it settles; a dispute restarts its settlement clock. Once a valid report settles and is accepted, Alice submits her capital change with explicit bounds. Report settlement does not execute a queued vault operation.</p>
 				<p>A multi-question portfolio shares one accepted price but allows independent reports at the same time. Each report has its own funding escrow, so a disputed report cannot hold another sponsor’s released funds. Capital operations execute separately once a valid shared price is available. Growing underwriting also requires enough challenged report funding; a settled larger report can support an owner’s entry even after a smaller renewal, while retaining that report’s conservative collateral requirement for the owner. The <a href="../reference/open-oracle.html#shared-report-coverage">shared coverage reference</a> gives the exact limits.</p>
 			</section>
 			<section id="limitations">
 				<h2>Security limitations</h2>
 				<p>OpenOracle relies on participants noticing and profitably correcting inaccurate reports. Congestion, censorship, incorrect gas assumptions, insufficient economic incentives, or repeated disputes can delay or undermine that process. A fresh price is not a guarantee that an operation will succeed, and a settled price says nothing about the market question's outcome.</p>
 				<p>Portfolios constrain capital growth by challenged report funding, but this does not guarantee an accurate price. The oracle does not impose an absolute deadline on a report game: each valid dispute restarts its settlement clock. Independent candidates can proceed independently when another report remains disputed; their acceptance still depends on a correction opportunity and timely settlement.</p>
-				<p>Each report is sized from a gas-cost assumption. The priority fee in that assumption is fixed when the <a href="../reference/glossary.html#origin-pool">origin pool</a> is created and inherited by its children; it is not observed from the request block. If prevailing priority fees are higher, the modeled incentive for a disputer is weaker; a value set too high raises the sponsor's initial WETH and REP requirement and can make requests impractical.</p>
+				<p>The portfolio creator fixes a minimum report stake in collateral units. Reports also need funding proportional to portfolio exposure. These rules do not automatically ensure that correcting a report covers ETH gas costs; participants must assess that incentive for the selected token. Children inherit the same collateral and stake floor. No collateral/ETH price feed is required.</p>
 				<p>The <a href="../reference/open-oracle.html">OpenOracle integration reference</a> specifies funding formulas, report sizing, sponsor rules, callbacks, recovery paths, configuration, and a report-sizing calculator. The <a href="../reference/security-model.html#assumptions-oracle">security model</a> states the participation assumptions.</p>
 			</section>
 		</main>

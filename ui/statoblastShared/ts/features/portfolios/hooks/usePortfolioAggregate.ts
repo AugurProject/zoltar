@@ -87,9 +87,9 @@ export function usePortfolioAggregate(
 	const targetCapacity = snapshot === undefined ? undefined : maximumPortfolioCommitment(snapshot, healthBps, sizingProofPrice)
 	const pledgedRep = snapshot?.positions.find(position => position.commitment > 0n)?.rep ?? 0n
 	const retirementTargetCapacity = snapshot === undefined ? undefined : maximumPortfolioCommitment({ ...snapshot, ownerPrincipalAttoRep: pledgedRep }, healthBps)
-	const commitmentAttoEth = commitmentAmount.value.trim() === '' ? targetCapacity : portfolioAmountOrUndefined(commitmentAmount.value)
-	const displayedCommitment = commitmentAmount.value.trim() === '' && targetCapacity !== undefined ? formatEther(targetCapacity) : commitmentAmount.value
-	const remainingCommitment = portfolioAmountOrUndefined(remainingCommitmentAmount.value)
+	const commitmentAttoEth = commitmentAmount.value.trim() === '' ? targetCapacity : portfolioAmountOrUndefined(commitmentAmount.value, snapshot?.collateral.decimals ?? 18)
+	const displayedCommitment = commitmentAmount.value.trim() === '' && targetCapacity !== undefined ? formatUnits(targetCapacity, snapshot?.collateral.decimals ?? 18) : commitmentAmount.value
+	const remainingCommitment = portfolioAmountOrUndefined(remainingCommitmentAmount.value, snapshot?.collateral.decimals ?? 18)
 	const targetRequiredRep = snapshot !== undefined && healthBps !== undefined && healthBps >= 10_000n && healthBps < 1n << 256n && snapshot.ownerConservativePrice > 0n ? requiredPortfolioCollateral(snapshot, snapshot.ownerCommitmentAttoEth, undefined, healthBps) : undefined
 	let targetShortfall: bigint | undefined
 	if (targetRequiredRep !== undefined && snapshot !== undefined) targetShortfall = targetRequiredRep > pledgedRep ? targetRequiredRep - pledgedRep : 0n
@@ -223,7 +223,7 @@ export function usePortfolioAggregate(
 			if (retirementTargetCapacity === undefined || snapshot === undefined || retirementTargetCapacity >= snapshot.ownerCommitmentAttoEth) return
 			const maximumResidual = snapshot.ownerCommitmentAttoEth > snapshot.economics.minimumCommitmentAttoEth ? snapshot.ownerCommitmentAttoEth - snapshot.economics.minimumCommitmentAttoEth : 0n
 			const residual = retirementTargetCapacity < maximumResidual ? retirementTargetCapacity : maximumResidual
-			remainingCommitmentAmount.value = formatEther(residual < snapshot.economics.minimumCommitmentAttoEth ? 0n : residual)
+			remainingCommitmentAmount.value = formatUnits(residual < snapshot.economics.minimumCommitmentAttoEth ? 0n : residual, snapshot.collateral.decimals)
 		},
 		reportInput: reportInput.value,
 		setReportInput: (value: string) => {
@@ -337,7 +337,7 @@ export function usePortfolioAggregate(
 					if (commitmentAttoEth === undefined) throw new Error('Enter a commitment.')
 					return {
 						...buildPortfolioCapitalSetCommitmentRequest({ ...base(selected), commitment: commitmentAttoEth, ...(reportId === undefined ? {} : { reportId }) }),
-						reviewDescription: `Authorize ${formatEther(commitmentAttoEth)} ETH commitment backed by all ${formatEther(selected.ownerPrincipalAttoRep)} REP in your account at your saved ${formatUnits(selected.ownerAccount.targetHealthFactorBps || 10_000n, 2)}% health target. All eligible questions share this capacity. Your account bears its own liquidation losses; retirement waits for spare capacity.${reportId === undefined ? '' : ` Report ${reportId} sets a collateral price floor until a later canonical report covers the full pool commitment.`}`,
+						reviewDescription: `Authorize ${formatUnits(commitmentAttoEth, selected.collateral.decimals)} ${selected.collateral.symbol} commitment backed by all ${formatEther(selected.ownerPrincipalAttoRep)} REP in your account at your saved ${formatUnits(selected.ownerAccount.targetHealthFactorBps || 10_000n, 2)}% health target. All eligible questions share this capacity. Your account bears its own liquidation losses; retirement waits for spare capacity.${reportId === undefined ? '' : ` Report ${reportId} sets a collateral price floor until a later canonical report covers the full pool commitment.`}`,
 					}
 				},
 				async latest => {
@@ -360,7 +360,7 @@ export function usePortfolioAggregate(
 					reviewDescription:
 						pendingRetirement === undefined
 							? 'Release commitments from the current retirement cohort using spare healthy capacity. Partial progress is possible; no fixed completion date is promised.'
-							: `Attempt to finish your request at ${formatEther(pendingRetirement.remainingCommitment)} ETH commitment. ${pendingRetirement.retirementPreview === undefined ? capitalCopy.retirementPreviewUnavailable : capitalCopy.retirementPreviewStatus[pendingRetirement.retirementPreview.status]}. It completes only when spare healthy capacity covers earlier reserved reductions and your entire remaining reduction. Otherwise your commitment remains unchanged. ${capitalCopy.retirementPreviewHint} Ordinary pool activity can still make partial progress.`,
+							: `Attempt to finish your request at ${formatUnits(pendingRetirement.remainingCommitment, selected.collateral.decimals)} ${selected.collateral.symbol} commitment. ${pendingRetirement.retirementPreview === undefined ? capitalCopy.retirementPreviewUnavailable : capitalCopy.retirementPreviewStatus[pendingRetirement.retirementPreview.status]}. It completes only when spare healthy capacity covers earlier reserved reductions and your entire remaining reduction. Otherwise your commitment remains unchanged. ${capitalCopy.retirementPreviewHint} Ordinary pool activity can still make partial progress.`,
 				}),
 				latest => {
 					if (!latest.priceValid) throw new Error('Refresh the shared REP price first.')

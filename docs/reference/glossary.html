@@ -46,7 +46,7 @@
 				<h2>SecurityPools, shares, and vaults</h2>
 				<dl>
 					<dt id="portfolio">Portfolio</dt>
-					<dd>A shared REP capital ledger and ETH settlement system backing questions admitted by its configured policy. Owners retain individual commitments and health settings; questions have separate outcome shares and settlement balances. A portfolio with one fixed question uses the same architecture as a portfolio admitting many questions.</dd>
+					<dd>A shared REP capital ledger and ERC-20 settlement system backing questions admitted by its configured policy. Owners retain individual commitments and health settings; questions have separate outcome shares and settlement balances. A portfolio with one fixed question uses the same architecture as a portfolio admitting many questions.</dd>
 					<dt id="security-pool">SecurityPool</dt>
 					<dd>The portfolio-bound contract for one question in one universe. It exposes shares, local reporting and redemption; its portfolio modules hold capital and settlement cash.</dd>
 					<dt id="lineage">Lineage</dt>
@@ -58,13 +58,13 @@
 					<dt id="open-interest">Open interest</dt>
 					<dd>The exposure created by outstanding question claims. Portfolio settlement demand aggregates the obligations that healthy underwriting commitments must support.</dd>
 					<dt id="complete-set">Complete set</dt>
-					<dd>One matching unit each of Invalid, Yes, and No shares, minted against ETH and redeemable together while the pool is operational.</dd>
+					<dd>One matching unit each of Invalid, Yes, and No shares, minted against portfolio collateral and redeemable together while the pool is operational.</dd>
 					<dt id="outcome-share">Outcome share</dt>
 					<dd>An ERC-1155 token representing one outcome claim in one universe-specific SecurityPool.</dd>
 					<dt id="vault">Vault</dt>
 					<dd>An owner’s capital account: its own REP principal, commitment and fee claims in the shared capital ledger. An auction winner may control a separate vault contract that owns such an account.</dd>
 					<dt id="underwriting-commitment">Underwriting commitment</dt>
-					<dd>An owner’s authorized amount of ETH obligations. Healthy commitments contribute to shared portfolio capacity and earn fees; losses from a distressed position stay with that owner.</dd>
+					<dd>An owner’s authorized amount of collateral obligations. Healthy commitments contribute to shared portfolio capacity and earn fees; losses from a distressed position stay with that owner.</dd>
 					<dt id="security-multiplier">Security multiplier</dt>
 					<dd>The portfolio’s fixed protocol backing multiplier, expressed in basis points. Owners can select an additional personal health target; the two settings have different purposes.</dd>
 					<dt id="vault-health">Vault health</dt>
@@ -114,7 +114,7 @@
 					<dt id="fork-continuation">Fork continuation</dt>
 					<dd>The preparation needed before a child question resumes an inherited unresolved reporting game. Purchases wait until the question and shared branch are ready.</dd>
 					<dt id="truth-auction">Truth Auction</dt>
-					<dd>A uniform-price auction of a portfolio branch’s saleable REP for ETH to repair branch claims. Winning bids automatically own separately accounted capital positions. It does not select truth.</dd>
+					<dd>A uniform-price auction of a portfolio branch’s saleable REP for the selected collateral to repair branch claims. Winning bids automatically own separately accounted capital positions. It does not select truth.</dd>
 				</dl>
 			</section>
 			<section id="liquidation">
@@ -132,9 +132,9 @@
 				<h2>Prices</h2>
 				<dl>
 					<dt id="open-oracle">OpenOracle</dt>
-					<dd>An economically contestable price-reporting contract used by Statoblast for fresh REP-per-ETH prices (written REP/ETH elsewhere in these pages), not market outcomes.</dd>
+					<dd>An economically contestable price-reporting contract used by Statoblast for fresh REP-per-collateral-token prices, not market outcomes.</dd>
 					<dt id="price-coordinator">Price coordinator</dt>
-					<dd>A question-facing adapter to the portfolio’s shared REP/ETH feed. It exposes current prices and requests funded OpenOracle reports; it does not queue vault operations.</dd>
+					<dd>A question-facing adapter to the portfolio’s shared REP/collateral feed. It exposes current prices and requests funded OpenOracle reports; it does not queue vault operations.</dd>
 				</dl>
 			</section>
 			<section id="trading">
@@ -143,11 +143,11 @@
 					<dt id="trading-pool">Trading pool</dt>
 					<dd>The constant-product pair (<code>TwoWayConstantProductPair</code>, called the pair in the Trading reference) that trades one SecurityPool's Yes and No shares against each other. The Trading factory creates at most one per SecurityPool.</dd>
 					<dt id="trading-router">Trading router</dt>
-					<dd>The <code>TwoWayConstantProductRouter</code> contract that turns ETH into a position and a position back into ETH by combining SecurityPool complete-set calls with trading-pool swaps.</dd>
+					<dd>The <code>TwoWayConstantProductRouter</code> contract that turns collateral into a position and a position back into collateral by combining SecurityPool complete-set calls with trading-pool swaps. WETH-backed pools also support native-ETH convenience paths.</dd>
 					<dt id="long-shares">Long shares</dt>
 					<dd>The Yes or No shares a trader holds on the side they expect to win. Entering through the trading router also leaves the trader one Invalid share for each complete set it minted, fewer than the long shares received.</dd>
 					<dt id="insured-exit">Insured exit</dt>
-					<dd>A trading-router exit that swaps some long shares for the opposite outcome, then redeems them with the trader's Invalid shares as complete sets for ETH.</dd>
+					<dd>A trading-router exit that swaps some long shares for the opposite outcome, then redeems them with the trader's Invalid shares as complete sets for collateral.</dd>
 				</dl>
 			</section>
 		</main>

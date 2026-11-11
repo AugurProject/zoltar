@@ -16,13 +16,13 @@
 					<p class="lede">Question ledger for one shared portfolio, question and universe. Shares and reporting are question-specific; provider capital, settlement cash and fees are accounted centrally. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol">SecurityPool source contract</a></p>
 				</header>
 				<h2 id="read-surface">Read surface</h2>
-				<p>Read portfolio owner positions from the capital ledger and question fee streams from the settlement book. Native storage mirrors settlement cash, share supply and the last fee checkpoint; it does not enumerate owners. <code>getTotalPoolHeldAttoRep</code> is always zero because provider capital is central. <code>getCurrentMintingCapacityAttoEth</code> is zero after reporting starts; otherwise it includes current question collateral and available shared capacity. <code>attoSharesToAttoEth</code>, <code>attoSharesToAttoRep</code> and <code>attoEthToAttoShares</code> quote central settlement including fork recovery rights. <code>isEscalationResolved</code> recognizes inherited final outcomes and locally finalized reports. <code>getFeeEpochEndTime</code> is the native fee cutoff, bounded by the universe fork time. Additional validated configuration and accounting getters: <code>questionId</code>, <code>universeId</code>, <code>initialEscalationGameDepositAttoRep</code>, <code>zoltar</code>, <code>parent</code>, <code>shareToken</code>, <code>repToken</code>, <code>openOraclePriceCoordinator</code>, <code>openOracle</code>, <code>escalationGameFactory</code>, <code>eventEmitter</code>, <code>escalationGame</code>, <code>questionData</code>, <code>securityPoolForker</code>, <code>truthAuction</code>, <code>securityPoolFactory</code>, <code>settlementCollateralAttoEth</code>, <code>statoblastSecurityMultiplierBps</code>, <code>shareTokenSupplyAttoShares</code>, <code>lastUpdatedFeeAccumulator</code>, <code>awaitingForkContinuation</code>, <code>systemState</code>, <code>portfolioCustody</code>.</p>
+				<p>Read portfolio owner positions from the capital ledger and question fee streams from the settlement book. Amounts named <code>AttoEth</code> use raw units of the portfolio collateral token; no token metadata is required. Native storage mirrors settlement cash, share supply and the last fee checkpoint; it does not enumerate owners. <code>getTotalPoolHeldAttoRep</code> is always zero because provider capital is central. <code>getCurrentMintingCapacityAttoEth</code> is zero after reporting starts; otherwise it includes current question collateral and available shared capacity. <code>attoSharesToAttoEth</code>, <code>attoSharesToAttoRep</code> and <code>attoEthToAttoShares</code> quote central settlement including fork recovery rights. <code>isEscalationResolved</code> recognizes inherited final outcomes and locally finalized reports. <code>getFeeEpochEndTime</code> is the native fee cutoff, bounded by the universe fork time. Additional validated configuration and accounting getters: <code>questionId</code>, <code>universeId</code>, <code>initialEscalationGameDepositAttoRep</code>, <code>zoltar</code>, <code>parent</code>, <code>shareToken</code>, <code>repToken</code>, <code>openOraclePriceCoordinator</code>, <code>openOracle</code>, <code>escalationGameFactory</code>, <code>eventEmitter</code>, <code>escalationGame</code>, <code>questionData</code>, <code>securityPoolForker</code>, <code>truthAuction</code>, <code>securityPoolFactory</code>, <code>settlementCollateralAttoEth</code>, <code>statoblastSecurityMultiplierBps</code>, <code>shareTokenSupplyAttoShares</code>, <code>lastUpdatedFeeAccumulator</code>, <code>awaitingForkContinuation</code>, <code>systemState</code>, <code>portfolioCustody</code>.</p>
 				<h2 id="security-assumptions">Security assumptions</h2>
-				<p>Price-sensitive withdrawal, commitment-increase, and liquidation calls depend on <a href="../security-model.html#assumption-a16">A16 timely inclusion</a>, <a href="../security-model.html#assumption-a21">A21 genesis REP and WETH behavior</a>, <a href="../security-model.html#assumption-a19">A19 observable correctable price</a>, and <a href="../security-model.html#assumption-a06">A06 lifecycle executors</a>. User-initiated pool calls additionally depend on <a href="../security-model.html#assumption-a28">A28 account authority</a>.</p>
+				<p>Price-sensitive withdrawal, commitment-increase, and liquidation calls depend on <a href="../security-model.html#assumption-a16">A16 timely inclusion</a>, <a href="../security-model.html#assumption-a21">A21 REP and selected collateral behavior</a>, <a href="../security-model.html#assumption-a19">A19 observable correctable price</a>, and <a href="../security-model.html#assumption-a06">A06 lifecycle executors</a>. User-initiated pool calls additionally depend on <a href="../security-model.html#assumption-a28">A28 account authority</a>.</p>
 				<h2 id="interactions">State-changing interactions</h2>
 				<p>Each call lists its parameter names in ABI order. The <a href="../contracts.html#table-columns">contract index</a> defines the columns. All deployed question ledgers belong to a portfolio. Providers use its capital ledger for deposits, commitments, health targets, retirement and liquidation. Reporters fund separate reporter custody with wallet REP. Purchases use the registered portfolio route; traders redeem through the question ledger. There is no standalone vault, tick auction or operation queue.</p>
 				<!-- Validated read ABI fingerprint: 2c146710571c345bfcd78d7da6ffb8e0e9705d2c4efe5317b77b3233b7e9e9f3 -->
-				<!-- Validated complete compiled ABI fingerprint: e147bc36ab1d3343ca30c88666ec72d36b19246490e6dbd562bb117ec58f4e9f -->
+				<!-- Validated complete compiled ABI fingerprint: 2cb18932da0e3bb6890840509af99b06d77ae44edd1e7c9feb94e694aa58d4fb -->
 				<table>
 					<thead>
 						<tr>
@@ -63,7 +63,7 @@
 							<td>Relevant share, reporting or central accounting events; no standalone vault accounting.</td>
 						</tr>
 						<tr>
-							<td><code>createCompleteSet()</code> with ETH</td>
+							<td><code>createCompleteSet(cash)</code></td>
 							<td>The registered portfolio purchase route</td>
 							<td>Operational unforked universe, reporting not started, question not ended, authenticated purchase and sufficient healthy backing.</td>
 							<td>Mints question complete sets using central settlement cash and shared backing. The portfolio transfers the resulting shares to the buyer.</td>
@@ -73,14 +73,14 @@
 							<td><code>redeemCompleteSet(amountAttoShares)</code></td>
 							<td>A complete-set holder</td>
 							<td>Operational unforked universe; holder has all outcome shares.</td>
-							<td>Burns complete sets and pays their current ETH and recovery REP entitlement. Released exposure becomes available to the portfolio.</td>
+							<td>Burns complete sets and pays their current collateral and recovery REP entitlement. Released exposure becomes available to the portfolio.</td>
 							<td>Relevant share, reporting or central accounting events; no standalone vault accounting.</td>
 						</tr>
 						<tr>
 							<td><code>redeemShares()</code></td>
 							<td>A winning-share holder</td>
 							<td>Operational question with a final outcome; finalized claims retain their protected settlement path.</td>
-							<td>Burns winning shares and pays their central ETH and recovery REP entitlement.</td>
+							<td>Burns winning shares and pays their central collateral and recovery REP entitlement.</td>
 							<td>Relevant share, reporting or central accounting events; no standalone vault accounting.</td>
 						</tr>
 						<tr>

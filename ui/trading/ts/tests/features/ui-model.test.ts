@@ -444,7 +444,7 @@ describe('standalone trading UI model', () => {
 		expect(settlementInputBlocker('redeem-complete-set', undefined, 5n, 0n, [], 'YES', 1n, unit)).toBe('Enter an amount greater than 0.')
 		// The limit is stated in the field's unit, ETH, with the complete sets it corresponds to.
 		expect(settlementInputBlocker('redeem-complete-set', undefined, 5n * 10n ** 18n, 6n * 10n ** 18n, [], 'YES', 1n, unit)).toBe('Enter no more than 5 ETH (your 5 complete sets).')
-		expect(settlementInputBlocker('redeem-complete-set', undefined, 5n * 10n ** 18n, 1n, [], 'YES', 1n, { settlementCollateralAttoEth: 5n * 10n ** 17n, shareTokenSupplyAttoShares: 10n ** 18n })).toBe('Amount too small to redeem any ETH.')
+		expect(settlementInputBlocker('redeem-complete-set', undefined, 5n * 10n ** 18n, 1n, [], 'YES', 1n, { settlementCollateralAttoEth: 5n * 10n ** 17n, shareTokenSupplyAttoShares: 10n ** 18n })).toBe('Amount too small to redeem any collateral.')
 		expect(settlementInputBlocker('migrate-shares', undefined, 0n, undefined, [], 'YES', 1n, unit)).toContain('at least one child universe')
 		expect(settlementInputBlocker('migrate-shares', undefined, 0n, undefined, [0n], 'YES', 0n, unit)).toBe('Your Yes balance is zero.')
 		expect(settlementInputBlocker('redeem-winning-shares', 'The question has not resolved yet.', 0n, undefined, [], 'NO', 0n, unit)).toBe('The question has not resolved yet.')

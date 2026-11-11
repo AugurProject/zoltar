@@ -92,6 +92,7 @@ export const accountTradingPnl = async (sql: SQL, query: { readonly chainId: num
 		const pnl = tradingProfitAndLoss(requiredBigint(row['cost_basis_atto_eth']), requiredBigint(row['proceeds_atto_eth']), holdings, valuation?.valueAttoEth)
 		return {
 			market_address: row['pair_address'],
+			collateral: row['collateral'],
 			pool_address: row['pool_address'],
 			question_title: row['question_title'],
 			action_count: row['action_count'],

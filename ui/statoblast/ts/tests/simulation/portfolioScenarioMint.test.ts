@@ -40,8 +40,8 @@ test('portfolio simulation mints use each funded purchase quote, including fees 
 	}
 	for (const [index, fee] of fees.entries()) {
 		const request = await prepareSeededPortfolioMint(client, owner, portfolio, BigInt(index + 1))
-		expect(request.value).toBe(unit + fee)
-		expect(decodeFunctionData({ abi: parseAbi(['function createCompleteSet(uint248 universeId,uint256 questionId,uint256 mintAttoEth,address recipient,uint256 minimumShares) payable']), data: request.data }).args).toEqual([0n, BigInt(index + 1), unit, owner, 0n])
+		expect(request.value).toBe(0n)
+		expect(decodeFunctionData({ abi: parseAbi(['function createCompleteSet(uint248 universeId,uint256 questionId,uint256 mintAttoEth,address recipient,uint256 minimumShares,uint256 maximumPurchaseFeeAttoEth)']), data: request.data }).args).toEqual([0n, BigInt(index + 1), unit, owner, 0n, fee])
 	}
 	expect(quoteIndex).toBe(2)
 })

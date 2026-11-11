@@ -1,3 +1,4 @@
+import { collateralUnit } from '../src/collateral.ts'
 import { questionIdHex } from './identifier-format.ts'
 import { annualFeeMillionths, annualFeeText } from './pool-metrics.ts'
 import type { EntityHistory, PoolRecord, StateEntity, StateTab, VaultRecord } from './browser-types.ts'
@@ -31,10 +32,11 @@ export interface StateRiskDeps {
 }
 
 export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRecord, suppliedHistory?: EntityHistory): Promise<void> => {
-	const { lookup: $, fetchEntityHistory, isCurrent, nativeSymbol, stateHeader, historyCoverageNotice, element, operationsHref, operationsPanel, operationRow, metricCard, number, chartCard, staticField, staticAddressField, chartNumericValue, yesNoCheckpoint } = deps
+	const { lookup: $, fetchEntityHistory, isCurrent, stateHeader, historyCoverageNotice, element, operationsHref, operationsPanel, operationRow, metricCard, number, chartCard, staticField, staticAddressField, chartNumericValue, yesNoCheckpoint } = deps
 	const history = suppliedHistory ?? (await fetchEntityHistory('pools', poolItem))
 	if (!isCurrent()) return
-	const poolNativeSymbol = nativeSymbol(poolItem.chain_id)
+	const poolCollateral = collateralUnit(poolItem)
+	const poolNativeSymbol = poolCollateral.symbol
 	const ammPrices = history.ammPrices ?? []
 	const repEthPrices = history.repEthPrices ?? []
 	const uniswapRepEthPrices = history.uniswapRepEthPrices ?? []
@@ -60,14 +62,14 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 	)
 	const metrics = element('div', 'metric-grid')
 	metrics.append(
-		metricCard('Settlement collateral', exactUnit(poolItem.settlement_collateral_atto_eth ?? poolItem.initial_settlement_collateral_atto_eth, 18, poolNativeSymbol)),
-		metricCard('Underwriting commitments', exactUnit(poolItem.total_capacity_ownership_atto_rep, 18, poolNativeSymbol)),
-		metricCard('Claimable vault fees', exactUnit(poolItem.total_claimable_vault_fees_atto_eth, 18, poolNativeSymbol)),
+		metricCard('Settlement collateral', exactUnit(poolItem.settlement_collateral_atto_eth ?? poolItem.initial_settlement_collateral_atto_eth, poolCollateral.decimals, poolNativeSymbol)),
+		metricCard('Underwriting commitments', exactUnit(poolItem.total_capacity_ownership_atto_rep, poolCollateral.decimals, poolNativeSymbol)),
+		metricCard('Claimable vault fees', exactUnit(poolItem.total_claimable_vault_fees_atto_eth, poolCollateral.decimals, poolNativeSymbol)),
 		metricCard('Vaults', number(poolItem.vault_count)),
 		metricCard('Annual open-interest fee', annualFeeText(poolItem.current_retention_rate)),
 		metricCard('Conditional YES', latestAmmPrice === undefined ? 'No AMM price' : exactUnit(latestAmmPrice.conditional_yes_bps, 2, '%')),
 		metricCard('Conditional NO', latestAmmPrice === undefined ? 'No AMM price' : exactUnit(latestAmmPrice.conditional_no_bps, 2, '%')),
-		metricCard('REP / ETH', latestRepEthPrice === undefined ? 'No coordinator price' : exactUnit(latestRepEthPrice.rep_per_eth_1e18, 18, 'REP/ETH')),
+		metricCard(`REP / ${poolNativeSymbol}`, latestRepEthPrice === undefined ? 'No coordinator price' : exactUnit(latestRepEthPrice.rep_per_eth_1e18, Math.max(0, 36 - poolCollateral.decimals), `REP/${poolNativeSymbol}`)),
 		metricCard('Latest Uniswap spot', latestUniswapPrice === undefined ? 'No Uniswap price' : exactUnit(latestUniswapPrice.rep_per_eth_1e18, 18, `REP/${latestUniswapPrice.quote_symbol}`), latestUniswapPrice === undefined ? undefined : uniswapPriceProvenance(latestUniswapPrice)),
 		metricCard('AMM market', history.market === undefined ? 'Unavailable' : `${number(ammPrices.length)} observations`),
 	)
@@ -77,9 +79,9 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 			'Pool accounting history',
 			history.snapshots,
 			[
-				{ key: 'settlement_collateral_atto_eth', label: 'Collateral', unit: poolNativeSymbol },
-				{ key: 'total_capacity_ownership_atto_rep', label: 'Underwriting commitment', unit: poolNativeSymbol, className: 'secondary' },
-				{ key: 'total_claimable_vault_fees_atto_eth', label: 'Claimable fees', unit: poolNativeSymbol, className: 'tertiary' },
+				{ key: 'settlement_collateral_atto_eth', label: 'Collateral', unit: poolNativeSymbol, decimals: poolCollateral.decimals },
+				{ key: 'total_capacity_ownership_atto_rep', label: 'Underwriting commitment', unit: poolNativeSymbol, decimals: poolCollateral.decimals, className: 'secondary' },
+				{ key: 'total_claimable_vault_fees_atto_eth', label: 'Claimable fees', unit: poolNativeSymbol, decimals: poolCollateral.decimals, className: 'tertiary' },
 			],
 			`Collateral, commitments, and fees are shown in ${poolNativeSymbol}.`,
 			{ zeroBaseline: true },
@@ -89,7 +91,7 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 			history.snapshots,
 			[
 				{ key: 'fee_index', label: 'Fee index', unit: `${poolNativeSymbol}/committed ${poolNativeSymbol}` },
-				{ key: 'unallocated_accrued_fees_atto_eth', label: 'Unallocated accrued fees', unit: poolNativeSymbol },
+				{ key: 'unallocated_accrued_fees_atto_eth', label: 'Unallocated accrued fees', unit: poolNativeSymbol, decimals: poolCollateral.decimals },
 			],
 			'Checkpoint fee accumulator and unallocated fees; balances may fall when fees are claimed.',
 			{ zeroBaseline: true },
@@ -128,13 +130,14 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 			{ sharedRange: [0, 100], axisUnit: '%', emptyMessage: 'No Augur AMM reserve observations match this view.' },
 		),
 		chartCard(
-			'REP / ETH coordinator price history',
+			`REP / ${poolNativeSymbol} coordinator price history`,
 			repEthPrices,
 			[
 				{
 					key: 'rep_per_eth_1e18',
-					label: 'REP per ETH',
-					unit: 'REP/ETH',
+					label: `REP per ${poolNativeSymbol}`,
+					unit: `REP/${poolNativeSymbol}`,
+					decimals: Math.max(0, 36 - poolCollateral.decimals),
 					pointShape: row => (row.event_name === 'RepEthPriceSet' ? 'diamond' : 'circle'),
 					pointLabel: row => (row.event_name === 'RepEthPriceSet' ? 'Initialization seed' : 'Accepted settlement'),
 				},
@@ -142,7 +145,7 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 			'Coordinator price state. RepEthPriceSet records initialization and does not establish timestamp-based oracle validity; PriceReported points are accepted settlements.',
 			{
 				legendItems: [{ label: 'Initialization', className: 'initialization' }],
-				emptyMessage: 'No REP / ETH coordinator price observations match this view.',
+				emptyMessage: 'No collateral / REP coordinator price observations match this view.',
 			},
 		),
 	)
@@ -156,8 +159,8 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 		staticField('Awaiting fork continuation', yesNoCheckpoint(currentState['awaitingForkContinuation'])),
 		staticField('Total REP backing units', currentState['totalRepBackingUnits'] === undefined ? 'No checkpoint' : exactUnit(chartNumericValue(currentState['totalRepBackingUnits']), 18, '')),
 		staticField('Share-token supply', currentState['shareTokenSupplyAttoShares'] === undefined ? 'No checkpoint' : exactUnit(chartNumericValue(currentState['shareTokenSupplyAttoShares']), 18, 'shares')),
-		staticField('Fee-eligible commitments', exactUnit(poolItem.fee_eligible_capacity_ownership_atto_rep, 18, poolNativeSymbol)),
-		staticField('Unallocated accrued fees', exactUnit(poolItem.unallocated_accrued_fees_atto_eth, 18, poolNativeSymbol)),
+		staticField('Fee-eligible commitments', exactUnit(poolItem.fee_eligible_capacity_ownership_atto_rep, poolCollateral.decimals, poolNativeSymbol)),
+		staticField('Unallocated accrued fees', exactUnit(poolItem.unallocated_accrued_fees_atto_eth, poolCollateral.decimals, poolNativeSymbol)),
 		staticField('Annual open-interest fee', annualFeeText(poolItem.current_retention_rate)),
 		typeof currentState['escalationGame'] === 'string' && currentState['escalationGame'] !== '' ? staticAddressField('Escalation game', currentState['escalationGame'], poolItem.chain_id) : staticField('Escalation game', 'Not set'),
 	)
@@ -191,10 +194,11 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 }
 
 export const renderVaultDetailPage = async (deps: StateRiskDeps, vaultItem: VaultRecord, suppliedHistory?: EntityHistory): Promise<void> => {
-	const { lookup: $, fetchEntityHistory, isCurrent, nativeSymbol, stateHeader, historyCoverageNotice, element, metricCard, number, chartCard, staticField, staticAddressField } = deps
+	const { lookup: $, fetchEntityHistory, isCurrent, stateHeader, historyCoverageNotice, element, metricCard, number, chartCard, staticField, staticAddressField } = deps
 	const history = suppliedHistory ?? (await fetchEntityHistory('vaults', vaultItem))
 	if (!isCurrent()) return
-	const vaultNativeSymbol = nativeSymbol(vaultItem.chain_id)
+	const vaultCollateral = collateralUnit(vaultItem)
+	const vaultNativeSymbol = vaultCollateral.symbol
 	const fragment = document.createDocumentFragment()
 	fragment.append(stateHeader('Security vault', vaultItem.vault_address, `Pool ${vaultItem.pool_address}`, 'Latest available'))
 	const riskLink = element('a', 'back-link', 'View vault risk and liquidation history →')
@@ -204,8 +208,8 @@ export const renderVaultDetailPage = async (deps: StateRiskDeps, vaultItem: Vaul
 	const metrics = element('div', 'metric-grid')
 	metrics.append(
 		metricCard('REP backing units', exactUnit(vaultItem.rep_backing_units, 18, '')),
-		metricCard('Underwriting commitment', exactUnit(vaultItem.capacity_ownership_atto_rep, 18, vaultNativeSymbol)),
-		metricCard('Claimable fees', exactUnit(vaultItem.claimable_fees_atto_eth, 18, vaultNativeSymbol)),
+		metricCard('Underwriting commitment', exactUnit(vaultItem.capacity_ownership_atto_rep, vaultCollateral.decimals, vaultNativeSymbol)),
+		metricCard('Claimable fees', exactUnit(vaultItem.claimable_fees_atto_eth, vaultCollateral.decimals, vaultNativeSymbol)),
 		metricCard('Fee index', exactUnit(vaultItem.fee_index, 18, '')),
 	)
 	fragment.append(metrics)
@@ -215,8 +219,8 @@ export const renderVaultDetailPage = async (deps: StateRiskDeps, vaultItem: Vaul
 			history.snapshots,
 			[
 				{ key: 'rep_backing_units', label: 'REP backing units', unit: 'units' },
-				{ key: 'capacity_ownership_atto_rep', label: 'Underwriting commitment', unit: vaultNativeSymbol, className: 'secondary' },
-				{ key: 'claimable_fees_atto_eth', label: 'Claimable fees', unit: vaultNativeSymbol, className: 'tertiary' },
+				{ key: 'capacity_ownership_atto_rep', label: 'Underwriting commitment', unit: vaultNativeSymbol, decimals: vaultCollateral.decimals, className: 'secondary' },
+				{ key: 'claimable_fees_atto_eth', label: 'Claimable fees', unit: vaultNativeSymbol, decimals: vaultCollateral.decimals, className: 'tertiary' },
 			],
 			`Commitments and fees are shown in ${vaultNativeSymbol}; REP backing units are protocol accounting units.`,
 			{ zeroBaseline: true },
@@ -232,7 +236,7 @@ export const renderVaultDetailPage = async (deps: StateRiskDeps, vaultItem: Vaul
 		staticField('Last block', `#${number(vaultItem.block_number)}`),
 		staticField('Fee remainder (1e18 denominator)', vaultItem.vault_fee_remainder),
 		staticField('Resulting pool-held REP backing units', exactUnit(vaultItem.resulting_total_rep_backing_units, 18, '')),
-		staticField('Resulting fee-eligible commitments', exactUnit(vaultItem.resulting_fee_eligible_capacity_ownership_atto_rep, 18, vaultNativeSymbol)),
+		staticField('Resulting fee-eligible commitments', exactUnit(vaultItem.resulting_fee_eligible_capacity_ownership_atto_rep, vaultCollateral.decimals, vaultNativeSymbol)),
 		staticField('Fee index', exactUnit(vaultItem.fee_index, 18, '')),
 	)
 	staticCard.append(grid)

@@ -1,3 +1,4 @@
+import { collateralAsset, tokenFunded, type TradingCollateral, type CollateralMarket } from '../protocol/collateral.js'
 import { quoteExactOutput } from '@zoltar/trading-shared/trading/math'
 import { maximumInsuredExit } from '@zoltar/trading-shared/trading/positions'
 import { compareBigint } from '@zoltar/core-shared/math/bigint'
@@ -9,7 +10,6 @@ import type { PortfolioBalanceEntry } from './live/liveTradingTypes.js'
 const TRADING_CLOSES_SOON_SECONDS = 7n * 24n * 60n * 60n
 
 /** Leftover shares backed by less than the smallest displayed ETH amount are rounding dust, not a pending payout. */
-const DISPLAY_DUST_ATTO_ETH = 10n ** 14n
 
 type PortfolioRowState = 'open' | 'closed' | 'resolved' | 'settlement-required' | 'unavailable'
 
@@ -20,11 +20,13 @@ type PortfolioRowState = 'open' | 'closed' | 'resolved' | 'settlement-required' 
  * resolves, such as INVALID left after an exit or a long share without INVALID insurance; they are not in the value.
  * `redemption` values a resolved position at its winning-share payout. Settlement and failed reads have no price.
  */
-export type PortfolioValuation =
+export type PortfolioValuation = (
 	| Readonly<{ kind: 'exit'; attoEth: bigint; attoRep?: bigint; pendingResolution: boolean }>
 	| Readonly<{ kind: 'complete-sets'; attoEth: bigint; attoRep?: bigint; pendingResolution: boolean }>
 	| Readonly<{ kind: 'redemption'; attoEth: bigint; attoRep?: bigint }>
 	| Readonly<{ kind: 'unavailable'; reason: 'settlement-required' | 'pool-inactive' | 'market-unavailable' | 'balance-unavailable' }>
+) &
+	CollateralMarket
 
 /** Why the item needs attention, which the list shows as its badge. */
 type PortfolioActionKind = 'redeem' | 'settle' | 'withdraw-liquidity' | 'trading-closes'
@@ -53,6 +55,7 @@ export type PortfolioOverview = Readonly<{
 	rows: readonly PortfolioRow[]
 	positionCount: number
 	totalValueAttoEth: bigint
+	totalsByAsset?: readonly { asset: TradingCollateral; value: bigint }[]
 	recoveryRepCount?: number
 	/** Rows left out of the total because they have no trustworthy value yet. */
 	unvaluedCount: number
@@ -104,17 +107,17 @@ function exitPosition(market: Pick<LiveMarket, 'yesReserve' | 'noReserve' | 'lpT
 	return { sets: completeSets + exitedSets, leftover }
 }
 
-function hasPendingShares(leftover: readonly bigint[], market: Pick<LiveMarket, 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares' | 'settlementRecoveryAttoRep'>) {
+function hasPendingShares(leftover: readonly bigint[], market: Pick<LiveMarket, 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares' | 'settlementRecoveryAttoRep' | 'collateral'>) {
 	return leftover.some(amount => amount > 0n && !isDust(amount, market))
 }
 
 /** Shares that pay no REP and less than the smallest displayed ETH amount even if their outcome wins are rounding dust. */
-function isDust(attoShares: bigint, market: Pick<LiveMarket, 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares' | 'settlementRecoveryAttoRep'>) {
-	return attoSharesToCollateralAttoEth(attoShares, market) < DISPLAY_DUST_ATTO_ETH && attoSharesToRecoveryAttoRep(attoShares, market) === 0n
+function isDust(attoShares: bigint, market: Pick<LiveMarket, 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares' | 'settlementRecoveryAttoRep' | 'collateral'>) {
+	return attoSharesToCollateralAttoEth(attoShares, market) < 10n ** BigInt(Math.max(0, collateralAsset(market).decimals - 4)) && attoSharesToRecoveryAttoRep(attoShares, market) === 0n
 }
 
 /** LP whose larger reserve claim is dust is a rounding remainder; withdrawing it is not worth an action item. */
-function holdsLiquidity(market: Pick<LiveMarket, 'yesReserve' | 'noReserve' | 'lpTotalSupply' | 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares' | 'settlementRecoveryAttoRep'>, lp: bigint) {
+function holdsLiquidity(market: Pick<LiveMarket, 'yesReserve' | 'noReserve' | 'lpTotalSupply' | 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares' | 'settlementRecoveryAttoRep' | 'collateral'>, lp: bigint) {
 	if (lp === 0n) return false
 	const claims = lpReserveClaims(market, lp)
 	return !isDust(claims.yes > claims.no ? claims.yes : claims.no, market)
@@ -138,7 +141,7 @@ function rowState(entry: PortfolioBalanceEntry, nowSeconds: bigint): PortfolioRo
 	return marketAcceptsNewRisk(market, nowSeconds) ? 'open' : 'closed'
 }
 
-function rowValuation(entry: PortfolioBalanceEntry, state: PortfolioRowState): PortfolioValuation {
+function baseRowValuation(entry: PortfolioBalanceEntry, state: PortfolioRowState): PortfolioValuation {
 	const { market, balances } = entry
 	if (market.loadError !== undefined) return { kind: 'unavailable', reason: 'market-unavailable' }
 	if (balances === undefined || entry.error !== undefined) return { kind: 'unavailable', reason: 'balance-unavailable' }
@@ -158,7 +161,7 @@ function rowValuation(entry: PortfolioBalanceEntry, state: PortfolioRowState): P
 
 function portfolioRow(entry: PortfolioBalanceEntry, nowSeconds: bigint): PortfolioRow {
 	const state = rowState(entry, nowSeconds)
-	const valuation = rowValuation(entry, state)
+	const valuation: PortfolioValuation = { ...baseRowValuation(entry, state), ...(entry.market.collateral === undefined ? {} : { collateral: entry.market.collateral }) }
 	const { market, balances } = entry
 	if (balances === undefined || state === 'unavailable') return { entry, state, valuation, canSell: false, sellSide: 'YES', canRedeem: false, actionItems: [] }
 	const sellSide = balances.no > balances.yes ? 'NO' : 'YES'
@@ -201,11 +204,18 @@ function soonestDeadline(items: readonly PortfolioActionItem[]) {
 export function portfolioOverview(entries: readonly PortfolioBalanceEntry[], nowSeconds: bigint): PortfolioOverview {
 	const rows = entries.map(entry => portfolioRow(entry, nowSeconds))
 	let totalValueAttoEth = 0n
+	const totals = new Map<string, { asset: TradingCollateral; value: bigint }>()
 	let unvaluedCount = 0
 	let pendingResolutionCount = 0
 	for (const row of rows) {
 		if (row.valuation.kind === 'unavailable') unvaluedCount += 1
-		else totalValueAttoEth += row.valuation.attoEth
+		else {
+			const asset = collateralAsset(row.entry.market)
+			const key = asset.native ? 'native' : asset.token.toLowerCase()
+			const current = totals.get(key)
+			totals.set(key, { asset, value: (current?.value ?? 0n) + row.valuation.attoEth })
+			if (!tokenFunded(row.entry.market)) totalValueAttoEth += row.valuation.attoEth
+		}
 		if ((row.valuation.kind === 'exit' || row.valuation.kind === 'complete-sets') && row.valuation.pendingResolution) pendingResolutionCount += 1
 	}
 	// Array.prototype.sort is stable, so undated markets keep row order.
@@ -214,5 +224,5 @@ export function portfolioOverview(entries: readonly PortfolioBalanceEntry[], now
 		.map(row => ({ pool: row.entry.market.pool, title: row.entry.market.title, deadline: soonestDeadline(row.actionItems), items: row.actionItems }))
 		.sort(compareActionGroups)
 	const recoveryRepCount = rows.filter(row => row.valuation.kind !== 'unavailable' && (row.valuation.attoRep ?? 0n) > 0n).length
-	return { ...(recoveryRepCount === 0 ? {} : { recoveryRepCount }), rows, positionCount: rows.length, totalValueAttoEth, unvaluedCount, pendingResolutionCount, actionGroups }
+	return { ...(rows.some(row => tokenFunded(row.entry.market)) ? { totalsByAsset: [...totals.values()] } : {}), ...(recoveryRepCount === 0 ? {} : { recoveryRepCount }), rows, positionCount: rows.length, totalValueAttoEth, unvaluedCount, pendingResolutionCount, actionGroups }
 }

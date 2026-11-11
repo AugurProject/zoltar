@@ -60,7 +60,7 @@ try {
 	const deployment = buildPortfolioDeploymentRequest({
 		owner: owner.account.address,
 		factory: infra.securityPoolFactory,
-		origin: { universeId: 0n, securityMultiplierBps: 20_000n, reportPriorityFeeAttoEthPerGas: 10n * 10n ** 9n },
+		origin: { collateralToken: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', minimumReportCollateral: 10n ** 16n, universeId: 0n, securityMultiplierBps: 20_000n, reportPriorityFeeAttoEthPerGas: 10n * 10n ** 9n },
 		maximumQuestionHorizonSeconds: 20n * 365n * DAY,
 		questionAdmissionPolicy: policy,
 		economics: { purchaseFeeBps: 100n, annualFeeBps: 0n, minimumPurchaseFeeAttoEth: unit / 1_000n, minimumCommitmentAttoEth: unit, minimumOutcomeRate: 1_000n, rewardVestingSeconds: DAY },
@@ -96,7 +96,7 @@ try {
 	await manipulatePriceOracle(owner, anvil, coordinator, unit, 100n * unit)
 	await measure('2. Shared underwriting and trading', 'Set owner commitment', owner, () => owner.writeContract({ ...capital, functionName: 'setCommitment', args: [200n * unit] }))
 	const quote = await trader.readContract({ ...portfolio, functionName: 'purchaseQuote', args: [0n, questionId, 100n * unit] })
-	await measure('2. Shared underwriting and trading', 'Purchase complete sets', trader, () => trader.writeContract({ ...portfolio, functionName: 'createCompleteSet', args: [0n, questionId, 100n * unit, trader.account.address, 0n], value: 100n * unit + (quote[0] * 10_100n + 9_999n) / 10_000n }))
+	await measure('2. Shared underwriting and trading', 'Purchase complete sets', trader, () => trader.writeContract({ ...portfolio, functionName: 'createCompleteSet', args: [0n, questionId, 100n * unit, trader.account.address, 0n, 100n * unit + (quote[0] * 10_100n + 9_999n) / 10_000n - 100n * unit], value: 0n }))
 	const shares = await trader.readContract({ ...pool, functionName: 'shareTokenSupplyAttoShares' })
 	await measure('2. Shared underwriting and trading', 'Return half of complete sets', trader, () => trader.writeContract({ ...pool, functionName: 'redeemCompleteSet', args: [shares / 2n] }))
 	await measure('2. Shared underwriting and trading', 'Checkpoint question accounting', trader, () => trader.writeContract({ ...pool, functionName: 'updateSettlementCollateral' }))

@@ -4,9 +4,16 @@ import { registerSimulationScenario } from '@zoltar/ui-core-shared/simulation/sc
 // Intentionally reuses the core `deployed` id so Trading's seeded-pool bootstrap and presentation replace the Statoblast-only core scenario.
 export const DEPLOYED_TRADING_SIMULATION_SCENARIO = 'deployed'
 export const FUNDED_TRADING_SIMULATION_SCENARIO = 'trading-funded'
+export const USDC_TRADING_SIMULATION_SCENARIO = 'trading-usdc'
+export const USDT_TRADING_SIMULATION_SCENARIO = 'trading-usdt'
 export const FORKED_TRADING_SIMULATION_SCENARIO = 'trading-forked'
 
 export function registerTradingSimulationScenario() {
+	for (const [scenario, token] of [
+		[USDC_TRADING_SIMULATION_SCENARIO, 'USDC'],
+		[USDT_TRADING_SIMULATION_SCENARIO, 'USDT'],
+	] as const)
+		registerSimulationScenario(scenario, { label: `Trading with ${token}`, description: `A funded ${token} market with six-decimal collateral and separate router approvals.` })
 	registerSimulationScenario(DEPLOYED_TRADING_SIMULATION_SCENARIO, {
 		description: 'A seeded Statoblast security pool with the trading factory and router deployed for walletless trade, liquidity, and settlement testing.',
 		label: 'Deployed',

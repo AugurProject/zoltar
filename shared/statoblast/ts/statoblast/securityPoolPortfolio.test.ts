@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, encodeAbiParameters, parseAbi, parseAbiParameters, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { buildPortfolioDeploymentRequest, buildPortfolioPrepareNextRequest, exportPortfolioTransaction, validatePortfolioEconomics, type PortfolioEconomicsConfig } from './securityPoolPortfolio.js'
+import { buildPortfolioDeploymentRequest, buildPortfolioPrepareNextRequest, exportPortfolioTransaction, validatePortfolioEconomics, type PortfolioEconomicsConfig, type PortfolioOriginConfig } from './securityPoolPortfolio.js'
 
 const owner: Address = '0x0000000000000000000000000000000000000001'
 const factory: Address = '0x0000000000000000000000000000000000000002'
-const origin = { universeId: 0n, securityMultiplierBps: 20_000n, reportPriorityFeeAttoEthPerGas: 10_000_000_000n }
+const origin: PortfolioOriginConfig = { collateralToken: '0x0000000000000000000000000000000000000001', minimumReportCollateral: 10n ** 16n, universeId: 0n, securityMultiplierBps: 20_000n, reportPriorityFeeAttoEthPerGas: 10_000_000_000n }
 const questionAdmissionPolicy: Address = '0x0000000000000000000000000000000000000004'
 const deployers = { capital: factory, commitments: factory, fees: factory, books: factory, settlement: factory, reporters: factory, forks: factory, services: factory, auctions: factory }
 const economics: PortfolioEconomicsConfig = {
@@ -16,7 +16,7 @@ const economics: PortfolioEconomicsConfig = {
 	rewardVestingSeconds: 86_400n,
 }
 const inputs = parseAbiParameters(
-	'address factory,(uint248 universeId,uint256 securityMultiplierBps,uint256 reportPriorityFeeAttoEthPerGas) origin,uint256 horizon,(address capital,address commitments,address fees,address books,address settlement,address reporters,address forks,address services,address auctions) deployment,address admission,(uint256 purchaseFeeBps,uint256 annualFeeBps,uint256 minimumPurchaseFeeAttoEth,uint256 minimumCommitmentAttoEth,uint256 minimumOutcomeRate,uint48 rewardVestingSeconds) config',
+	'address factory,(address collateralToken,uint256 minimumReportCollateral,uint248 universeId,uint256 securityMultiplierBps,uint256 reportPriorityFeeAttoEthPerGas) origin,uint256 horizon,(address capital,address commitments,address fees,address books,address settlement,address reporters,address forks,address services,address auctions) deployment,address admission,(uint256 purchaseFeeBps,uint256 annualFeeBps,uint256 minimumPurchaseFeeAttoEth,uint256 minimumCommitmentAttoEth,uint256 minimumOutcomeRate,uint48 rewardVestingSeconds) config',
 )
 const abi = [{ type: 'constructor', stateMutability: 'nonpayable', inputs }] as const
 const base = { owner, factory, origin, questionAdmissionPolicy, maximumQuestionHorizonSeconds: 31_536_000n, deployers, economics, artifact: { abi, bytecode: '0x1234' as const } }
@@ -62,4 +62,9 @@ describe('shared capital portfolio deployment', () => {
 		expect(decodeFunctionData({ abi: parseAbi(['function prepareNext()']), data: request.data })).toEqual({ functionName: 'prepareNext', args: [] })
 		expect(() => buildPortfolioPrepareNextRequest({ caller: owner, portfolio: zeroAddress })).toThrow('Portfolio')
 	})
+})
+
+test('deployment rejects missing collateral and a zero or oversized report stake floor', () => {
+	expect(() => buildPortfolioDeploymentRequest({ ...base, origin: { ...origin, collateralToken: zeroAddress } })).toThrow('Collateral token')
+	for (const minimumReportCollateral of [0n, 1n << 128n]) expect(() => buildPortfolioDeploymentRequest({ ...base, origin: { ...origin, minimumReportCollateral } })).toThrow()
 })

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { IERC20 } from '../IERC20.sol';
 import { IWeth9 } from './interfaces/IWeth9.sol';
 import { OpenOracle } from './openOracle/OpenOracle.sol';
 import { ReputationToken } from '../ReputationToken.sol';
@@ -93,6 +94,10 @@ abstract contract OpenOraclePriceSource {
 		require(_minLiquidationPriceDistanceBps <= SecurityPoolUtils.BPS_DENOMINATOR, 'Minimum liquidation price distance cannot exceed one hundred percent');
 		maxSettlementBaseFeeMultiplierBps = _maxSettlementBaseFeeMultiplierBps;
 		minLiquidationPriceDistanceBps = _minLiquidationPriceDistanceBps;
+	}
+
+	function collateralToken() external view returns (IERC20) {
+		return sharedPriceFeed.collateralToken();
 	}
 
 	function priceFeed() public view returns (address) {

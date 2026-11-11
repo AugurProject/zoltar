@@ -406,4 +406,33 @@ describe('TokenApprovalControl', () => {
 		expect(approveButton.getAttribute('aria-describedby')).toBe(validationMessage.id)
 		expect(document.body.querySelectorAll('.field-error')).toHaveLength(1)
 	})
+	for (const [approved, required] of [
+		[5n, 10n],
+		[20n, 10n],
+	]) {
+		test(`requires a zero reset for custom USDT increases with allowance ${approved}`, async () => {
+			const approvals: (bigint | undefined)[] = []
+			const view = await renderIntoDocument(
+				<TokenApprovalControl
+					actionLabel='Buy complete sets'
+					allowanceError={undefined}
+					allowanceLoading={false}
+					approvedAmount={approved}
+					guardMessage={undefined}
+					requiresAllowanceReset
+					onApprove={amount => approvals.push(amount)}
+					pending={false}
+					pendingLabel='Approving USDT'
+					requiredAmount={required}
+					resetKey='usdt-reset'
+					tokenSymbol='USDT'
+					tokenUnits={0}
+				/>,
+			)
+			cleanupRenderedComponent = view.cleanup
+			await act(() => fireEvent.input(within(view.container).getByPlaceholderText('Leave blank for required total'), { target: { value: '30' } }))
+			expectTransactionButtonDisabled(view.container, 'Approve USDT', 'Reset USDT approval first.')
+			expect(approvals).toEqual([])
+		})
+	}
 })

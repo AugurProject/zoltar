@@ -1,3 +1,4 @@
+import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact } from '../../types/contractArtifact'
 import { describe, expect, test } from 'bun:test'
 import { buildPortfolioCapitalDepositRequest, buildPortfolioCapitalSetCommitmentRequest, buildPortfolioCapitalWithdrawPrincipalRequest, buildPortfolioMintRequest, loadPortfolioCapitalSnapshot, loadPortfolioMintQuote } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
@@ -35,6 +36,9 @@ describe('Statoblast: central capital SDK against production contracts', () => {
 		expect(position).toMatchObject({ owner, rep: 1_000n * unit, commitment: 100n * unit })
 		const quote = await loadPortfolioMintQuote({ client, portfolio: fixture.portfolio, universeId: fixture.base.genesisUniverse, questionId: fixture.base.questionId, mintAttoEth: 10n * unit })
 		expect(quote.availableCommitmentAttoEth).toBe(100n * unit)
+		const collateral = await client.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'collateralToken' })
+		const services = await client.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'services' })
+		await approveToken(client, collateral, services)
 		await writeContractAndWait(client, () =>
 			client.sendTransaction(buildPortfolioMintRequest({ trader: owner, portfolio: fixture.portfolio, universeId: fixture.base.genesisUniverse, questionId: fixture.base.questionId, mintAttoEth: 10n * unit, recipient: owner, minimumShares: quote.shares, maximumPurchaseFeeAttoEth: quote.maximumPurchaseFeeAttoEth })),
 		)

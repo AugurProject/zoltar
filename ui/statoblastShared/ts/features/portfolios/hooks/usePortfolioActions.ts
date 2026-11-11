@@ -1,3 +1,4 @@
+import { portfolioCollateral, type CollateralSymbol } from '../../../protocol/collateral.js'
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
@@ -6,10 +7,10 @@ import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-c
 import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { createTransactionScope, mergeTransactionScopes } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
-import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { getActiveBackend, getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import type { WriteOperationsParameters } from '../../../types/app.js'
 import { loadPortfolioSetup, portfolioPreparationRequest, portfolioContractRequest, portfolioCreationRequest, sendPortfolioTransaction, type PortfolioTransaction } from '../../../protocol/securityPoolPortfolio.js'
-import { portfolioUnsignedId } from '../lib/draft.js'
+import { portfolioAmountOrUndefined, portfolioUnsignedId } from '../lib/draft.js'
 import type { usePortfolio } from './usePortfolio.js'
 import * as copy from '../../../copy/portfolio.js'
 import { defaultPortfolioCreationDraft, parseFixedPortfolioQuestions, parsePortfolioCreationEconomics, type CuratedAdmissionMode, type PortfolioCreationDraft } from '../lib/creation.js'
@@ -18,6 +19,9 @@ import { buildPortfolioAuctionVaultExecuteRequest } from '@zoltar/statoblast-sha
 import { authenticatePortfolioAuctionVault } from '../../../protocol/securityPoolPortfolioAuction.js'
 
 export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, parameters: WriteOperationsParameters) {
+	const collateralSymbol = useSignal<CollateralSymbol>('WETH')
+	const reportFloor = useSignal('0.01')
+	const collateral = portfolioCollateral(getActiveNetworkProfile(), collateralSymbol.value)
 	const originInput = useSignal('0')
 	const multiplierInput = useSignal('200')
 	const priorityFeeInput = useSignal((DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS / 10n ** 9n).toString())
@@ -70,7 +74,7 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 						request = {
 							...original,
 							...buildPortfolioAuctionVaultExecuteRequest({ bidder: selectedVault.bidder, vault: selectedVault.vault, request: { account: original.account, to: request.to, value: original.value ?? 0n, data: original.data }, sweep: { repToken: snapshot.repToken, recipient: selectedVault.bidder } }),
-							reviewDescription: `${original.reviewDescription ?? label} This operation uses your independent auction vault ${selectedVault.vault}. Returned ETH and REP are sent to your wallet ${selectedVault.bidder}.`,
+							reviewDescription: `${original.reviewDescription ?? label} This operation uses your independent auction vault ${selectedVault.vault}. Returned collateral, ETH and REP are sent to your wallet ${selectedVault.bidder}.`,
 							validateBeforeSubmit: async () => {
 								const client = createConnectedReadClient()
 								const block = await client.getBlock()
@@ -101,7 +105,7 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 	let fixedQuestionIds: bigint[] = []
 	let economics: ReturnType<typeof parsePortfolioCreationEconomics> | undefined
 	let horizon: bigint | undefined
-	let origin: { universeId: bigint; securityMultiplierBps: bigint; reportPriorityFeeAttoEthPerGas: bigint } | undefined
+	let origin: import('@zoltar/statoblast-shared/statoblast/securityPoolPortfolio').PortfolioOriginConfig | undefined
 	try {
 		const originUniverse = portfolioUnsignedId(originInput.value, 248)
 		if (originUniverse === undefined) throw new Error(copy.enterOrigin)
@@ -110,9 +114,12 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 		if (securityMultiplierBps <= 10_001n) throw new Error('Security multiplier must exceed 100.01%.')
 		if (reportPriorityFeeAttoEthPerGas <= 0n) throw new Error('Oracle priority fee must be positive.')
 		if (reportPriorityFeeAttoEthPerGas > MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) throw new Error('Oracle priority fee exceeds the report funding limit.')
-		origin = { universeId: originUniverse, securityMultiplierBps, reportPriorityFeeAttoEthPerGas }
+		if (collateral.address === undefined) throw new Error('This collateral token is unavailable on the selected network.')
+		const minimumReportCollateral = portfolioAmountOrUndefined(reportFloor.value, collateral.decimals)
+		if (minimumReportCollateral === undefined || minimumReportCollateral === 0n) throw new Error(`Enter a positive report stake floor with up to ${collateral.decimals} decimal places.`)
+		origin = { collateralToken: collateral.address, minimumReportCollateral, universeId: originUniverse, securityMultiplierBps, reportPriorityFeeAttoEthPerGas }
 		if (admissionMode.value === 'fixed') fixedQuestionIds = parseFixedPortfolioQuestions(fixedQuestions.value)
-		economics = parsePortfolioCreationEconomics(economicsDraft.value)
+		economics = parsePortfolioCreationEconomics(economicsDraft.value, collateral.decimals)
 		if (!/^\d+$/.test(horizonDays.value)) throw new Error(copy.horizonInvalid)
 		horizon = BigInt(horizonDays.value) * 86400n
 		if (horizon === 0n || horizon >= 1n << 48n) throw new Error(copy.horizonInvalid)
@@ -180,14 +187,23 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 		setFixedQuestions: (value: string) => {
 			fixedQuestions.value = value
 		},
+		collateralSymbol: collateralSymbol.value,
+		setCollateralSymbol: (value: CollateralSymbol) => {
+			collateralSymbol.value = value
+		},
+		collateral,
+		reportFloor: reportFloor.value,
+		setReportFloor: (value: string) => {
+			reportFloor.value = value
+		},
 		economicsDraft: economicsDraft.value,
 		setEconomicsField: (field: keyof PortfolioCreationDraft, value: string) => {
 			economicsDraft.value = { ...economicsDraft.value, [field]: value }
 		},
 		admissionAddress: admission?.address,
 		creationError,
-		admissionDeployReason: walletReason ?? (origin === undefined ? copy.enterOrigin : creationError) ?? (admission !== undefined ? copy.admissionDeployed : undefined),
-		deployReason: walletReason ?? (origin === undefined ? copy.enterOrigin : creationError) ?? (admission === undefined ? copy.deployAdmissionFirst : undefined),
+		admissionDeployReason: walletReason ?? creationError ?? (origin === undefined ? copy.enterOrigin : undefined) ?? (admission !== undefined ? copy.admissionDeployed : undefined),
+		deployReason: walletReason ?? creationError ?? (origin === undefined ? copy.enterOrigin : undefined) ?? (admission === undefined ? copy.deployAdmissionFirst : undefined),
 		deployAdmission: async () => {
 			let captured: { key: string; universeId: bigint } | undefined
 			await run(

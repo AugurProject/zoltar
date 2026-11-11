@@ -1,3 +1,4 @@
+import { collateralBalance } from './burnEvidence'
 import { describe, expect, test } from 'bun:test'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
@@ -114,9 +115,9 @@ describe('Statoblast: inherited activation delay and finality', () => {
 		if ((materializationOffset ?? 0n) > 0n) {
 			expect(secondFork).toBeGreaterThan(gameEnd)
 			await expect(trader.simulateContract({ ...shares, functionName: 'migrate', args: [child * 256n + 1n, [1n]] })).rejects.toThrow('Question finalized before fork')
-			const cashBefore = await owner.getBalance({ address: engine })
+			const cashBefore = await collateralBalance(owner, fixture.portfolio, engine)
 			await writeContractAndWait(trader, () => trader.writeContract({ abi: poolArtifact.abi, address: childPool, functionName: 'redeemShares' }))
-			expect(await owner.getBalance({ address: engine })).toBeLessThan(cashBefore)
+			expect(await collateralBalance(owner, fixture.portfolio, engine)).toBeLessThan(cashBefore)
 			expect(await trader.readContract({ ...shares, functionName: 'balanceOf', args: [trader.account.address, child * 256n + 1n] })).toBe(0n)
 			return
 		}

@@ -57,6 +57,7 @@ function fixture(overrides: Record<string, unknown> = {}, options: { timestamp?:
 	const opened = options.opened ?? true
 	const finalized = options.finalized ?? false
 	const values: Record<string, unknown> = {
+		collateralToken: rep,
 		factory,
 		forkController: controller,
 		portfolio,
@@ -99,7 +100,7 @@ function fixture(overrides: Record<string, unknown> = {}, options: { timestamp?:
 		owner: bidder,
 		initialCapital: capital,
 		auction,
-		balanceOf: 100n * unit,
+		balanceOf: options.walletAttoEth ?? 100n * unit,
 		allowance: 100n * unit,
 		clearing: [6n * unit, 3n, 3n * unit, 18n * unit + 1n, 1n, 0n, 0n, 0n, 3n, false],
 		...overrides,
@@ -130,15 +131,15 @@ const load = (source: ReturnType<typeof fixture>, bidStart = 0n, bidCount = 16) 
 const bidTerms = { lots: 2n, minimumAttoRepPerLot: 5n * unit, targetHealthFactorBps: 12_000n }
 
 describe('portfolio truth auction SDK', () => {
-	test('ETH-only bids need no existing REP or approval and pledge only purchased collateral', async () => {
-		const source = fixture({ balanceOf: 0n, allowance: 0n })
+	test('Collateral bids need token approval but no existing REP and pledge only purchased collateral', async () => {
+		const source = fixture()
 		const snapshot = await load(source)
 		const quote = quotePortfolioAuctionBid(snapshot, { ...bidTerms, minimumAttoRepPerLot: 5n * unit })
-		expect(buildPortfolioAuctionBidRequest(snapshot, quote).value).toBe(2n * unit)
+		expect(buildPortfolioAuctionBidRequest(snapshot, quote).value).toBe(0n)
 		expect(quote.minimumPrincipalAttoRep).toBe(10n * unit)
 		expect(quote).not.toHaveProperty('topUpAttoRep')
 		expect(quote).not.toHaveProperty('executionReserveAttoEth')
-		expect(source.calls.some(call => ['balanceOf', 'allowance', 'refundCreditAttoRep', 'minimumExecutionReservePerLot', 'bidReservePerLotAttoEth'].includes(call.functionName))).toBe(false)
+		expect(source.calls.some(call => ['refundCreditAttoRep', 'minimumExecutionReservePerLot', 'bidReservePerLotAttoEth'].includes(call.functionName))).toBe(false)
 	})
 	test('authenticates canonical modules and each bidder vault at one block without enumerating other bidders', async () => {
 		const source = fixture({ bidderBidCount: 1_000_000n })
@@ -205,17 +206,17 @@ describe('portfolio truth auction SDK', () => {
 			maximumPrice: { attoEth: unit, attoRep: 5n * unit },
 		})
 		const request = buildPortfolioAuctionBidRequest(snapshot, quote)
-		expect(request).toMatchObject({ account: bidder, to: auction, value: quote.bidAttoEth })
+		expect(request).toMatchObject({ account: bidder, to: auction, value: 0n })
 		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'submitBid', args: [2n, 5n * unit, 12_000n] })
 		for (const patch of [{ lots: 0n }, { minimumAttoRepPerLot: 1n }, { minimumAttoRepPerLot: 101n * unit }, { minimumAttoRepPerLot: 4n * unit }, { targetHealthFactorBps: 9_999n }, { targetHealthFactorBps: 20_000n }, { lots: 1n << 128n }])
 			expect(() => quotePortfolioAuctionBid(snapshot, { ...bidTerms, ...patch })).toThrow()
 	})
 	test('ETH balance and closing deadline block submission without increasing signed funding', async () => {
 		const snapshot = await load(fixture({}, { walletAttoEth: 2n * unit - 1n }))
-		expect(() => buildPortfolioAuctionBidRequest(snapshot, bidTerms)).toThrow('Insufficient ETH')
+		expect(() => buildPortfolioAuctionBidRequest(snapshot, bidTerms)).toThrow('Insufficient collateral')
 		const closed = await load(fixture({}, { timestamp: 1_000n }))
 		expect(() => buildPortfolioAuctionBidRequest(closed, bidTerms)).toThrow('not accepting')
-		expect(buildPortfolioAuctionBidRequest(await load(fixture({}, { walletAttoEth: 2n * unit })), bidTerms).value).toBe(2n * unit)
+		expect(buildPortfolioAuctionBidRequest(await load(fixture({}, { walletAttoEth: 2n * unit })), bidTerms).value).toBe(0n)
 	})
 	test('provably losing bids can credit and withdraw ETH before closing', async () => {
 		const snapshot = await load(fixture({ earlyRefundAttoEth: 2n * unit }))

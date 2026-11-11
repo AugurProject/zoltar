@@ -12,13 +12,13 @@
 		<main id="main-content">
 			<header>
 				<h1>OpenOracle integration reference</h1>
-				<p><a href="https://ethresear.ch/t/proposal-for-a-trust-minimized-price-oracle/22971">OpenOracle</a> supplies a fresh REP/ETH price for Statoblast's solvency-sensitive operations. It does not decide market truth; local Escalation Games and Zoltar remain responsible for truth and branching.</p>
+				<p><a href="https://ethresear.ch/t/proposal-for-a-trust-minimized-price-oracle/22971">OpenOracle</a> supplies a fresh REP/collateral price for Statoblast's solvency-sensitive operations. It does not decide market truth; local Escalation Games and Zoltar remain responsible for truth and branching.</p>
 				<p>The <a href="../explanation/open-oracle.html">OpenOracle explanation</a> covers why Statoblast uses a contestable price and which operations depend on it. This page specifies the integration: formulas, parameters, and settlement-callback behavior. Per-function callers, preconditions, and events are in the <a href="./contracts/openoraclepricecoordinator.html">coordinator contract reference</a>.</p>
 			</header>
 			<section id="openoracle-role">
 				<h2>Token pair and cached price</h2>
 
-				<p>Statoblast configures WETH as <code>token1</code> and REP as <code>token2</code>. Keeping WETH on the exact side lets the coordinator size the report directly from ETH-denominated gas costs without first assuming a REP/ETH conversion price. When a report settles, the coordinator converts the settled token amounts into REP per ETH:</p>
+				<p>Statoblast configures the portfolio’s immutable collateral token as <code>token1</code> and universe REP as <code>token2</code>. Reports quote their direct raw-unit ratio, without a collateral/ETH feed:</p>
 				<figure class="equation" id="eq-rep-eth-price">
 					<math aria-label="last price equals amount two times ten to the eighteenth divided by amount one" data-source="lastPrice = amount2 \cdot pow10(18) / amount1" display="block">
 						<mrow>
@@ -34,11 +34,11 @@
 							</mfrac>
 						</mrow>
 					</math>
-					<p class="equation-note">The settled REP amount (<code>amount2</code>) is scaled by the fixed price precision and divided by the settled WETH amount (<code>amount1</code>).</p>
+					<p class="equation-note">The settled REP amount (<code>amount2</code>) is scaled by the fixed price precision and divided by the settled collateral amount (<code>amount1</code>).</p>
 				</figure>
-				<p>This raw-amount ratio is valid because the configured WETH and REP contracts both use 18 decimals. The coordinator does not normalize token decimals in the settlement callback.</p>
+				<p>The price is raw REP units per raw collateral unit, scaled by 10<sup>18</sup>. The callback does not normalize decimals. For six-decimal USDC or USDT, one REP per whole collateral token is encoded as 10<sup>30</sup>; for 18-decimal WETH it is 10<sup>18</sup>.</p>
 
-				<p id="integration-terms">An accepted report becomes the coordinator's cached REP/ETH price. <code>lastSettlementTimestamp</code> records settlement eligibility: the final report timestamp plus <code>settlementTime</code>. The freshness window starts there, so settling late cannot extend it. The shared feed freshness window is <code>settlementTime</code> plus one hour on Sepolia or five minutes on other chains. With the mainnet eight-minute challenge period, a shared price is usable for 780 seconds after eligibility, or at most 21 minutes after the final report. <code>priceValidUntil()</code> returns the canonical expiry; a price is stale at that timestamp. The coordinator does not meter operation volume during the window.</p>
+				<p id="integration-terms">An accepted report becomes the coordinator's cached REP/collateral price. <code>lastSettlementTimestamp</code> records settlement eligibility: the final report timestamp plus <code>settlementTime</code>. The freshness window starts there, so settling late cannot extend it. The shared feed freshness window is <code>settlementTime</code> plus one hour on Sepolia or five minutes on other chains. With the mainnet eight-minute challenge period, a shared price is usable for 780 seconds after eligibility, or at most 21 minutes after the final report. <code>priceValidUntil()</code> returns the canonical expiry; a price is stale at that timestamp. The coordinator does not meter operation volume during the window.</p>
 				<p id="shared-feed-rules">Shared feeds size reports and escalation halts against the largest of current portfolio commitment, backing demand and the maximum commitment a preparing branch auction can add to chosen backing. The feed reads these aggregates without scanning questions or bidders. Unused capacity from an oversized earlier report does not increase the minimum size of the next report.</p>
 				<p>A shared feed permits concurrent candidates, including renewal before the accepted price expires. Each candidate has its own <code>SharedPoolReportEscrow</code>, which holds its reporter identity and funding credits. <code>pendingReportId</code> and the associated pending getters identify only the latest candidate; they do not enumerate or exclude other pending candidates. A pending, disputed or rejected report never extends accepted-price freshness.</p>
 				<p>Shared acceptance atomically checkpoints portfolio fees under the previous price and updates capital eligibility. A failed mandatory checkpoint rolls back acceptance. Capital operations execute separately and recheck current safety constraints against the accepted price.</p>
@@ -46,8 +46,8 @@
 				<p><code>SecurityPoolFactory.preparePortfolioPriceFeed(sourcePool, child)</code> prepares the canonical child feed without deploying a child question. <code>sourcePool</code> must be a canonical question pool already admitted to this portfolio, with its portfolio binding recorded by the factory. The configuration seed is itself a canonical portfolio question. <code>SecurityPoolPortfolio.isPriceReportingOpen(child)</code> permits requests and acceptance after <code>startBranch</code>, until the fixed native recapitalization deadline at week nine. From that deadline until activation, the accepted observation is frozen. Reporting reopens on activation if the child universe has not forked; a forked universe rejects new prices. Late branch preparation does not extend the window.</p>
 				<p>An accepted preparation report caches the price and funded exposure; it does not activate trading, start holding fees or start imported positions’ liquidation history. Activation uses the cached price only while it remains fresh. A stale or absent price does not block branch activation. Callbacks during a closed window reject the candidate price while preserving <a href="#callback-rejection-and-recovery">report funding recovery</a>.</p>
 				<h3 id="shared-report-coverage">Shared report coverage and capital prices</h3>
-				<p>During auction preparation, <code>minimumToken2ReportAttoRep()</code> requires one hundredth of fresh sale inventory, rounded up. <code>minimumToken1ReportAttoEthForPrice(price)</code> also raises the WETH minimum enough to fund that REP amount at the proposed price. Direct sponsorship through <code>requestPortfolioPrice</code> rejects a signed WETH budget below the required amount. Acceptance checks both sides: <code>acceptedRepExposureLimitAttoRep</code> is final REP funding times 100. An arbitrarily cheap proposed REP price therefore cannot remove the REP inventory challenge requirement.</p>
-				<p>A canonical acceptance sets <code>acceptedExposureLimitAttoEth</code> to <code>(final WETH − priority-fee report component) × 100</code> and increments <code>acceptedEpoch</code>. An ordinary <code>setCommitment</code> raise cannot lift aggregate exposure above that accepted limit. Pending funding grants no capacity. To raise a commitment, an owner can instead call <code>setCommitmentWithReport(reportId, commitment)</code> with an independently settled, fresh candidate whose final funding covers the projected total exposure. <code>reportAuthorization(reportId, newExposure)</code> validates that proof even if a newer, smaller canonical report superseded it.</p>
+				<p>During auction preparation, <code>minimumToken2ReportAttoRep()</code> requires one hundredth of fresh sale inventory, rounded up. <code>minimumToken1ReportAttoEthForPrice(price)</code> also raises the collateral minimum enough to fund that REP amount at the proposed price. Direct sponsorship through <code>requestPortfolioPrice</code> rejects a signed collateral budget below the required amount. Acceptance checks both sides: <code>acceptedRepExposureLimitAttoRep</code> is final REP funding times 100. An arbitrarily cheap proposed REP price therefore cannot remove the REP inventory challenge requirement.</p>
+				<p>A canonical acceptance sets <code>acceptedExposureLimitAttoEth</code> to <code>(final collateral − configured collateral stake floor) × 100</code> and increments <code>acceptedEpoch</code>. An ordinary <code>setCommitment</code> raise cannot lift aggregate exposure above that accepted limit. Pending funding grants no capacity. To raise a commitment, an owner can instead call <code>setCommitmentWithReport(reportId, commitment)</code> with an independently settled, fresh candidate whose final funding covers the projected total exposure. <code>reportAuthorization(reportId, newExposure)</code> validates that proof even if a newer, smaller canonical report superseded it.</p>
 				<p>For accepted price <code>q</code>, target error <code>e</code>, and percentage precision <code>P = 10,000,000</code>, the upper bound is <code>q × P / (P − e)</code>, rounded up, and the liquidation bound is <code>q × P / (P + e)</code>, rounded down. Capital entry, withdrawals, capacity and fee eligibility use the conservative upper bound; rewarded adverse actions use the lower bound. Proof authorization also retains the higher of the owner’s current conservative price and the proof’s upper bound for that owner’s collateral checks until a later canonical epoch covers the enlarged live exposure. Selecting a smaller report cannot remove this owner-specific floor.</p>
 			</section>
 
@@ -59,14 +59,14 @@
 
 			<section id="statoblast-integration">
 				<h2>Integration architecture</h2>
-				<p>Each question has an <code>OpenOraclePriceCoordinator</code> adapter attached to one <code>SharedPoolPriceFeed</code> per portfolio and universe. The feed owns the accepted REP/ETH price and freshness clock. Every candidate has its own escrow. The factory authenticates coordinator creation and binds each question once.</p>
+				<p>Each question has an <code>OpenOraclePriceCoordinator</code> adapter attached to one <code>SharedPoolPriceFeed</code> per portfolio and universe. The feed owns the accepted REP/collateral price and freshness clock. Every candidate has its own escrow. The factory authenticates coordinator creation and binds each question once.</p>
 				<p>A child universe gets a new feed for its own REP token, initially with no accepted price. Adding a question does not reset an existing feed. Capital deposits, commitments, retirement and liquidation use the portfolio directly; they are not queued by the coordinator.</p>
 			</section>
 
 			<section id="report-lifecycle">
 				<h2>Price request lifecycle</h2>
 				<ol>
-					<li>The sponsor approves WETH and universe REP, chooses a candidate price and report budget, and opens a report through a question coordinator or the shared feed.</li>
+					<li>The sponsor approves collateral and universe REP, chooses a candidate price and report budget, and opens a report through a question coordinator or the shared feed.</li>
 					<li>OpenOracle accepts valid corrections during the challenge window. A correction replaces the current reporter and restarts settlement timing.</li>
 					<li>After the challenge window, anyone can settle the report. Its isolated escrow validates the result and offers it to the shared feed.</li>
 					<li>The feed accepts only a qualifying, fresh observation with sufficient economic coverage. Rejected candidates cannot invalidate the previously accepted observation.</li>
@@ -77,14 +77,14 @@
 
 			<section id="request-funding">
 				<h2>Funding and report ownership</h2>
-				<p>The sponsor funds its own WETH, REP and transaction gas. The minimum public settlement bounty is <code>101 attoETH</code>; it does not reimburse the sponsor’s gas. The sponsor may supply a larger bounty.</p>
+				<p>The sponsor funds its own collateral, REP and transaction gas. The minimum public settlement bounty is <code>101 attoETH</code>; it does not reimburse the sponsor’s gas. The sponsor may supply a larger bounty.</p>
 				<figure class="equation" id="eq-openoracle-request-price-cost">
 					<math display="block" data-source="requestPriceCostAttoEth = 101" aria-label="minimum request bounty equals 101 attoETH"
 						><mrow><mi>requestPriceCostAttoEth</mi><mo>=</mo><mn>101</mn></mrow></math
 					>
 					<p class="equation-note"><code>REQUEST_BOUNTY_OFFSET_ATTO_ETH</code> is <code>101 attoETH</code>. The shared callback budget is <code>4,000,000 gas</code>; callers pay their own transaction gas.</p>
 				</figure>
-				<p><code>requestPortfolioPrice(proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth)</code> transfers exactly the reviewed WETH budget and its corresponding REP from the caller. It rejects a budget below the inclusion-time minimum instead of silently increasing it. Only the recorded sponsor receives that candidate’s returned funding. Portfolio settlement collateral does not fund reports.</p>
+				<p><code>requestPortfolioPrice(proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth)</code> transfers exactly the reviewed collateral budget and its corresponding REP from the caller. It rejects a budget below the inclusion-time minimum instead of silently increasing it. Only the recorded sponsor receives that candidate’s returned funding. Portfolio settlement collateral does not fund reports.</p>
 				<p id="refund-callback">A coordinator request forwards the specified bounty and refunds excess native ETH to the caller. Rejecting that refund reverts the whole request. A direct feed request requires exactly its specified bounty.</p>
 				<h3 id="rolling-dispute-exclusivity">Independent candidates</h3>
 				<p>There is no exclusive sponsor lane. Anyone may fund another candidate while earlier candidates are pending or the accepted price is still fresh. Disputing one candidate cannot reserve all reporting access.</p>
@@ -93,63 +93,21 @@
 			<section id="security-guarantee">
 				<h2>Report sizing and correction incentives</h2>
 
-				<p>The coordinator sizes each report so that correcting a price error of at least <code>targetPriceErrorForDispute</code> stays profitable after OpenOracle's fees and the modeled gas cost of one dispute multiplied by <code>openOracleSecurityMultiplierBps</code>. That multiplier is separate from a SecurityPool's backing multiplier, <code>statoblastSecurityMultiplierBps</code>.</p>
-
-				<p>A report can be corrected in either direction. The formula assumes the less profitable one, in which the true REP/ETH price is <code>(1 + targetError)</code> times the reported price, and models the correction as releasing the fraction <code>(targetError - fees) / (1 + targetError)</code> of the WETH position before gas. The required position is the multiplied gas cost divided by that fraction.</p>
-
-				<p>The minimum initial WETH position also has a floor of <code>1%</code> of the portfolio’s aggregate exposure (<code>aggregateExposureAttoEth()</code>), and the same floor applies to the escalation halt:</p>
+				<p>The creator-configured <code>minimumReportCollateral</code> is inherited by every universe in the portfolio. The minimum report adds that floor to one hundredth of aggregate collateral exposure, rounded up. REP inventory coverage can raise it further at the proposed price.</p>
 				<div class="equation" id="eq-openoracle-initial-report-size">
-					<math aria-label="all report and escalation-halt amounts are in attoETH; minimum token one report adds the priority-fee report to the larger base-fee or open-interest report; escalation halt is the greater of the open-interest report and the initial WETH report times the halt multiplier" data-source="reportAttoEth(gasPriceAttoEthPerGas) = ⌈gasPriceAttoEthPerGas \cdot gasUnitsForOneDispute \cdot openOracleSecurityMultiplierBps \cdot (percentagePrecision + targetPriceErrorForDispute) / (10000 \cdot (targetPriceErrorForDispute - protocolFee - feePercentage))⌉; priorityFeeReportAttoEth = reportAttoEth(initialReportPriorityFeeAttoEthPerGas); baseFeeReportAttoEth = reportAttoEth(block.basefee); exposureReportAttoEth = ⌈aggregateExposureAttoEth / 100⌉; minimumToken1ReportAttoEth = priorityFeeReportAttoEth + max(baseFeeReportAttoEth, exposureReportAttoEth); escalationHaltAttoEth = max(⌊initialWethReportAttoEth \cdot escalationHaltMultiplierBps / 10000⌋, exposureReportAttoEth)" display="block">
-						<mtable>
-							<mtr>
-								<mtd><mi>reportAttoEth</mi><mo>(</mo><mi>gasPriceAttoEthPerGas</mi><mo>)</mo></mtd>
-								<mtd><mo>=</mo></mtd>
-								<mtd>
-									<mo form="prefix" stretchy="true">⌈</mo>
-									<mfrac>
-										<mrow> <mi>gasPriceAttoEthPerGas</mi><mo>⋅</mo><mi>gasUnitsForOneDispute</mi><mo>⋅</mo><mi>openOracleSecurityMultiplierBps</mi> <mo>⋅</mo><mo>(</mo><mi>percentagePrecision</mi><mo>+</mo><mi>targetPriceErrorForDispute</mi><mo>)</mo> </mrow>
-										<mrow> <mn>10000</mn><mo>⋅</mo><mo>(</mo><mi>targetPriceErrorForDispute</mi><mo>-</mo><mi>protocolFee</mi><mo>-</mo><mi>feePercentage</mi><mo>)</mo> </mrow>
-									</mfrac>
-									<mo form="postfix" stretchy="true">⌉</mo>
-								</mtd>
-							</mtr>
-							<mtr>
-								<mtd><mi>exposureReportAttoEth</mi></mtd>
-								<mtd><mo>=</mo></mtd>
-								<mtd
-									><mo form="prefix" stretchy="true">⌈</mo><mfrac><mi>aggregateExposureAttoEth</mi><mn>100</mn></mfrac
-									><mo form="postfix" stretchy="true">⌉</mo></mtd
-								>
-							</mtr>
-							<mtr>
-								<mtd><mi>minimumToken1ReportAttoEth</mi></mtd>
-								<mtd><mo>=</mo></mtd>
-								<mtd>
-									<mi>reportAttoEth</mi><mo>(</mo><mi>initialReportPriorityFeeAttoEthPerGas</mi><mo>)</mo>
-									<mo>+</mo>
-									<mi>max</mi><mo>(</mo><mi>reportAttoEth</mi><mo>(</mo><mi>block.basefee</mi><mo>)</mo><mo>,</mo><mi>exposureReportAttoEth</mi><mo>)</mo>
-								</mtd>
-							</mtr>
-							<mtr>
-								<mtd><mi>escalationHaltAttoEth</mi></mtd>
-								<mtd><mo>=</mo></mtd>
-								<mtd
-									><mi>max</mi><mo>(</mo><mo form="prefix" stretchy="true">⌊</mo
-									><mfrac
-										><mrow><mi>initialWethReportAttoEth</mi><mo>⋅</mo><mi>escalationHaltMultiplierBps</mi></mrow
-										><mn>10000</mn></mfrac
-									><mo form="postfix" stretchy="true">⌋</mo><mo>,</mo><mi>exposureReportAttoEth</mi><mo>)</mo></mtd
-								>
-							</mtr>
-						</mtable>
-					</math>
-					<p class="equation-note">All amounts are in attoETH. <code>percentagePrecision</code> is <code>10,000,000</code>, the denominator of <code>targetPriceErrorForDispute</code>, <code>protocolFee</code>, and <code>feePercentage</code>.</p>
+					<math display="block" aria-label="minimum collateral report equals configured floor plus rounded up exposure divided by one hundred" data-source="minimumToken1ReportAttoEth = minimumReportCollateral + ⌈aggregateExposureAttoEth / 100⌉"
+						><mrow
+							><mi>minimumToken1ReportAttoEth</mi><mo>=</mo><mi>minimumReportCollateral</mi><mo>+</mo><mo>⌈</mo><mfrac><mi>aggregateExposureAttoEth</mi><mn>100</mn></mfrac
+							><mo>⌉</mo></mrow
+						></math
+					>
+					<p class="equation-note">Amounts use raw collateral units, including accessors with legacy <code>AttoEth</code> names. The escalation halt remains the larger of the exposure minimum and the configured fraction of initial collateral funding.</p>
 				</div>
-				<p>This is the ETH-exposure floor. The feed also requires REP-side funding of at least 1% of its REP exposure. At a proposed price, converting that REP minimum to ETH can increase the required initial WETH above this floor.</p>
+				<p>This floor does not automatically guarantee that correcting a price error covers ETH gas costs. That incentive depends on the collateral’s value, market liquidity, OpenOracle fees and actual execution costs. No collateral/ETH feed is queried.</p>
 
 				<p>The coordinator sets <code>initialWethReportAttoEth = max(minimumToken1ReportAttoEthForPrice(proposedRepPerEthPrice), requestedInitialAttoWeth)</code>, uses that value as OpenOracle's <code>currentAmount1</code>, and derives <code>amount2 = ⌈initialWethReportAttoEth * proposedRepPerEthPrice / 1e18⌉</code> in the same transaction.</p>
 
-				<h3 id="formula-inputs">Formula inputs</h3>
+				<h3 id="formula-inputs">Report configuration</h3>
 				<p>Default report configuration comes from <code>shared/statoblast/ts/initialReport/oracleInitialReport.ts</code> and is copied into the shared feed configuration.</p>
 				<table>
 					<thead>
@@ -212,6 +170,7 @@
 						</tr>
 					</tbody>
 				</table>
+				<p>The dispute gas units and OpenOracle security multiplier remain constructor configuration bounds; they do not size current report stakes. The configured priority fee sets the settlement base-fee acceptance cap. OpenOracle’s protocol and reporter fees still apply to corrections.</p>
 				<h3>Construction bounds and parameter effects</h3>
 
 				<p>Coordinator construction requires:</p>
@@ -226,12 +185,12 @@
 					<li>a timestamp clock with dispute tracking (<code>timeType</code> and <code>trackDisputes</code> both true)</li>
 					<li><code>maxSettlementBaseFeeMultiplierBps</code> of at least <code>1x</code></li>
 				</ol>
-				<p>Construction also bounds <code>initialReportPriorityFeeAttoEthPerGas</code> so that the priority-fee component of the minimum report, <code>reportAttoEth(initialReportPriorityFeeAttoEthPerGas)</code>, does not exceed half of <code>min(type(uint128).max, type(uint128).max × 10000 / escalationHaltMultiplierBps)</code>; a larger fee reverts with <code>Initial report priority fee exceeds OpenOracle limits</code>. <code>OpenOraclePriceCoordinatorFactory</code> stores the shared configuration without validating it, so an invalid configuration deploys the factory successfully and makes every later coordinator deployment revert.</p>
+				<p>Construction also bounds <code>initialReportPriorityFeeAttoEthPerGas</code> so that the legacy priority-fee sizing expression, <code>reportAttoEth(initialReportPriorityFeeAttoEthPerGas)</code>, does not exceed half of <code>min(type(uint128).max, type(uint128).max × 10000 / escalationHaltMultiplierBps)</code>; a larger fee reverts with <code>Initial report priority fee exceeds OpenOracle limits</code>. <code>OpenOraclePriceCoordinatorFactory</code> stores the shared configuration without validating it, so an invalid configuration deploys the factory successfully and makes every later coordinator deployment revert.</p>
 
-				<p>At a <code>30 nanoETH</code> base fee, a configured <code>10 nanoETH</code> priority fee, and <code>100 WETH</code> of aggregate exposure, the modeled gas cost of one dispute is <code>0.012 ETH</code>, the minimum report is <code>3.230769230769230770 WETH</code>, and the escalation halt is <code>32.307692307692307700 WETH</code>.</p>
+				<p>For comparison only, under the former WETH gas-sizing model, at a <code>30 nanoETH</code> base fee, a configured <code>10 nanoETH</code> priority fee, and <code>100 WETH</code> of aggregate exposure, the modeled gas cost of one dispute is <code>0.012 ETH</code>, the minimum report is <code>3.230769230769230770 WETH</code>, and the escalation halt is <code>32.307692307692307700 WETH</code>.</p>
 				<details class="interactive-example" id="initial-report-estimator-example" open="">
-					<summary>Dynamic WETH report estimator</summary>
-					<p>This calculator models the ETH-exposure floor, excluding the separate REP-inventory minimum. The deployment parameters and caller-selected amount are shown as adjustable inputs to make their effect explicit. For a deployed coordinator, the base fee and aggregate exposure can change from one request block to another.</p>
+					<summary>WETH dispute-gas comparison model</summary>
+					<p>This calculator illustrates the former WETH gas-sizing model. It does not calculate the current protocol minimum, which uses the configured collateral stake floor above. It excludes the separate REP-inventory minimum. The deployment parameters and caller-selected amount are shown as adjustable inputs to make their effect explicit. For a deployed coordinator, the base fee and aggregate exposure can change from one request block to another.</p>
 					<div class="tool-outcome-strip">
 						<div data-primary-output><span>Selected initial WETH</span><output data-example-output="selectedInitialWethReport">3.2308 WETH</output></div>
 						<div data-primary-output><span>Fee bound</span><output data-example-output="estimatorSafetyState">fees below target error</output></div>
@@ -346,14 +305,14 @@
 					<li>for a shared feed, the portfolio reporting window is closed: <code>Portfolio reporting window closed</code>;</li>
 					<li>the settlement block’s base fee exceeds the request-time cap: the feed uses <code>request block.basefee + initialReportPriorityFeeAttoEthPerGas</code>. This is scaled by <code>maxSettlementBaseFeeMultiplierBps / 10000</code>: <code>Base fee too high</code>;</li>
 					<li><code>storedGame(reportId).numReports</code> is saturated at the <code>uint24</code> maximum: <code>Counter saturated</code>;</li>
-					<li><code>numReports</code> is zero, or the settled WETH amount is below <code>reportAttoEth(initialReportPriorityFeeAttoEthPerGas) + reportAttoEth(recordedBaseFee)</code> from the <a href="#security-guarantee">sizing formula</a>, where <code>recordedBaseFee</code> comes from the final <code>disputeHistory(reportId, numReports - 1)</code>. Shared mode also requires the amount above the priority-fee component to cover <code>live aggregate exposure / 100</code>, rounded up: <code>Report uneconomic</code>;</li>
+					<li><code>numReports</code> is zero, or the settled collateral amount is below the configured floor plus <code>⌈live aggregate exposure / 100⌉</code>: <code>Report uneconomic</code>. Final REP funding must also cover the live REP inventory minimum;</li>
 					<li>for a shared feed, settlement eligibility is earlier than the accepted observation (<code>Report timestamp not newer</code>), or equal without larger funded coverage (<code>Report adds no newer observation or capacity</code>);</li>
 					<li>the freshness window measured from settlement eligibility has already closed: <code>Report stale</code>;</li>
 					<li>either settled token amount is zero: <code>Empty oracle settlement</code>;</li>
-					<li>the integer REP/ETH calculation produces a zero price: <code>Oracle price is zero</code>.</li>
+					<li>the integer REP/collateral calculation produces a zero price: <code>Oracle price is zero</code>.</li>
 				</ul>
 
-				<p>These checks establish only that the final WETH position meets the modeled security floor and that the callback data is structurally acceptable. They do not prove that the accepted price is externally correct, that an independent corrector exists, or that a correcting transaction will obtain inclusion.</p>
+				<p>These checks establish only that the final collateral position meets the configured stake and exposure floors and that the callback data is structurally acceptable. They do not prove that the accepted price is externally correct, that an independent corrector exists, or that a correcting transaction will obtain inclusion.</p>
 
 				<h3>Rejected-price cleanup</h3>
 
@@ -371,7 +330,7 @@
 
 				<h3 id="dispute-escalation">Dispute escalation amounts</h3>
 
-				<p>In this integration, WETH is the escalation variable. Before <code>escalationHalt</code>, OpenOracle requires <code>min(⌊oldAmount1 × multiplier / 100⌋, escalationHalt)</code>. With the configured multiplier of <code>115</code>, integer flooring leaves token1 amounts from one through six attoETH unchanged; seven attoETH is the first amount that grows. At or above the halt, each replacement instead requires <code>oldAmount1 + 1</code>, adding one attoETH of WETH.</p>
+				<p>In this integration, collateral is the escalation variable. Before <code>escalationHalt</code>, OpenOracle requires <code>min(⌊oldAmount1 × multiplier / 100⌋, escalationHalt)</code>. With the configured multiplier of <code>115</code>, integer flooring leaves token1 amounts from one through six raw collateral units unchanged; seven units is the first amount that grows. At or above the halt, each replacement instead requires <code>oldAmount1 + 1</code>, adding one raw collateral unit.</p>
 			</section>
 
 			<section id="parameters">
@@ -389,18 +348,18 @@
 					<tbody>
 						<tr>
 							<td><code>token1Address</code> / <code>token2Address</code></td>
-							<td>WETH / REP<br />The factory's WETH and the pool universe's REP token</td>
-							<td>Defines the REP/ETH price pair used for security-pool solvency checks.</td>
+							<td>Collateral / REP<br />The portfolio’s collateral and its universe’s REP token</td>
+							<td>Defines the REP/collateral price pair used for security-pool solvency checks.</td>
 						</tr>
 						<tr>
 							<td><code>minimumToken1ReportAttoEth()</code></td>
-							<td>See <a href="#security-guarantee">Report sizing and correction incentives</a> and the <a href="#initial-report-estimator-example">estimator</a>.<br />Derived per request</td>
-							<td>Minimum initial WETH position for a coordinator report.</td>
+							<td>See <a href="#security-guarantee">Report sizing and correction incentives</a>.<br />Configured collateral floor plus exposure</td>
+							<td>Minimum initial collateral position for a coordinator report.</td>
 						</tr>
 						<tr>
 							<td>OpenOracle initial <code>currentAmount1</code></td>
 							<td>The greater of the minimum and the sponsor's <code>requestedInitialAttoWeth</code><br />Derived per request</td>
-							<td>Initial WETH position; the sponsor may fund more than the minimum.</td>
+							<td>Initial collateral position; the sponsor may fund more than the minimum.</td>
 						</tr>
 						<tr>
 							<td><code>escalationHalt</code></td>
@@ -413,9 +372,9 @@
 							<td>Paid to the account that settles the report.</td>
 						</tr>
 						<tr>
-							<td>Sizing inputs: <code>gasUnitsForOneDispute</code>, <code>openOracleSecurityMultiplierBps</code>, <code>targetPriceErrorForDispute</code>, <code>protocolFee</code>, <code>feePercentage</code>, <code>escalationHaltMultiplierBps</code>, <code>initialReportPriorityFeeAttoEthPerGas</code>, <code>OPEN_INTEREST_DIVIDER</code></td>
-							<td>See <a href="#formula-inputs">Formula inputs</a>.</td>
-							<td>Size the report and the escalation halt. The two fees also set OpenOracle's dispute fee accounting.</td>
+							<td>Stake sizing: <code>minimumReportCollateral</code>, <code>OPEN_INTEREST_DIVIDER</code>, <code>escalationHaltMultiplierBps</code></td>
+							<td>See <a href="#security-guarantee">Report sizing and correction incentives</a>.</td>
+							<td>The configured collateral floor plus aggregate exposure sets the minimum. REP inventory can raise it. The halt scales selected collateral funding.</td>
 						</tr>
 
 						<tr>
@@ -447,7 +406,7 @@
 						<tr>
 							<td><code>multiplier</code></td>
 							<td><code>115</code> (<code>1.15x</code>)<br />Deployment configuration <code>ORACLE_MULTIPLIER</code></td>
-							<td>Growth of the WETH amount per dispute before the halt; see <a href="#dispute-escalation">Dispute escalation amounts</a>.</td>
+							<td>Growth of the collateral amount per dispute before the halt; see <a href="#dispute-escalation">Dispute escalation amounts</a>.</td>
 						</tr>
 						<tr>
 							<td><code>protocolFeeRecipient</code></td>
@@ -457,7 +416,7 @@
 						<tr>
 							<td><code>timeType</code> / <code>trackDisputes</code></td>
 							<td><code>true</code> / <code>true</code><br />Deployment configuration; the constructor rejects any other value</td>
-							<td>Timestamps let the coordinator measure freshness from settlement eligibility; dispute history lets settlement validate the final report's recorded base fee.</td>
+							<td>Timestamps let the coordinator measure freshness from settlement eligibility; dispute history preserves the correction sequence.</td>
 						</tr>
 						<tr>
 							<td><code>callbackContract</code></td>

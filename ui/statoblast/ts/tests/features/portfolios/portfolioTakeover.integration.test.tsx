@@ -27,7 +27,7 @@ describe('manual takeover against native portfolio contracts', () => {
 			await fixture.refreshPrice(fixture.base.questionId, 3n * unit)
 			await fixture.base.mockWindow.advanceTime(3601n)
 			await fixture.refreshPrice(fixture.base.questionId, 3n * unit)
-			const snapshot = await loadPortfolioCapitalSnapshot({ client: keeper, owner: keeper.account.address, portfolio: fixture.portfolio })
+			const snapshot = { ...(await loadPortfolioCapitalSnapshot({ client: keeper, owner: keeper.account.address, portfolio: fixture.portfolio })), collateral: { symbol: 'WETH', decimals: 18 } }
 			const original = await loadPortfolioCapitalSnapshot({ client: keeper, owner: owner.account.address, portfolio: fixture.portfolio })
 			const source = original.positions[0]
 			if (source === undefined) throw new Error('Missing distressed position')

@@ -6,6 +6,10 @@ import { SecurityPoolPortfolioSettlement } from './SecurityPoolPortfolioSettleme
 import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
 import { SecurityPoolCapitalLedger } from './SecurityPoolCapitalLedger.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
+import { Collateral } from '../Collateral.sol';
+import { ICollateralConfig } from './interfaces/ICollateralConfig.sol';
+import { IERC20 } from '../IERC20.sol';
+import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { Constants } from '../Constants.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 import { IPortfolioServiceRoot } from './interfaces/IPortfolioServiceRoot.sol';
@@ -18,9 +22,10 @@ import { BinaryOutcomes } from './BinaryOutcomes.sol';
 
 /// @notice Question-specific prepaid resolution risk compensation.
 /// @dev Premium roots copy across forks; no call walks questions or ancestors.
-/// No shared pot pays keepers or price sponsors. ETH whose payer is not
+/// No shared pot pays keepers or price sponsors. Collateral whose payer is not
 /// recorded, or that would otherwise accrue to no one, is burned.
 contract SecurityPoolPortfolioServices is IERC1155Receiver {
+	using SafeERC20Ops for IERC20;
 	address public immutable portfolio;
 	SecurityPoolResolutionPremiumBook public immutable premiumLedger;
 	bool private entered;
@@ -53,27 +58,32 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 	receive() external payable {
 		require(msg.sender == address(IPortfolioServiceRoot(portfolio).settlement()), 'Unexpected service ETH');
 	}
-	function purchase(address trader, uint248 universeId, uint256 questionId, uint256 cash, address recipient, uint256 minimumShares) external payable onlyPortfolio nonReentrant returns (uint256 minted, uint256 fee) {
+	function purchase(address trader, uint248 universeId, uint256 questionId, uint256 cash, address recipient, uint256 minimumShares, uint256 maximumFee) external onlyPortfolio nonReentrant returns (uint256 minted, uint256 fee) {
 		require(cash != 0, 'Purchase amount zero');
 		IPortfolioServiceRoot root = IPortfolioServiceRoot(portfolio);
 		ISecurityPool pool = root.prepareServicePurchase(universeId, questionId);
 		uint256 premium;
 		(fee, premium) = root.quoteHelper().purchaseQuote(universeId, questionId, cash);
-		require(msg.value >= cash + fee, 'Purchase fee exceeds budget');
+		require(fee <= maximumFee, 'Purchase fee exceeds budget');
+		IERC20 collateral = ICollateralConfig(portfolio).collateralToken();
+		Collateral.pull(collateral, trader, address(this), cash + fee);
+		collateral.safeApprove(address(root.settlement()), cash);
 		require(cash <= root.quoteHelper().availableMintCapacity(universeId), 'Purchase exceeds healthy capacity');
 		minted = _mintCompleteSets(pool, recipient, minimumShares, cash);
 		if (premium != 0) _fundPremium(universeId, questionId, premium);
 		uint256 earnings = fee - premium;
-		if (earnings != 0) root.capitalLedger(universeId).fundVestedFees{value: earnings}(0);
+		if (earnings != 0) {
+			collateral.safeApprove(address(root.capitalLedger(universeId)), earnings);
+			root.capitalLedger(universeId).fundVestedFees(earnings, 0);
+		}
 		_deliverCompleteSets(pool, recipient, minted);
-		_send(trader, msg.value - cash - fee);
 	}
-	function mintQuestionSettlement(ISecurityPool pool) external payable onlyPortfolio returns (uint256, uint256, uint256) {
+	function mintQuestionSettlement(ISecurityPool pool, uint256 cash) external onlyPortfolio returns (uint256, uint256, uint256) {
 		IPortfolioServiceRoot root = IPortfolioServiceRoot(portfolio);
 		uint248 universeId = pool.universeId();
 		SecurityPoolCapitalLedger capital = root.capitalLedger(universeId);
-		capital.setDemand(capital.demandAttoEth() + msg.value);
-		(uint256 minted, SecurityPoolPortfolioSettlement.Snapshot memory snapshot) = root.settlement().mint{value: msg.value}(address(pool), 0, root.logicalTime(universeId));
+		capital.setDemand(capital.demandAttoEth() + cash);
+		(uint256 minted, SecurityPoolPortfolioSettlement.Snapshot memory snapshot) = root.settlement().mint(address(pool), cash, 0, root.logicalTime(universeId));
 		_creditSnapshot(universeId, snapshot);
 		return (minted, snapshot.outcomeSupplyAttoShares, snapshot.questionCashAttoEth);
 	}
@@ -133,7 +143,7 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 		(, , uint48 premiumTime, bool premiumSealed) = premiumLedger.totals(universeId);
 		if (!premiumSealed) {
 			(uint256 earned, uint256 unused) = premiumLedger.checkpoint(universeId, uint48(Math.max(premiumTime, earnedThrough)));
-			if (earned != 0) capital.creditTimedFees{value: earned}();
+			if (earned != 0) _creditTimedFees(capital, earned);
 			// Premium paid for unhealthy or stale time belongs to no current
 			// underwriter, and the book does not record which buyer paid it.
 			(uint256 stale, uint256 remainingUnused) = premiumLedger.checkpoint(universeId, nowTime);
@@ -163,7 +173,7 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 	}
 	function _creditUniverse(uint248 universeId, uint256 fees, uint256 demand) private {
 		SecurityPoolCapitalLedger capital = IPortfolioServiceRoot(portfolio).capitalLedger(universeId);
-		if (fees != 0) capital.creditTimedFees{value: fees}();
+		if (fees != 0) _creditTimedFees(capital, fees);
 		capital.synchronizeDemand(demand);
 	}
 	function registerUniverse(uint248 universeId) external onlyPortfolio {
@@ -205,6 +215,11 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 		emit PremiumRecovered(source, questionId, recipient, cash);
 	}
 
+	function _creditTimedFees(SecurityPoolCapitalLedger capital, uint256 amount) private {
+		ICollateralConfig(portfolio).collateralToken().safeApprove(address(capital), amount);
+		capital.creditTimedFees(amount);
+	}
+
 	function _burn(uint248 universeId, uint256 amount) private {
 		if (amount == 0) return;
 		_send(Constants.BURN_ADDRESS, amount);
@@ -212,15 +227,14 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 	}
 	function _send(address recipient, uint256 amount) private {
 		if (amount == 0) return;
-		(bool sent, ) = recipient.call{value: amount}('');
-		require(sent, 'Service ETH transfer failed');
+		Collateral.send(ICollateralConfig(portfolio).collateralToken(), recipient, amount);
 	}
 	function _mintCompleteSets(ISecurityPool pool, address recipient, uint256 minimumShares, uint256 cash) private returns (uint256 minted) {
 		require(recipient != address(0) && recipient != address(this), 'Invalid share recipient');
 		IShareToken token = pool.shareToken();
 		uint248 universeId = pool.universeId();
 		uint256 beforeShares = token.balanceOfOutcome(universeId, BinaryOutcomes.BinaryOutcome.Invalid, address(this));
-		pool.createCompleteSet{value: cash}();
+		pool.createCompleteSet(cash);
 		minted = token.balanceOfOutcome(universeId, BinaryOutcomes.BinaryOutcome.Invalid, address(this)) - beforeShares;
 		require(minted > 0 && minted >= minimumShares, 'Minimum shares not met');
 	}

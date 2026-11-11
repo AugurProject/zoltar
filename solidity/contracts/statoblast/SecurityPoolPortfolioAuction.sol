@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { Collateral } from '../Collateral.sol';
+import { ICollateralConfig } from './interfaces/ICollateralConfig.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { Zoltar } from '../Zoltar.sol';
@@ -74,7 +76,7 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 		targetLots = shortfall / lotAttoEth;
 		uint256 multiplier = capital.securityMultiplierBps();
 		repGrid = multiplier / _gcd(multiplier, 10_000);
-		engine = new SecurityPoolUniformPriceAuction(address(this));
+		engine = new SecurityPoolUniformPriceAuction(address(this), ICollateralConfig(root).collateralToken());
 	}
 
 	modifier nonReentrant() {
@@ -105,19 +107,21 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 		emit AuctionOpened(openingConservativePrice, minimumCollateralAttoRepPerLot, engine.maximumBidAttoRepPerLot());
 	}
 
-	/// @notice Only the ETH purchase amount is paid upfront.
+	/// @notice Only the collateral purchase amount is paid upfront.
 	/// Purchased REP must back the commitment at the bidder's chosen health target.
-	function submitBid(uint256 lots, uint256 minimumAttoRepPerLot, uint256 targetHealthFactorBps) external payable nonReentrant returns (uint256 bidId, address vault) {
+	function submitBid(uint256 lots, uint256 minimumAttoRepPerLot, uint256 targetHealthFactorBps) external nonReentrant returns (uint256 bidId, address vault) {
 		require(opened && !finalized, 'Truth auction is not accepting bids');
 		require(portfolio.zoltar().getForkTime(universeId) == 0, 'Truth auction universe forked');
 		require(lots != 0 && targetHealthFactorBps >= 10_000, 'Invalid truth auction lots or health target');
-		require(msg.value == lots * lotAttoEth, 'Truth auction ETH funding mismatch');
+		IERC20 collateral = ICollateralConfig(address(portfolio)).collateralToken();
+		Collateral.pull(collateral, msg.sender, address(this), lots * lotAttoEth);
+		collateral.safeApprove(address(engine), lots * lotAttoEth);
 		uint256 required = capital.commitmentIndex().requiredRep(lotAttoEth, openingConservativePrice, capital.securityMultiplierBps(), targetHealthFactorBps);
 		require(minimumAttoRepPerLot >= required, 'Auction bid does not meet chosen health target');
 		bidId = engine.bidCount() + 1;
 		vault = SecurityPoolAuctionVaultClones.create(vaultImplementation, msg.sender, address(capital), address(this), bidId);
 		bidIdForVault[vault] = bidId;
-		require(engine.submitBid{value: lots * lotAttoEth}(msg.sender, vault, targetHealthFactorBps, lots, minimumAttoRepPerLot) == bidId, 'Auction bid identity mismatch');
+		require(engine.submitBid(msg.sender, vault, targetHealthFactorBps, lots, minimumAttoRepPerLot) == bidId, 'Auction bid identity mismatch');
 		emit WinningVaultCreated(bidId, msg.sender, vault);
 	}
 
@@ -161,7 +165,7 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 		return engine.previewBidFees(bidId, addedAttoEth, addedAttoRep);
 	}
 	/// @notice Anyone may credit refunds, including a provably losing bid before
-	/// closing. Only its bidder may withdraw the freely usable ETH.
+	/// closing. Only its bidder may withdraw the freely usable collateral.
 	/// Refunds and position materialization are independent and never scan bids.
 	function settleRefund(uint256 bidId) external nonReentrant {
 		require(opened, 'Truth auction has not opened');

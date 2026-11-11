@@ -22,6 +22,7 @@ test('matches Statoblast annual fee presentation, including normal limits and no
 
 test('derives question settlement metrics without presenting shared REP as question-owned capital', () => {
 	const rows = poolSummaryMetrics({
+		collateral: { symbol: 'ETH', decimals: 18 },
 		questionSettlementAttoEth: String(42n * 10n ** 18n),
 		averageValueAttoEthPerShare: String(7n * 10n ** 17n),
 		shareTokenSupplyAttoShares: String(60n * 10n ** 18n),
@@ -34,12 +35,17 @@ test('derives question settlement metrics without presenting shared REP as quest
 		['Question escalation multiplier', '2.5 ×'],
 	])
 	expect(poolSummaryMetrics({}).every(([, value]) => value === 'Unavailable')).toBe(true)
-	expect(poolSummaryMetrics({ questionSettlementAttoEth: 0n.toString() })).toContainEqual(['Question settlement value', '0 ETH'])
+	expect(poolSummaryMetrics({ collateral: { symbol: 'ETH', decimals: 18 }, questionSettlementAttoEth: 0n.toString() })).toContainEqual(['Question settlement value', '0 ETH'])
 })
 
 test('samples the current question ledger ABI and live settlement quotes without retired vault reads', async () => {
 	const pool = getAddress('0x1111111111111111111111111111111111111111')
 	const values: Readonly<Record<string, unknown>> = {
+		securityPoolFactory: pool,
+		getSecurityPoolPortfolio: pool,
+		collateralToken: pool,
+		symbol: 'WETH',
+		decimals: 18n,
 		settlementCollateralAttoEth: 43n * 10n ** 18n,
 		systemState: 0n,
 		awaitingForkContinuation: false,
@@ -61,7 +67,7 @@ test('samples the current question ledger ABI and live settlement quotes without
 	expect(snapshot.readStatus).toBe('success')
 	if (snapshot.readResult === undefined) throw new Error('Expected tagged question snapshot')
 	expect(snapshot.readResult['questionSettlementAttoEth']).toBe(String(42n * 10n ** 18n))
-	expect(poolSummaryMetrics(snapshot.readResult)).toEqual([
+	expect(poolSummaryMetrics({ ...snapshot.readResult, collateral: { symbol: 'ETH', decimals: 18 } })).toEqual([
 		['Question settlement value', '42 ETH'],
 		['Average value per share', '0.7 ETH'],
 		['Outcome share supply', '60 shares'],
@@ -73,6 +79,9 @@ for (const supply of [0n, 1n]) {
 	test(`question quote stays within the remaining supply of ${supply}`, async () => {
 		const pool = getAddress('0x1111111111111111111111111111111111111111')
 		const snapshot = await sampleEntityStateWithRead({ entityType: 'pool', entityIdentity: pool, address: pool }, async (_address, _abi, name, args) => {
+			if (['securityPoolFactory', 'getSecurityPoolPortfolio', 'collateralToken'].includes(name)) return pool
+			if (name === 'symbol') return 'WETH'
+			if (name === 'decimals') return 18n
 			if (name === 'shareTokenSupplyAttoShares') return supply
 			if (name === 'attoSharesToAttoEth') {
 				expect(args).toEqual([supply])

@@ -44,7 +44,14 @@ describe('Statoblast: central portfolio and native question integration', () => 
 				encodeDeployData({
 					abi: portfolioArtifact.abi,
 					bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object),
-					args: [infrastructure.securityPoolFactory, { universeId: fixture.base.genesisUniverse, securityMultiplierBps: fixture.base.statoblastSecurityMultiplierBps, reportPriorityFeeAttoEthPerGas }, maximumQuestionHorizonSeconds, modules, fixture.questionAdmissionPolicy, configuration],
+					args: [
+						infrastructure.securityPoolFactory,
+						{ collateralToken: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', minimumReportCollateral: 10n ** 16n, universeId: fixture.base.genesisUniverse, securityMultiplierBps: fixture.base.statoblastSecurityMultiplierBps, reportPriorityFeeAttoEthPerGas },
+						maximumQuestionHorizonSeconds,
+						modules,
+						fixture.questionAdmissionPolicy,
+						configuration,
+					],
 				}),
 			)
 		await expect(deploy(portfolioEconomics, deployers, 0n)).rejects.toThrow('Initial priority fee zero')
@@ -113,7 +120,7 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		await expect(createCompleteSet(fixture.other(), pool, unit)).rejects.toThrow('Use portfolio purchase')
 		await expect(depositRepToVault(fixture.owner(), pool, 100n * unit)).rejects.toThrow()
 		expect(await fixture.owner().readContract({ ...capital(), functionName: 'totalFreeAttoRep' })).toBe(0n)
-		await expect(fixture.other().writeContract({ ...portfolio(), functionName: 'mintQuestionSettlement', value: unit })).rejects.toThrow('Unknown question callback')
+		await expect(fixture.other().writeContract({ ...portfolio(), functionName: 'mintQuestionSettlement', args: [unit] })).rejects.toThrow('Unknown question callback')
 		await expect(fixture.other().writeContract({ ...portfolio(), functionName: 'onSharedPriceAccepted', args: [fixture.base.genesisUniverse, unit, 1] })).rejects.toThrow('Only canonical shared feed')
 		await expect(fixture.other().writeContract({ ...capital(), functionName: 'setDemand', args: [0n] })).rejects.toThrow('Only demand accounting')
 	})

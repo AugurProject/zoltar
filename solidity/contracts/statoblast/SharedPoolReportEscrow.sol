@@ -2,7 +2,8 @@
 pragma solidity 0.8.35;
 
 import { OpenOracle } from './openOracle/OpenOracle.sol';
-import { IWeth9 } from './interfaces/IWeth9.sol';
+import { IERC20 } from '../IERC20.sol';
+import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { ReputationToken } from '../ReputationToken.sol';
 
 interface ISharedReportReceiver {
@@ -14,15 +15,16 @@ interface ISharedReportReceiver {
 /// @dev Concurrent reports must never share the reporter address: disputes credit
 /// the old reporter before settlement, independently of other games' lifecycles.
 contract SharedPoolReportEscrow {
+	using SafeERC20Ops for IERC20;
 	address public immutable feed;
 	address public immutable sponsor;
 	OpenOracle public immutable openOracle;
-	IWeth9 public immutable weth;
+	IERC20 public immutable weth;
 	ReputationToken public immutable reputationToken;
 	uint256 public reportId;
 	event ReportCompleted(uint256 indexed reportId, address indexed priceFeed, bool accepted);
 
-	constructor(address _sponsor, OpenOracle _openOracle, IWeth9 _weth, ReputationToken _reputationToken) {
+	constructor(address _sponsor, OpenOracle _openOracle, IERC20 _weth, ReputationToken _reputationToken) {
 		feed = msg.sender;
 		sponsor = _sponsor;
 		openOracle = _openOracle;
@@ -32,7 +34,7 @@ contract SharedPoolReportEscrow {
 
 	function start(OpenOracle.OracleGame calldata parameters) external payable returns (uint256) {
 		require(msg.sender == feed && reportId == 0, 'Report escrow already started');
-		require(weth.approve(address(openOracle), parameters.currentAmount1), 'Oracle WETH approval failed');
+		weth.safeApprove(address(openOracle), parameters.currentAmount1);
 		require(reputationToken.approve(address(openOracle), parameters.currentAmount2), 'Oracle REP approval failed');
 		reportId = openOracle.report{value: msg.value}(parameters, false, false, OpenOracle.TimingBoundaries({blockNumber: 0, blockNumberBound: 0, blockTimestamp: 0, blockTimestampBound: 0}));
 		return reportId;

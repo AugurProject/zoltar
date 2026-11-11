@@ -47,7 +47,7 @@ export const marketGuideSteps = [
 	{
 		number: '01',
 		title: 'Create a complete set',
-		description: 'Your ETH is sent to the selected Statoblast security pool, which creates equal amounts of Yes, No, and Invalid shares at its current collateral rate.',
+		description: 'Your collateral is sent to the selected Statoblast security pool, which creates equal amounts of Yes, No, and Invalid shares at its current collateral rate.',
 	},
 	{
 		number: '02',
@@ -62,14 +62,14 @@ export const marketGuideSteps = [
 	{
 		number: '04',
 		title: 'Exit an insured amount',
-		description: 'The router buys the missing opposite share, combines a complete set, and redeems it for ETH at the current collateral rate.',
+		description: 'The router buys the missing opposite share, combines a complete set, and redeems it for collateral at the current collateral rate.',
 	},
 ] as const
 export const priceMeaningTitle = 'What the price means'
 export const priceMeaningDescription = 'Conditional Yes and No prices sum to 100% because the trading pool compares only valid outcomes. This does not say Invalid has zero probability; the trading pool has no invalidity estimate at all.'
 export const shareValueTitle = 'How share amounts are shown'
 export const shareValueDescription =
-	'Token quantities stay unchanged as holding fees reduce their ETH backing. A complete set contains equal amounts of Yes, No, and Invalid and redeems at the current collateral rate. An individual outcome pays that amount only if the question resolves to it, and pays 0 ETH otherwise. ETH values shown for outcomes are conditional payouts, not sale quotes. LP quantities represent a share of the trading pool; their underlying Yes and No claims are shown separately. Deposit and redemption inputs use ETH; LP removal inputs use LP quantities.'
+	'Token quantities stay unchanged as holding fees reduce their collateral backing. A complete set contains equal amounts of Yes, No, and Invalid and redeems at the current collateral rate. An individual outcome pays that amount only if the question resolves to it, and pays no collateral otherwise. Collateral values shown for outcomes are conditional payouts, not sale quotes. LP quantities represent a share of the trading pool; their underlying Yes and No claims are shown separately. Deposit and redemption inputs use collateral; LP removal inputs use LP quantities.'
 export const pricesAndPayoutsTitle = 'Prices and payouts'
 export const tasksTitle = 'Common tasks'
 export const findMarketTitle = 'Find a market'
@@ -84,7 +84,7 @@ export const resolutionLink = 'Guide: after resolution'
 export const forkLink = 'Guide: after a fork'
 export const remainingSharesTitle = 'Why profit can remain as shares'
 export const remainingSharesDescription =
-	'An insured ETH exit requires one Invalid share for every complete set redeemed. If a profitable position contains more directional shares than matching Invalid shares, the excess remains transferable but cannot be converted into complete sets without acquiring more Invalid shares. After resolution, those excess shares redeem collateral only if the question resolved to their outcome.'
+	'An insured exit requires one Invalid share for every complete set redeemed. If a profitable position contains more directional shares than matching Invalid shares, the excess remains transferable but cannot be converted into complete sets without acquiring more Invalid shares. After resolution, those excess shares redeem collateral only if the question resolved to their outcome.'
 
 export function documentTitle(pageTitle: string) {
 	return `${pageTitle} · ${appName}`

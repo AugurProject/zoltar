@@ -47,7 +47,6 @@ export const shares = 'Shares'
 export const poolResolutionRequired = 'Wait for the selected pool to resolve before redeeming shares.'
 export const yourHoldings = 'Your holdings'
 export const noSharesHeld = 'You hold no shares in this pool.'
-export const walletEth = 'Wallet ETH'
 export const availableToMint = 'Available to mint'
 
 export const forkDetailsUnavailable = 'Fork details unavailable. Refresh pool to retry.'

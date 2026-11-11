@@ -1,3 +1,4 @@
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { abiForKind } from './abi-catalog.ts'
 import { sampleClaimPositions } from './claim-snapshots.ts'
 import { type Abi, type AbiValue, type Address, getAddress } from './ethereum.ts'
@@ -70,12 +71,31 @@ const poolSnapshot = async (target: StateSnapshotTarget, read: StateRead): Promi
 		settlementCollateralAttoEth: exact(values[0], 'settlementCollateralAttoEth'),
 		questionSettlementAttoEth: settlement,
 		// Average value avoids requesting a whole share when less than one remains.
-		averageValueAttoEthPerShare: BigInt(supply) === 0n ? '0' : ((BigInt(settlement) * 10n ** 18n) / BigInt(supply)).toString(),
+		averageValueAttoEthPerShare: undefined,
 		systemState: exact(values[1], 'systemState'),
 		awaitingForkContinuation: flag(values[2], 'awaitingForkContinuation'),
 		escalationResolved: flag(values[3], 'isEscalationResolved'),
 		shareTokenSupplyAttoShares: supply,
 		securityMultiplierBps: exact(values[5], 'statoblastSecurityMultiplierBps'),
+	}
+	// ERC20 metadata is optional. A failed metadata read must not erase an otherwise valid accounting snapshot.
+	try {
+		const factory = getAddress(String(await read(address, poolAbi, 'securityPoolFactory')))
+		const portfolio = getAddress(String(await read(factory, snapshotAbi('securityPoolFactory'), 'getSecurityPoolPortfolio', [address])))
+		const token = getAddress(String(await read(portfolio, snapshotAbi('securityPoolPortfolio'), 'collateralToken')))
+		try {
+			const [symbol, units] = await Promise.all([read(token, snapshotAbi('iERC20Metadata'), 'symbol'), read(token, snapshotAbi('iERC20Metadata'), 'decimals')])
+			const decimals = Number(units)
+			if (typeof symbol !== 'string' || symbol.trim() === '' || !Number.isInteger(decimals) || decimals < 0 || decimals > 255) throw new Error('Invalid collateral metadata')
+			result['collateral'] = { address: token.toLowerCase(), symbol, decimals }
+			result['averageValueAttoEthPerShare'] = BigInt(supply) === 0n ? '0' : ((BigInt(settlement) * 10n ** BigInt(decimals)) / BigInt(supply)).toString()
+		} catch (error) {
+			result['collateralMetadataError'] = errorMessage(error)
+			result['collateral'] = { address: token.toLowerCase(), symbol: 'collateral units', decimals: 0 }
+		}
+	} catch (error) {
+		result['collateralMetadataError'] = errorMessage(error)
+		// Browser presentation uses explicit raw collateral units until token identity can be sampled.
 	}
 	if (target.coordinatorAddress !== undefined) {
 		const coordinator = target.coordinatorAddress

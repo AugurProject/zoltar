@@ -4,7 +4,7 @@ export { loadPortfolioAuctionSnapshot, type PortfolioAuctionSnapshot, type Portf
 
 const abi = parseAbi([
 	'function open()',
-	'function submitBid(uint256 lots,uint256 minimumAttoRepPerLot,uint256 targetHealthFactorBps) payable returns (uint256 bidId,address vault)',
+	'function submitBid(uint256 lots,uint256 minimumAttoRepPerLot,uint256 targetHealthFactorBps) returns (uint256 bidId,address vault)',
 	'function settleRefund(uint256 bidId)',
 	'function materializeAuctionBid(uint256 bidId) returns (address vault,uint96 positionId)',
 	'function withdrawRefunds(address recipient)',
@@ -34,7 +34,7 @@ function requireAuction(snapshot: PortfolioAuctionSnapshot) {
 /** Opening requires a funded observation; it cannot guarantee later profitability. */
 export function portfolioAuctionOpeningReason(snapshot: PortfolioAuctionSnapshot): string | undefined {
 	const auction = snapshot.auction
-	if (auction === undefined) return 'Start a branch with saleable REP and an ETH shortfall first.'
+	if (auction === undefined) return 'Start a branch with saleable REP and an collateral shortfall first.'
 	if (auction.finalized) return 'This auction is finalized.'
 	if (auction.opened) return 'This auction is already open.'
 	if (snapshot.timestamp >= auction.closesAt) return 'The auction window has closed.'
@@ -42,10 +42,10 @@ export function portfolioAuctionOpeningReason(snapshot: PortfolioAuctionSnapshot
 	if (auction.targetLots === 0n || auction.inventoryAttoRep === 0n) return 'This branch has no saleable auction lots.'
 	const price = auction.price
 	if (price === undefined || price.lastSettlementTimestamp === 0n || price.lastSettlementTimestamp > snapshot.timestamp || price.validUntil <= snapshot.timestamp || price.conservativePrice === 0n) return 'Accept a fresh branch REP price report first.'
-	if (price.exposureLimitAttoEth < price.requiredExposureAttoEth || price.exposureLimitAttoRep < auction.inventoryAttoRep) return 'The price report must cover the branch ETH exposure and auction REP inventory.'
+	if (price.exposureLimitAttoEth < price.requiredExposureAttoEth || price.exposureLimitAttoRep < auction.inventoryAttoRep) return 'The price report must cover the branch collateral exposure and auction REP inventory.'
 	const requiredBase = ceilDiv(auction.lotAttoEth * price.conservativePrice, ATTO_UNITS)
 	const requiredCollateral = ceilDiv(ceilDiv(requiredBase * auction.securityMultiplierBps, BPS), auction.repGrid) * auction.repGrid
-	if (requiredCollateral > auction.inventoryAttoRep) return 'The auction inventory cannot back one ETH lot at the minimum health target.'
+	if (requiredCollateral > auction.inventoryAttoRep) return 'The auction inventory cannot back one collateral lot at the minimum health target.'
 	return undefined
 }
 export function buildPortfolioAuctionOpenRequest(snapshot: PortfolioAuctionSnapshot) {
@@ -54,7 +54,7 @@ export function buildPortfolioAuctionOpenRequest(snapshot: PortfolioAuctionSnaps
 	return { account: snapshot.bidder, to: requireAuction(snapshot).address, value: 0n, data: encodeFunctionData({ abi, functionName: 'open' }) }
 }
 type PortfolioAuctionBidTerms = { lots: bigint; minimumAttoRepPerLot: bigint; targetHealthFactorBps: bigint }
-/** Every bid funds only the exact ETH lots. */
+/** Every bid funds only the exact collateral lots. */
 export function quotePortfolioAuctionBid(snapshot: PortfolioAuctionSnapshot, terms: PortfolioAuctionBidTerms) {
 	const auction = requireAuction(snapshot)
 	if (!auction.opened || auction.finalized || snapshot.timestamp >= auction.closesAt || snapshot.forkTime !== 0n) throw new Error('This auction is not accepting bids.')
@@ -68,7 +68,7 @@ export function quotePortfolioAuctionBid(snapshot: PortfolioAuctionSnapshot, ter
 	const requiredSecurity = ceilDiv(requiredBase * auction.securityMultiplierBps, BPS)
 	const requiredPrincipalPerLotAttoRep = uint(ceilDiv(ceilDiv(requiredSecurity * targetHealthFactorBps, BPS), auction.repGrid) * auction.repGrid, 'Required REP per lot')
 	if (minimumAttoRepPerLot < requiredPrincipalPerLotAttoRep) throw new Error(`Increase the minimum REP per lot to at least ${formatEther(requiredPrincipalPerLotAttoRep)} REP for the chosen health target.`)
-	const bidAttoEth = uint(lots * auction.lotAttoEth, 'Bid ETH', 128)
+	const bidAttoEth = uint(lots * auction.lotAttoEth, 'Bid collateral', 128)
 	uint(auction.depositedAttoEth + bidAttoEth, 'Total auction bid escrow', 128)
 	return {
 		...terms,
@@ -81,8 +81,9 @@ export function quotePortfolioAuctionBid(snapshot: PortfolioAuctionSnapshot, ter
 export function buildPortfolioAuctionBidRequest(snapshot: PortfolioAuctionSnapshot, terms: PortfolioAuctionBidTerms) {
 	const auction = requireAuction(snapshot)
 	const quote = quotePortfolioAuctionBid(snapshot, terms)
-	if (snapshot.walletAttoEth < quote.bidAttoEth) throw new Error('Insufficient ETH for the bid.')
-	return { account: snapshot.bidder, to: auction.address, value: quote.bidAttoEth, data: encodeFunctionData({ abi, functionName: 'submitBid', args: [quote.lots, quote.minimumAttoRepPerLot, quote.targetHealthFactorBps] }) }
+	if (snapshot.collateralAllowance < quote.bidAttoEth) throw new Error('Collateral approval required.')
+	if (snapshot.walletCollateral < quote.bidAttoEth) throw new Error('Insufficient collateral for the bid.')
+	return { account: snapshot.bidder, to: auction.address, value: 0n, data: encodeFunctionData({ abi, functionName: 'submitBid', args: [quote.lots, quote.minimumAttoRepPerLot, quote.targetHealthFactorBps] }) }
 }
 export function buildPortfolioAuctionMaterializeRequest(snapshot: PortfolioAuctionSnapshot, bidId: bigint) {
 	const auction = requireAuction(snapshot)
@@ -94,7 +95,7 @@ export function buildPortfolioAuctionRefundCreditRequest(snapshot: PortfolioAuct
 	const auction = requireAuction(snapshot)
 	const bid = auction.bids.find(candidate => candidate.id === uint(bidId, 'Bid ID'))
 	if (bid === undefined || bid.refundSettled) throw new Error('Choose an unsettled bid from this auction page.')
-	if (!auction.finalized && bid.earlyRefundAttoEth === 0n) throw new Error('This bid may still win. Its ETH remains committed until closing.')
+	if (!auction.finalized && bid.earlyRefundAttoEth === 0n) throw new Error('This bid may still win. Its collateral remains committed until closing.')
 	return { account: snapshot.bidder, to: auction.address, value: 0n, data: encodeFunctionData({ abi, functionName: 'settleRefund', args: [bidId] }) }
 }
 export function buildPortfolioAuctionRefundWithdrawRequest(snapshot: PortfolioAuctionSnapshot, recipient: Address) {
@@ -113,9 +114,9 @@ export function quotePortfolioAuctionRefundClaim(snapshot: PortfolioAuctionSnaps
 	let bidRefundAttoEth = 0n
 	if (!bid.refundSettled) {
 		if (auction.finalized) bidRefundAttoEth = bid.fill?.refundAttoEth ?? 0n
-		else if (bid.earlyRefundAttoEth === 0n) throw new Error('This bid may still win. Its ETH remains committed until closing.')
+		else if (bid.earlyRefundAttoEth === 0n) throw new Error('This bid may still win. Its collateral remains committed until closing.')
 		else bidRefundAttoEth = bid.earlyRefundAttoEth
-		if (bidRefundAttoEth === 0n) throw new Error('This bid has no unused ETH to refund.')
+		if (bidRefundAttoEth === 0n) throw new Error('This bid has no unused collateral to refund.')
 	}
 	const creditedAttoEth = auction.refundAttoEth
 	const totalAttoEth = creditedAttoEth + bidRefundAttoEth
@@ -132,13 +133,13 @@ export function buildPortfolioAuctionVaultExecuteRequest(parameters: { bidder: A
 	const vault = address(parameters.vault, 'Auction vault')
 	if (address(parameters.request.account, 'Capital account') !== vault) throw new Error('The capital transaction must belong to the selected auction vault.')
 	if (!isHex(parameters.request.data, { strict: true }) || parameters.request.data.length % 2 !== 0) throw new Error('Vault call data must contain whole hexadecimal bytes.')
-	const value = uint(parameters.request.value, 'Forwarded ETH')
+	const value = uint(parameters.request.value, 'Forwarded collateral')
 	const target = address(parameters.request.to, 'Vault target')
 	const data =
 		parameters.sweep === undefined
 			? encodeFunctionData({ abi, functionName: 'execute', args: [target, value, parameters.request.data] })
 			: encodeFunctionData({ abi, functionName: 'executeAndSweep', args: [target, value, parameters.request.data, address(parameters.sweep.repToken, 'Sweep REP token'), address(parameters.sweep.recipient, 'Sweep recipient')] })
-	return { account: address(parameters.bidder, 'Vault owner'), to: vault, value: uint(parameters.fundingAttoEth ?? value, 'Wallet ETH funding'), data }
+	return { account: address(parameters.bidder, 'Vault owner'), to: vault, value: uint(parameters.fundingAttoEth ?? value, 'Wallet collateral funding'), data }
 }
 /** The vault pulls the exact approved REP amount from its owner before depositing. */
 export function buildPortfolioAuctionVaultDepositRequest(parameters: { bidder: Address; vault: Address; capitalLedger: Address; amountAttoRep: bigint; targetHealthFactorBps: bigint }) {

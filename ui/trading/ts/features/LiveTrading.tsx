@@ -459,6 +459,7 @@ export function LiveTrading({
 								{activeView === 'trade' && selectedPairInitialized ? (
 									<LivePositionControls
 										market={selected}
+										fundingContext={workflowPanelProps}
 										nowSeconds={nowSeconds}
 										settings={tradeSettings}
 										onSettingsChange={onTradeSettingsChange}

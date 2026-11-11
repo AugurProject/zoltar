@@ -3,6 +3,9 @@ import type { PortfolioReadClient } from './securityPoolPortfolioRead.js'
 import { predictAuctionVaultAddress } from './securityPoolAuctionVaultClones.js'
 
 const abi = parseAbi([
+	'function collateralToken() view returns (address)',
+	'function balanceOf(address owner) view returns (uint256)',
+	'function allowance(address owner,address spender) view returns (uint256)',
 	'function factory() view returns (address)',
 	'function forkController() view returns (address)',
 	'function portfolio() view returns (address)',
@@ -99,13 +102,13 @@ export async function loadPortfolioAuctionSnapshot(parameters: { client: Auction
 	if (block.number === undefined || block.hash === undefined || !Number.isSafeInteger(chainId) || chainId <= 0) throw new Error('Auction snapshot requires a confirmed block and chain.')
 	const blockNumber = block.number
 	const read = (target: Address, functionName: string, args: readonly AbiValue[] = []) => client.readContract({ address: target, abi, functionName, args, blockNumber })
-	const [controllerValue, protocolValue, factoryValue, capitalValue, feedValue, walletEth] = await Promise.all([
+	const [controllerValue, protocolValue, factoryValue, capitalValue, feedValue, collateralValue] = await Promise.all([
 		read(portfolio, 'forkController'),
 		read(portfolio, 'zoltar'),
 		read(portfolio, 'factory'),
 		read(portfolio, 'capitalLedger', [universeId]),
 		read(portfolio, 'priceFeed', [universeId]),
-		client.getBalance({ address: bidder, blockNumber }),
+		read(portfolio, 'collateralToken'),
 	])
 	const controller = address(controllerValue, 'Fork controller')
 	const zoltar = address(protocolValue, 'Protocol')
@@ -116,7 +119,27 @@ export async function loadPortfolioAuctionSnapshot(parameters: { client: Auction
 	if (address(authorityValue, 'Fork authority') !== portfolio || address(controllerProtocol, 'Fork protocol') !== zoltar) throw new Error('Auction fork controller belongs to another portfolio.')
 	const auctionAddress = address(auctionValue, 'Auction', true)
 	const repToken = address(tokenValue, 'Branch REP', true)
-	const base = { chainId, blockNumber, blockHash: block.hash, timestamp: block.timestamp, portfolio, bidder, universeId, controller, zoltar, factory, capitalLedger, priceFeed, repToken, walletAttoEth: uint(walletEth, 'Wallet ETH'), forkTime: uint(forkTimeValue, 'Fork time') }
+	const collateralToken = address(collateralValue, 'Collateral token')
+	const [balanceValue, allowanceValue] = await Promise.all([read(collateralToken, 'balanceOf', [bidder]), auctionAddress === zeroAddress ? 0n : read(collateralToken, 'allowance', [bidder, auctionAddress])])
+	const base = {
+		collateralToken,
+		walletCollateral: uint(balanceValue, 'Wallet collateral'),
+		collateralAllowance: uint(allowanceValue, 'Collateral allowance'),
+		chainId,
+		blockNumber,
+		blockHash: block.hash,
+		timestamp: block.timestamp,
+		portfolio,
+		bidder,
+		universeId,
+		controller,
+		zoltar,
+		factory,
+		capitalLedger,
+		priceFeed,
+		repToken,
+		forkTime: uint(forkTimeValue, 'Fork time'),
+	}
 	let auction: Awaited<ReturnType<typeof readAuction>> | undefined
 	if (auctionAddress !== zeroAddress) {
 		if (capitalLedger === zeroAddress || repToken === zeroAddress) throw new Error('Auction capital or REP is unavailable.')

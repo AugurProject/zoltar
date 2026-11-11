@@ -91,6 +91,6 @@ describe('Statoblast: pluggable question admission', () => {
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: coordinator, functionName: 'finalizeBranch', args: [child] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: nativeForkArtifact.abi, address: getInfraContractAddresses().securityPoolForker, functionName: 'preparePortfolioQuestion', args: [parent, child] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: policyArtifact.abi, address: policy, functionName: 'setState', args: [false, false] }))
-		await expect(owner.writeContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'createCompleteSet', args: [child, fixture.secondQuestionId, unit, owner.account.address, 0n], value: 2n * unit })).rejects.toThrow('Question rejected by admission policy')
+		await expect(owner.writeContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'createCompleteSet', args: [child, fixture.secondQuestionId, unit, owner.account.address, 0n, 2n * unit - unit], value: 0n })).rejects.toThrow('Question rejected by admission policy')
 	})
 })

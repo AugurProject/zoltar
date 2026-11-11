@@ -1,3 +1,4 @@
+import { formatCollateralAmount } from '../protocol/collateral.js'
 import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
@@ -10,9 +11,7 @@ import { MarketOddsBar } from '../components/MarketOddsBar.js'
 import { MarketResolution } from '../components/MarketResolution.js'
 import * as appCopy from '../copy/app.js'
 import { liveCopy } from '../copy/live.js'
-import { formatEthAmount } from '../copy/outcomes.js'
 import { marketsCopy } from '../copy/markets.js'
-import { formatRoundedUnits } from '../lib/format.js'
 import { coarseDuration, marketLiquidityAttoEth, marketOddsPercent, marketPriceState } from '../lib/marketListing.js'
 import { getTradingRouteHref, type TradingListKind, type TradingLookupRoute } from '../lib/routing.js'
 import { marketTicketHref } from '../lib/routeState.js'
@@ -31,7 +30,7 @@ function marketRowActions(listKind: TradingListKind, lookupRoute: TradingLookupR
 
 export function formatMarketLiquidity(market: LiveMarket) {
 	const liquidity = marketLiquidityAttoEth(market)
-	return liquidity === undefined ? undefined : formatEthAmount(formatRoundedUnits(liquidity, 18, 4))
+	return liquidity === undefined ? undefined : formatCollateralAmount(liquidity, market)
 }
 
 /** A resolved market shows its outcome instead of a price; one that stopped trading shows its last price, muted. */

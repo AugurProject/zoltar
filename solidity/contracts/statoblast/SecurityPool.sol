@@ -201,28 +201,28 @@ contract SecurityPool is SecurityPoolStorage {
 			IPortfolioSettlement(address(portfolioAccounting)).quoteQuestionSettlement(address(this), amountAttoShares);
 	}
 
-	/// @notice Quotes the child REP paid alongside ETH when redeeming portfolio claims.
+	/// @notice Quotes the child REP paid alongside the configured collateral token when redeeming portfolio claims.
 	function attoSharesToAttoRep(uint256 amountAttoShares) external view returns (uint256) {
 		return
 			IPortfolioSettlement(address(portfolioAccounting)).quoteQuestionRecoveryRep(address(this), amountAttoShares);
 	}
 
-	/// @notice Quotes shares for attoETH from the portfolio's central settlement book.
+	/// @notice Quotes shares for raw collateral units from the portfolio's central settlement book.
 	function attoEthToAttoShares(uint256 amountAttoEth) public view returns (uint256) {
 		return IPortfolioSettlement(address(portfolioAccounting)).quoteQuestionMint(address(this), amountAttoEth);
 	}
 
 	// Complete Sets
-	/// @notice Mints complete sets to the caller for `msg.value` of settlement collateral while no escalation game exists.
-	function createCompleteSet() external payable isOperational {
-		bytes memory result = DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(SecurityPoolSettlementDelegate.createCompleteSet, ()));
+	/// @notice Mints complete sets through the authorized portfolio purchase path for `cash` raw collateral units while no escalation game exists.
+	function createCompleteSet(uint256 cash) external isOperational {
+		bytes memory result = DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(SecurityPoolSettlementDelegate.createCompleteSet, (cash)));
 		uint256 completeSetsToMintAttoShares = abi.decode(result, (uint256));
 		_emitPoolAccountingCheckpoint(AccountingReason.CollateralReconciliation);
 		shareToken.mintCompleteSets(universeId, msg.sender, completeSetsToMintAttoShares);
 		updateRetentionRate();
 	}
 
-	/// @notice Burns `amountAttoShares` complete sets from the caller and sends the matching settlement collateral in ETH.
+	/// @notice Burns `amountAttoShares` complete sets from the caller and sends the matching settlement collateral in the configured token.
 	/// @dev Complete-set exits use the current collateral-per-share rate after fee
 	/// accrual, preserving the exchange rate for remaining complete sets.
 	function redeemCompleteSet(uint256 amountAttoShares) external isOperational {
@@ -234,7 +234,7 @@ contract SecurityPool is SecurityPoolStorage {
 		_emitPoolAccountingCheckpoint(AccountingReason.CollateralReconciliation);
 	}
 
-	/// @notice Burns the caller's winning-outcome shares after finalization and sends their settlement collateral in ETH.
+	/// @notice Burns the caller's winning-outcome shares after finalization and sends their settlement collateral in the configured token.
 	function redeemShares() external {
 		require(systemState == SystemState.Operational, 'Pool inactive');
 		updateSettlementCollateral();
@@ -351,7 +351,7 @@ contract SecurityPool is SecurityPoolStorage {
 		shareToken.authorize(pool);
 	}
 
-	/// @notice Portfolio pools also accept refunded stream collateral; unsolicited ETH creates no claim.
+	/// @notice Accepts native ETH without creating a settlement-collateral claim.
 	receive() external payable {
 		require(portfolioCustody != address(0) || msg.sender == securityPoolForker || msg.sender == truthAuction || msg.sender == address(parent), 'Bad ETH sender');
 		emit EthReceived(msg.sender, msg.value);
