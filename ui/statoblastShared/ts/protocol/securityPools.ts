@@ -141,13 +141,12 @@ export async function loadRegisteredPortfolios(client: ReadClient, universeId: b
 	const anchor = await loadDeploymentRegistryAnchor(client)
 	const portfolios = await loadPortfolioRegistry(client, anchor)
 	const listings = new Map<Address, RegisteredPortfolio>()
+	// Every request ends with this call. A call starved of gas takes almost all that is left with it, so when this one
+	// succeeds, no call before it was starved and each failed address failed on its own.
+	const gasWitness = { address: getInfraContractAddresses().securityPoolFactory, abi: securityPoolFactoryAbi, functionName: 'portfolioCount', args: [] }
 	const read = async (addresses: readonly Address[]): Promise<readonly ListingRead[] | undefined> => {
 		try {
-			return await readOptionalMulticall(
-				client,
-				addresses.flatMap(portfolio => portfolioListingCalls(portfolio, universeId)),
-				anchor.blockNumber,
-			)
+			return await readOptionalMulticall(client, [...addresses.flatMap(portfolio => portfolioListingCalls(portfolio, universeId)), gasWitness], anchor.blockNumber)
 		} catch (error) {
 			// Only a failure the node reports for the calls is put down to a registered contract; anything else fails the list.
 			if (!isExecutionFailure(error)) throw error
@@ -163,8 +162,9 @@ export async function loadRegisteredPortfolios(client: ReadClient, universeId: b
 			const listing = answered[index] ? portfolioListing(portfolio, reads?.[2 * index], reads?.[2 * index + 1]) : undefined
 			if (listing !== undefined) listings.set(portfolio, listing)
 		}
-		// A call that failed before a later call succeeded still had gas, so its address failed on its own and is skipped.
-		// The calls after the last success may have been starved by an earlier contract, so they are read again.
+		if (reads?.[2 * addresses.length]?.status === 'success') return
+		// Otherwise a call that failed before a later success still had gas, so its address failed on its own and is
+		// skipped. The calls after the last success may have been starved by an earlier contract, so they are read again.
 		const unanswered = addresses.slice(answered.lastIndexOf(true) + 1)
 		if (unanswered.length === 0 || addresses.length === 1) return
 		if (unanswered.length < addresses.length) return await settle(unanswered)
