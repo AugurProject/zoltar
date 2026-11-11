@@ -61,13 +61,13 @@
 						<li>First REP deposit starts the <a href="./escalation-game.html">Escalation Game</a></li>
 						<li>Local resolution or Zoltar fork</li>
 						<li>Choose branches and materialize child claims</li>
-						<li>Repair missing collateral through a <a href="../reference/glossary.html#truth-auction">Truth Auction</a></li>
+						<li>Repair missing collateral through a <a href="../reference/glossary.html#collateral-repair-auction">Collateral Repair Auction</a></li>
 						<li>Redeem</li>
 					</ol>
 					<figcaption id="market-lifecycle-caption"><span class="figure-label">Market lifecycle.</span> The ordinary path resolves locally and skips the migration and repair steps. The fork path creates one child pool per answer and uses shared repair accounting and a branch auction for each portfolio child.</figcaption>
 				</figure>
 				<p>Reporters stake REP behind an answer in the pool's <a href="./escalation-game.html">Escalation Game</a>, a dispute round whose deadline moves later as the contested amount grows. When the deadline finally passes, the market resolves if exactly one answer holds more REP than every other, and winning shares redeem the question’s backing from central settlement custody. Usually that is the end of the story.</p>
-				<p>If two answers reach the <a href="../reference/glossary.html#non-decision-threshold">non-decision threshold</a>, the universe can split into Invalid, Yes and No children. Owners record their branch choices before the portfolio’s cutoff. Shared branch accounting migrates their capital without requiring a separate owner claim for every question. Shareholders can materialize claims in multiple children, but ETH is not duplicated. Each portfolio branch repairs its shortfall through a shared <a href="../reference/glossary.html#truth-auction">Truth Auction</a>; winning bidders become capital owners. <a href="./statoblast.html#forks-migration">Forks and migration</a> explains the process, and <a href="./zoltar.html#non-guarantees">what a fork does and does not promise</a> describes its limits.</p>
+				<p>If two answers reach the <a href="../reference/glossary.html#non-decision-threshold">non-decision threshold</a>, the universe can split into Invalid, Yes and No children. Owners record their branch choices before the portfolio’s cutoff. Shared branch accounting migrates their capital without requiring a separate owner claim for every question. Shareholders can materialize claims in multiple children, but ETH is not duplicated. Each portfolio branch repairs its shortfall through a shared <a href="../reference/glossary.html#collateral-repair-auction">Collateral Repair Auction</a>; winning bidders become capital owners. <a href="./statoblast.html#forks-migration">Forks and migration</a> explains the process, and <a href="./zoltar.html#non-guarantees">what a fork does and does not promise</a> describes its limits.</p>
 			</section>
 			<nav aria-label="Continue reading"><a href="./statoblast.html">Follow a market through Statoblast</a> · <a href="./zoltar.html">Understand branching universes</a> · <a href="../reference/glossary.html">Look up a term</a></nav>
 		</main>

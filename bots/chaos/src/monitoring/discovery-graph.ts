@@ -91,14 +91,14 @@ export function assertCanonicalPairGraph(identity: PairGraphIdentity) {
 	if (identity.pairUniverseId !== identity.poolUniverseId || identity.pairQuestionId !== identity.poolQuestionId) throw new Error(`Pair ${identity.pair} immutable question identity does not match pool ${identity.pool}`)
 }
 
-export function cachePoolDeployment(deployment: { parent: Address; openOraclePriceCoordinator: Address; questionId: bigint; securityPool: Address; shareToken: Address; truthAuction: Address; universeId: bigint }): CachedPoolDeployment {
+export function cachePoolDeployment(deployment: { parent: Address; openOraclePriceCoordinator: Address; questionId: bigint; securityPool: Address; shareToken: Address; collateralRepairAuction: Address; universeId: bigint }): CachedPoolDeployment {
 	return {
 		coordinator: getAddress(deployment.openOraclePriceCoordinator),
 		parent: getAddress(deployment.parent),
 		questionId: deployment.questionId.toString(),
 		securityPool: getAddress(deployment.securityPool),
 		shareToken: getAddress(deployment.shareToken),
-		truthAuction: getAddress(deployment.truthAuction),
+		collateralRepairAuction: getAddress(deployment.collateralRepairAuction),
 		universeId: deployment.universeId.toString(),
 	}
 }

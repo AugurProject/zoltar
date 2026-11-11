@@ -74,7 +74,7 @@ export const contractSafetyPolicy = {
 			reason: 'Pool accounting events and fee accrual read these exact SecurityPool slots through the shared storage base.',
 			anchors: [
 				{ label: 'settlementCollateralAttoEth', slot: '1', offset: 0, typeLabel: 'uint256' },
-				{ label: 'lastUpdatedFeeAccumulator', slot: '4', offset: 0, typeLabel: 'uint256' },
+				{ label: 'lastSettlementPortfolioTime', slot: '4', offset: 0, typeLabel: 'uint256' },
 			],
 		},
 	] satisfies readonly AnchoredLayout[],

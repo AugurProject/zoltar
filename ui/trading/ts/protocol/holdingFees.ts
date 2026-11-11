@@ -15,7 +15,7 @@ export type FeeAccounting = Readonly<{
 	totalUnderwritingLimitAttoEth: bigint
 	feeEligibleUnderwritingLimitAttoEth: bigint
 	currentRetentionRate: bigint
-	lastUpdatedFeeAccumulator: bigint
+	lastFeeCheckpointNativeTime: bigint
 	feeIndexRemainder: bigint
 	totalFeesOwedRemainder: bigint
 }>

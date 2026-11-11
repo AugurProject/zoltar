@@ -17,7 +17,7 @@ import { addRepToMigrationBalance, forkUniverse, getRepTokenAddress, getUniverse
 import { approveToken, getChildUniverseId } from '../../testSupport/simulator/utils/utilities'
 import { unit, type useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
-export async function preparePortfolioTruthAuction(fixture: ReturnType<typeof useSecurityPoolPortfolioFixture>) {
+export async function preparePortfolioCollateralRepairAuction(fixture: ReturnType<typeof useSecurityPoolPortfolioFixture>) {
 	const owner = fixture.owner()
 	const other = fixture.other()
 	const mock = fixture.base.mockWindow
@@ -37,7 +37,7 @@ export async function preparePortfolioTruthAuction(fixture: ReturnType<typeof us
 	await mock.setTime(forkTime + 56n * DAY)
 	await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'startBranch', args: [source, 1n] }))
 	const auction = await owner.readContract({ abi: forkArtifact.abi, address: forks, functionName: 'auctions', args: [child] })
-	if (auction === zeroAddress) throw new Error('Truth auction was not created')
+	if (auction === zeroAddress) throw new Error('Collateral repair auction was not created')
 	const engine = await owner.readContract({ abi: auctionArtifact.abi, address: auction, functionName: 'engine' })
 	const capital = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'capitalLedger', args: [child] })
 	const index = await owner.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'commitmentIndex' })
@@ -57,7 +57,7 @@ export async function preparePortfolioTruthAuction(fixture: ReturnType<typeof us
 		const id = await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'pendingReportId' })
 		await mock.advanceTime(481n)
 		await openOracleSettle(owner, id)
-		if ((await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'reportOutcome', args: [id] })) !== 1n) throw new Error('Truth auction price report was not accepted')
+		if ((await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'reportOutcome', args: [id] })) !== 1n) throw new Error('Collateral repair auction price report was not accepted')
 	}
 	const open = () => writeContractAndWait(owner, () => owner.writeContract({ abi: auctionArtifact.abi, address: auction, functionName: 'open' }))
 	const bid = async (bidder: WriteClient, lots: bigint, price = 6n * unit, health = 12_000n) => {

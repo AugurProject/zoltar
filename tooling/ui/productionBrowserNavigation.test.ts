@@ -4,7 +4,7 @@ import { createProductionBrowserNavigation } from './productionBrowserNavigation
 test('a second navigation waits for a seeded bootstrap beyond the action timeout within the workflow budget', async () => {
 	let elapsed = 0
 	let navigated = false
-	const readDocument = async () => ({ body: navigated && elapsed < 180_000 ? 'BOOTSTRAPPING\nStarting seeded truth auction' : 'Browse pools', timeOrigin: navigated ? 2 : 1 })
+	const readDocument = async () => ({ body: navigated && elapsed < 180_000 ? 'BOOTSTRAPPING\nStarting seeded collateral repair auction' : 'Browse pools', timeOrigin: navigated ? 2 : 1 })
 	const browser = createProductionBrowserNavigation({
 		bootstrapTimeoutMilliseconds: 600_000,
 		navigateDocument: async () => {
@@ -103,12 +103,12 @@ test.each([125, 120_000])('unfinished bootstrap expires at the selected %dms bud
 		bootstrapTimeoutMilliseconds,
 		navigateDocument: async () => ({ startsNewDocument: false }),
 		now: () => elapsed,
-		readDocument: async () => ({ body: 'BOOTSTRAPPING\nStarting seeded truth auction', timeOrigin: 1 }),
+		readDocument: async () => ({ body: 'BOOTSTRAPPING\nStarting seeded collateral repair auction', timeOrigin: 1 }),
 		wait: async milliseconds => {
 			elapsed += milliseconds
 		},
 	})
-	await expect(browser.waitForReady()).rejects.toThrow('Starting seeded truth auction')
+	await expect(browser.waitForReady()).rejects.toThrow('Starting seeded collateral repair auction')
 	expect(elapsed).toBe(bootstrapTimeoutMilliseconds)
 })
 

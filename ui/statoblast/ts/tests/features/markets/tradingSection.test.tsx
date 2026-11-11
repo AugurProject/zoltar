@@ -67,8 +67,8 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		totalPoolHeldAttoRep: 0n,
 		totalUnderwritingLimitAttoEth: 5n * 10n ** 18n,
 		mintingCapacityAttoEth: overrides.totalUnderwritingLimitAttoEth ?? 5n * 10n ** 18n,
-		truthAuctionAddress: zeroAddress,
-		truthAuctionStartedAt: 0n,
+		collateralRepairAuctionAddress: zeroAddress,
+		collateralRepairAuctionStartedAt: 0n,
 		universeHasForked: false,
 		universeId: 1n,
 		vaultCount: 0n,
@@ -277,7 +277,7 @@ void describe('TradingSection', () => {
 			settlementCollateralAttoEth: 10n ** 18n,
 			shareTokenSupplyAttoShares: 10n ** 18n,
 			totalUnderwritingLimitAttoEth: 10n ** 18n,
-			feeAccrualState: { linearFee: { rateAttoEthPerSecond: 0n, endTime: 100n }, lastUpdatedFeeAccumulator: 0n, feeEndTimestamp: 100n, feeIndexRemainder: 0n, totalFeesOwedRemainder: 0n },
+			feeAccrualState: { linearFee: { rateAttoEthPerSecond: 0n, endTime: 100n }, lastFeeCheckpointNativeTime: 0n, feeEndTimestamp: 100n, feeIndexRemainder: 0n, totalFeesOwedRemainder: 0n },
 		})
 		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool, onCreateCompleteSet, tradingForm: createTradingForm({ completeSetAmount: '0.1' }) })} />)
 		cleanupRenderedComponent = rendered.cleanup
@@ -721,7 +721,7 @@ void describe('TradingSection', () => {
 						selectedPool: createSelectedPool({
 							currentRetentionRate: 900_000_000_000_000_000n,
 							marketDetails: { ...createMarketDetails(), endTime: 1n },
-							feeAccrualState: { feeEndTimestamp: 200n, feeIndexRemainder: 0n, lastUpdatedFeeAccumulator: 1n, totalFeesOwedRemainder: 0n },
+							feeAccrualState: { feeEndTimestamp: 200n, feeIndexRemainder: 0n, lastFeeCheckpointNativeTime: 1n, totalFeesOwedRemainder: 0n },
 							settlementCollateralAttoEth: 10n * 10n ** 18n,
 							shareTokenSupplyAttoShares: 10n * 10n ** 18n,
 							totalUnderwritingLimitAttoEth: 50n * 10n ** 18n,

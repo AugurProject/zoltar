@@ -58,14 +58,14 @@ test('feature stylesheets own their product rules and load after the shared shee
 	expect(zoltar).toStartWith('/* Zoltar feature styles:')
 	expect(zoltarQuestions).toStartWith('/* Zoltar question styles:')
 	expect(zoltarDeployment).toStartWith('/* Zoltar deployment route styles.')
-	for (const selector of ['.truth-auction-panel', '.escalation-sides', '.security-pool-strip', '.vault-workspace', '.liquidation-constraints', '.oracle-actions', '.fork-workflow-stage']) expect(statoblast).toContain(`${selector} {`)
+	for (const selector of ['.collateral-repair-auction-panel', '.escalation-sides', '.security-pool-strip', '.vault-workspace', '.liquidation-constraints', '.oracle-actions', '.fork-workflow-stage']) expect(statoblast).toContain(`${selector} {`)
 	for (const selector of ['.question-create-editor', '.question-preview', '.question-draft-preview']) expect(zoltarQuestions).toContain(`${selector} {`)
 	expect(zoltarDeployment).toContain('.deployment-contract-details {')
 	expect(zoltar).toContain('.categorical-outcomes {')
 	// Statoblast and Trading load only the Zoltar partials they render, so the Zoltar-only sheet must not carry rules they need.
 	for (const selector of ['.question-', '.deployment-']) expect(zoltar).not.toContain(`\n${selector}`)
 	const shared = ['base.css', 'simulation-banner.css', 'protocol-surfaces.css', 'application-surfaces.css', 'controls-and-responsive.css', 'visual-foundation.css', 'protocol-apps.css'].map(readStylesheet).join('\n')
-	for (const selector of ['.truth-auction-', '.escalation-side', '.security-pool-strip', '.vault-workspace', '.question-draft-preview', '.deployment-contract-details']) expect(shared).not.toContain(`\n${selector}`)
+	for (const selector of ['.collateral-repair-auction-', '.escalation-side', '.security-pool-strip', '.vault-workspace', '.question-draft-preview', '.deployment-contract-details']) expect(shared).not.toContain(`\n${selector}`)
 	// Narrow-viewport overrides for feature grids must follow their base rules, so they live in the owning sheet rather than the earlier-loaded shared sheet.
 	for (const selector of ['.security-pool-strip-stats', '.vault-preview-side-metrics', '.vault-detail-hero', '.vault-detail-stage', '.trading-share-callouts', '.escalation-metrics', '.fork-summary-grid', '.categorical-outcome-row', '.question-preview-meta', '.question-draft-preview-meta'])
 		expect(shared).not.toMatch(new RegExp(`\\n\\t?${selector.replaceAll('.', '\\.')}[,\\s{]`))

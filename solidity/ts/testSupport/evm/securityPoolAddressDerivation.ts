@@ -30,7 +30,7 @@ type SecurityPoolAddressConfig = {
 		securityPoolFactory: Address
 		securityPoolForker: Address
 		shareToken: Address
-		truthAuction: Address
+		collateralRepairAuction: Address
 		universeId: bigint
 		zoltar: Address
 		zoltarQuestionData: Address
@@ -89,7 +89,7 @@ export function createSecurityPoolAddressHelper(config: SecurityPoolAddressConfi
 			from: infraContracts.shareTokenFactory,
 			salt: originId,
 		})
-		const truthAuction = zeroAddress
+		const collateralRepairAuction = zeroAddress
 		const securityPool = getCreate2Address({
 			bytecode: config.getSecurityPoolInitCode({
 				escalationGameFactory: infraContracts.escalationGameFactory,
@@ -101,7 +101,7 @@ export function createSecurityPoolAddressHelper(config: SecurityPoolAddressConfi
 				securityPoolFactory: infraContracts.securityPoolFactory,
 				securityPoolForker: infraContracts.securityPoolForker,
 				shareToken,
-				truthAuction,
+				collateralRepairAuction,
 				universeId,
 				zoltar: infraContracts.zoltar,
 				zoltarQuestionData: infraContracts.zoltarQuestionData,
@@ -120,7 +120,7 @@ export function createSecurityPoolAddressHelper(config: SecurityPoolAddressConfi
 			openOraclePriceCoordinator,
 			securityPool,
 			shareToken,
-			truthAuction,
+			collateralRepairAuction,
 		}
 	}
 

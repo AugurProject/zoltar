@@ -37,8 +37,8 @@ postgresTest('advances the canonical coverage floor when RPC log history is prun
 			const replayableContract = {
 				address: rediscoveredAddress,
 				label: 'Discovery at retrievable floor',
-				kind: 'truthAuction',
-				provenance: 'Factory.DeployTruthAuction',
+				kind: 'collateralRepairAuction',
+				provenance: 'Factory.DeployCollateralRepairAuction',
 				discoveryBlock: 2n,
 				discoveryTxHash: transactionHash,
 			} satisfies ContractMetadata
