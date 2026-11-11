@@ -138,9 +138,9 @@ const outOfGas = (shared: boolean) => new RpcError(shared ? 'out of gas' : 'EVM 
  * answers nothing, and the partial one has a ledger but no question count. `batch` decides how a read of more than one
  * address treats the stranger: it fails alone, or it exhausts the shared gas so every later call fails, or the whole
  * request runs out of gas. Read on its own, the stranger's request runs out of gas and every other address answers for
- * itself. `unavailable` fails every request at the provider; `flaky` fails a lone read of `second` at the provider.
+ * itself. `unavailable` fails every request at the provider; `flaky` fails a lone read of `second` with `providerError`.
  */
-function registryClient(batch: 'isolated' | 'starving' | 'reverting' | 'unavailable' | 'flaky', more: readonly Address[] = []) {
+function registryClient(batch: 'isolated' | 'starving' | 'reverting' | 'unavailable' | 'flaky', { more = [], providerError = () => new RpcError('HTTP 502 while calling eth_call', { code: 502 }) }: { more?: readonly Address[]; providerError?: () => Error } = {}) {
 	const registry = [portfolio, stranger, second, partial, unopened, ...more]
 	const ledgers = new Map([[`${portfolio}:0`, capital], [`${second}:0`, token], [`${partial}:0`, token], [`${portfolio}:42`, token], ...more.map(address => [`${address}:0`, token] as const)])
 	const questionCounts = new Map([[portfolio, 2n], [second, 0n], [unopened, 0n], ...more.map(address => [address, 1n] as const)])
@@ -161,7 +161,7 @@ function registryClient(batch: 'isolated' | 'starving' | 'reverting' | 'unavaila
 			if (batch === 'unavailable') throw new RpcError('HTTP 503 while calling eth_call', { code: 503 })
 			const addresses = request.contracts.map(contract => getAddress(String(contract.address)))
 			const shared = new Set(addresses).size > 1
-			if (batch === 'flaky' && !shared && addresses.includes(second)) throw new RpcError('HTTP 502 while calling eth_call', { code: 502 })
+			if (batch === 'flaky' && !shared && addresses.includes(second)) throw providerError()
 			if (addresses.includes(stranger) && (!shared || batch === 'reverting' || batch === 'flaky')) throw outOfGas(shared)
 			const starvedFrom = shared && batch === 'starving' ? addresses.indexOf(stranger) : -1
 			return request.contracts.map((contract, index) => {
@@ -204,7 +204,7 @@ test.each([
 
 test('one failing contract among many registered portfolios costs a few requests, not one per portfolio', async () => {
 	const more = Array.from({ length: 35 }, (_, index) => getAddress(`0x${(0xd00 + index).toString(16).padStart(40, '0')}`))
-	const { client, batches } = registryClient('reverting', more)
+	const { client, batches } = registryClient('reverting', { more })
 	const listed = await loadRegisteredPortfolios(client, 0n)
 	expect(listed.map(entry => entry.portfolio)).toEqual([...more].reverse().concat([second, portfolio]))
 	expect(batches.length).toBeLessThanOrEqual(2 * Math.ceil(Math.log2(40)) + 1)
@@ -214,8 +214,13 @@ test('a provider that answers no portfolio read reports an error rather than an 
 	await expect(loadRegisteredPortfolios(registryClient('unavailable').client, 0n)).rejects.toThrow('HTTP 503')
 })
 
-test('a provider failure while reading an address again fails the list instead of dropping that portfolio', async () => {
-	await expect(loadRegisteredPortfolios(registryClient('flaky').client, 0n)).rejects.toThrow('HTTP 502')
+// A timeout and a node that lost the block are not execution failures, though neither carries an HTTP status.
+test.each([
+	['an HTTP error', new RpcError('HTTP 502 while calling eth_call', { code: 502 })],
+	['a timeout', new RpcError('The operation timed out.', { code: 23 })],
+	['a missing block', new RpcError('header not found', { code: -32_000 })],
+] as const)('%s while reading an address again fails the list instead of dropping that portfolio', async (_failure, error) => {
+	await expect(loadRegisteredPortfolios(registryClient('flaky', { providerError: () => error }).client, 0n)).rejects.toThrow(error.message)
 })
 
 test('a reorganization during the portfolio reads is reported as such', async () => {
