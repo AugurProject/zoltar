@@ -69,7 +69,13 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 	{
 		command: 'bun ./tooling/testing/bun-test.mts tooling/testing/coverage-report.test.ts',
 		reason: 'coverage collection, reporting, or policy changed',
-		matches: filePath => filePath === '.coverage-policy.json' || filePath === 'tooling/testing/coverage-report.mts' || filePath === 'tooling/testing/run-typescript-coverage.mts' || filePath === 'tooling/testing/run-solidity-bytecode-coverage.mts',
+		matches: filePath =>
+			filePath === '.coverage-policy.json' ||
+			filePath === 'tooling/testing/coverage-report.mts' ||
+			filePath === 'tooling/testing/lcov.mts' ||
+			filePath === 'tooling/testing/coverage-source-maps.mts' ||
+			filePath === 'tooling/testing/run-typescript-coverage.mts' ||
+			filePath === 'tooling/testing/run-solidity-bytecode-coverage.mts',
 	},
 	{
 		command: 'bun ./tooling/testing/bun-test.mts tooling/ui/ui-split-workflows.test.ts',

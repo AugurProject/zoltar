@@ -1,134 +1,38 @@
+import type { SimulationEngine } from './simulationEngineTypes.js'
+import { parseScenarioSnapshot } from './preparedScenarioSnapshot.js'
+import {
+	getSimulationChainState,
+	normalizeNonce,
+	applyTemporarySimulationAccountChanges,
+	normalizeRpcTransactionRequest,
+	isMissingTransactionReceiptError,
+	normalizeRequestedAccount,
+	submitSimulationTransaction,
+	clampDelayMilliseconds,
+	delayMilliseconds,
+	type SimulationSendTransactionRequest,
+	type TemporarySimulationAccountCopy,
+} from './simulationTransactions.js'
 import { createPublicClient, createWalletClient, custom, encodeFunctionData, getAddress, parseTransaction, publicActions, recoverTransactionAddress, type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { InjectedEthereum } from '../wallet/injectedEthereum.js'
-import type { ChainBackend, CreateWriteClientCallbacks, ReadClient, WriteClient } from '../wallet/chainBackend.js'
+import type { CreateWriteClientCallbacks, WriteClient } from '../wallet/chainBackend.js'
 import { withTransactionCallbacks } from './writeClientCallbacks.js'
 import { createSimulationProfile } from '../wallet/networkProfile.js'
 import type { GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
 import { bootstrapSimulationChain, mintSimulationGenesisRep, predictSimulationTokenAddresses, updateZoltarGenesisRepToken, type BootstrapScenarioApplyParameters } from './bootstrap.js'
-import { advanceSimulationTime, advanceNextSimulationBlock, initializeSimulationClock, type TevmLikeClient } from './clock.js'
-import { applyDumpedAccountState, applyDumpedStorageState, formatTevmErrors, requireSuccessfulDumpState, requireSuccessfulLoadState, type DumpedTevmState } from './dumpedState.js'
-import { createSimulationChain, type SimulationChain, type SimulationTransactionParameters } from './simulationChain.js'
+import { advanceSimulationTime, advanceNextSimulationBlock, initializeSimulationClock } from './clock.js'
+import { formatTevmErrors, requireSuccessfulLoadState, type DumpedTevmState } from './dumpedState.js'
+import { createSimulationChain, type SimulationTransactionParameters } from './simulationChain.js'
 import type { SimulationScenario } from './scenarios.js'
-import { getSimulationSource, parseSavedSimulationStateEnvelope, serializeSavedSimulationStateEnvelope, type SavedSimulationStateEnvelopeV1, type SimulationInitialization } from './savedStates.js'
+import { getSimulationSource, serializeSavedSimulationStateEnvelope, type SavedSimulationStateEnvelopeV1, type SimulationInitialization } from './savedStates.js'
 import { getBundledSimulationSnapshotKey } from './scenarioSnapshots.js'
 import { createSimulationProvider, type SimulationProviderRequest } from './simulationProvider.js'
 import type { SimulationBootstrapParameters, SimulationWorkerState } from './tevmWorkerProtocol.js'
 const QA_ACCOUNTS = [getAddress('0x00000000000000000000000000000000000000a1'), getAddress('0x00000000000000000000000000000000000000b2'), getAddress('0x00000000000000000000000000000000000000c3')] as const satisfies readonly Address[]
-type MemoryClientLike = TevmLikeClient
-type TemporarySimulationAccountCopy = {
-	address: Address
-	mode: 'full' | 'storage'
-}
 type RequestArguments = SimulationProviderRequest
-type TevmBlock = Awaited<ReturnType<MemoryClientLike['getBlock']>>
 type SerializedTransaction = Parameters<typeof recoverTransactionAddress>[0]['serializedTransaction']
-type SimulationSendTransactionRequest = {
-	account?: unknown
-	data?: Hex | undefined
-	gas?: bigint | undefined
-	gasPrice?: bigint | undefined
-	maxFeePerGas?: bigint | undefined
-	maxPriorityFeePerGas?: bigint | undefined
-	nonce?: bigint | number | undefined
-	to?: Address | null | undefined
-	value?: bigint | undefined
-}
 const DEFAULT_SIMULATION_REP_PER_ETH_PRICE = 3n * 10n ** 18n
 const DEFAULT_SIMULATION_REP_PER_USDC_PRICE = 10n ** 6n
-function normalizeRpcBigInt(value: unknown) {
-	if (typeof value === 'bigint') return value
-	if (typeof value === 'number') return BigInt(value)
-	if (typeof value === 'string') return BigInt(value)
-	return undefined
-}
-function normalizeRpcAddress(value: unknown) {
-	if (typeof value !== 'string') return undefined
-	return getAddress(value)
-}
-function normalizeRpcTransactionRequest(value: Record<string, unknown>): SimulationSendTransactionRequest {
-	return {
-		account: (() => {
-			if ('account' in value) return value['account']
-			if ('from' in value) return value['from']
-
-			return undefined
-		})(),
-		data: typeof value['data'] === 'string' ? (value['data'] as Hex) : undefined,
-		gas: normalizeRpcBigInt(value['gas']),
-		gasPrice: normalizeRpcBigInt(value['gasPrice']),
-		maxFeePerGas: normalizeRpcBigInt(value['maxFeePerGas']),
-		maxPriorityFeePerGas: normalizeRpcBigInt(value['maxPriorityFeePerGas']),
-		nonce: normalizeRpcBigInt(value['nonce']),
-		to: value['to'] === null ? null : normalizeRpcAddress(value['to']),
-		value: normalizeRpcBigInt(value['value']),
-	}
-}
-function isMissingTransactionReceiptError(error: unknown) {
-	if (!(error instanceof Error)) return false
-	return error.message.includes('Transaction receipt with hash') && error.message.includes('could not be found')
-}
-function normalizeRequestedAccount(value: unknown, fallbackAccount: Address) {
-	if (typeof value === 'string') return getAddress(value)
-	if (typeof value === 'object' && value !== null && 'address' in value) {
-		const address = value.address
-		if (typeof address === 'string') return getAddress(address)
-	}
-	return fallbackAccount
-}
-function normalizeNonce(value: bigint | number | undefined) {
-	if (value === undefined) return undefined
-	return typeof value === 'bigint' ? value : BigInt(value)
-}
-async function submitSimulationTransaction(chain: SimulationChain, from: Address, { data, gas, gasPrice, maxFeePerGas, maxPriorityFeePerGas, nonce, to, value }: SimulationSendTransactionRequest, label: string) {
-	const blockGasLimit = (await chain.memoryClient.getBlock()).gasLimit
-	return await chain.sendTransaction({ data: data ?? '0x', from, gas: gas ?? blockGasLimit, gasPrice, maxFeePerGas, maxPriorityFeePerGas, nonce: normalizeNonce(nonce), to, value }, label)
-}
-function clampDelayMilliseconds(value: number) {
-	if (!Number.isFinite(value) || value <= 0) return 0
-	return Math.min(Math.trunc(value), 30000)
-}
-async function delayMilliseconds(milliseconds: number) {
-	if (milliseconds <= 0) return
-	await new Promise(resolve => {
-		setTimeout(resolve, milliseconds)
-	})
-}
-function getRequiredBlockNumber(block: TevmBlock) {
-	if (block.number === undefined || block.number === null) throw new Error('Simulation block number was unavailable')
-	return block.number
-}
-async function getSimulationChainState(memoryClient: MemoryClientLike) {
-	const block = await memoryClient.getBlock()
-	return {
-		blockNumber: getRequiredBlockNumber(block),
-		currentTimestamp: block.timestamp,
-	}
-}
-type SimulationEngine = {
-	accounts: readonly Address[]
-	advanceTime(seconds: bigint): Promise<void>
-	bootstrap(parameters?: SimulationBootstrapParameters): Promise<void>
-	exportState(name: string): Promise<string>
-	getAccounts(): Promise<readonly Address[]>
-	getChainId(): Promise<string>
-	getProfile(): ChainBackend['profile']
-	getState(): SimulationWorkerState
-	installSimulationProxyDeployer(parameters: { address: Address; runtimeCode: Hex }): Promise<void>
-	mintRep(amount: bigint): Promise<void>
-	advanceBlock(): Promise<void>
-	patchSimulationGenesisRepToken(parameters: { repAddress: Address; zoltarAddress: Address }): Promise<void>
-	request(parameters: RequestArguments): Promise<unknown>
-	reset(): Promise<void>
-	selectAccount(address: Address): Promise<void>
-	setRepPerEthPrice(value: bigint): void
-	setRepPerUsdcPrice(value: bigint): void
-	setQueryDelayMilliseconds(value: number): void
-	setTransactionDelayMilliseconds(value: number): void
-	subscribe(handler: () => void): () => void
-	waitForTransactionReceipt(hash: Hash): Promise<Awaited<ReturnType<ReadClient['getTransactionReceipt']>>>
-	waitUntilReady(): Promise<void>
-}
-
 function getInitializationScenario(initialization: SimulationInitialization): SimulationScenario {
 	return initialization.kind === 'scenario' ? initialization.scenario : initialization.envelope.baseScenario
 }
@@ -189,70 +93,6 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 		currentTimestamp = chainState.currentTimestamp
 		blockCountSinceReset = chainState.blockNumber
 	}
-	const createMemoryBackedWriteClient = ({ accountAddress, chainInstance }: { accountAddress: Address; chainInstance: SimulationChain }): WriteClient => {
-		const readClient = createPublicClient({
-			chain: profile.chain,
-			transport: custom({
-				request: async parameters => await chainInstance.request(parameters),
-			}),
-		})
-		const sendTransaction = async (request: SimulationSendTransactionRequest) => {
-			const senderAddress = normalizeRequestedAccount(request.account, accountAddress)
-			await chainInstance.memoryClient.impersonateAccount({ address: senderAddress })
-			return await submitSimulationTransaction(chainInstance, senderAddress, request, 'temporary simulation transaction')
-		}
-		const writeContract: WriteClient['writeContract'] = async parameters =>
-			await sendTransaction({
-				account: parameters.account,
-				data: encodeFunctionData(parameters as Parameters<typeof encodeFunctionData>[0]),
-				gas: parameters.gas,
-				maxFeePerGas: parameters.maxFeePerGas,
-				maxPriorityFeePerGas: parameters.maxPriorityFeePerGas,
-				to: parameters.address,
-				value: parameters.value,
-			})
-
-		return {
-			account: accountAddress,
-			getCode: async (parameters: Parameters<typeof readClient.getCode>[0]) => await readClient.getCode(parameters),
-			readContract: async (parameters: Parameters<typeof readClient.readContract>[0]) => await readClient.readContract(parameters),
-			sendTransaction,
-			waitForTransactionReceipt: async (parameters: Parameters<typeof readClient.getTransactionReceipt>[0]) => await readClient.getTransactionReceipt({ hash: parameters.hash }),
-			writeContract,
-		} as never
-	}
-	// One locked unit on the chain current when the change starts, so nothing lands on the copied accounts between the
-	// dump and the write-back and a reset meanwhile cannot redirect the write-back; the temporary chain carries its own lock.
-	const applyTemporarySimulationAccountChanges = async ({
-		accountsToCopy,
-		chain: activeChain,
-		mutate,
-	}: {
-		accountsToCopy: readonly TemporarySimulationAccountCopy[]
-		chain: SimulationChain
-		mutate: (context: { createWriteClient: (accountAddress: Address) => WriteClient; memoryClient: MemoryClientLike }) => Promise<void>
-	}) =>
-		await activeChain.withLock(async () => {
-			const baseSnapshot = await requireSuccessfulDumpState(activeChain.memoryClient)
-			const temporaryChain = await createSimulationChain(profile)
-			await requireSuccessfulLoadState(temporaryChain.memoryClient, baseSnapshot)
-			await mutate({
-				createWriteClient: accountAddress =>
-					createMemoryBackedWriteClient({
-						accountAddress,
-						chainInstance: temporaryChain,
-					}),
-				memoryClient: temporaryChain.memoryClient,
-			})
-			const mutatedSnapshot = await requireSuccessfulDumpState(temporaryChain.memoryClient)
-			for (const { address, mode } of accountsToCopy) {
-				if (mode === 'storage') {
-					await applyDumpedStorageState(activeChain.memoryClient, address, mutatedSnapshot)
-					continue
-				}
-				await applyDumpedAccountState(activeChain.memoryClient, address, mutatedSnapshot)
-			}
-		})
 	const installSimulationProxyDeployer = async ({ address, runtimeCode }: { address: Address; runtimeCode: Hex }) => {
 		const activeChain = chain
 		await activeChain.withLock(async () => {
@@ -263,7 +103,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 		})
 	}
 	const patchSimulationGenesisRepToken = async ({ zoltarAddress }: { zoltarAddress: Address }) => {
-		await applyTemporarySimulationAccountChanges({
+		await applyTemporarySimulationAccountChanges(profile, {
 			accountsToCopy: [{ address: zoltarAddress, mode: 'storage' }],
 			chain,
 			mutate: async ({ createWriteClient, memoryClient: temporaryMemoryClient }) => {
@@ -512,21 +352,6 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 		bootstrapProgress = 1
 		bootstrapped = true
 	}
-	/** Returns the prepared envelope when it was made for this scenario, universe and these sources; anything else seeds live instead. */
-	const parseScenarioSnapshot = (scenario: SimulationScenario, { scenarioSnapshot: serialized, scenarioSnapshotKey }: SimulationBootstrapParameters) => {
-		if (serialized === undefined) return undefined
-		try {
-			const bundledKey = (dependencies.getBundledSnapshotKey ?? getBundledSimulationSnapshotKey)()
-			if (bundledKey !== undefined && scenarioSnapshotKey !== undefined && bundledKey !== scenarioSnapshotKey) throw new Error('The prepared state was generated for other sources')
-			const envelope = parseSavedSimulationStateEnvelope(serialized)
-			if (envelope.baseScenario !== scenario) throw new Error(`The prepared state belongs to the ${envelope.baseScenario} scenario`)
-			if ((envelope.genesisOutcome ?? 'yes') !== genesisOutcome) throw new Error('The prepared state belongs to another genesis universe')
-			return envelope
-		} catch (error) {
-			console.warn(`[simulation] Ignoring the prepared ${scenario} state: ${error instanceof Error ? error.message : String(error)}`)
-			return undefined
-		}
-	}
 	/** Seeds the scenario on the current chain, or on a fresh one when resetting, unless a prepared state restores it. */
 	const bootstrapScenario = async (scenario: SimulationScenario, resetChain: boolean) => {
 		if (scenarioSnapshot !== undefined) {
@@ -550,7 +375,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 		bootstrapPromise = (async () => {
 			try {
 				if (initialization.kind === 'scenario') {
-					scenarioSnapshot = parseScenarioSnapshot(initialization.scenario, parameters ?? {})
+					scenarioSnapshot = parseScenarioSnapshot(initialization.scenario, genesisOutcome, dependencies.getBundledSnapshotKey ?? getBundledSimulationSnapshotKey, parameters ?? {})
 					await bootstrapScenario(initialization.scenario, false)
 				} else {
 					await restoreSavedStateEnvelope(initialization.envelope, 'Loading saved simulation state')
@@ -654,7 +479,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 							{ address: profile.genesisRepTokenAddress, mode: 'full' },
 							{ address: zoltarAddress, mode: 'storage' },
 						]
-			await applyTemporarySimulationAccountChanges({
+			await applyTemporarySimulationAccountChanges(profile, {
 				accountsToCopy,
 				chain: activeChain,
 				mutate: async ({ createWriteClient, memoryClient: temporaryMemoryClient }) => {
