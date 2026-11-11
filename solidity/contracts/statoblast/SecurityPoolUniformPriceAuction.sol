@@ -10,6 +10,10 @@ import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 /// Its AVL tree freezes at closing and also owns unmaterialized winners' fees.
 /// Bidding, clearing and detaching one winner use logarithmic paths, never scans.
 contract SecurityPoolUniformPriceAuction {
+	enum PriceBoundary {
+		Exclusive,
+		Inclusive
+	}
 	struct Bid {
 		address bidder;
 		address vault;
@@ -123,7 +127,7 @@ contract SecurityPoolUniformPriceAuction {
 		require(msg.value <= type(uint128).max - depositedAttoEth, 'Auction deposits exceed the supported range');
 		require(minimumAttoRepPerLot > 0 && minimumAttoRepPerLot % repGrid == 0, 'Auction bid must use the REP price grid');
 		require(minimumAttoRepPerLot <= maximumBidAttoRepPerLot, 'Auction bid exceeds the REP inventory per lot');
-		require(_pricePrefix(minimumAttoRepPerLot, false) < Math.min(targetLots, inventoryAttoRep / minimumAttoRepPerLot), 'Better bids already exclude this bid');
+		require(_pricePrefix(minimumAttoRepPerLot, PriceBoundary.Exclusive) < Math.min(targetLots, inventoryAttoRep / minimumAttoRepPerLot), 'Better bids already exclude this bid');
 		require(bidCount < type(uint96).max, 'Auction bid identifiers exhausted');
 		depositedAttoEth += msg.value;
 		bidId = ++bidCount;
@@ -157,8 +161,8 @@ contract SecurityPoolUniformPriceAuction {
 		if (result.filledLots == 0) return result;
 		uint256 marginal = bids[_lotAt(result.filledLots)].minimumAttoRepPerLot;
 		result.marginalMinimumAttoRepPerLot = marginal;
-		result.fullBeforeLots = _pricePrefix(marginal, false);
-		result.marginalDemandLots = _pricePrefix(marginal, true) - result.fullBeforeLots;
+		result.fullBeforeLots = _pricePrefix(marginal, PriceBoundary.Exclusive);
+		result.marginalDemandLots = _pricePrefix(marginal, PriceBoundary.Inclusive) - result.fullBeforeLots;
 		result.marginalFillLots = result.filledLots - result.fullBeforeLots;
 		result.raiseLimitReached = result.filledLots == maximumFilledLots;
 		result.attoRepPerLot = result.raiseLimitReached ? marginal : inventoryAttoRep / result.filledLots;
@@ -191,7 +195,7 @@ contract SecurityPoolUniformPriceAuction {
 		Bid storage bid = bids[bidId];
 		if (!initialized || finalized || bid.bidder == address(0) || bid.settled) return 0;
 		uint256 capacity = Math.min(targetLots, inventoryAttoRep / bid.minimumAttoRepPerLot);
-		if (_pricePrefix(bid.minimumAttoRepPerLot, false) < capacity) return 0;
+		if (_pricePrefix(bid.minimumAttoRepPerLot, PriceBoundary.Exclusive) < capacity) return 0;
 		return bid.lots * lotAttoEth;
 	}
 
@@ -400,12 +404,12 @@ contract SecurityPoolUniformPriceAuction {
 		node.removedLots += _amount128(weight);
 	}
 
-	function _pricePrefix(uint256 price, bool inclusive) private view returns (uint256 lots) {
+	function _pricePrefix(uint256 minimumRepPerLot, PriceBoundary boundary) private view returns (uint256 lots) {
 		uint256 id = root;
 		while (id != 0) {
 			Node storage node = nodes[id];
 			uint256 limit = bids[id].minimumAttoRepPerLot;
-			if (limit < price || (inclusive && limit == price)) {
+			if (limit < minimumRepPerLot || (boundary == PriceBoundary.Inclusive && limit == minimumRepPerLot)) {
 				lots += nodes[node.left].subtreeLots + bids[id].lots;
 				id = node.right;
 			} else id = node.left;

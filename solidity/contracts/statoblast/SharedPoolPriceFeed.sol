@@ -75,6 +75,16 @@ contract SharedPoolPriceFeed {
 	uint256 public acceptedExposureLimitAttoEth;
 	uint256 public acceptedRepExposureLimitAttoRep;
 	uint256 public acceptedEpoch;
+	uint8 private constant REPORT_PENDING = 0;
+	uint8 private constant REPORT_ACCEPTED = 1;
+	uint8 private constant REPORT_REJECTED = 2;
+	struct ReportFundingQuote {
+		uint256 wethAttoEth;
+		uint256 repAttoRep;
+		uint256 haltAttoEth;
+		uint256 exposureLimitAttoEth;
+		uint256 maxSettlementBaseFeeAttoEthPerGas;
+	}
 	struct ReportCandidate {
 		SharedPoolReportEscrow escrow;
 		address sponsor;
@@ -257,34 +267,40 @@ contract SharedPoolPriceFeed {
 		require(proposedRepPerEthPrice > 0, 'Initial oracle price zero');
 		require(bountyAttoEth >= getRequestPriceCostAttoEth(), 'Oracle bounty too small');
 		require(msg.value == bountyAttoEth, 'Incorrect oracle bounty');
+		ReportFundingQuote memory quote = _quoteReportFunding(coordinator, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth);
+		pendingExposureLimitAttoEth = quote.exposureLimitAttoEth;
+		pendingReportMaxSettlementBaseFeeAttoEthPerGas = quote.maxSettlementBaseFeeAttoEthPerGas;
+		pendingReportSponsor = sponsor;
+		pendingCoordinator = coordinator;
+		SharedPoolReportEscrow escrow;
+		(reportId, escrow) = this.createReportEscrow(msg.sender, sponsor, quote.wethAttoEth, quote.repAttoRep, quote.haltAttoEth, bountyAttoEth);
+		pendingReportId = reportId;
+		reports[reportId] = ReportCandidate(escrow, sponsor, coordinator, REPORT_PENDING, pendingReportMaxSettlementBaseFeeAttoEthPerGas);
+		emit PriceRequested(pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas);
+		emit ReportFundingAssigned(pendingReportId, coordinator, sponsor);
+	}
+
+	/// @dev Quote first; custody changes and the self-only escrow call stay in the request path.
+	function _quoteReportFunding(address coordinator, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) private view returns (ReportFundingQuote memory quote) {
 		uint256 minimumWethReportAttoEth = minimumToken1ReportAttoEthForPrice(proposedRepPerEthPrice);
 		// Direct sponsors sign an exact budget, even when a standing token approval
 		// is larger. A changed capital exposure or base fee must require a new quote.
 		if (coordinator == address(this))
 			require(requestedInitialAttoWeth >= minimumWethReportAttoEth, 'Report funding exceeds approved budget');
-		uint256 initialWethReportAttoEth =
+		quote.wethAttoEth =
 			requestedInitialAttoWeth > minimumWethReportAttoEth ? requestedInitialAttoWeth : minimumWethReportAttoEth;
-		uint256 initialRepReportAttoRep = Math.mulDiv(initialWethReportAttoEth, proposedRepPerEthPrice, SecurityPoolUtils.PRICE_PRECISION, Math.Rounding.Ceil);
-		uint256 escalationHaltAttoEth = Math.mulDiv(initialWethReportAttoEth, escalationHaltMultiplierBps, SecurityPoolUtils.BPS_DENOMINATOR);
+		quote.repAttoRep = Math.mulDiv(quote.wethAttoEth, proposedRepPerEthPrice, SecurityPoolUtils.PRICE_PRECISION, Math.Rounding.Ceil);
+		quote.haltAttoEth = Math.mulDiv(quote.wethAttoEth, escalationHaltMultiplierBps, SecurityPoolUtils.BPS_DENOMINATOR);
 		uint256 exposureEscalationHaltAttoEth = Math.ceilDiv(aggregateExposureAttoEth(), OPEN_INTEREST_DIVIDER);
-		if (exposureEscalationHaltAttoEth > escalationHaltAttoEth)
-			escalationHaltAttoEth = exposureEscalationHaltAttoEth;
-		require(initialWethReportAttoEth <= type(uint128).max, 'WETH report exceeds uint128');
-		require(initialRepReportAttoRep <= type(uint128).max, 'REP report exceeds uint128');
-		require(escalationHaltAttoEth <= type(uint128).max, 'Oracle escalation halt amount exceeds uint128 maximum');
+		if (exposureEscalationHaltAttoEth > quote.haltAttoEth) quote.haltAttoEth = exposureEscalationHaltAttoEth;
+		require(quote.wethAttoEth <= type(uint128).max, 'WETH report exceeds uint128');
+		require(quote.repAttoRep <= type(uint128).max, 'REP report exceeds uint128');
+		require(quote.haltAttoEth <= type(uint128).max, 'Oracle escalation halt amount exceeds uint128 maximum');
 		require(bountyAttoEth <= type(uint96).max, 'Oracle settler reward exceeds uint96 maximum');
-		pendingExposureLimitAttoEth =
-			(initialWethReportAttoEth - _minimumToken1ReportAttoEthForGasPrice(initialReportPriorityFeeAttoEthPerGas)) *
+		quote.exposureLimitAttoEth =
+			(quote.wethAttoEth - _minimumToken1ReportAttoEthForGasPrice(initialReportPriorityFeeAttoEthPerGas)) *
 			OPEN_INTEREST_DIVIDER;
-		pendingReportMaxSettlementBaseFeeAttoEthPerGas = Math.mulDiv(block.basefee + initialReportPriorityFeeAttoEthPerGas, maxSettlementBaseFeeMultiplierBps, SecurityPoolUtils.BPS_DENOMINATOR);
-		pendingReportSponsor = sponsor;
-		pendingCoordinator = coordinator;
-		SharedPoolReportEscrow escrow;
-		(reportId, escrow) = this.createReportEscrow(msg.sender, sponsor, initialWethReportAttoEth, initialRepReportAttoRep, escalationHaltAttoEth, bountyAttoEth);
-		pendingReportId = reportId;
-		reports[reportId] = ReportCandidate(escrow, sponsor, coordinator, 0, pendingReportMaxSettlementBaseFeeAttoEthPerGas);
-		emit PriceRequested(pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas);
-		emit ReportFundingAssigned(pendingReportId, coordinator, sponsor);
+		quote.maxSettlementBaseFeeAttoEthPerGas = Math.mulDiv(block.basefee + initialReportPriorityFeeAttoEthPerGas, maxSettlementBaseFeeMultiplierBps, SecurityPoolUtils.BPS_DENOMINATOR);
 	}
 
 	function createReportEscrow(address payer, address sponsor, uint256 wethAmount, uint256 repAmount, uint256 haltAmount, uint256 bounty) external returns (uint256 id, SharedPoolReportEscrow escrow) {
@@ -318,10 +334,10 @@ contract SharedPoolPriceFeed {
 	function settleReport(uint256 reportId, uint256 amount1, uint256 amount2) external {
 		ReportCandidate memory candidate = reports[reportId];
 		require(address(candidate.escrow) == msg.sender && msg.sender != address(0), 'Wrong report escrow');
-		require(reports[reportId].outcome == 0, 'Report already completed');
+		require(reports[reportId].outcome == REPORT_PENDING, 'Report already completed');
 		(string memory reason, uint256 priceTimestamp) = _validateSettledReport(reportId, amount1, amount2, candidate.maxSettlementBaseFee);
 		bool accepted = bytes(reason).length == 0;
-		reports[reportId].outcome = accepted ? 1 : 2;
+		reports[reportId].outcome = accepted ? REPORT_ACCEPTED : REPORT_REJECTED;
 		_clearLatestReport(reportId);
 		if (accepted) {
 			uint256 nextPrice = Math.mulDiv(amount2, SecurityPoolUtils.PRICE_PRECISION, amount1);
@@ -350,10 +366,10 @@ contract SharedPoolPriceFeed {
 	/// @notice Retire one failed callback without accepting its price late.
 	function recoverReport(uint256 reportId) public {
 		ReportCandidate memory candidate = reports[reportId];
-		require(address(candidate.escrow) != address(0) && reports[reportId].outcome == 0, 'No report to recover');
+		require(address(candidate.escrow) != address(0) && reports[reportId].outcome == REPORT_PENDING, 'No report to recover');
 		(, , , , uint48 settlementTimestamp) = IStoredOpenOracleGame(address(openOracle)).storedGame(reportId);
 		require(settlementTimestamp != 0, 'Report not settled');
-		reports[reportId].outcome = 2;
+		reports[reportId].outcome = REPORT_REJECTED;
 		_clearLatestReport(reportId);
 		candidate.escrow.withdrawFunding();
 		emit PendingReportRecovered(reportId, settlementTimestamp, pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas, lastPrice, lastSettlementTimestamp);
