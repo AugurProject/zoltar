@@ -51,12 +51,12 @@ const EXPECTED_TRADING_RUNTIME_CODE_HASHES: Readonly<Record<BootstrapDescendantH
 	},
 	mainnet: {
 		yes: {
-			tradingFactory: '0xeac34e1434bcc9ed96de3e062996dc4a76a194d228e787085f0cfeb16bc4f73b',
-			tradingRouter: '0x022e5ca37b32cd1789985c092dc0fd42b86808bf9b2736a318db99f937a6254b',
+			tradingFactory: '0x23ae8983dc96a04363265c1e587729e28e72a0f7fbb245a87d10e041cbdb99fd',
+			tradingRouter: '0xf1e9362a50524a6e40cafb82dd5498c1207d0427851df08ef9e067780ded1aec',
 		},
 		no: {
-			tradingFactory: '0x43b6b80f518f6d359e8e5a969c032cf866e061c861ac3a6dba13c66a2e0842f4',
-			tradingRouter: '0x3dca44d6590a219d0333e1f391338ed6aec5b24871846e8539e8473bf6ce940d',
+			tradingFactory: '0xdf992da30703017ad726eb311dcd1ab5030aa4f31eeac609650329a76e5e4dca',
+			tradingRouter: '0x6754cf9e4bbc33d80c5d1f8c4645f159ff271d10b0356f9584bb27c315295caa',
 		},
 	},
 }
@@ -106,6 +106,15 @@ function getTradingDeploymentSteps(profile: NetworkProfile) {
 	]
 }
 
+/** Trading steps with the runtime code hashes pinned for this network and its kind of Uniswap deployment. */
+export function getTradingDeploymentPlan(profile: NetworkProfile, hashProfile: BootstrapDescendantHashProfile) {
+	return getTradingDeploymentSteps(profile).map(step => {
+		const expectedRuntimeCodeHash = EXPECTED_TRADING_RUNTIME_CODE_HASHES[hashProfile][profile.genesisOutcome][step.id]
+		if (expectedRuntimeCodeHash === undefined) throw new Error(`Trading step ${step.id} has no pinned ${hashProfile} runtime code hash`)
+		return { ...step, expectedRuntimeCodeHash }
+	})
+}
+
 export function createCompleteDeploymentPlan(profile: NetworkProfile, uniswap: UniswapDeployment) {
 	const [create2DeployerStep, permit2Step, ...uniswapQuoteSteps] = uniswap.steps
 	if (create2DeployerStep === undefined || create2DeployerStep.id !== 'arachnidCreate2Deployer') throw new Error('Uniswap deployment plan must begin with the canonical CREATE2 deployer')
@@ -116,13 +125,10 @@ export function createCompleteDeploymentPlan(profile: NetworkProfile, uniswap: U
 	if (zoltarOracle === undefined) throw new Error('Zoltar deployment plan is missing its deployment status oracle')
 	const zoltarOracleStep = { ...zoltarOracle, id: 'zoltarDeploymentStatusOracle', label: 'Zoltar Deployment Status Oracle' }
 	const protocolStepsWithExternalDependencies = protocolSteps.map(step => (step.id === 'openOracle' ? { ...step, dependencies: [...step.dependencies, 'permit2'] } : step))
-	return [create2DeployerStep, permit2Step, proxyDeployerStep, ...uniswapQuoteSteps, zoltarOracleStep, ...protocolStepsWithExternalDependencies, ...getTradingDeploymentSteps(profile)].map(step => {
-		const outcome = profile.genesisOutcome
-		const networkHashProfile = profile.id === 'mainnet' ? 'mainnet' : 'sepolia'
-		const hashProfile = uniswap.kind === 'deterministic' ? 'deterministic' : networkHashProfile
-		const tradingHash = EXPECTED_TRADING_RUNTIME_CODE_HASHES[hashProfile][outcome][step.id]
-		if (tradingHash !== undefined) return { ...step, expectedRuntimeCodeHash: tradingHash }
-		const deterministicHash = uniswap.kind === 'deterministic' ? DETERMINISTIC_WETH_DEPENDENT_RUNTIME_CODE_HASHES[outcome][step.id] : undefined
+	const networkHashProfile = profile.id === 'mainnet' ? 'mainnet' : 'sepolia'
+	const hashProfile = uniswap.kind === 'deterministic' ? 'deterministic' : networkHashProfile
+	return [create2DeployerStep, permit2Step, proxyDeployerStep, ...uniswapQuoteSteps, zoltarOracleStep, ...protocolStepsWithExternalDependencies, ...getTradingDeploymentPlan(profile, hashProfile)].map(step => {
+		const deterministicHash = uniswap.kind === 'deterministic' ? DETERMINISTIC_WETH_DEPENDENT_RUNTIME_CODE_HASHES[profile.genesisOutcome][step.id] : undefined
 		if (deterministicHash !== undefined) return { ...step, expectedRuntimeCodeHash: deterministicHash }
 		if ('verifyRuntimeCode' in step && step.verifyRuntimeCode !== undefined) return step
 		if ('expectedRuntimeCodeHash' in step && step.expectedRuntimeCodeHash !== undefined) return step
