@@ -340,7 +340,7 @@ describe('ABI metadata', () => {
 		const transferTopics = requireTopics(encodeEventTopics({ abi: transferAbi, eventName: 'Transfer', args: { from: account, to: childToken } }))
 		expect(decodeLogRecord('reputationToken', transferTopics, '0x', new Map()).status).toBe('failed')
 
-		const checkpointAbi = parseAbi(['event QuestionAccountingCheckpoint(uint8 reason,uint256 settlementCollateralAttoEth,uint256 shareTokenSupplyAttoShares,uint256 lastUpdatedFeeAccumulator)'])
+		const checkpointAbi = parseAbi(['event QuestionAccountingCheckpoint(uint8 reason,uint256 settlementCollateralAttoEth,uint256 shareTokenSupplyAttoShares,uint256 lastSettlementPortfolioTime)'])
 		const checkpointTopics = requireTopics(encodeEventTopics({ abi: checkpointAbi, eventName: 'QuestionAccountingCheckpoint' }))
 		const decoded = decodeLogRecord('securityPool', checkpointTopics, '0x', new Map())
 		expect(decoded.status).toBe('failed')
@@ -382,7 +382,7 @@ describe('ABI metadata', () => {
 		expect(
 			discoveriesFrom({
 				name: 'DeploySecurityPool',
-				arguments: { truthAuction: zeroAddress },
+				arguments: { collateralRepairAuction: zeroAddress },
 				status: 'decoded',
 				summary: 'deployment',
 			}),

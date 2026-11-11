@@ -30,8 +30,8 @@ export const topologyIdentifiers = [
 	{ type: 'security pool address', value: topologyValues.poolAddress },
 	{ type: 'report token 1', value: topologyValues.reportToken1 },
 	{ type: 'report token 2', value: topologyValues.reportToken2 },
-	{ type: 'truth auction address', value: topologyValues.auctionAddress },
-	{ type: 'truth auction portfolio address', value: topologyValues.auctionPoolAddress },
+	{ type: 'collateral repair auction address', value: topologyValues.auctionAddress },
+	{ type: 'collateral repair auction portfolio address', value: topologyValues.auctionPoolAddress },
 	{ type: 'trading pair address', value: topologyValues.pairAddress },
 	{ type: 'trading pair pool address', value: topologyValues.pairPoolAddress },
 ]

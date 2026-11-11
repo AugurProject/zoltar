@@ -5,7 +5,7 @@ import { erc20Abi, zoltarAbi, securityPoolCapitalLedgerAbi as capitalAbi, securi
 import { createWriteClient, writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients'
 import { mainnet } from '@zoltar/core-shared/evm/ethereum'
 import { useSecurityPoolPortfolioFixture, unit } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioFixture'
-import { preparePortfolioTruthAuction } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioTruthAuctionFixture'
+import { preparePortfolioCollateralRepairAuction } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioCollateralRepairAuctionFixture'
 import { getInfraContractAddresses } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
 import { DAY } from '../../../../solidity/ts/testSupport/simulator/utils/constants'
 import { addRepToMigrationBalance, splitMigrationRep, getZoltarForkThreshold, forkUniverse, getZoltarAddress } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
@@ -19,7 +19,7 @@ import { loadPortfolioAuctionSnapshot } from '@zoltar/statoblast-shared/statobla
 describe('explicit portfolio instruction lifecycle', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
 	test('bids once across restart, counts pending exposure, activates and manages the winning vault', async () => {
-		const context = await preparePortfolioTruthAuction(fixture)
+		const context = await preparePortfolioCollateralRepairAuction(fixture)
 		await context.report()
 		await context.open()
 		const account = privateKeyToAccount(`0x${'01'.repeat(32)}`)

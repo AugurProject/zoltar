@@ -461,7 +461,7 @@ describe('GlobalTransactionDialog', () => {
 				transaction={{
 					dismissKey: '0xlabelled-contract',
 					technicalRows: [
-						{ label: 'Contract', value: `Truth Auction (${contractAddress})` },
+						{ label: 'Contract', value: `Collateral Repair Auction (${contractAddress})` },
 						{ label: 'Arguments', value: `(${contractAddress})` },
 					],
 					title: 'Submit bid',
@@ -472,7 +472,7 @@ describe('GlobalTransactionDialog', () => {
 		trackRendered(renderedComponent)
 
 		const contractValue = within(document.body).getByText('Contract').nextElementSibling
-		expect(contractValue?.querySelector('.global-transaction-identifier-label')?.textContent).toBe('Truth Auction')
+		expect(contractValue?.querySelector('.global-transaction-identifier-label')?.textContent).toBe('Collateral Repair Auction')
 		expect(contractValue?.querySelector('.address-value')?.getAttribute('title')).toBe(contractAddress)
 		expect(contractValue?.querySelector('.address-value-abbreviated')).not.toBeNull()
 		expect(contractValue?.querySelectorAll('a').length).toBe(1)

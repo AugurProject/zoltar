@@ -350,7 +350,7 @@ test('presents every timeline entity type as a human-facing label', () => {
 		'open-oracle-report': 'OpenOracle report',
 		'price-coordinator': 'Price coordinator',
 		escalation: 'Escalation game',
-		auction: 'Truth auction',
+		auction: 'Collateral repair auction',
 		pool: 'Security pool',
 		vault: 'Vault',
 		'liquidation-approval': 'Liquidation approval',

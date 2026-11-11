@@ -27,7 +27,7 @@ type SecurityPoolMintCapacity = {
 	escalationGameActive?: boolean
 	feeEndTimestamp?: bigint
 	feeIndexRemainder?: bigint
-	lastUpdatedFeeAccumulator?: bigint
+	lastFeeCheckpointNativeTime?: bigint
 	settlementCollateralAttoEth: bigint
 	feeEligibleUnderwritingLimitAttoEth: bigint
 	mintingCapacityAttoEth: bigint

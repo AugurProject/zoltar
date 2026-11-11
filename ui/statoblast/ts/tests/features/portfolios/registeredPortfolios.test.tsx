@@ -17,7 +17,7 @@ import { capitalClient } from './capitalClient.js'
 const lifecycle = installDomTestLifecycle({ url: `https://example.test/#/portfolios?portfolio=${portfolio}&owner=${owner}`, afterTest: resetActiveEnvironmentForTesting })
 const parameters = { accountAddress: owner, onTransactionRequested: () => undefined, onTransactionSubmitted: () => undefined, onTransactionFinished: () => undefined, onTransactionPresented: () => undefined, refreshState: async () => undefined }
 
-const deployments = (universeId: bigint) => [{ securityPool: token, parent: zeroAddress, universeId, questionId: 7n, initialReportPriorityFeeAttoEthPerGas: 1n, openOraclePriceCoordinator: token, statoblastSecurityMultiplierBps: 20000n, truthAuction: zeroAddress }]
+const deployments = (universeId: bigint) => [{ securityPool: token, parent: zeroAddress, universeId, questionId: 7n, initialReportPriorityFeeAttoEthPerGas: 1n, openOraclePriceCoordinator: token, statoblastSecurityMultiplierBps: 20000n, collateralRepairAuction: zeroAddress }]
 function registerQuestion(source: ReturnType<typeof capitalClient>, universeId = 0n) {
 	source.setRead('securityPoolDeploymentCount', 1n)
 	source.setRead('securityPoolDeploymentsRange', deployments(universeId))

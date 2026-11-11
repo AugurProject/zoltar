@@ -71,7 +71,7 @@ export const operationalPools = (snapshot: EcosystemSnapshot) => snapshot.pools.
 
 export function feeCheckpointDue(snapshot: EcosystemSnapshot, pool: PoolSnapshot) {
 	const target = feeCheckpointTarget(snapshot, pool)
-	return target !== undefined && amount(pool.lastUpdatedFeeAccumulator) < target
+	return target !== undefined && amount(pool.lastSettlementPortfolioTime) < target
 }
 
 function feeCheckpointTarget(snapshot: EcosystemSnapshot, pool: PoolSnapshot) {
@@ -87,11 +87,11 @@ export function poolAccountingCurrentEvidence(snapshot: EcosystemSnapshot, pool:
 	const target = feeCheckpointTarget(snapshot, pool)
 	if (target === undefined) throw new Error(`Pool ${pool.address} is missing its fee checkpoint boundary`)
 	return {
-		abi: 'function lastUpdatedFeeAccumulator() view returns (uint256)',
+		abi: 'function lastSettlementPortfolioTime() view returns (uint256)',
 		args: [],
 		contract: pool.address,
 		expected: target.toString(),
-		functionName: 'lastUpdatedFeeAccumulator',
+		functionName: 'lastSettlementPortfolioTime',
 		kind: 'storage-postcondition',
 		relation: 'at-least',
 	}

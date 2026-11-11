@@ -76,19 +76,19 @@
 						<h3><span class="assumption-id">A01</span> Participants act on risk-adjusted economic incentives</h3>
 						<p>Enough participants prefer actions with greater expected value after gas, fees, delay, capital lockup, and risk. The model does not rely on altruistic defense.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> A nominally profitable liquidation, dispute, bid, migration, or fork defense may not happen when its risk-adjusted return is unattractive.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/statoblast.html#participants-assets">economic roles</a>, <a href="../explanation/liquidations.html#rule">liquidation incentives</a>, <a href="../explanation/truth-auctions.html#portfolio-auctions">auction clearing</a>, and <a href="./open-oracle.html#security-guarantee">oracle incentives</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/statoblast.html#participants-assets">economic roles</a>, <a href="../explanation/liquidations.html#rule">liquidation incentives</a>, <a href="../explanation/collateral-repair-auctions.html#portfolio-auctions">auction clearing</a>, and <a href="./open-oracle.html#security-guarantee">oracle incentives</a>.</p>
 					</li>
 					<li id="assumption-a02" value="2">
 						<h3><span class="assumption-id">A02</span> Required actions remain worth their operating costs</h3>
 						<p>For each time-sensitive action, transaction fees, opportunity cost, coordination cost, and capital lockup remain small enough relative to the value protected or earned.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> An action can be technically executable but economically abandoned before its deadline.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/truth-auctions.html#portfolio-auctions">Truth Auction lifecycle</a>, <a href="./open-oracle.html#parameters">oracle gas parameters</a>, and <a href="../explanation/escalation-game.html#lifecycle-first">Escalation Game lifecycle</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/collateral-repair-auctions.html#portfolio-auctions">Collateral Repair Auction lifecycle</a>, <a href="./open-oracle.html#parameters">oracle gas parameters</a>, and <a href="../explanation/escalation-game.html#lifecycle-first">Escalation Game lifecycle</a>.</p>
 					</li>
 					<li id="assumption-a03" value="3">
 						<h3><span class="assumption-id">A03</span> Each economic role has enough independent participants</h3>
 						<p>Trading, liquidation, escalation, migration, auction bidding, price correction, and settlement have enough non-colluding participants for the relevant action. Secondary-market trading is external to Statoblast.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Thin or controlled participation can remove price discovery, competitive bidding, or an opposing outcome deposit.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/statoblast.html#participants-assets">economic roles</a>, <a href="../explanation/zoltar.html#non-guarantees">fork coordination</a>, and <a href="../explanation/truth-auctions.html#portfolio-auctions">auction participation</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/statoblast.html#participants-assets">economic roles</a>, <a href="../explanation/zoltar.html#non-guarantees">fork coordination</a>, and <a href="../explanation/collateral-repair-auctions.html#portfolio-auctions">auction participation</a>.</p>
 					</li>
 					<li id="assumption-a04" value="4">
 						<h3><span class="assumption-id">A04</span> Participants can mobilize REP to raise an alarm</h3>
@@ -191,10 +191,10 @@
 						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#accounting">REP splitting</a>, <a href="../explanation/statoblast.html#forks-migration">pool migration</a>, and <a href="./operator-guardrails.html#share-migration">share migration guardrails</a>.</p>
 					</li>
 					<li id="assumption-a12" value="12">
-						<h3><span class="assumption-id">A12</span> Truth Auctions can convert supported child REP efficiently</h3>
-						<p>When repair is needed, competitive <a href="./glossary.html#truth-auction">Truth Auction</a> entry can convert supported <a href="./glossary.html#child-rep">child REP</a> into ETH at an acceptably small discount and operating cost. This is a participation assumption, not a contract guarantee of revenue or full repair.</p>
+						<h3><span class="assumption-id">A12</span> Collateral Repair Auctions can convert supported child REP efficiently</h3>
+						<p>When repair is needed, competitive <a href="./glossary.html#collateral-repair-auction">Collateral Repair Auction</a> entry can convert supported <a href="./glossary.html#child-rep">child REP</a> into ETH at an acceptably small discount and operating cost. This is a participation assumption, not a contract guarantee of revenue or full repair.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Weak or strategically withheld demand leaves the child operational with impaired collateral. A shared portfolio auction can sell all fresh inventory for one funded lot. Ordinary surplus withdrawal and retirement remain available to winners, so selling the inventory does not guarantee permanent backing.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/truth-auctions.html#portfolio-auctions">shared portfolio auctions</a>, and <a href="../explanation/statoblast.html#forks-migration">repair accounting</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/collateral-repair-auctions.html#portfolio-auctions">shared portfolio auctions</a>, and <a href="../explanation/statoblast.html#forks-migration">repair accounting</a>.</p>
 					</li>
 					<li id="assumption-a13" value="13">
 						<h3><span class="assumption-id">A13</span> REP is sufficiently liquid</h3>
@@ -236,7 +236,7 @@
 						<p>Honest users can submit competitively priced Ethereum transactions and obtain canonical inclusion within every relevant dispute, escalation, migration, auction, and settlement window.</p>
 						<p>Each onchain comparison assigns the exact deadline timestamp to one phase. Same-block ordering cannot move an action across that boundary: users must target the phase valid at the block timestamp rather than rely on transaction ordering to extend an expired window.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Censorship or congestion lasting through a deadline can finalize a wrong report or prevent a supported action.</p>
-						<p class="assumption-links">Mechanics: <a href="./invariants.html#lifecycle">deadline invariants</a>, <a href="../explanation/truth-auctions.html#portfolio-auctions">auction windows</a>, and <a href="./open-oracle.html#intentional-economic-tradeoffs">oracle censorship model</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="./invariants.html#lifecycle">deadline invariants</a>, <a href="../explanation/collateral-repair-auctions.html#portfolio-auctions">auction windows</a>, and <a href="./open-oracle.html#intentional-economic-tradeoffs">oracle censorship model</a>.</p>
 					</li>
 					<li id="assumption-a17" value="17">
 						<h3><span class="assumption-id">A17</span> OpenOracle has an available, adequately capitalized corrector</h3>
@@ -277,9 +277,9 @@
 					</li>
 					<li id="assumption-a22" value="22">
 						<h3><span class="assumption-id">A22</span> Participant-controlled recipients can accept required asset deliveries</h3>
-						<p>Vaults, oracle sponsors, traders, share holders, and other caller-controlled recipients use addresses that accept native ETH when claiming fees, collateral, or proceeds. Truth-auction settlement instead credits bidder-specific pull escrow without calling the bidder; the bidder must accept ETH only when withdrawing that credit. Contract recipients also return the required ERC-1155 receiver selector when complete-set creation, share migration, or an outcome-share transfer delivers tokens to them. A rejected ETH pull or push reverts that transfer, and a rejected ERC-1155 callback reverts the mint or transfer and its surrounding protocol action. No protocol path can force a rejecting address to accept a later delivery or redirect every payout or mint.</p>
+						<p>Vaults, oracle sponsors, traders, share holders, and other caller-controlled recipients use addresses that accept native ETH when claiming fees, collateral, or proceeds. Collateral repair auction settlement instead credits bidder-specific pull escrow without calling the bidder; the bidder must accept ETH only when withdrawing that credit. Contract recipients also return the required ERC-1155 receiver selector when complete-set creation, share migration, or an outcome-share transfer delivers tokens to them. A rejected ETH pull or push reverts that transfer, and a rejected ERC-1155 callback reverts the mint or transfer and its surrounding protocol action. No protocol path can force a rejecting address to accept a later delivery or redirect every payout or mint.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> A contract account that rejects ETH or the required ERC-1155 callback can strand its own payout or make its complete-set, migration, transfer, or claim action unavailable even while protocol-wide accounting remains safe.</p>
-						<p class="assumption-links">Mechanics: <a href="./invariants.html#lifecycle">ETH callback safety</a>, <a href="./invariants.html#lifecycle">ERC-1155 callback safety</a>, <a href="./contracts/sharetoken.html">share-token receipt</a>, <a href="../explanation/truth-auctions.html#portfolio-auctions">auction refunds</a>, <a href="./open-oracle.html#refund-callback">oracle request refunds</a>, and <a href="./operator-guardrails.html#security-pool-guardrails">security pool guardrails</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="./invariants.html#lifecycle">ETH callback safety</a>, <a href="./invariants.html#lifecycle">ERC-1155 callback safety</a>, <a href="./contracts/sharetoken.html">share-token receipt</a>, <a href="../explanation/collateral-repair-auctions.html#portfolio-auctions">auction refunds</a>, <a href="./open-oracle.html#refund-callback">oracle request refunds</a>, and <a href="./operator-guardrails.html#security-pool-guardrails">security pool guardrails</a>.</p>
 					</li>
 					<li id="assumption-a23" value="23">
 						<h3><span class="assumption-id">A23</span> Users select verified canonical deployments</h3>
@@ -331,7 +331,7 @@
 					</li>
 					<li id="excluded-guarantee-eg02">
 						<strong>EG02.</strong>
-						A Truth Auction may raise less than its repair target; the child then activates with migrated collateral plus accepted auction ETH.
+						A Collateral Repair Auction may raise less than its repair target; the child then activates with migrated collateral plus accepted auction ETH.
 					</li>
 					<li id="excluded-guarantee-eg03">
 						<strong>EG03.</strong>

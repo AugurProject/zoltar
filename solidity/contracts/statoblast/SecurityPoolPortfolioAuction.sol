@@ -11,7 +11,7 @@ import { SecurityPoolCreationCodeDeployer } from './SecurityPoolCreationCode.sol
 import { ISecurityPoolAuctionCapital } from './interfaces/ISecurityPoolAuctionCapital.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
-interface ITruthAuctionPortfolio {
+interface ICollateralRepairAuctionPortfolio {
 	function zoltar() external view returns (Zoltar);
 	function capitalLedger(uint248 universeId) external view returns (SecurityPoolCapitalLedger);
 	function priceFeed(uint248 universeId) external view returns (address);
@@ -19,7 +19,7 @@ interface ITruthAuctionPortfolio {
 	function oracleExposure(uint248 universeId) external view returns (uint256);
 }
 
-interface ITruthAuctionPriceFeed {
+interface ICollateralRepairAuctionPriceFeed {
 	function conservativePrice() external view returns (uint256);
 	function priceValidUntil() external view returns (uint256);
 	function lastSettlementTimestamp() external view returns (uint256);
@@ -27,14 +27,14 @@ interface ITruthAuctionPriceFeed {
 	function acceptedRepExposureLimitAttoRep() external view returns (uint256);
 }
 
-/// @notice A fixed-deadline truth auction whose winners are funded underwriters.
+/// @notice A fixed-deadline collateral repair auction whose winners are funded underwriters.
 /// Only newly forfeited backing is sold. Old recovery REP and chosen capital
 /// never enter this custody; missing demand or reports leave claims in runoff.
 contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 	using SafeERC20Ops for IERC20;
 
 	address public immutable forkAuthority;
-	ITruthAuctionPortfolio public immutable portfolio;
+	ICollateralRepairAuctionPortfolio public immutable portfolio;
 	SecurityPoolCapitalLedger public immutable capital;
 	SecurityPoolUniformPriceAuction public immutable engine;
 	IERC20 public immutable repToken;
@@ -59,12 +59,12 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 	event AuctionClosed(uint256 filledLots, uint256 raisedAttoEth, uint256 soldAttoRep);
 
 	constructor(address authority, address root, uint248 child, uint256 deadline, uint256 inventory, uint256 shortfall, address implementation) {
-		require(authority != address(0) && root.code.length != 0 && implementation.code.length != 0, 'Truth auction dependencies missing');
+		require(authority != address(0) && root.code.length != 0 && implementation.code.length != 0, 'Collateral repair auction dependencies missing');
 		forkAuthority = authority;
 		vaultImplementation = implementation;
-		portfolio = ITruthAuctionPortfolio(root);
+		portfolio = ICollateralRepairAuctionPortfolio(root);
 		capital = portfolio.capitalLedger(child);
-		require(address(capital) != address(0), 'Truth auction capital missing');
+		require(address(capital) != address(0), 'Collateral repair auction capital missing');
 		repToken = IERC20(address(portfolio.zoltar().getRepToken(child)));
 		universeId = child;
 		closesAt = deadline;
@@ -78,7 +78,7 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 	}
 
 	modifier nonReentrant() {
-		require(!entered, 'Truth auction operation active');
+		require(!entered, 'Collateral repair auction operation active');
 		entered = true;
 		_;
 		entered = false;
@@ -91,15 +91,15 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 	/// @notice Opening needs a challenged quote covering the maximum possible
 	/// winning commitments and the fresh REP inventory before any bid is accepted.
 	function open() external nonReentrant {
-		require(!opened && !finalized && block.timestamp < closesAt, 'Truth auction opening unavailable');
-		require(portfolio.zoltar().getForkTime(universeId) == 0, 'Truth auction universe forked');
-		require(targetLots != 0 && inventoryAttoRep != 0, 'Truth auction has no saleable lots');
-		ITruthAuctionPriceFeed feed = ITruthAuctionPriceFeed(portfolio.priceFeed(universeId));
-		require(address(feed) != address(0) && _fundedQuote(feed, block.timestamp), 'Truth auction quote is not funded and fresh');
+		require(!opened && !finalized && block.timestamp < closesAt, 'Collateral repair auction opening unavailable');
+		require(portfolio.zoltar().getForkTime(universeId) == 0, 'Collateral repair auction universe forked');
+		require(targetLots != 0 && inventoryAttoRep != 0, 'Collateral repair auction has no saleable lots');
+		ICollateralRepairAuctionPriceFeed feed = ICollateralRepairAuctionPriceFeed(portfolio.priceFeed(universeId));
+		require(address(feed) != address(0) && _fundedQuote(feed, block.timestamp), 'Collateral repair auction quote is not funded and fresh');
 		openingConservativePrice = feed.conservativePrice();
 		uint256 required = capital.commitmentIndex().requiredRep(lotAttoEth, openingConservativePrice, capital.securityMultiplierBps(), 10_000);
 		minimumCollateralAttoRepPerLot = Math.ceilDiv(required, repGrid) * repGrid;
-		require(minimumCollateralAttoRepPerLot <= inventoryAttoRep, 'Truth auction inventory cannot back one lot');
+		require(minimumCollateralAttoRepPerLot <= inventoryAttoRep, 'Collateral repair auction inventory cannot back one lot');
 		engine.startAuction(block.timestamp, closesAt, lotAttoEth, targetLots, inventoryAttoRep, repGrid, address(this));
 		opened = true;
 		emit AuctionOpened(openingConservativePrice, minimumCollateralAttoRepPerLot, engine.maximumBidAttoRepPerLot());
@@ -108,10 +108,10 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 	/// @notice Only the ETH purchase amount is paid upfront.
 	/// Purchased REP must back the commitment at the bidder's chosen health target.
 	function submitBid(uint256 lots, uint256 minimumAttoRepPerLot, uint256 targetHealthFactorBps) external payable nonReentrant returns (uint256 bidId, address vault) {
-		require(opened && !finalized, 'Truth auction is not accepting bids');
-		require(portfolio.zoltar().getForkTime(universeId) == 0, 'Truth auction universe forked');
-		require(lots != 0 && targetHealthFactorBps >= 10_000, 'Invalid truth auction lots or health target');
-		require(msg.value == lots * lotAttoEth, 'Truth auction ETH funding mismatch');
+		require(opened && !finalized, 'Collateral repair auction is not accepting bids');
+		require(portfolio.zoltar().getForkTime(universeId) == 0, 'Collateral repair auction universe forked');
+		require(lots != 0 && targetHealthFactorBps >= 10_000, 'Invalid collateral repair auction lots or health target');
+		require(msg.value == lots * lotAttoEth, 'Collateral repair auction ETH funding mismatch');
 		uint256 required = capital.commitmentIndex().requiredRep(lotAttoEth, openingConservativePrice, capital.securityMultiplierBps(), targetHealthFactorBps);
 		require(minimumAttoRepPerLot >= required, 'Auction bid does not meet chosen health target');
 		bidId = engine.bidCount() + 1;
@@ -124,11 +124,11 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 	/// @notice Closing never requires a bidder transaction. The quote is tested
 	/// at the immutable deadline, so a late closer cannot select a later price.
 	function finalize() external nonReentrant returns (SecurityPoolUniformPriceAuction.Clearing memory result) {
-		require(msg.sender == forkAuthority, 'Only truth auction fork authority');
-		require(!finalized && block.timestamp >= closesAt, 'Truth auction closing unavailable');
+		require(msg.sender == forkAuthority, 'Only collateral repair auction fork authority');
+		require(!finalized && block.timestamp >= closesAt, 'Collateral repair auction closing unavailable');
 		finalized = true;
 		if (opened) {
-			ITruthAuctionPriceFeed feed = ITruthAuctionPriceFeed(portfolio.priceFeed(universeId));
+			ICollateralRepairAuctionPriceFeed feed = ICollateralRepairAuctionPriceFeed(portfolio.priceFeed(universeId));
 			uint256 forkTime = portfolio.zoltar().getForkTime(universeId);
 			bool eligible =
 				(forkTime == 0 || forkTime > closesAt) &&
@@ -164,23 +164,23 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 	/// closing. Only its bidder may withdraw the freely usable ETH.
 	/// Refunds and position materialization are independent and never scan bids.
 	function settleRefund(uint256 bidId) external nonReentrant {
-		require(opened, 'Truth auction has not opened');
+		require(opened, 'Collateral repair auction has not opened');
 		engine.settleBid(bidId);
 	}
 	function withdrawRefunds(address payable recipient) external nonReentrant {
-		require(recipient != address(0), 'Truth auction refund recipient missing');
+		require(recipient != address(0), 'Collateral repair auction refund recipient missing');
 		engine.withdrawRefundFor(msg.sender, recipient);
 	}
 	/// @notice One transaction for the bidder: credit its own eligible bid, or skip
 	/// a credit someone already made, then withdraw its whole refund credit. The
 	/// withdrawal includes credits from the bidder's other bids in this auction.
 	function settleAndWithdrawRefund(uint256 bidId, address payable recipient) external nonReentrant returns (uint256 amountAttoEth) {
-		require(opened, 'Truth auction has not opened');
-		require(recipient != address(0), 'Truth auction refund recipient missing');
+		require(opened, 'Collateral repair auction has not opened');
+		require(recipient != address(0), 'Collateral repair auction refund recipient missing');
 		return engine.settleAndWithdrawRefund(bidId, msg.sender, recipient);
 	}
 
-	function _fundedQuote(ITruthAuctionPriceFeed feed, uint256 atTime) private view returns (bool) {
+	function _fundedQuote(ICollateralRepairAuctionPriceFeed feed, uint256 atTime) private view returns (bool) {
 		return
 			feed.lastSettlementTimestamp() != 0 &&
 			feed.lastSettlementTimestamp() <= atTime &&

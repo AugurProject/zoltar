@@ -9,7 +9,8 @@ import { SecurityPoolCommitmentTree } from './SecurityPoolCommitmentTree.sol';
 /// custody. Keys are exact uint256 health thresholds followed by unique uint96
 /// position IDs. Balanced paths depend on live positions, never price-key entropy.
 contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
-	address public immutable portfolio;
+	/// @dev The capital ledger authorizes mutations and holds tokens; this contract only accounts for them.
+	address public immutable capitalLedger;
 	uint96 public lastPositionId;
 	uint96 public currentBatch;
 	uint96 public nextBatch = 1;
@@ -62,11 +63,11 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 
 	constructor(address authority) {
 		require(authority != address(0), 'Invalid commitment authority');
-		portfolio = authority;
+		capitalLedger = authority;
 	}
 
-	modifier onlyPortfolio() {
-		require(msg.sender == portfolio, 'Only portfolio');
+	modifier onlyCapitalLedger() {
+		require(msg.sender == capitalLedger, 'Only capital ledger');
 		_;
 	}
 
@@ -77,7 +78,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 
 	/// @dev Only a newly created child ledger can initialize imported cohorts.
 	/// Opening the child requires sealImports; sealed cohorts cannot reopen.
-	function initCohorts(uint96 currentId, uint96 nextId) external onlyPortfolio {
+	function initCohorts(uint96 currentId, uint96 nextId) external onlyCapitalLedger {
 		require(!importsInitialized && lastPositionId == 0, 'Commitment imports already initialized');
 		require(currentId != 0 && currentId < nextId, 'Invalid imported cohorts');
 		currentBatch = currentId;
@@ -87,26 +88,27 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		importsOpen = true;
 	}
 
-	function importPosition(address owner, uint256 rep, uint256 commitment, uint256 maxHealthyPrice, uint96 batch, uint256 remainingCommitment) external onlyPortfolio returns (uint96) {
+	function importPosition(address owner, uint256 rep, uint256 commitment, uint256 maxHealthyPrice, uint96 batch, uint256 remainingCommitment) external onlyCapitalLedger returns (uint96) {
 		require(importsOpen, 'Commitment imports are sealed');
 		require(batch == 0 || batch == currentBatch || batch == nextBatch, 'Unknown imported cohort');
 		require(remainingCommitment < commitment && (batch != 0 || remainingCommitment == 0), 'Invalid imported retirement target');
 		return _create(owner, batch, rep, commitment, maxHealthyPrice, remainingCommitment);
 	}
 
-	function sealImports() external onlyPortfolio {
+	function sealImports() external onlyCapitalLedger {
 		require(importsOpen, 'Commitment imports are sealed');
 		importsOpen = false;
 	}
 
 	/// @dev New commitments always start active. The controller limits the live
 	/// slots per owner and checks collateral and desired health.
-	function create(address owner, uint256 rep, uint256 commitment, uint256 maxHealthyPrice) external onlyPortfolio operational returns (uint96) {
+	function create(address owner, uint256 rep, uint256 commitment, uint256 maxHealthyPrice) external onlyCapitalLedger operational returns (uint96) {
 		return _create(owner, 0, rep, commitment, maxHealthyPrice, 0);
 	}
 
-	/// @dev A closed retirement cohort may shrink or gain collateral, never gain K.
-	function replace(uint96 id, uint256 rep, uint256 commitment, uint256 maxHealthyPrice) public onlyPortfolio operational {
+	/// @dev A closed retirement cohort may shrink or gain collateral, never gain commitment.
+	/// This preserves original retirement priority; securityPoolCommitmentIndex.test.ts covers rekeys and transfers.
+	function replace(uint96 id, uint256 rep, uint256 commitment, uint256 maxHealthyPrice) public onlyCapitalLedger operational {
 		_touch(id);
 		Position storage position = positions[id];
 		Node storage leaf = nodes[position.node];
@@ -123,7 +125,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 
 	/// @dev Fees remain attached to the old owner. The receiver gets a fresh ID
 	/// in precisely the source cohort; its insertion is balanced by source removal.
-	function split(uint96 id, address receiver, uint256 rep, uint256 commitment, uint256 remainingMaxPrice, uint256 receiverMaxPrice) external onlyPortfolio operational returns (uint96 receiverId) {
+	function split(uint96 id, address receiver, uint256 rep, uint256 commitment, uint256 remainingMaxPrice, uint256 receiverMaxPrice) external onlyCapitalLedger operational returns (uint96 receiverId) {
 		_touch(id);
 		Position storage source = positions[id];
 		Node storage leaf = nodes[source.node];
@@ -142,7 +144,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	/// @notice Materialize an exact share of an active auction cohort without
 	/// granting a new liquidation clock. Custody and past cohort fees are handled
 	/// by the controller; this operation moves only principal and commitment.
-	function splitAuctionPosition(uint96 id, address receiver, uint256 rep, uint256 commitment) external onlyPortfolio operational returns (uint96 receiverId) {
+	function splitAuctionPosition(uint96 id, address receiver, uint256 rep, uint256 commitment) external onlyCapitalLedger operational returns (uint96 receiverId) {
 		_touch(id);
 		Position storage source = positions[id];
 		Node storage leaf = nodes[source.node];
@@ -165,7 +167,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 
 	/// @dev Supports an existing receiver slot without refreshing retirement
 	/// priority. Both old fee entitlements stay with their respective owners.
-	function transferTo(uint96 sourceId, uint96 receiverId, uint256 rep, uint256 commitment, uint256 sourceMaxPrice, uint256 receiverMaxPrice) external onlyPortfolio operational {
+	function transferTo(uint96 sourceId, uint96 receiverId, uint256 rep, uint256 commitment, uint256 sourceMaxPrice, uint256 receiverMaxPrice) external onlyCapitalLedger operational {
 		require(sourceId != receiverId, 'Same commitment position');
 		_touch(sourceId);
 		_touch(receiverId);
@@ -190,7 +192,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		_reinsert(receiver);
 	}
 
-	function requestRetirement(uint96 id, uint256 remainingCommitment, uint256 minimumCommitment) external onlyPortfolio operational {
+	function requestRetirement(uint96 id, uint256 remainingCommitment, uint256 minimumCommitment) external onlyCapitalLedger operational {
 		_touch(id);
 		Position storage position = positions[id];
 		Node storage leaf = nodes[position.node];
@@ -206,7 +208,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 
 	/// @notice Record which existing live positions are healthy at a fresh price.
 	/// @dev Epochs distinguish recovery and relapse even within the same block.
-	function observeHealthy(uint256 price) external onlyPortfolio operational {
+	function observeHealthy(uint256 price) external onlyCapitalLedger operational {
 		require(block.timestamp <= type(uint48).max, 'Commitment clock exhausted');
 		uint64 epoch = ++healthObservationEpoch;
 		observationTimes[epoch] = uint48(block.timestamp);
@@ -245,7 +247,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 
 	/// @dev The controller calls only after an actual healthy mutation at a fresh
 	/// price, or full retirement. A stale-price deposit must not reset distress.
-	function clearLiquidation(uint96 id) external onlyPortfolio {
+	function clearLiquidation(uint96 id) external onlyCapitalLedger {
 		positions[id].healthyMutationEpoch = healthObservationEpoch;
 	}
 
@@ -255,7 +257,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	/// for. Any reduction left between the result and a nonzero `target` must
 	/// still be a valid retirement request: a rest below the economic minimum
 	/// is cut at once when spare allows, and otherwise grows to that minimum.
-	function cure(uint96 id, uint256 price, uint256 multiplier, uint256 minimumCommitment, uint256 demand, uint256 target) external onlyPortfolio operational returns (Cure memory result) {
+	function cure(uint96 id, uint256 price, uint256 multiplier, uint256 minimumCommitment, uint256 demand, uint256 target) external onlyCapitalLedger operational returns (Cure memory result) {
 		Account memory account = accountOf(id);
 		require(account.owner != address(0) && account.commitment > target, 'Position is not live');
 		uint256 supported = Math.mulDiv(Math.mulDiv(account.rep, 10_000, multiplier), 1e18, price);
@@ -305,7 +307,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	}
 	/// @notice Validate an individual takeover against the index's current
 	/// principal, cohort and adverse observation before custody moves any assets.
-	function takeoverQuote(uint96 id, address receiver, uint256 commitment, uint256 minimumCommitment, uint256 minimumAward, uint256 price) external view onlyPortfolio returns (Account memory source, uint256 award, uint256 debit) {
+	function takeoverQuote(uint96 id, address receiver, uint256 commitment, uint256 minimumCommitment, uint256 minimumAward, uint256 price) external view onlyCapitalLedger returns (Account memory source, uint256 award, uint256 debit) {
 		source = accountOf(id);
 		require(source.owner != receiver && source.maxHealthyPrice < price, 'Position does not need takeover');
 		uint48 started = liquidationStarted(id);
@@ -354,7 +356,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	/// @notice Assign exact, already funded budgets to currently healthy K.
 	/// @return assigned False when there are no healthy commitments; the controller
 	/// retains the undistributed funds and applies its explicit no-recipient policy.
-	function creditFees(uint256 acceptedPrice, uint256 ethAmount, uint256 repAmount) public onlyPortfolio operational returns (bool assigned) {
+	function creditFees(uint256 acceptedPrice, uint256 ethAmount, uint256 repAmount) public onlyCapitalLedger operational returns (bool assigned) {
 		uint256 total = eligibleCommitment(acceptedPrice);
 		if (total == 0) return false;
 		uint96[3] memory batches = [uint96(0), currentBatch, nextBatch];
@@ -375,7 +377,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 
 	/// @notice Unhealthy commitment remains in the earnings denominator. The
 	/// controller handles the unassigned funds without scanning their owners.
-	function creditProportionalFees(uint256 acceptedPrice, uint256 ethAmount, uint256 repAmount) external onlyPortfolio returns (uint256 unassignedEth, uint256 unassignedRep) {
+	function creditProportionalFees(uint256 acceptedPrice, uint256 ethAmount, uint256 repAmount) external onlyCapitalLedger returns (uint256 unassignedEth, uint256 unassignedRep) {
 		(, uint256 total) = totals();
 		uint256 eligible = acceptedPrice == 0 ? 0 : eligibleCommitment(acceptedPrice);
 		uint256 assignedEth = total == 0 ? 0 : Math.mulDiv(ethAmount, eligible, total);
@@ -388,7 +390,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	/// @dev At most two cohorts and one partial boundary are processed. A capped
 	/// request rejoins active capacity at its residual K; full exits can close in
 	/// bulk. The controller rekeys the sole boundary while retaining all its REP.
-	function retire(uint256 acceptedPrice, uint256 demand, uint96 id) external onlyPortfolio operational returns (Retirement memory result) {
+	function retire(uint256 acceptedPrice, uint256 demand, uint96 id) external onlyCapitalLedger operational returns (Retirement memory result) {
 		if (id != 0) return _retirePosition(id, acceptedPrice, demand);
 		uint256 healthy = eligibleCommitment(acceptedPrice);
 		if (healthy < demand) return result;
@@ -503,7 +505,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	/// caller can tell a retired position apart without a second fee preview.
 	function claim(uint96 id)
 		external
-		onlyPortfolio
+		onlyCapitalLedger
 		operational
 		returns (uint256 releasedRep, uint256 ethFees, uint256 repFees, uint256 commitment)
 	{

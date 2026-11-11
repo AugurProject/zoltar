@@ -33,7 +33,7 @@ test.skipIf(postgresUrl === undefined)('member ledgers share canonical feed hist
 				[poolB, coordinatorB],
 				[standalonePool, standaloneCoordinator],
 			]) {
-				await connection`INSERT INTO pools (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, parent_address, universe_id, question_id, truth_auction_address, coordinator_address, share_token_address, security_multiplier_bps, initial_priority_fee_atto_eth_per_gas, initial_retention_rate, initial_settlement_collateral_atto_eth)
+				await connection`INSERT INTO pools (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, parent_address, universe_id, question_id, collateral_repair_auction_address, coordinator_address, share_token_address, security_multiplier_bps, initial_priority_fee_atto_eth_per_gas, initial_retention_rate, initial_settlement_collateral_atto_eth)
 					VALUES (${chainId}, ${blockHash}, ${blockHash}, 0, 10, ${pool}, ${pool}, 0, 1, ${pool}, ${coordinator}, ${pool}, 15000, 1, 1, 0)`
 			}
 			for (const [index, emitter, name, args, canonical] of [

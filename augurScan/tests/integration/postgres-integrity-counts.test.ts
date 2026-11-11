@@ -1,3 +1,4 @@
+import { rewindAuctionNamingToV5 } from '../support/schema-fixtures.ts'
 import { expect } from 'bun:test'
 import { ScannerDatabase } from '../../src/database.ts'
 import { captureHistoryInvalidation, recordChainReorganization } from '../../src/database/history.ts'
@@ -38,6 +39,8 @@ postgresTest('integrity pages read stored counts without access to occurrence ev
 		expect((await database.sql`SELECT occurrence_counts FROM chain_reorganizations WHERE id = ${id}`)[0]?.occurrence_counts).toEqual({ block: '2001' })
 		// Simulate an existing v4 database: upgrade must backfill without reindexing.
 		await database.sql.unsafe('ALTER TABLE chain_reorganizations DROP COLUMN occurrence_counts')
+		await rewindAuctionNamingToV5(database)
+		await database.sql`DELETE FROM augurscan_schema_migrations WHERE schema_version::integer > 4`
 		await database.sql`UPDATE augurscan_schema SET schema_version = '4' WHERE singleton`
 		await initializeSchema(database.sql)
 		await initializeSchema(database.sql)
