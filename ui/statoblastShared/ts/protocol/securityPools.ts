@@ -1,7 +1,7 @@
 import { createRegistryIndex, readIncrementalRegistry, type RegistryIndex } from '@zoltar/ui-core-shared/lib/incrementalRegistry.js'
 import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio } from '../contractArtifact.js'
 
-import { RpcError, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { errorChain } from '@zoltar/core-shared/errors/errorChain'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -120,16 +120,25 @@ function portfolioListing(portfolio: Address, ledger: ListingRead | undefined, q
 	return { portfolio, questionCount: Number(questions.result) }
 }
 
+/** The error and its causes, plus a node error that a wallet wraps as JSON-RPC `data` (MetaMask's "Internal JSON-RPC error."). */
+function* reportedErrors(error: unknown) {
+	for (const current of errorChain(error)) {
+		yield current
+		if ('data' in current && typeof current.data === 'object' && current.data !== null) yield* errorChain(current.data)
+	}
+}
+
 /**
  * The node ran the calls and they failed: a revert or exhausted gas. A request that got no answer, such as an HTTP error,
  * a timeout or a lost connection, is not one, and neither is empty return data: Multicall3 always returns encoded
  * results or reverts, so empty data means the node or the deployment is at fault, not a registered contract.
  */
 function isExecutionFailure(error: unknown) {
-	return [...errorChain(error)].some(current => {
+	return [...reportedErrors(error)].some(current => {
 		if (current instanceof Error && current.name === 'ContractFunctionRevertedError') return true
 		// An HTTP status arrives in the same field as a JSON-RPC error code, but then the node never ran the calls.
-		if (!(current instanceof RpcError) || typeof current.code !== 'number' || (current.code >= 100 && current.code < 600)) return false
+		if (!('code' in current) || typeof current.code !== 'number' || (current.code >= 100 && current.code < 600)) return false
+		if (!('message' in current) || typeof current.message !== 'string') return false
 		// Nodes word these differently, such as "out of gas" and "EVM error OutOfGas".
 		const message = current.message.toLowerCase().replaceAll(/[\s_-]/g, '')
 		return message.includes('revert') || message.includes('outofgas') || message.includes('gasrequiredexceeds') || message.includes('invalidopcode')

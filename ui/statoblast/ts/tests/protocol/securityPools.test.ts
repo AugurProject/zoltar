@@ -133,6 +133,11 @@ const stranger = getAddress('0x00000000000000000000000000000000000000c3')
 const partial = getAddress('0x00000000000000000000000000000000000000c4')
 // Nodes word an exhausted call differently; a lone read uses Anvil's wording and a batch uses Geth's.
 const outOfGas = (shared: boolean) => new RpcError(shared ? 'out of gas' : 'EVM error OutOfGas', { code: -32_000 })
+/** How the client reports an error a wallet such as MetaMask wraps: "Internal JSON-RPC error." with the node's error as `data`. */
+const walletWrapped = (data: unknown) => {
+	const walletError = { code: -32_603, message: 'Internal JSON-RPC error.', data }
+	return new RpcError(walletError.message, { cause: walletError, code: walletError.code, shortMessage: walletError.message })
+}
 /**
  * A registry where the first portfolio also has a ledger in fork child 42. Any caller can register itself: the stranger
  * answers nothing, and the partial one has a ledger but no question count. `batch` decides how a read of more than one
@@ -146,7 +151,7 @@ const outOfGas = (shared: boolean) => new RpcError(shared ? 'out of gas' : 'EVM 
  */
 function registryClient(
 	batch: 'isolated' | 'starving' | 'reverting' | 'unavailable' | 'flaky' | 'empty',
-	{ more = [], junk = [], burning = [], providerError = () => new RpcError('HTTP 502 while calling eth_call', { code: 502 }) }: { more?: readonly Address[]; junk?: readonly Address[]; burning?: readonly Address[]; providerError?: () => Error } = {},
+	{ more = [], junk = [], burning = [], throughWallet = false, providerError = () => new RpcError('HTTP 502 while calling eth_call', { code: 502 }) }: { more?: readonly Address[]; junk?: readonly Address[]; burning?: readonly Address[]; throughWallet?: boolean; providerError?: () => Error } = {},
 ) {
 	const registry = [portfolio, stranger, second, partial, unopened, ...more, ...junk, ...burning]
 	const junkAddresses = new Set(junk)
@@ -178,8 +183,9 @@ function registryClient(
 			const addresses = request.contracts.map(contract => getAddress(String(contract.address)))
 			const shared = new Set(request.contracts.filter(contract => contract.functionName !== 'portfolioCount').map(contract => contract.address)).size > 1
 			if (batch === 'flaky' && !shared && addresses.includes(second)) throw providerError()
-			if (addresses.includes(stranger) && (!shared || batch === 'reverting' || batch === 'flaky')) throw outOfGas(shared)
-			if (!shared && addresses.some(address => burningAddresses.has(address))) throw outOfGas(shared)
+			const exhausted = () => (throughWallet ? walletWrapped({ code: -32_000, message: 'out of gas' }) : outOfGas(shared))
+			if (addresses.includes(stranger) && (!shared || batch === 'reverting' || batch === 'flaky')) throw exhausted()
+			if (!shared && addresses.some(address => burningAddresses.has(address))) throw exhausted()
 			const firstBurning = addresses.findIndex(address => burningAddresses.has(address))
 			let starvedFrom = shared && batch === 'starving' ? addresses.indexOf(stranger) : -1
 			if (firstBurning >= 0 && (starvedFrom < 0 || firstBurning < starvedFrom)) starvedFrom = firstBurning
@@ -267,6 +273,20 @@ test('empty data from the batched read fails the list, since a registered contra
 	const { client, batches } = registryClient('empty')
 	await expect(loadRegisteredPortfolios(client, 0n)).rejects.toThrow('returned no data')
 	expect(batches).toHaveLength(1)
+})
+
+test('a contract that reverts the batched read through a wallet cannot hide the other portfolios', async () => {
+	const { client } = registryClient('reverting', { throughWallet: true })
+	expect(await loadRegisteredPortfolios(client, 0n)).toEqual([
+		{ portfolio: second, questionCount: 0 },
+		{ portfolio, questionCount: 2 },
+	])
+})
+
+test('a provider failure a wallet wraps still fails the list', async () => {
+	// MetaMask wraps a failed upstream request too, with the response body rather than a node error as `data`.
+	const providerError = () => walletWrapped(`Non-200 status code: '503'`)
+	await expect(loadRegisteredPortfolios(registryClient('flaky', { throughWallet: true, providerError }).client, 0n)).rejects.toThrow('Internal JSON-RPC error.')
 })
 
 test('a provider that answers no portfolio read reports an error rather than an empty list', async () => {
