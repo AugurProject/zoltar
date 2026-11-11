@@ -21,7 +21,7 @@ export function PortfolioInput({
 	value: string
 	onChange: (value: string) => void
 	disabled?: boolean
-	hint?: string
+	hint?: string | undefined
 	numeric?: boolean
 	describedBy?: string | undefined
 	error?: string | undefined

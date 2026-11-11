@@ -1,4 +1,5 @@
-import { useId, useRef } from 'preact/hooks'
+import { useId, useRef, useState } from 'preact/hooks'
+import { isAddress } from '@zoltar/core-shared/evm/ethereum'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
@@ -7,10 +8,11 @@ import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import { TransactionScopeProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import type { WriteOperationsParameters } from '../../../types/app.js'
-import { usePortfolio } from '../hooks/usePortfolio.js'
+import { rememberedPortfolio, usePortfolio } from '../hooks/usePortfolio.js'
 import { usePortfolioActions } from '../hooks/usePortfolioActions.js'
 import { usePortfolioAggregate } from '../hooks/usePortfolioAggregate.js'
 import { usePortfolioPurchase } from '../hooks/usePortfolioPurchase.js'
+import { RegisteredPortfolios } from './RegisteredPortfolios.js'
 import { PortfolioTakeover } from './PortfolioTakeover.js'
 import { PortfolioAggregatePanel } from './PortfolioAggregatePanel.js'
 import { PortfolioSharedFork } from './PortfolioSharedFork.js'
@@ -21,11 +23,20 @@ import { PortfolioButton, PortfolioInput } from './PortfolioControls.js'
 import * as copy from '../../../copy/portfolio.js'
 import * as capitalCopy from '../../../copy/portfolioCapital.js'
 
-export function PortfoliosSection({ parameters, enabled, environmentKey, activeUniverseId }: { parameters: WriteOperationsParameters; enabled: boolean; environmentKey: number; activeUniverseId: bigint }) {
+/** `walletConnected` reports a wallet on any network; `parameters.accountAddress` is set only on the app's network. */
+export function PortfoliosSection({ parameters, walletConnected, enabled, environmentKey, activeUniverseId }: { parameters: WriteOperationsParameters; walletConnected: boolean; enabled: boolean; environmentKey: number; activeUniverseId: bigint }) {
 	const model = usePortfolio({ accountAddress: parameters.accountAddress, enabled, environmentKey, activeUniverseId })
 	const actions = usePortfolioActions(model, parameters)
 	const capital = usePortfolioAggregate(model, actions, parameters.accountAddress)
 	const purchase = usePortfolioPurchase(model, actions)
+	// Decided at mount, before a remembered portfolio fills the field, so the list never opens and then jumps shut.
+	const [listInitiallyOpen] = useState(() => model.managerInput.trim() === '' && rememberedPortfolio() === undefined)
+	// Said in place of the owner hint, so a visitor with no wallet learns why an opened portfolio does not load without the list moving.
+	// Only once the page can read the chain, so a wallet still starting up is not told to connect.
+	const ownerMissing = enabled && isAddress(model.managerInput.trim()) && !isAddress(model.ownerInput.trim())
+	let ownerMessage: string | undefined
+	// Only a visitor with no wallet at all is asked to connect one; a wallet on another network is flagged in the header.
+	if (ownerMissing) ownerMessage = walletConnected ? copy.ownerAddressNeeded : copy.ownerNeeded
 	const disabled = actions.busy !== undefined
 	const deployReasonId = useId()
 	// Once an account has been shown, its price report stays mounted through a failed refresh so typed drafts survive;
@@ -39,9 +50,23 @@ export function PortfoliosSection({ parameters, enabled, environmentKey, activeU
 			<SectionBlock title={copy.setup}>
 				<MetricGrid>
 					<PortfolioInput label={copy.manager} value={model.managerInput} onChange={model.setManagerInput} disabled={disabled} />
-					<PortfolioInput label={copy.owner} value={model.ownerInput} onChange={model.setOwnerInput} hint={copy.ownerHint} disabled={disabled} />
+					<PortfolioInput label={copy.owner} value={model.ownerInput} onChange={model.setOwnerInput} hint={ownerMissing ? undefined : copy.ownerHint} error={ownerMessage} liveError disabled={disabled} />
 					<PortfolioInput label={copy.universe} value={model.universeInput} onChange={model.setUniverseInput} disabled={disabled} />
 				</MetricGrid>
+				<RegisteredPortfolios
+					enabled={enabled}
+					environmentKey={environmentKey}
+					universeId={activeUniverseId}
+					selected={model.managerInput}
+					selectedUniverse={model.universeInput}
+					initiallyOpen={listInitiallyOpen}
+					disabled={disabled}
+					onOpen={portfolio => {
+						// The list is for the active universe, so open the portfolio there.
+						model.setUniverseInput(activeUniverseId.toString())
+						model.setManagerInput(portfolio)
+					}}
+				/>
 				<details>
 					<summary>{copy.deploy}</summary>
 					<div className='form-grid portfolio-creation-form'>
@@ -83,7 +108,7 @@ export function PortfoliosSection({ parameters, enabled, environmentKey, activeU
 				</details>
 			</SectionBlock>
 			<SectionBlock title={capitalCopy.prepareTitle} description={actions.setupStage === 4 ? undefined : capitalCopy.prepareHint}>
-				<UserMessage tone={actions.setupStage === 4 ? 'success' : 'neutral'} detail={capitalCopy.prepareProgress(actions.setupStage ?? 0)} />
+				<UserMessage tone={actions.setupStage === 4 ? 'success' : 'neutral'} detail={actions.setupStage === undefined ? capitalCopy.prepareProgressUnknown : capitalCopy.prepareProgress(actions.setupStage)} />
 				<div className='actions'>
 					{capitalCopy.prepareStages.map((label, index) => (
 						<PortfolioButton key={label} model={actions} action={`preparePortfolio${index + 1}`} label={label} pendingLabel={capitalCopy.preparing} reason={actions.preparationReason(index + 1)} onClick={() => actions.prepare(index + 1)} />

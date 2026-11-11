@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
-import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { loadAllSecurityPools } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
+import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { loadAllSecurityPools, loadRegisteredPortfolios } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
 import { loadSecurityPoolMintCapacity } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { createMockLoaderClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { owner, portfolio, capital, token } from '../features/portfolios/capitalFixture.js'
@@ -125,4 +125,48 @@ test.each([false, true])('mint capacity uses central fees and closes when report
 	const capacity = await loadSecurityPoolMintCapacity(fixture({ reporting }).client, owner)
 	expect(capacity.feeEndTimestamp).toBe(2000n)
 	expect(capacity.mintingCapacityAttoEth).toBe(reporting ? 0n : 80n)
+})
+
+test('registered portfolios list the pools of one universe by portfolio, newest registration first', async () => {
+	const other = getAddress('0x00000000000000000000000000000000000000c1')
+	const pool = (index: number) => getAddress(`0x${(0xa0 + index).toString(16).padStart(40, '0')}`)
+	// Question 7 is registered in universe 0 and again in fork child 42; each universe lists its own registrations.
+	const deployments = [
+		{ ...deployment, securityPool: pool(0), universeId: 0n, questionId: 7n },
+		{ ...deployment, securityPool: pool(1), universeId: 0n, questionId: 8n },
+		{ ...deployment, securityPool: pool(2), universeId: 0n, questionId: 9n },
+		{ ...deployment, securityPool: pool(3), universeId: 42n, questionId: 7n },
+		{ ...deployment, securityPool: pool(4), universeId: 0n, questionId: 5n },
+	]
+	const owners = new Map([
+		[pool(0), portfolio],
+		[pool(1), other],
+		[pool(2), zeroAddress],
+		[pool(3), portfolio],
+		[pool(4), portfolio],
+	])
+	const blocks: (bigint | undefined)[] = []
+	const batches: number[] = []
+	const client = createMockLoaderClient({
+		getBlock: async () => block,
+		readContract: async request => {
+			blocks.push(request.blockNumber)
+			if (request.functionName === 'securityPoolDeploymentCount') return BigInt(deployments.length)
+			if (request.functionName === 'securityPoolDeploymentsRange') return deployments
+			throw new Error(`Unexpected ${request.functionName}`)
+		},
+		multicall: async request => {
+			batches.push(request.contracts.length)
+			blocks.push(request.blockNumber)
+			return request.contracts.map(contract => owners.get(getAddress(String(contract.args?.[0]))))
+		},
+	})
+	expect(await loadRegisteredPortfolios(client, 0n)).toEqual([
+		{ portfolio, questionCount: 2 },
+		{ portfolio: other, questionCount: 1 },
+	])
+	expect(await loadRegisteredPortfolios(client, 42n)).toEqual([{ portfolio, questionCount: 1 }])
+	// Each load resolves only its universe's pools, in one batched read pinned with the registry to one block.
+	expect(batches).toEqual([4, 1])
+	expect(blocks.every(blockNumber => blockNumber === block.number)).toBe(true)
 })
