@@ -405,6 +405,10 @@
 			"bun": "./ts/copy/portfolioAuction.ts",
 			"default": "./js/copy/portfolioAuction.js"
 		},
+		"./copy/portfolioPrice.js": {
+			"bun": "./ts/copy/portfolioPrice.ts",
+			"default": "./js/copy/portfolioPrice.js"
+		},
 		"./protocol/securityPoolPortfolioAuction.js": {
 			"bun": "./ts/protocol/securityPoolPortfolioAuction.ts",
 			"default": "./js/protocol/securityPoolPortfolioAuction.js"

@@ -1,3 +1,5 @@
+import type { ComponentChildren } from 'preact'
+import { useEffect, useState } from 'preact/hooks'
 import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
@@ -15,10 +17,28 @@ import { PortfolioRetirementPreview } from './PortfolioRetirementPreview.js'
 import type { usePortfolioAggregate } from '../hooks/usePortfolioAggregate.js'
 import { capitalPositionPhase, requiredPortfolioCollateral } from '../lib/capital.js'
 import * as copy from '../../../copy/portfolioCapital.js'
+import * as priceCopy from '../../../copy/portfolioPrice.js'
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
 
 type Model = ReturnType<typeof usePortfolioAggregate>
-export function PortfolioAggregatePanel({ model, actions }: { model: Model; actions: Pick<PortfolioActions, 'scope' | 'busy'> }) {
+/** The request form is long, so it stays folded unless the price has expired and a new report can be requested. */
+function PriceReportDisclosure({ requestable, children }: { requestable: boolean; children: (unfolded: boolean) => ComponentChildren }) {
+	const [open, setOpen] = useState(requestable)
+	// Never folds by itself: settling a report must not hide the control that still has focus.
+	useEffect(() => {
+		if (requestable) setOpen(true)
+	}, [requestable])
+	// The report stays mounted so folding keeps its drafts; it learns it is folded and reads nothing until unfolded.
+	return (
+		<details open={open} onToggle={event => setOpen(event.currentTarget.open)}>
+			<summary>{priceCopy.scopes.universe.title}</summary>
+			{children(open)}
+		</details>
+	)
+}
+
+/** `priceReport` renders inside Shared backing, next to the price status it refreshes, and is told whether its disclosure is unfolded. */
+export function PortfolioAggregatePanel({ model, actions, priceReport }: { model: Model; actions: Pick<PortfolioActions, 'scope' | 'busy'>; priceReport?: ((unfolded: boolean) => ComponentChildren) | undefined }) {
 	const snapshot = model.snapshot
 	const disabled = actions.busy !== undefined || model.loading || model.showingPreviousSnapshot
 	const disabledReason = actions.busy !== undefined ? copy.actionPending : copy.readUnavailable
@@ -27,6 +47,8 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 	else if (model.targetCapacity === undefined) targetCapacityReason = copy.targetUnavailable
 	let available: bigint | undefined
 	if (snapshot !== undefined) available = snapshot.healthyCommitmentAttoEth > snapshot.demandAttoEth ? snapshot.healthyCommitmentAttoEth - snapshot.demandAttoEth : 0n
+	// A forked or importing universe cannot accept a new report, so only an expired price in an active universe asks for one.
+	const priceRequestable = snapshot !== undefined && !snapshot.priceValid && snapshot.forkTime === 0n && !snapshot.importing
 	let status = snapshot?.priceValid ? copy.priceValid : copy.priceStale
 	if (snapshot?.importing) status = copy.importing
 	if (snapshot !== undefined && snapshot.forkTime > 0n) status = copy.forked
@@ -55,6 +77,7 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 						<TimestampValue timestamp={snapshot?.timestamp} relative={false} />
 					</MetricField>
 				</MetricGrid>
+				{priceReport === undefined ? undefined : <PriceReportDisclosure requestable={priceRequestable}>{priceReport}</PriceReportDisclosure>}
 			</SectionBlock>
 			<SectionBlock title={copy.title} description={copy.description}>
 				{snapshot?.auctionVault === undefined ? undefined : <UserMessage detail={copy.auctionVaultOwnership} />}

@@ -71,7 +71,8 @@ export function PortfolioTakeover({ model, actions }: { model: Pick<ReturnType<t
 	let reason = actions.ownerReason
 	if (reason === undefined && (id === undefined || id === 0n)) reason = copy.enterTarget
 	if (reason === undefined && preview === undefined) reason = loaded?.error ?? copy.loading
-	if (reason === undefined && snapshot !== undefined && (!snapshot.priceValid || snapshot.forkTime !== 0n || snapshot.frozen || snapshot.importing)) reason = copy.inactive
+	if (reason === undefined && snapshot !== undefined && (snapshot.forkTime !== 0n || snapshot.frozen || snapshot.importing)) reason = copy.inactive
+	if (reason === undefined && snapshot !== undefined && !snapshot.priceValid) reason = copy.priceRequired
 	if (reason === undefined && preview !== undefined && snapshot !== undefined && (preview.position.owner === snapshot.owner || preview.position.commitment === 0n || preview.position.maxHealthyPrice >= snapshot.liquidationPrice || preview.started === 0n || source?.healthy === true)) reason = copy.notEligible
 	if (reason === undefined && (commitment === undefined || commitment === 0n || minimumAward === undefined || maximumOwnRep === undefined || maximumOwnerPrincipal === undefined || maximumOwnerCommitment === undefined)) reason = copy.enterBounds
 	const takeOver = async () => {

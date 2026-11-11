@@ -16,6 +16,10 @@ import * as common from '@zoltar/ui-core-shared/copy/common.js'
 
 export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 	const model = usePortfolioPrice(parameters)
+	const scoped = copy.scopes[parameters.scope]
+	// Only a branch has a preparation window and a feed to prepare; the account's universe already shows its price expiry.
+	// Its report sits under a disclosure that already names it, so it carries no heading of its own.
+	const branch = parameters.scope === 'branch'
 	const priceWarningId = useId()
 	const observation = model.snapshot?.observation
 	const disabled = parameters.actions.busy !== undefined
@@ -30,24 +34,28 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 		if (report.outcome === 2n) reportStatus = copy.states.rejected
 	}
 	return (
-		<WorkflowSubsection title={copy.title}>
-			<UserMessage detail={copy.description} />
+		<WorkflowSubsection title={branch ? scoped.title : undefined}>
+			<UserMessage detail={scoped.description} />
 			{model.error === undefined ? undefined : <UserMessage tone='error' detail={model.error} />}
 			<MetricGrid>
-				<MetricField label={copy.reportingDeadline}>
-					<TimestampValue timestamp={model.reportingDeadline} relative={false} />
-				</MetricField>
+				{branch ? (
+					<MetricField label={copy.reportingDeadline}>
+						<TimestampValue timestamp={model.reportingDeadline} relative={false} />
+					</MetricField>
+				) : undefined}
 				<MetricField label={copy.earliestSettlement}>
 					<TimestampValue timestamp={model.earliestSettlement} relative={false} />
 				</MetricField>
 				<MetricField label={copy.currentPrice} loading={model.loading}>
 					<CurrencyValue value={observation?.lastSettlementTimestamp === 0n ? undefined : observation?.lastPrice} />
 				</MetricField>
-				<MetricField label={copy.validUntil} loading={model.loading}>
-					<TimestampValue timestamp={observation === undefined || observation.lastSettlementTimestamp === 0n ? undefined : observation.lastSettlementTimestamp + observation.validitySeconds} relative={false} />
-				</MetricField>
+				{branch ? (
+					<MetricField label={copy.validUntil} loading={model.loading}>
+						<TimestampValue timestamp={observation === undefined || observation.lastSettlementTimestamp === 0n ? undefined : observation.lastSettlementTimestamp + observation.validitySeconds} relative={false} />
+					</MetricField>
+				) : undefined}
 			</MetricGrid>
-			<PortfolioButton model={parameters.actions} action='preparePortfolioPrice' label={copy.prepare} pendingLabel={copy.preparing} reason={model.prepareReason} onClick={model.prepare} />
+			{branch ? <PortfolioButton model={parameters.actions} action={model.actionId('prepare')} label={copy.prepare} pendingLabel={copy.preparing} reason={model.prepareReason} onClick={model.prepare} /> : undefined}
 			<MetricGrid>
 				<div className='initial-price-input'>
 					<PortfolioInput label={copy.price} value={model.priceInput} onChange={model.setPrice} disabled={disabled} numeric describedBy={priceWarning === undefined ? undefined : priceWarningId} />
@@ -59,7 +67,7 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 				<MetricField label={copy.minimumWeth} loading={model.loading}>
 					<CurrencyValue value={model.minimumWethAttoEth} suffix={common.weth} />
 				</MetricField>
-				<MetricField label={copy.requiredRep}>
+				<MetricField label={scoped.requiredRep}>
 					<CurrencyValue value={model.funding?.rep} suffix={common.rep} />
 				</MetricField>
 				<MetricField label={copy.bounty} loading={model.loading}>
@@ -68,16 +76,16 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 				<MetricField label={copy.walletWeth} loading={model.loading}>
 					<CurrencyValue value={observation?.wethBalanceAttoEth} suffix={common.weth} />
 				</MetricField>
-				<MetricField label={copy.walletRep} loading={model.loading}>
+				<MetricField label={scoped.walletRep} loading={model.loading}>
 					<CurrencyValue value={observation?.repBalanceAttoRep} suffix={common.rep} />
 				</MetricField>
 				<MetricField label={copy.wrapAmount}>
 					<CurrencyValue value={model.funding?.wrap} suffix={common.eth} />
 				</MetricField>
 			</MetricGrid>
-			<PortfolioButton model={parameters.actions} action='wrapPortfolioPrice' label={copy.wrap} pendingLabel={copy.wrapping} reason={model.wrapReason} onClick={model.wrap} />
+			<PortfolioButton model={parameters.actions} action={model.actionId('wrap')} label={copy.wrap} pendingLabel={copy.wrapping} reason={model.wrapReason} onClick={model.wrap} />
 			<TokenApprovalControl
-				actionLabel={copy.request}
+				actionLabel={scoped.request}
 				allowanceError={model.fundingReadError}
 				allowanceLoading={model.loading}
 				approvedAmount={observation?.wethAllowanceAttoEth}
@@ -86,15 +94,15 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 				onApprove={amount => {
 					if (amount !== undefined) void model.approve('weth', amount)
 				}}
-				pending={parameters.actions.busy === 'approvePortfolioPriceWeth'}
+				pending={parameters.actions.busy === model.actionId('approveWeth')}
 				pendingLabel={copy.approving}
 				requiredAmount={model.funding?.weth}
-				resetKey={`${model.snapshot?.feed}:${model.snapshot?.owner}:${model.priceInput}:${model.wethInput}:weth`}
+				resetKey={`${model.draftKey}:${model.priceInput}:${model.wethInput}:weth`}
 				tokenSymbol={common.weth}
 				tokenUnits={18}
 			/>
 			<TokenApprovalControl
-				actionLabel={copy.request}
+				actionLabel={scoped.request}
 				allowanceError={model.fundingReadError}
 				allowanceLoading={model.loading}
 				approvedAmount={observation?.repAllowanceAttoRep}
@@ -103,15 +111,15 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 				onApprove={amount => {
 					if (amount !== undefined) void model.approve('rep', amount)
 				}}
-				pending={parameters.actions.busy === 'approvePortfolioPriceRep'}
+				pending={parameters.actions.busy === model.actionId('approveRep')}
 				pendingLabel={copy.approving}
 				requiredAmount={model.funding?.rep}
-				resetKey={`${model.snapshot?.feed}:${model.snapshot?.owner}:${model.priceInput}:${model.wethInput}:rep`}
+				resetKey={`${model.draftKey}:${model.priceInput}:${model.wethInput}:rep`}
 				tokenSymbol={common.rep}
 				tokenUnits={18}
 			/>
-			<UserMessage tone='warning' detail={copy.requestWarning} />
-			<PortfolioButton model={parameters.actions} action='requestPortfolioPrice' label={copy.request} pendingLabel={copy.requesting} reason={model.requestReason} onClick={model.request} />
+			<UserMessage tone='warning' detail={scoped.requestWarning} />
+			<PortfolioButton model={parameters.actions} action={model.actionId('request')} label={scoped.request} pendingLabel={scoped.requesting} reason={model.requestReason} onClick={model.request} />
 			<PortfolioInput label={copy.reportId} hint={copy.reportHint} value={model.reportInput} onChange={model.setReportId} disabled={disabled} />
 			<MetricGrid>
 				<MetricField label={copy.reportState}>{reportStatus}</MetricField>
@@ -124,16 +132,16 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 				<MetricField label={copy.releasedWeth}>
 					<CurrencyValue value={report?.wethCredit} suffix={common.weth} />
 				</MetricField>
-				<MetricField label={copy.releasedRep}>
+				<MetricField label={scoped.releasedRep}>
 					<CurrencyValue value={report?.repCredit} suffix={common.rep} />
 				</MetricField>
 			</MetricGrid>
 			<UserMessage detail={copy.fundingReturnHint} />
 			<div className='actions'>
-				<PortfolioButton model={parameters.actions} action='settlePortfolioPrice' label={copy.settle} pendingLabel={copy.settling} reason={model.settleReason} onClick={model.settle} />
-				<PortfolioButton model={parameters.actions} action='recoverPortfolioPrice' label={copy.recover} pendingLabel={copy.recovering} reason={model.recoverReason} onClick={model.recover} />
-				<PortfolioButton model={parameters.actions} action='withdrawPortfolioPrice' label={copy.withdraw} pendingLabel={copy.withdrawing} reason={model.withdrawReason} onClick={model.withdraw} />
-				<ActionLauncherButton tone='secondary' idleLabel={copy.refresh} pendingLabel={copy.refreshing} availability={{ disabled: disabled || model.loading, reason: (disabled ? copy.busy : undefined) ?? (model.loading ? copy.loading : undefined) }} onClick={model.refresh} />
+				<PortfolioButton model={parameters.actions} action={model.actionId('settle')} label={copy.settle} pendingLabel={copy.settling} reason={model.settleReason} onClick={model.settle} />
+				<PortfolioButton model={parameters.actions} action={model.actionId('recover')} label={copy.recover} pendingLabel={copy.recovering} reason={model.recoverReason} onClick={model.recover} />
+				<PortfolioButton model={parameters.actions} action={model.actionId('withdraw')} label={copy.withdraw} pendingLabel={copy.withdrawing} reason={model.withdrawReason} onClick={model.withdraw} />
+				<ActionLauncherButton tone='secondary' idleLabel={copy.refresh} pendingLabel={copy.refreshing} availability={{ disabled: disabled || model.refreshReason !== undefined, reason: (disabled ? copy.busy : undefined) ?? model.refreshReason }} onClick={model.refresh} />
 			</div>
 		</WorkflowSubsection>
 	)

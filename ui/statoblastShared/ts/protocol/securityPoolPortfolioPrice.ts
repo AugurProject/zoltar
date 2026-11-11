@@ -31,13 +31,13 @@ export async function loadPortfolioBranchPrice(client: ReadClient, portfolio: Ad
 /** Authenticate one explicitly selected candidate and its stored oracle preimage. */
 export async function loadPortfolioPriceReport(client: ReadClient, snapshot: PortfolioPriceSnapshot, reportId: bigint) {
 	const observation = snapshot.observation
-	if (observation === undefined || reportId <= 0n || reportId >= 1n << 256n) throw new Error('Enter a valid report ID for this branch.')
+	if (observation === undefined || reportId <= 0n || reportId >= 1n << 256n) throw new Error('Enter a valid report ID for this price feed.')
 	const blockNumber = snapshot.blockNumber
 	const [candidate, outcome] = await Promise.all([client.readContract({ abi, address: snapshot.feed, functionName: 'reportCandidates', args: [reportId], blockNumber }), client.readContract({ abi, address: snapshot.feed, functionName: 'reportOutcome', args: [reportId], blockNumber })])
 	const tuple = requireTupleValue(candidate, 4, 'report candidate')
 	const escrow = requireAddressValue(tuple[0], 'report escrow')
 	const sponsor = requireAddressValue(tuple[1], 'report sponsor')
-	if (escrow === zeroAddress) throw new Error('This report does not belong to the selected branch.')
+	if (escrow === zeroAddress) throw new Error('This report does not belong to this price feed.')
 	const pinned: Pick<ReadClient, 'readContract'> = { readContract: parameters => client.readContract({ ...parameters, blockNumber }) }
 	const [escrowFeed, escrowId, escrowSponsor, escrowOracle, state, wethCredit, repCredit] = await Promise.all([
 		client.readContract({ abi, address: escrow, functionName: 'feed', blockNumber }),
@@ -59,7 +59,7 @@ export async function loadPortfolioPriceReport(client: ReadClient, snapshot: Por
 		getAddress(game.token2) !== snapshot.repToken ||
 		!hasOpenOracleFlag(game, OPEN_ORACLE_FLAG_TIME_TYPE)
 	)
-		throw new Error('Report escrow or oracle identities do not match this branch.')
+		throw new Error('Report escrow or oracle identities do not match this price feed.')
 	const [block, chain] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
 	if (block.hash !== snapshot.blockHash || chain !== snapshot.chainId) throw new Error('Report state changed. Refresh and retry.')
 	return { reportId, escrow, sponsor, outcome: BigInt(requireIntegerLikeValue(outcome, 'report outcome')), state, eligibleAt: game.reportTimestamp + game.settlementTime, wethCredit: releasedCredit(wethCredit), repCredit: releasedCredit(repCredit) }

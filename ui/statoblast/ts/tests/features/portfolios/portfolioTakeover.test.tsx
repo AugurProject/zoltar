@@ -129,3 +129,27 @@ test('bounds outlive a snapshot reload and a first target, and clear when an ID 
 	await fill(fields[0], '6')
 	await waitFor(() => expect(bounds()).toEqual(['', '', '', '', '']))
 })
+
+test.each([
+	// Stated as a condition: a report may already be in its challenge period, so asking for another would invite a duplicate.
+	['an expired price in an active universe needs a new accepted price', { priceValid: false }, 'A new accepted REP price is required.'],
+	['a forked universe cannot take over at all', { priceValid: false, forkTime: 1n }, 'Takeovers require an active universe.'],
+])('%s', async (_case, overrides, reason) => {
+	const snapshot = capitalSnapshot(overrides)
+	const reader = capitalClient(snapshot)
+	reader.setRead('accountOf', { owner: getAddress('0x0000000000000000000000000000000000000099'), batch: 0n, rep: 15n * unit, commitment: 10n * unit, maxHealthyPrice: unit, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 0n }, index)
+	reader.setRead('liquidationStarted', 1n, capital)
+	reader.setRead('acceptedPriceEpoch', 4n, capital)
+	reader.install()
+	const actions = { ownerReason: undefined, scope: undefined, busy: undefined, runPortfolioAction: async () => undefined }
+	const view = await renderIntoDocument(<PortfolioTakeover model={{ snapshot }} actions={actions} />)
+	lifecycle.trackRendered(view)
+	const field = view.container.querySelector('input')
+	if (field === null) throw new Error('Missing takeover target field')
+	await act(() => {
+		field.value = '2'
+		field.dispatchEvent(new Event('input', { bubbles: true }))
+	})
+	await waitFor(() => expect(view.container.textContent).toContain(reason))
+	expect(view.container.querySelector('button')?.disabled).toBe(true)
+})
