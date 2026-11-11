@@ -1,6 +1,6 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const securityPoolContractReference: ContractReference = {
-	compiledAbiFingerprint: 'b4cb129908492d7874dba090ca8651e3bad9d91c355fdef05d26663dac651872',
+	compiledAbiFingerprint: '50513393935b94b4c8e42fab0592205df41e59e5d1b4e235bc70e4fcee78ebb1',
 	name: 'SecurityPool',
 	interactionNotes:
 		'All deployed question ledgers belong to a portfolio. Providers use its capital ledger for deposits, commitments, health targets, retirement and liquidation. Reporters fund separate reporter custody with wallet REP. Purchases use the registered portfolio route; traders redeem through the question ledger. There is no standalone vault, tick auction or operation queue.',
@@ -259,7 +259,7 @@ export const securityPoolContractReference: ContractReference = {
 			signals: 'Relevant share, reporting or central accounting events; no standalone vault accounting.',
 		},
 		{
-			call: '`setStartingParams(currentRetentionRate, settlementCollateralAttoEth)`',
+			call: '`setStartingParams(currentRetentionRate, initialCollateral)`',
 			caller: 'The factory',
 			effect: 'Initializes the question fee clock and settlement mirror.',
 			declarations: [

@@ -139,6 +139,14 @@ describe('Statoblast: privileged authorization matrix', () => {
 		await assertRejectsWithoutStateChange(readPoolSnapshot, () => attacker.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'setPortfolioCustody', args: [attacker.account.address] }), /Only portfolio/)
 	})
 
+	test('escalation accounting rejects direct callers without changing capital', async () => {
+		await portfolio.prepare()
+		const attacker = portfolio.other()
+		for (const functionName of ['creditEscalationSurplus', 'burnEscalationWinnerHaircut'] as const) {
+			await assertRejectsWithoutStateChange(readPoolSnapshot, () => attacker.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName, args: [1n] }), /Only escalation game/)
+		}
+	})
+
 	test('every forker-only pool mutation rejects direct callers without changing accounting', async () => {
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const poolAbi = statoblast_SecurityPool_SecurityPool.abi
