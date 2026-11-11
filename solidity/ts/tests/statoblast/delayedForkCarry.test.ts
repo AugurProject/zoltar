@@ -83,6 +83,11 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 		assert.equal((await getEscalationGameOutcomeState(client, game, QuestionOutcome.Yes)).inheritedUnresolvedTotalAttoRep, 100n * ATTO_REP_PER_REP)
 		assert.equal((await getEscalationGameOutcomeState(client, game, QuestionOutcome.No)).inheritedUnresolvedTotalAttoRep, 80n * ATTO_REP_PER_REP)
 		const deadline = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getEscalationGameEndDate' })
+		const resumedAt = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'forkResumedAt' })
+		const inheritedElapsed = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'forkElapsedAtStart' })
+		const estimatedElapsed = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'computeTimeSinceStartFromAttritionCostAttoRep', args: [80n * ATTO_REP_PER_REP] })
+		const curveEstimate = resumedAt + (estimatedElapsed > inheritedElapsed ? estimatedElapsed - inheritedElapsed : 0n)
+		const estimatedDeadline = curveEstimate > resumedAt + 3n * DAY ? curveEstimate : resumedAt + 3n * DAY
 		const secondQuestion = { ...questionData, title: 'delayed carry second unrelated fork' }
 		await createQuestion(noDepositor, secondQuestion, outcomes)
 		const repToken = await getRepToken(client, pool.securityPool)
@@ -91,23 +96,27 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 		const balanceSlot = formatStorageSlot(getAddressMappingStorageSlot(noDepositor.account.address, 0n))
 		await mockWindow.addStateOverrides({ [repToken]: { stateDiff: { [balanceSlot]: forkThreshold * 2n } } })
 		await approveToken(noDepositor, repToken, getZoltarAddress())
-		return { noDepositor, pool, game, universe, deadline, proof, secondQuestionId: getQuestionId(secondQuestion, outcomes) }
+		return { noDepositor, pool, game, universe, deadline, estimatedDeadline, proof, secondQuestionId: getQuestionId(secondQuestion, outcomes) }
 	}
 
 	for (const { offset, name } of [
 		{ offset: -DAY, name: 'a pre-deadline fork preserves the original NO claim through delayed migration and a winner reversal' },
 		{ offset: 0n, name: 'a fork exactly at the deadline preserves every outcome through delayed migration' },
-		{ offset: 1n, name: 'a fork after the deadline preserves genuine settlement and retires losing inherited principal' },
+		{ offset: 1n, name: 'a fork in the logarithmic estimate rounding gap preserves child recovery and winning claims' },
+		{ offset: DAY, name: 'a fork after genuine settlement retires losing inherited principal' },
 	]) {
 		test(name, async () => {
 			const { client, mockWindow } = fixture
-			const { noDepositor, pool, game, universe, deadline, proof, secondQuestionId } = await setupInheritedDispute()
+			const { noDepositor, pool, game, universe, deadline, estimatedDeadline, proof, secondQuestionId } = await setupInheritedDispute()
 			const beforeFork = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getForkCarrySnapshot' })
 			// The fixture includes each transaction at latest block time + 1.
-			await mockWindow.setTime(deadline + offset - 1n)
+			const forkAt = (offset === 1n ? estimatedDeadline : deadline) + offset
+			await mockWindow.setTime(forkAt - 1n)
+			const finalizedBeforeFork = offset === DAY
+			assert.equal(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getFinalQuestionResolution' }), BigInt(finalizedBeforeFork ? QuestionOutcome.Yes : QuestionOutcome.None))
 			await forkUniverse(noDepositor, universe, secondQuestionId)
-			assert.equal(await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getForkTime', args: [universe] }), deadline + offset)
-			await mockWindow.setTime(deadline + DAY)
+			assert.equal(await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getForkTime', args: [universe] }), forkAt)
+			await mockWindow.setTime(forkAt + DAY)
 			const delayedSnapshot = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getForkCarrySnapshot' })
 			const delayedFinality = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getFinalQuestionResolution' })
 			const poolOutcome = await client.readContract({ abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi, address: getInfraContractAddresses().securityPoolForker, functionName: 'getQuestionOutcome', args: [pool.securityPool] })
@@ -115,7 +124,7 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 			assert.deepStrictEqual(delayedSnapshot[1], beforeFork[1], 'delay must preserve leaf counts')
 			assert.deepStrictEqual(delayedSnapshot[3], beforeFork[3], 'delay must not consume claims')
 
-			if (offset > 0n) {
+			if (finalizedBeforeFork) {
 				assert.equal(delayedFinality, BigInt(QuestionOutcome.Yes), 'a dispute finalized before the fork stays settled')
 				assert.equal(poolOutcome, BigInt(QuestionOutcome.Yes))
 				assert.equal(delayedSnapshot[2][QuestionOutcome.No], 0n, 'genuinely losing inherited principal must retire')

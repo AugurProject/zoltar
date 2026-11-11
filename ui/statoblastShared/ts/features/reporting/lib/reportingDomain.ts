@@ -2,7 +2,7 @@ import * as reportingCopy from '../../../copy/reporting.js'
 import {
 	getWinningEscalationDepositClaimAmount as computeWinningEscalationDepositClaimAmount,
 	getWinningImportedEscalationDepositClaimAmount as computeWinningImportedEscalationDepositClaimAmount,
-	computeEscalationTimeSinceStartFromAttritionCostAttoRep,
+	computeEscalationFinalityElapsed,
 	projectEscalationDeposit,
 	type EscalationBalanceTuple,
 } from '@zoltar/statoblast-shared/escalationGame/escalationMath'
@@ -308,7 +308,7 @@ export function previewReportingDeadline(details: ReportingDetails, outcome: Rep
 		if (a < b) return -1
 		return a > b ? 1 : 0
 	})
-	const elapsed = computeEscalationTimeSinceStartFromAttritionCostAttoRep(details.startBondAttoRep, details.nonDecisionThresholdAttoRep, balances[1] ?? 0n)
+	const elapsed = computeEscalationFinalityElapsed(details.startBondAttoRep, details.nonDecisionThresholdAttoRep, balances[1] ?? 0n)
 	let deadline = details.activationTime + elapsed
 	if (details.forkContinuation) {
 		if (details.forkResumedAt === undefined || details.forkElapsedAtStart === undefined || details.forkResumedAt === 0n) return undefined

@@ -68,7 +68,7 @@ describe('Audit PoC: escalation logarithm precision liveness', () => {
 		assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getBindingCapitalAttoRep' }), reportBond + 1n, 'both successful deposits must leave binding capital strictly between the bond and threshold')
 		const activationTime = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'activationTime' })
 		const deadline = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getEscalationGameEndDate' })
-		assert.strictEqual(deadline, activationTime + ESCALATION_TIME_LENGTH, 'the flat rounded curve reaches intermediate costs only at its terminal jump')
+		assert.strictEqual(deadline, activationTime + ESCALATION_TIME_LENGTH - 1n, 'the flat rounded curve stays unresolved until its terminal jump')
 		await mockWindow.setTime(deadline)
 		assert.strictEqual(await getQuestionOutcome(client, pool), QuestionOutcome.None, 'the exact deadline must remain unresolved')
 		await assert.rejects(client.simulateContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool, functionName: 'withdrawFromEscalationGame', args: [QuestionOutcome.Yes, [0n]] }), /Question not final/)
