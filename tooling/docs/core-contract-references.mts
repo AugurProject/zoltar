@@ -397,10 +397,10 @@ export const coreContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '93f3678c31b7c059acbbb471b22ff99ebfaaa57c851f0ef3bd570747a4b0ed77',
+		compiledAbiFingerprint: '20d673f95a053965341d4e689a0fbc1d7340e48d506c9fc5945be195fcb118d5',
 		name: 'SecurityPoolFactory',
 		purpose: 'Deploys and registers portfolio question ledgers and their shared price feeds. No standalone deployment entry point exists.',
-		readAbiFingerprint: '34c0330a029fda185ef279091d48b684a96d2c49478b1999ab304458a1808fb6',
+		readAbiFingerprint: '255c67a61707b7f415a1dbdf310ff101ceb7fbef13eae561aa4d588521a146d1',
 		readSurface:
 			'Each question derives its start bond as max(1 REP, universe theoretical REP supply / 10,000,000). The factory has no standalone vault or debt minima. Deployment requires the configured operations and accounting delegates. `securityPoolDeploymentCount` and strict `securityPoolDeploymentsRange` enumerate canonical question ledgers. `portfolioCount` and strict `portfoliosRange` enumerate every caller that configured a portfolio namespace, in registration order; a listed address is not authenticated as a portfolio. `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId` and `getSecurityPoolHasInheritedForkOutcome` identify their lineage. `getPortfolioOriginId` includes the caller portfolio namespace. `getSecurityPoolPortfolio` authenticates its portfolio; `sharedPriceFeeds` is indexed by portfolio and universe. `getChildPoolDependencies` returns a prepared coordinator and a zero per-question auction address. Branch collateral repair auctions are created by the shared fork coordinator. `zoltar` identifies the protocol root.',
 		readDeclarations: [
