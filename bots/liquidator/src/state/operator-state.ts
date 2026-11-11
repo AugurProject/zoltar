@@ -1,3 +1,4 @@
+import { parseSponsoredReports, type ReportSponsorship } from './sponsored-reports.ts'
 export type { DurableState } from './durable-state-document.ts'
 import { durableStateDocument, type DurableState } from './durable-state-document.ts'
 import { parseCompletedInstructions, parsePortfolioFunding, type PortfolioFundingEffect, type InstructionIdentity } from './portfolio-instructions.ts'
@@ -120,6 +121,8 @@ export type PendingStagedOperation = {
 }
 
 export type PendingTransactionIntent = {
+	reportSponsorship?: ReportSponsorship | undefined
+	reportOperations?: { feed: Address; reportId: bigint } | undefined
 	portfolioFunding?: PortfolioFundingEffect | undefined
 	portfolioInstruction?: InstructionIdentity | undefined
 	hash: Hex
@@ -577,6 +580,7 @@ export async function loadDurableState(path: string, expectedChainId: number): P
 			}
 		}),
 		pendingTransactions: await Promise.all(pendingTransactions.map((intent: unknown) => parsePendingTransactionIntent(intent, expectedChainId))),
+		sponsoredReports: parseSponsoredReports(Reflect.get(value, 'sponsoredReports')),
 		portfolioFunding: parsePortfolioFunding(Reflect.get(value, 'portfolioFunding')),
 		completedPortfolioInstructions: parseCompletedInstructions(Reflect.get(value, 'completedPortfolioInstructions')),
 		portfolioScopes: parsePortfolioScopes(Reflect.get(value, 'portfolioScopes')),

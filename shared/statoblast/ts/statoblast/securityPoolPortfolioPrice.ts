@@ -1,4 +1,4 @@
-import { encodeFunctionData, getAddress, isAddress, isHex, parseAbi, zeroAddress, type AbiValue, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { encodeFunctionData, getAddress, isAddress, isHex, parseAbi, zeroAddress, type AbiValue, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { PortfolioReadClient } from './securityPoolPortfolioRead.js'
 
 const abi = parseAbi([
@@ -32,6 +32,7 @@ const abi = parseAbi([
 	'function allowance(address owner,address spender) view returns (uint256)',
 	'function preparePortfolioPriceFeed(address source,uint248 universeId) returns (address)',
 	'function requestPortfolioPrice(uint256 proposedRepPerEthPrice,uint256 requestedInitialAttoWeth,uint256 bountyAttoEth) payable returns (uint256)',
+	'function requestPortfolioPriceWithOperations(uint256 price,uint256 weth,uint256 bounty,(uint32 gasLimit,uint256 minimumPrice,uint256 maximumPrice,uint48 deadline,(uint32 gasLimit,bytes data)[] operations) batch) payable returns(uint256)',
 	'function approve(address spender,uint256 amount) returns (bool)',
 	'function deposit() payable',
 ])
@@ -51,13 +52,14 @@ function bool(value: unknown, label: string) {
 }
 
 /** Read one branch feed directly, without a question coordinator or history scan. */
-export async function loadPortfolioPriceSnapshot(parameters: { client: PriceReadClient; portfolio: Address; owner: Address; universeId: bigint }) {
+export async function loadPortfolioPriceSnapshot(parameters: { client: PriceReadClient; portfolio: Address; owner: Address; universeId: bigint; blockNumber?: bigint }) {
 	const { client } = parameters
 	const portfolio = address(parameters.portfolio, 'Portfolio')
 	const owner = address(parameters.owner, 'Report sponsor')
 	const universeId = uint(parameters.universeId, 'Universe', 248)
-	const [block, chainId] = await Promise.all([client.getBlock(), client.getChainId()])
+	const [block, chainId] = await Promise.all([client.getBlock(parameters.blockNumber === undefined ? undefined : { blockNumber: parameters.blockNumber }), client.getChainId()])
 	if (block.number === undefined || block.hash === undefined) throw new Error('Price preparation requires a mined block.')
+	if (parameters.blockNumber !== undefined && block.number !== parameters.blockNumber) throw new Error('Price preparation returned another block.')
 	const blockNumber = block.number
 	const read = (target: Address, functionName: string, args: readonly AbiValue[] = []) => client.readContract({ address: target, abi, functionName, args, blockNumber })
 	const [factoryValue, originUniverseValue, protocolValue, feedValue, openValue, eth] = await Promise.all([
@@ -174,4 +176,26 @@ export function buildPortfolioPriceApprovalRequest(snapshot: PortfolioPriceSnaps
 export function buildPortfolioPriceWrapRequest(snapshot: PortfolioPriceSnapshot, amount: bigint) {
 	if (snapshot.observation === undefined || uint(amount, 'ETH to wrap') === 0n) throw new Error('No WETH wrapping is required.')
 	return { account: snapshot.owner, to: snapshot.observation.weth, value: amount, data: encodeFunctionData({ abi, functionName: 'deposit' }) }
+}
+
+/** @public Calldata and gas allowance for an external sponsor operation. */
+export type PortfolioReportOperation = { gasLimit: bigint; data: Hex }
+export type PortfolioReportOperations = { gasLimit: bigint; minimumPrice: bigint; maximumPrice: bigint; deadline: bigint; operations: readonly PortfolioReportOperation[] }
+
+/** Existing ledger entrypoints encoded in sponsor order, with no fixed count cap. */
+export function buildPortfolioPriceOperationsRequest(snapshot: PortfolioPriceSnapshot, proposedRepPerEth: bigint, requestedWethAttoEth: bigint, batch: PortfolioReportOperations) {
+	const request = buildPortfolioPriceRequest(snapshot, proposedRepPerEth, requestedWethAttoEth)
+	const funding = quotePortfolioPriceFunding(snapshot, proposedRepPerEth, requestedWethAttoEth)
+	uint(batch.gasLimit + 4_000_000n, 'Callback gas', 32)
+	uint(batch.minimumPrice, 'Minimum operation price')
+	uint(batch.maximumPrice, 'Maximum operation price')
+	uint(batch.deadline, 'Operations deadline', 48)
+	if (batch.deadline <= snapshot.timestamp || batch.minimumPrice > batch.maximumPrice || batch.maximumPrice === 0n || batch.operations.length === 0) throw new Error('Invalid report operation batch.')
+	let requiredGas = 0n
+	for (const operation of batch.operations) {
+		if (uint(operation.gasLimit, 'Operation gas', 32) === 0n || !isHex(operation.data) || operation.data.length < 10 || operation.data.length % 2 !== 0) throw new Error('Invalid report operation.')
+		requiredGas += operation.gasLimit + 100_000n
+	}
+	if (requiredGas > batch.gasLimit) throw new Error('Operation gas budget insufficient.')
+	return { ...request, data: encodeFunctionData({ abi, functionName: 'requestPortfolioPriceWithOperations', args: [funding.price, funding.weth, funding.bounty, batch] }) }
 }

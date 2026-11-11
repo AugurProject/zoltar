@@ -1,15 +1,16 @@
+import { registerSponsoredReplacement } from '#execution/sponsored-report-receipt'
 import { PRIVATE_INTENT_FINALITY_BLOCKS } from '#core/cycle-control'
 import { parseTransactionReconciliation, validateReconciliationIntentChain, verifyFinalizedReplacement } from '#core/transaction-reconciliation'
 import { canonicalBlockHash } from '#monitoring/operator-chain'
 import { commitReconciledIntent } from '#state/operator-state'
 import { createPublicClient } from '@zoltar/bot-shared/ethereum'
-import { isReceiptNotFound } from '@zoltar/bot-shared/execution/receipt-quorum'
+import { isReceiptNotFound, receiptEvidence } from '@zoltar/bot-shared/execution/receipt-quorum'
 import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import { readEndpoints, type LiquidatorDeps, type LiquidatorRuntime } from './liquidator-runtime.ts'
 
 /** Resolves a paused pending intent to its finalized replacement transaction, verified under the RPC quorum. */
-export function reconcileTransaction(runtime: LiquidatorRuntime, deps: LiquidatorDeps, value: unknown) {
+export function reconcileTransaction(runtime: Pick<LiquidatorRuntime, 'settings' | 'chain' | 'readPool'>, deps: Pick<LiquidatorDeps, 'state' | 'configurationMutationGate'>, value: unknown) {
 	return deps.configurationMutationGate.run(async () => {
 		const { state } = deps
 		if (!state.paused) throw new Error('Pause the bot before reconciling a replacement transaction')
@@ -29,6 +30,8 @@ export function reconcileTransaction(runtime: LiquidatorRuntime, deps: Liquidato
 					return {
 						endpoint,
 						value: {
+							receipt: receiptEvidence(receipt),
+							transaction: { to: transaction.to ?? undefined, input: transaction.input, value: transaction.value },
 							blockHash: receipt.blockHash,
 							blockNumber: receipt.blockNumber,
 							from: transaction.from,
@@ -54,13 +57,18 @@ export function reconcileTransaction(runtime: LiquidatorRuntime, deps: Liquidato
 			},
 			replacement: async () => replacementEvidence,
 		})
-		await commitReconciledIntent(runtime.settings.runtime.stateFile, state, intent.hash, {
+		const reconciledState = { ...state, sponsoredReports: [...(state.sponsoredReports ?? [])] }
+		if (replacementEvidence !== undefined) registerSponsoredReplacement(reconciledState, intent, replacementEvidence.receipt, replacementEvidence.transaction)
+		await commitReconciledIntent(runtime.settings.runtime.stateFile, reconciledState, intent.hash, {
 			details: `original=${intent.hash} replacement=${replacement.hash} nonce=${intent.nonce.toString()} replacementStatus=${replacement.status}`,
 			hash: replacement.hash,
 			kind: 'recovery',
 			message: `Finalized replacement reconciled: ${intent.label}`,
 			status: 'confirmed',
 		})
+		state.sponsoredReports = reconciledState.sponsoredReports
+		state.activities = reconciledState.activities
+		state.pendingTransactions = reconciledState.pendingTransactions
 		return { intentHash: intent.hash, replacementHash: replacement.hash, replacementStatus: replacement.status }
 	})
 }

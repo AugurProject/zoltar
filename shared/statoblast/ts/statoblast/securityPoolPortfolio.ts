@@ -104,7 +104,18 @@ export {
 	loadPortfolioForkSnapshot,
 	type PortfolioForkSnapshot,
 } from './securityPoolPortfolioFork.js'
-export { loadPortfolioPriceSnapshot, quotePortfolioPriceFunding, buildPortfolioPricePreparationRequest, buildPortfolioPriceRequest, buildPortfolioPriceApprovalRequest, buildPortfolioPriceWrapRequest, type PortfolioPriceSnapshot } from './securityPoolPortfolioPrice.js'
+/** @public Schemas for external clients that attach owner operations to price reports. */
+export type { PortfolioReportOperation, PortfolioReportOperations } from './securityPoolPortfolioPrice.js'
+export {
+	buildPortfolioPriceOperationsRequest,
+	loadPortfolioPriceSnapshot,
+	quotePortfolioPriceFunding,
+	buildPortfolioPricePreparationRequest,
+	buildPortfolioPriceRequest,
+	buildPortfolioPriceApprovalRequest,
+	buildPortfolioPriceWrapRequest,
+	type PortfolioPriceSnapshot,
+} from './securityPoolPortfolioPrice.js'
 export {
 	loadPortfolioAuctionSnapshot,
 	portfolioAuctionOpeningReason,

@@ -16,6 +16,7 @@ test('unused funding is bounded by tracked, free and withdrawable REP, and consu
 	observation.snapshot.ownerAccount.freeAttoRep = 7n
 	observation.snapshot.withdrawableAttoRep = 5n
 	expect(unusedPortfolioFunding(state, observation)).toEqual({ key, amount: 5n, target: 8n })
+	expect(unusedPortfolioFunding({ ...state, sponsoredReports: [{ feed: observation.snapshot.priceFeed, fundingKey: key, sponsor: observation.snapshot.owner, reportId: 7n, createdBlock: 1n, nextBlock: 1n }] }, observation).amount).toBe(0n)
 	expect(applyPortfolioFundingEffect(state.portfolioFunding, { key, operation: 'withdraw', amount: 5n })).toEqual({ [key]: { amount: 5n, target: 8n } })
 	expect(applyPortfolioFundingEffect(state.portfolioFunding, { key, operation: 'consume', amount: 0n })).toEqual({})
 })

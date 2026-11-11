@@ -11,9 +11,11 @@ function marketConfigurationForPool(pool: Pick<PoolObservation, 'repToken' | 'la
 	return marketConfigurations(settings).find(configuration => configuration.assetAddress.toLowerCase() === pool.repToken.toLowerCase())
 }
 
-export function marketPriceAllowsExecution(pool: Pick<PoolObservation, 'repToken' | 'lastPrice'>, settings: OperatorSettings, state: ReturnType<typeof initialRuntimeState>) {
-	const configuration = marketConfigurationForPool(pool, settings)
-	if (configuration === undefined || !centralizedMarketConfigurationAllowsExecution(configuration)) return false
+export function marketPriceAllowsExecution(pool: Pick<PoolObservation, 'repToken' | 'lastPrice'>, settings: OperatorSettings, state: ReturnType<typeof initialRuntimeState>, requireEvidence = false) {
+	const selectedConfiguration = marketConfigurationForPool(pool, settings)
+	if (selectedConfiguration === undefined) return false
+	const configuration = requireEvidence ? { ...selectedConfiguration, requiredForExecution: true } : selectedConfiguration
+	if (!centralizedMarketConfigurationAllowsExecution(configuration)) return false
 	const centralizedMarket = state.centralizedMarketsByAsset.get(pool.repToken.toLowerCase())
 	const marketConsensus = state.marketConsensusByAsset.get(pool.repToken.toLowerCase())
 	if (configuration.venueConsensus === undefined) return configuration.requiredForExecution ? false : centralizedPriceAllowsExecution(pool.lastPrice, centralizedMarket, configuration, pool.repToken)
@@ -36,8 +38,9 @@ export async function canonicalMarketPriceAllowsExecution(
 	state: ReturnType<typeof initialRuntimeState>,
 	readCanonicalHash: (blockNumber: bigint) => Promise<`0x${string}` | undefined>,
 	requireCurrentDexEvidence: (configuration: CentralizedMarketSettings, estimate: MarketConsensusEstimate | undefined) => Promise<void>,
+	requireEvidence = false,
 ) {
-	if (!marketPriceAllowsExecution(pool, settings, state)) return false
+	if (!marketPriceAllowsExecution(pool, settings, state, requireEvidence)) return false
 	const configuration = marketConfigurationForPool(pool, settings)
 	if (configuration === undefined) return false
 	const marketConsensus = state.marketConsensusByAsset.get(pool.repToken.toLowerCase())
