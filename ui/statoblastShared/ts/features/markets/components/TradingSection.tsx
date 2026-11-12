@@ -493,7 +493,7 @@ export function TradingSection({
 					<MetricField label={tradingCopy.formatWinningOutcomeShares(winningOutcomeLabel ?? '')}>
 						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={winningAttoShares} suffix={tradingCopy.sharesUnit} units={collateralDecimals} />
 					</MetricField>
-					<MetricField label={tradingCopy.expectedEthPayout}>
+					<MetricField label={tradingCopy.expectedCollateralPayout}>
 						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} decimals={4} value={expectedRedemptionPayoutAttoEth} suffix={collateralSymbol} units={collateralDecimals} />
 					</MetricField>
 					<MetricField label={tradingCopy.expectedRepPayout}>

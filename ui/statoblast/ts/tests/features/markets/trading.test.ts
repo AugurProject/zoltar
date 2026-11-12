@@ -741,3 +741,19 @@ test('complete-set redemption accepts share amounts when the claim pays only REP
 		}),
 	).toBeUndefined()
 })
+
+test('stablecoin mint-capacity errors use collateral units and precision', () => {
+	expect(
+		getTradingMintGuardMessage({
+			accountAddress: '0x1234567890123456789012345678901234567890',
+			settlementCollateralAttoEth: 0n,
+			hasSelectedPool: true,
+			isOnActiveAppChain: true,
+			shareTokenSupplyAttoShares: 0n,
+			totalPoolHeldAttoRep: 0n,
+			mintingCapacityAttoEth: 1_000_000n,
+			mintAmountInput: '2',
+			collateral: { symbol: 'USDC', decimals: 6, balance: 3_000_000n },
+		}),
+	).toBe('Max mint capacity is 1\u00a0USDC.')
+})

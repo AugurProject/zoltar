@@ -1,7 +1,8 @@
 import { getTokenApprovalResetReason } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { useSignal } from '@preact/signals'
-import { useEffect } from 'preact/hooks'
+import { useEffect, useRef } from 'preact/hooks'
+import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { isAddress, getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
@@ -21,21 +22,46 @@ export function useTradingCollateral({ pool, amountInput, ...parameters }: Write
 	const backend = getActiveBackend()
 	const collateralPool = pool !== undefined && isAddress(pool) ? getAddress(pool) : undefined
 	const collateralKey = `${backend.id}:${collateralPool}:${accountAddress}:${amountInput}:${collateralVersion.value}`
+	const refreshCollateral = useRef<(() => void) | undefined>(undefined)
+	useBlockRefresh(() => refreshCollateral.current?.(), enabled && collateralPool !== undefined && accountAddress !== undefined)
 	useEffect(() => {
 		let active = true
+		let inFlight = false
+		let queued = false
 		collateralLoaded.value = undefined
-		if (enabled && collateralPool !== undefined && accountAddress !== undefined)
+		const refresh = () => {
+			if (!active || !enabled || collateralPool === undefined || accountAddress === undefined) return
+			if (inFlight) {
+				queued = true
+				return
+			}
+			inFlight = true
 			void (async () => {
 				const client = createConnectedReadClient()
 				const collateral = await loadTradingCollateral(client, collateralPool, accountAddress)
 				const amount = portfolioAmountOrUndefined(amountInput, collateral.decimals)
 				const quote = amount !== undefined && amount > 0n ? await quoteTradingCollateral(client, collateralPool, collateral, amount) : undefined
 				if (active && getActiveBackend() === backend) collateralLoaded.value = { key: collateralKey, collateral, quote }
-			})().catch(error => {
-				if (active && getActiveBackend() === backend) collateralLoaded.value = { key: collateralKey, error: getErrorMessage(error, 'Unable to load collateral funding.') }
-			})
+			})()
+				.catch(error => {
+					if (active && getActiveBackend() === backend) {
+						const previous = collateralLoaded.peek()
+						collateralLoaded.value = { ...(previous?.key === collateralKey ? previous : { key: collateralKey }), error: getErrorMessage(error, 'Unable to load collateral funding.') }
+					}
+				})
+				.finally(() => {
+					inFlight = false
+					if (active && queued) {
+						queued = false
+						refresh()
+					}
+				})
+		}
+		refreshCollateral.current = refresh
+		refresh()
 		return () => {
 			active = false
+			if (refreshCollateral.current === refresh) refreshCollateral.current = undefined
 		}
 	}, [backend, collateralKey, enabled])
 

@@ -8,7 +8,7 @@ import {
 	statoblast_SecurityPool_SecurityPool as poolArtifact,
 	ReputationToken_ReputationToken as repArtifact,
 } from '../../types/contractArtifact'
-import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
+import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { deployContract } from '../../testSupport/deployContract'
 import { applyLibraries, getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
@@ -76,19 +76,28 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		const range = async (start: bigint, size: bigint) => (await fixture.owner().readContract({ ...factory, functionName: 'portfoliosRange', args: [start, size] })).map(address => getAddress(address))
 		const before = await count()
 		expect(await range(before - 1n, 1n)).toEqual([getAddress(fixture.portfolio)])
+		const beforeBlock = await fixture.owner().getBlockNumber()
 		const created = await fixture.deployPortfolio()
 		expect(await count()).toBe(before + 1n)
 		expect(await range(before - 1n, 2n)).toEqual([getAddress(fixture.portfolio), getAddress(created)])
 		expect(await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: created, functionName: 'questionCount' })).toBe(0n)
-		// Registration follows the configured namespace, so configuring it again adds nothing.
-		const sender = fixture.other()
+		const registrationLogs = await fixture.owner().getLogs({ address: factory.address, fromBlock: beforeBlock + 1n, toBlock: await fixture.owner().getBlockNumber() })
+		const registrations = registrationLogs.map(log => decodeEventLog({ abi: factoryArtifact.abi, data: log.data, topics: log.topics }))
+		expect(registrations).toEqual([{ eventName: 'PortfolioRegistered', args: { portfolio: getAddress(created), originUniverseId: fixture.base.genesisUniverse } }])
+		// Reconfigure a real namespace: the feed reads its immutable collateral configuration.
+		await fixture.base.mockWindow.impersonateAccount(created)
+		await fixture.base.mockWindow.setBalance(created, unit)
+		const sender = createWriteClient(fixture.base.mockWindow, BigInt(created))
 		const configure = () => writeContractAndWait(sender, () => sender.writeContract({ ...factory, functionName: 'initializePortfolioPriceFeed', args: [fixture.base.genesisUniverse, 10_000_000_000n] }))
 		const receipt = await sender.getTransactionReceipt({ hash: await configure() })
-		const registrations = receipt.logs.filter(log => getAddress(log.address) === getAddress(factory.address)).map(log => decodeEventLog({ abi: factoryArtifact.abi, data: log.data, topics: log.topics }))
-		expect(registrations).toEqual([{ eventName: 'PortfolioRegistered', args: { portfolio: getAddress(sender.account.address), originUniverseId: fixture.base.genesisUniverse } }])
+		expect(receipt.logs.filter(log => getAddress(log.address) === getAddress(factory.address))).toEqual([])
 		await configure()
-		expect(await count()).toBe(before + 2n)
-		expect(await range(before + 1n, 1n)).toEqual([getAddress(sender.account.address)])
+		expect(await count()).toBe(before + 1n)
+		expect(await range(before - 1n, 2n)).toEqual([getAddress(fixture.portfolio), getAddress(created)])
+		// An account without collateral configuration cannot leave a partial registry entry.
+		await expect(writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...factory, functionName: 'initializePortfolioPriceFeed', args: [fixture.base.genesisUniverse, 10_000_000_000n] }))).rejects.toThrow('Shared price feed deployment failed')
+		expect(await count()).toBe(before + 1n)
+		await expect(range(before + 1n, 1n)).rejects.toThrow('Portfolio range count too large')
 	})
 
 	test('permissionless registration binds distinct canonical shares without authorizing or moving owner capital', async () => {

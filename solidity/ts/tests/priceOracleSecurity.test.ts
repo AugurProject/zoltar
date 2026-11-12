@@ -588,14 +588,14 @@ describe('Shared portfolio oracle security regressions', () => {
 
 		await wrapWeth(client, minimumWethReport * 2n)
 		const initialBalance = await getETHBalance(client, client.account.address)
-		const initialWeth = await getERC20Balance(client, WETH_ADDRESS, client.account.address)
+		const initialWethAttoEth = await getERC20Balance(client, WETH_ADDRESS, client.account.address)
 		// Call requestPrice with overpayment above the committed bounty
 		await requestPriceWithValue(client, priceOracle, overpayment, undefined, 0n, costAttoEth)
 
 		const finalBalance = await getETHBalance(client, client.account.address)
 
 		assert.strictEqual(initialBalance - finalBalance, costAttoEth, 'only the committed native bounty is retained; excess ETH is refunded')
-		assert.strictEqual(initialWeth - (await getERC20Balance(client, WETH_ADDRESS, client.account.address)), minimumWethReport, 'the report separately transfers its configured collateral stake')
+		assert.strictEqual(initialWethAttoEth - (await getERC20Balance(client, WETH_ADDRESS, client.account.address)), minimumWethReport, 'the report separately transfers its configured collateral stake')
 	})
 
 	test('Sepolia prices expire after one challenge period plus one hour of renewal slack', async () => {

@@ -274,9 +274,11 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 					if (fresh.wrap !== funding?.wrap || latest.ethBalanceAttoEth < fresh.requiredEth) throw new Error('Wallet funding changed. Refresh before wrapping ETH.')
 				},
 			),
-		approve: (token: 'weth' | 'rep', amount: bigint) =>
-			run(
-				portfolioPriceAction(scope, amount === 0n && token === 'weth' ? 'resetCollateral' : token === 'weth' ? 'approveWeth' : 'approveRep'),
+		approve: (token: 'weth' | 'rep', amount: bigint) => {
+			const approvalAction = token === 'weth' ? 'approveWeth' : 'approveRep'
+			const action = amount === 0n && token === 'weth' ? 'resetCollateral' : approvalAction
+			return run(
+				portfolioPriceAction(scope, action),
 				token === 'weth' ? copy.approveWeth : copy.approveRep,
 				fundingReason,
 				selected => ({
@@ -288,7 +290,8 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 					const reason = getTokenApprovalResetReason(latest.observation?.wethAllowanceAttoEth, amount, collateral.symbol, token === 'weth' && collateral.symbol === 'USDT')
 					if (reason !== undefined) throw new Error(reason)
 				},
-			),
+			)
+		},
 		request: () =>
 			run(
 				portfolioPriceAction(scope, 'request'),

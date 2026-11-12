@@ -49,6 +49,10 @@
 			"bun": "./ts/features/markets/hooks/useMarketCreation.ts",
 			"default": "./js/features/markets/hooks/useMarketCreation.js"
 		},
+		"./features/markets/hooks/useTradingCollateral.js": {
+			"bun": "./ts/features/markets/hooks/useTradingCollateral.ts",
+			"default": "./js/features/markets/hooks/useTradingCollateral.js"
+		},
 		"./features/markets/hooks/useTradingOperations.js": {
 			"bun": "./ts/features/markets/hooks/useTradingOperations.ts",
 			"default": "./js/features/markets/hooks/useTradingOperations.js"

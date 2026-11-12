@@ -240,7 +240,7 @@ export function getTradingMintGuardMessage({
 	if (mintAmount === undefined) return 'Enter a valid mint amount.'
 
 	if (mintAmount <= 0n) return tradingCopy.mintAmountRequired
-	if (!usesSharedBacking && remainingCapacity !== undefined && mintAmount > remainingCapacity) return `Max mint capacity is ${formatCurrencyBalanceWithUnit(remainingCapacity, 'ETH')}.`
+	if (!usesSharedBacking && remainingCapacity !== undefined && mintAmount > remainingCapacity) return `Max mint capacity is ${formatCurrencyBalanceWithUnit(remainingCapacity, collateral?.symbol ?? 'ETH', collateral?.decimals ?? 18)}.`
 	if (collateral !== undefined) return collateral.balance < mintAmount ? 'Insufficient collateral balance.' : undefined
 	if (ethBalanceAttoEth === undefined) return statoblastAppCopy.loadingWalletEthBalance
 	const spendableEthAttoEth = getSpendableEthBalance(ethBalanceAttoEth)
