@@ -1,3 +1,4 @@
+import { loadSponsoredOperationReport } from './portfolio-report.ts'
 import { loadOwnedPortfolioVaults } from './portfolio-owned-vaults.ts'
 import { verifyPortfolioCustody } from './portfolio-identity.ts'
 import { authenticatePortfolioAuction, loadPortfolioAuctionPosition, portfolioAuctionPage, type PortfolioAuctionTarget, type PortfolioTarget } from './portfolio-auction.ts'
@@ -55,6 +56,7 @@ export type PortfolioPosition = {
 }
 export type PortfolioObservation = {
 	selection: PortfolioSelection
+	pendingOperationReport?: Awaited<ReturnType<typeof loadSponsoredOperationReport>>
 	selected: boolean
 	managedPrincipalAttoRep?: bigint
 	managedCommitmentAttoEth?: bigint
@@ -228,9 +230,11 @@ export async function loadPortfolioObservation(client: ReadClient, settings: Ope
 	}
 	page.nextScope.retirementObservations = [...retirementObservations.values()].slice(-256)
 	if ((await client.getBlock({ blockNumber })).hash !== snapshot.blockHash) throw new Error('Portfolio snapshot changed during discovery')
+	const pendingOperationReport = snapshot.priceFeed === zeroAddress ? undefined : await loadSponsoredOperationReport(client, snapshot)
 	return {
 		...(chosenChildUniverseId === undefined ? {} : { chosenChildUniverseId }),
-		managedPrincipalAttoRep: snapshot.ownerPrincipalAttoRep + owned.pendingPrincipal + owned.accounts.reduce((sum, account) => sum + account.ownerPrincipalAttoRep, 0n),
+		pendingOperationReport,
+		managedPrincipalAttoRep: (pendingOperationReport?.reservedRep ?? 0n) + snapshot.ownerPrincipalAttoRep + owned.pendingPrincipal + owned.accounts.reduce((sum, account) => sum + account.ownerPrincipalAttoRep, 0n),
 		managedCommitmentAttoEth: snapshot.ownerCommitmentAttoEth + owned.pendingCommitment + owned.accounts.reduce((sum, account) => sum + account.ownerCommitmentAttoEth, 0n),
 		ownedVaults: owned.accounts,
 		chosenVaultChildUniverseIds,

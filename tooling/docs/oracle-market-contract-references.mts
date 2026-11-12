@@ -189,7 +189,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 						sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol',
 					},
 				],
-				preconditions: 'No prior shared feed or ledger; nonzero feed with matching REP, WETH, and OpenOracle.',
+				preconditions: 'No prior shared feed or ledger; nonzero feed with matching REP, collateral, and OpenOracle.',
 				signals: '`SharedPriceFeedSet`',
 			},
 			{

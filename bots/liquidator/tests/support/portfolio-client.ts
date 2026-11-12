@@ -75,6 +75,7 @@ export function portfolioClient(overrides: Record<string, unknown> = {}) {
 		auctionCohort: ['0x0000000000000000000000000000000000000000', 0n, 0n, 0n, 0n],
 		premiumLedger: module('SecurityPoolResolutionPremiumBook'),
 		priceFeed: snapshot.priceFeed,
+		sponsorOperationReport: 0n,
 		...snapshot.economics,
 		minimumOutcomeExchangeRate: 1n,
 		repToken: snapshot.repToken,

@@ -142,7 +142,7 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/statoblast/EscalationGameState.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/EscalationGameStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-	'solidity/contracts/statoblast/SecurityPool.sol': '0573e118ad8d95a1e82354801ba75f50b87864263402a3bb6a0106f77cf2a29d',
+	'solidity/contracts/statoblast/SecurityPool.sol': 'ad958c7bcd4f6627beff714a70fa7c5cc21730bc4ae5d8be3b3fb1287eb1bef2',
 	'solidity/contracts/statoblast/SecurityPoolForker.sol': 'dc42ece125303c4b34ec5b06f287d70376743ec0cad2ff373877746ac29bb106',
 	'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol': '814d03c9e5a33ecb7a4c16e495470c17bee1111f7c15c0ffea19f424e72636ec',
 	'solidity/contracts/statoblast/tokens/ERC1155.sol': '7bb87695bc3df8fa177c545209ed58d2e4571c19c869b5598bb0a829e764b218',

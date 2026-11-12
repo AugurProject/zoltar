@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, parseAbi, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { buildPortfolioPriceApprovalRequest, buildPortfolioPricePreparationRequest, buildPortfolioPriceRequest, buildPortfolioPriceWrapRequest, loadPortfolioPriceSnapshot, quotePortfolioPriceFunding } from './securityPoolPortfolio.js'
+import { buildPortfolioPriceOperationsRequest, buildPortfolioPriceApprovalRequest, buildPortfolioPricePreparationRequest, buildPortfolioPriceRequest, buildPortfolioPriceWrapRequest, loadPortfolioPriceSnapshot, quotePortfolioPriceFunding } from './securityPoolPortfolio.js'
 
 const owner: Address = '0x0000000000000000000000000000000000000001'
 const portfolio: Address = '0x0000000000000000000000000000000000000002'
@@ -72,6 +72,33 @@ function fixture(overrides: Record<string, unknown> = {}) {
 const load = (client: Parameters<typeof loadPortfolioPriceSnapshot>[0]['client']) => loadPortfolioPriceSnapshot({ client, portfolio, owner, universeId: 42n })
 
 describe('portfolio branch price SDK', () => {
+	test('operation batches are bounded by gas and preserve caller order without a count cap', async () => {
+		const snapshot = await load(fixture().client)
+		const operations = Array.from({ length: 32 }, () => ({ gasLimit: 100_000n, data: '0x12345678' as const }))
+		const batch = { gasLimit: 6_400_000n, minimumPrice: unit, maximumPrice: unit, deadline: 2_000n, operations }
+		const request = buildPortfolioPriceOperationsRequest(snapshot, unit, 2n * unit, batch)
+		const operationAbi = parseAbi(['function requestPortfolioPriceWithOperations(uint256 price,uint256 weth,uint256 bounty,(uint32 gasLimit,uint256 minimumPrice,uint256 maximumPrice,uint48 deadline,(uint32 gasLimit,bytes data)[] operations) batch) payable returns(uint256)'])
+		expect(decodeFunctionData({ abi: operationAbi, data: request.data })).toEqual({ functionName: 'requestPortfolioPriceWithOperations', args: [unit, 2n * unit, 101n, batch] })
+		expect(() => buildPortfolioPriceOperationsRequest(snapshot, unit, 2n * unit, { ...batch, gasLimit: batch.gasLimit - 1n })).toThrow('gas budget')
+		expect(() => buildPortfolioPriceOperationsRequest(snapshot, unit, 2n * unit, { ...batch, gasLimit: 2n ** 32n })).toThrow('Callback gas')
+	})
+
+	test('a confirmed execution quote requires the requested block for every funding read', async () => {
+		const { client, calls } = fixture()
+		const heads: (bigint | undefined)[] = []
+		const pinned = {
+			...client,
+			getBlock: async (parameters?: { blockNumber?: bigint }) => {
+				heads.push(parameters?.blockNumber)
+				return { number: parameters?.blockNumber ?? 11n, hash, timestamp: 1_000n }
+			},
+		}
+		await loadPortfolioPriceSnapshot({ client: pinned, portfolio, owner, universeId: 42n, blockNumber: 10n })
+		expect(heads).toEqual([10n, 10n])
+		expect(calls.every(call => call.blockNumber === 10n)).toBe(true)
+		await expect(loadPortfolioPriceSnapshot({ client, portfolio, owner, universeId: 42n, blockNumber: 9n })).rejects.toThrow('another block')
+	})
+
 	test('prices the independently required auction REP challenge budget into the signed WETH amount', async () => {
 		const snapshot = await load(fixture({ minimumToken1ReportAttoEth: 2n, minimumToken2ReportAttoRep: 11n }).client)
 		const quote = quotePortfolioPriceFunding(snapshot, 3n * unit)

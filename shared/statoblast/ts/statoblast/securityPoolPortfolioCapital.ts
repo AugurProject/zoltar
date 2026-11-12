@@ -32,6 +32,7 @@ const abi = parseAbi([
 	'function frozen() view returns (bool)',
 	'function importing() view returns (bool)',
 	'function exported(address owner) view returns (bool)',
+	'function checkpoint()',
 	'function ownerAccount(address owner) view returns ((uint256 freeAttoRep,uint256 feesAttoEth,uint256 feesAttoRep,uint256 targetHealthFactorBps,uint96 positionId) account)',
 	'function ownerCollateral(address owner) view returns (uint256 principal,uint256 commitment,uint256 withdrawable)',
 	'function totals() view returns (uint256 rep,uint256 commitment,uint256 healthy)',
@@ -246,6 +247,25 @@ export function buildPortfolioCapitalTakeOverWithBoundsRequest(parameters: Capit
 		uint(parameters.maximumOwnRep, 'Maximum own REP'),
 		[uint(bounds.maximumOwnerPrincipal, 'Maximum owner principal'), uint(bounds.maximumOwnerCommitment, 'Maximum owner commitment'), bounds.expectedTargetHealthFactorBps, uint(bounds.expectedAcceptedPriceEpoch, 'Expected price epoch'), uint(bounds.expectedSourceBatch, 'Expected source cohort', 96)],
 	])
+}
+
+/**
+ * What `claimEarnings` pays at the snapshot block. It checkpoints first, so a passive owner's earnings stay uncredited
+ * until then. One `eth_call` runs that checkpoint and the reads that depend on it without keeping any state change.
+ */
+export async function loadPortfolioClaimableEarnings(
+	snapshot: Pick<PortfolioCapitalSnapshot, 'blockNumber' | 'capitalLedger' | 'commitmentIndex' | 'owner' | 'ownerAccount'>,
+	multicall: (contracts: readonly { address: Address; abi: typeof abi; functionName: string; args: readonly AbiValue[] }[], blockNumber: bigint) => Promise<readonly unknown[]>,
+) {
+	const positionId = snapshot.ownerAccount.positionId
+	const [, ownerValue, positionValue] = await multicall(
+		[{ address: snapshot.capitalLedger, abi, functionName: 'checkpoint', args: [] }, { address: snapshot.capitalLedger, abi, functionName: 'ownerAccount', args: [snapshot.owner] }, ...(positionId === 0n ? [] : [{ address: snapshot.commitmentIndex, abi, functionName: 'accountOf', args: [positionId] }])],
+		snapshot.blockNumber,
+	)
+	const account = ownerAccount(ownerValue)
+	if (positionValue === undefined) return { attoEth: account.feesAttoEth, attoRep: account.feesAttoRep }
+	const [eth, rep] = fields(positionValue, ['ethFees', 'repFees'])
+	return { attoEth: account.feesAttoEth + uint(eth, 'ETH earnings'), attoRep: account.feesAttoRep + uint(rep, 'REP earnings') }
 }
 
 /** All reads share one block and inspect only the owner's single position. */

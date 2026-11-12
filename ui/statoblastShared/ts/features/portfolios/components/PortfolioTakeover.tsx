@@ -1,6 +1,6 @@
 import * as collateralCopy from '../../../copy/collateral.js'
 import { useSignal } from '@preact/signals'
-import { useEffect } from 'preact/hooks'
+import { useEffect, useRef } from 'preact/hooks'
 import { buildPortfolioCapitalTakeOverWithBoundsRequest, portfolioTakeoverSource } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
@@ -37,6 +37,15 @@ export function PortfolioTakeover({ model, actions }: { model: Pick<ReturnType<t
 	const id = portfolioUnsignedId(positionInput.value, 96)
 	const key = `${snapshot?.chainId}:${snapshot?.capitalLedger}:${snapshot?.owner}:${snapshot?.blockHash}:${id}`
 	const target = useSignal<{ key: string; value?: Awaited<ReturnType<typeof loadTarget>>; error?: string }>()
+	// Bounds are consent for one position of one owner, so another target starts with none. A snapshot refresh or a half-typed ID is not a new target.
+	const boundsTarget = snapshot === undefined || id === undefined ? undefined : `${snapshot.chainId}:${snapshot.capitalLedger}:${snapshot.owner}:${id}`
+	const lastBoundsTarget = useRef(boundsTarget)
+	useEffect(() => {
+		if (boundsTarget === undefined || boundsTarget === lastBoundsTarget.current) return
+		const replacedTarget = lastBoundsTarget.current !== undefined
+		lastBoundsTarget.current = boundsTarget
+		if (replacedTarget) for (const bound of [commitmentInput, awardInput, ownInput, principalInput, totalCommitmentInput]) bound.value = ''
+	}, [boundsTarget])
 	useEffect(() => {
 		let current = true
 		target.value = undefined
@@ -63,7 +72,8 @@ export function PortfolioTakeover({ model, actions }: { model: Pick<ReturnType<t
 	let reason = actions.ownerReason
 	if (reason === undefined && (id === undefined || id === 0n)) reason = copy.enterTarget
 	if (reason === undefined && preview === undefined) reason = loaded?.error ?? copy.loading
-	if (reason === undefined && snapshot !== undefined && (!snapshot.priceValid || snapshot.forkTime !== 0n || snapshot.frozen || snapshot.importing)) reason = copy.inactive
+	if (reason === undefined && snapshot !== undefined && (snapshot.forkTime !== 0n || snapshot.frozen || snapshot.importing)) reason = copy.inactive
+	if (reason === undefined && snapshot !== undefined && !snapshot.priceValid) reason = copy.priceRequired
 	if (reason === undefined && preview !== undefined && snapshot !== undefined && (preview.position.owner === snapshot.owner || preview.position.commitment === 0n || preview.position.maxHealthyPrice >= snapshot.liquidationPrice || preview.started === 0n || source?.healthy === true)) reason = copy.notEligible
 	if (reason === undefined && (commitment === undefined || commitment === 0n || minimumAward === undefined || maximumOwnRep === undefined || maximumOwnerPrincipal === undefined || maximumOwnerCommitment === undefined)) reason = copy.enterBounds
 	const takeOver = async () => {

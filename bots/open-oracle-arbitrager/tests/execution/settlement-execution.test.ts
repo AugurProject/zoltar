@@ -411,7 +411,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 	test('keeps a public attempt pending when the RPC failed after it may have ingested the transaction', async () => {
 		const report = await submitReport()
 		await pastSettlementWindow()
-		// The node accepts and includes the raw transaction in a block, but the operator only sees an HTTP failure for the send.
+		// The node accepts the raw transaction, but the operator only sees an HTTP failure for the send.
 		const lossyRpc = Bun.serve({
 			port: 0,
 			async fetch(request) {
@@ -422,6 +422,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 			},
 		})
 		try {
+			await node.anvilWindowEthereum.request({ method: 'evm_setAutomine', params: [false] })
 			const records: SettlementRecord[] = []
 			const base = await context(records, [])
 			const plan = settlementPlan(report)
@@ -431,10 +432,16 @@ describe('third-party settlement execution against OpenOracle', () => {
 			expect(settlementGasSpentAttoEthOnUtcDay(records, new Date())).toBe(10n ** 15n)
 			const [attempt] = records
 			if (attempt === undefined) throw new Error('pending record missing')
-			expect((await reconcilePendingSettlements([client], base.config, [attempt], await client.getBlockNumber())).map(record => record.status)).toEqual(['confirmed'])
+			expect(await reconcilePendingSettlements([client], base.config, [attempt], await client.getBlockNumber())).toEqual([])
+			// Mine and observe a receipt before expecting reconciliation to confirm inclusion.
+			await node.anvilWindowEthereum.request({ method: 'evm_mine', params: [] })
+			const receipt = await client.waitForTransactionReceipt({ hash: attempt.transactionHash })
+			expect(receipt.status).toBe('success')
+			expect((await reconcilePendingSettlements([client], base.config, [attempt], receipt.blockNumber)).map(record => record.status)).toEqual(['confirmed'])
 			expect(await client.readContract({ abi: openOracleAbi, address: openOracle, functionName: 'storedGame', args: [report.helper.reportId] }).then(game => game[4])).not.toBe(0n)
 		} finally {
 			lossyRpc.stop(true)
+			await node.anvilWindowEthereum.request({ method: 'evm_setAutomine', params: [true] })
 		}
 	})
 

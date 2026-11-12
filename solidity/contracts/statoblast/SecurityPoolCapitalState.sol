@@ -100,6 +100,13 @@ abstract contract SecurityPoolCapitalState {
 		account.feesAttoEth += ethFees;
 		if (commitment == 0) account.positionId = 0;
 	}
+	address internal reportOwner;
+
+	/// @dev Only the ledger's authenticated self-call inherits the report sponsor.
+	/// Reentrant external calls keep their actual caller identity.
+	function _capitalOwner() internal view returns (address) {
+		return msg.sender == address(this) && reportOwner != address(0) ? reportOwner : msg.sender;
+	}
 	function _target(Owner storage owner) internal view returns (uint256) {
 		return owner.targetHealthFactorBps == 0 ? BPS : owner.targetHealthFactorBps;
 	}

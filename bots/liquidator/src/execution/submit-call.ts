@@ -14,6 +14,8 @@ type WriteClient = WalletClient<Transport, Chain, Account>
 type RpcPool = ReturnType<typeof createRpcEndpointPool>
 
 type Call = {
+	reportSponsorship?: PendingTransactionIntent['reportSponsorship']
+	reportOperations?: PendingTransactionIntent['reportOperations']
 	portfolioFunding?: PendingTransactionIntent['portfolioFunding']
 	portfolioInstruction?: PendingTransactionIntent['portfolioInstruction']
 	data: Hex
@@ -105,6 +107,8 @@ export async function submitCall(wallet: WriteClient, settings: OperatorSettings
 	})
 	await call.preSubmit?.()
 	state.pendingTransactions.push({
+		reportSponsorship: call.reportSponsorship,
+		reportOperations: call.reportOperations,
 		portfolioFunding: call.portfolioFunding,
 		portfolioInstruction: call.portfolioInstruction,
 		hash: signed.hash,

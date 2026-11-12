@@ -17,6 +17,7 @@ import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { Zoltar } from '../Zoltar.sol';
 import { Constants } from '../Constants.sol';
 import { SecurityPoolCommitmentIndex } from './SecurityPoolCommitmentIndex.sol';
+import { IReportOperations } from './interfaces/IReportOperations.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
@@ -176,12 +177,12 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		_depositFor(owner, amount);
 	}
 	function depositAndSetHealthTarget(uint256 amount, uint256 targetHealthFactorBps) external nonReentrant {
-		_depositFor(msg.sender, amount);
+		_depositFor(_capitalOwner(), amount);
 		_setHealthTarget(targetHealthFactorBps);
 	}
 	function _depositFor(address owner, uint256 amount) private {
 		_requireOpen();
-		require(owner == msg.sender && owner != forkAuthority && amount > 0, 'Invalid capital deposit');
+		require(owner == _capitalOwner() && owner != forkAuthority && amount > 0, 'Invalid capital deposit');
 		_checkpoint();
 		_settleOwner(owner);
 		Owner storage account = owners[owner].account;
@@ -192,9 +193,9 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 			SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(account.positionId);
 			_replace(account.positionId, position.rep + amount, position.commitment);
 		}
-		repToken.safeTransferFrom(msg.sender, address(this), amount);
+		repToken.safeTransferFrom(_capitalOwner(), address(this), amount);
 		_serveRetirement(0);
-		emit PrincipalDeposited(msg.sender, owner, amount);
+		emit PrincipalDeposited(_capitalOwner(), owner, amount);
 	}
 
 	function withdrawPrincipal(uint256 amount, address recipient) external nonReentrant {
@@ -209,8 +210,8 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		_requireOpen();
 		require(targetHealthFactorBps >= BPS, 'Health below protocol floor');
 		_checkpoint();
-		_settleOwner(msg.sender);
-		Owner storage owner = owners[msg.sender].account;
+		_settleOwner(_capitalOwner());
+		Owner storage owner = owners[_capitalOwner()].account;
 		if (owner.positionId != 0 && targetHealthFactorBps > _target(owner)) {
 			_requireFresh();
 			SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(owner.positionId);
@@ -219,7 +220,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		owner.targetHealthFactorBps = targetHealthFactorBps;
 	}
 	function _requireTarget(uint256 rep, uint256 commitment, uint256 health) private view {
-		require(rep >= _requiredRep(commitment, health, ownerConservativePrice(msg.sender)), 'Chosen health target unmet');
+		require(rep >= _requiredRep(commitment, health, ownerConservativePrice(_capitalOwner())), 'Chosen health target unmet');
 	}
 
 	/// @notice Set the owner's single commitment, which all deposited principal backs.
@@ -239,8 +240,8 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		_requireOpen();
 		_checkpoint();
 		_serveRetirement(0);
-		_settleOwner(msg.sender);
-		id = owners[msg.sender].account.positionId;
+		_settleOwner(_capitalOwner());
+		id = owners[_capitalOwner()].account.positionId;
 		SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(id);
 		bool pending = position.batch != 0;
 		require(!pending || commitment == position.remainingCommitment, 'Retirement pending');
@@ -298,6 +299,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	/// @dev The callback checkpoints the ledger's cached old price before reading
 	/// the feed's new epoch and bounds; all acceptance changes are atomic.
 	function acceptPrice(uint256 price, uint48 validUntil) external onlyPortfolio {
+		require(reportOwner == address(0), 'Report operation active');
 		require(zoltar.getForkTime(universeId) == 0, 'Fork price already frozen');
 		require(price > 0 && validUntil > block.timestamp, 'Invalid capital price');
 		_checkpointAccounting();
@@ -384,20 +386,32 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	/// @notice Competitive takeover: only the target funds the REP award.
 	function takeOver(uint96 id, uint256 commitment, uint256 minimumAward, uint256 maximumOwnRep) external nonReentrant returns (uint96 receiverId) {
 		TakeoverBounds memory bounds;
-		return _takeOver(id, commitment, minimumAward, maximumOwnRep, bounds, OMIT_TAKEOVER_BOUNDS);
+		return _takeOver(id, commitment, minimumAward, maximumOwnRep, bounds, OMIT_TAKEOVER_BOUNDS, _capitalOwner());
 	}
 	/// @notice Keeper-owned acquisition with signed owner exposure and quote bounds.
 	function takeOverWithBounds(uint96 id, uint256 commitment, uint256 minimumAward, uint256 maximumOwnRep, TakeoverBounds calldata bounds) external nonReentrant returns (uint96 receiverId) {
-		return _takeOver(id, commitment, minimumAward, maximumOwnRep, bounds, ENFORCE_TAKEOVER_BOUNDS);
+		return _takeOver(id, commitment, minimumAward, maximumOwnRep, bounds, ENFORCE_TAKEOVER_BOUNDS, _capitalOwner());
 	}
 	function takeOverAuctionBid(uint256 bidId, uint256 commitment, uint256 minimumAward, uint256 maximumOwnRep, TakeoverBounds calldata bounds) external nonReentrant returns (uint96 receiverId) {
 		_requireOpen();
 		_requireFresh();
 		_checkpoint();
 		(, uint96 id) = _materializeAuctionBid(bidId);
-		return _takeOver(id, commitment, minimumAward, maximumOwnRep, bounds, ENFORCE_TAKEOVER_BOUNDS);
+		return _takeOver(id, commitment, minimumAward, maximumOwnRep, bounds, ENFORCE_TAKEOVER_BOUNDS, _capitalOwner());
 	}
-	function _takeOver(uint96 id, uint256 commitment, uint256 minimumAward, uint256 maximumOwnRep, TakeoverBounds memory bounds, bool enforceBounds) private returns (uint96 receiverId) {
+	/// @notice Execute one existing owner operation as its funding sponsor.
+	/// The canonical feed filters selectors and isolates calls. The selected
+	/// public entrypoint retains its validation and reentrancy guard.
+	function executeReportOperation(address sponsor, bytes calldata data) external {
+		require(msg.sender == ICapitalLedgerAccounting(portfolio).priceFeed(universeId), 'Only canonical shared feed');
+		require(!entered && reportOwner == address(0) && sponsor != address(0), 'Capital operation active');
+		reportOwner = sponsor;
+		(bool success, bytes memory result) = address(this).call(data);
+		if (!success) DelegateCall.bubbleRevert(result);
+		reportOwner = address(0);
+	}
+
+	function _takeOver(uint96 id, uint256 commitment, uint256 minimumAward, uint256 maximumOwnRep, TakeoverBounds memory bounds, bool enforceBounds, address receiverOwner) private returns (uint96 receiverId) {
 		_requireOpen();
 		_requireFresh();
 		_checkpoint();
@@ -407,11 +421,11 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 			SecurityPoolCommitmentIndex.Account memory source,
 			uint256 receiverAwardAttoRep,
 			uint256 sourcePrincipalDebitAttoRep
-		) = commitmentIndex.takeoverQuote(id, msg.sender, commitment, minimumCommitmentAttoEth, minimumAward, liquidationPrice);
-		_settleOwner(msg.sender);
-		Owner storage receiver = owners[msg.sender].account;
+		) = commitmentIndex.takeoverQuote(id, receiverOwner, commitment, minimumCommitmentAttoEth, minimumAward, liquidationPrice);
+		_settleOwner(receiverOwner);
+		Owner storage receiver = owners[receiverOwner].account;
 		if (enforceBounds) {
-			require(acceptedPriceEpoch == bounds.expectedAcceptedPriceEpoch, 'Takeover price epoch changed');
+			require(acceptedPriceEpoch == bounds.expectedAcceptedPriceEpoch || (bounds.expectedAcceptedPriceEpoch == 0 && msg.sender == address(this) && reportOwner != address(0)), 'Takeover price epoch changed');
 			require(_target(receiver) == bounds.expectedTargetHealthFactorBps, 'Takeover owner target changed');
 			require(source.batch == bounds.expectedSourceBatch, 'Takeover source cohort changed');
 		}
@@ -424,14 +438,14 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		// Any previously idle receiver principal joins its one live position.
 		uint256 receiverFreePrincipalAttoRep = receiver.freeAttoRep;
 		require(receiverFreePrincipalAttoRep <= maximumOwnRep, 'Receiver consent exceeded');
-		uint256 requiredReceiverPrincipalAttoRep = _requiredRep(existing.commitment + commitment, _target(receiver), ownerConservativePrice(msg.sender));
+		uint256 requiredReceiverPrincipalAttoRep = _requiredRep(existing.commitment + commitment, _target(receiver), ownerConservativePrice(receiverOwner));
 		require(existing.rep + receiverAwardAttoRep + receiverFreePrincipalAttoRep >= requiredReceiverPrincipalAttoRep, 'Receiver collateral insufficient');
 		TakeoverPlan memory plan = _planTakeover(source, commitment, sourcePrincipalDebitAttoRep, receiverAwardAttoRep, receiverFreePrincipalAttoRep);
 		if (enforceBounds) {
 			require(existing.rep + plan.receivedPrincipalAttoRep <= bounds.maximumOwnerPrincipal, 'Takeover owner principal exceeds limit');
 			require(existing.commitment + commitment <= bounds.maximumOwnerCommitment, 'Takeover owner commitment exceeds limit');
 		}
-		receiverId = _transferTakeoverPosition(id, commitment, sourcePrincipalDebitAttoRep, receiver, existing, plan);
+		receiverId = _transferTakeoverPosition(id, commitment, sourcePrincipalDebitAttoRep, receiver, existing, plan, receiverOwner);
 		_clearHealthyLiquidation(id, plan.remainingCommitmentAttoEth, maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth));
 		receiver.freeAttoRep -= receiverFreePrincipalAttoRep;
 		totalFreeAttoRep -= receiverFreePrincipalAttoRep;
@@ -445,12 +459,12 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		plan.remainingPrincipalAttoRep = source.rep - sourcePrincipalDebitAttoRep;
 		plan.receivedPrincipalAttoRep = receiverAwardAttoRep + receiverFreePrincipalAttoRep;
 	}
-	function _transferTakeoverPosition(uint96 id, uint256 commitment, uint256 sourcePrincipalDebitAttoRep, Owner storage receiver, SecurityPoolCommitmentIndex.Account memory existing, TakeoverPlan memory plan) private returns (uint96 receiverId) {
+	function _transferTakeoverPosition(uint96 id, uint256 commitment, uint256 sourcePrincipalDebitAttoRep, Owner storage receiver, SecurityPoolCommitmentIndex.Account memory existing, TakeoverPlan memory plan, address receiverOwner) private returns (uint96 receiverId) {
 		receiverId = receiver.positionId;
 		uint256 receiverPrincipalAttoRep;
 		uint256 receiverCommitmentAttoEth;
 		if (receiverId == 0) {
-			receiverId = commitmentIndex.split(id, msg.sender, sourcePrincipalDebitAttoRep, commitment, maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth), maximumHealthyPrice(plan.receivedPrincipalAttoRep, commitment));
+			receiverId = commitmentIndex.split(id, receiverOwner, sourcePrincipalDebitAttoRep, commitment, maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth), maximumHealthyPrice(plan.receivedPrincipalAttoRep, commitment));
 			receiver.positionId = receiverId;
 			receiverPrincipalAttoRep = plan.receivedPrincipalAttoRep;
 			receiverCommitmentAttoEth = commitment;

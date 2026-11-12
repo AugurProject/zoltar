@@ -13,6 +13,17 @@ function portfolioStorageKey(chainId: number) {
 	return `statoblast:portfolio:last:${backend.id}:${chainId}:${backend.profile.genesisRepTokenAddress.toLowerCase()}`
 }
 
+/** The portfolio last opened on this network in this browser. */
+export function rememberedPortfolio(chainId = getActiveBackend().profile.chain.id) {
+	try {
+		const saved = window.localStorage.getItem(portfolioStorageKey(chainId))
+		return saved !== null && isAddress(saved) ? saved : undefined
+	} catch (failure) {
+		if (!(failure instanceof DOMException)) throw failure
+		return undefined
+	}
+}
+
 function portfolioBackendReady(backend: ReturnType<typeof getActiveBackend>) {
 	return backend.isBootstrapped !== false && backend.isBootstrapping !== true && backend.bootstrapError === undefined
 }
@@ -128,12 +139,8 @@ export function usePortfolio({ accountAddress, enabled, environmentKey, activeUn
 		let current = true
 		void (async () => {
 			if (managerInput.value === '') {
-				try {
-					const saved = window.localStorage.getItem(storageKey)
-					if (saved !== null && isAddress(saved)) managerInput.value = saved
-				} catch (failure) {
-					if (!(failure instanceof DOMException)) throw failure
-				}
+				const saved = rememberedPortfolio(backend.profile.chain.id)
+				if (saved !== undefined) managerInput.value = saved
 			}
 			if (managerInput.value === '' && isAddress(ownerInput.value)) {
 				discovering.value = true
