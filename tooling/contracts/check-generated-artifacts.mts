@@ -7,6 +7,7 @@ import { repositoryRoot as defaultRepositoryRoot } from '../repo/root.mts'
 import { untrackedGeneratedPathspecs } from '../repo/generated-artifacts.ts'
 import { augurScanMetadataOutputs } from '../repo/projects.ts'
 import { sharedPackages } from '../repo/sharedPackages.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 export type GeneratedArtifactCheckOptions = {
 	repositoryRoot?: string
@@ -29,10 +30,6 @@ const explicitlyRequiredGeneratedOutputs = [
 // Ignored registry outputs plus stray compiler output that must never be committed.
 const generatedReviewPaths = [...untrackedGeneratedPathspecs(), ':(glob)**/*.tsbuildinfo', ':(glob)ui/*/ts/**/*.d.ts', ':(glob)ui/*/ts/**/*.d.ts.map']
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
 async function assertExists(repositoryRoot: string, relativePath: string) {
 	try {
 		await fs.stat(path.join(repositoryRoot, relativePath))
@@ -46,7 +43,7 @@ async function assertExists(repositoryRoot: string, relativePath: string) {
 
 async function readJsonObject(repositoryRoot: string, relativePath: string) {
 	const parsed = JSON.parse(await fs.readFile(path.join(repositoryRoot, relativePath), 'utf8'))
-	if (!isRecord(parsed)) throw new Error(`${relativePath} must contain a JSON object`)
+	if (!isPlainRecord(parsed)) throw new Error(`${relativePath} must contain a JSON object`)
 	return parsed
 }
 
@@ -72,10 +69,10 @@ export async function getSharedPackageGeneratedOutputs(repositoryRoot: string) {
 	for (const entry of sharedPackages) {
 		const packageJson = await readJsonObject(repositoryRoot, `${entry.path}/package.json`)
 		const exportsValue = packageJson['exports']
-		if (!isRecord(exportsValue)) throw new Error(`${entry.path}/package.json exports must be an object`)
+		if (!isPlainRecord(exportsValue)) throw new Error(`${entry.path}/package.json exports must be an object`)
 
 		for (const [exportName, exportValue] of Object.entries(exportsValue)) {
-			if (!isRecord(exportValue)) throw new Error(`${entry.path}/package.json export ${exportName} must be an object`)
+			if (!isPlainRecord(exportValue)) throw new Error(`${entry.path}/package.json export ${exportName} must be an object`)
 			const defaultPath = exportValue['default']
 			if (typeof defaultPath !== 'string') throw new Error(`${entry.path}/package.json export ${exportName} must define a default path`)
 			const generatedJavaScriptPath = normalizeRepositoryRelativePath(entry.path, defaultPath)
@@ -97,9 +94,9 @@ async function getUiImportMapGeneratedOutputs(repositoryRoot: string, appId: str
 	const importMapText = importMapMatch[1]
 	if (importMapText === undefined) throw new Error(`ui/${appId}/index.html import map is empty`)
 	const importMap = JSON.parse(importMapText)
-	if (!isRecord(importMap)) throw new Error(`ui/${appId}/index.html import map must be a JSON object`)
+	if (!isPlainRecord(importMap)) throw new Error(`ui/${appId}/index.html import map must be a JSON object`)
 	const imports = importMap['imports']
-	if (!isRecord(imports)) throw new Error(`ui/${appId}/index.html import map imports must be an object`)
+	if (!isPlainRecord(imports)) throw new Error(`ui/${appId}/index.html import map imports must be an object`)
 
 	const outputs: string[] = []
 	for (const [specifier, targetPath] of Object.entries(imports)) {

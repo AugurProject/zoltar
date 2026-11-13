@@ -2,6 +2,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import { runBunTestProcess } from './run-bun-test-process.mts'
 import { createBalancedTestShards, discoverTestFiles, toBunTestPath } from './test-discovery.mts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 const coverageDirectory = join(process.cwd(), 'solidity', 'coverage')
 const summaryPath = join(coverageDirectory, 'coverage-summary.json')
@@ -20,10 +21,8 @@ interface SolidityCoverageSummary {
 	readonly files: Record<string, SolidityCoverageFileSummary>
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
-
 const parseCoverageFileSummary = (value: unknown): SolidityCoverageFileSummary | undefined => {
-	if (!isRecord(value)) return undefined
+	if (!isPlainRecord(value)) return undefined
 	const file = value['file']
 	const totalLines = value['totalLines']
 	const coveredLines = value['coveredLines']
@@ -31,7 +30,7 @@ const parseCoverageFileSummary = (value: unknown): SolidityCoverageFileSummary |
 	if (typeof file !== 'string') return undefined
 	if (typeof totalLines !== 'number') return undefined
 	if (typeof coveredLines !== 'number') return undefined
-	if (!isRecord(lineHitsValue)) return undefined
+	if (!isPlainRecord(lineHitsValue)) return undefined
 	const lineHits: Record<string, number> = {}
 	for (const [line, hitCount] of Object.entries(lineHitsValue)) {
 		if (typeof hitCount !== 'number') return undefined
@@ -41,13 +40,13 @@ const parseCoverageFileSummary = (value: unknown): SolidityCoverageFileSummary |
 }
 
 const parseCoverageSummary = (value: unknown): SolidityCoverageSummary | undefined => {
-	if (!isRecord(value)) return undefined
+	if (!isPlainRecord(value)) return undefined
 	const totalLines = value['totalLines']
 	const totalCoveredLines = value['totalCoveredLines']
 	const filesValue = value['files']
 	if (typeof totalLines !== 'number') return undefined
 	if (typeof totalCoveredLines !== 'number') return undefined
-	if (!isRecord(filesValue)) return undefined
+	if (!isPlainRecord(filesValue)) return undefined
 	const files: Record<string, SolidityCoverageFileSummary> = {}
 	for (const [absoluteFile, fileSummaryValue] of Object.entries(filesValue)) {
 		const fileSummary = parseCoverageFileSummary(fileSummaryValue)
