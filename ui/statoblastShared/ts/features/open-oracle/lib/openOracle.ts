@@ -66,8 +66,8 @@ export function formatOpenOracleSettleWriteErrorMessage(error: unknown, fallback
 	// Match only OpenOracle custom error names and their selectors.
 	if (normalizedDetail.includes('invalidgaslimit') || normalizedDetail.includes('0x98bdb2e0')) return 'Settlement did not leave enough gas for this report’s settlement callback. Retry settling and keep the gas limit the wallet suggests; do not lower it.'
 	if (normalizedDetail.includes('settletooearly') || normalizedDetail.includes('0x3edf6050')) return 'This report is not ready to settle.'
-	if (normalizedDetail.includes('alreadysettled') || normalizedDetail.includes('0x560ff900')) return 'This report is already settled.'
-	if (normalizedDetail.includes('noreportyet') || normalizedDetail.includes('0x15c7bbe9')) return 'This report is invalid because its initial report is missing.'
+	if (normalizedDetail.includes('alreadysettled') || normalizedDetail.includes('0x560ff900')) return openOracleCopy.reportAlreadySettled
+	if (normalizedDetail.includes('noreportyet') || normalizedDetail.includes('0x15c7bbe9')) return openOracleCopy.reportMissingInitialReport
 	if (genericMessage === ensureSentence(detail)) return genericMessage
 	return `Transaction failed while settling the report. Reason: ${ensureSentence(detail)}`
 }
@@ -80,8 +80,8 @@ export function formatOpenOracleDisputeWriteErrorMessage(error: unknown, fallbac
 	if (genericMessage === ensureSentence(detail)) return genericMessage
 	if (normalizedDetail.includes('disputetooearly') || normalizedDetail.includes('dispute too early')) return 'This report is not ready to dispute.'
 	if (normalizedDetail.includes('disputetoolate') || normalizedDetail.includes('dispute period expired')) return 'Dispute window closed. Settle report instead.'
-	if (normalizedDetail.includes('alreadysettled') || normalizedDetail.includes('report settled')) return 'This report is already settled.'
-	if (normalizedDetail.includes('noreporttodispute') || normalizedDetail.includes('no report to dispute')) return 'This report is invalid because its initial report is missing.'
+	if (normalizedDetail.includes('alreadysettled') || normalizedDetail.includes('report settled')) return openOracleCopy.reportAlreadySettled
+	if (normalizedDetail.includes('noreporttodispute') || normalizedDetail.includes('no report to dispute')) return openOracleCopy.reportMissingInitialReport
 	return `Transaction failed while disputing the report. Reason: ${ensureSentence(detail)}`
 }
 export function getOpenOracleCreateGuardMessage({ isOnActiveAppChain, settlerRewardInput, walletConnected, walletBalanceAttoEth }: { isOnActiveAppChain: boolean; settlerRewardInput: string; walletConnected: boolean; walletBalanceAttoEth: bigint | undefined }) {
@@ -345,6 +345,12 @@ export function getOpenOracleSelectedReportActionMode(report: Pick<OpenOracleRep
 function hasOpenOracleAtomicInitialReport(report: Pick<OpenOracleReportDetails, 'currentReporter' | 'reportTimestamp'>) {
 	return report.reportTimestamp !== 0n && report.currentReporter !== zeroAddress
 }
+/** Neither a dispute nor a settlement can act on a report that never received its initial report or has already settled. */
+function getClosedOpenOracleReportAvailability(report: Pick<OpenOracleReportDetails, 'currentReporter' | 'isDistributed' | 'reportTimestamp'>): OpenOracleReportActionAvailability | undefined {
+	if (!hasOpenOracleAtomicInitialReport(report)) return { canAct: false, message: openOracleCopy.reportMissingInitialReport }
+	if (report.isDistributed) return { canAct: false, message: openOracleCopy.reportAlreadySettled }
+	return undefined
+}
 function getOpenOracleLifecycleClockValue(report: Pick<OpenOracleReportDetails, 'currentBlockNumber' | 'currentTime' | 'timeType'>) {
 	return report.timeType ? report.currentTime : report.currentBlockNumber
 }
@@ -353,16 +359,8 @@ function formatOpenOracleLifecycleRemaining(remaining: bigint, timeType: boolean
 	return `${remaining.toString()} block${remaining === 1n ? '' : 's'}`
 }
 export function getOpenOracleDisputeAvailability(report: Pick<OpenOracleReportDetails, 'currentBlockNumber' | 'currentReporter' | 'currentTime' | 'disputeDelay' | 'isDistributed' | 'reportTimestamp' | 'settlementTime' | 'timeType'>): OpenOracleReportActionAvailability {
-	if (!hasOpenOracleAtomicInitialReport(report))
-		return {
-			canAct: false,
-			message: 'This report is invalid because its initial report is missing.',
-		}
-	if (report.isDistributed)
-		return {
-			canAct: false,
-			message: 'This report is already settled.',
-		}
+	const closed = getClosedOpenOracleReportAvailability(report)
+	if (closed !== undefined) return closed
 	const currentClock = getOpenOracleLifecycleClockValue(report)
 	const disputeStart = report.reportTimestamp + report.disputeDelay
 	const settlementStart = report.reportTimestamp + report.settlementTime
@@ -413,16 +411,8 @@ export function getOpenOracleSettleRemaining(report: Pick<OpenOracleReportDetail
 }
 
 export function getOpenOracleSettleAvailability(report: Pick<OpenOracleReportDetails, 'currentBlockNumber' | 'currentReporter' | 'currentTime' | 'isDistributed' | 'reportTimestamp' | 'settlementTime' | 'timeType'>): OpenOracleReportActionAvailability {
-	if (!hasOpenOracleAtomicInitialReport(report))
-		return {
-			canAct: false,
-			message: 'This report is invalid because its initial report is missing.',
-		}
-	if (report.isDistributed)
-		return {
-			canAct: false,
-			message: 'This report is already settled.',
-		}
+	const closed = getClosedOpenOracleReportAvailability(report)
+	if (closed !== undefined) return closed
 	const remaining = getOpenOracleSettleRemaining(report)
 	if (remaining > 0n) {
 		return {
