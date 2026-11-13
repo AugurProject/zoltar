@@ -281,10 +281,6 @@
 			"bun": "./ts/protocol/reviewedBackend.ts",
 			"default": "./js/protocol/reviewedBackend.js"
 		},
-		"./copy/priceRequest.js": {
-			"bun": "./ts/copy/priceRequest.ts",
-			"default": "./js/copy/priceRequest.js"
-		},
 		"./features/reporting/lib/escalationReminder.js": {
 			"bun": "./ts/features/reporting/lib/escalationReminder.ts",
 			"default": "./js/features/reporting/lib/escalationReminder.js"
