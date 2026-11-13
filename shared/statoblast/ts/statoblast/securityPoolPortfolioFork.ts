@@ -47,8 +47,9 @@ export function buildPortfolioForkFinalizeRequest(parameters: ForkRequest) {
 	return request(parameters, 'finalizeBranch')
 }
 export function buildPortfolioForkRecoveryRequest(parameters: ForkRequest & { questionId: bigint; shares: bigint }) {
-	if (decodeUint(parameters.shares, 'Complete sets') === 0n) throw new Error('Recovery shares must be positive.')
-	return request(parameters, 'recoverUnchosenCash', [decodeUint(parameters.questionId, 'Question'), parameters.shares])
+	const shares = decodeUint(parameters.shares, 'Complete sets')
+	if (shares === 0n) throw new Error('Recovery shares must be positive.')
+	return request(parameters, 'recoverUnchosenCash', [decodeUint(parameters.questionId, 'Question'), shares])
 }
 /** Transfer only source cash-recovery rights, in Invalid/Yes/No order, without moving branch shares. */
 export function buildPortfolioRecoveryRightsTransferRequest(parameters: { owner: Address; shareToken: Address; universeId: bigint; recipient: Address; amountsAttoShares: readonly [bigint, bigint, bigint] }) {

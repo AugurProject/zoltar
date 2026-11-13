@@ -137,9 +137,15 @@ export type PortfolioCapitalSnapshot = {
 	economics: PortfolioEconomicsConfig
 }
 
-function positive(value: bigint, label: string, bits = 256) {
-	if (decodeUint(value, label, bits) === 0n) throw new Error(`${label} must be positive.`)
-	return value
+function positive(value: unknown, label: string, bits = 256) {
+	const decoded = decodeUint(value, label, bits)
+	if (decoded === 0n) throw new Error(`${label} must be positive.`)
+	return decoded
+}
+function healthTarget(value: unknown) {
+	const target = decodeUint(value, 'Health target')
+	if (target < 10_000n) throw new Error('Health target must be at least 100%.')
+	return target
 }
 function retirementStatus(value: unknown): PortfolioRetirementPreview['status'] {
 	switch (value) {
@@ -194,12 +200,11 @@ export function buildPortfolioCapitalWithdrawPrincipalRequest(parameters: Capita
 	return request(parameters, 'withdrawPrincipal', [positive(parameters.amountAttoRep, 'REP withdrawal'), decodeAddress(parameters.recipient ?? parameters.owner, 'Recipient')])
 }
 export function buildPortfolioCapitalSetHealthRequest(parameters: CapitalRequest & { targetHealthFactorBps: bigint }) {
-	if (decodeUint(parameters.targetHealthFactorBps, 'Health target') < 10_000n) throw new Error('Health target must be at least 100%.')
-	return request(parameters, 'setHealthTarget', [parameters.targetHealthFactorBps])
+	return request(parameters, 'setHealthTarget', [healthTarget(parameters.targetHealthFactorBps)])
 }
 export function buildPortfolioCapitalDepositAndSetHealthRequest(parameters: CapitalRequest & { amountAttoRep: bigint; targetHealthFactorBps: bigint }) {
-	if (decodeUint(parameters.targetHealthFactorBps, 'Health target') < 10_000n) throw new Error('Health target must be at least 100%.')
-	return request(parameters, 'depositAndSetHealthTarget', [positive(parameters.amountAttoRep, 'REP deposit'), parameters.targetHealthFactorBps])
+	const amountAttoRep = positive(parameters.amountAttoRep, 'REP deposit')
+	return request(parameters, 'depositAndSetHealthTarget', [amountAttoRep, healthTarget(parameters.targetHealthFactorBps)])
 }
 /**
  * Sets the owner's whole commitment. Raising or keeping it applies at once; lowering it cures any unbacked part at once and
@@ -223,19 +228,14 @@ export function buildPortfolioCapitalTakeOverRequest(parameters: CapitalRequest 
 /** Bind an automated acquisition to its quoted price epoch, owner policy and final exposure. */
 export function buildPortfolioCapitalTakeOverWithBoundsRequest(parameters: CapitalRequest & { positionId: bigint; commitment: bigint; minimumAward: bigint; maximumOwnRep: bigint; bounds: PortfolioTakeoverBounds }) {
 	const bounds = parameters.bounds
-	if (decodeUint(bounds.expectedTargetHealthFactorBps, 'Expected health target') < 10_000n) throw new Error('Health target must be at least 100%.')
+	const expectedTargetHealthFactorBps = decodeUint(bounds.expectedTargetHealthFactorBps, 'Expected health target')
+	if (expectedTargetHealthFactorBps < 10_000n) throw new Error('Health target must be at least 100%.')
 	return request(parameters, 'takeOverWithBounds', [
 		positive(parameters.positionId, 'Position id', 96),
 		positive(parameters.commitment, 'Takeover commitment'),
 		decodeUint(parameters.minimumAward, 'Minimum REP award'),
 		decodeUint(parameters.maximumOwnRep, 'Maximum own REP'),
-		[
-			decodeUint(bounds.maximumOwnerPrincipal, 'Maximum owner principal'),
-			decodeUint(bounds.maximumOwnerCommitment, 'Maximum owner commitment'),
-			bounds.expectedTargetHealthFactorBps,
-			decodeUint(bounds.expectedAcceptedPriceEpoch, 'Expected price epoch'),
-			decodeUint(bounds.expectedSourceBatch, 'Expected source cohort', 96),
-		],
+		[decodeUint(bounds.maximumOwnerPrincipal, 'Maximum owner principal'), decodeUint(bounds.maximumOwnerCommitment, 'Maximum owner commitment'), expectedTargetHealthFactorBps, decodeUint(bounds.expectedAcceptedPriceEpoch, 'Expected price epoch'), decodeUint(bounds.expectedSourceBatch, 'Expected source cohort', 96)],
 	])
 }
 
