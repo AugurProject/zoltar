@@ -17,7 +17,6 @@ import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { Zoltar } from '../Zoltar.sol';
 import { Constants } from '../Constants.sol';
 import { SecurityPoolCommitmentIndex } from './SecurityPoolCommitmentIndex.sol';
-import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
 /// @notice Exact REP custody and individually authorized underwriting.
