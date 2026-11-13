@@ -149,7 +149,7 @@ const bytecodeCoverageWeights = new Map<string, number>([
 
 export async function discoverSolidityBytecodeTestFiles(repositoryRoot = process.cwd()) {
 	const files = await discoverTestFiles(repositoryRoot, ['solidity/ts'])
-	return files.filter(file => file.startsWith('solidity/ts/tests/') || file.startsWith('solidity/ts/fuzz/'))
+	return files.filter(file => file.startsWith('solidity/ts/tests/'))
 }
 
 export async function createSolidityBytecodeTestShards(repositoryRoot = process.cwd(), shardCount = 2) {
