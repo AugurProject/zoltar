@@ -147,6 +147,19 @@ export function snapshotFixture(): EcosystemSnapshot {
 	}
 }
 
+/** The standard snapshot after the wallet holds nothing but ETH: no tokens, shares, LP, Open Oracle credit, portfolio capital, or warnings. */
+export function drainedWalletSnapshotFixture() {
+	const snapshot = snapshotFixture()
+	snapshot.wallet.tokens = []
+	snapshot.wallet.shares = []
+	snapshot.wallet.lpTokens = []
+	snapshot.wallet.openOracleEthCredit = '0'
+	snapshot.portfolioCapital = []
+	for (const pair of snapshot.pairs) pair.walletLiquidity = '0'
+	snapshot.warnings = []
+	return snapshot
+}
+
 /** A genesis universe whose every trading prerequisite is in place; tests clear the prerequisite they exercise. */
 export function completeGenesisInitializationState(overrides: Partial<GenesisInitializationState>): GenesisInitializationState {
 	return {
