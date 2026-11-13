@@ -182,6 +182,8 @@
 
 .section-block-body {
 	display: grid;
+	/* One shrinkable track: a child such as a <details> or a form whose intrinsic width exceeds the card wraps inside it instead of widening the card. */
+	grid-template-columns: minmax(0, 1fr);
 	gap: var(--space-5);
 	min-width: 0;
 }
@@ -212,7 +214,8 @@
 
 .data-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+	/* A container narrower than one column, such as a nested section on a phone, gets one full-width column instead of overflowing. */
+	grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr));
 	gap: var(--space-4) var(--space-5);
 }
 

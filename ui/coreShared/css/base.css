@@ -1865,10 +1865,14 @@ a.transaction-hash-link {
 	word-break: normal;
 }
 
+/* A badge keeps its one-line width beside other content (it does not shrink in a row); only a status longer than its
+ * whole container wraps inside it instead of overflowing. */
 .badge {
 	display: inline-flex;
+	flex-shrink: 0;
 	align-items: center;
-	white-space: nowrap;
+	max-width: 100%;
+	overflow-wrap: anywhere;
 	border-radius: var(--radius-control);
 	padding: 0.32rem 0.68rem;
 	font-family: var(--font-family-mono);
@@ -1983,7 +1987,7 @@ a.transaction-hash-link {
 .workflow-question-grid,
 .workflow-vault-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr));
 	gap: 1rem 1.25rem;
 }
 

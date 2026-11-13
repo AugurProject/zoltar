@@ -4227,3 +4227,12 @@ span.rep-price-status.stale,
 	white-space: normal;
 	overflow-wrap: anywhere;
 }
+
+/* Question titles keep a readable column; on narrow screens the table scrolls inside its region instead of squeezing them. */
+.portfolio-questions-table td:first-child {
+	min-width: 10rem;
+}
+
+.portfolio-questions-table td:first-child button {
+	overflow-wrap: normal;
+}
