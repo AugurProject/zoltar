@@ -147,7 +147,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	function _deployOriginSecurityPool(address portfolio, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) private returns (ISecurityPool securityPool) {
 		// The caller's portfolio namespace prevents another creator from reserving its question identity.
 		require(address(portfolioConfigurations[portfolio]) != address(0), 'Portfolio configuration missing');
-		require(statoblastSecurityMultiplierBps > SecurityPoolUtils.BPS_DENOMINATOR + 1, 'Multiplier must exceed 10001 BPS');
+		require(statoblastSecurityMultiplierBps >= SecurityPoolUtils.MINIMUM_SECURITY_MULTIPLIER_BPS, 'Multiplier must be at least 10500 BPS');
 
 		// Validate that the question exists
 		require(questionData.questionCreatedTimestamp(questionId) > 0, 'Question does not exist');

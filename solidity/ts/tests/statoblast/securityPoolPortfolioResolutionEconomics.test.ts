@@ -57,8 +57,8 @@ describe('Statoblast: reporting and unresolved capital compensation', () => {
 	test('base purchase quotes preserve separate collateral and fee rounding at dust boundaries', async () => {
 		await fixture.prepare()
 		for (const minimum of [0n, 3n]) {
-			const created = await fixture.deployPortfolio(undefined, { ...portfolioEconomics, purchaseFeeBps: 4_000n, annualFeeBps: 0n, minimumPurchaseFeeAttoEth: minimum }, { securityMultiplierBps: 10_002n })
-			// The effective 105% backing floor rounds 2 attoETH to 3, then its 40% fee to 2.
+			const created = await fixture.deployPortfolio(undefined, { ...portfolioEconomics, purchaseFeeBps: 4_000n, annualFeeBps: 0n, minimumPurchaseFeeAttoEth: minimum }, { securityMultiplierBps: 10_500n })
+			// The minimum 105% backing rounds 2 attoETH to 3, then its 40% fee to 2.
 			// One combined division would charge only 1. Minimum fees apply after both steps.
 			for (const [cash, expected] of [
 				[1n, 1n],

@@ -17,8 +17,7 @@ export function portfolioMintFee(cash: bigint, state: PortfolioMintFees) {
 	if (supply !== 0n && state.cashAttoEth === 0n) throw new Error('Question backing exhausted')
 	const shares = supply === 0n ? cash : (cash * supply) / state.cashAttoEth
 	const principal = supply === 0n ? cash : ceilDiv(state.feePrincipalAttoEth * shares, supply)
-	const multiplier = state.securityMultiplierBps > 10_500n ? state.securityMultiplierBps : 10_500n
-	const backing = ceilDiv(cash * multiplier, 10_000n)
+	const backing = ceilDiv(cash * state.securityMultiplierBps, 10_000n)
 	const proportional = ceilDiv(backing * state.purchaseFeeBps, 10_000n)
 	const base = proportional > state.minimumPurchaseFeeAttoEth ? proportional : state.minimumPurchaseFeeAttoEth
 	return base + ceilDiv(principal * state.annualFeeBps * 52n, 10_000n * 365n)

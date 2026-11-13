@@ -71,7 +71,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		zoltar = _zoltar;
 		universeId = _universeId;
 		repToken = IERC20(address(_zoltar.getRepToken(_universeId)));
-		securityMultiplierBps = Math.max(multiplier, SecurityPoolUtils.MINIMUM_SECURITY_MULTIPLIER_BPS);
+		securityMultiplierBps = multiplier;
 		minimumCommitmentAttoEth = minimumCommitment;
 		repToken.safeApprove(address(_zoltar), type(uint256).max);
 	}

@@ -24,6 +24,7 @@ import {
 	SecurityPoolReporterLedgerDeployer
 } from './SecurityPoolPortfolioModuleDeployers.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
+import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 
 interface IPortfolioForkCoordinator {
 	function initialize(uint248 origin) external;
@@ -132,7 +133,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		require(address(deployment.capital).code.length != 0 && address(deployment.commitments).code.length != 0 && address(deployment.fees).code.length != 0 && address(deployment.books).code.length != 0 && address(deployment.settlement).code.length != 0 && address(deployment.reporters).code.length != 0 && address(deployment.forks).code.length != 0 && address(deployment.services).code.length != 0, 'Portfolio deployer has no code');
 		require(config.rewardVestingSeconds > 0 && horizon > 0 && horizon <= type(uint48).max, 'Invalid portfolio duration');
 		require(origin.reportPriorityFeeAttoEthPerGas > 0, 'Initial priority fee zero');
-		require(origin.securityMultiplierBps > 10_001, 'Multiplier must exceed 10001 BPS');
+		require(origin.securityMultiplierBps >= SecurityPoolUtils.MINIMUM_SECURITY_MULTIPLIER_BPS, 'Multiplier must be at least 10500 BPS');
 		factory = _factory;
 		zoltar = _factory.zoltar();
 		originUniverseId = origin.universeId;
