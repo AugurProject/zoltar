@@ -38,8 +38,6 @@
 						<dd>An account that disputes an incorrect OpenOracle report; see <a href="../reference/security-model.html#assumption-a17">A17</a>.</dd>
 						<dt>Callback-recovery candidate</dt>
 						<dd>A <a href="../reference/glossary.html#price-coordinator">price coordinator</a> whose pending report OpenOracle has already settled; see <a href="../reference/open-oracle.html#callback-rejection-and-recovery">settlement recovery</a>.</dd>
-						<dt>Overflow operation</dt>
-						<dd>A staged operation outside the next settlement callback's batch of four; see <a href="../reference/open-oracle.html#report-lifecycle">execution batches</a>.</dd>
 					</dl>
 				</section>
 				<section id="assumption-monitoring">
@@ -63,7 +61,6 @@
 										<li>Dispute opportunities and net reward: OpenOracle arbitrager dashboard</li>
 										<li>Active reporters, correctors, escalation depositors, and Collateral Repair Auction bidders: augurScan <code>/operations/reports</code>, <code>/operations/escalations</code>, <code>/operations/auctions</code></li>
 										<li>Callback-recovery candidates: coordinator <code>pendingReportId</code>, then the settlement timestamp in OpenOracle <code>storedGame(reportId)</code>; anyone can clear one with <code>recoverSettledPendingReport()</code></li>
-										<li>Overflow operations: coordinator <code>getActiveStagedOperationCount()</code> minus <code>getPendingSettlementOperationCount()</code></li>
 									</ul>
 								</td>
 								<td>Continuously for deadline-bearing flows; before launch and after parameter or gas-regime changes</td>
@@ -87,8 +84,8 @@
 								<td>
 									<ul>
 										<li><a href="../reference/glossary.html#theoretical-rep-supply">Theoretical REP supply</a>: Zoltar <code>getUniverseTheoreticalSupplyAttoRep(universeId)</code></li>
-										<li>Pool <a href="../reference/glossary.html#open-interest">open interest</a>: <code>settlementCollateralAttoEth</code> in <code>getPoolAccountingSnapshot()</code></li>
-										<li>Pool-held REP: <code>getTotalPoolHeldAttoRep()</code></li>
+										<li>Pool <a href="../reference/glossary.html#open-interest">open interest</a>: pool <code>settlementCollateralAttoEth()</code></li>
+										<li>REP deposited as underwriting capital: portfolio <code>capitalLedger(universeId)</code>, then the <code>rep</code> value from that ledger's <code>totals()</code></li>
 										<li>Cached REP/ETH price: coordinator <code>lastPrice</code></li>
 										<li>REP depth and price impact: arbitrager Uniswap venue quotes</li>
 										<li>Pool and vault risk: augurScan <code>/operations/risk</code></li>
@@ -104,7 +101,7 @@
 									<ul>
 										<li><a href="../reference/glossary.html#escalation-game">Escalation Game</a> deadline: <code>getEscalationGameEndDate()</code></li>
 										<li>Outcome funding: <code>getOutcomeBalancesAttoRep()</code> and <code>getBindingCapitalAttoRep()</code>, or augurScan <code>/operations/escalations</code></li>
-										<li>REP available to fund a correction: wallet REP <code>balanceOf</code> (wallet deposits, except in a game carried across a fork) and vault REP <code>backingUnitsToAttoRep(securityVaults(vault).repBackingUnits)</code> of each ready account</li>
+										<li>REP available to fund a correction: wallet REP <code>balanceOf</code> of each ready account (escalation deposits come from wallet REP, not from capital-ledger deposits)</li>
 										<li>Outcome evidence: where each source publishes (off-chain)</li>
 									</ul>
 								</td>
@@ -132,7 +129,7 @@
 										<li>Reorg history: augurScan <code>/operations/integrity</code></li>
 										<li>Escalation deadline: <code>getEscalationGameEndDate()</code></li>
 										<li>Collateral Repair Auction close: auction <code>closesAt()</code></li>
-										<li>Migration close: forker <code>forkData(pool)</code> <code>forkActivationTime</code> plus eight weeks</li>
+										<li><a href="../reference/glossary.html#migration-window">Branch-choice cutoff</a>: Zoltar <code>getForkChoiceDeadline(universeId)</code>, eight weeks after the fork</li>
 										<li>Margin: each deadline minus expected inclusion delay</li>
 									</ul>
 								</td>
@@ -144,7 +141,7 @@
 								<td>
 									<ul>
 										<li>Pending report: coordinator <code>pendingReportId</code>, then OpenOracle <code>storedGame(reportId)</code></li>
-										<li>Report outcomes: coordinator <code>PriceRequested</code>, <code>PriceReported</code>, and <code>PriceReportRejected</code> events, or augurScan <code>/operations/reports</code></li>
+										<li>Report outcomes: <code>PriceRequested</code>, <code>PriceReported</code>, and <code>PriceReportRejected</code> events from the shared feed at coordinator <code>priceFeed()</code>, or augurScan <code>/operations/reports</code></li>
 										<li>Independent correctors: whether any, such as an operator running the <a href="https://github.com/AugurProject/zoltar/blob/main/bots/open-oracle-arbitrager/README.md">OpenOracle arbitrager</a>, reports disputes profitable after fees, gas, and price impact</li>
 										<li>Creation-time floor: portfolio <code>minimumReportCollateral</code> and the selected collateral token’s units and current ETH value</li>
 										<li>Correction economics: compare obtainable correction gains with OpenOracle fees, current ETH gas costs including approvals and recovery, price impact, and capital lockup under <a href="../reference/security-model.html#assumption-a18">A18</a>; do not compare the whole stake with gas alone</li>

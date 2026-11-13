@@ -413,7 +413,7 @@ describe('reporting protocol client', () => {
 		expect(yesSide.importedUserDeposits).toEqual([])
 	})
 
-	// Contract migration checks use the pool's forkActivationTime + MIGRATION_TIME (SecurityPoolForker), not the universe fork time.
+	// The contracts no longer have a per-pool migration deadline; these cases guard that the loader never reads the removed forker fork data.
 	test.each([
 		{ blockTimestamp: 123n + 4_838_400n + 1n, forkActivationTime: 500n, expected: 'migration-required' },
 		{ blockTimestamp: 500n + 4_838_400n, forkActivationTime: 500n, expected: 'migration-required' },
