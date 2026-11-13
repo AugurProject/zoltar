@@ -49,10 +49,10 @@
 						</tr>
 						<tr>
 							<td><code>safeBatchTransferFrom(from, to, ids, values)</code> and <code>safeBatchTransferFrom(from, to, ids, values, data)</code><wbr /></td>
-							<td>Share holder or approved ERC-1155 operator for a nonempty batch; any caller for an empty batch</td>
-							<td>ID and value array lengths match. A nonempty batch also requires holder or operator authority, no listed source token already locked by child materialization or spending source-backed recovery rights, a nonzero destination, sufficient source balances, and, under <a href="../security-model.html#assumption-a22">A22 asset-recipient compatibility</a>, an accepting ERC-1155 callback from a contract recipient; the empty-batch no-op performs none of those checks.</td>
-							<td>A nonempty batch transfers each listed outcome-token balance without changing supply. Equal empty ID and value arrays return as a no-op without an event.</td>
-							<td><code>TransferBatch</code> for a nonempty batch; no event for an empty batch</td>
+							<td>Source account or approved ERC-1155 operator</td>
+							<td>ID and value array lengths match; caller is the source account or has operator approval; destination is nonzero; no listed source token is locked by child materialization or spending source-backed recovery rights; source balances are sufficient. Under <a href="../security-model.html#assumption-a22">A22 asset-recipient compatibility</a>, a contract recipient must accept the ERC-1155 callback, including for an empty batch.</td>
+							<td>Transfers each listed outcome-token balance without changing supply. Empty batches change no balances.</td>
+							<td><code>TransferBatch</code>, including empty batches</td>
 						</tr>
 						<tr>
 							<td><code>transferPortfolioRecoveryRights(sourceUniverse, recipient, amountsAttoShares)</code><wbr /></td>
