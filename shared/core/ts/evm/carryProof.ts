@@ -43,12 +43,6 @@ export function buildCarryPeakHeights(leafCount: bigint) {
 	return peakHeights
 }
 
-export function compareBigintAscending(left: bigint, right: bigint) {
-	if (left < right) return -1
-	if (left > right) return 1
-	return 0
-}
-
 export function buildCarryMerkleMountainRangeProof(leafHashes: readonly Hex[], targetLeafIndex: number) {
 	const peakHeights = buildCarryPeakHeights(BigInt(leafHashes.length))
 	let offset = 0
