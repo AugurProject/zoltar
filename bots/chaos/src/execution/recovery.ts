@@ -360,13 +360,13 @@ async function resolveQueuedReplacement(environment: ExecutionEnvironment, inten
 	return true
 }
 
-async function verifyRecoveredCancellation(environment: ExecutionEnvironment, intent: PendingTransactionIntent, cancellationHash: Hex) {
-	const connectivity = requiredConnectivity(environment.settings)
-	const transaction = await settledQuorumValue(
-		`nonce cancellation transaction ${cancellationHash}`,
+/** Reads the fields recovery policy compares for a cancellation or replacement transaction, agreed across the read quorum. */
+async function quorumRecoveryTransaction(environment: ExecutionEnvironment, hash: Hex, kind: 'nonce cancellation' | 'replacement') {
+	return settledQuorumValue(
+		`${kind} transaction ${hash}`,
 		executionReadClients(environment).map(async ({ client, endpoint }) => {
-			const candidate = await client.getTransaction({ hash: cancellationHash })
-			assertRequestedTransactionHash(candidate.hash, cancellationHash, `RPC ${endpoint} nonce cancellation lookup`)
+			const candidate = await client.getTransaction({ hash })
+			assertRequestedTransactionHash(candidate.hash, hash, `RPC ${endpoint} ${kind} lookup`)
 			return {
 				endpoint,
 				value: {
@@ -379,8 +379,12 @@ async function verifyRecoveredCancellation(environment: ExecutionEnvironment, in
 				},
 			}
 		}),
-		connectivity.rpcQuorum,
+		requiredConnectivity(environment.settings).rpcQuorum,
 	)
+}
+
+async function verifyRecoveredCancellation(environment: ExecutionEnvironment, intent: PendingTransactionIntent, cancellationHash: Hex) {
+	const transaction = await quorumRecoveryTransaction(environment, cancellationHash, 'nonce cancellation')
 	if (transaction.type !== BOT_COMPATIBLE_RECOVERY_TRANSACTION_TYPE) {
 		throw new Error('Nonce cancellation must use a bot-compatible EIP-1559 transaction')
 	}
@@ -490,27 +494,7 @@ export async function recoverPendingTransactions(environment: ExecutionEnvironme
 }
 
 async function verifyRecoveredReplacement(environment: ExecutionEnvironment, intent: PendingTransactionIntent, replacementHash: Hex) {
-	const connectivity = requiredConnectivity(environment.settings)
-	const readers = executionReadClients(environment)
-	const transaction = await settledQuorumValue(
-		`replacement transaction ${replacementHash}`,
-		readers.map(async ({ client, endpoint }) => {
-			const candidate = await client.getTransaction({ hash: replacementHash })
-			assertRequestedTransactionHash(candidate.hash, replacementHash, `RPC ${endpoint} replacement lookup`)
-			return {
-				endpoint,
-				value: {
-					from: candidate.from,
-					input: candidate.input,
-					nonce: candidate.nonce,
-					to: candidate.to,
-					type: candidate.type,
-					value: candidate.value,
-				},
-			}
-		}),
-		connectivity.rpcQuorum,
-	)
+	const transaction = await quorumRecoveryTransaction(environment, replacementHash, 'replacement')
 	if (transaction.type !== BOT_COMPATIBLE_RECOVERY_TRANSACTION_TYPE) {
 		throw new Error('Replacement transaction must use a bot-compatible EIP-1559 transaction')
 	}
