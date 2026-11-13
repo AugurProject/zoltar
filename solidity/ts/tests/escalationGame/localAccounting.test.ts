@@ -20,11 +20,8 @@ describe('Escalation Game: local accounting and exports', () => {
 	const fixture = useEscalationGameFixture()
 	const {
 		reportBond,
-		nonDecisionThresholdAttoRep,
 		recursiveResolutionTargetCost,
 		deployEscalationGameTestSecurityPool,
-		deployEscalationGameWithProofPool,
-		startEscalation,
 		advanceForkContinuationPastStart,
 		depositOnOutcomeViaProofTestSecurityPool,
 		assertEscrowAccounting,
@@ -141,8 +138,7 @@ describe('Escalation Game: local accounting and exports', () => {
 	})
 
 	test('local unresolved export by deposit index consumes only the selected local deposit', async () => {
-		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameWithProofPool()
-		await startEscalation(escalationGameAddress, reportBond, nonDecisionThresholdAttoRep)
+		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
 		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 2n * reportBond)
 		await assertEscrowAccounting(escalationGameAddress, 3n * reportBond)
@@ -185,8 +181,7 @@ describe('Escalation Game: local accounting and exports', () => {
 
 	for (const exportBeforeFinality of [false, true])
 		test(`stateful local accounting remains balanced across randomized deposits and ${exportBeforeFinality ? 'exports, rejecting underfunded ordinary settlement' : 'ordinary claims'}`, async () => {
-			const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameWithProofPool()
-			await startEscalation(escalationGameAddress, reportBond, nonDecisionThresholdAttoRep)
+			const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
 			const firstVault = client.account.address
 			const secondVault = addressString(TEST_ADDRESSES[1])
 			const vaults = [firstVault, secondVault, addressString(TEST_ADDRESSES[2])]
