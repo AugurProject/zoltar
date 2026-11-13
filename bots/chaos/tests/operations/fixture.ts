@@ -1,6 +1,7 @@
 import { getAddress, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
 import type { PlanningOptions } from '../../src/operations/catalog.ts'
-import type { EcosystemSnapshot } from '../../src/operations/types.ts'
+import type { EcosystemSnapshot, OracleGameSnapshot, PoolSnapshot } from '../../src/operations/types.ts'
+import type { GenesisInitializationState } from '../../src/runtime/selection.ts'
 
 export const address = (value: number): Address => getAddress(`0x${value.toString(16).padStart(40, '0')}`)
 export const hash = (value: number): Hash => `0x${value.toString(16).padStart(64, '0')}`
@@ -143,5 +144,49 @@ export function snapshotFixture(): EcosystemSnapshot {
 		},
 		discoveryIssues: [],
 		warnings: [],
+	}
+}
+
+/** A genesis universe whose every trading prerequisite is in place; tests clear the prerequisite they exercise. */
+export function completeGenesisInitializationState(overrides: Partial<GenesisInitializationState>): GenesisInitializationState {
+	return {
+		genesisUniversePresent: true,
+		hasInitializedPair: true,
+		hasInitializedUniswapPool: true,
+		hasPair: true,
+		hasPool: true,
+		hasQuestion: true,
+		hasSeededUniswapPool: true,
+		hasUniswapPool: true,
+		hasUniswapSeeder: true,
+		hasWeth: true,
+		hasPortfolioCapital: true,
+		tradingFactoryDeployed: true,
+		tradingRouterDeployed: true,
+		...overrides,
+	}
+}
+
+/** The OpenOracle report with id 42 that `pool` has pending, reported by its coordinator; tests override what they exercise. */
+export function pendingPoolReportFixture(snapshot: EcosystemSnapshot, pool: PoolSnapshot, overrides: Partial<OracleGameSnapshot> = {}): OracleGameSnapshot {
+	return {
+		currentAmount1: '1000',
+		currentAmount2: '1000',
+		currentReporter: pool.coordinator,
+		disputeDelay: '60',
+		escalationHalt: '100000',
+		flags: 7,
+		game: { callbackContract: pool.coordinator, callbackGasLimit: 500000, feePercentage: 0, lastReportOppoTime: '1', numReports: 1, protocolFee: 0, protocolFeeRecipient: address(30), settlerReward: '0' },
+		helper: { blockNumber: '99', blockTimestamp: '1999999500', creator: pool.coordinator },
+		multiplier: 140,
+		openOracle: snapshot.deployments.openOracle,
+		reportId: '42',
+		reportTimestamp: '1999999500',
+		settlementTime: '4000',
+		settlementTimestamp: '0',
+		stateHash: hash(42),
+		token1: snapshot.deployments.weth,
+		token2: pool.repToken,
+		...overrides,
 	}
 }
