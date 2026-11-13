@@ -17,6 +17,12 @@ Visual evidence:
 - Treat screenshots as evidence of appearance, not proof of behavior. Cross-check the changed source and the parent's functional validation for interaction and state-transition claims.
 - Limit the audit to the task's changed surfaces and directly affected shared shell or primitives. Do not turn a narrow change into a redesign of unrelated routes.
 
+Layout scan:
+
+- `bun run ui:layout-scan` (source: `tooling/ui/layoutScan.mts`) opens an app in the walletless simulation, walks every route, view tab, disclosure, and dialog launcher it can reach at 1440x900, 1024x768, 768x1024, 390x844, and 320x640, and reports measured layout defects: content cut off by a clipping box or the viewport edge, content escaping its box, overlapping text or controls, text hidden behind other elements or under fixed bars, squeezed columns, words split mid-word, wrapping short labels, field text that does not fit, and dialogs larger than the screen. Each finding states the element, measurements, likely cause and fix, the source files that render and style it, and a highlighted screenshot.
+- Expect the parent to supply the scan's `report.md` for the affected app, normally from `bun run ui:layout-scan -- --app <app> --route <changed hash routes> --out <directory outside the repository>`. When it is missing and a live preview server is already running, run the scan yourself against it with `--base-url <server URL>` and `--out` pointing outside the repository; that form neither builds nor writes repository files. Never run it without `--base-url`, because building the app writes generated output.
+- Treat each scan finding on a changed surface as evidence: confirm it against its screenshot, then report it with the scan's measurements, cause, and source location. A finding outside the task's changed surfaces is pre-existing unless the change reaches it through a shared primitive; mention it only in that case. The scan cannot judge hierarchy, copy, color, or interaction, so it complements rather than replaces the screenshot review.
+
 Review priorities:
 
 1. Clipping, overlap, overflow, unintended horizontal scroll, unreadable wrapping, layout shift, obscured content, and broken fixed or sticky positioning.
@@ -31,6 +37,7 @@ Review priorities:
 Review method:
 
 - Inspect desktop and narrow/mobile evidence side by side and compare relevant states for stable action placement and avoidable layout movement.
+- Read the layout scan report before the screenshots so measured clipping, overflow, and overlap on changed surfaces are not missed at viewports the screenshots do not cover.
 - Audit the task diff and changed source for every added or modified user-facing string, including headings, descriptions, helper text, button labels, placeholders, badges, tooltips, empty states, progress messages, confirmations, warnings, and errors. Cross-check each string against the rendered evidence before determining the issue list and total score.
 - Challenge each audited string to earn its place. Flag copy that restates a heading, control, status, icon, or nearby content; narrates an interaction the interface already makes evident; duplicates guidance; exposes implementation detail; or remains visible after its useful moment. Treat avoidable copy as a concrete violation of the essential-copy requirement, not merely a matter of taste.
 - Search changed surfaces and their directly related states for prompts, blockers, or buttons that tell the user to “load” already-selected data. Require the view to start those reads automatically on entry and relevant context changes, show a stable loading indicator with an accessible status, and keep dependent actions disabled until the read resolves. Treat a manual-load requirement for data the application can fetch itself as a blocking interaction defect, not a copy preference.

@@ -27,6 +27,7 @@ For a visual-review handoff, the parent must additionally provide:
 - states exercised, including relevant long-content and dense-data cases
 - intentional visual differences
 - console or runtime errors observed during browser QA
+- the `bun run ui:layout-scan` report (`report.md`) for each affected app, limited to the changed routes when the change is narrow
 - relevant states or surfaces that were inaccessible or intentionally not exercised, with reasons
 
 If an input is unavailable, the reviewer must continue with best effort and account for the gap when scoring instead of guessing. Report it only when it creates a concrete issue.

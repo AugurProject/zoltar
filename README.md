@@ -117,6 +117,8 @@ After completing [Setup](#setup):
 
 While a dev server is running, `UI_DEV_SERVER_URL=http://localhost:4153 bun run ui:browser-smoke:zoltar`, `UI_DEV_SERVER_URL=http://localhost:12347 bun run ui:browser-smoke:statoblast`, or `UI_DEV_SERVER_URL=http://localhost:4163 bun run ui:browser-smoke:trading` opens the app in headless Chromium and fails if it does not mount cleanly.
 
+`bun run ui:layout-scan -- --app <app>` builds and serves an app, walks every route, view tab, disclosure, and dialog launcher it can reach in each simulation scenario at five viewport sizes, and reports content that is cut off, runs off the screen, overlaps, or is squeezed. Each finding explains the measured problem, the likely cause and fix, the source files involved, and links a highlighted screenshot; `--help` lists the options for narrowing the scan or scanning a running server.
+
 This mode does not require a wallet extension or `anvil`. Instead, it boots a Tevm-backed in-browser chain and seeds the QA accounts with ETH, WETH, and REP. Zoltar and Statoblast scenarios control whether application contracts are already deployed. In Trading, `simScenario=deployed` deploys a seeded SecurityPool plus the Trading factory and router so its market routes are immediately usable, and the default `simScenario=trading-funded` additionally initializes pair liquidity and funds the simulation wallet with Yes, No, Invalid, and LP shares. `simScenario=trading-forked` starts from that funded market and forks its universe through the pool's own escalation game, so Settlement offers Fork migration for the wallet's parent-universe shares.
 
 Simulation mode details:
@@ -164,7 +166,7 @@ Each serve command first builds the selected app and its dependencies, then serv
 Root scripts are grouped by prefix:
 
 - `setup`, `generate`, `compile-contracts`, `shared:build`, `ui:vendor`, `ensure-*`: install dependencies and create generated outputs. `tooling/repo/generated-artifacts.ts` lists every generated output with the command that recreates it.
-- `app:serve:<app>`, `app:watch:<app>`, `ui:build*`, `ui:browser-smoke:<app>`, `ui:publish:*`: build, serve, smoke-test, and publish the UI apps.
+- `app:serve:<app>`, `app:watch:<app>`, `ui:build*`, `ui:browser-smoke:<app>`, `ui:layout-scan`, `ui:publish:*`: build, serve, smoke-test, layout-scan, and publish the UI apps.
 - `test`, `test:*`, `coverage*`: `test` runs `tsc` and then the canonical root suite (`test:run`). `test:preflight` covers the project registry and CI tooling, the `test:browser:*` and `test:integration:*` tiers run only when invoked explicitly, and the remaining `test:*` scripts run focused suites.
 - `check`, `check:*`, `lint:*`, `docs:check*`, `format*`, `knip*`: static analysis. `check` runs `check:static` (Biome and custom lint rules), `docs:check`, and `check:repository`. `check:complete` adds formatting, dead-code analysis, and generated-output freshness, and is the repository's `check` task in `validate`.
 - `validate`, `test:all`: the complete local validation used for CI and release parity.
