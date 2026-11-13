@@ -7,16 +7,40 @@ import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-co
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFinished, markTransactionRequested } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
-import type { ActiveReportingDetails, ReportingDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
+import type { ActiveReportingDetails, EscalationSide, ReportingDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { useReportingOperations, type UseReportingOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/reporting/hooks/useReportingOperations.js'
 import type { TransactionIntent } from '@zoltar/ui-zoltar-shared/features/types.js'
 import { describe, expect, mock, test } from 'bun:test'
-import { h, render } from 'preact'
+import { render } from 'preact'
 import { act } from 'preact/test-utils'
 
 type UseReportingOperations = typeof useReportingOperations
 type UseReportingOperationsState = ReturnType<UseReportingOperations>
 const ATTO_REP = 10n ** 18n
+const SIDE_LABELS: Record<EscalationSide['key'], string> = { invalid: 'Invalid', yes: 'Yes', no: 'No' }
+const MARKET_DETAILS: ReportingDetails['marketDetails'] = {
+	answerUnit: '',
+	createdAt: 1n,
+	description: 'Question description',
+	displayValueMax: 100n,
+	displayValueMin: 0n,
+	endTime: 100n,
+	exists: true,
+	marketType: 'binary',
+	numTicks: 2n,
+	outcomeLabels: ['Yes', 'No'],
+	questionId: '0x01',
+	startTime: 1n,
+	title: 'Will this resolve?',
+}
+
+function side(key: EscalationSide['key'], balance: bigint, userDeposits: EscalationSide['userDeposits'] = []): EscalationSide {
+	return { balance, deposits: [], importedUserDeposits: [], key, label: SIDE_LABELS[key], userDeposits }
+}
+
+function userDeposit(depositIndex: bigint, amountAttoRep: bigint, cumulativeAmountAttoRep = amountAttoRep): EscalationSide['userDeposits'][number] {
+	return { amountAttoRep, cumulativeAmountAttoRep, depositIndex, depositor: zeroAddress }
+}
 
 function createReportingDetails(securityPoolAddress: Address, overrides: Partial<ReportingDetails> = {}): ReportingDetails {
 	return {
@@ -28,29 +52,11 @@ function createReportingDetails(securityPoolAddress: Address, overrides: Partial
 		escalationGameAddress: zeroAddress,
 		forkThresholdAttoRep: 40n,
 		hasReachedNonDecision: false,
-		marketDetails: {
-			answerUnit: '',
-			createdAt: 1n,
-			description: 'Question description',
-			displayValueMax: 100n,
-			displayValueMin: 0n,
-			endTime: 100n,
-			exists: true,
-			marketType: 'binary',
-			numTicks: 2n,
-			outcomeLabels: ['Yes', 'No'],
-			questionId: '0x01',
-			startTime: 1n,
-			title: 'Will this resolve?',
-		},
+		marketDetails: MARKET_DETAILS,
 		nonDecisionThresholdAttoRep: 20n,
 		questionOutcome: 'none',
 		securityPoolAddress,
-		sides: [
-			{ balance: 5n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-			{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-			{ balance: 1n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
-		],
+		sides: [side('invalid', 5n), side('yes', 2n), side('no', 1n)],
 		activationTime: 120n,
 		startBondAttoRep: 1n,
 		status: 'active',
@@ -69,20 +75,13 @@ function createReportingDetails(securityPoolAddress: Address, overrides: Partial
 	}
 }
 
-function createHarness(
-	useReportingOperations: UseReportingOperations,
-	onRender: (state: UseReportingOperationsState) => void,
-	dependencies: UseReportingOperationsDependencies,
-	{
-		onTransactionCanceled = () => undefined,
-		onTransactionFinished = () => undefined,
-		onTransactionRequested = () => undefined,
-	}: {
-		onTransactionCanceled?: () => void
-		onTransactionFinished?: () => void
-		onTransactionRequested?: Parameters<UseReportingOperations>[0]['onTransactionRequested']
-	} = {},
-) {
+type HarnessCallbacks = {
+	onTransactionCanceled?: () => void
+	onTransactionFinished?: () => void
+	onTransactionRequested?: Parameters<UseReportingOperations>[0]['onTransactionRequested']
+}
+
+function createHarness(onRender: (state: UseReportingOperationsState) => void, dependencies: UseReportingOperationsDependencies, { onTransactionCanceled = () => undefined, onTransactionFinished = () => undefined, onTransactionRequested = () => undefined }: HarnessCallbacks = {}) {
 	return function ReportingOperationsHarness({ accountAddress = zeroAddress }: { accountAddress?: Address }) {
 		const state = useReportingOperations(
 			{
@@ -124,6 +123,26 @@ function createReportingOperationsDependencies(overrides: Partial<UseReportingOp
 describe('useReportingOperations', () => {
 	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: zeroAddress, installActiveEnvironment: installActiveEnvironmentForTesting })
 
+	async function renderOperations(dependencies: UseReportingOperationsDependencies, callbacks?: HarnessCallbacks) {
+		let hookState: UseReportingOperationsState | undefined
+		const Harness = createHarness(
+			next => {
+				hookState = next
+			},
+			dependencies,
+			callbacks,
+		)
+		const rendered = await renderIntoDocument(<Harness />)
+		trackCleanup(rendered.cleanup)
+		const state = () => requireHookState(hookState)
+		const setForm = async (fields: Partial<UseReportingOperationsState['reportingForm']>) => {
+			await act(async () => {
+				state().setReportingForm(current => ({ ...current, ...fields }))
+			})
+		}
+		return { Harness, container: rendered.container, state, setForm }
+	}
+
 	test.each([false, true])('refreshes balances after an account change and ignores old-account loads (pending: %s)', async pending => {
 		const pool = getAddress('0x00000000000000000000000000000000000000c1')
 		const nextAccount = getAddress('0x00000000000000000000000000000000000000b2')
@@ -135,29 +154,18 @@ describe('useReportingOperations', () => {
 			if (account === nextAccount) return await nextLoad.promise
 			return pending ? await oldLoad.promise : oldDetails
 		})
-		let hookState: UseReportingOperationsState | undefined
-		const Harness = createHarness(
-			useReportingOperations,
-			state => {
-				hookState = state
-			},
-			createReportingOperationsDependencies({ loadReportingDetails }),
-		)
-		const rendered = await renderIntoDocument(<Harness />)
-		trackCleanup(rendered.cleanup)
-		await act(async () => {
-			requireHookState(hookState).setReportingForm(current => ({ ...current, securityPoolAddress: pool }))
-		})
+		const { Harness, container, state, setForm } = await renderOperations(createReportingOperationsDependencies({ loadReportingDetails }))
+		await setForm({ securityPoolAddress: pool })
 		let firstLoad: Promise<void> | undefined
 		await act(async () => {
-			firstLoad = requireHookState(hookState).loadReporting()
+			firstLoad = state().loadReporting()
 			if (!pending) await firstLoad
 		})
 		await act(async () => {
-			render(<Harness accountAddress={nextAccount} />, rendered.container)
+			render(<Harness accountAddress={nextAccount} />, container)
 		})
 		expect(loadReportingDetails).toHaveBeenCalledTimes(2)
-		expect(requireHookState(hookState).reportingDetails).toBeUndefined()
+		expect(state().reportingDetails).toBeUndefined()
 		await act(async () => {
 			nextLoad.resolve(nextDetails)
 		})
@@ -166,7 +174,7 @@ describe('useReportingOperations', () => {
 			await firstLoad
 		})
 		await waitFor(() => {
-			expect(requireHookState(hookState).reportingDetails?.viewerPoolHeldVaultRepBackingAttoRep).toBe(0n)
+			expect(state().reportingDetails?.viewerPoolHeldVaultRepBackingAttoRep).toBe(0n)
 		})
 	})
 
@@ -184,42 +192,27 @@ describe('useReportingOperations', () => {
 			loadReportingDetails,
 		})
 
-		let hookState: UseReportingOperationsState | undefined
-		const Harness = createHarness(
-			useReportingOperations,
-			state => {
-				hookState = state
-			},
-			dependencies,
-		)
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		trackCleanup(renderedComponent.cleanup)
+		const { state, setForm } = await renderOperations(dependencies)
 
-		await act(async () => {
-			requireHookState(hookState).setReportingForm(current => ({
-				...current,
-				securityPoolAddress: firstPoolAddress,
-			}))
+		await setForm({
+			securityPoolAddress: firstPoolAddress,
 		})
 
 		let firstLoadPromise = Promise.resolve()
 		await act(() => {
-			firstLoadPromise = requireHookState(hookState).loadReporting()
+			firstLoadPromise = state().loadReporting()
 		})
 		await waitFor(() => {
 			expect(deferredLoads).toHaveLength(1)
 		})
 
-		await act(async () => {
-			requireHookState(hookState).setReportingForm(current => ({
-				...current,
-				securityPoolAddress: secondPoolAddress,
-			}))
+		await setForm({
+			securityPoolAddress: secondPoolAddress,
 		})
 
 		let secondLoadPromise = Promise.resolve()
 		await act(() => {
-			secondLoadPromise = requireHookState(hookState).loadReporting()
+			secondLoadPromise = state().loadReporting()
 		})
 		await waitFor(() => {
 			expect(deferredLoads).toHaveLength(2)
@@ -233,19 +226,19 @@ describe('useReportingOperations', () => {
 			await firstLoadPromise
 		})
 
-		expect(requireHookState(hookState).reportingDetails).toBeUndefined()
-		expect(requireHookState(hookState).loadingReportingDetails).toBe(true)
+		expect(state().reportingDetails).toBeUndefined()
+		expect(state().loadingReportingDetails).toBe(true)
 
 		await act(async () => {
 			deferredLoads[1]?.deferred.resolve(createReportingDetails(secondPoolAddress))
 			await secondLoadPromise
 		})
 
-		expect(requireHookState(hookState).reportingError).toBeUndefined()
-		expect(requireHookState(hookState).loadingReportingDetails).toBe(false)
-		expect(requireHookState(hookState).reportingDetails?.securityPoolAddress).toBe(secondPoolAddress)
-		expect(requireHookState(hookState).reportingDetails?.viewerPoolHeldVaultRepBackingAttoRep).toBe(8n)
-		expect(requireHookState(hookState).reportingDetails?.viewerVaultRepBackingAttoRep).toBe(10n)
+		expect(state().reportingError).toBeUndefined()
+		expect(state().loadingReportingDetails).toBe(false)
+		expect(state().reportingDetails?.securityPoolAddress).toBe(secondPoolAddress)
+		expect(state().reportingDetails?.viewerPoolHeldVaultRepBackingAttoRep).toBe(8n)
+		expect(state().reportingDetails?.viewerVaultRepBackingAttoRep).toBe(10n)
 	})
 
 	test('reportOutcome blocks pre-start contributions that would exceed the remaining selected-side threshold capacity', async () => {
@@ -254,21 +247,7 @@ describe('useReportingOperations', () => {
 			settlementCollateralAttoEth: 1n,
 			currentTime: 150n,
 			forkThresholdAttoRep: 40n * ATTO_REP,
-			marketDetails: {
-				answerUnit: '',
-				createdAt: 1n,
-				description: 'Question description',
-				displayValueMax: 100n,
-				displayValueMin: 0n,
-				endTime: 100n,
-				exists: true,
-				marketType: 'binary',
-				numTicks: 2n,
-				outcomeLabels: ['Yes', 'No'],
-				questionId: '0x01',
-				startTime: 1n,
-				title: 'Will this resolve?',
-			},
+			marketDetails: MARKET_DETAILS,
 			nonDecisionThresholdAttoRep: 20n * ATTO_REP,
 			questionOutcome: 'none',
 			securityPoolAddress,
@@ -293,34 +272,22 @@ describe('useReportingOperations', () => {
 			reportOutcomeInSecurityPool,
 		})
 
-		let hookState: UseReportingOperationsState | undefined
-		const Harness = createHarness(
-			useReportingOperations,
-			state => {
-				hookState = state
-			},
-			dependencies,
-		)
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		trackCleanup(renderedComponent.cleanup)
+		const { state, setForm } = await renderOperations(dependencies)
 
-		await act(async () => {
-			requireHookState(hookState).setReportingForm(current => ({
-				...current,
-				reportAmount: '25',
-				securityPoolAddress,
-				selectedOutcome: 'yes',
-			}))
+		await setForm({
+			reportAmount: '25',
+			securityPoolAddress,
+			selectedOutcome: 'yes',
 		})
 
 		await act(async () => {
-			await requireHookState(hookState).onReportOutcome()
+			await state().onReportOutcome()
 		})
 
 		expect(loadReportingDetails).toHaveBeenCalledTimes(1)
 		expect(reportOutcomeInSecurityPool).toHaveBeenCalledTimes(0)
-		expect(requireHookState(hookState).reportingResult).toBeUndefined()
-		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('Only 20 REP remains before the selected side reaches the non-decision threshold.')
+		expect(state().reportingResult).toBeUndefined()
+		expect(state().reportingFeedback?.status.detail).toBe('Only 20 REP remains before the selected side reaches the non-decision threshold.')
 	})
 
 	test('reportOutcome refresh blocks a newly closing response window before writing', async () => {
@@ -328,22 +295,16 @@ describe('useReportingOperations', () => {
 		const reportOutcomeInSecurityPool = mock(async () => {
 			throw new Error('Must not write')
 		})
-		let state: UseReportingOperationsState | undefined
-		const Harness = createHarness(
-			useReportingOperations,
-			next => {
-				state = next
-			},
+		const { state, setForm } = await renderOperations(
 			createReportingOperationsDependencies({
 				loadReportingDetails: mock(async () => createReportingDetails(pool, { currentTime: 299n, escalationEndTime: 300n })),
 				reportOutcomeInSecurityPool,
 			}),
 		)
-		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
-		await act(() => requireHookState(state).setReportingForm(current => ({ ...current, securityPoolAddress: pool, selectedOutcome: 'yes', reportAmount: '5' })))
-		await act(async () => await requireHookState(state).onReportOutcome())
+		await setForm({ securityPoolAddress: pool, selectedOutcome: 'yes', reportAmount: '5' })
+		await act(async () => await state().onReportOutcome())
 		expect(reportOutcomeInSecurityPool).not.toHaveBeenCalled()
-		expect(requireHookState(state).reportingFeedback?.status.detail).toContain('response window ends too soon')
+		expect(state().reportingFeedback?.status.detail).toContain('response window ends too soon')
 	})
 
 	test('reportOutcome blocks writes while the pool is not operational', async () => {
@@ -362,34 +323,22 @@ describe('useReportingOperations', () => {
 			reportOutcomeInSecurityPool,
 		})
 
-		let hookState: UseReportingOperationsState | undefined
-		const Harness = createHarness(
-			useReportingOperations,
-			state => {
-				hookState = state
-			},
-			dependencies,
-		)
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		trackCleanup(renderedComponent.cleanup)
+		const { state, setForm } = await renderOperations(dependencies)
 
-		await act(async () => {
-			requireHookState(hookState).setReportingForm(current => ({
-				...current,
-				reportAmount: '5',
-				securityPoolAddress,
-				selectedOutcome: 'yes',
-			}))
+		await setForm({
+			reportAmount: '5',
+			securityPoolAddress,
+			selectedOutcome: 'yes',
 		})
 
 		await act(async () => {
-			await requireHookState(hookState).onReportOutcome()
+			await state().onReportOutcome()
 		})
 
 		expect(loadReportingDetails).toHaveBeenCalledTimes(1)
 		expect(reportOutcomeInSecurityPool).toHaveBeenCalledTimes(0)
-		expect(requireHookState(hookState).reportingResult).toBeUndefined()
-		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('Reporting actions are unavailable until this pool is operational.')
+		expect(state().reportingResult).toBeUndefined()
+		expect(state().reportingFeedback?.status.detail).toBe('Reporting actions are unavailable until this pool is operational.')
 	})
 
 	test.each([false, true])('reportOutcome uses wallet REP in ordinary and continuation games (continuation: %s)', async forkContinuation => {
@@ -419,28 +368,16 @@ describe('useReportingOperations', () => {
 			}
 		})
 
-		let hookState: UseReportingOperationsState | undefined
-		const Harness = createHarness(
-			useReportingOperations,
-			state => {
-				hookState = state
-			},
-			createReportingOperationsDependencies({ loadReportingDetails, reportOutcomeInSecurityPool }),
-		)
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		trackCleanup(renderedComponent.cleanup)
+		const { state, setForm } = await renderOperations(createReportingOperationsDependencies({ loadReportingDetails, reportOutcomeInSecurityPool }))
 
-		await act(async () => {
-			requireHookState(hookState).setReportingForm(current => ({
-				...current,
-				contributionFunding: 'wallet',
-				reportAmount: '5',
-				securityPoolAddress,
-				selectedOutcome: 'yes',
-			}))
+		await setForm({
+			contributionFunding: 'wallet',
+			reportAmount: '5',
+			securityPoolAddress,
+			selectedOutcome: 'yes',
 		})
 		await act(async () => {
-			await requireHookState(hookState).onReportOutcome()
+			await state().onReportOutcome()
 		})
 
 		expect(reportOutcomeInSecurityPool).toHaveBeenCalledTimes(1)
@@ -449,20 +386,16 @@ describe('useReportingOperations', () => {
 		expect(submittedReviewAttoRep ?? 0n).toBeLessThan(5n * ATTO_REP)
 		// Wallet deposits pull the accepted amount with transferFrom, so the maximum must not exceed the reviewed and approved amount.
 		expect(submittedMaximumAttoRep).toBe(submittedReviewAttoRep)
-		expect(requireHookState(hookState).reportingResult?.action).toBe('reportOutcome')
+		expect(state().reportingResult?.action).toBe('reportOutcome')
 		// A submitted report clears its amount so a second click cannot repeat it.
-		expect(requireHookState(hookState).reportingForm.reportAmount).toBe('')
-		expect(requireHookState(hookState).reportingForm.selectedOutcome).toBe('yes')
+		expect(state().reportingForm.reportAmount).toBe('')
+		expect(state().reportingForm.selectedOutcome).toBe('yes')
 	})
 
 	test.each([true, false])('reportOutcome marks fork-triggering reports for review only when the displayed report already triggered the fork (displayed: %s)', async displayedTriggersFork => {
 		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d3')
 		// Invalid already sits at the 20 attoREP threshold, so filling Yes with 18 attoREP ends escalation and triggers the fork.
-		const forkReadySides: ActiveReportingDetails['sides'] = [
-			{ balance: 20n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-			{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-			{ balance: 1n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
-		]
+		const forkReadySides: ActiveReportingDetails['sides'] = [side('invalid', 20n), side('yes', 2n), side('no', 1n)]
 		const latestDetails = createReportingDetails(securityPoolAddress, { sides: forkReadySides, viewerPoolHeldVaultRepBackingAttoRep: 100n })
 		const displayedDetails = displayedTriggersFork ? latestDetails : createReportingDetails(securityPoolAddress, { viewerPoolHeldVaultRepBackingAttoRep: 100n })
 		const loadReportingDetails = mock(async () => (loadReportingDetails.mock.calls.length === 1 ? displayedDetails : latestDetails))
@@ -471,24 +404,13 @@ describe('useReportingOperations', () => {
 			submittedTriggersFork = args[7]
 			return { action: 'reportOutcome' as const, hash: '0x00000000000000000000000000000000000000000000000000000000000000a2' as const, outcome: 'yes' as const, securityPoolAddress, universeId: 1n }
 		})
-		let hookState: UseReportingOperationsState | undefined
-		const Harness = createHarness(
-			useReportingOperations,
-			state => {
-				hookState = state
-			},
-			createReportingOperationsDependencies({ loadReportingDetails, reportOutcomeInSecurityPool }),
-		)
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		trackCleanup(renderedComponent.cleanup)
+		const { state, setForm } = await renderOperations(createReportingOperationsDependencies({ loadReportingDetails, reportOutcomeInSecurityPool }))
+		await setForm({ contributionFunding: 'wallet', reportAmount: '0.000000000000000018', securityPoolAddress, selectedOutcome: 'yes' })
 		await act(async () => {
-			requireHookState(hookState).setReportingForm(current => ({ ...current, contributionFunding: 'wallet', reportAmount: '0.000000000000000018', securityPoolAddress, selectedOutcome: 'yes' }))
+			await state().loadReporting()
 		})
 		await act(async () => {
-			await requireHookState(hookState).loadReporting()
-		})
-		await act(async () => {
-			await requireHookState(hookState).onReportOutcome()
+			await state().onReportOutcome()
 		})
 		if (displayedTriggersFork) {
 			expect(reportOutcomeInSecurityPool).toHaveBeenCalledTimes(1)
@@ -496,9 +418,9 @@ describe('useReportingOperations', () => {
 		} else {
 			// The user never saw or confirmed the fork warning, so the report stops and shows the updated state.
 			expect(reportOutcomeInSecurityPool).not.toHaveBeenCalled()
-			expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('This report would now trigger the universe fork. Review the fork warning and confirm before reporting.')
-			expect(requireHookState(hookState).reportingDetails).toBe(latestDetails)
-			expect(requireHookState(hookState).reportingForm.reportAmount).toBe('0.000000000000000018')
+			expect(state().reportingFeedback?.status.detail).toBe('This report would now trigger the universe fork. Review the fork warning and confirm before reporting.')
+			expect(state().reportingDetails).toBe(latestDetails)
+			expect(state().reportingForm.reportAmount).toBe('0.000000000000000018')
 		}
 	})
 
@@ -507,11 +429,7 @@ describe('useReportingOperations', () => {
 		const walletFundingDetails = createReportingDetails(securityPoolAddress, {
 			contributionFunding: 'wallet',
 			nonDecisionThresholdAttoRep: 20n * ATTO_REP,
-			sides: [
-				{ balance: 1n * ATTO_REP, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-				{ balance: 5n * ATTO_REP, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-				{ balance: 8n * ATTO_REP, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
-			],
+			sides: [side('invalid', 1n * ATTO_REP), side('yes', 5n * ATTO_REP), side('no', 8n * ATTO_REP)],
 			viewerPoolHeldVaultRepBackingAttoRep: 0n,
 			viewerVaultExists: false,
 			viewerVaultRepBackingAttoRep: 0n,
@@ -527,27 +445,16 @@ describe('useReportingOperations', () => {
 			universeId: 1n,
 		}))
 
-		let hookState: UseReportingOperationsState | undefined
-		const Harness = createHarness(
-			useReportingOperations,
-			state => {
-				hookState = state
-			},
-			createReportingOperationsDependencies({ approveReportingRep, loadReportingDetails }),
-		)
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		trackCleanup(renderedComponent.cleanup)
+		const { state, setForm } = await renderOperations(createReportingOperationsDependencies({ approveReportingRep, loadReportingDetails }))
 
+		await setForm({ reportAmount: '5', securityPoolAddress, selectedOutcome: 'yes' })
 		await act(async () => {
-			requireHookState(hookState).setReportingForm(current => ({ ...current, reportAmount: '5', securityPoolAddress, selectedOutcome: 'yes' }))
-		})
-		await act(async () => {
-			await requireHookState(hookState).onApproveReportingRep(chosenAmount)
+			await state().onApproveReportingRep(chosenAmount)
 		})
 
 		expect(approveReportingRep).toHaveBeenCalledTimes(1)
 		expect(approveReportingRep.mock.calls[0]?.[4]).toBe(chosenAmount ?? 5n * ATTO_REP)
-		expect(requireHookState(hookState).reportingResult?.action).toBe('approveReportingRep')
+		expect(state().reportingResult?.action).toBe('approveReportingRep')
 	})
 
 	test('onApproveReportingRep rejects an amount that does not raise the allowance', async () => {
@@ -556,19 +463,11 @@ describe('useReportingOperations', () => {
 		const approveReportingRep = mock(async () => {
 			throw new Error('Must not approve')
 		})
-		let state: UseReportingOperationsState | undefined
-		const Harness = createHarness(
-			useReportingOperations,
-			next => {
-				state = next
-			},
-			createReportingOperationsDependencies({ approveReportingRep, loadReportingDetails: mock(async () => details) }),
-		)
-		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
-		await act(() => requireHookState(state).setReportingForm(current => ({ ...current, reportAmount: '5', securityPoolAddress, selectedOutcome: 'yes' })))
-		await act(async () => await requireHookState(state).onApproveReportingRep(2n * ATTO_REP))
+		const { state, setForm } = await renderOperations(createReportingOperationsDependencies({ approveReportingRep, loadReportingDetails: mock(async () => details) }))
+		await setForm({ reportAmount: '5', securityPoolAddress, selectedOutcome: 'yes' })
+		await act(async () => await state().onApproveReportingRep(2n * ATTO_REP))
 		expect(approveReportingRep).not.toHaveBeenCalled()
-		const detail = requireHookState(state).reportingFeedback?.status.detail
+		const detail = state().reportingFeedback?.status.detail
 		expect(typeof detail === 'string' ? detail.replaceAll('\u00a0', ' ') : detail).toContain('Already approved 3')
 	})
 
@@ -576,11 +475,7 @@ describe('useReportingOperations', () => {
 		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d1')
 		const loadReportingDetails = mock(async () =>
 			createReportingDetails(securityPoolAddress, {
-				sides: [
-					{ balance: 1n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-					{ balance: 5n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [{ amountAttoRep: 1n, cumulativeAmountAttoRep: 1n, depositIndex: 0n, depositor: zeroAddress }] },
-					{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [{ amountAttoRep: 1n, cumulativeAmountAttoRep: 1n, depositIndex: 1n, depositor: zeroAddress }] },
-				],
+				sides: [side('invalid', 1n), side('yes', 5n, [userDeposit(0n, 1n)]), side('no', 2n, [userDeposit(1n, 1n)])],
 				settlementState: 'resolved',
 				parentWithdrawalEnabled: true,
 			}),
@@ -594,32 +489,20 @@ describe('useReportingOperations', () => {
 			withdrawEscalationFromSecurityPool,
 		})
 
-		let hookState: UseReportingOperationsState | undefined
-		const Harness = createHarness(
-			useReportingOperations,
-			state => {
-				hookState = state
-			},
-			dependencies,
-		)
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		trackCleanup(renderedComponent.cleanup)
+		const { state, setForm } = await renderOperations(dependencies)
 
-		await act(async () => {
-			requireHookState(hookState).setReportingForm(current => ({
-				...current,
-				securityPoolAddress,
-			}))
+		await setForm({
+			securityPoolAddress,
 		})
 
 		await act(async () => {
-			await requireHookState(hookState).withdrawEscalation('no', [0n])
+			await state().withdrawEscalation('no', [0n])
 		})
 
 		expect(loadReportingDetails).toHaveBeenCalledTimes(1)
 		expect(withdrawEscalationFromSecurityPool).toHaveBeenCalledTimes(0)
-		expect(requireHookState(hookState).reportingResult).toBeUndefined()
-		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('Selected deposit #0 is no longer available to settle on No.')
+		expect(state().reportingResult).toBeUndefined()
+		expect(state().reportingFeedback?.status.detail).toBe('Selected deposit #0 is no longer available to settle on No.')
 	})
 
 	test('withdrawEscalation reports when the unresolved escalation migration window has closed', async () => {
@@ -627,11 +510,7 @@ describe('useReportingOperations', () => {
 		const loadReportingDetails = mock(async () =>
 			createReportingDetails(securityPoolAddress, {
 				settlementState: 'migration-expired',
-				sides: [
-					{ balance: 1n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [{ amountAttoRep: 1n, cumulativeAmountAttoRep: 1n, depositIndex: 0n, depositor: zeroAddress }] },
-					{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-					{ balance: 3n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
-				],
+				sides: [side('invalid', 1n, [userDeposit(0n, 1n)]), side('yes', 2n), side('no', 3n)],
 			}),
 		)
 		const withdrawEscalationFromSecurityPool = mock(async () => {
@@ -643,68 +522,38 @@ describe('useReportingOperations', () => {
 			withdrawEscalationFromSecurityPool,
 		})
 
-		let hookState: UseReportingOperationsState | undefined
-		const Harness = createHarness(
-			useReportingOperations,
-			state => {
-				hookState = state
-			},
-			dependencies,
-		)
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		trackCleanup(renderedComponent.cleanup)
+		const { state, setForm } = await renderOperations(dependencies)
 
-		await act(async () => {
-			requireHookState(hookState).setReportingForm(current => ({
-				...current,
-				securityPoolAddress,
-				selectedWithdrawDepositIndexesByOutcome: {
-					invalid: [0n],
-					yes: [],
-					no: [],
-				},
-			}))
+		await setForm({
+			securityPoolAddress,
+			selectedWithdrawDepositIndexesByOutcome: {
+				invalid: [0n],
+				yes: [],
+				no: [],
+			},
 		})
 
 		await act(async () => {
-			await requireHookState(hookState).withdrawEscalation('invalid')
+			await state().withdrawEscalation('invalid')
 		})
 
 		expect(loadReportingDetails).toHaveBeenCalledTimes(1)
 		expect(withdrawEscalationFromSecurityPool).toHaveBeenCalledTimes(0)
-		expect(requireHookState(hookState).reportingResult).toBeUndefined()
-		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('Settle winning parent deposits in the finalized child pool; the window for the optional cleanup of unresolved parent deposits has closed.')
+		expect(state().reportingResult).toBeUndefined()
+		expect(state().reportingFeedback?.status.detail).toBe('Settle winning parent deposits in the finalized child pool; the window for the optional cleanup of unresolved parent deposits has closed.')
 	})
 
 	test('withdrawEscalation prunes selections per side after a successful refresh', async () => {
 		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d2')
 		const latestDetails = createReportingDetails(securityPoolAddress, {
-			sides: [
-				{ balance: 1n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [{ amountAttoRep: 1n, cumulativeAmountAttoRep: 1n, depositIndex: 0n, depositor: zeroAddress }] },
-				{
-					balance: 5n,
-					deposits: [],
-					importedUserDeposits: [],
-					key: 'yes',
-					label: 'Yes',
-					userDeposits: [
-						{ amountAttoRep: 1n, cumulativeAmountAttoRep: 1n, depositIndex: 0n, depositor: zeroAddress },
-						{ amountAttoRep: 2n, cumulativeAmountAttoRep: 3n, depositIndex: 1n, depositor: zeroAddress },
-					],
-				},
-				{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
-			],
+			sides: [side('invalid', 1n, [userDeposit(0n, 1n)]), side('yes', 5n, [userDeposit(0n, 1n), userDeposit(1n, 2n, 3n)]), side('no', 2n)],
 			currentTime: 301n,
 			escalationEndTime: 300n,
 			settlementState: 'resolved',
 			parentWithdrawalEnabled: true,
 		})
 		const refreshedDetails = createReportingDetails(securityPoolAddress, {
-			sides: [
-				{ balance: 1n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [{ amountAttoRep: 1n, cumulativeAmountAttoRep: 1n, depositIndex: 0n, depositor: zeroAddress }] },
-				{ balance: 3n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [{ amountAttoRep: 2n, cumulativeAmountAttoRep: 3n, depositIndex: 1n, depositor: zeroAddress }] },
-				{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
-			],
+			sides: [side('invalid', 1n, [userDeposit(0n, 1n)]), side('yes', 3n, [userDeposit(1n, 2n, 3n)]), side('no', 2n)],
 			currentTime: 301n,
 			escalationEndTime: 300n,
 			settlementState: 'resolved',
@@ -737,31 +586,19 @@ describe('useReportingOperations', () => {
 			withdrawEscalationFromSecurityPool,
 		})
 
-		let hookState: UseReportingOperationsState | undefined
-		const Harness = createHarness(
-			useReportingOperations,
-			state => {
-				hookState = state
-			},
-			dependencies,
-		)
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		trackCleanup(renderedComponent.cleanup)
+		const { state, setForm } = await renderOperations(dependencies)
 
-		await act(async () => {
-			requireHookState(hookState).setReportingForm(current => ({
-				...current,
-				securityPoolAddress,
-				selectedWithdrawDepositIndexesByOutcome: {
-					invalid: [0n],
-					yes: [0n, 1n],
-					no: [2n],
-				},
-			}))
+		await setForm({
+			securityPoolAddress,
+			selectedWithdrawDepositIndexesByOutcome: {
+				invalid: [0n],
+				yes: [0n, 1n],
+				no: [2n],
+			},
 		})
 
 		await act(async () => {
-			await requireHookState(hookState).withdrawEscalation('yes', [0n])
+			await state().withdrawEscalation('yes', [0n])
 		})
 
 		expect(loadReportingDetails).toHaveBeenCalledTimes(2)
@@ -773,7 +610,7 @@ describe('useReportingOperations', () => {
 				securityPoolAddress,
 			},
 		])
-		expect(requireHookState(hookState).reportingResult).toEqual({
+		expect(state().reportingResult).toEqual({
 			amountAttoRep: 0n,
 			action: 'withdrawEscalation',
 			hash: '0x00000000000000000000000000000000000000000000000000000000000000ef',
@@ -781,7 +618,7 @@ describe('useReportingOperations', () => {
 			securityPoolAddress,
 			universeId: 1n,
 		})
-		expect(requireHookState(hookState).reportingForm.selectedWithdrawDepositIndexesByOutcome).toEqual({
+		expect(state().reportingForm.selectedWithdrawDepositIndexesByOutcome).toEqual({
 			invalid: [0n],
 			yes: [1n],
 			no: [],
@@ -794,20 +631,12 @@ describe('useReportingOperations', () => {
 		const staleRefresh = createDeferred<ReportingDetails>()
 		let firstPoolLoadCount = 0
 		const firstPoolDetails = createReportingDetails(firstPoolAddress, {
-			sides: [
-				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-				{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [{ amountAttoRep: 1n, cumulativeAmountAttoRep: 1n, depositIndex: 0n, depositor: zeroAddress }] },
-				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
-			],
+			sides: [side('invalid', 0n), side('yes', 2n, [userDeposit(0n, 1n)]), side('no', 0n)],
 			settlementState: 'resolved',
 			parentWithdrawalEnabled: true,
 		})
 		const secondPoolDetails = createReportingDetails(secondPoolAddress, {
-			sides: [
-				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-				{ balance: 4n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [{ amountAttoRep: 2n, cumulativeAmountAttoRep: 2n, depositIndex: 2n, depositor: zeroAddress }] },
-				{ balance: 3n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [{ amountAttoRep: 3n, cumulativeAmountAttoRep: 3n, depositIndex: 3n, depositor: zeroAddress }] },
-			],
+			sides: [side('invalid', 0n), side('yes', 4n, [userDeposit(2n, 2n)]), side('no', 3n, [userDeposit(3n, 3n)])],
 			settlementState: 'resolved',
 			parentWithdrawalEnabled: true,
 		})
@@ -833,54 +662,39 @@ describe('useReportingOperations', () => {
 			withdrawEscalationFromSecurityPool,
 		})
 
-		let hookState: UseReportingOperationsState | undefined
-		const Harness = createHarness(
-			useReportingOperations,
-			state => {
-				hookState = state
-			},
-			dependencies,
-		)
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		trackCleanup(renderedComponent.cleanup)
+		const { state, setForm } = await renderOperations(dependencies)
 
-		await act(async () => {
-			requireHookState(hookState).setReportingForm(current => ({
-				...current,
-				securityPoolAddress: firstPoolAddress,
-				selectedWithdrawDepositIndexesByOutcome: {
-					invalid: [],
-					yes: [0n],
-					no: [],
-				},
-			}))
+		await setForm({
+			securityPoolAddress: firstPoolAddress,
+			selectedWithdrawDepositIndexesByOutcome: {
+				invalid: [],
+				yes: [0n],
+				no: [],
+			},
 		})
 
 		let withdrawPromise = Promise.resolve()
 		await act(() => {
-			withdrawPromise = requireHookState(hookState).withdrawEscalation('yes', [0n])
+			withdrawPromise = state().withdrawEscalation('yes', [0n])
 		})
 
 		await waitFor(() => expect(loadReportingDetails).toHaveBeenCalledTimes(2))
 
-		await act(async () => {
-			requireHookState(hookState).setReportingForm(current => ({
-				...current,
-				securityPoolAddress: secondPoolAddress,
-				selectedWithdrawDepositIndexesByOutcome: {
-					invalid: [],
-					yes: [2n],
-					no: [3n],
-				},
-			}))
+		await setForm({
+			securityPoolAddress: secondPoolAddress,
+			selectedWithdrawDepositIndexesByOutcome: {
+				invalid: [],
+				yes: [2n],
+				no: [3n],
+			},
 		})
 
 		await act(async () => {
-			await requireHookState(hookState).loadReporting()
+			await state().loadReporting()
 		})
 
-		await waitFor(() => expect(requireHookState(hookState).reportingDetails?.securityPoolAddress).toBe(secondPoolAddress))
-		expect(requireHookState(hookState).reportingForm.selectedWithdrawDepositIndexesByOutcome).toEqual({
+		await waitFor(() => expect(state().reportingDetails?.securityPoolAddress).toBe(secondPoolAddress))
+		expect(state().reportingForm.selectedWithdrawDepositIndexesByOutcome).toEqual({
 			invalid: [],
 			yes: [2n],
 			no: [3n],
@@ -891,8 +705,8 @@ describe('useReportingOperations', () => {
 			await withdrawPromise
 		})
 
-		expect(requireHookState(hookState).reportingDetails?.securityPoolAddress).toBe(secondPoolAddress)
-		expect(requireHookState(hookState).reportingForm.selectedWithdrawDepositIndexesByOutcome).toEqual({
+		expect(state().reportingDetails?.securityPoolAddress).toBe(secondPoolAddress)
+		expect(state().reportingForm.selectedWithdrawDepositIndexesByOutcome).toEqual({
 			invalid: [],
 			yes: [2n],
 			no: [3n],
@@ -923,66 +737,50 @@ describe('useReportingOperations', () => {
 			reportOutcomeInSecurityPool,
 		})
 
-		let hookState: UseReportingOperationsState | undefined
-		const Harness = createHarness(
-			useReportingOperations,
-			state => {
-				hookState = state
+		const { state, setForm } = await renderOperations(dependencies, {
+			onTransactionCanceled: () => {
+				transactionState = markTransactionCanceled(transactionState)
 			},
-			dependencies,
-			{
-				onTransactionCanceled: () => {
-					transactionState = markTransactionCanceled(transactionState)
-				},
-				onTransactionFinished: () => {
-					transactionState = markTransactionFinished(transactionState)
-				},
-				onTransactionRequested: (intent: TransactionIntent) => {
-					transactionState = markTransactionRequested(transactionState, intent)
-				},
+			onTransactionFinished: () => {
+				transactionState = markTransactionFinished(transactionState)
 			},
-		)
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		trackCleanup(renderedComponent.cleanup)
+			onTransactionRequested: (intent: TransactionIntent) => {
+				transactionState = markTransactionRequested(transactionState, intent)
+			},
+		})
 
-		await act(async () => {
-			requireHookState(hookState).setReportingForm(current => ({
-				...current,
-				reportAmount: '1',
-				securityPoolAddress: firstPoolAddress,
-				selectedOutcome: 'yes',
-			}))
+		await setForm({
+			reportAmount: '1',
+			securityPoolAddress: firstPoolAddress,
+			selectedOutcome: 'yes',
 		})
 
 		let reportPromise = Promise.resolve()
 		await act(() => {
-			reportPromise = requireHookState(hookState).onReportOutcome()
+			reportPromise = state().onReportOutcome()
 		})
 
 		await waitFor(() => expect(loadReportingDetails).toHaveBeenCalledTimes(1))
-		expect(requireHookState(hookState).reportingFeedback?.status.tone).toBe('pending')
+		expect(state().reportingFeedback?.status.tone).toBe('pending')
 		expect(transactionState.entries[0]?.intent.action).toBe('reportOutcome')
 
-		await act(async () => {
-			requireHookState(hookState).setReportingForm(current => ({
-				...current,
-				securityPoolAddress: secondPoolAddress,
-			}))
+		await setForm({
+			securityPoolAddress: secondPoolAddress,
 		})
 
 		await act(async () => {
-			await requireHookState(hookState).loadReporting()
+			await state().loadReporting()
 		})
 
-		await waitFor(() => expect(requireHookState(hookState).reportingDetails?.securityPoolAddress).toBe(secondPoolAddress))
+		await waitFor(() => expect(state().reportingDetails?.securityPoolAddress).toBe(secondPoolAddress))
 
 		await act(async () => {
 			stalePreflight.resolve(createReportingDetails(firstPoolAddress))
 			await reportPromise
 		})
 
-		expect(requireHookState(hookState).reportingDetails?.securityPoolAddress).toBe(secondPoolAddress)
-		expect(requireHookState(hookState).reportingFeedback).toBeUndefined()
+		expect(state().reportingDetails?.securityPoolAddress).toBe(secondPoolAddress)
+		expect(state().reportingFeedback).toBeUndefined()
 		expect(reportOutcomeInSecurityPool).not.toHaveBeenCalled()
 		expect(transactionState.active).toBeUndefined()
 		expect(transactionState.entries).toEqual([])
