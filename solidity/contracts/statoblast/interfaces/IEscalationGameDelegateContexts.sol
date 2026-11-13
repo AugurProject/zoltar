@@ -27,7 +27,6 @@ interface IEscalationGameSecurityPoolContext {
 	function universeId() external view returns (uint248);
 	function zoltar() external view returns (address);
 	function creditEscalationSurplus(uint256 amountAttoRep) external;
-	function creditEscalationAuctionBacking(uint256 amountAttoRep) external;
 	function refreshPortfolioFees() external;
 	function burnEscalationWinnerHaircut(uint256 amountAttoRep) external;
 }

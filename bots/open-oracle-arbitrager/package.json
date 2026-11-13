@@ -17,8 +17,7 @@
 	"scripts": {
 		"compile-contracts": "bun ./scripts/compile-contracts.mts",
 		"build:docs": "bun ./scripts/build-doc-runtime.mts",
-		"generate:abi": "bun ./scripts/generate-executor-abi.mts",
-		"check:generated": "bun ./scripts/compile-contracts.mts --check && bun ./scripts/generate-executor-abi.mts --check && bun ./scripts/build-doc-runtime.mts --check",
+		"check:generated": "bun ./scripts/compile-contracts.mts --check && bun ./scripts/build-doc-runtime.mts --check",
 		"check:docs": "bun ./scripts/check-docs.mts && bun ./scripts/check-market-fixture.mts",
 		"typecheck": "bun x tsc --project tsconfig.json --noEmit",
 		"lint": "bun x @biomejs/biome lint package.json tsconfig.json bunfig.toml src tests scripts docs/*.ts config && bun ../../tooling/repo/lint-no-restricted-import-types.mts .",
