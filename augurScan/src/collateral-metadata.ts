@@ -1,5 +1,5 @@
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
-import { type Address, getAddress, isAddress, parseAbi } from './ethereum.ts'
+import { type Address, getAddress, isAddress, parseAbi, zeroAddress } from './ethereum.ts'
 import type { StateRead } from './snapshots.ts'
 
 const abi = parseAbi([
@@ -12,6 +12,21 @@ const abi = parseAbi([
 	'function decimals() view returns (uint8)',
 ])
 export type CollateralDisplayUnit = { readonly symbol: string; readonly decimals: number }
+
+// Network-owned successful immutable identities; callers publish only canonical discoveries.
+export type CollateralIdentityCache = Pick<Map<string, Address>, 'get' | 'set'>
+
+export const withCollateralIdentityCache =
+	(read: StateRead, cache?: CollateralIdentityCache): StateRead =>
+	async (address, abi, functionName, args) => {
+		const immutableIdentity = ['securityPoolFactory', 'getSecurityPoolPortfolio', 'collateralToken', 'portfolio', 'securityPool'].includes(functionName)
+		const key = `${address.toLowerCase()}:${functionName}:${args?.join(':').toLowerCase() ?? ''}`
+		const cached = immutableIdentity ? cache?.get(key) : undefined
+		if (cached !== undefined) return cached
+		const value = await read(address, abi, functionName, args)
+		if (immutableIdentity && typeof value === 'string' && isAddress(value) && value.toLowerCase() !== zeroAddress) cache?.set(key, getAddress(value))
+		return value
+	}
 
 export async function readCollateralMetadata(token: Address, read: StateRead) {
 	const [symbol, units] = await Promise.all([read(token, abi, 'symbol'), read(token, abi, 'decimals')])

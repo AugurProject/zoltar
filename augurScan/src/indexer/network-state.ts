@@ -1,6 +1,6 @@
 import { runtimeConfig } from '../config.ts'
 import type { EvidenceProvenance, HistoryInvalidationReason, IndexerLease, ScannerDatabase } from '../database.ts'
-import { createPublicClient, http, type PublicClient } from '../ethereum.ts'
+import { createPublicClient, http, type Address, type PublicClient } from '../ethereum.ts'
 import { ChainConfigurationError, createLogClient, createRpcDiagnosticContext, LeaseLostError, rpcProviderLabel } from '../indexer-runtime.ts'
 import { createRpcLoggingFetch, parseLoggedRpcResponse } from '../logging.ts'
 import { withRpcRequestQueue } from '../rpc-request-queue.ts'
@@ -45,6 +45,7 @@ export type NetworkIndexerState = {
 	readonly providers: ProviderState
 	readonly stateBoundary: StateBoundary
 	readonly progress: ProgressState
+	readonly collateralIdentityCache: Map<string, Address>
 	lease: IndexerLease | undefined
 	lastSeedReplayReason: Extract<HistoryInvalidationReason, 'abi-redecode' | 'projection-rebuild'> | undefined
 }
@@ -95,6 +96,7 @@ export const createNetworkIndexer = (
 			diagnostics: createRpcDiagnosticContext(firstProvider),
 		},
 		stateBoundary: { startBlock: network.startBlock, discovered: false },
+		collateralIdentityCache: new Map(),
 		progress: { indexingStartReported: false, sample: undefined, lastReportedPhase: undefined, lastDeploymentScanAt: undefined },
 		lease: undefined,
 		lastSeedReplayReason: undefined,

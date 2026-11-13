@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { decodeEventLog, encodeDeployData, getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
+	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
@@ -153,6 +154,24 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		await expect(fixture.other().writeContract({ ...portfolio(), functionName: 'mintQuestionSettlement', args: [unit] })).rejects.toThrow('Unknown question callback')
 		await expect(fixture.other().writeContract({ ...portfolio(), functionName: 'onSharedPriceAccepted', args: [fixture.base.genesisUniverse, unit, 1] })).rejects.toThrow('Only canonical shared feed')
 		await expect(fixture.other().writeContract({ ...capital(), functionName: 'setDemand', args: [0n] })).rejects.toThrow('Only demand accounting')
+	})
+
+	test('a registered pool cannot mint settlement outside an authorized funded purchase', async () => {
+		await fixture.prepare()
+		const pool = fixture.poolFor(fixture.base.questionId).securityPool
+		await fixture.base.mockWindow.impersonateAccount(pool)
+		await fixture.base.mockWindow.setBalance(pool, unit)
+		const caller = createWriteClient(fixture.base.mockWindow, BigInt(pool))
+		const beforeDemand = await demand()
+		const settlement = await fixture.owner().readContract({ ...portfolio(), functionName: 'settlement' })
+		const snapshot = () => fixture.owner().readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'snapshotQuestion', args: [pool] })
+		const before = await snapshot()
+		await expect(writeContractAndWait(caller, () => caller.writeContract({ ...portfolio(), functionName: 'mintQuestionSettlement', args: [unit] }))).rejects.toThrow('No authorized portfolio purchase')
+		expect(await demand()).toBe(beforeDemand)
+		expect(await snapshot()).toEqual(before)
+		// The same registered pool can mint through the purchase that funds settlement.
+		await fixture.mint(unit)
+		expect(await demand()).toBe(beforeDemand + unit)
 	})
 
 	test('stale prices block new purchases and live collateral withdrawal while idle owners can exit', async () => {

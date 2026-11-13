@@ -91,7 +91,9 @@ for (const mode of ['committed', 'empty', 'failed', 'reorg', 'wide', 'partial-fa
 			},
 			getBlockHeader: async (_providers, number) => ({ ...header, number, hash: mode === 'reorg' || (mode === 'partial-reorg' && committed && number === segmentEnd) ? zeroHash : hash }),
 			// Dense event ranges keep the existing durable 100-block commit boundaries.
-			indexBlock: async (_state, number) => {
+			indexBlock: async (_state, number, _observedHead, _contracts, _tokens, _parent, _header, _logs, _discovery, _readHeader, identityCache) => {
+				if (number > 10n) expect(identityCache?.get('10')).toBe(zeroAddress)
+				identityCache?.set(number.toString(), zeroAddress)
 				if (mode === 'block-failure' && number === 110n) throw new Error('Block failed')
 				if (mode === 'heartbeat') expectUncommittedHeartbeat()
 				return { block: { ...block, number }, contracts, tokenMetadata: new Map() }
@@ -101,6 +103,8 @@ for (const mode of ['committed', 'empty', 'failed', 'reorg', 'wide', 'partial-fa
 			if (mode === 'failed' || mode === 'partial-failure') await expect(poll(indexer, operations)).rejects.toThrow('Commit failed')
 			else if (mode === 'block-failure') await expect(poll(indexer, operations)).rejects.toThrow('Block failed')
 			else expect(await poll(indexer, operations)).toBe(mode !== 'reorg' && !largeRange)
+			const cachedBlocks = { committed: 1, empty: 1, failed: 0, reorg: 0, wide: 250, 'partial-failure': 100, 'partial-reorg': 100, 'block-failure': 100, heartbeat: 1 }[mode]
+			expect(indexer.collateralIdentityCache.size).toBe(cachedBlocks)
 			expect(lines).toHaveLength(1)
 			if (mode === 'wide')
 				expect(storedRanges).toEqual([
