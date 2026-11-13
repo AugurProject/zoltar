@@ -444,10 +444,6 @@
 			"bun": "./ts/components/ActionLauncherCard.tsx",
 			"default": "./js/components/ActionLauncherCard.js"
 		},
-		"./components/AddressInfo.js": {
-			"bun": "./ts/components/AddressInfo.tsx",
-			"default": "./js/components/AddressInfo.js"
-		},
 		"./components/AddressValue.js": {
 			"bun": "./ts/components/AddressValue.tsx",
 			"default": "./js/components/AddressValue.js"
@@ -1119,10 +1115,6 @@
 		"./tests/universeIdentity.test.js": {
 			"bun": "./ts/tests/universeIdentity.test.tsx",
 			"default": "./js/tests/universeIdentity.test.js"
-		},
-		"./components/TransactionFundingActionsPlaceholder.js": {
-			"bun": "./ts/components/TransactionFundingActionsPlaceholder.tsx",
-			"default": "./js/components/TransactionFundingActionsPlaceholder.js"
 		}
 	},
 	"version": "1.0.0"
