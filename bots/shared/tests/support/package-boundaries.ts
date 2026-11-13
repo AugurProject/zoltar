@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 // Bot tsconfigs map @zoltar packages straight at workspace sources, so typecheck and local Bun accept any subpath.
 // Container images install production dependencies and resolve through the package exports maps instead, so every
@@ -7,13 +8,9 @@ import { join } from 'node:path'
 // may only reach packages listed under dependencies.
 type DependencyField = 'dependencies' | 'devDependencies'
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
 async function readManifest(path: string) {
 	const manifest: unknown = JSON.parse(await readFile(path, 'utf8'))
-	if (!isRecord(manifest)) throw new Error(`${path} must contain a package manifest object`)
+	if (!isPlainRecord(manifest)) throw new Error(`${path} must contain a package manifest object`)
 	return manifest
 }
 
@@ -22,12 +19,12 @@ async function zoltarPackageExports(botDirectory: string) {
 	const exportsByPackage = new Map<string, { field: DependencyField; subpaths: Set<string> }>()
 	for (const field of ['dependencies', 'devDependencies'] as const) {
 		const dependencies = manifest[field]
-		if (!isRecord(dependencies)) continue
+		if (!isPlainRecord(dependencies)) continue
 		for (const [name, specifier] of Object.entries(dependencies)) {
 			if (!name.startsWith('@zoltar/') || typeof specifier !== 'string' || !specifier.startsWith('workspace:')) continue
 			if (exportsByPackage.has(name)) continue
 			const dependencyManifest = await readManifest(join(botDirectory, 'node_modules', name, 'package.json'))
-			if (!isRecord(dependencyManifest['exports'])) throw new Error(`${name} package exports must be an object`)
+			if (!isPlainRecord(dependencyManifest['exports'])) throw new Error(`${name} package exports must be an object`)
 			exportsByPackage.set(name, { field, subpaths: new Set(Object.keys(dependencyManifest['exports'])) })
 		}
 	}

@@ -1,6 +1,7 @@
-import { isRecord, parseDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
+import { parseDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { element } from './dom.js'
 import { refreshFormButton } from '@zoltar/bot-shared/dashboard/form-state'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 type MarketSourceRow = { ethMarket: string | null; exchangeId: string; repMarket: string }
 
@@ -91,7 +92,7 @@ function marketDepth(value: string, label: string) {
 function readSources(value: unknown): MarketSourceRow[] {
 	if (!Array.isArray(value)) return []
 	return value.map(source => {
-		const record: Record<string, unknown> = isRecord(source) ? source : {}
+		const record: Record<string, unknown> = isPlainRecord(source) ? source : {}
 		const ethMarket = record['ethMarket']
 		return { ethMarket: typeof ethMarket === 'string' ? ethMarket : null, exchangeId: readString(record, 'exchangeId'), repMarket: readString(record, 'repMarket') }
 	})
@@ -157,14 +158,14 @@ export function loadMarketSources(document_: Record<string, unknown>) {
 	element('market-required', HTMLInputElement).checked = document_['requiredForExecution'] === true
 	for (const name of NUMBER_FIELDS) thresholdInput(name).value = readNumber(document_, name)
 	for (const name of DECIMAL_FIELDS) thresholdInput(name).value = readString(document_, name)
-	const venueConsensus = isRecord(document_['venueConsensus']) ? document_['venueConsensus'] : undefined
+	const venueConsensus = isPlainRecord(document_['venueConsensus']) ? document_['venueConsensus'] : undefined
 	element('venue-consensus-enabled', HTMLInputElement).checked = venueConsensus !== undefined
 	element('venue-allow-single-group-fallback', HTMLInputElement).checked = venueConsensus?.['allowSingleGroupFallback'] === true
 	for (const name of [...VENUE_NUMBER_FIELDS, ...VENUE_DECIMAL_FIELDS]) venueInput(name).value = String(venueConsensus?.[name] ?? VENUE_DEFAULTS[name] ?? '')
 	const dexSources = Array.isArray(venueConsensus?.['dexSources']) ? venueConsensus['dexSources'] : []
 	element('venue-dex-source-rows', HTMLTableSectionElement).replaceChildren(
 		...dexSources.map(value => {
-			const source = isRecord(value) ? value : {}
+			const source = isPlainRecord(value) ? value : {}
 			return dexRow({ sourceId: readString(source, 'sourceId'), pair: readString(source, 'pair'), feeBps: readNumber(source, 'feeBps') })
 		}),
 	)

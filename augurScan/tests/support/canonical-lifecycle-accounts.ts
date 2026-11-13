@@ -1,12 +1,13 @@
 // Account-level stages of the canonical lifecycle integration test: address interactions, actions,
 // address transaction snapshots, and rich-list rankings over the stored chain.
 import { expect } from 'bun:test'
-import { isAccountTransactionValue, isRecord } from '../../browser/api-validation.ts'
+import { isAccountTransactionValue } from '../../browser/api-validation.ts'
 import { handleApi } from '../../src/api.ts'
 import { decodeOpaqueCursor } from '../../src/cursor-codec.ts'
 import { type Address, getAddress } from '../../src/ethereum.ts'
 import type { LifecycleChain, LifecycleContext } from './canonical-lifecycle-chain.ts'
 import { address, blockHash, chainId, discoveredAddress, orphanOnlyAddress, referencedOnlyAddress, rediscoveredAddress, secondWethAddress, transactionHash, wethAddress } from './postgres-fixtures.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 const referencedOnlyTransactionHash = blockHash('calldata-only-address-reference')
 
@@ -71,7 +72,7 @@ export const expectAddressInteractionsAndActions = async ({ database }: Lifecycl
 		total: 2,
 		limit: 1,
 	})
-	if (!isRecord(interactionsPayload) || !Array.isArray(interactionsPayload['items'])) throw new Error('address interactions API returned malformed items')
+	if (!isPlainRecord(interactionsPayload) || !Array.isArray(interactionsPayload['items'])) throw new Error('address interactions API returned malformed items')
 	expect(interactionsPayload['items'].every(isAccountTransactionValue)).toBeTrue()
 	const interactionCursor = interactionsPayload['nextCursor']
 	if (typeof interactionCursor !== 'string') throw new Error('address interactions API omitted its continuation')

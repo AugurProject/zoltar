@@ -10,6 +10,7 @@ import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, type CanonicalImmutableTopolog
 import { loadImmutableTopologyCacheWithinLimits, saveImmutableTopologyCache, validateImmutableTopologySidecarIfPresent } from '../../src/monitoring/topology-cache.ts'
 import { address, hash } from '../operations/fixture.ts'
 import { immutableTopologySidecarDirectory } from '../support/state-sidecars.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 const IMMUTABLE_TOPOLOGY_SEGMENT_BYTES = 32 * 1024 * 1024
 // Resident limits far above every fixture so loads exercise only the sidecar format checks.
@@ -22,12 +23,8 @@ function digest(value: string | Uint8Array) {
 }
 
 function object(value: unknown, label: string): Record<string, unknown> {
-	if (!isRecord(value)) throw new Error(`${label} must be an object`)
+	if (!isPlainRecord(value)) throw new Error(`${label} must be an object`)
 	return value
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 async function rewriteCurrentManifest(statePath: string, mutate: (manifest: Record<string, unknown>) => void) {

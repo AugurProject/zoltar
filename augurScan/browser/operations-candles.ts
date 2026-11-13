@@ -1,13 +1,14 @@
 import * as Plot from '@observablehq/plot'
-import { isRecord, type JsonRecord } from './api-validation.ts'
+import { type JsonRecord } from './api-validation.ts'
 import { chartValueBounds } from './chart-values.ts'
 import { utcDateTime } from './format.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 type EvidenceRow = (title: string, status: string, identity: string | undefined, block: unknown) => HTMLElement
 
 export const renderCandleContent = (candles: readonly JsonRecord[], operationRow: EvidenceRow, operationRatio: (numerator: unknown, denominator: unknown) => string): Element[] => {
 	const ratio = (value: unknown): number | undefined => {
-		if (!isRecord(value) || typeof value['numerator'] !== 'string' || typeof value['denominator'] !== 'string' || !/^\d+$/.test(value['numerator']) || !/^\d+$/.test(value['denominator']) || value['denominator'] === '0') return undefined
+		if (!isPlainRecord(value) || typeof value['numerator'] !== 'string' || typeof value['denominator'] !== 'string' || !/^\d+$/.test(value['numerator']) || !/^\d+$/.test(value['denominator']) || value['denominator'] === '0') return undefined
 		return Number((BigInt(value['numerator']) * 1_000_000_000n) / BigInt(value['denominator'])) / 1_000_000_000
 	}
 	const plotRows = candles.flatMap(candle => {
@@ -56,10 +57,10 @@ export const renderCandleContent = (candles: readonly JsonRecord[], operationRow
 		disclosureLabel.textContent = 'View exact candle data'
 		disclosure.append(disclosureLabel)
 		for (const candle of candles) {
-			const open = isRecord(candle['open']) ? candle['open'] : {}
-			const high = isRecord(candle['high']) ? candle['high'] : {}
-			const low = isRecord(candle['low']) ? candle['low'] : {}
-			const close = isRecord(candle['close']) ? candle['close'] : {}
+			const open = isPlainRecord(candle['open']) ? candle['open'] : {}
+			const high = isPlainRecord(candle['high']) ? candle['high'] : {}
+			const low = isPlainRecord(candle['low']) ? candle['low'] : {}
+			const close = isPlainRecord(candle['close']) ? candle['close'] : {}
 			disclosure.append(
 				operationRow(
 					utcDateTime(Number(candle['bucketStart'] ?? 0) * 1_000),

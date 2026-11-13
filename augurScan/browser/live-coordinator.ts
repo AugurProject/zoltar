@@ -1,4 +1,3 @@
-import { isRecord } from './api-validation.ts'
 import type { AccountDetailOptions, AccountReference, ActivityRecord, CanonicalRecovery, DetailOptions, DialogSnapshot, LiveEventPayload, LoadOptions, LogReference, RichListRecord } from './browser-types.ts'
 import type { ActivityDetailState } from './activity-detail-state.ts'
 import type { CanonicalState } from './canonical-state.ts'
@@ -8,6 +7,7 @@ import { createLiveRouteRefreshCoordinator, shouldRefreshRouteOnLiveEvent, strea
 import { activityRefreshRetention } from './refresh-presentation.ts'
 import { renderExplorerPage } from './explorer-page.ts'
 import { classifyRoute } from './routes.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 interface LiveCoordinatorDeps {
 	lookup: {
@@ -315,7 +315,7 @@ export const createLiveCoordinator = (deps: LiveCoordinatorDeps) => {
 		const eventPayload = (event: MessageEvent, label: string): LiveEventPayload | undefined => {
 			try {
 				const value: unknown = JSON.parse(String(event.data))
-				if (!isRecord(value) || (typeof value['chainId'] !== 'string' && typeof value['chainId'] !== 'number')) throw new Error('Missing chainId')
+				if (!isPlainRecord(value) || (typeof value['chainId'] !== 'string' && typeof value['chainId'] !== 'number')) throw new Error('Missing chainId')
 				const blockNumber = value['blockNumber']
 				const depth = value['depth']
 				const reason = value['reason']

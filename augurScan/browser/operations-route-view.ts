@@ -1,12 +1,13 @@
 import { semanticSummary } from './semantic-evidence.ts'
 import type { OperationsCatalogSection, OperationsDetailRoute, OperationsRenderContext } from './browser-types.ts'
 import { approvalTransitionFields, operationsDetailRecordKey } from './operations-presentation.ts'
-import { isRecord, operationRecords, type JsonRecord } from './api-validation.ts'
+import { operationRecords, type JsonRecord } from './api-validation.ts'
 import { exactUnit } from './format.ts'
 import { nativeSymbolFor } from './network-freshness.ts'
 import { shortIdentifier } from './identifier-format.ts'
 import { canonicalOperationsPath, parseOperationsDetailRoute } from './routes.ts'
 import { renderOperationsRiskSnapshotFilter, renderOperationsTimelineFilters, retainedFilterForm, type createOperationsComponents } from './operations-components.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 interface OperationsRouteViewDeps {
 	lookup: (selector: string) => HTMLElement
@@ -31,7 +32,7 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 	}
 
 	const approvalTransitionSummary = (item: Readonly<Record<string, unknown>>): string => {
-		const eventData = isRecord(item['event_data']) ? item['event_data'] : {}
+		const eventData = isPlainRecord(item['event_data']) ? item['event_data'] : {}
 		const receiver = String(item['receiver_vault'] ?? eventData['receiverVault'] ?? '')
 		const operation = typeof eventData['operationId'] === 'string' ? `operation ${shortIdentifier(eventData['operationId'])}` : undefined
 		const fields = approvalTransitionFields(eventData, nativeSymbolFor(requiredChainId())).map(field => `${field.label} ${field.value}`)
@@ -119,7 +120,7 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 	const operationsDetailRouteKey = (route: OperationsDetailRoute): string => `${route.kind}:${route.identity.join(':').toLowerCase()}`
 
 	// Evidence disclosures are keyed by their canonical occurrence, so a live re-render reopens the same record even after newer rows arrive above it.
-	const evidenceDisclosureKey = (prefix: string, value: unknown): string | undefined => (isRecord(value) && typeof value['tx_hash'] === 'string' ? `${prefix}:${operationsDetailRecordKey(value)}` : undefined)
+	const evidenceDisclosureKey = (prefix: string, value: unknown): string | undefined => (isPlainRecord(value) && typeof value['tx_hash'] === 'string' ? `${prefix}:${operationsDetailRecordKey(value)}` : undefined)
 
 	const rawEvidence = (value: unknown) => {
 		const disclosure = document.createElement('details')
@@ -145,11 +146,11 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 	const tradingEvidenceRows = (items: readonly JsonRecord[]) =>
 		items.map(item => {
 			const eventName = String(item['event_name'] ?? 'AMM event')
-			const data = isRecord(item['event_data']) ? item['event_data'] : {}
-			const analytics = isRecord(item['analytics']) ? item['analytics'] : {}
+			const data = isPlainRecord(item['event_data']) ? item['event_data'] : {}
+			const analytics = isPlainRecord(item['analytics']) ? item['analytics'] : {}
 			let summary = semanticSummary(item, nativeSymbolFor(requiredChainId()))
 			if (eventName === 'Swap')
-				summary = `${String(analytics['direction'] ?? 'Swap')} · ${exactUnit(String(analytics['amountIn'] ?? '0'), 18, String(analytics['baseAsset'] ?? 'shares'))} in → ${exactUnit(String(analytics['amountOut'] ?? '0'), 18, String(analytics['quoteAsset'] ?? 'shares'))} out · ${exactUnit(String(analytics['feeAmount'] ?? '0'), 18, 'shares')} fee${isRecord(analytics['priceImpact']) && analytics['priceImpact']['bps'] !== undefined ? ` · ${exactUnit(String(analytics['priceImpact']['bps']), 2, '%')} impact` : ''}`
+				summary = `${String(analytics['direction'] ?? 'Swap')} · ${exactUnit(String(analytics['amountIn'] ?? '0'), 18, String(analytics['baseAsset'] ?? 'shares'))} in → ${exactUnit(String(analytics['amountOut'] ?? '0'), 18, String(analytics['quoteAsset'] ?? 'shares'))} out · ${exactUnit(String(analytics['feeAmount'] ?? '0'), 18, 'shares')} fee${isPlainRecord(analytics['priceImpact']) && analytics['priceImpact']['bps'] !== undefined ? ` · ${exactUnit(String(analytics['priceImpact']['bps']), 2, '%')} impact` : ''}`
 			else if (eventName === 'Sync') summary = `${exactUnit(String(data['yesReserve'] ?? '0'), 18, 'YES')} · ${exactUnit(String(data['noReserve'] ?? '0'), 18, 'NO')} reserves`
 			else if (eventName === 'Transfer') summary = `${exactUnit(String(data['amount'] ?? '0'), 18, 'LP shares')} · ${shortIdentifier(String(data['from'] ?? ''))} → ${shortIdentifier(String(data['to'] ?? ''))}`
 			else if (eventName === 'Approval') summary = `${exactUnit(String(data['amount'] ?? '0'), 18, 'LP shares')} · ${shortIdentifier(String(data['owner'] ?? ''))} approved ${shortIdentifier(String(data['spender'] ?? ''))}`
@@ -161,11 +162,11 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 
 	const reportEvidenceRows = (items: readonly JsonRecord[]) =>
 		items.map(item => {
-			const data = isRecord(item['report_data']) ? item['report_data'] : {}
+			const data = isPlainRecord(item['report_data']) ? item['report_data'] : {}
 			const token1 = String(data['token1'] ?? 'token 1')
 			const token2 = String(data['token2'] ?? 'token 2')
 			const values = data['currentAmount1'] === undefined && data['currentAmount2'] === undefined ? 'No round amounts' : `${operationNumber(data['currentAmount1'])} ${shortIdentifier(token1)} · ${operationNumber(data['currentAmount2'])} ${shortIdentifier(token2)}`
-			const comparison = isRecord(item['comparison']) ? item['comparison'] : {}
+			const comparison = isPlainRecord(item['comparison']) ? item['comparison'] : {}
 			const changes = operationRecords(comparison['changes'])
 			const row = operationRow(`${String(item['event_name'] ?? 'Report round')} · round ${String(item['round_number'] ?? '—')}`, `${values} · reporter ${shortIdentifier(String(data['currentReporter'] ?? 'unknown'))}`, String(item['tx_hash'] ?? ''), item['block_number'])
 			const changeDetails = document.createElement('details')

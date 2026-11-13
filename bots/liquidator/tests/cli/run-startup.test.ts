@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { initialRuntimeState, saveDurableState } from '../../src/state/operator-state.ts'
 import { keccak256, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import { acquireFileProcessLock } from '@zoltar/bot-shared/execution/process-lock'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 const directories: string[] = []
 const servers: Bun.Server<unknown>[] = []
@@ -74,13 +75,9 @@ async function reserveUiPort() {
 	return uiPort
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
 function objectField(value: Record<string, unknown>, key: string) {
 	const field = value[key]
-	if (!isRecord(field)) throw new Error(`Example configuration ${key} is missing`)
+	if (!isPlainRecord(field)) throw new Error(`Example configuration ${key} is missing`)
 	return field
 }
 

@@ -1,4 +1,4 @@
-import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 import { formatUnits, parseUnits } from '@zoltar/core-shared/evm/ethereum'
 import type { Hex } from '../ethereum.ts'
 
@@ -39,7 +39,7 @@ export function formatDecimalAmount(value: bigint) {
 }
 
 export function record(value: unknown, label: string, message = `${label} must be an object`): Record<string, unknown> {
-	if (!isRecord(value)) throw new Error(message)
+	if (!isPlainRecord(value)) throw new Error(message)
 	return value
 }
 
@@ -59,10 +59,6 @@ export function nonemptyString(value: unknown, label: string, maximumLength?: nu
 }
 
 /** A JSON object: the core `isObjectRecord` guard, narrowed further to exclude arrays. */
-export function isRecord(value: unknown): value is Record<string, unknown> {
-	return isObjectRecord(value) && !Array.isArray(value)
-}
-
 export function optionalRecord(value: unknown): Record<string, unknown> | undefined {
-	return isRecord(value) ? Object.fromEntries(Object.entries(value)) : undefined
+	return isPlainRecord(value) ? Object.fromEntries(Object.entries(value)) : undefined
 }
