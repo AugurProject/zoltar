@@ -172,6 +172,7 @@ COPY --chown=bun:bun ./tooling/ui/appIds.mts /app/tooling/ui/appIds.mts
 USER bun
 EXPOSE 8080
 ENV UI_APP=trading
+ENV PORT=8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8080/'); process.exit(response.ok ? 0 : 1)" ]
 CMD [ "bun", "/app/tooling/ui/dockerServe.mts" ]
 
