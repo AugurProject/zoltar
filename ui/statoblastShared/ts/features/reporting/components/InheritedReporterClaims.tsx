@@ -1,4 +1,5 @@
 import * as copy from '../../../copy/reporting.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { getImportedEscalationDepositClaimAmount } from '../lib/reportingDomain.js'
 import { useEffect, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
@@ -50,7 +51,7 @@ export function InheritedReporterClaims({ parameters, accountState, details, onR
 		}
 		try {
 			await runWriteAction(
-				buildWriteActionConfig({ ...parameters, onTransactionCanceled: parameters.onTransactionCanceled, onTransactionFailed: parameters.onTransactionFailed, onTransactionPrepared: parameters.onTransactionPrepared }, error, 'Connect your wallet to recover reporter REP.', {
+				buildWriteActionConfig({ ...parameters, onTransactionCanceled: parameters.onTransactionCanceled, onTransactionFailed: parameters.onTransactionFailed, onTransactionPrepared: parameters.onTransactionPrepared }, error, commonCopy.formatConnectWalletBefore('recovering reporter REP'), {
 					action: settle ? 'settleForkedEscalation' : 'prepareForkClaim',
 					source: copy.recoverySource,
 					submittedTitle: settle ? copy.settleInheritedClaim : copy.prepareInheritedClaim,

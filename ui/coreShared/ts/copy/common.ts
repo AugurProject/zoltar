@@ -165,3 +165,6 @@ export const formatLocalTimeLabel = (localTimestamp: CopyTemplateValue) => `Loca
 export const formatApprovalResetRequired = (symbol: string) => `Reset ${symbol} approval first.`
 
 export const formatResetTokenApproval = (symbol: string) => `Reset ${symbol} approval`
+export const formatResettingTokenApproval = (symbol: string) => `Resetting ${symbol} approval…`
+/** The reason a prerequisite step, such as an allowance reset or an ETH wrap, is disabled when nothing is left for it to do. */
+export const notNeeded = 'Not needed.'

@@ -3,6 +3,7 @@
 import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
+import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { TransactionActionButton, TransactionActionButtonLockProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import { getActiveNetworkProfile, installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -220,6 +221,7 @@ function createOpenOracleSectionProps(overrides: Partial<OpenOracleSectionProps>
 		onWrapDisputeWeth: () => undefined,
 		openOracleActiveAction: undefined,
 		openOracleActiveWithdrawalBalance: undefined,
+		openOracleApprovalResetting: false,
 		openOracleCreateForm: getDefaultOpenOracleCreateFormState(),
 		openOracleDisputeSubmission: undefined,
 		openOracleError: undefined,
@@ -364,13 +366,15 @@ function createOpenOracleDisputeSubmission({
 type ReportActionSectionOptions = {
 	accountState?: AccountState
 	isOnActiveAppChain?: boolean
+	openOracleActiveAction?: OpenOracleSectionProps['openOracleActiveAction']
+	openOracleApprovalResetting?: boolean
 	openOracleForm?: OpenOracleFormState
 	openOracleReportDetails?: OpenOracleReportDetails
 }
 
 function renderReportActionSection(
 	actionMode: 'dispute' | 'settle',
-	{ accountState = createAccountState(), isOnActiveAppChain = true, openOracleForm = createOpenOracleForm(), openOracleReportDetails }: Required<Pick<ReportActionSectionOptions, 'openOracleReportDetails'>> & ReportActionSectionOptions,
+	{ accountState = createAccountState(), isOnActiveAppChain = true, openOracleActiveAction, openOracleApprovalResetting = false, openOracleForm = createOpenOracleForm(), openOracleReportDetails }: Required<Pick<ReportActionSectionOptions, 'openOracleReportDetails'>> & ReportActionSectionOptions,
 	openOracleTokenAccessState: OpenOracleSectionProps['openOracleTokenAccessState'],
 	disputeSubmission: OpenOracleDisputeSubmissionDetails | undefined,
 ) {
@@ -385,7 +389,8 @@ function renderReportActionSection(
 		onOpenOracleFormChange: () => undefined,
 		onSettleReport: () => undefined,
 		onWrapDisputeWeth: () => undefined,
-		openOracleActiveAction: undefined,
+		openOracleActiveAction,
+		openOracleApprovalResetting,
 		openOracleForm,
 		openOracleTokenAccessState,
 		openOracleReportDetails,
@@ -804,6 +809,34 @@ void describe('OpenOracleSection', () => {
 
 			expect(getButtonDisabled(requireButton(section, 'Reset USD₮ approval'))).toBe(false)
 			expect(findButton(section, 'Reset REPv2 approval')).toBeUndefined()
+		} finally {
+			resetEnvironment()
+		}
+	})
+
+	void test.each([
+		{ resetting: true, pendingButton: 'Reset USD₮ approval', pendingLabel: 'Resetting USD₮ approval…' },
+		{ resetting: false, pendingButton: 'USD₮ approval control', pendingLabel: 'Approving USD₮…' },
+	])('shows one pending approval button for the network USDT token while resetting is $resetting', ({ resetting, pendingButton, pendingLabel }) => {
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend())
+		try {
+			const usdt = getActiveNetworkProfile().usdtAddress
+			if (usdt === undefined) throw new Error('Expected a configured USDT address')
+			const section = renderDisputeActionSection({
+				openOracleActiveAction: 'approveToken2',
+				openOracleApprovalResetting: resetting,
+				openOracleForm: createOpenOracleForm({ disputeNewAmount1: '20', disputeNewAmount2: '7' }),
+				openOracleTokenAccessState: createApprovedTokenAccessState(1n),
+				openOracleReportDetails: createDisputableReportDetails({ token2: usdt, token2Symbol: 'USD₮' }),
+			})
+			const pendingControls: { label: string; pendingLabel: unknown }[] = []
+			visitTree(section, vnode => {
+				if (vnode.props['pending'] !== true) return
+				if (vnode.type === TransactionActionButton) pendingControls.push({ label: String(vnode.props['idleLabel']), pendingLabel: vnode.props['pendingLabel'] })
+				if (vnode.type === TokenApprovalControl) pendingControls.push({ label: `${String(vnode.props['tokenSymbol'])} approval control`, pendingLabel: vnode.props['pendingLabel'] })
+			})
+
+			expect(pendingControls).toEqual([{ label: pendingButton, pendingLabel }])
 		} finally {
 			resetEnvironment()
 		}

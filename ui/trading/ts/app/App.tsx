@@ -47,20 +47,17 @@ function currentRoute(): ResolvedTradingRoute {
 	return tradingRouting.resolve(window.location.hash)
 }
 
-function tradingDocumentTitle(route: ResolvedTradingRoute) {
+/** The page's own name. The document title adds the market and the application around it in one place, `formatDocumentTitle`. */
+function tradingPageTitle(route: ResolvedTradingRoute) {
 	let label = `${route.charAt(0).toUpperCase()}${route.slice(1)}`
-	if (route === 'not-found') label = appCopy.notFound
+	if (route === 'not-found') label = appCopy.pageNotFoundTitle
 	if (route === 'help') label = appCopy.help
 	if (route === 'create-market' || route.startsWith('create-market/')) label = appCopy.createMarket
 	if (route === 'market') label = appCopy.markets
 	if (route.startsWith('market/')) label = appCopy.market
 	if (route.startsWith('liquidity/')) label = appCopy.liquidity
 	if (route.startsWith('security-pool/')) label = appCopy.securityPool
-	return appCopy.documentTitle(label)
-}
-
-function tradingPageTitle(route: ResolvedTradingRoute) {
-	return tradingDocumentTitle(route).replace(` · ${appCopy.appName}`, '')
+	return label
 }
 
 const TRADING_NOT_FOUND_LINKS = [

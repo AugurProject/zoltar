@@ -7,7 +7,7 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { CollateralFundingControls } from '../../features/CollateralFundingControls.js'
 import type { useCollateralFunding } from '../../features/live/useCollateralFunding.js'
 
-function fundingFor(token: Address, symbol: string): ReturnType<typeof useCollateralFunding> {
+function fundingFor(token: Address, symbol: string, overrides: Partial<ReturnType<typeof useCollateralFunding>> = {}): ReturnType<typeof useCollateralFunding> {
 	return {
 		balanceState: 'ready',
 		asset: { token, symbol, decimals: 6, native: false },
@@ -22,6 +22,7 @@ function fundingFor(token: Address, symbol: string): ReturnType<typeof useCollat
 		pending: false,
 		resetting: false,
 		approve: async () => undefined,
+		...overrides,
 	}
 }
 
@@ -40,6 +41,18 @@ describe('collateral funding controls', () => {
 		const usdt = getActiveNetworkProfile().usdtAddress
 		if (usdt === undefined) throw new Error('Expected a configured USDT address')
 		expect(await renderedButtonLabels(usdt, 'USD₮')).toContain('Reset USD₮ approval')
+	})
+
+	test.each([
+		{ resetting: true, pendingLabel: 'Resetting USD₮ approval…' },
+		{ resetting: false, pendingLabel: 'Approving USD₮…' },
+	])('shows one pending button with the shared label while resetting is $resetting', async ({ resetting, pendingLabel }) => {
+		const usdt = getActiveNetworkProfile().usdtAddress
+		if (usdt === undefined) throw new Error('Expected a configured USDT address')
+		const rendered = await renderIntoDocument(<CollateralFundingControls actionLabel='buying' funding={fundingFor(usdt, 'USD₮', { pending: true, resetting })} required={5_000_000n} disabled={false} reason={undefined} />)
+		lifecycle.trackRendered(rendered)
+		const busy = Array.from(rendered.container.querySelectorAll('button[aria-busy="true"]')).map(button => button.textContent?.trim())
+		expect(busy).toEqual([pendingLabel])
 	})
 
 	test('does not offer an allowance reset for another token that reports the USDT symbol', async () => {

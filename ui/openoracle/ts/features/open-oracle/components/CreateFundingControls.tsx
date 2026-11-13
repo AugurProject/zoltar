@@ -15,6 +15,7 @@ export function CreateFundingControls({
 	disabled,
 	guard,
 	activeAction,
+	resetting,
 	approve,
 	wrap,
 }: {
@@ -24,12 +25,14 @@ export function CreateFundingControls({
 	disabled: boolean
 	guard: string | undefined
 	activeAction: string | undefined
+	/** Whether the active approval action is an allowance reset, so only the reset button shows as pending. */
+	resetting: boolean
 	approve: ((token: 'token1' | 'token2', amount: bigint) => void) | undefined
 	wrap: (() => void) | undefined
 }) {
 	let wrapReason = guard
 	if (wrapReason === undefined && funding.loading) wrapReason = copy.loading
-	else if (wrapReason === undefined && funding.wrap === 0n) wrapReason = copy.notNeeded
+	else if (wrapReason === undefined && funding.wrap === 0n) wrapReason = common.notNeeded
 	const tokens = funding.tokens
 	if (tokens.length === 0) return null
 	return (
@@ -41,16 +44,17 @@ export function CreateFundingControls({
 			{tokens.map((token, index) => {
 				const symbol = symbols[index] ?? copy.funding
 				const requiresAllowanceReset = tokenRequiresAllowanceReset(token.token)
+				const approvalActionPending = activeAction === `approveToken${index + 1}`
 				let resetReason = guard ?? funding.error
 				if (resetReason === undefined && token.access === undefined) resetReason = copy.loading
-				else if (resetReason === undefined && token.access?.allowance === 0n) resetReason = copy.notNeeded
+				else if (resetReason === undefined && token.access?.allowance === 0n) resetReason = common.notNeeded
 				return (
 					<div key={token.key}>
 						{requiresAllowanceReset ? (
 							<TransactionActionButton
 								idleLabel={common.formatResetTokenApproval(symbol)}
-								pendingLabel={common.formatApprovingToken(symbol)}
-								pending={activeAction === `approveToken${index + 1}`}
+								pendingLabel={common.formatResettingTokenApproval(symbol)}
+								pending={approvalActionPending && resetting}
 								availability={{ disabled: disabled || token.access === undefined || token.access.allowance === 0n || approve === undefined, reason: resetReason }}
 								onClick={() => approve?.(token.key, 0n)}
 								tone='secondary'
@@ -67,7 +71,7 @@ export function CreateFundingControls({
 							onApprove={amount => {
 								if (amount !== undefined) approve?.(token.key, amount)
 							}}
-							pending={activeAction === `approveToken${index + 1}`}
+							pending={approvalActionPending && !resetting}
 							pendingLabel={common.formatApprovingToken(symbol)}
 							requiredAmount={token.required}
 							resetKey={`${token.token}:${token.required}`}
