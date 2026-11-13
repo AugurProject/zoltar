@@ -42,18 +42,5 @@
 		"bun-types": "1.4.4",
 		"typescript": "5.8.2"
 	},
-	"knip": {
-		"entry": [
-			"scripts/*.ts",
-			"browser/app.ts",
-			"tests/**/*.test.ts"
-		],
-		"project": [
-			"src/**/*.ts",
-			"scripts/**/*.ts",
-			"browser/**/*.ts",
-			"tests/**/*.ts"
-		]
-	},
 	"main": "./src/server.ts"
 }
