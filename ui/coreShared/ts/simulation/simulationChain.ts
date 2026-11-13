@@ -8,6 +8,7 @@ import { getSimulationNode, mineLockedSimulationTransaction, withSimulationLock,
 import type { SerializedSimulationBlock } from './savedStates.js'
 import type { SimulationProviderRequest } from './simulationProvider.js'
 import type { SimulationTransactionReceipt } from './transactionReceipts.js'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 /**
  * One tevm chain with the request paths the simulation needs made cheap.
@@ -49,10 +50,6 @@ type EthCallRequest = {
 
 type RpcErrorLike = { code?: unknown; data?: unknown; message?: unknown }
 
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
 function isHexString(value: unknown): value is Hex {
 	return typeof value === 'string' && isHex(value, { strict: true })
 }
@@ -66,7 +63,7 @@ function optionalHex(record: Record<string, unknown>, key: string): Hex | undefi
 /** Extracts the fields tevm's `eth_call` procedure reads; anything else falls back to the regular request path. */
 function parseEthCallRequest(params: unknown): EthCallRequest | undefined {
 	// State and block overrides only exist on tevm's own path.
-	if (!Array.isArray(params) || params.length > 2 || !isObjectRecord(params[0])) return undefined
+	if (!Array.isArray(params) || params.length > 2 || !isPlainRecord(params[0])) return undefined
 	const [transaction, blockTag] = params
 	if (blockTag !== undefined && blockTag !== 'latest' && !isHexString(blockTag)) return undefined
 	const data = optionalHex(transaction, 'data')
@@ -97,7 +94,7 @@ function parseReceiptHash(params: unknown): Hash | undefined {
 
 /** Mirrors how tevm's EIP-1193 request decorator surfaces a JSON-RPC error object. */
 function createRpcError(error: unknown): Error {
-	const record: RpcErrorLike = isObjectRecord(error) ? error : {}
+	const record: RpcErrorLike = isPlainRecord(error) ? error : {}
 	const code = typeof record.code === 'number' ? record.code : Number(record.code)
 	return Object.assign(new Error(typeof record.message === 'string' ? record.message : 'Unknown provider error'), {
 		code: Number.isFinite(code) ? code : -32000,
