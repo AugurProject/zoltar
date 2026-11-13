@@ -170,7 +170,6 @@ function refundGeneration(log: ReturnType<typeof refundLog>) {
 
 type ProtocolIndexContext = Parameters<typeof updateProtocolIndex>[0]
 
-/** A protocol-index update for the fixture signer starting and anchored at block 10; tests override what they exercise. */
 /** A report submitted at block 10 by signer address(1) without a callback, as the first log in the block. */
 function signerReportLog(reportId: bigint) {
 	return canonicalLog({
@@ -208,6 +207,7 @@ async function canonicalBlock(parameters: { blockNumber?: bigint }) {
 	return { hash: hash(Number(number)), number, timestamp: 1_000n }
 }
 
+/** A protocol-index update for the fixture signer starting and anchored at block 10; tests override what they exercise. */
 function indexContext(client: ChaosReadClient, overrides: Partial<ProtocolIndexContext> = {}): ProtocolIndexContext {
 	return { anchorBlockNumber: 10n, auctionAddresses: [], chainId: 31337, client, escalationGames: [], ...indexDeployments, ...indexTrust, startBlock: 10n, wallet: address(1), ...overrides }
 }
