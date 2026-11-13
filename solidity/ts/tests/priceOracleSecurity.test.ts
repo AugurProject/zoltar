@@ -53,53 +53,24 @@ import { useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfo
 type TransactionReceiptLogs = Awaited<ReturnType<WriteClient['waitForTransactionReceipt']>>['logs']
 const OPEN_ORACLE_GAME_MAPPING_SLOT = 1n
 const MAX_OPEN_ORACLE_REPORT_COUNT = (1n << 24n) - 1n
-const findPendingReportRecoveredLog = (logs: TransactionReceiptLogs) =>
-	logs
-		.map(log => {
-			try {
-				return decodeEventLog({
-					abi: feedArtifact.abi,
-					data: log.data,
-					topics: log.topics,
-				})
-			} catch (error) {
-				if (!isIgnorableLogDecodeError(error)) throw error
-				return undefined
-			}
-		})
-		.find(log => log?.eventName === 'PendingReportRecovered')
-
-const findPriceReportedLog = (logs: TransactionReceiptLogs) =>
-	logs
-		.map(log => {
-			try {
-				return decodeEventLog({
-					abi: feedArtifact.abi,
-					data: log.data,
-					topics: log.topics,
-				})
-			} catch (error) {
-				if (!isIgnorableLogDecodeError(error)) throw error
-				return undefined
-			}
-		})
-		.find(log => log?.eventName === 'PriceReported')
-
-const findPriceReportRejectedLog = (logs: TransactionReceiptLogs) =>
-	logs
-		.map(log => {
-			try {
-				return decodeEventLog({
-					abi: feedArtifact.abi,
-					data: log.data,
-					topics: log.topics,
-				})
-			} catch (error) {
-				if (!isIgnorableLogDecodeError(error)) throw error
-				return undefined
-			}
-		})
-		.find(log => log?.eventName === 'PriceReportRejected')
+const decodeFeedLogs = (logs: TransactionReceiptLogs) =>
+	logs.map(log => {
+		try {
+			return decodeEventLog({
+				abi: feedArtifact.abi,
+				data: log.data,
+				topics: log.topics,
+			})
+		} catch (error) {
+			if (!isIgnorableLogDecodeError(error)) throw error
+			return undefined
+		}
+	})
+type FeedLog = NonNullable<ReturnType<typeof decodeFeedLogs>[number]>
+const findFeedLog = <EventName extends FeedLog['eventName']>(logs: TransactionReceiptLogs, eventName: EventName) => decodeFeedLogs(logs).find((log): log is Extract<FeedLog, { eventName: EventName }> => log?.eventName === eventName)
+const findPendingReportRecoveredLog = (logs: TransactionReceiptLogs) => findFeedLog(logs, 'PendingReportRecovered')
+const findPriceReportedLog = (logs: TransactionReceiptLogs) => findFeedLog(logs, 'PriceReported')
+const findPriceReportRejectedLog = (logs: TransactionReceiptLogs) => findFeedLog(logs, 'PriceReportRejected')
 
 describe('Shared portfolio oracle security regressions', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
@@ -113,6 +84,23 @@ describe('Shared portfolio oracle security regressions', () => {
 		priceOracle = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
 		priceFeed = await client.readContract({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: priceOracle, functionName: 'priceFeed' })
 	})
+	const setNextBlockBaseFee = async (baseFeeAttoEthPerGas: bigint) =>
+		await mockWindow.request({
+			method: 'anvil_setNextBlockBaseFeePerGas',
+			params: [`0x${baseFeeAttoEthPerGas.toString(16)}`],
+		})
+	const requestPriceAtBaseFee = async (repPerEthPrice: bigint, requestEthCost: bigint, baseFeeAttoEthPerGas: bigint) => {
+		await setNextBlockBaseFee(baseFeeAttoEthPerGas)
+		const requestHash = await client.writeContract({
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'requestPrice',
+			address: priceOracle,
+			args: [repPerEthPrice, 0n, requestEthCost],
+			value: requestEthCost,
+			gasPrice: baseFeeAttoEthPerGas,
+		})
+		await client.waitForTransactionReceipt({ hash: requestHash })
+	}
 	const configuredMinimum = async (exposure = 0n) => (await client.readContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'minimumReportCollateral' })) + (exposure + 99n) / 100n
 	const escrowFor = async (reportId: bigint) => (await client.readContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'reportCandidates', args: [reportId] }))[0]
 	const getOpenOracleHeldBalance = (holder: `0x${string}`, token: `0x${string}`) => client.readContract({ abi: statoblast_openOracle_OpenOracle_OpenOracle.abi, address: getInfraContractAddresses().openOracle, functionName: 'tokenHolder', args: [holder, token] })
@@ -171,19 +159,7 @@ describe('Shared portfolio oracle security regressions', () => {
 		await wrapWeth(counterpartyClient, minimumWethReport * 4n)
 		await approveToken(counterpartyClient, WETH_ADDRESS, openOracle)
 		await approveToken(counterpartyClient, addressString(GENESIS_REPUTATION_TOKEN), openOracle)
-		await mockWindow.request({
-			method: 'anvil_setNextBlockBaseFeePerGas',
-			params: [`0x${requestBaseFeeAttoEthPerGas.toString(16)}`],
-		})
-		const requestHash = await client.writeContract({
-			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'requestPrice',
-			address: priceOracle,
-			args: [proposedRepPerEthPrice, 0n, requestEthCost],
-			value: requestEthCost,
-			gasPrice: requestBaseFeeAttoEthPerGas,
-		})
-		await client.waitForTransactionReceipt({ hash: requestHash })
+		await requestPriceAtBaseFee(proposedRepPerEthPrice, requestEthCost, requestBaseFeeAttoEthPerGas)
 
 		const reportId = await getPendingReportId(client, priceOracle)
 		const reportMeta = await getOpenOracleReportMeta(client, reportId)
@@ -191,10 +167,7 @@ describe('Shared portfolio oracle security regressions', () => {
 		const reportState = (await loadOpenOracleEventState(client, reportId)).latest
 		const disputedAmount1 = (reportStatus.currentAmount1 * reportMeta.multiplier) / 100n
 		const disputedAmount2 = reportStatus.currentAmount2
-		await mockWindow.request({
-			method: 'anvil_setNextBlockBaseFeePerGas',
-			params: [`0x${finalReportBaseFeeAttoEthPerGas.toString(16)}`],
-		})
+		await setNextBlockBaseFee(finalReportBaseFeeAttoEthPerGas)
 		const disputeHash = await counterpartyClient.writeContract({
 			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'dispute',
@@ -213,10 +186,7 @@ describe('Shared portfolio oracle security regressions', () => {
 
 		const finalReportStatus = await getOpenOracleReportStatus(client, reportId)
 		await mockWindow.setTime(finalReportStatus.reportTimestamp + reportMeta.settlementTime - 1n)
-		await mockWindow.request({
-			method: 'anvil_setNextBlockBaseFeePerGas',
-			params: [`0x${requestBaseFeeAttoEthPerGas.toString(16)}`],
-		})
+		await setNextBlockBaseFee(requestBaseFeeAttoEthPerGas)
 		const settlementHash = await openOracleSettleWithGasPrice(client, reportId, requestBaseFeeAttoEthPerGas)
 		const settlementReceipt = await client.waitForTransactionReceipt({
 			hash: settlementHash,
@@ -247,19 +217,7 @@ describe('Shared portfolio oracle security regressions', () => {
 		await wrapWeth(counterpartyClient, initialWethReport * 4n)
 		await approveToken(counterpartyClient, WETH_ADDRESS, openOracle)
 		await approveToken(counterpartyClient, addressString(GENESIS_REPUTATION_TOKEN), openOracle)
-		await mockWindow.request({
-			method: 'anvil_setNextBlockBaseFeePerGas',
-			params: [`0x${baseFeeAttoEthPerGas.toString(16)}`],
-		})
-		const requestHash = await client.writeContract({
-			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'requestPrice',
-			address: priceOracle,
-			args: [proposedRepPerEthPrice, 0n, requestEthCost],
-			value: requestEthCost,
-			gasPrice: baseFeeAttoEthPerGas,
-		})
-		await client.waitForTransactionReceipt({ hash: requestHash })
+		await requestPriceAtBaseFee(proposedRepPerEthPrice, requestEthCost, baseFeeAttoEthPerGas)
 
 		const reportId = await getPendingReportId(client, priceOracle)
 		const reportMeta = await getOpenOracleReportMeta(client, reportId)
@@ -268,10 +226,7 @@ describe('Shared portfolio oracle security regressions', () => {
 			const newAmount1 = (reportState.game.currentAmount1 * reportMeta.multiplier) / 100n
 			const newAmount2 = (reportState.game.currentAmount2 * reportMeta.multiplier) / 100n
 			const disputeBaseFeeAttoEthPerGas = disputeIndex === 2n ? finalDisputeBaseFeeAttoEthPerGas : baseFeeAttoEthPerGas
-			await mockWindow.request({
-				method: 'anvil_setNextBlockBaseFeePerGas',
-				params: [`0x${disputeBaseFeeAttoEthPerGas.toString(16)}`],
-			})
+			await setNextBlockBaseFee(disputeBaseFeeAttoEthPerGas)
 			const disputeHash = await counterpartyClient.writeContract({
 				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 				functionName: 'dispute',
@@ -292,10 +247,7 @@ describe('Shared portfolio oracle security regressions', () => {
 
 		const finalReportStatus = await getOpenOracleReportStatus(client, reportId)
 		await mockWindow.setTime(finalReportStatus.reportTimestamp + reportMeta.settlementTime - 1n)
-		await mockWindow.request({
-			method: 'anvil_setNextBlockBaseFeePerGas',
-			params: [`0x${baseFeeAttoEthPerGas.toString(16)}`],
-		})
+		await setNextBlockBaseFee(baseFeeAttoEthPerGas)
 		const settlementHash = await openOracleSettleWithGasPrice(client, reportId, baseFeeAttoEthPerGas)
 		const settlementReceipt = await client.waitForTransactionReceipt({
 			hash: settlementHash,
@@ -462,10 +414,7 @@ describe('Shared portfolio oracle security regressions', () => {
 		assert.strictEqual(reportMeta.token2.toLowerCase(), addressString(GENESIS_REPUTATION_TOKEN).toLowerCase(), 'REP should be the price-expressing token2 side')
 
 		const baseFeeAttoEthPerGas = 30n * 10n ** 9n
-		await mockWindow.request({
-			method: 'anvil_setNextBlockBaseFeePerGas',
-			params: [`0x${baseFeeAttoEthPerGas.toString(16)}`],
-		})
+		await setNextBlockBaseFee(baseFeeAttoEthPerGas)
 		await mockWindow.request({ method: 'evm_mine', params: [] })
 		const sizedForBaseFee = await client.readContract({
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -549,10 +498,7 @@ describe('Shared portfolio oracle security regressions', () => {
 		await approveToken(client, WETH_ADDRESS, priceOracle)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
 
-		await mockWindow.request({
-			method: 'anvil_setNextBlockBaseFeePerGas',
-			params: [`0x${requestBaseFeeAttoEthPerGas.toString(16)}`],
-		})
+		await setNextBlockBaseFee(requestBaseFeeAttoEthPerGas)
 		await mockWindow.request({ method: 'evm_mine', params: [] })
 		const requestMinimumWethReport = await client.readContract({
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -814,19 +760,7 @@ describe('Shared portfolio oracle security regressions', () => {
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
 
 		const requestAtConfiguredBaseFee = async () => {
-			await mockWindow.request({
-				method: 'anvil_setNextBlockBaseFeePerGas',
-				params: [`0x${requestBaseFeeAttoEthPerGas.toString(16)}`],
-			})
-			const requestHash = await client.writeContract({
-				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-				functionName: 'requestPrice',
-				address: priceOracle,
-				args: [proposedRepPerEthPrice, 0n, requestEthCost],
-				value: requestEthCost,
-				gasPrice: requestBaseFeeAttoEthPerGas,
-			})
-			await client.waitForTransactionReceipt({ hash: requestHash })
+			await requestPriceAtBaseFee(proposedRepPerEthPrice, requestEthCost, requestBaseFeeAttoEthPerGas)
 			const reportId = await getPendingReportId(client, priceOracle)
 			assert.ok(reportId > 0n, 'nonzero-basefee request should create a pending report')
 			assert.strictEqual(await getPendingReportMaxSettlementBaseFee(client, priceOracle), expectedSettlementBaseFeeCap, 'request should snapshot the configured nonzero settlement basefee cap')
@@ -844,10 +778,7 @@ describe('Shared portfolio oracle security regressions', () => {
 		assert.strictEqual(initialHistoryRecord[0], await configuredMinimum(), 'the initial report should equal the configured collateral floor')
 		assert.strictEqual(initialHistoryRecord[2], requestBaseFeeAttoEthPerGas, 'the exact-floor check should use the initial report block base fee')
 		await mockWindow.advanceTime(BigInt(acceptedReportMeta.settlementTime) + 1n)
-		await mockWindow.request({
-			method: 'anvil_setNextBlockBaseFeePerGas',
-			params: [`0x${expectedSettlementBaseFeeCap.toString(16)}`],
-		})
+		await setNextBlockBaseFee(expectedSettlementBaseFeeCap)
 		const acceptedHash = await openOracleSettleWithGasPrice(client, acceptedReportId, expectedSettlementBaseFeeCap)
 		const acceptedReceipt = await client.waitForTransactionReceipt({
 			hash: acceptedHash,
@@ -862,10 +793,7 @@ describe('Shared portfolio oracle security regressions', () => {
 		const rejectedReportMeta = await getOpenOracleReportMeta(client, rejectedReportId)
 		await mockWindow.advanceTime(BigInt(rejectedReportMeta.settlementTime) + 1n)
 		const rejectedSettlementBaseFee = expectedSettlementBaseFeeCap + 1n
-		await mockWindow.request({
-			method: 'anvil_setNextBlockBaseFeePerGas',
-			params: [`0x${rejectedSettlementBaseFee.toString(16)}`],
-		})
+		await setNextBlockBaseFee(rejectedSettlementBaseFee)
 		const rejectedHash = await openOracleSettleWithGasPrice(client, rejectedReportId, rejectedSettlementBaseFee)
 		const rejectedReceipt = await client.waitForTransactionReceipt({
 			hash: rejectedHash,
