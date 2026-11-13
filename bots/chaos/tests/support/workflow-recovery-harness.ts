@@ -1,6 +1,7 @@
 import { expect } from 'bun:test'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
 import { connectToChromium, expectVisibleIdentifiers, explorerUrl, readAccessibilityIdentity, walletAddress } from './dashboard-harness.ts'
+import { dashboardFixtureStrategy } from './dashboard-strategy-fixture.ts'
 import { rpcSecret, scenarios } from './dashboard-workflow-fixtures.ts'
 
 // The dashboard server and Chromium session the workflow-recovery browser test drives through its staged steps.
@@ -89,19 +90,7 @@ export function startWorkflowRecoveryDashboard(): WorkflowRecoveryServer {
 						}
 					: undefined,
 				scheduler: { maximumDelaySeconds: 3_600, minimumDelaySeconds: 60 },
-				strategy: {
-					allowHighRiskOperations: false,
-					allowIrreversibleOperations: false,
-					initializeGenesisUniverse: true,
-					enabledEcosystems: ['zoltar', 'statoblast', 'open-oracle', 'trading'],
-					maximumEthPerOperation: '0.05',
-					maximumGasCostEth: '0.02',
-					maximumRepPerOperation: '10',
-					minimumEthReserve: '0.05',
-					minimumRepReserve: '10',
-					selectableOperationAllowlist: fixture.selectableOperationAllowlist,
-					workflowValidForBlocks: 288,
-				},
+				strategy: dashboardFixtureStrategy(fixture.selectableOperationAllowlist),
 			},
 			signerAddress: walletAddress,
 		}),
