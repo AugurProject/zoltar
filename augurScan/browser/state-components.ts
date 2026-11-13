@@ -104,13 +104,11 @@ export const createStateComponents = (element: <K extends keyof HTMLElementTagNa
 			sharedRange,
 			axisUnit,
 			zeroBaseline = false,
-			legendItems = [],
 			emptyMessage = 'No checkpoints match this view.',
 		}: {
 			sharedRange?: readonly [number, number] | undefined
 			axisUnit?: string | undefined
 			zeroBaseline?: boolean
-			legendItems?: Array<{ label: string; className?: string }>
 			emptyMessage?: string
 		} = {},
 	) => {
@@ -125,11 +123,6 @@ export const createStateComponents = (element: <K extends keyof HTMLElementTagNa
 			for (const [index, { label }] of definitions.entries()) {
 				const item = element('span')
 				item.append(legendSwatch(chartSeriesColor(index)), document.createTextNode(` ${label}`))
-				legend.append(item)
-			}
-			for (const { label, className = '' } of legendItems) {
-				const item = element('span')
-				item.append(element('i', className === '' ? '' : `chart-${className}`), document.createTextNode(label))
 				legend.append(item)
 			}
 			heading.append(legend)

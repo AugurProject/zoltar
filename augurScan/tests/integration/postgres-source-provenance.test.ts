@@ -86,13 +86,12 @@ const restorePoolIdentity = async ({ database, provenanceChainId, evidenceBlockH
 	await database.sql`
 		INSERT INTO pools (
 			chain_id, block_hash, tx_hash, log_index, block_number, pool_address, parent_address,
-			universe_id, question_id, collateral_repair_auction_address, coordinator_address, share_token_address,
-			security_multiplier_bps, initial_priority_fee_atto_eth_per_gas,
-			initial_retention_rate, initial_settlement_collateral_atto_eth, canonical
+			universe_id, question_id, coordinator_address, share_token_address,
+			security_multiplier_bps, initial_priority_fee_atto_eth_per_gas, canonical
 		) VALUES (
 			${provenanceChainId}, ${evidenceBlockHash}, ${evidenceTxHash}, 0, 1, ${discoveredAddress.toLowerCase()},
-			${address.toLowerCase()}, 1, 7, ${address.toLowerCase()}, ${discoveredAddress.toLowerCase()}, ${address.toLowerCase()},
-			15000, 0, 0, 0, true
+			${address.toLowerCase()}, 1, 7, ${discoveredAddress.toLowerCase()}, ${address.toLowerCase()},
+			15000, 0, true
 		)
 		ON CONFLICT (chain_id, block_hash, tx_hash, log_index, pool_address) DO UPDATE SET canonical = true
 	`
