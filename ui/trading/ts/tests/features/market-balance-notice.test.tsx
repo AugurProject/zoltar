@@ -7,7 +7,7 @@ import { LiveTrading } from '../../features/LiveTrading.js'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { buttonByLabel, waitForDom } from '../support/dom.js'
 import { etherScaleMarketFixture } from '../support/liveMarketFixture.js'
-import { connectedWalletServices, discoveryPage, installSilentInjectedWallet, offlineControllerServices } from '../support/liveTradingServices.js'
+import { connectedMarketServices, installSilentInjectedWallet } from '../support/liveTradingServices.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const pool = `0x${'22'.repeat(20)}` as Address
@@ -26,12 +26,7 @@ describe('market page balance failure', () => {
 	})
 
 	const services = {
-		...offlineControllerServices,
-		discoverAddressedMarket: async () => discoveryPage([{ ...market }]),
-		discoverTradingMarketPage: async () => discoveryPage([{ ...market }]),
-		discoverSavedMarkets: async () => discoveryPage([{ ...market }]),
-		...connectedWalletServices(account, configuration.chainId),
-		createTradingWalletClient: () => ({ waitForTransactionReceipt: async () => ({ status: 'success' as const }) }),
+		...connectedMarketServices(market, account, configuration.chainId),
 		loadLiveBalances: async () => {
 			throw new Error('Balance node unavailable')
 		},
