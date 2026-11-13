@@ -1,4 +1,4 @@
-import { getTokenApprovalResetReason } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
+import { getTokenApprovalResetReason, tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { collateralPresentation } from '../../../protocol/collateral.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
@@ -287,7 +287,9 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 				}),
 				async latest => {
 					freshFunding(latest)
-					const reason = getTokenApprovalResetReason(latest.observation?.wethAllowanceAttoEth, amount, collateral.symbol, token === 'weth' && collateral.symbol === 'USDT')
+					// REP has its own allowance and never needs a reset; only the collateral approval is checked against the collateral allowance.
+					if (token === 'rep') return
+					const reason = getTokenApprovalResetReason(latest.observation?.wethAllowanceAttoEth, amount, collateral.symbol, tokenRequiresAllowanceReset(collateral.address))
 					if (reason !== undefined) throw new Error(reason)
 				},
 			)

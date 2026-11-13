@@ -1,4 +1,4 @@
-import { getTokenApprovalResetReason } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
+import { getTokenApprovalResetReason, tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import { encodeFunctionData, formatUnits, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
@@ -80,7 +80,7 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 					validateBeforeSubmit: async () => {
 						const allowance = await createConnectedReadClient().readContract({ address: snapshot.collateralToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [account, snapshot.services] })
 						if (typeof allowance !== 'bigint') throw new Error('Collateral allowance unavailable.')
-						const reason = getTokenApprovalResetReason(allowance, approvalAmount, snapshot.collateral.symbol, snapshot.collateral.symbol === 'USDT')
+						const reason = getTokenApprovalResetReason(allowance, approvalAmount, snapshot.collateral.symbol, tokenRequiresAllowanceReset(snapshot.collateralToken))
 						if (reason !== undefined) throw new Error(reason)
 					},
 				}
