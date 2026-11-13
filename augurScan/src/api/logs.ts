@@ -3,7 +3,7 @@ import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import type { JsonValue } from '../ethereum.ts'
 import { logDetailData, logListRows, provenanceHistoryData, reorganizationHistoryData } from '../repositories/logs.ts'
 import { snapshotBoundary } from './entity-details.ts'
-import { ApiRequestError, actionJsonColumns, canonicalHistoryFilter, cursorTimestamp, decodedJsonColumns, directObservationTotal, evmAddress, integer, isCursorTimestamp, isNonNegativeSafeInteger, isPostgresBigint, json, logCursorFor, parseLogCursor, routeInteger } from './shared.ts'
+import { ApiRequestError, actionJsonColumns, canonicalHistoryFilter, cursorTimestamp, decodedJsonColumns, directObservationTotal, evmAddress, hasCursorSnapshot, integer, isCursorTimestamp, isNonNegativeSafeInteger, isPostgresBigint, json, logCursorFor, parseLogCursor, routeInteger } from './shared.ts'
 import { operationsAsOfForContinuations } from './snapshot.ts'
 
 export const listLogs = async (sql: SQL, url: URL): Promise<Response> => {
@@ -57,18 +57,7 @@ export const logDetail = async (sql: SQL, parts: readonly string[], url: URL): P
 
 type ReorganizationCursor = readonly [version: 1, chainId: number, snapshotBlock: string, snapshotHash: string, invalidationId: string, abiSourceHash: string, applicationSourceHash: string, projectionSourceHash: string, detectedAt: string, id: string]
 
-const isReorganizationCursor = (parts: readonly JsonValue[]): parts is ReorganizationCursor =>
-	parts.length === 10 &&
-	parts[0] === 1 &&
-	isNonNegativeSafeInteger(parts[1]) &&
-	isPostgresBigint(parts[2]) &&
-	typeof parts[3] === 'string' &&
-	/^0x[0-9a-f]{64}$/.test(parts[3]) &&
-	isPostgresBigint(parts[4]) &&
-	parts.slice(5, 8).every(part => typeof part === 'string') &&
-	typeof parts[8] === 'string' &&
-	isCursorTimestamp(parts[8]) &&
-	isPostgresBigint(parts[9])
+const isReorganizationCursor = (parts: readonly JsonValue[]): parts is ReorganizationCursor => parts.length === 10 && parts[0] === 1 && isNonNegativeSafeInteger(parts[1]) && hasCursorSnapshot(parts, 2) && typeof parts[8] === 'string' && isCursorTimestamp(parts[8]) && isPostgresBigint(parts[9])
 
 const parseReorganizationCursor = (value: string | null, chainId: number): ReorganizationCursor | undefined => {
 	if (value === null) return undefined
