@@ -171,14 +171,7 @@ export function reportOperation(mode: 'dispute' | 'settle'): OperationDefinition
 		discoveryInputs: ['indexed report preimages', 'anchor time', 'token balances and approvals'],
 		ecosystem: 'open-oracle',
 		evaluate(snapshot, options) {
-			const trustedReport = trustedReportPredicate(snapshot)
-			const found = snapshot.reports.some(candidate => {
-				if (!trustedReport(candidate)) return false
-				if (candidate.settlementTimestamp !== '0') return false
-				if (mode === 'dispute') return disputableReport(snapshot, candidate, options)
-				const window = reportWindow(snapshot, candidate, options)
-				return window.current >= window.closes
-			})
+			const found = candidates(snapshot, options).length > 0
 			return eligible(mode === 'dispute' && options.allowHighRisk !== true ? 'High-risk operations are disabled' : undefined, found ? undefined : `No report is ready to ${mode}`)
 		},
 		id,

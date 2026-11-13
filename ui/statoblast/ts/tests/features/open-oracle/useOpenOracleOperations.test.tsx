@@ -2,7 +2,7 @@ import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.
 /// <reference types="bun-types" />
 
 import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { getActiveNetworkProfile, installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { withFakeClock } from '@zoltar/ui-core-shared/tests/testUtils/fakeClock.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
@@ -910,6 +910,55 @@ describe('useOpenOracleOperations', () => {
 		expect(approveErc20).not.toHaveBeenCalled()
 		expect(reportLoadCount).toBe(2)
 		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toContain('No WETH approval is required for the refreshed report')
+	})
+
+	test.each([
+		{ label: 'the network USDT token under another symbol', symbol: 'USD₮', usesNetworkUsdt: true },
+		{ label: 'another token that reports the USDT symbol', symbol: 'USDT', usesNetworkUsdt: false },
+	])('dispute approval requires an allowance reset only for the network USDT address: $label', async ({ symbol, usesNetworkUsdt }) => {
+		const usdt = getActiveNetworkProfile().usdtAddress
+		if (usdt === undefined) throw new Error('Expected a configured USDT address')
+		const approveErc20 = mock(async (_client: TestOpenOracleWriteClient, _tokenAddress: Address, _spenderAddress: Address, _amount: bigint, _action: 'approveToken1' | 'approveToken2') => ({
+			action: 'approveToken2' as const,
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000da' as const,
+		}))
+		const dependencies = createOpenOracleOperationsDependencies({
+			approveErc20,
+			loadOpenOracleReportDetails: mock(async () =>
+				createOpenOracleReportDetails({
+					currentReporter: getAddress('0x00000000000000000000000000000000000000dd'),
+					reportTimestamp: 1n,
+					settlementTime: 100n,
+					token2: usesNetworkUsdt ? usdt : TOKEN2_ADDRESS,
+					token2Symbol: symbol,
+				}),
+			),
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		trackCleanup(renderedComponent.cleanup)
+
+		await act(async () => {
+			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+		})
+		await act(() => {
+			requireHookState(hookState).setOpenOracleForm(current => ({ ...current, disputeNewAmount1: '101', disputeNewAmount2: '26' }))
+		})
+		// The wallet already approved 25, and the dispute needs 51.
+		await act(async () => {
+			await requireHookState(hookState).approveToken2(51n)
+		})
+
+		if (usesNetworkUsdt) {
+			expect(approveErc20).not.toHaveBeenCalled()
+			expect(requireHookState(hookState).openOracleFeedback?.status.detail).toContain(`Reset ${symbol} approval first.`)
+			return
+		}
+		expect(approveErc20).toHaveBeenCalledTimes(1)
+		expect(approveErc20.mock.calls[0]?.[3]).toBe(51n)
 	})
 
 	test('approval failures use base and quote token terminology', async () => {

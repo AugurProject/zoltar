@@ -3,7 +3,7 @@ import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
-import { getTokenApprovalResetReason } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
+import { getTokenApprovalResetReason, tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { collateralAsset, tokenFunded } from '../../protocol/collateral.js'
 import type { LiveMarket } from '../../protocol/liveMarket.js'
 import type { LiveWorkflowContext } from './liveTradingTypes.js'
@@ -82,7 +82,7 @@ export function useCollateralFunding(market: LiveMarket, required: bigint | unde
 				prepare: async () => {
 					if (currentKey.current !== capturedKey || getActiveBackend() !== backend) throw new Error('Collateral funding context changed. Review again.')
 					const allowance = await walletClient.readContract({ address: asset.token, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [account, configuration.router] })
-					const resetReason = getTokenApprovalResetReason(allowance, amount, asset.symbol, asset.symbol === 'USDT')
+					const resetReason = getTokenApprovalResetReason(allowance, amount, asset.symbol, tokenRequiresAllowanceReset(asset.token))
 					if (resetReason !== undefined) throw new Error(resetReason)
 					return amount
 				},
