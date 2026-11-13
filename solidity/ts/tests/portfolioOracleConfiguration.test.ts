@@ -159,8 +159,12 @@ describe('Portfolio oracle configuration guards', () => {
 				message: /open oracle security multiplier must be at least one hundred percent/i,
 			},
 			{
+				args: buildArgsWithSizingParameters(ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, 10000000n, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_PROTOCOL_FEE, ORACLE_FEE_PERCENTAGE),
+				message: /target price error must be below one hundred percent/i,
+			},
+			{
 				args: buildArgsWithSizingParameters(ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, 10000001n, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_PROTOCOL_FEE, ORACLE_FEE_PERCENTAGE),
-				message: /target price error cannot exceed one hundred percent/i,
+				message: /target price error must be below one hundred percent/i,
 			},
 			{
 				args: buildArgsWithSizingParameters(ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, 490000, 10000),
