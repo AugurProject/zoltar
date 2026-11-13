@@ -205,8 +205,8 @@ export const auctionCatalogData = async (sql: SQL, chainId: number, asOf: Record
 			status: auctionLifecycle({
 				started: row['start_data'] !== null,
 				finalized: row['final_data'] !== null,
-				startTimestamp: typeof startData['startTimestamp'] === 'string' ? startData['startTimestamp'] : undefined,
-				endTimestamp: typeof startData['endTimestamp'] === 'string' ? startData['endTimestamp'] : undefined,
+				opensAt: typeof startData['opensAt'] === 'string' ? startData['opensAt'] : undefined,
+				closesAt: typeof startData['closesAt'] === 'string' ? startData['closesAt'] : undefined,
 				indexedTimestamp: String(asOf['blockTimestamp'] ?? ''),
 				bidCount: Number(row['bid_count'] ?? 0),
 				settlementCount: Number(row['settlement_count'] ?? 0),

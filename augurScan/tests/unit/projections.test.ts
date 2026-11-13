@@ -370,8 +370,15 @@ describe('state projections', () => {
 			entityIdentity: `${pool.toLowerCase()}:42`,
 			semanticEventKind: 'ReportSubmitted',
 		})
-		const auction = projectionsFrom(log('BidSubmitted', { bidder: vault, tick: '-3', bidIndex: '0', bidAmountAttoEth: atomic(10n) })).at(-1)
+		const auction = projectionsFrom(log('BidSubmitted', { bidId: '1', bidder: vault, vault, lots: '2', minimumAttoRepPerLot: atomic(10n), targetHealthBps: '12000' })).at(-1)
 		expect(auction).toMatchObject({ type: 'domainEvent', domain: 'auction', semanticEventKind: 'BidSubmitted' })
+		// Refund accounting reads these auction events, so each must reach the auction projection.
+		for (const [name, data] of [
+			['RefundWithdrawn', { bidder: vault, recipient: vault, amountAttoEth: atomic(1n) }],
+			['FeesRemoved', { bidId: '1', attoEth: atomic(1n), attoRep: atomic(2n) }],
+			['RaisedWithdrawn', { recipient: vault, amountAttoEth: atomic(3n) }],
+		] as const)
+			expect(projectionsFrom(log(name, data)).at(-1)).toMatchObject({ type: 'domainEvent', domain: 'auction', entityType: 'auction', semanticEventKind: name })
 	})
 
 	test('covers coordinator, escalation, risk, trading, and fork lifecycle taxonomy with stable keys', () => {

@@ -224,8 +224,11 @@ export const eventEntityDetailResponse = async (sql: SQL, parts: readonly string
 		events: paged(rows, page.limit, row => protocolCursorFor(chainId, domain, address, asOf, row)),
 	}
 	if (domain === 'auction') {
-		const { bids, finalization } = await auctionDetailData(sql, chainId, address, snapshotBlock)
-		result['demandCurve'] = auctionDemandCurve(bids.slice(0, 1000).map((row: Record<string, unknown>) => ({ tick: String(row['tick']), amountAttoEth: String(row['amount_atto_eth']) })))
+		const { bids, lotAttoEth, finalization } = await auctionDetailData(sql, chainId, address, snapshotBlock)
+		result['demandCurve'] = auctionDemandCurve(
+			bids.slice(0, 1000).map((row: Record<string, unknown>) => ({ minimumAttoRepPerLot: row['minimum_atto_rep_per_lot'], lots: row['lots'] })),
+			lotAttoEth,
+		)
 		result['demandCurveTruncated'] = bids.length > 1000
 		result['finalization'] = finalization
 	} else {
