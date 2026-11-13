@@ -18,6 +18,7 @@
 		"@tevm/memory-client": "1.0.0-rc.151",
 		"@tevm/common": "1.0.0-rc.151",
 		"@zoltar/core-shared": "workspace:1.0.0",
+		"@zoltar/statoblast-shared": "workspace:1.0.0",
 		"@zoltar/trading-shared": "workspace:1.0.0",
 		"@zoltar/zoltar-shared": "workspace:1.0.0"
 	},

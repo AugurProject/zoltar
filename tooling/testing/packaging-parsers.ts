@@ -1,5 +1,6 @@
 import { expect } from 'bun:test'
 import { join } from 'node:path'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 type DockerInstruction = {
 	readonly keyword: string
@@ -92,16 +93,14 @@ type BotComposeService = {
 	readonly volumes?: readonly unknown[]
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
-
 function botComposeService(source: string, service: string): BotComposeService {
 	const compose: unknown = Bun.YAML.parse(source)
-	const services = isRecord(compose) ? compose['services'] : undefined
-	const parsed = isRecord(services) ? services[service] : undefined
-	if (!isRecord(parsed)) throw new Error(`Missing Compose service: ${service}`)
+	const services = isPlainRecord(compose) ? compose['services'] : undefined
+	const parsed = isPlainRecord(services) ? services[service] : undefined
+	if (!isPlainRecord(parsed)) throw new Error(`Missing Compose service: ${service}`)
 	const { environment, healthcheck, ports, volumes } = parsed
-	if (environment !== undefined && !isRecord(environment)) throw new Error(`Compose service ${service} environment must be a mapping`)
-	if (healthcheck !== undefined && !isRecord(healthcheck)) throw new Error(`Compose service ${service} healthcheck must be a mapping`)
+	if (environment !== undefined && !isPlainRecord(environment)) throw new Error(`Compose service ${service} environment must be a mapping`)
+	if (healthcheck !== undefined && !isPlainRecord(healthcheck)) throw new Error(`Compose service ${service} healthcheck must be a mapping`)
 	const healthTest = healthcheck?.['test']
 	if (healthTest !== undefined && !Array.isArray(healthTest)) throw new Error(`Compose service ${service} healthcheck test must be a list`)
 	if (ports !== undefined && !Array.isArray(ports)) throw new Error(`Compose service ${service} ports must be a list`)

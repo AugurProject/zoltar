@@ -1,6 +1,7 @@
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { readFileSync } from 'node:fs'
 import { contractSafetyPolicy, type ContractReference } from './contract-safety-policy'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 type ArtifactContract = {
 	abi?: unknown[]
@@ -29,10 +30,6 @@ export type ContractSafetyResult = {
 	errors: string[]
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null
-}
-
 function getString(value: unknown, message: string): string {
 	if (typeof value !== 'string') throw new Error(message)
 	return value
@@ -59,7 +56,7 @@ type AbiParameter = {
 }
 
 function getAbiParameter(value: unknown, label: string): AbiParameter {
-	if (!isRecord(value) || typeof value['type'] !== 'string') throw new Error(`${label} is not a valid ABI parameter`)
+	if (!isPlainRecord(value) || typeof value['type'] !== 'string') throw new Error(`${label} is not a valid ABI parameter`)
 	if (value['components'] !== undefined && !Array.isArray(value['components'])) throw new Error(`${label} components must be an array`)
 	return {
 		type: value['type'],
@@ -114,9 +111,9 @@ function minimumTupleEncodingSize(parameters: readonly AbiParameter[]): number {
 }
 
 function minimumConstructorArgumentsBytes(contract: ArtifactContract, label: string): number {
-	const constructor = contract.abi?.find(entry => isRecord(entry) && entry['type'] === 'constructor')
+	const constructor = contract.abi?.find(entry => isPlainRecord(entry) && entry['type'] === 'constructor')
 	if (constructor === undefined) return 0
-	if (!isRecord(constructor) || !Array.isArray(constructor['inputs'])) throw new Error(`${label} constructor ABI is missing inputs`)
+	if (!isPlainRecord(constructor) || !Array.isArray(constructor['inputs'])) throw new Error(`${label} constructor ABI is missing inputs`)
 	return minimumTupleEncodingSize(constructor['inputs'].map((input, index) => getAbiParameter(input, `${label} constructor input ${index}`)))
 }
 
@@ -131,7 +128,7 @@ function getContract(artifact: ContractArtifact, reference: ContractReference): 
 function normalizeType(typeId: string, types: Record<string, unknown>, activeTypeIds = new Set<string>()): unknown {
 	if (activeTypeIds.has(typeId)) return { recursiveType: typeId }
 	const rawType = types[typeId]
-	if (!isRecord(rawType)) throw new Error(`Missing storage type ${typeId}`)
+	if (!isPlainRecord(rawType)) throw new Error(`Missing storage type ${typeId}`)
 	const nextActiveTypeIds = new Set(activeTypeIds)
 	nextActiveTypeIds.add(typeId)
 	const normalized: Record<string, unknown> = {
@@ -144,7 +141,7 @@ function normalizeType(typeId: string, types: Record<string, unknown>, activeTyp
 	}
 	if (Array.isArray(rawType['members'])) {
 		normalized['members'] = rawType['members'].map((member, index) => {
-			if (!isRecord(member)) throw new Error(`Invalid member ${index} of storage type ${typeId}`)
+			if (!isPlainRecord(member)) throw new Error(`Invalid member ${index} of storage type ${typeId}`)
 			return {
 				label: getString(member['label'], `Storage member ${index} of ${typeId} is missing a label`),
 				offset: getNumber(member['offset'], `Storage member ${index} of ${typeId} has an invalid offset`),
@@ -158,10 +155,10 @@ function normalizeType(typeId: string, types: Record<string, unknown>, activeTyp
 
 function normalizeStorageLayout(contract: ArtifactContract): unknown[] {
 	const layout = contract.storageLayout
-	if (layout === undefined || !Array.isArray(layout.storage) || !isRecord(layout.types)) throw new Error('Contract output is missing a complete storage layout')
+	if (layout === undefined || !Array.isArray(layout.storage) || !isPlainRecord(layout.types)) throw new Error('Contract output is missing a complete storage layout')
 	const types = layout.types
 	return layout.storage.map((entry, index) => {
-		if (!isRecord(entry)) throw new Error(`Invalid storage entry ${index}`)
+		if (!isPlainRecord(entry)) throw new Error(`Invalid storage entry ${index}`)
 		return {
 			label: getString(entry['label'], `Storage entry ${index} is missing a label`),
 			offset: getNumber(entry['offset'], `Storage entry ${index} has an invalid offset`),
@@ -221,8 +218,8 @@ export function checkContractSafety(artifact: ContractArtifact): ContractSafetyR
 		try {
 			const hostLayout = normalizeStorageLayout(getContract(artifact, anchoredLayout.host))
 			for (const anchor of anchoredLayout.anchors) {
-				const entry = hostLayout.find(candidate => isRecord(candidate) && candidate['label'] === anchor.label)
-				if (!isRecord(entry) || !isRecord(entry['type'])) {
+				const entry = hostLayout.find(candidate => isPlainRecord(candidate) && candidate['label'] === anchor.label)
+				if (!isPlainRecord(entry) || !isPlainRecord(entry['type'])) {
 					errors.push(`${contractId(anchoredLayout.host)} is missing ${anchor.label}, required by ${contractId(anchoredLayout.consumer)}`)
 					continue
 				}
@@ -242,6 +239,6 @@ export function checkContractSafety(artifact: ContractArtifact): ContractSafetyR
 
 export function loadContractArtifact(filePath: string): ContractArtifact {
 	const parsed: unknown = JSON.parse(readFileSync(filePath, 'utf8'))
-	if (!isRecord(parsed)) throw new Error(`${filePath} must contain an object`)
+	if (!isPlainRecord(parsed)) throw new Error(`${filePath} must contain an object`)
 	return parsed
 }

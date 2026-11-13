@@ -9,6 +9,7 @@ import { getUniswapNetworkDeployment, SEPOLIA_CHAIN_ID, type UniswapNetworkDeplo
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { statoblast_WETH9_WETH9 } from '../../solidity/ts/types/contractArtifact.ts'
 import type { PublishedContract } from './published-contracts.mts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 const UNISWAP_DEPLOYMENT_ARTIFACT = new URL('../../scripts/artifacts/uniswap-deployment.json', import.meta.url)
 const UNISWAP_DEPLOYMENT_ARTIFACT_SHA256 = '55a0caff0d9b6d9c3b8d8883a3ebe73ef462641e54fe2f46b077bf084bc97161'
@@ -121,10 +122,6 @@ const EXPECTED_UNISWAP_ARTIFACT_SOURCES = {
 
 let uniswapDeploymentArtifactsPromise: Promise<UniswapDeploymentArtifacts> | undefined
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null
-}
-
 function parseBytecode(value: unknown, artifactName: string): Hex {
 	if (typeof value !== 'string') throw new Error(`${artifactName} does not contain deployable bytecode`)
 	const bytecode = value.startsWith('0x') ? value : `0x${value}`
@@ -144,7 +141,7 @@ function parseAddressField(value: unknown, label: string): Address {
 
 function parsePublishedContract(value: unknown, id: PublishedContractId): PublishedContractRecord {
 	const label = `Published ${id}`
-	if (!isRecord(value)) throw new Error(`${label} deployment record is not an object`)
+	if (!isPlainRecord(value)) throw new Error(`${label} deployment record is not an object`)
 	const address = parseAddressField(value['address'], `${label} address`)
 	const creator = parseAddressField(value['creator'], `${label} creator`)
 	const initCode = parseBytecode(value['initCode'], label)
@@ -168,17 +165,17 @@ function parsePermit2ImmutableName(name: string | undefined): Permit2ImmutableRe
 }
 
 function parsePermit2Compilation(value: unknown): Permit2Compilation {
-	if (!isRecord(value)) throw new Error('Permit2 deployment artifact is not an object')
+	if (!isPlainRecord(value)) throw new Error('Permit2 deployment artifact is not an object')
 	const references = value['immutableReferences']
 	if (!Array.isArray(references)) throw new Error('Permit2 deployment artifact does not contain immutable references')
 	return {
 		deployedBytecodeTemplate: parseBytecode(value['deployedBytecodeTemplate'], 'Permit2 deployed bytecode'),
 		immutableReferences: references.map((immutable, index) => {
-			if (!isRecord(immutable) || !Array.isArray(immutable['references'])) throw new Error(`Permit2 immutable group ${index.toString()} is invalid`)
+			if (!isPlainRecord(immutable) || !Array.isArray(immutable['references'])) throw new Error(`Permit2 immutable group ${index.toString()} is invalid`)
 			return {
 				name: parsePermit2ImmutableName(typeof immutable['name'] === 'string' ? immutable['name'] : undefined),
 				references: immutable['references'].map((reference, referenceIndex) => {
-					if (!isRecord(reference) || !Number.isSafeInteger(reference['length']) || !Number.isSafeInteger(reference['start']) || Number(reference['length']) <= 0 || Number(reference['start']) < 0) {
+					if (!isPlainRecord(reference) || !Number.isSafeInteger(reference['length']) || !Number.isSafeInteger(reference['start']) || Number(reference['length']) <= 0 || Number(reference['start']) < 0) {
 						throw new Error(`Permit2 immutable group ${index.toString()} reference ${referenceIndex.toString()} is invalid`)
 					}
 					return { length: Number(reference['length']), start: Number(reference['start']) }
@@ -196,14 +193,14 @@ function parseUniswapDeploymentArtifacts(contents: string): UniswapDeploymentArt
 		throw new Error(`Uniswap deployment artifact is stale or changed: expected SHA-256 ${UNISWAP_DEPLOYMENT_ARTIFACT_SHA256}, received ${actualSha256}`)
 	}
 	const value: unknown = JSON.parse(canonicalContents)
-	if (!isRecord(value) || value['formatVersion'] !== 2) throw new Error('Uniswap deployment artifact has an unsupported format')
+	if (!isPlainRecord(value) || value['formatVersion'] !== 2) throw new Error('Uniswap deployment artifact has an unsupported format')
 	const sources = value['sources']
-	if (!isRecord(sources)) throw new Error('Uniswap deployment artifact does not identify its sources')
+	if (!isPlainRecord(sources)) throw new Error('Uniswap deployment artifact does not identify its sources')
 	for (const [packageName, expectedVersion] of Object.entries(EXPECTED_UNISWAP_ARTIFACT_SOURCES)) {
 		if (sources[packageName] !== expectedVersion) throw new Error(`Uniswap deployment artifact must use ${packageName} ${expectedVersion}`)
 	}
 	const published = value['sepoliaPublished']
-	if (!isRecord(published)) throw new Error('Uniswap deployment artifact does not contain the published Sepolia contracts')
+	if (!isPlainRecord(published)) throw new Error('Uniswap deployment artifact does not contain the published Sepolia contracts')
 	return {
 		permit2: parsePermit2Compilation(value['permit2']),
 		sepoliaPublished: {
