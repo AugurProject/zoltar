@@ -16,6 +16,7 @@ import { buildPoolsRouteHash } from '../../../lib/statoblastLocation.js'
 import type { usePortfolio } from '../hooks/usePortfolio.js'
 import type { usePortfolioPurchase } from '../hooks/usePortfolioPurchase.js'
 import * as copy from '../../../copy/portfolio.js'
+import * as common from '@zoltar/ui-core-shared/copy/common.js'
 import * as capitalCopy from '../../../copy/portfolioCapital.js'
 
 export function PortfolioPurchasePanel({ model, purchase, actions }: { model: ReturnType<typeof usePortfolio>; purchase: ReturnType<typeof usePortfolioPurchase>; actions: PortfolioActions }) {
@@ -88,7 +89,14 @@ export function PortfolioPurchasePanel({ model, purchase, actions }: { model: Re
 					<CurrencyValue value={purchase.quote?.purchaseFeeAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 				</MetricField>
 				{snapshot !== undefined && tokenRequiresAllowanceReset(snapshot.collateralToken) ? (
-					<PortfolioButton model={actions} action='resetPurchaseCollateral' label={collateralCopy.reset} pendingLabel={collateralCopy.resetting} reason={actions.ownerReason ?? (snapshot.collateralAllowance === 0n ? collateralCopy.notNeeded : undefined)} onClick={() => purchase.approve(0n)} />
+					<PortfolioButton
+						model={actions}
+						action='resetPurchaseCollateral'
+						label={common.formatResetTokenApproval(snapshot.collateral.symbol)}
+						pendingLabel={common.formatResettingTokenApproval(snapshot.collateral.symbol)}
+						reason={actions.ownerReason ?? (snapshot.collateralAllowance === 0n ? common.notNeeded : undefined)}
+						onClick={() => purchase.approve(0n)}
+					/>
 				) : undefined}
 				<TokenApprovalControl
 					actionLabel={copy.mint}
@@ -102,7 +110,7 @@ export function PortfolioPurchasePanel({ model, purchase, actions }: { model: Re
 						if (amount !== undefined) void purchase.approve(amount)
 					}}
 					pending={actions.busy === 'approvePurchaseCollateral'}
-					pendingLabel={collateralCopy.approving}
+					pendingLabel={common.formatApprovingToken(snapshot?.collateral.symbol ?? collateralCopy.fallback)}
 					requiredAmount={purchase.requiredCollateral}
 					resetKey={`${snapshot?.portfolio}:${snapshot?.owner}:${purchase.requiredCollateral}`}
 					tokenSymbol={snapshot?.collateral.symbol ?? collateralCopy.fallback}

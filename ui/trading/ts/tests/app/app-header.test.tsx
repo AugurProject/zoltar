@@ -230,7 +230,7 @@ describe('trading header', () => {
 		const rendered = await renderIntoDocument(<App />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('main')?.textContent).toContain('Page not found')
-		expect(rendered.container.querySelector('h1.visually-hidden')?.textContent).toBe('Not found')
+		expect(rendered.container.querySelector('h1.visually-hidden')?.textContent).toBe('Page not found')
 		const skipButton = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent === 'Skip to main content')
 		if (skipButton === undefined) throw new Error('Shared application skip control is unavailable')
 		await act(() => skipButton.click())
@@ -238,8 +238,8 @@ describe('trading header', () => {
 		// The shared frame focuses the route content only, so skipping lands past the header and tab navigation.
 		expect(document.activeElement?.querySelector('.tab-nav')).toBeNull()
 		expect(document.activeElement?.textContent).toContain('Page not found')
-		expect(document.title).toBe(appCopy.documentTitle(appCopy.notFound))
-		expect(document.title).toBe('Not found · Statoblast Trading')
+		expect(document.title).toBe(appCopy.documentTitle(appCopy.pageNotFoundTitle))
+		expect(document.title).toBe('Page not found | Statoblast Trading')
 	})
 
 	test('accepts only addressed security-pool routes', () => {
