@@ -3,7 +3,7 @@ import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/m
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import type { PendingTransactionIntent } from '../state/operator-state.ts'
 import { balanceObservations, captureBalanceEvidence, captureStorageEvidence, storageObservations } from './execution-evidence.ts'
-import { executionReadClients, requiredConnectivity } from './execution-quorum.ts'
+import { agreedPendingNonce, executionReadClients, requiredConnectivity } from './execution-quorum.ts'
 import { assertRequestedTransactionHash, type ExecutionEnvironment } from './execution-context.ts'
 import { requireSuccessfulReceipt } from './receipt-validation.ts'
 import { transactionMatchesIntent } from './recovery-policy.ts'
@@ -25,21 +25,8 @@ export async function recoveredReceiptObservations(environment: ExecutionEnviron
 	}
 }
 
-export async function agreedPendingNonce(environment: ExecutionEnvironment, intent: PendingTransactionIntent, capableRpcUrls?: ReadonlySet<string> | undefined) {
-	const connectivity = requiredConnectivity(environment.settings)
-	return settledQuorumValue(
-		`pending signer nonce for ${intent.hash}`,
-		executionReadClients(environment)
-			.filter(({ rpcUrl }) => capableRpcUrls?.has(rpcUrl) ?? true)
-			.map(async ({ client, endpoint }) => ({
-				endpoint,
-				value: await client.getTransactionCount({
-					address: intent.sender,
-					blockTag: 'pending',
-				}),
-			})),
-		connectivity.rpcQuorum,
-	)
+export async function agreedIntentPendingNonce(environment: ExecutionEnvironment, intent: PendingTransactionIntent, capableRpcUrls?: ReadonlySet<string> | undefined) {
+	return agreedPendingNonce(environment, intent.sender, capableRpcUrls, `pending signer nonce for ${intent.hash}`)
 }
 
 export async function availableHeads(environment: ExecutionEnvironment, intent: PendingTransactionIntent) {
