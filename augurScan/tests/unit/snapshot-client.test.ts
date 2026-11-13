@@ -37,7 +37,7 @@ test('caches immutable collateral identity across blocks while sampling live amo
 	const second = await sampleEntityState(client, target, 11n, undefined, cache)
 	for (const name of ['securityPoolFactory', 'getSecurityPoolPortfolio', 'collateralToken']) expect(calls.filter(call => call.startsWith(`${name}:`))).toHaveLength(1)
 	for (const name of ['symbol', 'decimals', 'settlementCollateralAttoEth']) expect(calls).toContain(`${name}:11`)
-	expect(second.readResult).toMatchObject({ settlementCollateralAttoEth: '11', collateral: { symbol: 'USDC', decimals: 6 } })
+	expect(second.readResult).toMatchObject({ settlementCollateralAttoEth: String(11n), collateral: { symbol: 'USDC', decimals: 6 } })
 	// Independent networks and invalidated history must discover identity again.
 	await sampleEntityState(client, target, 12n, undefined, new Map())
 	cache.clear()
