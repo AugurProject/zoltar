@@ -22,12 +22,12 @@ import {
 	TEST_TIMING_HISTORY_VERSION,
 	type TestTimingHistory,
 } from './test-timings.mts'
-import { isRecord } from '../repo/is-record.mts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 describe('canonical test discovery', () => {
 	test('the aggregate test entrypoint owns every local package suite and browser smoke', async () => {
 		const packageManifest: unknown = JSON.parse(await readFile('package.json', 'utf8'))
-		if (!isRecord(packageManifest) || !isRecord(packageManifest['scripts'])) throw new Error('package.json must define scripts')
+		if (!isPlainRecord(packageManifest) || !isPlainRecord(packageManifest['scripts'])) throw new Error('package.json must define scripts')
 		const command = packageManifest['scripts']['test:all']
 		expect(typeof command).toBe('string')
 		if (typeof command !== 'string') return
@@ -54,7 +54,7 @@ describe('canonical test discovery', () => {
 
 	test('the explicit browser smoke tier sequentially owns every test excluded from root discovery', async () => {
 		const packageManifest: unknown = JSON.parse(await readFile('package.json', 'utf8'))
-		if (!isRecord(packageManifest) || !isRecord(packageManifest['scripts'])) throw new Error('package.json must define scripts')
+		if (!isPlainRecord(packageManifest) || !isPlainRecord(packageManifest['scripts'])) throw new Error('package.json must define scripts')
 		const smokeCommand = packageManifest['scripts']['test:browser:smoke']
 		if (typeof smokeCommand !== 'string') throw new Error('package.json must define test:browser:smoke')
 

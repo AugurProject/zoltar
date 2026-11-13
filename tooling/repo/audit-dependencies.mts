@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { acceptedAuditAdvisories } from './projects.ts'
 import { repositoryRoot } from './root.mts'
-import { isRecord } from './is-record.mts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 function fail(reason: string): never {
 	throw new Error(`Zod audit exception requires review: ${reason}`)
@@ -24,10 +24,10 @@ const inspectedParents: Readonly<Record<string, readonly string[]>> = {
 const dependencyGroups = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies']
 
 export function validateLegacyZodAuditScope(lockfile: unknown): void {
-	if (!isRecord(lockfile)) fail('invalid workspace lockfile')
+	if (!isPlainRecord(lockfile)) fail('invalid workspace lockfile')
 	const packages = lockfile['packages']
 	const workspaces = lockfile['workspaces']
-	if (!isRecord(packages) || !isRecord(workspaces)) fail('invalid workspace lockfile')
+	if (!isPlainRecord(packages) || !isPlainRecord(workspaces)) fail('invalid workspace lockfile')
 	let hasLegacyZod = false
 	for (const [key, entry] of Object.entries(packages)) {
 		if (!Array.isArray(entry) || typeof entry[0] !== 'string') fail(`invalid package entry ${key}`)
@@ -52,11 +52,11 @@ export function validateLegacyZodAuditScope(lockfile: unknown): void {
 		}
 		const metadata = entry[2]
 		if (metadata === undefined) continue
-		if (!isRecord(metadata)) fail(`invalid package metadata ${key}`)
+		if (!isPlainRecord(metadata)) fail(`invalid package metadata ${key}`)
 		for (const group of dependencyGroups) {
 			const dependencies = metadata[group]
 			if (dependencies === undefined) continue
-			if (!isRecord(dependencies)) fail(`invalid dependencies for ${key}`)
+			if (!isPlainRecord(dependencies)) fail(`invalid dependencies for ${key}`)
 			for (const dependency of Object.keys(dependencies)) {
 				const parents = inspectedParents[dependency]
 				if (parents !== undefined && !parents.includes(key)) fail(`unexpected legacy path ${key} > ${dependency}`)
@@ -64,11 +64,11 @@ export function validateLegacyZodAuditScope(lockfile: unknown): void {
 		}
 	}
 	for (const [workspace, manifest] of Object.entries(workspaces)) {
-		if (!isRecord(manifest)) fail(`invalid workspace ${workspace}`)
+		if (!isPlainRecord(manifest)) fail(`invalid workspace ${workspace}`)
 		for (const group of dependencyGroups) {
 			const dependencies = manifest[group]
 			if (dependencies === undefined) continue
-			if (!isRecord(dependencies)) fail(`invalid workspace dependencies ${workspace}`)
+			if (!isPlainRecord(dependencies)) fail(`invalid workspace dependencies ${workspace}`)
 			for (const dependency of Object.keys(dependencies)) {
 				if (dependency in inspectedPackages) fail(`direct workspace dependency ${workspace} > ${dependency}`)
 			}

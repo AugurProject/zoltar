@@ -8,7 +8,7 @@ import { projectQuery } from '../repo/query-projects.mts'
 import { PRODUCTION_WORKFLOW_SCENARIOS } from './productionWorkflowScenarios.ts'
 import { repositoryRoot } from '../repo/root.mts'
 import { dockerGlobalArguments, dockerInstructions, parseDockerfile } from '../testing/packaging-parsers.ts'
-import { isRecord } from '../repo/is-record.mts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 // Validate pending workflow definitions until they are moved into GitHub's active directory.
 const workflowDefinitionPath = (name: string) => {
@@ -38,7 +38,7 @@ const uiPackageIds = ['coreShared', 'zoltarShared', 'statoblastShared', 'zoltar'
 const tevmPackagePaths = ['package.json', 'ui/coreShared/package.json', 'ui/zoltarShared/package.json', 'ui/statoblastShared/package.json', 'ui/zoltar/package.json', 'ui/statoblast/package.json', 'ui/trading/package.json', 'ui/openoracle/package.json'] as const
 const pinnedTevmTransitives = ['@tevm/actions', '@tevm/node'] as const
 const requireRecord = (value: unknown, label: string) => {
-	if (!isRecord(value)) throw new Error(`${label} must be a YAML mapping`)
+	if (!isPlainRecord(value)) throw new Error(`${label} must be a YAML mapping`)
 	return value
 }
 const readWorkflow = async (workflowPath: string) => requireRecord(Bun.YAML.parse(await readFile(workflowPath, 'utf8')), workflowPath)
@@ -64,7 +64,7 @@ describe('split UI workflow definitions (pending updates when present)', () => {
 		const jobs = workflowJobs(await readWorkflow(ciWorkflowPath))
 		const prepare = workflowSteps(jobs['prepare'])
 		expect(prepare.some(step => step['run'] === 'bun run format')).toBe(false)
-		expect(prepare.some(step => isRecord(step['with']) && step['with']['path'] === '.tsbuildinfo')).toBe(false)
+		expect(prepare.some(step => isPlainRecord(step['with']) && step['with']['path'] === '.tsbuildinfo')).toBe(false)
 		expect(workflowSteps(jobs['checks']).some(step => step['run'] === 'bun run format:check')).toBe(true)
 		expect(workflowSteps(jobs['checks']).some(step => step['run'] === 'bun run ci:typecheck:current')).toBe(true)
 		expect(prepare.some(step => String(step['run']).includes('ci:preflight:current'))).toBe(false)
@@ -229,7 +229,7 @@ ${command}`,
 		expect(requireRecord(workflow['on'], 'CI triggers')).toHaveProperty('workflow_call')
 		const releaseWorkflow = await readWorkflow(versionDeployWorkflowPath)
 		const releaseJobs = workflowJobs(releaseWorkflow)
-		expect(Object.values(releaseJobs).some(job => isRecord(job) && job['uses'] === './.github/workflows/ci.yml')).toBe(true)
+		expect(Object.values(releaseJobs).some(job => isPlainRecord(job) && job['uses'] === './.github/workflows/ci.yml')).toBe(true)
 	})
 
 	test('production artifacts preserve app dist and JavaScript paths when uploaded and restored', async () => {
@@ -536,7 +536,7 @@ ${command}`,
 			if (name === 'domain-tests') expect(requireRecord(consumer['with'], 'domain inputs')['build-inputs']).toBe(artifactName)
 			else {
 				const consumerSteps = workflowSteps(consumer)
-				expect(consumerSteps.some(step => isRecord(step['with']) && (step['with']['build-inputs'] === artifactName || step['with']['name'] === artifactName))).toBe(true)
+				expect(consumerSteps.some(step => isPlainRecord(step['with']) && (step['with']['build-inputs'] === artifactName || step['with']['name'] === artifactName))).toBe(true)
 			}
 		}
 		for (const name of ['application-tests', 'browser-workflow']) expect(requireRecord(requireRecord(jobs[name], name)['with'], 'reusable inputs')['build-inputs']).toBe(upload['name'])
@@ -687,15 +687,15 @@ ${command}`,
 	test('every TEVM workspace pins the compatible release-candidate dependency cohort', async () => {
 		for (const packagePath of tevmPackagePaths) {
 			const parsed: unknown = JSON.parse(await readFile(join(repositoryRoot, packagePath), 'utf8'))
-			expect(isRecord(parsed)).toBe(true)
-			if (!isRecord(parsed)) throw new Error(`${packagePath} must contain a JSON object`)
+			expect(isPlainRecord(parsed)).toBe(true)
+			if (!isPlainRecord(parsed)) throw new Error(`${packagePath} must contain a JSON object`)
 			const dependencies = parsed['dependencies']
-			if (!isRecord(dependencies)) throw new Error(`${packagePath} must define dependencies`)
+			if (!isPlainRecord(dependencies)) throw new Error(`${packagePath} must define dependencies`)
 			expect(dependencies['tevm']).toBeUndefined()
 			for (const name of ['@tevm/memory-client', '@tevm/common']) expect(dependencies[name]).toBe('1.0.0-rc.151')
 			if (packagePath === 'package.json') {
 				const overrides = parsed['overrides']
-				if (!isRecord(overrides)) throw new Error('Root package must define dependency overrides')
+				if (!isPlainRecord(overrides)) throw new Error('Root package must define dependency overrides')
 				for (const dependencyName of pinnedTevmTransitives) expect(overrides[dependencyName]).toBe('1.0.0-rc.151')
 			} else {
 				expect(parsed['overrides']).toBeUndefined()

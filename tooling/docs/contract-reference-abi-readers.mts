@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { isRecord } from '../repo/is-record.mts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 export function countEntrypoints(signatureCounts: Map<string, number> | undefined): number {
 	assert.ok(signatureCounts, 'Every contract reference must document at least one entrypoint')
@@ -25,14 +25,14 @@ export function getFallbackSelectorReferences(source: string, sourceLabel: strin
 }
 
 export function getCompiledContractAbi(compiledArtifacts: unknown, sourcePath: string, contractName: string): unknown[] {
-	assert.ok(isRecord(compiledArtifacts), 'solidity/artifacts/Contracts.json must contain an object')
+	assert.ok(isPlainRecord(compiledArtifacts), 'solidity/artifacts/Contracts.json must contain an object')
 	const contracts = compiledArtifacts['contracts']
-	assert.ok(isRecord(contracts), 'solidity/artifacts/Contracts.json must contain contract outputs')
+	assert.ok(isPlainRecord(contracts), 'solidity/artifacts/Contracts.json must contain contract outputs')
 	const artifactSourcePath = sourcePath.replace(/^solidity\//, '')
 	const sourceContracts = contracts[artifactSourcePath]
-	assert.ok(isRecord(sourceContracts), `Compiled artifacts are missing ${artifactSourcePath}`)
+	assert.ok(isPlainRecord(sourceContracts), `Compiled artifacts are missing ${artifactSourcePath}`)
 	const contract = sourceContracts[contractName]
-	assert.ok(isRecord(contract), `Compiled artifacts are missing ${artifactSourcePath}#${contractName}`)
+	assert.ok(isPlainRecord(contract), `Compiled artifacts are missing ${artifactSourcePath}#${contractName}`)
 	const abi = contract['abi']
 	assert.ok(Array.isArray(abi), `Compiled artifact ${artifactSourcePath}#${contractName} is missing its ABI`)
 	return abi
@@ -52,7 +52,7 @@ export function computeCompiledAbiFingerprint(abi: unknown[]): string {
 function canonicalizeJson(value: unknown): string {
 	if (value === null || typeof value === 'string' || typeof value === 'boolean' || typeof value === 'number') return JSON.stringify(value)
 	if (Array.isArray(value)) return `[${value.map(item => canonicalizeJson(item)).join(',')}]`
-	assert.ok(isRecord(value), 'Compiled ABI contains an unsupported JSON value')
+	assert.ok(isPlainRecord(value), 'Compiled ABI contains an unsupported JSON value')
 	return `{${Object.keys(value)
 		.sort()
 		.map(key => `${JSON.stringify(key)}:${canonicalizeJson(value[key])}`)
