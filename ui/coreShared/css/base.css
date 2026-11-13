@@ -1852,18 +1852,28 @@ a.transaction-hash-link {
 	white-space: nowrap;
 }
 
-/* The visible status and a hidden copy of the other status share one cell, so the slot always takes the longer label's width. */
+/* The visible status and an invisible copy of the other status share one cell, so the slot always takes the longer
+ * label's width. The copy is generated content with the badge's text metrics, so it never enters the page text. */
 .outcome-status-slot {
 	display: inline-grid;
 }
 
-.outcome-status-slot > * {
+.outcome-status-slot > .badge,
+.outcome-status-slot::after {
 	grid-area: 1 / 1;
 	justify-self: start;
 }
 
-.outcome-status-reserve {
+.outcome-status-slot::after {
+	content: attr(data-reserve);
 	visibility: hidden;
+	border: 1px solid transparent;
+	padding: 0.32rem 0.68rem;
+	font-family: var(--font-family-mono);
+	font-size: var(--font-label);
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	white-space: nowrap;
 }
 
 .migration-outcome-metrics strong {
