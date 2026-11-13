@@ -81,6 +81,16 @@ export function auditFit(tools: LayoutAuditTools) {
 		// Count lines per text run: a label and a status placed on separate rows are not a wrapped label.
 		const lines = Math.max(...atoms.map(atom => lineTops(atom.rects)))
 		if (lines < 2) continue
+		// A label wider than all the room its container has must wrap; only report a label squeezed by its neighbours.
+		const controlStyle = styleOf(control)
+		const chrome = ['paddingLeft', 'paddingRight', 'borderLeftWidth', 'borderRightWidth'].reduce((sum, property) => sum + Number.parseFloat(controlStyle.getPropertyValue(property.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`))), 0)
+		const oneLineWidth = atoms.flatMap(atom => atom.rects).reduce((sum, lineRect) => sum + lineRect.width, 0) + chrome
+		const parent = control.parentElement
+		if (parent !== null) {
+			const parentStyle = styleOf(parent)
+			const room = parent.clientWidth - Number.parseFloat(parentStyle.paddingLeft) - Number.parseFloat(parentStyle.paddingRight)
+			if (oneLineWidth > room + tolerance) continue
+		}
 		const rect = control.getBoundingClientRect()
 		report({
 			kind: 'wrapped-label',

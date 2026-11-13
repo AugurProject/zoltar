@@ -172,6 +172,10 @@ describe('layout audit stays quiet for intentional patterns', () => {
 		expect(findings).toEqual([])
 	})
 
+	test('a badge that wraps because it is wider than its whole container', async () => {
+		expect(await audit('<div style="width: 120px"><span class="badge" style="display: inline-flex; max-width: 100%">Child preparation in progress</span></div>')).toEqual([])
+	})
+
 	test('a long value inside an input, which scrolls', async () => {
 		expect(await audit('<input style="width: 90px" value="1979.166666666666664885">')).toEqual([])
 	})
