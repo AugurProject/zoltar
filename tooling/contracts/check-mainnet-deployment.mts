@@ -307,10 +307,7 @@ async function main() {
 	await assertDeploymentManifestsCurrent()
 }
 
-const currentScriptPath = url.fileURLToPath(import.meta.url)
-const invokedScriptPath = process.argv[1]
-
-if (invokedScriptPath !== undefined && path.resolve(invokedScriptPath) === currentScriptPath) {
+if (import.meta.main) {
 	main().catch(error => {
 		console.error(error)
 		process.exit(1)

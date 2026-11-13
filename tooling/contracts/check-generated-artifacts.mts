@@ -1,7 +1,6 @@
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import * as process from 'node:process'
-import * as url from 'node:url'
 import { type GitRunner, runGit as runRepositoryGit } from '../repo/git.mts'
 import { repositoryRoot as defaultRepositoryRoot } from '../repo/root.mts'
 import { untrackedGeneratedPathspecs } from '../repo/generated-artifacts.ts'
@@ -152,10 +151,7 @@ async function main() {
 	console.log('Generated artifacts verified. Generated outputs are intentionally untracked, so freshness is validated by successful generation and required-output checks.')
 }
 
-const currentScriptPath = url.fileURLToPath(import.meta.url)
-const invokedScriptPath = process.argv[1]
-
-if (invokedScriptPath !== undefined && path.resolve(invokedScriptPath) === currentScriptPath) {
+if (import.meta.main) {
 	main().catch(error => {
 		console.error(error)
 		process.exit(1)
