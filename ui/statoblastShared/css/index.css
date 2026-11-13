@@ -4228,9 +4228,9 @@ span.rep-price-status.stale,
 	overflow-wrap: anywhere;
 }
 
-/* Question titles wrap between words, and the portfolio column shows a short address. */
+/* Question titles wrap between words, breaking a single overlong token only when it would overflow; the portfolio column shows a short address. */
 .portfolio-questions-table td:first-child button {
-	overflow-wrap: normal;
+	overflow-wrap: break-word;
 }
 
 .portfolio-questions-table .portfolio-questions-address {
