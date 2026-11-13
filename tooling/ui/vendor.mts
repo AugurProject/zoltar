@@ -1,6 +1,5 @@
 import * as path from 'path'
 import { promises as fs } from 'fs'
-import { fileURLToPath } from 'node:url'
 import { getUiAppContractProject, getUiAppPaths, parseUiAppIdFromProcess } from './appPaths.mts'
 import { normalizeBundlerPath, resolveBundlerSpecifierPath } from './bundlerPaths.mts'
 type FileType = 'file' | 'directory'
@@ -171,10 +170,7 @@ export async function clearVendorOutput(vendorOutputPath = getVendorOutputPath()
 	await fs.rm(vendorOutputPath, { recursive: true, force: true })
 }
 
-const currentScriptPath = fileURLToPath(import.meta.url)
-const invokedScriptPath = process.argv[1]
-
-if (invokedScriptPath !== undefined && path.resolve(invokedScriptPath) === currentScriptPath) {
+if (import.meta.main) {
 	vendor().catch(error => {
 		console.error(error)
 		process.exit(1)

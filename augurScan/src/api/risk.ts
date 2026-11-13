@@ -3,7 +3,7 @@ import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import { riskCatalogData } from '../repositories/operations.ts'
 import { riskHistoryRows } from '../repositories/risk.ts'
 import { snapshotBoundary } from './entity-details.ts'
-import { ApiRequestError, cursorTimestamp, integer, isCursorTimestamp, isNonNegativeSafeInteger, isPostgresBigint, isPostgresInteger, json, jsonRecord, postgresBigint, routeInteger } from './shared.ts'
+import { ApiRequestError, cursorTimestamp, hasCursorSnapshot, integer, isCursorTimestamp, isNonNegativeSafeInteger, isPostgresBigint, isPostgresInteger, json, jsonRecord, postgresBigint, routeInteger } from './shared.ts'
 import { operationsAsOfForContinuations } from './snapshot.ts'
 import { rejectRawSnapshotOffset } from './trading-catalog.ts'
 
@@ -66,21 +66,7 @@ const parseRiskHistoryCursor = (value: string | null, chainId: number, identity:
 		value,
 		parts => {
 			const positions = riskHistoryPositions(parts[11])
-			if (
-				parts.length !== 12 ||
-				parts[0] !== 1 ||
-				parts[1] !== chainId ||
-				parts[2] !== 'risk-history' ||
-				parts[3] !== identity ||
-				!isPostgresBigint(parts[4]) ||
-				typeof parts[5] !== 'string' ||
-				!/^0x[0-9a-f]{64}$/.test(parts[5]) ||
-				!isPostgresBigint(parts[6]) ||
-				!parts.slice(7, 10).every(part => typeof part === 'string') ||
-				!isNonNegativeSafeInteger(parts[10]) ||
-				positions === undefined
-			)
-				throw new Error('shape')
+			if (parts.length !== 12 || parts[0] !== 1 || parts[1] !== chainId || parts[2] !== 'risk-history' || parts[3] !== identity || !hasCursorSnapshot(parts, 4) || !isNonNegativeSafeInteger(parts[10]) || positions === undefined) throw new Error('shape')
 			return [1, chainId, 'risk-history', identity, String(parts[4]), String(parts[5]), String(parts[6]), String(parts[7]), String(parts[8]), String(parts[9]), Number(parts[10]), positions]
 		},
 		error => new ApiRequestError('cursor is invalid', { cause: error }),
