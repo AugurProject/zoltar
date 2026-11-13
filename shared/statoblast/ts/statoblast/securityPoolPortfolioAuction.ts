@@ -1,4 +1,5 @@
 import { encodeFunctionData, formatEther, getAddress, isAddress, isHex, parseAbi, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 import type { PortfolioAuctionSnapshot } from './securityPoolPortfolioAuctionRead.js'
 export { loadPortfolioAuctionSnapshot, type PortfolioAuctionSnapshot, type PortfolioAuctionBid } from './securityPoolPortfolioAuctionRead.js'
 
@@ -22,9 +23,6 @@ function address(value: Address, label: string) {
 function uint(value: bigint, label: string, bits = 256) {
 	if (typeof value !== 'bigint' || value < 0n || value >= 1n << BigInt(bits)) throw new Error(`${label} must fit uint${bits}.`)
 	return value
-}
-function ceilDiv(value: bigint, denominator: bigint) {
-	return value === 0n ? 0n : (value - 1n) / denominator + 1n
 }
 function requireAuction(snapshot: PortfolioAuctionSnapshot) {
 	if (snapshot.auction === undefined) throw new Error('This branch has no collateral repair auction.')

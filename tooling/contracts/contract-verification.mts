@@ -3,6 +3,7 @@ import { getAddress, getCreate2Address, keccak256, toHex, type Address, type Hex
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import type { GenesisOutcome } from '../../shared/zoltar/ts/deployment/genesisUniverses.ts'
 import { SECURITY_POOL_UTILS_SOURCE_PATH, STEP_DEFINITIONS, UNVERIFIABLE_STEPS, type CompilerProfile } from './contract-verification-steps.mts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 const ZERO_SALT = toHex(0, { size: 32 })
 
@@ -40,10 +41,6 @@ export type VerificationPlan = {
 	skipped: { id: string; reason: string }[]
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null
-}
-
 function readString(source: Record<string, unknown>, field: string, label: string): string {
 	const value = source[field]
 	if (typeof value !== 'string') throw new Error(`Deployment manifest field ${label} must be a string`)
@@ -57,12 +54,12 @@ function readDecimalBigInt(source: Record<string, unknown>, field: string, label
 }
 
 export function parseDeploymentManifest(rawManifest: unknown, expectedNetworkId: 'mainnet' | 'sepolia', expectedGenesisOutcome: GenesisOutcome = 'yes'): DeploymentManifest {
-	if (!isRecord(rawManifest)) throw new Error('Deployment manifest must be an object')
+	if (!isPlainRecord(rawManifest)) throw new Error('Deployment manifest must be an object')
 	const network = rawManifest['network']
 	const protocolConfig = rawManifest['protocolConfig']
 	const deploymentSteps = rawManifest['deploymentSteps']
-	if (!isRecord(network)) throw new Error('Deployment manifest network must be an object')
-	if (!isRecord(protocolConfig)) throw new Error('Deployment manifest protocolConfig must be an object')
+	if (!isPlainRecord(network)) throw new Error('Deployment manifest network must be an object')
+	if (!isPlainRecord(protocolConfig)) throw new Error('Deployment manifest protocolConfig must be an object')
 	if (!Array.isArray(deploymentSteps)) throw new Error('Deployment manifest deploymentSteps must be an array')
 	const chainId = network['chainId']
 	if (typeof chainId !== 'number') throw new Error('Deployment manifest network.chainId must be a number')
@@ -72,7 +69,7 @@ export function parseDeploymentManifest(rawManifest: unknown, expectedNetworkId:
 	if (genesisOutcome !== expectedGenesisOutcome) throw new Error(`Expected ${expectedGenesisOutcome} genesis outcome, received ${genesisOutcome}`)
 	return {
 		deploymentSteps: deploymentSteps.map((step, index) => {
-			if (!isRecord(step)) throw new Error(`Deployment manifest step ${index.toString()} must be an object`)
+			if (!isPlainRecord(step)) throw new Error(`Deployment manifest step ${index.toString()} must be an object`)
 			const constructorArguments = step['constructorArguments']
 			if (constructorArguments !== undefined && (typeof constructorArguments !== 'string' || !/^[0-9a-fA-F]*$/.test(constructorArguments))) {
 				throw new Error(`Deployment manifest field deploymentSteps[${index.toString()}].constructorArguments must be a hex string without a 0x prefix`)
@@ -256,7 +253,7 @@ async function callExplorer(fetchFn: ExplorerFetch, target: ExplorerTarget, para
 	const response = method === 'GET' ? await fetchFn(requestUrl) : await fetchFn(requestUrl, { body: new URLSearchParams(bodyParameters).toString(), headers: { 'content-type': 'application/x-www-form-urlencoded' }, method: 'POST' })
 	if (!response.ok) throw new Error(`${target.name} responded with HTTP ${response.status.toString()}`)
 	const payload = await response.json()
-	if (!isRecord(payload)) throw new Error(`${target.name} returned a non-object response`)
+	if (!isPlainRecord(payload)) throw new Error(`${target.name} returned a non-object response`)
 	const status = payload['status']
 	return { result: payload['result'], status: typeof status === 'string' ? status : '' }
 }
@@ -270,7 +267,7 @@ async function isContractAlreadyVerified(fetchFn: ExplorerFetch, target: Explore
 	const { result } = await callExplorer(fetchFn, target, { action: 'getsourcecode', address, module: 'contract' }, 'GET')
 	if (!Array.isArray(result)) return false
 	const entry = result[0]
-	if (!isRecord(entry)) return false
+	if (!isPlainRecord(entry)) return false
 	const sourceCode = entry['SourceCode']
 	return typeof sourceCode === 'string' && sourceCode !== ''
 }
@@ -370,14 +367,14 @@ export function getSourcifyTarget(chainId: number): SourcifyTarget | undefined {
 }
 
 function sourcifyErrorText(payload: unknown, httpStatus: number): string {
-	const customCode = isRecord(payload) ? payload['customCode'] : undefined
-	const message = isRecord(payload) ? payload['message'] : undefined
+	const customCode = isPlainRecord(payload) ? payload['customCode'] : undefined
+	const message = isPlainRecord(payload) ? payload['message'] : undefined
 	const parts = [customCode, message].filter((part): part is string => typeof part === 'string' && part !== '')
 	return parts.length > 0 ? parts.join(': ') : `HTTP ${httpStatus.toString()}`
 }
 
 function sourcifyMatch(payload: unknown): string | undefined {
-	const match = isRecord(payload) ? payload['match'] : undefined
+	const match = isPlainRecord(payload) ? payload['match'] : undefined
 	return typeof match === 'string' && match !== '' ? match : undefined
 }
 
@@ -392,9 +389,9 @@ async function pollSourcifyVerification(fetchFn: ExplorerFetch, target: Sourcify
 	while (true) {
 		const response = await fetchFn(`${target.apiUrl}/v2/verify/${verificationId}`)
 		const payload = await response.json()
-		if (isRecord(payload) && payload['isJobCompleted'] === true) {
+		if (isPlainRecord(payload) && payload['isJobCompleted'] === true) {
 			const jobError = payload['error']
-			if (isRecord(jobError)) {
+			if (isPlainRecord(jobError)) {
 				const detail = sourcifyErrorText(jobError, response.status)
 				return { detail, status: isMissingContractMessage(detail) ? 'not-deployed' : 'failed' }
 			}
@@ -428,7 +425,7 @@ export async function verifyContractsWithSourcify(parameters: { fetchFn: Explore
 				method: 'POST',
 			})
 			const payload = await response.json()
-			const verificationId = isRecord(payload) ? payload['verificationId'] : undefined
+			const verificationId = isPlainRecord(payload) ? payload['verificationId'] : undefined
 			if (response.status === 202 && typeof verificationId === 'string') {
 				log(`  ${job.label} (${job.address}): submitted (job ${verificationId})`)
 				pendingSubmissions.push({ job, verificationId })

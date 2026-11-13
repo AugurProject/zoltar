@@ -26,9 +26,7 @@
 	},
 	"scripts": {
 		"build:tests": "bun ../../tooling/ui/tests.mts coreShared",
-		"generate": "bun ../../tooling/ui/projectArtifacts.mts && bun ../../tooling/ui/vendor.mts zoltar && bun ../../tooling/ui/vendor.mts statoblast && bun ../../tooling/ui/vendor.mts trading",
-		"tsc": "bun x tsc --project tsconfig.json",
-		"build:workers": "bun ../../tooling/ui/workers.mts zoltar && bun ../../tooling/ui/workers.mts statoblast && bun ../../tooling/ui/workers.mts trading"
+		"tsc": "bun x tsc --project tsconfig.json"
 	},
 	"exports": {
 		"./tests/simulationTestUtils.js": "./ts/tests/simulation/testUtils.ts",
@@ -443,10 +441,6 @@
 		"./components/ActionLauncherCard.js": {
 			"bun": "./ts/components/ActionLauncherCard.tsx",
 			"default": "./js/components/ActionLauncherCard.js"
-		},
-		"./components/AddressInfo.js": {
-			"bun": "./ts/components/AddressInfo.tsx",
-			"default": "./js/components/AddressInfo.js"
 		},
 		"./components/AddressValue.js": {
 			"bun": "./ts/components/AddressValue.tsx",
@@ -1119,10 +1113,6 @@
 		"./tests/universeIdentity.test.js": {
 			"bun": "./ts/tests/universeIdentity.test.tsx",
 			"default": "./js/tests/universeIdentity.test.js"
-		},
-		"./components/TransactionFundingActionsPlaceholder.js": {
-			"bun": "./ts/components/TransactionFundingActionsPlaceholder.tsx",
-			"default": "./js/components/TransactionFundingActionsPlaceholder.js"
 		}
 	},
 	"version": "1.0.0"

@@ -59,8 +59,6 @@ function settleCalldata(report: OpenOracleStatePreimage) {
 	return encodeFunctionData({ abi: openOracleAbi, functionName: 'settle', args: [report.helper.reportId, getOpenOracleGameTuple(report.game), getOpenOracleHelperTuple(report.helper)] })
 }
 
-type SignedAttempt = Pick<SettlementRecord, 'lastValidBlockNumber' | 'nonce' | 'submissionBlockNumber' | 'submissionMode' | 'transactionIntent'> & { hash: Hex }
-
 type SettlementCall = {
 	data: Hex
 	gas: bigint
@@ -72,7 +70,9 @@ type SettlementCall = {
 	tokenSymbol: string | undefined
 }
 
-async function signAndSubmit(context: SettlementExecutionContext, call: SettlementCall, pending: (attempt: SignedAttempt) => SettlementRecord) {
+type SettlementRecordIdentity = Pick<SettlementRecord, 'account' | 'coordinator' | 'kind' | 'projectedGasCostEth' | 'reportId' | 'rewardEth'>
+
+async function signAndSubmit(context: SettlementExecutionContext, call: SettlementCall, identity: SettlementRecordIdentity) {
 	const account = context.wallet.account
 	const signTransaction = account.signTransaction
 	if (signTransaction === undefined) throw new Error('Settlement requires a local transaction signer')
@@ -94,7 +94,24 @@ async function signAndSubmit(context: SettlementExecutionContext, call: Settleme
 	})
 	if (signed.transaction.maxFeePerGas !== context.maxFeePerGas) throw new Error(`Settlement signed a fee ceiling of ${signed.transaction.maxFeePerGas?.toString() ?? 'none'} but was evaluated at ${context.maxFeePerGas.toString()}`)
 	if (signed.transaction.gas !== signedSettlementGasLimit(call.gas)) throw new Error(`Settlement signed a gas limit of ${signed.transaction.gas.toString()} but was evaluated at ${signedSettlementGasLimit(call.gas).toString()}`)
-	const record = pending({ hash: signed.hash, lastValidBlockNumber: signed.maxBlockNumber.toString(), nonce: nonce.toString(), submissionBlockNumber: context.blockNumber.toString(), submissionMode: context.config.submission.mode, transactionIntent: durableTransactionIntent(signed.transaction) })
+	const submittedAt = new Date().toISOString()
+	const record: SettlementRecord = {
+		...identity,
+		actualGasCostEth: undefined,
+		finalized: false,
+		includedAt: undefined,
+		lastValidBlockNumber: signed.maxBlockNumber.toString(),
+		nonce: nonce.toString(),
+		receiptBlock: undefined,
+		replacedBy: undefined,
+		status: 'pending',
+		submissionBlockNumber: context.blockNumber.toString(),
+		submissionMode: context.config.submission.mode,
+		submittedAt,
+		transactionHash: signed.hash,
+		transactionIntent: durableTransactionIntent(signed.transaction),
+		updatedAt: submittedAt,
+	}
 	// The tracking table nets each transaction against its own signed gas exposure; the queue's projected net for a
 	// settlement additionally reserves the amortised reward withdrawal, which gets its own row here.
 	const signedGasCostAttoEth = signed.transaction.gas * context.maxFeePerGas
@@ -185,28 +202,18 @@ export async function executeSettlement(context: SettlementExecutionContext, pla
 		gas: plan.gas,
 	})
 	const reportId = plan.report.helper.reportId.toString()
-	return signAndSubmit(context, { data: settleCalldata(plan.report), gas: plan.gas, kind: 'settle', profitBeforeGasAttoEth: plan.rewardAttoEth, reportId, token: plan.token, tokenSymbol: plan.tokenSymbol }, attempt => ({
-		account: account.address,
-		actualGasCostEth: undefined,
-		coordinator: plan.coordinator,
-		finalized: false,
-		kind: 'settlement',
-		lastValidBlockNumber: attempt.lastValidBlockNumber,
-		includedAt: undefined,
-		nonce: attempt.nonce,
-		projectedGasCostEth: decimalWeth(plan.projectedGasCostAttoEth),
-		receiptBlock: undefined,
-		replacedBy: undefined,
-		reportId,
-		rewardEth: decimalWeth(plan.rewardAttoEth),
-		status: 'pending',
-		submissionBlockNumber: attempt.submissionBlockNumber,
-		submissionMode: attempt.submissionMode,
-		submittedAt: new Date().toISOString(),
-		transactionHash: attempt.hash,
-		transactionIntent: attempt.transactionIntent,
-		updatedAt: new Date().toISOString(),
-	}))
+	return signAndSubmit(
+		context,
+		{ data: settleCalldata(plan.report), gas: plan.gas, kind: 'settle', profitBeforeGasAttoEth: plan.rewardAttoEth, reportId, token: plan.token, tokenSymbol: plan.tokenSymbol },
+		{
+			account: account.address,
+			coordinator: plan.coordinator,
+			kind: 'settlement',
+			projectedGasCostEth: decimalWeth(plan.projectedGasCostAttoEth),
+			reportId,
+			rewardEth: decimalWeth(plan.rewardAttoEth),
+		},
+	)
 }
 
 export async function executeRewardWithdrawal(context: SettlementExecutionContext, amountAttoEth: bigint) {
@@ -214,28 +221,18 @@ export async function executeRewardWithdrawal(context: SettlementExecutionContex
 	const account = context.wallet.account
 	const gas = rewardWithdrawalGasPlan()
 	const projectedGasCostAttoEth = signedSettlementGasLimit(gas) * context.maxFeePerGas
-	return signAndSubmit(context, { data: encodeFunctionData({ abi: openOracleAbi, functionName: 'withdraw', args: [ETH_SENTINEL, amountAttoEth] }), gas, kind: 'withdraw-reward', profitBeforeGasAttoEth: 0n, reportId: undefined, token: undefined, tokenSymbol: undefined }, attempt => ({
-		account: account.address,
-		actualGasCostEth: undefined,
-		coordinator: undefined,
-		finalized: false,
-		kind: 'reward-withdrawal',
-		lastValidBlockNumber: attempt.lastValidBlockNumber,
-		includedAt: undefined,
-		nonce: attempt.nonce,
-		projectedGasCostEth: decimalWeth(projectedGasCostAttoEth),
-		receiptBlock: undefined,
-		replacedBy: undefined,
-		reportId: undefined,
-		rewardEth: decimalWeth(amountAttoEth),
-		status: 'pending',
-		submissionBlockNumber: attempt.submissionBlockNumber,
-		submissionMode: attempt.submissionMode,
-		submittedAt: new Date().toISOString(),
-		transactionHash: attempt.hash,
-		transactionIntent: attempt.transactionIntent,
-		updatedAt: new Date().toISOString(),
-	}))
+	return signAndSubmit(
+		context,
+		{ data: encodeFunctionData({ abi: openOracleAbi, functionName: 'withdraw', args: [ETH_SENTINEL, amountAttoEth] }), gas, kind: 'withdraw-reward', profitBeforeGasAttoEth: 0n, reportId: undefined, token: undefined, tokenSymbol: undefined },
+		{
+			account: account.address,
+			coordinator: undefined,
+			kind: 'reward-withdrawal',
+			projectedGasCostEth: decimalWeth(projectedGasCostAttoEth),
+			reportId: undefined,
+			rewardEth: decimalWeth(amountAttoEth),
+		},
+	)
 }
 
 /**
