@@ -1853,7 +1853,7 @@ a.transaction-hash-link {
 }
 
 /* The visible status and an invisible copy of the other status share one cell, so the slot always takes the longer
- * label's width. The copy is generated content with the badge's text metrics, so it never enters the page text. */
+ * label's width. The copy is generated content using the badge's text metrics (shared rule above), so it never enters the page text. */
 .outcome-status-slot {
 	display: inline-grid;
 }
@@ -1867,12 +1867,6 @@ a.transaction-hash-link {
 .outcome-status-slot::after {
 	content: attr(data-reserve);
 	visibility: hidden;
-	border: 1px solid transparent;
-	padding: 0.32rem 0.68rem;
-	font-family: var(--font-family-mono);
-	font-size: var(--font-label);
-	text-transform: uppercase;
-	letter-spacing: 0.08em;
 	white-space: nowrap;
 }
 
@@ -1894,6 +1888,17 @@ a.transaction-hash-link {
 	word-break: normal;
 }
 
+/* Text metrics shared by a badge and the invisible status-width reserve (.outcome-status-slot::after), so the two always measure the same. */
+.badge,
+.outcome-status-slot::after {
+	padding: 0.32rem 0.68rem;
+	border: 1px solid transparent;
+	font-family: var(--font-family-mono);
+	font-size: var(--font-label);
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+}
+
 /* A badge keeps its one-line width beside other content (it does not shrink in a row); only a status longer than its
  * whole container wraps inside it instead of overflowing. */
 .badge {
@@ -1903,12 +1908,7 @@ a.transaction-hash-link {
 	max-width: 100%;
 	overflow-wrap: break-word;
 	border-radius: var(--radius-control);
-	padding: 0.32rem 0.68rem;
-	font-family: var(--font-family-mono);
-	font-size: var(--font-label);
-	text-transform: uppercase;
-	letter-spacing: 0.08em;
-	border: 1px solid var(--border-default);
+	border-color: var(--border-default);
 	background: transparent;
 	color: var(--muted);
 }
