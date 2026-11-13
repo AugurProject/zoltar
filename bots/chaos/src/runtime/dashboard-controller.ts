@@ -24,7 +24,7 @@ import type { BotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-l
 import { scheduledStateAfterRun, schedulerIsDue } from '../core/scheduler.ts'
 import { abandonLifecycleObligation, retryLifecycleObligation } from './obligations.ts'
 import { workflowNeedsOperatorReconciliation } from './workflows.ts'
-import { recordActivity, saveDurableState, type RuntimeState } from '../state/operator-state.ts'
+import { recordActivity, saveDurableState, type PendingTransactionIntent, type RuntimeState } from '../state/operator-state.ts'
 import { createRetirementController } from './retirement-controller.ts'
 import { dashboardRecord as record, exactDashboardKeys as exactKeys, expectedRevision, transactionHash } from './dashboard-input.ts'
 import { dashboardState } from './dashboard-state.ts'
@@ -57,6 +57,20 @@ export type DashboardControllerOptions = {
 export function createChaosDashboardController(options: DashboardControllerOptions): ChaosDashboardController {
 	const persistRuntimeState = options.saveState ?? saveDurableState
 	const persistConfiguration = options.saveConfiguration ?? saveSettings
+	/** Persists a recovery-queue change to one pending transaction, then adopts it in memory only after the durable write succeeds. */
+	const commitPendingTransactionUpdate = async (intentId: string, update: (intent: PendingTransactionIntent) => PendingTransactionIntent, activity: Parameters<typeof recordActivity>[1]) => {
+		const candidateState: RuntimeState = {
+			...options.state,
+			activities: [...options.state.activities],
+			obligations: [...options.state.obligations],
+			pendingTransactions: options.state.pendingTransactions.map(candidate => (candidate.id === intentId ? update(candidate) : candidate)),
+			workflows: [...options.state.workflows],
+		}
+		recordActivity(candidateState, activity)
+		await persistRuntimeState(options.configuration.settings.runtime.stateFile, candidateState)
+		options.state.activities.splice(0, options.state.activities.length, ...candidateState.activities)
+		options.state.pendingTransactions.splice(0, options.state.pendingTransactions.length, ...candidateState.pendingTransactions)
+	}
 	const apply = async (candidate: OperatorSettings, revision: unknown, rememberSigner = options.configuration.rememberSigner, mutateRuntimeState: (state: RuntimeState, baseline: RuntimeState) => void = () => undefined) => {
 		expectedRevision(revision, options.configuration.revision)
 		const address = signerAddress(candidate)
@@ -186,14 +200,7 @@ export function createChaosDashboardController(options: DashboardControllerOptio
 					}
 					return
 				}
-				const candidateState: RuntimeState = {
-					...options.state,
-					activities: [...options.state.activities],
-					obligations: [...options.state.obligations],
-					pendingTransactions: options.state.pendingTransactions.map(candidate => (candidate.id === intent.id ? { ...candidate, cancellationHash } : candidate)),
-					workflows: [...options.state.workflows],
-				}
-				recordActivity(candidateState, {
+				await commitPendingTransactionUpdate(intent.id, candidate => ({ ...candidate, cancellationHash }), {
 					details: reason.trim(),
 					hash: cancellationHash,
 					message: `Queued strict nonce cancellation verification for ${intent.label}`,
@@ -201,9 +208,6 @@ export function createChaosDashboardController(options: DashboardControllerOptio
 					status: 'pending',
 					type: 'recovery',
 				})
-				await persistRuntimeState(options.configuration.settings.runtime.stateFile, candidateState)
-				options.state.activities.splice(0, options.state.activities.length, ...candidateState.activities)
-				options.state.pendingTransactions.splice(0, options.state.pendingTransactions.length, ...candidateState.pendingTransactions)
 			})
 		},
 		async setCandidate(value) {
@@ -227,30 +231,23 @@ export function createChaosDashboardController(options: DashboardControllerOptio
 				if (intent === undefined || currentCandidate?.toLowerCase() !== expectedCandidateHash.toLowerCase()) {
 					throw new Error('The queued recovery candidate changed; refresh and review it again')
 				}
-				const candidateState: RuntimeState = {
-					...options.state,
-					activities: [...options.state.activities],
-					obligations: [...options.state.obligations],
-					pendingTransactions: options.state.pendingTransactions.map(candidate => {
-						if (candidate.id !== intent.id) return candidate
+				await commitPendingTransactionUpdate(
+					intent.id,
+					candidate => {
 						const cleared = { ...candidate }
 						delete cleared.cancellationHash
 						delete cleared.replacementHash
 						return cleared
-					}),
-					workflows: [...options.state.workflows],
-				}
-				recordActivity(candidateState, {
-					details: reason.trim(),
-					hash: currentCandidate,
-					message: `Cleared queued recovery candidate for ${intent.label}`,
-					operationId: intent.operationId,
-					status: 'skipped',
-					type: 'recovery',
-				})
-				await persistRuntimeState(options.configuration.settings.runtime.stateFile, candidateState)
-				options.state.activities.splice(0, options.state.activities.length, ...candidateState.activities)
-				options.state.pendingTransactions.splice(0, options.state.pendingTransactions.length, ...candidateState.pendingTransactions)
+					},
+					{
+						details: reason.trim(),
+						hash: currentCandidate,
+						message: `Cleared queued recovery candidate for ${intent.label}`,
+						operationId: intent.operationId,
+						status: 'skipped',
+						type: 'recovery',
+					},
+				)
 			})
 		},
 		async setObligation(value) {
@@ -354,23 +351,13 @@ export function createChaosDashboardController(options: DashboardControllerOptio
 					}
 					return
 				}
-				const candidateState: RuntimeState = {
-					...options.state,
-					activities: [...options.state.activities],
-					obligations: [...options.state.obligations],
-					pendingTransactions: options.state.pendingTransactions.map(candidate => (candidate.id === intent.id ? { ...candidate, replacementHash } : candidate)),
-					workflows: [...options.state.workflows],
-				}
-				recordActivity(candidateState, {
+				await commitPendingTransactionUpdate(intent.id, candidate => ({ ...candidate, replacementHash }), {
 					hash: replacementHash,
 					message: `Queued exact replacement verification for ${intent.label}`,
 					operationId: intent.operationId,
 					status: 'pending',
 					type: 'recovery',
 				})
-				await persistRuntimeState(options.configuration.settings.runtime.stateFile, candidateState)
-				options.state.activities.splice(0, options.state.activities.length, ...candidateState.activities)
-				options.state.pendingTransactions.splice(0, options.state.pendingTransactions.length, ...candidateState.pendingTransactions)
 			})
 		},
 		async setWorkflow(value) {

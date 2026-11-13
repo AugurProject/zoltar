@@ -1,5 +1,6 @@
 import * as collateralCopy from '../../../copy/collateral.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
+import { tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
@@ -73,7 +74,7 @@ export function PortfolioAuction(parameters: PortfolioAuctionParameters) {
 			</MetricGrid>
 			<UserMessage tone='warning' detail={copy.ownership} />
 			<UserMessage detail={copy.fairness} />
-			{snapshot?.collateral.symbol === collateralCopy.usdt ? (
+			{snapshot !== undefined && tokenRequiresAllowanceReset(snapshot.collateralToken) ? (
 				<PortfolioButton model={parameters.actions} action='resetAuctionCollateral' label={collateralCopy.reset} pendingLabel={collateralCopy.resetting} reason={model.fundingReason ?? (snapshot.collateralAllowance === 0n ? collateralCopy.notNeeded : undefined)} onClick={() => model.approve(0n)} />
 			) : undefined}
 
@@ -84,7 +85,7 @@ export function PortfolioAuction(parameters: PortfolioAuctionParameters) {
 				approvedAmount={snapshot?.collateralAllowance}
 				disabled={disabled}
 				guardMessage={model.fundingReason}
-				requiresAllowanceReset={snapshot?.collateral.symbol === collateralCopy.usdt}
+				requiresAllowanceReset={tokenRequiresAllowanceReset(snapshot?.collateralToken)}
 				onApprove={amount => {
 					if (amount !== undefined) void model.approve(amount)
 				}}
