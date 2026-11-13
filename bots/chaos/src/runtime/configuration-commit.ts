@@ -1,7 +1,7 @@
 import type { Address } from '@zoltar/bot-shared/ethereum'
 import type { SignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import { type OperatorSettings } from '../config/settings.ts'
-import { setRuntimeExecutionAddress, bindRuntimeStateToSigner, recordActivity, type RuntimeState } from '../state/operator-state.ts'
+import { cloneRuntimeTopology, setRuntimeExecutionAddress, bindRuntimeStateToSigner, recordActivity, type RuntimeState } from '../state/operator-state.ts'
 
 export const CONFIGURATION_COMMIT_INDETERMINATE = 'ConfigurationCommitIndeterminate'
 export const CONFIGURATION_COMMITTED_SAFELY_PAUSED = 'ConfigurationCommittedSafelyPaused'
@@ -36,17 +36,7 @@ export function runtimeStateCandidate(state: RuntimeState): RuntimeState {
 		...state,
 		activities: [...state.activities],
 		scheduler: { ...state.scheduler },
-		topology:
-			state.topology === undefined
-				? undefined
-				: {
-						...state.topology,
-						auctions: state.topology.auctions.map(auction => ({ ...auction })),
-						pairs: state.topology.pairs.map(pair => ({ ...pair })),
-						pools: state.topology.pools.map(pool => ({ ...pool })),
-						reports: state.topology.reports.map(report => ({ ...report })),
-						universes: state.topology.universes.map(universe => ({ ...universe })),
-					},
+		topology: cloneRuntimeTopology(state.topology),
 	}
 }
 

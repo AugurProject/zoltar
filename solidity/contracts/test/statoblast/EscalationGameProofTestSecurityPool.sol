@@ -60,10 +60,6 @@ contract EscalationGameProofTestSecurityPool {
 		require(msg.sender == address(escalationGame), 'Only game');
 	}
 
-	function creditEscalationAuctionBacking(uint256) external view {
-		require(msg.sender == address(escalationGame), 'Only game');
-	}
-
 	function refreshPortfolioFees() external view {
 		require(msg.sender == address(escalationGame), 'Only game');
 	}
