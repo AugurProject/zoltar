@@ -99,7 +99,6 @@ const renderOverview = (response: OperationsResponse, live: boolean) => {
 			operationNumber: routeView.operationNumber,
 			operationCounted: routeView.operationCounted,
 			operationsHref: routeView.operationsHref,
-			approvalTransitionSummary: routeView.approvalTransitionSummary,
 			operationsCatalogSection: routeView.operationsCatalogSection,
 			operationsSectionFilters: routeView.operationsSectionFilters,
 			connection: element('div'),

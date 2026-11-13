@@ -35,7 +35,7 @@ export const createOperationsViews = (context: ScannerContext) => {
 		operationRow,
 		navigate: destination => void context.links.navigateInPlace(destination),
 	})
-	const { captureOperationsRenderContext, restoreOperationsRenderContext, operationNumber, operationCounted, operationsHref, approvalTransitionSummary, operationsCatalogSection, operationsSectionFilters } = routeView
+	const { captureOperationsRenderContext, restoreOperationsRenderContext, operationNumber, operationCounted, operationsHref, operationsCatalogSection, operationsSectionFilters } = routeView
 
 	const renderOperations = (response: OperationsResponse, preservedContext?: OperationsRenderContext, live?: boolean) =>
 		renderOperationsOverview(
@@ -50,7 +50,6 @@ export const createOperationsViews = (context: ScannerContext) => {
 				operationNumber,
 				operationCounted,
 				operationsHref,
-				approvalTransitionSummary,
 				operationsCatalogSection,
 				operationsSectionFilters,
 				connection: elements.connection,
@@ -77,7 +76,6 @@ export const createOperationsViews = (context: ScannerContext) => {
 				element,
 				connection: elements.connection,
 				operationsHref,
-				approvalTransitionSummary,
 				rawEvidence: routeView.rawEvidence,
 				operationCounted,
 				operationRatio: routeView.operationRatio,

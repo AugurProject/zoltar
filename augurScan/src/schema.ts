@@ -10,6 +10,7 @@ import {
 	INDEXER_OWNERSHIP_SCHEMA_VERSION,
 	QUESTION_SECONDS_SCHEMA_VERSION,
 	INVALIDATION_COUNTS_SCHEMA_VERSION,
+	COLLATERAL_REPAIR_AUCTIONS_SCHEMA_VERSION,
 	pendingSchemaMigrations,
 	runSchemaTransaction,
 	type SupportedSchemaVersion,
@@ -73,13 +74,14 @@ export const initializeSchema = async (sql: SQL): Promise<void> => {
 			await assertSchemaLayout(connection, schema, CURRENT_SCHEMA_VERSION)
 			return
 		}
-		if (action === 'migrate-from-1' || action === 'migrate-from-2' || action === 'migrate-from-3' || action === 'migrate-from-4' || action === 'migrate-from-5') {
+		if (action === 'migrate-from-1' || action === 'migrate-from-2' || action === 'migrate-from-3' || action === 'migrate-from-4' || action === 'migrate-from-5' || action === 'migrate-from-6') {
 			const migrationVersions: Record<typeof action, SupportedSchemaVersion> = {
 				'migrate-from-1': INITIAL_MIGRATABLE_SCHEMA_VERSION,
 				'migrate-from-2': HISTORICAL_INTEGRITY_SCHEMA_VERSION,
 				'migrate-from-3': INDEXER_OWNERSHIP_SCHEMA_VERSION,
 				'migrate-from-4': QUESTION_SECONDS_SCHEMA_VERSION,
 				'migrate-from-5': INVALIDATION_COUNTS_SCHEMA_VERSION,
+				'migrate-from-6': COLLATERAL_REPAIR_AUCTIONS_SCHEMA_VERSION,
 			}
 			const startingVersion = migrationVersions[action]
 			await assertSchemaLayout(connection, schema, startingVersion)

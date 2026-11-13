@@ -22,25 +22,19 @@ export async function demoRiskCatalogRoute(env: DemoEnvironment, path: string): 
 	const baseRisk = operations.data.risk
 	const more = context.pageUrl.searchParams.get('catalogMore') === '1'
 	const poolCursor = request.searchParams.get('poolCursor')
-	const vaultCursor = request.searchParams.get('vaultCursor')
-	if ((poolCursor !== null || vaultCursor !== null) && context.pageUrl.searchParams.get('catalogAppendDelay') === '1') await new Promise(resolve => setTimeout(resolve, 2_500))
-	if ((poolCursor !== null || vaultCursor !== null) && context.pageUrl.searchParams.get('catalogAppendError') === '1') throw new Error('Additional risk records could not be loaded')
+	if (poolCursor !== null && context.pageUrl.searchParams.get('catalogAppendDelay') === '1') await new Promise(resolve => setTimeout(resolve, 2_500))
+	if (poolCursor !== null && context.pageUrl.searchParams.get('catalogAppendError') === '1') throw new Error('Additional risk records could not be loaded')
 	const pools = poolCursor === null ? baseRisk.pools : baseRisk.pools.map(pool => ({ ...pool, pool_address: demoAddress('98'), block_number: String(BigInt(operations.asOf.blockNumber) - 100n) }))
-	const vaults = vaultCursor === null ? baseRisk.vaults : baseRisk.vaults.map(vault => ({ ...vault, vault_address: demoAddress('c8'), block_number: String(BigInt(operations.asOf.blockNumber) - 100n) }))
 	return {
 		chainId,
 		asOf: operations.asOf,
 		data: {
 			...baseRisk,
 			pools,
-			vaults,
 			pagination: {
 				poolTotal: more ? 2 : pools.length,
-				vaultTotal: more ? 2 : vaults.length,
 				poolHasMore: more && poolCursor === null,
-				vaultHasMore: more && vaultCursor === null,
 				...(more && poolCursor === null ? { poolNextCursor: 'demo-pool-older' } : {}),
-				...(more && vaultCursor === null ? { vaultNextCursor: 'demo-vault-older' } : {}),
 			},
 		},
 	}

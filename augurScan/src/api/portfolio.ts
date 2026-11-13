@@ -156,7 +156,6 @@ export const addressPortfolioResponse = async (sql: SQL, url: URL): Promise<Resp
 		data: {
 			...jsonRecord(base),
 			...balances,
-			vaultAvailability: Number(base?.['vault_count'] ?? 0) > 0 ? 'available' : 'unavailable',
 			...(base === undefined ? { address, availability: 'Awaiting indexed evidence' } : {}),
 			escalation_positions: positions.slice(0, 250),
 			escalation_payouts: await escalationPayouts(sql, chainId, snapshotBlock, address),

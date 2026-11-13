@@ -101,10 +101,16 @@ test('rejects overlong state and contract identifiers before querying', async ()
 	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
 	databases.push(database)
 	const address = `0x${'1'.repeat(40)}`
-	for (const path of [`state/pools/1/${address}/extra`, `state/vaults/1/${address}/${address}/extra`, 'state/universes/1/0/extra', 'state/questions/1/0/extra', `contracts/1/${address}/extra`]) {
+	for (const path of [`state/pools/1/${address}/extra`, 'state/universes/1/0/extra', 'state/questions/1/0/extra', `contracts/1/${address}/extra`]) {
 		const response = await handleApi(new Request(`http://localhost/api/v1/${path}`), database)
 		expect(response?.status).toBe(400)
 	}
+	// Vault state and vault risk are no longer resources: no current contract event describes a vault's accounting.
+	const vaultHistory = await handleApi(new Request(`http://localhost/api/v1/state/vaults/1/${address}/${address}`), database)
+	expect(vaultHistory?.status).toBe(404)
+	const vaultRisk = await handleApi(new Request(`http://localhost/api/v1/state/risk/vaults/1/${address}/${address}`), database)
+	expect(vaultRisk?.status).toBe(400)
+	expect(await vaultRisk?.json()).toEqual({ error: 'Invalid risk entity identifier' })
 })
 
 test('rejects non-decimal contract chain identifiers before querying', async () => {

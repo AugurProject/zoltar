@@ -241,35 +241,25 @@ export const expectRiskAndForkCatalogs = async ({ database, operationsChainId }:
 	const riskCatalog = (await riskCatalogResponse.json()) as {
 		data: {
 			pools: unknown[]
-			vaults: unknown[]
 			pagination: {
 				poolTotal: number
 				poolHasMore: boolean
 				poolNextCursor: string
-				vaultTotal: number
-				vaultHasMore: boolean
-				vaultNextCursor: string
 			}
 		}
 	}
 	expect(riskCatalog.data.pools).toHaveLength(250)
-	expect(riskCatalog.data.vaults).toHaveLength(250)
 	expect(riskCatalog.data.pagination).toMatchObject({
 		poolTotal: 261,
 		poolHasMore: true,
-		vaultTotal: 261,
-		vaultHasMore: true,
 	})
-	const riskContinuationResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk?chainId=${operationsChainId}&limit=250&poolCursor=${encodeURIComponent(riskCatalog.data.pagination.poolNextCursor)}&vaultCursor=${encodeURIComponent(riskCatalog.data.pagination.vaultNextCursor)}`), database.sql)
+	const riskContinuationResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk?chainId=${operationsChainId}&limit=250&poolCursor=${encodeURIComponent(riskCatalog.data.pagination.poolNextCursor)}`), database.sql)
 	if (riskContinuationResponse === undefined) throw new Error('risk catalog continuation did not return a response')
 	const riskContinuation = (await riskContinuationResponse.json()) as typeof riskCatalog
 	expect(riskContinuation.data.pools).toHaveLength(11)
-	expect(riskContinuation.data.vaults).toHaveLength(11)
 	expect(riskContinuation.data.pagination).toMatchObject({
 		poolTotal: 261,
 		poolHasMore: false,
-		vaultTotal: 261,
-		vaultHasMore: false,
 	})
 
 	const forkCatalogResponse = await handleApi(new Request(`http://localhost/api/v1/state/forks?chainId=${operationsChainId}&limit=250`), database.sql)

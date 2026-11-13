@@ -9,12 +9,10 @@ import { rejectRawSnapshotOffset } from './trading-catalog.ts'
 
 type RiskStatePosition = readonly [blockNumber: string, observedAt: string, id: string]
 type RiskEventPosition = readonly [blockNumber: string, logIndex: number, txHash: string, blockHash: string]
-type RiskLiquidationPosition = readonly [blockNumber: string, logIndex: number, txHash: string, blockHash: string, entityType: string, entityIdentity: string]
 type RiskHistoryPositions = {
 	readonly state?: RiskStatePosition
 	readonly accounting?: RiskEventPosition
 	readonly lifecycle?: RiskEventPosition
-	readonly liquidations?: RiskLiquidationPosition
 }
 type RiskHistoryCursor = readonly [version: 1, chainId: number, domain: 'risk-history', identity: string, snapshotBlock: string, snapshotHash: string, invalidationId: string, abiSourceHash: string, applicationSourceHash: string, projectionSourceHash: string, offset: number, positions: RiskHistoryPositions]
 
@@ -31,13 +29,6 @@ const riskStatePosition = (value: unknown): RiskStatePosition | undefined => {
 	return [blockNumber, observedAt, id]
 }
 
-const riskLiquidationPosition = (value: unknown, base: RiskEventPosition | undefined): RiskLiquidationPosition | undefined => {
-	if (!Array.isArray(value) || value.length !== 6 || base === undefined) return undefined
-	const [entityType, entityIdentity] = [value[4], value[5]]
-	if (typeof entityType !== 'string' || typeof entityIdentity !== 'string') return undefined
-	return [...base, entityType, entityIdentity]
-}
-
 const riskHistoryPositions = (value: unknown): RiskHistoryPositions | undefined => {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
 	const fields = jsonRecord(value)
@@ -48,15 +39,10 @@ const riskHistoryPositions = (value: unknown): RiskHistoryPositions | undefined 
 	if (fields['accounting'] !== undefined && accounting === undefined) return undefined
 	const lifecycle = riskEventPosition(fields['lifecycle'])
 	if (fields['lifecycle'] !== undefined && lifecycle === undefined) return undefined
-	const liquidationValue = fields['liquidations']
-	const liquidationBase = riskEventPosition(Array.isArray(liquidationValue) ? liquidationValue.slice(0, 4) : undefined)
-	const liquidations = liquidationValue === undefined ? undefined : riskLiquidationPosition(liquidationValue, liquidationBase)
-	if (liquidationValue !== undefined && liquidations === undefined) return undefined
 	return {
 		...(state === undefined ? {} : { state }),
 		...(accounting === undefined ? {} : { accounting }),
 		...(lifecycle === undefined ? {} : { lifecycle }),
-		...(liquidations === undefined ? {} : { liquidations }),
 	}
 }
 
@@ -93,50 +79,29 @@ export const riskDetailResponse = async (sql: SQL, parts: readonly string[], url
 	const kind = parts[0]
 	const chainId = routeInteger(parts[1])
 	const poolAddress = parts[2]?.toLowerCase()
-	const vaultAddress = parts[3]?.toLowerCase()
-	if (chainId === undefined || (kind !== 'pools' && kind !== 'vaults') || poolAddress === undefined || !/^0x[0-9a-f]{40}$/.test(poolAddress) || (kind === 'pools' ? parts.length !== 3 : parts.length !== 4 || vaultAddress === undefined || !/^0x[0-9a-f]{40}$/.test(vaultAddress)))
-		return json({ error: 'Invalid risk entity identifier' }, 400)
+	if (chainId === undefined || kind !== 'pools' || parts.length !== 3 || poolAddress === undefined || !/^0x[0-9a-f]{40}$/.test(poolAddress)) return json({ error: 'Invalid risk entity identifier' }, 400)
 	rejectRawSnapshotOffset(url)
 	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 250
 	const limit = Math.min(Math.max(requestedLimit, 1), 1_000)
-	const entityIdentity = kind === 'pools' ? poolAddress : `${poolAddress}:${vaultAddress}`
-	const historyIdentity = `${kind}:${entityIdentity}`
+	const historyIdentity = `pools:${poolAddress}`
 	const cursor = parseRiskHistoryCursor(url.searchParams.get('cursor'), chainId, historyIdentity)
 	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 4 }], postgresBigint(url.searchParams.get('atBlock'), 'atBlock'))
 	const offset = cursor?.[10] ?? 0
 	const positions = cursor?.[11] ?? {}
-	const risk = await riskCatalogData(sql, chainId, {
-		poolAddress,
-		...(kind === 'vaults' && vaultAddress !== undefined ? { vaultAddress } : {}),
-		limit: 1,
-		snapshotBlock: String(asOf['blockNumber']),
-	})
-	const entity = kind === 'pools' ? risk.pools.find((row: Record<string, unknown>) => row['pool_address'] === poolAddress) : risk.vaults.find((row: Record<string, unknown>) => row['pool_address'] === poolAddress && row['vault_address'] === vaultAddress)
-	if (entity === undefined) return json({ error: `${kind === 'pools' ? 'Pool' : 'Vault'} risk state not found` }, 404)
-	const entityType = kind === 'pools' ? 'pool' : 'vault'
-	const { stateSnapshots, accountingSnapshots, lifecycleEvents, liquidations } = await riskHistoryRows(sql, {
-		chainId,
-		kind,
-		poolAddress,
-		...(vaultAddress === undefined ? {} : { vaultAddress }),
-		entityType,
-		entityIdentity,
-		asOfBlock: String(asOf['blockNumber']),
-		positions,
-		limit,
-	})
-	const historyTruncated = [stateSnapshots, accountingSnapshots, lifecycleEvents, liquidations].some(rows => rows.length > limit)
+	const risk = await riskCatalogData(sql, chainId, { poolAddress, limit: 1, snapshotBlock: String(asOf['blockNumber']) })
+	const entity = risk.pools.find((row: Record<string, unknown>) => row['pool_address'] === poolAddress)
+	if (entity === undefined) return json({ error: 'Pool risk state not found' }, 404)
+	const { stateSnapshots, accountingSnapshots, lifecycleEvents } = await riskHistoryRows(sql, { chainId, poolAddress, asOfBlock: String(asOf['blockNumber']), positions, limit })
+	const historyTruncated = [stateSnapshots, accountingSnapshots, lifecycleEvents].some(rows => rows.length > limit)
 	const statePageRows = stateSnapshots.slice(0, limit)
 	const pageRows = {
 		stateSnapshots: statePageRows.map((row: Record<string, unknown>) => Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'cursor_observed_at'))),
 		accountingSnapshots: accountingSnapshots.slice(0, limit),
 		lifecycleEvents: lifecycleEvents.slice(0, limit),
-		liquidations: liquidations.slice(0, limit),
 	}
 	const lastState = statePageRows.at(-1)
 	const lastAccounting = pageRows.accountingSnapshots.at(-1)
 	const lastLifecycle = pageRows.lifecycleEvents.at(-1)
-	const lastLiquidation = pageRows.liquidations.at(-1)
 	const nextPositions: RiskHistoryPositions = {
 		...positions,
 		...(lastState === undefined ? {} : { state: [String(lastState['block_number']), cursorTimestamp(lastState['cursor_observed_at']), String(lastState['id'])] as const }),
@@ -150,18 +115,12 @@ export const riskDetailResponse = async (sql: SQL, parts: readonly string[], url
 			: {
 					lifecycle: [String(lastLifecycle['block_number']), Number(lastLifecycle['log_index']), String(lastLifecycle['tx_hash']), String(lastLifecycle['block_hash'])] as const,
 				}),
-		...(lastLiquidation === undefined
-			? {}
-			: {
-					liquidations: [String(lastLiquidation['block_number']), Number(lastLiquidation['log_index']), String(lastLiquidation['tx_hash']), String(lastLiquidation['block_hash']), String(lastLiquidation['entity_type']), String(lastLiquidation['entity_identity'])] as const,
-				}),
 	}
 	return json({
 		chainId,
 		asOf,
 		data: {
 			...entity,
-			approvalEvents: risk.approvalEvents,
 			history: {
 				...pageRows,
 				limit,

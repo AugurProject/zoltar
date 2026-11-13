@@ -38,13 +38,12 @@ function withDetail(kind: OperationsDetailRoute['kind'], tab: string, run: (harn
 					element,
 					connection: element('div'),
 					operationsHref: path => path,
-					approvalTransitionSummary: () => '',
 					rawEvidence: () => element('pre'),
 					operationCounted: (value, singular) => `${value} ${singular}`,
 					operationRatio: () => '',
 					operationNumber: String,
 					operationsHistoryOffset: value => (typeof value === 'number' ? value : undefined),
-					operationsRiskHistoryKeys: ['stateSnapshots', 'accountingSnapshots', 'lifecycleEvents', 'liquidations'],
+					operationsRiskHistoryKeys: ['stateSnapshots', 'accountingSnapshots', 'lifecycleEvents'],
 					detailEvidenceRows: rows => rows.map(() => element('p', '', 'Pool lifecycle observation')),
 					historyBlockRangeLabel: () => 'Block 10',
 					isDemo: false,
@@ -92,9 +91,9 @@ test('keeps risk lifecycle evidence with its history continuation', () => {
 	})
 })
 
-for (const kind of ['pool', 'vault', 'trading', 'escalation', 'auction', 'fork', 'report'] as const)
+for (const kind of ['pool', 'trading', 'escalation', 'auction', 'fork', 'report'] as const)
 	test(`renders only populated tabs for ${kind}`, () => {
-		const data = { snapshot: { read_status: 'success', read_result: {} }, ...(kind === 'report' ? { current: { event_name: 'Reported' } } : {}), ...(kind === 'pool' || kind === 'vault' ? { history: riskHistory } : {}), ...(kind === 'auction' ? { finalization: { block_number: '10' } } : {}) }
+		const data = { snapshot: { read_status: 'success', read_result: {} }, ...(kind === 'report' ? { current: { event_name: 'Reported' } } : {}), ...(kind === 'pool' ? { history: riskHistory } : {}), ...(kind === 'auction' ? { finalization: { block_number: '10' } } : {}) }
 		let tabs: string[] = []
 		renderDetail(kind, 'overview', data, () => {
 			tabs = Array.from(document.querySelectorAll<HTMLAnchorElement>('.entity-detail-tabs a'), anchor => new URL(anchor.href).searchParams.get('tab') ?? 'overview')
@@ -132,18 +131,9 @@ test('keeps market activity records and their pager on Evidence', () => {
 	})
 })
 
-for (const kind of ['pool', 'vault'] as const)
-	test(`puts canonical approval records on ${kind} Evidence`, () => {
-		renderDetail(kind, 'evidence', { approvalEvents: [{ event_name: 'LiquidationApproved' }] }, () => {
-			expect(document.body.textContent).toContain('Liquidation approval lifecycle')
-			expect(document.body.textContent).toContain('LiquidationApproved')
-			expect(document.querySelector('.entity-detail-tabs [aria-current="page"]')?.textContent).toBe('Evidence')
-		})
-	})
-
 test('detail tabs switch in place without reloading the page', () => {
 	withDetail('pool', 'overview', ({ render, load, selectTab }) => {
-		render({ snapshot: { read_status: 'success', read_result: {} }, history: riskHistory, approvalEvents: [{ event_name: 'LiquidationApproved' }] })
+		render({ snapshot: { read_status: 'success', read_result: {} }, history: riskHistory })
 		const content = document.querySelector<HTMLElement>('#operations-content')
 		if (content === null) throw new Error('Operations content is missing')
 		const current = () => document.querySelector('.entity-detail-tabs [aria-current="page"]')?.textContent
@@ -158,10 +148,13 @@ test('detail tabs switch in place without reloading the page', () => {
 		expect(visibleTabGroups().length).toBeGreaterThan(0)
 		expect(visibleTabGroups().every(group => group.dataset['detailTab'] === 'history')).toBe(true)
 		// History traversal applies the URL's tab to the same page.
-		showOperationsDetailTab(content, 'evidence')
-		expect(current()).toBe('Evidence')
-		expect(visibleTabGroups().map(group => group.textContent)).toEqual([expect.stringContaining('LiquidationApproved')])
 		showOperationsDetailTab(content, null)
+		expect(current()).toBe('Overview')
+		showOperationsDetailTab(content, 'history')
+		expect(current()).toBe('History')
+		// A pool has no event evidence of its own, so an Evidence link falls back to Overview.
+		expect(document.querySelector('a[href*="tab=evidence"]')).toBeNull()
+		showOperationsDetailTab(content, 'evidence')
 		expect(current()).toBe('Overview')
 		showOperationsDetailTab(content, 'missing')
 		expect(current()).toBe('Overview')

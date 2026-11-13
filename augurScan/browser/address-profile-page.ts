@@ -3,6 +3,7 @@ import { semanticSummary } from './semantic-evidence.ts'
 import type { AccountTransaction, ArgumentDefinition, LiveChangeOptions, LoadOptions, ProtocolAddressLinkOptions, RichListRecord } from './browser-types.ts'
 import { isRecord, operationRecords } from './api-validation.ts'
 import { exactUnit } from './format.ts'
+import { forkParticipationUniverse } from './operations-presentation.ts'
 import { short, shortIdentifier } from './identifier-format.ts'
 import { PORTFOLIO_KIND_LABELS, portfolioItems, portfolioPage } from './portfolio-helpers.ts'
 import type { createOperationsComponents } from './operations-components.ts'
@@ -57,7 +58,6 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		['Sent transactions', number(item.transaction_count)],
 		['Observed interactions', number(item.interaction_count)],
 		['Pools', number(item.pool_count)],
-		['Vault positions', number(item.vault_count)],
 	]) {
 		const card = element('div', 'state-stat')
 		card.append(element('span', '', label), element('strong', '', value))
@@ -67,7 +67,6 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		transactions: item.transaction_count,
 		interactions: item.interaction_count,
 		pools: item.pool_count,
-		vaults: item.vault_count,
 	})
 	const balances = element('section', 'address-profile-panel')
 	balances.append(element('p', 'eyebrow', 'Balances'), element('h3', '', 'Assets observed by augurScan'))
@@ -96,26 +95,16 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		rep: item.rep_balances,
 	})
 	const involvement = element('section', 'address-profile-panel')
-	involvement.append(element('p', 'eyebrow', 'Augur involvement'), element('h3', '', 'Pools and vaults'))
+	involvement.append(element('p', 'eyebrow', 'Augur involvement'), element('h3', '', 'Security pools'))
 	const involvementGrid = element('div', 'rich-position-grid')
 	for (const pool of item.pool_associations ?? []) {
 		const card = element('div', 'rich-position')
-		card.append(element('span', 'rich-position-kind', 'Pool'), element('strong', '', pool.questionTitle ?? pool.label ?? 'Security pool'), protocolAddressLink(pool.address, { knownLabel: pool.label, chainId, className: 'rich-token-address address-link' }))
+		card.append(element('strong', '', pool.questionTitle ?? pool.label ?? 'Security pool'), protocolAddressLink(pool.address, { knownLabel: pool.label, chainId, className: 'rich-token-address address-link' }))
 		involvementGrid.append(card)
 	}
-	for (const position of item.vault_positions ?? []) {
-		const card = element('div', 'rich-position')
-		card.append(
-			element('span', 'rich-position-kind', 'Vault'),
-			element('strong', '', position.questionTitle ?? 'Vault position'),
-			element('span', '', `${exactUnit(position.underwritingLimitAttoEth, 18, itemNativeSymbol)} underwriting commitment · ${exactUnit(position.claimableFeesAttoEth, 18, itemNativeSymbol)} claimable`),
-			protocolAddressLink(position.poolAddress, { chainId, className: 'rich-token-address address-link' }),
-		)
-		involvementGrid.append(card)
-	}
-	if (involvementGrid.childElementCount === 0) involvementGrid.append(element('p', 'data-note', 'No pool or vault involvement matches this view.'))
+	if (involvementGrid.childElementCount === 0) involvementGrid.append(element('p', 'data-note', 'No pool involvement matches this view.'))
 	involvement.append(involvementGrid)
-	setLiveRecord(involvement, 'involvement', { pools: item.pool_associations, vaults: item.vault_positions })
+	setLiveRecord(involvement, 'involvement', { pools: item.pool_associations })
 	const escalationClaims = operationsPanel(
 		'Escalation interactions',
 		(item.escalation_claims ?? []).map(claim =>
@@ -194,7 +183,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 	const forkParticipation = operationsPanel(
 		'Fork and migration participation',
 		operationRecords(item['fork_participation']).map(event =>
-			operationRow(String(event['event_name'] ?? 'Fork migration'), 'Canonical event evidence naming this address as migrator, vault, or recipient', String(event['universe_identity'] ?? ''), event['block_number'], operationsHref(`/operations/fork/${encodeURIComponent(String(event['universe_identity'] ?? ''))}`)),
+			operationRow(String(event['event_name'] ?? 'Fork migration'), 'Canonical event evidence naming this address as migrator, branch owner, or recipient', String(event['universe_identity'] ?? ''), event['block_number'], operationsHref(`/operations/fork/${encodeURIComponent(forkParticipationUniverse(event))}`)),
 		),
 		'No fork or migration participation matches this view.',
 	)

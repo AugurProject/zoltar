@@ -1,6 +1,6 @@
 import { semanticSummary } from './semantic-evidence.ts'
 import type { OperationsCatalogSection, OperationsDetailRoute, OperationsRenderContext } from './browser-types.ts'
-import { approvalTransitionFields, operationsDetailRecordKey } from './operations-presentation.ts'
+import { operationsDetailRecordKey } from './operations-presentation.ts'
 import { isRecord, operationRecords, type JsonRecord } from './api-validation.ts'
 import { exactUnit } from './format.ts'
 import { nativeSymbolFor } from './network-freshness.ts'
@@ -30,15 +30,6 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 		return section === 'reports' || section === 'escalations' || section === 'auctions' || section === 'forks' || section === 'trading' || section === 'timeline' || section === 'integrity' || section === 'risk' ? section : undefined
 	}
 
-	const approvalTransitionSummary = (item: Readonly<Record<string, unknown>>): string => {
-		const eventData = isRecord(item['event_data']) ? item['event_data'] : {}
-		const receiver = String(item['receiver_vault'] ?? eventData['receiverVault'] ?? '')
-		const operation = typeof eventData['operationId'] === 'string' ? `operation ${shortIdentifier(eventData['operationId'])}` : undefined
-		const fields = approvalTransitionFields(eventData, nativeSymbolFor(requiredChainId())).map(field => `${field.label} ${field.value}`)
-		const details = [operation, ...fields, receiver === '' ? undefined : `receiver ${shortIdentifier(receiver, 10, 6)}`].filter((value): value is string => value !== undefined)
-		return details.length === 0 ? 'Authorization lifecycle transition' : details.join(' · ')
-	}
-
 	const captureOperationsRenderContext = (): OperationsRenderContext => {
 		const content = $('#operations-content')
 		const active = document.activeElement
@@ -46,7 +37,7 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 			...(active instanceof HTMLAnchorElement && content.contains(active) ? { focusHref: active.href } : {}),
 			focusLoadMore: active instanceof HTMLElement && (active.classList.contains('operations-catalog-more') || active.classList.contains('operations-detail-more') || active.classList.contains('operations-pagination-complete')),
 			...(active instanceof HTMLElement && (active.dataset['detailCollection'] === 'decisions' || active.dataset['detailCollection'] === 'evidence') ? { focusDetailCollection: active.dataset['detailCollection'] } : {}),
-			...(active instanceof HTMLElement && (active.dataset['riskKind'] === 'pool' || active.dataset['riskKind'] === 'vault') ? { focusRiskKind: active.dataset['riskKind'] } : {}),
+			...(active instanceof HTMLElement && active.dataset['riskKind'] === 'pool' ? { focusRiskKind: active.dataset['riskKind'] } : {}),
 			focusHistoryMore: active instanceof HTMLElement && (active.classList.contains('operations-history-more') || active.classList.contains('operations-history-complete')),
 			...(active instanceof HTMLElement && content.contains(active) ? { focusViewportTop: active.getBoundingClientRect().top } : {}),
 			scrollY: window.scrollY,
@@ -94,7 +85,7 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 		if (chainId !== '') destination.searchParams.set('chainId', chainId)
 		if (isDemo) destination.searchParams.set('demo', '1')
 		const atBlock = pageUrl().searchParams.get('atBlock')
-		if (atBlock !== null && (destination.pathname.startsWith('/operations/risk') || destination.pathname.startsWith('/pool/') || destination.pathname.startsWith('/vault/'))) destination.searchParams.set('atBlock', atBlock)
+		if (atBlock !== null && (destination.pathname.startsWith('/operations/risk') || destination.pathname.startsWith('/pool/'))) destination.searchParams.set('atBlock', atBlock)
 		return `${destination.pathname}${destination.search}`
 	}
 
@@ -193,7 +184,6 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 
 	return {
 		operationsCatalogSection,
-		approvalTransitionSummary,
 		captureOperationsRenderContext,
 		restoreOperationsRenderContext,
 		operationNumber,

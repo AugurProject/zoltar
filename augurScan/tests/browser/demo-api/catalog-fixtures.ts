@@ -86,12 +86,7 @@ export const createDemoCatalogFixtures = (context: DemoContext) => {
 			initial_retention_rate: '999999800000000000',
 			initial_settlement_collateral_atto_eth: collateralAmount('182500000000000000000'),
 			settlement_collateral_atto_eth: collateralAmount('241820000000000000000'),
-			total_capacity_ownership_atto_rep: collateralAmount('168400000000000000000'),
-			fee_eligible_capacity_ownership_atto_rep: collateralAmount('154200000000000000000'),
-			total_claimable_vault_fees_atto_eth: collateralAmount('1280000000000000000'),
-			unallocated_accrued_fees_atto_eth: collateralAmount('210000000000000000'),
-			current_retention_rate: '999999987000000000',
-			vault_count: '7',
+			share_token_supply_atto_shares: collateralAmount('168400000000000000000'),
 			child_count: '2',
 			snapshot_block: '23184712',
 		},
@@ -112,12 +107,7 @@ export const createDemoCatalogFixtures = (context: DemoContext) => {
 			initial_retention_rate: '999999800000000000',
 			initial_settlement_collateral_atto_eth: collateralAmount('92000000000000000000'),
 			settlement_collateral_atto_eth: collateralAmount('117400000000000000000'),
-			total_capacity_ownership_atto_rep: collateralAmount('78200000000000000000'),
-			fee_eligible_capacity_ownership_atto_rep: collateralAmount('73900000000000000000'),
-			total_claimable_vault_fees_atto_eth: collateralAmount('430000000000000000'),
-			unallocated_accrued_fees_atto_eth: collateralAmount('80000000000000000'),
-			current_retention_rate: '999999987000000000',
-			vault_count: '4',
+			share_token_supply_atto_shares: collateralAmount('78200000000000000000'),
 			child_count: '0',
 			snapshot_block: '23184710',
 		},
@@ -138,12 +128,7 @@ export const createDemoCatalogFixtures = (context: DemoContext) => {
 			initial_retention_rate: '999999500000000000',
 			initial_settlement_collateral_atto_eth: collateralAmount('44000000000000000000'),
 			settlement_collateral_atto_eth: collateralAmount('68900000000000000000'),
-			total_capacity_ownership_atto_rep: collateralAmount('35500000000000000000'),
-			fee_eligible_capacity_ownership_atto_rep: collateralAmount('32100000000000000000'),
-			total_claimable_vault_fees_atto_eth: collateralAmount('190000000000000000'),
-			unallocated_accrued_fees_atto_eth: collateralAmount('40000000000000000'),
-			current_retention_rate: '999999980000000000',
-			vault_count: '3',
+			share_token_supply_atto_shares: collateralAmount('35500000000000000000'),
 			child_count: '0',
 			snapshot_block: '23184698',
 		},
@@ -163,36 +148,11 @@ export const createDemoCatalogFixtures = (context: DemoContext) => {
 			initial_retention_rate: '999999800000000000',
 			initial_settlement_collateral_atto_eth: collateralAmount('12000000000000000000'),
 			settlement_collateral_atto_eth: collateralAmount('18400000000000000000'),
-			total_capacity_ownership_atto_rep: collateralAmount('9700000000000000000'),
-			fee_eligible_capacity_ownership_atto_rep: collateralAmount('8800000000000000000'),
-			total_claimable_vault_fees_atto_eth: collateralAmount('70000000000000000'),
-			unallocated_accrued_fees_atto_eth: collateralAmount('9000000000000000'),
-			current_retention_rate: '999999987000000000',
-			vault_count: '5',
+			share_token_supply_atto_shares: collateralAmount('9700000000000000000'),
 			child_count: '1',
 			snapshot_block: '8972451',
 		},
 	]
-
-	const demoVaults = Array.from({ length: 9 }, (_, index) => {
-		const poolItem = requiredArrayItem(demoPools, index % demoPools.length, 'Demo vault pool')
-		return {
-			chain_id: poolItem.chain_id,
-			network_id: poolItem.network_id,
-			pool_address: poolItem.pool_address,
-			collateral,
-			vault_address: demoAddress(`${(index + 2).toString(16)}f`),
-			question_title: poolItem.question_title,
-			rep_backing_units: String((920_000 + index * 143_000) * 1e12),
-			capacity_ownership_atto_rep: String(BigInt(18 + index * 4) * 10n ** BigInt(decimals)),
-			claimable_fees_atto_eth: collateralAmount(String(BigInt(4 + index) * 10n ** 16n)),
-			fee_index: String(BigInt(1200 + index * 170) * 10n ** 15n),
-			vault_fee_remainder: String(index * 13),
-			resulting_total_rep_backing_units: '6410000000000000000',
-			resulting_fee_eligible_capacity_ownership_atto_rep: poolItem.fee_eligible_capacity_ownership_atto_rep,
-			block_number: String(23184700 - index),
-		}
-	})
 
 	const demoUniverses = [
 		{
@@ -285,7 +245,6 @@ export const createDemoCatalogFixtures = (context: DemoContext) => {
 		catalogVersion: '0'.repeat(32),
 		questions: demoQuestions,
 		pools: demoPools,
-		vaults: demoVaults,
 		universes: demoUniverses,
 		poolStates: demoPools.map((poolItem, index) => ({
 			chain_id: poolItem.chain_id,
@@ -294,12 +253,11 @@ export const createDemoCatalogFixtures = (context: DemoContext) => {
 			state: {
 				systemState: index === 1 ? '2' : '0',
 				awaitingForkContinuation: index === 1,
-				totalRepBackingUnits: String(BigInt(6_400_000 + index * 1_200_000) * 10n ** 12n),
 				shareTokenSupplyAttoShares: String(BigInt(220 + index * 70) * 10n ** BigInt(decimals)),
 				escalationGame: demoAddress(`${index + 4}e`),
 			},
 		})),
 	}
 
-	return { mainnetDemoQuestion, demoPools, demoVaults, demoUniverses, demoCatalog }
+	return { mainnetDemoQuestion, demoPools, demoUniverses, demoCatalog }
 }

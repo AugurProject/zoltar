@@ -116,9 +116,6 @@ export const stateCatalogRows = async (sql: SQL, chainId: number | undefined, qu
 			SELECT 'pool', p.chain_id::text, p.pool_address::text, p.block_number::text, p.question_id::text
 			FROM pools p WHERE p.canonical AND (${chainId ?? null}::bigint IS NULL OR p.chain_id = ${chainId ?? null}::bigint)
 			UNION ALL
-			SELECT 'vault', v.chain_id::text, v.pool_address::text || ':' || v.vault_address::text, ''::text, ''::text
-			FROM (SELECT DISTINCT chain_id, pool_address, vault_address FROM vault_snapshots WHERE canonical AND (${chainId ?? null}::bigint IS NULL OR chain_id = ${chainId ?? null}::bigint)) v
-			UNION ALL
 			SELECT 'universe', u.chain_id::text, u.universe_id::text, u.block_number::text, u.parent_universe_id::text
 			FROM (
 				SELECT DISTINCT ON (chain_id, universe_id) chain_id, universe_id, block_number, parent_universe_id
@@ -136,12 +133,10 @@ export const stateCatalogRows = async (sql: SQL, chainId: number | undefined, qu
 			? await sql`SELECT
 				(SELECT count(DISTINCT (chain_id, pool_address)) FROM pools WHERE canonical)::integer AS pools,
 				(SELECT count(DISTINCT (chain_id, question_id)) FROM questions WHERE canonical)::integer AS questions,
-				(SELECT count(DISTINCT (chain_id, pool_address, vault_address)) FROM vault_snapshots WHERE canonical)::integer AS vaults,
 				(SELECT count(DISTINCT (chain_id, universe_id)) FROM universe_events WHERE canonical)::integer AS universes`
 			: await sql`SELECT
 				(SELECT count(DISTINCT pool_address) FROM pools WHERE chain_id = ${chainId} AND canonical)::integer AS pools,
 				(SELECT count(DISTINCT question_id) FROM questions WHERE chain_id = ${chainId} AND canonical)::integer AS questions,
-				(SELECT count(DISTINCT (pool_address, vault_address)) FROM vault_snapshots WHERE chain_id = ${chainId} AND canonical)::integer AS vaults,
 				(SELECT count(DISTINCT universe_id) FROM universe_events WHERE chain_id = ${chainId} AND canonical)::integer AS universes`
 	const questions =
 		chainId === undefined
@@ -156,29 +151,19 @@ export const stateCatalogRows = async (sql: SQL, chainId: number | undefined, qu
 	const pools =
 		chainId === undefined
 			? await sql`SELECT p.*, (SELECT state.read_result->'collateral' FROM entity_state_snapshots state WHERE state.chain_id = p.chain_id AND state.entity_type = 'pool' AND state.entity_identity = p.pool_address AND state.canonical AND state.read_status = 'success' ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1) AS collateral, n.id AS network_id, q.title AS question_title,
-				ps.settlement_collateral_atto_eth, ps.total_capacity_ownership_atto_rep, ps.fee_eligible_capacity_ownership_atto_rep, ps.total_claimable_vault_fees_atto_eth, ps.unallocated_accrued_fees_atto_eth, ps.current_retention_rate, ps.block_number AS snapshot_block,
-				(SELECT count(DISTINCT v.vault_address) FROM vault_snapshots v WHERE v.chain_id = p.chain_id AND v.pool_address = p.pool_address AND v.canonical) AS vault_count,
+				ps.settlement_collateral_atto_eth, ps.share_token_supply_atto_shares, ps.block_number AS snapshot_block,
 				(SELECT count(*) FROM pools child WHERE child.chain_id = p.chain_id AND child.parent_address = p.pool_address AND child.canonical) AS child_count
 				FROM pools p JOIN networks n USING (chain_id)
 				LEFT JOIN questions q ON q.chain_id = p.chain_id AND q.question_id = p.question_id AND q.canonical
 				LEFT JOIN LATERAL (SELECT * FROM pool_snapshots snapshot WHERE snapshot.chain_id = p.chain_id AND snapshot.pool_address = p.pool_address AND snapshot.canonical ORDER BY snapshot.block_number DESC, snapshot.log_index DESC LIMIT 1) ps ON true
 				WHERE p.canonical AND (${search ?? null}::text IS NULL OR p.pool_address ILIKE ${search ?? ''} OR q.title ILIKE ${search ?? ''}) ORDER BY p.block_number DESC, p.chain_id, p.pool_address LIMIT ${queryLimit} OFFSET ${offset}`
 			: await sql`SELECT p.*, (SELECT state.read_result->'collateral' FROM entity_state_snapshots state WHERE state.chain_id = p.chain_id AND state.entity_type = 'pool' AND state.entity_identity = p.pool_address AND state.canonical AND state.read_status = 'success' ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1) AS collateral, n.id AS network_id, q.title AS question_title,
-				ps.settlement_collateral_atto_eth, ps.total_capacity_ownership_atto_rep, ps.fee_eligible_capacity_ownership_atto_rep, ps.total_claimable_vault_fees_atto_eth, ps.unallocated_accrued_fees_atto_eth, ps.current_retention_rate, ps.block_number AS snapshot_block,
-				(SELECT count(DISTINCT v.vault_address) FROM vault_snapshots v WHERE v.chain_id = p.chain_id AND v.pool_address = p.pool_address AND v.canonical) AS vault_count,
+				ps.settlement_collateral_atto_eth, ps.share_token_supply_atto_shares, ps.block_number AS snapshot_block,
 				(SELECT count(*) FROM pools child WHERE child.chain_id = p.chain_id AND child.parent_address = p.pool_address AND child.canonical) AS child_count
 				FROM pools p JOIN networks n USING (chain_id)
 				LEFT JOIN questions q ON q.chain_id = p.chain_id AND q.question_id = p.question_id AND q.canonical
 				LEFT JOIN LATERAL (SELECT * FROM pool_snapshots snapshot WHERE snapshot.chain_id = p.chain_id AND snapshot.pool_address = p.pool_address AND snapshot.canonical ORDER BY snapshot.block_number DESC, snapshot.log_index DESC LIMIT 1) ps ON true
 				WHERE p.canonical AND p.chain_id = ${chainId} AND (${search ?? null}::text IS NULL OR p.pool_address ILIKE ${search ?? ''} OR q.title ILIKE ${search ?? ''}) ORDER BY p.block_number DESC, p.chain_id, p.pool_address LIMIT ${queryLimit} OFFSET ${offset}`
-	const vaults =
-		chainId === undefined
-			? await sql`SELECT DISTINCT ON (v.chain_id, v.pool_address, v.vault_address) v.*, (SELECT state.read_result->'collateral' FROM entity_state_snapshots state WHERE state.chain_id = v.chain_id AND state.entity_type = 'pool' AND state.entity_identity = v.pool_address AND state.canonical AND state.read_status = 'success' ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1) AS collateral, n.id AS network_id, q.title AS question_title
-				FROM vault_snapshots v JOIN networks n USING (chain_id) LEFT JOIN pools p ON p.chain_id = v.chain_id AND p.pool_address = v.pool_address AND p.canonical LEFT JOIN questions q ON q.chain_id = p.chain_id AND q.question_id = p.question_id AND q.canonical
-				WHERE v.canonical AND (${search ?? null}::text IS NULL OR v.vault_address ILIKE ${search ?? ''} OR v.pool_address ILIKE ${search ?? ''}) ORDER BY v.chain_id, v.pool_address, v.vault_address, v.block_number DESC, v.log_index DESC LIMIT ${queryLimit} OFFSET ${offset}`
-			: await sql`SELECT DISTINCT ON (v.chain_id, v.pool_address, v.vault_address) v.*, (SELECT state.read_result->'collateral' FROM entity_state_snapshots state WHERE state.chain_id = v.chain_id AND state.entity_type = 'pool' AND state.entity_identity = v.pool_address AND state.canonical AND state.read_status = 'success' ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1) AS collateral, n.id AS network_id, q.title AS question_title
-				FROM vault_snapshots v JOIN networks n USING (chain_id) LEFT JOIN pools p ON p.chain_id = v.chain_id AND p.pool_address = v.pool_address AND p.canonical LEFT JOIN questions q ON q.chain_id = p.chain_id AND q.question_id = p.question_id AND q.canonical
-				WHERE v.canonical AND v.chain_id = ${chainId} AND (${search ?? null}::text IS NULL OR v.vault_address ILIKE ${search ?? ''} OR v.pool_address ILIKE ${search ?? ''}) ORDER BY v.chain_id, v.pool_address, v.vault_address, v.block_number DESC, v.log_index DESC LIMIT ${queryLimit} OFFSET ${offset}`
 	const universes =
 		chainId === undefined
 			? await sql`WITH identity AS (
@@ -213,5 +198,5 @@ export const stateCatalogRows = async (sql: SQL, chainId: number | undefined, qu
 				: await sql`SELECT DISTINCT ON (chain_id, pool_address, event_name) chain_id, pool_address, event_name, state, block_number, log_index FROM pool_state_events WHERE canonical AND chain_id = ${chainId} AND pool_address = ANY(${poolAddressArray}) ORDER BY chain_id, pool_address, event_name, block_number DESC, log_index DESC`
 	}
 	const poolStates = stateRows.filter(state => pagePoolKeys.has(`${state['chain_id']}:${state['pool_address']}`))
-	return { catalogVersion, totals, questions, pools, vaults, universes, poolStates }
+	return { catalogVersion, totals, questions, pools, universes, poolStates }
 }

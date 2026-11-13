@@ -1,4 +1,3 @@
-import { protocolFeeEconomics } from '../repositories/fee-economics.ts'
 import type { SQL } from 'bun'
 import { auctionCatalogData, escalationCatalogData, forkCatalogData, forkCatalogTotal, operationsOverviewSupplement, reportCatalogData, riskCatalogData } from '../repositories/operations.ts'
 import { detailPage, paged, parseRiskCursor, protocolCursorFor, protocolCursorForRequest, riskCursorFor } from './entity-details.ts'
@@ -17,7 +16,7 @@ export const operationsResponse = async (sql: SQL, url: URL): Promise<Response> 
 		operationsOverviewSupplement(sql, chainId, String(asOf['blockNumber'])),
 		forkCatalogData(sql, chainId, String(asOf['blockNumber'])),
 	])
-	return json({ chainId, asOf, data: { reports, escalations, auctions, risk, ...supplement, forks, feeEconomics: await protocolFeeEconomics(sql, chainId, String(asOf['blockNumber'])) } })
+	return json({ chainId, asOf, data: { reports, escalations, auctions, risk, ...supplement, forks } })
 }
 
 const catalogRows = async (sql: SQL, domain: 'reports' | 'escalations' | 'auctions' | 'forks', chainId: number, asOf: Record<string, unknown>, cursor: { block: string; log: number; tx: string }, queryLimit: number) => {
@@ -33,13 +32,9 @@ export const domainCatalogResponse = async (sql: SQL, url: URL, domain: 'reports
 	if (domain === 'risk') {
 		const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
 		const limit = Math.min(Math.max(requestedLimit, 1), 250)
-		const poolCursor = parseRiskCursor(url.searchParams.get('poolCursor'), chainId, 'pool')
-		const vaultCursor = parseRiskCursor(url.searchParams.get('vaultCursor'), chainId, 'vault')
-		const cursors = [poolCursor, vaultCursor].flatMap(cursor => (cursor === undefined ? [] : [{ parts: cursor, offset: 2 }]))
-		const asOf = await operationsAsOfForContinuations(sql, chainId, cursors, postgresBigint(url.searchParams.get('atBlock'), 'atBlock'))
-		const poolAfter = poolCursor?.[8]
-		const vaultAfter = vaultCursor?.[8]
-		const data = await riskCatalogData(sql, chainId, { limit, poolAfter, vaultAfter, snapshotBlock: String(asOf['blockNumber']) })
+		const poolCursor = parseRiskCursor(url.searchParams.get('poolCursor'), chainId)
+		const asOf = await operationsAsOfForContinuations(sql, chainId, poolCursor === undefined ? [] : [{ parts: poolCursor, offset: 2 }], postgresBigint(url.searchParams.get('atBlock'), 'atBlock'))
+		const data = await riskCatalogData(sql, chainId, { limit, poolAfter: poolCursor?.[8], snapshotBlock: String(asOf['blockNumber']) })
 		const pagination = jsonRecord(data.pagination)
 		return json({
 			chainId,
@@ -48,8 +43,7 @@ export const domainCatalogResponse = async (sql: SQL, url: URL, domain: 'reports
 				...data,
 				pagination: {
 					...pagination,
-					poolNextCursor: typeof pagination['poolNextCursor'] === 'string' ? riskCursorFor(chainId, 'pool', asOf, pagination['poolNextCursor']) : undefined,
-					vaultNextCursor: typeof pagination['vaultNextCursor'] === 'string' ? riskCursorFor(chainId, 'vault', asOf, pagination['vaultNextCursor']) : undefined,
+					poolNextCursor: typeof pagination['poolNextCursor'] === 'string' ? riskCursorFor(chainId, asOf, pagination['poolNextCursor']) : undefined,
 				},
 			},
 		})

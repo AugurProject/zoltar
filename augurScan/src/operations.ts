@@ -1,14 +1,11 @@
-import { ceilDiv, compareBigint } from '@zoltar/core-shared/math/bigint'
-import { getLiquidationMigrationSecurityMultiplierBps } from '@zoltar/statoblast-shared/statoblast/liquidation'
+import { compareBigint } from '@zoltar/core-shared/math/bigint'
 import { plainRecord } from './record-serialization.ts'
 
 type ReportClock = 'block' | 'timestamp'
 
 export const ETH_QUOTE_DECIMALS = 18
 export const USDC_QUOTE_DECIMALS = 6
-const VAULT_WARNING_HEALTH_FACTOR_BPS = 12_000n
 const BPS_DENOMINATOR = 10_000n
-const PRICE_PRECISION = 10n ** 18n
 
 export type ReportLifecycleInput = {
 	readonly eventName: 'ReportSubmitted' | 'ReportDisputed' | 'ReportSettled'
@@ -170,67 +167,6 @@ const positiveInteger = (value: unknown, name: string): bigint => {
 	if (typeof value !== 'string') throw new Error(`${name} must be a non-negative decimal integer`)
 	if (!/^\d+$/.test(value)) throw new Error(`${name} must be a non-negative integer`)
 	return BigInt(value)
-}
-
-export type VaultRiskInput = {
-	readonly poolHeldBackingAttoRep: unknown
-	/** Collateral-eligible escrow, excluding surplus already credited to the pool. */
-	readonly disputeStakedAttoRep: unknown
-	readonly openInterestAttoEth: unknown
-	readonly repPerEth1e18: string
-	readonly securityMultiplierBps: string
-	readonly badDebtAttoEth: unknown
-}
-
-const vaultHealthAssessment = (badDebt: bigint, healthFactor: bigint) => {
-	if (badDebt > 0n) return { protocolState: 'bad-debt' as const, scannerSeverity: 'critical' as const, scannerReason: 'Vault has recorded bad debt' }
-	if (healthFactor < BPS_DENOMINATOR) return { protocolState: 'liquidatable' as const, scannerSeverity: 'critical' as const, scannerReason: 'Exact contract health constraints fail at the liquidation boundary' }
-	if (healthFactor < VAULT_WARNING_HEALTH_FACTOR_BPS) return { protocolState: 'healthy' as const, scannerSeverity: 'warning' as const, scannerReason: `Health factor is below the scanner warning threshold of ${VAULT_WARNING_HEALTH_FACTOR_BPS} bps` }
-	return { protocolState: 'healthy' as const, scannerSeverity: 'healthy' as const, scannerReason: 'Health factor is above the scanner warning threshold' }
-}
-
-export const vaultRisk = (input: VaultRiskInput) => {
-	const backing = positiveInteger(input.poolHeldBackingAttoRep, 'poolHeldBackingAttoRep')
-	const dispute = positiveInteger(input.disputeStakedAttoRep, 'disputeStakedAttoRep')
-	const openInterest = positiveInteger(input.openInterestAttoEth, 'openInterestAttoEth')
-	const price = positiveInteger(input.repPerEth1e18, 'repPerEth1e18')
-	const securityMultiplier = positiveInteger(input.securityMultiplierBps, 'securityMultiplierBps')
-	const badDebt = positiveInteger(input.badDebtAttoEth, 'badDebtAttoEth')
-	if (openInterest === 0n)
-		return {
-			protocolState: badDebt > 0n ? ('bad-debt' as const) : ('healthy' as const),
-			scannerSeverity: badDebt > 0n ? ('critical' as const) : ('healthy' as const),
-			scannerReason: badDebt > 0n ? 'Vault has recorded bad debt' : 'Vault has no open-interest obligation',
-			healthFactorBps: undefined,
-			liquidationBoundaryBps: BPS_DENOMINATOR.toString(),
-		}
-	if (price === 0n)
-		return {
-			protocolState: 'unavailable' as const,
-			scannerSeverity: 'unavailable' as const,
-			scannerReason: 'The accounting REP/ETH price is zero or unavailable',
-			healthFactorBps: undefined,
-			liquidationBoundaryBps: BPS_DENOMINATOR.toString(),
-		}
-	const baseRequired = ceilDiv(openInterest * price, PRICE_PRECISION)
-	const associatedBeforeFactor = ceilDiv(baseRequired * securityMultiplier, BPS_DENOMINATOR)
-	const migrationMultiplier = getLiquidationMigrationSecurityMultiplierBps(securityMultiplier)
-	const freeBeforeFactor = ceilDiv(baseRequired * migrationMultiplier, BPS_DENOMINATOR)
-	const associatedFactor = associatedBeforeFactor === 0n ? 0n : ((backing + dispute) * BPS_DENOMINATOR) / associatedBeforeFactor
-	const freeFactor = freeBeforeFactor === 0n ? 0n : (backing * BPS_DENOMINATOR) / freeBeforeFactor
-	const healthFactor = associatedFactor < freeFactor ? associatedFactor : freeFactor
-	const assessment = vaultHealthAssessment(badDebt, healthFactor)
-	return {
-		...assessment,
-		healthFactorBps: healthFactor.toString(),
-		liquidationBoundaryBps: BPS_DENOMINATOR.toString(),
-		calculation: {
-			baseRequiredRepAttoRep: baseRequired.toString(),
-			associatedRequiredBeforeHealthFactorAttoRep: associatedBeforeFactor.toString(),
-			freeRequiredBeforeHealthFactorAttoRep: freeBeforeFactor.toString(),
-			migrationSecurityMultiplierBps: migrationMultiplier.toString(),
-		},
-	}
 }
 
 export type SwapAnalyticsInput = {

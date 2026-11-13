@@ -66,16 +66,6 @@ const storeDomainEvent = async (transaction: SQL, chainId: number, item: StoredL
 		`
 		return
 	}
-	if (projection.domain === 'approval') {
-		const approvalId = projection.data['approvalId']
-		const receiverVault = projection.data['receiverVault']
-		await transaction`
-			INSERT INTO liquidation_approval_events (chain_id, block_hash, tx_hash, transaction_index, log_index, block_number, registry_address, approval_identity, receiver_vault, event_name, event_data, canonical)
-			VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${item.transactionIndex}, ${position[3]}, ${position[4]}, ${item.address.toLowerCase()}, ${typeof approvalId === 'string' ? approvalId.toLowerCase() : `nonce:${String(receiverVault ?? 'unknown').toLowerCase()}`}, ${typeof receiverVault === 'string' ? receiverVault.toLowerCase() : null}, ${projection.semanticEventKind}, (${databaseJsonText(projection.data)}::text)::jsonb, true)
-			ON CONFLICT (chain_id, block_hash, tx_hash, log_index, registry_address) DO UPDATE SET canonical = true, event_data = EXCLUDED.event_data
-		`
-		return
-	}
 	return
 }
 
@@ -100,17 +90,9 @@ const storeProjection = async (transaction: SQL, chainId: number, item: StoredLo
 	}
 	if (projection.type === 'poolSnapshot') {
 		await transaction`
-			INSERT INTO pool_snapshots (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, reason, vault_address, settlement_collateral_atto_eth, total_capacity_ownership_atto_rep, fee_eligible_capacity_ownership_atto_rep, total_claimable_vault_fees_atto_eth, unallocated_accrued_fees_atto_eth, fee_index, fee_index_remainder, total_fees_owed_remainder, uncheckpointed_fee_eligible_capacity_ownership_atto_rep, last_updated_fee_accumulator, current_retention_rate, canonical)
-			VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.poolAddress}, ${projection.reason}, ${projection.vaultAddress}, ${projection.settlementCollateralAttoEth}, ${projection.totalUnderwritingLimitAttoEth}, ${projection.feeEligibleUnderwritingLimitAttoEth}, ${projection.totalClaimableVaultFeesAttoEth}, ${projection.unallocatedAccruedFeesAttoEth}, ${projection.feeIndex}, ${projection.feeIndexRemainder}, ${projection.totalFeesOwedRemainder}, ${projection.uncheckpointedFeeEligibleUnderwritingLimitAttoEth}, ${projection.lastSettlementPortfolioTime}, ${projection.currentRetentionRate}, true)
+			INSERT INTO pool_snapshots (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, reason, settlement_collateral_atto_eth, share_token_supply_atto_shares, last_settlement_portfolio_time, canonical)
+			VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.poolAddress}, ${projection.reason}, ${projection.settlementCollateralAttoEth}, ${projection.shareTokenSupplyAttoShares}, ${projection.lastSettlementPortfolioTime}, true)
 			ON CONFLICT (chain_id, block_hash, tx_hash, log_index, pool_address) DO UPDATE SET canonical = true
-		`
-		return
-	}
-	if (projection.type === 'vaultSnapshot') {
-		await transaction`
-			INSERT INTO vault_snapshots (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, vault_address, rep_backing_units, capacity_ownership_atto_rep, claimable_fees_atto_eth, fee_index, vault_fee_remainder, resulting_total_rep_backing_units, resulting_fee_eligible_capacity_ownership_atto_rep, canonical)
-			VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.poolAddress}, ${projection.vaultAddress}, ${projection.repBackingUnits}, ${projection.underwritingLimitAttoEth}, ${projection.claimableFeesAttoEth}, ${projection.feeIndex}, ${projection.vaultFeeRemainder}, ${projection.resultingTotalRepBackingUnits}, ${projection.resultingFeeEligibleUnderwritingLimitAttoEth}, true)
-			ON CONFLICT (chain_id, block_hash, tx_hash, log_index, pool_address, vault_address) DO UPDATE SET canonical = true
 		`
 		return
 	}

@@ -59,8 +59,6 @@ export const timelineEntityPath = (record: Readonly<Record<string, unknown>>): s
 	if (identity === '') return undefined
 	const segment = encodeURIComponent(identity)
 	switch (record['entity_type']) {
-		case 'vault':
-			return `/operations/risk/vault/${identity.split(':').map(encodeURIComponent).join('/')}`
 		case 'pool':
 			return `/operations/risk/pool/${segment}`
 		case 'auction':

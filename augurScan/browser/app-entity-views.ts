@@ -1,5 +1,5 @@
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
-import type { AccountTransaction, EntityHistory, PoolRecord, QuestionRecord, RichListRecord, StateEntity, StateTab, UniverseRecord, VaultRecord } from './browser-types.ts'
+import type { AccountTransaction, EntityHistory, PoolRecord, QuestionRecord, RichListRecord, StateEntity, StateTab, UniverseRecord } from './browser-types.ts'
 import type { ScannerContext } from './app-context.ts'
 import { element, lookup } from './app-dom.ts'
 import type { OperationsViews } from './app-operations-views.ts'
@@ -16,7 +16,7 @@ import { createStateComponents } from './state-components.ts'
 import { renderQuestionDetailPage, renderUniverseDetailPage } from './state-entity-pages.ts'
 import { createStateHistoryData } from './state-history-data.ts'
 import { renderStateHistoryCoverage } from './state-history-coverage.ts'
-import { renderPoolDetailPage, renderVaultDetailPage } from './state-risk-pages.ts'
+import { renderPoolDetailPage } from './state-risk-pages.ts'
 import { createSystemCatalogLoader } from './system-catalog-loader.ts'
 import { createSystemRoute } from './system-route.ts'
 
@@ -198,7 +198,6 @@ export const createEntityViews = (context: ScannerContext, { evidence, operation
 		nativeSymbol,
 		fetchEntityHistory,
 		renderPoolDetail: (poolItem: PoolRecord, requestVersion: number, canonicalGeneration: number, suppliedHistory?: EntityHistory) => renderPoolDetailPage(stateRiskDeps(requestVersion, canonicalGeneration), poolItem, suppliedHistory),
-		renderVaultDetail: (vaultItem: VaultRecord, requestVersion: number, canonicalGeneration: number, suppliedHistory?: EntityHistory) => renderVaultDetailPage(stateRiskDeps(requestVersion, canonicalGeneration), vaultItem, suppliedHistory),
 		renderQuestionDetail: (question: QuestionRecord, requestVersion: number, canonicalGeneration: number, suppliedHistory?: EntityHistory) => renderQuestionDetailPage(stateEntityDeps(requestVersion, canonicalGeneration), question, suppliedHistory),
 		renderUniverseDetail: (universe: UniverseRecord, requestVersion: number, canonicalGeneration: number, suppliedHistory?: EntityHistory) => renderUniverseDetailPage(stateEntityDeps(requestVersion, canonicalGeneration), universe, suppliedHistory),
 		systemDetailRefreshGate: refreshGates.systemDetail,

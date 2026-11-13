@@ -3,7 +3,7 @@ import { handleApi } from '../../src/api.ts'
 import { canonicalTablePolicies, ScannerDatabase } from '../../src/database.ts'
 import { initializeSchema } from '../../src/schema.ts'
 import { CURRENT_SCHEMA_VERSION, UNSUPPORTED_SCHEMA_MESSAGE } from '../../src/schema-policy.ts'
-import { rewindAuctionNamingToV5 } from '../support/schema-fixtures.ts'
+import { rewindAccountingStorageToV6, rewindAuctionNamingToV5 } from '../support/schema-fixtures.ts'
 import { address, blockHash, chainId, discoveredAddress, expectBehaviorChangingSchemaObjectsRejected, inverseUniswapPairAddress, pairAddress, postgresTest, rediscoveredAddress, requirePostgresUrl, wethAddress } from '../support/postgres-fixtures.ts'
 
 const v1ForkLogs = [
@@ -187,7 +187,7 @@ const expectMigratedTimelineEvidence = async (database: ScannerDatabase, migrati
 	const migratedMarker = await database.sql`SELECT schema_version FROM augurscan_schema WHERE singleton`
 	expect(migratedMarker).toEqual([{ schema_version: CURRENT_SCHEMA_VERSION }])
 	const appliedMigrations = await database.sql`SELECT schema_version FROM augurscan_schema_migrations ORDER BY schema_version`
-	expect(appliedMigrations).toEqual([{ schema_version: '2' }, { schema_version: '3' }, { schema_version: '4' }, { schema_version: '5' }, { schema_version: '6' }])
+	expect(appliedMigrations).toEqual([{ schema_version: '2' }, { schema_version: '3' }, { schema_version: '4' }, { schema_version: '5' }, { schema_version: '6' }, { schema_version: '7' }])
 	const migratedTimeline = await database.sql`
 		SELECT entity_identity, source_event, canonical FROM protocol_timeline_entries
 		WHERE chain_id = ${migrationChainId} ORDER BY block_number
@@ -414,7 +414,7 @@ postgresTest('renames v5 auction storage without losing canonical or orphan hist
 		const logsBefore = await database.sql`SELECT arguments FROM logs WHERE chain_id = ${migrationChainId} ORDER BY block_number, log_index`
 		await rewindAuctionNamingToV5(database)
 		await database.sql`UPDATE augurscan_schema SET schema_version = '5' WHERE singleton`
-		await database.sql`DELETE FROM augurscan_schema_migrations WHERE schema_version = '6'`
+		await database.sql`DELETE FROM augurscan_schema_migrations WHERE schema_version::integer > 5`
 		await initializeSchema(database.sql)
 		expect(await database.sql`SELECT block_number, auction_address, event_name, event_data, canonical, observed_at FROM collateral_repair_auction_events WHERE chain_id = ${migrationChainId} ORDER BY block_number`).toEqual(historyBefore)
 		expect(await database.sql`SELECT pool_address, collateral_repair_auction_address, canonical FROM pools WHERE chain_id = ${migrationChainId} ORDER BY block_number`).toEqual(bindingsBefore)
@@ -427,6 +427,58 @@ postgresTest('renames v5 auction storage without losing canonical or orphan hist
 		await initializeSchema(database.sql)
 		const historyAfterSecondStartup = await database.sql`SELECT count(*)::integer AS count FROM collateral_repair_auction_events WHERE chain_id = ${migrationChainId}`
 		expect(historyAfterSecondStartup).toEqual([{ count: 2 }])
+	} finally {
+		await database.sql.unsafe('TRUNCATE TABLE networks CASCADE')
+		await database.close()
+	}
+})
+
+postgresTest('replaces v6 accounting storage and keeps the logs a projection rebuild reads', async () => {
+	const database = new ScannerDatabase(requirePostgresUrl())
+	const migrationChainId = chainId + 70 + process.pid
+	try {
+		await initializeSchema(database.sql)
+		await database.sql`INSERT INTO networks (chain_id, id, name, explorer_base_url, start_block) VALUES (${migrationChainId}, ${`accounting-storage-${migrationChainId}`}, 'Accounting storage fixture', 'https://example.invalid', 0)`
+		const hash = blockHash('accounting-storage-block')
+		const txHash = blockHash('accounting-storage-transaction')
+		await database.sql`INSERT INTO blocks (chain_id, number, hash, parent_hash, timestamp, canonical) VALUES (${migrationChainId}, 1, ${hash}, ${blockHash('accounting-storage-parent')}, now(), true)`
+		await database.sql`INSERT INTO transactions (chain_id, hash, block_hash, block_number, transaction_index, from_address, to_address, value, input, status, receipt, canonical) VALUES (${migrationChainId}, ${txHash}, ${hash}, 1, 0, ${address.toLowerCase()}, ${discoveredAddress.toLowerCase()}, 0, '0x', 'success', '{}'::jsonb, true)`
+		const checkpoint = JSON.stringify({ reason: 5, settlementCollateralAttoEth: '7', shareTokenSupplyAttoShares: '9', lastSettlementPortfolioTime: '100' })
+		await database.sql`
+			INSERT INTO logs (chain_id, tx_hash, block_hash, block_number, transaction_index, log_index, emitter_address, topics, data, event_name, arguments, decode_status, summary, canonical)
+			VALUES (${migrationChainId}, ${txHash}, ${hash}, 1, 0, 0, ${address.toLowerCase()}, '[]'::jsonb, '0x', 'QuestionAccountingCheckpoint', (${checkpoint}::text)::jsonb, 'decoded', 'QuestionAccountingCheckpoint', true)
+		`
+		const logsBefore = await database.sql`SELECT event_name, arguments FROM logs WHERE chain_id = ${migrationChainId}`
+		await rewindAccountingStorageToV6(database)
+		// Rows projected from the removed events: the upgrade must discard them instead of failing on their shape.
+		await database.sql`
+			INSERT INTO pool_snapshots (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, reason, vault_address, settlement_collateral_atto_eth, total_capacity_ownership_atto_rep, fee_eligible_capacity_ownership_atto_rep, total_claimable_vault_fees_atto_eth, unallocated_accrued_fees_atto_eth, fee_index, fee_index_remainder, total_fees_owed_remainder, uncheckpointed_fee_eligible_capacity_ownership_atto_rep, last_updated_fee_accumulator, current_retention_rate, canonical)
+			VALUES (${migrationChainId}, ${hash}, ${txHash}, 0, 1, ${address.toLowerCase()}, 0, ${discoveredAddress.toLowerCase()}, 1, 2, 3, 4, 5, 6, 7, 8, 9, now(), 10, true)
+		`
+		await database.sql`
+			INSERT INTO vault_snapshots (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, vault_address, rep_backing_units, capacity_ownership_atto_rep, claimable_fees_atto_eth, fee_index, vault_fee_remainder, resulting_total_rep_backing_units, resulting_fee_eligible_capacity_ownership_atto_rep, canonical)
+			VALUES (${migrationChainId}, ${hash}, ${txHash}, 0, 1, ${address.toLowerCase()}, ${discoveredAddress.toLowerCase()}, 1, 2, 3, 4, 5, 6, 7, true)
+		`
+		await database.sql`
+			INSERT INTO liquidation_approval_events (chain_id, block_hash, tx_hash, transaction_index, log_index, block_number, registry_address, approval_identity, event_name, event_data, canonical)
+			VALUES (${migrationChainId}, ${hash}, ${txHash}, 0, 0, 1, ${address.toLowerCase()}, 'approval', 'LiquidationApprovalSet', '{}'::jsonb, true)
+		`
+		await database.sql`UPDATE augurscan_schema SET schema_version = '6' WHERE singleton`
+		await database.sql`DELETE FROM augurscan_schema_migrations WHERE schema_version = '7'`
+		await initializeSchema(database.sql)
+		expect(await database.sql`SELECT schema_version FROM augurscan_schema WHERE singleton`).toEqual([{ schema_version: CURRENT_SCHEMA_VERSION }])
+		expect(await database.sql`SELECT description FROM augurscan_schema_migrations WHERE schema_version = '7'`).toEqual([{ description: 'Storage for events the current contracts emit' }])
+		expect(await database.sql`SELECT to_regclass('public.vault_snapshots') AS vaults, to_regclass('public.liquidation_approval_events') AS approvals`).toEqual([{ vaults: null, approvals: null }])
+		expect(await database.sql`SELECT count(*)::integer AS count FROM pool_snapshots`).toEqual([{ count: 0 }])
+		expect(await database.sql`SELECT event_name, arguments FROM logs WHERE chain_id = ${migrationChainId}`).toEqual(logsBefore)
+		// The replaced table accepts the projection of the retained checkpoint log.
+		await database.sql`
+			INSERT INTO pool_snapshots (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, reason, settlement_collateral_atto_eth, share_token_supply_atto_shares, last_settlement_portfolio_time, canonical)
+			VALUES (${migrationChainId}, ${hash}, ${txHash}, 0, 1, ${address.toLowerCase()}, 5, 7, 9, to_timestamp(100), true)
+		`
+		// A second startup must accept the migrated layout without replaying DDL.
+		await initializeSchema(database.sql)
+		expect(await database.sql`SELECT settlement_collateral_atto_eth::text, share_token_supply_atto_shares::text FROM pool_snapshots WHERE chain_id = ${migrationChainId}`).toEqual([{ settlement_collateral_atto_eth: '7', share_token_supply_atto_shares: '9' }])
 	} finally {
 		await database.sql.unsafe('TRUNCATE TABLE networks CASCADE')
 		await database.close()

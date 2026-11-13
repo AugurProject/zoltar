@@ -10,8 +10,10 @@ test('renders exact lifecycle amounts, counterparties and outcomes without round
 	expect(semanticFields({ outcomeBalancesAttoRep: ['1000000000000000000', '2', '3'] }, 'ETH').map(field => field[0])).toEqual(['INVALID balance', 'YES balance', 'NO balance'])
 })
 
-test('timeline targets compound vault identities without losing the pool', () => {
-	expect(timelineEntityPath({ entity_type: 'vault', entity_identity: 'pool:vault' })).toBe('/operations/risk/vault/pool/vault')
+test('timeline targets link only entities that have a detail page', () => {
+	// A vault is a capital-ledger owner; it has timeline evidence but no detail page of its own.
+	expect(timelineEntityPath({ entity_type: 'vault', entity_identity: 'ledger:owner' })).toBeUndefined()
+	expect(timelineEntityPath({ entity_type: 'pool', entity_identity: 'pool' })).toBe('/operations/risk/pool/pool')
 	expect(timelineEntityPath({ entity_type: 'auction', entity_identity: 'auction' })).toBe('/operations/auction/auction')
 })
 

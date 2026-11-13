@@ -3,17 +3,16 @@ import { SQL } from 'bun'
 import { initializeSchema } from '../../src/schema.ts'
 import { sharePositions, pendingAuctionRefunds, escalationPositions, escalationPayouts } from '../../src/repositories/share-positions.ts'
 import { escalationCatalogData } from '../../src/repositories/operations.ts'
-import { protocolFeeEconomics } from '../../src/repositories/fee-economics.ts'
 import { chainDecodeCoverage } from '../../src/abi-coverage-report.ts'
 
 const url = process.env['POSTGRES_TEST_URL']
-test.skipIf(url === undefined)('canonical semantic state respects snapshots, migrations, claims and fee accounting boundaries', async () => {
+test.skipIf(url === undefined)('canonical semantic state respects snapshots, migrations, claims and refund boundaries', async () => {
 	if (url === undefined) throw new Error('POSTGRES_TEST_URL is required')
 	const sql = new SQL(url)
 	await initializeSchema(sql)
 	const connection = await sql.reserve()
 	try {
-		for (const table of ['logs', 'blocks', 'contracts', 'amm_markets', 'escalation_game_events', 'collateral_repair_auction_events', 'entity_state_snapshots', 'pool_snapshots', 'transactions', 'actions']) {
+		for (const table of ['logs', 'blocks', 'contracts', 'amm_markets', 'escalation_game_events', 'collateral_repair_auction_events', 'entity_state_snapshots', 'transactions', 'actions']) {
 			await connection.unsafe(`CREATE TEMP TABLE ${table} AS SELECT * FROM public.${table} WITH NO DATA`)
 		}
 		const token = `0x${'1'.repeat(40)}`
@@ -65,15 +64,6 @@ test.skipIf(url === undefined)('canonical semantic state respects snapshots, mig
 		expect((await escalationPayouts(connection, 1, '2', owner)).unavailable_games).toBe('1')
 		expect((await escalationPayouts(connection, 1, '1', owner)).items).toHaveLength(1)
 
-		for (const [index, [reason, fees]] of [
-			[5, 0],
-			[0, 10],
-			[1, 4],
-			[2, 4],
-			[0, 7],
-		].entries())
-			await connection`INSERT INTO pool_snapshots (chain_id, pool_address, block_number, log_index, reason, unallocated_accrued_fees_atto_eth, canonical) VALUES (1, ${token}, 1, ${index}, ${reason}, ${fees}, true)`
-		expect(await protocolFeeEconomics(connection, 1, '1')).toMatchObject({ accrued_atto_eth: '13', missing_baselines: '0' })
 		await connection`INSERT INTO transactions (chain_id, hash, block_hash, block_number, to_address, input, status, receipt, canonical) VALUES (1, ${hash}, ${hash}, 1, ${token}, '0x12345678', 'reverted', '{"callTraceStatus":"unavailable"}'::jsonb, true)`
 		await connection`INSERT INTO actions (chain_id, tx_hash, block_hash, decode_status) VALUES (1, ${hash}, ${hash}, 'unknown')`
 		expect(await chainDecodeCoverage(connection, 1, '1')).toMatchObject({ observed_calls: '1', undecoded_calls: '1', traced_transactions: '0' })

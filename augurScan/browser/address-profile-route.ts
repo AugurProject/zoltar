@@ -130,7 +130,6 @@ export const createAddressProfileRoute = (deps: AddressProfileRouteDeps) => {
 						transaction_count: transactions.total ?? transactions.items.length,
 						interaction_count: interactions.total ?? interactions.items.length,
 						pool_count: 0,
-						vault_count: 0,
 						largest_rep_token_address: null,
 						largest_rep_balance: null,
 						largest_rep_decimals: null,
@@ -139,7 +138,6 @@ export const createAddressProfileRoute = (deps: AddressProfileRouteDeps) => {
 						weth_balances: [],
 						native_balance_detail: { balance: '0', blockNumber: network?.indexed_block ?? '0' },
 						pool_associations: [],
-						vault_positions: [],
 						...portfolio.data,
 					}
 			const signature = JSON.stringify([item, transactions.items, interactions.items])

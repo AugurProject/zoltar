@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { auctionDemandCurve, auctionLifecycle, candlestickBuckets, fixedWindowTwap, reportLifecycle, reportRoundChanges, swapAnalytics, vaultRisk } from '../../src/operations.ts'
+import { auctionDemandCurve, auctionLifecycle, candlestickBuckets, fixedWindowTwap, reportLifecycle, reportRoundChanges, swapAnalytics } from '../../src/operations.ts'
 
 test('derives OpenOracle boundaries with the report clock selected by flags', () => {
 	expect(
@@ -80,40 +80,6 @@ test('derives auction lifecycle at exact boundaries', () => {
 	expect(auctionLifecycle({ started: true, finalized: false, opensAt: '10', closesAt: '20', indexedTimestamp: '19', bidCount: 0, settlementCount: 0 })).toBe('Open')
 	expect(auctionLifecycle({ started: true, finalized: false, opensAt: '10', closesAt: '20', indexedTimestamp: '9', bidCount: 0, settlementCount: 0 })).toBe('Scheduled')
 	expect(auctionLifecycle({ started: true, finalized: true, indexedTimestamp: '20', bidCount: 2, settlementCount: 1 })).toBe('Bid settlements outstanding')
-})
-
-test('matches the Solidity vault health constraints and keeps scanner severity separate', () => {
-	const healthy = vaultRisk({
-		poolHeldBackingAttoRep: String(200),
-		disputeStakedAttoRep: String(0),
-		openInterestAttoEth: (10n ** 18n).toString(),
-		repPerEth1e18: '100',
-		securityMultiplierBps: '15000',
-		badDebtAttoEth: String(0),
-	})
-	expect(healthy.protocolState).toBe('healthy')
-	expect(healthy.healthFactorBps).toBe('13333')
-	expect(healthy.scannerSeverity).toBe('healthy')
-
-	const warning = vaultRisk({
-		poolHeldBackingAttoRep: String(179),
-		disputeStakedAttoRep: String(0),
-		openInterestAttoEth: (10n ** 18n).toString(),
-		repPerEth1e18: '100',
-		securityMultiplierBps: '15000',
-		badDebtAttoEth: String(0),
-	})
-	expect(warning).toMatchObject({ protocolState: 'healthy', scannerSeverity: 'warning', healthFactorBps: '11933' })
-
-	const liquidatable = vaultRisk({
-		poolHeldBackingAttoRep: String(149),
-		disputeStakedAttoRep: String(0),
-		openInterestAttoEth: (10n ** 18n).toString(),
-		repPerEth1e18: '100',
-		securityMultiplierBps: '15000',
-		badDebtAttoEth: String(0),
-	})
-	expect(liquidatable).toMatchObject({ protocolState: 'liquidatable', scannerSeverity: 'critical' })
 })
 
 test('reconstructs pre-swap reserves and exact price impact from Swap evidence', () => {

@@ -107,77 +107,28 @@ const expectTradingObservationBoundary = async ({ database, operationsChainId, o
 			`
 }
 
-// Approval evidence is bounded to 100 rows and filtered to the vault's own security pool.
-const expectBoundedApprovalsAndRisk = async ({ database, operationsChainId, oracle, hash }: OperationsContext): Promise<void> => {
-	await database.sql`
-				INSERT INTO liquidation_approval_events (
-					chain_id, block_hash, tx_hash, transaction_index, log_index, block_number, registry_address,
-					approval_identity, receiver_vault, event_name, event_data, canonical
-				)
-				SELECT ${operationsChainId}, '0x' || lpad(to_hex(item), 64, '0'),
-					'0x' || lpad(to_hex(item + 20000), 64, '0'), 0, 0, item, ${oracle.toLowerCase()},
-					'0x' || lpad(to_hex(item), 64, '0'), ${address.toLowerCase()}::text, 'LiquidationApprovalSet',
-					jsonb_build_object(
-						'approvalId', '0x' || lpad(to_hex(item), 64, '0'),
-						'receiverVault', ${address.toLowerCase()}::text,
-						'securityPool', CASE WHEN item = 102 THEN ${uniswapOnlyMarket}::text ELSE ${oracle.toLowerCase()}::text END,
-						'targetVault', ${address.toLowerCase()}::text
-					), true
-				FROM generate_series(2, 102) item
-			`
-	const linkedApprovalId = `0x${'b'.repeat(64)}`
-	await database.sql`
-				INSERT INTO liquidation_approval_events (
-					chain_id, block_hash, tx_hash, transaction_index, log_index, block_number, registry_address,
-					approval_identity, receiver_vault, event_name, event_data, canonical
-				) VALUES
-				(
-					${operationsChainId}, ${`0x${(10002).toString(16).padStart(64, '0')}`},
-					${`0x${(30002).toString(16).padStart(64, '0')}`}, 0, 0, 10002, ${uniswapOnlyMarket},
-					${linkedApprovalId}, ${uniswapOnlyMarket}, 'LiquidationApprovalSet',
-					jsonb_build_object('approvalId', ${linkedApprovalId}::text, 'receiverVault', ${uniswapOnlyMarket}::text,
-						'securityPool', ${oracle.toLowerCase()}::text, 'targetVault', ${address.toLowerCase()}::text), true
-				),
-				(
-					${operationsChainId}, ${`0x${(10003).toString(16).padStart(64, '0')}`},
-					${`0x${(30003).toString(16).padStart(64, '0')}`}, 0, 0, 10003, ${uniswapOnlyMarket},
-					${linkedApprovalId}, NULL, 'LiquidationApprovalReserved',
-					jsonb_build_object('approvalId', ${linkedApprovalId}::text, 'operationId', '42'), true
-				),
-				(
-					${operationsChainId}, ${`0x${(10003).toString(16).padStart(64, '0')}`},
-					${`0x${(30003).toString(16).padStart(64, '0')}`}, 0, 0, 10003, ${oracle.toLowerCase()},
-					${linkedApprovalId}, ${uniswapOnlyMarket}, 'LiquidationApprovalSet',
-					jsonb_build_object('approvalId', ${linkedApprovalId}::text, 'receiverVault', ${uniswapOnlyMarket}::text,
-						'securityPool', ${uniswapOnlyMarket}::text, 'targetVault', ${uniswapOnlyMarket}::text), true
-				)
-			`
-	const boundedApprovalsResponse = await handleApi(new Request(`http://localhost/api/v1/operations?chainId=${operationsChainId}`), database.sql)
-	if (boundedApprovalsResponse === undefined) throw new Error('bounded operations endpoint did not return a response')
-	const boundedApprovals = (await boundedApprovalsResponse.json()) as { data: { risk: { approvalEvents: unknown[] } } }
-	expect(boundedApprovals.data.risk.approvalEvents).toHaveLength(100)
-
-	const riskResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}`), database.sql)
-	if (riskResponse === undefined) throw new Error('vault risk endpoint did not return a response')
-	const risk = (await riskResponse.json()) as {
-		data: Record<string, unknown> & { approvalEvents: Array<{ approval_identity: string; event_name: string; event_data: Record<string, unknown> }> }
-	}
-	expect(risk.data).toMatchObject({
-		protocol_state: 'unavailable',
-		scanner_severity: 'unavailable',
-		snapshot_evidence: {
-			vaultSnapshot: { blockNumber: '2', blockHash: `0x${(2).toString(16).padStart(64, '0')}` },
-			poolSnapshot: { blockNumber: '1', blockHash: hash },
-		},
-	})
-	expect(risk.data['scanner_reason']).toContain('different evidence blocks')
-	expect(risk.data.approvalEvents).toHaveLength(100)
-	expect(risk.data.approvalEvents).toContainEqual(expect.objectContaining({ approval_identity: linkedApprovalId, event_name: 'LiquidationApprovalReserved' }))
-	expect(risk.data.approvalEvents.some(event => event.event_data['securityPool'] === uniswapOnlyMarket)).toBe(false)
+// The risk overview feeds the capital ledger's take-overs and no longer reports approvals or vaults.
+const expectRecentTakeovers = async ({ database, operationsChainId, oracle }: OperationsContext): Promise<void> => {
+	const overviewResponse = await handleApi(new Request(`http://localhost/api/v1/operations?chainId=${operationsChainId}`), database.sql)
+	if (overviewResponse === undefined) throw new Error('operations endpoint did not return a response')
+	const overview = (await overviewResponse.json()) as { data: Record<string, unknown> & { risk: Record<string, unknown>; totals: Record<string, unknown> } }
+	expect(overview.data.risk['recentTakeovers']).toEqual([
+		expect.objectContaining({
+			semantic_event_kind: 'CommitmentTakenOver',
+			entity_type: 'capital-position',
+			entity_identity: `${oracle.toLowerCase()}:1`,
+			summary_data: { sourceId: '1', receiverId: '2', commitment: '90', awardAttoRep: '5' },
+		}),
+	])
+	for (const removed of ['vaults', 'approvalEvents', 'recentLiquidations']) expect(overview.data.risk).not.toHaveProperty(removed)
+	expect(overview.data.totals).not.toHaveProperty('vaults')
+	expect(overview.data).not.toHaveProperty('feeEconomics')
+	const vaultRiskResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}`), database.sql)
+	expect(vaultRiskResponse?.status).toBe(400)
 }
 
-// Vault risk history paginates per observation, and price validity and bad debt drive severity.
-const expectRiskHistoryAndSeverity = async ({ database, operationsChainId, oracle, hash }: OperationsContext): Promise<void> => {
+// Pool risk history paginates per observation and carries the pool's accounting checkpoints.
+const expectRiskHistoryAndSeverity = async ({ database, operationsChainId, oracle }: OperationsContext): Promise<void> => {
 	await database.sql`
 				INSERT INTO entity_state_observations (
 					chain_id, entity_type, entity_identity, block_number, block_hash, block_timestamp,
@@ -185,26 +136,32 @@ const expectRiskHistoryAndSeverity = async ({ database, operationsChainId, oracl
 					indexer_run_id, abi_source_hash, application_source_hash, projection_source_hash
 				)
 				SELECT chain_id, entity_type, entity_identity, block_number, block_hash, block_timestamp,
-					'augurscan.vault-risk.cursor-test', read_status, read_result, canonical,
+					'augurscan.pool-risk.cursor-test', read_status, read_result, canonical,
 					indexer_run_id, abi_source_hash, application_source_hash, projection_source_hash
 				FROM entity_state_observations
-				WHERE chain_id = ${operationsChainId} AND entity_type = 'vault'
+				WHERE chain_id = ${operationsChainId} AND entity_type = 'pool' AND entity_identity = ${oracle.toLowerCase()}
 				LIMIT 1
 			`
-	const firstRiskHistoryResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}?limit=1`), database.sql)
-	if (firstRiskHistoryResponse === undefined) throw new Error('vault risk history did not return a response')
+	const poolRiskPath = `http://localhost/api/v1/state/risk/pools/${operationsChainId}/${oracle.toLowerCase()}`
+	const firstRiskHistoryResponse = await handleApi(new Request(`${poolRiskPath}?limit=1`), database.sql)
+	if (firstRiskHistoryResponse === undefined) throw new Error('pool risk history did not return a response')
 	const firstRiskHistory = (await firstRiskHistoryResponse.json()) as {
-		data: { history: { stateSnapshots: Array<{ id: string }>; nextCursor: string } }
+		data: { history: Record<string, unknown> & { stateSnapshots: Array<{ id: string }>; accountingSnapshots: Array<Record<string, unknown>>; nextCursor: string } }
 	}
 	expect(firstRiskHistory.data.history.stateSnapshots).toHaveLength(1)
+	expect(firstRiskHistory.data.history.accountingSnapshots).toEqual([expect.objectContaining({ pool_address: oracle.toLowerCase(), reason: 5, settlement_collateral_atto_eth: '40', share_token_supply_atto_shares: '40' })])
+	expect(firstRiskHistory.data.history).not.toHaveProperty('liquidations')
+	expect(firstRiskHistory.data).not.toHaveProperty('approvalEvents')
 	expect(firstRiskHistory.data.history.nextCursor).toBeString()
-	const secondRiskHistoryResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}?limit=1&cursor=${encodeURIComponent(firstRiskHistory.data.history.nextCursor)}`), database.sql)
+	const secondRiskHistoryResponse = await handleApi(new Request(`${poolRiskPath}?limit=1&cursor=${encodeURIComponent(firstRiskHistory.data.history.nextCursor)}`), database.sql)
 	expect(secondRiskHistoryResponse?.status).toBe(200)
 	const secondRiskHistory = (await secondRiskHistoryResponse?.json()) as {
-		data: { history: { stateSnapshots: Array<{ id: string }> } }
+		data: { history: { stateSnapshots: Array<{ id: string }>; accountingSnapshots: unknown[] } }
 	}
 	expect(secondRiskHistory.data.history.stateSnapshots).toHaveLength(1)
 	expect(secondRiskHistory.data.history.stateSnapshots[0]?.id).not.toBe(firstRiskHistory.data.history.stateSnapshots[0]?.id)
+	// The single accounting checkpoint was on the first page and must not repeat.
+	expect(secondRiskHistory.data.history.accountingSnapshots).toEqual([])
 	const riskHistoryGeneration = await database.sql`
 				INSERT INTO chain_reorganizations
 					(chain_id, previous_block, previous_hash, ancestor_block, ancestor_hash, depth, reason)
@@ -212,55 +169,16 @@ const expectRiskHistoryAndSeverity = async ({ database, operationsChainId, oracl
 					${`0x${(10003).toString(16).padStart(64, '0')}`}, 0, 'projection-rebuild')
 				RETURNING id::text
 			`
-	const staleRiskHistoryResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}?limit=1&cursor=${encodeURIComponent(firstRiskHistory.data.history.nextCursor)}`), database.sql)
+	const staleRiskHistoryResponse = await handleApi(new Request(`${poolRiskPath}?limit=1&cursor=${encodeURIComponent(firstRiskHistory.data.history.nextCursor)}`), database.sql)
 	expect(staleRiskHistoryResponse?.status).toBe(409)
 	await database.sql`DELETE FROM chain_reorganizations WHERE id = ${riskHistoryGeneration[0]?.['id']}`
 
-	await database.sql`
-				UPDATE entity_state_snapshots SET
-					block_number = 1, block_hash = ${hash}, block_timestamp = timestamptz '2026-01-01 00:00:20+00'
-				WHERE chain_id = ${operationsChainId} AND entity_type = 'vault'
-			`
-	await database.sql`
-				UPDATE entity_state_snapshots SET read_result = jsonb_set(read_result, '{price,protocolValid}', 'false'::jsonb, true)
-				WHERE chain_id = ${operationsChainId} AND entity_type = 'pool'
-			`
-	const invalidPriceResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}`), database.sql)
-	if (invalidPriceResponse === undefined) throw new Error('invalid-price risk endpoint did not return a response')
-	const invalidPrice = (await invalidPriceResponse.json()) as { data: Record<string, unknown> }
-	expect(invalidPrice.data).toMatchObject({ protocol_state: 'unavailable', scanner_severity: 'unavailable' })
-	expect(invalidPrice.data['scanner_reason']).toContain('invalid accounting price')
-
-	await database.sql`
-		UPDATE entity_state_snapshots SET read_result = CASE entity_type
-			WHEN 'pool' THEN jsonb_set(read_result, '{price,protocolValid}', 'true'::jsonb, true)
-			ELSE read_result - 'targetHealthFactorBps'
-		END WHERE chain_id = ${operationsChainId} AND entity_type IN ('pool', 'vault')
-	`
-	const healthyResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}`), database.sql)
-	if (healthyResponse === undefined) throw new Error('healthy vault risk endpoint did not return a response')
-	expect(healthyResponse.status).toBe(200)
-	const healthy = await healthyResponse.json()
-	// The nominal 100 REP escrow was already credited as surplus and cannot increase vault health.
-	expect(healthy).toMatchObject({ data: { protocol_state: 'healthy', scanner_severity: 'healthy', risk: { healthFactorBps: '13333' } } })
-
-	await database.sql`
-				UPDATE entity_state_snapshots SET read_result =
-					CASE entity_type
-						WHEN 'pool' THEN jsonb_set(read_result, '{totalBadDebtAttoEth}', '"7"'::jsonb, true)
-						ELSE jsonb_set(read_result, '{badDebtAttoEth}', '"9"'::jsonb, true)
-					END
-				WHERE chain_id = ${operationsChainId} AND entity_type IN ('pool', 'vault')
-			`
-	const badDebtPoolResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk/pools/${operationsChainId}/${oracle.toLowerCase()}`), database.sql)
-	const badDebtVaultResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}`), database.sql)
-	if (badDebtPoolResponse === undefined || badDebtVaultResponse === undefined) throw new Error('bad-debt risk endpoint did not return a response')
-	const badDebtPool = (await badDebtPoolResponse.json()) as { data: Record<string, unknown> }
-	const badDebtVault = (await badDebtVaultResponse.json()) as { data: Record<string, unknown> }
+	const poolRiskResponse = await handleApi(new Request(poolRiskPath), database.sql)
+	if (poolRiskResponse === undefined) throw new Error('pool risk endpoint did not return a response')
+	const poolRisk = (await poolRiskResponse.json()) as { data: Record<string, unknown> }
 	// A question pool reports settlement state; capital risk belongs to the portfolio.
-	expect(badDebtPool.data).toMatchObject({ protocol_state: '1', scanner_severity: 'unavailable' })
-	expect(badDebtPool.data['scanner_reason']).toContain('shared portfolio capital positions')
-	expect(badDebtVault.data).toMatchObject({ protocol_state: 'bad-debt', scanner_severity: 'critical' })
+	expect(poolRisk.data).toMatchObject({ protocol_state: '1', scanner_severity: 'unavailable' })
+	expect(poolRisk.data['scanner_reason']).toContain('shared portfolio capital positions')
 }
 
 const expectSnapshotsAndIndexedPlans = async ({ database, operationsChainId, oracle }: OperationsContext): Promise<void> => {
@@ -292,10 +210,6 @@ const expectSnapshotsAndIndexedPlans = async ({ database, operationsChainId, ora
 			pool: await transaction`EXPLAIN (FORMAT JSON) SELECT * FROM pool_snapshots
 						WHERE chain_id = ${operationsChainId} AND pool_address = ${oracle.toLowerCase()} AND canonical
 						ORDER BY block_number DESC, log_index DESC, tx_hash DESC, block_hash DESC LIMIT 100`,
-			vault: await transaction`EXPLAIN (FORMAT JSON) SELECT * FROM vault_snapshots
-						WHERE chain_id = ${operationsChainId} AND pool_address = ${oracle.toLowerCase()}
-							AND vault_address = ${address.toLowerCase()} AND canonical
-						ORDER BY block_number DESC, log_index DESC, tx_hash DESC, block_hash DESC LIMIT 100`,
 			timeline: await transaction`EXPLAIN (FORMAT JSON) SELECT * FROM protocol_timeline_entries
 						WHERE chain_id = ${operationsChainId} AND entity_type = 'vault'
 							AND entity_identity = ${`${oracle.toLowerCase()}:${address.toLowerCase()}`} AND canonical
@@ -305,7 +219,6 @@ const expectSnapshotsAndIndexedPlans = async ({ database, operationsChainId, ora
 	expect(JSON.stringify(paginationPlans.balance)).toContain('address_balance_observation_page')
 	expect(JSON.stringify(paginationPlans.metadata)).toContain('token_metadata_observation_page')
 	expect(JSON.stringify(paginationPlans.pool)).toContain('pool_snapshots_detail_page')
-	expect(JSON.stringify(paginationPlans.vault)).toContain('vault_snapshots_detail_page')
 	expect(JSON.stringify(paginationPlans.timeline)).toMatch(/protocol_timeline_(entity_)?history_page/)
 }
 
@@ -328,11 +241,11 @@ const expectManifestResetRetention = async ({ database, operationsChainId, netwo
 					SELECT
 						(SELECT count(*) FROM pools WHERE chain_id = ${operationsChainId})::integer AS pools,
 						(SELECT count(*) FROM pool_state_events WHERE chain_id = ${operationsChainId})::integer AS pool_events,
-						(SELECT count(*) FROM vault_snapshots WHERE chain_id = ${operationsChainId})::integer AS vaults,
+						(SELECT count(*) FROM pool_snapshots WHERE chain_id = ${operationsChainId})::integer AS pool_snapshots,
 						(SELECT count(*) FROM escalation_game_events WHERE chain_id = ${operationsChainId})::integer AS escalations,
 						(SELECT count(*) FROM collateral_repair_auction_events WHERE chain_id = ${operationsChainId})::integer AS auctions
 				`
-	expect(clearedDerivedRows[0]).toEqual({ pools: 0, pool_events: 0, vaults: 0, escalations: 0, auctions: 0 })
+	expect(clearedDerivedRows[0]).toEqual({ pools: 0, pool_events: 0, pool_snapshots: 0, escalations: 0, auctions: 0 })
 	const resampleTargets = await database.stateSnapshotTargets(operationsChainId, 1n, 1_000)
 	expect(resampleTargets).toEqual([])
 }
@@ -369,7 +282,7 @@ postgresTest(
 			await expectRiskAndForkCatalogs(context)
 			await expectQuestionHistoryCursors(context)
 			await expectTradingObservationBoundary(context)
-			await expectBoundedApprovalsAndRisk(context)
+			await expectRecentTakeovers(context)
 			await expectRiskHistoryAndSeverity(context)
 			await expectSnapshotsAndIndexedPlans(context)
 			await expectManifestResetRetention(context)
