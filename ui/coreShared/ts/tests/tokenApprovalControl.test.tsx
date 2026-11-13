@@ -196,7 +196,7 @@ describe('TokenApprovalControl', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.input(documentQueries.getByPlaceholderText('Required total if blank'), {
+			fireEvent.input(documentQueries.getByPlaceholderText('Blank uses required total'), {
 				target: { value: '25' },
 			})
 		})
@@ -230,13 +230,13 @@ describe('TokenApprovalControl', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
-		await act(() => fireEvent.input(documentQueries.getByPlaceholderText('Required total if blank'), { target: { value } }))
+		await act(() => fireEvent.input(documentQueries.getByPlaceholderText('Blank uses required total'), { target: { value } }))
 		expect(documentQueries.getByText(error).id).not.toBe('')
 		const approveButton = documentQueries.getByRole('button', { name: 'Approve REP' }) as HTMLButtonElement
 		expect(approveButton.disabled).toBe(true)
 		await act(() => fireEvent.click(approveButton))
 		expect(approvals).toEqual([])
-		await act(() => fireEvent.input(documentQueries.getByPlaceholderText('Required total if blank'), { target: { value: '' } }))
+		await act(() => fireEvent.input(documentQueries.getByPlaceholderText('Blank uses required total'), { target: { value: '' } }))
 		expect(documentQueries.queryByText(error)).toBeNull()
 		expect((documentQueries.getByRole('button', { name: 'Approve 450k REP' }) as HTMLButtonElement).disabled).toBe(false)
 	})
@@ -247,7 +247,7 @@ describe('TokenApprovalControl', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
-		await act(() => fireEvent.input(documentQueries.getByPlaceholderText('Required total if blank'), { target: { value: (2n ** 256n - 1n).toString() } }))
+		await act(() => fireEvent.input(documentQueries.getByPlaceholderText('Blank uses required total'), { target: { value: (2n ** 256n - 1n).toString() } }))
 		expect((documentQueries.getByRole('button', { name: 'Approve unlimited REP' }) as HTMLButtonElement).disabled).toBe(false)
 	})
 
@@ -366,7 +366,7 @@ describe('TokenApprovalControl', () => {
 		await act(() => fireEvent.click(documentQueries.getByRole('button', { name: 'Approve 1.2k REP' })))
 		expect(approvals).toEqual([1200n * 10n ** 18n])
 
-		await act(() => fireEvent.input(documentQueries.getByPlaceholderText('Required total if blank'), { target: { value: 'max' } }))
+		await act(() => fireEvent.input(documentQueries.getByPlaceholderText('Blank uses required total'), { target: { value: 'max' } }))
 		expect(documentQueries.getByText('Approval amount must be a decimal number.')).not.toBeNull()
 		expect((documentQueries.getByRole('button', { name: 'Approve REP' }) as HTMLButtonElement).disabled).toBe(true)
 	})
@@ -392,13 +392,13 @@ describe('TokenApprovalControl', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.input(documentQueries.getByPlaceholderText('Required total if blank'), {
+			fireEvent.input(documentQueries.getByPlaceholderText('Blank uses required total'), {
 				target: { value: 'not-a-number' },
 			})
 		})
 
 		const approveButton = documentQueries.getByRole('button', { name: 'Approve WETH' }) as HTMLButtonElement
-		const amountInput = documentQueries.getByPlaceholderText('Required total if blank')
+		const amountInput = documentQueries.getByPlaceholderText('Blank uses required total')
 		const validationMessage = documentQueries.getByText('Approval amount must be a decimal number.')
 		expect(approveButton.disabled).toBe(true)
 		expect(approveButton.getAttribute('title')).toBeNull()
@@ -430,7 +430,7 @@ describe('TokenApprovalControl', () => {
 				/>,
 			)
 			cleanupRenderedComponent = view.cleanup
-			await act(() => fireEvent.input(within(view.container).getByPlaceholderText('Required total if blank'), { target: { value: '30' } }))
+			await act(() => fireEvent.input(within(view.container).getByPlaceholderText('Blank uses required total'), { target: { value: '30' } }))
 			expectTransactionButtonDisabled(view.container, 'Approve USDT', 'Reset USDT approval first.')
 			expect(approvals).toEqual([])
 		})

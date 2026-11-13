@@ -34,7 +34,11 @@ function getAbbreviations(address: string, compactAbbreviation: boolean) {
 	return forms.filter((form, index) => forms.indexOf(form) === index)
 }
 
-function AddressText({ alwaysAbbreviated, address, compactAbbreviation, widthConstraint, wrap = false }: { alwaysAbbreviated: boolean; address: string; compactAbbreviation: boolean; widthConstraint?: AddressWidthConstraint | undefined; wrap?: boolean }) {
+/**
+ * The address text alone, for a caller that supplies its own link or control. Unless `alwaysAbbreviated` or `wrap` is
+ * set, it shows the full address when it fits its container and otherwise the longest shortened form that does.
+ */
+export function AddressText({ alwaysAbbreviated = false, address, compactAbbreviation = false, widthConstraint, wrap = false }: { alwaysAbbreviated?: boolean; address: string; compactAbbreviation?: boolean; widthConstraint?: AddressWidthConstraint | undefined; wrap?: boolean }) {
 	const container = useRef<HTMLSpanElement>(null)
 	const full = useRef<HTMLSpanElement>(null)
 	const abbreviated = useRef<(HTMLSpanElement | null)[]>([])

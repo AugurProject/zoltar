@@ -1848,10 +1848,6 @@ a.transaction-hash-link {
 	}
 }
 
-.migration-outcome-metrics .badge {
-	white-space: nowrap;
-}
-
 /* The visible status and an invisible copy of the other status share one cell, so the slot always takes the longer
  * label's width. The copy is generated content using the badge's text metrics (shared rule above), so it never enters the page text. */
 .outcome-status-slot {
@@ -1899,14 +1895,12 @@ a.transaction-hash-link {
 	letter-spacing: 0.08em;
 }
 
-/* A badge keeps its one-line width beside other content (it does not shrink in a row); only a status longer than its
- * whole container wraps inside it instead of overflowing. */
+/* A badge stays on one line by default. A status that can be longer than its container on a phone opts in to
+ * wrapping with the badge-wrap class. */
 .badge {
 	display: inline-flex;
-	flex-shrink: 0;
 	align-items: center;
-	max-width: 100%;
-	overflow-wrap: break-word;
+	white-space: nowrap;
 	border-radius: var(--radius-control);
 	border-color: var(--border-default);
 	background: transparent;
@@ -1943,6 +1937,12 @@ a.transaction-hash-link {
 	color: var(--danger);
 	border-color: var(--danger-border);
 	background: var(--danger-soft);
+}
+
+.badge.badge-wrap {
+	max-width: 100%;
+	white-space: normal;
+	overflow-wrap: break-word;
 }
 
 .address {

@@ -4238,18 +4238,18 @@ span.rep-price-status.stale,
 	white-space: nowrap;
 }
 
-.portfolio-questions-address-short {
-	display: none;
+/* The address measures the room it has (AddressText) and shows the longest form that fits. Desktop width reserves the
+ * full address (42 monospace characters), so a long question title wraps instead of shortening it. Below that the
+ * address is capped at its standard short form, so it does not take column width from the title. */
+.portfolio-questions-table .portfolio-questions-address {
+	display: inline-block;
+	max-width: 16ch;
 }
 
-/* Below desktop width the full address would wrap over two lines, so the column shows a short form. */
-@media (max-width: 64rem) {
-	.portfolio-questions-address-full {
-		display: none;
-	}
-
-	.portfolio-questions-address-short {
-		display: inline;
+@media (min-width: 64.0625rem) {
+	.portfolio-questions-table .portfolio-questions-address {
+		min-width: 42ch;
+		max-width: none;
 	}
 }
 
@@ -4285,8 +4285,21 @@ span.rep-price-status.stale,
 		gap: var(--space-3);
 	}
 
+	/* The address takes the space left beside its label and sits at the row's end, like the outcome below it. */
+	.portfolio-questions-table td[data-label] > .portfolio-questions-address {
+		min-width: 0;
+	}
+
+	.portfolio-questions-table .portfolio-questions-address .address-value-text {
+		justify-items: end;
+	}
+
+	/* The label is visual only: the cell's column header already names it for assistive technology, so the
+	 * generated text carries empty alternative text where the browser supports it. */
 	.portfolio-questions-table td[data-label]::before {
 		content: attr(data-label);
+		content: attr(data-label) / "";
+		flex-shrink: 0;
 		color: var(--text-secondary);
 		font-size: var(--font-caption);
 	}

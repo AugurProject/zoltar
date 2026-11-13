@@ -363,6 +363,11 @@
 		overflow: visible;
 	}
 
+	/* The boot step stays beside the status and truncates; only the scenario name moves to a second row. */
+	.simulation-strip-progress {
+		flex-basis: 0;
+	}
+
 	.simulation-strip-status-full {
 		display: none;
 	}

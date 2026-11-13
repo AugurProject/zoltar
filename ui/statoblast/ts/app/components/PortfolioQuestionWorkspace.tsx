@@ -8,10 +8,10 @@ import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-c
 import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
+import { AddressText } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { getQuestionTitle } from '@zoltar/ui-core-shared/components/Question.js'
-import { abbreviateAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { ReportingSection } from '@zoltar/ui-statoblast-shared/features/reporting/components/ReportingSection.js'
 import { TradingSection } from '@zoltar/ui-statoblast-shared/features/markets/components/TradingSection.js'
@@ -145,14 +145,9 @@ export function PortfolioQuestionWorkspace({ accountState, parameters, deploymen
 												</button>
 											</td>
 											<td role='cell' data-label={copy.portfolioColumn}>
-												{/* Wide screens show the full address; narrower ones a short form. The link's accessible name and title carry the full address either way. */}
+												{/* The address shortens only when its cell is too narrow for it; the full address stays in the page text, the link's accessible name and its title. */}
 												<a className='portfolio-questions-address' href={`#/portfolios?portfolio=${question.portfolioAddress}&universe=${question.universeId}`} aria-label={copy.formatOpenPortfolioLabel(question.portfolioAddress)} title={question.portfolioAddress}>
-													<span aria-hidden='true' className='portfolio-questions-address-full'>
-														{question.portfolioAddress}
-													</span>
-													<span aria-hidden='true' className='portfolio-questions-address-short'>
-														{abbreviateAddress(question.portfolioAddress, 6, 4)}
-													</span>
+													<AddressText address={question.portfolioAddress} />
 												</a>
 											</td>
 											<td role='cell' data-label={copy.outcomeColumn}>
