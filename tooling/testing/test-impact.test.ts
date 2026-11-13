@@ -37,6 +37,8 @@ describe('test impact recommendations', () => {
 		expect(commandsFor(['ui/statoblastShared/ts/simulation/portfolioAuctionScenario.ts'])).toContain('bun run test:browser:workflow')
 		expect(commandsFor(['ui/statoblastShared/ts/simulation/portfolioScenario.ts'])).toContain('bun run test:browser:workflow')
 		expect(commandsFor(['ui/statoblastShared/ts/simulation/statoblastScenarioSeeding.ts'])).toContain('bun run test:browser:workflow')
+		// Only the simulation scenario modules select the long workflow tier, not the rest of the shared Statoblast UI.
+		expect(commandsFor(['ui/statoblastShared/ts/protocol/pagination.ts'])).not.toContain('bun run test:browser:workflow')
 	})
 
 	test('suggests recapturing documentation screenshots when a documented UI changes', () => {
