@@ -3,6 +3,7 @@ import { getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { getActiveNetworkProfile, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { expectTransactionButtonDisabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { CollateralFundingControls } from '../../features/CollateralFundingControls.js'
 import type { useCollateralFunding } from '../../features/live/useCollateralFunding.js'
@@ -53,6 +54,14 @@ describe('collateral funding controls', () => {
 		lifecycle.trackRendered(rendered)
 		const busy = Array.from(rendered.container.querySelectorAll('button[aria-busy="true"]')).map(button => button.textContent?.trim())
 		expect(busy).toEqual([pendingLabel])
+	})
+
+	test('explains a reset that has nothing left to reset with the shared reason', async () => {
+		const usdt = getActiveNetworkProfile().usdtAddress
+		if (usdt === undefined) throw new Error('Expected a configured USDT address')
+		const rendered = await renderIntoDocument(<CollateralFundingControls actionLabel='buying' funding={fundingFor(usdt, 'USDT', { allowance: 0n })} required={5_000_000n} disabled={false} reason={undefined} />)
+		lifecycle.trackRendered(rendered)
+		expectTransactionButtonDisabled(rendered.container, 'Reset USDT approval', 'Not needed.')
 	})
 
 	test('does not offer an allowance reset for another token that reports the USDT symbol', async () => {

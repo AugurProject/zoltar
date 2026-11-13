@@ -14,6 +14,7 @@ import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/do
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary, OpenOracleReportSummaryPage } from '@zoltar/ui-statoblast-shared/types/contracts.js'
+import { CreateFundingControls } from '../../../features/open-oracle/components/CreateFundingControls.js'
 import { renderSelectedReportActionSection } from '../../../features/open-oracle/components/OpenOracleReportContent.js'
 import { OpenOracleSection } from '../../../features/open-oracle/components/OpenOracleSection.js'
 import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/formDefaults.js'
@@ -839,6 +840,69 @@ void describe('OpenOracleSection', () => {
 			expect(pendingControls).toEqual([{ label: pendingButton, pendingLabel }])
 		} finally {
 			resetEnvironment()
+		}
+	})
+
+	void test.each([
+		{ label: 'a zero allowance', approval: { error: undefined, loading: false, value: 0n }, reason: 'Not needed.' },
+		{ label: 'a loading allowance', approval: { error: undefined, loading: true, value: undefined }, reason: 'Loading token balances and approvals.' },
+		{ label: 'a failed allowance read', approval: { error: 'Allowance RPC unavailable', loading: false, value: undefined }, reason: 'Allowance RPC unavailable' },
+	])('explains why the dispute reset is disabled for $label', ({ approval, reason }) => {
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend())
+		try {
+			const usdt = getActiveNetworkProfile().usdtAddress
+			if (usdt === undefined) throw new Error('Expected a configured USDT address')
+			const section = renderDisputeActionSection({
+				openOracleForm: createOpenOracleForm({ disputeNewAmount1: '20', disputeNewAmount2: '7' }),
+				openOracleTokenAccessState: createApprovedTokenAccessState(1n, { token2Approval: approval }),
+				openOracleReportDetails: createDisputableReportDetails({ token2: usdt, token2Symbol: 'USD₮' }),
+			})
+			const reset = requireButton(section, 'Reset USD₮ approval')
+
+			expect(getButtonDisabled(reset)).toBe(true)
+			expect(getButtonDisabledReason(reset)).toBe(reason)
+		} finally {
+			resetEnvironment()
+		}
+	})
+
+	void test.each([
+		{ resetting: true, pending: ['Resetting USD₮ approval…'] },
+		{ resetting: false, pending: ['Approving USD₮…'] },
+	])('shows one pending create-report approval button while resetting is $resetting', async ({ resetting, pending }) => {
+		const domEnvironment = installDomEnvironment()
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend())
+		const usdt = getActiveNetworkProfile().usdtAddress
+		if (usdt === undefined) throw new Error('Expected a configured USDT address')
+		const rendered = await renderIntoDocument(
+			<CreateFundingControls
+				funding={{
+					tokens: [
+						{ key: 'token1', token: usdt, required: 10_000_000n, access: { balance: 20_000_000n, allowance: 1_000_000n } },
+						{ key: 'token2', token: getAddress('0x4000000000000000000000000000000000000000'), required: 5n, access: { balance: 10n, allowance: 0n } },
+					],
+					wrap: 0n,
+					reason: undefined,
+					error: undefined,
+					loading: false,
+					retry: () => undefined,
+				}}
+				units={[6, 18]}
+				symbols={['USD₮', 'TKN']}
+				disabled
+				guard={undefined}
+				activeAction='approveToken1'
+				resetting={resetting}
+				approve={() => undefined}
+				wrap={() => undefined}
+			/>,
+		)
+		try {
+			expect(Array.from(rendered.container.querySelectorAll('button[aria-busy="true"]')).map(button => button.textContent?.trim())).toEqual(pending)
+		} finally {
+			await rendered.cleanup()
+			resetEnvironment()
+			domEnvironment.cleanup()
 		}
 	})
 
