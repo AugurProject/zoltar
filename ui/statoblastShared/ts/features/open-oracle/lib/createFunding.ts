@@ -1,7 +1,6 @@
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
-import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { getTokenApprovalResetReason } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
+import { getTokenApprovalResetReason, tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import { getOpenOracleAddress } from '../../../protocol/deploymentHelpers.js'
 import type { OpenOracleCreateFormState } from '../../../types/app.js'
@@ -12,7 +11,7 @@ import { type OpenOracleReadClient, readCreateTokenDecimals } from './openOracle
 export async function validateCreateReportApproval(client: OpenOracleReadClient, token: Address, owner: Address, amount: bigint) {
 	const allowance = await client.readContract({ address: token, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [owner, getOpenOracleAddress()] })
 	if (typeof allowance !== 'bigint') throw new Error('Token allowance unavailable.')
-	const reason = getTokenApprovalResetReason(allowance, amount, 'USDT', token.toLowerCase() === getActiveNetworkProfile().usdtAddress?.toLowerCase())
+	const reason = getTokenApprovalResetReason(allowance, amount, 'USDT', tokenRequiresAllowanceReset(token))
 	if (reason !== undefined) throw new Error(reason)
 }
 

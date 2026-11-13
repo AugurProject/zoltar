@@ -4,8 +4,6 @@ pragma solidity 0.8.35;
 import { IWeth9 } from './interfaces/IWeth9.sol';
 import { OpenOracle } from './openOracle/OpenOracle.sol';
 import { ReputationToken } from '../ReputationToken.sol';
-import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
-import './OpenOraclePriceCoordinatorTypes.sol';
 import { OpenOraclePriceSource } from './OpenOraclePriceSource.sol';
 import { OpenOracleReportDelegate } from './OpenOracleReportDelegate.sol';
 

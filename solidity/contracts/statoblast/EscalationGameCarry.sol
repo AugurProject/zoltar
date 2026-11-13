@@ -17,7 +17,6 @@ import {
 } from './EscalationGameTypes.sol';
 
 import { CarryConsumptionReason } from './interfaces/IEscalationGame.sol';
-import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 
 abstract contract EscalationGameCarry is EscalationGameCalculations {
 	bytes32 private constant CARRY_DEPOSIT_CONSUMED_SIGNATURE = keccak256('CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32,bytes32)');
