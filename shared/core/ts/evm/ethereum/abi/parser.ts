@@ -67,6 +67,7 @@ function parseAbiParameterEntry(entry: string): AbiParameter {
 	if (trimmedEntry === '') throw new Error(`Unable to parse ABI parameter: ${entry}`)
 	const indexed = /(?:^|\s)indexed(?:\s|$)/u.test(trimmedEntry)
 	const sanitizedEntry = trimmedEntry
+		.replace(/\baddress\s+payable(?=\s|\[|$)/gu, 'address')
 		.replace(/\b(?:indexed|memory|calldata|storage)\b/gu, ' ')
 		.replace(/\s+/gu, ' ')
 		.trim()
