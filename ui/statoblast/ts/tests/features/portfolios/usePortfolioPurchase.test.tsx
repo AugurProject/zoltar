@@ -125,3 +125,12 @@ test('USDT approvals require a separate reset even when the existing allowance c
 	await increase.validateBeforeSubmit?.()
 	expect(requests).toHaveLength(2)
 })
+test('a token that only reports the USDT symbol does not require an allowance reset', async () => {
+	const snapshot = capitalSnapshot({ collateralToken: token, collateral: { address: token, symbol: 'USDT', decimals: 6 }, walletCollateral: 10_000_000n, collateralAllowance: 5_000_000n })
+	const { hook, source, requests } = await setup(snapshot)
+	source.setRead('allowance', 5_000_000n)
+	await act(() => hook.state().approve(10_000_000n))
+	const increase = requests[0]
+	if (increase === undefined) throw new Error('Missing approval')
+	await increase.validateBeforeSubmit?.()
+})

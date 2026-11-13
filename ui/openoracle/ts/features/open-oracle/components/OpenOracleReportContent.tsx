@@ -13,6 +13,7 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
@@ -202,6 +203,7 @@ export function renderSelectedReportActionSection({
 				const isToken1 = token === 'token1'
 				const tokenSymbol = isToken1 ? token1Symbol : token2Symbol
 				const approval = isToken1 ? openOracleTokenAccessState.token1Approval : openOracleTokenAccessState.token2Approval
+				const requiresAllowanceReset = tokenRequiresAllowanceReset(isToken1 ? openOracleReportDetails?.token1 : openOracleReportDetails?.token2)
 				const requiredAmount = isToken1 ? disputeSubmission?.token1ContributionAmount : disputeSubmission?.token2ContributionAmount
 				const tokenApprovalGuardMessage = (() => {
 					if (openOracleReportDetails === undefined) return openOracleCopy.reportLoadRequired
@@ -211,7 +213,7 @@ export function renderSelectedReportActionSection({
 				})()
 				return (
 					<SectionBlock headingLevel={4} title={openOracleCopy.formatTokenApprovalTitle(tokenSymbol)} variant='embedded'>
-						{tokenSymbol === 'USDT' ? (
+						{requiresAllowanceReset ? (
 							<TransactionActionButton
 								idleLabel={commonCopy.formatResetTokenApproval(tokenSymbol)}
 								pendingLabel={commonCopy.formatApprovingToken(tokenSymbol)}
@@ -222,7 +224,7 @@ export function renderSelectedReportActionSection({
 							/>
 						) : null}
 						<TokenApprovalControl
-							requiresAllowanceReset={tokenSymbol === 'USDT'}
+							requiresAllowanceReset={requiresAllowanceReset}
 							actionLabel={openOracleCopy.disputingTheReport}
 							allowanceError={approval.error}
 							allowanceLoading={approval.loading}

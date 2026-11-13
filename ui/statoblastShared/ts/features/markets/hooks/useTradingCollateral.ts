@@ -1,4 +1,4 @@
-import { getTokenApprovalResetReason } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
+import { getTokenApprovalResetReason, tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
@@ -117,7 +117,7 @@ export function useTradingCollateral({ pool, amountInput, ...parameters }: Write
 					async (account, context) => {
 						const allowance = await createConnectedReadClient().readContract({ address: collateral.token, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [account, collateral.services] })
 						if (typeof allowance !== 'bigint') throw new Error('Collateral allowance unavailable.')
-						const reason = getTokenApprovalResetReason(allowance, amount, collateral.symbol, collateral.symbol === 'USDT')
+						const reason = getTokenApprovalResetReason(allowance, amount, collateral.symbol, tokenRequiresAllowanceReset(collateral.token))
 						if (reason !== undefined) throw new Error(reason)
 						const client = createWalletWriteClient(account, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal })
 						const hash = await client.writeContract({ address: collateral.token, abi: ABIS.mainnet.erc20, functionName: 'approve', args: [collateral.services, amount] })

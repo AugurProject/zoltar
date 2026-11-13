@@ -21,7 +21,6 @@ import { EscalationGameFactory } from './factories/EscalationGameFactory.sol';
 import { EscalationGame } from './EscalationGame.sol';
 import { CarriedDepositProof } from './EscalationGameTypes.sol';
 import { ZoltarQuestionData } from '../ZoltarQuestionData.sol';
-import { SecurityPoolForker } from './SecurityPoolForker.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolEventEmitter } from './SecurityPoolEventEmitter.sol';
@@ -30,7 +29,6 @@ import { SecurityPoolOperationsDelegate } from './SecurityPoolOperationsDelegate
 import { SecurityPoolSettlementDelegate } from './SecurityPoolSettlementDelegate.sol';
 import { DelegateCallForwarder } from './DelegateCallForwarder.sol';
 import { ISecurityPoolDeploymentWorkerConfiguration } from './interfaces/ISecurityPoolDeploymentWorkerConfiguration.sol';
-import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { SecurityPoolLinearFees } from './SecurityPoolLinearFees.sol';
 import { SecurityPoolPortfolioAccountingDelegate } from './SecurityPoolPortfolioAccountingDelegate.sol';
 import { IPortfolioSettlement } from './interfaces/IPortfolioSettlement.sol';
@@ -184,7 +182,7 @@ contract SecurityPool is SecurityPoolStorage {
 		return 0;
 	}
 
-	/// @notice Returns zero once a game exists; otherwise the standalone underwriting limit or question cash plus available shared capacity.
+	/// @notice Returns zero once a game exists; otherwise question cash plus available shared portfolio capacity.
 	function getCurrentMintingCapacityAttoEth() public view returns (uint256) {
 		if (address(escalationGame) != address(0)) return 0;
 		if (portfolioCustody != address(0)) {

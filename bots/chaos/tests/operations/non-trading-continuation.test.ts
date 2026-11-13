@@ -5,7 +5,7 @@ import { reevaluateOperationContinuation } from '../../src/operations/catalog.ts
 import { eligibleOperationPlans } from '../support/operation-plans.ts'
 import type { EcosystemSnapshot, OperationPlan } from '../../src/operations/types.ts'
 import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
-import { address, hash, planningOptionsFixture, snapshotFixture } from './fixture.ts'
+import { address, hash, pendingPoolReportFixture, planningOptionsFixture, snapshotFixture } from './fixture.ts'
 
 const options = planningOptionsFixture({ maximumGasCostAttoEth: (10n ** 14n).toString(), seed: 2 })
 
@@ -70,27 +70,7 @@ function disputeSnapshot() {
 	const pool = snapshot.pools[0]
 	if (pool === undefined) throw new Error('Dispute fixture is missing its pool')
 	pool.pendingReportId = '42'
-	snapshot.reports.push({
-		currentAmount1: '1000',
-		currentAmount2: '1000',
-		currentReporter: pool.coordinator,
-		disputeAfterTimestamp: '1999999560',
-		disputeBeforeTimestamp: '2000003500',
-		disputeDelay: '60',
-		escalationHalt: '100000',
-		flags: 7,
-		game: { callbackContract: pool.coordinator, callbackGasLimit: 500000, feePercentage: 0, lastReportOppoTime: '1', numReports: 1, protocolFee: 0, protocolFeeRecipient: address(30), settlerReward: '0' },
-		helper: { blockNumber: '99', blockTimestamp: '1999999500', creator: pool.coordinator },
-		multiplier: 140,
-		openOracle: snapshot.deployments.openOracle,
-		reportId: '42',
-		reportTimestamp: '1999999500',
-		settlementTime: '4000',
-		settlementTimestamp: '0',
-		stateHash: hash(42),
-		token1: snapshot.deployments.weth,
-		token2: pool.repToken,
-	})
+	snapshot.reports.push(pendingPoolReportFixture(snapshot, pool, { disputeAfterTimestamp: '1999999560', disputeBeforeTimestamp: '2000003500' }))
 	return snapshot
 }
 

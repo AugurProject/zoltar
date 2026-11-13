@@ -2,7 +2,7 @@ import { createSignerConflictSnapshot } from './signer-conflict-snapshot.ts'
 import { canonicalExecutorSalt } from '#execution/executor-identity'
 import { parseApprovedUniverses, validateApprovedUniverseSelection } from '@zoltar/bot-shared/monitoring/universe-policy'
 import { resolve } from 'node:path'
-import { privateKeyToAccount, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import { assertDistinctPersistentPaths, mutableStrategy, runnableOperatorSettings, type Configuration } from '#config/configuration'
 import { monitoringTokensForDeployment, assertFocusedDeploymentCompatible, mergeStoredDeploymentUpdate, prepareDeploymentTokenTransition, type DeploymentSettings } from '#config/deployment-settings'
 import { loadOperatorSettingsWithRevision, operatorConfigurationRevisionConflict, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, switchOperatorNetworkProfile, type PersistedOperatorSettings } from '#config/settings-store'
@@ -15,48 +15,21 @@ import { acquireExecutorDeploymentIntentLock, clearExecutorDeploymentIntent, exe
 import type { ExecutionLockManager } from '#execution/execution-locks'
 import { persistSignerSettingsWithProvisionalLock } from '#execution/execution-locks'
 import type { SignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
-import { validateSubmissionSettings, type SubmissionSettings } from '#execution/transaction-submission'
+import { validateSubmissionSettings } from '#execution/transaction-submission'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, presetNetworkChainId, updateSubmissionEndpointChecks } from '@zoltar/bot-shared/monitoring/connectivity'
 import { type QuorumConnectivitySettings } from '@zoltar/bot-shared/monitoring/quorum-connectivity'
 import { operatorStatusAfterPause, type SyncCursor } from '@zoltar/bot-shared/monitoring/block-sync'
-import { loadExecutionHistory, operatorSnapshot, queuedSignerChange, recordOperation, type MutableStrategy, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
-import type { MutableSettlement } from '#state/settlement-store'
+import { loadExecutionHistory, operatorSnapshot, queuedSignerChange, recordOperation, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
 import { acquireExecutionSignerLock, acquirePositionJournalLock, loadPositionJournal, type ExclusiveProcessLock } from '#state/position-store'
 import { checkIndependentRpcChains, updateOperatorConnectivity } from './connectivity-update.ts'
 import { networkConfiguration } from '#config/network'
-import { type RiskLimits } from '#core/safety-controls'
-import type { CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { loadPriceHistory } from '#monitoring/market-monitor'
 import { requireSafeDeploymentTransition } from './deployment-transition.ts'
 import { EXECUTOR_DEPLOYMENT_MESSAGES, RESUME_REQUIRES_CONFIGURED_CHAIN } from '#state/executor-deployment-recovery'
 import { deployExecutorFromConnectivity, requireActivePersistedNetwork, requireActivePersistedRpcQuorum, requireNoPendingExecutorDeployment, requirePausedExecutorDeployment } from './executor-deployment-control.ts'
 import { acquireConfigurationSignerOperation, clearDeploymentRecovery, executorDeploymentRecoveryStatus, persistExecutorDeploymentIntentForRecovery, runConfigurationSignerOperation, type DeploymentRecoveryState } from './signer-operations.ts'
 import { createOperatorSettingsControls, queuedSettingsSections } from './operator-settings-controls.ts'
-
-export type PendingOperatorUpdates = {
-	centralizedMarkets: CentralizedMarketSettings | undefined
-	/** Applied at the scan boundary to the primary and public RPCs, the quorum readers, and the agreement requirement. */
-	connectivity: QuorumConnectivitySettings | undefined
-	deployment: DeploymentSettings | undefined
-	execute: boolean | undefined
-	logLookbackBlocks: bigint | undefined
-	maxHedgeSlippageBps: bigint | undefined
-	network: Configuration['network'] | undefined
-	operatorSettings: PersistedOperatorSettings | undefined
-	paused: boolean | undefined
-	profileSwitch: boolean
-	privateKey: Hex | undefined
-	persistedPrivateKey: Hex | undefined
-	persistedTokenAddresses: Address[] | undefined
-	pollMilliseconds: number | undefined
-	riskLimits: RiskLimits | undefined
-	settlement: MutableSettlement | undefined
-	signerLock: ExclusiveProcessLock | undefined
-	signerUpdate: boolean
-	strategy: MutableStrategy | undefined
-	submission: SubmissionSettings | undefined
-	tokenAddresses: Address[] | undefined
-}
+import { emptyPendingOperatorUpdates } from './pending-operator-updates.ts'
 
 /** The primary and public RPCs alone, as the dashboard snapshot and connectivity response report them. */
 function endpointConnectivity(connectivity: QuorumConnectivitySettings) {
@@ -105,29 +78,7 @@ export function startOperatorControlPlane(parameters: {
 }) {
 	const { config, fixedState, lockManager, signerOperationGate, state } = parameters
 	const signerConflictSnapshot = createSignerConflictSnapshot(parameters.startupSignerConflict, fixedState.wallet)
-	const pending: PendingOperatorUpdates = {
-		centralizedMarkets: undefined,
-		connectivity: undefined,
-		deployment: undefined,
-		execute: undefined,
-		logLookbackBlocks: undefined,
-		maxHedgeSlippageBps: undefined,
-		network: undefined,
-		operatorSettings: undefined,
-		paused: undefined,
-		profileSwitch: false,
-		privateKey: undefined,
-		persistedPrivateKey: undefined,
-		persistedTokenAddresses: undefined,
-		pollMilliseconds: undefined,
-		riskLimits: undefined,
-		settlement: undefined,
-		signerLock: undefined,
-		signerUpdate: false,
-		strategy: undefined,
-		submission: undefined,
-		tokenAddresses: undefined,
-	}
+	const pending = emptyPendingOperatorUpdates()
 	// A queued switch to live execution is reported as live so Resume already routes through the readiness check; a queued
 	// switch back to dry run keeps reporting live because the running scan can still sign until the boundary.
 	const snapshotFixedState = () => ({ ...fixedState, execute: fixedState.execute || pending.execute === true, executorDeploymentRecovery: executorDeploymentRecoveryStatus(parameters.deploymentRecovery) })
