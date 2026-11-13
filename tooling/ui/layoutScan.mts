@@ -368,11 +368,12 @@ async function scanApp(
 
 type SourceIndex = { readonly files: readonly { readonly path: string; readonly lines: readonly string[] }[] }
 
-async function buildSourceIndex(): Promise<SourceIndex> {
+export async function buildSourceIndex(): Promise<SourceIndex> {
 	const files: { path: string; lines: string[] }[] = []
-	const glob = new Bun.Glob('ui/*/{css/**/*.css,ts/**/*.tsx}')
+	// Bun's glob does not expand braces that contain path separators, so match by extension and filter the directories.
+	const glob = new Bun.Glob('ui/**/*.{css,tsx}')
 	for await (const file of glob.scan({ cwd: repositoryRoot })) {
-		if (file.includes('/tests/') || file.includes('/js/') || file.includes('node_modules')) continue
+		if (!/^ui\/[^/]+\/(css|ts)\//.test(file) || file.includes('/tests/') || file.includes('/js/') || file.includes('node_modules')) continue
 		files.push({ path: file, lines: (await fs.readFile(path.join(repositoryRoot, file), 'utf8')).split('\n') })
 	}
 	files.sort((left, right) => left.path.localeCompare(right.path))
@@ -381,21 +382,27 @@ async function buildSourceIndex(): Promise<SourceIndex> {
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
-/** Finds the stylesheet rules and components that use the finding's most specific classes. */
-function findSources(index: SourceIndex, classes: readonly string[], limit = 4): string[] {
+/**
+ * Finds the stylesheet rules and the components that use the finding's most specific classes: for each class, up to two
+ * stylesheet lines and two component lines, so a heavily styled class still points at the component that renders it.
+ */
+export function findSources(index: SourceIndex, classes: readonly string[], limit = 4): string[] {
 	const results: string[] = []
 	for (const className of classes) {
 		if (results.length >= limit) break
 		const cssPattern = new RegExp(`\\.${escapeRegExp(className)}(?![\\w-])`)
 		const tsxPattern = new RegExp(`className=[^>]*['"\` ]${escapeRegExp(className)}(?![\\w-])|className=['"\`]${escapeRegExp(className)}(?![\\w-])`)
-		const matches: string[] = []
+		const styles: string[] = []
+		const components: string[] = []
 		for (const file of index.files) {
-			const pattern = file.path.endsWith('.css') ? cssPattern : tsxPattern
+			const isStylesheet = file.path.endsWith('.css')
+			const matches = isStylesheet ? styles : components
+			const pattern = isStylesheet ? cssPattern : tsxPattern
 			file.lines.forEach((line, lineIndex) => {
-				if (matches.length < 3 && pattern.test(line)) matches.push(`${file.path}:${(lineIndex + 1).toString()} (.${className})`)
+				if (matches.length < 2 && pattern.test(line)) matches.push(`${file.path}:${(lineIndex + 1).toString()} (.${className})`)
 			})
 		}
-		results.push(...matches.slice(0, limit - results.length))
+		results.push(...[...styles, ...components].slice(0, limit - results.length))
 	}
 	return results
 }
