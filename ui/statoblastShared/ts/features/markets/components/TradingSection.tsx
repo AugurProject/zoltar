@@ -247,6 +247,7 @@ export function TradingSection({
 	const walletBlocker = getActiveAppChainWalletBlocker({ accountAddress: accountState.address, isOnActiveAppChain })
 	const getModalActionAvailability = (actionEnabled: boolean, guardMessage: string | undefined, validAmount = true) =>
 		withWalletBlocker({ disabled: !isOnActiveAppChain || !actionEnabled || !validAmount || guardMessage !== undefined, reason: getModalActionReason(actionEnabled, guardMessage) }, !isOnActiveAppChain || (actionEnabled && hasSelectedPool) ? walletBlocker : undefined)
+	const closeActiveModal = () => setActiveModal(undefined)
 	const shareMigrationSelectionDisabled = poolUniverseHasForked !== true
 	const setAllTargetOutcomeIndexes = () => {
 		onTradingFormChange({ targetOutcomeIndexes: getDefaultShareMigrationTargetOutcomeIndexes(tradingForkUniverse) })
@@ -286,6 +287,20 @@ export function TradingSection({
 				</>
 			)}
 		</>
+	)
+	// Both redemption dialogs show the shares being redeemed beside the collateral and recovery REP they pay out.
+	const renderPayoutMetrics = ({ attoShares, collateralLabel, collateralPayout, repLabel, sharesLabel, sharesUnit }: { attoShares: bigint | undefined; collateralLabel: string; collateralPayout: bigint | undefined; repLabel: string; sharesLabel: string; sharesUnit: string }) => (
+		<MetricGrid>
+			<MetricField label={sharesLabel}>
+				<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={attoShares} suffix={sharesUnit} units={collateralDecimals} />
+			</MetricField>
+			<MetricField label={collateralLabel}>
+				<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} decimals={4} value={collateralPayout} suffix={collateralSymbol} units={collateralDecimals} />
+			</MetricField>
+			<MetricField label={repLabel}>
+				<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={recoveryRep(attoShares)} suffix={commonCopy.rep} />
+			</MetricField>
+		</MetricGrid>
 	)
 	// A launcher opens its dialog only when nothing blocks it; otherwise it names the first reason, so it never offers an action its dialog would refuse.
 	const shareActionLauncher = ({ blocker, description, key, label, modal }: { blocker: string | undefined; description: string; key: string; label: string; modal: Exclude<TradingActionModal, undefined> }): ReadinessAction => ({
@@ -377,7 +392,7 @@ export function TradingSection({
 
 			<ErrorNotice message={tradingError} />
 
-			<OperationModal closeOnSuccessKey={tradingResult?.action === 'createCompleteSet' ? tradingResult.hash : undefined} context={getTransactionContext('Complete set · Yes + No + Invalid')} isOpen={activeModal === 'mint'} onClose={() => setActiveModal(undefined)} title={tradingCopy.mintCompleteSets}>
+			<OperationModal closeOnSuccessKey={tradingResult?.action === 'createCompleteSet' ? tradingResult.hash : undefined} context={getTransactionContext('Complete set · Yes + No + Invalid')} isOpen={activeModal === 'mint'} onClose={closeActiveModal} title={tradingCopy.mintCompleteSets}>
 				<MetricGrid>
 					<MetricField label={collateralCopy.wallet}>
 						<CurrencyValue exactWhenRoundedToZero value={collateralFunding?.collateral?.balance} suffix={collateralFunding?.collateral?.symbol ?? collateralCopy.fallback} units={collateralFunding?.collateral?.decimals ?? 0} />
@@ -437,18 +452,15 @@ export function TradingSection({
 				</div>
 			</OperationModal>
 
-			<OperationModal closeOnSuccessKey={tradingResult?.action === 'redeemCompleteSet' ? tradingResult.hash : undefined} context={getTransactionContext('Complete set · Yes + No + Invalid')} isOpen={activeModal === 'redeem-complete-sets'} onClose={() => setActiveModal(undefined)} title={tradingCopy.redeemCompleteSets}>
-				<MetricGrid>
-					<MetricField label={tradingCopy.redeemableCompleteSets}>
-						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={maxRedeemableCompleteSetsAttoShares} suffix={tradingCopy.setsUnit} units={collateralDecimals} />
-					</MetricField>
-					<MetricField label={tradingCopy.availableToRedeem}>
-						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} decimals={4} value={displayMaxRedeemableCompleteSets} suffix={collateralSymbol} units={collateralDecimals} />
-					</MetricField>
-					<MetricField label={tradingCopy.availableRecoveryRep}>
-						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={recoveryRep(maxRedeemableCompleteSetsAttoShares)} suffix={commonCopy.rep} />
-					</MetricField>
-				</MetricGrid>
+			<OperationModal closeOnSuccessKey={tradingResult?.action === 'redeemCompleteSet' ? tradingResult.hash : undefined} context={getTransactionContext('Complete set · Yes + No + Invalid')} isOpen={activeModal === 'redeem-complete-sets'} onClose={closeActiveModal} title={tradingCopy.redeemCompleteSets}>
+				{renderPayoutMetrics({
+					attoShares: maxRedeemableCompleteSetsAttoShares,
+					collateralLabel: tradingCopy.availableToRedeem,
+					collateralPayout: displayMaxRedeemableCompleteSets,
+					repLabel: tradingCopy.availableRecoveryRep,
+					sharesLabel: tradingCopy.redeemableCompleteSets,
+					sharesUnit: tradingCopy.setsUnit,
+				})}
 				<AmountField fillMax={{ amount: maxRedeemableCompleteSetsAttoShares }} label={tradingCopy.redeemCompleteSetsAmount} onChange={redeemAmount => onTradingFormChange({ redeemAmount })} unit={tradingCopy.setsUnit} decimals={collateralDecimals} value={tradingForm.redeemAmount} />
 				<UserMessage className='detail' detail={tradingCopy.redeemCompleteSetsFeeDetail} />
 				<div className='actions'>
@@ -462,13 +474,7 @@ export function TradingSection({
 				</div>
 			</OperationModal>
 
-			<OperationModal
-				closeOnSuccessKey={tradingResult?.action === 'migrateShares' ? tradingResult.hash : undefined}
-				context={getTransactionContext(getReportingOutcomeLabel(tradingForm.selectedShareOutcome))}
-				isOpen={activeModal === 'migrate-shares'}
-				onClose={() => setActiveModal(undefined)}
-				title={tradingCopy.migrateForkedShares}
-			>
+			<OperationModal closeOnSuccessKey={tradingResult?.action === 'migrateShares' ? tradingResult.hash : undefined} context={getTransactionContext(getReportingOutcomeLabel(tradingForm.selectedShareOutcome))} isOpen={activeModal === 'migrate-shares'} onClose={closeActiveModal} title={tradingCopy.migrateForkedShares}>
 				<label className='field'>
 					<span>{tradingCopy.shareOutcomeToMigrate}</span>
 					<EnumDropdown options={shareOutcomeOptions} value={tradingForm.selectedShareOutcome} onChange={selectedShareOutcome => onTradingFormChange({ selectedShareOutcome })} disabled={shareMigrationSelectionDisabled} />
@@ -488,18 +494,15 @@ export function TradingSection({
 				</div>
 			</OperationModal>
 
-			<OperationModal closeOnSuccessKey={tradingResult?.action === 'redeemShares' ? tradingResult.hash : undefined} context={getTransactionContext(winningOutcomeLabel ?? '')} isOpen={activeModal === 'redeem-shares'} onClose={() => setActiveModal(undefined)} title={tradingCopy.redeemResolvedShares}>
-				<MetricGrid>
-					<MetricField label={tradingCopy.formatWinningOutcomeShares(winningOutcomeLabel ?? '')}>
-						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={winningAttoShares} suffix={tradingCopy.sharesUnit} units={collateralDecimals} />
-					</MetricField>
-					<MetricField label={tradingCopy.expectedCollateralPayout}>
-						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} decimals={4} value={expectedRedemptionPayoutAttoEth} suffix={collateralSymbol} units={collateralDecimals} />
-					</MetricField>
-					<MetricField label={tradingCopy.expectedRepPayout}>
-						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={recoveryRep(winningAttoShares)} suffix={commonCopy.rep} />
-					</MetricField>
-				</MetricGrid>
+			<OperationModal closeOnSuccessKey={tradingResult?.action === 'redeemShares' ? tradingResult.hash : undefined} context={getTransactionContext(winningOutcomeLabel ?? '')} isOpen={activeModal === 'redeem-shares'} onClose={closeActiveModal} title={tradingCopy.redeemResolvedShares}>
+				{renderPayoutMetrics({
+					attoShares: winningAttoShares,
+					collateralLabel: tradingCopy.expectedCollateralPayout,
+					collateralPayout: expectedRedemptionPayoutAttoEth,
+					repLabel: tradingCopy.expectedRepPayout,
+					sharesLabel: tradingCopy.formatWinningOutcomeShares(winningOutcomeLabel ?? ''),
+					sharesUnit: tradingCopy.sharesUnit,
+				})}
 				<UserMessage className='detail' detail={tradingCopy.resolvedShareRedemptionFeeDetail} />
 				<div className='actions'>
 					<TransactionActionButton idleLabel={tradingCopy.redeemResolvedShares} pendingLabel={tradingCopy.redeemingShares} onClick={onRedeemShares} pending={tradingActiveAction === 'redeemShares'} availability={getModalActionAvailability(redeemSharesEnabled, redeemSharesLauncherBlocker)} />

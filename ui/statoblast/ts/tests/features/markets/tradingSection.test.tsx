@@ -916,7 +916,7 @@ void describe('TradingSection', () => {
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
 				{...createTradingSectionProps({
-					selectedPool: createSelectedPool({ questionOutcome: 'yes', settlementCollateralAttoEth: 6n * 10n ** 18n, shareTokenSupplyAttoShares: 4n * 10n ** 18n }),
+					selectedPool: createSelectedPool({ questionOutcome: 'yes', settlementCollateralAttoEth: 6n * 10n ** 18n, settlementRecoveryAttoRep: 8n * 10n ** 18n, shareTokenSupplyAttoShares: 4n * 10n ** 18n }),
 					onRedeemShares: redeem,
 				})}
 			/>,
@@ -933,10 +933,12 @@ void describe('TradingSection', () => {
 		const modalQueries = within(dialog)
 		const sharesMetric = modalQueries.getByText('Winning Yes shares').parentElement
 		const payoutMetric = modalQueries.getByText('Expected collateral payout').parentElement
-		if (sharesMetric === null || payoutMetric === null) throw new Error('Expected resolved-share redemption metrics')
+		const repMetric = modalQueries.getByText('Expected REP payout').parentElement
+		if (sharesMetric === null || payoutMetric === null || repMetric === null) throw new Error('Expected resolved-share redemption metrics')
 		expect(getExactValueTitles(sharesMetric, '3')).toHaveLength(1)
-		// 3 winning shares of a 4-share supply backed by 6 WETH.
+		// 3 winning shares of a 4-share supply backed by 6 WETH and 8 recovery REP.
 		expect(getExactValueTitles(payoutMetric, '4.5')).toHaveLength(1)
+		expect(getExactValueTitles(repMetric, '6 REP')).toHaveLength(1)
 		await act(() => {
 			fireEvent.click(modalQueries.getByRole('button', { name: 'Redeem resolved shares' }))
 		})
@@ -1006,7 +1008,7 @@ void describe('TradingSection', () => {
 	})
 
 	void test('shows the redeemable complete sets and their ETH value in the redeem modal', async () => {
-		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ settlementCollateralAttoEth: 3n * 10n ** 18n, shareTokenSupplyAttoShares: 4n * 10n ** 18n }) })} />)
+		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ settlementCollateralAttoEth: 3n * 10n ** 18n, settlementRecoveryAttoRep: 8n * 10n ** 18n, shareTokenSupplyAttoShares: 4n * 10n ** 18n }) })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
@@ -1017,9 +1019,12 @@ void describe('TradingSection', () => {
 		const modalQueries = within(documentQueries.getByRole('dialog', { name: 'Redeem complete sets' }))
 		const setsMetric = modalQueries.getByText('Redeemable complete sets').parentElement
 		const ethMetric = modalQueries.getByText('Available to redeem').parentElement
-		if (setsMetric === null || ethMetric === null) throw new Error('Expected complete-set redemption metrics')
+		const repMetric = modalQueries.getByText('REP available to redeem').parentElement
+		if (setsMetric === null || ethMetric === null || repMetric === null) throw new Error('Expected complete-set redemption metrics')
 		expect(getExactValueTitles(setsMetric, '2 sets')).toHaveLength(1)
 		expect(getExactValueTitles(ethMetric, '1.5 WETH')).toHaveLength(1)
+		// 2 of a 4-set supply recover half of the 8 REP.
+		expect(getExactValueTitles(repMetric, '4 REP')).toHaveLength(1)
 	})
 
 	void test('leaves minting out once the selected market has finalized, since it can never apply again', async () => {
