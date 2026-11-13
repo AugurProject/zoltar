@@ -140,17 +140,19 @@
 								<td>Raise transaction fees where rational, use independent submission paths, and disclose missed-deadline or stranded-transition risk</td>
 							</tr>
 							<tr>
-								<td>REP/ETH price correction — A17, A18, A19</td>
+								<td>REP/collateral price correction — A17, A18, A19</td>
 								<td>
 									<ul>
 										<li>Pending report: coordinator <code>pendingReportId</code>, then OpenOracle <code>storedGame(reportId)</code></li>
 										<li>Report outcomes: coordinator <code>PriceRequested</code>, <code>PriceReported</code>, and <code>PriceReportRejected</code> events, or augurScan <code>/operations/reports</code></li>
 										<li>Independent correctors: whether any, such as an operator running the <a href="https://github.com/AugurProject/zoltar/blob/main/bots/open-oracle-arbitrager/README.md">OpenOracle arbitrager</a>, reports disputes profitable after fees, gas, and price impact</li>
-										<li>Corrector inventory: wrapped Ether (WETH) and REP balances</li>
+										<li>Creation-time floor: portfolio <code>minimumReportCollateral</code> and the selected collateral token’s units and current ETH value</li>
+										<li>Correction economics: compare obtainable correction gains with OpenOracle fees, current ETH gas costs including approvals and recovery, price impact, and capital lockup under <a href="../reference/security-model.html#assumption-a18">A18</a>; do not compare the whole stake with gas alone</li>
+										<li>Corrector inventory: selected collateral and REP balances, plus ETH for gas</li>
 									</ul>
 								</td>
 								<td>Continuously while a report is pending or a cached price can authorize operations</td>
-								<td>Block or discourage new price-sensitive operations and disclose that an incorrect report may settle</td>
+								<td>Do not add exposure when correction is uneconomic; disclose that a wrong report can settle despite passing the funding checks. The floor is immutable: a higher minimum requires a new portfolio.</td>
 							</tr>
 							<tr>
 								<td>Token behavior and recipient compatibility — A21, A22</td>

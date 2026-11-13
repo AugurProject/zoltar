@@ -98,7 +98,7 @@
 			<section id="security-guarantee">
 				<h2>Report sizing and correction incentives</h2>
 
-				<p>The creator-configured <code>minimumReportCollateral</code> is inherited by every universe in the portfolio. The minimum report adds that floor to one hundredth of aggregate collateral exposure, rounded up. REP inventory coverage can raise it further at the proposed price.</p>
+				<p>The creator sets a positive <code>minimumReportCollateral</code> in raw collateral units at portfolio creation. It is immutable and inherited by every universe in the portfolio. The minimum report adds that floor to one hundredth of aggregate collateral exposure, rounded up. REP inventory coverage can raise it further at the proposed price.</p>
 				<div class="equation" id="eq-openoracle-initial-report-size">
 					<math display="block" aria-label="minimum collateral report equals configured floor plus rounded up exposure divided by one hundred" data-source="minimumToken1ReportAttoEth = minimumReportCollateral + ⌈aggregateExposureAttoEth / 100⌉"
 						><mrow
@@ -108,7 +108,7 @@
 					>
 					<p class="equation-note">Amounts use raw collateral units, including accessors with legacy <code>AttoEth</code> names. The escalation halt remains the larger of the exposure minimum and the configured fraction of initial collateral funding.</p>
 				</div>
-				<p>This floor does not automatically guarantee that correcting a price error covers ETH gas costs. That incentive depends on the collateral’s value, market liquidity, OpenOracle fees and actual execution costs. No collateral/ETH feed is queried.</p>
+				<p>The creator must size this floor to satisfy <a href="./security-model.html#assumption-a18">A18: independent, gas-economic correction</a> throughout the portfolio’s use, including at low exposure. This is a system assumption, not an onchain gas-cost guarantee. No collateral/ETH feed is queried, and a higher floor requires a new portfolio.</p>
 
 				<p>The coordinator sets <code>initialWethReportAttoEth = max(minimumToken1ReportAttoEthForPrice(proposedRepPerEthPrice), requestedInitialAttoWeth)</code>, uses that value as OpenOracle's <code>currentAmount1</code>, and derives <code>amount2 = ⌈initialWethReportAttoEth * proposedRepPerEthPrice / 1e18⌉</code> in the same transaction.</p>
 
