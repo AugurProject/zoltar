@@ -12,15 +12,15 @@ import { installLayoutScanHelpers, type LayoutScanTab } from './layoutScanPage.t
 
 const repositoryRoot = path.resolve(import.meta.dir, '..', '..')
 
-const usage = () => `Usage: bun run ui:layout-scan [-- options]
+const usage = () => `Usage: bun run ui:layout-scan -- --app <ids> [options]
 
-Opens each UI in the walletless simulation, visits every route, tab, disclosure, and dialog launcher it can reach at
+Opens each named UI in the walletless simulation, visits every route, tab, disclosure, and dialog launcher it can reach at
 several viewport sizes, and reports content that overflows, is cut off, overlaps, or is squeezed. Each finding names
 the element, its measurements, the likely cause, and the source files that render and style it, with a highlighted
 screenshot.
 
 Options:
-  --app <ids>          Apps to scan, comma separated (${UI_APP_IDS.join(', ')}). Default: all.
+  --app <ids>          Required. Apps to scan, comma separated (${UI_APP_IDS.join(', ')}). Scan the apps whose UI changed.
   --scenario <ids>     Simulation scenarios, comma separated. Default: every scenario the app registers.
   --viewport <list>    Viewports as WIDTHxHEIGHT, comma separated. Default: ${DEFAULT_VIEWPORTS.map(formatViewport).join(', ')}.
   --route <hashes>     Only scan these hash routes, for example "#/portfolio,#/questions".
@@ -463,7 +463,8 @@ async function main() {
 		console.log(usage())
 		return
 	}
-	const apps = values.app === undefined ? UI_APP_IDS : values.app.split(',').map(app => app.trim())
+	if (values.app === undefined || values.app.trim() === '') throw new Error(`Name the apps to scan with --app.\n\n${usage()}`)
+	const apps = [...new Set(values.app.split(',').map(app => app.trim()))]
 	for (const app of apps) if (!isUiAppId(app)) throw new Error(`Unknown app '${app}'.\n\n${usage()}`)
 	const appIds = apps.filter(isUiAppId)
 	if (values['base-url'] !== undefined && appIds.length !== 1) throw new Error('--base-url scans one running app; pass exactly one --app.')

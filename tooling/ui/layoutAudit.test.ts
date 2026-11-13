@@ -79,8 +79,11 @@ describe('layout audit reports', () => {
 	})
 
 	test('a grid item that cannot shrink below its content explains min-width', async () => {
-		const findings = await audit('<div style="display: grid; grid-template-columns: 1fr 1fr; width: 300px"><div class="box">0x1234567890abcdef1234567890abcdef12345678</div><div>B</div></div>')
-		expect(findings.some(finding => finding.fix.includes('min-width: 0'))).toBe(true)
+		// A monospace value about 250px wide in a 100px track: the item grows past the bordered grid on any font metrics,
+		// while staying inside the 390px viewport so the finding is a spill rather than a viewport overflow.
+		const findings = await audit('<div class="box" style="display: grid; grid-template-columns: 1fr 1fr; width: 200px; font: 14px monospace"><div class="value">0x1234567890abcdef1234567890ab</div><div>B</div></div>')
+		const finding = only(findings, 'spill')
+		expect(finding.fix).toContain('`div.value` is a grid item with the default `min-width: auto`')
 	})
 
 	test('text drawn over other text', async () => {
