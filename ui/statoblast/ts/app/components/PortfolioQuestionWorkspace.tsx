@@ -1,4 +1,5 @@
 import * as copy from '@zoltar/ui-statoblast-shared/copy/portfolio.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { InheritedReporterClaims } from '@zoltar/ui-statoblast-shared/features/reporting/components/InheritedReporterClaims.js'
 import { useEffect, useState } from 'preact/hooks'
@@ -85,7 +86,7 @@ export function PortfolioQuestionWorkspace({ accountState, parameters, deploymen
 		forkError.value = undefined
 		try {
 			await runWriteAction(
-				buildWriteActionConfig({ ...parameters, onTransactionCanceled: parameters.onTransactionCanceled, onTransactionFailed: parameters.onTransactionFailed, onTransactionPrepared: parameters.onTransactionPrepared }, forkError, 'Connect your wallet.', {
+				buildWriteActionConfig({ ...parameters, onTransactionCanceled: parameters.onTransactionCanceled, onTransactionFailed: parameters.onTransactionFailed, onTransactionPrepared: parameters.onTransactionPrepared }, forkError, commonCopy.formatConnectWalletBefore('triggering a universe fork'), {
 					action: 'forkQuestion',
 					source: 'Question reporting',
 					submittedTitle: copy.triggerUniverseFork,

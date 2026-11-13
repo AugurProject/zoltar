@@ -92,9 +92,9 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 				<PortfolioButton
 					model={parameters.actions}
 					action={model.actionId('resetCollateral')}
-					label={collateralCopy.reset}
-					pendingLabel={collateralCopy.resetting}
-					reason={model.fundingReason ?? ((observation?.wethAllowanceAttoEth ?? 0n) === 0n ? collateralCopy.notNeeded : undefined)}
+					label={common.formatResetTokenApproval(model.collateral.symbol)}
+					pendingLabel={common.formatResettingTokenApproval(model.collateral.symbol)}
+					reason={model.fundingReason ?? ((observation?.wethAllowanceAttoEth ?? 0n) === 0n ? common.notNeeded : undefined)}
 					onClick={() => model.approve('weth', 0n)}
 				/>
 			) : undefined}
@@ -111,7 +111,7 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 					if (amount !== undefined) void model.approve('weth', amount)
 				}}
 				pending={parameters.actions.busy === model.actionId('approveWeth')}
-				pendingLabel={copy.approving}
+				pendingLabel={common.formatApprovingToken(model.collateral.symbol)}
 				requiredAmount={model.funding?.weth}
 				resetKey={`${model.draftKey}:${model.priceInput}:${model.wethInput}:weth`}
 				tokenSymbol={model.collateral.symbol}
@@ -128,7 +128,7 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 					if (amount !== undefined) void model.approve('rep', amount)
 				}}
 				pending={parameters.actions.busy === model.actionId('approveRep')}
-				pendingLabel={copy.approving}
+				pendingLabel={common.approvingRep}
 				requiredAmount={model.funding?.rep}
 				resetKey={`${model.draftKey}:${model.priceInput}:${model.wethInput}:rep`}
 				tokenSymbol={common.rep}

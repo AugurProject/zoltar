@@ -757,3 +757,19 @@ test('stablecoin mint-capacity errors use collateral units and precision', () =>
 		}),
 	).toBe('Max mint capacity is 1\u00a0USDC.')
 })
+
+test('a stablecoin mint above the wallet balance names the collateral token, as the funding reason does', () => {
+	expect(
+		getTradingMintGuardMessage({
+			accountAddress: '0x1234567890123456789012345678901234567890',
+			settlementCollateralAttoEth: 0n,
+			hasSelectedPool: true,
+			isOnActiveAppChain: true,
+			shareTokenSupplyAttoShares: 0n,
+			totalPoolHeldAttoRep: 0n,
+			mintingCapacityAttoEth: 10_000_000n,
+			mintAmountInput: '4',
+			collateral: { symbol: 'USDC', decimals: 6, balance: 3_000_000n },
+		}),
+	).toBe('Insufficient USDC balance.')
+})
