@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { createPublicClient, createWalletClient, custom, http, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { act } from 'preact/test-utils'
 import { getActiveNetworkProfile, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { transactionActivity } from '@zoltar/ui-core-shared/transactions/transactionActivityStore.js'
 import type { LiveWorkflowContext } from '../../features/live/liveTradingTypes.js'
@@ -33,7 +35,7 @@ describe('collateral funding activity', () => {
 		transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }
 	})
 
-	async function renderFunding({ receiptFails = false }: { receiptFails?: boolean } = {}) {
+	async function renderFunding(receipt: () => Promise<{ status: 'success' | 'reverted' }> = async () => ({ status: 'success' })) {
 		const usdt = getActiveNetworkProfile().usdtAddress
 		if (usdt === undefined) throw new Error('Expected a configured USDT address')
 		const market = liveMarketFixture({ collateral: { token: usdt, symbol: 'USDT', decimals: 6, native: false } })
@@ -45,10 +47,7 @@ describe('collateral funding activity', () => {
 				allowance = args[1]
 				return allowance === 0n ? resetHash : approvalHash
 			},
-			waitForTransactionReceipt: async () => {
-				if (receiptFails) throw new Error('Receipt unavailable')
-				return { status: 'success' as const }
-			},
+			waitForTransactionReceipt: receipt,
 		}
 		let funding: Funding | undefined
 		const context: LiveWorkflowContext = {
@@ -76,30 +75,51 @@ describe('collateral funding activity', () => {
 			/>,
 		)
 		lifecycle.trackRendered(rendered)
-		return {
-			approve: async (amount: bigint) => {
-				await act(async () => {
-					if (funding === undefined) throw new Error('Collateral funding did not render')
-					await funding.approve(amount)
-				})
-			},
+		const approve = async (amount: bigint) => {
+			if (funding === undefined) throw new Error('Collateral funding did not render')
+			await funding.approve(amount)
 		}
+		return { approve }
 	}
+	const rows = () => transactionActivity.value.entries.map(entry => ({ hash: entry.hash, status: entry.status, title: entry.title }))
 
 	test('records a reset under its own title and the approval after it as an approval', async () => {
 		const funding = await renderFunding()
-		await funding.approve(0n)
-		await funding.approve(5_000_000n)
+		await act(() => funding.approve(0n))
+		await act(() => funding.approve(5_000_000n))
 		// Newest first: the approval that follows the reset keeps its own row and title.
-		expect(transactionActivity.value.entries.map(entry => ({ hash: entry.hash, status: entry.status, title: entry.title }))).toEqual([
+		expect(rows()).toEqual([
 			{ hash: approvalHash, status: 'confirmed', title: 'Collateral approval' },
 			{ hash: resetHash, status: 'confirmed', title: 'USDT approval reset' },
 		])
 	})
 
+	test('a pending reset reads as the action and only a confirmed one as its result', async () => {
+		const receipt = createDeferred<{ status: 'success' }>()
+		const funding = await renderFunding(async () => await receipt.promise)
+		let pending: Promise<void> | undefined
+		await act(() => {
+			pending = funding.approve(0n)
+		})
+		await waitFor(() => expect(rows()).toEqual([{ hash: resetHash, status: 'pending', title: 'Reset USDT approval' }]))
+		await act(async () => {
+			receipt.resolve({ status: 'success' })
+			await pending
+		})
+		expect(rows()).toEqual([{ hash: resetHash, status: 'confirmed', title: 'USDT approval reset' }])
+	})
+
+	test('a reverted reset keeps the action title instead of claiming the reset happened', async () => {
+		const funding = await renderFunding(async () => ({ status: 'reverted' }))
+		await act(() => funding.approve(0n))
+		expect(rows()).toEqual([{ hash: resetHash, status: 'failed', title: 'Reset USDT approval' }])
+	})
+
 	test('names the reset when its receipt cannot be confirmed', async () => {
-		const funding = await renderFunding({ receiptFails: true })
-		await funding.approve(0n)
-		expect(transactionActivity.value.entries.map(entry => entry.title)).toEqual(['USDT approval reset'])
+		const funding = await renderFunding(async () => {
+			throw new Error('Receipt unavailable')
+		})
+		await act(() => funding.approve(0n))
+		expect(rows()).toEqual([{ hash: resetHash, status: 'pending', title: 'Reset USDT approval' }])
 	})
 })

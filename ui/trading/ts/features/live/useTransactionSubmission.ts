@@ -16,6 +16,8 @@ type RequestSignature = <T>(write: () => Promise<T>) => Promise<T>
 export type SubmissionPlan<Prepared> = Readonly<{
 	/** Names this submission in the activity list and the receipt-uncertainty warning when it is not the hook's usual transaction, such as an allowance reset sent through the approval workflow. */
 	label?: string | undefined
+	/** The activity row's title once this submission confirms; a pending or failed row keeps `label`. */
+	confirmedTitle?: string | undefined
 	/** The failure message for this submission when the error carries none; defaults to the hook's. */
 	failureFallback?: string | undefined
 	prepare(): Promise<Prepared>
@@ -161,7 +163,7 @@ export function useTransactionSubmission({
 					if (mounted.current) dispatch({ type: 'replaced', context, replacementHash })
 				},
 			})
-			activity.receipt(receipt.status)
+			activity.receipt(receipt.status, plan.confirmedTitle)
 			if (!mounted.current) return
 			if (receipt.status === 'reverted') {
 				dispatch({ type: 'reverted', context })

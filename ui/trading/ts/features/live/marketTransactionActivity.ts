@@ -24,9 +24,10 @@ export function createMarketTransactionActivity(market: Address, title: string) 
 			recordTransactionSubmitted({ hash, previousHash: current, scope: marketTransactionScope(market), title })
 			current = hash
 		},
-		receipt(status: 'success' | 'reverted') {
+		/** A confirmed row may take a result title; a reverted one keeps the title it was submitted under. */
+		receipt(status: 'success' | 'reverted', confirmedTitle?: string) {
 			if (current === undefined) return
-			recordTransactionSettled(current, status === 'success' ? { status: 'confirmed' } : { status: 'failed', failureKind: 'reverted' })
+			recordTransactionSettled(current, status === 'success' ? { status: 'confirmed', ...(confirmedTitle === undefined ? {} : { title: confirmedTitle }) } : { status: 'failed', failureKind: 'reverted' })
 		},
 		/** The ticket stopped waiting (its receipt read failed or it unmounted); the activity list keeps checking. */
 		handOff() {
