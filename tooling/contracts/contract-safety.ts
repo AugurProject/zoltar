@@ -1,6 +1,7 @@
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { readFileSync } from 'node:fs'
 import { contractSafetyPolicy, type ContractReference } from './contract-safety-policy'
+import { isRecord } from '../repo/is-record.mts'
 
 type ArtifactContract = {
 	abi?: unknown[]
@@ -27,10 +28,6 @@ export type ContractSize = ContractReference & {
 export type ContractSafetyResult = {
 	sizes: ContractSize[]
 	errors: string[]
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null
 }
 
 function getString(value: unknown, message: string): string {

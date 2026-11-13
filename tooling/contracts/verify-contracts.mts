@@ -19,6 +19,7 @@ import {
 	type VerificationOutcome,
 	type VerificationPlan,
 } from './contract-verification.mts'
+import { isRecord } from '../repo/is-record.mts'
 
 const CONTRACT_ARTIFACT_PATH = path.join(repositoryRoot, 'solidity', 'artifacts', 'Contracts.json')
 const NETWORK_IDS_BY_CHAIN_ID: Readonly<Record<number, 'mainnet' | 'sepolia'>> = {
@@ -34,10 +35,6 @@ export function parseRequestedChainIds(argv: readonly string[]): number[] {
 		if (!/^[1-9]\d*$/.test(value)) throw new Error(`--chain-id must be a canonical positive decimal integer, received ${value}`)
 		return Number(value)
 	})
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null
 }
 
 export function createArtifactLookup(rawArtifact: unknown): ArtifactLookup {

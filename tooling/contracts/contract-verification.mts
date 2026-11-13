@@ -3,6 +3,7 @@ import { getAddress, getCreate2Address, keccak256, toHex, type Address, type Hex
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import type { GenesisOutcome } from '../../shared/zoltar/ts/deployment/genesisUniverses.ts'
 import { SECURITY_POOL_UTILS_SOURCE_PATH, STEP_DEFINITIONS, UNVERIFIABLE_STEPS, type CompilerProfile } from './contract-verification-steps.mts'
+import { isRecord } from '../repo/is-record.mts'
 
 const ZERO_SALT = toHex(0, { size: 32 })
 
@@ -38,10 +39,6 @@ export type VerificationPlan = {
 	jobs: VerificationJob[]
 	libraryAddresses: { securityPoolUtils: Address }
 	skipped: { id: string; reason: string }[]
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null
 }
 
 function readString(source: Record<string, unknown>, field: string, label: string): string {

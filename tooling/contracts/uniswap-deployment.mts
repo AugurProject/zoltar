@@ -9,6 +9,7 @@ import { getUniswapNetworkDeployment, SEPOLIA_CHAIN_ID, type UniswapNetworkDeplo
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { statoblast_WETH9_WETH9 } from '../../solidity/ts/types/contractArtifact.ts'
 import type { PublishedContract } from './published-contracts.mts'
+import { isRecord } from '../repo/is-record.mts'
 
 const UNISWAP_DEPLOYMENT_ARTIFACT = new URL('../../scripts/artifacts/uniswap-deployment.json', import.meta.url)
 const UNISWAP_DEPLOYMENT_ARTIFACT_SHA256 = '55a0caff0d9b6d9c3b8d8883a3ebe73ef462641e54fe2f46b077bf084bc97161'
@@ -120,10 +121,6 @@ const EXPECTED_UNISWAP_ARTIFACT_SOURCES = {
 } as const
 
 let uniswapDeploymentArtifactsPromise: Promise<UniswapDeploymentArtifacts> | undefined
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null
-}
 
 function parseBytecode(value: unknown, artifactName: string): Hex {
 	if (typeof value !== 'string') throw new Error(`${artifactName} does not contain deployable bytecode`)

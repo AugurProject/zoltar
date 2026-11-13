@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
+import { isRecord } from '../repo/is-record.mts'
 
 export function countEntrypoints(signatureCounts: Map<string, number> | undefined): number {
 	assert.ok(signatureCounts, 'Every contract reference must document at least one entrypoint')
@@ -56,8 +57,4 @@ function canonicalizeJson(value: unknown): string {
 		.sort()
 		.map(key => `${JSON.stringify(key)}:${canonicalizeJson(value[key])}`)
 		.join(',')}}`
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

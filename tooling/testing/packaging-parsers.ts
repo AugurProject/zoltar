@@ -1,5 +1,6 @@
 import { expect } from 'bun:test'
 import { join } from 'node:path'
+import { isRecord } from '../repo/is-record.mts'
 
 type DockerInstruction = {
 	readonly keyword: string
@@ -91,8 +92,6 @@ type BotComposeService = {
 	readonly ports?: readonly unknown[]
 	readonly volumes?: readonly unknown[]
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 
 function botComposeService(source: string, service: string): BotComposeService {
 	const compose: unknown = Bun.YAML.parse(source)

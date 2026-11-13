@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { Window } from 'happy-dom'
+import { isRecord } from '../repo/is-record.mts'
 
 export function assertInvariantCatalogLifecycleBoundaries(invariantsHtml: string): void {
 	for (const id of ['capital-health', 'capital-exit', 'share-settlement', 'escalation', 'forks', 'auctions', 'auction-refunds', 'oracle', 'lifecycle']) {
@@ -84,10 +85,6 @@ export function assertCoordinatorDataEventAndEnumDeclarations(coordinatorData: s
 		sourceEnumValues[enumName] = Object.fromEntries(members.map((member, index) => [String(index), member]))
 	}
 	assert.deepEqual(coordinatorIndex['enumValues'], sourceEnumValues, 'Coordinator data enum values must exactly match OpenOraclePriceCoordinatorTypes.sol')
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 /** The coordinator parameter table and the worked request cost state literal values; keep them equal to the deployment configuration and source constants. */

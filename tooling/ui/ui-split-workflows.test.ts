@@ -8,6 +8,7 @@ import { projectQuery } from '../repo/query-projects.mts'
 import { PRODUCTION_WORKFLOW_SCENARIOS } from './productionWorkflowScenarios.ts'
 import { repositoryRoot } from '../repo/root.mts'
 import { dockerGlobalArguments, dockerInstructions, parseDockerfile } from '../testing/packaging-parsers.ts'
+import { isRecord } from '../repo/is-record.mts'
 
 // Validate pending workflow definitions until they are moved into GitHub's active directory.
 const workflowDefinitionPath = (name: string) => {
@@ -36,7 +37,6 @@ const developerDocumentation = [
 const uiPackageIds = ['coreShared', 'zoltarShared', 'statoblastShared', 'zoltar', 'statoblast', 'trading', 'openoracle'] as const
 const tevmPackagePaths = ['package.json', 'ui/coreShared/package.json', 'ui/zoltarShared/package.json', 'ui/statoblastShared/package.json', 'ui/zoltar/package.json', 'ui/statoblast/package.json', 'ui/trading/package.json', 'ui/openoracle/package.json'] as const
 const pinnedTevmTransitives = ['@tevm/actions', '@tevm/node'] as const
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 const requireRecord = (value: unknown, label: string) => {
 	if (!isRecord(value)) throw new Error(`${label} must be a YAML mapping`)
 	return value

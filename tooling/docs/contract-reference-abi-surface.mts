@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { isRecord } from '../repo/is-record.mts'
 export const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	'solidity/contracts/ZoltarQuestionData.sol': {
 		createQuestion: ['external(QuestionData,string[])'],
@@ -155,8 +156,6 @@ export const readDeclarationExclusionsBySource: Record<string, string[]> = {
 	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': ['storedGame', 'disputeHistory'],
 	'solidity/contracts/statoblast/SecurityPool.sol': ['eventEmitter', 'factory', 'operationsDelegate'],
 }
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
-
 export function assertCoordinatorDataFunctionInventory(coordinatorData: string, compiledContractArtifacts: unknown): void {
 	const coordinatorIndex: unknown = JSON.parse(coordinatorData)
 	assert.ok(isRecord(coordinatorIndex))

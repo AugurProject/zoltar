@@ -7,6 +7,7 @@ import type { GenesisOutcome } from '../../shared/zoltar/ts/deployment/genesisUn
 import { pathExists } from '../repo/fs.mts'
 import { repositoryRoot as repositoryRootPath } from '../repo/root.mts'
 import { deploymentManifestIds, getDeploymentManifestFileName, parseDeploymentManifestId } from './deployment-manifests.mts'
+import { isRecord } from '../repo/is-record.mts'
 
 type ManifestProtocolConfig = {
 	forkBurnDivisor: string
@@ -78,10 +79,6 @@ export async function ensureDeploymentRuntimeDependencies(hasRuntimeOutput: () =
 function getManifestPath(manifestId: ManifestId) {
 	return path.join(repositoryRootPath, 'docs', getDeploymentManifestFileName(manifestId))
 }
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null
-}
-
 function readFunction(source: unknown, name: string): (...args: unknown[]) => unknown {
 	if (!isRecord(source)) throw new Error(`Module for ${name} did not load as an object`)
 	const value = Reflect.get(source, name)

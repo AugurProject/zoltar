@@ -7,6 +7,7 @@ import { resolve } from 'node:path'
 import * as ts from 'typescript'
 import { listRepositoryFiles, mergeBaseWithMain, runGit } from '../repo/git.mts'
 import { discoverTestFiles } from './test-discovery.mts'
+import { isRecord } from '../repo/is-record.mts'
 
 export type CoverageMetric = {
 	covered: number
@@ -349,10 +350,6 @@ export function evaluateCoveragePolicy(report: CompleteCoverage, policy: Coverag
 		failures.push(`Changed product TypeScript line coverage ${formatExact(report.changedLines)}% is below ${policy.changedLines.minimum.toFixed(3)}%`)
 	}
 	return { passed: failures.length === 0, failures }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null
 }
 
 function parsePolicy(value: unknown): CoveragePolicy {

@@ -2,6 +2,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import { runBunTestProcess } from './run-bun-test-process.mts'
 import { createBalancedTestShards, discoverTestFiles, toBunTestPath } from './test-discovery.mts'
+import { isRecord } from '../repo/is-record.mts'
 
 const coverageDirectory = join(process.cwd(), 'solidity', 'coverage')
 const summaryPath = join(coverageDirectory, 'coverage-summary.json')
@@ -19,8 +20,6 @@ interface SolidityCoverageSummary {
 	readonly totalCoveredLines: number
 	readonly files: Record<string, SolidityCoverageFileSummary>
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 
 const parseCoverageFileSummary = (value: unknown): SolidityCoverageFileSummary | undefined => {
 	if (!isRecord(value)) return undefined

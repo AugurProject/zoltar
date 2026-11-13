@@ -7,6 +7,7 @@ import { repositoryRoot as defaultRepositoryRoot } from '../repo/root.mts'
 import { untrackedGeneratedPathspecs } from '../repo/generated-artifacts.ts'
 import { augurScanMetadataOutputs } from '../repo/projects.ts'
 import { sharedPackages } from '../repo/sharedPackages.ts'
+import { isRecord } from '../repo/is-record.mts'
 
 export type GeneratedArtifactCheckOptions = {
 	repositoryRoot?: string
@@ -28,10 +29,6 @@ const explicitlyRequiredGeneratedOutputs = [
 
 // Ignored registry outputs plus stray compiler output that must never be committed.
 const generatedReviewPaths = [...untrackedGeneratedPathspecs(), ':(glob)**/*.tsbuildinfo', ':(glob)ui/*/ts/**/*.d.ts', ':(glob)ui/*/ts/**/*.d.ts.map']
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
 
 async function assertExists(repositoryRoot: string, relativePath: string) {
 	try {

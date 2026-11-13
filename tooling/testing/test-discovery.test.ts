@@ -22,8 +22,7 @@ import {
 	TEST_TIMING_HISTORY_VERSION,
 	type TestTimingHistory,
 } from './test-timings.mts'
-
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
+import { isRecord } from '../repo/is-record.mts'
 
 describe('canonical test discovery', () => {
 	test('the aggregate test entrypoint owns every local package suite and browser smoke', async () => {

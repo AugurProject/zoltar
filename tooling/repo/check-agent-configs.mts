@@ -2,6 +2,7 @@ import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { readdir, readFile } from 'node:fs/promises'
 import * as path from 'node:path'
 import { repositoryRoot } from './root.mts'
+import { isRecord } from './is-record.mts'
 
 const requiredModel = 'gpt-6-astra'
 const requiredModelReasoningEffort = 'low'
@@ -29,10 +30,6 @@ const forbiddenInstructionOutputFragments = [
 type AgentValidation = {
 	errors: string[]
 	name: string | undefined
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function parseToml(filePath: string, source: string, errors: string[]) {

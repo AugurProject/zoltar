@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { acceptedAuditAdvisories } from './projects.ts'
 import { repositoryRoot } from './root.mts'
+import { isRecord } from './is-record.mts'
 
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 function fail(reason: string): never {
 	throw new Error(`Zod audit exception requires review: ${reason}`)
 }

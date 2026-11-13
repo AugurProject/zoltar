@@ -1,6 +1,7 @@
 import { readFile, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { repositoryRoot } from '../repo/root.mts'
+import { isRecord } from '../repo/is-record.mts'
 
 const coverageDirectory = path.join(repositoryRoot, 'coverage', 'trading-contracts')
 const summaryPath = path.join(coverageDirectory, 'coverage-summary.json')
@@ -14,8 +15,6 @@ type CoverageFile = {
 type CoverageSummary = {
 	readonly files: Readonly<Record<string, CoverageFile>>
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 
 const parseSummary = (value: unknown): CoverageSummary => {
 	if (!isRecord(value) || !isRecord(value['files'])) throw new Error('Invalid trading Solidity coverage summary')
