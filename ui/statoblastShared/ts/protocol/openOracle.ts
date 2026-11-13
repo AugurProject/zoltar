@@ -531,7 +531,7 @@ export async function settleOracleReport<TReceipt extends Pick<TransactionReceip
 				const { readContract, getBlock } = client
 				if (readContract === undefined || getBlock === undefined) throw new Error('OpenOracle settlement requires a readable wallet client.')
 				const current = await loadOpenOracleStoredState({ readContract }, openOracleAddress, reportId)
-				if (current.settled) throw new Error('This report is already settled.')
+				if (current.settled) throw new Error(openOracleCopy.reportAlreadySettled)
 				if (current.stateHash.toLowerCase() !== reviewedStateHash.toLowerCase()) throw new Error('This report changed onchain. Review the latest settlement state again.')
 				const block = await getBlock()
 				const clock = hasOpenOracleFlag(current.latest.game, OPEN_ORACLE_FLAG_TIME_TYPE) ? block.timestamp : block.number
