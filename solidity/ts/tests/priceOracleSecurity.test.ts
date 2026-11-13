@@ -217,16 +217,7 @@ describe('Shared portfolio oracle security regressions', () => {
 		await wrapWeth(counterpartyClient, initialWethReport * 4n)
 		await approveToken(counterpartyClient, WETH_ADDRESS, openOracle)
 		await approveToken(counterpartyClient, addressString(GENESIS_REPUTATION_TOKEN), openOracle)
-		await setNextBlockBaseFee(baseFeeAttoEthPerGas)
-		const requestHash = await client.writeContract({
-			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'requestPrice',
-			address: priceOracle,
-			args: [proposedRepPerEthPrice, 0n, requestEthCost],
-			value: requestEthCost,
-			gasPrice: baseFeeAttoEthPerGas,
-		})
-		await client.waitForTransactionReceipt({ hash: requestHash })
+		await requestPriceAtBaseFee(proposedRepPerEthPrice, requestEthCost, baseFeeAttoEthPerGas)
 
 		const reportId = await getPendingReportId(client, priceOracle)
 		const reportMeta = await getOpenOracleReportMeta(client, reportId)
