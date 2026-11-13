@@ -96,7 +96,8 @@ dependent deployment address for both outcomes. Both tokens mint the same
 allocations, with the constructor lists reversed for No to give it a distinct
 CREATE2 address through the existing zero-salt proxy.
 
-All three apps require a truthful universe choice. Use `?genesis=yes` or
+Zoltar, Statoblast, and Trading require a truthful universe choice; OpenOracle
+does not. Use `?genesis=yes` or
 `?genesis=no` (also accepted in the route query). Without a valid choice the app
 shows the Augur V2 fork question and asks for Yes or No before starting. The
 selected root's Parent universe link returns to the Augur v2 universe, where users can
@@ -126,8 +127,8 @@ Simulation mode details:
 - Production users should treat any `?simulate=1` URL as a local sandbox. Simulated balances, deployments, blocks, quotes, and transactions are local to the browser and are not evidence of mainnet state.
 - Every app supports `simScenario=baseline` and `simScenario=deployed`. The other seeded scenarios are app-specific:
   - Zoltar: `two-questions` and `forked-categorical`
-  - Statoblast: `portfolio`, `portfolio-auction`, `security-pool`, `securitypoolx2`, `securitypoolx2-auction`, `finalized-collateral-repair-auction`, `ended-pool-commitment`, `escalation-in-progress`, `liquidation-distance`, and `near-minimum-vault`
-  - Trading: `trading-funded` and `trading-forked`
+  - Statoblast: `portfolio`, `portfolio-auction`, `security-pool`, and `securitypoolx2`
+  - Trading: `trading-funded`, `trading-usdc`, `trading-usdt`, and `trading-forked`
 - The live simulation chain is ephemeral and exists only in the current browser tab session; only states explicitly saved from the simulation banner persist in browser storage
 - Serve commands prepare a snapshot of every scenario (`bun run ui:snapshots <app>` does it on its own, `bun run ui:snapshots:check` reports whether they are current), so opening a scenario restores its seeded chain in about a second instead of replaying the seeding. The watch rebuild removes the snapshots whenever a source behind the simulation changes, the serve and watch commands regenerate stale ones before serving, and the production build ships only snapshots that match the current sources; without them the app seeds live
 
@@ -140,7 +141,7 @@ Each serve command first builds the selected app and its dependencies, then serv
 | Zoltar      | `bun run app:serve:zoltar`     | `bun run app:watch:zoltar`     | http://localhost:4153  |
 | Statoblast  | `bun run app:serve:statoblast` | `bun run app:watch:statoblast` | http://localhost:12347 |
 | Trading     | `bun run app:serve:trading`    | `bun run app:watch:trading`    | http://localhost:4163  |
-| OpenOracle | `bun run app:serve:openoracle` | `bun run app:watch:openoracle` | http://localhost:4173 |
+| OpenOracle | `bun run app:serve:openoracle` | `bun run app:watch:openoracle` | http://localhost:4143 |
 
 ### Which command do I run?
 

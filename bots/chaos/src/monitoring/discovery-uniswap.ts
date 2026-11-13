@@ -11,10 +11,9 @@ import { uniswapV3PositionKey } from '../state/retirement.ts'
 import type { UniverseSnapshot } from '../operations/types.ts'
 import type { EcosystemDiscoveryContext } from './discovery-context.ts'
 import { DISCOVERY_RPC_QUEUE_LIMIT, drainConcurrent, mapWithConcurrency } from './discovery-client.ts'
-import { requireGraphEdge } from './discovery-graph.ts'
+import { hasCode, requireGraphEdge } from './discovery-graph.ts'
 import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
 
-const hasCode = (code: string | undefined): code is string => code !== undefined && code !== '0x'
 const UNISWAP_POOL_DISCOVERY_CONCURRENCY = Math.min(2, Math.floor(DISCOVERY_RPC_QUEUE_LIMIT / 6))
 
 export async function discoverUniverseUniswap(context: EcosystemDiscoveryContext, universes: readonly UniverseSnapshot[], blockNumber: bigint, chainId: number) {

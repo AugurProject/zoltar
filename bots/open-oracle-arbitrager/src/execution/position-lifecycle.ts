@@ -13,6 +13,7 @@ import {
 	lifecycleAttemptNeedsRecovery,
 	lifecycleLastValidBlockNumber,
 	lifecycleWithdrawalMismatch,
+	waitForTargetBlock,
 } from '#execution/execution-orchestration'
 import { discoverPublicReplacementWithQuorum, expireEntryWithQuorum, finalizeLifecycleAfterFinalityWithQuorum, recoverPendingEntryWithQuorum, recoverPendingLifecycleWithQuorum, tokenDecimalsFromSnapshot } from '#execution/position-recovery'
 import { currentBlockNumberWithQuorum, dateFromBlockTimestamp, durableTransactionIntent, lifecycleBalancesWithQuorum, pendingNonceWithQuorum, replacementDisputeAmountsWithQuorum, storedReportWithQuorum } from '#execution/recovery-support'
@@ -312,13 +313,7 @@ export async function processPositionLifecycle(
 				() => guardedExecutionStep(isPaused, async () => {}),
 			),
 	)
-	while (true) {
-		await guardedExecutionStep(isPaused, async () => {})
-		const currentBlockNumber = await client.getBlockNumber()
-		await guardedExecutionStep(isPaused, async () => {})
-		if (currentBlockNumber >= targetBlockNumber) break
-		await Bun.sleep(Math.min(config.pollMilliseconds, 1_000))
-	}
+	await waitForTargetBlock(client, isPaused, config.pollMilliseconds, targetBlockNumber)
 	await guardedExecutionStep(isPaused, async () => {})
 	try {
 		await finalizeSubmittedLifecycleAttempt(lifecyclePosition, pending => recoverPendingLifecycleWithQuorum(readClients, config, pending, targetBlockNumber), persistPosition)

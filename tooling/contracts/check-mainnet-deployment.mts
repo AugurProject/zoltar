@@ -7,6 +7,7 @@ import type { GenesisOutcome } from '../../shared/zoltar/ts/deployment/genesisUn
 import { pathExists } from '../repo/fs.mts'
 import { repositoryRoot as repositoryRootPath } from '../repo/root.mts'
 import { deploymentManifestIds, getDeploymentManifestFileName, parseDeploymentManifestId } from './deployment-manifests.mts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 type ManifestProtocolConfig = {
 	forkBurnDivisor: string
@@ -78,26 +79,22 @@ export async function ensureDeploymentRuntimeDependencies(hasRuntimeOutput: () =
 function getManifestPath(manifestId: ManifestId) {
 	return path.join(repositoryRootPath, 'docs', getDeploymentManifestFileName(manifestId))
 }
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null
-}
-
 function readFunction(source: unknown, name: string): (...args: unknown[]) => unknown {
-	if (!isRecord(source)) throw new Error(`Module for ${name} did not load as an object`)
+	if (!isPlainRecord(source)) throw new Error(`Module for ${name} did not load as an object`)
 	const value = Reflect.get(source, name)
 	if (typeof value !== 'function') throw new Error(`Module export ${name} is missing`)
 	return (...args: unknown[]) => value.call(undefined, ...args)
 }
 
 function readStringField(source: unknown, field: string, label = field): string {
-	if (!isRecord(source)) throw new Error(`Expected ${label} source to be an object`)
+	if (!isPlainRecord(source)) throw new Error(`Expected ${label} source to be an object`)
 	const value = Reflect.get(source, field)
 	if (typeof value !== 'string') throw new Error(`Expected ${label} to be a string`)
 	return value
 }
 
 function readProtocolConfig(source: unknown): ManifestProtocolConfig {
-	if (!isRecord(source)) throw new Error('Mainnet protocol config did not load as an object')
+	if (!isPlainRecord(source)) throw new Error('Mainnet protocol config did not load as an object')
 	const forkBurnDivisor = Reflect.get(source, 'forkBurnDivisor')
 	const forkThresholdDivisor = Reflect.get(source, 'forkThresholdDivisor')
 	if (typeof forkBurnDivisor !== 'bigint') throw new Error('Mainnet protocol config forkBurnDivisor must be a bigint')
@@ -109,7 +106,7 @@ function readProtocolConfig(source: unknown): ManifestProtocolConfig {
 }
 
 function readConstructorArgumentsById(source: unknown): Map<string, string> {
-	if (!isRecord(source)) throw new Error('Deployment step constructor arguments did not load as an object')
+	if (!isPlainRecord(source)) throw new Error('Deployment step constructor arguments did not load as an object')
 	return new Map(
 		Object.entries(source).map(([id, constructorArguments]) => {
 			if (typeof constructorArguments !== 'string' || !/^[0-9a-fA-F]*$/.test(constructorArguments)) throw new Error(`Constructor arguments for deployment step ${id} must be a hex string without a 0x prefix`)
@@ -128,7 +125,7 @@ export function readDeploymentSteps(source: unknown, constructorArgumentsById?: 
 		const id = readStringField(step, 'id', `deploymentSteps[${index}].id`)
 		const label = readStringField(step, 'label', `deploymentSteps[${index}].label`)
 		const address = readStringField(step, 'address', `deploymentSteps[${index}].address`)
-		const recordedArguments = isRecord(step) && typeof step['constructorArguments'] === 'string' ? step['constructorArguments'] : undefined
+		const recordedArguments = isPlainRecord(step) && typeof step['constructorArguments'] === 'string' ? step['constructorArguments'] : undefined
 		const constructorArguments = constructorArgumentsById === undefined ? recordedArguments : constructorArgumentsById.get(id)
 		if (constructorArgumentsById !== undefined && constructorArguments === undefined && !RAW_TRANSACTION_STEP_IDS.has(id)) {
 			throw new Error(`Deployment step ${id} has no computed constructor arguments. Extend getDeploymentStepConstructorArguments in ui/statoblastShared/ts/protocol/deployment.ts alongside the new deployment step.`)
@@ -142,9 +139,9 @@ function normalizeManifest(manifest: DeploymentManifest) {
 }
 
 function readNetworkProfile(source: unknown, manifestId: ManifestId): ManifestNetwork {
-	if (!isRecord(source)) throw new Error(`${manifestId} network profile did not load as an object`)
+	if (!isPlainRecord(source)) throw new Error(`${manifestId} network profile did not load as an object`)
 	const chain = Reflect.get(source, 'chain')
-	if (!isRecord(chain)) throw new Error(`${manifestId} network profile chain did not load as an object`)
+	if (!isPlainRecord(chain)) throw new Error(`${manifestId} network profile chain did not load as an object`)
 	const chainId = Reflect.get(chain, 'id')
 	if (typeof chainId !== 'number') throw new Error(`${manifestId} chain id must be a number`)
 	const id = readStringField(source, 'id', `${manifestId}.id`)
@@ -181,8 +178,8 @@ async function loadComputedManifest(manifestId: ManifestId): Promise<DeploymentM
 		const setRuntimeNetworkProfile = readFunction(networkProfileModule, 'setRuntimeNetworkProfile')
 		const getGenesisNetworkProfile = readFunction(networkProfileModule, 'getGenesisNetworkProfile')
 		const profileExportName = parseDeploymentManifestId(manifestId).networkId === 'mainnet' ? 'MAINNET_NETWORK_PROFILE' : 'SEPOLIA_NETWORK_PROFILE'
-		const baseProfile = isRecord(networkProfileModule) ? Reflect.get(networkProfileModule, profileExportName) : undefined
-		if (!isRecord(baseProfile)) throw new Error(`Module export ${profileExportName} is missing`)
+		const baseProfile = isPlainRecord(networkProfileModule) ? Reflect.get(networkProfileModule, profileExportName) : undefined
+		if (!isPlainRecord(baseProfile)) throw new Error(`Module export ${profileExportName} is missing`)
 		const profile = getGenesisNetworkProfile(baseProfile, parseDeploymentManifestId(manifestId).genesisOutcome)
 		setRuntimeNetworkProfile(profile)
 		const infraContractAddresses = getInfraContractAddresses(profile)
@@ -243,13 +240,13 @@ async function readManifest(manifestId: ManifestId): Promise<DeploymentManifest>
 	const manifestPath = getManifestPath(manifestId)
 	const rawManifest = await fs.readFile(manifestPath, 'utf8')
 	const parsedManifest: unknown = JSON.parse(rawManifest)
-	if (!isRecord(parsedManifest)) throw new Error(`${manifestId} deployment manifest must be an object`)
+	if (!isPlainRecord(parsedManifest)) throw new Error(`${manifestId} deployment manifest must be an object`)
 	const network = Reflect.get(parsedManifest, 'network')
 	const protocolConfig = Reflect.get(parsedManifest, 'protocolConfig')
 	const deploymentSteps = Reflect.get(parsedManifest, 'deploymentSteps')
 	const derivedContracts = Reflect.get(parsedManifest, 'derivedContracts')
-	if (!isRecord(network)) throw new Error(`${manifestId} deployment manifest network must be an object`)
-	if (!isRecord(protocolConfig)) throw new Error(`${manifestId} deployment manifest protocolConfig must be an object`)
+	if (!isPlainRecord(network)) throw new Error(`${manifestId} deployment manifest network must be an object`)
+	if (!isPlainRecord(protocolConfig)) throw new Error(`${manifestId} deployment manifest protocolConfig must be an object`)
 	const chainId = Reflect.get(network, 'chainId')
 	if (typeof chainId !== 'number') throw new Error(`${manifestId} deployment manifest chainId must be a number`)
 	const id = readStringField(network, 'id', 'network.id')
@@ -307,10 +304,7 @@ async function main() {
 	await assertDeploymentManifestsCurrent()
 }
 
-const currentScriptPath = url.fileURLToPath(import.meta.url)
-const invokedScriptPath = process.argv[1]
-
-if (invokedScriptPath !== undefined && path.resolve(invokedScriptPath) === currentScriptPath) {
+if (import.meta.main) {
 	main().catch(error => {
 		console.error(error)
 		process.exit(1)

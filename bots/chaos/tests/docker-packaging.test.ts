@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, readlink, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseSettings, serializedSettings } from '../src/config/settings.ts'
@@ -25,8 +25,8 @@ async function fixture() {
 	return directory
 }
 
-async function runEntrypoint(directory: string) {
-	const child = Bun.spawn([entrypoint, '/bin/true'], { cwd: directory, env: { ...process.env, ZOLTAR_BOT_CONTAINER: 'true', ZOLTAR_BOT_SIGNER_LOCK_ROOT: '.state/process-locks' }, stderr: 'pipe', stdout: 'pipe' })
+async function runEntrypoint(directory: string, environment: Record<string, string> = {}) {
+	const child = Bun.spawn([entrypoint, '/bin/true'], { cwd: directory, env: { ...process.env, ZOLTAR_BOT_CONTAINER: 'true', ZOLTAR_BOT_SIGNER_LOCK_ROOT: '.state/process-locks', ...environment }, stderr: 'pipe', stdout: 'pipe' })
 	const exitCode = await child.exited
 	if (exitCode !== 0) throw new Error(`Docker entrypoint exited ${exitCode.toString()}: ${await new Response(child.stderr).text()}`)
 }
@@ -231,5 +231,28 @@ describe('chaos Docker packaging', () => {
 
 		await expect(runEntrypoint(directory)).rejects.toThrow('must not be a symbolic link')
 		expect((await stat(target)).mode & 0o777).toBe(0o644)
+	})
+
+	test('rejects a dangling symbolic-link configuration instead of replacing it with the template', async () => {
+		const directory = await fixture()
+		const settingsFile = join(directory, '.state', 'operator.json')
+		const missingTarget = join(directory, 'missing-settings.json')
+		await symlink(missingTarget, settingsFile)
+
+		await expect(runEntrypoint(directory)).rejects.toThrow('must not be a symbolic link')
+		expect(await readlink(settingsFile)).toBe(missingTarget)
+		expect(await Bun.file(missingTarget).exists()).toBe(false)
+	})
+
+	test('rejects a dangling symbolic link selected by ZOLTAR_CHAOS_CONFIG as a link, not as a missing configuration', async () => {
+		const directory = await fixture()
+		const settingsFile = join(directory, '.state', 'custom.json')
+		const missingTarget = join(directory, 'missing-settings.json')
+		await symlink(missingTarget, settingsFile)
+
+		await expect(runEntrypoint(directory, { ZOLTAR_CHAOS_CONFIG: '.state/custom.json' })).rejects.toThrow('must not be a symbolic link')
+		expect(await readlink(settingsFile)).toBe(missingTarget)
+		expect(await Bun.file(missingTarget).exists()).toBe(false)
+		expect(await Bun.file(join(directory, '.state', 'operator.json')).exists()).toBe(false)
 	})
 })
