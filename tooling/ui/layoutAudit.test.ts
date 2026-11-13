@@ -172,6 +172,18 @@ describe('layout audit stays quiet for intentional patterns', () => {
 		expect(findings).toEqual([])
 	})
 
+	test('a long value inside an input, which scrolls', async () => {
+		expect(await audit('<input style="width: 90px" value="1979.166666666666664885">')).toEqual([])
+	})
+
+	test('the body of a closed details element', async () => {
+		const findings = await audit(`
+			<details><summary>More options</summary>
+				<div style="width: 600px"><p>Hidden option text</p><p style="margin-top: -24px">Overlapping hidden text</p></div>
+			</details>`)
+		expect(findings).toEqual([])
+	})
+
 	test('scope limits the report to an open dialog', async () => {
 		const findings = await audit('<div style="width: 60px; overflow: hidden; white-space: nowrap">Cut off page text</div><div role="dialog">Dialog text</div>', { scope: '[role=dialog]' })
 		expect(findings).toEqual([])

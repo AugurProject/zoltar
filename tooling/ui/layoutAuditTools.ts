@@ -58,7 +58,9 @@ export function createLayoutAuditTools(options: LayoutAuditOptions) {
 		const cached = hiddenCache.get(element)
 		if (cached !== undefined) return cached
 		const parent = element.parentElement
-		const hidden = (element instanceof SVGElement && !(element instanceof SVGSVGElement)) || isVisuallyHiddenBox(element) || element.closest('[hidden], [inert], template') !== null || (parent !== null && !isRoot(parent) && isHidden(parent))
+		// `checkVisibility` also catches content Chromium keeps laid out but skips painting, such as the body of a closed
+		// `<details>` (`content-visibility: hidden`), whose boxes would otherwise read as overlapping or overflowing.
+		const hidden = (element instanceof SVGElement && !(element instanceof SVGSVGElement)) || isVisuallyHiddenBox(element) || !element.checkVisibility() || element.closest('[hidden], [inert], template') !== null || (parent !== null && !isRoot(parent) && isHidden(parent))
 		hiddenCache.set(element, hidden)
 		return hidden
 	}

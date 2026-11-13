@@ -23,7 +23,8 @@ import { createLayoutAuditTools } from './layoutAuditTools.ts'
  * - `squeezed`: a box too narrow for its text (about one word per line, or narrower than three characters).
  * - `broken-word`: an ordinary word split across lines because the box is narrower than the word.
  * - `wrapped-label`: a short button, tab, or badge label that wraps onto several lines.
- * - `field-clipped`: an input placeholder, value, or selected option wider than the field.
+ * - `field-clipped`: an input placeholder or a select's chosen option wider than the field. Typed values scroll
+ *   inside the input, so they are not checked.
  * - `dialog-overflow`: a dialog that extends past the viewport without a way to scroll to the rest.
  *
  * Each finding names the element, the measured sizes, and the most likely cause, so it can be fixed without rerunning

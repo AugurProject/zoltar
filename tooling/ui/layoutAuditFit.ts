@@ -109,9 +109,10 @@ export function auditFit(tools: LayoutAuditTools) {
 		const style = styleOf(field)
 		const available = field.clientWidth - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight) - (field instanceof HTMLSelectElement ? 4 : 0)
 		const candidates: { label: string; text: string; severity: LayoutSeverity }[] = []
+		// A typed or prefilled value scrolls inside its input, so only text the reader cannot scroll to counts: the
+		// placeholder and the selected option of a closed select.
 		if (field instanceof HTMLInputElement) {
 			if (field.value === '' && field.placeholder !== '') candidates.push({ label: 'placeholder', text: field.placeholder, severity: 'medium' })
-			if (field.value !== '' && field.value.length <= 32) candidates.push({ label: 'value', text: field.value, severity: 'low' })
 		} else if (field instanceof HTMLSelectElement) {
 			const option = field.selectedOptions[0]
 			if (option !== undefined) candidates.push({ label: 'selected option', text: option.text, severity: 'medium' })
