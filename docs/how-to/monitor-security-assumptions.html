@@ -85,7 +85,7 @@
 									<ul>
 										<li><a href="../reference/glossary.html#theoretical-rep-supply">Theoretical REP supply</a>: Zoltar <code>getUniverseTheoreticalSupplyAttoRep(universeId)</code></li>
 										<li>Pool <a href="../reference/glossary.html#open-interest">open interest</a>: pool <code>settlementCollateralAttoEth()</code></li>
-										<li>Underwriting REP: portfolio <code>capitalLedger(universeId)</code>, then that ledger's <code>totals()</code></li>
+										<li>REP deposited as underwriting capital: portfolio <code>capitalLedger(universeId)</code>, then the <code>rep</code> value from that ledger's <code>totals()</code></li>
 										<li>Cached REP/ETH price: coordinator <code>lastPrice</code></li>
 										<li>REP depth and price impact: arbitrager Uniswap venue quotes</li>
 										<li>Pool and vault risk: augurScan <code>/operations/risk</code></li>
@@ -101,7 +101,7 @@
 									<ul>
 										<li><a href="../reference/glossary.html#escalation-game">Escalation Game</a> deadline: <code>getEscalationGameEndDate()</code></li>
 										<li>Outcome funding: <code>getOutcomeBalancesAttoRep()</code> and <code>getBindingCapitalAttoRep()</code>, or augurScan <code>/operations/escalations</code></li>
-										<li>REP available to fund a correction: wallet REP <code>balanceOf</code> of each ready account (escalation deposits come from wallet REP, not underwriting REP)</li>
+										<li>REP available to fund a correction: wallet REP <code>balanceOf</code> of each ready account (escalation deposits come from wallet REP, not from capital-ledger deposits)</li>
 										<li>Outcome evidence: where each source publishes (off-chain)</li>
 									</ul>
 								</td>
@@ -129,7 +129,7 @@
 										<li>Reorg history: augurScan <code>/operations/integrity</code></li>
 										<li>Escalation deadline: <code>getEscalationGameEndDate()</code></li>
 										<li>Collateral Repair Auction close: auction <code>closesAt()</code></li>
-										<li>Branch-choice close: Zoltar <code>getForkChoiceDeadline(universeId)</code>, eight weeks after the fork</li>
+										<li><a href="../reference/glossary.html#migration-window">Branch-choice cutoff</a>: Zoltar <code>getForkChoiceDeadline(universeId)</code>, eight weeks after the fork</li>
 										<li>Margin: each deadline minus expected inclusion delay</li>
 									</ul>
 								</td>
