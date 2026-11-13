@@ -49,6 +49,17 @@ export function compareBigintAscending(left: bigint, right: bigint) {
 	return 0
 }
 
+function hashCarryLevel(levelHashes: readonly Hex[]) {
+	const nextLevelHashes: Hex[] = []
+	for (let index = 0; index < levelHashes.length; index += 2) {
+		const left = levelHashes[index]
+		const right = levelHashes[index + 1]
+		if (left === undefined || right === undefined) throw new Error('Invalid carry Merkle Mountain Range level')
+		nextLevelHashes.push(hashCarryParent(left, right))
+	}
+	return nextLevelHashes
+}
+
 export function buildCarryMerkleMountainRangeProof(leafHashes: readonly Hex[], targetLeafIndex: number) {
 	const peakHeights = buildCarryPeakHeights(BigInt(leafHashes.length))
 	let offset = 0
@@ -61,14 +72,7 @@ export function buildCarryMerkleMountainRangeProof(leafHashes: readonly Hex[], t
 		const peakLeaves = leafHashes.slice(offset, offset + peakSize)
 		let levelHashes = [...peakLeaves]
 		while (levelHashes.length > 1) {
-			const nextLevelHashes: Hex[] = []
-			for (let index = 0; index < levelHashes.length; index += 2) {
-				const left = levelHashes[index]
-				const right = levelHashes[index + 1]
-				if (left === undefined || right === undefined) throw new Error('Invalid carry Merkle Mountain Range level')
-				nextLevelHashes.push(hashCarryParent(left, right))
-			}
-			levelHashes = nextLevelHashes
+			levelHashes = hashCarryLevel(levelHashes)
 		}
 		const peakRoot = levelHashes[0]
 		if (peakRoot === undefined) throw new Error('Missing carry Merkle Mountain Range peak root')
@@ -89,14 +93,7 @@ export function buildCarryMerkleMountainRangeProof(leafHashes: readonly Hex[], t
 		const siblingHash = levelHashes[relativeLeafIndex ^ 1]
 		if (siblingHash === undefined) throw new Error('Missing carry Merkle Mountain Range sibling')
 		merkleMountainRangeSiblings.push(siblingHash)
-		const nextLevelHashes: Hex[] = []
-		for (let index = 0; index < levelHashes.length; index += 2) {
-			const left = levelHashes[index]
-			const right = levelHashes[index + 1]
-			if (left === undefined || right === undefined) throw new Error('Invalid carry Merkle Mountain Range level')
-			nextLevelHashes.push(hashCarryParent(left, right))
-		}
-		levelHashes = nextLevelHashes
+		levelHashes = hashCarryLevel(levelHashes)
 		relativeLeafIndex = Math.floor(relativeLeafIndex / 2)
 	}
 	const orderedPeakHeights = [...peakRootsByHeight.keys()].sort((left, right) => left - right)
