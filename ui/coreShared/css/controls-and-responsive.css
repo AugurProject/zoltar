@@ -124,6 +124,13 @@
 	color: var(--text);
 }
 
+/* Phones: options on a wrapped row stretch to fill it, so no option sits alone at the start of the second row. */
+@media (max-width: 40rem) {
+	.view-tabs.segmented .view-tab {
+		flex: 1 1 auto;
+	}
+}
+
 .view-tabs.subroute .view-tab {
 	padding: 0.8rem 1rem;
 	border-color: var(--divider-subtle);

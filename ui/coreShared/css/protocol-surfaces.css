@@ -540,9 +540,9 @@ body:has(.global-transaction-dialog) .operation-modal-panel {
 	gap: var(--space-2);
 }
 
-/* Facts share the row in columns at least as wide as an abbreviated address with its copy control (about 11rem), so an address never clips and no fact strands alone. */
+/* Facts share the row in compact columns; an address too long for its column falls back to a shorter abbreviation (AddressValue) rather than clipping. */
 .sticky-object-context.context-strip .sticky-object-context-items {
-	grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr));
 	gap: var(--space-2);
 }
 

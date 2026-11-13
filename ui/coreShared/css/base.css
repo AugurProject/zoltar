@@ -1500,7 +1500,7 @@ button.wallet-asset-action-pending:disabled {
 	opacity: 0;
 }
 
-.address-value-text[data-abbreviated="true"] .address-value-abbreviated {
+.address-value-text[data-abbreviated="true"] .address-value-abbreviated[data-active="true"] {
 	visibility: visible;
 }
 
@@ -1520,7 +1520,7 @@ button.wallet-asset-action-pending:disabled {
 	position: absolute;
 }
 
-.address-value-fit-content[data-abbreviated="false"] .address-value-abbreviated {
+.address-value-fit-content .address-value-abbreviated:not([data-active="true"]) {
 	position: absolute;
 }
 
@@ -1810,7 +1810,8 @@ a.transaction-hash-link {
 
 .migration-outcome-metrics {
 	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr));
+	/* Columns never go below their content's narrowest width, so the one-line status badge sets its column's width. */
+	grid-template-columns: repeat(4, minmax(min-content, 1fr));
 	gap: 0.5rem 1rem;
 	margin-top: 0.25rem;
 	color: var(--text-secondary);
@@ -1847,6 +1848,10 @@ a.transaction-hash-link {
 	}
 }
 
+.migration-outcome-metrics .badge {
+	white-space: nowrap;
+}
+
 .migration-outcome-metrics strong {
 	display: block;
 	min-width: 0;
@@ -1872,7 +1877,7 @@ a.transaction-hash-link {
 	flex-shrink: 0;
 	align-items: center;
 	max-width: 100%;
-	overflow-wrap: anywhere;
+	overflow-wrap: break-word;
 	border-radius: var(--radius-control);
 	padding: 0.32rem 0.68rem;
 	font-family: var(--font-family-mono);

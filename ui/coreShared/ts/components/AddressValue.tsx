@@ -28,10 +28,19 @@ type AddressValueProps = {
 	widthConstraint?: AddressWidthConstraint | undefined
 }
 
+/** Shortened forms, longest first: a slot too narrow for one falls back to the next instead of clipping it. */
+function getAbbreviations(address: string, compactAbbreviation: boolean) {
+	const forms = compactAbbreviation ? [abbreviateAddress(address, 6, 4), abbreviateAddress(address, 4, 4)] : [abbreviateAddress(address), abbreviateAddress(address, 6, 4), abbreviateAddress(address, 4, 4)]
+	return forms.filter((form, index) => forms.indexOf(form) === index)
+}
+
 function AddressText({ alwaysAbbreviated, address, compactAbbreviation, widthConstraint, wrap = false }: { alwaysAbbreviated: boolean; address: string; compactAbbreviation: boolean; widthConstraint?: AddressWidthConstraint | undefined; wrap?: boolean }) {
 	const container = useRef<HTMLSpanElement>(null)
 	const full = useRef<HTMLSpanElement>(null)
-	const [overflowing, setOverflowing] = useState(false)
+	const abbreviated = useRef<(HTMLSpanElement | null)[]>([])
+	// -1 shows the full address; otherwise the index of the longest shortened form that fits.
+	const [formIndex, setFormIndex] = useState(-1)
+	const abbreviations = useMemo(() => getAbbreviations(address, compactAbbreviation), [address, compactAbbreviation])
 	useLayoutEffect(() => {
 		const element = container.current
 		const fullText = full.current
@@ -40,7 +49,12 @@ function AddressText({ alwaysAbbreviated, address, compactAbbreviation, widthCon
 			const slot = widthConstraint?.slot.current
 			const control = widthConstraint?.control.current
 			const availableWidth = slot && control ? slot.clientWidth - (control.offsetWidth - element.clientWidth) : element.clientWidth
-			setOverflowing(fullText.scrollWidth > availableWidth)
+			if (fullText.scrollWidth <= availableWidth) {
+				setFormIndex(-1)
+				return
+			}
+			const fitting = abbreviated.current.findIndex(form => form !== null && form.scrollWidth <= availableWidth)
+			setFormIndex(fitting === -1 ? abbreviations.length - 1 : fitting)
 		}
 		measure()
 		if (typeof ResizeObserver === 'undefined') return
@@ -50,8 +64,8 @@ function AddressText({ alwaysAbbreviated, address, compactAbbreviation, widthCon
 		if (widthConstraint?.slot.current) observer.observe(widthConstraint.slot.current)
 		if (widthConstraint?.control.current) observer.observe(widthConstraint.control.current)
 		return () => observer.disconnect()
-	}, [address, alwaysAbbreviated, widthConstraint, wrap])
-	const shortForm = compactAbbreviation ? abbreviateAddress(address, 6, 4) : abbreviateAddress(address)
+	}, [address, abbreviations, alwaysAbbreviated, widthConstraint, wrap])
+	const shortForm = abbreviations[0] ?? address
 	if (wrap) return <span className='address-value-wrapped'>{address}</span>
 	// The short form is what sighted users read; the full address stays in the text for assistive technology and text search.
 	if (alwaysAbbreviated)
@@ -62,13 +76,23 @@ function AddressText({ alwaysAbbreviated, address, compactAbbreviation, widthCon
 			</>
 		)
 	return (
-		<span className={`address-value-text${widthConstraint === undefined ? '' : ' address-value-fit-content'}`} data-abbreviated={overflowing} ref={container}>
+		<span className={`address-value-text${widthConstraint === undefined ? '' : ' address-value-fit-content'}`} data-abbreviated={formIndex !== -1} ref={container}>
 			<span className='address-value-full' ref={full}>
 				{address}
 			</span>
-			<span aria-hidden='true' className='address-value-abbreviated'>
-				{shortForm}
-			</span>
+			{abbreviations.map((form, index) => (
+				<span
+					key={form}
+					aria-hidden='true'
+					className='address-value-abbreviated'
+					data-active={index === formIndex}
+					ref={element => {
+						abbreviated.current[index] = element
+					}}
+				>
+					{form}
+				</span>
+			))}
 		</span>
 	)
 }
