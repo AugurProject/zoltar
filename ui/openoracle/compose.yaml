@@ -8,7 +8,7 @@ services:
       target: local-runtime-openoracle
     image: zoltar-openoracle
     ports:
-      - 127.0.0.1:4173:4173
+      - 127.0.0.1:4143:4143
     environment:
       UI_APP: openoracle
 
