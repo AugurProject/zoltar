@@ -3,7 +3,7 @@ import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import type { JsonValue } from '../ethereum.ts'
 import { directObservationMaxima, directObservationRows } from '../repositories/direct-observations.ts'
 import { snapshotBoundary } from './entity-details.ts'
-import { ApiRequestError, type CanonicalHistoryFilter, canonicalHistoryFilter, cursorTimestamp, directObservationTotal, evmAddress, integer, isCursorTimestamp, isNonNegativeSafeInteger, isPostgresBigint, json, jsonRecord } from './shared.ts'
+import { ApiRequestError, type CanonicalHistoryFilter, canonicalHistoryFilter, cursorTimestamp, directObservationTotal, evmAddress, hasCursorSnapshot, integer, isCursorTimestamp, isNonNegativeSafeInteger, isPostgresBigint, json, jsonRecord } from './shared.ts'
 import { operationsAsOfForContinuations } from './snapshot.ts'
 import { rejectRawSnapshotOffset } from './trading-catalog.ts'
 
@@ -46,11 +46,7 @@ const parseDirectObservationCursor = (value: string | null, chainId: number): Di
 				parts[1] !== chainId ||
 				parts[2] !== 'direct-observations' ||
 				typeof parts[3] !== 'string' ||
-				!isPostgresBigint(parts[4]) ||
-				typeof parts[5] !== 'string' ||
-				!/^0x[0-9a-f]{64}$/.test(parts[5]) ||
-				!isPostgresBigint(parts[6]) ||
-				!parts.slice(7, 10).every(part => typeof part === 'string') ||
+				!hasCursorSnapshot(parts, 4) ||
 				!isNonNegativeSafeInteger(parts[10]) ||
 				typeof parts[11] !== 'string' ||
 				!isCursorTimestamp(parts[11]) ||
