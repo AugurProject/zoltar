@@ -41,7 +41,6 @@ interface IOracleReportConfig {
 /// the calling coordinator. The delegate never accesses coordinator storage slots directly.
 contract OpenOracleReportDelegate {
 	using SafeERC20Ops for IERC20;
-	uint256 private constant OPEN_INTEREST_DIVIDER = 100;
 
 	/// @dev Delegate-called funding adapter preserves sponsor approvals to the question coordinator.
 	function createSharedReport(address sponsor, uint256 bountyAttoEth, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth) external payable {

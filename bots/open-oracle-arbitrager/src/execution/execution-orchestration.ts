@@ -216,6 +216,17 @@ export async function guardedExecutionStep<T>(isPaused: () => boolean, action: (
 	return action()
 }
 
+/** Polls the head until it reaches `targetBlockNumber`, honouring the pause guard around every read. */
+export async function waitForTargetBlock(client: { getBlockNumber(): Promise<bigint> }, isPaused: () => boolean, pollMilliseconds: number, targetBlockNumber: bigint) {
+	while (true) {
+		await guardedExecutionStep(isPaused, async () => {})
+		const currentBlockNumber = await client.getBlockNumber()
+		await guardedExecutionStep(isPaused, async () => {})
+		if (currentBlockNumber >= targetBlockNumber) return
+		await Bun.sleep(Math.min(pollMilliseconds, 1_000))
+	}
+}
+
 export async function guardedTransactionSubmission<T>(isPaused: () => boolean, prepare: () => Promise<unknown>, submit: () => Promise<T>) {
 	await prepare()
 	if (isPaused()) throw executionPausedError()

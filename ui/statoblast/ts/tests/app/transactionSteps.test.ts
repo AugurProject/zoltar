@@ -103,7 +103,7 @@ test('a wallet-only pool action starts the wallet request without a page confirm
 test('reporting requires a separate button click for the deposit and report', async () => {
 	const { client, receipt, sendTransaction } = setup()
 	const reviewed = createReviewedClient({ ...client, sendTransaction, waitForTransactionReceipt: async parameters => ({ ...receipt, transactionHash: parameters.hash }) })
-	const steps = ['depositRepToVault', 'depositToEscalationGame'].map(functionName => ({ functionName, contractAddress: account, args: [1n, 1n], data: '0x1234' as const }))
+	const steps = ['depositRepToVault', 'depositRepOnOutcome'].map(functionName => ({ functionName, contractAddress: account, args: [1n, 1n], data: '0x1234' as const }))
 	reviewed.onTransactionPlan?.(steps)
 	const action = (async () => {
 		for (const step of steps) {
@@ -191,7 +191,6 @@ test('titles transaction status from the prepared transaction labels instead of 
 })
 
 for (const [functionName, title, args] of [
-	['depositToEscalationGame', 'Report No · 2\u00a0REP', [2n, 2n * 10n ** 18n]],
 	['depositWalletRepToEscalationGame', 'Report No · 2\u00a0REP', [2n, 2n * 10n ** 18n]],
 	['depositRepOnOutcome', 'Report No · 2\u00a0REP', [2n, 2n * 10n ** 18n]],
 	['settle', 'Settle report #7', [7n]],
@@ -202,8 +201,7 @@ for (const [functionName, title, args] of [
 	test(`uses explicit reporting copy for ${functionName}`, async () => {
 		const step = await sendPreparedTransaction({ functionName, contractAddress: account, args })
 		expect(step?.title).toBe(title)
-		if (functionName === 'depositToEscalationGame') expect(step?.paidFrom).toBe('Pool vault REP')
-		if (functionName === 'depositWalletRepToEscalationGame') expect(step?.paidFrom).toBe('Wallet REP')
+		if (functionName === 'depositWalletRepToEscalationGame' || functionName === 'depositRepOnOutcome') expect(step?.paidFrom).toBe('Wallet REP')
 	})
 }
 

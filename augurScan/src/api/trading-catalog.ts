@@ -2,7 +2,7 @@ import type { SQL } from 'bun'
 import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import { tradingCatalogRows } from '../repositories/trading-catalog.ts'
 import { snapshotBoundary } from './entity-details.ts'
-import { ApiRequestError, integer, isNonNegativeSafeInteger, isPostgresBigint, json } from './shared.ts'
+import { ApiRequestError, hasCursorSnapshot, integer, isNonNegativeSafeInteger, json } from './shared.ts'
 import { operationsAsOfForContinuations } from './snapshot.ts'
 import { EMPTY_TRADING_VOLUME, tradingVolumes } from './trading-activity.ts'
 
@@ -20,19 +20,7 @@ export const offsetPage = (url: URL, chainId: number, domain: string, identity: 
 		parts => parts,
 		error => new ApiRequestError('cursor is invalid', { cause: error }),
 	)
-	if (
-		parts.length !== 10 ||
-		!isNonNegativeSafeInteger(parts[0]) ||
-		typeof parts[1] !== 'string' ||
-		typeof parts[2] !== 'string' ||
-		!isPostgresBigint(parts[3]) ||
-		typeof parts[4] !== 'string' ||
-		!/^0x[0-9a-f]{64}$/.test(parts[4]) ||
-		!isPostgresBigint(parts[5]) ||
-		!parts.slice(6, 9).every(part => typeof part === 'string') ||
-		!isNonNegativeSafeInteger(parts[9])
-	)
-		throw new ApiRequestError('cursor is invalid')
+	if (parts.length !== 10 || !isNonNegativeSafeInteger(parts[0]) || typeof parts[1] !== 'string' || typeof parts[2] !== 'string' || !hasCursorSnapshot(parts, 3) || !isNonNegativeSafeInteger(parts[9])) throw new ApiRequestError('cursor is invalid')
 	if (parts[0] !== chainId || parts[1] !== domain) throw new ApiRequestError('cursor does not match filters')
 	return { identity: parts[2], offset: parts[9], cursor: parts as [number, string, string, string, string, string, string, string, string, number] }
 }

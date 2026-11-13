@@ -2,7 +2,7 @@ import { randomOperationPlans, urgentOperationPlans } from './selection.ts'
 import { schedulerIsDue } from '../core/scheduler.ts'
 import { lifecyclePresenceBlockerMessage, MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS } from './obligations.ts'
 import { workflowNeedsOperatorReconciliation } from './workflows.ts'
-import { MAXIMUM_OBLIGATION_TOMBSTONE_COUNT, type RuntimeState } from '../state/operator-state.ts'
+import { cloneRuntimeTopology, MAXIMUM_OBLIGATION_TOMBSTONE_COUNT, type RuntimeState } from '../state/operator-state.ts'
 import type { ConfigurationState } from './dashboard-controller.ts'
 
 function groupedOperationEvaluations(state: RuntimeState, enabled: ReadonlySet<string>, selectableOperationAllowlist: readonly string[]) {
@@ -104,16 +104,6 @@ export function dashboardState(state: RuntimeState, configuration: Configuration
 			due: schedulerIsDue(state.scheduler.status === 'due' ? { ...state.scheduler, status: 'scheduled' } : state.scheduler),
 		},
 		signerReady: configuration.settings.privateKey !== undefined,
-		topology:
-			state.topology === undefined
-				? undefined
-				: {
-						...state.topology,
-						auctions: state.topology.auctions.map(auction => ({ ...auction })),
-						pairs: state.topology.pairs.map(pair => ({ ...pair })),
-						pools: state.topology.pools.map(pool => ({ ...pool })),
-						reports: state.topology.reports.map(report => ({ ...report })),
-						universes: state.topology.universes.map(universe => ({ ...universe })),
-					},
+		topology: cloneRuntimeTopology(state.topology),
 	}
 }
