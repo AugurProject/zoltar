@@ -87,8 +87,8 @@ describe('settlement panel', () => {
 
 	test('projects redemption holding fees from current chain time without a quote read', async () => {
 		const collateral = 10n * 10n ** 18n
-		const feeAccounting = { settlementCollateralAttoEth: collateral, totalUnderwritingLimitAttoEth: collateral, feeEligibleUnderwritingLimitAttoEth: collateral, currentRetentionRate: 999_990_000_000_000_000n, lastFeeCheckpointNativeTime: 100n, feeIndexRemainder: 0n, totalFeesOwedRemainder: 0n }
-		const market = { ...closedMarket, currentRetentionRate: feeAccounting.currentRetentionRate, valuation: { timestamp: 100n, feeEndTime: 10000n, projectedCollateralAttoEth: collateral, feeAccounting } }
+		const feeAccounting = { settlementCollateralAttoEth: collateral, totalUnderwritingLimitAttoEth: collateral, feeEligibleUnderwritingLimitAttoEth: collateral, lastFeeCheckpointNativeTime: 100n, linearFee: { rateAttoEthPerSecond: collateral / 100_000n, endTime: 10000n } }
+		const market = { ...closedMarket, valuation: { timestamp: 100n, feeEndTime: 10000n, projectedCollateralAttoEth: collateral, feeAccounting } }
 		const rendered = await renderPanel(market, { invalid: 2n * 10n ** 18n, yes: 2n * 10n ** 18n, no: 2n * 10n ** 18n }, 2000n, { ...DEFAULT_TRADE_SETTINGS, validityMinutes: 1n })
 		try {
 			await act(() => buttonByLabel('Max').click())

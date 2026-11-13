@@ -200,10 +200,8 @@ describe('liquidity workflow controller state', () => {
 			settlementCollateralAttoEth: 100n * unit,
 			totalUnderwritingLimitAttoEth: 100n * unit,
 			feeEligibleUnderwritingLimitAttoEth: 100n * unit,
-			currentRetentionRate: 999_990_000_000_000_000n,
 			lastFeeCheckpointNativeTime: 1n,
-			feeIndexRemainder: 0n,
-			totalFeesOwedRemainder: 0n,
+			linearFee: { rateAttoEthPerSecond: unit / 1000n, endTime: 10_000n },
 		}
 		const endingMarket = {
 			...market,

@@ -1,8 +1,8 @@
 const RETENTION_RATE_PRECISION = 10n ** 18n
 const SECONDS_PER_YEAR = 31_536_000n
 
-/** Fixed-point exponentiation by squaring with floor division, mirroring the contract's `rpow`. */
-export function rpow(value: bigint, exponent: bigint, baseUnit: bigint) {
+/** Fixed-point exponentiation by squaring with floor division. */
+function rpow(value: bigint, exponent: bigint, baseUnit: bigint) {
 	let result = exponent % 2n !== 0n ? value : baseUnit
 	let squaredValue = value
 	for (let remainingExponent = exponent / 2n; remainingExponent !== 0n; remainingExponent /= 2n) {

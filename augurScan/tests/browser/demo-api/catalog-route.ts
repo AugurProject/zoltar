@@ -75,7 +75,7 @@ export async function demoCatalogRoute(env: DemoEnvironment, path: string): Prom
 				chain_id: pool.chain_id,
 				pool_address: pool.pool_address,
 				event_name: 'CurrentDemoState',
-				state: { systemState: refreshedTail ? '3' : '2', awaitingForkContinuation: false, totalRepBackingUnits: String((refreshedTail ? 84n : 42n) * 10n ** 18n), shareTokenSupplyAttoShares: String(10n * 10n ** 18n) },
+				state: { systemState: refreshedTail ? '1' : '2', awaitingForkContinuation: false, totalRepBackingUnits: String((refreshedTail ? 84n : 42n) * 10n ** 18n), shareTokenSupplyAttoShares: String(10n * 10n ** 18n) },
 				block_number: '100',
 				log_index: 0,
 			})),

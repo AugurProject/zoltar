@@ -117,15 +117,12 @@ export type ListedSecurityPool = {
 	settlementRecoveryAttoRep?: bigint
 	mintingCapacityAttoEth?: bigint
 	settlementCollateralAttoEth: bigint
-	currentRetentionRate: bigint
 	feeAccrualState?: {
 		centralCheckpointTimestamp?: bigint
 		centralSettlement?: boolean
 		linearFee?: LinearFeeState
 		feeEndTimestamp: bigint
-		feeIndexRemainder: bigint
 		lastFeeCheckpointNativeTime: bigint
-		totalFeesOwedRemainder: bigint
 	}
 	feeEligibleUnderwritingLimitAttoEth: bigint
 	hasForkActivity: boolean

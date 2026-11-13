@@ -243,7 +243,6 @@ describe('submitting a quote after the chain advances', () => {
 		const { chain, client } = createAdvancingChain()
 		const feeMarket = {
 			...market,
-			currentRetentionRate: 999_000_000_000_000_000n,
 			valuation: {
 				timestamp: 2n,
 				feeEndTime: 1_000n,
@@ -253,10 +252,7 @@ describe('submitting a quote after the chain advances', () => {
 					settlementCollateralAttoEth: 100n,
 					totalUnderwritingLimitAttoEth: 100n,
 					feeEligibleUnderwritingLimitAttoEth: 100n,
-					currentRetentionRate: 999_000_000_000_000_000n,
 					lastFeeCheckpointNativeTime: 2n,
-					feeIndexRemainder: 0n,
-					totalFeesOwedRemainder: 0n,
 				},
 			},
 		}
@@ -278,7 +274,7 @@ describe('submitting a quote after the chain advances', () => {
 					timestamp: 2n,
 					feeEndTime: 1_000n,
 					projectedCollateralAttoEth: 100n,
-					feeAccounting: { linearFee: { rateAttoEthPerSecond: 1n, endTime: 1_000n }, settlementCollateralAttoEth: 100n, totalUnderwritingLimitAttoEth: 100n, feeEligibleUnderwritingLimitAttoEth: 100n, currentRetentionRate: 10n ** 18n, lastFeeCheckpointNativeTime: 2n, feeIndexRemainder: 0n, totalFeesOwedRemainder: 0n },
+					feeAccounting: { linearFee: { rateAttoEthPerSecond: 1n, endTime: 1_000n }, settlementCollateralAttoEth: 100n, totalUnderwritingLimitAttoEth: 100n, feeEligibleUnderwritingLimitAttoEth: 100n, lastFeeCheckpointNativeTime: 2n },
 				},
 			}
 			const send = quote.kind === 'sell' ? submitFreshExit(client, configuration, account, quote.value, write) : submitFreshLiquidity(client, configuration, account, quote.value, write)

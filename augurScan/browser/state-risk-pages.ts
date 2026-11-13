@@ -152,7 +152,7 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 	const currentCard = element('section', 'static-card')
 	currentCard.append(element('h4', '', 'Latest available accounting and lifecycle'))
 	const currentGrid = element('div', 'static-grid')
-	const systemStates = ['Operational', 'Pool forked', 'Fork migration', 'Fork collateral repair auction']
+	const systemStates = ['Operational', 'Pool forked', 'Fork migration']
 	const currentState = poolItem.current_state ?? {}
 	currentGrid.append(
 		staticField('System state', currentState['systemState'] === undefined ? 'No lifecycle event yet' : (systemStates[Number(currentState['systemState'])] ?? `State ${currentState['systemState']}`)),

@@ -75,7 +75,6 @@ function pool(address: string, questionId: string, selected: boolean, isPriceVal
 		settlementCollateralEth: '1942.73',
 		centralizedPriceAllowed: true,
 		centralizedPriceDeviationBps: '86',
-		currentRetentionRate: '999999987000000000',
 		forkActivationTime: systemState === '1' ? '1785416250' : '0',
 		forkOutcomeIndex,
 		initialReportPriorityFeeAttoEthPerGas: '2000000000',

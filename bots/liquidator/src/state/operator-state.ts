@@ -29,7 +29,6 @@ export type PoolObservation = {
 	botVault: VaultPosition
 	candidates: LiquidationCandidate[]
 	settlementCollateralAttoEth: bigint
-	currentRetentionRate: bigint
 	forkActivationTime: bigint
 	forkOutcomeIndex: bigint | undefined
 	initialReportPriorityFeeAttoEthPerGas: bigint
@@ -405,7 +404,6 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 				candidates: pool.candidates.map(candidateView),
 				settlementCollateralEth: formatDecimalAmount(pool.settlementCollateralAttoEth),
 				centralizedPriceAllowed: poolCentralizedPriceAllowed(pool, configurations.length === 0, centralizedMarkets, centralizedMarket, marketConsensus),
-				currentRetentionRate: pool.currentRetentionRate.toString(),
 				forkActivationTime: pool.forkActivationTime.toString(),
 				forkOutcomeIndex: pool.forkOutcomeIndex?.toString(),
 				initialReportPriorityFeeAttoEthPerGas: pool.initialReportPriorityFeeAttoEthPerGas.toString(),

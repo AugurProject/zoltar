@@ -120,15 +120,10 @@ export function TradingSection({
 		centralSettlement: selectedPool?.feeAccrualState?.centralSettlement,
 		centralCheckpointTimestamp: selectedPool?.feeAccrualState?.centralCheckpointTimestamp,
 		linearFee: selectedPool?.feeAccrualState?.linearFee,
-		currentRetentionRate: selectedPool?.currentRetentionRate,
 		currentTimestamp,
-		totalUnderwritingLimitAttoEth: selectedPool?.totalUnderwritingLimitAttoEth,
-		feeEligibleUnderwritingLimitAttoEth: selectedPool?.feeEligibleUnderwritingLimitAttoEth,
 		feeEndTimestamp: selectedPool?.feeAccrualState?.feeEndTimestamp,
-		feeIndexRemainder: selectedPool?.feeAccrualState?.feeIndexRemainder,
 		lastFeeCheckpointNativeTime: selectedPool?.feeAccrualState?.lastFeeCheckpointNativeTime,
 		settlementCollateralAttoEth: selectedPool?.settlementCollateralAttoEth,
-		totalFeesOwedRemainder: selectedPool?.feeAccrualState?.totalFeesOwedRemainder,
 	})
 	const estimatedSettlementCollateralAttoEth = mintCheckpoint?.settlementCollateralAfterFeesAttoEth ?? selectedPool?.settlementCollateralAttoEth
 	const usesSharedBacking = selectedPool?.feeAccrualState?.linearFee !== undefined

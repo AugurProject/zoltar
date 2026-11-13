@@ -20,8 +20,7 @@ enum AccountingReason {
 enum SystemState {
 	Operational,
 	PoolForked,
-	ForkMigration,
-	ForkCollateralRepairAuction
+	ForkMigration
 }
 
 enum QuestionOutcome {
@@ -56,7 +55,6 @@ interface ISecurityPool {
 	function openOraclePriceCoordinator() external view returns (OpenOraclePriceCoordinator);
 	function openOracle() external view returns (OpenOracle);
 	function shareTokenSupplyAttoShares() external view returns (uint256);
-	function collateralRepairAuction() external view returns (address);
 
 	function attoSharesToAttoEth(uint256 amountAttoShares) external view returns (uint256);
 	function attoSharesToAttoRep(uint256 amountAttoShares) external view returns (uint256);
@@ -68,11 +66,10 @@ interface ISecurityPool {
 	function initialEscalationGameDepositAttoRep() external view returns (uint256);
 	function burnEscalationWinnerHaircut(uint256 amountAttoRep) external;
 
-	function setStartingParams(uint256 currentRetentionRate, uint256 settlementCollateralAttoEth) external;
+	function setStartingParams() external;
 
 	function getFeeEpochEndTime() external view returns (uint256);
 	function updateSettlementCollateral() external;
-	function updateRetentionRate() external;
 
 	function withdrawForkedEscalationDeposits(QuestionOutcome outcome, CarriedDepositProof[] calldata proofs) external;
 	function createCompleteSet(uint256 cash) external;
@@ -99,7 +96,6 @@ interface ISecurityPoolFactory {
 
 	struct SecurityPoolDeployment {
 		ISecurityPool securityPool;
-		address collateralRepairAuction;
 		OpenOraclePriceCoordinator openOraclePriceCoordinator;
 		IShareToken shareToken;
 		ISecurityPool parent;
@@ -107,16 +103,14 @@ interface ISecurityPoolFactory {
 		uint256 questionId;
 		uint256 statoblastSecurityMultiplierBps;
 		uint256 initialReportPriorityFeeAttoEthPerGas;
-		uint256 currentRetentionRate;
-		uint256 settlementCollateralAttoEth;
 	}
 
-	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 currentRetentionRate, uint256 settlementCollateralAttoEth) external returns (ISecurityPool securityPool, address collateralRepairAuction);
+	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps) external returns (ISecurityPool securityPool);
 	function deployPortfolioSecurityPool(uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) external returns (ISecurityPool securityPool);
 	function getPortfolioOriginId(address portfolio, uint248 originUniverseId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) external pure returns (bytes32 originId);
 	function getSecurityPoolPortfolio(ISecurityPool securityPool) external view returns (address portfolio);
-	function prepareChildPoolDependencies(ISecurityPool parent, uint256 outcomeIndex) external returns (OpenOraclePriceCoordinator coordinator, address auction);
-	function getChildPoolDependencies(ISecurityPool parent, uint256 outcomeIndex) external view returns (OpenOraclePriceCoordinator coordinator, address auction);
+	function prepareChildPoolDependencies(ISecurityPool parent, uint256 outcomeIndex) external returns (OpenOraclePriceCoordinator coordinator);
+	function getChildPoolDependencies(ISecurityPool parent, uint256 outcomeIndex) external view returns (OpenOraclePriceCoordinator coordinator);
 	function preparePortfolioChildPriceFeed(ISecurityPool parent, uint256 outcomeIndex) external returns (address);
 	function initializePortfolioPriceFeed(uint248 universeId, uint256 priorityFee) external returns (address);
 	function initializePortfolioPriceFeedForUniverse(uint248 universeId) external returns (address);

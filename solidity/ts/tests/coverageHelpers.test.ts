@@ -429,7 +429,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				abi: factoryArtifact.abi,
 				address: factoryAddress,
 				functionName: 'deployChildSecurityPool',
-				args: [zeroAddress, zeroAddress, 0n, 0n, 2n, 0n, 0n],
+				args: [zeroAddress, zeroAddress, 0n, 0n, 2n],
 			}),
 			/Only security pool forker/,
 		)
@@ -1713,7 +1713,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
 				address: deploymentWorkerAddress,
 				functionName: 'deploy',
-				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n, zeroAddress],
+				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n],
 			}),
 			/Only SecurityPoolDeployer can use the deployment worker/,
 		)
@@ -1744,7 +1744,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer.abi,
 				address: securityPoolDeployerAddress,
 				functionName: 'deploy',
-				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n, zeroAddress],
+				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n],
 			}),
 			/Only SecurityPoolFactory can use the deployer/,
 		)

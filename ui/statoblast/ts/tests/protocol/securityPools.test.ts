@@ -7,7 +7,7 @@ import { owner, portfolio, capital, token } from '../features/portfolios/capital
 
 const mode = 'active'
 const block = { hash: `0x${'11'.repeat(32)}`, number: 99n, timestamp: 1000n } as const
-const deployment = { securityPool: owner, parent: zeroAddress, universeId: 42n, questionId: 7n, initialReportPriorityFeeAttoEthPerGas: 1n, openOraclePriceCoordinator: token, statoblastSecurityMultiplierBps: 20000n, collateralRepairAuction: zeroAddress }
+const deployment = { securityPool: owner, parent: zeroAddress, universeId: 42n, questionId: 7n, initialReportPriorityFeeAttoEthPerGas: 1n, openOraclePriceCoordinator: token, statoblastSecurityMultiplierBps: 20000n }
 function centralRead(name: string) {
 	switch (name) {
 		case 'refreshPortfolioFees':

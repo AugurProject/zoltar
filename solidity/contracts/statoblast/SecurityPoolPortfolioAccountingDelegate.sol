@@ -22,11 +22,6 @@ abstract contract SecurityPoolPortfolioAccountingDelegate is SecurityPoolLinearF
 		if (lastSettlementPortfolioTime != previousTimestamp) _emitAccountingCheckpoint(AccountingReason.Accrual);
 	}
 
-	/// @notice Refresh the portfolio's linear stream.
-	function updateRetentionRate() external payable {
-		ISecurityPool(payable(address(this))).refreshPortfolioFees();
-	}
-
 	function decodeError(bytes calldata result) external pure returns (string memory reason) {
 		if (result.length < 68 || bytes4(result[:4]) != bytes4(keccak256('Error(string)')))
 			return 'Delegate call failed';
