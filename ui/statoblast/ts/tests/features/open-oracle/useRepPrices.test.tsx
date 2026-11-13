@@ -114,6 +114,20 @@ function installSimulationBackend(readClient: ReadClient, controller: Simulation
 	return installActiveEnvironmentForTesting(backend, controller)
 }
 
+/** Activates a simulation backend whose REP reads succeed and reports how many reads it served. */
+function installCountingSimulationBackend() {
+	let reads = 0
+	const resetEnvironment = installSimulationBackend(
+		createReadClient({
+			readContract: async () => {
+				reads += 1
+				return 'REP'
+			},
+		}),
+	)
+	return { readContractCount: () => reads, resetEnvironment }
+}
+
 function expectDisplayedPrices(repPerEth: bigint, repPerUsdc: bigint) {
 	const probe = readRepPriceProbe()
 	expect(probe.repPerEth).toBe(repPerEth.toString())
@@ -147,6 +161,15 @@ describe('useRepPrices', () => {
 		const rendered = await renderIntoDocument(<PriceProbe {...props} />)
 		cleanupRenderedComponent = rendered.cleanup
 		return rendered
+	}
+
+	/** Renders the probe and waits for the first load, which reads both REP prices. */
+	async function renderLoadedPrices(readContractCount: () => number) {
+		await renderProbe()
+		await waitFor(() => {
+			expectDisplayedPrices(REP_PER_ETH, REP_PER_USDC)
+		})
+		expect(readContractCount()).toBe(2)
 	}
 
 	test('loads simulation mock REP prices using the active profile REP token', async () => {
@@ -186,27 +209,15 @@ describe('useRepPrices', () => {
 	})
 
 	test('reuses cached prices for 30 seconds without refetching', async () => {
-		let readContractCount = 0
-		const resetEnvironment = installSimulationBackend(
-			createReadClient({
-				readContract: async () => {
-					readContractCount += 1
-					return 'REP'
-				},
-			}),
-		)
+		const { readContractCount, resetEnvironment } = installCountingSimulationBackend()
 
-		await renderProbe()
-		await waitFor(() => {
-			expectDisplayedPrices(REP_PER_ETH, REP_PER_USDC)
-		})
-		expect(readContractCount).toBe(2)
+		await renderLoadedPrices(readContractCount)
 
 		await renderProbe()
 
 		expectDisplayedPrices(REP_PER_ETH, REP_PER_USDC)
 		expectIdleState()
-		expect(readContractCount).toBe(2)
+		expect(readContractCount()).toBe(2)
 
 		resetEnvironment()
 	})
@@ -464,55 +475,35 @@ describe('useRepPrices', () => {
 	})
 
 	test('disabled mode skips the initial fetch until the user refreshes manually', async () => {
-		let readContractCount = 0
-		const resetEnvironment = installSimulationBackend(
-			createReadClient({
-				readContract: async () => {
-					readContractCount += 1
-					return 'REP'
-				},
-			}),
-		)
+		const { readContractCount, resetEnvironment } = installCountingSimulationBackend()
 
 		await renderProbe({ enabled: false })
 
 		expect(readRepPriceProbe().repPerEth).toBe('-')
 		expect(readRepPriceProbe().repPerUsdc).toBe('-')
 		expectIdleState()
-		expect(readContractCount).toBe(0)
+		expect(readContractCount()).toBe(0)
 
 		fireEvent.click(within(document.body).getByRole('button', { name: 'Refresh REP prices' }))
 
 		await waitFor(() => {
 			expectDisplayedPrices(REP_PER_ETH, REP_PER_USDC)
 		})
-		expect(readContractCount).toBe(2)
+		expect(readContractCount()).toBe(2)
 
 		resetEnvironment()
 	})
 
 	test('disabled mode shows cached prices without starting another background refresh', async () => {
-		let readContractCount = 0
-		const resetEnvironment = installSimulationBackend(
-			createReadClient({
-				readContract: async () => {
-					readContractCount += 1
-					return 'REP'
-				},
-			}),
-		)
+		const { readContractCount, resetEnvironment } = installCountingSimulationBackend()
 
-		await renderProbe()
-		await waitFor(() => {
-			expectDisplayedPrices(REP_PER_ETH, REP_PER_USDC)
-		})
-		expect(readContractCount).toBe(2)
+		await renderLoadedPrices(readContractCount)
 
 		await renderProbe({ enabled: false })
 
 		expectDisplayedPrices(REP_PER_ETH, REP_PER_USDC)
 		expectIdleState()
-		expect(readContractCount).toBe(2)
+		expect(readContractCount()).toBe(2)
 
 		resetEnvironment()
 	})

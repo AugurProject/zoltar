@@ -25,6 +25,17 @@ import { mountApp } from '@zoltar/ui-core-shared/app/appRoot.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { initializeTradingActiveEnvironment } from '../../app/activeEnvironment.js'
 
+/** The Trading deployment the browser simulation reports in the application-shell tests. */
+const browserSimulationConfiguration: DeploymentConfiguration = {
+	chainId: 31_337,
+	chainName: 'Browser simulation',
+	factory: `0x${'22'.repeat(20)}`,
+	feeBps: 30,
+	router: `0x${'33'.repeat(20)}`,
+	rpcUrl: 'http://127.0.0.1/',
+	securityPoolFactory: `0x${'11'.repeat(20)}`,
+}
+
 beforeEach(() => installTradingRouting())
 
 test('Trading registers its shared TEVM scenarios and selects its own worker', () => {
@@ -74,21 +85,12 @@ test('Trading refreshes the active environment when history changes the simulati
 	const dom = installDomEnvironment('http://localhost/#/market?simulate=1&simScenario=deployed')
 	installTradingRouting()
 	let environmentInitializations = 0
-	const configuration: DeploymentConfiguration = {
-		chainId: 31_337,
-		chainName: 'Browser simulation',
-		factory: `0x${'22'.repeat(20)}`,
-		feeBps: 30,
-		router: `0x${'33'.repeat(20)}`,
-		rpcUrl: 'http://127.0.0.1/',
-		securityPoolFactory: `0x${'11'.repeat(20)}`,
-	}
 	const rendered = await renderIntoDocument(
 		<App
 			initializeEnvironment={async () => {
 				environmentInitializations += 1
 			}}
-			loadLiveDeployment={async () => configuration}
+			loadLiveDeployment={async () => browserSimulationConfiguration}
 		/>,
 	)
 	try {
@@ -366,16 +368,7 @@ for (const initializationFails of [false, true]) {
 
 test('the removed demo query cannot select a parallel simulated-data application', async () => {
 	const dom = installDomEnvironment('http://localhost/?demo=1&scenario=baseline#/market')
-	const configuration: DeploymentConfiguration = {
-		chainId: 31_337,
-		chainName: 'Browser simulation',
-		factory: `0x${'22'.repeat(20)}`,
-		feeBps: 30,
-		router: `0x${'33'.repeat(20)}`,
-		rpcUrl: 'http://127.0.0.1/',
-		securityPoolFactory: `0x${'11'.repeat(20)}`,
-	}
-	const rendered = await renderIntoDocument(<App loadLiveDeployment={async () => configuration} />)
+	const rendered = await renderIntoDocument(<App loadLiveDeployment={async () => browserSimulationConfiguration} />)
 	await new Promise(resolve => setTimeout(resolve, 10))
 	expect(rendered.container.querySelector('.demo-banner')).toBeNull()
 	expect(rendered.container.textContent).not.toContain('SIMULATED DATA')
