@@ -126,7 +126,7 @@ export const isPostgresBigint = (value: unknown): value is string => {
 	return BigInt(value) <= POSTGRES_BIGINT_MAX
 }
 
-/** Every cursor pins its snapshot as [snapshotBlock, snapshotHash, invalidationId, abiSourceHash, applicationSourceHash, projectionSourceHash] starting at `offset`. */
+/** Checks the snapshot segment [snapshotBlock, snapshotHash, invalidationId, abiSourceHash, applicationSourceHash, projectionSourceHash] that pagination cursors embed at `offset`. */
 export const hasCursorSnapshot = (parts: readonly JsonValue[], offset: number): boolean => {
 	const snapshotHash = parts[offset + 1]
 	return isPostgresBigint(parts[offset]) && typeof snapshotHash === 'string' && /^0x[0-9a-f]{64}$/.test(snapshotHash) && isPostgresBigint(parts[offset + 2]) && parts.slice(offset + 3, offset + 6).every(part => typeof part === 'string')
