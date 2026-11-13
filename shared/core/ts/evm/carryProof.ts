@@ -43,12 +43,6 @@ export function buildCarryPeakHeights(leafCount: bigint) {
 	return peakHeights
 }
 
-export function compareBigintAscending(left: bigint, right: bigint) {
-	if (left < right) return -1
-	if (left > right) return 1
-	return 0
-}
-
 function hashCarryLevel(levelHashes: readonly Hex[]) {
 	const nextLevelHashes: Hex[] = []
 	for (let index = 0; index < levelHashes.length; index += 2) {
