@@ -191,13 +191,7 @@ describe('file-only startup configuration', () => {
 
 	test('reports a failed scan with UTC time and network when the RPC serves the wrong chain', async () => {
 		const directory = await temporaryDirectory()
-		const rpc = Bun.serve({
-			port: 0,
-			async fetch(request) {
-				const body = await request.json()
-				return Response.json({ jsonrpc: '2.0', id: body.id, result: '0xaa36a7' })
-			},
-		})
+		const rpc = serveSepoliaChainIdRpc()
 		servers.push(rpc)
 		const saved = settings(rpc.url.href, 4173)
 		saved.runtime.once = true
