@@ -50,7 +50,8 @@ test(
 			if (portfolioLink === null || portfolioLink === undefined) throw new Error('Missing portfolio link')
 			const portfolioAddress = portfolioLink.getAttribute('title') ?? ''
 			expect(portfolioAddress).toMatch(/^0x[0-9a-fA-F]{40}$/)
-			expect(portfolioLink.textContent).toBe(abbreviateAddress(portfolioAddress, 6, 4))
+			expect(portfolioLink.querySelector('.portfolio-questions-address-full')?.textContent).toBe(portfolioAddress)
+			expect(portfolioLink.querySelector('.portfolio-questions-address-short')?.textContent).toBe(abbreviateAddress(portfolioAddress, 6, 4))
 			expect(portfolioLink.getAttribute('aria-label')).toBe(portfolioCopy.formatOpenPortfolioLabel(portfolioAddress))
 			expect(portfolioLink.getAttribute('href')).toBe(`#/portfolios?portfolio=${portfolioAddress}&universe=0`)
 			const button = table?.querySelector('button')

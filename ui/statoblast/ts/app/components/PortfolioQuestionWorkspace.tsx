@@ -145,9 +145,14 @@ export function PortfolioQuestionWorkspace({ accountState, parameters, deploymen
 												</button>
 											</td>
 											<td role='cell' data-label={copy.portfolioColumn}>
-												{/* The short address keeps the column narrow; the full address stays in the accessible name and title. */}
+												{/* Wide screens show the full address; narrower ones a short form. The link's accessible name and title carry the full address either way. */}
 												<a className='portfolio-questions-address' href={`#/portfolios?portfolio=${question.portfolioAddress}&universe=${question.universeId}`} aria-label={copy.formatOpenPortfolioLabel(question.portfolioAddress)} title={question.portfolioAddress}>
-													{abbreviateAddress(question.portfolioAddress, 6, 4)}
+													<span aria-hidden='true' className='portfolio-questions-address-full'>
+														{question.portfolioAddress}
+													</span>
+													<span aria-hidden='true' className='portfolio-questions-address-short'>
+														{abbreviateAddress(question.portfolioAddress, 6, 4)}
+													</span>
 												</a>
 											</td>
 											<td role='cell' data-label={copy.outcomeColumn}>
