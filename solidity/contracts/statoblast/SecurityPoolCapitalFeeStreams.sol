@@ -1,10 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-interface ICapitalFeeEligibility {
-	function eligibleCommitment(uint256 price) external view returns (uint256);
-}
-
 /// @notice Exact vesting of independently funded ETH and REP fee budgets.
 /// @dev The authority holds the tokens. Nothing here transfers assets or visits
 /// an old stream. Income follows an integer rate plus its exact remainder at the
@@ -33,7 +29,6 @@ contract SecurityPoolCapitalFeeStreams {
 		uint256 repIntegral;
 	}
 	mapping(uint48 => Expiry) private expiries;
-	event DeferredFeesResumed(uint256 ethAmount, uint256 repAmount);
 
 	constructor(address authority, uint48 timestamp, uint48 vestingDuration) {
 		require(authority != address(0), 'Invalid fee authority');
@@ -53,25 +48,6 @@ contract SecurityPoolCapitalFeeStreams {
 	/// One checkpoint per wall-clock second is sufficient, regardless of calls.
 	function addStream(uint256 ethAmount, uint256 repAmount) external onlyCapitalLedger {
 		_addStream(ethAmount, repAmount);
-	}
-
-	/// @notice Unallocatable income stays funded and resumes only as future income.
-	function defer(uint256 ethAmount, uint256 repAmount) external onlyCapitalLedger {
-		deferredEth += ethAmount;
-		deferredRep += repAmount;
-		_requireBudget();
-	}
-
-	/// @dev Called after the authority checkpoints old eligibility. Repeated calls
-	/// cannot restart an existing stream or award past income to a new commitment.
-	function resume(ICapitalFeeEligibility index, uint256 price) external onlyCapitalLedger {
-		uint256 ethAmount = deferredEth;
-		uint256 repAmount = deferredRep;
-		if ((ethAmount == 0 && repAmount == 0) || index.eligibleCommitment(price) == 0) return;
-		deferredEth = 0;
-		deferredRep = 0;
-		_addStream(ethAmount, repAmount);
-		emit DeferredFeesResumed(ethAmount, repAmount);
 	}
 
 	function _requireBudget() private view {
@@ -120,8 +96,8 @@ contract SecurityPoolCapitalFeeStreams {
 		}
 	}
 
-	/// @dev Only the authority can withdraw deferred accounting, after a fork
-	/// fixes eligibility permanently. It must burn exactly the returned amounts.
+	/// @dev Only the authority can withdraw deferred accounting. It does so after
+	/// every checkpoint and must burn exactly the returned amounts.
 	function takeDeferred() external onlyCapitalLedger returns (uint256 ethAmount, uint256 repAmount) {
 		ethAmount = deferredEth;
 		repAmount = deferredRep;

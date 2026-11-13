@@ -40,11 +40,6 @@ abstract contract OpenOraclePriceSource {
 	OpenOracleReportDelegate public immutable reportDelegate;
 
 	event SecurityPoolSet(ISecurityPool indexed securityPool);
-	event RepEthPriceSet(uint256 price);
-	event PriceRequested(uint256 indexed reportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas);
-	event PriceReportRejected(uint256 indexed reportId, string reason, uint256 pendingReportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas, uint256 lastPrice, uint256 lastSettlementTimestamp);
-	event PriceReported(uint256 indexed reportId, uint256 price, uint256 lastSettlementTimestamp);
-	event PendingReportRecovered(uint256 indexed reportId, uint256 settlementTimestamp, uint256 pendingReportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas, uint256 lastPrice, uint256 lastSettlementTimestamp);
 	SharedPoolPriceFeed public sharedPriceFeed;
 	event SharedPriceFeedSet(address indexed priceFeed);
 

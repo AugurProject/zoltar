@@ -8,7 +8,7 @@ import { createOpenOracleReportInstance, disputeOracleReport, loadOpenOracleRepo
 import { getOracleManagerPriceValidUntilTimestamp } from '@zoltar/ui-statoblast-shared/protocol/oracleTiming.js'
 import { getInfraContractAddresses, getOpenOracleAddress } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { loadCoordinatorPriceValidUntilTimestamp } from '@zoltar/ui-statoblast-shared/protocol/openOracleSettlement.js'
-import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed, statoblast_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { asWriteClient, createMulticallStub, createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { createReviewedClient } from '@zoltar/ui-statoblast-shared/protocol/reviewedClient.js'
@@ -398,7 +398,7 @@ describe('openOracle protocol client', () => {
 		test(`settlement filters unrelated logs before the ${status} coordinator outcome`, async () => {
 			const preimage = createOpenOraclePreimage(7n)
 			preimage.game.callbackContract = vaultAddress
-			const abi = statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi
+			const abi = statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi
 			const data = status === 'accepted' ? encodeAbiParameters(parseAbiParameters('uint256,uint256'), [123n, 11n]) : encodeAbiParameters(parseAbiParameters('string,uint256,uint256,uint256,uint256'), ['Base fee too high', 0n, 0n, 0n, 0n])
 			const eventName = status === 'accepted' ? ('PriceReported' as const) : ('PriceReportRejected' as const)
 			const log = { address: vaultAddress, data, topics: encodeEventTopics({ abi, eventName, args: { reportId: 7n } }) }
@@ -413,7 +413,7 @@ describe('openOracle protocol client', () => {
 		test(`isolated report escrow attributes its feed settlement outcome: ${accepted}`, async () => {
 			const preimage = createOpenOraclePreimage(7n)
 			preimage.game.callbackContract = vaultAddress
-			const feedAbi = statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi
+			const feedAbi = statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi
 			const escrowAbi = parseAbi(['event ReportCompleted(uint256 indexed reportId,address indexed priceFeed,bool accepted)'])
 			const completed = { address: vaultAddress, data: encodeAbiParameters(parseAbiParameters('bool'), [accepted]), topics: encodeEventTopics({ abi: escrowAbi, eventName: 'ReportCompleted', args: { reportId: 7n, priceFeed: alternateSecurityPoolAddress } }) }
 			const eventName = accepted ? ('PriceReported' as const) : ('PriceReportRejected' as const)
@@ -430,7 +430,7 @@ describe('openOracle protocol client', () => {
 	test('settlement returns the coordinator rejection even when the transaction succeeds', async () => {
 		const preimage = createOpenOraclePreimage(7n)
 		preimage.game.callbackContract = vaultAddress
-		const abi = statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi
+		const abi = statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi
 		const rejection = {
 			address: vaultAddress,
 			data: encodeAbiParameters(parseAbiParameters('string,uint256,uint256,uint256,uint256'), ['Report stale', 0n, 0n, 0n, 0n]),

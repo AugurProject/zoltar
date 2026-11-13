@@ -884,12 +884,6 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 		state.escalationLifecycles.set(log.emitter, lifecycle)
 		return
 	}
-	if (log.eventName === 'InheritedThresholdTieReopened') {
-		const lifecycle = state.escalationLifecycles.get(log.emitter)
-		if (lifecycle?.nonDecisionState !== 'inheritedThresholdTie') throw new Error('reopening requires an inherited threshold tie')
-		lifecycle.nonDecisionState = 'none'
-		return
-	}
 	if (log.eventName === 'InheritedThresholdTie') {
 		const lifecycle = state.escalationLifecycles.get(log.emitter) ?? {}
 		const sourceGame = requireAddress(log.args, 'sourceGame')
@@ -1184,7 +1178,7 @@ export function reduceAuctionEvent(state: ReplayState, log: ReplayLog) {
 }
 
 export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
-	const coordinatorEventNames = new Set(['SecurityPoolSet', 'RepEthPriceSet', 'PriceRequested', 'PriceReported', 'PriceReportRejected', 'PendingReportRecovered'])
+	const coordinatorEventNames = new Set(['SecurityPoolSet', 'PriceRequested', 'PriceReported', 'PriceReportRejected', 'PendingReportRecovered'])
 	if (!coordinatorEventNames.has(log.eventName)) return
 	let coordinator = state.coordinators.get(log.emitter)
 	if (coordinator === undefined) {
@@ -1199,10 +1193,6 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 	}
 	if (log.eventName === 'SecurityPoolSet') {
 		coordinator.securityPool = requireAddress(log.args, 'securityPool')
-		return
-	}
-	if (log.eventName === 'RepEthPriceSet') {
-		coordinator.lastPrice = requireBigInt(log.args, 'price')
 		return
 	}
 	if (log.eventName === 'PriceRequested') {

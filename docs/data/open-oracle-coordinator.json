@@ -102,13 +102,8 @@
 		"trackDisputes": "trackDisputes()",
 		"weth": "weth()"
 	},
-	"events": ["PendingReportRecovered", "PriceReportRejected", "PriceReported", "PriceRequested", "RepEthPriceSet", "SecurityPoolSet", "SharedPriceFeedSet"],
+	"events": ["SecurityPoolSet", "SharedPriceFeedSet"],
 	"eventDeclarations": {
-		"PendingReportRecovered": "PendingReportRecovered(uint256 indexed reportId, uint256 settlementTimestamp, uint256 pendingReportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas, uint256 lastPrice, uint256 lastSettlementTimestamp)",
-		"PriceReportRejected": "PriceReportRejected(uint256 indexed reportId, string reason, uint256 pendingReportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas, uint256 lastPrice, uint256 lastSettlementTimestamp)",
-		"PriceReported": "PriceReported(uint256 indexed reportId, uint256 price, uint256 lastSettlementTimestamp)",
-		"PriceRequested": "PriceRequested(uint256 indexed reportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas)",
-		"RepEthPriceSet": "RepEthPriceSet(uint256 price)",
 		"SecurityPoolSet": "SecurityPoolSet(address indexed securityPool)",
 		"SharedPriceFeedSet": "SharedPriceFeedSet(address indexed priceFeed)"
 	},
