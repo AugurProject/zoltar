@@ -3,7 +3,7 @@ import type { SQL } from 'bun'
 import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import { integrityCatalogData, latestInvalidationId } from '../repositories/integrity.ts'
 import { snapshotBoundary } from './entity-details.ts'
-import { ApiRequestError, cursorTimestamp, integer, isCursorTimestamp, isNonNegativeSafeInteger, isPostgresBigint, json } from './shared.ts'
+import { ApiRequestError, cursorTimestamp, hasCursorSnapshot, integer, isCursorTimestamp, isNonNegativeSafeInteger, isPostgresBigint, json } from './shared.ts'
 import { operationsAsOfForContinuations } from './snapshot.ts'
 import { rejectRawSnapshotOffset } from './trading-catalog.ts'
 
@@ -36,11 +36,7 @@ const parseIntegrityCursor = (value: string | null, chainId: number): IntegrityC
 				parts[2] !== 'integrity-catalog' ||
 				!isPostgresBigint(parts[3]) ||
 				!isNonNegativeSafeInteger(parts[4]) ||
-				!isPostgresBigint(parts[5]) ||
-				typeof parts[6] !== 'string' ||
-				!/^0x[0-9a-f]{64}$/.test(parts[6]) ||
-				!isPostgresBigint(parts[7]) ||
-				!parts.slice(8, 11).every(part => typeof part === 'string') ||
+				!hasCursorSnapshot(parts, 5) ||
 				!isNonNegativeSafeInteger(parts[11]) ||
 				Number(parts[11]) > Number(parts[4]) ||
 				typeof parts[12] !== 'string' ||
