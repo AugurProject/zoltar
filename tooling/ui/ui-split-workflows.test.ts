@@ -659,7 +659,7 @@ ${command}`,
 
 		const dockerfile = await readFile(dockerfilePath, 'utf8')
 		const dockerStages = parseDockerfile(dockerfile)
-		expect(dockerGlobalArguments(dockerfile)).toContain('BUN_VERSION=1.4.2')
+		expect(dockerGlobalArguments(dockerfile)).toContain('BUN_VERSION=1.4.4')
 		const copies = dockerStages.flatMap(stage => dockerInstructions(stage, 'COPY'))
 		const runs = dockerStages.flatMap(stage => dockerInstructions(stage, 'RUN'))
 		expect(copies.some(copy => copy.includes('bun.lock'))).toBe(true)

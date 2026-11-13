@@ -37,7 +37,7 @@ OpenOracle owns report browsing, standalone report creation, disputes, settlemen
 
 ## Prerequisites
 
-- Bun 1.4.2 (the version pinned by `packageManager` and CI)
+- Bun 1.4.4 (the version pinned by `packageManager` and CI)
 - Node.js 20+ on `PATH`: `bun x tsc` and other package binaries honor their `#!/usr/bin/env node` shebangs, so setup, UI builds, and TypeScript checks fail without it
 - Docker, only for the container workflows (`testnetwork/`, `reth/`, bot images, and UI publishing)
 

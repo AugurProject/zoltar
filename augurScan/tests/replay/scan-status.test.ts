@@ -10,7 +10,7 @@ for (const mode of ['committed', 'empty', 'failed', 'reorg', 'wide', 'partial-fa
 		const signal = new AbortController().signal
 		const indexer = createNetworkIndexer({ id: 'sepolia', name: 'Sepolia', chainId: 11_155_111, rpcUrls: ['http://unused.invalid'], startBlock: 10n, confirmationDepth: 12n, explorerBaseUrl: '', nativeSymbol: 'ETH', contracts: [] }, database, signal)
 		indexer.stateBoundary.discovered = true
-		indexer.lease = { backendPid: 1, connection: Object.assign(database.sql, { release() {}, [Symbol.dispose]() {} }), assertHeld: async () => {}, release: async () => {} }
+		indexer.lease = { backendPid: 1, connection: Object.assign(database.sql, { async release() {}, [Symbol.dispose]() {} }), assertHeld: async () => {}, release: async () => {} }
 		const largeRange = mode === 'wide' || mode === 'partial-failure' || mode === 'partial-reorg' || mode === 'block-failure'
 		const segmentEnd = largeRange ? 259n : 10n
 		const contracts = new Map([[zeroAddress, { address: zeroAddress, label: 'OpenOracle', kind: 'openOracle', provenance: 'manifest', deploymentBlock: 10n, deploymentBlockExact: true }]])
