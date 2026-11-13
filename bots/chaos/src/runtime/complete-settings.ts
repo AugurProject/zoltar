@@ -1,6 +1,5 @@
-import { getAddress } from '@zoltar/bot-shared/ethereum'
 import { deploymentFactoryId, executionProfileId } from '../config/execution-profile.ts'
-import { parseSettings, serializedSettings, type OperatorSettings } from '../config/settings.ts'
+import { DEPLOYMENT_PIN_ADDRESS_KEYS, parseDeploymentPinAddresses, parseSettings, serializedSettings, type OperatorSettings } from '../config/settings.ts'
 import { dashboardRecord as record, exactDashboardKeys as exactKeys } from './dashboard-input.ts'
 
 /** Derived deployment identities are regenerated on save; the editor owns the addresses, not their hashes. */
@@ -22,24 +21,8 @@ export function completeSettingsCandidate(current: OperatorSettings, value: unkn
 	const pin = settings['deploymentPin']
 	if (pin === undefined) return { revision: body['revision'], settings: base }
 	const addresses = record(pin, 'deploymentPin')
-	exactKeys(addresses, ['multicall3', 'openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', 'uniswapV3Factory', 'weth', 'zoltar'], 'deploymentPin')
-	const address = (key: string) => {
-		const value = addresses[key]
-		if (typeof value !== 'string') throw new Error(`deploymentPin.${key} must be an address`)
-		return getAddress(value)
-	}
-	const deployment = {
-		multicall3: address('multicall3'),
-		openOracle: address('openOracle'),
-		questionData: address('questionData'),
-		securityPoolFactory: address('securityPoolFactory'),
-		securityPoolForker: address('securityPoolForker'),
-		tradingFactory: address('tradingFactory'),
-		tradingRouter: address('tradingRouter'),
-		uniswapV3Factory: address('uniswapV3Factory'),
-		weth: address('weth'),
-		zoltar: address('zoltar'),
-	}
+	exactKeys(addresses, DEPLOYMENT_PIN_ADDRESS_KEYS, 'deploymentPin')
+	const deployment = parseDeploymentPinAddresses(addresses)
 	const profileId = executionProfileId({ network: base.network, deployment })
 	return {
 		revision: body['revision'],
