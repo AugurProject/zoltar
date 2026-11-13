@@ -1,5 +1,6 @@
 import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import { formatActionTense } from '@zoltar/ui-core-shared/copy/transactionActionTenses.js'
 
 export const disputeAndSwap = 'Dispute & swap'
 export const disputeDelay = 'Dispute delay'
@@ -149,6 +150,7 @@ export const settleReport = 'Settle report'
 
 export const formatReportMissing = (reportId: CopyTemplateValue) => `OpenOracle report #${reportId} does not exist.`
 export const formatApprovingTokenTitle = (tokenSymbol: CopyTemplateValue) => `Approving ${tokenSymbol}`
+export const formatResettingTokenApprovalTitle = (tokenSymbol: string) => formatActionTense(commonCopy.formatResetTokenApproval(tokenSymbol), 'pending')
 export const formatWithdrawingTokenTitle = (tokenSymbol: CopyTemplateValue) => `Withdrawing ${tokenSymbol}`
 export const creatingStandaloneReportTitle = 'Creating standalone OpenOracle report'
 export const standaloneReportCreated = 'Standalone OpenOracle report created'

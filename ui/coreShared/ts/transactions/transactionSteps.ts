@@ -157,7 +157,9 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 				if (amount !== undefined && step.approval !== undefined) {
 					const formattedAmount = amount === maxUint256 ? commonCopy.max : formatCurrencyBalance(amount, step.approval.tokenUnits)
 					step.amount = formatValueWithUnit(formattedAmount, step.approval.tokenSymbol)
-					step.title = commonCopy.formatApproveTokenAmount(formattedAmount, step.approval.tokenSymbol)
+					// Choosing zero resets the approval instead of granting one.
+					step.title = amount === 0n ? commonCopy.formatResetTokenApproval(step.approval.tokenSymbol) : commonCopy.formatApproveTokenAmount(formattedAmount, step.approval.tokenSymbol)
+					if (amount === 0n) step.description = transactionCopy.tokenApprovalReset.description
 				}
 				step.approvalAmount = amount ?? step.approval?.requiredAmount
 				transitionStep(step, { type: 'review-confirmed' })

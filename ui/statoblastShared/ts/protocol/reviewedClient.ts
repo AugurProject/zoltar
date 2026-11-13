@@ -51,13 +51,16 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 	const [spender, amount] = preview.args ?? []
 	if (typeof spender !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(spender) || typeof amount !== 'bigint') throw new Error('Cannot review this token approval.')
 	details.spender = getAddress(spender)
-	details.title = 'Approve token spending'
-	details.description = 'Authorize the listed spending limit; tokens stay in your wallet.'
+	// Approving zero grants nothing: it resets the spending limit, so every surface that titles this step names the reset.
+	const reset = amount === 0n
+	const approval = reset ? transactionCopy.tokenApprovalReset : transactionCopy.reviewedActions['approve']
+	details.title = approval?.title ?? details.title
+	details.description = approval?.description
 	details.amount = `${amount} token base units`
 	try {
 		const [symbol, decimals] = await Promise.all([client.readContract({ address: preview.contractAddress, abi: ABIS.mainnet.erc20, functionName: 'symbol' }), client.readContract({ address: preview.contractAddress, abi: ABIS.mainnet.erc20, functionName: 'decimals' })])
 		const formatApprovalAmount = (value: bigint) => (value === maxUint256 ? commonCopy.max : formatCurrencyBalance(value, Number(decimals)))
-		details.title = commonCopy.formatApproveTokenAmount(formatApprovalAmount(amount), symbol)
+		details.title = reset ? commonCopy.formatResetTokenApproval(symbol) : commonCopy.formatApproveTokenAmount(formatApprovalAmount(amount), symbol)
 		details.amount = formatValueWithUnit(formatApprovalAmount(amount), symbol)
 		if (requiredApprovalAmount !== undefined) {
 			const approvedAmount = await client.readContract({ address: preview.contractAddress, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, details.spender] })
@@ -65,7 +68,7 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 			details.amount = formatValueWithUnit(formatApprovalAmount(requiredApprovalAmount), symbol)
 		}
 	} catch (error) {
-		throw new Error('Could not read token details for approval. Retry before sending any transactions.', { cause: error })
+		throw new Error(`Could not read token details for approval${reset ? ' reset' : ''}. Retry before sending any transactions.`, { cause: error })
 	}
 	return details
 }

@@ -8,7 +8,7 @@ import { collateralAsset, tokenFunded } from '../../protocol/collateral.js'
 import type { LiveMarket } from '../../protocol/liveMarket.js'
 import type { LiveWorkflowContext } from './liveTradingTypes.js'
 import { useTransactionSubmission } from './useTransactionSubmission.js'
-import { walletConnectionRequired } from '@zoltar/ui-core-shared/copy/common.js'
+import { formatTokenApprovalReset, formatTokenApprovalResetFailed, walletConnectionRequired } from '@zoltar/ui-core-shared/copy/common.js'
 import * as copy from '../../copy/collateral.js'
 
 export function useCollateralFunding(market: LiveMarket, required: bigint | undefined, context: LiveWorkflowContext | undefined, enabled: boolean) {
@@ -79,7 +79,10 @@ export function useCollateralFunding(market: LiveMarket, required: bigint | unde
 			setApprovalAmount(amount)
 			const capturedKey = key
 			const { account, walletClient, configuration } = context
+			// Approving zero resets the allowance; it is recorded and reported as a reset, named like the approval row beside it, not as an approval.
+			const reset = amount === 0n
 			await transaction.submit({
+				...(reset ? { label: formatTokenApprovalReset(asset.symbol), failureFallback: formatTokenApprovalResetFailed(asset.symbol) } : {}),
 				prepare: async () => {
 					if (currentKey.current !== capturedKey || getActiveBackend() !== backend) throw new Error('Collateral funding context changed. Review again.')
 					const allowance = await walletClient.readContract({ address: asset.token, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [account, configuration.router] })

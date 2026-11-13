@@ -146,7 +146,6 @@ export function renderSelectedReportActionSection({
 	onSettleReport,
 	onWrapDisputeWeth,
 	openOracleActiveAction,
-	openOracleApprovalResetting,
 	openOracleForm,
 	openOracleTokenAccessState,
 	openOracleReportDetails,
@@ -166,7 +165,6 @@ export function renderSelectedReportActionSection({
 	onSettleReport: () => void
 	onWrapDisputeWeth: () => void
 	openOracleActiveAction: OpenOracleSectionProps['openOracleActiveAction']
-	openOracleApprovalResetting: OpenOracleSectionProps['openOracleApprovalResetting']
 	openOracleForm: OpenOracleFormState
 	openOracleTokenAccessState: OpenOracleSectionProps['openOracleTokenAccessState']
 	openOracleReportDetails?: OpenOracleReportDetails
@@ -210,7 +208,6 @@ export function renderSelectedReportActionSection({
 				let resetUnavailableReason = approval.error
 				if (resetUnavailableReason === undefined && approval.value === undefined) resetUnavailableReason = fundingCopy.loading
 				else if (resetUnavailableReason === undefined && approval.value === 0n) resetUnavailableReason = commonCopy.notNeeded
-				const approvalActionPending = openOracleActiveAction === (isToken1 ? 'approveToken1' : 'approveToken2')
 				const requiresAllowanceReset = tokenRequiresAllowanceReset(isToken1 ? openOracleReportDetails?.token1 : openOracleReportDetails?.token2)
 				const requiredAmount = isToken1 ? disputeSubmission?.token1ContributionAmount : disputeSubmission?.token2ContributionAmount
 				const tokenApprovalGuardMessage = (() => {
@@ -225,7 +222,7 @@ export function renderSelectedReportActionSection({
 							<TransactionActionButton
 								idleLabel={commonCopy.formatResetTokenApproval(tokenSymbol)}
 								pendingLabel={commonCopy.formatResettingTokenApproval(tokenSymbol)}
-								pending={approvalActionPending && openOracleApprovalResetting}
+								pending={openOracleActiveAction === (isToken1 ? 'resetToken1Approval' : 'resetToken2Approval')}
 								availability={{
 									disabled: !isConnected || !isOnActiveAppChain || (approval.value ?? 0n) === 0n || sharedApprovalGuardMessage !== undefined || tokenApprovalGuardMessage !== undefined,
 									reason: sharedApprovalGuardMessage ?? tokenApprovalGuardMessage ?? resetUnavailableReason,
@@ -244,7 +241,7 @@ export function renderSelectedReportActionSection({
 							guardMessage={sharedApprovalGuardMessage ?? tokenApprovalGuardMessage}
 							guardMessageElementId={sharedApprovalGuardMessage === undefined ? undefined : sharedApprovalGuardMessageId}
 							onApprove={amount => (isToken1 ? onApproveToken1 : onApproveToken2)(amount)}
-							pending={approvalActionPending && !openOracleApprovalResetting}
+							pending={openOracleActiveAction === (isToken1 ? 'approveToken1' : 'approveToken2')}
 							pendingLabel={commonCopy.formatApprovingToken(tokenSymbol)}
 							requiredAmount={requiredAmount}
 							resetKey={`dispute:${token}:${tokenSymbol}:${requiredAmount?.toString() ?? ''}:${openOracleForm.reportId}`}

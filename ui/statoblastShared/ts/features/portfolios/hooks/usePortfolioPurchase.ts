@@ -1,4 +1,6 @@
 import { getTokenApprovalResetReason, tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as collateralCopy from '../../../copy/collateral.js'
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
@@ -70,7 +72,8 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 	return {
 		requiredCollateral: amount === undefined || fee === undefined ? undefined : amount + fee,
 		approve: (approvalAmount: bigint) =>
-			actions.runPortfolioAction(approvalAmount === 0n ? 'resetPurchaseCollateral' : 'approvePurchaseCollateral', 'Approve purchase collateral', () => {
+			// Approving zero resets the allowance; the review and the activity row name the reset instead of an approval.
+			actions.runPortfolioAction(approvalAmount === 0n ? 'resetPurchaseCollateral' : 'approvePurchaseCollateral', approvalAmount === 0n && snapshot !== undefined ? commonCopy.formatResetTokenApproval(snapshot.collateral.symbol) : 'Approve purchase collateral', () => {
 				if (snapshot === undefined) throw new Error('Portfolio unavailable.')
 				const account = snapshot.auctionVault?.bidder ?? snapshot.owner
 				return {
@@ -78,6 +81,7 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 					to: snapshot.collateralToken,
 					value: 0n,
 					data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [snapshot.services, approvalAmount] }),
+					...(approvalAmount === 0n ? { reviewDescription: transactionCopy.tokenApprovalReset.description } : {}),
 					validateBeforeSubmit: async () => {
 						const allowance = await createConnectedReadClient().readContract({ address: snapshot.collateralToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [account, snapshot.services] })
 						if (typeof allowance !== 'bigint') throw new Error('Collateral allowance unavailable.')

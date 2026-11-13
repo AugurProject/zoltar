@@ -41,8 +41,11 @@ type StagedOracleQueuedResult = {
 
 export type OpenOraclePriceSettlement = { status: 'accepted' } | { status: 'unconfirmed' } | { status: 'rejected'; reason: string }
 
+/** Approving a report token, or resetting its approval to zero: the reset is its own action, so it is never titled or tracked as the approval that follows it. */
+export type OpenOracleTokenApprovalAction = 'approveToken1' | 'approveToken2' | 'resetToken1Approval' | 'resetToken2Approval'
+
 export type OpenOracleActionResult = ActionResult & {
-	action: 'approveToken1' | 'approveToken2' | 'createReportInstance' | 'dispute' | 'executeStagedOperation' | 'queueOperation' | 'requestPrice' | 'settle' | 'withdrawBalance' | 'wrapWeth'
+	action: OpenOracleTokenApprovalAction | 'createReportInstance' | 'dispute' | 'executeStagedOperation' | 'queueOperation' | 'requestPrice' | 'settle' | 'withdrawBalance' | 'wrapWeth'
 	priceSettlement?: OpenOraclePriceSettlement | undefined
 	queuedOperation?: StagedOracleQueuedResult
 	/** The new report's ID, read from its successful create or pool-price request receipt. */

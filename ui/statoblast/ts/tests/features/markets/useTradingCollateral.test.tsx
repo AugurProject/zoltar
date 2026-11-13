@@ -8,6 +8,7 @@ import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { useTradingCollateral } from '@zoltar/ui-statoblast-shared/features/markets/hooks/useTradingCollateral.js'
+import type { TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
 import { renderHookWithProps } from '../../support/renderHook.js'
 import { capitalClient } from '../portfolios/capitalClient.js'
 import { capitalSnapshot, owner, portfolio, token } from '../portfolios/capitalFixture.js'
@@ -23,13 +24,17 @@ async function setup(balance = 0n, allowance = 0n) {
 	source.setRead('purchaseQuote', [0n])
 	source.install()
 	const transactions: string[] = []
+	const intents: TransactionIntent[] = []
 	const hook = await renderHookWithProps(useTradingCollateral, {
 		pool: token,
 		amountInput: '2',
 		enabled: true,
 		accountAddress: owner,
-		onTransactionRequested: () => {
+		// Declining the request stops the action before it reaches the wallet.
+		onTransactionRequested: intent => {
 			transactions.push('requested')
+			intents.push(intent)
+			return false
 		},
 		onTransactionSubmitted: () => {
 			transactions.push('submitted')
@@ -43,7 +48,7 @@ async function setup(balance = 0n, allowance = 0n) {
 	lifecycle.trackRendered(hook)
 	await waitFor(() => expect(hook.state().loading).toBe(false))
 	const balanceReads = () => source.reads.filter(read => read.name === 'balanceOf').length
-	return { source, hook, transactions, balanceReads }
+	return { source, hook, transactions, intents, balanceReads }
 }
 
 test('external funding, approval, spending, revocation and fee changes refresh without editing the mint form', async () => {
@@ -161,4 +166,14 @@ test('typing keeps token identity visible and debounces quotes without reloading
 	await waitFor(() => expect(balanceReads()).toBe(beforeBalance + 1))
 	await waitFor(() => expect(quotes()).toBe(beforeQuotes + 2))
 	expect(identityReads()).toBe(before)
+})
+
+test('a collateral reset is requested as its own action and titled as a reset', async () => {
+	const { hook, intents } = await setup(3_000_000n, 1_000_000n)
+	await act(() => hook.state().approve(3_000_000n))
+	await act(() => hook.state().approve(0n))
+	expect(intents.map(intent => ({ action: intent.action, submittedTitle: intent.submittedTitle }))).toEqual([
+		{ action: 'approvePurchaseCollateral', submittedTitle: 'Approve collateral' },
+		{ action: 'resetPurchaseCollateral', submittedTitle: 'Reset USDC approval' },
+	])
 })

@@ -13,6 +13,8 @@ import { runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.
 import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionRequested } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 import { registerTransactionReviewScope } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
 import { createTransactionStepController, transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
+import { completedAction } from '@zoltar/ui-core-shared/copy/transaction.js'
+import { formatPendingAction } from '@zoltar/ui-core-shared/copy/transactionSteps.js'
 
 const account = '0x0000000000000000000000000000000000000001'
 const hash: Hash = `0x${'1'.repeat(64)}`
@@ -684,6 +686,64 @@ test('describes a standalone unlimited approval as Max REP', async () => {
 	} finally {
 		await sending
 	}
+})
+
+test('describes a zero-amount approval as resetting the token approval', async () => {
+	const { client } = setup()
+	const reviewed = createReviewedClient({ ...client, readContract: createReadContractStub(request => (request.functionName === 'symbol' ? 'USDT' : 6)), sendTransaction: async () => hash })
+	const data = encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [account, 0n] })
+	reviewed.onTransactionPrepared?.({ functionName: 'approve', contractAddress: account, account, args: [account, 0n], chainName: client.chain.name, value: undefined, data })
+	const sending = reviewed.sendTransaction({ to: account, data })
+	await waitForStarted()
+	try {
+		const step = transactionSteps.value?.steps[0]
+		expect(step?.title).toBe('Reset USDT approval')
+		expect(step?.description).toBe('Set the listed spending limit to zero; tokens stay in your wallet.')
+		expect(step?.amount).toBe('0\u00a0USDT')
+	} finally {
+		await sending
+	}
+})
+
+test('titles a zero-amount approval as a reset before the token symbol is known', async () => {
+	const { client } = setup()
+	const reviewed = createReviewedClient({
+		...client,
+		readContract: async () => {
+			throw new Error('Token read unavailable')
+		},
+		sendTransaction: async () => hash,
+	})
+	const data = encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [account, 0n] })
+	reviewed.onTransactionPrepared?.({ functionName: 'approve', contractAddress: account, account, args: [account, 0n], chainName: client.chain.name, value: undefined, data })
+	await expect(reviewed.sendTransaction({ to: account, data })).rejects.toThrow('Could not read token details for approval reset. Retry before sending any transactions.')
+})
+
+test('choosing a zero approval amount in a reviewed plan retitles the step as a reset', async () => {
+	const controller = createTransactionStepController(undefined, true)
+	controller.setPlan([
+		{
+			title: 'Approve 5\u00a0USDT',
+			description: 'Authorize the listed spending limit; tokens stay in your wallet.',
+			contractAddress: account,
+			contractLabel: undefined,
+			spender: account,
+			amount: '5\u00a0USDT',
+			ethValueAttoEth: undefined,
+			approval: { requiredAmount: 5_000_000n, approvedAmount: 1_000_000n, tokenSymbol: 'USDT', tokenUnits: 6 },
+		},
+	])
+	const review = controller.review(0)
+	await clickTransactionStep(0, 0n)
+	expect(await review).toBe(0n)
+	expect(transactionSteps.value?.steps[0]).toMatchObject({ title: 'Reset USDT approval', description: 'Set the listed spending limit to zero; tokens stay in your wallet.', amount: '0\u00a0USDT' })
+})
+
+test('a confirmed reset reads as a reset result instead of an approval', () => {
+	expect(completedAction('Reset USDT approval')).toBe('USDT approval reset')
+	expect(completedAction('Reset token approval')).toBe('Token approval reset')
+	expect(completedAction('Approve 5\u00a0USDT')).toBe('Approved 5\u00a0USDT')
+	expect(formatPendingAction('Reset USDT approval')).toBe('Resetting USDT approval…')
 })
 
 for (const phase of ['before-send', 'validation', 'metadata', 'funding', 'after-confirmation'] as const) {

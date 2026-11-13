@@ -224,6 +224,18 @@ test('a combined refund claim with no earlier credit reviews only the bid’s ow
 	expect(state.hook.state().claimReason(settled)).toBe('No refund credit remains to withdraw.')
 })
 
+test('an auction collateral reset is reviewed and recorded as a reset instead of an approval', async () => {
+	const state = await setup()
+	await terms(state)
+	const symbol = state.hook.state().snapshot?.collateral.symbol
+	if (symbol === undefined) throw new Error('Missing auction collateral')
+	await act(() => state.hook.state().approve(2n * unit))
+	expect(last(state.requests).reviewDescription).toBeUndefined()
+	await act(() => state.hook.state().approve(0n))
+	expect(state.labels).toEqual(['Approve auction collateral', `Reset ${symbol} approval`])
+	expect(last(state.requests).reviewDescription).toBe('Set the listed spending limit to zero; tokens stay in your wallet.')
+})
+
 test('an auction disappearing before approval submission invalidates the request', async () => {
 	const state = await setup()
 	await terms(state)

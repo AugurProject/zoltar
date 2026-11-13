@@ -14,6 +14,10 @@ type RequestSignature = <T>(write: () => Promise<T>) => Promise<T>
 
 /** One submission: an authoritative check right before signing, then the broadcast, then what to do after a confirmed receipt. */
 export type SubmissionPlan<Prepared> = Readonly<{
+	/** Names this submission in the activity list and the receipt-uncertainty warning when it is not the hook's usual transaction, such as an allowance reset sent through the approval workflow. */
+	label?: string | undefined
+	/** The failure message for this submission when the error carries none; defaults to the hook's. */
+	failureFallback?: string | undefined
 	prepare(): Promise<Prepared>
 	send(prepared: Prepared, requestSignature: RequestSignature): Promise<Hash>
 	afterConfirmed?(prepared: Prepared): Promise<void>
@@ -124,7 +128,7 @@ export function useTransactionSubmission({
 		setMarketLock(key, true)
 		dispatch({ type: 'operation-preparing', context, operation })
 		let broadcastHash: Hash | undefined
-		const activity = createMarketTransactionActivity(market, activityTitle ?? label)
+		const activity = createMarketTransactionActivity(market, plan.label ?? activityTitle ?? label)
 		let receiptKnown = false
 		let keepLocked = false
 		let signatureRequested = false
@@ -171,7 +175,7 @@ export function useTransactionSubmission({
 			if (!mounted.current) return
 			if (broadcastHash !== undefined && !receiptKnown) {
 				keepLocked = true
-				dispatch({ type: 'uncertain', context, reason: broadcastUncertainMessage(label, broadcastHash) })
+				dispatch({ type: 'uncertain', context, reason: broadcastUncertainMessage(plan.label ?? label, broadcastHash) })
 			} else {
 				if (!signatureRequested && isSlippageFailure(caught) && plan.afterSlippageRejected !== undefined) {
 					try {
@@ -182,7 +186,7 @@ export function useTransactionSubmission({
 					}
 				}
 				if (!mounted.current) return
-				dispatch({ type: 'failed', context, operation, message: describeTransactionFailure(caught, failureFallback) })
+				dispatch({ type: 'failed', context, operation, message: describeTransactionFailure(caught, plan.failureFallback ?? failureFallback) })
 			}
 		} finally {
 			activeMarkets.delete(key)

@@ -6,7 +6,7 @@ import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { parseOpenOracleCreateFormSubmission } from '../lib/openOracle.js'
 import type { WriteOperationsParameters } from '@zoltar/ui-zoltar-shared/types/app.js'
-import type { OpenOracleActionResult, OpenOracleReportDetails, OpenOracleWithdrawableBalances } from '../../../types/contracts.js'
+import type { OpenOracleActionResult, OpenOracleReportDetails, OpenOracleTokenApprovalAction, OpenOracleWithdrawableBalances } from '../../../types/contracts.js'
 import type { OpenOracleRawReadResult, OpenOracleReadClient } from '../lib/openOracleTokenAccess.js'
 
 export type UseOpenOracleOperationsParameters = WriteOperationsParameters & {
@@ -17,7 +17,7 @@ export type UseOpenOracleOperationsParameters = WriteOperationsParameters & {
 }
 export type OpenOracleProductionWriteClient = ReturnType<typeof createWalletWriteClient>
 export type UseOpenOracleOperationsDependencies<TWriteClient = OpenOracleProductionWriteClient> = {
-	approveErc20: (client: TWriteClient, tokenAddress: Address, spenderAddress: Address, amount: bigint, action: 'approveToken1' | 'approveToken2') => Promise<OpenOracleActionResult>
+	approveErc20: (client: TWriteClient, tokenAddress: Address, spenderAddress: Address, amount: bigint, action: OpenOracleTokenApprovalAction) => Promise<OpenOracleActionResult>
 	createConnectedReadClient: () => OpenOracleReadClient
 	createOpenOracleReportInstance: (client: TWriteClient, parameters: ReturnType<typeof parseOpenOracleCreateFormSubmission>) => Promise<OpenOracleActionResult>
 	createWalletWriteClient: (accountAddress: Address, callbacks?: Parameters<typeof createWalletWriteClient>[1]) => TWriteClient

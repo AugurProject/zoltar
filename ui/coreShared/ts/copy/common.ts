@@ -166,5 +166,13 @@ export const formatApprovalResetRequired = (symbol: string) => `Reset ${symbol} 
 
 export const formatResetTokenApproval = (symbol: string) => `Reset ${symbol} approval`
 export const formatResettingTokenApproval = (symbol: string) => `Resetting ${symbol} approval…`
+/** The result of a confirmed `formatResetTokenApproval` transaction. */
+export const formatTokenApprovalReset = (symbol: string) => `${symbol} approval reset`
+/** The result title for a `formatResetTokenApproval` action title; undefined for any other title. */
+export const formatCompletedTokenApprovalReset = (title: string) => {
+	const symbol = /^Reset (.+) approval$/.exec(title)?.[1]
+	return symbol === undefined ? undefined : formatTokenApprovalReset(symbol)
+}
+export const formatTokenApprovalResetFailed = (symbol: string) => `${symbol} approval reset failed.`
 /** The reason a prerequisite step, such as an allowance reset or an ETH wrap, is disabled when nothing is left for it to do. */
 export const notNeeded = 'Not needed.'

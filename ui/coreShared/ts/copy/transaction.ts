@@ -1,3 +1,4 @@
+import { formatCompletedTokenApprovalReset } from './common.js'
 import { formatActionTense } from './transactionActionTenses.js'
 import { ethWrapped, wrapEthIntoWeth } from './transactionSteps.js'
 import type { CopyTemplateValue } from './types.js'
@@ -75,8 +76,13 @@ export const reviewedActions: Record<string, { title: string; completedTitle: st
 	report: { title: 'Create oracle report', completedTitle: 'Oracle report created', description: 'Deposit the approved tokens and start the oracle report.' },
 	aggregate3: { title: 'Batched transaction', completedTitle: 'Batched transaction completed', description: 'Run several contract calls in one transaction.' },
 }
+/**
+ * An `approve` call that sets the spending limit to zero: the reset a token such as USDT needs before a new approval, or a revoke.
+ * It grants nothing, so it is never reviewed or titled as an approval. `formatResetTokenApproval` names the token once its symbol is known.
+ */
+export const tokenApprovalReset = { title: 'Reset token approval', completedTitle: 'Token approval reset', description: 'Set the listed spending limit to zero; tokens stay in your wallet.' }
 /** The result title of a finished action: the reviewed action's own noun-first title, else the action title in past tense. */
-export const completedAction = (title: string) => Object.values(reviewedActions).find(action => action.title === title)?.completedTitle ?? formatActionTense(title, 'completed')
+export const completedAction = (title: string) => [...Object.values(reviewedActions), tokenApprovalReset].find(action => action.title === title)?.completedTitle ?? formatCompletedTokenApprovalReset(title) ?? formatActionTense(title, 'completed')
 export const closeSymbol = '×'
 export const hide = 'Hide'
 export const transactionHash = 'Transaction hash'

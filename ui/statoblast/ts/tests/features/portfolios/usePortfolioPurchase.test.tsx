@@ -29,9 +29,11 @@ async function setup(snapshot = capitalSnapshot()) {
 	for (const [name, value] of Object.entries(values)) source.setRead(name, value)
 	source.install()
 	const requests: PortfolioTransaction[] = []
+	const labels: string[] = []
 	const actions = {
 		ownerReason: undefined,
-		runPortfolioAction: async (_action: string, _label: string, build: () => PortfolioTransaction | Promise<PortfolioTransaction>) => {
+		runPortfolioAction: async (_action: string, label: string, build: () => PortfolioTransaction | Promise<PortfolioTransaction>) => {
+			labels.push(label)
 			requests.push(await build())
 		},
 	}
@@ -44,7 +46,7 @@ async function setup(snapshot = capitalSnapshot()) {
 		hook.state().setMinimumShares('0.9')
 	})
 	await waitFor(() => expect(hook.state().quote).toBeDefined())
-	return { hook, source, requests }
+	return { hook, source, requests, labels }
 }
 test('purchases made while managing an auction vault receive shares in the controlling wallet', async () => {
 	const { hook, requests } = await setup(auctionCapitalSnapshot())
@@ -119,12 +121,16 @@ async function requestUsdtSymbolApprovalIncrease(collateralToken: typeof token) 
 }
 
 test('USDT approvals require a separate reset even when the existing allowance covers the purchase', async () => {
-	const { hook, source, requests, snapshot, increase } = await requestUsdtSymbolApprovalIncrease('0xdAC17F958D2ee523a2206206994597C13D831ec7')
+	const { hook, source, requests, labels, snapshot, increase } = await requestUsdtSymbolApprovalIncrease('0xdAC17F958D2ee523a2206206994597C13D831ec7')
 	await expect(increase.validateBeforeSubmit?.()).rejects.toThrow('Reset USDT approval first.')
 	await act(() => hook.state().approve(0n))
 	const reset = requests[1]
 	if (reset === undefined) throw new Error('Missing reset')
 	await reset.validateBeforeSubmit?.()
+	// The review and the activity row name the reset, not the approval it precedes.
+	expect(labels).toEqual(['Approve purchase collateral', 'Reset USDT approval'])
+	expect(increase.reviewDescription).toBeUndefined()
+	expect(reset.reviewDescription).toBe('Set the listed spending limit to zero; tokens stay in your wallet.')
 	expect(decodeFunctionData({ abi: parseAbi(['function approve(address spender,uint256 amount) returns (bool)']), data: reset.data }).args).toEqual([snapshot.services, 0n])
 	source.setRead('allowance', 0n)
 	await increase.validateBeforeSubmit?.()

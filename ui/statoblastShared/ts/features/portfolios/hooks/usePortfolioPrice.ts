@@ -11,6 +11,8 @@ import { buildPortfolioPriceFundingWithdrawal, buildPortfolioPriceRecovery, buil
 import type { PortfolioAccountSnapshot, PortfolioTransaction } from '../../../protocol/securityPoolPortfolio.js'
 import type { PortfolioSharedForkParameters } from './usePortfolioSharedFork.js'
 import { portfolioAmountOrUndefined, portfolioUnsignedId } from '../lib/draft.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as copy from '../../../copy/portfolioPrice.js'
 
 /** The shared price feed one report funds. */
@@ -276,14 +278,17 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 			),
 		approve: (token: 'weth' | 'rep', amount: bigint) => {
 			const approvalAction = token === 'weth' ? 'approveWeth' : 'approveRep'
-			const action = amount === 0n && token === 'weth' ? 'resetCollateral' : approvalAction
+			// Approving zero collateral resets the allowance; the review and the activity row name the reset instead of an approval.
+			const reset = amount === 0n && token === 'weth'
+			const action = reset ? 'resetCollateral' : approvalAction
+			const approvalLabel = token === 'weth' ? copy.approveWeth : copy.approveRep
 			return run(
 				portfolioPriceAction(scope, action),
-				token === 'weth' ? copy.approveWeth : copy.approveRep,
+				reset ? commonCopy.formatResetTokenApproval(collateral.symbol) : approvalLabel,
 				fundingReason,
 				selected => ({
 					...buildPortfolioPriceApprovalRequest(selected, token, amount),
-					reviewDescription: scoped.formatApprovalReview(selected.feed, formatUnits(amount, token === 'weth' ? collateral.decimals : 18), token, collateral.symbol),
+					reviewDescription: reset ? transactionCopy.tokenApprovalReset.description : scoped.formatApprovalReview(selected.feed, formatUnits(amount, token === 'weth' ? collateral.decimals : 18), token, collateral.symbol),
 				}),
 				async latest => {
 					freshFunding(latest)

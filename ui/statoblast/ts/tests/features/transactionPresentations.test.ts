@@ -20,6 +20,17 @@ describe('transaction presentations', () => {
 		expect(createOpenOracleSuccessPresentation({ action: 'withdrawBalance', hash: '0x1234' }, context).title).toBe('WETH withdrawn')
 	})
 
+	test('titles an OpenOracle allowance reset as a reset from submission to result', () => {
+		const context = { token1Symbol: 'USDT', token2Symbol: 'WETH' }
+		expect(createOpenOracleTransactionIntent('resetToken1Approval', context)).toMatchObject({ action: 'resetToken1Approval', submittedTitle: 'Resetting USDT approval' })
+		expect(createOpenOracleSuccessPresentation({ action: 'resetToken1Approval', hash: '0x1234' }, context).title).toBe('USDT approval reset')
+		expect(createOpenOracleTransactionIntent('resetToken2Approval', context).submittedTitle).toBe('Resetting WETH approval')
+		expect(createOpenOracleSuccessPresentation({ action: 'resetToken2Approval', hash: '0x1234' }, context).title).toBe('WETH approval reset')
+		// Without a resolved symbol the reset still never reads as an approval.
+		expect(createOpenOracleTransactionIntent('resetToken1Approval').submittedTitle).toBe('Resetting base token approval')
+		expect(createOpenOracleSuccessPresentation({ action: 'resetToken2Approval', hash: '0x1234' }).title).toBe('Quote token approval reset')
+	})
+
 	test('keeps unresolved token outcome titles in sentence case', () => {
 		expect(createOpenOracleTransactionIntent('approveToken1').submittedTitle).toBe('Approving base token')
 		expect(createOpenOracleSuccessPresentation({ action: 'approveToken1', hash: '0x1234' }).title).toBe('Base token approved')

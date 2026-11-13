@@ -25,6 +25,8 @@ import type { PortfolioTransaction } from '../../../protocol/securityPoolPortfol
 import type { PortfolioSharedForkParameters } from './usePortfolioSharedFork.js'
 import { portfolioAmountOrUndefined, portfolioUnsignedId } from '../lib/draft.js'
 import * as copy from '../../../copy/portfolioAuction.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as collateralCopy from '../../../copy/collateral.js'
 
 export type PortfolioAuctionParameters = { fork: PortfolioForkSnapshot | undefined; bidder: Address | undefined; actions: PortfolioSharedForkParameters['actions']; openVault?: ((vault: Address, universeId: bigint) => void) | undefined }
@@ -159,7 +161,8 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 		approve: (amount: bigint) =>
 			run(
 				amount === 0n ? 'resetAuctionCollateral' : 'approveAuctionCollateral',
-				'Approve auction collateral',
+				// Approving zero resets the allowance; the review and the activity row name the reset instead of an approval.
+				amount === 0n && snapshot !== undefined ? commonCopy.formatResetTokenApproval(snapshot.collateral.symbol) : 'Approve auction collateral',
 				fundingReason,
 				selected => {
 					if (selected.auction === undefined) throw new Error('Auction is unavailable. Refresh before approving collateral.')
@@ -168,6 +171,7 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 						to: selected.collateralToken,
 						value: 0n,
 						data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [selected.auction.address, amount] }),
+						...(amount === 0n ? { reviewDescription: transactionCopy.tokenApprovalReset.description } : {}),
 					}
 				},
 				latest => {

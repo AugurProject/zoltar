@@ -7,6 +7,7 @@ const actionTenses = [
 	{ verb: 'Report', pending: 'Reporting', completed: 'Reported' },
 	{ verb: 'Settle', pending: 'Settling', completed: 'Settled' },
 	{ verb: 'Approve', pending: 'Approving', completed: 'Approved' },
+	{ verb: 'Reset', pending: 'Resetting', completed: 'Reset' },
 	{ verb: 'Deposit', pending: 'Depositing', completed: 'Deposited' },
 	{ verb: 'Claim', pending: 'Claiming', completed: 'Claimed' },
 	{ verb: 'Clear', pending: 'Clearing', completed: 'Cleared' },

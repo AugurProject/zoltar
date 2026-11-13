@@ -109,13 +109,20 @@ export function useTradingCollateral({ pool, amountInput, ...parameters }: Write
 			if (approvalPending.value || collateral === undefined || accountAddress === undefined) return
 			approvalPending.value = true
 			approvalAmount.value = amount
+			const failure = amount === 0n ? commonCopy.formatTokenApprovalResetFailed(collateral.symbol) : collateralCopy.approvalFailed
 			try {
 				await runWriteAction(
-					buildWriteActionConfig({ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState }, tradingError, commonCopy.formatConnectWalletBefore('approving collateral'), {
-						action: 'approvePurchaseCollateral',
-						source: 'Complete sets',
-						submittedTitle: 'Approve collateral',
-					}),
+					buildWriteActionConfig(
+						{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState },
+						tradingError,
+						commonCopy.formatConnectWalletBefore(amount === 0n ? 'resetting the collateral approval' : 'approving collateral'),
+						{
+							// Approving zero resets the allowance: its own action and title, so the tray never reads it as the approval that follows.
+							action: amount === 0n ? 'resetPurchaseCollateral' : 'approvePurchaseCollateral',
+							source: 'Complete sets',
+							submittedTitle: amount === 0n ? commonCopy.formatResetTokenApproval(collateral.symbol) : 'Approve collateral',
+						},
+					),
 					async (account, context) => {
 						const allowance = await createConnectedReadClient().readContract({ address: collateral.token, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [account, collateral.services] })
 						if (typeof allowance !== 'bigint') throw new Error('Collateral allowance unavailable.')
@@ -124,10 +131,10 @@ export function useTradingCollateral({ pool, amountInput, ...parameters }: Write
 						const client = createWalletWriteClient(account, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal })
 						const hash = await client.writeContract({ address: collateral.token, abi: ABIS.mainnet.erc20, functionName: 'approve', args: [collateral.services, amount] })
 						const receipt = await client.waitForTransactionReceipt({ hash })
-						if (receipt.status !== 'success') throw new Error(collateralCopy.approvalFailed)
+						if (receipt.status !== 'success') throw new Error(failure)
 						return { hash }
 					},
-					collateralCopy.approvalFailed,
+					failure,
 				)
 				collateralVersion.value++
 			} finally {

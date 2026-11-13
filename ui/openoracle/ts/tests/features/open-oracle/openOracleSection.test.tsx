@@ -219,7 +219,6 @@ function createOpenOracleSectionProps(overrides: Partial<OpenOracleSectionProps>
 		onWrapDisputeWeth: () => undefined,
 		openOracleActiveAction: undefined,
 		openOracleActiveWithdrawalBalance: undefined,
-		openOracleApprovalResetting: false,
 		openOracleCreateForm: getDefaultOpenOracleCreateFormState(),
 		openOracleDisputeSubmission: undefined,
 		openOracleError: undefined,
@@ -365,14 +364,13 @@ type ReportActionSectionOptions = {
 	accountState?: AccountState
 	isOnActiveAppChain?: boolean
 	openOracleActiveAction?: OpenOracleSectionProps['openOracleActiveAction']
-	openOracleApprovalResetting?: boolean
 	openOracleForm?: OpenOracleFormState
 	openOracleReportDetails?: OpenOracleReportDetails
 }
 
 function renderReportActionSection(
 	actionMode: 'dispute' | 'settle',
-	{ accountState = createAccountState(), isOnActiveAppChain = true, openOracleActiveAction, openOracleApprovalResetting = false, openOracleForm = createOpenOracleForm(), openOracleReportDetails }: Required<Pick<ReportActionSectionOptions, 'openOracleReportDetails'>> & ReportActionSectionOptions,
+	{ accountState = createAccountState(), isOnActiveAppChain = true, openOracleActiveAction, openOracleForm = createOpenOracleForm(), openOracleReportDetails }: Required<Pick<ReportActionSectionOptions, 'openOracleReportDetails'>> & ReportActionSectionOptions,
 	openOracleTokenAccessState: OpenOracleSectionProps['openOracleTokenAccessState'],
 	disputeSubmission: OpenOracleDisputeSubmissionDetails | undefined,
 ) {
@@ -388,7 +386,6 @@ function renderReportActionSection(
 		onSettleReport: () => undefined,
 		onWrapDisputeWeth: () => undefined,
 		openOracleActiveAction,
-		openOracleApprovalResetting,
 		openOracleForm,
 		openOracleTokenAccessState,
 		openOracleReportDetails,
@@ -813,16 +810,15 @@ void describe('OpenOracleSection', () => {
 	})
 
 	void test.each([
-		{ resetting: true, pendingButton: 'Reset USD₮ approval', pendingLabel: 'Resetting USD₮ approval…' },
-		{ resetting: false, pendingButton: 'USD₮ approval control', pendingLabel: 'Approving USD₮…' },
-	])('shows one pending approval button for the network USDT token while resetting is $resetting', ({ resetting, pendingButton, pendingLabel }) => {
+		{ activeAction: 'resetToken2Approval' as const, pendingButton: 'Reset USD₮ approval', pendingLabel: 'Resetting USD₮ approval…' },
+		{ activeAction: 'approveToken2' as const, pendingButton: 'USD₮ approval control', pendingLabel: 'Approving USD₮…' },
+	])('shows one pending approval button for the network USDT token while $activeAction runs', ({ activeAction, pendingButton, pendingLabel }) => {
 		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend())
 		try {
 			const usdt = getActiveNetworkProfile().usdtAddress
 			if (usdt === undefined) throw new Error('Expected a configured USDT address')
 			const section = renderDisputeActionSection({
-				openOracleActiveAction: 'approveToken2',
-				openOracleApprovalResetting: resetting,
+				openOracleActiveAction: activeAction,
 				openOracleForm: createOpenOracleForm({ disputeNewAmount1: '20', disputeNewAmount2: '7' }),
 				openOracleTokenAccessState: createApprovedTokenAccessState(1n),
 				openOracleReportDetails: createDisputableReportDetails({ token2: usdt, token2Symbol: 'USD₮' }),
@@ -864,9 +860,9 @@ void describe('OpenOracleSection', () => {
 	})
 
 	void test.each([
-		{ resetting: true, pending: ['Resetting USD₮ approval…'] },
-		{ resetting: false, pending: ['Approving USD₮…'] },
-	])('shows one pending create-report approval button while resetting is $resetting', async ({ resetting, pending }) => {
+		{ activeAction: 'resetToken1Approval' as const, pending: ['Resetting USD₮ approval…'] },
+		{ activeAction: 'approveToken1' as const, pending: ['Approving USD₮…'] },
+	])('shows one pending create-report approval button while $activeAction runs', async ({ activeAction, pending }) => {
 		const domEnvironment = installDomEnvironment()
 		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend())
 		const usdt = getActiveNetworkProfile().usdtAddress
@@ -888,8 +884,7 @@ void describe('OpenOracleSection', () => {
 				symbols={['USD₮', 'TKN']}
 				disabled
 				guard={undefined}
-				activeAction='approveToken1'
-				resetting={resetting}
+				activeAction={activeAction}
 				approve={() => undefined}
 				wrap={() => undefined}
 			/>,

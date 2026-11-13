@@ -17,6 +17,7 @@ import { act } from 'preact/test-utils'
 
 type UseOpenOracleOperationsState = ReturnType<typeof useOpenOracleOperations>
 type TestOpenOracleWriteClient = { kind: 'injected-write-client' }
+type OpenOracleApprovalAction = Parameters<UseOpenOracleOperationsDependencies<TestOpenOracleWriteClient>['approveErc20']>[4]
 
 const OPEN_ORACLE_ADDRESS = getAddress('0x00000000000000000000000000000000000000aa')
 const REPORT_ID = 1n
@@ -582,7 +583,7 @@ describe('useOpenOracleOperations', () => {
 			feePercentage: 1_000_000n,
 		})
 		let reportLoadCount = 0
-		const approveErc20 = mock(async (_client: TestOpenOracleWriteClient, _tokenAddress: Address, _spenderAddress: Address, _amount: bigint, _action: 'approveToken1' | 'approveToken2') => ({
+		const approveErc20 = mock(async (_client: TestOpenOracleWriteClient, _tokenAddress: Address, _spenderAddress: Address, _amount: bigint, _action: OpenOracleApprovalAction) => ({
 			action: 'approveToken1' as const,
 			hash: '0x00000000000000000000000000000000000000000000000000000000000000d9' as const,
 		}))
@@ -918,7 +919,7 @@ describe('useOpenOracleOperations', () => {
 	])('dispute approval requires an allowance reset only for the network USDT address: $label', async ({ symbol, usesNetworkUsdt }) => {
 		const usdt = getActiveNetworkProfile().usdtAddress
 		if (usdt === undefined) throw new Error('Expected a configured USDT address')
-		const approveErc20 = mock(async (_client: TestOpenOracleWriteClient, _tokenAddress: Address, _spenderAddress: Address, _amount: bigint, _action: 'approveToken1' | 'approveToken2') => ({
+		const approveErc20 = mock(async (_client: TestOpenOracleWriteClient, _tokenAddress: Address, _spenderAddress: Address, _amount: bigint, _action: OpenOracleApprovalAction) => ({
 			action: 'approveToken2' as const,
 			hash: '0x00000000000000000000000000000000000000000000000000000000000000da' as const,
 		}))
@@ -962,13 +963,64 @@ describe('useOpenOracleOperations', () => {
 	})
 
 	test.each([
-		{ amount: 0n, resetting: true },
-		{ amount: 51n, resetting: false },
-	])('marks the active token approval as a reset only while approving $amount', async ({ amount, resetting }) => {
-		const approval = createDeferred<{ action: 'approveToken2'; hash: `0x${string}` }>()
-		const approveErc20 = mock(async (_client: TestOpenOracleWriteClient, _tokenAddress: Address, _spenderAddress: Address, _amount: bigint, _action: 'approveToken1' | 'approveToken2') => await approval.promise)
+		{ amount: 0n, action: 'resetToken2Approval', submittedTitle: 'Resetting WETH approval', successTitle: 'WETH approval reset', feedbackTitle: 'Quote token approval reset' },
+		{ amount: 51n, action: 'approveToken2', submittedTitle: 'Approving WETH', successTitle: 'WETH approved', feedbackTitle: 'Quote token approved' },
+	])('identifies and titles a token approval of $amount as $action from request to result', async ({ amount, action, submittedTitle, successTitle, feedbackTitle }) => {
+		const approval = createDeferred<`0x${string}`>()
+		const approveErc20 = mock(async (_client: TestOpenOracleWriteClient, _tokenAddress: Address, _spenderAddress: Address, _amount: bigint, approvalAction: OpenOracleApprovalAction) => ({ action: approvalAction, hash: await approval.promise }))
 		const dependencies = createOpenOracleOperationsDependencies({
 			approveErc20,
+			loadOpenOracleReportDetails: mock(async () => createOpenOracleReportDetails({ currentReporter: getAddress('0x00000000000000000000000000000000000000dd'), reportTimestamp: 1n, settlementTime: 100n })),
+		})
+		const intents: TransactionIntent[] = []
+		const presentedTitles: unknown[] = []
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(
+			dependencies,
+			state => {
+				hookState = state
+			},
+			true,
+			{
+				onTransactionPresented: presentation => {
+					presentedTitles.push(presentation.title)
+				},
+				onTransactionRequested: intent => {
+					intents.push(intent)
+					return undefined
+				},
+			},
+		)
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		trackCleanup(renderedComponent.cleanup)
+
+		await act(async () => {
+			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+		})
+		await act(() => {
+			requireHookState(hookState).setOpenOracleForm(current => ({ ...current, disputeNewAmount1: '101', disputeNewAmount2: '26' }))
+		})
+		let pendingApproval: Promise<void> | undefined
+		await act(() => {
+			pendingApproval = requireHookState(hookState).approveToken2(amount)
+		})
+		await waitFor(() => expect(approveErc20).toHaveBeenCalledTimes(1))
+		// The reset is its own action from the request on, so the tray and the screen never read it as the approval that follows it.
+		expect(String(requireHookState(hookState).openOracleActiveAction)).toBe(action)
+		expect(String(approveErc20.mock.calls[0]?.[4])).toBe(action)
+		expect(intents.map(intent => ({ action: intent.action, submittedTitle: intent.submittedTitle }))).toEqual([{ action, submittedTitle }])
+
+		await act(async () => {
+			approval.resolve('0x00000000000000000000000000000000000000000000000000000000000000db')
+			await pendingApproval
+		})
+		expect(requireHookState(hookState).openOracleActiveAction).toBeUndefined()
+		expect(presentedTitles).toEqual([successTitle])
+		expect(requireHookState(hookState).openOracleFeedback?.status.title).toBe(feedbackTitle)
+	})
+
+	test('a failed reset is reported as a reset failure', async () => {
+		const dependencies = createOpenOracleOperationsDependencies({
 			loadOpenOracleReportDetails: mock(async () => createOpenOracleReportDetails({ currentReporter: getAddress('0x00000000000000000000000000000000000000dd'), reportTimestamp: 1n, settlementTime: 100n })),
 		})
 		let hookState: UseOpenOracleOperationsState | undefined
@@ -984,21 +1036,14 @@ describe('useOpenOracleOperations', () => {
 		await act(() => {
 			requireHookState(hookState).setOpenOracleForm(current => ({ ...current, disputeNewAmount1: '101', disputeNewAmount2: '26' }))
 		})
-		expect(requireHookState(hookState).openOracleApprovalResetting).toBe(false)
-		let pendingApproval: Promise<void> | undefined
-		await act(() => {
-			pendingApproval = requireHookState(hookState).approveToken2(amount)
-		})
-		await waitFor(() => expect(approveErc20).toHaveBeenCalledTimes(1))
-		expect(requireHookState(hookState).openOracleActiveAction).toBe('approveToken2')
-		expect(requireHookState(hookState).openOracleApprovalResetting).toBe(resetting)
-
 		await act(async () => {
-			approval.resolve({ action: 'approveToken2', hash: '0x00000000000000000000000000000000000000000000000000000000000000db' })
-			await pendingApproval
+			await requireHookState(hookState).approveToken1(0n)
 		})
-		expect(requireHookState(hookState).openOracleActiveAction).toBeUndefined()
-		expect(requireHookState(hookState).openOracleApprovalResetting).toBe(false)
+		expect(requireHookState(hookState).openOracleFeedback?.status.title).toBe('Base token approval reset failed')
+		await act(async () => {
+			await requireHookState(hookState).approveToken2(0n)
+		})
+		expect(requireHookState(hookState).openOracleFeedback?.status.title).toBe('Quote token approval reset failed')
 	})
 
 	test('approval failures use base and quote token terminology', async () => {

@@ -6,6 +6,7 @@ import * as oracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
 import * as copy from '../copy/funding.js'
 import { tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
+import type { OpenOracleActionResult } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import type { useCreateFunding } from '../hooks/useCreateFunding.js'
 
 export function CreateFundingControls({
@@ -15,7 +16,6 @@ export function CreateFundingControls({
 	disabled,
 	guard,
 	activeAction,
-	resetting,
 	approve,
 	wrap,
 }: {
@@ -24,9 +24,8 @@ export function CreateFundingControls({
 	symbols: readonly (string | undefined)[]
 	disabled: boolean
 	guard: string | undefined
-	activeAction: string | undefined
-	/** Whether the active approval action is an allowance reset, so only the reset button shows as pending. */
-	resetting: boolean
+	/** The running OpenOracle action; a reset and an approval of the same token are separate actions, so only one button shows as pending. */
+	activeAction: OpenOracleActionResult['action'] | undefined
 	approve: ((token: 'token1' | 'token2', amount: bigint) => void) | undefined
 	wrap: (() => void) | undefined
 }) {
@@ -44,7 +43,7 @@ export function CreateFundingControls({
 			{tokens.map((token, index) => {
 				const symbol = symbols[index] ?? copy.funding
 				const requiresAllowanceReset = tokenRequiresAllowanceReset(token.token)
-				const approvalActionPending = activeAction === `approveToken${index + 1}`
+				const first = token.key === 'token1'
 				let resetReason = guard ?? funding.error
 				if (resetReason === undefined && token.access === undefined) resetReason = copy.loading
 				else if (resetReason === undefined && token.access?.allowance === 0n) resetReason = common.notNeeded
@@ -54,7 +53,7 @@ export function CreateFundingControls({
 							<TransactionActionButton
 								idleLabel={common.formatResetTokenApproval(symbol)}
 								pendingLabel={common.formatResettingTokenApproval(symbol)}
-								pending={approvalActionPending && resetting}
+								pending={activeAction === (first ? 'resetToken1Approval' : 'resetToken2Approval')}
 								availability={{ disabled: disabled || token.access === undefined || token.access.allowance === 0n || approve === undefined, reason: resetReason }}
 								onClick={() => approve?.(token.key, 0n)}
 								tone='secondary'
@@ -71,7 +70,7 @@ export function CreateFundingControls({
 							onApprove={amount => {
 								if (amount !== undefined) approve?.(token.key, amount)
 							}}
-							pending={approvalActionPending && !resetting}
+							pending={activeAction === (first ? 'approveToken1' : 'approveToken2')}
 							pendingLabel={common.formatApprovingToken(symbol)}
 							requiredAmount={token.required}
 							resetKey={`${token.token}:${token.required}`}
