@@ -1,4 +1,4 @@
-import { type CollateralIdentityCache, readContractCollateral, withCollateralIdentityCache } from '../collateral-metadata.ts'
+import { type CollateralIdentityCache, readContractCollateral, usesCollateralUnits, withCollateralIdentityCache } from '../collateral-metadata.ts'
 import { discoverPortfolioEventDependencies } from './portfolio-discovery.ts'
 import { transactionCallTrace, unsupportedTraceError } from './transaction-selection.ts'
 import { canonicalBlockLogs, type IndexedBlock, type RichListBalance, type StoredTransaction } from '../database.ts'
@@ -168,7 +168,7 @@ export async function indexBlock(
 	}
 	const collateralRead = withCollateralIdentityCache(async (address, abi, functionName, args) => await state.providers.client.readContract({ address, abi, functionName, ...(args === undefined ? {} : { args }), blockNumber: number }), identityCache)
 	const collateralDisplays = await mapLimit(
-		[...contracts.values()].filter(contract => displayAddresses.has(contract.address.toLowerCase()) && /^(securityPool|sharedPool|openOraclePrice|priceCoordinator|twoWayConstantProduct)/u.test(contract.kind)),
+		[...contracts.values()].filter(contract => displayAddresses.has(contract.address.toLowerCase()) && usesCollateralUnits(contract.kind)),
 		4,
 		async contract => {
 			const collateral = await readContractCollateral(contract.address, contract.kind, collateralRead)
