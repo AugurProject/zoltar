@@ -3,22 +3,15 @@ import { serializedSettings } from '../../src/config/settings.ts'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
 import type { manualOperationFixture } from '../runtime/manual-operation-fixture.ts'
 import { chromiumExecutable, startChromiumSession } from './chromium.ts'
+import { inertDashboardControls } from './dashboard-harness.ts'
 
 /** Serves a manual-operation fixture's dashboard and opens Chromium; `capture` writes a screenshot only when CHAOS_QA_SCREENSHOTS names a directory. */
 export async function startManualOperationDashboardSession(fixture: ReturnType<typeof manualOperationFixture>) {
 	const dashboard = startDashboardServer(0, {
-		hostname: '127.0.0.1',
+		...inertDashboardControls,
 		getState: () => fixture.state,
 		getConfiguration: () => ({ hasSigner: true, revision: fixture.configuration.revision, settings: serializedSettings(fixture.configuration.settings, true), wallet: fixture.state.wallet }),
 		setOperation: value => fixture.controller.handle(value),
-		setCancellation: () => undefined,
-		setCandidate: () => undefined,
-		setObligation: () => undefined,
-		setReplacement: () => undefined,
-		setPaused: () => undefined,
-		setSettings: () => undefined,
-		setSigner: () => undefined,
-		setWorkflow: () => undefined,
 	})
 	const session = await startChromiumSession(chromiumExecutable)
 	const waitFor = (expression: string) => session.waitFor(expression, { attempts: 150, retryFailures: true })
