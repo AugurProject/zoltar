@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, readlink, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseSettings, serializedSettings } from '../src/config/settings.ts'
@@ -231,5 +231,16 @@ describe('chaos Docker packaging', () => {
 
 		await expect(runEntrypoint(directory)).rejects.toThrow('must not be a symbolic link')
 		expect((await stat(target)).mode & 0o777).toBe(0o644)
+	})
+
+	test('rejects a dangling symbolic-link configuration instead of replacing it with the template', async () => {
+		const directory = await fixture()
+		const settingsFile = join(directory, '.state', 'operator.json')
+		const missingTarget = join(directory, 'missing-settings.json')
+		await symlink(missingTarget, settingsFile)
+
+		await expect(runEntrypoint(directory)).rejects.toThrow('must not be a symbolic link')
+		expect(await readlink(settingsFile)).toBe(missingTarget)
+		expect(await Bun.file(missingTarget).exists()).toBe(false)
 	})
 })
