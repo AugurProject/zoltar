@@ -62,6 +62,18 @@ export function auditFit(tools: LayoutAuditTools) {
 		}
 	}
 
+	// Text width on one line, measured with the element's font, letter spacing, and case.
+	const canvas = document.createElement('canvas')
+	const context2d = canvas.getContext('2d')
+	const textWidth = (text: string, element: Element) => {
+		if (context2d === null) return 0
+		const style = styleOf(element)
+		context2d.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
+		const shown = style.textTransform === 'uppercase' ? text.toUpperCase() : text
+		const spacing = Number.parseFloat(style.letterSpacing)
+		return context2d.measureText(shown).width + (Number.isFinite(spacing) ? spacing * shown.length : 0)
+	}
+
 	// Tab, segmented-control, and badge labels that wrap. Buttons are left out: a long action label wrapping inside a
 	// full-width button is an intended layout. Tab bars pinned to the viewport edge use two-line cells by design.
 	// Only painted text counts, so visually hidden labels of icon buttons are ignored.
@@ -84,7 +96,7 @@ export function auditFit(tools: LayoutAuditTools) {
 		// A label wider than all the room its container has must wrap; only report a label squeezed by its neighbours.
 		const controlStyle = styleOf(control)
 		const chrome = ['paddingLeft', 'paddingRight', 'borderLeftWidth', 'borderRightWidth'].reduce((sum, property) => sum + Number.parseFloat(controlStyle.getPropertyValue(property.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`))), 0)
-		const oneLineWidth = atoms.flatMap(atom => atom.rects).reduce((sum, lineRect) => sum + lineRect.width, 0) + chrome
+		const oneLineWidth = textWidth(text, atoms[0]?.owner ?? control) + chrome
 		const parent = control.parentElement
 		if (parent !== null) {
 			const parentStyle = styleOf(parent)
@@ -104,15 +116,6 @@ export function auditFit(tools: LayoutAuditTools) {
 
 	// ---------- Form fields ----------
 
-	const canvas = document.createElement('canvas')
-	const context2d = canvas.getContext('2d')
-	const textWidth = (text: string, element: Element) => {
-		if (context2d === null) return 0
-		const style = styleOf(element)
-		context2d.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
-		const spacing = Number.parseFloat(style.letterSpacing)
-		return context2d.measureText(text).width + (Number.isFinite(spacing) ? spacing * text.length : 0)
-	}
 	for (const field of fullAudit ? document.querySelectorAll('input, select') : []) {
 		if (isHidden(field) || field.getClientRects().length === 0) continue
 		if (field instanceof HTMLInputElement && !['text', 'number', 'search', 'email', 'url', 'tel', ''].includes(field.type)) continue
