@@ -85,7 +85,7 @@ export const forkEscalationContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'cccc70e6a298e0fc6a2921398576aa49269747361e340f340a487eb9faef130b',
+		compiledAbiFingerprint: '247bd0e6dfd75f1fe78f78aa25191965465802e602d319b40df2a97f04d6f446',
 		name: 'EscalationGame',
 		purpose: 'Escrows outcome REP, raises the running resolution cost, detects [non-decision](./glossary.html#non-decision-threshold), and settles local or carried deposits.',
 		readAbiFingerprint: '6c1e947d84e659b3fb3963654e3697cc80819e0c2c54712cecc3bf9831334239',
