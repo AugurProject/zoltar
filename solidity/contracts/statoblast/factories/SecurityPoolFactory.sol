@@ -2,7 +2,6 @@
 pragma solidity 0.8.35;
 import { ZoltarQuestionData } from '../../ZoltarQuestionData.sol';
 import { ISecurityPoolPortfolioNative } from '../interfaces/ISecurityPoolPortfolioNative.sol';
-import { SecurityPool } from '../SecurityPool.sol';
 import { ISecurityPool, ISecurityPoolFactory, SystemState } from '../interfaces/ISecurityPool.sol';
 import { OpenOracle } from '../openOracle/OpenOracle.sol';
 import { Zoltar } from '../../Zoltar.sol';
