@@ -314,7 +314,7 @@ The pair is treated as still trading while all of these hold:
 
 Limits of the reconstruction:
 
-- Router actions are attributed to the account whose shares were minted or burned. Router events are not indexed, so a router `recipient` or `payoutRecipient` that differs from that account is not observable.
+- Router actions are attributed to the account whose shares were minted or burned. The router's `PositionExitedByTransfer` and `CompleteSetRedeemedByTransfer` events are indexed as timeline evidence, but this reconstruction reads only share transfers and pool events, so a router `recipient` or `payoutRecipient` that differs from that account does not change the attribution.
 - A resolution that has no redemption yet and is not reflected in a sampled pool or escalation read is not observable from events, so until that sampling catches up the valuation can still assume an open market.
 - Shares received by plain transfer carry no cost basis.
 - Fee accrual after the latest indexed pool accounting event is not reflected.

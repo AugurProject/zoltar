@@ -381,6 +381,22 @@ describe('state projections', () => {
 			expect(projectionsFrom(log(name, data)).at(-1)).toMatchObject({ type: 'domainEvent', domain: 'auction', entityType: 'auction', semanticEventKind: name })
 	})
 
+	test('classifies the remaining events of indexed contracts and ignores the unemitted ERC-1155 URI', () => {
+		const cases = [
+			['ClaimCheckpointProgress', { claimId: `0x${'1'.repeat(64)}`, nextSourceGame: vault, pendingSteps: '2', complete: false }, 'escalation', 'escalation', pool.toLowerCase()],
+			['ReportOperationAttempted', { reportId: '7', sponsor: vault, operationIndex: '0', success: true }, 'oracle', 'price-feed', pool.toLowerCase()],
+			['PortfolioRegistered', { portfolio: vault, originUniverseId: '0' }, 'risk', 'portfolio', vault.toLowerCase()],
+			['EthReceived', { sender: vault, amountAttoEth: atomic(1n) }, 'risk', 'pool', pool.toLowerCase()],
+			['AuctionOpened', { conservativePrice: '1', minimumCollateralAttoRepPerLot: '2', maximumBidAttoRepPerLot: '3' }, 'risk', 'portfolio-auction', pool.toLowerCase()],
+			['WinningVaultCreated', { bidId: '1', bidder: vault, vault }, 'risk', 'portfolio-auction', pool.toLowerCase()],
+			['AuctionClosed', { filledLots: '1', raisedAttoEth: atomic(1n), soldAttoRep: atomic(2n) }, 'risk', 'portfolio-auction', pool.toLowerCase()],
+			['PortfolioRecoveryRightsTransferred', { universeId: '1', from: vault, to: vault, amountsAttoShares: ['1', '2', '3'] }, 'system', 'share-token', pool.toLowerCase()],
+			['PortfolioRecoveryRightsConsumed', { universeId: '1', holder: vault, amountAttoShares: '1', cumulativeAttoShares: '1' }, 'system', 'share-token', pool.toLowerCase()],
+		] as const
+		for (const [name, data, domain, entityType, entityIdentity] of cases) expect(projectionsFrom(log(name, data)).at(-1)).toMatchObject({ type: 'domainEvent', domain, entityType, entityIdentity, semanticEventKind: name })
+		expect(projectionsFrom({ ...log('URI', { value: 'ipfs://share', id: '1' }), contractKind: 'shareToken' })).toEqual([])
+	})
+
 	test('covers coordinator, escalation, risk, trading, and fork lifecycle taxonomy with stable keys', () => {
 		expect(projectionsFrom(log('PendingReportRecovered', { reportId: '1' })).at(-1)).toMatchObject({
 			type: 'domainEvent',

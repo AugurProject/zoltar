@@ -1,4 +1,6 @@
-import { catalogAbis } from '../abi-catalog.ts'
+import { abiForKind, catalogAbis } from '../abi-catalog.ts'
+import { dependencyDiscoveryKinds, discoveredContractKinds } from '../contract-discovery.ts'
+import type { SystemContractKind } from '../system-interfaces.ts'
 import type { StoredLog } from '../types.ts'
 import { type DomainEventProjection, eventProjectionsFrom, type Projection } from './events.ts'
 
@@ -11,22 +13,29 @@ type EventDomainDefinition = {
 const definitions = (domain: DomainEventProjection['domain'], entityType: string, eventNames: readonly string[], identityFields?: readonly string[]): Readonly<Record<string, EventDomainDefinition>> =>
 	Object.fromEntries(eventNames.map(eventName => [eventName, { domain, entityType, ...(identityFields === undefined ? {} : { identityFields }) }]))
 
-// This is the scanner's explicit semantic taxonomy. It intentionally excludes
-// generic ERC approvals/transfers while covering every protocol lifecycle event
-// emitted by the contracts represented in the operations views.
+// This is the scanner's explicit semantic taxonomy, keyed by event name. Every
+// event name that a contract kind in `taxonomyContractKinds` declares is listed
+// here, apart from the documented `unclassifiedEvents`. Generic token events
+// share names across contracts, so `domainProjectionFrom` projects `Transfer`
+// and `Approval` only for AMM pairs, `ApprovalForAll` only for share tokens and
+// `Deposit`/`Withdrawal` only for WETH. Logs are fetched by contract address, so
+// events of contracts the indexer never registers (the settlement book,
+// reporter ledger, portfolio services and settlement, capital fee streams and
+// the shared report escrow) are not ingested and are deliberately absent.
 const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	...definitions('system', 'question', ['QuestionCreated'], ['questionId']),
 	...definitions('system', 'deployment', ['DeploymentAddressesSet']),
 	...definitions('system', 'reputation-token', ['ReputationTokenInitialized', 'TheoreticalSupplySet', 'Mint', 'Burn']),
-	...definitions('system', 'share-token', ['URI', 'ApprovalForAll', 'AuthorizationUpdated', 'TransferSingle', 'TransferBatch', 'Migrate']),
+	...definitions('system', 'share-token', ['ApprovalForAll', 'AuthorizationUpdated', 'TransferSingle', 'TransferBatch', 'Migrate', 'PortfolioRecoveryRightsTransferred', 'PortfolioRecoveryRightsConsumed']),
 	...definitions('risk', 'pool', ['CompleteSetRedeemedByTransfer'], ['securityPool']),
 	...definitions('system', 'token-authorization', ['AuthorizationUsed', 'AuthorizationCanceled']),
 	...definitions('system', 'weth', ['Deposit', 'Withdrawal']),
 	...definitions('report', 'open-oracle-report', ['ReportSubmitted', 'ReportDisputed', 'ReportSettled'], ['reportId']),
 	...definitions('oracle', 'price-coordinator', ['PendingReportRecovered', 'PriceReportRejected', 'PriceReported', 'PriceRequested', 'RepEthPriceSet', 'SecurityPoolSet', 'SharedPriceFeedSet', 'InternalApproval']),
-	...definitions('oracle', 'price-feed', ['CoordinatorRegistered', 'ExposureCheckpoint', 'ReportFundingAssigned']),
+	...definitions('oracle', 'price-feed', ['CoordinatorRegistered', 'ExposureCheckpoint', 'ReportFundingAssigned', 'ReportOperationAttempted']),
 	...definitions('escalation', 'escalation', [
 		'CarryDepositConsumed',
+		'ClaimCheckpointProgress',
 		'ClaimDeposit',
 		'DepositOnOutcome',
 		'ForkCarryCheckpoint',
@@ -47,10 +56,13 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 		'VaultUnresolvedTotalsExported',
 	]),
 	...definitions('auction', 'auction', ['AuctionStarted', 'BidSubmitted', 'AuctionFinalized', 'BidSettled', 'FeesRemoved', 'RefundWithdrawn', 'RaisedWithdrawn']),
-	...definitions('risk', 'pool', ['DeploySecurityPool', 'SecurityPoolRegistered', 'AwaitingForkContinuationSet', 'CompleteSetCreated', 'CompleteSetRedeemed', 'EscalationGameSet', 'QuestionAccountingCheckpoint', 'ShareTokenSupplySet', 'SharesRedeemed', 'SystemStateSet'], ['securityPool']),
+	...definitions('risk', 'pool', ['DeploySecurityPool', 'SecurityPoolRegistered', 'AwaitingForkContinuationSet', 'CompleteSetCreated', 'CompleteSetRedeemed', 'EscalationGameSet', 'QuestionAccountingCheckpoint', 'ShareTokenSupplySet', 'SharesRedeemed', 'SystemStateSet', 'EthReceived'], ['securityPool']),
 	...definitions('risk', 'vault', ['PrincipalDeposited', 'PrincipalWithdrawn', 'CommitmentAuthorized', 'EarningsClaimed'], ['owner']),
 	...definitions('risk', 'capital-position', ['CommitmentCured', 'CommitmentTakenOver', 'AuctionCohortInstalled', 'AuctionBidMaterialized'], ['positionId', 'sourceId']),
 	...definitions('risk', 'portfolio', ['QuestionRegistered', 'CompleteSetsFunded', 'UniversePrepared', 'SetupAdvanced', 'RetirementServed', 'CapitalPriceAccepted', 'UnassignedFeesBurned']),
+	...definitions('risk', 'portfolio', ['PortfolioRegistered'], ['portfolio']),
+	// The portfolio auction controls a uniform-price auction engine at another address; only the engine's events build the auction views.
+	...definitions('risk', 'portfolio-auction', ['AuctionOpened', 'WinningVaultCreated', 'AuctionClosed']),
 	...definitions('fork', 'portfolio-branch', ['ForkFrozen', 'BranchChosen', 'BranchStarted', 'BranchActivated', 'NeutralCashRecovered'], ['universeId']),
 	...definitions('trading', 'amm', ['PositionExitedByTransfer', 'PairCreated', 'LiquidityAdded', 'LiquidityInitialized', 'LiquidityRemoved', 'PredeploymentSharesQuarantined', 'Swap', 'Sync', 'Transfer', 'Approval'], ['pair']),
 	...definitions('fork', 'fork', ['ChildReputationTokenInitialized', 'UniverseInitialized', 'UniverseForked', 'DeployChild', 'MigrationRepAdded', 'MigrationRepSplit', 'RepBurned'], ['universeId', 'parentUniverseId', 'parent', 'parentPool', 'securityPool', 'childUniverseId', 'childPool']),
@@ -58,9 +70,59 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 
 // Every taxonomy entry must name an event the pinned ABI catalog can decode;
 // otherwise a renamed contract event would silently stop projecting.
-const catalogEventNames = new Set(catalogAbis().flatMap(abi => abi.flatMap(item => (item.type === 'event' && typeof item.name === 'string' ? [item.name] : []))))
+const abiEventNames = (abi: ReturnType<typeof catalogAbis>[number]): readonly string[] => abi.flatMap(item => (item.type === 'event' && typeof item.name === 'string' ? [item.name] : []))
+const catalogEventNames = new Set(catalogAbis().flatMap(abiEventNames))
 const unbackedEventNames = Object.keys(eventDomains).filter(eventName => !catalogEventNames.has(eventName))
 if (unbackedEventNames.length > 0) throw new Error(`Semantic event taxonomy names events missing from the ABI catalog: ${unbackedEventNames.join(', ')}`)
+
+// Protocol contract kinds whose logs the indexer ingests from a manifest or a
+// portfolio-discovery read, together with the delegates that emit at those addresses.
+const listedTaxonomyContractKinds: readonly SystemContractKind[] = [
+	'ammFactory',
+	'ammPair',
+	'ammRouter',
+	'deploymentStatusOracle',
+	'escalationGame',
+	'escalationGameClaimDelegate',
+	'escalationGameDepositDelegate',
+	'openOracle',
+	'priceCoordinator',
+	'reputationToken',
+	'securityPool',
+	'securityPoolCapitalAuctionDelegate',
+	'securityPoolCapitalLedger',
+	'securityPoolCapitalLifecycleDelegate',
+	'securityPoolEventEmitter',
+	'securityPoolFactory',
+	'securityPoolOperationsDelegate',
+	'securityPoolPortfolio',
+	'securityPoolPortfolioAuction',
+	'securityPoolPortfolioForkCoordinator',
+	'securityPoolSettlementDelegate',
+	'securityPoolUniformPriceAuction',
+	'shareToken',
+	'sharedPoolPriceFeed',
+	'weth',
+	'zoltar',
+	'zoltarQuestionData',
+]
+
+// Kinds discovered from event arguments join the guard automatically; the Uniswap
+// dependencies among them have their own projection and no semantic taxonomy.
+const dependencyKinds: ReadonlySet<SystemContractKind> = new Set(Object.values(dependencyDiscoveryKinds))
+const taxonomyContractKinds = [...new Set([...listedTaxonomyContractKinds, ...discoveredContractKinds.filter(kind => !dependencyKinds.has(kind))])]
+
+// `URI` is declared by IERC1155, but ShareToken never emits it.
+const unclassifiedEvents: ReadonlySet<string> = new Set(['URI'])
+
+// The reverse direction, by event name: a new or renamed event on an indexed
+// contract must be listed here, or it would be stored as a raw log and never projected.
+const unclassifiedEventNames = taxonomyContractKinds.flatMap(kind => {
+	const abi = abiForKind(kind)
+	if (abi === undefined) throw new Error(`Semantic event taxonomy names a contract kind without an ABI: ${kind}`)
+	return abiEventNames(abi).flatMap(eventName => (eventDomains[eventName] === undefined && !unclassifiedEvents.has(eventName) ? [`${kind}.${eventName}`] : []))
+})
+if (unclassifiedEventNames.length > 0) throw new Error(`Semantic event taxonomy is missing events emitted by indexed contracts: ${unclassifiedEventNames.join(', ')}`)
 
 const liquidationApprovalIdentity = (approvalId: unknown, receiverVault: unknown): string | undefined => {
 	if (typeof approvalId === 'string') return approvalId.toLowerCase()
@@ -80,7 +142,7 @@ const domainProjectionFrom = (log: StoredLog): DomainEventProjection | undefined
 	if (eventName === undefined || data === undefined || log.decoded.status !== 'decoded') return undefined
 	const definition = eventDomains[eventName]
 	if (definition === undefined) return undefined
-	if ((eventName === 'URI' || eventName === 'ApprovalForAll') && log.contractKind !== 'shareToken') return undefined
+	if (eventName === 'ApprovalForAll' && log.contractKind !== 'shareToken') return undefined
 	if ((eventName === 'Deposit' || eventName === 'Withdrawal') && log.contractKind !== 'weth') return undefined
 	if (eventName === 'PairCreated' && log.contractKind !== 'ammFactory') return undefined
 	if ((eventName === 'Transfer' || eventName === 'Approval') && log.contractKind !== 'ammPair') return undefined

@@ -30,6 +30,7 @@ Every setting is an environment variable. The Compose column names the service t
 | `RPC_LOG_PATH` | `augurScan/logs/rpc.jsonl` | `indexer`, fixed to `/var/log/augurscan/rpc.jsonl` in the `augurscan-logs` volume | Rotating JSONL log of RPC exchanges. |
 | `POSTGRES_URL` | `postgres://augurscan:augurscan@localhost:5432/augurscan`; in Compose, the bundled `postgres` service | `app`, `indexer` | Connects directly to PostgreSQL or through a session-mode pooler. |
 | `POSTGRES_PASSWORD` | `augurscan-local` | `postgres`, and the default `POSTGRES_URL` | Password of the bundled database. Compose only. |
+| `POSTGRES_MAX_WAL_SIZE` | `8GB` | `postgres` | Soft `max_wal_size` budget of the bundled database during backfill; leave disk headroom above it. Apply a change with `docker compose up -d postgres`. Compose only. |
 | `PORT` | `3000` | `app`, fixed to `3000` | Port the web app listens on. |
 | `AUGURSCAN_PORT` | `3000` | host port of `app` | Host port that Compose publishes. Compose only. |
 | `API_RATE_LIMIT_PER_MINUTE` | `600` | `app` | Per-client API limit. `0` disables the limit when a trusted upstream enforces it. |

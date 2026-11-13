@@ -28,6 +28,9 @@ export const withCollateralIdentityCache =
 		return value
 	}
 
+// Kind names are the ones `scripts/project-system-contracts.ts` generates: the AMM contracts are `ammFactory`, `ammPair` and `ammRouter`.
+export const usesCollateralUnits = (kind: string | undefined): boolean => /^(securityPool|sharedPool|priceCoordinator|amm(Factory|Pair|Router)$)/u.test(kind ?? '')
+
 export async function readCollateralMetadata(token: Address, read: StateRead) {
 	const [symbol, units] = await Promise.all([read(token, abi, 'symbol'), read(token, abi, 'decimals')])
 	const decimals = Number(units)
@@ -41,13 +44,13 @@ export async function readContractCollateral(address: Address, kind: string, rea
 		if (typeof value !== 'string' || !isAddress(value)) throw new Error('Invalid collateral dependency')
 		return getAddress(value)
 	}
-	const poolKinds = ['securityPool', 'priceCoordinator', 'openOraclePriceCoordinator', 'twoWayConstantProductPair']
+	const poolKinds = ['securityPool', 'priceCoordinator', 'ammPair']
 	const portfolioKinds = ['securityPoolReporterLedger', 'securityPoolSettlementBook', 'securityPoolPortfolioServices', 'securityPoolPortfolioPurchase', 'securityPoolCapitalLedger', 'securityPoolPortfolioForkCoordinator', 'securityPoolPortfolioAuction']
 	const tokenKinds = ['securityPoolPortfolio', 'sharedPoolPriceFeed', 'securityPoolPortfolioSettlement', 'securityPoolUniformPriceAuction']
 	if (![...poolKinds, ...portfolioKinds, ...tokenKinds].includes(kind)) return undefined
 	try {
 		let source = address
-		if (kind === 'priceCoordinator' || kind === 'openOraclePriceCoordinator' || kind === 'twoWayConstantProductPair') source = await readAddress(source, 'securityPool')
+		if (kind === 'priceCoordinator' || kind === 'ammPair') source = await readAddress(source, 'securityPool')
 		if (poolKinds.includes(kind)) {
 			const factory = await readAddress(source, 'securityPoolFactory')
 			source = await readAddress(factory, 'getSecurityPoolPortfolio', [source])
