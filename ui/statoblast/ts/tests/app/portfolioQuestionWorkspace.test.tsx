@@ -10,6 +10,8 @@ import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accou
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { createBootstrappedSimulationBackendWithRetry, simulationSetupTimeoutMs, simulationWaitOptions } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
 import { loadAllSecurityPools } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
+import * as portfolioCopy from '@zoltar/ui-statoblast-shared/copy/portfolio.js'
+import { abbreviateAddress } from '@zoltar/ui-core-shared/lib/address.js'
 
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
 const callbacks = { onTransactionRequested: () => undefined, onTransactionSubmitted: () => undefined, onTransactionFinished: () => undefined, onTransactionPresented: () => undefined, refreshState: async () => undefined }
@@ -41,6 +43,16 @@ test(
 			await waitFor(() => expect(view.container.querySelectorAll('tbody tr')).toHaveLength(2), simulationWaitOptions)
 			const table = view.container.querySelector('[role="region"]')
 			expect(table?.getAttribute('tabindex')).toBe('0')
+			// Explicit roles keep the table semantics when phone widths stack the rows.
+			expect(table?.querySelectorAll('[role="row"]')).toHaveLength(3)
+			expect(table?.querySelectorAll('[role="columnheader"]')).toHaveLength(3)
+			const portfolioLink = table?.querySelector('tbody td[data-label] a')
+			if (portfolioLink === null || portfolioLink === undefined) throw new Error('Missing portfolio link')
+			const portfolioAddress = portfolioLink.getAttribute('title') ?? ''
+			expect(portfolioAddress).toMatch(/^0x[0-9a-fA-F]{40}$/)
+			expect(portfolioLink.textContent).toBe(abbreviateAddress(portfolioAddress, 6, 4))
+			expect(portfolioLink.getAttribute('aria-label')).toBe(portfolioCopy.formatOpenPortfolioLabel(portfolioAddress))
+			expect(portfolioLink.getAttribute('href')).toBe(`#/portfolios?portfolio=${portfolioAddress}&universe=0`)
 			const button = table?.querySelector('button')
 			if (!(button instanceof HTMLButtonElement)) throw new Error('Missing question selector')
 			await act(() => button.click())
