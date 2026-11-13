@@ -71,7 +71,7 @@ describe('Statoblast: bounded fork initialization', () => {
 		const factory = getInfraContractAddresses().securityPoolFactory
 		await writeContractAndWait(other(), () => other().writeContract({ abi: factoryArtifact.abi, address: factory, functionName: 'preparePortfolioPriceFeed', args: [parent, childUniverse] }))
 		await writeContractAndWait(other(), () => other().writeContract({ abi: factoryArtifact.abi, address: factory, functionName: 'prepareChildPoolDependencies', args: [parent, BigInt(QuestionOutcome.No)] }))
-		const [childCoordinator] = await owner().readContract({ abi: factoryArtifact.abi, address: factory, functionName: 'getChildPoolDependencies', args: [parent, BigInt(QuestionOutcome.No)] })
+		const childCoordinator = await owner().readContract({ abi: factoryArtifact.abi, address: factory, functionName: 'getChildPoolDependencies', args: [parent, BigInt(QuestionOutcome.No)] })
 		const feed = await owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'priceFeed', args: [childUniverse] })
 		const coordinatorCaller = createWriteClient(base.mockWindow, BigInt(childCoordinator))
 		// Coordinator registration requires the native child, whose preparation

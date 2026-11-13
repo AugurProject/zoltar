@@ -178,7 +178,7 @@ describe('Safe ERC20 Operations', () => {
 					abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
 					address: deploymentWorker,
 					functionName: 'deploy',
-					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n, zeroAddress],
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n],
 				}),
 			),
 			/Security pool deployment failed/,

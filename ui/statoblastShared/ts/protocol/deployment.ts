@@ -46,25 +46,25 @@ export { loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.j
 
 export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	escalationGameClaimDelegate: '0x1325556b8dfbe34e05c963245e045218609523e924714e35d91c827263f83871',
-	escalationGameDepositDelegate: '0x209fb229572759d1987fde8432414fdf86e03303b954e9827ca5db5fe5a6a056',
-	escalationGameFactory: '0x2827d450539ad12916af8dcf8d4b20b9a4303e415b7ad677c8c07bd215ca3729',
+	escalationGameDepositDelegate: '0x26844213fb9e5b0fcb2d7b3f278a255755fdf41490f5dd16e65748a3abcaf50e',
+	escalationGameFactory: '0x96cff8678cbae4dace20cc276a6012a864058aee031fb37739141d0af50a795e',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
 	openOraclePriceCoordinatorFactory: '0xbfa2bebd7ff8bc24367f4daf1edf646ad2e291d01c66a20229c833233d5e3eae',
 	priceCoordinatorDeploymentWorker: '0x3a84d1fb18646cc510761614360b981be60016173fa657d173fee5d7fb9a4278',
-	securityPoolEventEmitter: '0x3684df0420a3c86264794c2735609f8d3e62a6c63edf99e45467f63e60e28d59',
-	securityPoolFactory: '0x5ba19e64f3c1b1dd6cf60a777be304ab201b562feafc9b289086bafa4bfeb954',
-	securityPoolForker: '0xbb3a221acd783c7fafc44dad4405b9f0886eae7b8e9c8791d87eed22fad511a8',
-	securityPoolOperationsDelegate: '0x3578a54197740095893fd920f0ab3fe4f8c969d107fbbc6dc6a125ff1961e11e',
+	securityPoolEventEmitter: '0x2373a9697f0b83aee7329140f35fbb1a94227aec9f2f5f3bfb7c97ffb5154edf',
+	securityPoolFactory: '0xaa3101f85a0ae9cd2a46a46c0b59075ed9a259d5140ff7db535ee2443189e269',
+	securityPoolForker: '0x481204e070cbdb7ff172ff8d63455f7d8d18adb95c26e569745637c55bd58836',
+	securityPoolOperationsDelegate: '0xc589dfa457100e39d6bf48a5ee55f5fc8695c40f18eb8ff4baa68b9dd6958373',
 	securityPoolUtils: '0xec490f322a84001a84be8855592c50e6edf239cd67a4a1210d8792ab1fef6ff5',
-	shareTokenFactory: '0xa3216f3cd8ec8b2892861f6b870ed7f4ea86fe24cbf6a74cb19d302f4fd7d750',
+	shareTokenFactory: '0xf66e99d4705f7fbecb660f5ca99451fe9d1a2fcc4b05e434146762e59038bc2e',
 	sharedPoolPriceFeedDeploymentWorker: '0x6e58a53c45801e9bae71ab22e799a0f9e09002072080b13f0842adeb4e35eaba',
 }
 
 const EXPECTED_NO_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0x80fb050a7eb17b74d424e06ed1dada9df357cf8b916302f1999f004cb06b89d5',
-	securityPoolForker: '0xe4bd7ef5f23e4c35c3d61048911a6e830ca8ed65d1de133e06f5cd2f76a1612f',
-	shareTokenFactory: '0x9302af353fa006320b810f89d05f836a10ed214826917f99846413090fcaf876',
+	securityPoolFactory: '0xc1a7d149f1218e9d9596fa332d92a07da8f984689e61c144f54a0e5dcdebd3bc',
+	securityPoolForker: '0x2edcb334c93026b486920503435f26725d094d603e0cd00fd0a36d5f875153dd',
+	shareTokenFactory: '0x72a2093ab8d879348f40e336009145eb4ed70b9cad5489ca79b59a66266ac620',
 }
 
 function runtimeWithAddresses(artifact: { evm: { deployedBytecode: { object: string; immutableReferences: Readonly<Record<string, readonly { start: number; length: number }[]>> } } }, addresses: readonly Address[]) {
@@ -110,25 +110,25 @@ export function assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes(
 
 const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	escalationGameClaimDelegate: '0x1325556b8dfbe34e05c963245e045218609523e924714e35d91c827263f83871',
-	escalationGameDepositDelegate: '0x209fb229572759d1987fde8432414fdf86e03303b954e9827ca5db5fe5a6a056',
-	escalationGameFactory: '0x2827d450539ad12916af8dcf8d4b20b9a4303e415b7ad677c8c07bd215ca3729',
+	escalationGameDepositDelegate: '0x26844213fb9e5b0fcb2d7b3f278a255755fdf41490f5dd16e65748a3abcaf50e',
+	escalationGameFactory: '0x96cff8678cbae4dace20cc276a6012a864058aee031fb37739141d0af50a795e',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
 	openOraclePriceCoordinatorFactory: '0x70e28c98cc3d933d0b168f80a73014e65beff678952190a7db1d4c01a419d2f1',
 	priceCoordinatorDeploymentWorker: '0x3a84d1fb18646cc510761614360b981be60016173fa657d173fee5d7fb9a4278',
-	securityPoolEventEmitter: '0x3684df0420a3c86264794c2735609f8d3e62a6c63edf99e45467f63e60e28d59',
-	securityPoolFactory: '0x4aed87f5f19af8675e2488c31d67bef1d0f2ca3a0d729557cd89f06090f191ce',
-	securityPoolForker: '0x17494b2e61e2bd10fc3b5407552bf78b368f38d4babf942df985c4a756438b06',
-	securityPoolOperationsDelegate: '0x3578a54197740095893fd920f0ab3fe4f8c969d107fbbc6dc6a125ff1961e11e',
+	securityPoolEventEmitter: '0x2373a9697f0b83aee7329140f35fbb1a94227aec9f2f5f3bfb7c97ffb5154edf',
+	securityPoolFactory: '0x37d662556594d1d824df7718eb723706cdc5eec60866f30a244242597ee60593',
+	securityPoolForker: '0x0beb7d9537ce43d095eb93649c62d71da7cc018a794b9f593186ea563204a5b2',
+	securityPoolOperationsDelegate: '0xc589dfa457100e39d6bf48a5ee55f5fc8695c40f18eb8ff4baa68b9dd6958373',
 	securityPoolUtils: '0xec490f322a84001a84be8855592c50e6edf239cd67a4a1210d8792ab1fef6ff5',
-	shareTokenFactory: '0xc7793e24f12a9a93b8495b42e8d6d8ac36cf241986da2c774bc5e2c13bf68120',
+	shareTokenFactory: '0x2e2ba6510c71771f40fb82311177c773ab70f16cf740dee1db814db3d1f34edf',
 	sharedPoolPriceFeedDeploymentWorker: '0x6e58a53c45801e9bae71ab22e799a0f9e09002072080b13f0842adeb4e35eaba',
 }
 
 const EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_MAINNET_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0xd41e3211299e24caf37ceebf5dfd356bc867dcd108c9765fd0f460403c686d1c',
-	securityPoolForker: '0xebc9c372ae53e98809bbb2cba6793a1983e0664e638968167711701a41656bfc',
-	shareTokenFactory: '0x512301378cbe8b4acaf70bd9aa68767c8ab56e486c799d30912ff4467f16b779',
+	securityPoolFactory: '0x3b5f7d51ac08fd16b30281c1eea15f1a031f9e7ae6b545a60f89b486ea212cf5',
+	securityPoolForker: '0x996e4bdd9e6e7d951a1c49f05feea9a7e29c9e87d91d2e74210e121193d5fd11',
+	shareTokenFactory: '0x22338784f121c0e700beca5c094e4206a3d241a4b9eebf6ffd461c9e21c77339',
 }
 const EXPECTED_PUBLIC_RUNTIME_CODE_HASHES = {
 	mainnet: { yes: EXPECTED_MAINNET_RUNTIME_CODE_HASHES, no: EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES },

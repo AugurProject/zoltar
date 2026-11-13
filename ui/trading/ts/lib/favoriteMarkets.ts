@@ -31,10 +31,7 @@ function decodeCachedLiveMarket(value: unknown) {
 					settlementCollateralAttoEth: accounting.bigint('settlementCollateralAttoEth'),
 					totalUnderwritingLimitAttoEth: accounting.bigint('totalUnderwritingLimitAttoEth'),
 					feeEligibleUnderwritingLimitAttoEth: accounting.bigint('feeEligibleUnderwritingLimitAttoEth'),
-					currentRetentionRate: accounting.bigint('currentRetentionRate'),
 					lastFeeCheckpointNativeTime: accounting.bigint('lastFeeCheckpointNativeTime'),
-					feeIndexRemainder: accounting.bigint('feeIndexRemainder'),
-					totalFeesOwedRemainder: accounting.bigint('totalFeesOwedRemainder'),
 				}
 			})
 			return { feeEndTime: stored.bigint('feeEndTime'), projectedCollateralAttoEth: stored.bigint('projectedCollateralAttoEth'), timestamp: stored.bigint('timestamp'), ...(feeAccounting === undefined ? {} : { feeAccounting }) }
@@ -44,7 +41,6 @@ function decodeCachedLiveMarket(value: unknown) {
 			...(settlementRecoveryAttoRep === undefined ? {} : { settlementRecoveryAttoRep }),
 			availableMintingCapacityAttoEth: read.bigint('availableMintingCapacityAttoEth'),
 			awaitingForkContinuation: read.boolean('awaitingForkContinuation'),
-			currentRetentionRate: read.bigint('currentRetentionRate'),
 			description: read.string('description'),
 			endTime: read.bigint('endTime'),
 			feeBps: read.bigint('feeBps'),

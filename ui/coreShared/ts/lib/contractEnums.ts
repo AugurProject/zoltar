@@ -50,9 +50,6 @@ export function tryGetSecurityPoolSystemState(value: bigint | number): SecurityP
 		case 2:
 		case 2n:
 			return 'forkMigration'
-		case 3:
-		case 3n:
-			return 'forkCollateralRepairAuction'
 		default:
 			return undefined
 	}

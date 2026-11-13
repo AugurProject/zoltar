@@ -7,14 +7,12 @@ import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { tryParseBigIntListInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
-import { rpow, previewLinearFeeCheckpoint, type LinearFeeState } from '@zoltar/statoblast-shared/statoblast/retentionRate'
+import { previewLinearFeeCheckpoint, type LinearFeeState } from '@zoltar/statoblast-shared/statoblast/retentionRate'
 import { isValidScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import type { DeploymentStatus, ReportingOutcomeKey, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { TradingShareBalances } from '../../../types/contracts.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { ETH_GAS_RESERVE_ATTO_ETH, getSpendableEthBalance } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
-
-const PRICE_PRECISION = 10n ** 18n
 
 export const NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE = 'No mint capacity. No vault has an active commitment.'
 export const NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE = 'You need matching Yes, No, and Invalid shares to redeem complete sets.'
@@ -49,47 +47,27 @@ export function getMaximumMintAmount(walletEthBalanceAttoEth: bigint | undefined
 	return spendableEthAttoEth < remainingMintCapacityAttoEth ? spendableEthAttoEth : remainingMintCapacityAttoEth
 }
 
+/** Projects the question's cash after its linear fee stream accrues up to `currentTimestamp`. */
 export function estimateMintCheckpoint({
 	centralSettlement,
 	centralCheckpointTimestamp,
 	linearFee,
-	currentRetentionRate,
 	currentTimestamp,
-	feeEligibleUnderwritingLimitAttoEth,
-	totalUnderwritingLimitAttoEth,
 	feeEndTimestamp,
-	feeIndexRemainder,
 	lastFeeCheckpointNativeTime,
 	settlementCollateralAttoEth,
-	totalFeesOwedRemainder,
 }: {
 	centralCheckpointTimestamp?: bigint | undefined
 	centralSettlement?: boolean | undefined
 	linearFee?: LinearFeeState | undefined
-	currentRetentionRate: bigint | undefined
 	currentTimestamp: bigint | undefined
-	feeEligibleUnderwritingLimitAttoEth: bigint | undefined
-	totalUnderwritingLimitAttoEth: bigint | undefined
 	feeEndTimestamp: bigint | undefined
-	feeIndexRemainder: bigint | undefined
 	lastFeeCheckpointNativeTime: bigint | undefined
 	settlementCollateralAttoEth: bigint | undefined
-	totalFeesOwedRemainder: bigint | undefined
 }) {
-	if (
-		currentRetentionRate === undefined ||
-		currentTimestamp === undefined ||
-		feeEligibleUnderwritingLimitAttoEth === undefined ||
-		totalUnderwritingLimitAttoEth === undefined ||
-		feeEndTimestamp === undefined ||
-		feeIndexRemainder === undefined ||
-		lastFeeCheckpointNativeTime === undefined ||
-		settlementCollateralAttoEth === undefined ||
-		totalFeesOwedRemainder === undefined
-	)
-		return undefined
+	if (linearFee === undefined || currentTimestamp === undefined || feeEndTimestamp === undefined || lastFeeCheckpointNativeTime === undefined || settlementCollateralAttoEth === undefined) return undefined
 	if (centralSettlement === true) {
-		if (centralCheckpointTimestamp === undefined || linearFee === undefined) return undefined
+		if (centralCheckpointTimestamp === undefined) return undefined
 		// The simulated checkpoint includes historical pauses. Only future elapsed time
 		// can accrue again, bounded by the stream's remaining duration in native time.
 		const elapsed = currentTimestamp > centralCheckpointTimestamp ? currentTimestamp - centralCheckpointTimestamp : 0n
@@ -98,23 +76,7 @@ export function estimateMintCheckpoint({
 		const estimatedRetentionFeeAttoEth = fees < settlementCollateralAttoEth ? fees : settlementCollateralAttoEth
 		return { estimatedRetentionFeeAttoEth, settlementCollateralAfterFeesAttoEth: settlementCollateralAttoEth - estimatedRetentionFeeAttoEth }
 	}
-	if (linearFee !== undefined) return previewLinearFeeCheckpoint({ linearFee, currentTimestamp, feeEndTimestamp, lastFeeCheckpointNativeTime, settlementCollateralAttoEth })
-	const checkpointTimestamp = currentTimestamp < feeEndTimestamp ? currentTimestamp : feeEndTimestamp
-	if (lastFeeCheckpointNativeTime >= checkpointTimestamp || feeEligibleUnderwritingLimitAttoEth === 0n) return { estimatedRetentionFeeAttoEth: 0n, settlementCollateralAfterFeesAttoEth: settlementCollateralAttoEth }
-	const timeDelta = checkpointTimestamp - lastFeeCheckpointNativeTime
-	if (totalUnderwritingLimitAttoEth === 0n || feeEligibleUnderwritingLimitAttoEth > totalUnderwritingLimitAttoEth) return undefined
-	const feeBearingCollateral = (settlementCollateralAttoEth * feeEligibleUnderwritingLimitAttoEth) / totalUnderwritingLimitAttoEth
-	const pendingDecay = (feeIndexRemainder + totalFeesOwedRemainder) / PRICE_PRECISION
-	const decayingCollateral = feeBearingCollateral > pendingDecay ? feeBearingCollateral - pendingDecay : 0n
-	const retainedCollateralAttoEth = (decayingCollateral * rpow(currentRetentionRate, timeDelta, PRICE_PRECISION)) / PRICE_PRECISION
-	const scaledFeeDelta = (decayingCollateral - retainedCollateralAttoEth) * PRICE_PRECISION + feeIndexRemainder
-	const feeIndexDelta = scaledFeeDelta / feeEligibleUnderwritingLimitAttoEth
-	const feesOwedDelta = feeIndexDelta * feeEligibleUnderwritingLimitAttoEth + totalFeesOwedRemainder
-	const estimatedRetentionFeeAttoEth = feesOwedDelta / PRICE_PRECISION
-	return {
-		estimatedRetentionFeeAttoEth,
-		settlementCollateralAfterFeesAttoEth: settlementCollateralAttoEth - estimatedRetentionFeeAttoEth,
-	}
+	return previewLinearFeeCheckpoint({ linearFee, currentTimestamp, feeEndTimestamp, lastFeeCheckpointNativeTime, settlementCollateralAttoEth })
 }
 
 export function hasRepBackedPoolWithNoActiveCapacityOwnership(totalPoolHeldAttoRep: bigint | undefined, feeEligibleUnderwritingLimitAttoEth: bigint | undefined) {

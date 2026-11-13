@@ -350,7 +350,7 @@ describe('useReportingOperations', () => {
 		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d0')
 		const loadReportingDetails = mock(async () =>
 			createReportingDetails(securityPoolAddress, {
-				systemState: 'forkCollateralRepairAuction',
+				systemState: 'forkMigration',
 			}),
 		)
 		const reportOutcomeInSecurityPool = mock(async () => {

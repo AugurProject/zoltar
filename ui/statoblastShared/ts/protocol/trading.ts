@@ -23,12 +23,10 @@ type SecurityPoolMintCapacity = {
 	centralCheckpointTimestamp?: bigint
 	centralSettlement?: boolean
 	linearFee?: LinearFeeState
-	currentRetentionRate?: bigint
 	currentTimestamp?: bigint
 	/** An open escalation game closes minting, which is why `mintingCapacityAttoEth` then reads zero. */
 	escalationGameActive?: boolean
 	feeEndTimestamp?: bigint
-	feeIndexRemainder?: bigint
 	lastFeeCheckpointNativeTime?: bigint
 	settlementCollateralAttoEth: bigint
 	feeEligibleUnderwritingLimitAttoEth: bigint
@@ -36,7 +34,6 @@ type SecurityPoolMintCapacity = {
 	shareTokenSupplyAttoShares: bigint
 	totalPoolHeldAttoRep: bigint
 	totalUnderwritingLimitAttoEth: bigint
-	totalFeesOwedRemainder?: bigint
 }
 export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'getBlock' | 'multicall'>, securityPoolAddress: Address): Promise<SecurityPoolMintCapacity> {
 	const currentBlock = await client.getBlock()

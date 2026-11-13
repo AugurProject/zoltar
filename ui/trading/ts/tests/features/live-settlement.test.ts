@@ -108,10 +108,7 @@ function activeFeeValuation(unit: bigint, rate = unit / 1000n) {
 			settlementCollateralAttoEth: unit,
 			totalUnderwritingLimitAttoEth: unit,
 			feeEligibleUnderwritingLimitAttoEth: unit,
-			currentRetentionRate: unit,
 			lastFeeCheckpointNativeTime: 1n,
-			feeIndexRemainder: 0n,
-			totalFeesOwedRemainder: 0n,
 			centralSettlement: true,
 			centralCheckpointTimestamp: 1n,
 			linearFee: { rateAttoEthPerSecond: rate, endTime: 2n ** 48n - 1n },
@@ -211,7 +208,6 @@ describe('live settlement contract encoding', () => {
 			settlementCollateralAttoEth: unit,
 			totalUnderwritingLimitAttoEth: unit,
 			feeEligibleUnderwritingLimitAttoEth: unit,
-			currentRetentionRate: 999_000_000_000_000_000n,
 			valuation: activeFeeValuation(unit),
 		}
 		const { client, counts } = recordingSettlementClient(child)
@@ -230,7 +226,7 @@ describe('live settlement contract encoding', () => {
 
 	test('allows the minimum slippage after fee end but blocks new accrual before submission', async () => {
 		const unit = 10n ** 18n
-		const ended = { ...market, pair: account, shareTokenSupplyAttoShares: unit, settlementCollateralAttoEth: unit, totalUnderwritingLimitAttoEth: unit, feeEligibleUnderwritingLimitAttoEth: unit, currentRetentionRate: 999_000_000_000_000_000n }
+		const ended = { ...market, pair: account, shareTokenSupplyAttoShares: unit, settlementCollateralAttoEth: unit, totalUnderwritingLimitAttoEth: unit, feeEligibleUnderwritingLimitAttoEth: unit }
 		const { client, chain, counts } = recordingSettlementClient(ended)
 		const quote = await simulateSettlement(client, configuration, ended, account, 'redeem-complete-set', { amount: unit, slippageBps: MINIMUM_SLIPPAGE_BPS })
 		expect(await submitFreshSettlement(client, configuration, account, quote, async write => await write())).toBe(transactionHash)
@@ -241,7 +237,7 @@ describe('live settlement contract encoding', () => {
 
 	test('checks the retained approved minimum through expiry even when the refreshed slippage minimum is safe', async () => {
 		const unit = 10n ** 18n
-		const ended = { ...market, pair: account, shareTokenSupplyAttoShares: unit, settlementCollateralAttoEth: unit, totalUnderwritingLimitAttoEth: unit, feeEligibleUnderwritingLimitAttoEth: unit, currentRetentionRate: 999_990_000_000_000_000n }
+		const ended = { ...market, pair: account, shareTokenSupplyAttoShares: unit, settlementCollateralAttoEth: unit, totalUnderwritingLimitAttoEth: unit, feeEligibleUnderwritingLimitAttoEth: unit }
 		const { client, chain, counts } = recordingSettlementClient(ended)
 		const quote = await simulateSettlement(client, configuration, ended, account, 'redeem-complete-set', { amount: unit, slippageBps: 500n })
 		if (quote.operation !== 'redeem-complete-set') throw new Error('Expected complete-set quote')
@@ -252,7 +248,7 @@ describe('live settlement contract encoding', () => {
 
 	test('rechecks holding fees and expiry inside the final wallet guard without sending', async () => {
 		const unit = 10n ** 18n
-		const ended = { ...market, pair: account, shareTokenSupplyAttoShares: unit, settlementCollateralAttoEth: unit, totalUnderwritingLimitAttoEth: unit, feeEligibleUnderwritingLimitAttoEth: unit, currentRetentionRate: 999_000_000_000_000_000n }
+		const ended = { ...market, pair: account, shareTokenSupplyAttoShares: unit, settlementCollateralAttoEth: unit, totalUnderwritingLimitAttoEth: unit, feeEligibleUnderwritingLimitAttoEth: unit }
 		const { client, chain, counts } = recordingSettlementClient(ended)
 		const quote = await simulateSettlement(client, configuration, ended, account, 'redeem-complete-set', { amount: unit, slippageBps: MINIMUM_SLIPPAGE_BPS })
 		if (quote.operation !== 'redeem-complete-set') throw new Error('Expected complete-set quote')
@@ -290,7 +286,7 @@ describe('live settlement contract encoding', () => {
 
 test('REP-only complete-set redemption accepts zero ETH and retains the received-asset quote', async () => {
 	const unit = 10n ** 18n
-	const basket = { ...market, shareTokenSupplyAttoShares: 10n * unit, settlementCollateralAttoEth: 0n, settlementRecoveryAttoRep: 30n * unit, currentRetentionRate: unit, feeEligibleUnderwritingLimitAttoEth: 0n }
+	const basket = { ...market, shareTokenSupplyAttoShares: 10n * unit, settlementCollateralAttoEth: 0n, settlementRecoveryAttoRep: 30n * unit, feeEligibleUnderwritingLimitAttoEth: 0n }
 	const fixture = recordingSettlementClient(basket)
 	const quote = await simulateSettlement(fixture.client, configuration, basket, account, 'redeem-complete-set', { amount: 2n * unit })
 	expect(quote).toMatchObject({ expectedAttoEth: 0n, expectedAttoRep: 6n * unit, minimumAttoEth: 0n })

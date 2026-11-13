@@ -3,8 +3,9 @@ import { liquidityHoldingFeeBlocker, sellHoldingFeeBlocker } from '../../protoco
 import { liveMarketFixture } from '../support/liveMarketFixture.js'
 
 const unit = 10n ** 18n
-const accounting = { settlementCollateralAttoEth: unit, totalUnderwritingLimitAttoEth: unit, feeEligibleUnderwritingLimitAttoEth: unit, currentRetentionRate: 900_000_000_000_000_000n, lastFeeCheckpointNativeTime: 1n, feeIndexRemainder: 0n, totalFeesOwedRemainder: 0n }
-const market = liveMarketFixture({ currentRetentionRate: accounting.currentRetentionRate, valuation: { timestamp: 1n, feeEndTime: 2n, projectedCollateralAttoEth: (unit * 9n) / 10n, feeAccounting: accounting } })
+const accountingWithoutStream = { settlementCollateralAttoEth: unit, totalUnderwritingLimitAttoEth: unit, feeEligibleUnderwritingLimitAttoEth: unit, lastFeeCheckpointNativeTime: 1n }
+const accounting = { ...accountingWithoutStream, linearFee: { rateAttoEthPerSecond: unit / 10n, endTime: 2n } }
+const market = liveMarketFixture({ valuation: { timestamp: 1n, feeEndTime: 2n, projectedCollateralAttoEth: (unit * 9n) / 10n, feeAccounting: accounting } })
 
 test('caps projection at fee end and leaves zero-slippage transactions available without fee decay', () => {
 	expect(sellHoldingFeeBlocker(market, unit, (unit * 9n) / 10n, 100n)).toBeUndefined()
@@ -25,14 +26,14 @@ test('uses the simulated deposit mix instead of cached reserves and covers its d
 		...market,
 		shareTokenSupplyAttoShares: 3n,
 		settlementCollateralAttoEth: 3n,
-		valuation: { timestamp: 1n, feeEndTime: 2n, projectedCollateralAttoEth: 2n, feeAccounting: { ...accounting, settlementCollateralAttoEth: 3n, totalUnderwritingLimitAttoEth: 3n, feeEligibleUnderwritingLimitAttoEth: 3n, totalFeesOwedRemainder: 1n } },
+		valuation: { timestamp: 1n, feeEndTime: 2n, projectedCollateralAttoEth: 2n, feeAccounting: { ...accounting, settlementCollateralAttoEth: 3n, totalUnderwritingLimitAttoEth: 3n, feeEligibleUnderwritingLimitAttoEth: 3n, linearFee: { rateAttoEthPerSecond: 1n, endTime: 2n } } },
 	}
 	expect(liquidityHoldingFeeBlocker(small, 3n, 1n, 20n, 2n, { completeSetShares: 3n, yesUsed: 1n, noUsed: 3n })).toContain('Holding fees')
 })
 
 test('requires a fee checkpoint when fees accrue and blocks zero projected payouts even if minimum rounds to zero', () => {
-	expect(sellHoldingFeeBlocker(liveMarketFixture({ currentRetentionRate: accounting.currentRetentionRate }), unit, unit, 2n)).toContain('projection unavailable')
-	const depleted = { ...market, valuation: { ...market.valuation, timestamp: 1n, feeEndTime: 100n, projectedCollateralAttoEth: 0n, feeAccounting: { ...accounting, currentRetentionRate: 0n } } }
+	expect(sellHoldingFeeBlocker(liveMarketFixture({ valuation: { timestamp: 1n, feeEndTime: 2n, projectedCollateralAttoEth: unit, feeAccounting: accountingWithoutStream } }), unit, unit, 2n)).toContain('projection unavailable')
+	const depleted = { ...market, valuation: { ...market.valuation, timestamp: 1n, feeEndTime: 100n, projectedCollateralAttoEth: 0n, feeAccounting: { ...accounting, linearFee: { rateAttoEthPerSecond: unit, endTime: 100n } } } }
 	expect(sellHoldingFeeBlocker(depleted, unit, 0n, 2n)).toContain('Holding fees')
 })
 

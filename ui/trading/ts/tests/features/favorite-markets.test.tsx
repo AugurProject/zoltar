@@ -72,7 +72,7 @@ describe('favorite markets', () => {
 				feeEndTime: 3n,
 				projectedCollateralAttoEth: 4n,
 				timestamp: 5n,
-				feeAccounting: { linearFee: { rateAttoEthPerSecond: 3n, endTime: 9n }, settlementCollateralAttoEth: 10n, totalUnderwritingLimitAttoEth: 8n, feeEligibleUnderwritingLimitAttoEth: 7n, currentRetentionRate: 10n ** 18n, lastFeeCheckpointNativeTime: 2n, feeIndexRemainder: 1n, totalFeesOwedRemainder: 0n },
+				feeAccounting: { linearFee: { rateAttoEthPerSecond: 3n, endTime: 9n }, settlementCollateralAttoEth: 10n, totalUnderwritingLimitAttoEth: 8n, feeEligibleUnderwritingLimitAttoEth: 7n, lastFeeCheckpointNativeTime: 2n },
 			}
 			const market = createMarket(1, { originUniverseId: 7n, tradingStatus: undefined, valuation })
 			const withoutCheckpoint = createMarket(2, { valuation: { feeEndTime: 3n, projectedCollateralAttoEth: 4n, timestamp: 5n } })
@@ -80,7 +80,7 @@ describe('favorite markets', () => {
 				{ data: market, fetchedAt: 1, id: market.pool },
 				{ data: withoutCheckpoint, fetchedAt: 1, id: withoutCheckpoint.pool },
 				{ data: { ...market, pool: 'not an address' }, fetchedAt: 1, id: 'broken' },
-				{ data: { ...market, valuation: { ...valuation, feeAccounting: { ...valuation.feeAccounting, feeIndexRemainder: 'invalid' } } }, fetchedAt: 1, id: 'broken-accounting' },
+				{ data: { ...market, valuation: { ...valuation, feeAccounting: { ...valuation.feeAccounting, lastFeeCheckpointNativeTime: 'invalid' } } }, fetchedAt: 1, id: 'broken-accounting' },
 			]
 			window.localStorage.setItem(getDownloadedStorageKey(scope), serializeStoredValue({ items, version: 1 }))
 			expect(marketDownloadStore.read(scope).map(entry => entry.data)).toEqual([market, withoutCheckpoint])

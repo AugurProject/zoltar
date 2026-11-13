@@ -8,13 +8,12 @@ import { SecurityPoolPortfolioAccountingDelegate } from './SecurityPoolPortfolio
 contract SecurityPoolEventEmitter is SecurityPoolPortfolioAccountingDelegate {
 	event QuestionAccountingCheckpoint(AccountingReason reason, uint256 settlementCollateralAttoEth, uint256 shareTokenSupplyAttoShares, uint256 lastSettlementPortfolioTime);
 
-	function setStartingParams(uint256, uint256 initialCollateral) external {
+	function setStartingParams() external {
 		ISecurityPool pool = ISecurityPool(payable(address(this)));
 		require(msg.sender == address(pool.securityPoolFactory()), 'Only factory');
 		// Bootstrap placeholder until portfolio binding checkpoints the central portfolio clock.
 		lastSettlementPortfolioTime = block.timestamp;
 		feeEpochEndTime = pool.questionData().getQuestionEndDate(pool.questionId());
-		settlementCollateralAttoEth = initialCollateral;
 		_emitCheckpoint(AccountingReason.PoolInitialization);
 	}
 

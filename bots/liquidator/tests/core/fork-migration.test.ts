@@ -83,7 +83,6 @@ function pool(parameters: { address: string; approvedUniverse?: boolean; forkAct
 		},
 		candidates: [],
 		settlementCollateralAttoEth: 0n,
-		currentRetentionRate: 0n,
 		forkActivationTime: parameters.forkActivationTime ?? 0n,
 		forkOutcomeIndex: parameters.forkOutcomeIndex,
 		initialReportPriorityFeeAttoEthPerGas: 0n,
