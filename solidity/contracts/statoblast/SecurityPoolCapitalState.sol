@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { Collateral } from '../Collateral.sol';
+import { ICollateralConfig } from './interfaces/ICollateralConfig.sol';
 import { ICapitalFeeStreams } from './interfaces/ICapitalAccounting.sol';
 import { SecurityPoolCommitmentIndex } from './SecurityPoolCommitmentIndex.sol';
 import { ISecurityPoolAuctionCapital } from './interfaces/ISecurityPoolAuctionCapital.sol';
@@ -110,7 +112,10 @@ abstract contract SecurityPoolCapitalState {
 	}
 	function _sendEth(address recipient, uint256 amount) internal {
 		if (amount == 0) return;
-		(bool success, ) = recipient.call{value: amount}('');
-		require(success, 'Capital ETH transfer failed');
+		Collateral.send(ICollateralConfig(ICapitalPortfolio(address(this)).portfolio()).collateralToken(), recipient, amount);
 	}
+}
+
+interface ICapitalPortfolio {
+	function portfolio() external view returns (address);
 }

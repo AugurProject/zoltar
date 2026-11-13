@@ -132,6 +132,8 @@ export function App() {
 					environmentReady={shell.canReadOnchainData}
 					environmentRefreshKey={shell.activeEnvironmentNonce}
 					onActiveViewChange={setView}
+					onApproveCreateToken={(token, amount) => void oracle.approveCreateToken(token, amount)}
+					onWrapCreateWeth={() => void oracle.wrapCreateWeth()}
 					onApproveToken1={amount => void oracle.approveToken1(amount)}
 					onApproveToken2={amount => void oracle.approveToken2(amount)}
 					onCancelOpenOracleWithdrawalBalanceCheck={oracle.cancelWithdrawalBalanceCheck}

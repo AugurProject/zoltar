@@ -1,4 +1,4 @@
-export { eth, invalid, no, yes } from './outcomes.js'
+export { invalid, no, yes } from './outcomes.js'
 import { outcomeLabel } from './outcomes.js'
 import { recheckedBeforeWallet } from './workflows.js'
 export const operationLabel = 'Settlement operation'
@@ -7,7 +7,7 @@ export const forkMigrationAction = 'Migrate'
 export const completeSetRedemptionGuidance = 'Burn equal amounts of your Yes, No, and Invalid shares for their share of the pool’s collateral.'
 export { max } from '@zoltar/ui-core-shared/copy/common.js'
 /** The field takes ETH; the hint below it converts that to complete sets. */
-export const completeSetValueToRedeem = 'ETH to redeem'
+export const formatCollateralToRedeem = (symbol: string) => `${symbol} to redeem`
 export const winningRedemptionUnavailable = 'Winning-outcome redemption becomes available after the question resolves.'
 export const migrationGuidance = 'Moves your whole balance of one share into the child universes you pick and permanently locks its transfers here. You can add child universes later.'
 export const marketDataUnavailableReason = 'Market data is unavailable. Refresh the market.'
@@ -24,7 +24,7 @@ export const connectToSeeBalance = 'Connect a wallet to see your balance.'
 export const loadingForkDetails = 'Loading fork question and child universes…'
 export const forkDetailsUnavailable = 'Fork question details are unavailable.'
 export const retryForkDetails = 'Retry fork details'
-export const completeSetAmountTooSmall = 'Amount too small to redeem any ETH.'
+export const completeSetAmountTooSmall = 'Amount too small to redeem any collateral.'
 export const childUniverseRequired = 'Select at least one child universe.'
 export const missingChildPoolBlocker = 'This selection includes a child universe without a security pool. Migrate into each such child universe separately.'
 export const missingChildPoolWarning = 'For this share, migrate into each child universe that has no security pool in a separate transaction. Another share can migrate into those child universes together once their security pools are ready.'
@@ -86,7 +86,7 @@ export function migrationAction(count: number) {
 	return count === 0 ? 'Migrate shares' : `Migrate to ${count.toString()} child ${count === 1 ? 'universe' : 'universes'}`
 }
 
-export const zeroRedemptionReason = 'Complete-set redemption would return no ETH or REP.'
+export const zeroRedemptionReason = 'Complete-set redemption would return no collateral or REP.'
 export const completeSetsToRedeem = 'Complete sets to redeem'
 export const sets = 'sets'
 export const recoveryRep = 'Recovery REP'

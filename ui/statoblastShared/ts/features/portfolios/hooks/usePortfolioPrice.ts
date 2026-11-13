@@ -1,6 +1,8 @@
+import { getTokenApprovalResetReason } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
+import { collateralPresentation } from '../../../protocol/collateral.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
-import { formatEther, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { formatEther, formatUnits, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { buildPortfolioPriceApprovalRequest, buildPortfolioPricePreparationRequest, buildPortfolioPriceRequest, buildPortfolioPriceWrapRequest, quotePortfolioPriceFunding, type PortfolioForkSnapshot, type PortfolioPriceSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -33,6 +35,7 @@ export function accountPriceTarget(account: Pick<PortfolioAccountSnapshot, 'port
 	return { portfolio: account.portfolio, owner: account.owner, universeId: account.universeId, blockHash: account.blockHash, started: !account.importing, reportingDeadline: undefined }
 }
 const actionNames = {
+	resetCollateral: 'resetPortfolioPriceCollateral',
 	prepare: 'preparePortfolioPrice',
 	wrap: 'wrapPortfolioPrice',
 	approveWeth: 'approvePortfolioPriceWeth',
@@ -66,7 +69,7 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 	const sponsor = bidder ?? target?.owner
 	const identity = target === undefined ? undefined : `${target.portfolio}:${sponsor}:${target.universeId}`
 	const previous = useRef<{ backend: typeof backend; identity: string }>()
-	const loadedReference = useRef<{ backend: typeof backend; identity: string; price: bigint | undefined }>()
+	const loadedReference = useRef<{ backend: typeof backend; identity: string; price: bigint | undefined; collateralToken: Address | undefined }>()
 	useEffect(() => {
 		if (previous.current?.backend === backend && (identity === undefined || previous.current.identity === identity)) return
 		previous.current = identity === undefined ? undefined : { backend, identity }
@@ -95,10 +98,11 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 	const snapshot = current?.snapshot
 	// The target reloads on every block, so its last loaded reference stands in until the next load instead of the portfolio's price.
 	if (loadedReference.current?.backend !== backend || (identity !== undefined && loadedReference.current.identity !== identity)) loadedReference.current = undefined
+	const collateral = collateralPresentation(snapshot?.observation?.weth ?? loadedReference.current?.collateralToken)
 	// `previous` updates after the render that follows a backend change, so a snapshot from the old environment cannot set the new reference.
 	if (identity !== undefined && snapshot !== undefined && previous.current?.backend === backend) {
 		const observation = snapshot.observation
-		loadedReference.current = { backend, identity, price: observation !== undefined && observation.lastSettlementTimestamp !== 0n ? observation.lastPrice : referencePrice }
+		loadedReference.current = { backend, identity, collateralToken: observation?.weth, price: observation !== undefined && observation.lastSettlementTimestamp !== 0n ? observation.lastPrice : referencePrice }
 	}
 	const reportId = reportInput.value.trim() === '' ? snapshot?.observation?.pendingReportId : portfolioUnsignedId(reportInput.value)
 	const reportKey = `${key}:${snapshot?.blockHash}:${reportId}`
@@ -120,8 +124,8 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 	}, [backend, reportKey])
 	const reportState = reports.value?.key === reportKey ? reports.value : undefined
 	const report = reportState?.report
-	const price = portfolioAmountOrUndefined(priceInput.value)
-	const requestedWeth = wethInput.value.trim() === '' ? 0n : portfolioAmountOrUndefined(wethInput.value)
+	const price = portfolioAmountOrUndefined(priceInput.value, 36 - collateral.decimals)
+	const requestedWeth = wethInput.value.trim() === '' ? 0n : portfolioAmountOrUndefined(wethInput.value, collateral.decimals)
 	let funding: ReturnType<typeof quotePortfolioPriceFunding> | undefined
 	let minimumWethAttoEth: bigint | undefined
 	let fundingError: string | undefined
@@ -143,10 +147,10 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 	const fundingReason = reportWindowReason ?? (price === undefined || price <= 0n ? copy.priceInvalid : undefined) ?? (requestedWeth === undefined ? copy.wethInvalid : undefined) ?? fundingError
 	const walletReason =
 		fundingReason ?? (snapshot !== undefined && funding !== undefined && snapshot.ethBalanceAttoEth < funding.requiredEth ? copy.insufficientEth : undefined) ?? (snapshot?.observation !== undefined && funding !== undefined && snapshot.observation.repBalanceAttoRep < funding.rep ? scoped.insufficientRep : undefined)
-	const wrapReason = walletReason ?? (funding?.wrap === 0n ? copy.noWrap : undefined)
+	const wrapReason = walletReason ?? (collateral.symbol !== 'WETH' ? 'Wrapping does not apply to this collateral.' : undefined) ?? (funding?.wrap === 0n ? copy.noWrap : undefined)
 	const requestReason =
 		walletReason ??
-		(funding !== undefined && funding.wrap > 0n ? copy.insufficientWeth : undefined) ??
+		(snapshot?.observation !== undefined && funding !== undefined && snapshot.observation.wethBalanceAttoEth < funding.weth ? copy.insufficientWeth : undefined) ??
 		(snapshot?.observation !== undefined && funding !== undefined && (snapshot.observation.wethAllowanceAttoEth < funding.weth || snapshot.observation.repAllowanceAttoRep < funding.rep) ? copy.approvalRequired : undefined)
 	const selectedReportReason =
 		baseReason ??
@@ -217,6 +221,7 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 		return fresh
 	}
 	return {
+		collateral,
 		proposedPrice: price,
 		comparisonPrice: loadedReference.current?.price,
 		snapshot,
@@ -269,19 +274,24 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 					if (fresh.wrap !== funding?.wrap || latest.ethBalanceAttoEth < fresh.requiredEth) throw new Error('Wallet funding changed. Refresh before wrapping ETH.')
 				},
 			),
-		approve: (token: 'weth' | 'rep', amount: bigint) =>
-			run(
-				portfolioPriceAction(scope, token === 'weth' ? 'approveWeth' : 'approveRep'),
+		approve: (token: 'weth' | 'rep', amount: bigint) => {
+			const approvalAction = token === 'weth' ? 'approveWeth' : 'approveRep'
+			const action = amount === 0n && token === 'weth' ? 'resetCollateral' : approvalAction
+			return run(
+				portfolioPriceAction(scope, action),
 				token === 'weth' ? copy.approveWeth : copy.approveRep,
 				fundingReason,
 				selected => ({
 					...buildPortfolioPriceApprovalRequest(selected, token, amount),
-					reviewDescription: scoped.formatApprovalReview(selected.feed, formatEther(amount), token),
+					reviewDescription: scoped.formatApprovalReview(selected.feed, formatUnits(amount, token === 'weth' ? collateral.decimals : 18), token, collateral.symbol),
 				}),
 				async latest => {
 					freshFunding(latest)
+					const reason = getTokenApprovalResetReason(latest.observation?.wethAllowanceAttoEth, amount, collateral.symbol, token === 'weth' && collateral.symbol === 'USDT')
+					if (reason !== undefined) throw new Error(reason)
 				},
-			),
+			)
+		},
 		request: () =>
 			run(
 				portfolioPriceAction(scope, 'request'),
@@ -291,13 +301,13 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 					if (price === undefined || requestedWeth === undefined || funding === undefined) throw new Error(copy.priceInvalid)
 					return {
 						...buildPortfolioPriceRequest(selected, price, requestedWeth),
-						reviewDescription: scoped.formatRequestReview(formatEther(funding.weth), formatEther(funding.rep), formatEther(funding.bounty)),
+						reviewDescription: scoped.formatRequestReview(formatUnits(funding.weth, collateral.decimals), formatEther(funding.rep), formatEther(funding.bounty), collateral.symbol),
 					}
 				},
 				async latest => {
 					const fresh = freshFunding(latest)
 					const observation = latest.observation
-					if (observation === undefined || fresh.wrap > 0n || observation.repBalanceAttoRep < fresh.rep || latest.ethBalanceAttoEth < fresh.bounty) throw new Error('Wallet report funding is insufficient.')
+					if (observation === undefined || observation.wethBalanceAttoEth < fresh.weth || observation.repBalanceAttoRep < fresh.rep || latest.ethBalanceAttoEth < fresh.bounty) throw new Error('Wallet report funding is insufficient.')
 					if (observation.wethAllowanceAttoEth < fresh.weth || observation.repAllowanceAttoRep < fresh.rep) throw new Error(copy.approvalRequired)
 				},
 				true,

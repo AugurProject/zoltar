@@ -81,9 +81,9 @@ test('authenticates latest and retained candidate escrows at the same discovery 
 		settlementCallbackGasLimit: '1',
 		targetPriceErrorForDispute: '1000',
 	}
-	const snapshot = await discoverPoolPriceFeed(fake.client, address(21), 10n, 0n, funding, 20_002n, 101n, 1n, 7n, [6n, 9n])
+	const snapshot = await discoverPoolPriceFeed(fake.client, address(21), 10n, 0n, funding, 10_001n, 101n, 1n, 7n, [6n, 9n])
 	expect(snapshot.reportEscrows).toEqual({ '6': address(86), '7': address(87) })
-	await expect(discoverPoolPriceFeed(fake.client, address(21), 10n, 0n, funding, 20_002n, 101n, 1n, 9n)).rejects.toThrow('pending report has no authenticated escrow')
+	await expect(discoverPoolPriceFeed(fake.client, address(21), 10n, 0n, funding, 10_001n, 101n, 1n, 9n)).rejects.toThrow('pending report has no authenticated escrow')
 })
 
 for (const shared of [false, true])
@@ -651,7 +651,10 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 					expect(parameters.address).toBe(address(80))
 					if (parameters.args?.[0] === 7n) return [address(87), address(1), coordinator, 1n]
 					return [parameters.args?.[0] === 6n ? address(86) : zeroAddress, address(1), coordinator, 1n]
+				case 'minimumReportCollateral':
+					return 10_001n
 				case 'minimumToken1ReportAttoEth':
+					if (overrides.sharedExposure !== undefined) return 10_001n + (overrides.sharedExposure + 99n) / 100n
 					return 10_001n + ((overrides.sharedExposure ?? 0n) / 100n > 10_001n * callBaseFee ? (overrides.sharedExposure ?? 0n) / 100n : 10_001n * callBaseFee)
 				case 'gasConsumedOpenOracleReportPrice':
 				case 'getSettlementCallbackGasLimit':
@@ -687,6 +690,9 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 					return pool
 				case 'openOracle':
 					return address(6)
+				case 'services':
+					return address(79)
+				case 'collateralToken':
 				case 'weth':
 					return address(7)
 				case 'securityVaults':

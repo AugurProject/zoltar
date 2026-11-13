@@ -66,7 +66,7 @@ test('branch events discover the uniform engine, index its auction event and sam
 		)
 		expect(result.contracts.get(auction.toLowerCase())?.kind).toBe('securityPoolPortfolioAuction')
 		expect(result.contracts.get(engine.toLowerCase())?.kind).toBe('securityPoolUniformPriceAuction')
-		expect(reads).toEqual(['auctions', 'forkAuthority', 'engine', 'controller'])
+		expect(reads).toEqual(['auctions', 'forkAuthority', 'engine', 'controller', 'portfolio', 'collateralToken'])
 		const indexed = result.block.logs.find(log => log.address === engine)
 		if (indexed === undefined) throw new Error('Engine event was not indexed')
 		expect(projectionsFrom(indexed)).toContainEqual(expect.objectContaining({ domain: 'auction', semanticEventKind: 'AuctionStarted' }))

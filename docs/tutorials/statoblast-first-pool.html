@@ -18,7 +18,7 @@
 			<section id="before-you-start">
 				<h2>Open the prepared portfolio</h2>
 				<p>This exercise uses fake assets in a browser-local chain. From a prepared checkout, run <code>bun run app:serve:statoblast</code> and open <code>http://localhost:12347/#/portfolios?simulate=1&amp;genesis=yes&amp;simScenario=portfolio</code>. No wallet extension or live funds are needed. Wait for <strong>Price current</strong> in the Shared backing section.</p>
-				<p>The fixture supplies two registered questions, 5,000 REP of your principal, a 10 ETH commitment and a 120% saved health target. The portfolio shares that commitment across its questions; each question has separate outcome shares. See <a href="../explanation/statoblast.html">How Statoblast works</a> for the economic model.</p>
+				<p>The fixture supplies two registered questions, 5,000 REP of your principal, a 10 WETH commitment and a 120% saved health target. The portfolio shares that commitment across its questions; each question has separate outcome shares. See <a href="../explanation/statoblast.html">How Statoblast works</a> for the economic model.</p>
 				<figure class="screenshot">
 					<a class="screenshot-link" href="../assets/screenshots/statoblast/portfolio-capital.png"><img width="800" height="312" src="../assets/screenshots/statoblast/portfolio-capital.png" alt="The prepared portfolio's Your capital section shows principal, commitment and saved health target." loading="lazy" /></a>
 					<figcaption><span class="figure-label">Your starting account.</span> The fixture has already authorized backing.</figcaption>
@@ -29,19 +29,19 @@
 				<ol>
 					<li>In <strong>Deposit REP</strong>, enter <code>1</code> in <strong>REP amount</strong>. If an approval is requested, approve the displayed amount and confirm its review.</li>
 					<li>Select <strong>Deposit REP</strong>, review the transaction, and confirm it.</li>
-					<li>Wait for <strong>Transaction confirmed</strong>. Under <strong>Your capital</strong>, check that <strong>Your total principal</strong> is now 5,001 REP. Your commitment remains 10 ETH: depositing does not automatically increase it.</li>
+					<li>Wait for <strong>Transaction confirmed</strong>. Under <strong>Your capital</strong>, check that <strong>Your total principal</strong> is now 5,001 REP. Your commitment remains 10 WETH: depositing does not automatically increase it.</li>
 				</ol>
 			</section>
 			<section id="mint">
 				<h2>Purchase complete sets</h2>
 				<ol>
 					<li>In <strong>Mint portfolio complete sets</strong>, choose a title under <strong>Question</strong>. Read the question details and verify its full ID. Use <strong>Find by question ID</strong> to enter an exact identifier instead.</li>
-					<li>Enter <code>0.01</code> for <strong>Collateral ETH</strong>, <code>0.1</code> for <strong>Maximum purchase fee ETH</strong>, and <code>0</code> for <strong>Minimum complete sets</strong>. The zero minimum is suitable for this controlled simulation; a live purchase should set a minimum from its quote.</li>
-					<li>Check <strong>Purchase fee ETH</strong>. Select <strong>Mint portfolio complete sets</strong> and confirm the review. Unused fee budget returns to your wallet.</li>
+					<li>Enter <code>0.01</code> for <strong>Collateral (WETH)</strong>, <code>0.1</code> for <strong>Maximum purchase fee (WETH)</strong>, and <code>0</code> for <strong>Minimum complete sets</strong>. The zero minimum is suitable for this controlled simulation; a live purchase should set a minimum from its quote.</li>
+					<li>Check <strong>Purchase fee</strong>. If needed, approve the displayed WETH amount and wait for confirmation. Then select <strong>Mint portfolio complete sets</strong> and confirm the review. The purchase transfers 0.01 WETH plus the actual fee; unused fee allowance stays in your wallet.</li>
 					<li>Wait for <strong>Transaction confirmed</strong>. Open the selected question through its link and inspect your outcome balances in the Shares view. Each outcome has the same newly minted quantity.</li>
 				</ol>
 				<figure class="screenshot">
-					<a class="screenshot-link" href="../assets/screenshots/statoblast/portfolio-purchase.png"><img width="800" height="704" src="../assets/screenshots/statoblast/portfolio-purchase.png" alt="The portfolio purchase form selects a registered question and bounds collateral, purchase fee and shares received." loading="lazy" /></a>
+					<a class="screenshot-link" href="../assets/screenshots/statoblast/portfolio-purchase.png"><img width="800" height="998" src="../assets/screenshots/statoblast/portfolio-purchase.png" alt="The portfolio purchase form selects a registered question and bounds collateral, purchase fee and shares received." loading="lazy" /></a>
 					<figcaption><span class="figure-label">Purchase controls.</span> The fee budget is separate from collateral.</figcaption>
 				</figure>
 				<p>You have added capital and bought question shares through the same portfolio. Reloading a new simulation resets its local chain; these balances are not live assets. To understand fees or exiting capital, continue with <a href="../explanation/fees.html">Fees</a> and the <a href="../reference/operator-guardrails.html#security-pool-guardrails">capital guardrails</a>.</p>

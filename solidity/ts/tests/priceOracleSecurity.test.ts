@@ -113,6 +113,7 @@ describe('Shared portfolio oracle security regressions', () => {
 		priceOracle = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
 		priceFeed = await client.readContract({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: priceOracle, functionName: 'priceFeed' })
 	})
+	const configuredMinimum = async (exposure = 0n) => (await client.readContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'minimumReportCollateral' })) + (exposure + 99n) / 100n
 	const escrowFor = async (reportId: bigint) => (await client.readContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'reportCandidates', args: [reportId] }))[0]
 	const getOpenOracleHeldBalance = (holder: `0x${string}`, token: `0x${string}`) => client.readContract({ abi: statoblast_openOracle_OpenOracle_OpenOracle.abi, address: getInfraContractAddresses().openOracle, functionName: 'tokenHolder', args: [holder, token] })
 	const executeThroughRejectingReceiver = async (receiver: Address, target: Address, data: Hex, value = 0n) => {
@@ -152,7 +153,7 @@ describe('Shared portfolio oracle security regressions', () => {
 		})
 	}
 
-	test('oracle settlement rejects a final report that was uneconomic to dispute at its recorded base fee', async () => {
+	test('a report meeting the configured collateral floor remains acceptable when dispute gas rises', async () => {
 		const requestBaseFeeAttoEthPerGas = 1n * 10n ** 9n
 		const finalReportBaseFeeAttoEthPerGas = 100n * 10n ** 9n
 		const proposedRepPerEthPrice = 10n ** 18n
@@ -220,11 +221,12 @@ describe('Shared portfolio oracle security regressions', () => {
 		const settlementReceipt = await client.waitForTransactionReceipt({
 			hash: settlementHash,
 		})
-		const rejectedLog = findPriceReportRejectedLog(settlementReceipt.logs)
-		if (rejectedLog === undefined) throw new Error('missing PriceReportRejected log')
-		assert.strictEqual(rejectedLog.args.reason, 'Report uneconomic')
-		assert.strictEqual(findPriceReportedLog(settlementReceipt.logs), undefined, 'an uneconomic final dispute round must not publish a price')
-		assert.strictEqual(await getIsPriceValid(client, priceOracle), false, 'an uneconomic final dispute round must leave the price invalid')
+		assert.strictEqual(findPriceReportRejectedLog(settlementReceipt.logs), undefined, 'gas costs do not replace the configured collateral floor')
+		const accepted = findPriceReportedLog(settlementReceipt.logs)
+		if (accepted === undefined) throw new Error('missing PriceReported log')
+		assert.ok(finalReportStatus.currentAmount1 >= (await configuredMinimum()))
+		assert.strictEqual(accepted.args.price, (finalReportStatus.currentAmount2 * 10n ** 18n) / finalReportStatus.currentAmount1)
+		assert.strictEqual(await getIsPriceValid(client, priceOracle), true, 'a sufficiently collateralized final report publishes its price')
 	})
 
 	test('oracle settlement reads the last of multiple dispute-history records', async () => {
@@ -298,10 +300,10 @@ describe('Shared portfolio oracle security regressions', () => {
 		const settlementReceipt = await client.waitForTransactionReceipt({
 			hash: settlementHash,
 		})
-		const rejectedLog = findPriceReportRejectedLog(settlementReceipt.logs)
-		if (rejectedLog === undefined) throw new Error('missing PriceReportRejected log')
-		assert.strictEqual(rejectedLog.args.reason, 'Report uneconomic')
-		assert.strictEqual(findPriceReportedLog(settlementReceipt.logs), undefined, 'the uniquely expensive final dispute record must drive settlement rejection')
+		assert.strictEqual(findPriceReportRejectedLog(settlementReceipt.logs), undefined)
+		const accepted = findPriceReportedLog(settlementReceipt.logs)
+		if (accepted === undefined) throw new Error('missing PriceReported log')
+		assert.strictEqual(accepted.args.price, (finalReportStatus.currentAmount2 * 10n ** 18n) / finalReportStatus.currentAmount1, 'the final disputed token amounts determine the accepted price independently of gas cost')
 	})
 
 	test('oracle settlement rejects a saturated dispute-history counter', async () => {
@@ -411,7 +413,7 @@ describe('Shared portfolio oracle security regressions', () => {
 		await assert.rejects(recoverSettledPendingReport(client, priceOracle), /Report not settled/)
 	})
 
-	test('coordinator dynamically sizes the minimum WETH report side from the current base fee', async () => {
+	test('coordinator uses the configured collateral floor independently of the current base fee', async () => {
 		const sizingConfigurationAbi = [
 			{
 				inputs: [],
@@ -450,7 +452,7 @@ describe('Shared portfolio oracle security regressions', () => {
 			args: [],
 		})
 
-		assert.strictEqual(minimumToken1ReportAttoEth, calculateOracleMinimumWethReportAttoEth(), 'zero-basefee test chains should retain the configured priority-fee report')
+		assert.strictEqual(minimumToken1ReportAttoEth, await configuredMinimum(), 'zero-basefee chains retain the configured collateral report floor')
 		await requestPrice(client, priceOracle)
 
 		const reportId = await getPendingReportId(client, priceOracle)
@@ -471,14 +473,7 @@ describe('Shared portfolio oracle security regressions', () => {
 			address: priceOracle,
 			args: [],
 		})
-		assert.strictEqual(
-			sizedForBaseFee,
-			calculateOracleMinimumWethReportAttoEth({
-				...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
-				baseFeeAttoEthPerGas,
-			}),
-			'the on-chain WETH calculation should match the shared integer formula',
-		)
+		assert.strictEqual(sizedForBaseFee, await configuredMinimum(), 'changing gas prices does not change the configured collateral stake floor')
 	})
 
 	test('caller can voluntarily fund initial WETH above the coordinator minimum', async () => {
@@ -582,7 +577,6 @@ describe('Shared portfolio oracle security regressions', () => {
 
 	test('requestPrice should refund excess Ether when overpaid', async () => {
 		// Test that overpayment is refunded, not kept by contract
-		const initialBalance = await getETHBalance(client, client.account.address)
 		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
 		const overpayment = costAttoEth * 2n
 		const minimumWethReport = await client.readContract({
@@ -592,16 +586,16 @@ describe('Shared portfolio oracle security regressions', () => {
 			args: [],
 		})
 
+		await wrapWeth(client, minimumWethReport * 2n)
+		const initialBalance = await getETHBalance(client, client.account.address)
+		const initialWethAttoEth = await getERC20Balance(client, WETH_ADDRESS, client.account.address)
 		// Call requestPrice with overpayment above the committed bounty
 		await requestPriceWithValue(client, priceOracle, overpayment, undefined, 0n, costAttoEth)
 
 		const finalBalance = await getETHBalance(client, client.account.address)
 
-		// The helper wraps a 2x WETH execution buffer before requesting the report.
-		// The unused WETH remains with the caller; any native ETH above the committed
-		// bounty should still be refunded by the coordinator.
-		const expectedEthDecrease = costAttoEth + minimumWethReport * 2n
-		assert.strictEqual(initialBalance - finalBalance, expectedEthDecrease, `Caller should spend the ETH bounty plus the buffered WETH funding (${expectedEthDecrease}), but spent ${initialBalance - finalBalance}`)
+		assert.strictEqual(initialBalance - finalBalance, costAttoEth, 'only the committed native bounty is retained; excess ETH is refunded')
+		assert.strictEqual(initialWethAttoEth - (await getERC20Balance(client, WETH_ADDRESS, client.account.address)), minimumWethReport, 'the report separately transfers its configured collateral stake')
 	})
 
 	test('Sepolia prices expire after one challenge period plus one hour of renewal slack', async () => {
@@ -847,7 +841,7 @@ describe('Shared portfolio oracle security regressions', () => {
 			address: getInfraContractAddresses().openOracle,
 			args: [acceptedReportId, 0n],
 		})
-		assert.strictEqual(initialHistoryRecord[0], minimumWethReport, 'the initial report should equal the final-history economic floor')
+		assert.strictEqual(initialHistoryRecord[0], await configuredMinimum(), 'the initial report should equal the configured collateral floor')
 		assert.strictEqual(initialHistoryRecord[2], requestBaseFeeAttoEthPerGas, 'the exact-floor check should use the initial report block base fee')
 		await mockWindow.advanceTime(BigInt(acceptedReportMeta.settlementTime) + 1n)
 		await mockWindow.request({
@@ -968,7 +962,7 @@ describe('Shared portfolio oracle security regressions', () => {
 	test('direct capital commitments increase the report floor without a per-question synchronization', async () => {
 		const exposure = 100n * 10n ** 18n + 1n
 		await fixture.prepare(1_000n * 10n ** 18n, exposure)
-		const expected = calculateOracleMinimumWethReportAttoEth({ ...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, openInterestAttoEth: exposure })
+		const expected = await configuredMinimum(exposure)
 		assert.strictEqual(await client.readContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'minimumToken1ReportAttoEth' }), expected)
 		await requestPrice(client, priceOracle)
 		const report = await getOpenOracleReportMeta(client, await getPendingReportId(client, priceOracle))

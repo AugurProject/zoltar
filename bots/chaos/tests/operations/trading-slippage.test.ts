@@ -16,7 +16,7 @@ function openTradingSnapshot() {
 	if (pool === undefined) throw new Error('Trading pool fixture is missing')
 	pool.escalationGame = '0x0000000000000000000000000000000000000000'
 	pool.currentMintingCapacityAttoEth = (2n * 10n ** 18n).toString()
-	pool.purchaseQuote = { mintAttoEth: 1000000000000n.toString(), feeAttoEth: 10000000000n.toString(), premiumAttoEth: 20000000000n.toString(), minimumShares: '1000000000000' }
+	pool.purchaseQuote = { spender: pool.coordinator, mintAttoEth: 1000000000000n.toString(), feeAttoEth: 10000000000n.toString(), premiumAttoEth: 20000000000n.toString(), minimumShares: '1000000000000' }
 	pool.shareTokenSupplyAttoShares = '1000000000000000000'
 	shares.isApprovedForAll = Object.fromEntries(Object.keys(shares.isApprovedForAll).map(operator => [operator, true]))
 	const lp = snapshot.wallet.lpTokens[0]

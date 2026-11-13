@@ -1,6 +1,6 @@
 import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
 
-type TransactionOperation = 'trade' | 'settlement' | 'liquidity'
+type TransactionOperation = 'trade' | 'settlement' | 'liquidity' | 'approval'
 
 export type TransactionContext = Readonly<{
 	account: Address

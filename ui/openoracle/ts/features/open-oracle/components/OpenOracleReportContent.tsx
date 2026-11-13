@@ -211,7 +211,18 @@ export function renderSelectedReportActionSection({
 				})()
 				return (
 					<SectionBlock headingLevel={4} title={openOracleCopy.formatTokenApprovalTitle(tokenSymbol)} variant='embedded'>
+						{tokenSymbol === 'USDT' ? (
+							<TransactionActionButton
+								idleLabel={commonCopy.formatResetTokenApproval(tokenSymbol)}
+								pendingLabel={commonCopy.formatApprovingToken(tokenSymbol)}
+								pending={openOracleActiveAction === (isToken1 ? 'approveToken1' : 'approveToken2')}
+								availability={{ disabled: !isConnected || !isOnActiveAppChain || (approval.value ?? 0n) === 0n || sharedApprovalGuardMessage !== undefined || tokenApprovalGuardMessage !== undefined, reason: sharedApprovalGuardMessage ?? tokenApprovalGuardMessage ?? commonCopy.approvalSatisfied }}
+								onClick={() => (isToken1 ? onApproveToken1 : onApproveToken2)(0n)}
+								tone='secondary'
+							/>
+						) : null}
 						<TokenApprovalControl
+							requiresAllowanceReset={tokenSymbol === 'USDT'}
 							actionLabel={openOracleCopy.disputingTheReport}
 							allowanceError={approval.error}
 							allowanceLoading={approval.loading}

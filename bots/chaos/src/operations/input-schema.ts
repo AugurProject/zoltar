@@ -84,7 +84,7 @@ const schemas: Record<string, InputField[]> = {
 	'zoltar.migration.add': [universe, amountField(['args', 1], 'REP amount')],
 	'zoltar.rep.burn': [universe, amountField(['args', 1], 'REP amount')],
 }
-for (const id of ['statoblast.complete-set.create', 'statoblast.complete-set.redeem']) schemas[id] = [pool, amountField(['metadata', 'amount'], id.endsWith('.create') ? 'ETH amount' : 'Complete sets')]
+for (const id of ['statoblast.complete-set.create', 'statoblast.complete-set.redeem']) schemas[id] = [pool, amountField(['metadata', 'amount'], id.endsWith('.create') ? 'WETH amount' : 'Complete sets')]
 schemas['statoblast.shares.redeem-winning'] = [pool]
 for (const id of ['trading.pair.create-and-initialize', 'trading.pair.initialize-eth', 'trading.liquidity.add-eth', 'trading.position.enter']) {
 	const entering = id === 'trading.position.enter'

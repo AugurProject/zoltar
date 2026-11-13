@@ -5,7 +5,7 @@ const coordinator = getAddress('0x0000000000000000000000000000000000000001')
 const feed = getAddress('0x0000000000000000000000000000000000000002')
 const otherCoordinator = getAddress('0x0000000000000000000000000000000000000003')
 
-for (const mismatch of [undefined, 'feed', 'factory', 'weth', 'rep', 'escrow', 'report'] as const) {
+for (const mismatch of [undefined, 'feed', 'factory', 'collateralToken', 'rep', 'escrow', 'report'] as const) {
 	test(`shared report freshness authenticates canonical factory registration and report tokens (${mismatch ?? 'valid'})`, async () => {
 		const { createMulticallStub } = await import('@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js')
 		const { loadCoordinatorPriceValidUntilTimestamp } = await import('@zoltar/ui-statoblast-shared/protocol/openOracleSettlement.js')
@@ -20,7 +20,7 @@ for (const mismatch of [undefined, 'feed', 'factory', 'weth', 'rep', 'escrow', '
 				if (request.functionName === 'securityPoolFactory') return { status: 'success', result: mismatch === 'factory' ? coordinator : getInfraContractAddresses().securityPoolFactory }
 				if (request.functionName === 'portfolio') return { status: 'success', result: coordinator }
 				if (request.functionName === 'universeId') return { status: 'success', result: 5n }
-				if (request.functionName === 'weth') return { status: 'success', result: mismatch === 'weth' ? feed : coordinator }
+				if (request.functionName === 'collateralToken') return { status: 'success', result: mismatch === 'collateralToken' ? feed : coordinator }
 				if (request.functionName === 'reputationToken') return { status: 'success', result: mismatch === 'rep' ? feed : otherCoordinator }
 				if (request.functionName === 'priceValidityWindowSeconds') return { status: 'success', result: 780n }
 				if (request.functionName === 'sharedPriceFeeds') {

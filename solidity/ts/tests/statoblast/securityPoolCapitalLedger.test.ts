@@ -13,7 +13,7 @@ import { createWriteClient, writeContractAndWait, type WriteClient } from '../..
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
 import { deployCapitalTestComponents } from './securityPoolCapitalTestComponents'
-import { burnedEthBalance, receiptBurns } from './burnEvidence'
+import { collateralBalance, burnedCollateralBalance, receiptBurns } from './burnEvidence'
 
 const E = 10n ** 18n
 
@@ -70,7 +70,7 @@ describe('Statoblast: individual shared-custody capital', () => {
 		await deposit(alice, 210n * E)
 		const id = await authorize(alice, 100n * E)
 		expect((await position(id)).commitment).toBe(100n * E)
-		expect(await alice.getBalance({ address: ledger })).toBe(0n)
+		expect(await collateralBalance(alice, harness, ledger)).toBe(0n)
 	})
 
 	test('oracle uncertainty cannot create distress without a real price decline', async () => {
@@ -124,7 +124,7 @@ describe('Statoblast: individual shared-custody capital', () => {
 		await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'setFork', args: [forkTime] }))
 		await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'exportChoice', args: [alice.account.address] }))
 		expect(await position(id)).toMatchObject({ rep: 105n * E, commitment: 100n * E })
-		expect(await alice.getBalance({ address: ledger })).toBe(0n)
+		expect(await collateralBalance(alice, harness, ledger)).toBe(0n)
 		await expect(withdraw(alice, E)).rejects.toThrow('Capital universe inactive')
 	})
 
@@ -253,7 +253,7 @@ describe('Statoblast: individual shared-custody capital', () => {
 		const id = await authorize(alice, 100n * E)
 		await authorize(alice, 120n * E + 1n)
 		expect((await position(id)).commitment).toBe(120n * E + 1n)
-		expect(await alice.getBalance({ address: ledger })).toBe(0n)
+		expect(await collateralBalance(alice, harness, ledger)).toBe(0n)
 	})
 
 	test('a funded takeover charges only the target, preserves residual health, and creates no free headroom', async () => {
@@ -470,11 +470,11 @@ describe('Statoblast: individual shared-custody capital', () => {
 		await deposit(alice, 105n * E)
 		const id = await authorize(alice, 100n * E)
 		await price(E, 100)
-		const initialEth = await alice.getBalance({ address: ledger })
+		const initialEth = await collateralBalance(alice, harness, ledger)
 		const initialRep = await alice.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [ledger] })
-		const burnedBefore = await burnedEthBalance(alice)
+		const burnedBefore = await burnedCollateralBalance(alice, harness)
 		const supplyBefore = await repSupply()
-		const harnessBefore = await alice.getBalance({ address: harness })
+		const harnessBefore = await collateralBalance(alice, harness, harness)
 		await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'fundFees', value: 86_400n * E }))
 		await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'fundRepFees', args: [86_400n * E] }))
 		await getAnvilWindowEthereum().advanceTime(200n)
@@ -484,8 +484,8 @@ describe('Statoblast: individual shared-custody capital', () => {
 		expect(refreshBurns.unassignedRep).toBeGreaterThan(0n)
 		const feeStreams = await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'feeStreams' })
 		expect(await alice.readContract({ abi: feeStreamsArtifact.abi, address: feeStreams, functionName: 'deferredEth' })).toBe(0n)
-		expect(await burnedEthBalance(alice)).toBe(burnedBefore + refreshBurns.unassignedEth)
-		expect(await alice.getBalance({ address: harness })).toBe(harnessBefore)
+		expect(await burnedCollateralBalance(alice, harness)).toBe(burnedBefore + refreshBurns.unassignedEth)
+		expect(await collateralBalance(alice, harness, harness)).toBe(harnessBefore)
 		const before = await position(id)
 		expect(before.ethFees).toBeLessThan(200n * E)
 		expect(before.repFees).toBeLessThan(200n * E)
@@ -495,10 +495,10 @@ describe('Statoblast: individual shared-custody capital', () => {
 		expect(after.ethFees).toBeLessThan(86_400n * E)
 		expect(after.repFees).toBeLessThan(86_400n * E)
 		// Unhealthy or stale-interval income is burned, never retained for a later provider.
-		expect(after.ethFees + (await burnedEthBalance(alice)) - burnedBefore).toBe(86_400n * E)
+		expect(after.ethFees + (await burnedCollateralBalance(alice, harness)) - burnedBefore).toBe(86_400n * E)
 		expect(await repSupply()).toBe(supplyBefore + after.repFees)
-		expect(await alice.getBalance({ address: harness })).toBe(harnessBefore)
-		expect(await alice.getBalance({ address: ledger })).toBe(initialEth + after.ethFees)
+		expect(await collateralBalance(alice, harness, harness)).toBe(harnessBefore)
+		expect(await collateralBalance(alice, harness, ledger)).toBe(initialEth + after.ethFees)
 		expect(await alice.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [ledger] })).toBe(initialRep + after.repFees)
 	})
 
@@ -507,9 +507,9 @@ describe('Statoblast: individual shared-custody capital', () => {
 			await deposit(alice, 105n * E)
 			const id = mode === 'empty' ? 0n : await authorize(alice, 100n * E)
 			await price(mode === 'unhealthy' ? 2n * E : E, mode === 'stale' ? 100 : 100_000)
-			const originalEth = await alice.getBalance({ address: ledger })
+			const originalEth = await collateralBalance(alice, harness, ledger)
 			const originalRep = await alice.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [ledger] })
-			const burnedBefore = await burnedEthBalance(alice)
+			const burnedBefore = await burnedCollateralBalance(alice, harness)
 			const supplyBefore = await repSupply()
 			await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'fundFees', value: 86_400n * E }))
 			await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'fundRepFees', args: [86_400n * E] }))
@@ -519,17 +519,17 @@ describe('Statoblast: individual shared-custody capital', () => {
 			const earned = await position(id)
 			await getAnvilWindowEthereum().advanceTime(86_401n)
 			await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint' }))
-			expect(await alice.getBalance({ address: ledger })).toBe(originalEth + earned.ethFees)
+			expect(await collateralBalance(alice, harness, ledger)).toBe(originalEth + earned.ethFees)
 			expect(await alice.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [ledger] })).toBe(originalRep + earned.repFees)
 			await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint' }))
-			expect(await alice.getBalance({ address: ledger })).toBe(originalEth + earned.ethFees)
+			expect(await collateralBalance(alice, harness, ledger)).toBe(originalEth + earned.ethFees)
 			// Canonical late income must remain accepted and reach the same terminal disposition.
 			await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'fundRepFees', args: [E] }))
 			await getAnvilWindowEthereum().advanceTime(86_401n)
 			await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint' }))
 			expect(await alice.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [ledger] })).toBe(originalRep + earned.repFees)
 			// Everything not earned before the fork is burned rather than retained.
-			expect(await burnedEthBalance(alice)).toBe(burnedBefore + 86_400n * E - earned.ethFees)
+			expect(await burnedCollateralBalance(alice, harness)).toBe(burnedBefore + 86_400n * E - earned.ethFees)
 			expect(await repSupply()).toBe(supplyBefore + earned.repFees)
 			if (mode === 'stale') expect(earned.ethFees).toBeGreaterThan(0n)
 			else expect(earned.ethFees).toBe(0n)
@@ -639,11 +639,11 @@ describe('Statoblast: individual shared-custody capital', () => {
 
 	test('income with no eligible commitment cannot be captured by a later authorization', async () => {
 		await deposit(alice, 105n * E)
-		const burnedBefore = await burnedEthBalance(alice)
+		const burnedBefore = await burnedCollateralBalance(alice, harness)
 		await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'fundFees', value: 86_400n * E }))
 		await getAnvilWindowEthereum().advanceTime(200n)
 		const id = await authorize(alice, 100n * E)
-		expect(await burnedEthBalance(alice)).toBeGreaterThan(burnedBefore)
+		expect(await burnedCollateralBalance(alice, harness)).toBeGreaterThan(burnedBefore)
 		expect((await position(id)).ethFees).toBe(0n)
 		for (let i = 0; i < 3; i++) {
 			await getAnvilWindowEthereum().advanceTime(100n)
@@ -653,8 +653,8 @@ describe('Statoblast: individual shared-custody capital', () => {
 		await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint' }))
 		const earned = (await position(id)).ethFees
 		expect(earned).toBeLessThan(86_400n * E)
-		expect(earned + (await burnedEthBalance(alice)) - burnedBefore).toBe(86_400n * E)
-		expect(await alice.getBalance({ address: ledger })).toBe(earned)
+		expect(earned + (await burnedCollateralBalance(alice, harness)) - burnedBefore).toBe(86_400n * E)
+		expect(await collateralBalance(alice, harness, ledger)).toBe(earned)
 	})
 
 	test('old-price eligibility checkpoints atomically and stale vested income never backdates', async () => {

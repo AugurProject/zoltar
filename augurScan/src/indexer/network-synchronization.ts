@@ -3,7 +3,7 @@ import { scanBlockTimeMs, startScanReport } from '@zoltar/core-shared/monitoring
 import { runtimeConfig } from '../config.ts'
 import { type ContractDeploymentObservation, DatabaseConsistencyError, type IndexedBlock } from '../database.ts'
 import { errorChainIncludes } from '../error-chain.ts'
-import type { Hash, Log } from '../ethereum.ts'
+import type { Address, Hash, Log } from '../ethereum.ts'
 import {
 	ChainContinuityError,
 	commitSparseCanonicalBatch,
@@ -93,6 +93,7 @@ export async function reconcileManifestBackfill(state: NetworkIndexerState): Pro
 	const ancestorHash = storedAncestor?.hash
 	await assertLease(state)
 	await state.database.rewind(state.network.chainId, ancestor, ancestorHash, requireLease(state), 'manifest-reset', state.provenance)
+	state.collateralIdentityCache.clear()
 	state.progress.indexingStartReported = false
 	state.progress.lastReportedPhase = undefined
 	console.info(`[${state.network.id}] manifest history gap detected; rewound to ${ancestor < 0n ? 'before the configured start block' : `block #${ancestor}`} to replay from block #${replayStart}`)
@@ -113,10 +114,12 @@ async function reconcileReorg(state: NetworkIndexerState): Promise<void> {
 	if (ancestor !== undefined) {
 		await assertLease(state)
 		await state.database.rewind(state.network.chainId, ancestor.number, ancestor.hash, requireLease(state), 'chain-reorg', state.provenance)
+		state.collateralIdentityCache.clear()
 		return
 	}
 	await assertLease(state)
 	await state.database.rewind(state.network.chainId, -1n, undefined, requireLease(state), 'chain-reorg', state.provenance)
+	state.collateralIdentityCache.clear()
 }
 
 async function refreshContractDeployment(state: NetworkIndexerState, indexedBoundary: bigint): Promise<void> {
@@ -293,6 +296,11 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 	let committedLogs = 0
 	let commitCheckpoint = checkpoint === undefined ? undefined : { number: checkpoint.number, hash: checkpoint.hash }
 	const blocksToStore: IndexedBlock[] = []
+	const identityDiscoveries = new Map<string, Address>()
+	const identityCache = {
+		get: (key: string) => identityDiscoveries.get(key) ?? state.collateralIdentityCache.get(key),
+		set: (key: string, value: Address) => identityDiscoveries.set(key, value),
+	}
 	let previousStoredNumber = checkpoint?.number
 	let previousStoredHash = checkpoint?.hash
 	// Commit up to 100 event blocks at a time, including the empty range-end checkpoint.
@@ -326,6 +334,8 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 			await operations.reconcileReorg(state)
 			return false
 		}
+		for (const [key, value] of identityDiscoveries) state.collateralIdentityCache.set(key, value)
+		identityDiscoveries.clear()
 		committedLogs += blocksToStore.reduce((total, block) => total + block.logs.length, 0)
 		commitCheckpoint = { number: lastBlock.number, hash: indexedEndHash }
 		reportProgress(state, batchStart, lastBlock.number, observedHead, scanReport, committedLogs)
@@ -363,6 +373,7 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 					return coverage.currentBlockLogs
 				},
 				operations.getBlockHeader,
+				identityCache,
 			)
 		} catch (error) {
 			if (error instanceof ChainContinuityError) {

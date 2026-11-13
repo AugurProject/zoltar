@@ -1,3 +1,4 @@
+import { collateralBalance } from './burnEvidence'
 import { describe, expect, test } from 'bun:test'
 import {
 	statoblast_SecurityPool_SecurityPool as poolArtifact,
@@ -69,10 +70,10 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 			expect(await shares()).toEqual(protectedBalances)
 		}
 		const before = await settlementState()
-		const cash = await fixture.owner().getBalance({ address: before.engine })
+		const cash = await collateralBalance(fixture.owner(), fixture.portfolio, before.engine)
 		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...pool(), functionName: 'redeemShares' }))
 		expect((await shares())[1]).toBe(0n)
-		expect(await fixture.owner().getBalance({ address: before.engine })).toBeLessThan(cash)
+		expect(await collateralBalance(fixture.owner(), fixture.portfolio, before.engine)).toBeLessThan(cash)
 	})
 
 	test('winning shares redeem after the strict finality boundary without a prior question checkpoint', async () => {
@@ -83,23 +84,23 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		const beforeShares = await shares()
 		const expectedCash = await fixture.other().readContract({ ...portfolio(), functionName: 'quoteQuestionSettlement', args: [pool().address, beforeShares[1]] })
 		const otherCash = await secondCash()
-		const balance = await fixture.other().getBalance({ address: fixture.other().account.address })
+		const balance = await collateralBalance(fixture.other(), fixture.portfolio, fixture.other().account.address)
 		const hash = await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...pool(), functionName: 'redeemShares' }))
 		const receipt = await fixture.other().waitForTransactionReceipt({ hash })
 		if (receipt.effectiveGasPrice === undefined) throw new Error('Redemption receipt must include its effective gas price')
-		expect(await fixture.other().getBalance({ address: fixture.other().account.address })).toBe(balance + expectedCash - receipt.gasUsed * receipt.effectiveGasPrice)
+		expect(await collateralBalance(fixture.other(), fixture.portfolio, fixture.other().account.address)).toBe(balance + expectedCash)
 		expect(await shares()).toEqual([beforeShares[0], 0n, beforeShares[2]])
 		const state = await settlementState()
 		expect(state.frozenBookId).not.toBe(0n)
 		expect(state.question.outcomeSupplyAttoShares).toBe(0n)
 		expect(state.question.feeRateAttoEthPerSecond).toBe(0n)
 		expect(await secondCash()).toBe(otherCash)
-		expect(await fixture.owner().getBalance({ address: state.engine })).toBe((await questionCash(fixture.base.questionId)) + (await questionCash(fixture.secondQuestionId)))
+		expect(await collateralBalance(fixture.owner(), fixture.portfolio, state.engine)).toBe((await questionCash(fixture.base.questionId)) + (await questionCash(fixture.secondQuestionId)))
 		await refresh()
 		await refresh()
 		expect(await secondCash()).toBe(otherCash)
 		expect((await settlementState()).question.outcomeSupplyAttoShares).toBe(0n)
-		expect(await fixture.owner().getBalance({ address: state.engine })).toBe(await questionCash(fixture.secondQuestionId))
+		expect(await collateralBalance(fixture.owner(), fixture.portfolio, state.engine)).toBe(await questionCash(fixture.secondQuestionId))
 	})
 
 	test('partial complete-set return and the remaining winner preserve the frozen cash rate and other questions', async () => {
@@ -111,10 +112,10 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		const otherCash = await secondCash()
 		const amount = beforeShares[0] / 3n
 		const expectedCash = await fixture.other().readContract({ ...portfolio(), functionName: 'quoteQuestionSettlement', args: [pool().address, amount] })
-		const balance = await fixture.owner().getBalance({ address: before.engine })
+		const balance = await collateralBalance(fixture.owner(), fixture.portfolio, before.engine)
 		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...pool(), functionName: 'redeemCompleteSet', args: [amount] }))
 		expect(await shares()).toEqual([beforeShares[0] - amount, beforeShares[1] - amount, beforeShares[2] - amount])
-		expect(await fixture.owner().getBalance({ address: before.engine })).toBe(balance - expectedCash)
+		expect(await collateralBalance(fixture.owner(), fixture.portfolio, before.engine)).toBe(balance - expectedCash)
 		const after = await settlementState()
 		expect(after.frozenBookId).toBe(before.frozenBookId)
 		expect(after.question.feeRateAttoEthPerSecond).toBe(0n)
@@ -124,7 +125,7 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		expect((await settlementState()).question).toEqual(after.question)
 		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...pool(), functionName: 'redeemShares' }))
 		expect(await secondCash()).toBe(otherCash)
-		expect(await fixture.owner().getBalance({ address: before.engine })).toBe((await questionCash(fixture.base.questionId)) + (await questionCash(fixture.secondQuestionId)))
+		expect(await collateralBalance(fixture.owner(), fixture.portfolio, before.engine)).toBe((await questionCash(fixture.base.questionId)) + (await questionCash(fixture.secondQuestionId)))
 	})
 
 	test('a later fork leaves final cash at its source and child refresh cannot duplicate the claim', async () => {
@@ -149,9 +150,9 @@ describe('Statoblast: native finalized portfolio redemptions', () => {
 		const beforeShares = await shares()
 		const expectedCash = await owner.readContract({ ...portfolio(), functionName: 'quoteQuestionSettlement', args: [pool().address, beforeShares[1]] })
 		expect(expectedCash).toBeGreaterThan(0n)
-		const balance = await owner.getBalance({ address: state.engine })
+		const balance = await collateralBalance(owner, fixture.portfolio, state.engine)
 		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...pool(), functionName: 'redeemShares' }))
-		expect(await owner.getBalance({ address: state.engine })).toBe(balance - expectedCash)
+		expect(await collateralBalance(owner, fixture.portfolio, state.engine)).toBe(balance - expectedCash)
 		expect((await shares())[1]).toBe(0n)
 		await refresh()
 		const final = await settlementState()

@@ -162,6 +162,7 @@ export function PortfolioQuestionWorkspace({ accountState, parameters, deploymen
 				accountState={accountState}
 				loadingTradingDetails={trading.loadingTradingDetails}
 				loadingTradingForkUniverse={trading.loadingTradingForkUniverse}
+				collateralFunding={trading.collateralFunding}
 				onCreateCompleteSet={trading.createCompleteSet}
 				onMigrateShares={trading.migrateShares}
 				onRedeemCompleteSet={trading.redeemCompleteSet}

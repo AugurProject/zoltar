@@ -18,3 +18,11 @@ test('fixed policy questions normalize duplicate IDs and preserve full uint256 p
 	expect(parseFixedPortfolioQuestions('0x10, 2 16\n0')).toEqual([0n, 2n, 16n])
 	for (const value of ['', '-1', '2.5', '0x', String(1n << 256n), '1;2']) expect(() => parseFixedPortfolioQuestions(value)).toThrow()
 })
+
+test('six-decimal collateral parses minimums in token units and rejects excess precision', () => {
+	const config = parsePortfolioCreationEconomics(defaultPortfolioCreationDraft(), 6)
+	expect(config.minimumPurchaseFeeAttoEth).toBe(1_000n)
+	expect(config.minimumCommitmentAttoEth).toBe(1_000_000n)
+	expect(config.minimumOutcomeRate).toBe(10n ** 16n)
+	expect(() => parsePortfolioCreationEconomics({ ...defaultPortfolioCreationDraft(), minimumPurchaseFee: '0.0000001' }, 6)).toThrow('6 decimal places')
+})

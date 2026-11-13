@@ -809,11 +809,11 @@ describe('useOpenOracleOperations', () => {
 			},
 			{
 				amount: approvalCase.underRequiredAmount,
-				expectedMessage: `The ${approvalCase.tokenSymbol} approval must cover the refreshed dispute requirement`,
+				expectedMessage: undefined,
 				name: 'under-required explicit approval',
 			},
 		]) {
-			test(`approval preflight blocks ${rejectionCase.name} for the ${approvalCase.tokenLabel}`, async () => {
+			test(`approval preflight handles ${rejectionCase.name} for the ${approvalCase.tokenLabel}`, async () => {
 				const reportDetails = createOpenOracleReportDetails({
 					currentReporter: getAddress('0x00000000000000000000000000000000000000dd'),
 					reportTimestamp: 1n,
@@ -825,6 +825,9 @@ describe('useOpenOracleOperations', () => {
 				}))
 				const dependencies = createOpenOracleOperationsDependencies({
 					approveErc20,
+					disputeOracleReport: mock(async () => {
+						throw new Error('Unexpected dispute')
+					}),
 					loadOpenOracleReportDetails: mock(async () => reportDetails),
 				})
 				let hookState: UseOpenOracleOperationsState | undefined
@@ -845,8 +848,15 @@ describe('useOpenOracleOperations', () => {
 					await invokeOpenOracleApproval(requireHookState(hookState), approvalCase.action, rejectionCase.amount)
 				})
 
-				expect(approveErc20).not.toHaveBeenCalled()
-				expect(requireHookState(hookState).openOracleFeedback?.status.detail).toContain(rejectionCase.expectedMessage)
+				if (rejectionCase.expectedMessage === undefined) {
+					expect(approveErc20).toHaveBeenCalledTimes(1)
+					expect(approveErc20).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.anything(), rejectionCase.amount, approvalCase.action)
+					expect(dependencies.disputeOracleReport).not.toHaveBeenCalled()
+					expect(requireHookState(hookState).openOracleDisputeSubmission?.canSubmit).toBe(false)
+				} else {
+					expect(approveErc20).not.toHaveBeenCalled()
+					expect(requireHookState(hookState).openOracleFeedback?.status.detail).toContain(rejectionCase.expectedMessage)
+				}
 			})
 		}
 	}

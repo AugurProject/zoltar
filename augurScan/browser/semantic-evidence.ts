@@ -1,3 +1,4 @@
+import { collateralUnit, type CollateralUnit } from '../src/collateral.ts'
 import { annualFeeText } from './pool-metrics.ts'
 import { isRecord } from './api-validation.ts'
 import { exactNumber, exactUnit, percentFromBps, utcDateTime } from './format.ts'
@@ -12,10 +13,10 @@ const label = (key: string): string => {
 	return `${words.charAt(0).toUpperCase()}${words.slice(1)}`
 }
 
-const valueText = (key: string, value: unknown, nativeSymbol: string): string => {
+const valueText = (key: string, value: unknown, nativeSymbol: string, collateral?: CollateralUnit): string => {
 	if (value === undefined || value === null) return 'Unavailable'
 	if (typeof value === 'boolean') return value ? 'Yes' : 'No'
-	if (Array.isArray(value)) return value.map(item => valueText(key, item, nativeSymbol)).join(', ')
+	if (Array.isArray(value)) return value.map(item => valueText(key, item, nativeSymbol, collateral)).join(', ')
 	if (isRecord(value))
 		return semanticFields(value, nativeSymbol)
 			.map(([name, text]) => `${name}: ${text}`)
@@ -26,7 +27,8 @@ const valueText = (key: string, value: unknown, nativeSymbol: string): string =>
 		if (/^(activationTime|endTimestamp|nonDecisionTimestamp)$/.test(key) && BigInt(text) >= 0n && BigInt(text) <= 8_640_000_000_000n) return utcDateTime(Number(text) * 1000)
 		const unitKey = key.replaceAll('_', '')
 		if (/attoRep/i.test(unitKey)) return exactUnit(text, 18, 'REP')
-		if (/attoEth/i.test(unitKey) || key === 'wad') return exactUnit(text, 18, nativeSymbol)
+		if (/attoEthPerGas/i.test(unitKey)) return exactUnit(text, 18, `${nativeSymbol}/gas`)
+		if (/attoEth/i.test(unitKey) || key === 'wad') return collateral === undefined ? exactUnit(text, 18, nativeSymbol) : exactUnit(text, collateral.decimals, collateral.symbol)
 		if (/shares/i.test(unitKey)) return exactUnit(text, 18, 'shares')
 		if (/^feeIndex$/i.test(unitKey)) return exactUnit(text, 18, 'ratio')
 		if (/bps$/i.test(unitKey)) return percentFromBps(text)
@@ -40,7 +42,7 @@ export const semanticFields = (data: Readonly<Record<string, unknown>>, nativeSy
 	Object.entries(data).flatMap(([key, value]) => {
 		if (/^(current|initial)?retentionrate$/i.test(key.replaceAll('_', ''))) return [[key.toLowerCase().startsWith('initial') ? 'Initial annual open-interest fee' : 'Annual open-interest fee', annualFeeText(value)] as const]
 		if (key === 'outcomeBalancesAttoRep' && Array.isArray(value)) return value.map((balance, index): readonly [string, string] => [`${outcomes[index] ?? index} balance`, valueText('amountAttoRep', balance, nativeSymbol)])
-		return [[label(key), valueText(key, value, nativeSymbol)] as const]
+		return [[label(key), valueText(key, value, nativeSymbol, data['collateral'] === undefined ? undefined : collateralUnit(data))] as const]
 	})
 
 export const semanticSummary = (record: Readonly<Record<string, unknown>>, nativeSymbol: string): string => {

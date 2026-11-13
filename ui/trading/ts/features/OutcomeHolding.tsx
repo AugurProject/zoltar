@@ -10,7 +10,7 @@ import { marketsCopy } from '../copy/markets.js'
 export function OutcomeHolding({ amount, outcome, market, noteRedemption = true, rounding = 'down' }: { amount: bigint; outcome: ShareOutcome; market: LiveMarket; noteRedemption?: boolean; rounding?: ShareValueRounding }) {
 	return (
 		<>
-			{formatOutcomeQuantity(amount, outcome, 4, rounding)}
+			{formatOutcomeQuantity(amount, outcome, 4, rounding, market)}
 			<small className='payout-caption'> {formatOutcomePayout(amount, outcome, market, rounding, { noteRedemption })}</small>
 		</>
 	)

@@ -1,3 +1,4 @@
+import { collateralAsset } from '../protocol/collateral.js'
 import { FavoriteToggle } from '@zoltar/ui-core-shared/components/FavoriteToggle.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
@@ -116,7 +117,7 @@ export function LiveSecurityPoolDetails({
 										)}
 									</MetricField>
 									{market.questionOutcome === 3 ? undefined : <MetricField label={liveCopy.outcome}>{questionOutcomeLabel(market.questionOutcome)}</MetricField>}
-									<MetricField label={liveCopy.mintingCapacity}>{formatEthAmountPair(market.settlementCollateralAttoEth, market.mintingCapacityCeilingAttoEth)}</MetricField>
+									<MetricField label={liveCopy.mintingCapacity}>{formatEthAmountPair(market.settlementCollateralAttoEth, market.mintingCapacityCeilingAttoEth, collateralAsset(market))}</MetricField>
 								</DataGrid>
 							</div>
 							{market.pair === undefined ? (
@@ -138,7 +139,7 @@ export function LiveSecurityPoolDetails({
 									<MetricField label={liveCopy.securityMultiplier}>{formatMultiplier(market.statoblastSecurityMultiplierBps, 4)}</MetricField>
 									<MetricField label={liveCopy.initialReportPriorityFee}>{formatInitialReportPriorityFee(market.initialReportPriorityFeeAttoEthPerGas)}</MetricField>
 									<MetricField label={liveCopy.retentionRatePerSecond}>{formatMultiplier(market.currentRetentionRate, 18, 12)}</MetricField>
-									<MetricField label={liveCopy.commitmentLimits}>{formatEthAmountPair(market.totalUnderwritingLimitAttoEth, market.feeEligibleUnderwritingLimitAttoEth)}</MetricField>
+									<MetricField label={liveCopy.commitmentLimits}>{formatEthAmountPair(market.totalUnderwritingLimitAttoEth, market.feeEligibleUnderwritingLimitAttoEth, collateralAsset(market))}</MetricField>
 								</DataGrid>
 							</ReadOnlyDetailAccordion>
 							<BackingDetails market={market} />

@@ -9,6 +9,7 @@ import {
 	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 } from '../types/contractArtifact'
+import { collateralBalance } from './statoblast/burnEvidence'
 import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
 
 // Fee-stream, liquidation, retirement-tree, fork, and auction invariants have their
@@ -45,7 +46,8 @@ describe('Portfolio cross-question conservation model', () => {
 					expect(await getERC20Balance(owner, getRepTokenAddress(fixture.base.genesisUniverse), question.securityPool)).toBe(0n)
 					cash += question.cash
 				}
-				expect(await owner.getBalance({ address: settlement })).toBe(cash + forcedSurplus)
+				expect(await owner.getBalance({ address: settlement })).toBe(forcedSurplus)
+				expect(await collateralBalance(owner, fixture.portfolio, settlement)).toBe(cash)
 				expect(await owner.readContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'demandAttoEth' })).toBe(cash)
 				expect(await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'availableMintCapacity', args: [fixture.base.genesisUniverse] })).toBe(200n * unit - cash)
 				expect(await getERC20Balance(owner, getRepTokenAddress(fixture.base.genesisUniverse), fixture.capitalLedger)).toBe(1_000n * unit)
@@ -55,11 +57,11 @@ describe('Portfolio cross-question conservation model', () => {
 				if (question === undefined) throw new Error('Model question missing')
 				if (question.cash !== 0n && random(3n) === 0n) {
 					const amount = random(question.cash) + 1n
-					const before = await trader.getBalance({ address: trader.account.address })
+					const before = await collateralBalance(trader, fixture.portfolio, trader.account.address)
 					const hash = await writeContractAndWait(trader, () => trader.writeContract({ abi: poolArtifact.abi, address: question.securityPool, functionName: 'redeemCompleteSet', args: [amount] }))
 					const receipt = await trader.waitForTransactionReceipt({ hash })
-					if (receipt.effectiveGasPrice === undefined) throw new Error('Missing transaction gas price')
-					expect(await trader.getBalance({ address: trader.account.address })).toBe(before + amount - receipt.gasUsed * receipt.effectiveGasPrice)
+					expect(receipt.status).toBe('success')
+					expect(await collateralBalance(trader, fixture.portfolio, trader.account.address)).toBe(before + amount)
 					question.cash -= amount
 				} else {
 					const amount = step === 0 ? 1n : random(3n * unit) + 1n

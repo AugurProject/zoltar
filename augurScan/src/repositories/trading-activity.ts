@@ -154,7 +154,11 @@ export const tradingActivityRows = async (sql: SQL, query: TradingActivityQuery)
 	const { cursorBlock, cursorLog, cursorTx, queryLimit } = query
 	return await sql`
 		SELECT leg.block_hash, leg.tx_hash, leg.block_number::text, leg.log_index, leg.timestamp_seconds::text, leg.kind, leg.side, leg.account,
-			leg.shares::text, leg.eth_in::text AS eth_in_atto_eth, leg.eth_out::text AS eth_out_atto_eth, network.explorer_base_url
+			leg.shares::text, leg.eth_in::text AS eth_in_atto_eth, leg.eth_out::text AS eth_out_atto_eth, network.explorer_base_url,
+			(SELECT state.read_result->'collateral' FROM entity_state_snapshots state
+			 JOIN amm_markets market ON market.chain_id = state.chain_id AND market.pool_address = state.entity_identity AND market.canonical
+			 WHERE state.chain_id = ${query.chainId} AND market.pair_address = leg.pair_address AND state.entity_type = 'pool' AND state.canonical AND state.read_status = 'success' AND state.block_number <= ${query.asOfBlock}
+			 ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1) AS collateral
 		FROM (${tradingLegs(sql, { chainId: query.chainId, asOfBlock: query.asOfBlock, markets: [query.market] })}) leg
 		JOIN networks network ON network.chain_id = ${query.chainId}
 		WHERE (leg.block_number, leg.log_index, leg.tx_hash) < (${cursorBlock}::bigint, ${cursorLog}::integer, ${cursorTx})
@@ -166,6 +170,10 @@ export const tradingActivityRows = async (sql: SQL, query: TradingActivityQuery)
 export const tradingVolumeRows = async (sql: SQL, query: TradingLegFilter & { readonly asOfTimestamp: string }) =>
 	await sql`
 		SELECT leg.pair_address,
+			(SELECT state.read_result->'collateral' FROM entity_state_snapshots state
+			 JOIN amm_markets market ON market.chain_id = state.chain_id AND market.pool_address = state.entity_identity AND market.canonical
+			 WHERE state.chain_id = ${query.chainId} AND market.pair_address = leg.pair_address AND state.entity_type = 'pool' AND state.canonical AND state.read_status = 'success' AND state.block_number <= ${query.asOfBlock}
+			 ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1) AS collateral,
 			COALESCE(sum(COALESCE(leg.eth_in, 0) + COALESCE(leg.eth_out, 0)) FILTER (WHERE leg.kind IN ('enter', 'exit')), 0)::text AS eth_volume_atto_eth,
 			COALESCE(sum(COALESCE(leg.eth_in, 0) + COALESCE(leg.eth_out, 0)) FILTER (WHERE leg.kind IN ('enter', 'exit') AND leg.timestamp_seconds >= ${query.asOfTimestamp}::bigint - 86400), 0)::text AS eth_volume_24h_atto_eth,
 			COALESCE(sum(COALESCE(leg.eth_in, 0) + COALESCE(leg.eth_out, 0)) FILTER (WHERE leg.kind IN ('enter', 'exit') AND leg.timestamp_seconds >= ${query.asOfTimestamp}::bigint - 604800), 0)::text AS eth_volume_7d_atto_eth,
@@ -238,7 +246,7 @@ export const accountTradingRows = async (sql: SQL, query: { readonly chainId: nu
 			reserve.yes_reserve_atto_shares::text AS yes_reserve, reserve.no_reserve_atto_shares::text AS no_reserve, reserve.block_number::text AS reserve_block,
 			supply_state.supply::text AS share_supply_atto_shares, supply_state.block_number::text AS share_supply_block,
 			collateral_state.collateral::text AS settlement_collateral_atto_eth, collateral_state.block_number::text AS settlement_collateral_block,
-			question.end_time::text AS question_end_time, lifecycle.block_number::text AS pool_read_block, lifecycle.read_result->>'systemState' AS pool_system_state,
+			lifecycle.read_result->'collateral' AS collateral, question.end_time::text AS question_end_time, lifecycle.block_number::text AS pool_read_block, lifecycle.read_result->>'systemState' AS pool_system_state,
 			lifecycle.read_result->>'awaitingForkContinuation' AS pool_awaiting_fork_continuation, lifecycle.read_result->>'escalationResolved' AS pool_escalation_resolved,
 			system_event.state->>'systemState' AS system_state_event, system_event.block_number::text AS system_state_event_block,
 			continuation_event.state->>'awaitingForkContinuation' AS awaiting_fork_continuation_event, continuation_event.block_number::text AS awaiting_fork_continuation_event_block,

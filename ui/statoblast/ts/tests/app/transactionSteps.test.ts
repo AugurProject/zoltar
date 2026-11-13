@@ -872,6 +872,9 @@ test('minting complete sets sends the transaction directly and tracks its receip
 			if (request.functionName === 'escalationGame') return '0x0000000000000000000000000000000000000000'
 			if (request.functionName === 'securityPoolFactory') return account
 			if (request.functionName === 'getSecurityPoolPortfolio' || request.functionName === 'getPool') return account
+			if (request.functionName === 'collateralToken') return MAINNET_NETWORK_PROFILE.wethAddress
+			if (request.functionName === 'services') return account
+			if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 10n ** 20n
 			if (request.functionName === 'purchaseQuote') return [0n, 0n]
 			if (request.functionName === 'availableMintCapacity' || request.functionName === 'attoEthToAttoShares') return 10n ** 18n
 			if (request.functionName === 'questionData') return account
@@ -887,7 +890,7 @@ test('minting complete sets sends the transaction directly and tracks its receip
 	})
 	expect(await createCompleteSetInSecurityPool(reviewed, account, 10n ** 18n)).toEqual({ action: 'createCompleteSet', hash, securityPoolAddress: account, universeId: 0n })
 	expect(sendTransaction).toHaveBeenCalledTimes(1)
-	expect(sendTransaction).toHaveBeenCalledWith(expect.objectContaining({ value: 10n ** 18n }))
+	expect(sendTransaction).toHaveBeenCalledWith(expect.objectContaining({ value: 0n }))
 	expect(transactionSteps.value?.showReviewDialog).toBe(false)
 	expect(transactionSteps.value?.steps[0]?.phase).toBe('confirmed')
 })

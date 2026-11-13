@@ -49,6 +49,10 @@
 			"bun": "./ts/features/markets/hooks/useMarketCreation.ts",
 			"default": "./js/features/markets/hooks/useMarketCreation.js"
 		},
+		"./features/markets/hooks/useTradingCollateral.js": {
+			"bun": "./ts/features/markets/hooks/useTradingCollateral.ts",
+			"default": "./js/features/markets/hooks/useTradingCollateral.js"
+		},
 		"./features/markets/hooks/useTradingOperations.js": {
 			"bun": "./ts/features/markets/hooks/useTradingOperations.ts",
 			"default": "./js/features/markets/hooks/useTradingOperations.js"
@@ -92,6 +96,10 @@
 		"./lib/routing.js": {
 			"bun": "./ts/lib/routing.ts",
 			"default": "./js/lib/routing.js"
+		},
+		"./protocol/collateral.js": {
+			"bun": "./ts/protocol/collateral.ts",
+			"default": "./js/protocol/collateral.js"
 		},
 		"./protocol/contractLabels.js": {
 			"bun": "./ts/protocol/contractLabels.ts",

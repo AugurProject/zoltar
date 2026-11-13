@@ -226,6 +226,25 @@ test('portfolio creation rejects priority fees above the oracle funding bound be
 	expect(hook.state().creationError).toBeUndefined()
 })
 
+for (const symbol of ['USDC', 'USDT'] as const)
+	test(`${symbol} creation validates the configured oracle floor in six-decimal collateral units`, async () => {
+		capitalClient().install()
+		const hook = await renderHookWithProps(usePortfolioActionsWrapper, { model: model() })
+		lifecycle.trackRendered(hook)
+		await act(() => {
+			hook.state().setCollateralSymbol(symbol)
+			hook.state().setReportFloor('0.0000001')
+		})
+		expect(hook.state().deployReason).toContain('up to 6 decimal places')
+		await act(() => {
+			hook.state().setReportFloor('0.000001')
+			hook.state().setEconomicsField('minimumCommitment', '100')
+			hook.state().setEconomicsField('minimumPurchaseFee', '1')
+		})
+		expect(hook.state().deployReason).toContain('admission policy first')
+		await act(() => hook.state().setReportFloor('0'))
+		expect(hook.state().deployReason).toContain('positive report stake floor')
+	})
 test('the origin universe follows the selected universe until the user edits it', async () => {
 	capitalClient().install()
 	const hook = await renderHookWithProps(usePortfolioActionsWrapper, { model: { ...model(), universeInput: '7' } })
@@ -301,4 +320,15 @@ test('a fork between the two paid deployments stops the portfolio deployment', a
 	expect(requests).toHaveLength(1)
 	expect(hook.state().error).toContain('has forked')
 	expect(hook.state().deployReason).toContain('has forked')
+})
+
+test('changing collateral requires deliberate token-denominated economic amounts', async () => {
+	capitalClient().install()
+	const hook = await renderHookWithProps(usePortfolioActionsWrapper, { model: model() })
+	lifecycle.trackRendered(hook)
+	await act(() => hook.state().setCollateralSymbol('USDC'))
+	expect(hook.state().reportFloor).toBe('')
+	expect(hook.state().economicsDraft.minimumCommitment).toBe('')
+	expect(hook.state().economicsDraft.minimumPurchaseFee).toBe('')
+	expect(hook.state().creationError).toBeDefined()
 })

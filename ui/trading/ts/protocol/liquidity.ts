@@ -1,3 +1,4 @@
+import { tokenFunded } from './collateral.js'
 import { simulateLiquidity, type LiquidityOperation } from './liquiditySimulation.js'
 import { requireFreshSubmissionWindow } from './submissionWindow.js'
 import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
@@ -48,11 +49,15 @@ export async function submitFreshLiquidity(client: WalletClient, configuration: 
 		return initializedPairAddress === undefined
 			? await guardedWrite(async () => {
 					await requireFreshSubmissionWindow(client, quote.market, quote.operation, refreshed.deadline)
-					return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [quote.market.pool, refreshed.mintAttoEth, quote.conditionalYesBps, minimumLiquidity, account, refreshed.deadline], value: quote.amount })
+					return tokenFunded(quote.market)
+						? await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithCollateral', account, args: [quote.market.pool, refreshed.mintAttoEth, quote.conditionalYesBps, minimumLiquidity, account, refreshed.deadline, quote.amount] })
+						: await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [quote.market.pool, refreshed.mintAttoEth, quote.conditionalYesBps, minimumLiquidity, account, refreshed.deadline], value: quote.amount })
 				})
 			: await guardedWrite(async () => {
 					await requireFreshSubmissionWindow(client, quote.market, quote.operation, refreshed.deadline)
-					return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [initializedPairAddress, refreshed.mintAttoEth, quote.conditionalYesBps, minimumLiquidity, account, refreshed.deadline], value: quote.amount })
+					return tokenFunded(quote.market)
+						? await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithCollateral', account, args: [initializedPairAddress, refreshed.mintAttoEth, quote.conditionalYesBps, minimumLiquidity, account, refreshed.deadline, quote.amount] })
+						: await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [initializedPairAddress, refreshed.mintAttoEth, quote.conditionalYesBps, minimumLiquidity, account, refreshed.deadline], value: quote.amount })
 				})
 	}
 	const pairAddress = quote.market.pair
@@ -69,7 +74,9 @@ export async function submitFreshLiquidity(client: WalletClient, configuration: 
 		if (feeBlocker !== undefined) throw new Error(feeBlocker)
 		return await guardedWrite(async () => {
 			await requireFreshSubmissionWindow(client, quote.market, quote.operation, refreshed.deadline)
-			return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithEth', account, args: [pairAddress, refreshed.mintAttoEth, maximumYes, maximumNo, minimumLiquidity, account, refreshed.deadline], value: quote.amount })
+			return tokenFunded(quote.market)
+				? await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithCollateral', account, args: [pairAddress, refreshed.mintAttoEth, maximumYes, maximumNo, minimumLiquidity, account, refreshed.deadline, quote.amount] })
+				: await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithEth', account, args: [pairAddress, refreshed.mintAttoEth, maximumYes, maximumNo, minimumLiquidity, account, refreshed.deadline], value: quote.amount })
 		})
 	}
 	const minimumYes = retainApprovedMinimum(bounds.minimumYes, refreshed.expectedYes, 'YES')

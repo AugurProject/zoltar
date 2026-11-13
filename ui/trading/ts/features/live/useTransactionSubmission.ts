@@ -7,7 +7,7 @@ import { broadcastUncertainMessage, positionControlsWorkflowLocked } from '../li
 import { createMarketTransactionActivity } from './marketTransactionActivity.js'
 import { marketTransactionWorkflow, marketTransactionWorkflowsReducer, transactionMarketKey, transactionPhase, transactionWorkflowError, transactionWorkflowHash, transactionWorkflowReceiptWarning, type TransactionContext, type TransactionWorkflowEvent } from './transactionWorkflow.js'
 
-export type TransactionOperation = 'trade' | 'liquidity' | 'settlement'
+export type TransactionOperation = 'trade' | 'liquidity' | 'settlement' | 'approval'
 
 /** Wraps the wallet write so the workflow shows "Confirm in wallet" exactly while the wallet is asked to sign. */
 type RequestSignature = <T>(write: () => Promise<T>) => Promise<T>

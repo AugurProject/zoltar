@@ -67,6 +67,7 @@ test('never retries a wallet send against the public RPC', async () => {
 			methods.push(method)
 			if (method === 'eth_accounts') return [zeroAddress]
 			if (method === 'eth_chainId') return '0xaa36a7'
+			if (method === 'eth_call') return '0x'
 			throw { code: -32603, message: 'RetryOnEmptyMiddleware - retries exhausted' }
 		},
 	}

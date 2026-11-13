@@ -1,0 +1,7 @@
+export const loading = 'Loading token balances and approvals.'
+export const unavailable = 'Token funding is unavailable. Retry before sending.'
+export const wrapRequired = 'Wrap the required ETH into WETH first.'
+export const approvalRequired = 'Token approval required.'
+export const insufficient = 'Insufficient token balance to fund the report.'
+export const notNeeded = 'Not needed.'
+export const funding = 'Report funding'

@@ -4,6 +4,9 @@ import { address } from '../operations/fixture.ts'
 export function auctionFixture(): AuctionSnapshot {
 	return {
 		address: address(600),
+		collateralToken: address(7),
+		walletCollateral: '1000000000000000000',
+		collateralAllowance: '1000000000000000000',
 		engine: address(601),
 		portfolio: address(501),
 		universeId: '2',

@@ -65,7 +65,7 @@ export const browseMarkets = 'Browse markets'
 
 export const refreshPortfolio = 'Refresh portfolio'
 
-export const recoveryRepExcluded = 'REP recovery is shown per position and excluded from the ETH total.'
+export const recoveryRepExcluded = 'REP recovery is shown per position and excluded from collateral totals.'
 
 export function formatRecoveryRepTail(amount: string) {
 	return ` + ${amount} REP`

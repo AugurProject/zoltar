@@ -1,3 +1,4 @@
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 /// <reference types="bun-types" />
 
 import { signal } from '@preact/signals'
@@ -5,7 +6,7 @@ import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/co
 import type { GlobalTransactionPresentation } from '@zoltar/ui-core-shared/types/components.js'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { fireEvent, within, waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { withFakeClock } from '@zoltar/ui-core-shared/tests/testUtils/fakeClock.js'
 import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-core-shared/tests/testUtils/walletActions.js'
@@ -96,6 +97,7 @@ function createOpenOracleSectionProps(overrides: Partial<OpenOracleSectionTestPr
 		environmentReady: true,
 		environmentRefreshKey: 0,
 		loadCreateTokenMetadata: loadTestTokenMetadata,
+		loadCreateFunding: async () => ({ balance: (1n << 256n) - 1n, allowance: (1n << 256n) - 1n }),
 		loadingOpenOracleCreate: false,
 		onActiveViewChange: () => undefined,
 		onApproveToken1: () => undefined,
@@ -193,6 +195,118 @@ describe('OpenOracleSection route create view', () => {
 			await cleanupRenderedComponent?.()
 			cleanupRenderedComponent = undefined
 		},
+	})
+
+	test('refreshes external token funding and approval changes on new blocks without form edits', async () => {
+		const block = signal(1n)
+		let balance = 0n
+		let allowance = 0n
+		const load = mock(async () => ({ balance, allowance }))
+		const create = mock(() => undefined)
+		const props = createOpenOracleSectionProps({
+			accountState: createAccountState({ ethBalanceAttoEth: 10n ** 18n }),
+			loadCreateFunding: load,
+			onCreateOpenOracleGame: create,
+			openOracleCreateForm: { ...getDefaultOpenOracleCreateFormState(), token1Address: '0x2000000000000000000000000000000000000000', token2Address: '0x3000000000000000000000000000000000000000', exactToken1Report: '1', initialToken2Amount: '1' },
+		})
+		function Harness() {
+			return (
+				<ChainBlockNumberContext.Provider value={block.value}>
+					<OpenOracleSection {...props} />
+				</ChainBlockNumberContext.Provider>
+			)
+		}
+		const rendered = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = rendered.cleanup
+		await waitFor(() => expect(document.body.textContent).toContain('Insufficient token balance to fund the report.'))
+		expectTransactionButtonDisabled(document.body, 'Create standalone OpenOracle report')
+		balance = 10n ** 20n
+		await act(() => {
+			block.value = 2n
+		})
+		await waitFor(() => expect(document.body.textContent).toContain('Token approval required.'))
+		allowance = 10n ** 20n
+		await act(() => {
+			block.value = 3n
+		})
+		await waitFor(() => expectTransactionButtonEnabled(document.body, 'Create standalone OpenOracle report'))
+		allowance = 0n
+		await act(() => {
+			block.value = 4n
+		})
+		await waitFor(() => expectTransactionButtonDisabled(document.body, 'Create standalone OpenOracle report'))
+		expect(create).not.toHaveBeenCalled()
+	})
+
+	test('coalesces blocks during a slow funding read and keeps useful data visible', async () => {
+		const block = signal(1n)
+		const first = createDeferred<{ balance: bigint; allowance: bigint }>()
+		const next = createDeferred<{ balance: bigint; allowance: bigint }>()
+		let reads = 0
+		const load = mock(() => {
+			reads++
+			return reads <= 2 ? first.promise : next.promise
+		})
+		const props = createOpenOracleSectionProps({
+			accountState: createAccountState({ ethBalanceAttoEth: 10n ** 18n }),
+			loadCreateFunding: load,
+			openOracleCreateForm: { ...getDefaultOpenOracleCreateFormState(), token1Address: '0x2000000000000000000000000000000000000000', token2Address: '0x3000000000000000000000000000000000000000', exactToken1Report: '1', initialToken2Amount: '1' },
+		})
+		function Harness() {
+			return (
+				<ChainBlockNumberContext.Provider value={block.value}>
+					<OpenOracleSection {...props} />
+				</ChainBlockNumberContext.Provider>
+			)
+		}
+		const rendered = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = rendered.cleanup
+		await waitFor(() => expect(load).toHaveBeenCalledTimes(2))
+		await act(() => {
+			block.value = 2n
+		})
+		await act(() => {
+			block.value = 3n
+		})
+		expect(load).toHaveBeenCalledTimes(2)
+		await act(() => first.resolve({ balance: 0n, allowance: 0n }))
+		await waitFor(() => expect(load).toHaveBeenCalledTimes(4))
+		expect(document.body.textContent).toContain('Insufficient token balance to fund the report.')
+		await act(() => next.resolve({ balance: 10n ** 20n, allowance: 10n ** 20n }))
+		await waitFor(() => expectTransactionButtonEnabled(document.body, 'Create standalone OpenOracle report'))
+	})
+
+	test('retries failed funding reads without submitting a transaction', async () => {
+		let failed = true
+		const load = mock(async () => {
+			if (failed) throw new Error('Funding RPC unavailable')
+			return { balance: 10n ** 20n, allowance: 10n ** 20n }
+		})
+		const create = mock(() => undefined)
+		const rendered = await renderIntoDocument(
+			<OpenOracleSection
+				{...createOpenOracleSectionProps({
+					loadCreateFunding: load,
+					onCreateOpenOracleGame: create,
+					openOracleCreateForm: { ...getDefaultOpenOracleCreateFormState(), token1Address: '0x2000000000000000000000000000000000000000', token2Address: '0x3000000000000000000000000000000000000000', exactToken1Report: '1', initialToken2Amount: '1' },
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		await waitFor(() => expect(document.body.textContent).toContain('Funding RPC unavailable'))
+		expectTransactionButtonDisabled(document.body, 'Create standalone OpenOracle report')
+		const firstReads = load.mock.calls.length
+		failed = false
+		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Retry' })))
+		await waitFor(() => expect(document.body.textContent).not.toContain('Funding RPC unavailable'))
+		expect(load.mock.calls.length).toBeGreaterThan(firstReads)
+		expect(create).not.toHaveBeenCalled()
+	})
+
+	test('hides funding actions until a valid token pair and amounts are entered', async () => {
+		const rendered = await renderIntoDocument(<OpenOracleSection {...createOpenOracleSectionProps()} />)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(document.body.textContent).not.toContain('Approve Report funding')
 	})
 
 	test('keeps create-summary token addresses copyable and linked to Etherscan', async () => {
@@ -950,7 +1064,7 @@ describe('OpenOracleSection route create view', () => {
 		expectTransactionButtonDisabled(document.body, 'Create standalone OpenOracle report', openOracleCopy.readingTokenMetadata)
 		await flushTokenMetadata()
 
-		expectTransactionButtonEnabled(document.body, 'Create standalone OpenOracle report')
+		await waitFor(() => expectTransactionButtonEnabled(document.body, 'Create standalone OpenOracle report'))
 	})
 
 	test('validates high-precision token1 amounts inline against the loaded token decimals', async () => {
@@ -1009,7 +1123,7 @@ describe('OpenOracleSection route create view', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		await flushTokenMetadata()
 
-		expectTransactionButtonEnabled(document.body, 'Create standalone OpenOracle report')
+		await waitFor(() => expectTransactionButtonEnabled(document.body, 'Create standalone OpenOracle report'))
 	})
 
 	test('uses valid timing defaults for every lifecycle parameter', async () => {
@@ -1037,7 +1151,7 @@ describe('OpenOracleSection route create view', () => {
 		await flushTokenMetadata()
 
 		const documentQueries = within(document.body)
-		expectTransactionButtonEnabled(document.body, 'Create standalone OpenOracle report')
+		await waitFor(() => expectTransactionButtonEnabled(document.body, 'Create standalone OpenOracle report'))
 		expect(documentQueries.queryByRole('heading', { name: 'Transaction review' })).toBeNull()
 		for (const label of ['Settlement delay (seconds)', 'Dispute delay (seconds)', 'Dispute fee (%)', 'Multiplier', 'Escalation halt', 'Protocol fee (%)']) {
 			expect(documentQueries.getByLabelText(label)).not.toBeNull()

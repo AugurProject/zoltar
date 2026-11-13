@@ -1,3 +1,4 @@
+import { formatCollateralAmount } from '../protocol/collateral.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
@@ -39,7 +40,7 @@ export function PortfolioRowValue({ valuation }: { valuation: PortfolioValuation
 		<div className='portfolio-position-value'>
 			<span className='metric-label'>{portfolioCopy.valueNow}</span>
 			<strong className={valuation.kind === 'unavailable' ? 'is-unpriced' : undefined}>
-				{valuation.kind === 'unavailable' ? <UnpricedValue /> : `${formatPortfolioEth(valuation.attoEth)}${(valuation.attoRep ?? 0n) === 0n ? '' : portfolioCopy.formatRecoveryRepTail(formatRoundedUnits(valuation.attoRep ?? 0n, 18, 4))}`}
+				{valuation.kind === 'unavailable' ? <UnpricedValue /> : `${formatCollateralAmount(valuation.attoEth, valuation)}${(valuation.attoRep ?? 0n) === 0n ? '' : portfolioCopy.formatRecoveryRepTail(formatRoundedUnits(valuation.attoRep ?? 0n, 18, 4))}`}
 			</strong>
 			<small className='payout-caption'>{valuationCaption(valuation)}</small>
 		</div>
@@ -54,12 +55,13 @@ function totalValueCaptions(overview: PortfolioOverview) {
 
 /** Current value, position count, and action items across every listed position. With no priced position the total is a dash, not a misleading 0 ETH. */
 export function PortfolioSummary({ overview }: { overview: PortfolioOverview }) {
+	const totalValue = overview.totalsByAsset === undefined ? formatPortfolioEth(overview.totalValueAttoEth) : overview.totalsByAsset.map(({ asset, value }) => <div key={asset.token}>{formatCollateralAmount(value, { collateral: asset })}</div>)
 	const noPricedPosition = overview.positionCount > 0 && overview.unvaluedCount === overview.positionCount
 	return (
 		<section className='portfolio-summary' aria-label={portfolioCopy.summaryLabel}>
 			<DataGrid className='portfolio-summary-grid'>
 				<MetricField label={portfolioCopy.totalValue} valueClassName={noPricedPosition ? 'is-unpriced' : undefined}>
-					{noPricedPosition ? <UnpricedValue /> : formatPortfolioEth(overview.totalValueAttoEth)}
+					{noPricedPosition ? <UnpricedValue /> : totalValue}
 					{totalValueCaptions(overview).map(caption => (
 						<small key={caption} className='payout-caption'>
 							{caption}

@@ -18,6 +18,7 @@ type TradingRouteContentProps = {
 	accountState: AccountState
 	loadingTradingForkUniverse: boolean
 	loadingTradingDetails: boolean
+	collateralFunding?: ReturnType<typeof import('./markets/hooks/useTradingCollateral.js').useTradingCollateral>
 	onCreateCompleteSet: () => void
 	onMigrateShares: () => void
 	onRedeemCompleteSet: () => void

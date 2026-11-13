@@ -122,3 +122,10 @@ test('collects only supported inner token amounts, deduplicated and within the d
 	expect(candidates(nested)).toEqual([token])
 	expect(candidates(wrapped(concatHex([target, toHex(0n, { size: 32 }), nested])))).toEqual([])
 })
+
+test('nested pool redemptions resolve the inner target collateral rather than guessing native units', () => {
+	const call = encodeFunctionData({ abi: parseAbi(['function redeemCompleteSet(uint256 amountAttoShares)']), functionName: 'redeemCompleteSet', args: [1_000_000n] })
+	const decoded = decodeAction(undefined, wrapped(concatHex([target, toHex(0n, { size: 32 }), call])), labels, new Map(), kinds, { nativeSymbol: 'ETH', collateralByAddress: new Map([[target.toLowerCase(), { symbol: 'USDC', decimals: 6 }]]) })
+	expect(decoded.summary).toContain('=1 shares')
+	expect(decoded.summary).not.toContain('0.000000000001 shares')
+})

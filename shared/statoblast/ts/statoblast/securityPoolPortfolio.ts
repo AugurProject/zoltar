@@ -2,6 +2,8 @@ export { portfolioTakeoverSource } from './securityPoolPortfolioTakeover.js'
 import { type Abi, type Address, type Hex, encodeDeployData, encodeFunctionData, isAddress, isHex, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 
 export type PortfolioOriginConfig = {
+	collateralToken: Address
+	minimumReportCollateral: bigint
 	universeId: bigint
 	securityMultiplierBps: bigint
 	reportPriorityFeeAttoEthPerGas: bigint
@@ -43,6 +45,9 @@ export function validatePortfolioEconomics(config: PortfolioEconomicsConfig) {
 
 /** Compiled artifacts are injected so this SDK does not depend on generated contracts. */
 export function buildPortfolioDeploymentRequest(parameters: { owner: Address; factory: Address; origin: PortfolioOriginConfig; maximumQuestionHorizonSeconds: bigint; deployers: PortfolioDeployers; questionAdmissionPolicy: Address; economics: PortfolioEconomicsConfig; artifact: { abi: Abi; bytecode: Hex } }) {
+	address(parameters.origin.collateralToken, 'Collateral token')
+	uint(parameters.origin.minimumReportCollateral, 128, 'Report collateral floor')
+	if (parameters.origin.minimumReportCollateral === 0n) throw new Error('Report collateral floor must be positive.')
 	address(parameters.owner, 'Owner')
 	address(parameters.factory, 'Factory')
 	uint(parameters.origin.universeId, 248, 'Origin universe')
@@ -129,7 +134,6 @@ export {
 	buildPortfolioAuctionRefundClaimRequest,
 	buildPortfolioAuctionVaultExecuteRequest,
 	buildPortfolioAuctionVaultDepositRequest,
-	type PortfolioAuctionSnapshot,
 	type PortfolioAuctionBid,
 } from './securityPoolPortfolioAuction.js'
 /** @public Vault clone code and address derivation for external verifiers, fixtures and smart-account tooling. */

@@ -182,6 +182,7 @@ function amountAfterReserve(balance: bigint, reserve: bigint) {
 }
 
 export function oracleRequestInventoryIsFunded(snapshot: EcosystemSnapshot, pool: PoolSnapshot, options: PlanningOptions, prepared: PreparedOracleRequest, transactionCount: number) {
+	if (pool.oracleRequestFunding.collateralToken !== undefined && pool.oracleRequestFunding.collateralToken.toLowerCase() !== snapshot.deployments.weth.toLowerCase()) return false
 	const weth = tokenInventory(snapshot, snapshot.deployments.weth)
 	const rep = tokenInventory(snapshot, pool.repToken)
 	if (weth === undefined || rep === undefined) return false
@@ -194,6 +195,7 @@ export function oracleRequestInventoryIsFunded(snapshot: EcosystemSnapshot, pool
 }
 
 export function oracleRequestPreparation(snapshot: EcosystemSnapshot, pool: PoolSnapshot, options: PlanningOptions): PreparedOracleRequest | undefined {
+	if (pool.oracleRequestFunding.collateralToken !== undefined && pool.oracleRequestFunding.collateralToken.toLowerCase() !== snapshot.deployments.weth.toLowerCase()) return undefined
 	try {
 		const weth = tokenInventory(snapshot, snapshot.deployments.weth)
 		const rep = tokenInventory(snapshot, pool.repToken)

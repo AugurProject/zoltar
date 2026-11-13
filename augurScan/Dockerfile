@@ -1,4 +1,4 @@
-ARG BUN_VERSION=1.4.2
+ARG BUN_VERSION=1.4.4
 
 FROM oven/bun:${BUN_VERSION}-alpine AS workspace
 WORKDIR /workspace
@@ -37,6 +37,7 @@ COPY shared/statoblast/ts ./shared/statoblast/ts
 RUN bun run --cwd shared/statoblast build
 WORKDIR /workspace/augurScan
 COPY augurScan/browser ./browser
+COPY augurScan/src/collateral.ts ./src/collateral.ts
 COPY augurScan/scripts/build-browser.ts ./scripts/build-browser.ts
 COPY augurScan/public ./public
 RUN bun run build:browser

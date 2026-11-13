@@ -15,14 +15,6 @@ export function parseOptionalRepAmountInput(value: string) {
 	return tryParseRepAmountInput(trimmed)
 }
 
-export function parseTradingAmountInput(value: string, label: string) {
-	return parseDecimalInput(value, label, 18)
-}
-
-export function tryParseTradingAmountInput(value: string) {
-	return tryParseDecimalInput(value, 18)
-}
-
 export function tryParseTimestampInput(value: string) {
 	const trimmed = normalizeNumericInput(value)
 	if (/^-?\d+$/.test(trimmed)) return BigInt(trimmed)

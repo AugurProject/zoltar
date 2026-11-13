@@ -1,3 +1,4 @@
+import { collateralPresentation } from './collateral.js'
 import { getAddress, parseAbi, type AbiValue, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { decodeAuctionVaultBindings, loadPortfolioAuctionSnapshot, predictAuctionVaultAddress, verifyAuctionVaultCode } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -72,7 +73,7 @@ export async function loadPortfolioBranchAuction(client: ReadClient, portfolio: 
 	if (auction !== undefined) await Promise.all(auction.bids.map(async bid => verifyAuctionVaultCode(await client.getCode({ address: bid.vault, blockNumber }), { implementation: auction.vaultImplementation, owner: bidder, capital: snapshot.capitalLedger, auction: auction.address, bidId: bid.id })))
 	const [block, chainId] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
 	if (block.hash !== snapshot.blockHash || chainId !== snapshot.chainId) throw new Error('Auction authentication changed. Refresh and retry.')
-	return snapshot
+	return { ...snapshot, collateral: collateralPresentation(snapshot.collateralToken) }
 }
 
 /** Authenticate one selected vault directly, including its original branch after later forks. */

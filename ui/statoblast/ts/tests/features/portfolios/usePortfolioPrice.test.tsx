@@ -1,3 +1,4 @@
+import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { decodeFunctionData, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
@@ -29,11 +30,13 @@ async function setup(configure: (fixture: ReturnType<typeof priceFixture>) => vo
 	if (target === undefined) throw new Error('Missing price target')
 	const requests: PortfolioTransaction[] = []
 	const labels: string[] = []
+	const actionIds: string[] = []
 	const actions: PortfolioPriceParameters['actions'] = {
 		scope: unscopedTransaction,
 		busy: undefined,
 		ownerReason: undefined,
 		runPortfolioAction: async (_a, label, build) => {
+			actionIds.push(_a)
 			labels.push(label)
 			requests.push(await build())
 		},
@@ -42,7 +45,7 @@ async function setup(configure: (fixture: ReturnType<typeof priceFixture>) => vo
 	const hook = await renderHookWithProps(usePortfolioPrice, parameters)
 	lifecycle.trackRendered(hook)
 	await waitFor(() => expect(hook.state().loading).toBe(false))
-	return { ...fixture, fork, target, actions, requests, labels, hook }
+	return { ...fixture, fork, target, actions, requests, labels, actionIds, hook }
 }
 function lastRequest(requests: PortfolioTransaction[]) {
 	const request = requests.at(-1)
@@ -68,7 +71,7 @@ test('wrapping and editable approvals remain independent from requesting a funde
 	const state = await setup()
 	await act(() => state.hook.state().setPrice('2'))
 	expect(state.hook.state().wrapReason).toBeUndefined()
-	expect(state.hook.state().requestReason).toContain('Wrap')
+	expect(state.hook.state().requestReason).toContain('Insufficient collateral')
 	await act(() => state.hook.state().wrap())
 	expect(state.requests).toHaveLength(1)
 	expect(lastRequest(state.requests)).toMatchObject({ to: priceWeth, value: 2n * unit })
@@ -171,7 +174,7 @@ test.each(['weth', 'rep'] as const)('the %s approval review names the exact sele
 	const amount = 9_125_000_000_000_000_000n
 	await act(() => state.hook.state().approve(tokenKind, amount))
 	const request = lastRequest(state.requests)
-	expect(state.labels.at(-1)).toBe(tokenKind === 'weth' ? 'Approve WETH for report' : 'Approve REP for report')
+	expect(state.labels.at(-1)).toBe(tokenKind === 'weth' ? 'Approve collateral for report' : 'Approve REP for report')
 	expect(request.reviewDescription).toContain(tokenKind === 'weth' ? '9.125 WETH' : '9.125 branch REP')
 	expect(request.reviewDescription).toContain(priceFeed)
 	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'approve', args: [priceFeed, amount] })
@@ -201,6 +204,42 @@ test('a sponsor change during fresh price validation invalidates the reviewed ac
 	await expect(validation).rejects.toThrow('wallet environment changed')
 })
 
+for (const symbol of ['USDC', 'USDT'] as const) {
+	test(`${symbol} reports require the actual collateral balance before review`, async () => {
+		const collateral = symbol === 'USDC' ? MAINNET_NETWORK_PROFILE.usdcAddress : MAINNET_NETWORK_PROFILE.usdtAddress
+		if (collateral === undefined) throw new Error('Expected configured collateral')
+		const state = await setup(f => {
+			f.values['collateralToken'] = collateral
+			f.values['minimumToken1ReportAttoEth'] = 2_000_000n
+			f.set(collateral, 'balanceOf', 1_999_999n)
+			f.setAllowances(100n * unit, 100n * unit)
+		})
+		await act(() => state.hook.state().setPrice('1'))
+		expect(state.hook.state().funding?.wrap).toBe(0n)
+		expect(state.hook.state().requestReason).toContain('Insufficient collateral')
+		await expect(state.hook.state().request()).rejects.toThrow('Insufficient collateral')
+		expect(state.requests).toHaveLength(0)
+	})
+
+	test(`${symbol} reports recheck collateral lost during transaction review`, async () => {
+		const collateral = symbol === 'USDC' ? MAINNET_NETWORK_PROFILE.usdcAddress : MAINNET_NETWORK_PROFILE.usdtAddress
+		if (collateral === undefined) throw new Error('Expected configured collateral')
+		const state = await setup(f => {
+			f.values['collateralToken'] = collateral
+			f.values['minimumToken1ReportAttoEth'] = 2_000_000n
+			f.set(collateral, 'balanceOf', 2_000_000n)
+			f.setAllowances(100n * unit, 100n * unit)
+		})
+		await act(() => state.hook.state().setPrice('1'))
+		expect(state.hook.state().requestReason).toBeUndefined()
+		await act(() => state.hook.state().request())
+		const request = lastRequest(state.requests)
+		await request.validateBeforeSubmit?.()
+		state.set(collateral, 'balanceOf', 1_999_999n)
+		await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Wallet report funding is insufficient')
+		expect(state.requests).toHaveLength(1)
+	})
+}
 test("another environment never compares against the previous one's price", async () => {
 	const state = await setup(fixture => {
 		fixture.values['lastPrice'] = 900n * unit
@@ -272,4 +311,19 @@ test('with nothing to price, the report waits for a target instead of loading fo
 	await state.hook.setProps({ scope: 'universe' })
 	expect(state.hook.state().loading).toBe(false)
 	expect(state.hook.state().refreshReason).toBe(priceCopy.scopes.universe.missingTarget)
+})
+
+test('a universe USDT reset uses its own transaction action instead of the branch action', async () => {
+	const collateral = MAINNET_NETWORK_PROFILE.usdtAddress
+	if (collateral === undefined) throw new Error('Expected USDT')
+	const state = await setup(f => {
+		f.values['collateralToken'] = collateral
+		f.values['minimumToken1ReportAttoEth'] = 2_000_000n
+		f.set(collateral, 'balanceOf', 2_000_000n)
+		f.setAllowances(1n, 100n * unit)
+	}, capitalSnapshot())
+	await act(() => state.hook.state().setPrice('1'))
+	await act(() => state.hook.state().approve('weth', 0n))
+	expect(state.actionIds).toEqual(['resetPortfolioPriceCollateral:universe'])
+	expect(decodeFunctionData({ abi, data: lastRequest(state.requests).data }).args).toEqual([priceFeed, 0n])
 })

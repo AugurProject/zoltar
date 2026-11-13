@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
+import { IERC20 } from '../IERC20.sol';
+import { Collateral } from '../Collateral.sol';
 
 import { Constants } from '../Constants.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
-/// @notice A branch auction of exact ETH lots. Lower REP-per-lot limits bid a
+/// @notice A branch auction of exact collateral lots. Lower REP-per-lot limits bid a
 /// higher price; every winning lot pledges exactly the same clearing REP.
 /// Weak demand buys all inventory; grid residue belongs to winners as REP fees.
 /// Its AVL tree freezes at closing and also owns unmaterialized winners' fees.
@@ -69,6 +71,7 @@ contract SecurityPoolUniformPriceAuction {
 	uint256 public maximumBidAttoRepPerLot;
 	uint256 public repGrid;
 	uint256 public depositedAttoEth;
+	uint256 private withdrawnCollateral;
 	uint256 public bidCount;
 	uint256 public remainingFeeLots;
 	bool public initialized;
@@ -89,7 +92,9 @@ contract SecurityPoolUniformPriceAuction {
 	event RefundWithdrawn(address indexed bidder, address indexed recipient, uint256 amountAttoEth);
 	event RaisedWithdrawn(address indexed recipient, uint256 amountAttoEth);
 
-	constructor(address controller_) {
+	IERC20 public immutable collateralToken;
+	constructor(address controller_, IERC20 token) {
+		collateralToken = token;
 		require(controller_ != address(0), 'Auction controller is required');
 		controller = controller_;
 	}
@@ -119,17 +124,19 @@ contract SecurityPoolUniformPriceAuction {
 		emit AuctionStarted(opensAt_, closesAt_, lotAttoEth_, targetLots_, inventoryAttoRep_, maximum);
 	}
 
-	function submitBid(address bidder, address vault, uint256 targetHealthBps, uint256 lots, uint256 minimumAttoRepPerLot) external payable onlyController returns (uint256 bidId) {
+	function submitBid(address bidder, address vault, uint256 targetHealthBps, uint256 lots, uint256 minimumAttoRepPerLot) external onlyController returns (uint256 bidId) {
 		require(initialized && !finalized, 'Auction is not accepting bids');
 		require(block.timestamp >= opensAt && block.timestamp < closesAt, 'Auction bidding window is closed');
 		require(bidder != address(0) && vault != address(0), 'Auction bidder and vault are required');
-		require(lots > 0 && lots <= type(uint128).max / lotAttoEth && msg.value == lots * lotAttoEth, 'Auction bid must fund exact whole ETH lots');
-		require(msg.value <= type(uint128).max - depositedAttoEth, 'Auction deposits exceed the supported range');
+		require(lots > 0 && lots <= type(uint128).max / lotAttoEth, 'Auction bid must fund exact whole ETH lots');
+		require(lots * lotAttoEth <= type(uint128).max - depositedAttoEth, 'Auction deposits exceed the supported range');
 		require(minimumAttoRepPerLot > 0 && minimumAttoRepPerLot % repGrid == 0, 'Auction bid must use the REP price grid');
 		require(minimumAttoRepPerLot <= maximumBidAttoRepPerLot, 'Auction bid exceeds the REP inventory per lot');
 		require(_pricePrefix(minimumAttoRepPerLot, PriceBoundary.Exclusive) < Math.min(targetLots, inventoryAttoRep / minimumAttoRepPerLot), 'Better bids already exclude this bid');
 		require(bidCount < type(uint96).max, 'Auction bid identifiers exhausted');
-		depositedAttoEth += msg.value;
+		// The controller transfers bidder collateral directly into this engine before registration.
+		require(collateralToken.balanceOf(address(this)) + withdrawnCollateral >= depositedAttoEth + lots * lotAttoEth, 'Auction bid collateral missing');
+		depositedAttoEth += lots * lotAttoEth;
 		bidId = ++bidCount;
 		bids[bidId] = Bid(bidder, vault, targetHealthBps, lots, minimumAttoRepPerLot, false, false);
 		nodes[bidId].height = 1;
@@ -226,8 +233,8 @@ contract SecurityPoolUniformPriceAuction {
 
 	/// @notice Credit `bidId` for its bidder unless someone already did, then pay
 	/// that bidder's whole credit, which may include refunds of its other bids.
-	/// Settlement and the credit reset complete before the single ETH transfer,
-	/// so a rejecting recipient reverts the new credit and keeps older credit intact.
+	/// Settlement and the credit reset complete before the single collateral transfer,
+	/// so a failed transfer reverts the new credit and keeps older credit intact.
 	function settleAndWithdrawRefund(uint256 bidId, address bidder, address payable recipient) external onlyController returns (uint256 amountAttoEth) {
 		Bid storage bid = bids[bidId];
 		require(bid.bidder != address(0) && bid.bidder == bidder, 'Auction bid belongs to another bidder');
@@ -310,8 +317,8 @@ contract SecurityPoolUniformPriceAuction {
 		uint256 amount = clearing.raisedAttoEth;
 		emit RaisedWithdrawn(recipient, amount);
 		if (amount == 0) return;
-		(bool sent, ) = recipient.call{value: amount}('');
-		require(sent, 'Auction proceeds transfer failed');
+		withdrawnCollateral += amount;
+		Collateral.send(collateralToken, recipient, amount);
 	}
 
 	function withdrawRefund(address payable recipient) external {
@@ -329,8 +336,8 @@ contract SecurityPoolUniformPriceAuction {
 		if (amount == 0) return 0;
 		refundCreditAttoEth[bidder] = 0;
 		emit RefundWithdrawn(bidder, recipient, amount);
-		(bool sent, ) = recipient.call{value: amount}('');
-		require(sent, 'Auction refund transfer failed');
+		withdrawnCollateral += amount;
+		Collateral.send(collateralToken, recipient, amount);
 	}
 
 	function bidderBidCount(address bidder) external view returns (uint256) {

@@ -1,3 +1,4 @@
+import { collateralBalance } from './burnEvidence'
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { encodeDeployData, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import {
@@ -69,7 +70,8 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 		const streams = await deploy(`0x${streamsDeployerArtifact.evm.bytecode.object}`)
 		const auctions = await deploy(`0x${auctionDeployerArtifact.evm.bytecode.object}`)
 		root = await deploy(encodeDeployData({ abi: rootArtifact.abi, bytecode: `0x${rootArtifact.evm.bytecode.object}`, args: [zoltar, capitals, indices, streams, auctions] }))
-		engine = await deploy(encodeDeployData({ abi: settlementArtifact.abi, bytecode: `0x${settlementArtifact.evm.bytecode.object}`, args: [root] }))
+		const collateral = await owner.readContract({ ...rootTarget(), functionName: 'collateralToken' })
+		engine = await deploy(encodeDeployData({ abi: settlementArtifact.abi, bytecode: `0x${settlementArtifact.evm.bytecode.object}`, args: [root, collateral] }))
 		const book = await deploy(encodeDeployData({ abi: bookArtifact.abi, bytecode: `0x${bookArtifact.evm.bytecode.object}`, args: [engine, 10n ** 12n] }))
 		const reporter = await deploy(encodeDeployData({ abi: reporterArtifact.abi, bytecode: `0x${reporterArtifact.evm.bytecode.object}`, args: [root, zoltar] }))
 		forks = await deploy(encodeDeployData({ abi: forkArtifact.abi, bytecode: `0x${forkArtifact.evm.bytecode.object}`, args: [root, zoltar] }))
@@ -100,7 +102,7 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 		await choose(alice, 1n)
 		await moveTo(forkTime + 8n * week)
 		await expect(choose(bob, 1n)).rejects.toThrow('Fork choice window closed')
-		expect(await bob.getBalance({ address: capital })).toBe(0n)
+		expect(await collateralBalance(bob, root, capital)).toBe(0n)
 	})
 
 	test('a fully chosen branch activates without an auction or a zero-value recap transaction', async () => {
@@ -136,7 +138,7 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 			expect((await owner.readContract({ abi: bookArtifact.abi, address: bookAddress, functionName: 'totals', args: [bookId] })).slice(0, 2)).toEqual([100n * E, 200n * E])
 		}
 		expect(await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'availableForkCashAttoEth', args: [0n] })).toBe(0n)
-		expect(await owner.getBalance({ address: engine })).toBe(200n * E)
+		expect(await collateralBalance(owner, root, engine)).toBe(200n * E)
 	})
 
 	test('unchosen child REP belongs to outcome claimants without bids or a fresh child price', async () => {
@@ -249,7 +251,7 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 		await moveTo(forkTime + 9n * week)
 		await finalize(await childId(1n))
 		expect(await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'availableForkCashAttoEth', args: [0n] })).toBe(0n)
-		expect(await owner.getBalance({ address: engine })).toBe(100n * E)
+		expect(await collateralBalance(owner, root, engine)).toBe(100n * E)
 	})
 
 	test('split holders combine only their recovery rights and collect all unchosen cash in partial redemptions', async () => {
@@ -261,8 +263,8 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 		await writeContractAndWait(bob, () => bob.writeContract({ ...target, functionName: 'transferPortfolioRecoveryRights', args: [0n, buyer.account.address, [200n * E, 0n, 200n * E]] }))
 		for (const amount of [80n * E, 120n * E]) await writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'recoverUnchosenCash', args: [0n, 1n, amount] }))
 		expect((await owner.readContract({ ...forkTarget(), functionName: 'forks', args: [0n] })).neutralCash).toBe(100n * E)
-		expect(await owner.getBalance({ address: forks })).toBe(0n)
-		expect(await owner.getBalance({ address: engine })).toBe(100n * E)
+		expect(await collateralBalance(owner, root, forks)).toBe(0n)
+		expect(await collateralBalance(owner, root, engine)).toBe(100n * E)
 		expect(await owner.readContract({ ...target, functionName: 'balanceOfShares', args: [0n, buyer.account.address] })).toEqual([0n, 200n * E, 0n])
 		expect(await owner.readContract({ ...target, functionName: 'balanceOfShares', args: [0n, bob.account.address] })).toEqual([200n * E, 0n, 200n * E])
 		for (const client of [buyer, bob]) {
@@ -270,6 +272,6 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 			await expect(writeContractAndWait(client, () => client.writeContract({ ...forkTarget(), functionName: 'recoverUnchosenCash', args: [0n, 1n, 1n] }))).rejects.toThrow('unclaimed complete sets')
 		}
 		await start(1n)
-		expect(await owner.getBalance({ address: engine })).toBe(100n * E)
+		expect(await collateralBalance(owner, root, engine)).toBe(100n * E)
 	})
 })

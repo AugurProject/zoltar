@@ -262,6 +262,22 @@ async function deploySimulationTokens({
 	await memoryClient.setStorageAt({ address: profile.wethAddress, index: storageIndex(WETH_NAME_SLOT), value: shortStringStorageValue('Wrapped Ether') })
 	await memoryClient.setStorageAt({ address: profile.wethAddress, index: storageIndex(WETH_SYMBOL_SLOT), value: shortStringStorageValue('WETH') })
 	await memoryClient.setStorageAt({ address: profile.wethAddress, index: storageIndex(WETH_DECIMALS_SLOT), value: storageValue(18n) })
+	for (const [address, symbol] of [
+		[profile.usdcAddress, 'USDC'],
+		[profile.usdtAddress, 'USDT'],
+	] as const) {
+		if (address === undefined) continue
+		await memoryClient.setCode({ address, bytecode: `0x${statoblast_WETH9_WETH9.evm.deployedBytecode.object}` })
+		await memoryClient.setStorageAt({ address, index: storageIndex(WETH_NAME_SLOT), value: shortStringStorageValue(`Simulation ${symbol}`) })
+		await memoryClient.setStorageAt({ address, index: storageIndex(WETH_SYMBOL_SLOT), value: shortStringStorageValue(symbol) })
+		await memoryClient.setStorageAt({ address, index: storageIndex(WETH_DECIMALS_SLOT), value: storageValue(6n) })
+		for (const account of accounts) {
+			const client = createWriteClient(account)
+			const hash = await client.sendTransaction({ to: address, value: 10_000_000n * 10n ** 6n })
+			await client.waitForTransactionReceipt({ hash })
+		}
+	}
+
 	await reportBootstrapProgress(onProgress, 'Installing simulation WETH token', 0.2)
 	await seedGenesisRepTokenState({
 		accounts,

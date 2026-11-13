@@ -124,7 +124,7 @@ const expectVaultAccountingUnits = async (session: DevToolsSession) => {
 	await waitFor(`document.querySelector('#entity-list .entity-row') !== null`)
 	await evaluate(`document.querySelector('#entity-list .entity-row').click()`)
 	await waitFor(`document.querySelector('#state-detail')?.textContent.includes('Vault accounting history')`)
-	expect(await evaluate(`document.querySelector('#state-detail')?.textContent`)).toContain('Commitments and fees are shown in ETH; REP backing units are protocol accounting units.')
+	expect(await evaluate(`document.querySelector('#state-detail')?.textContent`)).toContain('Commitments and fees are shown in WETH; REP backing units are protocol accounting units.')
 }
 
 catalogTest('the system catalog can load and find questions beyond its initial page', 'tab=questions&entity1201=1', desktopViewport, async session => {
@@ -209,7 +209,7 @@ catalogTest('pool lifecycle and checkpoints remain available after loading a lat
 	expect(detail).toContain('42')
 	expect(detail).not.toContain('No lifecycle event yet')
 	expect(detail).not.toContain('No checkpoint')
-	expect(detail).toContain('Collateral, commitments, and fees are shown in ETH.')
+	expect(detail).toContain('Collateral, commitments, and fees are shown in WETH.')
 	await expectVaultAccountingUnits(session)
 })
 
@@ -230,7 +230,7 @@ catalogTest(
 		const detail = String(await evaluate(`document.querySelector('#state-detail')?.textContent`))
 		expect(detail).toContain('84')
 		expect(detail).not.toContain('No checkpoint')
-		expect(detail).toContain('Collateral, commitments, and fees are shown in ETH.')
+		expect(detail).toContain('Collateral, commitments, and fees are shown in WETH.')
 		await expectVaultAccountingUnits(session)
 		const requestsAfterLive = Number(await evaluate(`window.__augurScanCatalogRequests`))
 		const sequenceAfterLive = Number(await evaluate(`window.__augurScanLiveSequence`))

@@ -8,8 +8,6 @@ import { applyLibraries, getInfraContractAddresses } from '../testSupport/simula
 import { statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '../types/contractArtifact'
 import { useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
 import {
-	calculateOracleMinimumWethReportAttoEth,
-	DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
 	DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS,
 	MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS,
 	OPEN_ORACLE_SECURITY_MULTIPLIER_BPS,
@@ -195,7 +193,7 @@ describe('Portfolio oracle configuration guards', () => {
 		}
 	})
 
-	test('shared feeds use their configured dispute sizing and priority fee at the numeric boundary', async () => {
+	test('shared feeds retain their collateral floor across configured priority-fee boundaries', async () => {
 		const client = fixture.owner()
 		for (const priority of [DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS]) {
 			const args = getOracleCoordinatorConstructorArgs()
@@ -208,7 +206,7 @@ describe('Portfolio oracle configuration guards', () => {
 				await fixture.base.mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [`0x${baseFee.toString(16)}`] })
 				await fixture.base.mockWindow.request({ method: 'evm_mine', params: [] })
 				const minimum = await client.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'minimumToken1ReportAttoEth' })
-				assert.strictEqual(minimum, calculateOracleMinimumWethReportAttoEth({ ...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, baseFeeAttoEthPerGas: baseFee, initialReportPriorityFeeAttoEthPerGas: priority, targetPriceErrorForDispute: args[7], openOracleSecurityMultiplierBps: args[8] }))
+				assert.strictEqual(minimum, await client.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'minimumReportCollateral' }))
 				assert.ok(minimum <= (1n << 128n) - 1n)
 			}
 			await fixture.base.mockWindow.setNextBlockBaseFeePerGasToZero()

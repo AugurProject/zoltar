@@ -10,6 +10,7 @@ import {
 	statoblast_tokens_ShareToken_ShareToken as sharesArtifact,
 	test_statoblast_OpenOracleAdversarialHarnesses_OpenOracleRejectingETHReceiver as receiverArtifact,
 } from '../../types/contractArtifact'
+import { collateralBalance } from './burnEvidence'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 describe('Portfolio question transaction rollback', () => {
@@ -21,12 +22,12 @@ describe('Portfolio question transaction rollback', () => {
 		const ids = await Promise.all([0n, 1n, 2n].map(outcome => client.readContract({ abi: sharesArtifact.abi, address: addresses().shareToken, functionName: 'getTokenId', args: [fixture.base.genesisUniverse, outcome] })))
 		return {
 			snapshot: await client.readContract({ abi: settlementArtifact.abi, address: await client.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'settlement' }), functionName: 'snapshotQuestion', args: [pool().address] }),
-			eth: await client.getBalance({ address: pool().address }),
+			collateral: await collateralBalance(client, fixture.portfolio, pool().address),
 			shares: await client.readContract({ abi: sharesArtifact.abi, address: addresses().shareToken, functionName: 'balanceOfBatch', args: [ids.map(() => holder), ids] }),
 			capital: await client.readContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'totals' }),
 		}
 	}
-	test('a rejecting complete-set recipient restores shares, cash, fees, and capital accounting', async () => {
+	test('a recipient that rejects native ETH can receive ERC20 redemption collateral', async () => {
 		await fixture.prepare()
 		const client = fixture.owner()
 		const receiver = await deployContract(client, encodeDeployData({ abi: receiverArtifact.abi, bytecode: `0x${receiverArtifact.evm.bytecode.object}` }))
@@ -35,16 +36,16 @@ describe('Portfolio question transaction rollback', () => {
 		const shares = before.shares[0]
 		if (shares === undefined || shares === 0n) throw new Error('Receiver must own a complete set')
 		expect(before.shares).toEqual([shares, shares, shares])
-		await expect(writeContractAndWait(client, () => client.writeContract({ abi: receiverArtifact.abi, address: receiver, functionName: 'execute', args: [pool().address, encodeFunctionData({ abi: poolArtifact.abi, functionName: 'redeemCompleteSet', args: [shares] })] }))).rejects.toThrow(
-			'Settlement ETH transfer failed',
-		)
-		expect(await state(receiver)).toEqual(before)
+		const balance = await collateralBalance(client, fixture.portfolio, receiver)
+		await writeContractAndWait(client, () => client.writeContract({ abi: receiverArtifact.abi, address: receiver, functionName: 'execute', args: [pool().address, encodeFunctionData({ abi: poolArtifact.abi, functionName: 'redeemCompleteSet', args: [shares] })] }))
+		expect((await state(receiver)).shares).toEqual([0n, 0n, 0n])
+		expect(await collateralBalance(client, fixture.portfolio, receiver)).toBeGreaterThan(balance)
 	})
 	test('over-capacity purchases and missing-game claims leave all balances unchanged', async () => {
 		await fixture.prepare(1_000n * unit, unit)
 		const before = await state()
 		const client = fixture.owner()
-		await expect(client.writeContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'createCompleteSet', args: [fixture.base.genesisUniverse, fixture.base.questionId, 2n * unit, client.account.address, 0n], value: 3n * unit })).rejects.toThrow()
+		await expect(client.writeContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'createCompleteSet', args: [fixture.base.genesisUniverse, fixture.base.questionId, 2n * unit, client.account.address, 0n, 3n * unit - 2n * unit], value: 0n })).rejects.toThrow()
 		expect(await state()).toEqual(before)
 		await expect(client.writeContract({ ...pool(), functionName: 'withdrawFromEscalationGame', args: [1, []] })).rejects.toThrow('Game missing')
 		expect(await state()).toEqual(before)

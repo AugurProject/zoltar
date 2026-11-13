@@ -14,8 +14,8 @@ export function formatRoundedUnits(value: bigint, decimals = 18, maximumFraction
 }
 
 /** Formats two ETH amounts as `first / second ETH`, e.g. minted against maximum capacity or total against fee-eligible limits. Both round the same way, so their order is preserved. */
-export function formatEthAmountPair(firstAttoEth: bigint, secondAttoEth: bigint) {
-	return `${formatRoundedUnits(firstAttoEth)} / ${formatRoundedUnits(secondAttoEth)} ETH`
+export function formatEthAmountPair(firstAttoEth: bigint, secondAttoEth: bigint, asset = { decimals: 18, symbol: 'ETH' }) {
+	return `${formatRoundedUnits(firstAttoEth, asset.decimals)} / ${formatRoundedUnits(secondAttoEth, asset.decimals)} ${asset.symbol}`
 }
 
 /** Closes a message with a period unless it already ends a sentence, so composed errors and reasons read as prose. */

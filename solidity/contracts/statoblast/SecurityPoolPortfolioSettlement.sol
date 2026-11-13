@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { Collateral } from '../Collateral.sol';
 import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
@@ -9,13 +10,14 @@ interface IPortfolioForkAuthority {
 	function forkController() external view returns (address);
 }
 
-/// @notice Actual ETH custody for the portfolio's virtual question and branch settlement books.
+/// @notice Actual ERC20 custody for the portfolio's virtual question and branch settlement books.
 /// @dev The immutable portfolio authenticates native callbacks, decides fee policy and supplies
 /// its monotonic portfolio clock. Every returned earned fee is transferred to that authority;
 /// it must credit old underwriting weights before changing commitments or accepted prices.
 contract SecurityPoolPortfolioSettlement {
 	using SafeERC20Ops for IERC20;
 	address public immutable portfolio;
+	IERC20 public immutable collateralToken;
 	address public services;
 	SecurityPoolSettlementBook public ledger;
 	bool private entered;
@@ -64,7 +66,9 @@ contract SecurityPoolPortfolioSettlement {
 
 	event RecoveryRepPaid(uint248 indexed universeId, uint256 indexed questionId, address indexed recipient, uint256 amountAttoRep);
 
-	constructor(address authority) {
+	constructor(address authority, IERC20 token) {
+		require(address(token).code.length != 0, 'Collateral token missing');
+		collateralToken = token;
 		require(authority != address(0), 'Invalid settlement authority');
 		portfolio = authority;
 	}
@@ -113,10 +117,12 @@ contract SecurityPoolPortfolioSettlement {
 		poolsByQuestion[universeId][questionId] = pool;
 	}
 
-	function mint(address pool, uint256 minimumShares, uint48 timestamp) external payable onlyPortfolio nonReentrant returns (uint256 shares, Snapshot memory snapshot) {
+	function mint(address pool, uint256 cash, uint256 minimumShares, uint48 timestamp) external onlyPortfolio nonReentrant returns (uint256 shares, Snapshot memory snapshot) {
 		QuestionSource memory source = _question(pool);
 		uint64 bookId = _bookId(source.universeId);
-		shares = ledger.mint(bookId, source.questionId, msg.value, minimumShares, timestamp);
+		// Services atomically funds this custody directly from the trader before the pool callback.
+		if (msg.sender != services) Collateral.pull(collateralToken, msg.sender, address(this), cash);
+		shares = ledger.mint(bookId, source.questionId, cash, minimumShares, timestamp);
 		snapshot = _snapshot(source, _collectFees(bookId));
 	}
 
@@ -187,15 +193,16 @@ contract SecurityPoolPortfolioSettlement {
 		earnedFeesAttoEth = _collectFees(bookId);
 	}
 
-	/// @notice Fund one child's claim basket with assigned ETH and forfeited child REP.
-	/// @dev Additional auction ETH is supplied as msg.value. Only assigned source
+	/// @notice Fund one child's claim basket with assigned collateral and forfeited child REP.
+	/// @dev Pull auctionCash collateral tokens from the fork authority. Only assigned source
 	/// cash consumes the parent's balance; unsold and old recovery REP stay claims.
-	function createChildUniverse(uint248 sourceUniverseId, uint248 childUniverseId, uint256 parentContributionAttoEth, IERC20 recoveryToken, uint256 recoveryAttoRep) external payable onlyForkAuthority nonReentrant returns (uint64 bookId) {
+	function createChildUniverse(uint248 sourceUniverseId, uint248 childUniverseId, uint256 parentContributionAttoEth, IERC20 recoveryToken, uint256 recoveryAttoRep, uint256 auctionCash) external onlyForkAuthority nonReentrant returns (uint64 bookId) {
 		require(universes[childUniverseId].bookId == 0, 'Settlement universe registered');
 		uint256 available = universes[sourceUniverseId].availableForkCashAttoEth;
 		require(parentContributionAttoEth <= available, 'Fork settlement cash insufficient');
 		universes[sourceUniverseId].availableForkCashAttoEth = available - parentContributionAttoEth;
-		bookId = ledger.createChildBook(_bookId(sourceUniverseId), parentContributionAttoEth + msg.value, recoveryAttoRep);
+		Collateral.pull(collateralToken, msg.sender, address(this), auctionCash);
+		bookId = ledger.createChildBook(_bookId(sourceUniverseId), parentContributionAttoEth + auctionCash, recoveryAttoRep);
 		(, , , uint48 timestamp, ) = ledger.totals(bookId);
 		ledger.setFeeAccrualEnabled(bookId, false, timestamp);
 		universes[childUniverseId].bookId = bookId;
@@ -292,8 +299,7 @@ contract SecurityPoolPortfolioSettlement {
 
 	function _sendEth(address recipient, uint256 cashAttoEth) private {
 		if (cashAttoEth == 0) return;
-		(bool sent, ) = payable(recipient).call{value: cashAttoEth}('');
-		require(sent, 'Settlement ETH transfer failed');
+		Collateral.send(collateralToken, recipient, cashAttoEth);
 	}
 
 	function _payRecoveryRep(QuestionSource memory source, address recipient, uint256 amount) private {

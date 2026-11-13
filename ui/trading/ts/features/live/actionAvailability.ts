@@ -1,3 +1,4 @@
+import * as collateralCopy from '../../copy/collateral.js'
 import type { ActionAvailability } from '@zoltar/ui-core-shared/types/components.js'
 import { createActionAvailability } from '@zoltar/ui-core-shared/transactions/actionAvailability.js'
 import { ETH_GAS_RESERVE_ATTO_ETH, getSpendableEthBalance } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
@@ -7,10 +8,7 @@ import type { WalletSummaryState } from '../../lib/walletSummaryState.js'
 import * as copy from '../../copy/availability.js'
 import type { BalanceState } from './liveTradingTypes.js'
 
-// No trading flow needs an ERC-20 or ERC-1155 approval: entries pay ETH directly, and exits, liquidity
-// removal, and settlement hand shares to the router through ERC-1155 transfer callbacks that the router
-// authorises with the encoded request data (see protocol/authorization.ts). The missing
-// "Approval required" state is therefore intentional. Trade availability lives in tradeTicketModel.
+// Token-funded entries approve the router separately. Share exits authorize through receive callbacks.
 
 type WalletInputs = Readonly<{
 	/** True when the session holds an account and a wallet client. A wallet on the wrong network is not disconnected. */
@@ -46,10 +44,11 @@ function insufficientReason(requested: bigint | undefined, available: bigint | u
  * Why the wallet cannot fund a liquidity amount: removals spend LP tokens; deposits spend ETH and, like trades, leave
  * the gas reserve in the wallet so the transaction can still be sent.
  */
-export function liquidityShortfallReason(operation: LiquidityOperation, requested: bigint | undefined, walletEthAttoEth: bigint | undefined, lpBalance: bigint | undefined) {
+export function liquidityShortfallReason(operation: LiquidityOperation, requested: bigint | undefined, walletEthAttoEth: bigint | undefined, lpBalance: bigint | undefined, tokenFunded = false, tokenSymbol = 'Collateral') {
 	if (operation === 'remove') return insufficientReason(requested, lpBalance, copy.insufficientLpReason)
 	if (requested === undefined || walletEthAttoEth === undefined) return undefined
-	if (requested > walletEthAttoEth) return copy.insufficientEthReason
+	if (requested > walletEthAttoEth) return tokenFunded ? collateralCopy.insufficient(tokenSymbol) : copy.insufficientEthReason
+	if (tokenFunded) return undefined
 	if (requested > getSpendableEthBalance(walletEthAttoEth)) return copy.gasReserveReason(formatTrimmedUnits(ETH_GAS_RESERVE_ATTO_ETH))
 	return undefined
 }
@@ -81,6 +80,8 @@ export type LiquidityAvailabilityInputs = WalletInputs &
 	WorkflowInputs &
 	PreviewInputs &
 	Readonly<{
+		tokenFunded?: boolean
+		tokenSymbol?: string
 		operation: LiquidityOperation
 		marketClosed: boolean
 		/** The market status that closed it, such as `Question ended`; creating a market names it instead of the add-liquidity reason. */
@@ -105,7 +106,7 @@ export function resolveLiquidityAvailability(inputs: LiquidityAvailabilityInputs
 			inputs.submissionBlocker,
 			balanceReason(inputs),
 			unknownEthReason(inputs),
-			liquidityShortfallReason(inputs.operation, inputs.requestedAmount, inputs.walletEthAttoEth, inputs.lpBalance),
+			liquidityShortfallReason(inputs.operation, inputs.requestedAmount, inputs.walletEthAttoEth, inputs.lpBalance, inputs.tokenFunded, inputs.tokenSymbol),
 			inputs.amountError ?? copy.amountReason(inputs.requestedAmount),
 			inputs.operation === 'initialize' && !inputs.initializePriceValid ? copy.initializePriceInvalidReason : undefined,
 			workflowReason(inputs),

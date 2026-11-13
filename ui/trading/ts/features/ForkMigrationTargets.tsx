@@ -1,3 +1,4 @@
+import type { CollateralMarket } from '../protocol/collateral.js'
 import { ForkTargetPicker, type ForkTargetOption } from '@zoltar/ui-zoltar-shared/features/universes/components/ForkTargetPicker.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
@@ -73,9 +74,9 @@ export function ForkMigrationTargets({
 }
 
 /** What a child universe holds from this wallet's migrations, such as `0.005 Yes · 0.005 Invalid`. */
-function formatMigratedShares(target: ForkTarget) {
+function formatMigratedShares(target: ForkTarget, market: CollateralMarket) {
 	return SHARE_OUTCOMES.filter(outcome => migratedSharesOf(target, outcome) > 0n)
-		.map(outcome => formatOutcomeQuantity(migratedSharesOf(target, outcome), outcome))
+		.map(outcome => formatOutcomeQuantity(migratedSharesOf(target, outcome), outcome, 4, undefined, market))
 		.join(' · ')
 }
 
@@ -83,7 +84,7 @@ function formatMigratedShares(target: ForkTarget) {
  * Where migrated shares went: each child universe that received some, with a link that opens its security pool's market
  * in that universe. Migration mints the shares there, so this is the way to find, trade, or redeem them.
  */
-export function MigratedShareLinks({ context }: { context: ForkMigrationContext }) {
+export function MigratedShareLinks({ context, market = {} }: { context: ForkMigrationContext; market?: CollateralMarket }) {
 	const migratedTargets = context.availableTargets.filter(target => target.canonicalPool !== undefined && SHARE_OUTCOMES.some(outcome => migratedSharesOf(target, outcome) > 0n))
 	if (migratedTargets.length === 0) return null
 	return (
@@ -93,7 +94,7 @@ export function MigratedShareLinks({ context }: { context: ForkMigrationContext 
 				{migratedTargets.map(target => (
 					<li key={target.outcomeIndex.toString()}>
 						<span className='fork-migrated-list__universe'>{forkCopy.childUniverseName(target.label)}</span>
-						<span className='fork-migrated-list__amount'>{formatMigratedShares(target)}</span>
+						<span className='fork-migrated-list__amount'>{formatMigratedShares(target, market)}</span>
 						{target.canonicalPool === undefined ? undefined : <a href={getTradingRouteHrefInUniverse(`#/market/${target.canonicalPool}`, target.universeId)}>{forkCopy.openChildUniverseMarket(target.label)}</a>}
 					</li>
 				))}

@@ -13,8 +13,10 @@ import { MetricGrid } from './MetricGrid.js'
 import { MetricField } from './MetricField.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { formatCurrencyBalance, formatCurrencyBalanceWithUnit, formatCeilingAmount, formatCeilingAmountDisplay, formatUnitSuffix, withApproximateMarker } from '../lib/formatters.js'
-import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage, shouldDisplayMaxTokenApprovalAmount } from '../transactions/tokenApproval.js'
+import { getTokenApprovalResetReason, deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage, shouldDisplayMaxTokenApprovalAmount } from '../transactions/tokenApproval.js'
 type TokenApprovalControlProps = {
+	requiresAllowanceReset?: boolean
+
 	compact?: boolean
 	approvalPurpose?: string | undefined
 	/** Keeps a finished approval in place, disabled, labelled with its result instead of removing the control. */
@@ -107,7 +109,8 @@ export function TokenApprovalControl({
 	allowanceLoading,
 	approvedAmount,
 	disabled = false,
-	guardMessage,
+	guardMessage: providedGuardMessage,
+	requiresAllowanceReset = false,
 	onApprove,
 	pending,
 	pendingLabel,
@@ -143,6 +146,8 @@ export function TokenApprovalControl({
 
 		return parsedAmount.amount
 	})()
+	const increasingAllowance = approvedAmount !== undefined && nextApprovalAmount !== undefined && nextApprovalAmount > approvedAmount
+	const guardMessage = providedGuardMessage ?? (increasingAllowance ? getTokenApprovalResetReason(approvedAmount, nextApprovalAmount, tokenSymbol, requiresAllowanceReset) : undefined)
 	const hasNonIncreasingCustomApproval = parsedAmount.kind === 'custom' && approvedAmount !== undefined && parsedAmount.amount <= approvedAmount
 	const amountValidationMessage = parsedAmount.kind === 'invalid' ? parsedAmount.error : undefined
 	// A custom amount that does not raise the allowance cannot be sent; say so instead of disabling the button without a reason.

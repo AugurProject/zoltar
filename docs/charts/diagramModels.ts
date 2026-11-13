@@ -125,7 +125,7 @@ export const diagramGraphSpecs = {
 	),
 	'fig-statoblast-share-lifecycle': diagram(
 		{
-			ariaDescription: 'ETH mints Invalid, Yes, and No shares. Operational pools redeem full sets, and finalized winning shares redeem through outcome settlement.',
+			ariaDescription: 'Collateral mints Invalid, Yes, and No shares. Operational pools redeem full sets, and finalized winning shares redeem through outcome settlement.',
 			ariaLabel: 'Complete set lifecycle',
 			height: 360,
 			width: 860,
@@ -133,7 +133,13 @@ export const diagramGraphSpecs = {
 		[
 			section(
 				'share-lifecycle',
-				[node('eth', 'User sends ETH', 'blue'), node('full-set', 'Receives full set', 'green', ['Invalid + Yes + No']), node('operational', 'While operational', 'teal', ['burn full set']), node('finalized', 'After finalization', 'gold', ['winning leg redeems']), node('settlement', 'Collateral settlement', 'slate')],
+				[
+					node('eth', 'User sends collateral', 'blue'),
+					node('full-set', 'Receives full set', 'green', ['Invalid + Yes + No']),
+					node('operational', 'While operational', 'teal', ['burn full set']),
+					node('finalized', 'After finalization', 'gold', ['winning leg redeems']),
+					node('settlement', 'Collateral settlement', 'slate'),
+				],
 				[
 					edge('shares-eth-full-set', 'eth', 'full-set', 'portfolio purchase'),
 					edge('shares-full-set-operational', 'full-set', 'operational'),

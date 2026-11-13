@@ -17,13 +17,13 @@ test('personal capital shows exact principal and keeps distinct approval, deposi
 	lifecycle.trackRendered(view)
 	const text = view.container.textContent ?? ''
 	const amounts = (label: string) => [...view.container.querySelectorAll('.metric-label')].filter(node => node.textContent === label).map(node => node.parentElement?.querySelector('.currency-value')?.getAttribute('title')?.replaceAll(/\s/g, ''))
-	// The saved 120% target keeps 10 ETH × 2 REP/ETH × 1.05 × 1.2 = 25.2 REP.
+	// The saved 120% target keeps 10 WETH × 2 REP/WETH × 1.05 × 1.2 = 25.2 REP.
 	expect(amounts(copy.withdrawableRep)).toEqual(['4.8REP'])
 	expect(amounts(copy.principalRep)).toEqual(['30REP'])
-	expect(amounts(copy.commitment)).toEqual(['10ETH'])
+	expect(amounts(copy.commitment)).toEqual(['10WETH'])
 	expect(amounts(copy.positionPledged)).toEqual(['30REP'])
 	expect(amounts(copy.totalPledged)).toEqual(['100REP'])
-	expect(amounts(copy.ethEarnings)).toEqual(['1ETH'])
+	expect(amounts(copy.ethEarnings)).toEqual(['1WETH'])
 	expect(amounts(copy.repEarnings)).toEqual(['2REP'])
 	expect(text).toContain('120%')
 	const labels = Array.from(view.container.querySelectorAll('button')).map(button => button.textContent ?? '')
@@ -62,9 +62,9 @@ test('retirement readiness exposes the reserved capacity and observed times with
 			?.parentElement?.querySelector('.currency-value')
 			?.getAttribute('title')
 			?.replaceAll(/\s/g, '')
-	expect(amount(copy.retirementSpare)).toBe('1ETH')
-	expect(amount(copy.retirementAhead)).toBe('2ETH')
-	expect(amount(copy.retirementReduction)).toBe('5ETH')
+	expect(amount(copy.retirementSpare)).toBe('1WETH')
+	expect(amount(copy.retirementAhead)).toBe('2WETH')
+	expect(amount(copy.retirementReduction)).toBe('5WETH')
 })
 
 test('stale prices and closed universes never present a ready retirement preview', async () => {
@@ -93,11 +93,11 @@ test('earnings show what claiming pays, and the credited amounts when that previ
 			?.getAttribute('title')
 			?.replaceAll(/\s/g, '')
 	const credited = await renderIntoDocument(<Harness snapshot={snapshot} />)
-	expect(metric(credited, copy.ethEarnings)).toBe('1ETH')
+	expect(metric(credited, copy.ethEarnings)).toBe('1WETH')
 	expect(metric(credited, copy.repEarnings)).toBe('2REP')
 	await credited.cleanup()
 	const claimable = await renderIntoDocument(<Harness snapshot={{ ...snapshot, claimableEarnings: { attoEth: 5n * unit, attoRep: 7n * unit } }} />)
 	lifecycle.trackRendered(claimable)
-	expect(metric(claimable, copy.ethEarnings)).toBe('5ETH')
+	expect(metric(claimable, copy.ethEarnings)).toBe('5WETH')
 	expect(metric(claimable, copy.repEarnings)).toBe('7REP')
 })

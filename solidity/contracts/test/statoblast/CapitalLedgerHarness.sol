@@ -8,6 +8,7 @@ import { SecurityPoolCapitalLedgerDeployer } from '../../statoblast/SecurityPool
 import { ICapitalFeeStreams } from '../../statoblast/interfaces/ICapitalAccounting.sol';
 import { SecurityPoolCommitmentIndex } from '../../statoblast/SecurityPoolCommitmentIndex.sol';
 import { SecurityPoolCapitalFeeStreams } from '../../statoblast/SecurityPoolCapitalFeeStreams.sol';
+import { WETH9 } from '../../statoblast/WETH9.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
 import { Zoltar } from '../../Zoltar.sol';
 
@@ -56,12 +57,14 @@ contract CapitalLedgerTestComponents is SecurityPoolCreationCodeDeployer {
 }
 
 contract CapitalLedgerHarness {
+	WETH9 public collateralToken;
 	uint256 public targetPriceErrorForDispute;
 	uint256 public acceptedEpoch;
 	SecurityPoolCapitalLedger public immutable ledger;
 	CapitalLedgerZoltarMock public immutable zoltar;
 	ReputationToken public immutable token;
 	constructor(CapitalLedgerTestComponents components) {
+		collateralToken = new WETH9();
 		zoltar = new CapitalLedgerZoltarMock();
 		token = zoltar.token();
 		ledger = components.createLedger(address(this), Zoltar(address(zoltar)));
@@ -96,12 +99,14 @@ contract CapitalLedgerHarness {
 		ledger.setDemand(demand);
 	}
 	function fundFees() external payable {
-		ledger.fundVestedFees{value: msg.value}(0);
+		collateralToken.deposit{value: msg.value}();
+		collateralToken.approve(address(ledger), msg.value);
+		ledger.fundVestedFees(msg.value, 0);
 	}
 	function fundRepFees(uint256 amount) external {
 		zoltar.mint(address(this), amount);
 		token.approve(address(ledger), amount);
-		ledger.fundVestedFees(amount);
+		ledger.fundVestedFees(0, amount);
 	}
 	function setFork(uint256 timestamp) external {
 		zoltar.setFork(timestamp);

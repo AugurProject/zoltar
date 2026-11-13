@@ -1,3 +1,4 @@
+import * as collateralCopy from '../../../copy/collateral.js'
 import { useId, useRef, useState } from 'preact/hooks'
 import { isAddress } from '@zoltar/core-shared/evm/ethereum'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
@@ -70,6 +71,18 @@ export function PortfoliosSection({ parameters, walletConnected, enabled, enviro
 				<details>
 					<summary>{copy.deploy}</summary>
 					<div className='form-grid portfolio-creation-form'>
+						<ViewTabs
+							ariaLabel={collateralCopy.selector}
+							variant='segmented'
+							value={actions.collateralSymbol}
+							onChange={actions.setCollateralSymbol}
+							options={[
+								{ value: collateralCopy.weth, label: collateralCopy.weth, disabled },
+								{ value: collateralCopy.usdc, label: collateralCopy.usdc, disabled },
+								{ value: collateralCopy.usdt, label: collateralCopy.usdt, disabled },
+							]}
+						/>
+						<PortfolioInput label={collateralCopy.oracleStake(actions.collateral.symbol)} hint={collateralCopy.floorHint} value={actions.reportFloor} onChange={actions.setReportFloor} disabled={disabled} numeric />
 						<PortfolioInput label={copy.originPool} hint={copy.originPoolHint} value={actions.originInput} onChange={actions.setOriginInput} disabled={disabled} error={actions.originForked ? copy.originForked : undefined} liveError />
 						<PortfolioInput label={copy.securityMultiplier} hint={copy.securityMultiplierHint} value={actions.multiplierInput} onChange={actions.setMultiplierInput} disabled={disabled} />
 						<PortfolioInput label={copy.oraclePriorityFee} value={actions.priorityFeeInput} onChange={actions.setPriorityFeeInput} disabled={disabled} />
@@ -88,8 +101,8 @@ export function PortfoliosSection({ parameters, walletConnected, enabled, enviro
 						<PortfolioInput label={copy.horizon} hint={copy.horizonHint} value={actions.horizonDays} onChange={actions.setHorizonDays} disabled={disabled} numeric />
 						<MetricGrid>
 							<PortfolioInput label={copy.purchaseFeePercent} value={actions.economicsDraft.purchaseFeePercent} onChange={value => actions.setEconomicsField('purchaseFeePercent', value)} disabled={disabled} numeric />
-							<PortfolioInput label={copy.minimumPurchaseFee} value={actions.economicsDraft.minimumPurchaseFee} onChange={value => actions.setEconomicsField('minimumPurchaseFee', value)} disabled={disabled} numeric />
-							<PortfolioInput label={capitalCopy.minimumCommitment} hint={capitalCopy.minimumCommitmentHint} value={actions.economicsDraft.minimumCommitment} onChange={value => actions.setEconomicsField('minimumCommitment', value)} disabled={disabled} numeric />
+							<PortfolioInput label={collateralCopy.purchaseFee(actions.collateral.symbol)} value={actions.economicsDraft.minimumPurchaseFee} onChange={value => actions.setEconomicsField('minimumPurchaseFee', value)} disabled={disabled} numeric />
+							<PortfolioInput label={collateralCopy.commitment(actions.collateral.symbol)} hint={capitalCopy.minimumCommitmentHint} value={actions.economicsDraft.minimumCommitment} onChange={value => actions.setEconomicsField('minimumCommitment', value)} disabled={disabled} numeric />
 							<PortfolioInput label={capitalCopy.rewardVesting} value={actions.economicsDraft.rewardVestingHours} onChange={value => actions.setEconomicsField('rewardVestingHours', value)} disabled={disabled} numeric />
 							<PortfolioInput label={capitalCopy.annualFee} hint={capitalCopy.annualFeeHint} value={actions.economicsDraft.annualFeePercent} onChange={value => actions.setEconomicsField('annualFeePercent', value)} disabled={disabled} numeric />
 							<PortfolioInput label={capitalCopy.outcomeRate} hint={capitalCopy.outcomeRateHint} value={actions.economicsDraft.minimumOutcomeRate} onChange={value => actions.setEconomicsField('minimumOutcomeRate', value)} disabled={disabled} numeric />

@@ -1,13 +1,13 @@
 import { outcomeLabel } from './outcomes.js'
-export const holdingFeeNote = 'Holding fees reduce ETH payouts until fee accrual ends. Token quantities stay unchanged.'
-export const conditionalNote = 'Outcome payouts use the current collateral rate and are 0 ETH if the question resolves to another outcome. These are not sale quotes.'
+export const holdingFeeNote = 'Holding fees reduce collateral payouts until fee accrual ends. Token quantities stay unchanged.'
+export const conditionalNote = 'Outcome payouts use the current collateral rate and are zero if the question resolves to another outcome. These are not sale quotes.'
 export const redemptionValue = 'Complete-set redemption value'
 export const backingValue = 'Complete-set backing'
-export const otherwiseZero = '0 ETH otherwise'
+export const formatOtherwiseZero = (symbol: string) => `0 ${symbol} otherwise`
 export const unavailable = 'Payout unavailable'
 export const valueUnavailable = 'Value unavailable'
 export const redemptionUnavailable = 'Redemption unavailable'
-export const zeroPayout = '0 ETH · lost'
+export const formatZeroPayout = (symbol: string) => `0 ${symbol} · lost`
 export const feeProjection = 'Holding fee over next 30 days'
 
 export function formatConditionalPayout(value: string, outcome: 'YES' | 'NO' | 'INVALID') {

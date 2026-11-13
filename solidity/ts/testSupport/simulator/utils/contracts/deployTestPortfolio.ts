@@ -14,7 +14,7 @@ export async function deployTestPortfolio(client: WriteClient, universeId: bigin
 	const request = buildPortfolioDeploymentRequest({
 		owner: client.account.address,
 		factory: infrastructure.securityPoolFactory,
-		origin: { universeId, securityMultiplierBps, reportPriorityFeeAttoEthPerGas },
+		origin: { collateralToken: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', minimumReportCollateral: 10n ** 16n, universeId, securityMultiplierBps, reportPriorityFeeAttoEthPerGas },
 		maximumQuestionHorizonSeconds: 20n * 365n * 86_400n,
 		questionAdmissionPolicy,
 		economics: { purchaseFeeBps: 100n, annualFeeBps: 1_000n, minimumPurchaseFeeAttoEth: 10n ** 15n, minimumCommitmentAttoEth: 10n ** 16n, minimumOutcomeRate: 1_000n, rewardVestingSeconds: 86_400n },

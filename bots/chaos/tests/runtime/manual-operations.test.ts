@@ -541,7 +541,7 @@ test('manual portfolio mint refreshes the exact cash quote for both preview and 
 		},
 		scan: async (cash?: bigint) => {
 			requests.push(cash)
-			pool.purchaseQuote = cash === undefined ? undefined : { mintAttoEth: cash.toString(), feeAttoEth: 100n.toString(), premiumAttoEth: 200n.toString(), minimumShares: cash.toString() }
+			pool.purchaseQuote = cash === undefined ? undefined : { spender: pool.coordinator, mintAttoEth: cash.toString(), feeAttoEth: 100n.toString(), premiumAttoEth: 200n.toString(), minimumShares: cash.toString() }
 			return base.scan
 		},
 	})

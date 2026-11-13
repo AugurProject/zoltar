@@ -12,7 +12,7 @@ interface ISecurityPoolPortfolioPurchaseAuthority {
 abstract contract SecurityPoolSettlementDelegate is SecurityPoolStorage {
 	event CompleteSetCreated(address indexed creator, uint256 settlementCollateralProvidedAttoEth, uint256 completeSetsMintedAttoShares, uint256 resultingShareTokenSupplyAttoShares, uint256 resultingSettlementCollateralAttoEth);
 
-	function createCompleteSet() external payable returns (uint256 completeSetsToMintAttoShares) {
+	function createCompleteSet(uint256 cash) external returns (uint256 completeSetsToMintAttoShares) {
 		ISecurityPool pool = ISecurityPool(payable(address(this)));
 		require(!awaitingForkContinuation, 'Fork await');
 		if (portfolioCustody != address(0)) {
@@ -20,15 +20,15 @@ abstract contract SecurityPoolSettlementDelegate is SecurityPoolStorage {
 			require(msg.sender == ISecurityPoolPortfolioPurchaseAuthority(portfolio).services(), 'Use portfolio purchase');
 		}
 		require(address(escalationGame) == address(0), 'Escalation mint closed');
-		if (msg.value == 0 || pool.isEscalationResolved()) revert('Settlement unavailable');
+		if (cash == 0 || pool.isEscalationResolved()) revert('Settlement unavailable');
 		require(block.timestamp < pool.questionData().getQuestionEndDate(pool.questionId()), 'Question ended');
 		if (portfolioCustody != address(0)) {
 			(
 				completeSetsToMintAttoShares,
 				shareTokenSupplyAttoShares,
 				settlementCollateralAttoEth
-			) = IPortfolioSettlement(address(portfolioAccounting)).mintQuestionSettlement{value: msg.value}();
-			emit CompleteSetCreated(msg.sender, msg.value, completeSetsToMintAttoShares, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
+			) = IPortfolioSettlement(address(portfolioAccounting)).mintQuestionSettlement(cash);
+			emit CompleteSetCreated(msg.sender, cash, completeSetsToMintAttoShares, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
 			return completeSetsToMintAttoShares;
 		}
 		revert('Portfolio settlement missing');

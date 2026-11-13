@@ -6,9 +6,9 @@ export function parsePortfolioAmount(value: string) {
 	return amount
 }
 
-export function portfolioAmountOrUndefined(value: string) {
-	if (!/^(\d+)(\.\d{0,18})?$/.test(value.trim())) return undefined
-	return parseUnits(value.trim(), 18)
+export function portfolioAmountOrUndefined(value: string, decimals = 18) {
+	if (!new RegExp(`^(\\d+)(\\.\\d{0,${decimals}})?$`).test(value.trim())) return undefined
+	return parseUnits(value.trim(), decimals)
 }
 
 export function portfolioUnsignedId(value: string, bits = 256) {

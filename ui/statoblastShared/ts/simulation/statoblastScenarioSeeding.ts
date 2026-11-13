@@ -1,3 +1,4 @@
+import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { buildPortfolioPriceApprovalRequest, buildPortfolioPriceRequest, buildPortfolioPriceWrapRequest, loadPortfolioPriceSnapshot, quotePortfolioPriceFunding } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import type { BootstrapScenarioApplyParameters, TevmLikeClient } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
@@ -30,11 +31,13 @@ export async function settleSeededOracleReport({
 	const reader = { ...portfolioReadClient(readClient), getBalance: (request: { address: Address; blockNumber: bigint }) => readClient.getBalance(request) }
 	const load = () => loadPortfolioPriceSnapshot({ client: reader, portfolio, owner: accountAddress, universeId: 0n })
 	let price = await load()
-	const repPerEth = 3n * 10n ** 18n
+	if (price.observation === undefined) throw new Error('Simulation report collateral is unavailable.')
+	const decimals = Number(await readClient.readContract({ address: price.observation.weth, abi: ABIS.mainnet.erc20, functionName: 'decimals' }))
+	const repPerEth = 3n * 10n ** BigInt(36 - decimals)
 	const funding = quotePortfolioPriceFunding(price, repPerEth, requestedInitialAttoWeth)
 	if (funding.wrap > 0n) await sendPortfolioTransaction(client, buildPortfolioPriceWrapRequest(price, funding.wrap), 'Wrap report ETH')
 	await sendPortfolioTransaction(client, buildPortfolioPriceApprovalRequest(price, 'weth', funding.weth), 'Approve report WETH')
-	await onProgressStep(`Funded WETH price report for ${poolLabel}`)
+	await onProgressStep(`Funded collateral price report for ${poolLabel}`)
 	await sendPortfolioTransaction(client, buildPortfolioPriceApprovalRequest(price, 'rep', funding.rep), 'Approve report REP')
 	price = await load()
 	await sendPortfolioTransaction(client, buildPortfolioPriceRequest(price, repPerEth, requestedInitialAttoWeth), 'Report portfolio price')

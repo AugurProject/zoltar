@@ -48,7 +48,7 @@ describe('portfolio operator earnings integration', () => {
 		try {
 			const observation = await loadPortfolioObservation(reader, settings, account.address, scope, await reader.getBlockNumber())
 			expect(observation.snapshot.ownerAccount.feesAttoEth).toBeGreaterThan(settings.strategy.maximumGasCostAttoEth)
-			const ethBefore = await reader.getBalance({ address: account.address })
+			const collateralBefore = await reader.readContract({ address: settings.deployment.weth, abi: erc20Abi, functionName: 'balanceOf', args: [account.address] })
 			await executePortfolioEarnings(wallet, settings, state, pool, observation, async () => true)
 			const claim = state.activities.find(activity => activity.status === 'confirmed')
 			if (claim?.hash === undefined) throw new Error('Earnings claim was not confirmed')
@@ -58,7 +58,7 @@ describe('portfolio operator earnings integration', () => {
 			expect(stored.feesAttoEth).toBe(0n)
 			expect(stored.feesAttoRep).toBe(0n)
 			if (receipt.effectiveGasPrice === undefined) throw new Error('Earnings claim receipt has no effective gas price')
-			const paid = (await reader.getBalance({ address: account.address })) - ethBefore + receipt.gasUsed * receipt.effectiveGasPrice
+			const paid = (await reader.readContract({ address: settings.deployment.weth, abi: erc20Abi, functionName: 'balanceOf', args: [account.address] })) - collateralBefore
 			expect(paid).toBeGreaterThanOrEqual(observation.snapshot.ownerAccount.feesAttoEth)
 		} finally {
 			await stop()

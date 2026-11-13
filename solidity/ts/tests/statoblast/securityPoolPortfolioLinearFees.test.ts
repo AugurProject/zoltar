@@ -12,6 +12,7 @@ import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getERC20Balance } from '../../testSupport/simulator/utils/utilities'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 describe('Statoblast: central question fees and vested capital earnings', () => {
@@ -82,12 +83,16 @@ describe('Statoblast: central question fees and vested capital earnings', () => 
 		expect(credited.accruedFeesAttoEth).toBe(0n)
 		const claimable = await loadPortfolioClaimableEarnings(credited, async (contracts, blockNumber) => await client.multicall({ contracts, allowFailure: false, blockNumber, multicallAddress: getInfraContractAddresses().multicall3 }))
 		expect(claimable.attoEth).toBeGreaterThan(0n)
-		const balanceBefore = await client.getBalance({ address: owner })
+		const token = await client.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'collateralToken' })
+		const collateralBefore = await getERC20Balance(client, token, owner)
+		const nativeBefore = await client.getBalance({ address: owner })
 		const receipt = await client.waitForTransactionReceipt({ hash: await writeContractAndWait(client, () => client.writeContract({ ...capital(), functionName: 'claimEarnings' })) })
 		if (receipt.effectiveGasPrice === undefined) throw new Error('The claim receipt has no gas price.')
-		const received = (await client.getBalance({ address: owner })) - balanceBefore + receipt.gasUsed * receipt.effectiveGasPrice
+		const received = (await getERC20Balance(client, token, owner)) - collateralBefore
+		expect(nativeBefore - (await client.getBalance({ address: owner }))).toBe(receipt.gasUsed * receipt.effectiveGasPrice)
 		// The claim runs a moment after the preview, so it can only have earned more.
 		expect(received).toBeGreaterThanOrEqual(claimable.attoEth)
+		expect((await loadPortfolioCapitalSnapshot({ client, owner, portfolio: fixture.portfolio })).accruedFeesAttoEth).toBe(0n)
 	})
 
 	test('new deposits do not capture old earnings and stale time stops charging outcome holders', async () => {

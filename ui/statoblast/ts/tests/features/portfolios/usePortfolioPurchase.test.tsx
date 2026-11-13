@@ -11,7 +11,7 @@ import { auctionCapitalSnapshot, capitalSnapshot, owner, capital, token, unit } 
 import { capitalClient } from './capitalClient.js'
 
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
-const abi = parseAbi(['function createCompleteSet(uint248 universeId,uint256 questionId,uint256 mintAttoEth,address recipient,uint256 minimumShares) payable returns(uint256)'])
+const abi = parseAbi(['function createCompleteSet(uint248 universeId,uint256 questionId,uint256 mintAttoEth,address recipient,uint256 minimumShares,uint256 maximumFee) returns(uint256)'])
 async function setup(snapshot = capitalSnapshot()) {
 	const source = capitalClient(snapshot)
 	const values = {
@@ -52,7 +52,7 @@ test('purchases made while managing an auction vault receive shares in the contr
 	const request = requests[0]
 	if (request === undefined) throw new Error('Missing purchase')
 	expect(request.account).toBe(owner)
-	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'createCompleteSet', args: [0n, 999n, unit, owner, (9n * unit) / 10n] })
+	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'createCompleteSet', args: [0n, 999n, unit, owner, (9n * unit) / 10n, unit / 50n] })
 })
 test('purchase uses one aggregate transaction and preserves explicit limits across new blocks', async () => {
 	const { hook, requests } = await setup()
@@ -61,8 +61,8 @@ test('purchase uses one aggregate transaction and preserves explicit limits acro
 	await act(() => hook.state().buy())
 	const request = requests[0]
 	if (request === undefined) throw new Error('Missing purchase')
-	expect(request.value).toBe(unit + unit / 50n)
-	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'createCompleteSet', args: [0n, 999n, unit, owner, (9n * unit) / 10n] })
+	expect(request.value).toBe(0n)
+	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'createCompleteSet', args: [0n, 999n, unit, owner, (9n * unit) / 10n, unit / 50n] })
 	await hook.setProps({ snapshot: capitalSnapshot({ blockNumber: 11n }) })
 	expect(hook.state().maximumFee).toBe('0.02')
 	expect(hook.state().minimumShares).toBe('0.9')
@@ -78,4 +78,50 @@ test('a post-review capacity reduction or closed question stops submission', asy
 	source.setRead('availableMintCapacity', 10n * unit)
 	source.setRead('escalationGame', token)
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('minting has closed')
+})
+
+test('USDC purchases parse six decimals and require a separate token approval', async () => {
+	const collateralToken = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' as const
+	const snapshot = capitalSnapshot({ collateralToken, collateral: { address: collateralToken, symbol: 'USDC', decimals: 6 }, walletCollateral: 10_000_000n, collateralAllowance: 0n })
+	const { hook, source, requests } = await setup(snapshot)
+	source.setRead('purchaseQuote', [1_000n, 0n])
+	source.setRead('quoteQuestionMint', 2_000_000n)
+	await act(() => hook.state().setMintAmount('2'))
+	await waitFor(() => expect(hook.state().quote?.purchaseFeeAttoEth).toBe(1_000n))
+	expect(hook.state().requiredCollateral).toBe(2_020_000n)
+	expect(hook.state().reason).toBe('Collateral approval required.')
+	await act(() => hook.state().approve(2_020_000n))
+	expect(requests).toHaveLength(1)
+	const approval = requests[0]
+	if (approval === undefined) throw new Error('Missing collateral approval')
+	expect(approval.to).toBe(collateralToken)
+	expect(approval.value).toBe(0n)
+	expect(decodeFunctionData({ abi: parseAbi(['function approve(address spender,uint256 amount) returns (bool)']), data: approval.data })).toEqual({ functionName: 'approve', args: [snapshot.services, 2_020_000n] })
+	expect(hook.state().reason).toBe('Collateral approval required.')
+	await hook.setProps({ snapshot: { ...snapshot, collateralAllowance: 2_020_000n, blockNumber: 11n } })
+	await waitFor(() => expect(hook.state().reason).toBeUndefined())
+	await act(() => hook.state().buy())
+	const purchase = requests[1]
+	if (purchase === undefined) throw new Error('Missing collateral purchase')
+	expect(purchase.value).toBe(0n)
+	expect(decodeFunctionData({ abi, data: purchase.data })).toEqual({ functionName: 'createCompleteSet', args: [0n, 999n, 2_000_000n, owner, 900_000n, 20_000n] })
+})
+
+test('USDT approvals require a separate reset even when the existing allowance covers the purchase', async () => {
+	const collateralToken = '0xdAC17F958D2ee523a2206206994597C13D831ec7' as const
+	const snapshot = capitalSnapshot({ collateralToken, collateral: { address: collateralToken, symbol: 'USDT', decimals: 6 }, walletCollateral: 10_000_000n, collateralAllowance: 5_000_000n })
+	const { hook, source, requests } = await setup(snapshot)
+	source.setRead('allowance', 5_000_000n)
+	await act(() => hook.state().approve(10_000_000n))
+	const increase = requests[0]
+	if (increase === undefined) throw new Error('Missing approval')
+	await expect(increase.validateBeforeSubmit?.()).rejects.toThrow('Reset USDT approval first.')
+	await act(() => hook.state().approve(0n))
+	const reset = requests[1]
+	if (reset === undefined) throw new Error('Missing reset')
+	await reset.validateBeforeSubmit?.()
+	expect(decodeFunctionData({ abi: parseAbi(['function approve(address spender,uint256 amount) returns (bool)']), data: reset.data }).args).toEqual([snapshot.services, 0n])
+	source.setRead('allowance', 0n)
+	await increase.validateBeforeSubmit?.()
+	expect(requests).toHaveLength(2)
 })

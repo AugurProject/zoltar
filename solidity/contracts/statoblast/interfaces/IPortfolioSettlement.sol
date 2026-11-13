@@ -6,10 +6,7 @@ pragma solidity 0.8.35;
 /// Redemption follows the native token burn and pays the recipient from central custody.
 interface IPortfolioSettlement {
 	function availableMintCapacity(uint248 universeId) external view returns (uint256);
-	function mintQuestionSettlement()
-		external
-		payable
-		returns (uint256 mintedShares, uint256 totalEconomicShares, uint256 questionCashAttoEth);
+	function mintQuestionSettlement(uint256 cash) external returns (uint256 mintedShares, uint256 totalEconomicShares, uint256 questionCashAttoEth);
 	function redeemQuestionSettlement(address recipient, uint256 burnedShares) external returns (uint256 paidCashAttoEth, uint256 totalEconomicShares, uint256 questionCashAttoEth);
 	function checkpointQuestionSettlement()
 		external

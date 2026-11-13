@@ -1,4 +1,4 @@
-import { decodeEventLog, parseAbi, toEventSelector, type Hash } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, parseAbi, toEventSelector, type Hash, type Address, getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import type { ReadClient } from '../../testSupport/simulator/utils/clients'
 import { BURN_ADDRESS } from '../../testSupport/simulator/utils/constants'
@@ -12,7 +12,15 @@ if (serviceBurnEvent === undefined || unassignedBurnEvent === undefined) throw n
 const serviceBurnSelector = toEventSelector(serviceBurnEvent).toLowerCase()
 const unassignedBurnSelector = toEventSelector(unassignedBurnEvent).toLowerCase()
 
-export const burnedEthBalance = (client: ReadClient) => client.getBalance({ address: burnAddress })
+const collateralAbi = parseAbi(['function collateralToken() view returns (address)', 'function balanceOf(address owner) view returns (uint256)'])
+export async function collateralBalance(client: ReadClient, configuration: Address, account: Address) {
+	const token = await client.readContract({ abi: collateralAbi, address: configuration, functionName: 'collateralToken' })
+	if (typeof token !== 'string') throw new Error('Collateral token address missing')
+	const balance = await client.readContract({ abi: collateralAbi, address: getAddress(token), functionName: 'balanceOf', args: [account] })
+	if (typeof balance !== 'bigint') throw new Error('Collateral balance missing')
+	return balance
+}
+export const burnedCollateralBalance = (client: ReadClient, configuration: Address) => collateralBalance(client, configuration, burnAddress)
 
 /** Sum every ownerless-cash burn a transaction reports, by emitter kind. */
 export const receiptBurns = async (client: ReadClient, hash: Hash) => {
