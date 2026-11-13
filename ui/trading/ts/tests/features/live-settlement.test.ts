@@ -17,18 +17,6 @@ const pool = `0x${'33'.repeat(20)}` as Address
 const transactionHash = `0x${'44'.repeat(32)}` as Hex
 const blockHash = `0x${'55'.repeat(32)}` as Hex
 const configuration = deploymentConfigurationFixture({ chainId: 1, chainName: 'Test', rpcUrl: 'http://localhost', factory: `0x${'88'.repeat(20)}`, router: `0x${'99'.repeat(20)}` })
-const migrateAbi = [
-	{
-		type: 'function',
-		name: 'migrate',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'fromId', type: 'uint256' },
-			{ name: 'targetOutcomeIndexes', type: 'uint256[]' },
-		],
-		outputs: [],
-	},
-] as const
 
 function decodeReceiveRequest(data: Hex) {
 	// The router request is a static tuple, so its fields decode as flat ABI outputs.
@@ -136,7 +124,7 @@ describe('live settlement contract encoding', () => {
 		expect(counts.simulations).toBe(1)
 		expect(counts.sends).toBe(1)
 		for (const data of transactionData) {
-			expect(decodeFunctionData({ abi: migrateAbi, data }).args).toEqual([(7n << 8n) | 1n, [12n, 42n, 99n]])
+			expect(decodeFunctionData({ abi: shareTokenAbi, data })).toEqual({ functionName: 'migrate', args: [(7n << 8n) | 1n, [12n, 42n, 99n]] })
 		}
 	})
 
@@ -151,7 +139,7 @@ describe('live settlement contract encoding', () => {
 		expect(await submitFreshSettlement(client, configuration, account, quote, async write => await write())).toBe(transactionHash)
 		expect(transactionData).toHaveLength(3)
 		for (const data of transactionData) {
-			expect(decodeFunctionData({ abi: migrateAbi, data })).toEqual({ functionName: 'migrate', args: [(7n << 8n) | 1n, normalizedScalarTargets] })
+			expect(decodeFunctionData({ abi: shareTokenAbi, data })).toEqual({ functionName: 'migrate', args: [(7n << 8n) | 1n, normalizedScalarTargets] })
 		}
 	})
 
