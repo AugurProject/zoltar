@@ -13,8 +13,8 @@ import { writeContractAndWait, type WriteClient } from '../../testSupport/simula
 import { DAY } from '../../testSupport/simulator/utils/constants'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { openOracleSettle, wrapWeth } from '../../testSupport/simulator/utils/contracts/statoblast'
-import { addRepToMigrationBalance, forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress, splitMigrationRep } from '../../testSupport/simulator/utils/contracts/zoltar'
-import { approveToken, getChildUniverseId } from '../../testSupport/simulator/utils/utilities'
+import { addRepToMigrationBalance, getRepTokenAddress, splitMigrationRep } from '../../testSupport/simulator/utils/contracts/zoltar'
+import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { unit, type useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 export async function preparePortfolioCollateralRepairAuction(fixture: ReturnType<typeof useSecurityPoolPortfolioFixture>) {
@@ -27,15 +27,7 @@ export async function preparePortfolioCollateralRepairAuction(fixture: ReturnTyp
 	await fixture.deposit(1_000n * unit, other)
 	await fixture.authorize(200n * unit, other)
 	await fixture.mint(10n * unit)
-	const forks = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'forkController' })
-	await mock.setTime(fixture.base.questionData.endTime + 1n)
-	await approveToken(owner, getRepTokenAddress(source), getZoltarAddress())
-	await forkUniverse(owner, source, fixture.base.questionId)
-	const forkTime = (await getUniverseData(owner, source)).forkTime
-	await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'choose', args: [source, 1n] }))
-	const child = getChildUniverseId(source, 1)
-	await mock.setTime(forkTime + 56n * DAY)
-	await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'startBranch', args: [source, 1n] }))
+	const { forks, forkTime, child } = await fixture.forkAndStartYesBranch()
 	const auction = await owner.readContract({ abi: forkArtifact.abi, address: forks, functionName: 'auctions', args: [child] })
 	if (auction === zeroAddress) throw new Error('Collateral repair auction was not created')
 	const engine = await owner.readContract({ abi: auctionArtifact.abi, address: auction, functionName: 'engine' })
