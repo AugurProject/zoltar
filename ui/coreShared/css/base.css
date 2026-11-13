@@ -1852,6 +1852,20 @@ a.transaction-hash-link {
 	white-space: nowrap;
 }
 
+/* The visible status and a hidden copy of the other status share one cell, so the slot always takes the longer label's width. */
+.outcome-status-slot {
+	display: inline-grid;
+}
+
+.outcome-status-slot > * {
+	grid-area: 1 / 1;
+	justify-self: start;
+}
+
+.outcome-status-reserve {
+	visibility: hidden;
+}
+
 .migration-outcome-metrics strong {
 	display: block;
 	min-width: 0;
