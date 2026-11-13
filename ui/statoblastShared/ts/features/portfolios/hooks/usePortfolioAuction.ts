@@ -1,4 +1,4 @@
-import { getTokenApprovalResetReason } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
+import { getTokenApprovalResetReason, tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { encodeFunctionData } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { useSignal } from '@preact/signals'
@@ -170,7 +170,7 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 					}
 				},
 				latest => {
-					const reason = getTokenApprovalResetReason(latest.collateralAllowance, amount, latest.collateral.symbol, latest.collateral.symbol === 'USDT')
+					const reason = getTokenApprovalResetReason(latest.collateralAllowance, amount, latest.collateral.symbol, tokenRequiresAllowanceReset(latest.collateralToken))
 					if (reason !== undefined) throw new Error(reason)
 				},
 			),

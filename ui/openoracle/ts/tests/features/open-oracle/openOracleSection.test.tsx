@@ -5,6 +5,8 @@ import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TransactionActionButton, TransactionActionButtonLockProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
+import { getActiveNetworkProfile, installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { getLocalEntityScope } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { readFavoriteEntries, resetLocalEntityStoreForTesting, setEntityFavorite } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
@@ -783,6 +785,40 @@ void describe('OpenOracleSection', () => {
 		expect(getButtonDisabled(disputeButton)).toBe(true)
 		expect(getButtonDisabledReason(disputeButton)).toMatch(/ends too soon/)
 		expect(findButton(section, 'Settle report #7')).toBeUndefined()
+	})
+
+	void test('offers the allowance reset for the network USDT token whatever symbol the token reports', () => {
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend())
+		try {
+			const usdt = getActiveNetworkProfile().usdtAddress
+			if (usdt === undefined) throw new Error('Expected a configured USDT address')
+			// The dispute operation rejects a nonzero-to-nonzero approval for this address, so the screen must offer the reset.
+			const section = renderDisputeActionSection({
+				openOracleForm: createOpenOracleForm({ disputeNewAmount1: '20', disputeNewAmount2: '7' }),
+				openOracleTokenAccessState: createApprovedTokenAccessState(1n),
+				openOracleReportDetails: createDisputableReportDetails({ token2: usdt, token2Symbol: 'USD₮' }),
+			})
+
+			expect(getButtonDisabled(requireButton(section, 'Reset USD₮ approval'))).toBe(false)
+			expect(findButton(section, 'Reset REPv2 approval')).toBeUndefined()
+		} finally {
+			resetEnvironment()
+		}
+	})
+
+	void test('does not offer an allowance reset for another token that reports the USDT symbol', () => {
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend())
+		try {
+			const section = renderDisputeActionSection({
+				openOracleForm: createOpenOracleForm({ disputeNewAmount1: '20', disputeNewAmount2: '7' }),
+				openOracleTokenAccessState: createApprovedTokenAccessState(1n),
+				openOracleReportDetails: createDisputableReportDetails({ token2: getAddress('0x4000000000000000000000000000000000000000'), token2Symbol: 'USDT' }),
+			})
+
+			expect(findButton(section, 'Reset USDT approval')).toBeUndefined()
+		} finally {
+			resetEnvironment()
+		}
 	})
 
 	void test('renders dispute approval controls and blocks submit until required approvals are present', () => {

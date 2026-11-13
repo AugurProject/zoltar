@@ -327,3 +327,19 @@ test('a universe USDT reset uses its own transaction action instead of the branc
 	expect(state.actionIds).toEqual(['resetPortfolioPriceCollateral:universe'])
 	expect(decodeFunctionData({ abi, data: lastRequest(state.requests).data }).args).toEqual([priceFeed, 0n])
 })
+test('a REP approval is never blocked by an existing USDT collateral allowance', async () => {
+	const collateral = MAINNET_NETWORK_PROFILE.usdtAddress
+	if (collateral === undefined) throw new Error('Expected USDT')
+	const state = await setup(f => {
+		f.values['collateralToken'] = collateral
+		f.values['minimumToken1ReportAttoEth'] = 2_000_000n
+		f.set(collateral, 'balanceOf', 2_000_000n)
+		f.set(collateral, 'allowance', 1n)
+		f.setAllowances(0n, 0n)
+	}, capitalSnapshot())
+	await act(() => state.hook.state().setPrice('1'))
+	await act(() => state.hook.state().approve('rep', 5n * unit))
+	await lastRequest(state.requests).validateBeforeSubmit?.()
+	await act(() => state.hook.state().approve('weth', 2_000_000n))
+	await expect(lastRequest(state.requests).validateBeforeSubmit?.()).rejects.toThrow('Reset USDT approval first.')
+})
