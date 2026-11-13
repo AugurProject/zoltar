@@ -7,6 +7,7 @@ import { resolve } from 'node:path'
 import * as ts from 'typescript'
 import { listRepositoryFiles, mergeBaseWithMain, runGit } from '../repo/git.mts'
 import { discoverTestFiles } from './test-discovery.mts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 export type CoverageMetric = {
 	covered: number
@@ -351,19 +352,15 @@ export function evaluateCoveragePolicy(report: CompleteCoverage, policy: Coverag
 	return { passed: failures.length === 0, failures }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null
-}
-
 function parsePolicy(value: unknown): CoveragePolicy {
-	if (!isRecord(value) || value['version'] !== 1) throw new Error('Coverage policy must have version 1')
+	if (!isPlainRecord(value) || value['version'] !== 1) throw new Error('Coverage policy must have version 1')
 	const typescriptValue = value['typescript']
 	const solidityValue = value['solidity']
 	const changedLinesValue = value['changedLines']
-	if (!isRecord(typescriptValue) || !isRecord(solidityValue) || !isRecord(changedLinesValue)) throw new Error('Coverage policy is incomplete')
+	if (!isPlainRecord(typescriptValue) || !isPlainRecord(solidityValue) || !isPlainRecord(changedLinesValue)) throw new Error('Coverage policy is incomplete')
 	const parseSurfacePolicy = (surfaceName: TypeScriptSurfaceName) => {
 		const surfaceValue = typescriptValue[surfaceName]
-		if (!isRecord(surfaceValue)) throw new Error(`Coverage policy is missing TypeScript ${surfaceName}`)
+		if (!isPlainRecord(surfaceValue)) throw new Error(`Coverage policy is missing TypeScript ${surfaceName}`)
 		const minimumLines = surfaceValue['minimumLines']
 		const minimumFunctions = surfaceValue['minimumFunctions']
 		const allowedUnloadedFiles = surfaceValue['allowedUnloadedFiles']
@@ -398,10 +395,10 @@ function parsePolicy(value: unknown): CoveragePolicy {
 }
 
 function parseSoliditySummary(value: unknown): SolidityCoverageInput {
-	if (!isRecord(value) || !isRecord(value['files'])) throw new Error('Invalid Solidity coverage summary')
+	if (!isPlainRecord(value) || !isPlainRecord(value['files'])) throw new Error('Invalid Solidity coverage summary')
 	const files: SolidityCoverageInput['files'] = {}
 	for (const [absoluteFile, fileValue] of Object.entries(value['files'])) {
-		if (!isRecord(fileValue) || typeof fileValue['file'] !== 'string' || !isRecord(fileValue['lineHits'])) throw new Error(`Invalid Solidity coverage file: ${absoluteFile}`)
+		if (!isPlainRecord(fileValue) || typeof fileValue['file'] !== 'string' || !isPlainRecord(fileValue['lineHits'])) throw new Error(`Invalid Solidity coverage file: ${absoluteFile}`)
 		const lineHits: Record<string, number> = {}
 		for (const [line, hitCount] of Object.entries(fileValue['lineHits'])) {
 			if (typeof hitCount !== 'number') throw new Error(`Invalid Solidity coverage hit count: ${absoluteFile}:${line}`)
@@ -535,7 +532,7 @@ async function main() {
 
 	const discoveredTestFiles = await discoverTestFiles(repositoryRoot)
 	const testManifest: unknown = JSON.parse(await readFile(resolve(repositoryRoot, 'coverage/typescript/test-files.json'), 'utf8'))
-	if (!isRecord(testManifest) || testManifest['status'] !== 'passed' || !Array.isArray(testManifest['files']) || JSON.stringify(testManifest['files']) !== JSON.stringify(discoveredTestFiles)) throw new Error('TypeScript coverage test manifest does not match canonical test discovery')
+	if (!isPlainRecord(testManifest) || testManifest['status'] !== 'passed' || !Array.isArray(testManifest['files']) || JSON.stringify(testManifest['files']) !== JSON.stringify(discoveredTestFiles)) throw new Error('TypeScript coverage test manifest does not match canonical test discovery')
 
 	let solidity: SolidityCoverage | undefined
 	if (!typescriptOnly) {

@@ -321,7 +321,7 @@ export const projects: readonly Project[] = [
 			audit: { ...packageTask('bots/open-oracle-arbitrager', 'audit'), command: botAudit },
 		},
 		generatedDirectories: [],
-		generatedFiles: ['bots/open-oracle-arbitrager/src/contracts/artifacts.generated.ts', 'bots/open-oracle-arbitrager/tests/contracts/harness-artifacts.generated.ts', 'bots/open-oracle-arbitrager/src/contracts/executor-abi.generated.ts', 'bots/open-oracle-arbitrager/docs/chart-runtime.js'],
+		generatedFiles: ['bots/open-oracle-arbitrager/src/contracts/artifacts.generated.ts', 'bots/open-oracle-arbitrager/tests/contracts/harness-artifacts.generated.ts', 'bots/open-oracle-arbitrager/docs/chart-runtime.js'],
 		ci: { scope: 'arbitrager', componentName: 'arbitrager', requiresContractArtifacts: true },
 	},
 	{
