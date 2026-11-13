@@ -4228,11 +4228,51 @@ span.rep-price-status.stale,
 	overflow-wrap: anywhere;
 }
 
-/* Question titles keep a readable column; on narrow screens the table scrolls inside its region instead of squeezing them. */
-.portfolio-questions-table td:first-child {
-	min-width: 10rem;
-}
-
+/* Question titles wrap between words, and the portfolio column shows a short address. */
 .portfolio-questions-table td:first-child button {
 	overflow-wrap: normal;
+}
+
+.portfolio-questions-table .portfolio-questions-address {
+	font-family: var(--font-family-mono);
+	white-space: nowrap;
+}
+
+/* Phones stack each question: the title takes the full width and the portfolio and outcome follow as labelled lines,
+ * instead of three columns squeezing the title to a word per line. */
+@media (max-width: 40rem) {
+	.portfolio-questions-table thead {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
+	}
+
+	.portfolio-questions-table table,
+	.portfolio-questions-table tbody,
+	.portfolio-questions-table tr,
+	.portfolio-questions-table td {
+		display: block;
+	}
+
+	.portfolio-questions-table tr {
+		display: grid;
+		gap: var(--space-2);
+		padding-block: var(--space-3);
+		border-top: 1px solid var(--divider-subtle);
+	}
+
+	.portfolio-questions-table td[data-label] {
+		display: flex;
+		justify-content: space-between;
+		gap: var(--space-3);
+	}
+
+	.portfolio-questions-table td[data-label]::before {
+		content: attr(data-label);
+		color: var(--text-secondary);
+		font-size: var(--font-caption);
+	}
 }
