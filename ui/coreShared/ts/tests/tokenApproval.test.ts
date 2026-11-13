@@ -2,7 +2,10 @@
 
 import { describe, expect, test } from 'bun:test'
 import { maxUint256 } from '@zoltar/core-shared/evm/ethereum'
-import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage, shouldDisplayMaxTokenApprovalAmount } from '../transactions/tokenApproval.js'
+import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
+import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '../wallet/networkProfile.js'
+import { createFakeBackend } from './testUtils/fakeBackend.js'
+import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, getTokenApprovalResetReason, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage, shouldDisplayMaxTokenApprovalAmount, tokenRequiresAllowanceReset } from '../transactions/tokenApproval.js'
 
 const ONE = 10n ** 18n
 // Approved amounts above uint200 are displayed as unlimited.
@@ -121,5 +124,38 @@ describe('token approval helpers', () => {
 				tokenLabel: 'REP',
 			}),
 		).toBe('Unable to verify REP approval before depositing REP. Retry loading the approval status before continuing.')
+	})
+
+	test('requires an allowance reset only for the active network USDT address', () => {
+		const usdt = MAINNET_NETWORK_PROFILE.usdtAddress
+		if (usdt === undefined) throw new Error('Expected a configured USDT address')
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: MAINNET_NETWORK_PROFILE }))
+		try {
+			expect(tokenRequiresAllowanceReset(usdt)).toBe(true)
+			// Addresses compare without regard to checksum casing.
+			expect(tokenRequiresAllowanceReset(`0x${usdt.slice(2).toLowerCase()}`)).toBe(true)
+			expect(tokenRequiresAllowanceReset(MAINNET_NETWORK_PROFILE.usdcAddress)).toBe(false)
+			expect(tokenRequiresAllowanceReset(undefined)).toBe(false)
+		} finally {
+			resetEnvironment()
+		}
+	})
+
+	test('requires no allowance reset on a network that configures no USDT address', () => {
+		const usdt = MAINNET_NETWORK_PROFILE.usdtAddress
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }))
+		try {
+			expect(SEPOLIA_NETWORK_PROFILE.usdtAddress).toBeUndefined()
+			expect(tokenRequiresAllowanceReset(usdt)).toBe(false)
+		} finally {
+			resetEnvironment()
+		}
+	})
+
+	test('blocks a nonzero-to-nonzero approval change only for a token that requires the reset', () => {
+		expect(getTokenApprovalResetReason(1n, 2n, 'USDT', true)).toBe('Reset USDT approval first.')
+		expect(getTokenApprovalResetReason(1n, 0n, 'USDT', true)).toBeUndefined()
+		expect(getTokenApprovalResetReason(0n, 2n, 'USDT', true)).toBeUndefined()
+		expect(getTokenApprovalResetReason(1n, 2n, 'USDT', false)).toBeUndefined()
 	})
 })

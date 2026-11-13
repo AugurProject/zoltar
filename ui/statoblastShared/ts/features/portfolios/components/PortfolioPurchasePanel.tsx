@@ -1,5 +1,6 @@
 import * as collateralCopy from '../../../copy/collateral.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
+import { tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { Question, getQuestionTitle } from '@zoltar/ui-core-shared/components/Question.js'
 import { usePortfolioQuestionDetails } from '../hooks/usePortfolioQuestionDetails.js'
 import { useId } from 'preact/hooks'
@@ -86,7 +87,7 @@ export function PortfolioPurchasePanel({ model, purchase, actions }: { model: Re
 				<MetricField label={copy.estimatedPurchaseFee} loading={purchase.quoteLoading}>
 					<CurrencyValue value={purchase.quote?.purchaseFeeAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 				</MetricField>
-				{snapshot?.collateral.symbol === collateralCopy.usdt ? (
+				{snapshot !== undefined && tokenRequiresAllowanceReset(snapshot.collateralToken) ? (
 					<PortfolioButton model={actions} action='resetPurchaseCollateral' label={collateralCopy.reset} pendingLabel={collateralCopy.resetting} reason={actions.ownerReason ?? (snapshot.collateralAllowance === 0n ? collateralCopy.notNeeded : undefined)} onClick={() => purchase.approve(0n)} />
 				) : undefined}
 				<TokenApprovalControl
@@ -96,7 +97,7 @@ export function PortfolioPurchasePanel({ model, purchase, actions }: { model: Re
 					approvedAmount={snapshot?.collateralAllowance}
 					disabled={actions.busy !== undefined}
 					guardMessage={actions.ownerReason}
-					requiresAllowanceReset={snapshot?.collateral.symbol === collateralCopy.usdt}
+					requiresAllowanceReset={tokenRequiresAllowanceReset(snapshot?.collateralToken)}
 					onApprove={amount => {
 						if (amount !== undefined) void purchase.approve(amount)
 					}}

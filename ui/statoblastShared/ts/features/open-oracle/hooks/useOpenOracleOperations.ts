@@ -1,7 +1,6 @@
 import { useOpenOracleLiveReport } from './useOpenOracleLiveReport.js'
 import { createReportWrapShortfall, validateCreateReportApproval } from '../lib/createFunding.js'
-import { getTokenApprovalResetReason } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
-import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { getTokenApprovalResetReason, tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { useSignal } from '@preact/signals'
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { useEffect, useRef } from 'preact/hooks'
@@ -261,7 +260,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 						tokenLabel,
 					})
 					const approvalRequirement = token === 'token1' ? disputeSubmission.token1Approval : disputeSubmission.token2Approval
-					const resetReason = getTokenApprovalResetReason(approvalRequirement.approvedAmount, approvalAmount, tokenLabel, tokenLabel === 'USDT' || (token === 'token1' ? reportDetails.token1 : reportDetails.token2).toLowerCase() === getActiveNetworkProfile().usdtAddress?.toLowerCase())
+					const resetReason = getTokenApprovalResetReason(approvalRequirement.approvedAmount, approvalAmount, tokenLabel, tokenRequiresAllowanceReset(token === 'token1' ? reportDetails.token1 : reportDetails.token2))
 					if (resetReason !== undefined) throw new Error(resetReason)
 					return await dependencies.approveErc20(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), token === 'token1' ? reportDetails.token1 : reportDetails.token2, getOpenOracleAddress(), approvalAmount, action)
 				},

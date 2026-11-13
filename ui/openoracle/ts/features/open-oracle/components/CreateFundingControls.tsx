@@ -4,7 +4,7 @@ import { TransactionActionButton } from '@zoltar/ui-core-shared/components/Trans
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
 import * as oracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
 import * as copy from '../copy/funding.js'
-import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import type { useCreateFunding } from '../hooks/useCreateFunding.js'
 
@@ -40,13 +40,13 @@ export function CreateFundingControls({
 			) : null}
 			{tokens.map((token, index) => {
 				const symbol = symbols[index] ?? copy.funding
-				const usdt = token.token?.toLowerCase() === getActiveNetworkProfile().usdtAddress?.toLowerCase()
+				const requiresAllowanceReset = tokenRequiresAllowanceReset(token.token)
 				let resetReason = guard ?? funding.error
 				if (resetReason === undefined && token.access === undefined) resetReason = copy.loading
 				else if (resetReason === undefined && token.access?.allowance === 0n) resetReason = copy.notNeeded
 				return (
 					<div key={token.key}>
-						{usdt ? (
+						{requiresAllowanceReset ? (
 							<TransactionActionButton
 								idleLabel={common.formatResetTokenApproval(symbol)}
 								pendingLabel={common.formatApprovingToken(symbol)}
@@ -63,7 +63,7 @@ export function CreateFundingControls({
 							approvedAmount={token.access?.allowance}
 							disabled={disabled || approve === undefined}
 							guardMessage={guard}
-							requiresAllowanceReset={usdt}
+							requiresAllowanceReset={requiresAllowanceReset}
 							onApprove={amount => {
 								if (amount !== undefined) approve?.(token.key, amount)
 							}}
