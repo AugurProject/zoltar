@@ -1,3 +1,4 @@
+import { readCollateralMetadata } from './collateral-metadata.ts'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { abiForKind } from './abi-catalog.ts'
 import { sampleClaimPositions } from './claim-snapshots.ts'
@@ -84,10 +85,9 @@ const poolSnapshot = async (target: StateSnapshotTarget, read: StateRead): Promi
 		const portfolio = getAddress(String(await read(factory, snapshotAbi('securityPoolFactory'), 'getSecurityPoolPortfolio', [address])))
 		const token = getAddress(String(await read(portfolio, snapshotAbi('securityPoolPortfolio'), 'collateralToken')))
 		try {
-			const [symbol, units] = await Promise.all([read(token, snapshotAbi('iERC20Metadata'), 'symbol'), read(token, snapshotAbi('iERC20Metadata'), 'decimals')])
-			const decimals = Number(units)
-			if (typeof symbol !== 'string' || symbol.trim() === '' || !Number.isInteger(decimals) || decimals < 0 || decimals > 255) throw new Error('Invalid collateral metadata')
-			result['collateral'] = { address: token.toLowerCase(), symbol, decimals }
+			const metadata = await readCollateralMetadata(token, read)
+			const { decimals } = metadata
+			result['collateral'] = metadata
 			result['averageValueAttoEthPerShare'] = BigInt(supply) === 0n ? '0' : ((BigInt(settlement) * 10n ** BigInt(decimals)) / BigInt(supply)).toString()
 		} catch (error) {
 			result['collateralMetadataError'] = errorMessage(error)

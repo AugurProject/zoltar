@@ -34,7 +34,7 @@ function requireAuction(snapshot: PortfolioAuctionSnapshot) {
 /** Opening requires a funded observation; it cannot guarantee later profitability. */
 export function portfolioAuctionOpeningReason(snapshot: PortfolioAuctionSnapshot): string | undefined {
 	const auction = snapshot.auction
-	if (auction === undefined) return 'Start a branch with saleable REP and an collateral shortfall first.'
+	if (auction === undefined) return 'Start a branch with saleable REP and a collateral shortfall first.'
 	if (auction.finalized) return 'This auction is finalized.'
 	if (auction.opened) return 'This auction is already open.'
 	if (snapshot.timestamp >= auction.closesAt) return 'The auction window has closed.'
@@ -133,13 +133,13 @@ export function buildPortfolioAuctionVaultExecuteRequest(parameters: { bidder: A
 	const vault = address(parameters.vault, 'Auction vault')
 	if (address(parameters.request.account, 'Capital account') !== vault) throw new Error('The capital transaction must belong to the selected auction vault.')
 	if (!isHex(parameters.request.data, { strict: true }) || parameters.request.data.length % 2 !== 0) throw new Error('Vault call data must contain whole hexadecimal bytes.')
-	const value = uint(parameters.request.value, 'Forwarded collateral')
+	const value = uint(parameters.request.value, 'Forwarded ETH')
 	const target = address(parameters.request.to, 'Vault target')
 	const data =
 		parameters.sweep === undefined
 			? encodeFunctionData({ abi, functionName: 'execute', args: [target, value, parameters.request.data] })
 			: encodeFunctionData({ abi, functionName: 'executeAndSweep', args: [target, value, parameters.request.data, address(parameters.sweep.repToken, 'Sweep REP token'), address(parameters.sweep.recipient, 'Sweep recipient')] })
-	return { account: address(parameters.bidder, 'Vault owner'), to: vault, value: uint(parameters.fundingAttoEth ?? value, 'Wallet collateral funding'), data }
+	return { account: address(parameters.bidder, 'Vault owner'), to: vault, value: uint(parameters.fundingAttoEth ?? value, 'Wallet ETH funding'), data }
 }
 /** The vault pulls the exact approved REP amount from its owner before depositing. */
 export function buildPortfolioAuctionVaultDepositRequest(parameters: { bidder: Address; vault: Address; capitalLedger: Address; amountAttoRep: bigint; targetHealthFactorBps: bigint }) {

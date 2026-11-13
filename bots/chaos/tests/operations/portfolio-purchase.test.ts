@@ -1,3 +1,5 @@
+import { eligibleOperationPlans } from '../support/operation-plans.ts'
+import { reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
 import { expect, test } from 'bun:test'
 import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
 import { erc20Abi, securityPoolPortfolioAbi } from '@zoltar/bot-shared/contracts/abi'
@@ -59,3 +61,27 @@ test('an unapproved purchase prepares one exact collateral approval before spend
 	if (cleanup === undefined) throw new Error('Missing approval cleanup')
 	expect(decodeFunctionData({ abi: erc20Abi, data: cleanup.data }).args).toEqual([pool.coordinator, 0n])
 })
+
+test('single-step redemptions use canonical re-evaluation rather than approval continuations', () => {
+	expect(completeSetDefinition('redeem').buildContinuationPlan).toBeUndefined()
+	expect(completeSetDefinition('winning').buildContinuationPlan).toBeUndefined()
+	expect(completeSetDefinition('create').buildContinuationPlan).toBeDefined()
+})
+
+for (const kind of ['redeem', 'winning'] as const)
+	test(`${kind} re-evaluates changed inventory without dead-ending`, () => {
+		const snapshot = snapshotFixture()
+		const pool = snapshot.pools[0]
+		const shares = snapshot.wallet.shares[0]
+		if (pool === undefined || shares === undefined) throw new Error('Missing redemption fixture')
+		if (kind === 'winning') pool.questionOutcome = 1
+		const options = planningOptionsFixture()
+		const definitionId = completeSetDefinition(kind).id
+		const original = eligibleOperationPlans(snapshot, options).find(plan => plan.definitionId === definitionId)
+		if (original === undefined) throw new Error('Missing redemption plan')
+		shares.invalid = shares.yes = shares.no = '2000000000000000000'
+		const rebuilt = reevaluateOperationContinuation(snapshot, original, options)
+		expect(rebuilt.eligibility.eligible).toBe(true)
+		expect(rebuilt.plan?.steps).toHaveLength(1)
+		expect(rebuilt.plan?.steps[0]?.walletAssetDebits?.[0]?.amount).toBe('2000000000000000000')
+	})

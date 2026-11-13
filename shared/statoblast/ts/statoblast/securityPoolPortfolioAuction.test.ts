@@ -268,6 +268,8 @@ describe('portfolio collateral repair auction SDK', () => {
 	})
 	test('vault execution preserves the liability owner, target and exact funding, with a distinct wallet-funded deposit helper', () => {
 		const vault = vaultFor(1n)
+		expect(() => buildPortfolioAuctionVaultExecuteRequest({ bidder, vault, request: { account: vault, to: capital, value: -1n, data: '0x' } })).toThrow('Forwarded ETH')
+		expect(() => buildPortfolioAuctionVaultExecuteRequest({ bidder, vault, request: { account: vault, to: capital, value: 0n, data: '0x' }, fundingAttoEth: -1n })).toThrow('Wallet ETH funding')
 		const data: Hex = '0x12345678'
 		const request = buildPortfolioAuctionVaultExecuteRequest({ bidder, vault, request: { account: vault, to: capital, value: 7n, data } })
 		expect(request).toMatchObject({ account: bidder, to: vault, value: 7n })

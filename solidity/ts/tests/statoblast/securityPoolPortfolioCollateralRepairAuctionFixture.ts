@@ -63,9 +63,9 @@ export async function preparePortfolioCollateralRepairAuction(fixture: ReturnTyp
 	const bid = async (bidder: WriteClient, lots: bigint, price = 6n * unit, health = 12_000n) => {
 		const id = (await bidder.readContract({ abi: engineArtifact.abi, address: engine, functionName: 'bidCount' })) + 1n
 		await approveToken(bidder, weth, auction)
-		await writeContractAndWait(bidder, () => bidder.writeContract({ abi: auctionArtifact.abi, address: auction, functionName: 'submitBid', args: [lots, price, health] }))
+		const hash = await writeContractAndWait(bidder, () => bidder.writeContract({ abi: auctionArtifact.abi, address: auction, functionName: 'submitBid', args: [lots, price, health] }))
 		const [, vault] = await bidder.readContract({ abi: engineArtifact.abi, address: engine, functionName: 'bids', args: [id] })
-		return { id, vault }
+		return { id, vault, hash }
 	}
 	const closingQuote = async (price = unit) => {
 		await mock.setTime(deadline - 1_000n)

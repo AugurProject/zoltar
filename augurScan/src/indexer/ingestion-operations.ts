@@ -1,3 +1,4 @@
+import { readContractCollateral } from '../collateral-metadata.ts'
 import { discoverPortfolioEventDependencies } from './portfolio-discovery.ts'
 import { transactionCallTrace, unsupportedTraceError } from './transaction-selection.ts'
 import { canonicalBlockLogs, type IndexedBlock, type RichListBalance, type StoredTransaction } from '../database.ts'
@@ -157,7 +158,23 @@ export async function indexBlock(
 	if (tokenMetadataReads.some(metadata => metadata.readError === prunedTokenMetadataError)) await discoverStateStartBlock(state, observedHead, number, true)
 	for (const metadata of tokenMetadataReads) tokenMetadata.set(metadata.address.toLowerCase(), metadata)
 	const displayLabels = new Map(labels)
-	const displayContext = { nativeSymbol: state.network.nativeSymbol }
+	const displayAddresses = new Set(receipts.flatMap(receipt => receipt.logs.map(log => log.address.toLowerCase())))
+	for (const { transaction } of transactionByHash.values()) {
+		if (transaction.to === null || transaction.to === undefined) continue
+		displayAddresses.add(transaction.to.toLowerCase())
+		const decoded = decodeAction(contracts.get(transaction.to.toLowerCase()), transaction.input, labels)
+		for (const address of decoded.referencedAddresses ?? []) displayAddresses.add(address.toLowerCase())
+	}
+	const collateralDisplays = await mapLimit(
+		[...contracts.values()].filter(contract => displayAddresses.has(contract.address.toLowerCase()) && /^(securityPool|sharedPool|openOraclePrice|priceCoordinator|twoWayConstantProduct)/u.test(contract.kind)),
+		4,
+		async contract => {
+			const collateral = await readContractCollateral(contract.address, contract.kind, async (address, abi, functionName, args) => await state.providers.client.readContract({ address, abi, functionName, ...(args === undefined ? {} : { args }), blockNumber: number }))
+			return [contract.address.toLowerCase(), collateral?.unit] as const
+		},
+	)
+	const collateralByAddress = new Map(collateralDisplays.flatMap(([address, unit]) => (unit === undefined ? [] : [[address, unit] as const])))
+	const displayContext = { nativeSymbol: state.network.nativeSymbol, collateralByAddress }
 	for (const metadata of tokenMetadata.values()) {
 		const label = metadata.name ?? metadata.symbol
 		if (label !== undefined) displayLabels.set(metadata.address.toLowerCase(), metadata.symbol === undefined ? label : `${label} (${metadata.symbol})`)

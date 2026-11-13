@@ -426,3 +426,26 @@ test('retains malformed proxy calldata as failed evidence rather than throwing',
 	const proxy = { address: account, label: 'Proxy Deployer', kind: 'proxyDeployer', provenance: 'manifest' }
 	expect(decodeAction(proxy, '0xzz', new Map()).status).toBe('failed')
 })
+
+test('pool events use resolved collateral decimals for cash and shares', () => {
+	const abi = parseAbi(['event CompleteSetCreated(address indexed creator,uint256 settlementCollateralProvidedAttoEth,uint256 completeSetsMintedAttoShares,uint256 resultingShareTokenSupplyAttoShares,uint256 resultingSettlementCollateralAttoEth)'])
+	const topics = requireTopics(encodeEventTopics({ abi, eventName: 'CompleteSetCreated', args: { creator: account } }))
+	for (const [symbol, decimals] of [
+		['WETH', 18],
+		['USDC', 6],
+	] as const) {
+		const amount = 10n ** BigInt(decimals)
+		const data = encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [amount, amount, amount, amount])
+		const decoded = decodeLogRecord('securityPool', topics, data, new Map(), new Map(), account, new Map(), { nativeSymbol: 'ETH', collateral: { symbol, decimals } })
+		expect(decoded.displayArguments?.['settlementCollateralProvidedAttoEth']).toBe(`1 ${symbol}`)
+		expect(decoded.displayArguments?.['completeSetsMintedAttoShares']).toBe('1 shares')
+	}
+})
+
+test('native ETH received by a USDC pool stays native ETH', () => {
+	const abi = parseAbi(['event EthReceived(address indexed sender,uint256 amountAttoEth)'])
+	const topics = requireTopics(encodeEventTopics({ abi, eventName: 'EthReceived', args: { sender: account } }))
+	const data = encodeAbiParameters([{ type: 'uint256' }], [10n ** 18n])
+	const decoded = decodeLogRecord('securityPool', topics, data, new Map(), new Map(), account, new Map(), { nativeSymbol: 'ETH', collateral: { symbol: 'USDC', decimals: 6 } })
+	expect(decoded.displayArguments?.['amountAttoEth']).toBe('1 ETH')
+})

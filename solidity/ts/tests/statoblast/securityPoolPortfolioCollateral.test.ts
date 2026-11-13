@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { encodeDeployData } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, encodeDeployData } from '@zoltar/core-shared/evm/ethereum'
 import {
 	test_statoblast_CollateralTestToken_CollateralTestToken as tokenArtifact,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
@@ -62,7 +62,16 @@ describe('ERC20 portfolio collateral', () => {
 			const quote = await buyer.readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'purchaseQuote', args: [fixture.base.genesisUniverse, fixture.base.questionId, cash] })
 			const balance = () => buyer.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [buyer.account.address] })
 			const before = await balance()
-			await fixture.mint(cash, fixture.base.questionId, { namespace: portfolio, budget: quote[0] })
+			const mintHash = await fixture.mint(cash, fixture.base.questionId, { namespace: portfolio, budget: quote[0] })
+			const settlement = await owner.readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'settlement' })
+			const mintReceipt = await buyer.getTransactionReceipt({ hash: mintHash })
+			const transfers = mintReceipt.logs
+				.filter(log => log.address.toLowerCase() === token.toLowerCase())
+				.flatMap(log => {
+					const event = decodeEventLog({ abi: tokenArtifact.abi, data: log.data, topics: log.topics })
+					return event.eventName === 'Transfer' ? [event.args] : []
+				})
+			expect(transfers.some(transfer => transfer.from === buyer.account.address && transfer.to === settlement && transfer.amount === cash)).toBe(true)
 			expect(before - (await balance())).toBe(cash + quote[0])
 			const pool = fixture.poolFor(fixture.base.questionId, undefined, undefined, portfolio).securityPool
 			await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'setFee', args: [100n] }))

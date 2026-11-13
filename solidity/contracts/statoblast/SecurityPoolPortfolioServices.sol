@@ -66,8 +66,8 @@ contract SecurityPoolPortfolioServices is IERC1155Receiver {
 		(fee, premium) = root.quoteHelper().purchaseQuote(universeId, questionId, cash);
 		require(fee <= maximumFee, 'Purchase fee exceeds budget');
 		IERC20 collateral = ICollateralConfig(portfolio).collateralToken();
-		Collateral.pull(collateral, trader, address(this), cash + fee);
-		collateral.safeApprove(address(root.settlement()), cash);
+		Collateral.pull(collateral, trader, address(root.settlement()), cash);
+		Collateral.pull(collateral, trader, address(this), fee);
 		require(cash <= root.quoteHelper().availableMintCapacity(universeId), 'Purchase exceeds healthy capacity');
 		minted = _mintCompleteSets(pool, recipient, minimumShares, cash);
 		if (premium != 0) _fundPremium(universeId, questionId, premium);

@@ -142,3 +142,23 @@ test('changing the account discards a pending refresh and disabling stops backgr
 	await waitFor(() => expect(hook.state().collateral?.balance).toBe(4_000_000n))
 	expect(transactions).toEqual([])
 })
+
+test('typing keeps token identity visible and debounces quotes without reloading immutable identity', async () => {
+	const { source, hook, balanceReads } = await setup(30_000_000n, 30_000_000n)
+	const quotes = () => source.reads.filter(read => read.name === 'purchaseQuote').length
+	const beforeQuotes = quotes()
+	const identityReads = () => source.reads.filter(read => read.name === 'collateralToken').length
+	const before = identityReads()
+	await hook.setProps({ amountInput: '5' })
+	expect(hook.state().collateral?.decimals).toBe(6)
+	await hook.setProps({ amountInput: '6' })
+	await hook.setProps({ amountInput: '7' })
+	await waitFor(() => expect(hook.state().requiredCollateral).toBe(7_000_000n))
+	expect(identityReads()).toBe(before)
+	expect(quotes()).toBe(beforeQuotes + 1)
+	const beforeBalance = balanceReads()
+	await act(() => invalidateAppData())
+	await waitFor(() => expect(balanceReads()).toBe(beforeBalance + 1))
+	await waitFor(() => expect(quotes()).toBe(beforeQuotes + 2))
+	expect(identityReads()).toBe(before)
+})

@@ -118,10 +118,6 @@ export function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Op
 			})
 		},
 
-		buildContinuationPlan(snapshot, options, context) {
-			if (kind !== 'create') return definition.buildPlan(snapshot, options)
-			return collateralSpendContinuation({ snapshot, options, context, buildPlan: definition.buildPlan, approvalId: 'approve-portfolio-collateral', actionId: method, label: 'Revoke portfolio collateral approval', risk: 'medium' })
-		},
 		classification: 'selectable',
 		contract: kind === 'create' ? 'SecurityPoolPortfolio' : 'SecurityPool',
 		description: `Exercises the ${kind} complete-set/share workflow with wallet-owned inventory.`,
@@ -148,5 +144,6 @@ export function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Op
 		method,
 		risk: kind === 'create' ? 'medium' : 'low',
 	}
+	if (kind === 'create') definition.buildContinuationPlan = (snapshot, options, context) => collateralSpendContinuation({ snapshot, options, context, buildPlan: definition.buildPlan, approvalId: 'approve-portfolio-collateral', actionId: method, label: 'Revoke portfolio collateral approval', risk: 'medium' })
 	return definition
 }

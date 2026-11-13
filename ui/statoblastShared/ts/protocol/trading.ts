@@ -105,14 +105,23 @@ async function loadTradingCollateralIdentity(client: Pick<ReadClient, 'readContr
 	return { ...collateralPresentation(token), token, services, portfolio }
 }
 
-export async function loadTradingCollateral(client: ReadClient, pool: Address, owner: Address) {
-	const identity = await loadTradingCollateralIdentity(client, pool)
+async function loadTradingFundingIdentity(client: ReadClient, pool: Address) {
+	const [identity, universeId, questionId] = await Promise.all([
+		loadTradingCollateralIdentity(client, pool),
+		client.readContract({ address: pool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'universeId' }),
+		client.readContract({ address: pool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'questionId' }),
+	])
+	return { ...identity, universeId, questionId }
+}
+
+export async function loadTradingCollateral(client: ReadClient, pool: Address, owner: Address, cachedIdentity?: Awaited<ReturnType<typeof loadTradingFundingIdentity>>) {
+	const identity = cachedIdentity ?? (await loadTradingFundingIdentity(client, pool))
 	const { token, services } = identity
 	const [balance, allowance] = await Promise.all([client.readContract({ address: token, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [owner] }), client.readContract({ address: token, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [owner, services] })])
 	return { ...identity, balance, allowance }
 }
-export async function quoteTradingCollateral(client: ReadClient, pool: Address, collateral: Awaited<ReturnType<typeof loadTradingCollateral>>, amount: bigint) {
-	const [universeId, questionId] = await Promise.all([client.readContract({ address: pool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'universeId' }), client.readContract({ address: pool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'questionId' })])
+export async function quoteTradingCollateral(client: ReadClient, collateral: Awaited<ReturnType<typeof loadTradingCollateral>>, amount: bigint) {
+	const { universeId, questionId } = collateral
 	const result = await client.readContract({ address: collateral.portfolio, abi: purchaseAbi, functionName: 'purchaseQuote', args: [universeId, questionId, amount] })
 	if (!Array.isArray(result) || typeof result[0] !== 'bigint') throw new Error('Invalid collateral fee quote.')
 	return { amount, maximumFee: (result[0] * 10_100n + 9_999n) / 10_000n }

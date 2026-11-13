@@ -213,7 +213,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 						tradingForkUniverse.value = latestForkUniverse
 					}
 					if (actionName === 'createCompleteSet') {
-						if ((portfolioAmountOrUndefined(currentForm.completeSetAmount, collateralFunding.collateral?.decimals ?? 18) ?? 0n) <= 0n) throw new Error('Invalid mint amount.')
+						if ((portfolioAmountOrUndefined(currentForm.completeSetAmount, requireCollateralDecimals()) ?? 0n) <= 0n) throw new Error('Invalid mint amount.')
 						const latestMintCapacity = await dependencies.loadSecurityPoolMintCapacity(securityPoolAddress)
 						const walletBalanceAttoEth = await dependencies.getWalletEthBalance(walletAddress)
 						const mintCheckpoint = estimateMintCheckpoint({
@@ -247,7 +247,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 						if (guardMessage !== undefined) throw new Error(guardMessage)
 					}
 					if (actionName === 'redeemCompleteSet') {
-						if ((portfolioAmountOrUndefined(currentForm.redeemAmount, collateralFunding.collateral?.decimals ?? 18) ?? 0n) <= 0n) throw new Error('Invalid redeem amount.')
+						if ((portfolioAmountOrUndefined(currentForm.redeemAmount, requireCollateralDecimals()) ?? 0n) <= 0n) throw new Error('Invalid redeem amount.')
 						const latestMintCapacity = await dependencies.loadSecurityPoolMintCapacity(securityPoolAddress)
 						const guardMessage = getTradingRedeemCompleteSetGuardMessage({
 							accountAddress: walletAddress,
@@ -256,7 +256,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 							isOnActiveAppChain,
 							loadingTradingDetails: false,
 							redeemAmountInput: currentForm.redeemAmount,
-							shareDecimals: collateralFunding.collateral?.decimals ?? 18,
+							shareDecimals: requireCollateralDecimals(),
 							shareBalances: latestTradingDetails.shareBalances,
 							shareTokenSupplyAttoShares: latestMintCapacity.shareTokenSupplyAttoShares,
 						})
@@ -301,12 +301,18 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 		}
 	}
 
+	function requireCollateralDecimals() {
+		const collateral = collateralFunding.collateral
+		if (collateral === undefined) throw new Error('Collateral metadata is not loaded. Wait for funding details and try again.')
+		return collateral.decimals
+	}
+
 	const createCompleteSet = async () =>
 		await runTradingAction(
 			'createCompleteSet',
 			async (walletAddress, securityPoolAddress, currentForm, isCurrentSelection, context) => {
 				if (!isCurrentSelection()) return undefined
-				return await dependencies.createCompleteSetInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, portfolioAmountOrUndefined(currentForm.completeSetAmount, collateralFunding.collateral?.decimals ?? 18) ?? 0n)
+				return await dependencies.createCompleteSetInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, portfolioAmountOrUndefined(currentForm.completeSetAmount, requireCollateralDecimals()) ?? 0n)
 			},
 			'Failed to mint complete sets.',
 		)
@@ -316,7 +322,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 			'redeemCompleteSet',
 			async (walletAddress, securityPoolAddress, currentForm, isCurrentSelection, context) => {
 				if (!isCurrentSelection()) return undefined
-				const redeemAmountAttoShares = portfolioAmountOrUndefined(currentForm.redeemAmount, collateralFunding.collateral?.decimals ?? 18) ?? 0n
+				const redeemAmountAttoShares = portfolioAmountOrUndefined(currentForm.redeemAmount, requireCollateralDecimals()) ?? 0n
 				return await dependencies.redeemCompleteSetInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, redeemAmountAttoShares)
 			},
 			'Failed to redeem complete sets.',

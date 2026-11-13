@@ -160,12 +160,15 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 				amount === 0n ? 'resetAuctionCollateral' : 'approveAuctionCollateral',
 				'Approve auction collateral',
 				fundingReason,
-				selected => ({
-					account: selected.bidder,
-					to: selected.collateralToken,
-					value: 0n,
-					data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [selected.auction?.address ?? selected.controller, amount] }),
-				}),
+				selected => {
+					if (selected.auction === undefined) throw new Error('Auction is unavailable. Refresh before approving collateral.')
+					return {
+						account: selected.bidder,
+						to: selected.collateralToken,
+						value: 0n,
+						data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [selected.auction.address, amount] }),
+					}
+				},
 				latest => {
 					const reason = getTokenApprovalResetReason(latest.collateralAllowance, amount, latest.collateral.symbol, latest.collateral.symbol === 'USDT')
 					if (reason !== undefined) throw new Error(reason)

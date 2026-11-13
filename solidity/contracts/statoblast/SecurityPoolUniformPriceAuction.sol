@@ -71,6 +71,7 @@ contract SecurityPoolUniformPriceAuction {
 	uint256 public maximumBidAttoRepPerLot;
 	uint256 public repGrid;
 	uint256 public depositedAttoEth;
+	uint256 private withdrawnCollateral;
 	uint256 public bidCount;
 	uint256 public remainingFeeLots;
 	bool public initialized;
@@ -133,7 +134,8 @@ contract SecurityPoolUniformPriceAuction {
 		require(minimumAttoRepPerLot <= maximumBidAttoRepPerLot, 'Auction bid exceeds the REP inventory per lot');
 		require(_pricePrefix(minimumAttoRepPerLot, PriceBoundary.Exclusive) < Math.min(targetLots, inventoryAttoRep / minimumAttoRepPerLot), 'Better bids already exclude this bid');
 		require(bidCount < type(uint96).max, 'Auction bid identifiers exhausted');
-		Collateral.pull(collateralToken, msg.sender, address(this), lots * lotAttoEth);
+		// The controller transfers bidder collateral directly into this engine before registration.
+		require(collateralToken.balanceOf(address(this)) + withdrawnCollateral >= depositedAttoEth + lots * lotAttoEth, 'Auction bid collateral missing');
 		depositedAttoEth += lots * lotAttoEth;
 		bidId = ++bidCount;
 		bids[bidId] = Bid(bidder, vault, targetHealthBps, lots, minimumAttoRepPerLot, false, false);
@@ -315,6 +317,7 @@ contract SecurityPoolUniformPriceAuction {
 		uint256 amount = clearing.raisedAttoEth;
 		emit RaisedWithdrawn(recipient, amount);
 		if (amount == 0) return;
+		withdrawnCollateral += amount;
 		Collateral.send(collateralToken, recipient, amount);
 	}
 
@@ -333,6 +336,7 @@ contract SecurityPoolUniformPriceAuction {
 		if (amount == 0) return 0;
 		refundCreditAttoEth[bidder] = 0;
 		emit RefundWithdrawn(bidder, recipient, amount);
+		withdrawnCollateral += amount;
 		Collateral.send(collateralToken, recipient, amount);
 	}
 

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
-import { decodeFunctionData, parseAbi } from '@zoltar/core-shared/evm/ethereum'
+import { decodeFunctionData, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
@@ -222,4 +222,13 @@ test('a combined refund claim with no earlier credit reviews only the bid’s ow
 	const settled = state.hook.state().snapshot?.auction?.bids[0]
 	if (settled === undefined) throw new Error('Missing settled bid')
 	expect(state.hook.state().claimReason(settled)).toBe('No refund credit remains to withdraw.')
+})
+
+test('an auction disappearing before approval submission invalidates the request', async () => {
+	const state = await setup()
+	await terms(state)
+	await act(() => state.hook.state().approve(2n * unit))
+	const request = last(state.requests)
+	state.values['auctions'] = zeroAddress
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow()
 })

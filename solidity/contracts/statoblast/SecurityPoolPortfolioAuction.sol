@@ -114,8 +114,7 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 		require(portfolio.zoltar().getForkTime(universeId) == 0, 'Collateral repair auction universe forked');
 		require(lots != 0 && targetHealthFactorBps >= 10_000, 'Invalid collateral repair auction lots or health target');
 		IERC20 collateral = ICollateralConfig(address(portfolio)).collateralToken();
-		Collateral.pull(collateral, msg.sender, address(this), lots * lotAttoEth);
-		collateral.safeApprove(address(engine), lots * lotAttoEth);
+		Collateral.pull(collateral, msg.sender, address(engine), lots * lotAttoEth);
 		uint256 required = capital.commitmentIndex().requiredRep(lotAttoEth, openingConservativePrice, capital.securityMultiplierBps(), targetHealthFactorBps);
 		require(minimumAttoRepPerLot >= required, 'Auction bid does not meet chosen health target');
 		bidId = engine.bidCount() + 1;

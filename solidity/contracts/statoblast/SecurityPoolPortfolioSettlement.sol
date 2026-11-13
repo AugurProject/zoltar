@@ -120,7 +120,8 @@ contract SecurityPoolPortfolioSettlement {
 	function mint(address pool, uint256 cash, uint256 minimumShares, uint48 timestamp) external onlyPortfolio nonReentrant returns (uint256 shares, Snapshot memory snapshot) {
 		QuestionSource memory source = _question(pool);
 		uint64 bookId = _bookId(source.universeId);
-		Collateral.pull(collateralToken, msg.sender, address(this), cash);
+		// Services atomically funds this custody directly from the trader before the pool callback.
+		if (msg.sender != services) Collateral.pull(collateralToken, msg.sender, address(this), cash);
 		shares = ledger.mint(bookId, source.questionId, cash, minimumShares, timestamp);
 		snapshot = _snapshot(source, _collectFees(bookId));
 	}

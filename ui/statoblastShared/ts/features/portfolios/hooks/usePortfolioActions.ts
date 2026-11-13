@@ -220,7 +220,10 @@ export function usePortfolioActions(model: ReturnType<typeof usePortfolio>, para
 		},
 		collateralSymbol: collateralSymbol.value,
 		setCollateralSymbol: (value: CollateralSymbol) => {
+			if (collateralSymbol.value === value) return
 			collateralSymbol.value = value
+			reportFloor.value = ''
+			economicsDraft.value = { ...economicsDraft.value, minimumCommitment: '', minimumPurchaseFee: '' }
 		},
 		collateral,
 		reportFloor: reportFloor.value,

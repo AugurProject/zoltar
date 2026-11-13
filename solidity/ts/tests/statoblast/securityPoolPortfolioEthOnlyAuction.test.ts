@@ -1,6 +1,6 @@
 import { collateralBalance } from './burnEvidence'
 import { describe, expect, test } from 'bun:test'
-import { encodeFunctionData, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, encodeFunctionData, parseAbi, toEventSelector, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { preparePortfolioCollateralRepairAuction } from './securityPoolPortfolioCollateralRepairAuctionFixture'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
@@ -33,6 +33,15 @@ describe('Statoblast: ETH-only collateral-repair-auction funding', () => {
 			await expect(context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'submitBid', args: [2n, minimum, 12_000n], value: funding })).rejects.toThrow()
 		}
 		const bid = await context.bid(context.other, 2n, minimum)
+		const { logs } = await context.other.getTransactionReceipt({ hash: bid.hash })
+		const transferAbi = parseAbi(['event Transfer(address indexed src,address indexed dst,uint256 wad)'])
+		const event = transferAbi[0]
+		if (event === undefined) throw new Error('Missing Transfer ABI')
+		const collateralToken = await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'collateralToken' })
+		const transfers = logs.filter(log => log.address === collateralToken && log.topics[0] === toEventSelector(event)).map(log => decodeEventLog({ abi: transferAbi, data: log.data, topics: log.topics }).args)
+
+		expect(transfers.some(transfer => 'src' in transfer && 'dst' in transfer && 'wad' in transfer && transfer['src'] === context.other.account.address && transfer['dst'] === context.engine && transfer['wad'] === 2n * unit)).toBe(true)
+
 		expect(await collateralBalance(context.other, fixture.portfolio, context.auction)).toBe(0n)
 		expect(await collateralBalance(context.other, fixture.portfolio, context.engine)).toBe(2n * unit)
 		await context.closingQuote()
