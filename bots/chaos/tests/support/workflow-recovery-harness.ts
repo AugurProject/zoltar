@@ -1,7 +1,7 @@
 import { expect } from 'bun:test'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
 import { connectToChromium, expectVisibleIdentifiers, explorerUrl, readAccessibilityIdentity, walletAddress } from './dashboard-harness.ts'
-import { dashboardFixtureStrategy } from './dashboard-strategy-fixture.ts'
+import { dashboardFixtureStrategy } from '../../scripts/dashboard-strategy-fixture.mts'
 import { rpcSecret, scenarios } from './dashboard-workflow-fixtures.ts'
 
 // The dashboard server and Chromium session the workflow-recovery browser test drives through its staged steps.

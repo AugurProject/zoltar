@@ -1,6 +1,6 @@
 import { startDashboardServer } from '../src/dashboard/dashboard-server.ts'
 import { unavailableOperationCatalog } from '../src/runtime/canonical-scan.ts'
-import { dashboardFixtureStrategy } from '../tests/support/dashboard-strategy-fixture.ts'
+import { dashboardFixtureStrategy } from './dashboard-strategy-fixture.mts'
 
 const now = Date.now()
 const scenario = process.argv[2] ?? 'baseline'
