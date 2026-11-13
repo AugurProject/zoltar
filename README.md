@@ -141,7 +141,7 @@ Each serve command first builds the selected app and its dependencies, then serv
 | Zoltar      | `bun run app:serve:zoltar`     | `bun run app:watch:zoltar`     | http://localhost:4153  |
 | Statoblast  | `bun run app:serve:statoblast` | `bun run app:watch:statoblast` | http://localhost:12347 |
 | Trading     | `bun run app:serve:trading`    | `bun run app:watch:trading`    | http://localhost:4163  |
-| OpenOracle | `bun run app:serve:openoracle` | `bun run app:watch:openoracle` | http://localhost:4173 |
+| OpenOracle | `bun run app:serve:openoracle` | `bun run app:watch:openoracle` | http://localhost:4143 |
 
 ### Which command do I run?
 
