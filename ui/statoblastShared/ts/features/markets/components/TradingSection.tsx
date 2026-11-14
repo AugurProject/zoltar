@@ -401,10 +401,10 @@ export function TradingSection({
 				{usesSharedBacking && <UserMessage className='detail' detail={tradingCopy.sharedPoolPurchaseDetail} />}
 				{collateralFunding?.collateral !== undefined && tokenRequiresAllowanceReset(collateralFunding.collateral.token) ? (
 					<TransactionActionButton
-						idleLabel={collateralCopy.reset}
-						pendingLabel={collateralCopy.resetting}
+						idleLabel={commonCopy.formatResetTokenApproval(collateralFunding.collateral.symbol)}
+						pendingLabel={commonCopy.formatResettingTokenApproval(collateralFunding.collateral.symbol)}
 						pending={collateralFunding.resetting}
-						availability={collateralFunding.collateral.allowance === 0n ? { disabled: true, reason: collateralCopy.notNeeded } : { disabled: false, reason: undefined }}
+						availability={collateralFunding.collateral.allowance === 0n ? { disabled: true, reason: commonCopy.notNeeded } : { disabled: false, reason: undefined }}
 						onClick={() => collateralFunding.approve(0n)}
 					/>
 				) : undefined}
@@ -421,7 +421,7 @@ export function TradingSection({
 						if (amount !== undefined) void collateralFunding?.approve(amount)
 					}}
 					pending={(collateralFunding?.pending ?? false) && collateralFunding?.resetting !== true}
-					pendingLabel={collateralCopy.approving}
+					pendingLabel={commonCopy.formatApprovingToken(collateralSymbol)}
 					requiredAmount={collateralFunding?.requiredCollateral}
 					resetKey={`${selectedPool?.securityPoolAddress}:${collateralFunding?.requiredCollateral}`}
 					tokenSymbol={collateralFunding?.collateral?.symbol ?? collateralCopy.fallback}
