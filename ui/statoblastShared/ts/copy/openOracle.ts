@@ -100,7 +100,7 @@ export function formatSettleCountdown(remaining: bigint, timeType: boolean) {
 	return `Can settle in ${remaining / 3600n}h ${(remaining % 3600n) / 60n}m ${remaining % 60n}s`
 }
 export const searchReports = 'Search reports'
-export const reportSearchPlaceholder = 'Report ID, token symbol, or token address'
+export const reportSearchPlaceholder = 'Report ID, token, or address'
 export const noFavoriteReports = 'No favorite reports yet'
 export const noFavoriteReportsDetail = 'Reports you open are added here.'
 export const formatOpenReportById = (reportId: CopyTemplateValue) => `Open report #${reportId}`

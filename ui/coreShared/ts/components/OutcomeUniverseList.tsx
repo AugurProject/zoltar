@@ -39,7 +39,10 @@ export function OutcomeUniverseList({ outcomes, selection = false, emptyMessage,
 						<>
 							{outcome.exists === undefined ? undefined : (
 								<span className={!outcome.exists && notDeployedDetail !== undefined ? 'migration-outcome-status-detail' : undefined} id={`${statusId}-${outcome.key}`}>
-									<Badge tone={outcome.exists ? 'ok' : 'muted'}>{outcome.exists ? commonCopy.deployed : commonCopy.notDeployed}</Badge>
+									{/* The slot reserves the other status label's width (drawn invisibly by CSS, outside the DOM text), so the metrics beside it align across rows. */}
+									<span className='outcome-status-slot' data-reserve={outcome.exists ? commonCopy.notDeployed : commonCopy.deployed}>
+										<Badge tone={outcome.exists ? 'ok' : 'muted'}>{outcome.exists ? commonCopy.deployed : commonCopy.notDeployed}</Badge>
+									</span>
 									{outcome.exists || notDeployedDetail === undefined ? undefined : <span className='detail'> {notDeployedDetail}</span>}
 								</span>
 							)}

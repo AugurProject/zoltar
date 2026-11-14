@@ -9,6 +9,7 @@ import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-c
 import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
+import { AddressText } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { getQuestionTitle } from '@zoltar/ui-core-shared/components/Question.js'
@@ -125,28 +126,34 @@ export function PortfolioQuestionWorkspace({ accountState, parameters, deploymen
 				{!loading && questions.filter(question => question.universeId === universeId).length === 0 && <EmptyState title={copy.noRegisteredQuestions} detail={copy.registerQuestionsHint} actions={<a href='#/portfolios'>{copy.openPortfolios}</a>} />}
 				{!loading && questions.filter(question => question.universeId === universeId).length > 0 && (
 					<div className='portfolio-questions-table' role='region' aria-label={copy.portfolioQuestions} tabIndex={0}>
-						<table>
-							<thead>
-								<tr>
-									<th>{copy.questionColumn}</th>
-									<th>{copy.portfolioColumn}</th>
-									<th>{copy.outcomeColumn}</th>
+						{/* Explicit roles keep the table semantics when phone widths stack each row (see .portfolio-questions-table). */}
+						<table role='table'>
+							<thead role='rowgroup'>
+								<tr role='row'>
+									<th role='columnheader'>{copy.questionColumn}</th>
+									<th role='columnheader'>{copy.portfolioColumn}</th>
+									<th role='columnheader'>{copy.outcomeColumn}</th>
 								</tr>
 							</thead>
-							<tbody>
+							<tbody role='rowgroup'>
 								{questions
 									.filter(question => question.universeId === universeId)
 									.map(question => (
-										<tr key={question.securityPoolAddress}>
-											<td>
+										<tr key={question.securityPoolAddress} role='row'>
+											<td role='cell'>
 												<button type='button' onClick={() => onSelect(question.universeId, question.securityPoolAddress)}>
 													{getQuestionTitle(question.marketDetails)}
 												</button>
 											</td>
-											<td>
-												<a href={`#/portfolios?portfolio=${question.portfolioAddress}&universe=${question.universeId}`}>{question.portfolioAddress}</a>
+											<td role='cell' data-label={copy.portfolioColumn}>
+												{/* The address shortens only when its cell is too narrow for it; the full address stays in the page text, the link's accessible name and its title. */}
+												<a className='portfolio-questions-address' href={`#/portfolios?portfolio=${question.portfolioAddress}&universe=${question.universeId}`} aria-label={copy.formatOpenPortfolioLabel(question.portfolioAddress)} title={question.portfolioAddress}>
+													<AddressText address={question.portfolioAddress} />
+												</a>
 											</td>
-											<td>{question.questionOutcome}</td>
+											<td role='cell' data-label={copy.outcomeColumn}>
+												{question.questionOutcome}
+											</td>
 										</tr>
 									))}
 							</tbody>

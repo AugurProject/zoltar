@@ -147,6 +147,45 @@ describe('AddressValue', () => {
 		}
 	})
 
+	test('falls back to a shorter abbreviation when the standard one does not fit either', async () => {
+		let resize = () => {}
+		const previousObserver = globalThis.ResizeObserver
+		Reflect.set(globalThis, 'ResizeObserver', function (callback: () => void) {
+			resize = callback
+			return { observe: () => {}, disconnect: () => {} }
+		})
+		try {
+			const address = '0x1234567890abcdef1234567890abcdef12345678'
+			const rendered = await renderIntoDocument(<AddressValue address={address} />)
+			cleanupRenderedComponent = rendered.cleanup
+			const text = document.querySelector('.address-value-text')
+			const full = document.querySelector('.address-value-full')
+			const forms = [...document.querySelectorAll('.address-value-abbreviated')]
+			if (!(text instanceof HTMLElement) || !(full instanceof HTMLElement)) throw new Error('Address measurement elements are missing')
+			expect(forms.map(form => form.textContent)).toEqual(['0x123456…345678', '0x1234…5678', '0x12…5678'])
+			Reflect.defineProperty(full, 'scrollWidth', { configurable: true, value: 420 })
+			forms.forEach((form, index) => Reflect.defineProperty(form, 'scrollWidth', { configurable: true, value: [150, 110, 90][index] }))
+			const activeForm = () => forms.find(form => form.getAttribute('data-active') === 'true')?.textContent
+			for (const [width, expected] of [
+				[200, '0x123456…345678'],
+				[120, '0x1234…5678'],
+				[95, '0x12…5678'],
+				[60, '0x12…5678'],
+			] as const) {
+				Reflect.defineProperty(text, 'clientWidth', { configurable: true, value: width })
+				await act(() => resize())
+				expect(text.getAttribute('data-abbreviated')).toBe('true')
+				expect(activeForm()).toBe(expected)
+			}
+			Reflect.defineProperty(text, 'clientWidth', { configurable: true, value: 500 })
+			await act(() => resize())
+			expect(text.getAttribute('data-abbreviated')).toBe('false')
+			expect(activeForm()).toBeUndefined()
+		} finally {
+			Reflect.set(globalThis, 'ResizeObserver', previousObserver)
+		}
+	})
+
 	test('restores a compact control from its available slot rather than its shortened text width', async () => {
 		let resize = () => {}
 		const previousObserver = globalThis.ResizeObserver

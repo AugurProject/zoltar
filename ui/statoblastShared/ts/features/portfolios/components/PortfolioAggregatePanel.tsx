@@ -57,7 +57,11 @@ export function PortfolioAggregatePanel({ model, actions, priceReport }: { model
 		<>
 			<SectionBlock title={copy.poolTitle} description={copy.poolDescription}>
 				{model.showingPreviousSnapshot ? <UserMessage detail={copy.lastConfirmed} /> : undefined}
-				{snapshot === undefined ? undefined : <Badge tone={snapshot.priceValid ? 'ok' : 'warning'}>{status}</Badge>}
+				{snapshot === undefined ? undefined : (
+					<Badge className='badge-wrap' tone={snapshot.priceValid ? 'ok' : 'warning'}>
+						{status}
+					</Badge>
+				)}
 				<MetricGrid>
 					<MetricField label={copy.totalPledged} loading={model.loading}>
 						<CurrencyValue value={snapshot?.totalPledgedAttoRep} suffix={common.rep} />

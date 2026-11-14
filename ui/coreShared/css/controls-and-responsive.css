@@ -88,10 +88,12 @@
 	gap: var(--space-2);
 }
 
-/* Segmented switchers are form controls, not navigation: boxed options in one group, no underline. */
+/* Segmented switchers are form controls, not navigation: boxed options in one group, no underline. Options that do
+ * not fit one row wrap onto the next instead of running past the container. */
 .view-tabs.segmented {
 	display: inline-flex;
-	width: max-content;
+	flex-wrap: wrap;
+	width: fit-content;
 	max-width: 100%;
 	gap: var(--space-1);
 	padding: var(--space-1);
@@ -102,6 +104,7 @@
 
 .view-tabs.segmented .view-tab {
 	flex: 0 0 auto;
+	white-space: nowrap;
 	border-color: transparent;
 	background: transparent;
 	color: var(--text-secondary);
@@ -119,6 +122,13 @@
 	background: var(--interactive-bg-active);
 	border-color: var(--border-active);
 	color: var(--text);
+}
+
+/* Phones: options on a wrapped row stretch to fill it, so no option sits alone at the start of the second row. */
+@media (max-width: 40rem) {
+	.view-tabs.segmented .view-tab {
+		flex: 1 1 auto;
+	}
 }
 
 .view-tabs.subroute .view-tab {
@@ -1351,7 +1361,7 @@ button.tx-action-button[aria-disabled="true"]:hover {
 		grid-area: 1 / 1;
 	}
 
-	/* The brand yields to the activity and settings buttons: its name truncates instead of running under them. */
+	/* The brand yields to the activity and settings buttons: a long name wraps onto a second line instead of running under them or being cut off. */
 	.header-toolbar .application-brand {
 		min-width: 0;
 		font-size: var(--font-body);
@@ -1363,10 +1373,10 @@ button.tx-action-button[aria-disabled="true"]:hover {
 		height: auto;
 		min-width: 0;
 		margin: 0;
-		overflow: hidden;
+		overflow: visible;
 		clip: auto;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+		line-height: var(--line-height-tight);
+		white-space: normal;
 	}
 
 	.header-toolbar-settings {
@@ -1426,26 +1436,19 @@ button.tx-action-button[aria-disabled="true"]:hover {
 		min-width: 7.5rem;
 	}
 
-	/* Views share a two-column grid so a wrapped row reads as one control instead of a stray tab. */
+	/* Views fill the row and keep their labels on one line; a view that does not fit moves to a second row and
+	 * stretches across it, so the wrapped row still reads as one control. */
 	.route-subnav-shell .route-subtab-nav.view-tabs.segmented {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
+		display: flex;
 		width: 100%;
 	}
 
-	/* Exactly three views fit one row, so none is left alone on a second row. */
-	.route-subnav-shell .route-subtab-nav.view-tabs.segmented:has(> :nth-child(3):last-child) {
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-	}
-
 	.route-subnav-shell .route-subtab-nav.view-tabs.segmented .view-tab {
+		flex: 1 1 auto;
 		justify-content: center;
-		min-width: 0;
-		padding-inline: var(--space-1);
+		padding-inline: var(--space-2);
 		font-size: var(--font-label);
 		text-align: center;
-		white-space: normal;
-		overflow-wrap: anywhere;
 	}
 
 	.account-menu-trigger {
