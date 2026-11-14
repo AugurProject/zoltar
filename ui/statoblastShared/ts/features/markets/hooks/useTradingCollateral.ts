@@ -1,4 +1,4 @@
-import { getTokenApprovalResetReason } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
+import { getTokenApprovalResetReason, tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
@@ -6,6 +6,8 @@ import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { isAddress, getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as collateralCopy from '../../../copy/collateral.js'
 import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { portfolioAmountOrUndefined } from '../../portfolios/lib/draft.js'
@@ -88,12 +90,12 @@ export function useTradingCollateral({ pool, amountInput, ...parameters }: Write
 	const collateralQuote = selectedCollateral?.quoteInput === amountInput ? selectedCollateral.quote : undefined
 	const requiredCollateral = collateralQuote === undefined ? undefined : collateralQuote.amount + collateralQuote.maximumFee
 	let collateralReason: string | undefined
-	if (accountAddress === undefined) collateralReason = 'Connect wallet'
+	if (accountAddress === undefined) collateralReason = commonCopy.walletConnectionRequired
 	else if (selectedCollateral?.error !== undefined) collateralReason = selectedCollateral.error
-	else if (collateral === undefined) collateralReason = 'Loading collateral funding.'
+	else if (collateral === undefined) collateralReason = collateralCopy.fundingLoading
 	else if (requiredCollateral === undefined) collateralReason = (portfolioAmountOrUndefined(amountInput, collateral.decimals) ?? 0n) > 0n ? 'Updating collateral quote.' : 'Enter a positive collateral amount.'
-	else if (collateral.balance < requiredCollateral) collateralReason = 'Insufficient collateral balance.'
-	else if (collateral.allowance < requiredCollateral) collateralReason = 'Collateral approval required.'
+	else if (collateral.balance < requiredCollateral) collateralReason = collateralCopy.formatInsufficientBalance(collateral.symbol)
+	else if (collateral.allowance < requiredCollateral) collateralReason = collateralCopy.approvalRequired
 
 	return {
 		collateral,
@@ -109,7 +111,7 @@ export function useTradingCollateral({ pool, amountInput, ...parameters }: Write
 			approvalAmount.value = amount
 			try {
 				await runWriteAction(
-					buildWriteActionConfig({ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState }, tradingError, 'Connect wallet', {
+					buildWriteActionConfig({ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState }, tradingError, commonCopy.formatConnectWalletBefore('approving collateral'), {
 						action: 'approvePurchaseCollateral',
 						source: 'Complete sets',
 						submittedTitle: 'Approve collateral',
@@ -117,15 +119,15 @@ export function useTradingCollateral({ pool, amountInput, ...parameters }: Write
 					async (account, context) => {
 						const allowance = await createConnectedReadClient().readContract({ address: collateral.token, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [account, collateral.services] })
 						if (typeof allowance !== 'bigint') throw new Error('Collateral allowance unavailable.')
-						const reason = getTokenApprovalResetReason(allowance, amount, collateral.symbol, collateral.symbol === 'USDT')
+						const reason = getTokenApprovalResetReason(allowance, amount, collateral.symbol, tokenRequiresAllowanceReset(collateral.token))
 						if (reason !== undefined) throw new Error(reason)
 						const client = createWalletWriteClient(account, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal })
 						const hash = await client.writeContract({ address: collateral.token, abi: ABIS.mainnet.erc20, functionName: 'approve', args: [collateral.services, amount] })
 						const receipt = await client.waitForTransactionReceipt({ hash })
-						if (receipt.status !== 'success') throw new Error('Collateral approval failed.')
+						if (receipt.status !== 'success') throw new Error(collateralCopy.approvalFailed)
 						return { hash }
 					},
-					'Collateral approval failed.',
+					collateralCopy.approvalFailed,
 				)
 				collateralVersion.value++
 			} finally {

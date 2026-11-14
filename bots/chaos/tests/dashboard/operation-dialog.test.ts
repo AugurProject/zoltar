@@ -9,6 +9,7 @@ import { planningOptions } from '../../src/runtime/canonical-scan.ts'
 import { serializedSettings } from '../../src/config/settings.ts'
 import { manualOperationFixture } from '../runtime/manual-operation-fixture.ts'
 import { CHROMIUM_STARTUP_BUDGET_MILLISECONDS, chromiumExecutable, startChromiumSession } from '../support/chromium.ts'
+import { inertDashboardControls } from '../support/dashboard-harness.ts'
 
 function seedStepStatus(index: number, included: number) {
 	if (index < included) return 'confirmed'
@@ -54,7 +55,7 @@ test(
 		let stateReads = 0
 		let failNextStateRead = false
 		const dashboard = startDashboardServer(0, {
-			hostname: '127.0.0.1',
+			...inertDashboardControls,
 			getState: () => {
 				stateReads += 1
 				if (failNextStateRead) {
@@ -145,14 +146,6 @@ test(
 				if (holdExecution && action === 'preview' && typeof response === 'object' && response !== null) return { ...response, mode: executionOutcome === 'dry-run' ? 'dry-run' : 'live' }
 				return response
 			},
-			setCancellation: () => undefined,
-			setCandidate: () => undefined,
-			setObligation: () => undefined,
-			setReplacement: () => undefined,
-			setPaused: () => undefined,
-			setSettings: () => undefined,
-			setSigner: () => undefined,
-			setWorkflow: () => undefined,
 		})
 		if (!existsSync(chromiumExecutable)) throw new Error('Chromium or Chrome is required for the operation dialog test')
 		const session = await startChromiumSession(chromiumExecutable)

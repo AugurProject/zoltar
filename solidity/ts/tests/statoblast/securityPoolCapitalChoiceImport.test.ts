@@ -1,11 +1,11 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { encodeDeployData, type Address } from '@zoltar/core-shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as artifact, statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact, test_statoblast_CapitalLedgerHarness_CapitalLedgerHarness as harnessArtifact } from '../../types/contractArtifact'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
-import { deployCapitalTestComponents } from './securityPoolCapitalTestComponents'
+import { deployCapitalLedgerHarness } from './securityPoolCapitalTestComponents'
 
 const E = 10n ** 18n
 
@@ -25,13 +25,10 @@ describe('Statoblast: funded fork choice imports', () => {
 		await setupTestAccounts(ethereum)
 		owner = createWriteClient(ethereum, TEST_ADDRESSES[0])
 		buyer = createWriteClient(ethereum, TEST_ADDRESSES[1])
-		const componentsReceipt = await deployCapitalTestComponents(owner)
-		if (componentsReceipt.contractAddress === undefined) throw new Error('Capital test components address missing')
-		const receipt = await owner.waitForTransactionReceipt({ hash: await owner.sendTransaction({ data: encodeDeployData({ abi: harnessArtifact.abi, bytecode: `0x${harnessArtifact.evm.bytecode.object}`, args: [componentsReceipt.contractAddress] }) }) })
-		if (receipt.contractAddress === undefined) throw new Error('Capital harness address missing')
-		harness = receipt.contractAddress
-		ledger = await owner.readContract({ abi: harnessArtifact.abi, address: harness, functionName: 'ledger' })
-		index = await owner.readContract({ abi: artifact.abi, address: ledger, functionName: 'commitmentIndex' })
+		const deployment = await deployCapitalLedgerHarness(owner)
+		harness = deployment.harness
+		ledger = deployment.ledger
+		index = deployment.index
 		const now = (await owner.getBlock()).timestamp
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'setPrice', args: [E, Number(now + 100_000n)] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'beginImport' }))

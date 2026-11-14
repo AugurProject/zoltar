@@ -47,6 +47,19 @@ async function setup(configure: (fixture: ReturnType<typeof priceFixture>) => vo
 	await waitFor(() => expect(hook.state().loading).toBe(false))
 	return { ...fixture, fork, target, actions, requests, labels, actionIds, hook }
 }
+function stablecoinCollateral(symbol: 'USDC' | 'USDT') {
+	const collateral = symbol === 'USDC' ? MAINNET_NETWORK_PROFILE.usdcAddress : MAINNET_NETWORK_PROFILE.usdtAddress
+	if (collateral === undefined) throw new Error(`Expected configured ${symbol} collateral`)
+	return collateral
+}
+
+/** Reports in the stablecoin `collateral`, whose minimum report is 2 units, with `balance` of it in the wallet. */
+function reportInStablecoin(fixture: ReturnType<typeof priceFixture>, collateral: ReturnType<typeof stablecoinCollateral>, balance: bigint) {
+	fixture.values['collateralToken'] = collateral
+	fixture.values['minimumToken1ReportAttoEth'] = 2_000_000n
+	fixture.set(collateral, 'balanceOf', balance)
+}
+
 function lastRequest(requests: PortfolioTransaction[]) {
 	const request = requests.at(-1)
 	if (request === undefined) throw new Error('Missing transaction')
@@ -206,12 +219,9 @@ test('a sponsor change during fresh price validation invalidates the reviewed ac
 
 for (const symbol of ['USDC', 'USDT'] as const) {
 	test(`${symbol} reports require the actual collateral balance before review`, async () => {
-		const collateral = symbol === 'USDC' ? MAINNET_NETWORK_PROFILE.usdcAddress : MAINNET_NETWORK_PROFILE.usdtAddress
-		if (collateral === undefined) throw new Error('Expected configured collateral')
+		const collateral = stablecoinCollateral(symbol)
 		const state = await setup(f => {
-			f.values['collateralToken'] = collateral
-			f.values['minimumToken1ReportAttoEth'] = 2_000_000n
-			f.set(collateral, 'balanceOf', 1_999_999n)
+			reportInStablecoin(f, collateral, 1_999_999n)
 			f.setAllowances(100n * unit, 100n * unit)
 		})
 		await act(() => state.hook.state().setPrice('1'))
@@ -222,12 +232,9 @@ for (const symbol of ['USDC', 'USDT'] as const) {
 	})
 
 	test(`${symbol} reports recheck collateral lost during transaction review`, async () => {
-		const collateral = symbol === 'USDC' ? MAINNET_NETWORK_PROFILE.usdcAddress : MAINNET_NETWORK_PROFILE.usdtAddress
-		if (collateral === undefined) throw new Error('Expected configured collateral')
+		const collateral = stablecoinCollateral(symbol)
 		const state = await setup(f => {
-			f.values['collateralToken'] = collateral
-			f.values['minimumToken1ReportAttoEth'] = 2_000_000n
-			f.set(collateral, 'balanceOf', 2_000_000n)
+			reportInStablecoin(f, collateral, 2_000_000n)
 			f.setAllowances(100n * unit, 100n * unit)
 		})
 		await act(() => state.hook.state().setPrice('1'))
@@ -314,16 +321,26 @@ test('with nothing to price, the report waits for a target instead of loading fo
 })
 
 test('a universe USDT reset uses its own transaction action instead of the branch action', async () => {
-	const collateral = MAINNET_NETWORK_PROFILE.usdtAddress
-	if (collateral === undefined) throw new Error('Expected USDT')
+	const collateral = stablecoinCollateral('USDT')
 	const state = await setup(f => {
-		f.values['collateralToken'] = collateral
-		f.values['minimumToken1ReportAttoEth'] = 2_000_000n
-		f.set(collateral, 'balanceOf', 2_000_000n)
+		reportInStablecoin(f, collateral, 2_000_000n)
 		f.setAllowances(1n, 100n * unit)
 	}, capitalSnapshot())
 	await act(() => state.hook.state().setPrice('1'))
 	await act(() => state.hook.state().approve('weth', 0n))
 	expect(state.actionIds).toEqual(['resetPortfolioPriceCollateral:universe'])
 	expect(decodeFunctionData({ abi, data: lastRequest(state.requests).data }).args).toEqual([priceFeed, 0n])
+})
+test('a REP approval is never blocked by an existing USDT collateral allowance', async () => {
+	const collateral = stablecoinCollateral('USDT')
+	const state = await setup(f => {
+		reportInStablecoin(f, collateral, 2_000_000n)
+		f.set(collateral, 'allowance', 1n)
+		f.setAllowances(0n, 0n)
+	}, capitalSnapshot())
+	await act(() => state.hook.state().setPrice('1'))
+	await act(() => state.hook.state().approve('rep', 5n * unit))
+	await lastRequest(state.requests).validateBeforeSubmit?.()
+	await act(() => state.hook.state().approve('weth', 2_000_000n))
+	await expect(lastRequest(state.requests).validateBeforeSubmit?.()).rejects.toThrow('Reset USDT approval first.')
 })

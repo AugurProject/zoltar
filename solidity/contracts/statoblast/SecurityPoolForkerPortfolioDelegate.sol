@@ -8,7 +8,6 @@ import { ISecurityPoolPortfolioNative } from './interfaces/ISecurityPoolPortfoli
 import { EscalationGame } from './EscalationGame.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { ESCALATION_TIME_LENGTH } from './EscalationGameTypes.sol';
-import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { SecurityPoolPortfolioSettlement } from './SecurityPoolPortfolioSettlement.sol';
 import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
 

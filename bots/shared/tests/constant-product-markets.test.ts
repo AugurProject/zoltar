@@ -46,6 +46,19 @@ const settings: CentralizedMarketSettings = {
 	},
 }
 
+/** Reads `pair` at `block` from two endpoints whose REP reserves differ by a factor of two, requiring only one agreeing endpoint. */
+function readPairWithDisagreeingReserves(pair: `0x${string}`, block: { hash: `0x${string}`; number: bigint }) {
+	return readConstantProductPairWithQuorum({
+		block,
+		chainId: 1,
+		endpoints: ['primary', 'quorum-a'],
+		pair,
+		readBlock: async () => ({ hash: BLOCK_HASH, number: 100n, timestamp: 10n }),
+		readPairAtBlock: async endpoint => pairState(endpoint === 'primary' ? 200_000n * UNIT : 100_000n * UNIT),
+		requirement: 1,
+	})
+}
+
 describe('constant-product DEX observations', () => {
 	test('rejects identical pair values read from different endpoint block identities', async () => {
 		const replacementHash = `0x${'2'.repeat(64)}` as const
@@ -91,37 +104,13 @@ describe('constant-product DEX observations', () => {
 	})
 
 	test('does not downgrade a cross-endpoint reserve disagreement to an unavailable observation', async () => {
-		await expect(
-			observeConstantProductMarkets(settings, REP, WETH, async pair =>
-				readConstantProductPairWithQuorum({
-					block: { hash: BLOCK_HASH, number: 100n },
-					chainId: 1,
-					endpoints: ['primary', 'quorum-a'],
-					pair,
-					readBlock: async () => ({ hash: BLOCK_HASH, number: 100n, timestamp: 10n }),
-					readPairAtBlock: async endpoint => pairState(endpoint === 'primary' ? 200_000n * UNIT : 100_000n * UNIT),
-					requirement: 1,
-				}),
-			),
-		).rejects.toThrow('DEX pair snapshot failed safety verification')
+		await expect(observeConstantProductMarkets(settings, REP, WETH, async pair => readPairWithDisagreeingReserves(pair, { hash: BLOCK_HASH, number: 100n }))).rejects.toThrow('DEX pair snapshot failed safety verification')
 	})
 
 	test('revalidates retained DEX evidence against every available reader before execution', async () => {
 		const observed = await observeConstantProductMarkets(settings, REP, WETH, async () => snapshot())
 		const estimate = estimateMarketConsensus(observed.observations, { ...marketConsensusSettings(settings), allowSingleGroupFallback: true, minimumTotalSourceCount: 1 }, REP, 1, 10_000)
-		await expect(
-			requireCurrentConstantProductMarketEvidence(settings, REP, WETH, estimate, async (pair, block) =>
-				readConstantProductPairWithQuorum({
-					block,
-					chainId: 1,
-					endpoints: ['primary', 'quorum-a'],
-					pair,
-					readBlock: async () => ({ hash: BLOCK_HASH, number: 100n, timestamp: 10n }),
-					readPairAtBlock: async endpoint => pairState(endpoint === 'primary' ? 200_000n * UNIT : 100_000n * UNIT),
-					requirement: 1,
-				}),
-			),
-		).rejects.toThrow('DEX pair snapshot failed safety verification')
+		await expect(requireCurrentConstantProductMarketEvidence(settings, REP, WETH, estimate, readPairWithDisagreeingReserves)).rejects.toThrow('DEX pair snapshot failed safety verification')
 	})
 
 	test('rejects changed raw pair state even when token and reserve swaps preserve the derived quote', async () => {

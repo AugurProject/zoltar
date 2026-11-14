@@ -5,6 +5,22 @@ import { join } from 'node:path'
 import { assertIntentSender, clearMarketEvidenceForConfigurationChange, commitReconciledIntent, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, resolveRecoveredIntentJournal, saveDurableState } from '../../src/state/operator-state.ts'
 import { getAddress, keccak256, privateKeyToAccount, type Hex } from '@zoltar/bot-shared/ethereum'
 
+/** Signs a zero-value chain 1 transfer to 0x…20 with `privateKey` at `nonce`. */
+async function signedTransfer(privateKey: Hex, nonce = 4n) {
+	const account = privateKeyToAccount(privateKey)
+	if (account.signTransaction === undefined) throw new Error('Test account cannot sign')
+	const serializedTransaction = await account.signTransaction({
+		chainId: 1,
+		gas: 21_000n,
+		maxFeePerGas: 2n,
+		maxPriorityFeePerGas: 1n,
+		nonce,
+		to: getAddress('0x0000000000000000000000000000000000000020'),
+		value: 0n,
+	})
+	return { account, serializedTransaction }
+}
+
 describe('liquidator durable state', () => {
 	test('reports operator capability only after a complete scan with no unresolved recovery', () => {
 		const state = initialRuntimeState(false, undefined, 1)
@@ -76,17 +92,7 @@ describe('liquidator durable state', () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-state-transaction-chain-'))
 		const path = join(directory, 'state.json')
 		try {
-			const account = privateKeyToAccount(`0x${'10'.repeat(32)}`)
-			if (account.signTransaction === undefined) throw new Error('Test account cannot sign')
-			const serializedTransaction = await account.signTransaction({
-				chainId: 1,
-				gas: 21_000n,
-				maxFeePerGas: 2n,
-				maxPriorityFeePerGas: 1n,
-				nonce: 4n,
-				to: getAddress('0x0000000000000000000000000000000000000020'),
-				value: 0n,
-			})
+			const { account, serializedTransaction } = await signedTransfer(`0x${'10'.repeat(32)}`)
 			const state = initialRuntimeState(false, account.address, 11_155_111)
 			state.pendingTransactions.push({
 				hash: keccak256(serializedTransaction),
@@ -132,17 +138,7 @@ describe('liquidator durable state', () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-state-'))
 		const path = join(directory, 'state.json')
 		try {
-			const account = privateKeyToAccount(`0x${'11'.repeat(32)}`)
-			if (account.signTransaction === undefined) throw new Error('Test account cannot sign')
-			const serializedTransaction = await account.signTransaction({
-				chainId: 1,
-				gas: 21_000n,
-				maxFeePerGas: 2n,
-				maxPriorityFeePerGas: 1n,
-				nonce: 4n,
-				to: getAddress('0x0000000000000000000000000000000000000020'),
-				value: 0n,
-			})
+			const { account, serializedTransaction } = await signedTransfer(`0x${'11'.repeat(32)}`)
 			const state = initialRuntimeState(false, account.address, 1)
 			state.pendingStagedOperations.push({
 				candidateOutcome: {
@@ -195,17 +191,7 @@ describe('liquidator durable state', () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-late-receipt-'))
 		const path = join(directory, 'state.json')
 		try {
-			const account = privateKeyToAccount(`0x${'12'.repeat(32)}`)
-			if (account.signTransaction === undefined) throw new Error('Test account cannot sign')
-			const serializedTransaction = await account.signTransaction({
-				chainId: 1,
-				gas: 21_000n,
-				maxFeePerGas: 2n,
-				maxPriorityFeePerGas: 1n,
-				nonce: 3n,
-				to: getAddress('0x0000000000000000000000000000000000000020'),
-				value: 0n,
-			})
+			const { account, serializedTransaction } = await signedTransfer(`0x${'12'.repeat(32)}`, 3n)
 			const hash = keccak256(serializedTransaction)
 			const state = initialRuntimeState(false, account.address, 1)
 			state.pendingTransactions.push({
@@ -236,9 +222,7 @@ describe('liquidator durable state', () => {
 	})
 
 	test('keeps a reconciled intent blocking in memory until its removal is durable', async () => {
-		const account = privateKeyToAccount(`0x${'13'.repeat(32)}`)
-		if (account.signTransaction === undefined) throw new Error('Test account cannot sign')
-		const serializedTransaction = await account.signTransaction({ chainId: 1, gas: 21_000n, maxFeePerGas: 2n, maxPriorityFeePerGas: 1n, nonce: 4n, to: getAddress('0x0000000000000000000000000000000000000020'), value: 0n })
+		const { account, serializedTransaction } = await signedTransfer(`0x${'13'.repeat(32)}`)
 		const hash = keccak256(serializedTransaction)
 		const state = initialRuntimeState(false, account.address, 1)
 		state.pendingTransactions.push({ hash, kind: 'liquidation', label: 'Replacement persistence', maxBlockNumber: 120n, mode: 'public', nonce: 4n, receiptExpectation: { type: 'transaction' }, requiresMarketEvidence: true, sender: account.address, serializedTransaction, submissionBlock: 100n })
@@ -313,17 +297,7 @@ describe('liquidator durable state', () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-state-'))
 		const path = join(directory, 'state.json')
 		try {
-			const account = privateKeyToAccount(`0x${'22'.repeat(32)}`)
-			if (account.signTransaction === undefined) throw new Error('Test account cannot sign')
-			const serializedTransaction = await account.signTransaction({
-				chainId: 1,
-				gas: 21_000n,
-				maxFeePerGas: 2n,
-				maxPriorityFeePerGas: 1n,
-				nonce: 4n,
-				to: getAddress('0x0000000000000000000000000000000000000020'),
-				value: 0n,
-			})
+			const { serializedTransaction } = await signedTransfer(`0x${'22'.repeat(32)}`)
 			await writeFile(
 				path,
 				JSON.stringify({

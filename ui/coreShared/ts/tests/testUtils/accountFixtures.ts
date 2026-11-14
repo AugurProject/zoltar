@@ -11,3 +11,24 @@ export function createAccountState(overrides: Partial<AccountState> = {}): Accou
 		...overrides,
 	}
 }
+
+/** No wallet connected, so the account, its chain, and its balances are all unknown. */
+export const disconnectedAccountState: AccountState = {
+	address: undefined,
+	chainId: undefined,
+	ethBalanceAttoEth: undefined,
+	wethBalanceAttoEth: undefined,
+}
+
+/** Header wallet controls once the wallet bootstrap finished without a connected wallet; every action does nothing. */
+export const disconnectedOverviewWalletProps = {
+	accountState: disconnectedAccountState,
+	isConnectingWallet: false,
+	isManagingWallet: false,
+	isRefreshing: false,
+	onChangeWallet: () => undefined,
+	onConnect: () => undefined,
+	onDisconnectWallet: () => undefined,
+	onSwitchNetwork: () => undefined,
+	walletBootstrapComplete: true,
+}

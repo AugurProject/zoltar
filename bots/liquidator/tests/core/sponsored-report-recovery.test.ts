@@ -9,36 +9,23 @@ import { mainnet } from '@zoltar/core-shared/evm/ethereum'
 import { initialRuntimeState, loadDurableState } from '#state/operator-state'
 import { reconcileSponsoredReports } from '#execution/sponsored-report-recovery'
 import { portfolioObservation, portfolioSettings } from '../support/portfolio-observation.ts'
+import { serveScriptedRpc } from '../support/scripted-rpc.ts'
 
 test('report scans bound each range, resume their persisted cursor, and retain state on write failure or replaced anchor', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'sponsored-scan-'))
 	const ranges: unknown[] = []
 	let replaced = false
 	const hash = `0x${'11'.repeat(32)}` as const
-	const server = Bun.serve({
-		hostname: '127.0.0.1',
-		port: 0,
-		async fetch(request) {
-			const payload: unknown = await request.json()
-			if (typeof payload !== 'object' || payload === null) throw new Error('Invalid RPC request')
-			const method = Reflect.get(payload, 'method')
-			const params = Reflect.get(payload, 'params')
-			let result: unknown
-			if (method === 'eth_blockNumber') result = toHex(5000n)
-			else if (method === 'eth_getBlockByNumber') result = { number: Array.isArray(params) && params[0] !== 'latest' ? params[0] : toHex(5000n), hash: replaced ? `0x${'22'.repeat(32)}` : hash, timestamp: '0x1', transactions: [] }
-			else if (method === 'eth_getLogs') {
-				ranges.push(params)
-				result = []
-			} else throw new Error(`Unexpected RPC method ${String(method)}`)
-			return Response.json({ jsonrpc: '2.0', id: Reflect.get(payload, 'id'), result })
-		},
+	const { endpoint, server, settings } = serveScriptedRpc((method, params) => {
+		if (method === 'eth_blockNumber') return toHex(5000n)
+		if (method === 'eth_getBlockByNumber') return { number: Array.isArray(params) && params[0] !== 'latest' ? params[0] : toHex(5000n), hash: replaced ? `0x${'22'.repeat(32)}` : hash, timestamp: '0x1', transactions: [] }
+		if (method === 'eth_getLogs') {
+			ranges.push(params)
+			return []
+		}
+		throw new Error(`Unexpected RPC method ${String(method)}`)
 	})
 	try {
-		const settings = portfolioSettings()
-		const endpoint = `http://127.0.0.1:${server.port}`
-		settings.connectivity.readRpcUrl = endpoint
-		settings.connectivity.quorumRpcUrls = []
-		settings.connectivity.rpcQuorum = 1
 		settings.runtime.stateFile = join(directory, 'state.json')
 		const pool = createRpcEndpointPool([endpoint])
 		const account = privateKeyToAccount(`0x${'01'.repeat(32)}`)

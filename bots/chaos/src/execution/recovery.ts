@@ -1,4 +1,4 @@
-import { recoveredReceiptObservations, agreedPendingNonce, availableHeads, assertRecoveryChain, assertIntentIdentity, exactIntentIsVisible } from './recovery-observations.ts'
+import { recoveredReceiptObservations, agreedIntentPendingNonce, availableHeads, assertRecoveryChain, assertIntentIdentity, exactIntentIsVisible } from './recovery-observations.ts'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { advanceRollbackQueue } from './inclusion-journal.ts'
 import { commitReceiptDisposition as commitRecoveryDisposition } from './receipt-disposition.ts'
@@ -150,7 +150,7 @@ async function resubmitIntent(environment: ExecutionEnvironment, intent: Pending
 	if (account.signMessage === undefined) throw new Error('Execution signer cannot authenticate transaction recovery')
 	assertRecoverySubmissionMode(intent.mode, environment.settings.submission.mode)
 	const parsed = parseTransaction(intent.serializedTransaction)
-	const preflightNonce = await agreedPendingNonce(environment, intent)
+	const preflightNonce = await agreedIntentPendingNonce(environment, intent)
 	if (preflightNonce !== intent.nonce) await retainManualReconciliation(environment, intent, preflightNonce)
 	const anchor = await agreedLatestBlock(environment, `${intent.label} recovery block`)
 	if (anchor.number >= intent.maxBlockNumber) {
@@ -181,7 +181,7 @@ async function resubmitIntent(environment: ExecutionEnvironment, intent: Pending
 		if (!sameCanonicalExecutionAnchor(replayAnchor, anchor)) {
 			throw new TransactionAwaitingRecovery(intent.label, intent.hash, 'canonical recovery anchor or its attester set changed during replay checks')
 		}
-		const replayNonce = await agreedPendingNonce(environment, intent, replayAnchor.attestingRpcUrls)
+		const replayNonce = await agreedIntentPendingNonce(environment, intent, replayAnchor.attestingRpcUrls)
 		if (replayNonce !== intent.nonce) await retainManualReconciliation(environment, intent, replayNonce)
 	} catch (error) {
 		if (error instanceof RecoveryPolicyBlocked) {
@@ -242,7 +242,7 @@ async function resubmitIntent(environment: ExecutionEnvironment, intent: Pending
 			const submissionWorkflow = recoverableWorkflowForIntent(environment.state, intent.workflowId)
 			const submissionStep = requireWorkflowStep(submissionWorkflow, intent.stepId)
 			await assertRecoveryPolicy(environment, intent, submissionWorkflow, submissionStep, parsed, submissionAnchor)
-			const submissionNonce = await agreedPendingNonce(environment, intent, submissionAnchor.attestingRpcUrls)
+			const submissionNonce = await agreedIntentPendingNonce(environment, intent, submissionAnchor.attestingRpcUrls)
 			if (submissionNonce !== intent.nonce) {
 				const blocker = manualReconciliationBlocker(intent, submissionNonce)
 				deferral = { blocker, manual: true, reason: blocker }
@@ -360,13 +360,13 @@ async function resolveQueuedReplacement(environment: ExecutionEnvironment, inten
 	return true
 }
 
-async function verifyRecoveredCancellation(environment: ExecutionEnvironment, intent: PendingTransactionIntent, cancellationHash: Hex) {
-	const connectivity = requiredConnectivity(environment.settings)
-	const transaction = await settledQuorumValue(
-		`nonce cancellation transaction ${cancellationHash}`,
+/** Reads the fields recovery policy compares for a cancellation or replacement transaction, agreed across the read quorum. */
+async function quorumRecoveryTransaction(environment: ExecutionEnvironment, hash: Hex, kind: 'nonce cancellation' | 'replacement') {
+	return settledQuorumValue(
+		`${kind} transaction ${hash}`,
 		executionReadClients(environment).map(async ({ client, endpoint }) => {
-			const candidate = await client.getTransaction({ hash: cancellationHash })
-			assertRequestedTransactionHash(candidate.hash, cancellationHash, `RPC ${endpoint} nonce cancellation lookup`)
+			const candidate = await client.getTransaction({ hash })
+			assertRequestedTransactionHash(candidate.hash, hash, `RPC ${endpoint} ${kind} lookup`)
 			return {
 				endpoint,
 				value: {
@@ -379,8 +379,12 @@ async function verifyRecoveredCancellation(environment: ExecutionEnvironment, in
 				},
 			}
 		}),
-		connectivity.rpcQuorum,
+		requiredConnectivity(environment.settings).rpcQuorum,
 	)
+}
+
+async function verifyRecoveredCancellation(environment: ExecutionEnvironment, intent: PendingTransactionIntent, cancellationHash: Hex) {
+	const transaction = await quorumRecoveryTransaction(environment, cancellationHash, 'nonce cancellation')
 	if (transaction.type !== BOT_COMPATIBLE_RECOVERY_TRANSACTION_TYPE) {
 		throw new Error('Nonce cancellation must use a bot-compatible EIP-1559 transaction')
 	}
@@ -457,7 +461,7 @@ export async function recoverPendingTransactions(environment: ExecutionEnvironme
 	}
 	if (await resolveQueuedCancellation(environment, intent)) return true
 	if (await resolveQueuedReplacement(environment, intent)) return true
-	const nonce = await agreedPendingNonce(environment, intent)
+	const nonce = await agreedIntentPendingNonce(environment, intent)
 	const headObservations = await availableHeads(environment, intent)
 	const heads = headObservations.map(observation => observation.head)
 	const exactTransactionVisible = await exactIntentIsVisible(environment, intent)
@@ -490,27 +494,7 @@ export async function recoverPendingTransactions(environment: ExecutionEnvironme
 }
 
 async function verifyRecoveredReplacement(environment: ExecutionEnvironment, intent: PendingTransactionIntent, replacementHash: Hex) {
-	const connectivity = requiredConnectivity(environment.settings)
-	const readers = executionReadClients(environment)
-	const transaction = await settledQuorumValue(
-		`replacement transaction ${replacementHash}`,
-		readers.map(async ({ client, endpoint }) => {
-			const candidate = await client.getTransaction({ hash: replacementHash })
-			assertRequestedTransactionHash(candidate.hash, replacementHash, `RPC ${endpoint} replacement lookup`)
-			return {
-				endpoint,
-				value: {
-					from: candidate.from,
-					input: candidate.input,
-					nonce: candidate.nonce,
-					to: candidate.to,
-					type: candidate.type,
-					value: candidate.value,
-				},
-			}
-		}),
-		connectivity.rpcQuorum,
-	)
+	const transaction = await quorumRecoveryTransaction(environment, replacementHash, 'replacement')
 	if (transaction.type !== BOT_COMPATIBLE_RECOVERY_TRANSACTION_TYPE) {
 		throw new Error('Replacement transaction must use a bot-compatible EIP-1559 transaction')
 	}

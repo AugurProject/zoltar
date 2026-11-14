@@ -2,7 +2,7 @@ import { expect } from 'bun:test'
 import { getAddress } from '@zoltar/bot-shared/ethereum'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
 import { browserTest, CHROMIUM_STARTUP_BUDGET_MILLISECONDS } from '../support/chromium.ts'
-import { connectToChromium, state, walletAddress } from '../support/dashboard-harness.ts'
+import { connectToChromium, inertDashboardControls, state, walletAddress } from '../support/dashboard-harness.ts'
 
 browserTest(
 	'reviews every drain policy choice before submitting the captured request',
@@ -11,16 +11,8 @@ browserTest(
 		const dashboard = startDashboardServer(0, {
 			getConfiguration: () => ({ revision: 'retirement-review', settings: { network: { chainId: 1, name: 'mainnet' }, paused: true, runtime: { execute: false }, scheduler: { maximumDelaySeconds: 3600, minimumDelaySeconds: 60 }, strategy: { enabledEcosystems: [] } } }),
 			getState: () => state({ profileId: 'profile:review', retirement: { blockers: [], positions: [], status: 'inactive' }, wallet: walletAddress }),
-			hostname: '127.0.0.1',
-			setCancellation: () => {},
-			setCandidate: () => {},
-			setObligation: () => {},
-			setPaused: () => {},
-			setReplacement: () => {},
+			...inertDashboardControls,
 			setRetirement: value => requests.push(value),
-			setSettings: () => {},
-			setSigner: () => {},
-			setWorkflow: () => {},
 		})
 		let browserSession: Awaited<ReturnType<typeof connectToChromium>> | undefined
 		try {
