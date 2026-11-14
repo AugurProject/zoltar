@@ -6,10 +6,11 @@ export const markets = 'Markets'
 export const create = 'Create'
 export const liquidity = 'Liquidity'
 export const portfolio = 'Portfolio'
-export { changeWallet, disconnectWallet, sectionRequiresDeployment } from '@zoltar/ui-core-shared/copy/app.js'
+export { changeWallet, connecting, disconnectWallet, pageNotFoundTitle, sectionRequiresDeployment } from '@zoltar/ui-core-shared/copy/app.js'
+import { formatAppDocumentTitle } from '@zoltar/ui-core-shared/app/lib/appTitle.js'
 import { disconnectWallet } from '@zoltar/ui-core-shared/copy/app.js'
 export { universe } from '@zoltar/ui-core-shared/copy/common.js'
-export { connectWallet, deploy, loadingWithEllipsis, notDeployed, notFound, retry, unavailable } from '@zoltar/ui-core-shared/copy/common.js'
+export { connectWallet, deploy, loadingWithEllipsis, notDeployed, retry, unavailable } from '@zoltar/ui-core-shared/copy/common.js'
 export const help = 'Help'
 export const universeUnavailable = 'Unable to load the universe.'
 export function universeNotFound(label: string) {
@@ -38,7 +39,6 @@ export const tradingContractsUnreachableHint = 'Check the RPC in Settings, then 
 /** The deployment list is a static file served with the app; the RPC setting cannot fix a failed download. */
 export const deploymentRegistryUnavailable = 'The deployment list could not be downloaded. Check your connection, then retry.'
 export const checkingDeployment = 'Checking deployment…'
-export const connectingWallet = 'Connecting wallet…'
 export const securityPoolFactoryNotDeployed = 'Security pool factory is not deployed'
 export const checkingContract = 'Checking…'
 export const securityPoolDataUnavailable = 'Security pool data unavailable'
@@ -87,7 +87,7 @@ export const remainingSharesDescription =
 	'An insured exit requires one Invalid share for every complete set redeemed. If a profitable position contains more directional shares than matching Invalid shares, the excess remains transferable but cannot be converted into complete sets without acquiring more Invalid shares. After resolution, those excess shares redeem collateral only if the question resolved to their outcome.'
 
 export function documentTitle(pageTitle: string) {
-	return `${pageTitle} · ${appName}`
+	return formatAppDocumentTitle(pageTitle, appName)
 }
 
 /** A market's page names its question first, so browser tabs and history tell markets apart. */

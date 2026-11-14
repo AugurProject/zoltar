@@ -148,6 +148,48 @@ function createBootstrapMemoryClient(
 	} as never
 }
 
+// Mints 11 attoREP to the primary account through the mocked token, recording raw storage writes.
+async function mintElevenMockedRep({ repAddress, repTokenCode, zoltarAddress }: { repAddress: Address; repTokenCode: `0x${string}`; zoltarAddress: Address }) {
+	const storageWrites: MemoryStorageCall[] = []
+	const repState = createRepTokenMockState()
+	const memoryClient = {
+		setStorageAt: async (payload: MemoryStorageCall) => {
+			storageWrites.push(payload)
+			if (payload.address.toLowerCase() === repAddress.toLowerCase()) repState.theoreticalSupply = BigInt(payload.value)
+		},
+		getCode: async () => repTokenCode,
+		getBalance: async () => 0n,
+		getTransactionCount: async () => 0n,
+		impersonateAccount: async () => undefined,
+		setBalance: async () => undefined,
+		setNonce: async () => undefined,
+	} as never
+	await mintSimulationGenesisRep({
+		accountAddress: MOCK_PRIMARY_ACCOUNT,
+		amount: 11n,
+		createWriteClient: accountAddress => createRepTokenWriteClient({ accountAddress, repAddress, repState, zoltarAddress }),
+		memoryClient,
+		repAddress,
+		zoltarAddress,
+	})
+	return { repState, storageWrites }
+}
+
+function createRecordingWriteClients() {
+	const writeCalls: Array<{ account: Address; to: Address | undefined; value: bigint | undefined }> = []
+	const createWriteClient = (accountAddress: Address) =>
+		({
+			sendTransaction: async (request: { to?: Address; value?: bigint }) => {
+				writeCalls.push({ account: accountAddress, to: request.to, value: request.value })
+				return `0x${writeCalls.length.toString(16).padStart(64, '0')}` as `0x${string}`
+			},
+			waitForTransactionReceipt: async () => createSuccessfulReceipt(accountAddress),
+			getCode: async () => '0x01',
+			writeContract: async () => '0x01',
+		}) as never
+	return { writeCalls, createWriteClient }
+}
+
 const applyScenario = (parameters: BootstrapScenarioApplyParameters) => applyStatoblastScenario(parameters)
 const ZOLTAR_SIMULATION_STEP: DeploymentStep = {
 	id: 'zoltar',
@@ -198,30 +240,7 @@ describe('simulation bootstrap', () => {
 	test('mints mocked REP balances through the token ABI and skips Zoltar bootstrap when token code is missing', async () => {
 		const repAddress = getAddress('0x00000000000000000000000000000000000000d1')
 		const zoltarAddress = getAddress('0x00000000000000000000000000000000000000d2')
-		const storageWrites: MemoryStorageCall[] = []
-		const repState = createRepTokenMockState()
-		const setStorageAt = mock(async (payload: { address: string; index: string; value: string }) => {
-			storageWrites.push(payload)
-			if (payload.address.toLowerCase() === repAddress.toLowerCase()) repState.theoreticalSupply = BigInt(payload.value)
-		})
-		const memoryClient = {
-			setStorageAt,
-			getCode: async () => '0x',
-			getBalance: async () => 0n,
-			getTransactionCount: async () => 0n,
-			impersonateAccount: async () => undefined,
-			setBalance: async () => undefined,
-			setNonce: async () => undefined,
-		} as never
-
-		await mintSimulationGenesisRep({
-			accountAddress: MOCK_PRIMARY_ACCOUNT,
-			amount: 11n,
-			createWriteClient: accountAddress => createRepTokenWriteClient({ accountAddress, repAddress, repState, zoltarAddress }),
-			memoryClient,
-			repAddress,
-			zoltarAddress,
-		})
+		const { repState, storageWrites } = await mintElevenMockedRep({ repAddress, repTokenCode: '0x', zoltarAddress })
 
 		expect(repState.totalSupply).toBe(11n)
 		expect(repState.theoreticalSupply).toBe(11n)
@@ -232,30 +251,7 @@ describe('simulation bootstrap', () => {
 	test('updates Zoltar genesis pointer when the REP token is already deployed', async () => {
 		const repAddress = getAddress('0x00000000000000000000000000000000000000e1')
 		const zoltarAddress = getAddress('0x00000000000000000000000000000000000000e2')
-		const storageWrites: MemoryStorageCall[] = []
-		const repState = createRepTokenMockState()
-		const memoryClient = {
-			setStorageAt: async (payload: { address: string; index: string; value: string }) => {
-				storageWrites.push(payload)
-				if (payload.address.toLowerCase() === repAddress.toLowerCase()) repState.theoreticalSupply = BigInt(payload.value)
-			},
-			getCode: async ({ address }: { address: string }) => (address.toLowerCase() === repAddress.toLowerCase() ? '0x01' : '0x01'),
-			getBalance: async () => 0n,
-			getTransactionCount: async () => 0n,
-			impersonateAccount: async () => undefined,
-			setBalance: async () => undefined,
-			setNonce: async () => undefined,
-		} as never
-
-		await mintSimulationGenesisRep({
-			accountAddress: MOCK_PRIMARY_ACCOUNT,
-			amount: 11n,
-			createWriteClient: accountAddress => createRepTokenWriteClient({ accountAddress, repAddress, repState, zoltarAddress }),
-			memoryClient,
-			repAddress,
-			zoltarAddress,
-		})
-
+		const { repState, storageWrites } = await mintElevenMockedRep({ repAddress, repTokenCode: '0x01', zoltarAddress })
 		const zoltarWrites = storageWrites.filter(write => write.address === zoltarAddress)
 
 		expect(repState.totalSupply).toBe(11n)
@@ -269,30 +265,8 @@ describe('simulation bootstrap', () => {
 		const progress = async ({ label }: { label: string; value: number }) => {
 			progressCalls.push(label)
 		}
-		const writeCalls: Array<{ account: Address; to: Address | undefined; value: bigint | undefined }> = []
-		const memoryClient = {
-			tevmReady: async () => undefined,
-			getBlock: async () => ({ timestamp: SIMULATION_INITIAL_TIMESTAMP }),
-			getBalance: async () => 0n,
-			getStorageAt: async () => toHex(0n, { size: 32 }),
-			setStorageAt: async () => undefined,
-			getTransactionCount: async () => 0n,
-			setCode: async () => undefined,
-			impersonateAccount: async () => undefined,
-			setBalance: async () => undefined,
-			setNonce: async () => undefined,
-			getCode: async () => '0x01',
-		} as never
-		const createWriteClient = (accountAddress: Address) =>
-			({
-				sendTransaction: async (request: { to?: Address; value?: bigint }) => {
-					writeCalls.push({ account: accountAddress, to: request.to, value: request.value })
-					return `0x${writeCalls.length.toString(16).padStart(64, '0')}` as `0x${string}`
-				},
-				waitForTransactionReceipt: async () => createSuccessfulReceipt(accountAddress),
-				getCode: async () => '0x01',
-				writeContract: async () => '0x01',
-			}) as never
+		const memoryClient = createBootstrapMemoryClient()
+		const { writeCalls, createWriteClient } = createRecordingWriteClients()
 
 		await bootstrapSimulationChain({
 			applyScenario,
@@ -318,17 +292,7 @@ describe('simulation bootstrap', () => {
 
 	test('rejects security-pool bootstrap when the primary QA account is missing', async () => {
 		const memoryClient = createBootstrapMemoryClient()
-		const writeCalls: Array<{ account: Address; to: Address | undefined; value: bigint | undefined }> = []
-		const createWriteClient = (accountAddress: Address) =>
-			({
-				sendTransaction: async (request: { to?: Address; value?: bigint }) => {
-					writeCalls.push({ account: accountAddress, to: request.to, value: request.value })
-					return `0x${writeCalls.length.toString(16).padStart(64, '0')}` as `0x${string}`
-				},
-				waitForTransactionReceipt: async () => createSuccessfulReceipt(accountAddress),
-				getCode: async () => '0x01',
-				writeContract: async () => '0x01',
-			}) as never
+		const { createWriteClient } = createRecordingWriteClients()
 
 		await expect(
 			bootstrapSimulationChain({
@@ -352,17 +316,7 @@ describe('simulation bootstrap', () => {
 			getCode: async () => '0x01',
 		})
 		const progressCalls: string[] = []
-		const writeCalls: Array<{ account: Address; to: Address | undefined; value: bigint | undefined }> = []
-		const createWriteClient = (accountAddress: Address) =>
-			({
-				sendTransaction: async (request: { to?: Address; value?: bigint }) => {
-					writeCalls.push({ account: accountAddress, to: request.to, value: request.value })
-					return `0x${writeCalls.length.toString(16).padStart(64, '0')}` as `0x${string}`
-				},
-				waitForTransactionReceipt: async () => createSuccessfulReceipt(accountAddress),
-				getCode: async () => '0x01',
-				writeContract: async () => '0x01',
-			}) as never
+		const { writeCalls, createWriteClient } = createRecordingWriteClients()
 
 		await bootstrapSimulationChain({
 			applyScenario,

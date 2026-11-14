@@ -32,7 +32,7 @@ export function TradingDeploymentSetup(options: TradingDeploymentSetupOptions) {
 					<WalletConnectionControl disabled={actions.busy} ariaLabel={appCopy.disconnectWalletLabel(wallet.account)} title={appCopy.disconnectWallet} onClick={actions.disconnectWallet} label={appCopy.disconnectWallet} />
 				</>
 			) : (
-				<WalletConnectionControl disabled={!wallet.canConnect} pending={wallet.connecting} onClick={() => void actions.connectWallet()} pendingLabel={appCopy.connectingWallet} label={appCopy.connectWallet} />
+				<WalletConnectionControl disabled={!wallet.canConnect} pending={wallet.connecting} onClick={() => void actions.connectWallet()} pendingLabel={appCopy.connecting} label={appCopy.connectWallet} />
 			)
 	let retryAction
 	if (inspection.canRetry)

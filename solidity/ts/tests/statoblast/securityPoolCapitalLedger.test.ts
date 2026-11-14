@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { decodeEventLog, encodeDeployData, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { buildPortfolioCapitalTakeOverRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import {
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as artifact,
@@ -12,7 +12,7 @@ import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnv
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
-import { deployCapitalTestComponents } from './securityPoolCapitalTestComponents'
+import { deployCapitalLedgerHarness, fundCapitalOwners } from './securityPoolCapitalTestComponents'
 import { collateralBalance, burnedCollateralBalance, receiptBurns } from './burnEvidence'
 
 const E = 10n ** 18n
@@ -50,18 +50,12 @@ describe('Statoblast: individual shared-custody capital', () => {
 		alice = createWriteClient(ethereum, TEST_ADDRESSES[0])
 		bob = createWriteClient(ethereum, TEST_ADDRESSES[1])
 		keeper = createWriteClient(ethereum, TEST_ADDRESSES[2])
-		const componentsReceipt = await deployCapitalTestComponents(alice)
-		if (componentsReceipt.contractAddress === undefined) throw new Error('Capital test components address missing')
-		const receipt = await alice.waitForTransactionReceipt({ hash: await alice.sendTransaction({ data: encodeDeployData({ abi: harnessArtifact.abi, bytecode: `0x${harnessArtifact.evm.bytecode.object}`, args: [componentsReceipt.contractAddress] }) }) })
-		if (receipt.contractAddress === undefined) throw new Error('Capital harness address missing')
-		harness = receipt.contractAddress
-		ledger = await alice.readContract({ abi: harnessArtifact.abi, address: harness, functionName: 'ledger' })
-		token = await alice.readContract({ abi: harnessArtifact.abi, address: harness, functionName: 'token' })
-		index = await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'commitmentIndex' })
-		for (const client of [alice, bob, keeper]) {
-			await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'mint', args: [client.account.address, 10_000n * E] }))
-			await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'approve', args: [ledger, 10_000n * E] }))
-		}
+		const deployment = await deployCapitalLedgerHarness(alice)
+		harness = deployment.harness
+		ledger = deployment.ledger
+		token = deployment.token
+		index = deployment.index
+		await fundCapitalOwners(alice, deployment, [alice, bob, keeper], 10_000n * E)
 		await price(E)
 		await setBaselineSnapshot()
 	})

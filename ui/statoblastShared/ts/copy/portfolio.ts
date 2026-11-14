@@ -1,3 +1,5 @@
+import { formatConnectWalletBefore } from '@zoltar/ui-core-shared/copy/common.js'
+
 export const title = 'Portfolios'
 export const setup = 'Open a portfolio'
 export const manager = 'Portfolio address'
@@ -8,7 +10,7 @@ export const originPool = 'Origin universe ID'
 export const originPoolHint = 'Create a portfolio directly in an unforked universe. Complete the four setup stages after deployment, then register questions.'
 export const deploy = 'Deploy portfolio'
 export const deploying = 'Deploying portfolio…'
-export const connect = 'Connect a wallet to send transactions'
+export const connect = formatConnectWalletBefore('sending transactions')
 export const enterPortfolio = 'Open a portfolio first'
 export const enterOrigin = 'Enter a valid origin universe ID'
 export const originForked = 'This universe has forked. Choose an unforked universe as the origin.'

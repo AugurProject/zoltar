@@ -1,5 +1,5 @@
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
-import { retry } from '@zoltar/ui-core-shared/copy/common.js'
+import * as common from '@zoltar/ui-core-shared/copy/common.js'
 import { tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
@@ -12,14 +12,14 @@ export function CollateralFundingControls({ funding, required, disabled, reason,
 	const requiresAllowanceReset = tokenRequiresAllowanceReset(asset.token)
 	let resetReason = reason
 	if (resetReason === undefined && funding.allowance === undefined) resetReason = copy.loading
-	else if (resetReason === undefined && funding.allowance === 0n) resetReason = copy.notNeeded
+	else if (resetReason === undefined && funding.allowance === 0n) resetReason = common.notNeeded
 	return (
 		<div className='collateral-funding'>
-			{funding.readError === undefined ? null : <RetryableNotice message={funding.readError} retryLabel={retry} onRetry={funding.retry} disabled={disabled} />}
+			{funding.readError === undefined ? null : <RetryableNotice message={funding.readError} retryLabel={common.retry} onRetry={funding.retry} disabled={disabled} />}
 			{requiresAllowanceReset ? (
 				<TransactionActionButton
-					idleLabel={copy.reset(asset.symbol)}
-					pendingLabel={copy.resetting(asset.symbol)}
+					idleLabel={common.formatResetTokenApproval(asset.symbol)}
+					pendingLabel={common.formatResettingTokenApproval(asset.symbol)}
 					pending={funding.resetting}
 					availability={{ disabled: disabled || funding.allowance === undefined || funding.allowance === 0n, reason: resetReason }}
 					onClick={() => void funding.approve(0n)}
@@ -38,7 +38,7 @@ export function CollateralFundingControls({ funding, required, disabled, reason,
 					if (amount !== undefined) void funding.approve(amount)
 				}}
 				pending={funding.pending && !funding.resetting}
-				pendingLabel={copy.approving(asset.symbol)}
+				pendingLabel={common.formatApprovingToken(asset.symbol)}
 				requiredAmount={required}
 				resetKey={`${asset.token}:${required}`}
 				tokenSymbol={asset.symbol}

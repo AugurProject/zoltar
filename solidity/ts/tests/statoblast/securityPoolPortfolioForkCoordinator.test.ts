@@ -7,17 +7,13 @@ import {
 	statoblast_tokens_ShareToken_ShareToken as sharesArtifact,
 	test_statoblast_ShareTokenRecoveryTestPool_ShareTokenRecoveryTestPool as poolArtifact,
 	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
-	statoblast_SecurityPoolPortfolioAuction_SecurityPoolPortfolioAuctionDeployer as auctionDeployerArtifact,
-	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCapitalLedgerDeployer as capitalDeployerArtifact,
-	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCommitmentIndexDeployer as indexDeployerArtifact,
-	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCapitalFeeStreamsDeployer as streamsDeployerArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
 	statoblast_SecurityPoolPortfolioPurchase_SecurityPoolPortfolioPurchase as purchaseArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
-	statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact,
 	ReputationToken_ReputationToken as tokenArtifact,
 } from '../../types/contractArtifact'
+import { deployPortfolioForkHarness } from './portfolioForkHarnessFixture'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
@@ -64,19 +60,12 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 		alice = createWriteClient(ethereum, TEST_ADDRESSES[1])
 		bob = createWriteClient(ethereum, TEST_ADDRESSES[2])
 		buyer = createWriteClient(ethereum, TEST_ADDRESSES[3])
-		zoltar = await deploy(`0x${zoltarArtifact.evm.bytecode.object}`)
-		const capitals = await deploy(`0x${capitalDeployerArtifact.evm.bytecode.object}`)
-		const indices = await deploy(`0x${indexDeployerArtifact.evm.bytecode.object}`)
-		const streams = await deploy(`0x${streamsDeployerArtifact.evm.bytecode.object}`)
-		const auctions = await deploy(`0x${auctionDeployerArtifact.evm.bytecode.object}`)
-		root = await deploy(encodeDeployData({ abi: rootArtifact.abi, bytecode: `0x${rootArtifact.evm.bytecode.object}`, args: [zoltar, capitals, indices, streams, auctions] }))
-		const collateral = await owner.readContract({ ...rootTarget(), functionName: 'collateralToken' })
-		engine = await deploy(encodeDeployData({ abi: settlementArtifact.abi, bytecode: `0x${settlementArtifact.evm.bytecode.object}`, args: [root, collateral] }))
-		const book = await deploy(encodeDeployData({ abi: bookArtifact.abi, bytecode: `0x${bookArtifact.evm.bytecode.object}`, args: [engine, 10n ** 12n] }))
-		const reporter = await deploy(encodeDeployData({ abi: reporterArtifact.abi, bytecode: `0x${reporterArtifact.evm.bytecode.object}`, args: [root, zoltar] }))
-		forks = await deploy(encodeDeployData({ abi: forkArtifact.abi, bytecode: `0x${forkArtifact.evm.bytecode.object}`, args: [root, zoltar] }))
-		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'initialize', args: [engine, book, reporter, forks] }))
-		capital = await owner.readContract({ ...rootTarget(), functionName: 'capitalLedger', args: [0n] })
+		const harness = await deployPortfolioForkHarness(owner)
+		zoltar = harness.zoltar
+		root = harness.root
+		engine = harness.engine
+		forks = harness.forks
+		capital = harness.capital
 		shares = await deploy(encodeDeployData({ abi: sharesArtifact.abi, bytecode: `0x${sharesArtifact.evm.bytecode.object}`, args: [owner.account.address, zoltar, 1n] }))
 		const pool = await deploy(encodeDeployData({ abi: poolArtifact.abi, bytecode: `0x${poolArtifact.evm.bytecode.object}`, args: [shares, 0n, zeroAddress, root] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: sharesArtifact.abi, address: shares, functionName: 'authorize', args: [pool] }))

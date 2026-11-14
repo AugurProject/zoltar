@@ -148,7 +148,7 @@ describe('OpenOracle helpers', () => {
 	let uiWriteClient: ReturnType<typeof createWalletWriteClient>
 	let _managerAddress: Address
 
-	beforeAll(async () => {
+	async function installSepoliaClients() {
 		mockWindow = getAnvilWindowEthereum()
 		await mockWindow.request({ method: 'anvil_setChainId', params: [SEPOLIA_NETWORK_PROFILE.chain.id] })
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0, SEPOLIA_NETWORK_PROFILE.chain)
@@ -166,6 +166,10 @@ describe('OpenOracle helpers', () => {
 				throw new Error('UI log access is unavailable')
 			},
 		}
+	}
+
+	beforeAll(async () => {
+		await installSepoliaClients()
 		await setupTestAccounts(mockWindow)
 		await ensureProxyDeployerDeployed(client)
 		await ensureZoltarDeployed(client)
@@ -191,23 +195,7 @@ describe('OpenOracle helpers', () => {
 
 	beforeEach(async () => {
 		resetActiveEnvironmentForTesting()
-		mockWindow = getAnvilWindowEthereum()
-		await mockWindow.request({ method: 'anvil_setChainId', params: [SEPOLIA_NETWORK_PROFILE.chain.id] })
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0, SEPOLIA_NETWORK_PROFILE.chain)
-		installInjectedEthereum(mockWindow)
-		installActiveEnvironmentForTesting(createInjectedBackend({ profile: { ...MAINNET_NETWORK_PROFILE, genesisRepTokenAddress: REP_ADDRESS, chain: SEPOLIA_NETWORK_PROFILE.chain, chainIdHex: SEPOLIA_NETWORK_PROFILE.chainIdHex, id: 'sepolia', displayName: 'Sepolia' } }))
-		uiReadClient = {
-			...createConnectedReadClient(),
-			getLogs: async () => {
-				throw new Error('UI log access is unavailable')
-			},
-		}
-		uiWriteClient = {
-			...createWalletWriteClient(addressString(TEST_ADDRESSES[0])),
-			getLogs: async () => {
-				throw new Error('UI log access is unavailable')
-			},
-		}
+		await installSepoliaClients()
 	})
 
 	afterEach(() => resetActiveEnvironmentForTesting())
@@ -417,28 +405,6 @@ describe('OpenOracle helpers', () => {
 		for (const testCase of cases) {
 			const preview = createDisputeSubmissionPreview({
 				disputeNewAmount2Input: testCase.disputeNewAmount2Input,
-				reportDetails: {
-					currentAmount1: 100n,
-					currentAmount2: 50n,
-					currentBlockNumber: 0n,
-					currentReporter: getAddress(addressString(TEST_ADDRESSES[1])),
-					currentTime: 200n,
-					disputeDelay: 10n,
-					escalationHalt: 200n,
-					feePercentage: 1_000_000n,
-					feesOnlyAtHalt: false,
-					flexibleEscalation: false,
-					isDistributed: false,
-					multiplier: 20_000n,
-					protocolFee: 500_000n,
-					reportTimestamp: 100n,
-					settlementTime: 200n,
-					timeType: true,
-					token1: REP_ADDRESS,
-					token1Symbol: 'REP',
-					token2: WETH_ADDRESS,
-					token2Symbol: 'WETH',
-				},
 			})
 
 			expect(preview.expectedNewAmount1).toBe(200n)
