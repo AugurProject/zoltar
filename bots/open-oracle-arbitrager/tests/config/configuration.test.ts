@@ -11,6 +11,7 @@ import { deterministicDeploymentProxy, executorDeploymentPlan } from '#execution
 import { clearExecutorDeploymentIntent, executorDeploymentIntentPath, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import { acquirePositionJournalLock } from '#state/position-store'
 import { savePositionJournal } from '../support/position-journal.ts'
+import { serveSepoliaChainIdRpc } from '../support/sepolia-rpc.ts'
 
 const executable = process.execPath
 const runSource = join(import.meta.dir, '..', '..', 'src', 'cli', 'run.ts')
@@ -190,13 +191,7 @@ describe('file-only startup configuration', () => {
 
 	test('reports a failed scan with UTC time and network when the RPC serves the wrong chain', async () => {
 		const directory = await temporaryDirectory()
-		const rpc = Bun.serve({
-			port: 0,
-			async fetch(request) {
-				const body = await request.json()
-				return Response.json({ jsonrpc: '2.0', id: body.id, result: '0xaa36a7' })
-			},
-		})
+		const rpc = serveSepoliaChainIdRpc()
 		servers.push(rpc)
 		const saved = settings(rpc.url.href, 4173)
 		saved.runtime.once = true
@@ -355,14 +350,7 @@ describe('file-only startup configuration', () => {
 
 	test('keeps the dashboard available until initial chain and RPC settings are saved', async () => {
 		const directory = await temporaryDirectory()
-		const rpc = Bun.serve({
-			async fetch(request) {
-				const body = (await request.json()) as { id: unknown }
-				return Response.json({ id: body.id, jsonrpc: '2.0', result: '0xaa36a7' })
-			},
-			hostname: '127.0.0.1',
-			port: 0,
-		})
+		const rpc = serveSepoliaChainIdRpc()
 		servers.push(rpc)
 		if (rpc.port === undefined) throw new Error('Mock RPC did not expose a port')
 		// Reserve the dashboard port only once the mock servers listen, so the OS cannot hand it to one of them.
@@ -683,14 +671,7 @@ describe('file-only startup configuration', () => {
 
 	test('rejects RPC settings for a chain other than the selected profile', async () => {
 		const directory = await temporaryDirectory()
-		const rpc = Bun.serve({
-			async fetch(request) {
-				const body = (await request.json()) as { id: unknown }
-				return Response.json({ id: body.id, jsonrpc: '2.0', result: '0xaa36a7' })
-			},
-			hostname: '127.0.0.1',
-			port: 0,
-		})
+		const rpc = serveSepoliaChainIdRpc()
 		servers.push(rpc)
 		if (rpc.port === undefined) throw new Error('Mock RPC did not expose a port')
 		// Reserve the dashboard port only once the mock servers listen, so the OS cannot hand it to one of them.

@@ -6,7 +6,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import example from '../../config/operator.example.json'
-import { address, hash, snapshotFixture } from '../operations/fixture.ts'
+import { address, drainedWalletSnapshotFixture, hash, snapshotFixture } from '../operations/fixture.ts'
 import { buildRetirementLiquidityRemovalPlan } from '../../src/operations/retirement-liquidity.ts'
 import { applyRetirementAssessment, assessRetirement } from '../../src/runtime/retirement-assessment.ts'
 import { buildAllowanceRevocationPlan, buildAssetSweepPlan, buildNativeOpenOracleCreditPlan } from '../../src/runtime/retirement-recovery-plans.ts'
@@ -65,18 +65,6 @@ function request(retirement = initialRetirementState()) {
 
 function v3Anchor(blockNumber: bigint) {
 	return { blockHash: hash(Number(blockNumber)), blockNumber }
-}
-
-function emptySnapshot() {
-	const snapshot = snapshotFixture()
-	snapshot.wallet.tokens = []
-	snapshot.wallet.shares = []
-	snapshot.wallet.lpTokens = []
-	snapshot.wallet.openOracleEthCredit = '0'
-	snapshot.portfolioCapital = []
-	for (const pair of snapshot.pairs) pair.walletLiquidity = '0'
-	snapshot.warnings = []
-	return snapshot
 }
 
 function plan(definitionId: string, id = definitionId): OperationPlan {
@@ -152,7 +140,7 @@ describe('Drain & Retire state', () => {
 
 describe('Drain & Retire planning', () => {
 	test('sweeps known assets with missing history but retains other blockers', () => {
-		const snapshot = emptySnapshot()
+		const snapshot = drainedWalletSnapshotFixture()
 		snapshot.wallet.ethBalanceAttoEth = '20'
 		snapshot.warnings = ['Protocol log history is unavailable for blocks 0 through 9; known claims only.']
 		const state = initialDurableState(snapshot.chainId)
@@ -166,7 +154,7 @@ describe('Drain & Retire planning', () => {
 	})
 
 	test('the retirement runner executes known recovery with a caught-up partial scan', async () => {
-		const snapshot = emptySnapshot()
+		const snapshot = drainedWalletSnapshotFixture()
 		snapshot.wallet.openOracleEthCredit = '9'
 		const state = initialRuntimeState(false, snapshot.wallet.address, snapshot.chainId)
 		request(state.retirement)
@@ -189,7 +177,7 @@ describe('Drain & Retire planning', () => {
 	})
 
 	test('recovers known credits and reports only known completion with incomplete history', () => {
-		const snapshot = emptySnapshot()
+		const snapshot = drainedWalletSnapshotFixture()
 		snapshot.wallet.openOracleEthCredit = '9'
 		const state = initialDurableState(snapshot.chainId)
 		const retirement = request()
@@ -205,7 +193,7 @@ describe('Drain & Retire planning', () => {
 	})
 
 	test('fails closed before planning a self or zero-address sweep', () => {
-		const snapshot = emptySnapshot()
+		const snapshot = drainedWalletSnapshotFixture()
 		snapshot.wallet.ethBalanceAttoEth = '100'
 		const limits = { maximumEthAttoEth: 10n, maximumGasCostAttoEth: 1n, maximumRepAttoRep: 10n, minimumEthReserveAttoEth: 1n }
 		for (const [recipient, expectedError] of [
@@ -219,7 +207,7 @@ describe('Drain & Retire planning', () => {
 	})
 
 	test('does not record terminal completion from an unbound zero-wallet scan', async () => {
-		const snapshot = emptySnapshot()
+		const snapshot = drainedWalletSnapshotFixture()
 		snapshot.wallet.address = address(0)
 		snapshot.wallet.ethBalanceAttoEth = '0'
 		const state = initialRuntimeState(true, undefined, snapshot.chainId)
@@ -239,7 +227,7 @@ describe('Drain & Retire planning', () => {
 		expect(state.retirement.status).not.toBe('drained')
 	})
 	test('persists a canonical assessment before returning from a paused process cycle', async () => {
-		const snapshot = emptySnapshot()
+		const snapshot = drainedWalletSnapshotFixture()
 		snapshot.wallet.ethBalanceAttoEth = '0'
 		const durable = initialDurableState(snapshot.chainId, true, 'profile:test', snapshot.wallet.address)
 		const state = initialRuntimeState(true, snapshot.wallet.address, snapshot.chainId, durable)
@@ -281,7 +269,7 @@ describe('Drain & Retire planning', () => {
 	})
 
 	test('does not select an edited OpenOracle withdrawal to another wallet', () => {
-		const snapshot = emptySnapshot()
+		const snapshot = drainedWalletSnapshotFixture()
 		const otherRecipient = plan('open-oracle.withdraw-to')
 		otherRecipient.metadata = { recipient: address(99) }
 		expect(retirementPlanFromEvaluations([evaluation(otherRecipient)], DEFAULT_RETIREMENT_POLICIES, snapshot)).toBeUndefined()
@@ -297,13 +285,13 @@ describe('Drain & Retire planning', () => {
 
 	test('builds full burn then collect from live position liquidity', () => {
 		const observation: V3PositionObservation = { liquidity: 77n, position: position(), tokensOwed0: 3n, tokensOwed1: 4n }
-		const result = buildV3RetirementPlan(emptySnapshot(), observation, 7)
+		const result = buildV3RetirementPlan(drainedWalletSnapshotFixture(), observation, 7)
 		expect(result.steps.map(step => step.id)).toEqual(['burn-full-v3-position', 'collect-full-v3-position'])
 		expect(result.metadata['positionKey']).toBe(observation.position.positionKey)
 	})
 
 	test('builds collect-only positions without a zero-liquidity burn', () => {
-		const result = buildV3RetirementPlan(emptySnapshot(), { liquidity: 0n, position: position('collect-only'), tokensOwed0: 1n, tokensOwed1: 0n }, 7)
+		const result = buildV3RetirementPlan(drainedWalletSnapshotFixture(), { liquidity: 0n, position: position('collect-only'), tokensOwed0: 1n, tokensOwed1: 0n }, 7)
 		expect(result.steps.map(step => step.id)).toEqual(['collect-full-v3-position'])
 	})
 
@@ -315,7 +303,7 @@ describe('Drain & Retire planning', () => {
 		] as const) {
 			const current = position('closed')
 			const retirement = request()
-			const emptyParameters = { blockHash: hash(101), blockNumber: 101n, canonicalScanComplete: true, evaluations: [], retirement, snapshot: emptySnapshot(), state: initialDurableState(31337), v3: [] }
+			const emptyParameters = { blockHash: hash(101), blockNumber: 101n, canonicalScanComplete: true, evaluations: [], retirement, snapshot: drainedWalletSnapshotFixture(), state: initialDurableState(31337), v3: [] }
 			applyRetirementAssessment(retirement, assessRetirement(emptyParameters), hash(101), 101n, completionBinding)
 			expect(retirement.completionEvidence).toBeDefined()
 			retirement.positions = [current]
@@ -329,13 +317,13 @@ describe('Drain & Retire planning', () => {
 			expect(observations).toHaveLength(1)
 			for (const observation of observations) recordV3ScanSuccess({ retirement }, observation, 102n)
 			expect(current.status).toBe(status)
-			const assessment = assessRetirement({ blockHash: hash(102), blockNumber: 102n, canonicalScanComplete: true, evaluations: [], retirement, snapshot: emptySnapshot(), state: initialDurableState(31337), v3: observations })
+			const assessment = assessRetirement({ blockHash: hash(102), blockNumber: 102n, canonicalScanComplete: true, evaluations: [], retirement, snapshot: drainedWalletSnapshotFixture(), state: initialDurableState(31337), v3: observations })
 			applyRetirementAssessment(retirement, assessment, hash(102), 102n, completionBinding)
 			if (steps.length > 0) {
 				expect(retirement.completionEvidence).toBeUndefined()
 				expect(assessment.action?.kind).toBe('v3-position')
 				if (assessment.action?.kind !== 'v3-position') throw new Error('Expected V3 recovery action')
-				expect(buildV3RetirementPlan(emptySnapshot(), assessment.action.observation, 0).steps.map(step => step.id)).toEqual([...steps])
+				expect(buildV3RetirementPlan(drainedWalletSnapshotFixture(), assessment.action.observation, 0).steps.map(step => step.id)).toEqual([...steps])
 			} else expect(assessment.status).toBe('drained')
 		}
 	})
@@ -343,7 +331,7 @@ describe('Drain & Retire planning', () => {
 	test('missing observations for retained positions invalidate completion evidence', () => {
 		for (const status of ['active', 'closed', 'collect-only'] as const) {
 			const retirement = request()
-			const parameters = { blockHash: hash(100), blockNumber: 100n, canonicalScanComplete: true, evaluations: [], retirement, snapshot: emptySnapshot(), state: initialDurableState(31337), v3: [] }
+			const parameters = { blockHash: hash(100), blockNumber: 100n, canonicalScanComplete: true, evaluations: [], retirement, snapshot: drainedWalletSnapshotFixture(), state: initialDurableState(31337), v3: [] }
 			applyRetirementAssessment(retirement, assessRetirement(parameters), hash(100), 100n, completionBinding)
 			expect(retirement.completionEvidence).toBeDefined()
 			retirement.positions = [position(status)]
@@ -384,7 +372,7 @@ describe('Drain & Retire planning', () => {
 		} catch (error) {
 			recordV3ScanFailure(state, current, error)
 		}
-		const assessment = assessRetirement({ blockHash: canonicalBlockHash, blockNumber: 100n, canonicalScanComplete: true, evaluations: [], retirement: state.retirement, snapshot: emptySnapshot(), state, v3: [] })
+		const assessment = assessRetirement({ blockHash: canonicalBlockHash, blockNumber: 100n, canonicalScanComplete: true, evaluations: [], retirement: state.retirement, snapshot: drainedWalletSnapshotFixture(), state, v3: [] })
 		applyRetirementAssessment(state.retirement, assessment, canonicalBlockHash, 100n, completionBinding, now)
 		expect(current.status).toBe('blocked')
 		expect(assessment).toMatchObject({ blockers: [{ category: 'ambiguous-position', id: current.id }], status: 'blocked' })
@@ -422,7 +410,7 @@ describe('Drain & Retire planning', () => {
 	})
 
 	test('does not equate an empty plan with completion when approvals remain', () => {
-		const snapshot = emptySnapshot()
+		const snapshot = drainedWalletSnapshotFixture()
 		snapshot.wallet.tokens = [{ address: address(40), allowances: { [address(41)]: '1' }, balance: '0', openOracleCredit: '0', symbol: 'TEST' }]
 		const state = initialDurableState(31337)
 		const result = assessRetirement({ blockHash: hash(1), blockNumber: 1n, canonicalScanComplete: true, evaluations: [], retirement: request(), snapshot, state, v3: [] })
@@ -431,7 +419,7 @@ describe('Drain & Retire planning', () => {
 	})
 
 	test('blocks completion and profile replacement for an unresolved semantic workflow failure', async () => {
-		const snapshot = emptySnapshot()
+		const snapshot = drainedWalletSnapshotFixture()
 		const workflow = createDurableWorkflow(plan('trading.position.exit', 'semantic-failure'))
 		markWorkflowFailed(workflow, 'step', new Error('Canonical postcondition was not proven'), 'semantic-failure')
 		const durable = initialDurableState(31_337, true, 'profile:test', snapshot.wallet.address)
@@ -452,7 +440,7 @@ describe('Drain & Retire planning', () => {
 	})
 
 	test('revokes ERC-20, ERC-1155, and LP approvals one deterministic target at a time', () => {
-		const snapshot = emptySnapshot()
+		const snapshot = drainedWalletSnapshotFixture()
 		snapshot.wallet.tokens = [{ address: address(40), allowances: {}, balance: '0', openOracleCredit: '0', openOracleInternalAllowanceToSelf: '1', symbol: 'TEST' }]
 		expect(buildAllowanceRevocationPlan(snapshot, 1)?.definitionId).toBe('retirement.allowance.revoke-open-oracle-internal')
 		snapshot.wallet.tokens = [{ address: address(40), allowances: { [address(41)]: '1' }, balance: '0', openOracleCredit: '0', symbol: 'TEST' }]
@@ -466,7 +454,7 @@ describe('Drain & Retire planning', () => {
 	})
 
 	test('withdraws native OpenOracle credit to exactly its sentinel', () => {
-		const snapshot = emptySnapshot()
+		const snapshot = drainedWalletSnapshotFixture()
 		snapshot.wallet.openOracleEthCredit = '9'
 		const withdrawal = buildNativeOpenOracleCreditPlan(snapshot, request(), 0)
 		expect(withdrawal).toMatchObject({ definitionId: 'retirement.open-oracle.withdraw-native', metadata: { amount: '8' } })
@@ -484,7 +472,7 @@ describe('Drain & Retire planning', () => {
 	})
 
 	test('does not hide retained WETH or pending V3 verification in a drained proof', () => {
-		const snapshot = emptySnapshot()
+		const snapshot = drainedWalletSnapshotFixture()
 		snapshot.wallet.tokens = [{ address: snapshot.deployments.weth, allowances: {}, balance: '3', openOracleCredit: '0', symbol: 'WETH' }]
 		const retirement = request()
 		retirement.policies.unwrapWeth = false
@@ -496,7 +484,7 @@ describe('Drain & Retire planning', () => {
 	})
 
 	test('does not hide custom LP or existing migration claims from completion', () => {
-		const snapshot = emptySnapshot()
+		const snapshot = drainedWalletSnapshotFixture()
 		const retirement = request()
 		snapshot.wallet.lpTokens = [{ allowanceToRouter: '0', balance: '3', pair: address(81) }]
 		let result = assessRetirement({ blockHash: hash(1), blockNumber: 1n, canonicalScanComplete: true, evaluations: [], retirement, snapshot, state: initialDurableState(31337), v3: [] })
@@ -526,7 +514,7 @@ describe('Drain & Retire planning', () => {
 	})
 
 	test('unwraps WETH in bounded chunks and keeps ETH and REP with the signer', () => {
-		const snapshot = emptySnapshot()
+		const snapshot = drainedWalletSnapshotFixture()
 		const retirement = request()
 		const limits = { maximumEthAttoEth: 10n, maximumGasCostAttoEth: 1n, maximumRepAttoRep: 5n, minimumEthReserveAttoEth: 3n }
 		snapshot.wallet.tokens = [{ address: snapshot.deployments.weth, allowances: {}, balance: '12', openOracleCredit: '0', symbol: 'WETH' }]
@@ -539,7 +527,7 @@ describe('Drain & Retire planning', () => {
 	})
 
 	test('retains ETH and REP in the signer wallet after recovery', () => {
-		const snapshot = emptySnapshot()
+		const snapshot = drainedWalletSnapshotFixture()
 		const retirement = request()
 		const limits = { maximumEthAttoEth: 100n, maximumGasCostAttoEth: 4n, maximumRepAttoRep: 5n, minimumEthReserveAttoEth: 3n }
 		snapshot.wallet.ethBalanceAttoEth = '20'
@@ -555,7 +543,7 @@ describe('Drain & Retire planning', () => {
 	})
 
 	test('does not execute retirement actions until canonical lifecycle discovery is complete', async () => {
-		const snapshot = emptySnapshot()
+		const snapshot = drainedWalletSnapshotFixture()
 		snapshot.wallet.tokens = [{ address: address(40), allowances: { [address(41)]: '1' }, balance: '0', openOracleCredit: '0', symbol: 'TEST' }]
 		const state = initialRuntimeState(false, snapshot.wallet.address, snapshot.chainId)
 		request(state.retirement)
@@ -579,7 +567,7 @@ describe('Drain & Retire planning', () => {
 	})
 
 	test('waits for delayed obligations and blocks ambiguous ownership', () => {
-		const snapshot = emptySnapshot()
+		const snapshot = drainedWalletSnapshotFixture()
 		const state = initialDurableState(31337)
 		state.obligations.push({
 			automaticRetryCount: 0,
@@ -611,7 +599,7 @@ describe('Drain & Retire planning', () => {
 	})
 
 	test('records exact completion proof and residual completion separately', () => {
-		const snapshot = emptySnapshot()
+		const snapshot = drainedWalletSnapshotFixture()
 		const state = initialDurableState(31337)
 		const retirement = request()
 		const incomplete = assessRetirement({ blockHash: hash(0), blockNumber: 0n, canonicalScanComplete: false, evaluations: [], retirement, snapshot, state, v3: [] })
@@ -630,7 +618,7 @@ describe('Drain & Retire planning', () => {
 	})
 
 	test('keeps a clean completion block stable across later clean scans', () => {
-		const snapshot = emptySnapshot()
+		const snapshot = drainedWalletSnapshotFixture()
 		const retirement = request()
 		const state = initialDurableState(31337)
 		const first = assessRetirement({ blockHash: hash(100), blockNumber: 100n, canonicalScanComplete: true, evaluations: [], retirement, snapshot, state, v3: [] })
@@ -644,7 +632,7 @@ describe('Drain & Retire planning', () => {
 	})
 
 	test('binds a residual replacement override to current completion evidence, profile, and recipient', async () => {
-		const snapshot = emptySnapshot()
+		const snapshot = drainedWalletSnapshotFixture()
 		const pool = snapshot.pools[0]
 		if (pool === undefined) throw new Error('Pool fixture is missing')
 		pool.questionOutcome = 1
@@ -741,7 +729,7 @@ describe('Drain & Retire planning', () => {
 	})
 
 	test('persists cumulative canonical balance increases across recovery and sweeping', () => {
-		const snapshot = emptySnapshot()
+		const snapshot = drainedWalletSnapshotFixture()
 		snapshot.wallet.ethBalanceAttoEth = '10'
 		snapshot.wallet.tokens = [{ address: address(40), allowances: {}, balance: '3', openOracleCredit: '0', symbol: 'REP' }]
 		snapshot.wallet.lpTokens = [{ allowanceToRouter: '0', balance: '2', pair: address(41) }]
@@ -826,7 +814,7 @@ describe('Drain & Retire planning', () => {
 })
 
 test('retirement dispatch keeps ordinary scheduling paused', async () => {
-	const snapshot = emptySnapshot()
+	const snapshot = drainedWalletSnapshotFixture()
 	const settings = parseSettings(example)
 	const directory = await mkdtemp(join(tmpdir(), 'chaos-retirement-dispatch-'))
 	temporaryDirectories.push(directory)
@@ -886,7 +874,7 @@ test('retirement dispatch keeps ordinary scheduling paused', async () => {
 })
 
 test('V3 retirement continuation rebuilds collect after confirmed burn', () => {
-	const snapshot = emptySnapshot()
+	const snapshot = drainedWalletSnapshotFixture()
 	const owned = position()
 	const state = initialRuntimeState(false, snapshot.wallet.address, snapshot.chainId, initialDurableState(snapshot.chainId, false, 'profile:test', snapshot.wallet.address))
 	state.retirement = request()
@@ -928,7 +916,7 @@ test('V3 retirement continuation rebuilds collect after confirmed burn', () => {
 })
 
 test('a locally rejected sweep dispatch leaves retirement cancellable', async () => {
-	const snapshot = emptySnapshot()
+	const snapshot = drainedWalletSnapshotFixture()
 	snapshot.wallet.ethBalanceAttoEth = '0'
 	snapshot.wallet.tokens = [{ address: snapshot.deployments.weth, allowances: {}, balance: '7', openOracleCredit: '0', symbol: 'WETH' }]
 	const settings = parseSettings(example)

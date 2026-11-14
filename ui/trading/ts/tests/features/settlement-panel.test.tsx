@@ -9,6 +9,7 @@ import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { buttonByLabel } from '../support/dom.js'
 import { etherScaleMarketFixture } from '../support/liveMarketFixture.js'
+import { passthroughWorkflowPanelProps } from '../support/liveWorkflowPanelProps.js'
 import { formatDecimalPrecisionError } from '@zoltar/ui-core-shared/copy/common.js'
 
 const account = getAddress(`0x${'11'.repeat(20)}`)
@@ -40,24 +41,16 @@ const walletClient = createWalletClient({
 function renderPanel(market: LiveMarket, holdings: Readonly<{ invalid: bigint; yes: bigint; no: bigint }>, nowSeconds = 100n, settings = DEFAULT_TRADE_SETTINGS, options: Readonly<{ services?: LiveSettlementServices; refresh?(options?: Readonly<{ background?: boolean }>): Promise<void> }> = {}) {
 	return renderIntoDocument(
 		<LiveSettlementControls
+			{...passthroughWorkflowPanelProps}
 			configuration={configuration}
 			market={market}
 			balances={{ scope: shareBalanceScope(market), ...holdings, lp: 0n }}
 			balanceState='ready'
-			balanceError={undefined}
 			account={account}
 			walletClient={walletClient}
-			networkMismatchReason={undefined}
-			wallet={{ actionLabel: 'Connect wallet', connect: async () => undefined }}
 			settings={settings}
 			nowSeconds={nowSeconds}
-			externallyLocked={false}
 			refresh={options.refresh ?? (async () => undefined)}
-			onKnownReceipt={() => undefined}
-			executeWithCurrentWalletContext={async (_account, _network, _wallet, action) => await action()}
-			createGuardedWalletWrite={() => async write => await write()}
-			retryBalances={async () => undefined}
-			onWorkflowLockChange={() => undefined}
 			services={options.services ?? services}
 		/>,
 	)

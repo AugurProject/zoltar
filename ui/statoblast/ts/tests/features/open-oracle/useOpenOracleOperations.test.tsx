@@ -961,6 +961,46 @@ describe('useOpenOracleOperations', () => {
 		expect(approveErc20.mock.calls[0]?.[3]).toBe(51n)
 	})
 
+	test.each([
+		{ amount: 0n, resetting: true },
+		{ amount: 51n, resetting: false },
+	])('marks the active token approval as a reset only while approving $amount', async ({ amount, resetting }) => {
+		const approval = createDeferred<{ action: 'approveToken2'; hash: `0x${string}` }>()
+		const approveErc20 = mock(async (_client: TestOpenOracleWriteClient, _tokenAddress: Address, _spenderAddress: Address, _amount: bigint, _action: 'approveToken1' | 'approveToken2') => await approval.promise)
+		const dependencies = createOpenOracleOperationsDependencies({
+			approveErc20,
+			loadOpenOracleReportDetails: mock(async () => createOpenOracleReportDetails({ currentReporter: getAddress('0x00000000000000000000000000000000000000dd'), reportTimestamp: 1n, settlementTime: 100n })),
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		trackCleanup(renderedComponent.cleanup)
+
+		await act(async () => {
+			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+		})
+		await act(() => {
+			requireHookState(hookState).setOpenOracleForm(current => ({ ...current, disputeNewAmount1: '101', disputeNewAmount2: '26' }))
+		})
+		expect(requireHookState(hookState).openOracleApprovalResetting).toBe(false)
+		let pendingApproval: Promise<void> | undefined
+		await act(() => {
+			pendingApproval = requireHookState(hookState).approveToken2(amount)
+		})
+		await waitFor(() => expect(approveErc20).toHaveBeenCalledTimes(1))
+		expect(requireHookState(hookState).openOracleActiveAction).toBe('approveToken2')
+		expect(requireHookState(hookState).openOracleApprovalResetting).toBe(resetting)
+
+		await act(async () => {
+			approval.resolve({ action: 'approveToken2', hash: '0x00000000000000000000000000000000000000000000000000000000000000db' })
+			await pendingApproval
+		})
+		expect(requireHookState(hookState).openOracleActiveAction).toBeUndefined()
+		expect(requireHookState(hookState).openOracleApprovalResetting).toBe(false)
+	})
+
 	test('approval failures use base and quote token terminology', async () => {
 		const dependencies = createOpenOracleOperationsDependencies({
 			loadOpenOracleReportDetails: mock(async () =>

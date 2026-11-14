@@ -32,6 +32,14 @@ const lifecycle = installDomTestLifecycle({
 	},
 })
 
+type ScalarQuestion = { answerUnit: string; numTicks: bigint; displayValueMin: bigint; displayValueMax: bigint }
+
+/** Renders a scalar fork whose single outcome page carries `question`; child universes resolve through `loadOutcome`. */
+async function renderScalarFork(question: ScalarQuestion, loadOutcome: Parameters<typeof UniverseOutcomeNavigation>[0]['loadOutcome']) {
+	const loadPage = async () => ({ ...page, choices: [], hasNextPage: false, question: createMarketDetails({ ...question, marketType: 'scalar', outcomeLabels: [] }) })
+	return lifecycle.trackRendered(await renderIntoDocument(<UniverseOutcomeNavigation universe={universe} loadPage={loadPage} loadOutcome={loadOutcome} />))
+}
+
 describe('outcome-based universe traversal', () => {
 	test('refreshes deployment statuses on the current page without clearing visible outcomes', async () => {
 		const pending = createDeferred<UniverseOutcomePage>()
@@ -260,18 +268,10 @@ describe('outcome-based universe traversal', () => {
 	test('scalar forks use an exact picker and resolve only its selected child, even with huge tick counts', async () => {
 		const question = { answerUnit: 'units', numTicks: 10n ** 25n, displayValueMin: 0n, displayValueMax: 10n ** 43n }
 		const indexes: bigint[] = []
-		const view = lifecycle.trackRendered(
-			await renderIntoDocument(
-				<UniverseOutcomeNavigation
-					universe={universe}
-					loadPage={async () => ({ ...page, choices: [], hasNextPage: false, question: createMarketDetails({ ...question, marketType: 'scalar', outcomeLabels: [] }) })}
-					loadOutcome={async (_address, _id, index) => {
-						indexes.push(index)
-						return { universeId: 30n, exists: true }
-					}}
-				/>,
-			),
-		)
+		const view = await renderScalarFork(question, async (_address, _id, index) => {
+			indexes.push(index)
+			return { universeId: 30n, exists: true }
+		})
 		const q = within(view.container)
 		await waitFor(() => expect(q.queryByRole('textbox', { name: 'Scalar value' })).not.toBeNull())
 		await waitFor(() => expect(indexes).toHaveLength(1))
@@ -297,18 +297,10 @@ describe('outcome-based universe traversal', () => {
 		const pending = createDeferred<{ universeId: bigint; exists: boolean }>()
 		let deployed = false
 		const indexes: bigint[] = []
-		const view = lifecycle.trackRendered(
-			await renderIntoDocument(
-				<UniverseOutcomeNavigation
-					universe={universe}
-					loadPage={async () => ({ ...page, choices: [], hasNextPage: false, question: createMarketDetails({ ...question, marketType: 'scalar', outcomeLabels: [] }) })}
-					loadOutcome={async (_address, _id, index) => {
-						indexes.push(index)
-						return index === getScalarOutcomeIndex(question, 0n) ? await pending.promise : { universeId: 40n, exists: deployed }
-					}}
-				/>,
-			),
-		)
+		const view = await renderScalarFork(question, async (_address, _id, index) => {
+			indexes.push(index)
+			return index === getScalarOutcomeIndex(question, 0n) ? await pending.promise : { universeId: 40n, exists: deployed }
+		})
 		const q = within(view.container)
 		await waitFor(() => expect(q.queryByRole('slider', { name: 'Select outcome' })).not.toBeNull())
 		await waitFor(() => expect(indexes).toHaveLength(1))
@@ -331,18 +323,10 @@ describe('outcome-based universe traversal', () => {
 	test('moving the scalar slider reads only the final selection after it settles', async () => {
 		const question = { answerUnit: '°C', numTicks: 20n, displayValueMin: 0n, displayValueMax: 100n * 10n ** 18n }
 		const indexes: bigint[] = []
-		const view = lifecycle.trackRendered(
-			await renderIntoDocument(
-				<UniverseOutcomeNavigation
-					universe={universe}
-					loadPage={async () => ({ ...page, choices: [], hasNextPage: false, question: createMarketDetails({ ...question, marketType: 'scalar', outcomeLabels: [] }) })}
-					loadOutcome={async (_address, _id, index) => {
-						indexes.push(index)
-						return { universeId: 40n, exists: true }
-					}}
-				/>,
-			),
-		)
+		const view = await renderScalarFork(question, async (_address, _id, index) => {
+			indexes.push(index)
+			return { universeId: 40n, exists: true }
+		})
 		const q = within(view.container)
 		await waitFor(() => expect(indexes).toHaveLength(1))
 		const slider = q.getByRole('slider', { name: 'Select outcome' })
@@ -357,19 +341,11 @@ describe('outcome-based universe traversal', () => {
 	test('names the scalar outcome and preserves a nested timeout reason with a retry', async () => {
 		const question = { answerUnit: '°C', numTicks: 20n, displayValueMin: 0n, displayValueMax: 100n * 10n ** 18n }
 		const indexes: bigint[] = []
-		const view = lifecycle.trackRendered(
-			await renderIntoDocument(
-				<UniverseOutcomeNavigation
-					universe={universe}
-					loadPage={async () => ({ ...page, choices: [], question: createMarketDetails({ ...question, marketType: 'scalar', outcomeLabels: [] }) })}
-					loadOutcome={async (_address, _id, index) => {
-						indexes.push(index)
-						if (indexes.length === 1) throw new Error('Unknown error', { cause: new Error('RPC read timed out. Retry loading data.') })
-						return { universeId: 40n, exists: true }
-					}}
-				/>,
-			),
-		)
+		const view = await renderScalarFork(question, async (_address, _id, index) => {
+			indexes.push(index)
+			if (indexes.length === 1) throw new Error('Unknown error', { cause: new Error('RPC read timed out. Retry loading data.') })
+			return { universeId: 40n, exists: true }
+		})
 		const q = within(view.container)
 		await waitFor(() => expect(q.queryByText('The 0 °C child universe could not be loaded. Reason: RPC read timed out. Retry loading data.')).not.toBeNull())
 		fireEvent.click(q.getByRole('button', { name: 'Retry' }))

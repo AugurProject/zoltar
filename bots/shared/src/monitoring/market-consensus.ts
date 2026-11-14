@@ -129,7 +129,8 @@ export type MarketConsensusEstimate = {
 	sourceCount: number
 }
 
-function median(values: readonly bigint[]) {
+/** Median of the observations, averaging the two middle values; undefined without observations. */
+export function median(values: readonly bigint[]) {
 	if (values.length === 0) return undefined
 	const sorted = [...values].sort(compareBigint)
 	const middle = Math.floor(sorted.length / 2)
