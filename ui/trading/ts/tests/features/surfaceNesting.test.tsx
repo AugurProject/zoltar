@@ -9,7 +9,7 @@ import { shareBalanceScope, type LiveMarket } from '../../protocol/live.js'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { buttonByLabel, waitForDom } from '../support/dom.js'
 import { etherScaleMarketFixture } from '../support/liveMarketFixture.js'
-import { connectedWalletServices, discoveryPage, installSilentInjectedWallet, offlineControllerServices } from '../support/liveTradingServices.js'
+import { connectedMarketServices, installSilentInjectedWallet } from '../support/liveTradingServices.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const pool = `0x${'22'.repeat(20)}` as Address
@@ -35,12 +35,7 @@ describe('trading surface nesting', () => {
 	})
 
 	const services = {
-		...offlineControllerServices,
-		discoverAddressedMarket: async () => discoveryPage([{ ...market }]),
-		discoverTradingMarketPage: async () => discoveryPage([{ ...market }]),
-		discoverSavedMarkets: async () => discoveryPage([{ ...market }]),
-		...connectedWalletServices(account, configuration.chainId),
-		createTradingWalletClient: () => ({ waitForTransactionReceipt: async () => ({ status: 'success' as const }) }),
+		...connectedMarketServices(market, account, configuration.chainId),
 		loadLiveBalances: async (_client: unknown, selected: LiveMarket) => ({ scope: shareBalanceScope(selected), invalid: 10n ** 18n, yes: 10n ** 18n, no: 10n ** 18n, lp: 10n ** 18n }),
 	}
 

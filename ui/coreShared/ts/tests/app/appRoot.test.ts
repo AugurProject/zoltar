@@ -11,6 +11,29 @@ import { within } from '../testUtils/queries.js'
 
 const applicationTitle = 'Zoltar'
 
+/** Mounts `title` at the current URL and checks that it neither initializes nor renders its root before a universe is chosen. */
+async function mountAwaitingUniverseChoice(title: string) {
+	const initialize = mock(async () => undefined)
+	const root = mock(() => createElement('p', {}, 'Application ready'))
+	await act(async () => await mountApp({ applicationTitle: title, initialize, root }))
+	expect(initialize).not.toHaveBeenCalled()
+	expect(root).not.toHaveBeenCalled()
+}
+
+/** The accessible names of the universe-choice buttons, in order. */
+function outcomeButtonLabels() {
+	return within(document.querySelector('.migration-outcome-list') ?? document.body)
+		.getAllByRole('button')
+		.map(button => button.getAttribute('aria-label'))
+}
+
+/** Mounts the application with an initialization that rejects with `message`. */
+async function mountWithFailedInitialization(message: string) {
+	await act(async () => {
+		await mountApp({ applicationTitle, initialize: async () => Promise.reject(new Error(message)), root: () => createElement('p', {}, 'Application ready') })
+	})
+}
+
 installDomTestLifecycle({
 	url: 'http://localhost/?genesis=yes',
 	afterTest: async () => {
@@ -38,11 +61,7 @@ test('shows the historical fork resolution criteria and verified market metadata
 for (const applicationTitle of ['Zoltar', 'Augur Statoblast', 'Statoblast Trading']) {
 	test(`keeps ${applicationTitle} branding and the Augur v2 universe context visible before a deployment is selected`, async () => {
 		window.history.replaceState({}, '', '/')
-		const initialize = mock(async () => undefined)
-		const root = mock(() => createElement('p', {}, 'Application ready'))
-		await act(async () => await mountApp({ applicationTitle, initialize, root }))
-		expect(initialize).not.toHaveBeenCalled()
-		expect(root).not.toHaveBeenCalled()
+		await mountAwaitingUniverseChoice(applicationTitle)
 		expect(document.querySelector('.app-chrome .header-toolbar .application-brand-name')?.textContent).toBe(applicationTitle)
 		expect(document.querySelector('.application-brand img')?.getAttribute('src')).toBe('./favicon.svg')
 		expect(document.querySelector('.application-brand img')?.getAttribute('alt')).toBe('')
@@ -60,11 +79,7 @@ for (const applicationTitle of ['Zoltar', 'Augur Statoblast', 'Statoblast Tradin
 			expect(button.hasAttribute('disabled')).toBe(false)
 			expect(button.hasAttribute('aria-describedby')).toBe(false)
 		}
-		expect(
-			within(document.querySelector('.migration-outcome-list') ?? document.body)
-				.getAllByRole('button')
-				.map(button => button.getAttribute('aria-label')),
-		).toEqual(['Open Yes universe', 'Open No universe'])
+		expect(outcomeButtonLabels()).toEqual(['Open Yes universe', 'Open No universe'])
 	})
 }
 
@@ -97,17 +112,9 @@ test('links the historical Augur fork to Ethereum mainnet while the application 
 test('requires an explicit Yes or No choice before initializing or mounting universe-dependent applications', async () => {
 	for (const search of ['', '?universe=0', '?genesis=repv2', '?genesis=invalid']) {
 		window.history.replaceState({}, '', `/${search}`)
-		const initialize = mock(async () => undefined)
-		const root = mock(() => createElement('p', {}, 'Application ready'))
-		await act(async () => await mountApp({ applicationTitle, initialize, root }))
-		expect(initialize).not.toHaveBeenCalled()
-		expect(root).not.toHaveBeenCalled()
+		await mountAwaitingUniverseChoice(applicationTitle)
 		expect(within(document.body).getByRole('heading', { name: 'Choose the truthful universe' })).not.toBeNull()
-		expect(
-			within(document.querySelector('.migration-outcome-list') ?? document.body)
-				.getAllByRole('button')
-				.map(button => button.getAttribute('aria-label')),
-		).toEqual(['Open Yes universe', 'Open No universe'])
+		expect(outcomeButtonLabels()).toEqual(['Open Yes universe', 'Open No universe'])
 		expect(within(document.body).getByRole('heading', { name: 'Child universes', level: 3 })).not.toBeNull()
 		await act(() => render(null, document.body))
 	}
@@ -333,9 +340,7 @@ test('replaces the static loading placeholder with the initialization error inst
 	document.body.innerHTML = '<div class="app-frame"><main>Loading…</main></div>'
 	const errorLog = spyOn(console, 'error').mockImplementation(() => undefined)
 	try {
-		await act(async () => {
-			await mountApp({ applicationTitle, initialize: async () => Promise.reject(new Error('Read RPC unavailable')), root: () => createElement('p', {}, 'Application ready') })
-		})
+		await mountWithFailedInitialization('Read RPC unavailable')
 		expect(within(document.body).getByRole('alert').textContent).toContain('Read RPC unavailable')
 		expect(document.querySelectorAll('main')).toHaveLength(1)
 		expect(document.querySelectorAll('.app-frame')).toHaveLength(1)
@@ -349,9 +354,7 @@ test('keeps the initialization error and its Retry when a retry fails again', as
 	document.body.innerHTML = '<div class="app-frame"><main>Loading…</main></div>'
 	const errorLog = spyOn(console, 'error').mockImplementation(() => undefined)
 	try {
-		await act(async () => {
-			await mountApp({ applicationTitle, initialize: async () => Promise.reject(new Error('Read RPC unavailable')), root: () => createElement('p', {}, 'Application ready') })
-		})
+		await mountWithFailedInitialization('Read RPC unavailable')
 		await act(async () => {
 			within(document.body).getByRole('button', { name: 'Retry' }).click()
 			await Promise.resolve()

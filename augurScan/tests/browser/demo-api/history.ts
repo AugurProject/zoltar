@@ -1,5 +1,4 @@
 import { requiredArrayItem } from '../../../browser/api-decoding.ts'
-import type { DemoContext } from '../../../browser/demo-runtime.ts'
 import { demoAmmPriceHistory, demoDenseUniswapRepEthPriceHistory, demoRepEthPriceHistory, demoUniswapRepEthPriceHistory } from '../demo-fixtures.ts'
 import { demoAddress, demoHash } from './chain-fixtures.ts'
 import type { DemoEnvironment } from './environment.ts'
@@ -10,13 +9,6 @@ const demoDisplayedRepEthPrices = <T extends { rep_per_eth_1e18: string }>(price
 	if (priceDemo === 'constant-nonzero') return [firstRepEthPrice]
 	if (priceDemo === 'constant-repeated') return repEthPrices.slice(0, 3).map(price => ({ ...price, rep_per_eth_1e18: firstRepEthPrice.rep_per_eth_1e18 }))
 	return [...repEthPrices]
-}
-const demoRetentionRate = (context: DemoContext, rate: string) => {
-	const scenario = context.pageUrl.searchParams.get('retentionDemo')
-	if (scenario === 'none') return (10n ** 18n).toString()
-	if (scenario === 'full-fee') return '0'
-	if (scenario === 'missing') return null
-	return rate
 }
 const demoUniswapPrices = (priceDemo: string | null) => (priceDemo === 'eight' ? demoDenseUniswapRepEthPriceHistory() : demoUniswapRepEthPriceHistory())
 const DEMO_OPEN_ORACLE_HISTORY = [
@@ -38,9 +30,8 @@ export const demoHistory = (env: DemoEnvironment, path: string) => {
 	const requestedCollateral = context.pageUrl.searchParams.get('collateral')
 	const decimals = requestedCollateral === 'USDC' || requestedCollateral === 'USDT' ? 6 : 18
 	const collateralScale = 10n ** BigInt(18 - decimals)
-	const collateralAmount = (value: bigint) => String(value / collateralScale)
 	const { priceDemo } = env.settings
-	const { mainnetDemoQuestion, demoPools, demoVaults, demoUniverses } = env.fixtures
+	const { mainnetDemoQuestion, demoPools, demoUniverses } = env.fixtures
 	const request = new URL(path, location.origin)
 	const parts = request.pathname.split('/')
 	const type = parts[4]
@@ -79,7 +70,7 @@ export const demoHistory = (env: DemoEnvironment, path: string) => {
 	if (type === 'pools') {
 		const poolItem = demoPools.find(item => item.pool_address === parts[6]) ?? requiredArrayItem(demoPools, 0, 'Default demo pool')
 		const collateral = demoSeries(poolItem.settlement_collateral_atto_eth)
-		const capacity = demoSeries(poolItem.total_capacity_ownership_atto_rep, 12, 0.4)
+		const shareSupply = demoSeries(poolItem.share_token_supply_atto_shares, 12, 0.3)
 		const hasAmm = poolItem.question_id === mainnetDemoQuestion.question_id
 		const hasRepEthPrices = poolItem !== requiredArrayItem(demoPools, 2, 'REP price demo pool')
 		const repEthPrices = demoRepEthPriceHistory().map(price => ({ ...price, rep_per_eth_1e18: String(BigInt(price.rep_per_eth_1e18) * collateralScale) }))
@@ -91,11 +82,8 @@ export const demoHistory = (env: DemoEnvironment, path: string) => {
 					timestamp: new Date(Date.now() - (11 - index) * 7 * 86_400_000).toISOString(),
 					block_number: String(23100000 + index * 7700),
 					settlement_collateral_atto_eth: value,
-					total_capacity_ownership_atto_rep: requiredArrayItem(capacity, index, 'Demo capacity point'),
-					total_claimable_vault_fees_atto_eth: collateralAmount(BigInt(20 + index * 8) * 10n ** 16n),
-					fee_index: context.pageUrl.searchParams.get('feeSeries') === 'missing' ? undefined : String(BigInt(index + 1) * 10n ** 16n),
-					unallocated_accrued_fees_atto_eth: ['missing', 'partial'].includes(context.pageUrl.searchParams.get('feeSeries') ?? '') ? undefined : collateralAmount(BigInt(index + 1) * 10n ** 15n),
-					current_retention_rate: demoRetentionRate(context, poolItem.current_retention_rate),
+					reason: index === 0 ? 5 : 0,
+					share_token_supply_atto_shares: requiredArrayItem(shareSupply, index, 'Demo share supply point'),
 				})),
 				events: [],
 				market: hasAmm
@@ -121,23 +109,6 @@ export const demoHistory = (env: DemoEnvironment, path: string) => {
 					: [],
 			},
 			['snapshots', 'events', 'ammPrices', 'repEthPrices', 'uniswapRepEthPrices', 'openOracleHistory'],
-		)
-	}
-	if (type === 'vaults') {
-		const vaultItem = demoVaults.find(item => item.pool_address === parts[6] && item.vault_address === parts[7]) ?? requiredArrayItem(demoVaults, 0, 'Default demo vault')
-		const rep = demoSeries(vaultItem.rep_backing_units, 10, 0.45)
-		const capacity = demoSeries(vaultItem.capacity_ownership_atto_rep, 10, 0.5)
-		return pagedHistory(
-			{
-				snapshots: rep.map((value, index) => ({
-					timestamp: new Date(Date.now() - (9 - index) * 8 * 86_400_000).toISOString(),
-					block_number: String(23110000 + index * 6800),
-					rep_backing_units: value,
-					capacity_ownership_atto_rep: requiredArrayItem(capacity, index, 'Demo vault capacity point'),
-					claimable_fees_atto_eth: String(BigInt(1 + index) * 10n ** 16n),
-				})),
-			},
-			['snapshots'],
 		)
 	}
 	if (type === 'universes') {

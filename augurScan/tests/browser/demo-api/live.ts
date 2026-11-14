@@ -29,7 +29,7 @@ export const applyDemoBlock = (env: DemoEnvironment, payload: LiveEventPayload) 
 		transaction_index: 0,
 		log_index: counters.liveSequence,
 		tx_hash: `0x${(BigInt(counters.liveSequence) + 10_000n).toString(16).padStart(64, '0')}`,
-		event_name: counters.liveSequence % 2 === 0 ? 'PoolAccountingCheckpoint' : 'Transfer',
+		event_name: counters.liveSequence % 2 === 0 ? 'QuestionAccountingCheckpoint' : 'Transfer',
 		summary: counters.liveSequence % 2 === 0 ? 'New pool accounting checkpoint' : 'New token transfer',
 	})
 	if (demoLogs.length > 120) demoLogs.length = 120

@@ -88,7 +88,7 @@ export const requireChainId = (chainId: string): string => {
 	return chainId
 }
 
-export const isStateTab = (value: string | undefined | null): value is StateTab => value === 'pools' || value === 'vaults' || value === 'questions' || value === 'universes'
+export const isStateTab = (value: string | undefined | null): value is StateTab => value === 'pools' || value === 'questions' || value === 'universes'
 
 /** Advances every request-version counter so in-flight responses for the previous route are discarded. */
 export const invalidateStateRequestVersions = (state: ScannerState): void => {

@@ -1,4 +1,4 @@
-import type { JsonRecord, JsonValue } from './api-validation.ts'
+import { isRecord, type JsonRecord, type JsonValue } from './api-validation.ts'
 import { exactUnit } from './format.ts'
 
 export const operationsForkChildCount = (formattedCount: string, value: JsonValue | undefined): string => `${formattedCount} ${Number(value) === 1 ? 'child' : 'children'}`
@@ -24,7 +24,7 @@ export const operationsRouteFreshness = (asOf: JsonRecord, liveConnected: boolea
 	return `As of block #${operationsInteger(asOf['blockNumber'])} · ${operationsInteger(asOf['lagBlocks'])} blocks behind · ${liveConnected ? 'live updates connected' : 'live updates reconnecting'}`
 }
 
-type OperationsDetailKind = 'auction' | 'escalation' | 'fork' | 'pool' | 'report' | 'trading' | 'vault'
+type OperationsDetailKind = 'auction' | 'escalation' | 'fork' | 'pool' | 'report' | 'trading'
 
 const operationsDetailCatalogPaths: Readonly<Record<OperationsDetailKind, string>> = {
 	auction: '/operations/auctions',
@@ -33,7 +33,6 @@ const operationsDetailCatalogPaths: Readonly<Record<OperationsDetailKind, string
 	pool: '/operations/risk',
 	report: '/operations/reports',
 	trading: '/operations/trading',
-	vault: '/operations/risk',
 }
 
 export const operationsDetailHeaderPresentation = (kind: OperationsDetailKind, asOf: JsonRecord, liveConnected: boolean) => {
@@ -65,55 +64,31 @@ const poolProtocolStateLabel = (value: JsonValue | undefined): string => {
 	}
 }
 
-const vaultProtocolStateLabel = (value: JsonValue | undefined): string => {
-	switch (String(value).toLowerCase()) {
-		case 'healthy':
-			return 'Healthy'
-		case 'liquidatable':
-			return 'Liquidatable'
-		case 'bad-debt':
-			return 'Bad debt'
-		case 'unavailable':
-			return 'Unavailable'
-		default:
-			return 'Unrecognized vault state'
-	}
+const riskAssessments: Readonly<Record<string, { readonly scannerAssessment: string; readonly scannerTone: string }>> = {
+	healthy: { scannerAssessment: 'Healthy', scannerTone: 'healthy' },
+	warning: { scannerAssessment: 'Warning', scannerTone: 'warning' },
+	critical: { scannerAssessment: 'Critical', scannerTone: 'critical' },
+	unavailable: { scannerAssessment: 'Unavailable', scannerTone: 'unavailable' },
 }
 
-export const operationsRiskPresentation = (kind: 'pool' | 'vault', protocolState: JsonValue | undefined, scannerSeverity: JsonValue | undefined) => {
-	const severity = String(scannerSeverity).toLowerCase()
-	switch (severity) {
-		case 'healthy':
-			return {
-				protocolState: kind === 'pool' ? poolProtocolStateLabel(protocolState) : vaultProtocolStateLabel(protocolState),
-				scannerAssessment: 'Healthy',
-				scannerTone: 'healthy',
-			}
-		case 'warning':
-			return {
-				protocolState: kind === 'pool' ? poolProtocolStateLabel(protocolState) : vaultProtocolStateLabel(protocolState),
-				scannerAssessment: 'Warning',
-				scannerTone: 'warning',
-			}
-		case 'critical':
-			return {
-				protocolState: kind === 'pool' ? poolProtocolStateLabel(protocolState) : vaultProtocolStateLabel(protocolState),
-				scannerAssessment: 'Critical',
-				scannerTone: 'critical',
-			}
-		case 'unavailable':
-			return {
-				protocolState: kind === 'pool' ? poolProtocolStateLabel(protocolState) : vaultProtocolStateLabel(protocolState),
-				scannerAssessment: 'Unavailable',
-				scannerTone: 'unavailable',
-			}
-		default:
-			return {
-				protocolState: kind === 'pool' ? poolProtocolStateLabel(protocolState) : vaultProtocolStateLabel(protocolState),
-				scannerAssessment: 'Unrecognized assessment',
-				scannerTone: 'unavailable',
-			}
+export const operationsRiskPresentation = (protocolState: JsonValue | undefined, scannerSeverity: JsonValue | undefined) => ({
+	protocolState: poolProtocolStateLabel(protocolState),
+	...(riskAssessments[String(scannerSeverity).toLowerCase()] ?? { scannerAssessment: 'Unrecognized assessment', scannerTone: 'unavailable' }),
+})
+
+// CommitmentTakenOver carries position ids, the commitment moved and the REP award. The commitment is in the
+// ledger's collateral token, whose decimals a timeline entry does not carry, so it stays in explicit base units.
+export const takeoverSummary = (summaryData: unknown): string => {
+	const data = isRecord(summaryData) ? summaryData : {}
+	const integer = (key: string): string | undefined => {
+		const value = data[key]
+		return typeof value === 'string' && /^\d+$/.test(value) ? value : undefined
 	}
+	const [sourceId, receiverId, commitment, award] = [integer('sourceId'), integer('receiverId'), integer('commitment'), integer('awardAttoRep')]
+	const parts = [sourceId === undefined || receiverId === undefined ? undefined : `Position ${sourceId} → ${receiverId}`, commitment === undefined ? undefined : `commitment ${exactUnit(commitment, 0, 'collateral units')}`, award === undefined ? undefined : `award ${exactUnit(award, 18, 'REP')}`].filter(
+		(part): part is string => part !== undefined,
+	)
+	return parts.length === 0 ? 'Take-over evidence unavailable' : parts.join(' · ')
 }
 
 const snapshotReadStatusLabel = (readStatus: unknown) => {
@@ -132,10 +107,10 @@ export const operationsDetailSummaryPresentation = (
 		readonly snapshotReadStatus?: JsonValue | undefined
 	},
 ): { readonly label: string; readonly value: string } => {
-	if (kind === 'pool' || kind === 'vault')
+	if (kind === 'pool')
 		return {
 			label: 'Protocol state',
-			value: operationsRiskPresentation(kind, state.protocolState, state.scannerSeverity).protocolState,
+			value: operationsRiskPresentation(state.protocolState, state.scannerSeverity).protocolState,
 		}
 	if (kind === 'report') {
 		const value = state.lifecycleState ?? state.currentEvent
@@ -148,28 +123,7 @@ export const operationsDetailSummaryPresentation = (
 	}
 }
 
-export const operationsDetailEvidencePanelVisible = (kind: OperationsDetailKind, itemCount: number, hasMore: boolean, focusedContinuation: boolean): boolean => (kind === 'pool' || kind === 'vault' ? itemCount > 0 || hasMore || focusedContinuation : true)
-
-// Debt amounts are attoETH of the chain's native currency; nonces are identifiers, shown as written.
-const approvalFieldDefinitions = [
-	['maxCumulativeDebtAttoEth', 'maximum cumulative debt', 'native'],
-	['maxDebtPerLiquidationAttoEth', 'maximum debt per liquidation', 'native'],
-	['reservedDebtAttoEth', 'reserved debt', 'native'],
-	['consumedDebtAttoEth', 'consumed debt', 'native'],
-	['releasedDebtAttoEth', 'released debt', 'native'],
-	['resultingAvailableDebtAttoEth', 'resulting available debt', 'native'],
-	['resultingReservedDebtAttoEth', 'resulting reserved debt', 'native'],
-	['resultingConsumedDebtAttoEth', 'resulting consumed debt', 'native'],
-	['previousNonce', 'previous nonce', 'nonce'],
-	['newNonce', 'new nonce', 'nonce'],
-] as const
-
-export const approvalTransitionFields = (data: Readonly<Record<string, unknown>>, nativeSymbol: string): Array<{ readonly label: string; readonly value: string }> =>
-	approvalFieldDefinitions.flatMap(([key, label, kind]) => {
-		const value = data[key]
-		if (typeof value !== 'string') return []
-		return [{ label, value: kind === 'native' ? exactUnit(value, 18, nativeSymbol) : value }]
-	})
+export const operationsDetailEvidencePanelVisible = (kind: OperationsDetailKind, itemCount: number, hasMore: boolean, focusedContinuation: boolean): boolean => (kind === 'pool' ? itemCount > 0 || hasMore || focusedContinuation : true)
 
 /** The URL a filter form opens: its action path plus every field the user actually filled in. */
 export const filterFormDestination = (actionPath: string, origin: string, fields: Iterable<readonly [string, string]>): URL => {
@@ -195,4 +149,12 @@ export const blockRangeError = (fromBlock: string, toBlock: string): { readonly 
 export const operationsFailureMessage = (refresh: boolean, status: number | undefined, detail: string): string => {
 	if (refresh) return `Could not refresh protocol operations; existing evidence remains visible: ${detail}`
 	return status === 404 ? `No indexed record matches this address or identifier on the selected network: ${detail}` : `Could not load protocol operations: ${detail}`
+}
+
+// Portfolio fork events are keyed by coordinator and universe; the fork page is keyed by the universe alone.
+export const forkParticipationUniverse = (event: Readonly<Record<string, unknown>>): string => {
+	const identity = String(event['universe_identity'] ?? '')
+	const eventData = isRecord(event['event_data']) ? event['event_data'] : {}
+	const universeId = eventData['universeId']
+	return identity.includes(':') && typeof universeId === 'string' ? universeId : identity
 }

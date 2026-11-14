@@ -256,27 +256,6 @@ CREATE TABLE public.fork_migration_events (
 
 
 --
--- Name: liquidation_approval_events; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.liquidation_approval_events (
-    chain_id bigint NOT NULL,
-    block_hash text NOT NULL,
-    tx_hash text NOT NULL,
-    transaction_index integer NOT NULL,
-    log_index integer NOT NULL,
-    block_number bigint NOT NULL,
-    registry_address text NOT NULL,
-    approval_identity text NOT NULL,
-    receiver_vault text,
-    event_name text NOT NULL,
-    event_data jsonb NOT NULL,
-    canonical boolean DEFAULT true NOT NULL,
-    observed_at timestamp with time zone DEFAULT now() NOT NULL
-);
-
-
---
 -- Name: live_event_state; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -433,18 +412,9 @@ CREATE TABLE public.pool_snapshots (
     block_number bigint NOT NULL,
     pool_address text NOT NULL,
     reason integer NOT NULL,
-    vault_address text NOT NULL,
     settlement_collateral_atto_eth numeric(78,0) NOT NULL,
-    total_capacity_ownership_atto_rep numeric(78,0) NOT NULL,
-    fee_eligible_capacity_ownership_atto_rep numeric(78,0) NOT NULL,
-    total_claimable_vault_fees_atto_eth numeric(78,0) NOT NULL,
-    unallocated_accrued_fees_atto_eth numeric(78,0) NOT NULL,
-    fee_index numeric(78,0) NOT NULL,
-    fee_index_remainder numeric(78,0) NOT NULL,
-    total_fees_owed_remainder numeric(78,0) NOT NULL,
-    uncheckpointed_fee_eligible_capacity_ownership_atto_rep numeric(78,0) NOT NULL,
-    last_updated_fee_accumulator timestamp with time zone NOT NULL,
-    current_retention_rate numeric(78,0) NOT NULL,
+    share_token_supply_atto_shares numeric(78,0) NOT NULL,
+    last_settlement_portfolio_time timestamp with time zone NOT NULL,
     canonical boolean DEFAULT true NOT NULL
 );
 
@@ -694,29 +664,6 @@ CREATE TABLE public.universe_events (
 
 
 --
--- Name: vault_snapshots; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.vault_snapshots (
-    chain_id bigint NOT NULL,
-    block_hash text NOT NULL,
-    tx_hash text NOT NULL,
-    log_index integer NOT NULL,
-    block_number bigint NOT NULL,
-    pool_address text NOT NULL,
-    vault_address text NOT NULL,
-    rep_backing_units numeric(78,0) NOT NULL,
-    capacity_ownership_atto_rep numeric(78,0) NOT NULL,
-    claimable_fees_atto_eth numeric(78,0) NOT NULL,
-    fee_index numeric(78,0) NOT NULL,
-    vault_fee_remainder numeric(78,0) NOT NULL,
-    resulting_total_rep_backing_units numeric(78,0) NOT NULL,
-    resulting_fee_eligible_capacity_ownership_atto_rep numeric(78,0) NOT NULL,
-    canonical boolean DEFAULT true NOT NULL
-);
-
-
---
 -- Name: live_events id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -817,14 +764,6 @@ ALTER TABLE ONLY public.escalation_game_events
 
 ALTER TABLE ONLY public.fork_migration_events
     ADD CONSTRAINT fork_migration_events_pkey PRIMARY KEY (chain_id, block_hash, tx_hash, log_index, universe_identity);
-
-
---
--- Name: liquidation_approval_events liquidation_approval_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.liquidation_approval_events
-    ADD CONSTRAINT liquidation_approval_events_pkey PRIMARY KEY (chain_id, block_hash, tx_hash, log_index, registry_address);
 
 
 --
@@ -980,14 +919,6 @@ ALTER TABLE ONLY public.universe_events
 
 
 --
--- Name: vault_snapshots vault_snapshots_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.vault_snapshots
-    ADD CONSTRAINT vault_snapshots_pkey PRIMARY KEY (chain_id, block_hash, tx_hash, log_index, pool_address, vault_address);
-
-
---
 -- Name: address_activity_address; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1097,20 +1028,6 @@ CREATE INDEX fork_migration_page ON public.fork_migration_events USING btree (ch
 --
 
 CREATE INDEX fork_migration_universe ON public.fork_migration_events USING btree (chain_id, universe_identity, block_number DESC, log_index DESC) WHERE canonical;
-
-
---
--- Name: liquidation_approval_identity_page; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX liquidation_approval_identity_page ON public.liquidation_approval_events USING btree (chain_id, approval_identity, block_number DESC, transaction_index DESC, log_index DESC) WHERE canonical;
-
-
---
--- Name: liquidation_approval_vault_page; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX liquidation_approval_vault_page ON public.liquidation_approval_events USING btree (chain_id, receiver_vault, block_number DESC, transaction_index DESC, log_index DESC) WHERE canonical;
 
 
 --
@@ -1324,20 +1241,6 @@ CREATE INDEX universe_events_history ON public.universe_events USING btree (chai
 
 
 --
--- Name: vault_snapshots_history; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX vault_snapshots_history ON public.vault_snapshots USING btree (chain_id, vault_address, pool_address, block_number DESC, log_index DESC) WHERE canonical;
-
-
---
--- Name: vault_snapshots_detail_page; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX vault_snapshots_detail_page ON public.vault_snapshots USING btree (chain_id, pool_address, vault_address, block_number DESC, log_index DESC, tx_hash DESC, block_hash DESC) WHERE canonical;
-
-
---
 -- Name: actions actions_chain_id_block_hash_tx_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1447,14 +1350,6 @@ ALTER TABLE ONLY public.escalation_game_events
 
 ALTER TABLE ONLY public.fork_migration_events
     ADD CONSTRAINT fork_migration_events_chain_id_block_hash_tx_hash_log_inde_fkey FOREIGN KEY (chain_id, block_hash, tx_hash, log_index) REFERENCES public.logs(chain_id, block_hash, tx_hash, log_index);
-
-
---
--- Name: liquidation_approval_events liquidation_approval_events_chain_id_block_hash_tx_hash_lo_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.liquidation_approval_events
-    ADD CONSTRAINT liquidation_approval_events_chain_id_block_hash_tx_hash_lo_fkey FOREIGN KEY (chain_id, block_hash, tx_hash, log_index) REFERENCES public.logs(chain_id, block_hash, tx_hash, log_index);
 
 
 --
@@ -1583,14 +1478,6 @@ ALTER TABLE ONLY public.uniswap_rep_eth_price_observations
 
 ALTER TABLE ONLY public.universe_events
     ADD CONSTRAINT universe_events_chain_id_block_hash_tx_hash_log_index_fkey FOREIGN KEY (chain_id, block_hash, tx_hash, log_index) REFERENCES public.logs(chain_id, block_hash, tx_hash, log_index);
-
-
---
--- Name: vault_snapshots vault_snapshots_chain_id_block_hash_tx_hash_log_index_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.vault_snapshots
-    ADD CONSTRAINT vault_snapshots_chain_id_block_hash_tx_hash_log_index_fkey FOREIGN KEY (chain_id, block_hash, tx_hash, log_index) REFERENCES public.logs(chain_id, block_hash, tx_hash, log_index);
 
 
 --

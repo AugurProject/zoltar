@@ -1,6 +1,6 @@
 // Evidence seeding for the operations snapshot integration test: one decoded block with report and
 // capital commitment events, ten thousand blocks of AMM trading history, and bulk risk, portfolio,
-// fork, report, question, and vault rows that exercise every paginated catalog.
+// fork, report, and question rows that exercise every paginated catalog.
 import { expect } from 'bun:test'
 import { handleApi } from '../../src/api.ts'
 import type { ScannerDatabase } from '../../src/database.ts'
@@ -38,6 +38,8 @@ export const storeOperationsEvidenceBlock = async ({ database, operationsChainId
 			{ name: 'CommitmentAuthorized', argumentsValue: { owner: address, positionId: '1', rep: '120', commitment: '100', targetHealthFactorBps: '12000' } },
 			{ name: 'CommitmentCured', argumentsValue: { positionId: '1', removedCommitment: '10' } },
 			{ name: 'CommitmentTakenOver', argumentsValue: { sourceId: '1', receiverId: '2', commitment: '90', awardAttoRep: 5n.toString() } },
+			// The decoder keeps the uint8 reason as a number.
+			{ name: 'QuestionAccountingCheckpoint', argumentsValue: { reason: 5, settlementCollateralAttoEth: '40', shareTokenSupplyAttoShares: '40', lastSettlementPortfolioTime: '1767225620' } },
 		]
 		const capitalEvents = capitalEvidence.map(({ name, argumentsValue }, index) => ({
 			...decodedLog(hash, index + 2, oracle, name, argumentsValue),
@@ -71,6 +73,11 @@ export const storeOperationsEvidenceBlock = async ({ database, operationsChainId
 			{ semantic_event_kind: 'CommitmentAuthorized', entity_type: 'vault', entity_identity: `${oracle.toLowerCase()}:${address.toLowerCase()}` },
 			{ semantic_event_kind: 'CommitmentCured', entity_type: 'capital-position', entity_identity: `${oracle.toLowerCase()}:1` },
 			{ semantic_event_kind: 'CommitmentTakenOver', entity_type: 'capital-position', entity_identity: `${oracle.toLowerCase()}:1` },
+			{ semantic_event_kind: 'QuestionAccountingCheckpoint', entity_type: 'pool', entity_identity: oracle.toLowerCase() },
+		])
+		// The same checkpoint is the pool's accounting snapshot.
+		expect(await database.sql`SELECT reason, settlement_collateral_atto_eth::text, share_token_supply_atto_shares::text, EXTRACT(EPOCH FROM last_settlement_portfolio_time)::bigint::text AS last_settlement FROM pool_snapshots WHERE chain_id = ${operationsChainId}`).toEqual([
+			{ reason: 5, settlement_collateral_atto_eth: '40', share_token_supply_atto_shares: '40', last_settlement: '1767225620' },
 		])
 		const indexedResponse = await handleApi(new Request(`http://localhost/api/v1/state/timeline?chainId=${operationsChainId}&event=CommitmentTakenOver`), database.sql)
 		if (indexedResponse === undefined) throw new Error('indexed timeline endpoint did not return a response')
@@ -174,7 +181,7 @@ export const seedBulkTradingHistory = async ({ database, operationsChainId, orac
 		`
 }
 
-// Adds pool, vault, state, LP, fork, report, coordinator, and question evidence beyond single-page limits.
+// Adds pool, state, LP, fork, report, coordinator, and question evidence beyond single-page limits.
 export const seedRiskAndPortfolioEvidence = async ({ database, operationsChainId, oracle, hash }: OperationsContext): Promise<void> => {
 	await database.sql`
 			INSERT INTO pools (
@@ -189,17 +196,6 @@ export const seedRiskAndPortfolioEvidence = async ({ database, operationsChainId
 			)
 		`
 	await database.sql`
-			INSERT INTO vault_snapshots (
-				chain_id, block_hash, tx_hash, log_index, block_number, pool_address, vault_address,
-				rep_backing_units, capacity_ownership_atto_rep, claimable_fees_atto_eth, fee_index,
-				vault_fee_remainder, resulting_total_rep_backing_units,
-				resulting_fee_eligible_capacity_ownership_atto_rep, canonical
-			) VALUES (
-				${operationsChainId}, ${hash}, ${transactionHash}, 1, 1, ${oracle.toLowerCase()}, ${address.toLowerCase()},
-				100, 100, 0, 0, 0, 100, 100, true
-			)
-		`
-	await database.sql`
 			INSERT INTO entity_state_snapshots (
 				chain_id, entity_type, entity_identity, block_number, block_hash, block_timestamp,
 				source_method, read_status, read_result, canonical
@@ -210,14 +206,6 @@ export const seedRiskAndPortfolioEvidence = async ({ database, operationsChainId
 				jsonb_build_object('settlementCollateralAttoEth', '1', 'currentMintingCapacityAttoEth', '2',
 					'totalBadDebtAttoEth', '0', 'systemState', '1',
 					'price', jsonb_build_object('repPerEth1e18', '100')), true
-			),
-			(
-				${operationsChainId}, 'vault', ${`${oracle.toLowerCase()}:${address.toLowerCase()}`}, 2,
-				${`0x${(2).toString(16).padStart(64, '0')}`}, timestamptz '2026-01-01 00:00:22+00',
-				'augurscan.vault-risk.v1', 'success',
-				jsonb_build_object('poolHeldBackingAttoRep', '200', 'disputeStakedAttoRep', '100', 'disputeBackingAttoRep', '0',
-					'openInterestAttoEth', '1000000000000000000', 'securityMultiplierBps', '15000',
-					'targetHealthFactorBps', '12000', 'badDebtAttoEth', '0'), true
 			)
 		`
 	await database.sql`
@@ -230,7 +218,7 @@ export const seedRiskAndPortfolioEvidence = async ({ database, operationsChainId
 					source_method, read_status, read_result, read_failure_reason, observed_at, canonical,
 					indexer_run_id, abi_source_hash, application_source_hash, projection_source_hash
 				FROM entity_state_snapshots
-				WHERE chain_id = ${operationsChainId} AND entity_type IN ('pool', 'vault')
+				WHERE chain_id = ${operationsChainId} AND entity_type = 'pool'
 			`
 	await database.sql`
 				INSERT INTO logs (
@@ -359,17 +347,5 @@ export const seedRiskAndPortfolioEvidence = async ({ database, operationsChainId
 					1767225620, 1767312020,
 					1000, 0, 1, 'probability', '["No","Yes"]'::jsonb, true
 				)
-			`
-	await database.sql`
-				INSERT INTO vault_snapshots (
-					chain_id, block_hash, tx_hash, log_index, block_number, pool_address, vault_address,
-					rep_backing_units, capacity_ownership_atto_rep, claimable_fees_atto_eth, fee_index,
-					vault_fee_remainder, resulting_total_rep_backing_units,
-					resulting_fee_eligible_capacity_ownership_atto_rep, canonical
-				)
-				SELECT ${operationsChainId}, '0x' || lpad(to_hex(item), 64, '0'), '0x' || lpad(to_hex(item + 20000), 64, '0'),
-					2, item, '0x' || lpad(to_hex(item + 2000000), 40, '0'), '0x' || lpad(to_hex(item + 3000000), 40, '0'),
-					100, 100, 0, 0, 0, 100, 100, true
-				FROM generate_series(2, 261) item
 			`
 }

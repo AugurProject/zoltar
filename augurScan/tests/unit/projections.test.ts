@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress, type Hex } from '../../src/ethereum.ts'
-import { projectionsFrom } from '../../src/projections.ts'
+import { type Projection, projectionsFrom } from '../../src/projections.ts'
 import type { StoredLog } from '../../src/types.ts'
 
 const hash = `0x${'12'.repeat(32)}` as Hex
@@ -38,9 +38,17 @@ const questionCreatedLog = log('QuestionCreated', {
 })
 
 describe('state projections', () => {
-	test('projects portfolio question accounting without standalone vault fields', () => {
+	test('projects each question accounting checkpoint as pool state and as an accounting snapshot', () => {
 		const projections = projectionsFrom(log('QuestionAccountingCheckpoint', { reason: 2, settlementCollateralAttoEth: 100n.toString(), shareTokenSupplyAttoShares: 200n.toString(), lastSettlementPortfolioTime: '300' }))
 		expect(projections).toContainEqual({ type: 'poolState', poolAddress: pool.toLowerCase(), eventName: 'QuestionAccountingCheckpoint', state: { settlementCollateralAttoEth: 100n.toString(), shareTokenSupplyAttoShares: 200n.toString(), lastSettlementPortfolioTime: '300' } })
+		const snapshot: Projection = { type: 'poolSnapshot', poolAddress: pool.toLowerCase(), reason: 2, settlementCollateralAttoEth: '100', shareTokenSupplyAttoShares: '200', lastSettlementPortfolioTime: new Date(300_000) }
+		expect(projections).toContainEqual(snapshot)
+		// A uint8 enum decodes to a number; a replayed JSON record may carry it as a string.
+		expect(projectionsFrom(log('QuestionAccountingCheckpoint', { reason: '2', settlementCollateralAttoEth: '100', shareTokenSupplyAttoShares: '200', lastSettlementPortfolioTime: '300' }))).toContainEqual(snapshot)
+	})
+
+	test('ignores accounting and approval events that no current contract emits', () => {
+		for (const name of ['PoolAccountingCheckpoint', 'VaultAccountingCheckpoint', 'PoolForkModeActivated', 'TotalRepBackingUnitsSet', 'LiquidationApprovalSet', 'VaultLiquidated']) expect(projectionsFrom(log(name, { vault, reason: '5' }))).toEqual([])
 	})
 
 	test('captures immutable question metadata', () => {
@@ -52,7 +60,7 @@ describe('state projections', () => {
 		expect(projection.endTime).toBe('2100')
 	})
 
-	test('captures complete pool and vault accounting snapshots', () => {
+	test('captures a pool deployment', () => {
 		const [deployment] = projectionsFrom(
 			log('DeploySecurityPool', {
 				securityPool: pool,
@@ -69,47 +77,6 @@ describe('state projections', () => {
 			}),
 		)
 		expect(deployment).toMatchObject({ type: 'pool', poolAddress: pool.toLowerCase(), questionId: '42', universeId: '0' })
-
-		const [poolProjection] = projectionsFrom(
-			log('PoolAccountingCheckpoint', {
-				reason: '5',
-				vault,
-				settlementCollateralAttoEth: atomic(12_000_000_000_000_000_000n),
-				totalUnderwritingLimitAttoEth: atomic(9_000_000_000_000_000_000n),
-				feeEligibleUnderwritingLimitAttoEth: atomic(8_000_000_000_000_000_000n),
-				totalClaimableVaultFeesAttoEth: atomic(40n),
-				unallocatedAccruedFeesAttoEth: atomic(3n),
-				feeIndex: '10',
-				feeIndexRemainder: '1',
-				totalFeesOwedRemainder: '2',
-				uncheckpointedFeeEligibleUnderwritingLimitAttoEth: atomic(4n),
-				lastSettlementPortfolioTime: '2000',
-				currentRetentionRate: '999999000000000000',
-			}),
-		)
-		expect(poolProjection?.type).toBe('poolSnapshot')
-		if (poolProjection?.type !== 'poolSnapshot') throw new Error('pool projection missing')
-		expect(poolProjection.settlementCollateralAttoEth).toBe('12000000000000000000')
-		expect(poolProjection.totalUnderwritingLimitAttoEth).toBe('9000000000000000000')
-		expect(poolProjection.feeEligibleUnderwritingLimitAttoEth).toBe('8000000000000000000')
-
-		const [vaultProjection, resultingPoolState] = projectionsFrom(
-			log('VaultAccountingCheckpoint', {
-				vault,
-				repBackingUnits: '50',
-				underwritingLimitAttoEth: atomic(60n),
-				claimableFeesAttoEth: atomic(70n),
-				feeIndex: '80',
-				vaultFeeRemainder: '90',
-				resultingTotalRepBackingUnits: '100',
-				resultingFeeEligibleUnderwritingLimitAttoEth: atomic(110n),
-			}),
-		)
-		expect(vaultProjection?.type).toBe('vaultSnapshot')
-		if (vaultProjection?.type !== 'vaultSnapshot') throw new Error('vault projection missing')
-		expect(vaultProjection.vaultAddress).toBe(vault.toLowerCase())
-		expect(vaultProjection.underwritingLimitAttoEth).toBe('60')
-		expect(resultingPoolState).toMatchObject({ type: 'poolState', state: { totalRepBackingUnits: '100' } })
 	})
 
 	test('records universe lineage and changing theoretical supply', () => {

@@ -17,7 +17,6 @@ import {
 	isString,
 	isUniswapPriceValue,
 	isUniverseStateEntityValue,
-	isVaultStateEntityValue,
 } from './api-validation.ts'
 
 import {
@@ -37,7 +36,6 @@ import {
 	type RichListRecord,
 	type StateCatalog,
 	type UniverseRecord,
-	type VaultRecord,
 } from './browser-types.ts'
 
 import type { AmmPriceHistoryRecord, RepEthPriceHistoryRecord } from './browser-types.ts'
@@ -130,8 +128,6 @@ export const isLogDetail = (value: unknown): value is LogDetail => isLogDetailVa
 
 const isPoolRecord = (value: unknown): value is PoolRecord => isPoolStateEntityValue(value)
 
-const isVaultRecord = (value: unknown): value is VaultRecord => isVaultStateEntityValue(value)
-
 const isQuestionRecord = (value: unknown): value is QuestionRecord => isQuestionStateEntityValue(value)
 
 const isUniverseRecord = (value: unknown): value is UniverseRecord => isUniverseStateEntityValue(value)
@@ -149,11 +145,9 @@ const isPoolStateRecord = (value: unknown): value is PoolStateRecord =>
 export const decodeStateCatalog = (value: unknown): StateCatalog => {
 	if (!isRecord(value)) throw new Error('State catalog response is malformed')
 	const pools = value['pools']
-	const vaults = value['vaults']
 	const questions = value['questions']
 	const universes = value['universes']
 	if (!Array.isArray(pools) || !pools.every(isPoolRecord)) throw new Error('State catalog pools are malformed')
-	if (!Array.isArray(vaults) || !vaults.every(isVaultRecord)) throw new Error('State catalog vaults are malformed')
 	if (!Array.isArray(questions) || !questions.every(isQuestionRecord)) throw new Error('State catalog questions are malformed')
 	if (!Array.isArray(universes) || !universes.every(isUniverseRecord)) throw new Error('State catalog universes are malformed')
 	const poolStates = value['poolStates']
@@ -169,19 +163,17 @@ export const decodeStateCatalog = (value: unknown): StateCatalog => {
 	if (limit !== undefined && typeof limit !== 'number') throw new Error('State catalog limit is malformed')
 	if (offset !== undefined && (typeof offset !== 'number' || !Number.isSafeInteger(offset) || offset < 0)) throw new Error('State catalog offset is malformed')
 	if (typeof catalogVersion !== 'string' || !/^[0-9a-f]{32}$/.test(catalogVersion)) throw new Error('State catalog version is malformed')
-	if (totals !== undefined && (!isRecord(totals) || !['pools', 'questions', 'vaults', 'universes'].every(key => typeof totals[key] === 'number' && Number.isSafeInteger(totals[key]) && Number(totals[key]) >= 0))) throw new Error('State catalog totals are malformed')
+	if (totals !== undefined && (!isRecord(totals) || !['pools', 'questions', 'universes'].every(key => typeof totals[key] === 'number' && Number.isSafeInteger(totals[key]) && Number(totals[key]) >= 0))) throw new Error('State catalog totals are malformed')
 	const decodedTotals =
 		totals === undefined
 			? undefined
 			: {
 					pools: Number(totals['pools']),
 					questions: Number(totals['questions']),
-					vaults: Number(totals['vaults']),
 					universes: Number(totals['universes']),
 				}
 	return {
 		pools,
-		vaults,
 		questions,
 		universes,
 		...(poolStates === undefined ? {} : { poolStates }),

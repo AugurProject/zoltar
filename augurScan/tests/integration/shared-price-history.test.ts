@@ -41,7 +41,7 @@ test.skipIf(postgresUrl === undefined)('member ledgers share canonical feed hist
 				[2, coordinatorB, 'SharedPriceFeedSet', { priceFeed: feed }, true],
 				[3, coordinatorA, 'SharedPriceFeedSet', { priceFeed: orphanFeed }, false],
 				[4, feed, 'PriceReported', { reportId: '1', price: '100' }, true],
-				[5, coordinatorA, 'StagedOperationQueued', { operationId: '1' }, true],
+				[5, coordinatorA, 'SecurityPoolSet', { securityPool: poolA }, true],
 				[6, standaloneCoordinator, 'PriceReported', { reportId: '2', price: '200' }, true],
 			] as const) {
 				await connection`INSERT INTO logs (chain_id, tx_hash, block_hash, block_number, transaction_index, log_index, emitter_address, topics, data, event_name, arguments, decode_status, summary, canonical)
@@ -65,8 +65,8 @@ test.skipIf(postgresUrl === undefined)('member ledgers share canonical feed hist
 				expect(history.repEthPrices[0]).toMatchObject({ coordinator_address: feed, rep_per_eth_1e18: '100' })
 				expect(history.openOracleHistory.filter((row: { event_name: string }) => row.event_name === 'PriceReported')).toHaveLength(1)
 			}
-			expect(historyA.openOracleHistory.filter((row: { event_name: string }) => row.event_name === 'StagedOperationQueued')).toHaveLength(1)
-			expect(historyB.openOracleHistory.filter((row: { event_name: string }) => row.event_name === 'StagedOperationQueued')).toHaveLength(0)
+			expect(historyA.openOracleHistory.filter((row: { event_name: string }) => row.event_name === 'SecurityPoolSet')).toHaveLength(1)
+			expect(historyB.openOracleHistory.filter((row: { event_name: string }) => row.event_name === 'SecurityPoolSet')).toHaveLength(0)
 			expect(ordinary.repEthPrices).toHaveLength(1)
 			expect(ordinary.repEthPrices[0]).toMatchObject({ coordinator_address: standaloneCoordinator, rep_per_eth_1e18: '200' })
 			expect(ordinary.openOracleHistory).toHaveLength(1)

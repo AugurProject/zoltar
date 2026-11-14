@@ -10,7 +10,6 @@ interface CatalogState {
 interface RiskCatalogState {
 	readonly chainId: string
 	readonly pools: readonly JsonRecord[]
-	readonly vaults: readonly JsonRecord[]
 }
 
 interface DetailState {

@@ -22,6 +22,7 @@ import {
 	type ReplacementReason,
 	type RpcLog,
 	type RpcLogForEvent,
+	type SendTransactionParameters,
 	type Transport,
 } from '../types.js'
 
@@ -100,18 +101,7 @@ async function scanReplacementTransactions(blockReader: Pick<PublicClientActions
 	return { history, ...(transaction === undefined ? {} : { transaction }) }
 }
 
-export function buildRpcTransactionRequest(parameters: {
-	account?: Account | Address | undefined
-	amount?: bigint | undefined
-	data?: Hex | undefined
-	gas?: bigint | undefined
-	gasPrice?: bigint | undefined
-	maxFeePerGas?: bigint | undefined
-	maxPriorityFeePerGas?: bigint | undefined
-	nonce?: bigint | number | undefined
-	to?: Address | null | undefined
-	value?: bigint | undefined
-}) {
+export function buildRpcTransactionRequest(parameters: SendTransactionParameters) {
 	const from = normalizeAccountAddress(parameters.account)
 	const value = parameters.value ?? parameters.amount
 	return {

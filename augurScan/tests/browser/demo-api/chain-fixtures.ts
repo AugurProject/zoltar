@@ -15,7 +15,7 @@ const DEMO_LOG_CONTRACT_LABELS = ['Security Pool 0x8c2f', 'OpenOracle', 'Genesis
 
 const demoPoolQuestionTitle = (networkId: string) => (networkId === 'sepolia' ? 'Which client ships the next protocol release first?' : 'Will the 2030 global mean temperature anomaly exceed 1.5°C?')
 
-const demoEvents = ['PoolAccountingCheckpoint', 'Transfer', 'PriceReported', 'ClaimDeposit', 'DeploySecurityPool', 'ReportSubmitted', 'UniverseInitialized', 'BidSubmitted']
+const demoEvents = ['QuestionAccountingCheckpoint', 'Transfer', 'PriceReported', 'ClaimDeposit', 'DeploySecurityPool', 'ReportSubmitted', 'UniverseInitialized', 'BidSubmitted']
 
 export const createDemoChainFixtures = () => {
 	const demoNetworks = [
@@ -152,7 +152,6 @@ export const createDemoChainFixtures = () => {
 		const address = `0x${(BigInt(index + 1) * 0x123456789abcdefn).toString(16).padStart(40, '0')}`
 		const repBalance = BigInt(920 - index * 8) * 10n ** 18n + (index === 0 ? 123_456_789n : 0n) + (index === 1 ? 1n : 0n)
 		const poolCount = 1 + (index % 4)
-		const vaultCount = (index + 1) % 3
 		return {
 			chain_id: network.chain_id,
 			network_id: network.id,
@@ -178,8 +177,6 @@ export const createDemoChainFixtures = () => {
 			transaction_count: String(84 - index),
 			interaction_count: String(102 - index),
 			pool_count: String(poolCount),
-			vault_count: String(vaultCount),
-			active_vault_count: String(index % 2),
 			oldest_balance_block: String(BigInt(network.indexed_block) - BigInt(index % 4)),
 			last_balance_refresh: new Date(Date.now() - index * 17_000).toISOString(),
 			rep_balances: [
@@ -224,14 +221,6 @@ export const createDemoChainFixtures = () => {
 				address: `0x${(BigInt(index + 1) * 100n + BigInt(poolIndex + 1)).toString(16).padStart(40, 'a')}`,
 				label: poolIndex === 0 ? 'Security Pool' : null,
 				questionTitle: poolIndex === 0 ? demoPoolQuestionTitle(network.id) : null,
-			})),
-			vault_positions: Array.from({ length: vaultCount }, (_, vaultIndex) => ({
-				poolAddress: `0x${(BigInt(index + 1) * 100n + BigInt(vaultIndex + 1)).toString(16).padStart(40, 'a')}`,
-				questionTitle: network.id === 'sepolia' ? 'Which client ships the next protocol release first?' : 'Will the 2030 global mean temperature anomaly exceed 1.5°C?',
-				repBackingUnits: String(BigInt(120 + vaultIndex) * 10n ** 18n),
-				underwritingLimitAttoEth: String(BigInt(85 + vaultIndex) * 10n ** 18n),
-				claimableFeesAttoEth: String(BigInt(3 + vaultIndex) * 10n ** 16n),
-				blockNumber: network.indexed_block,
 			})),
 		}
 	})

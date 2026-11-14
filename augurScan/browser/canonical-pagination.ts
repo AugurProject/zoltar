@@ -1,5 +1,3 @@
-import type { JsonRecord } from './api-validation.ts'
-
 export type Page<T, Cursor = string> = { items: T[]; nextCursor?: Cursor | undefined }
 
 export const mergeUniqueRecords = <T>(primary: readonly T[], retained: readonly T[], keyFor: (record: T) => string): T[] => {
@@ -10,17 +8,6 @@ export const mergeUniqueRecords = <T>(primary: readonly T[], retained: readonly 
 		seen.add(key)
 		return true
 	})
-}
-
-export const riskPaginationForCollectedCursors = (pagination: JsonRecord, poolNextCursor: string | undefined, vaultNextCursor: string | undefined): JsonRecord => {
-	const paginationWithoutCursors = Object.fromEntries(Object.entries(pagination).filter(([key]) => key !== 'poolNextCursor' && key !== 'vaultNextCursor'))
-	return {
-		...paginationWithoutCursors,
-		poolHasMore: poolNextCursor !== undefined,
-		...(poolNextCursor === undefined ? {} : { poolNextCursor }),
-		vaultHasMore: vaultNextCursor !== undefined,
-		...(vaultNextCursor === undefined ? {} : { vaultNextCursor }),
-	}
 }
 
 const canonicalEventPosition = (record: Readonly<Record<string, unknown>>, key: 'block_number' | 'transaction_index' | 'log_index'): bigint => {
@@ -79,47 +66,6 @@ export const collectCursorCollections = async <T>(
 		if (page.nextCursor === undefined || page.offset >= throughOffset) return { collections, loadedOffset: page.offset, ...(page.nextCursor === undefined ? {} : { nextCursor: page.nextCursor }) }
 		priorOffset = page.offset
 		cursor = page.nextCursor
-	}
-}
-
-export const collectDualCursorCollections = async <T, Cursor = string>(
-	fetchPage: (options: { readonly leftCursor?: Cursor; readonly rightCursor?: Cursor; readonly limit: number }) => Promise<{
-		readonly left: readonly T[]
-		readonly right: readonly T[]
-		readonly leftNextCursor?: Cursor
-		readonly rightNextCursor?: Cursor
-	}>,
-	leftTargetCount: number,
-	rightTargetCount: number,
-	leftKeyFor: (record: T) => string,
-	rightKeyFor: (record: T) => string,
-): Promise<{ readonly left: readonly T[]; readonly right: readonly T[]; readonly leftNextCursor?: Cursor; readonly rightNextCursor?: Cursor }> => {
-	let left: T[] = []
-	let right: T[] = []
-	let leftNextCursor: Cursor | undefined
-	let rightNextCursor: Cursor | undefined
-	let firstPage = true
-	do {
-		const requestLeft = firstPage || (left.length < leftTargetCount && leftNextCursor !== undefined)
-		const requestRight = firstPage || (right.length < rightTargetCount && rightNextCursor !== undefined)
-		if (!requestLeft && !requestRight) break
-		const remaining = Math.max(requestLeft ? Math.max(leftTargetCount - left.length, 1) : 0, requestRight ? Math.max(rightTargetCount - right.length, 1) : 0)
-		const page = await fetchPage({
-			...(requestLeft && leftNextCursor !== undefined ? { leftCursor: leftNextCursor } : {}),
-			...(requestRight && rightNextCursor !== undefined ? { rightCursor: rightNextCursor } : {}),
-			limit: firstPage ? 100 : Math.min(100, remaining),
-		})
-		left = mergeUniqueRecords(left, page.left, leftKeyFor)
-		right = mergeUniqueRecords(right, page.right, rightKeyFor)
-		if (requestLeft) leftNextCursor = page.leftNextCursor
-		if (requestRight) rightNextCursor = page.rightNextCursor
-		firstPage = false
-	} while (left.length < leftTargetCount || right.length < rightTargetCount)
-	return {
-		left,
-		right,
-		...(leftNextCursor === undefined ? {} : { leftNextCursor }),
-		...(rightNextCursor === undefined ? {} : { rightNextCursor }),
 	}
 }
 

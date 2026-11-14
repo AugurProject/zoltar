@@ -718,7 +718,6 @@ test("loading the registry keeps the entity search usable and never leaves anoth
 				nativeSymbol: () => 'ETH',
 				fetchEntityHistory: unused,
 				renderPoolDetail: unused,
-				renderVaultDetail: unused,
 				renderQuestionDetail: unused,
 				renderUniverseDetail: unused,
 				systemDetailRefreshGate: createForegroundRefreshGate(),
@@ -770,16 +769,11 @@ test('a live System refresh keeps unchanged details untouched and reopens disclo
 				initial_retention_rate: '0',
 				initial_settlement_collateral_atto_eth: '0',
 				settlement_collateral_atto_eth: '0',
-				total_capacity_ownership_atto_rep: '0',
-				fee_eligible_capacity_ownership_atto_rep: '0',
-				total_claimable_vault_fees_atto_eth: '0',
-				unallocated_accrued_fees_atto_eth: '0',
-				current_retention_rate: '0',
-				vault_count: '0',
+				share_token_supply_atto_shares: '0',
 				child_count: '0',
 				snapshot_block: '10',
 			}
-			state.data = { pools: [pool], vaults: [], questions: [], universes: [], catalogVersion: '1' }
+			state.data = { pools: [pool], questions: [], universes: [], catalogVersion: '1' }
 			let history: EntityHistory = { snapshots: [{ block_number: '10', timestamp: '1', settlement_collateral_atto_eth: '0' }], events: [], ammPrices: [], repEthPrices: [], uniswapRepEthPrices: [], openOracleHistory: [], pools: [], forks: [] }
 			let renders = 0
 			const element = <K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text?: string): HTMLElementTagNameMap[K] => {
@@ -806,7 +800,6 @@ test('a live System refresh keeps unchanged details untouched and reopens disclo
 					chart.append(element('summary', '', 'View exact chart data'), element('p', '', `${loaded?.snapshots.length ?? 0} checkpoints`))
 					lookup('#state-detail').replaceChildren(element('h3', '', 'Question one'), chart)
 				},
-				renderVaultDetail: unused,
 				renderQuestionDetail: unused,
 				renderUniverseDetail: unused,
 				systemDetailRefreshGate: createForegroundRefreshGate(),
@@ -863,7 +856,7 @@ test('a live System refresh re-renders an open question once its time window end
 			}
 			const state = createSystemRouteState()
 			state.activeType = 'questions'
-			state.data = { pools: [], vaults: [], questions: [question], universes: [], catalogVersion: '1' }
+			state.data = { pools: [], questions: [question], universes: [], catalogVersion: '1' }
 			const history: EntityHistory = { snapshots: [], events: [], ammPrices: [], repEthPrices: [], uniswapRepEthPrices: [], openOracleHistory: [], pools: [], forks: [] }
 			let renders = 0
 			const unused = async () => {
@@ -879,7 +872,6 @@ test('a live System refresh re-renders an open question once its time window end
 				nativeSymbol: () => 'ETH',
 				fetchEntityHistory: async () => history,
 				renderPoolDetail: unused,
-				renderVaultDetail: unused,
 				renderQuestionDetail: async item => {
 					renders++
 					lookup('#state-detail').replaceChildren(element('p', 'question-time-window', questionStatus(item)))

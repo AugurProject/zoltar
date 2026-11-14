@@ -34,35 +34,14 @@ type PoolProjection = {
 	initialSettlementCollateralAttoEth: AtomicValue
 }
 
+// One QuestionAccountingCheckpoint: the pool's settlement collateral and share supply after an accounting change.
 type PoolSnapshotProjection = {
 	type: 'poolSnapshot'
 	poolAddress: string
 	reason: number
-	vaultAddress: string
 	settlementCollateralAttoEth: AtomicValue
-	totalUnderwritingLimitAttoEth: AtomicValue
-	feeEligibleUnderwritingLimitAttoEth: AtomicValue
-	totalClaimableVaultFeesAttoEth: AtomicValue
-	unallocatedAccruedFeesAttoEth: AtomicValue
-	feeIndex: string
-	feeIndexRemainder: string
-	totalFeesOwedRemainder: string
-	uncheckpointedFeeEligibleUnderwritingLimitAttoEth: AtomicValue
+	shareTokenSupplyAttoShares: AtomicValue
 	lastSettlementPortfolioTime: Date
-	currentRetentionRate: string
-}
-
-type VaultSnapshotProjection = {
-	type: 'vaultSnapshot'
-	poolAddress: string
-	vaultAddress: string
-	repBackingUnits: string
-	underwritingLimitAttoEth: AtomicValue
-	claimableFeesAttoEth: AtomicValue
-	feeIndex: string
-	vaultFeeRemainder: string
-	resultingTotalRepBackingUnits: string
-	resultingFeeEligibleUnderwritingLimitAttoEth: AtomicValue
 }
 
 type PoolStateProjection = { type: 'poolState'; poolAddress: string; eventName: string; state: Readonly<Record<string, unknown>> }
@@ -134,7 +113,7 @@ type UniswapPriceProjection = {
 
 export type DomainEventProjection = {
 	type: 'domainEvent'
-	domain: 'report' | 'oracle' | 'escalation' | 'auction' | 'risk' | 'approval' | 'trading' | 'fork' | 'system'
+	domain: 'report' | 'oracle' | 'escalation' | 'auction' | 'risk' | 'trading' | 'fork' | 'system'
 	entityType: string
 	entityIdentity: string
 	semanticEventKind: string
@@ -142,7 +121,7 @@ export type DomainEventProjection = {
 	relatedEntities: readonly string[]
 }
 
-export type Projection = QuestionProjection | PoolProjection | PoolSnapshotProjection | VaultSnapshotProjection | PoolStateProjection | UniverseProjection | AmmMarketProjection | AmmPriceProjection | RepEthPriceProjection | UniswapMarketProjection | UniswapPriceProjection | DomainEventProjection
+export type Projection = QuestionProjection | PoolProjection | PoolSnapshotProjection | PoolStateProjection | UniverseProjection | AmmMarketProjection | AmmPriceProjection | RepEthPriceProjection | UniswapMarketProjection | UniswapPriceProjection | DomainEventProjection
 
 const record = (value: unknown, name: string): Record<string, unknown> => {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${name} must be an object`)
@@ -183,17 +162,22 @@ const strings = (value: unknown, name: string): readonly string[] => {
 	return value.map(item => string(item, name))
 }
 
+// The decoder keeps a uint8 enum as a JavaScript number and wider integers as decimal strings.
+const accountingReason = (value: unknown): number => {
+	const reason = typeof value === 'number' ? value : Number(integerString(value, 'reason'))
+	if (!Number.isSafeInteger(reason) || reason < 0) throw new Error('reason must be a non-negative integer')
+	return reason
+}
+
 const poolStateFields: Readonly<Record<string, readonly string[]>> = {
 	AwaitingForkContinuationSet: ['awaitingForkContinuation'],
 	CompleteSetCreated: ['resultingShareTokenSupplyAttoShares', 'resultingSettlementCollateralAttoEth'],
 	CompleteSetRedeemed: ['resultingShareTokenSupplyAttoShares', 'resultingSettlementCollateralAttoEth'],
 	EscalationGameSet: ['escalationGame'],
 	QuestionAccountingCheckpoint: ['settlementCollateralAttoEth', 'shareTokenSupplyAttoShares', 'lastSettlementPortfolioTime'],
-	PoolForkModeActivated: ['repTransferredAttoRep', 'currentRetentionRate', 'systemState'],
 	ShareTokenSupplySet: ['shareTokenSupplyAttoShares'],
 	SharesRedeemed: ['resultingShareTokenSupplyAttoShares', 'resultingSettlementCollateralAttoEth'],
 	SystemStateSet: ['systemState'],
-	TotalRepBackingUnitsSet: ['totalRepBackingUnits'],
 }
 
 export const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
@@ -367,47 +351,6 @@ export const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 				settlementTimestamp: timestamp(args['lastSettlementTimestamp'], 'lastSettlementTimestamp'),
 			},
 		]
-	if (name === 'PoolAccountingCheckpoint')
-		return [
-			{
-				type: 'poolSnapshot',
-				poolAddress: log.address.toLowerCase(),
-				reason: Number(integerString(args['reason'], 'reason')),
-				vaultAddress: address(args['vault'], 'vault'),
-				settlementCollateralAttoEth: integerString(args['settlementCollateralAttoEth'], 'settlementCollateralAttoEth'),
-				totalUnderwritingLimitAttoEth: integerString(args['totalUnderwritingLimitAttoEth'], 'totalUnderwritingLimitAttoEth'),
-				feeEligibleUnderwritingLimitAttoEth: integerString(args['feeEligibleUnderwritingLimitAttoEth'], 'feeEligibleUnderwritingLimitAttoEth'),
-				totalClaimableVaultFeesAttoEth: integerString(args['totalClaimableVaultFeesAttoEth'], 'totalClaimableVaultFeesAttoEth'),
-				unallocatedAccruedFeesAttoEth: integerString(args['unallocatedAccruedFeesAttoEth'], 'unallocatedAccruedFeesAttoEth'),
-				feeIndex: integerString(args['feeIndex'], 'feeIndex'),
-				feeIndexRemainder: integerString(args['feeIndexRemainder'], 'feeIndexRemainder'),
-				totalFeesOwedRemainder: integerString(args['totalFeesOwedRemainder'], 'totalFeesOwedRemainder'),
-				uncheckpointedFeeEligibleUnderwritingLimitAttoEth: integerString(args['uncheckpointedFeeEligibleUnderwritingLimitAttoEth'], 'uncheckpointedFeeEligibleUnderwritingLimitAttoEth'),
-				lastSettlementPortfolioTime: timestamp(args['lastSettlementPortfolioTime'], 'lastSettlementPortfolioTime'),
-				currentRetentionRate: integerString(args['currentRetentionRate'], 'currentRetentionRate'),
-			},
-		]
-	if (name === 'VaultAccountingCheckpoint')
-		return [
-			{
-				type: 'vaultSnapshot',
-				poolAddress: log.address.toLowerCase(),
-				vaultAddress: address(args['vault'], 'vault'),
-				repBackingUnits: integerString(args['repBackingUnits'], 'repBackingUnits'),
-				underwritingLimitAttoEth: integerString(args['underwritingLimitAttoEth'], 'underwritingLimitAttoEth'),
-				claimableFeesAttoEth: integerString(args['claimableFeesAttoEth'], 'claimableFeesAttoEth'),
-				feeIndex: integerString(args['feeIndex'], 'feeIndex'),
-				vaultFeeRemainder: integerString(args['vaultFeeRemainder'], 'vaultFeeRemainder'),
-				resultingTotalRepBackingUnits: integerString(args['resultingTotalRepBackingUnits'], 'resultingTotalRepBackingUnits'),
-				resultingFeeEligibleUnderwritingLimitAttoEth: integerString(args['resultingFeeEligibleUnderwritingLimitAttoEth'], 'resultingFeeEligibleUnderwritingLimitAttoEth'),
-			},
-			{
-				type: 'poolState',
-				poolAddress: log.address.toLowerCase(),
-				eventName: name,
-				state: { totalRepBackingUnits: integerString(args['resultingTotalRepBackingUnits'], 'resultingTotalRepBackingUnits') },
-			},
-		]
 	const poolFields = poolStateFields[name]
 	if (poolFields !== undefined) {
 		const state = Object.fromEntries(poolFields.flatMap(field => (args[field] === undefined ? [] : [[field, args[field]]])))
@@ -415,12 +358,17 @@ export const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 			state['shareTokenSupplyAttoShares'] = state['resultingShareTokenSupplyAttoShares']
 			delete state['resultingShareTokenSupplyAttoShares']
 		}
+		const poolState: Projection = { type: 'poolState', poolAddress: log.address.toLowerCase(), eventName: name, state }
+		if (name !== 'QuestionAccountingCheckpoint') return [poolState]
 		return [
+			poolState,
 			{
-				type: 'poolState',
+				type: 'poolSnapshot',
 				poolAddress: log.address.toLowerCase(),
-				eventName: name,
-				state,
+				reason: accountingReason(args['reason']),
+				settlementCollateralAttoEth: integerString(args['settlementCollateralAttoEth'], 'settlementCollateralAttoEth'),
+				shareTokenSupplyAttoShares: integerString(args['shareTokenSupplyAttoShares'], 'shareTokenSupplyAttoShares'),
+				lastSettlementPortfolioTime: timestamp(args['lastSettlementPortfolioTime'], 'lastSettlementPortfolioTime'),
 			},
 		]
 	}

@@ -1,5 +1,6 @@
 import type { SQL } from 'bun'
 import { INITIAL_MIGRATABLE_SCHEMA_VERSION, type SupportedSchemaVersion } from './schema-policy.ts'
+import { POOL_SNAPSHOTS_BEFORE_SCHEMA_7, TABLES_REMOVED_IN_SCHEMA_7 } from './schema-removed-tables.ts'
 
 interface SchemaLayout {
 	readonly relations: readonly string[]
@@ -73,9 +74,11 @@ const identityGeneration = (columnDefinition: string): 'a' | 'd' | '' => {
 }
 
 export const expectedSchemaLayout = (schema: string, version: SupportedSchemaVersion): SchemaLayout => {
+	const currentSchema = schema.replaceAll('\r\n', '\n')
+	// Older supported databases keep the accounting tables that migration 007 replaced.
+	const schemaWithRemovedTables = Number(version) < 7 ? `${currentSchema.replace(/CREATE TABLE public\.pool_snapshots \(\n[\s\S]*?\n\);/, POOL_SNAPSHOTS_BEFORE_SCHEMA_7)}\n${TABLES_REMOVED_IN_SCHEMA_7}` : currentSchema
 	// Older supported databases retain their original physical names until migration 006.
-	const versionedSchema = Number(version) < 6 ? schema.replaceAll('collateral_repair_auction_events_log_fkey', 'truth_auction_events_chain_id_block_hash_tx_hash_log_index_fkey').replaceAll('collateral_repair_auction', 'truth_auction') : schema
-	const normalizedSchema = versionedSchema.replaceAll('\r\n', '\n')
+	const normalizedSchema = Number(version) < 6 ? schemaWithRemovedTables.replaceAll('collateral_repair_auction_events_log_fkey', 'truth_auction_events_chain_id_block_hash_tx_hash_log_index_fkey').replaceAll('collateral_repair_auction', 'truth_auction') : schemaWithRemovedTables
 	const relations = new Set<string>(['table:augurscan_schema'])
 	const columns = new Set<string>([columnSignature('augurscan_schema', 'singleton', 'boolean', true, '', 'true'), columnSignature('augurscan_schema', 'schema_version', 'text', true, '', undefined), columnSignature('augurscan_schema', 'initialized_at', 'timestamp with time zone', true, '', 'now()')])
 	const constraints = new Set<string>(['augurscan_schema.augurscan_schema_pkey|PRIMARY KEY (singleton)', 'augurscan_schema.augurscan_schema_singleton_check|CHECK (singleton)'])

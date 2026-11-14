@@ -1046,7 +1046,7 @@ describe('network indexer lifecycle', () => {
 			address: pool,
 			topics: [],
 			data: '0x',
-			decoded: { status: 'decoded', name: 'VaultAccountingCheckpoint', arguments: { vault }, referencedAddresses: [vault], summary: 'checkpoint' },
+			decoded: { status: 'decoded', name: 'VaultEscrowUpdated', arguments: { vault }, referencedAddresses: [vault], summary: 'checkpoint' },
 		}
 		const contracts = new Map<string, ContractMetadata>([[pool.toLowerCase(), { address: pool, label: 'Pool', kind: 'securityPool', provenance: 'test' }]])
 		expect(addressActivityFrom([transaction], [log], contracts)).toEqual([

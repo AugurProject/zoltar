@@ -46,6 +46,14 @@ export const transaction = (): StoredTransaction => ({
 	decoded: { status: 'unknown', summary: 'Unknown call' },
 })
 
+// The shared fixture transaction under its own hash, with an empty receipt in the given block.
+export const evidenceTransaction = (hash: BlockHash, inBlock: BlockHash, decoded: StoredTransaction['decoded']): StoredTransaction => ({
+	...transaction(),
+	hash,
+	receipt: { transactionHash: hash, blockHash: inBlock, status: 'success', logs: [] },
+	decoded,
+})
+
 export const log = (hash: BlockHash, summary: string): StoredLog => ({
 	transactionHash,
 	blockHash: hash,
@@ -58,22 +66,19 @@ export const log = (hash: BlockHash, summary: string): StoredLog => ({
 	decoded: { status: 'unknown', summary },
 })
 
-export const vaultCheckpoint = (hash: BlockHash): StoredLog => ({
-	...log(hash, 'replacement vault checkpoint'),
+export const accountingCheckpoint = (hash: BlockHash): StoredLog => ({
+	...log(hash, 'replacement accounting checkpoint'),
 	logIndex: 1,
 	decoded: {
 		status: 'decoded',
-		name: 'VaultAccountingCheckpoint',
-		summary: 'replacement vault checkpoint',
+		name: 'QuestionAccountingCheckpoint',
+		summary: 'replacement accounting checkpoint',
+		// The decoder keeps the uint8 reason as a number.
 		arguments: {
-			vault: address,
-			repBackingUnits: '120000000000000000000',
-			underwritingLimitAttoEth: 85_000_000_000_000_000_000n.toString(),
-			claimableFeesAttoEth: 30_000_000_000_000_000n.toString(),
-			feeIndex: '1',
-			vaultFeeRemainder: '0',
-			resultingTotalRepBackingUnits: '120000000000000000000',
-			resultingFeeEligibleUnderwritingLimitAttoEth: 85_000_000_000_000_000_000n.toString(),
+			reason: 0,
+			settlementCollateralAttoEth: 85_000_000_000_000_000_000n.toString(),
+			shareTokenSupplyAttoShares: 85_000_000_000_000_000_000n.toString(),
+			lastSettlementPortfolioTime: '1767225600',
 		},
 	},
 })

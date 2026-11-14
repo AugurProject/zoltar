@@ -81,6 +81,16 @@ async function setup() {
 		},
 	}
 }
+
+/** Fills question 7, two shares to `capital`, and 1/2/3 Invalid/Yes/No rights; call inside one `act`. */
+function fillMigrationDraft(hook: Awaited<ReturnType<typeof setup>>['hook']) {
+	hook.state().setQuestion('7')
+	hook.state().setShares('2')
+	hook.state().setRecipient(capital)
+	hook.state().setInvalidRights('1')
+	hook.state().setYesRights('2')
+	hook.state().setNoRights('3')
+}
 test('one irreversible choice has an explicit review and rechecks the strict native cutoff', async () => {
 	const { hook, requests, source, snapshot } = await setup()
 	expect(hook.state().chooseReason).toBeUndefined()
@@ -111,14 +121,7 @@ test('fork drafts survive a transient snapshot reload so a prepared branch can b
 	source.setSnapshot({ ...snapshot, timestamp: 3_001n })
 	await hook.setProps({ snapshot: { ...snapshot, blockHash: `0x${'44'.repeat(32)}` } })
 	await waitFor(() => expect(hook.state().state?.timestamp).toBe(3_001n))
-	await act(() => {
-		hook.state().setQuestion('7')
-		hook.state().setShares('2')
-		hook.state().setRecipient(capital)
-		hook.state().setInvalidRights('1')
-		hook.state().setYesRights('2')
-		hook.state().setNoRights('3')
-	})
+	await act(() => fillMigrationDraft(hook))
 	const draft = { sourceInput: '0', outcomeInput: '1', questionInput: '7', sharesInput: '2', recipientInput: capital, invalidRightsInput: '1', yesRightsInput: '2', noRightsInput: '3' }
 	await act(() => hook.state().start())
 	expect(requests).toHaveLength(1)
@@ -170,12 +173,7 @@ test.each([
 	const { hook, snapshot } = await setup()
 	await act(() => {
 		hook.state().setSource('2')
-		hook.state().setQuestion('7')
-		hook.state().setShares('2')
-		hook.state().setRecipient(capital)
-		hook.state().setInvalidRights('1')
-		hook.state().setYesRights('2')
-		hook.state().setNoRights('3')
+		fillMigrationDraft(hook)
 	})
 	await hook.setProps({ snapshot: undefined })
 	const next = { ...snapshot, ...changed }

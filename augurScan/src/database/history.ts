@@ -141,7 +141,6 @@ const derivedProjectionTables = [
 	'pools',
 	'pool_snapshots',
 	'pool_state_events',
-	'vault_snapshots',
 	'universe_events',
 	'amm_markets',
 	'amm_price_snapshots',
@@ -154,7 +153,6 @@ const derivedProjectionTables = [
 	'collateral_repair_auction_events',
 	'amm_trade_events',
 	'fork_migration_events',
-	'liquidation_approval_events',
 ] as const
 
 export const clearInvalidatedDerivedProjections = async (transaction: SQL, invalidationId: string): Promise<void> => {
@@ -202,7 +200,6 @@ export const canonicalTablePolicies = [
 	{ kind: 'history', table: 'pools', rewindColumn: 'block_number', invalidateOnFullReplay: true },
 	{ kind: 'history', table: 'pool_snapshots', rewindColumn: 'block_number', invalidateOnFullReplay: true },
 	{ kind: 'history', table: 'pool_state_events', rewindColumn: 'block_number', invalidateOnFullReplay: true },
-	{ kind: 'history', table: 'vault_snapshots', rewindColumn: 'block_number', invalidateOnFullReplay: true },
 	{ kind: 'history', table: 'universe_events', rewindColumn: 'block_number', invalidateOnFullReplay: true },
 	{ kind: 'history', table: 'amm_markets', rewindColumn: 'block_number', invalidateOnFullReplay: true },
 	{ kind: 'history', table: 'amm_price_snapshots', rewindColumn: 'block_number', invalidateOnFullReplay: true },
@@ -215,7 +212,6 @@ export const canonicalTablePolicies = [
 	{ kind: 'history', table: 'collateral_repair_auction_events', rewindColumn: 'block_number', invalidateOnFullReplay: true },
 	{ kind: 'history', table: 'amm_trade_events', rewindColumn: 'block_number', invalidateOnFullReplay: true },
 	{ kind: 'history', table: 'fork_migration_events', rewindColumn: 'block_number', invalidateOnFullReplay: true },
-	{ kind: 'history', table: 'liquidation_approval_events', rewindColumn: 'block_number', invalidateOnFullReplay: true },
 	{ kind: 'history', table: 'entity_state_snapshots', rewindColumn: 'block_number', staleOnInvalidation: true, invalidateOnFullReplay: false },
 	{ kind: 'history', table: 'entity_state_observations', rewindColumn: 'block_number', invalidateOnFullReplay: false },
 	{ kind: 'history', table: 'address_activity', rewindColumn: 'block_number', invalidateOnFullReplay: true },

@@ -26,7 +26,7 @@ import {
 	transactionHash,
 	uniswapPairAddress,
 	uniswapV4PoolManagerAddress,
-	vaultCheckpoint,
+	accountingCheckpoint,
 	wethAddress,
 } from './postgres-fixtures.ts'
 
@@ -251,7 +251,7 @@ export const storeReplacementBlock = async ({ database }: LifecycleContext, { wr
 	const replacement: IndexedBlock = {
 		...replacementBase,
 		contracts: [...replacementBase.contracts, uniswapPairDiscovery, inverseUniswapPairDiscovery],
-		logs: [...replacementBase.logs, vaultCheckpoint(replacementBase.hash), ...replacementPrices],
+		logs: [...replacementBase.logs, accountingCheckpoint(replacementBase.hash), ...replacementPrices],
 		addressActivity: [{ transactionHash, address, poolAddress: discoveredAddress, role: 'sender' }],
 		logScanCursors: [
 			{ contractAddress: address, startBlock: 1n, lastRetrievedBlock: 2n },

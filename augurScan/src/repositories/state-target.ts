@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 
-type Kind = 'pools' | 'questions' | 'vaults' | 'universes'
+type Kind = 'pools' | 'questions' | 'universes'
 
 export const selectedPoolStateRows = async (sql: SQL, chainId: number, poolAddress: string) =>
 	await sql`SELECT DISTINCT ON (chain_id, pool_address, event_name) chain_id, pool_address, event_name, state, block_number, log_index FROM pool_state_events WHERE canonical AND chain_id = ${chainId} AND pool_address = ${poolAddress.toLowerCase()} ORDER BY chain_id, pool_address, event_name, block_number DESC, log_index DESC`
@@ -8,18 +8,12 @@ export const selectedPoolStateRows = async (sql: SQL, chainId: number, poolAddre
 export const selectedStateEntity = async (sql: SQL, chainId: number, kind: Kind, identity: string): Promise<Record<string, unknown> | undefined> => {
 	if (kind === 'pools') {
 		const rows =
-			await sql`SELECT p.*, (SELECT state.read_result->'collateral' FROM entity_state_snapshots state WHERE state.chain_id = p.chain_id AND state.entity_type = 'pool' AND state.entity_identity = p.pool_address AND state.canonical AND state.read_status = 'success' ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1) AS collateral, n.id AS network_id, q.title AS question_title, ps.settlement_collateral_atto_eth, ps.total_capacity_ownership_atto_rep, ps.fee_eligible_capacity_ownership_atto_rep, ps.total_claimable_vault_fees_atto_eth, ps.unallocated_accrued_fees_atto_eth, ps.current_retention_rate, ps.block_number AS snapshot_block, (SELECT count(DISTINCT v.vault_address) FROM vault_snapshots v WHERE v.chain_id = p.chain_id AND v.pool_address = p.pool_address AND v.canonical) AS vault_count, (SELECT count(*) FROM pools child WHERE child.chain_id = p.chain_id AND child.parent_address = p.pool_address AND child.canonical) AS child_count FROM pools p JOIN networks n USING (chain_id) LEFT JOIN questions q ON q.chain_id = p.chain_id AND q.question_id = p.question_id AND q.canonical LEFT JOIN LATERAL (SELECT * FROM pool_snapshots snapshot WHERE snapshot.chain_id = p.chain_id AND snapshot.pool_address = p.pool_address AND snapshot.canonical ORDER BY snapshot.block_number DESC, snapshot.log_index DESC LIMIT 1) ps ON true WHERE p.chain_id = ${chainId} AND p.pool_address = ${identity.toLowerCase()} AND p.canonical LIMIT 1`
+			await sql`SELECT p.*, (SELECT state.read_result->'collateral' FROM entity_state_snapshots state WHERE state.chain_id = p.chain_id AND state.entity_type = 'pool' AND state.entity_identity = p.pool_address AND state.canonical AND state.read_status = 'success' ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1) AS collateral, n.id AS network_id, q.title AS question_title, ps.settlement_collateral_atto_eth, ps.share_token_supply_atto_shares, ps.block_number AS snapshot_block, (SELECT count(*) FROM pools child WHERE child.chain_id = p.chain_id AND child.parent_address = p.pool_address AND child.canonical) AS child_count FROM pools p JOIN networks n USING (chain_id) LEFT JOIN questions q ON q.chain_id = p.chain_id AND q.question_id = p.question_id AND q.canonical LEFT JOIN LATERAL (SELECT * FROM pool_snapshots snapshot WHERE snapshot.chain_id = p.chain_id AND snapshot.pool_address = p.pool_address AND snapshot.canonical ORDER BY snapshot.block_number DESC, snapshot.log_index DESC LIMIT 1) ps ON true WHERE p.chain_id = ${chainId} AND p.pool_address = ${identity.toLowerCase()} AND p.canonical LIMIT 1`
 		return rows[0]
 	}
 	if (kind === 'questions') {
 		const rows =
 			await sql`SELECT q.*, n.id AS network_id, (SELECT count(*) FROM pools p WHERE p.chain_id = q.chain_id AND p.question_id = q.question_id AND p.canonical) AS pool_count, (SELECT count(*) FROM universe_events u WHERE u.chain_id = q.chain_id AND u.fork_question_id = q.question_id AND u.event_name = 'UniverseForked' AND u.canonical) AS fork_count FROM questions q JOIN networks n USING (chain_id) WHERE q.chain_id = ${chainId} AND q.question_id = ${identity}::numeric AND q.canonical LIMIT 1`
-		return rows[0]
-	}
-	if (kind === 'vaults') {
-		const parts = identity.split(':')
-		const rows =
-			await sql`SELECT v.*, (SELECT state.read_result->'collateral' FROM entity_state_snapshots state WHERE state.chain_id = v.chain_id AND state.entity_type = 'pool' AND state.entity_identity = v.pool_address AND state.canonical AND state.read_status = 'success' ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1) AS collateral, n.id AS network_id, q.title AS question_title FROM vault_snapshots v JOIN networks n USING (chain_id) LEFT JOIN pools p ON p.chain_id = v.chain_id AND p.pool_address = v.pool_address AND p.canonical LEFT JOIN questions q ON q.chain_id = p.chain_id AND q.question_id = p.question_id AND q.canonical WHERE v.chain_id = ${chainId} AND v.pool_address = ${parts[0]?.toLowerCase()} AND v.vault_address = ${parts[1]?.toLowerCase()} AND v.canonical ORDER BY v.block_number DESC, v.log_index DESC LIMIT 1`
 		return rows[0]
 	}
 	const rows =

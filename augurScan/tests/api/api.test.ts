@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from 'bun:test'
 import { SQL } from 'bun'
-import { directObservationTotal } from '../../src/api/shared.ts'
+import { directObservationTotal, hasCursorSnapshot } from '../../src/api/shared.ts'
 import { handleApi } from '../../src/api.ts'
 import { decodeOpaqueCursor, encodeOpaqueCursor } from '../../src/cursor-codec.ts'
 
@@ -16,6 +16,15 @@ test('round-trips Unicode opaque cursors with unpadded base64url encoding', () =
 	expect(cursor).toMatch(/^[A-Za-z0-9_-]+$/)
 	expect(cursor).not.toContain('=')
 	expect(decodeOpaqueCursor(cursor)).toEqual(value)
+})
+
+test('validates the snapshot segment shared by every pagination cursor', () => {
+	const snapshot = ['120', `0x${'ab'.repeat(32)}`, '7', 'abi', 'application', 'projection']
+	expect(hasCursorSnapshot([1, 5, ...snapshot, 'row'], 2)).toBe(true)
+	expect(hasCursorSnapshot([1, 5, ...snapshot], 1)).toBe(false)
+	expect(hasCursorSnapshot(['-1', ...snapshot.slice(1)], 0)).toBe(false)
+	expect(hasCursorSnapshot(['120', `0x${'AB'.repeat(32)}`, ...snapshot.slice(2)], 0)).toBe(false)
+	expect(hasCursorSnapshot([...snapshot.slice(0, 5), 6], 0)).toBe(false)
 })
 
 test('returns request validation failures as 400 responses', async () => {
@@ -101,10 +110,16 @@ test('rejects overlong state and contract identifiers before querying', async ()
 	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
 	databases.push(database)
 	const address = `0x${'1'.repeat(40)}`
-	for (const path of [`state/pools/1/${address}/extra`, `state/vaults/1/${address}/${address}/extra`, 'state/universes/1/0/extra', 'state/questions/1/0/extra', `contracts/1/${address}/extra`]) {
+	for (const path of [`state/pools/1/${address}/extra`, 'state/universes/1/0/extra', 'state/questions/1/0/extra', `contracts/1/${address}/extra`]) {
 		const response = await handleApi(new Request(`http://localhost/api/v1/${path}`), database)
 		expect(response?.status).toBe(400)
 	}
+	// Vault state and vault risk are no longer resources: no current contract event describes a vault's accounting.
+	const vaultHistory = await handleApi(new Request(`http://localhost/api/v1/state/vaults/1/${address}/${address}`), database)
+	expect(vaultHistory?.status).toBe(404)
+	const vaultRisk = await handleApi(new Request(`http://localhost/api/v1/state/risk/vaults/1/${address}/${address}`), database)
+	expect(vaultRisk?.status).toBe(400)
+	expect(await vaultRisk?.json()).toEqual({ error: 'Invalid risk entity identifier' })
 })
 
 test('rejects non-decimal contract chain identifiers before querying', async () => {

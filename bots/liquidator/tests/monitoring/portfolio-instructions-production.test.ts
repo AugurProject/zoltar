@@ -1,18 +1,14 @@
 import { describe, expect, test } from 'bun:test'
-import { createPublicClient, createWalletClient, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
-import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { erc20Abi, zoltarAbi, securityPoolCapitalLedgerAbi as capitalAbi, securityPoolPortfolioForkCoordinatorAbi as forkAbi } from '@zoltar/bot-shared/contracts/abi'
 import { createWriteClient, writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients'
-import { mainnet } from '@zoltar/core-shared/evm/ethereum'
 import { useSecurityPoolPortfolioFixture, unit } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioFixture'
 import { preparePortfolioCollateralRepairAuction } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioCollateralRepairAuctionFixture'
-import { getInfraContractAddresses } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
 import { DAY } from '../../../../solidity/ts/testSupport/simulator/utils/constants'
 import { addRepToMigrationBalance, splitMigrationRep, getZoltarForkThreshold, forkUniverse, getZoltarAddress } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
 import { loadPortfolioObservation } from '../../src/monitoring/portfolio-monitor.ts'
 import { executePortfolioInstruction } from '../../src/execution/portfolio-instructions.ts'
 import { loadDurableState } from '../../src/state/operator-state.ts'
-import { portfolioSettings } from '../support/portfolio-observation.ts'
+import { repairAuctionKeeper } from '../support/collateral-repair-auction.ts'
 import { serveMockChainRpc } from '../support/mock-chain-rpc.ts'
 import { loadPortfolioAuctionSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 
@@ -22,18 +18,9 @@ describe('explicit portfolio instruction lifecycle', () => {
 		const context = await preparePortfolioCollateralRepairAuction(fixture)
 		await context.report()
 		await context.open()
-		const account = privateKeyToAccount(`0x${'01'.repeat(32)}`)
+		const { account, reader: client, scope, settings, wallet } = repairAuctionKeeper(fixture, context)
 		await context.mock.setBalance(account.address, 100n * unit)
-		const client = createPublicClient({ chain: mainnet, transport: custom(context.mock) })
-		const wallet = createWalletClient({ account, chain: mainnet, transport: custom(context.mock) })
-		const settings = portfolioSettings()
 		await wallet.sendTransaction({ to: settings.deployment.weth, value: 10n * unit })
-		const scope = { address: fixture.portfolio, universeId: context.child, nextPositionId: 1n, sweepEnd: 0n }
-		settings.deployment.securityPoolFactory = getInfraContractAddresses().securityPoolFactory
-		settings.deployment.zoltar = getZoltarAddress()
-		settings.deployment.multicall3 = getInfraContractAddresses().multicall3
-		settings.selectedPortfolios = [scope]
-		settings.approvedUniverses = [context.child]
 		settings.portfolioPolicy.maximumPrincipalAttoRep = 1_000_000n * unit
 		settings.portfolioPolicy.maximumTotalPrincipalAttoRep = 1_000_000n * unit
 		settings.portfolioPolicy.maximumCommitmentAttoEth = 1000n * unit

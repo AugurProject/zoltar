@@ -2,9 +2,8 @@ import { semanticSummary, timelineEntityPath } from './semantic-evidence.ts'
 import { shortIdentifier } from './identifier-format.ts'
 import type { NetworkRecord, OperationsCatalogSection, OperationsRenderContext, PagedOperationsCatalogSection } from './browser-types.ts'
 import { isRecord, operationRecords, operationsCatalogRecords, operationsRiskPagination, operationsRiskRecords, type JsonRecord, type OperationsResponse } from './api-validation.ts'
-import { compareCanonicalEventPosition } from './canonical-pagination.ts'
 import { evidenceStatusLabel, historyInvalidationEvidencePresentation, historyInvalidationReasonLabel, timelineEntityTypeLabel, timelineOccurrenceFields } from './history-evidence.ts'
-import { operationsForkChildCount, operationsRiskPresentation, operationsRouteFreshness } from './operations-presentation.ts'
+import { operationsForkChildCount, operationsRiskPresentation, operationsRouteFreshness, takeoverSummary } from './operations-presentation.ts'
 import { exactUnit, percentFromBps, utcDateTime } from './format.ts'
 import { nativeSymbolFor } from './network-freshness.ts'
 import type { createOperationsComponents } from './operations-components.ts'
@@ -23,44 +22,17 @@ export interface OperationsOverviewDeps {
 	readonly operationNumber: (value: unknown) => string
 	readonly operationCounted: (value: unknown, singular: string, plural?: string) => string
 	readonly operationsHref: (pathname: string) => string
-	readonly approvalTransitionSummary: (item: Readonly<Record<string, unknown>>) => string
 	readonly operationsCatalogSection: () => OperationsCatalogSection | undefined
 	readonly operationsSectionFilters: (selected: string) => HTMLElement[]
 	readonly connection: HTMLElement
-	readonly setRiskCatalogState: (state: { readonly chainId: string; readonly pools: readonly JsonRecord[]; readonly vaults: readonly JsonRecord[] }) => void
+	readonly setRiskCatalogState: (state: { readonly chainId: string; readonly pools: readonly JsonRecord[] }) => void
 	readonly setCatalogState: (state: { readonly chainId: string; readonly section: PagedOperationsCatalogSection; readonly items: readonly JsonRecord[] }) => void
-	readonly loadOperations: (options?: {
-		live?: boolean
-		catalogTargetCount?: number
-		riskPoolTargetCount?: number
-		riskVaultTargetCount?: number
-		detailTargetCount?: number
-		decisionTargetCount?: number
-		activityTargetCount?: number
-		historyTargetOffset?: number
-		preservedContext?: OperationsRenderContext
-	}) => Promise<boolean>
+	readonly loadOperations: (options?: { live?: boolean; catalogTargetCount?: number; riskPoolTargetCount?: number; detailTargetCount?: number; decisionTargetCount?: number; activityTargetCount?: number; historyTargetOffset?: number; preservedContext?: OperationsRenderContext }) => Promise<boolean>
 	readonly components: Components
 }
 
 export const renderOperationsOverview = (deps: OperationsOverviewDeps, response: OperationsResponse, preservedContext?: OperationsRenderContext, live = false) => {
-	const {
-		lookup: $,
-		captureContext: captureOperationsRenderContext,
-		restoreContext: restoreOperationsRenderContext,
-		networks: latestNetworks,
-		requiredChainId,
-		element,
-		number,
-		operationNumber,
-		operationCounted,
-		operationsHref,
-		approvalTransitionSummary,
-		operationsCatalogSection,
-		operationsSectionFilters,
-		connection,
-		loadOperations,
-	} = deps
+	const { lookup: $, captureContext: captureOperationsRenderContext, restoreContext: restoreOperationsRenderContext, networks: latestNetworks, requiredChainId, element, number, operationNumber, operationCounted, operationsHref, operationsCatalogSection, operationsSectionFilters, connection, loadOperations } = deps
 	const { operationCard, operationRow, exactEvidenceRow, operationsPanel } = deps.components
 	const content = $('#operations-content')
 	const renderContext = preservedContext ?? captureOperationsRenderContext()
@@ -86,10 +58,8 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 	if (riskValue !== undefined && !isRecord(riskValue)) throw new Error('Operations risk is malformed')
 	const risk = isRecord(riskValue) ? riskValue : {}
 	const riskPagination = operationsRiskPagination(risk['pagination'], riskValue !== undefined)
-	const pools = operationsRiskRecords('pools', risk['pools'])
-	const vaults = operationsRiskRecords('vaults', risk['vaults'])
-	const approvals = operationRecords(risk['approvalEvents']).sort(compareCanonicalEventPosition)
-	const recentLiquidations = operationRecords(risk['recentLiquidations'])
+	const pools = operationsRiskRecords(risk['pools'])
+	const recentTakeovers = operationRecords(risk['recentTakeovers'])
 	const freshness = element('div', 'operations-freshness')
 	freshness.append(
 		operationCard('Latest block', `#${number(typeof asOf['blockNumber'] === 'string' ? asOf['blockNumber'] : undefined)}`, shortIdentifier(String(asOf['blockHash'] ?? 'Unavailable'))),
@@ -120,10 +90,10 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 			changes.filter(item => item['entity_type'] === 'auction'),
 		),
 		operationCard(
-			'Pool / vault snapshots',
-			`${operationNumber(totals['pools'] ?? pools.length)} / ${operationNumber(totals['vaults'] ?? vaults.length)}`,
+			'Security pools',
+			operationNumber(totals['pools'] ?? pools.length),
 			undefined,
-			changes.filter(item => item['entity_type'] === 'pool' || item['entity_type'] === 'vault'),
+			changes.filter(item => item['entity_type'] === 'pool'),
 		),
 	)
 	const reportRows = reports.map(item => {
@@ -157,7 +127,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 	)
 	const poolRiskRows = pools.map(item => {
 		const capacity = isRecord(item['capacity']) ? item['capacity'] : {}
-		const riskPresentation = operationsRiskPresentation('pool', item['protocol_state'], item['scanner_severity'])
+		const riskPresentation = operationsRiskPresentation(item['protocol_state'], item['scanner_severity'])
 		return operationRow(
 			'Pool accounting',
 			`${riskPresentation.scannerAssessment} · ${percentFromBps(typeof capacity['utilizationBps'] === 'string' ? capacity['utilizationBps'] : undefined)} utilized · ${String(item['scanner_reason'] ?? '')}`,
@@ -166,21 +136,8 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 			operationsHref(`/operations/risk/pool/${encodeURIComponent(String(item['pool_address'] ?? ''))}`),
 		)
 	})
-	const vaultRiskRows = vaults.map(item => {
-		const itemRisk = isRecord(item['risk']) ? item['risk'] : {}
-		const riskPresentation = operationsRiskPresentation('vault', item['protocol_state'], item['scanner_severity'])
-		return operationRow(
-			'Vault position',
-			`${riskPresentation.scannerAssessment} · health ${percentFromBps(typeof itemRisk['healthFactorBps'] === 'string' ? itemRisk['healthFactorBps'] : undefined)} · ${String(item['scanner_reason'] ?? '')}`,
-			String(item['vault_address'] ?? ''),
-			item['block_number'],
-			operationsHref(`/operations/risk/vault/${encodeURIComponent(String(item['pool_address'] ?? ''))}/${encodeURIComponent(String(item['vault_address'] ?? ''))}`),
-		)
-	})
-	const riskRows = [...poolRiskRows, ...vaultRiskRows]
 	const nativeSymbol = nativeSymbolFor(requiredChainId())
-	const approvalRows = approvals.map(item => operationRow(String(item['event_name'] ?? 'Liquidation approval'), approvalTransitionSummary(item), String(item['approval_identity'] ?? item['receiver_vault'] ?? ''), item['block_number']))
-	const liquidationRows = recentLiquidations.map(item => operationRow('Vault liquidation', semanticSummary(item, nativeSymbol), String(item['entity_identity'] ?? item['source_contract'] ?? ''), item['block_number']))
+	const takeoverRows = recentTakeovers.map(item => operationRow('Commitment take-over', takeoverSummary(item['summary_data']), String(item['source_contract'] ?? ''), item['block_number']))
 	const tradingRows = trading.map(item =>
 		operationRow(
 			String(item['question_title'] ?? 'Augur AMM market'),
@@ -237,7 +194,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 	const forkRows = forks.map(item =>
 		operationRow(
 			`Universe ${String(item['universe_identity'] ?? '—')} fork`,
-			`${operationsForkChildCount(operationNumber(item['child_count']), item['child_count'])} · ${operationCounted(item['migrator_count'], 'migrator')} · ${exactUnit(String(item['migrated_atto_rep'] ?? '0'), 18, 'REP')} migrated · ${operationCounted(item['obligation_events'], 'escalation obligation')}`,
+			`${operationsForkChildCount(operationNumber(item['child_count']), item['child_count'])} · ${operationCounted(item['migrator_count'], 'migrator')} · ${exactUnit(String(item['migrated_atto_rep'] ?? '0'), 18, 'REP')} migrated · ${operationCounted(item['portfolio_fork_events'], 'portfolio fork event')}`,
 			undefined,
 			item['block_number'],
 			operationsHref(`/operations/fork/${encodeURIComponent(String(item['universe_identity'] ?? ''))}`),
@@ -265,14 +222,11 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 	const riskPoolPanel = operationsPanel('Pool risk evidence', poolRiskRows, 'No pool accounting snapshots match this view.', {
 		label: `${operationCounted(pools.length, 'pool')} shown · ${operationCounted(riskPagination['poolTotal'], 'pool')} total`,
 	})
-	const riskVaultPanel = operationsPanel('Vault risk evidence', vaultRiskRows, 'No vault accounting snapshots match this view.', {
-		label: `${operationCounted(vaults.length, 'vault')} shown · ${operationCounted(riskPagination['vaultTotal'], 'vault')} total`,
-	})
 	const sectionPanels = new Map<string, () => HTMLElement[]>([
 		['reports', () => [operationsPanel('OpenOracle reports', reportRows, 'No reports match this view.')]],
 		['escalations', () => [operationsPanel('Escalation games', escalationRows, 'No escalation games match this view.')]],
 		['auctions', () => [operationsPanel('Collateral repair auctions', auctionRows, 'No auctions match this view.')]],
-		['risk', () => [riskPoolPanel, riskVaultPanel, operationsPanel('Liquidation approval lifecycle', approvalRows, 'No liquidation approvals match this view.'), operationsPanel('Recent liquidations', liquidationRows, 'No vault liquidations match this view.')]],
+		['risk', () => [riskPoolPanel, operationsPanel('Recent commitment take-overs', takeoverRows, 'No commitment take-overs match this view.', { label: 'Latest 25' })]],
 		['trading', () => [operationsPanel('Augur AMM markets', tradingRows, 'No Augur AMM markets match this view.')]],
 		[
 			'timeline',
@@ -344,15 +298,11 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 			],
 		],
 	])
-	const fees = isRecord(data['feeEconomics']) ? data['feeEconomics'] : {}
 	const panels = sectionPanels.get(selected)?.() ?? [
-		operationsPanel('Protocol fee accrual', [operationRow('Accrued vault fees', fees['accrued_atto_eth'] == null ? 'Unavailable' : exactUnit(String(fees['accrued_atto_eth']), 18, nativeSymbol), undefined, undefined)], '', {
-			label: `Indexed accrual checkpoints across ${String(fees['pools'] ?? 'unknown')} pools; ${String(fees['missing_baselines'] ?? 'unknown')} missing opening checkpoints. This is accrued vault revenue, before claims.`,
-		}),
 		operationsPanel('Needs attention · reports', attentionReportRows.slice(0, 5), `No reports need attention among ${number(reports.length)} shown.`),
 		operationsPanel('Active escalations', activeEscalationRows, `No active escalation games among ${number(escalations.length)} shown.`),
 		operationsPanel('Active auctions', activeAuctionRows, `No active auctions among ${number(auctions.length)} shown.`),
-		operationsPanel('Pool and vault risk', riskRows, 'No risk snapshots are available.'),
+		operationsPanel('Pool risk', poolRiskRows, 'No risk snapshots are available.'),
 		operationsPanel('Fork and migration progress', forkRows, 'No forks or migrations match this view.'),
 		operationsPanel('Price provenance', priceRows, 'No accepted coordinator price is available.'),
 		operationsPanel('Recent semantic changes', changeRows, 'No changes match this view.'),
@@ -361,49 +311,42 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 	grid.append(...panels)
 	const riskCatalogPage = isRecord(data['_riskCatalogPage']) ? data['_riskCatalogPage'] : undefined
 	if (selected === 'risk' && riskCatalogPage !== undefined) {
-		deps.setRiskCatalogState({ chainId: requiredChainId(), pools, vaults })
-		const appendRiskPagination = (kind: 'pool' | 'vault', panel: HTMLElement, loadedCount: number, hasMore: boolean, nextCursor: unknown) => {
-			if (hasMore && typeof nextCursor === 'string') {
-				const button = element('button', 'secondary operations-catalog-more', `Show more ${kind === 'pool' ? 'pools' : 'vaults'}`)
-				button.type = 'button'
-				button.dataset['riskKind'] = kind
-				button.setAttribute('aria-label', `Show more ${kind} risk records`)
-				const status = element('p', 'activity-summary')
-				status.setAttribute('role', 'status')
-				status.setAttribute('aria-live', 'polite')
-				button.addEventListener('click', async () => {
-					const paginationContext = captureOperationsRenderContext()
-					button.disabled = true
-					button.setAttribute('aria-busy', 'true')
-					button.textContent = `Showing more ${kind === 'pool' ? 'pools' : 'vaults'}…`
-					status.textContent = `Loading older ${kind} risk records…`
-					status.classList.add('sr-only')
-					const loaded = await loadOperations({
-						live: true,
-						...(kind === 'pool' ? { riskPoolTargetCount: loadedCount + 100 } : { riskVaultTargetCount: loadedCount + 100 }),
-						preservedContext: paginationContext,
-					})
-					if (!loaded && button.isConnected) {
-						button.disabled = false
-						button.removeAttribute('aria-busy')
-						button.textContent = `Retry more ${kind === 'pool' ? 'pools' : 'vaults'}`
-						status.textContent = `Additional ${kind} risk records could not be loaded.`
-						status.classList.remove('sr-only')
-						button.focus({ preventScroll: true })
-					}
-				})
-				panel.append(button, status)
-			} else if (renderContext.focusRiskKind === kind) {
-				const complete = element('p', 'activity-summary operations-pagination-complete', `All available ${kind} records are shown.`)
-				complete.dataset['riskKind'] = kind
-				complete.tabIndex = -1
-				complete.setAttribute('role', 'status')
-				complete.setAttribute('aria-live', 'polite')
-				panel.append(complete)
-			}
+		deps.setRiskCatalogState({ chainId: requiredChainId(), pools })
+		const nextCursor = riskPagination['poolNextCursor']
+		if (riskPagination['poolHasMore'] === true && typeof nextCursor === 'string') {
+			const button = element('button', 'secondary operations-catalog-more', 'Show more pools')
+			button.type = 'button'
+			button.dataset['riskKind'] = 'pool'
+			button.setAttribute('aria-label', 'Show more pool risk records')
+			const status = element('p', 'activity-summary')
+			status.setAttribute('role', 'status')
+			status.setAttribute('aria-live', 'polite')
+			button.addEventListener('click', async () => {
+				const paginationContext = captureOperationsRenderContext()
+				button.disabled = true
+				button.setAttribute('aria-busy', 'true')
+				button.textContent = 'Showing more pools…'
+				status.textContent = 'Loading older pool risk records…'
+				status.classList.add('sr-only')
+				const loaded = await loadOperations({ live: true, riskPoolTargetCount: pools.length + 100, preservedContext: paginationContext })
+				if (!loaded && button.isConnected) {
+					button.disabled = false
+					button.removeAttribute('aria-busy')
+					button.textContent = 'Retry more pools'
+					status.textContent = 'Additional pool risk records could not be loaded.'
+					status.classList.remove('sr-only')
+					button.focus({ preventScroll: true })
+				}
+			})
+			riskPoolPanel.append(button, status)
+		} else if (renderContext.focusRiskKind === 'pool') {
+			const complete = element('p', 'activity-summary operations-pagination-complete', 'All available pool records are shown.')
+			complete.dataset['riskKind'] = 'pool'
+			complete.tabIndex = -1
+			complete.setAttribute('role', 'status')
+			complete.setAttribute('aria-live', 'polite')
+			riskPoolPanel.append(complete)
 		}
-		appendRiskPagination('pool', riskPoolPanel, pools.length, riskPagination['poolHasMore'] === true, riskPagination['poolNextCursor'])
-		appendRiskPagination('vault', riskVaultPanel, vaults.length, riskPagination['vaultHasMore'] === true, riskPagination['vaultNextCursor'])
 	}
 	const catalogPage = selectedCatalogPage
 	const catalogSection = operationsCatalogSection()

@@ -3,7 +3,7 @@ import type { SQL } from 'bun'
 import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import { addressPortfolioRows, richListRows, type RichListSort } from '../repositories/portfolio.ts'
 import { snapshotBoundary } from './entity-details.ts'
-import { ApiConflictError, ApiRequestError, boundedInteger, evmAddress, integer, isNonNegativeSafeInteger, isPostgresBigint, json, jsonRecord } from './shared.ts'
+import { ApiConflictError, ApiRequestError, boundedInteger, evmAddress, hasCursorSnapshot, integer, isNonNegativeSafeInteger, isPostgresBigint, json, jsonRecord } from './shared.ts'
 import { operationsAsOfForContinuations } from './snapshot.ts'
 import { accountTradingPnl } from './trading-activity.ts'
 
@@ -58,20 +58,7 @@ const parsePortfolioCursor = (value: string | null, chainId: number, address: st
 		},
 		error => new ApiRequestError(`${kind}Cursor is invalid`, { cause: error }),
 	)
-	if (
-		parts.length !== 11 ||
-		!isNonNegativeSafeInteger(parts[0]) ||
-		typeof parts[1] !== 'string' ||
-		(parts[2] !== 'forks' && parts[2] !== 'lp' && parts[2] !== 'reports') ||
-		!isPostgresBigint(parts[3]) ||
-		typeof parts[4] !== 'string' ||
-		!/^0x[0-9a-f]{64}$/.test(parts[4]) ||
-		!isPostgresBigint(parts[5]) ||
-		!parts.slice(6, 9).every(part => typeof part === 'string') ||
-		!isNonNegativeSafeInteger(parts[9]) ||
-		!isNonNegativeSafeInteger(parts[10]) ||
-		parts[10] > parts[9]
-	)
+	if (parts.length !== 11 || !isNonNegativeSafeInteger(parts[0]) || typeof parts[1] !== 'string' || (parts[2] !== 'forks' && parts[2] !== 'lp' && parts[2] !== 'reports') || !hasCursorSnapshot(parts, 3) || !isNonNegativeSafeInteger(parts[9]) || !isNonNegativeSafeInteger(parts[10]) || parts[10] > parts[9])
 		throw new ApiRequestError(`${kind}Cursor is invalid`)
 	if (parts[0] !== chainId || parts[1] !== address || parts[2] !== kind) throw new ApiRequestError(`${kind}Cursor does not match the requested collection`)
 	return {
@@ -156,7 +143,6 @@ export const addressPortfolioResponse = async (sql: SQL, url: URL): Promise<Resp
 		data: {
 			...jsonRecord(base),
 			...balances,
-			vaultAvailability: Number(base?.['vault_count'] ?? 0) > 0 ? 'available' : 'unavailable',
 			...(base === undefined ? { address, availability: 'Awaiting indexed evidence' } : {}),
 			escalation_positions: positions.slice(0, 250),
 			escalation_payouts: await escalationPayouts(sql, chainId, snapshotBlock, address),

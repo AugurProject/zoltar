@@ -107,14 +107,19 @@ test('USDC purchases parse six decimals and require a separate token approval', 
 	expect(decodeFunctionData({ abi, data: purchase.data })).toEqual({ functionName: 'createCompleteSet', args: [0n, 999n, 2_000_000n, owner, 900_000n, 20_000n] })
 })
 
-test('USDT approvals require a separate reset even when the existing allowance covers the purchase', async () => {
-	const collateralToken = '0xdAC17F958D2ee523a2206206994597C13D831ec7' as const
+/** A `USDT`-symbol collateral at `collateralToken` with a 5 USDT allowance, and the requested increase to 10 USDT. */
+async function requestUsdtSymbolApprovalIncrease(collateralToken: typeof token) {
 	const snapshot = capitalSnapshot({ collateralToken, collateral: { address: collateralToken, symbol: 'USDT', decimals: 6 }, walletCollateral: 10_000_000n, collateralAllowance: 5_000_000n })
-	const { hook, source, requests } = await setup(snapshot)
-	source.setRead('allowance', 5_000_000n)
-	await act(() => hook.state().approve(10_000_000n))
-	const increase = requests[0]
+	const state = await setup(snapshot)
+	state.source.setRead('allowance', 5_000_000n)
+	await act(() => state.hook.state().approve(10_000_000n))
+	const increase = state.requests[0]
 	if (increase === undefined) throw new Error('Missing approval')
+	return { ...state, snapshot, increase }
+}
+
+test('USDT approvals require a separate reset even when the existing allowance covers the purchase', async () => {
+	const { hook, source, requests, snapshot, increase } = await requestUsdtSymbolApprovalIncrease('0xdAC17F958D2ee523a2206206994597C13D831ec7')
 	await expect(increase.validateBeforeSubmit?.()).rejects.toThrow('Reset USDT approval first.')
 	await act(() => hook.state().approve(0n))
 	const reset = requests[1]
@@ -124,4 +129,8 @@ test('USDT approvals require a separate reset even when the existing allowance c
 	source.setRead('allowance', 0n)
 	await increase.validateBeforeSubmit?.()
 	expect(requests).toHaveLength(2)
+})
+test('a token that only reports the USDT symbol does not require an allowance reset', async () => {
+	const { increase } = await requestUsdtSymbolApprovalIncrease(token)
+	await increase.validateBeforeSubmit?.()
 })

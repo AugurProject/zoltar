@@ -79,24 +79,19 @@ export const operationsCatalogRecords = (section: OperationsCatalogSection, valu
 	return records
 }
 
-export const operationsRiskRecords = (kind: 'pools' | 'vaults', value: unknown, required = false): JsonRecord[] => {
-	const records = operationRecords(value, `Operations risk ${kind}`, required)
-	if (!records.every(record => isAddress(record['pool_address']) && (kind === 'pools' || isAddress(record['vault_address'])))) throw new Error(`Operations risk ${kind} records are malformed`)
+export const operationsRiskRecords = (value: unknown, required = false): JsonRecord[] => {
+	const records = operationRecords(value, 'Operations risk pools', required)
+	if (!records.every(record => isAddress(record['pool_address']))) throw new Error('Operations risk pools records are malformed')
 	return records
 }
 
 export const operationsRiskPagination = (value: unknown, required = false): JsonRecord => {
 	if (value === undefined && !required) return {}
 	if (!isJsonRecord(value)) throw new Error('Operations risk pagination is malformed')
-	for (const name of ['poolTotal', 'vaultTotal'] as const) if (!isNonNegativeSafeInteger(value[name])) throw new Error(`Operations risk ${name} is malformed`)
-	for (const name of ['poolHasMore', 'vaultHasMore'] as const) if (typeof value[name] !== 'boolean') throw new Error(`Operations risk ${name} is malformed`)
-	for (const [hasMoreName, cursorName] of [
-		['poolHasMore', 'poolNextCursor'],
-		['vaultHasMore', 'vaultNextCursor'],
-	] as const) {
-		const cursor = value[cursorName]
-		if (value[hasMoreName] === true ? !isString(cursor) : cursor !== undefined) throw new Error(`Operations risk ${cursorName} is malformed`)
-	}
+	if (!isNonNegativeSafeInteger(value['poolTotal'])) throw new Error('Operations risk poolTotal is malformed')
+	if (typeof value['poolHasMore'] !== 'boolean') throw new Error('Operations risk poolHasMore is malformed')
+	const cursor = value['poolNextCursor']
+	if (value['poolHasMore'] === true ? !isString(cursor) : cursor !== undefined) throw new Error('Operations risk poolNextCursor is malformed')
 	return value
 }
 
@@ -272,9 +267,6 @@ const isTokenBalanceValue = (value: unknown): boolean =>
 
 const isPoolAssociationValue = (value: unknown): boolean => isRecord(value) && isString(value['address']) && isNullableString(value['label']) && isNullableString(value['questionTitle'])
 
-const isVaultPositionValue = (value: unknown): boolean =>
-	isRecord(value) && isString(value['poolAddress']) && isNullableString(value['questionTitle']) && isString(value['repBackingUnits']) && isStringOrNumber(value['underwritingLimitAttoEth']) && isStringOrNumber(value['claimableFeesAttoEth']) && isString(value['blockNumber'])
-
 const isNativeBalanceDetailValue = (value: unknown): boolean => isRecord(value) && isString(value['balance']) && isString(value['blockNumber'])
 
 export const isRichListRecordValue = (value: unknown): boolean =>
@@ -292,8 +284,6 @@ export const isRichListRecordValue = (value: unknown): boolean =>
 	isStringOrNumber(value['transaction_count']) &&
 	isStringOrNumber(value['interaction_count']) &&
 	isStringOrNumber(value['pool_count']) &&
-	isStringOrNumber(value['vault_count']) &&
-	(value['active_vault_count'] === undefined || isStringOrNumber(value['active_vault_count'])) &&
 	(value['weth_balance'] === undefined || isString(value['weth_balance'])) &&
 	(value['native_balance'] === undefined || isString(value['native_balance'])) &&
 	(value['sampled_native_count'] === undefined || isStringOrNumber(value['sampled_native_count'])) &&
@@ -312,8 +302,6 @@ export const isRichListRecordValue = (value: unknown): boolean =>
 	(value['native_balance_detail'] === null || isNativeBalanceDetailValue(value['native_balance_detail'])) &&
 	Array.isArray(value['pool_associations']) &&
 	value['pool_associations'].every(isPoolAssociationValue) &&
-	Array.isArray(value['vault_positions']) &&
-	value['vault_positions'].every(isVaultPositionValue) &&
 	(value['escalation_positions_truncated'] === undefined || typeof value['escalation_positions_truncated'] === 'boolean') &&
 	(value['pending_refunds_truncated'] === undefined || typeof value['pending_refunds_truncated'] === 'boolean') &&
 	(value['share_positions'] === undefined || isJsonRecord(value['share_positions'])) &&
@@ -344,15 +332,9 @@ export const isPoolStateEntityValue = (value: unknown): boolean =>
 		'initial_priority_fee_atto_eth_per_gas',
 		'initial_retention_rate',
 		'initial_settlement_collateral_atto_eth',
-		'vault_count',
 		'child_count',
 	]) &&
-	hasNullableStringFields(value, ['question_title', 'settlement_collateral_atto_eth', 'total_capacity_ownership_atto_rep', 'fee_eligible_capacity_ownership_atto_rep', 'total_claimable_vault_fees_atto_eth', 'unallocated_accrued_fees_atto_eth', 'current_retention_rate', 'snapshot_block'])
-
-export const isVaultStateEntityValue = (value: unknown): boolean =>
-	isRecord(value) &&
-	hasStringFields(value, ['chain_id', 'network_id', 'pool_address', 'vault_address', 'rep_backing_units', 'capacity_ownership_atto_rep', 'claimable_fees_atto_eth', 'fee_index', 'vault_fee_remainder', 'resulting_total_rep_backing_units', 'resulting_fee_eligible_capacity_ownership_atto_rep', 'block_number']) &&
-	isNullableString(value['question_title'])
+	hasNullableStringFields(value, ['question_title', 'settlement_collateral_atto_eth', 'share_token_supply_atto_shares', 'snapshot_block'])
 
 const isQuestionSeconds = (value: unknown): boolean => typeof value === 'string' && /^(0|[1-9][0-9]{0,14})$/.test(value) && BigInt(value) <= 281_474_976_710_655n
 

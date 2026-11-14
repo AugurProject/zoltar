@@ -4,7 +4,7 @@ import type { ExecutionLockManager } from '#execution/execution-locks'
 import { clearWalletDerivedState, recordOperation, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
 import type { OpportunitySnapshot } from '#state/opportunity-snapshot'
 import type { ExclusiveProcessLock } from '#state/position-store'
-import type { PendingOperatorUpdates } from './operator-control-plane.ts'
+import type { PendingOperatorUpdates } from './pending-operator-updates.ts'
 
 function clearMarketEvidenceForSourceChange(state: { marketConsensus?: unknown; marketObservations?: unknown[] | undefined }) {
 	state.marketObservations = []

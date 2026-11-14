@@ -1,7 +1,6 @@
 import { collateralUnit } from '../src/collateral.ts'
 import { questionIdHex } from './identifier-format.ts'
-import { annualFeeMillionths, annualFeeText } from './pool-metrics.ts'
-import type { EntityHistory, PoolRecord, StateEntity, StateTab, VaultRecord } from './browser-types.ts'
+import type { EntityHistory, PoolRecord, StateEntity, StateTab } from './browser-types.ts'
 import { uniswapLiquidityChartModel, uniswapPriceChartModel, uniswapPriceProvenance } from './chart-values.ts'
 import { exactUnit, percentFromBps } from './format.ts'
 import { shortIdentifier } from './identifier-format.ts'
@@ -27,12 +26,11 @@ export interface StateRiskDeps {
 	readonly chartCard: StateComponents['chartCard']
 	readonly staticField: StateComponents['staticField']
 	readonly staticAddressField: StateComponents['staticAddressField']
-	readonly chartNumericValue: StateComponents['chartNumericValue']
 	readonly yesNoCheckpoint: (value: unknown) => string
 }
 
 export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRecord, suppliedHistory?: EntityHistory): Promise<void> => {
-	const { lookup: $, fetchEntityHistory, isCurrent, stateHeader, historyCoverageNotice, element, operationsHref, operationsPanel, operationRow, metricCard, number, chartCard, staticField, staticAddressField, chartNumericValue, yesNoCheckpoint } = deps
+	const { lookup: $, fetchEntityHistory, isCurrent, stateHeader, historyCoverageNotice, element, operationsHref, operationsPanel, operationRow, metricCard, number, chartCard, staticField, staticAddressField, yesNoCheckpoint } = deps
 	const history = suppliedHistory ?? (await fetchEntityHistory('pools', poolItem))
 	if (!isCurrent()) return
 	const poolCollateral = collateralUnit(poolItem)
@@ -43,7 +41,6 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 	const openOracleHistory = history.openOracleHistory ?? []
 	const uniswapChart = uniswapPriceChartModel(uniswapRepEthPrices)
 	const uniswapLiquidity = uniswapLiquidityChartModel(uniswapRepEthPrices)
-	const feeHistory = history.snapshots.map(row => ({ ...row, annual_fee_millionths: annualFeeMillionths(row['current_retention_rate']) }))
 	const latestAmmPrice = ammPrices.at(-1)
 	const latestRepEthPrice = repEthPrices.at(-1)
 	const latestUniswapPrice = uniswapChart.latestObservation
@@ -63,10 +60,7 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 	const metrics = element('div', 'metric-grid')
 	metrics.append(
 		metricCard('Settlement collateral', exactUnit(poolItem.settlement_collateral_atto_eth ?? poolItem.initial_settlement_collateral_atto_eth, poolCollateral.decimals, poolNativeSymbol)),
-		metricCard('Underwriting commitments', exactUnit(poolItem.total_capacity_ownership_atto_rep, poolCollateral.decimals, poolNativeSymbol)),
-		metricCard('Claimable vault fees', exactUnit(poolItem.total_claimable_vault_fees_atto_eth, poolCollateral.decimals, poolNativeSymbol)),
-		metricCard('Vaults', number(poolItem.vault_count)),
-		metricCard('Annual open-interest fee', annualFeeText(poolItem.current_retention_rate)),
+		metricCard('Share-token supply', poolItem.share_token_supply_atto_shares == null ? 'No checkpoint' : exactUnit(poolItem.share_token_supply_atto_shares, poolCollateral.decimals, 'shares')),
 		metricCard('Conditional YES', latestAmmPrice === undefined ? 'No AMM price' : exactUnit(latestAmmPrice.conditional_yes_bps, 2, '%')),
 		metricCard('Conditional NO', latestAmmPrice === undefined ? 'No AMM price' : exactUnit(latestAmmPrice.conditional_no_bps, 2, '%')),
 		metricCard(`REP / ${poolNativeSymbol}`, latestRepEthPrice === undefined ? 'No coordinator price' : exactUnit(latestRepEthPrice.rep_per_eth_1e18, Math.max(0, 36 - poolCollateral.decimals), `REP/${poolNativeSymbol}`)),
@@ -80,26 +74,11 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 			history.snapshots,
 			[
 				{ key: 'settlement_collateral_atto_eth', label: 'Collateral', unit: poolNativeSymbol, decimals: poolCollateral.decimals },
-				{ key: 'total_capacity_ownership_atto_rep', label: 'Underwriting commitment', unit: poolNativeSymbol, decimals: poolCollateral.decimals, className: 'secondary' },
-				{ key: 'total_claimable_vault_fees_atto_eth', label: 'Claimable fees', unit: poolNativeSymbol, decimals: poolCollateral.decimals, className: 'tertiary' },
+				{ key: 'share_token_supply_atto_shares', label: 'Share-token supply', unit: 'shares', decimals: poolCollateral.decimals, className: 'secondary' },
 			],
-			`Collateral, commitments, and fees are shown in ${poolNativeSymbol}.`,
+			`Collateral is shown in ${poolNativeSymbol}; supply in shares.`,
 			{ zeroBaseline: true },
 		),
-		chartCard(
-			'Fee accrual history',
-			history.snapshots,
-			[
-				{ key: 'fee_index', label: 'Fee index', unit: `${poolNativeSymbol}/committed ${poolNativeSymbol}` },
-				{ key: 'unallocated_accrued_fees_atto_eth', label: 'Unallocated accrued fees', unit: poolNativeSymbol, decimals: poolCollateral.decimals },
-			],
-			'Checkpoint fee accumulator and unallocated fees; balances may fall when fees are claimed.',
-			{ zeroBaseline: true },
-		),
-		chartCard('Annual open-interest fee history', feeHistory, [{ key: 'annual_fee_millionths', label: 'Annual open-interest fee', decimals: 6, unit: '%' }], 'Annualized assuming unchanged retention for 365 days. Actual fees vary with utilization.', {
-			sharedRange: [0, 100],
-			axisUnit: '%',
-		}),
 		chartCard(
 			'Uniswap REP price curves',
 			uniswapChart.rows,
@@ -157,11 +136,6 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 	currentGrid.append(
 		staticField('System state', currentState['systemState'] === undefined ? 'No lifecycle event yet' : (systemStates[Number(currentState['systemState'])] ?? `State ${currentState['systemState']}`)),
 		staticField('Awaiting fork continuation', yesNoCheckpoint(currentState['awaitingForkContinuation'])),
-		staticField('Total REP backing units', currentState['totalRepBackingUnits'] === undefined ? 'No checkpoint' : exactUnit(chartNumericValue(currentState['totalRepBackingUnits']), 18, '')),
-		staticField('Share-token supply', currentState['shareTokenSupplyAttoShares'] === undefined ? 'No checkpoint' : exactUnit(chartNumericValue(currentState['shareTokenSupplyAttoShares']), 18, 'shares')),
-		staticField('Fee-eligible commitments', exactUnit(poolItem.fee_eligible_capacity_ownership_atto_rep, poolCollateral.decimals, poolNativeSymbol)),
-		staticField('Unallocated accrued fees', exactUnit(poolItem.unallocated_accrued_fees_atto_eth, poolCollateral.decimals, poolNativeSymbol)),
-		staticField('Annual open-interest fee', annualFeeText(poolItem.current_retention_rate)),
 		typeof currentState['escalationGame'] === 'string' && currentState['escalationGame'] !== '' ? staticAddressField('Escalation game', currentState['escalationGame'], poolItem.chain_id) : staticField('Escalation game', 'Not set'),
 	)
 	currentCard.append(currentGrid)
@@ -189,57 +163,6 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 		analyticsLink.textContent = 'Open AMM trading analytics'
 		staticCard.append(analyticsLink)
 	}
-	fragment.append(staticCard)
-	$('#state-detail').replaceChildren(fragment)
-}
-
-export const renderVaultDetailPage = async (deps: StateRiskDeps, vaultItem: VaultRecord, suppliedHistory?: EntityHistory): Promise<void> => {
-	const { lookup: $, fetchEntityHistory, isCurrent, stateHeader, historyCoverageNotice, element, metricCard, number, chartCard, staticField, staticAddressField } = deps
-	const history = suppliedHistory ?? (await fetchEntityHistory('vaults', vaultItem))
-	if (!isCurrent()) return
-	const vaultCollateral = collateralUnit(vaultItem)
-	const vaultNativeSymbol = vaultCollateral.symbol
-	const fragment = document.createDocumentFragment()
-	fragment.append(stateHeader('Security vault', vaultItem.vault_address, `Pool ${vaultItem.pool_address}`, 'Latest available'))
-	const riskLink = element('a', 'back-link', 'View vault risk and liquidation history →')
-	riskLink.href = deps.operationsHref(`/vault/${vaultItem.pool_address}/${vaultItem.vault_address}?chainId=${vaultItem.chain_id}`)
-	fragment.append(riskLink)
-	fragment.append(historyCoverageNotice(history, 'vaults', vaultItem))
-	const metrics = element('div', 'metric-grid')
-	metrics.append(
-		metricCard('REP backing units', exactUnit(vaultItem.rep_backing_units, 18, '')),
-		metricCard('Underwriting commitment', exactUnit(vaultItem.capacity_ownership_atto_rep, vaultCollateral.decimals, vaultNativeSymbol)),
-		metricCard('Claimable fees', exactUnit(vaultItem.claimable_fees_atto_eth, vaultCollateral.decimals, vaultNativeSymbol)),
-		metricCard('Fee index', exactUnit(vaultItem.fee_index, 18, '')),
-	)
-	fragment.append(metrics)
-	fragment.append(
-		chartCard(
-			'Vault accounting history',
-			history.snapshots,
-			[
-				{ key: 'rep_backing_units', label: 'REP backing units', unit: 'units' },
-				{ key: 'capacity_ownership_atto_rep', label: 'Underwriting commitment', unit: vaultNativeSymbol, decimals: vaultCollateral.decimals, className: 'secondary' },
-				{ key: 'claimable_fees_atto_eth', label: 'Claimable fees', unit: vaultNativeSymbol, decimals: vaultCollateral.decimals, className: 'tertiary' },
-			],
-			`Commitments and fees are shown in ${vaultNativeSymbol}; REP backing units are protocol accounting units.`,
-			{ zeroBaseline: true },
-		),
-	)
-	const staticCard = element('section', 'static-card')
-	staticCard.append(element('h4', '', 'Identity and complete current checkpoint'))
-	const grid = element('div', 'static-grid')
-	grid.append(
-		staticAddressField('Vault address', vaultItem.vault_address, vaultItem.chain_id),
-		staticAddressField('Pool address', vaultItem.pool_address, vaultItem.chain_id),
-		staticField('Question', vaultItem.question_title),
-		staticField('Last block', `#${number(vaultItem.block_number)}`),
-		staticField('Fee remainder (1e18 denominator)', vaultItem.vault_fee_remainder),
-		staticField('Resulting pool-held REP backing units', exactUnit(vaultItem.resulting_total_rep_backing_units, 18, '')),
-		staticField('Resulting fee-eligible commitments', exactUnit(vaultItem.resulting_fee_eligible_capacity_ownership_atto_rep, vaultCollateral.decimals, vaultNativeSymbol)),
-		staticField('Fee index', exactUnit(vaultItem.fee_index, 18, '')),
-	)
-	staticCard.append(grid)
 	fragment.append(staticCard)
 	$('#state-detail').replaceChildren(fragment)
 }

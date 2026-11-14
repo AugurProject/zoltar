@@ -159,7 +159,7 @@ export async function demoLogDetailRoute(env: DemoEnvironment, path: string): Pr
 			gasUsed: '184220',
 			logs: demoLogs.slice(0, 4).map(({ emitter_address: address, topics, data, log_index: logIndex }) => ({ address, topics, data, logIndex })),
 		},
-		event_signature: 'event PoolAccountingCheckpoint(address indexed securityPool, uint256 totalRepBackingUnits)',
+		event_signature: 'event QuestionAccountingCheckpoint(uint8 reason, uint256 settlementCollateralAttoEth, uint256 shareTokenSupplyAttoShares, uint256 lastSettlementPortfolioTime)',
 		function_signature: 'checkpoint(uint8,address[])',
 		action_summary: 'checkpoint(reason=Trade)',
 		relatedLogs: demoLogs.slice(0, 4),

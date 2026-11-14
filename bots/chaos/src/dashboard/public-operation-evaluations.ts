@@ -1,11 +1,4 @@
-import { booleanField, compact, operationClassificationField, publicStrings, record, stringField } from './public-fields.ts'
-
-function publicCandidateCount(value: unknown) {
-	if (typeof value === 'number') return Number.isSafeInteger(value) && value >= 0 ? value : undefined
-	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)$/.test(value)) return undefined
-	const count = BigInt(value)
-	return count <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(count) : count.toString()
-}
+import { booleanField, compact, operationClassificationField, publicCandidateCount, publicStrings, record, stringField } from './public-fields.ts'
 
 function publicEvaluation(value: unknown) {
 	const source = record(value)

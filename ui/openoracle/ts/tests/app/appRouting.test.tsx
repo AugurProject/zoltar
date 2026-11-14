@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test'
 import { act } from 'preact/test-utils'
+import { disconnectedAccountState, disconnectedOverviewWalletProps } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createInjectedBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { installModuleMocks } from '@zoltar/ui-core-shared/tests/testUtils/moduleMocks.js'
@@ -70,7 +71,7 @@ const settledReport: OpenOracleReportDetails = {
 // wallet/deployment session and the RPC read are replaced in these navigation tests.
 await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/appShell/hooks/useProtocolAppShell.js', () => ({
 	useProtocolAppShell: ({ deploymentRoute }: Parameters<typeof useProtocolAppShell>[0]) => ({
-		accountState: { address: undefined, chainId: undefined, ethBalanceAttoEth: undefined, wethBalanceAttoEth: undefined },
+		accountState: disconnectedAccountState,
 		activeEnvironmentNonce: 0,
 		applicationDeploymentMissing: deploymentMissing,
 		canReadOnchainData: true,
@@ -89,17 +90,7 @@ await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/appShell/hooks/u
 		}),
 		environmentBootstrapError: undefined,
 		errorMessages: [],
-		overviewWalletProps: {
-			accountState: { address: undefined, chainId: undefined, ethBalanceAttoEth: undefined, wethBalanceAttoEth: undefined },
-			isConnectingWallet: false,
-			isManagingWallet: false,
-			isRefreshing: false,
-			onChangeWallet: () => undefined,
-			onConnect: () => undefined,
-			onDisconnectWallet: () => undefined,
-			onSwitchNetwork: () => undefined,
-			walletBootstrapComplete: true,
-		},
+		overviewWalletProps: disconnectedOverviewWalletProps,
 		readBackendMessage: undefined,
 		readBackendStatus: undefined,
 		refreshActiveEnvironment: async () => undefined,

@@ -65,7 +65,7 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	...definitions('risk', 'portfolio-auction', ['AuctionOpened', 'WinningVaultCreated', 'AuctionClosed']),
 	...definitions('fork', 'portfolio-branch', ['ForkFrozen', 'BranchChosen', 'BranchStarted', 'BranchActivated', 'NeutralCashRecovered'], ['universeId']),
 	...definitions('trading', 'amm', ['PositionExitedByTransfer', 'PairCreated', 'LiquidityAdded', 'LiquidityInitialized', 'LiquidityRemoved', 'PredeploymentSharesQuarantined', 'Swap', 'Sync', 'Transfer', 'Approval'], ['pair']),
-	...definitions('fork', 'fork', ['ChildReputationTokenInitialized', 'UniverseInitialized', 'UniverseForked', 'DeployChild', 'MigrationRepAdded', 'MigrationRepSplit', 'RepBurned'], ['universeId', 'parentUniverseId', 'parent', 'parentPool', 'securityPool', 'childUniverseId', 'childPool']),
+	...definitions('fork', 'fork', ['ChildReputationTokenInitialized', 'UniverseInitialized', 'UniverseForked', 'DeployChild', 'MigrationRepAdded', 'MigrationRepSplit', 'RepBurned'], ['universeId']),
 }
 
 // Every taxonomy entry must name an event the pinned ABI catalog can decode;
@@ -124,15 +124,9 @@ const unclassifiedEventNames = taxonomyContractKinds.flatMap(kind => {
 })
 if (unclassifiedEventNames.length > 0) throw new Error(`Semantic event taxonomy is missing events emitted by indexed contracts: ${unclassifiedEventNames.join(', ')}`)
 
-const liquidationApprovalIdentity = (approvalId: unknown, receiverVault: unknown): string | undefined => {
-	if (typeof approvalId === 'string') return approvalId.toLowerCase()
-	return typeof receiverVault === 'string' ? `nonce:${receiverVault.toLowerCase()}` : undefined
-}
-
-const domainEntityIdentity = (definition: { readonly domain: string; readonly entityType: string }, address: string, identity: { approvalIdentity: string | undefined; identitySuffix: string | undefined; reportId: unknown }): string => {
+const domainEntityIdentity = (definition: { readonly domain: string; readonly entityType: string }, address: string, identity: { identitySuffix: string | undefined; reportId: unknown }): string => {
 	if (definition.domain === 'report' && typeof identity.reportId === 'string') return `${address}:${identity.reportId}`
 	if (['vault', 'capital-position', 'portfolio-branch'].includes(definition.entityType) && identity.identitySuffix !== undefined) return `${address}:${identity.identitySuffix}`
-	if (definition.entityType === 'liquidation-approval' && identity.approvalIdentity !== undefined) return `${address}:${identity.approvalIdentity}`
 	return identity.identitySuffix ?? address
 }
 
@@ -155,11 +149,9 @@ const domainProjectionFrom = (log: StoredLog): DomainEventProjection | undefined
 	// observation path only.
 	if (eventName === 'Sync' && !(typeof data['yesReserve'] === 'string' && typeof data['noReserve'] === 'string')) return undefined
 	const reportId = data['reportId']
-	const approvalId = data['approvalId']
-	const approvalIdentity = liquidationApprovalIdentity(approvalId, data['receiverVault'])
 	const fieldIdentity = definition.identityFields?.map(field => data[field]).find(value => typeof value === 'string')
 	const identitySuffix = typeof fieldIdentity === 'string' ? fieldIdentity.toLowerCase() : undefined
-	const entityIdentity = domainEntityIdentity(definition, log.address.toLowerCase(), { approvalIdentity, identitySuffix, reportId })
+	const entityIdentity = domainEntityIdentity(definition, log.address.toLowerCase(), { identitySuffix, reportId })
 	return {
 		type: 'domainEvent',
 		domain: definition.domain,

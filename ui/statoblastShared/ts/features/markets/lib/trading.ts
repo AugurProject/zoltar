@@ -1,5 +1,6 @@
 import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import * as tradingCopy from '../../../copy/trading.js'
+import * as collateralCopy from '../../../copy/collateral.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
@@ -241,7 +242,7 @@ export function getTradingMintGuardMessage({
 
 	if (mintAmount <= 0n) return tradingCopy.mintAmountRequired
 	if (!usesSharedBacking && remainingCapacity !== undefined && mintAmount > remainingCapacity) return `Max mint capacity is ${formatCurrencyBalanceWithUnit(remainingCapacity, collateral?.symbol ?? 'ETH', collateral?.decimals ?? 18)}.`
-	if (collateral !== undefined) return collateral.balance < mintAmount ? 'Insufficient collateral balance.' : undefined
+	if (collateral !== undefined) return collateral.balance < mintAmount ? collateralCopy.formatInsufficientBalance(collateral.symbol) : undefined
 	if (ethBalanceAttoEth === undefined) return statoblastAppCopy.loadingWalletEthBalance
 	const spendableEthAttoEth = getSpendableEthBalance(ethBalanceAttoEth)
 	if (mintAmount > spendableEthAttoEth) return `Need ${formatAdditionalCurrencyBalance(mintAmount - spendableEthAttoEth, 'ETH')} in this wallet to mint the selected amount and keep ${formatCurrencyBalanceWithUnit(ETH_GAS_RESERVE_ATTO_ETH, 'ETH')} for gas.`

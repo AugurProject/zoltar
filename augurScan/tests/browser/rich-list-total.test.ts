@@ -29,12 +29,10 @@ test('the rich list CSV keeps raw addresses, labels, and plain amounts apart fro
 		transaction_count: 7,
 		interaction_count: '0',
 		pool_count: '0',
-		vault_count: '0',
 		rep_balances: [],
 		weth_balances: [],
 		native_balance_detail: null,
 		pool_associations: [],
-		vault_positions: [],
 	}
 	const item: RichListRecord = {
 		...base,

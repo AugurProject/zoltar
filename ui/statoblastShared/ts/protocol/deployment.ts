@@ -52,19 +52,19 @@ export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonl
 	openOraclePriceCoordinatorFactory: '0x9aa82b09348fa54eed7b19265fe88d300812c60ffe551be56a4af597ee9efc58',
 	priceCoordinatorDeploymentWorker: '0x04c1fcea46b94a59750f7232ad12ed12cde1e83b3b28041901f2b7f2976d850f',
 	securityPoolEventEmitter: '0xa40d4efbd7acb66e87e83aed8767c9e30a9b536006650b88f93369e30279ef12',
-	securityPoolFactory: '0x69a130c72ee9dc04d0d728451a63fd2abd996375e1715e39c12637e2c36c6470',
+	securityPoolFactory: '0x694c0fbf9f0980fca036c3413eaf29e7bc2ff60bd5e1ff4fdc104dc0a4128090',
 	securityPoolForker: '0xbb3a221acd783c7fafc44dad4405b9f0886eae7b8e9c8791d87eed22fad511a8',
 	securityPoolOperationsDelegate: '0x3578a54197740095893fd920f0ab3fe4f8c969d107fbbc6dc6a125ff1961e11e',
 	securityPoolUtils: '0xec490f322a84001a84be8855592c50e6edf239cd67a4a1210d8792ab1fef6ff5',
-	shareTokenFactory: '0xa3216f3cd8ec8b2892861f6b870ed7f4ea86fe24cbf6a74cb19d302f4fd7d750',
+	shareTokenFactory: '0x361b1e526b5dbc8fec4c0904a518675c1c0f7424706124681cc1a1cff42c8e8f',
 	sharedPoolPriceFeedDeploymentWorker: '0x6e58a53c45801e9bae71ab22e799a0f9e09002072080b13f0842adeb4e35eaba',
 }
 
 const EXPECTED_NO_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0x9f13c026de773c6c7fc6813383b1f21f4f1a02a9029ae0a4639d06c0075f9d79',
+	securityPoolFactory: '0x6b0dd5f65a54ad4fa8a17806c4f127ee79e0ece4ca77adc9b7f4545d61589853',
 	securityPoolForker: '0xe4bd7ef5f23e4c35c3d61048911a6e830ca8ed65d1de133e06f5cd2f76a1612f',
-	shareTokenFactory: '0x9302af353fa006320b810f89d05f836a10ed214826917f99846413090fcaf876',
+	shareTokenFactory: '0x7d8b65703d8f319879f55295edfbc69e97f4fd71366368f6980975fa151daa25',
 }
 
 function runtimeWithAddresses(artifact: { evm: { deployedBytecode: { object: string; immutableReferences: Readonly<Record<string, readonly { start: number; length: number }[]>> } } }, addresses: readonly Address[]) {
@@ -116,19 +116,19 @@ const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentSt
 	openOraclePriceCoordinatorFactory: '0x08cc2838e9aff4ae40b1db149fa4a7a3e128e96c15ea761f3dd14fbdda4a6927',
 	priceCoordinatorDeploymentWorker: '0x04c1fcea46b94a59750f7232ad12ed12cde1e83b3b28041901f2b7f2976d850f',
 	securityPoolEventEmitter: '0xa40d4efbd7acb66e87e83aed8767c9e30a9b536006650b88f93369e30279ef12',
-	securityPoolFactory: '0xc198ee39d10edeb38352aa6ec56c82c034f5873c5596f2a968e367b2e85c474b',
+	securityPoolFactory: '0xc656fba2b7c0595fadb7c2a2df4c3369474f8f13c26cd153d39d6997ddbada3d',
 	securityPoolForker: '0x17494b2e61e2bd10fc3b5407552bf78b368f38d4babf942df985c4a756438b06',
 	securityPoolOperationsDelegate: '0x3578a54197740095893fd920f0ab3fe4f8c969d107fbbc6dc6a125ff1961e11e',
 	securityPoolUtils: '0xec490f322a84001a84be8855592c50e6edf239cd67a4a1210d8792ab1fef6ff5',
-	shareTokenFactory: '0xc7793e24f12a9a93b8495b42e8d6d8ac36cf241986da2c774bc5e2c13bf68120',
+	shareTokenFactory: '0x057aaae69ea7b5657debfafd096a14804ef835e8adc0b799176e769d26e101e2',
 	sharedPoolPriceFeedDeploymentWorker: '0x6e58a53c45801e9bae71ab22e799a0f9e09002072080b13f0842adeb4e35eaba',
 }
 
 const EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_MAINNET_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0x1549586fecfefa6ff6d8f53861d50d0b88b6f605f89e65b9bef4efbe34ca42d2',
+	securityPoolFactory: '0x2ce182b212353b8394991e0ed715a62b329c70f4e4700f0bc150cf69248ebf4a',
 	securityPoolForker: '0xebc9c372ae53e98809bbb2cba6793a1983e0664e638968167711701a41656bfc',
-	shareTokenFactory: '0x512301378cbe8b4acaf70bd9aa68767c8ab56e486c799d30912ff4467f16b779',
+	shareTokenFactory: '0x5de94737d843ad929eafd1ceb5391b5a50160e1f97a5024d7d4616f2708b0e58',
 }
 const EXPECTED_PUBLIC_RUNTIME_CODE_HASHES = {
 	mainnet: { yes: EXPECTED_MAINNET_RUNTIME_CODE_HASHES, no: EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES },

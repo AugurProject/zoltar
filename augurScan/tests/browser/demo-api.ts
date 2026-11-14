@@ -26,7 +26,7 @@ export function createDemoApi(context: DemoContext) {
 		if (path.startsWith('/api/v1/operations')) return await demoOperationsRoute(env, path)
 		if (/^\/api\/v1\/state\/risk(?:\?|$)/.test(path)) return await demoRiskCatalogRoute(env, path)
 		if (/^\/api\/v1\/state\/(reports|escalations|auctions|forks|trading|timeline|integrity)(?:\?|$)/.test(path)) return await demoOperationsCatalogRoute(env, path)
-		if (/^\/api\/v1\/state\/(reports|escalations|auctions|forks|trading|risk\/(?:pools|vaults))\//.test(path)) return await demoOperationsDetailRoute(env, path)
+		if (/^\/api\/v1\/state\/(reports|escalations|auctions|forks|trading|risk\/pools)\//.test(path)) return await demoOperationsDetailRoute(env, path)
 		if (path.startsWith('/api/v1/state/catalog')) return await demoCatalogRoute(env, path)
 		if (path.startsWith('/api/v1/state/address-portfolio')) return await demoAddressPortfolioRoute(env, path)
 		if (path.startsWith('/api/v1/state/')) return await demoStateHistoryRoute(env, path)
