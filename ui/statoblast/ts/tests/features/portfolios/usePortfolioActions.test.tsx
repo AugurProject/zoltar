@@ -162,9 +162,9 @@ test('owner availability preserves the empty state and prioritizes the wallet gu
 	lifecycle.trackRendered(hook)
 	expect(hook.state().ownerReason).toBe('Open a portfolio first')
 	await hook.setProps({ parameters: { ...parameters, accountAddress: undefined } })
-	expect(hook.state().ownerReason).toBe('Connect a wallet to send transactions')
+	expect(hook.state().ownerReason).toBe('Connect a wallet before sending transactions.')
 	await hook.setProps({ model: { ...empty, loading: true } })
-	expect(hook.state().ownerReason).toBe('Connect a wallet to send transactions')
+	expect(hook.state().ownerReason).toBe('Connect a wallet before sending transactions.')
 })
 test('creation rejects invalid economics without changing the owner health target', async () => {
 	capitalClient().install()
@@ -213,7 +213,7 @@ test('presentation-only accounts explain refresh without enabling writes or repl
 	lifecycle.trackRendered(hook)
 	expect(hook.state().ownerReason).toBe('Account refresh pending.')
 	await hook.setProps({ parameters: { ...parameters, accountAddress: undefined } })
-	expect(hook.state().ownerReason).toBe('Connect a wallet to send transactions')
+	expect(hook.state().ownerReason).toBe('Connect a wallet before sending transactions.')
 })
 
 test('portfolio creation rejects priority fees above the oracle funding bound before any transaction', async () => {

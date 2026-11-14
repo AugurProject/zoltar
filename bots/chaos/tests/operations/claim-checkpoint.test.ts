@@ -8,78 +8,9 @@ import { prepareInheritedClaim } from '../../src/operations/statoblast/carry.ts'
 import { decodedTransaction, readableTransaction } from '../../src/operations/transaction-description.ts'
 import { address, planningOptionsFixture, snapshotFixture } from './fixture.ts'
 
-test('each claim preparation batch has a canonical progress identity and submits only its bounded checkpoint', () => {
-	const snapshot = snapshotFixture()
-	const candidate = {
-		pool: address(10),
-		game: address(11),
-		targetGame: address(11),
-		preparationReason: 'required' as const,
-		settlement: 'unknown' as const,
-		sourceGame: address(12),
-		claimSourceGame: address(13),
-		outcome: 1 as const,
-		parentDepositIndex: '5',
-		sourceNodeId: '6',
-		amountAttoRep: 10n.toString(),
-		cumulativeAmountAttoRep: 20n.toString(),
-		leafIndex: '1',
-		nextSourceGame: address(15),
-		pendingSteps: '2',
-		pendingCommitment: zeroHash,
-		baseCommitment: zeroHash,
-		transforms: [],
-	}
-	snapshot.forkedClaimCheckpoints = [candidate]
-	const options = planningOptionsFixture()
-	const plan = prepareInheritedClaim.buildPlan(snapshot, options)
-	const step = plan?.steps[0]
-	if (step === undefined) throw new Error('Missing checkpoint preparation')
-	expect(plan?.steps).toHaveLength(1)
-	expect(decodeFunctionData({ abi: escalationGameAbi, data: step.data })).toMatchObject({ functionName: 'processClaimCheckpoint', args: [1n, 10n, 20n, 1n, 8n, zeroHash, []] })
-	expect(canonicalLifecyclePresence(snapshot, options).find(item => item.definitionId === prepareInheritedClaim.id)?.metadata).toEqual(plan?.metadata)
-	candidate.nextSourceGame = zeroAddress
-	candidate.pendingSteps = '4'
-	expect(prepareInheritedClaim.buildPlan(snapshot, options)?.metadata).not.toEqual(plan?.metadata)
-	snapshot.forkedClaimCheckpoints = []
-	expect(prepareInheritedClaim.buildPlan(snapshot, options)).toBeUndefined()
-})
-
-test('uses verified witnesses for the same preparation method and includes the commitment in progress identity', () => {
-	const snapshot = snapshotFixture()
-	const options = planningOptionsFixture()
-	const candidate = {
-		pool: address(10),
-		game: address(11),
-		targetGame: address(11),
-		preparationReason: 'required' as const,
-		settlement: 'unknown' as const,
-		sourceGame: address(12),
-		claimSourceGame: address(13),
-		outcome: 1 as const,
-		parentDepositIndex: '5',
-		sourceNodeId: '6',
-		amountAttoRep: 10n.toString(),
-		cumulativeAmountAttoRep: 20n.toString(),
-		leafIndex: '1',
-		nextSourceGame: zeroAddress,
-		pendingSteps: '1',
-		pendingCommitment: zeroHash,
-		baseCommitment: zeroHash,
-		transforms: [{ consumedBeforeAttoRep: 1n.toString() }],
-	}
-	snapshot.forkedClaimCheckpoints = [candidate]
-	const plan = prepareInheritedClaim.buildPlan(snapshot, options)
-	const step = plan?.steps[0]
-	if (step === undefined) throw new Error('Missing witness transaction')
-	expect(decodeFunctionData({ abi: escalationGameAbi, data: step.data })).toMatchObject({ functionName: 'processClaimCheckpoint', args: [1n, 10n, 20n, 1n, 8n, zeroHash, [{ consumedBeforeAttoRep: 1n }]] })
-	candidate.pendingCommitment = `0x${'1'.repeat(64)}`
-	expect(prepareInheritedClaim.buildPlan(snapshot, options)?.metadata).not.toEqual(plan?.metadata)
-})
-
-test('final preparation calls the game then pool atomically with a committed recipient', () => {
-	const snapshot = snapshotFixture()
-	const candidate: ForkedClaimCheckpointSnapshot = {
+/** A single-step witnessed checkpoint candidate that tests reshape through `overrides`. */
+function claimCheckpointCandidate(overrides: Partial<ForkedClaimCheckpointSnapshot> = {}): ForkedClaimCheckpointSnapshot {
+	return {
 		pool: address(10),
 		game: address(11),
 		targetGame: address(11),
@@ -98,6 +29,44 @@ test('final preparation calls the game then pool atomically with a committed rec
 		pendingCommitment: zeroHash,
 		baseCommitment: zeroHash,
 		transforms: [{ consumedBeforeAttoRep: 1n.toString() }],
+		...overrides,
+	}
+}
+
+test('each claim preparation batch has a canonical progress identity and submits only its bounded checkpoint', () => {
+	const snapshot = snapshotFixture()
+	const candidate = claimCheckpointCandidate({ nextSourceGame: address(15), pendingSteps: '2', transforms: [] })
+	snapshot.forkedClaimCheckpoints = [candidate]
+	const options = planningOptionsFixture()
+	const plan = prepareInheritedClaim.buildPlan(snapshot, options)
+	const step = plan?.steps[0]
+	if (step === undefined) throw new Error('Missing checkpoint preparation')
+	expect(plan?.steps).toHaveLength(1)
+	expect(decodeFunctionData({ abi: escalationGameAbi, data: step.data })).toMatchObject({ functionName: 'processClaimCheckpoint', args: [1n, 10n, 20n, 1n, 8n, zeroHash, []] })
+	expect(canonicalLifecyclePresence(snapshot, options).find(item => item.definitionId === prepareInheritedClaim.id)?.metadata).toEqual(plan?.metadata)
+	candidate.nextSourceGame = zeroAddress
+	candidate.pendingSteps = '4'
+	expect(prepareInheritedClaim.buildPlan(snapshot, options)?.metadata).not.toEqual(plan?.metadata)
+	snapshot.forkedClaimCheckpoints = []
+	expect(prepareInheritedClaim.buildPlan(snapshot, options)).toBeUndefined()
+})
+
+test('uses verified witnesses for the same preparation method and includes the commitment in progress identity', () => {
+	const snapshot = snapshotFixture()
+	const options = planningOptionsFixture()
+	const candidate = claimCheckpointCandidate()
+	snapshot.forkedClaimCheckpoints = [candidate]
+	const plan = prepareInheritedClaim.buildPlan(snapshot, options)
+	const step = plan?.steps[0]
+	if (step === undefined) throw new Error('Missing witness transaction')
+	expect(decodeFunctionData({ abi: escalationGameAbi, data: step.data })).toMatchObject({ functionName: 'processClaimCheckpoint', args: [1n, 10n, 20n, 1n, 8n, zeroHash, [{ consumedBeforeAttoRep: 1n }]] })
+	candidate.pendingCommitment = `0x${'1'.repeat(64)}`
+	expect(prepareInheritedClaim.buildPlan(snapshot, options)?.metadata).not.toEqual(plan?.metadata)
+})
+
+test('final preparation calls the game then pool atomically with a committed recipient', () => {
+	const snapshot = snapshotFixture()
+	const candidate = claimCheckpointCandidate({
 		finalWithdrawal: {
 			multicall3: address(90),
 			resultingCarryRoot: zeroHash,
@@ -105,7 +74,7 @@ test('final preparation calls the game then pool atomically with a committed rec
 			preflightExpectedResult: '0x',
 			proof: { depositor: snapshot.wallet.address, amountAttoRep: 10n.toString(), cumulativeAmountAttoRep: 20n.toString(), leafIndex: '1', parentDepositIndex: '5', sourceNodeId: '6', merkleMountainRangePeakIndex: '0', merkleMountainRangeSiblings: [], nullifierSiblings: [] },
 		},
-	}
+	})
 	snapshot.forkedClaimCheckpoints = [candidate]
 	const plan = prepareInheritedClaim.buildPlan(snapshot, planningOptionsFixture())
 	const step = plan?.steps[0]

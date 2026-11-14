@@ -1,10 +1,36 @@
 import { openOracleAbi } from '@zoltar/bot-shared/contracts/abi'
-import { zeroAddress } from '@zoltar/bot-shared/ethereum'
+import { zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { tokenSpend } from '../input-funding.ts'
 import { amount, eligible, encodeStep, eventEvidence, ONE_TOKEN, optionAmount, planBase, tokenInventory } from '../planning.ts'
 import type { OperationDefinition } from '../types.ts'
 import { approveToken, maximumCleanupCount, openOracleCleanupPlan, preparedApprovalState, remainingApprovalSteps, requiredMetadataAddress, requiredMetadataAmount } from './approvals.ts'
 import { hasActiveSignerReport, MAX_UINT128, minAmount, tokenDebit, zeroTiming } from './planning.ts'
+
+/** The fixed report parameters the chaos bot uses for every OpenOracle report it opens. */
+function chaosReportParams(reporter: Address, token1: Address, token2: Address, amount1: bigint, amount2: bigint) {
+	return {
+		callbackContract: zeroAddress,
+		callbackGasLimit: 0,
+		currentAmount1: amount1,
+		currentAmount2: amount2,
+		currentReporter: reporter,
+		disputeDelay: 60,
+		escalationHalt: amount1 * 100n,
+		feePercentage: 0,
+		flags: 7,
+		lastReportOppoTime: 0,
+		multiplier: 140,
+		numReports: 0,
+		protocolFee: 0,
+		protocolFeeRecipient: zeroAddress,
+		reportTimestamp: 0,
+		settlementTime: 900,
+		settlementTimestamp: 0,
+		settlerReward: 0,
+		token1,
+		token2,
+	}
+}
 
 export const report: OperationDefinition = {
 	buildPlan(snapshot, options) {
@@ -14,28 +40,7 @@ export const report: OperationDefinition = {
 		const amount1 = minAmount(tokenSpend(snapshot, snapshot.deployments.weth, options, 'report-weth', 'amount1'), MAX_UINT128 / 100n)
 		const amount2 = minAmount(tokenSpend(snapshot, rep, options, 'report-rep', 'amount2'), MAX_UINT128)
 		if (amount1 === 0n || amount2 === 0n) return undefined
-		const params = {
-			callbackContract: zeroAddress,
-			callbackGasLimit: 0,
-			currentAmount1: amount1,
-			currentAmount2: amount2,
-			currentReporter: snapshot.wallet.address,
-			disputeDelay: 60,
-			escalationHalt: amount1 * 100n,
-			feePercentage: 0,
-			flags: 7,
-			lastReportOppoTime: 0,
-			multiplier: 140,
-			numReports: 0,
-			protocolFee: 0,
-			protocolFeeRecipient: zeroAddress,
-			reportTimestamp: 0,
-			settlementTime: 900,
-			settlementTimestamp: 0,
-			settlerReward: 0,
-			token1: snapshot.deployments.weth,
-			token2: rep,
-		}
+		const params = chaosReportParams(snapshot.wallet.address, snapshot.deployments.weth, rep, amount1, amount2)
 		const steps = approveToken(snapshot, snapshot.deployments.weth, amount1)
 		steps.push(...approveToken(snapshot, rep, amount2))
 		steps.push(
@@ -95,28 +100,7 @@ export const report: OperationDefinition = {
 			amount(token2Inventory.balance) >= amount2 + optionAmount(options, 'minimumRepReserveAttoRep', ONE_TOKEN) &&
 			preparedApprovalState(snapshot, context, requirements)
 		if (!safe) return cleanup()
-		const params = {
-			callbackContract: zeroAddress,
-			callbackGasLimit: 0,
-			currentAmount1: amount1,
-			currentAmount2: amount2,
-			currentReporter: snapshot.wallet.address,
-			disputeDelay: 60,
-			escalationHalt: amount1 * 100n,
-			feePercentage: 0,
-			flags: 7,
-			lastReportOppoTime: 0,
-			multiplier: 140,
-			numReports: 0,
-			protocolFee: 0,
-			protocolFeeRecipient: zeroAddress,
-			reportTimestamp: 0,
-			settlementTime: 900,
-			settlementTimestamp: 0,
-			settlerReward: 0,
-			token1,
-			token2,
-		}
+		const params = chaosReportParams(snapshot.wallet.address, token1, token2, amount1, amount2)
 		const steps = remainingApprovalSteps(snapshot, context, requirements)
 		steps.push(
 			encodeStep({
