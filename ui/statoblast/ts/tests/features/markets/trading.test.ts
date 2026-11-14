@@ -673,21 +673,22 @@ void describe('trading helpers', () => {
 	})
 })
 
+// Twenty seconds elapse since the checkpoint; a 3 attoETH/second linear fee runs for fifteen of them.
+const linearFeeMintCheckpoint = {
+	currentRetentionRate: 900_000_000_000_000_000n,
+	currentTimestamp: 30n,
+	totalUnderwritingLimitAttoEth: 100n,
+	feeEligibleUnderwritingLimitAttoEth: 100n,
+	feeEndTimestamp: 100n,
+	feeIndexRemainder: 0n,
+	lastFeeCheckpointNativeTime: 10n,
+	settlementCollateralAttoEth: 300n,
+	totalFeesOwedRemainder: 0n,
+	linearFee: { rateAttoEthPerSecond: 3n, endTime: 25n },
+}
+
 test('portfolio-native mint previews use the linear funded fee stream', () => {
-	expect(
-		estimateMintCheckpoint({
-			currentRetentionRate: 900_000_000_000_000_000n,
-			currentTimestamp: 30n,
-			totalUnderwritingLimitAttoEth: 100n,
-			feeEligibleUnderwritingLimitAttoEth: 100n,
-			feeEndTimestamp: 100n,
-			feeIndexRemainder: 0n,
-			lastFeeCheckpointNativeTime: 10n,
-			settlementCollateralAttoEth: 300n,
-			totalFeesOwedRemainder: 0n,
-			linearFee: { rateAttoEthPerSecond: 3n, endTime: 25n },
-		}),
-	).toEqual({ estimatedRetentionFeeAttoEth: 45n, settlementCollateralAfterFeesAttoEth: 255n })
+	expect(estimateMintCheckpoint(linearFeeMintCheckpoint)).toEqual({ estimatedRetentionFeeAttoEth: 45n, settlementCollateralAfterFeesAttoEth: 255n })
 })
 
 test('shared pool mint guard defers backing availability to the purchase quote', () => {
@@ -711,16 +712,7 @@ test('shared pool mint guard defers backing availability to the purchase quote',
 test('central settlement previews do not charge wall-clock time across paused price or fork intervals', () => {
 	expect(
 		estimateMintCheckpoint({
-			currentRetentionRate: 900_000_000_000_000_000n,
-			currentTimestamp: 30n,
-			totalUnderwritingLimitAttoEth: 100n,
-			feeEligibleUnderwritingLimitAttoEth: 100n,
-			feeEndTimestamp: 100n,
-			feeIndexRemainder: 0n,
-			lastFeeCheckpointNativeTime: 10n,
-			settlementCollateralAttoEth: 300n,
-			totalFeesOwedRemainder: 0n,
-			linearFee: { rateAttoEthPerSecond: 3n, endTime: 25n },
+			...linearFeeMintCheckpoint,
 			centralSettlement: true,
 			centralCheckpointTimestamp: 30n,
 		}),
