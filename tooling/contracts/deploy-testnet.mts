@@ -3,6 +3,7 @@ import { CONSERVATIVE_DEPLOYMENT_GAS } from './deployment-gas.mts'
 import * as process from 'node:process'
 import { createWalletClient, defineChain, formatEther, http, keccak256, parseUnits, privateKeyToAccount, type Account, type Address, type Chain, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
+import { hasCode } from '@zoltar/core-shared/evm/code'
 import { getBootstrapDescendantAddresses } from '../../ui/statoblastShared/ts/protocol/deploymentHelpers.ts'
 import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { assertStaticDeploymentArtifactRuntimeCodeHashes, CANONICAL_DEPLOYER_RAW_GAS_PRICE, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST, getProxyDeployerActivity, getProxyDeployerFundingShortfall } from '../../ui/zoltarShared/ts/protocol/deployment.ts'
@@ -374,10 +375,6 @@ export async function assertRequiredEvmCompatible(client: Pick<WriteClient, 'cal
 export async function assertEip1559Compatible(client: Pick<WriteClient, 'getBlock'>, chainId: number) {
 	const block = await client.getBlock()
 	if (block.baseFeePerGas === undefined) throw new Error(`RPC chain ${chainId.toString()} does not expose the EIP-1559 base fee required for bounded deployment transactions`)
-}
-
-function hasCode(code: Hex | undefined): code is Hex {
-	return code !== undefined && code !== '0x'
 }
 
 function assertExpectedRuntimeCode(id: string, address: Address, code: Hex | undefined, expectedRuntimeCodeHash: Hash) {

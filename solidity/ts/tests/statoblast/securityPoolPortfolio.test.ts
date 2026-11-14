@@ -12,6 +12,7 @@ import {
 import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { deployContract } from '../../testSupport/deployContract'
 import { applyLibraries, getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getTestPortfolioDeployers } from '../../testSupport/simulator/utils/contracts/deployTestPortfolio'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createCompleteSet, depositRepToVault, redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/statoblast'
@@ -28,17 +29,7 @@ describe('Statoblast: central portfolio and native question integration', () => 
 
 	test('invalid setup economics and missing module code are rejected before creating an unfinished portfolio', async () => {
 		const infrastructure = getInfraContractAddresses()
-		const deployers = {
-			capital: infrastructure.securityPoolCapitalLedgerDeployer,
-			commitments: infrastructure.securityPoolCommitmentIndexDeployer,
-			fees: infrastructure.securityPoolCapitalFeeStreamsDeployer,
-			books: infrastructure.securityPoolSettlementBookDeployer,
-			settlement: infrastructure.securityPoolPortfolioSettlementDeployer,
-			reporters: infrastructure.securityPoolReporterLedgerDeployer,
-			forks: infrastructure.securityPoolPortfolioForkCoordinatorDeployer,
-			auctions: infrastructure.securityPoolPortfolioAuctionDeployer,
-			services: infrastructure.securityPoolPortfolioServicesDeployer,
-		}
+		const deployers = getTestPortfolioDeployers()
 		const deploy = (configuration = portfolioEconomics, modules = deployers, reportPriorityFeeAttoEthPerGas = 10_000_000_000n, securityMultiplierBps = fixture.base.statoblastSecurityMultiplierBps) =>
 			deployContract(
 				fixture.owner(),

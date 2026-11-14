@@ -1,5 +1,6 @@
 import * as collateralCopy from '../../../copy/collateral.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
+import { tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as tradingCopy from '../../../copy/trading.js'
@@ -398,12 +399,12 @@ export function TradingSection({
 					value={tradingForm.completeSetAmount}
 				/>
 				{usesSharedBacking && <UserMessage className='detail' detail={tradingCopy.sharedPoolPurchaseDetail} />}
-				{collateralFunding?.collateral?.symbol === collateralCopy.usdt ? (
+				{collateralFunding?.collateral !== undefined && tokenRequiresAllowanceReset(collateralFunding.collateral.token) ? (
 					<TransactionActionButton
-						idleLabel={collateralCopy.reset}
-						pendingLabel={collateralCopy.resetting}
+						idleLabel={commonCopy.formatResetTokenApproval(collateralFunding.collateral.symbol)}
+						pendingLabel={commonCopy.formatResettingTokenApproval(collateralFunding.collateral.symbol)}
 						pending={collateralFunding.resetting}
-						availability={collateralFunding.collateral.allowance === 0n ? { disabled: true, reason: collateralCopy.notNeeded } : { disabled: false, reason: undefined }}
+						availability={collateralFunding.collateral.allowance === 0n ? { disabled: true, reason: commonCopy.notNeeded } : { disabled: false, reason: undefined }}
 						onClick={() => collateralFunding.approve(0n)}
 					/>
 				) : undefined}
@@ -414,13 +415,13 @@ export function TradingSection({
 					allowanceLoading={collateralFunding?.loading ?? true}
 					approvedAmount={collateralFunding?.collateral?.allowance}
 					guardMessage={mintGuardMessage}
-					requiresAllowanceReset={collateralFunding?.collateral?.symbol === collateralCopy.usdt}
+					requiresAllowanceReset={tokenRequiresAllowanceReset(collateralFunding?.collateral?.token)}
 					disabled={tradingActiveAction !== undefined}
 					onApprove={amount => {
 						if (amount !== undefined) void collateralFunding?.approve(amount)
 					}}
 					pending={(collateralFunding?.pending ?? false) && collateralFunding?.resetting !== true}
-					pendingLabel={collateralCopy.approving}
+					pendingLabel={commonCopy.formatApprovingToken(collateralSymbol)}
 					requiredAmount={collateralFunding?.requiredCollateral}
 					resetKey={`${selectedPool?.securityPoolAddress}:${collateralFunding?.requiredCollateral}`}
 					tokenSymbol={collateralFunding?.collateral?.symbol ?? collateralCopy.fallback}

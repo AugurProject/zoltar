@@ -4,6 +4,8 @@ import { isFinalClaimCheckpointBatch, planClaimCheckpointPreparation, shouldInsp
 
 const address = (value: number) => getAddress(`0x${value.toString(16).padStart(40, '0')}`)
 const claim = { outcomeIndex: 1, amountAttoRep: 10n, cumulativeAmountAttoRep: 30n, leafIndex: 2n }
+/** One copy of the shared claim on each listed game. */
+const claimsOn = (...games: number[]) => games.map(game => ({ game: address(game), claim }))
 const pending = (pendingSteps = 0n): ClaimCheckpointProgress => ({ nextSourceGame: address(1), pendingSteps, complete: false, ready: false })
 function fixture() {
 	const reads: string[] = []
@@ -24,7 +26,7 @@ function fixture() {
 
 test('a single cold claim prepares the terminal and never builds every parent', async () => {
 	const context = fixture()
-	const jobs = await planClaimCheckpointPreparation({ ...context, claims: [{ game: address(12), claim }] })
+	const jobs = await planClaimCheckpointPreparation({ ...context, claims: claimsOn(12) })
 	expect(jobs).toEqual([{ targetGame: address(12), game: address(12), claim, reason: 'required' }])
 })
 
@@ -32,7 +34,7 @@ test('three shallow branches retain direct preparation when atomic settlement ma
 	const context = fixture()
 	context.nodes.set(9, { parentGame: address(8), historyFrozen: true, progress: { ...pending(), nextSourceGame: address(7), ready: true } })
 	for (const game of [10, 11, 12]) context.nodes.set(game, { parentGame: address(9), historyFrozen: false, progress: { ...pending(), nextSourceGame: address(8) } })
-	const jobs = await planClaimCheckpointPreparation({ ...context, claims: [10, 11, 12].map(game => ({ game: address(game), claim })) })
+	const jobs = await planClaimCheckpointPreparation({ ...context, claims: claimsOn(10, 11, 12) })
 	expect(jobs.map(job => job.reason)).toEqual(['required', 'required', 'required'])
 })
 
@@ -40,7 +42,7 @@ test('deep authenticated branches seed a ready-but-incomplete parent when adopti
 	const context = fixture()
 	for (let game = 1; game <= 17; game++) context.nodes.set(game, { parentGame: game === 1 ? zeroAddress : address(game - 1), historyFrozen: true, progress: { ...pending(), nextSourceGame: game <= 2 ? zeroAddress : address(game - 2), ready: game === 17 } })
 	for (const game of [18, 19, 20]) context.nodes.set(game, { parentGame: address(17), historyFrozen: false, progress: { ...pending(), nextSourceGame: address(16) } })
-	const jobs = await planClaimCheckpointPreparation({ ...context, claims: [18, 19, 20].map(game => ({ game: address(game), claim })) })
+	const jobs = await planClaimCheckpointPreparation({ ...context, claims: claimsOn(18, 19, 20) })
 	expect(jobs).toEqual([{ targetGame: address(18), game: address(17), claim, reason: 'shared-ancestor' }])
 })
 
@@ -60,7 +62,7 @@ test('an almost complete parent is finished before an expensive terminal checkpo
 	const context = fixture()
 	context.nodes.set(12, { parentGame: address(11), historyFrozen: false, progress: { ...pending(32n), nextSourceGame: zeroAddress } })
 	context.nodes.set(11, { parentGame: address(10), historyFrozen: false, progress: { ...pending(2n), nextSourceGame: zeroAddress, ready: true } })
-	const jobs = await planClaimCheckpointPreparation({ ...context, claims: [{ game: address(12), claim }] })
+	const jobs = await planClaimCheckpointPreparation({ ...context, claims: claimsOn(12) })
 	expect(jobs).toEqual([{ targetGame: address(12), game: address(11), claim, reason: 'finishing-parent' }])
 })
 
@@ -68,7 +70,7 @@ test('a parent preparation tie keeps direct atomic settlement and avoids ancesto
 	const context = fixture()
 	context.nodes.set(12, { parentGame: address(11), historyFrozen: false, progress: { ...pending(24n), nextSourceGame: zeroAddress } })
 	context.nodes.set(11, { parentGame: address(10), historyFrozen: false, progress: { ...pending(2n), nextSourceGame: zeroAddress, ready: true } })
-	const jobs = await planClaimCheckpointPreparation({ ...context, claims: [{ game: address(12), claim }] })
+	const jobs = await planClaimCheckpointPreparation({ ...context, claims: claimsOn(12) })
 	expect(jobs).toEqual([{ targetGame: address(12), game: address(12), claim, reason: 'required' }])
 	expect(context.reads).toHaveLength(1)
 })
@@ -78,10 +80,7 @@ test('mutable ancestor history is never offered as a reusable preparation', asyn
 	context.nodes.set(10, { parentGame: address(9), historyFrozen: false, progress: pending() })
 	const jobs = await planClaimCheckpointPreparation({
 		...context,
-		claims: [
-			{ game: address(12), claim },
-			{ game: address(13), claim },
-		],
+		claims: claimsOn(12, 13),
 	})
 	expect(jobs.every(job => job.reason === 'required')).toBeTrue()
 })
@@ -91,10 +90,7 @@ test('ready terminal claims need no paid preparation or ancestor discovery', asy
 	context.nodes.set(13, { parentGame: address(11), historyFrozen: false, progress: { ...pending(), nextSourceGame: address(9), ready: true } })
 	const jobs = await planClaimCheckpointPreparation({
 		...context,
-		claims: [
-			{ game: address(12), claim },
-			{ game: address(13), claim },
-		],
+		claims: claimsOn(12, 13),
 		maxAncestorReads: 2,
 	})
 	expect(context.reads).toHaveLength(2)
@@ -107,10 +103,7 @@ test('canonical ancestry cycles are rejected instead of scheduling arbitrary wor
 	await expect(
 		planClaimCheckpointPreparation({
 			...context,
-			claims: [
-				{ game: address(12), claim },
-				{ game: address(13), claim },
-			],
+			claims: claimsOn(12, 13),
 		}),
 	).rejects.toThrow('cycle')
 })
@@ -120,10 +113,7 @@ test('a distant shared ancestor is not priced as one-call immediate parent adopt
 	context.nodes.set(13, { parentGame: address(10), historyFrozen: true, progress: { ...pending(), nextSourceGame: address(9) } })
 	const jobs = await planClaimCheckpointPreparation({
 		...context,
-		claims: [
-			{ game: address(12), claim },
-			{ game: address(13), claim },
-		],
+		claims: claimsOn(12, 13),
 	})
 	expect(jobs.every(job => job.reason === 'required')).toBeTrue()
 })
@@ -132,7 +122,7 @@ test('a cold shallow branching parent is skipped when two children cannot repay 
 	const context = fixture()
 	context.nodes.set(9, { parentGame: address(8), historyFrozen: true, progress: { ...pending(), nextSourceGame: address(7), ready: true } })
 	for (const game of [10, 11]) context.nodes.set(game, { parentGame: address(9), historyFrozen: false, progress: { ...pending(), nextSourceGame: address(8) } })
-	const jobs = await planClaimCheckpointPreparation({ ...context, claims: [10, 11].map(game => ({ game: address(game), claim })) })
+	const jobs = await planClaimCheckpointPreparation({ ...context, claims: claimsOn(10, 11) })
 	expect(jobs.map(job => job.reason)).toEqual(['required', 'required'])
 })
 
@@ -140,10 +130,7 @@ test('shared demand cannot exceed the global ancestor discovery budget or hide t
 	const context = fixture()
 	const jobs = await planClaimCheckpointPreparation({
 		...context,
-		claims: [
-			{ game: address(12), claim },
-			{ game: address(13), claim },
-		],
+		claims: claimsOn(12, 13),
 		maxAncestorReads: 2,
 	})
 	expect(context.reads).toHaveLength(4)

@@ -1,4 +1,4 @@
-import { getTokenApprovalResetReason } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
+import { getTokenApprovalResetReason, tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { encodeFunctionData } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { useSignal } from '@preact/signals'
@@ -25,6 +25,7 @@ import type { PortfolioTransaction } from '../../../protocol/securityPoolPortfol
 import type { PortfolioSharedForkParameters } from './usePortfolioSharedFork.js'
 import { portfolioAmountOrUndefined, portfolioUnsignedId } from '../lib/draft.js'
 import * as copy from '../../../copy/portfolioAuction.js'
+import * as collateralCopy from '../../../copy/collateral.js'
 
 export type PortfolioAuctionParameters = { fork: PortfolioForkSnapshot | undefined; bidder: Address | undefined; actions: PortfolioSharedForkParameters['actions']; openVault?: ((vault: Address, universeId: bigint) => void) | undefined }
 export function usePortfolioAuction({ fork, bidder, actions, openVault }: PortfolioAuctionParameters) {
@@ -94,7 +95,7 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 			bidReason = getErrorMessage(error, copy.quoteError)
 		}
 	}
-	if (bidReason === undefined && snapshot !== undefined && quote !== undefined && snapshot.collateralAllowance < quote.bidAttoEth) bidReason = 'Collateral approval required.'
+	if (bidReason === undefined && snapshot !== undefined && quote !== undefined && snapshot.collateralAllowance < quote.bidAttoEth) bidReason = collateralCopy.approvalRequired
 	const withdrawalReason = auctionReason ?? (auction?.refundAttoEth === 0n ? copy.noRefund : undefined)
 	const refundReason = (bid: PortfolioAuctionBid) => auctionReason ?? (bid.refundSettled ? copy.credited : undefined) ?? (!auction?.finalized && bid.earlyRefundAttoEth === 0n ? copy.bidMayStillWin : undefined)
 	const claimQuote = (selected: Awaited<ReturnType<typeof loadPortfolioBranchAuction>>, bid: PortfolioAuctionBid) => quotePortfolioAuctionRefundClaim(selected, bid.id)
@@ -170,7 +171,7 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 					}
 				},
 				latest => {
-					const reason = getTokenApprovalResetReason(latest.collateralAllowance, amount, latest.collateral.symbol, latest.collateral.symbol === 'USDT')
+					const reason = getTokenApprovalResetReason(latest.collateralAllowance, amount, latest.collateral.symbol, tokenRequiresAllowanceReset(latest.collateralToken))
 					if (reason !== undefined) throw new Error(reason)
 				},
 			),
