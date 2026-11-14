@@ -3,7 +3,7 @@ import { CONFIGURATION_REVISION_CONFLICT } from '@zoltar/bot-shared/config/durab
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
 import { CONFIGURATION_COMMITTED_SAFELY_PAUSED } from '../../src/runtime/configuration-commit.ts'
 import { browserTest, CHROMIUM_STARTUP_BUDGET_MILLISECONDS } from '../support/chromium.ts'
-import { connectToChromium, state, walletAddress } from '../support/dashboard-harness.ts'
+import { connectToChromium, inertDashboardControls, state, walletAddress } from '../support/dashboard-harness.ts'
 
 type Controller = Parameters<typeof startDashboardServer>[1]
 type Browser = Awaited<ReturnType<typeof connectToChromium>>
@@ -45,15 +45,7 @@ async function withDashboard(overrides: Partial<Controller>, path: string, scena
 	const dashboard = startDashboardServer(0, {
 		getConfiguration: () => configuration('revision-1'),
 		getState: () => state({ wallet: walletAddress }),
-		hostname: '127.0.0.1',
-		setCancellation: () => {},
-		setCandidate: () => {},
-		setObligation: () => {},
-		setPaused: () => {},
-		setReplacement: () => {},
-		setSettings: () => {},
-		setSigner: () => {},
-		setWorkflow: () => {},
+		...inertDashboardControls,
 		...overrides,
 	})
 	let browser: Browser | undefined
@@ -73,6 +65,17 @@ async function withDashboard(overrides: Partial<Controller>, path: string, scena
 		await browser?.close()
 		dashboard.stop(true)
 	}
+}
+
+/** Opens the first catalog operation, previews it, and clicks Execute once the preview completes. */
+async function previewAndExecuteFirstOperation(cdp: Browser) {
+	const executeButton = "document.querySelector('#operation-dialog .operation-actions button:nth-child(2)')"
+	await cdp.waitFor("document.querySelector('.operation-open') !== null", { message: 'catalog did not render' })
+	await cdp.evaluate("(() => { for (const group of document.querySelectorAll('.catalog-group')) group.open = true; document.querySelector('.operation-open').click() })()")
+	await cdp.waitFor("document.querySelector('#operation-input-amount') !== null && document.querySelector('#operation-dialog fieldset')?.disabled === false", { message: 'operation did not load' })
+	await cdp.evaluate("document.querySelector('#operation-dialog form').requestSubmit()")
+	await cdp.waitFor(`${executeButton}.disabled === false`, { message: 'preview did not complete' })
+	await cdp.evaluate(`${executeButton}.click()`)
 }
 
 function gate() {
@@ -307,13 +310,7 @@ browserTest(
 			},
 			'/catalog',
 			async cdp => {
-				const executeButton = "document.querySelector('#operation-dialog .operation-actions button:nth-child(2)')"
-				await cdp.waitFor("document.querySelector('.operation-open') !== null", { message: 'catalog did not render' })
-				await cdp.evaluate("(() => { for (const group of document.querySelectorAll('.catalog-group')) group.open = true; document.querySelector('.operation-open').click() })()")
-				await cdp.waitFor("document.querySelector('#operation-input-amount') !== null && document.querySelector('#operation-dialog fieldset')?.disabled === false", { message: 'operation did not load' })
-				await cdp.evaluate("document.querySelector('#operation-dialog form').requestSubmit()")
-				await cdp.waitFor(`${executeButton}.disabled === false`, { message: 'preview did not complete' })
-				await cdp.evaluate(`${executeButton}.click()`)
+				await previewAndExecuteFirstOperation(cdp)
 				for (let attempt = 0; attempt < 100 && !actions.includes('execute'); attempt++) await Bun.sleep(25)
 				await cdp.evaluate("document.querySelector('#operation-dialog').close()")
 				// Let the dialog's close event land before the request fails, as it does when an operator closes it mid-request.
@@ -364,13 +361,7 @@ browserTest(
 				},
 				'/catalog',
 				async cdp => {
-					const executeButton = "document.querySelector('#operation-dialog .operation-actions button:nth-child(2)')"
-					await cdp.waitFor("document.querySelector('.operation-open') !== null", { message: 'catalog did not render' })
-					await cdp.evaluate("(() => { for (const group of document.querySelectorAll('.catalog-group')) group.open = true; document.querySelector('.operation-open').click() })()")
-					await cdp.waitFor("document.querySelector('#operation-input-amount') !== null && document.querySelector('#operation-dialog fieldset')?.disabled === false", { message: 'operation did not load' })
-					await cdp.evaluate("document.querySelector('#operation-dialog form').requestSubmit()")
-					await cdp.waitFor(`${executeButton}.disabled === false`, { message: 'preview did not complete' })
-					await cdp.evaluate(`${executeButton}.click()`)
+					await previewAndExecuteFirstOperation(cdp)
 					for (let attempt = 0; attempt < 100 && !actions.includes('status'); attempt++) await Bun.sleep(25)
 					expect(actions).toContain('status')
 					// The status request now hangs inside the server's mutation queue. State polling must still run and,

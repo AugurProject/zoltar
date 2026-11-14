@@ -126,9 +126,9 @@ function presence(value: OperationPlan, blocksNovelty = true) {
 }
 
 /** Tracks `value` as a pending lifecycle obligation at block 10 and returns it with its workflow and first step. */
-function trackedObligation(value: OperationPlan = plan('10')) {
+function trackedObligation(value: OperationPlan = plan('10'), currentTimestamp?: bigint) {
 	const state = obligationState()
-	synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 10n)
+	synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 10n, currentTimestamp)
 	const obligation = obligationForPlan(state, value)
 	const workflow = state.workflows[0]
 	const step = workflow?.steps[0]
@@ -666,13 +666,7 @@ describe('durable lifecycle obligations', () => {
 	})
 
 	test('backs off then automatically rediscovers a canonically present finalized lifecycle revert', () => {
-		const value = plan('10')
-		const state = obligationState()
-		synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 10n, 900n)
-		const obligation = obligationForPlan(state, value)
-		const workflow = state.workflows[0]
-		const step = workflow?.steps[0]
-		if (obligation === undefined || workflow === undefined || step === undefined) throw new Error('Missing lifecycle fixture')
+		const { obligation, state, step, value, workflow } = trackedObligation(plan('10'), 900n)
 		obligation.status = 'failed'
 		workflow.status = 'failed'
 		step.status = 'failed'
@@ -748,13 +742,7 @@ describe('durable lifecycle obligations', () => {
 	})
 
 	test('requires operator reconciliation after bounded finalized lifecycle retry attempts are exhausted', () => {
-		const value = plan('10')
-		const state = obligationState()
-		synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 10n, 900n)
-		const obligation = obligationForPlan(state, value)
-		const workflow = state.workflows[0]
-		const step = workflow?.steps[0]
-		if (obligation === undefined || workflow === undefined || step === undefined) throw new Error('Missing lifecycle fixture')
+		const { obligation, state, step, value, workflow } = trackedObligation(plan('10'), 900n)
 		obligation.status = 'failed'
 		obligation.attemptCount = 30
 		obligation.automaticRetryCount = 2

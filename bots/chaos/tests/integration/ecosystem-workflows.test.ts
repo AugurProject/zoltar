@@ -156,13 +156,7 @@ function runtimeContext(settings: OperatorSettings) {
 }
 
 async function canonicalPlans(context: ReturnType<typeof runtimeContext>) {
-	const scan = await performCanonicalScan(context.environment.settings, context.pool, context.account.address, SCAN_SEED, undefined, undefined, { clock: ANVIL_CLOCK })
-	expect(scan.indexComplete).toBeTrue()
-	expect(scan.carryProofsComplete).toBeTrue()
-	context.state.evaluations = scan.evaluations
-	context.state.inventory = scan.inventory
-	context.state.lastScannedBlock = scan.anchor.blockNumber
-	context.state.protocolIndex = scan.index
+	const scan = await canonicalRescan(context)
 	return { plans: OPERATION_IDS.map(id => requiredPlan(scan.evaluations, id)), scan }
 }
 

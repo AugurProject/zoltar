@@ -7,6 +7,19 @@ export const walletAddress = `0x${'ab'.repeat(20)}`
 export const explorerUrl = 'https://sepolia.etherscan.io'
 export const explorerTransaction = (hash: string) => `${explorerUrl}/tx/${hash}`
 
+/** Loopback dashboard binding with mutation handlers that accept and ignore every request, for scenarios that do not exercise them. */
+export const inertDashboardControls = {
+	hostname: '127.0.0.1' as const,
+	setCancellation: () => {},
+	setCandidate: () => {},
+	setObligation: () => {},
+	setPaused: () => {},
+	setReplacement: () => {},
+	setSettings: () => {},
+	setSigner: () => {},
+	setWorkflow: () => {},
+}
+
 export function state(overrides: Record<string, unknown>) {
 	return {
 		activities: [],

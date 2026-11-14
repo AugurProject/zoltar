@@ -18,21 +18,15 @@ import { deterministicDeploymentProxy, executorDeploymentPlan } from '#execution
 import { keccak256 } from '@zoltar/bot-shared/ethereum'
 import { applyQueuedExecutionSettings, applyQueuedSigner } from '../../src/runtime/operator-execution-state.ts'
 import { operatorStateFixture } from '../support/operator-state.ts'
+import { serveSepoliaChainIdRpc } from '../support/sepolia-rpc.ts'
 
 const temporaryDirectories: string[] = []
 const dashboards: { stop: (closeActiveConnections?: boolean) => void }[] = []
 const rpcServers: Bun.Server<unknown>[] = []
 
-/** A Sepolia JSON-RPC stand-in that answers every method with the chain id, which satisfies the connectivity probes. */
+/** Starts a Sepolia chain-id RPC stand-in that afterEach stops, and returns its URL. */
 function mockSepoliaRpc() {
-	const server = Bun.serve({
-		async fetch(request) {
-			const body = (await request.json()) as { id: unknown }
-			return Response.json({ id: body.id, jsonrpc: '2.0', result: '0xaa36a7' })
-		},
-		hostname: '127.0.0.1',
-		port: 0,
-	})
+	const server = serveSepoliaChainIdRpc()
 	rpcServers.push(server)
 	if (server.port === undefined) throw new Error('Mock RPC did not expose a port')
 	return `http://127.0.0.1:${server.port.toString()}/`
