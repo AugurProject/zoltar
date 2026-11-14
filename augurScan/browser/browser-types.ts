@@ -11,10 +11,10 @@ export interface AmmPriceHistoryRecord {
 
 export interface RepEthPriceHistoryRecord {
 	timestamp: string
-	settlement_timestamp: string | null
+	settlement_timestamp: string
 	block_number: string
 	event_name: string
-	report_id: string | null
+	report_id: string
 	rep_per_eth_1e18: string
 }
 
@@ -174,13 +174,10 @@ export type PoolRecord = {
 	universe_id: string
 	question_id: string
 	question_title: string
-	collateral_repair_auction_address: string
 	coordinator_address: string
 	share_token_address: string
 	security_multiplier_bps: string
 	initial_priority_fee_atto_eth_per_gas: string
-	initial_retention_rate: string
-	initial_settlement_collateral_atto_eth: string
 	settlement_collateral_atto_eth: string
 	share_token_supply_atto_shares: string
 	child_count: string
@@ -354,7 +351,6 @@ export interface ChartDefinition<T extends { timestamp: string }> {
 	decimals?: number | undefined
 	unit?: string
 	className?: string
-	pointShape?: (row: T) => 'circle' | 'diamond'
 	pointLabel?: (row: T) => string
 }
 

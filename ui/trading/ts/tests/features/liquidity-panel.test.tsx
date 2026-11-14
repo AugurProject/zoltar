@@ -9,6 +9,7 @@ import { estimateLiquidity, outcomeSharesValueAttoEth } from '../../features/liv
 import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { etherScaleMarketFixture } from '../support/liveMarketFixture.js'
+import { passthroughWorkflowPanelProps } from '../support/liveWorkflowPanelProps.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const configuration = deploymentConfigurationFixture({ securityPoolFactory: `0x${'22'.repeat(20)}`, factory: `0x${'33'.repeat(20)}`, router: `0x${'44'.repeat(20)}` })
@@ -25,26 +26,18 @@ const services: LiveLiquidityServices = {
 function renderPanel(market: LiveMarket, connected: boolean, balances: LiveBalances | undefined = undefined, quoteServices = services, walletClient: ReturnType<typeof createWalletClient> | undefined = undefined) {
 	return renderIntoDocument(
 		<LiveLiquidityControls
+			{...passthroughWorkflowPanelProps}
 			configuration={configuration}
 			market={market}
 			balances={balances}
 			balanceState={connected ? 'ready' : 'disconnected'}
-			balanceError={undefined}
 			account={connected ? account : undefined}
 			walletClient={walletClient}
-			networkMismatchReason={undefined}
 			walletEthAttoEth={connected ? 10n ** 18n : undefined}
 			walletEthStatus={connected ? 'ready' : 'disconnected'}
-			wallet={{ actionLabel: 'Connect wallet', connect: async () => undefined }}
 			settings={DEFAULT_TRADE_SETTINGS}
-			externallyLocked={false}
 			nowSeconds={100n}
 			refresh={async () => undefined}
-			onKnownReceipt={() => undefined}
-			executeWithCurrentWalletContext={async (_account, _network, _wallet, action) => await action()}
-			createGuardedWalletWrite={() => async write => await write()}
-			retryBalances={async () => undefined}
-			onWorkflowLockChange={() => undefined}
 			services={quoteServices}
 		/>,
 	)
@@ -96,6 +89,21 @@ function amountErrorText() {
 
 describe('liquidity panel', () => {
 	installDomTestLifecycle()
+
+	test('explains token funding blocked by a disconnected wallet with the shared reason, not the connect button label', async () => {
+		const tokenMarket = etherScaleMarketFixture({ collateral: { token: `0x${'55'.repeat(20)}`, symbol: 'USDC', decimals: 6, native: false } })
+		const rendered = await renderPanel(tokenMarket, false)
+		try {
+			await typeAmount('0.1')
+			const approval = Array.from(document.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Approve USDC')
+			if (approval === undefined) throw new Error('Missing approval button')
+			expect(approval.disabled).toBe(true)
+			const description = approval.getAttribute('aria-describedby')
+			expect(description === null ? undefined : document.getElementById(description)?.textContent).toBe('Connect wallet to continue.')
+		} finally {
+			await rendered.cleanup()
+		}
+	})
 
 	test('previews additions instantly without wallet requests', async () => {
 		let requests = 0

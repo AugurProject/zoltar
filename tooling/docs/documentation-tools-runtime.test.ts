@@ -29,6 +29,42 @@ const runGeneratedRuntime = async (name: string): Promise<void> => {
 	await Function(`${source}\nreturn typeof deploymentMaskDecoderReady === 'undefined' ? undefined : deploymentMaskDecoderReady`)()
 }
 
+/** Lays out a sticky explorer 293px tall ending at 373px above a target at 80px, and records the last window.scrollBy request. */
+const installStickyExplorerLayout = (explorer: HTMLElement, target: HTMLElement) => {
+	const scrollBy: { lastOptions: ScrollToOptions | undefined } = { lastOptions: undefined }
+	const runAnimationFrame = (callback: FrameRequestCallback): number => {
+		callback(0)
+		return 1
+	}
+	Object.defineProperty(globalThis, 'requestAnimationFrame', { configurable: true, value: runAnimationFrame, writable: true })
+	Object.defineProperty(globalThis, 'getComputedStyle', { configurable: true, value: () => ({ position: 'sticky' }), writable: true })
+	Object.defineProperty(explorer, 'getBoundingClientRect', { configurable: true, value: () => ({ bottom: 373, height: 293 }) })
+	Object.defineProperty(target, 'getBoundingClientRect', { configurable: true, value: () => ({ top: 80 }) })
+	Object.defineProperty(target, 'scrollIntoView', { configurable: true, value: () => {} })
+	Object.defineProperty(window, 'scrollBy', {
+		configurable: true,
+		value: (options: ScrollToOptions) => {
+			scrollBy.lastOptions = options
+		},
+	})
+	return scrollBy
+}
+
+/** Replaces globalThis.fetch and returns a function that restores the previous descriptor. */
+const installFetch = (fetch: (input: URL | RequestInfo) => Promise<Response>) => {
+	const fetchDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch')
+	Object.defineProperty(globalThis, 'fetch', { configurable: true, value: fetch })
+	return () => {
+		if (fetchDescriptor === undefined) Reflect.deleteProperty(globalThis, 'fetch')
+		else Object.defineProperty(globalThis, 'fetch', fetchDescriptor)
+	}
+}
+
+const serveDeploymentAddresses = async (input: URL | RequestInfo) => {
+	const path = String(input).includes('sepolia') ? 'docs/sepolia-deployment-addresses.json' : 'docs/mainnet-deployment-addresses.json'
+	return new Response(await Bun.file(path).text(), { headers: { 'content-type': 'application/json' }, status: 200 })
+}
+
 test('interactive tools restore shared state, apply presets, validate input, and reset', async () => {
 	const state = encodeURIComponent(JSON.stringify({ yes: '9', no: '8' }))
 	const cleanup = await loadDocument('docs/explanation/escalation-game.html', `http://localhost/docs/explanation/escalation-game.html?tool=escalation-game-example&state=${state}`)
@@ -243,28 +279,13 @@ test('invariant fragment navigation clears sticky explorer controls', async () =
 		const explorer = document.querySelector<HTMLElement>('#invariant-explorer')
 		const target = document.querySelector<HTMLDetailsElement>('#pool-accounting')
 		if (explorer === null || target === null) throw new Error('Invariant fragment fixture is incomplete')
-		let scrollByOptions: ScrollToOptions | undefined
-		const runAnimationFrame = (callback: FrameRequestCallback): number => {
-			callback(0)
-			return 1
-		}
-		Object.defineProperty(globalThis, 'requestAnimationFrame', { configurable: true, value: runAnimationFrame, writable: true })
-		Object.defineProperty(globalThis, 'getComputedStyle', { configurable: true, value: () => ({ position: 'sticky' }), writable: true })
-		Object.defineProperty(explorer, 'getBoundingClientRect', { configurable: true, value: () => ({ bottom: 373, height: 293 }) })
-		Object.defineProperty(target, 'getBoundingClientRect', { configurable: true, value: () => ({ top: 80 }) })
-		Object.defineProperty(target, 'scrollIntoView', { configurable: true, value: () => {} })
-		Object.defineProperty(window, 'scrollBy', {
-			configurable: true,
-			value: (options: ScrollToOptions) => {
-				scrollByOptions = options
-			},
-		})
+		const scrollBy = installStickyExplorerLayout(explorer, target)
 
 		await runGeneratedRuntime('invariantExplorer')
 
 		expect(target.open).toBeTrue()
 		expect(target.style.scrollMarginTop).toBe('309px')
-		expect(scrollByOptions).toEqual({ behavior: 'instant', top: -309 })
+		expect(scrollBy.lastOptions).toEqual({ behavior: 'instant', top: -309 })
 	} finally {
 		cleanup()
 	}
@@ -277,22 +298,7 @@ test('invariant index links reveal a filtered-out entry clear of the sticky expl
 		const target = document.querySelector<HTMLDetailsElement>('#escalation')
 		const keyword = document.querySelector<HTMLInputElement>('[data-invariant-filter]')
 		if (explorer === null || target === null || keyword === null) throw new Error('Invariant index navigation fixture is incomplete')
-		let scrollByOptions: ScrollToOptions | undefined
-		const runAnimationFrame = (callback: FrameRequestCallback): number => {
-			callback(0)
-			return 1
-		}
-		Object.defineProperty(globalThis, 'requestAnimationFrame', { configurable: true, value: runAnimationFrame, writable: true })
-		Object.defineProperty(globalThis, 'getComputedStyle', { configurable: true, value: () => ({ position: 'sticky' }), writable: true })
-		Object.defineProperty(explorer, 'getBoundingClientRect', { configurable: true, value: () => ({ bottom: 373, height: 293 }) })
-		Object.defineProperty(target, 'getBoundingClientRect', { configurable: true, value: () => ({ top: 80 }) })
-		Object.defineProperty(target, 'scrollIntoView', { configurable: true, value: () => {} })
-		Object.defineProperty(window, 'scrollBy', {
-			configurable: true,
-			value: (options: ScrollToOptions) => {
-				scrollByOptions = options
-			},
-		})
+		const scrollBy = installStickyExplorerLayout(explorer, target)
 
 		await runGeneratedRuntime('invariantExplorer')
 		keyword.value = 'UNI-01'
@@ -308,7 +314,7 @@ test('invariant index links reveal a filtered-out entry clear of the sticky expl
 		expect(keyword.value).toBe('')
 		expect(document.activeElement).not.toBe(keyword)
 		expect(target.style.scrollMarginTop).toBe('309px')
-		expect(scrollByOptions).toEqual({ behavior: 'instant', top: -309 })
+		expect(scrollBy.lastOptions).toEqual({ behavior: 'instant', top: -309 })
 	} finally {
 		cleanup()
 	}
@@ -389,15 +395,7 @@ test('MMR planner updates valid output and guards invalid leaf and index boundar
 
 test('deployment bit controls clear the active preset and stale status', async () => {
 	const cleanup = await loadDocument('docs/reference/deployment-status.html', 'http://localhost/docs/reference/deployment-status.html')
-	const fetchDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch')
-	Object.defineProperty(globalThis, 'fetch', {
-		configurable: true,
-		value: async (input: URL | RequestInfo) => {
-			const source = String(input)
-			const path = source.includes('sepolia') ? 'docs/sepolia-deployment-addresses.json' : 'docs/mainnet-deployment-addresses.json'
-			return new Response(await Bun.file(path).text(), { headers: { 'content-type': 'application/json' }, status: 200 })
-		},
-	})
+	const restoreFetch = installFetch(serveDeploymentAddresses)
 	try {
 		await runGeneratedRuntime('deploymentMaskDecoder')
 		await runGeneratedRuntime('interactiveTools')
@@ -412,8 +410,7 @@ test('deployment bit controls clear the active preset and stale status', async (
 		expect(preset.getAttribute('aria-pressed')).toBe('false')
 		expect(status.textContent).toBe('')
 	} finally {
-		if (fetchDescriptor === undefined) Reflect.deleteProperty(globalThis, 'fetch')
-		else Object.defineProperty(globalThis, 'fetch', fetchDescriptor)
+		restoreFetch()
 		cleanup()
 	}
 })
@@ -425,15 +422,7 @@ test('deployment decoder decodes a mask against the selected network mapping', a
 	expect(sepoliaSteps[1]?.id).toBe('reputationToken')
 	expect(sepoliaSteps).toHaveLength(mainnetSteps.length + 1)
 	const cleanup = await loadDocument('docs/reference/deployment-status.html', 'http://localhost/docs/reference/deployment-status.html')
-	const fetchDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch')
-	Object.defineProperty(globalThis, 'fetch', {
-		configurable: true,
-		value: async (input: URL | RequestInfo) => {
-			const source = String(input)
-			const path = source.includes('sepolia') ? 'docs/sepolia-deployment-addresses.json' : 'docs/mainnet-deployment-addresses.json'
-			return new Response(await Bun.file(path).text(), { headers: { 'content-type': 'application/json' }, status: 200 })
-		},
-	})
+	const restoreFetch = installFetch(serveDeploymentAddresses)
 	try {
 		await runGeneratedRuntime('deploymentMaskDecoder')
 		const network = document.querySelector<HTMLSelectElement>('[data-deployment-mask-network]')
@@ -468,24 +457,19 @@ test('deployment decoder decodes a mask against the selected network mapping', a
 		expect(bitToggles().every(button => !button.disabled)).toBeTrue()
 		expect(bitToggles().some(button => button.getAttribute('aria-pressed') === 'true')).toBeTrue()
 	} finally {
-		if (fetchDescriptor === undefined) Reflect.deleteProperty(globalThis, 'fetch')
-		else Object.defineProperty(globalThis, 'fetch', fetchDescriptor)
+		restoreFetch()
 		cleanup()
 	}
 })
 
 test('deployment decoder exposes retryable HTTP and malformed-manifest failures', async () => {
 	const cleanup = await loadDocument('docs/reference/deployment-status.html', 'http://localhost/docs/reference/deployment-status.html')
-	const fetchDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch')
 	let mainnetResponse: 'http-error' | 'malformed' = 'http-error'
-	Object.defineProperty(globalThis, 'fetch', {
-		configurable: true,
-		value: async (input: URL | RequestInfo) => {
-			const source = String(input)
-			if (source.includes('sepolia')) return new Response(JSON.stringify({ deploymentSteps: [] }), { headers: { 'content-type': 'application/json' }, status: 200 })
-			if (mainnetResponse === 'http-error') return new Response('Unavailable', { status: 500 })
-			return new Response(JSON.stringify({ deploymentSteps: [] }), { headers: { 'content-type': 'application/json' }, status: 200 })
-		},
+	const restoreFetch = installFetch(async (input: URL | RequestInfo) => {
+		const source = String(input)
+		if (source.includes('sepolia')) return new Response(JSON.stringify({ deploymentSteps: [] }), { headers: { 'content-type': 'application/json' }, status: 200 })
+		if (mainnetResponse === 'http-error') return new Response('Unavailable', { status: 500 })
+		return new Response(JSON.stringify({ deploymentSteps: [] }), { headers: { 'content-type': 'application/json' }, status: 200 })
 	})
 	try {
 		await runGeneratedRuntime('deploymentMaskDecoder')
@@ -516,8 +500,7 @@ test('deployment decoder exposes retryable HTTP and malformed-manifest failures'
 		expect(retry.hidden).toBeFalse()
 		expect(retry.disabled).toBeFalse()
 	} finally {
-		if (fetchDescriptor === undefined) Reflect.deleteProperty(globalThis, 'fetch')
-		else Object.defineProperty(globalThis, 'fetch', fetchDescriptor)
+		restoreFetch()
 		cleanup()
 	}
 })

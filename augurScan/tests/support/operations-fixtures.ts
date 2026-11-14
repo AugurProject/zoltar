@@ -186,13 +186,12 @@ export const seedRiskAndPortfolioEvidence = async ({ database, operationsChainId
 	await database.sql`
 			INSERT INTO pools (
 				chain_id, block_hash, tx_hash, log_index, block_number, pool_address, parent_address,
-				universe_id, question_id, collateral_repair_auction_address, coordinator_address, share_token_address,
-				security_multiplier_bps, initial_priority_fee_atto_eth_per_gas,
-				initial_retention_rate, initial_settlement_collateral_atto_eth, canonical
+				universe_id, question_id, coordinator_address, share_token_address,
+				security_multiplier_bps, initial_priority_fee_atto_eth_per_gas, canonical
 			) VALUES (
 				${operationsChainId}, ${hash}, ${transactionHash}, 0, 1, ${oracle.toLowerCase()}, ${address.toLowerCase()},
-				1, 1, ${address.toLowerCase()}, ${oracle.toLowerCase()}, ${address.toLowerCase()},
-				15000, 0, 0, 0, true
+				1, 1, ${oracle.toLowerCase()}, ${address.toLowerCase()},
+				15000, 0, true
 			)
 		`
 	await database.sql`
@@ -327,13 +326,12 @@ export const seedRiskAndPortfolioEvidence = async ({ database, operationsChainId
 	await database.sql`
 				INSERT INTO pools (
 					chain_id, block_hash, tx_hash, log_index, block_number, pool_address, parent_address,
-					universe_id, question_id, collateral_repair_auction_address, coordinator_address, share_token_address,
-					security_multiplier_bps, initial_priority_fee_atto_eth_per_gas,
-					initial_retention_rate, initial_settlement_collateral_atto_eth, canonical
+					universe_id, question_id, coordinator_address, share_token_address,
+					security_multiplier_bps, initial_priority_fee_atto_eth_per_gas, canonical
 				)
 				SELECT ${operationsChainId}, '0x' || lpad(to_hex(item), 64, '0'), '0x' || lpad(to_hex(item + 20000), 64, '0'),
 					1, item, '0x' || lpad(to_hex(item + 2000000), 40, '0'), ${address.toLowerCase()}, 1, 1,
-					${address.toLowerCase()}, ${oracle.toLowerCase()}, ${address.toLowerCase()}, 15000, 0, 0, 0, true
+					${oracle.toLowerCase()}, ${address.toLowerCase()}, 15000, 0, true
 				FROM generate_series(2, 261) item
 			`
 	await database.sql`

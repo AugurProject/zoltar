@@ -31,10 +31,10 @@ export const demoRepEthPriceHistory = (now = Date.now()): RepEthPriceHistoryReco
 		const timestamp = new Date(now - (demoRepEthValues.length - 1 - index) * 9 * 86_400_000).toISOString()
 		return {
 			timestamp,
-			settlement_timestamp: index === 0 ? null : timestamp,
+			settlement_timestamp: timestamp,
 			block_number: String(23_100_000 + index * 13_200),
-			event_name: index === 0 ? 'RepEthPriceSet' : 'PriceReported',
-			report_id: index === 0 ? null : String(1_830 + index),
+			event_name: 'PriceReported',
+			report_id: String(1_830 + index),
 			rep_per_eth_1e18: value,
 		}
 	})

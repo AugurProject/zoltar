@@ -309,9 +309,23 @@ describe('simulation worker lifecycle', () => {
 	})
 })
 
-test('stops a stalled simulation control and clears its loading state', async () => {
+/** Shortens the two-minute worker request timeout to `requestTimeoutMilliseconds`; returns the real `setTimeout` and the spy to restore. */
+function shortenRequestTimeout(requestTimeoutMilliseconds: number) {
 	const originalSetTimeout = globalThis.setTimeout
-	const timer = spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) => originalSetTimeout(handler, delay === 120_000 ? 10 : delay, ...args))
+	const timer = spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) => originalSetTimeout(handler, delay === 120_000 ? requestTimeoutMilliseconds : delay, ...args))
+	return { originalSetTimeout, timer }
+}
+
+/** A baseline-scenario backend whose worker reported ready before the scenario was bootstrapped. */
+async function createUnbootstrappedScenarioBackend() {
+	const worker = createWorkerHarness()
+	const pendingBackend = createSimulationBackend({ scenario: 'baseline' }, { createWorkerConnection: () => worker.connection })
+	worker.emitMessage({ state: { ...createReadyState(), isBootstrapped: false }, type: 'ready' })
+	return { worker, backend: await pendingBackend }
+}
+
+test('stops a stalled simulation control and clears its loading state', async () => {
+	const { originalSetTimeout, timer } = shortenRequestTimeout(10)
 	const worker = createWorkerHarness()
 	const pendingBackend = createSimulationBackend({}, { createWorkerConnection: () => worker.connection })
 	worker.emitMessage({ state: { ...createReadyState(), isBootstrapping: true }, type: 'ready' })
@@ -332,12 +346,8 @@ test('stops a stalled simulation control and clears its loading state', async ()
 })
 
 test('keeps a scenario bootstrap alive while the worker reports progress beyond the request timeout', async () => {
-	const originalSetTimeout = globalThis.setTimeout
-	const timer = spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) => originalSetTimeout(handler, delay === 120_000 ? 30 : delay, ...args))
-	const worker = createWorkerHarness()
-	const pendingBackend = createSimulationBackend({ scenario: 'baseline' }, { createWorkerConnection: () => worker.connection })
-	worker.emitMessage({ state: { ...createReadyState(), isBootstrapped: false }, type: 'ready' })
-	const backend = await pendingBackend
+	const { originalSetTimeout, timer } = shortenRequestTimeout(30)
+	const { worker, backend } = await createUnbootstrappedScenarioBackend()
 	try {
 		const bootstrap = backend.bootstrap().then(
 			() => 'bootstrapped',
@@ -358,12 +368,8 @@ test('keeps a scenario bootstrap alive while the worker reports progress beyond 
 })
 
 test('stops a scenario bootstrap that stops reporting progress', async () => {
-	const originalSetTimeout = globalThis.setTimeout
-	const timer = spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) => originalSetTimeout(handler, delay === 120_000 ? 10 : delay, ...args))
-	const worker = createWorkerHarness()
-	const pendingBackend = createSimulationBackend({ scenario: 'baseline' }, { createWorkerConnection: () => worker.connection })
-	worker.emitMessage({ state: { ...createReadyState(), isBootstrapped: false }, type: 'ready' })
-	const backend = await pendingBackend
+	const { originalSetTimeout, timer } = shortenRequestTimeout(10)
+	const { worker, backend } = await createUnbootstrappedScenarioBackend()
 	try {
 		const bootstrap = backend.bootstrap().then(
 			() => 'unexpected success',

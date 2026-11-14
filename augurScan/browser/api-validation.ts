@@ -158,7 +158,7 @@ export const isChartRowValue = (value: unknown): boolean => isRecord(value) && i
 
 export const isAmmPriceValue = (value: unknown): boolean => isRecord(value) && isString(value['timestamp']) && isString(value['block_number']) && isString(value['conditional_yes_bps']) && isString(value['conditional_no_bps']) && isString(value['yes_reserve_atto_shares']) && isString(value['no_reserve_atto_shares'])
 
-export const isRepEthPriceValue = (value: unknown): boolean => isRecord(value) && isString(value['timestamp']) && isString(value['block_number']) && isString(value['event_name']) && isNullableString(value['report_id']) && isString(value['rep_per_eth_1e18']) && isNullableString(value['settlement_timestamp'])
+export const isRepEthPriceValue = (value: unknown): boolean => isRecord(value) && isString(value['timestamp']) && isString(value['block_number']) && isString(value['event_name']) && isString(value['report_id']) && isString(value['rep_per_eth_1e18']) && isString(value['settlement_timestamp'])
 
 export const isUniswapPriceValue = (value: unknown): boolean =>
 	isRecord(value) &&
@@ -318,22 +318,7 @@ const hasOptionalNullableStringFields = (value: Record<string, unknown>, fields:
 
 export const isPoolStateEntityValue = (value: unknown): boolean =>
 	isRecord(value) &&
-	hasStringFields(value, [
-		'chain_id',
-		'network_id',
-		'pool_address',
-		'parent_address',
-		'universe_id',
-		'question_id',
-		'collateral_repair_auction_address',
-		'coordinator_address',
-		'share_token_address',
-		'security_multiplier_bps',
-		'initial_priority_fee_atto_eth_per_gas',
-		'initial_retention_rate',
-		'initial_settlement_collateral_atto_eth',
-		'child_count',
-	]) &&
+	hasStringFields(value, ['chain_id', 'network_id', 'pool_address', 'parent_address', 'universe_id', 'question_id', 'coordinator_address', 'share_token_address', 'security_multiplier_bps', 'initial_priority_fee_atto_eth_per_gas', 'child_count']) &&
 	hasNullableStringFields(value, ['question_title', 'settlement_collateral_atto_eth', 'share_token_supply_atto_shares', 'snapshot_block'])
 
 const isQuestionSeconds = (value: unknown): boolean => typeof value === 'string' && /^(0|[1-9][0-9]{0,14})$/.test(value) && BigInt(value) <= 281_474_976_710_655n

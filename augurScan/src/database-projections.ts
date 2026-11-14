@@ -82,8 +82,8 @@ const storeProjection = async (transaction: SQL, chainId: number, item: StoredLo
 	}
 	if (projection.type === 'pool') {
 		await transaction`
-			INSERT INTO pools (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, parent_address, universe_id, question_id, collateral_repair_auction_address, coordinator_address, share_token_address, security_multiplier_bps, initial_priority_fee_atto_eth_per_gas, initial_retention_rate, initial_settlement_collateral_atto_eth, canonical)
-			VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.poolAddress}, ${projection.parentAddress}, ${projection.universeId}, ${projection.questionId}, ${projection.collateralRepairAuctionAddress}, ${projection.coordinatorAddress}, ${projection.shareTokenAddress}, ${projection.securityMultiplierBps}, ${projection.initialPriorityFeeAttoEthPerGas}, ${projection.initialRetentionRate}, ${projection.initialSettlementCollateralAttoEth}, true)
+			INSERT INTO pools (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, parent_address, universe_id, question_id, coordinator_address, share_token_address, security_multiplier_bps, initial_priority_fee_atto_eth_per_gas, canonical)
+			VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.poolAddress}, ${projection.parentAddress}, ${projection.universeId}, ${projection.questionId}, ${projection.coordinatorAddress}, ${projection.shareTokenAddress}, ${projection.securityMultiplierBps}, ${projection.initialPriorityFeeAttoEthPerGas}, true)
 			ON CONFLICT (chain_id, block_hash, tx_hash, log_index, pool_address) DO UPDATE SET canonical = true
 		`
 		return

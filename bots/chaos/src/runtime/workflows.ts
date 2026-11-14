@@ -2,7 +2,7 @@ import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { randomUUID } from 'node:crypto'
 import { maxUint256 } from '@zoltar/core-shared/evm/ethereum'
 import type { Hex } from '@zoltar/bot-shared/ethereum'
-import { canonicalizeOperationMetadata } from '../operations/planning.ts'
+import { canonicalizeOperationMetadata, serializeOperationMetadata } from '../operations/planning.ts'
 import type { OperationPlan } from '../operations/types.ts'
 import type { DurableWorkflow, DurableWorkflowFailureKind, DurableWorkflowStep, PendingTransactionIntent, RuntimeState } from '../state/operator-state.ts'
 
@@ -23,10 +23,6 @@ function workflowStep(planStep: OperationPlan['steps'][number]): DurableWorkflow
 		value: planStep.value ?? '0',
 		walletAssetDebits: planStep.walletAssetDebits,
 	}
-}
-
-function canonicalMetadata(metadata: OperationPlan['metadata']) {
-	return JSON.stringify(canonicalizeOperationMetadata(metadata))
 }
 
 function stepRequiresCanonicalLifecycleConfirmation(step: Pick<DurableWorkflowStep, 'evidence'>) {
@@ -58,7 +54,7 @@ function assertCanonicalLifecycleConfirmationBoundary(plan: Pick<OperationPlan, 
 }
 
 function workflowMatchesContinuationPlan(workflow: DurableWorkflow, plan: OperationPlan) {
-	return workflow.ecosystem === plan.ecosystem && workflow.operationId === plan.definitionId && canonicalMetadata(workflow.metadata) === canonicalMetadata(plan.metadata)
+	return workflow.ecosystem === plan.ecosystem && workflow.operationId === plan.definitionId && serializeOperationMetadata(workflow.metadata) === serializeOperationMetadata(plan.metadata)
 }
 
 export function workflowNeedsContinuation(workflow: DurableWorkflow) {

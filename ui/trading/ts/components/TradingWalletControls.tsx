@@ -35,7 +35,7 @@ export type TradingWalletControlsProps = Readonly<{
 }>
 
 function deploymentWalletLabel(state: DeploymentWalletState) {
-	if (state.connecting) return appCopy.connectingWallet
+	if (state.connecting) return appCopy.connecting
 	if (state.account === undefined) return appCopy.connectWallet
 	return appCopy.disconnectWallet
 }
@@ -84,7 +84,7 @@ export function TradingWalletControls({
 			{deploymentSetupActive ? (
 				<WalletConnectionControl
 					label={deploymentWalletLabel(deploymentWalletState)}
-					pendingLabel={appCopy.connectingWallet}
+					pendingLabel={appCopy.connecting}
 					pending={deploymentWalletState.connecting}
 					disabled={workflowLocked || !deploymentWalletState.ready}
 					disabledReason={deploymentWalletDisabledReason({ ready: deploymentWalletState.ready, workflowLocked })}

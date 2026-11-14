@@ -78,3 +78,27 @@ ALTER TABLE ONLY public.liquidation_approval_events
 ALTER TABLE ONLY public.vault_snapshots
     ADD CONSTRAINT vault_snapshots_chain_id_block_hash_tx_hash_log_index_fkey FOREIGN KEY (chain_id, block_hash, tx_hash, log_index) REFERENCES public.logs(chain_id, block_hash, tx_hash, log_index);
 `
+
+// Storage that migration 008 removed. Databases at schema versions 1 to 7 still hold the constant pool
+// deployment columns and accept the coordinator seed price that no contract emits.
+
+export const POOL_COLUMNS_REMOVED_IN_SCHEMA_8 = `    collateral_repair_auction_address text NOT NULL,
+    initial_retention_rate numeric(78,0) NOT NULL,
+    initial_settlement_collateral_atto_eth numeric(78,0) NOT NULL,
+`
+
+export const REP_ETH_PRICE_SNAPSHOTS_BEFORE_SCHEMA_8 = `CREATE TABLE public.rep_eth_price_snapshots (
+    chain_id bigint NOT NULL,
+    block_hash text NOT NULL,
+    tx_hash text NOT NULL,
+    log_index integer NOT NULL,
+    block_number bigint NOT NULL,
+    coordinator_address text NOT NULL,
+    event_name text NOT NULL,
+    report_id numeric(78,0),
+    rep_per_eth_1e18 numeric(78,0) NOT NULL,
+    settlement_timestamp timestamp with time zone,
+    canonical boolean DEFAULT true NOT NULL,
+    CONSTRAINT rep_eth_price_snapshots_event_name_check CHECK ((event_name = ANY (ARRAY['RepEthPriceSet'::text, 'PriceReported'::text]))),
+    CONSTRAINT rep_eth_price_snapshots_rep_per_eth_1e18_check CHECK ((rep_per_eth_1e18 >= (0)::numeric))
+);`

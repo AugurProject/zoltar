@@ -339,6 +339,19 @@ export function gameCapitalSnapshot(games: readonly Pick<OpenOracleGame, 'curren
 	}
 }
 
+/** Parses one line of a chain-scoped JSONL journal and returns its `record` payload; `journal` names the file in errors. */
+export function chainScopedJournalRecord(line: string, index: number, expectedChainId: number, journal: string): unknown {
+	let parsed: unknown
+	try {
+		parsed = JSON.parse(line)
+	} catch (error) {
+		if (error instanceof SyntaxError) throw new Error(`Invalid ${journal} line ${(index + 1).toString()}: ${error.message}`)
+		throw error
+	}
+	if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed) || Reflect.get(parsed, 'chainId') !== expectedChainId) throw new Error(`${journal.charAt(0).toUpperCase()}${journal.slice(1)} record at line ${(index + 1).toString()} belongs to another chain`)
+	return Reflect.get(parsed, 'record')
+}
+
 export async function loadExecutionHistory(path: string, expectedChainId: number, filesystem: ExecutionHistoryFilesystem = durableFilesystem) {
 	if (!Number.isSafeInteger(expectedChainId) || expectedChainId < 1) throw new Error('Expected execution history chain ID must be a positive integer')
 	try {
@@ -346,15 +359,7 @@ export async function loadExecutionHistory(path: string, expectedChainId: number
 		const records: ExecutionRecord[] = []
 		for (const [index, line] of contents.split('\n').entries()) {
 			if (line.trim() === '') continue
-			let parsed: unknown
-			try {
-				parsed = JSON.parse(line)
-			} catch (error) {
-				if (error instanceof SyntaxError) throw new Error(`Invalid execution history line ${(index + 1).toString()}: ${error.message}`)
-				throw error
-			}
-			if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed) || Reflect.get(parsed, 'chainId') !== expectedChainId) throw new Error(`Execution history record at line ${(index + 1).toString()} belongs to another chain`)
-			const record = parseExecutionRecord(Reflect.get(parsed, 'record'))
+			const record = parseExecutionRecord(chainScopedJournalRecord(line, index, expectedChainId, 'execution history'))
 			if (record === undefined) throw new Error(`Invalid execution history record at line ${(index + 1).toString()}`)
 			records.push(record)
 		}

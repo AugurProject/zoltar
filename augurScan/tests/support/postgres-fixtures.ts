@@ -46,6 +46,14 @@ export const transaction = (): StoredTransaction => ({
 	decoded: { status: 'unknown', summary: 'Unknown call' },
 })
 
+// The shared fixture transaction under its own hash, with an empty receipt in the given block.
+export const evidenceTransaction = (hash: BlockHash, inBlock: BlockHash, decoded: StoredTransaction['decoded']): StoredTransaction => ({
+	...transaction(),
+	hash,
+	receipt: { transactionHash: hash, blockHash: inBlock, status: 'success', logs: [] },
+	decoded,
+})
+
 export const log = (hash: BlockHash, summary: string): StoredLog => ({
 	transactionHash,
 	blockHash: hash,

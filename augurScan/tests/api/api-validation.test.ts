@@ -214,10 +214,10 @@ test('validates nested state rows and complete specialized price records', () =>
 	const repEth = {
 		timestamp: '2026-08-19T00:00:00.000Z',
 		block_number: '12',
-		event_name: 'RepEthPriceSet',
-		report_id: null,
+		event_name: 'PriceReported',
+		report_id: '7',
 		rep_per_eth_1e18: '18000000000000000000',
-		settlement_timestamp: null,
+		settlement_timestamp: '2026-08-19T00:00:00.000Z',
 	}
 	const uniswap = {
 		timestamp: '2026-08-19T00:00:00.000Z',
@@ -275,13 +275,10 @@ test('requires complete, renderable state catalog entities', () => {
 		universe_id: '0',
 		question_id: 'question',
 		question_title: null,
-		collateral_repair_auction_address: 'auction',
 		coordinator_address: 'coordinator',
 		share_token_address: 'shares',
 		security_multiplier_bps: '15000',
 		initial_priority_fee_atto_eth_per_gas: '1',
-		initial_retention_rate: '2',
-		initial_settlement_collateral_atto_eth: '3',
 		settlement_collateral_atto_eth: null,
 		share_token_supply_atto_shares: null,
 		child_count: '0',

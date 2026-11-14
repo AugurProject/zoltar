@@ -1,18 +1,13 @@
 import type { CentralizedMarketEstimate, CentralizedMarketObservation, CentralizedMarketSettings } from './centralized-markets.ts'
-import { compareBigint } from '@zoltar/core-shared/math/bigint'
+import { median } from './market-consensus.ts'
 
 const BPS = 10_000n
 
-function median(values: readonly bigint[]) {
+function requiredMedian(values: readonly bigint[]) {
 	if (values.length === 0) throw new Error('Cannot calculate a median without observations')
-	const sorted = [...values].sort(compareBigint)
-	const middle = Math.floor(sorted.length / 2)
-	const upper = sorted[middle]
-	if (upper === undefined) throw new Error('Median observation disappeared')
-	if (sorted.length % 2 === 1) return upper
-	const lower = sorted[middle - 1]
-	if (lower === undefined) throw new Error('Median observation disappeared')
-	return (lower + upper) / 2n
+	const value = median(values)
+	if (value === undefined) throw new Error('Median observation disappeared')
+	return value
 }
 
 export function aggregateCentralizedMarketObservations(observations: readonly CentralizedMarketObservation[], settings: CentralizedMarketSettings, assetId: string, now = Date.now()): CentralizedMarketEstimate | undefined {
@@ -44,7 +39,7 @@ export function aggregateCentralizedMarketObservations(observations: readonly Ce
 	const prices = fresh.map(observation => observation.priceRepPerEth)
 	const minimumPriceRepPerEth = prices.reduce((minimum, price) => (price < minimum ? price : minimum))
 	const maximumPriceRepPerEth = prices.reduce((maximum, price) => (price > maximum ? price : maximum))
-	const priceRepPerEth = median(prices)
+	const priceRepPerEth = requiredMedian(prices)
 	const dispersionBps = priceRepPerEth === 0n ? BPS : ((maximumPriceRepPerEth - minimumPriceRepPerEth) * BPS) / priceRepPerEth
 	if (dispersionBps > settings.maximumVenueDispersionBps) reasons.push(`CEX venue dispersion is ${dispersionBps.toString()} bps`)
 	const bidDepthAttoEth = fresh.reduce((total, observation) => total + observation.bidDepthAttoEth, 0n)

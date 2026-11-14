@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 import { INITIAL_MIGRATABLE_SCHEMA_VERSION, type SupportedSchemaVersion } from './schema-policy.ts'
-import { POOL_SNAPSHOTS_BEFORE_SCHEMA_7, TABLES_REMOVED_IN_SCHEMA_7 } from './schema-removed-tables.ts'
+import { POOL_COLUMNS_REMOVED_IN_SCHEMA_8, POOL_SNAPSHOTS_BEFORE_SCHEMA_7, REP_ETH_PRICE_SNAPSHOTS_BEFORE_SCHEMA_8, TABLES_REMOVED_IN_SCHEMA_7 } from './schema-removed-tables.ts'
 
 interface SchemaLayout {
 	readonly relations: readonly string[]
@@ -75,8 +75,10 @@ const identityGeneration = (columnDefinition: string): 'a' | 'd' | '' => {
 
 export const expectedSchemaLayout = (schema: string, version: SupportedSchemaVersion): SchemaLayout => {
 	const currentSchema = schema.replaceAll('\r\n', '\n')
+	// Older supported databases keep the constant pool columns and the seed price shape that migration 008 removed.
+	const schemaWithRemovedValues = Number(version) < 8 ? currentSchema.replace(/CREATE TABLE public\.rep_eth_price_snapshots \(\n[\s\S]*?\n\);/, REP_ETH_PRICE_SNAPSHOTS_BEFORE_SCHEMA_8).replace('CREATE TABLE public.pools (\n', `CREATE TABLE public.pools (\n${POOL_COLUMNS_REMOVED_IN_SCHEMA_8}`) : currentSchema
 	// Older supported databases keep the accounting tables that migration 007 replaced.
-	const schemaWithRemovedTables = Number(version) < 7 ? `${currentSchema.replace(/CREATE TABLE public\.pool_snapshots \(\n[\s\S]*?\n\);/, POOL_SNAPSHOTS_BEFORE_SCHEMA_7)}\n${TABLES_REMOVED_IN_SCHEMA_7}` : currentSchema
+	const schemaWithRemovedTables = Number(version) < 7 ? `${schemaWithRemovedValues.replace(/CREATE TABLE public\.pool_snapshots \(\n[\s\S]*?\n\);/, POOL_SNAPSHOTS_BEFORE_SCHEMA_7)}\n${TABLES_REMOVED_IN_SCHEMA_7}` : schemaWithRemovedValues
 	// Older supported databases retain their original physical names until migration 006.
 	const normalizedSchema = Number(version) < 6 ? schemaWithRemovedTables.replaceAll('collateral_repair_auction_events_log_fkey', 'truth_auction_events_chain_id_block_hash_tx_hash_log_index_fkey').replaceAll('collateral_repair_auction', 'truth_auction') : schemaWithRemovedTables
 	const relations = new Set<string>(['table:augurscan_schema'])

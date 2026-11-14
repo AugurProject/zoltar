@@ -981,25 +981,9 @@ a.operations-row:focus-visible {
 	color: var(--muted);
 	font-size: 0.8125rem;
 }
-.chart-legend i {
-	display: inline-block;
-	width: 22px;
-	height: 2px;
-	margin-right: 0.3rem;
-	vertical-align: middle;
-	background: var(--cyan);
-}
 .chart-legend svg.chart-swatch {
 	margin-right: 0.3rem;
 	vertical-align: middle;
-}
-.chart-legend i.chart-initialization {
-	width: 7px;
-	height: 7px;
-	margin-inline: 4px 8px;
-	border: 1.5px solid currentColor;
-	background: var(--panel);
-	transform: rotate(45deg);
 }
 .chart-current-values {
 	display: grid;

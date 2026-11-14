@@ -6,6 +6,7 @@ import { act } from 'preact/test-utils'
 import { ViewTabs } from '../components/ViewTabs.js'
 import { fireEvent, within } from './testUtils/queries'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { stubElementWidths } from './testUtils/elementWidths.js'
 
 function requireButton(value: HTMLButtonElement | undefined, label: string) {
 	if (value === undefined) throw new Error(`Expected tab button for ${label}`)
@@ -251,15 +252,12 @@ describe('ViewTabs', () => {
 	})
 
 	test('avoids animated active-tab scrolling when reduced motion is requested', async () => {
-		const clientWidthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
-		const scrollWidthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollWidth')
 		const originalMatchMedia = window.matchMedia
 		const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
 		const originalScrollTo = HTMLElement.prototype.scrollTo
 		const requestedBehaviors: (ScrollBehavior | undefined)[] = []
 		let scrollIntoViewCalls = 0
-		Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 200 })
-		Object.defineProperty(HTMLElement.prototype, 'scrollWidth', { configurable: true, get: () => 400 })
+		const restoreElementWidths = stubElementWidths(() => 200, 400)
 		window.matchMedia = query => ({
 			addEventListener: () => undefined,
 			addListener: () => undefined,
@@ -298,16 +296,11 @@ describe('ViewTabs', () => {
 			window.matchMedia = originalMatchMedia
 			HTMLElement.prototype.scrollIntoView = originalScrollIntoView
 			HTMLElement.prototype.scrollTo = originalScrollTo
-			if (clientWidthDescriptor === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'clientWidth')
-			else Object.defineProperty(HTMLElement.prototype, 'clientWidth', clientWidthDescriptor)
-			if (scrollWidthDescriptor === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'scrollWidth')
-			else Object.defineProperty(HTMLElement.prototype, 'scrollWidth', scrollWidthDescriptor)
+			restoreElementWidths()
 		}
 	})
 
 	test('keeps the active tab visible when a horizontal tab strip becomes narrower', async () => {
-		const clientWidthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
-		const scrollWidthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollWidth')
 		const originalResizeObserver = globalThis.ResizeObserver
 		const originalScrollTo = HTMLElement.prototype.scrollTo
 		let clientWidth = 400
@@ -321,8 +314,7 @@ describe('ViewTabs', () => {
 			observe() {}
 			unobserve() {}
 		}
-		Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => clientWidth })
-		Object.defineProperty(HTMLElement.prototype, 'scrollWidth', { configurable: true, get: () => 400 })
+		const restoreElementWidths = stubElementWidths(() => clientWidth, 400)
 		Reflect.set(globalThis, 'ResizeObserver', MockResizeObserver)
 		HTMLElement.prototype.scrollTo = (optionsOrX?: number | ScrollToOptions) => {
 			if (typeof optionsOrX === 'object' && optionsOrX.left !== undefined) requestedScrollPositions.push(optionsOrX.left)
@@ -362,10 +354,7 @@ describe('ViewTabs', () => {
 			HTMLElement.prototype.scrollTo = originalScrollTo
 			if (originalResizeObserver === undefined) Reflect.deleteProperty(globalThis, 'ResizeObserver')
 			else Reflect.set(globalThis, 'ResizeObserver', originalResizeObserver)
-			if (clientWidthDescriptor === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'clientWidth')
-			else Object.defineProperty(HTMLElement.prototype, 'clientWidth', clientWidthDescriptor)
-			if (scrollWidthDescriptor === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'scrollWidth')
-			else Object.defineProperty(HTMLElement.prototype, 'scrollWidth', scrollWidthDescriptor)
+			restoreElementWidths()
 		}
 	})
 })
