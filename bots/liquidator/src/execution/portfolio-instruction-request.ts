@@ -5,6 +5,7 @@ import { erc20Abi, zoltarAbi, securityPoolCapitalLedgerAbi as capitalAbi, securi
 import { encodeFunctionData, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import {
 	buildPortfolioAuctionBidRequest,
+	quotePortfolioAuctionBid,
 	buildPortfolioAuctionMaterializeRequest,
 	buildPortfolioAuctionRefundClaimRequest,
 	buildPortfolioAuctionVaultExecuteRequest,
@@ -75,13 +76,15 @@ async function auctionInstructionRequest({ client, settings, observation, totalP
 	const pinnedClient = { ...client, getBlock: () => client.getBlock({ blockNumber }) }
 	let auctionSnapshot = await loadPortfolioAuctionSnapshot({ client: pinnedClient, portfolio: instruction.portfolio, universeId: instruction.universeId, bidder: snapshot.owner, bidCount: 64 })
 	if (instruction.action === 'auction-bid') {
-		const request = buildPortfolioAuctionBidRequest(auctionSnapshot, instruction)
+		const quote = quotePortfolioAuctionBid(auctionSnapshot, instruction)
 		const auction = auctionSnapshot.auction
 		if (auction === undefined) throw new Error('Missing instruction auction')
 		// Reserve the full possible award even with weak demand, in addition to existing pending bids.
 		if (totalPrincipal + auction.inventoryAttoRep > settings.portfolioPolicy.maximumTotalPrincipalAttoRep || auction.inventoryAttoRep > settings.portfolioPolicy.maximumPrincipalAttoRep) throw new PortfolioOpportunityExpired('Auction award could exceed managed REP exposure limits')
-		if (request.value > instruction.maximumValueAttoEth || (observation.managedCommitmentAttoEth ?? snapshot.ownerCommitmentAttoEth) + request.value > settings.portfolioPolicy.maximumCommitmentAttoEth) throw new PortfolioOpportunityExpired('Auction bid exceeds ETH or commitment limits')
-		return { request, completes: true }
+		if (quote.bidAttoEth > instruction.maximumValueAttoEth || (observation.managedCommitmentAttoEth ?? snapshot.ownerCommitmentAttoEth) + quote.bidAttoEth > settings.portfolioPolicy.maximumCommitmentAttoEth) throw new PortfolioOpportunityExpired('Auction bid exceeds collateral or commitment limits')
+		if (auctionSnapshot.collateralAllowance < quote.bidAttoEth)
+			return { completes: false, request: { account: snapshot.owner, to: auctionSnapshot.collateralToken, value: 0n, data: encodeFunctionData({ abi: erc20Abi, functionName: 'approve', args: [auction.address, auctionSnapshot.collateralAllowance === 0n ? quote.bidAttoEth : 0n] }) } }
+		return { request: buildPortfolioAuctionBidRequest(auctionSnapshot, instruction), completes: true }
 	}
 	while (!auctionSnapshot.auction?.bids.some(bid => bid.id === instruction.bidId)) {
 		const auction = auctionSnapshot.auction

@@ -82,7 +82,7 @@ interface ISecurityPool {
 	function updateRetentionRate() external;
 
 	function withdrawForkedEscalationDeposits(QuestionOutcome outcome, CarriedDepositProof[] calldata proofs) external;
-	function createCompleteSet() external payable;
+	function createCompleteSet(uint256 cash) external;
 	function redeemCompleteSet(uint256 amountAttoShares) external;
 
 	function escalationGame() external view returns (EscalationGame);

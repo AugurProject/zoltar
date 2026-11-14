@@ -60,13 +60,13 @@ describe('ABI metadata', () => {
 		expect(decoded.displayArguments?.['value']).toBe('1.5 REP')
 	})
 
-	test('formats native event and action values with the network currency symbol', () => {
+	test('keeps unknown pool collateral in base units while native action values use the network currency', () => {
 		const eventAbi = parseAbi(['event CompleteSetCreated(address indexed creator,uint256 settlementCollateralProvidedAttoEth,uint256 completeSetsMintedAttoShares,uint256 resultingShareTokenSupplyAttoShares,uint256 resultingSettlementCollateralAttoEth)'])
 		const topics = requireTopics(encodeEventTopics({ abi: eventAbi, eventName: 'CompleteSetCreated', args: { creator: account } }))
 		const data = encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [2_000_000_000_000_000_000n, 3_000_000_000_000_000_000n, 4_000_000_000_000_000_000n, 5_000_000_000_000_000_000n])
 		const context = { nativeSymbol: 'SepoliaETH' }
 		const decodedEvent = decodeLogRecord('securityPool', topics, data, new Map(), new Map(), account, new Map(), context)
-		expect(decodedEvent.displayArguments?.['settlementCollateralProvidedAttoEth']).toBe('2 SepoliaETH')
+		expect(decodedEvent.displayArguments?.['settlementCollateralProvidedAttoEth']).toBe('2000000000000000000 collateral units')
 
 		const openOracleAbi = abiForKind('openOracle')
 		if (openOracleAbi === undefined) throw new Error('OpenOracle ABI missing')
@@ -96,7 +96,7 @@ describe('ABI metadata', () => {
 		const singleInput = encodeFunctionData({ abi, functionName: 'safeTransferFrom', args: [account, childToken, 7n, 2_500_000_000_000_000_000n] })
 		const single = decodeAction(contract, singleInput, new Map())
 		expect(single.arguments?.['value']).toBe('2500000000000000000')
-		expect(single.displayArguments?.['value']).toBe('2.5 shares')
+		expect(single.displayArguments?.['value']).toBe('2500000000000000000 share units')
 
 		const batchInput = encodeFunctionData({
 			abi,
@@ -105,7 +105,7 @@ describe('ABI metadata', () => {
 		})
 		const batch = decodeAction(contract, batchInput, new Map())
 		expect(batch.arguments?.['values']).toEqual(['1000000000000000000', '2000000000000000000'])
-		expect(batch.displayArguments?.['values']).toEqual(['1 shares', '2 shares'])
+		expect(batch.displayArguments?.['values']).toEqual(['1000000000000000000 share units', '2000000000000000000 share units'])
 	})
 
 	test('uses cached decimals for arbitrary InternalApproval tokens and explicit base-unit fallback', () => {
@@ -425,4 +425,27 @@ describe('deterministic proxy deployment actions', () => {
 test('retains malformed proxy calldata as failed evidence rather than throwing', () => {
 	const proxy = { address: account, label: 'Proxy Deployer', kind: 'proxyDeployer', provenance: 'manifest' }
 	expect(decodeAction(proxy, '0xzz', new Map()).status).toBe('failed')
+})
+
+test('pool events use resolved collateral decimals for cash and shares', () => {
+	const abi = parseAbi(['event CompleteSetCreated(address indexed creator,uint256 settlementCollateralProvidedAttoEth,uint256 completeSetsMintedAttoShares,uint256 resultingShareTokenSupplyAttoShares,uint256 resultingSettlementCollateralAttoEth)'])
+	const topics = requireTopics(encodeEventTopics({ abi, eventName: 'CompleteSetCreated', args: { creator: account } }))
+	for (const [symbol, decimals] of [
+		['WETH', 18],
+		['USDC', 6],
+	] as const) {
+		const amount = 10n ** BigInt(decimals)
+		const data = encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [amount, amount, amount, amount])
+		const decoded = decodeLogRecord('securityPool', topics, data, new Map(), new Map(), account, new Map(), { nativeSymbol: 'ETH', collateral: { symbol, decimals } })
+		expect(decoded.displayArguments?.['settlementCollateralProvidedAttoEth']).toBe(`1 ${symbol}`)
+		expect(decoded.displayArguments?.['completeSetsMintedAttoShares']).toBe('1 shares')
+	}
+})
+
+test('native ETH received by a USDC pool stays native ETH', () => {
+	const abi = parseAbi(['event EthReceived(address indexed sender,uint256 amountAttoEth)'])
+	const topics = requireTopics(encodeEventTopics({ abi, eventName: 'EthReceived', args: { sender: account } }))
+	const data = encodeAbiParameters([{ type: 'uint256' }], [10n ** 18n])
+	const decoded = decodeLogRecord('securityPool', topics, data, new Map(), new Map(), account, new Map(), { nativeSymbol: 'ETH', collateral: { symbol: 'USDC', decimals: 6 } })
+	expect(decoded.displayArguments?.['amountAttoEth']).toBe('1 ETH')
 })

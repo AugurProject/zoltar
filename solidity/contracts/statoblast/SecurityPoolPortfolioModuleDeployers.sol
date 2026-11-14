@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { ICollateralConfig } from './interfaces/ICollateralConfig.sol';
 import { Zoltar } from '../Zoltar.sol';
 import { SecurityPoolCapitalLedger } from './SecurityPoolCapitalLedger.sol';
 import { SecurityPoolCapitalFeeStreams } from './SecurityPoolCapitalFeeStreams.sol';
@@ -38,7 +39,7 @@ contract SecurityPoolSettlementBookDeployer {
 }
 contract SecurityPoolPortfolioSettlementDeployer {
 	function create(address authority) external returns (SecurityPoolPortfolioSettlement) {
-		return new SecurityPoolPortfolioSettlement(authority);
+		return new SecurityPoolPortfolioSettlement(authority, ICollateralConfig(authority).collateralToken());
 	}
 }
 contract SecurityPoolPortfolioServicesDeployer is SecurityPoolCreationCodeDeployer {

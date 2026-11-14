@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
-import { formatEther, getAddress, isAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { formatUnits, getAddress, isAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import {
 	buildPortfolioForkChoiceRequest,
 	buildPortfolioForkPreparationRequest,
@@ -56,11 +56,11 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 	const universeId = portfolioUnsignedId(sourceInput.value, 248)
 	const outcomeIndex = portfolioUnsignedId(outcomeInput.value)
 	const questionId = portfolioUnsignedId(questionInput.value)
-	const shares = portfolioAmountOrUndefined(sharesInput.value)
+	const shares = portfolioAmountOrUndefined(sharesInput.value, portfolio?.collateral.decimals ?? 18)
 	const recipient = isAddress(recipientInput.value.trim()) ? getAddress(recipientInput.value.trim()) : undefined
-	const invalidRights = portfolioAmountOrUndefined(invalidRightsInput.value)
-	const yesRights = portfolioAmountOrUndefined(yesRightsInput.value)
-	const noRights = portfolioAmountOrUndefined(noRightsInput.value)
+	const invalidRights = portfolioAmountOrUndefined(invalidRightsInput.value, portfolio?.collateral.decimals ?? 18)
+	const yesRights = portfolioAmountOrUndefined(yesRightsInput.value, portfolio?.collateral.decimals ?? 18)
+	const noRights = portfolioAmountOrUndefined(noRightsInput.value, portfolio?.collateral.decimals ?? 18)
 	const transferAmounts = invalidRights === undefined || yesRights === undefined || noRights === undefined ? undefined : ([invalidRights, yesRights, noRights] satisfies readonly [bigint, bigint, bigint])
 	const key = `${backend}:${portfolio?.portfolio}:${portfolio?.owner}:${portfolio?.blockHash}:${universeId}:${outcomeIndex}`
 	useEffect(() => {
@@ -245,7 +245,7 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 					if (questionId === undefined || recovery === undefined || recipient === undefined || transferAmounts === undefined) throw new Error('Enter the recipient and recovery rights to transfer.')
 					return {
 						...buildPortfolioRecoveryRightsTransferRequest({ owner: selected.owner, shareToken: recovery.shareToken, universeId: selected.universeId, recipient, amountsAttoShares: transferAmounts }),
-						reviewDescription: `Transfer ${formatEther(transferAmounts[0])} Invalid, ${formatEther(transferAmounts[1])} Yes and ${formatEther(transferAmounts[2])} No recovery rights for question 0x${questionId.toString(16)} in source universe ${selected.universeId} to ${recipient}. The recipient receives these rights to source cash. Spending source-backed rights locks those original source shares. Your child migration rights remain yours.`,
+						reviewDescription: `Transfer ${formatUnits(transferAmounts[0], portfolio?.collateral.decimals ?? 18)} Invalid, ${formatUnits(transferAmounts[1], portfolio?.collateral.decimals ?? 18)} Yes and ${formatUnits(transferAmounts[2], portfolio?.collateral.decimals ?? 18)} No recovery rights for question 0x${questionId.toString(16)} in source universe ${selected.universeId} to ${recipient}. The recipient receives these rights to source cash. Spending source-backed rights locks those original source shares. Your child migration rights remain yours.`,
 					}
 				},
 				async latest => {
@@ -264,7 +264,7 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, openUnive
 					if (questionId === undefined || shares === undefined) throw new Error('Enter recovery complete sets.')
 					return {
 						...buildPortfolioForkRecoveryRequest({ ...base(selected), questionId, shares }),
-						reviewDescription: `Use ${formatEther(shares)} complete-set recovery rights for question 0x${questionId.toString(16)}. Spending source-backed rights locks those original source shares. Received recovery rights are consumed first; all child migration rights remain available.`,
+						reviewDescription: `Use ${formatUnits(shares, portfolio?.collateral.decimals ?? 18)} complete-set recovery rights for question 0x${questionId.toString(16)}. Spending source-backed rights locks those original source shares. Received recovery rights are consumed first; all child migration rights remain available.`,
 					}
 				},
 				async latest => {

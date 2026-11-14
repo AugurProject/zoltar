@@ -1,3 +1,4 @@
+import * as collateralCopy from '../../../copy/collateral.js'
 import type { ComponentChildren } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
@@ -62,13 +63,13 @@ export function PortfolioAggregatePanel({ model, actions, priceReport }: { model
 						<CurrencyValue value={snapshot?.totalPledgedAttoRep} suffix={common.rep} />
 					</MetricField>
 					<MetricField label={copy.healthyCommitment} loading={model.loading}>
-						<CurrencyValue value={snapshot?.healthyCommitmentAttoEth} suffix={common.eth} />
+						<CurrencyValue value={snapshot?.healthyCommitmentAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 					</MetricField>
 					<MetricField label={copy.demand} loading={model.loading}>
-						<CurrencyValue value={snapshot?.demandAttoEth} suffix={common.eth} />
+						<CurrencyValue value={snapshot?.demandAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 					</MetricField>
 					<MetricField label={copy.availableCapacity} loading={model.loading}>
-						<CurrencyValue value={available} suffix={common.eth} />
+						<CurrencyValue value={available} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 					</MetricField>
 					<MetricField label={copy.priceExpiry} loading={model.loading}>
 						<TimestampValue timestamp={snapshot?.priceValidUntil} relative={false} zeroText={copy.noPrice} />
@@ -89,7 +90,7 @@ export function PortfolioAggregatePanel({ model, actions, priceReport }: { model
 						<CurrencyValue value={snapshot?.ownerPrincipalAttoRep} suffix={common.rep} />
 					</MetricField>
 					<MetricField label={copy.commitment} loading={model.loading}>
-						<CurrencyValue value={snapshot?.ownerCommitmentAttoEth} suffix={common.eth} />
+						<CurrencyValue value={snapshot?.ownerCommitmentAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 					</MetricField>
 					<MetricField label={copy.savedHealth} loading={model.loading}>
 						{snapshot === undefined ? undefined : `${formatUnits(snapshot.ownerAccount.targetHealthFactorBps || 10_000n, 2)}%`}
@@ -121,7 +122,7 @@ export function PortfolioAggregatePanel({ model, actions, priceReport }: { model
 				<PortfolioInput label={copy.health} hint={copy.healthHint} value={model.healthPercent} onChange={model.setHealthPercent} disabled={disabled} numeric />
 				<MetricGrid>
 					<MetricField label={copy.targetCapacity}>
-						<CurrencyValue value={model.targetCapacity} suffix={common.eth} />
+						<CurrencyValue value={model.targetCapacity} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 					</MetricField>
 					<MetricField label={copy.targetShortfall}>
 						<CurrencyValue value={model.targetShortfall} suffix={common.rep} />
@@ -159,7 +160,7 @@ export function PortfolioAggregatePanel({ model, actions, priceReport }: { model
 						<CurrencyValue value={model.requiredCollateral} suffix={common.rep} />
 					</MetricField>
 					<MetricField label={copy.minimumCommitment}>
-						<CurrencyValue value={snapshot?.economics.minimumCommitmentAttoEth} suffix={common.eth} />
+						<CurrencyValue value={snapshot?.economics.minimumCommitmentAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 					</MetricField>
 				</MetricGrid>
 				<PortfolioInput label={copy.reportId} hint={copy.reportHint} value={model.reportInput} onChange={model.setReportInput} disabled={disabled} />
@@ -191,7 +192,7 @@ export function PortfolioAggregatePanel({ model, actions, priceReport }: { model
 									<CurrencyValue value={position.rep} suffix={common.rep} />
 								</MetricField>
 								<MetricField label={copy.positionCommitment}>
-									<CurrencyValue value={position.commitment} suffix={common.eth} />
+									<CurrencyValue value={position.commitment} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 								</MetricField>
 								<MetricField label={copy.currentHealth}>{health}</MetricField>
 								<MetricField label={copy.liquidationHealth}>{liquidationStatus}</MetricField>
@@ -200,7 +201,7 @@ export function PortfolioAggregatePanel({ model, actions, priceReport }: { model
 								</MetricField>
 								{position.batch === 0n ? undefined : (
 									<MetricField label={copy.queuedRemainingCommitment}>
-										<CurrencyValue value={position.remainingCommitment} suffix={common.eth} />
+										<CurrencyValue value={position.remainingCommitment} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 									</MetricField>
 								)}
 							</MetricGrid>
@@ -232,7 +233,7 @@ export function PortfolioAggregatePanel({ model, actions, priceReport }: { model
 			<SectionBlock title={copy.earnings} description={copy.earningsHint}>
 				<MetricGrid>
 					<MetricField label={copy.ethEarnings} loading={model.loading}>
-						<CurrencyValue value={snapshot?.claimableEarnings?.attoEth ?? snapshot?.accruedFeesAttoEth} suffix={common.eth} />
+						<CurrencyValue value={snapshot?.claimableEarnings?.attoEth ?? snapshot?.accruedFeesAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 					</MetricField>
 					<MetricField label={copy.repEarnings} loading={model.loading}>
 						<CurrencyValue value={snapshot?.claimableEarnings?.attoRep ?? snapshot?.accruedFeesAttoRep} suffix={common.rep} />

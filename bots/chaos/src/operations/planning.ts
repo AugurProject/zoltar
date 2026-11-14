@@ -52,6 +52,11 @@ export function canonicalizeOperationMetadata(metadata: OperationPlan['metadata'
 	return Object.fromEntries(Object.entries(metadata).sort(([left], [right]) => left.localeCompare(right)))
 }
 
+/** Key-sorted JSON of operation metadata; operation identities and hashes depend on this exact serialization. */
+export function serializeOperationMetadata(metadata: OperationPlan['metadata']) {
+	return JSON.stringify(canonicalizeOperationMetadata(metadata))
+}
+
 export function choose<T>(values: readonly T[], seed: number): T | undefined {
 	if (values.length === 0) return undefined
 	return values[seed % values.length]

@@ -9,7 +9,7 @@ export { outcome, zeroDecimalPlaceholder } from '@zoltar/ui-core-shared/copy/com
 export const retryBalances = 'Retry balances'
 const refreshingWalletBalances = 'Refreshing wallet balances…'
 export const balanceRefreshFailed = 'Balance refresh failed.'
-export { eth, no, yes } from './outcomes.js'
+export { no, yes } from './outcomes.js'
 /** Closes every estimate note: the estimate is recomputed against the chain before the wallet is asked to sign. */
 export const recheckedBeforeWallet = 'Rechecked before your wallet opens.'
 

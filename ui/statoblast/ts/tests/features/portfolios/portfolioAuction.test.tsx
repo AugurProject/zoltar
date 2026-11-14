@@ -50,7 +50,7 @@ test('auction funding controls and bid rows stay in place through reload and fai
 	expect(view.container.textContent).not.toContain('Approve REP')
 	expect(view.container.textContent).not.toContain('REP top-up')
 	expect(view.container.textContent).not.toContain('Execution reserve')
-	expect(metric(view.container, 'ETH bid')).toContain('2.00')
+	expect(metric(view.container, 'collateral bid')).toContain('2.00')
 	expect(view.container.textContent).not.toContain('Credited REP refund')
 	const pending = createDeferred<bigint>()
 	fixture.values['repGrid'] = pending.promise
@@ -77,7 +77,7 @@ test('funded unclaimed winners show live fees and separate activation from manag
 	expect(metric(view.container, 'Current vault REP principal')).toContain('100.00')
 	expect(metric(view.container, 'Clearing REP per winning lot')).toContain('100.00')
 	expect(metric(view.container, 'REP pledged at closing')).toContain('100.00')
-	expect(metric(view.container, 'Unclaimed ETH fees')).toContain('7.00')
+	expect(metric(view.container, 'Unclaimed collateral fees')).toContain('7.00')
 	expect(metric(view.container, 'Unclaimed REP fees')).toContain('9.00')
 	expect(button(view.container, 'Activate vault controls').disabled).toBe(false)
 	expect(button(view.container, 'Manage vault').disabled).toBe(true)
@@ -109,7 +109,7 @@ test('early refund status enables only crediting then a separate unrestricted wi
 	await waitFor(() => expect(credit.disabled).toBe(false))
 	expect(claim.disabled).toBe(false)
 	expect(view.container.textContent).toContain('Better funded bids rule out this bid')
-	expect(metric(view.container, 'Unused bid ETH')).toContain('2.00')
+	expect(metric(view.container, 'Unused bid collateral')).toContain('2.00')
 	expect(withdraw.disabled).toBe(true)
 	fixture.values['earlyRefundAttoEth'] = 0n
 	fixture.values['bids'] = [owner, auctionVault, 12_000n, 2n, 60n * unit, true, false]
@@ -119,7 +119,7 @@ test('early refund status enables only crediting then a separate unrestricted wi
 	expect(credit.disabled).toBe(true)
 	// The credited bid can still use the combined path, which only withdraws.
 	expect(claim.disabled).toBe(false)
-	expect(view.container.textContent).toContain('Its ETH refund has been credited for withdrawal')
+	expect(view.container.textContent).toContain('Its collateral refund has been credited for withdrawal')
 	expect(view.container.textContent).not.toContain('credited and withdrawn')
 	expect(button(view.container, 'Credit this bid’s refunds')).toBe(credit)
 	expect(button(view.container, 'Credit and withdraw refunds')).toBe(claim)

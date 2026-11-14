@@ -1,17 +1,24 @@
+import { wrapWeth } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { beforeAll, expect } from 'bun:test'
 import { encodeDeployData, parseAbi, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { buildPortfolioDeploymentRequest, buildPortfolioPrepareNextRequest, type PortfolioEconomicsConfig } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
-import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_SecurityPoolOpenAdmissionPolicy_SecurityPoolOpenAdmissionPolicy as openAdmissionArtifact } from '../../types/contractArtifact'
+import {
+	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
+	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
+	statoblast_SecurityPoolOpenAdmissionPolicy_SecurityPoolOpenAdmissionPolicy as openAdmissionArtifact,
+	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
+} from '../../types/contractArtifact'
 import { deployContract } from '../../testSupport/deployContract'
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { DAY, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { applyLibraries, getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getTestPortfolioDeployers } from '../../testSupport/simulator/utils/contracts/deployTestPortfolio'
 import { createQuestion, makeQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
+import { forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { manipulatePriceOracle } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
-import { approveToken } from '../../testSupport/simulator/utils/utilities'
+import { approveToken, getChildUniverseId } from '../../testSupport/simulator/utils/utilities'
 import { usePortfolioProtocolFixture } from './portfolioProtocolFixture'
 
 export const unit = 10n ** 18n
@@ -36,9 +43,16 @@ export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<Port
 	const owner = () => base.client
 	const other = () => createWriteClient(base.mockWindow, TEST_ADDRESSES[1])
 	const poolFor = (questionId: bigint, universeId = base.genesisUniverse, parent = zeroAddress, namespace = portfolio) => getSecurityPoolAddresses(parent, universeId, questionId, base.statoblastSecurityMultiplierBps, base.genesisUniverse, DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, namespace)
-	const deployPortfolio = async (policy = questionAdmissionPolicy, configuration = economics, originOverrides: Partial<{ universeId: bigint; securityMultiplierBps: bigint; reportPriorityFeeAttoEthPerGas: bigint }> = {}) => {
+	const deployPortfolio = async (policy = questionAdmissionPolicy, configuration = economics, originOverrides: Partial<{ collateralToken: Address; minimumReportCollateral: bigint; universeId: bigint; securityMultiplierBps: bigint; reportPriorityFeeAttoEthPerGas: bigint }> = {}) => {
 		const infrastructure = getInfraContractAddresses()
-		const origin = { universeId: base.genesisUniverse, securityMultiplierBps: base.statoblastSecurityMultiplierBps, reportPriorityFeeAttoEthPerGas: DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, ...originOverrides }
+		const origin = {
+			collateralToken: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' as const,
+			minimumReportCollateral: 10n ** 16n,
+			universeId: base.genesisUniverse,
+			securityMultiplierBps: base.statoblastSecurityMultiplierBps,
+			reportPriorityFeeAttoEthPerGas: DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS,
+			...originOverrides,
+		}
 		const request = buildPortfolioDeploymentRequest({
 			owner: owner().account.address,
 			factory: infrastructure.securityPoolFactory,
@@ -46,17 +60,7 @@ export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<Port
 			maximumQuestionHorizonSeconds,
 			questionAdmissionPolicy: policy,
 			economics: configuration,
-			deployers: {
-				capital: infrastructure.securityPoolCapitalLedgerDeployer,
-				commitments: infrastructure.securityPoolCommitmentIndexDeployer,
-				fees: infrastructure.securityPoolCapitalFeeStreamsDeployer,
-				books: infrastructure.securityPoolSettlementBookDeployer,
-				settlement: infrastructure.securityPoolPortfolioSettlementDeployer,
-				reporters: infrastructure.securityPoolReporterLedgerDeployer,
-				forks: infrastructure.securityPoolPortfolioForkCoordinatorDeployer,
-				auctions: infrastructure.securityPoolPortfolioAuctionDeployer,
-				services: infrastructure.securityPoolPortfolioServicesDeployer,
-			},
+			deployers: getTestPortfolioDeployers(),
 			artifact: { abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object) },
 		})
 		const receipt = await owner().waitForTransactionReceipt({ hash: await owner().sendTransaction({ ...request, gas: 16_777_216n }) })
@@ -67,7 +71,7 @@ export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<Port
 		for (let stage = 1; stage <= 4; stage++) {
 			const sender = other()
 			await expect(sender.writeContract({ abi: portfolioArtifact.abi, address: created, functionName: 'addQuestion', args: [base.questionId] })).rejects.toThrow('Portfolio setup incomplete')
-			await expect(sender.writeContract({ abi: portfolioArtifact.abi, address: created, functionName: 'createCompleteSet', args: [origin.universeId, base.questionId, unit, sender.account.address, 0n], value: 2n * unit })).rejects.toThrow('Portfolio setup incomplete')
+			await expect(sender.writeContract({ abi: portfolioArtifact.abi, address: created, functionName: 'createCompleteSet', args: [origin.universeId, base.questionId, unit, sender.account.address, 0n, 2n * unit - unit], value: 0n })).rejects.toThrow('Portfolio setup incomplete')
 			const setup = buildPortfolioPrepareNextRequest({ caller: sender.account.address, portfolio: created })
 			const hash = await writeContractAndWait(sender, () => sender.sendTransaction({ ...setup, gas: 16_777_216n }))
 			const setupReceipt = await sender.waitForTransactionReceipt({ hash })
@@ -101,10 +105,34 @@ export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<Port
 		const sender = options.sender ?? other()
 		const namespace = options.namespace ?? portfolio
 		const quote = await sender.readContract({ abi: portfolioArtifact.abi, address: namespace, functionName: 'purchaseQuote', args: [base.genesisUniverse, question, amount] })
+		const token = await sender.readContract({ abi: portfolioArtifact.abi, address: namespace, functionName: 'collateralToken' })
+		const services = await sender.readContract({ abi: portfolioArtifact.abi, address: namespace, functionName: 'services' })
+		const allowance = await sender.readContract({ abi: parseAbi(['function allowance(address,address) view returns (uint256)']), address: token, functionName: 'allowance', args: [sender.account.address, services] })
+		if (typeof allowance !== 'bigint') throw new Error('Collateral allowance unavailable')
+		if (allowance < amount + quote[0]) {
+			if (allowance !== 0n) await writeContractAndWait(sender, () => sender.writeContract({ abi: parseAbi(['function approve(address,uint256) returns (bool)']), address: token, functionName: 'approve', args: [services, 0n] }))
+			await approveToken(sender, token, services)
+		}
 		const fee = options.budget ?? (quote[0] * 10_100n + 9_999n) / 10_000n
-		return writeContractAndWait(sender, () => sender.writeContract({ abi: portfolioArtifact.abi, address: namespace, functionName: 'createCompleteSet', args: [base.genesisUniverse, question, amount, options.recipient ?? sender.account.address, options.minimumShares ?? 0n], value: amount + fee }))
+		return writeContractAndWait(sender, () => sender.writeContract({ abi: portfolioArtifact.abi, address: namespace, functionName: 'createCompleteSet', args: [base.genesisUniverse, question, amount, options.recipient ?? sender.account.address, options.minimumShares ?? 0n, amount + fee - amount], value: 0n }))
+	}
+	/** Forks the genesis universe on the base question, has the owner choose Yes, and starts that branch 56 days after the fork. */
+	const forkAndStartYesBranch = async () => {
+		const source = base.genesisUniverse
+		const forks = await owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'forkController' })
+		await base.mockWindow.setTime(base.questionData.endTime + 1n)
+		await approveToken(owner(), getRepTokenAddress(source), getZoltarAddress())
+		await forkUniverse(owner(), source, base.questionId)
+		const forkTime = (await getUniverseData(owner(), source)).forkTime
+		await writeContractAndWait(owner(), () => owner().writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'choose', args: [source, 1n] }))
+		const child = getChildUniverseId(source, 1)
+		await base.mockWindow.setTime(forkTime + 56n * DAY)
+		await writeContractAndWait(owner(), () => owner().writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'startBranch', args: [source, 1n] }))
+		return { forks, forkTime, child }
 	}
 	beforeAll(async () => {
+		await wrapWeth(owner(), 10_000n * unit)
+		await wrapWeth(other(), 10_000n * unit)
 		questionAdmissionPolicy = await deployContract(owner(), encodeDeployData({ abi: openAdmissionArtifact.abi, bytecode: applyLibraries(openAdmissionArtifact.evm.bytecode.object) }))
 		portfolio = await deployPortfolio()
 		capitalLedger = await capitalFor()
@@ -129,6 +157,7 @@ export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<Port
 		authorize,
 		prepare,
 		mint,
+		forkAndStartYesBranch,
 		get portfolio() {
 			return portfolio
 		},

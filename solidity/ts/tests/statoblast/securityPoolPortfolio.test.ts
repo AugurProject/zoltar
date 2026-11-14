@@ -2,15 +2,17 @@ import { describe, expect, test } from 'bun:test'
 import { decodeEventLog, encodeDeployData, getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
+	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
 	statoblast_SecurityPool_SecurityPool as poolArtifact,
 	ReputationToken_ReputationToken as repArtifact,
 } from '../../types/contractArtifact'
-import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
+import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { deployContract } from '../../testSupport/deployContract'
 import { applyLibraries, getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getTestPortfolioDeployers } from '../../testSupport/simulator/utils/contracts/deployTestPortfolio'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createCompleteSet, depositRepToVault, redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/statoblast'
@@ -27,24 +29,21 @@ describe('Statoblast: central portfolio and native question integration', () => 
 
 	test('invalid setup economics and missing module code are rejected before creating an unfinished portfolio', async () => {
 		const infrastructure = getInfraContractAddresses()
-		const deployers = {
-			capital: infrastructure.securityPoolCapitalLedgerDeployer,
-			commitments: infrastructure.securityPoolCommitmentIndexDeployer,
-			fees: infrastructure.securityPoolCapitalFeeStreamsDeployer,
-			books: infrastructure.securityPoolSettlementBookDeployer,
-			settlement: infrastructure.securityPoolPortfolioSettlementDeployer,
-			reporters: infrastructure.securityPoolReporterLedgerDeployer,
-			forks: infrastructure.securityPoolPortfolioForkCoordinatorDeployer,
-			auctions: infrastructure.securityPoolPortfolioAuctionDeployer,
-			services: infrastructure.securityPoolPortfolioServicesDeployer,
-		}
+		const deployers = getTestPortfolioDeployers()
 		const deploy = (configuration = portfolioEconomics, modules = deployers, reportPriorityFeeAttoEthPerGas = 10_000_000_000n) =>
 			deployContract(
 				fixture.owner(),
 				encodeDeployData({
 					abi: portfolioArtifact.abi,
 					bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object),
-					args: [infrastructure.securityPoolFactory, { universeId: fixture.base.genesisUniverse, securityMultiplierBps: fixture.base.statoblastSecurityMultiplierBps, reportPriorityFeeAttoEthPerGas }, maximumQuestionHorizonSeconds, modules, fixture.questionAdmissionPolicy, configuration],
+					args: [
+						infrastructure.securityPoolFactory,
+						{ collateralToken: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', minimumReportCollateral: 10n ** 16n, universeId: fixture.base.genesisUniverse, securityMultiplierBps: fixture.base.statoblastSecurityMultiplierBps, reportPriorityFeeAttoEthPerGas },
+						maximumQuestionHorizonSeconds,
+						modules,
+						fixture.questionAdmissionPolicy,
+						configuration,
+					],
 				}),
 			)
 		await expect(deploy(portfolioEconomics, deployers, 0n)).rejects.toThrow('Initial priority fee zero')
@@ -69,19 +68,28 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		const range = async (start: bigint, size: bigint) => (await fixture.owner().readContract({ ...factory, functionName: 'portfoliosRange', args: [start, size] })).map(address => getAddress(address))
 		const before = await count()
 		expect(await range(before - 1n, 1n)).toEqual([getAddress(fixture.portfolio)])
+		const beforeBlock = await fixture.owner().getBlockNumber()
 		const created = await fixture.deployPortfolio()
 		expect(await count()).toBe(before + 1n)
 		expect(await range(before - 1n, 2n)).toEqual([getAddress(fixture.portfolio), getAddress(created)])
 		expect(await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: created, functionName: 'questionCount' })).toBe(0n)
-		// Registration follows the configured namespace, so configuring it again adds nothing.
-		const sender = fixture.other()
+		const registrationLogs = await fixture.owner().getLogs({ address: factory.address, fromBlock: beforeBlock + 1n, toBlock: await fixture.owner().getBlockNumber() })
+		const registrations = registrationLogs.map(log => decodeEventLog({ abi: factoryArtifact.abi, data: log.data, topics: log.topics }))
+		expect(registrations).toEqual([{ eventName: 'PortfolioRegistered', args: { portfolio: getAddress(created), originUniverseId: fixture.base.genesisUniverse } }])
+		// Reconfigure a real namespace: the feed reads its immutable collateral configuration.
+		await fixture.base.mockWindow.impersonateAccount(created)
+		await fixture.base.mockWindow.setBalance(created, unit)
+		const sender = createWriteClient(fixture.base.mockWindow, BigInt(created))
 		const configure = () => writeContractAndWait(sender, () => sender.writeContract({ ...factory, functionName: 'initializePortfolioPriceFeed', args: [fixture.base.genesisUniverse, 10_000_000_000n] }))
 		const receipt = await sender.getTransactionReceipt({ hash: await configure() })
-		const registrations = receipt.logs.filter(log => getAddress(log.address) === getAddress(factory.address)).map(log => decodeEventLog({ abi: factoryArtifact.abi, data: log.data, topics: log.topics }))
-		expect(registrations).toEqual([{ eventName: 'PortfolioRegistered', args: { portfolio: getAddress(sender.account.address), originUniverseId: fixture.base.genesisUniverse } }])
+		expect(receipt.logs.filter(log => getAddress(log.address) === getAddress(factory.address))).toEqual([])
 		await configure()
-		expect(await count()).toBe(before + 2n)
-		expect(await range(before + 1n, 1n)).toEqual([getAddress(sender.account.address)])
+		expect(await count()).toBe(before + 1n)
+		expect(await range(before - 1n, 2n)).toEqual([getAddress(fixture.portfolio), getAddress(created)])
+		// An account without collateral configuration cannot leave a partial registry entry.
+		await expect(writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...factory, functionName: 'initializePortfolioPriceFeed', args: [fixture.base.genesisUniverse, 10_000_000_000n] }))).rejects.toThrow('Shared price feed deployment failed')
+		expect(await count()).toBe(before + 1n)
+		await expect(range(before + 1n, 1n)).rejects.toThrow('Portfolio range count too large')
 	})
 
 	test('permissionless registration binds distinct canonical shares without authorizing or moving owner capital', async () => {
@@ -134,9 +142,27 @@ describe('Statoblast: central portfolio and native question integration', () => 
 		await expect(createCompleteSet(fixture.other(), pool, unit)).rejects.toThrow('Use portfolio purchase')
 		await expect(depositRepToVault(fixture.owner(), pool, 100n * unit)).rejects.toThrow()
 		expect(await fixture.owner().readContract({ ...capital(), functionName: 'totalFreeAttoRep' })).toBe(0n)
-		await expect(fixture.other().writeContract({ ...portfolio(), functionName: 'mintQuestionSettlement', value: unit })).rejects.toThrow('Unknown question callback')
+		await expect(fixture.other().writeContract({ ...portfolio(), functionName: 'mintQuestionSettlement', args: [unit] })).rejects.toThrow('Unknown question callback')
 		await expect(fixture.other().writeContract({ ...portfolio(), functionName: 'onSharedPriceAccepted', args: [fixture.base.genesisUniverse, unit, 1] })).rejects.toThrow('Only canonical shared feed')
 		await expect(fixture.other().writeContract({ ...capital(), functionName: 'setDemand', args: [0n] })).rejects.toThrow('Only demand accounting')
+	})
+
+	test('a registered pool cannot mint settlement outside an authorized funded purchase', async () => {
+		await fixture.prepare()
+		const pool = fixture.poolFor(fixture.base.questionId).securityPool
+		await fixture.base.mockWindow.impersonateAccount(pool)
+		await fixture.base.mockWindow.setBalance(pool, unit)
+		const caller = createWriteClient(fixture.base.mockWindow, BigInt(pool))
+		const beforeDemand = await demand()
+		const settlement = await fixture.owner().readContract({ ...portfolio(), functionName: 'settlement' })
+		const snapshot = () => fixture.owner().readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'snapshotQuestion', args: [pool] })
+		const before = await snapshot()
+		await expect(writeContractAndWait(caller, () => caller.writeContract({ ...portfolio(), functionName: 'mintQuestionSettlement', args: [unit] }))).rejects.toThrow('No authorized portfolio purchase')
+		expect(await demand()).toBe(beforeDemand)
+		expect(await snapshot()).toEqual(before)
+		// The same registered pool can mint through the purchase that funds settlement.
+		await fixture.mint(unit)
+		expect(await demand()).toBe(beforeDemand + unit)
 	})
 
 	test('stale prices block new purchases and live collateral withdrawal while idle owners can exit', async () => {

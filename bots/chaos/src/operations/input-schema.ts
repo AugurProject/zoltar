@@ -13,6 +13,16 @@ const pool = selection('pools', 'Security pool', ['metadata', 'pool'])
 const pair = selection('pairs', 'Trading pair', ['metadata', 'pair'])
 const token = selection('tokens', 'Token', ['metadata', 'token'])
 const universe = selection('universes', 'Universe', ['metadata', 'universeId'])
+const swapDirection: InputField = {
+	key: 'direction',
+	label: 'Swap direction',
+	path: ['metadata', 'direction'],
+	kind: 'choice',
+	options: [
+		{ value: 'YES-to-NO', label: 'YES to NO' },
+		{ value: 'NO-to-YES', label: 'NO to YES' },
+	],
+}
 const schemas: Record<string, InputField[]> = {
 	'trading.uniswap.mint-range': [
 		universe,
@@ -51,40 +61,12 @@ const schemas: Record<string, InputField[]> = {
 	],
 	'trading.pair.initialize-shares': [pair, amountField(['metadata', 'shareAmount'], 'Shares per outcome'), amountField(['metadata', 'minimumLiquidity'], 'Minimum LP tokens', 'minimumLiquidity')],
 	'trading.liquidity.add-shares': [pair, amountField(['metadata', 'shareAmount'], 'Shares per outcome'), amountField(['metadata', 'minimumLiquidity'], 'Minimum LP tokens', 'minimumLiquidity')],
-	'trading.swap.exact-input': [
-		pair,
-		{
-			key: 'direction',
-			label: 'Swap direction',
-			path: ['metadata', 'direction'],
-			kind: 'choice',
-			options: [
-				{ value: 'YES-to-NO', label: 'YES to NO' },
-				{ value: 'NO-to-YES', label: 'NO to YES' },
-			],
-		},
-		amountField(['metadata', 'inputAmount'], 'Input shares'),
-		amountField(['metadata', 'minimumOutput'], 'Minimum output shares', 'minimumOutput'),
-	],
-	'trading.swap.exact-output': [
-		pair,
-		{
-			key: 'direction',
-			label: 'Swap direction',
-			path: ['metadata', 'direction'],
-			kind: 'choice',
-			options: [
-				{ value: 'YES-to-NO', label: 'YES to NO' },
-				{ value: 'NO-to-YES', label: 'NO to YES' },
-			],
-		},
-		amountField(['metadata', 'outputAmount'], 'Exact output', 'outputAmount'),
-		amountField(['metadata', 'maximumInput'], 'Maximum input', 'maximumInput'),
-	],
+	'trading.swap.exact-input': [pair, swapDirection, amountField(['metadata', 'inputAmount'], 'Input shares'), amountField(['metadata', 'minimumOutput'], 'Minimum output shares', 'minimumOutput')],
+	'trading.swap.exact-output': [pair, swapDirection, amountField(['metadata', 'outputAmount'], 'Exact output', 'outputAmount'), amountField(['metadata', 'maximumInput'], 'Maximum input', 'maximumInput')],
 	'zoltar.migration.add': [universe, amountField(['args', 1], 'REP amount')],
 	'zoltar.rep.burn': [universe, amountField(['args', 1], 'REP amount')],
 }
-for (const id of ['statoblast.complete-set.create', 'statoblast.complete-set.redeem']) schemas[id] = [pool, amountField(['metadata', 'amount'], id.endsWith('.create') ? 'ETH amount' : 'Complete sets')]
+for (const id of ['statoblast.complete-set.create', 'statoblast.complete-set.redeem']) schemas[id] = [pool, amountField(['metadata', 'amount'], id.endsWith('.create') ? 'WETH amount' : 'Complete sets')]
 schemas['statoblast.shares.redeem-winning'] = [pool]
 for (const id of ['trading.pair.create-and-initialize', 'trading.pair.initialize-eth', 'trading.liquidity.add-eth', 'trading.position.enter']) {
 	const entering = id === 'trading.position.enter'

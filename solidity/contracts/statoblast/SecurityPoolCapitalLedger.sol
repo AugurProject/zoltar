@@ -6,6 +6,8 @@ import {
 	ICapitalPriceExposure,
 	ICapitalLedgerAccounting
 } from './interfaces/ICapitalAccounting.sol';
+import { Collateral } from '../Collateral.sol';
+import { ICollateralConfig } from './interfaces/ICollateralConfig.sol';
 import { SecurityPoolCapitalState } from './SecurityPoolCapitalState.sol';
 import { SecurityPoolCapitalLifecycleDelegate } from './SecurityPoolCapitalLifecycleDelegate.sol';
 import { SecurityPoolCapitalAuctionDelegate } from './SecurityPoolCapitalAuctionDelegate.sol';
@@ -15,7 +17,6 @@ import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { Zoltar } from '../Zoltar.sol';
 import { Constants } from '../Constants.sol';
 import { SecurityPoolCommitmentIndex } from './SecurityPoolCommitmentIndex.sol';
-import { IReportOperations } from './interfaces/IReportOperations.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
@@ -350,15 +351,17 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	}
 
 	/// @dev An already time-earned amount; only the canonical checkpoint may call.
-	function creditTimedFees() external payable onlyAccounting {
-		_creditEarnings(msg.value, 0);
+	function creditTimedFees(uint256 cash) external onlyAccounting {
+		Collateral.pull(ICollateralConfig(portfolio).collateralToken(), msg.sender, address(this), cash);
+		_creditEarnings(cash, 0);
 	}
 
-	function fundVestedFees(uint256 repAmount) external payable onlyAccounting {
+	function fundVestedFees(uint256 cash, uint256 repAmount) external onlyAccounting {
 		require(!importing, 'Capital imports are not complete');
 		_checkpoint();
 		if (repAmount != 0) repToken.safeTransferFrom(msg.sender, address(this), repAmount);
-		feeStreams.addStream(msg.value, repAmount);
+		Collateral.pull(ICollateralConfig(portfolio).collateralToken(), msg.sender, address(this), cash);
+		feeStreams.addStream(cash, repAmount);
 	}
 
 	function claimEarnings() external nonReentrant {

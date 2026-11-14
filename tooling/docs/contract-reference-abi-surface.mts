@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 export const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	'solidity/contracts/ZoltarQuestionData.sol': {
 		createQuestion: ['external(QuestionData,string[])'],
@@ -41,7 +42,7 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 		creditEscalationSurplus: ['external(uint256)'],
 		refreshPortfolioFees: ['public()'],
 		burnEscalationWinnerHaircut: ['external(uint256)'],
-		createCompleteSet: ['external()'],
+		createCompleteSet: ['external(uint256)'],
 		redeemCompleteSet: ['external(uint256)'],
 		redeemShares: ['external()'],
 		depositWalletRepToEscalationGame: ['external(BinaryOutcomes.BinaryOutcome,uint256)'],
@@ -142,7 +143,7 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/statoblast/EscalationGameState.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/EscalationGameStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-	'solidity/contracts/statoblast/SecurityPool.sol': 'e5f9b185f928c93f82addadc6c4ca4809a918dc5365f2dc080ee13de85d4010a',
+	'solidity/contracts/statoblast/SecurityPool.sol': 'ad958c7bcd4f6627beff714a70fa7c5cc21730bc4ae5d8be3b3fb1287eb1bef2',
 	'solidity/contracts/statoblast/SecurityPoolForker.sol': 'dc42ece125303c4b34ec5b06f287d70376743ec0cad2ff373877746ac29bb106',
 	'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol': '814d03c9e5a33ecb7a4c16e495470c17bee1111f7c15c0ffea19f424e72636ec',
 	'solidity/contracts/statoblast/tokens/ERC1155.sol': '7bb87695bc3df8fa177c545209ed58d2e4571c19c869b5598bb0a829e764b218',
@@ -155,40 +156,38 @@ export const readDeclarationExclusionsBySource: Record<string, string[]> = {
 	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': ['storedGame', 'disputeHistory'],
 	'solidity/contracts/statoblast/SecurityPool.sol': ['eventEmitter', 'factory', 'operationsDelegate'],
 }
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
-
 export function assertCoordinatorDataFunctionInventory(coordinatorData: string, compiledContractArtifacts: unknown): void {
 	const coordinatorIndex: unknown = JSON.parse(coordinatorData)
-	assert.ok(isRecord(coordinatorIndex))
+	assert.ok(isPlainRecord(coordinatorIndex))
 	const documentedFunctions = coordinatorIndex['functions']
-	assert.ok(isRecord(documentedFunctions), 'Coordinator data must provide its complete function inventory')
-	assert.ok(isRecord(compiledContractArtifacts))
+	assert.ok(isPlainRecord(documentedFunctions), 'Coordinator data must provide its complete function inventory')
+	assert.ok(isPlainRecord(compiledContractArtifacts))
 	const contracts = compiledContractArtifacts['contracts']
-	assert.ok(isRecord(contracts))
+	assert.ok(isPlainRecord(contracts))
 	const coordinatorSource = contracts['contracts/statoblast/OpenOraclePriceCoordinator.sol']
-	assert.ok(isRecord(coordinatorSource))
+	assert.ok(isPlainRecord(coordinatorSource))
 	const coordinatorArtifact = coordinatorSource['OpenOraclePriceCoordinator']
-	assert.ok(isRecord(coordinatorArtifact))
+	assert.ok(isPlainRecord(coordinatorArtifact))
 	const abi = coordinatorArtifact['abi']
 	assert.ok(Array.isArray(abi))
 	const compiledFunctionNames = Array.from(
 		new Set(
 			abi.flatMap(entry => {
-				if (!isRecord(entry) || entry['type'] !== 'function' || typeof entry['name'] !== 'string') return []
+				if (!isPlainRecord(entry) || entry['type'] !== 'function' || typeof entry['name'] !== 'string') return []
 				return [entry['name']]
 			}),
 		),
 	).sort()
 	assert.deepEqual(Object.keys(documentedFunctions).sort(), compiledFunctionNames, 'Coordinator data function inventory must exactly match the compiled ABI')
 	const documentedSignatures = coordinatorIndex['functionSignatures']
-	assert.ok(isRecord(documentedSignatures), 'Coordinator data must provide its documented signatures')
+	assert.ok(isPlainRecord(documentedSignatures), 'Coordinator data must provide its documented signatures')
 	for (const [name, signature] of Object.entries(documentedSignatures)) {
-		const entry: unknown = abi.find(value => isRecord(value) && value['type'] === 'function' && value['name'] === name)
-		assert.ok(isRecord(entry), `Unknown documented coordinator function: ${name}`)
+		const entry: unknown = abi.find(value => isPlainRecord(value) && value['type'] === 'function' && value['name'] === name)
+		assert.ok(isPlainRecord(entry), `Unknown documented coordinator function: ${name}`)
 		const inputs: unknown = entry['inputs']
 		assert.ok(Array.isArray(inputs))
 		const types = inputs.map((input: unknown) => {
-			assert.ok(isRecord(input) && typeof input['type'] === 'string')
+			assert.ok(isPlainRecord(input) && typeof input['type'] === 'string')
 			return input['type']
 		})
 		assert.equal(signature, `${name}(${types.join(',')})`, `Coordinator signature must match the compiled ABI: ${name}`)

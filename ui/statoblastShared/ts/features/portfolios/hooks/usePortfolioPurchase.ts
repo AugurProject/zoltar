@@ -1,7 +1,10 @@
+import { getTokenApprovalResetReason, tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
+import * as collateralCopy from '../../../copy/collateral.js'
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
-import { formatEther, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { encodeFunctionData, formatUnits, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { buildPortfolioMintRequest, loadPortfolioMintQuote, type PortfolioMintQuote } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { loadPortfolioAccount, portfolioReadClient } from '../../../protocol/securityPoolPortfolio.js'
@@ -18,9 +21,10 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 	const loaded = useSignal<{ key: string; quote?: PortfolioMintQuote; question?: Awaited<ReturnType<typeof loadPortfolioMintQuestion>>; error?: string } | undefined>(undefined)
 	const snapshot = model.snapshot
 	const questionId = portfolioUnsignedId(questionInput.value)
-	const amount = portfolioAmountOrUndefined(mintAmount.value)
-	const fee = portfolioAmountOrUndefined(maximumFee.value)
-	const minimum = portfolioAmountOrUndefined(minimumShares.value)
+	const decimals = snapshot?.collateral.decimals ?? 18
+	const amount = portfolioAmountOrUndefined(mintAmount.value, decimals)
+	const fee = portfolioAmountOrUndefined(maximumFee.value, decimals)
+	const minimum = portfolioAmountOrUndefined(minimumShares.value, decimals)
 	const key = `${snapshot?.portfolio}:${snapshot?.universeId}:${snapshot?.owner}:${snapshot?.blockHash}:${questionId}:${amount}`
 	useEffect(() => {
 		let current = true
@@ -60,9 +64,28 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 		else if (amount > quote.availableCommitmentAttoEth) reason = 'Insufficient available backing after queued retirement.'
 		else if (fee === undefined || fee < quote.purchaseFeeAttoEth) reason = 'Set a maximum fee that covers the quote.'
 		else if (minimum > quote.shares) reason = 'Minimum shares exceed the current quote.'
-		else if (amount + fee > snapshot.walletAttoEth) reason = 'Insufficient wallet ETH; gas is additional.'
+		else if (amount + fee > snapshot.walletCollateral) reason = collateralCopy.formatInsufficientBalance(snapshot.collateral.symbol)
+		else if (snapshot.collateralAllowance < amount + fee) reason = collateralCopy.approvalRequired
 	}
 	return {
+		requiredCollateral: amount === undefined || fee === undefined ? undefined : amount + fee,
+		approve: (approvalAmount: bigint) =>
+			actions.runPortfolioAction(approvalAmount === 0n ? 'resetPurchaseCollateral' : 'approvePurchaseCollateral', 'Approve purchase collateral', () => {
+				if (snapshot === undefined) throw new Error('Portfolio unavailable.')
+				const account = snapshot.auctionVault?.bidder ?? snapshot.owner
+				return {
+					account,
+					to: snapshot.collateralToken,
+					value: 0n,
+					data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [snapshot.services, approvalAmount] }),
+					validateBeforeSubmit: async () => {
+						const allowance = await createConnectedReadClient().readContract({ address: snapshot.collateralToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [account, snapshot.services] })
+						if (typeof allowance !== 'bigint') throw new Error('Collateral allowance unavailable.')
+						const reason = getTokenApprovalResetReason(allowance, approvalAmount, snapshot.collateral.symbol, tokenRequiresAllowanceReset(snapshot.collateralToken))
+						if (reason !== undefined) throw new Error(reason)
+					},
+				}
+			}),
 		questionInput: questionInput.value,
 		setQuestionInput: (value: string) => {
 			questionInput.value = value
@@ -91,7 +114,7 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 				const captured = { questionId, mintAttoEth: amount, maximumPurchaseFeeAttoEth: fee, minimumShares: minimum }
 				return {
 					...buildPortfolioMintRequest({ trader: buyer, portfolio: selected.portfolio, universeId: selected.universeId, recipient: buyer, ...captured }),
-					reviewDescription: `Buy complete sets for question 0x${questionId.toString(16)} with ${formatEther(amount)} ETH. The total charge for backing and the resolution premium is ${formatEther(quote.purchaseFeeAttoEth)} ETH, capped at ${formatEther(fee)} ETH; excess budget is refunded. Receive at least ${formatEther(minimum)} of each outcome. Available backing is checked after retirement in the same transaction.`,
+					reviewDescription: `Buy complete sets for question 0x${questionId.toString(16)} with ${formatUnits(amount, decimals)} ${selected.collateral.symbol}. The total charge for backing and the resolution premium is ${formatUnits(quote.purchaseFeeAttoEth, decimals)} ${selected.collateral.symbol}, capped at ${formatUnits(fee, decimals)} ${selected.collateral.symbol}. Receive at least ${formatUnits(minimum, decimals)} of each outcome. Available backing is checked after retirement in the same transaction.`,
 					validateBeforeSubmit: async () => {
 						const client = createConnectedReadClient()
 						const latest = await loadPortfolioAccount(client, selected.portfolio, selected.owner, selected.universeId)
@@ -99,7 +122,14 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 						const question = await loadPortfolioMintQuestion(client, latest, captured.questionId)
 						if (question === undefined || question.escalationGame !== zeroAddress || question.systemState !== 0n || latest.timestamp >= question.questionEndTime) throw new Error('Question minting has closed.')
 						const fresh = await loadPortfolioMintQuote({ client: portfolioReadClient(client), portfolio: selected.portfolio, universeId: selected.universeId, questionId: captured.questionId, mintAttoEth: captured.mintAttoEth, blockNumber: latest.blockNumber })
-						if (!fresh.priceValid || fresh.availableCommitmentAttoEth < captured.mintAttoEth || fresh.purchaseFeeAttoEth > captured.maximumPurchaseFeeAttoEth || fresh.shares < captured.minimumShares || latest.walletAttoEth < captured.mintAttoEth + captured.maximumPurchaseFeeAttoEth)
+						if (
+							!fresh.priceValid ||
+							fresh.availableCommitmentAttoEth < captured.mintAttoEth ||
+							fresh.purchaseFeeAttoEth > captured.maximumPurchaseFeeAttoEth ||
+							fresh.shares < captured.minimumShares ||
+							latest.walletCollateral < captured.mintAttoEth + captured.maximumPurchaseFeeAttoEth ||
+							latest.collateralAllowance < captured.mintAttoEth + captured.maximumPurchaseFeeAttoEth
+						)
 							throw new Error('Purchase prerequisites changed. Refresh and review again.')
 					},
 				}

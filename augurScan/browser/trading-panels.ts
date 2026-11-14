@@ -1,3 +1,4 @@
+import { collateralUnit } from '../src/collateral.ts'
 import { isRecord, operationRecords, type JsonRecord } from './api-validation.ts'
 import { exactUnit, utcDateTime } from './format.ts'
 import type { createOperationsComponents } from './operations-components.ts'
@@ -35,23 +36,27 @@ const shareUnit = (item: JsonRecord): string => {
 }
 
 /** @internal Exported for presentation unit tests. */
-export const tradingActivitySummary = (item: JsonRecord, nativeSymbol: string): string => {
-	const parts = [exactUnit(text(item['shares']) ?? '0', 18, shareUnit(item))]
+export const tradingActivitySummary = (item: JsonRecord, _nativeSymbol: string): string => {
+	const asset = collateralUnit(item)
+	const parts = [exactUnit(text(item['shares']) ?? '0', shareUnit(item) === 'LP tokens' ? 18 : asset.decimals, shareUnit(item))]
 	const ethIn = text(item['eth_in_atto_eth'])
 	const ethOut = text(item['eth_out_atto_eth'])
-	if (ethIn !== undefined && ethIn !== '0') parts.push(`${exactUnit(ethIn, 18, nativeSymbol)} paid`)
-	else if (ethOut !== undefined && ethOut !== '0') parts.push(`${exactUnit(ethOut, 18, nativeSymbol)} received`)
-	else parts.push(`No ${nativeSymbol} moved`)
+	if (ethIn !== undefined && ethIn !== '0') parts.push(`${exactUnit(ethIn, asset.decimals, asset.symbol)} paid`)
+	else if (ethOut !== undefined && ethOut !== '0') parts.push(`${exactUnit(ethOut, asset.decimals, asset.symbol)} received`)
+	else parts.push(`No ${asset.symbol} moved`)
 	const seconds = text(item['timestamp_seconds'])
 	if (seconds !== undefined) parts.push(utcDateTime(Number(seconds) * 1000))
 	return parts.join(' · ')
 }
 
-export const tradingVolumeRows = (summary: JsonRecord, { operationRow, operationCounted, nativeSymbol }: { readonly operationRow: Components['operationRow']; readonly operationCounted: (value: unknown, singular: string, plural?: string) => string; readonly nativeSymbol: string }) => [
-	operationRow('24-hour volume', `${exactUnit(text(summary['eth_volume_24h_atto_eth']) ?? '0', 18, nativeSymbol)} · ${operationCounted(summary['eth_trade_count_24h'], 'enter or exit', 'enters and exits')}`, undefined, undefined),
-	operationRow('Seven-day volume', exactUnit(text(summary['eth_volume_7d_atto_eth']) ?? '0', 18, nativeSymbol), undefined, undefined),
-	operationRow('All-time volume', `${exactUnit(text(summary['eth_volume_atto_eth']) ?? '0', 18, nativeSymbol)} · ${operationCounted(summary['eth_trade_count'], 'enter or exit', 'enters and exits')}`, undefined, undefined),
-]
+export const tradingVolumeRows = (summary: JsonRecord, { operationRow, operationCounted, nativeSymbol: _nativeSymbol }: { readonly operationRow: Components['operationRow']; readonly operationCounted: (value: unknown, singular: string, plural?: string) => string; readonly nativeSymbol: string }) => {
+	const asset = collateralUnit(summary)
+	return [
+		operationRow('24-hour volume', `${exactUnit(text(summary['eth_volume_24h_atto_eth']) ?? '0', asset.decimals, asset.symbol)} · ${operationCounted(summary['eth_trade_count_24h'], 'enter or exit', 'enters and exits')}`, undefined, undefined),
+		operationRow('Seven-day volume', exactUnit(text(summary['eth_volume_7d_atto_eth']) ?? '0', asset.decimals, asset.symbol), undefined, undefined),
+		operationRow('All-time volume', `${exactUnit(text(summary['eth_volume_atto_eth']) ?? '0', asset.decimals, asset.symbol)} · ${operationCounted(summary['eth_trade_count'], 'enter or exit', 'enters and exits')}`, undefined, undefined),
+	]
+}
 
 export const tradingActivityPanel = (
 	activity: unknown,
@@ -67,31 +72,33 @@ export const tradingActivityPanel = (
 	)
 }
 
-const signedEth = (value: unknown, nativeSymbol: string): string => {
+const signedEth = (value: unknown, asset: ReturnType<typeof collateralUnit>): string => {
 	const amount = text(value)
 	if (amount === undefined) return 'unavailable'
-	return `${amount.startsWith('-') || amount === '0' ? '' : '+'}${exactUnit(amount, 18, nativeSymbol)}`
+	return `${amount.startsWith('-') || amount === '0' ? '' : '+'}${exactUnit(amount, asset.decimals, asset.symbol)}`
 }
 
 /** @internal Exported for presentation unit tests. */
-export const tradingPnlSummary = (item: JsonRecord, nativeSymbol: string): string => {
+export const tradingPnlSummary = (item: JsonRecord, _nativeSymbol: string): string => {
+	const asset = collateralUnit(item)
 	const valuation = isRecord(item['valuation']) ? item['valuation'] : {}
-	const exitValue = `${exactUnit(text(item['holdings_value_atto_eth']) ?? '0', 18, nativeSymbol)} exit value${valuation['partial'] === true ? ' (partial, some shares unvalued)' : ''}`
+	const exitValue = `${exactUnit(text(item['holdings_value_atto_eth']) ?? '0', asset.decimals, asset.symbol)} exit value${valuation['partial'] === true ? ' (partial, some shares unvalued)' : ''}`
 	const reason = String(valuation['reason'] ?? 'no valuation')
 	const holdings = valuation['status'] === 'available' ? exitValue : `holdings value unavailable (${reason.charAt(0).toLowerCase()}${reason.slice(1)})`
 	return [
-		`${exactUnit(text(item['cost_basis_atto_eth']) ?? '0', 18, nativeSymbol)} paid in`,
-		`${exactUnit(text(item['proceeds_atto_eth']) ?? '0', 18, nativeSymbol)} received`,
+		`${exactUnit(text(item['cost_basis_atto_eth']) ?? '0', asset.decimals, asset.symbol)} paid in`,
+		`${exactUnit(text(item['proceeds_atto_eth']) ?? '0', asset.decimals, asset.symbol)} received`,
 		holdings,
-		`realized ${signedEth(item['realized_pnl_atto_eth'], nativeSymbol)}`,
-		`unrealized ${signedEth(item['unrealized_pnl_atto_eth'], nativeSymbol)}`,
-		`net ${signedEth(item['net_pnl_atto_eth'], nativeSymbol)}`,
+		`realized ${signedEth(item['realized_pnl_atto_eth'], asset)}`,
+		`unrealized ${signedEth(item['unrealized_pnl_atto_eth'], asset)}`,
+		`net ${signedEth(item['net_pnl_atto_eth'], asset)}`,
 	].join(' · ')
 }
 
 /** @internal Exported for presentation unit tests. */
 export const tradingPnlHoldings = (item: JsonRecord): string => {
-	const holdings = `${exactUnit(text(item['invalid_atto_shares']) ?? '0', 18, 'INVALID')} · ${exactUnit(text(item['yes_atto_shares']) ?? '0', 18, 'YES')} · ${exactUnit(text(item['no_atto_shares']) ?? '0', 18, 'NO')} · ${exactUnit(text(item['lp_tokens']) ?? '0', 18, 'LP tokens')}`
+	const asset = collateralUnit(item)
+	const holdings = `${exactUnit(text(item['invalid_atto_shares']) ?? '0', asset.decimals, 'INVALID')} · ${exactUnit(text(item['yes_atto_shares']) ?? '0', asset.decimals, 'YES')} · ${exactUnit(text(item['no_atto_shares']) ?? '0', asset.decimals, 'NO')} · ${exactUnit(text(item['lp_tokens']) ?? '0', 18, 'LP tokens')}`
 	return item['open'] === true ? `Open · ${holdings}` : 'Closed position'
 }
 

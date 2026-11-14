@@ -335,25 +335,14 @@ export function lintSourceText(filePath: string, sourceText: string, changedLine
 		}
 		return false
 	}
+	const reportChangedNode = (node: ts.Node, message: string) => {
+		if (!nodeOverlapsChangedLines(node)) return
+		const { line, character } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
+		failures.push(`${filePath}:${line + 1}:${character + 1} ${message}`)
+	}
 	const visit = (node: ts.Node) => {
-		if (ts.isJsxText(node)) {
-			if (looksUserFacingJsxText(node.getText(sourceFile))) {
-				const { line, character } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
-				if (!nodeOverlapsChangedLines(node)) {
-					ts.forEachChild(node, visit)
-					return
-				}
-				failures.push(`${filePath}:${line + 1}:${character + 1} JSX text must come from a named UI copy export`)
-			}
-		}
-		if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateExpression(node)) && shouldReportLiteral(node)) {
-			const { line, character } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
-			if (!nodeOverlapsChangedLines(node)) {
-				ts.forEachChild(node, visit)
-				return
-			}
-			failures.push(`${filePath}:${line + 1}:${character + 1} direct UI string literal must come from a module under a ui/*/ts/copy module`)
-		}
+		if (ts.isJsxText(node) && looksUserFacingJsxText(node.getText(sourceFile))) reportChangedNode(node, 'JSX text must come from a named UI copy export')
+		if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateExpression(node)) && shouldReportLiteral(node)) reportChangedNode(node, 'direct UI string literal must come from a module under a ui/*/ts/copy module')
 		ts.forEachChild(node, visit)
 	}
 	visit(sourceFile)

@@ -1,3 +1,6 @@
+import { useCreateFunding, type loadCreateFunding } from '../hooks/useCreateFunding.js'
+import { CreateFundingControls } from './CreateFundingControls.js'
+import { parseOpenOracleCreateFormSubmission } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { TransactionScopeProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
@@ -57,6 +60,7 @@ function getCreateTokenHint(metadata: OpenOracleCreateTokenMetadata) {
 
 type OpenOracleSectionDependencies = {
 	/** Reads a create-form token's decimals and symbol; tests replace the connected-wallet read. */
+	loadCreateFunding?: typeof loadCreateFunding
 	loadCreateTokenMetadata?: LoadOpenOracleCreateTokenMetadata
 }
 
@@ -66,6 +70,9 @@ export function OpenOracleSection({
 	environmentReady,
 	loadBrowseReports = loadBrowseReportPage,
 	loadCreateTokenMetadata = loadOpenOracleCreateTokenMetadata,
+	loadCreateFunding,
+	onApproveCreateToken,
+	onWrapCreateWeth,
 	onApproveToken1,
 	onApproveToken2,
 	onCancelOpenOracleWithdrawalBalanceCheck,
@@ -80,6 +87,7 @@ export function OpenOracleSection({
 	loadingOpenOracleCreate,
 	openOracleActiveAction,
 	openOracleActiveWithdrawalBalance,
+	openOracleApprovalResetting,
 	openOracleCreateForm,
 	openOracleCreateFieldErrors = {},
 	openOracleDisputeSubmission,
@@ -119,6 +127,8 @@ export function OpenOracleSection({
 	const createTokenMetadataLoading = createTokenMetadata.token1.status === 'loading' || createTokenMetadata.token2.status === 'loading'
 	// Known token decimals let amount fields report precision errors while typing instead of after submitting.
 	const createValidation = getOpenOracleCreateValidation({ form: openOracleCreateForm, token1Decimals, token2Decimals })
+	const createParameters = createValidation.isValid && token1Decimals !== undefined && token2Decimals !== undefined ? parseOpenOracleCreateFormSubmission({ form: openOracleCreateForm, token1Decimals, token2Decimals }) : undefined
+	const createFunding = useCreateFunding({ owner: accountState.address, parameters: createParameters, enabled: environmentReady && view === 'create' && isConnected && isOnActiveAppChain, revision: openOracleActiveAction, ...(loadCreateFunding === undefined ? {} : { load: loadCreateFunding }) })
 	const token1ContractError = openOracleCreateFieldErrors.token1Address ?? (createTokenMetadata.token1.status === 'failure' ? createTokenMetadata.token1.message : undefined)
 	const token2ContractError = openOracleCreateFieldErrors.token2Address ?? (createTokenMetadata.token2.status === 'failure' ? createTokenMetadata.token2.message : undefined)
 	const hasCreateContractFieldErrors = token1ContractError !== undefined || token2ContractError !== undefined
@@ -443,6 +453,17 @@ export function OpenOracleSection({
 									<UserMessage className='detail' detail={openOracleCopy.standaloneParameterDetails} />
 								</ReadOnlyDetailAccordion>
 
+								<CreateFundingControls
+									funding={createFunding}
+									units={[token1Decimals, token2Decimals]}
+									symbols={[token1Symbol, token2Symbol]}
+									disabled={!isConnected || !isOnActiveAppChain || openOracleActiveAction !== undefined}
+									guard={rawCreateGuardMessage}
+									activeAction={openOracleActiveAction}
+									resetting={openOracleApprovalResetting}
+									approve={onApproveCreateToken}
+									wrap={onWrapCreateWeth}
+								/>
 								<div className='actions'>
 									<TransactionActionButton
 										idleLabel={openOracleCopy.createStandaloneReport}
@@ -450,7 +471,7 @@ export function OpenOracleSection({
 										onClick={onCreateOpenOracleGame}
 										pending={loadingOpenOracleCreate}
 										availability={withActiveAppChainWalletBlocker(
-											{ disabled: !isOnActiveAppChain || createGuardMessage !== undefined || !createValidation.isValid || hasCreateContractFieldErrors || createTokenMetadataLoading, reason: createAvailabilityMessage },
+											{ disabled: !isOnActiveAppChain || createGuardMessage !== undefined || !createValidation.isValid || hasCreateContractFieldErrors || createTokenMetadataLoading || createFunding.reason !== undefined, reason: createAvailabilityMessage ?? createFunding.reason },
 											{ accountAddress: accountState.address, isOnActiveAppChain },
 										)}
 										disabledReasonElementId={createDisabledReasonElementId}
@@ -481,6 +502,7 @@ export function OpenOracleSection({
 							onWrapDisputeWeth={onWrapDisputeWeth}
 							openOracleActiveAction={openOracleActiveAction}
 							openOracleActiveWithdrawalBalance={openOracleActiveWithdrawalBalance}
+							openOracleApprovalResetting={openOracleApprovalResetting}
 							openOracleDisputeSubmission={openOracleDisputeSubmission}
 							openOracleForm={openOracleForm}
 							openOracleReportDetails={effectiveOpenOracleReportDetails}

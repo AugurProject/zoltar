@@ -128,7 +128,7 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 		expect(attempts.map(event => event.operationIndex)).toEqual(Array.from({ length: 32 }, (_, index) => BigInt(index)))
 	})
 
-	test.each(['withdraw', 'price'] as const)('a reentrant earnings recipient cannot change %s authority and later operations still execute', async mode => {
+	test.each(['withdraw', 'price'] as const)('collateral earnings do not invoke a native %s reentry hook and later operations still execute', async mode => {
 		await fixture.prepare(400n * unit, 100n * unit)
 		const owner = fixture.owner()
 		const receiver = await deployContract(owner, encodeDeployData({ abi: receiverArtifact.abi, bytecode: `0x${receiverArtifact.evm.bytecode.object}` }))
@@ -169,14 +169,15 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 			{ gasLimit: 5_000_000n, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings' }) },
 			{ ...withdraw(unit, receiver), gasLimit: 2_000_000n },
 		]
-		expect((await run({ sponsor: owner, feed }, operations, unit, (data, value) => execute(feed.address, data, value), beforeSettlement)).map(event => event.success)).toEqual([mode === 'price', true])
+		expect((await run({ sponsor: owner, feed }, operations, unit, (data, value) => execute(feed.address, data, value), beforeSettlement)).map(event => event.success)).toEqual([true, true])
 		if (nestedReport !== undefined) {
 			expect(await owner.readContract({ ...feed, functionName: 'lastPrice' })).toBe(unit)
 			expect(await owner.readContract({ ...feed, functionName: 'reportOutcome', args: [nestedReport] })).toBe(0n)
 			const id = nestedReport
-			await writeContractAndWait(owner, () => owner.writeContract({ ...feed, functionName: 'recoverReport', args: [id] }))
-			expect(await owner.readContract({ ...feed, functionName: 'reportOutcome', args: [id] })).toBe(2n)
+			await expect(owner.writeContract({ ...feed, functionName: 'recoverReport', args: [id] })).rejects.toThrow('Report not settled')
 		}
+		expect(await owner.readContract({ abi: receiverArtifact.abi, address: receiver, functionName: 'reenterOnReceive' })).toBe(true)
+		expect(await owner.readContract({ abi: tokenArtifact.abi, address: weth, functionName: 'balanceOf', args: [receiver] })).toBeGreaterThan(0n)
 		expect((await owner.readContract({ ...capital(), functionName: 'ownerCollateral', args: [receiver] }))[0]).toBe(2999n * unit)
 	})
 })

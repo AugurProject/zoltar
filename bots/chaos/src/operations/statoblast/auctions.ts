@@ -1,10 +1,12 @@
-import { securityPoolPortfolioAuctionAbi, securityPoolPortfolioForkCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
-import { amount, choose, eligible, encodeStep, mixSeed, optionAmount, planBase } from '../planning.ts'
+import { collateralSpendContinuation } from './collateral-approval.ts'
+import { erc20Abi, securityPoolPortfolioAuctionAbi, securityPoolPortfolioForkCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
+import { erc20WalletDebit, erc20AllowanceEvidence, amount, choose, eligible, encodeStep, mixSeed, optionAmount, planBase } from '../planning.ts'
 import { inputInteger, inputMatches } from '../input-values.ts'
 import { timestampDeadlineHasRequiredSafety } from '../timing.ts'
 import type { AuctionSnapshot, EcosystemSnapshot, OperationDefinition, PlanningOptions } from '../types.ts'
 
 function bidTerms(snapshot: EcosystemSnapshot, options: PlanningOptions, auction: AuctionSnapshot) {
+	if (auction.collateralToken.toLowerCase() !== snapshot.deployments.weth.toLowerCase()) return undefined
 	if (!inputMatches(options, 'auction', auction.address) || options.allowHighRisk !== true || !auction.opened || auction.finalized || !timestampDeadlineHasRequiredSafety(amount(snapshot.anchor.timestamp), amount(auction.endTime), options)) return undefined
 	const lot = amount(auction.lotAttoEth)
 	const grid = amount(auction.repGrid)
@@ -14,7 +16,15 @@ function bidTerms(snapshot: EcosystemSnapshot, options: PlanningOptions, auction
 	const required = (amount(auction.unroundedCollateralAttoRepPerLot) * health + 9_999n) / 10_000n
 	const minimum = inputInteger(options, 'minimumAttoRepPerLot', ((required + grid - 1n) / grid) * grid, 1n)
 	const value = lots * lot
-	if (minimum < required || minimum % grid !== 0n || minimum > amount(auction.maximumBidAttoRepPerLot) || value > optionAmount(options, 'maxEthSpendAttoEth', 10n ** 16n) || amount(snapshot.wallet.ethBalanceAttoEth) < value + optionAmount(options, 'minimumEthReserveAttoEth', 10n ** 16n)) return undefined
+	if (
+		minimum < required ||
+		minimum % grid !== 0n ||
+		minimum > amount(auction.maximumBidAttoRepPerLot) ||
+		value > optionAmount(options, 'maxEthSpendAttoEth', 10n ** 16n) ||
+		amount(auction.walletCollateral) < value ||
+		amount(snapshot.wallet.ethBalanceAttoEth) < optionAmount(options, 'minimumEthReserveAttoEth', 10n ** 16n)
+	)
+		return undefined
 	return { lots, health, minimum, value }
 }
 
@@ -27,7 +37,7 @@ export function auctionDefinition(kind: 'bid' | 'withdraw-refund'): OperationDef
 			return terms === undefined ? [] : [{ auction, terms }]
 		})
 	}
-	return {
+	const definition: OperationDefinition = {
 		id,
 		label: 'Bid in portfolio collateral repair auction',
 		method: 'submitBid',
@@ -35,8 +45,8 @@ export function auctionDefinition(kind: 'bid' | 'withdraw-refund'): OperationDef
 		classification: 'selectable',
 		ecosystem: 'statoblast',
 		risk: 'high',
-		description: 'Bids whole ETH lots for a uniformly priced REP-backed owner position with a chosen health target.',
-		discoveryInputs: ['portfolio auction', 'ETH lot and REP price grid', 'wallet ETH'],
+		description: 'Bids whole WETH lots for a uniformly priced REP-backed owner position with a chosen health target.',
+		discoveryInputs: ['portfolio auction', 'collateral lot and REP price grid', 'wallet WETH and ETH gas reserve'],
 		evaluate: (snapshot, options) => eligible(candidates(snapshot, options).length > 0 ? undefined : 'No affordable open auction or high-risk operations disabled'),
 		buildPlan(snapshot, options) {
 			const candidate = choose(candidates(snapshot, options), mixSeed(options.seed, id))
@@ -46,22 +56,42 @@ export function auctionDefinition(kind: 'bid' | 'withdraw-refund'): OperationDef
 				definitionId: id,
 				ecosystem: 'statoblast',
 				label: 'Bid in portfolio collateral repair auction',
-				metadata: { auction: auction.address, lots: terms.lots.toString(), minimumAttoRepPerLot: terms.minimum.toString(), healthFactorBps: terms.health.toString() },
+				metadata: { auction: auction.address, lots: terms.lots.toString(), minimumAttoRepPerLot: terms.minimum.toString(), healthFactorBps: terms.health.toString(), collateralToken: auction.collateralToken, collateralSpender: auction.address, collateralBudget: terms.value.toString() },
 				deadlineTimestamp: auction.endTime,
 				postconditions: ['The engine records a funded bid and its dedicated owner vault'],
 				risk: 'high',
 				snapshot,
-				steps: [encodeStep({ abi: securityPoolPortfolioAuctionAbi, args: [terms.lots, terms.minimum, terms.health], functionName: 'submitBid', id: 'bid', label: 'Bid ETH lots', to: auction.address, value: terms.value })],
+				maximumCleanupTransactionCount: 1,
+				steps: [
+					...(amount(auction.collateralAllowance) < terms.value
+						? [
+								encodeStep({
+									abi: erc20Abi,
+									args: [auction.address, terms.value],
+									functionName: 'approve',
+									id: 'approve-auction-collateral',
+									label: 'Approve auction collateral',
+									to: auction.collateralToken,
+									evidence: [erc20AllowanceEvidence(auction.collateralToken, snapshot.wallet.address, auction.address, terms.value)],
+								}),
+							]
+						: []),
+					encodeStep({ abi: securityPoolPortfolioAuctionAbi, args: [terms.lots, terms.minimum, terms.health], functionName: 'submitBid', id: 'bid', label: 'Bid collateral lots', to: auction.address, value: 0n, walletAssetDebits: [erc20WalletDebit(auction.collateralToken, terms.value, 'weth')] }),
+				],
 			})
 		},
+		buildContinuationPlan(snapshot, options, context) {
+			return collateralSpendContinuation({ snapshot, options, context, buildPlan: definition.buildPlan, approvalId: 'approve-auction-collateral', actionId: 'bid', label: 'Revoke auction collateral approval', risk: 'high' })
+		},
 	}
+	return definition
 }
 
 type LifecycleKind = 'open' | 'finalize' | 'settle' | 'early-refund' | 'withdraw'
 function auctionLifecycle(kind: LifecycleKind): OperationDefinition {
 	const id = { open: 'statoblast.auction.start', finalize: 'statoblast.auction.finalize-route', settle: 'statoblast.auction.settle-bids', 'early-refund': 'statoblast.auction.refund', withdraw: 'statoblast.auction.withdraw-refund' }[kind]
 	const method = { open: 'open', finalize: 'finalizeBranch', settle: 'settleRefund', 'early-refund': 'settleRefund', withdraw: 'withdrawRefunds' }[kind]
-	const label = { open: 'Open portfolio collateral repair auction', finalize: 'Finalize portfolio branch auction', settle: 'Settle auction bid refund', 'early-refund': 'Refund provably losing bid', withdraw: 'Withdraw auction ETH refund' }[kind]
+	const label = { open: 'Open portfolio collateral repair auction', finalize: 'Finalize portfolio branch auction', settle: 'Settle auction bid refund', 'early-refund': 'Refund provably losing bid', withdraw: 'Withdraw auction collateral refund' }[kind]
 	function candidates(snapshot: EcosystemSnapshot, options?: PlanningOptions) {
 		const now = amount(snapshot.anchor.timestamp)
 		return snapshot.auctions.flatMap<{ auction: AuctionSnapshot; bidId: string | undefined }>(auction => {

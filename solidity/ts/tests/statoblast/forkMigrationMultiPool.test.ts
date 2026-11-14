@@ -8,9 +8,9 @@ import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
-import { getScalarOutcomeIndex } from '../../testSupport/simulator/utils/contracts/scalarOutcome'
+import { getScalarOutcomeIndex } from '@zoltar/zoltar-shared/questions/scalarOutcome'
 import { getSystemState } from '../../testSupport/simulator/utils/contracts/securityPool'
-import { balanceOfShares, migrateShares } from '../../testSupport/simulator/utils/contracts/statoblast'
+import { balanceOfShares, migrateShares, wrapWeth } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { ensureDefined, strictEqualTypeSafe } from '../../testSupport/simulator/utils/testUtils'
@@ -22,6 +22,7 @@ import {
 	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
 	statoblast_SecurityPool_SecurityPool as poolArtifact,
 } from '../../types/contractArtifact'
+import { collateralBalance } from './burnEvidence'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 describe('Statoblast: shared portfolio multi-branch migration', () => {
@@ -69,6 +70,7 @@ describe('Statoblast: shared portfolio multi-branch migration', () => {
 
 		await createQuestion(client, scalarForkQuestion, [])
 		await fixture.prepare()
+		await wrapWeth(openInterestHolder, 6n * unit)
 		await fixture.mint(openInterestAmount, questionId, { sender: openInterestHolder })
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		await forkUniverse(client, genesisUniverse, scalarQuestionId)
@@ -158,6 +160,7 @@ describe('Statoblast: shared portfolio multi-branch migration', () => {
 
 		await createQuestion(client, scalarForkQuestion, [])
 		await fixture.prepare()
+		await wrapWeth(openInterestHolder, 6n * unit)
 		await fixture.mint(openInterestAmount, questionId, { sender: openInterestHolder })
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		await forkUniverse(client, genesisUniverse, scalarQuestionId)
@@ -207,7 +210,7 @@ describe('Statoblast: shared portfolio multi-branch migration', () => {
 		}
 		await finishChoiceWindow()
 		const settlement = await client.readContract({ ...portfolio(), functionName: 'settlement' })
-		const cashBefore = await client.getBalance({ address: settlement })
+		const cashBefore = await collateralBalance(client, fixture.portfolio, settlement)
 		let paid = 0n
 		for (const outcome of [1n, 2n]) {
 			for (let i = 0; i < questions.length; i++) {
@@ -227,7 +230,7 @@ describe('Statoblast: shared portfolio multi-branch migration', () => {
 				await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: poolArtifact.abi, address: childPool, functionName: 'redeemCompleteSet', args: [amount] }))
 				expect(await getERC20Balance(client, getRepTokenAddress(child), fixture.other().account.address)).toBe(balanceBefore + recovery)
 				paid += cash
-				expect(await client.getBalance({ address: settlement })).toBe(cashBefore - paid)
+				expect(await collateralBalance(client, fixture.portfolio, settlement)).toBe(cashBefore - paid)
 				expect(await client.readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'shareTokenSupplyAttoShares' })).toBe(0n)
 			}
 		}

@@ -22,7 +22,7 @@ describe('standing commitment keeper planning', () => {
 		if (question === undefined) throw new Error('Missing question fixture')
 		pool.currentMintingCapacityAttoEth = '10000000000000000000'
 		question.endTime = (BigInt(snapshot.anchor.timestamp) + 1_000n).toString()
-		pool.purchaseQuote = { mintAttoEth: 1000n.toString(), feeAttoEth: 100n.toString(), premiumAttoEth: 200n.toString(), minimumShares: '1000' }
+		pool.purchaseQuote = { spender: pool.coordinator, mintAttoEth: 1000n.toString(), feeAttoEth: 100n.toString(), premiumAttoEth: 200n.toString(), minimumShares: '1000' }
 		const mint = completeSetDefinition('create')
 		expect(mint.buildPlan(snapshot, options)?.deadlineTimestamp).toBe((BigInt(question.endTime) - 1n).toString())
 		question.endTime = (BigInt(snapshot.anchor.timestamp) + 1n).toString()

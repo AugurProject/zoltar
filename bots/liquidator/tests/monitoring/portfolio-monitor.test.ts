@@ -252,3 +252,9 @@ test('targeted revalidation preserves discovery cursor without fetching another 
 	expect(result.nextScope.auctionAfterBidId).toBe(2n)
 	expect(fixture.reads.filter(read => read.functionName === 'nextUnmaterializedBid')).toHaveLength(0)
 })
+
+test('refuses automatic gas-profit estimates for non-WETH collateral', async () => {
+	const fixture = portfolioClient()
+	fixture.values['collateralToken'] = fixture.settings.deployment.zoltar
+	await expect(loadPortfolioObservation(fixture.client, fixture.settings, fixture.observation.snapshot.owner, fixture.observation.nextScope, 123n)).rejects.toThrow('require WETH collateral')
+})

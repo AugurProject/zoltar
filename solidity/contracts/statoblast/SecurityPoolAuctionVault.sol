@@ -2,6 +2,8 @@
 pragma solidity 0.8.35;
 
 import { ISecurityPoolAuctionCapital } from './interfaces/ISecurityPoolAuctionCapital.sol';
+import { Collateral } from '../Collateral.sol';
+import { ICollateralConfig } from './interfaces/ICollateralConfig.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 
@@ -133,6 +135,8 @@ contract SecurityPoolAuctionVault {
 		result = _execute(target, value, data);
 		uint256 rep = token.balanceOf(address(this));
 		if (rep != 0) token.safeTransfer(recipient, rep);
+		IERC20 collateral = ICollateralConfig(IAuctionVaultPortfolio(address(initialCapital())).portfolio()).collateralToken();
+		Collateral.send(collateral, recipient, collateral.balanceOf(address(this)));
 		uint256 eth = address(this).balance;
 		if (eth != 0) {
 			(bool sent, ) = recipient.call{value: eth}('');
@@ -155,4 +159,8 @@ contract SecurityPoolAuctionVault {
 	function onERC1155BatchReceived(address, address, uint256[] calldata, uint256[] calldata, bytes calldata) external pure returns (bytes4) {
 		return this.onERC1155BatchReceived.selector;
 	}
+}
+
+interface IAuctionVaultPortfolio {
+	function portfolio() external view returns (address);
 }

@@ -7,6 +7,7 @@ import { topologyMutationCapacityBlocker } from '../topology-capacity.ts'
 import { sharesToProjectedEth } from '../pool-economics.ts'
 
 import { erc20Abi } from '@zoltar/bot-shared/contracts/abi'
+import { compareBigint } from '@zoltar/core-shared/math/bigint'
 
 import { isOracleRequestFundingError, poolOracleExposure, oracleRequestFundingEnvelope, oracleRequestSettlementCollateralCeiling, type OracleRequestFundingBounds } from '../oracle-request-funding.ts'
 
@@ -40,13 +41,7 @@ export const ERC20_TRANSFER_ABI = 'event Transfer(address indexed from, address 
 
 export const shareTokenId = (universeId: string, outcome: number) => (amount(universeId) << 8n) | BigInt(outcome)
 
-const compareBigInts = (left: bigint, right: bigint) => {
-	if (left < right) return -1
-	if (left > right) return 1
-	return 0
-}
-
-export const compareDecimalStrings = (left: string, right: string) => compareBigInts(BigInt(left), BigInt(right))
+export const compareDecimalStrings = (left: string, right: string) => compareBigint(BigInt(left), BigInt(right))
 
 export function lifecycleBatches<T>(values: readonly T[]) {
 	return Array.from({ length: Math.ceil(values.length / LIFECYCLE_BATCH_LIMIT) }, (_, index) => values.slice(index * LIFECYCLE_BATCH_LIMIT, (index + 1) * LIFECYCLE_BATCH_LIMIT))
@@ -182,6 +177,7 @@ function amountAfterReserve(balance: bigint, reserve: bigint) {
 }
 
 export function oracleRequestInventoryIsFunded(snapshot: EcosystemSnapshot, pool: PoolSnapshot, options: PlanningOptions, prepared: PreparedOracleRequest, transactionCount: number) {
+	if (pool.oracleRequestFunding.collateralToken !== undefined && pool.oracleRequestFunding.collateralToken.toLowerCase() !== snapshot.deployments.weth.toLowerCase()) return false
 	const weth = tokenInventory(snapshot, snapshot.deployments.weth)
 	const rep = tokenInventory(snapshot, pool.repToken)
 	if (weth === undefined || rep === undefined) return false
@@ -194,6 +190,7 @@ export function oracleRequestInventoryIsFunded(snapshot: EcosystemSnapshot, pool
 }
 
 export function oracleRequestPreparation(snapshot: EcosystemSnapshot, pool: PoolSnapshot, options: PlanningOptions): PreparedOracleRequest | undefined {
+	if (pool.oracleRequestFunding.collateralToken !== undefined && pool.oracleRequestFunding.collateralToken.toLowerCase() !== snapshot.deployments.weth.toLowerCase()) return undefined
 	try {
 		const weth = tokenInventory(snapshot, snapshot.deployments.weth)
 		const rep = tokenInventory(snapshot, pool.repToken)

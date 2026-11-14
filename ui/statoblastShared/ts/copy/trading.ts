@@ -13,7 +13,7 @@ export const childTargetsLockedReason = 'Child universe targets unlock after thi
 export const redeemCompleteSetsAmount = 'Complete sets to redeem'
 export const availableRecoveryRep = 'REP available to redeem'
 export const expectedRepPayout = 'Expected REP payout'
-export const redeemCompleteSetsFeeDetail = 'The pool deducts accrued holding fees before redeeming, so you may receive slightly less ETH than shown. Max redeems every complete set you hold.'
+export const redeemCompleteSetsFeeDetail = 'The pool deducts accrued holding fees before redeeming, so you may receive slightly less collateral than shown. Max redeems every complete set you hold.'
 export const shareMigrationWalletRequiredReason = commonCopy.formatConnectWalletBefore('migrating shares')
 export const completeSetMintWalletRequiredReason = commonCopy.formatConnectWalletBefore('minting complete sets')
 export const completeSetBurnWalletRequiredReason = commonCopy.formatConnectWalletBefore('redeeming complete sets')
@@ -29,7 +29,7 @@ export const mintCapacityUnavailable = 'Mint capacity unavailable. Refresh pool 
 export const migrateForkedShares = 'Migrate forked shares'
 export const shareMigrationDescription = 'After this universe forks, carry your shares for one outcome into the child universes you choose.'
 export const migratingShares = 'Migrating shares…'
-export const mintCompleteSetsAmount = 'ETH to mint with'
+export const mintCompleteSetsAmount = 'Collateral amount'
 export const completeSetMintDescription = 'Lock collateral to mint a fresh Yes, No, and Invalid share set for this pool.'
 export const mintingCompleteSets = 'Minting complete sets…'
 export const mintCapacityEmpty = 'No mint capacity remaining.'
@@ -47,20 +47,19 @@ export const shares = 'Shares'
 export const poolResolutionRequired = 'Wait for the selected pool to resolve before redeeming shares.'
 export const yourHoldings = 'Your holdings'
 export const noSharesHeld = 'You hold no shares in this pool.'
-export const walletEth = 'Wallet ETH'
 export const availableToMint = 'Available to mint'
 
 export const forkDetailsUnavailable = 'Fork details unavailable. Refresh pool to retry.'
 export const shareBalancesUnavailable = 'Share balances unavailable. Refresh pool to retry.'
 
-export const shareBackingDetail = 'ETH values assume the outcome wins; they are not sale quotes.'
+export const shareBackingDetail = 'Collateral values assume the outcome wins; they are not sale quotes.'
 
 export const actionUnavailableReason = 'This action is unavailable in the current pool state.'
 export const formatMaxKeepsGasReserveHint = (gasReserve: string) => `Max keeps ${gasReserve} in your wallet for gas.`
 export const mintingPausedDuringDispute = 'Minting is paused while the outcome is disputed.'
 export const formatNoWinningSharesReason = (outcomeLabel: string) => `You hold no winning ${outcomeLabel} shares to redeem.`
 export const formatWinningOutcomeShares = (outcomeLabel: string) => `Winning ${outcomeLabel} shares`
-export const expectedEthPayout = 'Expected ETH payout'
+export const expectedCollateralPayout = 'Expected collateral payout'
 export const resolvedShareRedemptionFeeDetail = 'Burns every winning share you hold. The pool deducts accrued holding fees first, so the payout may be slightly lower.'
 export const availableToRedeem = 'Available to redeem'
 export const setsUnit = 'sets'

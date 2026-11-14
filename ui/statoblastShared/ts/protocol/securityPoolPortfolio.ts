@@ -1,3 +1,4 @@
+import { collateralPresentation } from './collateral.js'
 import { encodeFunctionData, getAddress, parseAbi, parseAbiItem, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { buildPortfolioDeploymentRequest, buildPortfolioPrepareNextRequest, decodeAuctionVaultBindings, loadPortfolioCapitalSnapshot, loadPortfolioClaimableEarnings, type PortfolioReadClient, type PortfolioEconomicsConfig, type PortfolioOriginConfig } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
@@ -148,6 +149,12 @@ export async function loadPortfolioAccount(client: ReadClient, portfolio: Addres
 	const auctionVault = bindings !== undefined && (await isCanonicalAuctionVaultImplementation(client, bindings.implementation, blockNumber)) ? await authenticatePortfolioAuctionVault(client, portfolio, owner, blockNumber) : undefined
 	const fundingOwner = auctionVault?.bidder ?? owner
 	const depositSpender = auctionVault?.vault ?? snapshot.capitalLedger
+	const collateralToken = await client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'collateralToken', blockNumber })
+	const collateral = collateralPresentation(collateralToken)
+	const [walletCollateral, collateralAllowance] = await Promise.all([
+		client.readContract({ address: collateralToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [fundingOwner], blockNumber }),
+		client.readContract({ address: collateralToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [fundingOwner, services], blockNumber }),
+	])
 	const [questions, admission, walletAttoRep, allowanceAttoRep, walletAttoEth, bookValue, premiumValue] = await Promise.all([
 		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'getQuestions', args: [start, 64n], blockNumber }),
 		loadPortfolioAdmission(client, admissionAddress, originUniverseId, blockNumber, admissionStart),
@@ -190,6 +197,11 @@ export async function loadPortfolioAccount(client: ReadClient, portfolio: Addres
 	return {
 		...snapshot,
 		...(claimableEarnings === undefined ? {} : { claimableEarnings }),
+		collateralToken,
+		collateral,
+		walletCollateral,
+		collateralAllowance,
+		services,
 		originUniverseId,
 		questionAdmissionPolicy: admissionAddress,
 		admission,

@@ -1,6 +1,7 @@
-import { maxUint256 } from '@zoltar/core-shared/evm/ethereum'
+import { maxUint256, type Address } from '@zoltar/core-shared/evm/ethereum'
 import * as commonCopy from '../copy/common.js'
 import { parseDecimalInput } from '../forms/decimal.js'
+import { getActiveNetworkProfile } from '../lib/activeEnvironment.js'
 import { ensureSentence, sanitizeErrorDetail } from '../lib/errors.js'
 import { formatAdditionalCeilingAmount, formatCurrencyBalanceWithUnit } from '../lib/formatters.js'
 const maxUint200 = 2n ** 200n - 1n
@@ -123,4 +124,18 @@ function formatTokenApprovalPartialMessage({ actionLabel, nextApprovedAmount, re
 	if (nextApprovedAmount >= requiredAmount) return undefined
 	// The amount being approved is shown exactly: rounding it up could read as covering a requirement it falls short of.
 	return `Approving ${formatCurrencyBalanceWithUnit(nextApprovedAmount, tokenLabel, tokenUnits)} will still leave ${formatAdditionalCeilingAmount(requiredAmount - nextApprovedAmount, tokenLabel, tokenUnits)} needed before ${actionLabel}.`
+}
+
+/**
+ * Whether the token rejects nonzero-to-nonzero allowance changes, so an existing allowance must be reset to zero before a new approval.
+ * The active network's USDT is the only such token the apps support. It is identified by address: a symbol is display text that any token can report.
+ */
+export function tokenRequiresAllowanceReset(token: Address | undefined) {
+	const usdtAddress = getActiveNetworkProfile().usdtAddress
+	return token !== undefined && usdtAddress !== undefined && token.toLowerCase() === usdtAddress.toLowerCase()
+}
+
+/** The reason an approval of `next` is blocked until the allowance is reset, for a token where `tokenRequiresAllowanceReset` holds. */
+export function getTokenApprovalResetReason(approved: bigint | undefined, next: bigint | undefined, symbol: string, requiresReset: boolean) {
+	return requiresReset && approved !== undefined && approved > 0n && next !== undefined && next > 0n ? commonCopy.formatApprovalResetRequired(symbol) : undefined
 }

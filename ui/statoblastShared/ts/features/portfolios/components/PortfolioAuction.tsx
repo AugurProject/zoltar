@@ -1,3 +1,6 @@
+import * as collateralCopy from '../../../copy/collateral.js'
+import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
+import { tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
@@ -41,13 +44,13 @@ export function PortfolioAuction(parameters: PortfolioAuctionParameters) {
 					<CurrencyValue value={auction?.inventoryAttoRep} suffix={common.rep} />
 				</MetricField>
 				<MetricField label={copy.shortfall} loading={model.loading}>
-					<CurrencyValue value={auction?.shortfallAttoEth} suffix={common.eth} />
+					<CurrencyValue value={auction?.shortfallAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 				</MetricField>
 			</MetricGrid>
 			<PortfolioButton model={parameters.actions} action='openPortfolioAuction' label={copy.open} pendingLabel={copy.opening} reason={model.openReason} onClick={model.open} />
 			<MetricGrid>
 				<MetricField label={copy.lotPrice} loading={model.loading}>
-					<CurrencyValue value={auction?.lotAttoEth} suffix={common.eth} />
+					<CurrencyValue value={auction?.lotAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 				</MetricField>
 				<MetricField label={copy.minimumCollateral} loading={model.loading}>
 					<CurrencyValue value={auction?.opened ? auction.minimumCollateralAttoRepPerLot : undefined} suffix={common.rep} />
@@ -63,7 +66,7 @@ export function PortfolioAuction(parameters: PortfolioAuctionParameters) {
 			</MetricGrid>
 			<MetricGrid>
 				<MetricField label={copy.bidEth}>
-					<CurrencyValue value={model.quote?.bidAttoEth} suffix={common.eth} />
+					<CurrencyValue value={model.quote?.bidAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 				</MetricField>
 				<MetricField label={copy.minimumPrincipal}>
 					<CurrencyValue value={model.quote?.minimumPrincipalAttoRep} suffix={common.rep} />
@@ -71,6 +74,35 @@ export function PortfolioAuction(parameters: PortfolioAuctionParameters) {
 			</MetricGrid>
 			<UserMessage tone='warning' detail={copy.ownership} />
 			<UserMessage detail={copy.fairness} />
+			{snapshot !== undefined && tokenRequiresAllowanceReset(snapshot.collateralToken) ? (
+				<PortfolioButton
+					model={parameters.actions}
+					action='resetAuctionCollateral'
+					label={common.formatResetTokenApproval(snapshot.collateral.symbol)}
+					pendingLabel={common.formatResettingTokenApproval(snapshot.collateral.symbol)}
+					reason={model.fundingReason ?? (snapshot.collateralAllowance === 0n ? common.notNeeded : undefined)}
+					onClick={() => model.approve(0n)}
+				/>
+			) : undefined}
+
+			<TokenApprovalControl
+				actionLabel={copy.bid}
+				allowanceError={model.error}
+				allowanceLoading={model.loading}
+				approvedAmount={snapshot?.collateralAllowance}
+				disabled={disabled}
+				guardMessage={model.fundingReason}
+				requiresAllowanceReset={tokenRequiresAllowanceReset(snapshot?.collateralToken)}
+				onApprove={amount => {
+					if (amount !== undefined) void model.approve(amount)
+				}}
+				pending={parameters.actions.busy === 'approveAuctionCollateral'}
+				pendingLabel={common.formatApprovingToken(snapshot?.collateral.symbol ?? collateralCopy.fallback)}
+				requiredAmount={model.quote?.bidAttoEth}
+				resetKey={`${snapshot?.auction?.address}:${parameters.bidder}:${model.quote?.bidAttoEth}`}
+				tokenSymbol={snapshot?.collateral.symbol ?? collateralCopy.fallback}
+				tokenUnits={snapshot?.collateral.decimals ?? 18}
+			/>
 			<PortfolioButton model={parameters.actions} action='bidPortfolioAuction' label={copy.bid} pendingLabel={copy.bidding} reason={model.bidReason} onClick={model.bid} />
 			<h4>{copy.yourBids}</h4>
 			{auction?.bids.length === 0 && !model.loading ? <EmptyState title={copy.noBids} /> : undefined}
@@ -98,10 +130,10 @@ export function PortfolioAuction(parameters: PortfolioAuctionParameters) {
 								<CurrencyValue value={bid.position?.principalAttoRep} suffix={common.rep} />
 							</MetricField>
 							<MetricField label={copy.commitment}>
-								<CurrencyValue value={bid.position?.commitmentAttoEth} suffix={common.eth} />
+								<CurrencyValue value={bid.position?.commitmentAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 							</MetricField>
 							<MetricField label={copy.earnedEth}>
-								<CurrencyValue value={bid.position?.earnedAttoEth} suffix={common.eth} />
+								<CurrencyValue value={bid.position?.earnedAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 							</MetricField>
 							<MetricField label={copy.earnedRep}>
 								<CurrencyValue value={bid.position?.earnedAttoRep} suffix={common.rep} />
@@ -110,10 +142,10 @@ export function PortfolioAuction(parameters: PortfolioAuctionParameters) {
 								<CurrencyValue value={bid.fill?.principalAttoRep} suffix={common.rep} />
 							</MetricField>
 							<MetricField label={copy.charged}>
-								<CurrencyValue value={bid.fill?.usedAttoEth} suffix={common.eth} />
+								<CurrencyValue value={bid.fill?.usedAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 							</MetricField>
 							<MetricField label={copy.refund}>
-								<CurrencyValue value={refundAttoEth} suffix={common.eth} />
+								<CurrencyValue value={refundAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 							</MetricField>
 						</MetricGrid>
 						<RefundActions model={model} actions={parameters.actions} bid={bid} />
@@ -143,7 +175,7 @@ export function PortfolioAuction(parameters: PortfolioAuctionParameters) {
 			/>
 			<MetricGrid>
 				<MetricField label={copy.refundEth}>
-					<CurrencyValue value={auction?.refundAttoEth} suffix={common.eth} />
+					<CurrencyValue value={auction?.refundAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 				</MetricField>
 			</MetricGrid>
 			<div className='actions'>

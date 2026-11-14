@@ -2,9 +2,13 @@
 pragma solidity 0.8.35;
 
 import '../../statoblast/interfaces/IERC1155Receiver.sol';
+import { IWeth9 } from '../../statoblast/interfaces/IWeth9.sol';
+import { IERC20 } from '../../IERC20.sol';
+import { SafeERC20Ops } from '../../SafeERC20Ops.sol';
 import { SecurityPoolPortfolio } from '../../statoblast/SecurityPoolPortfolio.sol';
 
 contract CompleteSetReentrantReceiver is IERC1155Receiver {
+	using SafeERC20Ops for IERC20;
 	SecurityPoolPortfolio public immutable portfolio;
 	uint248 public immutable universeId;
 	uint256 public immutable questionId;
@@ -20,7 +24,10 @@ contract CompleteSetReentrantReceiver is IERC1155Receiver {
 	function attack(uint256 initialValue, uint256 nestedValue) external payable {
 		reentrantValue = nestedValue;
 		(uint256 fee, ) = portfolio.purchaseQuote(universeId, questionId, initialValue);
-		portfolio.createCompleteSet{value: initialValue + fee}(universeId, questionId, initialValue, address(this), 0);
+		IERC20 collateral = portfolio.collateralToken();
+		IWeth9(address(collateral)).deposit{value: initialValue + fee}();
+		collateral.safeApprove(address(portfolio.services()), initialValue + fee);
+		portfolio.createCompleteSet(universeId, questionId, initialValue, address(this), 0, fee);
 	}
 
 	function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
@@ -35,7 +42,7 @@ contract CompleteSetReentrantReceiver is IERC1155Receiver {
 		if (reentryCount == 0 && reentrantValue > 0) {
 			reentryCount = 1;
 			(uint256 fee, ) = portfolio.purchaseQuote(universeId, questionId, reentrantValue);
-			portfolio.createCompleteSet{value: reentrantValue + fee}(universeId, questionId, reentrantValue, address(this), 0);
+			portfolio.createCompleteSet(universeId, questionId, reentrantValue, address(this), 0, fee);
 		}
 		return IERC1155Receiver.onERC1155BatchReceived.selector;
 	}

@@ -54,6 +54,8 @@ export type ReportingSectionProps = ReportingRouteContentProps & {
 
 type OpenOracleRouteContentProps = {
 	accountState: AccountState
+	onApproveCreateToken?: ((token: 'token1' | 'token2', amount: bigint) => void) | undefined
+	onWrapCreateWeth?: (() => void) | undefined
 	onApproveToken1: (amount?: bigint) => void
 	onApproveToken2: (amount?: bigint) => void
 	onCancelOpenOracleWithdrawalBalanceCheck: () => void
@@ -68,6 +70,8 @@ type OpenOracleRouteContentProps = {
 	loadingOpenOracleCreate: boolean
 	openOracleActiveAction: OpenOracleActionResult['action'] | undefined
 	openOracleActiveWithdrawalBalance: keyof OpenOracleWithdrawableBalances | undefined
+	/** Whether the active token approval action is an allowance reset to zero. */
+	openOracleApprovalResetting: boolean
 	openOracleError: string | undefined
 	openOracleTokenAccessState: {
 		token1Approval: TokenApprovalState

@@ -10,7 +10,7 @@ for (const mode of ['quiet', 'events', 'event-reorg'] as const) {
 		const database = new ScannerDatabase('postgres://unused')
 		const indexer = createNetworkIndexer({ id: 'sepolia', name: 'Sepolia', chainId: 11_155_111, rpcUrls: ['http://unused.invalid'], startBlock: 10n, confirmationDepth: 12n, explorerBaseUrl: '', nativeSymbol: 'ETH', contracts: [] }, database, new AbortController().signal)
 		indexer.stateBoundary.discovered = true
-		indexer.lease = { backendPid: 1, connection: Object.assign(database.sql, { release() {}, [Symbol.dispose]() {} }), assertHeld: async () => {}, release: async () => {} }
+		indexer.lease = { backendPid: 1, connection: Object.assign(database.sql, { async release() {}, [Symbol.dispose]() {} }), assertHeld: async () => {}, release: async () => {} }
 		const header = (number: bigint) => ({ hash: toHex(number, { size: 32 }), parentHash: toHex(number - 1n, { size: 32 }), timestamp: 1_700_000_000n + number })
 		const contracts = new Map([[zeroAddress, { address: zeroAddress, label: 'Oracle', kind: 'openOracle', provenance: 'manifest', deploymentBlock: 10n, deploymentBlockExact: true }]])
 		const logs = mode === 'quiet' ? [] : [10n, 50n].map(number => ({ address: zeroAddress, blockNumber: number, blockHash: header(number).hash, transactionHash: toHex(number + 1_000n, { size: 32 }), transactionIndex: 0n, logIndex: 0n, topics: [zeroHash], data: '0x' as const }))

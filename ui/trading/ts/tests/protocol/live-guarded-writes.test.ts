@@ -5,6 +5,7 @@ import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/a
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { createTradingPublicClient, simulateEntry, simulateExit, submitFreshEntry, submitFreshExit, submitFreshLiquidity } from '../../protocol/live.js'
 import { tradingContracts } from '../../generated/contractArtifact.js'
+import { shareTokenAbi } from '../../protocol/authorization.js'
 import { receiveRequestParameter } from '@zoltar/trading-shared/trading/receiveRequest'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { feeAccountingRpcResult } from '../support/feeAccountingRpc.js'
@@ -18,31 +19,6 @@ const blockHash = `0x${'55'.repeat(32)}` as Hex
 const transactionHash = `0x${'66'.repeat(32)}` as Hex
 const routerAbi = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter.abi
 const pairAbi = tradingContracts['contracts/trading/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair.abi
-const shareTransferAbi = [
-	{
-		type: 'function',
-		name: 'balanceOf',
-		stateMutability: 'view',
-		inputs: [
-			{ name: 'account', type: 'address' },
-			{ name: 'id', type: 'uint256' },
-		],
-		outputs: [{ type: 'uint256' }],
-	},
-	{
-		type: 'function',
-		name: 'safeBatchTransferFrom',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'from', type: 'address' },
-			{ name: 'to', type: 'address' },
-			{ name: 'ids', type: 'uint256[]' },
-			{ name: 'values', type: 'uint256[]' },
-			{ name: 'data', type: 'bytes' },
-		],
-		outputs: [],
-	},
-] as const
 const configuration = deploymentConfigurationFixture({ chainId: 1, chainName: 'Test', rpcUrl: 'http://localhost', factory: `0x${'88'.repeat(20)}`, router: `0x${'99'.repeat(20)}` })
 const market = smallReserveMarketFixture({ pool, pair, shareToken, title: 'Guarded writes', description: 'Wallet context fixture' })
 
@@ -99,7 +75,7 @@ describe('live guarded transaction writes', () => {
 				if (typeof transaction !== 'object' || transaction === null || !('to' in transaction) || !('data' in transaction) || typeof transaction.to !== 'string' || typeof transaction.data !== 'string') throw new Error('Malformed transaction')
 				if (transaction.to.toLowerCase() === pair.toLowerCase()) return encodeAbiParameters([uint256, uint256], [2n, 1n])
 				if (transaction.to.toLowerCase() !== shareToken.toLowerCase()) throw new Error('Unexpected transaction target')
-				const decoded = decodeFunctionData({ abi: shareTransferAbi, data: transaction.data as Hex })
+				const decoded = decodeFunctionData({ abi: shareTokenAbi, data: transaction.data as Hex })
 				if (decoded.functionName === 'balanceOf') return encodeAbiParameters([uint256], [longBalance])
 				if (decoded.functionName === 'safeBatchTransferFrom' && decoded.args[3][1] > longBalance) throw new Error('ERC1155: insufficient balance for transfer')
 				shareCalls.push(transaction.data as Hex)
@@ -114,7 +90,7 @@ describe('live guarded transaction writes', () => {
 		expect(shareCalls).toHaveLength(3)
 		expect(shareCalls[1]).toBe(shareCalls[0])
 		expect(shareCalls[2]).toBe(shareCalls[0])
-		const decodedTransfer = decodeFunctionData({ abi: shareTransferAbi, data: shareCalls[0] })
+		const decodedTransfer = decodeFunctionData({ abi: shareTokenAbi, data: shareCalls[0] })
 		if (decodedTransfer.args === undefined) throw new Error('Missing share transfer arguments')
 		expect(decodedTransfer.args[4]).toBe(encodeAbiParameters([receiveRequestParameter], [[1, 0, shareToken, pool, pair, 1n, 2n, 256n, 257n, 258n, 1, 10n, quote.maximumLongShares, quote.minimumEth, account, account, quote.deadline]]))
 		longBalance = 13n
@@ -138,7 +114,7 @@ describe('live guarded transaction writes', () => {
 				if (typeof transaction !== 'object' || transaction === null || !('to' in transaction) || !('data' in transaction) || typeof transaction.to !== 'string' || typeof transaction.data !== 'string') throw new Error('Malformed transaction')
 				if (transaction.to.toLowerCase() === pair.toLowerCase()) return encodeAbiParameters([uint256, uint256], [longSharesSwapped, 1n])
 				if (transaction.to.toLowerCase() !== shareToken.toLowerCase()) throw new Error('Unexpected transaction target')
-				const decoded = decodeFunctionData({ abi: shareTransferAbi, data: transaction.data as Hex })
+				const decoded = decodeFunctionData({ abi: shareTokenAbi, data: transaction.data as Hex })
 				if (decoded.functionName === 'balanceOf') return encodeAbiParameters([uint256], [longBalance])
 				if (decoded.functionName !== 'safeBatchTransferFrom') throw new Error('Unexpected share transfer')
 				if (decoded.args[3][1] > longBalance) throw new Error('ERC1155: insufficient balance for transfer')
@@ -277,7 +253,7 @@ describe('live guarded transaction writes', () => {
 				const target = typeof transaction === 'object' && transaction !== null && 'to' in transaction && typeof transaction.to === 'string' ? transaction.to.toLowerCase() : ''
 				if (target === pair.toLowerCase()) return encodeAbiParameters([uint256, uint256], [2n, 1n])
 				if (target === shareToken.toLowerCase()) {
-					const decoded = decodeFunctionData({ abi: shareTransferAbi, data: callData(params) })
+					const decoded = decodeFunctionData({ abi: shareTokenAbi, data: callData(params) })
 					return decoded.functionName === 'balanceOf' ? encodeAbiParameters([uint256], [13n]) : '0x'
 				}
 				const decoded = decodeFunctionData({ abi: routerAbi, data: callData(params) })

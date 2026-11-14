@@ -1,11 +1,12 @@
+import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import * as tradingCopy from '../../../copy/trading.js'
+import * as collateralCopy from '../../../copy/collateral.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { tryParseBigIntListInput } from '@zoltar/ui-core-shared/forms/inputs.js'
-import { tryParseTradingAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
 import { rpow, previewLinearFeeCheckpoint, type LinearFeeState } from '@zoltar/statoblast-shared/statoblast/retentionRate'
 import { isValidScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
@@ -190,6 +191,7 @@ export function isTradingSystemDeployed(deploymentStatuses: DeploymentStatus[]) 
 }
 
 export function getTradingMintGuardMessage({
+	collateral,
 	accountAddress,
 	escalationGameActive = false,
 	usesSharedBacking = false,
@@ -202,6 +204,7 @@ export function getTradingMintGuardMessage({
 	shareTokenSupplyAttoShares,
 	totalPoolHeldAttoRep,
 }: {
+	collateral?: { balance: bigint; decimals: number; symbol: string } | undefined
 	accountAddress: Address | undefined
 	/** An open escalation game closes minting; it explains a zero capacity before any capacity message. */
 	escalationGameActive?: boolean
@@ -234,11 +237,12 @@ export function getTradingMintGuardMessage({
 
 	const trimmedAmount = mintAmountInput.trim()
 	if (trimmedAmount === '') return tradingCopy.mintAmountRequired
-	const mintAmount = tryParseTradingAmountInput(trimmedAmount)
+	const mintAmount = tryParseDecimalInput(trimmedAmount, collateral?.decimals ?? 18)
 	if (mintAmount === undefined) return 'Enter a valid mint amount.'
 
 	if (mintAmount <= 0n) return tradingCopy.mintAmountRequired
-	if (!usesSharedBacking && remainingCapacity !== undefined && mintAmount > remainingCapacity) return `Max mint capacity is ${formatCurrencyBalanceWithUnit(remainingCapacity, 'ETH')}.`
+	if (!usesSharedBacking && remainingCapacity !== undefined && mintAmount > remainingCapacity) return `Max mint capacity is ${formatCurrencyBalanceWithUnit(remainingCapacity, collateral?.symbol ?? 'ETH', collateral?.decimals ?? 18)}.`
+	if (collateral !== undefined) return collateral.balance < mintAmount ? collateralCopy.formatInsufficientBalance(collateral.symbol) : undefined
 	if (ethBalanceAttoEth === undefined) return statoblastAppCopy.loadingWalletEthBalance
 	const spendableEthAttoEth = getSpendableEthBalance(ethBalanceAttoEth)
 	if (mintAmount > spendableEthAttoEth) return `Need ${formatAdditionalCurrencyBalance(mintAmount - spendableEthAttoEth, 'ETH')} in this wallet to mint the selected amount and keep ${formatCurrencyBalanceWithUnit(ETH_GAS_RESERVE_ATTO_ETH, 'ETH')} for gas.`
@@ -246,6 +250,7 @@ export function getTradingMintGuardMessage({
 }
 
 export function getTradingRedeemCompleteSetGuardMessage({
+	shareDecimals = 18,
 	accountAddress,
 	hasSelectedPool,
 	isOnActiveAppChain,
@@ -253,6 +258,7 @@ export function getTradingRedeemCompleteSetGuardMessage({
 	redeemAmountInput,
 	shareBalances,
 }: {
+	shareDecimals?: number
 	accountAddress: Address | undefined
 	settlementCollateralAttoEth: bigint | undefined
 	hasSelectedPool: boolean
@@ -273,11 +279,11 @@ export function getTradingRedeemCompleteSetGuardMessage({
 
 	const trimmedAmount = redeemAmountInput.trim()
 	if (trimmedAmount === '') return tradingCopy.redeemAmountRequired
-	const redeemAmount = tryParseTradingAmountInput(trimmedAmount)
+	const redeemAmount = tryParseDecimalInput(trimmedAmount, shareDecimals)
 	if (redeemAmount === undefined) return 'Enter a valid redeem amount.'
 
 	if (redeemAmount <= 0n) return tradingCopy.redeemAmountRequired
-	if (redeemAmount > maxRedeemableCompleteSetsAttoShares) return `Max redeemable amount is ${formatCurrencyBalanceWithUnit(maxRedeemableCompleteSetsAttoShares, 'sets')}.`
+	if (redeemAmount > maxRedeemableCompleteSetsAttoShares) return `Max redeemable amount is ${formatCurrencyBalanceWithUnit(maxRedeemableCompleteSetsAttoShares, 'sets', shareDecimals)}.`
 	return undefined
 }
 

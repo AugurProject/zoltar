@@ -28,6 +28,11 @@ export async function discoverAuctions(context: EcosystemDiscoveryContext, pools
 		requireGraphEdge(getAddress(portfolio), pool.portfolio, 'Auction portfolio binding')
 		requireGraphEdge(getAddress(authority), controller, 'Auction fork authority binding')
 		if (universeId.toString() !== pool.universeId) throw new Error('Auction universe binding mismatch')
+		const collateralToken = getAddress(await client.readContract({ abi: abis.securityPoolPortfolioAbi, address: pool.portfolio, functionName: 'collateralToken', blockNumber }))
+		const [walletCollateral, collateralAllowance] =
+			wallet === undefined
+				? [0n, 0n]
+				: await Promise.all([client.readContract({ abi: abis.erc20Abi, address: collateralToken, functionName: 'balanceOf', args: [wallet], blockNumber }), client.readContract({ abi: abis.erc20Abi, address: collateralToken, functionName: 'allowance', args: [wallet, address], blockNumber })])
 		const capital = getAddress(await client.readContract({ abi: abis.securityPoolPortfolioAuctionAbi, address, functionName: 'capital', blockNumber }))
 		const openingPrice = await client.readContract({ abi: abis.securityPoolPortfolioAuctionAbi, address, functionName: 'openingConservativePrice', blockNumber })
 		const multiplier = await client.readContract({ abi: abis.securityPoolCapitalLedgerAbi, address: capital, functionName: 'securityMultiplierBps', blockNumber })
@@ -68,6 +73,9 @@ export async function discoverAuctions(context: EcosystemDiscoveryContext, pools
 			endTime: closesAt.toString(),
 			opened,
 			finalized,
+			collateralToken,
+			walletCollateral: walletCollateral.toString(),
+			collateralAllowance: collateralAllowance.toString(),
 			lotAttoEth: lotAttoEth.toString(),
 			repGrid: repGrid.toString(),
 			unroundedCollateralAttoRepPerLot: unroundedCollateral.toString(),

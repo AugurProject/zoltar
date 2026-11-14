@@ -13,6 +13,16 @@ import { TransactionAwaitingRecovery } from '../../src/execution/receipt-validat
 import { createManualOperationController } from '../../src/runtime/manual-operations.ts'
 import { advanceManualSnapshot, manualTradingFixture, manualOperationFixture as fixture } from './manual-operation-fixture.ts'
 
+/** A manual-operation fixture armed for live, unpaused execution with one million REP in every universe. */
+function liveFixture() {
+	const context = fixture()
+	context.configuration.settings.runtime.execute = true
+	context.configuration.settings.paused = false
+	context.state.paused = false
+	context.scan.inventory.rep = context.scan.snapshot.universes.map(universe => ({ universeId: universe.id, token: universe.repToken, symbol: 'REP', balance: '1000000000000000000000000' }))
+	return context
+}
+
 function object(value: unknown): Record<string, unknown> {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Expected response object')
 	return Object.fromEntries(Object.entries(value))
@@ -281,11 +291,7 @@ test('exact input above the policy cap is blocked rather than silently clamped',
 })
 
 test('manual live results expose the skip reason and transaction progress for the exact execution', async () => {
-	const { configuration, state, scan, gate } = fixture()
-	configuration.settings.runtime.execute = true
-	configuration.settings.paused = false
-	state.paused = false
-	scan.inventory.rep = scan.snapshot.universes.map(universe => ({ universeId: universe.id, token: universe.repToken, symbol: 'REP', balance: '1000000000000000000000000' }))
+	const { configuration, state, scan, gate } = liveFixture()
 	let skip = true
 	const submitted = Promise.withResolvers<void>()
 	const release = Promise.withResolvers<void>()
@@ -341,11 +347,7 @@ test('manual live results expose the skip reason and transaction progress for th
 
 for (const severity of ['pending', 'alarming'] as const) {
 	test(`manual transaction recovery logs ${severity} at the appropriate level and retains its hash`, async () => {
-		const { configuration, state, scan, gate } = fixture()
-		configuration.settings.runtime.execute = true
-		configuration.settings.paused = false
-		state.paused = false
-		scan.inventory.rep = scan.snapshot.universes.map(universe => ({ universeId: universe.id, token: universe.repToken, symbol: 'REP', balance: '1000000000000000000000000' }))
+		const { configuration, state, scan, gate } = liveFixture()
 		const hash = `0x${'ab'.repeat(32)}` as const
 		const error = new TransactionAwaitingRecovery('Wrap WETH', hash, 'not yet visible to the RPC quorum', severity)
 		const info = spyOn(console, 'log').mockImplementation(() => {})
@@ -541,7 +543,7 @@ test('manual portfolio mint refreshes the exact cash quote for both preview and 
 		},
 		scan: async (cash?: bigint) => {
 			requests.push(cash)
-			pool.purchaseQuote = cash === undefined ? undefined : { mintAttoEth: cash.toString(), feeAttoEth: 100n.toString(), premiumAttoEth: 200n.toString(), minimumShares: cash.toString() }
+			pool.purchaseQuote = cash === undefined ? undefined : { spender: pool.coordinator, mintAttoEth: cash.toString(), feeAttoEth: 100n.toString(), premiumAttoEth: 200n.toString(), minimumShares: cash.toString() }
 			return base.scan
 		},
 	})

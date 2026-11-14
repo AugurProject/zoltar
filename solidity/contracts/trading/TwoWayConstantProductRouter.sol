@@ -9,13 +9,17 @@ import { ITwoWayConstantProductFactory } from './interfaces/ITwoWayConstantProdu
 import { ITwoWayConstantProductPair } from './interfaces/ITwoWayConstantProductPair.sol';
 import { ITradingShareToken } from './interfaces/ITradingShareToken.sol';
 import { TwoWayConstantProductMath } from './TwoWayConstantProductMath.sol';
+import { Collateral } from '../Collateral.sol';
+import { ICollateralConfig } from '../statoblast/interfaces/ICollateralConfig.sol';
+import { IWeth9 } from '../statoblast/interfaces/IWeth9.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 
 interface ITradingPortfolioSettlement {
 	function settlement() external view returns (address);
+	function services() external view returns (address);
 	function purchaseQuote(uint248 universeId, uint256 questionId, uint256 cash) external view returns (uint256 fee, uint256 premium);
-	function createCompleteSet(uint248 universeId, uint256 questionId, uint256 cash, address recipient, uint256 minimumShares) external payable returns (uint256);
+	function createCompleteSet(uint248 universeId, uint256 questionId, uint256 cash, address recipient, uint256 minimumShares, uint256 maximumFee) external returns (uint256);
 }
 
 contract TwoWayConstantProductRouter is IERC1155Receiver {
@@ -75,6 +79,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 	bool private callbackActive;
 	bool private receiveInternalShareCallback;
 	bool private ethCallbackActive;
+	uint256 private collateralBudget;
 	ISecurityPool private callbackPool;
 	ITradingShareToken private callbackShareToken;
 	address private callbackSettlement;
@@ -96,11 +101,29 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		factory = _factory;
 	}
 
-	function enterPosition(ITwoWayConstantProductPair pair, uint256 mintAttoEth, BinaryOutcomes.BinaryOutcome longOutcome, uint256 minLongSharesOut, address recipient, uint256 deadline) external payable nonReentrant beforeDeadline(deadline) returns (EnterResult memory result) {
+	modifier tokenBudget(uint256 budget) {
+		require(!entered && budget != 0, 'Invalid token budget');
+		collateralBudget = budget;
+		_;
+		collateralBudget = 0;
+	}
+	function enterPositionWithCollateral(ITwoWayConstantProductPair pair, uint256 cash, BinaryOutcomes.BinaryOutcome outcome, uint256 minimum, address recipient, uint256 deadline, uint256 budget) external tokenBudget(budget) returns (EnterResult memory) {
+		return enterPosition(pair, cash, outcome, minimum, recipient, deadline);
+	}
+	function createPairAndInitializeWithCollateral(ISecurityPool pool, uint256 cash, uint256 probability, uint256 minimum, address recipient, uint256 deadline, uint256 budget) external tokenBudget(budget) returns (LiquidityResult memory) {
+		return createPairAndInitializeWithEth(pool, cash, probability, minimum, recipient, deadline);
+	}
+	function initializeWithCollateral(ITwoWayConstantProductPair pair, uint256 cash, uint256 probability, uint256 minimum, address recipient, uint256 deadline, uint256 budget) external tokenBudget(budget) returns (LiquidityResult memory) {
+		return initializeWithEth(pair, cash, probability, minimum, recipient, deadline);
+	}
+	function addLiquidityWithCollateral(ITwoWayConstantProductPair pair, uint256 cash, uint256 maxYes, uint256 maxNo, uint256 minimum, address recipient, uint256 deadline, uint256 budget) external tokenBudget(budget) returns (LiquidityResult memory) {
+		return addLiquidityWithEth(pair, cash, maxYes, maxNo, minimum, recipient, deadline);
+	}
+
+	function enterPosition(ITwoWayConstantProductPair pair, uint256 mintAttoEth, BinaryOutcomes.BinaryOutcome longOutcome, uint256 minLongSharesOut, address recipient, uint256 deadline) public payable nonReentrant beforeDeadline(deadline) returns (EnterResult memory result) {
 		_validatePair(pair);
 		bool longYes = _isDirectionalOutcome(longOutcome);
 		require(recipient != address(0) && recipient != address(this), 'Invalid recipient');
-		require(msg.value > 0, 'ETH input is zero');
 		ISecurityPool pool = pair.securityPool();
 		(uint256 startInvalid, uint256 startYes, uint256 startNo) = _beginShareOperation(pool);
 		(uint256 yesBefore, uint256 noBefore) = pair.getEffectiveReserves();
@@ -118,21 +141,20 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		result = EnterResult(spent, mintedInvalid, mintedInvalid, additionalLong, totalLong, mintedInvalid, feeAmount, TwoWayConstantProductMath.conditionalYesBps(yesBefore, noBefore), TwoWayConstantProductMath.conditionalYesBps(yesAfter, noAfter));
 	}
 
-	function createPairAndInitializeWithEth(ISecurityPool pool, uint256 mintAttoEth, uint256 conditionalYesBpsValue, uint256 minLiquidity, address recipient, uint256 deadline) external payable nonReentrant beforeDeadline(deadline) returns (LiquidityResult memory result) {
+	function createPairAndInitializeWithEth(ISecurityPool pool, uint256 mintAttoEth, uint256 conditionalYesBpsValue, uint256 minLiquidity, address recipient, uint256 deadline) public payable nonReentrant beforeDeadline(deadline) returns (LiquidityResult memory result) {
 		ITwoWayConstantProductPair pair = factory.createPair(pool);
 		require(pair.totalSupply() == 0, 'Pair already initialized');
 		result = _initializeWithEth(pair, mintAttoEth, conditionalYesBpsValue, minLiquidity, recipient);
 	}
 
-	function initializeWithEth(ITwoWayConstantProductPair pair, uint256 mintAttoEth, uint256 conditionalYesBpsValue, uint256 minLiquidity, address recipient, uint256 deadline) external payable nonReentrant beforeDeadline(deadline) returns (LiquidityResult memory result) {
+	function initializeWithEth(ITwoWayConstantProductPair pair, uint256 mintAttoEth, uint256 conditionalYesBpsValue, uint256 minLiquidity, address recipient, uint256 deadline) public payable nonReentrant beforeDeadline(deadline) returns (LiquidityResult memory result) {
 		_validatePair(pair);
 		require(pair.totalSupply() == 0, 'Pair already initialized');
 		result = _initializeWithEth(pair, mintAttoEth, conditionalYesBpsValue, minLiquidity, recipient);
 	}
 
-	function addLiquidityWithEth(ITwoWayConstantProductPair pair, uint256 mintAttoEth, uint256 maxYesUsed, uint256 maxNoUsed, uint256 minLiquidity, address recipient, uint256 deadline) external payable nonReentrant beforeDeadline(deadline) returns (LiquidityResult memory result) {
+	function addLiquidityWithEth(ITwoWayConstantProductPair pair, uint256 mintAttoEth, uint256 maxYesUsed, uint256 maxNoUsed, uint256 minLiquidity, address recipient, uint256 deadline) public payable nonReentrant beforeDeadline(deadline) returns (LiquidityResult memory result) {
 		_validatePair(pair);
-		require(msg.value > 0, 'ETH input is zero');
 		require(recipient != address(0) && recipient != address(this), 'Invalid recipient');
 		ISecurityPool pool = pair.securityPool();
 		(uint256 startInvalid, uint256 startYes, uint256 startNo) = _beginShareOperation(pool);
@@ -240,7 +262,8 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 	}
 
 	function _redeemReceivedShares(ReceiveRequest memory request) private {
-		uint256 ethBefore = address(this).balance;
+		IERC20 collateral = ICollateralConfig(request.securityPool.securityPoolFactory().getSecurityPoolPortfolio(request.securityPool)).collateralToken();
+		uint256 ethBefore = collateral.balanceOf(address(this));
 		IERC20 rep = IERC20(address(request.securityPool.repToken()));
 		uint256 repBefore = rep.balanceOf(address(this));
 		if (request.securityPool.portfolioCustody() != address(0)) {
@@ -251,13 +274,20 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		request.securityPool.redeemCompleteSet(request.completeSetShares);
 		ethCallbackActive = false;
 		callbackSettlement = address(0);
-		uint256 ethOut = address(this).balance - ethBefore;
+		uint256 ethOut = collateral.balanceOf(address(this)) - ethBefore;
 		uint256 repOut = rep.balanceOf(address(this)) - repBefore;
 		require(ethOut >= request.minEthOut && (ethOut > 0 || repOut > 0), 'Minimum ETH output');
 		if (repOut != 0) rep.safeTransfer(request.payoutRecipient, repOut);
 		if (ethOut != 0) {
-			(bool success, ) = request.payoutRecipient.call{value: ethOut}('');
-			require(success, 'ETH transfer failed');
+			if (address(collateral) == address(request.securityPool.openOraclePriceCoordinator().weth())) {
+				callbackSettlement = address(collateral);
+				ethCallbackActive = true;
+				IWeth9(address(collateral)).withdraw(ethOut);
+				ethCallbackActive = false;
+				callbackSettlement = address(0);
+				(bool success, ) = request.payoutRecipient.call{value: ethOut}('');
+				require(success, 'ETH transfer failed');
+			} else Collateral.send(collateral, request.payoutRecipient, ethOut);
 		}
 	}
 
@@ -308,7 +338,6 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 	}
 
 	function _initializeWithEth(ITwoWayConstantProductPair pair, uint256 mintAttoEth, uint256 conditionalYesBpsValue, uint256 minLiquidity, address recipient) private returns (LiquidityResult memory result) {
-		require(msg.value > 0, 'ETH input is zero');
 		require(recipient != address(0) && recipient != address(this), 'Invalid recipient');
 		ISecurityPool pool = pair.securityPool();
 		(uint256 startInvalid, uint256 startYes, uint256 startNo) = _beginShareOperation(pool);
@@ -335,11 +364,21 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		ITradingPortfolioSettlement portfolio = ITradingPortfolioSettlement(root);
 		(uint256 fee, ) = portfolio.purchaseQuote(pool.universeId(), pool.questionId(), cash);
 		spent = cash + fee;
-		require(spent <= msg.value, 'Purchase fee exceeds budget');
-		portfolio.createCompleteSet{value: spent}(pool.universeId(), pool.questionId(), cash, address(this), 0);
+		IERC20 collateral = ICollateralConfig(root).collateralToken();
+		if (collateralBudget != 0) {
+			require(spent <= collateralBudget, 'Purchase fee exceeds budget');
+			Collateral.pull(collateral, msg.sender, address(this), spent);
+		} else {
+			require(spent <= msg.value, 'Purchase fee exceeds budget');
+			require(address(collateral) == address(pool.openOraclePriceCoordinator().weth()), 'Use collateral token entry');
+			IWeth9(address(collateral)).deposit{value: spent}();
+		}
+		collateral.safeApprove(portfolio.services(), spent);
+		portfolio.createCompleteSet(pool.universeId(), pool.questionId(), cash, address(this), 0, spent - cash);
 	}
 
 	function _refundBudget(uint256 spent) private {
+		if (collateralBudget != 0) return;
 		uint256 refund = msg.value - spent;
 		if (refund == 0) return;
 		(bool success, ) = msg.sender.call{value: refund}('');

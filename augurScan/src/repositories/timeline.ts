@@ -24,6 +24,20 @@ export type TimelineFilters = {
 
 export const timelineCatalogRows = async (sql: SQL, filters: TimelineFilters) => {
 	const { chainId, entityType, event, address, query, fromBlock, toBlock, canonical, asOfBlock, cursor, limit } = filters
+	// A fresh fragment per query, so the rows and count queries never share one Query object.
+	const timelineFilter = () => sql`
+		WHERE timeline.chain_id = ${chainId} AND timeline.block_number BETWEEN ${fromBlock} AND ${toBlock}
+			AND timeline.block_number <= ${asOfBlock}
+			AND (${canonical === 'all'} OR timeline.canonical = ${canonical === 'canonical'})
+			AND (${entityType ?? null}::text IS NULL OR timeline.entity_type = ${entityType ?? null})
+			AND (${event ?? null}::text IS NULL OR timeline.semantic_event_kind = ${event ?? null})
+			AND (${address ?? null}::text IS NULL OR timeline.source_contract = ${address ?? null}
+				OR timeline.related_entities ? ${address ?? ''} OR timeline.summary_data::text ILIKE ${address === undefined ? '' : `%${address}%`})
+			AND (${query ?? null}::text IS NULL OR timeline.entity_identity ILIKE ${query === undefined ? '' : literalContainsPattern(query)}
+				OR timeline.semantic_event_kind ILIKE ${query === undefined ? '' : literalContainsPattern(query)}
+				OR timeline.source_contract ILIKE ${query === undefined ? '' : literalContainsPattern(query)}
+				OR timeline.summary_data::text ILIKE ${query === undefined ? '' : literalContainsPattern(query)})
+	`
 	const [rows, totalRows] = await Promise.all([
 		sql`
 			SELECT timeline.*, block.timestamp AS block_timestamp,
@@ -50,17 +64,7 @@ export const timelineCatalogRows = async (sql: SQL, filters: TimelineFilters) =>
 					AND occurrence.sub_index = timeline.log_index
 				ORDER BY replacement.id DESC LIMIT 1
 			) invalidation ON true
-			WHERE timeline.chain_id = ${chainId} AND timeline.block_number BETWEEN ${fromBlock} AND ${toBlock}
-				AND timeline.block_number <= ${asOfBlock}
-				AND (${canonical === 'all'} OR timeline.canonical = ${canonical === 'canonical'})
-				AND (${entityType ?? null}::text IS NULL OR timeline.entity_type = ${entityType ?? null})
-				AND (${event ?? null}::text IS NULL OR timeline.semantic_event_kind = ${event ?? null})
-				AND (${address ?? null}::text IS NULL OR timeline.source_contract = ${address ?? null}
-					OR timeline.related_entities ? ${address ?? ''} OR timeline.summary_data::text ILIKE ${address === undefined ? '' : `%${address}%`})
-				AND (${query ?? null}::text IS NULL OR timeline.entity_identity ILIKE ${query === undefined ? '' : literalContainsPattern(query)}
-					OR timeline.semantic_event_kind ILIKE ${query === undefined ? '' : literalContainsPattern(query)}
-					OR timeline.source_contract ILIKE ${query === undefined ? '' : literalContainsPattern(query)}
-					OR timeline.summary_data::text ILIKE ${query === undefined ? '' : literalContainsPattern(query)})
+			${timelineFilter()}
 				AND (timeline.block_number, timeline.log_index, timeline.tx_hash, timeline.block_hash, timeline.entity_type, timeline.entity_identity) <
 					(${cursor.block}::bigint, ${cursor.log}::integer, ${cursor.tx}, ${cursor.blockHash}, ${cursor.entityType}, ${cursor.identity})
 			ORDER BY timeline.block_number DESC, timeline.log_index DESC, timeline.tx_hash DESC,
@@ -68,18 +72,7 @@ export const timelineCatalogRows = async (sql: SQL, filters: TimelineFilters) =>
 			LIMIT ${limit + 1}
 		`,
 		sql`
-			SELECT count(*)::text AS total FROM protocol_timeline_entries timeline
-			WHERE timeline.chain_id = ${chainId} AND timeline.block_number BETWEEN ${fromBlock} AND ${toBlock}
-				AND timeline.block_number <= ${asOfBlock}
-				AND (${canonical === 'all'} OR timeline.canonical = ${canonical === 'canonical'})
-				AND (${entityType ?? null}::text IS NULL OR timeline.entity_type = ${entityType ?? null})
-				AND (${event ?? null}::text IS NULL OR timeline.semantic_event_kind = ${event ?? null})
-				AND (${address ?? null}::text IS NULL OR timeline.source_contract = ${address ?? null}
-					OR timeline.related_entities ? ${address ?? ''} OR timeline.summary_data::text ILIKE ${address === undefined ? '' : `%${address}%`})
-				AND (${query ?? null}::text IS NULL OR timeline.entity_identity ILIKE ${query === undefined ? '' : literalContainsPattern(query)}
-					OR timeline.semantic_event_kind ILIKE ${query === undefined ? '' : literalContainsPattern(query)}
-					OR timeline.source_contract ILIKE ${query === undefined ? '' : literalContainsPattern(query)}
-					OR timeline.summary_data::text ILIKE ${query === undefined ? '' : literalContainsPattern(query)})
+			SELECT count(*)::text AS total FROM protocol_timeline_entries timeline ${timelineFilter()}
 		`,
 	])
 	return { rows, totalRows }
@@ -155,7 +148,7 @@ export const stateCatalogRows = async (sql: SQL, chainId: number | undefined, qu
 				FROM questions q JOIN networks n USING (chain_id) WHERE q.canonical AND q.chain_id = ${chainId} AND (${search ?? null}::text IS NULL OR q.title ILIKE ${search ?? ''} OR q.question_id::text ILIKE ${search ?? ''}) ORDER BY q.created_timestamp DESC, q.chain_id, q.question_id LIMIT ${queryLimit} OFFSET ${offset}`
 	const pools =
 		chainId === undefined
-			? await sql`SELECT p.*, n.id AS network_id, q.title AS question_title,
+			? await sql`SELECT p.*, (SELECT state.read_result->'collateral' FROM entity_state_snapshots state WHERE state.chain_id = p.chain_id AND state.entity_type = 'pool' AND state.entity_identity = p.pool_address AND state.canonical AND state.read_status = 'success' ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1) AS collateral, n.id AS network_id, q.title AS question_title,
 				ps.settlement_collateral_atto_eth, ps.total_capacity_ownership_atto_rep, ps.fee_eligible_capacity_ownership_atto_rep, ps.total_claimable_vault_fees_atto_eth, ps.unallocated_accrued_fees_atto_eth, ps.current_retention_rate, ps.block_number AS snapshot_block,
 				(SELECT count(DISTINCT v.vault_address) FROM vault_snapshots v WHERE v.chain_id = p.chain_id AND v.pool_address = p.pool_address AND v.canonical) AS vault_count,
 				(SELECT count(*) FROM pools child WHERE child.chain_id = p.chain_id AND child.parent_address = p.pool_address AND child.canonical) AS child_count
@@ -163,7 +156,7 @@ export const stateCatalogRows = async (sql: SQL, chainId: number | undefined, qu
 				LEFT JOIN questions q ON q.chain_id = p.chain_id AND q.question_id = p.question_id AND q.canonical
 				LEFT JOIN LATERAL (SELECT * FROM pool_snapshots snapshot WHERE snapshot.chain_id = p.chain_id AND snapshot.pool_address = p.pool_address AND snapshot.canonical ORDER BY snapshot.block_number DESC, snapshot.log_index DESC LIMIT 1) ps ON true
 				WHERE p.canonical AND (${search ?? null}::text IS NULL OR p.pool_address ILIKE ${search ?? ''} OR q.title ILIKE ${search ?? ''}) ORDER BY p.block_number DESC, p.chain_id, p.pool_address LIMIT ${queryLimit} OFFSET ${offset}`
-			: await sql`SELECT p.*, n.id AS network_id, q.title AS question_title,
+			: await sql`SELECT p.*, (SELECT state.read_result->'collateral' FROM entity_state_snapshots state WHERE state.chain_id = p.chain_id AND state.entity_type = 'pool' AND state.entity_identity = p.pool_address AND state.canonical AND state.read_status = 'success' ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1) AS collateral, n.id AS network_id, q.title AS question_title,
 				ps.settlement_collateral_atto_eth, ps.total_capacity_ownership_atto_rep, ps.fee_eligible_capacity_ownership_atto_rep, ps.total_claimable_vault_fees_atto_eth, ps.unallocated_accrued_fees_atto_eth, ps.current_retention_rate, ps.block_number AS snapshot_block,
 				(SELECT count(DISTINCT v.vault_address) FROM vault_snapshots v WHERE v.chain_id = p.chain_id AND v.pool_address = p.pool_address AND v.canonical) AS vault_count,
 				(SELECT count(*) FROM pools child WHERE child.chain_id = p.chain_id AND child.parent_address = p.pool_address AND child.canonical) AS child_count
@@ -173,10 +166,10 @@ export const stateCatalogRows = async (sql: SQL, chainId: number | undefined, qu
 				WHERE p.canonical AND p.chain_id = ${chainId} AND (${search ?? null}::text IS NULL OR p.pool_address ILIKE ${search ?? ''} OR q.title ILIKE ${search ?? ''}) ORDER BY p.block_number DESC, p.chain_id, p.pool_address LIMIT ${queryLimit} OFFSET ${offset}`
 	const vaults =
 		chainId === undefined
-			? await sql`SELECT DISTINCT ON (v.chain_id, v.pool_address, v.vault_address) v.*, n.id AS network_id, q.title AS question_title
+			? await sql`SELECT DISTINCT ON (v.chain_id, v.pool_address, v.vault_address) v.*, (SELECT state.read_result->'collateral' FROM entity_state_snapshots state WHERE state.chain_id = v.chain_id AND state.entity_type = 'pool' AND state.entity_identity = v.pool_address AND state.canonical AND state.read_status = 'success' ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1) AS collateral, n.id AS network_id, q.title AS question_title
 				FROM vault_snapshots v JOIN networks n USING (chain_id) LEFT JOIN pools p ON p.chain_id = v.chain_id AND p.pool_address = v.pool_address AND p.canonical LEFT JOIN questions q ON q.chain_id = p.chain_id AND q.question_id = p.question_id AND q.canonical
 				WHERE v.canonical AND (${search ?? null}::text IS NULL OR v.vault_address ILIKE ${search ?? ''} OR v.pool_address ILIKE ${search ?? ''}) ORDER BY v.chain_id, v.pool_address, v.vault_address, v.block_number DESC, v.log_index DESC LIMIT ${queryLimit} OFFSET ${offset}`
-			: await sql`SELECT DISTINCT ON (v.chain_id, v.pool_address, v.vault_address) v.*, n.id AS network_id, q.title AS question_title
+			: await sql`SELECT DISTINCT ON (v.chain_id, v.pool_address, v.vault_address) v.*, (SELECT state.read_result->'collateral' FROM entity_state_snapshots state WHERE state.chain_id = v.chain_id AND state.entity_type = 'pool' AND state.entity_identity = v.pool_address AND state.canonical AND state.read_status = 'success' ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1) AS collateral, n.id AS network_id, q.title AS question_title
 				FROM vault_snapshots v JOIN networks n USING (chain_id) LEFT JOIN pools p ON p.chain_id = v.chain_id AND p.pool_address = v.pool_address AND p.canonical LEFT JOIN questions q ON q.chain_id = p.chain_id AND q.question_id = p.question_id AND q.canonical
 				WHERE v.canonical AND v.chain_id = ${chainId} AND (${search ?? null}::text IS NULL OR v.vault_address ILIKE ${search ?? ''} OR v.pool_address ILIKE ${search ?? ''}) ORDER BY v.chain_id, v.pool_address, v.vault_address, v.block_number DESC, v.log_index DESC LIMIT ${queryLimit} OFFSET ${offset}`
 	const universes =

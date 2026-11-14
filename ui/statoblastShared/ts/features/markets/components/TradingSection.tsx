@@ -1,3 +1,6 @@
+import * as collateralCopy from '../../../copy/collateral.js'
+import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
+import { tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as tradingCopy from '../../../copy/trading.js'
@@ -19,7 +22,7 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { ShareMigrationTargetsSection } from '../../universes/components/ShareMigrationTargetsSection.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
-import { tryParseTradingAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
+import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { tryParseBigIntListInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { getWrongNetworkReason, isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getActiveAppChainWalletBlocker, withWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
@@ -58,6 +61,7 @@ export function TradingSection({
 	embedInCard = false,
 	loadingTradingForkUniverse,
 	loadingTradingDetails,
+	collateralFunding,
 	onCreateCompleteSet,
 	onMigrateShares,
 	onRedeemCompleteSet,
@@ -74,6 +78,8 @@ export function TradingSection({
 	showHeader = true,
 	showSecurityPoolAddressInput = true,
 }: TradingSectionProps) {
+	const collateralDecimals = collateralFunding?.collateral?.decimals ?? 18
+	const collateralSymbol = collateralFunding?.collateral?.symbol ?? collateralCopy.fallback
 	const [activeModal, setActiveModal] = useState<TradingActionModal>(undefined)
 	const currentTimestamp = useChainTimestamp()
 	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
@@ -132,6 +138,7 @@ export function TradingSection({
 	const mintGuardMessage = getTradingMintGuardMessage({
 		accountAddress: accountState.address,
 		usesSharedBacking,
+		collateral: collateralFunding?.collateral,
 		escalationGameActive: mintingPausedByEscalation,
 		settlementCollateralAttoEth: estimatedSettlementCollateralAttoEth,
 		ethBalanceAttoEth: accountState.ethBalanceAttoEth,
@@ -149,6 +156,7 @@ export function TradingSection({
 		isOnActiveAppChain,
 		loadingTradingDetails,
 		redeemAmountInput: tradingForm.redeemAmount,
+		shareDecimals: collateralDecimals,
 		shareBalances,
 		shareTokenSupplyAttoShares: selectedPool?.shareTokenSupplyAttoShares,
 	})
@@ -166,7 +174,7 @@ export function TradingSection({
 	const selectedOutcomeBalance = getSelectedOutcomeShareBalance(shareBalances, tradingForm.selectedShareOutcome)
 	const shareOutcomeOptions = REPORTING_OUTCOME_DROPDOWN_OPTIONS.map(option => {
 		const balance = getSelectedOutcomeShareBalance(shareBalances, option.value)
-		return balance === undefined ? option : { ...option, label: tradingCopy.formatShareOutcomeOption(option.label, formatAmountDisplay(balance)) }
+		return balance === undefined ? option : { ...option, label: tradingCopy.formatShareOutcomeOption(option.label, formatAmountDisplay(balance, { units: collateralDecimals })) }
 	})
 	const mintLauncherBlocker = (() => {
 		if (!hasSelectedPool) return tradingCopy.completeSetMintPoolRequiredReason
@@ -271,11 +279,11 @@ export function TradingSection({
 	}
 	const renderShareMetricValue = (value: bigint | undefined, backing?: bigint) => (
 		<>
-			<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={value} />
+			<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={value} units={collateralDecimals} />
 			{backing === undefined ? undefined : (
 				<>
 					{' '}
-					(<CurrencyValue exactWhenRoundedToZero decimals={4} value={backing} suffix={commonCopy.eth} />)
+					(<CurrencyValue exactWhenRoundedToZero decimals={4} value={backing} suffix={collateralSymbol} units={collateralDecimals} />)
 				</>
 			)}
 		</>
@@ -318,10 +326,10 @@ export function TradingSection({
 								<div className='trading-holdings-hero'>
 									<span className='trading-holdings-label'>{tradingCopy.redeemableCompleteSets}</span>
 									<strong className='trading-holdings-value'>
-										<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={maxRedeemableCompleteSetsAttoShares} suffix={tradingCopy.setsUnit} />
+										<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={maxRedeemableCompleteSetsAttoShares} suffix={tradingCopy.setsUnit} units={collateralDecimals} />
 										{displayMaxRedeemableCompleteSets === undefined ? undefined : (
 											<span className='trading-holdings-backing'>
-												(<CurrencyValue exactWhenRoundedToZero decimals={4} value={displayMaxRedeemableCompleteSets} suffix={commonCopy.eth} />)
+												(<CurrencyValue exactWhenRoundedToZero decimals={4} value={displayMaxRedeemableCompleteSets} suffix={collateralSymbol} units={collateralDecimals} />)
 											</span>
 										)}
 									</strong>
@@ -372,10 +380,10 @@ export function TradingSection({
 
 			<OperationModal closeOnSuccessKey={tradingResult?.action === 'createCompleteSet' ? tradingResult.hash : undefined} context={getTransactionContext('Complete set · Yes + No + Invalid')} isOpen={activeModal === 'mint'} onClose={() => setActiveModal(undefined)} title={tradingCopy.mintCompleteSets}>
 				<MetricGrid>
-					<MetricField label={tradingCopy.walletEth}>
-						<CurrencyValue exactWhenRoundedToZero value={accountState.ethBalanceAttoEth} suffix={commonCopy.eth} />
+					<MetricField label={collateralCopy.wallet}>
+						<CurrencyValue exactWhenRoundedToZero value={collateralFunding?.collateral?.balance} suffix={collateralFunding?.collateral?.symbol ?? collateralCopy.fallback} units={collateralFunding?.collateral?.decimals ?? 0} />
 					</MetricField>
-					<MetricField label={tradingCopy.availableToMint}>{usesSharedBacking ? tradingCopy.sharedPoolCapacityAtReview : <CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={maximumMintAmount} suffix={commonCopy.eth} />}</MetricField>
+					<MetricField label={tradingCopy.availableToMint}>{usesSharedBacking ? tradingCopy.sharedPoolCapacityAtReview : <CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={maximumMintAmount} suffix={collateralSymbol} units={collateralDecimals} />}</MetricField>
 				</MetricGrid>
 				<AmountField
 					hint={
@@ -386,17 +394,46 @@ export function TradingSection({
 					fillMax={{ amount: maximumMintAmount }}
 					label={tradingCopy.mintCompleteSetsAmount}
 					onChange={completeSetAmount => onTradingFormChange({ completeSetAmount })}
-					unit={commonCopy.eth}
+					unit={collateralFunding?.collateral?.symbol ?? collateralCopy.fallback}
+					decimals={collateralFunding?.collateral?.decimals ?? 18}
 					value={tradingForm.completeSetAmount}
 				/>
 				{usesSharedBacking && <UserMessage className='detail' detail={tradingCopy.sharedPoolPurchaseDetail} />}
+				{collateralFunding?.collateral !== undefined && tokenRequiresAllowanceReset(collateralFunding.collateral.token) ? (
+					<TransactionActionButton
+						idleLabel={commonCopy.formatResetTokenApproval(collateralFunding.collateral.symbol)}
+						pendingLabel={commonCopy.formatResettingTokenApproval(collateralFunding.collateral.symbol)}
+						pending={collateralFunding.resetting}
+						availability={collateralFunding.collateral.allowance === 0n ? { disabled: true, reason: commonCopy.notNeeded } : { disabled: false, reason: undefined }}
+						onClick={() => collateralFunding.approve(0n)}
+					/>
+				) : undefined}
+
+				<TokenApprovalControl
+					actionLabel={tradingCopy.mintCompleteSets}
+					allowanceError={collateralFunding?.error}
+					allowanceLoading={collateralFunding?.loading ?? true}
+					approvedAmount={collateralFunding?.collateral?.allowance}
+					guardMessage={mintGuardMessage}
+					requiresAllowanceReset={tokenRequiresAllowanceReset(collateralFunding?.collateral?.token)}
+					disabled={tradingActiveAction !== undefined}
+					onApprove={amount => {
+						if (amount !== undefined) void collateralFunding?.approve(amount)
+					}}
+					pending={(collateralFunding?.pending ?? false) && collateralFunding?.resetting !== true}
+					pendingLabel={commonCopy.formatApprovingToken(collateralSymbol)}
+					requiredAmount={collateralFunding?.requiredCollateral}
+					resetKey={`${selectedPool?.securityPoolAddress}:${collateralFunding?.requiredCollateral}`}
+					tokenSymbol={collateralFunding?.collateral?.symbol ?? collateralCopy.fallback}
+					tokenUnits={collateralFunding?.collateral?.decimals ?? 18}
+				/>
 				<div className='actions'>
 					<TransactionActionButton
 						idleLabel={tradingCopy.mintCompleteSets}
 						pendingLabel={tradingCopy.mintingCompleteSets}
 						onClick={onCreateCompleteSet}
 						pending={tradingActiveAction === 'createCompleteSet'}
-						availability={getModalActionAvailability(mintEnabled, mintGuardMessage, (tryParseTradingAmountInput(tradingForm.completeSetAmount) ?? 0n) > 0n)}
+						availability={getModalActionAvailability(mintEnabled, mintGuardMessage ?? collateralFunding?.reason, (tryParseDecimalInput(tradingForm.completeSetAmount, collateralDecimals) ?? 0n) > 0n)}
 					/>
 				</div>
 			</OperationModal>
@@ -404,16 +441,16 @@ export function TradingSection({
 			<OperationModal closeOnSuccessKey={tradingResult?.action === 'redeemCompleteSet' ? tradingResult.hash : undefined} context={getTransactionContext('Complete set · Yes + No + Invalid')} isOpen={activeModal === 'redeem-complete-sets'} onClose={() => setActiveModal(undefined)} title={tradingCopy.redeemCompleteSets}>
 				<MetricGrid>
 					<MetricField label={tradingCopy.redeemableCompleteSets}>
-						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={maxRedeemableCompleteSetsAttoShares} suffix={tradingCopy.setsUnit} />
+						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={maxRedeemableCompleteSetsAttoShares} suffix={tradingCopy.setsUnit} units={collateralDecimals} />
 					</MetricField>
 					<MetricField label={tradingCopy.availableToRedeem}>
-						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} decimals={4} value={displayMaxRedeemableCompleteSets} suffix={commonCopy.eth} />
+						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} decimals={4} value={displayMaxRedeemableCompleteSets} suffix={collateralSymbol} units={collateralDecimals} />
 					</MetricField>
 					<MetricField label={tradingCopy.availableRecoveryRep}>
 						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={recoveryRep(maxRedeemableCompleteSetsAttoShares)} suffix={commonCopy.rep} />
 					</MetricField>
 				</MetricGrid>
-				<AmountField fillMax={{ amount: maxRedeemableCompleteSetsAttoShares }} label={tradingCopy.redeemCompleteSetsAmount} onChange={redeemAmount => onTradingFormChange({ redeemAmount })} unit={tradingCopy.setsUnit} value={tradingForm.redeemAmount} />
+				<AmountField fillMax={{ amount: maxRedeemableCompleteSetsAttoShares }} label={tradingCopy.redeemCompleteSetsAmount} onChange={redeemAmount => onTradingFormChange({ redeemAmount })} unit={tradingCopy.setsUnit} decimals={collateralDecimals} value={tradingForm.redeemAmount} />
 				<UserMessage className='detail' detail={tradingCopy.redeemCompleteSetsFeeDetail} />
 				<div className='actions'>
 					<TransactionActionButton
@@ -421,7 +458,7 @@ export function TradingSection({
 						pendingLabel={tradingCopy.redeemingCompleteSets}
 						onClick={onRedeemCompleteSet}
 						pending={tradingActiveAction === 'redeemCompleteSet'}
-						availability={getModalActionAvailability(redeemCompleteSetsEnabled, redeemCompleteSetGuardMessage, (tryParseTradingAmountInput(tradingForm.redeemAmount) ?? 0n) > 0n)}
+						availability={getModalActionAvailability(redeemCompleteSetsEnabled, redeemCompleteSetGuardMessage, (tryParseDecimalInput(tradingForm.redeemAmount, collateralDecimals) ?? 0n) > 0n)}
 					/>
 				</div>
 			</OperationModal>
@@ -437,7 +474,7 @@ export function TradingSection({
 					<span>{tradingCopy.shareOutcomeToMigrate}</span>
 					<EnumDropdown options={shareOutcomeOptions} value={tradingForm.selectedShareOutcome} onChange={selectedShareOutcome => onTradingFormChange({ selectedShareOutcome })} disabled={shareMigrationSelectionDisabled} />
 				</label>
-				{selectedOutcomeBalance === undefined ? undefined : <UserMessage tone='warning' title={tradingCopy.formatMigratingShares(formatAmountDisplay(selectedOutcomeBalance), getReportingOutcomeLabel(tradingForm.selectedShareOutcome))} detail={tradingCopy.shareMigrationIrreversible} />}
+				{selectedOutcomeBalance === undefined ? undefined : <UserMessage tone='warning' title={tradingCopy.formatMigratingShares(formatAmountDisplay(selectedOutcomeBalance, { units: collateralDecimals }), getReportingOutcomeLabel(tradingForm.selectedShareOutcome))} detail={tradingCopy.shareMigrationIrreversible} />}
 				<ShareMigrationTargetsSection
 					loading={loadingTradingForkUniverse}
 					disabled={shareMigrationSelectionDisabled}
@@ -455,10 +492,10 @@ export function TradingSection({
 			<OperationModal closeOnSuccessKey={tradingResult?.action === 'redeemShares' ? tradingResult.hash : undefined} context={getTransactionContext(winningOutcomeLabel ?? '')} isOpen={activeModal === 'redeem-shares'} onClose={() => setActiveModal(undefined)} title={tradingCopy.redeemResolvedShares}>
 				<MetricGrid>
 					<MetricField label={tradingCopy.formatWinningOutcomeShares(winningOutcomeLabel ?? '')}>
-						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={winningAttoShares} suffix={tradingCopy.sharesUnit} />
+						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={winningAttoShares} suffix={tradingCopy.sharesUnit} units={collateralDecimals} />
 					</MetricField>
-					<MetricField label={tradingCopy.expectedEthPayout}>
-						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} decimals={4} value={expectedRedemptionPayoutAttoEth} suffix={commonCopy.eth} />
+					<MetricField label={tradingCopy.expectedCollateralPayout}>
+						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} decimals={4} value={expectedRedemptionPayoutAttoEth} suffix={collateralSymbol} units={collateralDecimals} />
 					</MetricField>
 					<MetricField label={tradingCopy.expectedRepPayout}>
 						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={recoveryRep(winningAttoShares)} suffix={commonCopy.rep} />

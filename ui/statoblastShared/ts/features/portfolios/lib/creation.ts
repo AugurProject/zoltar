@@ -1,5 +1,5 @@
 import { validatePortfolioEconomics } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
-import { parsePortfolioAmount } from './draft.js'
+import { parsePortfolioAmount, portfolioAmountOrUndefined } from './draft.js'
 
 export type CuratedAdmissionMode = 'open' | 'fixed'
 export type PortfolioCreationDraft = {
@@ -33,12 +33,18 @@ export function portfolioBasisPointsOrUndefined(value: string) {
 	return BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0'))
 }
 
-export function parsePortfolioCreationEconomics(draft: PortfolioCreationDraft) {
+function collateralAmount(value: string, decimals: number) {
+	const amount = portfolioAmountOrUndefined(value, decimals)
+	if (amount === undefined) throw new Error(`Enter a nonnegative amount with up to ${decimals} decimal places.`)
+	return amount
+}
+
+export function parsePortfolioCreationEconomics(draft: PortfolioCreationDraft, decimals = 18) {
 	const config = {
 		annualFeeBps: portfolioBasisPoints(draft.annualFeePercent, 'Annual time fee'),
 		purchaseFeeBps: portfolioBasisPoints(draft.purchaseFeePercent, 'Purchase fee'),
-		minimumPurchaseFeeAttoEth: parsePortfolioAmount(draft.minimumPurchaseFee),
-		minimumCommitmentAttoEth: parsePortfolioAmount(draft.minimumCommitment),
+		minimumPurchaseFeeAttoEth: collateralAmount(draft.minimumPurchaseFee, decimals),
+		minimumCommitmentAttoEth: collateralAmount(draft.minimumCommitment, decimals),
 		minimumOutcomeRate: parsePortfolioAmount(draft.minimumOutcomeRate),
 		rewardVestingSeconds: (parsePortfolioAmount(draft.rewardVestingHours) * 3600n) / 10n ** 18n,
 	}

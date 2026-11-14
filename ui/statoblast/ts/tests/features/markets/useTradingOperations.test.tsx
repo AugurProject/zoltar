@@ -1,9 +1,12 @@
+import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { capitalClient } from '../portfolios/capitalClient.js'
+import { capitalSnapshot, portfolio, token } from '../portfolios/capitalFixture.js'
 /// <reference types='bun-types' />
 
 import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
-import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { getActiveBackend, installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
@@ -127,7 +130,15 @@ function createTwoPoolReads(pools: { address: Address; details: TradingDetails; 
 describe('useTradingOperations', () => {
 	const { replaceEnvironment, trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
 
-	async function renderTradingHook(dependencies: UseTradingOperationsDependencies, parameters: Partial<UseTradingOperationsParameters> = {}, initialProps: HarnessProps = {}) {
+	async function renderTradingHook(dependencies: UseTradingOperationsDependencies, parameters: Partial<UseTradingOperationsParameters> = {}, initialProps: HarnessProps = {}, collateralAvailable = true, collateralDecimals = 18) {
+		if (collateralAvailable) {
+			const source = capitalClient(capitalSnapshot({ collateralToken: collateralDecimals === 6 ? MAINNET_NETWORK_PROFILE.usdcAddress : MAINNET_NETWORK_PROFILE.wethAddress, walletCollateral: 100n * ATTO_ETH_PER_ETH, collateralAllowance: 100n * ATTO_ETH_PER_ETH }))
+			source.setRead('securityPoolFactory', token)
+			source.setRead('getSecurityPoolPortfolio', portfolio)
+			source.setRead('questionId', zeroHash)
+			source.setRead('purchaseQuote', [0n])
+			replaceEnvironment({ ...getActiveBackend(), createReadClient: () => source.client })
+		}
 		const onTransactionFailed = mock((_message: string, _details?: unknown) => undefined)
 		let hookState: ReturnType<typeof useTradingOperations> | undefined
 		function TradingOperationsHarness({ enabled = true, selectedSecurityPoolAddress = SECURITY_POOL_ADDRESS }: HarnessProps) {
@@ -153,6 +164,7 @@ describe('useTradingOperations', () => {
 		const rendered = await renderIntoDocument(<TradingOperationsHarness {...initialProps} />)
 		trackCleanup(rendered.cleanup)
 		const state = () => requireHookState(hookState)
+		if (collateralAvailable && initialProps.enabled !== false) await waitFor(() => expect(state().collateralFunding.collateral).toBeDefined())
 		return {
 			onTransactionFailed,
 			state,
@@ -168,6 +180,45 @@ describe('useTradingOperations', () => {
 			},
 		}
 	}
+
+	for (const action of ['createCompleteSet', 'redeemCompleteSet'] as const)
+		test(`${action} refuses to guess decimals before collateral loads`, async () => {
+			const write = mock(async () => {
+				throw new Error('Unexpected write')
+			})
+			const hook = await renderTradingHook(createMintDependencies({ createCompleteSetInSecurityPool: write, redeemCompleteSetInSecurityPool: write }), {}, {}, false)
+			await hook.setForm({ completeSetAmount: '5', redeemAmount: '5' })
+			await act(() => hook.state()[action]())
+			expect(hook.onTransactionFailed).toHaveBeenCalledWith('Collateral metadata is not loaded. Wait for funding details and try again.', expect.objectContaining({ kind: 'error' }))
+			expect(write).not.toHaveBeenCalled()
+		})
+
+	test('USDC mint and redeem submit six-decimal raw amounts', async () => {
+		const minted: bigint[] = []
+		const redeemed: bigint[] = []
+		const hook = await renderTradingHook(
+			createMintDependencies({
+				createCompleteSetInSecurityPool: async (_wallet, _callbacks, securityPoolAddress, amount) => {
+					minted.push(amount)
+					return { action: 'createCompleteSet', hash: zeroHash, securityPoolAddress, universeId: 1n }
+				},
+				redeemCompleteSetInSecurityPool: async (_wallet, _callbacks, securityPoolAddress, amount) => {
+					redeemed.push(amount)
+					return { action: 'redeemCompleteSet', hash: zeroHash, securityPoolAddress, universeId: 1n }
+				},
+				loadTradingDetails: async () => createTradingDetails({ shareBalances: { invalidAttoShares: 10_000_000n, yesAttoShares: 10_000_000n, noAttoShares: 10_000_000n } }),
+			}),
+			{},
+			{},
+			true,
+			6,
+		)
+		await hook.setForm({ completeSetAmount: '5', redeemAmount: '5' })
+		await act(() => hook.state().createCompleteSet())
+		await act(() => hook.state().redeemCompleteSet())
+		expect(minted).toEqual([5_000_000n])
+		expect(redeemed).toEqual([5_000_000n])
+	})
 
 	test('disabling pool reads clears stale errors and discards an outstanding decode failure', async () => {
 		const pendingDetails = createDeferred<TradingDetails>()
@@ -494,6 +545,15 @@ describe('useTradingOperations', () => {
 		expect(transactionState.entries).toEqual([])
 	})
 
+	/** The changed wallet account stopped the action before any read, request, or `write`, and was reported as feedback rather than as a failed transaction. */
+	function expectWalletAccountChangeStoppedBeforeReads(hook: Awaited<ReturnType<typeof renderTradingHook>>, onTransactionRequested: unknown, reads: readonly unknown[], write: unknown) {
+		expect(onTransactionRequested).not.toHaveBeenCalled()
+		expect(hook.onTransactionFailed.mock.calls).toEqual([])
+		expect(hook.state().tradingFeedback?.status.detail).toBe(WALLET_ACCOUNT_CHANGED)
+		for (const read of reads) expect(read).not.toHaveBeenCalled()
+		expect(write).not.toHaveBeenCalled()
+	}
+
 	test('does not request a mint transaction when the active wallet account changed', async () => {
 		replaceEnvironment(createFakeBackend({ accountAddress: NEXT_WALLET_ADDRESS }))
 
@@ -514,11 +574,7 @@ describe('useTradingOperations', () => {
 			await hook.state().createCompleteSet()
 		})
 
-		expect(onTransactionRequested).not.toHaveBeenCalled()
-		expect(hook.onTransactionFailed.mock.calls).toEqual([])
-		expect(hook.state().tradingFeedback?.status.detail).toBe(WALLET_ACCOUNT_CHANGED)
-		for (const read of reads) expect(read).not.toHaveBeenCalled()
-		expect(createCompleteSetInSecurityPool).not.toHaveBeenCalled()
+		expectWalletAccountChangeStoppedBeforeReads(hook, onTransactionRequested, reads, createCompleteSetInSecurityPool)
 	})
 
 	test('does not request a share-migration transaction when the active wallet account changed', async () => {
@@ -540,10 +596,6 @@ describe('useTradingOperations', () => {
 			await hook.state().migrateShares()
 		})
 
-		expect(onTransactionRequested).not.toHaveBeenCalled()
-		expect(hook.onTransactionFailed.mock.calls).toEqual([])
-		expect(hook.state().tradingFeedback?.status.detail).toBe(WALLET_ACCOUNT_CHANGED)
-		for (const read of reads) expect(read).not.toHaveBeenCalled()
-		expect(migrateSharesFromUniverse).not.toHaveBeenCalled()
+		expectWalletAccountChangeStoppedBeforeReads(hook, onTransactionRequested, reads, migrateSharesFromUniverse)
 	})
 })

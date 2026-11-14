@@ -1,3 +1,4 @@
+import { type CollateralIdentityCache, readContractCollateral, withCollateralIdentityCache } from '../collateral-metadata.ts'
 import { discoverPortfolioEventDependencies } from './portfolio-discovery.ts'
 import { transactionCallTrace, unsupportedTraceError } from './transaction-selection.ts'
 import { canonicalBlockLogs, type IndexedBlock, type RichListBalance, type StoredTransaction } from '../database.ts'
@@ -25,6 +26,7 @@ export async function indexBlock(
 	prefetchedLogs: readonly Log[],
 	getDiscoveredLogs: (addresses: readonly Address[], contracts: ReadonlyMap<string, ContractMetadata>) => Promise<readonly Log[]>,
 	readBlockHeader: BlockHeaderReader = getBlockHeader,
+	identityCache?: CollateralIdentityCache,
 ): Promise<{ block: IndexedBlock; contracts: Map<string, ContractMetadata>; tokenMetadata: Map<string, TokenMetadata> }> {
 	if (expectedParentHash !== undefined && block.parentHash !== expectedParentHash) {
 		throw new ChainContinuityError(`Block ${number} does not extend the indexed canonical chain`)
@@ -157,7 +159,24 @@ export async function indexBlock(
 	if (tokenMetadataReads.some(metadata => metadata.readError === prunedTokenMetadataError)) await discoverStateStartBlock(state, observedHead, number, true)
 	for (const metadata of tokenMetadataReads) tokenMetadata.set(metadata.address.toLowerCase(), metadata)
 	const displayLabels = new Map(labels)
-	const displayContext = { nativeSymbol: state.network.nativeSymbol }
+	const displayAddresses = new Set(receipts.flatMap(receipt => receipt.logs.map(log => log.address.toLowerCase())))
+	for (const { transaction } of transactionByHash.values()) {
+		if (transaction.to === null || transaction.to === undefined) continue
+		displayAddresses.add(transaction.to.toLowerCase())
+		const decoded = decodeAction(contracts.get(transaction.to.toLowerCase()), transaction.input, labels)
+		for (const address of decoded.referencedAddresses ?? []) displayAddresses.add(address.toLowerCase())
+	}
+	const collateralRead = withCollateralIdentityCache(async (address, abi, functionName, args) => await state.providers.client.readContract({ address, abi, functionName, ...(args === undefined ? {} : { args }), blockNumber: number }), identityCache)
+	const collateralDisplays = await mapLimit(
+		[...contracts.values()].filter(contract => displayAddresses.has(contract.address.toLowerCase()) && /^(securityPool|sharedPool|openOraclePrice|priceCoordinator|twoWayConstantProduct)/u.test(contract.kind)),
+		4,
+		async contract => {
+			const collateral = await readContractCollateral(contract.address, contract.kind, collateralRead)
+			return [contract.address.toLowerCase(), collateral?.unit] as const
+		},
+	)
+	const collateralByAddress = new Map(collateralDisplays.flatMap(([address, unit]) => (unit === undefined ? [] : [[address, unit] as const])))
+	const displayContext = { nativeSymbol: state.network.nativeSymbol, collateralByAddress }
 	for (const metadata of tokenMetadata.values()) {
 		const label = metadata.name ?? metadata.symbol
 		if (label !== undefined) displayLabels.set(metadata.address.toLowerCase(), metadata.symbol === undefined ? label : `${label} (${metadata.symbol})`)
@@ -308,6 +327,12 @@ export async function refreshEntityStateSnapshots(state: NetworkIndexerState, bl
 	if (blockNumber < state.stateBoundary.startBlock) return
 	const targets = await state.database.stateSnapshotTargets(state.network.chainId, blockNumber, 25, requireLease(state))
 	if (targets.length === 0) return
+	// Publish discoveries only after the tagged snapshot passes the canonical commit gate.
+	const discoveries = new Map<string, Address>()
+	const identityCache = {
+		get: (key: string) => discoveries.get(key) ?? state.collateralIdentityCache.get(key),
+		set: (key: string, value: Address) => discoveries.set(key, value),
+	}
 	try {
 		await commitCanonicalRead(
 			blockNumber,
@@ -316,9 +341,15 @@ export async function refreshEntityStateSnapshots(state: NetworkIndexerState, bl
 				const header = await getBlockHeader(state.providers, blockNumber)
 				if (header.hash !== blockHash) throw new ChainContinuityError(`Canonical chain changed while sampling block ${blockNumber}`)
 				const snapshots = await mapLimit(targets, 4, target =>
-					sampleEntityState(state.providers.client, target, blockNumber, error => {
-						if (isPrunedHistoricalStateError(error)) throw error
-					}),
+					sampleEntityState(
+						state.providers.client,
+						target,
+						blockNumber,
+						error => {
+							if (isPrunedHistoricalStateError(error)) throw error
+						},
+						identityCache,
+					),
 				)
 				return { snapshots, timestamp: unixSecondsToDate(header.timestamp, 'State snapshot block timestamp') }
 			},
@@ -326,6 +357,7 @@ export async function refreshEntityStateSnapshots(state: NetworkIndexerState, bl
 			async ({ snapshots, timestamp }) => {
 				await assertLease(state)
 				await state.database.storeEntityStateSnapshots(state.network.chainId, blockNumber, blockHash, timestamp, snapshots, requireLease(state), state.provenance)
+				for (const [key, value] of discoveries) state.collateralIdentityCache.set(key, value)
 			},
 		)
 	} catch (error) {

@@ -124,7 +124,7 @@ describe('Statoblast: shared fork deadlines and fixed outcomes', () => {
 		await writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName: 'materializePortfolioQuestion', args: [pool(), child] }))
 		const childPool = await owner.readContract({ ...portfolio(), functionName: 'getPool', args: [fixture.base.questionId, child] })
 		expect([...(await owner.readContract({ ...portfolio(), functionName: 'inheritedFixedOutcome', args: [child, fixture.base.questionId] }))]).toEqual([true, 1n])
-		await expect(owner.writeContract({ ...portfolio(), functionName: 'createCompleteSet', args: [child, fixture.base.questionId, unit, owner.account.address, 0n], value: 2n * unit })).rejects.toThrow()
+		await expect(owner.writeContract({ ...portfolio(), functionName: 'createCompleteSet', args: [child, fixture.base.questionId, unit, owner.account.address, 0n, 2n * unit - unit], value: 0n })).rejects.toThrow()
 		await fixture.base.mockWindow.setTime(firstForkTime + 70n * DAY)
 		await expect(owner.writeContract({ ...forker(), functionName: 'forkZoltarWithOwnEscalationGame', args: [childPool] })).rejects.toThrow()
 		await approveToken(owner, getRepTokenAddress(child), getZoltarAddress())

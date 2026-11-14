@@ -91,6 +91,9 @@ export interface QuestionSnapshot {
 export interface OracleRequestFundingSnapshot {
 	/** Shared feeds use a fixed native bounty instead of the standalone gas formula. */
 	fixedRequestPriceCostAttoEth?: CanonicalUintString
+	/** Shared feed collateral stake floor, in raw token units. */
+	minimumReportCollateral?: CanonicalUintString
+	collateralToken?: Address
 	escalationHaltMultiplierBps: CanonicalUintString
 	feePercentage: CanonicalUintString
 	gasConsumedOpenOracleReportPrice: CanonicalUintString
@@ -140,7 +143,7 @@ export interface PoolSnapshot {
 	awaitingForkContinuation: boolean
 	questionOutcome: number
 	settlementCollateralAttoEth: CanonicalUintString
-	purchaseQuote?: { mintAttoEth: CanonicalUintString; feeAttoEth: CanonicalUintString; premiumAttoEth: CanonicalUintString; minimumShares: string } | undefined
+	purchaseQuote?: { spender: Address; mintAttoEth: CanonicalUintString; feeAttoEth: CanonicalUintString; premiumAttoEth: CanonicalUintString; minimumShares: string } | undefined
 	projectedSettlementCollateralAttoEth: CanonicalUintString
 	shareTokenSupplyAttoShares: CanonicalUintString
 	currentMintingCapacityAttoEth: CanonicalUintString
@@ -216,6 +219,9 @@ export interface AuctionRefundSnapshot {
 }
 
 export interface AuctionSnapshot {
+	collateralToken: Address
+	walletCollateral: CanonicalUintString
+	collateralAllowance: CanonicalUintString
 	address: Address
 	engine: Address
 	portfolio: Address

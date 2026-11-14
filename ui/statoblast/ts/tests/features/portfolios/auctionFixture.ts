@@ -10,6 +10,8 @@ import { priceFixture } from './priceFixture.js'
 export { auctionAddress, auctionEngine, auctionVault, auctionVaultImplementation }
 export async function auctionFixture() {
 	const fixture = priceFixture()
+	fixture.setWeth(100n * unit)
+	fixture.setAllowances(100n * unit, 100n * unit)
 	const fork = await fixture.fork()
 	Object.assign(fixture.values, {
 		auctions: auctionAddress,

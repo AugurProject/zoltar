@@ -1,3 +1,5 @@
+import { collateralAsset, tokenFunded, formatCollateralAmount } from '../../protocol/collateral.js'
+import * as collateralCopy from '../../copy/collateral.js'
 import { estimateBudgetMint } from '../../protocol/minting.js'
 import { capSubmissionDeadline, submissionWindowBlocker } from '../../protocol/submissionWindow.js'
 import { largestExitForLongShares, quoteEnterPosition, quoteExitPosition, type EnterPositionQuote, type ExitPositionQuote } from '@zoltar/trading-shared/trading/positions'
@@ -5,11 +7,10 @@ import { getAmountInputErrorMessage, validateAmountInput } from '@zoltar/ui-core
 import { createActionAvailability } from '@zoltar/ui-core-shared/transactions/actionAvailability.js'
 import { ETH_GAS_RESERVE_ATTO_ETH, getSpendableEthBalance } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
 import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { attoSharesToCollateralAttoEth, collateralAttoEthToAttoShares, formatOutcomeQuantity, SHARE_QUANTITY_DECIMALS } from '../../lib/shareValue.js'
+import { attoSharesToCollateralAttoEth, collateralAttoEthToAttoShares, formatOutcomeQuantity } from '../../lib/shareValue.js'
 import type { TradeSettings } from '../../lib/tradeSettings.js'
 import type { LiveBalances, LiveMarket } from '../../protocol/live.js'
 import { maximumAfterSlippage, minimumAfterSlippage } from '../../protocol/tradeQuote.js'
-import { formatEthAmount } from '../../copy/outcomes.js'
 import * as availabilityCopy from '../../copy/availability.js'
 import * as ticketCopy from '../../copy/tradeTicket.js'
 import { sellHoldingFeeBlocker } from '../../protocol/holdingFees.js'
@@ -124,16 +125,16 @@ function estimateSell(market: LiveMarket, side: Side, requestedShares: bigint, s
 	}
 }
 
-function amountDecimals(mode: TradeMode) {
-	return mode === 'entry' ? 18 : SHARE_QUANTITY_DECIMALS
+function amountDecimals(_mode: TradeMode, market: LiveMarket) {
+	return collateralAsset(market).decimals
 }
 
 /**
  * Reads the typed amount with the shared amount rules, so each unreadable entry names its own problem. Zero is accepted
  * here: it is usually an amount still being typed, and the action's reason already asks for more.
  */
-function parseTradeAmount(mode: TradeMode, amount: string) {
-	const decimals = amountDecimals(mode)
+function parseTradeAmount(mode: TradeMode, amount: string, market: LiveMarket) {
+	const decimals = amountDecimals(mode, market)
 	const validation = validateAmountInput(amount, { decimals, allowZero: true })
 	if (validation.status === 'valid') return { value: validation.amount, error: undefined }
 	return { value: undefined, error: getAmountInputErrorMessage(validation, { decimals }) }
@@ -178,22 +179,22 @@ function sellableShares(market: LiveMarket, side: Side, balances: LiveBalances |
 }
 
 // Shortcut amounts keep eight decimals, rounded down so they never exceed what can be sold or spent; ETH and shares share the precision.
-const SHORTCUT_STEP = 10n ** BigInt(SHARE_QUANTITY_DECIMALS - 8)
 // Limits stated in reasons keep six decimals, rounded down so the stated amount is always accepted.
 const LIMIT_DIGITS = 6
 
 /** A share or ETH amount trimmed to eight decimals for the amount field; amounts below that step stay exact. */
-export function roundDownShortcut(value: bigint) {
-	return value < SHORTCUT_STEP ? value : value - (value % SHORTCUT_STEP)
+export function roundDownShortcut(value: bigint, decimals = 18) {
+	const step = 10n ** BigInt(Math.max(0, decimals - 8))
+	return value < step ? value : value - (value % step)
 }
 
 /** The 25%, 50%, and Max shortcuts for a sell, as share amounts. Like the buy shortcuts they divide what can be sold now, so none fills a sale the ticket would refuse. */
-function sellShortcuts(sellable: bigint | undefined) {
+function sellShortcuts(sellable: bigint | undefined, market: LiveMarket) {
 	if (sellable === undefined || sellable === 0n) return []
 	return [
-		{ label: ticketCopy.quarter, value: roundDownShortcut(sellable / 4n) },
-		{ label: ticketCopy.half, value: roundDownShortcut(sellable / 2n) },
-		{ label: ticketCopy.max, value: roundDownShortcut(sellable) },
+		{ label: ticketCopy.quarter, value: roundDownShortcut(sellable / 4n, collateralAsset(market).decimals) },
+		{ label: ticketCopy.half, value: roundDownShortcut(sellable / 2n, collateralAsset(market).decimals) },
+		{ label: ticketCopy.max, value: roundDownShortcut(sellable, collateralAsset(market).decimals) },
 	].filter(shortcut => shortcut.value > 0n)
 }
 
@@ -224,11 +225,11 @@ function largestTradableBuy(market: LiveMarket, side: Side, ceiling: bigint, sli
  */
 function buyShortcuts(market: LiveMarket, side: Side, walletEthAttoEth: bigint | undefined, slippageBps: bigint) {
 	if (walletEthAttoEth === undefined) return []
-	const buyable = largestTradableBuy(market, side, minimum(getSpendableEthBalance(walletEthAttoEth), market.availableMintingCapacityAttoEth), slippageBps)
+	const buyable = largestTradableBuy(market, side, minimum(tokenFunded(market) ? walletEthAttoEth : getSpendableEthBalance(walletEthAttoEth), market.availableMintingCapacityAttoEth), slippageBps)
 	return [
-		{ label: ticketCopy.quarter, value: roundDownShortcut(buyable / 4n) },
-		{ label: ticketCopy.half, value: roundDownShortcut(buyable / 2n) },
-		{ label: ticketCopy.max, value: roundDownShortcut(buyable) },
+		{ label: ticketCopy.quarter, value: roundDownShortcut(buyable / 4n, collateralAsset(market).decimals) },
+		{ label: ticketCopy.half, value: roundDownShortcut(buyable / 2n, collateralAsset(market).decimals) },
+		{ label: ticketCopy.max, value: roundDownShortcut(buyable, collateralAsset(market).decimals) },
 	].filter(shortcut => shortcut.value > 0n)
 }
 
@@ -248,16 +249,16 @@ function mintingCapacityReason(payAttoEth: bigint, market: LiveMarket, side: Sid
 	if (payAttoEth <= capacity) return undefined
 	if (capacity === 0n) return ticketCopy.mintingCapacityExhaustedReason
 	const largest = largestTradableBuy(market, side, capacity, slippageBps)
-	if (largest < capacity) return ticketCopy.formatPriceImpactBlockedReason(formatEthAmount(formatTrimmedUnits(largest, 18, LIMIT_DIGITS)))
-	return ticketCopy.formatMintingCapacityReason(formatTrimmedUnits(capacity, 18, LIMIT_DIGITS))
+	if (largest < capacity) return ticketCopy.formatPriceImpactBlockedReason(formatCollateralAmount(largest, market, LIMIT_DIGITS, 'down'))
+	return ticketCopy.formatMintingCapacityReason(formatTrimmedUnits(capacity, collateralAsset(market).decimals, LIMIT_DIGITS), collateralAsset(market).symbol)
 }
 
 /** A refused price impact names the largest amount of the same trade the pool takes within the limit. */
 function priceImpactBlockedReason(estimate: TradeEstimate, market: LiveMarket, settings: TradeSettings, balances: LiveBalances | undefined) {
-	if (estimate.kind === 'entry') return ticketCopy.formatPriceImpactBlockedReason(formatEthAmount(formatTrimmedUnits(largestTradableBuy(market, estimate.side, estimate.payAttoEth, settings.slippageBps), 18, LIMIT_DIGITS)))
+	if (estimate.kind === 'entry') return ticketCopy.formatPriceImpactBlockedReason(formatCollateralAmount(largestTradableBuy(market, estimate.side, estimate.payAttoEth, settings.slippageBps), market, LIMIT_DIGITS, 'down'))
 	const longBalance = estimate.side === 'YES' ? balances?.yes : balances?.no
 	const largest = largestTradableSell(market, estimate.side, settings.slippageBps, longBalance, balances?.invalid)
-	return ticketCopy.formatPriceImpactBlockedReason(formatOutcomeQuantity(largest, estimate.side, LIMIT_DIGITS, 'down'))
+	return ticketCopy.formatPriceImpactBlockedReason(formatOutcomeQuantity(largest, estimate.side, LIMIT_DIGITS, 'down', market))
 }
 
 /** A buy needs the wallet's ETH balance to check it can be paid; until it is known the buy waits for it. */
@@ -350,7 +351,7 @@ export type TradeTicketInputs = Readonly<{
 /** Everything the trade ticket shows and allows, derived from plain inputs so the view stays a pure render. */
 export function tradeTicketModel(inputs: TradeTicketInputs) {
 	const { market, mode, side, settings, balances } = inputs
-	const parsed = parseTradeAmount(mode, inputs.amount)
+	const parsed = parseTradeAmount(mode, inputs.amount, market)
 	const longBalance = side === 'YES' ? balances?.yes : balances?.no
 	let estimated: EstimateResult = { estimate: undefined, problem: undefined }
 	if (parsed.value !== undefined) estimated = mode === 'entry' ? estimateBuy(market, side, parsed.value, settings.slippageBps) : estimateSell(market, side, parsed.value, settings.slippageBps, longBalance)
@@ -361,7 +362,11 @@ export function tradeTicketModel(inputs: TradeTicketInputs) {
 	const needsAcknowledgment = impactTier === 'warning'
 	const impactAcknowledged = estimate !== undefined && inputs.acknowledgedImpactBps !== undefined && estimate.impactBps <= inputs.acknowledgedImpactBps
 	let insufficient: string | undefined
-	if (mode === 'entry' && parsed.value !== undefined && inputs.walletEthAttoEth !== undefined) insufficient = insufficientEthReason(parsed.value, inputs.walletEthAttoEth)
+	if (mode === 'entry' && parsed.value !== undefined && inputs.walletEthAttoEth !== undefined) {
+		if (tokenFunded(market)) {
+			if (parsed.value > inputs.walletEthAttoEth) insufficient = collateralCopy.insufficient(collateralAsset(market).symbol)
+		} else insufficient = insufficientEthReason(parsed.value, inputs.walletEthAttoEth)
+	}
 	if (mode === 'exit' && parsed.value !== undefined && longBalance !== undefined && parsed.value > longBalance) insufficient = availabilityCopy.formatInsufficientOutcomeReason(side)
 	let balanceReason: string | undefined
 	if (inputs.balanceState === 'loading') balanceReason = availabilityCopy.balancesLoadingReason
@@ -399,7 +404,7 @@ export function tradeTicketModel(inputs: TradeTicketInputs) {
 		impactAcknowledged,
 		shortfall,
 		sellable,
-		shortcuts: mode === 'exit' ? sellShortcuts(sellable) : buyShortcuts(market, side, inputs.walletEthAttoEth, settings.slippageBps),
+		shortcuts: mode === 'exit' ? sellShortcuts(sellable, market) : buyShortcuts(market, side, inputs.walletEthAttoEth, settings.slippageBps),
 		// Connecting comes first: without a wallet the ticket still prices the trade, and the button offers to connect.
 		primaryStep,
 		availability: actionAvailability.reason !== undefined && loadingReasons.includes(actionAvailability.reason) ? { ...actionAvailability, loading: true } : actionAvailability,

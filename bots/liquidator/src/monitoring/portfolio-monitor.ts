@@ -21,6 +21,7 @@ function address(value: unknown): Address {
 }
 
 const portfolioMonitorAbi = [
+	parseAbiItem('function collateralToken() view returns (address)'),
 	parseAbiItem('function factory() view returns (address)'),
 	parseAbiItem('function forkController() view returns (address)'),
 	parseAbiItem('function choices(uint248 universeId,address owner) view returns (uint256 outcome,bool recorded)'),
@@ -159,6 +160,8 @@ async function loadPortfolioPosition(client: ReadClient, snapshot: PortfolioCapi
 export async function loadPortfolioObservation(client: ReadClient, settings: OperatorSettings, wallet: Address | undefined, scope: PortfolioScope, blockNumber: bigint, targets?: readonly PortfolioTarget[]): Promise<PortfolioObservation> {
 	const [factory, protocol] = await Promise.all([client.readContract({ address: scope.address, abi: portfolioMonitorAbi, functionName: 'factory', blockNumber }), client.readContract({ address: scope.address, abi: portfolioMonitorAbi, functionName: 'zoltar', blockNumber })])
 	if (address(factory) !== settings.deployment.securityPoolFactory || address(protocol) !== settings.deployment.zoltar) throw new Error('Selected portfolio belongs to another factory or Zoltar')
+	const collateral = address(await client.readContract({ address: scope.address, abi: portfolioMonitorAbi, functionName: 'collateralToken', blockNumber }))
+	if (collateral !== settings.deployment.weth) throw new Error('Automatic gas-profit estimates require WETH collateral')
 	// A fixed nonzero observer permits monitoring before a signer is configured; no action can use it.
 	const owner = wallet ?? getAddress('0x0000000000000000000000000000000000000001')
 	const snapshot = await loadPortfolioCapitalSnapshot({ client, portfolio: scope.address, universeId: scope.universeId, owner, blockNumber })

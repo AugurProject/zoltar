@@ -4,6 +4,7 @@ pragma solidity 0.8.35;
 import { ISecurityPool, ISecurityPoolFactory } from './interfaces/ISecurityPool.sol';
 import { ISecurityPoolQuestionAdmissionPolicy } from './interfaces/ISecurityPoolQuestionAdmissionPolicy.sol';
 import { IPortfolioSettlement } from './interfaces/IPortfolioSettlement.sol';
+import { Collateral } from '../Collateral.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { Zoltar } from '../Zoltar.sol';
@@ -55,6 +56,8 @@ interface IPortfolioReporterIdentity {
 contract SecurityPoolPortfolio is IPortfolioSettlement {
 	using SafeERC20Ops for IERC20;
 	struct OriginConfig {
+		IERC20 collateralToken;
+		uint256 minimumReportCollateral;
 		uint248 universeId;
 		uint256 securityMultiplierBps;
 		uint256 reportPriorityFeeAttoEthPerGas;
@@ -84,6 +87,8 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	uint248 public immutable originUniverseId;
 	ISecurityPoolQuestionAdmissionPolicy public immutable questionAdmissionPolicy;
 	uint256 public immutable statoblastSecurityMultiplierBps;
+	IERC20 public immutable collateralToken;
+	uint256 public immutable minimumReportCollateral;
 	uint256 public immutable initialReportPriorityFeeAttoEthPerGas;
 	uint256 public immutable maximumQuestionHorizonSeconds;
 	uint256 public immutable purchaseFeeBps;
@@ -136,6 +141,18 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		questionAdmissionPolicy = admission;
 		maximumQuestionHorizonSeconds = horizon;
 		statoblastSecurityMultiplierBps = origin.securityMultiplierBps;
+		address token = address(origin.collateralToken);
+		require(token.code.length != 0, 'Collateral token missing');
+		// Canonical REP must remain distinct from collateral in every branch's oracle and custody accounting.
+		require(token != address(zoltar.getRepToken(0)), 'REP cannot be portfolio collateral');
+		(bool hasUniverse, bytes memory encodedUniverse) = token.staticcall{gas: 30_000}(abi.encodeWithSignature('universeId()'));
+		if (hasUniverse && encodedUniverse.length == 32) {
+			uint256 tokenUniverse = abi.decode(encodedUniverse, (uint256));
+			require(tokenUniverse > type(uint248).max || token != address(zoltar.getRepToken(uint248(tokenUniverse))), 'REP cannot be portfolio collateral');
+		}
+		require(origin.minimumReportCollateral > 0 && origin.minimumReportCollateral <= type(uint128).max, 'Invalid report collateral floor');
+		collateralToken = origin.collateralToken;
+		minimumReportCollateral = origin.minimumReportCollateral;
 		initialReportPriorityFeeAttoEthPerGas = origin.reportPriorityFeeAttoEthPerGas;
 		purchaseFeeBps = config.purchaseFeeBps;
 		annualFeeBps = config.annualFeeBps;
@@ -261,7 +278,10 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		if (zoltar.getForkTime(child) == 0 && capitalLedger[child].isPriceValid()) services.activateFees(child);
 	}
 	function creditForkFees(uint248 universeId, uint256 amount) external onlyForkController {
-		if (amount != 0) capitalLedger[universeId].creditTimedFees{value: amount}();
+		if (amount != 0) {
+			collateralToken.safeApprove(address(capitalLedger[universeId]), amount);
+			capitalLedger[universeId].creditTimedFees(amount);
+		}
 	}
 	function addQuestion(uint256 questionId) public returns (ISecurityPool pool) {
 		require(setupStage == SETUP_COMPLETE, 'Portfolio setup incomplete');
@@ -305,9 +325,9 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 	function purchaseQuote(uint248 universeId, uint256 questionId, uint256 mintAttoEth) external view returns (uint256 fee, uint256 premium) {
 		return quoteHelper.purchaseQuote(universeId, questionId, mintAttoEth);
 	}
-	function createCompleteSet(uint248 universeId, uint256 questionId, uint256 mintAttoEth, address recipient, uint256 minimumShares) external payable nonReentrant returns (uint256 minted) {
+	function createCompleteSet(uint248 universeId, uint256 questionId, uint256 mintAttoEth, address recipient, uint256 minimumShares, uint256 maximumFee) external nonReentrant returns (uint256 minted) {
 		uint256 fee;
-		(minted, fee) = services.purchase{value: msg.value}(msg.sender, universeId, questionId, mintAttoEth, recipient, minimumShares);
+		(minted, fee) = services.purchase(msg.sender, universeId, questionId, mintAttoEth, recipient, minimumShares, maximumFee);
 		purchasingPool = address(0);
 		emit CompleteSetsFunded(universeId, questionId, recipient, mintAttoEth, minted, fee);
 	}
@@ -322,10 +342,10 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		capitalLedger[universeId].checkpoint();
 	}
 
-	function mintQuestionSettlement() external payable returns (uint256, uint256, uint256) {
+	function mintQuestionSettlement(uint256 cash) external returns (uint256, uint256, uint256) {
 		ISecurityPool pool = _pool(msg.sender);
 		require(entered && purchasingPool == msg.sender, 'No authorized portfolio purchase');
-		return services.mintQuestionSettlement{value: msg.value}(pool);
+		return services.mintQuestionSettlement(pool, cash);
 	}
 	function redeemQuestionSettlement(address recipient, uint256 burnedShares) external returns (uint256, uint256, uint256) {
 		return services.redeemQuestionSettlement(_pool(msg.sender), recipient, burnedShares);
@@ -366,7 +386,7 @@ contract SecurityPoolPortfolio is IPortfolioSettlement {
 		IERC20 token = IERC20(address(pool.repToken()));
 		SecurityPoolCapitalLedger capital = capitalLedger[pool.universeId()];
 		token.safeApprove(address(capital), amountAttoRep);
-		capital.fundVestedFees(amountAttoRep);
+		capital.fundVestedFees(0, amountAttoRep);
 	}
 	function registerReporterGame(address game) external {
 		IPortfolioReporterIdentity identity = IPortfolioReporterIdentity(game);

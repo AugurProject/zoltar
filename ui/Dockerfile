@@ -2,7 +2,7 @@
 # App Setup: Install dependencies and build app
 # ---------------------------------------------
 
-ARG BUN_VERSION=1.4.2
+ARG BUN_VERSION=1.4.4
 
 FROM oven/bun:${BUN_VERSION}-alpine AS common-builder
 
@@ -142,10 +142,10 @@ COPY --from=openoracle-builder --chown=bun:bun /source/ui/openoracle/dist/ /app/
 COPY --chown=bun:bun ./tooling/ui/dockerServe.mts /app/tooling/ui/dockerServe.mts
 COPY --chown=bun:bun ./tooling/ui/appIds.mts /app/tooling/ui/appIds.mts
 USER bun
-EXPOSE 4173
+EXPOSE 4143
 ENV UI_APP=openoracle
-ENV PORT=4173
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:4173/'); process.exit(response.ok ? 0 : 1)" ]
+ENV PORT=4143
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:4143/'); process.exit(response.ok ? 0 : 1)" ]
 CMD [ "bun", "/app/tooling/ui/dockerServe.mts" ]
 
 # Build Trading as an application leaf.
@@ -172,6 +172,7 @@ COPY --chown=bun:bun ./tooling/ui/appIds.mts /app/tooling/ui/appIds.mts
 USER bun
 EXPOSE 8080
 ENV UI_APP=trading
+ENV PORT=8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8080/'); process.exit(response.ok ? 0 : 1)" ]
 CMD [ "bun", "/app/tooling/ui/dockerServe.mts" ]
 

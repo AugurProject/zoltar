@@ -1,3 +1,6 @@
+import { getTokenApprovalResetReason, tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
+import { encodeFunctionData } from '@zoltar/core-shared/evm/ethereum'
+import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
 import { parseUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
@@ -12,7 +15,6 @@ import {
 	portfolioAuctionOpeningReason,
 	quotePortfolioAuctionBid,
 	type PortfolioAuctionBid,
-	type PortfolioAuctionSnapshot,
 	type PortfolioForkSnapshot,
 } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
@@ -23,6 +25,7 @@ import type { PortfolioTransaction } from '../../../protocol/securityPoolPortfol
 import type { PortfolioSharedForkParameters } from './usePortfolioSharedFork.js'
 import { portfolioAmountOrUndefined, portfolioUnsignedId } from '../lib/draft.js'
 import * as copy from '../../../copy/portfolioAuction.js'
+import * as collateralCopy from '../../../copy/collateral.js'
 
 export type PortfolioAuctionParameters = { fork: PortfolioForkSnapshot | undefined; bidder: Address | undefined; actions: PortfolioSharedForkParameters['actions']; openVault?: ((vault: Address, universeId: bigint) => void) | undefined }
 export function usePortfolioAuction({ fork, bidder, actions, openVault }: PortfolioAuctionParameters) {
@@ -32,7 +35,7 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 	const healthInput = useSignal('120')
 	const pageStart = useSignal(0n)
 	const version = useSignal(0)
-	const loaded = useSignal<{ identity: string; key: string; snapshot?: PortfolioAuctionSnapshot | undefined; error?: string } | undefined>(undefined)
+	const loaded = useSignal<{ identity: string; key: string; snapshot?: Awaited<ReturnType<typeof loadPortfolioBranchAuction>> | undefined; error?: string } | undefined>(undefined)
 	const identity = fork?.branch === undefined || bidder === undefined ? undefined : `${backend.id}:${fork.portfolio}:${bidder}:${fork.branch.universeId}`
 	const currentIdentity = useRef(identity)
 	currentIdentity.current = identity
@@ -92,9 +95,10 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 			bidReason = getErrorMessage(error, copy.quoteError)
 		}
 	}
+	if (bidReason === undefined && snapshot !== undefined && quote !== undefined && snapshot.collateralAllowance < quote.bidAttoEth) bidReason = collateralCopy.approvalRequired
 	const withdrawalReason = auctionReason ?? (auction?.refundAttoEth === 0n ? copy.noRefund : undefined)
 	const refundReason = (bid: PortfolioAuctionBid) => auctionReason ?? (bid.refundSettled ? copy.credited : undefined) ?? (!auction?.finalized && bid.earlyRefundAttoEth === 0n ? copy.bidMayStillWin : undefined)
-	const claimQuote = (selected: PortfolioAuctionSnapshot, bid: PortfolioAuctionBid) => quotePortfolioAuctionRefundClaim(selected, bid.id)
+	const claimQuote = (selected: Awaited<ReturnType<typeof loadPortfolioBranchAuction>>, bid: PortfolioAuctionBid) => quotePortfolioAuctionRefundClaim(selected, bid.id)
 	const claimReason = (bid: PortfolioAuctionBid) => {
 		if (auctionReason !== undefined || snapshot === undefined) return auctionReason ?? copy.loading
 		try {
@@ -111,7 +115,7 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 		return claimQuote(snapshot, bid).settles ? copy.claim : copy.withdraw
 	}
 	const activateReason = (bid: PortfolioAuctionBid) => auctionReason ?? (bid.fill === undefined || bid.fill.filledLots === 0n ? copy.managePending : undefined) ?? (bid.materialized ? copy.activated : undefined)
-	const run = (action: string, title: string, reason: string | undefined, build: (selected: PortfolioAuctionSnapshot) => PortfolioTransaction, verify: (latest: PortfolioAuctionSnapshot) => void = () => undefined, onConfirmed?: () => void) =>
+	const run = (action: string, title: string, reason: string | undefined, build: (selected: Awaited<ReturnType<typeof loadPortfolioBranchAuction>>) => PortfolioTransaction, verify: (latest: Awaited<ReturnType<typeof loadPortfolioBranchAuction>>) => void = () => undefined, onConfirmed?: () => void) =>
 		actions.runPortfolioAction(
 			action,
 			title,
@@ -145,13 +149,32 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 				}
 			},
 		)
-	const verifyQuote = (latest: PortfolioAuctionSnapshot) => {
+	const verifyQuote = (latest: Awaited<ReturnType<typeof loadPortfolioBranchAuction>>) => {
 		if (quote === undefined) throw new Error(copy.quoteError)
 		const fresh = quotePortfolioAuctionBid(latest, quote)
 		if (fresh.bidAttoEth !== quote.bidAttoEth || fresh.minimumPrincipalAttoRep !== quote.minimumPrincipalAttoRep) throw new Error(copy.fundingChanged)
 		return fresh
 	}
 	return {
+		approve: (amount: bigint) =>
+			run(
+				amount === 0n ? 'resetAuctionCollateral' : 'approveAuctionCollateral',
+				'Approve auction collateral',
+				fundingReason,
+				selected => {
+					if (selected.auction === undefined) throw new Error('Auction is unavailable. Refresh before approving collateral.')
+					return {
+						account: selected.bidder,
+						to: selected.collateralToken,
+						value: 0n,
+						data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [selected.auction.address, amount] }),
+					}
+				},
+				latest => {
+					const reason = getTokenApprovalResetReason(latest.collateralAllowance, amount, latest.collateral.symbol, tokenRequiresAllowanceReset(latest.collateralToken))
+					if (reason !== undefined) throw new Error(reason)
+				},
+			),
 		snapshot,
 		quote,
 		loading,
@@ -195,7 +218,7 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 				bidReason,
 				selected => {
 					if (quote === undefined) throw new Error(copy.quoteError)
-					return { ...buildPortfolioAuctionBidRequest(selected, quote), reviewDescription: copy.bidReview(quote.lots, quote.bidAttoEth, quote.minimumAttoRepPerLot) }
+					return { ...buildPortfolioAuctionBidRequest(selected, quote), reviewDescription: copy.bidReview(quote.lots, quote.bidAttoEth, quote.minimumAttoRepPerLot, selected.collateral.decimals, selected.collateral.symbol) }
 				},
 				latest => {
 					buildPortfolioAuctionBidRequest(latest, verifyQuote(latest))
@@ -216,7 +239,7 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 				`claimPortfolioAuction${bid.id}`,
 				claimTitle(bid),
 				claimReason(bid),
-				selected => ({ ...buildPortfolioAuctionRefundClaimRequest(selected, bid.id, selected.bidder), reviewDescription: copy.claimReview(claimQuote(selected, bid)) }),
+				selected => ({ ...buildPortfolioAuctionRefundClaimRequest(selected, bid.id, selected.bidder), reviewDescription: copy.claimReview(claimQuote(selected, bid), selected.collateral.decimals, selected.collateral.symbol) }),
 				latest => {
 					if (snapshot === undefined) throw new Error(copy.loading)
 					// A credit someone else made in the meantime is skipped on chain; the

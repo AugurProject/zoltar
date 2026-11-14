@@ -37,6 +37,7 @@ for (const method of ['sendTransaction', 'sendRawTransaction', 'writeContract'] 
 									reached.resolve()
 									await resume.promise
 								}
+								if (method === 'eth_call') return '0x'
 								if (method === 'eth_accounts') return [account]
 								if (method === 'eth_chainId') return SEPOLIA_NETWORK_PROFILE.chainIdHex
 								if (method === 'eth_sendTransaction' || method === 'eth_sendRawTransaction') {

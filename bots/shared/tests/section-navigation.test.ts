@@ -12,14 +12,11 @@ function clickLink(window: Window, href: string) {
 	link.dispatchEvent(new window.MouseEvent('click', { bubbles: true, button: 0, cancelable: true }))
 }
 
+const navigationHeader = '<header class="operator-shell"><nav class="section-nav"><a href="/overview">Overview</a><a href="/ecosystem">Ecosystem</a><a href="/settings">Settings</a></nav></header>'
+const navigationWithRecoverySection = `${navigationHeader}<section id="recovery">Recovery</section>`
+
 test('in-page navigation marks the active section link with aria-current="page"', () => {
-	const window = new Window({ url: 'http://127.0.0.1/settings' })
-	const globalNames = ['document', 'window', 'HTMLAnchorElement', 'HTMLElement', 'HTMLDetailsElement', 'MutationObserver', 'ResizeObserver'] as const
-	const previousGlobals = globalNames.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const)
-	for (const name of globalNames) Object.defineProperty(globalThis, name, { configurable: true, value: name === 'window' ? window : Reflect.get(window, name) })
-	try {
-		window.document.body.innerHTML = '<header class="operator-shell"><nav class="section-nav"><a href="/overview">Overview</a><a href="/ecosystem">Ecosystem</a><a href="/settings">Settings</a></nav></header>'
-		createSectionNavigation()
+	withNavigation(navigationHeader, window => {
 		expect(currentLinks(window)).toEqual([['/settings', 'page']])
 
 		clickLink(window, '/ecosystem')
@@ -29,22 +26,17 @@ test('in-page navigation marks the active section link with aria-current="page"'
 		clickLink(window, '/settings')
 		expect(window.document.body.dataset['page']).toBe('settings')
 		expect(currentLinks(window)).toEqual([['/settings', 'page']])
-	} finally {
-		for (const [name, descriptor] of previousGlobals) {
-			if (descriptor === undefined) Reflect.deleteProperty(globalThis, name)
-			else Object.defineProperty(globalThis, name, descriptor)
-		}
-		void window.happyDOM.close()
-	}
+	})
 })
 
-function withNavigation(run: (window: Window, navigation: ReturnType<typeof createSectionNavigation>) => void) {
+/** Renders `bodyHtml` in a happy-dom window installed as the page globals, creates the section navigation, and restores the globals afterwards. */
+function withNavigation(bodyHtml: string, run: (window: Window, navigation: ReturnType<typeof createSectionNavigation>) => void) {
 	const window = new Window({ url: 'http://127.0.0.1/settings' })
 	const globalNames = ['document', 'window', 'HTMLAnchorElement', 'HTMLElement', 'HTMLDetailsElement', 'MutationObserver', 'ResizeObserver'] as const
 	const previousGlobals = globalNames.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const)
 	for (const name of globalNames) Object.defineProperty(globalThis, name, { configurable: true, value: name === 'window' ? window : Reflect.get(window, name) })
 	try {
-		window.document.body.innerHTML = '<header class="operator-shell"><nav class="section-nav"><a href="/overview">Overview</a><a href="/ecosystem">Ecosystem</a><a href="/settings">Settings</a></nav></header><section id="recovery">Recovery</section>'
+		window.document.body.innerHTML = bodyHtml
 		run(window, createSectionNavigation())
 	} finally {
 		for (const [name, descriptor] of previousGlobals) {
@@ -56,7 +48,7 @@ function withNavigation(run: (window: Window, navigation: ReturnType<typeof crea
 }
 
 test('selecting the section that is already shown adds no history entry', () => {
-	withNavigation(window => {
+	withNavigation(navigationWithRecoverySection, window => {
 		const entries = window.history.length
 		clickLink(window, '/settings')
 		clickLink(window, '/settings')
@@ -68,7 +60,7 @@ test('selecting the section that is already shown adds no history entry', () => 
 })
 
 test('fragment scrolling clears the operator header only while it is sticky', () => {
-	withNavigation((window, navigation) => {
+	withNavigation(navigationWithRecoverySection, (window, navigation) => {
 		const shell = window.document.querySelector('.operator-shell')
 		const target = window.document.getElementById('recovery')
 		if (shell === null || target === null) throw new Error('Missing navigation fixture')

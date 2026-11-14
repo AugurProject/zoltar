@@ -38,6 +38,7 @@ import {
 	simulateTrackedPrivateBundle,
 	trackPrivateBundleReceiptStatuses,
 	transactionReceiptsWithQuorum,
+	waitForTargetBlock,
 } from '#execution/execution-orchestration'
 import { executionRecordForConfirmedPosition, recoverPendingEntryWithQuorum } from '#execution/position-lifecycle'
 import { confirmedGasExpenditures, currentBlockNumberWithQuorum, dateFromBlockTimestamp, durableTransactionIntent, hedgeExecutionFromLogs, pendingNonceWithQuorum, recoveredTransactionIntentMismatchWithQuorum } from '#execution/recovery-support'
@@ -456,13 +457,7 @@ export async function executeDispute(
 		}
 		const pending = tracked.map(transaction => ({ ...transaction, ...submission }))
 		for (const transaction of pending) track(trackedActivity(transaction, 'pending'))
-		while (true) {
-			await guardedExecutionStep(isPaused, async () => {})
-			const currentBlockNumber = await client.getBlockNumber()
-			await guardedExecutionStep(isPaused, async () => {})
-			if (currentBlockNumber >= targetBlockNumber) break
-			await Bun.sleep(Math.min(config.pollMilliseconds, 1_000))
-		}
+		await waitForTargetBlock(client, isPaused, config.pollMilliseconds, targetBlockNumber)
 		await guardedExecutionStep(isPaused, async () => {})
 		let recoveredEntry: Awaited<ReturnType<typeof recoverPendingEntryWithQuorum>>
 		try {

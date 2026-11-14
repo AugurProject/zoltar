@@ -78,6 +78,27 @@ function createMockInjectedEthereum(requestHandler: (parameters: MockRequestPara
 	}
 }
 
+/**
+ * Installs an injected wallet that exposes `accounts` on `chainId`, answers every gas and send request, and records each
+ * method it receives; returns those methods and a write client for the zero address.
+ */
+function installSendingWallet(accounts: readonly string[], chainId?: string) {
+	const requestCalls: string[] = []
+	ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
+		requestCalls.push(method)
+		if (method === 'eth_accounts') return accounts
+		if (method === 'eth_chainId' && chainId !== undefined) return chainId
+		if (method === 'eth_getTransactionCount') return '0x1'
+		if (method === 'eth_call') return '0x'
+		if (method === 'eth_estimateGas') return '0x5208'
+		if (method === 'eth_gasPrice') return '0x1'
+		if (method === 'eth_maxPriorityFeePerGas') return '0x1'
+		if (method === 'eth_sendTransaction' || method === 'eth_sendRawTransaction') return `0x${'1'.padStart(64, '0')}`
+		return '0x'
+	})
+	return { requestCalls, writeClient: createInjectedBackend().createWriteClient(zeroAddress) }
+}
+
 function createMockInjectedEthereumWithListeners() {
 	const callbacks: { accounts: unknown[]; chain: unknown[] } = { accounts: [], chain: [] }
 	const calls: { action: 'add' | 'remove'; event: string; handler: unknown }[] = []
@@ -281,6 +302,7 @@ describe('injected backend read transport', () => {
 			if (method === 'eth_accounts') return [zeroAddress]
 			if (method === 'eth_chainId') return '0xaa36a7'
 			if (method === 'eth_getTransactionCount') return '0x1'
+			if (method === 'eth_call') return '0x'
 			if (method === 'eth_estimateGas') return '0x5208'
 			if (method === 'eth_gasPrice') return '0x1'
 			if (method === 'eth_maxPriorityFeePerGas') return '0x1'
@@ -370,41 +392,14 @@ describe('injected backend read transport', () => {
 		}
 
 		test(`blocks ${operation.name} when the wallet disconnects before send`, async () => {
-			const requestCalls: string[] = []
-			ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
-				requestCalls.push(method)
-				if (method === 'eth_accounts') return []
-				if (method === 'eth_getTransactionCount') return '0x1'
-				if (method === 'eth_estimateGas') return '0x5208'
-				if (method === 'eth_gasPrice') return '0x1'
-				if (method === 'eth_maxPriorityFeePerGas') return '0x1'
-				if (method === 'eth_sendTransaction' || method === 'eth_sendRawTransaction') return `0x${'1'.padStart(64, '0')}`
-				return '0x'
-			})
-
-			const backend = createInjectedBackend()
-			const writeClient = backend.createWriteClient(zeroAddress)
+			const { requestCalls, writeClient } = installSendingWallet([])
 
 			await expect(operation.execute(writeClient)).rejects.toThrow('Wallet account is no longer connected.')
 			expect(requestCalls).toEqual(['eth_accounts'])
 		})
 
 		test(`blocks ${operation.name} when the wallet switches networks before send`, async () => {
-			const requestCalls: string[] = []
-			ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
-				requestCalls.push(method)
-				if (method === 'eth_accounts') return [zeroAddress]
-				if (method === 'eth_chainId') return '0x539'
-				if (method === 'eth_getTransactionCount') return '0x1'
-				if (method === 'eth_estimateGas') return '0x5208'
-				if (method === 'eth_gasPrice') return '0x1'
-				if (method === 'eth_maxPriorityFeePerGas') return '0x1'
-				if (method === 'eth_sendTransaction' || method === 'eth_sendRawTransaction') return `0x${'1'.padStart(64, '0')}`
-				return '0x'
-			})
-
-			const backend = createInjectedBackend()
-			const writeClient = backend.createWriteClient(zeroAddress)
+			const { requestCalls, writeClient } = installSendingWallet([zeroAddress], '0x539')
 
 			await expect(operation.execute(writeClient)).rejects.toThrow('Wallet network changed. Switch to Sepolia and try again.')
 			expect(requestCalls).toEqual(['eth_accounts', 'eth_chainId'])
@@ -500,6 +495,7 @@ for (const receiptStatus of ['0x1', '0x0']) {
 			if (method === 'eth_accounts') return [zeroAddress]
 			if (method === 'eth_chainId') return '0xaa36a7'
 			if (method === 'eth_getTransactionCount') return '0x1'
+			if (method === 'eth_call') return '0x'
 			if (method === 'eth_estimateGas') return '0x5208'
 			if (method === 'eth_gasPrice' || method === 'eth_maxPriorityFeePerGas') return '0x1'
 			if (method === 'eth_sendTransaction') {
@@ -575,3 +571,37 @@ for (const receiptStatus of ['0x1', '0x0']) {
 		expect(failed).toHaveBeenCalledTimes(receiptStatus === '0x0' ? 1 : 0)
 	})
 }
+
+for (const operation of guardedWriteOperationCases.filter(operation => operation.name !== 'sendRawTransaction')) {
+	test(`${operation.name} rejects a deterministic contract revert before asking the wallet to send`, async () => {
+		const sends = mock(() => `0x${'1'.repeat(64)}`)
+		ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
+			if (method === 'eth_accounts') return [zeroAddress]
+			if (method === 'eth_chainId') return '0xaa36a7'
+			if (method === 'eth_call') throw new Error('execution reverted: approval must first be reset')
+			if (method === 'eth_sendTransaction') return sends()
+			return '0x'
+		})
+		const backend = createInjectedBackend()
+		await expect(operation.execute(backend.createWriteClient(zeroAddress))).rejects.toThrow('approval must first be reset')
+		expect(sends).not.toHaveBeenCalled()
+	})
+}
+
+test('a wallet network change during preflight prevents the send request', async () => {
+	let chain = '0xaa36a7'
+	const sends = mock(() => `0x${'1'.repeat(64)}`)
+	const provider = createMockInjectedEthereum(async ({ method }) => {
+		if (method === 'eth_accounts') return [zeroAddress]
+		if (method === 'eth_chainId') return chain
+		if (method === 'eth_call') {
+			chain = '0x1'
+			return '0x'
+		}
+		if (method === 'eth_sendTransaction') return sends()
+		return '0x'
+	})
+	const client = createInjectedBackend({ provider }).createWriteClient(zeroAddress)
+	await expect(client.sendTransaction({ to: zeroAddress, gas: 21_000n })).rejects.toThrow('Ethereum mainnet is disabled.')
+	expect(sends).not.toHaveBeenCalled()
+})

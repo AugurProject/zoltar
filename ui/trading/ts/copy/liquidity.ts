@@ -14,9 +14,9 @@ export const lp = 'LP'
 /** The starting price is conditional on a valid resolution, like every displayed price, and the label says so. */
 export const conditionalYesPrice = 'Yes price if not Invalid'
 export const conditionalYesPriceValidation = 'Enter a Yes price above 0% and below 100%, with at most two decimal places.'
-export const additionGuidance = 'Your ETH mints equal Yes, No, and Invalid shares. The trading pool keeps the Yes and No shares it needs; Invalid shares and any leftover Yes or No shares go to your wallet.'
+export const additionGuidance = 'Your collateral mints equal Yes, No, and Invalid shares. The trading pool keeps the Yes and No shares it needs; Invalid shares and any leftover Yes or No shares go to your wallet.'
 
-const removalLead = 'Removing liquidity returns Yes and No shares to your wallet, not ETH.'
+const removalLead = 'Removing liquidity returns Yes and No shares to your wallet, not collateral.'
 
 /** Removal pays out shares, not ETH, so the guidance names the next step that turns them into ETH. `path` is undefined while the market still trades. */
 export function formatRemovalGuidance(path: MarketSettlementPath | undefined) {
@@ -37,10 +37,10 @@ export const sharesDeposited = 'Yes / No deposited'
 export const liquidityTransaction = 'Liquidity transaction'
 export const transactionFailed = 'Liquidity transaction failed.'
 export const closedToAdditions = 'Trading has ended for this market, so it no longer accepts new liquidity. Removing liquidity is still available.'
-export { eth, percent } from './outcomes.js'
+export { percent } from './outcomes.js'
 
-export function approximateRemovalValue(amount: string) {
-	return `Worth about ${amount} ETH at the current trading pool price, if the question resolves Yes or No.`
+export function approximateRemovalValue(amount: string, appendEth = true) {
+	return `Worth about ${amount}${appendEth ? ' ETH' : ''} at the current trading pool price, if the question resolves Yes or No.`
 }
 
 export const youProvide = 'You provide'

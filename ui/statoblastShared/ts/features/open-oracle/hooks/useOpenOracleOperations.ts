@@ -1,20 +1,13 @@
+import { useOpenOracleLiveReport } from './useOpenOracleLiveReport.js'
+import { createReportWrapShortfall, validateCreateReportApproval } from '../lib/createFunding.js'
+import { getTokenApprovalResetReason, tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { useSignal } from '@preact/signals'
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useRef } from 'preact/hooks'
 import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
 import { getOpenOracleAddress } from '../../../protocol/deploymentHelpers.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
-import {
-	formatOpenOracleDisputeWriteErrorMessage,
-	formatOpenOracleSettleWriteErrorMessage,
-	getOpenOracleCreateGuardMessage,
-	getOpenOracleCreateValidation,
-	getOpenOracleLifecycleBoundaryOffsets,
-	getOpenOracleLiveReportDetails,
-	getOpenOracleSelectedReportActionMode,
-	getOpenOracleSettleAvailability,
-	parseOpenOracleCreateFormSubmission,
-} from '../lib/openOracle.js'
+import { formatOpenOracleDisputeWriteErrorMessage, formatOpenOracleSettleWriteErrorMessage, getOpenOracleCreateGuardMessage, getOpenOracleCreateValidation, getOpenOracleSelectedReportActionMode, getOpenOracleSettleAvailability, parseOpenOracleCreateFormSubmission } from '../lib/openOracle.js'
 import type { OpenOracleCreateContractFieldErrors, OpenOracleDisputeSubmissionDetails } from '../lib/openOracle.js'
 import { deriveOpenOracleDisputeSubmissionDetails } from '../lib/openOracleDispute.js'
 import { parseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
@@ -38,8 +31,6 @@ import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.
 
 export type { UseOpenOracleOperationsDependencies } from './openOracleOperationDependencies.js'
 
-const MAX_TIMEOUT_MS = 2_147_483_647
-
 function useOpenOracleOperationsWithDependencies<TWriteClient>(
 	{ accountAddress, enabled, onReportSettled, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState, walletEthBalanceAttoEth }: UseOpenOracleOperationsParameters,
 	dependencies: UseOpenOracleOperationsDependencies<TWriteClient>,
@@ -49,6 +40,8 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 	const openOracleCreateFieldErrors = useSignal<OpenOracleCreateContractFieldErrors>({})
 	const openOracleError = useSignal<string | undefined>(undefined)
 	const openOracleActiveAction = useSignal<OpenOracleActionResult['action'] | undefined>(undefined)
+	// An allowance reset runs as the token's approval action, so the screen needs this to tell which of the two buttons is pending.
+	const openOracleApprovalResetting = useSignal(false)
 	type OpenOracleWithdrawableBalanceKey = 'ethAttoEth' | 'token1' | 'token2'
 	const openOracleActiveWithdrawalBalance = useSignal<OpenOracleWithdrawableBalanceKey | undefined>(undefined)
 	const openOracleFeedback = useSignal<ActionFeedback<OpenOracleActionResult['action']> | undefined>(undefined)
@@ -145,12 +138,14 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 		action: (walletAddress: Address, context: WriteActionContext) => Promise<OpenOracleActionResult>,
 		errorFallback: string,
 		options?: {
+			approvalReset?: boolean
 			formatErrorMessage?: (error: unknown, fallbackMessage: string) => string
 			refreshTokenAccessOnSuccess?: boolean
 		},
 	) => {
 		if (openOracleActiveAction.value !== undefined || openOracleWithdrawalBalanceChecking.value) return
 		openOracleActiveAction.value = actionName
+		openOracleApprovalResetting.value = options?.approvalReset === true
 		openOracleResult.value = undefined
 		const actionReportIdInput = currentSelectedReportIdInput
 		const reportDetailsSnapshot = openOracleReportDetails.value
@@ -231,6 +226,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			)
 		} finally {
 			openOracleActiveAction.value = undefined
+			openOracleApprovalResetting.value = false
 		}
 	}
 
@@ -268,12 +264,42 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 						requirement: token === 'token1' ? disputeSubmission.token1Approval : disputeSubmission.token2Approval,
 						tokenLabel,
 					})
+					const approvalRequirement = token === 'token1' ? disputeSubmission.token1Approval : disputeSubmission.token2Approval
+					const resetReason = getTokenApprovalResetReason(approvalRequirement.approvedAmount, approvalAmount, tokenLabel, tokenRequiresAllowanceReset(token === 'token1' ? reportDetails.token1 : reportDetails.token2))
+					if (resetReason !== undefined) throw new Error(resetReason)
 					return await dependencies.approveErc20(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), token === 'token1' ? reportDetails.token1 : reportDetails.token2, getOpenOracleAddress(), approvalAmount, action)
 				},
 				`Failed to approve ${tokenLabel}`,
-				{ refreshTokenAccessOnSuccess: true },
+				{ approvalReset: amount === 0n, refreshTokenAccessOnSuccess: true },
 			)
 		})()
+
+	const approveCreateToken = async (token: 'token1' | 'token2', amount: bigint) => {
+		const tokenAddress = parseAddressInput(openOracleCreateForm.value[token === 'token1' ? 'token1Address' : 'token2Address'], 'Token address')
+		await runOracleAction(
+			token === 'token1' ? 'approveToken1' : 'approveToken2',
+			async (walletAddress, context) => {
+				const client = dependencies.createConnectedReadClient()
+				await validateCreateReportApproval(client, tokenAddress, walletAddress, amount)
+				if (parseAddressInput(openOracleCreateForm.value[token === 'token1' ? 'token1Address' : 'token2Address'], 'Token address') !== tokenAddress) throw new Error('Report token changed. Review again.')
+				return await dependencies.approveErc20(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), tokenAddress, getOpenOracleAddress(), amount, token === 'token1' ? 'approveToken1' : 'approveToken2')
+			},
+			'Token approval failed.',
+			{ approvalReset: amount === 0n },
+		)
+	}
+	const wrapCreateWeth = async () =>
+		await runOracleAction(
+			'wrapWeth',
+			async (walletAddress, context) => {
+				const form = openOracleCreateForm.value
+				const client = dependencies.createConnectedReadClient()
+				const shortfall = await createReportWrapShortfall(client, walletAddress, form)
+				if (openOracleCreateForm.value !== form) throw new Error('Report funding changed. Review again.')
+				return await dependencies.wrapWeth(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), shortfall)
+			},
+			'ETH wrap failed.',
+		)
 
 	const approveToken1 = async (amount?: bigint) => await approveDisputeToken('token1', amount)
 
@@ -496,27 +522,13 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 		void refreshOpenOracleWithdrawableBalances(openOracleReportDetails.value)
 	}, [accountAddress, enabled, openOracleReportDetails.value?.reportId, openOracleReportDetails.value?.token1, openOracleReportDetails.value?.token2, openOracleReportDetails.value?.exactToken1Report, openOracleReportDetails.value?.isDistributed, openOracleReportDetails.value?.settlementTimestamp])
 
-	// Dispute and settlement availability follow a wall clock anchored at the report read, re-rendering at each lifecycle boundary.
-	const loadedReportClock = useRef<{ details: OpenOracleReportDetails | undefined; loadedAtMs: number }>({ details: undefined, loadedAtMs: Date.now() })
-	if (loadedReportClock.current.details !== openOracleReportDetails.value) loadedReportClock.current = { details: openOracleReportDetails.value, loadedAtMs: Date.now() }
-	const [lifecycleClockTick, setLifecycleClockTick] = useState(0)
-	useEffect(() => {
-		const { details, loadedAtMs } = loadedReportClock.current
-		if (details === undefined) return
-		const now = Date.now()
-		const nextBoundaryAtMs = getOpenOracleLifecycleBoundaryOffsets(details)
-			.map(offset => loadedAtMs + Number(offset) * 1000)
-			.find(boundaryAtMs => boundaryAtMs > now)
-		if (nextBoundaryAtMs === undefined) return
-		const timeout = setTimeout(() => setLifecycleClockTick(tick => tick + 1), Math.min(nextBoundaryAtMs - now + 50, MAX_TIMEOUT_MS))
-		return () => clearTimeout(timeout)
-	}, [openOracleReportDetails.value, lifecycleClockTick])
-	const liveOpenOracleReportDetails = openOracleReportDetails.value === undefined ? undefined : getOpenOracleLiveReportDetails(openOracleReportDetails.value, BigInt(Math.floor((Date.now() - loadedReportClock.current.loadedAtMs) / 1000)))
+	const liveOpenOracleReportDetails = useOpenOracleLiveReport(openOracleReportDetails.value)
 	const openOracleDisputeSubmission = liveOpenOracleReportDetails === undefined ? undefined : getDisputeSubmission(liveOpenOracleReportDetails)
 	const openOracleSectionState = {
 		loadingOpenOracleCreate: loadingOpenOracleCreate.value,
 		openOracleActiveAction: openOracleActiveAction.value,
 		openOracleActiveWithdrawalBalance: openOracleActiveWithdrawalBalance.value,
+		openOracleApprovalResetting: openOracleApprovalResetting.value,
 		openOracleCreateFieldErrors: openOracleCreateFieldErrors.value,
 		openOracleCreateForm: openOracleCreateForm.value,
 		openOracleDisputeSubmission,
@@ -544,6 +556,8 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 	}
 
 	return {
+		approveCreateToken,
+		wrapCreateWeth,
 		approveToken1,
 		approveToken2,
 		cancelWithdrawalBalanceCheck,

@@ -17,6 +17,7 @@ export function relevantTokenSpenders(deployments: EcosystemDeployments, pools: 
 	for (const pool of pools) {
 		if (!sameAddress(token, deployments.weth) && !sameAddress(token, pool.repToken)) continue
 		spenders.set(pool.coordinator.toLowerCase(), pool.coordinator)
+		if (sameAddress(token, deployments.weth) && pool.purchaseQuote !== undefined) spenders.set(pool.purchaseQuote.spender.toLowerCase(), pool.purchaseQuote.spender)
 		if (sameAddress(token, pool.repToken)) {
 			spenders.set(pool.address.toLowerCase(), pool.address)
 			if (pool.escalationGame !== zeroAddress) spenders.set(pool.escalationGame.toLowerCase(), pool.escalationGame)

@@ -6,6 +6,22 @@ import { deployContract } from '../../../deployContract'
 import { type WriteClient, writeContractAndWait } from '../clients'
 import { applyLibraries, getInfraContractAddresses, getSecurityPoolAddresses } from './deployStatoblast'
 
+/** The protocol's portfolio module deployers, as `buildPortfolioDeploymentRequest` expects them. */
+export function getTestPortfolioDeployers() {
+	const infrastructure = getInfraContractAddresses()
+	return {
+		capital: infrastructure.securityPoolCapitalLedgerDeployer,
+		commitments: infrastructure.securityPoolCommitmentIndexDeployer,
+		fees: infrastructure.securityPoolCapitalFeeStreamsDeployer,
+		books: infrastructure.securityPoolSettlementBookDeployer,
+		settlement: infrastructure.securityPoolPortfolioSettlementDeployer,
+		reporters: infrastructure.securityPoolReporterLedgerDeployer,
+		forks: infrastructure.securityPoolPortfolioForkCoordinatorDeployer,
+		auctions: infrastructure.securityPoolPortfolioAuctionDeployer,
+		services: infrastructure.securityPoolPortfolioServicesDeployer,
+	}
+}
+
 /** A fully prepared native portfolio with one registered question and no owner capital. */
 export async function deployTestPortfolio(client: WriteClient, universeId: bigint, questionId: bigint, securityMultiplierBps: bigint) {
 	const infrastructure = getInfraContractAddresses()
@@ -14,21 +30,11 @@ export async function deployTestPortfolio(client: WriteClient, universeId: bigin
 	const request = buildPortfolioDeploymentRequest({
 		owner: client.account.address,
 		factory: infrastructure.securityPoolFactory,
-		origin: { universeId, securityMultiplierBps, reportPriorityFeeAttoEthPerGas },
+		origin: { collateralToken: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', minimumReportCollateral: 10n ** 16n, universeId, securityMultiplierBps, reportPriorityFeeAttoEthPerGas },
 		maximumQuestionHorizonSeconds: 20n * 365n * 86_400n,
 		questionAdmissionPolicy,
 		economics: { purchaseFeeBps: 100n, annualFeeBps: 1_000n, minimumPurchaseFeeAttoEth: 10n ** 15n, minimumCommitmentAttoEth: 10n ** 16n, minimumOutcomeRate: 1_000n, rewardVestingSeconds: 86_400n },
-		deployers: {
-			capital: infrastructure.securityPoolCapitalLedgerDeployer,
-			commitments: infrastructure.securityPoolCommitmentIndexDeployer,
-			fees: infrastructure.securityPoolCapitalFeeStreamsDeployer,
-			books: infrastructure.securityPoolSettlementBookDeployer,
-			settlement: infrastructure.securityPoolPortfolioSettlementDeployer,
-			reporters: infrastructure.securityPoolReporterLedgerDeployer,
-			forks: infrastructure.securityPoolPortfolioForkCoordinatorDeployer,
-			auctions: infrastructure.securityPoolPortfolioAuctionDeployer,
-			services: infrastructure.securityPoolPortfolioServicesDeployer,
-		},
+		deployers: getTestPortfolioDeployers(),
 		artifact: { abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object) },
 	})
 	const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ ...request, gas: 16_777_216n }) })

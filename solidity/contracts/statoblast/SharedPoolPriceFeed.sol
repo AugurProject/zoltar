@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { Collateral } from '../Collateral.sol';
+import { ICollateralConfig } from './interfaces/ICollateralConfig.sol';
+import { IERC20 } from '../IERC20.sol';
 import { SecurityPoolCapitalLedger } from './SecurityPoolCapitalLedger.sol';
 import { IReportOperations } from './interfaces/IReportOperations.sol';
 import { IWeth9 } from './interfaces/IWeth9.sol';
@@ -17,12 +20,8 @@ interface ISharedPoolPriceCoordinator {
 	function reputationToken() external view returns (ReputationToken);
 	function openOracle() external view returns (OpenOracle);
 	function weth() external view returns (IWeth9);
-	function gasConsumedOpenOracleReportPrice() external view returns (uint256);
-	function gasConsumedSettlement() external view returns (uint32);
-	function gasUnitsForOneDispute() external view returns (uint256);
 	function initialReportPriorityFeeAttoEthPerGas() external view returns (uint256);
 	function targetPriceErrorForDispute() external view returns (uint256);
-	function openOracleSecurityMultiplierBps() external view returns (uint256);
 	function settlementTime() external view returns (uint48);
 	function disputeDelay() external view returns (uint24);
 	function protocolFee() external view returns (uint24);
@@ -41,7 +40,7 @@ interface ISharedPoolPortfolioPriceCheckpoint {
 	function isPriceReportingOpen(uint248 universeId) external view returns (bool);
 }
 
-/// @notice One REP/ETH report and freshness clock for all question ledgers in one pool and universe.
+/// @notice One REP/collateral report and freshness clock for all question ledgers in one pool and universe.
 /// @dev Report sizing reads live aggregate capital, including direct authorizations
 /// that do not touch any question. No question or owner enumeration is required.
 contract SharedPoolPriceFeed {
@@ -55,13 +54,11 @@ contract SharedPoolPriceFeed {
 	address public immutable portfolio;
 	ReputationToken public immutable reputationToken;
 	OpenOracle public immutable openOracle;
+	IERC20 public immutable collateralToken;
+	uint256 public immutable minimumReportCollateral;
 	IWeth9 public immutable weth;
-	uint256 public immutable gasConsumedOpenOracleReportPrice;
-	uint32 public immutable gasConsumedSettlement;
-	uint256 public immutable gasUnitsForOneDispute;
 	uint256 public immutable initialReportPriorityFeeAttoEthPerGas;
 	uint256 public immutable targetPriceErrorForDispute;
-	uint256 public immutable openOracleSecurityMultiplierBps;
 	uint48 public immutable settlementTime;
 	uint24 public immutable disputeDelay;
 	uint24 public immutable protocolFee;
@@ -140,13 +137,11 @@ contract SharedPoolPriceFeed {
 		reputationToken = _reputationToken;
 		openOracle = config.openOracle();
 		weth = config.weth();
-		gasConsumedOpenOracleReportPrice = config.gasConsumedOpenOracleReportPrice();
-		gasConsumedSettlement = config.gasConsumedSettlement();
-		gasUnitsForOneDispute = config.gasUnitsForOneDispute();
+		collateralToken = ICollateralConfig(_portfolio).collateralToken();
+		minimumReportCollateral = ICollateralConfig(_portfolio).minimumReportCollateral();
 		initialReportPriorityFeeAttoEthPerGas = config.initialReportPriorityFeeAttoEthPerGas();
 		targetPriceErrorForDispute = config.targetPriceErrorForDispute();
 		require(targetPriceErrorForDispute < OPEN_ORACLE_PERCENTAGE_PRECISION, 'Oracle uncertainty reaches one hundred percent');
-		openOracleSecurityMultiplierBps = config.openOracleSecurityMultiplierBps();
 		settlementTime = config.settlementTime();
 		disputeDelay = config.disputeDelay();
 		protocolFee = config.protocolFee();
@@ -200,13 +195,13 @@ contract SharedPoolPriceFeed {
 		require(aggregateExposureAttoEth() <= acceptedExposureLimitAttoEth, 'Accepted report exposure exceeded');
 	}
 
-	/// @notice Conservative upper REP/ETH bound for entry, withdrawals and capacity.
+	/// @notice Conservative upper REP/collateral bound for entry, withdrawals and capacity.
 	function conservativePrice() external view returns (uint256) {
 		return
 			Math.mulDiv(lastPrice, OPEN_ORACLE_PERCENTAGE_PRECISION, OPEN_ORACLE_PERCENTAGE_PRECISION - targetPriceErrorForDispute, Math.Rounding.Ceil);
 	}
 
-	/// @notice Lower REP/ETH bound for externally rewarded adverse actions.
+	/// @notice Lower REP/collateral bound for externally rewarded adverse actions.
 	function liquidationPrice() external view returns (uint256) {
 		return
 			Math.mulDiv(lastPrice, OPEN_ORACLE_PERCENTAGE_PRECISION, OPEN_ORACLE_PERCENTAGE_PRECISION + targetPriceErrorForDispute);
@@ -214,17 +209,11 @@ contract SharedPoolPriceFeed {
 
 	/// @notice Report collateral covers aggregate standing commitment or funded demand.
 	function minimumToken1ReportAttoEth() public view returns (uint256) {
-		uint256 priorityFeeReportAttoEth = _minimumToken1ReportAttoEthForGasPrice(initialReportPriorityFeeAttoEthPerGas);
-		uint256 baseFeeReportAttoEth = _minimumToken1ReportAttoEthForGasPrice(block.basefee);
-		uint256 exposureReportAttoEth = Math.ceilDiv(aggregateExposureAttoEth(), OPEN_INTEREST_DIVIDER);
-		uint256 dynamicReportAttoEth =
-			baseFeeReportAttoEth > exposureReportAttoEth ? baseFeeReportAttoEth : exposureReportAttoEth;
-		uint256 minimumReportAttoEth = priorityFeeReportAttoEth + dynamicReportAttoEth;
-		return minimumReportAttoEth > 0 ? minimumReportAttoEth : 1;
+		return minimumReportCollateral + Math.ceilDiv(aggregateExposureAttoEth(), OPEN_INTEREST_DIVIDER);
 	}
 
 	/// @notice Auction inventory needs a challenged REP-side budget as well as
-	/// the ETH liability budget. Neither budget may be inferred from the other
+	/// the collateral liability budget. Neither budget may be inferred from the other
 	/// using an unchallenged proposed price.
 	function minimumToken2ReportAttoRep() public view returns (uint256) {
 		return
@@ -234,14 +223,6 @@ contract SharedPoolPriceFeed {
 		require(proposedRepPerEthPrice != 0, 'Initial oracle price zero');
 		return
 			Math.max(minimumToken1ReportAttoEth(), Math.mulDiv(minimumToken2ReportAttoRep(), SecurityPoolUtils.PRICE_PRECISION, proposedRepPerEthPrice, Math.Rounding.Ceil));
-	}
-
-	function _minimumToken1ReportAttoEthForGasPrice(uint256 gasPriceAttoEthPerGas) private view returns (uint256) {
-		if (gasPriceAttoEthPerGas == 0) return 0;
-		uint256 disputeGasCost = Math.mulDiv(gasPriceAttoEthPerGas, gasUnitsForOneDispute, 1);
-		uint256 correctionProfitNumerator = targetPriceErrorForDispute - uint256(protocolFee) - uint256(feePercentage);
-		return
-			Math.mulDiv(disputeGasCost, openOracleSecurityMultiplierBps * (OPEN_ORACLE_PERCENTAGE_PRECISION + targetPriceErrorForDispute), SecurityPoolUtils.BPS_DENOMINATOR * correctionProfitNumerator, Math.Rounding.Ceil);
 	}
 
 	function getSettlementCallbackGasLimit() public pure returns (uint32) {
@@ -265,7 +246,7 @@ contract SharedPoolPriceFeed {
 	}
 
 	/// @notice Fund a shared observation without first deploying a child question.
-	/// The caller approves this feed for WETH and the branch's REP; only that caller
+	/// The caller approves this feed for the configured collateral and the branch's REP; only that caller
 	/// receives the candidate's returned funding. No pool collateral funds reports.
 	function requestPortfolioPrice(uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) external payable returns (uint256 reportId) {
 		return
@@ -333,22 +314,20 @@ contract SharedPoolPriceFeed {
 		require(quote.repAttoRep <= type(uint128).max, 'REP report exceeds uint128');
 		require(quote.haltAttoEth <= type(uint128).max, 'Oracle escalation halt amount exceeds uint128 maximum');
 		require(bountyAttoEth <= type(uint96).max, 'Oracle settler reward exceeds uint96 maximum');
-		quote.exposureLimitAttoEth =
-			(quote.wethAttoEth - _minimumToken1ReportAttoEthForGasPrice(initialReportPriorityFeeAttoEthPerGas)) *
-			OPEN_INTEREST_DIVIDER;
+		quote.exposureLimitAttoEth = (quote.wethAttoEth - minimumReportCollateral) * OPEN_INTEREST_DIVIDER;
 		quote.maxSettlementBaseFeeAttoEthPerGas = Math.mulDiv(block.basefee + initialReportPriorityFeeAttoEthPerGas, maxSettlementBaseFeeMultiplierBps, SecurityPoolUtils.BPS_DENOMINATOR);
 	}
 
 	function createReportEscrow(address payer, address sponsor, uint256 wethAmount, uint256 repAmount, uint256 haltAmount, uint256 bounty, uint32 callbackGasLimit) external returns (uint256 id, SharedPoolReportEscrow escrow) {
 		require(msg.sender == address(this), 'Only report creation');
-		escrow = new SharedPoolReportEscrow(sponsor, openOracle, weth, reputationToken);
-		require(weth.transferFrom(payer, address(escrow), wethAmount), 'WETH transfer for initial report failed');
+		escrow = new SharedPoolReportEscrow(sponsor, openOracle, collateralToken, reputationToken);
+		Collateral.pull(collateralToken, payer, address(escrow), wethAmount);
 		require(reputationToken.transferFrom(payer, address(escrow), repAmount), 'REP transfer for initial report failed');
 		OpenOracle.OracleGame memory parameters;
 		parameters.currentAmount1 = uint128(wethAmount);
 		parameters.currentAmount2 = uint128(repAmount);
 		parameters.currentReporter = address(escrow);
-		parameters.token1 = address(weth);
+		parameters.token1 = address(collateralToken);
 		parameters.settlementTime = settlementTime;
 		parameters.escalationHalt = uint128(haltAmount);
 		parameters.protocolFeeRecipient = protocolFeeRecipient;
@@ -381,9 +360,7 @@ contract SharedPoolPriceFeed {
 			require(priceTimestamp + validForSeconds <= type(uint48).max, 'Price validity clock exhausted');
 			// Final report collateral may increase during disputes. Only its actually
 			// challenged final amount grants capacity, never a pending candidate.
-			acceptedExposureLimitAttoEth =
-				(amount1 - _minimumToken1ReportAttoEthForGasPrice(initialReportPriorityFeeAttoEthPerGas)) *
-				OPEN_INTEREST_DIVIDER;
+			acceptedExposureLimitAttoEth = (amount1 - minimumReportCollateral) * OPEN_INTEREST_DIVIDER;
 			acceptedRepExposureLimitAttoRep = amount2 * OPEN_INTEREST_DIVIDER;
 			acceptedEpoch++;
 			lastSettlementTimestamp = priceTimestamp;
@@ -471,16 +448,13 @@ contract SharedPoolPriceFeed {
 		if (block.basefee > maxSettlementBaseFeeAttoEthPerGas) return ('Base fee too high', 0);
 		(, , , uint48 finalReportTimestamp, , , , , , , , , uint24 numReports, , , , , , , ) = openOracle.storedGame(reportId);
 		if (numReports == type(uint24).max) return ('Counter saturated', 0);
-		if (numReports == 0 || !_isFinalReportProfitable(reportId, numReports, amount1))
-			return ('Report uneconomic', 0);
+		if (numReports == 0 || !_isFinalReportProfitable(amount1)) return ('Report uneconomic', 0);
 		if (amount2 < minimumToken2ReportAttoRep()) return ('Report REP inventory budget insufficient', 0);
 		priceTimestamp = uint256(finalReportTimestamp) + settlementTime;
 		if (priceTimestamp < lastSettlementTimestamp) return ('Report timestamp not newer', 0);
 		if (
 			priceTimestamp == lastSettlementTimestamp &&
-			(amount1 - _minimumToken1ReportAttoEthForGasPrice(initialReportPriorityFeeAttoEthPerGas)) *
-				OPEN_INTEREST_DIVIDER <=
-				acceptedExposureLimitAttoEth &&
+			(amount1 - minimumReportCollateral) * OPEN_INTEREST_DIVIDER <= acceptedExposureLimitAttoEth &&
 			amount2 * OPEN_INTEREST_DIVIDER <= acceptedRepExposureLimitAttoRep
 		) return ('Report adds no newer observation or capacity', 0);
 		if (!_isFreshPriceTimestamp(priceTimestamp)) return ('Report stale', 0);
@@ -521,23 +495,19 @@ contract SharedPoolPriceFeed {
 		require(block.basefee <= candidate.maxSettlementBaseFee, 'Report base fee limit exceeded');
 		require(numReports != 0 && numReports != type(uint24).max, 'Report counter invalid');
 		require(_isFreshPriceTimestamp(uint256(reportedAt) + settlementTime), 'Report candidate stale');
-		require(_isProfitableForExposure(reportId, numReports, amount1, newExposure), 'Report exposure insufficient');
+		require(_isProfitableForExposure(amount1, newExposure), 'Report exposure insufficient');
 		uint256 price = Math.mulDiv(amount2, SecurityPoolUtils.PRICE_PRECISION, amount1);
 		require(price != 0, 'Oracle price is zero');
 		conservativeReportPrice = Math.mulDiv(price, OPEN_ORACLE_PERCENTAGE_PRECISION, OPEN_ORACLE_PERCENTAGE_PRECISION - targetPriceErrorForDispute, Math.Rounding.Ceil);
 		return (conservativeReportPrice, acceptedEpoch);
 	}
 
-	function _isFinalReportProfitable(uint256 reportId, uint24 numReports, uint256 finalAmount1) private view returns (bool) {
-		return _isProfitableForExposure(reportId, numReports, finalAmount1, aggregateExposureAttoEth());
+	function _isFinalReportProfitable(uint256 finalAmount1) private view returns (bool) {
+		return _isProfitableForExposure(finalAmount1, aggregateExposureAttoEth());
 	}
 
-	function _isProfitableForExposure(uint256 reportId, uint24 numReports, uint256 finalAmount1, uint256 exposure) private view returns (bool) {
-		(, , uint128 finalReportBaseFee, ) = openOracle.disputeHistory(reportId, numReports - 1);
-		uint256 minimumProfitableReportAttoEth =
-			_minimumToken1ReportAttoEthForGasPrice(initialReportPriorityFeeAttoEthPerGas) +
-				Math.max(_minimumToken1ReportAttoEthForGasPrice(uint256(finalReportBaseFee)), Math.ceilDiv(exposure, OPEN_INTEREST_DIVIDER));
-		return finalAmount1 >= minimumProfitableReportAttoEth;
+	function _isProfitableForExposure(uint256 finalAmount1, uint256 exposure) private view returns (bool) {
+		return finalAmount1 >= minimumReportCollateral + Math.ceilDiv(exposure, OPEN_INTEREST_DIVIDER);
 	}
 
 	function isPriceValid() public view returns (bool) {

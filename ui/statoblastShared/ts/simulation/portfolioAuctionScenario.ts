@@ -22,7 +22,12 @@ import { Zoltar_Zoltar as zoltarArtifact } from '@zoltar/ui-core-shared/contract
 import { advanceSimulationTime, getSimulationChainTimestamp } from '@zoltar/ui-core-shared/simulation/clock.js'
 import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 import { createRangeProgressReporter, mintSimulationGenesisRep, requireQaAccount } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
-import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact } from '../contractArtifact.js'
+import {
+	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
+	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
+	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
+	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
+} from '../contractArtifact.js'
 import { getInfraContractAddresses } from '../protocol/deploymentHelpers.js'
 import { FORK_MIGRATION_DURATION_SECONDS } from '../protocol/forkMigrationTiming.js'
 import { portfolioReadClient, sendPortfolioTransaction as sendUnlabelled, type PortfolioTransaction } from '../protocol/securityPoolPortfolio.js'
@@ -111,6 +116,8 @@ export async function seedPortfolioAuctionScenario(parameters: ScenarioSeedParam
 	await sendPortfolioTransaction(ownerClient, { account: owner, to: zoltar, value: 0n, data: encodeFunctionData({ abi: zoltarArtifact.abi, functionName: 'forkUniverse', args: [0n, questionId] }) }, 'Fork the origin universe')
 	await reportStep('Forked the origin universe on the first question')
 	const controller = await readClient.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'forkController' })
+	// Directly forking Zoltar bypasses the normal pool fork transaction's freeze step.
+	await sendPortfolioTransaction(ownerClient, { account: owner, to: controller, value: 0n, data: encodeFunctionData({ abi: forkArtifact.abi, functionName: 'freeze', args: [0n] }) }, 'Freeze the source portfolio')
 	await sendPortfolioTransaction(ownerClient, { ...buildPortfolioForkPreparationRequest({ owner, controller, universeId: 0n, outcomeIndex: FORK_OUTCOME }), gas: 16_777_216n }, 'Prepare the Yes branch capital')
 	await reportStep('Prepared the Yes branch capital')
 	await sendPortfolioTransaction(ownerClient, { ...buildPortfolioForkChoiceRequest({ owner, controller, universeId: 0n, outcomeIndex: FORK_OUTCOME }), gas: 16_777_216n }, 'Choose the Yes branch')
@@ -150,6 +157,13 @@ export async function seedPortfolioAuctionScenario(parameters: ScenarioSeedParam
 	const auction = snapshot.auction
 	if (auction === undefined) throw new Error('Expected the opened branch collateral repair auction')
 	const minimum = auction.minimumCollateralAttoRepPerLot
+	for (const [account, client] of [
+		[owner, ownerClient],
+		[rival, rivalClient],
+	] as const)
+		await sendPortfolioTransaction(client, { account, to: profile.wethAddress, value: 0n, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [auction.address, (1n << 256n) - 1n] }) }, 'Approve simulated auction collateral')
+	snapshot = await auctionFor(owner)
+
 	await sendPortfolioTransaction(ownerClient, buildPortfolioAuctionBidRequest(snapshot, { lots: 2n, minimumAttoRepPerLot: minimum, targetHealthFactorBps: 10_000n }), 'Submit the winning bid')
 	await reportStep('Owner placed the winning bid')
 	snapshot = await auctionFor(owner)

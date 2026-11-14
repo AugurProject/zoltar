@@ -41,6 +41,22 @@ function requestPricePlan(snapshot: ReturnType<typeof snapshotFixture>) {
 }
 
 describe('oracle request funding bounds', () => {
+	test('ETH-budget report automation excludes non-WETH collateral', () => {
+		const { pool, snapshot } = requestPriceSnapshot()
+		const prior = requestPricePlan(snapshot)
+		if (prior === undefined) throw new Error('Missing report plan')
+		pool.oracleRequestFunding.collateralToken = address(88)
+		expect(requestPricePlan(snapshot)).toBeUndefined()
+		expect(reevaluateOperationContinuation(snapshot, prior, options).plan).toBeUndefined()
+	})
+
+	test('shared report stakes use the configured collateral floor independently of gas prices', () => {
+		const coordinator = { ...simpleCoordinatorFunding, minimumReportCollateral: '7', fixedRequestPriceCostAttoEth: 101n.toString() }
+		for (const baseFeePerGas of ['0', '1', '1000000000000']) {
+			expect(() => assertAnchoredOracleRequestFunding({ baseFeePerGas, coordinator, minimumToken1ReportAttoEth: 8n.toString(), requestPriceCostAttoEth: 101n.toString(), settlementCollateralAttoEth: 100n.toString() })).not.toThrow()
+		}
+	})
+
 	test('shared report funding keeps its fixed bounty at every inclusion base fee', () => {
 		const coordinator = { ...simpleCoordinatorFunding, fixedRequestPriceCostAttoEth: 101n.toString() }
 		expect(() => assertAnchoredOracleRequestFunding({ baseFeePerGas: '1', coordinator, minimumToken1ReportAttoEth: 4n.toString(), requestPriceCostAttoEth: 101n.toString(), settlementCollateralAttoEth: 100n.toString() })).not.toThrow()

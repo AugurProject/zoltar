@@ -23,7 +23,7 @@
 			</header>
 			<section id="orientation">
 				<h2>Security-model orientation</h2>
-				<p>The assets and state at stake are <a href="./glossary.html#rep">REP</a>, ETH <a href="./glossary.html#settlement-collateral">settlement collateral</a>, <a href="./glossary.html#outcome-share">outcome shares</a>, <a href="./glossary.html#vault">vault</a> backing, <a href="./glossary.html#escalation-game">Escalation Game</a> deposits, <a href="./glossary.html#child-universe">child-universe</a> accounting, and the integrity of event-derived state.</p>
+				<p>The assets and state at stake are <a href="./glossary.html#rep">REP</a>, ERC-20 <a href="./glossary.html#settlement-collateral">settlement collateral</a>, <a href="./glossary.html#outcome-share">outcome shares</a>, <a href="./glossary.html#vault">vault</a> backing, <a href="./glossary.html#escalation-game">Escalation Game</a> deposits, <a href="./glossary.html#child-universe">child-universe</a> accounting, and the integrity of event-derived state.</p>
 				<table>
 					<thead>
 						<tr>
@@ -38,7 +38,7 @@
 						</tr>
 						<tr>
 							<td>External dependencies</td>
-							<td><a href="./glossary.html#open-oracle">OpenOracle</a>, WETH/REP token behavior, Ethereum execution and finality, RPCs, wallets, and proof data.</td>
+							<td><a href="./glossary.html#open-oracle">OpenOracle</a>, collateral/REP token behavior, Ethereum execution and finality, RPCs, wallets, and proof data.</td>
 						</tr>
 						<tr>
 							<td>Untrusted actors</td>
@@ -192,7 +192,7 @@
 					</li>
 					<li id="assumption-a12" value="12">
 						<h3><span class="assumption-id">A12</span> Collateral Repair Auctions can convert supported child REP efficiently</h3>
-						<p>When repair is needed, competitive <a href="./glossary.html#collateral-repair-auction">Collateral Repair Auction</a> entry can convert supported <a href="./glossary.html#child-rep">child REP</a> into ETH at an acceptably small discount and operating cost. This is a participation assumption, not a contract guarantee of revenue or full repair.</p>
+						<p>When repair is needed, competitive <a href="./glossary.html#collateral-repair-auction">Collateral Repair Auction</a> entry can convert supported <a href="./glossary.html#child-rep">child REP</a> into the selected collateral at an acceptably small discount and operating cost. This is a participation assumption, not a contract guarantee of revenue or full repair.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Weak or strategically withheld demand leaves the child operational with impaired collateral. A shared portfolio auction can sell all fresh inventory for one funded lot. Ordinary surplus withdrawal and retirement remain available to winners, so selling the inventory does not guarantee permanent backing.</p>
 						<p class="assumption-links">Mechanics: <a href="../explanation/collateral-repair-auctions.html#portfolio-auctions">shared portfolio auctions</a>, and <a href="../explanation/statoblast.html#forks-migration">repair accounting</a>.</p>
 					</li>
@@ -204,7 +204,7 @@
 					</li>
 					<li id="assumption-a14" value="14">
 						<h3><span class="assumption-id">A14</span> REP economic value exceeds the open interest it secures</h3>
-						<p>For a stated pool, lineage, or system scope at one timestamp, <a href="./glossary.html#open-interest">open interest</a> and REP discounted cash flow are valued in the same numeraire, and REP discounted cash flow remains strictly greater. For a pool-level evaluation, open interest means the pool’s protocol-accounted ETH collateral unless the analysis explicitly names a broader exposure measure. The REP supply and price basis must also be stated; market capitalization is the observable proxy in <a href="#assumption-a08">A08</a>. This external relationship is separate from each pool’s onchain multiplier-adjusted REP backing check.</p>
+						<p>For a stated pool, lineage, or system scope at one timestamp, <a href="./glossary.html#open-interest">open interest</a> and REP discounted cash flow are valued in the same numeraire, and REP discounted cash flow remains strictly greater. For a pool-level evaluation, open interest means the pool’s protocol-accounted settlement collateral unless the analysis explicitly names a broader exposure measure. The REP supply and price basis must also be stated; market capitalization is the observable proxy in <a href="#assumption-a08">A08</a>. This external relationship is separate from each pool’s onchain multiplier-adjusted REP backing check.</p>
 						<div class="equation assumption-equation" id="eq-rep-economic-backing" role="region" aria-label="Open interest backing assumption" tabindex="0">
 							<math display="block" aria-label="open interest is less than REP discounted cash flow when both are valued in the same numeraire" data-source="commonNumeraire(openInterest) < commonNumeraire(repDiscountedCashFlow)">
 								<mrow>
@@ -229,7 +229,7 @@
 
 			<section class="assumption-group" id="assumptions-oracle">
 				<h2>Oracle correction, inclusion, and operational data</h2>
-				<p class="assumption-group-intro">These assumptions cover truthful REP/ETH price discovery, deadline access, capital, independent correction, and the offchain information required to act. OpenOracle's optional flexible-escalation and halt-only-fee flags can change a corrector's required capital and net incentive, so a deployment that enables them must evaluate the same assumptions against its configured flag set.</p>
+				<p class="assumption-group-intro">These assumptions cover truthful REP/collateral price discovery, deadline access, capital, independent correction, and the offchain information required to act. OpenOracle's optional flexible-escalation and halt-only-fee flags can change a corrector's required capital and net incentive, so a deployment that enables them must evaluate the same assumptions against its configured flag set.</p>
 				<ol class="assumption-grid">
 					<li id="assumption-a16" value="16">
 						<h3><span class="assumption-id">A16</span> Deadline transactions can obtain Ethereum inclusion</h3>
@@ -240,19 +240,21 @@
 					</li>
 					<li id="assumption-a17" value="17">
 						<h3><span class="assumption-id">A17</span> OpenOracle has an available, adequately capitalized corrector</h3>
-						<p>At least one OpenOracle participant continuously monitors pending REP/ETH reports, can identify candidate errors using the reference market in <a href="#assumption-a19">A19</a>, can fund the scenario-dependent WETH and REP replacement position plus transaction costs, and can obtain inclusion before settlement. The participant's net incentive to perform the correction is the separate boundary in <a href="#assumption-a18">A18</a>.</p>
+						<p>At least one OpenOracle participant continuously monitors pending REP/collateral reports, can identify candidate errors using the reference market in <a href="#assumption-a19">A19</a>, can fund the scenario-dependent collateral and REP replacement position plus transaction costs, and can obtain inclusion before settlement. The participant's net incentive to perform the correction is the separate boundary in <a href="#assumption-a18">A18</a>.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> An incorrect report can settle and authorize price-sensitive pool actions when no capable participant detects, funds, and includes a correction.</p>
-						<p class="assumption-links">Mechanics: <a href="./open-oracle.html">REP/ETH oracle</a>, <a href="./open-oracle.html#security-guarantee">correction incentives</a>, and <a href="./open-oracle.html#intentional-economic-tradeoffs">attack model</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="./open-oracle.html">REP/collateral oracle</a>, <a href="./open-oracle.html#security-guarantee">correction incentives</a>, and <a href="./open-oracle.html#intentional-economic-tradeoffs">attack model</a>.</p>
 					</li>
 					<li id="assumption-a18" value="18">
 						<h3><span class="assumption-id">A18</span> At least one available corrector has an independent net incentive</h3>
-						<p>At least one participant satisfying <a href="#assumption-a17">A17</a> is not under common control with the sponsor-funded coordinator reporting path, does not share the manipulation payoff, and is not bribed or compensated. The participant's net payoff from correcting is strictly greater than its net payoff from leaving the harmful report uncorrected. Two external submissions are not required for every request.</p>
-						<p class="assumption-failure"><strong>Failure boundary:</strong> A sponsor-controlled, bribed, or economically indifferent corrector can make the contestable report path behave like a single trusted reporter.</p>
+						<p>At least one participant satisfying <a href="#assumption-a17">A17</a> is not under common control with the sponsor-funded coordinator reporting path, does not share the manipulation payoff, and is not compensated to leave a harmful report uncorrected. The participant's net payoff from correcting is strictly greater than its net payoff from leaving the harmful report uncorrected. Two external submissions are not required for every request.</p>
+						<p>The creator must choose <code>minimumReportCollateral</code> at portfolio creation so that the floor alone makes correcting a security-relevant price error profitable, even at zero aggregate exposure. We assume this remains true throughout every report's dispute window, after accounting for the collateral's prevailing ETH value, OpenOracle fees, transaction gas including required approvals and recovery, price impact, and capital lockup costs. A stake worth more than the gas bill is not sufficient by itself: the gain available from the correction must exceed those costs.</p>
+						<p>The contracts enforce a positive, immutable creation-time floor and the additional exposure-based stake. They do not verify the floor's ETH value or its gas-cost adequacy, and they query no collateral/ETH feed. Child universes inherit the floor; raising it requires a new portfolio. Participants must reassess this assumption as gas fees and collateral value change.</p>
+						<p class="assumption-failure"><strong>Failure boundary:</strong> An undersized floor, higher gas fees, or falling collateral value can leave a wrong REP/collateral price uneconomic to dispute. It may settle unchallenged and authorize unsafe price-sensitive actions even when every onchain funding check passes. A sponsor-controlled, bribed, or economically indifferent corrector can cause the same failure.</p>
 						<p class="assumption-links">Mechanics: <a href="./open-oracle.html#settlement-validation-scope">settlement validation scope</a>, <a href="./open-oracle.html#intentional-economic-tradeoffs">economic tradeoffs</a>, and <a href="./invariants.html#oracle">oracle invariants</a>.</p>
 					</li>
 					<li id="assumption-a19" value="19">
-						<h3><span class="assumption-id">A19</span> A robust reference market makes harmful REP/ETH errors correctable</h3>
-						<p>Independent participants can observe a manipulation-resistant reference REP/ETH price. Every price error large enough to unlock a security-relevant pool action also leaves a correction opportunity that remains profitable after actual gas, prevailing priority fees, OpenOracle fees, price impact, and required capital lockup.</p>
+						<h3><span class="assumption-id">A19</span> A robust reference market makes harmful REP/collateral errors correctable</h3>
+						<p>Independent participants can observe a manipulation-resistant reference REP/collateral price. Every price error large enough to unlock a security-relevant pool action also leaves a correction opportunity that remains profitable after actual gas, prevailing priority fees, OpenOracle fees, price impact, and required capital lockup.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> A harmful deviation below the profitable correction threshold, or a manipulated/illiquid reference market, can settle without an economically rational challenge.</p>
 						<p class="assumption-links">Mechanics: <a href="./open-oracle.html#security-guarantee">report sizing</a>, <a href="./open-oracle.html#intentional-economic-tradeoffs">external-payoff model</a>, and <a href="./open-oracle.html#settlement-validation-scope">settlement limits</a>.</p>
 					</li>
@@ -270,15 +272,15 @@
 				<p class="assumption-group-intro">These assumptions define the technical foundation below the protocol’s onchain guards.</p>
 				<ol class="assumption-grid">
 					<li id="assumption-a21" value="21">
-						<h3><span class="assumption-id">A21</span> Genesis REP and configured WETH obey the required accounting model</h3>
-						<p>Genesis REP and configured WETH move exactly the requested base units, use 18 decimals, return supported ERC-20 values, and do not rebase, charge transfer fees, invoke unexpected callbacks, blacklist protocol contracts, pause required transfers, or permit unauthorized minting. WETH remains redeemable 1:1 for ETH, the genesis theoretical supply is accurate, and the hard-coded <code>Constants.BURN_ADDRESS</code> burn sink remains inaccessible. These are external assumptions on both networks, with one exception: on Sepolia the reviewed <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/GenesisReputationToken.sol"><code>GenesisReputationToken</code></a> enforces genesis REP issuance and transfer behavior, provided <a href="#assumption-a23">A23</a> verifies its deployed bytecode and wiring and <a href="#assumption-a26">A26</a> preserves Ethereum execution. Sepolia WETH is Uniswap's published contract, which the deployer verifies only by runtime-code hash. Canonical child REP is the reviewed <code>ReputationToken</code> contract and adds no external-token assumption.</p>
-						<p class="assumption-failure"><strong>Failure boundary:</strong> Origin-pool, genesis-fork, or oracle accounting can overstate balances, backing, burned supply, or WETH value.</p>
+						<h3><span class="assumption-id">A21</span> REP and selected collateral obey the required accounting model</h3>
+						<p>REP and the selected ERC-20 collateral move exactly the requested base units, return supported ERC-20 values, and do not rebase, charge transfer fees, invoke unexpected callbacks, blacklist protocol contracts, pause required transfers, or permit unauthorized minting. REP uses 18 decimals; collateral amounts use raw token units. Portfolios reject this Zoltar deployment’s canonical REP tokens as collateral so oracle reports and custody accounting keep the two assets distinct. For WETH collateral, WETH remains redeemable 1:1 for ETH; the genesis theoretical supply is accurate, and the hard-coded <code>Constants.BURN_ADDRESS</code> burn sink remains inaccessible. These are external assumptions on both networks, with one exception: on Sepolia the reviewed <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/GenesisReputationToken.sol"><code>GenesisReputationToken</code></a> enforces genesis REP issuance and transfer behavior, provided <a href="#assumption-a23">A23</a> verifies its deployed bytecode and wiring and <a href="#assumption-a26">A26</a> preserves Ethereum execution. Sepolia WETH is Uniswap's published contract, which the deployer verifies only by runtime-code hash. Canonical child REP is the reviewed <code>ReputationToken</code> contract and adds no external-token assumption.</p>
+						<p class="assumption-failure"><strong>Failure boundary:</strong> Origin-pool, genesis-fork, or oracle accounting can overstate balances, backing, burned supply, or collateral value.</p>
 						<p class="assumption-links">Mechanics: <a href="./invariants.html#lifecycle">bounded lifecycle work</a> and <a href="./open-oracle.html#openoracle-role">oracle token pair</a>.</p>
 					</li>
 					<li id="assumption-a22" value="22">
 						<h3><span class="assumption-id">A22</span> Participant-controlled recipients can accept required asset deliveries</h3>
-						<p>Vaults, oracle sponsors, traders, share holders, and other caller-controlled recipients use addresses that accept native ETH when claiming fees, collateral, or proceeds. Collateral repair auction settlement instead credits bidder-specific pull escrow without calling the bidder; the bidder must accept ETH only when withdrawing that credit. Contract recipients also return the required ERC-1155 receiver selector when complete-set creation, share migration, or an outcome-share transfer delivers tokens to them. A rejected ETH pull or push reverts that transfer, and a rejected ERC-1155 callback reverts the mint or transfer and its surrounding protocol action. No protocol path can force a rejecting address to accept a later delivery or redirect every payout or mint.</p>
-						<p class="assumption-failure"><strong>Failure boundary:</strong> A contract account that rejects ETH or the required ERC-1155 callback can strand its own payout or make its complete-set, migration, transfer, or claim action unavailable even while protocol-wide accounting remains safe.</p>
+						<p>Recipients must be able to receive the asset transferred by their chosen path. Portfolio fees, collateral redemptions, auction proceeds, and auction refunds use the selected ERC-20 collateral. Native-ETH router exits and OpenOracle ETH withdrawals or settler rewards require a recipient that accepts ETH. Contract recipients also return the required ERC-1155 receiver selector when complete-set creation, share migration, or an outcome-share transfer delivers tokens to them. Failed transfers or rejected callbacks can prevent delivery.</p>
+						<p class="assumption-failure"><strong>Failure boundary:</strong> A failed collateral-token transfer, rejected native-ETH delivery, or rejected ERC-1155 callback can make the recipient’s payout, mint, migration, transfer, or claim unavailable even while protocol-wide accounting remains safe.</p>
 						<p class="assumption-links">Mechanics: <a href="./invariants.html#lifecycle">ETH callback safety</a>, <a href="./invariants.html#lifecycle">ERC-1155 callback safety</a>, <a href="./contracts/sharetoken.html">share-token receipt</a>, <a href="../explanation/collateral-repair-auctions.html#portfolio-auctions">auction refunds</a>, <a href="./open-oracle.html#refund-callback">oracle request refunds</a>, and <a href="./operator-guardrails.html#security-pool-guardrails">security pool guardrails</a>.</p>
 					</li>
 					<li id="assumption-a23" value="23">
@@ -307,10 +309,10 @@
 					</li>
 					<li id="assumption-a27" value="27">
 						<h3><span class="assumption-id">A27</span> Ethereum cryptographic primitives remain secure</h3>
-						<p>Keccak-256 remains collision- and preimage-resistant at the truncated widths used by the protocol, and CREATE2 identity remains sound. secp256k1 ECDSA signatures remain unforgeable with correct EOA signer recovery for Ethereum transactions and EIP-712 authorizations. Contract paths using <code>SignatureValidation</code> additionally rely on correct EOA or ERC-1271 contract-account signature validation; OpenOracle also relies on its fixed Permit2 singleton.</p>
+						<p>Keccak-256 remains collision- and preimage-resistant at the truncated widths used by the protocol, and CREATE2 identity remains sound. secp256k1 ECDSA signatures remain unforgeable with correct EOA signer recovery for Ethereum transactions and EIP-712 authorizations. OpenOracle also relies on its fixed Permit2 singleton.</p>
 						<p>OpenOracle fixes the Permit2 address, requires the exact permitted amount, sends the requested tokens to itself, and constructs the witness from the beneficiary, relayer, token owner, and intent. Permit2 defines the EIP-712 domain, deadline, permitted-amount ceiling, unordered-nonce replay protection, and EOA/ERC-1271 signature validation. Verification under <a href="#assumption-a23">A23</a> must cover the pinned Permit2 implementation at that fixed address.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Forged identities, colliding questions or universes, false carry proofs, forged EOA transactions, incorrect EOA recovery or ERC-1271 acceptance, or broken domain and nonce enforcement can violate otherwise-correct guards or authorize an unintended token transfer.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#accounting">universe identity</a>, <a href="../reference/merkle-mountain-range.html#leaf-shape">proof hashing</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/OpenOracle.sol">Permit2 deposit authorization</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/interfaces/ISignatureTransfer.sol">Permit2 signature interface</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SignatureValidation.sol">liquidation-approval signature validation</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/UPSTREAM.md#permit2-dependency">pinned Permit2 implementation provenance</a>, and <a href="./operator-guardrails.html#security-pool-guardrails">deterministic address guardrails</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#accounting">universe identity</a>, <a href="../reference/merkle-mountain-range.html#leaf-shape">proof hashing</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/OpenOracle.sol">Permit2 deposit authorization</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/interfaces/ISignatureTransfer.sol">Permit2 signature interface</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/vendor/authorization/AuthorizationSignatures.sol">EIP-712 authorization signer recovery</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/UPSTREAM.md#permit2-dependency">pinned Permit2 implementation provenance</a>, and <a href="./operator-guardrails.html#security-pool-guardrails">deterministic address guardrails</a>.</p>
 					</li>
 					<li id="assumption-a28" value="28">
 						<h3><span class="assumption-id">A28</span> Participants retain control of account authority</h3>
@@ -331,7 +333,7 @@
 					</li>
 					<li id="excluded-guarantee-eg02">
 						<strong>EG02.</strong>
-						A Collateral Repair Auction may raise less than its repair target; the child then activates with migrated collateral plus accepted auction ETH.
+						A Collateral Repair Auction may raise less than its repair target; the child then activates with migrated collateral plus accepted auction collateral.
 					</li>
 					<li id="excluded-guarantee-eg03">
 						<strong>EG03.</strong>

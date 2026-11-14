@@ -3,7 +3,7 @@ import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 const BPS_DENOMINATOR = 10_000n
 
 export const TRADING_PNL_BASIS =
-	'Cost basis is the ETH paid into the market’s security pool for complete sets minted for this account, directly or through the trading router; proceeds are the ETH returned when this account’s shares were redeemed, exited through the router, or settled. Router actions are attributed to the account whose shares were minted or burned, because router events are not indexed; a router recipient or payout recipient that differs from that account is not observable. Shares received by plain transfer carry no cost basis. While the market still trades, holdings are valued at the ETH an exit would return at the latest indexed reserves and complete-set exchange rate, and fee accrual after that pool event is not reflected; shares that such an exit cannot convert count as zero, so a partial valuation is a lower bound. After trading closes, holdings are not valued. Realized profit follows cost recovery: it counts only after proceeds exceed the ETH paid in, unless the position is closed.'
+	'Cost basis is the collateral paid into the market’s security pool for complete sets minted for this account, directly or through the trading router; proceeds are the collateral returned when this account’s shares were redeemed, exited through the router, or settled. Router actions are attributed to the account whose shares were minted or burned, because router events are not indexed; a router recipient or payout recipient that differs from that account is not observable. Shares received by plain transfer carry no cost basis. While the market still trades, holdings are valued at the collateral an exit would return at the latest indexed reserves and complete-set exchange rate, and fee accrual after that pool event is not reflected; shares that such an exit cannot convert count as zero, so a partial valuation is a lower bound. After trading closes, holdings are not valued. Realized profit follows cost recovery: it counts only after proceeds exceed the collateral paid in, unless the position is closed.'
 
 export type TradingHoldings = {
 	readonly invalidShares: bigint
@@ -136,7 +136,7 @@ export type TradingProfitAndLoss = {
 }
 
 /**
- * Cost-recovery accounting: while a position is open, profit is realized only once proceeds exceed the ETH paid in, and
+ * Cost-recovery accounting: while a position is open, profit is realized only once proceeds exceed the collateral paid in, and
  * the unrecovered cost is carried against the current holdings value. A closed position realizes its whole result.
  */
 export const tradingProfitAndLoss = (costBasisAttoEth: bigint, proceedsAttoEth: bigint, holdings: TradingHoldings, holdingsValueAttoEth: bigint | undefined): TradingProfitAndLoss => {

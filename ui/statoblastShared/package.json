@@ -49,6 +49,10 @@
 			"bun": "./ts/features/markets/hooks/useMarketCreation.ts",
 			"default": "./js/features/markets/hooks/useMarketCreation.js"
 		},
+		"./features/markets/hooks/useTradingCollateral.js": {
+			"bun": "./ts/features/markets/hooks/useTradingCollateral.ts",
+			"default": "./js/features/markets/hooks/useTradingCollateral.js"
+		},
 		"./features/markets/hooks/useTradingOperations.js": {
 			"bun": "./ts/features/markets/hooks/useTradingOperations.ts",
 			"default": "./js/features/markets/hooks/useTradingOperations.js"
@@ -92,6 +96,10 @@
 		"./lib/routing.js": {
 			"bun": "./ts/lib/routing.ts",
 			"default": "./js/lib/routing.js"
+		},
+		"./protocol/collateral.js": {
+			"bun": "./ts/protocol/collateral.ts",
+			"default": "./js/protocol/collateral.js"
 		},
 		"./protocol/contractLabels.js": {
 			"bun": "./ts/protocol/contractLabels.ts",
@@ -273,10 +281,6 @@
 			"bun": "./ts/protocol/reviewedBackend.ts",
 			"default": "./js/protocol/reviewedBackend.js"
 		},
-		"./copy/priceRequest.js": {
-			"bun": "./ts/copy/priceRequest.ts",
-			"default": "./js/copy/priceRequest.js"
-		},
 		"./features/reporting/lib/escalationReminder.js": {
 			"bun": "./ts/features/reporting/lib/escalationReminder.ts",
 			"default": "./js/features/reporting/lib/escalationReminder.js"
@@ -432,6 +436,10 @@
 		"./copy/portfolio.js": {
 			"bun": "./ts/copy/portfolio.ts",
 			"default": "./js/copy/portfolio.js"
+		},
+		"./copy/collateral.js": {
+			"bun": "./ts/copy/collateral.ts",
+			"default": "./js/copy/collateral.js"
 		},
 		"./features/portfolios/components/PortfolioTakeover.js": {
 			"bun": "./ts/features/portfolios/components/PortfolioTakeover.tsx",

@@ -1,3 +1,4 @@
+import { collateralBalance } from './burnEvidence'
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { encodeDeployData, type Address } from '@zoltar/core-shared/evm/ethereum'
 import {
@@ -103,8 +104,8 @@ describe('Statoblast: individually owned lazy auction capital', () => {
 		await materialize(1n)
 		const id = (await owner(first.account.address)).positionId
 		expect(await position(id)).toMatchObject({ rep: 2n * REP, commitment: 2n * LOT })
-		expect(await caller.getBalance({ address: capital })).toBe(0n)
-		expect(await caller.getBalance({ address: adapter })).toBe(0n)
+		expect(await collateralBalance(caller, harness, capital)).toBe(0n)
+		expect(await collateralBalance(caller, harness, adapter)).toBe(0n)
 		expect((await owner(second.account.address)).positionId).toBe(0n)
 	})
 
@@ -171,7 +172,7 @@ describe('Statoblast: individually owned lazy auction capital', () => {
 		await writeContractAndWait(caller, () => caller.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'materializeAuctionBid', args: [2n], gasPrice: 10n ** 9n }))
 		expect((await owner(caller.account.address)).feesAttoRep).toBe(0n)
 		expect((await owner(caller.account.address)).feesAttoEth).toBe(0n)
-		expect(await caller.getBalance({ address: adapter })).toBe(0n)
+		expect(await collateralBalance(caller, harness, adapter)).toBe(0n)
 		expect(await position(1n)).toMatchObject({ rep: 2n * REP, commitment: 2n * LOT })
 		expect((await position((await owner(second.account.address)).positionId)).commitment).toBe(LOT)
 	})
@@ -216,7 +217,7 @@ describe('Statoblast: individually owned lazy auction capital', () => {
 		expect((await owner(first.account.address)).feesAttoEth).toBe(0n)
 		// The first owner has claimed 40 attoETH; only the second owner
 		// still owns the remaining 20 attoETH in capital custody.
-		expect(await caller.getBalance({ address: capital })).toBe(20n)
+		expect(await collateralBalance(caller, harness, capital)).toBe(20n)
 	})
 
 	test('frozen ownership detaches after backing migration without moving principal or changing the snapshot', async () => {

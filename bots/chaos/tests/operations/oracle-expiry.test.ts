@@ -15,7 +15,7 @@ function configureOpenQuestion(snapshot: ReturnType<typeof snapshotFixture>) {
 	const pool = snapshot.pools[0]
 	if (pool === undefined) throw new Error('Missing question')
 	pool.currentMintingCapacityAttoEth = (2n * 10n ** 18n).toString()
-	pool.purchaseQuote = { mintAttoEth: 1000000n.toString(), feeAttoEth: 100000n.toString(), premiumAttoEth: 200000n.toString(), minimumShares: '1000000' }
+	pool.purchaseQuote = { spender: pool.coordinator, mintAttoEth: 1000000n.toString(), feeAttoEth: 100000n.toString(), premiumAttoEth: 200000n.toString(), minimumShares: '1000000' }
 }
 
 const mintingDefinitionIds = ['statoblast.complete-set.create', 'trading.liquidity.add-eth', 'trading.position.enter']

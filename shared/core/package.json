@@ -59,6 +59,11 @@
 			"bun": "./ts/evm/address.ts",
 			"default": "./js/evm/address.js"
 		},
+		"./evm/code": {
+			"types": "./ts/evm/code.ts",
+			"bun": "./ts/evm/code.ts",
+			"default": "./js/evm/code.js"
+		},
 		"./evm/carryProof": {
 			"types": "./ts/evm/carryProof.ts",
 			"bun": "./ts/evm/carryProof.ts",
@@ -97,7 +102,7 @@
 		"micro-eth-signer": "0.18.1"
 	},
 	"devDependencies": {
-		"bun-types": "1.4.2",
+		"bun-types": "1.4.4",
 		"typescript": "5.8.2"
 	}
 }

@@ -2,6 +2,7 @@ import { getOpenOraclePriceExpiryPresentation } from '@zoltar/ui-statoblast-shar
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as openOracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
+import * as fundingCopy from '../copy/funding.js'
 import { Fragment, type ComponentChildren } from 'preact'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -13,6 +14,7 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
@@ -144,6 +146,7 @@ export function renderSelectedReportActionSection({
 	onSettleReport,
 	onWrapDisputeWeth,
 	openOracleActiveAction,
+	openOracleApprovalResetting,
 	openOracleForm,
 	openOracleTokenAccessState,
 	openOracleReportDetails,
@@ -163,6 +166,7 @@ export function renderSelectedReportActionSection({
 	onSettleReport: () => void
 	onWrapDisputeWeth: () => void
 	openOracleActiveAction: OpenOracleSectionProps['openOracleActiveAction']
+	openOracleApprovalResetting: OpenOracleSectionProps['openOracleApprovalResetting']
 	openOracleForm: OpenOracleFormState
 	openOracleTokenAccessState: OpenOracleSectionProps['openOracleTokenAccessState']
 	openOracleReportDetails?: OpenOracleReportDetails
@@ -202,6 +206,12 @@ export function renderSelectedReportActionSection({
 				const isToken1 = token === 'token1'
 				const tokenSymbol = isToken1 ? token1Symbol : token2Symbol
 				const approval = isToken1 ? openOracleTokenAccessState.token1Approval : openOracleTokenAccessState.token2Approval
+				// Mirrors the create form: a failed read, then loading, then nothing left to reset.
+				let resetUnavailableReason = approval.error
+				if (resetUnavailableReason === undefined && approval.value === undefined) resetUnavailableReason = fundingCopy.loading
+				else if (resetUnavailableReason === undefined && approval.value === 0n) resetUnavailableReason = commonCopy.notNeeded
+				const approvalActionPending = openOracleActiveAction === (isToken1 ? 'approveToken1' : 'approveToken2')
+				const requiresAllowanceReset = tokenRequiresAllowanceReset(isToken1 ? openOracleReportDetails?.token1 : openOracleReportDetails?.token2)
 				const requiredAmount = isToken1 ? disputeSubmission?.token1ContributionAmount : disputeSubmission?.token2ContributionAmount
 				const tokenApprovalGuardMessage = (() => {
 					if (openOracleReportDetails === undefined) return openOracleCopy.reportLoadRequired
@@ -211,7 +221,21 @@ export function renderSelectedReportActionSection({
 				})()
 				return (
 					<SectionBlock headingLevel={4} title={openOracleCopy.formatTokenApprovalTitle(tokenSymbol)} variant='embedded'>
+						{requiresAllowanceReset ? (
+							<TransactionActionButton
+								idleLabel={commonCopy.formatResetTokenApproval(tokenSymbol)}
+								pendingLabel={commonCopy.formatResettingTokenApproval(tokenSymbol)}
+								pending={approvalActionPending && openOracleApprovalResetting}
+								availability={{
+									disabled: !isConnected || !isOnActiveAppChain || (approval.value ?? 0n) === 0n || sharedApprovalGuardMessage !== undefined || tokenApprovalGuardMessage !== undefined,
+									reason: sharedApprovalGuardMessage ?? tokenApprovalGuardMessage ?? resetUnavailableReason,
+								}}
+								onClick={() => (isToken1 ? onApproveToken1 : onApproveToken2)(0n)}
+								tone='secondary'
+							/>
+						) : null}
 						<TokenApprovalControl
+							requiresAllowanceReset={requiresAllowanceReset}
 							actionLabel={openOracleCopy.disputingTheReport}
 							allowanceError={approval.error}
 							allowanceLoading={approval.loading}
@@ -220,7 +244,7 @@ export function renderSelectedReportActionSection({
 							guardMessage={sharedApprovalGuardMessage ?? tokenApprovalGuardMessage}
 							guardMessageElementId={sharedApprovalGuardMessage === undefined ? undefined : sharedApprovalGuardMessageId}
 							onApprove={amount => (isToken1 ? onApproveToken1 : onApproveToken2)(amount)}
-							pending={openOracleActiveAction === (isToken1 ? 'approveToken1' : 'approveToken2')}
+							pending={approvalActionPending && !openOracleApprovalResetting}
 							pendingLabel={commonCopy.formatApprovingToken(tokenSymbol)}
 							requiredAmount={requiredAmount}
 							resetKey={`dispute:${token}:${tokenSymbol}:${requiredAmount?.toString() ?? ''}:${openOracleForm.reportId}`}

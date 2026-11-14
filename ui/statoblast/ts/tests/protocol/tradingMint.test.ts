@@ -1,3 +1,4 @@
+import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { decodeFunctionData, getAddress, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { createBlockWithTimestamp, createMockWriteClient, asWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
@@ -7,61 +8,52 @@ import type { TransactionPlanStep, TransactionRequestPreview } from '@zoltar/ui-
 
 const pool = getAddress('0x00000000000000000000000000000000000000a1')
 
+/** A portfolio-backed pool with ample collateral, approvals, and mint capacity, no escalation game, and the given question end. */
+function mintClient(send: Parameters<typeof createMockWriteClient>[0], currentTimestamp: bigint, questionEndDate: bigint) {
+	return {
+		...asWriteClient(
+			createMockWriteClient(send, async request => {
+				if (request.functionName === 'collateralToken') return getActiveNetworkProfile().wethAddress
+				if (request.functionName === 'services') return portfolio
+				if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 10n ** 21n
+				if (request.functionName === 'escalationGame') return zeroAddress
+				if (request.functionName === 'universeId' || request.functionName === 'questionId') return 1n
+				if (request.functionName === 'securityPoolFactory') return pool
+				if (request.functionName === 'getSecurityPoolPortfolio') return portfolio
+				if (request.functionName === 'getPool') return pool
+				if (request.functionName === 'purchaseQuote') return [0n, 0n]
+				if (request.functionName === 'availableMintCapacity' || request.functionName === 'attoEthToAttoShares') return 10n ** 18n
+				if (request.functionName === 'questionData') return pool
+				if (request.functionName === 'getQuestionEndDate') return questionEndDate
+				throw new Error(`Unexpected read ${request.functionName}`)
+			}),
+		),
+		account: { address: pool, type: 'json-rpc' as const },
+		getBlock: async () => createBlockWithTimestamp(currentTimestamp),
+	}
+}
+
 void describe('complete-set mint submission', () => {
 	test.each([100n, 101n])('rejects minting at or after the question end without an escalation game (%s)', async currentTimestamp => {
 		const send = mock(() => undefined)
-		const client = {
-			...asWriteClient(
-				createMockWriteClient(send, async request => {
-					if (request.functionName === 'escalationGame') return zeroAddress
-					if (request.functionName === 'securityPoolFactory') return pool
-					if (request.functionName === 'getSecurityPoolPortfolio') return portfolio
-					if (request.functionName === 'getPool') return pool
-					if (request.functionName === 'purchaseQuote') return [0n, 0n]
-					if (request.functionName === 'availableMintCapacity' || request.functionName === 'attoEthToAttoShares') return 10n ** 18n
-					if (request.functionName === 'questionData') return pool
-					if (request.functionName === 'questionId' || request.functionName === 'universeId') return 1n
-					if (request.functionName === 'getQuestionEndDate') return 100n
-					throw new Error(`Unexpected read ${request.functionName}`)
-				}),
-			),
-			account: { address: pool, type: 'json-rpc' as const },
-			getBlock: async () => createBlockWithTimestamp(currentTimestamp),
-		}
+		const client = mintClient(send, currentTimestamp, 100n)
 		await expect(createCompleteSetInSecurityPool(client, pool, 10n ** 18n)).rejects.toThrow('question ended')
 		expect(send).not.toHaveBeenCalled()
 	})
 	test.each([3540n, 10n ** 9n])('submits the selected mint amount through its portfolio at %s', async currentTimestamp => {
 		const send = mock((request: { data?: `0x${string}`; value?: bigint }) => {
-			expect(request.value).toBe(10n ** 18n)
+			expect(request.value).toBe(0n)
 			if (request.data === undefined) throw new Error('Expected mint calldata')
 			expect(decodeFunctionData({ abi: portfolioMintAbi, data: request.data }).functionName).toBe('createCompleteSet')
 		})
-		const client = {
-			...asWriteClient(
-				createMockWriteClient(send, async request => {
-					if (request.functionName === 'escalationGame') return zeroAddress
-					if (request.functionName === 'universeId' || request.functionName === 'questionId') return 1n
-					if (request.functionName === 'securityPoolFactory') return pool
-					if (request.functionName === 'getSecurityPoolPortfolio') return portfolio
-					if (request.functionName === 'getPool') return pool
-					if (request.functionName === 'purchaseQuote') return [0n, 0n]
-					if (request.functionName === 'availableMintCapacity' || request.functionName === 'attoEthToAttoShares') return 10n ** 18n
-					if (request.functionName === 'questionData') return pool
-					if (request.functionName === 'getQuestionEndDate') return currentTimestamp + 1n
-					throw new Error(`Unexpected read ${request.functionName}`)
-				}),
-			),
-			account: { address: pool, type: 'json-rpc' as const },
-			getBlock: async () => createBlockWithTimestamp(currentTimestamp),
-		}
+		const client = mintClient(send, currentTimestamp, currentTimestamp + 1n)
 		await createCompleteSetInSecurityPool(client, pool, 10n ** 18n)
 		expect(send).toHaveBeenCalledTimes(1)
 	})
 })
 
 const portfolio = getAddress('0x00000000000000000000000000000000000000b1')
-const portfolioMintAbi = parseAbi(['function createCompleteSet(uint248 universeId,uint256 questionId,uint256 mintEth,address recipient,uint256 minimumShares) payable'])
+const portfolioMintAbi = parseAbi(['function createCompleteSet(uint248 universeId,uint256 questionId,uint256 mintEth,address recipient,uint256 minimumShares,uint256 maximumFee)'])
 
 test('winning-share redemption reviews ETH and REP recovery for the winning balance at one block', async () => {
 	const unit = 10n ** 18n
@@ -75,7 +67,12 @@ test('winning-share redemption reviews ETH and REP recovery for the winning bala
 	const client = {
 		...asWriteClient(
 			createMockWriteClient(send, async request => {
+				if (request.functionName === 'collateralToken') return getActiveNetworkProfile().wethAddress
+				if (request.functionName === 'services') return portfolio
+				if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 10n ** 21n
 				if (request.functionName === 'universeId') return 1n
+				if (request.functionName === 'securityPoolFactory') return pool
+				if (request.functionName === 'getSecurityPoolPortfolio') return portfolio
 				if (request.functionName === 'shareToken' || request.functionName === 'securityPoolForker') return portfolio
 				pinned.push(request.blockNumber)
 				if (request.functionName === 'balanceOfShares') return [unit, 2n * unit, 3n * unit]
@@ -94,7 +91,7 @@ test('winning-share redemption reviews ETH and REP recovery for the winning bala
 	}
 	await redeemSharesInSecurityPool(client, pool)
 	expect(pinned).toEqual([99n, 99n, 99n, 99n])
-	expect(review?.reviewDescription).toMatch(/1\sETH/)
+	expect(review?.reviewDescription).toMatch(/1\sWETH/)
 	expect(review?.reviewDescription).toMatch(/2\sREP/)
 	expect(send).toHaveBeenCalledTimes(1)
 })
@@ -119,14 +116,18 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 		let plans: readonly TransactionPlanStep[] = []
 		const send = mock((request: { to?: unknown; data?: `0x${string}`; value?: bigint }) => {
 			expect(request.to).toBe(portfolio)
-			expect(request.value).toBe(104n)
+			expect(request.value).toBe(0n)
 			if (request.data === undefined) throw new Error('Expected portfolio purchase calldata')
-			expect(decodeFunctionData({ abi: portfolioMintAbi, data: request.data })).toEqual({ functionName: 'createCompleteSet', args: [1n, 7n, 100n, pool, 90n] })
+			expect(decodeFunctionData({ abi: portfolioMintAbi, data: request.data })).toEqual({ functionName: 'createCompleteSet', args: [1n, 7n, 100n, pool, 90n, 4n] })
 		})
 		const reads: string[] = []
 		const client = {
 			...asWriteClient(
 				createMockWriteClient(send, async request => {
+					if (request.functionName === 'collateralToken') return getActiveNetworkProfile().wethAddress
+					if (request.functionName === 'services') return portfolio
+					if (request.functionName === 'balanceOf') return walletBalance
+					if (request.functionName === 'allowance') return 10n ** 21n
 					reads.push(request.functionName)
 					switch (request.functionName) {
 						case 'escalationGame':
@@ -176,7 +177,7 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 			await expect(validate()).rejects.toThrow('Purchase fee changed')
 			quoteFee = 3n
 			walletBalance = 103n
-			await expect(validate()).rejects.toThrow('Insufficient ETH balance')
+			await expect(validate()).rejects.toThrow('Insufficient collateral')
 			walletBalance = 1_000n
 			timestamp = 100n
 			await expect(validate()).rejects.toThrow('question ended')

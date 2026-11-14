@@ -231,7 +231,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 				'No trading observations are available.',
 			),
 		)
-		addPanel('overview', operationsPanel('ETH volume', tradingVolumeRows(tradingSummary, { operationRow, operationCounted, nativeSymbol }), '', { label: 'Router enters and exits' }))
+		addPanel('overview', operationsPanel('Collateral volume', tradingVolumeRows(tradingSummary, { operationRow, operationCounted, nativeSymbol }), '', { label: 'Router enters and exits' }))
 		const activityPanel = tradingActivityPanel(data['activity'], { operationRow, operationsPanel, operationsHref, nativeSymbol })
 		if (activityPage['hasMore'] === true && typeof activityPage['nextCursor'] === 'string') {
 			const more = element('button', 'secondary compact', 'Show older market activity')

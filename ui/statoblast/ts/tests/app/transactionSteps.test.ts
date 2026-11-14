@@ -103,7 +103,7 @@ test('a wallet-only pool action starts the wallet request without a page confirm
 test('reporting requires a separate button click for the deposit and report', async () => {
 	const { client, receipt, sendTransaction } = setup()
 	const reviewed = createReviewedClient({ ...client, sendTransaction, waitForTransactionReceipt: async parameters => ({ ...receipt, transactionHash: parameters.hash }) })
-	const steps = ['depositRepToVault', 'depositToEscalationGame'].map(functionName => ({ functionName, contractAddress: account, args: [1n, 1n], data: '0x1234' as const }))
+	const steps = ['depositRepToVault', 'depositRepOnOutcome'].map(functionName => ({ functionName, contractAddress: account, args: [1n, 1n], data: '0x1234' as const }))
 	reviewed.onTransactionPlan?.(steps)
 	const action = (async () => {
 		for (const step of steps) {
@@ -191,7 +191,6 @@ test('titles transaction status from the prepared transaction labels instead of 
 })
 
 for (const [functionName, title, args] of [
-	['depositToEscalationGame', 'Report No · 2\u00a0REP', [2n, 2n * 10n ** 18n]],
 	['depositWalletRepToEscalationGame', 'Report No · 2\u00a0REP', [2n, 2n * 10n ** 18n]],
 	['depositRepOnOutcome', 'Report No · 2\u00a0REP', [2n, 2n * 10n ** 18n]],
 	['settle', 'Settle report #7', [7n]],
@@ -202,8 +201,7 @@ for (const [functionName, title, args] of [
 	test(`uses explicit reporting copy for ${functionName}`, async () => {
 		const step = await sendPreparedTransaction({ functionName, contractAddress: account, args })
 		expect(step?.title).toBe(title)
-		if (functionName === 'depositToEscalationGame') expect(step?.paidFrom).toBe('Pool vault REP')
-		if (functionName === 'depositWalletRepToEscalationGame') expect(step?.paidFrom).toBe('Wallet REP')
+		if (functionName === 'depositWalletRepToEscalationGame' || functionName === 'depositRepOnOutcome') expect(step?.paidFrom).toBe('Wallet REP')
 	})
 }
 
@@ -872,6 +870,9 @@ test('minting complete sets sends the transaction directly and tracks its receip
 			if (request.functionName === 'escalationGame') return '0x0000000000000000000000000000000000000000'
 			if (request.functionName === 'securityPoolFactory') return account
 			if (request.functionName === 'getSecurityPoolPortfolio' || request.functionName === 'getPool') return account
+			if (request.functionName === 'collateralToken') return MAINNET_NETWORK_PROFILE.wethAddress
+			if (request.functionName === 'services') return account
+			if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 10n ** 20n
 			if (request.functionName === 'purchaseQuote') return [0n, 0n]
 			if (request.functionName === 'availableMintCapacity' || request.functionName === 'attoEthToAttoShares') return 10n ** 18n
 			if (request.functionName === 'questionData') return account
@@ -887,7 +888,7 @@ test('minting complete sets sends the transaction directly and tracks its receip
 	})
 	expect(await createCompleteSetInSecurityPool(reviewed, account, 10n ** 18n)).toEqual({ action: 'createCompleteSet', hash, securityPoolAddress: account, universeId: 0n })
 	expect(sendTransaction).toHaveBeenCalledTimes(1)
-	expect(sendTransaction).toHaveBeenCalledWith(expect.objectContaining({ value: 10n ** 18n }))
+	expect(sendTransaction).toHaveBeenCalledWith(expect.objectContaining({ value: 0n }))
 	expect(transactionSteps.value?.showReviewDialog).toBe(false)
 	expect(transactionSteps.value?.steps[0]?.phase).toBe('confirmed')
 })

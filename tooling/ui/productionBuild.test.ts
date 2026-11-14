@@ -9,9 +9,10 @@ import { getInfraContractAddresses } from '../../ui/statoblastShared/ts/protocol
 import { getDeploymentSteps } from '../../ui/statoblastShared/ts/protocol/deployment.js'
 import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '../../ui/statoblastShared/ts/contractArtifact.js'
 import * as portfolioCopy from '../../ui/statoblastShared/ts/copy/portfolio.js'
+import * as collateralCopy from '../../ui/statoblastShared/ts/copy/collateral.js'
 import * as capitalCopy from '../../ui/statoblastShared/ts/copy/portfolioCapital.js'
 import { UI_APP_IDS, featureStylesheets, getUiAppPaths, getUiCoreSharedPaths, isUiAppId, type UiAppId } from './appPaths.mts'
-import { launchChromium } from './chromiumDevTools.mts'
+import { launchChromium, writeViewportScreenshot } from './chromiumDevTools.mts'
 import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
 import { createProductionBrowserNavigation } from './productionBrowserNavigation.ts'
 import { browserButtonNameExpression, createProductionBrowserActions } from './productionBrowserActions.ts'
@@ -341,12 +342,7 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 		await navigation.navigate(pageUrl)
 		const driver: ProductionBrowserDriver = {
 			...createProductionBrowserActions({ evaluate, readBody }),
-			captureScreenshot: async screenshotPath => {
-				const result = (await send('Page.captureScreenshot', { captureBeyondViewport: false, format: 'png', fromSurface: true })) as { data?: unknown }
-				if (typeof result.data !== 'string') throw new Error('Chromium did not return PNG screenshot data.')
-				await fs.mkdir(path.dirname(screenshotPath), { recursive: true })
-				await fs.writeFile(screenshotPath, Buffer.from(result.data, 'base64'))
-			},
+			captureScreenshot: async screenshotPath => await writeViewportScreenshot(send, screenshotPath),
 			evaluate,
 			evaluateAsync: expression => page.evaluate(expression),
 			navigate: async url => {
@@ -553,13 +549,13 @@ test(
 				).toEqual({
 					managerLoaded: true,
 					owner: '0x00000000000000000000000000000000000000a1',
-					// The seeded 3 REP/ETH price, 5% oracle band and 2× multiplier retain 75.789473684210526336 REP at the saved 120% target.
+					// The seeded 3 REP/WETH price, 5% oracle band and 2× multiplier retain 75.789473684210526336 REP at the saved 120% target.
 					withdrawableRep: ['4924.210526315789473664REP'],
 					principalRep: ['5000REP'],
-					commitment: ['10ETH'],
+					commitment: ['10WETH'],
 					poolPledgedRep: ['5000REP'],
 					positionPledgedRep: ['5000REP'],
-					healthyCommitment: ['10ETH'],
+					healthyCommitment: ['10WETH'],
 					health: true,
 					positions: 1,
 					feeMetrics: true,
@@ -699,15 +695,16 @@ productionInteractionTest('portfolio-purchase', '#/portfolios?simulate=1&genesis
 		`(() => { const label = [...document.querySelectorAll('label')].find(node => node.textContent === ${JSON.stringify(portfolioCopy.registeredQuestions)}); const select = label?.control; if (!(select instanceof HTMLSelectElement)) return false; const option = [...select.options].find(option => option.value !== ''); if (!option) return false; select.value = option.value; select.dispatchEvent(new Event('change', { bubbles: true })); return true })()`,
 	)
 	expect(selected).toBe(true)
-	await driver.setInputByLabel(portfolioCopy.mintAmount, '0.01')
-	await driver.setInputByLabel(portfolioCopy.maximumPurchaseFee, '0.1')
+	await driver.setInputByLabel(collateralCopy.amount(portfolioCopy.mintAmount, collateralCopy.weth), '0.01')
+	await driver.setInputByLabel(collateralCopy.amount(portfolioCopy.maximumPurchaseFee, collateralCopy.weth), '0.1')
 	await driver.setInputByLabel(portfolioCopy.minimumShares, '0')
 	await driver.waitForButtonEnabled(portfolioCopy.mint)
 	await driver.clickButton(portfolioCopy.mint)
 	await createWorkflowActions(driver).completeTransactionReview(undefined, portfolioCopy.confirmed)
 	await driver.waitForBodyText(portfolioCopy.confirmed)
 	expect(await portfolioMetric(driver, capitalCopy.principalRep)).toBe('5000REP')
-	expect(await portfolioMetric(driver, capitalCopy.demand)).not.toBe('0ETH')
+	expect(await portfolioMetric(driver, capitalCopy.demand)).toContain('WETH')
+	expect(await portfolioMetric(driver, capitalCopy.demand)).not.toBe('0WETH')
 })
 
 productionInteractionTest('deployment', '#/deploy?simulate=1&genesis=yes&simScenario=baseline', { height: 900, width: 1440 }, async driver => {

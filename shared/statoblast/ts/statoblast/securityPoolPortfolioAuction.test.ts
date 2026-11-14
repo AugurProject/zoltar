@@ -57,6 +57,7 @@ function fixture(overrides: Record<string, unknown> = {}, options: { timestamp?:
 	const opened = options.opened ?? true
 	const finalized = options.finalized ?? false
 	const values: Record<string, unknown> = {
+		collateralToken: rep,
 		factory,
 		forkController: controller,
 		portfolio,
@@ -99,7 +100,7 @@ function fixture(overrides: Record<string, unknown> = {}, options: { timestamp?:
 		owner: bidder,
 		initialCapital: capital,
 		auction,
-		balanceOf: 100n * unit,
+		balanceOf: options.walletAttoEth ?? 100n * unit,
 		allowance: 100n * unit,
 		clearing: [6n * unit, 3n, 3n * unit, 18n * unit + 1n, 1n, 0n, 0n, 0n, 3n, false],
 		...overrides,
@@ -130,15 +131,15 @@ const load = (source: ReturnType<typeof fixture>, bidStart = 0n, bidCount = 16) 
 const bidTerms = { lots: 2n, minimumAttoRepPerLot: 5n * unit, targetHealthFactorBps: 12_000n }
 
 describe('portfolio collateral repair auction SDK', () => {
-	test('ETH-only bids need no existing REP or approval and pledge only purchased collateral', async () => {
-		const source = fixture({ balanceOf: 0n, allowance: 0n })
+	test('Collateral bids need token approval but no existing REP and pledge only purchased collateral', async () => {
+		const source = fixture()
 		const snapshot = await load(source)
 		const quote = quotePortfolioAuctionBid(snapshot, { ...bidTerms, minimumAttoRepPerLot: 5n * unit })
-		expect(buildPortfolioAuctionBidRequest(snapshot, quote).value).toBe(2n * unit)
+		expect(buildPortfolioAuctionBidRequest(snapshot, quote).value).toBe(0n)
 		expect(quote.minimumPrincipalAttoRep).toBe(10n * unit)
 		expect(quote).not.toHaveProperty('topUpAttoRep')
 		expect(quote).not.toHaveProperty('executionReserveAttoEth')
-		expect(source.calls.some(call => ['balanceOf', 'allowance', 'refundCreditAttoRep', 'minimumExecutionReservePerLot', 'bidReservePerLotAttoEth'].includes(call.functionName))).toBe(false)
+		expect(source.calls.some(call => ['refundCreditAttoRep', 'minimumExecutionReservePerLot', 'bidReservePerLotAttoEth'].includes(call.functionName))).toBe(false)
 	})
 	test('authenticates canonical modules and each bidder vault at one block without enumerating other bidders', async () => {
 		const source = fixture({ bidderBidCount: 1_000_000n })
@@ -186,7 +187,7 @@ describe('portfolio collateral repair auction SDK', () => {
 			expect(() => buildPortfolioAuctionOpenRequest(blocked)).toThrow()
 		}
 		expect(portfolioAuctionOpeningReason(await load(fixture({}, { opened: false, timestamp: 1_000n })))).toContain('closed')
-		expect(portfolioAuctionOpeningReason(await load(fixture({ inventoryAttoRep: 3n * unit }, { opened: false })))).toContain('cannot back one ETH lot')
+		expect(portfolioAuctionOpeningReason(await load(fixture({ inventoryAttoRep: 3n * unit }, { opened: false })))).toContain('cannot back one collateral lot')
 	})
 	test('chosen health rounds exact required collateral once to the grid without multiplying the rounded protocol minimum', async () => {
 		const snapshot = await load(fixture({ openingConservativePrice: 3n, securityMultiplierBps: 10_000n, repGrid: 2n, minimumCollateralAttoRepPerLot: 4n }))
@@ -195,7 +196,7 @@ describe('portfolio collateral repair auction SDK', () => {
 		expect(quote.minimumPrincipalAttoRep).toBe(8n)
 		expect(() => quotePortfolioAuctionBid(snapshot, { ...bidTerms, minimumAttoRepPerLot: 4n, targetHealthFactorBps: 15_000n })).toThrow('at least 0.000000000000000006 REP')
 	})
-	test('quotes exact ETH funding and purchased collateral without changing the chosen health target', async () => {
+	test('quotes exact collateral funding and purchased collateral without changing the chosen health target', async () => {
 		const snapshot = await load(fixture())
 		const quote = quotePortfolioAuctionBid(snapshot, bidTerms)
 		expect(quote).toMatchObject({
@@ -205,19 +206,19 @@ describe('portfolio collateral repair auction SDK', () => {
 			maximumPrice: { attoEth: unit, attoRep: 5n * unit },
 		})
 		const request = buildPortfolioAuctionBidRequest(snapshot, quote)
-		expect(request).toMatchObject({ account: bidder, to: auction, value: quote.bidAttoEth })
+		expect(request).toMatchObject({ account: bidder, to: auction, value: 0n })
 		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'submitBid', args: [2n, 5n * unit, 12_000n] })
 		for (const patch of [{ lots: 0n }, { minimumAttoRepPerLot: 1n }, { minimumAttoRepPerLot: 101n * unit }, { minimumAttoRepPerLot: 4n * unit }, { targetHealthFactorBps: 9_999n }, { targetHealthFactorBps: 20_000n }, { lots: 1n << 128n }])
 			expect(() => quotePortfolioAuctionBid(snapshot, { ...bidTerms, ...patch })).toThrow()
 	})
-	test('ETH balance and closing deadline block submission without increasing signed funding', async () => {
+	test('Collateral balance and closing deadline block submission without increasing signed funding', async () => {
 		const snapshot = await load(fixture({}, { walletAttoEth: 2n * unit - 1n }))
-		expect(() => buildPortfolioAuctionBidRequest(snapshot, bidTerms)).toThrow('Insufficient ETH')
+		expect(() => buildPortfolioAuctionBidRequest(snapshot, bidTerms)).toThrow('Insufficient collateral')
 		const closed = await load(fixture({}, { timestamp: 1_000n }))
 		expect(() => buildPortfolioAuctionBidRequest(closed, bidTerms)).toThrow('not accepting')
-		expect(buildPortfolioAuctionBidRequest(await load(fixture({}, { walletAttoEth: 2n * unit })), bidTerms).value).toBe(2n * unit)
+		expect(buildPortfolioAuctionBidRequest(await load(fixture({}, { walletAttoEth: 2n * unit })), bidTerms).value).toBe(0n)
 	})
-	test('provably losing bids can credit and withdraw ETH before closing', async () => {
+	test('provably losing bids can credit and withdraw collateral before closing', async () => {
 		const snapshot = await load(fixture({ earlyRefundAttoEth: 2n * unit }))
 		expect(decodeFunctionData({ abi, data: buildPortfolioAuctionRefundCreditRequest(snapshot, 1n).data })).toEqual({ functionName: 'settleRefund', args: [1n] })
 		const credited = await load(fixture({ refundCreditAttoEth: 2n * unit }))
@@ -241,7 +242,7 @@ describe('portfolio collateral repair auction SDK', () => {
 		const closed = await load(fixture({}, { finalized: true }))
 		expect(quotePortfolioAuctionRefundClaim(closed, 1n)).toMatchObject({ settles: true, bidRefundAttoEth: unit, totalAttoEth: unit })
 		const fullWinner = await load(fixture({ previewBid: [bidder, vaultFor(1n), 12_000n, 2n, 2n * unit, 12n * unit, 0n], refundCreditAttoEth: unit, bidderBidCount: 1n }, { finalized: true }))
-		expect(() => quotePortfolioAuctionRefundClaim(fullWinner, 1n)).toThrow('no unused ETH')
+		expect(() => quotePortfolioAuctionRefundClaim(fullWinner, 1n)).toThrow('no unused collateral')
 	})
 	test('early refund reads reject partial amounts and keep potential winners committed', async () => {
 		const pending = await load(fixture())
@@ -267,6 +268,8 @@ describe('portfolio collateral repair auction SDK', () => {
 	})
 	test('vault execution preserves the liability owner, target and exact funding, with a distinct wallet-funded deposit helper', () => {
 		const vault = vaultFor(1n)
+		expect(() => buildPortfolioAuctionVaultExecuteRequest({ bidder, vault, request: { account: vault, to: capital, value: -1n, data: '0x' } })).toThrow('Forwarded ETH')
+		expect(() => buildPortfolioAuctionVaultExecuteRequest({ bidder, vault, request: { account: vault, to: capital, value: 0n, data: '0x' }, fundingAttoEth: -1n })).toThrow('Wallet ETH funding')
 		const data: Hex = '0x12345678'
 		const request = buildPortfolioAuctionVaultExecuteRequest({ bidder, vault, request: { account: vault, to: capital, value: 7n, data } })
 		expect(request).toMatchObject({ account: bidder, to: vault, value: 7n })

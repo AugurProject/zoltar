@@ -180,6 +180,13 @@ test.skipIf(url === undefined)('derives market ETH volume, activity, and account
 		expect(closedTrader).not.toHaveProperty('holdings_value_atto_eth')
 		expect(closedTrader).not.toHaveProperty('net_pnl_atto_eth')
 		expect((await portfolioFor(address('9'))).items).toEqual([])
+		for (const symbol of ['USDC', 'USDT']) {
+			const collateral = { address: address('8'), symbol, decimals: 6 }
+			await connection`UPDATE entity_state_snapshots SET read_result = read_result || ${JSON.stringify({ collateral })}::text::jsonb WHERE chain_id = ${chainId} AND entity_type = 'pool' AND entity_identity = ${pool}`
+			const tokenDetail = await handleApi(new Request(`http://localhost/api/v1/state/trading/${chainId}/${pair}`), connection)
+			expect(await tokenDetail?.json()).toMatchObject({ data: { summary: { collateral }, activity: { items: expect.arrayContaining([expect.objectContaining({ collateral })]) } } })
+			expect((await portfolioFor(trader)).items[0]).toHaveProperty('collateral', collateral)
+		}
 	} finally {
 		connection.release()
 		await sql.close()

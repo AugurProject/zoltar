@@ -1,4 +1,5 @@
 import { useId } from 'preact/hooks'
+import * as collateralCopy from '../../../copy/collateral.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
@@ -7,6 +8,7 @@ import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
+import { tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
 import { PortfolioButton, PortfolioInput } from './PortfolioControls.js'
 import { usePortfolioPrice, type PortfolioPriceParameters } from '../hooks/usePortfolioPrice.js'
@@ -24,7 +26,7 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 	const observation = model.snapshot?.observation
 	const disabled = parameters.actions.busy !== undefined
 	const report = model.report
-	const priceWarning = getPortfolioPriceWarning(model.proposedPrice, model.comparisonPrice)
+	const priceWarning = getPortfolioPriceWarning(model.proposedPrice, model.comparisonPrice, model.collateral)
 	let reportStatus: string | undefined
 	if (report !== undefined) {
 		reportStatus = copy.states.pending
@@ -47,7 +49,7 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 					<TimestampValue timestamp={model.earliestSettlement} relative={false} />
 				</MetricField>
 				<MetricField label={copy.currentPrice} loading={model.loading}>
-					<CurrencyValue value={observation?.lastSettlementTimestamp === 0n ? undefined : observation?.lastPrice} />
+					<CurrencyValue value={observation?.lastSettlementTimestamp === 0n ? undefined : observation?.lastPrice} units={36 - model.collateral.decimals} />
 				</MetricField>
 				{branch ? (
 					<MetricField label={copy.validUntil} loading={model.loading}>
@@ -63,9 +65,9 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 						{priceWarning === undefined ? undefined : <UserMessage id={priceWarningId} placement='field' tone='warning' detail={priceWarning} />}
 					</div>
 				</div>
-				<PortfolioInput label={copy.weth} hint={copy.wethHint} value={model.wethInput} onChange={model.setWeth} disabled={disabled} numeric />
-				<MetricField label={copy.minimumWeth} loading={model.loading}>
-					<CurrencyValue value={model.minimumWethAttoEth} suffix={common.weth} />
+				<PortfolioInput label={collateralCopy.reportStake(model.collateral.symbol)} hint={copy.wethHint} value={model.wethInput} onChange={model.setWeth} disabled={disabled} numeric />
+				<MetricField label={collateralCopy.minimumReportStake(model.collateral.symbol)} loading={model.loading}>
+					<CurrencyValue value={model.minimumWethAttoEth} suffix={model.collateral.symbol} units={model.collateral.decimals} />
 				</MetricField>
 				<MetricField label={scoped.requiredRep}>
 					<CurrencyValue value={model.funding?.rep} suffix={common.rep} />
@@ -73,17 +75,30 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 				<MetricField label={copy.bounty} loading={model.loading}>
 					<CurrencyValue value={observation?.bounty} suffix={common.eth} />
 				</MetricField>
-				<MetricField label={copy.walletWeth} loading={model.loading}>
-					<CurrencyValue value={observation?.wethBalanceAttoEth} suffix={common.weth} />
+				<MetricField label={collateralCopy.walletBalance(model.collateral.symbol)} loading={model.loading}>
+					<CurrencyValue value={observation?.wethBalanceAttoEth} suffix={model.collateral.symbol} units={model.collateral.decimals} />
 				</MetricField>
 				<MetricField label={scoped.walletRep} loading={model.loading}>
 					<CurrencyValue value={observation?.repBalanceAttoRep} suffix={common.rep} />
 				</MetricField>
-				<MetricField label={copy.wrapAmount}>
-					<CurrencyValue value={model.funding?.wrap} suffix={common.eth} />
-				</MetricField>
+				{model.collateral.symbol === collateralCopy.weth ? (
+					<MetricField label={copy.wrapAmount}>
+						<CurrencyValue value={model.funding?.wrap} suffix={common.eth} />
+					</MetricField>
+				) : undefined}
 			</MetricGrid>
-			<PortfolioButton model={parameters.actions} action={model.actionId('wrap')} label={copy.wrap} pendingLabel={copy.wrapping} reason={model.wrapReason} onClick={model.wrap} />
+			{model.collateral.symbol === collateralCopy.weth ? <PortfolioButton model={parameters.actions} action={model.actionId('wrap')} label={copy.wrap} pendingLabel={copy.wrapping} reason={model.wrapReason} onClick={model.wrap} /> : undefined}
+			{tokenRequiresAllowanceReset(model.collateral.address) ? (
+				<PortfolioButton
+					model={parameters.actions}
+					action={model.actionId('resetCollateral')}
+					label={common.formatResetTokenApproval(model.collateral.symbol)}
+					pendingLabel={common.formatResettingTokenApproval(model.collateral.symbol)}
+					reason={model.fundingReason ?? ((observation?.wethAllowanceAttoEth ?? 0n) === 0n ? common.notNeeded : undefined)}
+					onClick={() => model.approve('weth', 0n)}
+				/>
+			) : undefined}
+
 			<TokenApprovalControl
 				actionLabel={scoped.request}
 				allowanceError={model.fundingReadError}
@@ -91,15 +106,16 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 				approvedAmount={observation?.wethAllowanceAttoEth}
 				disabled={disabled}
 				guardMessage={model.fundingReason}
+				requiresAllowanceReset={tokenRequiresAllowanceReset(model.collateral.address)}
 				onApprove={amount => {
 					if (amount !== undefined) void model.approve('weth', amount)
 				}}
 				pending={parameters.actions.busy === model.actionId('approveWeth')}
-				pendingLabel={copy.approving}
+				pendingLabel={common.formatApprovingToken(model.collateral.symbol)}
 				requiredAmount={model.funding?.weth}
 				resetKey={`${model.draftKey}:${model.priceInput}:${model.wethInput}:weth`}
-				tokenSymbol={common.weth}
-				tokenUnits={18}
+				tokenSymbol={model.collateral.symbol}
+				tokenUnits={model.collateral.decimals}
 			/>
 			<TokenApprovalControl
 				actionLabel={scoped.request}
@@ -112,7 +128,7 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 					if (amount !== undefined) void model.approve('rep', amount)
 				}}
 				pending={parameters.actions.busy === model.actionId('approveRep')}
-				pendingLabel={copy.approving}
+				pendingLabel={common.approvingRep}
 				requiredAmount={model.funding?.rep}
 				resetKey={`${model.draftKey}:${model.priceInput}:${model.wethInput}:rep`}
 				tokenSymbol={common.rep}
@@ -129,8 +145,8 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 				<MetricField label={copy.sponsor}>
 					<AddressValue address={report?.sponsor} />
 				</MetricField>
-				<MetricField label={copy.releasedWeth}>
-					<CurrencyValue value={report?.wethCredit} suffix={common.weth} />
+				<MetricField label={collateralCopy.released(model.collateral.symbol)}>
+					<CurrencyValue value={report?.wethCredit} suffix={model.collateral.symbol} units={model.collateral.decimals} />
 				</MetricField>
 				<MetricField label={scoped.releasedRep}>
 					<CurrencyValue value={report?.repCredit} suffix={common.rep} />

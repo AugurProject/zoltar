@@ -22,6 +22,7 @@ export function isOracleRequestFundingError(error: unknown) {
 }
 
 type CoordinatorFundingValues = {
+	minimumReportCollateral: bigint | undefined
 	fixedRequestPriceCostAttoEth: bigint | undefined
 	escalationHaltMultiplierBps: bigint
 	gasConsumedOpenOracleReportPrice: bigint
@@ -77,6 +78,8 @@ function mulDivCeil(left: bigint, right: bigint, denominator: bigint, label: str
 }
 
 function coordinatorFundingValues(snapshot: OracleRequestFundingSnapshot): CoordinatorFundingValues {
+	const minimumReportCollateral = snapshot.minimumReportCollateral === undefined ? undefined : uint256(snapshot.minimumReportCollateral, 'minimumReportCollateral')
+	if (minimumReportCollateral !== undefined && (minimumReportCollateral === 0n || minimumReportCollateral > UINT128_MAXIMUM)) throw oracleRequestFundingError('Invalid collateral report floor')
 	const fixedRequestPriceCostAttoEth = snapshot.fixedRequestPriceCostAttoEth === undefined ? undefined : uint256(snapshot.fixedRequestPriceCostAttoEth, 'fixedRequestPriceCostAttoEth')
 	if (fixedRequestPriceCostAttoEth !== undefined && fixedRequestPriceCostAttoEth !== 101n) throw oracleRequestFundingError('Shared report bounty must be 101 attoETH')
 	const gasConsumedOpenOracleReportPrice = uint256(snapshot.gasConsumedOpenOracleReportPrice, 'gasConsumedOpenOracleReportPrice')
@@ -110,6 +113,7 @@ function coordinatorFundingValues(snapshot: OracleRequestFundingSnapshot): Coord
 		throw oracleRequestFundingError('initialReportPriorityFeeAttoEthPerGas exceeds OpenOracle limits')
 	}
 	return {
+		minimumReportCollateral,
 		fixedRequestPriceCostAttoEth,
 		escalationHaltMultiplierBps,
 		gasConsumedOpenOracleReportPrice,
@@ -128,6 +132,7 @@ function minimumToken1ReportForGasPrice(gasPriceAttoEthPerGas: bigint, funding: 
 }
 
 function minimumToken1ReportAttoEth(baseFeePerGas: bigint, settlementCollateralAttoEth: bigint, funding: CoordinatorFundingValues) {
+	if (funding.minimumReportCollateral !== undefined) return checkedAdd(funding.minimumReportCollateral, ceilDiv(settlementCollateralAttoEth, OPEN_INTEREST_DIVIDER), 'minimum oracle report')
 	const priorityReport = minimumToken1ReportForGasPrice(funding.initialReportPriorityFeeAttoEthPerGas, funding)
 	const baseFeeReport = minimumToken1ReportForGasPrice(baseFeePerGas, funding)
 	const openInterestReport = ceilDiv(settlementCollateralAttoEth, OPEN_INTEREST_DIVIDER)
@@ -235,8 +240,8 @@ export function oracleRequestFundingEnvelope(parameters: OracleRequestFundingEnv
 export function oracleRequestSettlementCollateralCeiling(parameters: { coordinator: OracleRequestFundingSnapshot; envelope: OracleRequestFundingBounds }): CanonicalUintString {
 	const funding = coordinatorFundingValues(parameters.coordinator)
 	const initialWethAttoEth = uint256(parameters.envelope.maximumInitialAttoWeth, 'maximumInitialAttoWeth')
-	const priorityReportAttoEth = minimumToken1ReportForGasPrice(funding.initialReportPriorityFeeAttoEthPerGas, funding)
-	if (initialWethAttoEth < priorityReportAttoEth) throw oracleRequestFundingError('Oracle request WETH report is below its priority-fee floor')
+	const priorityReportAttoEth = funding.minimumReportCollateral ?? minimumToken1ReportForGasPrice(funding.initialReportPriorityFeeAttoEthPerGas, funding)
+	if (initialWethAttoEth < priorityReportAttoEth) throw oracleRequestFundingError('Oracle request WETH report is below its configured stake floor')
 	return checkedMultiply(initialWethAttoEth - priorityReportAttoEth, OPEN_INTEREST_DIVIDER, 'oracle settlement collateral ceiling').toString()
 }
 

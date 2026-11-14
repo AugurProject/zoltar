@@ -86,6 +86,21 @@ function createAdvancingChain() {
 	return { chain, client, provider }
 }
 
+/** A Sepolia wallet backend over `provider` that rejects an `eth_call` whose block parameter is not a block-number string, as a wallet that cannot read block objects does; `afterRequest` runs after each request resolves. */
+function blockNumberOnlyBackend(provider: InjectedEthereum, afterRequest: (method: string) => void = () => undefined) {
+	return createInjectedBackend({
+		profile: SEPOLIA_NETWORK_PROFILE,
+		provider: {
+			request: async request => {
+				if (request.method === 'eth_call' && Array.isArray(request.params) && typeof request.params[1] !== 'string') throw new TypeError('c.slice is not a function')
+				const result = await provider.request(request)
+				afterRequest(request.method)
+				return result
+			},
+		},
+	})
+}
+
 const write = async <T>(send: () => Promise<T>) => await send()
 
 describe('submitting a quote after the chain advances', () => {
@@ -150,15 +165,7 @@ describe('submitting a quote after the chain advances', () => {
 	test('quotes and submits initialization with captured block numbers and no extra block queries', async () => {
 		for (const existingPair of [undefined, pair]) {
 			const { chain, provider } = createAdvancingChain()
-			const backend = createInjectedBackend({
-				profile: SEPOLIA_NETWORK_PROFILE,
-				provider: {
-					request: async request => {
-						if (request.method === 'eth_call' && Array.isArray(request.params) && typeof request.params[1] !== 'string') throw new TypeError('c.slice is not a function')
-						return await provider.request(request)
-					},
-				},
-			})
+			const backend = blockNumberOnlyBackend(provider)
 			const client = backend.createWriteClient(account)
 			const initialMarket = { ...market, pair: existingPair, lpTotalSupply: 0n }
 			const quote = await simulateLiquidity(client, configuration, initialMarket, account, 'initialize', 10n)
@@ -170,7 +177,7 @@ describe('submitting a quote after the chain advances', () => {
 			chain.head = 3n
 			chain.simulatedBlocks.length = 0
 			expect(await submitFreshLiquidity(client, configuration, account, quote, write)).toBe(transactionHash)
-			expect(new Set(chain.simulatedBlocks)).toEqual(new Set(['0x3']))
+			expect(new Set(chain.simulatedBlocks)).toEqual(new Set(['0x3', 'latest']))
 			expect(chain.blockRequests).toEqual([
 				['latest', false],
 				['latest', false],
@@ -184,16 +191,8 @@ describe('submitting a quote after the chain advances', () => {
 
 	test('keeps all initialization reads at the captured height when a new block arrives', async () => {
 		const { chain, provider } = createAdvancingChain()
-		const backend = createInjectedBackend({
-			profile: SEPOLIA_NETWORK_PROFILE,
-			provider: {
-				request: async request => {
-					if (request.method === 'eth_call' && Array.isArray(request.params) && typeof request.params[1] !== 'string') throw new TypeError('c.slice is not a function')
-					const result = await provider.request(request)
-					if (request.method === 'eth_call') chain.head = 3n
-					return result
-				},
-			},
+		const backend = blockNumberOnlyBackend(provider, method => {
+			if (method === 'eth_call') chain.head = 3n
 		})
 		const quote = await simulateLiquidity(backend.createWriteClient(account), configuration, { ...market, pair: undefined, lpTotalSupply: 0n }, account, 'initialize', 10n)
 		expect(chain.head).toBe(3n)

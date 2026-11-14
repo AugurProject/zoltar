@@ -1,3 +1,4 @@
+import type { CollateralDisplayUnit } from './collateral-metadata.ts'
 import { abiForKind, catalogAbis, wrapperAbiForInput } from './abi-catalog.ts'
 import { dependencyDiscoveryKinds, discoveries } from './contract-discovery.ts'
 import { delegationExecutionDetails } from './delegation-executions.ts'
@@ -37,7 +38,7 @@ const exactUnits = (value: string, decimals: number): string => {
 	return formatted.includes('.') ? formatted.replace(/\.?0+$/, '') : formatted
 }
 
-type DecodeDisplayContext = { readonly nativeSymbol: string }
+type DecodeDisplayContext = { readonly nativeSymbol: string; readonly collateralUnits?: boolean; readonly collateral?: CollateralDisplayUnit | undefined; readonly collateralByAddress?: ReadonlyMap<string, CollateralDisplayUnit> }
 
 const defaultDisplayContext: DecodeDisplayContext = { nativeSymbol: 'ETH' }
 const maxDelegationDepth = 4
@@ -45,17 +46,19 @@ const maxDelegationDepth = 4
 const semanticUnit = (name: string, context: DecodeDisplayContext): { decimals: number; symbol: string } | undefined => {
 	const lower = name.toLowerCase()
 	if (lower.includes('attoethpergas')) return { decimals: 18, symbol: `${context.nativeSymbol}/gas` }
+	if (lower.includes('attoeth') && /bounty|settlerreward|requestpricecost|^fundingattoeth$|^forwardedattoeth$/u.test(lower)) return { decimals: 18, symbol: context.nativeSymbol }
 	if (lower.includes('attorep')) return { decimals: 18, symbol: 'REP' }
-	if (lower.includes('attoeth')) return { decimals: 18, symbol: context.nativeSymbol }
-	if (lower.includes('attoshares')) return { decimals: 18, symbol: 'shares' }
+	if (lower.includes('attoeth') || (context.collateralUnits && lower.includes('attoweth'))) return context.collateralUnits ? (context.collateral ?? { decimals: 0, symbol: 'collateral units' }) : { decimals: 18, symbol: context.nativeSymbol }
+	if (lower.includes('attoshares')) return context.collateralUnits ? { decimals: context.collateral?.decimals ?? 0, symbol: context.collateral === undefined ? 'share units' : 'shares' } : { decimals: 18, symbol: 'shares' }
 	return undefined
 }
 
 const protocolTokenUnit: Readonly<Record<string, { readonly decimals: number; readonly symbol: string }>> = {
 	reputationToken: { decimals: 18, symbol: 'REP' },
-	shareToken: { decimals: 18, symbol: 'shares' },
+	shareToken: { decimals: 0, symbol: 'share units' },
 	weth: { decimals: 18, symbol: 'WETH' },
 	usdc: { decimals: 6, symbol: 'USDC' },
+	usdt: { decimals: 6, symbol: 'USDT' },
 }
 
 type TokenAmountRule = { readonly tokenPath: string; readonly amountPaths: readonly string[] }
@@ -113,6 +116,7 @@ const tokenAmountRules: Readonly<Record<string, readonly TokenAmountRule[]>> = {
 }
 
 const fixedNativeAmountRules: Readonly<Record<string, readonly { readonly path: string; readonly decimals: number }[]>> = {
+	'securityPool.EthReceived': [{ path: 'amountAttoEth', decimals: 18 }],
 	'openOracle.dispute': [{ path: 'params.settlerReward', decimals: 18 }],
 	'openOracle.report': [{ path: 'params.settlerReward', decimals: 18 }],
 }
@@ -383,7 +387,17 @@ export const decodeLogRecord = (
 	const kindEvents = kindAbi?.filter((item): item is AbiEvent => isAbiEvent(item) && toEventSelector(item) === topic) ?? []
 	const candidates = kindEvents.length > 0 ? kindEvents : (eventByTopic.get(topic) ?? [])
 	if (candidates.length === 0) return { status: 'unknown', summary: `Unknown event ${topic.slice(0, 10)}…` }
-	return decodeWithEvents(candidates, kind, topics, data, labels, tokenMetadata, contractKinds, emitterAddress, context)
+	return decodeWithEvents(
+		candidates,
+		kind,
+		topics,
+		data,
+		labels,
+		tokenMetadata,
+		contractKinds,
+		emitterAddress,
+		/^(securityPool|sharedPool|openOraclePrice|priceCoordinator|twoWayConstantProduct)/u.test(kind ?? '') ? { ...context, collateralUnits: true, collateral: context.collateralByAddress?.get(emitterAddress?.toLowerCase() ?? '') ?? context.collateral } : context,
+	)
 }
 
 export const decodeAction = (contract: ContractMetadata | undefined, input: Hex, labels: ReadonlyMap<string, string>, tokenMetadata: ReadonlyMap<string, TokenMetadata> = new Map(), contractKinds: ReadonlyMap<string, string> = new Map(), context: DecodeDisplayContext = defaultDisplayContext): DecodedRecord => {
@@ -391,6 +405,12 @@ export const decodeAction = (contract: ContractMetadata | undefined, input: Hex,
 }
 
 const decodeActionRecord = (contract: ContractMetadata | undefined, input: Hex, labels: ReadonlyMap<string, string>, tokenMetadata: ReadonlyMap<string, TokenMetadata>, contractKinds: ReadonlyMap<string, string>, context: DecodeDisplayContext, depth: number): DecodedRecord => {
+	context = {
+		...context,
+		collateralUnits: /^(securityPool|sharedPool|openOraclePrice|priceCoordinator|twoWayConstantProduct)/u.test(contract?.kind ?? ''),
+		collateral: context.collateralByAddress === undefined ? context.collateral : context.collateralByAddress.get(contract?.address.toLowerCase() ?? ''),
+	}
+
 	try {
 		// deployViaProxy sends the entire init code to the zero-salt CREATE2 deployer;
 		// there is no Solidity function selector or ABI envelope to decode.
@@ -422,6 +442,11 @@ const decodeActionRecord = (contract: ContractMetadata | undefined, input: Hex, 
 		if (functionItem === undefined) throw new Error(`ABI function not found for ${selector}`)
 		const decodedArguments = Array.isArray(result.args) ? result.args : []
 		const argumentsValue = Object.fromEntries(functionItem.inputs.map((parameter, index) => [parameter.name || String(index), serializeValue(decodedArguments[index])]))
+		const linkedUnits = referencedAddressesFrom(functionItem.inputs, argumentsValue)
+			.map(address => context.collateralByAddress?.get(address.toLowerCase()))
+			.filter(unit => unit !== undefined)
+		const uniqueUnits = new Map(linkedUnits.map(unit => [`${unit.symbol}:${unit.decimals}`, unit]))
+		if (context.collateralUnits && context.collateral === undefined && uniqueUnits.size === 1) context = { ...context, collateral: linkedUnits[0] }
 		const displayArguments = Object.keys(argumentsValue).length === 0 ? undefined : (displayValue('', argumentsValue, labels, context) as SerializedArguments)
 		if (displayArguments !== undefined) applyTokenFormats(contract?.kind, result.functionName, argumentsValue, displayArguments, tokenMetadata, contractKinds, contract?.address, context)
 		const delegation =
