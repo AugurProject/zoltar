@@ -343,8 +343,8 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			},
 			{
 				call: '`safeBatchTransferFrom(from, to, ids, values)` and `safeBatchTransferFrom(from, to, ids, values, data)`',
-				caller: 'Share holder or approved ERC-1155 operator for a nonempty batch; any caller for an empty batch',
-				effect: 'A nonempty batch transfers each listed outcome-token balance without changing supply. Equal empty ID and value arrays return as a no-op without an event.',
+				caller: 'Source account or approved ERC-1155 operator',
+				effect: 'Transfers each listed outcome-token balance without changing supply. Empty batches change no balances.',
 				declarations: [
 					{
 						name: 'safeBatchTransferFrom',
@@ -352,8 +352,8 @@ export const oracleMarketContractReferences: ContractReference[] = [
 					},
 				],
 				preconditions:
-					'ID and value array lengths match. A nonempty batch also requires holder or operator authority, no listed source token already locked by child materialization or spending source-backed recovery rights, a nonzero destination, sufficient source balances, and, under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), an accepting ERC-1155 callback from a contract recipient; the empty-batch no-op performs none of those checks.',
-				signals: '`TransferBatch` for a nonempty batch; no event for an empty batch',
+					'ID and value array lengths match; caller is the source account or has operator approval; destination is nonzero; no listed source token is locked by child materialization or spending source-backed recovery rights; source balances are sufficient. Under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), a contract recipient must accept the ERC-1155 callback, including for an empty batch.',
+				signals: '`TransferBatch`, including empty batches',
 			},
 			{
 				call: '`transferPortfolioRecoveryRights(sourceUniverse, recipient, amountsAttoShares)`',

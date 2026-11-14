@@ -6,7 +6,7 @@ import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
 import { recordPreflightFailure } from '../../src/execution/preflight-failure.ts'
 import type { RuntimeState } from '../../src/state/operator-state.ts'
 import { browserTest, CHROMIUM_STARTUP_BUDGET_MILLISECONDS } from '../support/chromium.ts'
-import { activityHash, connectToChromium, explorerTransaction, explorerUrl, state, walletAddress } from '../support/dashboard-harness.ts'
+import { activityHash, connectToChromium, explorerTransaction, explorerUrl, inertDashboardControls, state, walletAddress } from '../support/dashboard-harness.ts'
 
 browserTest(
 	'shows unavailable, read-only, and signer-backed execution account inventory',
@@ -14,16 +14,8 @@ browserTest(
 		let current = state({ inventoryAvailable: false, signerReady: false })
 		const dashboard = startDashboardServer(0, {
 			getConfiguration: () => ({}),
-			setCancellation: () => {},
-			setCandidate: () => {},
-			setObligation: () => {},
-			setReplacement: () => {},
-			setWorkflow: () => {},
+			...inertDashboardControls,
 			getState: () => current,
-			hostname: '127.0.0.1',
-			setPaused: () => {},
-			setSettings: () => {},
-			setSigner: () => {},
 		})
 		const cdp = await connectToChromium()
 		try {
@@ -104,15 +96,7 @@ browserTest(
 		const dashboard = startDashboardServer(0, {
 			getConfiguration: () => ({ network: { explorerUrl } }),
 			getState: () => state({ activities }),
-			hostname: '127.0.0.1',
-			setCancellation: () => {},
-			setCandidate: () => {},
-			setObligation: () => {},
-			setPaused: () => {},
-			setReplacement: () => {},
-			setSettings: () => {},
-			setSigner: () => {},
-			setWorkflow: () => {},
+			...inertDashboardControls,
 		})
 		const cdp = await connectToChromium()
 		try {

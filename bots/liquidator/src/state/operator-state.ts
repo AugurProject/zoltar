@@ -9,9 +9,9 @@ import type { RuntimeState } from './runtime-state.ts'
 export type { RuntimeState } from './runtime-state.ts'
 import { readOwnerFileIfPresent, writeDurableStateFile } from '@zoltar/bot-shared/config/durable-file'
 import { stringifyWithBigInts } from '@zoltar/core-shared/serialization/bigInt'
-import { getAddress, isHex, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { compareBigint } from '@zoltar/core-shared/math/bigint'
-import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
+import { formatDecimalAmount, isHash32 } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { isVaultMigrationSourceEligible } from '#core/fork-migration'
 import { vaultHealthBps, type LiquidationCandidate, type VaultPosition } from '#core/strategy'
 import { serializeCentralizedMarketEstimate, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
@@ -144,10 +144,6 @@ export type PendingTransactionIntent = {
 function parseStagedOperation(value: unknown): 0 | 1 {
 	if (value === 0 || value === 1) return value
 	throw new Error('Pending transaction intent has invalid staged operation')
-}
-
-function isHash(value: unknown): value is Hex {
-	return typeof value === 'string' && isHex(value) && value.length === 66
 }
 
 export function initialRuntimeState(paused: boolean, wallet: Address | undefined, chainId: number): RuntimeState {
@@ -550,7 +546,7 @@ export async function loadDurableState(path: string, expectedChainId: number): P
 				const candidateOperationId = Reflect.get(rawCandidateOutcome, 'operationId')
 				const success = Reflect.get(rawCandidateOutcome, 'success')
 				const transactionHash = Reflect.get(rawCandidateOutcome, 'transactionHash')
-				if (!isHash(blockHash) || typeof blockNumber !== 'string' || typeof errorMessage !== 'string' || typeof candidateOperation !== 'string' || typeof candidateOperationId !== 'string' || typeof success !== 'boolean' || !isHash(transactionHash))
+				if (!isHash32(blockHash) || typeof blockNumber !== 'string' || typeof errorMessage !== 'string' || typeof candidateOperation !== 'string' || typeof candidateOperationId !== 'string' || typeof success !== 'boolean' || !isHash32(transactionHash))
 					throw new Error('Pending staged operation candidate outcome is invalid')
 				candidateOutcome = {
 					blockHash,
@@ -563,7 +559,7 @@ export async function loadDurableState(path: string, expectedChainId: number): P
 				}
 			}
 			if (typeof operationId !== 'string' || typeof queuedBlock !== 'string') throw new Error('Pending staged operation has invalid numeric metadata')
-			if ((recoveryAnchorBlock === undefined) !== (recoveryAnchorHash === undefined) || (recoveryAnchorBlock !== undefined && (typeof recoveryAnchorBlock !== 'string' || !isHash(recoveryAnchorHash)))) throw new Error('Pending staged operation recovery anchor is invalid')
+			if ((recoveryAnchorBlock === undefined) !== (recoveryAnchorHash === undefined) || (recoveryAnchorBlock !== undefined && (typeof recoveryAnchorBlock !== 'string' || !isHash32(recoveryAnchorHash)))) throw new Error('Pending staged operation recovery anchor is invalid')
 			return {
 				...(candidateOutcome === undefined ? {} : { candidateOutcome }),
 				coordinator: getAddress(String(Reflect.get(operation, 'coordinator'))),
@@ -573,7 +569,7 @@ export async function loadDurableState(path: string, expectedChainId: number): P
 				...(Reflect.get(operation, 'operation') === undefined ? {} : { operation: parseStagedOperation(Reflect.get(operation, 'operation')) }),
 				operationId: BigInt(operationId),
 				queuedBlock: BigInt(queuedBlock),
-				...(typeof recoveryAnchorBlock === 'string' && isHash(recoveryAnchorHash) ? { recoveryAnchorBlock: BigInt(recoveryAnchorBlock), recoveryAnchorHash } : {}),
+				...(typeof recoveryAnchorBlock === 'string' && isHash32(recoveryAnchorHash) ? { recoveryAnchorBlock: BigInt(recoveryAnchorBlock), recoveryAnchorHash } : {}),
 				target: getAddress(String(Reflect.get(operation, 'target'))),
 			}
 		}),

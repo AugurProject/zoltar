@@ -2,7 +2,7 @@ import { canonicalExecutorIdentity } from '#execution/executor-identity'
 import { REORG_OVERLAP_BLOCKS } from '#execution/execution-orchestration'
 import { canonicalSecurityPoolFactory } from '#config/network'
 import { requiredDeploymentRoles, type DeploymentRole } from '#config/deployment-roles'
-import { rpcFailureWithContext, type Address, type Hex, type TransactionLog } from '@zoltar/bot-shared/ethereum'
+import { rpcFailureWithContext, type Address, type TransactionLog } from '@zoltar/bot-shared/ethereum'
 import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, OPEN_ORACLE_REPORT_SETTLED_TOPIC } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { openOraclePriceCoordinatorAbi } from '#contracts/abi'
 import { type Configuration } from '#config/configuration'
@@ -13,6 +13,7 @@ import type { ReadClient } from '#core/operator-types'
 import { availableSettledValues, quorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { rpcQuorumDescription } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
+import { hasCode } from '@zoltar/core-shared/evm/code'
 import { endpointLabel } from '@zoltar/bot-shared/monitoring/connectivity'
 import type { OperatorState } from '#state/operator-state'
 
@@ -87,8 +88,6 @@ export type CanonicalDeploymentStatus = {
 	contracts: readonly { address: Address; deployed: boolean; role: DeploymentRole }[]
 	executorDeployed: boolean
 }
-
-const hasCode = (code: Hex | undefined) => code !== undefined && code !== '0x'
 
 async function inspectCanonicalDeploymentsWith(client: ReadClient, config: Configuration): Promise<CanonicalDeploymentStatus> {
 	const required = requiredDeploymentIdentities(config)

@@ -1,4 +1,5 @@
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
+import type { Address } from '../ethereum.ts'
 import { ConnectivityDegradedError, operationalFailureDisposition } from './resilience.ts'
 import { rpcQuorumDescription, type RpcQuorumRequirement } from './rpc-quorum-policy.ts'
 
@@ -41,6 +42,17 @@ export async function settledQuorumValue<T>(label: string, observations: readonl
 		throw new ConnectivityDegradedError(`${label} requires at least ${requirement === 1 ? 'one available RPC endpoint' : 'two available independent RPC endpoints'}${failures.length === 0 ? '' : `; ${failures.join('; ')}`}`)
 	}
 	return quorumValue(label, available, requirement)
+}
+
+type PendingNonceReader = { endpoint: string; client: { getTransactionCount(parameters: { address: Address; blockTag: 'pending' }): Promise<bigint> } }
+
+/** Agree on the signer's pending-block nonce across every supplied RPC reader. */
+export async function quorumPendingNonce(label: string, readers: readonly PendingNonceReader[], address: Address, requirement: RpcQuorumRequirement) {
+	return settledQuorumValue(
+		label,
+		readers.map(async ({ client, endpoint }) => ({ endpoint, value: await client.getTransactionCount({ address, blockTag: 'pending' }) })),
+		requirement,
+	)
 }
 
 export function sharedQuorumBlockNumber(heads: readonly bigint[], requiredQuorum: number) {

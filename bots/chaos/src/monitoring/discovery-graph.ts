@@ -101,7 +101,3 @@ export function cachePoolDeployment(deployment: { parent: Address; openOraclePri
 		universeId: deployment.universeId.toString(),
 	}
 }
-
-export function hasCode(code: string | undefined): code is string {
-	return code !== undefined && code !== '0x'
-}

@@ -63,14 +63,19 @@ export async function createTestFingerprints(testFiles: readonly string[], conte
 	return Object.fromEntries(await Promise.all(testFiles.map(async filePath => [normalizeTestPath(filePath), await createFileFingerprint(filePath, contextPaths)] as const)))
 }
 
-export function filterTestTimingHistory(history: TestTimingHistory, currentFingerprints: Readonly<Record<string, string>>): TestTimingHistory {
-	const samplesByFile = Object.fromEntries(Object.entries(history.samplesByFile).filter(([filePath]) => history.fingerprintsByFile?.[filePath] !== undefined && history.fingerprintsByFile[filePath] === currentFingerprints[filePath]))
+// Keeps a fingerprint only for files that retain samples, and omits the map entirely when none remain.
+function timingHistoryWithFingerprints(samplesByFile: Record<string, number[]>, fingerprintFor: (filePath: string) => string | undefined): TestTimingHistory {
 	const fingerprintsByFile = Object.fromEntries(
 		Object.keys(samplesByFile)
-			.map(filePath => [filePath, currentFingerprints[filePath]])
+			.map(filePath => [filePath, fingerprintFor(filePath)])
 			.filter((entry): entry is [string, string] => entry[1] !== undefined),
 	)
 	return { version: TEST_TIMING_HISTORY_VERSION, samplesByFile, ...(Object.keys(fingerprintsByFile).length === 0 ? {} : { fingerprintsByFile }) }
+}
+
+export function filterTestTimingHistory(history: TestTimingHistory, currentFingerprints: Readonly<Record<string, string>>): TestTimingHistory {
+	const samplesByFile = Object.fromEntries(Object.entries(history.samplesByFile).filter(([filePath]) => history.fingerprintsByFile?.[filePath] !== undefined && history.fingerprintsByFile[filePath] === currentFingerprints[filePath]))
+	return timingHistoryWithFingerprints(samplesByFile, filePath => currentFingerprints[filePath])
 }
 
 function decodeXmlAttribute(value: string) {
@@ -221,12 +226,7 @@ export function mergeTestTimingHistory(previous: TestTimingHistory | undefined, 
 		const samples = observed === undefined ? priorSamples : [...priorSamples, observed]
 		if (samples.length > 0) samplesByFile[filePath] = samples.slice(-MAXIMUM_TIMING_SAMPLES)
 	}
-	const fingerprintsByFile = Object.fromEntries(
-		Object.keys(samplesByFile)
-			.map(filePath => [filePath, observations.map(observation => observation.fingerprintsByFile?.[filePath]).find(fingerprint => fingerprint !== undefined) ?? previous?.fingerprintsByFile?.[filePath]])
-			.filter((entry): entry is [string, string] => entry[1] !== undefined),
-	)
-	return { version: TEST_TIMING_HISTORY_VERSION, samplesByFile, ...(Object.keys(fingerprintsByFile).length === 0 ? {} : { fingerprintsByFile }) }
+	return timingHistoryWithFingerprints(samplesByFile, filePath => observations.map(observation => observation.fingerprintsByFile?.[filePath]).find(fingerprint => fingerprint !== undefined) ?? previous?.fingerprintsByFile?.[filePath])
 }
 
 function median(values: readonly number[]) {

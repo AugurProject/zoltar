@@ -15,6 +15,7 @@ import { type WriteContractClient, readRequiredMulticall, writeContractAndWait }
 import { readSecurityPoolUniverseId } from './securityPoolActions.js'
 import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as tradingCopy from '../copy/trading.js'
+import * as collateralCopy from '../copy/collateral.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
 
@@ -263,7 +264,7 @@ export async function createCompleteSetInSecurityPool(client: WriteClient, secur
 			contractAddress: callParams.address,
 			validateBeforeSubmit: async () => {
 				const latest = await loadTradingCollateral(client, securityPoolAddress, client.account.address)
-				if (latest.allowance < amount + maximumFee) throw new Error('Collateral approval required.')
+				if (latest.allowance < amount + maximumFee) throw new Error(collateralCopy.approvalRequired)
 				if (latest.balance < amount + maximumFee) throw new Error('Insufficient collateral for minting and purchase fees.')
 				if ((await quote()) > maximumFee) throw new Error('Purchase fee changed. Review the amount again.')
 				await client.estimateGas({ account: client.account, to: callParams.address, data: encodeFunctionData(callParams), value: callParams.value })

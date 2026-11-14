@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test'
 import { createWalletClient, custom, decodeFunctionData, decodeFunctionResult, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { submitFreshSettlement } from '../../protocol/live.js'
 import { MINIMUM_SLIPPAGE_BPS } from '../../protocol/tradeQuote.js'
-import { receiveBasedExitArguments } from '../../protocol/authorization.js'
+import { receiveBasedExitArguments, shareTokenAbi } from '../../protocol/authorization.js'
 import { receiveRequestParameter } from '@zoltar/trading-shared/trading/receiveRequest'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { forkedMarketFixture } from '../support/liveMarketFixture.js'
@@ -17,33 +17,6 @@ const pool = `0x${'33'.repeat(20)}` as Address
 const transactionHash = `0x${'44'.repeat(32)}` as Hex
 const blockHash = `0x${'55'.repeat(32)}` as Hex
 const configuration = deploymentConfigurationFixture({ chainId: 1, chainName: 'Test', rpcUrl: 'http://localhost', factory: `0x${'88'.repeat(20)}`, router: `0x${'99'.repeat(20)}` })
-const migrateAbi = [
-	{
-		type: 'function',
-		name: 'migrate',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'fromId', type: 'uint256' },
-			{ name: 'targetOutcomeIndexes', type: 'uint256[]' },
-		],
-		outputs: [],
-	},
-] as const
-const shareTransferAbi = [
-	{
-		type: 'function',
-		name: 'safeBatchTransferFrom',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'from', type: 'address' },
-			{ name: 'to', type: 'address' },
-			{ name: 'ids', type: 'uint256[]' },
-			{ name: 'values', type: 'uint256[]' },
-			{ name: 'data', type: 'bytes' },
-		],
-		outputs: [],
-	},
-] as const
 
 function decodeReceiveRequest(data: Hex) {
 	// The router request is a static tuple, so its fields decode as flat ABI outputs.
@@ -148,7 +121,7 @@ describe('live settlement contract encoding', () => {
 		expect(counts.simulations).toBe(1)
 		expect(counts.sends).toBe(1)
 		for (const data of transactionData) {
-			expect(decodeFunctionData({ abi: migrateAbi, data }).args).toEqual([(7n << 8n) | 1n, [12n, 42n, 99n]])
+			expect(decodeFunctionData({ abi: shareTokenAbi, data })).toEqual({ functionName: 'migrate', args: [(7n << 8n) | 1n, [12n, 42n, 99n]] })
 		}
 	})
 
@@ -163,7 +136,7 @@ describe('live settlement contract encoding', () => {
 		expect(await submitFreshSettlement(client, configuration, account, quote, async write => await write())).toBe(transactionHash)
 		expect(transactionData).toHaveLength(3)
 		for (const data of transactionData) {
-			expect(decodeFunctionData({ abi: migrateAbi, data })).toEqual({ functionName: 'migrate', args: [(7n << 8n) | 1n, normalizedScalarTargets] })
+			expect(decodeFunctionData({ abi: shareTokenAbi, data })).toEqual({ functionName: 'migrate', args: [(7n << 8n) | 1n, normalizedScalarTargets] })
 		}
 	})
 
@@ -179,7 +152,7 @@ describe('live settlement contract encoding', () => {
 		expect(transactionData).toHaveLength(3)
 		expect(transactionData[1]).toBe(transactionData[0])
 		expect(transactionData[2]).toBe(transactionData[0])
-		const decodedTransfer = decodeFunctionData({ abi: shareTransferAbi, data: transactionData[0] })
+		const decodedTransfer = decodeFunctionData({ abi: shareTokenAbi, data: transactionData[0] })
 		if (decodedTransfer.args === undefined) throw new Error('Missing share transfer arguments')
 		expect(decodedTransfer.functionName).toBe('safeBatchTransferFrom')
 		expect(decodedTransfer.args.slice(0, 4)).toEqual([account, configuration.router, [1792n, 1793n, 1794n], [10n, 10n, 10n]])

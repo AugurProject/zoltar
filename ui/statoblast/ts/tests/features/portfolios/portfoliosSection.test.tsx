@@ -16,14 +16,26 @@ import { priceFeed, priceFixture } from './priceFixture.js'
 const lifecycle = installDomTestLifecycle({ url: `https://example.test/#/portfolios?portfolio=${portfolio}&owner=${owner}`, afterTest: resetActiveEnvironmentForTesting })
 const parameters = { accountAddress: owner, onTransactionRequested: () => undefined, onTransactionSubmitted: () => undefined, onTransactionFinished: () => undefined, onTransactionPresented: () => undefined, refreshState: async () => undefined }
 
+const renderPortfolios = async () => {
+	const view = await renderIntoDocument(<PortfoliosSection parameters={parameters} walletConnected enabled environmentKey={0} activeUniverseId={0n} />)
+	lifecycle.trackRendered(view)
+	return view
+}
+const sectionTitled = (container: Element, title: string) => [...container.querySelectorAll('section')].find(section => section.querySelector('h3')?.textContent === title)
+const universePriceReport = (backing: Element | undefined) => [...(backing?.querySelectorAll('details') ?? [])].find(details => details.querySelector('summary')?.textContent === priceCopy.scopes.universe.title)
+const firstPosition = (container: Element) => {
+	const position = [...container.querySelectorAll('.workflow-subsection')].find(section => section.querySelector('h4')?.textContent === copy.position(1n))
+	if (position === undefined) throw new Error('Position section missing')
+	return position
+}
+
 test('completed setup preserves the four transaction controls in their original order with completion reasons', async () => {
 	const source = capitalClient()
 	source.setSetupStage(2n)
 	source.install()
-	const view = await renderIntoDocument(<PortfoliosSection parameters={parameters} walletConnected enabled environmentKey={0} activeUniverseId={0n} />)
-	lifecycle.trackRendered(view)
+	const view = await renderPortfolios()
 	await waitFor(() => expect(view.container.textContent).toContain(copy.prepareProgress(2)))
-	const setup = [...view.container.querySelectorAll('section')].find(section => section.querySelector('h3')?.textContent === copy.prepareTitle)
+	const setup = sectionTitled(view.container, copy.prepareTitle)
 	if (setup === undefined) throw new Error('Setup section missing')
 	const buttons = [...setup.querySelectorAll('button')]
 	expect(buttons.map(button => button.textContent)).toEqual(copy.prepareStages)
@@ -47,11 +59,9 @@ test('completed setup preserves the four transaction controls in their original 
 test('authenticated refresh preserves position controls while disabling transactions until fresh data resolves', async () => {
 	const source = capitalClient()
 	source.install()
-	const view = await renderIntoDocument(<PortfoliosSection parameters={parameters} walletConnected enabled environmentKey={0} activeUniverseId={0n} />)
-	lifecycle.trackRendered(view)
+	const view = await renderPortfolios()
 	await waitFor(() => expect(view.container.textContent).toContain(copy.position(1n)))
-	const position = [...view.container.querySelectorAll('.workflow-subsection')].find(section => section.querySelector('h4')?.textContent === copy.position(1n))
-	if (position === undefined) throw new Error('Position section missing')
+	const position = firstPosition(view.container)
 	const inputs = [...position.querySelectorAll('input')]
 	const buttons = [...position.querySelectorAll('button')]
 	expect(inputs).toHaveLength(1)
@@ -73,11 +83,9 @@ test('a pending retirement shows its locked request without an editable form', a
 	const snapshot = capitalSnapshot()
 	const source = capitalClient({ ...snapshot, positions: snapshot.positions.map(position => ({ ...position, batch: 1n, remainingCommitment: 0n })) })
 	source.install()
-	const view = await renderIntoDocument(<PortfoliosSection parameters={parameters} walletConnected enabled environmentKey={0} activeUniverseId={0n} />)
-	lifecycle.trackRendered(view)
+	const view = await renderPortfolios()
 	await waitFor(() => expect(view.container.textContent).toContain(copy.queuedRemainingCommitment))
-	const position = [...view.container.querySelectorAll('.workflow-subsection')].find(section => section.querySelector('h4')?.textContent === copy.position(1n))
-	if (position === undefined) throw new Error('Position section missing')
+	const position = firstPosition(view.container)
 	expect(position.querySelectorAll('input')).toHaveLength(0)
 	expect([...position.querySelectorAll('button')].map(button => button.textContent?.trim())).not.toContain(copy.retire)
 	expect(position.textContent).not.toContain(copy.remainingCommitment)
@@ -91,8 +99,7 @@ test('purchase selection uses question text with a full copyable identifier and 
 	source.setRead('questionCreatedTimestamp', 1n)
 	source.setRead('getOutcomeLabels', ['No', 'Yes'])
 	source.install()
-	const view = await renderIntoDocument(<PortfoliosSection parameters={parameters} walletConnected enabled environmentKey={0} activeUniverseId={0n} />)
-	lifecycle.trackRendered(view)
+	const view = await renderPortfolios()
 	await waitFor(() => expect([...view.container.querySelectorAll('option')].some(option => option.textContent === 'Will the official result be Yes?')).toBe(true))
 	const option = [...view.container.querySelectorAll('option')].find(option => option.textContent === 'Will the official result be Yes?')
 	const select = option?.closest('select')
@@ -114,8 +121,7 @@ test('a forked origin is announced on its field and stated once beside the deplo
 	const source = capitalClient()
 	source.setRead('getForkTime', 1n)
 	source.install()
-	const view = await renderIntoDocument(<PortfoliosSection parameters={parameters} walletConnected enabled environmentKey={0} activeUniverseId={0n} />)
-	lifecycle.trackRendered(view)
+	const view = await renderPortfolios()
 	const form = view.container.querySelector('.portfolio-creation-form')
 	await waitFor(() => expect(form?.textContent).toContain('This universe has forked.'))
 	expect(form?.textContent?.split('This universe has forked.')).toHaveLength(2)
@@ -141,11 +147,10 @@ test('an unforked portfolio with an expired price can fund a new report from its
 	// The fork panel prices only fork branches, so the unforked universe needs its own request path.
 	const fixture = priceFixture(capitalSnapshot({ priceValid: false, priceValidUntil: 900n }))
 	fixture.set(priceFeed, 'universeId', 0n)
-	const view = await renderIntoDocument(<PortfoliosSection parameters={parameters} walletConnected enabled environmentKey={0} activeUniverseId={0n} />)
-	lifecycle.trackRendered(view)
-	const backing = () => [...view.container.querySelectorAll('section')].find(section => section.querySelector('h3')?.textContent === copy.poolTitle)
+	const view = await renderPortfolios()
+	const backing = () => sectionTitled(view.container, copy.poolTitle)
 	await waitFor(() => expect(backing()?.textContent).toContain(copy.priceStale))
-	const report = [...(backing()?.querySelectorAll('details') ?? [])].find(details => details.querySelector('summary')?.textContent === priceCopy.scopes.universe.title)
+	const report = universePriceReport(backing())
 	if (report === undefined) throw new Error('Shared backing has no price report')
 	expect(report.open).toBe(true)
 	// The summary is the report's only label.
@@ -167,9 +172,8 @@ test('shared backing has no price report until a portfolio account is shown', as
 	window.localStorage.clear()
 	window.history.replaceState(undefined, '', '/#/portfolios')
 	capitalClient().install()
-	const view = await renderIntoDocument(<PortfoliosSection parameters={parameters} walletConnected enabled environmentKey={0} activeUniverseId={0n} />)
-	lifecycle.trackRendered(view)
-	const backing = () => [...view.container.querySelectorAll('section')].find(section => section.querySelector('h3')?.textContent === copy.poolTitle)
+	const view = await renderPortfolios()
+	const backing = () => sectionTitled(view.container, copy.poolTitle)
 	await waitFor(() => expect(backing()?.textContent).toContain(copy.priceExpiry))
 	// Assert on text: with no account there is nothing to price, and an empty report would only show endless loading.
 	expect(backing()?.textContent).not.toContain(priceCopy.scopes.universe.title)
@@ -179,9 +183,8 @@ test('shared backing has no price report until a portfolio account is shown', as
 test('a current price keeps the price request folded under its summary', async () => {
 	const source = capitalClient()
 	source.install()
-	const view = await renderIntoDocument(<PortfoliosSection parameters={parameters} walletConnected enabled environmentKey={0} activeUniverseId={0n} />)
-	lifecycle.trackRendered(view)
-	const backing = () => [...view.container.querySelectorAll('section')].find(section => section.querySelector('h3')?.textContent === copy.poolTitle)
+	const view = await renderPortfolios()
+	const backing = () => sectionTitled(view.container, copy.poolTitle)
 	await waitFor(() => expect(backing()?.textContent).toContain(copy.priceValid))
 	const disclosure = backing()?.querySelector('details')
 	expect(disclosure?.querySelector('summary')?.textContent).toBe(priceCopy.scopes.universe.title)
@@ -196,9 +199,8 @@ test.each([
 ])('an expired price stays folded in %s, where no new report can be requested', async (_state, overrides, status) => {
 	const source = capitalClient(capitalSnapshot({ priceValid: false, ...overrides }))
 	source.install()
-	const view = await renderIntoDocument(<PortfoliosSection parameters={parameters} walletConnected enabled environmentKey={0} activeUniverseId={0n} />)
-	lifecycle.trackRendered(view)
-	const backing = () => [...view.container.querySelectorAll('section')].find(section => section.querySelector('h3')?.textContent === copy.poolTitle)
+	const view = await renderPortfolios()
+	const backing = () => sectionTitled(view.container, copy.poolTitle)
 	await waitFor(() => expect(backing()?.textContent).toContain(status))
 	expect(backing()?.querySelector('details')?.open).toBe(false)
 })
@@ -206,10 +208,9 @@ test.each([
 test('the price report keeps its drafts when folded and through a failed account refresh', async () => {
 	const fixture = priceFixture(capitalSnapshot({ priceValid: false, priceValidUntil: 900n }))
 	fixture.set(priceFeed, 'universeId', 0n)
-	const view = await renderIntoDocument(<PortfoliosSection parameters={parameters} walletConnected enabled environmentKey={0} activeUniverseId={0n} />)
-	lifecycle.trackRendered(view)
-	const backing = () => [...view.container.querySelectorAll('section')].find(section => section.querySelector('h3')?.textContent === copy.poolTitle)
-	const report = () => [...(backing()?.querySelectorAll('details') ?? [])].find(details => details.querySelector('summary')?.textContent === priceCopy.scopes.universe.title)
+	const view = await renderPortfolios()
+	const backing = () => sectionTitled(view.container, copy.poolTitle)
+	const report = () => universePriceReport(backing())
 	const priceInput = () => [...(report()?.querySelectorAll('input') ?? [])].find(candidate => candidate.closest('.field')?.querySelector('label')?.textContent?.includes(priceCopy.price))
 	await waitFor(() => expect(report()?.textContent).toContain('Wallet WETH'))
 	await act(() => {

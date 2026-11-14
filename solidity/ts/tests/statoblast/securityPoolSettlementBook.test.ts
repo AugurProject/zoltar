@@ -36,6 +36,15 @@ describe('Statoblast: central internal settlement units', () => {
 		return writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'scheduleFinality', args: [book, question, finalAfter, nowTime] }))
 	}
 	const freeze = (book: bigint, timestamp: number) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'freezeMatured', args: [book, timestamp] }))
+	/** Mints `shares` into questions 1 and 2 of book 1, charges each all but one unit as fees, then forks book 1 into child book 2 with `recoveryRep`. */
+	const forkTwoFeeBearingQuestions = async (shares: bigint, recoveryRep: bigint) => {
+		for (const q of [1n, 2n]) {
+			await mint(1n, q, shares)
+			await fee(1n, q, shares - 1n)
+		}
+		await seal(1n)
+		await child(1n, 0n, recoveryRep)
+	}
 	const book = (id: bigint) => client.readContract({ ...target(), functionName: 'books', args: [id] })
 	const question = (bookId: bigint, id: bigint) => client.readContract({ ...target(), functionName: 'question', args: [bookId, id] })
 	const quote = async (bookId: bigint, id: bigint, shares: bigint) => [...(await client.readContract({ ...target(), functionName: 'quoteRedemption', args: [bookId, id, shares] }))]
@@ -144,12 +153,7 @@ describe('Statoblast: central internal settlement units', () => {
 
 	test('partial REP entitlements stay separate across questions, finality and a nested fork', async () => {
 		const shares = 10n ** 18n
-		for (const q of [1n, 2n]) {
-			await mint(1n, q, shares)
-			await fee(1n, q, shares - 1n)
-		}
-		await seal(1n)
-		await child(1n, 0n, 2_000n * shares)
+		await forkTwoFeeBearingQuestions(shares, 2_000n * shares)
 		await redeem(2n, 1n, shares / 2n)
 		const deadline = 3 * 86_400 + 10
 		await schedule(2n, 1n, deadline)
@@ -167,12 +171,7 @@ describe('Statoblast: central internal settlement units', () => {
 
 	test('a nested fork preserves previously accrued REP before adding newly surrendered REP', async () => {
 		const shares = 10n ** 18n
-		for (const q of [1n, 2n]) {
-			await mint(1n, q, shares)
-			await fee(1n, q, shares - 1n)
-		}
-		await seal(1n)
-		await child(1n, 0n, 2_000n * shares)
+		await forkTwoFeeBearingQuestions(shares, 2_000n * shares)
 		await redeem(2n, 1n, shares / 2n)
 		await seal(2n)
 		await child(2n, 0n, 3_500n * shares)
@@ -185,12 +184,7 @@ describe('Statoblast: central internal settlement units', () => {
 
 	test('partial REP claims and moved deadlines preserve shared finality correction totals', async () => {
 		const shares = 10n ** 18n
-		for (const q of [1n, 2n]) {
-			await mint(1n, q, shares)
-			await fee(1n, q, shares - 1n)
-		}
-		await seal(1n)
-		await child(1n, 0n, 2_000n * shares)
+		await forkTwoFeeBearingQuestions(shares, 2_000n * shares)
 		const deadline = 3 * 86_400 + 10
 		await schedule(2n, 1n, deadline)
 		await schedule(2n, 2n, deadline)
