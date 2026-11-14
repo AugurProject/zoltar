@@ -7,6 +7,7 @@ import { act } from 'preact/test-utils'
 import { CurrencyValue } from '../components/CurrencyValue.js'
 import { fireEvent, waitFor, within } from './testUtils/queries'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { deniedClipboard, installClipboard } from './testUtils/clipboard.js'
 
 describe('CurrencyValue', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
@@ -167,13 +168,7 @@ describe('CurrencyValue', () => {
 	})
 
 	test('keeps the value visible and associates an announced clipboard error', async () => {
-		const clipboard = {
-			writeText: async () => {
-				throw new DOMException('clipboard unavailable', 'NotAllowedError')
-			},
-		}
-		Reflect.defineProperty(navigator, 'clipboard', { configurable: true, value: clipboard })
-		Reflect.defineProperty(window.navigator, 'clipboard', { configurable: true, value: clipboard })
+		installClipboard(deniedClipboard())
 		const { documentQueries } = await renderCurrencyValue({ copyable: true })
 		const copyButton = documentQueries.getByRole('button', { name: 'Copy exact value 999 999 990 000 ETH' })
 

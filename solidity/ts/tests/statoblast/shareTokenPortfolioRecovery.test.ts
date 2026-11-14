@@ -10,6 +10,17 @@ import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getZoltarAddres
 import { createQuestion, makeQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { statoblast_tokens_ShareToken_ShareToken as tokenArtifact, test_statoblast_ShareTokenRecoveryTestPool_ShareTokenRecoveryTestPool as poolArtifact } from '../../types/contractArtifact'
 
+/** Creates an open-ended Yes/No question titled `title`, its share token, and a recovery test pool over that token. */
+async function deployRecoverySource(owner: ReturnType<typeof createWriteClient>, title: string) {
+	const data = { ...makeQuestion(title), startTime: 0n, endTime: 0n }
+	const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
+	await createQuestion(owner, data, outcomes)
+	const question = getQuestionId(data, outcomes)
+	const token = await deployContract(owner, encodeDeployData({ abi: tokenArtifact.abi, bytecode: `0x${tokenArtifact.evm.bytecode.object}`, args: [owner.account.address, getZoltarAddress(), question] }))
+	const source = await deployContract(owner, encodeDeployData({ abi: poolArtifact.abi, bytecode: `0x${poolArtifact.evm.bytecode.object}`, args: [token, 0n, zeroAddress, owner.account.address] }))
+	return { question, source, token }
+}
+
 describe('Statoblast: independent portfolio share recovery rights', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
 	test('reassembles split recovery rights after both outcome holders migrate without moving child rights', async () => {
@@ -18,12 +29,7 @@ describe('Statoblast: independent portfolio share recovery rights', () => {
 		const bob = createWriteClient(ethereum, TEST_ADDRESSES[1])
 		await setupTestAccounts(ethereum)
 		await ensureZoltarDeployed(owner)
-		const data = { ...makeQuestion('split recovery rights'), startTime: 0n, endTime: 0n }
-		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
-		await createQuestion(owner, data, outcomes)
-		const question = getQuestionId(data, outcomes)
-		const token = await deployContract(owner, encodeDeployData({ abi: tokenArtifact.abi, bytecode: `0x${tokenArtifact.evm.bytecode.object}`, args: [owner.account.address, getZoltarAddress(), question] }))
-		const source = await deployContract(owner, encodeDeployData({ abi: poolArtifact.abi, bytecode: `0x${poolArtifact.evm.bytecode.object}`, args: [token, 0n, zeroAddress, owner.account.address] }))
+		const { question, source, token } = await deployRecoverySource(owner, 'split recovery rights')
 		const send = async (client: typeof owner, call: Parameters<typeof owner.writeContract>[0]) => await writeContractAndWait(client, () => client.writeContract(call))
 		await send(owner, { abi: tokenArtifact.abi, address: token, functionName: 'authorize', args: [source] })
 		await send(owner, { abi: tokenArtifact.abi, address: token, functionName: 'mintCompleteSets', args: [0n, owner.account.address, 10n] })
@@ -62,12 +68,7 @@ describe('Statoblast: independent portfolio share recovery rights', () => {
 		const carol = createWriteClient(ethereum, TEST_ADDRESSES[2])
 		await setupTestAccounts(ethereum)
 		await ensureZoltarDeployed(owner)
-		const data = { ...makeQuestion('recovery credit accounting'), startTime: 0n, endTime: 0n }
-		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
-		await createQuestion(owner, data, outcomes)
-		const question = getQuestionId(data, outcomes)
-		const token = await deployContract(owner, encodeDeployData({ abi: tokenArtifact.abi, bytecode: `0x${tokenArtifact.evm.bytecode.object}`, args: [owner.account.address, getZoltarAddress(), question] }))
-		const source = await deployContract(owner, encodeDeployData({ abi: poolArtifact.abi, bytecode: `0x${poolArtifact.evm.bytecode.object}`, args: [token, 0n, zeroAddress, owner.account.address] }))
+		const { question, source, token } = await deployRecoverySource(owner, 'recovery credit accounting')
 		const send = async (client: typeof owner, call: Parameters<typeof owner.writeContract>[0]) => await writeContractAndWait(client, () => client.writeContract(call))
 		const target = { abi: tokenArtifact.abi, address: token }
 		const transfer = (client: typeof owner, recipient: typeof owner.account.address, amounts: readonly [bigint, bigint, bigint]) => send(client, { ...target, functionName: 'transferPortfolioRecoveryRights', args: [0n, recipient, amounts] })
@@ -127,12 +128,7 @@ describe('Statoblast: independent portfolio share recovery rights', () => {
 		const stranger = createWriteClient(ethereum, TEST_ADDRESSES[1])
 		await setupTestAccounts(ethereum)
 		await ensureZoltarDeployed(owner)
-		const data = { ...makeQuestion('recovery rights'), startTime: 0n, endTime: 0n }
-		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
-		await createQuestion(owner, data, outcomes)
-		const question = getQuestionId(data, outcomes)
-		const token = await deployContract(owner, encodeDeployData({ abi: tokenArtifact.abi, bytecode: `0x${tokenArtifact.evm.bytecode.object}`, args: [owner.account.address, getZoltarAddress(), question] }))
-		const source = await deployContract(owner, encodeDeployData({ abi: poolArtifact.abi, bytecode: `0x${poolArtifact.evm.bytecode.object}`, args: [token, 0n, zeroAddress, owner.account.address] }))
+		const { question, source, token } = await deployRecoverySource(owner, 'recovery rights')
 		const send = async (call: Parameters<typeof owner.writeContract>[0]) => await writeContractAndWait(owner, () => owner.writeContract(call))
 		await send({ abi: tokenArtifact.abi, address: token, functionName: 'authorize', args: [source] })
 		await send({ abi: tokenArtifact.abi, address: token, functionName: 'mintCompleteSets', args: [0n, owner.account.address, 10n] })

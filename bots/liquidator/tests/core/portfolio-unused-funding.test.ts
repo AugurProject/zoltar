@@ -5,7 +5,7 @@ import { applyPortfolioFundingEffect } from '#state/portfolio-instructions'
 import { createWalletClient, createRpcEndpointPool, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { mainnet } from '@zoltar/core-shared/evm/ethereum'
-import type { submitCall } from '#execution/submit-call'
+import { recordingSubmit } from '../support/portfolio-execution.ts'
 import type { refreshPortfolioExecution } from '#execution/portfolio-executor'
 import { portfolioObservation, portfolioSettings, unit } from '../support/portfolio-observation.ts'
 
@@ -49,12 +49,7 @@ test('unwind rechecks the original target even outside the current discovery pag
 		targets.push(id)
 		return { observation: { ...observation, positions: id === undefined || !viable ? [] : observation.positions }, totalPrincipal: 70n * unit, allowance: 0n }
 	}
-	const calls: Parameters<typeof submitCall>[4][] = []
-	const submit: typeof submitCall = async (_wallet, _settings, _state, _pool, call) => {
-		await call.preSubmit?.()
-		calls.push(call)
-		return `0x${'1'.repeat(64)}`
-	}
+	const { calls, submit } = recordingSubmit()
 	const target = { ...observation, positions: [] }
 	await expect(executeUnusedPortfolioFunding(wallet, settings, state, pool, target, async () => true, { refresh, submit })).rejects.toThrow('still viable')
 	expect(targets).toContain(1n)

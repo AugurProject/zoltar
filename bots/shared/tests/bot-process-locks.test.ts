@@ -26,6 +26,23 @@ const ALWAYS: BotProcessLockOptions = { label: 'chaos-bot', signerLocksInDryRun:
 const acquireLiquidatorProcessLocks = (settings: Parameters<typeof acquireBotProcessLocks>[0], acquirers?: BotProcessLockOptions['acquirers']) => acquireBotProcessLocks(settings, acquirers === undefined ? LIVE_ONLY : { ...LIVE_ONLY, acquirers })
 const acquireChaosProcessLocks = (settings: Parameters<typeof acquireBotProcessLocks>[0], acquirers?: BotProcessLockOptions['acquirers']) => acquireBotProcessLocks(settings, acquirers === undefined ? ALWAYS : { ...ALWAYS, acquirers })
 
+const botProcessLocksModuleUrl = pathToFileURL(resolve(import.meta.dir, '../src/execution/bot-process-locks.ts')).href
+
+function spawnLockSubprocess(script: string) {
+	return Bun.spawn([process.execPath, '--eval', script], { cwd: resolve(import.meta.dir, '..'), stderr: 'pipe', stdout: 'pipe' })
+}
+
+/** Runs `script` in a Bun subprocess, drives it with `interact`, and always reaps the subprocess afterwards. */
+async function withLockSubprocess(script: string, interact: (child: ReturnType<typeof spawnLockSubprocess>) => Promise<void>) {
+	const child = spawnLockSubprocess(script)
+	try {
+		await interact(child)
+	} finally {
+		if (child.exitCode === null) child.kill('SIGKILL')
+		await child.exited
+	}
+}
+
 describe('bot process locks', () => {
 	test('opens a dashboard session on signer contention while retaining state ownership and requiring a fresh lock to arm', async () => {
 		const privateKey = `0x${'70'.repeat(32)}` as const
@@ -184,9 +201,8 @@ describe('bot process locks', () => {
 	test('releases state and signer locks after graceful SIGTERM shutdown and dashboard drain', async () => {
 		const state = await stateFile('state.json')
 		const privateKey = `0x${'44'.repeat(32)}` as const
-		const moduleUrl = pathToFileURL(resolve(import.meta.dir, '../src/execution/bot-process-locks.ts')).href
 		const script = `
-			import { acquireBotProcessLocks, createBotShutdownController, botDashboardLifecycle } from ${JSON.stringify(moduleUrl)}
+			import { acquireBotProcessLocks, createBotShutdownController, botDashboardLifecycle } from ${JSON.stringify(botProcessLocksModuleUrl)}
 			{
 				using shutdown = createBotShutdownController()
 				const locks = await acquireBotProcessLocks({ chainId: 1, execute: true, privateKey: ${JSON.stringify(privateKey)}, stateFile: ${JSON.stringify(state)} }, { label: 'liquidator', signerLocksInDryRun: false })
@@ -204,8 +220,7 @@ describe('bot process locks', () => {
 				}
 			}
 		`
-		const child = Bun.spawn([process.execPath, '--eval', script], { cwd: resolve(import.meta.dir, '..'), stderr: 'pipe', stdout: 'pipe' })
-		try {
+		await withLockSubprocess(script, async child => {
 			const reader = child.stdout.getReader()
 			const decoder = new TextDecoder()
 			let output = ''
@@ -222,10 +237,7 @@ describe('bot process locks', () => {
 			await expect(acquireLiquidatorProcessLocks({ chainId: 1, execute: true, privateKey, stateFile: state })).rejects.toThrow('already locked')
 			reader.releaseLock()
 			expect(await child.exited).toBe(0)
-		} finally {
-			if (child.exitCode === null) child.kill('SIGKILL')
-			await child.exited
-		}
+		})
 		const replacement = await acquireLiquidatorProcessLocks({ chainId: 1, execute: true, privateKey, stateFile: state })
 		releases.push(replacement.release)
 	})
@@ -233,9 +245,8 @@ describe('bot process locks', () => {
 	test('cleans up when SIGTERM arrives before asynchronous lock acquisition returns', async () => {
 		const state = await stateFile('state.json')
 		const privateKey = `0x${'55'.repeat(32)}` as const
-		const moduleUrl = pathToFileURL(resolve(import.meta.dir, '../src/execution/bot-process-locks.ts')).href
 		const script = `
-			import { acquireBotProcessLocks, createBotShutdownController, withBotProcessLocks } from ${JSON.stringify(moduleUrl)}
+			import { acquireBotProcessLocks, createBotShutdownController, withBotProcessLocks } from ${JSON.stringify(botProcessLocksModuleUrl)}
 			using shutdown = createBotShutdownController()
 			const options = { label: 'liquidator', signerLocksInDryRun: false }
 			const settings = { chainId: 1, execute: true, privateKey: ${JSON.stringify(privateKey)}, stateFile: ${JSON.stringify(state)} }
@@ -248,18 +259,14 @@ describe('bot process locks', () => {
 				return acquired
 			})
 		`
-		const child = Bun.spawn([process.execPath, '--eval', script], { cwd: resolve(import.meta.dir, '..'), stderr: 'pipe', stdout: 'pipe' })
-		try {
+		await withLockSubprocess(script, async child => {
 			const reader = child.stdout.getReader()
 			const next = await reader.read()
 			if (next.done || !new TextDecoder().decode(next.value).includes('locked-before-return')) throw new Error(`Lock subprocess stopped before acquisition pause: ${await new Response(child.stderr).text()}`)
 			reader.releaseLock()
 			child.kill('SIGTERM')
 			expect(await child.exited).toBe(0)
-		} finally {
-			if (child.exitCode === null) child.kill('SIGKILL')
-			await child.exited
-		}
+		})
 		const replacement = await acquireLiquidatorProcessLocks({ chainId: 1, execute: true, privateKey, stateFile: state })
 		releases.push(replacement.release)
 	})

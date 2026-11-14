@@ -35,7 +35,7 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 		amount: undefined,
 		ethValueAttoEth: preview.value,
 	}
-	if (preview.functionName === 'depositToEscalationGame' || preview.functionName === 'depositRepOnOutcome' || preview.functionName === 'depositWalletRepToEscalationGame') {
+	if (preview.functionName === 'depositRepOnOutcome' || preview.functionName === 'depositWalletRepToEscalationGame') {
 		const [outcome, amount] = preview.args ?? []
 		if (typeof amount !== 'bigint' || (outcome !== 0 && outcome !== 1 && outcome !== 2 && outcome !== 0n && outcome !== 1n && outcome !== 2n)) throw new Error('Invalid escalation deposit review')
 		let label = commonCopy.no
@@ -43,7 +43,7 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 		if (outcome === 1 || outcome === 1n) label = commonCopy.yes
 		details.title = preview.reviewTitle ?? transactionCopy.reportingAction(label, formatCurrencyBalance(amount))
 		details.amount = preview.reviewAmount ?? formatCurrencyBalanceWithUnit(amount, commonCopy.rep)
-		details.paidFrom = preview.functionName === 'depositToEscalationGame' ? transactionCopy.vaultBackedRep : transactionCopy.walletRep
+		details.paidFrom = transactionCopy.walletRep
 	}
 	if (preview.functionName === 'settle') details.title = transactionCopy.settleReportNumber(String(preview.args?.[0] ?? ''))
 	if (preview.functionName === 'withdrawFromEscalationGame') details.title = preview.reviewTitle ?? transactionCopy.settleEscalationDeposits

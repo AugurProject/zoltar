@@ -3,7 +3,8 @@ import type { createOperationDialog } from './operation-dialog.js'
 import { node, renderWhenChanged, setBadge, statusLabel } from './dom.js'
 import { type OperationEvaluation } from './dashboard-data.ts'
 import type { DashboardElements } from './dashboard-elements.ts'
-import { classificationLabel, displayedClassification, ecosystemLabels, ecosystemOrder, normalizeEcosystem, operationIsIndependentlyExecutable, operationIsSelectedForRandomWork, publicCandidateCount } from './dashboard-format.ts'
+import { classificationLabel, displayedClassification, ecosystemLabels, ecosystemOrder, normalizeEcosystem, operationIsIndependentlyExecutable, operationIsSelectedForRandomWork } from './dashboard-format.ts'
+import { publicCandidateCount } from './public-fields.ts'
 
 type DashboardCatalogViewContext = {
 	elements: DashboardElements

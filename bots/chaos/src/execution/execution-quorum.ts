@@ -1,7 +1,7 @@
 import { createPublicClient, type Address, toHex } from '@zoltar/bot-shared/ethereum'
 import { requestTransport } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { endpointLabel } from '@zoltar/bot-shared/monitoring/connectivity'
-import { availableSettledValues, quorumValue, settledQuorumValue, sharedQuorumBlockNumber } from '@zoltar/bot-shared/monitoring/read-quorum'
+import { availableSettledValues, quorumPendingNonce, quorumValue, settledQuorumValue, sharedQuorumBlockNumber } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import type { OperatorSettings } from '../config/settings.ts'
 import { erc1155Abi, erc20Abi, openOracleAbi } from '@zoltar/bot-shared/contracts/abi'
@@ -109,19 +109,12 @@ export async function agreedLatestBlock(environment: ExecutionEnvironment, label
 	}
 }
 
-export async function agreedPendingNonce(environment: ExecutionEnvironment, address: Address, capableRpcUrls?: ReadonlySet<string> | undefined) {
+export async function agreedPendingNonce(environment: ExecutionEnvironment, address: Address, capableRpcUrls?: ReadonlySet<string> | undefined, label = 'pending signer nonce') {
 	const connectivity = requiredConnectivity(environment.settings)
-	return settledQuorumValue(
-		'pending signer nonce',
-		executionReadClients(environment)
-			.filter(({ rpcUrl }) => capableRpcUrls?.has(rpcUrl) ?? true)
-			.map(async ({ client, endpoint }) => ({
-				endpoint,
-				value: await client.getTransactionCount({
-					address,
-					blockTag: 'pending',
-				}),
-			})),
+	return quorumPendingNonce(
+		label,
+		executionReadClients(environment).filter(({ rpcUrl }) => capableRpcUrls?.has(rpcUrl) ?? true),
+		address,
 		connectivity.rpcQuorum,
 	)
 }

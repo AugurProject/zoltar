@@ -1,5 +1,6 @@
 import { startDashboardServer } from '../src/dashboard/dashboard-server.ts'
 import { unavailableOperationCatalog } from '../src/runtime/canonical-scan.ts'
+import { dashboardFixtureStrategy } from './dashboard-strategy-fixture.mts'
 
 const now = Date.now()
 const scenario = process.argv[2] ?? 'baseline'
@@ -43,19 +44,7 @@ function settings() {
 		privateKey: hasSigner ? '__PRESERVE_SAVED_PRIVATE_KEY__' : null,
 		runtime: { execute: privateRelayScenario, pollMilliseconds: 12_000 },
 		scheduler: { maximumDelaySeconds: 3_600, minimumDelaySeconds: 60 },
-		strategy: {
-			allowHighRiskOperations: false,
-			allowIrreversibleOperations: false,
-			initializeGenesisUniverse: true,
-			enabledEcosystems: ['zoltar', 'statoblast', 'open-oracle', 'trading'],
-			maximumEthPerOperation: '0.05',
-			maximumGasCostEth: '0.02',
-			maximumRepPerOperation: '10',
-			minimumEthReserve: '0.05',
-			minimumRepReserve: '10',
-			selectableOperationAllowlist: ['open-oracle.report', 'statoblast.vault.deposit-rep', 'trading.position.enter', 'zoltar.question.create-binary'],
-			workflowValidForBlocks: 288,
-		},
+		strategy: dashboardFixtureStrategy(['open-oracle.report', 'statoblast.vault.deposit-rep', 'trading.position.enter', 'zoltar.question.create-binary']),
 		submission: privateRelayScenario
 			? {
 					minimumBundleRelaySuccesses: 2,

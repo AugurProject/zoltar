@@ -26,16 +26,22 @@ export const transactionHistorySnapshot = async (sql: SQL, chainId: number, addr
 					AND transaction.block_number <= ${snapshotBlock}) AS snapshot_total
 	`
 
-export const addressTransactionHistory = async (sql: SQL, query: AddressHistoryQuery) => {
+// Positional parameters: $1 chain, $2 address, $3 snapshot block, then the optional keyset cursor, then the page limit.
+const historyPageParameters = (query: AddressHistoryQuery, keyword: 'AND' | 'WHERE', alias: string) => {
 	const values: Array<string | number> = [query.chainId, query.address, query.snapshotBlock]
 	const cursorClause =
 		query.cursorBlock === undefined || query.cursorIndex === undefined
 			? ''
 			: (() => {
 					values.push(query.cursorBlock, query.cursorIndex)
-					return `AND (t.block_number, t.transaction_index) < ($${values.length - 1}::bigint, $${values.length}::integer)`
+					return `${keyword} (${alias}.block_number, ${alias}.transaction_index) < ($${values.length - 1}::bigint, $${values.length}::integer)`
 				})()
 	values.push(query.limit + 1)
+	return { values, cursorClause }
+}
+
+export const addressTransactionHistory = async (sql: SQL, query: AddressHistoryQuery) => {
+	const { values, cursorClause } = historyPageParameters(query, 'AND', 't')
 	return await sql.unsafe(
 		`WITH snapshot_transactions AS (
 			SELECT t.*, count(*) OVER () AS snapshot_total
@@ -88,15 +94,7 @@ export const interactionHistorySnapshot = async (sql: SQL, chainId: number, addr
 	`
 
 export const addressInteractionHistory = async (sql: SQL, query: AddressHistoryQuery) => {
-	const values: Array<string | number> = [query.chainId, query.address, query.snapshotBlock]
-	const cursorClause =
-		query.cursorBlock === undefined || query.cursorIndex === undefined
-			? ''
-			: (() => {
-					values.push(query.cursorBlock, query.cursorIndex)
-					return `WHERE (interaction.block_number, interaction.transaction_index) < ($${values.length - 1}::bigint, $${values.length}::integer)`
-				})()
-	values.push(query.limit + 1)
+	const { values, cursorClause } = historyPageParameters(query, 'WHERE', 'interaction')
 	return await sql.unsafe(
 		`WITH interactions AS (
 			SELECT activity.chain_id, activity.block_hash, activity.block_number, activity.tx_hash,
