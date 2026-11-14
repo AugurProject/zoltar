@@ -8,6 +8,7 @@ import { collateralAsset, tokenFunded } from '../../protocol/collateral.js'
 import type { LiveMarket } from '../../protocol/liveMarket.js'
 import type { LiveWorkflowContext } from './liveTradingTypes.js'
 import { useTransactionSubmission } from './useTransactionSubmission.js'
+import { walletConnectionRequired } from '@zoltar/ui-core-shared/copy/common.js'
 import * as copy from '../../copy/collateral.js'
 
 export function useCollateralFunding(market: LiveMarket, required: bigint | undefined, context: LiveWorkflowContext | undefined, enabled: boolean) {
@@ -54,7 +55,7 @@ export function useCollateralFunding(market: LiveMarket, required: bigint | unde
 	else if (selected?.balance !== undefined) balanceState = 'ready'
 	let reason: string | undefined
 	if (enabled && applicable) {
-		if (context?.account === undefined) reason = copy.connect
+		if (context?.account === undefined) reason = walletConnectionRequired
 		else if (selected?.error !== undefined) reason = selected.error
 		else if (selected?.balance === undefined || selected.allowance === undefined) reason = copy.loading
 		else if (required !== undefined && required > selected.balance) reason = copy.insufficient(asset.symbol)

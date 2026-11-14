@@ -40,6 +40,8 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 	const openOracleCreateFieldErrors = useSignal<OpenOracleCreateContractFieldErrors>({})
 	const openOracleError = useSignal<string | undefined>(undefined)
 	const openOracleActiveAction = useSignal<OpenOracleActionResult['action'] | undefined>(undefined)
+	// An allowance reset runs as the token's approval action, so the screen needs this to tell which of the two buttons is pending.
+	const openOracleApprovalResetting = useSignal(false)
 	type OpenOracleWithdrawableBalanceKey = 'ethAttoEth' | 'token1' | 'token2'
 	const openOracleActiveWithdrawalBalance = useSignal<OpenOracleWithdrawableBalanceKey | undefined>(undefined)
 	const openOracleFeedback = useSignal<ActionFeedback<OpenOracleActionResult['action']> | undefined>(undefined)
@@ -136,12 +138,14 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 		action: (walletAddress: Address, context: WriteActionContext) => Promise<OpenOracleActionResult>,
 		errorFallback: string,
 		options?: {
+			approvalReset?: boolean
 			formatErrorMessage?: (error: unknown, fallbackMessage: string) => string
 			refreshTokenAccessOnSuccess?: boolean
 		},
 	) => {
 		if (openOracleActiveAction.value !== undefined || openOracleWithdrawalBalanceChecking.value) return
 		openOracleActiveAction.value = actionName
+		openOracleApprovalResetting.value = options?.approvalReset === true
 		openOracleResult.value = undefined
 		const actionReportIdInput = currentSelectedReportIdInput
 		const reportDetailsSnapshot = openOracleReportDetails.value
@@ -222,6 +226,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			)
 		} finally {
 			openOracleActiveAction.value = undefined
+			openOracleApprovalResetting.value = false
 		}
 	}
 
@@ -265,7 +270,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 					return await dependencies.approveErc20(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), token === 'token1' ? reportDetails.token1 : reportDetails.token2, getOpenOracleAddress(), approvalAmount, action)
 				},
 				`Failed to approve ${tokenLabel}`,
-				{ refreshTokenAccessOnSuccess: true },
+				{ approvalReset: amount === 0n, refreshTokenAccessOnSuccess: true },
 			)
 		})()
 
@@ -280,6 +285,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 				return await dependencies.approveErc20(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), tokenAddress, getOpenOracleAddress(), amount, token === 'token1' ? 'approveToken1' : 'approveToken2')
 			},
 			'Token approval failed.',
+			{ approvalReset: amount === 0n },
 		)
 	}
 	const wrapCreateWeth = async () =>
@@ -522,6 +528,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 		loadingOpenOracleCreate: loadingOpenOracleCreate.value,
 		openOracleActiveAction: openOracleActiveAction.value,
 		openOracleActiveWithdrawalBalance: openOracleActiveWithdrawalBalance.value,
+		openOracleApprovalResetting: openOracleApprovalResetting.value,
 		openOracleCreateFieldErrors: openOracleCreateFieldErrors.value,
 		openOracleCreateForm: openOracleCreateForm.value,
 		openOracleDisputeSubmission,

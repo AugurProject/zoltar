@@ -97,6 +97,21 @@ function amountErrorText() {
 describe('liquidity panel', () => {
 	installDomTestLifecycle()
 
+	test('explains token funding blocked by a disconnected wallet with the shared reason, not the connect button label', async () => {
+		const tokenMarket = etherScaleMarketFixture({ collateral: { token: `0x${'55'.repeat(20)}`, symbol: 'USDC', decimals: 6, native: false } })
+		const rendered = await renderPanel(tokenMarket, false)
+		try {
+			await typeAmount('0.1')
+			const approval = Array.from(document.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Approve USDC')
+			if (approval === undefined) throw new Error('Missing approval button')
+			expect(approval.disabled).toBe(true)
+			const description = approval.getAttribute('aria-describedby')
+			expect(description === null ? undefined : document.getElementById(description)?.textContent).toBe('Connect wallet to continue.')
+		} finally {
+			await rendered.cleanup()
+		}
+	})
+
 	test('previews additions instantly without wallet requests', async () => {
 		let requests = 0
 		const walletClient = createWalletClient({
