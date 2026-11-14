@@ -46,7 +46,7 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 		'VaultEscrowUpdated',
 		'VaultUnresolvedTotalsExported',
 	]),
-	...definitions('auction', 'auction', ['AuctionStarted', 'BidSubmitted', 'AuctionFinalized', 'BidSettled']),
+	...definitions('auction', 'auction', ['AuctionStarted', 'BidSubmitted', 'AuctionFinalized', 'BidSettled', 'FeesRemoved', 'RefundWithdrawn', 'RaisedWithdrawn']),
 	...definitions('risk', 'pool', ['DeploySecurityPool', 'SecurityPoolRegistered', 'AwaitingForkContinuationSet', 'CompleteSetCreated', 'CompleteSetRedeemed', 'EscalationGameSet', 'QuestionAccountingCheckpoint', 'ShareTokenSupplySet', 'SharesRedeemed', 'SystemStateSet'], ['securityPool']),
 	...definitions('risk', 'vault', ['PrincipalDeposited', 'PrincipalWithdrawn', 'CommitmentAuthorized', 'EarningsClaimed'], ['owner']),
 	...definitions('risk', 'capital-position', ['CommitmentCured', 'CommitmentTakenOver', 'AuctionCohortInstalled', 'AuctionBidMaterialized'], ['positionId', 'sourceId']),

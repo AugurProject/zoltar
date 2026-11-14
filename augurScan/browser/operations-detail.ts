@@ -420,10 +420,12 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 	if (route.kind === 'escalation') {
 		for (const key of ['deposits', 'claims']) addPanel('history', operationsPanel(`Loaded ${key}`, detailEvidenceRows(operationRecords(data[key])), `No ${key} in the loaded event page.`))
 	}
-	if (data['demandCurveTruncated'] === true) addPanel('history', operationsPanel('Demand curve coverage', [element('p', 'data-note', 'Only the highest 1,000 ticks are shown. Cumulative demand covers these ticks only.')], ''))
+	if (data['demandCurveTruncated'] === true) addPanel('history', operationsPanel('Demand curve coverage', [element('p', 'data-note', 'Only the 1,000 lowest REP-per-lot minimums are shown. Cumulative demand covers these only.')], ''))
 	const demand = operationRecords(data['demandCurve'])
 	if (demand.length > 0) {
-		const demandRows = demand.map(point => operationRow(`Tick ${String(point['tick'])}`, `${exactUnit(String(point['amountAttoEth'] ?? '0'), 18, nativeSymbol)} · cumulative ${exactUnit(String(point['cumulativeDemandAttoEth'] ?? '0'), 18, nativeSymbol)}`, String(point['tick']), undefined))
+		// Levels arrive in fill order: the lowest REP-per-lot minimum fills first.
+		const demandLots = (lots: unknown, amount: unknown): string => (typeof amount === 'string' ? `${operationCounted(lots, 'lot')} (${exactUnit(amount, 18, nativeSymbol)})` : operationCounted(lots, 'lot'))
+		const demandRows = demand.map(point => operationRow(`Minimum ${exactUnit(String(point['minimumAttoRepPerLot'] ?? '0'), 18, 'REP')} per lot`, `${demandLots(point['lots'], point['amountAttoEth'])} · cumulative ${demandLots(point['cumulativeLots'], point['cumulativeDemandAttoEth'])}`, undefined, undefined))
 		addPanel('history', operationsPanel('Demand curve data', demandRows, 'No bids match this view.'))
 	}
 	const branches = operationRecords(data['branches'])

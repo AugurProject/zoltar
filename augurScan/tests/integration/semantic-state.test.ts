@@ -36,12 +36,19 @@ test.skipIf(url === undefined)('canonical semantic state respects snapshots, mig
 		expect(positions.items[0]).toMatchObject({ universe_id: '0', invalid_atto_shares: '10', yes_atto_shares: '15', no_atto_shares: '30', complete_sets_atto_shares: '10', migration_locked: true })
 		expect(positions.items[1]).toMatchObject({ universe_id: '1', yes_atto_shares: '15', complete_sets_atto_shares: '0', migration_locked: false })
 		expect((await sharePositions(connection, 1, '0', { address: owner })).items).toEqual([])
-		for (const [index, [name, amount]] of [
-			['EthRefundCredited', '12'],
-			['PendingEthRefundWithdrawn', '5'],
-		].entries())
-			await connection`INSERT INTO collateral_repair_auction_events (chain_id, block_number, block_hash, tx_hash, log_index, auction_address, event_name, event_data, canonical) VALUES (1, 1, ${hash}, ${hash}, ${index}, ${token}, ${name}, ${JSON.stringify({ bidder: owner, amountAttoEth: amount })}::text::jsonb, true)`
-		expect(await pendingAuctionRefunds(connection, 1, '1', owner)).toEqual([expect.objectContaining({ pending_atto_eth: '7' })])
+		const otherBidder = `0x${'4'.repeat(40)}`
+		// BidSettled credits a refund and RefundWithdrawn pays the bidder's whole credit, as the auction contract does.
+		const auctionEvents = [
+			['BidSettled', { bidId: '1', bidder: owner, filledLots: '2', refundAttoEth: '12' }, 1],
+			['BidSettled', { bidId: '2', bidder: owner, filledLots: '0', refundAttoEth: '5' }, 1],
+			['RefundWithdrawn', { bidder: owner, recipient: otherBidder, amountAttoEth: '12' }, 1],
+			['BidSettled', { bidId: '3', bidder: otherBidder, filledLots: '0', refundAttoEth: '99' }, 1],
+			['RefundWithdrawn', { bidder: owner, recipient: owner, amountAttoEth: '5' }, 2],
+		] as const
+		for (const [index, [name, data, blockNumber]] of auctionEvents.entries())
+			await connection`INSERT INTO collateral_repair_auction_events (chain_id, block_number, block_hash, tx_hash, log_index, auction_address, event_name, event_data, canonical) VALUES (1, ${blockNumber}, ${hash}, ${hash}, ${index}, ${token}, ${name}, ${JSON.stringify(data)}::text::jsonb, true)`
+		expect(await pendingAuctionRefunds(connection, 1, '1', owner)).toEqual([expect.objectContaining({ auction_address: token, pending_atto_eth: '5' })])
+		expect(await pendingAuctionRefunds(connection, 1, '2', owner)).toEqual([])
 		await connection`INSERT INTO escalation_game_events (chain_id, game_address, block_number, block_hash, tx_hash, log_index, event_name, event_data, canonical) VALUES (1, ${token}, 1, ${hash}, ${hash}, 1, 'LocalDepositAppended', ${JSON.stringify({ depositor: owner, outcome: '1', parentDepositIndex: '4', amountAttoRep: '200' })}::text::jsonb, true)`
 		await connection`INSERT INTO entity_state_snapshots (chain_id, entity_type, entity_identity, block_number, block_hash, read_status, read_result, canonical) VALUES (1, 'escalation', ${token}, 1, ${hash}, 'success', ${JSON.stringify({ outcomeBalancesAttoRep: ['2', '3', '4'], finalQuestionResolution: '1' })}::text::jsonb, true)`
 		expect(await escalationCatalogData(connection, 1, '1')).toEqual([expect.objectContaining({ invalid_stake_atto_rep: '2', yes_stake_atto_rep: '3', no_stake_atto_rep: '4' })])
