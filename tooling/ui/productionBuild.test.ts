@@ -12,7 +12,7 @@ import * as portfolioCopy from '../../ui/statoblastShared/ts/copy/portfolio.js'
 import * as collateralCopy from '../../ui/statoblastShared/ts/copy/collateral.js'
 import * as capitalCopy from '../../ui/statoblastShared/ts/copy/portfolioCapital.js'
 import { UI_APP_IDS, featureStylesheets, getUiAppPaths, getUiCoreSharedPaths, isUiAppId, type UiAppId } from './appPaths.mts'
-import { launchChromium } from './chromiumDevTools.mts'
+import { launchChromium, writeViewportScreenshot } from './chromiumDevTools.mts'
 import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
 import { createProductionBrowserNavigation } from './productionBrowserNavigation.ts'
 import { browserButtonNameExpression, createProductionBrowserActions } from './productionBrowserActions.ts'
@@ -342,12 +342,7 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 		await navigation.navigate(pageUrl)
 		const driver: ProductionBrowserDriver = {
 			...createProductionBrowserActions({ evaluate, readBody }),
-			captureScreenshot: async screenshotPath => {
-				const result = (await send('Page.captureScreenshot', { captureBeyondViewport: false, format: 'png', fromSurface: true })) as { data?: unknown }
-				if (typeof result.data !== 'string') throw new Error('Chromium did not return PNG screenshot data.')
-				await fs.mkdir(path.dirname(screenshotPath), { recursive: true })
-				await fs.writeFile(screenshotPath, Buffer.from(result.data, 'base64'))
-			},
+			captureScreenshot: async screenshotPath => await writeViewportScreenshot(send, screenshotPath),
 			evaluate,
 			evaluateAsync: expression => page.evaluate(expression),
 			navigate: async url => {
