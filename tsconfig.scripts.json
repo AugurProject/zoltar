@@ -7,7 +7,7 @@
 		"allowImportingTsExtensions": true,
 		"skipLibCheck": true,
 		"noEmit": true,
-		"lib": ["ESNext", "DOM"],
+		"lib": ["ESNext", "DOM", "DOM.Iterable"],
 		"types": ["bun-types", "node"],
 		"paths": {
 			"@zoltar/ui-core-shared/*": ["./ui/coreShared/ts/*"],

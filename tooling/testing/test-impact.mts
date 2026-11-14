@@ -89,10 +89,10 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 	},
 	{
 		command: 'bun run test:browser:smoke',
-		reason: 'production build or browser smoke behavior changed',
-		matches: filePath => filePath === 'tooling/ui/production.mts' || filePath === 'tooling/ui/appPaths.mts' || filePath === 'tooling/ui/browserSmoke.mts' || filePath === 'ui/coreShared/css/application-surfaces.css',
+		reason: 'production build, browser smoke, or layout audit behavior changed',
+		matches: filePath => filePath === 'tooling/ui/production.mts' || filePath === 'tooling/ui/appPaths.mts' || filePath === 'tooling/ui/browserSmoke.mts' || filePath === 'tooling/ui/layoutAudit.ts' || filePath === 'ui/coreShared/css/application-surfaces.css',
 		ownedTestOptions: {},
-		ownedTestPaths: ['tooling/ui/browserSmoke.test.ts', 'tooling/ui/productionBuild.test.ts'],
+		ownedTestPaths: ['tooling/ui/browserSmoke.test.ts', 'tooling/ui/layoutAudit.test.ts', 'tooling/ui/productionBuild.test.ts'],
 	},
 	{
 		command: 'bun run test:browser:workflow',
