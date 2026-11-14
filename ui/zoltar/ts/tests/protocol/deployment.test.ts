@@ -16,17 +16,14 @@ import { getSepoliaGenesisRepDeployment } from '@zoltar/ui-core-shared/lib/sepol
 import { DeploymentStatusOracle_DeploymentStatusOracle, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { assertStaticDeploymentArtifactRuntimeCodeHashes, fundCanonicalDeployerSigner } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 const require = createRequire(import.meta.url)
 const rootSolcPath = fileURLToPath(new URL('../../../../../node_modules/solc/index.js', import.meta.url))
 const solc: { compile: (input: string) => string; version: () => string } = require(rootSolcPath)
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
 function requireRecord(value: unknown, label: string) {
-	if (!isRecord(value)) throw new Error(`Expected ${label} to be an object`)
+	if (!isPlainRecord(value)) throw new Error(`Expected ${label} to be an object`)
 	return value
 }
 

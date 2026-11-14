@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { contentRevision, readFileIfPresent, writeRevisionedFile } from '../../src/config/durable-file.ts'
 import { assertProfileCandidates, chainSpecificPath, networkProfilePath, storedNetworkProfileCandidates, switchNetworkProfile, type ProfileCandidate } from '../../src/config/profiles.ts'
-import { isRecord } from '../../src/infrastructure/json-validation.ts'
 import type { NetworkName } from '../../src/monitoring/connectivity.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 test('network paths preserve directories and extensions and replace existing network suffixes', () => {
 	for (const { path, expected } of [
@@ -30,7 +30,7 @@ type Settings = {
 }
 
 function isSettings(value: unknown): value is Settings {
-	if (!isRecord(value) || !isRecord(value['runtime'])) return false
+	if (!isPlainRecord(value) || !isPlainRecord(value['runtime'])) return false
 	const { journals, network, paused, runtime, tunable } = value
 	return (
 		Array.isArray(journals) &&

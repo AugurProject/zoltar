@@ -5,10 +5,7 @@ import { deploymentRegistryUnavailable } from '../copy/app.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { parseGenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null
-}
+import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
 
 function requiredString(value: unknown, label: string) {
 	if (typeof value !== 'string' || value.trim() === '') throw new Error(`${label} is required`)
@@ -24,7 +21,7 @@ function requiredAddress(value: unknown, label: string) {
 function parseCoreDeployments(candidate: unknown): readonly CoreDeployment[] {
 	if (!Array.isArray(candidate) || candidate.length === 0) throw new Error('Core deployment registry must contain at least one network')
 	const deployments = candidate.map((value, index) => {
-		if (!isRecord(value)) throw new Error(`Core deployment ${index.toString()} must be an object`)
+		if (!isObjectRecord(value)) throw new Error(`Core deployment ${index.toString()} must be an object`)
 		if (typeof value['chainId'] !== 'number' || !Number.isSafeInteger(value['chainId']) || value['chainId'] <= 0) throw new Error(`Core deployment ${index.toString()} chainId must be a positive safe integer`)
 		const chainId = value['chainId']
 		const genesisOutcome = parseGenesisOutcome(typeof value['genesisOutcome'] === 'string' ? value['genesisOutcome'] : undefined)

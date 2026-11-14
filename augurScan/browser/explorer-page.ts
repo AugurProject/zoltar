@@ -1,10 +1,10 @@
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { callTraceRows } from './call-trace.ts'
-import { isRecord } from './api-validation.ts'
 import { exactNumber, exactUnit, utcDateTime } from './format.ts'
 import { short } from './identifier-format.ts'
 import { nativeSymbolFor } from './network-freshness.ts'
 import { captureViewState, restoreViewState } from './view-state.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 const node = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, value?: string): HTMLElementTagNameMap[K] => {
 	const result = document.createElement(tag)
@@ -61,9 +61,9 @@ export const renderExplorerPage = async (path: string, chainId: string, api: (pa
 	try {
 		const endpoint = kind === 'tx' ? 'transactions' : 'blocks'
 		const result = await api(`/api/v1/${endpoint}/${encodeURIComponent(chainId)}/${encodeURIComponent(identity)}`)
-		if (!isRecord(result)) throw new Error('Evidence response is malformed')
+		if (!isPlainRecord(result)) throw new Error('Evidence response is malformed')
 		const record = result[kind === 'tx' ? 'transaction' : 'block']
-		if (!isRecord(record)) throw new Error('Evidence record is malformed')
+		if (!isPlainRecord(record)) throw new Error('Evidence record is malformed')
 		if (!isCurrent()) return false
 		const evidenceSignature = `${chainId}:${path}:${JSON.stringify(result)}`
 		if (live && renderedEvidence.get(content) === evidenceSignature) {
@@ -97,7 +97,7 @@ export const renderExplorerPage = async (path: string, chainId: string, api: (pa
 			summary.append(field('Hash', string(record, 'hash')), field('Time', utcDateTime(string(record, 'timestamp'))), field('Parent', string(record, 'parent_hash')), field('Finalized', record['finalized'] === true ? 'Yes' : 'No'))
 		}
 		if (kind === 'tx') {
-			const receipt = isRecord(record['receipt']) ? record['receipt'] : {}
+			const receipt = isPlainRecord(record['receipt']) ? record['receipt'] : {}
 			const traces = node('section', 'static-card')
 			traces.append(node('h3', '', 'Calls and ETH value flows'))
 			const calls = callTraceRows(receipt['callTrace'], nativeSymbolFor(chainId))
@@ -118,7 +118,7 @@ export const renderExplorerPage = async (path: string, chainId: string, api: (pa
 		if (!Array.isArray(rows) || rows.length === 0) section.append(node('p', 'data-note', kind === 'tx' ? 'No indexed logs for this transaction.' : 'No indexed evidence in this block.'))
 		else
 			for (const row of rows) {
-				if (!isRecord(row)) continue
+				if (!isPlainRecord(row)) continue
 				const article = node('div', 'explorer-evidence-row')
 				if (kind === 'tx') {
 					article.append(node('strong', '', string(row, 'summary') === '—' ? string(row, 'event_name') : string(row, 'summary')))

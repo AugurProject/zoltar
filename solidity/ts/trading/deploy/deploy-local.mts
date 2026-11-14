@@ -2,8 +2,9 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { encodeDeployData, keccak256, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter } from '../../types/contractArtifact'
-import { isRecord, parseCoreDeploymentManifest, requireAddress, requireMatchingChain, requireReceiptBlockNumber, requireSafeChainId } from './manifest'
+import { parseCoreDeploymentManifest, requireAddress, requireMatchingChain, requireReceiptBlockNumber, requireSafeChainId } from './manifest'
 import { parseRpcResponse } from './rpc'
+import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
 
 const projectRoot = path.resolve(import.meta.dir, '../../..')
 const rpcUrl = process.env.TRADING_RPC_URL ?? 'http://127.0.0.1:8545'
@@ -21,7 +22,7 @@ async function deploy(from: Address, data: Hex) {
 	const hash = requireTransactionHash(await rpc('eth_sendTransaction', [{ from, data }]), 'deployment transaction hash')
 	for (let attempt = 0; attempt < 120; attempt++) {
 		const receipt = await rpc('eth_getTransactionReceipt', [hash])
-		if (isRecord(receipt)) {
+		if (isObjectRecord(receipt)) {
 			const address = requireAddress(receipt.contractAddress, 'deployed contract')
 			if (receipt.status !== '0x1') throw new Error(`Deployment ${hash} reverted`)
 			return { address, transactionHash: hash, blockNumber: requireReceiptBlockNumber(receipt.blockNumber) }
@@ -59,7 +60,7 @@ const factoryArtifact = { abi: factoryContract.abi, bytecode: `0x${factoryContra
 const routerArtifact = { abi: routerContract.abi, bytecode: `0x${routerContract.evm.bytecode.object}` as const }
 const factoryDeployment = await deploy(deployer, encodeDeployData({ abi: factoryArtifact.abi, bytecode: factoryArtifact.bytecode, args: [securityPoolFactory, feeBps] }))
 const routerDeployment = await deploy(deployer, encodeDeployData({ abi: routerArtifact.abi, bytecode: routerArtifact.bytecode, args: [factoryDeployment.address] }))
-const compilerProfiles = isRecord(artifactDocument) ? artifactDocument.compilerProfiles : undefined
+const compilerProfiles = isObjectRecord(artifactDocument) ? artifactDocument.compilerProfiles : undefined
 const manifest = {
 	network: { chainId: manifestChainId, chainIdHex, rpcUrl },
 	core: { securityPoolFactory, sourceManifest: path.resolve(coreManifestPath) },

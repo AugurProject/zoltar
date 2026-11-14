@@ -3,7 +3,7 @@ import { useState } from 'preact/hooks'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { nonnegativeAtomicValue } from '@zoltar/bot-shared/dashboard/amount'
 import { refreshFormButton } from '@zoltar/bot-shared/dashboard/form-state'
-import { isRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 type Market = Record<string, unknown>
 type Draft = { root: Market; children: Market[] }
@@ -51,7 +51,7 @@ const defaultVenue = {
 }
 
 function record(value: unknown): Market {
-	return isRecord(value) ? value : {}
+	return isPlainRecord(value) ? value : {}
 }
 
 function records(value: unknown): Market[] {

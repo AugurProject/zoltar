@@ -1,5 +1,4 @@
 import { questionIdHex } from './identifier-format.ts'
-import { isRecord } from './api-validation.ts'
 import { semanticFields } from './semantic-evidence.ts'
 import type { EntityHistory, QuestionRecord, StateCatalog, StateEntity, StateTab, UniverseRecord } from './browser-types.ts'
 import { exactUnit, utcDateTime } from './format.ts'
@@ -7,6 +6,7 @@ import { short, shortIdentifier } from './identifier-format.ts'
 import { nativeSymbolFor } from './network-freshness.ts'
 import { questionDateLabel, questionStatus } from './question-time.ts'
 import type { createStateComponents } from './state-components.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 type StateComponents = ReturnType<typeof createStateComponents>
 
@@ -35,8 +35,8 @@ export const renderQuestionDetailPage = async (deps: StateEntityDeps, question: 
 	const resolutionPanel = element('section', 'static-card')
 	resolutionPanel.append(element('h3', '', 'Market resolution by universe'))
 	for (const pool of history.pools) {
-		if (!isRecord(pool)) continue
-		const state = isRecord(pool['read_result']) ? pool['read_result'] : {}
+		if (!isPlainRecord(pool)) continue
+		const state = isPlainRecord(pool['read_result']) ? pool['read_result'] : {}
 		const row = element('div', 'static-grid')
 		row.append(
 			staticField('Universe', String(pool['universe_id'])),

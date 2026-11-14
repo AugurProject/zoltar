@@ -1,8 +1,8 @@
 import type { EntityHistory, SelectEntityOptions, StateEntity, StateTab } from './browser-types.ts'
-import { isRecord } from './api-validation.ts'
 import { summarizeHistoryCollections } from './canonical-pagination.ts'
 import { entityHistoryContinuationPresentation } from './refresh-presentation.ts'
 import { entityHistoryCollectionKeys } from './state-history-data.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 export interface StateHistoryCoverageDeps {
 	readonly lookup: (selector: string) => HTMLElement
@@ -50,7 +50,7 @@ export const renderStateHistoryCoverage = (deps: StateHistoryCoverageDeps, histo
 		return notice
 	}
 	const collections = entityHistoryCollections(history)
-	const recordCollections = Object.fromEntries(entityHistoryCollectionKeys.map(key => [key, collections[key].filter(isRecord)]))
+	const recordCollections = Object.fromEntries(entityHistoryCollectionKeys.map(key => [key, collections[key].filter(isPlainRecord)]))
 	const summary = summarizeHistoryCollections(recordCollections, entityHistoryCollectionKeys)
 	const loadedRange = historyBlockRangeLabel(summary.oldestBlock, summary.newestBlock, 'No block-numbered records loaded')
 	const seriesCounts = Object.entries(coverage.series)

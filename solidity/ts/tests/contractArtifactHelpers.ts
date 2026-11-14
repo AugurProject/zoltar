@@ -1,12 +1,9 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null
-}
+import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
 
 export function getRecord(value: unknown, errorMessage: string): Record<string, unknown> {
-	if (!isRecord(value)) throw new Error(errorMessage)
+	if (!isObjectRecord(value)) throw new Error(errorMessage)
 	return value
 }
 

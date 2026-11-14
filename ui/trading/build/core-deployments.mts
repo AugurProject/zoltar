@@ -4,10 +4,7 @@ import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { defaultCoreDeploymentRpcUrls } from '../ts/protocol/coreDeploymentDefaults.ts'
 import { parseGenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
 import { deploymentManifestIds, getDeploymentManifestFileName } from '../../../tooling/contracts/deployment-manifests.mts'
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null
-}
+import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
 
 function requiredString(value: unknown, label: string) {
 	if (typeof value !== 'string' || value.trim() === '') throw new Error(`${label} is required`)
@@ -21,13 +18,13 @@ function requiredChainId(value: unknown) {
 
 function deploymentStepAddress(steps: unknown, id: string) {
 	if (!Array.isArray(steps)) throw new Error('deploymentSteps must be an array')
-	const step = steps.find(candidate => isRecord(candidate) && candidate.id === id)
-	if (!isRecord(step)) throw new Error(`deploymentSteps must contain ${id}`)
+	const step = steps.find(candidate => isObjectRecord(candidate) && candidate.id === id)
+	if (!isObjectRecord(step)) throw new Error(`deploymentSteps must contain ${id}`)
 	return getAddress(requiredString(step.address, `${id}.address`))
 }
 
 export function coreDeploymentFromManifest(candidate: unknown) {
-	if (!isRecord(candidate) || !isRecord(candidate.network)) throw new Error('Core deployment manifest network is required')
+	if (!isObjectRecord(candidate) || !isObjectRecord(candidate.network)) throw new Error('Core deployment manifest network is required')
 	const chainId = requiredChainId(candidate.network.chainId)
 	const genesisOutcome = parseGenesisOutcome(typeof candidate.network.genesisOutcome === 'string' ? candidate.network.genesisOutcome : undefined)
 	if (genesisOutcome === undefined) throw new Error('network.genesisOutcome must be yes or no')

@@ -1,7 +1,6 @@
 // Chain-writing stages of the canonical lifecycle integration test: the first block, an orphaned sibling
 // and its rewind, the canonical replacement with price history, and a third block with Uniswap V4 markets.
 import { expect } from 'bun:test'
-import { isRecord } from '../../browser/api-validation.ts'
 import { handleApi } from '../../src/api.ts'
 import { assertBlockAppend, assertStartBlockCompatible, type IndexedBlock, type IndexerLease, ScannerDatabase } from '../../src/database.ts'
 import { getAddress } from '../../src/ethereum.ts'
@@ -29,6 +28,7 @@ import {
 	vaultCheckpoint,
 	wethAddress,
 } from './postgres-fixtures.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 export type LifecycleContext = {
 	readonly postgresUrl: string
@@ -371,7 +371,7 @@ export const expectReplacementPoolHistory = async ({ database }: LifecycleContex
 	try {
 		const decimalResponse = await handleApi(new Request(`http://localhost/api/v1/state/pools/${chainId}/${discoveredAddress.toLowerCase()}`), database.sql)
 		const decimalHistory: unknown = await decimalResponse?.json()
-		expect(isRecord(decimalHistory) ? decimalHistory['uniswapRepEthPrices'] : undefined).toEqual([
+		expect(isPlainRecord(decimalHistory) ? decimalHistory['uniswapRepEthPrices'] : undefined).toEqual([
 			expect.objectContaining({ quote_symbol: 'WETH', quote_decimals: 6, liquidity_value: '180000000000000000000000000000000000000000' }),
 			expect.objectContaining({ quote_symbol: 'WETH', quote_decimals: 6, liquidity_value: '240000000000000000000000000000000000000000' }),
 		])

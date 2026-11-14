@@ -1,8 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { promises as fs } from 'node:fs'
 import { createOpenOracleCompilerSources, loadOpenOracleCompiler, openOracleCompilerSettings } from '../compile'
-
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
+import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
 
 describe('OpenOracle compiler profile', () => {
 	test('normalizes Windows line endings before compiling vendored sources', () => {
@@ -41,22 +40,22 @@ describe('OpenOracle compiler profile', () => {
 
 	test('generated artifacts use unique and complete source-map ids across compiler profiles', async () => {
 		const artifact: unknown = JSON.parse(await fs.readFile('solidity/artifacts/Contracts.json', 'utf8'))
-		if (!isRecord(artifact) || !isRecord(artifact['sources']) || !isRecord(artifact['contracts'])) throw new Error('Generated contract artifact is missing sources or contracts')
+		if (!isObjectRecord(artifact) || !isObjectRecord(artifact['sources']) || !isObjectRecord(artifact['contracts'])) throw new Error('Generated contract artifact is missing sources or contracts')
 
 		const sourceIds = new Set<number>()
 		for (const [sourcePath, sourceData] of Object.entries(artifact['sources'])) {
-			if (!isRecord(sourceData) || typeof sourceData['id'] !== 'number') throw new Error(`Generated source ${sourcePath} is missing its numeric id`)
+			if (!isObjectRecord(sourceData) || typeof sourceData['id'] !== 'number') throw new Error(`Generated source ${sourcePath} is missing its numeric id`)
 			if (sourceIds.has(sourceData['id'])) throw new Error(`Generated source id ${sourceData['id'].toString()} is assigned more than once`)
 			sourceIds.add(sourceData['id'])
 		}
 
 		for (const [sourcePath, sourceContracts] of Object.entries(artifact['contracts'])) {
-			if (!isRecord(sourceContracts)) continue
+			if (!isObjectRecord(sourceContracts)) continue
 			for (const [contractName, contractData] of Object.entries(sourceContracts)) {
-				if (!isRecord(contractData) || !isRecord(contractData['evm'])) continue
+				if (!isObjectRecord(contractData) || !isObjectRecord(contractData['evm'])) continue
 				for (const sectionName of ['bytecode', 'deployedBytecode']) {
 					const section = contractData['evm'][sectionName]
-					if (!isRecord(section) || typeof section['sourceMap'] !== 'string') continue
+					if (!isObjectRecord(section) || typeof section['sourceMap'] !== 'string') continue
 					let currentSourceId: number | undefined
 					for (const segment of section['sourceMap'].split(';')) {
 						const sourceIdField = segment.split(':')[2]
@@ -72,16 +71,16 @@ describe('OpenOracle compiler profile', () => {
 
 	test('generated artifacts retain immutable and link ranges required for deployed-bytecode coverage matching', async () => {
 		const artifact: unknown = JSON.parse(await fs.readFile('solidity/artifacts/Contracts.json', 'utf8'))
-		if (!isRecord(artifact) || !isRecord(artifact['contracts'])) throw new Error('Generated contract artifact is missing contracts')
+		if (!isObjectRecord(artifact) || !isObjectRecord(artifact['contracts'])) throw new Error('Generated contract artifact is missing contracts')
 		const securityPoolSource = artifact['contracts']['contracts/statoblast/factories/SecurityPoolFactory.sol']
-		if (!isRecord(securityPoolSource) || !isRecord(securityPoolSource['SecurityPoolFactory'])) throw new Error('Generated contract artifact is missing SecurityPool')
+		if (!isObjectRecord(securityPoolSource) || !isObjectRecord(securityPoolSource['SecurityPoolFactory'])) throw new Error('Generated contract artifact is missing SecurityPool')
 		const evm = securityPoolSource['SecurityPoolFactory']['evm']
-		if (!isRecord(evm) || !isRecord(evm['deployedBytecode'])) throw new Error('Generated SecurityPool artifact is missing deployed bytecode')
+		if (!isObjectRecord(evm) || !isObjectRecord(evm['deployedBytecode'])) throw new Error('Generated SecurityPool artifact is missing deployed bytecode')
 		const immutableReferences = evm['deployedBytecode']['immutableReferences']
 		const linkReferences = evm['deployedBytecode']['linkReferences']
-		if (!isRecord(immutableReferences)) throw new Error('Generated SecurityPool artifact is missing immutable references')
-		if (!isRecord(linkReferences)) throw new Error('Generated SecurityPool artifact is missing link references')
+		if (!isObjectRecord(immutableReferences)) throw new Error('Generated SecurityPool artifact is missing immutable references')
+		if (!isObjectRecord(linkReferences)) throw new Error('Generated SecurityPool artifact is missing link references')
 		expect(Object.values(immutableReferences).some(ranges => Array.isArray(ranges) && ranges.length > 0)).toBe(true)
-		expect(Object.values(linkReferences).some(libraries => isRecord(libraries) && Object.values(libraries).some(ranges => Array.isArray(ranges) && ranges.length > 0))).toBe(true)
+		expect(Object.values(linkReferences).some(libraries => isObjectRecord(libraries) && Object.values(libraries).some(ranges => Array.isArray(ranges) && ranges.length > 0))).toBe(true)
 	})
 })
