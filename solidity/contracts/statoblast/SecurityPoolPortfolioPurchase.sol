@@ -46,7 +46,7 @@ contract SecurityPoolPortfolioPurchase {
 	}
 	/// @dev Round collateral up before rounding its fee up; combining these divisions changes dust fees.
 	function _basePurchaseFee(IPortfolioPurchaseRoot root, uint256 cashAttoEth) private view returns (uint256) {
-		uint256 backingValueAttoEth = Math.mulDiv(cashAttoEth, Math.max(root.statoblastSecurityMultiplierBps(), SecurityPoolUtils.MINIMUM_SECURITY_MULTIPLIER_BPS), SecurityPoolUtils.BPS_DENOMINATOR, Math.Rounding.Ceil);
+		uint256 backingValueAttoEth = Math.mulDiv(cashAttoEth, root.statoblastSecurityMultiplierBps(), SecurityPoolUtils.BPS_DENOMINATOR, Math.Rounding.Ceil);
 		return
 			Math.max(root.minimumPurchaseFeeAttoEth(), Math.mulDiv(backingValueAttoEth, root.purchaseFeeBps(), SecurityPoolUtils.BPS_DENOMINATOR, Math.Rounding.Ceil));
 	}

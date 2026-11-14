@@ -183,7 +183,7 @@
 					<li>positive dispute gas units</li>
 					<li>positive request gas: <code>gasConsumedSettlement</code> or <code>gasConsumedOpenOracleReportPrice</code> is nonzero</li>
 					<li>a nonzero <code>initialReportPriorityFeeAttoEthPerGas</code></li>
-					<li>a target error no greater than 100%; shared feeds additionally require it to be strictly below 100%</li>
+					<li>a target error strictly below 100%</li>
 					<li>an OpenOracle security multiplier of at least <code>1x</code> and at most <code>type(uint256).max / (percentagePrecision + targetPriceErrorForDispute)</code></li>
 					<li>combined OpenOracle fees below the target error</li>
 					<li>a nonzero <code>escalationHaltMultiplierBps</code></li>
