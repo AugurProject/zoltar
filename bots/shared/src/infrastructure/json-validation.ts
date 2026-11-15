@@ -58,7 +58,6 @@ export function nonemptyString(value: unknown, label: string, maximumLength?: nu
 	return value
 }
 
-/** A JSON object: the core `isObjectRecord` guard, narrowed further to exclude arrays. */
 export function optionalRecord(value: unknown): Record<string, unknown> | undefined {
 	return isPlainRecord(value) ? Object.fromEntries(Object.entries(value)) : undefined
 }
