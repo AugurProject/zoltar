@@ -45,7 +45,8 @@ describe('shared capital portfolio deployment', () => {
 
 	test('validates explicit universe, security multiplier and oracle priority fee without a seed pool', () => {
 		for (const universeId of [-1n, 1n << 248n]) expect(() => buildPortfolioDeploymentRequest({ ...base, origin: { ...origin, universeId } })).toThrow('Origin universe')
-		for (const securityMultiplierBps of [0n, 10_000n, 10_001n]) expect(() => buildPortfolioDeploymentRequest({ ...base, origin: { ...origin, securityMultiplierBps } })).toThrow('10001')
+		for (const securityMultiplierBps of [0n, 10_000n, 10_001n, 10_499n]) expect(() => buildPortfolioDeploymentRequest({ ...base, origin: { ...origin, securityMultiplierBps } })).toThrow('10500')
+		expect(() => buildPortfolioDeploymentRequest({ ...base, origin: { ...origin, securityMultiplierBps: 10_500n } })).not.toThrow()
 		expect(() => buildPortfolioDeploymentRequest({ ...base, origin: { ...origin, reportPriorityFeeAttoEthPerGas: 0n } })).toThrow('positive')
 	})
 
