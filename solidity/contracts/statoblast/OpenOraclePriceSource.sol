@@ -60,7 +60,7 @@ abstract contract OpenOraclePriceSource {
 		require(_gasUnitsForOneDispute > 0, 'Dispute gas units zero');
 		require(_gasConsumedSettlement > 0 || _gasConsumedOpenOracleReportPrice > 0, 'Request gas units zero');
 		require(_initialReportPriorityFeeAttoEthPerGas > 0, 'Initial priority fee zero');
-		require(_targetPriceErrorForDispute <= OPEN_ORACLE_PERCENTAGE_PRECISION, 'Target price error cannot exceed one hundred percent');
+		require(_targetPriceErrorForDispute < OPEN_ORACLE_PERCENTAGE_PRECISION, 'Target price error must be below one hundred percent');
 		require(_openOracleSecurityMultiplierBps >= SecurityPoolUtils.BPS_DENOMINATOR, 'Open Oracle Security multiplier must be at least one hundred percent');
 		require(uint256(_protocolFee) + uint256(_feePercentage) < _targetPriceErrorForDispute, 'Oracle fees must be below the target price error');
 		require(_escalationHaltMultiplierBps > 0, 'Escalation multiplier zero');

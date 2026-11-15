@@ -17,7 +17,6 @@ import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { Zoltar } from '../Zoltar.sol';
 import { Constants } from '../Constants.sol';
 import { SecurityPoolCommitmentIndex } from './SecurityPoolCommitmentIndex.sol';
-import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
 /// @notice Exact REP custody and individually authorized underwriting.
@@ -71,7 +70,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		zoltar = _zoltar;
 		universeId = _universeId;
 		repToken = IERC20(address(_zoltar.getRepToken(_universeId)));
-		securityMultiplierBps = Math.max(multiplier, SecurityPoolUtils.MINIMUM_SECURITY_MULTIPLIER_BPS);
+		securityMultiplierBps = multiplier;
 		minimumCommitmentAttoEth = minimumCommitment;
 		repToken.safeApprove(address(_zoltar), type(uint256).max);
 	}
