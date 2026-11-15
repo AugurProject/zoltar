@@ -13,7 +13,7 @@ import { initialDurableState, initialRuntimeState } from '../../src/state/initia
 import { acceptResidualProfileReplacement, cancelRetirement, DEFAULT_RETIREMENT_POLICIES, requestRetirement, uniswapV3PositionKey } from '../../src/state/retirement.ts'
 import { createDurableWorkflow } from '../../src/runtime/workflows.ts'
 import { readV3PositionsWithQuorum, reconcileV3PositionJournal, recordV3ScanSuccess } from '../../src/runtime/retirement-v3-positions.ts'
-import { address, hash, snapshotFixture } from '../operations/fixture.ts'
+import { address, drainedWalletSnapshotFixture, hash } from '../operations/fixture.ts'
 
 const directories: string[] = []
 
@@ -28,15 +28,8 @@ async function statePath() {
 }
 
 function emptySnapshot() {
-	const snapshot = snapshotFixture()
+	const snapshot = drainedWalletSnapshotFixture()
 	snapshot.wallet.ethBalanceAttoEth = '0'
-	snapshot.wallet.tokens = []
-	snapshot.wallet.shares = []
-	snapshot.wallet.lpTokens = []
-	snapshot.wallet.openOracleEthCredit = '0'
-	snapshot.portfolioCapital = []
-	for (const pair of snapshot.pairs) pair.walletLiquidity = '0'
-	snapshot.warnings = []
 	return snapshot
 }
 

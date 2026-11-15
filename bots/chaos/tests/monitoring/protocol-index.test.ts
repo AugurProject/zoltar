@@ -170,6 +170,43 @@ function refundGeneration(log: ReturnType<typeof refundLog>) {
 
 type ProtocolIndexContext = Parameters<typeof updateProtocolIndex>[0]
 
+/** A report submitted at block 10 by signer address(1) without a callback, as the first log in the block. */
+function signerReportLog(reportId: bigint) {
+	return canonicalLog({
+		address: indexDeployments.openOracle,
+		blockNumber: 10n,
+		data: packedReport({ callbackContract: address(0), callbackGasLimit: 0n, creator: address(1) }),
+		logIndex: 0,
+		topics: [reportSubmittedTopic, toHex(reportId, { size: 32 })],
+	})
+}
+
+/** A schema 4 index of wallet address(1) on chain 31337 with its cursor at block 10 and nothing indexed except `overrides`. */
+function protocolIndexFixture(overrides: Partial<ChaosProtocolIndex>): ChaosProtocolIndex {
+	return {
+		auctionBids: {},
+		auctionRefunds: {},
+		chainId: 31337,
+		childRepSplits: [],
+		cursor: { blockHash: hash(10), blockNumber: '10' },
+		escalationDeposits: [],
+		migrationRepSplits: [],
+		...indexDeployments,
+		reports: [],
+		schemaVersion: 4,
+		startBlock: '1',
+		wallet: address(1),
+		...overrides,
+	}
+}
+
+/** Answers getBlock with the canonical hash(number) block at timestamp 1000. */
+async function canonicalBlock(parameters: { blockNumber?: bigint }) {
+	const number = parameters.blockNumber
+	if (number === undefined) throw new Error('Block number required')
+	return { hash: hash(Number(number)), number, timestamp: 1_000n }
+}
+
 /** A protocol-index update for the fixture signer starting and anchored at block 10; tests override what they exercise. */
 function indexContext(client: ChaosReadClient, overrides: Partial<ProtocolIndexContext> = {}): ProtocolIndexContext {
 	return { anchorBlockNumber: 10n, auctionAddresses: [], chainId: 31337, client, escalationGames: [], ...indexDeployments, ...indexTrust, startBlock: 10n, wallet: address(1), ...overrides }
@@ -394,13 +431,7 @@ describe('durable protocol index', () => {
 	})
 
 	test('decodes the complete packed OpenOracle preimage and timestamp deadlines', async () => {
-		const signerReport = canonicalLog({
-			address: indexDeployments.openOracle,
-			blockNumber: 10n,
-			data: packedReport({ callbackContract: address(0), callbackGasLimit: 0n, creator: address(1) }),
-			logIndex: 0,
-			topics: [reportSubmittedTopic, toHex(42n, { size: 32 })],
-		})
+		const signerReport = signerReportLog(42n)
 		const update = await updateProtocolIndex(indexContext(eventIndexClient([signerReport])))
 		const report = update.index.reports[0]
 		if (report === undefined) throw new Error('Expected the signer report to be indexed')
@@ -446,11 +477,7 @@ describe('durable protocol index', () => {
 
 	test('ignores unrelated OpenOracle logs without trying to decode a report id', async () => {
 		const implementation = {
-			async getBlock(parameters: { blockNumber?: bigint }) {
-				const number = parameters.blockNumber
-				if (number === undefined) throw new Error('Block number required')
-				return { hash: hash(Number(number)), number, timestamp: 1_000n }
-			},
+			getBlock: canonicalBlock,
 			async getLogs(parameters: { address?: Address | Address[] }) {
 				return parameters.address === address(6) ? [{ address: address(6), blockHash: hash(10), blockNumber: 10n, data: '0x', logIndex: 0, removed: false, topics: [hash(777)], transactionHash: hash(500), transactionIndex: 0 }] : []
 			},
@@ -462,13 +489,7 @@ describe('durable protocol index', () => {
 	})
 
 	test('indexes only signer standalone and exact canonical coordinator reports', async () => {
-		const signerReport = canonicalLog({
-			address: indexDeployments.openOracle,
-			blockNumber: 10n,
-			data: packedReport({ callbackContract: address(0), callbackGasLimit: 0n, creator: address(1) }),
-			logIndex: 0,
-			topics: [reportSubmittedTopic, toHex(1n, { size: 32 })],
-		})
+		const signerReport = signerReportLog(1n)
 		const coordinatorReport = canonicalLog({
 			address: indexDeployments.openOracle,
 			blockNumber: 10n,
@@ -530,13 +551,7 @@ describe('durable protocol index', () => {
 	})
 
 	test('replays provider-reordered OpenOracle logs by canonical position', async () => {
-		const submitted = canonicalLog({
-			address: indexDeployments.openOracle,
-			blockNumber: 10n,
-			data: packedReport({ callbackContract: address(0), callbackGasLimit: 0n, creator: address(1) }),
-			logIndex: 0,
-			topics: [reportSubmittedTopic, toHex(1n, { size: 32 })],
-		})
+		const submitted = signerReportLog(1n)
 		const settled = canonicalLog({
 			address: indexDeployments.openOracle,
 			blockNumber: 10n,
@@ -551,20 +566,11 @@ describe('durable protocol index', () => {
 	})
 
 	test('keeps the durable shape JSON-safe', () => {
-		const index: ChaosProtocolIndex = {
+		const index = protocolIndexFixture({
 			auctionBids: { [address(20)]: [{ bidId: '1', vault: address(21), lots: '10', minimumAttoRepPerLot: 1n.toString(), targetHealthBps: '10000', settled: false }] },
-			auctionRefunds: {},
 			chainId: 1,
-			childRepSplits: [],
-			cursor: { blockHash: hash(10), blockNumber: '10' },
 			escalationDeposits: [{ amountAttoRep: 9n.toString(), claimed: false, depositIndex: '2', escalationGame: address(21), outcome: 1, parentDepositIndex: '2', pool: address(22), vault: address(1) }],
-			migrationRepSplits: [],
-			...indexDeployments,
-			reports: [],
-			schemaVersion: 4,
-			startBlock: '1',
-			wallet: address(1),
-		}
+		})
 		expect(JSON.stringify(JSON.parse(JSON.stringify(index)))).toBe(JSON.stringify(index))
 	})
 
@@ -629,13 +635,8 @@ describe('durable protocol index', () => {
 
 	test('retains more than ten thousand distinct durable migration routes', async () => {
 		const routeCount = 10_001
-		const previous: ChaosProtocolIndex = {
-			auctionBids: {},
-			auctionRefunds: {},
-			chainId: 31337,
+		const previous = protocolIndexFixture({
 			childRepSplits: Array.from({ length: routeCount }, (_, index) => ({ childPoolRepSplitAttoRep: 1n.toString(), outcomeIndex: (index + 1).toString(), pool: address(22) })),
-			cursor: { blockHash: hash(10), blockNumber: '10' },
-			escalationDeposits: [],
 			migrationRepSplits: Array.from({ length: routeCount }, (_, index) => {
 				const outcomeIndex = BigInt(index + 1)
 				return {
@@ -645,38 +646,19 @@ describe('durable protocol index', () => {
 					universeId: '0',
 				}
 			}),
-			...indexDeployments,
-			reports: [],
-			schemaVersion: 4,
-			startBlock: '1',
-			wallet: address(1),
-		}
+		})
 		const update = await updateProtocolIndex(indexContext(eventIndexClient([]), { previous, startBlock: 1n }))
 		expect(update.index.migrationRepSplits).toHaveLength(routeCount)
 		expect(update.index.childRepSplits).toHaveLength(routeCount)
 	})
 
 	test('prunes terminal bids and escalation deposits even when the cursor is already current', async () => {
-		const terminalIndex: ChaosProtocolIndex = {
+		const terminalIndex = protocolIndexFixture({
 			auctionBids: { [address(20)]: [{ bidId: '1', vault: address(21), lots: '10', minimumAttoRepPerLot: 1n.toString(), targetHealthBps: '10000', settled: true }] },
-			auctionRefunds: {},
-			chainId: 31337,
-			childRepSplits: [],
-			cursor: { blockHash: hash(10), blockNumber: '10' },
 			escalationDeposits: [{ amountAttoRep: 9n.toString(), claimed: true, depositIndex: '2', escalationGame: address(21), outcome: 1, parentDepositIndex: '2', pool: address(22), vault: address(1) }],
-			migrationRepSplits: [],
-			...indexDeployments,
-			reports: [],
-			schemaVersion: 4,
-			startBlock: '1',
-			wallet: address(1),
-		}
+		})
 		const implementation = {
-			async getBlock(parameters: { blockNumber?: bigint }) {
-				const number = parameters.blockNumber
-				if (number === undefined) throw new Error('Block number required')
-				return { hash: hash(Number(number)), number, timestamp: 1_000n }
-			},
+			getBlock: canonicalBlock,
 		}
 		const client = strictReadClient(implementation)
 		const update = await updateProtocolIndex(indexContext(client, { auctionAddresses: [address(20)], escalationGames: [{ escalationGame: address(21), pool: address(22) }], previous: terminalIndex, startBlock: 1n }))
@@ -688,11 +670,7 @@ describe('durable protocol index', () => {
 		const game = address(21)
 		const pool = address(22)
 		const otherGame = address(23)
-		const previous: ChaosProtocolIndex = {
-			auctionBids: {},
-			auctionRefunds: {},
-			chainId: 31337,
-			childRepSplits: [],
+		const previous = protocolIndexFixture({
 			cursor: { blockHash: hash(9), blockNumber: '9' },
 			escalationDeposits: [
 				{ amountAttoRep: 9n.toString(), claimed: false, depositIndex: '0', escalationGame: game, outcome: 1, parentDepositIndex: '0', pool, vault: address(1) },
@@ -700,13 +678,7 @@ describe('durable protocol index', () => {
 				{ amountAttoRep: 3n.toString(), claimed: false, depositIndex: '0', escalationGame: game, outcome: 0, parentDepositIndex: '0', pool, vault: address(2) },
 				{ amountAttoRep: 4n.toString(), claimed: false, depositIndex: '0', escalationGame: otherGame, outcome: 2, parentDepositIndex: '0', pool: address(24), vault: address(1) },
 			],
-			migrationRepSplits: [],
-			...indexDeployments,
-			reports: [],
-			schemaVersion: 4,
-			startBlock: '1',
-			wallet: address(1),
-		}
+		})
 		const topic = keccak256(toHex('OrdinarySettlementInitialized(uint8,uint256,uint256)'))
 		const settlement = canonicalLog({ address: game, blockNumber: 10n, logIndex: 0, topics: [topic, toHex(1n, { size: 32 })], data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [9n, 17n]) })
 		const client = strictReadClient({
@@ -738,31 +710,17 @@ describe('durable protocol index', () => {
 	test('marks both winning claims and losing carry consumptions terminal', async () => {
 		const game = address(21)
 		const pool = address(22)
-		const previous: ChaosProtocolIndex = {
-			auctionBids: {},
-			auctionRefunds: {},
-			chainId: 31337,
-			childRepSplits: [],
+		const previous = protocolIndexFixture({
 			cursor: { blockHash: hash(9), blockNumber: '9' },
 			escalationDeposits: [
 				{ amountAttoRep: 9n.toString(), claimed: false, depositIndex: '2', escalationGame: game, outcome: 1, parentDepositIndex: '102', pool, vault: address(1) },
 				{ amountAttoRep: 10n.toString(), claimed: false, depositIndex: '3', escalationGame: game, outcome: 2, parentDepositIndex: '103', pool, vault: address(1) },
 			],
-			migrationRepSplits: [],
-			...indexDeployments,
-			reports: [],
-			schemaVersion: 4,
-			startBlock: '1',
-			wallet: address(1),
-		}
+		})
 		const claimTopic = keccak256(toHex('ClaimDeposit(address,uint8,uint256,uint256,uint256,uint256,bool)'))
 		const carryTopic = keccak256(toHex('CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32,bytes32)'))
 		const implementation = {
-			async getBlock(parameters: { blockNumber?: bigint }) {
-				const number = parameters.blockNumber
-				if (number === undefined) throw new Error('Block number required')
-				return { hash: hash(Number(number)), number, timestamp: 1_000n }
-			},
+			getBlock: canonicalBlock,
 			async getLogs(parameters: { address?: Address | Address[] }) {
 				if (parameters.address === address(6)) return []
 				if (Array.isArray(parameters.address) && parameters.address.some(value => value.toLowerCase() === indexDeployments.zoltar.toLowerCase())) return []

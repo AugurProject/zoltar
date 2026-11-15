@@ -160,6 +160,15 @@ export function createChaosDashboardController(options: DashboardControllerOptio
 		commitRuntimeState(options.state, committedState)
 		return candidate
 	}
+	/** Applies an execution-policy candidate once settings are paused, its revision matches, and live execution is ready. */
+	const applyPolicyCandidate = async (candidate: { revision: unknown; settings: OperatorSettings }, message: string) => {
+		assertSettingsUpdatePaused(options.configuration.settings, options.state.paused)
+		expectedRevision(candidate.revision, options.configuration.revision)
+		if (!options.configuration.settings.runtime.execute && candidate.settings.runtime.execute) assertLiveExecutionReadiness(options.state, candidate.settings)
+		await apply(candidate.settings, candidate.revision, options.configuration.rememberSigner, state => {
+			recordActivity(state, { message, status: 'info', type: 'configuration' })
+		})
+	}
 	const { update, restart, ...configurationDocument } = createConfigurationRestartController(options)
 
 	return {
@@ -519,31 +528,12 @@ export function createChaosDashboardController(options: DashboardControllerOptio
 		async setExecution(value) {
 			await update(async () => {
 				const candidate = executionCandidate(options.configuration.settings, value)
-				assertSettingsUpdatePaused(options.configuration.settings, options.state.paused)
-				expectedRevision(candidate.revision, options.configuration.revision)
-				if (!options.configuration.settings.runtime.execute && candidate.settings.runtime.execute) assertLiveExecutionReadiness(options.state, candidate.settings)
-				await apply(candidate.settings, candidate.revision, options.configuration.rememberSigner, state => {
-					recordActivity(state, {
-						message: candidate.settings.runtime.execute ? 'Live execution enabled; resume to start signing' : 'Dry-run mode enabled',
-						status: 'info',
-						type: 'configuration',
-					})
-				})
+				await applyPolicyCandidate(candidate, candidate.settings.runtime.execute ? 'Live execution enabled; resume to start signing' : 'Dry-run mode enabled')
 			})
 		},
 		async setSettings(value) {
 			await update(async () => {
-				const candidate = settingsPatchCandidate(options.configuration.settings, value)
-				assertSettingsUpdatePaused(options.configuration.settings, options.state.paused)
-				expectedRevision(candidate.revision, options.configuration.revision)
-				if (!options.configuration.settings.runtime.execute && candidate.settings.runtime.execute) assertLiveExecutionReadiness(options.state, candidate.settings)
-				await apply(candidate.settings, candidate.revision, options.configuration.rememberSigner, state => {
-					recordActivity(state, {
-						message: 'Execution policy updated',
-						status: 'info',
-						type: 'configuration',
-					})
-				})
+				await applyPolicyCandidate(settingsPatchCandidate(options.configuration.settings, value), 'Execution policy updated')
 			})
 		},
 		async setSigner(value) {

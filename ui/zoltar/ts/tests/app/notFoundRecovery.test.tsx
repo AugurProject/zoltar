@@ -30,15 +30,19 @@ async function renderNotFound() {
 	)
 }
 
+/** Every recovery link the not-found page offers; the page always offers three. */
+function recoveryLinkUrls(container: HTMLElement) {
+	const links = [...container.querySelectorAll('a')]
+	expect(links).toHaveLength(3)
+	return links.map(link => new URL(link.href))
+}
+
 describe('not-found recovery', () => {
 	installDomTestLifecycle({ url: 'http://localhost/?network=sepolia&rpcUrl=https%3A%2F%2Frpc.example#/missing?universe=42' })
 	test('keeps the selected universe and read environment in every recovery link', async () => {
 		const rendered = await renderNotFound()
 		try {
-			const links = [...rendered.container.querySelectorAll('a')]
-			expect(links).toHaveLength(3)
-			for (const link of links) {
-				const url = new URL(link.href)
+			for (const url of recoveryLinkUrls(rendered.container)) {
 				expect(new URLSearchParams(url.hash.split('?')[1]).get('universe')).toBe('42')
 				expect(url.searchParams.get('network')).toBe('sepolia')
 				expect(url.searchParams.get('rpcUrl')).toBe('https://rpc.example')
@@ -54,10 +58,7 @@ describe('not-found recovery from a malformed universe', () => {
 	test('drops the malformed universe so every recovery link opens a valid route', async () => {
 		const rendered = await renderNotFound()
 		try {
-			const links = [...rendered.container.querySelectorAll('a')]
-			expect(links).toHaveLength(3)
-			for (const link of links) {
-				const url = new URL(link.href)
+			for (const url of recoveryLinkUrls(rendered.container)) {
 				expect(new URLSearchParams(url.hash.split('?')[1]).has('universe')).toBe(false)
 				expect(url.searchParams.get('network')).toBe('sepolia')
 			}

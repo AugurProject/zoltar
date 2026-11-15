@@ -78,6 +78,27 @@ function createMockInjectedEthereum(requestHandler: (parameters: MockRequestPara
 	}
 }
 
+/**
+ * Installs an injected wallet that exposes `accounts` on `chainId`, answers every gas and send request, and records each
+ * method it receives; returns those methods and a write client for the zero address.
+ */
+function installSendingWallet(accounts: readonly string[], chainId?: string) {
+	const requestCalls: string[] = []
+	ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
+		requestCalls.push(method)
+		if (method === 'eth_accounts') return accounts
+		if (method === 'eth_chainId' && chainId !== undefined) return chainId
+		if (method === 'eth_getTransactionCount') return '0x1'
+		if (method === 'eth_call') return '0x'
+		if (method === 'eth_estimateGas') return '0x5208'
+		if (method === 'eth_gasPrice') return '0x1'
+		if (method === 'eth_maxPriorityFeePerGas') return '0x1'
+		if (method === 'eth_sendTransaction' || method === 'eth_sendRawTransaction') return `0x${'1'.padStart(64, '0')}`
+		return '0x'
+	})
+	return { requestCalls, writeClient: createInjectedBackend().createWriteClient(zeroAddress) }
+}
+
 function createMockInjectedEthereumWithListeners() {
 	const callbacks: { accounts: unknown[]; chain: unknown[] } = { accounts: [], chain: [] }
 	const calls: { action: 'add' | 'remove'; event: string; handler: unknown }[] = []
@@ -371,43 +392,14 @@ describe('injected backend read transport', () => {
 		}
 
 		test(`blocks ${operation.name} when the wallet disconnects before send`, async () => {
-			const requestCalls: string[] = []
-			ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
-				requestCalls.push(method)
-				if (method === 'eth_accounts') return []
-				if (method === 'eth_getTransactionCount') return '0x1'
-				if (method === 'eth_call') return '0x'
-				if (method === 'eth_estimateGas') return '0x5208'
-				if (method === 'eth_gasPrice') return '0x1'
-				if (method === 'eth_maxPriorityFeePerGas') return '0x1'
-				if (method === 'eth_sendTransaction' || method === 'eth_sendRawTransaction') return `0x${'1'.padStart(64, '0')}`
-				return '0x'
-			})
-
-			const backend = createInjectedBackend()
-			const writeClient = backend.createWriteClient(zeroAddress)
+			const { requestCalls, writeClient } = installSendingWallet([])
 
 			await expect(operation.execute(writeClient)).rejects.toThrow('Wallet account is no longer connected.')
 			expect(requestCalls).toEqual(['eth_accounts'])
 		})
 
 		test(`blocks ${operation.name} when the wallet switches networks before send`, async () => {
-			const requestCalls: string[] = []
-			ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
-				requestCalls.push(method)
-				if (method === 'eth_accounts') return [zeroAddress]
-				if (method === 'eth_chainId') return '0x539'
-				if (method === 'eth_getTransactionCount') return '0x1'
-				if (method === 'eth_call') return '0x'
-				if (method === 'eth_estimateGas') return '0x5208'
-				if (method === 'eth_gasPrice') return '0x1'
-				if (method === 'eth_maxPriorityFeePerGas') return '0x1'
-				if (method === 'eth_sendTransaction' || method === 'eth_sendRawTransaction') return `0x${'1'.padStart(64, '0')}`
-				return '0x'
-			})
-
-			const backend = createInjectedBackend()
-			const writeClient = backend.createWriteClient(zeroAddress)
+			const { requestCalls, writeClient } = installSendingWallet([zeroAddress], '0x539')
 
 			await expect(operation.execute(writeClient)).rejects.toThrow('Wallet network changed. Switch to Sepolia and try again.')
 			expect(requestCalls).toEqual(['eth_accounts', 'eth_chainId'])

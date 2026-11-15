@@ -138,6 +138,17 @@ describe('third-party settlement execution against OpenOracle', () => {
 		return { stop: () => server.stop(true), swallowed, url: server.url.href }
 	}
 
+	/** Starts settling `report` with public submission through `rpc` at the pending nonce, returning the in-flight attempt with its journal. */
+	async function startSwallowedSettlement(report: OpenOracleStatePreimage, rpc: ReturnType<typeof swallowingRpc>) {
+		const records: SettlementRecord[] = []
+		const activity: TransactionActivity[] = []
+		const base = await context(records, activity)
+		const config = { ...base.config, connectivity: { ...base.config.connectivity, publicRpcUrls: [rpc.url] }, pollMilliseconds: 5_000 }
+		const nonce = await client.getTransactionCount({ address: account.address, blockTag: 'pending' })
+		const attempt = executeSettlement({ ...base, config }, settlementPlan(report))
+		return { activity, attempt, base, nonce, records }
+	}
+
 	async function pastSettlementWindow() {
 		await node.anvilWindowEthereum.request({ method: 'evm_increaseTime', params: [Number(SETTLEMENT_SECONDS) + 1] })
 		await node.anvilWindowEthereum.request({ method: 'evm_mine', params: [] })
@@ -277,13 +288,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 		// The signed settle never reaches a mempool, so its nonce can be taken.
 		const rpc = swallowingRpc()
 		try {
-			const records: SettlementRecord[] = []
-			const activity: TransactionActivity[] = []
-			const base = await context(records, activity)
-			const config = { ...base.config, connectivity: { ...base.config.connectivity, publicRpcUrls: [rpc.url] }, pollMilliseconds: 5_000 }
-			const nonce = await client.getTransactionCount({ address: account.address, blockTag: 'pending' })
-			const plan = settlementPlan(report)
-			const attempt = executeSettlement({ ...base, config }, plan)
+			const { activity, attempt, base, nonce, records } = await startSwallowedSettlement(report, rpc)
 			// The attempt and this test both poll for the replacement receipt; keep the expected rejection handled so the
 			// attempt cannot reject unhandled if its poll observes the replacement first.
 			const outcome = attempt.then(
@@ -451,13 +456,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 		// The signed settle never reaches a mempool; a manual rebroadcast of the same call at the same nonce lands instead.
 		const rpc = swallowingRpc()
 		try {
-			const records: SettlementRecord[] = []
-			const activity: TransactionActivity[] = []
-			const base = await context(records, activity)
-			const config = { ...base.config, connectivity: { ...base.config.connectivity, publicRpcUrls: [rpc.url] }, pollMilliseconds: 5_000 }
-			const nonce = await client.getTransactionCount({ address: account.address, blockTag: 'pending' })
-			const plan = settlementPlan(report)
-			const attempt = executeSettlement({ ...base, config }, plan)
+			const { activity, attempt, base, nonce, records } = await startSwallowedSettlement(report, rpc)
 			for (let waited = 0; records.length === 0 && waited < 200; waited++) await Bun.sleep(10)
 			const [original] = records
 			if (original === undefined) throw new Error('pending record missing')

@@ -1,9 +1,7 @@
 import { resolveDevServerPort } from './devServerPort.mts'
-import * as fs from 'node:fs/promises'
-import * as path from 'node:path'
 import * as process from 'node:process'
 import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
-import { type ChromiumLaunchOptions, type ChromiumViewport, launchChromium, type WaitForOptions } from './chromiumDevTools.mts'
+import { type ChromiumLaunchOptions, type ChromiumViewport, launchChromium, type WaitForOptions, writeViewportScreenshot } from './chromiumDevTools.mts'
 import { parseUiAppIdFromProcess, type UiAppId } from './appPaths.mts'
 
 const MOUNT_TIMEOUT_MILLISECONDS = 120_000
@@ -215,10 +213,7 @@ async function runBrowserSmokeUnlocked(appId: UiAppId, baseUrl: string, options:
 				await send('Runtime.evaluate', { expression: `document.querySelector(${JSON.stringify(scrollSelector)})?.scrollIntoView({ block: 'start' })` })
 				await Bun.sleep(100)
 			}
-			const result = (await send('Page.captureScreenshot', { captureBeyondViewport: false, format: 'png', fromSurface: true })) as { data?: unknown }
-			if (typeof result.data !== 'string') throw new Error('Chromium did not return PNG screenshot data.')
-			await fs.mkdir(path.dirname(screenshotPath), { recursive: true })
-			await fs.writeFile(screenshotPath, Buffer.from(result.data, 'base64'))
+			await writeViewportScreenshot(send, screenshotPath)
 		}
 
 		if (issues.length > 0) {

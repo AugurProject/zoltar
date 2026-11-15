@@ -1,10 +1,11 @@
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { createHash } from 'node:crypto'
 import { isoTimestampFromSeconds } from '../core/units.ts'
+import { serializeOperationMetadata } from '../operations/planning.ts'
 import type { CanonicalLifecyclePresence, EvaluatedOperation, OperationPlan } from '../operations/types.ts'
 import { completeWorkflowFromCanonicalConfirmation, createDurableWorkflow, markWorkflowForRediscovery, markRetryableLifecycleWorkflowForRediscovery, refreshWorkflowContinuation, retryableOnChainWorkflowFailure } from './workflows.ts'
 import { MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT } from '../state/durable-record-parsers.ts'
-import { MAXIMUM_OBLIGATION_TOMBSTONE_COUNT, type DurableLifecyclePresenceBlocker, type DurableMetadata, type DurableObligation, type DurableObligationTombstone, type DurableWorkflow, type RuntimeState } from '../state/operator-state.ts'
+import { MAXIMUM_OBLIGATION_TOMBSTONE_COUNT, type DurableLifecyclePresenceBlocker, type DurableObligation, type DurableObligationTombstone, type DurableWorkflow, type RuntimeState } from '../state/operator-state.ts'
 
 const OBLIGATION_TOMBSTONE_RETENTION_BLOCKS = 64n
 const MAXIMUM_ACTIVE_LIFECYCLE_OBLIGATIONS = 256
@@ -16,13 +17,9 @@ function now() {
 	return new Date().toISOString()
 }
 
-function canonicalMetadata(metadata: DurableMetadata) {
-	return JSON.stringify(Object.fromEntries(Object.entries(metadata).sort(([left], [right]) => left.localeCompare(right))))
-}
-
 function operationInstanceId(instance: Pick<OperationPlan, 'definitionId' | 'metadata'>) {
 	const identity = createHash('sha256')
-		.update(`${instance.definitionId}:${canonicalMetadata(instance.metadata)}`)
+		.update(`${instance.definitionId}:${serializeOperationMetadata(instance.metadata)}`)
 		.digest('hex')
 		.slice(0, 24)
 	return `obligation:${instance.definitionId}:${identity}`
@@ -36,7 +33,7 @@ function uniqueCanonicalPresence(canonicalPresence: readonly CanonicalLifecycleP
 	for (const instance of canonicalPresence) {
 		const id = operationInstanceId(instance)
 		const existing = unique.get(id)
-		if (existing !== undefined && (existing.blocksNovelty !== instance.blocksNovelty || existing.definitionId !== instance.definitionId || existing.ecosystem !== instance.ecosystem || canonicalMetadata(existing.metadata) !== canonicalMetadata(instance.metadata))) {
+		if (existing !== undefined && (existing.blocksNovelty !== instance.blocksNovelty || existing.definitionId !== instance.definitionId || existing.ecosystem !== instance.ecosystem || serializeOperationMetadata(existing.metadata) !== serializeOperationMetadata(instance.metadata))) {
 			throw new Error(`Canonical lifecycle identities collide at ${id}`)
 		}
 		unique.set(id, instance)

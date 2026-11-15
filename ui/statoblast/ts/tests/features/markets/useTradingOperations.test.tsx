@@ -545,6 +545,15 @@ describe('useTradingOperations', () => {
 		expect(transactionState.entries).toEqual([])
 	})
 
+	/** The changed wallet account stopped the action before any read, request, or `write`, and was reported as feedback rather than as a failed transaction. */
+	function expectWalletAccountChangeStoppedBeforeReads(hook: Awaited<ReturnType<typeof renderTradingHook>>, onTransactionRequested: unknown, reads: readonly unknown[], write: unknown) {
+		expect(onTransactionRequested).not.toHaveBeenCalled()
+		expect(hook.onTransactionFailed.mock.calls).toEqual([])
+		expect(hook.state().tradingFeedback?.status.detail).toBe(WALLET_ACCOUNT_CHANGED)
+		for (const read of reads) expect(read).not.toHaveBeenCalled()
+		expect(write).not.toHaveBeenCalled()
+	}
+
 	test('does not request a mint transaction when the active wallet account changed', async () => {
 		replaceEnvironment(createFakeBackend({ accountAddress: NEXT_WALLET_ADDRESS }))
 
@@ -565,11 +574,7 @@ describe('useTradingOperations', () => {
 			await hook.state().createCompleteSet()
 		})
 
-		expect(onTransactionRequested).not.toHaveBeenCalled()
-		expect(hook.onTransactionFailed.mock.calls).toEqual([])
-		expect(hook.state().tradingFeedback?.status.detail).toBe(WALLET_ACCOUNT_CHANGED)
-		for (const read of reads) expect(read).not.toHaveBeenCalled()
-		expect(createCompleteSetInSecurityPool).not.toHaveBeenCalled()
+		expectWalletAccountChangeStoppedBeforeReads(hook, onTransactionRequested, reads, createCompleteSetInSecurityPool)
 	})
 
 	test('does not request a share-migration transaction when the active wallet account changed', async () => {
@@ -591,10 +596,6 @@ describe('useTradingOperations', () => {
 			await hook.state().migrateShares()
 		})
 
-		expect(onTransactionRequested).not.toHaveBeenCalled()
-		expect(hook.onTransactionFailed.mock.calls).toEqual([])
-		expect(hook.state().tradingFeedback?.status.detail).toBe(WALLET_ACCOUNT_CHANGED)
-		for (const read of reads) expect(read).not.toHaveBeenCalled()
-		expect(migrateSharesFromUniverse).not.toHaveBeenCalled()
+		expectWalletAccountChangeStoppedBeforeReads(hook, onTransactionRequested, reads, migrateSharesFromUniverse)
 	})
 })

@@ -13,9 +13,9 @@ const JSON_RPC_ERROR_NAMES = new Map<number, string>([
 
 export const jsonRpcErrorName = (code: number): string | undefined => JSON_RPC_ERROR_NAMES.get(code) ?? (code >= -32099 && code <= -32000 ? 'Server error' : undefined)
 
-export const safeRpcProviderMessage = (value: unknown): string | undefined => {
-	if (typeof value !== 'string' || value.length > 4096) return undefined
-	const message = [...value]
+/** Replaces C0/C1 control and format characters with spaces, then collapses whitespace onto one trimmed line. */
+export const singleLineText = (value: string): string =>
+	[...value]
 		.map(character => {
 			const codePoint = character.codePointAt(0)
 			return codePoint !== undefined && (codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f)) ? ' ' : character
@@ -24,6 +24,10 @@ export const safeRpcProviderMessage = (value: unknown): string | undefined => {
 		.replace(/\p{Cf}/gu, ' ')
 		.replace(/\s+/gu, ' ')
 		.trim()
+
+export const safeRpcProviderMessage = (value: unknown): string | undefined => {
+	if (typeof value !== 'string' || value.length > 4096) return undefined
+	const message = singleLineText(value)
 	return /^state at block (?:#[0-9]+|0x[0-9a-f]+) is pruned[.!]?$/iu.test(message) || /^pruned history unavailable[.!]?$/iu.test(message) ? message : undefined
 }
 

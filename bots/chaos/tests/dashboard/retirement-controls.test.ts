@@ -1,22 +1,11 @@
 import { expect } from 'bun:test'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
 import { browserTest, CHROMIUM_STARTUP_BUDGET_MILLISECONDS, chromiumExecutable, startChromiumSession } from '../support/chromium.ts'
+import { inertDashboardControls } from '../support/dashboard-harness.ts'
 
 const wallet = `0x${'ab'.repeat(20)}`
 const profileId = `profile:v1:${'12'.repeat(32)}`
 const idleState = { activities: [], evaluations: [], inventory: { rep: [] }, obligations: [], paused: true, pendingTransactions: [], profileId }
-const inertControls = {
-	hostname: '127.0.0.1' as const,
-	setCancellation: () => {},
-	setCandidate: () => {},
-	setObligation: () => {},
-	setPaused: () => {},
-	setReplacement: () => {},
-	setSettings: () => {},
-	setSigner: () => {},
-	setWorkflow: () => {},
-}
-
 function pausedSepoliaConfiguration(revision: string) {
 	return { hasSigner: true, revision, settings: { network: { chainId: 11_155_111, name: 'sepolia' }, paused: true, runtime: { execute: false }, strategy: {} }, signerAddress: wallet }
 }
@@ -49,7 +38,7 @@ browserTest(
 				wallet,
 				workflows: [],
 			}),
-			...inertControls,
+			...inertDashboardControls,
 		})
 		const browser = await startChromiumSession(chromiumExecutable, { evaluationDefaults: { exceptions: 'ignore' } })
 		const { evaluate } = browser
@@ -150,7 +139,7 @@ browserTest(
 					completionEvidence: status === 'drained-with-residuals' ? { blockHash, blockNumber: '123456', residuals: [{ amount: '20000000000000000', asset: 'REP', category: 'operator-accepted', reason: 'Old claim is no longer redeemable' }] } : undefined,
 				},
 			}),
-			...inertControls,
+			...inertDashboardControls,
 			setRetirement: value => requests.push(value),
 		})
 		const browser = await startChromiumSession(chromiumExecutable, { evaluationDefaults: { attempts: 120, exceptions: 'ignore', intervalMilliseconds: 25 } })

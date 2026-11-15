@@ -2,6 +2,7 @@ import { expect } from 'bun:test'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
 import { CONFIGURATION_COMMITTED_SAFELY_PAUSED } from '../../src/runtime/configuration-commit.ts'
 import { browserTest, CHROMIUM_STARTUP_BUDGET_MILLISECONDS, chromiumExecutable, startChromiumSession } from '../support/chromium.ts'
+import { inertDashboardControls } from '../support/dashboard-harness.ts'
 
 const wallet = `0x${'ab'.repeat(20)}`
 const repToken = `0x${'e1'.repeat(20)}`
@@ -21,7 +22,7 @@ browserTest(
 		const settingsMutations: unknown[] = []
 		const checkedAt = () => new Date().toISOString()
 		const dashboard = startDashboardServer(0, {
-			hostname: '127.0.0.1',
+			...inertDashboardControls,
 			getConfiguration: () => ({
 				hasSigner: ready,
 				revision: String(revision),
@@ -72,8 +73,6 @@ browserTest(
 				wallet: ready ? wallet : undefined,
 				workflows: [],
 			}),
-			setCancellation: () => {},
-			setCandidate: () => {},
 			setExecution: async value => {
 				executionMutations.push(value)
 				notifySaveReceived?.()
@@ -88,15 +87,10 @@ browserTest(
 					throw committed
 				}
 			},
-			setObligation: () => {},
-			setPaused: () => {},
-			setReplacement: () => {},
 			setSettings: value => {
 				settingsMutations.push(value)
 				revision += 1
 			},
-			setSigner: () => {},
-			setWorkflow: () => {},
 		})
 		const session = await startChromiumSession(chromiumExecutable, { evaluationDefaults: { attempts: 200, exceptions: 'ignore', intervalMilliseconds: 25 } })
 		await session.send('Runtime.enable')

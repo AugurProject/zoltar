@@ -8,6 +8,7 @@ import { AddressValue } from '../components/AddressValue.js'
 import { fireEvent, waitFor, within } from './testUtils/queries'
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '../wallet/networkProfile.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { deniedClipboard, installClipboard } from './testUtils/clipboard.js'
 
 describe('AddressValue', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
@@ -16,15 +17,20 @@ describe('AddressValue', () => {
 	installDomTestLifecycle({
 		beforeTest: domEnvironment => {
 			clipboardWriteText = mock(async () => undefined)
-
-			Reflect.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: clipboardWriteText } })
-			Reflect.defineProperty(domEnvironment.window.navigator, 'clipboard', { configurable: true, value: { writeText: clipboardWriteText } })
+			installClipboard({ writeText: clipboardWriteText }, domEnvironment.window.navigator)
 		},
 		afterTest: async () => {
 			await cleanupRenderedComponent?.()
 			cleanupRenderedComponent = undefined
 		},
 	})
+
+	/** Renders `address` and returns its copy button, unmounting it after the test. */
+	async function renderAddressCopyButton(address: string) {
+		const renderedComponent = await renderIntoDocument(<AddressValue address={address} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		return within(document.body).getByRole('button', { name: `Copy address ${address}` })
+	}
 
 	test('renders a placeholder when no address is available', async () => {
 		const renderedComponent = await renderIntoDocument(<AddressValue address={undefined} />)
@@ -183,10 +189,8 @@ describe('AddressValue', () => {
 
 	test('provides a start-and-end abbreviation without changing the accessible name or copied value', async () => {
 		const address = '0x1234567890abcdef1234567890abcdef12345678'
-		const renderedComponent = await renderIntoDocument(<AddressValue address={address} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		const copyButton = await renderAddressCopyButton(address)
 
-		const copyButton = within(document.body).getByRole('button', { name: `Copy address ${address}` })
 		expect(document.querySelector('.address-value-full')?.textContent).toBe(address)
 		expect(document.querySelector('.address-value-abbreviated')?.textContent).toBe('0x123456…345678')
 		expect(document.querySelector('.address-value-abbreviated')?.getAttribute('aria-hidden')).toBe('true')
@@ -203,9 +207,7 @@ describe('AddressValue', () => {
 
 	test('shows the full inline address when it fits, while keeping the complete copy target', async () => {
 		const address = '0x1234567890abcdef1234567890abcdef12345678'
-		const renderedComponent = await renderIntoDocument(<AddressValue address={address} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
-		const copyButton = within(document.body).getByRole('button', { name: `Copy address ${address}` })
+		const copyButton = await renderAddressCopyButton(address)
 		expect(document.querySelector('.address-value-full')?.textContent).toBe(address)
 		expect(document.querySelector('.address-value-text')?.getAttribute('data-abbreviated')).toBe('false')
 		expect(copyButton.getAttribute('title')).toBe(address)
@@ -252,17 +254,9 @@ describe('AddressValue', () => {
 
 	test('keeps the address visible and associates an announced clipboard error', async () => {
 		const address = '0x1234567890abcdef1234567890abcdef12345678'
-		const clipboard = {
-			writeText: async () => {
-				throw new DOMException('clipboard unavailable', 'NotAllowedError')
-			},
-		}
-		Reflect.defineProperty(navigator, 'clipboard', { configurable: true, value: clipboard })
-		Reflect.defineProperty(window.navigator, 'clipboard', { configurable: true, value: clipboard })
-		const renderedComponent = await renderIntoDocument(<AddressValue address={address} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		installClipboard(deniedClipboard())
+		const copyButton = await renderAddressCopyButton(address)
 		const documentQueries = within(document.body)
-		const copyButton = documentQueries.getByRole('button', { name: `Copy address ${address}` })
 
 		await act(() => {
 			fireEvent.click(copyButton)

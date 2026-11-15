@@ -1,4 +1,4 @@
-import { recoveredReceiptObservations, agreedPendingNonce, availableHeads, assertRecoveryChain, assertIntentIdentity, exactIntentIsVisible } from './recovery-observations.ts'
+import { recoveredReceiptObservations, agreedIntentPendingNonce, availableHeads, assertRecoveryChain, assertIntentIdentity, exactIntentIsVisible } from './recovery-observations.ts'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { advanceRollbackQueue } from './inclusion-journal.ts'
 import { commitReceiptDisposition as commitRecoveryDisposition } from './receipt-disposition.ts'
@@ -150,7 +150,7 @@ async function resubmitIntent(environment: ExecutionEnvironment, intent: Pending
 	if (account.signMessage === undefined) throw new Error('Execution signer cannot authenticate transaction recovery')
 	assertRecoverySubmissionMode(intent.mode, environment.settings.submission.mode)
 	const parsed = parseTransaction(intent.serializedTransaction)
-	const preflightNonce = await agreedPendingNonce(environment, intent)
+	const preflightNonce = await agreedIntentPendingNonce(environment, intent)
 	if (preflightNonce !== intent.nonce) await retainManualReconciliation(environment, intent, preflightNonce)
 	const anchor = await agreedLatestBlock(environment, `${intent.label} recovery block`)
 	if (anchor.number >= intent.maxBlockNumber) {
@@ -181,7 +181,7 @@ async function resubmitIntent(environment: ExecutionEnvironment, intent: Pending
 		if (!sameCanonicalExecutionAnchor(replayAnchor, anchor)) {
 			throw new TransactionAwaitingRecovery(intent.label, intent.hash, 'canonical recovery anchor or its attester set changed during replay checks')
 		}
-		const replayNonce = await agreedPendingNonce(environment, intent, replayAnchor.attestingRpcUrls)
+		const replayNonce = await agreedIntentPendingNonce(environment, intent, replayAnchor.attestingRpcUrls)
 		if (replayNonce !== intent.nonce) await retainManualReconciliation(environment, intent, replayNonce)
 	} catch (error) {
 		if (error instanceof RecoveryPolicyBlocked) {
@@ -242,7 +242,7 @@ async function resubmitIntent(environment: ExecutionEnvironment, intent: Pending
 			const submissionWorkflow = recoverableWorkflowForIntent(environment.state, intent.workflowId)
 			const submissionStep = requireWorkflowStep(submissionWorkflow, intent.stepId)
 			await assertRecoveryPolicy(environment, intent, submissionWorkflow, submissionStep, parsed, submissionAnchor)
-			const submissionNonce = await agreedPendingNonce(environment, intent, submissionAnchor.attestingRpcUrls)
+			const submissionNonce = await agreedIntentPendingNonce(environment, intent, submissionAnchor.attestingRpcUrls)
 			if (submissionNonce !== intent.nonce) {
 				const blocker = manualReconciliationBlocker(intent, submissionNonce)
 				deferral = { blocker, manual: true, reason: blocker }
@@ -461,7 +461,7 @@ export async function recoverPendingTransactions(environment: ExecutionEnvironme
 	}
 	if (await resolveQueuedCancellation(environment, intent)) return true
 	if (await resolveQueuedReplacement(environment, intent)) return true
-	const nonce = await agreedPendingNonce(environment, intent)
+	const nonce = await agreedIntentPendingNonce(environment, intent)
 	const headObservations = await availableHeads(environment, intent)
 	const heads = headObservations.map(observation => observation.head)
 	const exactTransactionVisible = await exactIntentIsVisible(environment, intent)
