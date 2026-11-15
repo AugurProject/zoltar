@@ -53,7 +53,7 @@ export function buildPortfolioDeploymentRequest(parameters: { owner: Address; fa
 	uint(parameters.origin.universeId, 248, 'Origin universe')
 	uint(parameters.origin.securityMultiplierBps, 256, 'Security multiplier')
 	uint(parameters.origin.reportPriorityFeeAttoEthPerGas, 256, 'Report priority fee')
-	if (parameters.origin.securityMultiplierBps <= 10_001n) throw new Error('Security multiplier must exceed 10001 BPS.')
+	if (parameters.origin.securityMultiplierBps < 10_500n) throw new Error('Security multiplier must be at least 10500 BPS.')
 	if (parameters.origin.reportPriorityFeeAttoEthPerGas === 0n) throw new Error('Report priority fee must be positive.')
 	address(parameters.questionAdmissionPolicy, 'Question admission policy')
 	for (const [name, value] of Object.entries(parameters.deployers)) address(value, `${name} deployer`)
