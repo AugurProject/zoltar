@@ -1,4 +1,5 @@
 import type { SimulationScenario } from './scenarios.js'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 /**
  * Prepared scenario states live next to the simulation worker bundle: a manifest naming one serialized saved-state
@@ -28,13 +29,9 @@ export type SimulationSnapshotManifest = {
 	scenarios: Record<string, { file: string }>
 }
 
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
 export function isSimulationSnapshotManifest(value: unknown): value is SimulationSnapshotManifest {
-	if (!isObjectRecord(value) || typeof value['generatedAt'] !== 'string' || typeof value['key'] !== 'string' || !isObjectRecord(value['scenarios'])) return false
-	return Object.values(value['scenarios']).every(entry => isObjectRecord(entry) && typeof entry['file'] === 'string' && entry['file'] !== '')
+	if (!isPlainRecord(value) || typeof value['generatedAt'] !== 'string' || typeof value['key'] !== 'string' || !isPlainRecord(value['scenarios'])) return false
+	return Object.values(value['scenarios']).every(entry => isPlainRecord(entry) && typeof entry['file'] === 'string' && entry['file'] !== '')
 }
 
 function getSimulationSnapshotDirectoryUrl(workerPath: URL) {

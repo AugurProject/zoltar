@@ -103,7 +103,7 @@ type AmmPriceProjection = {
 type RepEthPriceProjection = {
 	type: 'repEthPrice'
 	coordinatorAddress: string
-	eventName: 'RepEthPriceSet' | 'PriceReported'
+	eventName: 'PriceReported'
 	reportId?: string
 	repPerEth1e18: string
 	settlementTimestamp?: Date
@@ -347,15 +347,6 @@ export const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 			},
 		]
 	if (name === 'Swap') return []
-	if (name === 'RepEthPriceSet')
-		return [
-			{
-				type: 'repEthPrice',
-				coordinatorAddress: log.address.toLowerCase(),
-				eventName: name,
-				repPerEth1e18: integerString(args['price'], 'price'),
-			},
-		]
 	if (name === 'PriceReported')
 		return [
 			{

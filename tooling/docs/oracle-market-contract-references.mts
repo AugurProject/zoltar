@@ -1,7 +1,7 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const oracleMarketContractReferences: ContractReference[] = [
 	{
-		compiledAbiFingerprint: 'd1cceca63477679ef6678d08f1dac7da7c144dfa546610325864e5360805ba47',
+		compiledAbiFingerprint: 'da22986690d7acacbc4520f6620f2e8f6246a794effd69e88f1084843c2440e2',
 		name: 'OpenOraclePriceCoordinator',
 		purpose: 'Per-question adapter to the portfolio universe\u2019s shared collateral/REP feed. It exposes reporting and canonical price reads without staging capital operations.',
 		readAbiFingerprint: 'a9ae0df17c5fadf1119fce59c68a4e0ed9b9fd49db9fadc8f35f9268e9a3c30a',

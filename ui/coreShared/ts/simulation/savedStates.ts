@@ -3,6 +3,7 @@ import { getErrorMessage } from '../lib/errors.js'
 import { getBrowserStorage } from '../lib/browserStorage.js'
 import type { SimulationScenario } from './scenarios.js'
 import { parseGenesisOutcome, type GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 export function getSimulationSource(initialization: SimulationInitialization): SimulationSource {
 	return initialization.kind === 'scenario'
@@ -135,10 +136,6 @@ class SavedSimulationStateError extends Error {
 	}
 }
 
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
 function isHexString(value: unknown): value is Hex {
 	return typeof value === 'string' && isHex(value, { strict: true })
 }
@@ -148,16 +145,16 @@ function isSerializedLog(value: unknown): value is SerializedSimulationLog {
 }
 
 function isSerializedReceipt(value: unknown): value is SerializedSimulationReceipt {
-	if (!isObjectRecord(value)) return false
+	if (!isPlainRecord(value)) return false
 	return isHexString(value['cumulativeGasUsed']) && isHexString(value['logsBloom']) && (value['status'] === 0 || value['status'] === 1) && Array.isArray(value['logs']) && value['logs'].every(isSerializedLog)
 }
 
 function isSerializedSimulationBlock(value: unknown): value is SerializedSimulationBlock {
-	return isObjectRecord(value) && isHexString(value['block']) && Array.isArray(value['receipts']) && value['receipts'].every(isSerializedReceipt) && Array.isArray(value['senders']) && value['senders'].every(isHexString)
+	return isPlainRecord(value) && isHexString(value['block']) && Array.isArray(value['receipts']) && value['receipts'].every(isSerializedReceipt) && Array.isArray(value['senders']) && value['senders'].every(isHexString)
 }
 
 function isTaggedBigIntValue(value: unknown): value is Record<typeof BIGINT_VALUE_TAG, string> {
-	return isObjectRecord(value) && Object.keys(value).length === 1 && typeof value[BIGINT_VALUE_TAG] === 'string'
+	return isPlainRecord(value) && Object.keys(value).length === 1 && typeof value[BIGINT_VALUE_TAG] === 'string'
 }
 
 function getStorage(storage?: Storage) {
@@ -205,14 +202,14 @@ function isNonNegativeBigInt(value: unknown) {
 }
 
 function assertSavedStateEnvelope(value: unknown): asserts value is SavedSimulationStateEnvelopeV1 {
-	if (!isObjectRecord(value)) throw new SavedSimulationStateError('Saved simulation state must be a JSON object')
+	if (!isPlainRecord(value)) throw new SavedSimulationStateError('Saved simulation state must be a JSON object')
 	if (value['genesisOutcome'] !== undefined && (typeof value['genesisOutcome'] !== 'string' || parseGenesisOutcome(value['genesisOutcome']) === undefined)) throw new SavedSimulationStateError('Saved simulation state has an invalid genesis universe')
 	if (value['version'] !== SAVED_SIMULATION_STATE_VERSION) throw new SavedSimulationStateError(`Unsupported saved simulation state version: ${String(value['version'])}`)
 	if (typeof value['name'] !== 'string' || normalizeSavedStateName(value['name']) === '') throw new SavedSimulationStateError('Saved simulation state is missing a name')
 	if (typeof value['savedAt'] !== 'string' || value['savedAt'].trim() === '') throw new SavedSimulationStateError('Saved simulation state is missing a savedAt timestamp')
 	if (Number.isNaN(Date.parse(value['savedAt']))) throw new SavedSimulationStateError('Saved simulation state is missing a valid savedAt timestamp')
 	if (typeof value['baseScenario'] !== 'string' || value['baseScenario'] === '') throw new SavedSimulationStateError('Saved simulation state is missing a valid baseScenario')
-	if (!isObjectRecord(value['state'])) throw new SavedSimulationStateError('Saved simulation state is missing its state payload')
+	if (!isPlainRecord(value['state'])) throw new SavedSimulationStateError('Saved simulation state is missing its state payload')
 	const state = value['state']
 	if (typeof state['selectedAccount'] !== 'string' || state['selectedAccount'].trim() === '') throw new SavedSimulationStateError('Saved simulation state is missing a selectedAccount')
 	if (!isFiniteNonNegativeNumber(state['queryDelayMilliseconds'])) throw new SavedSimulationStateError('Saved simulation state is missing a valid query delay')
@@ -222,12 +219,12 @@ function assertSavedStateEnvelope(value: unknown): asserts value is SavedSimulat
 	if (!isNonNegativeBigInt(state['transactionCountSinceReset'])) throw new SavedSimulationStateError('Saved simulation state is missing a valid transaction count')
 	if (!isNonNegativeBigInt(state['repPerEthPrice']) || state['repPerEthPrice'] === 0n) throw new SavedSimulationStateError('Saved simulation state is missing a valid REP/ETH price')
 	if (!isNonNegativeBigInt(state['repPerUsdcPrice']) || state['repPerUsdcPrice'] === 0n) throw new SavedSimulationStateError('Saved simulation state is missing a valid REP/USDC price')
-	if (!isObjectRecord(state['snapshot'])) throw new SavedSimulationStateError('Saved simulation state is missing a valid TEVM snapshot')
+	if (!isPlainRecord(state['snapshot'])) throw new SavedSimulationStateError('Saved simulation state is missing a valid TEVM snapshot')
 	if (state['blocks'] !== undefined && (!Array.isArray(state['blocks']) || !state['blocks'].every(isSerializedSimulationBlock))) throw new SavedSimulationStateError('Saved simulation state has invalid block history')
 }
 
 function assertSavedStateRecord(value: unknown): asserts value is SavedSimulationStateStorageRecord {
-	if (!isObjectRecord(value)) throw new SavedSimulationStateError('Saved simulation state record must be an object')
+	if (!isPlainRecord(value)) throw new SavedSimulationStateError('Saved simulation state record must be an object')
 	if (typeof value['id'] !== 'string' || value['id'].trim() === '') throw new SavedSimulationStateError('Saved simulation state record is missing an id')
 	if (typeof value['serialized'] !== 'string' || value['serialized'].trim() === '') throw new SavedSimulationStateError('Saved simulation state record is missing its serialized payload')
 	if (typeof value['name'] !== 'string' || normalizeSavedStateName(value['name']) === '') throw new SavedSimulationStateError('Saved simulation state record is missing a name')
@@ -329,7 +326,7 @@ function writeCorruptedSavedStateStorageBackup(rawValue: string, storage?: Stora
 		try {
 			const parsed = JSON.parse(serializedExistingBackups)
 			if (Array.isArray(parsed)) {
-				existingBackups = parsed.filter((item): item is SavedSimulationStateCorruptedBackup => isObjectRecord(item) && typeof item['backedUpAt'] === 'string' && typeof item['rawValue'] === 'string')
+				existingBackups = parsed.filter((item): item is SavedSimulationStateCorruptedBackup => isPlainRecord(item) && typeof item['backedUpAt'] === 'string' && typeof item['rawValue'] === 'string')
 			}
 		} catch (error) {
 			if (!(error instanceof SyntaxError)) throw error

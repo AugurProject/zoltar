@@ -1,9 +1,9 @@
 import { workflowProgress } from './workflow-progress.js'
 import { fullIdentifier } from './dom.js'
-import { isRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { displayOperationInput, serializeOperationInput } from './operation-input-format.js'
 import { stepValueLabel } from './dashboard-format.ts'
 import { confirmOperatorAction } from '@zoltar/bot-shared/dashboard/confirmation'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 type Operation = { id?: string | undefined; label?: string | undefined; description?: string | undefined; blockers: string[] }
 type Input = { source: 'chaosbot' } | { source: 'custom'; value: string }
@@ -20,7 +20,7 @@ type Result = {
 }
 
 function record(value: unknown): Record<string, unknown> {
-	if (!isRecord(value)) throw new Error('Operation response unavailable')
+	if (!isPlainRecord(value)) throw new Error('Operation response unavailable')
 	return Object.fromEntries(Object.entries(value))
 }
 

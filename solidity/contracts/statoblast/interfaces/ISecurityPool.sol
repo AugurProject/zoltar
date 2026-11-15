@@ -13,15 +13,8 @@ import { BinaryOutcomes } from '../BinaryOutcomes.sol';
 
 enum AccountingReason {
 	Accrual,
-	VaultCheckpoint,
-	FeeRedemption,
-	CapacityOwnershipChange,
-	AuctionClaim,
 	PoolInitialization,
-	ForkActivation,
-	CollateralReconciliation,
-	RetentionRateChange,
-	ForkFinalization
+	CollateralReconciliation
 }
 
 enum SystemState {

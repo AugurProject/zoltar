@@ -1,8 +1,5 @@
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null
-}
+import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
 
 export function requireAddress(value: unknown, label: string): Address {
 	if (typeof value !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(value)) throw new Error(`${label} must be an address`)
@@ -11,7 +8,7 @@ export function requireAddress(value: unknown, label: string): Address {
 
 function readManifestChainId(manifest: Record<string, unknown>) {
 	const network = manifest['network']
-	const candidate = isRecord(network) ? network['chainId'] : manifest['chainId']
+	const candidate = isObjectRecord(network) ? network['chainId'] : manifest['chainId']
 	if (typeof candidate === 'number' && Number.isSafeInteger(candidate) && candidate >= 0) return BigInt(candidate)
 	if (typeof candidate === 'string' && /^(?:0x[0-9a-fA-F]+|[0-9]+)$/.test(candidate)) return BigInt(candidate)
 	throw new Error('Core deployment manifest does not contain a valid chain ID')
@@ -22,20 +19,20 @@ function readSecurityPoolFactory(manifest: Record<string, unknown>) {
 	if (direct !== undefined) return requireAddress(direct, 'securityPoolFactory')
 	const deploymentSteps = manifest['deploymentSteps']
 	if (Array.isArray(deploymentSteps)) {
-		const factoryStep = deploymentSteps.find(step => isRecord(step) && step['id'] === 'securityPoolFactory')
-		if (isRecord(factoryStep)) return requireAddress(factoryStep['address'], 'deploymentSteps.securityPoolFactory.address')
+		const factoryStep = deploymentSteps.find(step => isObjectRecord(step) && step['id'] === 'securityPoolFactory')
+		if (isObjectRecord(factoryStep)) return requireAddress(factoryStep['address'], 'deploymentSteps.securityPoolFactory.address')
 	}
 	const contracts = manifest['contracts']
-	if (isRecord(contracts)) {
+	if (isObjectRecord(contracts)) {
 		const candidate = contracts['SecurityPoolFactory'] ?? contracts['securityPoolFactory']
-		if (isRecord(candidate)) return requireAddress(candidate['address'], 'contracts.SecurityPoolFactory.address')
+		if (isObjectRecord(candidate)) return requireAddress(candidate['address'], 'contracts.SecurityPoolFactory.address')
 		if (candidate !== undefined) return requireAddress(candidate, 'contracts.SecurityPoolFactory')
 	}
 	throw new Error('Core deployment manifest does not contain SecurityPoolFactory')
 }
 
 export function parseCoreDeploymentManifest(manifest: unknown) {
-	if (!isRecord(manifest)) throw new Error('Core deployment manifest must be an object')
+	if (!isObjectRecord(manifest)) throw new Error('Core deployment manifest must be an object')
 	return { chainId: readManifestChainId(manifest), securityPoolFactory: readSecurityPoolFactory(manifest) }
 }
 
