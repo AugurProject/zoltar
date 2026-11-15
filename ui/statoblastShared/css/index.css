@@ -4243,13 +4243,13 @@ span.rep-price-status.stale,
  * address is capped at its standard short form, so it does not take column width from the title. */
 .portfolio-questions-table .portfolio-questions-address {
 	display: inline-block;
-	max-width: 16ch;
+	min-width: 42ch;
 }
 
-@media (min-width: 64.0625rem) {
+@media (max-width: 64rem) {
 	.portfolio-questions-table .portfolio-questions-address {
-		min-width: 42ch;
-		max-width: none;
+		min-width: 0;
+		max-width: 16ch;
 	}
 }
 
