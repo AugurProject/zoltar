@@ -279,22 +279,7 @@ describe('state projections', () => {
 		})
 	})
 
-	test('distinguishes initialization seeds from accepted REP per ETH coordinator prices', () => {
-		const [originSeed] = projectionsFrom(log('RepEthPriceSet', { price: '0' }, vault))
-		expect(originSeed).toEqual({
-			type: 'repEthPrice',
-			coordinatorAddress: vault.toLowerCase(),
-			eventName: 'RepEthPriceSet',
-			repPerEth1e18: '0',
-		})
-		const [childSeed] = projectionsFrom(log('RepEthPriceSet', { price: '18000000000000000000' }, vault))
-		expect(childSeed).toEqual({
-			type: 'repEthPrice',
-			coordinatorAddress: vault.toLowerCase(),
-			eventName: 'RepEthPriceSet',
-			repPerEth1e18: '18000000000000000000',
-		})
-
+	test('projects accepted REP per ETH coordinator prices', () => {
 		const [reported] = projectionsFrom(log('PriceReported', { reportId: '42', price: '19500000000000000000', lastSettlementTimestamp: '2000' }, vault))
 		expect(reported).toMatchObject({
 			type: 'repEthPrice',
@@ -383,11 +368,6 @@ describe('state projections', () => {
 		})
 		expect(projectionsFrom(log('GameStarted', { activationTime: '1' })).at(-1)).toMatchObject({
 			domain: 'escalation',
-			entityIdentity: pool.toLowerCase(),
-		})
-		expect(projectionsFrom(log('InheritedThresholdTieReopened', {})).at(-1)).toMatchObject({
-			domain: 'escalation',
-			semanticEventKind: 'InheritedThresholdTieReopened',
 			entityIdentity: pool.toLowerCase(),
 		})
 		expect(projectionsFrom(log('CommitmentAuthorized', { owner: vault, positionId: '1' })).at(-1)).toMatchObject({

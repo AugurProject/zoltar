@@ -25,10 +25,9 @@ test('provides eight distinct Uniswap markets for dense visual QA', () => {
 	expect(new Set(prices.map(({ market_id }) => market_id))).toHaveLength(8)
 })
 
-test('distinguishes the REP/ETH initialization seed from accepted demo settlements', () => {
+test('records every demo REP/ETH price as an accepted settlement', () => {
 	const prices = demoRepEthPriceHistory(Date.parse('2026-08-12T00:00:00.000Z'))
-	expect(prices[0]).toMatchObject({ event_name: 'RepEthPriceSet', report_id: null, settlement_timestamp: null })
-	for (const price of prices.slice(1)) {
+	for (const price of prices) {
 		expect(price.event_name).toBe('PriceReported')
 		expect(price.report_id).not.toBeNull()
 		expect(price.settlement_timestamp).toMatch(/^2026-/)

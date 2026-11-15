@@ -5,8 +5,6 @@ interface ICapitalFeeStreams {
 	function addStream(uint256 ethAmount, uint256 repAmount) external;
 	function checkpoint(uint48 eligibleThrough) external returns (uint256 ethAmount, uint256 repAmount);
 	function takeDeferred() external returns (uint256 ethAmount, uint256 repAmount);
-	function defer(uint256 ethAmount, uint256 repAmount) external;
-	function resume(address index, uint256 price) external;
 }
 
 interface ICapitalPriceExposure {
