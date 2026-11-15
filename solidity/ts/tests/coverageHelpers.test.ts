@@ -46,6 +46,7 @@ import {
 	test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool,
 	test_statoblast_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar,
 } from '../types/contractArtifact'
+import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
 
 const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000'
 const SCALAR_DECIMALS = 18n
@@ -61,16 +62,14 @@ type CoverageFileSummary = {
 
 const bytes32 = (value: bigint): Hex => `0x${value.toString(16).padStart(64, '0')}` as Hex
 const isCoverageEnabled = () => process.env['SOLIDITY_BYTECODE_COVERAGE'] === '1'
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
-
 const parseBytecodeRanges = (value: unknown): { readonly start: number; readonly length: number }[] => {
 	if (Array.isArray(value)) {
 		return value.map(range => {
-			if (!isRecord(range) || typeof range['start'] !== 'number' || typeof range['length'] !== 'number') throw new Error('Bytecode reference range is invalid')
+			if (!isObjectRecord(range) || typeof range['start'] !== 'number' || typeof range['length'] !== 'number') throw new Error('Bytecode reference range is invalid')
 			return { start: range['start'], length: range['length'] }
 		})
 	}
-	if (!isRecord(value)) return []
+	if (!isObjectRecord(value)) return []
 	return Object.values(value).flatMap(parseBytecodeRanges)
 }
 
@@ -87,14 +86,14 @@ const parseRpcHash = (value: unknown): Hash => {
 const readCoverageFileSummary = async (sourceSuffix: string): Promise<CoverageFileSummary> => {
 	const rawSummary = await readFile('solidity/coverage/coverage-summary.json', 'utf8')
 	const parsedSummary: unknown = JSON.parse(rawSummary)
-	if (!isRecord(parsedSummary)) throw new Error('Coverage summary must be an object')
+	if (!isObjectRecord(parsedSummary)) throw new Error('Coverage summary must be an object')
 	const files = parsedSummary['files']
-	if (!isRecord(files)) throw new Error('Coverage summary must contain files')
+	if (!isObjectRecord(files)) throw new Error('Coverage summary must contain files')
 	for (const fileSummaryValue of Object.values(files)) {
-		if (!isRecord(fileSummaryValue)) continue
+		if (!isObjectRecord(fileSummaryValue)) continue
 		const file = fileSummaryValue['file']
 		const lineHits = fileSummaryValue['lineHits']
-		if (typeof file === 'string' && file.endsWith(sourceSuffix) && isRecord(lineHits)) {
+		if (typeof file === 'string' && file.endsWith(sourceSuffix) && isObjectRecord(lineHits)) {
 			const parsedLineHits: Record<string, number> = {}
 			for (const [line, hitCount] of Object.entries(lineHits)) {
 				if (typeof hitCount !== 'number') throw new Error(`Coverage line ${line} has non-numeric hit count`)
@@ -108,11 +107,11 @@ const readCoverageFileSummary = async (sourceSuffix: string): Promise<CoverageFi
 
 test('coverage runtime matching preserves linked PCs and masks generated mutable ranges exactly', async () => {
 	const artifactDocument: unknown = JSON.parse(await readFile('solidity/artifacts/Contracts.json', 'utf8'))
-	if (!isRecord(artifactDocument) || !isRecord(artifactDocument['contracts'])) throw new Error('Contract artifact must contain contracts')
+	if (!isObjectRecord(artifactDocument) || !isObjectRecord(artifactDocument['contracts'])) throw new Error('Contract artifact must contain contracts')
 	const sourceContracts = artifactDocument['contracts']['contracts/statoblast/factories/SecurityPoolFactory.sol']
-	if (!isRecord(sourceContracts) || !isRecord(sourceContracts['SecurityPoolFactory'])) throw new Error('Contract artifact must contain SecurityPool')
+	if (!isObjectRecord(sourceContracts) || !isObjectRecord(sourceContracts['SecurityPoolFactory'])) throw new Error('Contract artifact must contain SecurityPool')
 	const evm = sourceContracts['SecurityPoolFactory']['evm']
-	if (!isRecord(evm) || !isRecord(evm['deployedBytecode'])) throw new Error('SecurityPool must contain deployed bytecode')
+	if (!isObjectRecord(evm) || !isObjectRecord(evm['deployedBytecode'])) throw new Error('SecurityPool must contain deployed bytecode')
 	const bytecode = evm['deployedBytecode']['object']
 	const sourceMap = evm['deployedBytecode']['sourceMap']
 	const immutableRanges = parseBytecodeRanges(evm['deployedBytecode']['immutableReferences'])
@@ -473,7 +472,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			method: 'debug_traceTransaction',
 			params: [decoyHash, { disableStack: false, disableMemory: true, disableStorage: true }],
 		})
-		if (!isRecord(rawDecoyTrace)) throw new Error('Decoy attribution fixture trace is missing')
+		if (!isObjectRecord(rawDecoyTrace)) throw new Error('Decoy attribution fixture trace is missing')
 		const decoyStructLogs = rawDecoyTrace['structLogs']
 		if (!Array.isArray(decoyStructLogs)) throw new Error('Decoy attribution fixture trace is missing struct logs')
 		await collectBytecodeCoverageForTransaction({
@@ -496,11 +495,11 @@ describe('Solidity bytecode coverage helpers', () => {
 			method: 'debug_traceTransaction',
 			params: [hash, { disableStack: false, disableMemory: true, disableStorage: true }],
 		})
-		if (!isRecord(rawTrace)) throw new Error('Attribution fixture trace is missing')
+		if (!isObjectRecord(rawTrace)) throw new Error('Attribution fixture trace is missing')
 		const structLogs = rawTrace['structLogs']
 		if (!Array.isArray(structLogs)) throw new Error('Attribution fixture trace is missing struct logs')
 		const unresolvedNestedSteps = decoyStructLogs.flatMap(step => {
-			if (!isRecord(step) || typeof step['pc'] !== 'number') return []
+			if (!isObjectRecord(step) || typeof step['pc'] !== 'number') return []
 			return [{ depth: 3, op: 'PUSH1', pc: step['pc'] }]
 		})
 		assert.ok(unresolvedNestedSteps.length > 0, 'decoy attribution fixture should produce unresolved PCs')

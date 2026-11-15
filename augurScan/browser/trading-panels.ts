@@ -1,7 +1,8 @@
 import { collateralUnit } from '../src/collateral.ts'
-import { isRecord, operationRecords, type JsonRecord } from './api-validation.ts'
+import { operationRecords, type JsonRecord } from './api-validation.ts'
 import { exactUnit, utcDateTime } from './format.ts'
 import type { createOperationsComponents } from './operations-components.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 type Components = ReturnType<typeof createOperationsComponents>
 
@@ -62,7 +63,7 @@ export const tradingActivityPanel = (
 	activity: unknown,
 	{ operationRow, operationsPanel, operationsHref, nativeSymbol }: { readonly operationRow: Components['operationRow']; readonly operationsPanel: Components['operationsPanel']; readonly operationsHref: (pathname: string) => string; readonly nativeSymbol: string },
 ) => {
-	const page = isRecord(activity) ? activity : {}
+	const page = isPlainRecord(activity) ? activity : {}
 	const items = operationRecords(page['items'])
 	return operationsPanel(
 		'Recent market activity',
@@ -81,7 +82,7 @@ const signedEth = (value: unknown, asset: ReturnType<typeof collateralUnit>): st
 /** @internal Exported for presentation unit tests. */
 export const tradingPnlSummary = (item: JsonRecord, _nativeSymbol: string): string => {
 	const asset = collateralUnit(item)
-	const valuation = isRecord(item['valuation']) ? item['valuation'] : {}
+	const valuation = isPlainRecord(item['valuation']) ? item['valuation'] : {}
 	const exitValue = `${exactUnit(text(item['holdings_value_atto_eth']) ?? '0', asset.decimals, asset.symbol)} exit value${valuation['partial'] === true ? ' (partial, some shares unvalued)' : ''}`
 	const reason = String(valuation['reason'] ?? 'no valuation')
 	const holdings = valuation['status'] === 'available' ? exitValue : `holdings value unavailable (${reason.charAt(0).toLowerCase()}${reason.slice(1)})`
@@ -118,7 +119,7 @@ export const tradingPnlPanel = (
 		readonly nativeSymbol: string
 	},
 ) => {
-	const record = isRecord(pnl) ? pnl : {}
+	const record = isPlainRecord(pnl) ? pnl : {}
 	const panel = operationsPanel(
 		'Trading profit and loss',
 		operationRecords(record['items']).map(item => {

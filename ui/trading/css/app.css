@@ -585,15 +585,14 @@ button.outcome-button--no:hover:not(:disabled) {
 
 /* On phones the status chips take their own row and share it, so the four labels fit inside the page gutter. */
 @media (max-width: 40rem) {
+	/* Filters fill the row with one-line labels; a filter that does not fit moves to a second row and stretches across it. */
 	.market-list-subbar > .market-list-filters {
 		flex: 1 1 100%;
-		flex-wrap: nowrap;
 		width: 100%;
 	}
 	.market-list-subbar .view-tabs.market-list-filters .view-tab {
 		flex: 1 1 auto;
-		min-width: 0;
-		padding-inline: var(--space-1);
+		padding-inline: var(--space-2);
 	}
 }
 

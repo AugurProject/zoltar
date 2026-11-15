@@ -3,7 +3,8 @@ import { parsePortfolioPolicy, parsePortfolioSelections, serializePortfolioPolic
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
-import { boolean, formatDecimalAmount, integer, isRecord, parseDecimalAmount, record, nonemptyString as string } from '@zoltar/bot-shared/infrastructure/json-validation'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
+import { boolean, formatDecimalAmount, integer, parseDecimalAmount, record, nonemptyString as string } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { parseCentralizedMarketSettings, serializeCentralizedMarketSettings, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { presetNetworkChainId, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
 import { parseQuorumConnectivitySettings, unconfiguredQuorumConnectivity, type QuorumConnectivitySettings } from '@zoltar/bot-shared/monitoring/quorum-connectivity'
@@ -103,7 +104,7 @@ const REMOVED_STRATEGY_KEYS = [
 
 /** A misspelled optional key would otherwise silently take its default. */
 function assertKnownKeys(value: unknown, known: readonly string[], removed: readonly string[], label: string) {
-	if (!isRecord(value)) return
+	if (!isPlainRecord(value)) return
 	const allowed = new Set([...known, ...removed])
 	const unsupported = Object.keys(value).find(key => !allowed.has(key))
 	if (unsupported !== undefined) throw new Error(`${label} contains unsupported field ${unsupported}`)
