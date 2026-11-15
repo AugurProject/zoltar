@@ -1,13 +1,14 @@
 import { claimProofDisclosure, escalationPayoutSummary, escalationPayoutTitle } from './escalation-payouts.ts'
 import { semanticSummary } from './semantic-evidence.ts'
 import type { AccountTransaction, ArgumentDefinition, LiveChangeOptions, LoadOptions, ProtocolAddressLinkOptions, RichListRecord } from './browser-types.ts'
-import { isRecord, operationRecords } from './api-validation.ts'
+import { operationRecords } from './api-validation.ts'
 import { exactUnit } from './format.ts'
 import { short, shortIdentifier } from './identifier-format.ts'
 import { PORTFOLIO_KIND_LABELS, portfolioItems, portfolioPage } from './portfolio-helpers.ts'
 import type { createOperationsComponents } from './operations-components.ts'
 import { tradingPnlPanel } from './trading-panels.ts'
 import { captureViewState, restoreViewState } from './view-state.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 type Components = ReturnType<typeof createOperationsComponents>
 
@@ -139,7 +140,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 	const payoutPanel = operationsPanel(
 		'Escalation payouts',
 		operationRecords(payouts['items']).map(entry => {
-			const position = isRecord(entry['position']) ? entry['position'] : {}
+			const position = isPlainRecord(entry['position']) ? entry['position'] : {}
 			const row = operationRow(escalationPayoutTitle(position), escalationPayoutSummary(position), String(entry['game_address']), entry['snapshot_block'])
 			const gameLink = element('a', 'back-link', 'View escalation game →')
 			gameLink.href = operationsHref(`/escalation/${entry['game_address']}`)

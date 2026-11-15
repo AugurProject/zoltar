@@ -25,6 +25,14 @@ function scan(fixture: ReturnType<typeof storageFixture>) {
 	return scanCarryStorage({ client: fixture.client, escalationGames: [{ pool: fixture.pool(child), escalationGame: child }], wallet, anchorBlockNumber: anchor, expectedAnchorHash: blockHash, securityPoolForker: forker, maximumItems: 1000 })
 }
 
+/** Asserts the scan fell back to one separately settled checkpoint with its transform and no atomic final withdrawal. */
+function expectStandaloneCheckpointPreparation(result: Awaited<ReturnType<typeof scanCarryStorage>>) {
+	expect(result.checkpoints).toHaveLength(1)
+	expect(result.checkpoints[0]?.settlement).toBe('separate')
+	expect(result.checkpoints[0]?.finalWithdrawal).toBeUndefined()
+	expect(result.checkpoints[0]?.transforms).toHaveLength(1)
+}
+
 test('constructs and simulates a carry withdrawal exclusively from anchored storage', async () => {
 	const fixture = storageFixture()
 	const result = await scan(fixture)
@@ -233,10 +241,7 @@ test('the final bounded batch is simulated together with the authenticated pool 
 	expect(result.withdrawals).toEqual([])
 	fixture.setAtomicFailure()
 	const fallback = await scanCarryStorage({ client: fixture.client, escalationGames: [{ pool: fixture.pool(child), escalationGame: child }], wallet, anchorBlockNumber: anchor, expectedAnchorHash: blockHash, securityPoolForker: forker, maximumItems: 1000, multicall3 })
-	expect(fallback.checkpoints).toHaveLength(1)
-	expect(fallback.checkpoints[0]?.settlement).toBe('separate')
-	expect(fallback.checkpoints[0]?.finalWithdrawal).toBeUndefined()
-	expect(fallback.checkpoints[0]?.transforms).toHaveLength(1)
+	expectStandaloneCheckpointPreparation(fallback)
 })
 
 test('an unavailable multicall deployment retains standalone checkpoint preparation', async () => {
@@ -244,10 +249,7 @@ test('an unavailable multicall deployment retains standalone checkpoint preparat
 	fixture.setCheckpointApplying()
 	fixture.setAtomicResponse('0x')
 	const result = await scanCarryStorage({ client: fixture.client, escalationGames: [{ pool: fixture.pool(child), escalationGame: child }], wallet, anchorBlockNumber: anchor, expectedAnchorHash: blockHash, securityPoolForker: forker, maximumItems: 1000, multicall3: fixture.pool(source) })
-	expect(result.checkpoints).toHaveLength(1)
-	expect(result.checkpoints[0]?.settlement).toBe('separate')
-	expect(result.checkpoints[0]?.finalWithdrawal).toBeUndefined()
-	expect(result.checkpoints[0]?.transforms).toHaveLength(1)
+	expectStandaloneCheckpointPreparation(result)
 })
 
 test('a context-wrapped node revert retains standalone checkpoint preparation', async () => {
@@ -255,10 +257,7 @@ test('a context-wrapped node revert retains standalone checkpoint preparation', 
 	fixture.setCheckpointApplying()
 	fixture.setAtomicFailure(new Error('RPC endpoint rejected the call', { cause: new RpcError('execution reverted: stale atomic withdrawal proof', { code: -32000 }) }))
 	const result = await scanCarryStorage({ client: fixture.client, escalationGames: [{ pool: fixture.pool(child), escalationGame: child }], wallet, anchorBlockNumber: anchor, expectedAnchorHash: blockHash, securityPoolForker: forker, maximumItems: 1000, multicall3: fixture.pool(source) })
-	expect(result.checkpoints).toHaveLength(1)
-	expect(result.checkpoints[0]?.settlement).toBe('separate')
-	expect(result.checkpoints[0]?.finalWithdrawal).toBeUndefined()
-	expect(result.checkpoints[0]?.transforms).toHaveLength(1)
+	expectStandaloneCheckpointPreparation(result)
 })
 
 test.each([new TypeError('Atomic revert decoder invariant failed'), new RpcError('RPC upstream unavailable', { code: -32000 })])('unexpected atomic simulation failure propagates: $message', async error => {

@@ -65,13 +65,6 @@ export function parsePositiveNumber(value: string | number | undefined) {
 	return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined
 }
 
-export function publicCandidateCount(value: string | number | undefined) {
-	if (typeof value === 'number') return Number.isSafeInteger(value) && value >= 0 ? value : undefined
-	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)$/.test(value)) return undefined
-	const count = BigInt(value)
-	return count <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(count) : count.toString()
-}
-
 export function formatClockDuration(totalSeconds: number) {
 	const seconds = Math.max(0, Math.floor(totalSeconds))
 	const hours = Math.floor(seconds / 3_600)

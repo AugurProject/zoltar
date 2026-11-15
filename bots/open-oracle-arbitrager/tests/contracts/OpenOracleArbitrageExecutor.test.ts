@@ -110,6 +110,15 @@ describe('OpenOracle arbitrage executor', () => {
 		)
 	}
 
+	/** Funds a 1_200 token1 dispute against the target report with 900 token2. */
+	const disputeRequest = (token1: Address, token2: Address) =>
+		({
+			abi: executorArtifact.abi,
+			address: executor,
+			functionName: 'dispute',
+			args: [target, 1_200n, 900n, game(token1, token2), helper(), timing],
+		}) as const
+
 	const settleAndWithdraw = (lifecycle: { amount1: bigint; amount2: bigint; parent: { hash: `0x${string}`; number: bigint } }, token1: Address, token2: Address, reportId = 1n) =>
 		({
 			abi: executorArtifact.abi,
@@ -139,14 +148,7 @@ describe('OpenOracle arbitrage executor', () => {
 		await mintToken(token1, client.account.address, 10_000n)
 		await mintToken(token2, client.account.address, 10_000n)
 		await approveToken(token1, executor, 2_200n)
-		await writeContractAndWait(client, () =>
-			client.writeContract({
-				abi: executorArtifact.abi,
-				address: executor,
-				functionName: 'dispute',
-				args: [target, 1_200n, 900n, game(token1, token2), helper(), timing],
-			}),
-		)
+		await writeContractAndWait(client, () => client.writeContract(disputeRequest(token1, token2)))
 		expect(await tokenBalance(token1, executor)).toBe(0n)
 		expect(await tokenAllowance(token1, executor, target)).toBe(0n)
 		expect(await tokenBalance(token1, target)).toBe(2_200n)
@@ -157,14 +159,7 @@ describe('OpenOracle arbitrage executor', () => {
 		await mintToken(token1, client.account.address, 10_100n)
 		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token1, functionName: 'transfer', args: [executor, 100n] }))
 		await approveToken(token1, executor, 2_200n)
-		await writeContractAndWait(client, () =>
-			client.writeContract({
-				abi: executorArtifact.abi,
-				address: executor,
-				functionName: 'dispute',
-				args: [target, 1_200n, 900n, game(token1, token2), helper(), timing],
-			}),
-		)
+		await writeContractAndWait(client, () => client.writeContract(disputeRequest(token1, token2)))
 		expect(await tokenBalance(token1, executor)).toBe(100n)
 		expect(await tokenBalance(token1, target)).toBe(2_200n)
 	})
@@ -174,15 +169,7 @@ describe('OpenOracle arbitrage executor', () => {
 		const token2 = await deploy(tokenArtifact, ['Token 2', 'TK2'])
 		await writeContractAndWait(client, () => client.writeContract({ abi: feeTokenArtifact.abi, address: token1, functionName: 'mint', args: [client.account.address, 10_000n] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: feeTokenArtifact.abi, address: token1, functionName: 'approve', args: [executor, 2_200n] }))
-		await expect(
-			client.simulateContract({
-				abi: executorArtifact.abi,
-				address: executor,
-				account: client.account,
-				functionName: 'dispute',
-				args: [target, 1_200n, 900n, game(token1, token2), helper(), timing],
-			}),
-		).rejects.toThrow('Token transfer to executor was not exact')
+		await expect(client.simulateContract({ ...disputeRequest(token1, token2), account: client.account })).rejects.toThrow('Token transfer to executor was not exact')
 		expect(await client.readContract({ abi: feeTokenArtifact.abi, address: token1, functionName: 'balanceOf', args: [executor] })).toBe(0n)
 		expect(await client.readContract({ abi: feeTokenArtifact.abi, address: token1, functionName: 'balanceOf', args: [target] })).toBe(0n)
 	})

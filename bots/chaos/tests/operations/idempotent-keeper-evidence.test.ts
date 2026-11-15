@@ -52,7 +52,7 @@ describe('idempotent Statoblast keeper evidence', () => {
 		const snapshot = dueFeeSnapshot()
 		const pool = snapshot.pools[0]
 		if (pool === undefined) throw new Error('Statoblast pool fixture is missing')
-		for (const definitionId of ['statoblast.pool.checkpoint-collateral', 'statoblast.pool.checkpoint-retention']) {
+		for (const definitionId of ['statoblast.pool.checkpoint-collateral', 'statoblast.pool.checkpoint-fees']) {
 			const plan = planFor(snapshot, definitionId)
 			const step = plan.steps[0]
 			if (step === undefined) throw new Error(`${definitionId} is missing its keeper step`)

@@ -3,9 +3,9 @@ import type { SQL } from 'bun'
 import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import { integrityCatalogData, latestInvalidationId } from '../repositories/integrity.ts'
 import { snapshotBoundary } from './entity-details.ts'
-import { ApiRequestError, cursorTimestamp, hasCursorSnapshot, integer, isCursorTimestamp, isNonNegativeSafeInteger, isPostgresBigint, json } from './shared.ts'
+import { ApiRequestError, cursorTimestamp, hasCursorSnapshot, isCursorTimestamp, isNonNegativeSafeInteger, isPostgresBigint, json } from './shared.ts'
 import { operationsAsOfForContinuations } from './snapshot.ts'
-import { rejectRawSnapshotOffset } from './trading-catalog.ts'
+import { snapshotCatalogRequest } from './trading-catalog.ts'
 
 type IntegrityCursor = readonly [
 	version: 1,
@@ -54,11 +54,7 @@ const integrityCursorFor = (chainId: number, snapshotId: string, total: number, 
 	encodeOpaqueCursor([1, chainId, 'integrity-catalog', snapshotId, total, ...snapshotBoundary(asOf), offset, cursorTimestamp(row['cursor_detected_at']), String(row['id'])] satisfies IntegrityCursor)
 
 export const integrityCatalogResponse = async (sql: SQL, url: URL): Promise<Response> => {
-	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
-	if (chainId === undefined) throw new ApiRequestError('chainId is required')
-	rejectRawSnapshotOffset(url)
-	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
-	const limit = Math.min(Math.max(requestedLimit, 1), 250)
+	const { chainId, limit } = snapshotCatalogRequest(url)
 	const cursor = parseIntegrityCursor(url.searchParams.get('cursor'), chainId)
 	const snapshotRows = await latestInvalidationId(sql, chainId)
 	const currentSnapshotId = snapshotRows[0]?.['id']

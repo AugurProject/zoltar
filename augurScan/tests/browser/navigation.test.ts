@@ -226,7 +226,7 @@ catalogTest(
 		const sequenceBeforeLive = Number(await evaluate(`window.__augurScanLiveSequence`))
 		await evaluate(`document.querySelector('#entity-list .entity-row:last-child')?.click()`)
 		await waitFor(`document.querySelector('#state-detail')?.textContent.includes('Fork migration')`)
-		await waitFor(`document.querySelector('#state-detail')?.textContent.includes('Fork collateral repair auction')`)
+		await waitFor(`document.querySelector('#state-detail')?.textContent.includes('Pool forked')`)
 		const detail = String(await evaluate(`document.querySelector('#state-detail')?.textContent`))
 		expect(detail).toContain('84')
 		expect(detail).not.toContain('No checkpoint')

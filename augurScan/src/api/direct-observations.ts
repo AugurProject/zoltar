@@ -3,9 +3,9 @@ import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import type { JsonValue } from '../ethereum.ts'
 import { directObservationMaxima, directObservationRows } from '../repositories/direct-observations.ts'
 import { snapshotBoundary } from './entity-details.ts'
-import { ApiRequestError, type CanonicalHistoryFilter, canonicalHistoryFilter, cursorTimestamp, directObservationTotal, evmAddress, hasCursorSnapshot, integer, isCursorTimestamp, isNonNegativeSafeInteger, isPostgresBigint, json, jsonRecord } from './shared.ts'
+import { ApiRequestError, type CanonicalHistoryFilter, canonicalHistoryFilter, cursorTimestamp, directObservationTotal, evmAddress, hasCursorSnapshot, isCursorTimestamp, isNonNegativeSafeInteger, isPostgresBigint, json, jsonRecord } from './shared.ts'
 import { operationsAsOfForContinuations } from './snapshot.ts'
-import { rejectRawSnapshotOffset } from './trading-catalog.ts'
+import { snapshotCatalogRequest } from './trading-catalog.ts'
 
 type DirectObservationKind = 'all' | 'address-balance' | 'token-metadata'
 
@@ -94,11 +94,7 @@ const directObservationSnapshot = (value: string): DirectObservationSnapshot => 
 }
 
 export const directObservationsResponse = async (sql: SQL, url: URL): Promise<Response> => {
-	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
-	if (chainId === undefined) throw new ApiRequestError('chainId is required')
-	rejectRawSnapshotOffset(url)
-	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
-	const limit = Math.min(Math.max(requestedLimit, 1), 250)
+	const { chainId, limit } = snapshotCatalogRequest(url)
 	const requestedKind = url.searchParams.get('kind') ?? 'all'
 	if (requestedKind !== 'all' && requestedKind !== 'address-balance' && requestedKind !== 'token-metadata') throw new ApiRequestError('kind must be all, address-balance, or token-metadata')
 	const address = evmAddress(url.searchParams.get('address'), 'address')

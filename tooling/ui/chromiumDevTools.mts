@@ -235,6 +235,15 @@ const readDevToolsPortFile = async (profilePath: string) => {
 	}
 }
 
+/** Captures the current viewport as a PNG and writes it to `screenshotPath`, creating its directory. */
+export async function writeViewportScreenshot(send: DevToolsCommand, screenshotPath: string): Promise<void> {
+	const result = await send('Page.captureScreenshot', { captureBeyondViewport: false, format: 'png', fromSurface: true })
+	const data = typeof result === 'object' && result !== null && 'data' in result ? result.data : undefined
+	if (typeof data !== 'string') throw new Error('Chromium did not return PNG screenshot data.')
+	await fs.mkdir(path.dirname(screenshotPath), { recursive: true })
+	await fs.writeFile(screenshotPath, Buffer.from(data, 'base64'))
+}
+
 export type ChromiumLaunchOptions = {
 	readonly path: string
 	readonly viewport: ChromiumViewport
