@@ -194,15 +194,11 @@ void describe('trading helpers', () => {
 	void test('estimates the exact fee checkpoint that runs before minting', () => {
 		expect(
 			estimateMintCheckpoint({
-				currentRetentionRate: 900_000_000_000_000_000n,
+				linearFee: { rateAttoEthPerSecond: TOKEN_PRECISION, endTime: 10n },
 				currentTimestamp: 2n,
-				totalUnderwritingLimitAttoEth: 5n * TOKEN_PRECISION,
-				feeEligibleUnderwritingLimitAttoEth: 5n * TOKEN_PRECISION,
 				feeEndTimestamp: 10n,
-				feeIndexRemainder: 0n,
 				lastFeeCheckpointNativeTime: 1n,
 				settlementCollateralAttoEth: 10n * TOKEN_PRECISION,
-				totalFeesOwedRemainder: 0n,
 			}),
 		).toEqual({ estimatedRetentionFeeAttoEth: TOKEN_PRECISION, settlementCollateralAfterFeesAttoEth: 9n * TOKEN_PRECISION })
 	})
@@ -675,15 +671,10 @@ void describe('trading helpers', () => {
 
 // Twenty seconds elapse since the checkpoint; a 3 attoETH/second linear fee runs for fifteen of them.
 const linearFeeMintCheckpoint = {
-	currentRetentionRate: 900_000_000_000_000_000n,
 	currentTimestamp: 30n,
-	totalUnderwritingLimitAttoEth: 100n,
-	feeEligibleUnderwritingLimitAttoEth: 100n,
 	feeEndTimestamp: 100n,
-	feeIndexRemainder: 0n,
 	lastFeeCheckpointNativeTime: 10n,
 	settlementCollateralAttoEth: 300n,
-	totalFeesOwedRemainder: 0n,
 	linearFee: { rateAttoEthPerSecond: 3n, endTime: 25n },
 }
 

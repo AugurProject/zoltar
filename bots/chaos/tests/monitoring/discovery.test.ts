@@ -282,7 +282,6 @@ interface GraphOverrides {
 		questionId: bigint
 		securityPool: Address
 		shareToken: Address
-		collateralRepairAuction: Address
 		universeId: bigint
 	}[]
 	questionIds?: readonly bigint[]
@@ -393,7 +392,7 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 				case 'getSecurityPoolOriginId':
 					return hash(90)
 				case 'getChildPoolDependencies':
-					return graph.childPreparation?.ready ? [address(91), graph.childPreparation.shared ? zeroAddress : address(92)] : [zeroAddress, zeroAddress]
+					return graph.childPreparation?.ready ? address(91) : zeroAddress
 				case 'clocks':
 					return [0n, 0n, true, graph.childPreparation?.ready ?? false]
 				case 'getForkTime':
@@ -494,7 +493,6 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				questionId: 101n,
 				securityPool: pool,
 				shareToken,
-				collateralRepairAuction,
 				universeId: 0n,
 			},
 		],
@@ -605,8 +603,6 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				case 'escalationGame':
 				case 'portfolioCustody':
 					return address(0)
-				case 'collateralRepairAuction':
-					return collateralRepairAuction
 				case 'systemState':
 					return 0n
 				case 'awaitingForkContinuation':
@@ -1056,7 +1052,6 @@ describe('anchored ecosystem discovery', () => {
 			questionId: questionIds[index] ?? 0n,
 			securityPool: address(2_000 + index),
 			shareToken: address(3_000 + index),
-			collateralRepairAuction: address(4_000 + index),
 			universeId: 0n,
 		}))
 		const limits = { maxPools: 3, maxQuestions: 3, maxStagedOperationsPerPool: 3, maxUniverses: 3, maxVaultsPerPool: 3 }

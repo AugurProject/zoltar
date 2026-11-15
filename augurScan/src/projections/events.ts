@@ -227,13 +227,13 @@ export const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 				parentAddress: address(args['parent'], 'parent'),
 				universeId: integerString(args['universeId'], 'universeId'),
 				questionId: integerString(args['questionId'], 'questionId'),
-				collateralRepairAuctionAddress: address(args['collateralRepairAuction'], 'collateralRepairAuction'),
+				collateralRepairAuctionAddress: '0x0000000000000000000000000000000000000000',
 				coordinatorAddress: address(args['openOraclePriceCoordinator'], 'openOraclePriceCoordinator'),
 				shareTokenAddress: address(args['shareToken'], 'shareToken'),
 				securityMultiplierBps: integerString(args['statoblastSecurityMultiplierBps'], 'statoblastSecurityMultiplierBps'),
 				initialPriorityFeeAttoEthPerGas: integerString(args['initialReportPriorityFeeAttoEthPerGas'], 'initialReportPriorityFeeAttoEthPerGas'),
-				initialRetentionRate: integerString(args['currentRetentionRate'], 'currentRetentionRate'),
-				initialSettlementCollateralAttoEth: integerString(args['settlementCollateralAttoEth'], 'settlementCollateralAttoEth'),
+				initialRetentionRate: 0n.toString(),
+				initialSettlementCollateralAttoEth: 0n.toString(),
 			},
 		]
 	if (name === 'PairCreated' && args['token0'] !== undefined)

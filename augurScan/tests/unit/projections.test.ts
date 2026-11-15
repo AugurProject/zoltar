@@ -59,13 +59,10 @@ describe('state projections', () => {
 				parent: '0x0000000000000000000000000000000000000000',
 				universeId: '0',
 				questionId: '42',
-				collateralRepairAuction: '0x0000000000000000000000000000000000000000',
 				openOraclePriceCoordinator: vault,
 				shareToken: vault,
 				statoblastSecurityMultiplierBps: '15000',
 				initialReportPriorityFeeAttoEthPerGas: atomic(10_000_000_000n),
-				currentRetentionRate: '999999000000000000',
-				settlementCollateralAttoEth: atomic(12_000_000_000_000_000_000n),
 			}),
 		)
 		expect(deployment).toMatchObject({ type: 'pool', poolAddress: pool.toLowerCase(), questionId: '42', universeId: '0' })
