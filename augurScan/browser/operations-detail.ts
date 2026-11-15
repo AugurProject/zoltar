@@ -4,7 +4,7 @@ import { semanticFields } from './semantic-evidence.ts'
 import { identifierCopyButton } from './identifier-copy.ts'
 import { shortIdentifier } from './identifier-format.ts'
 import type { OperationsDetailRoute, OperationsRenderContext } from './browser-types.ts'
-import { isRecord, operationRecords, type JsonRecord, type OperationsResponse } from './api-validation.ts'
+import { operationRecords, type JsonRecord, type OperationsResponse } from './api-validation.ts'
 import { compareCanonicalEventPosition, summarizeHistoryCollections } from './canonical-pagination.ts'
 import { operationsDetailEvidencePanelVisible, operationsDetailHeaderPresentation, operationsDetailSummaryPresentation, operationsRiskPresentation } from './operations-presentation.ts'
 import { exactUnit } from './format.ts'
@@ -13,6 +13,7 @@ import { renderCandleContent } from './operations-candles.ts'
 import type { createOperationsComponents } from './operations-components.ts'
 import { tradingActivityPanel, tradingVolumeRows } from './trading-panels.ts'
 import { captureViewState, restoreViewState } from './view-state.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 type Components = ReturnType<typeof createOperationsComponents>
 
@@ -56,7 +57,7 @@ export interface OperationsDetailDeps {
 	readonly components: Components
 }
 
-const detailPageRecord = (data: JsonRecord, key: string): JsonRecord => (isRecord(data[key]) ? data[key] : {})
+const detailPageRecord = (data: JsonRecord, key: string): JsonRecord => (isPlainRecord(data[key]) ? data[key] : {})
 
 // Overview holds current state, History keeps timelines with their pagers, and Evidence holds canonical records and proofs.
 type DetailTab = 'overview' | 'history' | 'evidence'
@@ -130,9 +131,9 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 	if (historical) header.append(element('p', 'operations-route-freshness', headerPresentation.freshness))
 
 	const summary = element('div', 'operations-metrics')
-	const snapshot = isRecord(data['snapshot']) ? data['snapshot'] : undefined
-	const current = isRecord(data['current']) ? data['current'] : undefined
-	const lifecycle = current !== undefined && isRecord(current['lifecycle']) ? current['lifecycle'] : undefined
+	const snapshot = isPlainRecord(data['snapshot']) ? data['snapshot'] : undefined
+	const current = isPlainRecord(data['current']) ? data['current'] : undefined
+	const lifecycle = current !== undefined && isPlainRecord(current['lifecycle']) ? current['lifecycle'] : undefined
 	const summaryPresentation = operationsDetailSummaryPresentation(route.kind, {
 		currentEvent: current?.['event_name'],
 		lifecycleState: lifecycle?.['state'],
@@ -143,7 +144,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 	if (summaryPresentation.label !== 'Evidence state' || summaryPresentation.value !== 'Event-derived') summary.append(operationCard(summaryPresentation.label, summaryPresentation.value))
 	const nativeSymbol = nativeSymbolFor(requiredChainId())
 	if (route.kind === 'pool') {
-		const state = data['read_status'] === 'success' && isRecord(data['read_result']) ? data['read_result'] : {}
+		const state = data['read_status'] === 'success' && isPlainRecord(data['read_result']) ? data['read_result'] : {}
 		for (const [label, value] of poolSummaryMetrics(state, nativeSymbol)) summary.append(operationCard(label, value))
 	}
 
@@ -171,15 +172,15 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 				'Current-state snapshot',
 				[
 					operationRow('Tagged block read', String(snapshot['read_status']), String(snapshot['entity_identity'] ?? ''), snapshot['block_number']),
-					...semanticFields(isRecord(snapshot['read_result']) ? Object.fromEntries(Object.entries(snapshot['read_result']).filter(([key]) => key !== 'claimEvidence')) : {}, nativeSymbol).map(([label, value]) => operationRow(label, value, undefined, undefined)),
+					...semanticFields(isPlainRecord(snapshot['read_result']) ? Object.fromEntries(Object.entries(snapshot['read_result']).filter(([key]) => key !== 'claimEvidence')) : {}, nativeSymbol).map(([label, value]) => operationRow(label, value, undefined, undefined)),
 					rawEvidence(snapshot),
 				],
 				'Snapshot unavailable',
 			),
 		)
 	if (route.kind === 'escalation' && snapshot !== undefined) {
-		const result = isRecord(snapshot['read_result']) ? snapshot['read_result'] : {}
-		const claims = isRecord(result['claimEvidence']) ? result['claimEvidence'] : {}
+		const result = isPlainRecord(snapshot['read_result']) ? snapshot['read_result'] : {}
+		const claims = isPlainRecord(result['claimEvidence']) ? result['claimEvidence'] : {}
 		const rows = operationRecords(claims['positions']).map(position => {
 			const row = operationRow(escalationPayoutTitle(position), escalationPayoutSummary(position), String(position['depositor']), snapshot['block_number'])
 			row.append(claimProofDisclosure(position, snapshot['block_number'], snapshot['block_hash']))
@@ -206,7 +207,9 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 				[
 					protocolStateRow,
 					scannerAssessmentRow,
-					...semanticFields({ ...(data['read_status'] === 'success' && isRecord(data['read_result']) ? data['read_result'] : {}), ...(data['read_status'] === 'success' && isRecord(data['risk']) ? data['risk'] : {}) }, nativeSymbol).map(([label, value]) => operationRow(label, value, undefined, data['block_number'])),
+					...semanticFields({ ...(data['read_status'] === 'success' && isPlainRecord(data['read_result']) ? data['read_result'] : {}), ...(data['read_status'] === 'success' && isPlainRecord(data['risk']) ? data['risk'] : {}) }, nativeSymbol).map(([label, value]) =>
+						operationRow(label, value, undefined, data['block_number']),
+					),
 					rawEvidence(data),
 				],
 				'Risk state unavailable',
@@ -215,9 +218,9 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 	}
 	if (route.kind === 'vault') addPanel('overview', operationsPanel('Accounting', [operationRow('Vault accounting history', 'REP backing, ETH commitments, and accrued fees', undefined, undefined, operationsHref(`/system?tab=vaults&entity=${requiredChainId()}:${route.identity[0]}:${route.identity[1]}`))], ''))
 	if (route.kind === 'trading') {
-		const tradingSummary = isRecord(data['summary']) ? data['summary'] : {}
-		const twap24h = isRecord(data['twap24h']) ? data['twap24h'] : {}
-		const twap7d = isRecord(data['twap7d']) ? data['twap7d'] : {}
+		const tradingSummary = isPlainRecord(data['summary']) ? data['summary'] : {}
+		const twap24h = isPlainRecord(data['twap24h']) ? data['twap24h'] : {}
+		const twap7d = isPlainRecord(data['twap7d']) ? data['twap7d'] : {}
 		addPanel(
 			'overview',
 			operationsPanel(
@@ -252,7 +255,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			activityPanel.append(more, status)
 		}
 		addPanel('evidence', activityPanel)
-		const shares = isRecord(data['sharePositions']) ? data['sharePositions'] : {}
+		const shares = isPlainRecord(data['sharePositions']) ? data['sharePositions'] : {}
 		addPanel(
 			'overview',
 			operationsPanel(
@@ -287,7 +290,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 		const decisionPanel = operationsPanel(
 			'Coordinator decisions',
 			decisionItems.map(decision => {
-				const argumentsValue = isRecord(decision['arguments']) ? decision['arguments'] : {}
+				const argumentsValue = isPlainRecord(decision['arguments']) ? decision['arguments'] : {}
 				return operationRow(String(decision['event_name'] ?? 'Coordinator decision'), String(argumentsValue['reason'] ?? decision['summary'] ?? 'Linked coordinator evidence'), String(decision['emitter_address'] ?? ''), decision['block_number'])
 			}),
 			'No coordinator decision could be linked to this report.',
@@ -333,7 +336,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 		addPanel('evidence', decisionPanel)
 	}
 	if (route.kind === 'pool' || route.kind === 'vault') {
-		const history = isRecord(data['history']) ? data['history'] : {}
+		const history = isPlainRecord(data['history']) ? data['history'] : {}
 		loadedRiskHistoryOffset = operationsHistoryOffset(history['loadedOffset']) ?? operationsHistoryOffset(history['offset']) ?? 0
 		const historyCollections = Object.fromEntries(operationsRiskHistoryKeys.map(key => [key, operationRecords(history[key])]))
 		for (const [key, label] of [
@@ -416,7 +419,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 		}
 	}
 
-	if (isRecord(data['finalization'])) addPanel('evidence', operationsPanel('Auction finalization', detailEvidenceRows([data['finalization']]), 'Not finalized'))
+	if (isPlainRecord(data['finalization'])) addPanel('evidence', operationsPanel('Auction finalization', detailEvidenceRows([data['finalization']]), 'Not finalized'))
 	if (route.kind === 'escalation') {
 		for (const key of ['deposits', 'claims']) addPanel('history', operationsPanel(`Loaded ${key}`, detailEvidenceRows(operationRecords(data[key])), `No ${key} in the loaded event page.`))
 	}
@@ -428,7 +431,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 	}
 	const branches = operationRecords(data['branches'])
 	if (route.kind === 'fork') {
-		const forkSummary = isRecord(data['summary']) ? data['summary'] : {}
+		const forkSummary = isPlainRecord(data['summary']) ? data['summary'] : {}
 		addPanel(
 			'overview',
 			operationsPanel(

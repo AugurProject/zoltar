@@ -29,6 +29,7 @@ import { describe, expect, mock, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { createAccountState as createEmptyAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
+import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
 
 type VNodeLike = {
 	props: Record<string, unknown>
@@ -37,10 +38,6 @@ type VNodeLike = {
 
 const REPORTER = getAddress('0x3000000000000000000000000000000000000000')
 const TOKEN_UNITS = 10n ** 18n
-
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null
-}
 
 function isVNodeLike(value: unknown): value is VNodeLike {
 	return isObjectRecord(value) && 'type' in value && 'props' in value && isObjectRecord(value['props'])

@@ -1,17 +1,18 @@
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
+
 type JsonPrimitive = string | number | boolean | null
 export type JsonValue = JsonPrimitive | readonly JsonValue[] | { readonly [key: string]: JsonValue }
 export type JsonRecord = { readonly [key: string]: JsonValue }
 
-export const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 export const isString = (value: unknown): value is string => typeof value === 'string'
 export const isNullableString = (value: unknown): value is string | null => value === null || isString(value)
 const isStringOrNumber = (value: unknown): value is string | number => isString(value) || typeof value === 'number'
 export const isJsonValue = (value: unknown): value is JsonValue => {
 	if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) return true
 	if (Array.isArray(value)) return value.every(isJsonValue)
-	return isRecord(value) && Object.values(value).every(isJsonValue)
+	return isPlainRecord(value) && Object.values(value).every(isJsonValue)
 }
-export const isJsonRecord = (value: unknown): value is JsonRecord => isRecord(value) && Object.values(value).every(isJsonValue)
+export const isJsonRecord = (value: unknown): value is JsonRecord => isPlainRecord(value) && Object.values(value).every(isJsonValue)
 const isNullableJsonRecord = (value: unknown): value is JsonRecord | null => value === null || isJsonRecord(value)
 export const isJsonArray = (value: unknown): value is readonly JsonValue[] => Array.isArray(value) && value.every(isJsonValue)
 
@@ -118,7 +119,7 @@ export interface EntityHistoryCoverageValue {
 const isNonNegativeInteger = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 
 export const isEntityHistoryCoverageValue = (value: unknown): value is EntityHistoryCoverageValue =>
-	isRecord(value) &&
+	isPlainRecord(value) &&
 	isString(value['requestedFromBlock']) &&
 	isString(value['requestedToBlock']) &&
 	isString(value['indexedFromBlock']) &&
@@ -126,7 +127,7 @@ export const isEntityHistoryCoverageValue = (value: unknown): value is EntityHis
 	(value['indexedThroughHash'] === undefined || isNullableString(value['indexedThroughHash'])) &&
 	isNonNegativeInteger(value['limit']) &&
 	isNonNegativeInteger(value['offset']) &&
-	isRecord(value['series']) &&
+	isPlainRecord(value['series']) &&
 	Object.values(value['series']).every(isNonNegativeInteger) &&
 	typeof value['complete'] === 'boolean' &&
 	(value['rangeCovered'] === undefined || typeof value['rangeCovered'] === 'boolean') &&
@@ -138,7 +139,7 @@ const isDateString = (value: unknown): value is string => isString(value) && Num
 const isNullableDateString = (value: unknown): value is string | null => value === null || isDateString(value)
 
 export const isNetworkRecordValue = (value: unknown): boolean =>
-	isRecord(value) &&
+	isPlainRecord(value) &&
 	isUnsignedIntegerString(value['chain_id']) &&
 	isString(value['id']) &&
 	isString(value['name']) &&
@@ -157,16 +158,18 @@ export const isNetworkRecordValue = (value: unknown): boolean =>
 	isNullableString(value['last_error']) &&
 	isString(value['explorer_base_url'])
 
-export const isAddressIdentityValue = (value: unknown): boolean => isRecord(value) && typeof value['chainId'] === 'number' && Number.isSafeInteger(value['chainId']) && isString(value['address']) && (value['label'] === undefined || isString(value['label'])) && (value['kind'] === undefined || isString(value['kind']))
+export const isAddressIdentityValue = (value: unknown): boolean =>
+	isPlainRecord(value) && typeof value['chainId'] === 'number' && Number.isSafeInteger(value['chainId']) && isString(value['address']) && (value['label'] === undefined || isString(value['label'])) && (value['kind'] === undefined || isString(value['kind']))
 
-export const isChartRowValue = (value: unknown): boolean => isRecord(value) && isString(value['timestamp']) && Object.values(value).every(item => item === undefined || isJsonValue(item))
+export const isChartRowValue = (value: unknown): boolean => isPlainRecord(value) && isString(value['timestamp']) && Object.values(value).every(item => item === undefined || isJsonValue(item))
 
-export const isAmmPriceValue = (value: unknown): boolean => isRecord(value) && isString(value['timestamp']) && isString(value['block_number']) && isString(value['conditional_yes_bps']) && isString(value['conditional_no_bps']) && isString(value['yes_reserve_atto_shares']) && isString(value['no_reserve_atto_shares'])
+export const isAmmPriceValue = (value: unknown): boolean =>
+	isPlainRecord(value) && isString(value['timestamp']) && isString(value['block_number']) && isString(value['conditional_yes_bps']) && isString(value['conditional_no_bps']) && isString(value['yes_reserve_atto_shares']) && isString(value['no_reserve_atto_shares'])
 
-export const isRepEthPriceValue = (value: unknown): boolean => isRecord(value) && isString(value['timestamp']) && isString(value['block_number']) && isString(value['event_name']) && isNullableString(value['report_id']) && isString(value['rep_per_eth_1e18']) && isNullableString(value['settlement_timestamp'])
+export const isRepEthPriceValue = (value: unknown): boolean => isPlainRecord(value) && isString(value['timestamp']) && isString(value['block_number']) && isString(value['event_name']) && isNullableString(value['report_id']) && isString(value['rep_per_eth_1e18']) && isNullableString(value['settlement_timestamp'])
 
 export const isUniswapPriceValue = (value: unknown): boolean =>
-	isRecord(value) &&
+	isPlainRecord(value) &&
 	isString(value['timestamp']) &&
 	isString(value['block_number']) &&
 	isString(value['venue']) &&
@@ -179,12 +182,12 @@ export const isUniswapPriceValue = (value: unknown): boolean =>
 	(value['quote_decimals'] === undefined || value['quote_decimals'] === null || (typeof value['quote_decimals'] === 'number' && Number.isInteger(value['quote_decimals']) && value['quote_decimals'] >= 0 && value['quote_decimals'] <= 255)) &&
 	(value['liquidity_value'] === undefined || isNullableString(value['liquidity_value']))
 
-const isArgumentDefinition = (value: unknown): boolean => isRecord(value) && typeof value['index'] === 'number' && Number.isInteger(value['index']) && isString(value['name']) && isString(value['type']) && (value['indexed'] === undefined || typeof value['indexed'] === 'boolean')
+const isArgumentDefinition = (value: unknown): boolean => isPlainRecord(value) && typeof value['index'] === 'number' && Number.isInteger(value['index']) && isString(value['name']) && isString(value['type']) && (value['indexed'] === undefined || typeof value['indexed'] === 'boolean')
 
 const isNullableArgumentDefinitions = (value: unknown): boolean => value === null || (Array.isArray(value) && value.every(isArgumentDefinition))
 
 export const isActivityRecordValue = (value: unknown): boolean =>
-	isRecord(value) &&
+	isPlainRecord(value) &&
 	isString(value['chain_id']) &&
 	isString(value['network_id']) &&
 	isString(value['block_number']) &&
@@ -214,11 +217,11 @@ export const isActivityRecordValue = (value: unknown): boolean =>
 	(value['to_address'] === undefined || isNullableString(value['to_address'])) &&
 	isString(value['explorer_base_url'])
 
-const isRelatedLogRecordValue = (value: unknown): boolean => isRecord(value) && typeof value['log_index'] === 'number' && isString(value['emitter_address']) && isNullableString(value['event_name']) && isString(value['summary'])
+const isRelatedLogRecordValue = (value: unknown): boolean => isPlainRecord(value) && typeof value['log_index'] === 'number' && isString(value['emitter_address']) && isNullableString(value['event_name']) && isString(value['summary'])
 
 export const isLogDetailValue = (value: unknown): boolean =>
 	isActivityRecordValue(value) &&
-	isRecord(value) &&
+	isPlainRecord(value) &&
 	isNullableString(value['to_address']) &&
 	isString(value['value']) &&
 	isString(value['input']) &&
@@ -235,7 +238,7 @@ export const isLogDetailValue = (value: unknown): boolean =>
 	value['relatedLogs'].every(isRelatedLogRecordValue)
 
 export const isAccountTransactionValue = (value: unknown): boolean =>
-	isRecord(value) &&
+	isPlainRecord(value) &&
 	isString(value['chain_id']) &&
 	isString(value['tx_hash']) &&
 	isString(value['block_hash']) &&
@@ -260,7 +263,7 @@ export const isAccountTransactionValue = (value: unknown): boolean =>
 	isString(value['explorer_base_url'])
 
 const isTokenBalanceValue = (value: unknown): boolean =>
-	isRecord(value) &&
+	isPlainRecord(value) &&
 	isString(value['address']) &&
 	isString(value['balance']) &&
 	(value['contractLabel'] === undefined || isNullableString(value['contractLabel'])) &&
@@ -270,15 +273,15 @@ const isTokenBalanceValue = (value: unknown): boolean =>
 	(value['decimals'] === null || typeof value['decimals'] === 'number') &&
 	isString(value['blockNumber'])
 
-const isPoolAssociationValue = (value: unknown): boolean => isRecord(value) && isString(value['address']) && isNullableString(value['label']) && isNullableString(value['questionTitle'])
+const isPoolAssociationValue = (value: unknown): boolean => isPlainRecord(value) && isString(value['address']) && isNullableString(value['label']) && isNullableString(value['questionTitle'])
 
 const isVaultPositionValue = (value: unknown): boolean =>
-	isRecord(value) && isString(value['poolAddress']) && isNullableString(value['questionTitle']) && isString(value['repBackingUnits']) && isStringOrNumber(value['underwritingLimitAttoEth']) && isStringOrNumber(value['claimableFeesAttoEth']) && isString(value['blockNumber'])
+	isPlainRecord(value) && isString(value['poolAddress']) && isNullableString(value['questionTitle']) && isString(value['repBackingUnits']) && isStringOrNumber(value['underwritingLimitAttoEth']) && isStringOrNumber(value['claimableFeesAttoEth']) && isString(value['blockNumber'])
 
-const isNativeBalanceDetailValue = (value: unknown): boolean => isRecord(value) && isString(value['balance']) && isString(value['blockNumber'])
+const isNativeBalanceDetailValue = (value: unknown): boolean => isPlainRecord(value) && isString(value['balance']) && isString(value['blockNumber'])
 
 export const isRichListRecordValue = (value: unknown): boolean =>
-	isRecord(value) &&
+	isPlainRecord(value) &&
 	isString(value['chain_id']) &&
 	isString(value['network_id']) &&
 	isString(value['explorer_base_url']) &&
@@ -329,7 +332,7 @@ const hasNullableStringFields = (value: Record<string, unknown>, fields: readonl
 const hasOptionalNullableStringFields = (value: Record<string, unknown>, fields: readonly string[]): boolean => fields.every(field => value[field] === undefined || isNullableString(value[field]))
 
 export const isPoolStateEntityValue = (value: unknown): boolean =>
-	isRecord(value) &&
+	isPlainRecord(value) &&
 	hasStringFields(value, [
 		'chain_id',
 		'network_id',
@@ -350,14 +353,14 @@ export const isPoolStateEntityValue = (value: unknown): boolean =>
 	hasNullableStringFields(value, ['question_title', 'settlement_collateral_atto_eth', 'total_capacity_ownership_atto_rep', 'fee_eligible_capacity_ownership_atto_rep', 'total_claimable_vault_fees_atto_eth', 'unallocated_accrued_fees_atto_eth', 'current_retention_rate', 'snapshot_block'])
 
 export const isVaultStateEntityValue = (value: unknown): boolean =>
-	isRecord(value) &&
+	isPlainRecord(value) &&
 	hasStringFields(value, ['chain_id', 'network_id', 'pool_address', 'vault_address', 'rep_backing_units', 'capacity_ownership_atto_rep', 'claimable_fees_atto_eth', 'fee_index', 'vault_fee_remainder', 'resulting_total_rep_backing_units', 'resulting_fee_eligible_capacity_ownership_atto_rep', 'block_number']) &&
 	isNullableString(value['question_title'])
 
 const isQuestionSeconds = (value: unknown): boolean => typeof value === 'string' && /^(0|[1-9][0-9]{0,14})$/.test(value) && BigInt(value) <= 281_474_976_710_655n
 
 export const isQuestionStateEntityValue = (value: unknown): boolean =>
-	isRecord(value) &&
+	isPlainRecord(value) &&
 	hasStringFields(value, ['chain_id', 'network_id', 'question_id', 'title', 'description', 'created_timestamp', 'start_time', 'end_time', 'num_ticks', 'display_value_min', 'display_value_max', 'answer_unit', 'pool_count', 'fork_count']) &&
 	isQuestionSeconds(value['start_time']) &&
 	isQuestionSeconds(value['end_time']) &&
@@ -366,6 +369,6 @@ export const isQuestionStateEntityValue = (value: unknown): boolean =>
 	(value['block_number'] === undefined || isString(value['block_number']))
 
 export const isUniverseStateEntityValue = (value: unknown): boolean =>
-	isRecord(value) &&
+	isPlainRecord(value) &&
 	hasStringFields(value, ['chain_id', 'network_id', 'universe_id', 'parent_universe_id', 'forking_outcome_index', 'reputation_token_address', 'theoretical_supply_atto_rep', 'child_count', 'pool_count']) &&
 	hasOptionalNullableStringFields(value, ['active_fork_question_id', 'active_fork_time', 'forker_address', 'fork_threshold_atto_rep', 'migration_rep_balance_atto_rep'])

@@ -1,7 +1,8 @@
 import type { EntityHistory, StateEntity, StateTab } from './browser-types.ts'
 import { decodeEntityHistory } from './api-decoding.ts'
-import { isRecord, type EntityHistoryCoverageValue } from './api-validation.ts'
+import { type EntityHistoryCoverageValue } from './api-validation.ts'
 import { collectCursorCollections, compareCanonicalEventPosition } from './canonical-pagination.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 export const entityHistoryCollectionKeys = ['snapshots', 'events', 'ammPrices', 'repEthPrices', 'uniswapRepEthPrices', 'openOracleHistory', 'pools', 'forks'] as const
 
@@ -57,7 +58,7 @@ export const createStateHistoryData = (api: (path: string) => Promise<unknown>, 
 		)
 		if (firstPage === undefined || anchor === undefined) throw new Error('State history returned no pages')
 		const anchoredCoverage = anchor
-		const chronological = (records: readonly unknown[]) => records.toSorted((left, right) => (isRecord(left) && isRecord(right) ? compareCanonicalEventPosition(left, right) : 0))
+		const chronological = (records: readonly unknown[]) => records.toSorted((left, right) => (isPlainRecord(left) && isPlainRecord(right) ? compareCanonicalEventPosition(left, right) : 0))
 		const collections = Object.fromEntries(entityHistoryCollectionKeys.map(key => [key, chronological(collected.collections[key] ?? [])]))
 		const series = Object.fromEntries(entityHistoryCollectionKeys.filter(key => key in anchoredCoverage.series).map(key => [key, collections[key]?.length ?? 0]))
 		const decoded = decodeEntityHistory({

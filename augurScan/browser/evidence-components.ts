@@ -1,7 +1,7 @@
-import { isRecord } from './api-validation.ts'
 import { decodeValue, isAddressIdentity } from './api-decoding.ts'
 import type { ArgumentDefinition, ProtocolAddressLinkOptions } from './browser-types.ts'
 import { short } from './identifier-format.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 interface EvidenceComponentsDeps {
 	element: <K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string) => HTMLElementTagNameMap[K]
@@ -117,11 +117,11 @@ export const createEvidenceComponents = (deps: EvidenceComponentsDeps) => {
 			node.append(document.createTextNode(']'))
 			return node
 		}
-		if (isRecord(rawValue)) {
+		if (isPlainRecord(rawValue)) {
 			node.append(document.createTextNode('{ '))
 			Object.entries(rawValue).forEach(([key, value], index) => {
 				if (index > 0) node.append(document.createTextNode(', '))
-				node.append(document.createTextNode(`${key}: `), decodedValueNode(value, isRecord(displayValue) ? displayValue[key] : undefined, chainId))
+				node.append(document.createTextNode(`${key}: `), decodedValueNode(value, isPlainRecord(displayValue) ? displayValue[key] : undefined, chainId))
 			})
 			node.append(document.createTextNode(' }'))
 			return node

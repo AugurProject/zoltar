@@ -1,6 +1,6 @@
 import { rewindAuctionNamingToV5 } from '../support/schema-fixtures.ts'
 import { describe, expect, test } from 'bun:test'
-import { isQuestionStateEntityValue, isRecord } from '../../browser/api-validation.ts'
+import { isQuestionStateEntityValue } from '../../browser/api-validation.ts'
 import { handleApi } from '../../src/api.ts'
 import { assertBlockAppend, assertContractDeploymentObservation, assertLogScanCursorUpdate, assertRewindTarget, assertStartBlockCompatible, type IndexedBlock, type IndexerLease, releaseReservedConnection, rewindDepth, ScannerDatabase, scannerDatabaseOptions } from '../../src/database.ts'
 import { getAddress } from '../../src/ethereum.ts'
@@ -8,6 +8,7 @@ import { decodeAction } from '../../src/metadata.ts'
 import { initializeSchema } from '../../src/schema.ts'
 import type { NetworkConfig } from '../../src/types.ts'
 import { address, blockHash, chainId, decodedLog, indexedBlock, log, pairAddress, postgresTest, rediscoveredAddress, requirePostgresUrl, transaction, transactionHash, uniswapPairAddress, wethAddress } from '../support/postgres-fixtures.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 describe('database checkpoint fencing', () => {
 	test('keeps reserved advisory-lock sessions alive between RPC operations', () => {
@@ -258,10 +259,10 @@ postgresTest('returns the originating transaction action on every log row', asyn
 		const response = await handleApi(new Request(`http://localhost/api/v1/logs?chainId=${actionChainId}`), database.sql)
 		expect(response?.status).toBe(200)
 		const payload = await response?.json()
-		if (!isRecord(payload) || !Array.isArray(payload['items'])) throw new Error('Log action response has no items')
+		if (!isPlainRecord(payload) || !Array.isArray(payload['items'])) throw new Error('Log action response has no items')
 		expect(payload['items']).toHaveLength(2)
 		for (const row of payload['items']) {
-			if (!isRecord(row)) throw new Error('Log action response contains an invalid row')
+			if (!isPlainRecord(row)) throw new Error('Log action response contains an invalid row')
 			expect(row['function_name']).toBe('deploy')
 			expect(row['action_summary']).toBe('Deploy Known deployment via Proxy Deployer')
 			expect(row['to_address']).toBe(proxy.address.toLowerCase())
@@ -328,7 +329,7 @@ for (const scenario of ['question seconds', 'receipt discovery order'] as const)
 				const response = await handleApi(new Request(`http://localhost/api/v1/state/catalog?chainId=${fixtureChain}`), database.sql)
 				if (response === undefined) throw new Error('Missing state response')
 				const body: unknown = await response.json()
-				if (!isRecord(body) || !Array.isArray(body['questions'])) throw new Error('Missing questions')
+				if (!isPlainRecord(body) || !Array.isArray(body['questions'])) throw new Error('Missing questions')
 				const catalogVersion = body['catalogVersion']
 				expect(catalogVersion).toMatch(/^[0-9a-f]{32}$/)
 				expect(body['questions'].every(isQuestionStateEntityValue)).toBe(true)
@@ -337,7 +338,7 @@ for (const scenario of ['question seconds', 'receipt discovery order'] as const)
 				const changedResponse = await handleApi(new Request(`http://localhost/api/v1/state/catalog?chainId=${fixtureChain}`), database.sql)
 				if (changedResponse === undefined) throw new Error('Missing changed state response')
 				const changedBody: unknown = await changedResponse.json()
-				if (!isRecord(changedBody)) throw new Error('Missing changed state catalog')
+				if (!isPlainRecord(changedBody)) throw new Error('Missing changed state catalog')
 				expect(changedBody['catalogVersion']).not.toBe(catalogVersion)
 				await database.sql`UPDATE questions SET title = 'Exact_% question' WHERE chain_id = ${fixtureChain} AND question_id = 0`
 				for (const path of ['search', 'state/catalog']) {
@@ -349,7 +350,7 @@ for (const scenario of ['question seconds', 'receipt discovery order'] as const)
 						const filteredResponse = await handleApi(new Request(`http://localhost/api/v1/${path}?chainId=${fixtureChain}&q=${encodeURIComponent(query)}`), database.sql)
 						if (filteredResponse === undefined) throw new Error(`Missing ${path} search response`)
 						const filteredBody: unknown = await filteredResponse.json()
-						if (!isRecord(filteredBody)) throw new Error(`Malformed ${path} search response`)
+						if (!isPlainRecord(filteredBody)) throw new Error(`Malformed ${path} search response`)
 						const matches = path === 'search' ? filteredBody['items'] : filteredBody['questions']
 						expect(Array.isArray(matches) ? matches.length : -1).toBe(expected)
 					}
