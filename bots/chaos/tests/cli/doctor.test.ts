@@ -64,6 +64,18 @@ const probeResult: ChaosDoctorProbeResult = {
 	},
 }
 
+/** The passive probe result with a wallet holding enough ETH and REP to pass every funding check. */
+const fundedProbeResult: ChaosDoctorProbeResult = {
+	...probeResult,
+	snapshot: {
+		...probeResult.snapshot,
+		wallet: {
+			ethBalanceAttoEth: (10n ** 30n).toString(),
+			tokens: [{ address: probeResult.snapshot.universes[0]?.repToken ?? '0x0000000000000000000000000000000000000001', balance: (10n ** 30n).toString(), symbol: 'REP' }],
+		},
+	},
+}
+
 function passiveDoctorDependencies(settings: Awaited<ReturnType<typeof settingsFixture>>, overrides: Partial<ChaosDoctorDependencies> = {}): ChaosDoctorDependencies {
 	return {
 		deploymentAvailability: async () => undefined,
@@ -588,16 +600,6 @@ describe('chaos launch doctor', () => {
 		const liveSettings = { ...configuredSettings, paused: false, privateKey, runtime: { ...configuredSettings.runtime, execute: true } }
 		let liveLocks = 0
 		let liveProbes = 0
-		const fundedProbeResult: ChaosDoctorProbeResult = {
-			...probeResult,
-			snapshot: {
-				...probeResult.snapshot,
-				wallet: {
-					ethBalanceAttoEth: (10n ** 30n).toString(),
-					tokens: [{ address: probeResult.snapshot.universes[0]?.repToken ?? '0x0000000000000000000000000000000000000001', balance: (10n ** 30n).toString(), symbol: 'REP' }],
-				},
-			},
-		}
 		const report = await runChaosLaunchGate(
 			passiveDoctorDependencies(liveSettings, {
 				acquireLocks: async () => {
@@ -627,16 +629,6 @@ describe('chaos launch doctor', () => {
 		const waiting = await runChaosLaunchGate(passiveDoctorDependencies(liveSettings, { deploymentAvailability: async () => notice }))
 		expect(launchGateSummary(waiting)).toBe(`Launch preflight passed with the deployment still pending. ${notice}`)
 
-		const fundedProbeResult: ChaosDoctorProbeResult = {
-			...probeResult,
-			snapshot: {
-				...probeResult.snapshot,
-				wallet: {
-					ethBalanceAttoEth: (10n ** 30n).toString(),
-					tokens: [{ address: probeResult.snapshot.universes[0]?.repToken ?? '0x0000000000000000000000000000000000000001', balance: (10n ** 30n).toString(), symbol: 'REP' }],
-				},
-			},
-		}
 		const passed = await runChaosLaunchGate(passiveDoctorDependencies(liveSettings, { probe: async () => fundedProbeResult }))
 		expect(launchGateSummary(passed)).toBe('Launch preflight passed all 10 readiness checks at canonical block 100. Run `bun run doctor` for the detailed readiness report.')
 	})

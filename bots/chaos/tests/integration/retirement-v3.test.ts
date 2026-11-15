@@ -174,6 +174,15 @@ async function deploy(client: ReturnType<typeof createWriteClient>, bytecode: He
 	return receipt.contractAddress
 }
 
+/** Deploys two fixture tokens and a pool over them, minting `amount` of each token to the pool. */
+async function deployFundedPool(owner: ReturnType<typeof createWriteClient>, amount: bigint) {
+	const token0 = await deploy(owner, tokenBytecode, tokenAbi)
+	const token1 = await deploy(owner, tokenBytecode, tokenAbi)
+	const pool = await deploy(owner, poolBytecode, poolAbi, [token0, token1])
+	for (const token of [token0, token1]) await owner.writeContract({ abi: tokenAbi, address: token, args: [pool, amount], functionName: 'mint' })
+	return { pool, token0, token1 }
+}
+
 function durablePosition(pool: Address, owner: Address, token0: Address, token1: Address, id: string, tickLower = -120, tickUpper = 120): DurableV3Position {
 	const positionKey = uniswapV3PositionKey(owner, tickLower, tickUpper)
 	return { createdAt: new Date(0).toISOString(), creationWorkflowId: id, fee: 3_000, id: `${pool}:${positionKey}`, owner, pool, positionKey, profileId: 'integration', registeredBy: 'operator', status: 'active', tickLower, tickUpper, token0, token1 }
@@ -236,10 +245,7 @@ describe('Drain & Retire on a local chain', () => {
 
 	test.each(UNISWAP_POSITION_RANGES.filter(range => range.id !== 'full'))('partial recovery and fee collection preserve range $id across restart', async range => {
 		const owner = createWriteClient(requiredNode().anvilWindowEthereum, TEST_ADDRESSES[4])
-		const token0 = await deploy(owner, tokenBytecode, tokenAbi)
-		const token1 = await deploy(owner, tokenBytecode, tokenAbi)
-		const pool = await deploy(owner, poolBytecode, poolAbi, [token0, token1])
-		for (const token of [token0, token1]) await owner.writeContract({ abi: tokenAbi, address: token, args: [pool, 1000n], functionName: 'mint' })
+		const { pool, token0, token1 } = await deployFundedPool(owner, 1000n)
 		const creationHash = await owner.writeContract({ abi: poolAbi, address: pool, args: [owner.account.address, range.tickLower, range.tickUpper, 100n, 10n, 20n], functionName: 'seed' })
 		await owner.waitForTransactionReceipt({ hash: creationHash })
 		const snapshot = uniswapActionsFixture()
@@ -289,10 +295,7 @@ describe('Drain & Retire on a local chain', () => {
 
 	test('retains successful position provenance after a reverted top-up and restart', async () => {
 		const owner = createWriteClient(requiredNode().anvilWindowEthereum, TEST_ADDRESSES[4])
-		const token0 = await deploy(owner, tokenBytecode, tokenAbi)
-		const token1 = await deploy(owner, tokenBytecode, tokenAbi)
-		const pool = await deploy(owner, poolBytecode, poolAbi, [token0, token1])
-		for (const token of [token0, token1]) await owner.writeContract({ abi: tokenAbi, address: token, args: [pool, 1000n], functionName: 'mint' })
+		const { pool, token0, token1 } = await deployFundedPool(owner, 1000n)
 		const seedHash = await owner.writeContract({ abi: poolAbi, address: pool, args: [owner.account.address, -887_200, 887_200, 50n, 0n, 0n], functionName: 'seed' })
 		await owner.waitForTransactionReceipt({ hash: seedHash })
 		// An invalid pool call gives the later workflow a real reverted receipt.
@@ -345,10 +348,7 @@ describe('Drain & Retire on a local chain', () => {
 	test('recovers idempotently across pre-confirmation, post-confirmation, and burn-to-collect restarts', async () => {
 		const simulator = requiredNode().anvilWindowEthereum
 		const owner = createWriteClient(simulator, TEST_ADDRESSES[4])
-		const token0 = await deploy(owner, tokenBytecode, tokenAbi)
-		const token1 = await deploy(owner, tokenBytecode, tokenAbi)
-		const pool = await deploy(owner, poolBytecode, poolAbi, [token0, token1])
-		for (const token of [token0, token1]) await owner.writeContract({ abi: tokenAbi, address: token, args: [pool, 10_000n], functionName: 'mint' })
+		const { pool, token0, token1 } = await deployFundedPool(owner, 10_000n)
 		const directory = await mkdtemp(join(tmpdir(), 'chaos-retirement-v3-restart-'))
 		const path = join(directory, 'state.json')
 		try {
@@ -428,10 +428,7 @@ describe('Drain & Retire on a local chain', () => {
 		const simulator = requiredNode().anvilWindowEthereum
 		const owner = createWriteClient(simulator, TEST_ADDRESSES[0])
 		const other = createWriteClient(simulator, TEST_ADDRESSES[1])
-		const token0 = await deploy(owner, tokenBytecode, tokenAbi)
-		const token1 = await deploy(owner, tokenBytecode, tokenAbi)
-		const pool = await deploy(owner, poolBytecode, poolAbi, [token0, token1])
-		for (const token of [token0, token1]) await owner.writeContract({ abi: tokenAbi, address: token, args: [pool, 10_000n], functionName: 'mint' })
+		const { pool, token0, token1 } = await deployFundedPool(owner, 10_000n)
 		const creationTransactionHash = await owner.writeContract({ abi: poolAbi, address: pool, args: [owner.account.address, -120, 120, 70n, 3n, 4n], functionName: 'seed' })
 		await owner.writeContract({ abi: poolAbi, address: pool, args: [owner.account.address, -60, 60, 20n, 1n, 2n], functionName: 'seed' })
 		await owner.writeContract({ abi: poolAbi, address: pool, args: [other.account.address, -120, 120, 90n, 5n, 6n], functionName: 'seed' })
@@ -457,10 +454,7 @@ describe('Drain & Retire on a local chain', () => {
 		const simulator = requiredNode().anvilWindowEthereum
 		const owner = createWriteClient(simulator, TEST_ADDRESSES[2])
 		const recipient = owner.account.address
-		const token0 = await deploy(owner, tokenBytecode, tokenAbi)
-		const token1 = await deploy(owner, tokenBytecode, tokenAbi)
-		const pool = await deploy(owner, poolBytecode, poolAbi, [token0, token1])
-		for (const token of [token0, token1]) await owner.writeContract({ abi: tokenAbi, address: token, args: [pool, 10_000n], functionName: 'mint' })
+		const { pool, token0, token1 } = await deployFundedPool(owner, 10_000n)
 		await owner.writeContract({ abi: poolAbi, address: pool, args: [owner.account.address, -120, 120, 0n, 7n, 8n], functionName: 'seed' })
 		const position = durablePosition(pool, owner.account.address, token0, token1, 'collect-only')
 		const observation = await readV3Position(owner, position, await currentV3Anchor(owner))

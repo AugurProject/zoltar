@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { createWalletClient, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { mainnet } from '@zoltar/core-shared/evm/ethereum'
+import type { submitCall } from '../../src/execution/submit-call.ts'
 import { initialRuntimeState } from '../../src/state/operator-state.ts'
 import { portfolioObservation, portfolioSettings, unit } from './portfolio-observation.ts'
 
@@ -32,4 +33,15 @@ export async function portfolioTakeoverFixture(directoryPrefix: string) {
 		}),
 	})
 	return { directory, observation, settings, state, wallet }
+}
+
+/** A submitter that runs each call's pre-submit hook, records the call, and reports a fixed transaction hash without touching the chain. */
+export function recordingSubmit() {
+	const calls: Parameters<typeof submitCall>[4][] = []
+	const submit: typeof submitCall = async (_wallet, _settings, _state, _pool, call) => {
+		await call.preSubmit?.()
+		calls.push(call)
+		return `0x${'1'.repeat(64)}`
+	}
+	return { calls, submit }
 }

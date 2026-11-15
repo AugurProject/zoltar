@@ -7,6 +7,7 @@ import { act } from 'preact/test-utils'
 import { IdentifierValue } from '../components/IdentifierValue.js'
 import { fireEvent, waitFor, within } from './testUtils/queries.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { installClipboard } from './testUtils/clipboard.js'
 
 describe('IdentifierValue', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
@@ -15,14 +16,7 @@ describe('IdentifierValue', () => {
 	installDomTestLifecycle({
 		beforeTest: domEnvironment => {
 			clipboardWriteText = mock(async () => undefined)
-			Reflect.defineProperty(navigator, 'clipboard', {
-				configurable: true,
-				value: { writeText: clipboardWriteText },
-			})
-			Reflect.defineProperty(domEnvironment.window.navigator, 'clipboard', {
-				configurable: true,
-				value: { writeText: clipboardWriteText },
-			})
+			installClipboard({ writeText: clipboardWriteText }, domEnvironment.window.navigator)
 		},
 		afterTest: async () => {
 			await cleanupRenderedComponent?.()

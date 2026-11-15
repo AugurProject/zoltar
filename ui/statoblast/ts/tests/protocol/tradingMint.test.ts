@@ -8,30 +8,35 @@ import type { TransactionPlanStep, TransactionRequestPreview } from '@zoltar/ui-
 
 const pool = getAddress('0x00000000000000000000000000000000000000a1')
 
+/** A portfolio-backed pool with ample collateral, approvals, and mint capacity, no escalation game, and the given question end. */
+function mintClient(send: Parameters<typeof createMockWriteClient>[0], currentTimestamp: bigint, questionEndDate: bigint) {
+	return {
+		...asWriteClient(
+			createMockWriteClient(send, async request => {
+				if (request.functionName === 'collateralToken') return getActiveNetworkProfile().wethAddress
+				if (request.functionName === 'services') return portfolio
+				if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 10n ** 21n
+				if (request.functionName === 'escalationGame') return zeroAddress
+				if (request.functionName === 'universeId' || request.functionName === 'questionId') return 1n
+				if (request.functionName === 'securityPoolFactory') return pool
+				if (request.functionName === 'getSecurityPoolPortfolio') return portfolio
+				if (request.functionName === 'getPool') return pool
+				if (request.functionName === 'purchaseQuote') return [0n, 0n]
+				if (request.functionName === 'availableMintCapacity' || request.functionName === 'attoEthToAttoShares') return 10n ** 18n
+				if (request.functionName === 'questionData') return pool
+				if (request.functionName === 'getQuestionEndDate') return questionEndDate
+				throw new Error(`Unexpected read ${request.functionName}`)
+			}),
+		),
+		account: { address: pool, type: 'json-rpc' as const },
+		getBlock: async () => createBlockWithTimestamp(currentTimestamp),
+	}
+}
+
 void describe('complete-set mint submission', () => {
 	test.each([100n, 101n])('rejects minting at or after the question end without an escalation game (%s)', async currentTimestamp => {
 		const send = mock(() => undefined)
-		const client = {
-			...asWriteClient(
-				createMockWriteClient(send, async request => {
-					if (request.functionName === 'collateralToken') return getActiveNetworkProfile().wethAddress
-					if (request.functionName === 'services') return portfolio
-					if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 10n ** 21n
-					if (request.functionName === 'escalationGame') return zeroAddress
-					if (request.functionName === 'securityPoolFactory') return pool
-					if (request.functionName === 'getSecurityPoolPortfolio') return portfolio
-					if (request.functionName === 'getPool') return pool
-					if (request.functionName === 'purchaseQuote') return [0n, 0n]
-					if (request.functionName === 'availableMintCapacity' || request.functionName === 'attoEthToAttoShares') return 10n ** 18n
-					if (request.functionName === 'questionData') return pool
-					if (request.functionName === 'questionId' || request.functionName === 'universeId') return 1n
-					if (request.functionName === 'getQuestionEndDate') return 100n
-					throw new Error(`Unexpected read ${request.functionName}`)
-				}),
-			),
-			account: { address: pool, type: 'json-rpc' as const },
-			getBlock: async () => createBlockWithTimestamp(currentTimestamp),
-		}
+		const client = mintClient(send, currentTimestamp, 100n)
 		await expect(createCompleteSetInSecurityPool(client, pool, 10n ** 18n)).rejects.toThrow('question ended')
 		expect(send).not.toHaveBeenCalled()
 	})
@@ -41,27 +46,7 @@ void describe('complete-set mint submission', () => {
 			if (request.data === undefined) throw new Error('Expected mint calldata')
 			expect(decodeFunctionData({ abi: portfolioMintAbi, data: request.data }).functionName).toBe('createCompleteSet')
 		})
-		const client = {
-			...asWriteClient(
-				createMockWriteClient(send, async request => {
-					if (request.functionName === 'collateralToken') return getActiveNetworkProfile().wethAddress
-					if (request.functionName === 'services') return portfolio
-					if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 10n ** 21n
-					if (request.functionName === 'escalationGame') return zeroAddress
-					if (request.functionName === 'universeId' || request.functionName === 'questionId') return 1n
-					if (request.functionName === 'securityPoolFactory') return pool
-					if (request.functionName === 'getSecurityPoolPortfolio') return portfolio
-					if (request.functionName === 'getPool') return pool
-					if (request.functionName === 'purchaseQuote') return [0n, 0n]
-					if (request.functionName === 'availableMintCapacity' || request.functionName === 'attoEthToAttoShares') return 10n ** 18n
-					if (request.functionName === 'questionData') return pool
-					if (request.functionName === 'getQuestionEndDate') return currentTimestamp + 1n
-					throw new Error(`Unexpected read ${request.functionName}`)
-				}),
-			),
-			account: { address: pool, type: 'json-rpc' as const },
-			getBlock: async () => createBlockWithTimestamp(currentTimestamp),
-		}
+		const client = mintClient(send, currentTimestamp, currentTimestamp + 1n)
 		await createCompleteSetInSecurityPool(client, pool, 10n ** 18n)
 		expect(send).toHaveBeenCalledTimes(1)
 	})

@@ -13,6 +13,7 @@ import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { smallReserveMarketFixture } from '../support/liveMarketFixture.js'
+import { passthroughWorkflowContext, passthroughWorkflowPanelProps } from '../support/liveWorkflowPanelProps.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const transactionHash = `0x${'88'.repeat(32)}` as Hash
@@ -41,18 +42,15 @@ type ProbeProps = Readonly<{
 // One stable component type so re-rendering with a new market object updates the hook instead of remounting it.
 function Probe({ walletClient, services, onController, onLockChange, market: probeMarket, refresh = async () => undefined }: ProbeProps) {
 	const controller = useLiquidityWorkflowController({
+		...passthroughWorkflowContext,
 		configuration,
 		market: probeMarket,
 		balanceState: 'ready',
 		account,
 		walletClient,
-		externallyLocked: false,
 		nowSeconds: 1n,
 		settings: DEFAULT_TRADE_SETTINGS,
 		refresh,
-		onKnownReceipt: () => undefined,
-		executeWithCurrentWalletContext: async (_account, _networkFailure, _accountFailure, action) => await action(),
-		createGuardedWalletWrite: () => async write => await write(),
 		onWorkflowLockChange: onLockChange,
 		services,
 	})
@@ -157,26 +155,18 @@ describe('liquidity workflow controller state', () => {
 	test('associates amount errors with the liquidity field and offers a decimal price keypad', async () => {
 		const rendered = await renderIntoDocument(
 			<LiveLiquidityControls
+				{...passthroughWorkflowPanelProps}
 				configuration={configuration}
 				market={{ ...market, lpTotalSupply: 0n }}
 				balances={undefined}
 				balanceState='ready'
-				balanceError={undefined}
 				account={account}
 				walletClient={undefined}
-				networkMismatchReason={undefined}
 				walletEthAttoEth={10n ** 18n}
 				walletEthStatus='ready'
-				wallet={{ actionLabel: 'Connect wallet', connect: async () => undefined }}
 				settings={DEFAULT_TRADE_SETTINGS}
-				externallyLocked={false}
 				nowSeconds={1n}
 				refresh={async () => undefined}
-				onKnownReceipt={() => undefined}
-				executeWithCurrentWalletContext={async (_account, _network, _wallet, action) => await action()}
-				createGuardedWalletWrite={() => async write => await write()}
-				retryBalances={async () => undefined}
-				onWorkflowLockChange={() => undefined}
 			/>,
 		)
 		try {

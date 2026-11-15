@@ -1,6 +1,7 @@
 import { expect } from 'bun:test'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
 import { browserTest, CHROMIUM_STARTUP_BUDGET_MILLISECONDS, chromiumExecutable, startChromiumSession } from '../support/chromium.ts'
+import { inertDashboardControls } from '../support/dashboard-harness.ts'
 
 const wallet = `0x${'ab'.repeat(20)}`
 const id = '12'.repeat(32)
@@ -19,7 +20,7 @@ browserTest(
 		let readDelay: Promise<void> | undefined
 		let releaseRead: () => void = () => undefined
 		const dashboard = startDashboardServer(0, {
-			hostname: '127.0.0.1',
+			...inertDashboardControls,
 			getConfiguration: () => ({ hasSigner: true, revision: 'config', settings: { network: { chainId: 11155111, name: 'sepolia' }, paused, runtime: { execute: false }, strategy: {} }, wallet }),
 			getState: () => {
 				if (failState) throw new Error('Intentional bot state read failure')
@@ -53,14 +54,6 @@ browserTest(
 				received = value
 				active = id
 			},
-			setCancellation: () => {},
-			setCandidate: () => {},
-			setObligation: () => {},
-			setPaused: () => {},
-			setReplacement: () => {},
-			setSettings: () => {},
-			setSigner: () => {},
-			setWorkflow: () => {},
 		})
 		const browser = await startChromiumSession(chromiumExecutable, { evaluationDefaults: { exceptions: 'ignore' } })
 		async function waitFor(expression: string) {

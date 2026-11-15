@@ -3,7 +3,7 @@ import { errorChain } from '@zoltar/core-shared/errors/errorChain'
 import { findEarliestAvailableBlock } from '@zoltar/core-shared/evm/availability'
 import type { AddressActivity, StoredTransaction } from '../database.ts'
 import { type Address, createPublicClient, getAddress, type Hash, http, type Log, type PublicClient, type RpcFetchFn, zeroAddress } from '../ethereum.ts'
-import { parseLoggedRpcResponse, safePrunedStateProviderMessage } from '../logging.ts'
+import { parseLoggedRpcResponse, safePrunedStateProviderMessage, singleLineText } from '../logging.ts'
 import { RpcRequestMethodError, type RpcRequestQueue, withRpcRequestQueue } from '../rpc-request-queue.ts'
 import { bigintToSafeNumber } from '../time.ts'
 import type { ContractMetadata, StoredLog } from '../types.ts'
@@ -20,17 +20,7 @@ export const waitForIndexerDelay = (milliseconds: number, signal: AbortSignal): 
 		else signal.addEventListener('abort', finish, { once: true })
 	})
 
-export const normalizedRpcDescription = (value: string): string =>
-	[...value]
-		.map(character => {
-			const codePoint = character.codePointAt(0)
-			return codePoint !== undefined && (codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f)) ? ' ' : character
-		})
-		.join('')
-		.replace(/\p{Cf}/gu, ' ')
-		.replace(/\s+/gu, ' ')
-		.trim()
-		.toLowerCase()
+export const normalizedRpcDescription = (value: string): string => singleLineText(value).toLowerCase()
 
 const withoutAnsiControlSequences = (value: string): string => {
 	const characters: string[] = []
@@ -48,16 +38,7 @@ const withoutAnsiControlSequences = (value: string): string => {
 	return characters.join('')
 }
 
-export const singleLineErrorDescription = (value: string): string =>
-	[...withoutAnsiControlSequences(value)]
-		.map(character => {
-			const codePoint = character.codePointAt(0)
-			return codePoint !== undefined && (codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f)) ? ' ' : character
-		})
-		.join('')
-		.replace(/\p{Cf}/gu, ' ')
-		.replace(/\s+/gu, ' ')
-		.trim()
+export const singleLineErrorDescription = (value: string): string => singleLineText(withoutAnsiControlSequences(value))
 
 const classifiedRpcDescription = (value: string): string =>
 	normalizedRpcDescription(value)

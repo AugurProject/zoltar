@@ -58,6 +58,18 @@ describe('wallet action fix', () => {
 		return { state, settle, walletActions }
 	}
 
+	/** Renders a Create question action whose availability follows a wallet that is still connecting. */
+	async function renderCreateQuestionWithConnectingWallet() {
+		const wallet = createConnectingWallet()
+		const Harness = () => (
+			<WalletActionsProvider walletActions={wallet.walletActions()}>
+				<TransactionActionButton availability={wallet.state.value.availability} idleLabel='Create question' onClick={() => undefined} pendingLabel='Creating…' />
+			</WalletActionsProvider>
+		)
+		await renderPage(<Harness />)
+		return wallet
+	}
+
 	async function focusAndClickConnectFix() {
 		const fix = within(document.body).getByRole('button', { name: 'Connect wallet' })
 		fix.focus()
@@ -139,13 +151,7 @@ describe('wallet action fix', () => {
 	})
 
 	test('returns focus to the unblocked action after the wallet connects', async () => {
-		const { settle, state, walletActions } = createConnectingWallet()
-		const Harness = () => (
-			<WalletActionsProvider walletActions={walletActions()}>
-				<TransactionActionButton availability={state.value.availability} idleLabel='Create question' onClick={() => undefined} pendingLabel='Creating…' />
-			</WalletActionsProvider>
-		)
-		await renderPage(<Harness />)
+		const { settle } = await renderCreateQuestionWithConnectingWallet()
 		const page = within(document.body)
 		const fix = await focusAndClickConnectFix()
 		expect(fix.hasAttribute('disabled')).toBe(true)
@@ -158,13 +164,7 @@ describe('wallet action fix', () => {
 	})
 
 	test('does not move focus later when the connected action stays disabled for another reason', async () => {
-		const { settle, state, walletActions } = createConnectingWallet()
-		const Harness = () => (
-			<WalletActionsProvider walletActions={walletActions()}>
-				<TransactionActionButton availability={state.value.availability} idleLabel='Create question' onClick={() => undefined} pendingLabel='Creating…' />
-			</WalletActionsProvider>
-		)
-		await renderPage(<Harness />)
+		const { settle } = await renderCreateQuestionWithConnectingWallet()
 		const fix = await focusAndClickConnectFix()
 		fix.blur()
 		await settle({ disabled: true, reason: 'Enter a title.' })
