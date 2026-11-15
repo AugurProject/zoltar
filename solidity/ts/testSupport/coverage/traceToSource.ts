@@ -4,6 +4,7 @@ import { buildPcToSourceMap, normalizeBytecode, type ParsedSourceMapSegment } fr
 import { getSolidityBytecodeCoverageConfig, isSolidityBytecodeCoverageEnabled } from './coverageConfig'
 import { writeCoverageArtifacts } from './reporter'
 import { knownSourceMapCoverageGaps, type KnownSourceMapCoverageGapLineRule } from './sourceMapCoverageGaps'
+import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
 
 type RpcRequest = (args: { method: string; params?: unknown[] | undefined }) => Promise<unknown>
 
@@ -81,36 +82,34 @@ type ContractsJson = {
 	readonly sources?: Record<string, unknown>
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
-
 const flattenBytecodeRanges = (value: unknown): BytecodeRange[] => {
 	if (Array.isArray(value)) {
 		return value.flatMap(range => {
-			if (!isRecord(range) || typeof range['start'] !== 'number' || typeof range['length'] !== 'number') return []
+			if (!isObjectRecord(range) || typeof range['start'] !== 'number' || typeof range['length'] !== 'number') return []
 			return [{ start: range['start'], length: range['length'] }]
 		})
 	}
-	if (!isRecord(value)) return []
+	if (!isObjectRecord(value)) return []
 	return Object.values(value).flatMap(flattenBytecodeRanges)
 }
 
 const parseContractsJson = (raw: ContractsJson): ContractArtifacts => {
 	const contractsValue = raw.contracts
-	if (!isRecord(contractsValue)) return {}
+	if (!isObjectRecord(contractsValue)) return {}
 
 	const contracts: ContractArtifacts = {}
 	for (const [sourceFileName, sourceContractsValue] of Object.entries(contractsValue)) {
-		if (!isRecord(sourceContractsValue)) continue
+		if (!isObjectRecord(sourceContractsValue)) continue
 
 		for (const [contractName, contractValue] of Object.entries(sourceContractsValue)) {
-			if (!isRecord(contractValue)) continue
+			if (!isObjectRecord(contractValue)) continue
 
 			const evmValue = contractValue['evm']
-			if (!isRecord(evmValue)) continue
+			if (!isObjectRecord(evmValue)) continue
 
 			const getSection = (field: 'bytecode' | 'deployedBytecode'): ContractArtifactEvmBytecode | undefined => {
 				const sectionValue = evmValue[field]
-				if (!isRecord(sectionValue)) return undefined
+				if (!isObjectRecord(sectionValue)) return undefined
 				const object = typeof sectionValue['object'] === 'string' ? sectionValue['object'] : undefined
 				const sourceMap = typeof sectionValue['sourceMap'] === 'string' ? sectionValue['sourceMap'] : undefined
 				const immutableReferences = flattenBytecodeRanges(sectionValue['immutableReferences'])
@@ -143,13 +142,13 @@ const parseContractsJson = (raw: ContractsJson): ContractArtifacts => {
 
 const readArtifactsMetadata = async (artifactsPath: string): Promise<{ contracts: ContractArtifacts; sourceFiles: ReadonlyArray<string | undefined> }> => {
 	const rawJson = JSON.parse(await fs.readFile(artifactsPath, 'utf8'))
-	if (!isRecord(rawJson)) return { contracts: {}, sourceFiles: [] }
+	if (!isObjectRecord(rawJson)) return { contracts: {}, sourceFiles: [] }
 	const raw: ContractsJson = rawJson
 	const contracts = parseContractsJson(raw)
 	const sourceFiles: Array<string | undefined> = []
-	if (isRecord(raw.sources)) {
+	if (isObjectRecord(raw.sources)) {
 		for (const [sourcePath, sourceValue] of Object.entries(raw.sources)) {
-			if (!isRecord(sourceValue)) continue
+			if (!isObjectRecord(sourceValue)) continue
 			const id = sourceValue['id']
 			if (typeof id !== 'number') continue
 			sourceFiles[id] = typeof sourceValue['sourcePath'] === 'string' ? sourceValue['sourcePath'] : sourcePath
@@ -321,9 +320,9 @@ const serializeCoverageContextValue = (value: unknown): string => {
 
 const parseStateOverrideCodeByAddress = (stateOverrides: unknown): Map<string, string> => {
 	const result = new Map<string, string>()
-	if (!isRecord(stateOverrides)) return result
+	if (!isObjectRecord(stateOverrides)) return result
 	for (const [address, overrideValue] of Object.entries(stateOverrides)) {
-		if (!isRecord(overrideValue)) continue
+		if (!isObjectRecord(overrideValue)) continue
 		const code = overrideValue['code']
 		if (typeof code !== 'string') continue
 		result.set(normalizeAddress(address), code)
@@ -540,7 +539,7 @@ const readSourceFileBySourcePath = async (rootPath: string, sourcePath: string):
 }
 
 const parseTraceSteps = (traceResponse: unknown): unknown[] => {
-	if (!isRecord(traceResponse)) return []
+	if (!isObjectRecord(traceResponse)) return []
 	const structLogs = traceResponse['structLogs']
 	return Array.isArray(structLogs) ? structLogs : []
 }
@@ -567,7 +566,7 @@ const resolveTraceSteps = (rawSteps: readonly unknown[], rootCodeAddress?: strin
 	let rootDepth: number | undefined
 
 	for (const rawStep of rawSteps) {
-		if (!isRecord(rawStep)) continue
+		if (!isObjectRecord(rawStep)) continue
 
 		const depth = parseDepthValue(rawStep['depth']) ?? 0
 		if (rootDepth === undefined) {

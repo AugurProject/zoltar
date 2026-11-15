@@ -1,4 +1,4 @@
-import { isRecord } from './api-validation.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 const searchResultCountLabel = (count: number): string => {
 	if (count === 0) return 'No indexed matches'
@@ -49,10 +49,10 @@ export const mountSearch = (api: (path: string) => Promise<unknown>, chainId: ()
 			if (chainId() !== '') params.set('chainId', chainId())
 			const response = await api(`/api/v1/search?${params}`)
 			if (current !== generation) return
-			if (!isRecord(response) || !Array.isArray(response['items'])) throw new Error('Search response is malformed')
+			if (!isPlainRecord(response) || !Array.isArray(response['items'])) throw new Error('Search response is malformed')
 			const anchors: HTMLAnchorElement[] = []
 			for (const item of response['items']) {
-				if (!isRecord(item) || typeof item['href'] !== 'string' || typeof item['label'] !== 'string') continue
+				if (!isPlainRecord(item) || typeof item['href'] !== 'string' || typeof item['label'] !== 'string') continue
 				const anchor = document.createElement('a')
 				const destination = new URL(item['href'], location.origin)
 				if (new URL(location.href).searchParams.get('demo') === '1') destination.searchParams.set('demo', '1')

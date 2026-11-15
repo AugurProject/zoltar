@@ -1500,7 +1500,7 @@ button.wallet-asset-action-pending:disabled {
 	opacity: 0;
 }
 
-.address-value-text[data-abbreviated="true"] .address-value-abbreviated {
+.address-value-text[data-abbreviated="true"] .address-value-abbreviated[data-active="true"] {
 	visibility: visible;
 }
 
@@ -1520,7 +1520,7 @@ button.wallet-asset-action-pending:disabled {
 	position: absolute;
 }
 
-.address-value-fit-content[data-abbreviated="false"] .address-value-abbreviated {
+.address-value-fit-content .address-value-abbreviated:not([data-active="true"]) {
 	position: absolute;
 }
 
@@ -1810,7 +1810,8 @@ a.transaction-hash-link {
 
 .migration-outcome-metrics {
 	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr));
+	/* Columns never go below their content's narrowest width, so the one-line status badge sets its column's width. */
+	grid-template-columns: repeat(4, minmax(min-content, 1fr));
 	gap: 0.5rem 1rem;
 	margin-top: 0.25rem;
 	color: var(--text-secondary);
@@ -1847,6 +1848,24 @@ a.transaction-hash-link {
 	}
 }
 
+/* The visible status and an invisible copy of the other status share one cell, so the slot always takes the longer
+ * label's width. The copy is generated content using the badge's text metrics (shared rule above), so it never enters the page text. */
+.outcome-status-slot {
+	display: inline-grid;
+}
+
+.outcome-status-slot > .badge,
+.outcome-status-slot::after {
+	grid-area: 1 / 1;
+	justify-self: start;
+}
+
+.outcome-status-slot::after {
+	content: attr(data-reserve);
+	visibility: hidden;
+	white-space: nowrap;
+}
+
 .migration-outcome-metrics strong {
 	display: block;
 	min-width: 0;
@@ -1865,17 +1884,25 @@ a.transaction-hash-link {
 	word-break: normal;
 }
 
+/* Text metrics shared by a badge and the invisible status-width reserve (.outcome-status-slot::after), so the two always measure the same. */
+.badge,
+.outcome-status-slot::after {
+	padding: 0.32rem 0.68rem;
+	border: 1px solid transparent;
+	font-family: var(--font-family-mono);
+	font-size: var(--font-label);
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+}
+
+/* A badge stays on one line by default. A status that can be longer than its container on a phone opts in to
+ * wrapping with the badge-wrap class. */
 .badge {
 	display: inline-flex;
 	align-items: center;
 	white-space: nowrap;
 	border-radius: var(--radius-control);
-	padding: 0.32rem 0.68rem;
-	font-family: var(--font-family-mono);
-	font-size: var(--font-label);
-	text-transform: uppercase;
-	letter-spacing: 0.08em;
-	border: 1px solid var(--border-default);
+	border-color: var(--border-default);
 	background: transparent;
 	color: var(--muted);
 }
@@ -1910,6 +1937,12 @@ a.transaction-hash-link {
 	color: var(--danger);
 	border-color: var(--danger-border);
 	background: var(--danger-soft);
+}
+
+.badge.badge-wrap {
+	max-width: 100%;
+	white-space: normal;
+	overflow-wrap: break-word;
 }
 
 .address {
@@ -1983,7 +2016,7 @@ a.transaction-hash-link {
 .workflow-question-grid,
 .workflow-vault-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr));
 	gap: 1rem 1.25rem;
 }
 
