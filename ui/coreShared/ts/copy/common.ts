@@ -111,7 +111,7 @@ export const formatRequiredValue = (amount: CopyTemplateValue) => `Required ${am
 export const formatApprovedValue = (amount: CopyTemplateValue) => `Approved ${amount}`
 export const formatValueApprovalAmount = (tokenLabel: CopyTemplateValue, purpose?: string) => (purpose === undefined ? `${tokenLabel} approval amount` : `${purpose}: ${tokenLabel} approval amount`)
 export const requiredTotalPlaceholder = 'Required'
-export const leaveBlankForRequiredTotal = 'Leave blank for required total'
+export const blankUsesRequiredTotal = 'Blank uses required total'
 export const emptyStateDetail = 'Nothing to show.'
 export const unlimitedApproval = 'Unlimited approval'
 export const approvalAmountTooLargeError = 'Approval amount is too large.'

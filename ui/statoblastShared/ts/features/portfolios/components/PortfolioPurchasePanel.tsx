@@ -59,7 +59,7 @@ export function PortfolioPurchasePanel({ model, purchase, actions }: { model: Re
 				<div className='field'>
 					<label htmlFor={id}>{copy.registeredQuestions}</label>
 					<select id={id} value={selected === undefined ? '' : toHex(selected)} disabled={actions.busy !== undefined || model.loading} onChange={event => purchase.setQuestionInput(event.currentTarget.value)}>
-						<option value=''>{copy.chooseRegisteredQuestion}</option>
+						<option value=''>{copy.chooseQuestion}</option>
 						{snapshot?.questions.map(questionId => (
 							<option key={String(questionId)} value={toHex(questionId)}>
 								{details.entries?.get(questionId)?.question === undefined ? toHex(questionId) : getQuestionTitle(details.entries.get(questionId)?.question ?? { title: '' })}

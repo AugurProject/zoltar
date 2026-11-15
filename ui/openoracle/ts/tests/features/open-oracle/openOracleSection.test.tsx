@@ -570,7 +570,7 @@ void describe('OpenOracleSection', () => {
 			const documentQueries = within(document.body)
 			const searchInput = documentQueries.getByLabelText('Search reports')
 			if (!(searchInput instanceof window.HTMLInputElement)) throw new Error('Expected report search input')
-			expect(searchInput.placeholder).toBe('Report ID, token symbol, or token address')
+			expect(searchInput.placeholder).toBe('Report ID, token, or address')
 			expect(documentQueries.getByText('Report block')).not.toBeNull()
 			expect(documentQueries.getByText('Settlement block')).not.toBeNull()
 			expect(documentQueries.getByText('123 blocks')).not.toBeNull()
