@@ -73,12 +73,26 @@ abstract contract EscalationGameStorage {
 	// Ordinary deposits irrevocably release the minimum outcome balance. Reporter
 	// principal remains nominal because only one outcome can claim in each child.
 	uint256 public creditedSurplusAttoRep;
+	// A new strict leader must remain challengeable for a full response period.
+	uint256 internal leadResponseEnd;
+
+	function _strictStakeLeader() internal view returns (BinaryOutcomes.BinaryOutcome leader) {
+		uint256 highest;
+		for (uint8 index = 0; index < 3; index++) {
+			uint256 balance = outcomeState[index].balanceAttoRep;
+			if (balance > highest) {
+				highest = balance;
+				leader = BinaryOutcomes.BinaryOutcome(index);
+			} else if (balance == highest) leader = BinaryOutcomes.BinaryOutcome.None;
+		}
+	}
 
 	function _isDepositResolutionOpen(BinaryOutcomes.BinaryOutcome provisionalResolution) internal view returns (bool) {
-		// A provisional leader cannot close an unresolved unrelated continuation's
-		// guaranteed response period. Equality remains open, matching finality.
+		// A provisional leader cannot close a guaranteed response period.
+		// Equality remains open, matching finality.
 		return
 			provisionalResolution == BinaryOutcomes.BinaryOutcome.None ||
+			block.timestamp <= leadResponseEnd ||
 			(forkContinuation &&
 				fixedQuestionOutcome == BinaryOutcomes.BinaryOutcome.None &&
 				forkResumedAt != 0 &&
