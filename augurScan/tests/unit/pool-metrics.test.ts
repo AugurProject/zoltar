@@ -1,23 +1,23 @@
 import { getAddress } from '../../src/ethereum.ts'
 import { sampleEntityStateWithRead } from '../../src/snapshots.ts'
 import { expect, test } from 'bun:test'
-import { annualFeeMillionths, annualFeeText, poolSummaryMetrics } from '../../browser/pool-metrics.ts'
+import { annualFeeText, poolSummaryMetrics } from '../../browser/pool-metrics.ts'
 
 test('matches Statoblast annual fee presentation, including normal limits and no decay', () => {
 	// Statoblast shows the same values: the origin-pool default retention rate is 9.462085 % a year.
 	const expected: ReadonlyArray<readonly [bigint, string]> = [
-		[0n, '100000000'],
-		[1n, '100000000'],
-		[999999977880000000n, '50220968'],
-		[999999987000000000n, '33632851'],
-		[999999996848000000n, '9462085'],
-		[999999999999999999n, '0'],
-		[1000000000000000000n, '0'],
+		[0n, '100%'],
+		[1n, '100%'],
+		[999999977880000000n, '50.220968%'],
+		[999999987000000000n, '33.632851%'],
+		[999999996848000000n, '9.462085%'],
+		[999999999999999999n, '0%'],
+		[1000000000000000000n, '0%'],
 	]
-	for (const [rate, millionths] of expected) expect(annualFeeMillionths(rate)).toBe(millionths)
+	for (const [rate, fee] of expected) expect(annualFeeText(rate)).toBe(fee)
 	expect(annualFeeText('1000000000000000000')).toBe('0%')
 	expect(annualFeeText('0')).toBe('100%')
-	for (const invalid of [undefined, null, '', 'bad', '-1']) expect(annualFeeMillionths(invalid)).toBeUndefined()
+	for (const invalid of [undefined, null, '', 'bad', '-1']) expect(annualFeeText(invalid)).toBe('Unavailable')
 })
 
 test('derives question settlement metrics without presenting shared REP as question-owned capital', () => {

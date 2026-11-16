@@ -6,7 +6,7 @@ augurScan separates retained evidence from the current view so an operator can t
 
 1. **Occurrences** are the block, transaction, action, receipt, and raw log records selected by the indexer's declared coverage model. A log retains its topics, data, block hash, transaction hash, and position even when decoding fails. A reorganization changes its canonical status instead of deleting the displaced occurrence.
 2. **Interpretations** record how one indexer run decoded an action or log and which semantic projections it produced. Each interpretation carries run and ABI/application/projection source provenance. A later replay appends another interpretation, so operators can compare meanings without changing the raw occurrence.
-3. **Observations** are contract values read at a tagged canonical block. Every pool, vault, escalation, auction, address-balance, or token-metadata attempt is appended with its result or failure, block hash, observation time, run, and source hashes.
+3. **Observations** are contract values read at a tagged canonical block. Every pool, escalation, auction, address-balance, or token-metadata attempt is appended with its result or failure, block hash, observation time, run, and source hashes.
 4. **Current materializations** are replaceable registries, domain projections, and latest state rows used by the UI and ordinary canonical APIs. They are convenient views of the first three layers, not independent historical evidence.
 
 OpenOracle reports, escalation games, collateral repair auctions, AMM activity, registrations, forks, and migrations use this same model. One decoded occurrence can create several semantic timeline entries because it can affect several entities. Current views keep stable entity and occurrence identities so replay remains idempotent.
@@ -25,7 +25,7 @@ Every replacement has an audit record. `chain_reorganizations` stores its bounda
 
 Event-first indexing retains event-bearing blocks and scan-range endpoints; quiet intervening blocks need no individual records. Every Operations response after indexing begins is anchored to one fully indexed canonical block. The overview and risk surfaces accept `atBlock` for a retained canonical boundary. Their `asOf` envelope distinguishes that selected block from the current indexed and observed heads and includes the latest invalidation and applied source hashes. Before the first indexed block, Operations returns empty evidence with an explicit availability message; its zero block is only a loading anchor.
 
-At the live head, the indexer samples bounded sets of least-recently observed pools, vaults, escalation games, and collateral repair auctions. Every call in one entity read is tagged to the same indexed block and the block hash is checked before commit. A failure is an availability observation, never numeric zero. Repeated cycles continue until every known entity has a snapshot at that head.
+At the live head, the indexer samples bounded sets of least-recently observed pools, escalation games, and collateral repair auctions. Every call in one entity read is tagged to the same indexed block and the block hash is checked before commit. A failure is an availability observation, never numeric zero. Repeated cycles continue until every known entity has a snapshot at that head.
 
 The [API reference](API_REFERENCE.md) is the canonical source for collection ordering, limits, point-in-time filters, opaque cursors, completeness fields, and invalidated-continuation behavior. The browser refetches the visible depth of paged Operations views after a committed update so it does not mix materialization generations.
 
@@ -38,7 +38,7 @@ The [API reference](API_REFERENCE.md) is the canonical source for collection ord
 | Escalation deposits and per-outcome totals | Direct event fields plus deterministic canonical aggregation |
 | Auction schedule, bids, clearing result, settlements, and refunds | Direct event fields plus deterministic canonical aggregation |
 | Current values absent from events | Current contract read at the latest fully indexed canonical block. `entity_state_snapshots` is the replaceable latest materialization. Every sampling attempt is appended to `entity_state_observations` with method, success/failure, block hash, observation time, run, and source hashes. |
-| Related addresses carried by one timeline event | Direct event fields; timeline entries do not claim cross-record inferred relationships. Risk summaries may associate approval transitions that share both an approval ID and registry, and expose that association as inferred evidence. |
+| Related addresses carried by one timeline event | Direct event fields; timeline entries do not claim cross-record inferred relationships. |
 | Warning or urgency | Scanner presentation state, separate from protocol state |
 
 ## One report through the four layers
@@ -51,9 +51,9 @@ The same separation applies across the indexed domains:
 | --- | --- | --- |
 | OpenOracle reports | Submitted, disputed, settled, rejected, and recovery occurrences plus coordinator decisions | Latest report round and lifecycle state |
 | Escalations and auctions | Deposits, claims, bids, settlements, refunds, and lifecycle events | Current totals, outcome state, and clearing summary |
-| Statoblast risk | Accounting checkpoints, liquidation approvals, and tagged pool/vault reads | Latest coherent risk snapshot and scanner assessment |
+| Statoblast risk | Question accounting checkpoints, capital-ledger commitment take-overs, and tagged pool reads | Latest pool settlement state |
 | Trading | Pair identity, reserve synchronization, swaps, liquidity events, and LP transfers, joined at read time with pool complete-set events and share transfers | Current market summary, ETH volume, market activity, account profit and loss, positions, and bounded analytics |
-| Zoltar forks | Universe lineage, migration, REP burn, pool checkpoints, and escalation obligations | Current branch and migration summary |
+| Zoltar forks | Universe lineage, migration, REP burn, and portfolio fork events (`ForkFrozen`, `BranchChosen`, `BranchStarted`, `BranchActivated`, `NeutralCashRecovered`) | Current branch and migration summary |
 | Addresses and tokens | Participation occurrences plus tagged balance and metadata read outcomes | Latest successful balance and metadata values |
 
 Exact domain calculations, filters, response fields, limits, and continuation rules belong to the [API reference](API_REFERENCE.md). This page owns only the evidence model.
