@@ -87,7 +87,6 @@ export function OpenOracleSection({
 	loadingOpenOracleCreate,
 	openOracleActiveAction,
 	openOracleActiveWithdrawalBalance,
-	openOracleApprovalResetting,
 	openOracleCreateForm,
 	openOracleCreateFieldErrors = {},
 	openOracleDisputeSubmission,
@@ -460,7 +459,6 @@ export function OpenOracleSection({
 									disabled={!isConnected || !isOnActiveAppChain || openOracleActiveAction !== undefined}
 									guard={rawCreateGuardMessage}
 									activeAction={openOracleActiveAction}
-									resetting={openOracleApprovalResetting}
 									approve={onApproveCreateToken}
 									wrap={onWrapCreateWeth}
 								/>
@@ -502,7 +500,6 @@ export function OpenOracleSection({
 							onWrapDisputeWeth={onWrapDisputeWeth}
 							openOracleActiveAction={openOracleActiveAction}
 							openOracleActiveWithdrawalBalance={openOracleActiveWithdrawalBalance}
-							openOracleApprovalResetting={openOracleApprovalResetting}
 							openOracleDisputeSubmission={openOracleDisputeSubmission}
 							openOracleForm={openOracleForm}
 							openOracleReportDetails={effectiveOpenOracleReportDetails}

@@ -1,4 +1,3 @@
-import { getTokenApprovalResetReason, tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { encodeFunctionData } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { useSignal } from '@preact/signals'
@@ -157,24 +156,15 @@ export function usePortfolioAuction({ fork, bidder, actions, openVault }: Portfo
 	}
 	return {
 		approve: (amount: bigint) =>
-			run(
-				amount === 0n ? 'resetAuctionCollateral' : 'approveAuctionCollateral',
-				'Approve auction collateral',
-				fundingReason,
-				selected => {
-					if (selected.auction === undefined) throw new Error('Auction is unavailable. Refresh before approving collateral.')
-					return {
-						account: selected.bidder,
-						to: selected.collateralToken,
-						value: 0n,
-						data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [selected.auction.address, amount] }),
-					}
-				},
-				latest => {
-					const reason = getTokenApprovalResetReason(latest.collateralAllowance, amount, latest.collateral.symbol, tokenRequiresAllowanceReset(latest.collateralToken))
-					if (reason !== undefined) throw new Error(reason)
-				},
-			),
+			run('approveAuctionCollateral', 'Approve auction collateral', fundingReason, selected => {
+				if (selected.auction === undefined) throw new Error('Auction is unavailable. Refresh before approving collateral.')
+				return {
+					account: selected.bidder,
+					to: selected.collateralToken,
+					value: 0n,
+					data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [selected.auction.address, amount] }),
+				}
+			}),
 		snapshot,
 		quote,
 		loading,

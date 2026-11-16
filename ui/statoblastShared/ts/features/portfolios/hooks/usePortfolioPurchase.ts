@@ -1,4 +1,3 @@
-import { getTokenApprovalResetReason, tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import * as collateralCopy from '../../../copy/collateral.js'
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
@@ -70,7 +69,7 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 	return {
 		requiredCollateral: amount === undefined || fee === undefined ? undefined : amount + fee,
 		approve: (approvalAmount: bigint) =>
-			actions.runPortfolioAction(approvalAmount === 0n ? 'resetPurchaseCollateral' : 'approvePurchaseCollateral', 'Approve purchase collateral', () => {
+			actions.runPortfolioAction('approvePurchaseCollateral', 'Approve purchase collateral', () => {
 				if (snapshot === undefined) throw new Error('Portfolio unavailable.')
 				const account = snapshot.auctionVault?.bidder ?? snapshot.owner
 				return {
@@ -78,12 +77,6 @@ export function usePortfolioPurchase(model: Pick<ReturnType<typeof usePortfolio>
 					to: snapshot.collateralToken,
 					value: 0n,
 					data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [snapshot.services, approvalAmount] }),
-					validateBeforeSubmit: async () => {
-						const allowance = await createConnectedReadClient().readContract({ address: snapshot.collateralToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [account, snapshot.services] })
-						if (typeof allowance !== 'bigint') throw new Error('Collateral allowance unavailable.')
-						const reason = getTokenApprovalResetReason(allowance, approvalAmount, snapshot.collateral.symbol, tokenRequiresAllowanceReset(snapshot.collateralToken))
-						if (reason !== undefined) throw new Error(reason)
-					},
 				}
 			}),
 		questionInput: questionInput.value,
