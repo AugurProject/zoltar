@@ -3,6 +3,7 @@ import { apiFailureLog } from '../api-failure-log.ts'
 import { actionCatalog, contractCatalog, contractDetail, networkCatalog } from '../repositories/catalog.ts'
 import { addressIdentity, addressInteractions, addressTransactions } from './address-history.ts'
 import { capitalCatalogResponse, capitalDetailResponse, liquidationCatalogResponse } from './capital.ts'
+import { feeEconomicsResponse } from './fee-economics.ts'
 import { directObservationsResponse } from './direct-observations.ts'
 import { eventEntityDetailResponse, forkDetailResponse, reportDetailResponse } from './entity-details.ts'
 import { historicalExport } from './exports.ts'
@@ -50,6 +51,7 @@ export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs
 		if (url.pathname === '/api/v1/state/forks') return await domainCatalogResponse(sql, url, 'forks')
 		if (url.pathname === '/api/v1/state/capital') return await capitalCatalogResponse(sql, url)
 		if (url.pathname === '/api/v1/state/liquidations') return await liquidationCatalogResponse(sql, url)
+		if (url.pathname === '/api/v1/state/fees') return await feeEconomicsResponse(sql, url)
 		if (url.pathname === '/api/v1/state/trading') return await tradingCatalogResponse(sql, url)
 		if (url.pathname === '/api/v1/state/integrity') return await integrityCatalogResponse(sql, url)
 		if (url.pathname === '/api/v1/state/direct-observations') return await directObservationsResponse(sql, url)

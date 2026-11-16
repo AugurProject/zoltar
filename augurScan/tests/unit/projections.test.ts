@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import { getAddress, type Hex } from '../../src/ethereum.ts'
+import { abiForKind } from '../../src/abi-catalog.ts'
+import { encodeAbiParameters, encodeEventTopics, getAddress, type Hex } from '../../src/ethereum.ts'
+import { decodeLogRecord } from '../../src/metadata.ts'
 import { type Projection, projectionsFrom } from '../../src/projections.ts'
 import type { StoredLog } from '../../src/types.ts'
 
@@ -197,8 +199,8 @@ describe('state projections', () => {
 	})
 
 	test('retains LP share transfers and approvals only when the emitter is an Augur AMM pair', () => {
-		const transfer = { ...log('Transfer', { from: pool, to: vault, amount: '50' }), contractKind: 'ammPair' }
-		const approval = { ...log('Approval', { owner: pool, spender: vault, amount: '50' }), contractKind: 'ammPair' }
+		const transfer = { ...log('Transfer', { from: pool, to: vault, value: '50' }), contractKind: 'ammPair' }
+		const approval = { ...log('Approval', { owner: pool, spender: vault, value: '50' }), contractKind: 'ammPair' }
 		expect(projectionsFrom(transfer).at(-1)).toMatchObject({
 			type: 'domainEvent',
 			domain: 'trading',
@@ -213,6 +215,20 @@ describe('state projections', () => {
 			semanticEventKind: 'Approval',
 		})
 		expect(projectionsFrom(log('Approval', { owner: pool, spender: vault, value: '50' })).some(item => item.type === 'domainEvent')).toBe(false)
+	})
+
+	test('stores an AMM pair LP transfer under the compiled ERC-20 argument names', () => {
+		const event = abiForKind('ammPair')?.find(item => item.type === 'event' && item.name === 'Transfer')
+		if (event?.type !== 'event') throw new Error('Missing compiled AMM pair Transfer event')
+		const topics = encodeEventTopics({ abi: [event], eventName: 'Transfer', args: { from: pool, to: vault } }).flatMap(topic => (typeof topic === 'string' ? [topic] : []))
+		const data = encodeAbiParameters([{ type: 'uint256' }], [50n])
+		const transfer: StoredLog = { ...log('Transfer', {}, vault, 'ammPair'), topics, data, decoded: decodeLogRecord('ammPair', topics, data, new Map(), new Map(), vault) }
+		const projection = projectionsFrom(transfer).at(-1)
+		if (projection?.type !== 'domainEvent') throw new Error('LP transfer did not project a domain event')
+		// The trading, catalog, portfolio, and detail LP queries read these exact keys from amm_trade_events.event_data.
+		expect(projection).toMatchObject({ domain: 'trading', entityIdentity: vault.toLowerCase(), semanticEventKind: 'Transfer' })
+		expect(Object.keys(projection.data).sort()).toEqual(['from', 'to', 'value'])
+		expect(projection.data['value']).toBe('50')
 	})
 
 	test('adds stable timeline identities for registries, markets, and universes', () => {

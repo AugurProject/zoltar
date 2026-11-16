@@ -62,7 +62,7 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 		matches: filePath => filePath === 'tooling/contracts/prettier-solidity-batch.mjs',
 	},
 	{
-		command: 'bun ./tooling/testing/bun-test.mts tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts tooling/testing/test-impact.test.ts',
+		command: 'bun ./tooling/testing/bun-test.mts tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts tooling/testing/run-bun-test-process.test.ts tooling/testing/test-timeout.test.ts tooling/testing/test-impact.test.ts',
 		reason: 'root test discovery, execution, timing, or impact selection changed',
 		matches: filePath => TEST_INFRASTRUCTURE_PATHS.has(filePath),
 	},

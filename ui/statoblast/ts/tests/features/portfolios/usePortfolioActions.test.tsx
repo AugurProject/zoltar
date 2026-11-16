@@ -324,3 +324,28 @@ test('changing collateral requires deliberate token-denominated economic amounts
 	expect(hook.state().economicsDraft.minimumPurchaseFee).toBe('')
 	expect(hook.state().creationError).toBeDefined()
 })
+
+test('question registration is blocked outside the portfolio horizon by chain time', async () => {
+	const day = 86_400n
+	const now = capitalSnapshot().timestamp
+	const source = capitalClient()
+	source.setRead('isQuestionAllowed', true)
+	source.setRead('maximumQuestionHorizonSeconds', 30n * day)
+	const { hook, requests } = await renderWithDeploymentWallet(source)
+	const expectReason = async (questionId: string, endTime: bigint, reason: string | undefined) => {
+		source.setRead('getQuestionEndDate', endTime)
+		await act(() => hook.state().setQuestionInput(questionId))
+		if (reason === undefined) await waitFor(() => expect(hook.state().registerReason).toBeUndefined())
+		else await waitFor(() => expect(hook.state().registerReason).toContain(reason))
+	}
+	await expectReason('7', now + day, undefined)
+	await expectReason('8', now, 'has ended')
+	await expectReason('9', 0n, 'does not exist')
+	await expectReason('10', now + 30n * day + 1n, '30-day question horizon')
+	await expectReason('11', now + 30n * day, undefined)
+	// Chain time can pass the end between the displayed check and submission.
+	source.setSnapshot(capitalSnapshot({ timestamp: now + 31n * day }))
+	await act(() => hook.state().register())
+	expect(requests).toHaveLength(0)
+	expect(hook.state().error).toContain('has ended')
+})

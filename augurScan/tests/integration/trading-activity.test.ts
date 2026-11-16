@@ -1,6 +1,9 @@
 import { expect, test } from 'bun:test'
 import { SQL } from 'bun'
+import { abiForKind } from '../../src/abi-catalog.ts'
 import { handleApi } from '../../src/api.ts'
+import { encodeAbiParameters, encodeEventTopics, type Hex } from '../../src/ethereum.ts'
+import { decodeLogRecord } from '../../src/metadata.ts'
 import { initializeSchema } from '../../src/schema.ts'
 
 const url = process.env['POSTGRES_TEST_URL']
@@ -17,6 +20,16 @@ const liquidityProvider = address('2')
 const swapper = address('3')
 const settler = address('4')
 const now = 1_767_225_600
+// LP transfers are decoded through the pair ABI, so the stored payload keys follow the compiled ERC-20 event.
+const lpTransfer = (from: string, to: string, value: bigint) => {
+	const event = abiForKind('ammPair')?.find(item => item.type === 'event' && item.name === 'Transfer')
+	if (event?.type !== 'event') throw new Error('Missing compiled AMM pair Transfer event')
+	const topics = encodeEventTopics({ abi: [event], eventName: 'Transfer', args: { from, to } }).flatMap(topic => (typeof topic === 'string' ? [topic] : []))
+	const data: Hex = encodeAbiParameters([{ type: 'uint256' }], [value])
+	const decoded = decodeLogRecord('ammPair', topics, data, new Map())
+	if (decoded.arguments === undefined) throw new Error(`AMM pair Transfer did not decode: ${decoded.summary}`)
+	return decoded.arguments
+}
 const blocks = [
 	{ number: 1, hash: hash(1001), timestamp: now - 200_000 },
 	{ number: 2, hash: hash(1002), timestamp: now - 100 },
@@ -57,9 +70,9 @@ const settlementLogs: readonly LogFixture[] = [
 ]
 
 const pairLogs: readonly LogFixture[] = [
-	{ block: 1, tx: 1, logIndex: 4, emitter: pair, name: 'Transfer', data: { from: zero, to: `0x${'0'.repeat(39)}1`, amount: '1' } },
+	{ block: 1, tx: 1, logIndex: 4, emitter: pair, name: 'Transfer', data: lpTransfer(zero, `0x${'0'.repeat(39)}1`, 1n) },
 	{ block: 1, tx: 1, logIndex: 5, emitter: pair, name: 'LiquidityInitialized', data: { provider: router, recipient: liquidityProvider, yesAmount: '100', noAmount: '100', liquidity: '99' } },
-	{ block: 1, tx: 1, logIndex: 7, emitter: pair, name: 'Transfer', data: { from: zero, to: liquidityProvider, amount: '99' } },
+	{ block: 1, tx: 1, logIndex: 7, emitter: pair, name: 'Transfer', data: lpTransfer(zero, liquidityProvider, 99n) },
 	{ block: 1, tx: 2, logIndex: 14, emitter: pair, name: 'Swap', data: swap(router, false, false, 10, 6) },
 	{ block: 2, tx: 3, logIndex: 23, emitter: pair, name: 'Swap', data: swap(router, true, true, 6, 4) },
 	{ block: 2, tx: 4, logIndex: 30, emitter: pair, name: 'Swap', data: swap(swapper, true, false, 3, 2) },
@@ -149,7 +162,11 @@ test.skipIf(url === undefined)('derives market ETH volume, activity, and account
 		await insertLogs(settlementLogs)
 		const detailResponse = await handleApi(new Request(`http://localhost/api/v1/state/trading/${chainId}/${pair}`), connection)
 		expect(detailResponse?.status).toBe(200)
-		const detail = (await detailResponse?.json()) as { data: { summary: Record<string, unknown>; activity: { items: Record<string, unknown>[]; hasMore: boolean } } }
+		const detail = (await detailResponse?.json()) as { data: { summary: Record<string, unknown>; activity: { items: Record<string, unknown>[]; hasMore: boolean }; lpPositions: Record<string, unknown>[] } }
+		expect(detail.data.lpPositions).toEqual([
+			{ address: liquidityProvider, received_liquidity: '99', sent_liquidity: '0', balance: '99' },
+			{ address: `0x${'0'.repeat(39)}1`, received_liquidity: '1', sent_liquidity: '0', balance: '1' },
+		])
 		expect(detail.data.summary).toMatchObject({ eth_volume_atto_eth: '14', eth_volume_24h_atto_eth: '4', eth_volume_7d_atto_eth: '14', eth_trade_count: 2, eth_trade_count_24h: 1 })
 		expect(detail.data.activity.hasMore).toBe(false)
 		expect(detail.data.activity.items.map(item => [item['kind'], item['side'], item['account'], item['shares'], item['eth_in_atto_eth'], item['eth_out_atto_eth']])).toEqual([
@@ -171,7 +188,10 @@ test.skipIf(url === undefined)('derives market ETH volume, activity, and account
 
 		const catalogResponse = await handleApi(new Request(`http://localhost/api/v1/state/trading?chainId=${chainId}`), connection)
 		const catalog = (await catalogResponse?.json()) as { data: { items: Record<string, unknown>[] } }
-		expect(catalog.data.items[0]).toMatchObject({ pair_address: pair, eth_volume_atto_eth: '14', eth_volume_24h_atto_eth: '4', eth_trade_count: 2 })
+		expect(catalog.data.items[0]).toMatchObject({ pair_address: pair, eth_volume_atto_eth: '14', eth_volume_24h_atto_eth: '4', eth_trade_count: 2, lp_holder_count: 2 })
+		const lpPortfolioResponse = await handleApi(new Request(`http://localhost/api/v1/state/address-portfolio?chainId=${chainId}&address=${liquidityProvider}`), connection)
+		const lpPortfolio = (await lpPortfolioResponse?.json()) as { data: { lp_positions: Record<string, unknown>[] } }
+		expect(lpPortfolio.data.lp_positions).toEqual([expect.objectContaining({ market_address: pair, balance: '99', transfer_count: 1, pool_address: pool })])
 
 		expect((await portfolioFor(settler)).items).toEqual([expect.objectContaining({ cost_basis_atto_eth: '0', proceeds_atto_eth: '2', yes_atto_shares: '0', realized_pnl_atto_eth: '2', open: false })])
 		// After settlement the pair no longer trades, so the open position is not valued at stale reserves.

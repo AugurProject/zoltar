@@ -7,7 +7,6 @@ import { address, hash, snapshotFixture } from './fixture.ts'
 const capacity = {
 	maxPools: 2,
 	maxQuestions: 2,
-	maxStagedOperationsPerPool: 2,
 	maxUniverses: 2,
 	maxVaultsPerPool: 2,
 	maximumAggregateItems: 4,

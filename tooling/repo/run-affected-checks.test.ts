@@ -47,12 +47,29 @@ test('uses the repository composite check for lint without duplicating the full 
 	expect(commands.filter(command => command === 'bun run check:complete')).toHaveLength(1)
 })
 
-for (const path of ['README.md', 'shared/core/README.md', 'bots/liquidator/README.md', 'augurScan/src/ARCHITECTURE.md', 'ui/AGENTS.md', '.codex/agents/reviewer.toml', '.vscode/settings.json', '.claude/skills/babysit']) {
+for (const path of ['docs/how-to/trading-deploy-contracts.html', 'shared/core/README.md', 'bots/liquidator/README.md', 'augurScan/src/ARCHITECTURE.md', 'ui/AGENTS.md', '.codex/agents/reviewer.toml', '.vscode/settings.json', '.claude/skills/babysit']) {
 	test(`documentation-only ${path} selects documentation checks`, () => {
 		expect(affectedCheckSelection([path]).map(project => project.id)).toEqual(['docs'])
 		expect(affectedCheckPlan([path]).map(entry => entry.command.join(' '))).toEqual(['bun run docs:check'])
 	})
 }
+
+test.each([
+	['docs/runtime/interactiveTools.ts', ['repository', 'docs']],
+	['docs/assets/js/interactiveTools.js', ['repository', 'docs']],
+	['docs/manifest.json', ['repository', 'docs']],
+	['README.md', ['repository', 'docs']],
+	['testnetwork/README.md', ['repository', 'docs']],
+	['augurScan/README.md', ['augur-scan', 'docs']],
+	['bots/open-oracle-arbitrager/MARKETS.md', ['arbitrager', 'docs']],
+] as const)('documentation consumed by code (%s) selects its consumer and documentation checks', (path, expected) => {
+	expect(affectedCheckSelection([path]).map(project => project.id)).toEqual([...expected])
+	expect(new Set(affectedCheckPlan([path]).map(entry => entry.projectId))).toEqual(new Set(expected))
+})
+
+test('repository-wide documentation data selects the complete registry', () => {
+	expect(affectedCheckSelection(['docs/mainnet-deployment-addresses.json'])).toEqual(projects)
+})
 
 test('mixed documentation and runtime changes preserve each distinct owner', () => {
 	const paths = ['bots/liquidator/README.md', 'bots/chaos/src/run.ts']
