@@ -73,3 +73,44 @@ test('releases a receipt wait as soon as the user stops tracking its transaction
 	await expect(wait({ hash, pollingInterval: 1 })).rejects.toThrow(transactionErrorMessages.trackingStopped)
 	expect(waitForTransactionReceipt).toHaveBeenCalledTimes(1)
 })
+
+test('releases a receipt wait when the user stops tracking the transaction that replaced it', async () => {
+	const replacementHash = '0x0000000000000000000000000000000000000000000000000000000000000002'
+	const neverMined = new Promise<never>(() => undefined)
+	let reportReplaced: () => void = () => undefined
+	const replaced = new Promise<void>(resolve => {
+		reportReplaced = resolve
+	})
+	const onReplaced = mock(() => reportReplaced())
+	const wait = createRecoveringReceiptWaiter(
+		{
+			getTransaction: mock(async () => {
+				throw new Error('Transaction not found')
+			}),
+			waitForTransactionReceipt: mock(async parameters => {
+				// The wallet sped the transaction up; the tray and activity list now follow only the replacement hash.
+				parameters.onReplaced?.({ reason: 'repriced', replacedTransaction: { hash } as never, transaction: { hash: replacementHash } as never, transactionReceipt: { transactionHash: replacementHash } as never })
+				return await neverMined
+			}),
+		},
+		{ isCurrentEnvironment: () => true, onTransactionSubmitted: mock(() => undefined) },
+	)
+	const waiting = wait({ hash, onReplaced, pollingInterval: 1 })
+	await replaced
+	announceTransactionTrackingStopped(replacementHash)
+	// Bounded so a wait that never releases fails this test instead of hanging the run.
+	let timer: ReturnType<typeof setTimeout> | undefined
+	const stillWaiting = new Promise<string>(resolve => {
+		timer = setTimeout(() => resolve('still waiting'), 1_000)
+	})
+	const outcome = await Promise.race([
+		waiting.then(
+			() => 'resolved',
+			(error: unknown) => (error instanceof Error ? error.message : 'unexpected rejection'),
+		),
+		stillWaiting,
+	])
+	clearTimeout(timer)
+	expect(outcome).toBe(transactionErrorMessages.trackingStopped)
+	expect(onReplaced).toHaveBeenCalledTimes(1)
+})
