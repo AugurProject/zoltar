@@ -13,12 +13,11 @@ function aggregateProductFits(left: number, right: number, maximum: number) {
 export function configuredImmutableTopologyCapacity(options: PlanningOptions): ImmutableTopologyPlanningCapacity | undefined {
 	const capacity = options.immutableTopologyCapacity
 	if (capacity === undefined) return undefined
-	const limits = [capacity.maxPools, capacity.maxQuestions, capacity.maxStagedOperationsPerPool, capacity.maxUniverses, capacity.maxVaultsPerPool, capacity.maximumAggregateItems]
+	const limits = [capacity.maxPools, capacity.maxQuestions, capacity.maxUniverses, capacity.maxVaultsPerPool, capacity.maximumAggregateItems]
 	if (limits.some(limit => !Number.isSafeInteger(limit) || limit <= 0)) return undefined
-	if ([capacity.maxPools, capacity.maxQuestions, capacity.maxStagedOperationsPerPool, capacity.maxUniverses, capacity.maxVaultsPerPool].some(limit => limit > capacity.maximumAggregateItems)) return undefined
+	if ([capacity.maxPools, capacity.maxQuestions, capacity.maxUniverses, capacity.maxVaultsPerPool].some(limit => limit > capacity.maximumAggregateItems)) return undefined
 	if (!aggregateProductFits(capacity.maxPools, capacity.maxUniverses, capacity.maximumAggregateItems)) return undefined
 	if (!aggregateProductFits(capacity.maxPools, capacity.maxVaultsPerPool, capacity.maximumAggregateItems)) return undefined
-	if (!aggregateProductFits(capacity.maxPools, capacity.maxStagedOperationsPerPool, capacity.maximumAggregateItems)) return undefined
 	return capacity
 }
 
@@ -49,7 +48,6 @@ export function topologyMutationCapacityBlocker(snapshot: EcosystemSnapshot, opt
 	for (const [aggregateLabel, left, right] of [
 		['pool × universe', resultingPools, resultingUniverses],
 		['pool × vault', resultingPools, capacity.maxVaultsPerPool],
-		['pool × staged-operation', resultingPools, capacity.maxStagedOperationsPerPool],
 	] as const) {
 		if (!aggregateProductFits(left, right, capacity.maximumAggregateItems)) {
 			return `${mutation.label} would exceed the configured ${capacity.maximumAggregateItems.toString()}-item ${aggregateLabel} discovery aggregate limit`

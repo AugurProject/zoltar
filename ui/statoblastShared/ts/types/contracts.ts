@@ -269,6 +269,8 @@ export type ActiveReportingDetails = ReportingDetailsBase & {
 	status: 'active'
 	bindingCapital: bigint
 	currentRequiredBond: bigint
+	/** Zoltar refuses this universe's fork before this time while its parent fork response period is active. */
+	earliestForkTime: bigint
 	escalationEndTime: bigint
 	escalationGameAddress: Address
 	hasReachedNonDecision: boolean

@@ -22,7 +22,6 @@ export interface DiscoveryLimits {
 	maxUniverses: number
 	maxPools: number
 	maxVaultsPerPool: number
-	maxStagedOperationsPerPool: number
 }
 
 export interface EcosystemDiscoveryContext {
@@ -51,7 +50,6 @@ const DEFAULT_LIMITS: DiscoveryLimits = {
 	maxOutcomeLabelsPerQuestion: DEFAULT_MAXIMUM_OUTCOME_LABELS_PER_QUESTION,
 	maxPools: 100,
 	maxQuestions: 100,
-	maxStagedOperationsPerPool: 100,
 	maxUniverses: 100,
 	maxVaultsPerPool: 100,
 }
@@ -62,7 +60,6 @@ export function limitsWithDefaults(configured?: Partial<DiscoveryLimits>): Disco
 		maxOutcomeLabelsPerQuestion: configured?.maxOutcomeLabelsPerQuestion ?? DEFAULT_LIMITS.maxOutcomeLabelsPerQuestion,
 		maxPools: configured?.maxPools ?? DEFAULT_LIMITS.maxPools,
 		maxQuestions: configured?.maxQuestions ?? DEFAULT_LIMITS.maxQuestions,
-		maxStagedOperationsPerPool: configured?.maxStagedOperationsPerPool ?? DEFAULT_LIMITS.maxStagedOperationsPerPool,
 		maxUniverses: configured?.maxUniverses ?? DEFAULT_LIMITS.maxUniverses,
 		maxVaultsPerPool: configured?.maxVaultsPerPool ?? DEFAULT_LIMITS.maxVaultsPerPool,
 	}
@@ -73,7 +70,6 @@ export function requireAggregateDiscoveryEnvelope(limits: DiscoveryLimits) {
 		['maxOutcomeLabelsPerQuestion', limits.maxOutcomeLabelsPerQuestion],
 		['maxPools', limits.maxPools],
 		['maxQuestions', limits.maxQuestions],
-		['maxStagedOperationsPerPool', limits.maxStagedOperationsPerPool],
 		['maxUniverses', limits.maxUniverses],
 		['maxVaultsPerPool', limits.maxVaultsPerPool],
 	] as const) {
@@ -84,7 +80,6 @@ export function requireAggregateDiscoveryEnvelope(limits: DiscoveryLimits) {
 	}
 	if (limits.maxPools * limits.maxUniverses > DISCOVERY_AGGREGATE_ITEM_LIMIT) throw new Error(`maxPools × maxUniverses exceeds the ${DISCOVERY_AGGREGATE_ITEM_LIMIT.toString()}-item discovery safety envelope`)
 	if (limits.maxPools * limits.maxVaultsPerPool > DISCOVERY_AGGREGATE_ITEM_LIMIT) throw new Error(`maxPools × maxVaultsPerPool exceeds the ${DISCOVERY_AGGREGATE_ITEM_LIMIT.toString()}-item discovery safety envelope`)
-	if (limits.maxPools * limits.maxStagedOperationsPerPool > DISCOVERY_AGGREGATE_ITEM_LIMIT) throw new Error(`maxPools × maxStagedOperationsPerPool exceeds the ${DISCOVERY_AGGREGATE_ITEM_LIMIT.toString()}-item discovery safety envelope`)
 }
 
 /** Shared anchored inputs for the bounded topology discovery stages. */

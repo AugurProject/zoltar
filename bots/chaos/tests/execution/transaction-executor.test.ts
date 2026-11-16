@@ -71,7 +71,6 @@ function settings(readRpcUrl: string, quorumRpcUrls: string[]): OperatorSettings
 		discovery: {
 			maxPools: 1,
 			maxQuestions: 1,
-			maxStagedOperationsPerPool: 1,
 			maxUniverses: 1,
 			maxVaultsPerPool: 1,
 		},

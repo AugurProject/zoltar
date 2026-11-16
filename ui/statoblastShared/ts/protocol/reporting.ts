@@ -213,7 +213,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			])
 		: undefined
 	const walletReportingStatePromise = loadViewerReportingWalletState(client, securityPoolAddress, accountAddress)
-	const [startBondAttoRep, nonDecisionThresholdAttoRep, activationTime, totalCostAttoRep, bindingCapital, invalidOutcomeState, yesOutcomeState, noOutcomeState, escalationEndTime, _questionOutcome, universeForkTime, hasReachedNonDecision, walletReportingState] = await Promise.all([
+	const [startBondAttoRep, nonDecisionThresholdAttoRep, activationTime, totalCostAttoRep, bindingCapital, invalidOutcomeState, yesOutcomeState, noOutcomeState, escalationEndTime, _questionOutcome, universeForkTime, earliestForkTime, hasReachedNonDecision, walletReportingState] = await Promise.all([
 		client.readContract({
 			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'startBondAttoRep',
@@ -262,6 +262,12 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		client.readContract({
 			abi: Zoltar_Zoltar.abi,
 			functionName: 'getForkTime',
+			address: getInfraContractAddresses().zoltar,
+			args: [universeId],
+		}),
+		client.readContract({
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'getEarliestForkTime',
 			address: getInfraContractAddresses().zoltar,
 			args: [universeId],
 		}),
@@ -321,6 +327,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		settlementCollateralAttoEth,
 		currentRequiredBond: totalCostAttoRep === 0n ? startBondAttoRep : totalCostAttoRep,
 		currentTime: block.timestamp,
+		earliestForkTime,
 		escalationEndTime,
 		escalationGameAddress,
 		forkThresholdAttoRep: frozenOrdinaryForkThreshold ?? (universeForkTime > escalationEndTime ? nonDecisionThresholdAttoRep : forkThresholdAttoRep),

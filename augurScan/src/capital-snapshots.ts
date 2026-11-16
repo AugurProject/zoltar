@@ -123,6 +123,67 @@ const ledgerFields = (state: LedgerState): Record<string, unknown> => ({
 	universeForked: state.universeForked,
 })
 
+/**
+ * The fee state of one universe: the portfolio's fee configuration, the ledger's vesting fee streams, and the
+ * universe's book in the portfolio settlement book. Fee reads are optional: a failure is recorded beside an
+ * otherwise valid ledger snapshot instead of failing it.
+ */
+const universeFees = async (ledger: Address, state: LedgerState, read: StateRead): Promise<Readonly<Record<string, unknown>>> => {
+	const call = caller(read)
+	try {
+		const [annualFeeBps, purchaseFeeBps, rawStreams, rawSettlement, rawServices] = await Promise.all([
+			call(state.portfolio, 'securityPoolPortfolio', 'annualFeeBps'),
+			call(state.portfolio, 'securityPoolPortfolio', 'purchaseFeeBps'),
+			call(ledger, 'securityPoolCapitalLedger', 'feeStreams'),
+			call(state.portfolio, 'securityPoolPortfolio', 'settlement'),
+			call(state.portfolio, 'securityPoolPortfolio', 'services'),
+		])
+		const streams = address(rawStreams, 'feeStreams')
+		const settlement = address(rawSettlement, 'settlement')
+		const streamKind = 'securityPoolCapitalFeeStreams'
+		const [outstandingEth, outstandingRep, deferredEth, deferredRep, releasedThrough, rewardDuration, rawBook, rawBookId] = await Promise.all([
+			call(streams, streamKind, 'outstandingEth'),
+			call(streams, streamKind, 'outstandingRep'),
+			call(streams, streamKind, 'deferredEth'),
+			call(streams, streamKind, 'deferredRep'),
+			call(streams, streamKind, 'releasedThrough'),
+			call(streams, streamKind, 'rewardDuration'),
+			call(settlement, 'securityPoolPortfolioSettlement', 'ledger'),
+			call(settlement, 'securityPoolPortfolioSettlement', 'bookIds', [state.universeId]),
+		])
+		const book = address(rawBook, 'settlement.ledger')
+		const bookId = quantity(rawBookId, 'bookIds')
+		// A universe without a registered book has id 0, which the book contract rejects.
+		const bookState = bookId === 0n ? undefined : tuple(await call(book, 'securityPoolSettlementBook', 'books', [bookId]), 16, 'books')
+		return {
+			fees: {
+				annualFeeBps: quantity(annualFeeBps, 'annualFeeBps').toString(),
+				purchaseFeeBps: quantity(purchaseFeeBps, 'purchaseFeeBps').toString(),
+				feeStreams: streams.toLowerCase(),
+				services: address(rawServices, 'services').toLowerCase(),
+				// Funded earnings still vesting to underwriters, and elapsed stale income awaiting its burn.
+				vestingOutstandingAttoEth: quantity(outstandingEth, 'outstandingEth').toString(),
+				vestingOutstandingAttoRep: quantity(outstandingRep, 'outstandingRep').toString(),
+				deferredAttoEth: quantity(deferredEth, 'deferredEth').toString(),
+				deferredAttoRep: quantity(deferredRep, 'deferredRep').toString(),
+				vestingReleasedThrough: quantity(releasedThrough, 'releasedThrough').toString(),
+				vestingDurationSeconds: quantity(rewardDuration, 'rewardDuration').toString(),
+				settlementBook: book.toLowerCase(),
+				bookId: bookId.toString(),
+				...(bookState === undefined
+					? {}
+					: {
+							bookCashAttoEth: quantity(bookState[0], 'books.cashAttoEth').toString(),
+							bookFeeCashAttoEth: quantity(bookState[2], 'books.feeCashAttoEth').toString(),
+							bookFeesEnabled: flag(bookState[11], 'books.feesEnabled'),
+						}),
+			},
+		}
+	} catch (error) {
+		return { feeReadError: errorMessage(error) }
+	}
+}
+
 /** One universe's capital ledger: the price it accepted, its aggregate principal and commitment, and the last position id it issued. */
 export const capitalLedgerSnapshot = async (ledger: Address, read: StateRead): Promise<Readonly<Record<string, unknown>>> => {
 	const call = caller(read)
@@ -154,6 +215,7 @@ export const capitalLedgerSnapshot = async (ledger: Address, read: StateRead): P
 		frozenBackingAttoRep: quantity(frozenBacking, 'frozenBackingAttoRep').toString(),
 		frozenCommitmentAttoEth: quantity(frozenCommitment, 'frozenCommitmentAttoEth').toString(),
 		lastPositionId: quantity(lastPositionId, 'lastPositionId').toString(),
+		...(await universeFees(ledger, state, read)),
 		...(await collateralOf(state.portfolio, read)),
 	}
 }

@@ -21,7 +21,7 @@ const positionOwnerJoin = (sql: SQL, chainId: number, alias: 'source' | 'receive
 	) ${alias} ON true`)
 
 /** `ledgers`: the latest successful read of every capital ledger at the snapshot block. */
-const latestLedgers = (sql: SQL, chainId: number, snapshotBlock: string) => sql`
+export const latestLedgers = (sql: SQL, chainId: number, snapshotBlock: string) => sql`
 	ledgers AS (
 		SELECT contract.address AS ledger_address, latest.read_result, latest.block_number, latest.block_hash, latest.block_timestamp
 		FROM contracts contract

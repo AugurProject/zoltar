@@ -116,7 +116,6 @@ export type DurableObligation = {
 	blockers: string[]
 	completedAt?: string | undefined
 	createdAt: string
-	dueAt?: string | undefined
 	ecosystem: ChaosEcosystem
 	expiresAt?: string | undefined
 	id: string
