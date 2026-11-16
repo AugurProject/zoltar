@@ -97,6 +97,8 @@ test('a confirmed allowance reset reads as its result whichever path confirmed i
 			{ chainId: 1, hash: failedHash, scope: [], status: 'confirmed', submittedAt: submittedAt - 1_000, settledAt: submittedAt, title: 'Resetting USDT approval' },
 			{ chainId: 1, failureKind: 'reverted', hash: `0x${'33'.repeat(32)}`, scope: [], status: 'failed', submittedAt: submittedAt - 2_000, settledAt: submittedAt, title: 'Resetting USDT approval' },
 			{ chainId: 1, hash: `0x${'44'.repeat(32)}`, scope: [], status: 'confirmed', submittedAt: submittedAt - 3_000, settledAt: submittedAt, title: 'Approving USDT' },
+			{ chainId: 1, hash: `0x${'55'.repeat(32)}`, scope: [], status: 'confirmed', submittedAt: submittedAt - 4_000, settledAt: submittedAt, title: 'Resetting base token approval' },
+			{ chainId: 1, hash: `0x${'66'.repeat(32)}`, scope: [], status: 'confirmed', submittedAt: submittedAt - 5_000, settledAt: submittedAt, title: 'Reset token approval' },
 		],
 		ownerKey: 'test',
 		storageKey: undefined,
@@ -104,8 +106,8 @@ test('a confirmed allowance reset reads as its result whichever path confirmed i
 	const rendered = await renderIntoDocument(<TransactionActivityMenu />)
 	await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Activity' })))
 	const titles = Array.from(within(document.body).getByRole('dialog', { name: 'Recent transactions' }).querySelectorAll('li strong')).map(title => title.textContent)
-	// A failed reset keeps the action wording, and an approval is never retitled as a reset.
-	expect(titles).toEqual(['USDT approval reset', 'USDT approval reset', 'Reset USDT approval', 'Approved USDT'])
+	// A failed reset keeps the action wording, an approval is never retitled as a reset, and a reset recorded without a token symbol still reads as a sentence.
+	expect(titles).toEqual(['USDT approval reset', 'USDT approval reset', 'Reset USDT approval', 'Approved USDT', 'Base token approval reset', 'Token approval reset'])
 	await rendered.cleanup()
 })
 
