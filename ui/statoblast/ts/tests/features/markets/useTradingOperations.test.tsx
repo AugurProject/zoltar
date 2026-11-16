@@ -345,6 +345,32 @@ describe('useTradingOperations', () => {
 		expect(submittedRedeemAmount).toBe(firstMintShareAmount)
 	})
 
+	test('submits the amounts the mint and redeem guards accept, including a leading decimal point and digit grouping spaces', async () => {
+		const halfShare = ATTO_ETH_PER_ETH / 2n
+		const createCompleteSetInSecurityPool = mock(async (_accountAddress: Address, _callbacks: unknown, securityPoolAddress: Address, _amount: bigint) => ({ action: 'createCompleteSet' as const, hash: zeroHash, securityPoolAddress, universeId: 1n }))
+		const redeemCompleteSetInSecurityPool = mock(async (_accountAddress: Address, _callbacks: unknown, securityPoolAddress: Address, _amount: bigint) => ({ action: 'redeemCompleteSet' as const, hash: zeroHash, securityPoolAddress, universeId: 1n }))
+		const hook = await renderTradingHook(
+			createMintDependencies({
+				createCompleteSetInSecurityPool,
+				loadSecurityPoolMintCapacity: mock(async () => createMintCapacity({ shareTokenSupplyAttoShares: ATTO_ETH_PER_ETH })),
+				loadTradingDetails: mock(async () => createTradingDetails({ maxRedeemableCompleteSetsAttoShares: ATTO_ETH_PER_ETH, shareBalances: { invalidAttoShares: ATTO_ETH_PER_ETH, noAttoShares: ATTO_ETH_PER_ETH, yesAttoShares: ATTO_ETH_PER_ETH } })),
+				redeemCompleteSetInSecurityPool,
+			}),
+		)
+
+		await hook.setForm({ completeSetAmount: '.5', redeemAmount: '0 .5' })
+		await act(async () => {
+			await hook.state().createCompleteSet()
+		})
+		await act(async () => {
+			await hook.state().redeemCompleteSet()
+		})
+
+		expect(hook.onTransactionFailed.mock.calls).toEqual([])
+		expect(createCompleteSetInSecurityPool.mock.calls[0]?.[3]).toBe(halfShare)
+		expect(redeemCompleteSetInSecurityPool.mock.calls[0]?.[3]).toBe(halfShare)
+	})
+
 	test('redeems the exact share amount even when its ETH backing is zero', async () => {
 		let submittedRedeemAmount: bigint | undefined
 		const redeemCompleteSetInSecurityPool = mock(async (_accountAddress: Address, _callbacks: unknown, securityPoolAddress: Address, amount: bigint) => {

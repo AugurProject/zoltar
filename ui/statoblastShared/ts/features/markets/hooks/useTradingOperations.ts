@@ -1,5 +1,4 @@
 import { useTradingCollateral } from './useTradingCollateral.js'
-import { portfolioAmountOrUndefined } from '../../portfolios/lib/draft.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
@@ -11,6 +10,7 @@ import { normalizeAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput, tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
+import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { getDefaultTradingFormState } from '../lib/marketForm.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
@@ -213,7 +213,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 						tradingForkUniverse.value = latestForkUniverse
 					}
 					if (actionName === 'createCompleteSet') {
-						if ((portfolioAmountOrUndefined(currentForm.completeSetAmount, requireCollateralDecimals()) ?? 0n) <= 0n) throw new Error('Invalid mint amount.')
+						if ((parseCollateralAmount(currentForm.completeSetAmount) ?? 0n) <= 0n) throw new Error('Invalid mint amount.')
 						const latestMintCapacity = await dependencies.loadSecurityPoolMintCapacity(securityPoolAddress)
 						const walletBalanceAttoEth = await dependencies.getWalletEthBalance(walletAddress)
 						const mintCheckpoint = estimateMintCheckpoint({
@@ -242,7 +242,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 						if (guardMessage !== undefined) throw new Error(guardMessage)
 					}
 					if (actionName === 'redeemCompleteSet') {
-						if ((portfolioAmountOrUndefined(currentForm.redeemAmount, requireCollateralDecimals()) ?? 0n) <= 0n) throw new Error('Invalid redeem amount.')
+						if ((parseCollateralAmount(currentForm.redeemAmount) ?? 0n) <= 0n) throw new Error('Invalid redeem amount.')
 						const latestMintCapacity = await dependencies.loadSecurityPoolMintCapacity(securityPoolAddress)
 						const guardMessage = getTradingRedeemCompleteSetGuardMessage({
 							accountAddress: walletAddress,
@@ -302,12 +302,17 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 		return collateral.decimals
 	}
 
+	/** Parses with the same rules as the mint and redeem guards, so every amount they accept is the amount submitted. */
+	function parseCollateralAmount(input: string) {
+		return tryParseDecimalInput(input, requireCollateralDecimals())
+	}
+
 	const createCompleteSet = async () =>
 		await runTradingAction(
 			'createCompleteSet',
 			async (walletAddress, securityPoolAddress, currentForm, isCurrentSelection, context) => {
 				if (!isCurrentSelection()) return undefined
-				return await dependencies.createCompleteSetInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, portfolioAmountOrUndefined(currentForm.completeSetAmount, requireCollateralDecimals()) ?? 0n)
+				return await dependencies.createCompleteSetInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, parseCollateralAmount(currentForm.completeSetAmount) ?? 0n)
 			},
 			'Failed to mint complete sets.',
 		)
@@ -317,7 +322,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 			'redeemCompleteSet',
 			async (walletAddress, securityPoolAddress, currentForm, isCurrentSelection, context) => {
 				if (!isCurrentSelection()) return undefined
-				const redeemAmountAttoShares = portfolioAmountOrUndefined(currentForm.redeemAmount, requireCollateralDecimals()) ?? 0n
+				const redeemAmountAttoShares = parseCollateralAmount(currentForm.redeemAmount) ?? 0n
 				return await dependencies.redeemCompleteSetInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, redeemAmountAttoShares)
 			},
 			'Failed to redeem complete sets.',
