@@ -166,11 +166,15 @@ export type ShareMigrationTarget = {
 	outcomeIndex: bigint
 }
 
+/** The fork's child universes as the share token sees them, or why reading them failed; refreshing the pool retries the read. */
+export type ShareMigrationTargetsState = readonly ShareMigrationTarget[] | { unavailableReason: string }
+
 export type TradingDetails = {
 	maxRedeemableCompleteSetsAttoShares: bigint | undefined
 	shareBalances: TradingShareBalances | undefined
-	/** Loaded once the pool's universe has forked; absent until then. */
-	shareMigrationTargets?: readonly ShareMigrationTarget[] | undefined
+	/** Loaded once the pool's universe has forked; absent until then. A failed read leaves the rest of the details usable. */
+	shareMigrationTargets?: ShareMigrationTargetsState | undefined
+	shareTokenAddress: Address
 	universeId: bigint
 }
 

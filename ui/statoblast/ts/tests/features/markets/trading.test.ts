@@ -20,7 +20,7 @@ import {
 import { ETH_GAS_RESERVE_ATTO_ETH } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
 import { getScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import type { DeploymentStatus, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { ShareMigrationTarget } from '@zoltar/ui-statoblast-shared/types/contracts.js'
+import type { ShareMigrationTarget, ShareMigrationTargetsState } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 
 const TOKEN_PRECISION = 10n ** 18n
 
@@ -220,8 +220,8 @@ void describe('trading helpers', () => {
 		expect(getSelectedOutcomeShareBalance(shareBalances, 'yes')).toBe(3n * 10n ** 18n)
 		expect(getSelectedOutcomeShareBalance(shareBalances, 'no')).toBe(4n * 10n ** 18n)
 		expect(getSelectedOutcomeShareBalance(shareBalances, 'invalid')).toBe(2n * 10n ** 18n)
-		expect(getDefaultShareMigrationTargetOutcomeIndexes(binaryForkUniverse)).toBe('0, 1, 2')
-		expect(getDefaultShareMigrationTargetOutcomeIndexes(scalarForkUniverse)).toBe('')
+		expect(getDefaultShareMigrationTargetOutcomeIndexes({ selectedShareOutcome: 'yes', shareBalances, shareMigrationTargets: undefined, tradingForkUniverse: binaryForkUniverse })).toBe('0, 1, 2')
+		expect(getDefaultShareMigrationTargetOutcomeIndexes({ selectedShareOutcome: 'yes', shareBalances, shareMigrationTargets: undefined, tradingForkUniverse: scalarForkUniverse })).toBe('')
 	})
 
 	void test('blocks minting until a pool is loaded and the wallet is connected on Sepolia', () => {
@@ -651,6 +651,7 @@ void describe('trading helpers', () => {
 		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: freshForkTargets, targetOutcomeIndexesInput: '0, 1, 2' })).toBe('This selection includes a child universe without a security pool. Migrate into each such child universe separately.')
 		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: freshForkTargets, targetOutcomeIndexesInput: '1' })).toBeUndefined()
 		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: undefined, targetOutcomeIndexesInput: '0, 1, 2' })).toBe('Loading child universe security pools…')
+		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: { unavailableReason: 'Child universe security pools unavailable. Refresh pool to retry.' }, targetOutcomeIndexesInput: '0, 1, 2' })).toBe('Child universe security pools unavailable. Refresh pool to retry.')
 
 		const migratedYes = { ...noMigratedShares, yesAttoShares: shareBalances.yesAttoShares }
 		const migratedTargets = [
@@ -661,6 +662,42 @@ void describe('trading helpers', () => {
 		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: migratedTargets, targetOutcomeIndexesInput: '0, 1' })).toBe('Your Yes shares are already migrated into the selected child universes.')
 		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: migratedTargets, targetOutcomeIndexesInput: '0, 1, 2' })).toBeUndefined()
 		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, selectedShareOutcome: 'no', shareMigrationTargets: migratedTargets, targetOutcomeIndexesInput: '0, 1' })).toBeUndefined()
+	})
+
+	void test('defaults migration targets to children a single migration can reach', () => {
+		const pool = '0x00000000000000000000000000000000000000b1'
+		const noMigratedShares = { invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n }
+		const migratedYes = { ...noMigratedShares, yesAttoShares: shareBalances.yesAttoShares }
+		const defaultTargets = (shareMigrationTargets: ShareMigrationTargetsState, selectedShareOutcome: 'yes' | 'no' = 'yes') => getDefaultShareMigrationTargetOutcomeIndexes({ selectedShareOutcome, shareBalances, shareMigrationTargets, tradingForkUniverse: binaryForkUniverse })
+		const target = (outcomeIndex: bigint, canonicalPool: typeof pool | undefined, migratedAttoShares = noMigratedShares) => ({ canonicalPool, migratedAttoShares, outcomeIndex })
+
+		expect(defaultTargets(withCanonicalPools(binaryForkUniverse))).toBe('0, 1, 2')
+		expect(defaultTargets([target(0n, pool), target(1n, undefined), target(2n, undefined)])).toBe('0')
+		expect(defaultTargets([target(0n, undefined), target(1n, undefined), target(2n, undefined)])).toBe('')
+		expect(defaultTargets([target(0n, pool, migratedYes), target(1n, pool), target(2n, undefined)])).toBe('1')
+		expect(defaultTargets([target(0n, pool, migratedYes), target(1n, pool, migratedYes), target(2n, undefined)])).toBe('2')
+		expect(defaultTargets([target(0n, pool, migratedYes), target(1n, pool, migratedYes), target(2n, undefined)], 'no')).toBe('0, 1')
+		expect(defaultTargets({ unavailableReason: 'Child universe security pools unavailable.' })).toBe('0, 1, 2')
+		for (const shareMigrationTargets of [
+			[target(0n, pool), target(1n, undefined), target(2n, undefined)],
+			[target(0n, pool, migratedYes), target(1n, pool, migratedYes), target(2n, undefined)],
+		]) {
+			const targetOutcomeIndexesInput = defaultTargets(shareMigrationTargets)
+			expect(
+				getTradingMigrateSharesGuardMessage({
+					accountAddress: '0x1234567890123456789012345678901234567890',
+					hasSelectedPool: true,
+					isOnActiveAppChain: true,
+					loadingTradingDetails: false,
+					loadingTradingForkUniverse: false,
+					selectedShareOutcome: 'yes',
+					shareBalances,
+					shareMigrationTargets,
+					targetOutcomeIndexesInput,
+					tradingForkUniverse: binaryForkUniverse,
+				}),
+			).toBeUndefined()
+		}
 	})
 
 	void test('checks local and network prerequisites before resolved-share redemption', () => {

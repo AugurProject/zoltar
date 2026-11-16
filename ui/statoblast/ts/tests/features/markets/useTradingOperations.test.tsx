@@ -15,6 +15,8 @@ import { createInitialTransactionTrayState, markTransactionCanceled, markTransac
 import type { DeploymentStatus, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { TradingDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { useTradingOperations, type UseTradingOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/markets/hooks/useTradingOperations.js'
+import { getTradingMigrateSharesGuardMessage } from '@zoltar/ui-statoblast-shared/features/markets/lib/trading.js'
+import { invalidateAppData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
@@ -45,6 +47,7 @@ function createTradingDetails(overrides: Partial<TradingDetails> = {}): TradingD
 			noAttoShares: 0n,
 			yesAttoShares: 0n,
 		},
+		shareTokenAddress: zeroAddress,
 		universeId: 1n,
 		...overrides,
 	}
@@ -92,7 +95,7 @@ function createTradingOperationsDependencies(overrides: Partial<UseTradingOperat
 		getWalletEthBalance: unexpected('getWalletEthBalance'),
 		loadSecurityPoolMintCapacity: unexpected('loadSecurityPoolMintCapacity'),
 		// Every loaded child universe has a security pool and holds nothing migrated unless a test says otherwise.
-		loadShareMigrationTargets: async (_securityPoolAddress, childUniverses) => childUniverses.map(child => ({ outcomeIndex: child.outcomeIndex, canonicalPool: SECURITY_POOL_ADDRESS, migratedAttoShares: { invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n } })),
+		loadShareMigrationTargets: async (_source, childUniverses) => childUniverses.map(child => ({ outcomeIndex: child.outcomeIndex, canonicalPool: SECURITY_POOL_ADDRESS, migratedAttoShares: { invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n } })),
 		loadTradingDetails: unexpected('loadTradingDetails'),
 		loadZoltarUniverseSummary: unexpected('loadZoltarUniverseSummary'),
 		migrateSharesFromUniverse: unexpected('migrateSharesFromUniverse'),
@@ -471,14 +474,78 @@ describe('useTradingOperations', () => {
 			}),
 		)
 
-		await waitFor(() => expect(hook.state().tradingForm.targetOutcomeIndexes).toBe('0, 1, 2'))
-		await hook.setForm({ selectedShareOutcome: 'yes' })
+		await waitFor(() => expect(hook.state().tradingDetails?.shareMigrationTargets).toHaveLength(3))
+		await hook.setForm({ selectedShareOutcome: 'yes', targetOutcomeIndexes: '0, 1, 2' })
 		await act(async () => {
 			await hook.state().migrateShares()
 		})
 
 		expect(migrateSharesFromUniverse.mock.calls).toEqual([])
 		expect(hook.state().tradingFeedback?.status.detail).toBe('This selection includes a child universe without a security pool. Migrate into each such child universe separately.')
+	})
+
+	function getMigrateGuardMessage(state: ReturnType<typeof useTradingOperations>) {
+		return getTradingMigrateSharesGuardMessage({
+			accountAddress: WALLET_ADDRESS,
+			hasSelectedPool: true,
+			isOnActiveAppChain: true,
+			loadingTradingDetails: state.loadingTradingDetails,
+			loadingTradingForkUniverse: state.loadingTradingForkUniverse,
+			selectedShareOutcome: state.tradingForm.selectedShareOutcome,
+			shareBalances: state.tradingDetails?.shareBalances,
+			shareMigrationTargets: state.tradingDetails?.shareMigrationTargets,
+			targetOutcomeIndexesInput: state.tradingForm.targetOutcomeIndexes,
+			tradingForkUniverse: state.tradingForkUniverse,
+		})
+	}
+
+	test('defaults a fresh fork migration to the child universes it can migrate into in one transaction', async () => {
+		const noMigratedShares = { invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n }
+		const childUniverses = [createChildUniverse(1n, 0n, 'Invalid', 2n), createChildUniverse(1n, 1n, 'Yes', 3n), createChildUniverse(1n, 2n, 'No', 4n)]
+		const hook = await renderTradingHook(
+			createTradingOperationsDependencies({
+				// Only the forking pool's own child has a canonical pool right after the fork.
+				loadShareMigrationTargets: mock(async () => [
+					{ outcomeIndex: 0n, canonicalPool: getAddress('0x00000000000000000000000000000000000000b1'), migratedAttoShares: noMigratedShares },
+					{ outcomeIndex: 1n, canonicalPool: undefined, migratedAttoShares: noMigratedShares },
+					{ outcomeIndex: 2n, canonicalPool: undefined, migratedAttoShares: noMigratedShares },
+				]),
+				loadTradingDetails: mock(async () => createTradingDetails({ shareBalances: { invalidAttoShares: ATTO_ETH_PER_ETH, noAttoShares: ATTO_ETH_PER_ETH, yesAttoShares: ATTO_ETH_PER_ETH } })),
+				loadZoltarUniverseSummary: mock(async () => createUniverseSummary({ childUniverses, forkQuestionDetails: createMarketDetails(), forkTime: 5n, hasForked: true })),
+			}),
+		)
+
+		await waitFor(() => expect(hook.state().tradingForm.targetOutcomeIndexes).toBe('0'))
+		expect(getMigrateGuardMessage(hook.state())).toBeUndefined()
+	})
+
+	test('keeps trading details usable when the child universe security pools cannot be read, and retries them on refresh', async () => {
+		const childUniverses = [createChildUniverse(1n, 0n, 'Invalid', 2n), createChildUniverse(1n, 1n, 'Yes', 3n)]
+		const shareBalances = { invalidAttoShares: ATTO_ETH_PER_ETH, noAttoShares: ATTO_ETH_PER_ETH, yesAttoShares: ATTO_ETH_PER_ETH }
+		let failTargetsRead = true
+		const loadShareMigrationTargets = mock(async (_source: Pick<TradingDetails, 'shareTokenAddress' | 'universeId'>, children: ZoltarUniverseSummary['childUniverses']) => {
+			if (failTargetsRead) throw new Error('multicall failed')
+			return children.map(child => ({ outcomeIndex: child.outcomeIndex, canonicalPool: SECURITY_POOL_ADDRESS, migratedAttoShares: { invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n } }))
+		})
+		const hook = await renderTradingHook(
+			createTradingOperationsDependencies({
+				loadShareMigrationTargets,
+				loadTradingDetails: mock(async () => createTradingDetails({ maxRedeemableCompleteSetsAttoShares: ATTO_ETH_PER_ETH, shareBalances })),
+				loadZoltarUniverseSummary: mock(async () => createUniverseSummary({ childUniverses, forkQuestionDetails: createMarketDetails(), forkTime: 5n, hasForked: true })),
+			}),
+		)
+
+		await waitFor(() => expect(hook.state().tradingDetails?.shareMigrationTargets).toEqual({ unavailableReason: 'Child universe security pools unavailable. Refresh pool to retry. Reason: multicall failed.' }))
+		expect(hook.state().tradingError).toBeUndefined()
+		expect(hook.state().tradingDetails?.shareBalances).toEqual(shareBalances)
+		expect(hook.state().tradingDetails?.maxRedeemableCompleteSetsAttoShares).toBe(ATTO_ETH_PER_ETH)
+		expect(getMigrateGuardMessage(hook.state())).toBe('Child universe security pools unavailable. Refresh pool to retry. Reason: multicall failed.')
+
+		failTargetsRead = false
+		await act(() => invalidateAppData())
+		await waitFor(() => expect(hook.state().tradingDetails?.shareMigrationTargets).toHaveLength(2))
+		expect(hook.state().tradingForm.targetOutcomeIndexes).toBe('0, 1')
+		expect(getMigrateGuardMessage(hook.state())).toBeUndefined()
 	})
 
 	test('createCompleteSet ignores a stale post-success refresh after the selected pool changes', async () => {
