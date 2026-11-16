@@ -193,9 +193,26 @@ test('the retirement review omits the immediate cure for a covered position', as
 test('the retirement review states the immediate cure for a position underwater at a fresh price', async () => {
 	const { hook, requests } = await setup(underwaterSnapshot())
 	await act(() => hook.state().retire(1n))
-	// 30 REP at a 10,500 bps multiplier and a liquidation price of 4 backs 7.142857… ETH, shown rounded down.
-	expect(requests[0]?.reviewDescription).toContain('Your REP covers only 7.1428 ETH at the current price, so the uncovered part is removed at once where spare capacity allows. The rest waits for spare capacity behind earlier retirement requests.')
+	// 30 REP at a 10,500 bps multiplier and a liquidation price of 4 backs 7.142857… WETH, shown rounded down.
+	expect(requests[0]?.reviewDescription).toContain('Your REP covers only 7.1428 WETH at the current price, so the uncovered part is removed at once where spare capacity allows. The rest waits for spare capacity behind earlier retirement requests.')
 	expect(requests[0]?.reviewDescription).toContain('The rest waits for spare capacity')
+})
+test('the retirement review states six-decimal collateral amounts in collateral units', async () => {
+	const usdc = 10n ** 6n
+	const snapshot = capitalSnapshot()
+	const underwaterUsdc = {
+		...snapshot,
+		collateral: { ...snapshot.collateral, symbol: 'USDC', decimals: 6 },
+		economics: { ...snapshot.economics, minimumCommitmentAttoEth: usdc },
+		// A price of 4 × 10^30 makes 30 REP at a 10,500 bps multiplier cover 7.142857 USDC.
+		liquidationPrice: 4n * 10n ** 30n,
+		positions: snapshot.positions.map(position => ({ ...position, commitment: 10n * usdc, maxHealthyPrice: 2n * 10n ** 30n })),
+	}
+	const { hook, requests } = await setup(underwaterUsdc)
+	await act(() => hook.state().setRemainingCommitmentAmount('2.5'))
+	await act(() => hook.state().retire(1n))
+	expect(requests[0]?.reviewDescription).toContain('Reduce position 1 to 2.5 USDC commitment.')
+	expect(requests[0]?.reviewDescription).toContain('Your REP covers only 7.1428 USDC at the current price,')
 })
 test('the retirement review claims no queued rest when the kept commitment is at least the covered amount', async () => {
 	const { hook, requests } = await setup(underwaterSnapshot())
