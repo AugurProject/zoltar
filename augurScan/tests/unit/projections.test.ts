@@ -337,11 +337,11 @@ describe('state projections', () => {
 			['ReportOperationAttempted', { reportId: '7', sponsor: vault, operationIndex: '0', success: true }, 'oracle', 'price-feed', pool.toLowerCase()],
 			['PortfolioRegistered', { portfolio: vault, originUniverseId: '0' }, 'risk', 'portfolio', vault.toLowerCase()],
 			['EthReceived', { sender: vault, amountAttoEth: atomic(1n) }, 'risk', 'pool', pool.toLowerCase()],
-			['AuctionOpened', { conservativePrice: '1', minimumCollateralAttoRepPerLot: '2', maximumBidAttoRepPerLot: '3' }, 'risk', 'portfolio-auction', pool.toLowerCase()],
+			['AuctionOpened', { conservativePrice: '1', minimumCollateralAttoRepPerLot: atomic(2n), maximumBidAttoRepPerLot: atomic(3n) }, 'risk', 'portfolio-auction', pool.toLowerCase()],
 			['WinningVaultCreated', { bidId: '1', bidder: vault, vault }, 'risk', 'portfolio-auction', pool.toLowerCase()],
 			['AuctionClosed', { filledLots: '1', raisedAttoEth: atomic(1n), soldAttoRep: atomic(2n) }, 'risk', 'portfolio-auction', pool.toLowerCase()],
 			['PortfolioRecoveryRightsTransferred', { universeId: '1', from: vault, to: vault, amountsAttoShares: ['1', '2', '3'] }, 'system', 'share-token', pool.toLowerCase()],
-			['PortfolioRecoveryRightsConsumed', { universeId: '1', holder: vault, amountAttoShares: '1', cumulativeAttoShares: '1' }, 'system', 'share-token', pool.toLowerCase()],
+			['PortfolioRecoveryRightsConsumed', { universeId: '1', holder: vault, amountAttoShares: atomic(1n), cumulativeAttoShares: atomic(1n) }, 'system', 'share-token', pool.toLowerCase()],
 		] as const
 		for (const [name, data, domain, entityType, entityIdentity] of cases) expect(projectionsFrom(log(name, data)).at(-1)).toMatchObject({ type: 'domainEvent', domain, entityType, entityIdentity, semanticEventKind: name })
 		expect(projectionsFrom({ ...log('URI', { value: 'ipfs://share', id: '1' }), contractKind: 'shareToken' })).toEqual([])
