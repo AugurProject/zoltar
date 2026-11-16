@@ -34,7 +34,7 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 		preparePortfolioPriceFeed: ['external(ISecurityPool,uint248)'],
 		deployPortfolioSecurityPool: ['external(uint248,uint256,uint256,uint256)'],
 		preparePortfolioChildPriceFeed: ['external(ISecurityPool,uint256)'],
-		prepareChildPoolDependencies: ['external(ISecurityPool,uint256)'],
+		prepareChildPoolCoordinator: ['external(ISecurityPool,uint256)'],
 		deployChildSecurityPool: ['external(ISecurityPool,IShareToken,uint248,uint256,uint256)'],
 	},
 	'solidity/contracts/statoblast/SecurityPool.sol': {
@@ -144,7 +144,7 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/SecurityPool.sol': '829869a2d6d5143d6d375b80af14695aae01cc420dd0264b3b0c0a4660c4f66a',
 	'solidity/contracts/statoblast/SecurityPoolForker.sol': 'dc42ece125303c4b34ec5b06f287d70376743ec0cad2ff373877746ac29bb106',
-	'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol': 'c1938475b1dc83ea034bb7ff7a55836869779cfa1d37aa22bd2c8c6a7267ebfe',
+	'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol': 'a048dcb1dd7247c59fd0b33785200c9bda31dd56d69f20b36d31802aebd98e19',
 	'solidity/contracts/statoblast/tokens/ERC1155.sol': '7bb87695bc3df8fa177c545209ed58d2e4571c19c869b5598bb0a829e764b218',
 	'solidity/contracts/statoblast/tokens/ShareToken.sol': '68c370c22a6da29cf139846ea2fdf86f9922027ee6d46e2618de0dcdb7bc5e5f',
 	'solidity/contracts/vendor/authorization/ERC20Authorization.sol': '6bfae34f9210ed80f176774eb2b5a3624060ce4be34825ca84949ddcfb8024d2',
