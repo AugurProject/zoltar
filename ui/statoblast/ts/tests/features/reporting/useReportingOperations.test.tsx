@@ -48,6 +48,7 @@ function createReportingDetails(securityPoolAddress: Address, overrides: Partial
 		settlementCollateralAttoEth: 1n,
 		currentRequiredBond: 2n,
 		currentTime: 150n,
+		earliestForkTime: 0n,
 		escalationEndTime: 300n,
 		escalationGameAddress: zeroAddress,
 		forkThresholdAttoRep: 40n,

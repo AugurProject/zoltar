@@ -52,6 +52,7 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 		currentTime: 150n,
 		escalationEndTime: 300n,
 		escalationGameAddress: zeroAddress,
+		earliestForkTime: 0n,
 		forkThresholdAttoRep: rep(200n),
 		hasReachedNonDecision: false,
 		marketDetails: createMarketDetails(),

@@ -6,7 +6,8 @@ import { createMarketDetails as marketDetailsFixture } from '@zoltar/ui-core-sha
 /// <reference types="bun-types" />
 
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { formatDuration, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatDuration, formatRelativeTimestamp, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
+import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
 import { getDecimalSeparatorError } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
@@ -81,6 +82,7 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 		settlementCollateralAttoEth: 1n,
 		currentRequiredBond: rep(20n),
 		currentTime: 150n,
+		earliestForkTime: 0n,
 		escalationEndTime: 300n,
 		escalationGameAddress: zeroAddress,
 		forkThresholdAttoRep: rep(40n),
@@ -132,6 +134,7 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 		settlementCollateralAttoEth: 1n,
 		currentRequiredBond: rep(2n),
 		currentTime,
+		earliestForkTime: 0n,
 		escalationEndTime,
 		escalationGameAddress: zeroAddress,
 		forkThresholdAttoRep,
@@ -2211,6 +2214,51 @@ describe('ReportingSection', () => {
 		})
 
 		expect(triggerZoltarForkCalls).toBe(1)
+	})
+
+	test('disables Trigger universe fork until the parent fork response period ends', async () => {
+		let triggerZoltarForkCalls = 0
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					currentTimestamp: 150n,
+					onTriggerZoltarFork: () => {
+						triggerZoltarForkCalls += 1
+					},
+					reportingDetails: createReportingDetails({
+						earliestForkTime: 200n,
+						hasReachedNonDecision: true,
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Trigger universe fork', zoltarCopy.formatParentForkResponseActiveReason(formatTimestamp(200n), formatRelativeTimestamp(200n, 150n)))
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Trigger universe fork' }))
+		})
+		expect(triggerZoltarForkCalls).toBe(0)
+	})
+
+	test('enables Trigger universe fork once chain time reaches the earliest fork time', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					currentTimestamp: 200n,
+					onTriggerZoltarFork: () => undefined,
+					reportingDetails: createReportingDetails({
+						earliestForkTime: 200n,
+						hasReachedNonDecision: true,
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonEnabled(document.body, 'Trigger universe fork')
 	})
 
 	test('disables preset buttons when reporting details are missing without showing the load reason inline', async () => {
