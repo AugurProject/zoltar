@@ -37,12 +37,12 @@ export const tradingCatalogRows = async (sql: SQL, query: { readonly chainId: nu
 				(SELECT count(*) FROM (
 					SELECT movement.address
 					FROM (
-						SELECT lower(transfer.event_data->>'to') AS address, (transfer.event_data->>'amount')::numeric AS delta
+						SELECT lower(transfer.event_data->>'to') AS address, (transfer.event_data->>'value')::numeric AS delta
 						FROM amm_trade_events transfer
 						WHERE transfer.chain_id = market.chain_id AND transfer.market_address = market.pair_address
 							AND transfer.canonical AND transfer.event_name = 'Transfer' AND transfer.block_number <= ${asOfBlock}
 						UNION ALL
-						SELECT lower(transfer.event_data->>'from'), -(transfer.event_data->>'amount')::numeric
+						SELECT lower(transfer.event_data->>'from'), -(transfer.event_data->>'value')::numeric
 						FROM amm_trade_events transfer
 						WHERE transfer.chain_id = market.chain_id AND transfer.market_address = market.pair_address
 							AND transfer.canonical AND transfer.event_name = 'Transfer' AND transfer.block_number <= ${asOfBlock}
