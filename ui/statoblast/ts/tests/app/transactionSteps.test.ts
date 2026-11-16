@@ -705,7 +705,7 @@ test('describes a zero-amount approval as resetting the token approval', async (
 	}
 })
 
-test('titles a zero-amount approval as a reset before the token symbol is known', async () => {
+test('a zero-amount approval whose token details cannot be read fails as an approval reset', async () => {
 	const { client } = setup()
 	const reviewed = createReviewedClient({
 		...client,
@@ -741,6 +741,7 @@ test('choosing a zero approval amount in a reviewed plan retitles the step as a 
 
 test('a confirmed reset reads as a reset result instead of an approval', () => {
 	expect(completedAction('Reset USDT approval')).toBe('USDT approval reset')
+	// The symbol-less title is the fallback entry portfolio reviews use when no token symbol is loaded.
 	expect(completedAction('Reset token approval')).toBe('Token approval reset')
 	expect(completedAction('Approve 5\u00a0USDT')).toBe('Approved 5\u00a0USDT')
 	expect(formatPendingAction('Reset USDT approval')).toBe('Resetting USDT approval…')

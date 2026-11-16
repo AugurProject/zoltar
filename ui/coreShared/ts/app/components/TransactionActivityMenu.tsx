@@ -35,7 +35,9 @@ function getStatusPresentation(entry: TransactionActivityEntry): { label: string
 /** A settled row reads as a result (`Created question`) or a plain action (`Create question`), not as still in progress. */
 function getActivityTitle(entry: TransactionActivityEntry) {
 	if (entry.status === 'pending') return entry.title
-	return retenseInProgressTitle(entry.title, entry.status === 'confirmed' ? 'completed' : 'base')
+	if (entry.status !== 'confirmed') return retenseInProgressTitle(entry.title, 'base')
+	// A reset confirmed by the receipt watcher carries no result title of its own, so it takes the shared one here.
+	return commonCopy.formatCompletedTokenApprovalReset(retenseInProgressTitle(entry.title, 'base')) ?? retenseInProgressTitle(entry.title, 'completed')
 }
 
 function ActivityRow({ entry, onStopped }: { entry: TransactionActivityEntry; onStopped: () => void }) {

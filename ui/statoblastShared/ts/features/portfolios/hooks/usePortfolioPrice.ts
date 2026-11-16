@@ -12,7 +12,7 @@ import type { PortfolioAccountSnapshot, PortfolioTransaction } from '../../../pr
 import type { PortfolioSharedForkParameters } from './usePortfolioSharedFork.js'
 import { portfolioAmountOrUndefined, portfolioUnsignedId } from '../lib/draft.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
+import { portfolioApprovalReview } from '../lib/approvalReview.js'
 import * as copy from '../../../copy/portfolioPrice.js'
 
 /** The shared price feed one report funds. */
@@ -278,17 +278,16 @@ export function usePortfolioPrice({ scope, target, bidder, actions, referencePri
 			),
 		approve: (token: 'weth' | 'rep', amount: bigint) => {
 			const approvalAction = token === 'weth' ? 'approveWeth' : 'approveRep'
-			// Approving zero collateral resets the allowance; the review and the activity row name the reset instead of an approval.
-			const reset = amount === 0n && token === 'weth'
-			const action = reset ? 'resetCollateral' : approvalAction
-			const approvalLabel = token === 'weth' ? copy.approveWeth : copy.approveRep
+			// Only the collateral has a reset control, so only its reset runs as a separate action; a zero REP approval is still reviewed as a reset.
+			const action = amount === 0n && token === 'weth' ? 'resetCollateral' : approvalAction
+			const review = portfolioApprovalReview(amount, token === 'weth' ? collateral.symbol : commonCopy.rep, { label: token === 'weth' ? copy.approveWeth : copy.approveRep })
 			return run(
 				portfolioPriceAction(scope, action),
-				reset ? commonCopy.formatResetTokenApproval(collateral.symbol) : approvalLabel,
+				review.label,
 				fundingReason,
 				selected => ({
 					...buildPortfolioPriceApprovalRequest(selected, token, amount),
-					reviewDescription: reset ? transactionCopy.tokenApprovalReset.description : scoped.formatApprovalReview(selected.feed, formatUnits(amount, token === 'weth' ? collateral.decimals : 18), token, collateral.symbol),
+					reviewDescription: review.reviewDescription ?? scoped.formatApprovalReview(selected.feed, formatUnits(amount, token === 'weth' ? collateral.decimals : 18), token, collateral.symbol),
 				}),
 				async latest => {
 					freshFunding(latest)

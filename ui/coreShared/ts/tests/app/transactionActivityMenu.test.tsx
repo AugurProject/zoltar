@@ -87,6 +87,28 @@ test('lists recent transactions with their status and a pending count', async ()
 	await rendered.cleanup()
 })
 
+test('a confirmed allowance reset reads as its result whichever path confirmed it', async () => {
+	const submittedAt = Date.now()
+	// Neither row carries a result title: the receipt watcher, not the initiating flow, confirmed them.
+	transactionActivity.value = {
+		chainId: 1,
+		entries: [
+			{ chainId: 1, hash: pendingHash, scope: [], status: 'confirmed', submittedAt, settledAt: submittedAt, title: 'Reset USDT approval' },
+			{ chainId: 1, hash: failedHash, scope: [], status: 'confirmed', submittedAt: submittedAt - 1_000, settledAt: submittedAt, title: 'Resetting USDT approval' },
+			{ chainId: 1, failureKind: 'reverted', hash: `0x${'33'.repeat(32)}`, scope: [], status: 'failed', submittedAt: submittedAt - 2_000, settledAt: submittedAt, title: 'Resetting USDT approval' },
+			{ chainId: 1, hash: `0x${'44'.repeat(32)}`, scope: [], status: 'confirmed', submittedAt: submittedAt - 3_000, settledAt: submittedAt, title: 'Approving USDT' },
+		],
+		ownerKey: 'test',
+		storageKey: undefined,
+	}
+	const rendered = await renderIntoDocument(<TransactionActivityMenu />)
+	await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Activity' })))
+	const titles = Array.from(within(document.body).getByRole('dialog', { name: 'Recent transactions' }).querySelectorAll('li strong')).map(title => title.textContent)
+	// A failed reset keeps the action wording, and an approval is never retitled as a reset.
+	expect(titles).toEqual(['USDT approval reset', 'USDT approval reset', 'Reset USDT approval', 'Approved USDT'])
+	await rendered.cleanup()
+})
+
 test('lets the user stop tracking a pending transaction after stating that it can still confirm', async () => {
 	transactionActivity.value = { chainId: 1, entries: [{ chainId: 1, hash: pendingHash, scope: ['market:0x1'], status: 'pending', submittedAt: Date.now(), title: 'Depositing REP' }], ownerKey: 'test', storageKey: undefined }
 	const stopped: Hash[] = []

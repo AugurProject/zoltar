@@ -334,6 +334,15 @@ test('a universe USDT reset uses its own transaction action instead of the branc
 	expect(lastRequest(state.requests).reviewDescription).toBe('Set the listed spending limit to zero; tokens stay in your wallet.')
 	expect(decodeFunctionData({ abi, data: lastRequest(state.requests).data }).args).toEqual([priceFeed, 0n])
 })
+test('a zero REP approval is reviewed as a reset while keeping the REP approval action', async () => {
+	const state = await setup()
+	await act(() => state.hook.state().setPrice('2'))
+	await act(() => state.hook.state().approve('rep', 0n))
+	// Only the collateral has a reset control, so the REP button keeps tracking its own action.
+	expect(state.actionIds).toEqual(['approvePortfolioPriceRep'])
+	expect(state.labels).toEqual(['Reset REP approval'])
+	expect(lastRequest(state.requests).reviewDescription).toBe('Set the listed spending limit to zero; tokens stay in your wallet.')
+})
 test('a REP approval is never blocked by an existing USDT collateral allowance', async () => {
 	const collateral = stablecoinCollateral('USDT')
 	const state = await setup(f => {
