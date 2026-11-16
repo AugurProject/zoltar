@@ -45,6 +45,7 @@ import {
 } from '../../browser/network-freshness.ts'
 import {
 	approvalTransitionFields,
+	auctionDemandRowText,
 	operationsCatalogRecordKey,
 	operationsDetailEvidencePanelVisible,
 	operationsDetailHeaderPresentation,
@@ -1531,4 +1532,10 @@ test('discards the previous indexing rate immediately after progress rolls backw
 	const result = indexerProgressEstimate({ start_block: '0', indexed_block: '100', observed_block: '1000' }, { indexedBlock: 200, sampledAt: 1000, blocksPerSecond: 10 }, 2000)
 	expect(result.eta).toBe('Estimating ETA')
 	expect(result.sample?.blocksPerSecond).toBeUndefined()
+})
+
+test('labels auction demand rows by REP price level, in ETH or in lots when the lot size is not indexed', () => {
+	const level = { minimumAttoRepPerLot: (4n * 10n ** 18n).toString(), lots: '3', cumulativeLots: '5' }
+	expect(auctionDemandRowText({ ...level, amountAttoEth: (3n * 10n ** 18n).toString(), cumulativeDemandAttoEth: (5n * 10n ** 18n).toString() }, 'ETH')).toEqual({ label: 'At least 4 REP per lot', value: '3 ETH · cumulative 5 ETH' })
+	expect(auctionDemandRowText(level, 'ETH')).toEqual({ label: 'At least 4 REP per lot', value: '3 lots · cumulative 5 lots' })
 })

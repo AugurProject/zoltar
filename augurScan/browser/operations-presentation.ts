@@ -194,3 +194,9 @@ export const operationsFailureMessage = (refresh: boolean, status: number | unde
 	if (refresh) return `Could not refresh protocol operations; existing evidence remains visible: ${detail}`
 	return status === 404 ? `No indexed record matches this address or identifier on the selected network: ${detail}` : `Could not load protocol operations: ${detail}`
 }
+
+/** One demand-curve row: its REP price level and the ETH demand at it, or its lots when the auction's lot size is not indexed. */
+export const auctionDemandRowText = (point: JsonRecord, nativeSymbol: string): { readonly label: string; readonly value: string } => ({
+	label: `At least ${exactUnit(String(point['minimumAttoRepPerLot'] ?? '0'), 18, 'REP')} per lot`,
+	value: point['amountAttoEth'] === undefined ? `${String(point['lots'] ?? '0')} lots · cumulative ${String(point['cumulativeLots'] ?? '0')} lots` : `${exactUnit(String(point['amountAttoEth']), 18, nativeSymbol)} · cumulative ${exactUnit(String(point['cumulativeDemandAttoEth'] ?? '0'), 18, nativeSymbol)}`,
+})

@@ -6,7 +6,7 @@ import { shortIdentifier } from './identifier-format.ts'
 import type { OperationsDetailRoute, OperationsRenderContext } from './browser-types.ts'
 import { operationRecords, type JsonRecord, type OperationsResponse } from './api-validation.ts'
 import { compareCanonicalEventPosition, summarizeHistoryCollections } from './canonical-pagination.ts'
-import { operationsDetailEvidencePanelVisible, operationsDetailHeaderPresentation, operationsDetailSummaryPresentation, operationsRiskPresentation } from './operations-presentation.ts'
+import { auctionDemandRowText, operationsDetailEvidencePanelVisible, operationsDetailHeaderPresentation, operationsDetailSummaryPresentation, operationsRiskPresentation } from './operations-presentation.ts'
 import { exactUnit } from './format.ts'
 import { nativeSymbolFor } from './network-freshness.ts'
 import { renderCandleContent } from './operations-candles.ts'
@@ -426,14 +426,10 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 	if (data['demandCurveTruncated'] === true) addPanel('history', operationsPanel('Demand curve coverage', [element('p', 'data-note', 'Only the 1,000 best price levels are shown. Cumulative demand covers these levels only.')], ''))
 	const demand = operationRecords(data['demandCurve'])
 	if (demand.length > 0) {
-		const demandRows = demand.map(point =>
-			operationRow(
-				`At least ${exactUnit(String(point['minimumAttoRepPerLot'] ?? '0'), 18, 'REP')} per lot`,
-				point['amountAttoEth'] === undefined ? `${String(point['lots'] ?? '0')} lots · cumulative ${String(point['cumulativeLots'] ?? '0')} lots` : `${exactUnit(String(point['amountAttoEth']), 18, nativeSymbol)} · cumulative ${exactUnit(String(point['cumulativeDemandAttoEth'] ?? '0'), 18, nativeSymbol)}`,
-				String(point['minimumAttoRepPerLot']),
-				undefined,
-			),
-		)
+		const demandRows = demand.map(point => {
+			const row = auctionDemandRowText(point, nativeSymbol)
+			return operationRow(row.label, row.value, String(point['minimumAttoRepPerLot']), undefined)
+		})
 		addPanel('history', operationsPanel('Demand curve data', demandRows, 'No bids match this view.'))
 	}
 	const branches = operationRecords(data['branches'])
