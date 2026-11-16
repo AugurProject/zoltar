@@ -13,8 +13,7 @@ import {
 import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { DAY } from '../../testSupport/simulator/utils/constants'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
-import { addRepToMigrationBalance, forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress, splitMigrationRep } from '../../testSupport/simulator/utils/contracts/zoltar'
-import { approveToken, getChildUniverseId } from '../../testSupport/simulator/utils/utilities'
+import { addRepToMigrationBalance, forkUniverse, getZoltarAddress, splitMigrationRep } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 import { collateralBalance, burnedCollateralBalance, receiptBurns } from './burnEvidence'
 
@@ -25,18 +24,9 @@ describe('Statoblast: preparation premium ownership', () => {
 	const prepare = async (delay: bigint) => {
 		const owner = fixture.owner()
 		const mock = fixture.base.mockWindow
-		const source = fixture.base.genesisUniverse
 		await fixture.prepare()
 		await fixture.mint()
-		const forks = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'forkController' })
-		await mock.setTime(fixture.base.questionData.endTime + 1n)
-		await approveToken(owner, getRepTokenAddress(source), getZoltarAddress())
-		await forkUniverse(owner, source, fixture.base.questionId)
-		const forkTime = (await getUniverseData(owner, source)).forkTime
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'choose', args: [source, 1n] }))
-		const child = getChildUniverseId(source, 1)
-		await mock.setTime(forkTime + 56n * DAY)
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'startBranch', args: [source, 1n] }))
+		const { forks, forkTime, child } = await fixture.forkAndStartYesBranch()
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: factoryArtifact.abi, address: getInfraContractAddresses().securityPoolFactory, functionName: 'preparePortfolioPriceFeed', args: [fixture.poolFor(fixture.base.questionId).securityPool, child] }))
 		const capital = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'capitalLedger', args: [child] })
 		const index = await owner.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'commitmentIndex' })

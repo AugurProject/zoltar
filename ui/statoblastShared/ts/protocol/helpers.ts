@@ -8,7 +8,6 @@ export type SecurityPoolDeploymentTuple = {
 	questionId: bigint
 	statoblastSecurityMultiplierBps: bigint
 	securityPool: Address
-	collateralRepairAuction: Address
 	universeId: bigint
 }
 
@@ -21,7 +20,6 @@ function isSecurityPoolDeploymentTuple(value: unknown): value is SecurityPoolDep
 		typeof value['questionId'] === 'bigint' &&
 		typeof value['statoblastSecurityMultiplierBps'] === 'bigint' &&
 		typeof value['securityPool'] === 'string' &&
-		typeof value['collateralRepairAuction'] === 'string' &&
 		typeof value['universeId'] === 'bigint'
 	)
 }

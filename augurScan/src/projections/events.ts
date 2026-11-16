@@ -103,7 +103,7 @@ type AmmPriceProjection = {
 type RepEthPriceProjection = {
 	type: 'repEthPrice'
 	coordinatorAddress: string
-	eventName: 'RepEthPriceSet' | 'PriceReported'
+	eventName: 'PriceReported'
 	reportId?: string
 	repPerEth1e18: string
 	settlementTimestamp?: Date
@@ -227,13 +227,13 @@ export const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 				parentAddress: address(args['parent'], 'parent'),
 				universeId: integerString(args['universeId'], 'universeId'),
 				questionId: integerString(args['questionId'], 'questionId'),
-				collateralRepairAuctionAddress: address(args['collateralRepairAuction'], 'collateralRepairAuction'),
+				collateralRepairAuctionAddress: '0x0000000000000000000000000000000000000000',
 				coordinatorAddress: address(args['openOraclePriceCoordinator'], 'openOraclePriceCoordinator'),
 				shareTokenAddress: address(args['shareToken'], 'shareToken'),
 				securityMultiplierBps: integerString(args['statoblastSecurityMultiplierBps'], 'statoblastSecurityMultiplierBps'),
 				initialPriorityFeeAttoEthPerGas: integerString(args['initialReportPriorityFeeAttoEthPerGas'], 'initialReportPriorityFeeAttoEthPerGas'),
-				initialRetentionRate: integerString(args['currentRetentionRate'], 'currentRetentionRate'),
-				initialSettlementCollateralAttoEth: integerString(args['settlementCollateralAttoEth'], 'settlementCollateralAttoEth'),
+				initialRetentionRate: 0n.toString(),
+				initialSettlementCollateralAttoEth: 0n.toString(),
 			},
 		]
 	if (name === 'PairCreated' && args['token0'] !== undefined)
@@ -347,15 +347,6 @@ export const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 			},
 		]
 	if (name === 'Swap') return []
-	if (name === 'RepEthPriceSet')
-		return [
-			{
-				type: 'repEthPrice',
-				coordinatorAddress: log.address.toLowerCase(),
-				eventName: name,
-				repPerEth1e18: integerString(args['price'], 'price'),
-			},
-		]
 	if (name === 'PriceReported')
 		return [
 			{

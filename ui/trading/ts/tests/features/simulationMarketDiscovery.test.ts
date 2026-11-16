@@ -16,13 +16,12 @@ import { liveTradingControllerServices } from '../../features/liveTradingControl
 import { LiveTrading } from '../../features/LiveTrading.js'
 import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, simulationSetupTimeoutMs, simulationWaitOptions, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
-import { deploymentConfigurationForPlan, getTradingDeploymentPlan } from '../../protocol/deployment.js'
 import { createSecurityPoolDeploymentIndex, discoverLiveUniverseMarketPage, loadLiveBalances, marketNewRiskBlocker } from '../../protocol/live.js'
 import { statoblast_SecurityPool_SecurityPool, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { shareTokenAbi } from '../../protocol/authorization.js'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
+import { simulationDeploymentConfiguration } from '../support/simulationDeploymentConfiguration.js'
 import { DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO } from '../../simulation/index.js'
 
 test('universe and address lookup discovery reads only the selected universe', async () => {
@@ -105,12 +104,7 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 		if (scenario === FUNDED_TRADING_SIMULATION_SCENARIO)
 			test('a timed-out saved pool does not prevent loading the following healthy pool', async () => {
 				activateSimulationBackendProfile(backend)
-				const addresses = getInfraContractAddresses(backend.profile)
-				const plan = getTradingDeploymentPlan(
-					{ genesisOutcome: 'yes', chainId: backend.profile.chain.id, chainName: backend.profile.displayName, defaultRpcUrl: 'http://127.0.0.1/', id: 'simulation', proxyDeployer: PROXY_DEPLOYER_ADDRESS, securityPoolFactory: addresses.securityPoolFactory, zoltar: addresses.zoltar },
-					30,
-				)
-				const configuration = deploymentConfigurationForPlan(plan, 'http://127.0.0.1/')
+				const configuration = simulationDeploymentConfiguration(backend)
 				const seeded = (await discoverLiveUniverseMarketPage(backend.createReadClient(), configuration, 0n)).markets[0]
 				if (seeded === undefined) throw new Error('Missing seeded market')
 				const stalledPool = getAddress('0x1111111111111111111111111111111111111111')
@@ -169,9 +163,7 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 			}, 180_000)
 
 		test('shows a missing pool without retry and offers a way back on addressed routes', async () => {
-			const addresses = getInfraContractAddresses(backend.profile)
-			const plan = getTradingDeploymentPlan({ genesisOutcome: 'yes', chainId: backend.profile.chain.id, chainName: backend.profile.displayName, defaultRpcUrl: 'http://127.0.0.1/', id: 'simulation', proxyDeployer: PROXY_DEPLOYER_ADDRESS, securityPoolFactory: addresses.securityPoolFactory, zoltar: addresses.zoltar }, 30)
-			const configuration = deploymentConfigurationForPlan(plan, 'http://127.0.0.1/')
+			const configuration = simulationDeploymentConfiguration(backend)
 			const missingPool = getAddress('0x1111111111111111111111111111111111111111')
 			await expect(discoverAddressedMarket(backend.createReadClient(), configuration, missingPool)).rejects.toMatchObject({ name: 'SecurityPoolNotFoundError' })
 			const dom = installDomEnvironment()
@@ -210,21 +202,7 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 
 		test('discovers the seeded market through current registries without log access', async () => {
 			activateSimulationBackendProfile(backend)
-			const addresses = getInfraContractAddresses(backend.profile)
-			const plan = getTradingDeploymentPlan(
-				{
-					genesisOutcome: 'yes',
-					chainId: backend.profile.chain.id,
-					chainName: backend.profile.displayName,
-					defaultRpcUrl: 'http://127.0.0.1/',
-					id: 'simulation',
-					proxyDeployer: PROXY_DEPLOYER_ADDRESS,
-					securityPoolFactory: addresses.securityPoolFactory,
-					zoltar: addresses.zoltar,
-				},
-				30,
-			)
-			const configuration = deploymentConfigurationForPlan(plan, 'http://127.0.0.1/')
+			const configuration = simulationDeploymentConfiguration(backend)
 			const noLogsClient = {
 				...backend.createReadClient(),
 				getLogs: async () => {
@@ -432,11 +410,7 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 
 		test('isolates one failed market read into an explicit unavailable row without leaking provider detail', async () => {
 			activateSimulationBackendProfile(backend)
-			const addresses = getInfraContractAddresses(backend.profile)
-			const configuration = deploymentConfigurationForPlan(
-				getTradingDeploymentPlan({ genesisOutcome: 'yes', chainId: backend.profile.chain.id, chainName: backend.profile.displayName, defaultRpcUrl: 'http://127.0.0.1/', id: 'simulation', proxyDeployer: PROXY_DEPLOYER_ADDRESS, securityPoolFactory: addresses.securityPoolFactory, zoltar: addresses.zoltar }, 30),
-				'http://127.0.0.1/',
-			)
+			const configuration = simulationDeploymentConfiguration(backend)
 			const client = backend.createReadClient()
 			const seeded = await discoverLiveUniverseMarketPage(client, configuration, 0n)
 			const pool = seeded.markets[0]?.pool

@@ -4,6 +4,7 @@ import { encodeDeployData, getAddress, toHex } from '@zoltar/core-shared/evm/eth
 import { CANONICAL_TRADING_FEE_BPS, createDeploymentStatusOracleAddressHelper, tradingDeploymentData, zoltarDeploymentStatusStepAddresses } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { DeploymentStatusOracle_DeploymentStatusOracle as statusOracleContract, trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory as factoryContract, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter as routerContract } from '../../solidity/ts/types/contractArtifact.ts'
 import { systemContractMappings } from './project-system-contracts.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 type DeploymentFile = {
 	readonly network: {
@@ -15,7 +16,6 @@ type DeploymentFile = {
 	readonly derivedContracts: readonly { readonly id: string; readonly label: string; readonly address: string }[]
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 const requiredString = (value: unknown, name: string): string => {
 	if (typeof value !== 'string' || value === '') throw new Error(`${name} must be a nonempty string`)
 	return value
@@ -23,7 +23,7 @@ const requiredString = (value: unknown, name: string): string => {
 const deploymentEntries = (value: unknown, name: string): DeploymentFile['deploymentSteps'] => {
 	if (!Array.isArray(value)) throw new Error(`${name} must be an array`)
 	return value.map((entry, index) => {
-		if (!isRecord(entry)) throw new Error(`${name}[${index}] must be an object`)
+		if (!isPlainRecord(entry)) throw new Error(`${name}[${index}] must be an object`)
 		return {
 			id: requiredString(entry['id'], `${name}[${index}].id`),
 			label: requiredString(entry['label'], `${name}[${index}].label`),
@@ -32,7 +32,7 @@ const deploymentEntries = (value: unknown, name: string): DeploymentFile['deploy
 	})
 }
 const deploymentFile = (value: unknown, source: string): DeploymentFile => {
-	if (!isRecord(value) || !isRecord(value['network'])) throw new Error(`${source} has no network object`)
+	if (!isPlainRecord(value) || !isPlainRecord(value['network'])) throw new Error(`${source} has no network object`)
 	// Universe identities are scoped to a chain in the scanner, so each chain indexes one genesis deployment.
 	if (value['network']['genesisOutcome'] !== 'yes') throw new Error(`${source}.network.genesisOutcome must be yes for the scanner deployment`)
 	return {
@@ -100,7 +100,7 @@ export async function projectManifests(projectRoot: string, deploymentKinds?: Re
 	let kinds = deploymentKinds
 	if (kinds === undefined) {
 		const catalog: unknown = await Bun.file(new URL('../config/abis.json', import.meta.url)).json()
-		if (!isRecord(catalog) || !isRecord(catalog['contracts'])) throw new Error('ABI catalog has no contracts')
+		if (!isPlainRecord(catalog) || !isPlainRecord(catalog['contracts'])) throw new Error('ABI catalog has no contracts')
 		kinds = systemContractMappings(Object.keys(catalog['contracts']), await projectDeploymentIds(projectRoot)).deploymentKinds
 	}
 	const [mainnet, sepolia] = await Promise.all([projectManifest(projectRoot, 'mainnet', kinds), projectManifest(projectRoot, 'sepolia', kinds)])

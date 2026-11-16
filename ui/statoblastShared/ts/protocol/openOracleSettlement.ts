@@ -4,7 +4,7 @@ import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { readOptionalMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
-import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '../contractArtifact.js'
+import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '../contractArtifact.js'
 import type { OpenOraclePriceSettlement } from '../types/contracts.js'
 import { getInfraContractAddresses } from './deploymentHelpers.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './oracleTiming.js'
@@ -108,7 +108,7 @@ export function getOpenOraclePriceSettlement(receipt: Partial<Pick<TransactionRe
 	for (const log of receipt.logs ?? []) {
 		if (!sameAddress(log.address, priceSource)) continue
 		try {
-			const decoded = decodeEventLog({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, data: log.data, topics: log.topics })
+			const decoded = decodeEventLog({ abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, data: log.data, topics: log.topics })
 			if (decoded.eventName === 'PriceReportRejected' && decoded.args.reportId === reportId) return { status: 'rejected', reason: decoded.args.reason }
 			if (decoded.eventName === 'PriceReported' && decoded.args.reportId === reportId) return { status: 'accepted' }
 		} catch (error) {

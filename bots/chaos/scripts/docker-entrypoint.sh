@@ -20,12 +20,12 @@ if [ -L .state ] || [ ! -d .state ]; then
 fi
 chmod 700 .state
 
-if [ ! -e "$settings_file" ] && [ "$settings_file" != '.state/operator.json' ]; then
+if [ ! -e "$settings_file" ] && [ ! -L "$settings_file" ] && [ "$settings_file" != '.state/operator.json' ]; then
 	echo 'Selected chaos configuration does not exist' >&2
 	exit 1
 fi
 
-if [ ! -e "$settings_file" ]; then
+if [ ! -e "$settings_file" ] && [ ! -L "$settings_file" ]; then
 	umask 077
 	temporary_file=$(mktemp '.state/operator.json.XXXXXX')
 	sed 's/"uiHost": "127.0.0.1"/"uiHost": "0.0.0.0"/' config/operator.example.json > "$temporary_file"

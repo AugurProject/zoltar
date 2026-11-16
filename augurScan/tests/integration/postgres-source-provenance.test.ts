@@ -5,7 +5,7 @@ import { type IndexedBlock, ScannerDatabase } from '../../src/database.ts'
 import { initializeSchema } from '../../src/schema.ts'
 import type { EntityStateSnapshot } from '../../src/snapshots.ts'
 import type { NetworkConfig, StoredLog } from '../../src/types.ts'
-import { address, type BlockHash, blockHash, chainId, decodedLog, discoveredAddress, type IndexerRunSourceHashes, insertIndexerRun, postgresTest, requirePostgresUrl } from '../support/postgres-fixtures.ts'
+import { address, type BlockHash, blockHash, chainId, decodedLog, discoveredAddress, evidenceTransaction, type IndexerRunSourceHashes, insertIndexerRun, postgresTest, requirePostgresUrl } from '../support/postgres-fixtures.ts'
 
 type ProvenanceContext = {
 	readonly database: ScannerDatabase
@@ -63,20 +63,7 @@ const createProvenanceContext = (database: ScannerDatabase): ProvenanceContext =
 		addressActivity: [],
 		contractDeploymentObservations: [],
 		logScanCursors: [],
-		transactions: [
-			{
-				hash: evidenceTxHash,
-				transactionIndex: 0,
-				from: address,
-				to: discoveredAddress,
-				value: 0n,
-				input: '0x',
-				status: 'success',
-				gasUsed: 21_000n,
-				receipt: { transactionHash: evidenceTxHash, blockHash: evidenceBlockHash, status: 'success', logs: [] },
-				decoded: { status: 'decoded', name: 'submitReport', summary: 'Submit report', arguments: { reportId: '7' } },
-			},
-		],
+		transactions: [evidenceTransaction(evidenceTxHash, evidenceBlockHash, { status: 'decoded', name: 'submitReport', summary: 'Submit report', arguments: { reportId: '7' } })],
 		logs: [evidenceLog, evidencePaginationLog],
 	}
 	return { database, provenanceChainId, evidenceBlockHash, evidenceTxHash, evidenceRawTopic, network, evidenceBlock }

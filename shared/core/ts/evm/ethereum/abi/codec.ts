@@ -239,31 +239,13 @@ function cloneAbiParameter(parameter: AbiParameter, options: { stripName: boolea
 	}
 }
 
-function normalizeFunctionAbiForCodec(abiItem: AbiParameter): AbiParameter {
+function normalizeFunctionAbi(abiItem: AbiParameter, { stripInputNames }: { stripInputNames: boolean }): AbiParameter {
 	return {
 		...(abiItem.name === undefined ? {} : { name: abiItem.name }),
 		...(abiItem.inputs === undefined
 			? {}
 			: {
-					inputs: abiItem.inputs.map((input: AbiParameter) => cloneAbiParameter(input, { stripName: true })),
-				}),
-		...(abiItem.outputs === undefined
-			? {}
-			: {
-					outputs: abiItem.outputs.map((output: AbiParameter, _index: number, outputs: readonly AbiParameter[]) => cloneAbiParameter(output, { stripName: outputs.length !== 1 || !output.type.startsWith('tuple') })),
-				}),
-		...(abiItem.stateMutability === undefined ? {} : { stateMutability: abiItem.stateMutability }),
-		type: abiItem.type,
-	}
-}
-
-function normalizeFunctionAbiForEncoder(abiItem: AbiParameter): AbiParameter {
-	return {
-		...(abiItem.name === undefined ? {} : { name: abiItem.name }),
-		...(abiItem.inputs === undefined
-			? {}
-			: {
-					inputs: abiItem.inputs.map((input: AbiParameter) => cloneAbiParameter(input, { stripName: false })),
+					inputs: abiItem.inputs.map((input: AbiParameter) => cloneAbiParameter(input, { stripName: stripInputNames })),
 				}),
 		...(abiItem.outputs === undefined
 			? {}
@@ -325,7 +307,7 @@ function canEncodeFunctionArguments(abiItem: AbiParameter, args: readonly unknow
 
 export function getContractMethod(abiItem: AbiParameter) {
 	if (abiItem.name === undefined) throw new Error('ABI function is missing a name')
-	const contract = createContract([normalizeFunctionAbiForEncoder(abiItem)] as never) as Record<
+	const contract = createContract([normalizeFunctionAbi(abiItem, { stripInputNames: false })] as never) as Record<
 		string,
 		{
 			decodeOutput: (value: Uint8Array) => unknown
@@ -433,7 +415,7 @@ export function decodeFunctionData(parameters: { abi: Abi; data: Hex }) {
 	const strippedAbi = normalizeAbi(parameters.abi)
 		.filter((entry: AbiParameter) => entry.type === 'function')
 		.map((entry: AbiParameter) => ({
-			...normalizeFunctionAbiForCodec(entry),
+			...normalizeFunctionAbi(entry, { stripInputNames: true }),
 			outputs: entry.outputs,
 		}))
 	const decoder = new Decoder()

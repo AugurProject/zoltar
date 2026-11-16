@@ -108,6 +108,17 @@ describe('useMarketCreation', () => {
 		}
 	}
 
+	/** Types the anonymous draft title and connects the wallet in the same update, then waits for the draft to survive the account change. */
+	async function connectWalletWithAnonymousDraft(hook: Awaited<ReturnType<typeof renderMarketCreationHook>>, title: string) {
+		await act(async () => {
+			hook.state().setMarketForm(current => ({ ...current, title }))
+			hook.renderProps({ accountAddress: WALLET_ADDRESS })
+		})
+		await waitFor(() => {
+			expect(hook.state().marketForm.title).toBe(title)
+		})
+	}
+
 	test('blocks repeated market creation submissions while the first request is still preparing', async () => {
 		const pendingCreate = createDeferred<CreatedMarket>()
 		const createMarketTransaction = mock<CreateMarket>(async (_accountAddress, callbacks) => {
@@ -221,13 +232,7 @@ describe('useMarketCreation', () => {
 			},
 			initialProps: { accountAddress: undefined },
 		})
-		await act(async () => {
-			hook.state().setMarketForm(current => ({ ...current, title: 'Anonymous draft' }))
-			hook.renderProps({ accountAddress: WALLET_ADDRESS })
-		})
-		await waitFor(() => {
-			expect(hook.state().marketForm.title).toBe('Anonymous draft')
-		})
+		await connectWalletWithAnonymousDraft(hook, 'Anonymous draft')
 
 		await hook.remount({ accountAddress: WALLET_ADDRESS })
 		expect(hook.state().marketForm.title).toBe('Anonymous draft')
@@ -265,13 +270,7 @@ describe('useMarketCreation', () => {
 			() => storageWithFailedOwnerWrites,
 			async () => {
 				const hook = await renderMarketCreationHook({ initialProps: { accountAddress: undefined } })
-				await act(async () => {
-					hook.state().setMarketForm(current => ({ ...current, title: 'Anonymous draft' }))
-					hook.renderProps({ accountAddress: WALLET_ADDRESS })
-				})
-				await waitFor(() => {
-					expect(hook.state().marketForm.title).toBe('Anonymous draft')
-				})
+				await connectWalletWithAnonymousDraft(hook, 'Anonymous draft')
 				expect(storageWithFailedOwnerWrites.getItem(OWNER_DRAFT_KEY)).toBeNull()
 				expect(storageWithFailedOwnerWrites.getItem(ANONYMOUS_DRAFT_KEY)).toContain('Anonymous draft')
 			},

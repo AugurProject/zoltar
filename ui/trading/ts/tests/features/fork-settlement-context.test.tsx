@@ -41,6 +41,45 @@ async function settleEffects() {
 	})
 }
 
+type SettlementControlsProps = Parameters<typeof LiveSettlementControls>[0]
+
+/** Settlement controls for a connected, ready wallet; each test supplies the market, balances, wallet, and services it drives. */
+function SettlementControls(props: Pick<SettlementControlsProps, 'market' | 'balances' | 'account' | 'walletClient' | 'services'> & Partial<SettlementControlsProps>) {
+	return (
+		<LiveSettlementControls
+			nowSeconds={100n}
+			configuration={configuration}
+			balanceState='ready'
+			balanceError={undefined}
+			networkMismatchReason={undefined}
+			wallet={{ actionLabel: 'Connect wallet', connect: async () => undefined }}
+			settings={DEFAULT_TRADE_SETTINGS}
+			externallyLocked={false}
+			refresh={async () => undefined}
+			onKnownReceipt={() => undefined}
+			executeWithCurrentWalletContext={async (_account, _network, _wallet, action) => await action()}
+			createGuardedWalletWrite={() => async write => await write()}
+			retryBalances={async () => undefined}
+			onWorkflowLockChange={() => undefined}
+			{...props}
+		/>
+	)
+}
+
+/** A wallet for `account` whose node reports every submitted transaction as confirmed against the share token. */
+function createConfirmingWalletClient() {
+	return createWalletClient({
+		account,
+		transport: custom({
+			request: async ({ method }) => {
+				if (method === 'eth_getTransactionByHash') return null
+				if (method !== 'eth_getTransactionReceipt') throw new Error(`Unexpected RPC method: ${method}`)
+				return { blockHash, blockNumber: '0xc', cumulativeGasUsed: '0x5208', from: account, gasUsed: '0x5208', logs: [], status: '0x1', to: shareToken, transactionHash, transactionIndex: '0x0', type: '0x2' }
+			},
+		}),
+	})
+}
+
 describe('live fork settlement context', () => {
 	let cleanupRendered: (() => Promise<void>) | undefined
 
@@ -59,25 +98,11 @@ describe('live fork settlement context', () => {
 		const walletClient = { ...baseWallet, waitForTransactionReceipt: async () => ({ status: 'success' as const }) }
 		let submissions = 0
 		const rendered = await renderIntoDocument(
-			<LiveSettlementControls
-				nowSeconds={100n}
-				configuration={configuration}
+			<SettlementControls
 				market={liveMarket}
 				balances={{ scope: shareBalanceScope(liveMarket), invalid: 10n ** 18n, yes: 10n ** 18n, no: 10n ** 18n, lp: 0n }}
-				balanceState='ready'
-				balanceError={undefined}
 				account={account}
 				walletClient={walletClient}
-				networkMismatchReason={undefined}
-				wallet={{ actionLabel: 'Connect wallet', connect: async () => undefined }}
-				settings={DEFAULT_TRADE_SETTINGS}
-				externallyLocked={false}
-				refresh={async () => undefined}
-				onKnownReceipt={() => undefined}
-				executeWithCurrentWalletContext={async (_account, _network, _wallet, action) => await action()}
-				createGuardedWalletWrite={() => async write => await write()}
-				retryBalances={async () => undefined}
-				onWorkflowLockChange={() => undefined}
 				services={{
 					createPublicClient: () => publicClient,
 					loadForkContext: async () => forkContext,
@@ -123,50 +148,17 @@ describe('live fork settlement context', () => {
 			},
 			submit: async () => transactionHash,
 		}
-		const walletClient = createWalletClient({
-			account,
-			transport: custom({
-				request: async ({ method }) => {
-					if (method === 'eth_getTransactionByHash') return null
-					if (method !== 'eth_getTransactionReceipt') throw new Error(`Unexpected RPC method: ${method}`)
-					return {
-						blockHash,
-						blockNumber: '0xc',
-						cumulativeGasUsed: '0x5208',
-						from: account,
-						gasUsed: '0x5208',
-						logs: [],
-						status: '0x1',
-						to: shareToken,
-						transactionHash,
-						transactionIndex: '0x0',
-						type: '0x2',
-					}
-				},
-			}),
-		})
+		const walletClient = createConfirmingWalletClient()
 		const balances = { scope: actualLive.shareBalanceScope(market), invalid: 1n, yes: 1n, no: 1n, lp: 0n }
 		const settlementView = (currentAccount: typeof account, currentWalletClient: typeof walletClient, currentBalances: typeof balances) => (
-			<LiveSettlementControls
-				nowSeconds={100n}
-				configuration={configuration}
+			<SettlementControls
 				market={market}
 				balances={currentBalances}
-				balanceState='ready'
-				balanceError={undefined}
 				account={currentAccount}
 				walletClient={currentWalletClient}
-				wallet={{ actionLabel: 'Connect wallet', connect: async () => undefined }}
-				settings={DEFAULT_TRADE_SETTINGS}
-				externallyLocked={false}
 				refresh={async () => {
 					refreshes++
 				}}
-				onKnownReceipt={() => undefined}
-				executeWithCurrentWalletContext={async (_account, _networkFailure, _accountFailure, action) => await action()}
-				createGuardedWalletWrite={() => async write => await write()}
-				retryBalances={async () => undefined}
-				onWorkflowLockChange={() => undefined}
 				services={services}
 			/>
 		)
@@ -223,36 +215,13 @@ describe('live fork settlement context', () => {
 		let migrated = false
 		const loadedAccounts: (string | undefined)[] = []
 		const publicClient = createPublicClient({ transport: custom({ request: async () => undefined }) })
-		const walletClient = createWalletClient({
-			account,
-			transport: custom({
-				request: async ({ method }) => {
-					if (method === 'eth_getTransactionByHash') return null
-					if (method !== 'eth_getTransactionReceipt') throw new Error(`Unexpected RPC method: ${method}`)
-					return { blockHash, blockNumber: '0xc', cumulativeGasUsed: '0x5208', from: account, gasUsed: '0x5208', logs: [], status: '0x1', to: shareToken, transactionHash, transactionIndex: '0x0', type: '0x2' }
-				},
-			}),
-		})
+		const walletClient = createConfirmingWalletClient()
 		const rendered = await renderIntoDocument(
-			<LiveSettlementControls
-				nowSeconds={100n}
-				configuration={configuration}
+			<SettlementControls
 				market={market}
 				balances={{ scope: shareBalanceScope(market), invalid: 0n, yes: 10n ** 18n, no: 0n, lp: 0n }}
-				balanceState='ready'
-				balanceError={undefined}
 				account={account}
 				walletClient={walletClient}
-				networkMismatchReason={undefined}
-				wallet={{ actionLabel: 'Connect wallet', connect: async () => undefined }}
-				settings={DEFAULT_TRADE_SETTINGS}
-				externallyLocked={false}
-				refresh={async () => undefined}
-				onKnownReceipt={() => undefined}
-				executeWithCurrentWalletContext={async (_account, _network, _wallet, action) => await action()}
-				createGuardedWalletWrite={() => async write => await write()}
-				retryBalances={async () => undefined}
-				onWorkflowLockChange={() => undefined}
 				services={{
 					createPublicClient: () => publicClient,
 					loadForkContext: async (_client, _market, loadedAccount) => {

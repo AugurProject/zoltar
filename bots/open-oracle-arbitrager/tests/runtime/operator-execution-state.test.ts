@@ -12,7 +12,7 @@ import { authenticateConfiguredDeployments, refreshIncompleteCanonicalDeployment
 import { validateDeploymentSettings } from '#config/deployment-settings'
 import { loadConfiguration, runnableOperatorSettings } from '#config/configuration'
 import type { OperatorState } from '#state/operator-state'
-import type { PendingOperatorUpdates } from '../../src/runtime/operator-control-plane.ts'
+import { emptyPendingOperatorUpdates } from '../../src/runtime/pending-operator-updates.ts'
 import { applyQueuedExecutionSettings, recordScanDecision, resetReportScanState } from '../../src/runtime/operator-execution-state.ts'
 import { operatorStateFixture } from '../support/operator-state.ts'
 
@@ -33,32 +33,6 @@ async function exampleConfiguration() {
 
 function operatorState(): OperatorState {
 	return operatorStateFixture({ status: 'running' })
-}
-
-function noPendingUpdates(): PendingOperatorUpdates {
-	return {
-		centralizedMarkets: undefined,
-		connectivity: undefined,
-		deployment: undefined,
-		execute: undefined,
-		logLookbackBlocks: undefined,
-		maxHedgeSlippageBps: undefined,
-		network: undefined,
-		operatorSettings: undefined,
-		paused: undefined,
-		profileSwitch: false,
-		privateKey: undefined,
-		persistedPrivateKey: undefined,
-		persistedTokenAddresses: undefined,
-		pollMilliseconds: undefined,
-		riskLimits: undefined,
-		settlement: undefined,
-		signerLock: undefined,
-		signerUpdate: false,
-		strategy: undefined,
-		submission: undefined,
-		tokenAddresses: undefined,
-	}
 }
 
 function sourceObservation(sourceId: string): MarketConsensusObservation {
@@ -99,7 +73,7 @@ test('logs a decision entry for priced reports only; skipped reports already log
 test('applies queued settlement settings at the scan boundary and clears the queue entry', async () => {
 	const config = await exampleConfiguration()
 	const state = operatorState()
-	const pending = noPendingUpdates()
+	const pending = emptyPendingOperatorUpdates()
 	pending.settlement = { enabled: true, maxGasPriceAttoEthPerGas: 7n * 10n ** 9n, minimumProfitAttoWeth: 2n * 10n ** 15n, rewardWithdrawThresholdAttoEth: 3n * 10n ** 16n }
 	expect(config.settlement.enabled).toBe(false)
 	applyQueuedExecutionSettings(config, state, pending)
@@ -114,7 +88,7 @@ describe('queued operator execution settings', () => {
 		const observation = sourceObservation('source-a')
 		state.marketObservations = [observation]
 		state.marketConsensus = reliableConsensus(observation)
-		const pending = noPendingUpdates()
+		const pending = emptyPendingOperatorUpdates()
 		pending.centralizedMarkets = { ...config.centralizedMarkets, sources: [{ ethMarket: undefined, exchangeId: 'source-b', repMarket: 'REP/ETH' }] }
 
 		expect(applyQueuedExecutionSettings(config, state, pending)).toEqual({ reportScanReset: false })
@@ -127,20 +101,20 @@ describe('queued operator execution settings', () => {
 	test('requests a complete report-window rebuild only when the bounded lookback changes', async () => {
 		const config = await exampleConfiguration()
 		const state = operatorState()
-		const pending = noPendingUpdates()
+		const pending = emptyPendingOperatorUpdates()
 		const expandedLookbackBlocks = config.logLookbackBlocks + 16n
 		pending.logLookbackBlocks = expandedLookbackBlocks
 		expect(applyQueuedExecutionSettings(config, state, pending)).toEqual({ reportScanReset: true })
 		expect(config.logLookbackBlocks).toBe(expandedLookbackBlocks)
 		expect(pending.logLookbackBlocks).toBeUndefined()
-		const unchanged = noPendingUpdates()
+		const unchanged = emptyPendingOperatorUpdates()
 		unchanged.logLookbackBlocks = config.logLookbackBlocks
 		expect(applyQueuedExecutionSettings(config, state, unchanged)).toEqual({ reportScanReset: false })
 	})
 
 	test('applies a queued main loop poll interval at the scan boundary', async () => {
 		const config = await exampleConfiguration()
-		const pending = noPendingUpdates()
+		const pending = emptyPendingOperatorUpdates()
 		pending.pollMilliseconds = config.pollMilliseconds + 4_000
 		expect(applyQueuedExecutionSettings(config, operatorState(), pending)).toEqual({ reportScanReset: false })
 		expect(config.pollMilliseconds).toBe(5_000)
@@ -357,7 +331,7 @@ for (const name of ['mainnet', 'sepolia'] as const)
 
 test('approving another universe restarts historical report discovery', async () => {
 	const config = await exampleConfiguration()
-	const pending = noPendingUpdates()
+	const pending = emptyPendingOperatorUpdates()
 	pending.operatorSettings = { ...config.operatorSettings, approvedUniverses: [...config.operatorSettings.approvedUniverses, 999n] }
 	expect(applyQueuedExecutionSettings(config, operatorState(), pending).reportScanReset).toBe(true)
 	pending.operatorSettings = { ...config.operatorSettings }

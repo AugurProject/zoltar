@@ -2,7 +2,7 @@ import type { SQL } from 'bun'
 import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import { auctionDemandCurve, reportLifecycle, reportLifecycleEventName, reportRoundChanges } from '../operations.ts'
 import { auctionDetailData, eventEntityRows, forkDetailData, latestEntitySnapshot, reportDetailData } from '../repositories/entity-details.ts'
-import { ApiConflictError, ApiRequestError, integer, isNonNegativeSafeInteger, isPostgresBigint, isPostgresInteger, json, jsonRecord, routeInteger } from './shared.ts'
+import { ApiConflictError, ApiRequestError, hasCursorSnapshot, integer, isNonNegativeSafeInteger, isPostgresBigint, isPostgresInteger, json, jsonRecord, routeInteger } from './shared.ts'
 import { operationsAsOfForContinuations, snapshotBoundaryMatches } from './snapshot.ts'
 
 export const snapshotBoundary = (asOf: Record<string, unknown>): readonly [string, string, string, string, string, string] => [
@@ -22,19 +22,7 @@ export const parseRiskCursor = (value: string | null, chainId: number, kind: 'po
 	const parts = parseCursor(
 		value,
 		parts => {
-			if (
-				parts.length !== 9 ||
-				!isNonNegativeSafeInteger(parts[0]) ||
-				(parts[1] !== 'pool' && parts[1] !== 'vault') ||
-				!isPostgresBigint(parts[2]) ||
-				typeof parts[3] !== 'string' ||
-				!/^0x[0-9a-f]{64}$/.test(parts[3]) ||
-				!isPostgresBigint(parts[4]) ||
-				!parts.slice(5, 8).every(part => typeof part === 'string') ||
-				typeof parts[8] !== 'string' ||
-				(kind === 'pool' ? !/^0x[0-9a-f]{40}$/.test(parts[8]) : !/^0x[0-9a-f]{40}:0x[0-9a-f]{40}$/.test(parts[8]))
-			)
-				throw new Error('shape')
+			if (parts.length !== 9 || !isNonNegativeSafeInteger(parts[0]) || (parts[1] !== 'pool' && parts[1] !== 'vault') || !hasCursorSnapshot(parts, 2) || typeof parts[8] !== 'string' || (kind === 'pool' ? !/^0x[0-9a-f]{40}$/.test(parts[8]) : !/^0x[0-9a-f]{40}:0x[0-9a-f]{40}$/.test(parts[8]))) throw new Error('shape')
 			return parts
 		},
 		error => new ApiRequestError(`${kind}Cursor is invalid`, { cause: error }),
@@ -55,16 +43,12 @@ const parseProtocolCursor = (value: string | null): ProtocolCursor | undefined =
 				!isNonNegativeSafeInteger(parts[0]) ||
 				typeof parts[1] !== 'string' ||
 				typeof parts[2] !== 'string' ||
-				!isPostgresBigint(parts[3]) ||
-				typeof parts[4] !== 'string' ||
-				!/^0x[0-9a-f]{64}$/.test(parts[4]) ||
-				!isPostgresBigint(parts[5]) ||
-				!parts.slice(6, 9).every(part => typeof part === 'string') ||
+				!hasCursorSnapshot(parts, 3) ||
 				!isPostgresBigint(parts[9]) ||
 				typeof parts[10] !== 'string' ||
 				!/^0x[0-9a-f]{64}$/.test(parts[10]) ||
 				!isPostgresInteger(parts[11]) ||
-				BigInt(parts[9]) > BigInt(parts[3])
+				BigInt(parts[9]) > BigInt(String(parts[3]))
 			)
 				throw new Error('shape')
 			return parts as [number, string, string, string, string, string, string, string, string, string, string, number]
@@ -100,11 +84,7 @@ export const parseTimelineCatalogCursor = (value: string | null, chainId: number
 				parts.length !== 15 ||
 				!isNonNegativeSafeInteger(parts[0]) ||
 				typeof parts[1] !== 'string' ||
-				!isPostgresBigint(parts[2]) ||
-				typeof parts[3] !== 'string' ||
-				!/^0x[0-9a-f]{64}$/.test(parts[3]) ||
-				!isPostgresBigint(parts[4]) ||
-				!parts.slice(5, 8).every(part => typeof part === 'string') ||
+				!hasCursorSnapshot(parts, 2) ||
 				!isPostgresBigint(parts[8]) ||
 				!isPostgresInteger(parts[9]) ||
 				typeof parts[10] !== 'string' ||

@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from 'bun:test'
 import { SQL } from 'bun'
-import { directObservationTotal } from '../../src/api/shared.ts'
+import { directObservationTotal, hasCursorSnapshot } from '../../src/api/shared.ts'
 import { handleApi } from '../../src/api.ts'
 import { decodeOpaqueCursor, encodeOpaqueCursor } from '../../src/cursor-codec.ts'
 
@@ -16,6 +16,15 @@ test('round-trips Unicode opaque cursors with unpadded base64url encoding', () =
 	expect(cursor).toMatch(/^[A-Za-z0-9_-]+$/)
 	expect(cursor).not.toContain('=')
 	expect(decodeOpaqueCursor(cursor)).toEqual(value)
+})
+
+test('validates the snapshot segment shared by every pagination cursor', () => {
+	const snapshot = ['120', `0x${'ab'.repeat(32)}`, '7', 'abi', 'application', 'projection']
+	expect(hasCursorSnapshot([1, 5, ...snapshot, 'row'], 2)).toBe(true)
+	expect(hasCursorSnapshot([1, 5, ...snapshot], 1)).toBe(false)
+	expect(hasCursorSnapshot(['-1', ...snapshot.slice(1)], 0)).toBe(false)
+	expect(hasCursorSnapshot(['120', `0x${'AB'.repeat(32)}`, ...snapshot.slice(2)], 0)).toBe(false)
+	expect(hasCursorSnapshot([...snapshot.slice(0, 5), 6], 0)).toBe(false)
 })
 
 test('returns request validation failures as 400 responses', async () => {

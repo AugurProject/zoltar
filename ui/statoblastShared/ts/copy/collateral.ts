@@ -5,10 +5,11 @@ export const weth = 'WETH'
 export const usdc = 'USDC'
 export const usdt = 'USDT'
 export const wallet = 'Wallet collateral'
-export const reset = 'Reset USDT approval'
-export const resetting = 'Resetting approval…'
-export const notNeeded = 'Not needed'
-export const approving = 'Approving collateral…'
+/** Why a collateral-funded action is blocked. Statoblast and Trading show the same reason for the same funding state. */
+export const fundingLoading = 'Loading collateral balance and approval.'
+export const approvalRequired = 'Collateral approval required.'
+export const formatInsufficientBalance = (symbol: string) => `Insufficient ${symbol} balance.`
+export const approvalFailed = 'Collateral approval failed.'
 export const floorHint = 'Reports also need an exposure-based stake. This floor does not automatically cover dispute gas costs.'
 export const amount = (label: string, symbol: string) => `${label} (${symbol})`
 export const oracleStake = (symbol: string) => amount('Minimum oracle stake', symbol)

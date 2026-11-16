@@ -198,7 +198,7 @@ export function TokenApprovalControl({
 		return guardMessageElementId
 	})()
 	// A finished approval keeps its field for context, showing the approved amount instead of hints that ask for more input.
-	let amountPlaceholder: string | undefined = commonCopy.leaveBlankForRequiredTotal
+	let amountPlaceholder: string | undefined = commonCopy.blankUsesRequiredTotal
 	let amountValue = draftAmount
 	if (completedLabel !== undefined) {
 		amountPlaceholder = undefined
@@ -231,7 +231,7 @@ export function TokenApprovalControl({
 					value={amountValue}
 					onInput={event => setDraftAmount(event.currentTarget.value)}
 					placeholder={amountPlaceholder}
-					title={completedLabel === undefined && recommendedAmount === undefined ? commonCopy.leaveBlankForRequiredTotal : undefined}
+					title={completedLabel === undefined && recommendedAmount === undefined ? commonCopy.blankUsesRequiredTotal : undefined}
 					invalid={amountValidationMessage !== undefined}
 					disabled={controlsDisabled}
 				/>

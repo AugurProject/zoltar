@@ -6,6 +6,7 @@ import { createWriteClient, writeContractAndWait, type WriteClient } from '../..
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
+import { deployCommitmentIndexHarness } from './securityPoolCommitmentIndexHarness'
 
 const owner = (id: number) => addressString(BigInt(id) + 0x1000n)
 
@@ -40,10 +41,9 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		const ethereum = getAnvilWindowEthereum()
 		await setupTestAccounts(ethereum)
 		client = createWriteClient(ethereum, TEST_ADDRESSES[0])
-		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: `0x${harnessArtifact.evm.bytecode.object}` }) })
-		if (receipt.contractAddress === undefined) throw new Error('Commitment harness deployment address missing')
-		harness = receipt.contractAddress
-		address = await client.readContract({ abi: harnessArtifact.abi, address: harness, functionName: 'index' })
+		const deployment = await deployCommitmentIndexHarness(client)
+		harness = deployment.harness
+		address = deployment.index
 		await setBaselineSnapshot()
 	})
 

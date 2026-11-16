@@ -13,6 +13,8 @@ type SeedScope = 'genesis' | 'universe'
 const GET_POOL_ABI = 'function getPool(address tokenA,address tokenB,uint24 fee) view returns (address)'
 const MAXIMUM_SEED_AMOUNT = 10n ** 15n
 
+type UniswapSeed = NonNullable<ReturnType<typeof uniswapSeedSteps>>
+
 export const deployGenesisUniswapSeeder: OperationDefinition = {
 	buildPlan(snapshot) {
 		const deployment = genesisUniswapSeederDeployment()
@@ -107,6 +109,22 @@ export function uniswapSeedSteps(snapshot: EcosystemSnapshot, scope: SeedScope, 
 		}),
 	)
 	return { liquidity, maximum0, maximum1, seeder, steps, token0, token1 }
+}
+
+/** Builds a pool liquidity plan from its seed steps; `metadata` adds the pool identity to the seed amounts and tokens. */
+function liquiditySeedPlan(definition: OperationDefinition, snapshot: EcosystemSnapshot, seed: UniswapSeed, metadata: Record<string, string>, postcondition: string) {
+	const { liquidity, maximum0, maximum1, seeder, steps, token0, token1 } = seed
+	return planBase({
+		definitionId: definition.id,
+		ecosystem: 'trading',
+		label: definition.label,
+		maximumCleanupTransactionCount: 2,
+		metadata: { ...metadata, liquidity: liquidity.toString(), maximum0: maximum0.toString(), maximum1: maximum1.toString(), seeder, token0, token1 },
+		postconditions: [postcondition],
+		risk: 'medium',
+		snapshot,
+		steps,
+	})
 }
 
 /** Revokes every seeder allowance a confirmed step of the previous seed plan created. */
@@ -214,18 +232,7 @@ function genesisLiquidityDefinition(kind: 'seed' | 'add'): OperationDefinition {
 			const amounts = uniswapSeedAmounts(snapshot, options, rep)
 			const seed = amounts === undefined ? undefined : uniswapSeedSteps(snapshot, 'genesis', pool, rep, amounts, `${kind === 'seed' ? 'Seed' : 'Add'} REP/WETH liquidity`)
 			if (seed === undefined) return undefined
-			const { liquidity, maximum0, maximum1, seeder, steps, token0, token1 } = seed
-			return planBase({
-				definitionId: definition.id,
-				ecosystem: 'trading',
-				label: definition.label,
-				maximumCleanupTransactionCount: 2,
-				metadata: { liquidity: liquidity.toString(), maximum0: maximum0.toString(), maximum1: maximum1.toString(), pool, seeder, token0, token1 },
-				postconditions: ['The authenticated genesis REP/WETH pool has nonzero active liquidity using bounded token transfers'],
-				risk: 'medium',
-				snapshot,
-				steps,
-			})
+			return liquiditySeedPlan(definition, snapshot, seed, { pool }, 'The authenticated genesis REP/WETH pool has nonzero active liquidity using bounded token transfers')
 		},
 		buildContinuationPlan(snapshot, options, context) {
 			const cleanup = () => seederAllowanceCleanup(snapshot, context, 'genesis', definition)
@@ -344,18 +351,7 @@ function universeLiquidityDefinition(kind: 'seed' | 'add'): OperationDefinition 
 			const amounts = uniswapSeedAmounts(snapshot, options, target.repToken)
 			const seed = amounts === undefined ? undefined : uniswapSeedSteps(snapshot, 'universe', target.pool, target.repToken, amounts, `${kind === 'seed' ? 'Seed' : 'Add'} universe ${target.universeId} REP/WETH liquidity`)
 			if (seed === undefined) return undefined
-			const { liquidity, maximum0, maximum1, seeder, steps, token0, token1 } = seed
-			return planBase({
-				definitionId: definition.id,
-				ecosystem: 'trading',
-				label: definition.label,
-				maximumCleanupTransactionCount: 2,
-				metadata: { liquidity: liquidity.toString(), maximum0: maximum0.toString(), maximum1: maximum1.toString(), pool: target.pool, rep: target.repToken, seeder, token0, token1, universeId: target.universeId },
-				postconditions: ['The authenticated child-universe REP/WETH pool has nonzero active liquidity using bounded token transfers'],
-				risk: 'medium',
-				snapshot,
-				steps,
-			})
+			return liquiditySeedPlan(definition, snapshot, seed, { pool: target.pool, rep: target.repToken, universeId: target.universeId }, 'The authenticated child-universe REP/WETH pool has nonzero active liquidity using bounded token transfers')
 		},
 		buildContinuationPlan(snapshot, options, context) {
 			const cleanup = () => seederAllowanceCleanup(snapshot, context, 'universe', definition)

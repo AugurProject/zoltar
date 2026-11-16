@@ -6,8 +6,6 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, simulationSetupTimeoutMs, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
-import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
-import { deploymentConfigurationForPlan, getTradingDeploymentPlan } from '../../protocol/deployment.js'
 import { discoverLiveUniverseMarketPage, loadLiveBalances, simulateEntry, submitFreshEntry, simulateExit, submitFreshExit, type LiveMarket } from '../../protocol/live.js'
 import { LiveLiquidityControls } from '../../features/LiveLiquidityControls.js'
 import { LivePositionControls } from '../../features/LivePositionControls.js'
@@ -15,6 +13,8 @@ import { LiveSettlementControls } from '../../features/LiveSettlementControls.js
 import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
 import { positionTicket } from '../support/positionTicket.js'
 import { buttonByLabel } from '../support/dom.js'
+import { passthroughWorkflowPanelProps } from '../support/liveWorkflowPanelProps.js'
+import { simulationDeploymentConfiguration } from '../support/simulationDeploymentConfiguration.js'
 import { registerTradingSimulationScenario } from '../../simulation/index.js'
 
 for (const symbol of ['USDC', 'USDT'])
@@ -37,11 +37,7 @@ for (const symbol of ['USDC', 'USDT'])
 			const restore = installActiveEnvironmentForTesting(backend, backend)
 			const account = backend.accounts[0]
 			if (account === undefined) throw new Error('Missing account')
-			const addresses = getInfraContractAddresses(backend.profile)
-			const configuration = deploymentConfigurationForPlan(
-				getTradingDeploymentPlan({ genesisOutcome: 'yes', chainId: backend.profile.chain.id, chainName: backend.profile.displayName, defaultRpcUrl: 'http://127.0.0.1/', id: 'simulation', proxyDeployer: PROXY_DEPLOYER_ADDRESS, securityPoolFactory: addresses.securityPoolFactory, zoltar: addresses.zoltar }, 30),
-				'http://127.0.0.1/',
-			)
+			const configuration = simulationDeploymentConfiguration(backend)
 			const read = backend.createReadClient()
 			const wallet = backend.createWriteClient(account)
 			const requests: Parameters<typeof wallet.writeContract>[0][] = []
@@ -66,27 +62,16 @@ for (const symbol of ['USDC', 'USDT'])
 					await read.waitForTransactionReceipt({ hash })
 				}
 				const context = async (selected: LiveMarket) => ({
+					...passthroughWorkflowPanelProps,
 					configuration,
 					market: selected,
 					balances: await loadLiveBalances(read, selected, account),
 					balanceState: 'ready' as const,
-					balanceError: undefined,
 					account,
 					walletClient: client,
-					networkMismatchReason: undefined,
-					wallet: { actionLabel: 'Connect wallet', connect: async () => undefined },
 					settings: DEFAULT_TRADE_SETTINGS,
-					externallyLocked: false,
 					nowSeconds: (await read.getBlock()).timestamp,
 					refresh: async () => undefined,
-					onKnownReceipt: () => undefined,
-					executeWithCurrentWalletContext: async <T,>(_account: unknown, _network: unknown, _wallet: unknown, action: () => Promise<T>) => await action(),
-					createGuardedWalletWrite:
-						() =>
-						async <T,>(write: () => Promise<T>) =>
-							await write(),
-					retryBalances: async () => undefined,
-					onWorkflowLockChange: () => undefined,
 				})
 				const typeAmount = async (value: string) =>
 					await act(() => {

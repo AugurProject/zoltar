@@ -10,7 +10,6 @@ import { EscalationGameProofVerifier } from '../EscalationGameProofVerifier.sol'
 import { BinaryOutcomes } from '../BinaryOutcomes.sol';
 import { EscalationGameClaimDelegate } from '../EscalationGameClaimDelegate.sol';
 import { EscalationGameDepositDelegate } from '../EscalationGameDepositDelegate.sol';
-import { ISecurityPoolForker } from '../interfaces/ISecurityPoolForker.sol';
 import { Create2Deployment } from './Create2Deployment.sol';
 
 contract EscalationGameFactory {

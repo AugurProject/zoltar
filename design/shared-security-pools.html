@@ -665,7 +665,7 @@
 				<p>This section follows a portfolio from creation to redemption. Numbers in the examples use illustrative parameters: a security multiplier of 150% (15,000 basis points), a 5% oracle tolerance, a 1% purchase fee, a 10% annual holding fee and a 1 ETH minimum commitment. All of these are configured per portfolio or per deployment, not fixed by the protocol, except where the text says otherwise.</p>
 
 				<h3 id="create">4.1 Creating a portfolio and registering questions</h3>
-				<p>A portfolio is created with an <code>OriginConfig</code> specifying its universe, security multiplier and oracle report priority fee. The multiplier must exceed 10,001 basis points and the priority fee must be positive; question adapters are registered within the portfolio rather than supplied as standalone seed pools. The creator supplies an immutable <strong>admission policy</strong> contract and an <strong>economics configuration</strong>. The repository ships two policies: <em>Open</em>, which admits any question, and <em>Fixed</em>, which admits a sorted list of question identifiers that can never change. Anyone can write another policy; it is consulted with a static call on registration, quotes and purchases, never on withdrawals or recovery, so a broken policy cannot trap funds.</p>
+				<p>A portfolio is created with an <code>OriginConfig</code> specifying its universe, security multiplier and oracle report priority fee. The multiplier must be at least 10,500 basis points (105%) and the priority fee must be positive; question adapters are registered within the portfolio rather than supplied as standalone seed pools. The creator supplies an immutable <strong>admission policy</strong> contract and an <strong>economics configuration</strong>. The repository ships two policies: <em>Open</em>, which admits any question, and <em>Fixed</em>, which admits a sorted list of question identifiers that can never change. Anyone can write another policy; it is consulted with a static call on registration, quotes and purchases, never on withdrawals or recovery, so a broken policy cannot trap funds.</p>
 				<div class="table-wrap">
 					<table>
 						<thead>
@@ -733,7 +733,7 @@
 							<mfrac><mi>healthTarget</mi><mn>10 000</mn></mfrac>
 						</mrow>
 					</math>
-					<p class="equation-caption">Each multiplication rounds up in the contract. The capital ledger uses the portfolio’s configured security multiplier, floored at 10,500 basis points (105%). The health target is at least 10,000 basis points.</p>
+					<p class="equation-caption">Each multiplication rounds up in the contract. The capital ledger uses the portfolio’s configured security multiplier, which is at least 10,500 basis points (105%). The health target is at least 10,000 basis points.</p>
 				</div>
 				<p>Rather than re-evaluating every position at each new price, the index stores for every position the highest price at which it is still healthy at the protocol floor:</p>
 				<div class="equation" id="eq-max-healthy-price">

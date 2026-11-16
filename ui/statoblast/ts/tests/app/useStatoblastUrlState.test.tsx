@@ -1,13 +1,13 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { UniverseIdentity } from '@zoltar/ui-core-shared/components/UniverseIdentity.js'
 import { act } from 'preact/test-utils'
 import { useStatoblastUrlState } from '../../app/hooks/useStatoblastUrlState.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { resetRoutingForTesting } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { installStatoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { renderUniverseBackdrop } from '@zoltar/ui-core-shared/tests/testUtils/universeBackdropHarness.js'
 
 type UseUrlState = typeof useStatoblastUrlState
 type UseUrlStateState = ReturnType<UseUrlState>
@@ -63,21 +63,13 @@ describe('useStatoblastUrlState', () => {
 		const overflow = 1n << 248n
 		const maximum = overflow - 1n
 		window.history.replaceState({}, '', `/?universe=${overflow}#/pools?universe=0x${overflow.toString(16)}`)
-		let hookState: UseUrlStateState | undefined
-		function Harness() {
-			hookState = useStatoblastUrlState()
-			return <UniverseIdentity universeId={hookState.activeUniverseId} variant='backdrop' />
-		}
-		const rendered = await renderIntoDocument(<Harness />)
-		cleanupRenderedComponent = rendered.cleanup
-		expect(requireState(hookState).activeUniverseId).toBe(0n)
-		expect(rendered.container.querySelector('.universe-identity-backdrop')?.getAttribute('data-universe-id')).toBe('0')
-		await act(() => {
-			window.history.replaceState({}, '', `/?universe=${overflow}#/pools?universe=${maximum}`)
-			window.dispatchEvent(new Event('popstate'))
-		})
-		expect(requireState(hookState).activeUniverseId).toBe(maximum)
-		expect(rendered.container.querySelector('.universe-identity-backdrop')?.getAttribute('data-universe-id')).toBe(maximum.toString())
+		const backdrop = await renderUniverseBackdrop(useStatoblastUrlState)
+		cleanupRenderedComponent = backdrop.cleanup
+		expect(backdrop.activeUniverseId()).toBe(0n)
+		expect(backdrop.backdropUniverseId()).toBe('0')
+		await backdrop.navigate(`/?universe=${overflow}#/pools?universe=${maximum}`)
+		expect(backdrop.activeUniverseId()).toBe(maximum)
+		expect(backdrop.backdropUniverseId()).toBe(maximum.toString())
 	})
 
 	test('lands on Browse pools before the default route hash is installed', async () => {

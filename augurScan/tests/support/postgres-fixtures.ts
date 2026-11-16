@@ -46,6 +46,14 @@ export const transaction = (): StoredTransaction => ({
 	decoded: { status: 'unknown', summary: 'Unknown call' },
 })
 
+// The shared fixture transaction under its own hash, with an empty receipt in the given block.
+export const evidenceTransaction = (hash: BlockHash, inBlock: BlockHash, decoded: StoredTransaction['decoded']): StoredTransaction => ({
+	...transaction(),
+	hash,
+	receipt: { transactionHash: hash, blockHash: inBlock, status: 'success', logs: [] },
+	decoded,
+})
+
 export const log = (hash: BlockHash, summary: string): StoredLog => ({
 	transactionHash,
 	blockHash: hash,
@@ -98,13 +106,10 @@ export const priceHistoryLogs = (hash: BlockHash): readonly StoredLog[] => [
 		parent: '0x0000000000000000000000000000000000000000',
 		universeId: '0',
 		questionId: '42',
-		collateralRepairAuction: rediscoveredAddress,
 		openOraclePriceCoordinator: promotedAddress,
 		shareToken: wethAddress,
 		statoblastSecurityMultiplierBps: '15000',
 		initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n.toString(),
-		currentRetentionRate: '999999000000000000',
-		settlementCollateralAttoEth: 12_000_000_000_000_000_000n.toString(),
 	}),
 	decodedLog(hash, 3, address, 'PairCreated', {
 		securityPool: discoveredAddress,

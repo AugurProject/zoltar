@@ -4,15 +4,21 @@ import { encodeDeployData, parseAbi, zeroAddress, type Address } from '@zoltar/c
 import { buildPortfolioDeploymentRequest, buildPortfolioPrepareNextRequest, type PortfolioEconomicsConfig } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
-import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_SecurityPoolOpenAdmissionPolicy_SecurityPoolOpenAdmissionPolicy as openAdmissionArtifact } from '../../types/contractArtifact'
+import {
+	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
+	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
+	statoblast_SecurityPoolOpenAdmissionPolicy_SecurityPoolOpenAdmissionPolicy as openAdmissionArtifact,
+	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
+} from '../../types/contractArtifact'
 import { deployContract } from '../../testSupport/deployContract'
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { DAY, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { applyLibraries, getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getTestPortfolioDeployers } from '../../testSupport/simulator/utils/contracts/deployTestPortfolio'
 import { createQuestion, makeQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
+import { forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { manipulatePriceOracle } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
-import { approveToken } from '../../testSupport/simulator/utils/utilities'
+import { approveToken, getChildUniverseId } from '../../testSupport/simulator/utils/utilities'
 import { usePortfolioProtocolFixture } from './portfolioProtocolFixture'
 
 export const unit = 10n ** 18n
@@ -54,17 +60,7 @@ export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<Port
 			maximumQuestionHorizonSeconds,
 			questionAdmissionPolicy: policy,
 			economics: configuration,
-			deployers: {
-				capital: infrastructure.securityPoolCapitalLedgerDeployer,
-				commitments: infrastructure.securityPoolCommitmentIndexDeployer,
-				fees: infrastructure.securityPoolCapitalFeeStreamsDeployer,
-				books: infrastructure.securityPoolSettlementBookDeployer,
-				settlement: infrastructure.securityPoolPortfolioSettlementDeployer,
-				reporters: infrastructure.securityPoolReporterLedgerDeployer,
-				forks: infrastructure.securityPoolPortfolioForkCoordinatorDeployer,
-				auctions: infrastructure.securityPoolPortfolioAuctionDeployer,
-				services: infrastructure.securityPoolPortfolioServicesDeployer,
-			},
+			deployers: getTestPortfolioDeployers(),
 			artifact: { abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object) },
 		})
 		const receipt = await owner().waitForTransactionReceipt({ hash: await owner().sendTransaction({ ...request, gas: 16_777_216n }) })
@@ -120,6 +116,20 @@ export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<Port
 		const fee = options.budget ?? (quote[0] * 10_100n + 9_999n) / 10_000n
 		return writeContractAndWait(sender, () => sender.writeContract({ abi: portfolioArtifact.abi, address: namespace, functionName: 'createCompleteSet', args: [base.genesisUniverse, question, amount, options.recipient ?? sender.account.address, options.minimumShares ?? 0n, amount + fee - amount], value: 0n }))
 	}
+	/** Forks the genesis universe on the base question, has the owner choose Yes, and starts that branch 56 days after the fork. */
+	const forkAndStartYesBranch = async () => {
+		const source = base.genesisUniverse
+		const forks = await owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'forkController' })
+		await base.mockWindow.setTime(base.questionData.endTime + 1n)
+		await approveToken(owner(), getRepTokenAddress(source), getZoltarAddress())
+		await forkUniverse(owner(), source, base.questionId)
+		const forkTime = (await getUniverseData(owner(), source)).forkTime
+		await writeContractAndWait(owner(), () => owner().writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'choose', args: [source, 1n] }))
+		const child = getChildUniverseId(source, 1)
+		await base.mockWindow.setTime(forkTime + 56n * DAY)
+		await writeContractAndWait(owner(), () => owner().writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'startBranch', args: [source, 1n] }))
+		return { forks, forkTime, child }
+	}
 	beforeAll(async () => {
 		await wrapWeth(owner(), 10_000n * unit)
 		await wrapWeth(other(), 10_000n * unit)
@@ -147,6 +157,7 @@ export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<Port
 		authorize,
 		prepare,
 		mint,
+		forkAndStartYesBranch,
 		get portfolio() {
 			return portfolio
 		},

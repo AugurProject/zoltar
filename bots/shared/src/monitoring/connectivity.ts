@@ -142,6 +142,7 @@ async function rawRpcRequest(url: string, method: string, params: readonly unkno
 		signal: AbortSignal.timeout(timeoutMilliseconds),
 	})
 	if (!response.ok) {
+		void response.body?.cancel().catch(() => undefined)
 		const message = `RPC returned HTTP ${response.status.toString()}`
 		if (response.status === 408 || response.status === 425 || response.status === 429 || response.status >= 500) throw new EndpointTransportError(message)
 		throw new Error(message)
@@ -283,6 +284,7 @@ async function rawCapabilityErrorResponse(url: string, body: string, headers: Re
 	})
 	const boundedClientErrorResponse = response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 425 && response.status !== 429
 	if (!response.ok && !(parameters.allowClientErrorResponse && boundedClientErrorResponse)) {
+		void response.body?.cancel().catch(() => undefined)
 		const message = `${parameters.label}: RPC returned HTTP ${response.status.toString()}`
 		if (response.status === 408 || response.status === 425 || response.status === 429 || response.status >= 500) throw new EndpointTransportError(message)
 		throw new EndpointSafetyError(message)
@@ -440,6 +442,7 @@ async function rawRelayCapabilityError(url: string, requestedMethod: string, cap
 		signal: AbortSignal.timeout(timeoutMilliseconds),
 	})
 	if (!response.ok) {
+		void response.body?.cancel().catch(() => undefined)
 		const message = `Endpoint did not prove ${capabilityMethod} support: RPC returned HTTP ${response.status.toString()}`
 		if (response.status === 408 || response.status === 425 || response.status === 429 || response.status >= 500) throw new EndpointTransportError(message)
 		throw new Error(message)

@@ -2,7 +2,7 @@ import type { SQL } from 'bun'
 import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import { tradingCatalogRows } from '../repositories/trading-catalog.ts'
 import { snapshotBoundary } from './entity-details.ts'
-import { ApiRequestError, integer, isNonNegativeSafeInteger, isPostgresBigint, json } from './shared.ts'
+import { ApiRequestError, hasCursorSnapshot, integer, isNonNegativeSafeInteger, json } from './shared.ts'
 import { operationsAsOfForContinuations } from './snapshot.ts'
 import { EMPTY_TRADING_VOLUME, tradingVolumes } from './trading-activity.ts'
 
@@ -10,6 +10,15 @@ export type OffsetCursor = readonly [number, string, string, string, string, str
 
 export const rejectRawSnapshotOffset = (url: URL): void => {
 	if (url.searchParams.has('offset')) throw new ApiRequestError('offset requires a snapshot-bound cursor')
+}
+
+/** Reads the required chain and the 1–250 page size (default 100) shared by the snapshot-bound catalog endpoints. */
+export const snapshotCatalogRequest = (url: URL): { readonly chainId: number; readonly limit: number } => {
+	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
+	if (chainId === undefined) throw new ApiRequestError('chainId is required')
+	rejectRawSnapshotOffset(url)
+	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
+	return { chainId, limit: Math.min(Math.max(requestedLimit, 1), 250) }
 }
 
 export const offsetPage = (url: URL, chainId: number, domain: string, identity: string) => {
@@ -20,19 +29,7 @@ export const offsetPage = (url: URL, chainId: number, domain: string, identity: 
 		parts => parts,
 		error => new ApiRequestError('cursor is invalid', { cause: error }),
 	)
-	if (
-		parts.length !== 10 ||
-		!isNonNegativeSafeInteger(parts[0]) ||
-		typeof parts[1] !== 'string' ||
-		typeof parts[2] !== 'string' ||
-		!isPostgresBigint(parts[3]) ||
-		typeof parts[4] !== 'string' ||
-		!/^0x[0-9a-f]{64}$/.test(parts[4]) ||
-		!isPostgresBigint(parts[5]) ||
-		!parts.slice(6, 9).every(part => typeof part === 'string') ||
-		!isNonNegativeSafeInteger(parts[9])
-	)
-		throw new ApiRequestError('cursor is invalid')
+	if (parts.length !== 10 || !isNonNegativeSafeInteger(parts[0]) || typeof parts[1] !== 'string' || typeof parts[2] !== 'string' || !hasCursorSnapshot(parts, 3) || !isNonNegativeSafeInteger(parts[9])) throw new ApiRequestError('cursor is invalid')
 	if (parts[0] !== chainId || parts[1] !== domain) throw new ApiRequestError('cursor does not match filters')
 	return { identity: parts[2], offset: parts[9], cursor: parts as [number, string, string, string, string, string, string, string, string, number] }
 }
@@ -40,11 +37,7 @@ export const offsetPage = (url: URL, chainId: number, domain: string, identity: 
 export const offsetCursorFor = (chainId: number, domain: string, identity: string, asOf: Record<string, unknown>, offset: number): string => encodeOpaqueCursor([chainId, domain, identity, ...snapshotBoundary(asOf), offset] satisfies OffsetCursor)
 
 export const tradingCatalogResponse = async (sql: SQL, url: URL): Promise<Response> => {
-	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
-	if (chainId === undefined) throw new ApiRequestError('chainId is required')
-	rejectRawSnapshotOffset(url)
-	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
-	const limit = Math.min(Math.max(requestedLimit, 1), 250)
+	const { chainId, limit } = snapshotCatalogRequest(url)
 	const query = url.searchParams.get('q')?.trim().toLowerCase()
 	if (query !== undefined && query.length > 128) throw new ApiRequestError('q must not exceed 128 characters')
 	const cursorIdentity = query ?? ''

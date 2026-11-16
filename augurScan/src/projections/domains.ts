@@ -31,7 +31,7 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	...definitions('system', 'token-authorization', ['AuthorizationUsed', 'AuthorizationCanceled']),
 	...definitions('system', 'weth', ['Deposit', 'Withdrawal']),
 	...definitions('report', 'open-oracle-report', ['ReportSubmitted', 'ReportDisputed', 'ReportSettled'], ['reportId']),
-	...definitions('oracle', 'price-coordinator', ['PendingReportRecovered', 'PriceReportRejected', 'PriceReported', 'PriceRequested', 'RepEthPriceSet', 'SecurityPoolSet', 'SharedPriceFeedSet', 'InternalApproval']),
+	...definitions('oracle', 'price-coordinator', ['PendingReportRecovered', 'PriceReportRejected', 'PriceReported', 'PriceRequested', 'SecurityPoolSet', 'SharedPriceFeedSet', 'InternalApproval']),
 	...definitions('oracle', 'price-feed', ['CoordinatorRegistered', 'ExposureCheckpoint', 'ReportFundingAssigned', 'ReportOperationAttempted']),
 	...definitions('escalation', 'escalation', [
 		'CarryDepositConsumed',
@@ -45,7 +45,6 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 		'GameContinuedFromFork',
 		'GameStarted',
 		'InheritedThresholdTie',
-		'InheritedThresholdTieReopened',
 		'LocalDepositAppended',
 		'NonDecisionReached',
 		'OrdinarySettlementInitialized',

@@ -1,4 +1,4 @@
-import { isRecord } from '../infrastructure/json-validation.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 type Guard<T> = (value: unknown) => value is T
 
@@ -23,14 +23,14 @@ export function oneOf<const T extends string | number | boolean>(...choices: rea
 // Extra fields remain available for forward-compatible API additions.
 export function object<T extends object>(fields: { [K in keyof T]-?: Guard<T[K]> }): Guard<T> {
 	return (value): value is T => {
-		if (!isRecord(value)) return false
+		if (!isPlainRecord(value)) return false
 		for (const key in fields) if (!fields[key](value[key])) return false
 		return true
 	}
 }
 
 export function dictionary<T>(guard: Guard<T>): Guard<Record<string, T>> {
-	return (value): value is Record<string, T> => isRecord(value) && Object.values(value).every(item => guard(item))
+	return (value): value is Record<string, T> => isPlainRecord(value) && Object.values(value).every(item => guard(item))
 }
 
 export function decode<T>(value: unknown, guard: Guard<T>, label: string): T {

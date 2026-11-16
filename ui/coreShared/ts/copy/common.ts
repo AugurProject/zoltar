@@ -111,7 +111,7 @@ export const formatRequiredValue = (amount: CopyTemplateValue) => `Required ${am
 export const formatApprovedValue = (amount: CopyTemplateValue) => `Approved ${amount}`
 export const formatValueApprovalAmount = (tokenLabel: CopyTemplateValue, purpose?: string) => (purpose === undefined ? `${tokenLabel} approval amount` : `${purpose}: ${tokenLabel} approval amount`)
 export const requiredTotalPlaceholder = 'Required'
-export const leaveBlankForRequiredTotal = 'Leave blank for required total'
+export const blankUsesRequiredTotal = 'Blank uses required total'
 export const emptyStateDetail = 'Nothing to show.'
 export const unlimitedApproval = 'Unlimited approval'
 export const approvalAmountTooLargeError = 'Approval amount is too large.'
@@ -165,3 +165,6 @@ export const formatLocalTimeLabel = (localTimestamp: CopyTemplateValue) => `Loca
 export const formatApprovalResetRequired = (symbol: string) => `Reset ${symbol} approval first.`
 
 export const formatResetTokenApproval = (symbol: string) => `Reset ${symbol} approval`
+export const formatResettingTokenApproval = (symbol: string) => `Resetting ${symbol} approval…`
+/** The reason a prerequisite step, such as an allowance reset or an ETH wrap, is disabled when nothing is left for it to do. */
+export const notNeeded = 'Not needed.'

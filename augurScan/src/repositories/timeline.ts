@@ -24,6 +24,20 @@ export type TimelineFilters = {
 
 export const timelineCatalogRows = async (sql: SQL, filters: TimelineFilters) => {
 	const { chainId, entityType, event, address, query, fromBlock, toBlock, canonical, asOfBlock, cursor, limit } = filters
+	// A fresh fragment per query, so the rows and count queries never share one Query object.
+	const timelineFilter = () => sql`
+		WHERE timeline.chain_id = ${chainId} AND timeline.block_number BETWEEN ${fromBlock} AND ${toBlock}
+			AND timeline.block_number <= ${asOfBlock}
+			AND (${canonical === 'all'} OR timeline.canonical = ${canonical === 'canonical'})
+			AND (${entityType ?? null}::text IS NULL OR timeline.entity_type = ${entityType ?? null})
+			AND (${event ?? null}::text IS NULL OR timeline.semantic_event_kind = ${event ?? null})
+			AND (${address ?? null}::text IS NULL OR timeline.source_contract = ${address ?? null}
+				OR timeline.related_entities ? ${address ?? ''} OR timeline.summary_data::text ILIKE ${address === undefined ? '' : `%${address}%`})
+			AND (${query ?? null}::text IS NULL OR timeline.entity_identity ILIKE ${query === undefined ? '' : literalContainsPattern(query)}
+				OR timeline.semantic_event_kind ILIKE ${query === undefined ? '' : literalContainsPattern(query)}
+				OR timeline.source_contract ILIKE ${query === undefined ? '' : literalContainsPattern(query)}
+				OR timeline.summary_data::text ILIKE ${query === undefined ? '' : literalContainsPattern(query)})
+	`
 	const [rows, totalRows] = await Promise.all([
 		sql`
 			SELECT timeline.*, block.timestamp AS block_timestamp,
@@ -50,17 +64,7 @@ export const timelineCatalogRows = async (sql: SQL, filters: TimelineFilters) =>
 					AND occurrence.sub_index = timeline.log_index
 				ORDER BY replacement.id DESC LIMIT 1
 			) invalidation ON true
-			WHERE timeline.chain_id = ${chainId} AND timeline.block_number BETWEEN ${fromBlock} AND ${toBlock}
-				AND timeline.block_number <= ${asOfBlock}
-				AND (${canonical === 'all'} OR timeline.canonical = ${canonical === 'canonical'})
-				AND (${entityType ?? null}::text IS NULL OR timeline.entity_type = ${entityType ?? null})
-				AND (${event ?? null}::text IS NULL OR timeline.semantic_event_kind = ${event ?? null})
-				AND (${address ?? null}::text IS NULL OR timeline.source_contract = ${address ?? null}
-					OR timeline.related_entities ? ${address ?? ''} OR timeline.summary_data::text ILIKE ${address === undefined ? '' : `%${address}%`})
-				AND (${query ?? null}::text IS NULL OR timeline.entity_identity ILIKE ${query === undefined ? '' : literalContainsPattern(query)}
-					OR timeline.semantic_event_kind ILIKE ${query === undefined ? '' : literalContainsPattern(query)}
-					OR timeline.source_contract ILIKE ${query === undefined ? '' : literalContainsPattern(query)}
-					OR timeline.summary_data::text ILIKE ${query === undefined ? '' : literalContainsPattern(query)})
+			${timelineFilter()}
 				AND (timeline.block_number, timeline.log_index, timeline.tx_hash, timeline.block_hash, timeline.entity_type, timeline.entity_identity) <
 					(${cursor.block}::bigint, ${cursor.log}::integer, ${cursor.tx}, ${cursor.blockHash}, ${cursor.entityType}, ${cursor.identity})
 			ORDER BY timeline.block_number DESC, timeline.log_index DESC, timeline.tx_hash DESC,
@@ -68,18 +72,7 @@ export const timelineCatalogRows = async (sql: SQL, filters: TimelineFilters) =>
 			LIMIT ${limit + 1}
 		`,
 		sql`
-			SELECT count(*)::text AS total FROM protocol_timeline_entries timeline
-			WHERE timeline.chain_id = ${chainId} AND timeline.block_number BETWEEN ${fromBlock} AND ${toBlock}
-				AND timeline.block_number <= ${asOfBlock}
-				AND (${canonical === 'all'} OR timeline.canonical = ${canonical === 'canonical'})
-				AND (${entityType ?? null}::text IS NULL OR timeline.entity_type = ${entityType ?? null})
-				AND (${event ?? null}::text IS NULL OR timeline.semantic_event_kind = ${event ?? null})
-				AND (${address ?? null}::text IS NULL OR timeline.source_contract = ${address ?? null}
-					OR timeline.related_entities ? ${address ?? ''} OR timeline.summary_data::text ILIKE ${address === undefined ? '' : `%${address}%`})
-				AND (${query ?? null}::text IS NULL OR timeline.entity_identity ILIKE ${query === undefined ? '' : literalContainsPattern(query)}
-					OR timeline.semantic_event_kind ILIKE ${query === undefined ? '' : literalContainsPattern(query)}
-					OR timeline.source_contract ILIKE ${query === undefined ? '' : literalContainsPattern(query)}
-					OR timeline.summary_data::text ILIKE ${query === undefined ? '' : literalContainsPattern(query)})
+			SELECT count(*)::text AS total FROM protocol_timeline_entries timeline ${timelineFilter()}
 		`,
 	])
 	return { rows, totalRows }

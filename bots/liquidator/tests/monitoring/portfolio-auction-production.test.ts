@@ -1,19 +1,13 @@
 import { PORTFOLIO_CHECKPOINT_GAS_RESERVE } from '../../src/execution/gas-estimate.ts'
 import { describe, expect, test } from 'bun:test'
-import { createPublicClient, createWalletClient, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
-import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
-import { mainnet } from '@zoltar/core-shared/evm/ethereum'
 import { paddedTransactionGas } from '@zoltar/bot-shared/execution/transaction-submission'
-import { securityPoolCapitalLedgerAbi as capitalAbi, erc20Abi } from '@zoltar/bot-shared/contracts/abi'
+import { securityPoolCapitalLedgerAbi as capitalAbi } from '@zoltar/bot-shared/contracts/abi'
 import { useSecurityPoolPortfolioFixture, unit } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioFixture'
 import { preparePortfolioCollateralRepairAuction } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioCollateralRepairAuctionFixture'
-import { getInfraContractAddresses } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
-import { getZoltarAddress } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
-import { createWriteClient, writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients'
 import { loadPortfolioObservation } from '../../src/monitoring/portfolio-monitor.ts'
 import { portfolioTarget } from '../../src/monitoring/portfolio-auction.ts'
 import { executePortfolioTakeover } from '../../src/execution/portfolio-executor.ts'
-import { portfolioSettings } from '../support/portfolio-observation.ts'
+import { distressedSecondWinner, repairAuctionKeeper } from '../support/collateral-repair-auction.ts'
 import { serveMockChainRpc } from '../support/mock-chain-rpc.ts'
 
 describe('portfolio operator funded auction capital integration', () => {
@@ -28,17 +22,9 @@ describe('portfolio operator funded auction capital integration', () => {
 		const second = await context.bid(context.other, 3n, (35n * unit) / 10n)
 		await context.closingQuote()
 		await context.finalize()
-		const account = privateKeyToAccount(`0x${'01'.repeat(32)}`)
+		const keeperOperator = repairAuctionKeeper(fixture, context)
+		const { account, reader, scope, settings, wallet } = keeperOperator
 		await context.mock.setBalance(account.address, unit / 50n)
-		const reader = createPublicClient({ chain: mainnet, transport: custom(context.mock) })
-		const wallet = createWalletClient({ account, chain: mainnet, transport: custom(context.mock) })
-		const settings = portfolioSettings()
-		const scope = { address: fixture.portfolio, universeId: context.child, nextPositionId: 1n, sweepEnd: 0n }
-		settings.deployment.securityPoolFactory = getInfraContractAddresses().securityPoolFactory
-		settings.deployment.zoltar = getZoltarAddress()
-		settings.deployment.multicall3 = getInfraContractAddresses().multicall3
-		settings.selectedPortfolios = [scope]
-		settings.approvedUniverses = [context.child]
 		const ownerExposure = await loadPortfolioObservation(reader, settings, context.owner.account.address, scope, await reader.getBlockNumber())
 		expect(ownerExposure.ownedVaults?.map(vault => vault.owner)).toContain(first.vault)
 		expect(ownerExposure.managedPrincipalAttoRep).toBeGreaterThan(ownerExposure.snapshot.ownerPrincipalAttoRep)
@@ -63,21 +49,7 @@ describe('portfolio operator funded auction capital integration', () => {
 			// Cures are unpaid, so the keeper never cures standalone and both winners stay virtual until a funded acquisition.
 			expect((await reader.readContract({ address: context.capital, abi: capitalAbi, functionName: 'auctionPosition', args: [first.id] })).materialized).toBe(false)
 			await context.mock.setBalance(account.address, 100n * unit)
-			// Retire chosen capital down to claim demand so cure cannot change K.
-			await context.report(unit)
-			await writeContractAndWait(context.owner, () => context.owner.writeContract({ address: context.capital, abi: capitalAbi, functionName: 'setCommitment', args: [5n * unit] }))
-			await context.report(2n * unit)
-			await context.mock.advanceTime(3601n)
-			await context.report(2n * unit)
-			await context.mock.impersonateAccount(account.address)
-			const keeper = createWriteClient(context.mock, BigInt(account.address))
-			await writeContractAndWait(keeper, () => keeper.writeContract({ address: context.capital, abi: capitalAbi, functionName: 'setHealthTarget', args: [15_000n] }))
-			await writeContractAndWait(context.owner, () => context.owner.writeContract({ address: context.token, abi: erc20Abi, functionName: 'transfer', args: [account.address, 20n * unit] }))
-			settings.strategy.maximumGasCostAttoEth = unit / 50n
-			const next = await loadPortfolioObservation(reader, settings, account.address, scope, await reader.getBlockNumber())
-			const winner = next.positions.find(position => position.auctionTarget?.bidId === second.id)
-			if (winner === undefined) throw new Error('Second auction target disappeared')
-			expect(next.snapshot.totalCommitmentAttoEth).toBe(next.snapshot.demandAttoEth)
+			const { next, winner } = await distressedSecondWinner(context, keeperOperator, second.id)
 			for (let step = 0; step < 3; step++) {
 				const before = state.activities.filter(activity => activity.status === 'confirmed').length
 				await executePortfolioTakeover(wallet, settings, state, pool, next, portfolioTarget(winner), async () => true)

@@ -7,7 +7,7 @@ import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { getERC20Balance } from '../../testSupport/simulator/utils/utilities'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
-import { getActivationTime, getEscalationGameOutcomeState, getEscrowedRepByVault, getTotalEscrowedRep, readCarryPeaks, readCarryLeafCount, readCarryTotal, readNullifierRoot, readCarryLeafPage } from '../../testSupport/simulator/utils/contracts/escalationGame'
+import { getActivationTime, getEscalationGameOutcomeState, getEscrowedRepByVault, getTotalEscrowedRep, readCarryTotal, readCarryLeafPage } from '../../testSupport/simulator/utils/contracts/escalationGame'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { ensureDefined } from '../../testSupport/simulator/utils/testUtils'
 import { statoblast_EscalationGame_EscalationGame, test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact } from '../../types/contractArtifact'
@@ -20,12 +20,8 @@ describe('Escalation Game: local accounting and exports', () => {
 	const fixture = useEscalationGameFixture()
 	const {
 		reportBond,
-		nonDecisionThresholdAttoRep,
 		recursiveResolutionTargetCost,
 		deployEscalationGameTestSecurityPool,
-		deployEscalationGameWithProofPool,
-		startEscalation,
-		startEscalationFromFork,
 		advanceForkContinuationPastStart,
 		depositOnOutcomeViaProofTestSecurityPool,
 		assertEscrowAccounting,
@@ -36,6 +32,8 @@ describe('Escalation Game: local accounting and exports', () => {
 		assertOutcomeCarryTotalsMatchComponents,
 		initializeSnapshotViaTestSecurityPool,
 		getEscalationReplayLogs,
+		deployForkContinuationEscalationGame,
+		readOutcomeCarrySnapshot,
 	} = fixture
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
@@ -84,17 +82,12 @@ describe('Escalation Game: local accounting and exports', () => {
 	})
 
 	test('proof-backed withdrawDeposit reverts before question finalization', async () => {
-		const parent = await deployEscalationGameWithProofPool()
-		await startEscalation(parent.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep)
+		const parent = await deployEscalationGameTestSecurityPool()
 		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 
-		const parentLeafCount = await readCarryLeafCount(client, parent.escalationGameAddress, QuestionOutcome.Yes)
-		const parentCarryTotal = await readCarryTotal(client, parent.escalationGameAddress, QuestionOutcome.Yes)
-		const parentNullifierRoot = await readNullifierRoot(client, parent.escalationGameAddress, QuestionOutcome.Yes)
-		const parentYesPeaks = await readCarryPeaks(client, parent.escalationGameAddress, QuestionOutcome.Yes)
+		const { peaks: parentYesPeaks, leafCount: parentLeafCount, carryTotal: parentCarryTotal, nullifierRoot: parentNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Yes)
 
-		const child = await deployEscalationGameWithProofPool()
-		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+		const child = await deployForkContinuationEscalationGame()
 		await initializeSnapshotViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, parentLeafCount, 0n], [0n, parentCarryTotal, 0n], [zeroHash(), parentNullifierRoot, zeroHash()])
 
 		const proof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 0n, [], new SparseNullifierTree().getProof(0n))
@@ -102,8 +95,7 @@ describe('Escalation Game: local accounting and exports', () => {
 	})
 
 	test('vault unresolved export moves aggregate totals once without scanning deposit history', async () => {
-		const deployment = await deployEscalationGameWithProofPool()
-		await startEscalation(deployment.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep)
+		const deployment = await deployEscalationGameTestSecurityPool()
 		const depositCount = 65
 		for (let index = 0; index < depositCount; index += 1) {
 			await depositOnOutcomeViaProofTestSecurityPool(deployment.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
@@ -146,8 +138,7 @@ describe('Escalation Game: local accounting and exports', () => {
 	})
 
 	test('local unresolved export by deposit index consumes only the selected local deposit', async () => {
-		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameWithProofPool()
-		await startEscalation(escalationGameAddress, reportBond, nonDecisionThresholdAttoRep)
+		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
 		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 2n * reportBond)
 		await assertEscrowAccounting(escalationGameAddress, 3n * reportBond)
@@ -190,8 +181,7 @@ describe('Escalation Game: local accounting and exports', () => {
 
 	for (const exportBeforeFinality of [false, true])
 		test(`stateful local accounting remains balanced across randomized deposits and ${exportBeforeFinality ? 'exports, rejecting underfunded ordinary settlement' : 'ordinary claims'}`, async () => {
-			const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameWithProofPool()
-			await startEscalation(escalationGameAddress, reportBond, nonDecisionThresholdAttoRep)
+			const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
 			const firstVault = client.account.address
 			const secondVault = addressString(TEST_ADDRESSES[1])
 			const vaults = [firstVault, secondVault, addressString(TEST_ADDRESSES[2])]
@@ -282,16 +272,11 @@ describe('Escalation Game: local accounting and exports', () => {
 	})
 
 	test('aggregate-backed winner payout is sent to the authenticated wallet', async () => {
-		const parent = await deployEscalationGameWithProofPool()
-		await startEscalation(parent.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep)
+		const parent = await deployEscalationGameTestSecurityPool()
 		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
-		const parentLeafCount = await readCarryLeafCount(client, parent.escalationGameAddress, QuestionOutcome.Yes)
-		const parentCarryTotal = await readCarryTotal(client, parent.escalationGameAddress, QuestionOutcome.Yes)
-		const parentNullifierRoot = await readNullifierRoot(client, parent.escalationGameAddress, QuestionOutcome.Yes)
-		const parentYesPeaks = await readCarryPeaks(client, parent.escalationGameAddress, QuestionOutcome.Yes)
+		const { peaks: parentYesPeaks, leafCount: parentLeafCount, carryTotal: parentCarryTotal, nullifierRoot: parentNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Yes)
 
-		const child = await deployEscalationGameWithProofPool()
-		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+		const child = await deployForkContinuationEscalationGame()
 		await initializeSnapshotViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, parentLeafCount, 0n], [0n, parentCarryTotal, 0n], [zeroHash(), parentNullifierRoot, zeroHash()])
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 
@@ -308,20 +293,15 @@ describe('Escalation Game: local accounting and exports', () => {
 	})
 
 	test('aggregate-backed winner payouts consume multiple carried proofs independently', async () => {
-		const parent = await deployEscalationGameWithProofPool()
-		await startEscalation(parent.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep)
+		const parent = await deployEscalationGameTestSecurityPool()
 		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 2n * reportBond)
 
-		const parentLeafCount = await readCarryLeafCount(client, parent.escalationGameAddress, QuestionOutcome.Yes)
-		const parentCarryTotal = await readCarryTotal(client, parent.escalationGameAddress, QuestionOutcome.Yes)
-		const parentNullifierRoot = await readNullifierRoot(client, parent.escalationGameAddress, QuestionOutcome.Yes)
-		const parentYesPeaks = await readCarryPeaks(client, parent.escalationGameAddress, QuestionOutcome.Yes)
+		const { peaks: parentYesPeaks, leafCount: parentLeafCount, carryTotal: parentCarryTotal, nullifierRoot: parentNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Yes)
 		const firstLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, reportBond, 0n, reportBond, 1n)
 		const secondLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, 2n * reportBond, 1n, 3n * reportBond, 2n)
 
-		const child = await deployEscalationGameWithProofPool()
-		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+		const child = await deployForkContinuationEscalationGame()
 		await initializeSnapshotViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, parentLeafCount, 0n], [0n, parentCarryTotal, 0n], [zeroHash(), parentNullifierRoot, zeroHash()])
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 		const repToken = getRepTokenAddress(0n)

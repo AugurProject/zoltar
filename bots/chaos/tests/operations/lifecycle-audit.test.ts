@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test'
 import { canonicalLifecyclePresence, reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
 import { classifiedMethod } from '../support/canonical-contracts.ts'
 import { eligibleOperationPlans, urgentOperationPlans } from '../support/operation-plans.ts'
-import { address, hash, snapshotFixture } from './fixture.ts'
+import { address, hash, pendingPoolReportFixture, snapshotFixture } from './fixture.ts'
 
 const options = {
 	allowHighRisk: true,
@@ -65,27 +65,7 @@ describe('raw lifecycle identity audit', () => {
 		const pool = snapshot.pools[0]
 		if (pool === undefined) throw new Error('Oracle pool missing')
 		pool.pendingReportId = '42'
-		snapshot.reports = [
-			{
-				currentAmount1: '0',
-				currentAmount2: '1000',
-				currentReporter: snapshot.wallet.address,
-				disputeDelay: '60',
-				escalationHalt: '100000',
-				flags: 7,
-				game: { callbackContract: pool.coordinator, callbackGasLimit: 500000, feePercentage: 0, lastReportOppoTime: '1', numReports: 1, protocolFee: 0, protocolFeeRecipient: address(30), settlerReward: '0' },
-				helper: { blockNumber: '99', blockTimestamp: '1999999500', creator: pool.coordinator },
-				multiplier: 140,
-				openOracle: snapshot.deployments.openOracle,
-				reportId: '42',
-				reportTimestamp: '1999999500',
-				settlementTime: '4000',
-				settlementTimestamp: '0',
-				stateHash: hash(42),
-				token1: snapshot.deployments.weth,
-				token2: pool.repToken,
-			},
-		]
+		snapshot.reports = [pendingPoolReportFixture(snapshot, pool, { currentAmount1: '0', currentReporter: snapshot.wallet.address })]
 		for (const token of snapshot.wallet.tokens) {
 			token.balance = '0'
 			token.allowances = {}

@@ -40,6 +40,14 @@ export function isoTimestampField(source: Record<string, unknown>, key: string) 
 	return Number.isFinite(milliseconds) ? new Date(milliseconds).toISOString() : undefined
 }
 
+/** A published candidate count: a safe integer as a number, a larger decimal as its string, otherwise undefined. */
+export function publicCandidateCount(value: unknown) {
+	if (typeof value === 'number') return Number.isSafeInteger(value) && value >= 0 ? value : undefined
+	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)$/.test(value)) return undefined
+	const count = BigInt(value)
+	return count <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(count) : count.toString()
+}
+
 export function compact<T extends Record<string, unknown>>(value: T) {
 	return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined))
 }

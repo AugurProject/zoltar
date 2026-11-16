@@ -366,6 +366,19 @@ export type Account = {
 	type: 'json-rpc' | 'local' | string
 }
 
+export type SendTransactionParameters = {
+	account?: Account | Address | undefined
+	amount?: bigint | undefined
+	data?: Hex | undefined
+	gas?: bigint | undefined
+	gasPrice?: bigint | undefined
+	maxFeePerGas?: bigint | undefined
+	maxPriorityFeePerGas?: bigint | undefined
+	nonce?: bigint | number | undefined
+	to?: Address | null | undefined
+	value?: bigint | undefined
+}
+
 export type SignTransactionParameters = {
 	chainId?: bigint | number | undefined
 	data?: Hex | undefined
@@ -511,18 +524,7 @@ type WalletClientShape<TTransport extends Transport, TChain extends Chain | unde
 		value?: bigint | undefined
 	}) => Promise<{ data: Hex | undefined }>
 	sendRawTransaction: (parameters: { serializedTransaction: Hex }) => Promise<Hash>
-	sendTransaction: (parameters: {
-		account?: Account | Address | undefined
-		amount?: bigint | undefined
-		data?: Hex | undefined
-		gas?: bigint | undefined
-		gasPrice?: bigint | undefined
-		maxFeePerGas?: bigint | undefined
-		maxPriorityFeePerGas?: bigint | undefined
-		nonce?: bigint | number | undefined
-		to?: Address | null | undefined
-		value?: bigint | undefined
-	}) => Promise<Hash>
+	sendTransaction: (parameters: SendTransactionParameters) => Promise<Hash>
 	writeContract: <TAbi extends Abi, TFunctionName extends string>(parameters: ContractWriteParameters<TAbi, TFunctionName>) => Promise<Hash>
 }
 

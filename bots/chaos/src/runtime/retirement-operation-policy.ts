@@ -28,7 +28,7 @@ const RECOVERY_OPERATIONS = [
 	'statoblast.child.initialize-history',
 	'statoblast.oracle.recover-report',
 	'statoblast.pool.checkpoint-collateral',
-	'statoblast.pool.checkpoint-retention',
+	'statoblast.pool.checkpoint-fees',
 	'statoblast.shares.redeem-winning',
 	'statoblast.capital.claim',
 	'statoblast.capital.retire',

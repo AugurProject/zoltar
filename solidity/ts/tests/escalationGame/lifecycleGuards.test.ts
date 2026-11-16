@@ -33,6 +33,8 @@ describe('Escalation Game: lifecycle and guards', () => {
 		initializeSnapshotViaTestSecurityPool,
 		initializeSnapshotWithResolutionBalancesViaTestSecurityPool,
 		initializeSnapshotFromSourceViaTestSecurityPool,
+		deployForkContinuationEscalationGame,
+		readOutcomeCarrySnapshot,
 	} = fixture
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
@@ -135,16 +137,14 @@ describe('Escalation Game: lifecycle and guards', () => {
 			'a positive one-attoREP bond must remain available when live REP supply falls below one whole REP',
 		)
 
-		const alreadyStarted = await deployEscalationGameWithProofPool()
-		await startEscalation(alreadyStarted.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep)
+		const alreadyStarted = await deployEscalationGameTestSecurityPool()
 		await assert.rejects(startEscalation(alreadyStarted.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep), /Invalid game start/)
 		await assert.rejects(resumeEscalationFromFork(alreadyStarted.escalationGameAddress), /No fork mode/)
 
 		const excessiveForkTime = await deployEscalationGameWithProofPool()
 		await assert.rejects(startEscalationFromFork(excessiveForkTime.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, ESCALATION_TIME_LENGTH + 1n), /execution reverted|Reverted without a reason/i)
 
-		const fork = await deployEscalationGameWithProofPool()
-		await startEscalationFromFork(fork.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+		const fork = await deployForkContinuationEscalationGame()
 		await assert.rejects(
 			attacker.writeContract({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
@@ -164,8 +164,7 @@ describe('Escalation Game: lifecycle and guards', () => {
 		const normal = await deployEscalationGameTestSecurityPool()
 		await assert.rejects(initializeSnapshotViaTestSecurityPool(normal.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()]), /No fork mode/)
 
-		const unauthorized = await deployEscalationGameWithProofPool()
-		await startEscalationFromFork(unauthorized.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+		const unauthorized = await deployForkContinuationEscalationGame()
 		await assert.rejects(
 			client.writeContract({
 				abi: initializeGameForkCarrySnapshotAbi,
@@ -176,18 +175,15 @@ describe('Escalation Game: lifecycle and guards', () => {
 			/Only pool/,
 		)
 
-		const repeated = await deployEscalationGameWithProofPool()
-		await startEscalationFromFork(repeated.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+		const repeated = await deployForkContinuationEscalationGame()
 		const emptySnapshot = [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()] as const
 		await initializeSnapshotViaTestSecurityPool(repeated.testSecurityPoolAddress, emptySnapshot, [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
 		await assert.rejects(initializeSnapshotViaTestSecurityPool(repeated.testSecurityPoolAddress, emptySnapshot, [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()]), /Snapshot initialized/)
 
-		const oversized = await deployEscalationGameWithProofPool()
-		await startEscalationFromFork(oversized.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+		const oversized = await deployForkContinuationEscalationGame()
 		await assert.rejects(initializeSnapshotViaTestSecurityPool(oversized.testSecurityPoolAddress, emptySnapshot, [1n << 64n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()]), /Leaf count high/)
 
-		const badId = await deployEscalationGameWithProofPool()
-		await startEscalationFromFork(badId.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+		const badId = await deployForkContinuationEscalationGame()
 		await assert.rejects(initializeSnapshotFromSourceViaTestSecurityPool(badId.testSecurityPoolAddress, client.account.address, `0x${'0'.repeat(63)}1`, emptySnapshot, [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()]), /Snapshot id mismatch/)
 	})
 
@@ -243,8 +239,7 @@ describe('Escalation Game: lifecycle and guards', () => {
 		)
 		await assert.rejects(record(resolved.testSecurityPoolAddress, reportBond, reportBond), /Question resolved/)
 
-		const maximumHeight = await deployEscalationGameWithProofPool()
-		await startEscalationFromFork(maximumHeight.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+		const maximumHeight = await deployForkContinuationEscalationGame()
 		await initializeSnapshotViaTestSecurityPool(maximumHeight.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, (1n << 64n) - 1n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
 		await assert.rejects(record(maximumHeight.testSecurityPoolAddress, reportBond, reportBond), /MMR too tall/)
 	})
@@ -253,8 +248,7 @@ describe('Escalation Game: lifecycle and guards', () => {
 		test(`continuation response admission at elapsed ${elapsed} separates provisional and final resolution`, async () => {
 			const parent = await deployEscalationGameTestSecurityPool()
 			await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 100n * reportBond)
-			const child = await deployEscalationGameWithProofPool()
-			await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+			const child = await deployForkContinuationEscalationGame()
 			await initializeSnapshotViaTestSecurityPool(
 				child.testSecurityPoolAddress,
 				[zeroPeakArray(), await readCarryPeaks(client, parent.escalationGameAddress, QuestionOutcome.Yes), zeroPeakArray()],
@@ -343,13 +337,9 @@ describe('Escalation Game: lifecycle and guards', () => {
 	})
 
 	test('carried proof verification rejects a zero amount before mutating the inherited snapshot', async () => {
-		const parent = await deployEscalationGameWithProofPool()
-		await startEscalation(parent.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep)
+		const parent = await deployEscalationGameTestSecurityPool()
 		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
-		const parentPeaks = await readCarryPeaks(client, parent.escalationGameAddress, QuestionOutcome.Yes)
-		const parentLeafCount = await readCarryLeafCount(client, parent.escalationGameAddress, QuestionOutcome.Yes)
-		const parentCarryTotal = await readCarryTotal(client, parent.escalationGameAddress, QuestionOutcome.Yes)
-		const parentNullifierRoot = await readNullifierRoot(client, parent.escalationGameAddress, QuestionOutcome.Yes)
+		const { peaks: parentPeaks, leafCount: parentLeafCount, carryTotal: parentCarryTotal, nullifierRoot: parentNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Yes)
 
 		const child = await deployEscalationGameWithProofPool()
 		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes)
