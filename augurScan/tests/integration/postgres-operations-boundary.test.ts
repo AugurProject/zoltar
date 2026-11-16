@@ -179,8 +179,16 @@ postgresTest(
 			expect(auctionResponse?.status).toBe(200)
 			// Lower minimum REP per lot is the better bid, so demand accumulates from the lowest price level; each lot is 1 ETH.
 			expect(((await auctionResponse?.json()) as { data: { demandCurve: unknown } }).data.demandCurve).toEqual([
-				{ minimumAttoRepPerLot: '4', lots: '3', amountAttoEth: '3000000000000000000', cumulativeDemandAttoEth: '3000000000000000000' },
-				{ minimumAttoRepPerLot: '5', lots: '2', amountAttoEth: '2000000000000000000', cumulativeDemandAttoEth: '5000000000000000000' },
+				{ minimumAttoRepPerLot: '4', lots: '3', cumulativeLots: '3', amountAttoEth: '3000000000000000000', cumulativeDemandAttoEth: '3000000000000000000' },
+				{ minimumAttoRepPerLot: '5', lots: '2', cumulativeLots: '5', amountAttoEth: '2000000000000000000', cumulativeDemandAttoEth: '5000000000000000000' },
+			])
+			// An auction whose AuctionStarted predates retained history still answers, with its demand in lots.
+			await database.sql`DELETE FROM collateral_repair_auction_events WHERE chain_id = ${historicalChainId} AND auction_address = ${auctionAddress} AND event_name = 'AuctionStarted'`
+			const startlessResponse = await handleApi(new Request(`http://localhost/api/v1/state/auctions/${historicalChainId}/${auctionAddress}`), database.sql)
+			expect(startlessResponse?.status).toBe(200)
+			expect(((await startlessResponse?.json()) as { data: { demandCurve: unknown } }).data.demandCurve).toEqual([
+				{ minimumAttoRepPerLot: '4', lots: '3', cumulativeLots: '3' },
+				{ minimumAttoRepPerLot: '5', lots: '2', cumulativeLots: '5' },
 			])
 			await database.sql`
 					INSERT INTO chain_reorganizations

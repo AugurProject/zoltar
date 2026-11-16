@@ -160,10 +160,11 @@ test('aggregates auction demand from the best (lowest) REP price per lot and bui
 			'100',
 		),
 	).toEqual([
-		{ minimumAttoRepPerLot: '1', lots: '3', amountAttoEth: String(300), cumulativeDemandAttoEth: String(300) },
-		{ minimumAttoRepPerLot: '2', lots: '15', amountAttoEth: String(1500), cumulativeDemandAttoEth: String(1800) },
+		{ minimumAttoRepPerLot: '1', lots: '3', cumulativeLots: '3', amountAttoEth: String(300), cumulativeDemandAttoEth: String(300) },
+		{ minimumAttoRepPerLot: '2', lots: '15', cumulativeLots: '18', amountAttoEth: String(1500), cumulativeDemandAttoEth: String(1800) },
 	])
-	expect(auctionDemandCurve([], undefined)).toEqual([])
+	// Bids indexed without their AuctionStarted lot size still produce a curve, in lots.
+	expect(auctionDemandCurve([{ minimumAttoRepPerLot: '2', lots: '4' }], undefined)).toEqual([{ minimumAttoRepPerLot: '2', lots: '4', cumulativeLots: '4' }])
 	expect(
 		candlestickBuckets(
 			[

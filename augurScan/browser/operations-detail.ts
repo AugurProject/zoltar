@@ -429,7 +429,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 		const demandRows = demand.map(point =>
 			operationRow(
 				`At least ${exactUnit(String(point['minimumAttoRepPerLot'] ?? '0'), 18, 'REP')} per lot`,
-				`${exactUnit(String(point['amountAttoEth'] ?? '0'), 18, nativeSymbol)} · cumulative ${exactUnit(String(point['cumulativeDemandAttoEth'] ?? '0'), 18, nativeSymbol)}`,
+				point['amountAttoEth'] === undefined ? `${String(point['lots'] ?? '0')} lots · cumulative ${String(point['cumulativeLots'] ?? '0')} lots` : `${exactUnit(String(point['amountAttoEth']), 18, nativeSymbol)} · cumulative ${exactUnit(String(point['cumulativeDemandAttoEth'] ?? '0'), 18, nativeSymbol)}`,
 				String(point['minimumAttoRepPerLot']),
 				undefined,
 			),

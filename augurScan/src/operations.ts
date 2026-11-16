@@ -351,23 +351,23 @@ export const fixedWindowTwap = (observations: readonly ExactPriceObservation[], 
 
 /**
  * Demand per bid price level of a uniform-price auction. A lower minimum REP per lot is the better bid, so cumulative demand
- * accumulates from the lowest level: each row is the ETH that clears at a price of at least that many REP per lot.
+ * accumulates from the lowest level. ETH amounts need the lot size from AuctionStarted; without it (for example when the
+ * start predates retained log history) the curve stays in lots.
  */
 export const auctionDemandCurve = (levels: readonly { readonly minimumAttoRepPerLot: unknown; readonly lots: unknown }[], lotAttoEth: unknown) => {
-	if (levels.length === 0) return []
-	const lotSize = positiveInteger(lotAttoEth, 'lot size')
+	const lotSize = lotAttoEth === undefined || lotAttoEth === null ? undefined : positiveInteger(lotAttoEth, 'lot size')
 	const totals = new Map<bigint, bigint>()
 	for (const level of levels) {
 		const minimum = positiveInteger(level.minimumAttoRepPerLot, 'minimum REP per lot')
 		totals.set(minimum, (totals.get(minimum) ?? 0n) + positiveInteger(level.lots, 'bid lots'))
 	}
-	let cumulative = 0n
+	let cumulativeLots = 0n
 	return [...totals]
 		.sort(([left], [right]) => compareBigint(left, right))
 		.map(([minimumAttoRepPerLot, lots]) => {
-			const amountAttoEth = lots * lotSize
-			cumulative += amountAttoEth
-			return { minimumAttoRepPerLot: minimumAttoRepPerLot.toString(), lots: lots.toString(), amountAttoEth: amountAttoEth.toString(), cumulativeDemandAttoEth: cumulative.toString() }
+			cumulativeLots += lots
+			const point = { minimumAttoRepPerLot: minimumAttoRepPerLot.toString(), lots: lots.toString(), cumulativeLots: cumulativeLots.toString() }
+			return lotSize === undefined ? point : { ...point, amountAttoEth: (lots * lotSize).toString(), cumulativeDemandAttoEth: (cumulativeLots * lotSize).toString() }
 		})
 }
 
