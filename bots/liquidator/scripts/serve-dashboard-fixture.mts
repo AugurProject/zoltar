@@ -191,10 +191,7 @@ const server = startDashboardServer(Number(process.env['DASHBOARD_FIXTURE_PORT']
 	getState: () => ({
 		operatorCapable: false,
 		activities,
-		alerts: [
-			{ message: '1 transaction intent requires recovery before execution can continue', severity: 'error' },
-			{ message: '1 staged operation requires outcome recovery before execution can continue', severity: 'error' },
-		],
+		alerts: [{ message: '1 transaction intent requires recovery before execution can continue', severity: 'error' }],
 		centralizedMarket: {
 			assetId: '0x0000000000000000000000000000000000000abc',
 			askDepthEth: '6.3',

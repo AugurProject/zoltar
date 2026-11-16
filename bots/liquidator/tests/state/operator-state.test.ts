@@ -254,7 +254,7 @@ describe('liquidator durable state', () => {
 		const path = join(directory, 'state.json')
 		try {
 			await writeFile(path, '{"version":2,"chainId":1,"activities":[],"pendingTransactions":"invalid"}', { mode: 0o600 })
-			expect(loadDurableState(path, 1)).rejects.toThrow('pendingTransactions must be an array')
+			await expect(loadDurableState(path, 1)).rejects.toThrow('pendingTransactions must be an array')
 		} finally {
 			await rm(directory, { force: true, recursive: true })
 		}
@@ -287,7 +287,7 @@ describe('liquidator durable state', () => {
 				}),
 				{ mode: 0o600 },
 			)
-			expect(loadDurableState(path, 1)).rejects.toThrow('hash does not match')
+			await expect(loadDurableState(path, 1)).rejects.toThrow('hash does not match')
 		} finally {
 			await rm(directory, { force: true, recursive: true })
 		}
@@ -325,7 +325,7 @@ describe('liquidator durable state', () => {
 				}),
 				{ mode: 0o600 },
 			)
-			expect(loadDurableState(path, 1)).rejects.toThrow('sender does not match')
+			await expect(loadDurableState(path, 1)).rejects.toThrow('sender does not match')
 		} finally {
 			await rm(directory, { force: true, recursive: true })
 		}
