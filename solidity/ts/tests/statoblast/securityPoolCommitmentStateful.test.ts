@@ -6,6 +6,7 @@ import { createWriteClient, writeContractAndWait, type WriteClient } from '../..
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
+import { deployCommitmentIndexHarness } from './securityPoolCommitmentIndexHarness'
 
 type Position = { id: bigint; rep: bigint; commitment: bigint; price: bigint; batch: bigint; remaining: bigint; released: bigint; paid: bigint; eth: bigint; repFees: bigint; paidEth: bigint; paidRep: bigint }
 const sum = (positions: Position[], value: (position: Position) => bigint) => positions.reduce((total, position) => total + value(position), 0n)
@@ -26,10 +27,9 @@ describe('Statoblast: replayable mixed retirement reference model', () => {
 	beforeAll(async () => {
 		await setupTestAccounts(node.getAnvilWindowEthereum())
 		client = createWriteClient(node.getAnvilWindowEthereum(), TEST_ADDRESSES[0])
-		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: `0x${harnessArtifact.evm.bytecode.object}` }) })
-		if (receipt.contractAddress === undefined) throw new Error('Commitment model harness missing')
-		harness = receipt.contractAddress
-		index = await client.readContract({ abi: harnessArtifact.abi, address: harness, functionName: 'index' })
+		const deployment = await deployCommitmentIndexHarness(client)
+		harness = deployment.harness
+		index = deployment.index
 		await node.setBaselineSnapshot()
 	})
 	const configuredSeed = process.env['CAPITAL_MODEL_SEED']

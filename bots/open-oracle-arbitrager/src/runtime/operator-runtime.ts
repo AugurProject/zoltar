@@ -15,7 +15,8 @@ import type { SignerOperationGate } from '@zoltar/bot-shared/execution/signer-op
 import type { SyncCursor } from '@zoltar/bot-shared/monitoring/block-sync'
 import type { createOperatorHeadWatcher, createScanWakeGate, startCentralizedMarketSampler } from './background-observers.ts'
 import type { createConfiguredDexPairReader } from './configured-dex-pair.ts'
-import type { PendingOperatorUpdates, startOperatorControlPlane } from './operator-control-plane.ts'
+import type { startOperatorControlPlane } from './operator-control-plane.ts'
+import type { PendingOperatorUpdates } from './pending-operator-updates.ts'
 import type { createSettlementJournal } from './settlement-stage.ts'
 import type { DeploymentRecoveryReconciliation, DeploymentRecoveryState } from './signer-operations.ts'
 

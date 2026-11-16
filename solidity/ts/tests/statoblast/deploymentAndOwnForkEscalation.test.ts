@@ -43,10 +43,10 @@ describe('Statoblast: portfolio namespaces and own-fork claims', () => {
 	}
 
 	test('rejects missing universes and invalid origin parameters', async () => {
-		for (const securityMultiplierBps of [0n, 10_000n, 10_001n]) await expect(fixture.deployPortfolio(undefined, undefined, { securityMultiplierBps })).rejects.toThrow('multiplier must exceed 10001 BPS')
+		for (const securityMultiplierBps of [0n, 10_000n, 10_001n, 10_002n, 10_499n]) await expect(fixture.deployPortfolio(undefined, undefined, { securityMultiplierBps })).rejects.toThrow('multiplier must be at least 10500 BPS')
 		await expect(fixture.deployPortfolio(undefined, undefined, { universeId: 999999n })).rejects.toThrow('Universe REP token missing')
 		await expect(fixture.deployPortfolio(undefined, undefined, { reportPriorityFeeAttoEthPerGas: 0n })).rejects.toThrow('Report priority fee must be positive')
-		for (const securityMultiplierBps of [10_002n, 15_000n]) {
+		for (const securityMultiplierBps of [10_500n, 15_000n]) {
 			const created = await fixture.deployPortfolio(undefined, undefined, { securityMultiplierBps })
 			await fixture.register(fixture.base.questionId, created)
 			const native = await fixture.owner().readContract({ ...portfolio(created), functionName: 'getPool', args: [fixture.base.questionId, fixture.base.genesisUniverse] })

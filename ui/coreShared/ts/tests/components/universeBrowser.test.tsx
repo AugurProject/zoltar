@@ -53,6 +53,12 @@ describe('UniverseBrowser', () => {
 		},
 	})
 
+	async function renderGenesisRoot(url: string, activeGenesis: 'yes' | 'no') {
+		window.history.replaceState({}, '', url)
+		setRuntimeNetworkProfile(getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, activeGenesis))
+		cleanupRenderedComponent = (await renderIntoDocument(<UniverseBrowser activeUniverseId={0n} universe={createUniverse({ childUniverses: [], hasForked: false, lineage: undefined, universeId: 0n })} />)).cleanup
+	}
+
 	test('allows an outcome with unknown deployment status without inventing a description', async () => {
 		let selected = false
 		const view = await renderIntoDocument(
@@ -121,9 +127,7 @@ describe('UniverseBrowser', () => {
 
 	for (const outcome of ['yes', 'no'] as const) {
 		test(`links the ${outcome} genesis root to its Augur parent through ordinary parent navigation`, async () => {
-			window.history.replaceState({}, '', `?genesis=${outcome}&simulate=1&simState=saved#/zoltar?zoltarView=universes&universe=0`)
-			setRuntimeNetworkProfile(getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, outcome))
-			cleanupRenderedComponent = (await renderIntoDocument(<UniverseBrowser activeUniverseId={0n} universe={createUniverse({ childUniverses: [], hasForked: false, lineage: undefined, universeId: 0n })} />)).cleanup
+			await renderGenesisRoot(`?genesis=${outcome}&simulate=1&simState=saved#/zoltar?zoltarView=universes&universe=0`, outcome)
 			const queries = within(document.body)
 			const field = queries.getByText('Parent universe').parentElement
 			if (field === null) throw new Error('Expected the parent universe field')
@@ -135,9 +139,7 @@ describe('UniverseBrowser', () => {
 	}
 
 	test('uses the active No root for its heading and parent when the URL has no choice', async () => {
-		window.history.replaceState({}, '', '?simulate=1#/zoltar?zoltarView=universes&universe=0')
-		setRuntimeNetworkProfile(getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, 'no'))
-		cleanupRenderedComponent = (await renderIntoDocument(<UniverseBrowser activeUniverseId={0n} universe={createUniverse({ childUniverses: [], hasForked: false, lineage: undefined, universeId: 0n })} />)).cleanup
+		await renderGenesisRoot('?simulate=1#/zoltar?zoltarView=universes&universe=0', 'no')
 		const queries = within(document.body)
 		expect(queries.getByRole('heading', { name: 'Augur v2 › No' })).toBeTruthy()
 		expect(queries.getByRole('link', { name: 'Augur v2 universe' }).getAttribute('href')).toBe('/?simulate=1#/')
@@ -146,9 +148,7 @@ describe('UniverseBrowser', () => {
 
 	for (const outcome of ['yes', 'no'] as const) {
 		test(`keeps the active ${outcome} root label when the URL names the other root`, async () => {
-			window.history.replaceState({}, '', `?genesis=${outcome === 'yes' ? 'no' : 'yes'}#/zoltar?universe=0`)
-			setRuntimeNetworkProfile(getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, outcome))
-			cleanupRenderedComponent = (await renderIntoDocument(<UniverseBrowser activeUniverseId={0n} universe={createUniverse({ childUniverses: [], hasForked: false, lineage: undefined, universeId: 0n })} />)).cleanup
+			await renderGenesisRoot(`?genesis=${outcome === 'yes' ? 'no' : 'yes'}#/zoltar?universe=0`, outcome)
 			expect(within(document.body).getByRole('heading', { name: outcome === 'yes' ? 'Augur v2 › Yes' : 'Augur v2 › No' })).toBeTruthy()
 		})
 	}

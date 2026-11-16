@@ -354,6 +354,20 @@
 }
 
 @media (max-width: 40rem) {
+	/* The scenario name moves under the title when the row is full instead of shrinking to an ellipsis. */
+	.simulation-strip {
+		flex-wrap: wrap;
+	}
+
+	.simulation-strip-scenario {
+		overflow: visible;
+	}
+
+	/* The boot step stays beside the status and truncates; only the scenario name moves to a second row. */
+	.simulation-strip-progress {
+		flex-basis: 0;
+	}
+
 	.simulation-strip-status-full {
 		display: none;
 	}

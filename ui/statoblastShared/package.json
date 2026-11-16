@@ -441,6 +441,10 @@
 			"bun": "./ts/copy/portfolio.ts",
 			"default": "./js/copy/portfolio.js"
 		},
+		"./copy/collateral.js": {
+			"bun": "./ts/copy/collateral.ts",
+			"default": "./js/copy/collateral.js"
+		},
 		"./features/portfolios/components/PortfolioTakeover.js": {
 			"bun": "./ts/features/portfolios/components/PortfolioTakeover.tsx",
 			"default": "./js/features/portfolios/components/PortfolioTakeover.js"

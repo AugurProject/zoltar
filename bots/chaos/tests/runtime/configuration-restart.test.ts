@@ -57,39 +57,17 @@ async function fixture(directory: string, overrides: Partial<DashboardController
 
 describe('UI configuration restart', () => {
 	test('switches a bound signer from the UI while preserving the old state and staying paused and dry', async () => {
-		const directory = await mkdtemp(join(tmpdir(), 'chaos-ui-config-'))
-		try {
-			const settings = parseSettings({ ...example, privateKey: firstKey, runtime: { ...example.runtime, stateFile: join(directory, 'old.json') } })
-			const address = privateKeyToAccount(firstKey).address
-			const state = initialRuntimeState(true, address, settings.network.chainId, initialDurableState(settings.network.chainId, true, executionProfileId(settings), address))
-			state.uniswapV3Factory = settings.deployment.uniswapV3Factory
-			await saveDurableState(settings.runtime.stateFile, state)
-			const path = join(directory, 'operator.json')
-			const revision = await saveSettings(path, settings)
-			let restarted = false
-			const options = {
-				configuration: { path, revision, settings, rememberSigner: true },
-				gate: createSignerOperationGate(),
-				hostname: '127.0.0.1',
-				locks: { acquireSigner: async () => undefined, commitSigner: async () => undefined, discardSigner: async () => undefined, release: async () => undefined },
-				state,
-				onRestartRequested: () => {
-					restarted = true
-				},
-			} satisfies DashboardControllerOptions
-			const controller = createChaosDashboardController(options)
+		await withController(async ({ controller, configuration, settings, revision, next }) => {
 			await controller.setSigner({ privateKey: secondKey, remember: true, revision })
-			const saved = await loadSettings(path)
-			expect(restarted).toBe(true)
+			const saved = await loadSettings(configuration.path)
+			expect(next()).toBeDefined()
 			expect(saved.settings.privateKey).toBe(secondKey)
 			expect(saved.settings.runtime.stateFile).not.toBe(settings.runtime.stateFile)
 			expect(saved.settings.paused).toBe(true)
 			expect(saved.settings.runtime.execute).toBe(false)
-			expect((await loadDurableState(settings.runtime.stateFile, settings.network.chainId)).signerAddress).toBe(address)
+			expect((await loadDurableState(settings.runtime.stateFile, settings.network.chainId)).signerAddress).toBe(privateKeyToAccount(firstKey).address)
 			expect((await loadDurableState(saved.settings.runtime.stateFile, settings.network.chainId)).signerAddress).toBe(privateKeyToAccount(secondKey).address)
-		} finally {
-			await rm(directory, { recursive: true, force: true })
-		}
+		})
 	})
 	test('keeps memory-only replacement keys out of the saved configuration and archives', async () => {
 		await withController(async ({ controller, configuration, revision, next, directory }) => {

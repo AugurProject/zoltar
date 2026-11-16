@@ -38,6 +38,22 @@ async function setup(snapshot = capitalSnapshot()) {
 	lifecycle.trackRendered(hook)
 	return { hook, requests, transport }
 }
+
+/** Lets the debounced report authorization quote settle. */
+async function waitForReportQuote() {
+	await act(async () => {
+		await new Promise(resolve => setTimeout(resolve, 20))
+	})
+}
+
+/** Enters a commitment and report price together, then waits for the report authorization quote. */
+async function enterReportCommitment(hook: Awaited<ReturnType<typeof setup>>['hook'], commitmentAmount: string, reportPrice: string) {
+	await act(async () => {
+		hook.state().setCommitmentAmount(commitmentAmount)
+		hook.state().setReportInput(reportPrice)
+	})
+	await waitForReportQuote()
+}
 test('approval and deposit remain separate transactions with exact capital-ledger custody', async () => {
 	const { hook, requests } = await setup()
 	await act(() => hook.state().setDepositAmount('5'))
@@ -177,9 +193,26 @@ test('the retirement review omits the immediate cure for a covered position', as
 test('the retirement review states the immediate cure for a position underwater at a fresh price', async () => {
 	const { hook, requests } = await setup(underwaterSnapshot())
 	await act(() => hook.state().retire(1n))
-	// 30 REP at a 10,500 bps multiplier and a liquidation price of 4 backs 7.142857… ETH, shown rounded down.
-	expect(requests[0]?.reviewDescription).toContain('Your REP covers only 7.1428 ETH at the current price, so the uncovered part is removed at once where spare capacity allows. The rest waits for spare capacity behind earlier retirement requests.')
+	// 30 REP at a 10,500 bps multiplier and a liquidation price of 4 backs 7.142857… WETH, shown rounded down.
+	expect(requests[0]?.reviewDescription).toContain('Your REP covers only 7.1428 WETH at the current price, so the uncovered part is removed at once where spare capacity allows. The rest waits for spare capacity behind earlier retirement requests.')
 	expect(requests[0]?.reviewDescription).toContain('The rest waits for spare capacity')
+})
+test('the retirement review states six-decimal collateral amounts in collateral units', async () => {
+	const usdc = 10n ** 6n
+	const snapshot = capitalSnapshot()
+	const underwaterUsdc = {
+		...snapshot,
+		collateral: { ...snapshot.collateral, symbol: 'USDC', decimals: 6 },
+		economics: { ...snapshot.economics, minimumCommitmentAttoEth: usdc },
+		// A price of 4 × 10^30 makes 30 REP at a 10,500 bps multiplier cover 7.142857 USDC.
+		liquidationPrice: 4n * 10n ** 30n,
+		positions: snapshot.positions.map(position => ({ ...position, commitment: 10n * usdc, maxHealthyPrice: 2n * 10n ** 30n })),
+	}
+	const { hook, requests } = await setup(underwaterUsdc)
+	await act(() => hook.state().setRemainingCommitmentAmount('2.5'))
+	await act(() => hook.state().retire(1n))
+	expect(requests[0]?.reviewDescription).toContain('Reduce position 1 to 2.5 USDC commitment.')
+	expect(requests[0]?.reviewDescription).toContain('Your REP covers only 7.1428 USDC at the current price,')
 })
 test('the retirement review claims no queued rest when the kept commitment is at least the covered amount', async () => {
 	const { hook, requests } = await setup(underwaterSnapshot())
@@ -340,13 +373,7 @@ test('a selected funded report quotes collateral, authorizes explicitly, and is 
 	const snapshot = capitalSnapshot({ oracleExposureLimitAttoEth: 1n, ownerPrincipalAttoRep: 40n * unit })
 	const { hook, requests, transport } = await setup(snapshot)
 	transport.setRead('reportAuthorization', [3n * unit, 2n])
-	await act(async () => {
-		hook.state().setCommitmentAmount('10')
-		hook.state().setReportInput('7')
-	})
-	await act(async () => {
-		await new Promise(resolve => setTimeout(resolve, 20))
-	})
+	await enterReportCommitment(hook, '10', '7')
 	expect(hook.state().authorizeReason).toBeUndefined()
 	expect(hook.state().requiredCollateral).toBe(37_800_000_000_000_000_000n)
 	await act(() => hook.state().authorize())
@@ -365,12 +392,8 @@ test('a higher funded report price resizes target capacity and settles after rec
 	await act(async () => {
 		hook.state().setReportInput('7')
 	})
-	await act(async () => {
-		await new Promise(resolve => setTimeout(resolve, 20))
-	})
-	await act(async () => {
-		await new Promise(resolve => setTimeout(resolve, 20))
-	})
+	await waitForReportQuote()
+	await waitForReportQuote()
 	expect(hook.state().commitmentAmount).toBe('10.58201058201058201')
 	expect(hook.state().authorizeReason).toBeUndefined()
 	expect(transport.reads.filter(read => read.name === 'reportAuthorization')).toHaveLength(2)
@@ -379,13 +402,7 @@ test('funded authorization proofs cover existing demand when it exceeds proposed
 	const snapshot = capitalSnapshot({ demandAttoEth: 100n * unit })
 	const { hook, transport } = await setup(snapshot)
 	transport.setRead('reportAuthorization', [2n * unit, 2n])
-	await act(async () => {
-		hook.state().setCommitmentAmount('10')
-		hook.state().setReportInput('7')
-	})
-	await act(async () => {
-		await new Promise(resolve => setTimeout(resolve, 20))
-	})
+	await enterReportCommitment(hook, '10', '7')
 	expect(transport.reads.filter(read => read.name === 'reportAuthorization').at(-1)?.args).toEqual([7n, 100n * unit])
 })
 

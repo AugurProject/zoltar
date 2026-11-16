@@ -17,7 +17,6 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 		deployEscalationGameTestSecurityPool,
 		deployEscalationGameWithProofPool,
 		deployFalseReturningToken,
-		startEscalation,
 		startEscalationFromFork,
 		resumeEscalationFromFork,
 		initializeSnapshotViaTestSecurityPool,
@@ -86,8 +85,7 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 	})
 
 	test('empty started game becomes final only after its exact end timestamp', async () => {
-		const { escalationGameAddress: escalationGame } = await deployEscalationGameWithProofPool()
-		await startEscalation(escalationGame, reportBond, nonDecisionThresholdAttoRep)
+		const { escalationGameAddress: escalationGame } = await deployEscalationGameTestSecurityPool()
 		const escalationEndDate = await readEscalationGameEndDate(client, escalationGame)
 
 		await mockWindow.setTime(escalationEndDate - 1n)

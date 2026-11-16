@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test'
 import { createWalletClient, custom, decodeFunctionData, decodeFunctionResult, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { submitFreshSettlement } from '../../protocol/live.js'
 import { MINIMUM_SLIPPAGE_BPS } from '../../protocol/tradeQuote.js'
-import { receiveBasedExitArguments } from '../../protocol/authorization.js'
+import { receiveBasedExitArguments, shareTokenAbi } from '../../protocol/authorization.js'
 import { receiveRequestParameter } from '@zoltar/trading-shared/trading/receiveRequest'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { forkedMarketFixture } from '../support/liveMarketFixture.js'
@@ -17,33 +17,6 @@ const pool = `0x${'33'.repeat(20)}` as Address
 const transactionHash = `0x${'44'.repeat(32)}` as Hex
 const blockHash = `0x${'55'.repeat(32)}` as Hex
 const configuration = deploymentConfigurationFixture({ chainId: 1, chainName: 'Test', rpcUrl: 'http://localhost', factory: `0x${'88'.repeat(20)}`, router: `0x${'99'.repeat(20)}` })
-const migrateAbi = [
-	{
-		type: 'function',
-		name: 'migrate',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'fromId', type: 'uint256' },
-			{ name: 'targetOutcomeIndexes', type: 'uint256[]' },
-		],
-		outputs: [],
-	},
-] as const
-const shareTransferAbi = [
-	{
-		type: 'function',
-		name: 'safeBatchTransferFrom',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'from', type: 'address' },
-			{ name: 'to', type: 'address' },
-			{ name: 'ids', type: 'uint256[]' },
-			{ name: 'values', type: 'uint256[]' },
-			{ name: 'data', type: 'bytes' },
-		],
-		outputs: [],
-	},
-] as const
 
 function decodeReceiveRequest(data: Hex) {
 	// The router request is a static tuple, so its fields decode as flat ABI outputs.
@@ -108,10 +81,7 @@ function activeFeeValuation(unit: bigint, rate = unit / 1000n) {
 			settlementCollateralAttoEth: unit,
 			totalUnderwritingLimitAttoEth: unit,
 			feeEligibleUnderwritingLimitAttoEth: unit,
-			currentRetentionRate: unit,
 			lastFeeCheckpointNativeTime: 1n,
-			feeIndexRemainder: 0n,
-			totalFeesOwedRemainder: 0n,
 			centralSettlement: true,
 			centralCheckpointTimestamp: 1n,
 			linearFee: { rateAttoEthPerSecond: rate, endTime: 2n ** 48n - 1n },
@@ -151,7 +121,7 @@ describe('live settlement contract encoding', () => {
 		expect(counts.simulations).toBe(1)
 		expect(counts.sends).toBe(1)
 		for (const data of transactionData) {
-			expect(decodeFunctionData({ abi: migrateAbi, data }).args).toEqual([(7n << 8n) | 1n, [12n, 42n, 99n]])
+			expect(decodeFunctionData({ abi: shareTokenAbi, data })).toEqual({ functionName: 'migrate', args: [(7n << 8n) | 1n, [12n, 42n, 99n]] })
 		}
 	})
 
@@ -166,7 +136,7 @@ describe('live settlement contract encoding', () => {
 		expect(await submitFreshSettlement(client, configuration, account, quote, async write => await write())).toBe(transactionHash)
 		expect(transactionData).toHaveLength(3)
 		for (const data of transactionData) {
-			expect(decodeFunctionData({ abi: migrateAbi, data })).toEqual({ functionName: 'migrate', args: [(7n << 8n) | 1n, normalizedScalarTargets] })
+			expect(decodeFunctionData({ abi: shareTokenAbi, data })).toEqual({ functionName: 'migrate', args: [(7n << 8n) | 1n, normalizedScalarTargets] })
 		}
 	})
 
@@ -182,7 +152,7 @@ describe('live settlement contract encoding', () => {
 		expect(transactionData).toHaveLength(3)
 		expect(transactionData[1]).toBe(transactionData[0])
 		expect(transactionData[2]).toBe(transactionData[0])
-		const decodedTransfer = decodeFunctionData({ abi: shareTransferAbi, data: transactionData[0] })
+		const decodedTransfer = decodeFunctionData({ abi: shareTokenAbi, data: transactionData[0] })
 		if (decodedTransfer.args === undefined) throw new Error('Missing share transfer arguments')
 		expect(decodedTransfer.functionName).toBe('safeBatchTransferFrom')
 		expect(decodedTransfer.args.slice(0, 4)).toEqual([account, configuration.router, [1792n, 1793n, 1794n], [10n, 10n, 10n]])
@@ -211,7 +181,6 @@ describe('live settlement contract encoding', () => {
 			settlementCollateralAttoEth: unit,
 			totalUnderwritingLimitAttoEth: unit,
 			feeEligibleUnderwritingLimitAttoEth: unit,
-			currentRetentionRate: 999_000_000_000_000_000n,
 			valuation: activeFeeValuation(unit),
 		}
 		const { client, counts } = recordingSettlementClient(child)
@@ -230,7 +199,7 @@ describe('live settlement contract encoding', () => {
 
 	test('allows the minimum slippage after fee end but blocks new accrual before submission', async () => {
 		const unit = 10n ** 18n
-		const ended = { ...market, pair: account, shareTokenSupplyAttoShares: unit, settlementCollateralAttoEth: unit, totalUnderwritingLimitAttoEth: unit, feeEligibleUnderwritingLimitAttoEth: unit, currentRetentionRate: 999_000_000_000_000_000n }
+		const ended = { ...market, pair: account, shareTokenSupplyAttoShares: unit, settlementCollateralAttoEth: unit, totalUnderwritingLimitAttoEth: unit, feeEligibleUnderwritingLimitAttoEth: unit }
 		const { client, chain, counts } = recordingSettlementClient(ended)
 		const quote = await simulateSettlement(client, configuration, ended, account, 'redeem-complete-set', { amount: unit, slippageBps: MINIMUM_SLIPPAGE_BPS })
 		expect(await submitFreshSettlement(client, configuration, account, quote, async write => await write())).toBe(transactionHash)
@@ -241,7 +210,7 @@ describe('live settlement contract encoding', () => {
 
 	test('checks the retained approved minimum through expiry even when the refreshed slippage minimum is safe', async () => {
 		const unit = 10n ** 18n
-		const ended = { ...market, pair: account, shareTokenSupplyAttoShares: unit, settlementCollateralAttoEth: unit, totalUnderwritingLimitAttoEth: unit, feeEligibleUnderwritingLimitAttoEth: unit, currentRetentionRate: 999_990_000_000_000_000n }
+		const ended = { ...market, pair: account, shareTokenSupplyAttoShares: unit, settlementCollateralAttoEth: unit, totalUnderwritingLimitAttoEth: unit, feeEligibleUnderwritingLimitAttoEth: unit }
 		const { client, chain, counts } = recordingSettlementClient(ended)
 		const quote = await simulateSettlement(client, configuration, ended, account, 'redeem-complete-set', { amount: unit, slippageBps: 500n })
 		if (quote.operation !== 'redeem-complete-set') throw new Error('Expected complete-set quote')
@@ -252,7 +221,7 @@ describe('live settlement contract encoding', () => {
 
 	test('rechecks holding fees and expiry inside the final wallet guard without sending', async () => {
 		const unit = 10n ** 18n
-		const ended = { ...market, pair: account, shareTokenSupplyAttoShares: unit, settlementCollateralAttoEth: unit, totalUnderwritingLimitAttoEth: unit, feeEligibleUnderwritingLimitAttoEth: unit, currentRetentionRate: 999_000_000_000_000_000n }
+		const ended = { ...market, pair: account, shareTokenSupplyAttoShares: unit, settlementCollateralAttoEth: unit, totalUnderwritingLimitAttoEth: unit, feeEligibleUnderwritingLimitAttoEth: unit }
 		const { client, chain, counts } = recordingSettlementClient(ended)
 		const quote = await simulateSettlement(client, configuration, ended, account, 'redeem-complete-set', { amount: unit, slippageBps: MINIMUM_SLIPPAGE_BPS })
 		if (quote.operation !== 'redeem-complete-set') throw new Error('Expected complete-set quote')
@@ -290,7 +259,7 @@ describe('live settlement contract encoding', () => {
 
 test('REP-only complete-set redemption accepts zero ETH and retains the received-asset quote', async () => {
 	const unit = 10n ** 18n
-	const basket = { ...market, shareTokenSupplyAttoShares: 10n * unit, settlementCollateralAttoEth: 0n, settlementRecoveryAttoRep: 30n * unit, currentRetentionRate: unit, feeEligibleUnderwritingLimitAttoEth: 0n }
+	const basket = { ...market, shareTokenSupplyAttoShares: 10n * unit, settlementCollateralAttoEth: 0n, settlementRecoveryAttoRep: 30n * unit, feeEligibleUnderwritingLimitAttoEth: 0n }
 	const fixture = recordingSettlementClient(basket)
 	const quote = await simulateSettlement(fixture.client, configuration, basket, account, 'redeem-complete-set', { amount: 2n * unit })
 	expect(quote).toMatchObject({ expectedAttoEth: 0n, expectedAttoRep: 6n * unit, minimumAttoEth: 0n })

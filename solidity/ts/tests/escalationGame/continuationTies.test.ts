@@ -7,19 +7,7 @@ import { BURN_ADDRESS } from '../../testSupport/simulator/utils/constants'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { getERC20Balance } from '../../testSupport/simulator/utils/utilities'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
-import {
-	getEscalationGameOutcomeState,
-	getQuestionResolution,
-	readHasReachedNonDecision,
-	readNonDecisionState,
-	readCanTriggerOwnFork,
-	readNonDecisionTimestamp,
-	readCarryPeaks,
-	readCarryLeafCount,
-	readCarryTotal,
-	readIsForkCarryFundingComplete,
-	readNullifierRoot,
-} from '../../testSupport/simulator/utils/contracts/escalationGame'
+import { getEscalationGameOutcomeState, getQuestionResolution, readHasReachedNonDecision, readNonDecisionState, readCanTriggerOwnFork, readNonDecisionTimestamp, readCarryPeaks, readCarryTotal, readIsForkCarryFundingComplete, readNullifierRoot } from '../../testSupport/simulator/utils/contracts/escalationGame'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { statoblast_EscalationGame_EscalationGame } from '../../types/contractArtifact'
 import { isIgnorableLogDecodeError } from '../logDecodeErrors'
@@ -34,7 +22,6 @@ describe('Escalation Game: fork continuation funding and inherited ties', () => 
 		nonDecisionThresholdAttoRep,
 		recursiveResolutionTargetCost,
 		deployEscalationGameWithProofPool,
-		startEscalation,
 		startEscalationFromFork,
 		resumeEscalationFromFork,
 		fundEscalationGame,
@@ -44,6 +31,9 @@ describe('Escalation Game: fork continuation funding and inherited ties', () => 
 		createCarryProof,
 		initializeSnapshotWithResolutionBalancesViaTestSecurityPool,
 		initializeSnapshotFromSourceViaTestSecurityPool,
+		deployEscalationGameTestSecurityPool,
+		deployForkContinuationEscalationGame,
+		readOutcomeCarrySnapshot,
 	} = fixture
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
@@ -54,8 +44,7 @@ describe('Escalation Game: fork continuation funding and inherited ties', () => 
 	})
 
 	test('fork carry funding completeness requires aggregate REP backing at a one-to-one ratio', async () => {
-		const child = await deployEscalationGameWithProofPool()
-		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+		const child = await deployForkContinuationEscalationGame()
 		await initializeSnapshotWithResolutionBalancesViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 1n, 0n], [0n, 3n * reportBond, 0n], [0n, 3n * reportBond, 0n], [zeroHash(), zeroHash(), zeroHash()])
 
 		const yesState = await getEscalationGameOutcomeState(client, child.escalationGameAddress, QuestionOutcome.Yes)
@@ -65,16 +54,11 @@ describe('Escalation Game: fork continuation funding and inherited ties', () => 
 	})
 
 	test('zero-live-balance carry snapshots require aggregate REP rather than vault escrow', async () => {
-		const parent = await deployEscalationGameWithProofPool()
-		await startEscalation(parent.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep)
+		const parent = await deployEscalationGameTestSecurityPool()
 		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
-		const parentLeafCount = await readCarryLeafCount(client, parent.escalationGameAddress, QuestionOutcome.Yes)
-		const parentCarryTotal = await readCarryTotal(client, parent.escalationGameAddress, QuestionOutcome.Yes)
-		const parentNullifierRoot = await readNullifierRoot(client, parent.escalationGameAddress, QuestionOutcome.Yes)
-		const parentYesPeaks = await readCarryPeaks(client, parent.escalationGameAddress, QuestionOutcome.Yes)
+		const { peaks: parentYesPeaks, leafCount: parentLeafCount, carryTotal: parentCarryTotal, nullifierRoot: parentNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Yes)
 
-		const child = await deployEscalationGameWithProofPool()
-		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+		const child = await deployForkContinuationEscalationGame()
 		await initializeSnapshotWithResolutionBalancesViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, parentLeafCount, 0n], [0n, parentCarryTotal, 0n], [0n, 0n, 0n], [zeroHash(), parentNullifierRoot, zeroHash()])
 		assert.strictEqual(await readIsForkCarryFundingComplete(client, child.escalationGameAddress), false, 'an unfunded inherited carry should be incomplete')
 		await assert.rejects(resumeEscalationFromFork(child.escalationGameAddress), /Fork carry underfunded/)
@@ -99,8 +83,7 @@ describe('Escalation Game: fork continuation funding and inherited ties', () => 
 	})
 
 	test('fork continuation records an inherited threshold tie without fabricating a local timestamp', async () => {
-		const child = await deployEscalationGameWithProofPool()
-		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+		const child = await deployForkContinuationEscalationGame()
 		const snapshotHash = await initializeSnapshotWithResolutionBalancesViaTestSecurityPool(
 			child.testSecurityPoolAddress,
 			[zeroPeakArray(), zeroPeakArray(), zeroPeakArray()],
@@ -166,8 +149,7 @@ describe('Escalation Game: fork continuation funding and inherited ties', () => 
 	}
 
 	test('an inherited tie survives an unrelated continuation and pays authenticated claims in a fixed branch', async () => {
-		const parent = await deployEscalationGameWithProofPool()
-		await startEscalation(parent.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep)
+		const parent = await deployEscalationGameTestSecurityPool()
 		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, nonDecisionThresholdAttoRep)
 		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.No, nonDecisionThresholdAttoRep)
 		let source = parent.escalationGameAddress

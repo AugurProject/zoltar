@@ -169,7 +169,7 @@ The operator file is `version: 2`. A key is required unless the Default column g
 | `connectivity` | object | [shared](../README.md#connectivity) | absent until saved | absent | RPC endpoints and the agreement requirement. |
 | `approvedUniverses` | string array | decimal universe ids below 2^248 | required | `[]` | The operator's truth policy. |
 | `selectedPortfolios` | array | up to 16 address/universe pairs | `[]` | `[]` | Portfolios the bot monitors. |
-| `portfolioPolicy` | object | see [Portfolio operation](#portfolio-operation) | conservative defaults | absent | Portfolio acquisition and scanning limits. |
+| `portfolioPolicy` | object | see [Portfolio operation](#portfolio-operation) | conservative defaults | the defaults | Portfolio acquisition and scanning limits. |
 | `centralizedMarkets` | object | [shared](../README.md#centralizedmarkets-keys) | required | no sources | Root REP market policy. |
 | `childMarketConfigurations` | array | each entry uses the shared keys plus `assetAddress` and `assetChainId` | `[]` | `[]` | Child-universe REP market policies. |
 | `submission` | object | [shared](../README.md#submission) | required | public | Delivery mode and relays. |
@@ -215,7 +215,7 @@ The reusable Ethereum, connectivity, quorum, block synchronization, signer gate,
 
 ## Upgrading
 
-The operator file must use `version: 2`. Deployment addresses come from the selected network's manifest. Removed standalone-pool settings are ignored and disappear on the next save; configure `selectedPortfolios` and `portfolioPolicy` explicitly before enabling portfolio automation. Keep the durable state file and chain profiles so managed exposure and pending transactions remain recoverable.
+The operator file must use `version: 2`. Deployment addresses come from the selected network's manifest. Removed standalone-pool settings (`selectedPools`, `desiredPools`, `deployment`, and the former standalone-pool `strategy` keys) are ignored and disappear on the next save. Any other unknown key at the top level or in `runtime`, `strategy`, or `portfolioPolicy` is rejected at startup, so a misspelled optional key cannot silently take its default; configure `selectedPortfolios` and `portfolioPolicy` explicitly before enabling portfolio automation. Keep the durable state file and chain profiles so managed exposure and pending transactions remain recoverable.
 
 ## Explicit portfolio instructions
 

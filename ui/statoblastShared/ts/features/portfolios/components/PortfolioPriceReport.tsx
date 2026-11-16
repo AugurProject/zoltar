@@ -87,17 +87,6 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 				) : undefined}
 			</MetricGrid>
 			{model.collateral.symbol === collateralCopy.weth ? <PortfolioButton model={parameters.actions} action={model.actionId('wrap')} label={copy.wrap} pendingLabel={copy.wrapping} reason={model.wrapReason} onClick={model.wrap} /> : undefined}
-			{model.collateral.symbol === collateralCopy.usdt ? (
-				<PortfolioButton
-					model={parameters.actions}
-					action={model.actionId('resetCollateral')}
-					label={collateralCopy.reset}
-					pendingLabel={collateralCopy.resetting}
-					reason={model.fundingReason ?? ((observation?.wethAllowanceAttoEth ?? 0n) === 0n ? collateralCopy.notNeeded : undefined)}
-					onClick={() => model.approve('weth', 0n)}
-				/>
-			) : undefined}
-
 			<TokenApprovalControl
 				actionLabel={scoped.request}
 				allowanceError={model.fundingReadError}
@@ -105,12 +94,11 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 				approvedAmount={observation?.wethAllowanceAttoEth}
 				disabled={disabled}
 				guardMessage={model.fundingReason}
-				requiresAllowanceReset={model.collateral.symbol === collateralCopy.usdt}
 				onApprove={amount => {
 					if (amount !== undefined) void model.approve('weth', amount)
 				}}
 				pending={parameters.actions.busy === model.actionId('approveWeth')}
-				pendingLabel={copy.approving}
+				pendingLabel={common.formatApprovingToken(model.collateral.symbol)}
 				requiredAmount={model.funding?.weth}
 				resetKey={`${model.draftKey}:${model.priceInput}:${model.wethInput}:weth`}
 				tokenSymbol={model.collateral.symbol}
@@ -127,7 +115,7 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 					if (amount !== undefined) void model.approve('rep', amount)
 				}}
 				pending={parameters.actions.busy === model.actionId('approveRep')}
-				pendingLabel={copy.approving}
+				pendingLabel={common.approvingRep}
 				requiredAmount={model.funding?.rep}
 				resetKey={`${model.draftKey}:${model.priceInput}:${model.wethInput}:rep`}
 				tokenSymbol={common.rep}

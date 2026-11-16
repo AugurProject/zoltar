@@ -151,9 +151,6 @@ contract ERC1155 is IERC1155 {
 
 	function _batchTransferFrom(address from, address to, uint256[] memory ids, uint256[] memory values, bytes memory data) internal {
 		require(ids.length == values.length, 'ERC1155: batch transfer IDs and values arrays must have the same length');
-		if (ids.length == 0) {
-			return;
-		}
 		require(to != address(0), 'ERC1155: batch transfer target address must be non-zero');
 		require(from == msg.sender || isApprovedForAll(from, msg.sender) == true, 'ERC1155: caller needs operator approval for third-party batch transfers');
 

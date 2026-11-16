@@ -66,8 +66,7 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 	},
 	{
 		name: 'DeploySecurityPool',
-		parameters:
-			'ISecurityPool indexed securityPool,address collateralRepairAuction,OpenOraclePriceCoordinator openOraclePriceCoordinator,IShareToken shareToken,ISecurityPool indexed parent,uint248 indexed universeId,uint256 questionId,uint256 statoblastSecurityMultiplierBps,uint256 initialReportPriorityFeeAttoEthPerGas,uint256 currentRetentionRate,uint256 settlementCollateralAttoEth',
+		parameters: 'ISecurityPool indexed securityPool,OpenOraclePriceCoordinator openOraclePriceCoordinator,IShareToken shareToken,ISecurityPool indexed parent,uint248 indexed universeId,uint256 questionId,uint256 statoblastSecurityMultiplierBps,uint256 initialReportPriorityFeeAttoEthPerGas',
 		sourcePath: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
 	},
 	{
@@ -132,4 +131,4 @@ export const assemblyEventEmissions: Array<{ dataArguments: string; indexedArgum
 		sourcePath: 'solidity/contracts/statoblast/EscalationGameCarry.sol',
 	},
 ]
-export const referencedEventAbiFingerprint = '87b923eb3581b1c1620a945a87e82b60678e0771dc75c4f520275c683bb0b7a8'
+export const referencedEventAbiFingerprint = '31e4c5ba0a89b1028aead6086f5c292c2b4eee0700b5a204c58deb9111e98066'

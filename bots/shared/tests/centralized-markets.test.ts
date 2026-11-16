@@ -117,7 +117,7 @@ describe('centralized market observations', () => {
 				...serializeCentralizedMarketSettings(settings),
 				sources: [
 					{ ethMarket: 'ETH/USD', exchangeId: 'alpha', repMarket: 'REP/USD' },
-					{ ethMarket: 'ETH/USDT', exchangeId: 'alpha', repMarket: 'REP/USDT' },
+					{ ethMarket: 'ETH/USDC', exchangeId: 'alpha', repMarket: 'REP/USDC' },
 				],
 			}),
 		).toThrow('distinct exchanges')
@@ -222,7 +222,7 @@ describe('centralized market observations', () => {
 		expect(() => parseCentralizedMarketSettings({ ...serialized, minimumSourceCount: 1, requiredForExecution: false, sources: [{ ethMarket: 'BTC/USD', exchangeId: 'alpha', repMarket: 'REP/USD' }] })).toThrow('must be ETH/USD')
 		expect(() => parseCentralizedMarketSettings({ ...serialized, minimumSourceCount: 1, requiredForExecution: false, sources: [{ ethMarket: 'USD/ETH', exchangeId: 'alpha', repMarket: 'REP/USD' }] })).toThrow('must be ETH/USD')
 		expect(() => parseCentralizedMarketSettings({ ...serialized, minimumSourceCount: 1, requiredForExecution: false, sources: [{ ethMarket: 'BTC/ETH', exchangeId: 'alpha', repMarket: 'REP/ETH' }] })).toThrow('must be absent')
-		expect(parseCentralizedMarketSettings({ ...serialized, minimumSourceCount: 1, requiredForExecution: false, sources: [{ ethMarket: 'ETH/USDT', exchangeId: 'alpha', repMarket: 'REP/USDT' }] }).sources[0]?.ethMarket).toBe('ETH/USDT')
+		expect(parseCentralizedMarketSettings({ ...serialized, minimumSourceCount: 1, requiredForExecution: false, sources: [{ ethMarket: 'ETH/USDC', exchangeId: 'alpha', repMarket: 'REP/USDC' }] }).sources[0]?.ethMarket).toBe('ETH/USDC')
 	})
 
 	test('fails closed for manually constructed required settings with too few configured DEX sources', () => {

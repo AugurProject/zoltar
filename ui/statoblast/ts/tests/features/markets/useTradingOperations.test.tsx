@@ -282,17 +282,15 @@ describe('useTradingOperations', () => {
 				getWalletEthBalance: mock(async () => 3n * ATTO_ETH_PER_ETH),
 				loadSecurityPoolMintCapacity: mock(async () =>
 					createMintCapacity({
-						currentRetentionRate: ATTO_ETH_PER_ETH / 2n,
+						linearFee: { rateAttoEthPerSecond: ATTO_ETH_PER_ETH, endTime: 100n },
 						currentTimestamp: 2n,
 						feeEligibleUnderwritingLimitAttoEth: 3n * ATTO_ETH_PER_ETH,
 						feeEndTimestamp: 100n,
-						feeIndexRemainder: 0n,
 						lastFeeCheckpointNativeTime: 1n,
 						mintingCapacityAttoEth: 3n * ATTO_ETH_PER_ETH,
 						settlementCollateralAttoEth: 2n * ATTO_ETH_PER_ETH,
 						shareTokenSupplyAttoShares: 2n * ATTO_ETH_PER_ETH,
 						totalUnderwritingLimitAttoEth: 3n * ATTO_ETH_PER_ETH,
-						totalFeesOwedRemainder: 0n,
 					}),
 				),
 			}),
@@ -345,6 +343,32 @@ describe('useTradingOperations', () => {
 		expect(hook.onTransactionFailed.mock.calls).toEqual([])
 		expect(redeemCompleteSetInSecurityPool).toHaveBeenCalled()
 		expect(submittedRedeemAmount).toBe(firstMintShareAmount)
+	})
+
+	test('submits the amounts the mint and redeem guards accept, including a leading decimal point and digit grouping spaces', async () => {
+		const halfShare = ATTO_ETH_PER_ETH / 2n
+		const createCompleteSetInSecurityPool = mock(async (_accountAddress: Address, _callbacks: unknown, securityPoolAddress: Address, _amount: bigint) => ({ action: 'createCompleteSet' as const, hash: zeroHash, securityPoolAddress, universeId: 1n }))
+		const redeemCompleteSetInSecurityPool = mock(async (_accountAddress: Address, _callbacks: unknown, securityPoolAddress: Address, _amount: bigint) => ({ action: 'redeemCompleteSet' as const, hash: zeroHash, securityPoolAddress, universeId: 1n }))
+		const hook = await renderTradingHook(
+			createMintDependencies({
+				createCompleteSetInSecurityPool,
+				loadSecurityPoolMintCapacity: mock(async () => createMintCapacity({ shareTokenSupplyAttoShares: ATTO_ETH_PER_ETH })),
+				loadTradingDetails: mock(async () => createTradingDetails({ maxRedeemableCompleteSetsAttoShares: ATTO_ETH_PER_ETH, shareBalances: { invalidAttoShares: ATTO_ETH_PER_ETH, noAttoShares: ATTO_ETH_PER_ETH, yesAttoShares: ATTO_ETH_PER_ETH } })),
+				redeemCompleteSetInSecurityPool,
+			}),
+		)
+
+		await hook.setForm({ completeSetAmount: '.5', redeemAmount: '0 .5' })
+		await act(async () => {
+			await hook.state().createCompleteSet()
+		})
+		await act(async () => {
+			await hook.state().redeemCompleteSet()
+		})
+
+		expect(hook.onTransactionFailed.mock.calls).toEqual([])
+		expect(createCompleteSetInSecurityPool.mock.calls[0]?.[3]).toBe(halfShare)
+		expect(redeemCompleteSetInSecurityPool.mock.calls[0]?.[3]).toBe(halfShare)
 	})
 
 	test('redeems the exact share amount even when its ETH backing is zero', async () => {
@@ -545,6 +569,15 @@ describe('useTradingOperations', () => {
 		expect(transactionState.entries).toEqual([])
 	})
 
+	/** The changed wallet account stopped the action before any read, request, or `write`, and was reported as feedback rather than as a failed transaction. */
+	function expectWalletAccountChangeStoppedBeforeReads(hook: Awaited<ReturnType<typeof renderTradingHook>>, onTransactionRequested: unknown, reads: readonly unknown[], write: unknown) {
+		expect(onTransactionRequested).not.toHaveBeenCalled()
+		expect(hook.onTransactionFailed.mock.calls).toEqual([])
+		expect(hook.state().tradingFeedback?.status.detail).toBe(WALLET_ACCOUNT_CHANGED)
+		for (const read of reads) expect(read).not.toHaveBeenCalled()
+		expect(write).not.toHaveBeenCalled()
+	}
+
 	test('does not request a mint transaction when the active wallet account changed', async () => {
 		replaceEnvironment(createFakeBackend({ accountAddress: NEXT_WALLET_ADDRESS }))
 
@@ -565,11 +598,7 @@ describe('useTradingOperations', () => {
 			await hook.state().createCompleteSet()
 		})
 
-		expect(onTransactionRequested).not.toHaveBeenCalled()
-		expect(hook.onTransactionFailed.mock.calls).toEqual([])
-		expect(hook.state().tradingFeedback?.status.detail).toBe(WALLET_ACCOUNT_CHANGED)
-		for (const read of reads) expect(read).not.toHaveBeenCalled()
-		expect(createCompleteSetInSecurityPool).not.toHaveBeenCalled()
+		expectWalletAccountChangeStoppedBeforeReads(hook, onTransactionRequested, reads, createCompleteSetInSecurityPool)
 	})
 
 	test('does not request a share-migration transaction when the active wallet account changed', async () => {
@@ -591,10 +620,6 @@ describe('useTradingOperations', () => {
 			await hook.state().migrateShares()
 		})
 
-		expect(onTransactionRequested).not.toHaveBeenCalled()
-		expect(hook.onTransactionFailed.mock.calls).toEqual([])
-		expect(hook.state().tradingFeedback?.status.detail).toBe(WALLET_ACCOUNT_CHANGED)
-		for (const read of reads) expect(read).not.toHaveBeenCalled()
-		expect(migrateSharesFromUniverse).not.toHaveBeenCalled()
+		expectWalletAccountChangeStoppedBeforeReads(hook, onTransactionRequested, reads, migrateSharesFromUniverse)
 	})
 })

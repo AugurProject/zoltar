@@ -12,6 +12,7 @@ import {
 import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { deployContract } from '../../testSupport/deployContract'
 import { applyLibraries, getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getTestPortfolioDeployers } from '../../testSupport/simulator/utils/contracts/deployTestPortfolio'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createCompleteSet, depositRepToVault, redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/statoblast'
@@ -33,33 +34,30 @@ describe('Statoblast: central portfolio and native question integration', () => 
 
 	test('invalid setup economics and missing module code are rejected before creating an unfinished portfolio', async () => {
 		const infrastructure = getInfraContractAddresses()
-		const deployers = {
-			capital: infrastructure.securityPoolCapitalLedgerDeployer,
-			commitments: infrastructure.securityPoolCommitmentIndexDeployer,
-			fees: infrastructure.securityPoolCapitalFeeStreamsDeployer,
-			books: infrastructure.securityPoolSettlementBookDeployer,
-			settlement: infrastructure.securityPoolPortfolioSettlementDeployer,
-			reporters: infrastructure.securityPoolReporterLedgerDeployer,
-			forks: infrastructure.securityPoolPortfolioForkCoordinatorDeployer,
-			auctions: infrastructure.securityPoolPortfolioAuctionDeployer,
-			services: infrastructure.securityPoolPortfolioServicesDeployer,
-		}
-		const origin = (reportPriorityFeeAttoEthPerGas: bigint) => ({ collateralToken: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' as const, minimumReportCollateral: 10n ** 16n, universeId: fixture.base.genesisUniverse, securityMultiplierBps: fixture.base.statoblastSecurityMultiplierBps, reportPriorityFeeAttoEthPerGas })
+		const deployers = getTestPortfolioDeployers()
+		const origin = (reportPriorityFeeAttoEthPerGas: bigint, securityMultiplierBps = fixture.base.statoblastSecurityMultiplierBps) => ({
+			collateralToken: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' as const,
+			minimumReportCollateral: 10n ** 16n,
+			universeId: fixture.base.genesisUniverse,
+			securityMultiplierBps,
+			reportPriorityFeeAttoEthPerGas,
+		})
 		const factory = { abi: factoryArtifact.abi, address: infrastructure.securityPoolFactory }
 		const creationCode = applyLibraries(portfolioArtifact.evm.bytecode.object)
 		// The factory call is encoded here, without the SDK's validation, so the constructor's own checks are the ones exercised.
-		const deploy = (configuration = portfolioEconomics, reportPriorityFeeAttoEthPerGas = 10_000_000_000n) =>
+		const deploy = (configuration = portfolioEconomics, reportPriorityFeeAttoEthPerGas = 10_000_000_000n, securityMultiplierBps = fixture.base.statoblastSecurityMultiplierBps) =>
 			writeContractAndWait(fixture.owner(), () =>
 				fixture.owner().writeContract({
 					...factory,
 					functionName: 'deployPortfolio',
-					args: [creationCode, encodeAbiParameters(portfolioConfigurationInputs, [origin(reportPriorityFeeAttoEthPerGas), maximumQuestionHorizonSeconds, fixture.questionAdmissionPolicy, configuration])],
+					args: [creationCode, encodeAbiParameters(portfolioConfigurationInputs, [origin(reportPriorityFeeAttoEthPerGas, securityMultiplierBps), maximumQuestionHorizonSeconds, fixture.questionAdmissionPolicy, configuration])],
 					gas: 16_777_216n,
 				}),
 			)
 		const portfolioCount = () => fixture.owner().readContract({ ...factory, functionName: 'portfolioCount' })
 		const before = await portfolioCount()
 		await expect(deploy(portfolioEconomics, 0n)).rejects.toThrow('Initial priority fee zero')
+		for (const multiplier of [10_002n, 10_499n]) await expect(deploy(portfolioEconomics, 10_000_000_000n, multiplier)).rejects.toThrow('Multiplier must be at least 10500 BPS')
 		for (const minimumOutcomeRate of [0n, unit + 1n]) await expect(deploy({ ...portfolioEconomics, minimumOutcomeRate })).rejects.toThrow('Invalid minimum exchange rate')
 		await expect(deploy({ ...portfolioEconomics, annualFeeBps: 10_001n })).rejects.toThrow('Invalid portfolio economics')
 		expect(await portfolioCount()).toBe(before)

@@ -3,7 +3,7 @@ import { simulateWithRevalidation } from './simulation.ts'
 import { createPublicClient, createWalletClient, type Account, type Address, type Chain, type Hex, type Transport, type WalletClient, type createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { MAX_PRIORITY_FEE_PER_GAS, maximumFeePerGas, paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction, transactionMaxBlockNumber } from '@zoltar/bot-shared/execution/transaction-submission'
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
-import { settledQuorumValue, sharedQuorumReadTargets } from '@zoltar/bot-shared/monitoring/read-quorum'
+import { quorumPendingNonce, settledQuorumValue, sharedQuorumReadTargets } from '@zoltar/bot-shared/monitoring/read-quorum'
 import type { OperatorSettings } from '#config/settings'
 import { recordActivity, saveDurableState, type PendingTransactionIntent, type RuntimeState } from '#state/operator-state'
 import { resolveFinalizedReceipt } from '#execution/receipt-transition'
@@ -180,16 +180,6 @@ export async function submitCall(wallet: WriteClient, settings: OperatorSettings
 }
 
 async function agreedPendingNonce(wallet: WriteClient, settings: OperatorSettings, address: Address, pool: RpcPool) {
-	const endpoints = [settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls]
-	return settledQuorumValue(
-		'pending signer nonce',
-		endpoints.map(async endpoint => ({
-			endpoint,
-			value: await createPublicClient({
-				chain: wallet.chain,
-				transport: pool.transportFor(endpoint),
-			}).getTransactionCount({ address, blockTag: 'pending' }),
-		})),
-		settings.connectivity.rpcQuorum,
-	)
+	const readers = [settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls].map(endpoint => ({ client: createPublicClient({ chain: wallet.chain, transport: pool.transportFor(endpoint) }), endpoint }))
+	return quorumPendingNonce('pending signer nonce', readers, address, settings.connectivity.rpcQuorum)
 }

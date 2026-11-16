@@ -14,12 +14,17 @@ async function mount() {
 	lifecycle.trackRendered(hook)
 	return hook
 }
-test.each(['empty', 'failed'])('automatic portfolio discovery exposes its pending state and a truthful %s result', async result => {
+/** Opens the bare portfolios route with automatic discovery waiting on the returned log request. */
+function installPendingDiscovery() {
 	window.history.replaceState({}, '', '#/portfolios')
 	const source = capitalClient()
 	const logs = createDeferred<never[]>()
 	const client = source.client.extend(() => ({ getLogs: () => logs.promise }))
 	installActiveEnvironmentForTesting({ ...source.backend, id: 'simulation', createReadClient: () => client })
+	return logs
+}
+test.each(['empty', 'failed'])('automatic portfolio discovery exposes its pending state and a truthful %s result', async result => {
+	const logs = installPendingDiscovery()
 	const hook = await mount()
 	try {
 		expect(hook.state().discovering).toBe(true)
@@ -34,11 +39,7 @@ test.each(['empty', 'failed'])('automatic portfolio discovery exposes its pendin
 	}
 })
 test('disabling the portfolio clears discovery status and ignores a late discovery failure', async () => {
-	window.history.replaceState({}, '', '#/portfolios')
-	const source = capitalClient()
-	const logs = createDeferred<never[]>()
-	const client = source.client.extend(() => ({ getLogs: () => logs.promise }))
-	installActiveEnvironmentForTesting({ ...source.backend, id: 'simulation', createReadClient: () => client })
+	const logs = installPendingDiscovery()
 	const hook = await mount()
 	try {
 		expect(hook.state().discovering).toBe(true)

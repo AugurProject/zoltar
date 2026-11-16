@@ -2,6 +2,7 @@ import type { EthereumBytes32, EthereumData, EthereumQuantity, EthereumQuantityS
 import { ensureDefined } from './utils/testUtils'
 import { ensureArray } from './utils/array-utils'
 import { collectBytecodeCoverageForCall, collectBytecodeCoverageForTransaction, invalidateSolidityBytecodeCoverageAddressCache, resetSolidityBytecodeCoverageAddressCache } from '../coverage/traceToSource'
+import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
 
 type BlockTimeManipulation = { readonly type: 'AddToTimestamp'; readonly deltaToAdd: EthereumQuantity } | { readonly type: 'SetTimestamp'; readonly timeToSet: EthereumQuantity }
 
@@ -72,8 +73,6 @@ const SEND_TRANSACTION_RECEIPT_TIMEOUT_MS = 180_000
 const SEND_TRANSACTION_RECEIPT_POLL_INTERVAL_MS = 100
 const SEND_TRANSACTION_RECEIPT_BLOCK_ADVANCE_INTERVAL_MS = 1_000
 const RECEIPT_DIAGNOSTIC_RPC_TIMEOUT_MS = 1_000
-
-const isObjectRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 
 const parseTransactionReceipt = (value: unknown): RpcTransactionReceipt | undefined => {
 	if (!isObjectRecord(value)) return undefined

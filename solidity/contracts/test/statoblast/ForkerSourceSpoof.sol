@@ -54,8 +54,8 @@ contract ForkerSourceSpoof {
 	function preparePortfolioPriceFeed(address, uint248) external pure returns (address) {
 		return address(0);
 	}
-	function deployChildSecurityPool(address, address, uint248, uint256, uint256, uint256, uint256) external view returns (address, address) {
-		return (victim, address(0));
+	function deployChildSecurityPool(address, address, uint248, uint256, uint256) external view returns (address) {
+		return victim;
 	}
 
 	// Portfolio and reporter ledger surface.

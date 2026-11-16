@@ -1,6 +1,5 @@
 import { promises as fs } from 'fs'
 import * as process from 'node:process'
-import * as url from 'node:url'
 import * as path from 'path'
 import { contractProjectOwner, isContractProjectSource, type ContractProject } from '../../solidity/ts/contractProjects.ts'
 import { repositoryRoot as REPOSITORY_ROOT_PATH } from '../repo/root.mts'
@@ -112,10 +111,7 @@ export async function copyProjectArtifacts(options: ProjectArtifactOptions = {},
 	await fs.writeFile(artifactPaths.tradingContractArtifactOutputPath, `// Generated from solidity/artifacts/Contracts.json by tooling/ui/projectArtifacts.mts. Do not edit.\nexport const tradingContracts = ${JSON.stringify(tradingContracts)} as const\n`)
 }
 
-const currentScriptPath = url.fileURLToPath(import.meta.url)
-const invokedScriptPath = process.argv[1]
-
-if (invokedScriptPath !== undefined && path.resolve(invokedScriptPath) === currentScriptPath) {
+if (import.meta.main) {
 	copyProjectArtifacts().catch(error => {
 		console.error(error)
 		process.exit(1)

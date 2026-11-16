@@ -25,7 +25,7 @@ export function formatCollateralAmount(value: bigint, market: CollateralMarket, 
 export async function loadTradingCollateralAsset(client: Pick<PublicClient, 'readContract'>, token: Address, blockNumber?: bigint): Promise<TradingCollateral> {
 	const known = collateralPresentation(token)
 	if (token.toLowerCase() === getActiveNetworkProfile().wethAddress.toLowerCase()) return { token, symbol: 'ETH', decimals: 18, native: true }
-	if (known.symbol === 'USDC' || known.symbol === 'USDT') return { token, symbol: known.symbol, decimals: known.decimals, native: false }
+	if (known.symbol === 'USDC') return { token, symbol: known.symbol, decimals: known.decimals, native: false }
 	const [symbolResult, decimalsResult] = await Promise.allSettled([client.readContract({ address: token, abi: ABIS.mainnet.erc20, functionName: 'symbol', blockNumber }), client.readContract({ address: token, abi: ABIS.mainnet.erc20, functionName: 'decimals', blockNumber })])
 	const units = decimalsResult.status === 'fulfilled' ? Number(decimalsResult.value) : undefined
 	if (units === undefined || !Number.isInteger(units) || units < 0 || units > 255) return { token, symbol: 'Collateral base units', decimals: 0, native: false }

@@ -6,6 +6,22 @@ import { deployContract } from '../../../deployContract'
 import { type WriteClient, writeContractAndWait } from '../clients'
 import { applyLibraries, getInfraContractAddresses, getSecurityPoolAddresses } from './deployStatoblast'
 
+/** The protocol's portfolio module deployers, as `buildPortfolioDeploymentRequest` expects them. */
+export function getTestPortfolioDeployers() {
+	const infrastructure = getInfraContractAddresses()
+	return {
+		capital: infrastructure.securityPoolCapitalLedgerDeployer,
+		commitments: infrastructure.securityPoolCommitmentIndexDeployer,
+		fees: infrastructure.securityPoolCapitalFeeStreamsDeployer,
+		books: infrastructure.securityPoolSettlementBookDeployer,
+		settlement: infrastructure.securityPoolPortfolioSettlementDeployer,
+		reporters: infrastructure.securityPoolReporterLedgerDeployer,
+		forks: infrastructure.securityPoolPortfolioForkCoordinatorDeployer,
+		auctions: infrastructure.securityPoolPortfolioAuctionDeployer,
+		services: infrastructure.securityPoolPortfolioServicesDeployer,
+	}
+}
+
 /** A fully prepared native portfolio with one registered question and no owner capital. */
 export async function deployTestPortfolio(client: WriteClient, universeId: bigint, questionId: bigint, securityMultiplierBps: bigint) {
 	const infrastructure = getInfraContractAddresses()

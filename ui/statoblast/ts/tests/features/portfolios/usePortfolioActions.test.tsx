@@ -39,8 +39,8 @@ function model(): Parameters<typeof usePortfolioActions>[0] {
 		nextApprovedQuestionPage: async () => undefined,
 	}
 }
-test('creation uses an explicit admission transaction before deployment and invalidates changed policies', async () => {
-	const source = capitalClient()
+/** Renders the actions over `source` with an owner wallet that records each transaction, reports `token` as the first deployed contract and the factory's deployment event for `portfolio` after it. */
+async function renderWithDeploymentWallet(source: ReturnType<typeof capitalClient>) {
 	// The factory creates the portfolio, so the receipt carries no contract address for it: only the factory's event names it.
 	const topic = (value: Address) => encodeAbiParameters(parseAbiParameters('address'), [value])
 	const deployed = () => ({ address: getInfraContractAddresses().securityPoolFactory, data: '0x' as const, topics: [toEventSelector(parseAbiItem('event PortfolioDeployed(address indexed portfolio, address indexed creator)')), topic(portfolio), topic(owner)] })
@@ -57,6 +57,11 @@ test('creation uses an explicit admission transaction before deployment and inva
 		},
 	})
 	lifecycle.trackRendered(hook)
+	return { hook, requests, loaded }
+}
+test('creation uses an explicit admission transaction before deployment and invalidates changed policies', async () => {
+	const source = capitalClient()
+	const { hook, requests, loaded } = await renderWithDeploymentWallet(source)
 	await act(() => hook.state().setOriginInput(portfolio))
 	expect(hook.state().deployReason).toContain('admission policy first')
 	await act(() => hook.state().deployAdmission())
@@ -176,9 +181,9 @@ test('owner availability preserves the empty state and prioritizes the wallet gu
 	lifecycle.trackRendered(hook)
 	expect(hook.state().ownerReason).toBe('Open a portfolio first')
 	await hook.setProps({ parameters: { ...parameters, accountAddress: undefined } })
-	expect(hook.state().ownerReason).toBe('Connect a wallet to send transactions')
+	expect(hook.state().ownerReason).toBe('Connect a wallet before sending transactions.')
 	await hook.setProps({ model: { ...empty, loading: true } })
-	expect(hook.state().ownerReason).toBe('Connect a wallet to send transactions')
+	expect(hook.state().ownerReason).toBe('Connect a wallet before sending transactions.')
 })
 test('creation rejects invalid economics without changing the owner health target', async () => {
 	capitalClient().install()
@@ -227,7 +232,7 @@ test('presentation-only accounts explain refresh without enabling writes or repl
 	lifecycle.trackRendered(hook)
 	expect(hook.state().ownerReason).toBe('Account refresh pending.')
 	await hook.setProps({ parameters: { ...parameters, accountAddress: undefined } })
-	expect(hook.state().ownerReason).toBe('Connect a wallet to send transactions')
+	expect(hook.state().ownerReason).toBe('Connect a wallet before sending transactions.')
 })
 
 test('portfolio creation rejects priority fees above the oracle funding bound before any transaction', async () => {
@@ -240,25 +245,24 @@ test('portfolio creation rejects priority fees above the oracle funding bound be
 	expect(hook.state().creationError).toBeUndefined()
 })
 
-for (const symbol of ['USDC', 'USDT'] as const)
-	test(`${symbol} creation validates the configured oracle floor in six-decimal collateral units`, async () => {
-		capitalClient().install()
-		const hook = await renderHookWithProps(usePortfolioActionsWrapper, { model: model() })
-		lifecycle.trackRendered(hook)
-		await act(() => {
-			hook.state().setCollateralSymbol(symbol)
-			hook.state().setReportFloor('0.0000001')
-		})
-		expect(hook.state().deployReason).toContain('up to 6 decimal places')
-		await act(() => {
-			hook.state().setReportFloor('0.000001')
-			hook.state().setEconomicsField('minimumCommitment', '100')
-			hook.state().setEconomicsField('minimumPurchaseFee', '1')
-		})
-		expect(hook.state().deployReason).toContain('admission policy first')
-		await act(() => hook.state().setReportFloor('0'))
-		expect(hook.state().deployReason).toContain('positive report stake floor')
+test('USDC creation validates the configured oracle floor in six-decimal collateral units', async () => {
+	capitalClient().install()
+	const hook = await renderHookWithProps(usePortfolioActionsWrapper, { model: model() })
+	lifecycle.trackRendered(hook)
+	await act(() => {
+		hook.state().setCollateralSymbol('USDC')
+		hook.state().setReportFloor('0.0000001')
 	})
+	expect(hook.state().deployReason).toContain('up to 6 decimal places')
+	await act(() => {
+		hook.state().setReportFloor('0.000001')
+		hook.state().setEconomicsField('minimumCommitment', '100')
+		hook.state().setEconomicsField('minimumPurchaseFee', '1')
+	})
+	expect(hook.state().deployReason).toContain('admission policy first')
+	await act(() => hook.state().setReportFloor('0'))
+	expect(hook.state().deployReason).toContain('positive report stake floor')
+})
 test('the origin universe follows the selected universe until the user edits it', async () => {
 	capitalClient().install()
 	const hook = await renderHookWithProps(usePortfolioActionsWrapper, { model: { ...model(), universeInput: '7' } })
@@ -274,11 +278,7 @@ test('the origin universe follows the selected universe until the user edits it'
 test('a forked origin stops creation before the paid admission deployment', async () => {
 	const source = capitalClient()
 	source.setRead('getForkTime', 1n)
-	const requests: { data?: Hex | undefined }[] = []
-	const writer = asWriteClient({ ...createMockWriteClient(request => requests.push(request)), waitForTransactionReceipt: async () => ({ status: 'success' as const, contractAddress: token }) })
-	installActiveEnvironmentForTesting({ ...source.backend, createWriteClient: () => ({ ...writer, account: { address: owner, type: 'json-rpc' }, chain: MAINNET_NETWORK_PROFILE.chain, call: async () => ({ data: undefined }) }) })
-	const hook = await renderHookWithProps(usePortfolioActionsWrapper, { model: model() })
-	lifecycle.trackRendered(hook)
+	const { hook, requests } = await renderWithDeploymentWallet(source)
 	await waitFor(() => expect(hook.state().originForked).toBe(true))
 	expect(hook.state().creationError).toBeUndefined()
 	expect(hook.state().admissionDeployReason).toContain('has forked')
@@ -290,11 +290,7 @@ test('a forked origin stops creation before the paid admission deployment', asyn
 
 test('a universe that forks after the form checked it still stops at submission', async () => {
 	const source = capitalClient()
-	const requests: { data?: Hex | undefined }[] = []
-	const writer = asWriteClient({ ...createMockWriteClient(request => requests.push(request)), waitForTransactionReceipt: async () => ({ status: 'success' as const, contractAddress: token }) })
-	installActiveEnvironmentForTesting({ ...source.backend, createWriteClient: () => ({ ...writer, account: { address: owner, type: 'json-rpc' }, chain: MAINNET_NETWORK_PROFILE.chain, call: async () => ({ data: undefined }) }) })
-	const hook = await renderHookWithProps(usePortfolioActionsWrapper, { model: model() })
-	lifecycle.trackRendered(hook)
+	const { hook, requests } = await renderWithDeploymentWallet(source)
 	await waitFor(() => expect(hook.state().admissionDeployReason).toBeUndefined())
 	source.setRead('getForkTime', 1n)
 	await act(() => hook.state().deployAdmission())
@@ -322,11 +318,7 @@ test('a fork seen on one network does not block the same universe ID on another'
 
 test('a fork between the two paid deployments stops the portfolio deployment', async () => {
 	const source = capitalClient()
-	const requests: { data?: Hex | undefined }[] = []
-	const writer = asWriteClient({ ...createMockWriteClient(request => requests.push(request)), waitForTransactionReceipt: async () => ({ status: 'success' as const, contractAddress: token }) })
-	installActiveEnvironmentForTesting({ ...source.backend, createWriteClient: () => ({ ...writer, account: { address: owner, type: 'json-rpc' }, chain: MAINNET_NETWORK_PROFILE.chain, call: async () => ({ data: undefined }) }) })
-	const hook = await renderHookWithProps(usePortfolioActionsWrapper, { model: model() })
-	lifecycle.trackRendered(hook)
+	const { hook, requests } = await renderWithDeploymentWallet(source)
 	await act(() => hook.state().deployAdmission())
 	expect(requests).toHaveLength(1)
 	source.setRead('getForkTime', 1n)

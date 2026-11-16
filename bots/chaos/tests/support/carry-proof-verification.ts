@@ -1,18 +1,16 @@
-import { concatHex, keccak256, zeroHash, type Hash } from '@zoltar/bot-shared/ethereum'
+import { zeroHash, type Hash } from '@zoltar/bot-shared/ethereum'
+import { hashCarryParent } from '@zoltar/core-shared/evm/carryProof'
 import { computeNullifierRootFromProof, createMerkleMountainRangeProof, nullifierPath, sparseNullifierRoot } from '../../src/monitoring/carry-proof-index.ts'
 
 // Reference verifiers mirroring the Solidity fork-carry proof checks. The bot only
-// creates proofs, so the tests keep an independent verifier as their oracle.
+// creates proofs, so the tests keep an independent verifier as their oracle. Only the
+// keccak256(left || right) parent hash comes from the shared carry-proof module.
 
 type MerkleMountainRangeProof = ReturnType<typeof createMerkleMountainRangeProof>
 type SparseNullifierState = Parameters<typeof sparseNullifierRoot>[0]
 
 const CARRY_MMR_MAXIMUM_PEAKS = 64
 const MAXIMUM_CARRY_LEAF_COUNT = 1n << BigInt(CARRY_MMR_MAXIMUM_PEAKS)
-
-export function hashCarryParent(left: Hash, right: Hash): Hash {
-	return keccak256(concatHex([left, right]))
-}
 
 function occupiedPeakCount(leafCount: bigint) {
 	let count = 0

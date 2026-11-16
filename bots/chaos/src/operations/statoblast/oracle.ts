@@ -248,54 +248,45 @@ export const requestOraclePrice: OperationDefinition = {
 	risk: 'medium',
 }
 
+function hasSettledPendingReport(pool: PoolSnapshot) {
+	return pool.pendingReportId !== '0' && pool.pendingReportSettled
+}
+
+function recoverSettledReportPlan(snapshot: EcosystemSnapshot, pool: PoolSnapshot) {
+	return planBase({
+		definitionId: recoverSettledReport.id,
+		ecosystem: 'statoblast',
+		label: recoverSettledReport.label,
+		metadata: { coordinator: pool.coordinator, reportId: pool.pendingReportId },
+		postconditions: ['Coordinator consumes the settled pending report and advances any pending settlement operations'],
+		priority: 'urgent',
+		risk: 'low',
+		snapshot,
+		steps: [encodeStep({ abi: openOraclePriceCoordinatorAbi, evidence: [eventEvidence(pool.priceFeed, 'PendingReportRecovered(uint256,uint256,uint256,uint256,uint256,uint256)')], functionName: 'recoverSettledPendingReport', id: 'recover-report', label: 'Recover settled pending report', to: pool.coordinator })],
+	})
+}
+
 export const recoverSettledReport: OperationDefinition = {
 	buildPlan(snapshot, options) {
-		const pool = choose(
-			snapshot.pools.filter(candidate => candidate.pendingReportId !== '0' && candidate.pendingReportSettled),
-			mixSeed(options.seed, recoverSettledReport.id),
-		)
+		const pool = choose(snapshot.pools.filter(hasSettledPendingReport), mixSeed(options.seed, recoverSettledReport.id))
 		if (pool === undefined) return undefined
-		return planBase({
-			definitionId: recoverSettledReport.id,
-			ecosystem: 'statoblast',
-			label: recoverSettledReport.label,
-			metadata: { coordinator: pool.coordinator, reportId: pool.pendingReportId },
-			postconditions: ['Coordinator consumes the settled pending report and advances any pending settlement operations'],
-			priority: 'urgent',
-			risk: 'low',
-			snapshot,
-			steps: [encodeStep({ abi: openOraclePriceCoordinatorAbi, evidence: [eventEvidence(pool.priceFeed, 'PendingReportRecovered(uint256,uint256,uint256,uint256,uint256,uint256)')], functionName: 'recoverSettledPendingReport', id: 'recover-report', label: 'Recover settled pending report', to: pool.coordinator })],
-		})
+		return recoverSettledReportPlan(snapshot, pool)
 	},
 	buildLifecyclePlans(snapshot) {
-		return snapshot.pools
-			.filter(pool => pool.pendingReportId !== '0' && pool.pendingReportSettled)
-			.map(pool =>
-				planBase({
-					definitionId: recoverSettledReport.id,
-					ecosystem: 'statoblast',
-					label: recoverSettledReport.label,
-					metadata: { coordinator: pool.coordinator, reportId: pool.pendingReportId },
-					postconditions: ['Coordinator consumes the settled pending report and advances any pending settlement operations'],
-					priority: 'urgent',
-					risk: 'low',
-					snapshot,
-					steps: [encodeStep({ abi: openOraclePriceCoordinatorAbi, evidence: [eventEvidence(pool.priceFeed, 'PendingReportRecovered(uint256,uint256,uint256,uint256,uint256,uint256)')], functionName: 'recoverSettledPendingReport', id: 'recover-report', label: 'Recover settled pending report', to: pool.coordinator })],
-				}),
-			)
+		return snapshot.pools.filter(hasSettledPendingReport).map(pool => recoverSettledReportPlan(snapshot, pool))
 	},
 	enumerateLifecycleObstructingPresence(snapshot) {
-		return snapshot.pools.filter(pool => pool.pendingReportId !== '0' && pool.pendingReportSettled).map(pool => ({ coordinator: pool.coordinator, reportId: pool.pendingReportId }))
+		return snapshot.pools.filter(hasSettledPendingReport).map(pool => ({ coordinator: pool.coordinator, reportId: pool.pendingReportId }))
 	},
 	enumerateLifecyclePresence(snapshot) {
-		return snapshot.pools.filter(pool => pool.pendingReportId !== '0' && pool.pendingReportSettled).map(pool => ({ coordinator: pool.coordinator, reportId: pool.pendingReportId }))
+		return snapshot.pools.filter(hasSettledPendingReport).map(pool => ({ coordinator: pool.coordinator, reportId: pool.pendingReportId }))
 	},
 	classification: 'lifecycle-obligation',
 	contract: 'OpenOraclePriceCoordinator',
 	description: 'Recovers a settled stored OpenOracle report whose callback did not clear the coordinator slot.',
 	discoveryInputs: ['coordinator pending report', 'OpenOracle storedGame settlement timestamp'],
 	ecosystem: 'statoblast',
-	evaluate: snapshot => eligible(snapshot.pools.some(pool => pool.pendingReportId !== '0' && pool.pendingReportSettled) ? undefined : 'No settled pending coordinator report requires recovery'),
+	evaluate: snapshot => eligible(snapshot.pools.some(hasSettledPendingReport) ? undefined : 'No settled pending coordinator report requires recovery'),
 	id: 'statoblast.oracle.recover-report',
 	label: 'Recover settled oracle report',
 	method: 'recoverSettledPendingReport',

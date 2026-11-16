@@ -202,6 +202,7 @@ export function renderSelectedReportActionSection({
 				const isToken1 = token === 'token1'
 				const tokenSymbol = isToken1 ? token1Symbol : token2Symbol
 				const approval = isToken1 ? openOracleTokenAccessState.token1Approval : openOracleTokenAccessState.token2Approval
+				const approvalActionPending = openOracleActiveAction === (isToken1 ? 'approveToken1' : 'approveToken2')
 				const requiredAmount = isToken1 ? disputeSubmission?.token1ContributionAmount : disputeSubmission?.token2ContributionAmount
 				const tokenApprovalGuardMessage = (() => {
 					if (openOracleReportDetails === undefined) return openOracleCopy.reportLoadRequired
@@ -211,18 +212,7 @@ export function renderSelectedReportActionSection({
 				})()
 				return (
 					<SectionBlock headingLevel={4} title={openOracleCopy.formatTokenApprovalTitle(tokenSymbol)} variant='embedded'>
-						{tokenSymbol === 'USDT' ? (
-							<TransactionActionButton
-								idleLabel={commonCopy.formatResetTokenApproval(tokenSymbol)}
-								pendingLabel={commonCopy.formatApprovingToken(tokenSymbol)}
-								pending={openOracleActiveAction === (isToken1 ? 'approveToken1' : 'approveToken2')}
-								availability={{ disabled: !isConnected || !isOnActiveAppChain || (approval.value ?? 0n) === 0n || sharedApprovalGuardMessage !== undefined || tokenApprovalGuardMessage !== undefined, reason: sharedApprovalGuardMessage ?? tokenApprovalGuardMessage ?? commonCopy.approvalSatisfied }}
-								onClick={() => (isToken1 ? onApproveToken1 : onApproveToken2)(0n)}
-								tone='secondary'
-							/>
-						) : null}
 						<TokenApprovalControl
-							requiresAllowanceReset={tokenSymbol === 'USDT'}
 							actionLabel={openOracleCopy.disputingTheReport}
 							allowanceError={approval.error}
 							allowanceLoading={approval.loading}
@@ -231,7 +221,7 @@ export function renderSelectedReportActionSection({
 							guardMessage={sharedApprovalGuardMessage ?? tokenApprovalGuardMessage}
 							guardMessageElementId={sharedApprovalGuardMessage === undefined ? undefined : sharedApprovalGuardMessageId}
 							onApprove={amount => (isToken1 ? onApproveToken1 : onApproveToken2)(amount)}
-							pending={openOracleActiveAction === (isToken1 ? 'approveToken1' : 'approveToken2')}
+							pending={approvalActionPending}
 							pendingLabel={commonCopy.formatApprovingToken(tokenSymbol)}
 							requiredAmount={requiredAmount}
 							resetKey={`dispute:${token}:${tokenSymbol}:${requiredAmount?.toString() ?? ''}:${openOracleForm.reportId}`}

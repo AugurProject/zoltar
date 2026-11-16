@@ -1,5 +1,6 @@
 import { ETH_GAS_RESERVE_ATTO_ETH } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
 import * as collateralCopy from '../copy/collateral.js'
+import { walletConnectionRequired } from '@zoltar/ui-core-shared/copy/common.js'
 import { collateralAsset, tokenFunded, formatCollateralAmount } from '../protocol/collateral.js'
 import { useCollateralFunding } from './live/useCollateralFunding.js'
 import { CollateralFundingControls } from './CollateralFundingControls.js'
@@ -162,7 +163,13 @@ export function LiveLiquidityControls({
 			) : null}
 			<UserMessage className='detail' detail={operation === 'remove' ? liquidityCopy.formatRemovalGuidance(newRiskBlocker === undefined ? undefined : marketSettlementPath(market)) : liquidityCopy.additionGuidance} />
 			{operation !== 'remove' ? (
-				<CollateralFundingControls actionLabel={actionLabel} funding={funding} required={parsed} disabled={workflowLocked || funding.pending || gasReason !== undefined || !walletConnected || networkMismatchReason !== undefined} reason={networkMismatchReason ?? (!walletConnected ? wallet.actionLabel : gasReason)} />
+				<CollateralFundingControls
+					actionLabel={actionLabel}
+					funding={funding}
+					required={parsed}
+					disabled={workflowLocked || funding.pending || gasReason !== undefined || !walletConnected || networkMismatchReason !== undefined}
+					reason={networkMismatchReason ?? (!walletConnected ? walletConnectionRequired : gasReason)}
+				/>
 			) : null}
 			<QuotedTransactionPanel
 				phase={state}

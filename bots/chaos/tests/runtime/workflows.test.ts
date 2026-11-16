@@ -122,6 +122,19 @@ function canonicalConfirmationPlan(position: 'prerequisite' | 'terminal' = 'term
 	}
 }
 
+/** A workflow whose dust step is signed under intent:1, with the matching not-yet-broadcast intent. */
+function signedDustWorkflow() {
+	const workflow = createDurableWorkflow(plan())
+	markWorkflowStepSigned(workflow, 'dust', 'intent:1', `0x${'11'.repeat(32)}` as const)
+	const intent: Pick<PendingTransactionIntent, 'status' | 'stepId' | 'submissionBlock' | 'submittedAt'> = {
+		status: 'signed',
+		stepId: 'dust',
+		submissionBlock: undefined,
+		submittedAt: undefined,
+	}
+	return { intent, workflow }
+}
+
 describe('durable chaos workflows', () => {
 	test('reuses a retained plan only for the same canonical workflow identity', () => {
 		const original: OperationPlan = { ...plan(), metadata: { reportId: '1', selfDispute: false } }
@@ -204,15 +217,7 @@ describe('durable chaos workflows', () => {
 	})
 
 	test('journals an uncertain broadcast consistently before network submission', () => {
-		const workflow = createDurableWorkflow(plan())
-		const hash = `0x${'11'.repeat(32)}` as const
-		markWorkflowStepSigned(workflow, 'dust', 'intent:1', hash)
-		const intent: Pick<PendingTransactionIntent, 'status' | 'stepId' | 'submissionBlock' | 'submittedAt'> = {
-			status: 'signed',
-			stepId: 'dust',
-			submissionBlock: undefined,
-			submittedAt: undefined,
-		}
+		const { intent, workflow } = signedDustWorkflow()
 		markWorkflowIntentBroadcastAttempt(workflow, intent, 12n)
 		expect(intent.status).toBe('confirmation-unknown')
 		expect(intent.submissionBlock).toBe(12n)
@@ -221,15 +226,7 @@ describe('durable chaos workflows', () => {
 	})
 
 	test('restores a signed write-ahead intent only when submission is deferred before the network call', () => {
-		const workflow = createDurableWorkflow(plan())
-		const hash = `0x${'11'.repeat(32)}` as const
-		markWorkflowStepSigned(workflow, 'dust', 'intent:1', hash)
-		const intent: Pick<PendingTransactionIntent, 'status' | 'stepId' | 'submissionBlock' | 'submittedAt'> = {
-			status: 'signed',
-			stepId: 'dust',
-			submissionBlock: undefined,
-			submittedAt: undefined,
-		}
+		const { intent, workflow } = signedDustWorkflow()
 		const journal = captureWorkflowIntentSubmissionJournal(workflow, intent)
 		markWorkflowIntentBroadcastAttempt(workflow, intent, 12n)
 

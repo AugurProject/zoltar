@@ -8,7 +8,7 @@ import type { ExclusiveProcessLock } from '#state/position-store'
 import { privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import type { SignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import { operatorStatusAfterPause, type SyncCursor } from '@zoltar/bot-shared/monitoring/block-sync'
-import type { PendingOperatorUpdates } from './operator-control-plane.ts'
+import type { PendingOperatorUpdates } from './pending-operator-updates.ts'
 import { acquireConfigurationSignerOperation } from './signer-operations.ts'
 
 /** Which operator-file sections hold a saved change the scan boundary has not consumed yet. */

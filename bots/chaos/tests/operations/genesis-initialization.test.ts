@@ -2,8 +2,8 @@ import { capitalFixture } from '../support/portfolio-fixtures.ts'
 import { describe, expect, test } from 'bun:test'
 import { evaluateSelectableOperationDefinition } from '../../src/operations/catalog.ts'
 import { TRADING_OPERATIONS } from '../../src/operations/trading/catalog.ts'
-import { genesisInitializationDefinitionId, type GenesisInitializationState } from '../../src/runtime/selection.ts'
-import { address, snapshotFixture } from './fixture.ts'
+import { genesisInitializationDefinitionId } from '../../src/runtime/selection.ts'
+import { address, completeGenesisInitializationState, snapshotFixture } from './fixture.ts'
 
 const maximumEthSpendAttoEth = 10n ** 15n
 const maximumRepSpendAttoRep = 10n ** 15n
@@ -20,37 +20,18 @@ const options = {
 	seed: 1,
 } as const
 
-function completeState(overrides: Partial<GenesisInitializationState>): GenesisInitializationState {
-	return {
-		genesisUniversePresent: true,
-		hasInitializedPair: true,
-		hasInitializedUniswapPool: true,
-		hasPair: true,
-		hasPool: true,
-		hasQuestion: true,
-		hasSeededUniswapPool: true,
-		hasUniswapPool: true,
-		hasUniswapSeeder: true,
-		hasWeth: true,
-		hasPortfolioCapital: true,
-		tradingFactoryDeployed: true,
-		tradingRouterDeployed: true,
-		...overrides,
-	}
-}
-
 describe('genesis initialization', () => {
 	test('advances through every external and protocol trading prerequisite in order', () => {
-		expect(genesisInitializationDefinitionId(completeState({ hasQuestion: false }))).toBe('zoltar.question.create-binary')
-		expect(genesisInitializationDefinitionId(completeState({ hasPool: false }))).toBe('statoblast.portfolio.add-question')
-		expect(genesisInitializationDefinitionId(completeState({ hasPortfolioCapital: false }))).toBe('statoblast.capital.deposit')
-		expect(genesisInitializationDefinitionId(completeState({ hasUniswapSeeder: false }))).toBe('trading.genesis-uniswap.deploy-seeder')
-		expect(genesisInitializationDefinitionId(completeState({ hasUniswapPool: false }))).toBe('trading.genesis-uniswap.create-pool')
-		expect(genesisInitializationDefinitionId(completeState({ hasInitializedUniswapPool: false }))).toBe('trading.genesis-uniswap.initialize-pool')
-		expect(genesisInitializationDefinitionId(completeState({ hasWeth: false }))).toBe('open-oracle.weth.wrap')
-		expect(genesisInitializationDefinitionId(completeState({ hasSeededUniswapPool: false }))).toBe('trading.genesis-uniswap.seed-pool')
-		expect(genesisInitializationDefinitionId(completeState({ tradingFactoryDeployed: false }))).toBe('trading.root.deploy-factory')
-		expect(genesisInitializationDefinitionId(completeState({ tradingRouterDeployed: false }))).toBe('trading.root.deploy-router')
+		expect(genesisInitializationDefinitionId(completeGenesisInitializationState({ hasQuestion: false }))).toBe('zoltar.question.create-binary')
+		expect(genesisInitializationDefinitionId(completeGenesisInitializationState({ hasPool: false }))).toBe('statoblast.portfolio.add-question')
+		expect(genesisInitializationDefinitionId(completeGenesisInitializationState({ hasPortfolioCapital: false }))).toBe('statoblast.capital.deposit')
+		expect(genesisInitializationDefinitionId(completeGenesisInitializationState({ hasUniswapSeeder: false }))).toBe('trading.genesis-uniswap.deploy-seeder')
+		expect(genesisInitializationDefinitionId(completeGenesisInitializationState({ hasUniswapPool: false }))).toBe('trading.genesis-uniswap.create-pool')
+		expect(genesisInitializationDefinitionId(completeGenesisInitializationState({ hasInitializedUniswapPool: false }))).toBe('trading.genesis-uniswap.initialize-pool')
+		expect(genesisInitializationDefinitionId(completeGenesisInitializationState({ hasWeth: false }))).toBe('open-oracle.weth.wrap')
+		expect(genesisInitializationDefinitionId(completeGenesisInitializationState({ hasSeededUniswapPool: false }))).toBe('trading.genesis-uniswap.seed-pool')
+		expect(genesisInitializationDefinitionId(completeGenesisInitializationState({ tradingFactoryDeployed: false }))).toBe('trading.root.deploy-factory')
+		expect(genesisInitializationDefinitionId(completeGenesisInitializationState({ tradingRouterDeployed: false }))).toBe('trading.root.deploy-router')
 	})
 
 	test('builds bounded pool creation, initialization, and seeding plans from authenticated state', () => {

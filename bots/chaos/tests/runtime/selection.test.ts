@@ -6,8 +6,9 @@ import { publicChaosState } from '../../src/dashboard/dashboard-server.ts'
 import { parseSnapshot } from '../../src/dashboard/dashboard-data.ts'
 import { OperationRediscoveryRequired } from '../../src/execution/execution-context.ts'
 import { describe, expect, test } from 'bun:test'
-import { genesisInitializationPlan, selectExecutableOperationPlan, randomOperationSkipReason, randomOperationPlans, urgentOperationPlans, type GenesisInitializationState } from '../../src/runtime/selection.ts'
+import { genesisInitializationPlan, selectExecutableOperationPlan, randomOperationSkipReason, randomOperationPlans, urgentOperationPlans } from '../../src/runtime/selection.ts'
 import type { EvaluatedOperation, OperationPlan } from '../../src/operations/types.ts'
+import { completeGenesisInitializationState } from '../operations/fixture.ts'
 
 function plan(id: string, priority: OperationPlan['priority'], deadlineTimestamp?: string): OperationPlan {
 	return {
@@ -46,25 +47,6 @@ function evaluation(value: OperationPlan | undefined, eligible = true): Evaluate
 	}
 }
 
-function initializedState(overrides: Partial<GenesisInitializationState>): GenesisInitializationState {
-	return {
-		genesisUniversePresent: true,
-		hasInitializedPair: true,
-		hasInitializedUniswapPool: true,
-		hasPair: true,
-		hasPool: true,
-		hasQuestion: true,
-		hasSeededUniswapPool: true,
-		hasUniswapPool: true,
-		hasUniswapSeeder: true,
-		hasWeth: true,
-		hasPortfolioCapital: true,
-		tradingFactoryDeployed: true,
-		tradingRouterDeployed: true,
-		...overrides,
-	}
-}
-
 describe('chaos operation selection', () => {
 	test('selects the earliest urgent lifecycle obligation before random work', () => {
 		const evaluations = [evaluation(plan('random', 'random')), evaluation(plan('later', 'urgent', '20')), evaluation(plan('earlier', 'urgent', '10'))]
@@ -90,9 +72,9 @@ describe('chaos operation selection', () => {
 
 	test('retries the earliest missing genesis prerequisite before later initialization work', () => {
 		const evaluations = [evaluation(plan('trading.pair.create', 'random')), evaluation(plan('statoblast.capital.deposit', 'random')), evaluation(plan('statoblast.portfolio.add-question', 'random'))]
-		expect(genesisInitializationPlan(evaluations, initializedState({ hasInitializedPair: false, hasPair: false, hasPool: false, hasPortfolioCapital: false }))?.definitionId).toBe('statoblast.portfolio.add-question')
-		expect(genesisInitializationPlan([evaluation(plan('trading.pair.create', 'random'))], initializedState({ hasInitializedPair: false, hasPair: false }))?.definitionId).toBe('trading.pair.create')
-		expect(genesisInitializationPlan(evaluations, initializedState({ genesisUniversePresent: false }))).toBeUndefined()
+		expect(genesisInitializationPlan(evaluations, completeGenesisInitializationState({ hasInitializedPair: false, hasPair: false, hasPool: false, hasPortfolioCapital: false }))?.definitionId).toBe('statoblast.portfolio.add-question')
+		expect(genesisInitializationPlan([evaluation(plan('trading.pair.create', 'random'))], completeGenesisInitializationState({ hasInitializedPair: false, hasPair: false }))?.definitionId).toBe('trading.pair.create')
+		expect(genesisInitializationPlan(evaluations, completeGenesisInitializationState({ genesisUniversePresent: false }))).toBeUndefined()
 	})
 
 	test('returns no candidates when no operation has an eligible plan', () => {

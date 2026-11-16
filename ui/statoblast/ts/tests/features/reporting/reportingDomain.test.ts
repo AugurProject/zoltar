@@ -76,6 +76,16 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 	}
 }
 
+/** 1000 REP backs Yes, the required bond is 1000 REP, and the non-decision threshold is 2000 REP. */
+function createThousandRepOnYesDetails() {
+	return createReportingDetails({
+		currentRequiredBond: rep(1_000n),
+		nonDecisionThresholdAttoRep: rep(2_000n),
+		sides: [side('invalid', 0n), side('yes', rep(1_000n)), side('no', 0n)],
+		startBondAttoRep: rep(1n),
+	})
+}
+
 function createNotStartedReportingDetails(overrides: Partial<Extract<ReportingDetails, { status: 'not-started' }>> = {}): ReportingDetails {
 	return {
 		settlementCollateralAttoEth: 1n,
@@ -143,12 +153,7 @@ describe('reportingDomain', () => {
 	})
 
 	test('getReportingMinimumOutcomeChangeContribution returns 1000 REP plus one attoREP for 1000 REP on yes and no selected', () => {
-		const details = createReportingDetails({
-			currentRequiredBond: rep(1_000n),
-			nonDecisionThresholdAttoRep: rep(2_000n),
-			sides: [side('invalid', 0n), side('yes', rep(1_000n)), side('no', 0n)],
-			startBondAttoRep: rep(1n),
-		})
+		const details = createThousandRepOnYesDetails()
 
 		expect(getReportingMinimumOutcomeChangeContribution(details, 'no')).toEqual({
 			amountAttoRep: rep(1_000n) + 1n,
@@ -190,7 +195,7 @@ describe('reportingDomain', () => {
 
 	test.each([
 		{ name: 'until pool-level question finalization', overrides: { questionOutcome: 'none' } },
-		{ name: 'when a child outcome is known before the pool becomes operational', overrides: { questionOutcome: 'yes', systemState: 'forkCollateralRepairAuction' } },
+		{ name: 'when a child outcome is known before the pool becomes operational', overrides: { questionOutcome: 'yes', systemState: 'forkMigration' } },
 	] satisfies { name: string; overrides: Partial<ActiveReportingDetails> }[])('getImportedEscalationDepositClaimAmount stays pending $name', ({ overrides }) => {
 		const importedDeposit = { amountAttoRep: rep(2n), cumulativeAmountAttoRep: rep(1n), depositor: zeroAddress, parentDepositIndex: 7n }
 		const details = createReportingDetails({
@@ -250,12 +255,7 @@ describe('reportingDomain', () => {
 	})
 
 	test('getReportingMaxProfitContribution returns 1500 REP for 1000 REP on yes and no selected', () => {
-		const details = createReportingDetails({
-			currentRequiredBond: rep(1_000n),
-			nonDecisionThresholdAttoRep: rep(2_000n),
-			sides: [side('invalid', 0n), side('yes', rep(1_000n)), side('no', 0n)],
-			startBondAttoRep: rep(1n),
-		})
+		const details = createThousandRepOnYesDetails()
 
 		expect(getReportingMaxProfitContribution(details, 'no')).toEqual({
 			amountAttoRep: rep(1_500n),

@@ -82,6 +82,33 @@ describe('liquidator settings', () => {
 		}
 	})
 
+	test('rejects unknown and misspelled keys instead of silently applying their defaults', () => {
+		expect(() => parseSettings({ ...settings, selectedPortfolio: [] })).toThrow('operator settings contains unsupported field selectedPortfolio')
+		expect(() => parseSettings({ ...settings, runtime: { ...settings.runtime, logLookbackBlock: 64 } })).toThrow('runtime contains unsupported field logLookbackBlock')
+		expect(() => parseSettings({ ...settings, strategy: { ...settings.strategy, walletReserveEth: '1' } })).toThrow('strategy contains unsupported field walletReserveEth')
+		expect(() => parseSettings({ ...settings, portfolioPolicy: { allowFundedTakeover: true } })).toThrow('portfolioPolicy contains unsupported field allowFundedTakeover')
+	})
+
+	test('ignores removed standalone-pool settings and drops them on the next save', () => {
+		const parsed = parseSettings({
+			...settings,
+			desiredPools: [],
+			selectedPools: [],
+			strategy: { ...settings.strategy, allowAutomaticDeposits: true, candidatePriority: 'largest-bonus', vaultTargetHealthBps: 12500 },
+		})
+		const saved = serializedSettings(parsed)
+		expect(saved).not.toHaveProperty('desiredPools')
+		expect(saved).not.toHaveProperty('selectedPools')
+		expect(Object.keys(saved.strategy).sort()).toEqual(['maximumGasCostEth', 'walletReserveRep'])
+		expect(parseSettings(JSON.parse(JSON.stringify(saved))).strategy).toEqual(parsed.strategy)
+	})
+
+	test('loads the shipped example configuration', () => {
+		const parsed = parseSettings(example)
+		expect(parsed.networkConfigured).toBe(false)
+		expect(parsed.portfolioPolicy.maximumPositionsPerScan).toBe(example.portfolioPolicy.maximumPositionsPerScan)
+	})
+
 	test('keeps settings and durable recovery state isolated while switching chain profiles', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-profiles-'))
 		try {

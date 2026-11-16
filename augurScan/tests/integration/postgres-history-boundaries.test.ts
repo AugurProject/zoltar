@@ -3,7 +3,7 @@ import { handleApi } from '../../src/api.ts'
 import { type IndexedBlock, ScannerDatabase } from '../../src/database.ts'
 import { initializeSchema } from '../../src/schema.ts'
 import type { ContractMetadata, NetworkConfig } from '../../src/types.ts'
-import { address, blockHash, chainId, decodedLog, discoveredAddress, indexedBlock, log, orphanOnlyAddress, postgresTest, promotedAddress, rediscoveredAddress, requirePostgresUrl, transaction, transactionHash } from '../support/postgres-fixtures.ts'
+import { address, blockHash, chainId, decodedLog, discoveredAddress, evidenceTransaction, indexedBlock, log, orphanOnlyAddress, postgresTest, promotedAddress, rediscoveredAddress, requirePostgresUrl, transaction, transactionHash } from '../support/postgres-fixtures.ts'
 
 postgresTest('advances the canonical coverage floor when RPC log history is pruned', async () => {
 	const postgresUrl = requirePostgresUrl()
@@ -200,20 +200,7 @@ postgresTest(
 			addressActivity: [],
 			contractDeploymentObservations: [],
 			logScanCursors: [],
-			transactions: [
-				{
-					hash: evidenceTxHash,
-					transactionIndex: 0,
-					from: address,
-					to: discoveredAddress,
-					value: 0n,
-					input: '0x',
-					status: 'success',
-					gasUsed: 21_000n,
-					receipt: { transactionHash: evidenceTxHash, blockHash: evidenceBlockHash, status: 'success', logs: [] },
-					decoded: { status: 'unknown', summary: 'Manifest replay fixture' },
-				},
-			],
+			transactions: [evidenceTransaction(evidenceTxHash, evidenceBlockHash, { status: 'unknown', summary: 'Manifest replay fixture' })],
 			logs: [
 				{
 					...decodedLog(evidenceBlockHash, 0, discoveredAddress, eventName, {

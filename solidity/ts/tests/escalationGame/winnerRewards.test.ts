@@ -1,4 +1,5 @@
 import assert from '../../testSupport/simulator/utils/assert'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { beforeEach, describe, test } from 'bun:test'
 import type { AnvilWindowEthereum } from '../../testSupport/simulator/AnvilWindowEthereum'
 import { createWriteClient, type WriteClient } from '../../testSupport/simulator/utils/clients'
@@ -22,6 +23,11 @@ describe('Escalation Game: tie-breaking and winner rewards', () => {
 		client = fixture.client
 	})
 
+	/** Moves the chain clock one second past the escalation period of `escalationGame`. */
+	const endEscalation = async (escalationGame: Address) => {
+		await mockWindow.setTime((await getActivationTime(client, escalationGame)) + ESCALATION_TIME_LENGTH + 1n)
+	}
+
 	test('depositOnOutcome prevents tie by refunding 1 attoREP', async () => {
 		const { escalationGameAddress: escalationGame, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
 		const depositAmount = 100n * reportBond
@@ -34,8 +40,7 @@ describe('Escalation Game: tie-breaking and winner rewards', () => {
 		assert.strictEqual(balances.invalid, depositAmount - 1n, 'Invalid balance reduced by 1 attoREP')
 		assert.strictEqual(balances.no, 0n, 'No balance remains zero')
 		// Advance time past game end
-		const activationTime = await getActivationTime(client, escalationGame)
-		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
+		await endEscalation(escalationGame)
 		const resolution = await getQuestionResolution(client, escalationGame)
 		assert.strictEqual(resolution, QuestionOutcome.Yes, 'Winner should be Yes')
 	})
@@ -50,8 +55,7 @@ describe('Escalation Game: tie-breaking and winner rewards', () => {
 		assert.strictEqual(balances.yes, amount1 + amount2, 'Yes balance increased without adjustment')
 		assert.strictEqual(balances.invalid, 0n, 'Invalid balance zero')
 		assert.strictEqual(balances.no, 0n, 'No balance zero')
-		const activationTime = await getActivationTime(client, escalationGame)
-		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
+		await endEscalation(escalationGame)
 		const resolution = await getQuestionResolution(client, escalationGame)
 		assert.strictEqual(resolution, QuestionOutcome.Yes, 'Resolution should be Yes')
 	})
@@ -72,8 +76,7 @@ describe('Escalation Game: tie-breaking and winner rewards', () => {
 		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, winningDepositorAddress, QuestionOutcome.Yes, excessWinningDeposit)
 		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, losingDepositorAddress, QuestionOutcome.No, losingDeposit)
 
-		const activationTime = await getActivationTime(client, escalationGameAddress)
-		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
+		await endEscalation(escalationGameAddress)
 
 		assert.strictEqual(await getQuestionResolution(client, escalationGameAddress), QuestionOutcome.Yes, 'Resolution should be Yes')
 		const burnBalanceBeforeClaim = await getERC20Balance(client, getRepTokenAddress(0n), addressString(BURN_ADDRESS))
@@ -105,8 +108,7 @@ describe('Escalation Game: tie-breaking and winner rewards', () => {
 		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, secondWinningDepositorAddress, QuestionOutcome.Yes, secondWinningDeposit)
 		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, losingDepositorAddress, QuestionOutcome.No, losingDeposit)
 
-		const activationTime = await getActivationTime(client, escalationGameAddress)
-		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
+		await endEscalation(escalationGameAddress)
 
 		assert.strictEqual(await getQuestionResolution(client, escalationGameAddress), QuestionOutcome.Yes, 'Resolution should be Yes')
 		const claimLog = await claimWinningDepositAndReadClaimLog(testSecurityPoolAddress, 1n, QuestionOutcome.Yes)
@@ -132,8 +134,7 @@ describe('Escalation Game: tie-breaking and winner rewards', () => {
 		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, secondWinningDepositorAddress, QuestionOutcome.Yes, secondWinningDeposit)
 		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, losingDepositorAddress, QuestionOutcome.No, losingDeposit)
 
-		const activationTime = await getActivationTime(client, escalationGameAddress)
-		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
+		await endEscalation(escalationGameAddress)
 
 		assert.strictEqual(await getQuestionResolution(client, escalationGameAddress), QuestionOutcome.Yes, 'Resolution should be Yes')
 		const firstClaimLog = await claimWinningDepositAndReadClaimLog(testSecurityPoolAddress, 0n, QuestionOutcome.Yes)

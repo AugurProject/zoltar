@@ -25,6 +25,21 @@ function batchReads(client: ReturnType<typeof asWriteClient>) {
 	})
 }
 
+/** A wallet that records each transaction's calldata and reads the child escalation game's snapshot before `readCheckpoint` answers the rest. */
+function createChildGameWriteClient(sent: Hex[], readCheckpoint: NonNullable<Parameters<typeof createMockWriteClient>[1]>) {
+	return createMockWriteClient(
+		request => {
+			if (request.data !== undefined) sent.push(request.data)
+		},
+		async request => {
+			if (request.functionName === 'universeId') return 1n
+			if (request.functionName === 'escalationGame') return child
+			if (request.functionName === 'getOutcomeState') return { snapshotLeafCount: 2n, snapshotPeaks }
+			return await readCheckpoint(request)
+		},
+	)
+}
+
 for (const mode of ['unprepared', 'ready', 'corrupt snapshot'] as const)
 	test(`authenticates the historical index before loading claim readiness (${mode})`, async () => {
 		const ready = mode === 'ready'
@@ -81,20 +96,12 @@ for (const mode of ['unprepared', 'ready', 'corrupt snapshot'] as const)
 test('one checkpoint action processes at most eight steps and never submits a settlement', async () => {
 	const sent: Hex[] = []
 	const client = asWriteClient(
-		createMockWriteClient(
-			request => {
-				if (request.data !== undefined) sent.push(request.data)
-			},
-			async request => {
-				if (request.functionName === 'universeId') return 1n
-				if (request.functionName === 'escalationGame') return child
-				if (request.functionName === 'getOutcomeState') return { snapshotLeafCount: 2n, snapshotPeaks }
-				if (request.functionName === 'getClaimCheckpointProgress') return [game, 0n, false, false]
-				if (request.functionName === 'getClaimCheckpointState') return [false, zeroHash, zeroAddress, { startAttoRep: 10n, endAttoRep: 20n, rewardStartAttoRep: 10n, rewardEndAttoRep: 20n }]
-				if (request.functionName === 'getClaimCheckpointWitnessSegment') return [zeroAddress, zeroHash, 0n, 0n]
-				throw new Error(`Unexpected ${request.functionName}`)
-			},
-		),
+		createChildGameWriteClient(sent, async request => {
+			if (request.functionName === 'getClaimCheckpointProgress') return [game, 0n, false, false]
+			if (request.functionName === 'getClaimCheckpointState') return [false, zeroHash, zeroAddress, { startAttoRep: 10n, endAttoRep: 20n, rewardStartAttoRep: 10n, rewardEndAttoRep: 20n }]
+			if (request.functionName === 'getClaimCheckpointWitnessSegment') return [zeroAddress, zeroHash, 0n, 0n]
+			throw new Error(`Unexpected ${request.functionName}`)
+		}),
 	)
 	await prepareForkClaimCheckpoint(Object.assign(batchReads(client), { getBlockNumber: async () => 1n }), parent, identity)
 	expect(sent).toHaveLength(1)
@@ -114,26 +121,18 @@ for (const mode of ['apply', 'refresh', 'complete', 'changing'] as const)
 		let transformReads = 0
 		const client = Object.assign(
 			asWriteClient(
-				createMockWriteClient(
-					request => {
-						if (request.data !== undefined) sent.push(request.data)
-					},
-					async request => {
-						if (request.functionName === 'universeId') return 1n
-						if (request.functionName === 'escalationGame') return child
-						if (request.functionName === 'getOutcomeState') return { snapshotLeafCount: 2n, snapshotPeaks }
-						const changed = mode !== 'apply' && request.blockNumber !== 1n
-						if (request.functionName === 'getClaimCheckpointProgress') return mode === 'changing' ? [game, request.blockNumber ?? 0n, false, false] : [changed ? game : zeroAddress, changed ? 0n : 1n, mode === 'complete' && changed, mode === 'complete' && changed]
-						if (request.functionName === 'getClaimCheckpointState') return [true, changed ? zeroHash : commitment, zeroAddress, { startAttoRep: 10n, endAttoRep: 20n, rewardStartAttoRep: 10n, rewardEndAttoRep: 20n }]
-						if (request.functionName === 'getClaimCheckpointWitnessSegment') return [game, zeroHash, 0n, changed ? 0n : 1n]
-						if (request.functionName === 'getClaimIntervalTransform') {
-							transformReads++
-							expect(request.blockNumber).toBe(1n)
-							return [zeroAddress, transform]
-						}
-						throw new Error(`Unexpected ${request.functionName}`)
-					},
-				),
+				createChildGameWriteClient(sent, async request => {
+					const changed = mode !== 'apply' && request.blockNumber !== 1n
+					if (request.functionName === 'getClaimCheckpointProgress') return mode === 'changing' ? [game, request.blockNumber ?? 0n, false, false] : [changed ? game : zeroAddress, changed ? 0n : 1n, mode === 'complete' && changed, mode === 'complete' && changed]
+					if (request.functionName === 'getClaimCheckpointState') return [true, changed ? zeroHash : commitment, zeroAddress, { startAttoRep: 10n, endAttoRep: 20n, rewardStartAttoRep: 10n, rewardEndAttoRep: 20n }]
+					if (request.functionName === 'getClaimCheckpointWitnessSegment') return [game, zeroHash, 0n, changed ? 0n : 1n]
+					if (request.functionName === 'getClaimIntervalTransform') {
+						transformReads++
+						expect(request.blockNumber).toBe(1n)
+						return [zeroAddress, transform]
+					}
+					throw new Error(`Unexpected ${request.functionName}`)
+				}),
 			),
 			{
 				getBlockNumber: async () => ++block,

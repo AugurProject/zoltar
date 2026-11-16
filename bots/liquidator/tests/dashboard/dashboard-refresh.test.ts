@@ -1107,7 +1107,7 @@ describe('liquidator dashboard refresh behavior', () => {
 	})
 
 	test('keeps unchanged market-source rows mounted across polls and updates changed evidence', async () => {
-		const source: MarketSourceRow = { assetId: '0x1111111111111111111111111111111111111111', id: 'kraken', kind: 'cex', market: 'REP/USDT', status: 'admitted' }
+		const source: MarketSourceRow = { assetId: '0x1111111111111111111111111111111111111111', id: 'kraken', kind: 'cex', market: 'REP/USDC', status: 'admitted' }
 		const page = await dashboard(mainnetConfiguration(), state(undefined, [], { marketSources: [source] }))
 		const rows = page.window.document.getElementById('market-source-rows')
 		const first = rows?.querySelector('tr')
@@ -1381,6 +1381,26 @@ describe('liquidator go-live settings', () => {
 		await page.confirmOperatorAction()
 		for (let attempt = 0; attempt < 100 && page.strategyRequests.length === 0; attempt++) await Bun.sleep(10)
 		expect(page.strategyRequests).toEqual([expect.objectContaining({ portfolioPolicy: expect.objectContaining({ allowFundedTakeovers: true, maximumPrincipalRep: '5', maximumTotalPrincipalRep: '10', maximumCommitmentEth: '2', maximumOwnFundingRep: '3' }) })])
+	})
+
+	test('keeps saved report sponsorship settings that the policy form does not edit', async () => {
+		const saved = mainnetConfiguration()
+		saved.portfolioPolicy = { ...saved.portfolioPolicy, maximumReportFundingEth: '0.05', reportOperationGasLimit: 2_000_000, reportOperationsGasLimit: 5_000_000 }
+		const page = await dashboard(saved, state())
+		const form = page.window.document.getElementById('strategy-form')
+		const input = form?.querySelector('[name="minimumNetRewardEth"]')
+		if (!(form instanceof page.window.HTMLFormElement) || !(input instanceof page.window.HTMLInputElement)) throw new Error('Expected strategy controls')
+		input.value = '0.123'
+		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		let review = page.window.document.querySelector('.operator-confirm-dialog')
+		for (let attempt = 0; attempt < 100 && review === null; attempt++) {
+			await Bun.sleep(10)
+			review = page.window.document.querySelector('.operator-confirm-dialog')
+		}
+		expect(review?.textContent).not.toContain('Historical log recovery')
+		await page.confirmOperatorAction()
+		for (let attempt = 0; attempt < 100 && page.strategyRequests.length === 0; attempt++) await Bun.sleep(10)
+		expect(page.strategyRequests).toEqual([expect.objectContaining({ portfolioPolicy: expect.objectContaining({ minimumNetRewardEth: '0.123', maximumReportFundingEth: '0.05', reportOperationGasLimit: 2_000_000, reportOperationsGasLimit: 5_000_000 }) })])
 	})
 
 	test('rejects an amount with more than 18 decimal places before opening strategy review', async () => {

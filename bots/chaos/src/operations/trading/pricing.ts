@@ -1,4 +1,5 @@
 import { ceilDiv } from '@zoltar/core-shared/math/bigint'
+import { quoteExactOutput as quoteSwapExactOutput } from '@zoltar/trading-shared/trading/math'
 import { BPS_DENOMINATOR } from '../oracle-request-funding.ts'
 import { amount } from '../planning.ts'
 import type { PairSnapshot, PoolSnapshot } from '../types.ts'
@@ -36,10 +37,9 @@ export function quoteExactInput(pair: PairSnapshot, yesForNo: boolean, input: bi
 
 export function quoteExactOutput(pair: PairSnapshot, yesForNo: boolean, output: bigint) {
 	const { reserveIn, reserveOut } = directionalReserves(pair, yesForNo)
-	// An unquotable pair returns undefined; the guards keep both ceilDiv denominators positive.
+	// An unquotable pair returns undefined; these guards cover every case the shared quote rejects.
 	if (output <= 0n || output >= reserveOut || reserveIn <= 0n || !feeIsValid(pair)) return undefined
-	const netInput = ceilDiv(reserveIn * output, reserveOut - output)
-	return ceilDiv(netInput * BPS_DENOMINATOR, BPS_DENOMINATOR - BigInt(pair.feeBps))
+	return quoteSwapExactOutput(reserveIn, reserveOut, output, BigInt(pair.feeBps)).amountIn
 }
 
 export function removableLiquidity(pair: PairSnapshot) {

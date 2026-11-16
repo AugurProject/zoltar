@@ -1,4 +1,5 @@
 import * as appCopy from '../../copy/app.js'
+import * as deploymentCopy from '../../copy/deployment.js'
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { requireInjectedAccount } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
@@ -236,12 +237,12 @@ export function useWalletSessionController({
 			const provider = getActiveInjectedProvider()
 			if (provider === undefined) {
 				dispatch({ type: 'chainObserved', chainId: undefined })
-				throw new Error('No browser wallet was found.')
+				throw new Error(deploymentCopy.walletNotFound)
 			}
 			await establish(provider, expectedContext, () => connectionRequests.isCurrent(request))
 		} catch (error) {
 			if (!connectionRequests.isCurrent(request) || renderContextKeyRef.current !== expectedContext) return
-			invalidateIdentity(publicErrorMessage(error, 'Wallet connection failed.'))
+			invalidateIdentity(publicErrorMessage(error, deploymentCopy.walletConnectionFailed))
 		}
 	}
 	connectHandler.current = () => void connect()

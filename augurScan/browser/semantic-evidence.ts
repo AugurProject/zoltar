@@ -1,7 +1,7 @@
 import { collateralUnit, type CollateralUnit } from '../src/collateral.ts'
 import { annualFeeText } from './pool-metrics.ts'
-import { isRecord } from './api-validation.ts'
 import { exactNumber, exactUnit, percentFromBps, utcDateTime } from './format.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 const outcomes = ['INVALID', 'YES', 'NO', 'None']
 const label = (key: string): string => {
@@ -17,7 +17,7 @@ const valueText = (key: string, value: unknown, nativeSymbol: string, collateral
 	if (value === undefined || value === null) return 'Unavailable'
 	if (typeof value === 'boolean') return value ? 'Yes' : 'No'
 	if (Array.isArray(value)) return value.map(item => valueText(key, item, nativeSymbol, collateral)).join(', ')
-	if (isRecord(value))
+	if (isPlainRecord(value))
 		return semanticFields(value, nativeSymbol)
 			.map(([name, text]) => `${name}: ${text}`)
 			.join(' · ')
@@ -40,14 +40,14 @@ const valueText = (key: string, value: unknown, nativeSymbol: string, collateral
 /** Labels and formats decoded fields; attoETH amounts are in the chain's native currency, `nativeSymbol`. */
 export const semanticFields = (data: Readonly<Record<string, unknown>>, nativeSymbol: string): ReadonlyArray<readonly [string, string]> =>
 	Object.entries(data).flatMap(([key, value]) => {
-		if (/^(current|initial)?retentionrate$/i.test(key.replaceAll('_', ''))) return [[key.toLowerCase().startsWith('initial') ? 'Initial annual open-interest fee' : 'Annual open-interest fee', annualFeeText(value)] as const]
+		if (/^(current)?retentionrate$/i.test(key.replaceAll('_', ''))) return [['Annual open-interest fee', annualFeeText(value)] as const]
 		if (key === 'outcomeBalancesAttoRep' && Array.isArray(value)) return value.map((balance, index): readonly [string, string] => [`${outcomes[index] ?? index} balance`, valueText('amountAttoRep', balance, nativeSymbol)])
 		return [[label(key), valueText(key, value, nativeSymbol, data['collateral'] === undefined ? undefined : collateralUnit(data))] as const]
 	})
 
 export const semanticSummary = (record: Readonly<Record<string, unknown>>, nativeSymbol: string): string => {
 	const data = record['event_data'] ?? record['summary_data'] ?? record['arguments'] ?? record['read_result']
-	return isRecord(data)
+	return isPlainRecord(data)
 		? semanticFields(data, nativeSymbol)
 				.map(([name, value]) => `${name}: ${value}`)
 				.join(' · ') || 'No payload fields'
@@ -59,8 +59,6 @@ export const timelineEntityPath = (record: Readonly<Record<string, unknown>>): s
 	if (identity === '') return undefined
 	const segment = encodeURIComponent(identity)
 	switch (record['entity_type']) {
-		case 'vault':
-			return `/operations/risk/vault/${identity.split(':').map(encodeURIComponent).join('/')}`
 		case 'pool':
 			return `/operations/risk/pool/${segment}`
 		case 'auction':
