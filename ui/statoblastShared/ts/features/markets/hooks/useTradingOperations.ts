@@ -3,7 +3,7 @@ import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
-import { createCompleteSetInSecurityPool, loadSecurityPoolMintCapacity, loadTradingDetails as loadTradingDetailsForPool, migrateSharesFromUniverse, redeemCompleteSetInSecurityPool, redeemSharesInSecurityPool } from '../../../protocol/trading.js'
+import { createCompleteSetInSecurityPool, loadSecurityPoolMintCapacity, loadShareMigrationTargets, loadTradingDetails as loadTradingDetailsForPool, migrateSharesFromUniverse, redeemCompleteSetInSecurityPool, redeemSharesInSecurityPool } from '../../../protocol/trading.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { normalizeAddress } from '@zoltar/ui-core-shared/lib/address.js'
@@ -44,6 +44,7 @@ export type UseTradingOperationsDependencies = {
 	createCompleteSetInSecurityPool: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], securityPoolAddress: Address, amount: bigint) => ReturnType<typeof createCompleteSetInSecurityPool>
 	getWalletEthBalance: (walletAddress: Address) => Promise<bigint>
 	loadSecurityPoolMintCapacity: (securityPoolAddress: Address) => ReturnType<typeof loadSecurityPoolMintCapacity>
+	loadShareMigrationTargets: (securityPoolAddress: Address, childUniverses: ZoltarUniverseSummary['childUniverses'], accountAddress: Address | undefined) => ReturnType<typeof loadShareMigrationTargets>
 	loadTradingDetails: (securityPoolAddress: Address, accountAddress: Address | undefined) => ReturnType<typeof loadTradingDetailsForPool>
 	loadZoltarUniverseSummary: (universeId: bigint) => ReturnType<typeof loadZoltarUniverseSummary>
 	migrateSharesFromUniverse: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], securityPoolAddress: Address, outcome: Parameters<typeof migrateSharesFromUniverse>[2], targetOutcomeIndexes: bigint[], migratedAttoShares?: bigint) => ReturnType<typeof migrateSharesFromUniverse>
@@ -55,6 +56,7 @@ const defaultUseTradingOperationsDependencies: UseTradingOperationsDependencies 
 	createCompleteSetInSecurityPool: async (accountAddress, callbacks, securityPoolAddress, amount) => await createCompleteSetInSecurityPool(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, amount),
 	getWalletEthBalance: async walletAddress => await createConnectedReadClient().getBalance({ address: walletAddress }),
 	loadSecurityPoolMintCapacity: async securityPoolAddress => await loadSecurityPoolMintCapacity(createConnectedReadClient(), securityPoolAddress),
+	loadShareMigrationTargets: async (securityPoolAddress, childUniverses, accountAddress) => await loadShareMigrationTargets(createConnectedReadClient(), securityPoolAddress, childUniverses, accountAddress),
 	loadTradingDetails: async (securityPoolAddress, accountAddress) => await loadTradingDetailsForPool(createConnectedReadClient(), securityPoolAddress, accountAddress),
 	loadZoltarUniverseSummary: async universeId => await loadZoltarUniverseSummary(createConnectedReadClient(), universeId),
 	migrateSharesFromUniverse: async (accountAddress, callbacks, securityPoolAddress, outcome, targetOutcomeIndexes, migratedAttoShares) => await migrateSharesFromUniverse(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, outcome, targetOutcomeIndexes, migratedAttoShares),
@@ -131,6 +133,14 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 	}
 	const resolveEffectiveTradingPoolAddressInput = () => effectiveTradingPoolAddressInput
 	const isTradingSelectionCurrent = (selectionKey: string) => currentTradingSelectionKeyRef.current === selectionKey
+	// A forked universe's details carry its child universes' share-token state, which decides whether a migration would revert.
+	const loadTradingState = async (securityPoolAddress: Address, walletAddress: Address | undefined) => {
+		const details = await dependencies.loadTradingDetails(securityPoolAddress, walletAddress)
+		const forkUniverse = await dependencies.loadZoltarUniverseSummary(details.universeId)
+		if (forkUniverse?.hasForked !== true) return { details, forkUniverse }
+		const shareMigrationTargets = await dependencies.loadShareMigrationTargets(securityPoolAddress, forkUniverse.childUniverses, walletAddress)
+		return { details: { ...details, shareMigrationTargets }, forkUniverse }
+	}
 
 	const refreshTradingDetails = async (securityPoolAddressInput: string, walletAddress: Address | undefined, isCurrent?: () => boolean) => {
 		if (!tradingSystemDeployed) {
@@ -151,11 +161,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 			onStart: () => {
 				tradingError.value = undefined
 			},
-			load: async () => {
-				const details = await dependencies.loadTradingDetails(securityPoolAddress, walletAddress)
-				const forkUniverse = await dependencies.loadZoltarUniverseSummary(details.universeId)
-				return { details, forkUniverse }
-			},
+			load: async () => await loadTradingState(securityPoolAddress, walletAddress),
 			onSuccess: ({ details, forkUniverse }: { details: TradingDetails; forkUniverse: ZoltarUniverseSummary | undefined }) => {
 				tradingDetails.value = details
 				tradingForkUniverse.value = forkUniverse
@@ -215,8 +221,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 				async (walletAddress, activeWallet) => {
 					const securityPoolAddress = parseAddressInput(resolveEffectiveTradingPoolAddressInput(), 'Security pool address')
 					const isOnActiveAppChain = isActiveAppChain(activeWallet.chainId)
-					const latestTradingDetails = await dependencies.loadTradingDetails(securityPoolAddress, walletAddress)
-					const latestForkUniverse = await dependencies.loadZoltarUniverseSummary(latestTradingDetails.universeId)
+					const { details: latestTradingDetails, forkUniverse: latestForkUniverse } = await loadTradingState(securityPoolAddress, walletAddress)
 					if (isActionSelectionCurrent()) {
 						tradingDetails.value = latestTradingDetails
 						tradingForkUniverse.value = latestForkUniverse
@@ -275,6 +280,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 							loadingTradingForkUniverse: false,
 							selectedShareOutcome: currentForm.selectedShareOutcome,
 							shareBalances: latestTradingDetails.shareBalances,
+							shareMigrationTargets: latestTradingDetails.shareMigrationTargets,
 							targetOutcomeIndexesInput: currentForm.targetOutcomeIndexes,
 							tradingForkUniverse: latestForkUniverse,
 						})

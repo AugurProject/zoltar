@@ -35,7 +35,8 @@ import { getActiveAppChainWalletBlocker, withWalletBlocker } from '@zoltar/ui-co
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { pickFirstReason } from '@zoltar/ui-core-shared/transactions/actionAvailability.js'
-import { formatCurrencyBalance, formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalance, formatCurrencyInputBalance, formatRelativeTimestamp, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
+import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
 import { parseOptionalRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { getWrongNetworkReason, isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getEscalationPhase, getReportingMaxProfitContribution, getReportingMinimumOutcomeChangeContribution, getRemainingSelectedOutcomeContributionCapacity, getSecondLargestEscalationBalance, isPoolQuestionFinalized, previewReportingContribution, reportingContributionTriggersFork } from '../lib/reportingDomain.js'
@@ -269,7 +270,12 @@ export function ReportingSection({
 	const reportOutcomeSelectionMessage = showFullReporting && reportingStatus !== 'missing' && selectedOutcome === undefined && !reportControlsLocked && reportActionDisabledReason === reportingCopy.reportOutcomeSelectionRequired ? SELECT_OUTCOME_TO_ENABLE_REPORTING_MESSAGE : undefined
 	const showForkWorkflowAction = reportingStageKey === 'forkTriggered' && forkAlreadyTriggered && onOpenForkWorkflow !== undefined
 	const showTriggerZoltarForkAction = reportingStageKey === 'forkTriggered' && !forkAlreadyTriggered && onTriggerZoltarFork !== undefined
-	const resolvedTriggerZoltarForkAvailability = triggerZoltarForkAvailability ?? { disabled: false, reason: undefined }
+	// Zoltar rejects a fork until the parent fork response period ends; equal timestamps are allowed.
+	const parentForkResponseReason =
+		activeReportingDetails !== undefined && effectiveCurrentTimestamp !== undefined && effectiveCurrentTimestamp < activeReportingDetails.earliestForkTime
+			? zoltarCopy.formatParentForkResponseActiveReason(formatTimestamp(activeReportingDetails.earliestForkTime), formatRelativeTimestamp(activeReportingDetails.earliestForkTime, effectiveCurrentTimestamp))
+			: undefined
+	const resolvedTriggerZoltarForkAvailability = triggerZoltarForkAvailability?.disabled === true || parentForkResponseReason === undefined ? (triggerZoltarForkAvailability ?? { disabled: false, reason: undefined }) : { disabled: true, reason: parentForkResponseReason }
 	const forkTriggeredActions =
 		reportingStageKey !== 'forkTriggered' || (!showForkWorkflowAction && !showTriggerZoltarForkAction) ? undefined : (
 			<div className='actions'>

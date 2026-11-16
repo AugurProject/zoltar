@@ -91,6 +91,8 @@ function createTradingOperationsDependencies(overrides: Partial<UseTradingOperat
 		createCompleteSetInSecurityPool: unexpected('createCompleteSetInSecurityPool'),
 		getWalletEthBalance: unexpected('getWalletEthBalance'),
 		loadSecurityPoolMintCapacity: unexpected('loadSecurityPoolMintCapacity'),
+		// Every loaded child universe has a security pool and holds nothing migrated unless a test says otherwise.
+		loadShareMigrationTargets: async (_securityPoolAddress, childUniverses) => childUniverses.map(child => ({ outcomeIndex: child.outcomeIndex, canonicalPool: SECURITY_POOL_ADDRESS, migratedAttoShares: { invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n } })),
 		loadTradingDetails: unexpected('loadTradingDetails'),
 		loadZoltarUniverseSummary: unexpected('loadZoltarUniverseSummary'),
 		migrateSharesFromUniverse: unexpected('migrateSharesFromUniverse'),
@@ -447,6 +449,36 @@ describe('useTradingOperations', () => {
 
 		expect(hook.onTransactionFailed.mock.calls).toEqual([])
 		expect(migrateSharesFromUniverse.mock.calls[0]?.[5]).toBe(3n * ATTO_ETH_PER_ETH)
+	})
+
+	test('does not request a multi-target share migration while a selected child universe has no security pool', async () => {
+		const migrateSharesFromUniverse = mock(async () => {
+			throw new Error('migrateSharesFromUniverse should not be called while a selected child universe has no security pool')
+		})
+		const noMigratedShares = { invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n }
+		const loadShareMigrationTargets = mock(async () => [
+			{ outcomeIndex: 0n, canonicalPool: SECURITY_POOL_ADDRESS, migratedAttoShares: noMigratedShares },
+			{ outcomeIndex: 1n, canonicalPool: undefined, migratedAttoShares: noMigratedShares },
+			{ outcomeIndex: 2n, canonicalPool: undefined, migratedAttoShares: noMigratedShares },
+		])
+		const childUniverses = [createChildUniverse(1n, 0n, 'Invalid', 2n), createChildUniverse(1n, 1n, 'Yes', 3n), createChildUniverse(1n, 2n, 'No', 4n)]
+		const hook = await renderTradingHook(
+			createTradingOperationsDependencies({
+				loadShareMigrationTargets,
+				loadTradingDetails: mock(async () => createTradingDetails({ shareBalances: { invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: ATTO_ETH_PER_ETH } })),
+				loadZoltarUniverseSummary: mock(async () => createUniverseSummary({ childUniverses, forkQuestionDetails: createMarketDetails(), forkTime: 5n, hasForked: true })),
+				migrateSharesFromUniverse,
+			}),
+		)
+
+		await waitFor(() => expect(hook.state().tradingForm.targetOutcomeIndexes).toBe('0, 1, 2'))
+		await hook.setForm({ selectedShareOutcome: 'yes' })
+		await act(async () => {
+			await hook.state().migrateShares()
+		})
+
+		expect(migrateSharesFromUniverse.mock.calls).toEqual([])
+		expect(hook.state().tradingFeedback?.status.detail).toBe('This selection includes a child universe without a security pool. Migrate into each such child universe separately.')
 	})
 
 	test('createCompleteSet ignores a stale post-success refresh after the selected pool changes', async () => {

@@ -20,6 +20,7 @@ import {
 import { ETH_GAS_RESERVE_ATTO_ETH } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
 import { getScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import type { DeploymentStatus, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ShareMigrationTarget } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 
 const TOKEN_PRECISION = 10n ** 18n
 
@@ -508,11 +509,14 @@ void describe('trading helpers', () => {
 			loadingTradingDetails: false,
 			selectedShareOutcome: 'yes',
 			shareBalances,
+			shareMigrationTargets: [],
 			targetOutcomeIndexesInput: '0, 1, 2',
 		} as const
 		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, tradingForkUniverse: { ...binaryForkUniverse, hasForked: false } })).toBe('Available only after this universe forks.')
 		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, tradingForkUniverse: undefined })).toBe('Refresh the child universes.')
 	})
+
+	const withCanonicalPools = (universe: ZoltarUniverseSummary): ShareMigrationTarget[] => universe.childUniverses.map(child => ({ canonicalPool: '0x00000000000000000000000000000000000000b1', migratedAttoShares: { invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n }, outcomeIndex: child.outcomeIndex }))
 
 	void test('validates share migration targets and positive balances once migration is available', () => {
 		expect(
@@ -524,6 +528,7 @@ void describe('trading helpers', () => {
 				loadingTradingDetails: false,
 				selectedShareOutcome: 'yes',
 				shareBalances,
+				shareMigrationTargets: withCanonicalPools(binaryForkUniverse),
 				targetOutcomeIndexesInput: '0, 1, 2',
 				tradingForkUniverse: binaryForkUniverse,
 			}),
@@ -538,6 +543,7 @@ void describe('trading helpers', () => {
 				loadingTradingDetails: false,
 				selectedShareOutcome: 'yes',
 				shareBalances,
+				shareMigrationTargets: withCanonicalPools(binaryForkUniverse),
 				targetOutcomeIndexesInput: '0, 1, 1',
 				tradingForkUniverse: binaryForkUniverse,
 			}),
@@ -556,6 +562,7 @@ void describe('trading helpers', () => {
 					noAttoShares: 4n * 10n ** 18n,
 					yesAttoShares: 3n * 10n ** 18n,
 				},
+				shareMigrationTargets: withCanonicalPools(binaryForkUniverse),
 				targetOutcomeIndexesInput: '0, 1, 2',
 				tradingForkUniverse: binaryForkUniverse,
 			}),
@@ -570,6 +577,7 @@ void describe('trading helpers', () => {
 				loadingTradingDetails: false,
 				selectedShareOutcome: 'yes',
 				shareBalances,
+				shareMigrationTargets: withCanonicalPools(binaryForkUniverse),
 				targetOutcomeIndexesInput: '',
 				tradingForkUniverse: binaryForkUniverse,
 			}),
@@ -584,6 +592,7 @@ void describe('trading helpers', () => {
 				loadingTradingDetails: false,
 				selectedShareOutcome: 'yes',
 				shareBalances,
+				shareMigrationTargets: withCanonicalPools(binaryForkUniverse),
 				targetOutcomeIndexesInput: '9',
 				tradingForkUniverse: binaryForkUniverse,
 			}),
@@ -598,6 +607,7 @@ void describe('trading helpers', () => {
 				loadingTradingDetails: false,
 				selectedShareOutcome: 'yes',
 				shareBalances,
+				shareMigrationTargets: withCanonicalPools(scalarForkUniverse),
 				targetOutcomeIndexesInput: getScalarOutcomeIndex(scalarForkUniverse.forkQuestionDetails, 5n).toString(),
 				tradingForkUniverse: scalarForkUniverse,
 			}),
@@ -612,10 +622,45 @@ void describe('trading helpers', () => {
 				loadingTradingDetails: false,
 				selectedShareOutcome: 'yes',
 				shareBalances,
+				shareMigrationTargets: withCanonicalPools(scalarForkUniverse),
 				targetOutcomeIndexesInput: '5',
 				tradingForkUniverse: scalarForkUniverse,
 			}),
 		).toBe('Select valid target child universes.')
+	})
+
+	void test('blocks share migrations the share token would revert', () => {
+		const pool = '0x00000000000000000000000000000000000000b1'
+		const noMigratedShares = { invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n }
+		const guardInput = {
+			accountAddress: '0x1234567890123456789012345678901234567890',
+			hasSelectedPool: true,
+			isOnActiveAppChain: true,
+			loadingTradingForkUniverse: false,
+			loadingTradingDetails: false,
+			selectedShareOutcome: 'yes',
+			shareBalances,
+			tradingForkUniverse: binaryForkUniverse,
+		} as const
+		const freshForkTargets = [
+			{ outcomeIndex: 0n, canonicalPool: pool, migratedAttoShares: noMigratedShares },
+			{ outcomeIndex: 1n, canonicalPool: undefined, migratedAttoShares: noMigratedShares },
+			{ outcomeIndex: 2n, canonicalPool: undefined, migratedAttoShares: noMigratedShares },
+		]
+
+		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: freshForkTargets, targetOutcomeIndexesInput: '0, 1, 2' })).toBe('This selection includes a child universe without a security pool. Migrate into each such child universe separately.')
+		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: freshForkTargets, targetOutcomeIndexesInput: '1' })).toBeUndefined()
+		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: undefined, targetOutcomeIndexesInput: '0, 1, 2' })).toBe('Loading child universe security pools…')
+
+		const migratedYes = { ...noMigratedShares, yesAttoShares: shareBalances.yesAttoShares }
+		const migratedTargets = [
+			{ outcomeIndex: 0n, canonicalPool: pool, migratedAttoShares: migratedYes },
+			{ outcomeIndex: 1n, canonicalPool: pool, migratedAttoShares: migratedYes },
+			{ outcomeIndex: 2n, canonicalPool: pool, migratedAttoShares: noMigratedShares },
+		]
+		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: migratedTargets, targetOutcomeIndexesInput: '0, 1' })).toBe('Your Yes shares are already migrated into the selected child universes.')
+		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: migratedTargets, targetOutcomeIndexesInput: '0, 1, 2' })).toBeUndefined()
+		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, selectedShareOutcome: 'no', shareMigrationTargets: migratedTargets, targetOutcomeIndexesInput: '0, 1' })).toBeUndefined()
 	})
 
 	void test('checks local and network prerequisites before resolved-share redemption', () => {
