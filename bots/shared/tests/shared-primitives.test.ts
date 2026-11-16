@@ -812,6 +812,28 @@ describe('shared bot primitives', () => {
 		}
 	})
 
+	test('fails over a JSON-RPC rate limit to a healthy endpoint', async () => {
+		let healthyRequests = 0
+		const limited = Bun.serve({ port: 0, fetch: () => Response.json({ error: { code: -32_005, message: 'request rate limited' }, id: 1, jsonrpc: '2.0' }) })
+		const healthy = Bun.serve({
+			port: 0,
+			fetch: () => {
+				healthyRequests += 1
+				return Response.json({ id: 1, jsonrpc: '2.0', result: '0x7' })
+			},
+		})
+		try {
+			if (limited.port === undefined || healthy.port === undefined) throw new Error('RPC rate-limit failover test servers did not expose ports')
+			const pool = createRpcEndpointPool([`http://127.0.0.1:${limited.port.toString()}`, `http://127.0.0.1:${healthy.port.toString()}`])
+			expect(await createPublicClient({ transport: pool.transport }).getBlockNumber()).toBe(7n)
+			expect(healthyRequests).toBe(1)
+			expect(pool.snapshot()[0]?.status).toBe('degraded')
+		} finally {
+			limited.stop(true)
+			healthy.stop(true)
+		}
+	})
+
 	test('identifies the RPC origin and method for non-retryable HTTP failures', async () => {
 		let healthyRequests = 0
 		const rejected = Bun.serve({ port: 0, fetch: () => new Response('invalid request', { status: 400 }) })
@@ -1002,6 +1024,8 @@ describe('shared bot primitives', () => {
 	test('distinguishes recoverable connectivity loss from safety faults', () => {
 		expect(operationalFailureDisposition(new TypeError('fetch failed'))).toBe('connectivity-degraded')
 		expect(operationalFailureDisposition(new RpcError('request timed out', { code: -32_000 }))).toBe('safety-paused')
+		expect(operationalFailureDisposition(new RpcError('request rate limited', { code: -32_005 }))).toBe('connectivity-degraded')
+		expect(operationalFailureDisposition(new RpcError('Too Many Requests', { code: 429 }))).toBe('connectivity-degraded')
 		expect(operationalFailureDisposition(new TypeError('Malformed JSON-RPC result'))).toBe('safety-paused')
 		const missingBlock = new Error('Requested block is missing')
 		missingBlock.name = 'BlockNotFoundError'
