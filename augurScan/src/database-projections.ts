@@ -123,7 +123,7 @@ const storeProjection = async (transaction: SQL, chainId: number, item: StoredLo
 	if (projection.type === 'repEthPrice') {
 		await transaction`
 			INSERT INTO rep_eth_price_snapshots (chain_id, block_hash, tx_hash, log_index, block_number, coordinator_address, event_name, report_id, rep_per_eth_1e18, settlement_timestamp, canonical)
-			VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.coordinatorAddress}, ${projection.eventName}, ${projection.reportId ?? null}, ${projection.repPerEth1e18}, ${projection.settlementTimestamp ?? null}, true)
+			VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.coordinatorAddress}, ${projection.eventName}, ${projection.reportId}, ${projection.repPerEth1e18}, ${projection.settlementTimestamp}, true)
 			ON CONFLICT (chain_id, block_hash, tx_hash, log_index, coordinator_address) DO UPDATE SET canonical = true
 		`
 		return
