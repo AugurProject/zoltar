@@ -115,7 +115,7 @@ postgresTest(
 						chain_id, block_hash, tx_hash, log_index, block_number, auction_address, event_name, event_data, canonical
 					) VALUES
 						(${historicalChainId}, ${firstHash}, ${firstTransactionHash}, 2, 1, ${auctionAddress}, 'AuctionStarted',
-							'{"startTimestamp":"1767225600","endTimestamp":"1767229200"}'::jsonb, true),
+							'{"opensAt":"1767225600","closesAt":"1767229200","lotAttoEth":"1","targetLots":"1","inventoryAttoRep":"1","maximumAttoRepPerLot":"1"}'::jsonb, true),
 						(${historicalChainId}, ${firstHash}, ${firstTransactionHash}, 3, 1, ${auctionAddress}, 'BidSubmitted',
 							'{"bidder":"0x1000000000000000000000000000000000000001"}'::jsonb, true),
 						(${historicalChainId}, ${secondHash}, ${secondTransactionHash}, 2, 2, ${auctionAddress}, 'BidSubmitted',
@@ -167,7 +167,8 @@ postgresTest(
 				report_data: { marker: 'historical' },
 			})
 			expect(operations.data.escalations).toEqual([expect.objectContaining({ block_number: '1', event_name: 'DepositOnOutcome', invalid_stake_atto_rep: null, balance_read_status: null })])
-			expect(operations.data.auctions).toEqual([expect.objectContaining({ block_number: '1', event_name: 'BidSubmitted', bid_count: 1, bidder_count: 1, settlement_count: 0 })])
+			// Block 1 (2026-01-01T00:00:21Z) falls inside the AuctionStarted window, so the auction is open at that boundary.
+			expect(operations.data.auctions).toEqual([expect.objectContaining({ block_number: '1', event_name: 'BidSubmitted', bid_count: 1, bidder_count: 1, settlement_count: 0, status: 'Open' })])
 			expect(operations.data.totals).toMatchObject({ reports: 1, escalations: 1, auctions: 1, reorganizations: 1 })
 			const reportCursor = btoa(
 				JSON.stringify([historicalChainId, 'reports-catalog', 'catalog', operations.asOf.blockNumber, operations.asOf.blockHash, operations.asOf.invalidationId, operations.asOf.abiSourceHash, operations.asOf.applicationSourceHash, operations.asOf.projectionSourceHash, '1', firstTransactionHash, 0]),

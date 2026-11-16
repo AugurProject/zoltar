@@ -153,6 +153,12 @@ export type AuctionLifecycleInput = {
 	readonly settlementCount: number
 }
 
+/** The bidding window from a stored `AuctionStarted(opensAt, closesAt, …)` event, in the field names auctionLifecycle reads. */
+export const auctionStartedWindow = (eventData: Readonly<Record<string, unknown>>) => ({
+	startTimestamp: typeof eventData['opensAt'] === 'string' ? eventData['opensAt'] : undefined,
+	endTimestamp: typeof eventData['closesAt'] === 'string' ? eventData['closesAt'] : undefined,
+})
+
 export const auctionLifecycle = (input: AuctionLifecycleInput): string => {
 	if (!input.started) return 'Scheduled'
 	if (input.finalized) return input.settlementCount < input.bidCount ? 'Bid settlements outstanding' : 'Fully settled'

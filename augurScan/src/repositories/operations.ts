@@ -1,5 +1,5 @@
 import type { SQL } from 'bun'
-import { auctionLifecycle, reportLifecycle, reportLifecycleEventName, vaultRisk } from '../operations.ts'
+import { auctionLifecycle, auctionStartedWindow, reportLifecycle, reportLifecycleEventName, vaultRisk } from '../operations.ts'
 import { ApiRequestError } from '../query-errors.ts'
 import { jsonRecord } from '../record-serialization.ts'
 
@@ -199,14 +199,12 @@ export const auctionCatalogData = async (sql: SQL, chainId: number, asOf: Record
 		ORDER BY latest.block_number DESC, latest.log_index DESC, latest.tx_hash DESC LIMIT ${queryLimit}
 	`
 	return rows.map((row: Record<string, unknown>) => {
-		const startData = jsonRecord(row['start_data'])
 		return {
 			...row,
 			status: auctionLifecycle({
 				started: row['start_data'] !== null,
 				finalized: row['final_data'] !== null,
-				startTimestamp: typeof startData['startTimestamp'] === 'string' ? startData['startTimestamp'] : undefined,
-				endTimestamp: typeof startData['endTimestamp'] === 'string' ? startData['endTimestamp'] : undefined,
+				...auctionStartedWindow(jsonRecord(row['start_data'])),
 				indexedTimestamp: String(asOf['blockTimestamp'] ?? ''),
 				bidCount: Number(row['bid_count'] ?? 0),
 				settlementCount: Number(row['settlement_count'] ?? 0),
