@@ -13,9 +13,9 @@ test('review expands added and removed sources into their fields', () => {
 		{ label: 'Source 1 · Address', before: '—', after: '0xabc' },
 		{ label: 'Source 1 · Minimum depth ETH', before: '—', after: '2' },
 	])
-	expect(reviewChangeRows({ sources: [{ exchangeId: 'kraken', repMarket: 'REP/USD' }] }, { sources: [{ exchangeId: 'coinbase', repMarket: 'REP/USDT' }] })).toEqual([
+	expect(reviewChangeRows({ sources: [{ exchangeId: 'kraken', repMarket: 'REP/USD' }] }, { sources: [{ exchangeId: 'coinbase', repMarket: 'REP/USDC' }] })).toEqual([
 		{ label: 'Source 1 · Exchange ID', before: 'kraken', after: 'coinbase' },
-		{ label: 'Source 1 · REP market', before: 'REP/USD', after: 'REP/USDT' },
+		{ label: 'Source 1 · REP market', before: 'REP/USD', after: 'REP/USDC' },
 	])
 	expect(reviewChangeRows({ sources: [{ address: '0xabc', minimumDepthEth: '2' }] }, { sources: [] })).toEqual([
 		{ label: 'Source 1 · Address', before: '0xabc', after: '—' },

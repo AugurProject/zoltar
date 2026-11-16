@@ -8,7 +8,6 @@ import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
-import { tokenRequiresAllowanceReset } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
 import { PortfolioButton, PortfolioInput } from './PortfolioControls.js'
 import { usePortfolioPrice, type PortfolioPriceParameters } from '../hooks/usePortfolioPrice.js'
@@ -88,17 +87,6 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 				) : undefined}
 			</MetricGrid>
 			{model.collateral.symbol === collateralCopy.weth ? <PortfolioButton model={parameters.actions} action={model.actionId('wrap')} label={copy.wrap} pendingLabel={copy.wrapping} reason={model.wrapReason} onClick={model.wrap} /> : undefined}
-			{tokenRequiresAllowanceReset(model.collateral.address) ? (
-				<PortfolioButton
-					model={parameters.actions}
-					action={model.actionId('resetCollateral')}
-					label={common.formatResetTokenApproval(model.collateral.symbol)}
-					pendingLabel={common.formatResettingTokenApproval(model.collateral.symbol)}
-					reason={model.fundingReason ?? ((observation?.wethAllowanceAttoEth ?? 0n) === 0n ? common.notNeeded : undefined)}
-					onClick={() => model.approve('weth', 0n)}
-				/>
-			) : undefined}
-
 			<TokenApprovalControl
 				actionLabel={scoped.request}
 				allowanceError={model.fundingReadError}
@@ -106,7 +94,6 @@ export function PortfolioPriceReport(parameters: PortfolioPriceParameters) {
 				approvedAmount={observation?.wethAllowanceAttoEth}
 				disabled={disabled}
 				guardMessage={model.fundingReason}
-				requiresAllowanceReset={tokenRequiresAllowanceReset(model.collateral.address)}
 				onApprove={amount => {
 					if (amount !== undefined) void model.approve('weth', amount)
 				}}
