@@ -42,10 +42,10 @@ const proofAbi = [
 ] as const
 
 /** An underwater position's uncovered part is cut at once; only a reduction below the covered amount leaves a queued rest. */
-function retirementQueueDescription(covered: bigint | undefined, remainingCommitment: bigint) {
+function retirementQueueDescription(covered: bigint | undefined, remainingCommitment: bigint, collateral: Readonly<{ decimals: number; symbol: string }>) {
 	if (covered === undefined) return ' The reduction waits for spare capacity behind earlier retirement requests.'
 	// Rounding down keeps "covers only" conservative.
-	const coverage = ` Your REP covers only ${formatRoundedCurrencyBalance(covered, 18, 4, 'down')} ETH at the current price, so`
+	const coverage = ` Your REP covers only ${formatRoundedCurrencyBalance(covered, collateral.decimals, 4, 'down')} ${collateral.symbol} at the current price, so`
 	if (remainingCommitment >= covered) return `${coverage} this reduction is removed at once where spare capacity allows; any shortfall waits behind earlier retirement requests.`
 	return `${coverage} the uncovered part is removed at once where spare capacity allows. The rest waits for spare capacity behind earlier retirement requests.`
 }
@@ -381,10 +381,10 @@ export function usePortfolioAggregate(
 					if (reason !== undefined || remainingCommitment === undefined) throw new Error(reason ?? 'Enter a remaining commitment.')
 					const position = selected.positions.find(item => item.id === id && item.commitment > 0n)
 					const covered = position === undefined ? undefined : coveredUnderwaterCommitment(selected, position)
-					const queue = retirementQueueDescription(covered, remainingCommitment)
+					const queue = retirementQueueDescription(covered, remainingCommitment, selected.collateral)
 					return {
 						...buildPortfolioCapitalSetCommitmentRequest({ ...base(selected), commitment: remainingCommitment }),
-						reviewDescription: `Reduce position ${id} to ${formatEther(remainingCommitment)} ETH commitment. ${remainingCommitment === 0n ? 'Full retirement releases its REP.' : 'The reduction stops at this amount and keeps its REP backing the remaining commitment.'}${queue} Once submitted, the request cannot be changed or cancelled. The saved health target stays unchanged.`,
+						reviewDescription: `Reduce position ${id} to ${formatUnits(remainingCommitment, selected.collateral.decimals)} ${selected.collateral.symbol} commitment. ${remainingCommitment === 0n ? 'Full retirement releases its REP.' : 'The reduction stops at this amount and keeps its REP backing the remaining commitment.'}${queue} Once submitted, the request cannot be changed or cancelled. The saved health target stays unchanged.`,
 					}
 				},
 				latest => {
