@@ -150,6 +150,10 @@ export const settleReport = 'Settle report'
 
 export const formatReportMissing = (reportId: CopyTemplateValue) => `OpenOracle report #${reportId} does not exist.`
 export const formatApprovingTokenTitle = (tokenSymbol: CopyTemplateValue) => `Approving ${tokenSymbol}`
+/** Titles for a report token's approval reset when its symbol is not known; `role` is `Base token` or `Quote token`. */
+export const formatTokenRoleApprovalResetTitles = (role: 'Base token' | 'Quote token') => ({ failure: `${role} approval reset failed`, pending: `Resetting ${role.toLowerCase()} approval`, success: `${role} approval reset` })
+export const formatTokenApprovalResetFailure = (tokenLabel: string) => `Failed to reset ${tokenLabel} approval`
+export const tokenApprovalResetFailed = 'Token approval reset failed.'
 export const formatResettingTokenApprovalTitle = (tokenSymbol: string) => formatActionTense(commonCopy.formatResetTokenApproval(tokenSymbol), 'pending')
 export const formatWithdrawingTokenTitle = (tokenSymbol: CopyTemplateValue) => `Withdrawing ${tokenSymbol}`
 export const creatingStandaloneReportTitle = 'Creating standalone OpenOracle report'

@@ -10,6 +10,8 @@ export const fundingLoading = 'Loading collateral balance and approval.'
 export const approvalRequired = 'Collateral approval required.'
 export const formatInsufficientBalance = (symbol: string) => `Insufficient ${symbol} balance.`
 export const approvalFailed = 'Collateral approval failed.'
+/** Completes `formatConnectWalletBefore` for a collateral approval reset. */
+export const resettingApproval = 'resetting the collateral approval'
 export const floorHint = 'Reports also need an exposure-based stake. This floor does not automatically cover dispute gas costs.'
 export const amount = (label: string, symbol: string) => `${label} (${symbol})`
 export const oracleStake = (symbol: string) => amount('Minimum oracle stake', symbol)

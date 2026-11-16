@@ -76,6 +76,7 @@ export const reviewedActions: Record<string, { title: string; completedTitle: st
 	report: { title: 'Create oracle report', completedTitle: 'Oracle report created', description: 'Deposit the approved tokens and start the oracle report.' },
 	aggregate3: { title: 'Batched transaction', completedTitle: 'Batched transaction completed', description: 'Run several contract calls in one transaction.' },
 }
+export const tokenApprovalResetDetailsUnavailable = 'Could not read token details for approval reset. Retry before sending any transactions.'
 /**
  * An `approve` call that sets the spending limit to zero: the reset a token such as USDT needs before a new approval, or a revoke.
  * It grants nothing, so it is never reviewed or titled as an approval. `formatResetTokenApproval` names the token once its symbol is known.

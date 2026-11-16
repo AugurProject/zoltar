@@ -270,7 +270,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 					if (resetReason !== undefined) throw new Error(resetReason)
 					return await dependencies.approveErc20(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), token === 'token1' ? reportDetails.token1 : reportDetails.token2, getOpenOracleAddress(), approvalAmount, action)
 				},
-				amount === 0n ? `Failed to reset ${tokenLabel} approval` : `Failed to approve ${tokenLabel}`,
+				amount === 0n ? openOracleCopy.formatTokenApprovalResetFailure(tokenLabel) : `Failed to approve ${tokenLabel}`,
 				{ refreshTokenAccessOnSuccess: true },
 			)
 		})()
@@ -286,7 +286,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 				if (parseAddressInput(openOracleCreateForm.value[token === 'token1' ? 'token1Address' : 'token2Address'], 'Token address') !== tokenAddress) throw new Error('Report token changed. Review again.')
 				return await dependencies.approveErc20(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), tokenAddress, getOpenOracleAddress(), amount, action)
 			},
-			amount === 0n ? 'Token approval reset failed.' : 'Token approval failed.',
+			amount === 0n ? openOracleCopy.tokenApprovalResetFailed : 'Token approval failed.',
 		)
 	}
 	const wrapCreateWeth = async () =>

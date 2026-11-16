@@ -136,8 +136,8 @@ type OpenOracleActionTitles = Readonly<{ failure: string; pending: string; succe
 const OPEN_ORACLE_ACTION_TITLES = {
 	approveToken1: { failure: 'Base token approval failed', pending: 'Approving base token', success: 'Base token approved' },
 	approveToken2: { failure: 'Quote token approval failed', pending: 'Approving quote token', success: 'Quote token approved' },
-	resetToken1Approval: { failure: 'Base token approval reset failed', pending: 'Resetting base token approval', success: 'Base token approval reset' },
-	resetToken2Approval: { failure: 'Quote token approval reset failed', pending: 'Resetting quote token approval', success: 'Quote token approval reset' },
+	resetToken1Approval: openOracleCopy.formatTokenRoleApprovalResetTitles('Base token'),
+	resetToken2Approval: openOracleCopy.formatTokenRoleApprovalResetTitles('Quote token'),
 	createReportInstance: { failure: 'Report creation failed', pending: openOracleCopy.creatingStandaloneReportTitle, success: openOracleCopy.standaloneReportCreated },
 	dispute: { failure: 'Dispute failed', pending: 'Submitting dispute', success: 'Dispute submitted' },
 	executeStagedOperation: { failure: 'Staged operation failed', pending: 'Executing staged operation', success: 'Staged operation executed' },

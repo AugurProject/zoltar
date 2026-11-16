@@ -68,7 +68,7 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 			details.amount = formatValueWithUnit(formatApprovalAmount(requiredApprovalAmount), symbol)
 		}
 	} catch (error) {
-		throw new Error(`Could not read token details for approval${reset ? ' reset' : ''}. Retry before sending any transactions.`, { cause: error })
+		throw new Error(reset ? transactionCopy.tokenApprovalResetDetailsUnavailable : 'Could not read token details for approval. Retry before sending any transactions.', { cause: error })
 	}
 	return details
 }

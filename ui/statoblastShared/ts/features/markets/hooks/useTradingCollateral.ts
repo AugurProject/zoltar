@@ -115,7 +115,7 @@ export function useTradingCollateral({ pool, amountInput, ...parameters }: Write
 					buildWriteActionConfig(
 						{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState },
 						tradingError,
-						commonCopy.formatConnectWalletBefore(amount === 0n ? 'resetting the collateral approval' : 'approving collateral'),
+						commonCopy.formatConnectWalletBefore(amount === 0n ? collateralCopy.resettingApproval : 'approving collateral'),
 						{
 							// Approving zero resets the allowance: its own action and title, so the tray never reads it as the approval that follows.
 							action: amount === 0n ? 'resetPurchaseCollateral' : 'approvePurchaseCollateral',
