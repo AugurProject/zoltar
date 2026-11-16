@@ -4,6 +4,8 @@ import { exactNumber, exactUnit, percentFromBps, utcDateTime } from './format.ts
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 const outcomes = ['INVALID', 'YES', 'NO', 'None']
+const capitalPriceKeys: ReadonlySet<string> = new Set(['acceptedPrice', 'conservativePrice', 'liquidationPrice', 'ownerConservativePrice', 'maxHealthyPrice'])
+const MAX_UINT256 = 2n ** 256n - 1n
 const label = (key: string): string => {
 	const words = key
 		.replace(/Bps$/i, '')
@@ -24,7 +26,14 @@ const valueText = (key: string, value: unknown, nativeSymbol: string, collateral
 	const text = String(value)
 	if (/^(outcome|questionResolution|finalQuestionResolution)$/.test(key)) return outcomes[Number(text)] ?? `Unknown outcome (${text})`
 	if (/^-?\d+$/.test(text)) {
-		if (/^(activationTime|endTimestamp|nonDecisionTimestamp)$/.test(key) && BigInt(text) >= 0n && BigInt(text) <= 8_640_000_000_000n) return utcDateTime(Number(text) * 1000)
+		if (/^(activationTime|endTimestamp|nonDecisionTimestamp|priceValidUntil)$/.test(key) && BigInt(text) >= 0n && BigInt(text) <= 8_640_000_000_000n) return utcDateTime(Number(text) * 1000)
+		// The ledger reports zero until an adverse price observation starts a position's take-over clock.
+		if (key === 'liquidationStartedAt') return text === '0' ? 'Not started' : utcDateTime(Number(text) * 1000)
+		// Capital-ledger prices are attoREP per whole collateral token scaled by 1e18; a position without commitment has no price limit.
+		if (capitalPriceKeys.has(key)) {
+			if (BigInt(text) === MAX_UINT256) return 'No limit'
+			return collateral === undefined ? exactNumber(text) : exactUnit(text, Math.max(0, 36 - collateral.decimals), `REP/${collateral.symbol}`)
+		}
 		const unitKey = key.replaceAll('_', '')
 		if (/attoRep/i.test(unitKey)) return exactUnit(text, 18, 'REP')
 		if (/attoEthPerGas/i.test(unitKey)) return exactUnit(text, 18, `${nativeSymbol}/gas`)

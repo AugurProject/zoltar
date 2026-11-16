@@ -16,6 +16,9 @@ export const parseOperationsDetailRoute = (pathname: string): OperationsDetailRo
 		if ((kind === 'auction' || kind === 'escalation' || kind === 'fork' || kind === 'trading') && parts.length === expected) return { kind, identity: [decodeURIComponent(parts.at(-1) ?? '')] }
 		if (parts[0] === 'pool' && parts.length === 2) return { kind: 'pool', identity: [decodeURIComponent(parts[1] ?? '')] }
 		if (parts[0] === 'operations' && parts[1] === 'risk' && parts[2] === 'pool' && parts.length === 4) return { kind: 'pool', identity: [decodeURIComponent(parts[3] ?? '')] }
+		// A capital position is identified by its universe ledger and its owner.
+		if (parts[0] === 'capital' && parts.length === 3) return { kind: 'capital', identity: parts.slice(1).map(decodeURIComponent) }
+		if (parts[0] === 'operations' && parts[1] === 'risk' && parts[2] === 'capital' && parts.length === 5) return { kind: 'capital', identity: parts.slice(3).map(decodeURIComponent) }
 	} catch (error) {
 		if (!(error instanceof URIError)) throw error
 		return undefined
@@ -51,7 +54,7 @@ export const routeTitle = (pathname: string): string => {
 	else if (route === 'system' && canonicalKind === 'universe') name = 'Universe'
 	else if (route === 'operations' && !pathname.startsWith('/operations')) name = `${canonicalKind?.slice(0, 1).toUpperCase()}${canonicalKind?.slice(1)}`
 	const identity = pathname.split('/').filter(Boolean).at(-1)
-	return `${name}${identity !== undefined && ['address', 'tx', 'block', 'pool', 'report', 'auction', 'escalation', 'fork', 'trading', 'question', 'universe'].includes(canonicalKind ?? '') ? ` ${shortIdentifier(canonicalKind === 'question' ? questionIdHex(identity) : identity, 12, 8)}` : ''} · augurScan`
+	return `${name}${identity !== undefined && ['address', 'tx', 'block', 'pool', 'capital', 'report', 'auction', 'escalation', 'fork', 'trading', 'question', 'universe'].includes(canonicalKind ?? '') ? ` ${shortIdentifier(canonicalKind === 'question' ? questionIdHex(identity) : identity, 12, 8)}` : ''} · augurScan`
 }
 
 const timelineContextParameters = ['q', 'entityType', 'event', 'address', 'fromBlock', 'toBlock', 'canonical']
@@ -61,7 +64,7 @@ export const routeDataContext = (chainId: string, url: URL): string => {
 	const { pathname } = url
 	let parameters: readonly string[] = []
 	if (pathname === '/operations/timeline') parameters = timelineContextParameters
-	else if (pathname.startsWith('/operations/risk') || pathname.startsWith('/pool/')) parameters = ['atBlock']
+	else if (pathname.startsWith('/operations/risk') || pathname.startsWith('/pool/') || pathname.startsWith('/capital/')) parameters = ['atBlock']
 	const selected = parameters.flatMap(name => {
 		const value = url.searchParams.get(name)
 		return value === null || value === '' ? [] : [`${name}=${encodeURIComponent(value)}`]
