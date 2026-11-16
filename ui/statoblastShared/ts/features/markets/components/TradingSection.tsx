@@ -162,6 +162,7 @@ export function TradingSection({
 		loadingTradingDetails,
 		selectedShareOutcome: tradingForm.selectedShareOutcome,
 		shareBalances,
+		shareMigrationTargets: tradingDetails?.shareMigrationTargets,
 		targetOutcomeIndexesInput: tradingForm.targetOutcomeIndexes,
 		tradingForkUniverse,
 	})
