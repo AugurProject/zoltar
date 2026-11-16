@@ -4,7 +4,7 @@ import type { ConnectivitySettings } from '@zoltar/bot-shared/monitoring/connect
 import type { StoredRuntimeLimits } from '#config/settings-store'
 import type { SettlementSettings } from '#state/settlement-store'
 import { array, booleanValue, decode, numberValue, object, oneOf, optional, stringValue } from '@zoltar/bot-shared/dashboard/response-validation'
-import { isRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 export type DashboardDeployment = {
 	uniswapV2Enabled: boolean
@@ -52,7 +52,7 @@ const isConnectivity = object<ConnectivitySettings>({ publicRpcUrls: array(strin
 export const decodeSettings = (value: unknown) => decode(value, object<{ settings: StrategySettings }>({ settings: isStrategySettings }), 'strategy response')
 export const decodeSettlement = (value: unknown) => decode(value, object<{ settlement: SettlementSettings }>({ settlement: isSettlementSettings }), 'settlement response')
 export const decodeRuntimeLimits = (value: unknown) => decode(value, object<{ runtime: StoredRuntimeLimits }>({ runtime: isRuntimeLimits }), 'risk limit response')
-export const decodeCentralizedMarkets = (value: unknown) => decode(value, object<{ centralizedMarkets: Record<string, unknown> }>({ centralizedMarkets: isRecord }), 'market source response')
+export const decodeCentralizedMarkets = (value: unknown) => decode(value, object<{ centralizedMarkets: Record<string, unknown> }>({ centralizedMarkets: isPlainRecord }), 'market source response')
 export const decodeExecution = (value: unknown) => decode(value, isExecutionMode, 'execution mode response')
 export const decodeSubmission = (value: unknown) => decode(value, object<{ submission: SubmissionSettings }>({ submission: isSubmissionSettings }), 'submission response')
 export const decodeDeployment = (value: unknown) => decode(value, object<{ deployment: DashboardDeployment }>({ deployment: isDeploymentSettings }), 'deployment response')

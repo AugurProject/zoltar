@@ -1,4 +1,5 @@
-import { isRecord, type JsonRecord, type JsonValue } from './api-validation.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
+import type { JsonRecord, JsonValue } from './api-validation.ts'
 import { exactUnit } from './format.ts'
 
 export const operationsForkChildCount = (formattedCount: string, value: JsonValue | undefined): string => `${formattedCount} ${Number(value) === 1 ? 'child' : 'children'}`
@@ -53,8 +54,6 @@ const poolProtocolStateLabel = (value: JsonValue | undefined): string => {
 			return 'Pool forked'
 		case '2':
 			return 'Fork migration'
-		case '3':
-			return 'Fork collateral repair auction'
 		case 'bad-debt':
 			return 'Bad debt'
 		case 'unavailable':
@@ -79,7 +78,7 @@ export const operationsRiskPresentation = (protocolState: JsonValue | undefined,
 // CommitmentTakenOver carries position ids, the commitment moved and the REP award. The commitment is in the
 // ledger's collateral token, whose decimals a timeline entry does not carry, so it stays in explicit base units.
 export const takeoverSummary = (summaryData: unknown): string => {
-	const data = isRecord(summaryData) ? summaryData : {}
+	const data = isPlainRecord(summaryData) ? summaryData : {}
 	const integer = (key: string): string | undefined => {
 		const value = data[key]
 		return typeof value === 'string' && /^\d+$/.test(value) ? value : undefined
@@ -154,7 +153,7 @@ export const operationsFailureMessage = (refresh: boolean, status: number | unde
 // Portfolio fork events are keyed by coordinator and universe; the fork page is keyed by the universe alone.
 export const forkParticipationUniverse = (event: Readonly<Record<string, unknown>>): string => {
 	const identity = String(event['universe_identity'] ?? '')
-	const eventData = isRecord(event['event_data']) ? event['event_data'] : {}
+	const eventData = isPlainRecord(event['event_data']) ? event['event_data'] : {}
 	const universeId = eventData['universeId']
 	return identity.includes(':') && typeof universeId === 'string' ? universeId : identity
 }

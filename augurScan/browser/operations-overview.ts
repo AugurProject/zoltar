@@ -1,13 +1,14 @@
 import { semanticSummary, timelineEntityPath } from './semantic-evidence.ts'
 import { shortIdentifier } from './identifier-format.ts'
 import type { NetworkRecord, OperationsCatalogSection, OperationsRenderContext, PagedOperationsCatalogSection } from './browser-types.ts'
-import { isRecord, operationRecords, operationsCatalogRecords, operationsRiskPagination, operationsRiskRecords, type JsonRecord, type OperationsResponse } from './api-validation.ts'
+import { operationRecords, operationsCatalogRecords, operationsRiskPagination, operationsRiskRecords, type JsonRecord, type OperationsResponse } from './api-validation.ts'
 import { evidenceStatusLabel, historyInvalidationEvidencePresentation, historyInvalidationReasonLabel, timelineEntityTypeLabel, timelineOccurrenceFields } from './history-evidence.ts'
 import { operationsForkChildCount, operationsRiskPresentation, operationsRouteFreshness, takeoverSummary } from './operations-presentation.ts'
 import { exactUnit, percentFromBps, utcDateTime } from './format.ts'
 import { nativeSymbolFor } from './network-freshness.ts'
 import type { createOperationsComponents } from './operations-components.ts'
 import { captureViewState, replaceChildrenKeeping, restoreViewState } from './view-state.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 type Components = ReturnType<typeof createOperationsComponents>
 
@@ -49,14 +50,14 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 	const trading = operationsCatalogRecords('trading', data['trading'])
 	const timeline = operationsCatalogRecords('timeline', data['timeline'])
 	const integrity = operationsCatalogRecords('integrity', data['integrity'])
-	const selectedCatalogPage = isRecord(data['_catalogPage']) ? data['_catalogPage'] : undefined
-	const totals = isRecord(data['totals']) ? data['totals'] : {}
+	const selectedCatalogPage = isPlainRecord(data['_catalogPage']) ? data['_catalogPage'] : undefined
+	const totals = isPlainRecord(data['totals']) ? data['totals'] : {}
 	const selectedNetwork = latestNetworks.find(network => String(network.chain_id) === requiredChainId())
 	const selectedNetworkScope = `Selected network · ${selectedNetwork?.name ?? `chain ${requiredChainId()}`} · chain ${requiredChainId()}`
 	const riskValue = data['risk']
 	const historical = asOf['historical'] === true || asOf['phase'] === 'historical'
-	if (riskValue !== undefined && !isRecord(riskValue)) throw new Error('Operations risk is malformed')
-	const risk = isRecord(riskValue) ? riskValue : {}
+	if (riskValue !== undefined && !isPlainRecord(riskValue)) throw new Error('Operations risk is malformed')
+	const risk = isPlainRecord(riskValue) ? riskValue : {}
 	const riskPagination = operationsRiskPagination(risk['pagination'], riskValue !== undefined)
 	const pools = operationsRiskRecords(risk['pools'])
 	const recentTakeovers = operationRecords(risk['recentTakeovers'])
@@ -68,7 +69,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		operationCard('Block timestamp', asOf['blockTimestamp'] === undefined ? 'Unavailable' : utcDateTime(Number(asOf['blockTimestamp']) * 1_000)),
 	)
 	const metrics = element('div', 'operations-metrics')
-	const settleableShown = reports.filter(item => isRecord(item['lifecycle']) && item['lifecycle']['state'] === 'Settleable').length
+	const settleableShown = reports.filter(item => isPlainRecord(item['lifecycle']) && item['lifecycle']['state'] === 'Settleable').length
 	const openAuctionsShown = auctions.filter(item => item['status'] === 'Open').length
 	metrics.append(
 		operationCard(
@@ -97,8 +98,8 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		),
 	)
 	const reportRows = reports.map(item => {
-		const lifecycle = isRecord(item['lifecycle']) ? item['lifecycle'] : {}
-		const reportData = isRecord(item['report_data']) ? item['report_data'] : {}
+		const lifecycle = isPlainRecord(item['lifecycle']) ? item['lifecycle'] : {}
+		const reportData = isPlainRecord(item['report_data']) ? item['report_data'] : {}
 		return operationRow(
 			`Report ${String(item['report_id'] ?? '—')}`,
 			`${String(lifecycle['state'] ?? 'Awaiting indexed evidence')} · ${operationCounted(item['observed_rounds'], 'round')} · ${String(reportData['token1'] ?? 'token 1')} / ${String(reportData['token2'] ?? 'token 2')}`,
@@ -126,7 +127,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		),
 	)
 	const poolRiskRows = pools.map(item => {
-		const capacity = isRecord(item['capacity']) ? item['capacity'] : {}
+		const capacity = isPlainRecord(item['capacity']) ? item['capacity'] : {}
 		const riskPresentation = operationsRiskPresentation(item['protocol_state'], item['scanner_severity'])
 		return operationRow(
 			'Pool accounting',
@@ -166,7 +167,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		}
 		return row
 	})
-	const coverage = isRecord(data['decodeCoverage']) ? data['decodeCoverage'] : {}
+	const coverage = isPlainRecord(data['decodeCoverage']) ? data['decodeCoverage'] : {}
 	const decodeRows = operationRecords(coverage['groups']).map(item => operationRow(String(item['selector'] ?? 'No selector'), `${String(item['transaction_count'])} calls · ${String(item['decode_status'])}`, String(item['destination'] ?? ''), undefined, operationsHref(`/tx/${item['sample_transaction']}`)))
 	const integrityRows = integrity.map(item => {
 		const evidence = historyInvalidationEvidencePresentation(item['causes'], item['occurrence_counts'])
@@ -204,7 +205,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 	const priceRows = prices.map(item => operationRow('Coordinator REP / ETH', `${exactUnit(String(item['value'] ?? '0'), 18, 'REP/ETH')} · ${String(item['source_event'] ?? 'Unavailable')}`, String(item['source_contract'] ?? ''), item['block_number']))
 	const attentionReportRows: HTMLElement[] = []
 	for (const [index, item] of reports.entries()) {
-		const lifecycle = isRecord(item['lifecycle']) ? item['lifecycle'] : {}
+		const lifecycle = isPlainRecord(item['lifecycle']) ? item['lifecycle'] : {}
 		const row = reportRows[index]
 		if ((lifecycle['state'] === 'Dispute window open' || lifecycle['state'] === 'Settleable') && row !== undefined) attentionReportRows.push(row)
 	}
@@ -309,7 +310,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 	]
 	const grid = element('div', panels.length === 1 ? 'operations-grid operations-grid-single' : 'operations-grid')
 	grid.append(...panels)
-	const riskCatalogPage = isRecord(data['_riskCatalogPage']) ? data['_riskCatalogPage'] : undefined
+	const riskCatalogPage = isPlainRecord(data['_riskCatalogPage']) ? data['_riskCatalogPage'] : undefined
 	if (selected === 'risk' && riskCatalogPage !== undefined) {
 		deps.setRiskCatalogState({ chainId: requiredChainId(), pools })
 		const nextCursor = riskPagination['poolNextCursor']

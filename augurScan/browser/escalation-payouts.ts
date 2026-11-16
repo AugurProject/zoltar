@@ -1,5 +1,5 @@
-import { isRecord } from './api-validation.ts'
 import { exactUnit } from './format.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 export const escalationPayoutSummary = (position: Readonly<Record<string, unknown>>): string => {
 	const amount = (key: string) => exactUnit(typeof position[key] === 'string' ? position[key] : undefined, 18, 'REP')
@@ -15,7 +15,7 @@ export const claimProofDisclosure = (position: Readonly<Record<string, unknown>>
 	const details = document.createElement('details')
 	details.className = 'operations-raw-evidence'
 	const title = document.createElement('summary')
-	title.textContent = isRecord(position['proof']) ? 'View membership and unspent proof' : 'View payout calculation evidence'
+	title.textContent = isPlainRecord(position['proof']) ? 'View membership and unspent proof' : 'View payout calculation evidence'
 	const evidence = document.createElement('pre')
 	evidence.textContent = JSON.stringify({ block, blockHash, ...position }, null, 2)
 	details.append(title, evidence)

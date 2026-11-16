@@ -1401,7 +1401,7 @@ describe('ReportingSection', () => {
 				createProps({
 					reportingDetails: createReportingDetails({
 						questionOutcome: 'yes',
-						systemState: 'forkCollateralRepairAuction',
+						systemState: 'forkMigration',
 						settlementState: 'locked',
 					}),
 				}),

@@ -23,7 +23,7 @@ export const STATOBLAST_OPERATIONS: readonly OperationDefinition[] = [
 	initializeChildHistory,
 	deployPool,
 	checkpointDefinition('collateral'),
-	checkpointDefinition('retention'),
+	checkpointDefinition('fees'),
 	depositCapital,
 	capitalPolicy('commitment'),
 	capitalPolicy('health'),
