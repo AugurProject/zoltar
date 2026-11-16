@@ -89,7 +89,7 @@ export function obligationDetail(obligation: Obligation) {
 		return `${ecosystemLabel(obligation.ecosystem)} · ${obligation.automaticRetryCount.toString()} of ${obligation.automaticRetryLimit.toString()} included attempts failed · next attempt ${formatDate(obligation.notBefore)}`
 	}
 	if (obligation.status === 'deferred') return `${ecosystemLabel(obligation.ecosystem)} · tracked, not currently actionable`
-	return `${ecosystemLabel(obligation.ecosystem)} · due ${formatDate(obligation.dueAt)}`
+	return `${ecosystemLabel(obligation.ecosystem)} · deadline ${formatDate(obligation.expiresAt)}`
 }
 
 export function recoveryItemCount(value: Snapshot) {

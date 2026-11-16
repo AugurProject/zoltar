@@ -218,7 +218,6 @@ describe('chaos-bot settings', () => {
 		expect(settings.discovery).toEqual({
 			maxPools: 100,
 			maxQuestions: 100,
-			maxStagedOperationsPerPool: 100,
 			maxUniverses: 100,
 			maxVaultsPerPool: 100,
 		})
@@ -298,12 +297,18 @@ describe('chaos-bot settings', () => {
 		}
 	})
 
-	test('bounds aggregate pool fan-out across universe, vault, and staged-operation registries', async () => {
+	test('bounds aggregate pool fan-out across universe and vault registries', async () => {
 		const example = await storedExample()
 		const discovery = record(example['discovery'])
-		expect(() => parseSettings({ ...example, discovery: { ...discovery, maxPools: 101, maxStagedOperationsPerPool: 1, maxUniverses: 100, maxVaultsPerPool: 1 } })).toThrow('maxPools × discovery.maxUniverses')
-		expect(() => parseSettings({ ...example, discovery: { ...discovery, maxPools: 101, maxStagedOperationsPerPool: 1, maxUniverses: 1, maxVaultsPerPool: 100 } })).toThrow('maxPools × discovery.maxVaultsPerPool')
-		expect(() => parseSettings({ ...example, discovery: { ...discovery, maxPools: 101, maxStagedOperationsPerPool: 100, maxUniverses: 1, maxVaultsPerPool: 1 } })).toThrow('maxPools × discovery.maxStagedOperationsPerPool')
+		expect(() => parseSettings({ ...example, discovery: { ...discovery, maxPools: 101, maxUniverses: 100, maxVaultsPerPool: 1 } })).toThrow('maxPools × discovery.maxUniverses')
+		expect(() => parseSettings({ ...example, discovery: { ...discovery, maxPools: 101, maxUniverses: 1, maxVaultsPerPool: 100 } })).toThrow('maxPools × discovery.maxVaultsPerPool')
+	})
+
+	test('accepts pool counts that only the removed staged-operation registry bounded and rejects that key as unknown', async () => {
+		const example = await storedExample()
+		const discovery = { maxPools: 200, maxQuestions: 100, maxUniverses: 50, maxVaultsPerPool: 50 }
+		expect(parseSettings({ ...example, discovery }).discovery).toEqual(discovery)
+		expect(() => parseSettings({ ...example, discovery: { ...discovery, maxStagedOperationsPerPool: 1 } })).toThrow('discovery contains unsupported field maxStagedOperationsPerPool')
 	})
 
 	test('bounds the cursor-based protocol log update span', async () => {

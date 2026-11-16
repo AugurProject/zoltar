@@ -2,6 +2,10 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { parseSnapshot } from '../../src/dashboard/dashboard-data.ts'
+import { obligationDetail } from '../../src/dashboard/dashboard-format.ts'
+import { formatDate } from '../../src/dashboard/dom.ts'
+import { publicChaosState } from '../../src/dashboard/public-state.ts'
 import type { EvaluatedOperation, OperationPlan } from '../../src/operations/types.ts'
 import {
 	abandonLifecycleObligation,
@@ -877,5 +881,36 @@ describe('durable lifecycle obligations', () => {
 
 		expect(state.obligationTombstones).toHaveLength(1)
 		expect(state.obligations).toHaveLength(1)
+	})
+})
+
+describe('lifecycle obligation deadlines on the dashboard', () => {
+	function dashboardObligationDetail(obligations: readonly DurableObligation[]) {
+		const obligation = parseSnapshot(publicChaosState({ obligations })).obligations[0]
+		if (obligation === undefined) throw new Error('Missing published obligation')
+		return obligationDetail(obligation)
+	}
+
+	test('shows the plan deadline of a tracked obligation', () => {
+		const { obligation } = trackedObligation({ ...plan('10'), deadlineTimestamp: '1000' }, 900n)
+
+		expect(dashboardObligationDetail([obligation])).toBe(`OpenOracle · deadline ${formatDate('1970-01-01T00:16:40.000Z')}`)
+	})
+
+	test('keeps an obligation without a plan deadline unscheduled', () => {
+		const { obligation } = trackedObligation()
+
+		expect(dashboardObligationDetail([obligation])).toBe('OpenOracle · deadline Not scheduled')
+	})
+
+	test('shows the refreshed deadline after the same identity becomes actionable again', () => {
+		const first = { ...plan('10'), deadlineTimestamp: '1000' }
+		const state = obligationState()
+		synchronizeLifecycleObligations(state, [evaluation(first)], presence(first), true, 10n, 900n)
+		synchronizeLifecycleObligations(state, [], presence(first, false), true, 11n, 1_001n)
+		const refreshed = { ...plan('12'), deadlineTimestamp: '2000' }
+		synchronizeLifecycleObligations(state, [evaluation(refreshed)], presence(refreshed), true, 12n, 1_100n)
+
+		expect(dashboardObligationDetail(state.obligations)).toBe(`OpenOracle · deadline ${formatDate('1970-01-01T00:33:20.000Z')}`)
 	})
 })

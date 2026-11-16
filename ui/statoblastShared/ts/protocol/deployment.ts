@@ -46,13 +46,13 @@ export { loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.j
 
 export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	escalationGameClaimDelegate: '0x1325556b8dfbe34e05c963245e045218609523e924714e35d91c827263f83871',
-	escalationGameDepositDelegate: '0x26844213fb9e5b0fcb2d7b3f278a255755fdf41490f5dd16e65748a3abcaf50e',
-	escalationGameFactory: '0x96cff8678cbae4dace20cc276a6012a864058aee031fb37739141d0af50a795e',
+	escalationGameDepositDelegate: '0x666833145f8045c16281a83eca48ee3e972c74668fa7deb327c877f79309c130',
+	escalationGameFactory: '0xfb6a9d55c125762e01fff5074454ba38d3f52e0d3e6e79c0ac1ef7c5f87ff71f',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
 	openOraclePriceCoordinatorFactory: '0xa377877a99080696983dadd8a9e061fbb71b629880293b3250d247f44d196c2f',
 	priceCoordinatorDeploymentWorker: '0x150056cb839741ecfa63266899c06f937f9a34a3bdfebc4e09b61c7d55298457',
 	securityPoolEventEmitter: '0x2373a9697f0b83aee7329140f35fbb1a94227aec9f2f5f3bfb7c97ffb5154edf',
-	securityPoolFactory: '0x6e8faf0ff7dcf73570af95539bc75e2d3615d37aaec83bbaebc387155dc8233b',
+	securityPoolFactory: '0xfa1a7818b9987634897d2e5a6ef7b33cf073466c5c97e26cab77c432ad48240d',
 	securityPoolForker: '0x662a48bdd93e316856567d2043476a9dce5f8cd3c08935a64b9c9b1bf9007258',
 	securityPoolOperationsDelegate: '0xc589dfa457100e39d6bf48a5ee55f5fc8695c40f18eb8ff4baa68b9dd6958373',
 	securityPoolUtils: '0xec490f322a84001a84be8855592c50e6edf239cd67a4a1210d8792ab1fef6ff5',
@@ -62,7 +62,7 @@ export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonl
 
 const EXPECTED_NO_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0x92d10c05ec513de17ea3951a3410162a944157237e9f934ed5bc1c2c5e884f42',
+	securityPoolFactory: '0xffaec2d650103a9b397654acac4e20e6ecb0c39999f4b110bded2ad406bf3819',
 	securityPoolForker: '0x03d8bd0313a65c86afd937ed65c733e500bd4cd7fb5ad7d69a520b0e62e31729',
 	shareTokenFactory: '0xcadc207c123725c918848d5626e5526187d53ad9932f04941964351e3d8b343a',
 }
@@ -110,13 +110,13 @@ export function assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes(
 
 const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	escalationGameClaimDelegate: '0x1325556b8dfbe34e05c963245e045218609523e924714e35d91c827263f83871',
-	escalationGameDepositDelegate: '0x26844213fb9e5b0fcb2d7b3f278a255755fdf41490f5dd16e65748a3abcaf50e',
-	escalationGameFactory: '0x96cff8678cbae4dace20cc276a6012a864058aee031fb37739141d0af50a795e',
+	escalationGameDepositDelegate: '0x666833145f8045c16281a83eca48ee3e972c74668fa7deb327c877f79309c130',
+	escalationGameFactory: '0xfb6a9d55c125762e01fff5074454ba38d3f52e0d3e6e79c0ac1ef7c5f87ff71f',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
 	openOraclePriceCoordinatorFactory: '0x9d925346a61086e39b681dc28f1b57a009a4b12b67e392a2af5c5459b8752d7f',
 	priceCoordinatorDeploymentWorker: '0x150056cb839741ecfa63266899c06f937f9a34a3bdfebc4e09b61c7d55298457',
 	securityPoolEventEmitter: '0x2373a9697f0b83aee7329140f35fbb1a94227aec9f2f5f3bfb7c97ffb5154edf',
-	securityPoolFactory: '0x6f43d02a223d06b5012412c260f9693e48586570106b66a0f1a9a2509bf16c72',
+	securityPoolFactory: '0xfe8e38d6d20e4dafddc9b13f25177071f251a25b77a0e102b75fef412ec199d7',
 	securityPoolForker: '0x34d9d35dbe2f6e5bbd6f6e24349bc76c47093bdf4e7f4cd8ae517ce8d346d739',
 	securityPoolOperationsDelegate: '0xc589dfa457100e39d6bf48a5ee55f5fc8695c40f18eb8ff4baa68b9dd6958373',
 	securityPoolUtils: '0xec490f322a84001a84be8855592c50e6edf239cd67a4a1210d8792ab1fef6ff5',
@@ -126,7 +126,7 @@ const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentSt
 
 const EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_MAINNET_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0xe4eb610f00e8786992744fe514058279cf11b7b5d8a34e7d3cb9a308bef924e9',
+	securityPoolFactory: '0xa3fed3d28c8cded1efa01c3da585769735a2b3c1e0b711207a390303a35f079d',
 	securityPoolForker: '0xdc6706a662f0ce8426e92f4ac3d9dae2da6625b6238e2e6a115b7b1d7b166554',
 	shareTokenFactory: '0x07637034ebc39b4b67553da5171939b74eb29e0d587611ab31f25c5a92d3761f',
 }

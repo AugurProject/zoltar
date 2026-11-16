@@ -169,7 +169,7 @@ export function parseWorkflow(value: unknown, index: number): DurableWorkflow {
 export function parseObligation(value: unknown, index: number): DurableObligation {
 	const label = `obligations[${index.toString()}]`
 	const obligation = requiredRecord(value, label)
-	assertExactKeys(obligation, ['attemptCount', 'blockers', 'createdAt', 'ecosystem', 'id', 'label', 'metadata', 'operationId', 'status', 'updatedAt', 'workflowId'], ['automaticRetryCount', 'completedAt', 'dueAt', 'expiresAt', 'lastAttemptAt', 'lastError', 'notBefore', 'resolvedAt', 'resolutionReason'], label)
+	assertExactKeys(obligation, ['attemptCount', 'blockers', 'createdAt', 'ecosystem', 'id', 'label', 'metadata', 'operationId', 'status', 'updatedAt', 'workflowId'], ['automaticRetryCount', 'completedAt', 'expiresAt', 'lastAttemptAt', 'lastError', 'notBefore', 'resolvedAt', 'resolutionReason'], label)
 	const automaticRetryCount = obligation['automaticRetryCount'] ?? 0
 	if (typeof automaticRetryCount !== 'number' || !Number.isSafeInteger(automaticRetryCount) || automaticRetryCount < 0) throw new Error(`${label}.automaticRetryCount is invalid`)
 	const attemptCount = obligation['attemptCount']
@@ -177,7 +177,6 @@ export function parseObligation(value: unknown, index: number): DurableObligatio
 	const status = obligation['status']
 	if (status !== 'abandoned' && status !== 'blocked' && status !== 'completed' && status !== 'deferred' && status !== 'executing' && status !== 'failed' && status !== 'pending') throw new Error(`${label}.status is invalid`)
 	const completedAt = optionalTimestamp(obligation['completedAt'], `${label}.completedAt`)
-	const dueAt = optionalTimestamp(obligation['dueAt'], `${label}.dueAt`)
 	const expiresAt = optionalTimestamp(obligation['expiresAt'], `${label}.expiresAt`)
 	const lastAttemptAt = optionalTimestamp(obligation['lastAttemptAt'], `${label}.lastAttemptAt`)
 	const lastError = optionalString(obligation['lastError'], `${label}.lastError`, 8_192)
@@ -196,7 +195,6 @@ export function parseObligation(value: unknown, index: number): DurableObligatio
 		blockers: stringArray(obligation['blockers'], `${label}.blockers`),
 		...(completedAt === undefined ? {} : { completedAt }),
 		createdAt: timestamp(obligation['createdAt'], `${label}.createdAt`),
-		...(dueAt === undefined ? {} : { dueAt }),
 		ecosystem: ecosystem(obligation['ecosystem'], `${label}.ecosystem`),
 		...(expiresAt === undefined ? {} : { expiresAt }),
 		id: identifier(obligation['id'], `${label}.id`),
