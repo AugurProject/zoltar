@@ -55,8 +55,8 @@ const SCREENSHOT_RULES: readonly TestImpactRule[] = screenshotAppIds().map(appId
 	matches: filePath => isScreenshotSourcePath(appId, filePath),
 }))
 
-// Documentation read or executed by tests; CI scope classification selects the same consumers from this table.
-const DOCUMENTATION_CONSUMER_RULES: readonly TestImpactRule[] = documentationConsumers.flatMap(consumer => groupedTestCommands(consumer.tests).map(command => ({ command, reason: consumer.reason, matches: (filePath: string) => documentationConsumerMatches(consumer, filePath) })))
+// Documentation read or executed by tests or checks; CI scope classification selects the same consumers from this table.
+const DOCUMENTATION_CONSUMER_RULES: readonly TestImpactRule[] = documentationConsumers.flatMap(consumer => [...groupedTestCommands(consumer.tests ?? []), ...(consumer.checks ?? [])].map(command => ({ command, reason: consumer.reason, matches: (filePath: string) => documentationConsumerMatches(consumer, filePath) })))
 
 const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 	...SCREENSHOT_RULES,

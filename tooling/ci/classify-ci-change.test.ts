@@ -29,6 +29,7 @@ const routingCases: readonly (readonly [readonly string[], readonly CiScope[]])[
 	[['docs/charts/diagramControl.ts'], ['core', 'docs']],
 	[['docs/reference/invariants.html'], ['core', 'docs']],
 	[['docs/explanation/escalation-game.html'], ['core', 'docs']],
+	[['docs/documentation.html'], ['core', 'docs']],
 	[['docs/how-to/trading-set-up-development.html'], ['core', 'docs']],
 	[['README.md'], ['core', 'docs']],
 	[['testnetwork/README.md'], ['core', 'docs']],

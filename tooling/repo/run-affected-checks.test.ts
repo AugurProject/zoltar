@@ -71,6 +71,7 @@ test.each([
 	['docs/assets/js/interactiveTools.js', ['repository', 'docs']],
 	['docs/charts/diagramControl.ts', ['repository', 'docs']],
 	['docs/reference/invariants.html', ['repository', 'docs']],
+	['docs/documentation.html', ['repository', 'docs']],
 	['README.md', ['repository', 'docs']],
 	['testnetwork/README.md', ['repository', 'docs']],
 	['augurScan/README.md', ['augur-scan', 'docs']],
