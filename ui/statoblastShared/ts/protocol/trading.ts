@@ -8,8 +8,8 @@ import { encodeFunctionData, getAddress, isAddress, parseAbi, zeroAddress, type 
 import { sortBigIntsAscending } from '@zoltar/core-shared/serialization/bigInt'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
-import type { ReadClient, ReportingOutcomeKey, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { TradingActionResult, TradingDetails, TradingShareBalances } from '../types/contracts.js'
+import type { ReadClient, ReportingOutcomeKey, WriteClient, ZoltarChildUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ShareMigrationTarget, TradingActionResult, TradingDetails, TradingShareBalances } from '../types/contracts.js'
 import { getMinBigintValue, isBigintTriple } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { readSecurityPoolUniverseId } from './securityPoolActions.js'
@@ -54,14 +54,6 @@ export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'get
 	return { ...central, currentTimestamp: currentBlock.timestamp, escalationGameActive, mintingCapacityAttoEth: escalationGameActive ? 0n : central.mintingCapacityAttoEth }
 }
 export async function loadTradingDetails(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<TradingDetails> {
-	if (accountAddress === undefined) {
-		const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
-		return {
-			maxRedeemableCompleteSetsAttoShares: undefined,
-			shareBalances: undefined,
-			universeId,
-		}
-	}
 	const [universeId, shareTokenAddress] = await readRequiredMulticall(client, [
 		{
 			address: securityPoolAddress,
@@ -76,6 +68,7 @@ export async function loadTradingDetails(client: ReadClient, securityPoolAddress
 			args: [],
 		},
 	])
+	if (accountAddress === undefined) return { maxRedeemableCompleteSetsAttoShares: undefined, shareBalances: undefined, shareTokenAddress, universeId }
 	const shareBalancesResult = await client.readContract({
 		address: shareTokenAddress,
 		abi: statoblast_tokens_ShareToken_ShareToken.abi,
@@ -91,6 +84,7 @@ export async function loadTradingDetails(client: ReadClient, securityPoolAddress
 	return {
 		maxRedeemableCompleteSetsAttoShares: getMinBigintValue([shareBalances.invalidAttoShares, shareBalances.yesAttoShares, shareBalances.noAttoShares]),
 		shareBalances,
+		shareTokenAddress,
 		universeId,
 	}
 }
@@ -178,6 +172,30 @@ export async function redeemSharesInSecurityPool(client: WriteClient, securityPo
 		securityPoolAddress,
 		universeId,
 	} satisfies TradingActionResult
+}
+const SHARE_MIGRATION_SOURCE_OUTCOMES = ['invalid', 'yes', 'no'] as const
+/**
+ * Reads, in one multicall, each child universe's canonical pool in the source pool's share token and what `accountAddress`
+ * already migrated into it from each source outcome. `source` is the pool's already-loaded universe and share token.
+ */
+export async function loadShareMigrationTargets(client: Pick<ReadClient, 'multicall'>, source: Pick<TradingDetails, 'shareTokenAddress' | 'universeId'>, childUniverses: readonly Pick<ZoltarChildUniverseSummary, 'outcomeIndex' | 'universeId'>[], accountAddress: Address | undefined): Promise<ShareMigrationTarget[]> {
+	if (childUniverses.length === 0) return []
+	const { shareTokenAddress, universeId } = source
+	const canonicalPoolCalls = childUniverses.map(child => ({ address: shareTokenAddress, abi: statoblast_tokens_ShareToken_ShareToken.abi, functionName: 'canonicalPoolByUniverse', args: [child.universeId] }))
+	const migratedAmountCalls =
+		accountAddress === undefined
+			? []
+			: childUniverses.flatMap(child => SHARE_MIGRATION_SOURCE_OUTCOMES.map(outcome => ({ address: shareTokenAddress, abi: statoblast_tokens_ShareToken_ShareToken.abi, functionName: 'getMigratedShareAmountAttoShares', args: [getShareTokenId(universeId, outcome), child.universeId, accountAddress] })))
+	const results: readonly unknown[] = await readRequiredMulticall(client, [...canonicalPoolCalls, ...migratedAmountCalls])
+	return childUniverses.map((child, childIndex) => {
+		const canonicalPool = requireAddressValue(results[childIndex], 'canonical child pool')
+		const migrated = (outcomeOffset: number) => (accountAddress === undefined ? 0n : requireBigintValue(results[childUniverses.length + childIndex * SHARE_MIGRATION_SOURCE_OUTCOMES.length + outcomeOffset], 'migrated share amount'))
+		return {
+			canonicalPool: canonicalPool === zeroAddress ? undefined : canonicalPool,
+			migratedAttoShares: { invalidAttoShares: migrated(0), yesAttoShares: migrated(1), noAttoShares: migrated(2) },
+			outcomeIndex: child.outcomeIndex,
+		}
+	})
 }
 /** Migrates the wallet's whole balance of `shareOutcome`; `migratedAttoShares` is that balance, shown in the transaction review. */
 export async function migrateSharesFromUniverse<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: ReadWriteContractClient<TReceipt>, securityPoolAddress: Address, shareOutcome: ReportingOutcomeKey, targetOutcomeIndexes: bigint[], migratedAttoShares?: bigint) {

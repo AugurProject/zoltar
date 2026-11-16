@@ -69,11 +69,11 @@ export const tradingDetailData = async (sql: SQL, query: TradingDetailQuery) => 
 	const lpPositions = await sql`
 		WITH transfers AS (
 			SELECT lower(event.event_data->>'from') AS from_address, lower(event.event_data->>'to') AS to_address,
-				(event.event_data->>'amount')::numeric AS amount
+				(event.event_data->>'value')::numeric AS amount
 			FROM amm_trade_events event
 			WHERE event.chain_id = ${chainId} AND event.market_address = ${market} AND event.canonical
 				AND event.block_number <= ${asOfBlock}
-				AND event.event_name = 'Transfer' AND event.event_data ? 'from' AND event.event_data ? 'to' AND event.event_data ? 'amount'
+				AND event.event_name = 'Transfer' AND event.event_data ? 'from' AND event.event_data ? 'to' AND event.event_data ? 'value'
 		), deltas AS (
 			SELECT to_address AS address, amount AS received_liquidity, 0::numeric AS sent_liquidity, amount AS balance_delta
 			FROM transfers WHERE to_address <> '0x0000000000000000000000000000000000000000'

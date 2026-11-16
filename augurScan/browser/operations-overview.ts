@@ -3,7 +3,7 @@ import { shortIdentifier } from './identifier-format.ts'
 import type { NetworkRecord, OperationsCatalogSection, OperationsRenderContext, PagedOperationsCatalogSection } from './browser-types.ts'
 import { operationRecords, operationsCatalogRecords, operationsRiskPagination, operationsRiskRecords, type JsonRecord, type OperationsResponse } from './api-validation.ts'
 import { evidenceStatusLabel, historyInvalidationEvidencePresentation, historyInvalidationReasonLabel, timelineEntityTypeLabel, timelineOccurrenceFields } from './history-evidence.ts'
-import { capitalLedgerSummary, capitalPositionListLabel, capitalPositionPath, capitalPositionSummary, liquidationSummary, liquidationTitle } from './capital-presentation.ts'
+import { capitalLedgerSummary, capitalPositionListLabel, capitalPositionPath, feeEconomicsSummary, questionFeeStreamSummary, capitalPositionSummary, liquidationSummary, liquidationTitle } from './capital-presentation.ts'
 import { operationsForkChildCount, operationsRiskPresentation, operationsRouteFreshness } from './operations-presentation.ts'
 import { exactUnit, percentFromBps, utcDateTime } from './format.ts'
 import { nativeSymbolFor } from './network-freshness.ts'
@@ -167,6 +167,17 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		else if (item['event_name'] === 'ReportOperationAttempted' && typeof sponsor === 'string') href = operationsHref(`/address/${encodeURIComponent(sponsor.toLowerCase())}`)
 		return operationRow(liquidationTitle(item), liquidationSummary(item), String(item['tx_hash'] ?? ''), item['block_number'], href)
 	})
+	// Fees are accounted per universe: the settlement book accrues the annual fee, purchases fund the owners' vesting stream.
+	const feeRows = operationRecords(risk['feeEconomics'] ?? data['feeEconomics']).flatMap(item => {
+		const summary = feeEconomicsSummary(item)
+		const universe = `Universe ${shortIdentifier(String(item['universe_id'] ?? 'unread'), 9, 6)}`
+		return [operationRow(`${universe} · rates`, summary.rates, String(item['ledger_address'] ?? ''), item['block_number']), operationRow(`${universe} · fees to date`, summary.flows, undefined, undefined)]
+	})
+	const asOfTimestamp = asOf['blockTimestamp']
+	const asOfSeconds = typeof asOfTimestamp === 'string' && /^\d+$/.test(asOfTimestamp) ? BigInt(asOfTimestamp) : undefined
+	const feeStreamRows = operationRecords(risk['questionFeeStreams']).map(item =>
+		operationRow(String(item['question_title'] ?? `Question ${shortIdentifier(String(item['question_id'] ?? ''), 9, 6)}`), `${questionFeeStreamSummary(item, asOfSeconds)} · universe ${shortIdentifier(String(item['universe_id'] ?? ''), 9, 6)}`, String(item['tx_hash'] ?? ''), item['block_number']),
+	)
 	const atRiskCapitalRows = capitalPositionRows.filter((_, index) => ['critical', 'warning'].includes(String(capitalPositions[index]?.['scanner_severity'])))
 	const tradingRows = trading.map(item =>
 		operationRow(
@@ -264,6 +275,8 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 				}),
 				operationsPanel('Capital ledgers', capitalLedgerRows, 'No capital ledger is indexed.'),
 				operationsPanel('Liquidation feed', liquidationRows, 'No take-over, cure or report operation matches this view.', { label: 'Latest 25 · attributed to universe and owner, not to a question pool' }),
+				operationsPanel('Fee economics', feeRows, 'No capital ledger is indexed.'),
+				operationsPanel('Question fee streams', feeStreamRows, 'No question fee stream has been set.', { label: 'Latest 25 changes' }),
 				riskPoolPanel,
 			],
 		],
@@ -343,6 +356,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		operationsPanel('Active escalations', activeEscalationRows, `No active escalation games among ${number(escalations.length)} shown.`),
 		operationsPanel('Active auctions', activeAuctionRows, `No active auctions among ${number(auctions.length)} shown.`),
 		operationsPanel('Capital positions at risk', atRiskCapitalRows.slice(0, 5), `No capital position at risk among ${number(capitalPositions.length)} shown.`),
+		operationsPanel('Fee economics', feeRows, 'No capital ledger is indexed.'),
 		operationsPanel('Pool risk', poolRiskRows, 'No risk snapshots are available.'),
 		operationsPanel('Fork and migration progress', forkRows, 'No forks or migrations match this view.'),
 		operationsPanel('Price provenance', priceRows, 'No accepted coordinator price is available.'),

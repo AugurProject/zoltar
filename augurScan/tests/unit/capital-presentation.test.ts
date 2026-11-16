@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { capitalEventPresentation, capitalLedgerSummary, capitalPositionListLabel, capitalPositionPath, capitalPositionSummary, capitalSummaryMetrics, liquidationSummary, liquidationTitle } from '../../browser/capital-presentation.ts'
+import { capitalEventPresentation, capitalLedgerSummary, capitalPositionListLabel, feeEconomicsSummary, questionFeeStreamSummary, capitalPositionPath, capitalPositionSummary, capitalSummaryMetrics, liquidationSummary, liquidationTitle } from '../../browser/capital-presentation.ts'
 import { operationsDetailHeaderPresentation, operationsDetailSummaryPresentation, operationsRiskPresentation } from '../../browser/operations-presentation.ts'
 import { parseOperationsDetailRoute, canonicalOperationsPath, classifyRoute, routeDataContext, routeTitle } from '../../browser/routes.ts'
 import { semanticFields } from '../../browser/semantic-evidence.ts'
@@ -59,6 +59,34 @@ test("presents an owner's ledger events in REP and the ledger collateral", () =>
 	expect(at('EarningsClaimed', { owner: alice, ethAmount: '1500000', repAmount: '0' })?.summary).toBe('1.5 USDC · 0 REP')
 	expect(at('AuctionBidMaterialized', { bidId: '4', vault: alice, positionId: '3', principal: (70n * 10n ** 18n).toString(), commitment: '10000000' })?.summary).toBe('bid 4 became position 3 · 70 REP principal · 10 USDC commitment')
 	expect(at('CommitmentTakenOver', {})).toBeUndefined()
+})
+
+test('summarizes fee economics and question fee streams in the ledger collateral', () => {
+	const universe = {
+		collateral: usdc,
+		fees: { annualFeeBps: '200', purchaseFeeBps: '30', vestingOutstandingAttoEth: '700000000' },
+		accrued_atto_eth: '1250000000',
+		purchase_fees_atto_eth: '960000000',
+		earnings_funded_atto_eth: '900000000',
+		claimed_atto_eth: '1100000000',
+		claimed_atto_rep: (12n * 10n ** 18n).toString(),
+		burned_atto_eth: '25000000',
+		burned_atto_rep: '0',
+	}
+	expect(feeEconomicsSummary(universe)).toEqual({
+		rates: '2% annual fee · 0.3% purchase fee · 700 USDC vesting to owners',
+		flows: '1,250 USDC annual fees accrued · 960 USDC purchase fees, 900 USDC to owners · 1,100 USDC and 12 REP claimed · 25 USDC and 0 REP burned unassigned',
+	})
+	// Without a fee read the rates are not guessed; the event totals remain.
+	expect(feeEconomicsSummary({ ...universe, fees: undefined, fee_read_error: 'execution reverted' }).rates).toBe('Rates unavailable')
+	// Totals that have no source are stated as unavailable, never as zero.
+	expect(feeEconomicsSummary({ ...universe, accrued_atto_eth: null, earnings_funded_atto_eth: undefined }).flows).toBe('Unavailable annual fees accrued · 960 USDC purchase fees, Unavailable to owners · 1,100 USDC and 12 REP claimed · 25 USDC and 0 REP burned unassigned')
+	const stream = { collateral: usdc, rate_atto_eth_per_second: '203', rate_atto_eth_per_year: '6400000000', end_timestamp: '1893456000' }
+	expect(questionFeeStreamSummary(stream, 1_800_000_000n)).toBe('6,400 USDC per year · ends 2030-01-01 00:00:00 UTC')
+	// At or after its end the stream no longer accrues, although its last rate is non-zero.
+	expect(questionFeeStreamSummary(stream, 1_893_456_000n)).toBe('Ended 2030-01-01 00:00:00 UTC · was 6,400 USDC per year')
+	expect(questionFeeStreamSummary(stream, undefined)).toBe('6,400 USDC per year · ends 2030-01-01 00:00:00 UTC')
+	expect(questionFeeStreamSummary({ collateral: usdc, rate_atto_eth_per_second: '0', rate_atto_eth_per_year: '0', end_timestamp: '0' }, 1n)).toBe('No fee stream')
 })
 
 test('capital position routes parse, canonicalize and keep their snapshot block', () => {

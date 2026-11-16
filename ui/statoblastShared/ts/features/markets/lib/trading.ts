@@ -11,7 +11,7 @@ import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
 import { previewLinearFeeCheckpoint, type LinearFeeState } from '@zoltar/statoblast-shared/statoblast/retentionRate'
 import { isValidScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import type { DeploymentStatus, ReportingOutcomeKey, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { TradingShareBalances } from '../../../types/contracts.js'
+import type { ShareMigrationTarget, ShareMigrationTargetsState, TradingShareBalances } from '../../../types/contracts.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { ETH_GAS_RESERVE_ATTO_ETH, getSpendableEthBalance } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
 
@@ -142,10 +142,71 @@ function areShareMigrationTargetOutcomeIndexesValid(tradingForkUniverse: ZoltarU
 	return targetOutcomeIndexes.every(outcomeIndex => availableOutcomeIndexSet.has(outcomeIndex.toString()))
 }
 
-export function getDefaultShareMigrationTargetOutcomeIndexes(tradingForkUniverse: ZoltarUniverseSummary | undefined) {
+/**
+ * Why `ShareToken.migrate` would revert for these targets, or undefined when it would not. It creates a missing
+ * child pool only for a single target, and it reverts when every target already holds the whole source balance.
+ * A target absent from `shareMigrationTargets` (an undeployed scalar child) has no pool yet.
+ */
+function getShareMigrationTargetBlocker(shareMigrationTargets: readonly ShareMigrationTarget[], targetOutcomeIndexes: readonly bigint[], selectedShareOutcome: ReportingOutcomeKey, selectedOutcomeBalance: bigint) {
+	const targets = targetOutcomeIndexes.map(outcomeIndex => shareMigrationTargets.find(target => target.outcomeIndex === outcomeIndex))
+	if (targets.length > 1 && targets.some(target => target?.canonicalPool === undefined)) return tradingCopy.missingChildPoolBlocker
+	const alreadyMigrated = targets.every(target => target !== undefined && isShareMigrationTargetComplete(target, selectedShareOutcome, selectedOutcomeBalance))
+	return alreadyMigrated ? tradingCopy.formatSharesAlreadyMigratedReason(getReportingOutcomeLabel(selectedShareOutcome)) : undefined
+}
+
+function isShareMigrationTargetComplete(target: ShareMigrationTarget, selectedShareOutcome: ReportingOutcomeKey, selectedOutcomeBalance: bigint) {
+	const migratedAttoShares = getSelectedOutcomeShareBalance(target.migratedAttoShares, selectedShareOutcome)
+	return migratedAttoShares !== undefined && migratedAttoShares >= selectedOutcomeBalance
+}
+
+type ShareMigrationDefaultsInput = {
+	selectedShareOutcome: ReportingOutcomeKey
+	shareBalances: TradingShareBalances | undefined
+	shareMigrationTargets: ShareMigrationTargetsState | undefined
+	tradingForkUniverse: ZoltarUniverseSummary | undefined
+}
+
+/**
+ * The categorical child universes a migration of the selected balance can still reach, leaving out children that already
+ * hold the whole balance. Undefined before a categorical fork or while the share token's view of the children is not loaded.
+ */
+function getShareMigrationCandidates({ selectedShareOutcome, shareBalances, shareMigrationTargets, tradingForkUniverse }: ShareMigrationDefaultsInput) {
+	if (tradingForkUniverse === undefined || !tradingForkUniverse.hasForked) return undefined
+	if (tradingForkUniverse.forkQuestionDetails?.marketType === 'scalar') return undefined
+	if (shareMigrationTargets === undefined || 'unavailableReason' in shareMigrationTargets) return undefined
+	const selectedOutcomeBalance = getSelectedOutcomeShareBalance(shareBalances, selectedShareOutcome)
+	return tradingForkUniverse.childUniverses.flatMap(child => {
+		const target = shareMigrationTargets.find(candidate => candidate.outcomeIndex === child.outcomeIndex)
+		if (target !== undefined && selectedOutcomeBalance !== undefined && selectedOutcomeBalance > 0n && isShareMigrationTargetComplete(target, selectedShareOutcome, selectedOutcomeBalance)) return []
+		return [{ hasPool: target?.canonicalPool !== undefined, outcomeIndex: child.outcomeIndex }]
+	})
+}
+
+/**
+ * The child universes a categorical migration starts with, and what "Select all" restores. Once the share token's view of
+ * the children is loaded, it leaves out children that already hold the whole selected balance and, because a batch with a
+ * missing child pool reverts, keeps only children with pools whenever more than one candidate remains; with no pooled
+ * candidate it selects nothing, so the user picks a single child, whose pool the migration creates.
+ */
+export function getDefaultShareMigrationTargetOutcomeIndexes(input: ShareMigrationDefaultsInput) {
+	const { tradingForkUniverse } = input
 	if (tradingForkUniverse === undefined || !tradingForkUniverse.hasForked) return ''
 	if (tradingForkUniverse.forkQuestionDetails?.marketType === 'scalar') return ''
-	return tradingForkUniverse.childUniverses.map(child => child.outcomeIndex.toString()).join(', ')
+	const candidates = getShareMigrationCandidates(input)
+	if (candidates === undefined) return tradingForkUniverse.childUniverses.map(child => child.outcomeIndex).join(', ')
+	const selectable = candidates.length > 1 ? candidates.filter(candidate => candidate.hasPool) : candidates
+	return selectable.map(candidate => candidate.outcomeIndex.toString()).join(', ')
+}
+
+/** Why the default selection is empty for a held balance: every child already holds it, or several children remain and none has a pool. */
+function getEmptyShareMigrationDefaultReason(input: ShareMigrationDefaultsInput) {
+	const selectedOutcomeBalance = getSelectedOutcomeShareBalance(input.shareBalances, input.selectedShareOutcome)
+	if (selectedOutcomeBalance === undefined || selectedOutcomeBalance === 0n || input.tradingForkUniverse?.childUniverses.length === 0) return undefined
+	const candidates = getShareMigrationCandidates(input)
+	if (candidates === undefined) return undefined
+	if (candidates.length === 0) return tradingCopy.formatSharesMigratedIntoEveryChildReason(getReportingOutcomeLabel(input.selectedShareOutcome))
+	if (candidates.length > 1 && candidates.every(candidate => !candidate.hasPool)) return tradingCopy.noChildPoolForBatchMigration
+	return undefined
 }
 
 export function isTradingSystemDeployed(deploymentStatuses: DeploymentStatus[]) {
@@ -262,6 +323,7 @@ export function getTradingMigrateSharesGuardMessage({
 	loadingTradingDetails,
 	selectedShareOutcome,
 	shareBalances,
+	shareMigrationTargets,
 	targetOutcomeIndexesInput,
 	tradingForkUniverse,
 }: {
@@ -272,6 +334,7 @@ export function getTradingMigrateSharesGuardMessage({
 	loadingTradingDetails: boolean
 	selectedShareOutcome: ReportingOutcomeKey
 	shareBalances: TradingShareBalances | undefined
+	shareMigrationTargets: ShareMigrationTargetsState | undefined
 	targetOutcomeIndexesInput: string
 	tradingForkUniverse: ZoltarUniverseSummary | undefined
 }) {
@@ -283,7 +346,11 @@ export function getTradingMigrateSharesGuardMessage({
 	if (!tradingForkUniverse.hasForked) return tradingCopy.shareMigrationRequiresFork
 
 	const targetOutcomeIndexes = tryParseBigIntListInput(targetOutcomeIndexesInput)
-	if (targetOutcomeIndexes === undefined) return targetOutcomeIndexesInput.trim() === '' ? 'Select at least one target child universe.' : 'Select valid target child universes.'
+	if (targetOutcomeIndexes === undefined) {
+		if (targetOutcomeIndexesInput.trim() !== '') return 'Select valid target child universes.'
+		if (loadingTradingDetails) return 'Select at least one target child universe.'
+		return getEmptyShareMigrationDefaultReason({ selectedShareOutcome, shareBalances, shareMigrationTargets, tradingForkUniverse }) ?? 'Select at least one target child universe.'
+	}
 	if (new Set(targetOutcomeIndexes.map(outcomeIndex => outcomeIndex.toString())).size !== targetOutcomeIndexes.length) return 'Select each target child universe only once.'
 
 	if (!areShareMigrationTargetOutcomeIndexesValid(tradingForkUniverse, targetOutcomeIndexes)) return 'Select valid target child universes.'
@@ -292,7 +359,9 @@ export function getTradingMigrateSharesGuardMessage({
 	const selectedOutcomeBalance = getSelectedOutcomeShareBalance(shareBalances, selectedShareOutcome)
 	if (selectedOutcomeBalance === undefined) return 'Loading wallet share balances…'
 	if (selectedOutcomeBalance === 0n) return `No ${getReportingOutcomeLabel(selectedShareOutcome)} shares available to migrate.`
-	return undefined
+	if (shareMigrationTargets === undefined) return tradingCopy.loadingShareMigrationTargetPools
+	if ('unavailableReason' in shareMigrationTargets) return shareMigrationTargets.unavailableReason
+	return getShareMigrationTargetBlocker(shareMigrationTargets, targetOutcomeIndexes, selectedShareOutcome, selectedOutcomeBalance)
 }
 
 /** Without `questionOutcome` only the pool and wallet are checked; with it, the pool must be resolved and the wallet must hold winning shares. */

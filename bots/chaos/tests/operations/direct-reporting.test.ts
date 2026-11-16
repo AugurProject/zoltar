@@ -35,7 +35,7 @@ test('wallet reporting needs no vault registration and preserves approval cleanu
 
 test('resolved wallet reporter claims are available without a vault slot', () => {
 	const snapshot = snapshotFixture()
-	const options = planningOptionsFixture({ immutableTopologyCapacity: { maxPools: 16, maxUniverses: 16, maxVaultsPerPool: 1, maxStagedOperationsPerPool: 16, maxQuestions: 16, maximumAggregateItems: 100 } })
+	const options = planningOptionsFixture({ immutableTopologyCapacity: { maxPools: 16, maxUniverses: 16, maxVaultsPerPool: 1, maxQuestions: 16, maximumAggregateItems: 100 } })
 	const pool = snapshot.pools[0]
 	if (pool === undefined) throw new Error('Missing question fixture')
 	pool.questionOutcome = 1

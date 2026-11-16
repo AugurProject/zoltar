@@ -113,3 +113,28 @@ browserTest(
 	},
 	30_000,
 )
+
+for (const viewport of qaViewports)
+	browserTest(
+		`risk status and the overview show each universe's fee economics at ${viewport.width}x${viewport.height}`,
+		async () => {
+			await withBrowserPage(`${origin}/operations/risk?demo=1&chainId=1`, viewport, async ({ evaluate, waitFor }) => {
+				await waitFor(`${panel('Fee economics')} !== undefined`)
+				const fees = await evaluate(`${panel('Fee economics')}.textContent`)
+				expect(fees).toContain('2% annual fee · 0.3% purchase fee · 700 USDC vesting to owners')
+				expect(fees).toContain('1,250 USDC annual fees accrued · 960 USDC purchase fees, 900 USDC to owners · 1,100 USDC and 12 REP claimed · 25 USDC and 0 REP burned unassigned')
+				const streams = await evaluate(`${panel('Question fee streams')}.textContent`)
+				expect(streams).toContain('6,400 USDC per year · ends 2030-01-01 00:00:00 UTC · universe 0')
+				expect(streams).toContain('No fee stream')
+				expect(streams).toContain('Ended 2024-01-01 00:00:00 UTC · was 3,000 USDC per year')
+				expect(streams).toContain('Latest 25 changes')
+				expect(await evaluate(noOverflow)).toBe(true)
+			})
+			await withBrowserPage(`${origin}/operations?demo=1&chainId=1`, viewport, async ({ evaluate, waitFor }) => {
+				await waitFor(`${panel('Fee economics')} !== undefined`)
+				expect(await evaluate(`${panel('Fee economics')}.textContent`)).toContain('1,250 USDC annual fees accrued')
+				expect(await evaluate(noOverflow)).toBe(true)
+			})
+		},
+		30_000,
+	)

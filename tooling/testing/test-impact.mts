@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import { getChangedFileEntries, type ChangedFileEntry } from '../repo/changed-files.mts'
+import { documentationConsumerMatches, documentationConsumers } from '../repo/documentation-consumers.ts'
 import { mergeBaseWithMain, runGit } from '../repo/git.mts'
 import { sharedPackages } from '../repo/sharedPackages.ts'
 import { walkFiles } from '../repo/walk.mts'
@@ -54,6 +55,9 @@ const SCREENSHOT_RULES: readonly TestImpactRule[] = screenshotAppIds().map(appId
 	matches: filePath => isScreenshotSourcePath(appId, filePath),
 }))
 
+// Documentation read or executed by tests or checks; CI scope classification selects the same consumers from this table.
+const DOCUMENTATION_CONSUMER_RULES: readonly TestImpactRule[] = documentationConsumers.flatMap(consumer => [...groupedTestCommands(consumer.tests ?? []), ...(consumer.checks ?? [])].map(command => ({ command, reason: consumer.reason, matches: (filePath: string) => documentationConsumerMatches(consumer, filePath) })))
+
 const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 	...SCREENSHOT_RULES,
 	{
@@ -62,7 +66,7 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 		matches: filePath => filePath === 'tooling/contracts/prettier-solidity-batch.mjs',
 	},
 	{
-		command: 'bun ./tooling/testing/bun-test.mts tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts tooling/testing/test-impact.test.ts',
+		command: 'bun ./tooling/testing/bun-test.mts tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts tooling/testing/run-bun-test-process.test.ts tooling/testing/test-timeout.test.ts tooling/testing/test-impact.test.ts',
 		reason: 'root test discovery, execution, timing, or impact selection changed',
 		matches: filePath => TEST_INFRASTRUCTURE_PATHS.has(filePath),
 	},
@@ -82,11 +86,7 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 		reason: 'CI or coverage workflow wiring changed',
 		matches: filePath => filePath.startsWith('workflow/') || filePath.startsWith('.github/workflows/') || filePath.startsWith('.github/actions/'),
 	},
-	{
-		command: 'bun ./tooling/testing/bun-test.mts tooling/ui/ui-split-workflows.test.ts',
-		reason: 'developer documentation asserted by the UI split workflow test changed',
-		matches: filePath => filePath === 'README.md' || filePath === 'testnetwork/README.md' || filePath === 'docs/how-to/trading-set-up-development.html',
-	},
+	...DOCUMENTATION_CONSUMER_RULES,
 	{
 		command: 'bun run test:browser:smoke',
 		reason: 'production build or browser smoke behavior changed',

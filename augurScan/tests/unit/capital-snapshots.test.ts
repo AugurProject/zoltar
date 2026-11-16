@@ -12,7 +12,19 @@ const token = getAddress('0x5555555555555555555555555555555555555555')
 const owner = getAddress('0x6666666666666666666666666666666666666666')
 const other = getAddress('0x7777777777777777777777777777777777777777')
 const zoltar = getAddress('0x8888888888888888888888888888888888888888')
-const kinds: Readonly<Record<string, string>> = { [ledger]: 'securityPoolCapitalLedger', [index]: 'securityPoolCommitmentIndex', [portfolio]: 'securityPoolPortfolio', [zoltar]: 'zoltar' }
+const streams = getAddress('0x9999999999999999999999999999999999999999')
+const settlement = getAddress('0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa')
+const book = getAddress('0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB')
+const services = getAddress('0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC')
+const kinds: Readonly<Record<string, string>> = {
+	[ledger]: 'securityPoolCapitalLedger',
+	[index]: 'securityPoolCommitmentIndex',
+	[portfolio]: 'securityPoolPortfolio',
+	[zoltar]: 'zoltar',
+	[streams]: 'securityPoolCapitalFeeStreams',
+	[settlement]: 'securityPoolPortfolioSettlement',
+	[book]: 'securityPoolSettlementBook',
+}
 
 type Outputs = Readonly<Record<string, readonly unknown[] | ((args: readonly unknown[]) => readonly unknown[])>>
 const ledgerOutputs: Outputs = {
@@ -42,6 +54,20 @@ const ledgerOutputs: Outputs = {
 	ownerCollateral: [520n, 10n, 30n],
 	ownerConservativePrice: [215n * 10n ** 18n],
 	auctionCohort: [zeroAddress, 0n, 0n, 0n, 0n],
+	annualFeeBps: [200n],
+	purchaseFeeBps: [30n],
+	feeStreams: [streams],
+	settlement: [settlement],
+	services: [services],
+	outstandingEth: [700n],
+	outstandingRep: [80n],
+	deferredEth: [3n],
+	deferredRep: [0n],
+	releasedThrough: [1_700_000_100],
+	rewardDuration: [604_800],
+	ledger: [book],
+	bookIds: [4n],
+	books: [5_000n, 4_900n, 60n, 0n, 0n, 0n, 1_700_000_000, false, 0n, 0n, 0n, true, 0, 0, 0n, 0n],
 	liquidationStarted: [1_700_000_000],
 	requiredRep: [400n],
 	accountOf: args => [{ owner: args[0] === 7n ? owner : other, batch: 0n, rep: 500n, commitment: 10n, maxHealthyPrice: 180n * 10n ** 18n, releasedRep: 0n, ethFees: 1n, repFees: 2n, remainingCommitment: 0n }],
@@ -92,8 +118,46 @@ test('a capital ledger snapshot reads its price, totals, feed and last position 
 		frozenBackingAttoRep: '0',
 		frozenCommitmentAttoEth: '0',
 		lastPositionId: '9',
+		fees: {
+			annualFeeBps: '200',
+			purchaseFeeBps: '30',
+			feeStreams: streams.toLowerCase(),
+			services: services.toLowerCase(),
+			vestingOutstandingAttoEth: '700',
+			vestingOutstandingAttoRep: '80',
+			deferredAttoEth: '3',
+			deferredAttoRep: '0',
+			vestingReleasedThrough: '1700000100',
+			vestingDurationSeconds: '604800',
+			settlementBook: book.toLowerCase(),
+			bookId: '4',
+			bookCashAttoEth: '5000',
+			bookFeeCashAttoEth: '60',
+			bookFeesEnabled: true,
+		},
 		collateral: { address: token.toLowerCase(), symbol: 'USDC', decimals: 6 },
 	})
+})
+
+test('fee reads are optional beside the ledger state and skip an unregistered book', async () => {
+	const sample = async (overrides: Outputs) => (await sampleEntityStateWithRead({ entityType: 'capital-ledger', entityIdentity: ledger.toLowerCase(), address: ledger }, reader(overrides))).readResult
+	// A universe without a settlement book has id 0, which the book contract rejects; it is not read.
+	const unregistered = await sample({
+		bookIds: [0n],
+		books: () => {
+			throw new Error('Unknown settlement book')
+		},
+	})
+	expect(unregistered?.['fees']).toMatchObject({ bookId: '0', annualFeeBps: '200' })
+	expect(unregistered?.['fees']).not.toHaveProperty('bookCashAttoEth')
+	// A failed fee read leaves the ledger's price and totals in place and records the reason.
+	const failed = await sample({
+		outstandingEth: () => {
+			throw new Error('fee streams unavailable')
+		},
+	})
+	expect(failed).toMatchObject({ commitmentAttoEth: '40', feeReadError: 'fee streams unavailable' })
+	expect(failed).not.toHaveProperty('fees')
 })
 
 test('a capital position snapshot reads the permanent owner of one id', async () => {

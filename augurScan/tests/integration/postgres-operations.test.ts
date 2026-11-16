@@ -138,7 +138,8 @@ const expectRecentTakeovers = async ({ database, operationsChainId, oracle }: Op
 	expect((await api(`/api/v1/state/capital/${operationsChainId}/${oracle}/${address}`)).status).toBe(404)
 	expect((await api(`/api/v1/state/capital/${operationsChainId}/${oracle}`)).status).toBe(400)
 	expect(overview.data.totals).not.toHaveProperty('vaults')
-	expect(overview.data).not.toHaveProperty('feeEconomics')
+	// The fixture's emitter is not a registered capital ledger, so no universe has fee economics.
+	expect(overview.data['feeEconomics']).toEqual([])
 	const vaultRiskResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}`), database.sql)
 	expect(vaultRiskResponse?.status).toBe(400)
 }
