@@ -13,7 +13,7 @@ const PROFILE_INDEPENDENT_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Rec
 	escalationGameCreationCodePartOne: '0x47b7df45744196388360a847f5bae40b39c25ceeea5af62f009ffb59b5c86cd3',
 	escalationGameCreationCodePartTwo: '0x4353b6da3ced3961cfdfb922ca5498413b337e55bfa8341d5e31d4b38d8f0697',
 	escalationGameProofVerifier: '0xae36c0b208871ec2ab53bbcac4fd1ca7d2c39e1a406889adcd12545127b0d2a3',
-	oracleReportDelegate: '0xfe9632a17fb2292d3e7b5cc7b1060e0a4b06a12c5ba3a9e13fba15335d3f4092',
+	oracleReportDelegate: '0x501edaed1a7f5e323df3b193bfc494b495c390fe3e6013fd5e57dcb938415396',
 	priceCoordinatorCreationCodeFirstChunk: '0x836ab6115d2e1b5beff05c885424cd37dacc7935236223d91cb33b969e713f28',
 	priceCoordinatorCreationCodeSecondChunk: '0xdaec1c3423b63ceeb4fb43f55ffdfd4695f7ba41efc6fb3e2b2e96aad70c94d7',
 	securityPoolAuctionCreationCodeFirstChunk: '0xa4d131b6fd2dc31538ca28ee1f9fe758442b771fa8696331e5c76e5f2dd95748',
@@ -34,33 +34,33 @@ const PROFILE_INDEPENDENT_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Rec
 export const EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Record<BootstrapDescendantHashProfile, Readonly<Record<string, Hash>>>> = {
 	sepolia: {
 		...PROFILE_INDEPENDENT_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES,
-		securityPoolDeployer: '0x21674cbd21a6973ff2ecf5a2a9b41c0e54d7adffe0949cf41afb596537126c32',
-		securityPoolDeploymentWorker: '0xedab3d188818b99f1e3d24c89db5f5d58b4aeb09e15e7b25a65f24cd62a9b067',
+		securityPoolDeployer: '0x54a66f9a8d68dc577074fc1c02080c63d25ab5c8a1628ac7cd1ea0790a8e694b',
+		securityPoolDeploymentWorker: '0x3282bc06ce284a9ed95b10dd287d605943f528f9d11253af148e2f9276ff3a66',
 	},
 	deterministic: {
 		...PROFILE_INDEPENDENT_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES,
-		securityPoolDeployer: '0xa537364152312b4618c80d4b0b7543d520234feb73768a3b6b094e5f90a263b4',
-		securityPoolDeploymentWorker: '0x539f6e36b836a8b0deb99caca13197a1245054a96c13fc30f8d02463b3d310b4',
+		securityPoolDeployer: '0x821e470915d7d4441100c179ca6a6cfca11269f5e3588b56c3c43ed9b59ef8f7',
+		securityPoolDeploymentWorker: '0xb56b92cda8c5258f4af7e1543f321c69128256b901d871648245e23e7af19409',
 	},
 	mainnet: {
 		...PROFILE_INDEPENDENT_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES,
-		securityPoolDeployer: '0x0d8f13a228ce314ad12228233c36d8d56aa94d2d6766f73c29eec81fca745cec',
-		securityPoolDeploymentWorker: '0x5ff95204acf382686fd479c05bc395c1a240921dbf1326e0c5240ad3368c9169',
+		securityPoolDeployer: '0xdc28343ac619de7e0ba705b47e8fc28df8083bd7a7d6073e13da58eaea17ee84',
+		securityPoolDeploymentWorker: '0x34bb2c885877edac6fde729a7b67db62178bf7655f4df853f8bb8aadb1ed9481',
 	},
 }
 
 // Only descendants that embed a selected Zoltar address differ between the two genesis deployments.
 export const EXPECTED_NO_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Record<BootstrapDescendantHashProfile, Readonly<Record<string, Hash>>>> = {
 	sepolia: {
-		securityPoolDeployer: '0x95ffa310a03649569f8af847d54d99ac0f1b33e56b8e8550c4947cf66b3e1ef3',
-		securityPoolDeploymentWorker: '0x67045f6df2d056c8e6fa753a780d53fdb227a55e3bcb56319cf1fc1eadd03130',
+		securityPoolDeployer: '0x5c107af77fb5273be946d322269dfd61d00464dcf5cf202c8935aef46caa7f05',
+		securityPoolDeploymentWorker: '0x4d6f6aa6b8f5af7bfc05ff2aa1016f4b5ecbfcebc51227dd4147b0af14ce2169',
 	},
 	deterministic: {
-		securityPoolDeployer: '0xaad20e407be1b77af5d35f024e4a4b58fd0e79356f93939c0f65b174ef989631',
-		securityPoolDeploymentWorker: '0x5bc4e0636d0e87ce4390737095bc61142077d5649d27aab338c856c998bf1980',
+		securityPoolDeployer: '0xa2777bd94f843851991e1b70e000d970c31ea9a63b093a669d5869aabadf66fd',
+		securityPoolDeploymentWorker: '0x996c7c50af3ff69deb47c4b6352797bc424b7b60927dbae4f7c90985a62c6bc2',
 	},
 	mainnet: {
-		securityPoolDeployer: '0x36e2d25699b3b5bab76ef5ecccfcddadea02254dae78450415d978d5c850588e',
-		securityPoolDeploymentWorker: '0xb3d46ed296de98b50b107471ab644d2345a6c88313ddc4a60dc8c1b66e9d594e',
+		securityPoolDeployer: '0x993972d950db8605575edb6951d9dccb870babb93a047522d0da3877b423b255',
+		securityPoolDeploymentWorker: '0xbd434ac6257b8b58c491115331fd20580b8b687a3681609d9f62bcd67bfab640',
 	},
 }

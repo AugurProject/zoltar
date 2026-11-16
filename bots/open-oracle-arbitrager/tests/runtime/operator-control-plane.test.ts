@@ -164,12 +164,12 @@ test('focused settlement, risk-limit, and market-source forms persist their sect
 		assetAddress: '0x0000000000000000000000000000000000000001',
 		assetChainId: 1,
 		minimumSourceCount: 1,
-		sources: [{ ethMarket: 'ETH/USDT', exchangeId: 'binance', repMarket: 'REP/USDT' }],
+		sources: [{ ethMarket: 'ETH/USDC', exchangeId: 'binance', repMarket: 'REP/USDC' }],
 	})
 	expect(markets.status, await markets.clone().text()).toBe(200)
 	const marketBody = (await markets.json()) as { centralizedMarkets: Record<string, unknown> }
 	expect(marketBody.centralizedMarkets['minimumSourceCount']).toBe(1)
-	expect(marketBody.centralizedMarkets['sources']).toEqual([{ ethMarket: 'ETH/USDT', exchangeId: 'binance', repMarket: 'REP/USDT' }])
+	expect(marketBody.centralizedMarkets['sources']).toEqual([{ ethMarket: 'ETH/USDC', exchangeId: 'binance', repMarket: 'REP/USDC' }])
 	expect(marketBody.centralizedMarkets).not.toHaveProperty('assetAddress')
 	expect(pending.centralizedMarkets?.assetChainId).toBe(11_155_111)
 	expect(pending.centralizedMarkets?.sources.map(source => source.exchangeId)).toEqual(['binance'])

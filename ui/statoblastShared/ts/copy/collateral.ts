@@ -3,7 +3,6 @@ export const token = 'token'
 export const selector = 'Collateral token'
 export const weth = 'WETH'
 export const usdc = 'USDC'
-export const usdt = 'USDT'
 export const wallet = 'Wallet collateral'
 /** Why a collateral-funded action is blocked. Statoblast and Trading show the same reason for the same funding state. */
 export const fundingLoading = 'Loading collateral balance and approval.'

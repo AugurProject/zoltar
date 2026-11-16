@@ -132,7 +132,6 @@ function createTradingSectionProps(overrides: Partial<TradingSectionProps> = {})
 			loading: false,
 			error: undefined,
 			pending: false,
-			resetting: false,
 			approve: async () => undefined,
 		},
 

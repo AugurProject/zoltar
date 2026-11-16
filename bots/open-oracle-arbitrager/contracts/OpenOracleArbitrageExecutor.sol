@@ -522,7 +522,6 @@ contract OpenOracleArbitrageExecutor is OpenOracleV4Hedge {
 	}
 
 	function _approveExact(IERC20 token, address spender, uint256 amount) private {
-		if (token.allowance(address(this), spender) != 0) token.safeApprove(spender, 0);
-		if (amount != 0) token.safeApprove(spender, amount);
+		if (token.allowance(address(this), spender) != amount) token.safeApprove(spender, amount);
 	}
 }

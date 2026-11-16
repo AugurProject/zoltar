@@ -37,10 +37,9 @@ describe('portfolio report price check', () => {
 	})
 })
 
-for (const symbol of ['USDC', 'USDT'])
-	test(`${symbol} warnings use six-decimal collateral price precision and the actual token name`, () => {
-		const precision = 10n ** 30n
-		const collateral = { symbol, decimals: 6 }
-		expect(getPortfolioPriceWarning(precision / 300n, 300n * precision, collateral)?.replaceAll('\u00a0', ' ')).toBe(`This looks inverted (${symbol} per REP). Enter REP per ${symbol}; the last accepted price is 300.00 REP per ${symbol}.`)
-		expect(getPortfolioPriceWarning(3000n * precision, 300n * precision, collateral)?.replaceAll('\u00a0', ' ')).toBe(`More than double the last accepted price of 300.00 REP per ${symbol}. Check the price before sending.`)
-	})
+test('USDC warnings use six-decimal collateral price precision and the actual token name', () => {
+	const precision = 10n ** 30n
+	const collateral = { symbol: 'USDC', decimals: 6 }
+	expect(getPortfolioPriceWarning(precision / 300n, 300n * precision, collateral)?.replaceAll('\u00a0', ' ')).toBe('This looks inverted (USDC per REP). Enter REP per USDC; the last accepted price is 300.00 REP per USDC.')
+	expect(getPortfolioPriceWarning(3000n * precision, 300n * precision, collateral)?.replaceAll('\u00a0', ' ')).toBe('More than double the last accepted price of 300.00 REP per USDC. Check the price before sending.')
+})

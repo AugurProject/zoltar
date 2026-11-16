@@ -41,6 +41,6 @@ export const contractPagesDirectory = 'docs/reference/contracts'
 export function contractPageOutputPath(contractName: string): string {
 	return `${contractPagesDirectory}/${contractName.toLowerCase()}.html`
 }
-export const expectedProductionSoliditySourceFingerprint = '656dc87deb88ba4b9212c1cfce5c8901b74f173145808e94f4a31679257420f5'
+export const expectedProductionSoliditySourceFingerprint = '583e8962f840ee00088f1a143e0afb80c3f31a51b96ac211e02d9f90e5fee480'
 
 export const contractReferences: ContractReference[] = [...coreContractReferences, securityPoolContractReference, ...forkEscalationContractReferences, ...oracleMarketContractReferences]
