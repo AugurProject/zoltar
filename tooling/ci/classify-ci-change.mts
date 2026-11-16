@@ -2,6 +2,7 @@ import { appendFileSync } from 'node:fs'
 import * as process from 'node:process'
 import { getCommittedChangedPaths } from '../repo/changed-files.mts'
 import { runGit } from '../repo/git.mts'
+import { documentationConsumerMatches, documentationConsumers } from '../repo/documentation-consumers.ts'
 import { affectedProjects, ciScopes as registeredCiScopes, componentProjects, type Project, projectForPath, projects, taskInputMatches, topologicallySortedProjects } from '../repo/projects.ts'
 
 export const ciScopes = registeredCiScopes()
@@ -34,15 +35,6 @@ const ordered = (scopes: ReadonlySet<CiScope>): CiScope[] => ciScopes.filter(sco
 
 // Canonical deployment addresses are imported by bots, augurScan builds and UI packaging.
 const isDeploymentAddressData = (filePath: string) => /^docs\/[a-z-]+-deployment-addresses\.json$/.test(filePath)
-// Documentation that code or tests execute or read. Changes run these consumers alongside the documentation checks.
-const documentationConsumers: readonly { readonly projectId: string; readonly matches: (filePath: string) => boolean }[] = [
-	// Root tooling tests and typechecking execute the documentation runtime, its compiled bundles and docs data, and read the setup READMEs.
-	{ projectId: 'repository', matches: filePath => filePath.startsWith('docs/runtime/') || filePath.startsWith('docs/assets/js/') || (filePath.startsWith('docs/') && filePath.endsWith('.json')) || filePath === 'README.md' || filePath === 'testnetwork/README.md' },
-	// augurScan packaging tests assert its README.
-	{ projectId: 'augur-scan', matches: filePath => filePath === 'augurScan/README.md' },
-	// The arbitrager dashboard serves its reference documents and its check validates them.
-	{ projectId: 'arbitrager', matches: filePath => /^bots\/open-oracle-arbitrager\/[^/]+\.md$/.test(filePath) },
-]
 for (const consumer of documentationConsumers) if (!projects.some(project => project.id === consumer.projectId)) throw new Error(`Documentation consumer ${consumer.projectId} is not a registered project`)
 
 export function isDocumentationChange(filePath: string) {
@@ -52,7 +44,7 @@ export function isDocumentationChange(filePath: string) {
 
 /** Projects, with their dependents, whose code or tests execute or read the changed documentation paths. */
 export function documentationConsumerProjects(filePaths: readonly string[]): Project[] {
-	const ids = new Set(filePaths.flatMap(filePath => (isDocumentationChange(filePath) ? documentationConsumers.filter(consumer => consumer.matches(filePath)).map(consumer => consumer.projectId) : [])))
+	const ids = new Set(filePaths.flatMap(filePath => (isDocumentationChange(filePath) ? documentationConsumers.filter(consumer => documentationConsumerMatches(consumer, filePath)).map(consumer => consumer.projectId) : [])))
 	let changed = true
 	while (changed) {
 		changed = false

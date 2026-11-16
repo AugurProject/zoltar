@@ -12,7 +12,11 @@ const routingCases: readonly (readonly [readonly string[], readonly CiScope[]])[
 	[['docs/how-to/trading-deploy-contracts.html', 'docs/assets/css/docs.css', 'docs/data/notes.md'], ['docs']],
 	[['ui/AGENTS.md', 'ui/trading/AGENTS.md'], ['docs']],
 	[['solidity/contracts/README.md', 'docs/how-to/trading-deploy-contracts.html'], ['docs']],
-	[['bots/README.md', 'bots/chaos/README.md', 'bots/liquidator/README.md', 'bots/open-oracle-arbitrager/docs/notes.md'], ['docs']],
+	[['bots/chaos/README.md', 'bots/liquidator/README.md', 'bots/open-oracle-arbitrager/docs/notes.md'], ['docs']],
+	// Documentation data read only by the documentation checks stays in the documentation scope.
+	[['docs/manifest.json'], ['docs']],
+	[['docs/assets/screenshots/fingerprints.json'], ['docs']],
+	[['docs/data/open-oracle-coordinator.json'], ['docs']],
 	[['augurScan/src/ARCHITECTURE.md'], ['docs']],
 	// Documentation that code or tests execute or read selects its consumers as well as the documentation checks.
 	[
@@ -22,12 +26,15 @@ const routingCases: readonly (readonly [readonly string[], readonly CiScope[]])[
 	[['docs/runtime/docsShell.ts'], ['core', 'docs']],
 	[['docs/assets/js/responsiveDocs.js'], ['core', 'docs']],
 	[['docs/tsconfig.json'], ['core', 'docs']],
-	[['docs/manifest.json'], ['core', 'docs']],
-	[['docs/data/open-oracle-coordinator.json'], ['core', 'docs']],
+	[['docs/charts/diagramControl.ts'], ['core', 'docs']],
+	[['docs/reference/invariants.html'], ['core', 'docs']],
+	[['docs/explanation/escalation-game.html'], ['core', 'docs']],
+	[['docs/how-to/trading-set-up-development.html'], ['core', 'docs']],
 	[['README.md'], ['core', 'docs']],
 	[['testnetwork/README.md'], ['core', 'docs']],
 	[['augurScan/README.md'], ['augur-scan', 'docs']],
 	[['bots/open-oracle-arbitrager/README.md'], ['arbitrager', 'docs']],
+	[['bots/README.md'], ['arbitrager', 'docs']],
 	[
 		['bots/open-oracle-arbitrager/RECOVERY.md', 'bots/open-oracle-arbitrager/MARKETS.md'],
 		['arbitrager', 'docs'],
