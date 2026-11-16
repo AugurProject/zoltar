@@ -14,7 +14,7 @@ import type { OpportunitySnapshot } from '#state/opportunity-snapshot'
 import type { SettlementSnapshot } from '#state/settlement-store'
 import { parseExecutionRecord, type ExecutionRecord } from '#state/execution-record'
 import type { MarketPricePoint, TokenMarketSnapshot } from '#monitoring/market-monitor'
-import { archivedUtcDayGasSpentWeth, emptyPositionJournalArchive, type PositionJournalArchive, type PositionRecord } from '#state/position-store'
+import { archivedUtcDayGasSpentWeth, emptyPositionJournalArchive, terminalRealizedNetProfitEth, type PositionJournalArchive, type PositionRecord } from '#state/position-store'
 import { positionConsumesRisk, utcDayGasSpentWeth, type RiskLimits } from '#core/safety-controls'
 import { serializeCentralizedMarketEstimate, type CentralizedMarketEstimate } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { serializeMarketConsensusEstimate, type MarketConsensusEstimate } from '@zoltar/bot-shared/monitoring/market-consensus'
@@ -401,9 +401,8 @@ function positionTotals(positions: readonly PositionRecord[], archived: Position
 	let openHedgedNet = 0n
 	let realized = parseSignedDecimalEth(archived.realizedNetProfitEth)
 	for (const position of positions) {
-		if (position.status === 'closed' && position.realizedNetProfitEth !== undefined) {
-			realized += parseSignedDecimalEth(position.realizedNetProfitEth)
-		}
+		const realizedNetProfitEth = terminalRealizedNetProfitEth(position)
+		if (realizedNetProfitEth !== undefined) realized += parseSignedDecimalEth(realizedNetProfitEth)
 		// A zero entry-gas value is the durable marker for a staged entry whose
 		// receipts and executor event have not yet reached RPC quorum.
 		const awaitingLifecycleEvidence = position.lifecycleTransactionHashes.length !== 0 && !position.lifecycleReceiptRecovered

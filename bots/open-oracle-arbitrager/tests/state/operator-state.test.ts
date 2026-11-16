@@ -524,6 +524,12 @@ describe('operator execution history', () => {
 		expect(snapshot.totalRealizedNetProfitEth).toBe('0')
 	})
 
+	test('includes the gas of an expired entry that later reverted in realized P&L', () => {
+		const lateRevert = position({ capitalAtRiskWeth: '0', closedAt: new Date(1).toISOString(), lockedToken: '0', lockedWeth: '0', realizedNetProfitEth: '-0.000021', status: 'expired-not-included' })
+		const snapshot = operatorSnapshot(operatorStateFixture({ positions: [lateRevert], status: 'running' }), strategy(), submission, connectivity, fixed)
+		expect(snapshot.totalRealizedNetProfitEth).toBe('-0.000021')
+	})
+
 	test('excludes ambiguous lifecycle receipts from actual P&L while retaining manually recorded realized P&L', () => {
 		const pending = position({
 			actualEntryGasCostEth: '0.01',
