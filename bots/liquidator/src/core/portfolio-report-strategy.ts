@@ -11,6 +11,7 @@ export type PortfolioReportTakeover = { target: PortfolioTarget; plan: Portfolio
 export function portfolioReportTakeoverPlan(observation: PortfolioObservation, position: PortfolioPosition, settings: OperatorSettings, totalPrincipal: bigint, marketAllowed: boolean): { reason: string; plan?: PortfolioTakeover; plans?: PortfolioReportTakeover[] } {
 	if (settings.portfolioPolicy.maximumReportFundingAttoEth === 0n || observation.snapshot.acceptedPrice === 0n || observation.pendingOperationReport !== undefined) return { reason: 'Report sponsorship is disabled or already pending' }
 	if (observation.snapshot.priceValid && observation.snapshot.timestamp < observation.snapshot.priceValidUntil) return { reason: 'Use the existing fresh price' }
+	if (observation.snapshot.timestamp >= observation.snapshot.priceValidUntil) return { reason: 'Fresh report restarts takeover award clock' }
 	const projected = { ...observation, snapshot: { ...observation.snapshot, ownerAccount: { ...observation.snapshot.ownerAccount }, priceValid: true, priceValidUntil: observation.snapshot.timestamp + 1n } }
 	const targets = [position, ...observation.positions.filter(candidate => !samePortfolioTarget(portfolioTarget(candidate), portfolioTarget(position)))]
 	const plans: PortfolioReportTakeover[] = []

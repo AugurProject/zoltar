@@ -374,3 +374,13 @@ test('USDC buys parse collateral decimals without subtracting an ETH gas reserve
 	expect(result.insufficientReason).toBeUndefined()
 	expect(tradeTicketModel({ ...ready, amount: '1.0000001', market: { ...market, collateral } }).amountError).toBeDefined()
 })
+
+test('recovery REP blocks cash-only buys without blocking share sales', () => {
+ const recovered = { ...market, settlementRecoveryAttoRep: shares }
+ const buy = tradeTicketModel({ ...ready, market: recovered })
+ expect(buy.estimate).toBeUndefined()
+ expect(buy.availability.reason).toBe('New complete sets require recovery REP. Use portfolio purchases.')
+ const sell = tradeTicketModel({ ...ready, market: recovered, mode: 'exit', amount: '0.01' })
+ expect(sell.availability.disabled).toBe(false)
+ expect(sell.estimate?.kind).toBe('exit')
+})

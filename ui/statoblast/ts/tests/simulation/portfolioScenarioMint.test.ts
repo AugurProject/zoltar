@@ -27,6 +27,8 @@ test('portfolio simulation mints use each funded purchase quote, including fees 
 					return 10n * unit
 				case 'quoteQuestionMint':
 					return unit
+				case 'quoteMintRecoveryRep':
+					return 0n
 				case 'purchaseQuote': {
 					expect(parameters.args).toEqual([0n, BigInt(quoteIndex + 1), unit])
 					const fee = fees[quoteIndex++]

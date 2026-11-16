@@ -2,12 +2,16 @@
 pragma solidity 0.8.35;
 
 import { Collateral } from '../Collateral.sol';
+import { SecurityPoolCapitalLedger } from './SecurityPoolCapitalLedger.sol';
+import { Zoltar } from '../Zoltar.sol';
 import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 
 interface IPortfolioForkAuthority {
 	function forkController() external view returns (address);
+	function capitalLedger(uint248 universeId) external view returns (SecurityPoolCapitalLedger);
+	function zoltar() external view returns (Zoltar);
 }
 
 /// @notice Actual ERC20 custody for the portfolio's virtual question and branch settlement books.
@@ -64,6 +68,8 @@ contract SecurityPoolPortfolioSettlement {
 		return universes[universeId].recoveryToken;
 	}
 
+	event SettlementRepaired(uint248 indexed universeId, address indexed sponsor, uint256 cashAttoEth);
+	event RecoveryRepFunded(uint248 indexed universeId, uint256 indexed questionId, address indexed payer, uint256 amountAttoRep);
 	event RecoveryRepPaid(uint248 indexed universeId, uint256 indexed questionId, address indexed recipient, uint256 amountAttoRep);
 
 	constructor(address authority, IERC20 token) {
@@ -118,11 +124,26 @@ contract SecurityPoolPortfolioSettlement {
 	}
 
 	function mint(address pool, uint256 cash, uint256 minimumShares, uint48 timestamp) external onlyPortfolio nonReentrant returns (uint256 shares, Snapshot memory snapshot) {
+		return _mint(pool, msg.sender, cash, minimumShares, 0, timestamp);
+	}
+
+	function mintWithRecoveryRep(address pool, address payer, uint256 cash, uint256 minimumShares, uint256 maximumRecoveryAttoRep, uint48 timestamp) external onlyPortfolio nonReentrant returns (uint256 shares, Snapshot memory snapshot) {
+		return _mint(pool, payer, cash, minimumShares, maximumRecoveryAttoRep, timestamp);
+	}
+
+	function _mint(address pool, address payer, uint256 cash, uint256 minimumShares, uint256 maximumRecoveryAttoRep, uint48 timestamp) private returns (uint256 shares, Snapshot memory snapshot) {
 		QuestionSource memory source = _question(pool);
 		uint64 bookId = _bookId(source.universeId);
-		// Services atomically funds this custody directly from the trader before the pool callback.
+		ledger.freezeMatured(bookId, timestamp);
+		uint256 recoveryAttoRep = ledger.quoteMintRecoveryRep(bookId, source.questionId, cash);
+		require(recoveryAttoRep <= maximumRecoveryAttoRep, 'Recovery REP exceeds budget');
+		if (recoveryAttoRep != 0) {
+			Collateral.pull(universes[source.universeId].recoveryToken, payer, address(this), recoveryAttoRep);
+			emit RecoveryRepFunded(source.universeId, source.questionId, payer, recoveryAttoRep);
+		}
+		// Services atomically funds collateral before the native pool callback.
 		if (msg.sender != services) Collateral.pull(collateralToken, msg.sender, address(this), cash);
-		shares = ledger.mint(bookId, source.questionId, cash, minimumShares, timestamp);
+		shares = ledger.mintWithRecoveryRep(bookId, source.questionId, cash, minimumShares, recoveryAttoRep, timestamp);
 		snapshot = _snapshot(source, _collectFees(bookId));
 	}
 
@@ -187,7 +208,8 @@ contract SecurityPoolPortfolioSettlement {
 	function sealUniverse(uint248 universeId, uint48 timestamp) external onlyForkAuthority nonReentrant returns (uint256 cashAttoEth, uint256 units, uint256 earnedFeesAttoEth) {
 		uint64 bookId = _bookId(universeId);
 		ledger.sealForFork(bookId, timestamp);
-		(cashAttoEth, units, , , ) = ledger.totals(bookId);
+		(cashAttoEth, , , , ) = ledger.totals(bookId);
+		units = ledger.scaledUnits(bookId);
 		universes[universeId].availableForkCashAttoEth = cashAttoEth;
 		universes[universeId].availableForkRecoveryAttoRep = ledger.recoveryRep(bookId);
 		earnedFeesAttoEth = _collectFees(bookId);
@@ -253,6 +275,31 @@ contract SecurityPoolPortfolioSettlement {
 	function quoteRecoveryRep(address pool, uint256 shares) external view returns (uint256) {
 		QuestionSource memory source = _question(pool);
 		return ledger.quoteRecoveryRep(_bookId(source.universeId), source.questionId, shares);
+	}
+
+	/// @notice Restore an impaired branch by replacing its entire active cash
+	/// deficit while preserving every inherited recovery REP entitlement.
+	/// This is a donation: no shares, commitments or REP are paid to the sponsor.
+	function topUp(uint248 universeId, uint256 cashAttoEth) external {
+		require(!entered, 'Settlement reentry');
+		IPortfolioForkAuthority root = IPortfolioForkAuthority(portfolio);
+		require(root.zoltar().getForkTime(universeId) == 0, 'Settlement universe forked');
+		// Checkpoint before taking the custody lock: capital's normal callback
+		// enters this settlement to pause stale time and protect finalized claims.
+		root.capitalLedger(universeId).checkpoint();
+		_repair(universeId, cashAttoEth);
+		// The custody lock is released before capital synchronizes the repaired
+		// cash demand through its ordinary settlement callback.
+		root.capitalLedger(universeId).checkpoint();
+	}
+
+	function _repair(uint248 universeId, uint256 cashAttoEth) private nonReentrant {
+		Collateral.pull(collateralToken, msg.sender, address(this), cashAttoEth);
+		uint64 bookId = _bookId(universeId);
+		ledger.topUp(bookId, cashAttoEth);
+		(uint256 demand, , , , ) = ledger.totals(bookId);
+		IPortfolioForkAuthority(portfolio).capitalLedger(universeId).recordSettlementRepair(demand);
+		emit SettlementRepaired(universeId, msg.sender, cashAttoEth);
 	}
 
 	function quoteMint(address pool, uint256 cashAttoEth) external view returns (uint256) {

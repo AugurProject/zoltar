@@ -9,18 +9,22 @@ import type { TransactionPlanStep, TransactionRequestPreview } from '@zoltar/ui-
 const pool = getAddress('0x00000000000000000000000000000000000000a1')
 
 /** A portfolio-backed pool with ample collateral, approvals, and mint capacity, no escalation game, and the given question end. */
-function mintClient(send: Parameters<typeof createMockWriteClient>[0], currentTimestamp: bigint, questionEndDate: bigint) {
+function mintClient(send: Parameters<typeof createMockWriteClient>[0], currentTimestamp: bigint, questionEndDate: bigint, recovery = { required: 0n, balance: 10n ** 21n, allowance: 10n ** 21n }) {
 	return {
 		...asWriteClient(
 			createMockWriteClient(send, async request => {
 				if (request.functionName === 'collateralToken') return getActiveNetworkProfile().wethAddress
-				if (request.functionName === 'services') return portfolio
+				if (request.functionName === 'services' || request.functionName === 'settlement') return portfolio
+				if (request.functionName === 'recoveryTokens') return pool
+				if (request.address === pool && request.functionName === 'balanceOf') return recovery.balance
+				if (request.address === pool && request.functionName === 'allowance') return recovery.allowance
 				if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 10n ** 21n
 				if (request.functionName === 'escalationGame') return zeroAddress
 				if (request.functionName === 'universeId' || request.functionName === 'questionId') return 1n
 				if (request.functionName === 'securityPoolFactory') return pool
 				if (request.functionName === 'getSecurityPoolPortfolio') return portfolio
 				if (request.functionName === 'getPool') return pool
+				if (request.functionName === 'quoteMintRecoveryRep') return recovery.required
 				if (request.functionName === 'purchaseQuote') return [0n, 0n]
 				if (request.functionName === 'availableMintCapacity' || request.functionName === 'attoEthToAttoShares') return 10n ** 18n
 				if (request.functionName === 'questionData') return pool
@@ -68,7 +72,10 @@ test('winning-share redemption reviews ETH and REP recovery for the winning bala
 		...asWriteClient(
 			createMockWriteClient(send, async request => {
 				if (request.functionName === 'collateralToken') return getActiveNetworkProfile().wethAddress
-				if (request.functionName === 'services') return portfolio
+				if (request.functionName === 'services' || request.functionName === 'settlement') return portfolio
+				if (request.functionName === 'recoveryTokens') return pool
+				if (request.address === pool && request.functionName === 'balanceOf') return recovery.balance
+				if (request.address === pool && request.functionName === 'allowance') return recovery.allowance
 				if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 10n ** 21n
 				if (request.functionName === 'universeId') return 1n
 				if (request.functionName === 'securityPoolFactory') return pool
@@ -125,7 +132,10 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 			...asWriteClient(
 				createMockWriteClient(send, async request => {
 					if (request.functionName === 'collateralToken') return getActiveNetworkProfile().wethAddress
-					if (request.functionName === 'services') return portfolio
+					if (request.functionName === 'services' || request.functionName === 'settlement') return portfolio
+					if (request.functionName === 'recoveryTokens') return pool
+					if (request.address === pool && request.functionName === 'balanceOf') return recovery.balance
+					if (request.address === pool && request.functionName === 'allowance') return recovery.allowance
 					if (request.functionName === 'balanceOf') return walletBalance
 					if (request.functionName === 'allowance') return 10n ** 21n
 					reads.push(request.functionName)
@@ -146,6 +156,8 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 							return mode === 'child pool' ? 0n : 1n
 						case 'getQuestionEndDate':
 							return 100n
+						case 'quoteMintRecoveryRep':
+							return 0n
 						case 'purchaseQuote':
 							expect(request.args).toEqual([1n, 7n, 100n])
 							return [quoteFee, 1n]
@@ -191,3 +203,35 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 		}
 	})
 }
+
+test('a funded recovery purchase binds REP and rechecks funding before submission', async () => {
+	const recovery = { required: 5n, balance: 10n, allowance: 7n }
+	const recoveryAbi = parseAbi(['function createCompleteSetWithRecoveryRep(uint248,uint256,uint256,address,uint256,uint256,uint256)'])
+	const send = mock((request: { data?: `0x${string}` }) => {
+		if (request.data === undefined) throw new Error('Missing funded purchase calldata')
+		expect(decodeFunctionData({ abi: recoveryAbi, data: request.data }).args?.[6]).toBe(7n)
+	})
+	let steps: readonly TransactionPlanStep[] = []
+	const client = {
+		...mintClient(send, 10n, 100n, recovery),
+		onTransactionPlan: (value: readonly TransactionPlanStep[]) => {
+			steps = value
+		},
+		estimateGas: async () => 100_000n,
+	}
+	await createCompleteSetInSecurityPool(client, pool, 100n)
+	const validate = steps[0]?.validateBeforeSubmit
+	if (validate === undefined) throw new Error('Missing funded purchase validation')
+	await validate()
+	recovery.allowance = 0n
+	await expect(validate()).rejects.toThrow('Recovery REP approval required')
+	recovery.allowance = 7n
+	recovery.balance = 0n
+	await expect(validate()).rejects.toThrow('Insufficient REP')
+	recovery.balance = 10n
+	recovery.required = 6n
+	await validate()
+	recovery.required = 8n
+	await expect(validate()).rejects.toThrow('Recovery REP quote changed')
+	expect(send).toHaveBeenCalledTimes(1)
+})

@@ -48,6 +48,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		conservativePrice = Math.mulDiv(price, 10_000_000, 10_000_000 - uncertainty, Math.Rounding.Ceil);
 		liquidationPrice = Math.mulDiv(price, 10_000_000, 10_000_000 + uncertainty);
 		require(liquidationPrice != 0, 'Liquidation price rounds to zero');
+		if (!importing && block.timestamp >= priceValidUntil) commitmentIndex.restartLiquidationClock();
 		priceValidUntil = validUntil;
 		// Child reports can fund the fork auction before capital activation.
 		// Imported positions have no operating health history until imports seal.

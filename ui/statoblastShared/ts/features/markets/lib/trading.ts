@@ -73,7 +73,9 @@ export function estimateMintCheckpoint({
 		// can accrue again, bounded by the stream's remaining duration in native time.
 		const elapsed = currentTimestamp > centralCheckpointTimestamp ? currentTimestamp - centralCheckpointTimestamp : 0n
 		const remaining = linearFee.endTime > lastFeeCheckpointNativeTime ? linearFee.endTime - lastFeeCheckpointNativeTime : 0n
-		const fees = (elapsed < remaining ? elapsed : remaining) * linearFee.rateAttoEthPerSecond
+		const scale = linearFee.rateScale ?? 1n
+		if (scale <= 0n) return undefined
+		const fees = ((elapsed < remaining ? elapsed : remaining) * linearFee.rateAttoEthPerSecond) / scale
 		const estimatedRetentionFeeAttoEth = fees < settlementCollateralAttoEth ? fees : settlementCollateralAttoEth
 		return { estimatedRetentionFeeAttoEth, settlementCollateralAfterFeesAttoEth: settlementCollateralAttoEth - estimatedRetentionFeeAttoEth }
 	}

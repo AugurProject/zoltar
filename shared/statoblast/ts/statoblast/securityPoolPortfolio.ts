@@ -96,7 +96,7 @@ export {
 /** @public Explicitly bounded commitment takeovers for external keeper implementations. */
 export { buildPortfolioCapitalTakeOverRequest } from './securityPoolPortfolioCapital.js'
 export { buildPortfolioCapitalTakeOverWithBoundsRequest } from './securityPoolPortfolioCapital.js'
-export { buildPortfolioMintRequest, loadPortfolioMintQuote, type PortfolioMintQuote } from './securityPoolPortfolioMint.js'
+export { buildPortfolioMintRequest, loadPortfolioMintQuote, portfolioRecoveryMintBudget, type PortfolioMintQuote } from './securityPoolPortfolioMint.js'
 /** @public External clients can register an admitted question independently of purchasing shares. */
 export { buildPortfolioAddQuestionRequest } from './securityPoolPortfolioMint.js'
 export {

@@ -79,6 +79,7 @@ export function capitalClient(initial = capitalSnapshot()) {
 			const infrastructure = ['zoltar', 'factory', 'auctionDeployer'].includes(request.functionName) ? getInfraContractAddresses() : undefined
 			const values: Record<string, unknown> = {
 				setupStage,
+				quoteMintRecoveryRep: 0n,
 				collateralToken: snapshot.collateralToken,
 				originUniverseId: snapshot.originUniverseId,
 				universeId: snapshot.universeId,

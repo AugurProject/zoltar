@@ -125,7 +125,7 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 	}
 
 	/// @notice Closing never requires a bidder transaction. The quote is tested
-	/// at the immutable deadline, so a late closer cannot select a later price.
+	/// against the immutable deadline and its preceding day; a late closer cannot select a later price.
 	function finalize() external nonReentrant returns (SecurityPoolUniformPriceAuction.Clearing memory result) {
 		require(msg.sender == forkAuthority, 'Only collateral repair auction fork authority');
 		require(!finalized && block.timestamp >= closesAt, 'Collateral repair auction closing unavailable');
@@ -135,8 +135,9 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 			uint256 forkTime = portfolio.zoltar().getForkTime(universeId);
 			bool eligible =
 				(forkTime == 0 || forkTime > closesAt) &&
-					_fundedQuote(feed, closesAt) &&
-					feed.conservativePrice() <= openingConservativePrice;
+					_fundedClosingQuote(feed) &&
+					engine.previewFinalization(targetLots).attoRepPerLot >=
+						capital.commitmentIndex().requiredRep(lotAttoEth, feed.conservativePrice(), capital.securityMultiplierBps(), 10_000);
 			result = engine.finalize(eligible ? targetLots : 0);
 			engine.withdrawRaised(payable(forkAuthority));
 		}
@@ -181,6 +182,18 @@ contract SecurityPoolPortfolioAuction is ISecurityPoolAuctionCapital {
 		require(opened, 'Collateral repair auction has not opened');
 		require(recipient != address(0), 'Collateral repair auction refund recipient missing');
 		return engine.settleAndWithdrawRefund(bidId, msg.sender, recipient);
+	}
+
+	/// @dev Closing accepts a funded observation from the final day, avoiding a
+	/// single short freshness window that disputes can cheaply erase.
+	function _fundedClosingQuote(ICollateralRepairAuctionPriceFeed feed) private view returns (bool) {
+		uint256 observed = feed.lastSettlementTimestamp();
+		return
+			observed != 0 &&
+			observed <= closesAt &&
+			closesAt - observed <= 1 days &&
+			feed.acceptedExposureLimitAttoEth() >= portfolio.oracleExposure(universeId) &&
+			feed.acceptedRepExposureLimitAttoRep() >= inventoryAttoRep;
 	}
 
 	function _fundedQuote(ICollateralRepairAuctionPriceFeed feed, uint256 atTime) private view returns (bool) {

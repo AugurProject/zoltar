@@ -19,6 +19,10 @@ import { Constants } from '../Constants.sol';
 import { SecurityPoolCommitmentIndex } from './SecurityPoolCommitmentIndex.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
+interface ICapitalSettlementRepairRoot {
+	function settlement() external view returns (address);
+}
+
 /// @notice Exact REP custody and individually authorized underwriting.
 /// @dev One live position contains all an owner's deposited principal and
 /// commitment. Retirement never leaves a sibling position with stale health.
@@ -294,6 +298,16 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		demandAttoEth = demand;
 	}
 
+	/// @notice Account for collateral donated to restore existing claims.
+	/// The canonical settlement checkpoints old fees before receiving cash,
+	/// then supplies its actual active cash balance. No new shares are minted.
+	function recordSettlementRepair(uint256 demand) external {
+		require(msg.sender == ICapitalSettlementRepairRoot(portfolio).settlement(), 'Only canonical settlement');
+		_requireOpen();
+		require(demand >= demandAttoEth, 'Repair cannot remove demand');
+		demandAttoEth = demand;
+	}
+
 	/// @dev The callback checkpoints the ledger's cached old price before reading
 	/// the feed's new epoch and bounds; all acceptance changes are atomic.
 	function acceptPrice(uint256 price, uint48 validUntil) external onlyPortfolio {
@@ -414,7 +428,17 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		_requireFresh();
 		_checkpoint();
 		_serveRetirement(0);
-		_cure(id, 0);
+		SecurityPoolCommitmentIndex.Account memory beforeCure = commitmentIndex.accountOf(id);
+		require(beforeCure.owner != receiverOwner && beforeCure.maxHealthyPrice < liquidationPrice, 'Position does not need takeover');
+		require(commitmentIndex.liquidationStarted(id) != 0, 'Adverse observation missing');
+		require(commitment > 0 && commitment <= beforeCure.commitment, 'Invalid takeover commitment');
+		uint256 cured = _cure(id, 0);
+		// A keeper must be able to leave a successful cure in place. No assets
+		// transfer and no award is paid when nominal excess alone restores health.
+		if (cured != 0 && commitmentIndex.liquidationStarted(id) == 0) {
+			require(minimumAward == 0, 'Takeover award below minimum');
+			return 0;
+		}
 		(
 			SecurityPoolCommitmentIndex.Account memory source,
 			uint256 receiverAwardAttoRep,

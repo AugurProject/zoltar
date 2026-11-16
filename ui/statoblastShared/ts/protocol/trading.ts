@@ -1,3 +1,5 @@
+import { portfolioRecoveryMintBudget } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { loadRecoveryMintFunding } from './recoveryMintFunding.js'
 import { collateralPresentation } from './collateral.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from './securityPoolAbi.js'
@@ -116,13 +118,17 @@ export async function loadTradingCollateral(client: ReadClient, pool: Address, o
 	const identity = cachedIdentity ?? (await loadTradingFundingIdentity(client, pool))
 	const { token, services } = identity
 	const [balance, allowance] = await Promise.all([client.readContract({ address: token, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [owner] }), client.readContract({ address: token, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [owner, services] })])
-	return { ...identity, balance, allowance }
+	return { ...identity, balance, allowance, owner }
 }
 export async function quoteTradingCollateral(client: ReadClient, collateral: Awaited<ReturnType<typeof loadTradingCollateral>>, amount: bigint) {
 	const { universeId, questionId } = collateral
-	const result = await client.readContract({ address: collateral.portfolio, abi: purchaseAbi, functionName: 'purchaseQuote', args: [universeId, questionId, amount] })
+	const [result, recoveryValue] = await Promise.all([
+		client.readContract({ address: collateral.portfolio, abi: purchaseAbi, functionName: 'purchaseQuote', args: [universeId, questionId, amount] }),
+		client.readContract({ address: collateral.portfolio, abi: purchaseAbi, functionName: 'quoteMintRecoveryRep', args: [universeId, questionId, amount] }),
+	])
+	const recovery = await loadRecoveryMintFunding(client, collateral.portfolio, universeId, collateral.owner, requireBigintValue(recoveryValue, 'Recovery REP contribution'))
 	if (!Array.isArray(result) || typeof result[0] !== 'bigint') throw new Error('Invalid collateral fee quote.')
-	return { amount, maximumFee: (result[0] * 10_100n + 9_999n) / 10_000n }
+	return { amount, maximumFee: (result[0] * 10_100n + 9_999n) / 10_000n, recovery }
 }
 
 function getShareMigrationOutcomeValue(outcome: ReportingOutcomeKey) {
@@ -217,6 +223,8 @@ const purchaseAbi = parseAbi([
 	'function getPool(uint256 questionId,uint248 universeId) view returns (address)',
 	'function purchaseQuote(uint248 universeId,uint256 questionId,uint256 amount) view returns (uint256 fee,uint256 premium)',
 	'function availableMintCapacity(uint248 universeId) view returns (uint256)',
+	'function quoteMintRecoveryRep(uint248 universeId,uint256 questionId,uint256 cash) view returns(uint256)',
+	'function createCompleteSetWithRecoveryRep(uint248 universeId,uint256 questionId,uint256 mintAttoEth,address recipient,uint256 minimumShares,uint256 maximumFee,uint256 maximumRecoveryAttoRep)',
 	'function createCompleteSet(uint248 universeId,uint256 questionId,uint256 mintAttoEth,address recipient,uint256 minimumShares,uint256 maximumFee)',
 ])
 
@@ -238,25 +246,32 @@ export async function createCompleteSetInSecurityPool(client: WriteClient, secur
 	const quote = async () => {
 		const canonicalPool = await client.readContract({ abi: purchaseAbi, address: portfolio, functionName: 'getPool', args: [questionId, universeId] })
 		if (typeof canonicalPool !== 'string' || canonicalPool.toLowerCase() !== securityPoolAddress.toLowerCase()) throw new Error('Portfolio question pool is not canonical.')
-		const [quoted, capacity] = await Promise.all([client.readContract({ abi: purchaseAbi, address: portfolio, functionName: 'purchaseQuote', args: [universeId, questionId, amount] }), client.readContract({ abi: purchaseAbi, address: portfolio, functionName: 'availableMintCapacity', args: [universeId] })])
+		const [quoted, capacity, recoveryValue] = await Promise.all([
+			client.readContract({ abi: purchaseAbi, address: portfolio, functionName: 'purchaseQuote', args: [universeId, questionId, amount] }),
+			client.readContract({ abi: purchaseAbi, address: portfolio, functionName: 'availableMintCapacity', args: [universeId] }),
+			client.readContract({ abi: purchaseAbi, address: portfolio, functionName: 'quoteMintRecoveryRep', args: [universeId, questionId, amount] }),
+		])
 		if (!Array.isArray(quoted) || typeof quoted[0] !== 'bigint' || quoted.length !== 2 || typeof quoted[1] !== 'bigint') throw new Error('Invalid shared REP purchase quote.')
 		const fee = quoted[0]
 		if (typeof capacity !== 'bigint' || capacity < amount) throw new Error('Insufficient shared REP backing after queued retirement.')
 		if (typeof fee !== 'bigint' || fee < 0n) throw new Error('Invalid shared REP purchase quote.')
-		return fee
+		return { fee, recoveryAttoRep: requireBigintValue(recoveryValue, 'Recovery REP contribution') }
 	}
 	const collateral = await loadTradingCollateral(client, securityPoolAddress, client.account.address)
-	const purchaseFee = await quote()
+	const quoted = await quote()
+	const purchaseFee = quoted.fee
+	const maximumRecoveryAttoRep = portfolioRecoveryMintBudget(quoted.recoveryAttoRep)
 	const maximumFee = (purchaseFee * 10_100n + 9_999n) / 10_000n
 	const minimumShares = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'attoEthToAttoShares', args: [amount] })
+	const args = [universeId, questionId, amount, client.account.address, minimumShares, maximumFee] as const
+	const mintCall = maximumRecoveryAttoRep === 0n ? { functionName: 'createCompleteSet' as const, args } : { functionName: 'createCompleteSetWithRecoveryRep' as const, args: [...args, maximumRecoveryAttoRep] as const }
 	const callParams = {
 		address: portfolio,
 		abi: purchaseAbi,
-		functionName: 'createCompleteSet',
-		args: [universeId, questionId, amount, client.account.address, minimumShares, maximumFee],
+		...mintCall,
 		value: 0n,
 		reviewTitle: 'Buy complete sets',
-		reviewDescription: `Estimated purchase fee: ${formatCurrencyBalanceWithUnit(purchaseFee, collateral.symbol, collateral.decimals)}. Includes 1% fee budget headroom; only the actual fee is transferred.`,
+		reviewDescription: `Estimated purchase fee: ${formatCurrencyBalanceWithUnit(purchaseFee, collateral.symbol, collateral.decimals)}. Includes 1% fee budget headroom; only the actual fee is transferred. Recovery contribution: ${formatCurrencyBalanceWithUnit(quoted.recoveryAttoRep, commonCopy.rep)}. Maximum recovery REP contribution: ${formatCurrencyBalanceWithUnit(maximumRecoveryAttoRep, commonCopy.rep)}, including 1% headroom and rounding; only the actual contribution is transferred.`,
 	} as const
 	client.onTransactionPlan?.([
 		{
@@ -266,7 +281,12 @@ export async function createCompleteSetInSecurityPool(client: WriteClient, secur
 				const latest = await loadTradingCollateral(client, securityPoolAddress, client.account.address)
 				if (latest.allowance < amount + maximumFee) throw new Error(collateralCopy.approvalRequired)
 				if (latest.balance < amount + maximumFee) throw new Error('Insufficient collateral for minting and purchase fees.')
-				if ((await quote()) > maximumFee) throw new Error('Purchase fee changed. Review the amount again.')
+				const fresh = await quote()
+				if (fresh.fee > maximumFee) throw new Error('Purchase fee changed. Review the amount again.')
+				if (fresh.recoveryAttoRep > maximumRecoveryAttoRep) throw new Error('Recovery REP quote changed. Review the amount again.')
+				const recovery = await loadRecoveryMintFunding(client, portfolio, universeId, client.account.address, fresh.recoveryAttoRep)
+				if (recovery.balance < maximumRecoveryAttoRep) throw new Error(collateralCopy.insufficientRecoveryRep)
+				if (recovery.allowance < maximumRecoveryAttoRep) throw new Error(collateralCopy.recoveryApprovalRequired)
 				await client.estimateGas({ account: client.account, to: callParams.address, data: encodeFunctionData(callParams), value: callParams.value })
 				await validateBeforeSubmit()
 			},

@@ -325,7 +325,7 @@
 
 				<h3>Recovering a settled report after callback failure</h3>
 
-				<p>Anyone can recover a settled candidate through its report escrow. Shared feeds expose <code>recoverReport(reportId)</code> for any unprocessed settled candidate; <code>recoverSettledPendingReport()</code> is only a convenience for the latest ID. Shared recovery marks that candidate rejected and releases its escrow credits without accepting a price. Independently, anyone may call an escrow’s <code>withdrawFunding()</code> to deliver already-released credits to its original sponsor, including credits released by a dispute before settlement. Each escrow isolates those credits from other reports.</p>
+				<p>Anyone can recover a settled candidate through its report escrow. Shared feeds expose <code>recoverReport(reportId)</code> for any unprocessed settled candidate; <code>recoverSettledPendingReport()</code> is only a convenience for the latest ID. Shared recovery retries acceptance from the amounts stored by OpenOracle, using the original observation timestamp and the usual freshness, funding and reporting-window checks. A still-valid candidate accepts its price and attempts its sponsor operations; an invalid candidate is rejected. Recovery releases its escrow credits in either case. Independently, anyone may call an escrow’s <code>withdrawFunding()</code> to deliver already-released credits to its original sponsor, including credits released by a dispute before settlement. Each escrow isolates those credits from other reports.</p>
 			</section>
 
 			<section id="intentional-economic-tradeoffs">

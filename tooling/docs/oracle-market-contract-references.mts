@@ -169,7 +169,8 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			{
 				call: '`recoverSettledPendingReport()`',
 				caller: 'Anyone',
-				effect: 'Recovers the feed’s latest settled candidate without accepting its price. Use feed.recoverReport(reportId) for another unprocessed settled candidate. Recovery marks only that candidate rejected and returns its isolated escrow credits to its original sponsor.',
+				effect:
+					'Retries acceptance of the feed’s latest settled candidate from OpenOracle’s stored amounts and original observation timestamp. Use feed.recoverReport(reportId) for another unprocessed settled candidate. A still-valid candidate accepts its price and attempts sponsor operations; an invalid candidate is rejected. Both outcomes return isolated escrow credits to the original sponsor.',
 				declarations: [
 					{
 						name: 'recoverSettledPendingReport',
