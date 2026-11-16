@@ -356,7 +356,7 @@ describe('state projections', () => {
 			['SettlementRedeemed', { bookId: '1', questionId: '42', outcomeShares: '5', units: '5', cashAttoEth: atomic(5n) }, 'risk', 'settlement-book', `${emitter}:1`],
 			['FinalityScheduled', { bookId: '1', questionId: '42', finalAfter: '100' }, 'risk', 'settlement-book', `${emitter}:1`],
 			['FinalClaimsFrozen', { bookId: '1', frozenBookId: '1', portfolioTimestamp: '100', units: '5', cashAttoEth: atomic(5n) }, 'risk', 'settlement-book', `${emitter}:1`],
-			['FeeStreamReplaced', { bookId: '1', questionId: '42', rateAttoEthPerSecond: '3', end: '200' }, 'risk', 'settlement-book', `${emitter}:1`],
+			['FeeStreamReplaced', { bookId: '1', questionId: '42', rateAttoEthPerSecond: atomic(3n), end: '200' }, 'risk', 'settlement-book', `${emitter}:1`],
 			['AggregateFeesAccrued', { bookId: '1', portfolioTimestamp: '150', cashAttoEth: atomic(9n) }, 'risk', 'settlement-book', `${emitter}:1`],
 			['PremiumFunded', { universeId: '3', questionId: '42', amountAttoEth: atomic(1n), units: '1' }, 'risk', 'portfolio-services', `${emitter}:3`],
 			['PremiumRecovered', { universeId: '3', questionId: '42', recipient: vault, amountAttoEth: atomic(1n) }, 'risk', 'portfolio-services', `${emitter}:3`],

@@ -58,7 +58,7 @@ test.skipIf(url === undefined)('events of portfolio components reach the escalat
 		const report = { reportId: '7', numReports: '1' }
 		const events: readonly StoredLog[] = [
 			projected(0, openOracle, 'ReportSubmitted', report),
-			projected(1, feed, 'PriceRequested', { reportId: '7', pendingReportMaxSettlementBaseFeeAttoEthPerGas: '1' }),
+			projected(1, feed, 'PriceRequested', { reportId: '7', pendingReportMaxSettlementBaseFeeAttoEthPerGas: 1n.toString() }),
 			projected(2, feed, 'ReportFundingAssigned', { reportId: '7', coordinator, sponsor: coordinator }),
 			projected(3, escrow, 'ReportCompleted', { reportId: '7', priceFeed: feed, accepted: true }),
 			// Another feed's escrow completes its own report 7; it must not join this report's decisions.
@@ -66,11 +66,11 @@ test.skipIf(url === undefined)('events of portfolio components reach the escalat
 			projected(5, game, 'GameStarted', { activationTime: '1' }),
 			projected(6, reporters, 'GameRegistered', { universeId: '1', questionId: '42', game }),
 			projected(7, reporters, 'ReporterFinalityScheduled', { game, finalAfter: '500' }),
-			projected(8, reporters, 'ReporterBalanceChanged', { universeId: '1', questionId: '42', balanceAttoRep: '70' }),
-			projected(9, coordinator, 'UniverseForked', { universeId: '1', questionId: '42', forkTime: '10', forker: coordinator, forkThresholdAttoRep: '1', migrationRepBalanceAttoRep: '1', universeTheoreticalSupplyAttoRep: '1' }),
-			projected(10, reporters, 'ReporterForkFrozen', { universeId: '1', migrationAttoRep: '60', protectedParentAttoRep: '10' }),
-			projected(11, reporters, 'ReporterChildCreated', { sourceUniverseId: '1', childUniverseId: '2', escrowAttoRep: '60' }),
-			projected(12, book, 'AggregateFeesAccrued', { bookId: '1', portfolioTimestamp: '150', cashAttoEth: '9' }),
+			projected(8, reporters, 'ReporterBalanceChanged', { universeId: '1', questionId: '42', balanceAttoRep: 70n.toString() }),
+			projected(9, coordinator, 'UniverseForked', { universeId: '1', questionId: '42', forkTime: '10', forker: coordinator, forkThresholdAttoRep: 1n.toString(), migrationRepBalanceAttoRep: 1n.toString(), universeTheoreticalSupplyAttoRep: 1n.toString() }),
+			projected(10, reporters, 'ReporterForkFrozen', { universeId: '1', migrationAttoRep: 60n.toString(), protectedParentAttoRep: 10n.toString() }),
+			projected(11, reporters, 'ReporterChildCreated', { sourceUniverseId: '1', childUniverseId: '2', escrowAttoRep: 60n.toString() }),
+			projected(12, book, 'AggregateFeesAccrued', { bookId: '1', portfolioTimestamp: '150', cashAttoEth: 9n.toString() }),
 		]
 		for (const event of events) await store(connection, event)
 		// Reaching non-decision schedules reporter finality in the same transaction, at a higher log index.
