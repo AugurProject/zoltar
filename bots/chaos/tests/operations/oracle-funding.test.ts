@@ -174,14 +174,25 @@ describe('oracle request funding bounds', () => {
 		expect(() =>
 			oracleRequestFundingEnvelope({
 				coordinator: simpleCoordinatorFunding,
-				maximumEthPrincipalAttoEth: 124n.toString(),
-				maximumNativePrincipalAttoEth: 124n.toString(),
-				maximumRepPrincipalAttoRep: 4n.toString(),
-				maximumWethPrincipalAttoEth: 124n.toString(),
+				maximumEthPrincipalAttoEth: 126n.toString(),
+				maximumNativePrincipalAttoEth: 126n.toString(),
+				maximumRepPrincipalAttoRep: 6n.toString(),
+				maximumWethPrincipalAttoEth: 126n.toString(),
 				proposedRepPerEthPrice: (10n ** 18n).toString(),
 				settlementCollateralCeilingAttoEth: 0n.toString(),
 			}),
 		).toThrow('cannot support a positive maximum base fee')
+		expect(
+			oracleRequestFundingEnvelope({
+				coordinator: simpleCoordinatorFunding,
+				maximumEthPrincipalAttoEth: 127n.toString(),
+				maximumNativePrincipalAttoEth: 127n.toString(),
+				maximumRepPrincipalAttoRep: 6n.toString(),
+				maximumWethPrincipalAttoEth: 127n.toString(),
+				proposedRepPerEthPrice: (10n ** 18n).toString(),
+				settlementCollateralCeilingAttoEth: 0n.toString(),
+			}).maximumBaseFeePerGas,
+		).toBe('1')
 	})
 
 	test('rejects immutable funding inputs that the coordinator constructor forbids', () => {

@@ -39,7 +39,7 @@ function fixture(definitionId: string) {
 			settlementCallbackGasLimit: '2',
 			targetPriceErrorForDispute: '5000000',
 		}
-		pool.minimumToken1ReportAttoEth = '4'
+		pool.minimumToken1ReportAttoEth = '6'
 		pool.requestPriceCostAttoEth = '121'
 		pool.settlementCollateralAttoEth = '100'
 	}
