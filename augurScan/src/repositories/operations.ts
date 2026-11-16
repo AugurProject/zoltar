@@ -136,6 +136,8 @@ export const reportCatalogData = async (sql: SQL, chainId: number, asOf: Record<
 	})
 }
 
+// A game's latest own event is its catalog state. The reporter ledger schedules finality after the game's
+// concluding event in the same transaction, so its events are the state only of a game with no event of its own.
 export const escalationCatalogData = async (sql: SQL, chainId: number, snapshotBlock: string, cursorBlock = snapshotBlock, cursorTx = `0x${'f'.repeat(64)}`, cursorLog = 2_147_483_647, queryLimit = 250) =>
 	await sql`
 		WITH games AS (
@@ -157,7 +159,7 @@ export const escalationCatalogData = async (sql: SQL, chainId: number, snapshotB
 		) snapshot ON true JOIN LATERAL (
 			SELECT * FROM escalation_game_events event WHERE event.chain_id = ${chainId} AND event.game_address = game.game_address
 				AND event.canonical AND event.block_number <= ${snapshotBlock}
-			ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT 1
+			ORDER BY (event.event_name IN ('GameRegistered', 'ReporterFinalityScheduled')), event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT 1
 		) latest ON true WHERE (latest.block_number, latest.log_index, latest.tx_hash) < (${cursorBlock}::bigint, ${cursorLog}::integer, ${cursorTx})
 		ORDER BY latest.block_number DESC, latest.log_index DESC, latest.tx_hash DESC LIMIT ${queryLimit}
 	`
@@ -287,9 +289,10 @@ export const forkCatalogTotal = async (sql: SQL, chainId: number, snapshotBlock:
 	return Number(rows[0]?.['total'] ?? 0)
 }
 
-// Portfolio fork events name the forked universe (ForkFrozen, BranchChosen, NeutralCashRecovered) or one of its
-// child universes (BranchStarted, BranchActivated). A child's start and activation belong to its parent's fork,
-// so they join only through the child's universe record and never through their own universeId.
+// Portfolio fork events name the forked universe (ForkFrozen, BranchChosen, NeutralCashRecovered, ReporterForkFrozen,
+// and ReporterChildCreated as sourceUniverseId) or one of its child universes (BranchStarted, BranchActivated).
+// A child's start and activation belong to its parent's fork, so they join only through the child's universe
+// record and never through their own universeId.
 export const forkCatalogData = async (sql: SQL, chainId: number, cursorBlock: string, cursorTx = `0x${'f'.repeat(64)}`, cursorLog = 2_147_483_647, queryLimit = 100, snapshotBlock = cursorBlock) =>
 	await sql`
 		WITH roots AS (
@@ -306,12 +309,13 @@ export const forkCatalogData = async (sql: SQL, chainId: number, cursorBlock: st
 				(WHERE related.event_name = 'MigrationRepSplit' AND related.event_data ? 'amountAttoRep'), 0)::text AS migrated_atto_rep,
 			COALESCE(sum((related.event_data->>'amountAttoRep')::numeric) FILTER
 				(WHERE related.event_name = 'RepBurned' AND related.event_data ? 'amountAttoRep'), 0)::text AS burned_atto_rep,
-			count(*) FILTER (WHERE related.event_name IN ('ForkFrozen', 'BranchChosen', 'BranchStarted', 'BranchActivated', 'NeutralCashRecovered'))::integer AS portfolio_fork_events
+			count(*) FILTER (WHERE related.event_name IN ('ForkFrozen', 'BranchChosen', 'BranchStarted', 'BranchActivated', 'NeutralCashRecovered', 'ReporterForkFrozen', 'ReporterChildCreated'))::integer AS portfolio_fork_events
 		FROM roots root
 		LEFT JOIN fork_migration_events related ON related.chain_id = root.chain_id AND related.canonical
 			AND related.block_number <= ${snapshotBlock} AND (
 			(related.event_name NOT IN ('BranchStarted', 'BranchActivated')
-				AND (related.universe_identity = root.universe_identity OR related.event_data->>'universeId' = root.universe_identity))
+				AND (related.universe_identity = root.universe_identity OR related.event_data->>'universeId' = root.universe_identity
+					OR related.event_data->>'sourceUniverseId' = root.universe_identity))
 			OR (related.event_name IN ('BranchStarted', 'BranchActivated') AND EXISTS (
 				SELECT 1 FROM universe_events child WHERE child.chain_id = root.chain_id AND child.canonical
 					AND child.block_number <= ${snapshotBlock} AND child.parent_universe_id::text = root.universe_identity

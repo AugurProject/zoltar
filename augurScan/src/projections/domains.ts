@@ -19,9 +19,8 @@ const definitions = (domain: DomainEventProjection['domain'], entityType: string
 // share names across contracts, so `domainProjectionFrom` projects `Transfer`
 // and `Approval` only for AMM pairs, `ApprovalForAll` only for share tokens and
 // `Deposit`/`Withdrawal` only for WETH. Logs are fetched by contract address, so
-// events of contracts the indexer never registers (the settlement book,
-// reporter ledger, portfolio services and settlement, capital fee streams and
-// the shared report escrow) are not ingested and are deliberately absent.
+// a contract's events are ingested only once discovery registers it; the kinds
+// it registers join the guard below through `discoveredContractKinds`.
 const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	...definitions('system', 'question', ['QuestionCreated'], ['questionId']),
 	...definitions('system', 'deployment', ['DeploymentAddressesSet']),
@@ -54,6 +53,9 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 		'VaultEscrowUpdated',
 		'VaultUnresolvedTotalsExported',
 	]),
+	// The reporter ledger names the game it registers or schedules, so both join that game's history.
+	...definitions('escalation', 'escalation', ['GameRegistered', 'ReporterFinalityScheduled'], ['game']),
+	...definitions('risk', 'reporter-ledger', ['ReporterBalanceChanged'], ['universeId']),
 	...definitions('auction', 'auction', ['AuctionStarted', 'BidSubmitted', 'AuctionFinalized', 'BidSettled', 'FeesRemoved', 'RefundWithdrawn', 'RaisedWithdrawn']),
 	...definitions('risk', 'pool', ['DeploySecurityPool', 'SecurityPoolRegistered', 'AwaitingForkContinuationSet', 'CompleteSetCreated', 'CompleteSetRedeemed', 'EscalationGameSet', 'QuestionAccountingCheckpoint', 'ShareTokenSupplySet', 'SharesRedeemed', 'SystemStateSet', 'EthReceived'], ['securityPool']),
 	...definitions('risk', 'vault', ['PrincipalDeposited', 'PrincipalWithdrawn', 'CommitmentAuthorized', 'EarningsClaimed'], ['owner']),
@@ -62,7 +64,15 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	...definitions('risk', 'portfolio', ['PortfolioRegistered'], ['portfolio']),
 	// The portfolio auction controls a uniform-price auction engine at another address; only the engine's events build the auction views.
 	...definitions('risk', 'portfolio-auction', ['AuctionOpened', 'WinningVaultCreated', 'AuctionClosed']),
-	...definitions('fork', 'portfolio-branch', ['ForkFrozen', 'BranchChosen', 'BranchStarted', 'BranchActivated', 'NeutralCashRecovered'], ['universeId']),
+	...definitions('fork', 'portfolio-branch', ['ForkFrozen', 'BranchChosen', 'BranchStarted', 'BranchActivated', 'NeutralCashRecovered', 'ReporterForkFrozen'], ['universeId']),
+	// The reporter ledger creates a child's reporter escrow under the forked source universe.
+	...definitions('fork', 'portfolio-branch', ['ReporterChildCreated'], ['sourceUniverseId']),
+	// One settlement book contract serves a portfolio; each universe owns one numbered book in it.
+	...definitions('risk', 'settlement-book', ['BookCreated', 'SettlementMinted', 'SettlementRedeemed', 'FinalityScheduled', 'FinalClaimsFrozen', 'FeeStreamReplaced', 'AggregateFeesAccrued'], ['bookId']),
+	...definitions('risk', 'portfolio-services', ['PremiumFunded', 'PremiumRecovered', 'UnusedServiceCashBurned'], ['universeId']),
+	...definitions('risk', 'portfolio-settlement', ['RecoveryRepPaid'], ['universeId']),
+	// A report escrow completes one funded report for the shared feed that created it, so the event joins that feed's history.
+	...definitions('oracle', 'price-feed', ['ReportCompleted'], ['priceFeed']),
 	...definitions('trading', 'amm', ['PositionExitedByTransfer', 'PairCreated', 'LiquidityAdded', 'LiquidityInitialized', 'LiquidityRemoved', 'PredeploymentSharesQuarantined', 'Swap', 'Sync', 'Transfer', 'Approval'], ['pair']),
 	...definitions('fork', 'fork', ['ChildReputationTokenInitialized', 'UniverseInitialized', 'UniverseForked', 'DeployChild', 'MigrationRepAdded', 'MigrationRepSplit', 'RepBurned'], ['universeId']),
 }
@@ -74,8 +84,8 @@ const catalogEventNames = new Set(catalogAbis().flatMap(abiEventNames))
 const unbackedEventNames = Object.keys(eventDomains).filter(eventName => !catalogEventNames.has(eventName))
 if (unbackedEventNames.length > 0) throw new Error(`Semantic event taxonomy names events missing from the ABI catalog: ${unbackedEventNames.join(', ')}`)
 
-// Protocol contract kinds whose logs the indexer ingests from a manifest or a
-// portfolio-discovery read, together with the delegates that emit at those addresses.
+// Protocol contract kinds whose logs the indexer ingests from a manifest, together
+// with the delegates that emit at the addresses of indexed contracts.
 const listedTaxonomyContractKinds: readonly SystemContractKind[] = [
 	'ammFactory',
 	'ammPair',
@@ -89,16 +99,11 @@ const listedTaxonomyContractKinds: readonly SystemContractKind[] = [
 	'reputationToken',
 	'securityPool',
 	'securityPoolCapitalAuctionDelegate',
-	'securityPoolCapitalLedger',
 	'securityPoolCapitalLifecycleDelegate',
 	'securityPoolEventEmitter',
 	'securityPoolFactory',
 	'securityPoolOperationsDelegate',
-	'securityPoolPortfolio',
-	'securityPoolPortfolioAuction',
-	'securityPoolPortfolioForkCoordinator',
 	'securityPoolSettlementDelegate',
-	'securityPoolUniformPriceAuction',
 	'shareToken',
 	'sharedPoolPriceFeed',
 	'weth',
@@ -106,8 +111,8 @@ const listedTaxonomyContractKinds: readonly SystemContractKind[] = [
 	'zoltarQuestionData',
 ]
 
-// Kinds discovered from event arguments join the guard automatically; the Uniswap
-// dependencies among them have their own projection and no semantic taxonomy.
+// Kinds discovered from event arguments or portfolio reads join the guard automatically;
+// the Uniswap dependencies among them have their own projection and no semantic taxonomy.
 const dependencyKinds: ReadonlySet<SystemContractKind> = new Set(Object.values(dependencyDiscoveryKinds))
 const taxonomyContractKinds = [...new Set([...listedTaxonomyContractKinds, ...discoveredContractKinds.filter(kind => !dependencyKinds.has(kind))])]
 
@@ -123,9 +128,12 @@ const unclassifiedEventNames = taxonomyContractKinds.flatMap(kind => {
 })
 if (unclassifiedEventNames.length > 0) throw new Error(`Semantic event taxonomy is missing events emitted by indexed contracts: ${unclassifiedEventNames.join(', ')}`)
 
+// Entities numbered or keyed inside one contract: the identity is the emitter followed by that key.
+const addressScopedEntityTypes: ReadonlySet<string> = new Set(['vault', 'capital-position', 'portfolio-branch', 'settlement-book', 'reporter-ledger', 'portfolio-services', 'portfolio-settlement'])
+
 const domainEntityIdentity = (definition: { readonly domain: string; readonly entityType: string }, address: string, identity: { identitySuffix: string | undefined; reportId: unknown }): string => {
 	if (definition.domain === 'report' && typeof identity.reportId === 'string') return `${address}:${identity.reportId}`
-	if (['vault', 'capital-position', 'portfolio-branch'].includes(definition.entityType) && identity.identitySuffix !== undefined) return `${address}:${identity.identitySuffix}`
+	if (addressScopedEntityTypes.has(definition.entityType) && identity.identitySuffix !== undefined) return `${address}:${identity.identitySuffix}`
 	return identity.identitySuffix ?? address
 }
 
