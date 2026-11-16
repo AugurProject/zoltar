@@ -185,6 +185,26 @@ test('compacts price history after it crosses the storage bound', async () => {
 	expect((await readFile(path, 'utf8')).trim().split('\n')).toHaveLength(2)
 })
 
+test('keeps a complete record that starts exactly at the tail boundary', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'zoltar-market-history-'))
+	temporaryDirectories.push(directory)
+	const path = join(directory, 'prices.jsonl')
+	const template = {
+		pool: '0x0000000000000000000000000000000000000002' as Address,
+		priceWeth: '0.0042',
+		sampledAt: '2026-07-25T00:00:00.000Z',
+		symbol: 'REPv2',
+		token: '0x0000000000000000000000000000000000000001' as Address,
+		venue: 'Uniswap V3 0.3%',
+	}
+	const points = ['1', '2', '3'].map(blockNumber => ({ ...template, blockNumber }))
+	const lines = points.map(point => `${JSON.stringify({ chainId: 1, point })}\n`)
+	await writeFile(path, lines.join(''))
+	// Every line has the same length, so a two-line byte bound starts the tail on the second record's first byte.
+	const lineBytes = Buffer.byteLength(lines[0] ?? '')
+	expect(await loadPriceHistory(path, 1, 10, { maximumBytes: 2 * lineBytes, maximumRecords: 10 })).toEqual(points.slice(1))
+})
+
 test('does not scan past the configured tail for an oversized unterminated record', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'zoltar-market-history-'))
 	temporaryDirectories.push(directory)
