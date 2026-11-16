@@ -70,7 +70,6 @@ function settingsFor(current: ChaosAnvilFixture, proxy: ChaosRpcProxy, stateFile
 		discovery: {
 			maxPools: 100,
 			maxQuestions: 100,
-			maxStagedOperationsPerPool: 100,
 			maxUniverses: 100,
 			maxVaultsPerPool: 100,
 		},

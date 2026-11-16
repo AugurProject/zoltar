@@ -73,7 +73,6 @@ function settings() {
 		discovery: {
 			maxPools: 100,
 			maxQuestions: 100,
-			maxStagedOperationsPerPool: 100,
 			maxUniverses: 100,
 			maxVaultsPerPool: 100,
 		},
@@ -485,7 +484,6 @@ describe('canonical scan policy', () => {
 			immutableTopologyCapacity: {
 				maxPools: 100,
 				maxQuestions: 100,
-				maxStagedOperationsPerPool: 100,
 				maxUniverses: 100,
 				maxVaultsPerPool: 100,
 				maximumAggregateItems: 10_000,
