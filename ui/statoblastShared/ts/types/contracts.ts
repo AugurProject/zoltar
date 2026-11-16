@@ -159,9 +159,18 @@ export type TradingShareBalances = {
 	yesAttoShares: bigint
 }
 
+/** A fork's child universe as the share token sees it: the canonical security pool a migration lands in, and what the wallet already migrated into it from each source outcome. */
+export type ShareMigrationTarget = {
+	canonicalPool: Address | undefined
+	migratedAttoShares: TradingShareBalances
+	outcomeIndex: bigint
+}
+
 export type TradingDetails = {
 	maxRedeemableCompleteSetsAttoShares: bigint | undefined
 	shareBalances: TradingShareBalances | undefined
+	/** Loaded once the pool's universe has forked; absent until then. */
+	shareMigrationTargets?: readonly ShareMigrationTarget[] | undefined
 	universeId: bigint
 }
 
