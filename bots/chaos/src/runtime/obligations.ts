@@ -163,9 +163,23 @@ function refreshPlannedWorkflow(workflow: DurableWorkflow, plan: OperationPlan) 
 	workflow.updatedAt = now()
 }
 
+function obligationDeadline(plan: OperationPlan) {
+	return isoTimestampFromSeconds(plan.deadlineTimestamp, 'Lifecycle obligation deadline')
+}
+
+/** Clears blockers and adopts the current plan's label, metadata, and deadline for a rediscovered identity. */
+function refreshObligationFromPlan(obligation: DurableObligation, plan: OperationPlan) {
+	const expiresAt = obligationDeadline(plan)
+	obligation.blockers = []
+	obligation.label = plan.label
+	obligation.metadata = plan.metadata
+	if (expiresAt === undefined) delete obligation.expiresAt
+	else obligation.expiresAt = expiresAt
+}
+
 function newObligation(plan: OperationPlan, workflow: DurableWorkflow): DurableObligation {
 	const createdAt = now()
-	const expiresAt = isoTimestampFromSeconds(plan.deadlineTimestamp, 'Lifecycle obligation deadline')
+	const expiresAt = obligationDeadline(plan)
 	return {
 		automaticRetryCount: 0,
 		attemptCount: 0,
@@ -298,9 +312,7 @@ export function synchronizeLifecycleObligations(
 			markRetryableLifecycleWorkflowForRediscovery(workflow, 'Automatic retry after a canonically included revert or verified nonce cancellation')
 			refreshPlannedWorkflow(workflow, plan)
 			delete obligation.notBefore
-			obligation.blockers = []
-			obligation.label = plan.label
-			obligation.metadata = plan.metadata
+			refreshObligationFromPlan(obligation, plan)
 			obligation.status = 'pending'
 			obligation.updatedAt = now()
 			continue
@@ -312,9 +324,7 @@ export function synchronizeLifecycleObligations(
 			continue
 		}
 		refreshPlannedWorkflow(workflow, plan)
-		obligation.blockers = []
-		obligation.label = plan.label
-		obligation.metadata = plan.metadata
+		refreshObligationFromPlan(obligation, plan)
 		if (workflow.status === 'completed') {
 			recoverCompletedObligation(state, obligation, workflow, currentBlock)
 		} else {
