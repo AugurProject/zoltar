@@ -28,12 +28,10 @@ function setFormValue(form: HTMLFormElement, name: string, value: string | numbe
 	else if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement) field.value = String(value)
 }
 
-/** Fills the strategy form, including the runtime log-recovery fields it edits, from a loaded configuration. */
+/** Fills the strategy form from a loaded configuration. */
 export function loadStrategyForm(elements: DashboardElements, configuration: Configuration) {
 	const form = elements.strategyForm
 	for (const [name, value] of Object.entries({ ...configuration.strategy, ...configuration.portfolioPolicy })) setFormValue(form, name, value)
-	setFormValue(form, 'logLookbackBlocks', configuration.runtime.logLookbackBlocks)
-	setFormValue(form, 'historicalLogRecovery', configuration.runtime.historicalLogRecovery)
 }
 
 /** Names the automatic actions the saved strategy enables: what the running bot does, not what the form currently shows. */
@@ -65,8 +63,6 @@ function readStrategyForm(form: HTMLFormElement, saved: Configuration): Strategy
 	return {
 		maximumGasCostEth: String(data.get('maximumGasCostEth') ?? ''),
 		walletReserveRep: String(data.get('walletReserveRep') ?? ''),
-		logLookbackBlocks: Number(data.get('logLookbackBlocks')),
-		historicalLogRecovery: checkboxChecked(form, 'historicalLogRecovery'),
 		portfolioPolicy: serializePortfolioPolicy(
 			parsePortfolioPolicy({
 				...saved.portfolioPolicy,

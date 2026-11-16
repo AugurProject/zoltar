@@ -32,7 +32,7 @@ function scanFailureDetail(error: string) {
 }
 
 function recoveryWorkCount(snapshot: Snapshot) {
-	return snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length
+	return snapshot.pendingTransactions.length
 }
 
 /** Renders the operator header badges and the overview's global notice from the latest snapshot and configuration. */

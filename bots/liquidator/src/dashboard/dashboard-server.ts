@@ -207,8 +207,6 @@ function publicOperatorSnapshot(value: unknown) {
 	if (record(source['metrics']) !== undefined) {
 		snapshot['metrics'] = publicFields(source['metrics'], ['approvedUniverseCount', 'assumedOpenInterestEth', 'candidateCount', 'deployedRep', 'eligiblePoolCount', 'poolCount', 'selectedPoolCount', 'walletEth', 'walletRep'])
 	}
-	if (Array.isArray(source['pendingStagedOperations']))
-		snapshot['pendingStagedOperations'] = publicList(source['pendingStagedOperations'], operation => publicFields(operation, ['candidateBlock', 'coordinator', 'historicalRecoveryComplete', 'latestRecoveryBlock', 'nextHistoricalBlock', 'operationId', 'queuedBlock', 'target']))
 	if (Array.isArray(source['pendingTransactions'])) snapshot['pendingTransactions'] = publicList(source['pendingTransactions'], intent => publicFields(intent, ['hash', 'label', 'mode', 'nonce', 'submissionBlock']))
 	if (Array.isArray(source['rpcEndpointHealth'])) snapshot['rpcEndpointHealth'] = publicList(source['rpcEndpointHealth'], publicRpcEndpointHealth)
 	if (Array.isArray(source['pools'])) snapshot['pools'] = publicList(source['pools'], publicPool)

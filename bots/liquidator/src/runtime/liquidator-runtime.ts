@@ -106,7 +106,6 @@ export async function createLiquidatorRuntime(loaded: LoadedSettings, collaborat
 	state.portfolioScopes = durable.portfolioScopes
 	state.activities = durable.activities
 	state.lastScannedBlock = durable.lastScannedBlock === undefined ? undefined : BigInt(durable.lastScannedBlock)
-	state.pendingStagedOperations = durable.pendingStagedOperations
 	state.pendingTransactions = durable.pendingTransactions
 	const deps: LiquidatorDeps = {
 		...collaborators,
