@@ -146,8 +146,9 @@ export const reportLifecycle = (input: ReportLifecycleInput): LifecycleState => 
 export type AuctionLifecycleInput = {
 	readonly started: boolean
 	readonly finalized: boolean
-	readonly startTimestamp?: string | undefined
-	readonly endTimestamp?: string | undefined
+	/** `AuctionStarted.opensAt` and `closesAt`, in Unix seconds. */
+	readonly opensAt?: string | undefined
+	readonly closesAt?: string | undefined
 	readonly indexedTimestamp: string
 	readonly bidCount: number
 	readonly settlementCount: number
@@ -157,8 +158,8 @@ export const auctionLifecycle = (input: AuctionLifecycleInput): string => {
 	if (!input.started) return 'Scheduled'
 	if (input.finalized) return input.settlementCount < input.bidCount ? 'Bid settlements outstanding' : 'Fully settled'
 	const current = nonNegative(input.indexedTimestamp)
-	const start = nonNegative(input.startTimestamp)
-	const end = nonNegative(input.endTimestamp)
+	const start = nonNegative(input.opensAt)
+	const end = nonNegative(input.closesAt)
 	if (current === undefined || start === undefined || end === undefined) return 'Awaiting indexed evidence'
 	if (current < start) return 'Scheduled'
 	if (current < end) return 'Open'
@@ -349,18 +350,30 @@ export const fixedWindowTwap = (observations: readonly ExactPriceObservation[], 
 	}
 }
 
-export const auctionDemandCurve = (bids: readonly { readonly tick: string; readonly amountAttoEth: unknown }[]) => {
+export type AuctionBidLevel = { readonly minimumAttoRepPerLot: unknown; readonly lots: unknown }
+
+// The uniform-price auction fills bids in ascending minimumAttoRepPerLot order: a
+// lower REP-per-lot limit accepts less collateral per lot and is therefore the
+// better bid. Demand accumulates in that fill order. A lot is `lotAttoEth` of
+// collateral, known only once AuctionStarted is indexed.
+export const auctionDemandCurve = (bids: readonly AuctionBidLevel[], lotAttoEth: string | undefined) => {
+	const lotSize = lotAttoEth === undefined ? undefined : positiveInteger(lotAttoEth, 'lotAttoEth')
 	const totals = new Map<bigint, bigint>()
 	for (const bid of bids) {
-		const tick = BigInt(bid.tick)
-		totals.set(tick, (totals.get(tick) ?? 0n) + positiveInteger(bid.amountAttoEth, 'bid amount'))
+		const level = positiveInteger(bid.minimumAttoRepPerLot, 'minimumAttoRepPerLot')
+		totals.set(level, (totals.get(level) ?? 0n) + positiveInteger(bid.lots, 'lots'))
 	}
-	let cumulative = 0n
+	let cumulativeLots = 0n
 	return [...totals]
-		.sort(([left], [right]) => compareBigint(right, left))
-		.map(([tick, amountAttoEth]) => {
-			cumulative += amountAttoEth
-			return { tick: tick.toString(), amountAttoEth: amountAttoEth.toString(), cumulativeDemandAttoEth: cumulative.toString() }
+		.sort(([left], [right]) => compareBigint(left, right))
+		.map(([level, lots]) => {
+			cumulativeLots += lots
+			return {
+				minimumAttoRepPerLot: level.toString(),
+				lots: lots.toString(),
+				cumulativeLots: cumulativeLots.toString(),
+				...(lotSize === undefined ? {} : { amountAttoEth: (lots * lotSize).toString(), cumulativeDemandAttoEth: (cumulativeLots * lotSize).toString() }),
+			}
 		})
 }
 
